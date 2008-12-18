@@ -1,27 +1,42 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002, 2003 Cluster File Systems, Inc.
- *   Author: Phil Schwan <phil@clusterfs.com>
- *   Author: Peter Braam <braam@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/ldlm/ldlm_resource.c
+ *
+ * Author: Phil Schwan <phil@clusterfs.com>
+ * Author: Peter Braam <braam@clusterfs.com>
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
@@ -268,6 +283,12 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
                 lock_vars[0].write_fptr = lprocfs_wr_uint;
                 lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
         } else {
+                snprintf(lock_name, MAX_STRING_SIZE, "%s/lock_timeouts",
+                         ns->ns_name);
+                lock_vars[0].data = &ns->ns_timeouts;
+                lock_vars[0].read_fptr = lprocfs_rd_uint;
+                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
+
                 snprintf(lock_name, MAX_STRING_SIZE, "%s/max_nolock_bytes",
                          ns->ns_name);
                 lock_vars[0].data = &ns->ns_max_nolock_size;
@@ -348,9 +369,11 @@ ldlm_namespace_new(struct obd_device *obd, char *name,
                 CFS_INIT_LIST_HEAD(bucket);
 
         CFS_INIT_LIST_HEAD(&ns->ns_unused_list);
+        CFS_INIT_LIST_HEAD(&ns->ns_list_chain);
         ns->ns_nr_unused = 0;
         ns->ns_max_unused = LDLM_DEFAULT_LRU_SIZE;
         ns->ns_max_age = LDLM_DEFAULT_MAX_ALIVE;
+        ns->ns_timeouts = 0;
         spin_lock_init(&ns->ns_unused_lock);
         ns->ns_orig_connect_flags = 0;
         ns->ns_connect_flags = 0;
@@ -394,7 +417,6 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
         int rc = 0, client = ns_is_client(res->lr_namespace);
         int local_only = (flags & LDLM_FL_LOCAL_ONLY);
         ENTRY;
-
 
         do {
                 struct ldlm_lock *lock = NULL;
@@ -979,8 +1001,8 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
         check_res_locked(res);
 
         ldlm_resource_dump(D_INFO, res);
-        CDEBUG(D_INFO, "About to add this lock:\n");
-        ldlm_lock_dump(D_INFO, lock, 0);
+        CDEBUG(D_OTHER, "About to add this lock:\n");
+        ldlm_lock_dump(D_OTHER, lock, 0);
 
         if (lock->l_destroyed) {
                 CDEBUG(D_OTHER, "Lock destroyed, not adding to resource\n");
@@ -999,7 +1021,7 @@ void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
 
         check_res_locked(res);
 
-        ldlm_resource_dump(D_OTHER, res);
+        ldlm_resource_dump(D_INFO, res);
         CDEBUG(D_OTHER, "About to insert this lock after %p:\n", original);
         ldlm_lock_dump(D_OTHER, new, 0);
 

@@ -10,6 +10,7 @@ TAGS
 version_tag.pl
 lustre_createcsv
 lustre_config
+lustre_start
 lc_net
 lc_modprobe
 lc_hb

@@ -1,22 +1,50 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/quota/quota_master.c
- *  Lustre Quota Master request handler
+ * GPL HEADER START
  *
- *  Copyright (c) 2001-2005 Cluster File Systems, Inc.
- *   Author: Niu YaWei <niu@clusterfs.com>
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   No redistribution or use is permitted outside of Cluster File Systems, Inc.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
  */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/quota/quota_master.c
+ *
+ * Lustre Quota Master request handler
+ *
+ * Author: Niu YaWei <niu@clusterfs.com>
+ */
+
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
 
-#define DEBUG_SUBSYSTEM S_MDS
+#define DEBUG_SUBSYSTEM S_LQUOTA
 
 #include <linux/version.h>
 #include <linux/fs.h>
@@ -33,6 +61,8 @@
 #include <lustre_mds.h>
 
 #include "quota_internal.h"
+
+#ifdef HAVE_QUOTA_SUPPORT
 
 /* lock ordering: mds->mds_qonoff_sem > dquot->dq_sem */
 static struct list_head lustre_dquot_hash[NR_DQHASH];
@@ -281,7 +311,7 @@ int dqacq_adjust_qunit_sz(struct obd_device *obd, qid_t id, int type,
 
         up(&dquot->dq_sem);
 
-        rc = qctxt_adjust_qunit(obd, qctxt, uid, gid, is_blk, 0);
+        rc = qctxt_adjust_qunit(obd, qctxt, uid, gid, is_blk, 0, NULL);
         if (rc == -EDQUOT || rc == -EBUSY) {
                 CDEBUG(D_QUOTA, "rc: %d.\n", rc);
                 rc = 0;
@@ -294,7 +324,7 @@ int dqacq_adjust_qunit_sz(struct obd_device *obd, qid_t id, int type,
 
         /* only when block qunit is reduced, boardcast to osts */
         if ((adjust_res & LQS_BLK_DECREASE) && QAQ_IS_ADJBLK(oqaq))
-                rc = obd_quota_adjust_qunit(mds->mds_osc_exp, oqaq);
+                rc = obd_quota_adjust_qunit(mds->mds_osc_exp, oqaq, qctxt);
 
 out:
         lustre_dqput(dquot);
@@ -453,21 +483,26 @@ int mds_quota_adjust(struct obd_device *obd, unsigned int qcids[],
         switch (opc) {
         case FSFILT_OP_RENAME:
                 /* acquire/release block quota on owner of original parent */
-                rc2 = qctxt_adjust_qunit(obd, qctxt, qpids[2], qpids[3], 1, 0);
+                rc2 = qctxt_adjust_qunit(obd, qctxt, qpids[2], qpids[3], 1, 0,
+                                         NULL);
                 /* fall-through */
         case FSFILT_OP_SETATTR:
                 /* acquire/release file quota on original owner */
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 0, 0);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 0, 0,
+                                          NULL);
                 /* fall-through */
         case FSFILT_OP_CREATE:
         case FSFILT_OP_UNLINK:
                 /* acquire/release file/block quota on owner of child
                  * (or current owner) */
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 0, 0);
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 1, 0);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 0, 0,
+                                          NULL);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 1, 0,
+                                          NULL);
                 /* acquire/release block quota on owner of parent
                  * (or original owner) */
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 1, 0);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 1, 0,
+                                          NULL);
                 break;
         default:
                 LBUG();
@@ -493,14 +528,17 @@ int filter_quota_adjust(struct obd_device *obd, unsigned int qcids[],
         switch (opc) {
         case FSFILT_OP_SETATTR:
                 /* acquire/release block quota on original & current owner */
-                rc = qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 1, 0);
-                rc2 = qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 1, 0);
+                rc = qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 1, 0,
+                                        NULL);
+                rc2 = qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 1, 0,
+                                         NULL);
                 break;
         case FSFILT_OP_UNLINK:
                 /* release block quota on this owner */
         case FSFILT_OP_CREATE: /* XXX for write operation on obdfilter */
                 /* acquire block quota on this owner */
-                rc = qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 1, 0);
+                rc = qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 1, 0,
+                                        NULL);
                 break;
         default:
                 LBUG();
@@ -1117,7 +1155,8 @@ static int mds_init_slave_ilimits(struct obd_device *obd,
         else
                 gid = oqctl->qc_id;
 
-        rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, uid, gid, 0, 0);
+        rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, uid, gid, 0, 0,
+                                NULL);
         if (rc == -EDQUOT || rc == -EBUSY) {
                 CDEBUG(D_QUOTA, "rc: %d.\n", rc);
                 rc = 0;
@@ -1185,7 +1224,8 @@ static int mds_init_slave_blimits(struct obd_device *obd,
         /* initialize all slave's limit */
         rc = obd_quotactl(mds->mds_osc_exp, ioqc);
 
-        rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, uid, gid, 1, 0);
+        rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, uid, gid, 1, 0,
+                                NULL);
         if (rc == -EDQUOT || rc == -EBUSY) {
                 CDEBUG(D_QUOTA, "rc: %d.\n", rc);
                 rc = 0;
@@ -1199,7 +1239,7 @@ static int mds_init_slave_blimits(struct obd_device *obd,
          * this is will create a lqs for every ost, which will present
          * certain uid/gid is set quota or not */
         QAQ_SET_ADJBLK(oqaq);
-        rc = obd_quota_adjust_qunit(mds->mds_osc_exp, oqaq);
+        rc = obd_quota_adjust_qunit(mds->mds_osc_exp, oqaq, qctxt);
 
         EXIT;
 out:
@@ -1599,7 +1639,8 @@ int mds_quota_recovery(struct obd_device *obd)
 
         mutex_down(&lov->lov_lock);
         if (lov->desc.ld_tgt_count != lov->desc.ld_active_tgt_count) {
-                CWARN("Not all osts are active, abort quota recovery\n");
+                CWARN("Only %u/%u OSTs are active, abort quota recovery\n",
+                      lov->desc.ld_tgt_count, lov->desc.ld_active_tgt_count);
                 mutex_up(&lov->lov_lock);
                 RETURN(rc);
         }
@@ -1615,3 +1656,5 @@ int mds_quota_recovery(struct obd_device *obd)
         wait_for_completion(&data.comp);
         RETURN(rc);
 }
+
+#endif /* HAVE_QUOTA_SUPPORT */

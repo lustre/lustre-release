@@ -1,28 +1,48 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *   Copyright (C) 2006 Cluster File Systems, Inc.
- *   Author: Nathan Rutman <nathan@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
  */
- /* This source file is compiled into both mkfs.lustre and tunefs.lustre */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/utils/mkfs_lustre.c
+ *
+ * Author: Nathan Rutman <nathan@clusterfs.com>
+*/
 
+/* This source file is compiled into both mkfs.lustre and tunefs.lustre */
+
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -50,6 +70,7 @@
 #include <lustre_param.h>
 #include <lnet/lnetctl.h>
 #include <lustre_ver.h>
+#include "mount_utils.h"
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
@@ -73,8 +94,8 @@ struct mkfs_opts {
         int   mo_mgs_failnodes;
 };
 
-static char *progname;
-static int verbose = 1;
+char *progname;
+int verbose = 1;
 static int print_only = 0;
 static int failover = 0;
 
@@ -124,12 +145,6 @@ void usage(FILE *out)
 
 #define vprint if (verbose > 0) printf
 #define verrprint if (verbose >= 0) printf
-
-static void fatal(void)
-{
-        verbose = 0;
-        fprintf(stderr, "\n%s FATAL: ", progname);
-}
 
 /*================ utility functions =====================*/
 
@@ -183,47 +198,6 @@ int get_os_version()
                         version = 26;
         }
         return version;
-}
-
-int run_command(char *cmd, int cmdsz)
-{
-        char log[] = "/tmp/mkfs_logXXXXXX";
-        int fd = -1, rc;
-
-        if ((cmdsz - strlen(cmd)) < 6) {
-                fatal();
-                fprintf(stderr, "Command buffer overflow: %.*s...\n",
-                        cmdsz, cmd);
-                return ENOMEM;
-        }
-
-        if (verbose > 1) {
-                printf("cmd: %s\n", cmd);
-        } else {
-                if ((fd = mkstemp(log)) >= 0) {
-                        close(fd);
-                        strcat(cmd, " >");
-                        strcat(cmd, log);
-                }
-        }
-        strcat(cmd, " 2>&1");
-
-        /* Can't use popen because we need the rv of the command */
-        rc = system(cmd);
-        if (rc && (fd >= 0)) {
-                char buf[128];
-                FILE *fp;
-                fp = fopen(log, "r");
-                if (fp) {
-                        while (fgets(buf, sizeof(buf), fp) != NULL) {
-                                printf("   %s", buf);
-                        }
-                        fclose(fp);
-                }
-        }
-        if (fd >= 0)
-                remove(log);
-        return rc;
 }
 
 static int check_mtab_entry(char *spec)
@@ -401,9 +375,8 @@ static void disp_old_e2fsprogs_msg(const char *feature, int make_backfs)
 
         fprintf(stderr, "WARNING: The e2fsprogs package currently installed on "
                 "your system does not support \"%s\" feature.\nPlease install "
-                "the latest version of e2fsprogs from http://www.clusterfs.com/"
-                "downloads/public/Lustre/Tools/e2fsprogs/\nto enable this "
-                "feature.\n", feature);
+                "the latest version of e2fsprogs from http://downloads.lustre.org"
+                "/public/tools/e2fsprogs/\nto enable this feature.\n", feature);
 
         if (make_backfs)
                 fprintf(stderr, "Feature will not be enabled until e2fsprogs "
@@ -421,7 +394,7 @@ static int file_in_dev(char *file_name, char *dev_name)
 
         /* Construct debugfs command line. */
         snprintf(debugfs_cmd, sizeof(debugfs_cmd),
-                "debugfs -c -R 'stat %s' %s 2>&1 | egrep '(Inode|unsupported)'",
+                "debugfs -c -R 'stat %s' '%s' 2>&1 | egrep '(Inode|unsupported)'",
                 file_name, dev_name);
 
         fp = popen(debugfs_cmd, "r");
@@ -441,6 +414,7 @@ static int file_in_dev(char *file_name, char *dev_name)
                 if (strstr(debugfs_cmd, "unsupported feature")) {
                         disp_old_e2fsprogs_msg("an unknown", 0);
                 }
+                pclose(fp);
                 return -1;
         }
         pclose(fp);
@@ -891,8 +865,12 @@ int read_local_files(struct mkfs_opts *mop)
 
         dev = mop->mo_device;
 
+        /* TODO: it's worth observing the get_mountdata() function that is
+                 in mount_utils.c for getting the mountdata out of the
+                 filesystem */
+
         /* Construct debugfs command line. */
-        snprintf(cmd, cmdsz, "debugfs -c -R 'dump /%s %s/mountdata' %s",
+        snprintf(cmd, cmdsz, "debugfs -c -R 'dump /%s %s/mountdata' '%s'",
                  MOUNT_DATA_FILE, tmpdir, dev);
 
         ret = run_command(cmd, cmdsz);
@@ -1089,38 +1067,40 @@ static int add_param(char *buf, char *key, char *val, int unique)
 #define MAXNIDSTR 1024
 static char *convert_hostnames(char *s1)
 {
-        char *converted, *s2 = 0, *c;
+        char *converted, *s2 = 0, *c, *end, sep;
         int left = MAXNIDSTR;
         lnet_nid_t nid;
 
         converted = malloc(left);
+        end = s1 + strlen(s1);
         c = converted;
-        while ((left > 0) && ((s2 = strsep(&s1, ",: \0")))) {
-                nid = libcfs_str2nid(s2);
+        while ((left > 0) && (s1 < end)) {
+                s2 = strpbrk(s1, ",:");
+                if (!s2)
+                        s2 = end;
+                sep = *s2;
+                *s2 = '\0';
+                nid = libcfs_str2nid(s1);
+                
                 if (nid == LNET_NID_ANY) {
-                        if (*s2 == '/')
-                                /* end of nids */
-                                break;
-                        fprintf(stderr, "%s: Can't parse NID '%s'\n",
-                                progname, s2);
+                        fprintf(stderr, "%s: Can't parse NID '%s'\n", progname, s1);
                         free(converted);
                         return NULL;
                 }
-
                 if (strncmp(libcfs_nid2str(nid), "127.0.0.1",
                             strlen("127.0.0.1")) == 0) {
                         fprintf(stderr, "%s: The NID '%s' resolves to the "
                                 "loopback address '%s'.  Lustre requires a "
                                 "non-loopback address.\n",
-                                progname, s2, libcfs_nid2str(nid));
+                                progname, s1, libcfs_nid2str(nid));
                         free(converted);
                         return NULL;
                 }
-
-                c += snprintf(c, left, "%s,", libcfs_nid2str(nid));
+                                        
+                c += snprintf(c, left, "%s%c", libcfs_nid2str(nid), sep);
                 left = converted + MAXNIDSTR - c;
+                s1 = s2 + 1;
         }
-        *(c - 1) = '\0';
         return converted;
 }
 
@@ -1476,7 +1456,7 @@ int main(int argc, char *const argv[])
                         strscat(always_mountopts, ",asyncdel",
                                 sizeof(always_mountopts));
                 /* NB: Files created while extents are enabled cannot be read
-                   if mounted with a kernel that doesn't include the CFS
+                   if mounted with a kernel that doesn't include the Lustre ldiskfs
                    patches! */
                 if (IS_OST(ldd) &&
                     (ldd->ldd_mount_type == LDD_MT_LDISKFS ||

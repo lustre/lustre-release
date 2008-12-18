@@ -1,27 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/mgc/mgc_request.c
- *  Lustre Management Client
+ * GPL HEADER START
  *
- *  Copyright (C) 2006 Cluster File Systems, Inc.
- *   Author: Nathan Rutman <nathan@clusterfs.com>
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of Lustre, http://www.lustre.org
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
  *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/mgc/mgc_request.c
+ *
+ * Author: Nathan Rutman <nathan@clusterfs.com>
  */
 
 #ifndef EXPORT_SYMTAB
@@ -73,7 +87,7 @@ static int mgc_name2resid(char *name, int len, struct ldlm_res_id *res_id)
 int mgc_fsname2resid(char *fsname, struct ldlm_res_id *res_id)
 {
         /* fsname is at most 8 chars long, maybe contain "-".
-         * e.g. "lustre", "CFS-000" */
+         * e.g. "lustre", "SUN-000" */
         return mgc_name2resid(fsname, strlen(fsname), res_id);
 }
 EXPORT_SYMBOL(mgc_fsname2resid);
@@ -84,7 +98,7 @@ int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id)
         int len;
 
         /* logname consists of "fsname-nodetype".
-         * e.g. "lustre-MDT0001", "CFS-000-client" */
+         * e.g. "lustre-MDT0001", "SUN-000-client" */
         name_end = strrchr(logname, '-');
         LASSERT(name_end);
         len = name_end - logname;
@@ -218,6 +232,8 @@ static int config_log_add(char *logname, struct config_llog_instance *cfg,
         RETURN(rc);
 }
 
+DECLARE_MUTEX(llog_process_lock);
+
 /* Stop watching for updates on this log. */
 static int config_log_end(char *logname, struct config_llog_instance *cfg)
 {       
@@ -231,7 +247,10 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
         /* drop the ref from the find */
         config_log_put(cld);
 
+        down(&llog_process_lock);
         cld->cld_stopping = 1;
+        up(&llog_process_lock);
+
         /* drop the start ref */
         config_log_put(cld);
         CDEBUG(D_MGC, "end config log %s (%d)\n", logname ? logname : "client",
@@ -322,16 +341,17 @@ static int mgc_requeue_add(struct config_llog_data *cld, int later)
         CDEBUG(D_INFO, "log %s: requeue (l=%d r=%d sp=%d st=%x)\n", 
                cld->cld_logname, later, atomic_read(&cld->cld_refcount),
                cld->cld_stopping, rq_state);
-        
+
         /* Hold lock for rq_state */
         spin_lock(&config_list_lock);
-        cld->cld_lostlock = 1;
 
         if (cld->cld_stopping || (rq_state & RQ_STOP)) {
                 spin_unlock(&config_list_lock);
                 config_log_put(cld);
                 RETURN(0);
         }
+
+        cld->cld_lostlock = 1;
 
         if (!(rq_state & RQ_RUNNING)) {
                 LASSERT(rq_state == 0);
@@ -662,14 +682,10 @@ static int mgc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         int rc;
         ENTRY;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        MOD_INC_USE_COUNT;
-#else
         if (!try_module_get(THIS_MODULE)) {
                 CERROR("Can't get module. Is it alive?");
                 return -EINVAL;
         }
-#endif
         switch (cmd) {
         /* REPLicator context */
         case OBD_IOC_PARSE: {
@@ -703,11 +719,7 @@ static int mgc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 GOTO(out, rc = -ENOTTY);
         }
 out:
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        MOD_DEC_USE_COUNT;
-#else
         module_put(THIS_MODULE);
-#endif
 
         return rc;
 }
@@ -759,7 +771,7 @@ static int mgc_set_mgs_param(struct obd_export *exp,
         struct ptlrpc_request *req;
         struct mgs_send_param *req_msp, *rep_msp;
         int size[] = { sizeof(struct ptlrpc_body), sizeof(*req_msp) };
-        int rep_size[] = { sizeof(struct ptlrpc_body), sizeof(*msp) };
+        __u32 rep_size[] = { sizeof(struct ptlrpc_body), sizeof(*msp) };
         int rc;
         ENTRY;
 
@@ -880,17 +892,16 @@ static int mgc_import_event(struct obd_device *obd,
         CDEBUG(D_MGC, "import event %#x\n", event);
 
         switch (event) {
-        case IMP_EVENT_DISCON: 
-                /* MGC imports should not wait for recovery */
+        case IMP_EVENT_DISCON:
                 break;
-        case IMP_EVENT_INACTIVE: 
+        case IMP_EVENT_INACTIVE:
                 break;
         case IMP_EVENT_INVALIDATE: {
                 struct ldlm_namespace *ns = obd->obd_namespace;
                 ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
                 break;
         }
-        case IMP_EVENT_ACTIVE: 
+        case IMP_EVENT_ACTIVE:
                 LCONSOLE_WARN("%s: Reactivating import\n", obd->obd_name);
                 /* Clearing obd_no_recov allows us to continue pinging */
                 obd->obd_no_recov = 0;
@@ -923,6 +934,10 @@ static int mgc_llog_init(struct obd_device *obd, struct obd_device *tgt,
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
                 llog_initiator_connect(ctxt);
                 llog_ctxt_put(ctxt);
+        } else {
+                ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+                if (ctxt)
+                        llog_cleanup(ctxt);
         }
 
         RETURN(rc);
@@ -1051,7 +1066,8 @@ out_closel:
                 struct client_obd *cli = &obd->u.cli;
                 LASSERT(cli);
                 LASSERT(cli->cl_mgc_configs_dir);
-                rc = lustre_rename(cli->cl_mgc_configs_dir, temp_log, logname);
+                rc = lustre_rename(cli->cl_mgc_configs_dir, cli->cl_mgc_vfsmnt,
+                                   temp_log, logname);
         }
         CDEBUG(D_MGC, "Copied remote log %s (%d)\n", logname, rc);
 out:
@@ -1060,8 +1076,6 @@ out:
         OBD_FREE(temp_log, strlen(logname) + 1);
         RETURN(rc);
 }
-
-DECLARE_MUTEX(llog_process_lock);
 
 /* Get a config log from the MGS and process it.
    This func is called for both clients and servers. */
@@ -1081,8 +1095,17 @@ static int mgc_process_log(struct obd_device *mgc,
                 CERROR("Missing cld, aborting log update\n");
                 RETURN(-EINVAL);
         }
-        if (cld->cld_stopping) 
+
+        /* I don't want mutliple processes running process_log at once -- 
+           sounds like badness.  It actually might be fine, as long as 
+           we're not trying to update from the same log
+           simultaneously (in which case we should use a per-log sem.) */
+        down(&llog_process_lock);
+
+        if (cld->cld_stopping) {
+                up(&llog_process_lock);
                 RETURN(0);
+        }
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_MGC_PAUSE_PROCESS_LOG, 20);
 
@@ -1094,14 +1117,9 @@ static int mgc_process_log(struct obd_device *mgc,
         ctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
         if (!ctxt) {
                 CERROR("missing llog context\n");
+                up(&llog_process_lock);
                 RETURN(-EINVAL);
         }
-
-        /* I don't want mutliple processes running process_log at once -- 
-           sounds like badness.  It actually might be fine, as long as 
-           we're not trying to update from the same log
-           simultaneously (in which case we should use a per-log sem.) */
-        down(&llog_process_lock);
 
         /* Get the cfg lock on the llog */
         rcl = mgc_enqueue(mgc->u.cli.cl_mgc_mgsexp, NULL, LDLM_PLAIN, NULL, 
@@ -1276,7 +1294,7 @@ static void /*__exit*/ mgc_exit(void)
         class_unregister_type(LUSTRE_MGC_NAME);
 }
 
-MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Management Client");
 MODULE_LICENSE("GPL");
 

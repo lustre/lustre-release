@@ -1,26 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
@@ -63,7 +74,7 @@ void request_out_callback(lnet_event_t *ev)
                 req->rq_net_err = 1;
                 spin_unlock(&req->rq_lock);
 
-                ptlrpc_wake_client_req(req);
+                ptlrpc_client_wake_req(req);
         }
 
         ptlrpc_req_finished(req);
@@ -82,7 +93,7 @@ void reply_in_callback(lnet_event_t *ev)
 
         DEBUG_REQ((ev->status == 0) ? D_NET : D_ERROR, req,
                   "type %d, status %d", ev->type, ev->status);
-        
+
         LASSERT(ev->type == LNET_EVENT_PUT || ev->type == LNET_EVENT_UNLINK);
         LASSERT(ev->md.start == req->rq_repbuf);
         LASSERT(ev->mlength <= req->rq_replen);
@@ -94,16 +105,18 @@ void reply_in_callback(lnet_event_t *ev)
 
         req->rq_receiving_reply = 0;
         req->rq_early = 0;
-        
+        if (ev->unlinked)
+                req->rq_must_unlink = 0;
+
         if (ev->status)
                 goto out_wake;
         if (ev->type == LNET_EVENT_UNLINK) {
-                req->rq_must_unlink = 0;
+                LASSERT(ev->unlinked);
                 DEBUG_REQ(D_RPCTRACE, req, "unlink");
                 goto out_wake;
         }
 
-        if ((ev->offset == 0) && 
+        if ((ev->offset == 0) &&
             (lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT)) {
                 /* Early reply */
                 DEBUG_REQ(D_ADAPTTO, req,
@@ -111,23 +124,15 @@ void reply_in_callback(lnet_event_t *ev)
                           "replied=%d unlinked=%d", ev->mlength, ev->offset,
                           req->rq_replen, req->rq_replied, ev->unlinked);
 
-                if (unlikely(ev->mlength != lustre_msg_early_size()))
+                if (unlikely(ev->mlength != lustre_msg_early_size(req)))
                         CERROR("early reply sized %u, expect %u\n",
-                               ev->mlength, lustre_msg_early_size());
+                               ev->mlength, lustre_msg_early_size(req));
 
                 req->rq_early_count++; /* number received, client side */
-                if (req->rq_replied) {
-                        /* If we already got the real reply, then we need to
-                         * check if lnet_finalize() unlinked the md.  In that
-                         * case, there will be no further callback of type
-                         * LNET_EVENT_UNLINK.
-                         */
-                        if (ev->unlinked)
-                                req->rq_must_unlink = 0;
-                        else
-                                DEBUG_REQ(D_RPCTRACE, req, "unlinked in reply");
+
+                if (req->rq_replied)   /* already got the real reply */
                         goto out_wake;
-                }
+
                 req->rq_early = 1;
                 req->rq_nob_received = ev->mlength;
                 /* repmsg points to early reply */
@@ -136,6 +141,7 @@ void reply_in_callback(lnet_event_t *ev)
                 req->rq_receiving_reply = 1;
         } else {
                 /* Real reply */
+                req->rq_rep_swab_mask = 0;
                 req->rq_replied = 1;
                 req->rq_nob_received = ev->mlength;
                 /* repmsg points to real reply */
@@ -154,7 +160,7 @@ void reply_in_callback(lnet_event_t *ev)
 out_wake:
         /* NB don't unlock till after wakeup; req can disappear under us
          * since we don't have our own ref */
-        ptlrpc_wake_client_req(req);
+        ptlrpc_client_wake_req(req);
         spin_unlock(&req->rq_lock);
         EXIT;
 }
@@ -195,7 +201,7 @@ void client_bulk_callback (lnet_event_t *ev)
 
         /* NB don't unlock till after wakeup; desc can disappear under us
          * otherwise */
-        ptlrpc_wake_client_req(desc->bd_req);
+        ptlrpc_client_wake_req(desc->bd_req);
 
         spin_unlock(&desc->bd_lock);
         EXIT;

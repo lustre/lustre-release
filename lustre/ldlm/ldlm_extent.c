@@ -1,27 +1,42 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
- *   Author: Peter Braam <braam@clusterfs.com>
- *   Author: Phil Schwan <phil@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/ldlm/ldlm_extent.c
+ *
+ * Author: Peter Braam <braam@clusterfs.com>
+ * Author: Phil Schwan <phil@clusterfs.com>
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
@@ -32,6 +47,7 @@
 #include <lustre_dlm.h>
 #include <obd_support.h>
 #include <obd.h>
+#include <obd_class.h>
 #include <lustre_lib.h>
 
 #include "ldlm_internal.h"
@@ -686,10 +702,25 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                 if (list_empty(&lock->l_res_link))
                         ldlm_resource_add_lock(res, &res->lr_waiting, lock);
                 unlock_res(res);
-                rc = ldlm_run_bl_ast_work(&rpc_list);
-                lock_res(res);
 
+                rc = ldlm_run_bl_ast_work(&rpc_list);
+
+                if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_OST_FAIL_RACE) &&
+                    !ns_is_client(res->lr_namespace))
+                        class_fail_export(lock->l_export);
+
+                lock_res(res);
                 if (rc == -ERESTART) {
+                        /* 15715: The lock was granted and destroyed after
+                         * resource lock was dropped. Interval node was freed
+                         * in ldlm_lock_destroy. Anyway, this always happens
+                         * when a client is being evicted. So it would be
+                         * ok to return an error. -jay */
+                        if (lock->l_destroyed) {
+                                *err = -EAGAIN;
+                                GOTO(out, rc = -EAGAIN);
+                        }
+
                         /* lock was granted while resource was unlocked. */
                         if (lock->l_granted_mode == lock->l_req_mode) {
                                 /* bug 11300: if the lock has been granted,
@@ -778,6 +809,7 @@ void ldlm_interval_free(struct ldlm_interval *node)
 {
         if (node) {
                 LASSERT(list_empty(&node->li_group));
+                LASSERT(!interval_is_intree(&node->li_node));
                 OBD_SLAB_FREE(node, ldlm_interval_slab, sizeof(*node));
         }
 }
@@ -830,6 +862,7 @@ void ldlm_extent_add_lock(struct ldlm_resource *res,
 
         node = lock->l_tree_node;
         LASSERT(node != NULL);
+        LASSERT(!interval_is_intree(&node->li_node));
 
         idx = lock_mode_to_index(lock->l_granted_mode);
         LASSERT(lock->l_granted_mode == 1 << idx);
@@ -857,14 +890,13 @@ void ldlm_extent_add_lock(struct ldlm_resource *res,
 void ldlm_extent_unlink_lock(struct ldlm_lock *lock)
 {
         struct ldlm_resource *res = lock->l_resource;
-        struct ldlm_interval *node;
+        struct ldlm_interval *node = lock->l_tree_node;
         struct ldlm_interval_tree *tree;
         int idx;
 
-        if (lock->l_granted_mode != lock->l_req_mode)
+        if (!node || !interval_is_intree(&node->li_node)) /* duplicate unlink */
                 return;
 
-        LASSERT(lock->l_tree_node != NULL);
         idx = lock_mode_to_index(lock->l_granted_mode);
         LASSERT(lock->l_granted_mode == 1 << idx);
         tree = &res->lr_itree[idx];

@@ -1,25 +1,43 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Lustre Lite I/O page cache routines for the 2.5/2.6 kernel version
+ * GPL HEADER START
  *
- *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
  */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/llite/rw26.c
+ *
+ * Lustre Lite I/O page cache routines for the 2.5/2.6 kernel version
+ */
+
 #ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
@@ -36,7 +54,6 @@
 
 #include <linux/fs.h>
 #include <linux/buffer_head.h>
-#include <linux/mpage.h>
 #include <linux/writeback.h>
 #include <linux/stat.h>
 #include <asm/uaccess.h>
@@ -80,7 +97,12 @@ static void ll_invalidatepage(struct page *page, unsigned long offset)
 }
 #endif
 
-static int ll_releasepage(struct page *page, gfp_t gfp_mask)
+#ifdef HAVE_RELEASEPAGE_WITH_GFP
+#define RELEASEPAGE_ARG_TYPE gfp_t
+#else
+#define RELEASEPAGE_ARG_TYPE int
+#endif
+static int ll_releasepage(struct page *page, RELEASEPAGE_ARG_TYPE gfp_mask)
 {
         if (PagePrivate(page))
                 ll_removepage(page);
@@ -159,7 +181,7 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
                 /* To the end of the page, or the length, whatever is less */
                 pga[i].count = min_t(int, CFS_PAGE_SIZE -(file_offset & ~CFS_PAGE_MASK),
                                      length);
-                pga[i].flag = 0;
+                pga[i].flag = OBD_BRW_SYNC;
                 if (rw == READ)
                         POISON_PAGE(pages[i], 0x0d);
         }

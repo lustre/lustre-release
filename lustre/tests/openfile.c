@@ -1,5 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #if 0
@@ -60,13 +92,13 @@ int main(int argc, char** argv)
         int    fd;
         int    flags = 0;
         mode_t mode = 0644;
-        char*  fname = NULL;
+        char  *fname = NULL;
         int    mode_set = 0;
         int    flag_set = 0;
         int    c;
         int    save_errno = 0;
         int    print_usage = 0;
-        char*  cloned_flags = NULL;
+        char  *cloned_flags = NULL;
 
         if (argc == 1)
                 Usage_and_abort();
@@ -91,9 +123,10 @@ int main(int argc, char** argv)
                                 printf("flags = %d\n",flags);
 #endif
                                 break;
-                        } else 
+                        } else {
                                 flags = 0;
-                        
+                        }
+
                         for (tmp = strtok(cloned_flags, ":|"); tmp;
                              tmp = strtok(NULL, ":|")) {
                                 int i = 0;
@@ -170,11 +203,10 @@ int main(int argc, char** argv)
         } else {
                 fprintf(stderr, "Error in opening file \"%s\"(flags=%s",
                         fname, cloned_flags);
+                if (mode_set)
+                        fprintf(stderr, ", mode=%o", mode);
+                fprintf(stderr, ") %d: %s\n", save_errno, strerror(save_errno));
         }
-
-        if (mode_set)
-                fprintf(stderr, ", mode=%o", mode);
-        fprintf(stderr, ") %d: %s\n", save_errno, strerror(save_errno));
 
 out:
         if (cloned_flags)
@@ -184,4 +216,3 @@ out:
 
         return save_errno;
 }
-

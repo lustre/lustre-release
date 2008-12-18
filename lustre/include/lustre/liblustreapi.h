@@ -1,8 +1,39 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *   This file is part of Lustre, http://www.lustre.org
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
  */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ */
+
 #ifndef _LIBLUSTREAPI_H_
 #define _LIBLUSTREAPI_H_
 
@@ -36,12 +67,21 @@ enum llapi_message_level {
 extern void llapi_msg_set_level(int level);
 extern void llapi_err(int level, char *fmt, ...);
 extern void llapi_printf(int level, char *fmt, ...);
-extern int llapi_file_create(const char *name, unsigned long stripe_size,
+extern int llapi_file_create(const char *name, unsigned long long stripe_size,
                              int stripe_offset, int stripe_count,
                              int stripe_pattern);
 extern int llapi_file_open(const char *name, int flags, int mode,
-                           unsigned long stripe_size, int stripe_offset,
+                           unsigned long long stripe_size, int stripe_offset,
                            int stripe_count, int stripe_pattern);
+extern int llapi_file_create_pool(const char *name,
+                                  unsigned long long stripe_size,
+                                  int stripe_offset, int stripe_count,
+                                  int stripe_pattern, char *pool_name);
+extern int llapi_file_open_pool(const char *name, int flags, int mode,
+                                unsigned long long stripe_size,
+                                int stripe_offset, int stripe_count,
+                                int stripe_pattern, char *pool_name);
+extern int llapi_poollist(char *name);
 extern int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);
 #define HAVE_LLAPI_FILE_LOOKUP
 extern int llapi_file_lookup(int dirfd, const char *name);
@@ -72,7 +112,9 @@ struct find_param {
                         exclude_gid:1,
                         exclude_uid:1,
                         check_gid:1,
-                        check_uid:1;
+                        check_uid:1,
+                        check_pool:1,
+                        exclude_pool:1;
 
         int     verbose;
         int     quiet;
@@ -94,6 +136,8 @@ struct find_param {
         /* In-precess parameters. */
         unsigned int depth;
         dev_t   st_dev;
+
+        char poolname[LOV_MAXPOOLNAME + 1];
 };
 
 extern int llapi_getstripe(char *path, struct find_param *param);
@@ -106,11 +150,13 @@ extern int llapi_ping(char *obd_type, char *obd_name);
 extern int llapi_target_check(int num_types, char **obd_types, char *dir);
 extern int llapi_catinfo(char *dir, char *keyword, char *node_name);
 extern int llapi_file_get_lov_uuid(const char *path, struct obd_uuid *lov_uuid);
-extern int llapi_file_get_lov_fuuid(int fd, struct obd_uuid *lov_uuid);
+extern int llapi_file_fget_lov_uuid(int fd, struct obd_uuid *lov_uuid);
 extern int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count);
 extern int llapi_is_lustre_mnttype(const char *type);
 extern int parse_size(char *optarg, unsigned long long *size,
                       unsigned long long *size_units, int bytes_spec);
+extern void llapi_ping_target(char *obd_type, char *obd_name,
+                              char *obd_uuid, void *args);
 struct mntent;
 #define HAVE_LLAPI_IS_LUSTRE_MNT
 extern int llapi_is_lustre_mnt(struct mntent *mnt);

@@ -1,29 +1,48 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2002 Cluster File Systems, Inc.
- *   Author: Robert Read <rread@clusterfs.com>
- *   Author: Nathan Rutman <nathan@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/utils/mount_lustre.c
+ *
+ * Author: Robert Read <rread@clusterfs.com>
+ * Author: Nathan Rutman <nathan@clusterfs.com>
  */
 
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -33,21 +52,23 @@
 #include <sys/mount.h>
 #include <mntent.h>
 #include <getopt.h>
-#include <sys/utsname.h>
 #include "obdctl.h"
 #include <lustre_ver.h>
 #include <glob.h>
 #include <ctype.h>
 #include <limits.h>
+#include "mount_utils.h"
 
 #define MAX_HW_SECTORS_KB_PATH  "queue/max_hw_sectors_kb"
 #define MAX_SECTORS_KB_PATH     "queue/max_sectors_kb"
+#define MAX_RETRIES 99
 
 int          verbose = 0;
 int          nomtab = 0;
 int          fake = 0;
 int          force = 0;
-static char *progname = NULL;
+int          retry = 0;
+char         *progname = NULL;
 
 void usage(FILE *out)
 {
@@ -72,6 +93,7 @@ void usage(FILE *out)
                 "\t\tnomgs: only start target obds, using existing MGS\n"
                 "\t\texclude=<ostname>[:<ostname>] : colon-separated list of "
                 "inactive OSTs (e.g. lustre-OST0001)\n"
+                "\t\tretry=<num>: number of times mount is retried by client\n"
                 );
         exit((out != stdout) ? EINVAL : 0);
 }
@@ -237,7 +259,7 @@ static int parse_one_option(const char *check, int *flagp)
    fill in mount flags */
 int parse_options(char *orig_options, int *flagp)
 {
-        char *options, *opt, *nextopt;
+        char *options, *opt, *nextopt, *arg, *val;
 
         options = calloc(strlen(orig_options) + 1, 1);
         *flagp = 0;
@@ -246,7 +268,19 @@ int parse_options(char *orig_options, int *flagp)
                 if (!*opt)
                         /* empty option */
                         continue;
-                if (parse_one_option(opt, flagp) == 0) {
+
+                /* Handle retries in a slightly different
+                 * manner */
+                arg = opt;
+                val = strchr(opt, '=');
+                if (val != NULL && strncmp(arg, "retry", 5) == 0) {
+                        retry = atoi(val + 1);
+                        if (retry > MAX_RETRIES)
+                                retry = MAX_RETRIES;
+                        else if (retry < 0)
+                                retry = 0;
+                }
+                else if (parse_one_option(opt, flagp) == 0) {
                         /* pass this on as an option */
                         if (*options)
                                 strcat(options, ",");
@@ -306,7 +340,7 @@ int set_tunables(char *source, int src_len)
         ret_path = realpath(source, real_path);
         if (ret_path == NULL) {
                 if (verbose)
-                        fprintf(stderr, "warning: %s: cannot resolve: %s",
+                        fprintf(stderr, "warning: %s: cannot resolve: %s\n",
                                 source, strerror(errno));
                 return -EINVAL;
         }
@@ -548,16 +582,39 @@ int main(int argc, char *const argv[])
                 printf("mounting device %s at %s, flags=%#x options=%s\n",
                        source, target, flags, optcopy);
 
-        if (set_tunables(source, strlen(source)) && verbose)
+        if (!strstr(usource, ":/") && set_tunables(source, strlen(source)) &&
+            verbose)
                 fprintf(stderr, "%s: unable to set tunables for %s"
-                                " (may cause reduced IO performance)",
+                                " (may cause reduced IO performance)\n",
                                 argv[0], source);
 
-        if (!fake)
+        register_service_tags(usource, source, target);
+
+        if (!fake) {
                 /* flags and target get to lustre_get_sb, but not
                    lustre_fill_super.  Lustre ignores the flags, but mount
                    does not. */
-                rc = mount(source, target, "lustre", flags, (void *)optcopy);
+                for (i = 0, rc = -EAGAIN; i <= retry && rc != 0; i++) {
+                        rc = mount(source, target, "lustre", flags,
+                                   (void *)optcopy);
+                        if (rc) {
+                                if (verbose) {
+                                        fprintf(stderr, "%s: mount %s at %s "
+                                                "failed: %s retries left: "
+                                                "%d\n", basename(progname),
+                                                usource, target,
+                                                strerror(errno), retry-i);
+                                }
+
+                                if (retry) {
+                                        sleep(1 << max((i/2), 5));
+                                }
+                                else {
+                                        rc = errno;
+                                }
+                        }
+                }
+        }
 
         if (rc) {
                 char *cli;

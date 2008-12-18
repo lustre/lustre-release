@@ -1,12 +1,10 @@
-Index: linux-2.6.9-5.0.3.EL/drivers/scsi/Kconfig
+Index: linux-2.6.18-53.1.21/drivers/scsi/Kconfig
 ===================================================================
-Index: linux-2.6.9/drivers/scsi/Kconfig
-===================================================================
---- linux-2.6.9.orig/drivers/scsi/Kconfig	2007-07-23 14:19:13.000000000 +0400
-+++ linux-2.6.9/drivers/scsi/Kconfig	2007-07-26 14:16:36.000000000 +0400
-@@ -61,6 +61,14 @@ config SCSI_DUMP
- 	help
- 	   SCSI dump support
+--- linux-2.6.18-53.1.21.orig/drivers/scsi/Kconfig
++++ linux-2.6.18-53.1.21/drivers/scsi/Kconfig
+@@ -66,6 +66,14 @@ config BLK_DEV_SD
+ 	  In this case, do not compile the driver for your SCSI host adapter
+ 	  (below) as a module either.
  
 +config SD_IOSTATS
 +   bool "Enable SCSI disk I/O stats"
@@ -19,11 +17,11 @@ Index: linux-2.6.9/drivers/scsi/Kconfig
  config CHR_DEV_ST
  	tristate "SCSI tape support"
  	depends on SCSI
-Index: linux-2.6.9/drivers/scsi/scsi_proc.c
+Index: linux-2.6.18-53.1.21/drivers/scsi/scsi_proc.c
 ===================================================================
---- linux-2.6.9.orig/drivers/scsi/scsi_proc.c	2007-03-13 02:47:28.000000000 +0300
-+++ linux-2.6.9/drivers/scsi/scsi_proc.c	2007-07-26 14:16:36.000000000 +0400
-@@ -38,7 +38,8 @@
+--- linux-2.6.18-53.1.21.orig/drivers/scsi/scsi_proc.c
++++ linux-2.6.18-53.1.21/drivers/scsi/scsi_proc.c
+@@ -40,7 +40,8 @@
  /* 4K page size, but our output routines, use some slack for overruns */
  #define PROC_BLOCK_SIZE (3*1024)
  
@@ -32,12 +30,12 @@ Index: linux-2.6.9/drivers/scsi/scsi_proc.c
 +EXPORT_SYMBOL(proc_scsi);
  
  /* Protect sht->present and sht->proc_dir */
- static DECLARE_MUTEX(global_host_template_sem);
-Index: linux-2.6.9/drivers/scsi/sd.c
+ static DEFINE_MUTEX(global_host_template_mutex);
+Index: linux-2.6.18-53.1.21/drivers/scsi/sd.c
 ===================================================================
---- linux-2.6.9.orig/drivers/scsi/sd.c	2007-03-13 02:47:27.000000000 +0300
-+++ linux-2.6.9/drivers/scsi/sd.c	2007-07-28 14:55:56.000000000 +0400
-@@ -63,6 +63,67 @@
+--- linux-2.6.18-53.1.21.orig/drivers/scsi/sd.c
++++ linux-2.6.18-53.1.21/drivers/scsi/sd.c
+@@ -62,6 +62,63 @@
  
  #include "scsi_logging.h"
  
@@ -46,15 +44,15 @@ Index: linux-2.6.9/drivers/scsi/sd.c
 +# include <linux/seq_file.h>
 +
 +typedef struct {
-+        unsigned long long iostat_size;
-+        unsigned long long iostat_count;
++	unsigned long long iostat_size;
++	unsigned long long iostat_count;
 +} iostat_counter_t;
 +
 +#define IOSTAT_NCOUNTERS 16
 +typedef struct {
-+        iostat_counter_t        iostat_read_histogram[IOSTAT_NCOUNTERS];
-+        iostat_counter_t        iostat_write_histogram[IOSTAT_NCOUNTERS];
-+        struct timeval          iostat_timeval;
++	iostat_counter_t	iostat_read_histogram[IOSTAT_NCOUNTERS];
++	iostat_counter_t	iostat_write_histogram[IOSTAT_NCOUNTERS];
++	struct timeval		iostat_timeval;
 +
 +	/* queue depth: how well the pipe is filled up */
 +	unsigned long long	iostat_queue_ticks[IOSTAT_NCOUNTERS];
@@ -79,24 +77,20 @@ Index: linux-2.6.9/drivers/scsi/sd.c
 +	unsigned long		iostat_rtime_in_queue[IOSTAT_NCOUNTERS];
 +	unsigned long		iostat_wtime_in_queue[IOSTAT_NCOUNTERS];
 +
-+	char			iostat_name[32];
-+
 +	/* must be the last field, as it's used to know size to be memset'ed */
-+	spinlock_t              iostat_lock;
-+}  ____cacheline_aligned_in_smp iostat_stats_t;
++	spinlock_t		iostat_lock;
++} ____cacheline_aligned_in_smp iostat_stats_t;
 +
-+iostat_stats_t       **sd_iostats;
-+struct proc_dir_entry *sd_iostats_procdir;
-+char                   sd_iostats_procdir_name[] = "sd_iostats";
++struct proc_dir_entry *sd_iostats_procdir = NULL;
++char sd_iostats_procdir_name[] = "sd_iostats";
++static struct file_operations sd_iostats_proc_fops;
 +
 +extern void sd_iostats_init(void);
-+extern void sd_iostats_init_disk(struct gendisk *);
 +extern void sd_iostats_fini(void);
 +void sd_iostats_start_req(struct scsi_cmnd *SCpnt);
 +void sd_iostats_finish_req(struct scsi_cmnd *SCpnt);
 +#else
 +static inline void sd_iostats_init(void) {}
-+static inline void sd_iostats_init_disk(struct gendisk *disk) {}
 +static inline void sd_iostats_fini(void) {}
 +static inline void sd_iostats_start_req(struct scsi_cmnd *SCpnt) {}
 +static inline void sd_iostats_finish_req(struct scsi_cmnd *SCpnt) {}
@@ -105,42 +99,73 @@ Index: linux-2.6.9/drivers/scsi/sd.c
  /*
   * More than enough for everybody ;)  The huge number of majors
   * is a leftover from 16bit dev_t days, we don't really need that
-@@ -76,6 +137,7 @@
-  */
- #define SD_MAX_DISKS	(((26 * 26) + 26 + 1) * 26)
+@@ -126,6 +183,9 @@ struct scsi_disk {
+ 	unsigned	WCE : 1;	/* state of disk WCE bit */
+ 	unsigned	RCD : 1;	/* state of disk RCD bit, unused */
+ 	unsigned	DPOFUA : 1;	/* state of disk DPOFUA bit */
++#if (defined(CONFIG_SD_IOSTATS) && defined(CONFIG_PROC_FS))
++	iostat_stats_t	*stats;		/* scsi disk statistics */
++#endif
+ };
+ #define to_scsi_disk(obj) container_of(obj,struct scsi_disk,cdev)
  
-+#define SD_STATS 256
- /*
-  * Time out in seconds for disks and Magneto-opticals (which are slower).
-  */
-@@ -278,6 +340,8 @@ static int sd_init_command(struct scsi_c
- 	SCSI_LOG_HLQUEUE(2, printk("%s : block=%llu\n",
- 				   disk->disk_name, (unsigned long long)block));
+@@ -557,6 +617,8 @@ static int sd_init_command(struct scsi_c
+ 	 */
+ 	SCpnt->done = sd_rw_intr;
  
 +	sd_iostats_start_req(SCpnt);
 +
  	/*
- 	 * If we have a 1K hardware sectorsize, prevent access to single
- 	 * 512 byte sectors.  In theory we could handle this - in fact
-@@ -474,6 +538,7 @@ static int sd_open(struct inode *inode, 
- 			scsi_set_medium_removal(sdev, SCSI_REMOVAL_PREVENT);
- 	}
- 
-+   sd_iostats_init_disk(disk);
- 	return 0;
- 
- error_out:
-@@ -849,6 +914,7 @@ static void sd_rw_intr(struct scsi_cmnd 
+ 	 * This indicates that the command is ready from our end to be
+ 	 * queued.
+@@ -1040,6 +1102,7 @@ static void sd_rw_intr(struct scsi_cmnd 
  		break;
  	}
   out:
 +	sd_iostats_finish_req(SCpnt);
  	scsi_io_completion(SCpnt, good_bytes);
  }
-
-@@ -1575,6 +1643,481 @@ static void sd_shutdown(struct device *d
- 	sd_sync_cache(sdp);
- }	
+ 
+@@ -1735,6 +1798,36 @@ static int sd_probe(struct device *dev)
+ 	if (sdp->removable)
+ 		gd->flags |= GENHD_FL_REMOVABLE;
+ 
++#if (defined(CONFIG_SD_IOSTATS) && defined(CONFIG_PROC_FS))
++	sdkp->stats = kzalloc(sizeof(iostat_stats_t), GFP_KERNEL);
++	if (!sdkp->stats) {
++		printk(KERN_WARNING "cannot allocate iostat structure for"
++				    "%s\n", gd->disk_name);
++	} else {
++		do_gettimeofday(&sdkp->stats->iostat_timeval);
++		sdkp->stats->iostat_queue_stamp = jiffies;
++		spin_lock_init(&sdkp->stats->iostat_lock);
++		if (sd_iostats_procdir) {
++			struct proc_dir_entry *pde;
++			pde = create_proc_entry(gd->disk_name, S_IRUGO | S_IWUSR,
++					        sd_iostats_procdir);
++			if (!pde) {
++				printk(KERN_WARNING "Can't create /proc/scsi/"
++						    "%s/%s\n",
++						    sd_iostats_procdir_name,
++						    gd->disk_name);
++				kfree(sdkp->stats);
++				sdkp->stats = NULL;
++			} else {
++				pde->proc_fops = &sd_iostats_proc_fops;
++				pde->data = gd;
++			}
++		} else {
++			kfree(sdkp->stats);
++			sdkp->stats = NULL;
++		}
++	}
++#endif
+ 	dev_set_drvdata(dev, sdkp);
+ 	add_disk(gd);
+ 
+@@ -1778,6 +1871,366 @@ static int sd_remove(struct device *dev)
+ 	return 0;
+ }
  
 +#if (defined(CONFIG_SD_IOSTATS) && defined(CONFIG_PROC_FS))
 +static int
@@ -160,12 +185,7 @@ Index: linux-2.6.9/drivers/scsi/sd.c
 +	int                i;
 +	int                maxi;
 +
-+	if (sd_iostats == NULL) {
-+		printk(KERN_ERR "sd_iostats_seq_show: NULL stats array\n");
-+		BUG();
-+	}
-+
-+	stats = sd_iostats[scsi_disk(disk)->index];
++	stats = scsi_disk(disk)->stats;
 +	if (stats == NULL) {
 +		printk(KERN_ERR "sd_iostats_seq_show: NULL stats entry\n");
 +		BUG();
@@ -312,7 +332,7 @@ Index: linux-2.6.9/drivers/scsi/sd.c
 +static int
 +sd_iostats_seq_open (struct inode *inode, struct file *file)
 +{
-+	int                    rc;
++	int rc;
 +
 +	rc = seq_open(file, &sd_iostats_seqops);
 +	if (rc != 0)
@@ -324,11 +344,11 @@ Index: linux-2.6.9/drivers/scsi/sd.c
 +
 +static ssize_t
 +sd_iostats_seq_write(struct file *file, const char *buffer,
-+                     size_t len, loff_t *off)
++		     size_t len, loff_t *off)
 +{
 +	struct seq_file   *seq = file->private_data;
 +	struct gendisk *disk = seq->private;
-+	iostat_stats_t    *stats = sd_iostats[scsi_disk(disk)->index];
++	iostat_stats_t    *stats = scsi_disk(disk)->stats;
 +	unsigned long      flags;
 +	unsigned long      qdepth;
 +
@@ -358,19 +378,6 @@ Index: linux-2.6.9/drivers/scsi/sd.c
 +void
 +sd_iostats_init(void)
 +{
-+	int    i;
-+
-+	sd_iostats = kmalloc(SD_STATS * sizeof(iostat_stats_t *), GFP_KERNEL);
-+	if (sd_iostats == NULL) {
-+		printk(KERN_WARNING "Can't keep sd iostats: "
-+			"ENOMEM allocating stats array size %d\n",
-+			SD_STATS * sizeof(iostat_stats_t *));
-+		return;
-+	}
-+
-+	for (i = 0; i < SD_STATS; i++)
-+		sd_iostats[i] = NULL;
-+
 +	if (proc_scsi == NULL) {
 +		printk(KERN_WARNING "No access to sd iostats: "
 +			"proc_scsi is NULL\n");
@@ -378,97 +385,21 @@ Index: linux-2.6.9/drivers/scsi/sd.c
 +	}
 +
 +	sd_iostats_procdir = create_proc_entry(sd_iostats_procdir_name,
-+			S_IFDIR | S_IRUGO | S_IXUGO,
-+			proc_scsi);
++					       S_IFDIR | S_IRUGO | S_IXUGO,
++					        proc_scsi);
 +	if (sd_iostats_procdir == NULL) {
 +		printk(KERN_WARNING "No access to sd iostats: "
 +			"can't create /proc/scsi/%s\n", sd_iostats_procdir_name);
 +		return;
-+        }
-+}
-+
-+void
-+sd_iostats_init_disk(struct gendisk *disk)
-+{
-+	struct proc_dir_entry *pde;
-+	unsigned long          flags;
-+	iostat_stats_t        *stats;
-+
-+	if (sd_iostats == NULL || sd_iostats_procdir == NULL)
-+		return;
-+
-+	if (scsi_disk(disk)->index > SD_STATS) {
-+		printk(KERN_ERR "sd_iostats_init_disk: "
-+			"unexpected disk index %d(%d)\n",
-+			scsi_disk(disk)->index, SD_STATS);
-+		return;
-+	}
-+
-+	if (sd_iostats[scsi_disk(disk)->index] != NULL)
-+		return;
-+
-+	stats = kmalloc(sizeof(*stats), GFP_KERNEL);
-+	if (stats == NULL) {
-+		printk(KERN_WARNING "Can't keep %s iostats: "
-+			"ENOMEM allocating stats size %d\n", 
-+			disk->disk_name, sizeof(*stats));
-+		return;
-+	}
-+
-+	memset (stats, 0, sizeof(*stats));
-+	do_gettimeofday(&stats->iostat_timeval);
-+	stats->iostat_queue_stamp = jiffies;
-+	spin_lock_init(&stats->iostat_lock);
-+
-+
-+	spin_lock_irqsave(&stats->iostat_lock, flags);
-+
-+	if (sd_iostats[scsi_disk(disk)->index] != NULL) {
-+		spin_unlock_irqrestore(&stats->iostat_lock, flags);
-+		kfree (stats);
-+		return;
-+	}
-+
-+	sd_iostats[scsi_disk(disk)->index] = stats;
-+
-+	spin_unlock_irqrestore(&stats->iostat_lock, flags);
-+
-+	strncpy(stats->iostat_name, disk->disk_name,
-+		sizeof(stats->iostat_name)-1);
-+
-+	pde = create_proc_entry(stats->iostat_name, S_IRUGO | S_IWUSR,
-+				sd_iostats_procdir);
-+	if (pde == NULL) {
-+		printk(KERN_WARNING "Can't create /proc/scsi/%s/%s\n",
-+			sd_iostats_procdir_name, disk->disk_name);
-+	} else {
-+		pde->proc_fops = &sd_iostats_proc_fops;
-+		pde->data = disk;
 +	}
 +}
 +
 +void sd_iostats_fini(void)
 +{
-+	int  i;
-+
-+	if (sd_iostats == NULL)
-+		return;
-+
-+	for (i = 0; i < SD_STATS; i++) {
-+		if (sd_iostats[i] == NULL)
-+			continue;
-+		if (sd_iostats_procdir != NULL)
-+			remove_proc_entry(sd_iostats[i]->iostat_name,
-+						sd_iostats_procdir);
-+		kfree(sd_iostats[i]);
-+	}
-+
 +	if (proc_scsi != NULL && sd_iostats_procdir != NULL)
 +		remove_proc_entry(sd_iostats_procdir_name, proc_scsi);
 +
 +	sd_iostats_procdir = NULL;
-+	kfree(sd_iostats);
-+	sd_iostats = NULL;
 +}
 +
 +void sd_iostats_finish_req(struct scsi_cmnd *SCpnt)
@@ -479,31 +410,20 @@ Index: linux-2.6.9/drivers/scsi/sd.c
 +	int			tbucket;
 +	int			tmp;
 +	unsigned long		irqflags;
-+	int			disk, i;
++	unsigned long		i;
 +
-+	disk = scsi_disk(rq->rq_disk)->index;
-+
-+	if (sd_iostats == NULL)
-+		return;
-+
-+	if (disk < 0 || disk >= SD_STATS) {
-+		printk(KERN_ERR "sd_iostats_bump: unexpected disk index "
-+		        "%d([0-%d])\n", disk, SD_STATS);
-+		BUG();
-+	}
-+
-+	stats = sd_iostats[disk];
++	stats = scsi_disk(rq->rq_disk)->stats;
 +	if (stats == NULL)
 +		return;
 +
-+	tmp = jiffies -  rq->start_time;
++	tmp = jiffies - rq->start_time;
 +	for (tbucket = 0; tmp > 1; tbucket++)
 +		tmp >>= 1;
 +	if (tbucket >= IOSTAT_NCOUNTERS)
 +		tbucket = IOSTAT_NCOUNTERS - 1;
 +	//printk("%u ticks in D to %u\n", jiffies - rq->start_time, tbucket);
 +
-+	tcounter = rq_data_dir(rq) == WRITE ? 
++	tcounter = rq_data_dir(rq) == WRITE ?
 +		&stats->iostat_wtime[tbucket] : &stats->iostat_rtime[tbucket];
 +
 +	spin_lock_irqsave(&stats->iostat_lock, irqflags);
@@ -517,13 +437,14 @@ Index: linux-2.6.9/drivers/scsi/sd.c
 +		i = IOSTAT_NCOUNTERS - 1;
 +	stats->iostat_queue_ticks[i] += jiffies - stats->iostat_queue_stamp;
 +	stats->iostat_queue_ticks_sum += jiffies - stats->iostat_queue_stamp;
++	BUG_ON(stats->iostat_queue_depth == 0);
 +	stats->iostat_queue_depth--;
 +
 +	/* update seek stats. XXX: not sure about nr_sectors */
 +	stats->iostat_sectors += rq->nr_sectors;
 +	stats->iostat_reqs++;
 +	if (rq->sector != stats->iostat_next_sector) {
-+		stats->iostat_seek_sectors += 
++		stats->iostat_seek_sectors +=
 +			rq->sector > stats->iostat_next_sector ?
 +			rq->sector - stats->iostat_next_sector :
 +			stats->iostat_next_sector - rq->sector;
@@ -545,21 +466,10 @@ Index: linux-2.6.9/drivers/scsi/sd.c
 +	int			tbucket;
 +	int			tmp;
 +	unsigned long		irqflags;
-+	int			disk, i;
++	unsigned long		i;
 +	int			nsect;
 +
-+	disk = scsi_disk(rq->rq_disk)->index;
-+
-+	if (sd_iostats == NULL)
-+		return;
-+
-+	if (disk < 0 || disk >= SD_STATS) {
-+		printk(KERN_ERR "sd_iostats_bump: unexpected disk index %d([0-%d])\n",
-+			disk, SD_STATS);
-+		BUG();
-+	}
-+
-+	stats = sd_iostats[disk];
++	stats = scsi_disk(rq->rq_disk)->stats;
 +	if (stats == NULL)
 +		return;
 +
@@ -572,7 +482,7 @@ Index: linux-2.6.9/drivers/scsi/sd.c
 +		BUG();
 +	}
 +
-+	counter = rq_data_dir(rq) == WRITE ? 
++	counter = rq_data_dir(rq) == WRITE ?
 +		&stats->iostat_write_histogram[bucket] :
 +		&stats->iostat_read_histogram[bucket];
 +
@@ -618,33 +528,54 @@ Index: linux-2.6.9/drivers/scsi/sd.c
 +#endif
 +
  /**
-  *	init_sd - entry point for this driver (both when built in or when
-  *	a module).
-@@ -1584,6 +2127,7 @@ static void sd_shutdown(struct device *d
+  *	scsi_disk_release - Called to free the scsi_disk structure
+  *	@cdev: pointer to embedded class device
+@@ -1796,10 +2249,16 @@ static void scsi_disk_release(struct cla
+ 	idr_remove(&sd_index_idr, sdkp->index);
+ 	spin_unlock(&sd_index_lock);
+ 
++#if (defined(CONFIG_SD_IOSTATS) && defined(CONFIG_PROC_FS))
++	if (sdkp->stats) {
++		remove_proc_entry(disk->disk_name, sd_iostats_procdir);
++		kfree(sdkp->stats);
++		sdkp->stats = NULL;
++	}
++#endif
+ 	disk->private_data = NULL;
+ 	put_disk(disk);
+ 	put_device(&sdkp->device->sdev_gendev);
+-
+ 	kfree(sdkp);
+ }
+ 
+@@ -1907,6 +2366,7 @@ done:
  static int __init init_sd(void)
  {
  	int majors = 0, i;
-+   int rc = 0;
++	int rc = 0;
  
  	SCSI_LOG_HLQUEUE(3, printk("init_sd: sd driver entry point\n"));
  
-@@ -1594,7 +2138,10 @@ static int __init init_sd(void)
+@@ -1917,9 +2377,13 @@ static int __init init_sd(void)
  	if (!majors)
  		return -ENODEV;
  
++	sd_iostats_init();
+ 	class_register(&sd_disk_class);
+ 
 -	return scsi_register_driver(&sd_template.gendrv);
-+   rc = scsi_register_driver(&sd_template.gendrv);
-+   if (rc == 0)
-+      sd_iostats_init();
-+   return rc;
++	rc = scsi_register_driver(&sd_template.gendrv);
++	if (rc)
++		sd_iostats_fini();
++	return rc;
  }
  
  /**
-@@ -1608,6 +2155,7 @@ static void __exit exit_sd(void)
- 
- 	SCSI_LOG_HLQUEUE(3, printk("exit_sd: exiting sd driver\n"));
- 
-+   sd_iostats_fini();
- 	scsi_unregister_driver(&sd_template.gendrv);
- 	for (i = 0; i < SD_MAJORS; i++)
+@@ -1938,6 +2402,7 @@ static void __exit exit_sd(void)
  		unregister_blkdev(sd_major(i), "sd");
+ 
+ 	class_unregister(&sd_disk_class);
++	sd_iostats_fini();
+ }
+ 
+ module_init(init_sd);

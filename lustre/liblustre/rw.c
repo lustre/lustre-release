@@ -1,24 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/liblustre/rw.c
+ *
  * Lustre Light block IO
- *
- *  Copyright (c) 2002-2004 Cluster File Systems, Inc.
- *
- *   This file is part of Lustre, http://www.lustre.org.
- *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
- *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define DEBUG_SUBSYSTEM S_LLITE
@@ -93,8 +110,7 @@ static int llu_lock_to_stripe_offset(struct inode *inode, struct ldlm_lock *lock
         struct {
                 char name[16];
                 struct ldlm_lock *lock;
-                struct lov_stripe_md *lsm;
-        } key = { .name = KEY_LOCK_TO_STRIPE, .lock = lock, .lsm = lsm };
+        } key = { .name = KEY_LOCK_TO_STRIPE, .lock = lock };
         __u32 stripe, vallen = sizeof(stripe);
         int rc;
         ENTRY;
@@ -103,7 +119,7 @@ static int llu_lock_to_stripe_offset(struct inode *inode, struct ldlm_lock *lock
                 RETURN(0);
 
         /* get our offset in the lov */
-        rc = obd_get_info(exp, sizeof(key), &key, &vallen, &stripe);
+        rc = obd_get_info(exp, sizeof(key), &key, &vallen, &stripe, lsm);
         if (rc != 0) {
                 CERROR("obd_get_info: rc = %d\n", rc);
                 LBUG();
@@ -179,7 +195,7 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         struct inode *inode = llu_inode_from_lock(lock);
         struct llu_inode_info *lli;
         struct ost_lvb *lvb;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*lvb) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*lvb) };
         int rc, stripe = 0;
         ENTRY;
 
@@ -256,7 +272,11 @@ int llu_glimpse_size(struct inode *inode)
                 RETURN(rc > 0 ? -EIO : rc);
         }
 
+        lov_stripe_lock(lli->lli_smd);
         inode_init_lvb(inode, &lvb);
+        /* merge timestamps the most resently obtained from mds with
+           timestamps obtained from osts */
+        lvb = lli->lli_lvb;
         rc = obd_merge_lvb(sbi->ll_osc_exp, lli->lli_smd, &lvb, 0);
         st->st_size = lvb.lvb_size;
         st->st_blocks = lvb.lvb_blocks;
@@ -266,6 +286,7 @@ int llu_glimpse_size(struct inode *inode)
         st->st_mtime = lvb.lvb_mtime;
         st->st_atime = lvb.lvb_atime;
         st->st_ctime = lvb.lvb_ctime;
+        lov_stripe_unlock(lli->lli_smd);
 
         CDEBUG(D_DLMTRACE, "glimpse: size: "LPU64", blocks: "LPU64"\n",
                (__u64)st->st_size, (__u64)st->st_blocks);
@@ -689,6 +710,23 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
                 }
         } else if (lli->lli_open_flags & O_APPEND) {
                 pos = st->st_size;
+        }
+
+        if (local_lock) {
+                struct ost_lvb xtimes;
+
+                lov_stripe_lock(lsm);
+                /* inode might mtime and ctime set earlier in race with stat
+                 * which merged into inode timestamps obtained from mds and
+                 * osts */
+                st->st_atime = st->st_mtime = st->st_ctime = CURRENT_TIME;
+                xtimes.lvb_atime = st->st_atime;
+                xtimes.lvb_mtime = st->st_mtime;
+                xtimes.lvb_ctime = st->st_ctime;
+                obd_update_lvb(exp, lsm, &xtimes,
+                               is_read ? OBD_MD_FLATIME :
+                               (OBD_MD_FLMTIME | OBD_MD_FLCTIME));
+                lov_stripe_unlock(lsm);
         }
 
         for (iovidx = 0; iovidx < iovlen; iovidx++) {

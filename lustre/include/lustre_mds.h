@@ -1,7 +1,39 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *   This file is part of Lustre, http://www.lustre.org
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/include/lustre_mds.h
  *
  * MDS data structures.
  * See also lustre_idl.h for wire formats of requests.
@@ -171,13 +203,14 @@ struct obd_client_handle;
 void mdc_set_open_replay_data(struct obd_client_handle *och,
                               struct ptlrpc_request *open_req);
 void mdc_clear_open_replay_data(struct obd_client_handle *och);
-int mdc_close(struct obd_export *, struct obdo *, struct obd_client_handle *,
-              struct ptlrpc_request **);
+int mdc_close(struct obd_export *, struct mdc_op_data *, struct obdo *,
+              struct obd_client_handle *, struct ptlrpc_request **);
 int mdc_readpage(struct obd_export *exp, struct ll_fid *mdc_fid, __u64 offset,
                  struct page *, struct ptlrpc_request **);
 int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
                const void *data, int datalen, int mode, __u32 uid, __u32 gid,
-               __u32 cap_effective, __u64 rdev,struct ptlrpc_request **request);
+               cfs_cap_t cap_effective, __u64 rdev,
+               struct ptlrpc_request **request);
 int mdc_unlink(struct obd_export *exp, struct mdc_op_data *data,
                struct ptlrpc_request **request);
 int mdc_link(struct obd_export *exp, struct mdc_op_data *data,
@@ -196,10 +229,10 @@ int mdc_resource_get_unused(struct obd_export *exp, struct ll_fid *fid,
 void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,
                                 int repoff);
 int mdc_llog_process(struct obd_export *, char *logname, llog_cb_t, void *data);
-int mdc_done_writing(struct obd_export *exp, struct obdo *);
+int mdc_done_writing(struct obd_export *, struct mdc_op_data *, struct obdo *);
 
-static inline void mdc_pack_fid(struct ll_fid *fid, obd_id ino, __u32 gen,
-                                int type)
+static inline void ll_pack_fid(struct ll_fid *fid, obd_id ino, __u32 gen,
+                               int type)
 {
         fid->id = ino;
         fid->generation = gen;
@@ -237,7 +270,6 @@ typedef int (* md_enqueue_cb_t)(struct obd_export *exp,
                                 int rc);
 
 struct md_enqueue_info {
-        struct obd_export      *mi_exp;
         struct mdc_op_data      mi_data;
         struct lookup_intent    mi_it;
         struct lustre_handle    mi_lockh;
@@ -245,11 +277,6 @@ struct md_enqueue_info {
         md_enqueue_cb_t         mi_cb;
         unsigned int            mi_generation;
         void                   *mi_cbdata;
-};
-
-struct mdc_enqueue_args {
-        struct md_enqueue_info   *ma_mi;
-        struct ldlm_enqueue_info *ma_ei;
 };
 
 #endif

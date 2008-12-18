@@ -1,6 +1,39 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
  */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ */
+
 #ifndef _LUSTRE_QUOTA_H
 #define _LUSTRE_QUOTA_H
 
@@ -18,6 +51,7 @@
 #include <lustre_net.h>
 #include <lvfs.h>
 #include <obd_support.h>
+#include <class_hash.h>
 
 struct obd_device;
 struct client_obd;
@@ -29,6 +63,40 @@ struct client_obd;
 #ifdef HAVE_QUOTA_SUPPORT
 
 #ifdef __KERNEL__
+
+#ifdef LPROCFS
+enum {
+        LQUOTA_FIRST_STAT = 0,
+        /* these four are for measuring quota requests, for both of
+         * quota master and quota slaves */
+        LQUOTA_SYNC_ACQ = LQUOTA_FIRST_STAT,
+        LQUOTA_SYNC_REL,
+        LQUOTA_ASYNC_ACQ,
+        LQUOTA_ASYNC_REL,
+        /* these four measure how much time I/O threads spend on dealing
+         * with quota before and after writing data or creating files,
+         * only for quota slaves(lquota_chkquota and lquota_pending_commit) */
+        LQUOTA_WAIT_FOR_CHK_BLK,
+        LQUOTA_WAIT_FOR_CHK_INO,
+        LQUOTA_WAIT_FOR_COMMIT_BLK,
+        LQUOTA_WAIT_FOR_COMMIT_INO,
+        /* these two are for measuring time waiting return of quota reqs
+         * (qctxt_wait_pending_dqacq), only for quota salves */
+        LQUOTA_WAIT_PENDING_BLK_QUOTA,
+        LQUOTA_WAIT_PENDING_INO_QUOTA,
+        /* these two are for those when they are calling
+         * qctxt_wait_pending_dqacq, the quota req has returned already,
+         * only for quota salves */
+        LQUOTA_NOWAIT_PENDING_BLK_QUOTA,
+        LQUOTA_NOWAIT_PENDING_INO_QUOTA,
+        /* these are for quota ctl */
+        LQUOTA_QUOTA_CTL,
+        /* these are for adjust quota qunit, for both of
+         * quota master and quota slaves  */
+        LQUOTA_ADJUST_QUNIT,
+        LQUOTA_LAST_STAT
+};
+#endif  /* LPROCFS */
 
 /* structures to access admin quotafile */
 struct lustre_mem_dqinfo {
@@ -93,7 +161,6 @@ struct dquot_id {
 #define QFILE_CONVERT           7
 
 /* admin quotafile operations */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 int lustre_check_quota_file(struct lustre_quota_info *lqi, int type);
 int lustre_read_quota_info(struct lustre_quota_info *lqi, int type);
 int lustre_write_quota_info(struct lustre_quota_info *lqi, int type);
@@ -103,46 +170,6 @@ int lustre_init_quota_info(struct lustre_quota_info *lqi, int type);
 int lustre_get_qids(struct file *file, struct inode *inode, int type,
                     struct list_head *list);
 int lustre_quota_convert(struct lustre_quota_info *lqi, int type);
-#else
-
-#ifndef DQ_FAKE_B
-#define DQ_FAKE_B       6
-#endif
-
-static inline int lustre_check_quota_file(struct lustre_quota_info *lqi,
-                                          int type)
-{
-        return 0;
-}
-static inline int lustre_read_quota_info(struct lustre_quota_info *lqi,
-                                         int type)
-{
-        return 0;
-}
-static inline int lustre_write_quota_info(struct lustre_quota_info *lqi,
-                                          int type)
-{
-        return 0;
-}
-static inline int lustre_read_dquot(struct lustre_dquot *dquot)
-{
-        return 0;
-}
-static inline int lustre_commit_dquot(struct lustre_dquot *dquot)
-{
-        return 0;
-}
-static inline int lustre_init_quota_info(struct lustre_quota_info *lqi,
-                                         int type)
-{
-        return 0;
-}
-static inline int lustre_quota_convert(struct lustre_quota_info *lqi,
-                                       int type)
-{
-        return 0;
-}
-#endif  /* KERNEL_VERSION(2,5,0) */
 
 #define LL_DQUOT_OFF(sb)    DQUOT_OFF(sb)
 
@@ -163,8 +190,13 @@ struct lustre_quota_ctxt {
         dqacq_handler_t lqc_handler;    /* dqacq/dqrel RPC handler, only for quota master */
         unsigned long lqc_flags;        /* quota flags */
         unsigned long lqc_recovery:1,   /* Doing recovery */
-                      lqc_switch_qs:1;  /* the function of change qunit size
+                      lqc_switch_qs:1,  /* the function of change qunit size
                                          * 0:Off, 1:On */
+                      lqc_valid:1,      /* this qctxt is valid or not */
+                      lqc_setup:1;      /* tell whether of not quota_type has
+                                         * been processed, so that the master
+                                         * knows when it can start processing
+                                         * incoming acq/rel quota requests */
         unsigned long lqc_iunit_sz;     /* original unit size of file quota and
                                          * upper limitation for adjust file
                                          * qunit */
@@ -176,9 +208,8 @@ struct lustre_quota_ctxt {
                                          * upper limitation for adjust block
                                          * qunit */
         unsigned long lqc_btune_sz;     /* See comment of lqc_itune_sz */
-        struct lustre_class_hash_body *lqc_lqs_hash_body;
-                                        /* all lustre_qunit_size structure in
-                                         * it */
+        struct lustre_hash *lqc_lqs_hash; /* all lustre_qunit_size structures */
+
         /* the values below are relative to how master change its qunit sizes */
         unsigned long lqc_cqs_boundary_factor; /* this affects the boundary of
                                                 * shrinking and enlarging qunit
@@ -192,10 +223,20 @@ struct lustre_quota_ctxt {
                                              * adjusting qunit size. How many
                                              * seconds must be waited between
                                              * enlarging and shinking qunit */
+        int           lqc_sync_blk;         /* when blk qunit reaches this value,
+                                             * later write reqs from client
+                                             * should be sync b=16642 */
         spinlock_t    lqc_lock;         /* guard lqc_imp_valid now */
+        cfs_waitq_t   lqc_wait_for_qmaster; /* when mds isn't connected, threads
+                                             * on osts who send the quota reqs
+                                             * with wait==1 will be put here
+                                             * b=14840 */
+        struct proc_dir_entry *lqc_proc_dir;
+        struct lprocfs_stats  *lqc_stats; /* lquota statistics */
 };
 
-#define LQC_HASH_BODY(qctxt) (qctxt->lqc_lqs_hash_body)
+#define QUOTA_MASTER_READY(qctxt)   (qctxt)->lqc_setup = 1
+#define QUOTA_MASTER_UNREADY(qctxt) (qctxt)->lqc_setup = 0
 
 struct lustre_qunit_size {
         struct hlist_node lqs_hash; /* the hash entry */
@@ -219,6 +260,8 @@ struct lustre_qunit_size {
         cfs_time_t lqs_last_bshrink;   /* time of last block shrink */
         cfs_time_t lqs_last_ishrink;   /* time of last inode shrink */
         spinlock_t lqs_lock;
+        struct quota_adjust_qunit lqs_key; /* hash key */
+        struct lustre_quota_ctxt *lqs_ctxt; /* quota ctxt */
 };
 
 #define LQS_IS_GRP(lqs)    ((lqs)->lqs_flags & LQUOTA_FLAGS_GRP)
@@ -232,15 +275,24 @@ struct lustre_qunit_size {
 static inline void lqs_getref(struct lustre_qunit_size *lqs)
 {
         atomic_inc(&lqs->lqs_refcount);
+        CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
+               lqs, atomic_read(&lqs->lqs_refcount));
 }
 
 static inline void lqs_putref(struct lustre_qunit_size *lqs)
 {
-        if (atomic_dec_and_test(&lqs->lqs_refcount)) {
-                spin_lock(&lqs->lqs_lock);
-                hlist_del_init(&lqs->lqs_hash);
-                spin_unlock(&lqs->lqs_lock);
+        LASSERT(atomic_read(&lqs->lqs_refcount) > 0);
+
+        /* killing last ref, let's let hash table kill it */
+        if (atomic_read(&lqs->lqs_refcount) == 1) {
+                lustre_hash_del(lqs->lqs_ctxt->lqc_lqs_hash,
+                                &lqs->lqs_key, &lqs->lqs_hash);
                 OBD_FREE_PTR(lqs);
+        } else {
+                atomic_dec(&lqs->lqs_refcount);
+                CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
+                       lqs, atomic_read(&lqs->lqs_refcount));
+
         }
 }
 
@@ -269,6 +321,9 @@ struct lustre_quota_info {
 struct lustre_quota_ctxt {
 };
 
+#define QUOTA_MASTER_READY(qctxt)
+#define QUOTA_MASTER_UNREADY(qctxt)
+
 #endif /* !HAVE_QUOTA_SUPPORT */
 
 /* If the (quota limit < qunit * slave count), the slave which can't
@@ -282,8 +337,9 @@ struct quotacheck_thread_args {
         atomic_t            *qta_sem;   /* obt_quotachecking */
 };
 
-typedef int (*quota_acquire)(struct obd_device *obd,
-                             unsigned int uid, unsigned int gid);
+struct obd_trans_info;
+typedef int (*quota_acquire)(struct obd_device *obd, unsigned int uid,
+                             unsigned int gid, struct obd_trans_info *oti);
 
 typedef struct {
         int (*quota_init) (void);
@@ -311,33 +367,36 @@ typedef struct {
 
         /* For quota slave, check whether specified uid/gid is over quota */
         int (*quota_getflag) (struct obd_device *, struct obdo *);
-
+#ifdef __KERNEL__
         /* For quota slave, acquire/release quota from master if needed */
-        int (*quota_acquire) (struct obd_device *, unsigned int, unsigned int);
+        int (*quota_acquire) (struct obd_device *, unsigned int, unsigned int,
+                              struct obd_trans_info *);
 
         /* For quota slave, check whether specified uid/gid's remaining quota
          * can finish a block_write or inode_create rpc. It updates the pending
          * record of block and inode, acquires quota if necessary */
         int (*quota_chkquota) (struct obd_device *, unsigned int, unsigned int,
-                               int, int *, quota_acquire);
+                               int, int *, quota_acquire,
+                               struct obd_trans_info *, struct inode *, int);
 
+        /* For quota client, the actions after the pending write is committed */
+        int (*quota_pending_commit) (struct obd_device *, unsigned int,
+                                     unsigned int, int);
+#endif
         /* For quota client, poll if the quota check done */
         int (*quota_poll_check) (struct obd_export *, struct if_quotacheck *);
 
         /* For quota client, check whether specified uid/gid is over quota */
         int (*quota_chkdq) (struct client_obd *, unsigned int, unsigned int);
 
-        /* For quota client, the actions after the pending write is committed */
-        int (*quota_pending_commit) (struct obd_device *, unsigned int,
-                                     unsigned int, int);
-
         /* For quota client, set over quota flag for specifed uid/gid */
         int (*quota_setdq) (struct client_obd *, unsigned int, unsigned int,
                             obd_flag, obd_flag);
 
         /* For adjusting qunit size b=10600 */
-        int (*quota_adjust_qunit) (struct obd_export *exp, struct
-                                   quota_adjust_qunit *oqaq);
+        int (*quota_adjust_qunit) (struct obd_export *exp,
+                                   struct quota_adjust_qunit *oqaq,
+                                   struct lustre_quota_ctxt *qctxt);
 
 } quota_interface_t;
 
@@ -517,22 +576,25 @@ static inline int lquota_getflag(quota_interface_t *interface,
         RETURN(rc);
 }
 
+#ifdef __KERNEL__
 static inline int lquota_acquire(quota_interface_t *interface,
                                  struct obd_device *obd,
-                                 unsigned int uid, unsigned int gid)
+                                 unsigned int uid, unsigned int gid,
+                                 struct obd_trans_info *oti)
 {
         int rc;
         ENTRY;
 
         QUOTA_CHECK_OP(interface, acquire);
-        rc = QUOTA_OP(interface, acquire)(obd, uid, gid);
+        rc = QUOTA_OP(interface, acquire)(obd, uid, gid, oti);
         RETURN(rc);
 }
 
 static inline int lquota_chkquota(quota_interface_t *interface,
                                   struct obd_device *obd,
-                                  unsigned int uid, unsigned int gid,
-                                  int count, int *flag)
+                                  unsigned int uid, unsigned int gid, int count,
+                                  int *flag, struct obd_trans_info *oti,
+                                  struct inode *inode, int frags)
 {
         int rc;
         ENTRY;
@@ -540,52 +602,42 @@ static inline int lquota_chkquota(quota_interface_t *interface,
         QUOTA_CHECK_OP(interface, chkquota);
         QUOTA_CHECK_OP(interface, acquire);
         rc = QUOTA_OP(interface, chkquota)(obd, uid, gid, count, flag,
-                                           QUOTA_OP(interface, acquire));
+                                           QUOTA_OP(interface, acquire), oti,
+                                           inode, frags);
         RETURN(rc);
 }
 
 static inline int lquota_pending_commit(quota_interface_t *interface,
                                         struct obd_device *obd,
                                         unsigned int uid, unsigned int gid,
-                                        int npage)
+                                        int pending)
 {
         int rc;
         ENTRY;
 
         QUOTA_CHECK_OP(interface, pending_commit);
-        rc = QUOTA_OP(interface, pending_commit)(obd, uid, gid, npage);
+        rc = QUOTA_OP(interface, pending_commit)(obd, uid, gid, pending);
         RETURN(rc);
 }
-
-int lprocfs_quota_rd_bunit(char *page, char **start, off_t off, int count,
-                           int *eof, void *data);
-int lprocfs_quota_wr_bunit(struct file *file, const char *buffer,
-                           unsigned long count, void *data);
-int lprocfs_quota_rd_btune(char *page, char **start, off_t off, int count,
-                           int *eof, void *data);
-int lprocfs_quota_wr_btune(struct file *file, const char *buffer,
-                           unsigned long count, void *data);
-int lprocfs_quota_rd_iunit(char *page, char **start, off_t off, int count,
-                           int *eof, void *data);
-int lprocfs_quota_wr_iunit(struct file *file, const char *buffer,
-                           unsigned long count, void *data);
-int lprocfs_quota_rd_itune(char *page, char **start, off_t off, int count,
-                           int *eof, void *data);
-int lprocfs_quota_wr_itune(struct file *file, const char *buffer,
-                           unsigned long count, void *data);
-int lprocfs_quota_rd_type(char *page, char **start, off_t off, int count,
-                          int *eof, void *data);
-int lprocfs_quota_wr_type(struct file *file, const char *buffer,
-                          unsigned long count, void *data);
-int lprocfs_quota_rd_switch_seconds(char *page, char **start, off_t off,
-                                    int count, int *eof, void *data);
-int lprocfs_quota_wr_switch_seconds(struct file *file, const char *buffer,
-                                    unsigned long count, void *data);
+#endif
 
 #ifndef __KERNEL__
 extern quota_interface_t osc_quota_interface;
 extern quota_interface_t mdc_quota_interface;
 extern quota_interface_t lov_quota_interface;
+
+#ifndef MAXQUOTAS
+#define MAXQUOTAS 2
+#endif
+
+#ifndef USRQUOTA
+#define USRQUOTA 0
+#endif
+
+#ifndef GRPQUOTA
+#define GRPQUOTA 1
+#endif
+
 #endif
 
 #define LUSTRE_ADMIN_QUOTAFILES_V1 {\

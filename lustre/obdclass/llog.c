@@ -1,32 +1,46 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
- *   Author: Andreas Dilger <adilger@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/obdclass/llog.c
  *
  * OST<->MDS recovery logging infrastructure.
- *
  * Invariants in implementation:
  * - we do not share logs among different OST<->MDS connections, so that
  *   if an OST or MDS fails it need only look at log(s) relevant to itself
+ *
+ * Author: Andreas Dilger <adilger@clusterfs.com>
  */
 
 #define DEBUG_SUBSYSTEM S_LOG
@@ -86,17 +100,17 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
         int rc = 0;
         ENTRY;
 
-        CDEBUG(D_RPCTRACE, "canceling %d in log "LPX64"\n",
+        CDEBUG(D_RPCTRACE, "Canceling %d in log "LPX64"\n",
                index, loghandle->lgh_id.lgl_oid);
 
         if (index == 0) {
-                CERROR("cannot cancel index 0 (which is header)\n");
+                CERROR("Can't cancel index 0 which is header\n");
                 RETURN(-EINVAL);
         }
 
         if (!ext2_clear_bit(index, llh->llh_bitmap)) {
-                CDEBUG(D_RPCTRACE, "catalog index %u already clear?\n", index);
-                RETURN(-EINVAL);
+                CDEBUG(D_RPCTRACE, "Catalog index %u already clear?\n", index);
+                RETURN(-ENOENT);
         }
 
         llh->llh_count--;
@@ -106,7 +120,7 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
             (loghandle->lgh_last_idx == (LLOG_BITMAP_BYTES * 8) - 1)) {
                 rc = llog_destroy(loghandle);
                 if (rc) {
-                        CERROR("failure destroying log after last cancel: %d\n",
+                        CERROR("Failure destroying log after last cancel: %d\n",
                                rc);
                         ext2_set_bit(index, llh->llh_bitmap);
                         llh->llh_count++;
@@ -118,7 +132,7 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
 
         rc = llog_write_rec(loghandle, &llh->llh_hdr, NULL, 0, NULL, 0);
         if (rc) {
-                CERROR("failure re-writing header %d\n", rc);
+                CERROR("Failure re-writing header %d\n", rc);
                 ext2_set_bit(index, llh->llh_bitmap);
                 llh->llh_count++;
         }
@@ -231,11 +245,11 @@ static int llog_process_thread(void *arg)
         cfs_daemonize_ctxt("llog_process_thread");
 
         if (cd != NULL) {
-                last_called_index = cd->first_idx;
-                index = cd->first_idx + 1;
+                last_called_index = cd->lpcd_first_idx;
+                index = cd->lpcd_first_idx + 1;
         }
-        if (cd != NULL && cd->last_idx)
-                last_index = cd->last_idx;
+        if (cd != NULL && cd->lpcd_last_idx)
+                last_index = cd->lpcd_last_idx;
         else
                 last_index = LLOG_BITMAP_BYTES * 8 - 1;
 
@@ -333,7 +347,7 @@ static int llog_process_thread(void *arg)
 
  out:
         if (cd != NULL)
-                cd->last_idx = last_called_index;
+                cd->lpcd_last_idx = last_called_index;
         if (buf)
                 OBD_FREE(buf, LLOG_CHUNK_SIZE);
         lpi->lpi_rc = rc;
@@ -400,9 +414,9 @@ int llog_reverse_process(struct llog_handle *loghandle, llog_cb_t cb,
                 RETURN(-ENOMEM);
 
         if (cd != NULL)
-                first_index = cd->first_idx + 1;
-        if (cd != NULL && cd->last_idx)
-                index = cd->last_idx;
+                first_index = cd->lpcd_first_idx + 1;
+        if (cd != NULL && cd->lpcd_last_idx)
+                index = cd->lpcd_last_idx;
         else
                 index = LLOG_BITMAP_BYTES * 8 - 1;
 

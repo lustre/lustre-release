@@ -35,9 +35,11 @@ assert_env mds_HOST MDS_MKFS_OPTS MDSDEV
 assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
 assert_env LIVE_CLIENT FSNAME
 
+remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
+remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
 
-# This can be a regexp, to allow more clients
-CLIENTS=${CLIENTS:-"`comma_list $LIVE_CLIENT $FAIL_CLIENTS`"}
+# FAIL_CLIENTS list should not contain the LIVE_CLIENT
+FAIL_CLIENTS=$(echo " $FAIL_CLIENTS " | sed -re "s/\s+$LIVE_CLIENT\s+/ /g")
 
 DIR=${DIR:-$MOUNT}
 
@@ -71,13 +73,6 @@ shutdown_client() {
     fi
 }
 
-reboot_node() {
-    NODE=$1
-    if [ "$FAILURE_MODE" = HARD ]; then
-       $POWER_UP $NODE
-    fi
-}
-
 fail_clients() {
     num=$1
 
@@ -103,7 +98,7 @@ fail_clients() {
     echo "down clients: $DOWN_CLIENTS"
 
     for client in $DOWN_CLIENTS; do
-	reboot_node $client
+	boot_node $client
     done
     DOWN_NUM=`echo $DOWN_CLIENTS | wc -w`
     client_rmdirs
@@ -160,7 +155,7 @@ clients_recover_osts() {
 #    do_node $CLIENTS "$LCTL "'--device %OSC_`hostname`_'"${facet}_svc_MNT_client_facet recover"
 }
 
-cleanup_and_setup_lustre
+check_and_setup_lustre
 
 # 9 Different Failure Modes Combinations
 echo "Starting Test 17 at `date`"
@@ -370,6 +365,7 @@ test_6() {
     echo "Test Lustre stability after OST failure"
     client_df &
     DFPIDA=$!
+    echo DFPIDA=$DFPIDA
     sleep 5
 
     #CLIENT Portion
@@ -380,17 +376,20 @@ test_6() {
     echo "Test Lustre stability after CLIENTs failure"
     client_df &
     DFPIDB=$!
+    echo DFPIDB=$DFPIDB
     sleep 5
     
     #Reintegration
     echo "Reintegrating OST/CLIENTs"
     wait_for ost1
     start_ost 1
-    reintegrate_clients
+    reintegrate_clients || return 1
     sleep 5 
 
+    wait_remote_prog df $((TIMEOUT * 3 + 10)) 
     wait $DFPIDA
     wait $DFPIDB
+
     echo "Verifying mount"
     [ -z "$(mounted_lustre_filesystems)" ] && return 3
     client_df
@@ -579,4 +578,4 @@ run_test 10 "Running Availability for 6 hours..."
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

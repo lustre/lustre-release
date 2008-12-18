@@ -1,26 +1,43 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/mgs/mgs_llog.c
- *  Lustre Management Server (mgs) config llog creation
+ * GPL HEADER START
  *
- *  Copyright (C) 2006 Cluster File Systems, Inc.
- *   Author: Nathan Rutman <nathan@clusterfs.com>
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/mgs/mgs_llog.c
+ *
+ * Lustre Management Server (mgs) config llog creation
+ *
+ * Author: Nathan Rutman <nathan@clusterfs.com>
  */
 
 #ifndef EXPORT_SYMTAB
@@ -1073,8 +1090,10 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
         rc = record_attach(obd, llh, mti->mti_svname, LUSTRE_MDS_NAME, 
                            mti->mti_uuid);
         rc = record_setup(obd, llh, mti->mti_svname,
-                          "dev"/*ignored*/, "type"/*ignored*/,
-                          mti->mti_svname, 0/*options*/);
+                          mti->mti_uuid /* Ignored. Compatible with future. */,
+                          "0" /* MDT Index, default to zero. */,
+                          mti->mti_svname,
+                          0 /* options */);
         rc = record_marker(obd, llh, fsdb, CM_END, mti->mti_svname, "add mdt"); 
         rc = record_end_log(obd, &llh);
 
@@ -1944,6 +1963,10 @@ int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname)
         ptr = strrchr(devname, '-');
         memset(fsname, 0, MTI_NAME_MAXLEN);
         if (ptr && (server_name2index(ptr, &index, NULL) >= 0)) {
+                /* param related to llite isn't allowed to set by OST or MDT */
+                if (strncmp(param, PARAM_LLITE, sizeof(PARAM_LLITE)) == 0)
+                        RETURN(-EINVAL);
+
                 strncpy(fsname, devname, ptr - devname);
         } else {
                 /* assume devname is the fsname */
@@ -1990,6 +2013,145 @@ out:
         RETURN(rc);
 }
 
+
+static int mgs_write_log_pool(struct obd_device *obd, char *logname, struct fs_db *fsdb,
+                       char *lovname,
+                       enum lcfg_command_type cmd,
+                       char *poolname, char *fsname,
+                       char *ostname, char *comment)
+{
+        struct llog_handle *llh = NULL;
+        int rc;
+
+        rc = record_start_log(obd, &llh, logname);
+        if (rc)
+                RETURN(rc);
+        rc = record_marker(obd, llh, fsdb, CM_START, lovname, comment);
+        record_base(obd, llh, lovname, 0, cmd, poolname, fsname, ostname, 0);
+        rc = record_marker(obd, llh, fsdb, CM_END, lovname, comment);
+        rc = record_end_log(obd, &llh);
+
+        return(rc);
+}
+
+int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
+                 char *fsname, char *poolname, char *ostname)
+{
+        struct fs_db *fsdb;
+        char mdt_index[16];
+        char *lovname;
+        char *logname;
+        char *label, *canceled_label = NULL;
+        int label_sz;
+        struct mgs_target_info *mti;
+        int rc;
+        ENTRY;
+
+        rc = mgs_find_or_make_fsdb(obd, fsname, &fsdb);
+        if (rc) {
+                CERROR("Can't get db for %s\n", fsname);
+                RETURN(rc);
+        }
+        if (fsdb->fsdb_flags & FSDB_LOG_EMPTY) {
+                CERROR("%s is not defined\n", fsname);
+                mgs_free_fsdb(obd, fsdb);
+                RETURN(-EINVAL);
+        }
+
+        label_sz = 10 + strlen(fsname) + strlen(poolname);
+
+        /* check if ostname match fsname */
+        if (ostname != NULL) {
+                char *ptr;
+
+                ptr = strrchr(ostname, '-');
+                if ((ptr == NULL) ||
+                    (strncmp(fsname, ostname, ptr-ostname) != 0))
+                        RETURN(-EINVAL);
+                label_sz += strlen(ostname);
+        }
+
+        OBD_ALLOC(label, label_sz);
+        if (label == NULL)
+                RETURN(-ENOMEM);
+
+        switch(cmd) {
+        case LCFG_POOL_NEW: {
+                sprintf(label,
+                        "new %s.%s", fsname, poolname);
+                break;
+        }
+        case LCFG_POOL_ADD: {
+                sprintf(label,
+                        "add %s.%s.%s", fsname, poolname, ostname);
+                break;
+        }
+        case LCFG_POOL_REM: {
+                OBD_ALLOC(canceled_label, label_sz);
+                if (canceled_label == NULL)
+                         RETURN(-ENOMEM);
+                sprintf(label,
+                        "rem %s.%s.%s", fsname, poolname, ostname);
+                sprintf(canceled_label,
+                        "add %s.%s.%s", fsname, poolname, ostname);
+                break;
+        }
+        case LCFG_POOL_DEL: {
+                OBD_ALLOC(canceled_label, label_sz);
+                if (canceled_label == NULL)
+                         RETURN(-ENOMEM);
+                sprintf(label,
+                        "del %s.%s", fsname, poolname);
+                sprintf(canceled_label,
+                        "new %s.%s", fsname, poolname);
+                break;
+        }
+        default: {
+                break;
+        }
+        }
+
+        down(&fsdb->fsdb_sem);
+
+        sprintf(mdt_index, "-MDT%04x", 0);
+        name_create(&logname, fsname, mdt_index);
+        name_create(&lovname, fsdb->fsdb_mdtlov, "");
+
+        mti = NULL;
+        if (canceled_label != NULL) {
+                OBD_ALLOC(mti, sizeof(*mti));
+                if (mti != NULL) {
+                        strcpy(mti->mti_svname, "lov pool");
+                        mgs_modify(obd, fsdb, mti, logname, lovname,
+                                   canceled_label, CM_SKIP);
+                }
+        }
+
+        mgs_write_log_pool(obd, logname, fsdb, lovname,
+                           cmd, fsname, poolname, ostname, label);
+        name_destroy(&logname);
+
+        name_create(&logname, fsname, "-client");
+        if (canceled_label != NULL) {
+                mgs_modify(obd, fsdb, mti, logname, lovname,
+                           canceled_label, CM_SKIP);
+        }
+        mgs_write_log_pool(obd, logname, fsdb, fsdb->fsdb_clilov,
+                           cmd, fsname, poolname, ostname, label);
+        name_destroy(&logname);
+        name_destroy(&lovname);
+
+        up(&fsdb->fsdb_sem);
+
+        OBD_FREE(label, label_sz);
+        if (canceled_label != NULL)
+                OBD_FREE(canceled_label, label_sz);
+
+        if (mti != NULL)
+                OBD_FREE(mti, sizeof(*mti));
+
+        RETURN(rc);
+}
 
 #if 0
 /******************** unused *********************/

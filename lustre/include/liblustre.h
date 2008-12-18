@@ -1,26 +1,43 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001 Cluster File Systems, Inc. <info@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/include/liblustre.h
  *
  * User-space Lustre headers.
- *
  */
+
 #ifndef LIBLUSTRE_H__
 #define LIBLUSTRE_H__
 
@@ -112,7 +129,6 @@ typedef unsigned short umode_t;
 #define set_page_private(page, v) ((page)->private = (v))
 #endif
 
-
 static inline void inter_module_put(void *a)
 {
         return;
@@ -194,17 +210,30 @@ typedef int (write_proc_t)(struct file *file, const char *buffer,
 
 static __inline__ int ext2_set_bit(int nr, void *addr)
 {
+#ifdef __BIG_ENDIAN
+        return set_bit((nr ^ ((BITS_PER_LONG-1) & ~0x7)), addr);
+#else
         return set_bit(nr, addr);
+#endif
 }
 
 static __inline__ int ext2_clear_bit(int nr, void *addr)
 {
+#ifdef __BIG_ENDIAN
+        return clear_bit((nr ^ ((BITS_PER_LONG-1) & ~0x7)), addr);
+#else
         return clear_bit(nr, addr);
+#endif
 }
 
 static __inline__ int ext2_test_bit(int nr, void *addr)
 {
+#ifdef __BIG_ENDIAN
+        __const__ unsigned char *tmp = (__const__ unsigned char *) addr;
+        return (tmp[nr >> 3] >> (nr & 7)) & 1;
+#else
         return test_bit(nr, addr);
+#endif
 }
 
 /* modules */
@@ -321,6 +350,7 @@ typedef spinlock_t rwlock_t;
 #ifndef ERESTARTSYS
 #define ERESTARTSYS ERESTART
 #endif
+#undef HZ
 #define HZ 1
 
 /* random */
@@ -580,7 +610,7 @@ struct task_struct {
         int max_groups;
         int ngroups;
         gid_t *groups;
-        __u32 cap_effective;
+        cfs_cap_t cap_effective;
 };
 
 typedef struct task_struct cfs_task_t;
@@ -590,13 +620,6 @@ typedef struct task_struct cfs_task_t;
 
 extern struct task_struct *current;
 int in_group_p(gid_t gid);
-static inline int capable(int cap)
-{
-        if (current->cap_effective & (1 << cap))
-                return 1;
-        else
-                return 0;
-}
 
 #define set_current_state(foo) do { current->state = foo; } while (0)
 
@@ -735,12 +758,6 @@ typedef enum {
     CAP_CLEAR=0,
     CAP_SET=1
 } cap_flag_value_t;
-
-#define CAP_DAC_OVERRIDE        1
-#define CAP_DAC_READ_SEARCH     2
-#define CAP_FOWNER              3
-#define CAP_FSETID              4
-#define CAP_SYS_ADMIN          21
 
 cap_t   cap_get_proc(void);
 int     cap_get_flag(cap_t, cap_value_t, cap_flag_t, cap_flag_value_t *);

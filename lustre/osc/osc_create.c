@@ -1,32 +1,45 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
- *   Author Peter Braam <braam@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *  For testing and management it is treated as an obd_device,
- *  although * it does not export a full OBD method table (the
- *  requests are coming * in over the wire, so object target modules
- *  do not have a full * method table.)
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
  *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/osc/osc_create.c
+ * For testing and management it is treated as an obd_device,
+ * although * it does not export a full OBD method table (the
+ * requests are coming * in over the wire, so object target modules
+ * do not have a full * method table.)
+ *
+ * Author: Peter Braam <braam@clusterfs.com>
  */
 
 #ifndef EXPORT_SYMTAB
@@ -63,7 +76,7 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
 
         oscc = req->rq_async_args.pointer_arg[0];
         LASSERT(oscc && (oscc->oscc_obd != LP_POISON));
-        
+
         spin_lock(&oscc->oscc_lock);
         oscc->oscc_flags &= ~OSCC_FLAG_CREATING;
         switch (rc) {
@@ -128,7 +141,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
 {
         struct ptlrpc_request *request;
         struct ost_body *body;
-        int size[] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        __u32 size[] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
         LASSERT_SPIN_LOCKED(&oscc->oscc_lock);
@@ -139,7 +152,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
                 RETURN(0);
         }
 
-        if (oscc->oscc_grow_count < OST_MAX_PRECREATE &&
+        if (oscc->oscc_grow_count < oscc->oscc_max_grow_count &&
             ((oscc->oscc_flags & OSCC_FLAG_LOW) == 0) &&
             (__s64)(oscc->oscc_last_id - oscc->oscc_next_id) <=
                    (oscc->oscc_grow_count / 4 + 1)) {
@@ -147,8 +160,8 @@ static int oscc_internal_create(struct osc_creator *oscc)
                 oscc->oscc_grow_count *= 2;
         }
 
-        if (oscc->oscc_grow_count > OST_MAX_PRECREATE / 2)
-                oscc->oscc_grow_count = OST_MAX_PRECREATE / 2;
+        if (oscc->oscc_grow_count > oscc->oscc_max_grow_count / 2)
+                oscc->oscc_grow_count = oscc->oscc_max_grow_count / 2;
 
         oscc->oscc_flags |= OSCC_FLAG_CREATING;
         spin_unlock(&oscc->oscc_lock);
@@ -267,21 +280,17 @@ int osc_precreate(struct obd_export *exp)
         if (imp != NULL && imp->imp_deactive)
                 RETURN(1000);
 
-        if (oscc->oscc_last_id < oscc->oscc_next_id) {
-                spin_lock(&oscc->oscc_lock);
-                if (oscc->oscc_flags & OSCC_FLAG_NOSPC) {
-                        spin_unlock(&oscc->oscc_lock);
-                        RETURN(1000);
-                }
-                if (oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS) {
-                        spin_unlock(&oscc->oscc_lock);
-                        RETURN(1);
-                }
-                if (oscc->oscc_flags & OSCC_FLAG_RECOVERING) {
-                        spin_unlock(&oscc->oscc_lock);
-                        RETURN(2);
-                }
+        if (oscc_recovering(oscc))
+                RETURN(2);
 
+        if (oscc->oscc_flags & OSCC_FLAG_NOSPC)
+                RETURN(1000);
+
+        if (oscc->oscc_last_id < oscc->oscc_next_id) {
+                if (oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS)
+                        RETURN(1);
+
+                spin_lock(&oscc->oscc_lock);
                 if (oscc->oscc_flags & OSCC_FLAG_CREATING) {
                         spin_unlock(&oscc->oscc_lock);
                         RETURN(1);
@@ -438,6 +447,7 @@ void oscc_init(struct obd_device *obd)
         spin_lock_init(&oscc->oscc_lock);
         oscc->oscc_obd = obd;
         oscc->oscc_grow_count = OST_MIN_PRECREATE;
+        oscc->oscc_max_grow_count = OST_MAX_PRECREATE;
 
         oscc->oscc_next_id = 2;
         oscc->oscc_last_id = 1;

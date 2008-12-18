@@ -1,23 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #ifndef _OBD_SUPPORT
@@ -41,7 +55,7 @@ extern unsigned int obd_fail_val;
 extern unsigned int obd_debug_peer_on_timeout;
 extern unsigned int obd_dump_on_timeout;
 extern unsigned int obd_dump_on_eviction;
-/* obd_timeout should only be used for recovery, not for 
+/* obd_timeout should only be used for recovery, not for
    networking / disk / timings affected by load (use Adaptive Timeouts) */
 extern unsigned int obd_timeout;          /* seconds */
 extern unsigned int ldlm_timeout;         /* seconds */
@@ -53,8 +67,14 @@ extern int obd_race_state;
 extern unsigned int obd_alloc_fail_rate;
 
 /* Timeout definitions */
-#define OBD_TIMEOUT_DEFAULT 100
-#define LDLM_TIMEOUT_DEFAULT 20
+#define OBD_TIMEOUT_DEFAULT             100
+#define LDLM_TIMEOUT_DEFAULT            20
+#define MDS_LDLM_TIMEOUT_DEFAULT        6
+#ifdef HAVE_DELAYED_RECOVERY
+#define STALE_EXPORT_MAXTIME_DEFAULT    (24*60*60) /**< one day, in seconds */
+#else
+#define STALE_EXPORT_MAXTIME_DEFAULT    (0) /**< zero if no delayed recovery */
+#endif
 #ifdef CRAY_XT3
  #define OBD_RECOVERY_MAX_TIME (obd_timeout * 18) /* b13079 */
 #endif
@@ -77,12 +97,12 @@ extern unsigned int obd_alloc_fail_rate;
 #define CONNECTION_SWITCH_MAX min(50U, max(CONNECTION_SWITCH_MIN,obd_timeout))
 #define CONNECTION_SWITCH_INC 5  /* Connection timeout backoff */
 #ifndef CRAY_XT3
-/* In general this should be low to have quick detection of a system 
+/* In general this should be low to have quick detection of a system
    running on a backup server. (If it's too low, import_select_connection
    will increase the timeout anyhow.)  */
 #define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/20)
 #else
-/* ...but for very large systems (e.g. CRAY) we need to keep the initial 
+/* ...but for very large systems (e.g. CRAY) we need to keep the initial
    connect t.o. high (bz 10803), because they will nearly ALWAYS be doing the
    connects for the first time (clients "reboot" after every process, so no
    chance to generate adaptive timeout data. */
@@ -153,6 +173,8 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_MDS_CLOSE_NET_REP       0x13b
 #define OBD_FAIL_MDS_BLOCK_QUOTA_REQ     0x13c
 #define OBD_FAIL_MDS_DROP_QUOTA_REQ      0x13d
+#define OBD_FAIL_MDS_REMOVE_COMMON_EA    0x13e
+#define OBD_FAIL_MDS_ALLOW_COMMON_EA_SETTING   0x13f
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -192,6 +214,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_OST_PAUSE_CREATE        0x223
 #define OBD_FAIL_OST_BRW_PAUSE_PACK      0x224
 #define OBD_FAIL_OST_CONNECT_NET2        0x225
+#define OBD_FAIL_OST_NOMEM               0x226
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
@@ -214,6 +237,10 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_LDLM_PAUSE_CANCEL       0x312
 #define OBD_FAIL_LDLM_CLOSE_THREAD       0x313
 #define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE  0x314
+#define OBD_FAIL_LDLM_CP_CB_WAIT         0x315
+#define OBD_FAIL_LDLM_OST_FAIL_RACE      0x316
+#define OBD_FAIL_LDLM_INTR_CP_AST        0x317
+#define OBD_FAIL_LDLM_CP_BL_RACE         0x318
 
 #define OBD_FAIL_OSC                     0x400
 #define OBD_FAIL_OSC_BRW_READ_BULK       0x401
@@ -241,12 +268,21 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_PTLRPC_CLIENT_BULK_CB   0x508
 #define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
 #define OBD_FAIL_PTLRPC_PAUSE_REP        0x50c
+#define OBD_FAIL_PTLRPC_IMP_DEACTIVE     0x50d
+
+#define OBD_FAIL_PTLRPC_DUMP_LOG         0x50e
+#define OBD_FAIL_PTLRPC_LONG_REPL_UNLINK 0x50f
+#define OBD_FAIL_PTLRPC_LONG_BULK_UNLINK 0x510
+#define OBD_FAIL_PTLRPC_HPREQ_TIMEOUT    0x511
+#define OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT  0x512
 
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601
 #define OBD_FAIL_OBD_LOGD_NET            0x602
 #define OBD_FAIL_OBD_QC_CALLBACK_NET     0x603
 #define OBD_FAIL_OBD_DQACQ               0x604
+#define OBD_FAIL_OBD_LLOG_SETUP          0x605
+#define OBD_FAIL_OBD_LOG_CANCEL_REP      0x606
 
 #define OBD_FAIL_TGT_REPLY_NET           0x700
 #define OBD_FAIL_TGT_CONN_RACE           0x701
@@ -256,6 +292,9 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_TGT_DELAY_PRECREATE     0x705
 #define OBD_FAIL_TGT_TOOMANY_THREADS     0x706
 #define OBD_FAIL_TGT_REPLAY_DROP         0x707
+#define OBD_FAIL_TGT_FAKE_EXP            0x708
+#define OBD_FAIL_TGT_REPLAY_DELAY        0x709
+#define OBD_FAIL_TGT_LAST_REPLAY         0x710
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 #define OBD_FAIL_MDC_ENQUEUE_PAUSE       0x801
@@ -382,7 +421,7 @@ extern atomic_t libcfs_kmemory;
 #define OBD_ALLOC_FAIL_MASK ((1 << OBD_ALLOC_FAIL_BITS) - 1)
 #define OBD_ALLOC_FAIL_MULT (OBD_ALLOC_FAIL_MASK / 100)
 
-#ifdef LPROCFS 
+#ifdef LPROCFS
 #define obd_memory_add(size)                                                  \
         lprocfs_counter_add(obd_memory, OBD_MEMORY_STAT, (long)(size))
 #define obd_memory_sub(size)                                                  \
@@ -424,7 +463,7 @@ static inline void obd_memory_sub(long size)
         obd_alloc -= size;
 }
 
-static inline void obd_pages_add(int order) 
+static inline void obd_pages_add(int order)
 {
         obd_pages += 1<< order;
         if (obd_pages > obd_max_pages)
@@ -584,7 +623,7 @@ do {                                                                          \
         cfs_mem_cache_free((slab), (ptr));                                    \
         (ptr) = NULL;                                                         \
         0;                                                                    \
-}) 
+})
 #define OBD_SLAB_ALLOC(ptr, slab, type, size)                                 \
 do {                                                                          \
         LASSERT(!in_interrupt());                                             \

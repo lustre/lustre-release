@@ -1,25 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001 Cluster File Systems, Inc. <braam@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/include/lustre_lib.h
  *
  * Basic Lustre library routines.
- *
  */
 
 #ifndef _LUSTRE_LIB_H
@@ -55,6 +71,18 @@ struct obd_export;
 
 void target_client_add_cb(struct obd_device *obd, __u64 transno, void *cb_data,
                           int error);
+void target_trans_table_init(struct obd_device *obd);
+__u32 target_trans_table_last_time(struct obd_export *exp);
+void target_trans_table_recalc(struct obd_device *obd, __u32 new_age);
+void target_trans_table_update(struct obd_export *exp, __u64 transno);
+#ifdef __KERNEL__
+int target_fs_version_capable(struct obd_device *obd);
+#else
+static inline int target_fs_version_capable(struct obd_device *obd)
+{
+        return 0;
+}
+#endif
 int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler);
 int target_handle_disconnect(struct ptlrpc_request *req);
 void target_destroy_export(struct obd_export *exp);
@@ -64,21 +92,21 @@ int target_handle_ping(struct ptlrpc_request *req);
 int target_pack_pool_reply(struct ptlrpc_request *req);
 void target_committed_to_req(struct ptlrpc_request *req);
 
-#ifdef HAVE_QUOTA_SUPPORT
 /* quotacheck callback, dqacq/dqrel callback handler */
 int target_handle_qc_callback(struct ptlrpc_request *req);
+#ifdef HAVE_QUOTA_SUPPORT
 int target_handle_dqacq_callback(struct ptlrpc_request *req);
 #else
 #define target_handle_dqacq_callback(req) ldlm_callback_reply(req, -ENOTSUPP)
-#define target_handle_qc_callback(req) (0)
 #endif
 
 void target_cancel_recovery_timer(struct obd_device *obd);
 void target_abort_recovery(void *data);
+int target_recovery_check_and_stop(struct obd_device *obd);
 void target_cleanup_recovery(struct obd_device *obd);
 int target_queue_recovery_request(struct ptlrpc_request *req,
                                   struct obd_device *obd);
-int target_queue_last_replay_reply(struct ptlrpc_request *req, int rc);
+int target_handle_reply(struct ptlrpc_request *req, int rc, int fail);
 void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id);
 
 /* client.c */
@@ -446,6 +474,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 
 #define OBD_IOC_LOV_GET_CONFIG         _IOWR('f', 132, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_CLIENT_RECOVER         _IOW ('f', 133, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_PING_TARGET            _IOW ('f', 136, OBD_IOC_DATA_TYPE)
 
 #define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 139      )
 #define OBD_IOC_NO_TRANSNO             _IOW ('f', 140, OBD_IOC_DATA_TYPE)
@@ -476,6 +505,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_DUMP_LOG               _IOWR('f', 185, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_CLEAR_LOG              _IOWR('f', 186, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_PARAM                  _IOW ('f', 187, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_POOL                   _IOWR('f', 188, OBD_IOC_DATA_TYPE)
 
 #define OBD_IOC_CATLOGLIST             _IOWR('f', 190, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_LLOG_INFO              _IOWR('f', 191, OBD_IOC_DATA_TYPE)
@@ -759,4 +789,3 @@ do {                                                                    \
 #endif
 
 #endif /* _LUSTRE_LIB_H */
-

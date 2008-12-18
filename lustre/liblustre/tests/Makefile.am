@@ -52,7 +52,8 @@ replay_ost_single_DEPENDENCIES = $(top_builddir)/lustre/liblustre/liblustre.a li
 if MPITESTS
 test_lock_cancel_SOURCES = test_lock_cancel.c
 test_lock_cancel_CFLAGS = $(LL_CFLAGS) -I/opt/lam/include
-test_lock_cancel_LDADD :=  $(LLIB_EXEC)  -L/opt/lam/lib -lmpi -llam
+#test_lock_cancel_LDADD :=  $(LLIB_EXEC)  -L/opt/lam/lib -lmpi -llam
+test_lock_cancel_LDADD :=  $(LLIB_EXEC)  -lmpich
 endif
 
 

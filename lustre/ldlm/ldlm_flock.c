@@ -1,27 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2003 Hewlett-Packard Development Company LP.
- *   Developed under the sponsorship of the US Government under
- *   Subcontract No. B514193
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ *
+ * Copyright (c) 2003 Hewlett-Packard Development Company LP.
+ * Developed under the sponsorship of the US Government under
+ * Subcontract No. B514193
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
@@ -91,7 +105,7 @@ ldlm_flock_destroy(struct ldlm_lock *lock, ldlm_mode_t mode, int flags)
                 /* client side - set a flag to prevent sending a CANCEL */
                 lock->l_flags |= LDLM_FL_LOCAL_ONLY | LDLM_FL_CBPENDING;
 
-                /* when reaching here, it is under lock_res_and_lock(). Thus, 
+                /* when reaching here, it is under lock_res_and_lock(). Thus,
                    need call the nolock version of ldlm_lock_decref_internal*/
                 ldlm_lock_decref_internal_nolock(lock, mode);
         }
@@ -377,14 +391,14 @@ reprocess:
                 new2->l_conn_export = lock->l_conn_export;
                 if (lock->l_export != NULL) {
                         new2->l_export = class_export_get(lock->l_export);
-                        spin_lock(&new2->l_export->exp_ldlm_data.led_lock);
-                        list_add(&new2->l_export_chain,
-                                 &new2->l_export->exp_ldlm_data.led_held_locks);
-                        spin_unlock(&new2->l_export->exp_ldlm_data.led_lock);
+                        if (new2->l_export->exp_lock_hash && 
+                            hlist_unhashed(&new2->l_exp_hash))
+                                lustre_hash_add(new2->l_export->exp_lock_hash,
+                                                &new2->l_remote_handle,
+                                                &new2->l_exp_hash);
                 }
-                if (*flags == LDLM_FL_WAIT_NOREPROC) {
+                if (*flags == LDLM_FL_WAIT_NOREPROC)
                         ldlm_lock_addref_internal_nolock(new2, lock->l_granted_mode);
-                }
 
                 /* insert new2 at lock */
                 ldlm_resource_add_lock(res, ownlocks, new2);
@@ -409,7 +423,7 @@ reprocess:
         if (*flags != LDLM_FL_WAIT_NOREPROC) {
                 if (first_enq) {
                         /* If this is an unlock, reprocess the waitq and
-                         * send completions ASTs for locks that can now be 
+                         * send completions ASTs for locks that can now be
                          * granted. The only problem with doing this
                          * reprocessing here is that the completion ASTs for
                          * newly granted locks will be sent before the unlock
@@ -444,7 +458,7 @@ restart:
         if (added)
                 ldlm_flock_destroy(req, mode, *flags);
 
-        ldlm_resource_dump(D_OTHER, res);
+        ldlm_resource_dump(D_INFO, res);
         RETURN(LDLM_ITER_CONTINUE);
 }
 
@@ -501,7 +515,7 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
          * holding the lock even if app still believes it has it, since
          * server already dropped it anyway. Only for granted locks too. */
         lock_res_and_lock(lock);
-        if ((lock->l_flags & (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) == 
+        if ((lock->l_flags & (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) ==
             (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) {
                 unlock_res_and_lock(lock);
                 if (lock->l_req_mode == lock->l_granted_mode &&
@@ -542,19 +556,21 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 
         LDLM_DEBUG(lock, "client-side enqueue waking up: rc = %d", rc);
         RETURN(rc);
- 
+
 granted:
+        OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT, 10);
+        LDLM_DEBUG(lock, "client-side enqueue granted");
+        ns = lock->l_resource->lr_namespace;
+        lock_res_and_lock(lock);
+
         /* before flock's complete ast gets here, the flock
          * can possibly be freed by another thread
          */
         if (lock->l_destroyed) {
                 LDLM_DEBUG(lock, "already destroyed by another thread");
+                unlock_res_and_lock(lock);
                 RETURN(0);
         }
-
-        LDLM_DEBUG(lock, "client-side enqueue granted");
-        ns = lock->l_resource->lr_namespace;
-        lock_res_and_lock(lock);
 
         /* take lock off the deadlock detection waitq. */
         spin_lock(&ldlm_flock_waitq_lock);

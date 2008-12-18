@@ -1,10 +1,46 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *   No redistribution or use is permitted outside of Cluster File Systems, Inc.
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/lvfs/quotafmt_test.c
+ *
+ * No redistribution or use is permitted outside of Sun Microsystems, Inc.
  *
  * Kernel module to test lustre administrative quotafile format APIs
- * from the OBD setup function */
+ * from the OBD setup function
+ */
+
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
@@ -20,6 +56,8 @@
 #include <obd_class.h>
 
 #include "lustre_quota_fmt.h"
+
+#ifdef HAVE_QUOTA_SUPPORT
 
 char *test_quotafile[2] = { "usrquota_test", "grpquota_test" };
 
@@ -48,7 +86,8 @@ static int quotfmt_initialize(struct lustre_quota_info *lqi,
                 LOCK_INODE_MUTEX(parent_inode);
                 de = lookup_one_len(name, tgt->obd_lvfs_ctxt.pwd, namelen);
                 if (!IS_ERR(de) && de->d_inode)
-                        vfs_unlink(parent_inode, de);
+                        ll_vfs_unlink(parent_inode, de, 
+                                      tgt->obd_lvfs_ctxt.pwdmnt);
                 if (!IS_ERR(de))
                         dput(de);
                 UNLOCK_INODE_MUTEX(parent_inode);
@@ -109,7 +148,7 @@ static int quotfmt_finalize(struct lustre_quota_info *lqi,
                         goto dput;
                 }
 
-                rc = vfs_unlink(parent_inode, de);
+                rc = ll_vfs_unlink(parent_inode, de, tgt->obd_lvfs_ctxt.pwdmnt);
                 if (rc)
                         CERROR("error unlink quotafile %s (rc = %d)\n",
                                name, rc);
@@ -500,9 +539,11 @@ static void __exit quotfmt_test_exit(void)
         class_unregister_type("quotfmt_test");
 }
 
-MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("administrative quotafile test module");
 MODULE_LICENSE("GPL");
 
 module_init(quotfmt_test_init);
 module_exit(quotfmt_test_exit);
+
+#endif /* HAVE_QUOTA_SUPPORT */

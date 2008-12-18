@@ -1,29 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/ptlrpc/pinger.c
+ *
  * Portal-RPC reconnection and replay operations, for use in recovery.
- *
- *  Copyright (c) 2003 Cluster File Systems, Inc.
- *   Authors: Phil Schwan <phil@clusterfs.com>
- *            Mike Shaver <shaver@clusterfs.com>
- *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
- *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
- *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
- *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
  */
 
 #ifndef __KERNEL__
@@ -39,20 +51,51 @@
 struct semaphore pinger_sem;
 static struct list_head pinger_imports = CFS_LIST_HEAD_INIT(pinger_imports);
 
+struct ptlrpc_request *
+ptlrpc_prep_ping(struct obd_import *imp)
+{
+        struct ptlrpc_request *req;
+
+        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION,
+                              OBD_PING, 1, NULL, NULL);
+        if (req) {
+                ptlrpc_req_set_repsize(req, 1, NULL);
+                req->rq_no_resend = req->rq_no_delay = 1;
+        }
+        return req;
+}
+
+int ptlrpc_obd_ping(struct obd_device *obd)
+{
+        int rc;
+        struct ptlrpc_request *req;
+        ENTRY;
+
+        req = ptlrpc_prep_ping(obd->u.cli.cl_import);
+        if (req == NULL)
+                RETURN(-ENOMEM);
+
+        req->rq_send_state = LUSTRE_IMP_FULL;
+
+        rc = ptlrpc_queue_wait(req);
+
+        ptlrpc_req_finished(req);
+
+        RETURN(rc);
+}
+EXPORT_SYMBOL(ptlrpc_obd_ping);
+
 int ptlrpc_ping(struct obd_import *imp)
 {
         struct ptlrpc_request *req;
         int rc = 0;
         ENTRY;
 
-        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING, 
-                              1, NULL, NULL);
+        req = ptlrpc_prep_ping(imp);
         if (req) {
                 DEBUG_REQ(D_INFO, req, "pinging %s->%s",
                           imp->imp_obd->obd_uuid.uuid,
                           obd2cli_tgt(imp->imp_obd));
-                req->rq_no_resend = req->rq_no_delay = 1;
-                ptlrpc_req_set_repsize(req, 1, NULL);
                 ptlrpcd_add_req(req);
         } else {
                 CERROR("OOM trying to ping %s->%s\n",
@@ -63,6 +106,7 @@ int ptlrpc_ping(struct obd_import *imp)
 
         RETURN(rc);
 }
+EXPORT_SYMBOL(ptlrpc_ping);
 
 void ptlrpc_update_next_ping(struct obd_import *imp)
 {
@@ -81,6 +125,12 @@ void ptlrpc_update_next_ping(struct obd_import *imp)
 void ptlrpc_ping_import_soon(struct obd_import *imp)
 {
         imp->imp_next_ping = cfs_time_current();
+}
+
+static inline int imp_is_deactive(struct obd_import *imp)
+{
+        return (imp->imp_deactive ||
+                OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_IMP_DEACTIVE));
 }
 
 #ifdef __KERNEL__
@@ -127,14 +177,14 @@ static int ptlrpc_pinger_main(void *arg)
                             cfs_time_aftereq(this_ping, 
                                              imp->imp_next_ping - 5 * CFS_TICK)) {
                                 if (level == LUSTRE_IMP_DISCON &&
-                                    !imp->imp_deactive) {
+                                    !imp_is_deactive(imp)) {
                                         /* wait at least a timeout before
                                            trying recovery again. */
                                         imp->imp_next_ping = cfs_time_shift(obd_timeout);
                                         ptlrpc_initiate_recovery(imp);
                                 } else if (level != LUSTRE_IMP_FULL ||
                                          imp->imp_obd->obd_no_recov ||
-                                         imp->imp_deactive) {
+                                         imp_is_deactive(imp)) {
                                         CDEBUG(D_HA, "not pinging %s "
                                                "(in recovery: %s or recovery "
                                                "disabled: %u/%u)\n",
@@ -143,7 +193,7 @@ static int ptlrpc_pinger_main(void *arg)
                                                imp->imp_deactive,
                                                imp->imp_obd->obd_no_recov);
                                 } else if (imp->imp_pingable || force) {
-                                        ptlrpc_ping(imp);
+                                                ptlrpc_ping(imp);
                                 }
                         } else {
                                 if (!imp->imp_pingable)
@@ -467,6 +517,7 @@ static int pinger_check_rpcs(void *arg)
         struct ptlrpc_request *req;
         struct ptlrpc_request_set *set;
         struct list_head *iter;
+        struct obd_import *imp;
         struct pinger_data *pd = &pinger_args;
         int rc;
 
@@ -528,7 +579,7 @@ static int pinger_check_rpcs(void *arg)
                         req->rq_no_resend = 1;
                         ptlrpc_req_set_repsize(req, 1, NULL);
                         req->rq_send_state = LUSTRE_IMP_FULL;
-                        req->rq_phase = RQ_PHASE_RPC;
+                        ptlrpc_rqphase_move(req, RQ_PHASE_RPC);
                         req->rq_import_generation = generation;
                         ptlrpc_set_add_req(set, req);
                 } else {
@@ -574,17 +625,23 @@ do_check_set:
                 if (req->rq_phase == RQ_PHASE_COMPLETE)
                         continue;
 
-                req->rq_phase = RQ_PHASE_COMPLETE;
-                atomic_dec(&req->rq_import->imp_inflight);
-                set->set_remaining--;
-                /* If it was disconnected, don't sweat it. */
-                if (list_empty(&req->rq_import->imp_pinger_chain)) {
-                        ptlrpc_unregister_reply(req);
-                        continue;
-                }
+                CDEBUG(D_RPCTRACE, "Pinger initiate expire request(%p)\n",
+                       req);
 
-                CDEBUG(D_RPCTRACE, "pinger initiate expire_one_request\n");
-                ptlrpc_expire_one_request(req);
+                /* This will also unregister reply. */
+                ptlrpc_expire_one_request(req, 0);
+
+                /* We're done with this req, let's finally move it to complete
+                 * phase and take care of inflights. */
+                ptlrpc_rqphase_move(req, RQ_PHASE_COMPLETE);
+                imp = req->rq_import;
+                spin_lock(&imp->imp_lock);
+                if (!list_empty(&req->rq_list)) {
+                        list_del_init(&req->rq_list);
+                        atomic_dec(&imp->imp_inflight);
+                }
+                spin_unlock(&imp->imp_lock);
+                set->set_remaining--;
         }
         mutex_up(&pinger_sem);
 
@@ -682,11 +739,13 @@ void ptlrpc_pinger_wake_up()
                 CDEBUG(D_RPCTRACE, "checking import %s->%s\n",
                        imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
 #ifdef ENABLE_LIBLUSTRE_RECOVERY
-                if (imp->imp_state == LUSTRE_IMP_DISCON && !imp->imp_deactive)
+                if (imp->imp_state == LUSTRE_IMP_DISCON &&
+                    !imp_is_deactive(imp))
 #else
                 /*XXX only recover for the initial connection */
                 if (!lustre_handle_is_used(&imp->imp_remote_handle) &&
-                    imp->imp_state == LUSTRE_IMP_DISCON && !imp->imp_deactive)
+                    imp->imp_state == LUSTRE_IMP_DISCON &&
+                    !imp_is_deactive(imp))
 #endif
                         ptlrpc_initiate_recovery(imp);
                 else if (imp->imp_state != LUSTRE_IMP_FULL)
@@ -694,7 +753,7 @@ void ptlrpc_pinger_wake_up()
                                      "state %d, deactive %d\n",
                                      imp->imp_obd->obd_uuid.uuid,
                                      obd2cli_tgt(imp->imp_obd), imp->imp_state,
-                                     imp->imp_deactive);
+                                     imp_is_deactive(imp));
         }
 #endif
         EXIT;

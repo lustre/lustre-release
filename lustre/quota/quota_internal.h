@@ -1,14 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/quota/quota_internal.h
+ * GPL HEADER START
  *
- *  Copyright (c) 2001-2005 Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   No redistribution or use is permitted outside of Cluster File Systems, Inc.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #ifndef __QUOTA_INTERNAL_H
@@ -16,12 +39,15 @@
 
 #include <lustre_quota.h>
 
+#ifdef HAVE_QUOTA_SUPPORT
+
 /* QUSG covnert bytes to blocks when counting block quota */
 #define QUSG(count, isblk)      (isblk ? toqb(count) : count)
 
 /* This flag is set in qc_stat to distinguish if the current getquota
  * operation is for quota recovery */
 #define QUOTA_RECOVERING    0x01
+#define OBD_LQUOTA_DEVICENAME  "lquota"
 
 #ifdef __KERNEL__
 
@@ -75,17 +101,18 @@
 void qunit_cache_cleanup(void);
 int qunit_cache_init(void);
 int qctxt_adjust_qunit(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
-                       uid_t uid, gid_t gid, __u32 isblk, int wait);
+                       uid_t uid, gid_t gid, __u32 isblk, int wait,
+                       struct obd_trans_info *oti);
 int qctxt_wait_pending_dqacq(struct lustre_quota_ctxt *qctxt, unsigned int id,
                              unsigned short type, int isblk);
-int qctxt_init(struct lustre_quota_ctxt *qctxt, struct super_block *sb,
-               dqacq_handler_t handler);
+int qctxt_init(struct obd_device *obd, dqacq_handler_t handler);
 void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force);
 void qslave_start_recovery(struct obd_device *obd,
                            struct lustre_quota_ctxt *qctxt);
 int compute_remquota(struct obd_device *obd,
                      struct lustre_quota_ctxt *qctxt, struct qunit_data *qdata,
                      int isblk);
+int check_qm(struct lustre_quota_ctxt *qctxt);
 /* quota_master.c */
 int lustre_dquot_init(void);
 void lustre_dquot_exit(void);
@@ -118,36 +145,10 @@ int dquot_create_oqaq(struct lustre_quota_ctxt *qctxt, struct lustre_dquot
 /* quota_ctl.c */
 int mds_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl);
 int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl);
-int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl);
-int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl);
 
 /* quota_chk.c */
 int target_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl);
-int client_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl);
-int lov_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl);
-int client_quota_poll_check(struct obd_export *exp, struct if_quotacheck *qchk);
 
-#ifdef LPROCFS
-void lprocfs_quotactl_test_init_vars(struct lprocfs_static_vars *lvars);
-void lprocfs_quotacheck_test_init_vars(struct lprocfs_static_vars *lvars);
-#else
-static inline void lprocfs_quotactl_test_init_vars
-                                (struct lprocfs_static_vars *lvars)
-{
-        memset(lvars, 0, sizeof(*lvars));
-}
-static inline void lprocfs_quotacheck_test_init_vars
-                                (struct lprocfs_static_vars *lvars)
-{
-        memset(lvars, 0, sizeof(*lvars));
-}
-#endif
-
-/* quota_adjust_qunit.c */
-int client_quota_adjust_qunit(struct obd_export *exp, struct
-                              quota_adjust_qunit *oqaq);
-int lov_quota_adjust_qunit(struct obd_export *exp, struct
-                           quota_adjust_qunit *oqaq);
 int quota_adjust_slave_lqs(struct quota_adjust_qunit *oqaq, struct
                           lustre_quota_ctxt *qctxt);
 void qdata_to_oqaq(struct qunit_data *qdata,
@@ -169,8 +170,13 @@ extern int quote_get_qdata(struct ptlrpc_request *req, struct qunit_data *qdata,
                            int is_req, int is_exp);
 extern int quote_copy_qdata(struct ptlrpc_request *req, struct qunit_data *qdata,
                             int is_req, int is_exp);
-int filter_quota_adjust_qunit(struct obd_export *exp, struct
-                              quota_adjust_qunit *oqaq);
+int filter_quota_adjust_qunit(struct obd_export *exp,
+                              struct quota_adjust_qunit *oqaq,
+                              struct lustre_quota_ctxt *qctxt);
+int lquota_proc_setup(struct obd_device *obd, int is_master);
+int lquota_proc_cleanup(struct lustre_quota_ctxt *qctxt);
+
+extern cfs_proc_dir_entry_t *lquota_type_proc_dir;
 #endif
 
 #define LQS_BLK_DECREASE 1
@@ -179,4 +185,16 @@ int filter_quota_adjust_qunit(struct obd_export *exp, struct
 #define LQS_INO_INCREASE 8
 
 
+#endif
+int client_quota_adjust_qunit(struct obd_export *exp,
+                              struct quota_adjust_qunit *oqaq,
+                              struct lustre_quota_ctxt *qctxt);
+int lov_quota_adjust_qunit(struct obd_export *exp,
+                           struct quota_adjust_qunit *oqaq,
+                           struct lustre_quota_ctxt *qctxt);
+int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl);
+int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl);
+int client_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl);
+int lov_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl);
+int client_quota_poll_check(struct obd_export *exp, struct if_quotacheck *qchk);
 #endif

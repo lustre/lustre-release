@@ -1,28 +1,42 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
- * (visit-tags-table FILE)
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2002, 2007 Cluster File Systems, Inc.
- *   Author: Huang Wei <huangwei@clusterfs.com>
- *   Author: Jay Xiong <jinshan.xiong@sun.com>
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/include/interval_tree.h
+ *
+ * Author: Huang Wei <huangwei@clusterfs.com>
+ * Author: Jay Xiong <jinshan.xiong@sun.com>
  */
 
 #ifndef _INTERVAL_H__
@@ -35,8 +49,10 @@ struct interval_node {
         struct interval_node   *in_left;
         struct interval_node   *in_right;
         struct interval_node   *in_parent;
-        __u8                    in_color;
-        __u8                    res1[7];  /* tags, 8-bytes aligned */
+        unsigned                in_color:1,
+                                in_intree:1, /** set if the node is in tree */
+                                in_res1:30;
+        __u8                    in_res2[4];  /** tags, 8-bytes aligned */
         __u64                   in_max_high;
         struct interval_node_extent {
                 __u64 start;
@@ -48,6 +64,11 @@ enum interval_iter {
         INTERVAL_ITER_CONT = 1,
         INTERVAL_ITER_STOP = 2
 };
+
+static inline int interval_is_intree(struct interval_node *node)
+{
+        return node->in_intree == 1;
+}
 
 static inline __u64 interval_low(struct interval_node *node)
 {

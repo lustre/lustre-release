@@ -122,6 +122,26 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# LC_FUNC_RELEASEPAGE_WITH_GFP
+#
+# if ->releasepage() takes a gfp_t arg in 2.6.9
+# This kernel defines gfp_t (HAS_GFP_T) but doesn't use it for this function,
+# while others either don't have gfp_t or pass gfp_t as the parameter.
+#
+AC_DEFUN([LC_FUNC_RELEASEPAGE_WITH_GFP],
+[AC_MSG_CHECKING([if releasepage has a gfp_t parameter])
+RELEASEPAGE_WITH_GFP="`grep -c 'releasepage.*gfp_t' $LINUX/include/linux/fs.h`"
+if test "$RELEASEPAGE_WITH_GFP" != 0 ; then
+	AC_DEFINE(HAVE_RELEASEPAGE_WITH_GFP, 1,
+                  [releasepage with gfp_t parameter])
+	AC_MSG_RESULT([yes])
+else
+	AC_MSG_RESULT([no])
+fi
+])
+
+
+#
 # LC_FUNC_ZAP_PAGE_RANGE
 #
 # if zap_page_range() takes a vma arg
@@ -220,9 +240,6 @@ LB_LINUX_TRY_COMPILE([
 	#include <linux/fs.h>
 	#include <linux/version.h>
 ],[
-	#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,24))
-	#error "down_read_trylock broken before 2.4.24"
-	#endif
 	struct inode i;
 	return (char *)&i.i_alloc_sem - (char *)&i;
 ],[
@@ -237,27 +254,52 @@ LB_LINUX_TRY_COMPILE([
 # LC_FUNC_REGISTER_CACHE
 #
 # if register_cache() is defined by kernel
+# 
+# There are two ways to shrink one customized cache in linux kernels. For the
+# kernels are prior than 2.6.5(?), register_cache() is used, and for latest 
+# kernels, set_shrinker() is used instead.
 #
 AC_DEFUN([LC_FUNC_REGISTER_CACHE],
-[AC_MSG_CHECKING([if kernel defines register_cache()])
+[AC_MSG_CHECKING([if kernel defines cache pressure hook])
 LB_LINUX_TRY_COMPILE([
-	#include <linux/list.h>
-	#include <linux/cache_def.h>
+	#include <linux/mm.h>
 ],[
-	struct cache_definition cache;
+	shrinker_t shrinker;
+
+	set_shrinker(1, shrinker);
 ],[
-	AC_MSG_RESULT([yes])
-	AC_DEFINE(HAVE_REGISTER_CACHE, 1, [register_cache found])
-	AC_MSG_CHECKING([if kernel expects return from cache shrink function])
-	HAVE_CACHE_RETURN_INT="`grep -c 'int.*shrink' $LINUX/include/linux/cache_def.h`"
-	if test "$HAVE_CACHE_RETURN_INT" != 0 ; then
-		AC_DEFINE(HAVE_CACHE_RETURN_INT, 1, [kernel expects return from shrink_cache])
-		AC_MSG_RESULT(yes)
-	else
-		AC_MSG_RESULT(no)
-	fi
+	AC_MSG_RESULT([set_shrinker])
+	AC_DEFINE(HAVE_SHRINKER_CACHE, 1, [shrinker_cache found])
+	AC_DEFINE(HAVE_CACHE_RETURN_INT, 1, [shrinkers should return int])
 ],[
-	AC_MSG_RESULT([no])
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/list.h>
+		#include <linux/cache_def.h>
+	],[
+		struct cache_definition cache;
+	],[
+		AC_MSG_RESULT([register_cache])
+		AC_DEFINE(HAVE_REGISTER_CACHE, 1, [register_cache found])
+		AC_MSG_CHECKING([if kernel expects return from cache shrink ])
+		tmp_flags="$EXTRA_KCFLAGS"
+		EXTRA_KCFLAGS="-Werror"
+		LB_LINUX_TRY_COMPILE([
+			#include <linux/list.h>
+			#include <linux/cache_def.h>
+		],[
+			struct cache_definition c;
+			c.shrinker = (int (*)(int, unsigned int))1;
+		],[
+			AC_DEFINE(HAVE_CACHE_RETURN_INT, 1,
+				  [kernel expects return from shrink_cache])
+			AC_MSG_RESULT(yes)
+		],[
+			AC_MSG_RESULT(no)
+		])
+		EXTRA_KCFLAGS="$tmp_flags"
+	],[
+		AC_MSG_RESULT([no])
+	])
 ])
 ])
 
@@ -551,6 +593,28 @@ AC_DEFUN([LC_XATTR_ACL],
 [])
 ])
 
+#
+# LC_LINUX_FIEMAP_H
+#
+# If we have fiemap.h
+# after 2.6.27 use fiemap.h in include/linux
+#
+AC_DEFUN([LC_LINUX_FIEMAP_H],
+[LB_CHECK_FILE([$LINUX/include/linux/fiemap.h],[
+        AC_MSG_CHECKING([if fiemap.h can be compiled])
+        LB_LINUX_TRY_COMPILE([
+                #include <linux/fiemap.h>
+        ],[],[
+                AC_MSG_RESULT([yes])
+                AC_DEFINE(HAVE_LINUX_FIEMAP_H, 1, [Kernel has fiemap.h])
+        ],[
+                AC_MSG_RESULT([no])
+        ])
+],
+[])
+])
+
+
 AC_DEFUN([LC_STRUCT_INTENT_FILE],
 [AC_MSG_CHECKING([if struct open_intent has a file field])
 LB_LINUX_TRY_COMPILE([
@@ -792,7 +856,7 @@ LB_LINUX_TRY_COMPILE([
 # LC_INODE_I_MUTEX
 # after 2.6.15 inode have i_mutex intead of i_sem
 AC_DEFUN([LC_INODE_I_MUTEX],
-[AC_MSG_CHECKING([use inode have i_mutex ])
+[AC_MSG_CHECKING([if inode has i_mutex ])
 LB_LINUX_TRY_COMPILE([
 	#include <linux/mutex.h>
 	#include <linux/fs.h>
@@ -806,7 +870,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_INODE_I_MUTEX, 1,
                 [after 2.6.15 inode have i_mutex intead of i_sem])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -827,7 +891,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_DQUOTOFF_MUTEX, 1,
                 [after 2.6.17 dquote use mutex instead if semaphore])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -887,7 +951,7 @@ LB_LINUX_TRY_COMPILE([
 	AC_DEFINE(HAVE_INVALIDATEPAGE_RETURN_INT, 1,
 		[Define if return type of invalidatepage should be int])
 ],[
-	AC_MSG_RESULT(NO)
+	AC_MSG_RESULT(no)
 ])
 ])
 
@@ -916,7 +980,7 @@ LB_LINUX_TRY_COMPILE([
 	AC_DEFINE(HAVE_UMOUNTBEGIN_VFSMOUNT, 1,
 		[Define umount_begin need second argument])
 ],[
-	AC_MSG_RESULT(NO)
+	AC_MSG_RESULT(no)
 ])
 EXTRA_KCFLAGS="$tmp_flags"
 ])
@@ -935,7 +999,7 @@ LB_LINUX_TRY_COMPILE([
 	AC_DEFINE(HAVE_INODE_BLKSIZE, 1,
 		[struct inode has i_blksize field])
 ],[
-	AC_MSG_RESULT(NO)
+	AC_MSG_RESULT(no)
 ])
 ])
 
@@ -962,7 +1026,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_VFS_READDIR_U64_INO, 1,
                 [if vfs_readdir need 64bit inode number])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 EXTRA_KCFLAGS="$tmp_flags"
 ])
@@ -974,14 +1038,14 @@ AC_DEFUN([LC_FILE_WRITEV],
 LB_LINUX_TRY_COMPILE([
         #include <linux/fs.h>
 ],[
-        struct file_operations *fops;
+        struct file_operations *fops = NULL;
         fops->writev = NULL;
 ],[
         AC_MSG_RESULT(yes)
         AC_DEFINE(HAVE_FILE_WRITEV, 1,
                 [use fops->writev])
 ],[
-	AC_MSG_RESULT(NO)
+	AC_MSG_RESULT(no)
 ])
 ])
 
@@ -992,14 +1056,14 @@ AC_DEFUN([LC_FILE_READV],
 LB_LINUX_TRY_COMPILE([
         #include <linux/fs.h>
 ],[
-        struct file_operations *fops;
+        struct file_operations *fops = NULL;
         fops->readv = NULL;
 ],[
         AC_MSG_RESULT(yes)
         AC_DEFINE(HAVE_FILE_READV, 1,
                 [use fops->readv])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1016,7 +1080,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_NR_PAGECACHE, 1,
                 [is kernel export nr_pagecache])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1026,6 +1090,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_CANCEL_DIRTY_PAGE],
 [AC_MSG_CHECKING([kernel has cancel_dirty_page])
 LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
         #include <linux/page-flags.h>
 ],[
         cancel_dirty_page(NULL, 0);
@@ -1034,7 +1099,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_CANCEL_DIRTY_PAGE, 1,
                   [kernel has cancel_dirty_page instead of clear_page_dirty])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1048,6 +1113,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_PAGE_CONSTANT],
 [AC_MSG_CHECKING([if kernel have PageConstant defined])
 LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
         #include <linux/page-flags.h>
 ],[
         #ifndef PG_constant
@@ -1066,6 +1132,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_PG_FS_MISC],
 [AC_MSG_CHECKING([kernel has PG_fs_misc])
 LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
         #include <linux/page-flags.h>
 ],[
         #ifndef PG_fs_misc
@@ -1076,7 +1143,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_PG_FS_MISC, 1,
                   [is kernel have PG_fs_misc])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1084,6 +1151,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_PAGE_CHECKED],
 [AC_MSG_CHECKING([kernel has PageChecked and SetPageChecked])
 LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
         #include <linux/page-flags.h>
 ],[
         #ifndef PageChecked
@@ -1097,7 +1165,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_PAGE_CHECKED, 1,
                   [does kernel have PageChecked and SetPageChecked])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1142,6 +1210,38 @@ AC_DEFUN([LC_EXPORT___D_MOVE],
 [fs/dcache.c],[
 AC_DEFINE(HAVE___D_MOVE, 1,
             [__d_move is exported by the kernel])
+],[
+])
+])
+
+#
+# LC_EXPORT_INVALIDATE_MAPPING_PAGES
+#
+# SLES9, RHEL4, RHEL5, vanilla 2.6.24 export invalidate_mapping_pages() but
+# SLES10 2.6.16 does not, for some reason.  For filter cache invalidation.
+#
+AC_DEFUN([LC_EXPORT_INVALIDATE_MAPPING_PAGES],
+    [LB_CHECK_SYMBOL_EXPORT([invalidate_mapping_pages], [mm/truncate.c], [
+         AC_DEFINE(HAVE_INVALIDATE_MAPPING_PAGES, 1,
+                        [exported invalidate_mapping_pages])],
+    [LB_CHECK_SYMBOL_EXPORT([invalidate_inode_pages], [mm/truncate.c], [
+         AC_DEFINE(HAVE_INVALIDATE_INODE_PAGES, 1,
+                        [exported invalidate_inode_pages])], [
+       AC_MSG_ERROR([no way to invalidate pages])
+  ])
+    ],[])
+])
+
+#
+# LC_EXPORT_FILEMAP_FDATASYNC_RANGE
+#
+# No standard kernels export this
+#
+AC_DEFUN([LC_EXPORT_FILEMAP_FDATAWRITE_RANGE],
+[LB_CHECK_SYMBOL_EXPORT([filemap_fdatawrite_range],
+[mm/filemap.c],[
+AC_DEFINE(HAVE_FILEMAP_FDATAWRITE_RANGE, 1,
+            [filemap_fdatawrite_range is exported by the kernel])
 ],[
 ])
 ])
@@ -1209,6 +1309,26 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# 2.6.12 merge patch from oracle to convert tree_lock from spinlock to rwlock
+AC_DEFUN([LC_RW_TREE_LOCK],
+[AC_MSG_CHECKING([if kernel has tree_lock as rwlock])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        struct address_space a;
+
+        write_lock(&a.tree_lock);
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_RW_TREE_LOCK, 1, [kernel has tree_lock as rw_lock])
+],[
+        AC_MSG_RESULT([no])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+])
+
 # 2.6.23 have return type 'void' for unregister_blkdev
 AC_DEFUN([LC_UNREGISTER_BLKDEV_RETURN_INT],
 [AC_MSG_CHECKING([if unregister_blkdev return int])
@@ -1265,10 +1385,11 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_CONFIG_PINGER
           LC_CONFIG_CHECKSUM
           LC_CONFIG_LIBLUSTRE_RECOVERY
-          LC_CONFIG_QUOTA
           LC_CONFIG_HEALTH_CHECK_WRITE
           LC_CONFIG_LRU_RESIZE
           LC_CONFIG_ADAPTIVE_TIMEOUTS
+          LC_CONFIG_DELAYED_RECOVERY
+          LC_QUOTA_MODULE
 
           LC_TASK_PPTR
           # RHEL4 patches
@@ -1281,6 +1402,7 @@ AC_DEFUN([LC_PROG_LINUX],
 
           LC_STRUCT_KIOBUF
           LC_FUNC_COND_RESCHED
+          LC_FUNC_RELEASEPAGE_WITH_GFP
           LC_FUNC_ZAP_PAGE_RANGE
           LC_FUNC_PDE
           LC_FUNC_DIRECT_IO
@@ -1307,13 +1429,20 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_QUOTA_READ
           LC_COOKIE_FOLLOW_LINK
           LC_FUNC_RCU
+          LC_PERCPU_COUNTER
           LC_QUOTA64
 
           # does the kernel have VFS intent patches?
           LC_VFS_INTENT_PATCHES
 
+          # 2.6.12
+          LC_RW_TREE_LOCK
+
           # 2.6.15
           LC_INODE_I_MUTEX
+
+          # 2.6.16
+          LC_SECURITY_PLUG  # for SLES10 SP2
 
           # 2.6.17
           LC_DQUOTOFF_MUTEX
@@ -1324,6 +1453,10 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_VFS_KERN_MOUNT
           LC_INVALIDATEPAGE_RETURN_INT
           LC_UMOUNTBEGIN_HAS_VFSMOUNT
+         if test x$enable_server = xyes ; then
+                LC_EXPORT_INVALIDATE_MAPPING_PAGES
+                LC_EXPORT_FILEMAP_FDATAWRITE_RANGE
+         fi
 
           #2.6.18 + RHEL5 (fc6)
           LC_PG_FS_MISC
@@ -1340,8 +1473,8 @@ AC_DEFUN([LC_PROG_LINUX],
 
           # raid5-zerocopy patch
           LC_PAGE_CONSTANT
-	  
-	  # 2.6.22
+
+          # 2.6.22
           LC_INVALIDATE_BDEV_2ARG
           LC_FS_RENAME_DOES_D_MOVE
           # 2.6.23
@@ -1405,12 +1538,50 @@ if test x$enable_liblustre_acl = xyes ; then
   AC_DEFINE(LIBLUSTRE_POSIX_ACL, 1, Liblustre Support ACL-enabled MDS)
 fi
 
-AC_MSG_CHECKING([whether to build mpitests])
-AC_ARG_ENABLE([mpitests],
-	AC_HELP_STRING([--enable-mpitests],
-			[build liblustre mpi tests]),
-	[],[enable_mpitests=no])
+#
+# --enable-mpitest
+#
+AC_ARG_ENABLE(mpitests,
+	AC_HELP_STRING([--enable-mpitest=yes|no|mpich directory],
+                           [include mpi tests]),
+	[
+	 enable_mpitests=yes
+         case $enableval in
+         yes)
+		MPI_ROOT=/opt/mpich
+		LDFLAGS="$LDFLAGS -L$MPI_ROOT/ch-p4/lib -L$MPI_ROOT/ch-p4/lib64"
+		CFLAGS="$CFLAGS -I$MPI_ROOT/include"
+		;;
+         no)
+		enable_mpitests=no
+		;;
+	 [[\\/$]]* | ?:[[\\/]]* )
+		MPI_ROOT=$enableval
+		LDFLAGS="$LDFLAGS -L$with_mpi/lib"
+		CFLAGS="$CFLAGS -I$MPI_ROOT/include"
+                ;;
+         *)
+                 AC_MSG_ERROR([expected absolute directory name for --enable-mpitests or yes or no])
+                 ;;
+	 esac
+	],
+	[
+	MPI_ROOT=/opt/mpich
+        LDFLAGS="$LDFLAGS -L$MPI_ROOT/ch-p4/lib -L$MPI_ROOT/ch-p4/lib64"
+        CFLAGS="$CFLAGS -I$MPI_ROOT/include"
+	enable_mpitests=yes
+	]
+)
+AC_SUBST(MPI_ROOT)
+
+if test x$enable_mpitests != xno; then
+	AC_MSG_CHECKING([whether to mpitests can be built])
+        AC_CHECK_FILE([$MPI_ROOT/include/mpi.h],
+                      [AC_CHECK_LIB([mpich],[MPI_Start],[enable_mpitests=yes],[enable_mpitests=no])],
+                      [enable_mpitests=no])
+fi
 AC_MSG_RESULT([$enable_mpitests])
+
 
 AC_MSG_NOTICE([Enabling Lustre configure options for libsysio])
 ac_configure_args="$ac_configure_args --with-lustre-hack --with-sockets"
@@ -1443,26 +1614,53 @@ if test x$enable_adaptive_timeouts == xyes; then
 fi
 ])
 
+# config delayed recovery
+AC_DEFUN([LC_CONFIG_DELAYED_RECOVERY],
+[AC_MSG_CHECKING([whether to enable delayed recovery support])
+AC_ARG_ENABLE([delayed-recovery],
+	AC_HELP_STRING([--enable-delayed-recovery],
+			[enable late recovery after main one]),
+	[],[enable_delayed_recovery='no'])
+AC_MSG_RESULT([$enable_delayed_recovery])
+if test x$enable_delayed_recovery == xyes; then
+   AC_DEFINE(HAVE_DELAYED_RECOVERY, 1, [Enable delayed recovery support])
+fi
+])
+
 #
 # LC_CONFIG_QUOTA
 #
-# whether to enable quota support
+# whether to enable quota support global control
 #
 AC_DEFUN([LC_CONFIG_QUOTA],
-[AC_MSG_CHECKING([whether to enable quota support])
-AC_ARG_ENABLE([quota], 
+[AC_ARG_ENABLE([quota],
 	AC_HELP_STRING([--enable-quota],
 			[enable quota support]),
 	[],[enable_quota='yes'])
-AC_MSG_RESULT([$enable_quota])
-if test x$linux25 != xyes; then
-   enable_quota='no'
-fi
-if test x$enable_quota != xno; then
-   AC_DEFINE(HAVE_QUOTA_SUPPORT, 1, [Enable quota support])
+])
+
+# whether to enable quota support(kernel modules)
+AC_DEFUN([LC_QUOTA_MODULE],
+[if test x$enable_quota != xno; then
+    LB_LINUX_CONFIG([QUOTA],[
+	enable_quota_module='yes'
+	AC_DEFINE(HAVE_QUOTA_SUPPORT, 1, [Enable quota support])
+    ],[
+	enable_quota_module='no'
+	AC_MSG_WARN([quota is not enabled because the kernel - lacks quota support])
+    ])
 fi
 ])
-  
+
+AC_DEFUN([LC_QUOTA],
+[#check global
+LC_CONFIG_QUOTA
+#check for utils
+AC_CHECK_HEADER(sys/quota.h,
+                [AC_DEFINE(HAVE_SYS_QUOTA_H, 1, [Define to 1 if you have <sys/quota.h>.])],
+                [AC_MSG_ERROR([don't find <sys/quota.h> in your system])])
+])
+
 AC_DEFUN([LC_QUOTA_READ],
 [AC_MSG_CHECKING([if kernel supports quota_read])
 LB_LINUX_TRY_COMPILE([
@@ -1557,6 +1755,53 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# LC_SECURITY_PLUG  # for SLES10 SP2
+# check security plug in sles10 sp2 kernel 
+AC_DEFUN([LC_SECURITY_PLUG],
+[AC_MSG_CHECKING([If kernel has security plug support])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        struct dentry   *dentry;
+        struct vfsmount *mnt;
+        struct iattr    *iattr;
+
+        notify_change(dentry, mnt, iattr);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_SECURITY_PLUG, 1,
+                [SLES10 SP2 use extra parameter in vfs])
+],[
+        AC_MSG_RESULT(no)
+])
+])
+
+AC_DEFUN([LC_PERCPU_COUNTER],
+[AC_MSG_CHECKING([if have struct percpu_counter defined])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/percpu_counter.h>
+],[],[
+        AC_DEFINE(HAVE_PERCPU_COUNTER, 1, [percpu_counter found])
+        AC_MSG_RESULT([yes])
+
+        AC_MSG_CHECKING([if percpu_counter_inc takes the 2nd argument])
+        LB_LINUX_TRY_COMPILE([
+                #include <linux/percpu_counter.h>
+        ],[
+                struct percpu_counter c;
+                percpu_counter_init(&c, 0);
+        ],[
+                AC_DEFINE(HAVE_PERCPU_2ND_ARG, 1, [percpu_counter_init has two
+                                                   arguments])
+                AC_MSG_RESULT([yes])
+        ],[
+                AC_MSG_RESULT([no])
+        ])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
 #
 # LC_CONFIGURE
 #
@@ -1567,10 +1812,6 @@ AC_DEFUN([LC_CONFIGURE],
 
 # include/liblustre.h
 AC_CHECK_HEADERS([asm/page.h sys/user.h sys/vfs.h stdint.h blkid/blkid.h])
-
-# include/lustre/lustre_user.h
-# See note there re: __ASM_X86_64_PROCESSOR_H
-AC_CHECK_HEADERS([linux/fs.h linux/quota.h])
 
 # liblustre/llite_lib.h
 AC_CHECK_HEADERS([xtio.h file.h])
@@ -1642,7 +1883,7 @@ AM_CONDITIONAL(LIBLUSTRE_TESTS, test x$enable_liblustre_tests = xyes)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
-AM_CONDITIONAL(QUOTA, test x$enable_quota = xyes)
+AM_CONDITIONAL(QUOTA, test x$enable_quota_module = xyes)
 AM_CONDITIONAL(BLKID, test x$ac_cv_header_blkid_blkid_h = xyes)
 AM_CONDITIONAL(EXT2FS_DEVEL, test x$ac_cv_header_ext2fs_ext2fs_h = xyes)
 AM_CONDITIONAL(LIBPTHREAD, test x$enable_libpthread = xyes)

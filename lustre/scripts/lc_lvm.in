@@ -162,9 +162,11 @@ shift  `expr $OPTIND - 1`
 
 # Here we expect the csv file
 if [ $# -eq 0 ]; then
-    echo >&2 "`basename $0`: Missing csv file!"
+    error_output "Missing csv file!"
     usage
 fi
+
+CSV_FILE=$1
 
 # check_lvm_item index
 #
@@ -172,7 +174,7 @@ fi
 check_lvm_item() {
     # Check argument
     if [ $# -eq 0 ]; then
-        echo >&2 "`basename $0`: check_lvm_item() error:"\
+        error_output "check_lvm_item():"\
                  "Missing argument!"
         return 1
     fi
@@ -181,7 +183,7 @@ check_lvm_item() {
 
     # Check hostname
     if [ -z "${HOST_NAME[i]}" ]; then
-        echo >&2 "`basename $0`: check_lvm_item() error:"\
+        error_output "check_lvm_item():"\
                  "hostname item has null value!"
         return 1
     fi
@@ -190,7 +192,7 @@ check_lvm_item() {
     if [ -z "${LVM_NAME[i]}" ] \
     && [ "${LINE_MARKER[i]}" != "${LV_MARKER}" -a "${OP_MODE[i]}" != "remove" ]
     then
-        echo >&2 "`basename $0`: check_lvm_item() error:"\
+        error_output "check_lvm_item():"\
                  "LVM component name item has null value!"
         return 1
     fi
@@ -199,7 +201,7 @@ check_lvm_item() {
     if [ -n "${OP_MODE[i]}" ] \
     && [ "${OP_MODE[i]}" != "create" -a "${OP_MODE[i]}" != "remove" ]
     then
-        echo >&2 "`basename $0`: check_lvm_item() error:"\
+        error_output "check_lvm_item():"\
                  "Invalid operation mode item - \"${OP_MODE[i]}\"!"
         return 1
     fi
@@ -208,20 +210,20 @@ check_lvm_item() {
     if [ -z "${OP_MODE[i]}" -o "${OP_MODE[i]}" = "create" ]; then
         if [ "${LINE_MARKER[i]}" = "${VG_MARKER}" -a -z "${SIXTH_ITEM[i]}" ]
         then
-            echo >&2 "`basename $0`: check_lvm_item() error:"\
+            error_output "check_lvm_item():"\
             "pv paths item of vg ${LVM_NAME[i]} has null value!"
             return 1
         fi
 
         if [ "${LINE_MARKER[i]}" = "${LV_MARKER}" ]; then
             if [ -z "${SIXTH_ITEM[i]}" ]; then
-                echo >&2 "`basename $0`: check_lvm_item() error:"\
+                error_output "check_lvm_item():"\
                          "lv size item has null value!"
                 return 1
             fi
 
             if [ -z "${SEVENTH_ITEM[i]}" ]; then
-                echo >&2 "`basename $0`: check_lvm_item() error:"\
+                error_output "check_lvm_item():"\
                          "vg name item has null value!"
                 return 1
             fi
@@ -237,11 +239,11 @@ check_lvm_item() {
 get_lvm_items() {
     # Check argument
     if [ $# -eq 0 ]; then
-        echo >&2 "`basename $0`: get_lvm_items() error: Missing csv file!"
+        error_output "get_lvm_items(): Missing csv file!"
         return 1
     fi
 
-    CSV_FILE=$1
+    local CSV_FILE=$1
     local LINE line_marker
     local hostname
     declare -i line_num=0
@@ -280,7 +282,7 @@ get_lvm_items() {
 
         # Check some required items
         if ! check_lvm_item $idx; then
-            echo >&2 "`basename $0`: check_lvm_item() error:"\
+            error_output "check_lvm_item():"\
                      "Occurred on line ${line_num} in ${CSV_FILE}."
             return 1    
         fi
@@ -473,7 +475,7 @@ construct_lvm_cmdline() {
                     fi
                     ;;
             *)
-                echo >&2 "`basename $0`: construct_lvm_cmdline() error:"\
+                error_output "construct_lvm_cmdline():"\
                          "Invalid operation mode - \"${OP_MODE[i]}\"!"
                 return 1
                 ;;
@@ -511,7 +513,7 @@ config_lvm_devs() {
     verbose_output "Configuring LVM devices in host ${host_name}..."
     verbose_output "Configure command line is: \"${LVM_CMDLINE}\""
     REMOTE_CMD[pid_num]="${REMOTE} ${host_name} \"${LVM_CMDLINE}\""
-    ${REMOTE} ${host_name} "(${EXPORT_PATH} ${LVM_CMDLINE})" >&2 &
+    $REMOTE $host_name "export PATH=\$PATH:/sbin:/usr/sbin; $LVM_CMDLINE" &
     REMOTE_PID[pid_num]=$!
     let "pid_num += 1"
 
@@ -553,7 +555,7 @@ config_lvm() {
     for ((pid_num = 0; pid_num < ${#REMOTE_PID[@]}; pid_num++)); do
         wait ${REMOTE_PID[${pid_num}]}
         if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo >&2 "`basename $0`: config_lvm() error: Failed"\
+            error_output "config_lvm(): Failed"\
                  "to execute \"${REMOTE_CMD[${pid_num}]}\"!"
             failed_status=true
         fi
@@ -569,13 +571,10 @@ config_lvm() {
 
 # Main flow
 # Check the csv file
-if ! check_file $1; then
-    exit 1    
-fi
+check_file $CSV_FILE || exit ${PIPESTATUS[0]}
 
 # Get the list of nodes to be operated on
-NODES_TO_USE=$(get_nodelist)
-[ ${PIPESTATUS[0]} -ne 0 ] && echo >&2 "${NODES_TO_USE}" && exit 1
+NODES_TO_USE=$(get_nodelist) || error_exit ${PIPESTATUS[0]} "$NODES_TO_USE"
 
 # Check the node list
 check_nodelist ${NODES_TO_USE} || exit 1

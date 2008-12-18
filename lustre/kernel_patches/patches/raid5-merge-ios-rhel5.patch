@@ -1,6 +1,7 @@
-diff -pur linux-2.6.18-53.orig/drivers/md/raid5.c linux-2.6.18-53/drivers/md/raid5.c
---- linux-2.6.18-53.orig/drivers/md/raid5.c	2007-12-28 18:55:24.000000000 +0800
-+++ linux-2.6.18-53/drivers/md/raid5.c	2007-12-28 19:08:15.000000000 +0800
+Index: linux-2.6.18-92.1.17/drivers/md/raid5.c
+===================================================================
+--- linux-2.6.18-92.1.17.orig/drivers/md/raid5.c
++++ linux-2.6.18-92.1.17/drivers/md/raid5.c
 @@ -1277,7 +1277,26 @@ static void compute_block_2(struct strip
  	}
  }
@@ -151,7 +152,7 @@ diff -pur linux-2.6.18-53.orig/drivers/md/raid5.c linux-2.6.18-53/drivers/md/rai
  		}
  		if (sh) {
 -			handle_stripe(sh, NULL);
-+			handle_stripe(sh, NULL, NULL);
++			handle_stripe(sh, NULL, bios);
  			release_stripe(sh);
  			sh = NULL;
  		}

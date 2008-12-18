@@ -1,30 +1,43 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  linux/fs/obdfilter/filter_log.c
+ * GPL HEADER START
  *
- *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
- *   Author: Peter Braam <braam@clusterfs.com>
- *   Author: Andreas Dilger <adilger@clusterfs.com>
- *   Author: Phil Schwan <phil@clusterfs.com>
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/obdfilter/filter_log.c
+ *
+ * Author: Peter Braam <braam@clusterfs.com>
+ * Author: Andreas Dilger <adilger@clusterfs.com>
+ * Author: Phil Schwan <phil@clusterfs.com>
  */
 
 #define DEBUG_SUBSYSTEM S_FILTER
@@ -37,9 +50,8 @@
 
 #include <libcfs/list.h>
 #include <obd_class.h>
+#include <lustre_log.h>
 #include <lustre_fsfilt.h>
-#include <lustre_commit_confd.h>
-
 #include "filter_internal.h"
 
 int filter_log_sz_change(struct llog_handle *cathandle,
@@ -132,11 +144,11 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
                                       struct llog_rec_hdr *rec,
                                       struct llog_cookie *cookie)
 {
-        struct obd_device *obd = ctxt->loc_obd;
-        struct obd_export *exp = obd->obd_self_export;
+        struct obd_export *exp = ctxt->loc_obd->obd_self_export;
         struct llog_unlink_rec *lur;
         struct obdo *oa;
         obd_id oid;
+        obd_count count;
         int rc = 0;
         ENTRY;
 
@@ -146,20 +158,26 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
                 RETURN(-ENOMEM);
         oa->o_valid |= OBD_MD_FLCOOKIE;
         oa->o_id = lur->lur_oid;
-        oa->o_gr = lur->lur_ogen;
+        oa->o_gr = lur->lur_ogr;
         oa->o_lcookie = *cookie;
         oid = oa->o_id;
+        /* objid gap may require to destroy several objects in row */
+        count = lur->lur_count + 1;
 
-        rc = filter_destroy(exp, oa, NULL, NULL, NULL);
-        OBDO_FREE(oa);
-        if (rc == -ENOENT) {
-                CDEBUG(D_RPCTRACE, "object already removed, send cookie\n");
-                llog_cancel(ctxt, NULL, 1, cookie, 0);
-                RETURN(0);
+        while (count > 0) {
+                rc = filter_destroy(exp, oa, NULL, NULL, NULL);
+                if (rc == 0)
+                        CDEBUG(D_RPCTRACE, "object "LPU64" is destroyed\n",
+                               oid);
+                else if (rc != -ENOENT)
+                        CEMERG("error destroying object "LPU64": %d\n",
+                               oid, rc);
+                else
+                        rc = 0;
+                count--;
+                oid++;
         }
-
-        if (rc == 0)
-                CDEBUG(D_RPCTRACE, "object "LPU64" is destroyed\n", oid);
+        OBDO_FREE(oa);
 
         RETURN(rc);
 }
@@ -172,21 +190,31 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct obd_export *exp = obd->obd_self_export;
-        struct llog_setattr_rec *lsr;
         struct obd_info oinfo = { { { 0 } } };
         obd_id oid;
         int rc = 0;
         ENTRY;
 
-        lsr = (struct llog_setattr_rec *)rec;
         OBDO_ALLOC(oinfo.oi_oa);
+
+        if (rec->lrh_type == MDS_SETATTR_REC) {
+                struct llog_setattr_rec *lsr = (struct llog_setattr_rec *)rec;
+
+                oinfo.oi_oa->o_id = lsr->lsr_oid;
+                oinfo.oi_oa->o_gr = lsr->lsr_ogr;
+                oinfo.oi_oa->o_uid = lsr->lsr_uid;
+                oinfo.oi_oa->o_gid = lsr->lsr_gid;
+        } else {
+                struct llog_setattr64_rec *lsr = (struct llog_setattr64_rec *)rec;
+
+                oinfo.oi_oa->o_id = lsr->lsr_oid;
+                oinfo.oi_oa->o_gr = lsr->lsr_ogr;
+                oinfo.oi_oa->o_uid = lsr->lsr_uid;
+                oinfo.oi_oa->o_gid = lsr->lsr_gid;
+        }
 
         oinfo.oi_oa->o_valid |= (OBD_MD_FLID | OBD_MD_FLUID | OBD_MD_FLGID |
                                  OBD_MD_FLCOOKIE);
-        oinfo.oi_oa->o_id = lsr->lsr_oid;
-        oinfo.oi_oa->o_gr = lsr->lsr_ogen;
-        oinfo.oi_oa->o_uid = lsr->lsr_uid;
-        oinfo.oi_oa->o_gid = lsr->lsr_gid;
         oinfo.oi_oa->o_lcookie = *cookie;
         oid = oinfo.oi_oa->o_id;
 
@@ -206,7 +234,7 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
 }
 
 int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
-                               struct llog_rec_hdr *rec, void *data)
+                                struct llog_rec_hdr *rec, void *data)
 {
         struct llog_ctxt *ctxt = llh->lgh_ctxt;
         struct llog_cookie cookie;
@@ -231,6 +259,7 @@ int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
                 rc = filter_recov_log_unlink_cb(ctxt, rec, &cookie);
                 break;
         case MDS_SETATTR_REC:
+        case MDS_SETATTR64_REC:
                 rc = filter_recov_log_setattr_cb(ctxt, rec, &cookie);
                 break;
         case LLOG_GEN_REC: {

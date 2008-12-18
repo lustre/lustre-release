@@ -1,28 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2003 Cluster File Systems, Inc.
- *   Author: Phil Schwan <phil@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- * A kernel module which tests the llog API from the OBD setup function.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/obdclass/llog_test.c
+ *
+ * Author: Phil Schwan <phil@clusterfs.com>
  */
 
 #ifndef EXPORT_SYMTAB
@@ -223,6 +236,41 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
         }
 
         if ((rc = verify_handle("3c", llh, num_recs)))
+                RETURN(rc);
+	
+        CWARN("3d: write log more than BITMAP_SIZE, return -ENOSPC\n");
+        for (i = 0; i < LLOG_BITMAP_SIZE(llh->lgh_hdr) + 1; i++) {
+                struct llog_rec_hdr hdr;
+                char buf_even[24];
+                char buf_odd[32];
+
+                memset(buf_odd, 0, sizeof buf_odd);
+                memset(buf_even, 0, sizeof buf_even);
+                if ((i % 2) == 0) {
+                        hdr.lrh_len = 24;
+                        hdr.lrh_type = OBD_CFG_REC;
+                        rc = llog_write_rec(llh, &hdr, NULL, 0, buf_even, -1);
+                } else {
+                        hdr.lrh_len = 32;
+                        hdr.lrh_type = OBD_CFG_REC;
+                        rc = llog_write_rec(llh, &hdr, NULL, 0, buf_odd, -1);
+                }
+                if (rc) {
+                        if (rc == -ENOSPC) {
+                                break;
+                        } else {
+                       	        CERROR("3c: write recs failed at #%d: %d\n",
+                               	        i + 1, rc);
+                       	        RETURN(rc);
+                        }
+                }
+                num_recs++;
+        }
+	if (rc != -ENOSPC) {
+                CWARN("3d: write record more than BITMAP size!\n");
+                RETURN(-EINVAL);
+        }
+        if ((rc = verify_handle("3d", llh, num_recs)))
                 RETURN(rc);
 
         RETURN(rc);
@@ -712,7 +760,7 @@ static void __exit llog_test_exit(void)
         class_unregister_type("llog_test");
 }
 
-MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("llog test module");
 MODULE_LICENSE("GPL");
 

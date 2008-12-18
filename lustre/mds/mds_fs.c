@@ -1,29 +1,43 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  mds/mds_fs.c
- *  Lustre Metadata Server (MDS) filesystem interface code
+ * GPL HEADER START
  *
- *  Copyright (C) 2002, 2003 Cluster File Systems, Inc.
- *   Author: Andreas Dilger <adilger@clusterfs.com>
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/mds/mds_fs.c
+ *
+ * Lustre Metadata Server (MDS) filesystem interface code
+ *
+ * Author: Andreas Dilger <adilger@clusterfs.com>
  */
 
 #ifndef EXPORT_SYMTAB
@@ -36,9 +50,7 @@
 #include <linux/version.h>
 #include <linux/sched.h>
 #include <lustre_quota.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <linux/mount.h>
-#endif
 #include <lustre_mds.h>
 #include <obd_class.h>
 #include <obd_support.h>
@@ -50,15 +62,21 @@
 #include "mds_internal.h"
 
 
-static int mds_export_stats_init(struct obd_device *obd,
+int mds_export_stats_init(struct obd_device *obd,
                                  struct obd_export *exp,
-                                 void *client_nid)
-  {
+                                 void *localdata)
+{
+        lnet_nid_t *client_nid = localdata;
         int rc, num_stats, newnid = 0;
 
         rc = lprocfs_exp_setup(exp, client_nid, &newnid);
-        if (rc)
+        if (rc) {
+                /* Mask error for already created
+                 * /proc entries */
+                if (rc == -EALREADY)
+                        rc = 0;
                 return rc;
+        }
 
         if (newnid) {
                 struct nid_stat *tmp = exp->exp_nid_stats;
@@ -78,9 +96,75 @@ static int mds_export_stats_init(struct obd_device *obd,
                         return rc;
 
                 mds_stats_counter_init(tmp->nid_stats);
+
+                /* Always add in ldlm_stats */
+                tmp->nid_ldlm_stats = lprocfs_alloc_stats(LDLM_LAST_OPC -
+                                                          LDLM_FIRST_OPC,
+                                                          0);
+                if (tmp->nid_ldlm_stats == NULL)
+                        return -ENOMEM;
+
+                lprocfs_init_ldlm_stats(tmp->nid_ldlm_stats);
+
+                rc = lprocfs_register_stats(tmp->nid_proc, "ldlm_stats",
+                                            tmp->nid_ldlm_stats);
+                if (rc)
+                        return rc;
         }
 
         return 0;
+}
+
+/* VBR: to determine the delayed client the lcd should be updated for each new
+ * epoch */
+int mds_update_client_epoch(struct obd_export *exp)
+{
+        struct mds_export_data *med = &exp->exp_mds_data;
+        struct mds_obd *mds = &exp->exp_obd->u.mds;
+        struct lvfs_run_ctxt saved;
+        loff_t off = med->med_lr_off;
+        int rc = 0;
+
+        /* VBR: set client last_epoch to current epoch */
+        if (le32_to_cpu(med->med_lcd->lcd_last_epoch) >=
+                        le32_to_cpu(mds->mds_server_data->lsd_start_epoch))
+                return rc;
+
+        med->med_lcd->lcd_last_epoch = mds->mds_server_data->lsd_start_epoch;
+        push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
+        rc = fsfilt_write_record(exp->exp_obd, mds->mds_rcvd_filp,
+                                 med->med_lcd, sizeof(*med->med_lcd), &off,
+                                 exp->exp_delayed);
+        pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
+
+        CDEBUG(D_INFO, "update client idx %u last_epoch %#x (%#x)\n",
+               med->med_lr_idx, le32_to_cpu(med->med_lcd->lcd_last_epoch),
+               le32_to_cpu(mds->mds_server_data->lsd_start_epoch));
+
+        return rc;
+}
+
+/* Called after recovery is done on server */
+void mds_update_last_epoch(struct obd_device *obd)
+{
+        struct ptlrpc_request *req;
+        struct mds_obd *mds = &obd->u.mds;
+        __u32 start_epoch;
+
+        /* Increase server epoch after recovery */
+        spin_lock(&mds->mds_transno_lock);
+        start_epoch = lr_epoch(mds->mds_last_transno) + 1;
+        mds->mds_last_transno = (__u64)start_epoch << LR_EPOCH_BITS;
+        mds->mds_server_data->lsd_start_epoch = cpu_to_le32(start_epoch);
+        spin_unlock(&mds->mds_transno_lock);
+
+        /* go through delayed reply queue to find all exports participate in
+         * recovery and set new epoch for them */
+        list_for_each_entry(req, &obd->obd_delayed_reply_queue, rq_list) {
+                LASSERT(!req->rq_export->exp_delayed);
+                mds_update_client_epoch(req->rq_export);
+        }
+        mds_update_server_data(obd, 1);
 }
 
 /* Add client data to the MDS.  We use a bitmap to locate a free space
@@ -98,7 +182,7 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
         struct mds_export_data *med = &exp->exp_mds_data;
         unsigned long *bitmap = mds->mds_client_bitmap;
         int new_client = (cl_idx == -1);
-        int rc;
+        int rc = 0;
         ENTRY;
 
         LASSERT(bitmap != NULL);
@@ -107,6 +191,10 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
         /* XXX if lcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
         if (!strcmp(med->med_lcd->lcd_uuid, obd->obd_uuid.uuid))
                 RETURN(0);
+
+        /* VBR: remove expired exports before searching for free slot */
+        if (new_client)
+                class_disconnect_expired_exports(obd);
 
         /* the bitmap operations can handle cl_idx > sizeof(long) * 8, so
          * there's no need for extra complication here
@@ -143,18 +231,32 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
         mds_export_stats_init(obd, exp, localdata);
 
         if (new_client) {
-                struct lvfs_run_ctxt saved;
+                struct lvfs_run_ctxt *saved = NULL;
                 loff_t off = med->med_lr_off;
                 struct file *file = mds->mds_rcvd_filp;
                 void *handle;
 
-                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                OBD_SLAB_ALLOC_PTR(saved, obd_lvfs_ctxt_cache);
+                if (saved == NULL) {
+                        CERROR("cannot allocate memory for run ctxt\n");
+                        RETURN(-ENOMEM);
+                }
+
+                push_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
                 handle = fsfilt_start(obd, file->f_dentry->d_inode,
                                       FSFILT_OP_SETATTR, NULL);
                 if (IS_ERR(handle)) {
                         rc = PTR_ERR(handle);
                         CERROR("unable to start transaction: rc %d\n", rc);
                 } else {
+                        /* VBR: set client last_transno as mds_last_transno to
+                         * remember last epoch for this client */
+                        med->med_lcd->lcd_last_epoch =
+                                        mds->mds_server_data->lsd_start_epoch;
+                        exp->exp_last_request_time = cfs_time_current_sec();
+                        /* remember first epoch of client for orphan handling */
+                        med->med_lcd->lcd_first_epoch =
+                                  cpu_to_le32(lr_epoch(mds->mds_last_transno));
                         rc = fsfilt_add_journal_cb(obd, 0, handle,
                                                    target_client_add_cb, exp);
                         if (rc == 0) {
@@ -168,7 +270,8 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
                         fsfilt_commit(obd, file->f_dentry->d_inode, handle, 0);
                 }
 
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                pop_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
+                OBD_SLAB_FREE_PTR(saved, obd_lvfs_ctxt_cache);
 
                 if (rc)
                         return rc;
@@ -176,16 +279,17 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
                        med->med_lr_idx, med->med_lr_off,
                        (unsigned int)sizeof(*med->med_lcd));
         }
-        return 0;
+        return rc;
 }
 
+struct lsd_client_data zero_lcd; /* globals are implicitly zeroed */
+ 
 int mds_client_free(struct obd_export *exp)
 {
         struct mds_export_data *med = &exp->exp_mds_data;
         struct mds_obd *mds = &exp->exp_obd->u.mds;
         struct obd_device *obd = exp->exp_obd;
-        struct lsd_client_data zero_lcd;
-        struct lvfs_run_ctxt saved;
+        struct lvfs_run_ctxt *saved = NULL;
         int rc;
         loff_t off;
         ENTRY;
@@ -202,7 +306,6 @@ int mds_client_free(struct obd_export *exp)
 
         LASSERT(mds->mds_client_bitmap != NULL);
 
-        lprocfs_exp_cleanup(exp);
 
         off = med->med_lr_off;
 
@@ -223,17 +326,31 @@ int mds_client_free(struct obd_export *exp)
         }
 
         if (!(exp->exp_flags & OBD_OPT_FAILOVER)) {
-                memset(&zero_lcd, 0, sizeof(zero_lcd));
-                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                /* Don't force sync on each disconnect if aborting recovery,
+                 * or it does num_clients * num_osts syncs.  b=17194 */
+                int need_sync = (!exp->exp_libclient || exp->exp_need_sync) &&
+                                 !(exp->exp_flags & OBD_OPT_ABORT_RECOV);
+                OBD_SLAB_ALLOC_PTR(saved, obd_lvfs_ctxt_cache);
+                if (saved == NULL) {
+                        CERROR("cannot allocate memory for run ctxt\n");
+                        GOTO(free, rc = -ENOMEM);
+                }
+                push_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_write_record(obd, mds->mds_rcvd_filp, &zero_lcd,
-                                         sizeof(zero_lcd), &off,
-                                         (!exp->exp_libclient ||
-                                          exp->exp_need_sync));
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                                         sizeof(zero_lcd), &off, 0);
+
+                /* Make sure the server's last_transno is up to date. Do this
+                 * after the client is freed so we know all the client's
+                 * transactions have been committed. */
+                if (rc == 0)
+                        mds_update_server_data(exp->exp_obd, need_sync);
+
+                pop_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
 
                 CDEBUG(rc == 0 ? D_INFO : D_ERROR,
-                       "zeroing out client %s idx %u in %s rc %d\n",
-                       med->med_lcd->lcd_uuid, med->med_lr_idx, LAST_RCVD, rc);
+                       "zero out client %s at idx %u/%llu in %s %ssync rc %d\n",
+                       med->med_lcd->lcd_uuid, med->med_lr_idx, med->med_lr_off,
+                       LAST_RCVD, need_sync ? "" : "a", rc);
         }
 
         if (!test_and_clear_bit(med->med_lr_idx, mds->mds_client_bitmap)) {
@@ -242,14 +359,11 @@ int mds_client_free(struct obd_export *exp)
                 LBUG();
         }
 
-
-        /* Make sure the server's last_transno is up to date. Do this
-         * after the client is freed so we know all the client's
-         * transactions have been committed. */
-        mds_update_server_data(exp->exp_obd, 0);
-
         EXIT;
- free:
+free:
+        if (saved)
+                OBD_SLAB_FREE_PTR(saved, obd_lvfs_ctxt_cache);
+
         OBD_FREE_PTR(med->med_lcd);
         med->med_lcd = NULL;
 
@@ -265,6 +379,85 @@ static int mds_server_free_data(struct mds_obd *mds)
         return 0;
 }
 
+static void mds_add_fake_export(struct obd_device *obd, int num,
+                                struct file *file)
+{
+        struct obd_export *exp;
+        struct lvfs_run_ctxt saved;
+        struct obd_device_target *obt = &obd->u.obt;
+        struct lu_export_data *led;
+        unsigned long *bitmap = obt->obt_client_bitmap;
+        struct lsd_client_data *lcd = NULL;
+        unsigned int idx = 0;
+        loff_t off = 0;
+        int rc = 0;
+
+        while (num > 0) {
+                num--;
+                if (!lcd) {
+                        OBD_ALLOC_PTR(lcd);
+                        if (!lcd)
+                                return;
+                }
+                idx = find_next_zero_bit(bitmap, LR_MAX_CLIENTS, idx);
+                if (idx >= LR_MAX_CLIENTS) {
+                        CERROR("no room for %u clients - fix LR_MAX_CLIENTS\n", idx);
+                        OBD_FREE_PTR(lcd);
+                        break;
+                }
+                if (test_and_set_bit(idx, bitmap)) {
+                        CERROR("Bit %u is set already\n", idx);
+                        continue;
+                }
+                off = le32_to_cpu(obt->obt_lsd->lsd_client_start) +
+                      idx * le16_to_cpu(obt->obt_lsd->lsd_client_size);
+
+                sprintf(lcd->lcd_uuid, "dead-%.16u", idx);
+                CDEBUG(D_INFO, "Create fake export %s, index %u, offset %lu\n",
+                       lcd->lcd_uuid, idx, (unsigned long)off);
+
+                exp = class_new_export(obd, (struct obd_uuid *)lcd->lcd_uuid);
+                if (IS_ERR(exp)) {
+                        if (PTR_ERR(exp) == -EALREADY) {
+                                CERROR("Export %s already exists\n",
+                                       lcd->lcd_uuid);
+                        }
+                        CERROR("Failed to create export %lu\n", PTR_ERR(exp));
+                        OBD_FREE_PTR(lcd);
+                        break;
+                }
+                LASSERT(exp);
+                led = &exp->exp_target_data;
+                led->led_lr_idx = idx;
+                led->led_lr_off = off;
+                led->led_lcd = lcd;
+
+                exp->exp_last_request_time = cfs_time_current_sec();
+                exp->exp_replay_needed = 1;
+                exp->exp_connecting = 0;
+                exp->exp_in_recovery = 0;
+
+                spin_lock_bh(&obd->obd_processing_task_lock);
+                obd->obd_recoverable_clients++;
+                obd->obd_max_recoverable_clients++;
+                spin_unlock_bh(&obd->obd_processing_task_lock);
+
+                class_set_export_delayed(exp);
+                class_export_put(exp);
+
+                lcd->lcd_last_epoch = cpu_to_le32(1);
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                rc = fsfilt_write_record(obd, file, lcd, sizeof(*lcd), &off, 0);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                if (rc) {
+                        CERROR("Failed to create fake client record\n");
+                        OBD_FREE_PTR(lcd);
+                        break;
+                }
+                lcd = NULL;
+        }
+}
+
 static int mds_init_server_data(struct obd_device *obd, struct file *file)
 {
         struct mds_obd *mds = &obd->u.mds;
@@ -273,6 +466,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         loff_t off = 0;
         unsigned long last_rcvd_size = i_size_read(file->f_dentry->d_inode);
         __u64 mount_count;
+        __u32 start_epoch;
         int cl_idx, rc = 0;
         ENTRY;
 
@@ -343,9 +537,13 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
 
         lsd->lsd_feature_compat = cpu_to_le32(OBD_COMPAT_MDT);
 
+        target_trans_table_init(obd);
         mds->mds_last_transno = le64_to_cpu(lsd->lsd_last_transno);
+        start_epoch = le32_to_cpu(lsd->lsd_start_epoch);
 
-        CDEBUG(D_INODE, "%s: server last_transno: "LPU64"\n",
+        CDEBUG(D_INODE, "%s: server start_epoch: %#x\n",
+               obd->obd_name, start_epoch);
+        CDEBUG(D_INODE, "%s: server last_transno: "LPX64"\n",
                obd->obd_name, mds->mds_last_transno);
         CDEBUG(D_INODE, "%s: server mount_count: "LPU64"\n",
                obd->obd_name, mount_count + 1);
@@ -374,6 +572,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         for (cl_idx = 0, off = le32_to_cpu(lsd->lsd_client_start);
              off < last_rcvd_size; cl_idx++) {
                 __u64 last_transno;
+                __u32 last_epoch;
                 struct obd_export *exp;
                 struct mds_export_data *med;
 
@@ -401,10 +600,8 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                         continue;
                 }
 
-                last_transno = le64_to_cpu(lcd->lcd_last_transno) >
-                               le64_to_cpu(lcd->lcd_last_close_transno) ?
-                               le64_to_cpu(lcd->lcd_last_transno) :
-                               le64_to_cpu(lcd->lcd_last_close_transno);
+                last_transno = lsd_last_transno(lcd);
+                last_epoch = le32_to_cpu(lcd->lcd_last_epoch);
 
                 /* These exports are cleaned up by mds_disconnect(), so they
                  * need to be set up like real exports as mds_connect() does.
@@ -429,24 +626,40 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                         /* can't fail for existing client */
                         LASSERTF(rc == 0, "rc = %d\n", rc);
 
+                        /* VBR: set export last committed version */
+                        exp->exp_last_committed = last_transno;
+                        /* read last time from disk */
+                        exp->exp_last_request_time = target_trans_table_last_time(exp);
                         lcd = NULL;
 
                         spin_lock(&exp->exp_lock);
                         exp->exp_replay_needed = 1;
                         exp->exp_connecting = 0;
+                        exp->exp_in_recovery = 0;
                         spin_unlock(&exp->exp_lock);
 
+                        spin_lock_bh(&obd->obd_processing_task_lock);
                         obd->obd_recoverable_clients++;
                         obd->obd_max_recoverable_clients++;
+                        spin_unlock_bh(&obd->obd_processing_task_lock);
+
+                        /* VBR: if epoch too old mark export as delayed,
+                         * if epoch is zero then client is pre-vbr one */
+                        if (start_epoch > last_epoch && last_epoch != 0)
+                                class_set_export_delayed(exp);
                         class_export_put(exp);
                 }
 
                 /* Need to check last_rcvd even for duplicated exports. */
-                CDEBUG(D_OTHER, "client at idx %d has last_transno = "LPU64"\n",
-                       cl_idx, last_transno);
+                CDEBUG(D_OTHER, "client at idx %d has last_transno = "LPX64","
+                       "last_epoch %#x\n", cl_idx, last_transno, last_epoch);
 
                 if (last_transno > mds->mds_last_transno)
                         mds->mds_last_transno = last_transno;
+        }
+
+        if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_TGT_FAKE_EXP))) {
+                mds_add_fake_export(obd, obd_fail_val, file);
         }
 
         if (lcd)
@@ -456,8 +669,9 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
 
         if (obd->obd_recoverable_clients) {
                 CWARN("RECOVERY: service %s, %d recoverable clients, "
-                      "last_transno "LPU64"\n", obd->obd_name,
-                      obd->obd_recoverable_clients, mds->mds_last_transno);
+                      "%d delayed clients, last_transno "LPU64"\n",
+                      obd->obd_name, obd->obd_recoverable_clients,
+                      obd->obd_delayed_clients, mds->mds_last_transno);
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
                 obd->obd_recovering = 1;
                 obd->obd_recovery_start = 0;
@@ -467,8 +681,11 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 /* bz13079: this won't be changed for mds */
                 obd->obd_recovery_max_time = OBD_RECOVERY_MAX_TIME;
 #endif
+        } else {
+                LASSERT(!obd->obd_recovering);
+                /* VBR: update boot epoch after recovery */
+                mds_update_last_epoch(obd);
         }
-
         mds->mds_mount_count = mount_count + 1;
         lsd->lsd_mount_count = lsd->lsd_compat14 =
                 cpu_to_le64(mds->mds_mount_count);
@@ -490,7 +707,7 @@ err_msd:
 int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct lvfs_run_ctxt saved;
+        struct lvfs_run_ctxt *saved = NULL;
         struct dentry *dentry;
         struct file *file;
         int rc;
@@ -502,9 +719,17 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         if (rc)
                 RETURN(rc);
 
+        OBD_SLAB_ALLOC_PTR(saved, obd_lvfs_ctxt_cache);
+        if (saved == NULL) {
+                CERROR("cannot allocate memory for run ctxt\n");
+                RETURN(-ENOMEM);
+        }
+
         mds->mds_vfsmnt = mnt;
         /* why not mnt->mnt_sb instead of mnt->mnt_root->d_inode->i_sb? */
         obd->u.obt.obt_sb = mnt->mnt_root->d_inode->i_sb;
+        obd->u.obt.obt_stale_export_age = STALE_EXPORT_MAXTIME_DEFAULT;
+        spin_lock_init(&obd->u.obt.obt_trans_table_lock);
 
         rc = fsfilt_setup(obd, obd->u.obt.obt_sb);
         if (rc)
@@ -517,8 +742,8 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         obd->obd_lvfs_ctxt.cb_ops = mds_lvfs_ops;
 
         /* setup the directory tree */
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        dentry = simple_mkdir(current->fs->pwd, "ROOT", 0755, 0);
+        push_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
+        dentry = simple_mkdir(current->fs->pwd, mnt, "ROOT", 0755, 0);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create ROOT directory: rc = %d\n", rc);
@@ -546,7 +771,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 GOTO(err_fid, rc);
         }
 
-        dentry = simple_mkdir(current->fs->pwd, "PENDING", 0777, 1);
+        dentry = simple_mkdir(current->fs->pwd, mnt, "PENDING", 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create PENDING directory: rc = %d\n", rc);
@@ -555,7 +780,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         mds->mds_pending_dir = dentry;
 
         /* COMPAT_146 */
-        dentry = simple_mkdir(current->fs->pwd, MDT_LOGS_DIR, 0777, 1);
+        dentry = simple_mkdir(current->fs->pwd, mnt, MDT_LOGS_DIR, 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create %s directory: rc = %d\n",
@@ -565,7 +790,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         mds->mds_logs_dir = dentry;
         /* end COMPAT_146 */
 
-        dentry = simple_mkdir(current->fs->pwd, "OBJECTS", 0777, 1);
+        dentry = simple_mkdir(current->fs->pwd, mnt, "OBJECTS", 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create OBJECTS directory: rc = %d\n", rc);
@@ -616,8 +841,8 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         if (rc)
                 GOTO(err_health_check, rc);
 err_pop:
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
+        pop_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
+        OBD_SLAB_FREE_PTR(saved, obd_lvfs_ctxt_cache);
         return rc;
 
 err_health_check:
@@ -645,8 +870,14 @@ err_fid:
 int mds_fs_cleanup(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct lvfs_run_ctxt saved;
+        struct lvfs_run_ctxt *saved = NULL;
         int rc = 0;
+
+        OBD_SLAB_ALLOC_PTR(saved, obd_lvfs_ctxt_cache);
+        if (saved == NULL) {
+                CERROR("cannot allocate memory for run ctxt\n");
+                RETURN(-ENOMEM);
+        }
 
         if (obd->obd_fail)
                 LCONSOLE_WARN("%s: shutting down for failover; client state "
@@ -655,7 +886,7 @@ int mds_fs_cleanup(struct obd_device *obd)
         class_disconnect_exports(obd); /* cleans up client info too */
         mds_server_free_data(mds);
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        push_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
         if (mds->mds_rcvd_filp) {
                 rc = filp_close(mds->mds_rcvd_filp, 0);
                 mds->mds_rcvd_filp = NULL;
@@ -686,7 +917,8 @@ int mds_fs_cleanup(struct obd_device *obd)
 
         lquota_fs_cleanup(mds_quota_interface_ref, obd);
 
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        pop_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
+        OBD_SLAB_FREE_PTR(saved, obd_lvfs_ctxt_cache);
         shrink_dcache_parent(mds->mds_fid_de);
         dput(mds->mds_fid_de);
         LL_DQUOT_OFF(obd->u.obt.obt_sb);
@@ -705,17 +937,23 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         unsigned int tmpname = ll_rand();
         struct file *filp;
         struct dentry *new_child;
-        struct lvfs_run_ctxt saved;
+        struct lvfs_run_ctxt *saved = NULL;
         char fidname[LL_FID_NAMELEN];
         void *handle;
         struct lvfs_ucred ucred = { 0 };
         int rc = 0, err, namelen;
         ENTRY;
 
+        OBD_SLAB_ALLOC_PTR(saved, obd_lvfs_ctxt_cache);
+        if (saved == NULL) {
+                CERROR("cannot allocate memory for run ctxt\n");
+                RETURN(-ENOMEM);
+        }
+
         /* the owner of object file should always be root */
         cap_raise(ucred.luc_cap, CAP_SYS_RESOURCE);
 
-        push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, &ucred);
+        push_ctxt(saved, &exp->exp_obd->obd_lvfs_ctxt, &ucred);
 
         sprintf(fidname, "OBJECTS/%u.%u", tmpname, current->pid);
         filp = filp_open(fidname, O_CREAT | O_EXCL, 0666);
@@ -755,8 +993,9 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
                 GOTO(out_dput, rc = PTR_ERR(handle));
 
         lock_kernel();
-        rc = vfs_rename(mds->mds_objects_dir->d_inode, filp->f_dentry,
-                        mds->mds_objects_dir->d_inode, new_child);
+        rc = ll_vfs_rename(mds->mds_objects_dir->d_inode, filp->f_dentry,
+                           filp->f_vfsmnt, mds->mds_objects_dir->d_inode,
+                           new_child, filp->f_vfsmnt);
         unlock_kernel();
         if (rc)
                 CERROR("error renaming new object "LPU64":%u: rc %d\n",
@@ -779,7 +1018,8 @@ out_close:
                         rc = err;
         }
 out_pop:
-        pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, &ucred);
+        pop_ctxt(saved, &exp->exp_obd->obd_lvfs_ctxt, &ucred);
+        OBD_SLAB_FREE_PTR(saved, obd_lvfs_ctxt_cache);
         RETURN(rc);
 }
 
@@ -790,7 +1030,7 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         struct mds_obd *mds = &exp->exp_obd->u.mds;
         struct inode *parent_inode = mds->mds_objects_dir->d_inode;
         struct obd_device *obd = exp->exp_obd;
-        struct lvfs_run_ctxt saved;
+        struct lvfs_run_ctxt *saved = NULL;
         struct lvfs_ucred ucred = { 0 };
         char fidname[LL_FID_NAMELEN];
         struct inode *inode = NULL;
@@ -799,8 +1039,14 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         int err, namelen, rc = 0;
         ENTRY;
 
+        OBD_SLAB_ALLOC_PTR(saved, obd_lvfs_ctxt_cache);
+        if (saved == NULL) {
+                CERROR("cannot allocate memory for run ctxt\n");
+                RETURN(-ENOMEM);
+        }
+
         cap_raise(ucred.luc_cap, CAP_SYS_RESOURCE);
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, &ucred);
+        push_ctxt(saved, &obd->obd_lvfs_ctxt, &ucred);
 
         namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
 
@@ -831,7 +1077,7 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
            vfs_unlink() context. bug 10409 */
         inode = de->d_inode;
         atomic_inc(&inode->i_count);
-        rc = vfs_unlink(mds->mds_objects_dir->d_inode, de);
+        rc = ll_vfs_unlink(mds->mds_objects_dir->d_inode, de, mds->mds_vfsmnt);
         if (rc)
                 CERROR("error destroying object "LPU64":%u: rc %d\n",
                        oa->o_id, oa->o_generation, rc);
@@ -847,6 +1093,7 @@ out_dput:
         if (inode)
                 iput(inode);
 
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &ucred);
+        pop_ctxt(saved, &obd->obd_lvfs_ctxt, &ucred);
+        OBD_SLAB_FREE_PTR(saved, obd_lvfs_ctxt_cache);
         RETURN(rc);
 }

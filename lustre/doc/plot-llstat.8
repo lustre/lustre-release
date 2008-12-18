@@ -1,0 +1,43 @@
+.TH plot0llstat 1 "Jul 7, 2008" Lustre "utilities"
+.SH NAME
+plot-llstat \- plot Lustre statistics
+.SH SYNOPSIS
+.B "plot-llstat results_filename [parameter_index]"
+.br
+.SH DESCRIPTION
+The
+.B plot-llstat
+script is used to generate csv file and instructions files for gnuplot
+from the output of
+.B llstat.
+Since
+.B llstat
+is generic in nature,
+.B plot-llstat
+is also a generic script.
+.LP
+.I parameter_index
+can be 1 for count per interval, 2 for count per second (default),
+or 3 for total count.
+.LP
+plot-llstat script creates dat(csv) file using number of operations
+specified by the user. Number of operations equals to number of columns in csv
+file. And values in those columns are equals to the corresponding value of
+the
+.I "parameter_index"
+parameter from the output file.
+.LP
+.B plot-llstat
+also creates .scr file that contains instructions for gnuplot to plot
+the graph. After generating .dat and .scr files
+.B plot-llstat
+invokes
+.B gnuplot
+to display graph.
+.SH EXAMPLE
+.nf
+llstat -i2 -g -c lustre-OST0000 > log
+plot-llstat log 3
+.fi
+.SH SEE ALSO
+llstat(8)

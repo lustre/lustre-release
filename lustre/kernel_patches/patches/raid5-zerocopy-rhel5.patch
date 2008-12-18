@@ -345,9 +345,9 @@ diff -pur linux-2.6.18-53.orig/include/linux/page-flags.h linux-2.6.18-53/includ
  #define PG_nosave_free		18	/* Free, should not be written */
  #define PG_buddy		19	/* Page is free, on buddy lists */
 +#define PG_constant		20	/* To mark if the page is constant */
+ #define PG_xpmem		27	/* Testing for xpmem. */
  
  /* PG_owner_priv_1 users should have descriptive aliases */
- #define PG_checked              PG_owner_priv_1 /* Used by some filesystems */
 @@ -252,6 +253,14 @@
  
  struct page;	/* forward declaration */

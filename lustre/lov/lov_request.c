@@ -1,25 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002, 2003 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #ifndef EXPORT_SYMTAB
@@ -337,6 +349,7 @@ int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
 
                 /* XXX LOV STACKING: submd should be from the subobj */
                 req->rq_oi.oi_md->lsm_object_id = loi->loi_id;
+                req->rq_oi.oi_md->lsm_object_gr = loi->loi_gr;
                 req->rq_oi.oi_md->lsm_stripe_count = 0;
                 req->rq_oi.oi_md->lsm_oinfo[0]->loi_kms_valid =
                         loi->loi_kms_valid;
@@ -447,6 +460,7 @@ int lov_prep_match_set(struct obd_export *exp, struct obd_info *oinfo,
 
                 /* XXX LOV STACKING: submd should be from the subobj */
                 req->rq_oi.oi_md->lsm_object_id = loi->loi_id;
+                req->rq_oi.oi_md->lsm_object_gr = loi->loi_gr;
                 req->rq_oi.oi_md->lsm_stripe_count = 0;
 
                 lov_set_add_req(req, set);
@@ -1003,6 +1017,7 @@ int lov_prep_getattr_set(struct obd_export *exp, struct obd_info *oinfo,
                        sizeof(*req->rq_oi.oi_oa));
                 req->rq_oi.oi_oa->o_id = loi->loi_id;
                 req->rq_oi.oi_cb_up = cb_getattr_update;
+                req->rq_rqset = set;
 
                 lov_set_add_req(req, set);
         }
@@ -1365,8 +1380,16 @@ int lov_fini_sync_set(struct lov_request_set *set)
         RETURN(rc);
 }
 
+/* The callback for osc_sync that finilizes a request info when a
+ * response is recieved. */
+static int cb_sync_update(struct obd_info *oinfo, int rc)
+{
+        struct lov_request *lovreq;
+        lovreq = container_of(oinfo, struct lov_request, rq_oi);
+        return lov_update_common_set(lovreq->rq_rqset, lovreq, rc);
+}
+
 int lov_prep_sync_set(struct obd_export *exp, struct obd_info *oinfo,
-                      struct obdo *src_oa, struct lov_stripe_md *lsm,
                       obd_off start, obd_off end,
                       struct lov_request_set **reqset)
 {
@@ -1383,21 +1406,22 @@ int lov_prep_sync_set(struct obd_export *exp, struct obd_info *oinfo,
 
         set->set_exp = exp;
         set->set_oi = oinfo;
-        set->set_oi->oi_md = lsm;
-        set->set_oi->oi_oa = src_oa;
+        set->set_oi->oi_md = oinfo->oi_md;
+        set->set_oi->oi_oa = oinfo->oi_oa;
 
-        for (i = 0; i < lsm->lsm_stripe_count; i++) {
+        for (i = 0; i < oinfo->oi_md->lsm_stripe_count; i++) {
                 struct lov_request *req;
                 obd_off rs, re;
 
-                loi = lsm->lsm_oinfo[i];
+                loi = oinfo->oi_md->lsm_oinfo[i];
                 if (!lov->lov_tgts[loi->loi_ost_idx] ||
                     !lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
                         continue;
                 }
 
-                if (!lov_stripe_intersects(lsm, i, start, end, &rs, &re))
+                if (!lov_stripe_intersects(oinfo->oi_md, i, start,
+                                           end, &rs, &re))
                         continue;
 
                 OBD_ALLOC(req, sizeof(*req));
@@ -1411,13 +1435,16 @@ int lov_prep_sync_set(struct obd_export *exp, struct obd_info *oinfo,
                         OBD_FREE(req, sizeof(*req));
                         GOTO(out_set, rc = -ENOMEM);
                 }
-                memcpy(req->rq_oi.oi_oa, src_oa, sizeof(*req->rq_oi.oi_oa));
+                memcpy(req->rq_oi.oi_oa, oinfo->oi_oa,
+                       sizeof(*req->rq_oi.oi_oa));
                 req->rq_oi.oi_oa->o_id = loi->loi_id;
                 req->rq_oi.oi_oa->o_stripe_idx = i;
 
                 req->rq_oi.oi_policy.l_extent.start = rs;
                 req->rq_oi.oi_policy.l_extent.end = re;
                 req->rq_oi.oi_policy.l_extent.gid = -1;
+                req->rq_oi.oi_cb_up = cb_sync_update;
+                req->rq_rqset = set;
 
                 lov_set_add_req(req, set);
         }
@@ -1453,7 +1480,7 @@ int lov_fini_statfs(struct obd_device *obd, struct obd_statfs *osfs,int success)
 
                 spin_lock(&obd->obd_osfs_lock);
                 memcpy(&obd->obd_osfs, osfs, sizeof(*osfs));
-                obd->obd_osfs_age = get_jiffies_64();
+                obd->obd_osfs_age = cfs_time_current_64();
                 spin_unlock(&obd->obd_osfs_lock);
                 RETURN(0);
         }
@@ -1480,15 +1507,11 @@ int lov_fini_statfs_set(struct lov_request_set *set)
         RETURN(rc);
 }
 
-void lov_update_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                       struct obd_statfs *lov_sfs, int success)
+void lov_update_statfs(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
+                       int success)
 {
         int shift = 0, quit = 0;
         __u64 tmp;
-        spin_lock(&obd->obd_osfs_lock);
-        memcpy(&obd->obd_osfs, lov_sfs, sizeof(*lov_sfs));
-        obd->obd_osfs_age = get_jiffies_64();
-        spin_unlock(&obd->obd_osfs_lock);
 
         if (success == 0) {
                 memcpy(osfs, lov_sfs, sizeof(*lov_sfs));
@@ -1582,7 +1605,13 @@ static int cb_statfs_update(struct obd_info *oinfo, int rc)
                 RETURN(rc);
         }
 
-        lov_update_statfs(obd, osfs, lov_sfs, success);
+        spin_lock(&obd->obd_osfs_lock);
+        memcpy(&obd->obd_osfs, lov_sfs, sizeof(*lov_sfs));
+        if ((oinfo->oi_flags & OBD_STATFS_FROM_CACHE) == 0)
+                obd->obd_osfs_age = cfs_time_current_64();
+        spin_unlock(&obd->obd_osfs_lock);
+
+        lov_update_statfs(osfs, lov_sfs, success);
         qos_update(lov);
 
         RETURN(0);
@@ -1625,6 +1654,7 @@ int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
 
                 req->rq_idx = i;
                 req->rq_oi.oi_cb_up = cb_statfs_update;
+                req->rq_oi.oi_flags = oinfo->oi_flags;
                 req->rq_rqset = set;
 
                 lov_set_add_req(req, set);

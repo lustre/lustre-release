@@ -1,6 +1,39 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
  */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ */
+
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -158,6 +191,8 @@ check_ptlrpc_body(void)
         CHECK_MEMBER(ptlrpc_body, pb_service_time);
         CHECK_MEMBER(ptlrpc_body, pb_slv);
         CHECK_MEMBER(ptlrpc_body, pb_limit);
+        CHECK_MEMBER(ptlrpc_body, pb_pre_versions);
+        CHECK_MEMBER(ptlrpc_body, pb_padding);
 }
 
 static void check_obd_connect_data(void)
@@ -205,7 +240,9 @@ static void check_obd_connect_data(void)
         CHECK_CDEFINE(OBD_CONNECT_LRU_RESIZE);
         CHECK_CDEFINE(OBD_CONNECT_MDS_MDS);
         CHECK_CDEFINE(OBD_CONNECT_REAL);
+        CHECK_CDEFINE(OBD_CONNECT_FID);
         CHECK_CDEFINE(OBD_CONNECT_CKSUM);
+        CHECK_CDEFINE(OBD_CONNECT_VBR);
 }
 
 static void
@@ -331,6 +368,33 @@ check_lov_mds_md_join(void)
         CHECK_MEMBER(lov_mds_md_join, lmmj_md);
         CHECK_MEMBER(lov_mds_md_join, lmmj_array_id);
         CHECK_MEMBER(lov_mds_md_join, lmmj_extent_count);
+}
+
+static void
+check_lov_mds_md_v3(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(lov_mds_md_v3);
+        CHECK_MEMBER(lov_mds_md_v3, lmm_magic);
+        CHECK_MEMBER(lov_mds_md_v3, lmm_pattern);
+        CHECK_MEMBER(lov_mds_md_v3, lmm_object_id);
+        CHECK_MEMBER(lov_mds_md_v3, lmm_object_gr);
+        CHECK_MEMBER(lov_mds_md_v3, lmm_stripe_size);
+        CHECK_MEMBER(lov_mds_md_v3, lmm_stripe_count);
+        CHECK_MEMBER(lov_mds_md_v3, lmm_pool_name);
+        CHECK_MEMBER(lov_mds_md_v3, lmm_objects);
+
+        BLANK_LINE();
+        CHECK_STRUCT(lov_ost_data_v1);
+        CHECK_MEMBER(lov_ost_data_v1, l_object_id);
+        CHECK_MEMBER(lov_ost_data_v1, l_object_gr);
+        CHECK_MEMBER(lov_ost_data_v1, l_ost_gen);
+        CHECK_MEMBER(lov_ost_data_v1, l_ost_idx);
+
+        CHECK_CDEFINE(LOV_MAGIC_V3);
+
+        CHECK_VALUE(LOV_PATTERN_RAID0);
+        CHECK_VALUE(LOV_PATTERN_RAID1);
 }
 
 static void
@@ -744,6 +808,19 @@ check_ldlm_lvb(void)
         CHECK_MEMBER(ost_lvb, lvb_blocks);
 }
 
+static void
+check_cfg_marker(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(cfg_marker);
+        CHECK_MEMBER(cfg_marker, cm_step);
+        CHECK_MEMBER(cfg_marker, cm_flags);
+        CHECK_MEMBER(cfg_marker, cm_vers);
+        CHECK_MEMBER(cfg_marker, cm_createtime);
+        CHECK_MEMBER(cfg_marker, cm_canceltime);
+        CHECK_MEMBER(cfg_marker, cm_tgtname);
+        CHECK_MEMBER(cfg_marker, cm_comment);
+}
 
 static void
 check_llog_logid(void)
@@ -820,7 +897,7 @@ check_llog_create_rec(void)
         CHECK_MEMBER(llog_create_rec, lcr_hdr);
         CHECK_MEMBER(llog_create_rec, lcr_fid);
         CHECK_MEMBER(llog_create_rec, lcr_oid);
-        CHECK_MEMBER(llog_create_rec, lcr_ogen);
+        CHECK_MEMBER(llog_create_rec, lcr_ogr);
         CHECK_MEMBER(llog_create_rec, padding);
 }
 
@@ -843,8 +920,8 @@ check_llog_unlink_rec(void)
         CHECK_STRUCT(llog_unlink_rec);
         CHECK_MEMBER(llog_unlink_rec, lur_hdr);
         CHECK_MEMBER(llog_unlink_rec, lur_oid);
-        CHECK_MEMBER(llog_unlink_rec, lur_ogen);
-        CHECK_MEMBER(llog_unlink_rec, padding);
+        CHECK_MEMBER(llog_unlink_rec, lur_ogr);
+        CHECK_MEMBER(llog_unlink_rec, lur_count);
         CHECK_MEMBER(llog_unlink_rec, lur_tail);
 }
 
@@ -855,11 +932,27 @@ check_llog_setattr_rec(void)
         CHECK_STRUCT(llog_setattr_rec);
         CHECK_MEMBER(llog_setattr_rec, lsr_hdr);
         CHECK_MEMBER(llog_setattr_rec, lsr_oid);
-        CHECK_MEMBER(llog_setattr_rec, lsr_ogen);
+        CHECK_MEMBER(llog_setattr_rec, lsr_ogr);
         CHECK_MEMBER(llog_setattr_rec, lsr_uid);
         CHECK_MEMBER(llog_setattr_rec, lsr_gid);
         CHECK_MEMBER(llog_setattr_rec, padding);
         CHECK_MEMBER(llog_setattr_rec, lsr_tail);
+}
+
+static void
+check_llog_setattr64_rec(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(llog_setattr64_rec);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_hdr);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_oid);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_ogr);
+        CHECK_MEMBER(llog_setattr64_rec, padding);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_uid);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_uid_h);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_gid);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_gid_h);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_tail);
 }
 
 static void
@@ -1067,6 +1160,50 @@ check_quota_adjust_qunit(void)
 }
 
 static void
+check_ll_user_fiemap(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(ll_user_fiemap);
+        CHECK_MEMBER(ll_user_fiemap, fm_start);
+        CHECK_MEMBER(ll_user_fiemap, fm_length);
+        CHECK_MEMBER(ll_user_fiemap, fm_flags);
+        CHECK_MEMBER(ll_user_fiemap, fm_mapped_extents);
+        CHECK_MEMBER(ll_user_fiemap, fm_extent_count);
+        CHECK_MEMBER(ll_user_fiemap, fm_reserved);
+        CHECK_MEMBER(ll_user_fiemap, fm_extents);
+
+        CHECK_CDEFINE(FIEMAP_FLAG_SYNC);
+        CHECK_CDEFINE(FIEMAP_FLAG_XATTR);
+        CHECK_CDEFINE(FIEMAP_FLAG_DEVICE_ORDER);
+}
+
+static void
+check_ll_fiemap_extent(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(ll_fiemap_extent);
+        CHECK_MEMBER(ll_fiemap_extent, fe_logical);
+        CHECK_MEMBER(ll_fiemap_extent, fe_physical);
+        CHECK_MEMBER(ll_fiemap_extent, fe_length);
+        CHECK_MEMBER(ll_fiemap_extent, fe_flags);
+        CHECK_MEMBER(ll_fiemap_extent, fe_device);
+
+        CHECK_CDEFINE(FIEMAP_EXTENT_LAST);
+        CHECK_CDEFINE(FIEMAP_EXTENT_UNKNOWN);
+        CHECK_CDEFINE(FIEMAP_EXTENT_DELALLOC);
+        CHECK_CDEFINE(FIEMAP_EXTENT_NO_DIRECT);
+        CHECK_CDEFINE(FIEMAP_EXTENT_SECONDARY);
+        CHECK_CDEFINE(FIEMAP_EXTENT_NET);
+        CHECK_CDEFINE(FIEMAP_EXTENT_DATA_COMPRESSED);
+        CHECK_CDEFINE(FIEMAP_EXTENT_DATA_ENCRYPTED);
+        CHECK_CDEFINE(FIEMAP_EXTENT_NOT_ALIGNED);
+        CHECK_CDEFINE(FIEMAP_EXTENT_DATA_INLINE);
+        CHECK_CDEFINE(FIEMAP_EXTENT_DATA_TAIL);
+        CHECK_CDEFINE(FIEMAP_EXTENT_UNWRITTEN);
+        CHECK_CDEFINE(FIEMAP_EXTENT_MERGED);
+}
+
+static void
 system_string (char *cmdline, char *str, int len)
 {
         int   fds[2];
@@ -1200,6 +1337,7 @@ main(int argc, char **argv)
         CHECK_VALUE(REINT_UNLINK);
         CHECK_VALUE(REINT_RENAME);
         CHECK_VALUE(REINT_OPEN);
+        CHECK_VALUE(REINT_SETXATTR);
         CHECK_VALUE(REINT_MAX);
 
         CHECK_VALUE(MGS_CONNECT);
@@ -1252,7 +1390,7 @@ main(int argc, char **argv)
 
         CHECK_VALUE(MGS_CONNECT);
         CHECK_VALUE(MGS_DISCONNECT);
-        CHECK_VALUE(MGS_EXCEPTION);   
+        CHECK_VALUE(MGS_EXCEPTION);
         CHECK_VALUE(MGS_TARGET_REG);
         CHECK_VALUE(MGS_TARGET_DEL);
         CHECK_VALUE(MGS_SET_INFO);
@@ -1269,6 +1407,7 @@ main(int argc, char **argv)
         check_obd_connect_data();
         check_obdo();
         check_lov_mds_md_v1();
+        check_lov_mds_md_v3();
         check_lov_mds_md_join();
         check_obd_statfs();
         check_obd_ioobj();
@@ -1295,6 +1434,7 @@ main(int argc, char **argv)
         check_ldlm_request();
         check_ldlm_reply();
         check_ldlm_lvb();
+        check_cfg_marker();
         check_llog_logid();
         check_llog_catid();
         check_llog_rec_hdr();
@@ -1304,6 +1444,7 @@ main(int argc, char **argv)
         check_llog_orphan_rec();
         check_llog_unlink_rec();
         check_llog_setattr_rec();
+        check_llog_setattr64_rec();
         check_llog_size_change_rec();
         check_llog_gen();
         check_llog_gen_rec();
@@ -1315,11 +1456,12 @@ main(int argc, char **argv)
         check_mds_extent_desc();
         check_qunit_data();
         check_qunit_data_old2();
-        check_qunit_data_old();
         check_quota_adjust_qunit();
         check_mgs_target_info();
         check_lustre_disk_data();
-        printf("#ifdef LIBLUSTRE_POSIX_ACL\n");
+        check_ll_user_fiemap();
+        check_ll_fiemap_extent();
+        printf("#if defined(LIBLUSTRE_POSIX_ACL) && defined(CONFIG_FS_POSIX_ACL)\n");
 #ifndef LIBLUSTRE_POSIX_ACL
 #error build generator without LIBLUSTRE_POSIX_ACL defined - produce wrong check code.
 #endif

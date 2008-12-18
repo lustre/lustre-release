@@ -2,7 +2,7 @@
 
 set -e
 
-# bug number:  10124 
+# bug number:  10124
 ALWAYS_EXCEPT="15c   $REPLAY_DUAL_EXCEPT"
 
 SAVE_PWD=$PWD
@@ -13,16 +13,30 @@ CLEANUP=${CLEANUP:-""}
 MOUNT_2=${MOUNT_2:-"yes"}
 . $LUSTRE/tests/test-framework.sh
 
+if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
+    CONFIG_EXCEPTIONS="17"
+    echo -n "Several ost services on one ost node are used with FAILURE_MODE=$FAILURE_MODE. "
+    echo "Except the tests: $CONFIG_EXCEPTIONS"
+    ALWAYS_EXCEPT="$ALWAYS_EXCEPT $CONFIG_EXCEPTIONS"
+fi
+
 init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-#
+remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
+
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="1 2 3 4 5 14"
 
 build_test_filter
 
-cleanup_and_setup_lustre
+check_and_setup_lustre
+MOUNTED=$(mounted_lustre_filesystems)
+if ! $(echo $MOUNTED | grep -w -q $MOUNT2); then
+    zconf_mount $HOSTNAME $MOUNT2
+    MOUNTED2=yes
+fi
+
 assert_DIR
 rm -rf $DIR/[df][0-9]*
 
@@ -241,7 +255,7 @@ test_13() {
 }
 run_test 13 "close resend timeout"
 
-test_14() {
+test_14a() {
     replay_barrier mds
     createmany -o $MOUNT1/$tfile- 25
     createmany -o $MOUNT2/$tfile-2- 1
@@ -250,16 +264,46 @@ test_14() {
 
     facet_failover mds
     # expect recovery to fail due to missing client 2
-    df $MOUNT && return 1
+    df $MOUNT1 && return 1
     sleep 1
 
-    # first 25 files should have been replayed 
+    # first 25 files should have been replayed
     unlinkmany $MOUNT1/$tfile- 25 || return 2
 
-    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail" 
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     return 0
 }
-run_test 14 "timeouts waiting for lost client during replay"
+run_test 14a "timeouts waiting for lost client during replay"
+
+test_14b() {
+    BEFOREUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
+    #lfs setstripe --index=0 --count=1 $MOUNT1
+    mkdir -p $MOUNT1/$tdir
+    #lfs setstripe --index=0 --count=1 $MOUNT1/$tdir
+    replay_barrier mds
+    createmany -o $MOUNT1/$tfile- 5
+    echo "data" > $MOUNT2/$tdir/$tfile-2
+    createmany -o $MOUNT1/$tfile-3- 5
+    umount $MOUNT2
+
+    facet_failover mds
+    # expect recovery don't fail due to VBR
+    df $MOUNT1 || return 1
+
+    # first 25 files should have been replayed
+    unlinkmany $MOUNT1/$tfile- 5 || return 2
+    unlinkmany $MOUNT1/$tfile-3- 5 || return 3
+
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
+    # give ost time to process llogs
+    sleep 3
+    AFTERUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
+    log "before $BEFOREUSED, after $AFTERUSED"
+    [ $AFTERUSED -ne $BEFOREUSED ] && \
+        error "after $AFTERUSED > before $BEFOREUSED" && return 4
+    return 0
+}
+run_test 14b "delete ost orphans if gap occured in objids due to VBR"
 
 test_15a() {	# was test_15
     replay_barrier mds
@@ -281,14 +325,14 @@ run_test 15a "timeout waiting for lost client during replay, 1 client completes"
 test_15c() {
     replay_barrier mds
     for ((i = 0; i < 2000; i++)); do
-	echo "data" > "$MOUNT2/${tfile}-$i" || error "create ${tfile}-$i failed"
+        echo "data" > "$MOUNT2/${tfile}-$i" || error "create ${tfile}-$i failed"
     done
-    
+
     umount $MOUNT2
     facet_failover mds
 
     df $MOUNT || return 1
-    
+
     zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     return 0
 }
@@ -314,6 +358,8 @@ test_16() {
 run_test 16 "fail MDS during recovery (3571)"
 
 test_17() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
     createmany -o $MOUNT1/$tfile- 25
     createmany -o $MOUNT2/$tfile-2- 1
 
@@ -369,8 +415,36 @@ test_19() { # Bug 10991 - resend of open request does not fail assertion.
 }
 run_test 19 "resend of open request"
 
+test_20() { #16389
+    BEFORE=`date +%s`
+    replay_barrier mds
+    touch $MOUNT1/a
+    touch $MOUNT2/b
+    umount $MOUNT2
+    facet_failover mds
+    df $MOUNT1 || return 1
+    rm $MOUNT1/a
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
+    TIER1=$((`date +%s` - BEFORE))
+    BEFORE=`date +%s`
+    replay_barrier mds
+    touch $MOUNT1/a
+    touch $MOUNT2/b
+    umount $MOUNT2
+    facet_failover mds
+    df $MOUNT1 || return 1
+    rm $MOUNT1/a
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
+    TIER2=$((`date +%s` - BEFORE))
+    [ $TIER2 -ge $((TIER1 * 2)) ] && \
+        error "recovery time is growing $TIER2 > $TIER1"
+    return 0
+}
+run_test 20 "recovery time is not increasing"
+
 equals_msg `basename $0`: test complete, cleaning up
 SLEEP=$((`date +%s` - $NOW))
 [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
+[ "$MOUNTED2" = yes ] && zconf_umount $HOSTNAME $MOUNT2 || true
 check_and_cleanup_lustre
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

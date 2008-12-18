@@ -1,30 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Object Devices Class Driver
+ * GPL HEADER START
  *
- *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
  *
- * These are the only exported functions, they provide some generic
- * infrastructure for managing object devices
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
@@ -51,6 +58,7 @@ atomic_t libcfs_kmemory = {0};
 struct obd_device *obd_devs[MAX_OBD_DEVICES];
 struct list_head obd_types;
 spinlock_t obd_dev_lock = SPIN_LOCK_UNLOCKED;
+cfs_mem_cache_t *obd_lvfs_ctxt_cache;
 
 /* The following are visible and mutable through /proc/sys/lustre/. */
 unsigned int obd_debug_peer_on_timeout;
@@ -265,16 +273,16 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 if (!data->ioc_inlbuf1) {
                         CERROR("No buffer passed in ioctl\n");
                         GOTO(out, err = -EINVAL);
-                } 
+                }
                 if (data->ioc_inllen1 < 128) {
                         CERROR("ioctl buffer too small to hold version\n");
                         GOTO(out, err = -EINVAL);
                 }
-                                
+
                 obd = class_num2obd(index);
                 if (!obd)
                         GOTO(out, err = -ENOENT);
-                
+
                 if (obd->obd_stopping)
                         status = "ST";
                 else if (obd->obd_set_up)
@@ -282,7 +290,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 else if (obd->obd_attached)
                         status = "AT";
                 else
-                        status = "--"; 
+                        status = "--";
                 str = (char *)data->ioc_bulk;
                 snprintf(str, len - sizeof(*data), "%3d %s %s %s %s %d",
                          (int)index, status, obd->obd_type->typ_name,
@@ -295,14 +303,24 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 
         }
 
-        if (data->ioc_dev >= class_devno_max()) {
+        if (data->ioc_dev == OBD_DEV_BY_DEVNAME) {
+                if (data->ioc_inllen4 <= 0 || data->ioc_inlbuf4 == NULL)
+                        GOTO(out, err = -EINVAL);
+                if (strnlen(data->ioc_inlbuf4, MAX_OBD_NAME) >= MAX_OBD_NAME)
+                        GOTO(out, err = -EINVAL);
+                obd = class_name2obd(data->ioc_inlbuf4);
+        } else if (data->ioc_dev < class_devno_max()) {
+                obd = class_num2obd(data->ioc_dev);
+        } else {
                 CERROR("OBD ioctl: No device\n");
                 GOTO(out, err = -EINVAL);
         }
 
-        obd = class_num2obd(data->ioc_dev);
         if (obd == NULL) {
-                CERROR("OBD ioctl : No Device %d\n", data->ioc_dev);
+                if (data->ioc_dev == OBD_DEV_BY_DEVNAME)
+                        CERROR("OBD ioctl: No Device %s\n", data->ioc_inlbuf4);
+                else
+                        CERROR("OBD ioctl: No Device %d\n", data->ioc_dev);
                 GOTO(out, err = -EINVAL);
         }
         LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
@@ -320,7 +338,9 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 }
                 CDEBUG(D_HA, "%s: disabling committed-transno notification\n",
                        obd->obd_name);
+                spin_lock_bh(&obd->obd_processing_task_lock);
                 obd->obd_no_transno = 1;
+                spin_unlock_bh(&obd->obd_processing_task_lock);
                 GOTO(out, err = 0);
         }
 
@@ -368,6 +388,7 @@ void *obd_psdev = NULL;
 #endif
 
 EXPORT_SYMBOL(obd_devs);
+EXPORT_SYMBOL(obd_lvfs_ctxt_cache);
 EXPORT_SYMBOL(obd_print_fail_loc);
 EXPORT_SYMBOL(obd_race_waitq);
 EXPORT_SYMBOL(obd_race_state);
@@ -489,7 +510,7 @@ int obd_init_checks(void)
                 ret = -EINVAL;
         }
         if ((u64val & ~CFS_PAGE_MASK) >= CFS_PAGE_SIZE) {
-                CWARN("mask failed: u64val "LPU64" >= %lu\n", u64val, 
+                CWARN("mask failed: u64val "LPU64" >= %lu\n", u64val,
                       (unsigned long)CFS_PAGE_SIZE);
                 ret = -EINVAL;
         }
@@ -513,21 +534,17 @@ int init_obdclass(void)
         int i, err;
 #ifdef __KERNEL__
         int lustre_register_fs(void);
-
-        printk(KERN_INFO "Lustre: OBD class driver, info@clusterfs.com\n");
-        printk(KERN_INFO "        Lustre Version: "LUSTRE_VERSION_STRING"\n");
-        printk(KERN_INFO "        Build Version: "BUILD_VERSION"\n");
-#else
-        CDEBUG(D_INFO, "Lustre: OBD class driver, info@clusterfs.com\n");
-        CDEBUG(D_INFO, "        Lustre Version: "LUSTRE_VERSION_STRING"\n");
-        CDEBUG(D_INFO, "        Build Version: "BUILD_VERSION"\n");
 #endif
+
+        LCONSOLE_INFO("OBD class driver, http://www.lustre.org/\n");
+        LCONSOLE_INFO("    Lustre Version: "LUSTRE_VERSION_STRING"\n");
+        LCONSOLE_INFO("    Build Version: "BUILD_VERSION"\n");
 
         spin_lock_init(&obd_types_lock);
         cfs_waitq_init(&obd_race_waitq);
         obd_zombie_impexp_init();
 #ifdef LPROCFS
-        obd_memory = lprocfs_alloc_stats(OBD_STATS_NUM, 
+        obd_memory = lprocfs_alloc_stats(OBD_STATS_NUM,
                                          LPROCFS_STATS_FLAG_PERCPU);
         if (obd_memory == NULL) {
                 CERROR("kmalloc of 'obd_memory' failed\n");
@@ -535,12 +552,17 @@ int init_obdclass(void)
         }
 
         lprocfs_counter_init(obd_memory, OBD_MEMORY_STAT,
-                             LPROCFS_CNTR_AVGMINMAX, 
+                             LPROCFS_CNTR_AVGMINMAX,
                              "memused", "bytes");
         lprocfs_counter_init(obd_memory, OBD_MEMORY_PAGES_STAT,
-                             LPROCFS_CNTR_AVGMINMAX, 
+                             LPROCFS_CNTR_AVGMINMAX,
                              "pagesused", "pages");
 #endif
+        obd_lvfs_ctxt_cache = cfs_mem_cache_create("obd_lvfs_ctxt_cache",
+                sizeof(struct lvfs_run_ctxt), 0, 0);
+        if (obd_lvfs_ctxt_cache == NULL)
+                RETURN(-ENOMEM);
+
         err = obd_init_checks();
         if (err == -EOVERFLOW)
                 return err;
@@ -563,8 +585,13 @@ int init_obdclass(void)
         for (i = 0; i < class_devno_max(); i++)
                 obd_devs[i] = NULL;
 
-        /* Default the dirty page cache cap to 1/2 of system memory */
-        obd_max_dirty_pages = num_physpages / 2;
+        /* Default the dirty page cache cap to 1/2 of system memory.
+         * For clients with less memory, a larger fraction is needed
+         * for other purposes (mostly for BGL). */
+        if (num_physpages <= 512 << (20 - CFS_PAGE_SHIFT))
+                obd_max_dirty_pages = num_physpages / 4;
+        else
+                obd_max_dirty_pages = num_physpages / 2;
 
         err = obd_init_caches();
         if (err)
@@ -618,17 +645,20 @@ static void cleanup_obdclass(void)
         memory_max = obd_memory_max();
         pages_max = obd_pages_max();
 
+        cfs_mem_cache_destroy(obd_lvfs_ctxt_cache);
+
         lprocfs_free_stats(&obd_memory);
-        CDEBUG((memory_leaked | pages_leaked) ? D_ERROR : D_INFO,
-               "obd_memory max: "LPU64", leaked: "LPU64" "
+        CDEBUG((memory_leaked) ? D_ERROR : D_INFO,
+               "obd_memory max: "LPU64", leaked: "LPU64"\n",
+               memory_max, memory_leaked);
+        CDEBUG((pages_leaked) ? D_ERROR : D_INFO,
                "obd_memory_pages max: "LPU64", leaked: "LPU64"\n",
-               memory_max, memory_leaked, 
                pages_max, pages_leaked);
 
         EXIT;
 }
 
-MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Class Driver Build Version: " BUILD_VERSION);
 MODULE_LICENSE("GPL");
 

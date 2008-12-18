@@ -1,19 +1,42 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/quota/quota_ctl.c
+ * GPL HEADER START
  *
- *  Copyright (c) 2005 Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   No redistribution or use is permitted outside of Cluster File Systems, Inc.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#define DEBUG_SUBSYSTEM S_MDS
+#define DEBUG_SUBSYSTEM S_LQUOTA
 
 #ifdef __KERNEL__
 # include <linux/version.h>
@@ -21,16 +44,11 @@
 # include <linux/init.h>
 # include <linux/fs.h>
 # include <linux/jbd.h>
-# include <linux/ext3_fs.h>
 # include <linux/quota.h>
-# if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #  include <linux/smp_lock.h>
 #  include <linux/buffer_head.h>
 #  include <linux/workqueue.h>
 #  include <linux/mount.h>
-# else
-#  include <linux/locks.h>
-# endif
 #else /* __KERNEL__ */
 # include <liblustre.h>
 #endif
@@ -44,13 +62,19 @@
 #include <lustre_quota.h>
 #include "quota_internal.h"
 
+#ifdef HAVE_QUOTA_SUPPORT
 #ifdef __KERNEL__
 int mds_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 {
         struct obd_device *obd = exp->exp_obd;
+        struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
+        struct timeval work_start;
+        struct timeval work_end;
+        long timediff;
         int rc = 0;
         ENTRY;
 
+        do_gettimeofday(&work_start);
         switch (oqctl->qc_cmd) {
         case Q_QUOTAON:
                 rc = mds_quota_on(obd, oqctl);
@@ -90,6 +114,9 @@ int mds_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                 CDEBUG(D_INFO, "mds_quotactl admin quota command %d, id %u, "
                                "type %d, failed: rc = %d\n",
                        oqctl->qc_cmd, oqctl->qc_id, oqctl->qc_type, rc);
+        do_gettimeofday(&work_end);
+        timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
+        lprocfs_counter_add(qctxt->lqc_stats, LQUOTA_QUOTA_CTL, timediff);
 
         RETURN(rc);
 }
@@ -99,9 +126,14 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         struct obd_device *obd = exp->exp_obd;
         struct obd_device_target *obt = &obd->u.obt;
         struct lvfs_run_ctxt saved;
+        struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
+        struct timeval work_start;
+        struct timeval work_end;
+        long timediff;
         int rc = 0;
         ENTRY;
 
+        do_gettimeofday(&work_start);
         switch (oqctl->qc_cmd) {
         case Q_FINVALIDATE:
         case Q_QUOTAON:
@@ -197,8 +229,8 @@ adjust:
                 else
                         gid = oqctl->qc_id;
 
-                rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, 
-                                        uid, gid, 1, 0);
+                rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt,
+                                        uid, gid, 1, 0, NULL);
                 if (rc == -EDQUOT || rc == -EBUSY) {
                         CDEBUG(D_QUOTA, "rc: %d.\n", rc);
                         rc = 0;
@@ -211,16 +243,20 @@ adjust:
                        obd->obd_name, oqctl->qc_cmd);
                 RETURN(-EFAULT);
         }
+        do_gettimeofday(&work_end);
+        timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
+        lprocfs_counter_add(qctxt->lqc_stats, LQUOTA_QUOTA_CTL, timediff);
 
         RETURN(rc);
 }
 #endif /* __KERNEL__ */
+#endif
 
 int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 {
         struct ptlrpc_request *req;
         struct obd_quotactl *oqc;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*oqctl) };
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*oqctl) };
         int ver, opc, rc;
         ENTRY;
 
@@ -244,8 +280,15 @@ int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         ptlrpc_req_set_repsize(req, 2, size);
 
         rc = ptlrpc_queue_wait(req);
-        oqc = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*oqc),
-                                 lustre_swab_obd_quotactl);
+        if (rc) {
+                CERROR("ptlrpc_queue_wait failed, rc: %d\n", rc);
+                GOTO(out, rc);
+        }
+
+        oqc = NULL;
+        if (req->rq_repmsg)
+                oqc = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*oqc),
+                                         lustre_swab_obd_quotactl);
         if (oqc == NULL) {
                 CERROR ("Can't unpack obd_quotactl\n");
                 GOTO(out, rc = -EPROTO);
@@ -267,9 +310,12 @@ int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         int i, rc = 0;
         ENTRY;
 
-        if (oqctl->qc_cmd != Q_QUOTAON && oqctl->qc_cmd != Q_QUOTAOFF &&
-            oqctl->qc_cmd != Q_GETOQUOTA && oqctl->qc_cmd != Q_INITQUOTA &&
-            oqctl->qc_cmd != Q_SETQUOTA && oqctl->qc_cmd != Q_FINVALIDATE) {
+        if (oqctl->qc_cmd != LUSTRE_Q_QUOTAON &&
+            oqctl->qc_cmd != LUSTRE_Q_QUOTAOFF &&
+            oqctl->qc_cmd != Q_GETOQUOTA &&
+            oqctl->qc_cmd != Q_INITQUOTA &&
+            oqctl->qc_cmd != LUSTRE_Q_SETQUOTA &&
+            oqctl->qc_cmd != Q_FINVALIDATE) {
                 CERROR("bad quota opc %x for lov obd", oqctl->qc_cmd);
                 RETURN(-EFAULT);
         }
@@ -306,4 +352,3 @@ int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         }
         RETURN(rc);
 }
-

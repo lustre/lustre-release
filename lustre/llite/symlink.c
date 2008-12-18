@@ -1,22 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2002 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #include <linux/fs.h>
@@ -135,7 +150,7 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
 #ifdef HAVE_VFS_INTENT_PATCHES
         struct lookup_intent *it = ll_nd2it(nd);
 #endif
-        struct ptlrpc_request *request;
+        struct ptlrpc_request *request = NULL;
         int rc;
         char *symname;
         ENTRY;
@@ -152,9 +167,15 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
 #endif
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
-        down(&lli->lli_size_sem);
-        rc = ll_readlink_internal(inode, &request, &symname);
-        up(&lli->lli_size_sem);
+        /* Limit the recursive symlink depth to 5 instead of default
+         * 8 links when kernel has 4k stack to prevent stack overflow. */
+        if (THREAD_SIZE < 8192 && current->link_count >= 5) {
+                rc = -ELOOP;
+        } else {
+                down(&lli->lli_size_sem);
+                rc = ll_readlink_internal(inode, &request, &symname);
+                up(&lli->lli_size_sem);
+        }
         if (rc) {
                 path_release(nd); /* Kernel assumes that ->follow_link()
                                      releases nameidata on error */
@@ -206,11 +227,7 @@ struct inode_operations ll_fast_symlink_inode_operations = {
 #ifdef HAVE_COOKIE_FOLLOW_LINK
         .put_link       = ll_put_link,
 #endif
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        .revalidate_it  = ll_inode_revalidate_it,
-#else 
         .getattr        = ll_getattr,
-#endif
         .permission     = ll_inode_permission,
         .setxattr       = ll_setxattr,
         .getxattr       = ll_getxattr,

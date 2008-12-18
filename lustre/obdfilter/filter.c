@@ -1,26 +1,42 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  linux/fs/obdfilter/filter.c
+ * GPL HEADER START
  *
- *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
- *   Author: Peter Braam <braam@clusterfs.com>
- *   Author: Andreas Dilger <adilger@clusterfs.com>
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/obdfilter/filter.c
+ *
+ * Author: Peter Braam <braam@clusterfs.com>
+ * Author: Andreas Dilger <adilger@clusterfs.com>
  */
 
 /*
@@ -43,10 +59,8 @@
 #include <linux/init.h>
 #include <linux/version.h>
 #include <linux/sched.h>
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-# include <linux/mount.h>
-# include <linux/buffer_head.h>
-#endif
+#include <linux/mount.h>
+#include <linux/buffer_head.h>
 
 #include <obd_class.h>
 #include <obd_lov.h>
@@ -54,12 +68,12 @@
 #include <lustre_fsfilt.h>
 #include <lprocfs_status.h>
 #include <lustre_log.h>
-#include <lustre_commit_confd.h>
 #include <libcfs/list.h>
 #include <lustre_disk.h>
 #include <lustre_quota.h>
 #include <linux/slab.h>
 #include <lustre_param.h>
+#include <lustre/ll_fiemap.h>
 
 #include "filter_internal.h"
 
@@ -69,11 +83,38 @@ cfs_mem_cache_t *ll_fmd_cachep;
 static void filter_commit_cb(struct obd_device *obd, __u64 transno,
                              void *cb_data, int error)
 {
-        obd_transno_commit_cb(obd, transno, error);
+        struct obd_export *exp = cb_data;
+        obd_transno_commit_cb(obd, transno, exp, error);
+}
+
+int filter_version_get_check(struct obd_export *exp,
+                             struct obd_trans_info *oti, struct inode *inode)
+{
+        __u64 curr_version;
+
+        if (inode == NULL || oti == NULL)
+                RETURN(0);
+
+        curr_version = fsfilt_get_version(exp->exp_obd, inode);
+        if ((__s64)curr_version == -EOPNOTSUPP)
+                RETURN(0);
+        /* VBR: version is checked always because costs nothing */
+        if (oti->oti_pre_version != 0 &&
+            oti->oti_pre_version != curr_version) {
+                CDEBUG(D_INODE, "Version mismatch "LPX64" != "LPX64"\n",
+                       oti->oti_pre_version, curr_version);
+                spin_lock(&exp->exp_lock);
+                exp->exp_vbr_failed = 1;
+                spin_unlock(&exp->exp_lock);
+                RETURN (-EOVERFLOW);
+        }
+        oti->oti_pre_version = curr_version;
+        RETURN(0);
 }
 
 /* Assumes caller has already pushed us into the kernel context. */
-int filter_finish_transno(struct obd_export *exp, struct obd_trans_info *oti,
+int filter_finish_transno(struct obd_export *exp, struct inode *inode,
+                          struct obd_trans_info *oti,
                           int rc, int force_sync)
 {
         struct filter_obd *filter = &exp->exp_obd->u.filter;
@@ -91,24 +132,29 @@ int filter_finish_transno(struct obd_export *exp, struct obd_trans_info *oti,
                 RETURN(rc);
 
         /* we don't allocate new transnos for replayed requests */
+        spin_lock(&filter->fo_translock);
         if (oti->oti_transno == 0) {
-                spin_lock(&filter->fo_translock);
                 last_rcvd = le64_to_cpu(filter->fo_fsd->lsd_last_transno) + 1;
                 filter->fo_fsd->lsd_last_transno = cpu_to_le64(last_rcvd);
-                spin_unlock(&filter->fo_translock);
-                oti->oti_transno = last_rcvd;
         } else {
-                spin_lock(&filter->fo_translock);
                 last_rcvd = oti->oti_transno;
                 if (last_rcvd > le64_to_cpu(filter->fo_fsd->lsd_last_transno))
-                        filter->fo_fsd->lsd_last_transno =
-                                cpu_to_le64(last_rcvd);
+                        filter->fo_fsd->lsd_last_transno = cpu_to_le64(last_rcvd);
+        }
+        oti->oti_transno = last_rcvd;
+        if (last_rcvd <= le64_to_cpu(lcd->lcd_last_transno)) {
                 spin_unlock(&filter->fo_translock);
+                LBUG();
         }
         lcd->lcd_last_transno = cpu_to_le64(last_rcvd);
+        lcd->lcd_pre_versions[0] = cpu_to_le64(oti->oti_pre_version);
+        lcd->lcd_last_xid = cpu_to_le64(oti->oti_xid);
+        target_trans_table_update(exp, last_rcvd);
 
-        /* could get xid from oti, if it's ever needed */
-        lcd->lcd_last_xid = 0;
+        spin_unlock(&filter->fo_translock);
+
+        if (inode)
+                fsfilt_set_version(exp->exp_obd, inode, last_rcvd);
 
         off = fed->fed_lr_off;
         if (off <= 0) {
@@ -117,17 +163,17 @@ int filter_finish_transno(struct obd_export *exp, struct obd_trans_info *oti,
                 err = -EINVAL;
         } else {
                 if (!force_sync)
-                        force_sync = fsfilt_add_journal_cb(exp->exp_obd, 
+                        force_sync = fsfilt_add_journal_cb(exp->exp_obd,
                                                            last_rcvd,
                                                            oti->oti_handle,
                                                            filter_commit_cb,
-                                                           NULL);
+                                                           exp);
 
                 err = fsfilt_write_record(exp->exp_obd, filter->fo_rcvd_filp,
                                           lcd, sizeof(*lcd), &off,
                                           force_sync | exp->exp_need_sync);
                 if (force_sync)
-                        filter_commit_cb(exp->exp_obd, last_rcvd, NULL, err);
+                        filter_commit_cb(exp->exp_obd, last_rcvd, exp, err);
         }
         if (err) {
                 log_pri = D_ERROR;
@@ -194,9 +240,15 @@ static int filter_export_stats_init(struct obd_device *obd,
         if (obd_uuid_equals(&exp->exp_client_uuid, &obd->obd_uuid))
                 /* Self-export gets no proc entry */
                 RETURN(0);
-        rc = lprocfs_exp_setup(exp, client_nid, &newnid);
-        if (rc)
+        rc = lprocfs_exp_setup(exp, (lnet_nid_t *)client_nid, &newnid);
+        if (rc) {
+                /* Mask error for already created
+                 * /proc entries */
+                if (rc == -EALREADY)
+                        rc = 0;
+
                 RETURN(rc);
+        }
 
         if (newnid) {
                 struct nid_stat *tmp = exp->exp_nid_stats;
@@ -224,7 +276,85 @@ static int filter_export_stats_init(struct obd_device *obd,
                                             tmp->nid_stats);
                 if (rc)
                         RETURN(rc);
+
+                /* Always add in ldlm_stats */
+                tmp->nid_ldlm_stats = lprocfs_alloc_stats(LDLM_LAST_OPC -
+                                                          LDLM_FIRST_OPC, 0);
+                if (tmp->nid_ldlm_stats == NULL)
+                        return -ENOMEM;
+
+                lprocfs_init_ldlm_stats(tmp->nid_ldlm_stats);
+
+                rc = lprocfs_register_stats(tmp->nid_proc, "ldlm_stats",
+                                            tmp->nid_ldlm_stats);
         }
+
+        RETURN(0);
+}
+
+/* VBR: to determine the delayed client the lcd should be updated for each new
+ * epoch */
+static int filter_update_client_epoch(struct obd_export *exp)
+{
+        struct filter_export_data *fed = &exp->exp_filter_data;
+        struct filter_obd *filter = &exp->exp_obd->u.filter;
+        struct lvfs_run_ctxt saved;
+        loff_t off = fed->fed_lr_off;
+        int rc = 0;
+
+        /* VBR: set client last_epoch to current epoch */
+        if (le32_to_cpu(fed->fed_lcd->lcd_last_epoch) >=
+                        le32_to_cpu(filter->fo_fsd->lsd_start_epoch))
+                return rc;
+        fed->fed_lcd->lcd_last_epoch = filter->fo_fsd->lsd_start_epoch;
+        push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
+        rc = fsfilt_write_record(exp->exp_obd, filter->fo_rcvd_filp,
+                                 fed->fed_lcd, sizeof(*fed->fed_lcd), &off,
+                                 exp->exp_delayed);
+        pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
+
+        CDEBUG(D_INFO, "update client idx %u last_epoch %#x (%#x)\n",
+               fed->fed_lr_idx, le32_to_cpu(fed->fed_lcd->lcd_last_epoch),
+               le32_to_cpu(filter->fo_fsd->lsd_start_epoch));
+
+        return rc;
+}
+
+/* Called after recovery is done on server */
+static void filter_update_last_epoch(struct obd_device *obd)
+{
+        struct ptlrpc_request *req;
+        struct filter_obd *filter = &obd->u.filter;
+        struct lr_server_data *fsd = filter->fo_fsd;
+        __u32 start_epoch;
+
+        /* Increase server epoch after recovery */
+        spin_lock(&filter->fo_translock);
+        /* VBR: increase the epoch and store it in lsd */
+        start_epoch = lr_epoch(le64_to_cpu(fsd->lsd_last_transno)) + 1;
+        fsd->lsd_last_transno = cpu_to_le64((__u64)start_epoch << LR_EPOCH_BITS);
+        fsd->lsd_start_epoch = cpu_to_le32(start_epoch);
+        spin_unlock(&filter->fo_translock);
+
+        /* go through delayed reply queue to find all exports participate in
+         * recovery and set new epoch for them */
+        list_for_each_entry(req, &obd->obd_delayed_reply_queue, rq_list) {
+                LASSERT(!req->rq_export->exp_delayed);
+                filter_update_client_epoch(req->rq_export);
+        }
+        filter_update_server_data(obd, filter->fo_rcvd_filp, fsd, 1);
+}
+
+static int filter_postrecov(struct obd_device *obd)
+{
+        ENTRY;
+
+        if (obd->obd_fail)
+                RETURN(0);
+
+        LASSERT(!obd->obd_recovering);
+        /* VBR: update start_epoch on server */
+        filter_update_last_epoch(obd);
 
         RETURN(0);
 }
@@ -249,6 +379,10 @@ static int filter_client_add(struct obd_device *obd, struct obd_export *exp,
         /* Self-export */
         if (strcmp(fed->fed_lcd->lcd_uuid, obd->obd_uuid.uuid) == 0)
                 RETURN(0);
+
+        /* VBR: remove expired exports before searching for free slot */
+        if (new_client)
+                class_disconnect_expired_exports(obd);
 
         /* the bitmap operations can handle cl_idx > sizeof(long) * 8, so
          * there's no need for extra complication here
@@ -300,6 +434,9 @@ static int filter_client_add(struct obd_device *obd, struct obd_export *exp,
                         rc = PTR_ERR(handle);
                         CERROR("unable to start transaction: rc %d\n", rc);
                 } else {
+                        fed->fed_lcd->lcd_last_epoch =
+                                              filter->fo_fsd->lsd_start_epoch;
+                        exp->exp_last_request_time = cfs_time_current_sec();
                         rc = fsfilt_add_journal_cb(obd, 0, handle,
                                                    target_client_add_cb, exp);
                         if (rc == 0) {
@@ -326,12 +463,13 @@ static int filter_client_add(struct obd_device *obd, struct obd_export *exp,
         RETURN(0);
 }
 
+struct lsd_client_data zero_lcd; /* globals are implicitly zeroed */
+
 static int filter_client_free(struct obd_export *exp)
 {
         struct filter_export_data *fed = &exp->exp_filter_data;
         struct filter_obd *filter = &exp->exp_obd->u.filter;
         struct obd_device *obd = exp->exp_obd;
-        struct lsd_client_data zero_lcd;
         struct lvfs_run_ctxt saved;
         int rc;
         loff_t off;
@@ -345,7 +483,7 @@ static int filter_client_free(struct obd_export *exp)
                 GOTO(free, 0);
 
         CDEBUG(D_INFO, "freeing client at idx %u, offset %lld with UUID '%s'\n",
-               fed->fed_lr_idx, off, fed->fed_lcd->lcd_uuid);
+               fed->fed_lr_idx, fed->fed_lr_off, fed->fed_lcd->lcd_uuid);
 
         LASSERT(filter->fo_last_rcvd_slots != NULL);
 
@@ -368,24 +506,27 @@ static int filter_client_free(struct obd_export *exp)
         }
 
         if (!(exp->exp_flags & OBD_OPT_FAILOVER)) {
-                memset(&zero_lcd, 0, sizeof(zero_lcd));
+                /* Don't force sync on disconnect if aborting recovery,
+                 * or it does num_clients * num_osts.  b=17194 */
+                int need_sync = (!exp->exp_libclient || exp->exp_need_sync) &&
+                                !(exp->exp_flags&OBD_OPT_ABORT_RECOV);
+
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_write_record(obd, filter->fo_rcvd_filp, &zero_lcd,
-                                         sizeof(zero_lcd), &off,
-                                         (!exp->exp_libclient ||
-                                          exp->exp_need_sync));
+                                         sizeof(zero_lcd), &off, 0);
 
+                /* Make sure the server's last_transno is up to date. Do this
+                 * after the client is freed so we know all the client's
+                 * transactions have been committed. */
                 if (rc == 0)
-                        /* update server's transno */
                         filter_update_server_data(obd, filter->fo_rcvd_filp,
-                                                  filter->fo_fsd,
-                                                  !exp->exp_libclient);
+                                                  filter->fo_fsd, need_sync);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
                 CDEBUG(rc == 0 ? D_INFO : D_ERROR,
-                       "zeroing out client %s at idx %u (%llu) in %s rc %d\n",
+                       "zero out client %s at idx %u/%llu in %s %ssync rc %d\n",
                        fed->fed_lcd->lcd_uuid, fed->fed_lr_idx, fed->fed_lr_off,
-                       LAST_RCVD, rc);
+                       LAST_RCVD, need_sync ? "" : "a", rc);
         }
 
         if (!test_and_clear_bit(fed->fed_lr_idx, filter->fo_last_rcvd_slots)) {
@@ -577,12 +718,12 @@ static int filter_init_export(struct obd_export *exp)
 {
         spin_lock_init(&exp->exp_filter_data.fed_lock);
         INIT_LIST_HEAD(&exp->exp_filter_data.fed_mod_list);
-        
+
         spin_lock(&exp->exp_lock);
         exp->exp_connecting = 1;
         spin_unlock(&exp->exp_lock);
 
-        return 0;
+        return ldlm_init_export(exp);
 }
 
 static int filter_free_server_data(struct filter_obd *filter)
@@ -652,6 +793,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
         struct inode *inode = filp->f_dentry->d_inode;
         unsigned long last_rcvd_size = i_size_read(inode);
         __u64 mount_count;
+        __u32 start_epoch;
         int cl_idx;
         loff_t off = 0;
         int rc;
@@ -723,7 +865,12 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 GOTO(err_fsd, rc = -EINVAL);
         }
 
-        CDEBUG(D_INODE, "%s: server last_transno : "LPU64"\n",
+        target_trans_table_init(obd);
+        start_epoch = le32_to_cpu(fsd->lsd_start_epoch);
+
+        CDEBUG(D_INODE, "%s: server start_epoch : %#x\n",
+               obd->obd_name, start_epoch);
+        CDEBUG(D_INODE, "%s: server last_transno : "LPX64"\n",
                obd->obd_name, le64_to_cpu(fsd->lsd_last_transno));
         CDEBUG(D_INODE, "%s: server mount_count: "LPU64"\n",
                obd->obd_name, mount_count + 1);
@@ -801,20 +948,34 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                         /* can't fail for existing client */
                         LASSERTF(rc == 0, "rc = %d\n", rc);
 
-                        lcd = NULL;
+                        /* VBR: set export last committed */
+                        exp->exp_last_committed = last_rcvd;
+                        /* read last time from disk */
+                        exp->exp_last_request_time = target_trans_table_last_time(exp);
 
                         spin_lock(&exp->exp_lock);
                         exp->exp_replay_needed = 1;
                         exp->exp_connecting = 0;
+                        exp->exp_in_recovery = 0;
                         spin_unlock(&exp->exp_lock);
 
+                        spin_lock_bh(&obd->obd_processing_task_lock);
                         obd->obd_recoverable_clients++;
                         obd->obd_max_recoverable_clients++;
+                        spin_unlock_bh(&obd->obd_processing_task_lock);
+
+                        /* VBR: if epoch too old mark export as delayed,
+                         * if epoch is zero then client is pre-vbr one */
+                        if (start_epoch > le32_to_cpu(lcd->lcd_last_epoch) &&
+                            le32_to_cpu(lcd->lcd_last_epoch) != 0)
+                                class_set_export_delayed(exp);
+
+                        lcd = NULL;
                         class_export_put(exp);
                 }
 
                 /* Need to check last_rcvd even for duplicated exports. */
-                CDEBUG(D_OTHER, "client at idx %d has last_rcvd = "LPU64"\n",
+                CDEBUG(D_OTHER, "client at idx %d has last_rcvd = "LPX64"\n",
                        cl_idx, last_rcvd);
 
                 if (last_rcvd > le64_to_cpu(fsd->lsd_last_transno))
@@ -828,8 +989,9 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
 
         if (obd->obd_recoverable_clients) {
                 CWARN("RECOVERY: service %s, %d recoverable clients, "
-                      "last_rcvd "LPU64"\n", obd->obd_name,
-                      obd->obd_recoverable_clients,
+                      "%d delayed clients, last_rcvd "LPU64"\n",
+                      obd->obd_name, obd->obd_recoverable_clients,
+                      obd->obd_delayed_clients,
                       le64_to_cpu(fsd->lsd_last_transno));
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
                 obd->obd_recovering = 1;
@@ -840,8 +1002,11 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 /* b13079: this should be set to desired value for ost */
                 obd->obd_recovery_max_time = OBD_RECOVERY_MAX_TIME;
 #endif
+        } else {
+                LASSERT(!obd->obd_recovering);
+                /* VBR: update boot epoch after recovery */
+                filter_update_last_epoch(obd);
         }
-
 out:
         filter->fo_mount_count = mount_count + 1;
         fsd->lsd_mount_count = cpu_to_le64(filter->fo_mount_count);
@@ -920,7 +1085,8 @@ static int filter_prep_groups(struct obd_device *obd)
         int i, rc = 0, cleanup_phase = 0;
         ENTRY;
 
-        O_dentry = simple_mkdir(current->fs->pwd, "O", 0700, 1);
+        O_dentry = simple_mkdir(current->fs->pwd, filter->fo_vfsmnt,
+                                "O", 0700, 1);
         CDEBUG(D_INODE, "got/created O: %p\n", O_dentry);
         if (IS_ERR(O_dentry)) {
                 rc = PTR_ERR(O_dentry);
@@ -947,7 +1113,8 @@ static int filter_prep_groups(struct obd_device *obd)
                 loff_t off = 0;
 
                 sprintf(name, "%d", i);
-                dentry = simple_mkdir(O_dentry, name, 0700, 1);
+                dentry = simple_mkdir(O_dentry, filter->fo_vfsmnt,
+                                      name, 0700, 1);
                 CDEBUG(D_INODE, "got/created O/%s: %p\n", name, dentry);
                 if (IS_ERR(dentry)) {
                         rc = PTR_ERR(dentry);
@@ -998,7 +1165,8 @@ static int filter_prep_groups(struct obd_device *obd)
                         char dir[20];
                         snprintf(dir, sizeof(dir), "d%u", i);
 
-                        dentry = simple_mkdir(O_dentry, dir, 0700, 1);
+                        dentry = simple_mkdir(O_dentry, filter->fo_vfsmnt,
+                                              dir, 0700, 1);
                         CDEBUG(D_INODE, "got/created O/0/%s: %p\n", dir,dentry);
                         if (IS_ERR(dentry)) {
                                 rc = PTR_ERR(dentry);
@@ -1291,7 +1459,8 @@ static int filter_prepare_destroy(struct obd_device *obd, obd_id objid)
  * i_sem before starting a handle, while filter_destroy() + vfs_unlink do the
  * reverse.  Caller must take i_sem before starting the transaction and we
  * drop it here before the inode is removed from the dentry.  bug 4180/6984 */
-int filter_vfs_unlink(struct inode *dir, struct dentry *dentry)
+int filter_vfs_unlink(struct inode *dir, struct dentry *dentry,
+                      struct vfsmount *mnt)
 {
         int rc;
         ENTRY;
@@ -1315,8 +1484,9 @@ int filter_vfs_unlink(struct inode *dir, struct dentry *dentry)
                 GOTO(out, rc = -EPERM);
 
         /* check_sticky() */
-        if ((dentry->d_inode->i_uid != current->fsuid && !capable(CAP_FOWNER))||
-            IS_APPEND(dentry->d_inode) || IS_IMMUTABLE(dentry->d_inode))
+        if ((dentry->d_inode->i_uid != current->fsuid &&
+             !cfs_capable(CFS_CAP_FOWNER)) || IS_APPEND(dentry->d_inode) ||
+            IS_IMMUTABLE(dentry->d_inode))
                 GOTO(out, rc = -EPERM);
 
         /* NOTE: This might need to go outside i_mutex, though it isn't clear if
@@ -1324,12 +1494,9 @@ int filter_vfs_unlink(struct inode *dir, struct dentry *dentry)
          *       here) or some other ordering issue. */
         DQUOT_INIT(dir);
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        rc = security_inode_unlink(dir, dentry);
+        rc = ll_security_inode_unlink(dir, dentry, mnt);
         if (rc)
                 GOTO(out, rc);
-#endif
-
         rc = dir->i_op->unlink(dir, dentry);
 out:
         /* need to drop i_mutex before we lose inode reference */
@@ -1348,6 +1515,7 @@ static int filter_destroy_internal(struct obd_device *obd, obd_id objid,
                                    struct dentry *dchild)
 {
         struct inode *inode = dchild->d_inode;
+        struct filter_obd *filter = &obd->u.filter;
         int rc;
 
         if (inode->i_nlink != 1 || atomic_read(&inode->i_count) != 1) {
@@ -1357,7 +1525,7 @@ static int filter_destroy_internal(struct obd_device *obd, obd_id objid,
                        atomic_read(&inode->i_count));
         }
 
-        rc = filter_vfs_unlink(dparent->d_inode, dchild);
+        rc = filter_vfs_unlink(dparent->d_inode, dchild, filter->fo_vfsmnt);
         if (rc)
                 CERROR("error unlinking objid %.*s: rc %d\n",
                        dchild->d_name.len, dchild->d_name.name, rc);
@@ -1426,7 +1594,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         int idx, rc, tmpflags = 0, only_liblustre = 1;
         struct ldlm_interval_tree *tree;
         struct filter_intent_args arg;
-        int repsize[3] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+        __u32 repsize[3] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                            [DLM_LOCKREPLY_OFF]   = sizeof(*rep),
                            [DLM_REPLY_REC_OFF]   = sizeof(*reply_lvb) };
         ENTRY;
@@ -1448,14 +1616,11 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
 
         //fixup_handle_for_resent_req(req, lock, &lockh);
 
-        /* If we grant any lock at all, it will be a whole-file read lock.
-         * Call the extent policy function to see if our request can be
-         * granted, or is blocked. 
-         * If the OST lock has LDLM_FL_HAS_INTENT set, it means a glimpse lock
+        /* Call the extent policy function to see if our request can be
+         * granted, or is blocked.
+         * If the OST lock has LDLM_FL_HAS_INTENT set, it means a glimpse
+         * lock, and should not be granted if the lock will be blocked.
          */
-        lock->l_policy_data.l_extent.start = 0;
-        lock->l_policy_data.l_extent.end = OBD_OBJECT_EOF;
-        lock->l_req_mode = LCK_PR;
 
         LASSERT(ns == res->lr_namespace);
         lock_res(res);
@@ -1515,7 +1680,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
                 if (tree->lit_mode == LCK_PR)
                         continue;
 
-                interval_iterate_reverse(tree->lit_root, 
+                interval_iterate_reverse(tree->lit_root,
                                          filter_intent_cb, &arg);
         }
         unlock_res(res);
@@ -1648,7 +1813,8 @@ static int filter_iobuf_pool_init(struct filter_obd *filter)
  * If we haven't allocated a pool entry for this thread before, do so now. */
 void *filter_iobuf_get(struct filter_obd *filter, struct obd_trans_info *oti)
 {
-        int thread_id                    = oti ? oti->oti_thread_id : -1;
+        int thread_id                    = (oti && oti->oti_thread) ?
+                                           oti->oti_thread->t_id : -1;
         struct filter_iobuf  *pool       = NULL;
         struct filter_iobuf **pool_place = NULL;
 
@@ -1684,6 +1850,9 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         __u8 *uuid_ptr;
         char *str, *label;
         char ns_name[48];
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,9)
+        request_queue_t *q;
+#endif
         int rc;
         ENTRY;
 
@@ -1736,6 +1905,9 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
 
         filter->fo_vfsmnt = mnt;
         obd->u.obt.obt_sb = mnt->mnt_sb;
+        obd->u.obt.obt_stale_export_age = STALE_EXPORT_MAXTIME_DEFAULT;
+        spin_lock_init(&obd->u.obt.obt_trans_table_lock);
+
         filter->fo_fstype = mnt->mnt_sb->s_type->name;
         CDEBUG(D_SUPER, "%s: mnt = %p\n", filter->fo_fstype, mnt);
 
@@ -1749,10 +1921,6 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         obd->obd_lvfs_ctxt.fs = get_ds();
         obd->obd_lvfs_ctxt.cb_ops = filter_lvfs_ops;
 
-        rc = filter_prep(obd);
-        if (rc)
-                GOTO(err_ops, rc);
-
         filter->fo_destroy_in_progress = 0;
         sema_init(&filter->fo_create_lock, 1);
         spin_lock_init(&filter->fo_translock);
@@ -1760,9 +1928,15 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         INIT_LIST_HEAD(&filter->fo_export_list);
         sema_init(&filter->fo_alloc_lock, 1);
         init_brw_stats(&filter->fo_filter_stats);
+        filter->fo_read_cache = 1; /* enable read-only cache by default */
+        filter->fo_writethrough_cache = 1; /* enable writethrough cache */
         filter->fo_readcache_max_filesize = FILTER_MAX_CACHE_SIZE;
         filter->fo_fmd_max_num = FILTER_FMD_MAX_NUM_DEFAULT;
         filter->fo_fmd_max_age = FILTER_FMD_MAX_AGE_DEFAULT;
+
+        rc = filter_prep(obd);
+        if (rc)
+                GOTO(err_ops, rc);
 
         sprintf(ns_name, "filter-%s", obd->obd_uuid.uuid);
         obd->obd_namespace = ldlm_namespace_new(obd, ns_name, LDLM_NAMESPACE_SERVER,
@@ -1776,7 +1950,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
                            "filter_ldlm_cb_client", &obd->obd_ldlm_client);
 
-        rc = llog_cat_initialize(obd, 1, NULL);
+        rc = obd_llog_init(obd, obd, 1, NULL, NULL);
         if (rc) {
                 CERROR("failed to setup llogging subsystems\n");
                 GOTO(err_post, rc);
@@ -1785,6 +1959,17 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         rc = lquota_setup(filter_quota_interface_ref, obd);
         if (rc)
                 GOTO(err_post, rc);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,9)
+        q = bdev_get_queue(mnt->mnt_sb->s_bdev);
+        if (q->max_sectors < q->max_hw_sectors &&
+            q->max_sectors < PTLRPC_MAX_BRW_SIZE >> 9)
+                LCONSOLE_INFO("%s: underlying device %s should be tuned "
+                              "for larger I/O requests: max_sectors = %u "
+                              "could be up to max_hw_sectors=%u\n",
+                              obd->obd_name, mnt->mnt_sb->s_id,
+                              q->max_sectors, q->max_hw_sectors);
+#endif
 
         uuid_ptr = fsfilt_uuid(obd, obd->u.obt.obt_sb);
         if (uuid_ptr != NULL) {
@@ -1807,8 +1992,8 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                               label ?: "", label ? "/" : "", str,
                               obd->obd_recovery_timeout / 60,
                               obd->obd_recovery_timeout % 60,
-                              obd->obd_max_recoverable_clients,
-                              (obd->obd_max_recoverable_clients == 1) ? "":"s",
+                              obd->obd_recoverable_clients,
+                              (obd->obd_recoverable_clients == 1) ? "":"s",
                               obd->obd_name);
         } else {
                 LCONSOLE_INFO("OST %s now serving %s (%s%s%s) with recovery "
@@ -1863,14 +2048,32 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
                 lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_WRITE_BYTES,
                                      LPROCFS_CNTR_AVGMINMAX,
                                      "write_bytes", "bytes");
+                lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_GET_PAGE,
+                                     LPROCFS_CNTR_AVGMINMAX|LPROCFS_CNTR_STDDEV,
+                                     "get_page", "usec");
+                lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_NO_PAGE,
+                                     LPROCFS_CNTR_AVGMINMAX,
+                                     "get_page failures", "num");
+                lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_CACHE_ACCESS,
+                                     LPROCFS_CNTR_AVGMINMAX,
+                                     "cache_access", "pages");
+                lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_CACHE_HIT,
+                                     LPROCFS_CNTR_AVGMINMAX,
+                                     "cache_hit", "pages");
+                lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_CACHE_MISS,
+                                     LPROCFS_CNTR_AVGMINMAX,
+                                     "cache_miss", "pages");
                 lproc_filter_attach_seqstat(obd);
+#ifdef HAVE_DELAYED_RECOVERY
+                lprocfs_obd_attach_stale_exports(obd);
+#endif
                 obd->obd_proc_exports_entry = proc_mkdir("exports",
                                                          obd->obd_proc_entry);
         }
         if (obd->obd_proc_exports_entry)
                 lprocfs_add_simple(obd->obd_proc_exports_entry, "clear",
                                    lprocfs_nid_stats_clear_read,
-                                   lprocfs_nid_stats_clear_write, obd);
+                                   lprocfs_nid_stats_clear_write, obd, NULL);
 
         memcpy((void *)addr, lustre_cfg_buf(lcfg, 4),
                LUSTRE_CFG_BUFLEN(lcfg, 4));
@@ -1903,61 +2106,75 @@ static int filter_llog_init(struct obd_device *obd, struct obd_device *tgt,
         int rc;
         ENTRY;
 
-        OBD_ALLOC(filter->fo_lcm, sizeof(struct llog_commit_master));
+        filter->fo_lcm = llog_recov_thread_init(obd->obd_name);
         if (!filter->fo_lcm)
                 RETURN(-ENOMEM);
 
-        rc = llog_init_commit_master((struct llog_commit_master *)
-                                     filter->fo_lcm);
-        if (rc)
-                GOTO(cleanup, rc);
-
         filter_mds_ost_repl_logops = llog_client_ops;
         filter_mds_ost_repl_logops.lop_cancel = llog_obd_repl_cancel;
-        filter_mds_ost_repl_logops.lop_connect = llog_repl_connect;
+        filter_mds_ost_repl_logops.lop_connect = llog_obd_repl_connect;
         filter_mds_ost_repl_logops.lop_sync = llog_obd_repl_sync;
 
         rc = llog_setup(obd, LLOG_MDS_OST_REPL_CTXT, tgt, 0, NULL,
                         &filter_mds_ost_repl_logops);
         if (rc)
-                GOTO(cleanup, rc);
+                GOTO(cleanup_lcm, rc);
 
         /* FIXME - assign unlink_cb for filter's recovery */
         ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
         ctxt->llog_proc_cb = filter_recov_log_mds_ost_cb;
-        ctxt->loc_lcm = obd->u.filter.fo_lcm;
-        rc = llog_start_commit_thread(ctxt->loc_lcm);
+        ctxt->loc_lcm = filter->fo_lcm;
         llog_ctxt_put(ctxt);
-        if (rc)
-                GOTO(cleanup, rc);
 
         rc = llog_setup(obd, LLOG_SIZE_ORIG_CTXT, tgt, 0, NULL,
                         &filter_size_orig_logops);
-
-cleanup:
-        if (rc) {
-                llog_cleanup_commit_master(filter->fo_lcm, 0);
-                OBD_FREE(filter->fo_lcm, sizeof(struct llog_commit_master));
-                filter->fo_lcm = NULL;
-        }
+        if (rc)
+                GOTO(cleanup_ctxt, rc);
         RETURN(rc);
+cleanup_ctxt:
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
+        if (ctxt)
+                llog_cleanup(ctxt);
+cleanup_lcm:
+        llog_recov_thread_fini(filter->fo_lcm, 1);
+        filter->fo_lcm = NULL;
+        return rc;
 }
 
 static int filter_llog_finish(struct obd_device *obd, int count)
 {
+        struct filter_obd *filter = &obd->u.filter;
         struct llog_ctxt *ctxt;
         int rc = 0, rc2 = 0;
         ENTRY;
 
-        if (obd->u.filter.fo_lcm) {
-                llog_cleanup_commit_master((struct llog_commit_master *)
-                                           obd->u.filter.fo_lcm, 1);
-                OBD_FREE(obd->u.filter.fo_lcm, 
-                         sizeof(struct llog_commit_master));
-                obd->u.filter.fo_lcm = NULL;
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
+        if (ctxt) {
+                /*
+                 * Make sure that no cached llcds left in recov_thread. We
+                 * actually do sync in disconnect time, but disconnect may
+                 * not come being marked rq_no_resend = 1.
+                 */
+                llog_sync(ctxt, NULL);
+
+                /*
+                 * Balance class_import_get() called in llog_receptor_accept().
+                 * This is safe to do here, as llog is already synchronized and
+                 * its import may go.
+                 */
+                mutex_down(&ctxt->loc_sem);
+                if (ctxt->loc_imp) {
+                        class_import_put(ctxt->loc_imp);
+                        ctxt->loc_imp = NULL;
+                }
+                mutex_up(&ctxt->loc_sem);
         }
 
-        ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
+        if (filter->fo_lcm) {
+                llog_recov_thread_fini(filter->fo_lcm, obd->obd_force);
+                filter->fo_lcm = NULL;
+        }
+
         if (ctxt)
                 rc = llog_cleanup(ctxt);
 
@@ -2138,7 +2355,8 @@ static int filter_connect_internal(struct obd_export *exp,
 
 static int filter_reconnect(struct obd_export *exp, struct obd_device *obd,
                             struct obd_uuid *cluuid,
-                            struct obd_connect_data *data)
+                            struct obd_connect_data *data,
+                            void *localdata)
 {
         int rc;
         ENTRY;
@@ -2147,6 +2365,8 @@ static int filter_reconnect(struct obd_export *exp, struct obd_device *obd,
                 RETURN(-EINVAL);
 
         rc = filter_connect_internal(exp, data);
+        if (rc == 0)
+                filter_export_stats_init(obd, exp, localdata);
 
         RETURN(rc);
 }
@@ -2334,11 +2554,11 @@ static int filter_destroy_export(struct obd_export *exp)
         lquota_clearinfo(filter_quota_interface_ref, exp, exp->exp_obd);
 
         target_destroy_export(exp);
+        ldlm_destroy_export(exp);
 
         if (obd_uuid_equals(&exp->exp_client_uuid, &exp->exp_obd->obd_uuid))
                 RETURN(0);
 
-        lprocfs_exp_cleanup(exp);
 
         if (exp->exp_obd->obd_replayable)
                 filter_client_free(exp);
@@ -2359,11 +2579,20 @@ static int filter_disconnect(struct obd_export *exp)
 {
         struct obd_device *obd = exp->exp_obd;
         struct llog_ctxt *ctxt;
-        int rc, err;
+        int rc;
         ENTRY;
 
         LASSERT(exp);
         class_export_get(exp);
+
+        /* Flush any remaining cancel messages out to the target */
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
+        if (ctxt) {
+                if (ctxt->loc_imp == exp->exp_imp_reverse)
+                        CDEBUG(D_RPCTRACE, "Reverse import disconnect\n");
+                llog_sync(ctxt, exp);
+                llog_ctxt_put(ctxt);
+        }
 
         if (!(exp->exp_flags & OBD_OPT_FORCE))
                 filter_grant_sanity_check(obd, __FUNCTION__);
@@ -2374,14 +2603,7 @@ static int filter_disconnect(struct obd_export *exp)
         if (exp->exp_obd->obd_namespace != NULL)
                 ldlm_cancel_locks_for_export(exp);
 
-        /* flush any remaining cancel messages out to the target */
-        ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
-        err = llog_sync(ctxt, exp);
-        llog_ctxt_put(ctxt);
-
-        if (err)
-                CERROR("error flushing logs to MDS: rc %d\n", err);
-
+        lprocfs_exp_cleanup(exp);
         class_export_put(exp);
         RETURN(rc);
 }
@@ -2389,6 +2611,9 @@ static int filter_disconnect(struct obd_export *exp)
 static int filter_ping(struct obd_export *exp)
 {
         filter_fmd_expire(exp);
+
+        if (exp->exp_delayed)
+                filter_update_client_epoch(exp);
 
         return 0;
 }
@@ -2491,6 +2716,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         struct llog_cookie *fcc = NULL;
         struct filter_obd *filter;
         int rc, err, locked = 0, sync = 0;
+        loff_t old_size = 0;
         unsigned int ia_valid;
         struct inode *inode;
         struct iattr iattr;
@@ -2516,8 +2742,14 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         if (ia_valid & ATTR_SIZE || ia_valid & (ATTR_UID | ATTR_GID)) {
                 DQUOT_INIT(inode);
                 LOCK_INODE_MUTEX(inode);
+                old_size = i_size_read(inode);
                 locked = 1;
         }
+
+        /* VBR: version recovery check */
+        rc = filter_version_get_check(exp, oti, inode);
+        if (rc)
+                GOTO(out_unlock, rc);
 
         /* If the inode still has SUID+SGID bits set (see filter_precreate())
          * then we will accept the UID+GID sent by the client during write for
@@ -2583,7 +2815,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         /* The truncate might have used up our transaction credits.  Make
          * sure we have one left for the last_rcvd update. */
         err = fsfilt_extend(exp->exp_obd, inode, 1, handle);
-        rc = filter_finish_transno(exp, oti, rc, sync);
+        rc = filter_finish_transno(exp, inode, oti, rc, sync);
         if (sync) {
                 filter_cancel_cookies_cb(exp->exp_obd, 0, fcc, rc);
                 fcc = NULL;
@@ -2598,14 +2830,17 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                 fcc = NULL;
         }
 
+        /* For a partial-page truncate flush the page to disk immediately
+         * to avoid data corruption during direct disk write. b=17397 */
+        if (!sync && (iattr.ia_valid & ATTR_SIZE) &&
+            old_size != iattr.ia_size && (iattr.ia_size & ~CFS_PAGE_MASK)) {
+                err = filemap_fdatawrite_range(inode->i_mapping, iattr.ia_size,
+                                               iattr.ia_size + 1);
+                if (!rc)
+                        rc = err;
+        }
+
         if (locked) {
-                /* Let's flush truncated page on disk immediately, then we can
-                 * avoid need to search for page aliases before directio writes
-                 * and this sort of stuff at expense of somewhat slower
-                 * truncates not on a page boundary. I believe this is the only
-                 * place in filter code that can lead to pages getting to
-                 * pagecache so far. */
-                filter_clear_truncated_page(inode);
                 UNLOCK_INODE_MUTEX(inode);
                 locked = 0;
         }
@@ -3004,8 +3239,6 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 } else
                         next_id = filter_last_id(filter, group) + 1;
 
-                CDEBUG(D_INFO, "precreate objid "LPU64"\n", next_id);
-
                 dparent = filter_parent_lock(obd, group, next_id);
                 if (IS_ERR(dparent))
                         GOTO(cleanup, rc = PTR_ERR(dparent));
@@ -3050,6 +3283,10 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 cleanup_phase = 3;
+
+                CDEBUG(D_INODE, "%s: filter_precreate(od->o_gr="LPU64
+                       ",od->o_id="LPU64")\n", obd->obd_name, group, 
+                       next_id);
 
                 /* We mark object SUID+SGID to flag it for accepting UID+GID
                  * from client on first write.  Currently the permission bits
@@ -3157,7 +3394,7 @@ int filter_recreate(struct obd_device *obd, struct obdo *oa)
 static int filter_create(struct obd_export *exp, struct obdo *oa,
                          struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
-        struct obd_device *obd = NULL;
+        struct obd_device *obd = exp->exp_obd;
         struct lvfs_run_ctxt saved;
         struct lov_stripe_md *lsm = NULL;
         struct ldlm_res_id res_id = { .name = { oa->o_id } };
@@ -3166,6 +3403,9 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
         int flags = 0;
         int rc = 0;
         ENTRY;
+
+        CDEBUG(D_INODE, "%s: filter_create(od->o_gr="LPU64",od->o_id="
+               LPU64")\n", obd->obd_name, oa->o_gr, oa->o_id);
 
         if (!(oa->o_valid & OBD_MD_FLGROUP))
                 oa->o_gr = 0;
@@ -3180,7 +3420,6 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
                 }
         }
 
-        obd = exp->exp_obd;
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         if ((oa->o_valid & OBD_MD_FLFLAGS) &&
@@ -3238,6 +3477,9 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 1;
 
+        CDEBUG(D_INODE, "%s: filter_destroy(od->o_gr="LPU64",od->o_id="
+               LPU64")\n", obd->obd_name, oa->o_gr, oa->o_id);
+
         dchild = filter_fid2dentry(obd, NULL, oa->o_gr, oa->o_id);
         if (IS_ERR(dchild))
                 GOTO(cleanup, rc = PTR_ERR(dchild));
@@ -3257,7 +3499,7 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
                 }
                 GOTO(cleanup, rc = -ENOENT);
         }
-        
+
         filter_prepare_destroy(obd, oa->o_id);
 
         /* Our MDC connection is established by the MDS to us */
@@ -3276,6 +3518,12 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
          * (see BUG 4180) -bzzz
          */
         LOCK_INODE_MUTEX(dchild->d_inode);
+
+        /* VBR: version recovery check */
+        rc = filter_version_get_check(exp, oti, dchild->d_inode);
+        if (rc)
+                GOTO(cleanup, rc);
+
         handle = fsfilt_start_log(obd, dchild->d_inode, FSFILT_OP_SETATTR,
                                   NULL, 1);
         if (IS_ERR(handle)) {
@@ -3328,13 +3576,13 @@ cleanup:
                                                      filter_cancel_cookies_cb,
                                                      fcc);
                 /* If add_journal_cb failed, then filter_finish_transno
-                 * will commit the handle and we will do a sync 
-                 * on commit. then we call callback directly to free 
-                 * the fcc. 
+                 * will commit the handle and we will do a sync
+                 * on commit. then we call callback directly to free
+                 * the fcc.
                  */
-                rc = filter_finish_transno(exp, oti, rc, sync);
+                rc = filter_finish_transno(exp, NULL, oti, rc, sync);
                 if (sync) {
-                        filter_cancel_cookies_cb(obd, 0, fcc, rc); 
+                        filter_cancel_cookies_cb(obd, 0, fcc, rc);
                         fcc = NULL;
                 }
                 rc2 = fsfilt_commit(obd, dparent->d_inode, handle, 0);
@@ -3393,8 +3641,9 @@ static int filter_truncate(struct obd_export *exp, struct obd_info *oinfo,
         RETURN(rc);
 }
 
-static int filter_sync(struct obd_export *exp, struct obdo *oa,
-                       struct lov_stripe_md *lsm, obd_off start, obd_off end)
+static int filter_sync(struct obd_export *exp, struct obd_info *oinfo,
+                       obd_off start, obd_off end,
+                       struct ptlrpc_request_set *set)
 {
         struct lvfs_run_ctxt saved;
         struct filter_obd *filter;
@@ -3405,17 +3654,23 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
 
         filter = &exp->exp_obd->u.filter;
 
-        /* an objid of zero is taken to mean "sync whole filesystem" */
-        if (!oa || !(oa->o_valid & OBD_MD_FLID)) {
+        /* An objid of zero is taken to mean "sync whole filesystem" */
+        if (!oinfo->oi_oa || !(oinfo->oi_oa->o_valid & OBD_MD_FLID)) {
                 rc = fsfilt_sync(exp->exp_obd, filter->fo_obt.obt_sb);
-                /* flush any remaining cancel messages out to the target */
+
+                /* Flush any remaining cancel messages out to the target */
                 ctxt = llog_get_context(exp->exp_obd, LLOG_MDS_OST_REPL_CTXT);
-                llog_sync(ctxt, exp);
-                llog_ctxt_put(ctxt);
+                if (ctxt) {
+                        llog_sync(ctxt, exp);
+                        llog_ctxt_put(ctxt);
+                } else {
+                        CERROR("No LLOG_MDS_OST_REPL_CTXT found in obd %p\n",
+                               exp->exp_obd);
+                }
                 RETURN(rc);
         }
 
-        dentry = filter_oa2dentry(exp->exp_obd, oa);
+        dentry = filter_oa2dentry(exp->exp_obd, oinfo->oi_oa);
         if (IS_ERR(dentry))
                 RETURN(PTR_ERR(dentry));
 
@@ -3437,8 +3692,8 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
         }
         UNLOCK_INODE_MUTEX(dentry->d_inode);
 
-        oa->o_valid = OBD_MD_FLID;
-        obdo_from_inode(oa, dentry->d_inode, FILTER_VALID_FLAGS);
+        oinfo->oi_oa->o_valid = OBD_MD_FLID;
+        obdo_from_inode(oinfo->oi_oa, dentry->d_inode, FILTER_VALID_FLAGS);
 
         pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
 
@@ -3447,7 +3702,8 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
 }
 
 static int filter_get_info(struct obd_export *exp, __u32 keylen,
-                           void *key, __u32 *vallen, void *val)
+                           void *key, __u32 *vallen, void *val,
+                           struct lov_stripe_md *lsm)
 {
         struct obd_device *obd;
         ENTRY;
@@ -3489,6 +3745,38 @@ static int filter_get_info(struct obd_export *exp, __u32 keylen,
                         *last_id = filter_last_id(&obd->u.filter, 0);
                 }
                 *vallen = sizeof(*last_id);
+                RETURN(0);
+        }
+
+        if (KEY_IS(KEY_FIEMAP)) {
+                struct ll_fiemap_info_key *fm_key = key;
+                struct dentry *dentry;
+                struct ll_user_fiemap *fiemap = val;
+                struct lvfs_run_ctxt saved;
+                int rc;
+
+                if (fiemap == NULL) {
+                        *vallen = fiemap_count_to_size(
+                                                fm_key->fiemap.fm_extent_count);
+                        RETURN(0);
+                }
+
+                dentry = __filter_oa2dentry(exp->exp_obd, &fm_key->oa,
+                                            __FUNCTION__, 1);
+                if (IS_ERR(dentry))
+                        RETURN(PTR_ERR(dentry));
+
+                memcpy(fiemap, &fm_key->fiemap, sizeof(*fiemap));
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                rc = fsfilt_iocontrol(obd, dentry->d_inode, NULL,
+                                      EXT3_IOC_FIEMAP, (long)fiemap);
+                if (rc) {
+                        f_dput(dentry);
+                        RETURN(rc);
+                }
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+                f_dput(dentry);
                 RETURN(0);
         }
 
@@ -3552,9 +3840,8 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
                 void *handle;
                 struct super_block *sb = obd->u.obt.obt_sb;
                 struct inode *inode = sb->s_root->d_inode;
-                BDEVNAME_DECLARE_STORAGE(tmp);
                 LCONSOLE_WARN("*** setting obd %s device '%s' read-only ***\n",
-                              obd->obd_name, ll_bdevname(sb, tmp));
+                              obd->obd_name, sb->s_id);
 
                 handle = fsfilt_start(obd, inode, FSFILT_OP_MKNOD, NULL);
                 if (!IS_ERR(handle))
@@ -3588,8 +3875,6 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
                 RETURN(rc);
 */
         }
-
-
         default:
                 RETURN(-EINVAL);
         }
@@ -3641,6 +3926,23 @@ static struct lvfs_callback_ops filter_lvfs_ops = {
         l_fid2dentry:     filter_lvfs_fid2dentry,
 };
 
+static int filter_notify(struct obd_device *obd, struct obd_device *watched,
+                         enum obd_notify_event ev, void *data)
+{
+        ENTRY;
+
+        CDEBUG(D_CONFIG, "notify %s ev=%d\n", watched->obd_name, ev);
+
+        switch (ev) {
+        case OBD_NOTIFY_CONFIG:
+                /* call this only when config is processed and stale_export_age
+                 * value is configured */
+                class_disconnect_expired_exports(obd);
+        default:
+                RETURN(0);
+        }
+}
+
 static struct obd_ops filter_obd_ops = {
         .o_owner          = THIS_MODULE,
         .o_get_info       = filter_get_info,
@@ -3670,6 +3972,8 @@ static struct obd_ops filter_obd_ops = {
         .o_iocontrol      = filter_iocontrol,
         .o_health_check   = filter_health_check,
         .o_process_config = filter_process_config,
+        .o_postrecov      = filter_postrecov,
+        .o_notify         = filter_notify,
 };
 
 quota_interface_t *filter_quota_interface_ref;
@@ -3680,7 +3984,7 @@ static int __init obdfilter_init(void)
         struct lprocfs_static_vars lvars;
         int rc;
 
-        printk(KERN_INFO "Lustre: Filtering OBD driver; info@clusterfs.com\n");
+        printk(KERN_INFO "Lustre: Filtering OBD driver; http://www.lustre.org/\n");
 
         lprocfs_filter_init_vars(&lvars);
 
@@ -3737,7 +4041,7 @@ static void __exit obdfilter_exit(void)
                  sizeof(*obdfilter_created_scratchpad));
 }
 
-MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Filtering OBD driver");
 MODULE_LICENSE("GPL");
 

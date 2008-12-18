@@ -1,10 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2003 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #ifndef LOV_INTERNAL_H
@@ -130,6 +157,8 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
                   struct ost_lvb *lvb, int kms_only);
 int lov_adjust_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
                    obd_off size, int shrink);
+int lov_update_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
+                   struct ost_lvb *lvb, obd_flag valid);
 
 /* lov_offset.c */
 obd_size lov_stripe_size(struct lov_stripe_md *lsm, obd_size ost_size,
@@ -192,9 +221,8 @@ int lov_prep_punch_set(struct obd_export *exp, struct obd_info *oinfo,
                        struct lov_request_set **reqset);
 int lov_fini_punch_set(struct lov_request_set *set);
 int lov_prep_sync_set(struct obd_export *exp, struct obd_info *obd_info,
-                      struct obdo *src_oa,
-                      struct lov_stripe_md *lsm, obd_off start,
-                      obd_off end, struct lov_request_set **reqset);
+                      obd_off start, obd_off end,
+                      struct lov_request_set **reqset);
 int lov_fini_sync_set(struct lov_request_set *set);
 int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
                          struct ldlm_enqueue_info *einfo,
@@ -216,8 +244,8 @@ int lov_prep_cancel_set(struct obd_export *exp, struct obd_info *oinfo,
 int lov_fini_cancel_set(struct lov_request_set *set);
 int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
                         struct lov_request_set **reqset);
-void lov_update_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                       struct obd_statfs *lov_sfs, int success);
+void lov_update_statfs(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
+                       int success);
 int lov_fini_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                     int success);
 int lov_fini_statfs_set(struct lov_request_set *set);
@@ -254,6 +282,9 @@ void lov_free_memmd(struct lov_stripe_md **lsmp);
 
 void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm);
 void lov_dump_lmm_join(int level, struct lov_mds_md_join *lmmj);
+void lov_dump_lmm_v3(int level, struct lov_mds_md_v3 *lmm);
+void lov_dump_lmm(int level, void *lmm);
+
 /* lov_ea.c */
 int lov_unpackmd_join(struct lov_obd *lov, struct lov_stripe_md *lsm,
                       struct lov_mds_md *lmm);
@@ -273,6 +304,56 @@ static inline void lprocfs_lov_init_vars(struct lprocfs_static_vars *lvars)
 {
         memset(lvars, 0, sizeof(*lvars));
 }
+#endif
+
+/* pools */
+extern lustre_hash_ops_t pool_hash_operations;
+
+/* ost_pool methods */
+int lov_ost_pool_init(struct ost_pool *op, unsigned int count);
+int lov_ost_pool_extend(struct ost_pool *op, unsigned int max_count);
+int lov_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int max_count);
+int lov_ost_pool_remove(struct ost_pool *op, __u32 idx);
+int lov_ost_pool_free(struct ost_pool *op);
+
+/* high level pool methods */
+int lov_pool_new(struct obd_device *obd, char *poolname);
+int lov_pool_del(struct obd_device *obd, char *poolname);
+int lov_pool_add(struct obd_device *obd, char *poolname, char *ostname);
+int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname);
+void lov_dump_pool(int level, struct pool_desc *pool);
+struct pool_desc *lov_find_pool(struct lov_obd *lov, char *poolname);
+int lov_check_index_in_pool(__u32 idx, struct pool_desc *pool);
+
+
+#if BITS_PER_LONG == 64
+# define ll_do_div64(n,base) ({                                 \
+        uint64_t __base = (base);                               \
+        uint64_t __rem;                                         \
+        __rem = ((uint64_t)(n)) % __base;                       \
+        (n) = ((uint64_t)(n)) / __base;                         \
+        __rem;                                                  \
+  })
+#elif BITS_PER_LONG == 32
+# define ll_do_div64(n,base) ({                                 \
+        uint64_t __rem;                                         \
+        if ((sizeof(base) > 4) && (((base)&0xffffffff00000000ULL) != 0)) { \
+                int __remainder;                                \
+                LASSERTF(!((base) & (LOV_MIN_STRIPE_SIZE - 1)), "64 bit lov "\
+                          "division %llu / %llu\n", (n), (base)); \
+                __remainder = (n) & (LOV_MIN_STRIPE_SIZE - 1);  \
+                (n) >>= LOV_MIN_STRIPE_BITS;                    \
+                (base) >>= LOV_MIN_STRIPE_BITS;                 \
+                __rem = do_div(n, base);                        \
+                __rem <<= LOV_MIN_STRIPE_BITS;                  \
+                __rem += __remainder;                           \
+        } else {                                                \
+                __rem = do_div(n, base);                        \
+        }                                                       \
+        __rem;                                                  \
+  })
+#else
+#error Unsupported architecture.
 #endif
 
 #endif

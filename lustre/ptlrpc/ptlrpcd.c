@@ -1,27 +1,39 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
- *   Author Peter Braam <braam@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/ptlrpc/ptlrpcd.c
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
@@ -42,21 +54,6 @@
 #include <obd_support.h> /* for OBD_FAIL_CHECK */
 #include <lprocfs_status.h>
 
-#define LIOD_STOP 0
-struct ptlrpcd_ctl {
-        unsigned long             pc_flags;
-        spinlock_t                pc_lock;
-        struct completion         pc_starting;
-        struct completion         pc_finishing;
-        struct ptlrpc_request_set *pc_set;
-        char                      pc_name[16];
-#ifndef __KERNEL__
-        int                       pc_recurred;
-        void                     *pc_wait_callback;
-        void                     *pc_idle_callback;
-#endif
-};
-
 static struct ptlrpcd_ctl ptlrpcd_pc;
 static struct ptlrpcd_ctl ptlrpcd_recovery_pc;
 
@@ -72,19 +69,39 @@ void ptlrpcd_wake(struct ptlrpc_request *req)
         cfs_waitq_signal(&rq_set->set_waitq);
 }
 
-/* requests that are added to the ptlrpcd queue are sent via
- * ptlrpcd_check->ptlrpc_check_set() */
+/* 
+ * Requests that are added to the ptlrpcd queue are sent via
+ * ptlrpcd_check->ptlrpc_check_set().
+ */
 void ptlrpcd_add_req(struct ptlrpc_request *req)
 {
         struct ptlrpcd_ctl *pc;
+        int rc;
 
         if (req->rq_send_state == LUSTRE_IMP_FULL)
                 pc = &ptlrpcd_pc;
         else
                 pc = &ptlrpcd_recovery_pc;
+        rc = ptlrpc_set_add_new_req(pc, req);
+        if (rc) {
+                int (*interpreter)(struct ptlrpc_request *,
+                                   void *, int);
+                                
+                interpreter = req->rq_interpret_reply;
 
-        ptlrpc_set_add_new_req(pc->pc_set, req);
-        cfs_waitq_signal(&pc->pc_set->set_waitq);
+                /*
+                 * Thread is probably in stop now so we need to
+                 * kill this rpc as it was not added. Let's call
+                 * interpret for it to let know we're killing it
+                 * so that higher levels might free assosiated
+                 * resources.
+                */
+                req->rq_status = -EBADR;
+                interpreter(req, &req->rq_async_args,
+                            req->rq_status);
+                req->rq_set = NULL;
+                ptlrpc_req_finished(req);
+        }
 }
 
 static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
@@ -94,23 +111,25 @@ static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
         int rc = 0;
         ENTRY;
 
-        if (test_bit(LIOD_STOP, &pc->pc_flags))
-                RETURN(1);
-
         spin_lock(&pc->pc_set->set_new_req_lock);
         list_for_each_safe(pos, tmp, &pc->pc_set->set_new_requests) {
                 req = list_entry(pos, struct ptlrpc_request, rq_set_chain);
                 list_del_init(&req->rq_set_chain);
                 ptlrpc_set_add_req(pc->pc_set, req);
-                rc = 1; /* need to calculate its timeout */
+                /* 
+                 * Need to calculate its timeout. 
+                 */
+                rc = 1;
         }
         spin_unlock(&pc->pc_set->set_new_req_lock);
 
         if (pc->pc_set->set_remaining) {
                 rc = rc | ptlrpc_check_set(pc->pc_set);
 
-                /* XXX our set never completes, so we prune the completed
-                 * reqs after each iteration. boy could this be smarter. */
+                /* 
+                 * XXX: our set never completes, so we prune the completed
+                 * reqs after each iteration. boy could this be smarter. 
+                 */
                 list_for_each_safe(pos, tmp, &pc->pc_set->set_requests) {
                         req = list_entry(pos, struct ptlrpc_request,
                                          rq_set_chain);
@@ -124,7 +143,9 @@ static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
         }
 
         if (rc == 0) {
-                /* If new requests have been added, make sure to wake up */
+                /* 
+                 * If new requests have been added, make sure to wake up. 
+                 */
                 spin_lock(&pc->pc_set->set_new_req_lock);
                 rc = !list_empty(&pc->pc_set->set_new_requests);
                 spin_unlock(&pc->pc_set->set_new_req_lock);
@@ -134,43 +155,66 @@ static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
 }
 
 #ifdef __KERNEL__
-/* ptlrpc's code paths like to execute in process context, so we have this
- * thread which spins on a set which contains the io rpcs.  llite specifies
- * ptlrpcd's set when it pushes pages down into the oscs */
+/* 
+ * ptlrpc's code paths like to execute in process context, so we have this
+ * thread which spins on a set which contains the io rpcs. llite specifies
+ * ptlrpcd's set when it pushes pages down into the oscs.
+ */
 static int ptlrpcd(void *arg)
 {
         struct ptlrpcd_ctl *pc = arg;
-        int rc;
+        int rc, exit = 0;
         ENTRY;
 
         if ((rc = cfs_daemonize_ctxt(pc->pc_name))) {
                 complete(&pc->pc_starting);
-                return rc;
+                goto out;
         }
 
         complete(&pc->pc_starting);
 
-        /* this mainloop strongly resembles ptlrpc_set_wait except
-         * that our set never completes.  ptlrpcd_check calls ptlrpc_check_set
-         * when there are requests in the set.  new requests come in
-         * on the set's new_req_list and ptlrpcd_check moves them into
-         * the set. */
-        while (1) {
+        /* 
+         * This mainloop strongly resembles ptlrpc_set_wait() except that our
+         * set never completes.  ptlrpcd_check() calls ptlrpc_check_set() when
+         * there are requests in the set. New requests come in on the set's 
+         * new_req_list and ptlrpcd_check() moves them into the set. 
+         */
+        do {
                 struct l_wait_info lwi;
-                cfs_duration_t timeout;
+                int timeout;
 
-                timeout = cfs_time_seconds(ptlrpc_set_next_timeout(pc->pc_set));
-                lwi = LWI_TIMEOUT(timeout, ptlrpc_expired_set, pc->pc_set);
+                timeout = ptlrpc_set_next_timeout(pc->pc_set);
+                lwi = LWI_TIMEOUT(cfs_time_seconds(timeout ? timeout : 1), 
+                                  ptlrpc_expired_set, pc->pc_set);
 
                 l_wait_event(pc->pc_set->set_waitq, ptlrpcd_check(pc), &lwi);
 
-                if (test_bit(LIOD_STOP, &pc->pc_flags))
-                        break;
-        }
-        /* wait for inflight requests to drain */
+                /*
+                 * Abort inflight rpcs for forced stop case.
+                 */
+                if (test_bit(LIOD_STOP, &pc->pc_flags)) {
+                        if (test_bit(LIOD_FORCE, &pc->pc_flags))
+                                ptlrpc_abort_set(pc->pc_set);
+                        exit++;
+                }
+
+                /* 
+                 * Let's make one more loop to make sure that ptlrpcd_check()
+                 * copied all raced new rpcs into the set so we can kill them.
+                 */
+        } while (exit < 2);
+
+        /* 
+         * Wait for inflight requests to drain. 
+         */
         if (!list_empty(&pc->pc_set->set_requests))
                 ptlrpc_set_wait(pc->pc_set);
+
         complete(&pc->pc_finishing);
+out:
+        clear_bit(LIOD_START, &pc->pc_flags);
+        clear_bit(LIOD_STOP, &pc->pc_flags);
+        clear_bit(LIOD_FORCE, &pc->pc_flags);
         return 0;
 }
 
@@ -181,14 +225,18 @@ int ptlrpcd_check_async_rpcs(void *arg)
         struct ptlrpcd_ctl *pc = arg;
         int                  rc = 0;
 
-        /* single threaded!! */
+        /* 
+         * Single threaded!! 
+         */
         pc->pc_recurred++;
 
         if (pc->pc_recurred == 1) {
                 rc = ptlrpcd_check(pc);
                 if (!rc)
                         ptlrpc_expired_set(pc->pc_set);
-                /*XXX send replay requests */
+                /* 
+                 * XXX: send replay requests. 
+                 */
                 if (pc == &ptlrpcd_recovery_pc)
                         rc = ptlrpcd_check(pc);
         }
@@ -207,29 +255,37 @@ int ptlrpcd_idle(void *arg)
 
 #endif
 
-static int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
+int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
 {
-        int rc;
-
+        int rc = 0;
         ENTRY;
-        memset(pc, 0, sizeof(*pc));
+ 
+        /* 
+         * Do not allow start second thread for one pc. 
+         */
+        if (test_bit(LIOD_START, &pc->pc_flags)) {
+                CERROR("Starting second thread (%s) for same pc %p\n",
+                       name, pc);
+                RETURN(-EALREADY);
+        }
+
+        set_bit(LIOD_START, &pc->pc_flags);
         init_completion(&pc->pc_starting);
         init_completion(&pc->pc_finishing);
-        pc->pc_flags = 0;
         spin_lock_init(&pc->pc_lock);
         snprintf (pc->pc_name, sizeof (pc->pc_name), name);
 
         pc->pc_set = ptlrpc_prep_set();
         if (pc->pc_set == NULL)
-                RETURN(-ENOMEM);
+                GOTO(out, rc = -ENOMEM);
 
 #ifdef __KERNEL__
         rc = cfs_kernel_thread(ptlrpcd, pc, 0);
         if (rc < 0)  {
                 ptlrpc_set_destroy(pc->pc_set);
-                RETURN(rc);
+                GOTO(out, rc);
         }
-
+        rc = 0;
         wait_for_completion(&pc->pc_starting);
 #else
         pc->pc_wait_callback =
@@ -238,14 +294,23 @@ static int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
         pc->pc_idle_callback =
                 liblustre_register_idle_callback("ptlrpcd_check_idle_rpcs",
                                                  &ptlrpcd_idle, pc);
-        (void)rc;
 #endif
-        RETURN(0);
+out:
+        if (rc)
+                clear_bit(LIOD_START, &pc->pc_flags);
+        RETURN(rc);
 }
 
-static void ptlrpcd_stop(struct ptlrpcd_ctl *pc)
+void ptlrpcd_stop(struct ptlrpcd_ctl *pc, int force)
 {
+        if (!test_bit(LIOD_START, &pc->pc_flags)) {
+                CERROR("Thread for pc %p was not started\n", pc);
+                return;
+        }
+
         set_bit(LIOD_STOP, &pc->pc_flags);
+        if (force)
+                set_bit(LIOD_FORCE, &pc->pc_flags);
         cfs_waitq_signal(&pc->pc_set->set_waitq);
 #ifdef __KERNEL__
         wait_for_completion(&pc->pc_finishing);
@@ -273,7 +338,7 @@ int ptlrpcd_addref(void)
 
         rc = ptlrpcd_start("ptlrpcd-recov", &ptlrpcd_recovery_pc);
         if (rc) {
-                ptlrpcd_stop(&ptlrpcd_pc);
+                ptlrpcd_stop(&ptlrpcd_pc, 0);
                 --ptlrpcd_users;
                 GOTO(out, rc);
         }
@@ -286,8 +351,8 @@ void ptlrpcd_decref(void)
 {
         mutex_down(&ptlrpcd_sem);
         if (--ptlrpcd_users == 0) {
-                ptlrpcd_stop(&ptlrpcd_pc);
-                ptlrpcd_stop(&ptlrpcd_recovery_pc);
+                ptlrpcd_stop(&ptlrpcd_pc, 0);
+                ptlrpcd_stop(&ptlrpcd_recovery_pc, 0);
         }
         mutex_up(&ptlrpcd_sem);
 }

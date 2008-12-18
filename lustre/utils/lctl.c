@@ -1,26 +1,43 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2002 Cluster File Systems, Inc.
- *   Author: Peter J. Braam <braam@clusterfs.com>
- *   Author: Phil Schwan <phil@clusterfs.com>
- *   Author: Robert Read <rread@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/utils/lctl.c
+ *
+ * Author: Peter J. Braam <braam@clusterfs.com>
+ * Author: Phil Schwan <phil@clusterfs.com>
+ * Author: Robert Read <rread@clusterfs.com>
  */
 
 #include <stdlib.h>
@@ -191,6 +208,24 @@ command_t cmdlist[] = {
          "get the device info of a attached file\n"
          "usage: blockdev_info <device_name>"},
 
+        /* Pool commands */
+        {"===  Pools ==", jt_noop, 0, "pool management"},
+        {"pool_new", jt_pool_cmd, 0,
+         "add a new pool\n"
+         "usage pool_new <fsname>.<poolname>"},
+        {"pool_add", jt_pool_cmd, 0,
+         "add the named OSTs to the pool\n"
+         "usage pool_add <fsname>.<poolname> <ostname indexed list>"},
+        {"pool_remove", jt_pool_cmd, 0,
+         "remove the named OST from the pool\n"
+         "usage pool_remove <fsname>.<poolname> <ostname indexed list>"},
+        {"pool_destroy", jt_pool_cmd, 0,
+         "destroy a pool\n"
+         "usage pool_destroy <fsname>.<poolname>"},
+        {"pool_list", jt_pool_cmd, 0,
+         "list pools and pools members\n"
+         "usage pool_list  <fsname>[.<poolname>] | <pathname>"},
+
         /* Test only commands */
         {"==== testing (DANGEROUS) ====", jt_noop, 0, "testing (DANGEROUS)"},
         {"--threads", jt_opt_threads, 0,
@@ -209,7 +244,7 @@ command_t cmdlist[] = {
         {"add_peer", jt_ptl_add_peer, 0, "add an peer entry\n"
          "usage: add_peer <nid> <host> <port>"},
         {"del_peer", jt_ptl_del_peer, 0, "remove an peer entry\n"
-         "usage: del_autoconn [<nid>] [<host>] [ks]"},
+         "usage: del_peer [<nid>] [<ipaddr|pid>]"},
         {"add_conn ", jt_lcfg_add_conn, 0,
          "usage: add_conn <conn_uuid> [priority]\n"},
         {"del_conn ", jt_lcfg_del_conn, 0,

@@ -1,25 +1,37 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2005 Cluster File Systems, Inc.
+ * GPL HEADER START
  *
- *   This file is part of the Lustre file system, http://www.lustre.org
- *   Lustre is a trademark of Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   You may have signed or agreed to another license before downloading
- *   this software.  If so, you are bound by the terms and conditions
- *   of that agreement, and the following does not apply to you.  See the
- *   LICENSE file included with this distribution for more information.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   If you did not agree to a different license, then this copy of Lustre
- *   is open source software; you can redistribute it and/or modify it
- *   under the terms of version 2 of the GNU General Public License as
- *   published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   In either case, Lustre is distributed in the hope that it will be
- *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
- *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   license text for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
 #define DEBUG_SUBSYSTEM S_LOG
@@ -45,10 +57,10 @@ static struct llog_ctxt* llog_new_ctxt(struct obd_device *obd)
         OBD_ALLOC(ctxt, sizeof(*ctxt));
         if (!ctxt)
                 return NULL;
-        
+
         ctxt->loc_obd = obd;
         atomic_set(&ctxt->loc_refcount, 1);
-        
+
         return ctxt;
 }
 
@@ -60,6 +72,7 @@ static void llog_ctxt_destroy(struct llog_ctxt *ctxt)
                 class_import_put(ctxt->loc_imp);
                 ctxt->loc_imp = NULL;
         }
+        LASSERT(ctxt->loc_llcd == NULL);
         OBD_FREE(ctxt, sizeof(*ctxt));
         return;
 }
@@ -78,7 +91,11 @@ int __llog_ctxt_put(struct llog_ctxt *ctxt)
         obd->obd_llog_ctxt[ctxt->loc_idx] = NULL;
         spin_unlock(&obd->obd_dev_lock);
 
-	LASSERT(obd->obd_stopping == 1 || obd->obd_set_up == 0);
+        LASSERTF(obd->obd_starting == 1 || 
+                 obd->obd_stopping == 1 || obd->obd_set_up == 0,
+                 "wrong obd state: %d/%d/%d\n", !!obd->obd_starting, 
+                 !!obd->obd_stopping, !!obd->obd_set_up);
+
         /* cleanup the llog ctxt here */
         if (CTXTP(ctxt, cleanup))
                 rc = CTXTP(ctxt, cleanup)(ctxt);
@@ -106,12 +123,22 @@ int llog_cleanup(struct llog_ctxt *ctxt)
 
         /* sync with other llog ctxt user thread */
         spin_lock(&obd->obd_dev_lock);
-	LASSERT(obd->obd_stopping == 1 || obd->obd_set_up == 0);
+
+        /* obd->obd_starting is needed for the case of cleanup
+         * in error case while obd is starting up. */
+        LASSERTF(obd->obd_starting == 1 || 
+                 obd->obd_stopping == 1 || obd->obd_set_up == 0,
+                 "wrong obd state: %d/%d/%d\n", !!obd->obd_starting, 
+                 !!obd->obd_stopping, !!obd->obd_set_up);
+
         spin_unlock(&obd->obd_dev_lock);
 
         idx = ctxt->loc_idx;
         /*try to free the ctxt */
         rc = __llog_ctxt_put(ctxt);
+        if (rc)
+                CERROR("Error %d while cleaning up ctxt %p\n", 
+                       rc, ctxt);
 
         l_wait_event(obd->obd_llog_waitq, llog_ctxt_null(obd, idx), &lwi);
 
@@ -129,18 +156,22 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
         if (index < 0 || index >= LLOG_MAX_CTXTS)
                 RETURN(-EFAULT);
 
-        ctxt = llog_get_context(obd, index); 
+        /* someone can call lov_llog_init with NULL uuid - this can produce
+         * parallel enter to this function */
+        mutex_down(&obd->obd_llog_alloc);
+        ctxt = llog_get_context(obd, index);
         if (ctxt) {
                 /* mds_lov_update_mds might call here multiple times. So if the
                    llog is already set up then don't to do it again. */
-                CDEBUG(D_CONFIG, "obd %s ctxt %d already set up\n", 
+                CDEBUG(D_CONFIG, "obd %s ctxt %d already set up\n",
                        obd->obd_name, index);
                 LASSERT(ctxt->loc_obd == obd);
                 LASSERT(ctxt->loc_exp == disk_obd->obd_self_export);
                 LASSERT(ctxt->loc_logops == op);
-                llog_ctxt_put(ctxt); 
+                llog_ctxt_put(ctxt);
                 GOTO(out, rc = 0);
         }
+
         ctxt = llog_new_ctxt(obd);
         if (!ctxt)
                 GOTO(out, rc = -ENOMEM);
@@ -151,14 +182,19 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
         ctxt->loc_logops = op;
         sema_init(&ctxt->loc_sem, 1);
 
-        if (op->lop_setup)
-                rc = op->lop_setup(obd, index, disk_obd, count, logid);
+        if (op->lop_setup) {
+                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LLOG_SETUP))
+                        rc = -EOPNOTSUPP;
+                else
+                        rc = op->lop_setup(obd, index, disk_obd, count, logid);
+        }
 
         if (rc) {
                 llog_ctxt_destroy(ctxt);
                 obd->obd_llog_ctxt[index] = NULL;
         }
 out:
+        mutex_up(&obd->obd_llog_alloc);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_setup);
@@ -179,11 +215,10 @@ int llog_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
 EXPORT_SYMBOL(llog_sync);
 
 int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
-                struct lov_stripe_md *lsm, struct llog_cookie *logcookies,
-                int numcookies)
+             struct lov_stripe_md *lsm, struct llog_cookie *logcookies,
+             int numcookies)
 {
-        __u32 cap;
-        int rc;
+        int raised, rc;
         ENTRY;
 
         if (!ctxt) {
@@ -192,10 +227,12 @@ int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
         }
         
         CTXT_CHECK_OP(ctxt, add, -EOPNOTSUPP);
-        cap = current->cap_effective;             
-        cap_raise(current->cap_effective, CAP_SYS_RESOURCE);
+        raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+        if (!raised)
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
         rc = CTXTP(ctxt, add)(ctxt, rec, lsm, logcookies, numcookies);
-        current->cap_effective = cap; 
+        if (!raised)
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_add);
@@ -273,12 +310,16 @@ int llog_obd_origin_setup(struct obd_device *obd, int index,
 {
         struct llog_ctxt *ctxt;
         struct llog_handle *handle;
-        struct lvfs_run_ctxt saved;
+        struct lvfs_run_ctxt *saved = NULL;
         int rc;
         ENTRY;
 
         if (count == 0)
                 RETURN(0);
+
+        OBD_SLAB_ALLOC_PTR(saved, obd_lvfs_ctxt_cache);
+        if (saved == NULL)
+                RETURN(-ENOMEM);
 
         LASSERT(count == 1);
 
@@ -297,9 +338,9 @@ int llog_obd_origin_setup(struct obd_device *obd, int index,
                 GOTO(out, rc);
 
         ctxt->loc_handle = handle;
-        push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+        push_ctxt(saved, &disk_obd->obd_lvfs_ctxt, NULL);
         rc = llog_init_handle(handle, LLOG_F_IS_CAT, NULL);
-        pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+        pop_ctxt(saved, &disk_obd->obd_lvfs_ctxt, NULL);
         if (rc)
                 GOTO(out, rc);
 
@@ -308,6 +349,7 @@ int llog_obd_origin_setup(struct obd_device *obd, int index,
                 CERROR("llog_process with cat_cancel_cb failed: %d\n", rc);
 out:
         llog_ctxt_put(ctxt);
+        OBD_SLAB_FREE_PTR(saved, obd_lvfs_ctxt_cache);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_obd_origin_setup);
@@ -372,42 +414,40 @@ int llog_obd_origin_add(struct llog_ctxt *ctxt,
 }
 EXPORT_SYMBOL(llog_obd_origin_add);
 
-int llog_cat_initialize(struct obd_device *obd, int count,
+int llog_cat_initialize(struct obd_device *obd, int idx,
                         struct obd_uuid *uuid)
 {
+        struct llog_catid idarray;
         char name[32] = CATLIST;
-        struct llog_catid *idarray = NULL;
-        int size = sizeof(*idarray) * count;
         int rc;
         ENTRY;
 
-        if (count) {
-                OBD_VMALLOC(idarray, size);
-                if (!idarray)
-                        RETURN(-ENOMEM);
-        }
-
-        rc = llog_get_cat_list(obd, obd, name, count, idarray);
+        mutex_down(&obd->obd_llog_cat_process);
+        rc = llog_get_cat_list(obd, obd, name, idx, 1, &idarray);
         if (rc) {
                 CERROR("rc: %d\n", rc);
                 GOTO(out, rc);
         }
 
-        rc = obd_llog_init(obd, obd, count, idarray, uuid);
+        CDEBUG(D_INFO, "%s: Init llog for %s/%d - catid "LPX64"/"LPX64":%x\n",
+               obd->obd_name, uuid->uuid, idx, idarray.lci_logid.lgl_oid,
+               idarray.lci_logid.lgl_ogr, idarray.lci_logid.lgl_ogen);
+
+        rc = obd_llog_init(obd, obd, 1, &idarray, uuid);
         if (rc) {
                 CERROR("rc: %d\n", rc);
                 GOTO(out, rc);
         }
 
-        rc = llog_put_cat_list(obd, obd, name, count, idarray);
+        rc = llog_put_cat_list(obd, obd, name, idx, 1, &idarray);
         if (rc) {
                 CERROR("rc: %d\n", rc);
                 GOTO(out, rc);
         }
 
  out:
-        if (idarray)
-                OBD_VFREE(idarray, size);
+        mutex_up(&obd->obd_llog_cat_process);
+
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_initialize);

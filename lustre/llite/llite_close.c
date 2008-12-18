@@ -1,24 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/llite/llite_close.c
+ *
  * Lustre Lite routines to issue a secondary close after writeback
- *
- *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
- *
- *   This file is part of Lustre, http://www.lustre.org.
- *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
- *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #include <linux/module.h>
@@ -122,6 +139,7 @@ static void ll_close_done_writing(struct inode *inode)
         ldlm_policy_data_t policy = { .l_extent = {0, OBD_OBJECT_EOF } };
         struct lustre_handle lockh = { 0 };
         struct obdo obdo;
+        struct mdc_op_data data = { { 0 } };
         obd_flag valid;
         int rc, ast_flags = 0;
         ENTRY;
@@ -166,7 +184,8 @@ static void ll_close_done_writing(struct inode *inode)
         obdo.o_blocks = inode->i_blocks;
         obdo.o_valid = OBD_MD_FLID | OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 
-        rc = mdc_done_writing(ll_i2sbi(inode)->ll_mdc_exp, &obdo);
+        ll_inode2fid(&data.fid1, inode);
+        rc = mdc_done_writing(ll_i2sbi(inode)->ll_mdc_exp, &data, &obdo);
  out:
 }
 
@@ -265,5 +284,3 @@ void ll_close_thread_shutdown(struct ll_close_queue *lcq)
         wait_for_completion(&lcq->lcq_comp);
         OBD_FREE(lcq, sizeof(*lcq));
 }
-
-

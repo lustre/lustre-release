@@ -1,24 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/liblustre/llite_lib.c
+ *
  * Lustre Light common routines
- *
- *  Copyright (c) 2002-2004 Cluster File Systems, Inc.
- *
- *   This file is part of Lustre, http://www.lustre.org.
- *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
- *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #include <stdlib.h>
@@ -156,7 +173,8 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         if (ocd == NULL)
                 GOTO(out_cleanup, rc = -ENOMEM);
 
-        ocd->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_AT;
+        ocd->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_AT |
+                                 OBD_CONNECT_VBR;
 #ifdef LIBLUSTRE_POSIX_ACL
         ocd->ocd_connect_flags |= OBD_CONNECT_ACL;
 #endif
@@ -307,6 +325,8 @@ int _sysio_lustre_init(void)
 
 extern int _sysio_native_init();
 
+static int mnt_retry = 0;
+
 char *lustre_path = NULL;
 
 void __liblustre_setup_(void)
@@ -314,11 +334,18 @@ void __liblustre_setup_(void)
         char *target = NULL;
         char *lustre_driver = "lustre";
         unsigned mntflgs = 0;
-        int err;
+        int err, count;
 
         lustre_path = getenv("LIBLUSTRE_MOUNT_POINT");
         if (!lustre_path) {
                 lustre_path = "/mnt/lustre";
+        }
+
+        target = getenv("LIBLUSTRE_MOUNT_RETRY");
+        if (target) {
+                mnt_retry = atoi(target);
+                if (mnt_retry < 0)
+                        mnt_retry = 0;
         }
 
         /* mount target */
@@ -349,7 +376,16 @@ void __liblustre_setup_(void)
                 exit(1);
 #endif /* INIT_SYSIO */
 
-        err = mount(target, lustre_path, lustre_driver, mntflgs, NULL);
+        count = mnt_retry;
+        do {
+                err = mount(target, lustre_path, lustre_driver, mntflgs, NULL);
+                if (err && mnt_retry && (-- count)) {
+                        fprintf(stderr, "Lustre mount failed: %s. "
+                                 "Will retry %d more times\n",
+                                strerror(errno), mnt_retry - count );
+                        sleep(2);
+                }
+        } while (err && count > 0);
         if (err) {
                 fprintf(stderr, "Lustre mount failed: %s\n", strerror(errno));
                 exit(1);

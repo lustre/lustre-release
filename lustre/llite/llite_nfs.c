@@ -1,24 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *   NFS export of Lustre Light File System 
+ * GPL HEADER START
  *
- *   Copyright (c) 2002, 2003 Cluster File Systems, Inc.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/llite/llite_nfs.c
+ *
+ * NFS export of Lustre Light File System
  */
 
 #define DEBUG_SUBSYSTEM S_LLITE
@@ -40,11 +57,7 @@ __u32 get_uuid2int(const char *name, int len)
         return (key0 << 1);
 }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-static int ll_nfs_test_inode(struct inode *inode, unsigned long ino, void *opaque)
-#else
 static int ll_nfs_test_inode(struct inode *inode, void *opaque)
-#endif
 {
         struct ll_fid *iid = opaque;
 
@@ -103,9 +116,6 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
 {
         struct inode *inode;
         struct dentry *result;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        struct list_head *lp;
-#endif
         ENTRY;
 
         if (ino == 0)
@@ -126,51 +136,12 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
                 RETURN(ERR_PTR(-ESTALE));
         }
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         result = d_alloc_anon(inode);
         if (!result) {
                 iput(inode);
                 RETURN(ERR_PTR(-ENOMEM));
         }
-#else
-        /* now to find a dentry.
-         * If possible, get a well-connected one
-         */
-        spin_lock(&dcache_lock);
-        for (lp = inode->i_dentry.next; lp != &inode->i_dentry ; lp=lp->next) {
-                result = list_entry(lp,struct dentry, d_alias);
-                lock_dentry(result);
-                if (!(result->d_flags & DCACHE_DISCONNECTED)) {
-                        dget_locked(result);
-                        ll_set_dflags(result, DCACHE_REFERENCED);
-                        unlock_dentry(result);
-                        spin_unlock(&dcache_lock);
-                        iput(inode);
-                        RETURN(result);
-                }
-                unlock_dentry(result);
-        }
-        spin_unlock(&dcache_lock);
-        result = d_alloc_root(inode);
-        if (result == NULL) {
-                iput(inode);
-                RETURN(ERR_PTR(-ENOMEM));
-        }
-        result->d_flags |= DCACHE_DISCONNECTED;
-
-#endif
-        ll_set_dd(result);
-
-        lock_dentry(result);
-        if (unlikely(result->d_op == &ll_init_d_ops)) {
-                result->d_op = &ll_d_ops;
-                unlock_dentry(result);
-                smp_wmb();
-                ll_d_wakeup(result);
-        } else {
-                result->d_op = &ll_d_ops;
-                unlock_dentry(result);
-        }
+        ll_dops_init(result, 1);
 
         RETURN(result);
 }
@@ -219,7 +190,7 @@ int ll_dentry_to_fh(struct dentry *dentry, __u32 *datap, int *lenp,
         return 1;
 }
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+#if THREAD_SIZE >= 8192
 struct dentry *ll_get_dentry(struct super_block *sb, void *data)
 {
         __u32 *inump = (__u32*)data;

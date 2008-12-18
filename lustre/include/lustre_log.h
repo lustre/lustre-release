@@ -1,25 +1,41 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001 Cluster File Systems, Inc. <info@clusterfs.com>
+ * GPL HEADER START
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/include/lustre_log.h
  *
  * Generic infrastructure for managing a collection of logs.
- *
  * These logs are used for:
  *
  * - orphan recovery: OST adds record on create
@@ -96,16 +112,44 @@ extern int llog_cancel_rec(struct llog_handle *loghandle, int index);
 extern int llog_close(struct llog_handle *cathandle);
 extern int llog_get_size(struct llog_handle *loghandle);
 
-/* llog_cat.c   -  catalog api */
+/* llog_cat.c - catalog api */
 struct llog_process_data {
-        void *lpd_data;
-        llog_cb_t lpd_cb;
+        /**
+         * Any useful data needed while processing catalog. This is
+         * passed later to process callback.
+         */
+        void                *lpd_data;
+        /**
+         * Catalog process callback function, called for each record
+         * in catalog.
+         */
+        llog_cb_t            lpd_cb;
 };
 
 struct llog_process_cat_data {
-        int     first_idx;
-        int     last_idx;
-        /* to process catalog across zero record */
+        /**
+         * Temporary stored first_idx while scanning log.
+         */
+        int                  lpcd_first_idx;
+        /**
+         * Temporary stored last_idx while scanning log.
+         */
+        int                  lpcd_last_idx;
+};
+
+struct llog_process_cat_args {
+        /**
+         * Llog context used in recovery thread on OST (recov_thread.c)
+         */
+        struct llog_ctxt    *lpca_ctxt;
+        /**
+         * Llog callback used in recovery thread on OST (recov_thread.c)
+         */
+        void                *lpca_cb;
+        /**
+         * Data pointer for llog callback.
+         */
+        void                *lpca_arg;
 };
 
 int llog_cat_put(struct llog_handle *cathandle);
@@ -114,6 +158,7 @@ int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
 int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                             struct llog_cookie *cookies);
 int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data);
+int llog_cat_process_thread(void *data);
 int llog_cat_reverse_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data);
 int llog_cat_set_first_idx(struct llog_handle *cathandle, int index);
 
@@ -137,7 +182,7 @@ int llog_obd_origin_add(struct llog_ctxt *ctxt,
                         struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
                         struct llog_cookie *logcookies, int numcookies);
 
-int llog_cat_initialize(struct obd_device *obd, int count, 
+int llog_cat_initialize(struct obd_device *obd, int idx,
                         struct obd_uuid *uuid);
 int obd_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
                   int count, struct llog_catid *logid, struct obd_uuid *uuid);
@@ -152,7 +197,7 @@ int llog_catalog_list(struct obd_device *obd, int count,
 /* llog_net.c */
 int llog_initiator_connect(struct llog_ctxt *ctxt);
 int llog_receptor_accept(struct llog_ctxt *ctxt, struct obd_import *imp);
-int llog_origin_connect(struct llog_ctxt *ctxt, int count,
+int llog_origin_connect(struct llog_ctxt *ctxt,
                         struct llog_logid *logid, struct llog_gen *gen,
                         struct obd_uuid *uuid);
 int llog_handle_connect(struct ptlrpc_request *req);
@@ -162,9 +207,9 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
                          struct lov_stripe_md *lsm, int count,
                          struct llog_cookie *cookies, int flags);
 int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp);
-int llog_repl_connect(struct llog_ctxt *ctxt, int count,
-                      struct llog_logid *logid, struct llog_gen *gen,
-                      struct obd_uuid *uuid);
+int llog_obd_repl_connect(struct llog_ctxt *ctxt,
+                          struct llog_logid *logid, struct llog_gen *gen,
+                          struct obd_uuid *uuid);
 
 struct llog_operations {
         int (*lop_write_rec)(struct llog_handle *loghandle,
@@ -191,7 +236,7 @@ struct llog_operations {
                        struct llog_cookie *logcookies, int numcookies);
         int (*lop_cancel)(struct llog_ctxt *ctxt, struct lov_stripe_md *lsm,
                           int count, struct llog_cookie *cookies, int flags);
-        int (*lop_connect)(struct llog_ctxt *ctxt, int count,
+        int (*lop_connect)(struct llog_ctxt *ctxt,
                            struct llog_logid *logid, struct llog_gen *gen,
                            struct obd_uuid *uuid);
         /* XXX add 2 more: commit callbacks and llog recovery functions */
@@ -200,7 +245,11 @@ struct llog_operations {
 /* llog_lvfs.c */
 extern struct llog_operations llog_lvfs_ops;
 int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
-                      char *name, int count, struct llog_catid *idarray);
+                      char *name, int idx, int count,
+                      struct llog_catid *idarray);
+
+int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
+                      char *name, int idx, int count, struct llog_catid *idarray);
 
 struct llog_ctxt {
         int                      loc_idx; /* my index the obd array of ctxt's */
@@ -218,13 +267,76 @@ struct llog_ctxt {
         void                    *llog_proc_cb;
 };
 
-#ifndef __KERNEL__
+#define LCM_NAME_SIZE 64
 
-#define cap_raise(c, flag) do {} while(0)
+struct llog_commit_master {
+        /**
+         * Thread control flags (start, stop, etc.)
+         */
+        long                       lcm_flags;
+        /**
+         * Number of llcds onthis lcm.
+         */
+        atomic_t                   lcm_count;
+        /**
+         * Thread control structure. Used for control commit thread.
+         */
+        struct ptlrpcd_ctl         lcm_pc;
+        /**
+         * Lock protecting list of llcds.
+         */
+        spinlock_t                 lcm_lock;
+        /**
+         * Llcds in flight for debugging purposes.
+         */
+        struct list_head           lcm_llcds;
+        /**
+         * Commit thread name buffer. Only used for thread start.
+         */
+        char                       lcm_name[LCM_NAME_SIZE];
+};
 
-#define CAP_SYS_RESOURCE 24
+struct llog_canceld_ctxt {
+        /**
+         * Llog context this llcd is attached to. Used for accessing
+         * ->loc_import and others in process of canceling cookies
+         * gathered in this llcd.
+         */
+        struct llog_ctxt          *llcd_ctxt;
+        /**
+         * Cancel thread control stucture pointer. Used for accessing
+         * it to see if should stop processing and other needs.
+         */
+        struct llog_commit_master *llcd_lcm;
+        /**
+         * Maximal llcd size. Used in calculations on how much of room
+         * left in llcd to cookie comming cookies.
+         */
+        int                        llcd_size;
+        /**
+         * Link to lcm llcds list.
+         */
+        struct list_head           llcd_list;
+        /**
+         * Current llcd size while gathering cookies. This should not be
+         * more than ->llcd_size. Used for determining if we need to
+         * send this llcd (if full) and allocate new one. This is also
+         * used for copying new cookie at the end of buffer.
+         */
+        int                        llcd_cookiebytes;
+        /**
+         * Pointer to the start of cookies buffer.
+         */
+        struct llog_cookie         llcd_cookies[0];
+};
 
-#endif   /* !__KERNEL__ */
+/* ptlrpc/recov_thread.c */
+extern struct llog_commit_master *llog_recov_thread_init(char *name);
+extern void llog_recov_thread_fini(struct llog_commit_master *lcm, 
+                                   int force);
+extern int llog_recov_thread_start(struct llog_commit_master *lcm);
+extern void llog_recov_thread_stop(struct llog_commit_master *lcm, 
+                                   int force);
 
 static inline void llog_gen_init(struct llog_ctxt *ctxt)
 {
@@ -292,10 +404,10 @@ static inline int llog_data_len(int len)
 do {                                                                        \
          if ((ctxt) == NULL)                                                \
                  break;                                                     \
-         CDEBUG(D_INFO, "PUTting ctxt %p : new refcount %d\n", (ctxt),      \
-                atomic_read(&(ctxt)->loc_refcount) - 1);                    \
          LASSERT(atomic_read(&(ctxt)->loc_refcount) > 0);                   \
          LASSERT(atomic_read(&(ctxt)->loc_refcount) < 0x5a5a5a);            \
+         CDEBUG(D_INFO, "PUTting ctxt %p : new refcount %d\n", (ctxt),      \
+                atomic_read(&(ctxt)->loc_refcount) - 1);                    \
          __llog_ctxt_put(ctxt);                                             \
 } while (0)
 
@@ -303,14 +415,16 @@ static inline struct llog_ctxt *llog_get_context(struct obd_device *obd,
                                                    int index)
 {
          struct llog_ctxt *ctxt;
- 
-         if (index < 0 || index >= LLOG_MAX_CTXTS)
+
+         if (index < 0 || index >= LLOG_MAX_CTXTS) {
+                 CDEBUG(D_INFO, "obd %p bad index %d\n", obd, index);
                  return NULL;
-        
-         spin_lock(&obd->obd_dev_lock);  
+         }
+
+         spin_lock(&obd->obd_dev_lock);
          if (obd->obd_llog_ctxt[index] == NULL) {
                  spin_unlock(&obd->obd_dev_lock);
-                 CDEBUG(D_INFO, "obd %p and ctxt index %d is NULL \n", obd, index);
+                 CDEBUG(D_INFO,"obd %p and ctxt index %d is NULL \n",obd,index);
                  return NULL;
          }
          ctxt = llog_ctxt_get(obd->obd_llog_ctxt[index]);
@@ -329,8 +443,7 @@ static inline int llog_write_rec(struct llog_handle *handle,
                                  int numcookies, void *buf, int idx)
 {
         struct llog_operations *lop;
-        __u32 cap;
-        int rc, buflen;
+        int raised, rc, buflen;
         ENTRY;
 
         rc = llog_handle2ops(handle, &lop);
@@ -346,10 +459,12 @@ static inline int llog_write_rec(struct llog_handle *handle,
                 buflen = rec->lrh_len;
         LASSERT(size_round(buflen) == buflen);
 
-        cap = current->cap_effective;             
-        cap_raise(current->cap_effective, CAP_SYS_RESOURCE); 
+        raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+        if (!raised)
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE); 
         rc = lop->lop_write_rec(handle, rec, logcookies, numcookies, buf, idx);
-        current->cap_effective = cap; 
+        if (!raised)
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE); 
         RETURN(rc);
 }
 
@@ -445,8 +560,7 @@ static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                               struct llog_logid *logid, char *name)
 {
         struct llog_operations *lop;
-        __u32 cap;
-        int rc;
+        int raised, rc;
         ENTRY;
 
         rc = llog_obd2ops(ctxt, &lop);
@@ -455,14 +569,16 @@ static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         if (lop->lop_create == NULL)
                 RETURN(-EOPNOTSUPP);
 
-        cap = current->cap_effective;             
-        cap_raise(current->cap_effective, CAP_SYS_RESOURCE);
+        raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+        if (!raised)
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
         rc = lop->lop_create(ctxt, res, logid, name);
-        current->cap_effective = cap; 
+        if (!raised)
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
         RETURN(rc);
 }
 
-static inline int llog_connect(struct llog_ctxt *ctxt, int count,
+static inline int llog_connect(struct llog_ctxt *ctxt,
                                struct llog_logid *logid, struct llog_gen *gen,
                                struct obd_uuid *uuid)
 {
@@ -476,7 +592,7 @@ static inline int llog_connect(struct llog_ctxt *ctxt, int count,
         if (lop->lop_connect == NULL)
                 RETURN(-EOPNOTSUPP);
 
-        rc = lop->lop_connect(ctxt, count, logid, gen, uuid);
+        rc = lop->lop_connect(ctxt, logid, gen, uuid);
         RETURN(rc);
 }
 

@@ -1,7 +1,39 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *   This file is part of Lustre, http://www.lustre.org
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
+ * Use is subject to license terms.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ *
+ * lustre/include/lustre/lustre_user.h
  *
  * Lustre public user-space interface definitions.
  */
@@ -9,6 +41,7 @@
 #ifndef _LUSTRE_USER_H
 #define _LUSTRE_USER_H
 
+#include <lustre/ll_fiemap.h>
 #if defined(__linux__)
 #include <linux/lustre_user.h>
 #elif defined(__APPLE__)
@@ -29,7 +62,11 @@
 #define EXT3_IOC_SETVERSION             _IOW('f', 4, long)
 #define EXT3_IOC_GETVERSION_OLD         _IOR('v', 1, long)
 #define EXT3_IOC_SETVERSION_OLD         _IOW('v', 2, long)
+#define EXT3_IOC_FIEMAP                 _IOWR('f', 10, struct ll_user_fiemap)
 #endif
+
+/* FIEMAP flags supported by Lustre */
+#define LUSTRE_FIEMAP_FLAGS_COMPAT (FIEMAP_FLAG_SYNC | FIEMAP_FLAG_DEVICE_ORDER)
 
 struct obd_statfs;
 
@@ -77,6 +114,10 @@ struct obd_statfs;
 #define LL_IOC_OBD_STATFS       IOC_OBD_STATFS
 #define IOC_MDC_GETSTRIPE       IOC_MDC_GETFILESTRIPE
 
+/* Do not define O_CHECK_STALE as 0200000000,
+ * which is conflict with MDS_OPEN_OWNEROVERRIDE */
+#define O_CHECK_STALE       020000000  /* hopefully this does not conflict */
+
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
 #define O_JOIN_FILE        0400000000  /* hopefully this does not conflict */
 
@@ -86,12 +127,15 @@ struct obd_statfs;
 
 #define LOV_USER_MAGIC_V1 0x0BD10BD0
 #define LOV_USER_MAGIC    LOV_USER_MAGIC_V1
-
 #define LOV_USER_MAGIC_JOIN 0x0BD20BD0
+#define LOV_USER_MAGIC_V3 0x0BD30BD0
 
 #define LOV_PATTERN_RAID0 0x001
 #define LOV_PATTERN_RAID1 0x002
 #define LOV_PATTERN_FIRST 0x100
+
+#define LOV_MAXPOOLNAME 16
+#define LOV_POOLNAMEF "%.16s"
 
 #define lov_user_ost_data lov_user_ost_data_v1
 struct lov_user_ost_data_v1 {     /* per-stripe data structure */
@@ -113,6 +157,18 @@ struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
         struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 } __attribute__((packed));
 
+struct lov_user_md_v3 {           /* LOV EA user data (host-endian) */
+        __u32 lmm_magic;          /* magic number = LOV_USER_MAGIC_V3 */
+        __u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
+        __u64 lmm_object_id;      /* LOV object ID */
+        __u64 lmm_object_gr;      /* LOV object group */
+        __u32 lmm_stripe_size;    /* size of stripe in bytes */
+        __u16 lmm_stripe_count;   /* num stripes in use for this object */
+        __u16 lmm_stripe_offset;  /* starting stripe offset in lmm_objects */
+        char  lmm_pool_name[LOV_MAXPOOLNAME]; /* pool name */
+        struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
+} __attribute__((packed));
+
 /* Compile with -D_LARGEFILE64_SOURCE or -D_GNU_SOURCE (or #define) to
  * use this.  It is unsafe to #define those values in this header as it
  * is possible the application has already #included <sys/stat.h>. */
@@ -120,7 +176,12 @@ struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
 #define lov_user_mds_data lov_user_mds_data_v1
 struct lov_user_mds_data_v1 {
         lstat_t lmd_st;                 /* MDS stat struct */
-        struct lov_user_md_v1 lmd_lmm;  /* LOV EA user data */
+        struct lov_user_md_v1 lmd_lmm;  /* LOV EA V1 user data */
+} __attribute__((packed));
+
+struct lov_user_mds_data_v3 {
+        lstat_t lmd_st;                 /* MDS stat struct */
+        struct lov_user_md_v3 lmd_lmm;  /* LOV EA V3 user data */
 } __attribute__((packed));
 #endif
 
@@ -232,6 +293,8 @@ struct mds_grp_downcall_data {
 #endif
 
 #endif /* !__KERNEL__ */
+
+#define QFMT_LDISKFS 2 /* pre-1.6.6 compatibility */
 
 typedef enum lustre_quota_version {
         LUSTRE_QUOTA_V1 = 0,
