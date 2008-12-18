@@ -1823,7 +1823,8 @@ test_80a() {
     $CHECKSTAT -t dir $DIR/$tdir || error "$CHECKSTAT -t dir $DIR/$tdir failed"
     rmdir $DIR/$tdir || error "rmdir $DIR/$tdir failed"
     fail mds2
-    stat $DIR/$tdir
+    stat $DIR/$tdir 2&>/dev/null && error "$DIR/$tdir still exist after recovery!"
+    return 0
 }
 run_test 80a "CMD: unlink cross-node dir (fail mds with inode)"
 
@@ -1835,7 +1836,8 @@ test_80b() {
     $CHECKSTAT -t dir $DIR/$tdir || error "$CHECKSTAT -t dir $DIR/$tdir failed"
     rmdir $DIR/$tdir || error "rmdir $DIR/$tdir failed"
     fail mds1
-    stat $DIR/$tdir
+    stat $DIR/$tdir 2&>/dev/null && error "$DIR/$tdir still exist after recovery!"
+    return 0
 }
 run_test 80b "CMD: unlink cross-node dir (fail mds with name)"
 
