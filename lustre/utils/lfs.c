@@ -119,9 +119,9 @@ command_t cmdlist[] = {
          "directory or recursively for all files in a directory tree.\n"
          "usage: getstripe [--obd|-O <uuid>] [--quiet | -q] [--verbose | -v]\n"
          "                 [--recursive | -r] <dir|file> ..."},
-        {"poollist", lfs_poollist, 0,
+        {"pool_list", lfs_poollist, 0,
          "List pools or pool OSTs\n"
-         "usage: poollist <fsname>[.<poolname>] | <pathname>\n"},
+         "usage: pool_list <fsname>[.<poolname>] | <pathname>\n"},
         {"find", lfs_find, 0,
          "To find files that match given parameters recursively in a directory tree.\n"
          "usage: find <dir|file> ... \n"
