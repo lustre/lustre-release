@@ -215,7 +215,7 @@ ksocknal_lib_send_iov (ksock_conn_t *conn, ksock_tx_t *tx)
         struct iovec   *scratchiov = &scratch;
         unsigned int    niov = 1;
 #else
-        struct iovec   *scratchiov = conn->ksnc_tx_scratch_iov;
+        struct iovec   *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
         unsigned int    niov = tx->tx_niov;
 #endif
         struct msghdr msg = {
@@ -260,7 +260,7 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
         struct iovec *scratchiov = &scratch;
         unsigned int  niov = 1;
 #else
-        struct iovec *scratchiov = conn->ksnc_tx_scratch_iov;
+        struct iovec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
         unsigned int  niov = tx->tx_nkiov;
 #endif
         struct msghdr msg = {
@@ -302,7 +302,7 @@ ksocknal_lib_recv_iov (ksock_conn_t *conn)
         struct iovec *scratchiov = &scratch;
         unsigned int  niov = 1;
 #else
-        struct iovec *scratchiov = conn->ksnc_rx_scratch_iov;
+        struct iovec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
         unsigned int  niov = conn->ksnc_rx_niov;
 #endif
         struct iovec *iov = conn->ksnc_rx_iov;
@@ -342,7 +342,7 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
         struct iovec *scratchiov = &scratch;
         unsigned int  niov = 1;
 #else
-        struct iovec *scratchiov = conn->ksnc_rx_scratch_iov;
+        struct iovec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
         unsigned int  niov = conn->ksnc_rx_nkiov;
 #endif
         lnet_kiov_t   *kiov = conn->ksnc_rx_kiov;
@@ -544,7 +544,7 @@ ksocknal_lib_send_iov (ksock_conn_t *conn, ksock_tx_t *tx)
         struct iovec   *scratchiov = &scratch; 
         unsigned int    niov = 1;
 #else 
-        struct iovec   *scratchiov = conn->ksnc_tx_scratch_iov; 
+        struct iovec   *scratchiov = conn->ksnc_scheduler->kss_scratch_iov; 
         unsigned int    niov = tx->tx_niov;
 #endif
         struct socket *sock = conn->ksnc_sock;
@@ -600,7 +600,7 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
         struct iovec *scratchiov = &scratch; 
         unsigned int  niov = 1;
 #else
-        struct iovec *scratchiov = conn->ksnc_tx_scratch_iov; 
+        struct iovec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
         unsigned int  niov = tx->tx_nkiov;
 #endif
         struct socket *sock = conn->ksnc_sock;
@@ -738,7 +738,7 @@ ksocknal_lib_recv_iov (ksock_conn_t *conn)
         struct iovec *scratchiov = &scratch; 
         unsigned int  niov = 1;
 #else 
-        struct iovec *scratchiov = conn->ksnc_rx_scratch_iov; 
+        struct iovec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
         unsigned int  niov = conn->ksnc_rx_niov;
 #endif
         struct iovec *iov = conn->ksnc_rx_iov;
@@ -792,7 +792,7 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
         struct iovec *scratchiov = &scratch; 
         unsigned int  niov = 1;
 #else 
-        struct iovec *scratchiov = conn->ksnc_rx_scratch_iov; 
+        struct iovec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
         unsigned int  niov = conn->ksnc_rx_nkiov;
 #endif
         lnet_kiov_t    *kiov = conn->ksnc_rx_kiov;

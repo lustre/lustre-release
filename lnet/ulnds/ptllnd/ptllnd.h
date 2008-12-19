@@ -140,11 +140,13 @@ typedef struct
 
         int                        plp_max_msg_size;
         int                        plp_refcount;
+        int                        plp_sent_hello:1;
         int                        plp_recvd_hello:1;
         int                        plp_closing:1;
         __u64                      plp_match;
         __u64                      plp_stamp;
         struct list_head           plp_txq;
+        struct list_head           plp_noopq;
         struct list_head           plp_activeq;
 } ptllnd_peer_t;
 
@@ -271,13 +273,13 @@ ptllnd_peer_decref (ptllnd_peer_t *peer)
 static inline lnet_nid_t
 ptllnd_ptl2lnetnid(lnet_ni_t *ni, ptl_nid_t portals_nid)
 {
-	return LNET_MKNID(LNET_NIDNET(ni->ni_nid), portals_nid);
+        return LNET_MKNID(LNET_NIDNET(ni->ni_nid), portals_nid);
 }
 
 static inline ptl_nid_t
 ptllnd_lnet2ptlnid(lnet_nid_t lnet_nid)
 {
-	return LNET_NIDADDR(lnet_nid);
+        return LNET_NIDADDR(lnet_nid);
 }
 
 /*

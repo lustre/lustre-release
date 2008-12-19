@@ -75,6 +75,13 @@ typedef struct                                  /* per scheduler state */
         struct list_head  kss_zombie_noop_txs;  /* zombie noop tx list */
         cfs_waitq_t       kss_waitq;            /* where scheduler sleeps */
         int               kss_nconns;           /* # connections assigned to this scheduler */
+#if !SOCKNAL_SINGLE_FRAG_RX
+        struct page      *kss_rx_scratch_pgs[LNET_MAX_IOV];
+#endif
+#if !SOCKNAL_SINGLE_FRAG_TX || !SOCKNAL_SINGLE_FRAG_RX
+        struct iovec      kss_scratch_iov[LNET_MAX_IOV];
+#endif
+
 } ksock_sched_t;
 
 typedef struct
@@ -113,6 +120,8 @@ typedef struct
         int              *ksnd_enable_csum;     /* enable check sum */
         int              *ksnd_inject_csum_error; /* set non-zero to inject checksum error */
         unsigned int     *ksnd_zc_min_frag;     /* minimum zero copy frag size */
+        int              *ksnd_zc_recv;         /* enable ZC receive (for Chelsio TOE) */
+        int              *ksnd_zc_recv_min_nfrags; /* minimum # of fragments to enable ZC receive */
 #ifdef CPU_AFFINITY
         int              *ksnd_irq_affinity;    /* enable IRQ affinity? */
 #endif
@@ -210,6 +219,7 @@ typedef struct                                  /* transmit packet */
         lnet_kiov_t            *tx_kiov;        /* packet page frags */
         struct ksock_conn      *tx_conn;        /* owning conn */
         lnet_msg_t             *tx_lnetmsg;     /* lnet message for lnet_finalize() */
+        cfs_time_t              tx_deadline;    /* when (in jiffies) tx times out */
         ksock_msg_t             tx_msg;         /* socklnd message buffer */
         int                     tx_desc_size;   /* size of this descriptor */
         union {
@@ -293,13 +303,6 @@ typedef struct ksock_conn
         cfs_atomic_t        ksnc_tx_nob;        /* # bytes queued */
         int                 ksnc_tx_ready;      /* write space */
         int                 ksnc_tx_scheduled;  /* being progressed */
-
-#if !SOCKNAL_SINGLE_FRAG_RX
-        struct iovec        ksnc_rx_scratch_iov[LNET_MAX_IOV];
-#endif
-#if !SOCKNAL_SINGLE_FRAG_TX
-        struct iovec        ksnc_tx_scratch_iov[LNET_MAX_IOV];
-#endif
 } ksock_conn_t;
 
 typedef struct ksock_route
@@ -401,6 +404,7 @@ ksocknal_conn_addref (ksock_conn_t *conn)
 }
 
 extern void ksocknal_queue_zombie_conn (ksock_conn_t *conn);
+extern void ksocknal_finalize_zcreq(ksock_conn_t *conn);
 
 static inline void
 ksocknal_conn_decref (ksock_conn_t *conn)
@@ -434,6 +438,7 @@ ksocknal_connsock_decref (ksock_conn_t *conn)
                 LASSERT (conn->ksnc_closing);
                 libcfs_sock_release(conn->ksnc_sock);
                 conn->ksnc_sock = NULL;
+                ksocknal_finalize_zcreq(conn);
         }
 }
 

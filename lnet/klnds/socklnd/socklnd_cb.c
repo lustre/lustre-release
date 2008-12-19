@@ -444,6 +444,10 @@ ksocknal_check_zc_req(ksock_tx_t *tx)
 
         cfs_spin_lock(&peer->ksnp_lock);
 
+        /* ZC_REQ is going to be pinned to the peer */
+        tx->tx_deadline =
+                cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
+
         LASSERT (tx->tx_msg.ksm_zc_req_cookie == 0);
         tx->tx_msg.ksm_zc_req_cookie = peer->ksnp_zc_next_cookie++;
         list_add_tail(&tx->tx_zc_list, &peer->ksnp_zc_req_list);
@@ -738,10 +742,9 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
         tx->tx_conn = conn;
         ksocknal_conn_addref(conn); /* +1 ref for tx */
 
-        /* 
-         * NB Darwin: SOCK_WMEM_QUEUED()->sock_getsockopt() will take
-         * a blockable lock(socket lock), so SOCK_WMEM_QUEUED can't be
-         * put in spinlock. 
+        /*
+         * FIXME: SOCK_WMEM_QUEUED and SOCK_ERROR could block in __DARWIN8__
+         * but they're used inside spinlocks a lot.
          */
         bufnob = libcfs_sock_wmem_queued(conn->ksnc_sock);
         cfs_spin_lock_bh (&sched->kss_lock);
@@ -961,6 +964,10 @@ ksocknal_launch_packet (lnet_ni_t *ni, ksock_tx_t *tx, lnet_process_id_t id)
 
         if (peer->ksnp_accepting > 0 ||
             ksocknal_find_connecting_route_locked (peer) != NULL) {
+                /* the message is going to be pinned to the peer */
+                tx->tx_deadline =
+                        cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
+                
                 /* Queue the message until a connection is established */
                 list_add_tail (&tx->tx_list, &peer->ksnp_tx_queue);
                 cfs_write_unlock_bh (g_lock);
@@ -1291,6 +1298,16 @@ ksocknal_process_receive (ksock_conn_t *conn)
                         __swab64s(&conn->ksnc_msg.ksm_zc_ack_cookie);
                 }
 
+                if (conn->ksnc_msg.ksm_type != KSOCK_MSG_NOOP &&
+                    conn->ksnc_msg.ksm_type != KSOCK_MSG_LNET) {
+                        CERROR("%s: Unknown message type: %x\n",
+                               libcfs_id2str(conn->ksnc_peer->ksnp_id),
+                               conn->ksnc_msg.ksm_type);
+                        ksocknal_new_packet(conn, 0);
+                        ksocknal_close_conn_and_siblings(conn, -EPROTO);
+                        return (-EPROTO);
+                }
+
                 if (conn->ksnc_msg.ksm_type == KSOCK_MSG_NOOP &&
                     conn->ksnc_msg.ksm_csum != 0 &&     /* has checksum */
                     conn->ksnc_msg.ksm_csum != conn->ksnc_rx_csum) {
@@ -1322,7 +1339,6 @@ ksocknal_process_receive (ksock_conn_t *conn)
                         ksocknal_new_packet (conn, 0);
                         return 0;       /* NOOP is done and just return */
                 }
-                LASSERT (conn->ksnc_msg.ksm_type == KSOCK_MSG_LNET);
 
                 conn->ksnc_rx_state = SOCKNAL_RX_LNET_HEADER;
                 conn->ksnc_rx_nob_wanted = sizeof(ksock_lnet_msg_t);
@@ -2615,6 +2631,31 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
         return (NULL);
 }
 
+static inline void
+ksocknal_flush_stale_txs(ksock_peer_t *peer)
+{
+        ksock_tx_t        *tx;
+        CFS_LIST_HEAD      (stale_txs);
+        
+        cfs_write_lock_bh (&ksocknal_data.ksnd_global_lock);
+
+        while (!list_empty (&peer->ksnp_tx_queue)) {
+                tx = list_entry (peer->ksnp_tx_queue.next,
+                                 ksock_tx_t, tx_list);
+
+                if (!cfs_time_aftereq(cfs_time_current(),
+                                      tx->tx_deadline))
+                        break;
+                
+                list_del (&tx->tx_list);
+                list_add_tail (&tx->tx_list, &stale_txs);
+        }
+
+        cfs_write_unlock_bh (&ksocknal_data.ksnd_global_lock);
+
+        ksocknal_txlist_done(peer->ksnp_ni, &stale_txs, 1);
+}
+
 void
 ksocknal_check_peer_timeouts (int idx)
 {
@@ -2644,8 +2685,50 @@ ksocknal_check_peer_timeouts (int idx)
                         ksocknal_conn_decref(conn);
                         goto again;
                 }
+
+                /* we can't process stale txs right here because we're
+                 * holding only shared lock */
+                if (!list_empty (&peer->ksnp_tx_queue)) {
+                        ksock_tx_t *tx = list_entry (peer->ksnp_tx_queue.next,
+                                                     ksock_tx_t, tx_list);
+
+                        if (cfs_time_aftereq(cfs_time_current(),
+                                             tx->tx_deadline)) {
+
+                                ksocknal_peer_addref(peer);
+                                cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
+                                
+                                ksocknal_flush_stale_txs(peer);
+
+                                ksocknal_peer_decref(peer);
+                                goto again;
+                        }
+                }
         }
 
+        /* print out warnings about stale ZC_REQs */
+        list_for_each_entry(peer, peers, ksnp_list) {
+                ksock_tx_t *tx;
+                int         n = 0;
+                
+                list_for_each_entry(tx, &peer->ksnp_zc_req_list, tx_zc_list) {
+                        if (!cfs_time_aftereq(cfs_time_current(),
+                                              tx->tx_deadline))
+                                break;
+                        n++;
+                }
+
+                if (n != 0) {
+                        tx = list_entry (peer->ksnp_zc_req_list.next,
+                                         ksock_tx_t, tx_zc_list);
+                        CWARN("Stale ZC_REQs for peer %s detected: %d; the "
+                              "oldest (%p) timed out %ld secs ago\n",
+                              libcfs_nid2str(peer->ksnp_id.nid), n, tx,
+                              cfs_duration_sec(cfs_time_current() -
+                                               tx->tx_deadline));
+                }
+        }
+        
         cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
 }
 

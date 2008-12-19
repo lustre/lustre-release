@@ -1060,6 +1060,7 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
         }
 
         memset (conn, 0, sizeof (*conn));
+
         conn->ksnc_peer = NULL;
         conn->ksnc_route = NULL;
         conn->ksnc_sock = sock;
@@ -1506,6 +1507,41 @@ ksocknal_peer_failed (ksock_peer_t *peer)
 }
 
 void
+ksocknal_finalize_zcreq(ksock_conn_t *conn)
+{
+        ksock_peer_t     *peer = conn->ksnc_peer;
+        ksock_tx_t       *tx;
+        ksock_tx_t       *tmp;
+        CFS_LIST_HEAD    (zlist);
+
+        /* NB safe to finalize TXs because closing of socket will
+         * abort all buffered data */
+        LASSERT (conn->ksnc_sock == NULL);
+
+        cfs_spin_lock(&peer->ksnp_lock);
+
+        list_for_each_entry_safe(tx, tmp, &peer->ksnp_zc_req_list, tx_zc_list) {
+                if (tx->tx_conn != conn)
+                        continue;
+
+                LASSERT (tx->tx_msg.ksm_zc_req_cookie != 0);
+
+                tx->tx_msg.ksm_zc_req_cookie = 0;
+                list_del(&tx->tx_zc_list);
+                list_add(&tx->tx_zc_list, &zlist);
+        }
+
+        cfs_spin_unlock(&peer->ksnp_lock);
+
+        while (!list_empty(&zlist)) {
+                tx = list_entry(zlist.next, ksock_tx_t, tx_zc_list);
+
+                list_del(&tx->tx_zc_list);
+                ksocknal_tx_decref(tx);
+        }
+}
+
+void
 ksocknal_terminate_conn (ksock_conn_t *conn)
 {
         /* This gets called by the reaper (guaranteed thread context) to
@@ -1515,10 +1551,6 @@ ksocknal_terminate_conn (ksock_conn_t *conn)
         ksock_peer_t     *peer = conn->ksnc_peer;
         ksock_sched_t    *sched = conn->ksnc_scheduler;
         int               failed = 0;
-        struct list_head *tmp;
-        struct list_head *nxt;
-        ksock_tx_t       *tx;
-        LIST_HEAD        (zlist);
 
         LASSERT(conn->ksnc_closing);
 
@@ -1540,30 +1572,6 @@ ksocknal_terminate_conn (ksock_conn_t *conn)
         }
 
         cfs_spin_unlock_bh (&sched->kss_lock);
-
-        cfs_spin_lock(&peer->ksnp_lock);
-
-        list_for_each_safe(tmp, nxt, &peer->ksnp_zc_req_list) {
-                tx = list_entry(tmp, ksock_tx_t, tx_zc_list);
-
-                if (tx->tx_conn != conn)
-                        continue;
-
-                LASSERT (tx->tx_msg.ksm_zc_req_cookie != 0);
-
-                tx->tx_msg.ksm_zc_req_cookie = 0;
-                list_del(&tx->tx_zc_list);
-                list_add(&tx->tx_zc_list, &zlist);
-        }
-
-        cfs_spin_unlock(&peer->ksnp_lock);
-
-        list_for_each_safe(tmp, nxt, &zlist) {
-                tx = list_entry(tmp, ksock_tx_t, tx_zc_list);
-
-                list_del(&tx->tx_zc_list);
-                ksocknal_tx_decref(tx);
-        }
 
         /* serialise with callbacks */
         cfs_write_lock_bh (&ksocknal_data.ksnd_global_lock);
