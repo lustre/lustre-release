@@ -491,8 +491,7 @@ stop() {
     HOST=`facet_active_host $facet`
     [ -z $HOST ] && echo stop: no host for $facet && return 0
 
-    running=$(do_facet ${facet} "grep -c ${MOUNT%/*}/${facet}' ' /proc/mounts") || \
-        return $? 
+    running=$(do_facet ${facet} "grep -c ${MOUNT%/*}/${facet}' ' /proc/mounts") || true
     if [ ${running} -ne 0 ]; then
         echo "Stopping ${MOUNT%/*}/${facet} (opts:$@)"
         do_facet ${facet} umount -d $@ ${MOUNT%/*}/${facet}
