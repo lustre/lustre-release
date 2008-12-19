@@ -3222,7 +3222,8 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
 
 static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
                      __u32 type, ldlm_policy_data_t *policy, __u32 mode,
-                     int *flags, void *data, struct lustre_handle *lockh)
+                     int *flags, void *data, struct lustre_handle *lockh,
+                     int *n_matches)
 {
         struct ldlm_res_id res_id;
         struct obd_device *obd = exp->exp_obd;
@@ -3254,7 +3255,8 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
                         ldlm_lock_addref(lockh, LCK_PR);
                         ldlm_lock_decref(lockh, LCK_PW);
                 }
-                RETURN(rc);
+                if (n_matches != NULL)
+                        (*n_matches)++;
         }
 
         RETURN(rc);
