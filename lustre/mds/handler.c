@@ -2275,7 +2275,6 @@ err_llog:
 
 int mds_postrecov(struct obd_device *obd)
 {
-        struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
 
@@ -2283,9 +2282,6 @@ int mds_postrecov(struct obd_device *obd)
                 RETURN(0);
 
         LASSERT(!obd->obd_recovering);
-        ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
-        LASSERT(ctxt != NULL);
-        llog_ctxt_put(ctxt);
 
         /* clean PENDING dir */
         rc = mds_cleanup_pending(obd);
