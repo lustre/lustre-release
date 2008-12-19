@@ -636,9 +636,11 @@ test_32a() { # bug 11270
         local p="$TMP/sanityN-$TESTNAME.parameters"
         save_lustre_params $HOSTNAME osc.*.lockless_truncate > $p
         cancel_lru_locks osc
-        clear_osc_stats
         enable_lockless_truncate 1
+        rm -f $DIR1/$tfile
+        lfs setstripe -c -1 $DIR1/$tfile
         dd if=/dev/zero of=$DIR1/$tfile count=10 bs=1M > /dev/null 2>&1
+        clear_osc_stats
 
         log "checking cached lockless truncate"
         $TRUNCATE $DIR1/$tfile 8000000
