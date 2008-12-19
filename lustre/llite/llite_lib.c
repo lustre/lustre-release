@@ -1316,11 +1316,10 @@ static int ll_setattr_do_truncate(struct inode *inode, loff_t new_size)
         ldlm_policy_data_t policy = { .l_extent = {new_size,
                                                    OBD_OBJECT_EOF } };
         struct lustre_handle lockh = { 0 };
-        int local_lock = 0; /* 0 - no local lock;
+        int local_lock = 1; /* 0 - no local lock;
                              * 1 - lock taken by lock_extent;
                              * 2 - by obd_match*/
         int ast_flags;
-        int err;
         ENTRY;
 
         UNLOCK_INODE_MUTEX(inode);
@@ -1328,24 +1327,34 @@ static int ll_setattr_do_truncate(struct inode *inode, loff_t new_size)
 
         if (sbi->ll_lockless_truncate_enable && 
             (sbi->ll_lco.lco_flags & OBD_CONNECT_TRUNCLOCK)) {
+                int n_matches = 0;
+
                 ast_flags = LDLM_FL_BLOCK_GRANTED;
                 rc = obd_match(sbi->ll_osc_exp, lsm, LDLM_EXTENT,
-                               &policy, LCK_PW, &ast_flags, inode, &lockh);
+                               &policy, LCK_PW, &ast_flags, inode, &lockh,
+                               &n_matches);
                 if (rc > 0) {
                         local_lock = 2;
                         rc = 0;
-                } else if (rc == 0) {
-                        rc = ll_file_punch(inode, new_size, 1);
+                } else {
+                        /* clear the lock handle as it not cleared
+                         * by obd_match if no matched lock found */
+                        lockh.cookie = 0;
+                        if (rc == 0 && n_matches == 0) {
+                                local_lock = 0;
+                                rc = ll_file_punch(inode, new_size, 1);
+                        }
                 }
-        } else {
+        }
+        if (local_lock == 1) {
                 /* XXX when we fix the AST intents to pass the discard-range
                  * XXX extent, make ast_flags always LDLM_AST_DISCARD_DATA
                  * XXX here. */
                 ast_flags = (new_size == 0) ? LDLM_AST_DISCARD_DATA : 0;
                 rc = ll_extent_lock(NULL, inode, lsm, LCK_PW, &policy,
                                     &lockh, ast_flags);
-                if (likely(rc == 0))
-                        local_lock = 1;
+                if (unlikely(rc != 0))
+                        local_lock = 0;
         }
 
         LOCK_INODE_MUTEX(inode);
@@ -1366,10 +1375,11 @@ static int ll_setattr_do_truncate(struct inode *inode, loff_t new_size)
                 }
         }
         if (local_lock) {
-                if (local_lock == 2)
-                        err = obd_cancel(sbi->ll_osc_exp, lsm, LCK_PW, &lockh);
-                else
-                        err = ll_extent_unlock(NULL, inode, lsm, LCK_PW, &lockh);
+                int err;
+
+                err = (local_lock == 2) ?
+                        obd_cancel(sbi->ll_osc_exp, lsm, LCK_PW, &lockh):
+                        ll_extent_unlock(NULL, inode, lsm, LCK_PW, &lockh);
                 if (unlikely(err != 0)){
                         CERROR("extent unlock failed: err=%d,"
                                " unlock method =%d\n", err, local_lock);

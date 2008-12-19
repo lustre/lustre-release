@@ -1234,7 +1234,8 @@ static inline int obd_enqueue(struct obd_export *exp,
 
 static inline int obd_match(struct obd_export *exp, struct lov_stripe_md *ea,
                             __u32 type, ldlm_policy_data_t *policy, __u32 mode,
-                            int *flags, void *data, struct lustre_handle *lockh)
+                            int *flags, void *data, struct lustre_handle *lockh,
+                            int *n_matches)
 {
         int rc;
         ENTRY;
@@ -1243,7 +1244,7 @@ static inline int obd_match(struct obd_export *exp, struct lov_stripe_md *ea,
         EXP_COUNTER_INCREMENT(exp, match);
 
         rc = OBP(exp->exp_obd, match)(exp, ea, type, policy, mode, flags, data,
-                                      lockh);
+                                      lockh, n_matches);
         RETURN(rc);
 }
 
