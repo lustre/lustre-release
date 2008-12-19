@@ -2143,7 +2143,8 @@ out:
 
 static int lov_match(struct obd_export *exp, struct lov_stripe_md *lsm,
                      __u32 type, ldlm_policy_data_t *policy, __u32 mode,
-                     int *flags, void *data, struct lustre_handle *lockh)
+                     int *flags, void *data, struct lustre_handle *lockh,
+                     int *n_matches)
 {
         struct lov_request_set *set;
         struct obd_info oinfo;
@@ -2176,7 +2177,8 @@ static int lov_match(struct obd_export *exp, struct lov_stripe_md *lsm,
 
                 rc = obd_match(lov->lov_tgts[req->rq_idx]->ltd_exp,
                                req->rq_oi.oi_md, type, &sub_policy,
-                               mode, &lov_flags, data, lov_lockhp);
+                               mode, &lov_flags, data, lov_lockhp,
+                               n_matches);
                 rc = lov_update_match_set(set, req, rc);
                 if (rc <= 0)
                         break;
