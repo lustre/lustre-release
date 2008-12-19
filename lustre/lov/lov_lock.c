@@ -789,19 +789,48 @@ static int lock_lock_multi_match()
 }
 #endif
 
-static int lov_is_same_stripe(struct lov_object *lov, int stripe,
-                              const struct cl_lock_descr *descr)
+/**
+ * Check if the extent region \a descr is covered by \a child against the
+ * specific \a stripe.
+ */
+static int lov_lock_stripe_is_matching(const struct lu_env *env,
+                                       struct lov_object *lov, int stripe,
+                                       const struct cl_lock_descr *child,
+                                       const struct cl_lock_descr *descr)
 {
         struct lov_stripe_md *lsm = lov_r0(lov)->lo_lsm;
         obd_off start;
         obd_off end;
+        int result;
 
+        if (lov_r0(lov)->lo_nr == 1)
+                return cl_lock_ext_match(child, descr);
+
+        /*
+         * For a multi-stripes object:
+         * - make sure the descr only covers child's stripe, and
+         * - check if extent is matching.
+         */
         start = cl_offset(&lov->lo_cl, descr->cld_start);
         end   = cl_offset(&lov->lo_cl, descr->cld_end + 1) - 1;
-        return
-                end - start <= lsm->lsm_stripe_size &&
-                stripe == lov_stripe_number(lsm, start) &&
-                stripe == lov_stripe_number(lsm, end);
+        result = end - start <= lsm->lsm_stripe_size &&
+                 stripe == lov_stripe_number(lsm, start) &&
+                 stripe == lov_stripe_number(lsm, end);
+        if (result) {
+                struct cl_lock_descr *subd = &lov_env_info(env)->lti_ldescr;
+                obd_off sub_start;
+                obd_off sub_end;
+
+                subd->cld_obj  = NULL;   /* don't need sub object at all */
+                subd->cld_mode = descr->cld_mode;
+                result = lov_stripe_intersects(lsm, stripe, start, end,
+                                               &sub_start, &sub_end);
+                LASSERT(result);
+                subd->cld_start = cl_index(child->cld_obj, sub_start);
+                subd->cld_end   = cl_index(child->cld_obj, sub_end);
+                result = cl_lock_ext_match(child, subd);
+        }
+        return result;
 }
 
 /**
@@ -828,19 +857,11 @@ static int lov_lock_fits_into(const struct lu_env *env,
         ENTRY;
 
         if (lov->lls_nr == 1) {
-                /*
-                 * If a lock is on a single stripe, it's enough to check that
-                 * @need lock matches actually granted stripe lock, and...
-                 */
-                result = cl_lock_ext_match(&lov->lls_sub[0].sub_got, need);
-                if (result && lov_r0(obj)->lo_nr > 1)
-                        /*
-                         * ... @need is on the same stripe, if multiple
-                         * stripes are possible at all for this object.
-                         */
-                        result = lov_is_same_stripe(cl2lov(slice->cls_obj),
-                                                    lov->lls_sub[0].sub_stripe,
-                                                    need);
+                struct cl_lock_descr *got = &lov->lls_sub[0].sub_got;
+                result = lov_lock_stripe_is_matching(env,
+                                                     cl2lov(slice->cls_obj),
+                                                     lov->lls_sub[0].sub_stripe,
+                                                     got, need);
         } else if (io->ci_type != CIT_TRUNC && io->ci_type != CIT_MISC &&
                    !cl_io_is_append(io) && need->cld_mode != CLM_PHANTOM)
                 /*
