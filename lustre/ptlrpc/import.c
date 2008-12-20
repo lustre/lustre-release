@@ -199,13 +199,13 @@ void ptlrpc_deactivate_import(struct obd_import *imp)
         ptlrpc_deactivate_and_unlock_import(imp);
 }
 
-static unsigned int 
+static unsigned int
 ptlrpc_inflight_deadline(struct ptlrpc_request *req, time_t now)
 {
         long dl;
 
         if (!(((req->rq_phase == RQ_PHASE_RPC) && !req->rq_waiting) ||
-              (req->rq_phase == RQ_PHASE_BULK) || 
+              (req->rq_phase == RQ_PHASE_BULK) ||
               (req->rq_phase == RQ_PHASE_NEW)))
                 return 0;
 
@@ -259,7 +259,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
          * If this is an invalid MGC connection, then don't bother
          * waiting for imp_inflight to drop to 0.
          */
-        if (imp->imp_invalid && imp->imp_recon_bk && !imp->imp_obd->obd_no_recov)
+        if (imp->imp_invalid && imp->imp_recon_bk &&!imp->imp_obd->obd_no_recov)
                 goto out;
 
         if (!imp->imp_invalid || imp->imp_obd->obd_no_recov)
@@ -268,20 +268,20 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
         LASSERT(imp->imp_invalid);
 
         /* Wait forever until inflight == 0. We really can't do it another
-         * way because in some cases we need to wait for very long reply 
+         * way because in some cases we need to wait for very long reply
          * unlink. We can't do anything before that because there is really
          * no guarantee that some rdma transfer is not in progress right now. */
         do {
-                /* Calculate max timeout for waiting on rpcs to error 
+                /* Calculate max timeout for waiting on rpcs to error
                  * out. Use obd_timeout if calculated value is smaller
                  * than it. */
                 timeout = ptlrpc_inflight_timeout(imp);
                 timeout += timeout / 3;
-                
+
                 if (timeout == 0)
                         timeout = obd_timeout;
-                
-                CDEBUG(D_RPCTRACE, "Sleeping %d sec for inflight to error out\n",
+
+                CDEBUG(D_RPCTRACE,"Sleeping %d sec for inflight to error out\n",
                        timeout);
 
                 /* Wait for all requests to error out and call completion
@@ -300,16 +300,16 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
 
                         spin_lock(&imp->imp_lock);
                         list_for_each_safe(tmp, n, &imp->imp_sending_list) {
-                                req = list_entry(tmp, struct ptlrpc_request, 
+                                req = list_entry(tmp, struct ptlrpc_request,
                                         rq_list);
-                                DEBUG_REQ(D_ERROR, req, "still on sending list");
+                                DEBUG_REQ(D_ERROR, req,"still on sending list");
                         }
                         list_for_each_safe(tmp, n, &imp->imp_delayed_list) {
-                                req = list_entry(tmp, struct ptlrpc_request, 
+                                req = list_entry(tmp, struct ptlrpc_request,
                                         rq_list);
-                                DEBUG_REQ(D_ERROR, req, "still on delayed list");
+                                DEBUG_REQ(D_ERROR, req,"still on delayed list");
                         }
-                        
+
                         if (atomic_read(&imp->imp_unregistering) == 0) {
                                 /* We know that only "unregistering" rpcs may
                                  * still survive in sending or delaying lists
@@ -318,7 +318,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                                  * is no unregistering and inflight != 0 this
                                  * is bug. */
                                 LASSERT(atomic_read(&imp->imp_inflight) == 0);
-                                
+
                                 /* Let's save one loop as soon as inflight have
                                  * dropped to zero. No new inflights possible at
                                  * this point. */
@@ -812,8 +812,8 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 if (memcmp(&imp->imp_remote_handle,
                            lustre_msg_get_handle(request->rq_repmsg),
                            sizeof(imp->imp_remote_handle))) {
-                        int level = msg_flags & MSG_CONNECT_RECOVERING ? D_HA :
-                                                                         D_WARNING;
+                        int level = msg_flags & MSG_CONNECT_RECOVERING ?
+                                D_HA : D_WARNING;
 
                         /* Bug 16611/14775: if server handle have changed,
                          * that means some sort of disconnection happened.
@@ -823,14 +823,14 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                          * participate since we can reestablish all of our state
                          * with server again */
                         CDEBUG(level,"%s@%s changed server handle from "
-                                     LPX64" to "LPX64"%s \n" "but is still in recovery \n",
+                                     LPX64" to "LPX64"%s\n",
                                      obd2cli_tgt(imp->imp_obd),
                                      imp->imp_connection->c_remote_uuid.uuid,
                                      imp->imp_remote_handle.cookie,
                                      lustre_msg_get_handle(request->rq_repmsg)->
                                                                         cookie,
                                      (MSG_CONNECT_RECOVERING & msg_flags) ?
-                                         "but is still in recovery" : "");
+                                         " but is still in recovery" : "");
 
                         imp->imp_remote_handle =
                                      *lustre_msg_get_handle(request->rq_repmsg);
@@ -955,7 +955,8 @@ finish:
                 }
                 old_connect_flags = exp->exp_connect_flags;
                 exp->exp_connect_flags = ocd->ocd_connect_flags;
-                imp->imp_obd->obd_self_export->exp_connect_flags = ocd->ocd_connect_flags;
+                imp->imp_obd->obd_self_export->exp_connect_flags =
+                        ocd->ocd_connect_flags;
                 class_export_put(exp);
 
                 obd_import_event(imp->imp_obd, imp, IMP_EVENT_OCD);
@@ -1035,7 +1036,8 @@ finish:
                  * disable lru_resize, etc. */
                 if (old_connect_flags != exp->exp_connect_flags ||
                     aa->pcaa_initial_connect) {
-                        CWARN("Reseting ns_connect_flags to server flags: "LPU64"\n", 
+                        CWARN("%s: Resetting ns_connect_flags to server flags: "
+                              LPX64"\n", imp->imp_obd->obd_name,
                               ocd->ocd_connect_flags);
                         imp->imp_obd->obd_namespace->ns_connect_flags =
                                 ocd->ocd_connect_flags;
@@ -1235,9 +1237,9 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 
 #ifdef __KERNEL__
                 /* bug 17802:  XXX client_disconnect_export vs connect request
-                 * race. if client will evicted at this time, we start invalidate
-                 * thread without referece to import and import can be freed
-                 * at same time. */
+                 * race. if client will evicted at this time, we start
+                 * invalidate thread without referece to import and import can
+                 * be freed at same time. */
                 class_import_get(imp);
                 rc = cfs_kernel_thread(ptlrpc_invalidate_import_thread, imp,
                                    CLONE_VM | CLONE_FILES);
