@@ -1913,6 +1913,10 @@ void ptlrpc_free_committed(struct obd_import *imp)
                 LASSERT(req != last_req);
                 last_req = req;
 
+                if (req->rq_transno == 0) {
+                        DEBUG_REQ(D_EMERG, req, "zero transno during replay");
+                        LBUG();
+                }
                 if (req->rq_import_generation < imp->imp_generation) {
                         DEBUG_REQ(D_RPCTRACE, req, "free request with old gen");
                         GOTO(free_req, 0);
@@ -2029,6 +2033,11 @@ void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
         struct list_head *tmp;
 
         LASSERT_SPIN_LOCKED(&imp->imp_lock);
+
+        if (req->rq_transno == 0) {
+                DEBUG_REQ(D_EMERG, req, "saving request with zero transno");
+                LBUG();
+        }
 
         /* clear this for new requests that were resent as well
            as resent replayed requests. */
@@ -2485,7 +2494,7 @@ static spinlock_t ptlrpc_last_xid_lock;
  * NOT want to have an XID per target or similar.
  *
  * To avoid an unlikely collision between match bits after a client reboot
- * (which would cause old to be delivered into the wrong buffer) we initialize
+ * (which would deliver old data into the wrong RDMA buffer) initialize
  * the XID based on the current time, assuming a maximum RPC rate of 1M RPC/s.
  * If the time is clearly incorrect, we instead use a 62-bit random number.
  * In the worst case the random number will overflow 1M RPCs per second in
@@ -2502,7 +2511,7 @@ void ptlrpc_init_xid(void)
                 ptlrpc_last_xid >>= 2;
                 ptlrpc_last_xid |= (1ULL << 61);
         } else {
-                ptlrpc_last_xid = (now << 20);
+                ptlrpc_last_xid = (__u64)now << 20;
         }
 }
 
