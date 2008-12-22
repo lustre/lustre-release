@@ -1,4 +1,4 @@
-01-15-2009 Sun Microsystems, Inc.
+2009-01-15 Sun Microsystems, Inc.
 	* version 1.6.7
 	* Support for kernels:
 	 2.6.5-7.314 (SLES 9),
@@ -48,8 +48,7 @@ Severity   : major
 Frequency  : on remount
 Bugzilla   : 18018
 Description: external journal device not working after the remount
-Details    : clear dev_rdonly flag for external journal devices in 
-             blkdev_put()
+Details    : clear dev_rdonly flag for external journal devices in blkdev_put()
 
 Severity   : minor
 Frequency  : rare
@@ -57,8 +56,8 @@ Bugzilla   : 17802
 Description: shutdown vs evict race
 Details    : client_disconnect_export vs connect request race.
 	     if client will evicted at this time - we start invalidate
-             thread without referece to import and import can be freed
-             at same time.
+	     thread without referece to import and import can be freed
+	     at same time.
 
 Severity   : minor
 Frequency  : always
@@ -268,8 +267,8 @@ Bugzilla   : 16522
 Description: Watchdog triggered on MDS failover
 Details    : enable OBD_CONNECT_MDT flag when connecting from the MDS so that
 	     the OSTs know that the MDS "UUID" can be reused for the same export
-	     from a different NID, so we do not need to wait for the export to be
-	     evicted
+	     from a different NID, so we do not need to wait for the export to
+	     be evicted.
 
 --------------------------------------------------------------------------
 
