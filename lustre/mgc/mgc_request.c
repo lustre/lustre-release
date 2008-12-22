@@ -742,12 +742,13 @@ static int mgc_target_register(struct obd_export *exp,
                 RETURN(-ENOMEM);
 
         req_mti = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*req_mti));
-        if (!req_mti)
+        if (!req_mti) {
+                ptlrpc_req_finished(req);
                 RETURN(-ENOMEM);
+        }
+
         memcpy(req_mti, mti, sizeof(*req_mti));
-
         ptlrpc_req_set_repsize(req, 2, rep_size);
-
         CDEBUG(D_MGC, "register %s\n", mti->mti_svname);
 
         rc = ptlrpc_queue_wait(req);
@@ -781,11 +782,14 @@ static int mgc_set_mgs_param(struct obd_export *exp,
                 RETURN(-ENOMEM);
 
         req_msp = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*req_msp));
-        if (!req_msp)
+        if (!req_msp) {
+                ptlrpc_req_finished(req);
                 RETURN(-ENOMEM);
+        }
 
         memcpy(req_msp, msp, sizeof(*req_msp));
         ptlrpc_req_set_repsize(req, 2, rep_size);
+
         rc = ptlrpc_queue_wait(req);
         if (!rc) {
                 rep_msp = lustre_swab_repbuf(req, REPLY_REC_OFF,
