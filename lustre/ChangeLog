@@ -49,11 +49,11 @@ Frequency  : race on file read and write
 Bugzilla   : 16417
 Description: Lustre doesn't delete files
 Details    : Clients drop lock reference and release openhandle when they find
-             stale inode.
+	     stale inode.
 
 
 --------------------------------------------------------------------------
-01-15-2009 Sun Microsystems, Inc.
+2009-01-15 Sun Microsystems, Inc.
 	* version 1.6.7
 	* Support for kernels:
 	 2.6.5-7.314 (SLES 9),
@@ -112,8 +112,8 @@ Bugzilla   : 17802
 Description: shutdown vs evict race
 Details    : client_disconnect_export vs connect request race.
 	     if client will evicted at this time - we start invalidate
-             thread without referece to import and import can be freed
-             at same time.
+	     thread without referece to import and import can be freed
+	     at same time.
 
 Severity   : minor
 Frequency  : always
@@ -323,8 +323,8 @@ Bugzilla   : 16522
 Description: Watchdog triggered on MDS failover
 Details    : enable OBD_CONNECT_MDT flag when connecting from the MDS so that
 	     the OSTs know that the MDS "UUID" can be reused for the same export
-	     from a different NID, so we do not need to wait for the export to be
-	     evicted
+	     from a different NID, so we do not need to wait for the export to
+	     be evicted.
 
 --------------------------------------------------------------------------
 
@@ -384,16 +384,16 @@ Bugzilla   : 15139
 Frequency  : rare
 Description: avoid ASSERTION(client_stat->nid_exp_ref_count == 0) failed
 Details    : release reference to stats when client disconnected, not
-             when export destroyed for avoid races when client destroyed
-             after main ost export.
+	     when export destroyed for avoid races when client destroyed
+	     after main ost export.
 
 Severity   : normal
 Bugzilla   : 16679
 Description: more cleanup in mds_lov
 Details    : add workaround for get valid ost count for avoid warnings about
-             drop too big messages, not init llog cat under semphore which
-             can be blocked on reconnect and break normal replay, fix access
-             to wrong pointer.
+	     drop too big messages, not init llog cat under semphore which
+	     can be blocked on reconnect and break normal replay, fix access
+	     to wrong pointer.
 
 Severity   : normal
 Bugzilla   : 16006
@@ -403,9 +403,9 @@ Details    : restore missing copy oi_flags to lov requests.
 Severity   : enhancement
 Bugzilla   : 16581
 Description: Add man pages for llobdstat(8), llstat(8), plot-llstat(8),
-           : l_getgroups(8), lst(8), routerstat(8)
+	     l_getgroups(8), lst(8), routerstat(8)
 Details    : included man pages for llobdstat(8), llstat(8),
-           : plot-llstat(8), l_getgroups(8), lst(8), routerstat(8)
+	     plot-llstat(8), l_getgroups(8), lst(8), routerstat(8)
 
 Severity   : enhancement
 Bugzilla   : 16208
@@ -422,9 +422,9 @@ Description: Update to RHEL4 kernel-2.6.9-67.0.22.EL.
 Severity   : enhancement
 Bugzilla   : 16091
 Description: configure's --enable-quota should check the
-           : kernel .config for CONFIG_QUOTA
+	     kernel .config for CONFIG_QUOTA
 Details    : configure is terminated if --enable-quota is passed but
-           : no quota support is in kernel
+	     no quota support is in kernel
 
 Severity   : normal
 Bugzilla   : 16317
@@ -435,8 +435,8 @@ Severity   : normal
 Bugzilla   : 16080
 Description: don't fail open with -ERANGE
 Details    : if client connected until mds will be know about real ost count
-             get LOV EA can be fail because mds not allocate enougth buffer
-             for LOV EA.
+	     get LOV EA can be fail because mds not allocate enougth buffer
+	     for LOV EA.
 
 Severity   : normal
 Frequency  : only for filesystems larger than 8TB
@@ -701,7 +701,7 @@ Description: add -gid, -group, -uid, -user options to lfs find
 
 Severity   : enhancement
 Bugzilla   : 15284
-Description: ll_recover_lost_found_objs - rename objects in lost+found to object ID
+Description: ll_recover_lost_found_objs - rename lost+found objects to object ID
 Details    : OST crashes and subsequent e2fsck can lead to objects being moved
 	     to lost+found directory. Using the "ll_recover_lost_found_objs"
 	     tool, these objects can be retrieved and data can be salvaged
@@ -744,7 +744,7 @@ Details    : If insertion of an extent fails, then discard the inode
 Severity   : normal
 Bugzilla   : 16199
 Description: don't always update ctime in ext3_xattr_set_handle()
-Details    : Current xattr code updates the inode ctime in ext3_xattr_set_handle.
+Details    : Current xattr code updates inode ctime in ext3_xattr_set_handle()
 	     In some cases the ctime should not be updated, for example for
 	     2.0->1.8 compatibility it is necessary to delete an xattr and it
 	     should not update the ctime.
@@ -815,14 +815,13 @@ Severity   : enhancement
 Bugzilla   : 10555
 Description: Add a FIEMAP(FIle Extent MAP) ioctl for ldiskfs
 Details    : FIEMAP ioctl will allow an application to efficiently fetch the
-             extent information of a file. It can be used to map logical blocks
-             in a file to physical blocks in the block device.
+	     extent information of a file. It can be used to map logical blocks
+	     in a file to physical blocks in the block device.
 
 Severity   : minor
 Bugzilla   : 16717
 Description: LBUG when llog conf file is full
-Details    : When llog bitmap is full, ENOSPC should be returned for plain
-	     log.
+Details    : When llog bitmap is full, ENOSPC should be returned for plain log.
 
 Severity   : normal
 Frequency  : only with adaptive timeout enabled
