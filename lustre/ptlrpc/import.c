@@ -1035,8 +1035,8 @@ finish:
                  * disable lru_resize, etc. */
                 if (old_connect_flags != exp->exp_connect_flags ||
                     aa->pcaa_initial_connect) {
-                        CWARN("Reseting ns_connect_flags to server flags: "LPU64"\n", 
-                              ocd->ocd_connect_flags);
+                        CDEBUG(D_HA, "Resetting ns_connect_flags to server "
+                               "flags: "LPU64"\n", ocd->ocd_connect_flags);
                         imp->imp_obd->obd_namespace->ns_connect_flags =
                                 ocd->ocd_connect_flags;
                         imp->imp_obd->obd_namespace->ns_orig_connect_flags =
