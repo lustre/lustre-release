@@ -1,4 +1,4 @@
-tbd Sun Microsystems, Inc.
+2008-12-31 Sun Microsystems, Inc.
 	* version 1.8.0
 	* Support for kernels:
 	 2.6.5-7.314 (SLES 9),
@@ -48,7 +48,7 @@ Frequency  : on remount
 Bugzilla   : 18018
 Description: external journal device not working after the remount
 Details    : clear dev_rdonly flag for external journal devices in
-             blkdev_put()
+	     blkdev_put()
 
 Severity   : minor
 Frequency  : rare
@@ -56,8 +56,8 @@ Bugzilla   : 17802
 Description: shutdown vs evict race
 Details    : client_disconnect_export vs connect request race.
 	     if client will evicted at this time - we start invalidate
-             thread without referece to import and import can be freed
-             at same time.
+	     thread without referece to import and import can be freed
+	     at same time.
 
 Severity   : minor
 Frequency  : always
@@ -70,9 +70,9 @@ Frequency  : rare
 Bugzilla   : 16081
 Description: don't skip ost target if they assigned to file
 Details    : Drop slow OSCs if we can, but not for requested start idx.
-             This means "if OSC is slow and it is not the requested
-             start OST, then it can be skipped, otherwise skip it only
-             if it is inactive/recovering/out-of-space.
+	     This means "if OSC is slow and it is not the requested
+	     start OST, then it can be skipped, otherwise skip it only
+	     if it is inactive/recovering/out-of-space.
 
 Severity   : enhancement
 Bugzilla   : 17201
@@ -83,9 +83,9 @@ Frequency  : rare, need acl's on inode.
 Bugzilla   : 16492
 Description: client can't handle ost additional correctly
 Details    : if ost was added after client connected to mds client can have 
-             hit lnet_try_match_md ... to big messages to wide striped files.
-             in this case need teach client to handle config events about add
-             lov target and update client max ea size at that event.
+	     hit lnet_try_match_md ... to big messages to wide striped files.
+	     in this case need teach client to handle config events about add
+	     lov target and update client max ea size at that event.
 
 Severity   : enhancement
 Bugzilla   : 17374
@@ -107,9 +107,9 @@ Frequency  : rare
 Bugzilla   : 16492
 Description: mds is deadlocked
 Details    : in rare cases, inode in catalog can have i_no less than have parent
-	     i_no, this produce wrong order for locking during open, and parallel
-	     unlink can be lock open. this need teach mds_open to grab locks in
-	     resource id order, not at parent -> child order.
+	     i_no, this produce wrong order for locking during open, and
+	     parallel unlink can be lock open. this need teach mds_open to
+	     grab locks in resource id order, not at parent -> child order.
 
 Severity   : enhancement
 Bugzilla   : 1819
@@ -610,7 +610,7 @@ Details    : If insertion of an extent fails, then discard the inode
 Severity   : normal
 Bugzilla   : 16199
 Description: don't always update ctime in ext3_xattr_set_handle()
-Details    : Current xattr code updates the inode ctime in ext3_xattr_set_handle.
+Details    : Current xattr code updates inode ctime in ext3_xattr_set_handle()
 	     In some cases the ctime should not be updated, for example for
 	     2.0->1.8 compatibility it is necessary to delete an xattr and it
 	     should not update the ctime.
@@ -731,10 +731,10 @@ Details    : In case of memory pressure, list_del() can be called twice on
 
 Severity   : normal
 Bugzilla   : 17026
-Description: (ptllnd_peer.c:557:kptllnd_peer_check_sends()) ASSERTION(!in_interrupt()) failed
-Details    : fix stack overflow in the distributed lock manager by defering export
-	     eviction after a failed ast to the elt thread instead of handling
-	     it in the dlm interpret routine.
+Description: kptllnd_peer_check_sends()) ASSERTION(!in_interrupt()) failed
+Details    : fix stack overflow in the distributed lock manager by defering
+	     export eviction after a failed ast to the elt thread instead of
+	     handling it in the dlm interpret routine.
 
 Severity   : enhancement
 Bugzilla   : 12800
@@ -752,10 +752,10 @@ Details    : Checks validity of on-disk block bitmap. Also it does better
 Severity   : normal
 Bugzilla   : 16438
 Frequency  : only for big-endian servers
-Description: Check if system is big-endian while mounting fs with extents feature
+Description: Check if big-endian system while mounting fs with extents feature
 Details    : Mounting a filesystem with extents feature will fail on big-endian
 	     systems since ext3-based ldiskfs is not supported on big-endian
-	     systems. This can be over-riden with "bigendian_extents" mount option.
+	     systems.  Can be overridden with "bigendian_extents" mount option.
 
 Severity   : normal
 Bugzilla   : 16860
@@ -772,8 +772,8 @@ Bugzilla   : 16522
 Description: Watchdog triggered on MDS failover
 Details    : enable OBD_CONNECT_MDT flag when connecting from the MDS so that
 	     the OSTs know that the MDS "UUID" can be reused for the same export
-	     from a different NID, so we do not need to wait for the export to be
-	     evicted
+	     from a different NID, so we do not need to wait for the export to
+	     be evicted.
 
 -------------------------------------------------------------------------------
 
