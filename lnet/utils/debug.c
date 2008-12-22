@@ -502,13 +502,13 @@ static int parse_buffer(int fdin, int fdout)
                          if (linev) {
                                 fprintf(stderr, "error: line malloc(%u): "
                                         "printing accumulated records\n",
-                                        sizeof(*line));
+                                        (unsigned int)sizeof(*line));
                                 print_rec(&linev, kept, fdout);
 
                                 goto retry_alloc;
                         }
                         fprintf(stderr, "error: line malloc(%u): exiting\n",
-                                sizeof(*line));
+                                (unsigned int)sizeof(*line));
                         break;
                 }
 
