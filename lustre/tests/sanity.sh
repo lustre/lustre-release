@@ -1072,9 +1072,8 @@ test_27u() { # bug 4900
         [ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
         remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
-        #define OBD_FAIL_MDS_OSC_PRECREATE      0x13d
-
-        do_facet $SINGLEMDS lctl set_param fail_loc=0x13d
+#define OBD_FAIL_MDS_OSC_PRECREATE      0x139
+        do_facet $SINGLEMDS lctl set_param fail_loc=0x139
         mkdir -p $DIR/d27u
         createmany -o $DIR/d27u/t- 1000
         do_facet $SINGLEMDS lctl set_param fail_loc=0
@@ -2811,8 +2810,8 @@ run_test 60b "limit repeated messages from CERROR/CWARN ========"
 test_60c() {
 	echo "create 5000 files"
 	createmany -o $DIR/f60c- 5000
-#define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x13c
-	lctl set_param fail_loc=0x8000013c
+#define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x137
+	lctl set_param fail_loc=0x80000137
 	unlinkmany $DIR/f60c- 5000
 	lctl set_param fail_loc=0
 }

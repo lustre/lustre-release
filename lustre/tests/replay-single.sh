@@ -1179,8 +1179,8 @@ test_53d() {
         # give multiop a chance to open
         sleep 1
 
-        #define OBD_FAIL_MDS_CLOSE_NET_REP 0x13f
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013f"
+        #define OBD_FAIL_MDS_CLOSE_NET_REP 0x13b
+        do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013b"
         kill -USR1 $close_pid
         cancel_lru_locks mdc    # force the close
         do_facet $SINGLEMDS "lctl set_param fail_loc=0"
@@ -1238,8 +1238,8 @@ test_53f() {
         open_pid=$!
         sleep 1
 
-        #define OBD_FAIL_MDS_CLOSE_NET_REP 0x13f
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013f"
+        #define OBD_FAIL_MDS_CLOSE_NET_REP 0x13b
+        do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013b"
         kill -USR1 $close_pid
         cancel_lru_locks mdc    # force the close
 
@@ -1300,8 +1300,8 @@ test_53h() {
         open_pid=$!
         sleep 1
 
-        #define OBD_FAIL_MDS_CLOSE_NET_REP 0x13f
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013f"
+        #define OBD_FAIL_MDS_CLOSE_NET_REP 0x13b
+        do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013b"
         kill -USR1 $close_pid
         cancel_lru_locks mdc    # force the close
         sleep 1
@@ -1464,8 +1464,8 @@ run_test 61a "test race llog recovery vs llog cleanup"
 
 #test race  mds llog sync vs llog cleanup
 test_61b() {
-#   OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT 0x140
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000140"
+#   OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT 0x13a
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013a"
     facet_failover $SINGLEMDS 
     sleep 10
     fail $SINGLEMDS

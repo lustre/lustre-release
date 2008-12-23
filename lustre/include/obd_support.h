@@ -181,19 +181,23 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MDS_SETXATTR_WRITE      0x134
 #define OBD_FAIL_MDS_FS_SETUP            0x135
 #define OBD_FAIL_MDS_RESEND              0x136
-#define OBD_FAIL_MDS_IS_SUBDIR_NET       0x137
-#define OBD_FAIL_MDS_IS_SUBDIR_PACK      0x138
-#define OBD_FAIL_MDS_SET_INFO_NET        0x139
-#define OBD_FAIL_MDS_WRITEPAGE_NET       0x13a
-#define OBD_FAIL_MDS_WRITEPAGE_PACK      0x13b
-#define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x13c
-#define OBD_FAIL_MDS_OSC_PRECREATE       0x13d
-#define OBD_FAIL_MDS_LOV_SYNC_RACE       0x13e
-#define OBD_FAIL_MDS_CLOSE_NET_REP       0x13f
-#define OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT   0x140
-#define OBD_FAIL_MDS_RECOVERY_ACCEPTS_GAPS 0x141
-#define OBD_FAIL_MDS_BLOCK_QUOTA_REQ     0x142
-#define OBD_FAIL_MDS_DROP_QUOTA_REQ      0x143
+#define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x137
+#define OBD_FAIL_MDS_LOV_SYNC_RACE       0x138
+#define OBD_FAIL_MDS_OSC_PRECREATE       0x139
+#define OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT   0x13a
+#define OBD_FAIL_MDS_CLOSE_NET_REP       0x13b
+#define OBD_FAIL_MDS_BLOCK_QUOTA_REQ     0x13c
+#define OBD_FAIL_MDS_DROP_QUOTA_REQ      0x13d
+#define OBD_FAIL_MDS_REMOVE_COMMON_EA    0x13e
+#define OBD_FAIL_MDS_ALLOW_COMMON_EA_SETTING   0x13f
+
+/* CMD */
+#define OBD_FAIL_MDS_IS_SUBDIR_NET       0x180
+#define OBD_FAIL_MDS_IS_SUBDIR_PACK      0x181
+#define OBD_FAIL_MDS_SET_INFO_NET        0x182
+#define OBD_FAIL_MDS_WRITEPAGE_NET       0x183
+#define OBD_FAIL_MDS_WRITEPAGE_PACK      0x184
+#define OBD_FAIL_MDS_RECOVERY_ACCEPTS_GAPS 0x185
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -262,7 +266,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_LDLM_CP_BL_RACE         0x318
 
 /* LOCKLESS IO */
-#define OBD_FAIL_LDLM_SET_CONTENTION     0x315
+#define OBD_FAIL_LDLM_SET_CONTENTION     0x385
 
 #define OBD_FAIL_OSC                     0x400
 #define OBD_FAIL_OSC_BRW_READ_BULK       0x401
@@ -291,6 +295,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_PTLRPC_CLIENT_BULK_CB   0x508
 #define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
 #define OBD_FAIL_PTLRPC_PAUSE_REP        0x50c
+#define OBD_FAIL_PTLRPC_IMP_DEACTIVE     0x50d
 
 #define OBD_FAIL_PTLRPC_DUMP_LOG         0x50e
 #define OBD_FAIL_PTLRPC_LONG_REPL_UNLINK 0x50f
@@ -314,6 +319,8 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_TGT_DELAY_PRECREATE     0x705
 #define OBD_FAIL_TGT_TOOMANY_THREADS     0x706
 #define OBD_FAIL_TGT_REPLAY_DROP         0x707
+#define OBD_FAIL_TGT_FAKE_EXP            0x708
+#define OBD_FAIL_TGT_REPLAY_DELAY        0x709
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 #define OBD_FAIL_MDC_ENQUEUE_PAUSE       0x801

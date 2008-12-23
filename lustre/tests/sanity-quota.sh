@@ -1330,8 +1330,8 @@ test_18() {
 	$LFS setstripe $TESTFILE -i 0 -c 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
 
-	#define OBD_FAIL_MDS_BLOCK_QUOTA_REQ      0x142
-	lustre_fail mds 0x142
+	#define OBD_FAIL_MDS_BLOCK_QUOTA_REQ      0x13c
+	lustre_fail mds 0x13c
 
 	log "   step1: write 100M block ..."
 	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$((1024 * 100)) &
@@ -1384,8 +1384,8 @@ test_18a() {
 	$LFS setstripe $TESTFILE -i 0 -c 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
 
-	#define OBD_FAIL_MDS_DROP_QUOTA_REQ | OBD_FAIL_ONCE   0x80000143
-	lustre_fail mds 0x80000143
+	#define OBD_FAIL_MDS_DROP_QUOTA_REQ | OBD_FAIL_ONCE   0x8000013d
+	lustre_fail mds 0x8000013d
 
 	log "   step1: write 100M block ..."
 	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$((1024 * 100)) &
