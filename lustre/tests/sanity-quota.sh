@@ -66,7 +66,9 @@ LOVNAME=`lctl get_param -n llite.*.lov.common_name | tail -n 1`
 OSTCOUNT=`lctl get_param -n lov.$LOVNAME.numobd`
 
 SHOW_QUOTA_USER="$LFS quota -v -u $TSTUSR $DIR"
+SHOW_QUOTA_USER2="$LFS quota -v -u $TSTUSR2 $DIR"
 SHOW_QUOTA_GROUP="$LFS quota -v -g $TSTUSR $DIR"
+SHOW_QUOTA_GROUP2="$LFS quota -v -g $TSTUSR2 $DIR"
 SHOW_QUOTA_INFO="$LFS quota -t $DIR"
 
 # control the time of tests
@@ -1819,6 +1821,106 @@ test_24() {
         
 }
 run_test_with_stat 24 "test if lfs draws an asterix when limit is reached (16646) ==========="
+
+show_quota() {
+        if [ $1 = "-u" ]; then
+                if [ $2 = "$TSTUSR" ]; then
+	                $SHOW_QUOTA_USER
+                else
+                        $SHOW_QUOTA_USER2
+                fi
+        else
+                if [ $2 = "$TSTUSR" ]; then
+                        $SHOW_QUOTA_GROUP
+                else
+                        $SHOW_QUOTA_GROUP2
+                fi
+        fi
+}
+
+test_25_sub() {
+	mkdir -p $DIR/$tdir
+	chmod 0777 $DIR/$tdir
+	TESTFILE="$DIR/$tdir/$tfile-0"
+	rm -f $TESTFILE
+
+	wait_delete_completed
+
+        # set quota for $TSTUSR
+        log "setquota for $TSTUSR"
+	$LFS setquota $1 $TSTUSR -b 10240 -B 10240 -i 10 -I 10 $DIR
+	sleep 3
+        show_quota $1 $TSTUSR
+
+        # set quota for $TSTUSR2
+        log "setquota for $TSTUSR2"
+	$LFS setquota $1 $TSTUSR2 -b 10240 -B 10240 -i 10 -I 10 $DIR
+	sleep 3
+        show_quota $1 $TSTUSR2
+
+        # set stripe index to 0
+        log "setstripe for $DIR/$tdir to 0"
+	$LFS setstripe $DIR/$tdir -i 0
+	MDS_UUID=`do_facet mds $LCTL dl | grep -m1 mds | awk '{print $((NF-1))}'`
+	OST0_UUID=`do_facet ost1 $LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
+	MDS_QUOTA_USED_OLD=`$LFS quota -o $MDS_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`
+	OST0_QUOTA_USED_OLD=`$LFS quota -o $OST0_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+	MDS_QUOTA_USED2_OLD=`$LFS quota -o $MDS_UUID $1 $TSTUSR2 $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`
+	OST0_QUOTA_USED2_OLD=`$LFS quota -o $OST0_UUID $1 $TSTUSR2 $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+
+        # TSTUSR write 4M
+        log "$TSTUSR write 4M to $TESTFILE"
+        $RUNAS dd if=/dev/zero of=$TESTFILE bs=4K count=1K || error "dd failed"
+        sync
+	show_quota $1 $TSTUSR
+	show_quota $1 $TSTUSR2
+	MDS_QUOTA_USED_NEW=`$LFS quota -o $MDS_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`
+        [ $MDS_QUOTA_USED_NEW -ne $((MDS_QUOTA_USED_OLD + 1)) ] && \
+                error "$TSTUSR inode quota usage error: [$MDS_QUOTA_USED_OLD|$MDS_QUOTA_USED_NEW]"
+	OST0_QUOTA_USED_NEW=`$LFS quota -o $OST0_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+        OST0_QUOTA_USED_DELTA=$((OST0_QUOTA_USED_NEW - OST0_QUOTA_USED_OLD))
+        [ $OST0_QUOTA_USED_DELTA -lt 4096 ] && \
+                error "$TSTUSR block quota usage error: [$OST0_QUOTA_USED_OLD|$OST0_QUOTA_USED_NEW]"
+
+        # chown/chgrp from $TSTUSR to $TSTUSR2
+        if [ $1 = "-u" ]; then
+                log "chown from $TSTUSR to $TSTUSR2"
+                chown $TSTUSR2 $TESTFILE || error "chown failed"
+        else
+                log "chgrp from $TSTUSR to $TSTUSR2"
+                chgrp $TSTUSR2 $TESTFILE || error "chgrp failed"
+        fi
+        sync
+	show_quota $1 $TSTUSR
+	show_quota $1 $TSTUSR2
+	MDS_QUOTA_USED2_NEW=`$LFS quota -o $MDS_UUID $1 $TSTUSR2 $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`
+        [ $MDS_QUOTA_USED2_NEW -ne $((MDS_QUOTA_USED2_OLD + 1)) ] && \
+                error "$TSTUSR2 inode quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$MDS_QUOTA_USED2_OLD|$MDS_QUOTA_USED2_NEW]"
+	OST0_QUOTA_USED2_NEW=`$LFS quota -o $OST0_UUID $1 $TSTUSR2 $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+        OST0_QUOTA_USED2_DELTA=$((OST0_QUOTA_USED2_NEW - OST0_QUOTA_USED2_OLD))
+        [ $OST0_QUOTA_USED2_DELTA -ne $OST0_QUOTA_USED_DELTA ] && \
+                error "$TSTUSR2 block quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$OST0_QUOTA_USED2_OLD|$OST0_QUOTA_USED2_NEW]"
+	MDS_QUOTA_USED_NEW=`$LFS quota -o $MDS_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`
+        [ $MDS_QUOTA_USED_NEW -ne $MDS_QUOTA_USED_OLD ] && \
+                error "$TSTUSR inode quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$MDS_QUOTA_USED_OLD|$MDS_QUOTA_USED_NEW]"
+	OST0_QUOTA_USED_NEW=`$LFS quota -o $OST0_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+        [ $OST0_QUOTA_USED_NEW -ne $OST0_QUOTA_USED_OLD ] && \
+                error "$TSTUSR block quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$OST0_QUOTA_USED_OLD|$OST0_QUOTA_USED_NEW]"
+
+	rm -f $TESTFILE
+	wait_delete_completed
+	resetquota $1 $TSTUSR
+	resetquota $1 $TSTUSR2
+}
+
+test_25() {
+	log "run for chown case"
+	test_25_sub -u
+
+	log "run for chgrp case"
+	test_25_sub -g
+}
+run_test_with_stat 25 "test whether quota usage is transfered when chown/chgrp (18081) ==========="
 
 # turn off quota
 test_99()
