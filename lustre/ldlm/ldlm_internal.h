@@ -45,19 +45,19 @@ extern struct list_head ldlm_cli_namespace_list;
 
 static inline atomic_t *ldlm_namespace_nr(ldlm_side_t client)
 {
-        return client == LDLM_NAMESPACE_SERVER ? 
+        return client == LDLM_NAMESPACE_SERVER ?
                 &ldlm_srv_namespace_nr : &ldlm_cli_namespace_nr;
 }
 
 static inline struct list_head *ldlm_namespace_list(ldlm_side_t client)
 {
-        return client == LDLM_NAMESPACE_SERVER ? 
+        return client == LDLM_NAMESPACE_SERVER ?
                 &ldlm_srv_namespace_list : &ldlm_cli_namespace_list;
 }
 
 static inline struct semaphore *ldlm_namespace_lock(ldlm_side_t client)
 {
-        return client == LDLM_NAMESPACE_SERVER ? 
+        return client == LDLM_NAMESPACE_SERVER ?
                 &ldlm_srv_namespace_lock : &ldlm_cli_namespace_lock;
 }
 
@@ -75,11 +75,11 @@ enum {
         LDLM_CANCEL_LRUR   = 1 << 3  /* Cancel locks from lru resize. */
 };
 
-int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t sync, 
+int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t sync,
                     int flags);
 int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
                           int count, int max, int cancel_flags, int flags);
-int ldlm_cancel_lru_estimate(struct ldlm_namespace *ns, int count, int max, 
+int ldlm_cancel_lru_estimate(struct ldlm_namespace *ns, int count, int max,
                              int flags);
 extern int ldlm_enqueue_min;
 int ldlm_get_enq_timeout(struct ldlm_lock *lock);
@@ -88,7 +88,7 @@ int ldlm_get_enq_timeout(struct ldlm_lock *lock);
 int ldlm_resource_putref_locked(struct ldlm_resource *res);
 void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
                                      struct ldlm_lock *new);
-void ldlm_namespace_free_prior(struct ldlm_namespace *ns, 
+void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
                                struct obd_import *imp, int force);
 void ldlm_namespace_free_post(struct ldlm_namespace *ns);
 
@@ -235,3 +235,17 @@ typedef enum ldlm_policy_res ldlm_policy_res_t;
                 return rc;                                                  \
         }                                                                   \
         struct __##var##__dummy_write {;} /* semicolon catcher */
+
+static inline int is_granted_or_cancelled(struct ldlm_lock *lock)
+{
+        int ret = 0;
+
+        lock_res_and_lock(lock);
+        if (((lock->l_req_mode == lock->l_granted_mode) &&
+             !(lock->l_flags & LDLM_FL_CP_REQD)) ||
+            (lock->l_flags & LDLM_FL_FAILED))
+                ret = 1;
+        unlock_res_and_lock(lock);
+
+        return ret;
+}
