@@ -1,7 +1,7 @@
 tbd Sun Microsystems, Inc.
 	* version 1.6.8
 	* Support for kernels:
-	 2.6.5-7.314 (SLES 9),
+	 2.6.5-7.315 (SLES 9),
 	 2.6.9-67.0.22.EL (RHEL 4),
 	 2.6.16.60-0.31 (SLES 10),
 	 2.6.18-92.1.22.el5 (RHEL 5),
@@ -43,6 +43,10 @@ tbd Sun Microsystems, Inc.
 	* NFS export disabled when stack size < 8192. Since the NFSv4 export
 	  of Lustre filesystem with 4K stack may cause a stack overflow. For
 	  more information, please refer to bugzilla 17630.
+
+Severity   : enhancement
+Bugzilla   : 18062
+Description: Update to sles9 kernel-2.6.5-7.315.
 
 Severity   : enhancement
 Bugzilla   : 18060
