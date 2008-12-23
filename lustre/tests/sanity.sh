@@ -5690,6 +5690,47 @@ test_153() {
 }
 run_test 153 "test if fdatasync does not crash ======================="
 
+test_160() {
+        $LCTL debug_daemon start $TMP/${tfile}_log_good
+        touch $DIR/$tfile
+        $LCTL debug_daemon stop
+        cat $TMP/${tfile}_log_good | sed -e "s/^...../a/g" > $TMP/${tfile}_log_bad
+
+        $LCTL debug_daemon start $TMP/${tfile}_log_good
+        rm -rf $DIR/$tfile
+        $LCTL debug_daemon stop
+
+        $LCTL df $TMP/${tfile}_log_bad 2&> $TMP/${tfile}_log_bad.out
+        bad_line=`tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $9}'`
+        good_line1=`tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $5}'`
+
+        $LCTL df $TMP/${tfile}_log_good 2&>$TMP/${tfile}_log_good.out 
+        good_line2=`tail -n 1 $TMP/${tfile}_log_good.out | awk '{print $5}'`
+
+        cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt
+        cat $TMP/${tfile}_log_bad >> $TMP/${tfile}_logs_corrupt 
+        cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt           
+
+        $LCTL df $TMP/${tfile}_logs_corrupt 2&> $TMP/${tfile}_log_bad.out
+        bad_line_new=`tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $9}'`
+        good_line_new=`tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $5}'`
+        expected_good=$((good_line1 + good_line2*2))
+
+        rm -rf $TMP/${tfile}*
+        if [ $bad_line -ne $bad_line_new ]; then
+                error "expected $bad_line bad lines, but got $bad_line_new"
+                return 1 
+        fi
+
+        if [ $expected_good -ne $good_line_new ]; then
+                error "expected $expected_good good lines, but got $good_line_new"
+                return 2 
+        fi
+        true
+}
+run_test 160 "test lctl df to handle corruputed log ====================="
+
+
 POOL=${POOL:-cea1}
 TGT_COUNT=$OSTCOUNT
 TGTPOOL_FIRST=1
