@@ -728,7 +728,6 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
         }
 
         req->rq_request_portal = OST_IO_PORTAL; /* bug 7198 */
-        req->rq_interpret_reply = osc_destroy_interpret;
         ptlrpc_at_set_req_timeout(req);
 
         if (oti != NULL && oa->o_valid & OBD_MD_FLCOOKIE)
@@ -740,15 +739,19 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
         osc_pack_capa(req, body, (struct obd_capa *)capa);
         ptlrpc_request_set_replen(req);
 
-        if (!osc_can_send_destroy(cli)) {
-                struct l_wait_info lwi = { 0 };
+        /* don't throttle destroy RPCs for the MDT */
+        if (!(cli->cl_import->imp_connect_flags_orig & OBD_CONNECT_MDS)) {
+                req->rq_interpret_reply = osc_destroy_interpret;
+                if (!osc_can_send_destroy(cli)) {
+                        struct l_wait_info lwi = { 0 };
 
-                /*
-                 * Wait until the number of on-going destroy RPCs drops
-                 * under max_rpc_in_flight
-                 */
-                l_wait_event_exclusive(cli->cl_destroy_waitq,
-                                       osc_can_send_destroy(cli), &lwi);
+                        /*
+                         * Wait until the number of on-going destroy RPCs drops
+                         * under max_rpc_in_flight
+                         */
+                        l_wait_event_exclusive(cli->cl_destroy_waitq,
+                                               osc_can_send_destroy(cli), &lwi);
+                }
         }
 
         /* Do not wait for response */
@@ -3763,13 +3766,13 @@ static int osc_disconnect(struct obd_export *exp)
         ctxt = llog_get_context(obd, LLOG_SIZE_REPL_CTXT);
         if (ctxt) {
                 if (obd->u.cli.cl_conn_count == 1) {
-                        /* Flush any remaining cancel messages out to the 
+                        /* Flush any remaining cancel messages out to the
                          * target */
                         llog_sync(ctxt, exp);
                 }
                 llog_ctxt_put(ctxt);
         } else {
-                CDEBUG(D_HA, "No LLOG_SIZE_REPL_CTXT found in obd %p\n", 
+                CDEBUG(D_HA, "No LLOG_SIZE_REPL_CTXT found in obd %p\n",
                        obd);
         }
 
