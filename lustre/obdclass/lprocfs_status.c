@@ -745,7 +745,7 @@ int lprocfs_rd_timeouts(char *page, char **start, off_t off, int count,
 static const char *obd_connect_names[] = {
         "read_only",
         "lov_index",
-        "unused",
+        "mds_connection",
         "write_grant",
         "server_lock",
         "version",
