@@ -1025,9 +1025,9 @@ Index: LINUX-SRC-TREE/include/linux/sched.h
  
  extern int mmlist_nr;
 @@ -603,6 +611,10 @@ struct task_struct {
- 	struct rw_semaphore pagg_sem;
+ #ifndef __GENKSYMS__
+ 	struct list_head	*scm_work_list;
  #endif
- 
 +#ifdef CONFIG_PTRACK
 +/* process tracking callback */
 +	struct list_head ptrack_list;
