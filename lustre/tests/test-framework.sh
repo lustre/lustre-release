@@ -530,12 +530,27 @@ zconf_mount() {
 zconf_umount() {
     local client=$1
     local mnt=$2
+    local force
+    local busy 
+    local need_kill
+
     [ "$3" ] && force=-f
     local running=$(do_node $client "grep -c $mnt' ' /proc/mounts") || true
     if [ $running -ne 0 ]; then
         echo "Stopping client $client $mnt (opts:$force)"
-        do_node $client lsof | grep "$mnt" || true
-        do_node $client umount $force $mnt
+        do_node $client lsof -t $mnt || need_kill=no
+        if [ "x$force" != "x" -a "x$need_kill" != "xno" ]; then
+            pids=$(do_node $client lsof -t $mnt | sort -u);
+            if [ -n $pids ]; then
+                do_node $client kill -9 $pids || true
+            fi
+        fi
+
+        busy=$(do_node $client "umount $force $mnt 2>&1" | grep -c "busy") || true
+        if [ $busy -ne 0 ] ; then
+            echo "$mnt is still busy, wait one second" && sleep 1
+            do_node $client umount $force $mnt
+        fi
     fi
 }
 
@@ -572,11 +587,27 @@ zconf_mount_clients() {
 zconf_umount_clients() {
     local clients=$1
     local mnt=$2
+    local force
+
     [ "$3" ] && force=-f
 
-    echo "Umounting clients: $clients"
     echo "Stopping clients: $clients $mnt (opts:$force)"
-    do_nodes $clients umount $force $mnt
+    do_nodes $clients "set -x; running=\\\$(grep -c $mnt' ' /proc/mounts)
+if [ \\\$running -ne 0 ] ; then
+echo Stopping client \\\$(hostname) client $mnt opts:$force
+lsof -t $mnt || need_kill=no
+if [ "x$force" != "x" -a "x\\\$need_kill" != "xno" ]; then
+    pids=\\\$(lsof -t $mnt | sort -u);
+    if [ -n \\\$pids ]; then
+             kill -9 \\\$pids
+    fi
+fi
+busy=\\\$(umount $force $mnt 2>&1 | grep -c "busy")
+if [ \\\$busy -ne 0 ] ; then
+    echo "$mnt is still busy, wait one second" && sleep 1
+    umount $force $mnt
+fi
+fi"
 }
 
 shutdown_facet() {
