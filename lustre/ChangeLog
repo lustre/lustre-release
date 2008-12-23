@@ -39,9 +39,15 @@
 	  old (verbose) output can be obtained by using -v option.
 	* File join has been disabled in this release, refer to Bugzilla 16929.
 	* A new Lustre ADIO driver is available for MPICH2-1.0.7.
-	* NFS export disabled when stack size < 8192. Since the NFSv4 export of 
+	* NFS export disabled when stack size < 8192. Since the NFSv4 export of
 	  Lustre filesystem with 4K stack may cause a stack overflow. For more
 	  information, please refer to bugzilla 17630.
+
+Severity   : normal
+Frequency  : start MDS on uncleanly shutdowned MDS device
+Bugzilla   : 18049
+Descriptoin: aborting recovery hang on MDS
+Details    : don't throttle destroy RPCs for the MDT.
 
 Severity   : major
 Frequency  : on remount
@@ -62,7 +68,7 @@ Details    : client_disconnect_export vs connect request race.
 Severity   : minor
 Frequency  : always
 Bugzilla   : 16693
-Description: shrink LOV EAs before replying   
+Description: shrink LOV EAs before replying
 Details    : correctly adjust LOV EA buffer for reply.
 
 Severity   : normal
@@ -82,7 +88,7 @@ Severity   : normal
 Frequency  : rare, need acl's on inode.
 Bugzilla   : 16492
 Description: client can't handle ost additional correctly
-Details    : if ost was added after client connected to mds client can have 
+Details    : if ost was added after client connected to mds client can have
 	     hit lnet_try_match_md ... to big messages to wide striped files.
 	     in this case need teach client to handle config events about add
 	     lov target and update client max ea size at that event.
