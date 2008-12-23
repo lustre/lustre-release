@@ -166,17 +166,17 @@ case "$lustretag" in
     b_hd_lnet_smp)
         # LNet grained locking and SMP improvement branch
         lnettag="b_hd_lnet_smp"
-        ldiskfstag="$ldiskfstag_head"
-        lustretag="HEAD"
-        libcfstag="HEAD"
+        ldiskfstag="lnet_smp_ldiskfs"
+        lustretag="lnet_smp_lustre"
+        libcfstag="lnet_smp_libcfs"
         ;;
 
-    b_hd_lnet_smp_concur)
-        # LNet grained locking and SMP concurrency branch
-        lnettag="b_hd_lnet_smp_concur"
-        ldiskfstag="$ldiskfstag_head"
-        lustretag="HEAD"
-        libcfstag="HEAD"
+    b_hd_lnet_perf)
+        # Tag for lnet performance tests
+        lnettag="HEAD"
+        ldiskfstag="lnet_smp_ldiskfs"
+        lustretag="lnet_smp_lustre"
+        libcfstag="lnet_smp_libcfs"
         ;;
 
     b_hd_o2ib_new_proto)
