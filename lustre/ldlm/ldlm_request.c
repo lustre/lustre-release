@@ -78,9 +78,9 @@ int ldlm_expired_completion_wait(void *data)
                         RETURN(0);
 
                 LDLM_ERROR(lock, "lock timed out (enqueued at "CFS_TIME_T", "
-			   CFS_DURATION_T"s ago); not entering recovery in "
+                           CFS_DURATION_T"s ago); not entering recovery in "
                            "server code, just going back to sleep",
-			   lock->l_enqueued_time.tv_sec,
+                           lock->l_enqueued_time.tv_sec,
                            cfs_time_sub(cfs_time_current_sec(),
                            lock->l_enqueued_time.tv_sec));
                 if (cfs_time_after(cfs_time_current(), next_dump)) {
@@ -2103,10 +2103,10 @@ static int replay_lock_interpret(const struct lu_env *env,
         lock->l_remote_handle = reply->lock_handle;
 
         /* Key change rehash lock in per-export hash with new key */
-	exp = req->rq_export;
+        exp = req->rq_export;
         if (exp && exp->exp_lock_hash)
                 lustre_hash_rehash_key(exp->exp_lock_hash, &old_hash_key,
-        			       &lock->l_remote_handle,
+                                       &lock->l_remote_handle,
                                        &lock->l_exp_hash);
 
         LDLM_DEBUG(lock, "replayed lock:");
