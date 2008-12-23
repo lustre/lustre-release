@@ -205,7 +205,7 @@ static int expired_lock_main(void *arg)
                                 /* release extra ref grabbed by
                                  * ldlm_add_waiting_lock() or
                                  * ldlm_failed_ast() */
-                                LDLM_LOCK_PUT(lock);
+                                LDLM_LOCK_RELEASE(lock);
                                 continue;
                         }
                         export = class_export_get(lock->l_export);
@@ -213,7 +213,7 @@ static int expired_lock_main(void *arg)
 
                         /* release extra ref grabbed by ldlm_add_waiting_lock()
                          * or ldlm_failed_ast() */
-                        LDLM_LOCK_PUT(lock);
+                        LDLM_LOCK_RELEASE(lock);
 
                         do_dump++;
                         class_fail_export(export);
@@ -491,7 +491,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
         if (ret)
                 /* release lock ref if it has indeed been removed
                  * from a list */
-                LDLM_LOCK_PUT(lock);
+                LDLM_LOCK_RELEASE(lock);
 
         LDLM_DEBUG(lock, "%s", ret == 0 ? "wasn't waiting" : "removed");
         return ret;
