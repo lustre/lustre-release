@@ -1262,7 +1262,11 @@ static int osd_inode_setattr(const struct lu_env *env,
                 struct iattr iattr;
                 int rc;
 
-                iattr.ia_valid = bits & (LA_UID | LA_GID);
+                iattr.ia_valid = 0;
+                if (bits & LA_UID)
+                        iattr.ia_valid |= ATTR_UID;
+                if (bits & LA_GID)
+                        iattr.ia_valid |= ATTR_GID;
                 iattr.ia_uid = attr->la_uid;
                 iattr.ia_gid = attr->la_gid;
                 osd_push_ctxt(env, save);
