@@ -242,6 +242,9 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_LDLM_INTR_CP_AST        0x317
 #define OBD_FAIL_LDLM_CP_BL_RACE         0x318
 
+/* LOCKLESS IO */
+#define OBD_FAIL_LDLM_SET_CONTENTION     0x385
+
 #define OBD_FAIL_OSC                     0x400
 #define OBD_FAIL_OSC_BRW_READ_BULK       0x401
 #define OBD_FAIL_OSC_BRW_WRITE_BULK      0x402
@@ -256,6 +259,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_OSC_CONNECT_CKSUM       0x40b
 #define OBD_FAIL_OSC_CKSUM_ADLER_ONLY    0x40c
 #define OBD_FAIL_OSC_DIO_PAUSE           0x40d
+#define OBD_FAIL_OSC_OBJECT_CONTENTION   0x40e
 
 #define OBD_FAIL_PTLRPC                  0x500
 #define OBD_FAIL_PTLRPC_ACK              0x501

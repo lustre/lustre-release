@@ -1068,11 +1068,13 @@ test_53c() {
     multiop $DIR/${tdir}-1/f O_c &
     close_pid=$!
 
+#define OBD_FAIL_MDS_REINT_NET           0x107
     do_facet mds "lctl set_param fail_loc=0x80000107"
     mcreate $DIR/${tdir}-2/f &
     open_pid=$!
     sleep 1
 
+#define OBD_FAIL_MDS_CLOSE_NET           0x115
     do_facet mds "lctl set_param fail_loc=0x80000115"
     kill -USR1 $close_pid
     cancel_lru_locks mdc  # force the close
@@ -1099,7 +1101,7 @@ test_53d() {
     # give multiop a chance to open
     sleep 1
 
-    # define OBD_FAIL_MDS_CLOSE_NET_REP 0X138    
+#define OBD_FAIL_MDS_CLOSE_NET_REP       0x13b
     do_facet mds "lctl set_param fail_loc=0x8000013b"
     kill -USR1 $close_pid
     cancel_lru_locks mdc  # force the close
@@ -1153,11 +1155,13 @@ test_53f() {
         multiop $DIR/${tdir}-1/f O_c &
         close_pid=$!
 
+#define OBD_FAIL_MDS_REINT_NET_REP       0x119
         do_facet mds "lctl set_param fail_loc=0x80000119"
         mcreate $DIR/${tdir}-2/f &
         open_pid=$!
         sleep 1
 
+#define OBD_FAIL_MDS_CLOSE_NET_REP       0x13b
         do_facet mds "lctl set_param fail_loc=0x8000013b"
         kill -USR1 $close_pid
         cancel_lru_locks mdc
@@ -1182,11 +1186,13 @@ test_53g() {
         multiop $DIR/${tdir}-1/f O_c &
         close_pid=$!
 
+#define OBD_FAIL_MDS_REINT_NET_REP       0x119
         do_facet mds "lctl set_param fail_loc=0x80000119"
         mcreate $DIR/${tdir}-2/f &
         open_pid=$!
         sleep 1
 
+#define OBD_FAIL_MDS_CLOSE_NET           0x115
         do_facet mds "lctl set_param fail_loc=0x80000115"
         kill -USR1 $close_pid
         cancel_lru_locks mdc # force the close
@@ -1211,11 +1217,13 @@ test_53h() {
     multiop $DIR/${tdir}-1/f O_c &
     close_pid=$!
 
+#define OBD_FAIL_MDS_REINT_NET           0x107
     do_facet mds "lctl set_param fail_loc=0x80000107"
     mcreate $DIR/${tdir}-2/f &
     open_pid=$!
     sleep 1
 
+#define OBD_FAIL_MDS_CLOSE_NET_REP       0x13b
     do_facet mds "lctl set_param fail_loc=0x8000013b"
     kill -USR1 $close_pid
     cancel_lru_locks mdc  # force the close
