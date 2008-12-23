@@ -116,20 +116,6 @@ int ldlm_get_enq_timeout(struct ldlm_lock *lock)
 }
 EXPORT_SYMBOL(ldlm_get_enq_timeout);
 
-static int is_granted_or_cancelled(struct ldlm_lock *lock)
-{
-        int ret = 0;
-
-        lock_res_and_lock(lock);
-        if (((lock->l_req_mode == lock->l_granted_mode) &&
-             !(lock->l_flags & LDLM_FL_CP_REQD)) ||
-            (lock->l_flags & LDLM_FL_FAILED))
-                ret = 1;
-        unlock_res_and_lock(lock);
-
-        return ret;
-}
-
 int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 {
         /* XXX ALLOCATE - 160 bytes */
@@ -188,7 +174,7 @@ noreproc:
                 spin_unlock(&imp->imp_lock);
         }
 
-        if (ns_is_client(lock->l_resource->lr_namespace) && 
+        if (ns_is_client(lock->l_resource->lr_namespace) &&
             lock->l_resource->lr_type == LDLM_EXTENT &&
             OBD_FAIL_CHECK(OBD_FAIL_LDLM_INTR_CP_AST | OBD_FAIL_ONCE)) {
                 obd_fail_loc = OBD_FAIL_LDLM_CP_BL_RACE | OBD_FAIL_ONCE;
@@ -196,7 +182,7 @@ noreproc:
                 rc = -EINTR;
         } else {
                 /* Go to sleep until the lock is granted or cancelled. */
-                rc = l_wait_event(lock->l_waitq, 
+                rc = l_wait_event(lock->l_waitq,
                                   is_granted_or_cancelled(lock), &lwi);
         }
 
@@ -364,20 +350,20 @@ static void failed_lock_cleanup(struct ldlm_namespace *ns,
         /* Set a flag to prevent us from sending a CANCEL (bug 407) */
         lock_res_and_lock(lock);
         /* Check that lock is not granted or failed, we might race. */
-        if ((lock->l_req_mode != lock->l_granted_mode) && 
+        if ((lock->l_req_mode != lock->l_granted_mode) &&
             !(lock->l_flags & LDLM_FL_FAILED)) {
                 /* Make sure that this lock will not be found by raced
-                 * bl_ast and -EINVAL reply is sent to server anyways. 
+                 * bl_ast and -EINVAL reply is sent to server anyways.
                  * bug 17645 */
-                lock->l_flags |= LDLM_FL_LOCAL_ONLY | LDLM_FL_FAILED | 
+                lock->l_flags |= LDLM_FL_LOCAL_ONLY | LDLM_FL_FAILED |
                                  LDLM_FL_ATOMIC_CB;
                 need_cancel = 1;
         }
         unlock_res_and_lock(lock);
-  
+
         if (need_cancel) {
-                LDLM_DEBUG(lock, 
-                           "setting FL_LOCAL_ONLY | LDLM_FL_FAILED | " 
+                LDLM_DEBUG(lock,
+                           "setting FL_LOCAL_ONLY | LDLM_FL_FAILED | "
                            "LDLM_FL_ATOMIC_CB");
                 ldlm_lock_decref_and_cancel(lockh, mode);
         } else {
@@ -1932,10 +1918,10 @@ static int replay_lock_interpret(struct ptlrpc_request *req,
         lock->l_remote_handle = reply->lock_handle;
 
         /* Key change rehash lock in per-export hash with new key */
-	exp = req->rq_export;
+        exp = req->rq_export;
         if (exp && exp->exp_lock_hash)
                 lustre_hash_rehash_key(exp->exp_lock_hash, &old_hash_key,
-				       &lock->l_remote_handle,
+                                       &lock->l_remote_handle,
                                        &lock->l_exp_hash);
 
         LDLM_DEBUG(lock, "replayed lock:");
