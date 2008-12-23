@@ -848,11 +848,18 @@ test_35() { # bug 17645
 #define OBD_FAIL_LDLM_INTR_CP_AST        0x317
         do_facet client "lctl set_param fail_loc=0x80000317"
         ls -la $MOUNT1/$tfile > /dev/null &
+        pid1=$!
         sleep 1
         
         # Let's take write lock on same file from another mount. This
         # should cause conflict and bl_ast
         createmany -o $MOUNT2/$tfile/a 2000 &
+        pid2=$!
+        local timeout=`do_facet $SINGLEMDS lctl get_param  -n timeout`
+        let timeout=timeout*3
+        log "Wait for $pid1 $pid2 for $timeout sec..."
+        sleep $timeout
+        kill -9 $pid1 $pid2 > /dev/null 2>&1
         wait
         do_facet client "lctl set_param fail_loc=0x0"
         df -h $MOUNT1 $MOUNT2
