@@ -748,25 +748,30 @@ test_34() { # bug 17645
         done
 
         dd if=/dev/zero of=$MOUNT1/$tfile bs=1M count=10
+        cp $MOUNT1/$tfile $MOUNT1/${tfile}-1
         sync
         cancel_lru_locks osc
 
-        # Let's get some read locks so that later we have something to
-        # conflict with
-        dd if=$MOUNT1/$tfile of=$MOUNT1/${tfile}-1 bs=1k count=10000
-        
         # Let's initiate -EINTR situation by setting fail_loc and take
         # write lock on same file from same client. This will not cause
         # bl_ast yet as lock is already in local cache.
 #define OBD_FAIL_LDLM_INTR_CP_AST        0x317
         do_facet client "lctl set_param fail_loc=0x80000317"
-        dd if=$MOUNT1/${tfile}-1 of=$MOUNT1/$tfile bs=1k count=10000 &
+        dd if=$MOUNT1/${tfile}-1 of=$MOUNT1/$tfile bs=512 count=10000 &
+        pid1=$!
         sleep 1
         
         # Let's take write lock on same file from another mount. This
         # should cause conflict and bl_ast
-        dd if=$MOUNT2/${tfile}-1 of=$MOUNT2/$tfile bs=1k count=10000 &
+        dd if=$MOUNT2/${tfile}-1 of=$MOUNT2/$tfile bs=512 count=10000 &
+        pid2=$!
+        local timeout=`do_facet mds lctl get_param  -n timeout`
+        let timeout=timeout*3
+        log "Wait for $pid1 $pid2 for $timeout sec..."
+        sleep $timeout
+        kill -9 $pid1 $pid2 > /dev/null 2>&1
         wait
+
         do_facet client "lctl set_param fail_loc=0x0"
         df -h $MOUNT1 $MOUNT2
         count=0
