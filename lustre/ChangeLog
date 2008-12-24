@@ -117,6 +117,13 @@ Details    : Clients drop lock reference and release openhandle when they find
 	  Lustre filesystem with 4K stack may cause a stack overflow. For more
 	  information, please refer to bugzilla 17630.
 
+Severity   : normal
+Frequency  : always with long access acl
+Bugzilla   : 17636
+Descriptoin: mds can't pack reply with long acl.
+Details    : mds don't control size of acl but they limited by reint/getattr
+             reply buffer.
+
 Severity   : major
 Frequency  : on remount
 Bugzilla   : 18018
