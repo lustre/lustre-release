@@ -316,17 +316,17 @@ int lov_ost_pool_init(struct ost_pool *op, unsigned int count)
 }
 
 /* Caller must hold write op_rwlock */
-int lov_ost_pool_extend(struct ost_pool *op, unsigned int max_count)
+int lov_ost_pool_extend(struct ost_pool *op, unsigned int min_count)
 {
         __u32 *new;
         int new_size;
 
-        LASSERT(max_count != 0);
+        LASSERT(min_count != 0);
 
         if (op->op_count < op->op_size)
                 return 0;
 
-        new_size = min(max_count, 2 * op->op_size);
+        new_size = max(min_count, 2 * op->op_size);
         OBD_ALLOC(new, new_size * sizeof(op->op_array[0]));
         if (new == NULL)
                 return -ENOMEM;
@@ -339,14 +339,14 @@ int lov_ost_pool_extend(struct ost_pool *op, unsigned int max_count)
         return 0;
 }
 
-int lov_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int max_count)
+int lov_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int min_count)
 {
         int rc = 0, i;
         ENTRY;
 
         down_write(&op->op_rw_sem);
 
-        rc = lov_ost_pool_extend(op, max_count);
+        rc = lov_ost_pool_extend(op, min_count);
         if (rc)
                 GOTO(out, rc);
 

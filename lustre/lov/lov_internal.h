@@ -311,8 +311,8 @@ extern lustre_hash_ops_t pool_hash_operations;
 
 /* ost_pool methods */
 int lov_ost_pool_init(struct ost_pool *op, unsigned int count);
-int lov_ost_pool_extend(struct ost_pool *op, unsigned int max_count);
-int lov_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int max_count);
+int lov_ost_pool_extend(struct ost_pool *op, unsigned int min_count);
+int lov_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int min_count);
 int lov_ost_pool_remove(struct ost_pool *op, __u32 idx);
 int lov_ost_pool_free(struct ost_pool *op);
 
