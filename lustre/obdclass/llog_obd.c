@@ -182,16 +182,17 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
         ctxt->loc_logops = op;
         sema_init(&ctxt->loc_sem, 1);
 
-        if (op->lop_setup) {
-                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LLOG_SETUP))
-                        rc = -EOPNOTSUPP;
-                else
+        if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LLOG_SETUP)) {
+                rc = -EOPNOTSUPP;
+        } else {
+                if (op->lop_setup)
                         rc = op->lop_setup(obd, index, disk_obd, count, logid);
         }
 
         if (rc) {
-                llog_ctxt_destroy(ctxt);
-                obd->obd_llog_ctxt[index] = NULL;
+                CERROR("obd %s ctxt %d lop_setup=%p failed %d\n",
+                       obd->obd_name, index, op->lop_setup, rc);
+                llog_ctxt_put(ctxt);
         }
 out:
         mutex_up(&obd->obd_llog_alloc);
