@@ -662,7 +662,6 @@ int mds_quota_finvalidate(struct obd_device *obd, struct obd_quotactl *oqctl)
         down(&mds->mds_qonoff_sem);
 
         oqctl->qc_cmd = Q_FINVALIDATE;
-        oqctl->qc_id = obd->u.obt.obt_qfmt;
         rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
         if (!rc)
                 rc = obd_quotactl(mds->mds_osc_exp, oqctl);
@@ -900,15 +899,16 @@ int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         rc = mds_admin_quota_on(obd, oqctl);
         if (rc)
-                goto out;
-
-        rc = obd_quotactl(mds->mds_osc_exp, oqctl);
-        if (rc)
-                goto out;
+                GOTO(out, rc);
 
         rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
         if (!rc)
                 obt->obt_qctxt.lqc_flags |= UGQUOTA2LQC(oqctl->qc_type);
+        else
+                GOTO(out, rc);
+
+        rc = obd_quotactl(mds->mds_osc_exp, oqctl);
+
 out:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         up(&mds->mds_qonoff_sem);
