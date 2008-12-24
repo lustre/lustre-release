@@ -44,6 +44,13 @@
 	  information, please refer to bugzilla 17630.
 
 Severity   : normal
+Frequency  : always with long access acl
+Bugzilla   : 17636
+Descriptoin: mds can't pack reply with long acl.
+Details    : mds don't control size of acl but they limited by reint/getattr
+             reply buffer.
+
+Severity   : normal
 Frequency  : start MDS on uncleanly shutdowned MDS device
 Bugzilla   : 18049
 Descriptoin: aborting recovery hang on MDS
