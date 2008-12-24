@@ -1941,7 +1941,7 @@ static void print_quota_title(char *name, struct if_quotactl *qctl)
                "files", "quota", "limit", "grace");
 }
 
-static void print_quota(char *mnt, struct if_quotactl *qctl)
+static void print_quota(char *mnt, struct if_quotactl *qctl, int type)
 {
         time_t now;
 
@@ -1991,7 +1991,7 @@ static void print_quota(char *mnt, struct if_quotactl *qctl)
                                 diff2str(dqb->dqb_btime, timebuf, now);
                         sprintf(numbuf[0], (dqb->dqb_valid & QIF_SPACE) ?
                                 LPU64 : "["LPU64"]", toqb(dqb->dqb_curspace));
-                        if (qctl->qc_valid == QC_GENERAL)
+                        if (type == QC_GENERAL)
                                 sprintf(numbuf[1], (dqb->dqb_valid & QIF_BLIMITS)
                                         ? LPU64 : "["LPU64"]",
                                         dqb->dqb_bsoftlimit);
@@ -2008,7 +2008,7 @@ static void print_quota(char *mnt, struct if_quotactl *qctl)
 
                         sprintf(numbuf[0], (dqb->dqb_valid & QIF_INODES) ?
                                 LPU64 : "["LPU64"]", dqb->dqb_curinodes);
-                       if (qctl->qc_valid == QC_GENERAL)
+                       if (type == QC_GENERAL)
                                 sprintf(numbuf[1], (dqb->dqb_valid & QIF_ILIMITS)
                                         ? LPU64 : "["LPU64"]",
                                         dqb->dqb_isoftlimit);
@@ -2016,7 +2016,7 @@ static void print_quota(char *mnt, struct if_quotactl *qctl)
                                 sprintf(numbuf[1], "%s", "");
                         sprintf(numbuf[2], (dqb->dqb_valid & QIF_ILIMITS) ?
                                 LPU64 : "["LPU64"]", dqb->dqb_ihardlimit);
-                        if (qctl->qc_valid != QC_OSTIDX)
+                        if (type != QC_OSTIDX)
                                 printf(" %7s%c %6s %7s %7s",
                                        numbuf[0], iover ? '*' : ' ', numbuf[1],
                                        numbuf[2], iover > 1 ? timebuf : "");
@@ -2063,7 +2063,7 @@ static int print_obd_quota(char *mnt, struct if_quotactl *qctl, int is_mdt)
                         continue;
                 }
 
-                print_quota(obd_uuid2str(&qctl->obd_uuid), qctl);
+                print_quota(obd_uuid2str(&qctl->obd_uuid), qctl, qctl->qc_valid);
         }
 
 out:
@@ -2177,9 +2177,9 @@ ug_output:
                 fprintf(stderr, "%s %s ", obd_type, obd_uuid);
 
         if (qctl.qc_valid != QC_GENERAL)
-                mnt = obd_uuid2str(&qctl.obd_uuid);
+                mnt = "";
 
-        print_quota(mnt, &qctl);
+        print_quota(mnt, &qctl, QC_GENERAL);
 
         if (qctl.qc_valid == QC_GENERAL && qctl.qc_cmd != LUSTRE_Q_GETINFO && verbose) {
                 rc2 = print_obd_quota(mnt, &qctl, 1);
