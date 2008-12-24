@@ -60,6 +60,8 @@
 # ifndef HAVE_VFS_INTENT_PATCHES
 #  include <linux/lustre_intent.h>
 # endif
+/* XATTR_{REPLACE,CREATE} */
+#include <linux/xattr.h>
 #endif /* __KERNEL__ */
 
 /* ACL */
