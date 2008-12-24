@@ -1448,7 +1448,6 @@ static void process_recovery_queue(struct obd_device *obd)
                                 return;
                         continue;
                 }
-                target_exp_dequeue_req_replay(req);
                 list_del_init(&req->rq_list);
                 obd->obd_requests_queued_for_recovery--;
                 spin_unlock_bh(&obd->obd_processing_task_lock);
@@ -1462,13 +1461,16 @@ static void process_recovery_queue(struct obd_device *obd)
                        at_get(&req->rq_rqbd->rqbd_service->srv_at_estimate), 1);
                 /* bug 1580: decide how to properly sync() in recovery */
                 //mds_fsync_super(obd->u.obt.obt_sb);
+                spin_lock_bh(&obd->obd_processing_task_lock);
+                obd->obd_next_recovery_transno++;
+                spin_unlock_bh(&obd->obd_processing_task_lock);
+                target_exp_dequeue_req_replay(req);
                 class_export_put(req->rq_export);
                 ptlrpc_req_drop_rs(req);
                 OBD_FREE(req->rq_reqmsg, req->rq_reqlen);
                 OBD_FREE(req, sizeof *req);
                 OBD_RACE(OBD_FAIL_TGT_REPLAY_DELAY);
                 spin_lock_bh(&obd->obd_processing_task_lock);
-                obd->obd_next_recovery_transno++;
                 if (list_empty(&obd->obd_recovery_queue)) {
                         obd->obd_processing_task = 0;
                         spin_unlock_bh(&obd->obd_processing_task_lock);
