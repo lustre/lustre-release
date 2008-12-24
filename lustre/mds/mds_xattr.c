@@ -269,6 +269,16 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
                 GOTO(out, rc = -EOPNOTSUPP);
         }
 
+        /* currently lustre limit xattr size */
+        if (body->valid & OBD_MD_FLXATTR && !strcmp(xattr_name, XATTR_NAME_ACL_ACCESS))  {
+                xattrlen = lustre_msg_buflen(req->rq_reqmsg,
+                                             REQ_REC_OFF + 2);
+
+                if (xattrlen > LUSTRE_POSIX_ACL_MAX_SIZE)
+                        GOTO(out, -ERANGE);
+        }
+
+
         if (!strcmp(xattr_name, XATTR_NAME_ACL_ACCESS))
                 lockpart |= MDS_INODELOCK_LOOKUP;
 
@@ -301,9 +311,9 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
 
                         xattrlen = lustre_msg_buflen(req->rq_reqmsg,
                                                      REQ_REC_OFF + 2);
-                        if (xattrlen)
-                                xattr = lustre_msg_buf(req->rq_reqmsg,
-                                                       REQ_REC_OFF+2, xattrlen);
+
+                        xattr = lustre_msg_buf(req->rq_reqmsg,
+                                               REQ_REC_OFF+2, xattrlen);
 
                         LOCK_INODE_MUTEX(inode);
                         rc = inode->i_op->setxattr(de, xattr_name, xattr,

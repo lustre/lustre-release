@@ -145,6 +145,12 @@ setup() {
 	mount_client $MOUNT
 }
 
+setup_noconfig() {
+	start_mds
+	start_ost
+	mount_client $MOUNT
+}
+
 cleanup_nocli() {
 	stop_mds || return 201
 	stop_ost || return 202
@@ -1597,6 +1603,31 @@ test_47() { #17674
         return 0
 }
 run_test 47 "server restart does not make client loss lru_resize settings"
+
+# reformat after this test must need - if test will failed
+# we will have unkillable file at FS
+test_48() { # bug 17636
+	reformat
+	setup_noconfig
+        check_mount || return 2
+
+	$LFS setstripe $MOUNT -c -1 || return 9
+	$LFS getstripe $MOUNT || return 10
+
+	echo "ok" > $MOUNT/widestripe
+	$LFS getstripe $MOUNT/widestripe || return 11
+	# fill acl buffer for avoid expand lsm to them
+	awk -F : '{ print "u:"$1":rwx" }' /etc/passwd | while read acl; do  
+	    setfacl -m $acl $MOUNT/widestripe
+	done
+
+	stat $MOUNT/widestripe || return 12
+	
+	cleanup || error "can't cleanup"
+	return 0
+}
+run_test 48 "too many acls on file"
+
 
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

@@ -31,6 +31,13 @@ tbd Sun Microsystems, Inc.
 	  of Lustre filesystem with 4K stack may cause a stack overflow. For
 	  more information, please refer to bugzilla 17630.
 
+Severity   : normal
+Frequency  : always with long access acl
+Bugzilla   : 17636
+Descriptoin: mds can't pack reply with long acl.
+Details    : mds don't control size of acl but they limited by reint/getattr
+             reply buffer.
+
 Severity   : enhancement
 Bugzilla   : 18061
 Description: Update to SLES10 kernel-2.6.16.60-0.33.
