@@ -1699,7 +1699,10 @@ test_70b () {
 	[ "$SLOW" = "no" ] && duration=60
 	local cmd="rundbench 1 -t $duration"
 	local PID=""
-	do_nodes $CLIENTS "set -x; PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests/:$DBENCH_LIB DBENCH_LIB=$DBENCH_LIB $cmd" &
+	do_nodes $CLIENTS "set -x; MISSING_DBENCH_OK=$MISSING_DBENCH_OK \
+		PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests/:$DBENCH_LIB \
+		DBENCH_LIB=$DBENCH_LIB TESTSUITE=$TESTSUITE TESTNAME=$TESTNAME \
+		LCTL=$LCTL $cmd" &
 	PID=$!
 	log "Started rundbench load PID=$PID ..."
 
