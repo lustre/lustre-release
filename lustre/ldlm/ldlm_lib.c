@@ -585,6 +585,8 @@ target_start_and_reset_recovery_timer(struct obd_device *obd,
                                       struct ptlrpc_request *req,
                                       int new_client);
 void target_stop_recovery(void *, int);
+static void reset_recovery_timer(struct obd_device *obd, int duration,
+                                 int extend);
 int target_recovery_check_and_stop(struct obd_device *obd)
 {
         int abort_recovery = 0;
@@ -592,10 +594,27 @@ int target_recovery_check_and_stop(struct obd_device *obd)
         spin_lock_bh(&obd->obd_processing_task_lock);
         abort_recovery = obd->obd_abort_recovery;
         spin_unlock_bh(&obd->obd_processing_task_lock);
-        if (abort_recovery) {
+        if (!abort_recovery)
+                return 0;
+        /** check is fs version-capable */
+        if (target_fs_version_capable(obd)) {
+                class_handle_stale_exports(obd);
+        } else {
+                CWARN("Versions are not supported by ldiskfs, VBR is OFF\n");
+                class_disconnect_stale_exports(obd, exp_flags_from_obd(obd));
+        }
+        /* VBR: no clients are remained to replay, stop recovery */
+        spin_lock_bh(&obd->obd_processing_task_lock);
+        if (obd->obd_recovering && obd->obd_recoverable_clients == 0) {
+                spin_unlock_bh(&obd->obd_processing_task_lock);
                 target_stop_recovery(obd, 0);
                 return 1;
         }
+        /* always check versions now */
+        obd->obd_version_recov = 1;
+        spin_unlock_bh(&obd->obd_processing_task_lock);
+        /* reset timer, recovery will proceed with versions now */
+        reset_recovery_timer(obd, OBD_RECOVERY_FACTOR * obd_timeout, 1);
         return 0;
 }
 EXPORT_SYMBOL(target_recovery_check_and_stop);
@@ -1245,31 +1264,16 @@ static void reset_recovery_timer(struct obd_device *, int, int);
 static void target_recovery_expired(unsigned long castmeharder)
 {
         struct obd_device *obd = (struct obd_device *)castmeharder;
-        int version_recov = obd->obd_version_recov;
         LCONSOLE_WARN("%s: recovery period over; %d clients never reconnected "
                       "after %lds (%d clients did)\n",
                       obd->obd_name, obd->obd_recoverable_clients,
                       cfs_time_current_sec()- obd->obd_recovery_start,
                       obd->obd_connected_clients);
 
-        /** check is fs version-capable */
-        if (target_fs_version_capable(obd)) {
-                class_handle_stale_exports(obd);
-        } else {
-                CWARN("Versions are not supported by ldiskfs, VBR is OFF\n");
-                class_disconnect_stale_exports(obd, exp_flags_from_obd(obd));
-        }
         spin_lock_bh(&obd->obd_processing_task_lock);
-        /* VBR: no clients are remained to replay, stop recovery */
-        if (obd->obd_recovering && obd->obd_recoverable_clients == 0)
-                obd->obd_abort_recovery = 1;
-        /* always check versions now */
-        obd->obd_version_recov = 1;
+        obd->obd_abort_recovery = 1;
         cfs_waitq_signal(&obd->obd_next_transno_waitq);
         spin_unlock_bh(&obd->obd_processing_task_lock);
-        /* reset timer if recovery will proceed with versions now */
-        reset_recovery_timer(obd, OBD_RECOVERY_FACTOR * obd_timeout,
-                             !version_recov);
 }
 
 /* obd_processing_task_lock should be held */
