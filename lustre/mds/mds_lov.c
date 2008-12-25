@@ -429,7 +429,7 @@ static int mds_lov_get_objid(struct obd_device * obd,
         page = idx / OBJID_PER_PAGE();
         off = idx % OBJID_PER_PAGE();
         data = mds->mds_lov_page_array[page];
-        if (data[off] == 0) {
+        if (data[off] < 2) {
                 /* We never read this lastid; ask the osc */
                 struct obd_id_info lastid;
                 __u32 size = sizeof(lastid);
