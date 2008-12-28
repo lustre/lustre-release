@@ -14,6 +14,11 @@ $(obj)/fsfilt-%.c: $(obj)/fsfilt_%.c
 	ln -s $< $@
 endif
 
+EXTRA_DIST = $(lvfs-objs:.o=.c)  $(quotafmt-objs:.o=.c) \
+	fsfilt_ext3.c fsfilt_reiserfs.c \
+        lvfs_internal.h lvfs_userfs.c \
+	lustre_quota_fmt.c lustre_quota_fmt.h
+
 # for <ext3/xattr.h> on 2.6
 EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LDISKFS_DIR@ -I@LDISKFS_DIR@/ldiskfs
 

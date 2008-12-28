@@ -51,4 +51,3 @@ install-data-hook: $(install_data_hook)
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  llog-test.c
 MOSTLYCLEANFILES += linux/*.o darwin/*.o
-DIST_SOURCES = $(filter-out llog-test.c,$(obdclass-all-objs:.o=.c)) $(llog-test-objs:.o=.c) llog_test.c llog_internal.h
