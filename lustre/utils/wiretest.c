@@ -1645,6 +1645,38 @@ void lustre_assert_wire_constants(void)
         LASSERTF((int)sizeof(((struct ost_lvb *)0)->lvb_blocks) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct ost_lvb *)0)->lvb_blocks));
 
+        /* Checks for struct cfg_marker */
+        LASSERTF((int)sizeof(struct cfg_marker) == 160, " found %lld\n",
+                 (long long)(int)sizeof(struct cfg_marker));
+        LASSERTF((int)offsetof(struct cfg_marker, cm_step) == 0, " found %lld\n",
+                 (long long)(int)offsetof(struct cfg_marker, cm_step));
+        LASSERTF((int)sizeof(((struct cfg_marker *)0)->cm_step) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct cfg_marker *)0)->cm_step));
+        LASSERTF((int)offsetof(struct cfg_marker, cm_flags) == 4, " found %lld\n",
+                 (long long)(int)offsetof(struct cfg_marker, cm_flags));
+        LASSERTF((int)sizeof(((struct cfg_marker *)0)->cm_flags) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct cfg_marker *)0)->cm_flags));
+        LASSERTF((int)offsetof(struct cfg_marker, cm_vers) == 8, " found %lld\n",
+                 (long long)(int)offsetof(struct cfg_marker, cm_vers));
+        LASSERTF((int)sizeof(((struct cfg_marker *)0)->cm_vers) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct cfg_marker *)0)->cm_vers));
+        LASSERTF((int)offsetof(struct cfg_marker, cm_createtime) == 16, " found %lld\n",
+                 (long long)(int)offsetof(struct cfg_marker, cm_createtime));
+        LASSERTF((int)sizeof(((struct cfg_marker *)0)->cm_createtime) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct cfg_marker *)0)->cm_createtime));
+        LASSERTF((int)offsetof(struct cfg_marker, cm_canceltime) == 24, " found %lld\n",
+                 (long long)(int)offsetof(struct cfg_marker, cm_canceltime));
+        LASSERTF((int)sizeof(((struct cfg_marker *)0)->cm_canceltime) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct cfg_marker *)0)->cm_canceltime));
+        LASSERTF((int)offsetof(struct cfg_marker, cm_tgtname) == 32, " found %lld\n",
+                 (long long)(int)offsetof(struct cfg_marker, cm_tgtname));
+        LASSERTF((int)sizeof(((struct cfg_marker *)0)->cm_tgtname) == 64, " found %lld\n",
+                 (long long)(int)sizeof(((struct cfg_marker *)0)->cm_tgtname));
+        LASSERTF((int)offsetof(struct cfg_marker, cm_comment) == 96, " found %lld\n",
+                 (long long)(int)offsetof(struct cfg_marker, cm_comment));
+        LASSERTF((int)sizeof(((struct cfg_marker *)0)->cm_comment) == 64, " found %lld\n",
+                 (long long)(int)sizeof(((struct cfg_marker *)0)->cm_comment));
+
         /* Checks for struct llog_logid */
         LASSERTF((int)sizeof(struct llog_logid) == 20, " found %lld\n",
                  (long long)(int)sizeof(struct llog_logid));
@@ -2327,7 +2359,7 @@ void lustre_assert_wire_constants(void)
         CLASSERT(FIEMAP_EXTENT_DATA_TAIL == 0x00000400);
         CLASSERT(FIEMAP_EXTENT_UNWRITTEN == 0x00000800);
         CLASSERT(FIEMAP_EXTENT_MERGED == 0x00001000);
-#ifdef LIBLUSTRE_POSIX_ACL
+#if defined(LIBLUSTRE_POSIX_ACL) && defined(CONFIG_FS_POSIX_ACL)
 
         /* Checks for type posix_acl_xattr_entry */
         LASSERTF((int)sizeof(xattr_acl_entry) == 8, " found %lld\n",
