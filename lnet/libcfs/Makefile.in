@@ -28,6 +28,7 @@ libcfs-all-objs := debug.o nidstrings.o lwt.o module.o tracefile.o watchdog.o
 
 libcfs-objs := $(libcfs-linux-objs) $(libcfs-all-objs)
 
+EXTRA_DIST := $(libcfs-all-objs:%.o=%.c) tracefile.h user-prim.c user-lock.c Info.plist
 EXTRA_PRE_CFLAGS := -I@LUSTRE@/../lnet/libcfs
 
 @INCLUDE_RULES@
