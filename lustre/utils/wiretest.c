@@ -2421,7 +2421,7 @@ void lustre_assert_wire_constants(void)
         CLASSERT(FIEMAP_EXTENT_DATA_TAIL == 0x00000400);
         CLASSERT(FIEMAP_EXTENT_UNWRITTEN == 0x00000800);
         CLASSERT(FIEMAP_EXTENT_MERGED == 0x00001000);
-#ifdef LIBLUSTRE_POSIX_ACL
+#if defined(LIBLUSTRE_POSIX_ACL) && defined(CONFIG_FS_POSIX_ACL)
 
         /* Checks for type posix_acl_xattr_entry */
         LASSERTF((int)sizeof(xattr_acl_entry) == 8, " found %lld\n",
