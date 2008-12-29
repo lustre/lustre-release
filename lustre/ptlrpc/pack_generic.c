@@ -54,7 +54,7 @@
 #include <lustre_net.h>
 #include <lustre/ll_fiemap.h>
 
-#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(1,8,0,0)
+#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(1,8,99,0)
 #error "lustre_msg_v1 has been deprecated since 1.6.0, please remove it"
 #endif
 

@@ -470,15 +470,7 @@ do_lock:
         }
 
         if (rc < 0) {
-                if (-ESTALE == rc) {
-                        if (it_disposition(it, DISP_OPEN_OPEN) &&
-                            !it_open_error(DISP_OPEN_OPEN, it))
-                                /* server have valid open - close file first*/
-                                ll_release_openhandle(de, it);
-                        /* release intent reference to avoid having stale 'it'
-                         * in namedata for old VFS intent */
-                        ll_intent_drop_lock(it);
-                } else {
+                if (rc != -ESTALE) {
                         CDEBUG(D_INFO, "ll_intent_lock: rc %d : it->it_status "
                                "%d\n", rc, it->d.lustre.it_status);
                 }
