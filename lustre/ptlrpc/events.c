@@ -110,11 +110,13 @@ void reply_in_callback(lnet_event_t *ev)
 
         req->rq_receiving_reply = 0;
         req->rq_early = 0;
+        if (ev->unlinked)
+                req->rq_must_unlink = 0;
 
         if (ev->status)
                 goto out_wake;
         if (ev->type == LNET_EVENT_UNLINK) {
-                req->rq_must_unlink = 0;
+                LASSERT(ev->unlinked);
                 DEBUG_REQ(D_RPCTRACE, req, "unlink");
                 goto out_wake;
         }
@@ -128,18 +130,10 @@ void reply_in_callback(lnet_event_t *ev)
                           req->rq_replen, req->rq_replied, ev->unlinked);
 
                 req->rq_early_count++; /* number received, client side */
-                if (req->rq_replied) {
-                        /* If we already got the real reply, then we need to
-                         * check if lnet_finalize() unlinked the md.  In that
-                         * case, there will be no further callback of type
-                         * LNET_EVENT_UNLINK.
-                         */
-                        if (ev->unlinked)
-                                req->rq_must_unlink = 0;
-                        else
-                                DEBUG_REQ(D_RPCTRACE, req, "unlinked in reply");
+
+                if (req->rq_replied)   /* already got the real reply */
                         goto out_wake;
-                }
+
                 req->rq_early = 1;
                 req->rq_reply_off = ev->offset;
                 req->rq_nob_received = ev->mlength;
@@ -147,6 +141,7 @@ void reply_in_callback(lnet_event_t *ev)
                 req->rq_receiving_reply = 1;
         } else {
                 /* Real reply */
+                req->rq_rep_swab_mask = 0;
                 req->rq_replied = 1;
                 req->rq_reply_off = ev->offset;
                 req->rq_nob_received = ev->mlength;
@@ -342,10 +337,12 @@ void reply_out_callback(lnet_event_t *ev)
                 /* Last network callback.  The net's ref on 'rs' stays put
                  * until ptlrpc_server_handle_reply() is done with it */
                 spin_lock(&svc->srv_lock);
+                spin_lock(&rs->rs_lock);
                 rs->rs_on_net = 0;
                 if (!rs->rs_no_ack ||
                     rs->rs_transno <= rs->rs_export->exp_obd->obd_last_committed)
                         ptlrpc_schedule_difficult_reply (rs);
+                spin_unlock(&rs->rs_lock);
                 spin_unlock(&svc->srv_lock);
         }
 

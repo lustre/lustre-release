@@ -143,6 +143,12 @@ setup() {
 	mount_client $MOUNT
 }
 
+setup_noconfig() {
+	start_mds
+	start_ost
+	mount_client $MOUNT
+}
+
 cleanup_nocli() {
 	stop_mds || return 201
 	stop_ost || return 202
@@ -762,6 +768,29 @@ test_26() {
 }
 run_test 26 "MDT startup failure cleans LOV (should return errs)"
 
+wait_update () {
+	local node=$1
+	local TEST=$2
+	local FINAL=$3
+
+	local RESULT
+	local MAX=90
+	local WAIT=0
+	local sleep=5
+	while [ $WAIT -lt $MAX ]; do
+	    RESULT=$(do_node $node "$TEST") 
+	    if [ $RESULT -eq $FINAL ]; then
+		echo "Updated config after $WAIT sec: wanted $FINAL got $RESULT"
+		return 0
+	    fi
+	    WAIT=$((WAIT + sleep))
+	    echo "Waiting $((MAX - WAIT)) secs for config update" 
+	    sleep $sleep
+	done
+	echo "Config update not seen after $MAX sec: wanted $FINAL got $RESULT"
+	return 3
+}
+
 set_and_check() {
 	local myfacet=$1
 	local TEST=$2
@@ -775,23 +804,8 @@ set_and_check() {
 	fi
 	echo "Setting $PARAM from $ORIG to $FINAL"
 	do_facet $SINGLEMDS "$LCTL conf_param $PARAM=$FINAL" || error conf_param failed
-	local RESULT
-	local MAX=90
-	local WAIT=0
-	while [ 1 ]; do
-	    sleep 5
-	    RESULT=$(do_facet $myfacet "$TEST") 
-	    if [ $RESULT -eq $FINAL ]; then
-		echo "Updated config after $WAIT sec (got $RESULT)"
-		break
-	    fi
-	    WAIT=$((WAIT + 5))
-	    if [ $WAIT -eq $MAX ]; then
-		echo "Config update not seen: wanted $FINAL got $RESULT"
-		return 3
-	    fi
-	    echo "Waiting $(($MAX - $WAIT)) secs for config update" 
-	done
+
+	wait_update $(facet_host $myfacet) "$TEST" $FINAL || error check failed!
 }
 
 test_27a() {
@@ -933,19 +947,54 @@ test_31() { # bug 10734
 }
 run_test 31 "Connect to non-existent node (shouldn't crash)"
 
-test_32a() {
-	# XXX - make this test verify 1.8 -> 2.0 upgrade is working
-	# XXX - make this run on client-only systems with real hardware on
-	#       the OST and MDT
-	#       there appears to be a lot of assumption here about loopback
-	#       devices
-	# or maybe this test is just totally useless on a client-only system
-	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
-	[ "$mds_HOST" = "`hostname`" ] || { skip "remote MDS" && return 0; }
-	[ "$ost_HOST" = "`hostname`" -o "$ost1_HOST" = "`hostname`" ] || \
-		{ skip "remote OST" && return 0; }
+# Use these start32/stop32 fn instead of t-f start/stop fn,
+# for local devices, to skip global facet vars init 
+stop32 () {
+	local facet=$1
+	shift
+	echo "Stopping local ${MOUNT%/*}/${facet} (opts:$@)"
+	umount -d $@ ${MOUNT%/*}/${facet}
+	losetup -a
+}
 
-	[ -z "$TUNEFS" ] && skip "No tunefs" && return
+start32 () {
+	local facet=$1
+	shift
+	local device=$1
+	shift
+	mkdir -p ${MOUNT%/*}/${facet}
+
+	echo "Starting local ${facet}: $@ $device ${MOUNT%/*}/${facet}"
+	mount -t lustre $@ ${device} ${MOUNT%/*}/${facet}
+	RC=$?
+	if [ $RC -ne 0 ]; then
+		echo "mount -t lustre $@ ${device} ${MOUNT%/*}/${facet}"
+		echo "Start of ${device} of local ${facet} failed ${RC}"
+	fi 
+	losetup -a
+	return $RC
+}
+
+cleanup_nocli32 () {
+	stop32 mds -f
+	stop32 ost1 -f
+	wait_exit_ST client
+}
+
+cleanup_32() {
+	trap 0
+	echo "Cleanup test_32 umount $MOUNT ..."
+	umount -f $MOUNT || true
+	echo "Cleanup local mds ost1 ..."
+	cleanup_nocli32
+	unload_modules
+}
+
+test_32a() {
+	# this test is totally useless on a client-only system
+	[ -n "$CLIENTONLY" -o -n "$CLIENTMODSONLY" ] && skip "client only testing" && return 0
+	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
+	[ -z "$TUNEFS" ] && skip "No tunefs" && return 0
 	local DISK1_8=$LUSTRE/tests/disk1_8.tgz
 	[ ! -r $DISK1_8 ] && skip "Cannot find $DISK1_8" && return 0
 
@@ -957,14 +1006,17 @@ test_32a() {
 	lctl set_param debug=$PTLDEBUG
 
 	$TUNEFS $tmpdir/mds || error "tunefs failed"
+
 	# nids are wrong, so client wont work, but server should start
-	start mds $tmpdir/mds "-o loop,exclude=lustre-OST0000" || return 3
-	local UUID=$(lctl get_param -n mdt.lustre-MDT0000.uuid)
+	start32 mds $tmpdir/mds "-o loop,exclude=lustre-OST0000" && \
+		trap cleanup_32 EXIT INT || return 3
+	
+	local UUID=$(lctl get_param -n mds.lustre-MDT0000.uuid)
 	echo MDS uuid $UUID
 	[ "$UUID" == "mdsA_UUID" ] || error "UUID is wrong: $UUID" 
 
 	$TUNEFS --mgsnode=`hostname` $tmpdir/ost1 || error "tunefs failed"
-	start ost1 $tmpdir/ost1 "-o loop" || return 5
+	start32 ost1 $tmpdir/ost1 "-o loop" || return 5
 	UUID=$(lctl get_param -n obdfilter.lustre-OST0000.uuid)
 	echo OST uuid $UUID
 	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID" 
@@ -982,41 +1034,37 @@ test_32a() {
 
 	# With a new good MDT failover nid, we should be able to mount a client
 	# (but it cant talk to OST)
-	local OLDMOUNTOPT=$MOUNTOPT
-	MOUNTOPT="exclude=lustre-OST0000"
-	mount_client $MOUNT
-        MOUNTOPT=$OLDMOUNTOPT
-	set_and_check client "lctl get_param -n mdc.*.max_rpcs_in_flight" "lustre-MDT0000.mdc.max_rpcs_in_flight" ||
-		return 11
+	local mountopt="-o exclude=lustre-OST0000"
 
-	zconf_umount `hostname` $MOUNT -f
-	cleanup_nocli
-	load_modules
+	local device=`h2$NETTYPE $HOSTNAME`:/lustre
+	echo "Starting local client: $HOSTNAME: $mountopt $device $MOUNT"
+	mount -t lustre $mountopt $device $MOUNT || return 1
 
-        # mount a second time to make sure we didnt leave upgrade flag on
+	local old=$(lctl get_param -n mdc.*.max_rpcs_in_flight)
+	local new=$((old + 5))
+	lctl conf_param lustre-MDT0000.mdc.max_rpcs_in_flight=$new
+	wait_update $HOSTNAME "lctl get_param -n mdc.*.max_rpcs_in_flight" $new || return 11
+
+	cleanup_32
+
+	# mount a second time to make sure we didnt leave upgrade flag on
 	load_modules
 	$TUNEFS --dryrun $tmpdir/mds || error "tunefs failed"
-	load_modules
-	start mds $tmpdir/mds "-o loop,exclude=lustre-OST0000" || return 12
-	cleanup_nocli
+	start32 mds $tmpdir/mds "-o loop,exclude=lustre-OST0000" && \
+		trap cleanup_32 EXIT INT || return 12
+
+	cleanup_32
 
 	rm -rf $tmpdir || true	# true is only for TMP on NFS
 }
 run_test 32a "Upgrade from 1.8 (not live)"
 
 test_32b() {
-	# XXX - make this test verify 1.8 -> 2.0 upgrade is working
-	# XXX - make this run on client-only systems with real hardware on
-	#       the OST and MDT
-	#       there appears to be a lot of assumption here about loopback
-	#       devices
-	# or maybe this test is just totally useless on a client-only system
+	# this test is totally useless on a client-only system
+	[ -n "$CLIENTONLY" -o -n "$CLIENTMODSONLY" ] && skip "client only testing" && return 0
 	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
-	[ "$mds_HOST" = "`hostname`" ] || { skip "remote MDS" && return 0; }
-	[ "$ost_HOST" = "`hostname`" -o "$ost1_HOST" = "`hostname`" ] || \
-		{ skip "remote OST" && return 0; }
-
 	[ -z "$TUNEFS" ] && skip "No tunefs" && return
+
 	local DISK1_8=$LUSTRE/tests/disk1_8.tgz
 	[ ! -r $DISK1_8 ] && skip "Cannot find $DISK1_8" && return 0
 	local tmpdir=$TMP/$tdir
@@ -1026,17 +1074,19 @@ test_32b() {
 
 	load_modules
 	lctl set_param debug=$PTLDEBUG
-	NEWNAME=lustre
+	local NEWNAME=lustre
 
 	# writeconf will cause servers to register with their current nids
 	$TUNEFS --writeconf --fsname=$NEWNAME $tmpdir/mds || error "tunefs failed"
-	start mds1 $tmpdir/mds "-o loop" || return 3
+	start32 mds1 $tmpdir/mds "-o loop" && \
+		trap cleanup_32 EXIT INT || return 3
+
 	local UUID=$(lctl get_param -n mdt.${NEWNAME}-MDT0000.uuid)
 	echo MDS uuid $UUID
 	[ "$UUID" == "${NEWNAME}-MDT0000_UUID" ] || error "UUID is wrong: $UUID" 
 
 	$TUNEFS --mgsnode=`hostname` --writeconf --fsname=$NEWNAME $tmpdir/ost1 || error "tunefs failed"
-	start ost1 $tmpdir/ost1 "-o loop" || return 5
+	start32 ost1 $tmpdir/ost1 "-o loop" || return 5
 	UUID=$(lctl get_param -n obdfilter.${NEWNAME}-OST0000.uuid)
 	echo OST uuid $UUID
 	[ "$UUID" == "${NEWNAME}-OST0000_UUID" ] || error "UUID is wrong: $UUID"
@@ -1052,15 +1102,21 @@ test_32b() {
 	# MDT and OST should have registered with new nids, so we should have
 	# a fully-functioning client
 	echo "Check client and old fs contents"
-	OLDFS=$FSNAME
-	FSNAME=$NEWNAME
-	mount_client $MOUNT
-	FSNAME=$OLDFS
-	set_and_check client "lctl get_param -n mdc.*.max_rpcs_in_flight" "${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight" || return 11
+
+	local device=`h2$NETTYPE $HOSTNAME`:/$NEWNAME
+	echo "Starting local client: $HOSTNAME: $device $MOUNT"
+	mount -t lustre $device $MOUNT || return 1
+
+	local old=$(lctl get_param -n mdc.*.max_rpcs_in_flight)
+	local new=$((old + 5))
+	lctl conf_param ${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight=$new
+	wait_update $HOSTNAME "lctl get_param -n mdc.*.max_rpcs_in_flight" $new || return 11
+
 	[ "$(cksum $MOUNT/passwd | cut -d' ' -f 1,2)" == "94306271 1478" ] || return 12
 	echo "ok."
 
-	cleanup
+	cleanup_32
+
 	rm -rf $tmpdir || true  # true is only for TMP on NFS
 }
 run_test 32b "Upgrade from 1.8 with writeconf"
@@ -1439,6 +1495,115 @@ test_45() { #17310
         return 0
 }
 run_test 45 "long unlink handling in ptlrpcd"
+
+test_46a() {
+	OSTCOUNT=6
+	reformat
+	start_mds || return 1
+	#first client should see only one ost
+	start_ost || return 2
+	#start_client
+	mount_client $MOUNT || return 3
+	
+	start_ost2 || return 4
+	start ost3 `ostdevname 3` $OST_MOUNT_OPTS || return 5
+	start ost4 `ostdevname 4` $OST_MOUNT_OPTS || return 6
+	start ost5 `ostdevname 5` $OST_MOUNT_OPTS || return 7
+	# wait until ost2-5 is sync
+	sleep 5
+	#second client see both ost's
+
+	mount_client $MOUNT2 || return 8
+	$LFS setstripe $MOUNT2 -c -1 || return 9
+	$LFS getstripe $MOUNT2 || return 10
+
+	echo "ok" > $MOUNT2/widestripe
+	$LFS getstripe $MOUNT2/widestripe || return 11
+	# fill acl buffer for avoid expand lsm to them
+	awk -F : '{if (FNR < 25) { print "u:"$1":rwx" }}' /etc/passwd | while read acl; do  
+	    setfacl -m $acl $MOUNT2/widestripe
+	done
+
+	# will be deadlock
+	stat $MOUNT/widestripe || return 12
+
+	umount_client $MOUNT2 || return 13
+	umount_client $MOUNT || return 14
+	stop ost5 -f || return 20
+	stop ost4 -f || return 21
+	stop ost3 -f || return 22
+	stop_ost2 || return 23
+	stop_ost || return 24
+	stop_mds || return 25
+}
+run_test 46a "handle ost additional - wide striped file"
+
+test_47() { #17674
+        setup
+        check_mount || return 2
+        $LCTL set_param ldlm.namespaces.$FSNAME-*-*-*.lru_size=100
+
+        local lru_size=[]
+        local count=0
+        for ns in $($LCTL get_param ldlm.namespaces.$FSNAME-*-*-*.lru_size); do
+            if echo $ns | grep "MDT[[:digit:]]*"; then
+                continue
+            fi
+            lrs=$(echo $ns | sed 's/.*lru_size=//')
+            lru_size[count]=$lrs
+            let count=count+1
+        done
+ 
+        facet_failover ost1
+        facet_failover $SINGLEMDS
+        df -h $MOUNT || return 3
+
+        count=0
+        for ns in $($LCTL get_param ldlm.namespaces.$FSNAME-*-*-*.lru_size); do
+            if echo $ns | grep "MDT[[:digit:]]*"; then
+                continue
+            fi
+            lrs=$(echo $ns | sed 's/.*lru_size=//')
+            if ! test "$lrs" -eq "${lru_size[count]}"; then
+                n=$(echo $ns | sed -e 's/ldlm.namespaces.//' -e 's/.lru_size=.*//')
+                error "$n has lost lru_size: $lrs vs. ${lru_size[count]}"
+            fi
+            let count=count+1
+        done
+
+        cleanup
+        return 0
+}
+run_test 47 "server restart does not make client loss lru_resize settings"
+
+# reformat after this test must need - if test will failed
+# we will have unkillable file at FS
+test_48() { # bug 17636
+	reformat
+	setup_noconfig
+        check_mount || return 2
+
+	$LFS setstripe $MOUNT -c -1 || return 9
+	$LFS getstripe $MOUNT || return 10
+
+	echo "ok" > $MOUNT/widestripe
+	$LFS getstripe $MOUNT/widestripe || return 11
+	# fill acl buffer for avoid expand lsm to them
+	awk -F : '{ print "u:"$1":rwx" }' /etc/passwd | while read acl; do  
+	    setfacl -m $acl $MOUNT/widestripe
+	done
+	awk -F : '{ print "g:"$1":rwx" }' /etc/groups | while read acl; do  
+	    setfacl -m $acl $MOUNT/widestripe
+	done
+
+
+	stat $MOUNT/widestripe || return 12
+	
+	cleanup || error "can't cleanup"
+	return 0
+}
+run_test 48 "too many acls on file"
+
 
 cleanup_gss
 equals_msg `basename $0`: test complete

@@ -41,7 +41,7 @@
 
 /* Minimal MGC for liblustre: only used to read the config log from the MGS
    at setup time, no updates. */
- 
+
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
@@ -67,6 +67,9 @@ static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (rc)
                 GOTO(err_decref, rc);
 
+        /* liblustre only support null flavor to MGS */
+        obd->u.cli.cl_flvr_mgc.sf_rpc = SPTLRPC_FLVR_NULL;
+
         rc = obd_llog_init(obd, &obd->obd_olg, obd, 0, NULL, NULL);
         if (rc) {
                 CERROR("failed to setup llogging subsystems\n");
@@ -88,7 +91,7 @@ static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         ENTRY;
 
         switch (stage) {
-        case OBD_CLEANUP_EARLY: 
+        case OBD_CLEANUP_EARLY:
         case OBD_CLEANUP_EXPORTS:
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
@@ -113,7 +116,7 @@ static int mgc_cleanup(struct obd_device *obd)
 }
 
 static int mgc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                         struct obd_device *tgt, int count, 
+                         struct obd_device *tgt, int count,
                          struct llog_catid *logid, struct obd_uuid *uuid)
 {
         struct llog_ctxt *ctxt;
@@ -157,6 +160,6 @@ struct obd_ops mgc_obd_ops = {
 
 int __init mgc_init(void)
 {
-        return class_register_type(&mgc_obd_ops, NULL, 
+        return class_register_type(&mgc_obd_ops, NULL,
                                    NULL, LUSTRE_MGC_NAME, NULL);
 }

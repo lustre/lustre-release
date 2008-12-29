@@ -483,12 +483,17 @@ static int __lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
                     (typeof(lumv3.lmm_stripe_offset))(-1)) {
                         rc = lov_check_index_in_pool(lumv3.lmm_stripe_offset,
                                                      pool);
-                        if (rc < 0)
+                        if (rc < 0) {
+                                lh_put(lov->lov_pools_hash_body,
+                                       &pool->pool_hash);
                                 RETURN(-EINVAL);
+                        }
                 }
 
                 if (stripe_count > pool_tgt_count(pool))
                         stripe_count = pool_tgt_count(pool);
+
+                lh_put(lov->lov_pools_hash_body, &pool->pool_hash);
         }
 
         if ((__u64)lumv1->lmm_stripe_size * stripe_count > ~0UL) {

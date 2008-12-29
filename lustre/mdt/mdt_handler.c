@@ -2537,6 +2537,7 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
 
         /* To not check for split by default. */
         info->mti_spec.sp_ck_split = 0;
+        info->mti_spec.no_create = 0;
 }
 
 static void mdt_thread_info_fini(struct mdt_thread_info *info)
@@ -4114,7 +4115,7 @@ static int mdt_obd_llog_setup(struct obd_device *obd,
 
         obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
         if (IS_ERR(obd->obd_fsops))
-                return (int) PTR_ERR(obd->obd_fsops);
+                return PTR_ERR(obd->obd_fsops);
 
         rc = fsfilt_setup(obd, lsi->lsi_srv_mnt->mnt_sb);
         if (rc) {
@@ -4130,7 +4131,7 @@ static int mdt_obd_llog_setup(struct obd_device *obd,
         rc = llog_setup(obd, &obd->obd_olg, LLOG_CONFIG_ORIG_CTXT, obd,
                         0, NULL, &llog_lvfs_ops);
         if (rc) {
-                CERROR("llog setup failed: %d\n", rc);
+                CERROR("llog_setup() failed: %d\n", rc);
                 fsfilt_put_ops(obd->obd_fsops);
         }
 
@@ -4145,17 +4146,19 @@ static void mdt_obd_llog_cleanup(struct obd_device *obd)
         if (ctxt)
                 llog_cleanup(ctxt);
 
-        if (obd->obd_fsops)
+        if (obd->obd_fsops) {
                 fsfilt_put_ops(obd->obd_fsops);
+                obd->obd_fsops = NULL;
+        }
 }
 
 static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 {
-        struct md_device *next = m->mdt_child;
-        struct lu_device *d    = &m->mdt_md_dev.md_lu_dev;
-        struct lu_site   *ls   = d->ld_site;
+        struct md_device  *next = m->mdt_child;
+        struct lu_device  *d    = &m->mdt_md_dev.md_lu_dev;
+        struct lu_site    *ls   = d->ld_site;
         struct obd_device *obd = mdt2obd_dev(m);
-        int             waited = 0;
+        int                waited = 0;
         ENTRY;
 
         /* At this point, obd exports might still be on the "obd_zombie_exports"
@@ -4208,7 +4211,10 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         mdt_seq_fini_cli(m);
         mdt_fld_fini(env, m);
         mdt_procfs_fini(m);
-        lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
+        if (obd->obd_proc_exports_entry) {
+                lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
+                obd->obd_proc_exports_entry = NULL;
+        }
         lprocfs_free_per_client_stats(obd);
         lprocfs_free_obd_stats(obd);
         ptlrpc_lprocfs_unregister_obd(d->ld_obd);
@@ -4220,7 +4226,9 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         cfs_timer_disarm(&m->mdt_ck_timer);
         mdt_ck_thread_stop(m);
 
-        /* finish the stack */
+        /* 
+         * Finish the stack 
+         */
         mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
 
         if (ls) {
@@ -4563,8 +4571,10 @@ err_fini_stack:
         mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
 err_fini_proc:
         mdt_procfs_fini(m);
-        if (obd->obd_proc_exports_entry)
+        if (obd->obd_proc_exports_entry) {
                 lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
+                obd->obd_proc_exports_entry = NULL;
+        }
         ptlrpc_lprocfs_unregister_obd(obd);
         lprocfs_obd_cleanup(obd);
 err_fini_site:
@@ -4936,7 +4946,9 @@ static int mdt_obd_disconnect(struct obd_export *exp)
 
                 spin_lock(&svc->srv_lock);
                 list_del_init(&rs->rs_exp_list);
+                spin_lock(&rs->rs_lock);
                 ptlrpc_schedule_difficult_reply(rs);
+                spin_unlock(&rs->rs_lock);
                 spin_unlock(&svc->srv_lock);
         }
         spin_unlock(&exp->exp_lock);
@@ -5138,11 +5150,87 @@ static int mdt_obd_notify(struct obd_device *host,
         RETURN(0);
 }
 
+static int mdt_ioc_fid2path(struct lu_env *env, struct mdt_device *mdt,
+                            struct obd_ioctl_data *data)
+{
+        struct lu_context  ioctl_session;
+        struct mdt_object *obj;
+        struct lu_fid     *fid;
+        char  *path = NULL;
+        __u64  recno;
+        int    pathlen = data->ioc_plen1;
+        int    linkno;
+        int    rc;
+        ENTRY;
+
+
+        fid = (struct lu_fid *)data->ioc_inlbuf1;
+        memcpy(&recno, data->ioc_inlbuf2, sizeof(recno));
+        memcpy(&linkno, data->ioc_inlbuf3, sizeof(linkno));
+        CDEBUG(D_IOCTL, "path get "DFID" from "LPU64" #%d\n",
+               PFID(fid), recno, linkno);
+
+        if (!fid_is_sane(fid))
+                RETURN(-EINVAL);
+
+        if (pathlen < 3)
+                RETURN(-EOVERFLOW);
+
+        rc = lu_context_init(&ioctl_session, LCT_SESSION);
+        if (rc)
+                RETURN(rc);
+        ioctl_session.lc_thread = (struct ptlrpc_thread *)cfs_current();
+        lu_context_enter(&ioctl_session);
+        env->le_ses = &ioctl_session;
+
+        OBD_ALLOC(path, pathlen);
+        if (path == NULL)
+                GOTO(out_context, rc = -ENOMEM);
+
+        obj = mdt_object_find(env, mdt, fid);
+        if (obj == NULL || IS_ERR(obj)) {
+                CDEBUG(D_IOCTL, "no object "DFID": %ld\n", PFID(fid),
+                       PTR_ERR(obj));
+                GOTO(out_free, rc = -EINVAL);
+        }
+
+        rc = lu_object_exists(&obj->mot_obj.mo_lu);
+        if (rc <= 0) {
+                if (rc == -1)
+                        rc = -EREMOTE;
+                else
+                        rc = -ENOENT;
+                mdt_object_put(env, obj);
+                CDEBUG(D_IOCTL, "nonlocal object "DFID": %d\n", PFID(fid),
+                       rc);
+                GOTO(out_free, rc);
+        }
+
+        rc = mo_path(env, md_object_next(&obj->mot_obj), path, pathlen, recno,
+                     &linkno);
+        mdt_object_put(env, obj);
+        if (rc)
+               GOTO(out_free, rc);
+
+        if (copy_to_user(data->ioc_pbuf1, path, pathlen))
+                rc = -EFAULT;
+
+        memcpy(data->ioc_inlbuf3, &linkno, sizeof(linkno));
+
+        EXIT;
+out_free:
+        OBD_FREE(path, pathlen);
+out_context:
+        lu_context_exit(&ioctl_session);
+        lu_context_fini(&ioctl_session);
+        return rc;
+}
+
 static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                          void *karg, void *uarg)
 {
         struct lu_env      env;
-        struct obd_device *obd= exp->exp_obd;
+        struct obd_device *obd = exp->exp_obd;
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
         struct dt_device  *dt = mdt->mdt_bottom;
         int rc;
@@ -5164,6 +5252,9 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 CERROR("Aborting recovery for device %s\n", obd->obd_name);
                 target_stop_recovery_thread(obd);
                 rc = 0;
+                break;
+        case OBD_IOC_FID2PATH:
+                rc = mdt_ioc_fid2path(&env, mdt, karg);
                 break;
         default:
                 CERROR("Not supported cmd = %d for device %s\n",

@@ -51,13 +51,46 @@
 struct semaphore pinger_sem;
 static CFS_LIST_HEAD(pinger_imports);
 
+struct ptlrpc_request *
+ptlrpc_prep_ping(struct obd_import *imp)
+{
+        struct ptlrpc_request *req;
+
+        req = ptlrpc_request_alloc_pack(imp, &RQF_OBD_PING,
+                                        LUSTRE_OBD_VERSION, OBD_PING);
+        if (req) {
+                ptlrpc_request_set_replen(req);
+                req->rq_no_resend = req->rq_no_delay = 1;
+        }
+        return req;
+}
+
+int ptlrpc_obd_ping(struct obd_device *obd)
+{
+        int rc;
+        struct ptlrpc_request *req;
+        ENTRY;
+
+        req = ptlrpc_prep_ping(obd->u.cli.cl_import);
+        if (req == NULL)
+                RETURN(-ENOMEM);
+
+        req->rq_send_state = LUSTRE_IMP_FULL;
+
+        rc = ptlrpc_queue_wait(req);
+
+        ptlrpc_req_finished(req);
+
+        RETURN(rc);
+}
+EXPORT_SYMBOL(ptlrpc_obd_ping);
+
 int ptlrpc_ping(struct obd_import *imp)
 {
         struct ptlrpc_request *req;
         ENTRY;
 
-        req = ptlrpc_request_alloc_pack(imp, &RQF_OBD_PING, LUSTRE_OBD_VERSION,
-                                        OBD_PING);
+        req = ptlrpc_prep_ping(imp);
         if (req == NULL) {
                 CERROR("OOM trying to ping %s->%s\n",
                        imp->imp_obd->obd_uuid.uuid,
@@ -67,8 +100,6 @@ int ptlrpc_ping(struct obd_import *imp)
 
         DEBUG_REQ(D_INFO, req, "pinging %s->%s",
                   imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
-        req->rq_no_resend = req->rq_no_delay = 1;
-        ptlrpc_request_set_replen(req);
         ptlrpcd_add_req(req, PSCOPE_OTHER);
 
         RETURN(0);

@@ -1911,11 +1911,10 @@ int jt_cfg_dump_log(int argc, char **argv)
         struct obd_ioctl_data data;
         int rc;
 
-        IOC_INIT(data);
-
         if (argc != 2)
                 return CMD_HELP;
 
+        IOC_INIT(data);
         data.ioc_inllen1 = strlen(argv[1]) + 1;
         data.ioc_inlbuf1 = argv[1];
 
@@ -2929,4 +2928,33 @@ out:
         }
 
         return rc;
+}
+
+void  llapi_ping_target(char *obd_type, char *obd_name,
+                        char *obd_uuid, void *args)
+{
+        int  rc;
+        struct obd_ioctl_data data;
+
+        memset(&data, 0, sizeof(data));
+        data.ioc_inlbuf4 = obd_name;
+        data.ioc_inllen4 = strlen(obd_name) + 1;
+        data.ioc_dev = OBD_DEV_BY_DEVNAME;
+        memset(buf, 0, sizeof(rawbuf));
+        if (obd_ioctl_pack(&data, &buf, max)) {
+                fprintf(stderr, "error: invalid ioctl\n");
+                return;
+        }
+        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_PING_TARGET, buf);
+        if (rc)
+                rc = errno;
+        if (rc == ENOTCONN || rc == ESHUTDOWN) {
+                printf("%s inactive.\n", obd_name);
+        } else if (rc) {
+                fprintf(stderr, "error: check '%s' %s\n",
+                        obd_name, strerror(errno));
+        } else {
+                printf("%s active.\n", obd_name);
+        }
+
 }

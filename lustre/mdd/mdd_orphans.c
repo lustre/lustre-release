@@ -120,7 +120,7 @@ static inline void mdd_orphan_write_lock(const struct lu_env *env,
 {
 
         struct dt_object        *dor    = mdd->mdd_orphans;
-        dor->do_ops->do_write_lock(env, dor, MOR_TGT_CHILD);
+        dor->do_ops->do_write_lock(env, dor, MOR_TGT_ORPHAN);
 }
 
 static inline void mdd_orphan_write_unlock(const struct lu_env *env,

@@ -1,8 +1,8 @@
 tbd  Sun Microsystems, Inc.
        * version 2.0.0
        * Support for kernels:
-        2.6.16.60-0.31 (SLES 10),
-        2.6.18-92.1.17.el5 (RHEL 5),
+        2.6.16.60-0.33 (SLES 10),
+        2.6.18-92.1.22.el5 (RHEL 5),
         2.6.22.14 vanilla (kernel.org).
        * Client support for unpatched kernels:
 	 (see http://wiki.lustre.org/index.php?title=Patchless_Client)
@@ -12,6 +12,67 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
+
+Severity   : normal
+Frequency  : always with long access acl
+Bugzilla   : 17636
+Descriptoin: mds can't pack reply with long acl.
+Details    : mds don't control size of acl but they limited by reint/getattr
+             reply buffer.
+
+Severity   : enhancement
+Bugzilla   : 18061
+Description: Update to SLES10 kernel-2.6.16.60-0.33.
+
+Severity   : enhancement
+Bugzilla   : 18060
+Description: Update to RHEL5 kernel-2.6.18-92.1.22.el5.
+
+Severity   : normal
+Frequency  : start MDS on uncleanly shutdowned MDS device
+Bugzilla   : 18049
+Descriptoin: aborting recovery hang on MDS
+Details    : don't throttle destroy RPCs for the MDT.
+
+Severity   : major
+Frequency  : on remount
+Bugzilla   : 18018
+Description: external journal device not working after the remount
+Details    : clear dev_rdonly flag for external journal devices in
+             blkdev_put()
+
+Severity   : normal
+Frequency  : race on file read and write
+Bugzilla   : 16417
+Description: Lustre doesn't delete files
+Details    : Clients drop lock reference and release openhandle when they find
+             stale inode.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 17802
+Description: shutdown vs evict race
+Details    : client_disconnect_export vs connect request race.
+	     if client will evicted at this time - we start invalidate
+             thread without referece to import and import can be freed
+             at same time.
+
+Severity   : normal
+Frequency  : rare, need acl's on inode.
+Bugzilla   : 16492
+Description: client can't handle ost additional correctly
+Details    : if ost was added after client connected to mds client can have
+             hit lnet_try_match_md ... to big messages to wide striped files.
+             in this case need teach client to handle config events about add
+             lov target and update client max ea size at that event.
+
+Severity   : enhancement
+Bugzilla   : 15699
+Description: Changelogs
+Details    : Changelogs are a lightweight mechanism to track filesystem
+             metadata and namespace changes.  The changelog is recorded
+             permanently on the MDTs, and is periodically "consumed" / purged
+             when records are no longer needed.
 
 Severity   : enhancement
 Bugzilla   : 15957
@@ -44,7 +105,7 @@ Description: Interoperability at server side (Disk interoperability)
 Severity   : enhancement
 Bugzilla   : 17201
 Description: Update to RHEL5 kernel-2.6.18-92.1.17.el5.
- 
+
 Severity   : enhancement
 Bugzilla   : 17458
 Description: Update to SLES10 SP2 kernel-2.6.16.60-0.31.
@@ -1860,6 +1921,14 @@ Details    : With AT enabled, the recovery window can be excessively long (6000+
 	     timeout no longer depends on the service time, it is set to
 	     INITIAL_CONNECT_TIMEOUT now) and clients report the old service
 	     time via pb_service_time.
+
+Severity   : normal
+Bugzilla   : 16522
+Description: Watchdog triggered on MDS failover
+Details    : enable OBD_CONNECT_MDT flag when connecting from the MDS so that
+	     the OSTs know that the MDS "UUID" can be reused for the same export
+	     from a different NID, so we do not need to wait for the export to be
+	     evicted
 
 --------------------------------------------------------------------------------
 

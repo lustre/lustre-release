@@ -141,6 +141,8 @@ test_6() {
     before=`kbytesfree`
     dd if=/dev/urandom bs=4096 count=1280 of=$f || return 28
     lfs getstripe $f
+    get_stripe_info client $f
+
     sync
     sleep 2					# ensure we have a fresh statfs
     sync
@@ -150,7 +152,7 @@ test_6() {
     log "before: $before after_dd: $after_dd"
     (( $before > $after_dd )) || return 1
     rm -f $f
-    fail ost1
+    fail ost$((stripe_index + 1))
     $CHECKSTAT -t file $f && return 2 || true
     sync
     # let the delete happen

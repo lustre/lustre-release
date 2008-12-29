@@ -65,6 +65,7 @@
 
 /* For dirname() */
 #include <libgen.h>
+#include <poll.h>
 
 #include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
@@ -105,6 +106,9 @@ static int lfs_rgetfacl(int argc, char **argv);
 static int lfs_cp(int argc, char **argv);
 static int lfs_ls(int argc, char **argv);
 static int lfs_poollist(int argc, char **argv);
+static int lfs_changelog(int argc, char **argv);
+static int lfs_changelog_clear(int argc, char **argv);
+static int lfs_fid2path(int argc, char **argv);
 static int lfs_path2fid(int argc, char **argv);
 
 /* all avaialable commands */
@@ -129,9 +133,9 @@ command_t cmdlist[] = {
          "directory or recursively for all files in a directory tree.\n"
          "usage: getstripe [--obd|-O <uuid>] [--quiet | -q] [--verbose | -v]\n"
          "                 [--recursive | -r] <dir|file> ..."},
-        {"poollist", lfs_poollist, 0,
+        {"pool_list", lfs_poollist, 0,
          "List pools or pool OSTs\n"
-         "usage: poollist <fsname>[.<poolname>] | <pathname>\n"},
+         "usage: pool_list <fsname>[.<poolname>] | <pathname>\n"},
         {"find", lfs_find, 0,
          "To find files that match given parameters recursively in a directory tree.\n"
          "usage: find <dir|file> ... \n"
@@ -214,6 +218,18 @@ command_t cmdlist[] = {
         {"ls", lfs_ls, 0,
          "Remote user list directory contents.\n"
          "usage: ls [OPTION]... [FILE]..."},
+        {"changelog", lfs_changelog, 0,
+         "Show the metadata changes in a filesystem between two snapshot times."
+         "\nusage: changelog [--follow] <mdtname> [startrec [endrec]]"},
+        {"changelog_clear", lfs_changelog_clear, 0,
+         "Purge old changelog records up to <endrec> to free up space.\n"
+         "An <endrec> of 0 means all records.\n"
+         "usage: changelog_clear <mdtname> <endrec>"},
+        {"fid2path", lfs_fid2path, 0,
+         "Resolve the full path to a given FID. For a specific hardlink "
+         "specify link number <linkno>.\n"
+         /* "For a historical name, specify changelog record <recno>.\n" */
+         "usage: fid2path <mdtname> <fid> [--link <linkno>]"/*[--rec <recno>]*/},
         {"path2fid", lfs_path2fid, 0, "Display the fid for a given path.\n"
          "usage: path2fid <path>"},
         {"help", Parser_help, 0, "help"},
@@ -901,32 +917,6 @@ static int lfs_osts(int argc, char **argv)
         return rc;
 }
 
-static int lfs_path2fid(int argc, char **argv)
-{
-        char *path;
-        unsigned long long seq;
-        unsigned long oid, ver;
-        int rc;
-
-        if (argc != 2)
-                return CMD_HELP;
-
-        path = argv[1];
-        rc = llapi_path2fid(path, &seq, &oid, &ver);
-        if (rc) {
-                fprintf(stderr, "error: can't get fid for %s\n", path);
-                return rc;
-        }
-
-        printf("%llu:%lu", seq, oid);
-        if (ver)
-                printf(":%lu", ver);
-
-        printf("\n");
-
-        return 0;
-}
-
 #define COOK(value)                                                     \
 ({                                                                      \
         int radix = 0;                                                  \
@@ -1255,7 +1245,8 @@ static int lfs_check(int argc, char **argv)
                 return -1;
         }
 
-        rc = llapi_target_check(num_types, obd_types, mnt->mnt_dir);
+        rc = llapi_target_iterate(num_types, obd_types,
+                                  mnt->mnt_dir, llapi_ping_target);
 
         if (rc)
                 fprintf(stderr, "error: %s: %s status failed\n",
@@ -1950,7 +1941,7 @@ static void print_quota_title(char *name, struct if_quotactl *qctl)
                "files", "quota", "limit", "grace");
 }
 
-static void print_quota(char *mnt, struct if_quotactl *qctl)
+static void print_quota(char *mnt, struct if_quotactl *qctl, int type)
 {
         time_t now;
 
@@ -2000,7 +1991,7 @@ static void print_quota(char *mnt, struct if_quotactl *qctl)
                                 diff2str(dqb->dqb_btime, timebuf, now);
                         sprintf(numbuf[0], (dqb->dqb_valid & QIF_SPACE) ?
                                 LPU64 : "["LPU64"]", toqb(dqb->dqb_curspace));
-                        if (qctl->qc_valid == QC_GENERAL)
+                        if (type == QC_GENERAL)
                                 sprintf(numbuf[1], (dqb->dqb_valid & QIF_BLIMITS)
                                         ? LPU64 : "["LPU64"]",
                                         dqb->dqb_bsoftlimit);
@@ -2017,7 +2008,7 @@ static void print_quota(char *mnt, struct if_quotactl *qctl)
 
                         sprintf(numbuf[0], (dqb->dqb_valid & QIF_INODES) ?
                                 LPU64 : "["LPU64"]", dqb->dqb_curinodes);
-                       if (qctl->qc_valid == QC_GENERAL)
+                       if (type == QC_GENERAL)
                                 sprintf(numbuf[1], (dqb->dqb_valid & QIF_ILIMITS)
                                         ? LPU64 : "["LPU64"]",
                                         dqb->dqb_isoftlimit);
@@ -2025,7 +2016,7 @@ static void print_quota(char *mnt, struct if_quotactl *qctl)
                                 sprintf(numbuf[1], "%s", "");
                         sprintf(numbuf[2], (dqb->dqb_valid & QIF_ILIMITS) ?
                                 LPU64 : "["LPU64"]", dqb->dqb_ihardlimit);
-                        if (qctl->qc_valid != QC_OSTIDX)
+                        if (type != QC_OSTIDX)
                                 printf(" %7s%c %6s %7s %7s",
                                        numbuf[0], iover ? '*' : ' ', numbuf[1],
                                        numbuf[2], iover > 1 ? timebuf : "");
@@ -2072,7 +2063,7 @@ static int print_obd_quota(char *mnt, struct if_quotactl *qctl, int is_mdt)
                         continue;
                 }
 
-                print_quota(obd_uuid2str(&qctl->obd_uuid), qctl);
+                print_quota(obd_uuid2str(&qctl->obd_uuid), qctl, qctl->qc_valid);
         }
 
 out:
@@ -2186,9 +2177,9 @@ ug_output:
                 fprintf(stderr, "%s %s ", obd_type, obd_uuid);
 
         if (qctl.qc_valid != QC_GENERAL)
-                mnt = obd_uuid2str(&qctl.obd_uuid);
+                mnt = "";
 
-        print_quota(mnt, &qctl);
+        print_quota(mnt, &qctl, QC_GENERAL);
 
         if (qctl.qc_valid == QC_GENERAL && qctl.qc_cmd != LUSTRE_Q_GETINFO && verbose) {
                 rc2 = print_obd_quota(mnt, &qctl, 1);
@@ -2328,6 +2319,219 @@ static int lfs_ls(int argc, char **argv)
         return(llapi_ls(argc, argv));
 }
 
+/* A helper function to return single, whole lines delimited by newline.
+   Returns length of line.  Not reentrant! */
+static int get_next_full_line(int fd, char **ptr)
+{
+        static char buf[8192]; /* bigger than MAX_PATH_LENGTH */
+        static char *sptr = buf, *eptr = buf;
+        static int len, rem;
+
+        if ((*ptr == NULL) /* first time */
+            || (eptr >= buf + len) /* buffer empty */) {
+                sptr = eptr = buf;
+                len = read(fd, buf, sizeof(buf));
+                if (len <= 0)
+                        return len;
+        } else {
+                sptr = eptr + 1;
+        }
+
+full_line:
+        while (eptr < buf + len) {
+                eptr++;
+                /* parse full lines */
+                if (*eptr == '\n') {
+                        *eptr = '\0';
+                        *ptr = sptr;
+                        return (eptr - sptr);
+                }
+        }
+
+        /* partial line; move to front of buf */
+        rem = buf + len - sptr;
+        memcpy(buf, sptr, rem);
+        sptr = buf;
+        eptr = buf + rem;
+        len = read(fd, eptr, sizeof(buf) - rem);
+        if (len <= 0)
+                return len;
+        len += rem;
+        goto full_line;
+}
+
+static int lfs_changelog(int argc, char **argv)
+{
+        long long startrec = 0, endrec = 0, recnum;
+        int fd, len;
+        char c, *mdd, *ptr = NULL;
+        struct option long_opts[] = {
+                {"follow", 0, 0, 'f'},
+                {0, 0, 0, 0}
+        };
+        char short_opts[] = "f";
+        int follow = 0;
+
+        optind = 0;
+        while ((c = getopt_long(argc, argv, short_opts,
+                                long_opts, NULL)) != -1) {
+                switch (c) {
+                case 'f':
+                        follow++;
+                        break;
+                case '?':
+                        return CMD_HELP;
+                default:
+                        fprintf(stderr, "error: %s: option '%s' unrecognized\n",
+                                argv[0], argv[optind - 1]);
+                        return CMD_HELP;
+                }
+        }
+        if (optind >= argc)
+                return CMD_HELP;
+
+        mdd = argv[optind++];
+        if (argc > optind)
+                startrec = strtoll(argv[optind++], NULL, 10);
+        if (argc > optind)
+                endrec = strtoll(argv[optind++], NULL, 10);
+
+        fd = llapi_changelog_open(mdd, startrec);
+        if (fd < 0)
+                return fd;
+
+        while ((len = get_next_full_line(fd, &ptr)) >= 0) {
+                if (len == 0) {
+                        struct pollfd pfds[1];
+                        int rc;
+
+                        if (!follow)
+                                break;
+                        pfds[0].fd = fd;
+                        pfds[0].events = POLLIN;
+                        rc = poll(pfds, 1, -1);
+                        if (rc < 0)
+                                break;
+                        continue;
+                }
+     /* eg. 2 02MKDIR 4405821890 t=[0x100000400/0x5] p=[0x100000400/0x4] pics */
+                sscanf(ptr, "%lld *", &recnum);
+                if (endrec && recnum > endrec)
+                        break;
+                if (recnum < startrec)
+                        continue;
+                printf("%.*s\n", len, ptr);
+        }
+
+        close(fd);
+
+        if (len < 0) {
+                printf("read err %d\n", errno);
+                return -errno;
+        }
+
+        return 0;
+}
+
+static int lfs_changelog_clear(int argc, char **argv)
+{
+        long long endrec;
+
+        if (argc != 3)
+                return CMD_HELP;
+
+        endrec = strtoll(argv[2], NULL, 10);
+
+        return(llapi_changelog_clear(argv[1], endrec));
+}
+
+static int lfs_fid2path(int argc, char **argv)
+{
+        struct option long_opts[] = {
+                {"link", 1, 0, 'l'},
+                {"rec", 1, 0, 'r'},
+                {0, 0, 0, 0}
+        };
+        char c, short_opts[] = "l:r:";
+        char *device, *fid, *path;
+        long long recno = -1;
+        int linkno = -1;
+        int lnktmp;
+        int rc;
+
+        optind = 0;
+        while ((c = getopt_long(argc, argv, short_opts,
+                                long_opts, NULL)) != -1) {
+                switch (c) {
+                case 'l':
+                        linkno = strtol(optarg, NULL, 10);
+                        break;
+                case 'r':
+                        recno = strtoll(optarg, NULL, 10);
+                        break;
+                case '?':
+                        return CMD_HELP;
+                default:
+                        fprintf(stderr, "error: %s: option '%s' unrecognized\n",
+                                argv[0], argv[optind - 1]);
+                        return CMD_HELP;
+                }
+        }
+
+        device = argv[optind++];
+        fid = argv[optind++];
+        if (optind != argc)
+                return CMD_HELP;
+
+        path = calloc(1, PATH_MAX);
+
+        lnktmp = (linkno >= 0) ? linkno : 0;
+        while (1) {
+                int oldtmp = lnktmp;
+                rc = llapi_fid2path(device, fid, path, PATH_MAX, recno,
+                                    &lnktmp);
+                if (rc < 0) {
+                        fprintf(stderr, "%s error: %s\n", argv[0],
+                                strerror(errno = -rc));
+                        break;
+                } else {
+                        fprintf(stdout, "%s\n", path);
+                }
+                if (linkno >= 0)
+                        /* specified linkno */
+                        break;
+                if (oldtmp == lnktmp)
+                        /* no more links */
+                        break;
+        }
+
+        free(path);
+        return rc;
+}
+
+static int lfs_path2fid(int argc, char **argv)
+{
+        char *path;
+        unsigned long long seq;
+        unsigned long oid, ver;
+        int rc;
+
+        if (argc != 2)
+                return CMD_HELP;
+
+        path = argv[1];
+        rc = llapi_path2fid(path, &seq, &oid, &ver);
+        if (rc) {
+                fprintf(stderr, "can't get fid for %s: %s\n", path,
+                        strerror(errno = -rc));
+                return rc;
+        }
+
+        printf(DFID"\n", seq, (unsigned int)oid, (unsigned int)ver);
+
+        return 0;
+}
+
 int main(int argc, char **argv)
 {
         int rc;
@@ -2351,3 +2555,4 @@ int main(int argc, char **argv)
         obd_finalize(argc, argv);
         return rc;
 }
+

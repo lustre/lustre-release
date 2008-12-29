@@ -479,6 +479,7 @@ static int mdc_finish_enqueue(struct obd_export *exp,
         it->d.lustre.it_disposition = (int)lockrep->lock_policy_res1;
         it->d.lustre.it_status = (int)lockrep->lock_policy_res2;
         it->d.lustre.it_lock_mode = einfo->ei_mode;
+        it->d.lustre.it_lock_handle = lockh->cookie;
         it->d.lustre.it_data = req;
 
         if (it->d.lustre.it_status < 0 && req->rq_replay)
@@ -530,25 +531,6 @@ static int mdc_finish_enqueue(struct obd_export *exp,
                                                               body->eadatasize);
                         if (eadata == NULL)
                                 RETURN(-EPROTO);
-
-                        if (body->valid & OBD_MD_FLMODEASIZE) {
-                                struct obd_device *obddev = class_exp2obd(exp);
-
-                                if (obddev->u.cli.cl_max_mds_easize <
-                                    body->max_mdsize) {
-                                        obddev->u.cli.cl_max_mds_easize =
-                                                body->max_mdsize;
-                                        CDEBUG(D_INFO, "maxeasize become %d\n",
-                                               body->max_mdsize);
-                                }
-                                if (obddev->u.cli.cl_max_mds_cookiesize <
-                                    body->max_cookiesize) {
-                                        obddev->u.cli.cl_max_mds_cookiesize =
-                                                body->max_cookiesize;
-                                        CDEBUG(D_INFO, "cookiesize become %d\n",
-                                               body->max_cookiesize);
-                                }
-                        }
 
                         /*
                          * We save the reply LOV EA in case we have to replay a
@@ -928,7 +910,6 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                                  lmm, lmmsize, NULL, extra_lock_flags);
                 if (rc < 0)
                         RETURN(rc);
-                it->d.lustre.it_lock_handle = lockh.cookie;
         } else if (!fid_is_sane(&op_data->op_fid2) ||
                    !(it->it_flags & O_CHECK_STALE)) {
                 /* DISP_ENQ_COMPLETE set means there is extra reference on
@@ -975,8 +956,6 @@ static int mdc_intent_getattr_async_interpret(const struct lu_env *env,
         rc = mdc_finish_enqueue(exp, req, einfo, it, lockh, rc);
         if (rc)
                 GOTO(out, rc);
-
-        it->d.lustre.it_lock_handle = lockh->cookie;
 
         rc = mdc_finish_intent_lock(exp, req, &minfo->mi_data, it, lockh);
         EXIT;

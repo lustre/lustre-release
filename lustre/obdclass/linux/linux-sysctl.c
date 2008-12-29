@@ -355,7 +355,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .mode     = 0644,
                 .proc_handler = &proc_set_timeout
         },
-#ifdef RANDOM_FAIL_LOC
+#ifdef RANDOM_FAIL_ALLOC
         {
                 .ctl_name = OBD_ALLOC_FAIL_RATE,
                 .procname = "alloc_fail_rate",

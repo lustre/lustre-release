@@ -133,8 +133,17 @@ void fld_cache_fini(struct fld_cache *cache)
         EXIT;
 }
 
+/**
+ * delete given node from list.
+ */
 static inline void fld_cache_entry_delete(struct fld_cache *cache,
-                                         struct fld_cache_entry *node);
+                                          struct fld_cache_entry *node)
+{
+        list_del(&node->fce_list);
+        list_del(&node->fce_lru);
+        cache->fci_cache_count--;
+        OBD_FREE_PTR(node);
+}
 
 /**
  * fix list by checking new entry with NEXT entry in order.
@@ -212,18 +221,6 @@ static inline void fld_cache_entry_add(struct fld_cache *cache,
 
         cache->fci_cache_count++;
         fld_fix_new_list(cache);
-}
-
-/**
- * delete given node from list.
- */
-static inline void fld_cache_entry_delete(struct fld_cache *cache,
-                                          struct fld_cache_entry *node)
-{
-        list_del(&node->fce_list);
-        list_del(&node->fce_lru);
-        cache->fci_cache_count--;
-        OBD_FREE_PTR(node);
 }
 
 /**

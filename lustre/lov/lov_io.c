@@ -201,8 +201,8 @@ static int lov_io_sub_init(const struct lu_env *env, struct lov_io *lio,
         RETURN(result);
 }
 
-static struct lov_io_sub *lov_sub_get(const struct lu_env *env,
-                                      struct lov_io *lio, int stripe)
+struct lov_io_sub *lov_sub_get(const struct lu_env *env,
+                               struct lov_io *lio, int stripe)
 {
         int rc;
         struct lov_io_sub *sub = &lio->lis_subs[stripe];
@@ -391,6 +391,7 @@ static int lov_io_iter_init(const struct lu_env *env,
                                stripe, start, end);
                 } else
                         rc = PTR_ERR(sub);
+
                 if (!rc)
                         list_add_tail(&sub->sub_linkage, &lio->lis_active);
                 else

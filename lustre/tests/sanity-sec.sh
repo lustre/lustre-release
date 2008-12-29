@@ -128,7 +128,7 @@ test_0() {
 	umask 0022
 
 	chmod 0755 $DIR || error "chmod (1)"
-	rm -rf $DIR/* || error "rm (1)"
+	rm -rf $DIR/$tdir || error "rm (1)"
 	mkdir -p $DIR/$tdir || error "mkdir (1)"
 
 	if [ "$CLIENT_TYPE" = "remote" ]; then
@@ -154,7 +154,7 @@ test_0() {
 	$RUNAS -u $ID0 touch $DIR/$tdir/f4 || error "touch (5)"
 	$RUNAS -u $ID1 touch $DIR/$tdir/f5 && error "touch (6)"
 	touch $DIR/$tdir/f6 || error "touch (7)"
-	rm -rf $DIR/* || error "rm (3)"
+	rm -rf $DIR/$tdir || error "rm (3)"
 
 	if [ "$CLIENT_TYPE" = "remote" ]; then
 		do_facet $SINGLEMDS "rm -f $PERM_CONF"

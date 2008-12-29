@@ -56,8 +56,7 @@ else
     COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --mknod --dir ${TESTDIR}
                         --nfiles ${NUM_FILES} --filefmt 'f%%d'"
     echo "+" ${COMMAND}
-    $MPIRUN -np ${NUM_THREADS} -machinefile ${MACHINEFILE} \
-	   ${MPIRUN_OPTIONS} ${COMMAND} 2>&1 
+    mpi_run -np ${NUM_THREADS} -machinefile ${MACHINEFILE} ${COMMAND} 2>&1 
 
     # No lockup if error occurs on file creation, abort.
     [ ${PIPESTATUS[0]} != 0 ] && error "mpirun ... mdsrate ... file creation failed, aborting"
@@ -73,8 +72,7 @@ else
     log "===== $0 ### 1 NODE LOOKUPS ###"
     echo "Running lookups on 1 node(s)."
     echo "+" ${COMMAND}
-    $MPIRUN -np 1 -machinefile ${MACHINEFILE} \
-        ${MPIRUN_OPTIONS} ${COMMAND} | tee ${LOG}
+    mpi_run -np 1 -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
         [ -f $LOG ] && cat $LOG
@@ -90,8 +88,7 @@ else
     log "===== $0 ### ${NUM_CLIENTS} NODES LOOKUPS ###"
     echo "Running lookups on ${NUM_CLIENTS} node(s)."
     echo "+" ${COMMAND}
-    $MPIRUN -np ${NUM_CLIENTS} -machinefile ${MACHINEFILE} \
-        ${MPIRUN_OPTIONS} ${COMMAND} | tee ${LOG}
+    mpi_run -np ${NUM_CLIENTS} -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
         [ -f $LOG ] && cat $LOG

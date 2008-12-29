@@ -48,13 +48,7 @@
 #endif
 #define DEBUG_SUBSYSTEM S_MDS
 
-/* prerequisite for linux/xattr.h */
-#include <linux/types.h>
-/* prerequisite for linux/xattr.h */
-#include <linux/fs.h>
-/* XATTR_{REPLACE,CREATE} */
-#include <linux/xattr.h>
-
+#include <lustre_acl.h>
 #include "mdt_internal.h"
 
 
@@ -280,8 +274,6 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct md_ucred         *uc  = mdt_ucred(info);
-        const char               user_string[] = "user.";
-        const char               trust_string[] = "trusted.";
         struct mdt_lock_handle  *lh;
         struct req_capsule      *pill = info->mti_pill;
         const struct lu_env     *env  = info->mti_env;
@@ -330,14 +322,24 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
         if (!xattr_name)
                 GOTO(out, rc = err_serious(-EFAULT));
 
-        if (strncmp(xattr_name, trust_string, sizeof(trust_string) - 1) == 0) {
-                if (strcmp(xattr_name + 8, XATTR_NAME_LOV) == 0)
+        if (strncmp(xattr_name, XATTR_USER_PREFIX,
+                    sizeof(XATTR_USER_PREFIX) - 1) == 0) {
+                if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_XATTR))
+                        GOTO(out, rc = -EOPNOTSUPP);
+                if (strcmp(xattr_name, XATTR_NAME_LOV) == 0)
                         GOTO(out, rc = -EACCES);
-        }
+                if (strcmp(xattr_name, XATTR_NAME_LMA) == 0)
+                        GOTO(out, rc = 0);
+                if (strcmp(xattr_name, XATTR_NAME_LINK) == 0)
+                        GOTO(out, rc = 0);
+        } else if ((valid & OBD_MD_FLXATTR) &&
+                   (strncmp(xattr_name, XATTR_NAME_ACL_ACCESS,
+                             sizeof(XATTR_NAME_ACL_ACCESS) - 1) == 0)) {
+                /* currently lustre limit acl access size */
+                xattr_len = req_capsule_get_size(pill, &RMF_EADATA, RCL_CLIENT);
 
-        if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_XATTR) &&
-            (strncmp(xattr_name, user_string, sizeof(user_string) - 1) == 0)) {
-                GOTO(out, rc = -EOPNOTSUPP);
+                if (xattr_len > LUSTRE_POSIX_ACL_MAX_SIZE)
+                        GOTO(out, -ERANGE);
         }
 
         lockpart = MDS_INODELOCK_UPDATE;

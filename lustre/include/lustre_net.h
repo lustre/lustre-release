@@ -260,7 +260,9 @@ struct ptlrpc_reply_state {
 #if RS_DEBUG
         struct list_head       rs_debug_list;
 #endif
-        /* updates to following flag serialised by srv_request_lock */
+        /* A spinlock to protect the reply state flags */
+        spinlock_t             rs_lock;
+        /* Reply state flags */
         unsigned long          rs_difficult:1;     /* ACK/commit stuff */
         unsigned long          rs_no_ack:1;    /* no ACK, even for
                                                   difficult requests */
@@ -692,7 +694,7 @@ struct ptlrpc_service {
         int              srv_threads_max;       /* thread upper limit */
         int              srv_threads_started;   /* index of last started thread */
         int              srv_threads_running;   /* # running threads */
-        int              srv_n_difficult_replies; /* # 'difficult' replies */
+        atomic_t         srv_n_difficult_replies; /* # 'difficult' replies */
         int              srv_n_active_reqs;     /* # reqs being served */
         int              srv_n_hpreq;           /* # HPreqs being served */
         cfs_duration_t   srv_rqbd_timeout;      /* timeout before re-posting reqs, in tick */
@@ -732,8 +734,9 @@ struct ptlrpc_service {
 
         atomic_t          srv_outstanding_replies;
         struct list_head  srv_active_replies;   /* all the active replies */
+#ifndef __KERNEL__
         struct list_head  srv_reply_queue;      /* replies waiting for service */
-
+#endif
         cfs_waitq_t       srv_waitq; /* all threads sleep on this. This
                                       * wait-queue is signalled when new
                                       * incoming request arrives and when
@@ -1006,6 +1009,7 @@ struct ptlrpc_service_conf {
 void ptlrpc_save_lock (struct ptlrpc_request *req,
                        struct lustre_handle *lock, int mode, int no_ack);
 void ptlrpc_commit_replies (struct obd_device *obd);
+void ptlrpc_dispatch_difficult_reply (struct ptlrpc_reply_state *rs);
 void ptlrpc_schedule_difficult_reply (struct ptlrpc_reply_state *rs);
 struct ptlrpc_service *ptlrpc_init_svc_conf(struct ptlrpc_service_conf *c,
                                             svc_handler_t h, char *name,
@@ -1033,6 +1037,13 @@ void ptlrpc_daemonize(char *name);
 int ptlrpc_service_health_check(struct ptlrpc_service *);
 void ptlrpc_hpreq_reorder(struct ptlrpc_request *req);
 
+#ifdef __KERNEL__
+int ptlrpc_hr_init(void);
+void ptlrpc_hr_fini(void);
+#else
+# define ptlrpc_hr_init() (0)
+# define ptlrpc_hr_fini() do {} while(0)
+#endif
 
 struct ptlrpc_svc_data {
         char *name;
@@ -1268,6 +1279,8 @@ int import_set_conn_priority(struct obd_import *imp, struct obd_uuid *uuid);
 /* ptlrpc/pinger.c */
 int ptlrpc_pinger_add_import(struct obd_import *imp);
 int ptlrpc_pinger_del_import(struct obd_import *imp);
+struct ptlrpc_request * ptlrpc_prep_ping(struct obd_import *imp);
+int ptlrpc_obd_ping(struct obd_device *obd);
 cfs_time_t ptlrpc_suspend_wakeup_time(void);
 #ifdef __KERNEL__
 void ping_evictor_start(void);

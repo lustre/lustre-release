@@ -158,40 +158,6 @@ static struct dentry_operations ll_d_root_ops = {
 #endif
 };
 
-/* Initialize the default and maximum LOV EA and cookie sizes.  This allows
- * us to make MDS RPCs with large enough reply buffers to hold the
- * maximum-sized (= maximum striped) EA and cookie without having to
- * calculate this (via a call into the LOV + OSCs) each time we make an RPC. */
-static int ll_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp)
-{
-        struct lov_stripe_md lsm = { .lsm_magic = LOV_MAGIC_V3 };
-        __u32 valsize = sizeof(struct lov_desc);
-        int rc, easize, def_easize, cookiesize;
-        struct lov_desc desc;
-        __u32 stripes;
-        ENTRY;
-
-        rc = obd_get_info(dt_exp, sizeof(KEY_LOVDESC), KEY_LOVDESC,
-                          &valsize, &desc, NULL);
-        if (rc)
-                RETURN(rc);
-
-        stripes = min(desc.ld_tgt_count, (__u32)LOV_MAX_STRIPE_COUNT);
-        lsm.lsm_stripe_count = stripes;
-        easize = obd_size_diskmd(dt_exp, &lsm);
-
-        lsm.lsm_stripe_count = desc.ld_default_stripe_count;
-        def_easize = obd_size_diskmd(dt_exp, &lsm);
-
-        cookiesize = stripes * sizeof(struct llog_cookie);
-
-        CDEBUG(D_HA, "updating max_mdsize/max_cookiesize: %d/%d\n",
-               easize, cookiesize);
-
-        rc = md_init_ea_size(md_exp, easize, def_easize, cookiesize);
-        RETURN(rc);
-}
-
 static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 {
         struct inode *root = 0;
@@ -403,7 +369,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                data->ocd_version, data->ocd_grant);
 
         obd->obd_upcall.onu_owner = &sbi->ll_lco;
-        obd->obd_upcall.onu_upcall = ll_ocd_update;
+        obd->obd_upcall.onu_upcall = cl_ocd_update;
         data->ocd_brw_size = PTLRPC_MAX_BRW_PAGES << CFS_PAGE_SHIFT;
 
         err = obd_connect(NULL, &dt_conn, obd, &sbi->ll_sb_uuid, data, NULL);
@@ -429,13 +395,9 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 
         spin_lock(&sbi->ll_lco.lco_lock);
         sbi->ll_lco.lco_flags = data->ocd_connect_flags;
+        sbi->ll_lco.lco_md_exp = sbi->ll_md_exp;
+        sbi->ll_lco.lco_dt_exp = sbi->ll_dt_exp;
         spin_unlock(&sbi->ll_lco.lco_lock);
-
-        err = ll_init_ea_size(sbi->ll_md_exp, sbi->ll_dt_exp);;
-        if (err) {
-                CERROR("cannot set max EA and cookie sizes: rc = %d\n", err);
-                GOTO(out_lock_cn_cb, err);
-        }
 
         fid_zero(&sbi->ll_root_fid);
         err = md_getstatus(sbi->ll_md_exp, &sbi->ll_root_fid, &oc);
@@ -1958,9 +1920,19 @@ void ll_umount_begin(struct super_block *sb)
 
         /* Really, we'd like to wait until there are no requests outstanding,
          * and then continue.  For now, we just invalidate the requests,
-         * schedule, and hope.
+         * schedule() and sleep one second if needed, and hope.
          */
         schedule();
+#ifdef HAVE_UMOUNTBEGIN_VFSMOUNT
+        if (atomic_read(&vfsmnt->mnt_count) > 2) {
+                cfs_schedule_timeout(CFS_TASK_INTERRUPTIBLE,
+                                     cfs_time_seconds(1));
+                if (atomic_read(&vfsmnt->mnt_count) > 2)
+                        LCONSOLE_WARN("Mount still busy with %d refs! You "
+                                      "may try to umount it a bit later\n",
+                                      atomic_read(&vfsmnt->mnt_count));
+        }
+#endif
 
         EXIT;
 }

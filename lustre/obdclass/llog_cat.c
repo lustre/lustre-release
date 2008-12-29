@@ -293,6 +293,8 @@ int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
                 RETURN(PTR_ERR(loghandle));
         /* loghandle is already locked by llog_cat_current_log() for us */
         rc = llog_write_rec(loghandle, rec, reccookie, 1, buf, -1);
+        if (rc < 0)
+                CERROR("llog_write_rec %d: lh=%p\n", rc, loghandle);
         up_write(&loghandle->lgh_lock);
         if (rc == -ENOSPC) {
                 /* to create a new plain log */
@@ -382,14 +384,29 @@ int llog_cat_process_cb(struct llog_handle *cat_llh, struct llog_rec_hdr *rec,
                 RETURN(rc);
         }
 
-        rc = llog_process(llh, d->lpd_cb, d->lpd_data, NULL);
+        if (rec->lrh_index < d->lpd_startcat)
+                /* Skip processing of the logs until startcat */
+                RETURN(0);
+
+        if (d->lpd_startidx > 0) {
+                struct llog_process_cat_data cd;
+
+                cd.lpcd_first_idx = d->lpd_startidx;
+                cd.lpcd_last_idx = 0;
+                rc = llog_process(llh, d->lpd_cb, d->lpd_data, &cd);
+                /* Continue processing the next log from idx 0 */
+                d->lpd_startidx = 0;
+        } else {
+                rc = llog_process(llh, d->lpd_cb, d->lpd_data, NULL);
+        }
+
         RETURN(rc);
 }
 
-int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data)
+int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data,
+                     int startcat, int startidx)
 {
         struct llog_process_data d;
-        struct llog_process_cat_data cd;
         struct llog_log_hdr *llh = cat_llh->lgh_hdr;
         int rc;
         ENTRY;
@@ -397,8 +414,12 @@ int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data)
         LASSERT(llh->llh_flags & LLOG_F_IS_CAT);
         d.lpd_data = data;
         d.lpd_cb = cb;
+        d.lpd_startcat = startcat;
+        d.lpd_startidx = startidx;
 
         if (llh->llh_cat_idx > cat_llh->lgh_last_idx) {
+                struct llog_process_cat_data cd;
+
                 CWARN("catlog "LPX64" crosses index zero\n",
                       cat_llh->lgh_id.lgl_oid);
 
@@ -445,7 +466,7 @@ int llog_cat_process_thread(void *data)
         }
 
         if (cb) {
-                rc = llog_cat_process(llh, (llog_cb_t)cb, NULL);
+                rc = llog_cat_process(llh, (llog_cb_t)cb, NULL, 0, 0);
                 if (rc != LLOG_PROC_BREAK && rc != 0)
                         CERROR("llog_cat_process() failed %d\n", rc);
         } else {

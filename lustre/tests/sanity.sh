@@ -126,7 +126,7 @@ rm -rf $DIR/[Rdfs][0-9]*
 # $RUNAS_ID may get set incorrectly somewhere else
 [ $UID -eq 0 -a $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 
-check_runas_id $RUNAS_ID $RUNAS
+check_runas_id $RUNAS_ID $RUNAS_ID $RUNAS
 
 build_test_filter
 
@@ -1072,9 +1072,8 @@ test_27u() { # bug 4900
         [ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
         remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
-        #define OBD_FAIL_MDS_OSC_PRECREATE      0x13d
-
-        do_facet $SINGLEMDS lctl set_param fail_loc=0x13d
+#define OBD_FAIL_MDS_OSC_PRECREATE      0x139
+        do_facet $SINGLEMDS lctl set_param fail_loc=0x139
         mkdir -p $DIR/d27u
         createmany -o $DIR/d27u/t- 1000
         do_facet $SINGLEMDS lctl set_param fail_loc=0
@@ -2811,8 +2810,8 @@ run_test 60b "limit repeated messages from CERROR/CWARN ========"
 test_60c() {
 	echo "create 5000 files"
 	createmany -o $DIR/f60c- 5000
-#define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x13c
-	lctl set_param fail_loc=0x8000013c
+#define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x137
+	lctl set_param fail_loc=0x80000137
 	unlinkmany $DIR/f60c- 5000
 	lctl set_param fail_loc=0
 }
@@ -3162,7 +3161,7 @@ test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	[ "$RUNAS_ID" = "$UID" ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
 
         # Check that testing environment is properly set up. Skip if not
-        FAIL_ON_ERROR=false check_runas_id_ret $RUNAS_ID $RUNAS || {
+        FAIL_ON_ERROR=false check_runas_id_ret $RUNAS_ID $RUNAS_ID $RUNAS || {
                 skip "User $RUNAS_ID does not exist - skipping"
                 return 0
         }
@@ -3628,21 +3627,16 @@ test_80() { # bug 10718
 }
 run_test 80 "Page eviction is equally fast at high offsets too  ===="
 
-# on the LLNL clusters, runas will still pick up root's $TMP settings,
-# which will not be writable for the runas user, and then you get a CVS
-# error message with a corrupt path string (CVS bug) and panic.
-# We're not using much space, so just stick it in /tmp, which is safe.
-OLDTMPDIR=$TMPDIR
-OLDTMP=$TMP
-TMPDIR=/tmp
-TMP=/tmp
-OLDHOME=$HOME
-[ $RUNAS_ID -ne $UID ] && HOME=/tmp
-
 test_99a() {
+        [ -z "$(which cvs 2>/dev/null)" ] && skip "could not find cvs" && \
+	    return
 	mkdir -p $DIR/d99cvsroot
 	chown $RUNAS_ID $DIR/d99cvsroot
+	local oldPWD=$PWD	# bug 13584, use $TMP as working dir
+	cd $TMP
+	
 	$RUNAS cvs -d $DIR/d99cvsroot init || error
+	cd $oldPWD
 }
 run_test 99a "cvs init ========================================="
 
@@ -3798,7 +3792,7 @@ cleanup_test101() {
 	[ "$SETUP_TEST101" = "yes" ] || return
 	trap 0
 	rm -rf $DIR/$tdir
-    rm -f $DIR/$tfile
+        rm -f $DIR/$tfile
 	SETUP_TEST101=no
 }
 
@@ -3999,7 +3993,7 @@ compare_stripe_info1() {
 			do
 				local size=`expr $STRIPE_SIZE \* $num`
 				local file=file"$num-$offset-$count"
-				get_stripe_info client $file
+				get_stripe_info client $PWD/$file
 				if [ $stripe_size -ne $size ]; then
 					error "$file: different stripe size" && return
 				fi
@@ -4023,7 +4017,7 @@ compare_stripe_info2() {
 			do
 				local size=`expr $STRIPE_SIZE \* $num`
 				local file=file"$num-$offset-$count"
-				get_stripe_info client $file
+				get_stripe_info client $PWD/$file
 				if [ $stripe_size -ne $size ]; then
 					error "$file: different stripe size" && return	
 				fi
@@ -5082,26 +5076,13 @@ test_123a() { # was test 123, statahead(bug 11401)
 		SLOWOK=1
         fi
 
+        rm -rf $DIR/$tdir
         mkdir -p $DIR/$tdir
-        rm -rf $DIR/$tdir/*
-        cancel_lru_locks mdc
-        cancel_lru_locks osc
-        error=0
         NUMFREE=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
         [ $NUMFREE -gt 100000 ] && NUMFREE=100000 || NUMFREE=$((NUMFREE-1000))
         MULT=10
-        for ((i=1, j=0; i<=$NUMFREE; j=$i, i=$((i * MULT)) )); do
+        for ((i=100, j=0; i<=$NUMFREE; j=$i, i=$((i * MULT)) )); do
                 createmany -o $DIR/$tdir/$tfile $j $((i - j))
-
-                lctl get_param -n llite.*.statahead_max | grep '[0-9]'
-                cancel_lru_locks mdc
-                cancel_lru_locks osc
-                stime=`date +%s`
-                ls -l $DIR/$tdir > /dev/null
-                etime=`date +%s`
-                delta_sa=$((etime - stime))
-                log "ls $i files with statahead:    $delta_sa sec"
-		lctl get_param -n llite.*.statahead_stats
 
                 max=`lctl get_param -n llite.*.statahead_max | head -n 1`
                 lctl set_param -n llite.*.statahead_max 0
@@ -5109,15 +5090,35 @@ test_123a() { # was test 123, statahead(bug 11401)
                 cancel_lru_locks mdc
                 cancel_lru_locks osc
                 stime=`date +%s`
-                ls -l $DIR/$tdir > /dev/null
+                time ls -l $DIR/$tdir > /dev/null
                 etime=`date +%s`
                 delta=$((etime - stime))
                 log "ls $i files without statahead: $delta sec"
-
                 lctl set_param llite.*.statahead_max=$max
-                if [ $delta_sa -gt $(($delta + 2)) ]; then
-                        log "ls $i files is slower with statahead!"
-                        error=1
+
+                swrong=`lctl get_param -n llite.*.statahead_stats | grep "statahead wrong:" | awk '{print $3}'`
+                lctl get_param -n llite.*.statahead_max | grep '[0-9]'
+                cancel_lru_locks mdc
+                cancel_lru_locks osc
+                stime=`date +%s`
+                time ls -l $DIR/$tdir > /dev/null
+                etime=`date +%s`
+                delta_sa=$((etime - stime))
+                log "ls $i files with statahead:    $delta_sa sec"
+		lctl get_param -n llite.*.statahead_stats
+                ewrong=`lctl get_param -n llite.*.statahead_stats | grep "statahead wrong:" | awk '{print $3}'`
+
+                if [ $swrong -lt $ewrong ]; then
+                        log "statahead was stopped, maybe too many locks held!"
+                fi
+
+                if [ $((delta_sa * 100)) -gt $((delta * 105)) ]; then
+                        if [  $SLOWOK -eq 0 ]; then
+                                error "ls $i files is slower with statahead!"
+                        else
+                                log "ls $i files is slower with statahead!"
+                        fi
+                        break;
                 fi
 
                 [ $delta -gt 20 ] && break
@@ -5134,10 +5135,6 @@ test_123a() { # was test 123, statahead(bug 11401)
         log "rm -r $DIR/$tdir/: $delta seconds"
         log "rm done"
         lctl get_param -n llite.*.statahead_stats
-        # wait for commitment of removal
-        sleep 2
-        [ $error -ne 0 -a $SLOWOK -eq 0 ] && error "statahead is slow!"
-        return 0
 }
 run_test 123a "verify statahead work"
 
@@ -5204,7 +5201,7 @@ test_124a() {
         # them (10-100 locks). This depends on how fast ther were created.
         # Many of them were touched in almost the same moment and thus will
         # be killed in groups.
-        local LVF=$(($MAX_HRS * 60 * 60 / $SLEEP))
+        local LVF=$(($MAX_HRS * 60 * 60 / $SLEEP * $LIMIT / $LRU_SIZE))
 
         # Use $LRU_SIZE_B here to take into account real number of locks
         # created in the case of CMD, LRU_SIZE_B != $NR in most of cases
@@ -5442,9 +5439,17 @@ test_129() {
 }
 run_test 129 "test directory size limit ========================"
 
+OLDIFS="$IFS"
+cleanup_130() {
+	trap 0
+	IFS="$OLDIFS"
+}
+
 test_130a() {
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
+
+	trap cleanup_130 EXIT RETURN
 
 	local fm_file=$DIR/$tfile
 	lfs setstripe -s 65536 -c 1 $fm_file || error "setstripe failed on $fm_file"
@@ -5463,6 +5468,7 @@ test_130a() {
 		frag_lun=`echo $line | cut -d: -f5`
 		ext_len=`echo $line | cut -d: -f4`
 		if (( $frag_lun != $lun )); then
+			cleanup_130
 			error "FIEMAP on 1-stripe file($fm_file) failed"
 			return
 		fi
@@ -5470,9 +5476,13 @@ test_130a() {
 	done
 
 	if (( lun != frag_lun || start_blk != 0 || tot_len != 64 )); then
+		cleanup_130
 		error "FIEMAP on 1-stripe file($fm_file) failed;"
 		return
 	fi
+
+	cleanup_130
+
 	echo "FIEMAP on single striped file succeeded"
 }
 run_test 130a "FIEMAP (1-stripe file)"
@@ -5482,6 +5492,8 @@ test_130b() {
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
+
+	trap cleanup_130 EXIT RETURN
 
 	local fm_file=$DIR/$tfile
 	lfs setstripe -s 65536 -c 2 $fm_file || error "setstripe failed on $fm_file"
@@ -5501,6 +5513,7 @@ test_130b() {
 		ext_len=`echo $line | cut -d: -f4`
 		if (( $frag_lun != $last_lun )); then
 			if (( tot_len != 1024 )); then
+				cleanup_130
 				error "FIEMAP on $fm_file failed; returned len $tot_len for OST $last_lun instead of 256"
 				return
 			else
@@ -5512,9 +5525,12 @@ test_130b() {
 		last_lun=$frag_lun
 	done
 	if (( num_luns != 2 || tot_len != 1024 )); then
+		cleanup_130
 		error "FIEMAP on $fm_file failed; returned wrong number of luns or wrong len for OST $last_lun"
 		return
 	fi
+
+	cleanup_130
 
 	echo "FIEMAP on 2-stripe file succeeded"
 }
@@ -5525,6 +5541,8 @@ test_130c() {
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
+
+	trap cleanup_130 EXIT RETURN
 
 	local fm_file=$DIR/$tfile
 	lfs setstripe -s 65536 -c 2 $fm_file || error "setstripe failed on $fm_file"
@@ -5545,10 +5563,12 @@ test_130c() {
 		if (( $frag_lun != $last_lun )); then
 			logical=`echo $line | cut -d: -f2 | cut -d. -f1`
 			if (( logical != 512 )); then
+				cleanup_130
 				error "FIEMAP on $fm_file failed; returned logical start for lun $logical instead of 512"
 				return
 			fi
 			if (( tot_len != 512 )); then
+				cleanup_130
 				error "FIEMAP on $fm_file failed; returned len $tot_len for OST $last_lun instead of 1024"
 				return
 			else
@@ -5560,9 +5580,12 @@ test_130c() {
 		last_lun=$frag_lun
 	done
 	if (( num_luns != 2 || tot_len != 512 )); then
+		cleanup_130
 		error "FIEMAP on $fm_file failed; returned wrong number of luns or wrong len for OST $last_lun"
 		return
 	fi
+
+	cleanup_130
 
 	echo "FIEMAP on 2-stripe file with hole succeeded"
 }
@@ -5573,6 +5596,8 @@ test_130d() {
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
+
+	trap cleanup_130 EXIT RETURN
 
 	local fm_file=$DIR/$tfile
 	lfs setstripe -s 65536 -c $OSTCOUNT $fm_file || error "setstripe failed on $fm_file"
@@ -5592,6 +5617,7 @@ test_130d() {
 		ext_len=`echo $line | cut -d: -f4`
 		if (( $frag_lun != $last_lun )); then
 			if (( tot_len != 1024 )); then
+				cleanup_130
 				error "FIEMAP on $fm_file failed; returned len $tot_len for OST $last_lun instead of 1024"
 				return
 			else
@@ -5603,9 +5629,12 @@ test_130d() {
 		last_lun=$frag_lun
 	done
 	if (( num_luns != OSTCOUNT || tot_len != 1024 )); then
+		cleanup_130
 		error "FIEMAP on $fm_file failed; returned wrong number of luns or wrong len for OST $last_lun"
 		return
 	fi
+
+	cleanup_130
 
 	echo "FIEMAP on N-stripe file succeeded"
 }
@@ -5616,6 +5645,8 @@ test_130e() {
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
+
+	trap cleanup_130 EXIT RETURN
 
 	local fm_file=$DIR/$tfile
 	lfs setstripe -s 65536 -c 2 $fm_file || error "setstripe failed on $fm_file"
@@ -5640,6 +5671,7 @@ test_130e() {
 		ext_len=`echo $line | cut -d: -f4`
 		if (( $frag_lun != $last_lun )); then
 			if (( tot_len != $EXPECTED_LEN )); then
+				cleanup_130
 				error "FIEMAP on $fm_file failed; returned len $tot_len for OST $last_lun instead of $EXPECTED_LEN"
 				return
 			else
@@ -5651,10 +5683,12 @@ test_130e() {
 		last_lun=$frag_lun
 	done
 	if (( num_luns != 2 || tot_len != $EXPECTED_LEN )); then
-		echo "$num_luns $tot_len"
+		cleanup_130
 		error "FIEMAP on $fm_file failed; returned wrong number of luns or wrong len for OST $last_lun"
 		return
 	fi
+
+	cleanup_130
 
 	echo "FIEMAP with continuation calls succeeded"
 }
@@ -5728,23 +5762,10 @@ test_140() { #bug-17379
                 }
         done
         i=`expr $i - 1`
-        [ $i -eq 5 -o $i -eq 8 ] || error "Invalid symlink depth"
         echo "The symlink depth = $i"
+        [ $i -eq 4 -o $i -eq 8 ] || error "Invalid symlink depth"
 }
 run_test 140 "Check reasonable stack depth (shouldn't LBUG) ===="
-
-test_141() {
-        local ls
-        #define OBD_FAIL_MGC_PAUSE_PROCESS_LOG   0x903
-        $LCTL set_param fail_loc=0x903
-        # cancel_lru_locks mgc - does not work due to lctl set_param syntax
-        for ls in /proc/fs/lustre/ldlm/namespaces/MGC*/lru_size; do
-                echo "clear" > $ls
-        done
-        FAIL_ON_ERROR=true cleanup
-        FAIL_ON_ERROR=true setup
-}
-run_test 141 "umount should not race with any mgc requeue thread"
 
 test_150() {
 	local TF="$TMP/$tfile"
@@ -5859,6 +5880,193 @@ test_152() {
 }
 run_test 152 "test read/write with enomem ============================"
 
+test_153() {
+        multiop $DIR/$tfile Ow4096Ycu || error "multiop failed"
+}
+run_test 153 "test if fdatasync does not crash ======================="
+
+err17935 () {
+    if [ $MDSCOUNT -gt 1 ]; then
+	error_ignore 17935 $*
+    else
+	error $*
+    fi
+}
+
+#Changelogs
+test_160() {
+    remote_mds && skip "remote MDS" && return
+    lctl set_param -n mdd.*.changelog on
+    $LFS changelog_clear $FSNAME 0
+
+    # change something
+    mkdir -p $DIR/$tdir/pics/2008/zachy
+    touch $DIR/$tdir/pics/2008/zachy/timestamp
+    cp /etc/hosts $DIR/$tdir/pics/2008/zachy/pic1.jpg
+    mv $DIR/$tdir/pics/2008/zachy $DIR/$tdir/pics/zach
+    ln $DIR/$tdir/pics/zach/pic1.jpg $DIR/$tdir/pics/2008/portland.jpg
+    ln -s $DIR/$tdir/pics/2008/portland.jpg $DIR/$tdir/pics/desktop.jpg
+    rm $DIR/$tdir/pics/desktop.jpg
+
+    # verify contents
+    $LFS changelog $FSNAME
+    # check target fid
+    fidc=$($LFS changelog $FSNAME | grep timestamp | grep "CREAT" | tail -1 | \
+	awk '{print $5}')
+    fidf=$($LFS path2fid $DIR/$tdir/pics/zach/timestamp)
+    [ "$fidc" == "t=$fidf" ] || \
+	err17935 "fid in changelog $fidc != file fid $fidf"
+    # check parent fid
+    fidc=$($LFS changelog $FSNAME | grep timestamp | grep "CREAT" | tail -1 | \
+	awk '{print $6}')
+    fidf=$($LFS path2fid $DIR/$tdir/pics/zach)
+    [ "$fidc" == "p=$fidf" ] || \
+	err17935 "pfid in changelog $fidc != dir fid $fidf" 
+
+    # verify purge
+    FIRST_REC=$($LFS changelog $FSNAME | head -1 | awk '{print $1}')
+    $LFS changelog_clear $FSNAME $(($FIRST_REC + 5)) 
+    PURGE_REC=$($LFS changelog $FSNAME | head -1 | awk '{print $1}')
+    [ $PURGE_REC == $(($FIRST_REC + 6)) ] || \
+     err17935 "first rec after purge should be $(($FIRST_REC + 6)); is $PURGE_REC"
+    # purge all
+    $LFS changelog_clear $FSNAME 0
+    lctl set_param -n mdd.*.changelog off
+}
+run_test 160 "changelog sanity"
+
+test_161() {
+    # need local MDT for fid2path
+    remote_mds && skip "remote MDS" && return
+
+    mkdir -p $DIR/$tdir
+    cp /etc/hosts $DIR/$tdir/$tfile
+    mkdir $DIR/$tdir/foo1
+    mkdir $DIR/$tdir/foo2
+    ln $DIR/$tdir/$tfile $DIR/$tdir/foo1/sofia
+    ln $DIR/$tdir/$tfile $DIR/$tdir/foo2/zachary
+    ln $DIR/$tdir/$tfile $DIR/$tdir/foo1/luna
+    ln $DIR/$tdir/$tfile $DIR/$tdir/foo2/thor
+    local FID=$($LFS path2fid $DIR/$tdir/$tfile)
+    if [ "$($LFS fid2path ${mds1_svc} $FID | wc -l)" != "5" ]; then
+	$LFS fid2path ${mds1_svc} $FID
+	err17935 "bad link ea"
+    fi
+    # middle
+    rm $DIR/$tdir/foo2/zachary
+    # last
+    rm $DIR/$tdir/foo2/thor
+    # first
+    rm $DIR/$tdir/$tfile
+    # rename
+    mv $DIR/$tdir/foo1/sofia $DIR/$tdir/foo2/maggie
+    if [ "$($LFS fid2path ${mds1_svc} --link 1 $FID)" != "/$tdir/foo2/maggie" ]
+	then
+	$LFS fid2path ${mds1_svc} $FID
+	err17935 "bad link rename"
+    fi
+    rm $DIR/$tdir/foo2/maggie
+
+    # overflow the EA
+    local longname=filename_avg_len_is_thirty_two_
+    createmany -l$DIR/$tdir/foo1/luna $DIR/$tdir/foo2/$longname 1000 || \
+	error "failed to hardlink many files"
+    links=$($LFS fid2path ${mds1_svc} $FID | wc -l)
+    echo -n "${links}/1000 links in link EA"
+    [ ${links} -gt 60 ] || err17935 "expected at least 60 links in link EA"
+    unlinkmany $DIR/$tdir/foo2/$longname 1000 || \
+	error "failed to unlink many hardlinks" 
+}
+run_test 161 "link ea sanity"
+
+check_path() {
+    local expected=$1
+    shift
+    local fid=$2
+
+    local path=$(${LFS} fid2path $*)
+    RC=$?
+
+    if [ $RC -ne 0 ]; then
+      	err17935 "path looked up of $expected failed. Error $RC"
+ 	return $RC
+    elif [ "${path}" != "${expected}" ]; then
+      	err17935 "path looked up \"${path}\" instead of \"${expected}\""
+ 	return 2
+    fi
+    echo "fid $fid resolves to path $path"
+}
+
+test_162() {
+    # need local MDT for fid2path
+    remote_mds && skip "remote MDS" && return
+
+    # Make changes to filesystem
+    mkdir -p $DIR/$tdir/d2
+    touch $DIR/$tdir/d2/$tfile
+    touch $DIR/$tdir/d2/x1
+    touch $DIR/$tdir/d2/x2
+    mkdir -p $DIR/$tdir/d2/a/b/c
+    mkdir -p $DIR/$tdir/d2/p/q/r
+    fid=$($LFS path2fid $DIR/$tdir/d2/$tfile)
+    check_path "/$tdir/d2/$tfile" ${mds1_svc} $fid --link 0
+    ln $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/p/q/r/hlink
+    mv $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/a/b/c/new_file
+    fid=$($LFS path2fid $DIR/$tdir/d2/a/b/c/new_file)
+    check_path "/$tdir/d2/a/b/c/new_file" ${mds1_svc} $fid --link 1
+    check_path "/$tdir/d2/p/q/r/hlink" ${mds1_svc} $fid --link 0
+    # check that there are 2 links, and that --rec doesnt break anything
+    ${LFS} fid2path ${mds1_svc} $fid --rec 20 | wc -l | grep -q 2 || \
+	err17935 "expected 2 links" 
+
+    rm $DIR/$tdir/d2/p/q/r/hlink
+    check_path "/$tdir/d2/a/b/c/new_file" ${mds1_svc} $fid --link 0
+    # Doesnt work with CMD yet: 17935 
+    return 0
+}
+run_test 162 "path lookup sanity"
+
+test_170() {
+        $LCTL debug_daemon start $TMP/${tfile}_log_good
+        touch $DIR/$tfile
+        $LCTL debug_daemon stop
+        cat $TMP/${tfile}_log_good | sed -e "s/^...../a/g" > $TMP/${tfile}_log_bad
+
+        $LCTL debug_daemon start $TMP/${tfile}_log_good
+        rm -rf $DIR/$tfile
+        $LCTL debug_daemon stop
+
+        $LCTL df $TMP/${tfile}_log_bad 2&> $TMP/${tfile}_log_bad.out
+        bad_line=`tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $9}'`
+        good_line1=`tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $5}'`
+
+        $LCTL df $TMP/${tfile}_log_good 2&>$TMP/${tfile}_log_good.out 
+        good_line2=`tail -n 1 $TMP/${tfile}_log_good.out | awk '{print $5}'`
+
+        cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt
+        cat $TMP/${tfile}_log_bad >> $TMP/${tfile}_logs_corrupt 
+        cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt           
+
+        $LCTL df $TMP/${tfile}_logs_corrupt 2&> $TMP/${tfile}_log_bad.out
+        bad_line_new=`tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $9}'`
+        good_line_new=`tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $5}'`
+        expected_good=$((good_line1 + good_line2*2))
+
+        rm -rf $TMP/${tfile}*
+        if [ $bad_line -ne $bad_line_new ]; then
+                error "expected $bad_line bad lines, but got $bad_line_new"
+                return 1 
+        fi
+
+        if [ $expected_good -ne $good_line_new ]; then
+                error "expected $expected_good good lines, but got $good_line_new"
+                return 2 
+        fi
+        true
+}
+run_test 170 "test lctl df to handle corruputed log ====================="
+
+# OST pools tests
 POOL=${POOL:-cea1}
 TGT_COUNT=$OSTCOUNT
 TGTPOOL_FIRST=1
@@ -5994,9 +6202,22 @@ test_212() {
 }
 run_test 212 "Sendfile test ============================================"
 
-TMPDIR=$OLDTMPDIR
-TMP=$OLDTMP
-HOME=$OLDHOME
+#
+# tests that do cleanup/setup should be run at the end
+#
+
+test_900() {
+        local ls
+        #define OBD_FAIL_MGC_PAUSE_PROCESS_LOG   0x903
+        $LCTL set_param fail_loc=0x903
+        # cancel_lru_locks mgc - does not work due to lctl set_param syntax
+        for ls in /proc/fs/lustre/ldlm/namespaces/MGC*/lru_size; do
+                echo "clear" > $ls
+        done
+        FAIL_ON_ERROR=true cleanup
+        FAIL_ON_ERROR=true setup
+}
+run_test 900 "umount should not race with any mgc requeue thread"
 
 log "cleanup: ======================================================"
 check_and_cleanup_lustre

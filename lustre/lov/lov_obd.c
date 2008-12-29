@@ -879,10 +879,8 @@ static int lov_cleanup(struct obd_device *obd)
 
         list_for_each_safe(pos, tmp, &lov->lov_pool_list) {
                 pool = list_entry(pos, struct pool_desc, pool_list);
-                list_del(&pool->pool_list);
-                lov_ost_pool_free(&(pool->pool_rr.lqr_pool));
-                lov_ost_pool_free(&(pool->pool_obds));
-                OBD_FREE_PTR(pool);
+                /* free pool structs */
+                lov_pool_del(obd, pool->pool_name);
         }
         lov_ost_pool_free(&(lov->lov_qos.lq_rr.lqr_pool));
         lov_ost_pool_free(&lov->lov_packed);
@@ -2692,95 +2690,6 @@ static int lov_extent_calc(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         RETURN(0);
 }
-
-
-#if 0
-struct lov_multi_wait {
-        struct ldlm_lock *lock;
-        wait_queue_t      wait;
-        int               completed;
-        int               generation;
-};
-
-int lov_complete_many(struct obd_export *exp, struct lov_stripe_md *lsm,
-                      struct lustre_handle *lockh)
-{
-        struct lov_lock_handles *lov_lockh = NULL;
-        struct lustre_handle *lov_lockhp;
-        struct lov_obd *lov;
-        struct lov_oinfo *loi;
-        struct lov_multi_wait *queues;
-        int rc = 0, i;
-        ENTRY;
-
-        ASSERT_LSM_MAGIC(lsm);
-
-        if (!exp || !exp->exp_obd)
-                RETURN(-ENODEV);
-
-        LASSERT(lockh != NULL);
-        if (lsm->lsm_stripe_count > 1) {
-                lov_lockh = lov_handle2llh(lockh);
-                if (lov_lockh == NULL) {
-                        CERROR("LOV: invalid lov lock handle %p\n", lockh);
-                        RETURN(-EINVAL);
-                }
-
-                lov_lockhp = lov_lockh->llh_handles;
-        } else {
-                lov_lockhp = lockh;
-        }
-
-        OBD_ALLOC(queues, lsm->lsm_stripe_count * sizeof(*queues));
-        if (queues == NULL)
-                GOTO(out, rc = -ENOMEM);
-
-        lov = &exp->exp_obd->u.lov;
-        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
-             i++, loi++, lov_lockhp++) {
-                struct ldlm_lock *lock;
-                struct obd_device *obd;
-
-                lock = ldlm_handle2lock_long(lov_lockhp, 0);
-                if (lock == NULL) {
-                        CDEBUG(D_HA, "lov idx %d subobj "LPX64" no lock?\n",
-                               loi->loi_ost_idx, loi->loi_id);
-                        queues[i].completed = 1;
-                        continue;
-                }
-
-                queues[i].lock = lock;
-                init_waitqueue_entry(&(queues[i].wait), current);
-                add_wait_queue(lock->l_waitq, &(queues[i].wait));
-
-                obd = class_exp2obd(lock->l_conn_export);
-                if (obd != NULL)
-                        imp = obd->u.cli.cl_import;
-                if (imp != NULL) {
-                        spin_lock(&imp->imp_lock);
-                        queues[i].generation = imp->imp_generation;
-                        spin_unlock(&imp->imp_lock);
-                }
-        }
-
-        lwi = LWI_TIMEOUT_INTR(obd_timeout * HZ, ldlm_expired_completion_wait,
-                               interrupted_completion_wait, &lwd);
-        rc = l_wait_event_added(check_multi_complete(queues, lsm), &lwi);
-
-        for (i = 0; i < lsm->lsm_stripe_count; i++)
-                remove_wait_queue(lock->l_waitq, &(queues[i].wait));
-
-        if (rc == -EINTR || rc == -ETIMEDOUT) {
-
-
-        }
-
- out:
-        if (lov_lockh != NULL)
-                lov_llh_put(lov_lockh);
-        RETURN(rc);
-}
-#endif
 
 void lov_stripe_lock(struct lov_stripe_md *md)
 {

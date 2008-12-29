@@ -1923,39 +1923,6 @@ struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
 }
 
 static int
-llu_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp)
-{
-        /* even if default lov is LOV_MAGIC_V1 we use LOV_MAGIC_V3
-         * to be sure buffer are large enough */
-        struct lov_stripe_md lsm = { .lsm_magic = LOV_MAGIC_V3 };
-        __u32 valsize = sizeof(struct lov_desc);
-        int rc, easize, def_easize, cookiesize;
-        struct lov_desc desc;
-        __u32 stripes;
-        ENTRY;
-
-        rc = obd_get_info(dt_exp, sizeof(KEY_LOVDESC), KEY_LOVDESC,
-                          &valsize, &desc, NULL);
-        if (rc)
-                RETURN(rc);
-
-        stripes = min(desc.ld_tgt_count, (__u32)LOV_MAX_STRIPE_COUNT);
-        lsm.lsm_stripe_count = stripes;
-        easize = obd_size_diskmd(dt_exp, &lsm);
-
-        lsm.lsm_stripe_count = desc.ld_default_stripe_count;
-        def_easize = obd_size_diskmd(dt_exp, &lsm);
-
-        cookiesize = stripes * sizeof(struct llog_cookie);
-
-        CDEBUG(D_HA, "updating max_mdsize/max_cookiesize: %d/%d\n",
-               easize, cookiesize);
-
-        rc = md_init_ea_size(md_exp, easize, def_easize, cookiesize);
-        RETURN(rc);
-}
-
-static int
 llu_fsswop_mount(const char *source,
                  unsigned flags,
                  const void *data __IS_UNUSED,
@@ -2084,7 +2051,7 @@ llu_fsswop_mount(const char *source,
                            sizeof(async), &async, NULL);
 
         obd->obd_upcall.onu_owner = &sbi->ll_lco;
-        obd->obd_upcall.onu_upcall = ll_ocd_update;
+        obd->obd_upcall.onu_upcall = cl_ocd_update;
 
         ocd.ocd_connect_flags = OBD_CONNECT_SRVLOCK | OBD_CONNECT_REQPORTAL |
                                 OBD_CONNECT_VERSION | OBD_CONNECT_TRUNCLOCK |
@@ -2097,13 +2064,8 @@ llu_fsswop_mount(const char *source,
         }
         sbi->ll_dt_exp = class_conn2export(&dt_conn);
         sbi->ll_lco.lco_flags = ocd.ocd_connect_flags;
-
-        if (err) {
-                CERROR("cannot register lock cancel callback: rc = %d\n", err);
-                GOTO(out_dt, err);
-        }
-
-        llu_init_ea_size(sbi->ll_md_exp, sbi->ll_dt_exp);
+        sbi->ll_lco.lco_md_exp = sbi->ll_md_exp;
+        sbi->ll_lco.lco_dt_exp = sbi->ll_dt_exp;
 
         fid_zero(&sbi->ll_root_fid);
         err = md_getstatus(sbi->ll_md_exp, &sbi->ll_root_fid, NULL);
@@ -2169,7 +2131,6 @@ out_inode:
 out_request:
         ptlrpc_req_finished(request);
 out_lock_cn_cb:
-out_dt:
         obd_disconnect(sbi->ll_dt_exp);
 out_md:
         obd_disconnect(sbi->ll_md_exp);

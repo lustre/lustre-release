@@ -205,7 +205,7 @@ static int expired_lock_main(void *arg)
                                 /* release extra ref grabbed by
                                  * ldlm_add_waiting_lock() or
                                  * ldlm_failed_ast() */
-                                LDLM_LOCK_PUT(lock);
+                                LDLM_LOCK_RELEASE(lock);
                                 continue;
                         }
                         export = class_export_get(lock->l_export);
@@ -213,7 +213,7 @@ static int expired_lock_main(void *arg)
 
                         /* release extra ref grabbed by ldlm_add_waiting_lock()
                          * or ldlm_failed_ast() */
-                        LDLM_LOCK_PUT(lock);
+                        LDLM_LOCK_RELEASE(lock);
 
                         do_dump++;
                         class_fail_export(export);
@@ -321,7 +321,8 @@ repeat:
                         LDLM_LOCK_GET(lock);
                         spin_unlock_bh(&waiting_locks_spinlock);
                         LDLM_DEBUG(lock, "prolong the busy lock");
-                        ldlm_refresh_waiting_lock(lock);
+                        ldlm_refresh_waiting_lock(lock,
+                                                  ldlm_get_enq_timeout(lock));
                         spin_lock_bh(&waiting_locks_spinlock);
 
                         if (!cont) {
@@ -380,7 +381,7 @@ repeat:
  *
  * Called with the namespace lock held.
  */
-static int __ldlm_add_waiting_lock(struct ldlm_lock *lock)
+static int __ldlm_add_waiting_lock(struct ldlm_lock *lock, int seconds)
 {
         cfs_time_t timeout;
         cfs_time_t timeout_rounded;
@@ -390,11 +391,9 @@ static int __ldlm_add_waiting_lock(struct ldlm_lock *lock)
 
         if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT) ||
             OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_TIMEOUT))
-                timeout = 2;
-        else
-                timeout = ldlm_get_enq_timeout(lock);
+                seconds = 2;
 
-        timeout = cfs_time_shift(timeout);
+        timeout = cfs_time_shift(seconds);
         if (likely(cfs_time_after(timeout, lock->l_callback_timeout)))
                 lock->l_callback_timeout = timeout;
 
@@ -429,7 +428,7 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
                 return 0;
         }
 
-        ret = __ldlm_add_waiting_lock(lock);
+        ret = __ldlm_add_waiting_lock(lock, ldlm_get_enq_timeout(lock));
         if (ret)
                 /* grab ref on the lock if it has been added to the
                  * waiting list */
@@ -492,7 +491,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
         if (ret)
                 /* release lock ref if it has indeed been removed
                  * from a list */
-                LDLM_LOCK_PUT(lock);
+                LDLM_LOCK_RELEASE(lock);
 
         LDLM_DEBUG(lock, "%s", ret == 0 ? "wasn't waiting" : "removed");
         return ret;
@@ -503,7 +502,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
  *
  * Called with namespace lock held.
  */
-int ldlm_refresh_waiting_lock(struct ldlm_lock *lock)
+int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, int timeout)
 {
         if (lock->l_export == NULL) {
                 /* We don't have a "waiting locks list" on clients. */
@@ -522,7 +521,7 @@ int ldlm_refresh_waiting_lock(struct ldlm_lock *lock)
         /* we remove/add the lock to the waiting list, so no needs to
          * release/take a lock reference */
         __ldlm_del_waiting_lock(lock);
-        __ldlm_add_waiting_lock(lock);
+        __ldlm_add_waiting_lock(lock, timeout);
         spin_unlock_bh(&waiting_locks_spinlock);
 
         LDLM_DEBUG(lock, "refreshed");
@@ -541,7 +540,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
         RETURN(0);
 }
 
-int ldlm_refresh_waiting_lock(struct ldlm_lock *lock)
+int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, int timeout)
 {
         RETURN(0);
 }
@@ -1188,7 +1187,7 @@ existing_lock:
                 if (unlikely(!(lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK) ||
                              !(dlm_rep->lock_flags & LDLM_FL_CANCEL_ON_BLOCK))){
                         CERROR("Granting sync lock to libclient. "
-                               "req fl %d, rep fl %d, lock fl %d\n",
+                               "req fl %d, rep fl %d, lock fl "LPX64"\n",
                                dlm_req->lock_flags, dlm_rep->lock_flags,
                                lock->l_flags);
                         LDLM_ERROR(lock, "sync lock");
@@ -1727,6 +1726,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                         RETURN(0);
                 break;
         case OBD_LOG_CANCEL: /* remove this eventually - for 1.4.0 compat */
+                CERROR("shouldn't be handling OBD_LOG_CANCEL on DLM thread\n");
                 req_capsule_set(&req->rq_pill, &RQF_LOG_CANCEL);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOG_CANCEL_NET))
                         RETURN(0);
@@ -1812,15 +1812,21 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
+        if ((lock->l_flags & LDLM_FL_FAIL_LOC) && 
+            lustre_msg_get_opc(req->rq_reqmsg) == LDLM_BL_CALLBACK)
+                OBD_RACE(OBD_FAIL_LDLM_CP_BL_RACE);
+
         /* Copy hints/flags (e.g. LDLM_FL_DISCARD_DATA) from AST. */
         lock_res_and_lock(lock);
         lock->l_flags |= (dlm_req->lock_flags & LDLM_AST_FLAGS);
         if (lustre_msg_get_opc(req->rq_reqmsg) == LDLM_BL_CALLBACK) {
-                /* If somebody cancels locks and cache is already droped,
+                /* If somebody cancels lock and cache is already droped,
+                 * or lock is failed before cp_ast received on client,
                  * we can tell the server we have no lock. Otherwise, we
                  * should send cancel after dropping the cache. */
-                if ((lock->l_flags & LDLM_FL_CANCELING) &&
-                    (lock->l_flags & LDLM_FL_BL_DONE)) {
+                if (((lock->l_flags & LDLM_FL_CANCELING) &&
+                    (lock->l_flags & LDLM_FL_BL_DONE)) ||
+                    (lock->l_flags & LDLM_FL_FAILED)) {
                         LDLM_DEBUG(lock, "callback on lock "
                                    LPX64" - lock disappeared\n",
                                    dlm_req->lock_handle[0].cookie);

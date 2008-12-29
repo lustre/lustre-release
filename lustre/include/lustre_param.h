@@ -55,12 +55,12 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 
 
 /****************** User-settable parameter keys *********************/
-/* e.g. 
+/* e.g.
         tunefs.lustre --param="failover.node=192.168.0.13@tcp0" /dev/sda
         lctl conf_param testfs-OST0000 failover.node=3@elan,192.168.0.3@tcp0
                     ... testfs-MDT0000.lov.stripesize=4M
                     ... testfs-OST0000.ost.client_cache_seconds=15
-                    ... testfs.sys.timeout=<secs> 
+                    ... testfs.sys.timeout=<secs>
                     ... testfs.llite.max_read_ahead_mb=16
 */
 

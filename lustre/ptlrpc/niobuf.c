@@ -540,6 +540,9 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                         RETURN(rc);
         }
 
+        if (request->rq_resend)
+                lustre_msg_add_flags(request->rq_reqmsg, MSG_RESENT);
+
         if (!noreply) {
                 LASSERT (request->rq_replen != 0);
                 if (request->rq_repbuf == NULL) {

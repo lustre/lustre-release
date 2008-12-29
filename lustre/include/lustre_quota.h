@@ -499,6 +499,7 @@ typedef struct {
          */
         int (*quota_getflag) (struct obd_device *, struct obdo *);
 
+#ifdef __KERNEL__
         /**
          * For quota slave, acquire/release quota from master if needed
          */
@@ -512,7 +513,15 @@ typedef struct {
          */
         int (*quota_chkquota) (struct obd_device *, unsigned int, unsigned int,
                                int, int *, quota_acquire,
-                               struct obd_trans_info *, int);
+                               struct obd_trans_info *, int, struct inode *,
+                               int);
+
+        /**
+         * For quota client, the actions after the pending write is committed
+         */
+        int (*quota_pending_commit) (struct obd_device *, unsigned int,
+                                     unsigned int, int, int);
+#endif
 
         /**
          * For quota client, poll if the quota check done
@@ -523,12 +532,6 @@ typedef struct {
          * For quota client, check whether specified uid/gid is over quota
          */
         int (*quota_chkdq) (struct client_obd *, unsigned int, unsigned int);
-
-        /**
-         * For quota client, the actions after the pending write is committed
-         */
-        int (*quota_pending_commit) (struct obd_device *, unsigned int,
-                                     unsigned int, int, int);
 
         /**
          * For quota client, set over quota flag for specifed uid/gid
@@ -746,11 +749,12 @@ static inline int lquota_getflag(quota_interface_t *interface,
         RETURN(rc);
 }
 
+#ifdef __KERNEL__
 static inline int lquota_chkquota(quota_interface_t *interface,
                                   struct obd_device *obd,
                                   unsigned int uid, unsigned int gid, int count,
                                   int *flag, struct obd_trans_info *oti,
-                                  int isblk)
+                                  int isblk, struct inode *inode, int frags)
 {
         int rc;
         ENTRY;
@@ -759,22 +763,23 @@ static inline int lquota_chkquota(quota_interface_t *interface,
         QUOTA_CHECK_OP(interface, acquire);
         rc = QUOTA_OP(interface, chkquota)(obd, uid, gid, count, flag,
                                            QUOTA_OP(interface, acquire), oti,
-                                           isblk);
+                                           isblk, inode, frags);
         RETURN(rc);
 }
 
 static inline int lquota_pending_commit(quota_interface_t *interface,
                                         struct obd_device *obd,
                                         unsigned int uid, unsigned int gid,
-                                        int npage, int isblk)
+                                        int pending, int isblk)
 {
         int rc;
         ENTRY;
 
         QUOTA_CHECK_OP(interface, pending_commit);
-        rc = QUOTA_OP(interface, pending_commit)(obd, uid, gid, npage, isblk);
+        rc = QUOTA_OP(interface, pending_commit)(obd, uid, gid, pending, isblk);
         RETURN(rc);
 }
+#endif
 
 #ifndef __KERNEL__
 extern quota_interface_t osc_quota_interface;

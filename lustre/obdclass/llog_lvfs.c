@@ -637,16 +637,8 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 handle->lgh_id = *logid;
 
         } else if (name) {
-                /* COMPAT_146 */
-                if (strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME) == 0) {
-                        handle->lgh_file = llog_filp_open(MDT_LOGS_DIR, name,
-                                                          open_flags, 0644);
-                } else {
-                        /* end COMPAT_146 */
-                        handle->lgh_file = llog_filp_open(MOUNT_CONFIGS_DIR,
-                                                          name, open_flags,
-                                                          0644);
-                }
+                handle->lgh_file = llog_filp_open(MOUNT_CONFIGS_DIR,
+                                                  name, open_flags, 0644);
                 if (IS_ERR(handle->lgh_file))
                         GOTO(cleanup, rc = PTR_ERR(handle->lgh_file));
 
@@ -718,12 +710,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         int rc;
         ENTRY;
 
-        /* COMPAT_146 */
-        if (strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME) == 0)
-                dir = MDT_LOGS_DIR;
-        else
-                /* end COMPAT_146 */
-                dir = MOUNT_CONFIGS_DIR;
+        dir = MOUNT_CONFIGS_DIR;
 
         fdentry = handle->lgh_file->f_dentry;
         if (strcmp(fdentry->d_parent->d_name.name, dir) == 0) {

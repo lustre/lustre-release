@@ -146,9 +146,17 @@ static int vvp_mmap_locks(const struct lu_env *env,
                 count += addr & (~CFS_PAGE_MASK);
                 addr &= CFS_PAGE_MASK;
                 while((vma = our_vma(addr, count)) != NULL) {
-                        LASSERT(vma->vm_file);
+                        struct file *file = vma->vm_file;
+                        struct ll_file_data *fd;
 
-                        inode = vma->vm_file->f_dentry->d_inode;
+                        LASSERT(file);
+                        fd = LUSTRE_FPRIVATE(file);
+
+                        inode = file->f_dentry->d_inode;
+                        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK ||
+                            ll_i2sbi(inode)->ll_flags & LL_SBI_NOLCK))
+                                goto cont;
+
                         /*
                          * XXX: Required lock mode can be weakened: CIT_WRITE
                          * io only ever reads user level buffer, and CIT_READ
@@ -161,9 +169,11 @@ static int vvp_mmap_locks(const struct lu_env *env,
                                                     policy.l_extent.start);
                         descr->cld_end = cl_index(descr->cld_obj,
                                                   policy.l_extent.end);
-                        result = cl_io_lock_alloc_add(env, io, descr);
+                        result = cl_io_lock_alloc_add(env, io, descr, CEF_MUST);
                         if (result < 0)
                                 RETURN(result);
+
+                cont:
                         if (vma->vm_end - addr >= count)
                                 break;
                         count -= vma->vm_end - addr;

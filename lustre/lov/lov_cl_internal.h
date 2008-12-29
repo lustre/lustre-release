@@ -396,6 +396,15 @@ struct lovsub_lock {
         struct cl_lock       *lss_active;
 };
 
+/**
+ * Describe the environment settings for sublocks.
+ */
+struct lov_sublock_env {
+        const struct lu_env *lse_env;
+        struct cl_io        *lse_io;
+        struct lov_io_sub   *lse_sub;
+};
+
 struct lovsub_page {
         struct cl_page_slice lsb_cl;
 };
@@ -507,7 +516,8 @@ struct lov_io {
 };
 
 struct lov_session {
-        struct lov_io ls_io;
+        struct lov_io          ls_io;
+        struct lov_sublock_env ls_subenv;
 };
 
 /**
@@ -564,7 +574,9 @@ int   lov_io_init_empty   (const struct lu_env *env, struct cl_object *obj,
 void  lov_lock_unlink     (const struct lu_env *env, struct lov_lock_link *link,
                            struct lovsub_lock *sub);
 
-void  lov_sub_put         (struct lov_io_sub *sub);
+struct lov_io_sub *lov_sub_get(const struct lu_env *env, struct lov_io *lio,
+                               int stripe);
+void  lov_sub_put             (struct lov_io_sub *sub);
 int   lov_sublock_modify  (const struct lu_env *env, struct lov_lock *lov,
                            struct lovsub_lock *sublock,
                            const struct cl_lock_descr *d, int idx);

@@ -429,7 +429,7 @@ static int mds_lov_get_objid(struct obd_device * obd,
         page = idx / OBJID_PER_PAGE();
         off = idx % OBJID_PER_PAGE();
         data = mds->mds_lov_page_array[page];
-        if (data[off] == 0) {
+        if (data[off] < 2) {
                 /* We never read this lastid; ask the osc */
                 struct obd_id_info lastid;
                 __u32 size = sizeof(lastid);
@@ -643,7 +643,8 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                                   OBD_CONNECT_REQPORTAL | OBD_CONNECT_QUOTA64 |
                                   OBD_CONNECT_OSS_CAPA  | OBD_CONNECT_FID     |
                                   OBD_CONNECT_BRW_SIZE  | OBD_CONNECT_CKSUM   |
-                                  OBD_CONNECT_AT | OBD_CONNECT_CHANGE_QS;
+                                  OBD_CONNECT_CHANGE_QS | OBD_CONNECT_AT      |
+                                  OBD_CONNECT_MDS;
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
 #endif

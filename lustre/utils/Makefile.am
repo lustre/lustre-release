@@ -62,7 +62,9 @@ llverfs_LDADD := $(EXT2FSLIB) $(E2PLIB)
 
 llverdev_LDADD := $(EXT2FSLIB) $(BLKIDLIB)
 
-liblustreapi_a_SOURCES = liblustreapi.c
+L_IOCTL := $(top_builddir)/libcfs/libcfs/util/l_ioctl.c
+liblustreapi_a_SOURCES = liblustreapi.c $(L_IOCTL)
+
 libiam_a_SOURCES = libiam.c
 
 wirecheck_SOURCES = wirecheck.c

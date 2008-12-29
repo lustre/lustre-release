@@ -1,22 +1,14 @@
-#!/bin/sh
+#!/bin/bash
 
 MDIR=/lib/modules/`uname -r`/lustre
 /bin/rm -rf $MDIR
 mkdir -p $MDIR
 
-KVER=26
 EXT=ko
-FSFLT=fsfilt_ldiskfs
 if [ -d /etc/modprobe.d ]; then
     MODFILE="/etc/modprobe.d/Lustre"
 else
     MODFILE="/etc/modprobe.conf"
-fi
-if [ `uname -r | cut -c 3` -eq 4 ]; then
-    KVER=24
-    EXT=o
-    FSFLT=fsfilt_ext3
-    MODFILE="/etc/modules.conf"
 fi
 
 echo "Copying modules from local build dir to "$MDIR

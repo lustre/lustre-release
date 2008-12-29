@@ -595,6 +595,28 @@ static int parse_callout_info(const char *coinfo,
         return 0;
 }
 
+#define LOG_LEVEL_PATH  "/proc/fs/lustre/sptlrpc/gss/lgss_keyring/debug_level"
+
+static void set_log_level()
+{
+        FILE         *file;
+        unsigned int  level;
+
+        file = fopen(LOG_LEVEL_PATH, "r");
+        if (file == NULL)
+                return;
+
+        if (fscanf(file, "%u", &level) != 1)
+                goto out;
+
+        if (level >= LL_MAX)
+                goto out;
+
+        lgss_set_loglevel(level);
+out:
+        fclose(file);
+}
+
 /****************************************
  * main process                         *
  ****************************************/
@@ -609,6 +631,9 @@ int main(int argc, char *argv[])
         struct lgss_mech_type          *mech;
         struct lgss_cred               *cred;
 
+        set_log_level();
+
+        logmsg(LL_TRACE, "start parsing parameters\n");
         /*
          * parse & sanity check upcall parameters
          * expected to be called with:

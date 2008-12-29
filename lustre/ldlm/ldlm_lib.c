@@ -737,14 +737,25 @@ int target_handle_connect(struct ptlrpc_request *req)
                    req->rq_peer.nid != export->exp_connection->c_peer.nid) {
                 /* make darn sure this is coming from the same peer
                  * if the UUIDs matched */
-                  CWARN("%s: cookie %s seen on new NID %s when "
-                          "existing NID %s is already connected\n",
-                        target->obd_name, cluuid.uuid,
-                  libcfs_nid2str(req->rq_peer.nid),
-                  libcfs_nid2str(export->exp_connection->c_peer.nid));
-                  class_export_put(export);
-                  export = NULL;
-                  rc = -EALREADY;
+                if (data && data->ocd_connect_flags & OBD_CONNECT_MDS) {
+                        /* the MDS UUID can be reused, don't need to wait
+                         * for the export to be evicted */
+                        CWARN("%s: received MDS connection from a new NID %s,"
+                              " removing former export from NID %s\n",
+                            target->obd_name,
+                            libcfs_nid2str(req->rq_peer.nid),
+                            libcfs_nid2str(export->exp_connection->c_peer.nid));
+                        class_fail_export(export);
+                } else {
+                        CWARN("%s: cookie %s seen on new NID %s when "
+                              "existing NID %s is already connected\n",
+                            target->obd_name, cluuid.uuid,
+                            libcfs_nid2str(req->rq_peer.nid),
+                            libcfs_nid2str(export->exp_connection->c_peer.nid));
+                        rc = -EALREADY;
+                }
+                class_export_put(export);
+                export = NULL;
         } else if (export != NULL) {
                 spin_lock(&export->exp_lock);
                 export->exp_connecting = 1;
@@ -2150,7 +2161,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 
         spin_lock(&svc->srv_lock);
 
-        svc->srv_n_difficult_replies++;
+        atomic_inc(&svc->srv_n_difficult_replies);
 
         if (netrc != 0) {
                 /* error sending: reply is off the net.  Also we need +1
@@ -2163,18 +2174,18 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
                 atomic_inc (&svc->srv_outstanding_replies);
         }
 
+        spin_lock(&rs->rs_lock);
         if (rs->rs_transno <= obd->obd_last_committed ||
             (!rs->rs_on_net && !rs->rs_no_ack) ||
              list_empty(&rs->rs_exp_list) ||     /* completed already */
              list_empty(&rs->rs_obd_list)) {
                 CDEBUG(D_HA, "Schedule reply immediately\n");
-                list_add_tail (&rs->rs_list, &svc->srv_reply_queue);
-                cfs_waitq_signal (&svc->srv_waitq);
+                ptlrpc_dispatch_difficult_reply(rs);
         } else {
                 list_add (&rs->rs_list, &svc->srv_active_replies);
                 rs->rs_scheduled = 0;           /* allow notifier to schedule */
         }
-
+        spin_unlock(&rs->rs_lock);
         spin_unlock(&svc->srv_lock);
         EXIT;
 }

@@ -67,7 +67,7 @@ rm -rf $DIR1/[df][0-9]* $DIR1/lnk
 # $RUNAS_ID may get set incorrectly somewhere else
 [ $UID -eq 0 -a $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 
-check_runas_id $RUNAS_ID $RUNAS
+check_runas_id $RUNAS_ID $RUNAS_ID $RUNAS
 
 build_test_filter
 
@@ -636,9 +636,11 @@ test_32a() { # bug 11270
         local p="$TMP/sanityN-$TESTNAME.parameters"
         save_lustre_params $HOSTNAME osc.*.lockless_truncate > $p
         cancel_lru_locks osc
-        clear_osc_stats
         enable_lockless_truncate 1
+        rm -f $DIR1/$tfile
+        lfs setstripe -c -1 $DIR1/$tfile
         dd if=/dev/zero of=$DIR1/$tfile count=10 bs=1M > /dev/null 2>&1
+        clear_osc_stats
 
         log "checking cached lockless truncate"
         $TRUNCATE $DIR1/$tfile 8000000
@@ -780,12 +782,12 @@ run_test 33a "commit on sharing, cross crete/delete, 2 clients, benchmark"
 # End commit on sharing tests
 
 test_34() { #16129
+        local OPER
+        local lock_in
+        local lock_out
         for OPER in notimeout timeout ; do
                 rm $DIR1/$tfile 2>/dev/null
-                lock_in=0;
-                for f in `lctl get_param -n ldlm/namespaces/*/lock_timeouts`; do
-                        lock_in=$(($lock_in + $f))
-                done
+                lock_in=$(do_nodes $(osts_nodes) "lctl get_param -n ldlm.namespaces.filter-*.lock_timeouts" | calc_sum)
                 if [ $OPER == "timeout" ] ; then
                         for j in `seq $OSTCOUNT`; do
                                 #define OBD_FAIL_PTLRPC_HPREQ_TIMEOUT    0x511
@@ -808,10 +810,7 @@ test_34() { #16129
                 dd of=/dev/null if=$DIR2/$tfile > /dev/null 2>&1
                 # wait for a lock timeout
                 sleep 4
-                lock_out=0
-                for f in `lctl get_param -n ldlm/namespaces/*/lock_timeouts`; do
-                        lock_out=$(($lock_out + $f))
-                done
+                lock_out=$(do_nodes $(osts_nodes) "lctl get_param -n ldlm.namespaces.filter-*.lock_timeouts" | calc_sum)
                 if [ $OPER == "timeout" ] ; then 
                         if [ $lock_in == $lock_out ]; then
                                 error "no lock timeout happened"
@@ -828,6 +827,52 @@ test_34() { #16129
         done
 }
 run_test 34 "no lock timeout under IO"
+
+test_35() { # bug 17645
+        local generation=[]
+        local count=0
+        for imp in /proc/fs/lustre/mdc/$FSNAME-MDT*-mdc-*; do
+            g=$(awk '/generation/{print $2}' $imp/import)
+            generation[count]=$g
+            let count=count+1
+        done
+
+        mkdir -p $MOUNT1/$tfile
+        createmany -o $MOUNT1/$tfile/a 2000
+        sync
+        cancel_lru_locks mdc
+
+        # Let's initiate -EINTR situation by setting fail_loc and take
+        # write lock on same file from same client. This will not cause
+        # bl_ast yet as lock is already in local cache.
+#define OBD_FAIL_LDLM_INTR_CP_AST        0x317
+        do_facet client "lctl set_param fail_loc=0x80000317"
+        ls -la $MOUNT1/$tfile > /dev/null &
+        pid1=$!
+        sleep 1
+        
+        # Let's take write lock on same file from another mount. This
+        # should cause conflict and bl_ast
+        createmany -o $MOUNT2/$tfile/a 2000 &
+        pid2=$!
+        local timeout=`do_facet $SINGLEMDS lctl get_param  -n timeout`
+        let timeout=timeout*3
+        log "Wait for $pid1 $pid2 for $timeout sec..."
+        sleep $timeout
+        kill -9 $pid1 $pid2 > /dev/null 2>&1
+        wait
+        do_facet client "lctl set_param fail_loc=0x0"
+        df -h $MOUNT1 $MOUNT2
+        count=0
+        for imp in /proc/fs/lustre/mdc/$FSNAME-MDT*-mdc-*; do
+            g=$(awk '/generation/{print $2}' $imp/import)
+            if ! test "$g" -eq "${generation[count]}"; then
+                error "Eviction happened on import $(basename $imp)"
+            fi
+            let count=count+1
+        done
+}
+run_test 35 "-EINTR cp_ast vs. bl_ast race does not evict client"
 
 log "cleanup: ======================================================"
 

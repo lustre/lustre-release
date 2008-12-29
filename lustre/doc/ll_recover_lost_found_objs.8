@@ -1,0 +1,25 @@
+.TH ll_recover_lost_found_objs 1 "Aug 21, 2008" Lustre "utilities"
+.SH NAME
+ll_recover_lost_found_objs \- recover Lustre OST objects in lost+found
+.SH SYNOPSIS
+.B "ll_recover_lost_found_objs [-hv] -d directory"
+.br
+.SH DESCRIPTION
+.B ll_recover_lost_found_objs
+recovers objects from lost+found that might result from a
+Lustre OST with a corrupted directory. Running e2fsck will fix the
+directory, but puts all of the objects into lost+found, where they are
+inaccessible to Lustre.
+.TP
+.I "\-h"
+Print help message.
+.TP
+.I "\-v"
+Increase verbosity.
+.TP
+.I "\-d directory"
+Set lost+found directory path.
+.SH EXAMPLE
+.fi
+ll_recover_lost_found_objs -d /mnt/ost/lost+found
+.fi

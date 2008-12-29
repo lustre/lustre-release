@@ -96,6 +96,8 @@ typedef enum {
 
 extern loglevel_t g_log_level;
 
+void lgss_set_loglevel(loglevel_t level);
+
 void __logmsg(loglevel_t level, const char *func, const char *format, ...);
 void __logmsg_gss(loglevel_t level, const char *func, const gss_OID mech,
                   uint32_t major, uint32_t minor, const char *format, ...);

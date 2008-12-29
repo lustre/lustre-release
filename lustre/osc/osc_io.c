@@ -422,19 +422,23 @@ static int osc_io_trunc_start(const struct lu_env *env,
         struct osc_punch_cbargs *cbargs = &oio->oi_punch_cbarg;
         struct obd_capa         *capa;
         loff_t                   size   = io->u.ci_truncate.tr_size;
-        int                      result;
+        int                      result = 0;
+
 
         memset(oa, 0, sizeof(*oa));
 
         osc_trunc_check(env, io, oio, size);
 
-        cl_object_attr_lock(obj);
-        result = cl_object_attr_get(env, obj, attr);
-        if (result == 0) {
-                attr->cat_size = attr->cat_kms = size;
-                result = cl_object_attr_set(env, obj, attr, CAT_SIZE|CAT_KMS);
+        if (oio->oi_lockless == 0) {
+                cl_object_attr_lock(obj);
+                result = cl_object_attr_get(env, obj, attr);
+                if (result == 0) {
+                        attr->cat_size = attr->cat_kms = size;
+                        result = cl_object_attr_set(env, obj, attr,
+                                                    CAT_SIZE|CAT_KMS);
+                }
+                cl_object_attr_unlock(obj);
         }
-        cl_object_attr_unlock(obj);
 
         if (result == 0) {
                 oa->o_id = loi->loi_id;
@@ -602,19 +606,15 @@ static void osc_req_attr_set(const struct lu_env *env,
                 opg = osc_cl_page_osc(apage);
                 apage = opg->ops_cl.cpl_page; /* now apage is a sub-page */
                 lock = cl_lock_at_page(env, apage->cp_obj, apage, NULL, 1, 1);
-                if (lock != NULL) {
-                        olck = osc_lock_at(lock);
-                        LASSERT(olck != NULL);
-                        /* check for lockless io. */
-                        if (olck->ols_lock != NULL) {
-                                oa->o_handle = olck->ols_lock->l_remote_handle;
-                                oa->o_valid |= OBD_MD_FLHANDLE;
-                        }
-                        cl_lock_put(env, lock);
-                } else {
-                        /* Should only be possible with liblustre */
-                        LASSERT(LIBLUSTRE_CLIENT);
+                LASSERT(lock != NULL);
+                olck = osc_lock_at(lock);
+                LASSERT(olck != NULL);
+                /* check for lockless io. */
+                if (olck->ols_lock != NULL) {
+                        oa->o_handle = olck->ols_lock->l_remote_handle;
+                        oa->o_valid |= OBD_MD_FLHANDLE;
                 }
+                cl_lock_put(env, lock);
         }
 }
 

@@ -194,6 +194,8 @@ static int mds_postsetup(struct obd_device *obd)
         if (rc)
                 GOTO(err_llog, rc);
 
+        mds_changelog_llog_init(obd, obd);
+
         if (mds->mds_profile) {
                 struct lustre_profile *lprof;
                 /* The profile defines which osc and mdc to connect to, for a
@@ -267,8 +269,9 @@ static int mds_lov_early_clean(struct obd_device *obd)
 
 static int mds_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 {
-        int rc = 0;
         struct mds_obd *mds = &obd->u.mds;
+        struct llog_ctxt *ctxt;
+        int rc = 0;
         ENTRY;
 
         switch (stage) {
@@ -279,8 +282,12 @@ static int mds_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                 down_write(&mds->mds_notify_lock);
                 mds_lov_disconnect(obd);
                 mds_lov_clean(obd);
-                llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
-                llog_cleanup(llog_get_context(obd, LLOG_LOVEA_ORIG_CTXT));
+                ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+                if (ctxt)
+                        llog_cleanup(ctxt);
+                ctxt = llog_get_context(obd, LLOG_LOVEA_ORIG_CTXT);
+                if (ctxt)
+                        llog_cleanup(ctxt);
                 rc = obd_llog_finish(obd, 0);
                 mds->mds_osc_exp = NULL;
                 up_write(&mds->mds_notify_lock);

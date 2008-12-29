@@ -84,6 +84,7 @@ print_summary () {
 init_test_env() {
     export LUSTRE=`absolute_path $LUSTRE`
     export TESTSUITE=`basename $0 .sh`
+    export TEST_FAILED=false
 
     #[ -d /r ] && export ROOT=${ROOT:-/r}
     export TMP=${TMP:-$ROOT/tmp}
@@ -258,9 +259,9 @@ load_modules() {
 
     load_module llite/lustre
     load_module llite/llite_lloop
+    [ -d /r ] && OGDB=${OGDB:-"/r/tmp"}
     OGDB=${OGDB:-$TMP}
     rm -f $OGDB/ogdb-$HOSTNAME
-    [ -d /r ] && OGDB="/r/tmp"
     $LCTL modules > $OGDB/ogdb-$HOSTNAME
 
     # 'mount' doesn't look in $PATH, just sbin
@@ -529,12 +530,27 @@ zconf_mount() {
 zconf_umount() {
     local client=$1
     local mnt=$2
+    local force
+    local busy 
+    local need_kill
+
     [ "$3" ] && force=-f
     local running=$(do_node $client "grep -c $mnt' ' /proc/mounts") || true
     if [ $running -ne 0 ]; then
         echo "Stopping client $client $mnt (opts:$force)"
-        lsof | grep "$mnt" || true
-        do_node $client umount $force $mnt
+        do_node $client lsof -t $mnt || need_kill=no
+        if [ "x$force" != "x" -a "x$need_kill" != "xno" ]; then
+            pids=$(do_node $client lsof -t $mnt | sort -u);
+            if [ -n $pids ]; then
+                do_node $client kill -9 $pids || true
+            fi
+        fi
+
+        busy=$(do_node $client "umount $force $mnt 2>&1" | grep -c "busy") || true
+        if [ $busy -ne 0 ] ; then
+            echo "$mnt is still busy, wait one second" && sleep 1
+            do_node $client umount $force $mnt
+        fi
     fi
 }
 
@@ -571,15 +587,31 @@ zconf_mount_clients() {
 zconf_umount_clients() {
     local clients=$1
     local mnt=$2
+    local force
+
     [ "$3" ] && force=-f
 
-    echo "Umounting clients: $clients"
     echo "Stopping clients: $clients $mnt (opts:$force)"
-    do_nodes $clients umount $force $mnt
+    do_nodes $clients "set -x; running=\\\$(grep -c $mnt' ' /proc/mounts)
+if [ \\\$running -ne 0 ] ; then
+echo Stopping client \\\$(hostname) client $mnt opts:$force
+lsof -t $mnt || need_kill=no
+if [ "x$force" != "x" -a "x\\\$need_kill" != "xno" ]; then
+    pids=\\\$(lsof -t $mnt | sort -u);
+    if [ -n \\\$pids ]; then
+             kill -9 \\\$pids
+    fi
+fi
+busy=\\\$(umount $force $mnt 2>&1 | grep -c "busy")
+if [ \\\$busy -ne 0 ] ; then
+    echo "$mnt is still busy, wait one second" && sleep 1
+    umount $force $mnt
+fi
+fi"
 }
 
 shutdown_facet() {
-    facet=$1
+    local facet=$1
     if [ "$FAILURE_MODE" = HARD ]; then
         $POWER_DOWN `facet_active_host $facet`
         sleep 2
@@ -603,6 +635,92 @@ boot_node() {
        $POWER_UP $node
     fi
 }
+
+# recovery-scale functions
+check_progs_installed () {
+    local clients=$1
+    shift
+    local progs=$@
+
+    do_nodes $clients "set -x ; PATH=:$PATH status=true; for prog in $progs; do
+        which \\\$prog || { echo \\\$prog missing on \\\$(hostname) && status=false; }
+        done;
+        eval \\\$status"
+}
+
+start_client_load() {
+    local list=(${1//,/ })
+    local nodenum=$2
+
+    local numloads=${#CLIENT_LOADS[@]}
+    local testnum=$((nodenum % numloads))
+
+    do_node ${list[nodenum]} "PATH=$PATH MOUNT=$MOUNT ERRORS_OK=$ERRORS_OK \
+                              BREAK_ON_ERROR=$BREAK_ON_ERROR \
+                              END_RUN_FILE=$END_RUN_FILE \
+                              LOAD_PID_FILE=$LOAD_PID_FILE \
+                              TESTSUITELOG=$TESTSUITELOG \
+                              run_${CLIENT_LOADS[testnum]}.sh" &
+    CLIENT_LOAD_PIDS="$CLIENT_LOAD_PIDS $!"
+    log "Started client load: ${CLIENT_LOADS[testnum]} on ${list[nodenum]}"
+
+    eval export ${list[nodenum]}_load=${CLIENT_LOADS[testnum]}
+    return 0
+}
+
+start_client_loads () {
+    local clients=(${1//,/ })
+
+    for ((num=0; num < ${#clients[@]}; num++ )); do
+        start_client_load $1 $num
+    done
+}
+
+# only for remote client 
+check_client_load () {
+    local client=$1
+    local var=${client}_load
+
+    local TESTLOAD=run_${!var}.sh
+
+    ps auxww | grep -v grep | grep $client | grep -q "$TESTLOAD" || return 1
+
+    check_catastrophe $client || return 2
+
+    # see if the load is still on the client
+    local tries=3
+    local RC=254
+    while [ $RC = 254 -a $tries -gt 0 ]; do
+        let tries=$tries-1
+        # assume success
+        RC=0
+        if ! do_node $client "ps auxwww | grep -v grep | grep -q $TESTLOAD"; then
+            RC=${PIPESTATUS[0]}
+            sleep 30
+        fi
+    done
+    if [ $RC = 254 ]; then
+        echo "got a return status of $RC from do_node while checking (i.e. with 'ps') the client load on the remote system"
+        # see if we can diagnose a bit why this is
+    fi
+
+    return $RC
+}
+check_client_loads () {
+   local clients=${1//,/ }
+   local client=
+   local rc=0
+
+   for client in $clients; do
+      check_client_load $client
+      rc=$?
+      if [ "$rc" != 0 ]; then
+        log "Client load failed on node $client, rc=$rc"
+        return $rc
+      fi
+   done
+}
+# End recovery-scale functions
 
 # verify that lustre actually cleaned up properly
 cleanup_check() {
@@ -681,6 +799,7 @@ wait_exit_ST () {
 
     local WAIT=0
     local INTERVAL=1
+    local running
     # conf-sanity 31 takes a long time cleanup
     while [ $WAIT -lt 300 ]; do
         running=$(do_facet ${facet} "lsmod | grep lnet > /dev/null && lctl dl | grep ' ST '") || true
@@ -891,6 +1010,8 @@ declare -fx h2o2ib
 
 facet_host() {
     local facet=$1
+
+    [ "$facet" == client ] && echo -n $HOSTNAME && return
     varname=${facet}_HOST
     if [ -z "${!varname}" ]; then
         if [ "${facet:0:3}" == "ost" ]; then
@@ -1243,6 +1364,8 @@ setupall() {
         [ -n "$CLIENTS" ] && zconf_mount_clients $CLIENTS $MOUNT2
     fi
 
+    init_versions_vars
+
     # by remounting mdt before ost, initial connect from mdt to ost might
     # timeout because ost is not ready yet. wait some time to its fully
     # recovery. initial obd_connect timeout is 5s; in GSS case it's preceeded
@@ -1295,15 +1418,26 @@ init_facets_vars () {
     done
 }
 
+init_versions_vars () {
+    export MDSVER=$(do_facet $SINGLEMDS "lctl get_param version" | cut -d. -f1,2)
+    export OSTVER=$(do_facet ost1 "lctl get_param version" | cut -d. -f1,2)
+    export CLIVER=$(lctl get_param version | cut -d. -f 1,2)
+}
+
 check_config () {
     local mntpt=$1
-    
+    local myMGS_host=$mgs_HOST   
+    if [ "$NETTYPE" = "ptl" ]; then
+        myMGS_host=$(h2ptl $mgs_HOST | sed -e s/@ptl//) 
+    fi
+
     echo Checking config lustre mounted on $mntpt
     local mgshost=$(mount | grep " $mntpt " | awk -F@ '{print $1}')
     mgshost=$(echo $mgshost | awk -F: '{print $1}')
-    if [ "$mgshost" != "$mgs_HOST" ]; then
+
+    if [ "$mgshost" != "$myMGS_host" ]; then
         FAIL_ON_ERROR=true \
-            error "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST
+            error "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST, NETTYPE=$NETTYPE
                    Please use correct config or set mds_HOST correctly!"
     fi
 }
@@ -1319,6 +1453,7 @@ check_and_setup_lustre() {
     else
         check_config $MOUNT
         init_facets_vars
+        init_versions_vars
     fi
     if [ "$ONLY" == "setup" ]; then
         exit 0
@@ -1383,6 +1518,16 @@ comma_list() {
     # the sed converts spaces to commas, but leaves the last space
     # alone, so the line doesn't end with a comma.
     echo "$*" | tr -s " " "\n" | sort -b -u | tr "\n" " " | sed 's/ \([^$]\)/,\1/g'
+}
+
+# list is comma separated list
+exclude_item_from_list () {
+    local list=$1
+    local excluded=$2
+
+    list=${list//,/ }
+    list=$(echo " $list " | sed -re "s/\s+$excluded\s+/ /g")
+    echo $(comma_list $list) 
 }
 
 absolute_path() {
@@ -1596,6 +1741,7 @@ error_noexit() {
     done
     debugrestore
     [ "$TESTSUITELOG" ] && echo "$0: ${TYPE}: $TESTNAME $@" >> $TESTSUITELOG
+    TEST_FAILED=true
 }
 
 error() {
@@ -1743,7 +1889,8 @@ trace() {
 }
 
 pass() {
-    echo PASS $@
+    $TEST_FAILED && echo -n "FAIL " || echo -n "PASS " 
+    echo $@
 }
 
 check_mds() {
@@ -1766,6 +1913,7 @@ run_one() {
     message=$2
     tfile=f${testnum}
     export tdir=d0.${TESTSUITE}/d${base}
+
     local SAVE_UMASK=`umask`
     umask 0022
 
@@ -1773,6 +1921,7 @@ run_one() {
     log "== test $testnum: $message ============ `date +%H:%M:%S` ($BEFORE)"
     #check_mds
     export TESTNAME=test_$testnum
+    TEST_FAILED=false
     test_${testnum} || error "test_$testnum failed with $?"
     #check_mds
     cd $SAVE_PWD
@@ -1781,6 +1930,7 @@ run_one() {
     check_catastrophe || error "LBUG/LASSERT detected"
     ps auxww | grep -v grep | grep -q multiop && error "multiop still running"
     pass "($((`date +%s` - $BEFORE))s)"
+    TEST_FAILED=false
     unset TESTNAME
     unset tdir
     umask $SAVE_UMASK
@@ -1959,14 +2109,30 @@ init_clients_lists () {
     CLIENTCOUNT=$((${#remoteclients[@]} + 1))
 }
 
+get_random_entry () {
+    local rnodes=$1
+
+    rnodes=${rnodes//,/ }
+
+    local nodes=($rnodes)
+    local num=${#nodes[@]} 
+    local i=$((RANDOM * num  / 65536))
+
+    echo ${nodes[i]}
+}
+
 is_patchless ()
 {
     lctl get_param version | grep -q patchless
 }
 
+check_versions () {
+    [ "$MDSVER" = "$CLIVER" -a "$OSTVER" = "$CLIVER" ]
+}
+
 get_node_count() {
-   local nodes="$@"
-   echo $nodes | wc -w || true
+    local nodes="$@"
+    echo $nodes | wc -w || true
 }
 
 mixed_ost_devs () {
@@ -1999,8 +2165,9 @@ get_stripe () {
 
 check_runas_id_ret() {
     local myRC=0
-    local myRUNAS_ID=$1
-    shift
+    local myRUNAS_UID=$1
+    local myRUNAS_GID=$2
+    shift 2
     local myRUNAS=$@
     if [ -z "$myRUNAS" ]; then
         error_exit "myRUNAS command must be specified for check_runas_id"
@@ -2011,20 +2178,21 @@ check_runas_id_ret() {
     fi
     mkdir $DIR/d0_runas_test
     chmod 0755 $DIR
-    chown $myRUNAS_ID:$myRUNAS_ID $DIR/d0_runas_test
+    chown $myRUNAS_UID:$myRUNAS_GID $DIR/d0_runas_test
     $myRUNAS touch $DIR/d0_runas_test/f$$ || myRC=$?
     rm -rf $DIR/d0_runas_test
     return $myRC
 }
 
 check_runas_id() {
-    local myRUNAS_ID=$1
-    shift
+    local myRUNAS_UID=$1
+    local myRUNAS_GID=$2
+    shift 2
     local myRUNAS=$@
-    check_runas_id_ret $myRUNAS_ID $myRUNAS || \
-        error "unable to write to $DIR/d0_runas_test as UID $myRUNAS_ID.
+    check_runas_id_ret $myRUNAS_UID $myRUNAS_GID $myRUNAS || \
+        error "unable to write to $DIR/d0_runas_test as UID $myRUNAS_UID.
         Please set RUNAS_ID to some UID which exists on MDS and client or
-        add user $myRUNAS_ID:$myRUNAS_ID on these nodes."
+        add user $myRUNAS_UID:$myRUNAS_GID on these nodes."
 }
 
 # Run multiop in the background, but wait for it to print
@@ -2066,7 +2234,7 @@ check_rate() {
 
     # We need to use bc since the rate is a floating point number
     local RES=$(echo "${RATE} < ${TARGET_RATE}" | bc -l )
-    if [ ${RES} -eq 0 ]; then
+    if [ "${RES}" = 0 ]; then
         echo "Success: ${RATE} ${OP}s/sec met target rate" \
              "${TARGET_RATE} ${OP}s/sec for ${NUM_CLIENTS} client(s)."
         return 0
@@ -2127,11 +2295,11 @@ restore_lustre_params() {
 }
 
 check_catastrophe () {
-    local rnodes=$(comma_list $(remote_nodes_list))
+    local rnodes=${1:-$(comma_list $(remote_nodes_list))}
 
-    [ -f $CATASTROPHE ] && [ `cat $CATASTROPHE` -ne 0 ] && return 1
+    [ -f $CATASTROPHE ] && [ $(cat $CATASTROPHE) -ne 0 ] && return 1
     if [ $rnodes ]; then
-        do_nodes $rnodes "[ -f $CATASTROPHE ] && { [ \`cat $CATASTROPHE\` -eq 0 ] || false; } || true"
+        do_nodes $rnodes "set -x; [ -f $CATASTROPHE ] && { [ \`cat $CATASTROPHE\` -eq 0 ] || false; } || true"
     fi 
 }
 
@@ -2152,3 +2320,19 @@ get_stripe_info() {
 	stripe_index=`awk '/obdidx/ {start = 1; getline; print $1; exit}' $tmp_file`
 	rm -f $tmp_file
 }
+
+mpi_run () {
+    local mpirun="$MPIRUN $MPIRUN_OPTIONS"
+    local command="$mpirun $@"
+
+    if [ "$MPI_USER" != root -a $mpirun ]; then
+        echo "+ chmod 0777 $MOUNT"
+        chmod 0777 $MOUNT
+        command="su $MPI_USER sh -c \"$command \""
+    fi
+
+    ls -ald $MOUNT
+    echo "+ $command"
+    eval $command
+}
+

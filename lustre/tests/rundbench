@@ -27,7 +27,11 @@ mkdir -p $DIR
 TGT=$DIR/client.txt
 CLIENT_PREFIX="${DBENCH_LIB} /usr/share/dbench /usr/local/share /usr/lib/dbench"
 CLIENT_FILE="client.txt client_plain.txt dbench_client"
-which dbench > /dev/null 2>&1 || { skip "$0: dbench not installed" && exit 0; }
+if ! which dbench > /dev/null 2>&1 ; then
+    [ "$MISSING_DBENCH_OK" ] || { error "$0 : $(hostname) dbench is not installed !" && exit 3; }
+    skip "$0 : $(hostname) dbench is not installed"
+    exit 0
+fi
 CLIENT=""
 
 for prefix in $CLIENT_PREFIX; do
@@ -45,12 +49,12 @@ if [ -n "$SRC" -a -s "$SRC" ]; then
 fi
 
 [ ! -s "$CLIENT" ] && \
-    skip "$0: no client file found for dbench DBENCH_LIB=$DBENCH_LIB SRC=$SRC" && \
+    skip "$0 : $(hostname) no client file found for dbench DBENCH_LIB=$DBENCH_LIB SRC=$SRC" && \
         exit 0 
 
 [ ! -s "$TGT" ] && echo "copying $CLIENT to $TGT" && cp $CLIENT $TGT
 [ ! -s "$TGT" ] && \
-    echo "$0: $TGT file doesn't exist after cp $CLIENT $TGT" && exit 1
+    echo "$0 : $(hostname) $TGT file doesn't exist after cp $CLIENT $TGT" && exit 1
 
 if [ "x$CHROOT" == "xyes" ]; then
 	echo "copying necessary libs to $DIR"
@@ -65,9 +69,20 @@ fi
 
 shift $((OPTIND - 1))
 
+trap '
+echo kill dbench main pid=$DBENCHPID
+kill $DBENCHPID
+rm -rf dbench $LIBS71 client.txt
+exit 0
+' TERM
+
 cd $DIR
 echo "running 'dbench $@' $PREFIX $PWD at `date`"
-$RUN dbench -c client.txt $@
+
+$RUN dbench -c client.txt $@ &
+DBENCHPID=$!
+echo "dbench PID=$DBENCHPID"
+wait $DBENCHPID
 RC=$?
 [ $RC -ne 0 ] && killall -9 dbench
 

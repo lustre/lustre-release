@@ -1099,7 +1099,9 @@ static void mdt_steal_ack_locks(struct ptlrpc_request *req)
                 oldrep->rs_nlocks = 0;
 
                 DEBUG_REQ(D_HA, req, "stole locks for");
+                spin_lock(&oldrep->rs_lock);
                 ptlrpc_schedule_difficult_reply (oldrep);
+                spin_unlock(&oldrep->rs_lock);
 
                 spin_unlock (&svc->srv_lock);
                 break;

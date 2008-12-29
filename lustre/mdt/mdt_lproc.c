@@ -94,9 +94,11 @@ int mdt_procfs_init(struct mdt_device *mdt, const char *name)
 int mdt_procfs_fini(struct mdt_device *mdt)
 {
         struct lu_device *ld = &mdt->mdt_md_dev.md_lu_dev;
-        lu_time_fini(&ld->ld_site->ls_time_stats);
-        lu_time_fini(&mdt->mdt_stats);
-        mdt->mdt_proc_entry = NULL;
+        if (mdt->mdt_proc_entry) {
+                lu_time_fini(&ld->ld_site->ls_time_stats);
+                lu_time_fini(&mdt->mdt_stats);
+                mdt->mdt_proc_entry = NULL;
+        }
         RETURN(0);
 }
 

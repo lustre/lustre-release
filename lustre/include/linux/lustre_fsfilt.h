@@ -58,8 +58,6 @@ struct fsfilt_objinfo {
         int fso_bufcnt;
 };
 
-#define XATTR_LUSTRE_MDS_LOV_EA         "lov"
-
 struct lustre_dquot;
 struct fsfilt_operations {
         struct list_head fs_list;
@@ -123,6 +121,8 @@ struct fsfilt_operations {
                                  int cmd);
         int     (* fs_qids)(struct file *file, struct inode *inode, int type,
                             struct list_head *list);
+        int     (* fs_get_mblk)(struct super_block *sb, int *count,
+                                struct inode *inode, int frags);
         int     (* fs_dquot)(struct lustre_dquot *dquot, int cmd);
         lvfs_sbdev_type (* fs_journal_sbdev)(struct super_block *sb);
 };
@@ -442,6 +442,15 @@ static inline int fsfilt_dquot(struct obd_device *obd,
 {
         if (obd->obd_fsops->fs_dquot)
                 return obd->obd_fsops->fs_dquot(dquot, cmd);
+        return -ENOTSUPP;
+}
+
+static inline int fsfilt_get_mblk(struct obd_device *obd,
+                                  struct super_block *sb, int *count,
+                                  struct inode *inode, int frags)
+{
+        if (obd->obd_fsops->fs_get_mblk)
+                return obd->obd_fsops->fs_get_mblk(sb, count, inode, frags);
         return -ENOTSUPP;
 }
 

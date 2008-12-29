@@ -150,6 +150,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                 struct cl_fault_io *fio;
 
                 io = &ccc_env_info(env)->cti_io;
+                memset(io, 0, sizeof(*io));
                 io->ci_obj = ll_i2info(inode)->lli_clob;
                 LASSERT(io->ci_obj != NULL);
 
@@ -174,13 +175,22 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                 if (cl_io_init(env, io, CIT_FAULT, io->ci_obj) == 0) {
                         struct vvp_io *vio = vvp_env_io(env);
                         struct ccc_io *cio = ccc_env_io(env);
+                        struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+                        struct ll_sb_info *sbi  = ll_i2sbi(inode);
 
                         LASSERT(cio->cui_cl.cis_io == io);
+
+                        /* mmap lock should be MANDATORY or NEVER. */
+                        if (fd->fd_flags & LL_FILE_IGNORE_LOCK ||
+                            sbi->ll_flags & LL_SBI_NOLCK)
+                                io->ci_lockreq = CILR_NEVER;
+                        else
+                                io->ci_lockreq = CILR_MANDATORY;
 
                         vio->u.fault.ft_vma     = vma;
                         vio->u.fault.ft_address = address;
                         vio->u.fault.ft_type    = type;
-                        cio->cui_fd = LUSTRE_FPRIVATE(file);
+                        cio->cui_fd             = fd;
 
                         result = cl_io_loop(env, io);
                         if (result == 0) {

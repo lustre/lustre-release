@@ -1179,8 +1179,8 @@ test_53d() {
         # give multiop a chance to open
         sleep 1
 
-        #define OBD_FAIL_MDS_CLOSE_NET_REP 0x13f
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013f"
+        #define OBD_FAIL_MDS_CLOSE_NET_REP 0x13b
+        do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013b"
         kill -USR1 $close_pid
         cancel_lru_locks mdc    # force the close
         do_facet $SINGLEMDS "lctl set_param fail_loc=0"
@@ -1238,8 +1238,8 @@ test_53f() {
         open_pid=$!
         sleep 1
 
-        #define OBD_FAIL_MDS_CLOSE_NET_REP 0x13f
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013f"
+        #define OBD_FAIL_MDS_CLOSE_NET_REP 0x13b
+        do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013b"
         kill -USR1 $close_pid
         cancel_lru_locks mdc    # force the close
 
@@ -1300,8 +1300,8 @@ test_53h() {
         open_pid=$!
         sleep 1
 
-        #define OBD_FAIL_MDS_CLOSE_NET_REP 0x13f
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013f"
+        #define OBD_FAIL_MDS_CLOSE_NET_REP 0x13b
+        do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013b"
         kill -USR1 $close_pid
         cancel_lru_locks mdc    # force the close
         sleep 1
@@ -1427,33 +1427,6 @@ test_59() {
 }
 run_test 59 "test log_commit_thread vs filter_destroy race"
 
-# bug 17323
-test_59b() {
-    do_facet $SINGLEMDS "lctl set_param debug=+rpctrace"
-    mkdir -p $DIR/$tdir
-    createmany -o $DIR/$tdir/$tfile-%d 2000
-    sync
-#define OBD_FAIL_OBD_LOG_CANCEL_REP      0x606
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x606"
-    unlinkmany $DIR/$tdir/$tfile-%d 2000
-
-    # make sure that all llcds left ost and nothing left cached
-    sync
-    sleep 10
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x0"
-
-    # sleep 2 obd_timeouts from ost to make sure that we get resents.
-    local timeout=$(do_facet ost1 lctl get_param -n timeout)
-    timeout=$((timeout * 2))
-    log "Sleep $timeout"
-    sleep $timeout
-    do_facet $SINGLEMDS $LCTL dk | grep -q "RESENT cancel req"
-    local res=$?
-    rmdir $DIR/$tdir
-    return $res
-}
-run_test 59b "resent handle in llog_origin_handle_cancel"
-
 # race between add unlink llog vs cat log init in post_recovery (only for b1_6)
 # bug 12086: should no oops and No ctxt error for this test
 test_60() {
@@ -1491,8 +1464,8 @@ run_test 61a "test race llog recovery vs llog cleanup"
 
 #test race  mds llog sync vs llog cleanup
 test_61b() {
-#   OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT 0x140
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000140"
+#   OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT 0x13a
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013a"
     facet_failover $SINGLEMDS 
     sleep 10
     fail $SINGLEMDS
@@ -1513,6 +1486,16 @@ test_61c() {
     set_nodes_failloc "$(osts_nodes)" 0x0
 }
 run_test 61c "test race mds llog sync vs llog cleanup"
+
+test_61d() { # bug 16002 # bug 17466
+#define OBD_FAIL_OBD_LLOG_SETUP        0x605
+    shutdown_facet $SINGLEMDS
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x605"
+    start $SINGLEMDS `mdsdevname 1` $MDS_MOUNT_OPTS && error "mds start should have failed"
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+    start $SINGLEMDS `mdsdevname 1` $MDS_MOUNT_OPTS || error "cannot restart mds"
+}
+run_test 61d "error in llog_setup should cleanup the llog context correctly"
 
 test_62() { # Bug 15756 - don't mis-drop resent replay
     mkdir -p $DIR/$tdir
@@ -1580,7 +1563,7 @@ test_65a() #bug 3055
     # because previous tests may have caused this value to increase.
     REQ_DELAY=`lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts |
                awk '/portal 12/ {print $5}'`
-    REQ_DELAY=$((${REQ_DELAY} + 5))
+    REQ_DELAY=$((${REQ_DELAY} + ${REQ_DELAY} / 4 + 5))
 
     do_facet mds lctl set_param fail_val=$((${REQ_DELAY} * 1000))
 #define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
@@ -1610,7 +1593,7 @@ test_65b() #bug 3055
     # because previous tests may have caused this value to increase.
     REQ_DELAY=`lctl get_param -n osc.${FSNAME}-OST0000-osc-*.timeouts |
                awk '/portal 6/ {print $5}'`
-    REQ_DELAY=$((${REQ_DELAY} + 5))
+    REQ_DELAY=$((${REQ_DELAY} + ${REQ_DELAY} / 4 + 5))
 
     do_facet ost1 lctl set_param fail_val=${REQ_DELAY}
 #define OBD_FAIL_OST_BRW_PAUSE_PACK      0x224
@@ -1811,31 +1794,25 @@ test_70b () {
 
 	zconf_mount_clients $CLIENTS $DIR
 	
-	local duration="-t 60"
-	local cmd="rundbench 1 $duration "
+	local duration=120
+	[ "$SLOW" = "no" ] && duration=60
+	local cmd="rundbench 1 -t $duration"
 	local PID=""
-	for CLIENT in ${CLIENTS//,/ }; do
-		$PDSH $CLIENT "set -x; PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests/:${DBENCH_LIB} DBENCH_LIB=${DBENCH_LIB} $cmd" &
-		PID=$!
-		echo $PID >pid.$CLIENT
-		echo "Started load PID=`cat pid.$CLIENT`"
-	done
+	do_nodes $CLIENTS "set -x; MISSING_DBENCH_OK=$MISSING_DBENCH_OK \
+		PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests/:$DBENCH_LIB \
+		DBENCH_LIB=$DBENCH_LIB TESTSUITE=$TESTSUITE TESTNAME=$TESTNAME \
+		LCTL=$LCTL $cmd" &
+	PID=$!
+	log "Started rundbench load PID=$PID ..."
 
+	sleep $((duration / 4))
 	replay_barrier $SINGLEMDS 
 	sleep 3 # give clients a time to do operations
 
 	log "$TESTNAME fail mds 1"
 	fail $SINGLEMDS
 
-# wait for client to reconnect to MDS
-	sleep $TIMEOUT
-
-	for CLIENT in ${CLIENTS//,/ }; do
-		PID=`cat pid.$CLIENT`
-		wait $PID
-		rc=$?
-		echo "load on ${CLIENT} returned $rc"
-	done
+	wait $PID || error "rundbench load on $CLIENTS failed!"
 
 }
 run_test 70b "mds recovery; $CLIENTCOUNT clients"
@@ -1849,7 +1826,8 @@ test_80a() {
     $CHECKSTAT -t dir $DIR/$tdir || error "$CHECKSTAT -t dir $DIR/$tdir failed"
     rmdir $DIR/$tdir || error "rmdir $DIR/$tdir failed"
     fail mds2
-    stat $DIR/$tdir
+    stat $DIR/$tdir 2&>/dev/null && error "$DIR/$tdir still exist after recovery!"
+    return 0
 }
 run_test 80a "CMD: unlink cross-node dir (fail mds with inode)"
 
@@ -1861,7 +1839,8 @@ test_80b() {
     $CHECKSTAT -t dir $DIR/$tdir || error "$CHECKSTAT -t dir $DIR/$tdir failed"
     rmdir $DIR/$tdir || error "rmdir $DIR/$tdir failed"
     fail mds1
-    stat $DIR/$tdir
+    stat $DIR/$tdir 2&>/dev/null && error "$DIR/$tdir still exist after recovery!"
+    return 0
 }
 run_test 80b "CMD: unlink cross-node dir (fail mds with name)"
 

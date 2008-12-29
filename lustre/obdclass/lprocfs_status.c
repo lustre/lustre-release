@@ -882,6 +882,7 @@ int lprocfs_obd_cleanup(struct obd_device *obd)
                 /* Should be no exports left */
                 LASSERT(obd->obd_proc_exports_entry->subdir == NULL);
                 lprocfs_remove(&obd->obd_proc_exports_entry);
+                obd->obd_proc_exports_entry = NULL;
         }
         lprocfs_remove(&obd->obd_proc_entry);
         return 0;
@@ -1391,7 +1392,7 @@ int lprocfs_alloc_md_stats(struct obd_device *obd,
                         LBUG();
                 }
         }
-        rc = lprocfs_register_stats(obd->obd_proc_entry, "stats", stats);
+        rc = lprocfs_register_stats(obd->obd_proc_entry, "md_stats", stats);
         if (rc < 0) {
                 lprocfs_free_stats(&stats);
         } else {

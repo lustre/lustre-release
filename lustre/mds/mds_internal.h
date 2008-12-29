@@ -48,6 +48,7 @@ int mds_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                   struct obd_device *tgt, int count,
                   struct llog_catid *logid, struct obd_uuid *uuid);
 int mds_llog_finish(struct obd_device *obd, int count);
+int mds_changelog_llog_init(struct obd_device *obd, struct obd_device *tgt);
 
 /* mds/mds_lov.c */
 int mds_lov_connect(struct obd_device *obd, char * lov_name);

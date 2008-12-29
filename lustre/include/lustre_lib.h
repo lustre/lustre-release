@@ -91,7 +91,7 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req);
 #define OBD_RECOVERY_MAX_TIME (obd_timeout * 18) /* b13079 */
 
 void target_cancel_recovery_timer(struct obd_device *obd);
-int target_start_recovery_thread(struct obd_device *obd, 
+int target_start_recovery_thread(struct obd_device *obd,
                                  svc_handler_t handler);
 void target_stop_recovery_thread(struct obd_device *obd);
 void target_cleanup_recovery(struct obd_device *obd);
@@ -337,7 +337,7 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
         ENTRY;
 
         err = copy_from_user(&hdr, (void *)arg, sizeof(hdr));
-        if (err) 
+        if (err)
                 RETURN(err);
 
         if (hdr.ioc_version != OBD_IOCTL_VERSION) {
@@ -431,8 +431,8 @@ static inline void obd_ioctl_freedata(char *buf, int len)
  * arg will be treated as a pointer, bsd will call
  * copyin(buf, arg, sizeof(long))
  *
- * To make BSD ioctl handles argument correctly and simplely, 
- * we change _IOR to _IOWR so BSD will copyin obd_ioctl_data 
+ * To make BSD ioctl handles argument correctly and simplely,
+ * we change _IOR to _IOWR so BSD will copyin obd_ioctl_data
  * for us. Does this change affect Linux?  (XXX Liang)
  */
 #define OBD_IOC_CREATE                 _IOWR('f', 101, OBD_IOC_DATA_TYPE)
@@ -463,6 +463,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 
 #define OBD_IOC_LOV_GET_CONFIG         _IOWR('f', 132, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_CLIENT_RECOVER         _IOW ('f', 133, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_PING_TARGET            _IOW ('f', 136, OBD_IOC_DATA_TYPE)
 
 #define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 139      )
 #define OBD_IOC_NO_TRANSNO             _IOW ('f', 140, OBD_IOC_DATA_TYPE)
@@ -478,6 +479,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_CLOSE_UUID             _IOWR ('f', 147, OBD_IOC_DATA_TYPE)
 
 #define OBD_IOC_GETDEVICE              _IOWR ('f', 149, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_FID2PATH               _IOWR ('f', 150, OBD_IOC_DATA_TYPE)
 
 #define OBD_IOC_LOV_SETSTRIPE          _IOW ('f', 154, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_LOV_GETSTRIPE          _IOW ('f', 155, OBD_IOC_DATA_TYPE)

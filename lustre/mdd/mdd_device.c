@@ -58,6 +58,7 @@
 #include <linux/ldiskfs_fs.h>
 #include <lustre_mds.h>
 #include <lustre/lustre_idl.h>
+#include <lustre_disk.h>      /* for changelogs */
 #include <lustre_param.h>
 
 #include "mdd_internal.h"
@@ -102,10 +103,14 @@ static struct lu_device *mdd_device_fini(const struct lu_env *env,
         return next;
 }
 
+static void mdd_changelog_fini(const struct lu_env *env,
+                               struct mdd_device *mdd);
+
 static void mdd_device_shutdown(const struct lu_env *env,
                                 struct mdd_device *m, struct lustre_cfg *cfg)
 {
         ENTRY;
+        mdd_changelog_fini(env, m);
         dt_txn_callback_del(m->mdd_child, &m->mdd_txn_cb);
         if (m->mdd_obd_dev)
                 mdd_fini_obd(env, m, cfg);
@@ -113,6 +118,186 @@ static void mdd_device_shutdown(const struct lu_env *env,
         /* remove upcall device*/
         md_upcall_fini(&m->mdd_md_dev);
         EXIT;
+}
+
+static int changelog_init_cb(struct llog_handle *llh, struct llog_rec_hdr *hdr,
+                             void *data)
+{
+        struct mdd_device *mdd = (struct mdd_device *)data;
+        struct llog_changelog_rec *rec = (struct llog_changelog_rec *)hdr;
+        ENTRY;
+
+        if (!(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN)) {
+                CERROR("log is not plain\n");
+                RETURN(-EINVAL);
+        }
+        if (rec->cr_hdr.lrh_type != CHANGELOG_REC) {
+                CERROR("Not a changelog rec? %d\n", rec->cr_hdr.lrh_type);
+                RETURN(-EINVAL);
+        }
+
+        CDEBUG(D_INODE,
+               "seeing record at index %d/%d/"LPU64" t=%x %.*s in log "LPX64"\n",
+               hdr->lrh_index, rec->cr_hdr.lrh_index, rec->cr_index,
+               rec->cr_type, rec->cr_namelen, rec->cr_name,
+               llh->lgh_id.lgl_oid);
+
+        mdd->mdd_cl.mc_index = rec->cr_index;
+        RETURN(LLOG_PROC_BREAK);
+}
+
+static int mdd_changelog_llog_init(struct mdd_device *mdd)
+{
+        struct obd_device *obd = mdd2obd_dev(mdd);
+        struct llog_ctxt *ctxt;
+        int rc;
+
+        ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
+        if (ctxt == NULL) {
+                CERROR("no context\n");
+                return -EINVAL;
+        }
+        if (!ctxt->loc_handle) {
+                CERROR("no handle\n");
+                return -EINVAL;
+        }
+        rc = llog_cat_reverse_process(ctxt->loc_handle, changelog_init_cb, mdd);
+        llog_ctxt_put(ctxt);
+
+        if (rc < 0)
+                CERROR("changelog init failed: %d\n", rc);
+        else
+                rc = 0; /* llog_proc_break is ok */
+
+        CDEBUG(D_INODE, "changelog_init index="LPU64"\n", mdd->mdd_cl.mc_index);
+
+        return rc;
+}
+
+static int mdd_changelog_init(const struct lu_env *env, struct mdd_device *mdd)
+{
+        int rc;
+
+        mdd->mdd_cl.mc_index = 0;
+        spin_lock_init(&mdd->mdd_cl.mc_lock);
+        cfs_waitq_init(&mdd->mdd_cl.mc_waitq);
+
+        mdd->mdd_cl.mc_starttime = cfs_time_current_64();
+        mdd->mdd_cl.mc_flags = 0; /* off by default */
+        mdd->mdd_cl.mc_mask = CL_DEFMASK;
+        rc = mdd_changelog_llog_init(mdd);
+        if (rc) {
+                CERROR("Changelog setup during init failed %d\n", rc);
+                mdd->mdd_cl.mc_flags |= CLM_ERR;
+        }
+        return rc;
+}
+
+static void mdd_changelog_fini(const struct lu_env *env, struct mdd_device *mdd)
+{
+        mdd->mdd_cl.mc_flags = 0;
+}
+
+/** Add a changelog entry \a rec to the changelog llog
+ * \param mdd
+ * \param rec
+ * \param handle - currently ignored since llogs start their own transaction;
+ *                 this will hopefully be fixed in llog rewrite
+ * \retval 0 ok
+ */
+int mdd_changelog_llog_write(struct mdd_device         *mdd,
+                             struct llog_changelog_rec *rec,
+                             struct thandle            *handle)
+{
+        struct obd_device *obd = mdd2obd_dev(mdd);
+        struct llog_ctxt *ctxt;
+        int rc;
+
+        if ((mdd->mdd_cl.mc_mask & (1 << rec->cr_type)) == 0)
+                return 0;
+
+        rec->cr_hdr.lrh_len = llog_data_len(sizeof(*rec) + rec->cr_namelen);
+        /* llog_lvfs_write_rec sets the llog tail len */
+        rec->cr_hdr.lrh_type = CHANGELOG_REC;
+        rec->cr_time = cfs_time_current_64();
+        spin_lock(&mdd->mdd_cl.mc_lock);
+        /* NB: I suppose it's possible llog_add adds out of order wrt cr_index,
+           but as long as the MDD transactions are ordered correctly for e.g.
+           rename conflicts, I don't think this should matter. */
+        rec->cr_index = ++mdd->mdd_cl.mc_index;
+        spin_unlock(&mdd->mdd_cl.mc_lock);
+        ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
+        if (ctxt == NULL)
+                return -ENXIO;
+
+        /* nested journal transaction */
+        rc = llog_add(ctxt, &rec->cr_hdr, NULL, NULL, 0);
+        llog_ctxt_put(ctxt);
+
+        cfs_waitq_signal(&mdd->mdd_cl.mc_waitq);
+
+        return rc;
+}
+
+/** Remove entries with indicies up to and including \a endrec from the
+ *  changelog
+ * \param mdd
+ * \param endrec
+ * \retval 0 ok
+ */
+int mdd_changelog_llog_cancel(struct mdd_device *mdd, long long endrec)
+{
+        struct obd_device *obd = mdd2obd_dev(mdd);
+        struct llog_ctxt *ctxt;
+        int rc;
+
+        ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
+        if (ctxt == NULL)
+                return -ENXIO;
+
+        /* Some records purged; reset repeat-access time */
+        mdd->mdd_cl.mc_starttime = cfs_time_current_64();
+
+        rc = llog_cancel(ctxt, NULL, 1, (struct llog_cookie *)&endrec, 0);
+
+        llog_ctxt_put(ctxt);
+
+        return rc;
+}
+
+/** Add a CL_MARK record to the changelog
+ * \param mdd
+ * \param markerflags - CLM_*
+ * \retval 0 ok
+ */
+int mdd_changelog_write_header(struct mdd_device *mdd, int markerflags)
+{
+        struct obd_device *obd = mdd2obd_dev(mdd);
+        struct llog_changelog_rec *rec;
+        int reclen;
+        int len = strlen(obd->obd_name);
+        int rc;
+        ENTRY;
+
+        reclen = llog_data_len(sizeof(*rec) + len);
+        OBD_ALLOC(rec, reclen);
+        if (rec == NULL)
+                RETURN(-ENOMEM);
+
+        rec->cr_flags = CLF_VERSION;
+        rec->cr_type = CL_MARK;
+        rec->cr_namelen = len;
+        memcpy(rec->cr_name, obd->obd_name, rec->cr_namelen);
+        /* Status and action flags */
+        rec->cr_markerflags = mdd->mdd_cl.mc_flags | markerflags;
+
+        rc = mdd_changelog_llog_write(mdd, rec, NULL);
+
+        /* assume on or off event; reset repeat-access time */
+        mdd->mdd_cl.mc_starttime = rec->cr_time;
+
+        OBD_FREE(rec, reclen);
+        RETURN(rc);
 }
 
 static int mdd_process_config(const struct lu_env *env,
@@ -147,6 +332,10 @@ static int mdd_process_config(const struct lu_env *env,
                         GOTO(out, rc);
                 }
                 rc = mdd_txn_init_credits(env, m);
+                if (rc)
+                        break;
+
+                mdd_changelog_init(env, m);
                 break;
         case LCFG_CLEANUP:
                 mdd_device_shutdown(env, m, cfg);
@@ -157,6 +346,7 @@ static int mdd_process_config(const struct lu_env *env,
 out:
         RETURN(rc);
 }
+
 #if 0
 static int mdd_lov_set_nextid(const struct lu_env *env,
                               struct mdd_device *mdd)
@@ -469,6 +659,8 @@ static void mdd_key_fini(const struct lu_context *ctx,
                 OBD_FREE(info->mti_max_lmm, info->mti_max_lmm_size);
         if (info->mti_max_cookie != NULL)
                 OBD_FREE(info->mti_max_cookie, info->mti_max_cookie_size);
+        mdd_buf_put(&info->mti_big_buf);
+
         OBD_FREE_PTR(info);
 }
 

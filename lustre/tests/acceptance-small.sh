@@ -23,7 +23,7 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval lctl set_param debug=\"$DEBUG_LVL\""
 [ "$DEBUG_ON" ] || DEBUG_ON="eval lctl set_param debug=0x33f0484"
 
-export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA SANITY_SEC SANITY_GSS PERFORMANCE_SANITY"
+export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA SANITY_SEC SANITY_GSS PERFORMANCE_SANITY RECOVERY_MDS_SCALE"
 
 if [ "$ACC_SM_ONLY" ]; then
     for O in $TESTSUITE_LIST; do
@@ -61,6 +61,7 @@ setup_if_needed() {
     local MOUNTED=$(mounted_lustre_filesystems)
     if $(echo $MOUNTED | grep -w -q $MOUNT); then
         check_config $MOUNT
+        init_versions_vars
         return
     fi
 
@@ -147,7 +148,7 @@ for NAME in $CONFIGS; do
 		$DEBUG_OFF
 		myUID=$RUNAS_ID
 		myRUNAS=$RUNAS
-		FAIL_ON_ERROR=false check_runas_id_ret $myUID $myRUNAS || { myRUNAS="" && myUID=$UID; }
+		FAIL_ON_ERROR=false check_runas_id_ret $myUID $myUID $myRUNAS || { myRUNAS="" && myUID=$UID; }
 		chown $myUID:$myUID $DBENCHDIR
 		duration=""
 		[ "$SLOW" = "no" ] && duration=" -t 120"
@@ -182,7 +183,7 @@ for NAME in $CONFIGS; do
 		$DEBUG_OFF
 		myUID=$RUNAS_ID
 		myRUNAS=$RUNAS
-		FAIL_ON_ERROR=false check_runas_id_ret $myUID $myRUNAS || { myRUNAS="" && myUID=$UID; }
+		FAIL_ON_ERROR=false check_runas_id_ret $myUID $myUID $myRUNAS || { myRUNAS="" && myUID=$UID; }
 		chown $myUID:$myUID $BONDIR		
 		$myRUNAS bonnie++ -f -r 0 -s$((SIZE / 1024)) -n 10 -u$myUID:$myUID -d$BONDIR
 		$DEBUG_ON
@@ -212,7 +213,7 @@ for NAME in $CONFIGS; do
 		$DEBUG_OFF
 		myUID=$RUNAS_ID
 		myRUNAS=$RUNAS
-		FAIL_ON_ERROR=false check_runas_id_ret $myUID $myRUNAS || { myRUNAS="" && myUID=$UID; }
+		FAIL_ON_ERROR=false check_runas_id_ret $myUID $myUID $myRUNAS || { myRUNAS="" && myUID=$UID; }
 		chown $myUID:$myUID $IOZDIR
 		$myRUNAS iozone $IOZONE_OPTS -s $SIZE -f $IOZFILE 2>&1 | tee $IOZLOG
 		tail -1 $IOZLOG | grep -q complete || \
@@ -271,13 +272,15 @@ for NAME in $CONFIGS; do
 
 	if [ "$FSX" != "no" ]; then
 	        title fsx
+		FSX_SIZE=$((RAMKB / 2))
 		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
-		[ $SPACE -lt $SIZE ] && SIZE=$((SPACE * 3 / 4))
+		[ $SPACE -lt $FSX_SIZE ] && FSX_SIZE=$((SPACE * 3 / 4))
 		$DEBUG_OFF
 		FSX_SEED=${FSX_SEED:-$RANDOM}
 		rm -f $MOUNT/fsxfile
 		$LFS setstripe -c -1 $MOUNT/fsxfile
-		./fsx -c 50 -p 1000 -S $FSX_SEED -P $TMP -l $SIZE \
+		echo Using FSX_SEED=$FSX_SEED FSX_SIZE=$FSX_SIZE COUNT=$COUNT
+		./fsx -c 50 -p 1000 -S $FSX_SEED -P $TMP -l $FSX_SIZE \
 			-N $(($COUNT * 100)) $MOUNT/fsxfile
 		$DEBUG_ON
 		$CLEANUP
@@ -315,8 +318,12 @@ for NAME in $CONFIGS; do
 	fi
 
 	[ "$NETTYPE" = "tcp" -o "$NETTYPE" = "ptl" ] || LIBLUSTRE=no # bug 15660
+	if [ "$LIBLUSTRE" != "no" ] && ! check_versions ; then
+		skip liblustre version mismatch: cli $CLIVER, mds $MDSVER, ost $OSTVER
+		LIBLUSTRE=no	# bug 17696
+	fi
 	if [ "$LIBLUSTRE" != "no" ]; then
-	        title liblustre
+		title liblustre
 		assert_env MGSNID MOUNT2
 		export LIBLUSTRE_MOUNT_POINT=$MOUNT2
 		export LIBLUSTRE_MOUNT_RETRY=5
@@ -423,6 +430,15 @@ if [ "$PERFORMANCE_SANITY" != "no" ]; then
         title performance-sanity
         bash performance-sanity.sh
         PERFORMANCE_SANITY="done"
+fi
+
+[ "$SLOW" = no ] && RECOVERY_MDS_SCALE="no"
+[ "$RECOVERY_MDS_SCALE" != "no" ] && skip_remmds recovery-mds-scale && RECOVERY_MDS_SCALE=no && MSKIPPED=1
+[ "$RECOVERY_MDS_SCALE" != "no" ] && skip_remost recovery-mds-scale && RECOVERY_MDS_SCALE=no && OSKIPPED=1
+if [ "$RECOVERY_MDS_SCALE" != "no" ]; then
+        title recovery-mds-scale
+        bash recovery-mds-scale.sh
+        RECOVERY_MDS_SCALE="done"
 fi
 
 RC=$?

@@ -146,7 +146,9 @@ static int mgs_disconnect(struct obd_export *exp)
 
                 spin_lock(&svc->srv_lock);
                 list_del_init(&rs->rs_exp_list);
+                spin_lock(&rs->rs_lock);
                 ptlrpc_schedule_difficult_reply(rs);
+                spin_unlock(&rs->rs_lock);
                 spin_unlock(&svc->srv_lock);
         }
         spin_unlock(&exp->exp_lock);

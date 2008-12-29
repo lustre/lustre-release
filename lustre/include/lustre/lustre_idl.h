@@ -370,7 +370,7 @@ static inline __u32 lu_igif_gen(const struct lu_fid *fid)
         return fid_oid(fid);
 }
 
-#define DFID "[0x%16.16"LPF64"x/0x%8.8x:0x%8.8x]"
+#define DFID "["LPX64":0x%x:0x%x]"
 
 #define PFID(fid)     \
         fid_seq(fid), \
@@ -459,12 +459,12 @@ extern void lustre_swab_lu_seq_range(struct lu_seq_range *range);
 static inline int lu_fid_eq(const struct lu_fid *f0,
                             const struct lu_fid *f1)
 {
-	/* Check that there is no alignment padding. */
-	CLASSERT(sizeof *f0 ==
+        /* Check that there is no alignment padding. */
+        CLASSERT(sizeof *f0 ==
                  sizeof f0->f_seq + sizeof f0->f_oid + sizeof f0->f_ver);
         LASSERTF(fid_is_igif(f0) || fid_ver(f0) == 0, DFID, PFID(f0));
         LASSERTF(fid_is_igif(f1) || fid_ver(f1) == 0, DFID, PFID(f1));
-	return memcmp(f0, f1, sizeof *f0) == 0;
+        return memcmp(f0, f1, sizeof *f0) == 0;
 }
 
 #define __diff_normalize(val0, val1)                            \
@@ -667,6 +667,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 /* Connect flags */
 #define OBD_CONNECT_RDONLY     0x00000001ULL /* client allowed read-only access */
 #define OBD_CONNECT_INDEX      0x00000002ULL /* connect to specific LOV idx */
+#define OBD_CONNECT_MDS        0x00000004ULL /* connect from MDT to OST */
 #define OBD_CONNECT_GRANT      0x00000008ULL /* OSC acquires grant at connect */
 #define OBD_CONNECT_SRVLOCK    0x00000010ULL /* server takes locks for client */
 #define OBD_CONNECT_VERSION    0x00000020ULL /* Server supports versions in ocd */
@@ -723,7 +724,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_CKSUM | LRU_RESIZE_CONNECT_FLAG | \
                                 OBD_CONNECT_AT | OBD_CONNECT_CHANGE_QS | \
                                 OBD_CONNECT_RMT_CLIENT | \
-                                OBD_CONNECT_RMT_CLIENT_FORCE)
+                                OBD_CONNECT_RMT_CLIENT_FORCE | OBD_CONNECT_MDS)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT)
 
@@ -875,7 +876,16 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 
 #define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
 #define XATTR_NAME_ACL_DEFAULT  "system.posix_acl_default"
+#define XATTR_USER_PREFIX       "user."
+#define XATTR_TRUSTED_PREFIX    "trusted."
+#define XATTR_SECURITY_PREFIX   "security."
+#define XATTR_LUSTRE_PREFIX     "lustre."
+
 #define XATTR_NAME_LOV          "trusted.lov"
+#define XATTR_NAME_LMA          "trusted.lma"
+#define XATTR_NAME_LMV          "trusted.lmv"
+#define XATTR_NAME_LINK         "trusted.link"
+
 
 struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
         __u32 lmm_magic;          /* magic number = LOV_MAGIC_V3 */
@@ -2013,6 +2023,7 @@ struct cfg_marker {
 extern void lustre_swab_cfg_marker(struct cfg_marker *marker,
                                    int swab, int size);
 
+
 /*
  * Opcodes for multiple servers.
  */
@@ -2068,6 +2079,8 @@ typedef enum {
         PTL_CFG_REC      = LLOG_OP_MAGIC | 0x30000, /* obsolete */
         LLOG_GEN_REC     = LLOG_OP_MAGIC | 0x40000,
         LLOG_JOIN_REC    = LLOG_OP_MAGIC | 0x50000,
+         /** changelog record type */
+        CHANGELOG_REC    = LLOG_OP_MAGIC | 0x60000,
         LLOG_HDR_MAGIC   = LLOG_OP_MAGIC | 0x45539,
         LLOG_LOGID_MAGIC = LLOG_OP_MAGIC | 0x4553b,
 } llog_op_type;
@@ -2178,6 +2191,62 @@ struct llog_size_change_rec {
         __u32                   lsc_ioepoch;
         __u32                   padding;
         struct llog_rec_tail    lsc_tail;
+} __attribute__((packed));
+
+#define CHANGELOG_MAGIC 0xca103000
+/** Changelog record types
+ * When adding record types, update mdd_lproc.c's changelog_str
+ */
+enum changelog_rec_type {
+        CL_MARK     = 0,
+        CL_CREATE   = 1,  /* namespace */
+        CL_MKDIR    = 2,  /* namespace */
+        CL_HARDLINK = 3,  /* namespace */
+        CL_SOFTLINK = 4,  /* namespace */
+        CL_MKNOD    = 5,  /* namespace */
+        CL_UNLINK   = 6,  /* namespace */
+        CL_RMDIR    = 7,  /* namespace */
+        CL_RENAME   = 8,  /* namespace */
+        CL_EXT      = 9,  /* namespace extended record (2nd half of rename) */
+        CL_OPEN     = 10, /* not currently used */
+        CL_CLOSE    = 11, /* may be written to log only with mtime change */
+        CL_IOCTL    = 12,
+        CL_TRUNC    = 13,
+        CL_SETATTR  = 14,
+        CL_XATTR    = 15,
+        CL_LAST
+};
+
+/** \a changelog_rec_type's that can't be masked */
+#define CL_MINMASK (1 << CL_MARK)
+/** bits covering all \a changelog_rec_type's */
+#define CL_ALLMASK 0XFFFF
+/** default \a changelog_rec_type mask */
+#define CL_DEFMASK CL_ALLMASK
+
+/* per-record flags */
+#define CLF_VERSION  0x1000
+#define CLF_FLAGMASK 0x0FFF
+#define CLF_HSM      0x0001
+
+/** changelog record */
+struct llog_changelog_rec {
+        struct llog_rec_hdr   cr_hdr;
+        __u16                 cr_flags; /**< (flags&CLF_FLAGMASK)|CLF_VERSION */
+        __u16                 cr_namelen;
+        __u32                 cr_type;  /**< \a changelog_rec_type */
+        __u64                 cr_index;
+        __u64                 cr_prev;  /**< last index for this target fid */
+        __u64                 cr_time;
+        union {
+                struct lu_fid cr_tfid;        /**< target fid */
+                __u32         cr_markerflags; /**< CL_MARK flags */
+        };
+        struct lu_fid         cr_pfid;        /**< parent fid */
+        union {
+                char          cr_name[0];     /**< last element */
+                struct llog_rec_tail cr_tail; /**< for_sizezof_only */
+        };
 } __attribute__((packed));
 
 struct llog_gen {
@@ -2420,7 +2489,6 @@ typedef enum {
 #define QUOTA_RET_NOQUOTA      1 /**< not support quota */
 #define QUOTA_RET_NOLIMIT      2 /**< quota limit isn't set */
 #define QUOTA_RET_ACQUOTA      4 /**< need to acquire extra quota */
-#define QUOTA_RET_INC_PENDING  8 /**< pending value is increased */
 
 /* security opcodes */
 typedef enum {
@@ -2511,6 +2579,27 @@ struct lustre_capa_key {
 
 extern void lustre_swab_lustre_capa_key(struct lustre_capa_key *k);
 
-#endif
+/** The link ea holds 1 \a link_ea_entry for each hardlink */
+#define LINK_EA_MAGIC 0x01EA0000
+struct link_ea_header {
+        __u32 leh_magic;
+        __u32 leh_reccount;
+        __u64 leh_len;      /* total size */
+        /* future use */
+        __u32 padding1;
+        __u32 padding2;
+};
 
+/** Hardlink data is name and parent fid.
+ * Stored in this crazy struct for maximum packing and endian-neutrality
+ */
+struct link_ea_entry {
+        /** __u16 stored big-endian, unaligned */
+        char               lee_reclen[2];
+        struct lu_fid_pack lee_parent_fid; /**< variable length */
+        /** logically after lee_parent_fid; don't use directly */
+        char               lee_name[0];
+};
+
+#endif
 /** @} lustreidl */

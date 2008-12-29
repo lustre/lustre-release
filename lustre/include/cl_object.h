@@ -2098,7 +2098,24 @@ enum cl_enq_flags {
          * owner of the conflicting lock, that it can drop dirty pages
          * protected by this lock, without sending them to the server.
          */
-        CEF_DISCARD_DATA = 0x00000004
+        CEF_DISCARD_DATA = 0x00000004,
+        /**
+         * tell the sub layers that it must be a `real' lock.
+         */
+        CEF_MUST         = 0x00000008,
+        /**
+         * tell the sub layers that never request a `real' lock.
+         * currently, the CEF_MUST & CEF_NEVER are only used for mmap locks.
+         * cl_io::ci_lockreq and these two flags: ci_lockreq just describes
+         * generic information of lock requirement for this IO, especially for
+         * locks which belong to the object doing IO; however, lock itself may
+         * have precise requirements, this is described by the latter.
+         */
+        CEF_NEVER        = 0x00000010,
+        /**
+         * mask of enq_flags.
+         */
+        CEF_MASK         = 0x0000001f
 };
 
 /**
@@ -2837,7 +2854,7 @@ void  cl_io_end          (const struct lu_env *env, struct cl_io *io);
 int   cl_io_lock_add     (const struct lu_env *env, struct cl_io *io,
                           struct cl_io_lock_link *link);
 int   cl_io_lock_alloc_add(const struct lu_env *env, struct cl_io *io,
-                           struct cl_lock_descr *descr);
+                           struct cl_lock_descr *descr, int enqflags);
 int   cl_io_read_page    (const struct lu_env *env, struct cl_io *io,
                           struct cl_page *page);
 int   cl_io_prepare_write(const struct lu_env *env, struct cl_io *io,

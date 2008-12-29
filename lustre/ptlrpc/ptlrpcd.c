@@ -296,16 +296,19 @@ int ptlrpcd_check_async_rpcs(void *arg)
         pc->pc_recurred++;
 
         if (pc->pc_recurred == 1) {
-                lu_context_enter(&pc->pc_env.le_ctx);
-                rc = ptlrpcd_check(&pc->pc_env, pc);
-                lu_context_exit(&pc->pc_env.le_ctx);
-                if (!rc)
-                        ptlrpc_expired_set(pc->pc_set);
-                /*
-                 * XXX: send replay requests.
-                 */
-                if (test_bit(LIOD_RECOVERY, &pc->pc_flags))
+                rc = lu_env_refill(&pc->pc_env);
+                if (rc == 0) {
+                        lu_context_enter(&pc->pc_env.le_ctx);
                         rc = ptlrpcd_check(&pc->pc_env, pc);
+                        lu_context_exit(&pc->pc_env.le_ctx);
+                        if (!rc)
+                                ptlrpc_expired_set(pc->pc_set);
+                        /*
+                         * XXX: send replay requests.
+                         */
+                        if (test_bit(LIOD_RECOVERY, &pc->pc_flags))
+                                rc = ptlrpcd_check(&pc->pc_env, pc);
+                }
         }
 
         pc->pc_recurred--;

@@ -50,11 +50,6 @@
 
 #include "llite_internal.h"
 
-#define XATTR_USER_PREFIX       "user."
-#define XATTR_TRUSTED_PREFIX    "trusted."
-#define XATTR_SECURITY_PREFIX   "security."
-#define XATTR_LUSTRE_PREFIX     "lustre."
-
 #define XATTR_USER_T            (1)
 #define XATTR_TRUSTED_T         (2)
 #define XATTR_SECURITY_T        (3)
@@ -239,7 +234,8 @@ int ll_setxattr(struct dentry *dentry, const char *name,
 
                 return rc;
 
-        } else if (strcmp(name, "trusted.lma") == 0) /* b17288: ignore common_ea */
+        } else if (strcmp(name, XATTR_NAME_LMA) == 0 ||
+                   strcmp(name, XATTR_NAME_LINK) == 0)
                 return 0;
 
         return ll_setxattr_common(inode, name, value, size, flags,

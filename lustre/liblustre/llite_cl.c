@@ -278,10 +278,6 @@ static int slp_io_init(const struct lu_env *env, struct cl_object *obj,
                 /* "If nbyte is 0, read() will return 0 and have no other
                  *  results."  -- Single Unix Spec */
                 if (count == 0)
-                        return 1;
-                /* "If nbyte is 0, read() will return 0 and have no other
-                 *  results."  -- Single Unix Spec */
-                if (count == 0)
                         result = 1;
                 else {
                         vio->cui_tot_count = count;
@@ -289,7 +285,7 @@ static int slp_io_init(const struct lu_env *env, struct cl_object *obj,
                 }
 
         }
-        return 0;
+        return result;
 }
 
 static int slp_attr_get(const struct lu_env *env, struct cl_object *obj,
@@ -431,38 +427,29 @@ static const struct cl_lock_operations slp_lock_ops = {
  *
  */
 
-static int slp_io_rw_lock(const struct lu_env *env, struct cl_io *io,
-                          enum cl_lock_mode mode, loff_t start, loff_t end)
-{
-        int result;
-
-        LASSERT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE);
-
-        if (!io->u.ci_wr.wr_append) { // No lock without O_APPEND in liblustre
-                return 0;
-        }
-
-        result = ccc_io_one_lock(env, io, 0, mode, start, end);
-
-        return result;
-}
-
-static int slp_io_write_lock(const struct lu_env *env,
+static int slp_io_rw_lock(const struct lu_env *env,
                              const struct cl_io_slice *ios)
 {
         struct cl_io *io = ios->cis_io;
         loff_t start;
         loff_t end;
 
-        if (io->u.ci_wr.wr_append) {
+        if (cl_io_is_append(io)) {
                 start = 0;
                 end   = OBD_OBJECT_EOF;
         } else {
                 start = io->u.ci_wr.wr.crw_pos;
                 end   = start + io->u.ci_wr.wr.crw_count - 1;
         }
-
-        return slp_io_rw_lock(env, io, CLM_WRITE, start, end);
+        /*
+         * This acquires real DLM lock only in O_APPEND case, because of
+         * the io->ci_lockreq setting in llu_io_init().
+         */
+        LASSERT(ergo(cl_io_is_append(io), io->ci_lockreq == CILR_MANDATORY));
+        LASSERT(ergo(!cl_io_is_append(io), io->ci_lockreq == CILR_NEVER));
+        return ccc_io_one_lock(env, io, 0,
+                               io->ci_type == CIT_READ ? CLM_READ : CLM_WRITE,
+                               start, end);
 
 }
 
@@ -749,12 +736,13 @@ static const struct cl_io_operations ccc_io_ops = {
         .op = {
                 [CIT_READ] = {
                         .cio_fini      = ccc_io_fini,
+                        .cio_lock      = slp_io_rw_lock,
                         .cio_start     = slp_io_start,
                         .cio_end       = ccc_io_end
                 },
                 [CIT_WRITE] = {
                         .cio_fini      = ccc_io_fini,
-                        .cio_lock      = slp_io_write_lock,
+                        .cio_lock      = slp_io_rw_lock,
                         .cio_start     = slp_io_start,
                         .cio_end       = ccc_io_end
                 },

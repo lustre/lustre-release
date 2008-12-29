@@ -582,7 +582,7 @@ static void cl_free_io_lock_link(const struct lu_env *env,
  * Allocates new lock link, and uses it to add a lock to a lockset.
  */
 int cl_io_lock_alloc_add(const struct lu_env *env, struct cl_io *io,
-                         struct cl_lock_descr *descr)
+                         struct cl_lock_descr *descr, int enqflags)
 {
         struct cl_io_lock_link *link;
         int result;
@@ -590,8 +590,9 @@ int cl_io_lock_alloc_add(const struct lu_env *env, struct cl_io *io,
         ENTRY;
         OBD_ALLOC_PTR(link);
         if (link != NULL) {
-                link->cill_descr = *descr;
-                link->cill_fini = cl_free_io_lock_link;
+                link->cill_descr     = *descr;
+                link->cill_enq_flags = enqflags;
+                link->cill_fini      = cl_free_io_lock_link;
                 result = cl_io_lock_add(env, io, link);
                 if (result) /* lock match */
                         link->cill_fini(env, link);

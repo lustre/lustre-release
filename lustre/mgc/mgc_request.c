@@ -792,11 +792,14 @@ static int mgc_set_mgs_param(struct obd_export *exp,
                 RETURN(-ENOMEM);
 
         req_msp = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*req_msp));
-        if (!req_msp)
+        if (!req_msp) {
+                ptlrpc_req_finished(req);
                 RETURN(-ENOMEM);
+        }
 
         memcpy(req_msp, msp, sizeof(*req_msp));
         ptlrpc_req_set_repsize(req, 2, rep_size);
+
         rc = ptlrpc_queue_wait(req);
         if (!rc) {
                 rep_msp = lustre_swab_repbuf(req, REPLY_REC_OFF,
@@ -921,10 +924,13 @@ static int mgc_target_register(struct obd_export *exp,
                 RETURN(-ENOMEM);
 
         req_mti = req_capsule_client_get(&req->rq_pill, &RMF_MGS_TARGET_INFO);
+        if (!req_mti) {
+                ptlrpc_req_finished(req);
+                RETURN(-ENOMEM);
+        }
+
         memcpy(req_mti, mti, sizeof(*req_mti));
-
         ptlrpc_request_set_replen(req);
-
         CDEBUG(D_MGC, "register %s\n", mti->mti_svname);
 
         rc = ptlrpc_queue_wait(req);
@@ -1120,6 +1126,12 @@ static int mgc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                         &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
+                if (!ctxt) {
+                        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+                        if (ctxt)
+                                llog_cleanup(ctxt);
+                        RETURN(-ENODEV);
+                }
                 llog_initiator_connect(ctxt);
                 llog_ctxt_put(ctxt);
         } else {
@@ -1330,7 +1342,7 @@ int mgc_process_log(struct obd_device *mgc,
          */
         if (rcl && cld->cld_is_sptlrpc)
                 goto out_pop;
-        
+
         /* Copy the setup log locally if we can. Don't mess around if we're
            running an MGS though (logs are already local). */
         if (lctxt && lsi && (lsi->lsi_flags & LSI_SERVER) &&

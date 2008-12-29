@@ -477,7 +477,10 @@ do_lock:
         it->it_flags &= ~O_CHECK_STALE;
         ll_finish_md_op_data(op_data);
         if (it->it_op == IT_GETATTR && !first)
-                ll_statahead_exit(de, rc);
+                /* If there are too many locks on client-side, then some
+                 * locks taken by statahead maybe dropped automatically
+                 * before the real "revalidate" using them. */
+                ll_statahead_exit(de, req == NULL ? rc : 0);
         else if (first == -EEXIST)
                 ll_statahead_mark(de);
 
@@ -490,7 +493,15 @@ do_lock:
         }
 
         if (rc < 0) {
-                if (rc != -ESTALE) {
+                if (-ESTALE == rc) {
+                        if (it_disposition(it, DISP_OPEN_OPEN) &&
+                            !it_open_error(DISP_OPEN_OPEN, it))
+                                /* server have valid open - close file first*/
+                                ll_release_openhandle(de, it);
+                        /* release intent reference to avoid having stale 'it'
+                         * in namedata for old VFS intent */
+                        ll_intent_drop_lock(it);
+                } else {
                         CDEBUG(D_INFO, "ll_intent_lock: rc %d : it->it_status "
                                "%d\n", rc, it->d.lustre.it_status);
                 }
@@ -614,7 +625,7 @@ out_sa:
         if (it && it->it_op == IT_GETATTR && rc == 1) {
                 first = ll_statahead_enter(de->d_parent->d_inode, &de, 0);
                 if (!first)
-                        ll_statahead_exit(de, rc);
+                        ll_statahead_exit(de, 1);
                 else if (first == -EEXIST)
                         ll_statahead_mark(de);
         }

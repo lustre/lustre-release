@@ -60,6 +60,8 @@ struct list_head  obd_zombie_imports;
 struct list_head  obd_zombie_exports;
 spinlock_t        obd_zombie_impexp_lock;
 static void obd_zombie_impexp_notify(void);
+static void obd_zombie_export_add(struct obd_export *exp);
+static void obd_zombie_import_add(struct obd_import *imp);
 
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 
@@ -704,44 +706,6 @@ struct obd_import *class_conn2cliimp(struct lustre_handle *conn)
 }
 
 /* Export management functions */
-static void export_handle_addref(void *export)
-{
-        class_export_get(export);
-}
-
-struct obd_export *class_export_get(struct obd_export *exp)
-{
-        atomic_inc(&exp->exp_refcount);
-        CDEBUG(D_INFO, "GETting export %p : new refcount %d\n", exp,
-               atomic_read(&exp->exp_refcount));
-        return exp;
-}
-EXPORT_SYMBOL(class_export_get);
-
-void class_export_put(struct obd_export *exp)
-{
-        LASSERT(exp != NULL);
-        CDEBUG(D_INFO, "PUTting export %p : new refcount %d\n", exp,
-               atomic_read(&exp->exp_refcount) - 1);
-        LASSERT(atomic_read(&exp->exp_refcount) > 0);
-        LASSERT(atomic_read(&exp->exp_refcount) < 0x5a5a5a);
-
-        if (atomic_dec_and_test(&exp->exp_refcount)) {
-                LASSERT (list_empty(&exp->exp_obd_chain));
-
-                CDEBUG(D_IOCTL, "final put %p/%s\n",
-                       exp, exp->exp_client_uuid.uuid);
-
-                spin_lock(&obd_zombie_impexp_lock);
-                list_add(&exp->exp_obd_chain, &obd_zombie_exports);
-                spin_unlock(&obd_zombie_impexp_lock);
-
-                if (obd_zombie_impexp_notify != NULL)
-                        obd_zombie_impexp_notify();
-        }
-}
-EXPORT_SYMBOL(class_export_put);
-
 static void class_export_destroy(struct obd_export *exp)
 {
         struct obd_device *obd = exp->exp_obd;
@@ -767,6 +731,36 @@ static void class_export_destroy(struct obd_export *exp)
         OBD_FREE_RCU(exp, sizeof(*exp), &exp->exp_handle);
         EXIT;
 }
+
+static void export_handle_addref(void *export)
+{
+        class_export_get(export);
+}
+
+struct obd_export *class_export_get(struct obd_export *exp)
+{
+        atomic_inc(&exp->exp_refcount);
+        CDEBUG(D_INFO, "GETting export %p : new refcount %d\n", exp,
+               atomic_read(&exp->exp_refcount));
+        return exp;
+}
+EXPORT_SYMBOL(class_export_get);
+
+void class_export_put(struct obd_export *exp)
+{
+        LASSERT(exp != NULL);
+        CDEBUG(D_INFO, "PUTting export %p : new refcount %d\n", exp,
+               atomic_read(&exp->exp_refcount) - 1);
+        LASSERT(atomic_read(&exp->exp_refcount) > 0);
+        LASSERT(atomic_read(&exp->exp_refcount) < 0x5a5a5a);
+
+        if (atomic_dec_and_test(&exp->exp_refcount)) {
+                CDEBUG(D_IOCTL, "final put %p/%s\n",
+                       exp, exp->exp_client_uuid.uuid);
+                obd_zombie_export_add(exp);
+        }
+}
+EXPORT_SYMBOL(class_export_put);
 
 /* Creates a new export, adds it to the hash table, and returns a
  * pointer to it. The refcount is 2: one for the hash reference, and
@@ -848,6 +842,33 @@ void class_unlink_export(struct obd_export *exp)
 EXPORT_SYMBOL(class_unlink_export);
 
 /* Import management functions */
+void class_import_destroy(struct obd_import *imp)
+{
+        ENTRY;
+
+        CDEBUG(D_IOCTL, "destroying import %p for %s\n", imp,
+                imp->imp_obd->obd_name);
+
+        LASSERT(atomic_read(&imp->imp_refcount) == 0);
+
+        ptlrpc_put_connection_superhack(imp->imp_connection);
+
+        while (!list_empty(&imp->imp_conn_list)) {
+                struct obd_import_conn *imp_conn;
+
+                imp_conn = list_entry(imp->imp_conn_list.next,
+                                      struct obd_import_conn, oic_item);
+                list_del_init(&imp_conn->oic_item);
+                ptlrpc_put_connection_superhack(imp_conn->oic_conn);
+                OBD_FREE(imp_conn, sizeof(*imp_conn));
+        }
+
+        LASSERT(imp->imp_sec == NULL);
+        class_decref(imp->imp_obd, "import", imp);
+        OBD_FREE_RCU(imp, sizeof(*imp), &imp->imp_handle);
+        EXIT;
+}
+
 static void import_handle_addref(void *import)
 {
         class_import_get(import);
@@ -865,58 +886,26 @@ struct obd_import *class_import_get(struct obd_import *import)
 }
 EXPORT_SYMBOL(class_import_get);
 
-void class_import_put(struct obd_import *import)
+void class_import_put(struct obd_import *imp)
 {
         ENTRY;
 
-        LASSERT(atomic_read(&import->imp_refcount) > 0);
-        LASSERT(atomic_read(&import->imp_refcount) < 0x5a5a5a);
-        LASSERT(list_empty(&import->imp_zombie_chain));
+        LASSERT(atomic_read(&imp->imp_refcount) > 0);
+        LASSERT(atomic_read(&imp->imp_refcount) < 0x5a5a5a);
+        LASSERT(list_empty(&imp->imp_zombie_chain));
 
-        CDEBUG(D_INFO, "import %p refcount=%d obd=%s\n", import,
-               atomic_read(&import->imp_refcount) - 1, 
-               import->imp_obd->obd_name);
+        CDEBUG(D_INFO, "import %p refcount=%d obd=%s\n", imp,
+               atomic_read(&imp->imp_refcount) - 1, 
+               imp->imp_obd->obd_name);
 
-        if (atomic_dec_and_test(&import->imp_refcount)) {
-                CDEBUG(D_INFO, "final put import %p\n", import);
-                spin_lock(&obd_zombie_impexp_lock);
-                list_add(&import->imp_zombie_chain, &obd_zombie_imports);
-                spin_unlock(&obd_zombie_impexp_lock);
-
-                if (obd_zombie_impexp_notify != NULL)
-                        obd_zombie_impexp_notify();
+        if (atomic_dec_and_test(&imp->imp_refcount)) {
+                CDEBUG(D_INFO, "final put import %p\n", imp);
+                obd_zombie_import_add(imp);
         }
 
         EXIT;
 }
 EXPORT_SYMBOL(class_import_put);
-
-void class_import_destroy(struct obd_import *import)
-{
-        ENTRY;
-
-        CDEBUG(D_IOCTL, "destroying import %p for %s\n", import,
-                import->imp_obd->obd_name);
-
-        LASSERT(atomic_read(&import->imp_refcount) == 0);
-
-        ptlrpc_put_connection_superhack(import->imp_connection);
-
-        while (!list_empty(&import->imp_conn_list)) {
-                struct obd_import_conn *imp_conn;
-
-                imp_conn = list_entry(import->imp_conn_list.next,
-                                      struct obd_import_conn, oic_item);
-                list_del(&imp_conn->oic_item);
-                ptlrpc_put_connection_superhack(imp_conn->oic_conn);
-                OBD_FREE(imp_conn, sizeof(*imp_conn));
-        }
-
-        LASSERT(import->imp_sec == NULL);
-        class_decref(import->imp_obd, "import", import);
-        OBD_FREE_RCU(import, sizeof(*import), &import->imp_handle);
-        EXIT;
-}
 
 static void init_imp_at(struct imp_at *at) {
         int i;
@@ -1313,14 +1302,14 @@ void obd_zombie_impexp_cull(void)
         ENTRY;
 
         do {
-                spin_lock (&obd_zombie_impexp_lock);
+                spin_lock(&obd_zombie_impexp_lock);
 
                 import = NULL;
                 if (!list_empty(&obd_zombie_imports)) {
                         import = list_entry(obd_zombie_imports.next,
                                             struct obd_import,
                                             imp_zombie_chain);
-                        list_del(&import->imp_zombie_chain);
+                        list_del_init(&import->imp_zombie_chain);
                 }
 
                 export = NULL;
@@ -1349,7 +1338,7 @@ static unsigned long            obd_zombie_flags;
 static cfs_waitq_t              obd_zombie_waitq;
 
 enum {
-        OBD_ZOMBIE_STOP = 1
+        OBD_ZOMBIE_STOP   = 1 << 1
 };
 
 /**
@@ -1367,6 +1356,32 @@ static int obd_zombie_impexp_check(void *arg)
         spin_unlock(&obd_zombie_impexp_lock);
 
         RETURN(rc);
+}
+
+/**
+ * Add export to the obd_zombe thread and notify it.
+ */
+static void obd_zombie_export_add(struct obd_export *exp) {
+        spin_lock(&obd_zombie_impexp_lock);
+        LASSERT(list_empty(&exp->exp_obd_chain));
+        list_add(&exp->exp_obd_chain, &obd_zombie_exports);
+        spin_unlock(&obd_zombie_impexp_lock);
+
+        if (obd_zombie_impexp_notify != NULL)
+                obd_zombie_impexp_notify();
+}
+
+/**
+ * Add import to the obd_zombe thread and notify it.
+ */
+static void obd_zombie_import_add(struct obd_import *imp) {
+        spin_lock(&obd_zombie_impexp_lock);
+        LASSERT(list_empty(&imp->imp_zombie_chain));
+        list_add(&imp->imp_zombie_chain, &obd_zombie_imports);
+        spin_unlock(&obd_zombie_impexp_lock);
+
+        if (obd_zombie_impexp_notify != NULL)
+                obd_zombie_impexp_notify();
 }
 
 /**
@@ -1398,7 +1413,6 @@ static int obd_zombie_is_idle(void)
 void obd_zombie_barrier(void)
 {
         struct l_wait_info lwi = { 0 };
-
         l_wait_event(obd_zombie_waitq, obd_zombie_is_idle(), &lwi);
 }
 EXPORT_SYMBOL(obd_zombie_barrier);
@@ -1422,10 +1436,14 @@ static int obd_zombie_impexp_thread(void *unused)
         while(!test_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags)) {
                 struct l_wait_info lwi = { 0 };
 
-                l_wait_event(obd_zombie_waitq, !obd_zombie_impexp_check(NULL), &lwi);
-
+                l_wait_event(obd_zombie_waitq, 
+                             !obd_zombie_impexp_check(NULL), &lwi);
                 obd_zombie_impexp_cull();
-                /* Notify obd_zombie_barrier callers that queues may be empty */
+
+                /* 
+                 * Notify obd_zombie_barrier callers that queues
+                 * may be empty.
+                 */
                 cfs_waitq_signal(&obd_zombie_waitq);
         }
 
@@ -1484,7 +1502,6 @@ int obd_zombie_impexp_init(void)
                 liblustre_register_idle_callback("obd_zombi_impexp_check",
                                                  &obd_zombie_impexp_check, NULL);
         rc = 0;
-
 #endif
         RETURN(rc);
 }

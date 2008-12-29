@@ -252,7 +252,7 @@ check_obdo(void)
         CHECK_MEMBER(obdo, o_padding_3);
         CHECK_MEMBER(obdo, o_padding_4);
         CHECK_MEMBER(obdo, o_padding_5);
-        CHECK_MEMBER(obdo, o_padding_6);       
+        CHECK_MEMBER(obdo, o_padding_6);
 
         CHECK_CDEFINE(OBD_MD_FLID);
         CHECK_CDEFINE(OBD_MD_FLATIME);
@@ -476,6 +476,15 @@ check_ll_fid(void)
         CHECK_MEMBER(ll_fid, id);
         CHECK_MEMBER(ll_fid, generation);
         CHECK_MEMBER(ll_fid, f_type);
+}
+
+static void
+check_lu_fid_pack(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(lu_fid_pack);
+        CHECK_MEMBER(lu_fid_pack, fp_len);
+        CHECK_MEMBER(lu_fid_pack, fp_area);
 }
 
 static void
@@ -942,6 +951,23 @@ check_llog_size_change_rec(void)
 }
 
 static void
+check_llog_changelog_rec(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(llog_changelog_rec);
+        CHECK_MEMBER(llog_changelog_rec, cr_hdr);
+        CHECK_MEMBER(llog_changelog_rec, cr_flags);
+        CHECK_MEMBER(llog_changelog_rec, cr_namelen);
+        CHECK_MEMBER(llog_changelog_rec, cr_type);
+        CHECK_MEMBER(llog_changelog_rec, cr_index);
+        CHECK_MEMBER(llog_changelog_rec, cr_prev);
+        CHECK_MEMBER(llog_changelog_rec, cr_time);
+        CHECK_MEMBER(llog_changelog_rec, cr_tfid);
+        CHECK_MEMBER(llog_changelog_rec, cr_pfid);
+        CHECK_MEMBER(llog_changelog_rec, cr_tail);
+}
+
+static void
 check_llog_gen(void)
 {
         BLANK_LINE();
@@ -1169,6 +1195,29 @@ check_ll_fiemap_extent(void)
 }
 
 static void
+check_link_ea_header(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(link_ea_header);
+        CHECK_MEMBER(link_ea_header, leh_magic);
+        CHECK_MEMBER(link_ea_header, leh_reccount);
+        CHECK_MEMBER(link_ea_header, leh_len);
+        CHECK_MEMBER(link_ea_header, padding1);
+        CHECK_MEMBER(link_ea_header, padding2);
+}
+
+static void
+check_link_ea_entry(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(link_ea_entry);
+        CHECK_MEMBER(link_ea_entry, lee_reclen);
+        CHECK_MEMBER(link_ea_entry, lee_parent_fid);
+        CHECK_MEMBER(link_ea_entry, lee_name);
+}
+
+
+static void
 system_string (char *cmdline, char *str, int len)
 {
         int   fds[2];
@@ -1353,7 +1402,7 @@ main(int argc, char **argv)
 
         CHECK_VALUE(MGS_CONNECT);
         CHECK_VALUE(MGS_DISCONNECT);
-        CHECK_VALUE(MGS_EXCEPTION);   
+        CHECK_VALUE(MGS_EXCEPTION);
         CHECK_VALUE(MGS_TARGET_REG);
         CHECK_VALUE(MGS_TARGET_DEL);
         CHECK_VALUE(MGS_SET_INFO);
@@ -1375,6 +1424,7 @@ main(int argc, char **argv)
         check_niobuf_remote();
         check_ost_body();
         check_ll_fid();
+        check_lu_fid_pack();
         check_mds_status_req();
         check_mds_body();
         check_mds_rec_setattr();
@@ -1406,6 +1456,7 @@ main(int argc, char **argv)
         check_llog_setattr_rec();
         check_llog_setattr64_rec();
         check_llog_size_change_rec();
+        check_llog_changelog_rec();
         check_llog_gen();
         check_llog_gen_rec();
         check_llog_log_hdr();
@@ -1427,7 +1478,8 @@ main(int argc, char **argv)
         check_posix_acl_xattr_entry();
         check_posix_acl_xattr_header();
         printf("#endif\n");
-
+        check_link_ea_header();
+        check_link_ea_entry();
 
         printf("}\n\n");
 

@@ -85,7 +85,6 @@
 /* llo_* api support */
 #include <md_object.h>
 
-static const char MDT_XATTR_NAME[] = "trusted.lma";
 static const char dot[] = ".";
 static const char dotdot[] = "..";
 static const char remote_obj_dir[] = "REM_OBJ_DIR";
@@ -1263,7 +1262,11 @@ static int osd_inode_setattr(const struct lu_env *env,
                 struct iattr iattr;
                 int rc;
 
-                iattr.ia_valid = bits & (LA_UID | LA_GID);
+                iattr.ia_valid = 0;
+                if (bits & LA_UID)
+                        iattr.ia_valid |= ATTR_UID;
+                if (bits & LA_GID)
+                        iattr.ia_valid |= ATTR_GID;
                 iattr.ia_uid = attr->la_uid;
                 iattr.ia_gid = attr->la_gid;
                 osd_push_ctxt(env, save);
@@ -1718,7 +1721,7 @@ static int osd_ea_fid_set(const struct lu_env *env, struct dt_object *dt,
 
         return __osd_xattr_set(env, dt,
                                osd_buf_get(env, mdt_attrs, sizeof *mdt_attrs),
-                               MDT_XATTR_NAME, LU_XATTR_CREATE);
+                               XATTR_NAME_LMA, LU_XATTR_CREATE);
 
 }
 
@@ -1760,7 +1763,7 @@ static int osd_ea_fid_get(const struct lu_env *env, struct dentry *dentry,
 
         LASSERT(inode->i_op != NULL && inode->i_op->getxattr != NULL);
 
-        rc = inode->i_op->getxattr(dentry, MDT_XATTR_NAME, (void *)mdt_attrs,
+        rc = inode->i_op->getxattr(dentry, XATTR_NAME_LMA, (void *)mdt_attrs,
                                    sizeof *mdt_attrs);
 
         if (rc > 0) {

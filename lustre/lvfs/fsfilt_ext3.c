@@ -2094,6 +2094,24 @@ static int fsfilt_ext3_dquot(struct lustre_dquot *dquot, int cmd)
         }
         RETURN(rc);
 }
+
+static int fsfilt_ext3_get_mblk(struct super_block *sb, int *count,
+                                struct inode *inode, int frags)
+{
+#ifdef EXT3_EXT_HAS_NO_TREE
+        struct ext3_ext_base *base = inode;
+#else
+        struct ext3_extents_tree tree;
+        struct ext3_ext_base *base = &tree;
+
+        ext3_init_tree_desc(base, inode);
+#endif
+        /* for an ost_write request, it needs <#fragments> * <tree depth + 1>
+         * metablocks at maxium b=16542 */
+        *count = frags * (EXT_DEPTH(base) + 1) * EXT3_BLOCK_SIZE(sb);
+        return 0;
+}
+
 #endif
 
 lvfs_sbdev_type fsfilt_ext3_journal_sbdev(struct super_block *sb)
@@ -2138,6 +2156,7 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_quotainfo           = fsfilt_ext3_quotainfo,
         .fs_qids                = fsfilt_ext3_qids,
         .fs_dquot               = fsfilt_ext3_dquot,
+        .fs_get_mblk            = fsfilt_ext3_get_mblk,
 #endif
         .fs_journal_sbdev       = fsfilt_ext3_journal_sbdev,
 };

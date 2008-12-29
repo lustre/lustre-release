@@ -86,17 +86,30 @@ void *inter_module_get(char *arg);
 
 static __inline__ int ext2_set_bit(int nr, void *addr)
 {
+#ifdef __BIG_ENDIAN
+        return set_bit((nr ^ ((BITS_PER_LONG-1) & ~0x7)), addr);
+#else
         return set_bit(nr, addr);
+#endif
 }
 
 static __inline__ int ext2_clear_bit(int nr, void *addr)
 {
+#ifdef __BIG_ENDIAN
+        return clear_bit((nr ^ ((BITS_PER_LONG-1) & ~0x7)), addr);
+#else
         return clear_bit(nr, addr);
+#endif
 }
 
 static __inline__ int ext2_test_bit(int nr, void *addr)
 {
+#ifdef __BIG_ENDIAN
+        __const__ unsigned char *tmp = (__const__ unsigned char *) addr;
+        return (tmp[nr >> 3] >> (nr & 7)) & 1;
+#else
         return test_bit(nr, addr);
+#endif
 }
 
 

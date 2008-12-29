@@ -180,15 +180,6 @@ static int mdc_getattr_common(struct obd_export *exp,
                         RETURN(-EPROTO);
         }
 
-        if (body->valid & OBD_MD_FLMODEASIZE) {
-                struct client_obd *cli = &exp->exp_obd->u.cli;
-
-                if (cli->cl_max_mds_easize < body->max_mdsize)
-                        cli->cl_max_mds_easize = body->max_mdsize;
-                if (cli->cl_max_mds_cookiesize < body->max_cookiesize)
-                        cli->cl_max_mds_cookiesize = body->max_cookiesize;
-        }
-
         if (body->valid & OBD_MD_FLRMTPERM) {
                 struct mdt_remote_perm *perm;
 
@@ -1073,6 +1064,9 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 rc = lquota_poll_check(quota_interface, exp,
                                        (struct if_quotacheck *)karg);
                 GOTO(out, rc);
+        case OBD_IOC_PING_TARGET:
+                rc = ptlrpc_obd_ping(obd);
+                GOTO(out, rc);
         default:
                 CERROR("mdc_ioctl(): unrecognised ioctl %#x\n", cmd);
                 GOTO(out, rc = -ENOTTY);
@@ -1659,8 +1653,8 @@ static int mdc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
 
         LASSERT(olg == &obd->obd_olg);
 
-        rc = llog_setup(obd, olg, LLOG_LOVEA_REPL_CTXT, tgt, 0,
-                        NULL, &llog_client_ops);
+        rc = llog_setup(obd, olg, LLOG_LOVEA_REPL_CTXT, tgt, 0, NULL,
+                        &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_LOVEA_REPL_CTXT);
                 llog_initiator_connect(ctxt);

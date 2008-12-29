@@ -321,8 +321,8 @@ static void vvp_page_completion_write(const struct lu_env *env,
 /**
  * Implements cl_page_operations::cpo_make_ready() method.
  *
- * This is called to yank page from the transfer page and to send it out as a
- * part of transfer. This function try-locks the page. If try-lock failed,
+ * This is called to yank a page from the transfer cache and to send it out as
+ * a part of transfer. This function try-locks the page. If try-lock failed,
  * page is owned by some concurrent IO, and should be skipped (this is bad,
  * but hopefully rare situation, as it usually results in transfer being
  * shorter than possible).

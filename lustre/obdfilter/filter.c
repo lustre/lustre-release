@@ -4453,8 +4453,8 @@ static int filter_process_config(struct obd_device *obd, obd_count len,
 
                 rc = class_process_proc_param(PARAM_OST, lvars.obd_vars,
                                               lcfg, obd);
-        	if (rc > 0)
-        		rc = 0;
+                if (rc > 0)
+                        rc = 0;
                 break;
         }
 

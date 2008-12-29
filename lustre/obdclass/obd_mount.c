@@ -521,10 +521,13 @@ static int server_start_mgs(struct super_block *sb)
 
         rc = server_register_mount(LUSTRE_MGS_OBDNAME, sb, mnt);
 
-        if (!rc &&
-            ((rc = lustre_start_simple(LUSTRE_MGS_OBDNAME, LUSTRE_MGS_NAME,
-                                       LUSTRE_MGS_OBDNAME, 0, 0))))
-                server_deregister_mount(LUSTRE_MGS_OBDNAME);
+        if (!rc) {
+                rc = lustre_start_simple(LUSTRE_MGS_OBDNAME, LUSTRE_MGS_NAME,
+                                         LUSTRE_MGS_OBDNAME, 0, 0);
+                /* Do NOT call server_deregister_mount() here. This leads to
+                 * inability cleanup cleanly and free lsi and other stuff when
+                 * mgs calls server_put_mount() in error handling case. -umka */
+        }
 
         if (rc)
                 LCONSOLE_ERROR_MSG(0x15e, "Failed to start MGS '%s' (%d). "
@@ -1149,7 +1152,9 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
         if (rc) {
                 CERROR("failed to start server %s: %d\n",
                        lsi->lsi_ldd->ldd_svname, rc);
-                server_deregister_mount(lsi->lsi_ldd->ldd_svname);
+                /* Do NOT call server_deregister_mount() here. This makes it
+                 * impossible to find mount later in cleanup time and leaves
+                 * @lsi and othder stuff leaked. -umka */
                 GOTO(out_mgc, rc);
         }
 
@@ -1673,7 +1678,7 @@ int server_name2index(char *svname, __u32 *idx, char **endptr)
 {
         unsigned long index;
         int rc;
-        char *dash = strchr(svname, '-');
+        char *dash = strrchr(svname, '-');
         if (!dash)
                 return(-EINVAL);
 

@@ -126,44 +126,9 @@ struct lustre_client_ocd {
          */
         __u64      lco_flags;
         spinlock_t lco_lock;
+        struct obd_export *lco_md_exp;
+        struct obd_export *lco_dt_exp;
 };
-
-/**
- * This function is used as an upcall-callback hooked by liblustre and llite
- * clients into obd_notify() listeners chain to handle notifications about
- * change of import connect_flags. See llu_fsswop_mount() and
- * lustre_common_fill_super().
- *
- * Again, it is dumped into this header for the lack of a better place.
- */
-static inline int ll_ocd_update(struct obd_device *host,
-                                struct obd_device *watched,
-                                enum obd_notify_event ev, void *owner)
-{
-        struct lustre_client_ocd *lco;
-        struct client_obd        *cli;
-        __u64 flags;
-        int   result;
-
-        ENTRY;
-        if (!strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME)) {
-                cli = &watched->u.cli;
-                lco = owner;
-                flags = cli->cl_import->imp_connect_data.ocd_connect_flags;
-                CDEBUG(D_SUPER, "Changing connect_flags: "LPX64" -> "LPX64"\n",
-                       lco->lco_flags, flags);
-                spin_lock(&lco->lco_lock);
-                lco->lco_flags &= flags;
-                spin_unlock(&lco->lco_lock);
-                result = 0;
-        } else {
-                CERROR("unexpected notification from %s %s!\n",
-                       watched->obd_type->typ_name,
-                       watched->obd_name);
-                result = -EINVAL;
-        }
-        RETURN(result);
-}
 
 /*
  * Chain of hash overflow pages.
