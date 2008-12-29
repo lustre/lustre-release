@@ -62,14 +62,6 @@ Bugzilla   : 18049
 Descriptoin: aborting recovery hang on MDS
 Details    : don't throttle destroy RPCs for the MDT.
 
-Severity   : normal
-Frequency  : race on file read and write
-Bugzilla   : 16417
-Description: Lustre doesn't delete files
-Details    : Clients drop lock reference and release openhandle when they find
-	     stale inode.
-
-
 --------------------------------------------------------------------------
 2009-01-15 Sun Microsystems, Inc.
 	* version 1.6.7
