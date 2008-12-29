@@ -309,7 +309,8 @@ static int client_common_fill_super(struct super_block *sb,
         else
                 sbi->ll_fop = &ll_file_operations_noflock;
 
-        err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, data, NULL);
+
+        err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, data, &sbi->ll_mdc_exp);
         if (err == -EBUSY) {
                 LCONSOLE_ERROR_MSG(0x14f, "An MDT (mdc %s) is performing "
                                    "recovery, of which this client is not a "
@@ -320,7 +321,7 @@ static int client_common_fill_super(struct super_block *sb,
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);
                 GOTO(out, err);
         }
-        sbi->ll_mdc_exp = class_conn2export(&mdc_conn);
+
         err = obd_fid_init(sbi->ll_mdc_exp);
         if (err)
                 GOTO(out_mdc, err);
@@ -411,7 +412,10 @@ static int client_common_fill_super(struct super_block *sb,
         obd->obd_upcall.onu_upcall = ll_ocd_update;
         data->ocd_brw_size = PTLRPC_MAX_BRW_PAGES << CFS_PAGE_SHIFT;
 
-        err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, data, NULL);
+        obd_register_lock_cancel_cb(obd, ll_extent_lock_cancel_cb);
+        obd_register_page_removal_cb(obd, ll_page_removal_cb, ll_pin_extent_cb);
+
+        err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, data, &sbi->ll_osc_exp);
         if (err == -EBUSY) {
                 LCONSOLE_ERROR_MSG(0x150, "An OST (osc %s) is performing "
                                    "recovery, of which this client is not a "
@@ -420,33 +424,19 @@ static int client_common_fill_super(struct super_block *sb,
                 GOTO(out, err);
         } else if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
-                GOTO(out_mdc, err);
+                GOTO(out_cb, err);
         }
-        sbi->ll_osc_exp = class_conn2export(&osc_conn);
+
         spin_lock(&sbi->ll_lco.lco_lock);
         sbi->ll_lco.lco_flags = data->ocd_connect_flags;
         sbi->ll_lco.lco_mdc_exp = sbi->ll_mdc_exp;
         sbi->ll_lco.lco_osc_exp = sbi->ll_osc_exp;
         spin_unlock(&sbi->ll_lco.lco_lock);
 
-        err = obd_register_page_removal_cb(sbi->ll_osc_exp,
-                                           ll_page_removal_cb,
-                                           ll_pin_extent_cb);
-        if (err) {
-                CERROR("cannot register page removal callback: rc = %d\n",err);
-                GOTO(out_osc, err);
-        }
-        err = obd_register_lock_cancel_cb(sbi->ll_osc_exp,
-                                          ll_extent_lock_cancel_cb);
-        if (err) {
-                CERROR("cannot register lock cancel callback: rc = %d\n", err);
-                GOTO(out_page_rm_cb, err);
-        }
-
         err = mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
         if (err) {
                 CERROR("cannot set max EA and cookie sizes: rc = %d\n", err);
-                GOTO(out_lock_cn_cb, err);
+                GOTO(out_osc, err);
         }
 
         err = obd_prep_async_page(sbi->ll_osc_exp, NULL, NULL, NULL,
@@ -455,7 +445,7 @@ static int client_common_fill_super(struct super_block *sb,
                 LCONSOLE_ERROR_MSG(0x151, "There are no OST's in this "
                                    "filesystem. There must be at least one "
                                    "active OST for a client to start.\n");
-                GOTO(out_lock_cn_cb, err);
+                GOTO(out_osc, err);
         }
 
         if (!ll_async_page_slab) {
@@ -465,13 +455,13 @@ static int client_common_fill_super(struct super_block *sb,
                                                           ll_async_page_slab_size,
                                                           0, 0);
                 if (!ll_async_page_slab)
-                        GOTO(out_lock_cn_cb, -ENOMEM);
+                        GOTO(out_osc, err = -ENOMEM);
         }
 
         err = mdc_getstatus(sbi->ll_mdc_exp, &rootfid);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
-                GOTO(out_lock_cn_cb, err);
+                GOTO(out_osc, err);
         }
         CDEBUG(D_SUPER, "rootfid "LPU64":"DFID"\n", rootfid.id,
                         PFID((struct lu_fid*)&rootfid));
@@ -492,14 +482,14 @@ static int client_common_fill_super(struct super_block *sb,
                           0, &request);
         if (err) {
                 CERROR("mdc_getattr failed for root: rc = %d\n", err);
-                GOTO(out_lock_cn_cb, err);
+                GOTO(out_osc, err);
         }
 
         err = mdc_req2lustre_md(request, REPLY_REC_OFF, sbi->ll_osc_exp, &md);
         if (err) {
                 CERROR("failed to understand root inode md: rc = %d\n",err);
                 ptlrpc_req_finished (request);
-                GOTO(out_lock_cn_cb, err);
+                GOTO(out_osc, err);
         }
 
         LASSERT(sbi->ll_rootino != 0);
@@ -552,15 +542,13 @@ static int client_common_fill_super(struct super_block *sb,
 out_root:
         if (root)
                 iput(root);
-out_lock_cn_cb:
-        obd_unregister_lock_cancel_cb(sbi->ll_osc_exp,
-                                      ll_extent_lock_cancel_cb);
-out_page_rm_cb:
-        obd_unregister_page_removal_cb(sbi->ll_osc_exp,
-                                       ll_page_removal_cb);
 out_osc:
         obd_disconnect(sbi->ll_osc_exp);
         sbi->ll_osc_exp = NULL;
+out_cb:
+        obd = class_name2obd(osc);
+        obd_unregister_lock_cancel_cb(obd, ll_extent_lock_cancel_cb);
+        obd_unregister_page_removal_cb(obd, ll_page_removal_cb);
 out_mdc:
         obd_fid_fini(sbi->ll_mdc_exp);
         obd_disconnect(sbi->ll_mdc_exp);
@@ -1025,13 +1013,11 @@ static int old_lustre_process_log(struct super_block *sb, char *newprofile,
         /* If we don't have this then an ACL MDS will refuse the connection */
         ocd.ocd_connect_flags = OBD_CONNECT_ACL;
 
-        rc = obd_connect(&mdc_conn, obd, &mdc_uuid, &ocd, NULL);
+        rc = obd_connect(&mdc_conn, obd, &mdc_uuid, &ocd, &exp);
         if (rc) {
                 CERROR("cannot connect to %s: rc = %d\n", mdt, rc);
                 GOTO(out_cleanup, rc);
         }
-
-        exp = class_conn2export(&mdc_conn);
 
         ctxt = llog_get_context(exp->exp_obd, LLOG_CONFIG_REPL_CTXT);
 
