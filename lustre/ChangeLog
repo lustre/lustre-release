@@ -44,6 +44,15 @@
 	  information, please refer to bugzilla 17630.
 
 Severity   : normal
+Frequency  : start MDS on uncleanly shutdowned MDS device
+Bugzilla   : 16839
+Descriptoin: ll_sync thread stay in waiting mds<>ost recovery finished
+Details    : stay in waiting mds<>ost recovery finished produce random bugs
+             due race between two ll_sync thread for one lov target. send 
+             ACTIVATE event only if connect realy finished and import have
+             FULL state.
+
+Severity   : normal
 Frequency  : always with long access acl
 Bugzilla   : 17636
 Descriptoin: mds can't pack reply with long acl.
