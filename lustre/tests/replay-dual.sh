@@ -451,31 +451,6 @@ shutdown_client() {
     fi
 }
 
-# CMD: determine mds index where directory inode presents 
-get_mds_dir () {
-    local dir=$1
-    local file=$dir/$tfile
-
-    rm -f $file
-    local iused=$(lfs df -i $dir | grep MDT | awk '{print $3}')
-    local oldused=($iused)
-
-    touch $file
-    sleep 1
-    iused=$(lfs df -i $dir | grep MDT | awk '{print $3}')
-    local newused=($iused)
-
-    local num=0
-    for ((i=0; i<${#newused[@]}; i++)); do
-         if [ ${oldused[$i]} -lt ${newused[$i]} ];  then
-             echo $(( i + 1 ))
-             rm -f $dir/$tfile
-             return 0
-         fi 
-    done
-    error "mdt-s : inodes count OLD ${oldused[@]} NEW ${newused[@]}"
-}
-
 test_21b_sub () {
     local mds=$1 
     do_node $CLIENT1 rm -f $MOUNT1/$tfile-*
