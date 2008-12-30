@@ -2264,6 +2264,24 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
                 GOTO(end, rc);
         }
 
+        if (class_match_param(ptr, PARAM_LDLM_TIMEOUT, &tmp) == 0) {
+                /* Change ldlm timeout */
+                int timeout;
+                timeout = simple_strtoul(tmp, NULL, 0);
+ 
+                CDEBUG(D_MGS, "ldlm timeout %d\n", timeout);
+                         
+                lustre_cfg_bufs_reset(&bufs, NULL);
+                lcfg = lustre_cfg_new(LCFG_SET_LDLM_TIMEOUT, &bufs);
+                lcfg->lcfg_num = timeout;
+                /* modify all servers and clients */
+                rc = mgs_write_log_direct_all(obd, fsdb, mti, lcfg,
+                                              mti->mti_fsname,
+                                              "ldlm_timeout"); 
+                lustre_cfg_free(lcfg);
+                GOTO(end, rc);
+        }
+
         if (class_match_param(ptr, PARAM_OSC""PARAM_ACTIVE, &tmp) == 0) {
                 /* active=0 means off, anything else means on */
                 char mdt_index[16];
