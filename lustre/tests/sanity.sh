@@ -2634,23 +2634,28 @@ test_57a() {
 run_test 57a "verify MDS filesystem created with large inodes =="
 
 test_57b() {
-	FILECOUNT=100
-	FILE1=$DIR/d57b/f1
-	FILEN=$DIR/d57b/f$FILECOUNT
-	rm -rf $DIR/d57b || error "removing $DIR/d57b"
-	mkdir -p $DIR/d57b || error "creating $DIR/d57b"
+	local dir=$DIR/d57b
+
+	local FILECOUNT=100
+	local FILE1=$dir/f1
+	local FILEN=$dir/f$FILECOUNT
+
+	rm -rf $dir || error "removing $dir"
+	mkdir -p $dir || error "creating $dir"
+	
 	echo "mcreating $FILECOUNT files"
-	createmany -m $DIR/d57b/f 1 $FILECOUNT || \
-		error "creating files in $DIR/d57b"
+	createmany -m $dir/f 1 $FILECOUNT || \
+		error "creating files in $dir"
 
 	# verify that files do not have EAs yet
 	$GETSTRIPE $FILE1 2>&1 | grep -q "no stripe" || error "$FILE1 has an EA"
 	$GETSTRIPE $FILEN 2>&1 | grep -q "no stripe" || error "$FILEN has an EA"
 
-	MDSFREE="`lctl get_param -n mds.*.kbytesfree 2> /dev/null`"
-	MDCFREE="`lctl get_param -n mdc.*.kbytesfree | head -n 1`"
+	local MDSFREE=$(do_facet mds lctl get_param -n mds.*.kbytesfree)
+	local MDCFREE=$(lctl get_param -n mdc.*.kbytesfree | head -n 1)
 	echo "opening files to create objects/EAs"
-	for FILE in `seq -f $DIR/d57b/f%g 1 $FILECOUNT`; do
+	local FILE
+	for FILE in `seq -f $dir/f%g 1 $FILECOUNT`; do
 		$OPENFILE -f O_RDWR $FILE > /dev/null || error "opening $FILE"
 	done
 
@@ -2659,8 +2664,8 @@ test_57b() {
 	$GETSTRIPE $FILEN | grep -q "obdidx" || error "$FILEN missing EA"
 
 	sleep 1 # make sure we get new statfs data
-	MDSFREE2="`lctl get_param -n mds.*.kbytesfree 2> /dev/null`"
-	MDCFREE2="`lctl get_param -n mdc.*.kbytesfree | head -n 1`"
+	local MDSFREE2=$(do_facet mds lctl get_param -n mds.*.kbytesfree)
+	local MDCFREE2=$(lctl get_param -n mdc.*.kbytesfree | head -n 1)
 	if [ "$MDCFREE2" -lt "$((MDCFREE - 8))" ]; then
 		if [ "$MDSFREE" != "$MDSFREE2" ]; then
 			error "MDC before $MDCFREE != after $MDCFREE2"
@@ -2669,7 +2674,7 @@ test_57b() {
 			echo "unable to confirm if MDS has large inodes"
 		fi
 	fi
-	rm -rf $DIR/d57b
+	rm -rf $dir
 }
 run_test 57b "default LOV EAs are stored inside large inodes ==="
 
