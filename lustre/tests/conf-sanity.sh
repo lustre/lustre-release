@@ -1534,7 +1534,8 @@ test_46a() {
 run_test 46a "handle ost additional - wide striped file"
 
 test_47() { #17674
-        setup
+	reformat
+	setup_noconfig
         check_mount || return 2
         $LCTL set_param ldlm.namespaces.$FSNAME-*-*-*.lru_size=100
 
