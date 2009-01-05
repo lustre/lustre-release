@@ -838,8 +838,6 @@ test_35() { # bug 17645
         done
 
         mkdir -p $MOUNT1/$tfile
-        createmany -o $MOUNT1/$tfile/a 2000
-        sync
         cancel_lru_locks mdc
 
         # Let's initiate -EINTR situation by setting fail_loc and take
@@ -847,20 +845,32 @@ test_35() { # bug 17645
         # bl_ast yet as lock is already in local cache.
 #define OBD_FAIL_LDLM_INTR_CP_AST        0x317
         do_facet client "lctl set_param fail_loc=0x80000317"
-        ls -la $MOUNT1/$tfile > /dev/null &
-        pid1=$!
-        sleep 1
-        
-        # Let's take write lock on same file from another mount. This
-        # should cause conflict and bl_ast
-        createmany -o $MOUNT2/$tfile/a 2000 &
-        pid2=$!
         local timeout=`do_facet $SINGLEMDS lctl get_param  -n timeout`
         let timeout=timeout*3
-        log "Wait for $pid1 $pid2 for $timeout sec..."
-        sleep $timeout
-        kill -9 $pid1 $pid2 > /dev/null 2>&1
-        wait
+        local nr=0
+        while test $nr -lt 10; do
+                log "Race attempt $nr"
+                local blk1=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
+                test "x$blk1" = "x" && blk1=0
+                createmany -o $MOUNT2/$tfile/a 4000 &
+                pid1=$!
+                sleep 1
+        
+                # Let's make conflict and bl_ast
+                ls -la $MOUNT1/$tfile > /dev/null &
+                pid2=$!
+                
+                log "Wait for $pid1 $pid2 for $timeout sec..."
+                sleep $timeout
+                kill -9 $pid1 $pid2 > /dev/null 2>&1
+                wait
+                local blk2=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
+                test "x$blk2" = "x" && blk2=0
+                test $blk2 -gt $blk1 && break
+                rm -fr $MOUNT1/$tfile/*
+                cancel_lru_locks mdc
+                let nr=nr+1
+        done
         do_facet client "lctl set_param fail_loc=0x0"
         df -h $MOUNT1 $MOUNT2
         count=0
