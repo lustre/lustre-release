@@ -189,7 +189,6 @@ noreproc:
         }
 
         if (ns_is_client(lock->l_resource->lr_namespace) && 
-            lock->l_resource->lr_type == LDLM_EXTENT &&
             OBD_FAIL_CHECK(OBD_FAIL_LDLM_INTR_CP_AST | OBD_FAIL_ONCE)) {
                 obd_fail_loc = OBD_FAIL_LDLM_CP_BL_RACE | OBD_FAIL_ONCE;
                 lock->l_flags |= LDLM_FL_FAIL_LOC;
