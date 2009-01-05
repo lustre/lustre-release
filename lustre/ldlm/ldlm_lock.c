@@ -653,6 +653,10 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                  * reference, put it on the LRU. */
                 ldlm_lock_add_to_lru(lock);
                 unlock_res_and_lock(lock);
+
+                if (lock->l_flags & LDLM_FL_FAIL_LOC)
+                        OBD_RACE(OBD_FAIL_LDLM_CP_BL_RACE);
+
                 /* Call ldlm_cancel_lru() only if EARLY_CANCEL and LRU RESIZE
                  * are not supported by the server, otherwise, it is done on
                  * enqueue. */
