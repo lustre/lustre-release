@@ -756,7 +756,7 @@ test_35() { # bug 17645
 #define OBD_FAIL_LDLM_INTR_CP_AST        0x317
         do_facet client "lctl set_param fail_loc=0x80000317"
         local timeout=`do_facet mds lctl get_param  -n timeout`
-        let timeout=timeout*2
+        let timeout=timeout*3
         local nr=0
         while test $nr -lt 10; do
                 log "Race attempt $nr"
