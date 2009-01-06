@@ -1665,8 +1665,13 @@ void fid_pack(struct lu_fid_pack *pack, const struct lu_fid *fid,
          */
         CLASSERT(LUSTRE_SEQ_MAX_WIDTH < 0xffffull);
 
-        if (fid_is_igif(fid) ||
-            seq > 0xffffffull || oid > 0xffff || fid_ver(fid) != 0) {
+        /* fid can be packed in six bytes (first byte as length of packed fid,
+         * three bytes of seq and two bytes of oid).
+         * this reduces IO overhead specially for OSD Object Index. */
+
+        if (seq < FID_SEQ_START ||
+            seq > (0xffffffull + FID_SEQ_START) ||
+            oid > 0xffff || fid_ver(fid) != 0) {
                 fid_cpu_to_be(befider, fid);
                 recsize = sizeof *befider;
         } else {
@@ -1703,6 +1708,7 @@ int fid_unpack(const struct lu_fid_pack *pack, struct lu_fid *fid)
 
                 area = (unsigned char *)pack->fp_area;
                 fid->f_seq = (area[0] << 16) | (area[1] << 8) | area[2];
+                fid->f_seq +=  FID_SEQ_START;
                 fid->f_oid = (area[3] << 8) | area[4];
                 fid->f_ver = 0;
                 break;
