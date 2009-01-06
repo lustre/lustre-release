@@ -262,6 +262,20 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                                 space->lsr_start = in->lsr_end;
                 }
 
+                /* sending replay_super to update fld as only super sequence
+                 * server can update fld.
+                 * we are sending meta sequence to fld rather than super
+                 * sequence, but fld server can handle range merging. */
+
+                in->lsr_mdt = space->lsr_mdt;
+                rc = seq_client_replay_super(seq->lss_cli, in, env);
+
+                if (rc) {
+                        CERROR("%s: Can't replay super-sequence, "
+                                        "rc %d\n", seq->lss_name, rc);
+                        RETURN(rc);
+                }
+
                 *out = *in;
 
                 CDEBUG(D_INFO, "%s: Recovered space: "DRANGE"\n",
