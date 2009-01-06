@@ -675,13 +675,15 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 
                 rc = mdd_la_get(env, mdd_tobj, la_tmp, BYPASS_CAPA);
                 if (!rc) {
+                        void *data = NULL;
+                        mdd_data_get(env, mdd_tobj, &data);
                         quota_opc = FSFILT_OP_LINK;
                         mdd_quota_wrapper(la_tmp, qids);
                         /* get block quota for parent */
                         lquota_chkquota(mds_quota_interface_ref, obd,
                                         qids[USRQUOTA], qids[GRPQUOTA], 1,
                                         &rec_pending, NULL, LQUOTA_FLAGS_BLK,
-                                        NULL, 0);
+                                        data, 1);
                 }
         }
 #endif
@@ -960,13 +962,15 @@ static int mdd_name_insert(const struct lu_env *env,
 
                         rc = mdd_la_get(env, mdd_obj, la_tmp, BYPASS_CAPA);
                         if (!rc) {
+                                void *data = NULL;
+                                mdd_data_get(env, mdd_obj, &data);
                                 quota_opc = FSFILT_OP_LINK;
                                 mdd_quota_wrapper(la_tmp, qids);
                                 /* get block quota for parent */
                                 lquota_chkquota(mds_quota_interface_ref, obd,
                                                 qids[USRQUOTA], qids[GRPQUOTA],
                                                 1, &rec_pending, NULL,
-                                                LQUOTA_FLAGS_BLK, NULL, 0);
+                                                LQUOTA_FLAGS_BLK, data, 1);
                         }
                 } else {
                         uc->mu_cap |= CFS_CAP_SYS_RESOURCE_MASK;
@@ -1184,13 +1188,15 @@ static int mdd_rename_tgt(const struct lu_env *env,
 
                 rc = mdd_la_get(env, mdd_tpobj, la_tmp, BYPASS_CAPA);
                 if (!rc) {
+                        void *data = NULL;
+                        mdd_data_get(env, mdd_tpobj, &data);
                         quota_opc = FSFILT_OP_LINK;
                         mdd_quota_wrapper(la_tmp, qpids);
                         /* get block quota for target parent */
                         lquota_chkquota(mds_quota_interface_ref, obd,
                                         qpids[USRQUOTA], qpids[GRPQUOTA], 1,
                                         &rec_pending, NULL, LQUOTA_FLAGS_BLK,
-                                        NULL, 0);
+                                        data, 1);
                 }
         }
 #endif
@@ -1985,6 +1991,8 @@ static int mdd_rename(const struct lu_env *env,
                                 rc = mdd_la_get(env, mdd_tpobj, la_tmp,
                                                 BYPASS_CAPA);
                                 if (!rc) {
+                                        void *data = NULL;
+                                        mdd_data_get(env, mdd_tpobj, &data);
                                         quota_opc = FSFILT_OP_LINK;
                                         mdd_quota_wrapper(la_tmp, qtpids);
                                         /* get block quota for target parent */
@@ -1993,7 +2001,7 @@ static int mdd_rename(const struct lu_env *env,
                                                         qtpids[GRPQUOTA], 1,
                                                         &rec_pending, NULL,
                                                         LQUOTA_FLAGS_BLK,
-                                                        NULL, 0);
+                                                        data, 1);
                                 }
                         }
                 }

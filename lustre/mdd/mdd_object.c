@@ -67,6 +67,15 @@ static int mdd_xattr_get(const struct lu_env *env,
                          struct md_object *obj, struct lu_buf *buf,
                          const char *name);
 
+int mdd_data_get(const struct lu_env *env, struct mdd_object *obj,
+                 void **data)
+{
+        LASSERTF(mdd_object_exists(obj), "FID is "DFID"\n",
+                 PFID(mdd_object_fid(obj)));
+        mdo_data_get(env, obj, data);
+        return 0;
+}
+
 int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
                struct lu_attr *la, struct lustre_capa *capa)
 {
@@ -1248,14 +1257,17 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
                                         qnids[USRQUOTA], qnids[GRPQUOTA], 1,
                                         &inode_pending, NULL, 0, NULL, 0);
                         block_count = (la_tmp->la_blocks + 7) >> 3;
-                        if (block_count)
+                        if (block_count) {
+                                void *data = NULL;
+                                mdd_data_get(env, mdd_obj, &data);
                                 /* get block quota for new owner */
                                 lquota_chkquota(mds_quota_interface_ref, obd,
                                                 qnids[USRQUOTA],
                                                 qnids[GRPQUOTA],
                                                 block_count, &block_pending,
                                                 NULL, LQUOTA_FLAGS_BLK,
-                                                NULL, 0);
+                                                data, 1);
+                        }
                 }
         }
 #endif
