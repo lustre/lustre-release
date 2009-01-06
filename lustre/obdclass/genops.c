@@ -1161,6 +1161,7 @@ void class_handle_stale_exports(struct obd_device *obd)
         }
 #ifndef HAVE_DELAYED_RECOVERY
         /* delayed recovery is turned off, evict all delayed exports */
+        list_splice_init(&delay_list, &evict_list);
         list_splice_init(&obd->obd_delayed_exports, &evict_list);
 #endif
         spin_unlock(&obd->obd_dev_lock);
