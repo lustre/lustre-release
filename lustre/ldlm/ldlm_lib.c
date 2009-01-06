@@ -592,6 +592,7 @@ int target_recovery_check_and_stop(struct obd_device *obd)
 
         spin_lock_bh(&obd->obd_processing_task_lock);
         abort_recovery = obd->obd_abort_recovery;
+        obd->obd_abort_recovery = 0;
         spin_unlock_bh(&obd->obd_processing_task_lock);
         if (!abort_recovery)
                 return 0;
