@@ -67,7 +67,6 @@ enum lcfg_command_type {
         LCFG_LOV_DEL_OBD        = 0x00cf00e,
         LCFG_PARAM              = 0x00cf00f,
         LCFG_MARKER             = 0x00cf010,
-        LCFG_SET_LDLM_TIMEOUT   = 0x00cf011,
         LCFG_LOG_START          = 0x00ce011,
         LCFG_LOG_END            = 0x00ce012,
         LCFG_LOV_ADD_INA        = 0x00ce013,
