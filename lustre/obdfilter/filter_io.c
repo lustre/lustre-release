@@ -246,9 +246,9 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
  * use GFP_NOFS not allowing to enter FS as the client can run on this node
  * and we might end waiting on a page he sent in the request we're serving.
  *
- * use NORETRY so that the allocator doesn't go crazy: chance to more lucky
- * thread have enough memory to complete his request. for our request client
- * will do resend hopefully -bzzz
+ * use __GFP_HIGHMEM so that the pages can use all of the available memory
+ * on 32-bit machines
+ *
  */
 static struct page * filter_get_page(struct obd_device *obd,
                                      struct inode *inode,
@@ -257,7 +257,7 @@ static struct page * filter_get_page(struct obd_device *obd,
         struct page *page;
 
         page = find_or_create_page(inode->i_mapping, offset >> CFS_PAGE_SHIFT,
-                                   GFP_NOFS | __GFP_NORETRY);
+                                   GFP_NOFS | __GFP_HIGHMEM);
         if (unlikely(page == NULL))
                 lprocfs_counter_add(obd->obd_stats, LPROC_FILTER_NO_PAGE, 1);
 
@@ -617,21 +617,20 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         LASSERT(objcount == 1);
         LASSERT(obj->ioo_bufcnt > 0);
 
-        push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
-        iobuf = filter_iobuf_get(&exp->exp_obd->u.filter, oti);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        iobuf = filter_iobuf_get(&obd->u.filter, oti);
         if (IS_ERR(iobuf))
                 GOTO(cleanup, rc = PTR_ERR(iobuf));
         cleanup_phase = 1;
 
-        dentry = filter_fid2dentry(exp->exp_obd, NULL, obj->ioo_gr,
-                                   obj->ioo_id);
+        dentry = filter_fid2dentry(obd, NULL, obj->ioo_gr, obj->ioo_id);
         if (IS_ERR(dentry))
                 GOTO(cleanup, rc = PTR_ERR(dentry));
         cleanup_phase = 2;
 
         if (dentry->d_inode == NULL) {
                 CERROR("%s: trying to BRW to non-existent file "LPU64"\n",
-                       exp->exp_obd->obd_name, obj->ioo_id);
+                       obd->obd_name, obj->ioo_id);
                 GOTO(cleanup, rc = -ENOENT);
         }
 
@@ -639,7 +638,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         if (rc)
                 GOTO(cleanup, rc);
 
-        fsfilt_check_slow(exp->exp_obd, now, "preprw_write setup");
+        fsfilt_check_slow(obd, now, "preprw_write setup");
 
         /* Don't update inode timestamps if this write is older than a
          * setattr which modifies the timestamps. b=10150 */
@@ -649,8 +648,8 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         fmd = filter_fmd_find(exp, obj->ioo_id, obj->ioo_gr);
 
         LASSERT(oa != NULL);
-        spin_lock(&exp->exp_obd->obd_osfs_lock);
- 
+        spin_lock(&obd->obd_osfs_lock);
+
         filter_grant_incoming(exp, oa);
         if (fmd && fmd->fmd_mactime_xid > oti->oti_xid)
                 oa->o_valid &= ~(OBD_MD_FLMTIME | OBD_MD_FLCTIME |
@@ -673,7 +672,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         if (oa->o_valid & OBD_MD_FLGRANT)
                 oa->o_grant = filter_grant(exp,oa->o_grant,oa->o_undirty,left);
 
-        spin_unlock(&exp->exp_obd->obd_osfs_lock);
+        spin_unlock(&obd->obd_osfs_lock);
         filter_fmd_put(exp, fmd);
 
         if (rc)
@@ -720,7 +719,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                                                LPU64" flg %x before EOF %llu\n",
                                                lnb->len, lnb->offset,lnb->flags,
                                                i_size_read(dentry->d_inode));
-                                filter_iobuf_add_page(exp->exp_obd, iobuf,
+                                filter_iobuf_add_page(obd, iobuf,
                                                       dentry->d_inode,
                                                       lnb->page);
                         } else {
@@ -750,9 +749,9 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         rc = filter_direct_io(OBD_BRW_READ, dentry, iobuf, exp,
                               NULL, NULL, NULL);
 
-        fsfilt_check_slow(exp->exp_obd, now, "start_page_write");
+        fsfilt_check_slow(obd, now, "start_page_write");
 
-        lprocfs_counter_add(exp->exp_obd->obd_stats, LPROC_FILTER_WRITE_BYTES,
+        lprocfs_counter_add(obd->obd_stats, LPROC_FILTER_WRITE_BYTES,
                             tot_bytes);
         if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats)
                 lprocfs_counter_add(exp->exp_nid_stats->nid_stats,
@@ -772,20 +771,20 @@ cleanup:
                         filter_grant_commit(exp, *pages, res);
                 }
         case 3:
-                filter_iobuf_put(&exp->exp_obd->u.filter, iobuf, oti);
+                filter_iobuf_put(&obd->u.filter, iobuf, oti);
         case 2:
-                pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 if (rc)
                         f_dput(dentry);
                 break;
         case 1:
-                filter_iobuf_put(&exp->exp_obd->u.filter, iobuf, oti);
+                filter_iobuf_put(&obd->u.filter, iobuf, oti);
         case 0:
-                spin_lock(&exp->exp_obd->obd_osfs_lock);
+                spin_lock(&obd->obd_osfs_lock);
                 if (oa)
                         filter_grant_incoming(exp, oa);
-                spin_unlock(&exp->exp_obd->obd_osfs_lock);
-                pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
+                spin_unlock(&obd->obd_osfs_lock);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 break;
         default:;
         }
