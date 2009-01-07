@@ -378,7 +378,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
 {
         struct client_obd *cli = &obd->u.cli;
         struct obd_import *imp = cli->cl_import;
-        struct obd_export *exp;
+        struct obd_export **exp = localdata;
         struct obd_connect_data *ocd;
         struct ldlm_namespace *to_be_freed = NULL;
         int rc;
@@ -392,7 +392,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
         cli->cl_conn_count++;
         if (cli->cl_conn_count > 1)
                 GOTO(out_sem, rc);
-        exp = class_conn2export(dlm_handle);
+        *exp = class_conn2export(dlm_handle);
 
         if (obd->obd_namespace != NULL)
                 CERROR("already have namespace!\n");
@@ -418,7 +418,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
                 LASSERT (imp->imp_state == LUSTRE_IMP_DISCON);
                 GOTO(out_ldlm, rc);
         }
-        LASSERT(exp->exp_connection);
+        LASSERT((*exp)->exp_connection);
 
         if (data) {
                 LASSERT((ocd->ocd_connect_flags & data->ocd_connect_flags) ==
@@ -436,10 +436,9 @@ out_ldlm:
                 obd->obd_namespace = NULL;
 out_disco:
                 cli->cl_conn_count--;
-                class_disconnect(exp);
-        } else {
-                class_export_put(exp);
-        }
+                class_disconnect(*exp);
+                *exp = NULL;
+        } 
 out_sem:
         up_write(&cli->cl_sem);
         if (to_be_freed)

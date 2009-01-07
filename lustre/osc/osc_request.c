@@ -4006,40 +4006,54 @@ int osc_cleanup(struct obd_device *obd)
         RETURN(rc);
 }
 
-static int osc_register_page_removal_cb(struct obd_export *exp,
+static int osc_register_page_removal_cb(struct obd_device *obd,
                                         obd_page_removal_cb_t func,
                                         obd_pin_extent_cb pin_cb)
 {
-        return cache_add_extent_removal_cb(exp->exp_obd->u.cli.cl_cache, func,
+        ENTRY;
+
+        /* this server - not need init */
+        if (func == NULL)
+                return 0;
+
+        return cache_add_extent_removal_cb(obd->u.cli.cl_cache, func,
                                            pin_cb);
 }
 
-static int osc_unregister_page_removal_cb(struct obd_export *exp,
+static int osc_unregister_page_removal_cb(struct obd_device *obd,
                                           obd_page_removal_cb_t func)
 {
-        return cache_del_extent_removal_cb(exp->exp_obd->u.cli.cl_cache, func);
+        ENTRY;
+        return cache_del_extent_removal_cb(obd->u.cli.cl_cache, func);
 }
 
-static int osc_register_lock_cancel_cb(struct obd_export *exp,
+static int osc_register_lock_cancel_cb(struct obd_device *obd,
                                        obd_lock_cancel_cb cb)
 {
-        LASSERT(exp->exp_obd->u.cli.cl_ext_lock_cancel_cb == NULL);
+        ENTRY;
+        LASSERT(obd->u.cli.cl_ext_lock_cancel_cb == NULL);
 
-        exp->exp_obd->u.cli.cl_ext_lock_cancel_cb = cb;
+        /* this server - not need init */
+        if (cb == NULL)
+                return 0;
+
+        obd->u.cli.cl_ext_lock_cancel_cb = cb;
         return 0;
 }
 
-static int osc_unregister_lock_cancel_cb(struct obd_export *exp,
+static int osc_unregister_lock_cancel_cb(struct obd_device *obd,
                                          obd_lock_cancel_cb cb)
 {
-        if (exp->exp_obd->u.cli.cl_ext_lock_cancel_cb != cb) {
+        ENTRY;
+
+        if (obd->u.cli.cl_ext_lock_cancel_cb != cb) {
                 CERROR("Unregistering cancel cb %p, while only %p was "
                        "registered\n", cb,
-                       exp->exp_obd->u.cli.cl_ext_lock_cancel_cb);
+                       obd->u.cli.cl_ext_lock_cancel_cb);
                 RETURN(-EINVAL);
         }
 
-        exp->exp_obd->u.cli.cl_ext_lock_cancel_cb = NULL;
+        obd->u.cli.cl_ext_lock_cancel_cb = NULL;
         return 0;
 }
 

@@ -782,14 +782,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                         IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY_LOCKS);
                 } else {
                         IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
-                }
-
-                spin_lock(&imp->imp_lock);
-                if (imp->imp_invalid) {
-                        spin_unlock(&imp->imp_lock);
                         ptlrpc_activate_import(imp);
-                } else {
-                        spin_unlock(&imp->imp_lock);
                 }
 
                 GOTO(finish, rc = 0);

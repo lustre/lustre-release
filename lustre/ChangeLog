@@ -283,6 +283,15 @@ Details    : enable OBD_CONNECT_MDT flag when connecting from the MDS so that
 	     from a different NID, so we do not need to wait for the export to
 	     be evicted.
 
+Severity   : normal
+Frequency  : start MDS on uncleanly shutdowned MDS device
+Bugzilla   : 16839
+Description: ll_sync thread stay in waiting mds<>ost recovery finished
+Details    : fix race due to two ll_sync threads processing the same lov target
+	     causing random failures in various tests. The solution is to send
+	     ACTIVATE event only if connect already finished and import is in
+	     FULL state.
+
 --------------------------------------------------------------------------
 
 2008-08-31 Sun Microsystems, Inc.

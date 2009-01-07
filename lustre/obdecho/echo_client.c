@@ -1306,7 +1306,7 @@ echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
         ocd->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_REQPORTAL;
         ocd->ocd_version = LUSTRE_VERSION_CODE;
 
-        rc = obd_connect(&conn, tgt, &echo_uuid, ocd, NULL);
+        rc = obd_connect(&conn, tgt, &echo_uuid, ocd, &ec->ec_exp);
 
         OBD_FREE(ocd, sizeof(*ocd));
 
@@ -1315,7 +1315,6 @@ echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
                        lustre_cfg_string(lcfg, 1));
                 return (rc);
         }
-        ec->ec_exp = class_conn2export(&conn);
 
         RETURN(rc);
 }

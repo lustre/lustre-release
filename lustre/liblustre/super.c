@@ -108,13 +108,15 @@ static void llu_fsop_gone(struct filesys *fs)
 {
         struct llu_sb_info *sbi = (struct llu_sb_info *) fs->fs_private;
         struct obd_device *obd = class_exp2obd(sbi->ll_mdc_exp);
+        struct obd_device *lov_obd = class_exp2obd(sbi->ll_osc_exp);
         int next = 0;
         ENTRY;
 
         list_del(&sbi->ll_conn_chain);
-        obd_unregister_lock_cancel_cb(sbi->ll_osc_exp,
-                                      llu_extent_lock_cancel_cb);
+
         obd_disconnect(sbi->ll_osc_exp);
+        obd_unregister_lock_cancel_cb(lov_obd, llu_extent_lock_cancel_cb);
+
         obd_disconnect(sbi->ll_mdc_exp);
 
         while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) != NULL)
@@ -1962,12 +1964,11 @@ llu_fsswop_mount(const char *source,
         ocd.ocd_version = LUSTRE_VERSION_CODE;
 
         /* setup mdc */
-        err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, &ocd, NULL);
+        err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, &ocd, &sbi->ll_mdc_exp);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);
                 GOTO(out_free, err);
         }
-        sbi->ll_mdc_exp = class_conn2export(&mdc_conn);
 
         err = obd_statfs(obd, &osfs, 100000000, 0);
         if (err)
@@ -1989,33 +1990,26 @@ llu_fsswop_mount(const char *source,
         obd->obd_upcall.onu_owner = &sbi->ll_lco;
         obd->obd_upcall.onu_upcall = ll_ocd_update;
 
+        obd_register_lock_cancel_cb(obd, llu_extent_lock_cancel_cb);
+
         ocd.ocd_connect_flags = OBD_CONNECT_SRVLOCK | OBD_CONNECT_REQPORTAL |
                 OBD_CONNECT_VERSION | OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_AT;
         ocd.ocd_version = LUSTRE_VERSION_CODE;
-        err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, &ocd, NULL);
+        err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, &ocd, &sbi->ll_osc_exp);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
-                GOTO(out_mdc, err);
+                GOTO(out_lock_cb, err);
         }
-        sbi->ll_osc_exp = class_conn2export(&osc_conn);
         sbi->ll_lco.lco_flags = ocd.ocd_connect_flags;
         sbi->ll_lco.lco_mdc_exp = sbi->ll_mdc_exp;
         sbi->ll_lco.lco_osc_exp = sbi->ll_osc_exp;
-
-
-        err = obd_register_lock_cancel_cb(sbi->ll_osc_exp,
-                                          llu_extent_lock_cancel_cb);
-        if (err) {
-                CERROR("cannot register lock cancel callback: rc = %d\n", err);
-                GOTO(out_osc, err);
-        }
 
         mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
 
         err = mdc_getstatus(sbi->ll_mdc_exp, &rootfid);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
-                GOTO(out_lock_cn_cb, err);
+                GOTO(out_lock_cb, err);
         }
         CDEBUG(D_SUPER, "rootfid "LPU64"\n", rootfid.id);
         sbi->ll_rootino = rootfid.id;
@@ -2026,7 +2020,7 @@ llu_fsswop_mount(const char *source,
                           &request);
         if (err) {
                 CERROR("mdc_getattr failed for root: rc = %d\n", err);
-                GOTO(out_lock_cn_cb, err);
+                GOTO(out_osc, err);
         }
 
         err = mdc_req2lustre_md(request, REPLY_REC_OFF, sbi->ll_osc_exp, &md);
@@ -2069,11 +2063,11 @@ out_inode:
         _sysio_i_gone(root);
 out_request:
         ptlrpc_req_finished(request);
-out_lock_cn_cb:
-        obd_unregister_lock_cancel_cb(sbi->ll_osc_exp,
-                                      llu_extent_lock_cancel_cb);
 out_osc:
         obd_disconnect(sbi->ll_osc_exp);
+out_lock_cb:
+        obd = class_name2obd(osc);
+        obd_unregister_lock_cancel_cb(obd, llu_extent_lock_cancel_cb);
 out_mdc:
         obd_disconnect(sbi->ll_mdc_exp);
 out_free:

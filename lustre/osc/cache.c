@@ -227,6 +227,7 @@ int cache_del_extent_removal_cb(struct lustre_cache *cache,
 {
         int found = 0;
         struct page_removal_cb_element *element, *t;
+        ENTRY;
 
         write_lock(&cache->lc_page_removal_cb_lock);
         list_for_each_entry_safe(element, t,
@@ -347,6 +348,7 @@ static int cache_remove_extents_from_lock(struct lustre_cache *cache,
                            page with address 0x5a5a5a5a in
                            cache_extent_removal_event */
                         ext_data = extent->oap_page;
+                        LASSERT(cache->lc_pin_extent_cb != NULL);
                         cache->lc_pin_extent_cb(extent->oap_page);
 
                         if (lock->l_flags & LDLM_FL_BL_AST)
@@ -402,46 +404,48 @@ struct lustre_cache *cache_create(struct obd_device *obd)
         OBD_ALLOC(cache, sizeof(*cache));
         if (!cache)
                 GOTO(out, NULL);
+
         spin_lock_init(&cache->lc_locks_list_lock);
         CFS_INIT_LIST_HEAD(&cache->lc_locks_list);
         CFS_INIT_LIST_HEAD(&cache->lc_page_removal_callback_list);
         rwlock_init(&cache->lc_page_removal_cb_lock);
         cache->lc_obd = obd;
 
-      out:
+out:
         return cache;
 }
 
 /* Destroy @cache and free its memory */
 int cache_destroy(struct lustre_cache *cache)
 {
-        if (cache) {
-                spin_lock(&cache->lc_locks_list_lock);
-                if (!list_empty(&cache->lc_locks_list)) {
-                        struct ldlm_lock *lock, *tmp;
-                        CERROR("still have locks in the list on cleanup:\n");
+        if (!cache)
+                RETURN(0);
 
-                        list_for_each_entry_safe(lock, tmp,
-                                                 &cache->lc_locks_list,
-                                                 l_cache_locks_list) {
-                                list_del_init(&lock->l_cache_locks_list);
-                                /* XXX: Of course natural idea would be to print
-                                   offending locks here, but if we use
-                                   e.g. LDLM_ERROR, we will likely crash here,
-                                   as LDLM error tries to access e.g.
-                                   nonexisting namespace. Normally this kind of
-                                   case could only happen when somebody did not
-                                   release lock reference and we have other ways
-                                   to detect this. */
-                                /* Make sure there are no pages left under the
-                                   lock */
-                                LASSERT(list_empty(&lock->l_extents_list));
-                        }
+        spin_lock(&cache->lc_locks_list_lock);
+        if (!list_empty(&cache->lc_locks_list)) {
+                struct ldlm_lock *lock, *tmp;
+                CERROR("still have locks in the list on cleanup:\n");
+
+                list_for_each_entry_safe(lock, tmp,
+                                         &cache->lc_locks_list,
+                                         l_cache_locks_list) {
+                        list_del_init(&lock->l_cache_locks_list);
+                        /* XXX: Of course natural idea would be to print
+                         * offending locks here, but if we use
+                         * e.g. LDLM_ERROR, we will likely crash here,
+                         * as LDLM error tries to access e.g.
+                         * nonexisting namespace. Normally this kind of
+                         * case could only happen when somebody did not
+                         * release lock reference and we have other ways
+                         * to detect this. */
+                        /* Make sure there are no pages left under the
+                         * lock */
+                        LASSERT(list_empty(&lock->l_extents_list));
                 }
-                spin_unlock(&cache->lc_locks_list_lock);
-                LASSERT(list_empty(&cache->lc_page_removal_callback_list));
-                OBD_FREE(cache, sizeof(*cache));
         }
+        spin_unlock(&cache->lc_locks_list_lock);
+        LASSERT(list_empty(&cache->lc_page_removal_callback_list));
 
+        OBD_FREE(cache, sizeof(*cache));
         return 0;
 }

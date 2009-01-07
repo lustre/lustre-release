@@ -768,6 +768,8 @@ enum llog_ctxt_id {
  * Events signalled through obd_notify() upcall-chain.
  */
 enum obd_notify_event {
+        /* DEVICE connect start */
+        OBD_NOTIFY_CONNECT,
         /* Device activated */
         OBD_NOTIFY_ACTIVE,
         /* Device deactivated */
@@ -1127,14 +1129,14 @@ struct obd_ops {
 
         int (*o_ping)(struct obd_export *exp);
 
-        int (*o_register_page_removal_cb)(struct obd_export *exp,
+        int (*o_register_page_removal_cb)(struct obd_device *obd,
                                           obd_page_removal_cb_t cb,
                                           obd_pin_extent_cb pin_cb);
-        int (*o_unregister_page_removal_cb)(struct obd_export *exp,
+        int (*o_unregister_page_removal_cb)(struct obd_device *obd,
                                             obd_page_removal_cb_t cb);
-        int (*o_register_lock_cancel_cb)(struct obd_export *exp,
+        int (*o_register_lock_cancel_cb)(struct obd_device *obd,
                                        obd_lock_cancel_cb cb);
-        int (*o_unregister_lock_cancel_cb)(struct obd_export *exp,
+        int (*o_unregister_lock_cancel_cb)(struct obd_device *obd,
                                          obd_lock_cancel_cb cb);
 
         /*
