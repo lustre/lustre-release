@@ -2022,12 +2022,12 @@ kiblnd_abort_txs(kib_conn_t *conn, struct list_head *txs)
                 } else {
                         LASSERT (tx->tx_queued);
                 }
-                
+
                 tx->tx_status = -ECONNABORTED;
-                tx->tx_queued = 0;
                 tx->tx_waiting = 0;
-                
+
                 if (tx->tx_sending == 0) {
+                        tx->tx_queued = 0;
                         list_del (&tx->tx_list);
                         list_add (&tx->tx_list, &zombies);
                 }
