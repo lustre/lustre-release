@@ -477,6 +477,7 @@ typedef struct {
 typedef struct {
         struct list_head ptl_ml;  /* match list */
         struct list_head ptl_msgq; /* messages blocking for MD */
+        __u64            ptl_ml_version;    /* validity stamp, only changed for new attached MD */
         __u64            ptl_msgq_version;  /* validity stamp */
         unsigned int     ptl_options;
 } lnet_portal_t;

@@ -1605,12 +1605,14 @@ lnet_parse_put(lnet_ni_t *ni, lnet_msg_t *msg)
 {
         int               rc;
         int               index;
+        __u64             version;
         lnet_hdr_t       *hdr = &msg->msg_hdr;
         unsigned int      rlength = hdr->payload_length;
         unsigned int      mlength = 0;
         unsigned int      offset = 0;
         lnet_process_id_t src= {0};
         lnet_libmd_t     *md;
+        lnet_portal_t    *ptl;
 
         src.nid = hdr->src_nid;
         src.pid = hdr->src_pid;
@@ -1621,9 +1623,11 @@ lnet_parse_put(lnet_ni_t *ni, lnet_msg_t *msg)
         hdr->msg.put.offset = le32_to_cpu(hdr->msg.put.offset);
 
         index = hdr->msg.put.ptl_index;
+        ptl = &the_lnet.ln_portals[index];
 
         LNET_LOCK();
 
+ again:
         rc = lnet_match_md(index, LNET_MD_OP_PUT, src,
                            rlength, hdr->msg.put.offset,
                            hdr->msg.put.match_bits, msg,
@@ -1634,24 +1638,31 @@ lnet_parse_put(lnet_ni_t *ni, lnet_msg_t *msg)
 
         case LNET_MATCHMD_OK:
                 LNET_UNLOCK();
-                lnet_recv_put(md, msg, 0, offset, mlength);
+                lnet_recv_put(md, msg, msg->msg_delayed, offset, mlength);
                 return 0;
 
         case LNET_MATCHMD_NONE:
-                rc = lnet_eager_recv_locked(msg);
-                if (rc == 0 && !the_lnet.ln_shutdown) {
-                        list_add_tail(&msg->msg_list,
-                                      &the_lnet.ln_portals[index].ptl_msgq);
+                version = ptl->ptl_ml_version;
 
-                        the_lnet.ln_portals[index].ptl_msgq_version++;
+                rc = 0;
+                if (!msg->msg_delayed)
+                        rc = lnet_eager_recv_locked(msg);
+
+                if (rc == 0 &&
+                    !the_lnet.ln_shutdown &&
+                    ((ptl->ptl_options & LNET_PTL_LAZY) != 0)) {
+                        if (version != ptl->ptl_ml_version)
+                                goto again;
+
+                        list_add_tail(&msg->msg_list, &ptl->ptl_msgq);
+                        ptl->ptl_msgq_version++;
+                        LNET_UNLOCK();
 
                         CDEBUG(D_NET, "Delaying PUT from %s portal %d match "
                                LPU64" offset %d length %d: no match \n",
                                libcfs_id2str(src), index,
                                hdr->msg.put.match_bits,
                                hdr->msg.put.offset, rlength);
-
-                        LNET_UNLOCK();
                         return 0;
                 }
                 /* fall through */
