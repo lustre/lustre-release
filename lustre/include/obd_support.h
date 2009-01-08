@@ -579,7 +579,7 @@ do {                                                                          \
 
 #ifdef HAVE_RCU
 # ifdef HAVE_CALL_RCU_PARAM
-#  define my_call_rcu(rcu, cb)            call_rcu(rcu, cb, rcu)
+#  define my_call_rcu(rcu, cb)            call_rcu(rcu, (void (*) (void *))(cb), rcu)
 # else
 #  define my_call_rcu(rcu, cb)            call_rcu(rcu, cb)
 # endif

@@ -401,7 +401,7 @@ int main(int argc, char **argv)
 	struct stat stat_buf;
 	char tmp_path[PATH_MAX];
 	char mount_path[PATH_MAX] = {0};
-	char c;
+	int c;
 	int retval;
 
 	progname = argv[0];

@@ -277,7 +277,7 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
                              bufcount, size);
         if (rc & (rc - 1))
                 size[bufcount - 1] = min(size[bufcount - 1] + round_up(rc) - rc,
-                                         obddev->u.cli.cl_max_mds_easize);
+                                         (__u32)obddev->u.cli.cl_max_mds_easize);
 
         /* If inode is known, cancel conflicting OPEN locks. */
         if (data->fid2.id) {
