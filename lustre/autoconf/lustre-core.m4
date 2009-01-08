@@ -910,6 +910,38 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+#
+# LC_RELEASEPAGE_ARG_GFP_T
+# more 2.6 api changes.  Second argument type for newer kernels is
+# gfp_t and for older 2.6 kernels is int.
+#
+AC_DEFUN([LC_RELEASEPAGE_ARG_GFP_T],
+[AC_MSG_CHECKING([releasepage has gfp_t as argument])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+
+        static int my_releasepage(struct page *pg, gfp_t gfp_mask)
+        {
+                return 0;
+        }
+
+        struct address_space_operations my_aops = {
+                .releasepage    = my_releasepage,
+        };
+],[
+        my_aops.releasepage(NULL, 0);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_RELEASEPAGE_ARG_GFP_T, 1,
+                [Define if releasepage argument should be gfp_t])
+],[
+        AC_MSG_RESULT(no)
+])
+EXTRA_KCFLAGS="$tmp_flags"
+])
+
 # LC_UMOUNTBEGIN_HAS_VFSMOUNT
 # more 2.6 API changes. 2.6.18 umount_begin has different parameters
 AC_DEFUN([LC_UMOUNTBEGIN_HAS_VFSMOUNT],
@@ -1349,6 +1381,7 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_STATFS_DENTRY_PARAM
           LC_VFS_KERN_MOUNT
           LC_INVALIDATEPAGE_RETURN_INT
+          LC_RELEASEPAGE_ARG_GFP_T
           LC_UMOUNTBEGIN_HAS_VFSMOUNT
 
           #2.6.18 + RHEL5 (fc6)

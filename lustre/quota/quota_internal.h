@@ -93,8 +93,9 @@
                LQS_IS_GRP(lqs) ? 'g' : 'u',                                   \
                lqs->lqs_bunit_sz, lqs->lqs_btune_sz, lqs->lqs_iunit_sz,       \
                lqs->lqs_itune_sz, lqs->lqs_bwrite_pending,                    \
-               lqs->lqs_iwrite_pending, lqs->lqs_ino_rec,                     \
-               lqs->lqs_blk_rec, atomic_read(&lqs->lqs_refcount), ## arg);
+               lqs->lqs_iwrite_pending, (__s64)lqs->lqs_ino_rec,              \
+               (__s64)lqs->lqs_blk_rec, atomic_read(&lqs->lqs_refcount),      \
+               ## arg);
 
 
 /* quota_context.c */

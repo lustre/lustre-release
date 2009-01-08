@@ -345,7 +345,7 @@ check_cur_qunit(struct obd_device *obd,
                ", pending_write: "LPU64", record: "LPD64
                ", qunit_sz: %lu, tune_sz: %lu, ret: %d.\n",
                QDATA_IS_BLK(qdata) ? 'b' : 'i', limit, usage, pending_write,
-               record, qunit_sz, tune_sz, ret);
+               (__s64)record, qunit_sz, tune_sz, ret);
         LASSERT(ret == 0 || qdata->qd_count);
 
         spin_unlock(&lqs->lqs_lock);
