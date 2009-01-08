@@ -40,6 +40,10 @@
 
 /* This source file is compiled into both mkfs.lustre and tunefs.lustre */
 
+#if HAVE_CONFIG_H
+#  include "config.h"
+#endif /* HAVE_CONFIG_H */
+
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
@@ -366,22 +370,25 @@ static void disp_old_e2fsprogs_msg(const char *feature, int make_backfs)
         static int msg_displayed;
 
         if (msg_displayed) {
-                fprintf(stderr, "WARNING: e2fsprogs does not support %s "
-                        "feature.\n\n", feature);
+                fprintf(stderr, "WARNING: %s does not support %s "
+                        "feature.\n\n", E2FSPROGS, feature);
                 return;
         }
 
         msg_displayed++;
 
-        fprintf(stderr, "WARNING: The e2fsprogs package currently installed on "
-                "your system does not support \"%s\" feature.\nPlease install "
-                "the latest version of e2fsprogs from http://downloads.lustre.org"
-                "/public/tools/e2fsprogs/\nto enable this feature.\n", feature);
-
+        fprintf(stderr, "WARNING: The %s package currently installed on "
+                "your system does not support \"%s\" feature.\n",
+                E2FSPROGS, feature);
+#if !(HAVE_LDISKFSPROGS)
+        fprintf(stderr, "Please install the latest version of e2fsprogs from\n"
+                "http://downloads.lustre.org/public/tools/e2fsprogs/\n"
+                "to enable this feature.\n");
+#endif
         if (make_backfs)
-                fprintf(stderr, "Feature will not be enabled until e2fsprogs "
-                        "is updated and 'tune2fs -O %s %%{device}' "
-                        "is run.\n\n", feature);
+                fprintf(stderr, "Feature will not be enabled until %s"
+                        "is updated and '%s -O %s %%{device}' "
+                        "is run.\n\n", E2FSPROGS, TUNE2FS, feature);
 }
 
 /* Check whether the file exists in the device */
@@ -394,8 +401,8 @@ static int file_in_dev(char *file_name, char *dev_name)
 
         /* Construct debugfs command line. */
         snprintf(debugfs_cmd, sizeof(debugfs_cmd),
-                "debugfs -c -R 'stat %s' '%s' 2>&1 | egrep '(Inode|unsupported)'",
-                file_name, dev_name);
+                "%s -c -R 'stat %s' '%s' 2>&1 | egrep '(Inode|unsupported)'",
+                DEBUGFS, file_name, dev_name);
 
         fp = popen(debugfs_cmd, "r");
         if (!fp) {
@@ -456,8 +463,8 @@ static int is_e2fsprogs_feature_supp(const char *feature)
         int fd = -1;
         int ret = 0;
 
-        snprintf(cmd, sizeof(cmd),
-                 "debugfs -c -R \"supported_features %s\" 2>&1", feature);
+        snprintf(cmd, sizeof(cmd), "%s -c -R \"supported_features %s\" 2>&1",
+                 DEBUGFS, feature);
 
         /* Using popen() instead of run_command() since debugfs does not return
          * proper error code if command is not supported */
@@ -475,8 +482,8 @@ static int is_e2fsprogs_feature_supp(const char *feature)
         if ((fd = mkstemp(imgname)) < 0)
                 return -1;
 
-        snprintf(cmd, sizeof(cmd), "mke2fs -F -O %s %s 100 >/dev/null 2>&1",
-                 feature, imgname);
+        snprintf(cmd, sizeof(cmd), "%s -F -O %s %s 100 >/dev/null 2>&1",
+                 MKE2FS, feature, imgname);
         /* run_command() displays the output of mke2fs when it fails for
          * some feature, so use system() directly */
         ret = system(cmd);
@@ -642,7 +649,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                 strscat(mop->mo_mkfsopts, " -F", sizeof(mop->mo_mkfsopts));
 
                 snprintf(mkfs_cmd, sizeof(mkfs_cmd),
-                         "mkfs.ext2 -j -b %d -L %s ", L_BLOCK_SIZE,
+                         "%s -j -b %d -L %s ", MKE2FS, L_BLOCK_SIZE,
                          mop->mo_ldd.ldd_svname);
 
         } else if (mop->mo_ldd.ldd_mount_type == LDD_MT_REISERFS) {
@@ -870,8 +877,8 @@ int read_local_files(struct mkfs_opts *mop)
                  filesystem */
 
         /* Construct debugfs command line. */
-        snprintf(cmd, cmdsz, "debugfs -c -R 'dump /%s %s/mountdata' '%s'",
-                 MOUNT_DATA_FILE, tmpdir, dev);
+        snprintf(cmd, cmdsz, "%s -c -R 'dump /%s %s/mountdata' '%s'",
+                 DEBUGFS, MOUNT_DATA_FILE, tmpdir, dev);
 
         ret = run_command(cmd, cmdsz);
         if (ret)
@@ -894,8 +901,8 @@ int read_local_files(struct mkfs_opts *mop)
                 sprintf(filepnm, "%s/%s", tmpdir, LAST_RCVD);
 
                 /* Construct debugfs command line. */
-                snprintf(cmd, cmdsz, "debugfs -c -R 'dump /%s %s' %s",
-                         LAST_RCVD, filepnm, dev);
+                snprintf(cmd, cmdsz, "%s -c -R 'dump /%s %s' %s",
+                         DEBUGFS, LAST_RCVD, filepnm, dev);
 
                 ret = run_command(cmd, cmdsz);
                 if (ret) {
@@ -914,7 +921,8 @@ int read_local_files(struct mkfs_opts *mop)
                         snprintf(cmd, cmdsz, "ls -l %s/", tmpdir);
                         run_command(cmd, cmdsz);
                         verrprint("Contents of disk:\n");
-                        snprintf(cmd, cmdsz, "debugfs -c -R 'ls -l /' %s", dev);
+                        snprintf(cmd, cmdsz, "%s -c -R 'ls -l /' %s",
+                                 DEBUGFS, dev);
                         run_command(cmd, cmdsz);
 
                         goto out_rmdir;
@@ -946,8 +954,8 @@ int read_local_files(struct mkfs_opts *mop)
                 } else  {
                         /* If neither is set, we're pre-1.4.6, make a guess. */
                         /* Construct debugfs command line. */
-                        snprintf(cmd, cmdsz, "debugfs -c -R 'rdump /%s %s' %s",
-                                 MDT_LOGS_DIR, tmpdir, dev);
+                        snprintf(cmd, cmdsz, "%s -c -R 'rdump /%s %s' %s",
+                                 DEBUGFS, MDT_LOGS_DIR, tmpdir, dev);
                         run_command(cmd, cmdsz);
 
                         sprintf(filepnm, "%s/%s", tmpdir, MDT_LOGS_DIR);
