@@ -3159,7 +3159,8 @@ test_69() {
 run_test 69 "verify oa2dentry return -ENOENT doesn't LBUG ======"
 
 test_71() {
-    sh rundbench -C -D $DIR 2 || error "dbench failed!"
+    mkdir -p $DIR/$tdir
+    sh rundbench -C -D $DIR/$tdir 2 || error "dbench failed!"
 }
 run_test 71 "Running dbench on lustre (don't segment fault) ===="
 
