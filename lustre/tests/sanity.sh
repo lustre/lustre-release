@@ -2716,7 +2716,7 @@ test_57a() {
 	DEV=$(do_facet $SINGLEMDS lctl get_param -n $MNTDEV)
 	[ -z "$DEV" ] && error "can't access $MNTDEV"
 	for DEV in $(do_facet $SINGLEMDS lctl get_param -n $MNTDEV); do
-		do_facet $SINGLEMDS dumpe2fs -h $DEV > $TMP/t57a.dump || error "can't access $DEV"
+		do_facet $SINGLEMDS $DUMPE2FS -h $DEV > $TMP/t57a.dump || error "can't access $DEV"
 		DEVISIZE=`awk '/Inode size:/ { print $3 }' $TMP/t57a.dump`
 		[ "$DEVISIZE" -gt 128 ] || error "inode size $DEVISIZE"
 		rm $TMP/t57a.dump

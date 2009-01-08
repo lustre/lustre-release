@@ -86,6 +86,13 @@ init_test_env() {
     export TESTSUITE=`basename $0 .sh`
     export TEST_FAILED=false
 
+    export MKE2FS=${MKE2FS:-mke2fs}
+    export DEBUGFS=${DEBUGFS:-debugfs}
+    export TUNE2FS=${TUNE2FS:-tune2fs}
+    export E2LABEL=${E2LABEL:-e2label}
+    export DUMPE2FS=${DUMPE2FS:-dumpe2fs}
+    export E2FSCK=${E2FSCK:-e2fsck}
+
     #[ -d /r ] && export ROOT=${ROOT:-/r}
     export TMP=${TMP:-$ROOT/tmp}
     export TESTSUITELOG=${TMP}/${TESTSUITE}.log
@@ -462,7 +469,7 @@ mount_facet() {
             lctl set_param debug_mb=${DEBUG_SIZE}; \
             sync"
 
-        label=$(do_facet ${facet} "e2label ${!dev}")
+        label=$(do_facet ${facet} "$E2LABEL ${!dev}")
         [ -z "$label" ] && echo no label for ${!dev} && exit 1
         eval export ${facet}_svc=${label}
         echo Started ${label}
@@ -1393,7 +1400,7 @@ init_facet_vars () {
     eval export ${facet}_opt=\"$@\"
 
     local dev=${facet}_dev
-    local label=$(do_facet ${facet} "e2label ${!dev}")
+    local label=$(do_facet ${facet} "$E2LABEL ${!dev}")
     [ -z "$label" ] && echo no label for ${!dev} && exit 1
 
     eval export ${facet}_svc=${label}

@@ -34,6 +34,10 @@
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
+#if HAVE_CONFIG_H
+#  include "config.h"
+#endif /* HAVE_CONFIG_H */
+
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
@@ -114,8 +118,8 @@ int get_mountdata(char *dev, struct lustre_disk_data *mo_ldd)
                 return errno;
         }
 
-        snprintf(cmd, cmdsz, "/sbin/debugfs -c -R 'dump /%s %s/mountdata' %s",
-                 MOUNT_DATA_FILE, tmpdir, dev);
+        snprintf(cmd, cmdsz, "%s -c -R 'dump /%s %s/mountdata' %s",
+                 DEBUGFS, MOUNT_DATA_FILE, tmpdir, dev);
 
         ret = run_command(cmd, cmdsz);
         if (ret) {

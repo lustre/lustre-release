@@ -426,7 +426,7 @@ test_16() {
         cleanup || return $?
 
         log "read the mode of OBJECTS and check if they has been changed properly"
-        EXPECTEDOBJECTSMODE=`do_facet $SINGLEMDS "debugfs -R 'stat OBJECTS' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
+        EXPECTEDOBJECTSMODE=`do_facet $SINGLEMDS "$DEBUGFS -R 'stat OBJECTS' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
 
         if [ "$EXPECTEDOBJECTSMODE" = "0777" ]; then
                 log "Success:Lustre change the mode of OBJECTS correctly"
@@ -448,7 +448,7 @@ test_17() {
         fi
 
         echo "Remove mds config log"
-        do_facet $SINGLEMDS "debugfs -w -R 'unlink CONFIGS/$FSNAME-MDT0000' $MDSDEV || return \$?" || return $?
+        do_facet $SINGLEMDS "$DEBUGFS -w -R 'unlink CONFIGS/$FSNAME-MDT0000' $MDSDEV || return \$?" || return $?
 
         start_ost
 	start_mds && return 42
@@ -501,7 +501,7 @@ test_18() {
         check_mount || return 41
 
         echo "check journal size..."
-        local FOUNDSIZE=`do_facet mds "debugfs -c -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}'`
+        local FOUNDSIZE=`do_facet mds "$$DEBUGFS -c -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}'`
         if [ $FOUNDSIZE -gt $((32 * 1024 * 1024)) ]; then
                 log "Success: mkfs creates large journals. Size: $((FOUNDSIZE >> 20))M"
         else
@@ -1380,8 +1380,8 @@ test_38() { # bug 14222
 
 	local dev=${SINGLEMDS}_dev
 	local MDSDEV=${!dev}
-	do_facet $SINGLEMDS "debugfs -c -R \\\"dump lov_objid $TMP/lov_objid.orig\\\" $MDSDEV"
-	do_facet $SINGLEMDS "debugfs -w -R \\\"rm lov_objid\\\" $MDSDEV"
+	do_facet $SINGLEMDS "$DEBUGFS -c -R \\\"dump lov_objid $TMP/lov_objid.orig\\\" $MDSDEV"
+	do_facet $SINGLEMDS "$DEBUGFS -w -R \\\"rm lov_objid\\\" $MDSDEV"
 
 	do_facet $SINGLEMDS "od -Ax -td8 $TMP/lov_objid.orig"
 	# check create in mds_lov_connect
@@ -1391,7 +1391,7 @@ test_38() { # bug 14222
 		[ $V ] && log "verifying $DIR/$tdir/$f"
 		diff -q $f $DIR/$tdir/$f || ERROR=y
 	done
-	do_facet $SINGLEMDS "debugfs -c -R \\\"dump lov_objid $TMP/lov_objid.new\\\"  $MDSDEV"
+	do_facet $SINGLEMDS "$DEBUGFS -c -R \\\"dump lov_objid $TMP/lov_objid.new\\\"  $MDSDEV"
 	do_facet $SINGLEMDS "od -Ax -td8 $TMP/lov_objid.new"
 	[ "$ERROR" = "y" ] && error "old and new files are different after connect" || true
 
@@ -1400,8 +1400,8 @@ test_38() { # bug 14222
 	stop_mds
 
 	do_facet $SINGLEMDS dd if=/dev/zero of=$TMP/lov_objid.clear bs=4096 count=1
-	do_facet $SINGLEMDS "debugfs -w -R \\\"rm lov_objid\\\" $MDSDEV"
-	do_facet $SINGLEMDS "debugfs -w -R \\\"write $TMP/lov_objid.clear lov_objid\\\" $MDSDEV "
+	do_facet $SINGLEMDS "$DEBUGFS -w -R \\\"rm lov_objid\\\" $MDSDEV"
+	do_facet $SINGLEMDS "$DEBUGFS -w -R \\\"write $TMP/lov_objid.clear lov_objid\\\" $MDSDEV "
 
 	start_mds
 	mount_client $MOUNT
@@ -1409,7 +1409,7 @@ test_38() { # bug 14222
 		[ $V ] && log "verifying $DIR/$tdir/$f"
 		diff -q $f $DIR/$tdir/$f || ERROR=y
 	done
-	do_facet $SINGLEMDS "debugfs -c -R \\\"dump lov_objid $TMP/lov_objid.new1\\\" $MDSDEV"
+	do_facet $SINGLEMDS "$DEBUGFS -c -R \\\"dump lov_objid $TMP/lov_objid.new1\\\" $MDSDEV"
 	do_facet $SINGLEMDS "od -Ax -td8 $TMP/lov_objid.new1"
 	umount_client $MOUNT
 	stop_mds
