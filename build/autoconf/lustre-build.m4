@@ -316,6 +316,46 @@ fi
 ])
 
 #
+# LB_DEFINE_E2FSPROGS_NAMES
+#
+# Enable the use of alternate naming of ldiskfs-enabled e2fsprogs package.
+#
+AC_DEFUN([LB_DEFINE_E2FSPROGS_NAMES],
+[AC_ARG_WITH([ldiskfsprogs],
+        AC_HELP_STRING([--with-ldiskfsprogs],
+                       [use alternate names for ldiskfs-enabled e2fsprogs]),
+	[],[withval='no'])
+
+if test x$withval = xyes ; then
+	AC_DEFINE(HAVE_LDISKFSPROGS, 1, [enable use of ldiskfsprogs package])
+	E2FSPROGS="ldiskfsprogs"
+	MKE2FS="mkfs.ldiskfs"
+	DEBUGFS="debug.ldiskfs"
+	TUNE2FS="tune.ldiskfs"
+	E2LABEL="label.ldiskfs"
+	DUMPE2FS="dump.ldiskfs"
+	E2FSCK="fsck.ldiskfs"
+	AC_MSG_RESULT([enabled])
+else
+	E2FSPROGS="e2fsprogs"
+	MKE2FS="mke2fs"
+	DEBUGFS="debugfs"
+	TUNE2FS="tune2fs"
+	E2LABEL="e2label"
+	DUMPE2FS="dumpe2fs"
+	E2FSCK="e2fsck"
+	AC_MSG_RESULT([disabled])
+fi
+	AC_DEFINE_UNQUOTED(E2FSPROGS, "$E2FSPROGS", [name of ldiskfs e2fsprogs package])
+	AC_DEFINE_UNQUOTED(MKE2FS, "$MKE2FS", [name of ldiskfs mkfs program])
+	AC_DEFINE_UNQUOTED(DEBUGFS, "$DEBUGFS", [name of ldiskfs debug program])
+	AC_DEFINE_UNQUOTED(TUNE2FS, "$TUNE2FS", [name of ldiskfs tune program])
+	AC_DEFINE_UNQUOTED(E2LABEL, "$E2LABEL", [name of ldiskfs label program])
+	AC_DEFINE_UNQUOTED(DUMPE2FS,"$DUMPE2FS", [name of ldiskfs dump program])
+	AC_DEFINE_UNQUOTED(E2FSCK, "$E2FSCK", [name of ldiskfs fsck program])
+])
+
+#
 # LB_CONFIG_CRAY_XT3
 #
 # Enable Cray XT3 features
@@ -791,6 +831,8 @@ LB_PATH_LIBSYSIO
 LB_PATH_SNMP
 LB_PATH_LDISKFS
 LB_PATH_LUSTREIOKIT
+
+LB_DEFINE_E2FSPROGS_NAMES
 
 LB_DEFINE_E2FSPROGS_NAMES
 
