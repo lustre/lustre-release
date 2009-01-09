@@ -2029,6 +2029,7 @@ check_catastrophe () {
 
 # $1 node
 # $2 file
+# $3 $RUNAS
 get_stripe_info() {
 	local tmp_file
 
@@ -2037,7 +2038,7 @@ get_stripe_info() {
 	stripe_index=0
 	tmp_file=$(mktemp)
 
-	do_facet $1 lfs getstripe -v $2 > $tmp_file
+	do_facet $1 $3 lfs getstripe -v $2 > $tmp_file
 
 	stripe_size=`awk '$1 ~ /size/ {print $2}' $tmp_file`
 	stripe_count=`awk '$1 ~ /count/ {print $2}' $tmp_file`
