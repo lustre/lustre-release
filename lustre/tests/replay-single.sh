@@ -1731,7 +1731,7 @@ test_80() {
     dd if=$DIR/$tfile of=/dev/null bs=1024k count=8 || error "Cannot read"
     cksum2=`md5sum $DIR/$tfile | awk '{print $1}'`
     if [ $cksum != $cksum2 ] ; then
-	error "New checksum $cksum2 does not mach original $cksum"
+	error "New checksum $cksum2 does not match original $cksum"
     fi
 }
 run_test 80 "write replay"
@@ -1750,7 +1750,7 @@ test_80b() {
     dd if=$DIR/$tfile of=/dev/null bs=1024k count=8 || error "Cannot read"
     cksum2=`md5sum $DIR/$tfile | awk '{print $1}'`
     if [ $cksum != $cksum2 ] ; then
-	error "New checksum $cksum2 does not mach original $cksum"
+	error "New checksum $cksum2 does not match original $cksum"
     fi
 }
 run_test 80b "write replay with changed data (checksum resend)"
