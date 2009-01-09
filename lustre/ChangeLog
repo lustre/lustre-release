@@ -65,6 +65,12 @@ Bugzilla   : 18049
 Descriptoin: aborting recovery hang on MDS
 Details    : don't throttle destroy RPCs for the MDT.
 
+Severity   : enhancement
+Bugzilla   : 16919
+Descriptoin: Don't sync journal after every i/o
+Details    : Implement write RPC replay to allow server replies for write RPCs
+	     before data is on disk.
+
 -------------------------------------------------------------------------------
 2008-12-31 Sun Microsystems, Inc.
 	* version 1.8.0

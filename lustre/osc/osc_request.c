@@ -930,7 +930,7 @@ static int check_write_rcs(struct ptlrpc_request *req,
 static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
 {
         if (p1->flag != p2->flag) {
-                unsigned mask = ~OBD_BRW_FROM_GRANT;
+                unsigned mask = ~(OBD_BRW_FROM_GRANT | OBD_BRW_ASYNC);
 
                 /* warn if we try to combine flags that we don't know to be
                  * safe to combine */
@@ -2031,7 +2031,7 @@ static int brw_interpret(struct ptlrpc_request *request, void *data, int rc)
                 }
                 OBDO_FREE(aa->aa_oa);
         } else { /* from async_internal() */
-                int i;
+                obd_count i;
                 for (i = 0; i < aa->aa_page_count; i++)
                         osc_release_write_grant(aa->aa_cli, aa->aa_ppga[i], 1);
         }
@@ -2040,6 +2040,7 @@ static int brw_interpret(struct ptlrpc_request *request, void *data, int rc)
         client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         osc_release_ppga(aa->aa_ppga, aa->aa_page_count);
+
         RETURN(rc);
 }
 
