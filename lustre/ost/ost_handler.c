@@ -1413,6 +1413,37 @@ static int ost_handle_quota_adjust_qunit(struct ptlrpc_request *req)
 }
 #endif
 
+/* Ensure that data and metadata are synced to the disk when lock is cancelled
+ * (if requested) */
+int ost_blocking_ast(struct ldlm_lock *lock,
+                             struct ldlm_lock_desc *desc,
+                             void *data, int flag)
+{
+        struct obd_device *obd = lock->l_export->exp_obd;
+        if (flag == LDLM_CB_CANCELING &&
+            (lock->l_granted_mode & (LCK_PW|LCK_GROUP)) &&
+            (obd->u.ost.ost_sync_on_lock_cancel == ALWAYS_SYNC_ON_CANCEL ||
+             (obd->u.ost.ost_sync_on_lock_cancel == BLOCKING_SYNC_ON_CANCEL &&
+              lock->l_flags & LDLM_FL_CBPENDING))) {
+                struct obdo *oa;
+                int rc;
+
+                OBDO_ALLOC(oa);
+                oa->o_id = lock->l_resource->lr_name.name[0];
+                oa->o_valid = OBD_MD_FLID;
+
+                rc = obd_sync(lock->l_export, oa, NULL,
+                              lock->l_policy_data.l_extent.start,
+                              lock->l_policy_data.l_extent.end);
+                if (rc)
+                        CERROR("Error %d syncing data on lock cancel\n", rc);
+
+                OBDO_FREE(oa);
+        }
+
+        return ldlm_server_blocking_ast(lock, desc, data, flag);
+}
+
 static int ost_filter_recovery_request(struct ptlrpc_request *req,
                                        struct obd_device *obd, int *process)
 {
@@ -1950,7 +1981,7 @@ static int ost_handle(struct ptlrpc_request *req)
                 CDEBUG(D_INODE, "enqueue\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_ENQUEUE, 0);
                 rc = ldlm_handle_enqueue(req, ldlm_server_completion_ast,
-                                         ldlm_server_blocking_ast,
+                                         ost_blocking_ast,
                                          ldlm_server_glimpse_ast);
                 fail = OBD_FAIL_OST_LDLM_REPLY_NET;
                 break;
@@ -2084,6 +2115,9 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
         sema_init(&ost->ost_health_sem, 1);
+
+        /* Always sync on lock cancel */
+        ost->ost_sync_on_lock_cancel = ALWAYS_SYNC_ON_CANCEL;
 
         if (oss_num_threads) {
                 /* If oss_num_threads is set, it is the min and the max. */

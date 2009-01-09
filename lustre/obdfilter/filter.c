@@ -1805,6 +1805,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         filter->fo_readcache_max_filesize = FILTER_MAX_CACHE_SIZE;
         filter->fo_fmd_max_num = FILTER_FMD_MAX_NUM_DEFAULT;
         filter->fo_fmd_max_age = FILTER_FMD_MAX_AGE_DEFAULT;
+        filter->fo_syncjournal = 0; /* Don't sync journals on i/o by default */
 
         sprintf(ns_name, "filter-%s", obd->obd_uuid.uuid);
         obd->obd_namespace = ldlm_namespace_new(obd, ns_name, LDLM_NAMESPACE_SERVER,
@@ -3190,16 +3191,22 @@ int filter_recreate(struct obd_device *obd, struct obdo *oa)
         ENTRY;
 
         if (oa->o_id > filter_last_id(&obd->u.filter, oa->o_gr)) {
-                CERROR("recreate objid "LPU64" > last id "LPU64"\n",
-                       oa->o_id, filter_last_id(&obd->u.filter, oa->o_gr));
-                RETURN(-EINVAL);
-        }
-
-        if ((oa->o_valid & OBD_MD_FLFLAGS) == 0) {
-                oa->o_valid |= OBD_MD_FLFLAGS;
-                oa->o_flags = OBD_FL_RECREATE_OBJS;
+                if (!obd->obd_recovering ||
+                    oa->o_id > filter_last_id(&obd->u.filter, oa->o_gr) +
+                    OST_MAX_PRECREATE) {
+                        CERROR("recreate objid "LPU64" > last id "LPU64"\n",
+                               oa->o_id, filter_last_id(&obd->u.filter,
+                               oa->o_gr));
+                        RETURN(-EINVAL);
+                }
+                diff = oa->o_id - filter_last_id(&obd->u.filter, oa->o_gr);
         } else {
-                oa->o_flags |= OBD_FL_RECREATE_OBJS;
+                if ((oa->o_valid & OBD_MD_FLFLAGS) == 0) {
+                        oa->o_valid |= OBD_MD_FLFLAGS;
+                        oa->o_flags = OBD_FL_RECREATE_OBJS;
+                } else {
+                        oa->o_flags |= OBD_FL_RECREATE_OBJS;
+                }
         }
 
         down(&obd->u.filter.fo_create_lock);

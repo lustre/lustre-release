@@ -356,6 +356,7 @@ struct filter_obd {
 
         int                      fo_fmd_max_num; /* per exp filter_mod_data */
         int                      fo_fmd_max_age; /* jiffies to fmd expiry */
+        int                      fo_syncjournal; /* sync journal on writes */
         struct llog_commit_master *fo_lcm;
 };
 
@@ -569,6 +570,7 @@ struct ost_obd {
         struct ptlrpc_service *ost_create_service;
         struct ptlrpc_service *ost_io_service;
         struct semaphore       ost_health_sem;
+        int                    ost_sync_on_lock_cancel;
 };
 
 struct echo_client_obd {
