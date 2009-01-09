@@ -42,6 +42,12 @@ USER1=`cat /etc/passwd|grep :$ID1:$ID1:|cut -d: -f1`
 
 check_and_setup_lustre
 
+sec_cleanup() {
+	if [ "$I_MOUNTED" = "yes" ]; then
+		cleanupall -f || error "sec_cleanup"
+	fi
+}
+
 DIR=${DIR:-$MOUNT}
 [ -z "`echo $DIR | grep $MOUNT`" ] && \
 	error "$DIR not in $MOUNT" && sec_cleanup && exit 1
@@ -565,11 +571,6 @@ sec_unsetup() {
 }
 sec_unsetup
 
-sec_cleanup() {
-	if [ "$I_MOUNTED" = "yes" ]; then
-		cleanupall -f || error "sec_cleanup"
-	fi
-}
 sec_cleanup
 
 echo '=========================== finished ==============================='
