@@ -41,13 +41,6 @@ Description: external journal device not working after the remount
 Details    : clear dev_rdonly flag for external journal devices in
              blkdev_put()
 
-Severity   : normal
-Frequency  : race on file read and write
-Bugzilla   : 16417
-Description: Lustre doesn't delete files
-Details    : Clients drop lock reference and release openhandle when they find
-             stale inode.
-
 Severity   : minor
 Frequency  : rare
 Bugzilla   : 17802

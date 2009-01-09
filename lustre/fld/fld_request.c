@@ -344,9 +344,7 @@ static inline int hash_is_sane(int hash)
 int fld_client_init(struct lu_client_fld *fld,
                     const char *prefix, int hash)
 {
-#ifdef __KERNEL__
         int cache_size, cache_threshold;
-#endif
         int rc;
         ENTRY;
 
@@ -367,7 +365,6 @@ int fld_client_init(struct lu_client_fld *fld,
         fld->lcf_flags = LUSTRE_FLD_INIT;
         CFS_INIT_LIST_HEAD(&fld->lcf_targets);
 
-#ifdef __KERNEL__
         cache_size = FLD_CLIENT_CACHE_SIZE /
                 sizeof(struct fld_cache_entry);
 
@@ -381,7 +378,6 @@ int fld_client_init(struct lu_client_fld *fld,
                 fld->lcf_cache = NULL;
                 GOTO(out, rc);
         }
-#endif
 
         rc = fld_client_proc_init(fld);
         if (rc)
@@ -415,13 +411,11 @@ void fld_client_fini(struct lu_client_fld *fld)
         }
         spin_unlock(&fld->lcf_lock);
 
-#ifdef __KERNEL__
         if (fld->lcf_cache != NULL) {
                 if (!IS_ERR(fld->lcf_cache))
                         fld_cache_fini(fld->lcf_cache);
                 fld->lcf_cache = NULL;
         }
-#endif
 
         EXIT;
 }
@@ -523,8 +517,6 @@ EXPORT_SYMBOL(fld_client_lookup);
 
 void fld_client_flush(struct lu_client_fld *fld)
 {
-#ifdef __KERNEL__
         fld_cache_flush(fld->lcf_cache);
-#endif
 }
 EXPORT_SYMBOL(fld_client_flush);

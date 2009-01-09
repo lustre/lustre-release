@@ -1344,7 +1344,11 @@ test_18() {
 
 	echo  "   step2: testing ......"
 	count=0
-	timeout=$(lctl get_param -n timeout)
+	if at_is_valid && at_is_enabled; then
+	    timeout=$(at_max_get mds)
+	else
+	    timeout=$(lctl get_param -n timeout)
+	fi
 	while [ true ]; do
 	    if ! ps -p ${DDPID} > /dev/null 2>&1; then break; fi
 	    count=$[count+1]
@@ -1395,7 +1399,11 @@ test_18a() {
 
 	echo  "   step2: testing ......"
 	count=0
-	timeout=$(lctl get_param -n timeout)
+	if at_is_valid && at_is_enabled; then
+	    timeout=$(at_max_get mds)
+	else
+	    timeout=$(lctl get_param -n timeout)
+	fi
 	while [ true ]; do
 	    if ! ps -p ${DDPID} > /dev/null 2>&1; then break; fi
 	    count=$[count+1]
@@ -1465,6 +1473,11 @@ test_18bc_sub() {
 	fi
 
 	count=0
+	if at_is_valid && at_is_enabled; then
+	    timeout=$(at_max_get mds)
+	else
+	    timeout=$(lctl get_param -n timeout)
+	fi
 	while [ true ]; do
 	    if ! ps -p ${DDPID} > /dev/null 2>&1; then break; fi
 	    if [ $((++count % (2 * timeout) )) -eq 0 ]; then
@@ -1497,7 +1510,7 @@ test_18b() {
  				       print;
  			       }
  		       }' $TMP/lustre-log-${TESTNAME}.log`
-	if [ -n "$watchdog" ]; then error "$watchdog"; fi
+	[ `echo "$watchdog" | wc -l` -ge 3 ] && error "$watchdog"
 	rm -f $TMP/lustre-log-${TESTNAME}.log
 }
 run_test_with_stat 18b "run for fixing bug14840(mds failover, no watchdog) ==========="
