@@ -926,13 +926,14 @@ static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
         struct obd_io_group *oig;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         int rc, noquot = llap->llap_ignore_quota ? OBD_BRW_NOQUOTA : 0;
+        int brwflags = OBD_BRW_ASYNC;
         ENTRY;
 
         /* _make_ready only sees llap once we've unlocked the page */
         llap->llap_write_queued = 1;
         rc = obd_queue_async_io(exp, ll_i2info(inode)->lli_smd, NULL,
                                 llap->llap_cookie, OBD_BRW_WRITE | noquot,
-                                0, 0, 0, async_flags);
+                                0, 0, brwflags, async_flags);
         if (rc == 0) {
                 LL_CDEBUG_PAGE(D_PAGE, llap->llap_page, "write queued\n");
                 llap_write_pending(inode, llap);

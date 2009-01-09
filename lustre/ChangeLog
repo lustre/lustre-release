@@ -797,6 +797,12 @@ Details    : enable OBD_CONNECT_MDT flag when connecting from the MDS so that
 	     from a different NID, so we do not need to wait for the export to
 	     be evicted.
 
+Severity   : enhancement
+Bugzilla   : 16919
+Descriptoin: Don't sync journal after every i/o
+Details    : Implement write RPC replay to allow server replies for write RPCs
+	     before data is on disk.
+
 -------------------------------------------------------------------------------
 
 2008-05-26  Sun Microsystems, Inc.

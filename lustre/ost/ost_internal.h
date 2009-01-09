@@ -80,4 +80,11 @@ static void lprocfs_ost_init_vars(struct lprocfs_static_vars *lvars)
 }
 #endif
 
+enum {
+        NEVER_SYNC_ON_CANCEL = 0,
+        BLOCKING_SYNC_ON_CANCEL = 1,
+        ALWAYS_SYNC_ON_CANCEL = 2,
+        NUM_SYNC_ON_CANCEL_STATES
+};
+
 #endif /* OST_INTERNAL_H */

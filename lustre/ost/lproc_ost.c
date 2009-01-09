@@ -41,8 +41,54 @@
 #include "ost_internal.h"
 
 #ifdef LPROCFS
+static char *sync_on_cancel_states[] = {"never",
+                                        "blocking",
+                                        "always" };
+
+int lprocfs_ost_rd_ost_sync_on_lock_cancel(char *page, char **start, off_t off,
+                                           int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        int rc;
+
+        rc = snprintf(page, count, "%s\n",
+                     sync_on_cancel_states[obd->u.ost.ost_sync_on_lock_cancel]);
+        return rc;
+}
+
+int lprocfs_ost_wr_ost_sync_on_lock_cancel(struct file *file,
+                                           const char *buffer,
+                                           unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val = -1;
+        int i;
+
+        for (i = 0 ; i < NUM_SYNC_ON_CANCEL_STATES; i++) {
+                if (memcmp(buffer, sync_on_cancel_states[i],
+                    strlen(sync_on_cancel_states[i])) == 0) {
+                        val = i;
+                        break;
+                }
+        }
+        if (val == -1) {
+                int rc;
+                rc = lprocfs_write_helper(buffer, count, &val);
+                if (rc)
+                        return rc;
+        }
+
+        if (val < 0 || val > 2)
+                return -EINVAL;
+
+        obd->u.ost.ost_sync_on_lock_cancel = val;
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_ost_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,   0, 0 },
+        { "sync_on_lock_cancel", lprocfs_ost_rd_ost_sync_on_lock_cancel,
+                                 lprocfs_ost_wr_ost_sync_on_lock_cancel, 0 },
         { 0 }
 };
 
