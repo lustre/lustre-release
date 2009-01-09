@@ -3764,29 +3764,35 @@ export SETUP_TEST102=no
 setup_test102() {
 	[ "$SETUP_TEST102" = "yes" ] && return
 	mkdir -p $DIR/$tdir
+	chown $RUNAS_ID $DIR/$tdir
 	STRIPE_SIZE=65536
-	STRIPE_COUNT=4
-	STRIPE_OFFSET=2
+	STRIPE_OFFSET=1
+	STRIPE_COUNT=$OSTCOUNT
+	[ $OSTCOUNT -gt 4 ] && STRIPE_COUNT=4
 
 	trap cleanup_test102 EXIT
 	cd $DIR
-	$SETSTRIPE $tdir -s $STRIPE_SIZE -i $STRIPE_OFFSET -c $STRIPE_COUNT
+	# $1 = runas
+	$1 $SETSTRIPE $tdir -s $STRIPE_SIZE -i $STRIPE_OFFSET -c $STRIPE_COUNT
 	cd $DIR/$tdir
 	for num in 1 2 3 4
 	do
-		for count in 1 2 3 4
+		for count in `seq 1 $STRIPE_COUNT`
 		do
-			for offset in 0 1 2 3
+			for offset in `seq 0 $[$STRIPE_COUNT - 1]`
 			do
 				local stripe_size=`expr $STRIPE_SIZE \* $num`
 				local file=file"$num-$offset-$count"
-				$SETSTRIPE $file -s $stripe_size -i $offset -c $count
+				$1 $SETSTRIPE $file -s $stripe_size -i $offset -c $count
 			done
 		done
 	done
 
 	cd $DIR
-	star -c  f=$TMP/f102.tar $tdir
+	if [ "$TAR" == "tar" ]; then
+		TAR_OPTS="--xattrs"
+	fi
+	$1 $TAR cf $TMP/f102.tar $tdir $TAR_OPTS
 	SETUP_TEST102=yes
 }
 
@@ -3900,21 +3906,21 @@ run_test 102c "non-root getfattr/setfattr for lustre.lov EAs ==========="
 compare_stripe_info1() {
 	for num in 1 2 3 4
 	do
-		for count in 1 2 3 4
+ 		for count in `seq 1 $STRIPE_COUNT`
 		do
-			for offset in 0 1 2 3
+			for offset in `seq 0 $[$STRIPE_COUNT - 1]`
 			do
 				local size=`expr $STRIPE_SIZE \* $num`
 				local file=file"$num-$offset-$count"
-				get_stripe_info client $PWD/$file
+				get_stripe_info client $PWD/$file "$1"
 				if [ $stripe_size -ne $size ]; then
-					error "$file: different stripe size" && return
+					error "$file: different stripe size $stripe_size, expected $size" && return
 				fi
 				if [ $stripe_count -ne $count ]; then
-					error "$file: different stripe count" && return
+					error "$file: different stripe count $stripe_count, expected $count" && return
 				fi
 				if [ $stripe_index -ne 0 ]; then
-					error "$file: different stripe offset" && return
+ 					error "$file: different stripe offset $stripe_index, expected 0" && return
 				fi
 			done
 		done
@@ -3924,49 +3930,53 @@ compare_stripe_info1() {
 compare_stripe_info2() {
 	for num in 1 2 3 4
 	do
-		for count in 1 2 3 4
+		for count in `seq 1 $STRIPE_COUNT`
 		do
-			for offset in 0 1 2 3
+			for offset in `seq 0 $[$STRIPE_COUNT - 1]`
 			do
 				local size=`expr $STRIPE_SIZE \* $num`
 				local file=file"$num-$offset-$count"
 				get_stripe_info client $PWD/$file
 				if [ $stripe_size -ne $size ]; then
-					error "$file: different stripe size" && return	
+					error "$file: different stripe size $stripe_size, expected $size" && return
 				fi
 				if [ $stripe_count -ne $count ]; then
-					error "$file: different stripe count" && return
+					error "$file: different stripe count $stripe_count, expected $count" && return
 				fi
 				if [ $stripe_index -ne $offset ]; then
-					error "$file: different stripe offset" && return
+					error "$file: different stripe offset $stripe_index, expected $offset" && return
 				fi
 			done
 		done
 	done
 }
 
+find_lustre_tar() {
+	[ -n "$(which star 2>/dev/null)" ] && strings $(which star) | grep -q lustre && echo star && return
+	[ -n "$(which tar 2>/dev/null)" ] && strings $(which tar) | grep -q lustre && echo tar
+}
+
 test_102d() {
-	# b10930: star test for trusted.lov xattr
-	star --xhelp 2>&1 | grep -q nolustre
-	if [ $? -ne 0 ]
-	then
-		skip "being skipped because a lustre-aware star is not installed." && return
-	fi
-	[ "$OSTCOUNT" -lt "4" ] && skip "skipping 4-stripe test" && return
+	# b10930: (s)tar test for trusted.lov xattr
+	TAR=$(find_lustre_tar)
+	[ -z "$TAR" ] && skip "lustre-aware (s)tar is not installed" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102d
-	star -x  f=$TMP/f102.tar -C $DIR/d102d
+	if [ "$TAR" == "tar" ]; then
+		TAR_OPTS="--xattrs"
+	fi
+	$TAR xf $TMP/f102.tar -C $DIR/d102d $TAR_OPTS
 	cd $DIR/d102d/$tdir
 	compare_stripe_info1
-
 }
-run_test 102d "star restore stripe info from tarfile,not keep osts ==========="
+run_test 102d "(s)tar restore stripe info from tarfile,not keep osts ==========="
 
 test_102e() {
 	# b10930: star test for trusted.lov xattr
-	star --xhelp 2>&1 | grep -q nolustre
-	[ $? -ne 0 ] && skip "lustre-aware star is not installed" && return
-	[ "$OSTCOUNT" -lt "4" ] && skip "skipping 4-stripe test" && return
+	TAR=$(find_lustre_tar)
+	[ "$TAR" != star ] && skip "lustre-aware star is not installed" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102e
 	star -x  -preserve-osts f=$TMP/f102.tar -C $DIR/d102e
@@ -3976,24 +3986,27 @@ test_102e() {
 run_test 102e "star restore stripe info from tarfile, keep osts ==========="
 
 test_102f() {
-	# b10930: star test for trusted.lov xattr
-	star --xhelp 2>&1 | grep -q nolustre
-	[ $? -ne 0 ] && skip "lustre-aware star is not installed" && return
-	[ "$OSTCOUNT" -lt "4" ] && skip "skipping 4-stripe test" && return
+	# b10930: (s)tar test for trusted.lov xattr
+	TAR=$(find_lustre_tar)
+	[ -z "$TAR" ] && skip "lustre-aware (s)tar is not installed" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102f
 	cd $DIR
-	star -copy  $tdir $DIR/d102f
+	if [ "$TAR" == "tar" ]; then
+		TAR_OPTS="--xattrs"
+	fi
+	$TAR cf - $TAR_OPTS . | $TAR xf - $TAR_OPTS -C $DIR/d102f
 	cd $DIR/d102f/$tdir
 	compare_stripe_info1
 }
-run_test 102f "star copy files, not keep osts ==========="
+run_test 102f "(s)tar copy files, not keep osts ==========="
 
 test_102g() {
 	# b10930: star test for trusted.lov xattr
-	star --xhelp 2>&1 | grep -q nolustre
-	[ $? -ne 0 ] && skip "lustre-aware star is not installed" && return
-	[ "$OSTCOUNT" -lt "4" ] && skip "skipping 4-stripe test" && return
+	TAR=$(find_lustre_tar)
+	[ "$TAR" != star ] && skip "lustre-aware star is not installed" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102g
 	cd $DIR
@@ -4056,6 +4069,22 @@ test_102i() { # bug 17038
         rm -f $DIR/$tfile $DIR/${tfile}link
 }
 run_test 102i "lgetxattr test on symbolic link ============"
+
+test_102j() {
+	TAR=$(find_lustre_tar)
+	[ -z "$TAR" ] && skip "lustre-aware (s)tar is not installed" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
+	setup_test102 "$RUNAS"
+	mkdir -p $DIR/d102j
+	chown $RUNAS_ID $DIR/d102j
+	if [ "$TAR" == "tar" ]; then
+		TAR_OPTS="--xattrs"
+	fi
+	$RUNAS $TAR xf $TMP/f102.tar -C $DIR/d102j $TAR_OPTS
+	cd $DIR/d102j/$tdir
+	compare_stripe_info1 "$RUNAS"
+}
+run_test 102j "non-root (s)tar restore stripe info from tarfile,not keep osts ="
 
 run_acl_subtest()
 {
