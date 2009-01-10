@@ -1166,7 +1166,7 @@ struct ll_ra_read *ll_ra_read_get(struct file *f)
 }
 
 static int ll_read_ahead_page(struct obd_export *exp, struct obd_io_group *oig,
-                              int index, struct address_space *mapping)
+                              pgoff_t index, struct address_space *mapping)
 {
         struct ll_async_page *llap;
         struct page *page;
@@ -1199,7 +1199,7 @@ static int ll_read_ahead_page(struct obd_export *exp, struct obd_io_group *oig,
                         ll_ra_stats_inc(mapping, RA_STAT_FAILED_MATCH);
                         CDEBUG(D_READA | D_PAGE,
                                "Adding page to cache failed index "
-                                "%d\n", index);
+                                "%ld\n", index);
                                 CDEBUG(D_READA, "nolock page\n");
                                 GOTO(unlock_page, rc = -ENOLCK);
                 }

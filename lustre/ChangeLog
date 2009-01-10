@@ -77,6 +77,12 @@ Descriptoin: Don't sync journal after every i/o
 Details    : Implement write RPC replay to allow server replies for write RPCs
 	     before data is on disk.
 
+Severity   : low
+Bugzilla   : 18016
+Description: Slow reads beyond 8Tb offsets.
+Details    : Page index integer overflow in ll_read_ahead_page
+
+
 --------------------------------------------------------------------------
 2009-01-15 Sun Microsystems, Inc.
 	* version 1.6.7
