@@ -1887,7 +1887,7 @@ test_73c() {
 }
 run_test 73c "open(O_CREAT), unlink, replay, reconnect at last_replay, close"
 
-test_80() {
+test_80a() {
     do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 0"
     
     replay_barrier ost1
@@ -1902,7 +1902,7 @@ test_80() {
 	error "New checksum $cksum2 does not match original $cksum"
     fi
 }
-run_test 80 "write replay"
+run_test 80a "write replay"
 
 test_80b() {
     do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 0"
