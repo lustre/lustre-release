@@ -1253,20 +1253,30 @@ int ost_blocking_ast(struct ldlm_lock *lock,
             (obd->u.ost.ost_sync_on_lock_cancel == ALWAYS_SYNC_ON_CANCEL ||
              (obd->u.ost.ost_sync_on_lock_cancel == BLOCKING_SYNC_ON_CANCEL &&
               lock->l_flags & LDLM_FL_CBPENDING))) {
-                struct obdo *oa;
+                struct obd_info *oinfo;
                 int rc;
 
-                OBDO_ALLOC(oa);
-                oa->o_id = lock->l_resource->lr_name.name[0];
-                oa->o_valid = OBD_MD_FLID;
+                OBD_ALLOC_PTR(oinfo);
+                if (!oinfo)
+                        RETURN(-ENOMEM);
 
-                rc = obd_sync(lock->l_export, oa, NULL,
-                              lock->l_policy_data.l_extent.start,
-                              lock->l_policy_data.l_extent.end);
+                OBDO_ALLOC(oinfo->oi_oa);
+                if (!oinfo->oi_oa) {
+                        OBD_FREE_PTR(oinfo);
+                        RETURN(-ENOMEM);
+                }
+
+                oinfo->oi_oa->o_id = lock->l_resource->lr_name.name[0];
+                oinfo->oi_oa->o_valid = OBD_MD_FLID;
+
+                rc = obd_sync_rqset(lock->l_export, oinfo,
+                                    lock->l_policy_data.l_extent.start,
+                                    lock->l_policy_data.l_extent.end);
                 if (rc)
                         CERROR("Error %d syncing data on lock cancel\n", rc);
 
-                OBDO_FREE(oa);
+                OBDO_FREE(oinfo->oi_oa);
+                OBD_FREE_PTR(oinfo);
         }
 
         return ldlm_server_blocking_ast(lock, desc, data, flag);
