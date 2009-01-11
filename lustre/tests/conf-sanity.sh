@@ -586,6 +586,9 @@ test_22() {
 
 	echo Client mount with ost in logs, but none running
 	start_ost
+	# wait until mds connected to ost and open client connection
+	# ping_interval + 1
+	sleep $((TIMEOUT / 4 + 1))
 	stop_ost
 	mount_client $MOUNT
 	# check_mount will block trying to contact ost
@@ -1544,7 +1547,8 @@ test_46a() {
 	start ost4 `ostdevname 4` $OST_MOUNT_OPTS || return 6
 	start ost5 `ostdevname 5` $OST_MOUNT_OPTS || return 7
 	# wait until ost2-5 is sync
-	sleep 5
+	# ping_interval + 1
+	sleep $((TIMEOUT / 4 + 1))
 	#second client see both ost's
 
 	mount_client $MOUNT2 || return 8
