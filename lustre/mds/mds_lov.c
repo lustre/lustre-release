@@ -315,7 +315,8 @@ void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm)
                         /* we might have lost precreated objects due to VBR */
                         if (lost > 0 && obd->obd_recovering) {
                                 CDEBUG(D_HA, "GAP in objids is %u\n", lost);
-                                LASSERT(obd->obd_version_recov);
+                                if (!obd->obd_version_recov)
+                                        CWARN("Unexpected gap in objids\n");
                                 /* lsm is allocated if NULL */
                                 mds_log_lost_precreated(obd, &lsm, &stripes,
                                                         data[idx] + 1, lost, i);
