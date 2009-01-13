@@ -300,7 +300,7 @@ static void waiting_locks_callback(unsigned long unused)
                 lock->l_resource->lr_namespace->ns_timeouts++;
                 LDLM_ERROR(lock, "lock callback timer expired after %lds: "
                            "evicting client at %s ",
-                           cfs_time_current_sec()- lock->l_enqueued_time.tv_sec,
+                           cfs_time_current_sec()- lock->l_last_activity,
                            libcfs_nid2str(
                                    lock->l_export->exp_connection->c_peer.nid));
                 if (lock == last) {
@@ -755,6 +755,8 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 
         LDLM_DEBUG(lock, "server preparing blocking AST");
 
+        lock->l_last_activity = cfs_time_current_sec();
+
         ptlrpc_req_set_repsize(req, 1, NULL);
         if (instant_cancel) {
                 unlock_res(lock->l_resource);
@@ -786,7 +788,6 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         struct ldlm_cb_set_arg *arg = data;
         struct ldlm_request *body;
         struct ptlrpc_request *req;
-        struct timeval granted_time;
         long total_enqueue_wait;
         __u32 size[3] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                         [DLM_LOCKREQ_OFF]     = sizeof(*body) };
@@ -796,14 +797,13 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         LASSERT(lock != NULL);
         LASSERT(data != NULL);
 
-        do_gettimeofday(&granted_time);
-        total_enqueue_wait = cfs_timeval_sub(&granted_time,
-                                             &lock->l_enqueued_time, NULL);
+        total_enqueue_wait = cfs_time_sub(cfs_time_current_sec(),
+                                          lock->l_last_activity);
 
-        if (total_enqueue_wait / ONE_MILLION > obd_timeout)
+        if (total_enqueue_wait > obd_timeout)
                 /* non-fatal with AT - change to LDLM_DEBUG? */
-                LDLM_ERROR(lock, "enqueue wait took %luus from %lu",
-                           total_enqueue_wait, lock->l_enqueued_time.tv_sec);
+                LDLM_WARN(lock, "enqueue wait took %lus from %lu",
+                           total_enqueue_wait, lock->l_last_activity);
 
         lock_res_and_lock(lock);
         if (lock->l_resource->lr_lvb_len) {
@@ -839,13 +839,13 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                 unlock_res_and_lock(lock);
         }
 
-        LDLM_DEBUG(lock, "server preparing completion AST (after %ldus wait)",
+        LDLM_DEBUG(lock, "server preparing completion AST (after %lds wait)",
                    total_enqueue_wait);
 
         /* Server-side enqueue wait time estimate, used in
             __ldlm_add_waiting_lock to set future enqueue timers */
         at_add(&lock->l_resource->lr_namespace->ns_at_estimate,
-               total_enqueue_wait / ONE_MILLION);
+               total_enqueue_wait);
 
         ptlrpc_req_set_repsize(req, 1, NULL);
 
@@ -1086,7 +1086,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
         if (!lock)
                 GOTO(out, rc = -ENOMEM);
 
-        do_gettimeofday(&lock->l_enqueued_time);
+        lock->l_last_activity = cfs_time_current_sec();
         lock->l_remote_handle = dlm_req->lock_handle[0];
         LDLM_DEBUG(lock, "server-side enqueue handler, new lock created");
 
@@ -1291,7 +1291,7 @@ int ldlm_handle_convert(struct ptlrpc_request *req)
 
                 LDLM_DEBUG(lock, "server-side convert handler START");
 
-                do_gettimeofday(&lock->l_enqueued_time);
+                lock->l_last_activity = cfs_time_current_sec();
                 res = ldlm_lock_convert(lock, dlm_req->lock_desc.l_req_mode,
                                         &dlm_rep->lock_flags);
                 if (res) {

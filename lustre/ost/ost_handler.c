@@ -1510,7 +1510,7 @@ int ost_msg_check_version(struct lustre_msg *msg)
 }
 
 static int ost_rw_hpreq_lock_match(struct ptlrpc_request *req,
-                                       struct ldlm_lock *lock)
+                                   struct ldlm_lock *lock)
 {
         struct niobuf_remote *nb;
         struct obd_ioobj *ioo;
@@ -1546,6 +1546,10 @@ static int ost_rw_hpreq_lock_match(struct ptlrpc_request *req,
         start = nb[0].offset & CFS_PAGE_MASK;
         end = (nb[ioo->ioo_bufcnt - 1].offset +
                nb[ioo->ioo_bufcnt - 1].len - 1) | ~CFS_PAGE_MASK;
+
+        LASSERT(lock->l_resource != NULL);
+        if (lock->l_resource->lr_name.name[0] != ioo->ioo_id)
+                RETURN(0);
 
         if (!(lock->l_granted_mode & mode))
                 RETURN(0);
