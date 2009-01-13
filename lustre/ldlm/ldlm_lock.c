@@ -1176,7 +1176,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
         struct ldlm_interval *node = NULL;
         ENTRY;
 
-        do_gettimeofday(&lock->l_enqueued_time);
+        lock->l_last_activity = cfs_time_current_sec();
         /* policies are not executed on the client or during replay */
         if ((*flags & (LDLM_FL_HAS_INTENT|LDLM_FL_REPLAY)) == LDLM_FL_HAS_INTENT
             && !local && ns->ns_policy) {
