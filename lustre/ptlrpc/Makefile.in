@@ -1,9 +1,6 @@
 MODULES := ptlrpc
-ifeq ($(PATCHLEVEL),6)
 LDLM := @top_srcdir@/lustre/ldlm/
-else
-LDLM :=
-endif
+
 ldlm_objs := $(LDLM)l_lock.o $(LDLM)ldlm_lock.o 
 ldlm_objs += $(LDLM)ldlm_resource.o $(LDLM)ldlm_lib.o
 ldlm_objs += $(LDLM)ldlm_plain.o $(LDLM)ldlm_extent.o
