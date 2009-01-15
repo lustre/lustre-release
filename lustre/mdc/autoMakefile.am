@@ -45,5 +45,4 @@ if MODULES
 modulefs_DATA = mdc$(KMODEXT)
 endif
 
-DIST_SOURCES = $(mdc-objs:.o=.c) mdc_internal.h
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
