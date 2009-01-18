@@ -877,6 +877,10 @@ static int lov_cleanup(struct obd_device *obd)
 
         lprocfs_obd_cleanup(obd);
 
+        /* Delete hash entries and kill hash table before freeing pools
+         * and get to use after free issue. */
+        lustre_hash_exit(lov->lov_pools_hash_body);
+
         list_for_each_safe(pos, tmp, &lov->lov_pool_list) {
                 pool = list_entry(pos, struct pool_desc, pool_list);
                 /* free pool structs */
@@ -884,7 +888,6 @@ static int lov_cleanup(struct obd_device *obd)
         }
         lov_ost_pool_free(&(lov->lov_qos.lq_rr.lqr_pool));
         lov_ost_pool_free(&lov->lov_packed);
-        lustre_hash_exit(lov->lov_pools_hash_body);
 
         if (lov->lov_tgts) {
                 int i;

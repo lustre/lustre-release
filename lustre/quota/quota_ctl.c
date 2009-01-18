@@ -67,6 +67,7 @@
 int mds_quota_ctl(struct obd_device *obd, struct obd_export *unused,
                   struct obd_quotactl *oqctl)
 {
+        struct obd_device_target *obt = &obd->u.obt;
         struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
         struct timeval work_start;
         struct timeval work_end;
@@ -77,9 +78,11 @@ int mds_quota_ctl(struct obd_device *obd, struct obd_export *unused,
         do_gettimeofday(&work_start);
         switch (oqctl->qc_cmd) {
         case Q_QUOTAON:
+                oqctl->qc_id = obt->obt_qfmt; /* override qfmt version */
                 rc = mds_quota_on(obd, oqctl);
                 break;
         case Q_QUOTAOFF:
+                oqctl->qc_id = obt->obt_qfmt; /* override qfmt version */
                 rc = mds_quota_off(obd, oqctl);
                 break;
         case Q_SETINFO:
@@ -102,6 +105,7 @@ int mds_quota_ctl(struct obd_device *obd, struct obd_export *unused,
                 rc = mds_quota_invalidate(obd, oqctl);
                 break;
         case LUSTRE_Q_FINVALIDATE:
+                oqctl->qc_id = obt->obt_qfmt; /* override qfmt version */
                 rc = mds_quota_finvalidate(obd, oqctl);
                 break;
         default:

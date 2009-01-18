@@ -311,8 +311,8 @@ for NAME in $CONFIGS; do
 		if [ -x /usr/sbin/lfsck ]; then
 			bash lfscktest.sh
 		else
-			log "$(e2fsck -V)"
-			log "SKIP: e2fsck does not support lfsck"
+			log "$($E2FSCK -V)"
+			log "SKIP: $E2FSCK does not support lfsck"
 		fi
 		LFSCK="done"
 	fi

@@ -754,7 +754,7 @@ static inline int lquota_chkquota(quota_interface_t *interface,
                                   struct obd_device *obd,
                                   unsigned int uid, unsigned int gid, int count,
                                   int *flag, struct obd_trans_info *oti,
-                                  int isblk, struct inode *inode, int frags)
+                                  int isblk, void *data, int frags)
 {
         int rc;
         ENTRY;
@@ -763,7 +763,7 @@ static inline int lquota_chkquota(quota_interface_t *interface,
         QUOTA_CHECK_OP(interface, acquire);
         rc = QUOTA_OP(interface, chkquota)(obd, uid, gid, count, flag,
                                            QUOTA_OP(interface, acquire), oti,
-                                           isblk, inode, frags);
+                                           isblk, (struct inode *)data, frags);
         RETURN(rc);
 }
 

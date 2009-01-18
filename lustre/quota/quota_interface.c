@@ -287,14 +287,17 @@ static int quota_check_common(struct obd_device *obd, unsigned int uid,
                                 /* in order to complete this write, we need extra
                                  * meta blocks. This function can get it through
                                  * data needed to be written b=16542 */
-                                mb = *pending;
-                                LASSERT(inode && frags > 0);
-                                if (fsfilt_get_mblk(obd, qctxt->lqc_sb, &mb,
-                                                    inode, frags) < 0)
-                                        CDEBUG(D_ERROR,
-                                               "can't get extra meta blocks.\n");
-                                else
-                                        *pending += mb;
+                                if (inode) {
+                                        mb = *pending;
+                                        rc = fsfilt_get_mblk(obd, qctxt->lqc_sb,
+                                                             &mb, inode,frags);
+                                        if (rc)
+                                                CDEBUG(D_ERROR,
+                                                       "can't get extra "
+                                                       "meta blocks.\n");
+                                        else
+                                                *pending += mb;
+                                }
                                 lqs->lqs_bwrite_pending += *pending;
                         } else {
                                 *pending = count;

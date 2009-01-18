@@ -573,7 +573,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
          * decide if it is out of quota or not b=14783 */
         lquota_chkquota(filter_quota_interface_ref, obd, oa->o_uid,
                         oa->o_gid, niocount, &rec_pending, oti,
-                        LQUOTA_FLAGS_BLK, inode, obj->ioo_bufcnt);
+                        LQUOTA_FLAGS_BLK, (void *)inode, obj->ioo_bufcnt);
 
         iobuf = filter_iobuf_get(&obd->u.filter, oti);
         if (IS_ERR(iobuf))
