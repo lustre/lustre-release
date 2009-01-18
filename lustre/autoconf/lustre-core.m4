@@ -84,45 +84,6 @@ $2
 ])
 
 #
-# LC_STRUCT_KIOBUF
-#
-# rh 2.4.18 has iobuf->dovary, but other kernels do not
-#
-AC_DEFUN([LC_STRUCT_KIOBUF],
-[AC_MSG_CHECKING([if struct kiobuf has a dovary field])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/iobuf.h>
-],[
-	struct kiobuf iobuf;
-	iobuf.dovary = 1;
-],[
-	AC_MSG_RESULT([yes])
-	AC_DEFINE(HAVE_KIOBUF_DOVARY, 1, [struct kiobuf has a dovary field])
-],[
-	AC_MSG_RESULT([no])
-])
-])
-
-#
-# LC_FUNC_COND_RESCHED
-#
-# cond_resched() was introduced in 2.4.20
-#
-AC_DEFUN([LC_FUNC_COND_RESCHED],
-[AC_MSG_CHECKING([if kernel offers cond_resched])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/sched.h>
-],[
-	cond_resched();
-],[
-	AC_MSG_RESULT([yes])
-	AC_DEFINE(HAVE_COND_RESCHED, 1, [cond_resched found])
-],[
-	AC_MSG_RESULT([no])
-])
-])
-
-#
 # LC_FUNC_RELEASEPAGE_WITH_INT
 #
 # if ->releasepage() takes an int arg in 2.6.9
@@ -138,39 +99,6 @@ if test "$RELEASEPAGE_WITH_INT" != 0 ; then
         AC_MSG_RESULT([yes])
 else
         AC_MSG_RESULT([no])
-fi
-])
-
-
-#
-# LC_FUNC_ZAP_PAGE_RANGE
-#
-# if zap_page_range() takes a vma arg
-#
-AC_DEFUN([LC_FUNC_ZAP_PAGE_RANGE],
-[AC_MSG_CHECKING([if zap_page_range with vma parameter])
-ZAP_PAGE_RANGE_VMA="`grep -c 'zap_page_range.*struct vm_area_struct' $LINUX/include/linux/mm.h`"
-if test "$ZAP_PAGE_RANGE_VMA" != 0 ; then
-	AC_DEFINE(ZAP_PAGE_RANGE_VMA, 1, [zap_page_range with vma parameter])
-	AC_MSG_RESULT([yes])
-else
-	AC_MSG_RESULT([no])
-fi
-])
-
-#
-# LC_FUNC_PDE
-#
-# if proc_fs.h defines PDE()
-#
-AC_DEFUN([LC_FUNC_PDE],
-[AC_MSG_CHECKING([if kernel defines PDE])
-HAVE_PDE="`grep -c 'proc_dir_entry..PDE' $LINUX/include/linux/proc_fs.h`"
-if test "$HAVE_PDE" != 0 ; then
-	AC_DEFINE(HAVE_PDE, 1, [the kernel defines PDE])
-	AC_MSG_RESULT([yes])
-else
-	AC_MSG_RESULT([no])
 fi
 ])
 
@@ -191,22 +119,6 @@ LB_LINUX_TRY_COMPILE([
 ],[
 	AC_MSG_RESULT([no])
 ])
-])
-
-#
-# LC_FUNC_DIRECT_IO
-#
-# if direct_IO takes a struct file argument
-#
-AC_DEFUN([LC_FUNC_DIRECT_IO],
-[AC_MSG_CHECKING([if kernel passes struct file to direct_IO])
-HAVE_DIO_FILE="`grep -c 'direct_IO.*struct file' $LINUX/include/linux/fs.h`"
-if test "$HAVE_DIO_FILE" != 0 ; then
-	AC_DEFINE(HAVE_DIO_FILE, 1, [the kernel passes struct file to direct_IO])
-	AC_MSG_RESULT(yes)
-else
-	AC_MSG_RESULT(no)
-fi
 ])
 
 #
@@ -1588,12 +1500,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_EXPORT___D_MOVE
          LC_EXPORT_NODE_TO_CPUMASK
 
-         LC_STRUCT_KIOBUF
-         LC_FUNC_COND_RESCHED
          LC_FUNC_RELEASEPAGE_WITH_INT
-         LC_FUNC_ZAP_PAGE_RANGE
-         LC_FUNC_PDE
-         LC_FUNC_DIRECT_IO
          LC_HEADER_MM_INLINE
          LC_STRUCT_INODE
          LC_FUNC_REGISTER_CACHE
