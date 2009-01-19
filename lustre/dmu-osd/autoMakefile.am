@@ -1,0 +1,22 @@
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
+if DMU_OSD_ENABLED
+
+DMU_INC = -I $(DMU_SRC)/src/lib/libudmu/include
+
+noinst_LIBRARIES = libdmuosd.a
+libdmuosd_a_SOURCES= osd_handler.c
+libdmuosd_a_CPPFLAGS = $(LLCPPFLAGS) -DLUSTRE_VERSION=\"32\" -DBUILD_VERSION=\"1\"
+libdmuosd_a_CFLAGS = $(LLCFLAGS) ${DMU_INC}
+
+endif
+
+if MODULES
+modulefs_DATA = osd$(KMODEXT)
+endif
+
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
+DIST_SOURCES := $(osd-objs:%.o=%.c) osd_internal.h osd_oi.h osd_igif.h
