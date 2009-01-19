@@ -120,7 +120,7 @@ ksocknal_lib_tunables_init ()
 
         ksocknal_ctl_table[i].ctl_name = j++;
         ksocknal_ctl_table[i].procname = "zero_copy";
-        ksocknal_ctl_table[i].data     = ksocknal_tunables.ksnd_zc_min_frag;
+        ksocknal_ctl_table[i].data     = ksocknal_tunables.ksnd_zc_min_payload;
         ksocknal_ctl_table[i].maxlen   = sizeof (int);
         ksocknal_ctl_table[i].mode     = 0644;
         ksocknal_ctl_table[i].proc_handler = &proc_dointvec;
@@ -161,6 +161,14 @@ ksocknal_lib_tunables_init ()
         ksocknal_ctl_table[i].ctl_name = j++;
         ksocknal_ctl_table[i].procname = "nagle";
         ksocknal_ctl_table[i].data     = ksocknal_tunables.ksnd_nagle;
+        ksocknal_ctl_table[i].maxlen   = sizeof(int);
+        ksocknal_ctl_table[i].mode     = 0644;
+        ksocknal_ctl_table[i].proc_handler = &proc_dointvec;
+        i++;
+
+        ksocknal_ctl_table[i].ctl_name = j++;
+        ksocknal_ctl_table[i].procname = "round_robin";
+        ksocknal_ctl_table[i].data     = ksocknal_tunables.ksnd_round_robin;
         ksocknal_ctl_table[i].maxlen   = sizeof(int);
         ksocknal_ctl_table[i].mode     = 0644;
         ksocknal_ctl_table[i].proc_handler = &proc_dointvec;
@@ -646,7 +654,7 @@ ksocknal_lib_reset_callback(struct socket *sock, ksock_conn_t *conn)
 }
 
 int
-ksocknal_lib_zc_capable(struct socket *sock)
+ksocknal_lib_zc_capable(ksock_conn_t *conn)
 {
         return 0;
 }

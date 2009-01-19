@@ -392,15 +392,6 @@ usocklnd_set_sock_options(int fd)
         return libcfs_fcntl_nonblock(fd);
 }
 
-void
-usocklnd_init_msg(ksock_msg_t *msg, int type)
-{
-        msg->ksm_type           = type;
-        msg->ksm_csum           = 0;
-        msg->ksm_zc_req_cookie  = 0;
-        msg->ksm_zc_ack_cookie  = 0;
-}
-
 usock_tx_t *
 usocklnd_create_noop_tx(__u64 cookie)
 {
@@ -413,8 +404,8 @@ usocklnd_create_noop_tx(__u64 cookie)
         tx->tx_size = sizeof(usock_tx_t);
         tx->tx_lnetmsg = NULL;
 
-        usocklnd_init_msg(&tx->tx_msg, KSOCK_MSG_NOOP);
-        tx->tx_msg.ksm_zc_ack_cookie = cookie;
+        socklnd_init_msg(&tx->tx_msg, KSOCK_MSG_NOOP);
+        tx->tx_msg.ksm_zc_cookies[1] = cookie;
         
         tx->tx_iova[0].iov_base = (void *)&tx->tx_msg;
         tx->tx_iova[0].iov_len = tx->tx_resid = tx->tx_nob =
@@ -445,7 +436,7 @@ usocklnd_create_tx(lnet_msg_t *lntmsg)
 
         tx->tx_resid = tx->tx_nob = sizeof(ksock_msg_t) + payload_nob;
         
-        usocklnd_init_msg(&tx->tx_msg, KSOCK_MSG_LNET);
+        socklnd_init_msg(&tx->tx_msg, KSOCK_MSG_LNET);
         tx->tx_msg.ksm_u.lnetmsg.ksnm_hdr = lntmsg->msg_hdr;
         tx->tx_iova[0].iov_base = (void *)&tx->tx_msg;
         tx->tx_iova[0].iov_len = sizeof(ksock_msg_t);

@@ -18,6 +18,18 @@ Description:
 Details    : 
 
 Severity   : major
+Bugzilla   : 14634
+Description: socklnd prtocol version 3
+Details    : With current protocol V2, connections on router can be
+             blocked and can't receive any incoming messages when there is no
+             more router buffer, so ZC-ACK can't be handled (LNet message
+             can't be finalized) and will cause deadlock on router.
+             Protocol V3 has a dedicated connection for emergency messages
+             like ZC-ACK to router, messages on this dedicated connection
+             don't need any credit so will never be blocked. Also, V3 can send
+             keepalive ping in specified period for router healthy checking.
+
+Severity   : major
 Bugzilla   : 15983
 Description: workaround for OOM from o2iblnd
 Details    : OFED needs allocate big chunk of memory for QP while creating

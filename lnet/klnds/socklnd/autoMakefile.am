@@ -12,7 +12,7 @@ if DARWIN
 
   macos_PROGRAMS := ksocklnd
 
-  nodist_ksocklnd_SOURCES := socklnd.c socklnd_cb.c socklnd_modparams.c socklnd_lib-darwin.c
+  nodist_ksocklnd_SOURCES := socklnd.c socklnd_cb.c socklnd_proto.c socklnd_modparams.c socklnd_lib-darwin.c
   DIST_SOURCES += socklnd_lib-darwin.c socklnd_lib-darwin.h
 
   ksocklnd_CFLAGS := $(EXTRA_KCFLAGS)

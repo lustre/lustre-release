@@ -83,6 +83,14 @@ static int nagle = 0;
 CFS_MODULE_PARM(nagle, "i", int, 0644,
                 "enable NAGLE?");
 
+static int round_robin = 1;
+CFS_MODULE_PARM(round_robin, "i", int, 0644,
+                "Round robin for multiple interfaces");
+
+static int keepalive = 30;
+CFS_MODULE_PARM(keepalive, "i", int, 0644,
+                "# seconds before send keepalive");
+
 static int keepalive_idle = 30;
 CFS_MODULE_PARM(keepalive_idle, "i", int, 0644,
                 "# idle seconds before probe");
@@ -113,9 +121,9 @@ CFS_MODULE_PARM(enable_irq_affinity, "i", int, 0644,
                 "enable IRQ affinity");
 #endif
 
-static unsigned int zc_min_frag = (2<<10);
-CFS_MODULE_PARM(zc_min_frag, "i", int, 0644,
-                "minimum fragment to zero copy");
+static unsigned int zc_min_payload = (16 << 10);
+CFS_MODULE_PARM(zc_min_payload, "i", int, 0644,
+                "minimum payload size to zero copy");
 
 static unsigned int zc_recv = 0;
 CFS_MODULE_PARM(zc_recv, "i", int, 0644,
@@ -136,7 +144,7 @@ CFS_MODULE_PARM(backoff_max, "i", int, 0644,
 #endif
 
 #if SOCKNAL_VERSION_DEBUG
-static int protocol = 2;
+static int protocol = 3;
 CFS_MODULE_PARM(protocol, "i", int, 0644,
                 "protocol version");
 #endif
@@ -157,6 +165,8 @@ int ksocknal_tunables_init(void)
         ksocknal_tunables.ksnd_tx_buffer_size     = &tx_buffer_size;
         ksocknal_tunables.ksnd_rx_buffer_size     = &rx_buffer_size;
         ksocknal_tunables.ksnd_nagle              = &nagle;
+        ksocknal_tunables.ksnd_round_robin        = &round_robin;
+        ksocknal_tunables.ksnd_keepalive          = &keepalive;
         ksocknal_tunables.ksnd_keepalive_idle     = &keepalive_idle;
         ksocknal_tunables.ksnd_keepalive_count    = &keepalive_count;
         ksocknal_tunables.ksnd_keepalive_intvl    = &keepalive_intvl;
@@ -164,10 +174,9 @@ int ksocknal_tunables_init(void)
         ksocknal_tunables.ksnd_peercredits        = &peer_credits;
         ksocknal_tunables.ksnd_enable_csum        = &enable_csum;
         ksocknal_tunables.ksnd_inject_csum_error  = &inject_csum_error;
-        ksocknal_tunables.ksnd_zc_min_frag        = &zc_min_frag;
+        ksocknal_tunables.ksnd_zc_min_payload     = &zc_min_payload;
         ksocknal_tunables.ksnd_zc_recv            = &zc_recv;
         ksocknal_tunables.ksnd_zc_recv_min_nfrags = &zc_recv_min_nfrags;
-
 
 #ifdef CPU_AFFINITY
         ksocknal_tunables.ksnd_irq_affinity       = &enable_irq_affinity;
@@ -185,6 +194,9 @@ int ksocknal_tunables_init(void)
 #if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
         ksocknal_tunables.ksnd_sysctl             =  NULL;
 #endif
+
+        if (*ksocknal_tunables.ksnd_zc_min_payload < (2 << 10))
+                *ksocknal_tunables.ksnd_zc_min_payload = (2 << 10);
 
         /* initialize platform-sepcific tunables */
         return ksocknal_lib_tunables_init();
