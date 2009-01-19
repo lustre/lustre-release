@@ -77,7 +77,7 @@ ksocknal_lib_tunables_init ()
 		 sizeof (int), 0644, NULL, &proc_dointvec};
 #if SOCKNAL_ZC
         ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "zero_copy", ksocknal_tunables.ksnd_zc_min_frag, 
+		{j++, "zero_copy", ksocknal_tunables.ksnd_zc_min_payload, 
 		 sizeof (int), 0644, NULL, &proc_dointvec};
 #endif
         ksocknal_ctl_table[i++] = (ctl_table)
@@ -374,7 +374,7 @@ ksocknal_lib_send_iov (ksock_conn_t *conn, ksock_tx_t *tx)
          * or leave them alone. */
 
 #if (SOCKNAL_ZC && SOCKNAL_VADDR_ZC)
-        if (zcsize >= ksocknal_data.ksnd_zc_min_frag &&
+        if (tx->tx_zc_capable &&
             (sock->sk->sk_route_caps & NETIF_F_SG) &&
             (sock->sk->sk_route_caps & (NETIF_F_IP_CSUM | NETIF_F_NO_CSUM | NETIF_F_HW_CSUM)) &&
             (page = ksocknal_kvaddr_to_page (vaddr)) != NULL) {
@@ -420,7 +420,7 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
          * or leave them alone. */
 
 #if SOCKNAL_ZC
-        if (kiov->kiov_len >= *ksocknal_tunables.ksnd_zc_min_frag &&
+        if (tx->tx_zc_capable &&
             (sock->sk->sk_route_caps & NETIF_F_SG) &&
             (sock->sk->sk_route_caps & (NETIF_F_IP_CSUM | NETIF_F_NO_CSUM | NETIF_F_HW_CSUM))) {
                 struct page   *page = kiov->kiov_page;

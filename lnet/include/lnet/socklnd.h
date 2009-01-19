@@ -50,6 +50,8 @@
 #define SOCKLND_CONN_BULK_OUT   3
 #define SOCKLND_CONN_NTYPES     4
 
+#define SOCKLND_CONN_ACK        SOCKLND_CONN_BULK_IN
+
 typedef struct {
         __u32                   kshm_magic;     /* magic number of socklnd message */
         __u32                   kshm_version;   /* version of socklnd message */
@@ -72,18 +74,26 @@ typedef struct {
 typedef struct {
         __u32                   ksm_type;       /* type of socklnd message */
         __u32                   ksm_csum;       /* checksum if != 0 */
-        __u64                   ksm_zc_req_cookie; /* ack required if != 0 */
-        __u64                   ksm_zc_ack_cookie; /* ack if != 0 */
+        __u64                   ksm_zc_cookies[2]; /* Zero-Copy request/ACK cookie */
         union {
                 ksock_lnet_msg_t lnetmsg;       /* lnet message, it's empty if it's NOOP */
         } WIRE_ATTR ksm_u;
 } WIRE_ATTR ksock_msg_t;
 
-#define KSOCK_MSG_NOOP          0xc0            /* ksm_u empty */ 
+static inline void
+socklnd_init_msg(ksock_msg_t *msg, int type)
+{
+        msg->ksm_csum           = 0;
+        msg->ksm_type           = type;
+        msg->ksm_zc_cookies[0]  = msg->ksm_zc_cookies[1]  = 0;
+}
+
+#define KSOCK_MSG_NOOP          0xc0            /* ksm_u empty */
 #define KSOCK_MSG_LNET          0xc1            /* lnet msg */
 
 /* We need to know this number to parse hello msg from ksocklnd in
- * other LND (usocklnd, for example) */ 
+ * other LND (usocklnd, for example) */
 #define KSOCK_PROTO_V2          2
+#define KSOCK_PROTO_V3          3
 
 #endif
