@@ -31,12 +31,6 @@ tbd Sun Microsystems, Inc.
 	  of Lustre filesystem with 4K stack may cause a stack overflow. For
 	  more information, please refer to bugzilla 17630.
 
-Severity   : normal
-Frequency  : always with long access acl
-Bugzilla   : 17636
-Descriptoin: mds can't pack reply with long acl.
-Details    : mds don't control size of acl but they limited by reint/getattr
-             reply buffer.
 
 Severity   : enhancement
 Bugzilla   : 18061
@@ -122,6 +116,21 @@ Details    : Page index integer overflow in ll_read_ahead_page
 	* NFS export disabled when stack size < 8192. Since the NFSv4 export of
 	  Lustre filesystem with 4K stack may cause a stack overflow. For more
 	  information, please refer to bugzilla 17630.
+
+Severity   : normal
+Frequency  : rarw
+Bugzilla   : 17972
+Descriptoin: stuck in cache_remove_extent() or panic with accessing to already
+             freed look.
+Details    : release lock refernce only after add page to pages list.
+
+Severity   : normal
+Frequency  : always with long access acl
+Bugzilla   : 17636
+Descriptoin: mds can't pack reply with long acl.
+Details    : mds don't control size of acl but they limited by reint/getattr
+             reply buffer.
+
 
 Severity   : major
 Frequency  : on remount
