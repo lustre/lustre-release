@@ -858,6 +858,8 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         lock_res_and_lock(lock);
         if (lock->l_flags & LDLM_FL_AST_SENT) {
                 body->lock_flags |= LDLM_FL_AST_SENT;
+                /* copy ast flags like LDLM_FL_DISCARD_DATA */
+                body->lock_flags |= (lock->l_flags & LDLM_AST_FLAGS);
 
                 /* We might get here prior to ldlm_handle_enqueue setting
                  * LDLM_FL_CANCEL_ON_BLOCK flag. Then we will put this lock
