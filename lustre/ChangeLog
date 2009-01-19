@@ -44,6 +44,13 @@
 	  information, please refer to bugzilla 17630.
 
 Severity   : normal
+Frequency  : rarw
+Bugzilla   : 17972
+Descriptoin: stuck in cache_remove_extent() or panic with accessing to already
+             freed look.
+Details    : release lock refernce only after add page to pages list.
+
+Severity   : normal
 Frequency  : start MDS on uncleanly shutdowned MDS device
 Bugzilla   : 16839
 Descriptoin: ll_sync thread stay in waiting mds<>ost recovery finished

@@ -86,6 +86,7 @@ int cache_add_extent(struct lustre_cache *cache, struct ldlm_res_id *res,
         struct lustre_handle tmplockh;
         ldlm_policy_data_t tmpex;
         struct ldlm_lock *lock = NULL;
+        int mode = 0;
         ENTRY;
 
         /* Don't add anything second time */
@@ -108,7 +109,6 @@ int cache_add_extent(struct lustre_cache *cache, struct ldlm_res_id *res,
                          lock->l_policy_data.l_extent.start,
                          lock->l_policy_data.l_extent.end, extent->oap_obj_off);
         } else {
-                int mode;
                 /* Real extent width calculation here once we have real
                  * extents
                  */
@@ -138,13 +138,16 @@ int cache_add_extent(struct lustre_cache *cache, struct ldlm_res_id *res,
                                "under us\n");
                         RETURN(-ENOLCK);
                 }
-                ldlm_lock_decref(&tmplockh, mode);
         }
 
         spin_lock(&lock->l_extents_list_lock);
         list_add_tail(&extent->oap_page_list, &lock->l_extents_list);
         spin_unlock(&lock->l_extents_list_lock);
         extent->oap_ldlm_lock = lock;
+        LASSERTF(!(lock->l_flags & LDLM_FL_CANCEL), "Adding a page to already "
+                 "cancelled lock %p", lock);
+        if (mode)
+                ldlm_lock_decref(&tmplockh, mode);
         LDLM_LOCK_PUT(lock);
 
         RETURN(0);
