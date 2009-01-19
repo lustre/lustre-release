@@ -131,6 +131,13 @@ Details    : Page index integer overflow in ll_read_ahead_page
 	  information, please refer to bugzilla 17630.
 
 Severity   : normal
+Frequency  : rarw
+Bugzilla   : 17972
+Descriptoin: stuck in cache_remove_extent() or panic with accessing to already
+             freed look.
+Details    : release lock refernce only after add page to pages list.
+
+Severity   : normal
 Frequency  : always with long access acl
 Bugzilla   : 17636
 Descriptoin: mds can't pack reply with long acl.
