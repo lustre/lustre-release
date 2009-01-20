@@ -1111,7 +1111,7 @@ enum obd_cleanup_stage {
 #define KEY_CLEAR_FS            "clear_fs"
 #define KEY_BLOCKSIZE           "blocksize"
 #define KEY_BLOCKSIZE_BITS      "blocksize_bits"
-#define KEY_FIEMAP              "FIEMAP"
+#define KEY_FIEMAP              "fiemap"
 #define KEY_SPTLRPC_CONF        "sptlrpc_conf"
 #define KEY_MGSSEC              "mgssec"
 /* XXX unused ?*/
