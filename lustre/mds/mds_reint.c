@@ -1617,6 +1617,7 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
         *dchildp = mds_lookup(obd, name, *dparentp, namelen - 1);
         if (IS_ERR(*dchildp)) {
                 rc = PTR_ERR(*dchildp);
+                *dchildp = NULL;
                 CDEBUG(D_INODE, "child lookup error %d\n", rc);
                 GOTO(cleanup, rc);
         }
