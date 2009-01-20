@@ -1814,7 +1814,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
-        if ((lock->l_flags & LDLM_FL_FAIL_LOC) && 
+        if ((lock->l_flags & LDLM_FL_FAIL_LOC) &&
             lustre_msg_get_opc(req->rq_reqmsg) == LDLM_BL_CALLBACK)
                 OBD_RACE(OBD_FAIL_LDLM_CP_BL_RACE);
 
@@ -2494,6 +2494,7 @@ EXPORT_SYMBOL(ldlm_lock_dump);
 EXPORT_SYMBOL(ldlm_lock_dump_handle);
 EXPORT_SYMBOL(ldlm_cancel_locks_for_export);
 EXPORT_SYMBOL(ldlm_reprocess_all_ns);
+EXPORT_SYMBOL(ldlm_lock_allow_match_locked);
 EXPORT_SYMBOL(ldlm_lock_allow_match);
 EXPORT_SYMBOL(ldlm_lock_downgrade);
 EXPORT_SYMBOL(ldlm_lock_convert);

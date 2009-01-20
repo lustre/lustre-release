@@ -998,11 +998,16 @@ static struct ldlm_lock *search_queue(struct list_head *queue,
         return NULL;
 }
 
+void ldlm_lock_allow_match_locked(struct ldlm_lock *lock)
+{
+        lock->l_flags |= LDLM_FL_LVB_READY;
+        cfs_waitq_signal(&lock->l_waitq);
+}
+
 void ldlm_lock_allow_match(struct ldlm_lock *lock)
 {
         lock_res_and_lock(lock);
-        lock->l_flags |= LDLM_FL_LVB_READY;
-        cfs_waitq_signal(&lock->l_waitq);
+        ldlm_lock_allow_match_locked(lock);
         unlock_res_and_lock(lock);
 }
 
