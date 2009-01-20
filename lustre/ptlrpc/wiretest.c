@@ -168,7 +168,15 @@ void lustre_assert_wire_constants(void)
                  (long long)MDS_QUOTACHECK);
         LASSERTF(MDS_QUOTACTL == 48, " found %lld\n",
                  (long long)MDS_QUOTACTL);
-        LASSERTF(MDS_LAST_OPC == 51, " found %lld\n",
+        LASSERTF(MDS_GETXATTR == 49, " found %lld\n",
+                 (long long)MDS_GETXATTR);
+        LASSERTF(MDS_SETXATTR == 50, " found %lld\n",
+                 (long long)MDS_SETXATTR);
+        LASSERTF(MDS_WRITEPAGE == 51, " found %lld\n",
+                 (long long)MDS_WRITEPAGE);
+        LASSERTF(MDS_IS_SUBDIR == 52, " found %lld\n",
+                 (long long)MDS_IS_SUBDIR);
+        LASSERTF(MDS_LAST_OPC == 53, " found %lld\n",
                  (long long)MDS_LAST_OPC);
         LASSERTF(REINT_SETATTR == 1, " found %lld\n",
                  (long long)REINT_SETATTR);
