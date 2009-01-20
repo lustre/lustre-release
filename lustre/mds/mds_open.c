@@ -1129,12 +1129,6 @@ int mds_open(struct mds_update_record *rec, int offset,
         if (use_parent)
                 dchild = dget(dparent);
 
-        if (IS_ERR(dchild)) {
-                rc = PTR_ERR(dchild);
-                dchild = NULL; /* don't confuse mds_finish_transno() below */
-                GOTO(cleanup, rc);
-        }
-
         if (rec->ur_flags & MDS_OPEN_JOIN_FILE) {
                 acc_mode = accmode(dchild->d_inode, rec->ur_flags);
                 GOTO(found_child, rc);
