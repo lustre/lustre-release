@@ -1027,7 +1027,7 @@ enum obd_cleanup_stage {
 #define KEY_BLOCKSIZE           "blocksize"
 #define KEY_BLOCKSIZE_BITS      "blocksize_bits"
 #define KEY_MAX_EASIZE          "max_ea_size"
-#define KEY_FIEMAP              "FIEMAP"
+#define KEY_FIEMAP              "fiemap"
 /* XXX unused */
 #define KEY_ASYNC               "async"
 
