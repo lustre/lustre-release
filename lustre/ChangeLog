@@ -45,7 +45,13 @@
 	  information, please refer to bugzilla 17630.
 
 Severity   : normal
-Frequency  : rarw
+Frequency  : rare
+Bugzilla   : 18238
+Descriptoin: panic in mds_open
+Details    : don't confuse mds_finish_transno() with PTR_ERR(-ENOENT)
+
+Severity   : normal
+Frequency  : rare
 Bugzilla   : 17972
 Descriptoin: stuck in cache_remove_extent() or panic with accessing to already
              freed look.
