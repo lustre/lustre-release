@@ -1361,15 +1361,6 @@ struct obd_ops {
          * Also, add a wrapper function in include/linux/obd_class.h. */
 };
 
-/* TODO: lmv_stripe_md should contain mds capabilities for all slave fids */
-struct lmv_stripe_md {
-        __u32         mea_magic;
-        __u32         mea_count;
-        __u32         mea_master;
-        __u32         mea_padding;
-        struct lu_fid mea_ids[0];
-};
-
 enum {
         LUSTRE_OPC_MKDIR    = (1 << 0),
         LUSTRE_OPC_SYMLINK  = (1 << 1),

@@ -251,9 +251,9 @@ void lustre_assert_wire_constants(void)
                  (long long)OBD_QC_CALLBACK);
         LASSERTF(OBD_LAST_OPC == 403, " found %lld\n",
                  (long long)OBD_LAST_OPC);
-        LASSERTF(QUOTA_DQACQ == 901, " found %lld\n",
+        LASSERTF(QUOTA_DQACQ == 601, " found %lld\n",
                  (long long)QUOTA_DQACQ);
-        LASSERTF(QUOTA_DQREL == 902, " found %lld\n",
+        LASSERTF(QUOTA_DQREL == 602, " found %lld\n",
                  (long long)QUOTA_DQREL);
         LASSERTF(MGS_CONNECT == 250, " found %lld\n",
                  (long long)MGS_CONNECT);

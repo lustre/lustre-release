@@ -1951,13 +1951,25 @@ void lustre_swab_lov_desc (struct lov_desc *ld)
         /* uuid endian insensitive */
 }
 
-/*begin adding MDT by huanghua@clusterfs.com*/
 void lustre_swab_lmv_desc (struct lmv_desc *ld)
 {
         __swab32s (&ld->ld_tgt_count);
         __swab32s (&ld->ld_active_tgt_count);
+        __swab32s (&ld->ld_default_stripe_count);
+        __swab32s (&ld->ld_pattern);
+        __swab64s (&ld->ld_default_hash_size);
+        __swab32s (&ld->ld_qos_maxage);
         /* uuid endian insensitive */
 }
+
+void lustre_swab_lmv_stripe_md (struct lmv_stripe_md *mea)
+{
+        __swab32s(&mea->mea_magic);
+        __swab32s(&mea->mea_count);
+        __swab32s(&mea->mea_master);
+        CLASSERT(offsetof(typeof(*mea), mea_padding) != 0);
+}
+
 
 static void print_lum (struct lov_user_md *lum)
 {
