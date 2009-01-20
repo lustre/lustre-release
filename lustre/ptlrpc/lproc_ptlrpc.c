@@ -117,13 +117,13 @@ struct ll_rpc_opcode {
         { LLOG_CATINFO,                  "llog_catinfo" },
         { LLOG_ORIGIN_HANDLE_PREV_BLOCK, "llog_origin_handle_prev_block" },
         { LLOG_ORIGIN_HANDLE_DESTROY,    "llog_origin_handle_destroy" },
-        { FLD_QUERY,        "fld_query" },
+        { QUOTA_DQACQ,      "quota_acquire" },
+        { QUOTA_DQREL,      "quota_release" },
         { SEQ_QUERY,        "seq_query" },
         { SEC_CTX_INIT,     "sec_ctx_init" },
         { SEC_CTX_INIT_CONT,"sec_ctx_init_cont" },
         { SEC_CTX_FINI,     "sec_ctx_fini" },
-        { QUOTA_DQACQ,      "quota_acquire" },
-        { QUOTA_DQREL,      "quota_release" }
+        { FLD_QUERY,        "fld_query" }
 };
 
 struct ll_eopcode {

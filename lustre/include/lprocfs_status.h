@@ -222,9 +222,9 @@ static inline int opcode_offset(__u32 opc) {
                         (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
                         (OST_LAST_OPC - OST_FIRST_OPC));
-        } else if (opc < FLD_LAST_OPC) {
-                /* FLD opcode */
-                return (opc - FLD_FIRST_OPC +
+        } else if (opc < QUOTA_LAST_OPC) {
+                /* LQUOTA Opcode */
+                return (opc - QUOTA_FIRST_OPC +
                         (LLOG_LAST_OPC - LLOG_FIRST_OPC) +
                         (OBD_LAST_OPC - OBD_FIRST_OPC) +
                         (MGS_LAST_OPC - MGS_FIRST_OPC) +
@@ -234,7 +234,7 @@ static inline int opcode_offset(__u32 opc) {
         } else if (opc < SEQ_LAST_OPC) {
                 /* SEQ opcode */
                 return (opc - SEQ_FIRST_OPC +
-                        (FLD_LAST_OPC - FLD_FIRST_OPC) +
+                        (QUOTA_LAST_OPC- QUOTA_FIRST_OPC) +
                         (LLOG_LAST_OPC - LLOG_FIRST_OPC) +
                         (OBD_LAST_OPC - OBD_FIRST_OPC) +
                         (MGS_LAST_OPC - MGS_FIRST_OPC) +
@@ -245,19 +245,19 @@ static inline int opcode_offset(__u32 opc) {
                 /* SEC opcode */
                 return (opc - SEC_FIRST_OPC +
                         (SEQ_LAST_OPC - SEQ_FIRST_OPC) +
-                        (FLD_LAST_OPC - FLD_FIRST_OPC) +
+                        (QUOTA_LAST_OPC- QUOTA_FIRST_OPC) +
                         (LLOG_LAST_OPC - LLOG_FIRST_OPC) +
                         (OBD_LAST_OPC - OBD_FIRST_OPC) +
                         (MGS_LAST_OPC - MGS_FIRST_OPC) +
                         (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
                         (OST_LAST_OPC - OST_FIRST_OPC));
-        } else if (opc < QUOTA_LAST_OPC) {
-                /* LQUOTA Opcode */
-                return (opc - QUOTA_FIRST_OPC +
+        } else if (opc < FLD_LAST_OPC) {
+                /* FLD opcode */
+                 return (opc - FLD_FIRST_OPC +
                         (SEC_LAST_OPC - SEC_FIRST_OPC) +
                         (SEQ_LAST_OPC - SEQ_FIRST_OPC) +
-                        (FLD_LAST_OPC - FLD_FIRST_OPC) +
+                        (QUOTA_LAST_OPC- QUOTA_FIRST_OPC) +
                         (LLOG_LAST_OPC - LLOG_FIRST_OPC) +
                         (OBD_LAST_OPC - OBD_FIRST_OPC) +
                         (MGS_LAST_OPC - MGS_FIRST_OPC) +
@@ -270,16 +270,17 @@ static inline int opcode_offset(__u32 opc) {
         }
 }
 
-#define LUSTRE_MAX_OPCODES ((LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
+
+#define LUSTRE_MAX_OPCODES ((OST_LAST_OPC - OST_FIRST_OPC)     + \
                             (MDS_LAST_OPC - MDS_FIRST_OPC)     + \
-                            (OST_LAST_OPC - OST_FIRST_OPC)     + \
-                            (OBD_LAST_OPC - OBD_FIRST_OPC)     + \
-                            (FLD_LAST_OPC - FLD_FIRST_OPC)     + \
-                            (SEQ_LAST_OPC - SEQ_FIRST_OPC)     + \
+                            (LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
                             (MGS_LAST_OPC - MGS_FIRST_OPC)     + \
+                            (OBD_LAST_OPC - OBD_FIRST_OPC)     + \
                             (LLOG_LAST_OPC - LLOG_FIRST_OPC)   + \
+                            (QUOTA_LAST_OPC - QUOTA_FIRST_OPC) + \
+                            (SEQ_LAST_OPC - SEQ_FIRST_OPC)     + \
                             (SEC_LAST_OPC - SEC_FIRST_OPC)     + \
-                            (QUOTA_LAST_OPC - QUOTA_FIRST_OPC))
+                            (FLD_LAST_OPC - FLD_FIRST_OPC))
 
 #define EXTRA_MAX_OPCODES ((PTLRPC_LAST_CNTR - PTLRPC_FIRST_CNTR)  + \
                            (EXTRA_LAST_OPC - EXTRA_FIRST_OPC))
