@@ -216,11 +216,9 @@ static void ll_free_user_pages(struct page **pages, int npages, int do_dirty)
         OBD_FREE(pages, npages * sizeof(*pages));
 }
 
-static ssize_t ll_direct_IO_26_seg(const struct lu_env *env, struct cl_io *io,
-                                   int rw, struct inode *inode,
-                                   struct address_space *mapping,
-                                   size_t size, loff_t file_offset,
-                                   struct page **pages, int page_count)
+ssize_t ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io,
+                           int rw, struct inode *inode,
+                           struct ll_dio_pages *pv)
 {
         struct cl_page    *clp;
         struct ccc_page   *clup;
@@ -229,8 +227,11 @@ static ssize_t ll_direct_IO_26_seg(const struct lu_env *env, struct cl_io *io,
         struct cl_sync_io *anchor = &ccc_env_info(env)->cti_sync_io;
         int i;
         ssize_t rc = 0;
-        ssize_t size_orig = size;
-        size_t page_size  = cl_page_size(obj);
+        loff_t file_offset  = pv->ldp_start_offset;
+        size_t size         = pv->ldp_size;
+        int page_count      = pv->ldp_nr;
+        struct page **pages = pv->ldp_pages;
+        size_t page_size    = cl_page_size(obj);
         ENTRY;
 
         cl_sync_io_init(anchor, page_count);
@@ -238,8 +239,11 @@ static ssize_t ll_direct_IO_26_seg(const struct lu_env *env, struct cl_io *io,
         queue = &io->ci_queue;
         cl_2queue_init(queue);
         for (i = 0; i < page_count; i++) {
+                if (pv->ldp_offsets)
+                    file_offset = pv->ldp_offsets[i];
+                LASSERT(!(file_offset & (page_size - 1)));
                 clp = cl_page_find(env, obj, cl_index(obj, file_offset),
-                                   pages[i], CPT_TRANSIENT);
+                                   pv->ldp_pages[i], CPT_TRANSIENT);
                 if (IS_ERR(clp)) {
                         rc = PTR_ERR(clp);
                         break;
@@ -319,7 +323,7 @@ static ssize_t ll_direct_IO_26_seg(const struct lu_env *env, struct cl_io *io,
                                 cl_sync_io_note(anchor, +1);
                         /* wait for the IO to be finished. */
                         rc = cl_sync_io_wait(env, io, &queue->c2_qout,
-                                             anchor) ?: size_orig;
+                                             anchor) ?: pv->ldp_size;
                 }
         }
 
@@ -327,6 +331,23 @@ static ssize_t ll_direct_IO_26_seg(const struct lu_env *env, struct cl_io *io,
         cl_2queue_disown(env, io, queue);
         cl_2queue_fini(env, queue);
         RETURN(rc);
+}
+EXPORT_SYMBOL(ll_direct_rw_pages);
+
+static ssize_t ll_direct_IO_26_seg(const struct lu_env *env, struct cl_io *io,
+                                   int rw, struct inode *inode,
+                                   struct address_space *mapping,
+                                   size_t size, loff_t file_offset,
+                                   struct page **pages, int page_count)
+{
+    struct ll_dio_pages pvec = { .ldp_pages        = pages,
+                                 .ldp_nr           = page_count,
+                                 .ldp_size         = size,
+                                 .ldp_offsets      = NULL,
+                                 .ldp_start_offset = file_offset
+                               };
+
+    return ll_direct_rw_pages(env, io, rw, inode, &pvec);
 }
 
 /* This is the maximum size of a single O_DIRECT request, based on a 128kB

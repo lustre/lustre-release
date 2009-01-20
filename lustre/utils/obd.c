@@ -2142,14 +2142,15 @@ static int jt_blockdev_find_module(const char *module)
 {
         FILE *fp;
         int found = 0;
-        char modname[256];
+        char buf[1024];
 
         fp = fopen("/proc/modules", "r");
         if (fp == NULL)
                 return -1;
 
-        while (fscanf(fp, "%s %*s %*s %*s %*s %*s", modname) == 1) {
-                if (strcmp(module, modname) == 0) {
+        while (fgets(buf, 1024, fp) != NULL) {
+                *strchr(buf, ' ') = 0;
+                if (strcmp(module, buf) == 0) {
                         found = 1;
                         break;
                 }

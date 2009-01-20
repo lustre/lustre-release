@@ -1216,4 +1216,25 @@ static inline int cl_merge_lvb(struct inode *inode)
 
 struct obd_capa *cl_capa_lookup(struct inode *inode, enum cl_req_type crt);
 
+/** direct write pages */
+struct ll_dio_pages {
+        /** page array to be written. we don't support
+         * partial pages except the last one. */
+        struct page **ldp_pages;
+        /* offset of each page */
+        loff_t       *ldp_offsets;
+        /** if ldp_offsets is NULL, it means a sequential
+         * pages to be written, then this is the file offset
+         * of the * first page. */
+        loff_t        ldp_start_offset;
+        /** how many bytes are to be written. */
+        size_t        ldp_size;
+        /** # of pages in the array. */
+        int           ldp_nr;
+};
+
+extern ssize_t ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io,
+                                  int rw, struct inode *inode,
+                                  struct ll_dio_pages *pv);
+
 #endif /* LLITE_INTERNAL_H */

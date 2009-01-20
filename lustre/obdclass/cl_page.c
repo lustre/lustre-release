@@ -1259,7 +1259,12 @@ void cl_page_completion(const struct lu_env *env,
                                (const struct lu_env *,
                                 const struct cl_page_slice *, int), ioret);
 
-        KLASSERT(!PageWriteback(cl_page_vmpage(env, pg)));
+        /* Don't assert the page writeback bit here because the lustre file
+         * may be as a backend of swap space. in this case, the page writeback
+         * is set by VM, and obvious we shouldn't clear it at all. Fortunately
+         * this type of pages are all TRANSIENT pages. */
+        KLASSERT(ergo(pg->cp_type == CPT_CACHEABLE,
+                      !PageWriteback(cl_page_vmpage(env, pg))));
         EXIT;
 }
 EXPORT_SYMBOL(cl_page_completion);

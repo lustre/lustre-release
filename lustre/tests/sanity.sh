@@ -8,7 +8,7 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 # bug number for skipped test: 13297 2108 9789 3637 9789 3561 12622 12653 12653 5188 10764 16260
-ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   65a   65e   68   75    119d  $SANITY_EXCEPT"
+ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   65a   65e   68b   75    119d  $SANITY_EXCEPT"
 # bug number for skipped test: 2108 9789 3637 9789 3561 5188/5749 1443
 #ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27m 42a 42b 42c 42d 45 68 76"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
@@ -3075,12 +3075,15 @@ LLOOP=
 cleanup_68() {
 	trap 0
 	if [ ! -z "$LLOOP" ]; then
-		swapoff $LLOOP || error "swapoff failed"
+		if swapon -s | grep -q $LLOOP; then
+			swapoff $LLOOP || error "swapoff failed"
+		fi
+
 		$LCTL blockdev_detach $LLOOP || error "detach failed"
 		rm -f $LLOOP
 		unset LLOOP
 	fi
-	rm -f $DIR/f68
+	rm -f $DIR/f68*
 }
 
 meminfo() {
@@ -3091,10 +3094,29 @@ swap_used() {
 	swapon -s | awk '($1 == "'$1'") { print $4 }'
 }
 
+# test case for lloop driver, basic function
+test_68a() {
+	[ "$UID" != 0 ] && skip "must run as root" && return
+
+	grep -q llite_lloop /proc/modules
+	[ $? -ne 0 ] && skip "can't find module llite_lloop" && return
+
+	LLOOP=$TMP/lloop.`date +%s`.`date +%N`
+	dd if=/dev/zero of=$DIR/f68a bs=4k count=1024
+	$LCTL blockdev_attach $DIR/f68a $LLOOP || error "attach failed"
+
+	trap cleanup_68 EXIT
+
+	directio rdwr $LLOOP 0 1024 4096 || error "direct write failed"
+	directio rdwr $LLOOP 0 1025 4096 && error "direct write should fail"
+
+	cleanup_68
+}
+run_test 68a "lloop driver - basic test ========================"
 
 # excercise swapping to lustre by adding a high priority swapfile entry
 # and then consuming memory until it is used.
-test_68() {
+test_68b() {  # was test_68
 	[ "$UID" != 0 ] && skip "must run as root" && return
 	lctl get_param -n devices | grep -q obdfilter && \
 		skip "local OST" && return
@@ -3110,10 +3132,10 @@ test_68() {
 	[[ $NR_BLOCKS -le 2048 ]] && NR_BLOCKS=2048
 
 	LLOOP=$TMP/lloop.`date +%s`.`date +%N`
-	dd if=/dev/zero of=$DIR/f68 bs=64k seek=$NR_BLOCKS count=1
-	mkswap $DIR/f68
+	dd if=/dev/zero of=$DIR/f68b bs=64k seek=$NR_BLOCKS count=1
+	mkswap $DIR/f68b
 
-	$LCTL blockdev_attach $DIR/f68 $LLOOP || error "attach failed"
+	$LCTL blockdev_attach $DIR/f68b $LLOOP || error "attach failed"
 
 	trap cleanup_68 EXIT
 
@@ -3128,7 +3150,7 @@ test_68() {
 
 	[ $SWAPUSED -eq 0 ] && echo "no swap used???" || true
 }
-run_test 68 "support swapping to Lustre ========================"
+run_test 68b "support swapping to Lustre ========================"
 
 # bug5265, obdfilter oa2dentry return -ENOENT
 # #define OBD_FAIL_OST_ENOENT 0x217
