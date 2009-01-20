@@ -2,13 +2,8 @@ MODULES := obdfilter
 
 obdfilter-objs := filter.o filter_io.o filter_log.o
 obdfilter-objs += lproc_obdfilter.o filter_lvb.o
-
-ifeq ($(PATCHLEVEL),4)
-obdfilter-objs += filter_io_24.o
-else
 obdfilter-objs += filter_io_26.o
-endif # PATCHLEVEL 
 
-EXTRA_DIST = $(obdfilter-objs:%.o=%.c) filter_io_24.c filter_io_26.c filter_internal.h
+EXTRA_DIST = $(obdfilter-objs:%.o=%.c) filter_internal.h
 
 @INCLUDE_RULES@

@@ -7,12 +7,10 @@ lvfs-objs := lvfs_common.o lvfs_linux.o fsfilt.o upcall_cache.o prng.o lvfs_lib.
 
 @QUOTA_TRUE@quotafmt-objs := quotafmt_test.o
 
-ifeq ($(PATCHLEVEL),6)
 fsfilt_@BACKINGFS@-objs := fsfilt-@BACKINGFS@.o
 
 $(obj)/fsfilt-%.c: $(obj)/fsfilt_%.c
 	ln -s $< $@
-endif
 
 EXTRA_DIST = $(lvfs-objs:.o=.c)  $(quotafmt-objs:.o=.c) \
 	fsfilt_ext3.c fsfilt_reiserfs.c \
