@@ -8,4 +8,8 @@ lustre-objs += vvp_dev.o vvp_page.o vvp_lock.o vvp_io.o vvp_object.o
 
 llite_lloop-objs := lloop.o
 
+EXTRA_DIST := $(lustre-objs:.o=.c) llite_internal.h rw26.c super25.c
+EXTRA_DIST += $(llite_lloop-objs:.o=.c)
+EXTRA_DIST += vvp_internal.h
+
 @INCLUDE_RULES@
