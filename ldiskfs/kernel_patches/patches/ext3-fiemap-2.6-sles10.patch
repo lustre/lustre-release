@@ -1,11 +1,11 @@
 A large part of this code is from the generic VFS code in fs/ioctl.c in the
 upstream kernel.
 
-Index: linux-2.6.16.60-0.23/fs/ext3/ioctl.c
+Index: linux-2.6.16.60-0.33/fs/ext3/ioctl.c
 ===================================================================
---- linux-2.6.16.60-0.23.orig/fs/ext3/ioctl.c
-+++ linux-2.6.16.60-0.23/fs/ext3/ioctl.c
-@@ -17,6 +17,159 @@
+--- linux-2.6.16.60-0.33.orig/fs/ext3/ioctl.c
++++ linux-2.6.16.60-0.33/fs/ext3/ioctl.c
+@@ -17,6 +17,161 @@
  #include <linux/namei.h>
  
  #include <linux/lustre_iam.h>
@@ -19,9 +19,9 @@ Index: linux-2.6.16.60-0.23/fs/ext3/ioctl.c
 + * @fieinfo:   Fiemap context passed into ->fiemap
 + * @logical:   Extent logical start offset, in bytes
 + * @phys:      Extent physical start offset, in bytes
-+ * @len:	Extent length, in bytes
++ * @len:       Extent length, in bytes
 + * @flags:     FIEMAP_EXTENT flags that describe this extent
-+ * @lun:	LUN on which this extent resides
++ * @lun:       LUN on which this extent resides
 + *
 + * Called from file system ->fiemap callback. Will populate extent
 + * info as passed in via arguments and copy to user memory. On
@@ -31,9 +31,9 @@ Index: linux-2.6.16.60-0.23/fs/ext3/ioctl.c
 + * extent that will fit in user array.
 + */
 +#define SET_UNKNOWN_FLAGS      (FIEMAP_EXTENT_DELALLOC)
-+#define SET_NO_DIRECT_FLAGS    (FIEMAP_EXTENT_DATA_COMPRESSED	\
-+				|FIEMAP_EXTENT_DATA_ENCRYPTED	\
++#define SET_NO_DIRECT_FLAGS    (FIEMAP_EXTENT_DATA_ENCRYPTED	\
 +				|FIEMAP_EXTENT_NET)
++#define SET_NO_UNMOUNTED_IO_FLAGS       (FIEMAP_EXTENT_DATA_ENCRYPTED)
 +#define SET_NOT_ALIGNED_FLAGS  (FIEMAP_EXTENT_DATA_TAIL|FIEMAP_EXTENT_DATA_INLINE)
 +int fiemap_fill_next_extent(struct fiemap_extent_info *fieinfo, u64 logical,
 +			    u64 phys, u64 len, u32 flags, dev_t dev)
@@ -43,19 +43,21 @@ Index: linux-2.6.16.60-0.23/fs/ext3/ioctl.c
 +
 +	/* only count the extents */
 +	if (fieinfo->fi_extents_max == 0) {
-+		 fieinfo->fi_extents_mapped++;
-+		 return (flags & FIEMAP_EXTENT_LAST) ? 1 : 0;
++		fieinfo->fi_extents_mapped++;
++		return (flags & FIEMAP_EXTENT_LAST) ? 1 : 0;
 +	}
 +
 +	if (fieinfo->fi_extents_mapped >= fieinfo->fi_extents_max)
-+		 return 1;
++		return 1;
 +
 +	if (flags & SET_UNKNOWN_FLAGS)
-+		 flags |= FIEMAP_EXTENT_UNKNOWN;
++		flags |= FIEMAP_EXTENT_UNKNOWN;
 +	if (flags & SET_NO_DIRECT_FLAGS)
-+		 flags |= FIEMAP_EXTENT_NO_DIRECT;
++		flags |= FIEMAP_EXTENT_NO_DIRECT;
 +	if (flags & SET_NOT_ALIGNED_FLAGS)
-+		 flags |= FIEMAP_EXTENT_NOT_ALIGNED;
++		flags |= FIEMAP_EXTENT_NOT_ALIGNED;
++	if (flags & SET_NO_UNMOUNTED_IO_FLAGS)
++		flags |= FIEMAP_EXTENT_ENCODED;
 +
 +	extent.fe_logical = logical;
 +	extent.fe_physical = phys;
@@ -65,11 +67,11 @@ Index: linux-2.6.16.60-0.23/fs/ext3/ioctl.c
 +
 +	dest += fieinfo->fi_extents_mapped;
 +	if (copy_to_user(dest, &extent, sizeof(extent)))
-+		 return -EFAULT;
++		return -EFAULT;
 +
 +	fieinfo->fi_extents_mapped++;
 +	if (fieinfo->fi_extents_mapped == fieinfo->fi_extents_max)
-+		 return 1;
++		return 1;
 +
 +	return (flags & FIEMAP_EXTENT_LAST) ? 1 : 0;
 +}
@@ -131,11 +133,11 @@ Index: linux-2.6.16.60-0.23/fs/ext3/ioctl.c
 +	int error = 0;
 +
 +	if (copy_from_user(&fiemap, (struct fiemap __user *) arg,
-+			     sizeof(struct fiemap)))
++			   sizeof(struct fiemap)))
 +		 return -EFAULT;
 +
 +	if (fiemap.fm_extent_count > FIEMAP_MAX_EXTENTS)
-+		 return -EINVAL;
++		return -EINVAL;
 +
 +	error = fiemap_check_ranges(sb, fiemap.fm_start, fiemap.fm_length,
 +				    &len);
@@ -149,7 +151,7 @@ Index: linux-2.6.16.60-0.23/fs/ext3/ioctl.c
 +	if (fiemap.fm_extent_count != 0 &&
 +	    !access_ok(VERIFY_WRITE, (void *)arg,
 +		       offsetof(typeof(fiemap), fm_extents[fiemap.fm_extent_count])))
-+		       return -EFAULT;
++		return -EFAULT;
 +
 +	if (fieinfo.fi_flags & FIEMAP_FLAG_SYNC)
 +		filemap_write_and_wait(inode->i_mapping);
@@ -165,7 +167,7 @@ Index: linux-2.6.16.60-0.23/fs/ext3/ioctl.c
  
  int ext3_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
  		unsigned long arg)
-@@ -263,7 +416,9 @@ flags_err:
+@@ -263,7 +418,9 @@ flags_err:
  
  		return err;
  	}
@@ -176,11 +178,11 @@ Index: linux-2.6.16.60-0.23/fs/ext3/ioctl.c
  
  	default:
  		return iam_uapi_ioctl(inode, filp, cmd, arg);
-Index: linux-2.6.16.60-0.23/include/linux/ext3_fs.h
+Index: linux-2.6.16.60-0.33/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.16.60-0.23.orig/include/linux/ext3_fs.h
-+++ linux-2.6.16.60-0.23/include/linux/ext3_fs.h
-@@ -260,15 +260,19 @@ struct ext3_new_group_data {
+--- linux-2.6.16.60-0.33.orig/include/linux/ext3_fs.h
++++ linux-2.6.16.60-0.33/include/linux/ext3_fs.h
+@@ -261,15 +261,19 @@ struct ext3_new_group_data {
  #define	EXT3_IOC_SETFLAGS		_IOW('f', 2, long)
  #define	EXT3_IOC_GETVERSION		_IOR('f', 3, long)
  #define	EXT3_IOC_SETVERSION		_IOW('f', 4, long)
@@ -188,7 +190,7 @@ Index: linux-2.6.16.60-0.23/include/linux/ext3_fs.h
 +#define EXT3_IOC_SETRSVSZ		_IOW('f', 6, long)
  #define EXT3_IOC_GROUP_EXTEND		_IOW('f', 7, unsigned long)
  #define EXT3_IOC_GROUP_ADD		_IOW('f', 8,struct ext3_new_group_input)
-+#define EXT3_IOC_FIEMAP			_IOWR('f', 10, struct fiemap)
++#define EXT3_IOC_FIEMAP			_IOWR('f', 11, struct fiemap)
  #define	EXT3_IOC_GETVERSION_OLD		_IOR('v', 1, long)
  #define	EXT3_IOC_SETVERSION_OLD		_IOW('v', 2, long)
  #ifdef CONFIG_JBD_DEBUG
@@ -202,7 +204,7 @@ Index: linux-2.6.16.60-0.23/include/linux/ext3_fs.h
  
  /*
   *  Mount options
-@@ -1017,6 +1021,9 @@ extern int ext3_writepage_trans_blocks(s
+@@ -1018,6 +1022,9 @@ extern int ext3_writepage_trans_blocks(s
  /* ioctl.c */
  extern int ext3_ioctl (struct inode *, struct file *, unsigned int,
  		       unsigned long);
@@ -212,10 +214,10 @@ Index: linux-2.6.16.60-0.23/include/linux/ext3_fs.h
  
  /* namei.c */
  extern int ext3_orphan_add(handle_t *, struct inode *);
-Index: linux-2.6.16.60-0.23/include/linux/ext3_extents.h
+Index: linux-2.6.16.60-0.33/include/linux/ext3_extents.h
 ===================================================================
---- linux-2.6.16.60-0.23.orig/include/linux/ext3_extents.h
-+++ linux-2.6.16.60-0.23/include/linux/ext3_extents.h
+--- linux-2.6.16.60-0.33.orig/include/linux/ext3_extents.h
++++ linux-2.6.16.60-0.33/include/linux/ext3_extents.h
 @@ -170,7 +170,10 @@ struct ext3_extents_helpers {
   */
  typedef int (*ext_prepare_callback)(struct ext3_extents_tree *,
@@ -228,9 +230,9 @@ Index: linux-2.6.16.60-0.23/include/linux/ext3_extents.h
  
  #define EXT_CONTINUE	0
  #define EXT_BREAK	1
-@@ -179,6 +182,25 @@ typedef int (*ext_prepare_callback)(stru
- 
+@@ -180,6 +183,25 @@ typedef int (*ext_prepare_callback)(stru
  #define EXT_MAX_BLOCK	0xffffffff
+ #define EXT_UNSET_BLOCK 1
  
 +/*
 + * EXT_INIT_MAX_LEN is the maximum number of blocks we can have in an
@@ -254,7 +256,7 @@ Index: linux-2.6.16.60-0.23/include/linux/ext3_extents.h
  
  #define EXT_FIRST_EXTENT(__hdr__) \
  	((struct ext3_extent *) (((char *) (__hdr__)) +		\
-@@ -242,6 +264,12 @@ struct ext3_extent_tree_stats {
+@@ -243,6 +265,12 @@ struct ext3_extent_tree_stats {
  	int leaf_num;
  };
  
@@ -267,10 +269,10 @@ Index: linux-2.6.16.60-0.23/include/linux/ext3_extents.h
  extern int ext3_ext_search_left(struct ext3_extents_tree *, struct ext3_ext_path *, unsigned long *, unsigned long *);
  extern int ext3_ext_search_right(struct ext3_extents_tree *, struct ext3_ext_path *, unsigned long *, unsigned long *);
  extern void ext3_init_tree_desc(struct ext3_extents_tree *, struct inode *);
-Index: linux-2.6.16.60-0.23/fs/ext3/extents.c
+Index: linux-2.6.16.60-0.33/fs/ext3/extents.c
 ===================================================================
---- linux-2.6.16.60-0.23.orig/fs/ext3/extents.c
-+++ linux-2.6.16.60-0.23/fs/ext3/extents.c
+--- linux-2.6.16.60-0.33.orig/fs/ext3/extents.c
++++ linux-2.6.16.60-0.33/fs/ext3/extents.c
 @@ -41,6 +41,7 @@
  #include <linux/string.h>
  #include <linux/slab.h>
@@ -399,11 +401,11 @@ Index: linux-2.6.16.60-0.23/fs/ext3/extents.c
  EXPORT_SYMBOL(ext3_init_tree_desc);
  EXPORT_SYMBOL(ext3_mark_inode_dirty);
  EXPORT_SYMBOL(ext3_ext_invalidate_cache);
-Index: linux-2.6.16.60-0.23/fs/ext3/fiemap.h
+Index: linux-2.6.16.60-0.33/fs/ext3/fiemap.h
 ===================================================================
 --- /dev/null
-+++ linux-2.6.16.60-0.23/fs/ext3/fiemap.h
-@@ -0,0 +1,84 @@
++++ linux-2.6.16.60-0.33/fs/ext3/fiemap.h
+@@ -0,0 +1,85 @@
 +/*
 + * FIEMAP ioctl infrastructure.
 + *
@@ -422,8 +424,10 @@ Index: linux-2.6.16.60-0.23/fs/ext3/fiemap.h
 +	__u64 fe_physical; /* physical offset in bytes for the start
 +			    * of the extent from the beginning of the disk */
 +	__u64 fe_length;   /* length in bytes for this extent */
++	__u64 fe_reserved64[2];
 +	__u32 fe_flags;    /* FIEMAP_EXTENT_* flags for this extent */
 +	__u32 fe_device;   /* device number for this extent */
++	__u32 fe_reserved[2];
 +};
 +
 +struct fiemap {
@@ -460,31 +464,30 @@ Index: linux-2.6.16.60-0.23/fs/ext3/fiemap.h
 +/* ldiskfs only supports FLAG_SYNC flag currently */
 +#define FIEMAP_FLAGS_COMPAT (FIEMAP_FLAG_SYNC | FIEMAP_FLAG_XATTR)
 +
-+
 +#define FIEMAP_EXTENT_LAST		0x00000001 /* Last extent in file. */
 +#define FIEMAP_EXTENT_UNKNOWN		0x00000002 /* Data location unknown. */
 +#define FIEMAP_EXTENT_DELALLOC		0x00000004 /* Location still pending.
-+						   * Sets EXTENT_UNKNOWN. */
-+#define FIEMAP_EXTENT_NO_DIRECT		0x00000008 /* Data mapping undefined */
-+#define FIEMAP_EXTENT_SECONDARY		0x00000010 /* Data copied offline. May
-+						   * set EXTENT_NO_DIRECT. */
-+#define FIEMAP_EXTENT_NET		0x00000020 /* Data stored remotely.
-+						   * Sets EXTENT_NO_DIRECT. */
-+#define FIEMAP_EXTENT_DATA_COMPRESSED	0x00000040 /* Data is compressed by fs.
-+						   * Sets EXTENT_NO_DIRECT. */
++						    * Sets EXTENT_UNKNOWN. */
++#define FIEMAP_EXTENT_ENCODED		0x00000008 /* Data can not be read
++						    * while fs is unmounted */
 +#define FIEMAP_EXTENT_DATA_ENCRYPTED	0x00000080 /* Data is encrypted by fs.
-+						   * Sets EXTENT_NO_DIRECT. */
++						    * Sets EXTENT_NO_DIRECT. */
 +#define FIEMAP_EXTENT_NOT_ALIGNED	0x00000100 /* Extent offsets may not be
-+						   * block aligned. */
++						    * block aligned. */
 +#define FIEMAP_EXTENT_DATA_INLINE	0x00000200 /* Data mixed with metadata.
-+						   * Sets EXTENT_NOT_ALIGNED.*/
++						    * Sets EXTENT_NOT_ALIGNED.*/
 +#define FIEMAP_EXTENT_DATA_TAIL		0x00000400 /* Multiple files in block.
-+						   * Sets EXTENT_NOT_ALIGNED.*/
++						    * Sets EXTENT_NOT_ALIGNED.*/
 +#define FIEMAP_EXTENT_UNWRITTEN		0x00000800 /* Space allocated, but
-+						   * no data (i.e. zero). */
++						    * no data (i.e. zero). */
 +#define FIEMAP_EXTENT_MERGED		0x00001000 /* File does not natively
-+						   * support extents. Result
-+						   * merged for efficiency. */
++						    * support extents. Result
++						    * merged for efficiency. */
++
++/* Lustre specific flags - use a high bit, don't conflict with upstream flag */
++#define FIEMAP_EXTENT_NO_DIRECT		0x40000000 /* Data mapping undefined */
++#define FIEMAP_EXTENT_NET		0x80000000 /* Data stored remotely.
++						    * Sets NO_DIRECT flag */
 +
 +#endif /* _LINUX_EXT3_FIEMAP_H */
 +
