@@ -1785,24 +1785,25 @@ test_25_sub() {
 	chmod 0777 $DIR/$tdir
 	TESTFILE="$DIR/$tdir/$tfile-0"
 	rm -f $TESTFILE
+	LIMIT=$(( $BUNIT_SZ * ($OSTCOUNT + 1) + 4096 ))
 
 	wait_delete_completed
 
         # set quota for $TSTUSR
         log "setquota for $TSTUSR"
-	$LFS setquota $1 $TSTUSR -b 10240 -B 10240 -i 10 -I 10 $DIR
+	$LFS setquota $1 $TSTUSR -b $LIMIT -B $LIMIT -i 10 -I 10 $DIR
 	sleep 3
         show_quota $1 $TSTUSR
 
         # set quota for $TSTUSR2
         log "setquota for $TSTUSR2"
-	$LFS setquota $1 $TSTUSR2 -b 10240 -B 10240 -i 10 -I 10 $DIR
+	$LFS setquota $1 $TSTUSR2 -b $LIMIT -B $LIMIT -i 10 -I 10 $DIR
 	sleep 3
         show_quota $1 $TSTUSR2
 
         # set stripe index to 0
         log "setstripe for $DIR/$tdir to 0"
-	$LFS setstripe $DIR/$tdir -i 0
+	$LFS setstripe $DIR/$tdir -c 1 -i 0
 	MDS_UUID=`do_facet $SINGLEMDS $LCTL dl | grep -m1 " mdt " | awk '{print $((NF-1))}'`
 	OST0_UUID=`do_facet ost1 $LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
 	MDS_QUOTA_USED_OLD=`$LFS quota -o $MDS_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`
