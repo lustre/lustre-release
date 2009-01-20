@@ -74,8 +74,6 @@ void target_client_add_cb(struct obd_device *obd, __u64 transno, void *cb_data,
 int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler);
 int target_handle_disconnect(struct ptlrpc_request *req);
 void target_destroy_export(struct obd_export *exp);
-int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
-                            struct obd_uuid *cluuid);
 int target_handle_ping(struct ptlrpc_request *req);
 int target_pack_pool_reply(struct ptlrpc_request *req);
 void target_committed_to_req(struct ptlrpc_request *req);
