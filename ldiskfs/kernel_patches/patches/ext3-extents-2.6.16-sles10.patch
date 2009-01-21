@@ -1577,8 +1577,8 @@ Index: linux-2.6.16.54-0.2.5/fs/ext3/extents.c
 +		path[depth].p_ext = ex;
 +	
 +		a = ex->ee_block > start ? ex->ee_block : start;
-+		b = (unsigned long long)ex->ee_block + ex->ee_len - 1 <
-+			end ? ex->ee_block + ex->ee_len - 1 : end;
++		b = (unsigned long long)ex->ee_block + ex->ee_len - 1 < end ?
++			ex->ee_block + ex->ee_len - 1 : end;
 +		
 +		ext_debug(tree, "  border %u:%u\n", a, b);
 +
