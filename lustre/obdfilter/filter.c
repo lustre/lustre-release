@@ -4327,9 +4327,11 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
         obd->u.filter.fo_mdc_conn.cookie = exp->exp_handle.h_cookie;
 
         /* setup llog imports */
-        LASSERT(val != NULL);
+        if (val != NULL)
+                group = (int)(*(__u32 *)val);
+        else
+                group = 0; /* default value */
 
-        group = (int)(*(__u32 *)val);
         LASSERT_MDS_GROUP(group);
         rc = filter_setup_llog_group(exp, obd, group);
         if (rc)
