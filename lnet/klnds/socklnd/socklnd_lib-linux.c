@@ -248,7 +248,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
                 .data     = &ksocknal_tunables.ksnd_round_robin,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
-                .proc_handler = &proc_dointvec
+                .proc_handler = &proc_dointvec,
                 .strategy = &sysctl_intvec,
         },
         {
@@ -257,7 +257,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
                 .data     = &ksocknal_tunables.ksnd_keepalive,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
-                .proc_handler = &proc_dointvec
+                .proc_handler = &proc_dointvec,
                 .strategy = &sysctl_intvec,
         },
         {
