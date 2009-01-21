@@ -501,7 +501,7 @@ test_18() {
         check_mount || return 41
 
         echo "check journal size..."
-        local FOUNDSIZE=`do_facet mds "$$DEBUGFS -c -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}'`
+        local FOUNDSIZE=`do_facet mds "$DEBUGFS -c -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}'`
         if [ $FOUNDSIZE -gt $((32 * 1024 * 1024)) ]; then
                 log "Success: mkfs creates large journals. Size: $((FOUNDSIZE >> 20))M"
         else
