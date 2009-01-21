@@ -224,7 +224,7 @@ static inline int opcode_offset(__u32 opc) {
                         (OST_LAST_OPC - OST_FIRST_OPC));
        } else if (opc < QUOTA_LAST_OPC) {
                 /* LQUOTA Opcode */
-                return (opc -  QUOTA_FIRST_OPC +
+                return (opc - QUOTA_FIRST_OPC +
                         (LLOG_LAST_OPC - LLOG_FIRST_OPC) +
                         (OBD_LAST_OPC - OBD_FIRST_OPC) +
                         (MGS_LAST_OPC - MGS_FIRST_OPC) +
