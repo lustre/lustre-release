@@ -182,7 +182,8 @@ static int oscc_internal_create(struct osc_creator *oscc)
 
         spin_lock(&oscc->oscc_lock);
         body->oa.o_id = oscc->oscc_last_id + oscc->oscc_grow_count;
-        body->oa.o_valid |= OBD_MD_FLID;
+        body->oa.o_gr = 0;
+        body->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
         spin_unlock(&oscc->oscc_lock);
         CDEBUG(D_RPCTRACE, "prealloc through id "LPU64" (last seen "LPU64")\n",
                body->oa.o_id, oscc->oscc_last_id);
@@ -341,8 +342,9 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                        oscc->oscc_obd->obd_name, oscc->oscc_next_id - 1);
 
                 /* delete from next_id on up */
-                oa->o_valid |= OBD_MD_FLID;
+                oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
                 oa->o_id = oscc->oscc_next_id - 1;
+                oa->o_gr = 0;
 
                 rc = osc_real_create(exp, oa, ea, NULL);
 

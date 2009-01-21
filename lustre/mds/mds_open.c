@@ -388,8 +388,9 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         oinfo.oi_oa->o_gid = 0;
         oinfo.oi_oa->o_mode = S_IFREG | 0600;
         oinfo.oi_oa->o_id = inode->i_ino;
+        oinfo.oi_oa->o_gr = 0;
         oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLFLAGS |
-                OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID;
+                OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID| OBD_MD_FLGROUP;
         oinfo.oi_oa->o_size = 0;
 
         obdo_from_inode(oinfo.oi_oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
