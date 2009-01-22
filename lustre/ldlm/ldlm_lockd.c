@@ -373,7 +373,7 @@ static int __ldlm_add_waiting_lock(struct ldlm_lock *lock, int seconds)
 
         if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT) ||
             OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_TIMEOUT))
-                seconds = 2;
+                seconds = 1;
 
         timeout = cfs_time_shift(seconds);
         if (likely(cfs_time_after(timeout, lock->l_callback_timeout)))
