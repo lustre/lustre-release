@@ -49,7 +49,8 @@
 #include "mdt_internal.h"
 
 static int mdt_server_data_update(const struct lu_env *env,
-                                  struct mdt_device *mdt);
+                                  struct mdt_device *mdt,
+                                  int need_sync);
 
 struct lu_buf *mdt_buf(const struct lu_env *env, void *area, ssize_t len)
 {
@@ -243,8 +244,16 @@ static inline int mdt_last_rcvd_header_read(const struct lu_env *env,
         return rc;
 }
 
+static void mdt_client_cb(const struct mdt_device *mdt, __u64 transno,
+                          void *data, int err)
+{
+        struct obd_device *obd = mdt2obd_dev(mdt);
+        target_client_add_cb(obd, transno, data, err);
+}
+
 static inline int mdt_last_rcvd_header_write(const struct lu_env *env,
-                                             struct mdt_device *mdt)
+                                             struct mdt_device *mdt,
+                                             int need_sync)
 {
         struct mdt_thread_info *mti;
         struct thandle *th;
@@ -253,6 +262,11 @@ static inline int mdt_last_rcvd_header_write(const struct lu_env *env,
 
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
 
+        if (mti->mti_exp) {
+                spin_lock(&mti->mti_exp->exp_lock);
+                mti->mti_exp->exp_need_sync = need_sync;
+                spin_unlock(&mti->mti_exp->exp_lock);
+        }
         mdt_trans_credit_init(env, mdt, MDT_TXN_LAST_RCVD_WRITE_OP);
         th = mdt_trans_start(env, mdt);
         if (IS_ERR(th))
@@ -260,6 +274,9 @@ static inline int mdt_last_rcvd_header_write(const struct lu_env *env,
 
         mti->mti_off = 0;
         lsd_cpu_to_le(&mdt->mdt_lsd, &mti->mti_lsd);
+
+        if (need_sync && mti->mti_exp)
+                mdt_trans_add_cb(th, mdt_client_cb, mti->mti_exp);
 
         rc = mdt_record_write(env, mdt->mdt_last_rcvd,
                               mdt_buf_const(env, &mti->mti_lsd,
@@ -561,7 +578,8 @@ static int mdt_server_data_init(const struct lu_env *env,
         lsd->lsd_mount_count = mdt->mdt_mount_count;
 
         /* save it, so mount count and last_transno is current */
-        rc = mdt_server_data_update(env, mdt);
+        rc = mdt_server_data_update(env, mdt, (mti->mti_exp && 
+                                               mti->mti_exp->exp_need_sync));
         if (rc)
                 GOTO(err_client, rc);
 
@@ -574,7 +592,8 @@ out:
 }
 
 static int mdt_server_data_update(const struct lu_env *env,
-                                  struct mdt_device *mdt)
+                                  struct mdt_device *mdt,
+                                  int need_sync)
 {
         int rc = 0;
         ENTRY;
@@ -591,16 +610,8 @@ static int mdt_server_data_update(const struct lu_env *env,
          * mdt->mdt_last_rcvd may be NULL that time.
          */
         if (mdt->mdt_last_rcvd != NULL)
-                rc = mdt_last_rcvd_header_write(env, mdt);
+                rc = mdt_last_rcvd_header_write(env, mdt, need_sync);
         RETURN(rc);
-}
-
-void mdt_cb_new_client(const struct mdt_device *mdt, __u64 transno,
-                                  void *data, int err)
-{
-        struct obd_device *obd = mdt2obd_dev(mdt);
-
-        target_client_add_cb(obd, transno, data, err);
 }
 
 int mdt_client_new(const struct lu_env *env, struct mdt_device *mdt)
@@ -651,16 +662,22 @@ int mdt_client_new(const struct lu_env *env, struct mdt_device *mdt)
         init_mutex(&med->med_lcd_lock);
 
         LASSERTF(med->med_lr_off > 0, "med_lr_off = %llu\n", med->med_lr_off);
-        /* write new client data */
+
+        /* Write new client data. */
         off = med->med_lr_off;
         mdt_trans_credit_init(env, mdt, MDT_TXN_LAST_RCVD_WRITE_OP);
+
         th = mdt_trans_start(env, mdt);
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
 
-        /* until this operations will be committed the sync is needed for this
-         * export */
-        mdt_trans_add_cb(th, mdt_cb_new_client, mti->mti_exp);
+        /* 
+         * Until this operations will be committed the sync is needed
+         * for this export. This should be done _after_ starting the
+         * transaction so that many connecting clients will not bring
+         * server down with lots of sync writes. 
+         */
+        mdt_trans_add_cb(th, mdt_client_cb, mti->mti_exp);
         spin_lock(&mti->mti_exp->exp_lock);
         mti->mti_exp->exp_need_sync = 1;
         spin_unlock(&mti->mti_exp->exp_lock);
@@ -730,21 +747,24 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
         struct mdt_export_data *med;
         struct lsd_client_data *lcd;
         struct obd_device      *obd = mdt2obd_dev(mdt);
-        struct thandle *th;
-        loff_t off;
-        int rc = 0;
+        struct obd_export      *exp;
+        struct thandle         *th;
+        int                     need_sync;
+        loff_t                  off;
+        int                     rc = 0;
         ENTRY;
 
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
         LASSERT(mti != NULL);
 
-        med = &mti->mti_exp->exp_mdt_data;
+        exp = mti->mti_exp;
+        med = &exp->exp_mdt_data;
         lcd = med->med_lcd;
         if (!lcd)
                 RETURN(0);
 
         /* XXX: If lcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
-        if (!strcmp(med->med_lcd->lcd_uuid, obd->obd_uuid.uuid))
+        if (!strcmp(lcd->lcd_uuid, obd->obd_uuid.uuid))
                 GOTO(free, 0);
 
         CDEBUG(D_INFO, "freeing client at idx %u, offset %lld\n",
@@ -772,15 +792,33 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
                 LBUG();
         }
 
+        /* Don't force sync on disconnect if aborting recovery,
+         * or it does num_clients * num_osts.  b=17194 */
+        need_sync = (!exp->exp_libclient || exp->exp_need_sync) &&
+                     !(exp->exp_flags & OBD_OPT_ABORT_RECOV);
+
         /*
          * This may be called from difficult reply handler path and
          * mdt->mdt_last_rcvd may be NULL that time.
          */
         if (mdt->mdt_last_rcvd != NULL) {
                 mdt_trans_credit_init(env, mdt, MDT_TXN_LAST_RCVD_WRITE_OP);
+
+                spin_lock(&exp->exp_lock);
+                exp->exp_need_sync = need_sync;
+                spin_unlock(&exp->exp_lock);
+
                 th = mdt_trans_start(env, mdt);
                 if (IS_ERR(th))
                         GOTO(free, rc = PTR_ERR(th));
+
+                if (need_sync) {
+                        /* 
+                         * Until this operations will be committed the sync
+                         * is needed for this export. 
+                         */
+                        mdt_trans_add_cb(th, mdt_client_cb, exp);
+                }
 
                 mutex_down(&med->med_lcd_lock);
                 memset(lcd, 0, sizeof *lcd);
@@ -791,18 +829,20 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
         }
 
         CDEBUG(rc == 0 ? D_INFO : D_ERROR, "Zeroing out client idx %u in "
-               "%s rc %d\n",  med->med_lr_idx, LAST_RCVD, rc);
+               "%s %ssync rc %d\n",  med->med_lr_idx, LAST_RCVD, 
+               need_sync ? "" : "a", rc);
 
         spin_lock(&mdt->mdt_client_bitmap_lock);
         clear_bit(med->med_lr_idx, mdt->mdt_client_bitmap);
         spin_unlock(&mdt->mdt_client_bitmap_lock);
 
-        /*
-         * Make sure the server's last_transno is up to date. Do this after the
-         * client is freed so we know all the client's transactions have been
-         * committed.
+        /* 
+         * Make sure the server's last_transno is up to date. Do this
+         * after the client is freed so we know all the client's
+         * transactions have been committed. 
          */
-        mdt_server_data_update(env, mdt);
+        mdt_server_data_update(env, mdt, need_sync);
+
         EXIT;
 free:
         OBD_FREE_PTR(lcd);
@@ -866,7 +906,9 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
          */
         if (mti->mti_transno == 0 &&
             *transno_p == mdt->mdt_last_transno)
-                mdt_server_data_update(mti->mti_env, mdt);
+                mdt_server_data_update(mti->mti_env, mdt, 
+                                      (mti->mti_exp && 
+                                       mti->mti_exp->exp_need_sync));
 
         *transno_p = mti->mti_transno;
 

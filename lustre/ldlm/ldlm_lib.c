@@ -1667,7 +1667,9 @@ static int target_recovery_thread(void *arg)
                        "evict them\n", obd->obd_connected_clients,
                        obd->obd_max_recoverable_clients);
                 obd->obd_abort_recovery = obd->obd_stopping;
-                class_disconnect_stale_exports(obd, connect_done);
+                class_disconnect_stale_exports(obd, connect_done, 
+                                               exp_flags_from_obd(obd) | 
+                                               OBD_OPT_ABORT_RECOV);
         }
         /* next stage: replay requests */
         delta = jiffies;
@@ -1697,7 +1699,9 @@ static int target_recovery_thread(void *arg)
         if (obd->obd_abort_recovery) {
                 CDEBUG(D_ERROR, "req replay timed out, aborting ...\n");
                 obd->obd_abort_recovery = obd->obd_stopping;
-                class_disconnect_stale_exports(obd, req_replay_done);
+                class_disconnect_stale_exports(obd, req_replay_done, 
+                                               exp_flags_from_obd(obd) | 
+                                               OBD_OPT_ABORT_RECOV);
                 abort_req_replay_queue(obd);
         }
 
@@ -1722,7 +1726,9 @@ static int target_recovery_thread(void *arg)
                 int stale;
                 CERROR("lock replay timed out, aborting ...\n");
                 obd->obd_abort_recovery = obd->obd_stopping;
-                stale = class_disconnect_stale_exports(obd, lock_replay_done);
+                stale = class_disconnect_stale_exports(obd, lock_replay_done, 
+                                                       exp_flags_from_obd(obd) | 
+                                                       OBD_OPT_ABORT_RECOV);
                 abort_lock_replay_queue(obd);
         }
 

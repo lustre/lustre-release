@@ -1075,9 +1075,6 @@ struct obd_device {
         struct lu_ref          obd_reference;
 };
 
-#define OBD_OPT_FORCE           0x0001
-#define OBD_OPT_FAILOVER        0x0002
-
 #define OBD_LLOG_FL_SENDNOW     0x0001
 
 enum obd_cleanup_stage {
