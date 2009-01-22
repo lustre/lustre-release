@@ -804,8 +804,6 @@ test_34() { #16129
                 echo writing on client1
                 dd if=/dev/zero of=$DIR1/$tfile count=100 conv=notrunc > /dev/null 2>&1
                 sync &
-                # wait for the flush
-                sleep 1
                 echo reading on client2
                 dd of=/dev/null if=$DIR2/$tfile > /dev/null 2>&1
                 # wait for a lock timeout
