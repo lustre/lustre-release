@@ -2282,6 +2282,19 @@ void lustre_swab_mds_md(struct lov_mds_md *lmm)
         EXIT;
 }
 
+void lustre_swab_mds_md(struct lov_mds_md *lmm)
+{
+        ENTRY;
+        CDEBUG(D_IOCTL, "swabbing lov_mds_md\n");
+        __swab32s(&lmm->lmm_magic);
+        __swab32s(&lmm->lmm_pattern);
+        __swab64s(&lmm->lmm_object_id);
+        __swab64s(&lmm->lmm_object_gr);
+        __swab32s(&lmm->lmm_stripe_size);
+        __swab32s(&lmm->lmm_stripe_count);
+        EXIT;
+}
+
 void lustre_swab_lov_user_md_join(struct lov_user_md_join *lumj)
 {
         ENTRY;
