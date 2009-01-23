@@ -2026,7 +2026,7 @@ void lustre_swab_lov_user_md_v3(struct lov_user_md_v3 *lum)
         EXIT;
 }
 
-void lustre_swab_mds_md(struct lov_mds_md *lmm)
+void lustre_swab_lov_mds_md(struct lov_mds_md *lmm)
 {
         ENTRY;
         CDEBUG(D_IOCTL, "swabbing lov_mds_md\n");
