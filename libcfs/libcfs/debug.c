@@ -421,7 +421,7 @@ int libcfs_debug_clear_buffer(void)
 int libcfs_debug_mark_buffer(const char *text)
 {
         CDEBUG(D_TRACE,"***************************************************\n");
-        CDEBUG(D_WARNING, "DEBUG MARKER: %s\n", text);
+        LCONSOLE(D_WARNING, "DEBUG MARKER: %s\n", text);
         CDEBUG(D_TRACE,"***************************************************\n");
 
         return 0;
