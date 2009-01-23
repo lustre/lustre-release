@@ -247,12 +247,14 @@ int lov_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
         ENTRY;
 
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                int err;
-
                 if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active) {
                         CERROR("lov idx %d inactive\n", i);
                         RETURN(-EIO);
                 }
+        }
+
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                int err;
 
                 err = obd_quotacheck(lov->lov_tgts[i]->ltd_exp, oqctl);
                 if (err && !rc)
