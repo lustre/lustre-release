@@ -1424,10 +1424,31 @@ run_test 62 "don't mis-drop resent replay"
 
 #Adaptive Timeouts (bug 3055)
 AT_MAX_SET=0
-# Suppose that all osts have the same at_max
-for facet in mds client ost; do
-    eval AT_MAX_SAVE_${facet}=$(at_max_get $facet)
-done
+
+at_cleanup () {
+    local var
+    local facet
+    local at_new
+
+    echo "Cleaning up AT ..."
+    if [ -n "$ATOLDBASE" ]; then
+        local at_history=$(do_facet mds "find /sys/ -name at_history")
+        do_facet mds "echo $ATOLDBASE >> $at_history" || true
+        do_facet ost1 "echo $ATOLDBASE >> $at_history" || true
+    fi
+
+    if [ $AT_MAX_SET -ne 0 ]; then
+        for facet in mds client ost; do
+            var=AT_MAX_SAVE_${facet}
+            echo restore AT on $facet to saved value ${!var}
+            at_max_set ${!var} $facet
+            at_new=$(at_max_get $facet)
+            echo Restored AT value on $facet $at_new
+            [ $at_new -eq ${!var} ] || \
+            error "$facet : AT value was not restored SAVED ${!var} NEW $at_new"
+        done
+    fi
+}
 
 at_start()
 {
@@ -1437,8 +1458,15 @@ at_start()
         return 1
     fi
 
+    # Save at_max original values
+    local facet
+    if [ $AT_MAX_SET -eq 0 ]; then
+        # Suppose that all osts have the same at_max
+        for facet in mds client ost; do
+            eval AT_MAX_SAVE_${facet}=$(at_max_get $facet)
+        done
+    fi
     local at_max
-
     for facet in mds client ost; do
         at_max=$(at_max_get $facet)
         if [ $at_max -ne $at_max_new ]; then
@@ -1646,24 +1674,7 @@ test_68 () #bug 13813
 }
 run_test 68 "AT: verify slowing locks"
 
-if [ -n "$ATOLDBASE" ]; then
-    at_history=$(do_facet mds "find /sys/ -name at_history")
-    do_facet mds "echo $ATOLDBASE >> $at_history" || true
-    do_facet ost1 "echo $ATOLDBASE >> $at_history" || true
-fi
-
-if [ $AT_MAX_SET -ne 0 ]; then
-    for facet in mds client ost; do
-        var=AT_MAX_SAVE_${facet}
-        echo restore AT on $facet to saved value ${!var}
-        at_max_set ${!var} $facet
-        AT_NEW=$(at_max_get $facet)
-        echo Restored AT value on $facet $AT_NEW 
-        [ $AT_NEW -ne ${!var} ] && \
-            error "$facet : AT value was not restored SAVED ${!var} NEW $AT_NEW"
-    done
-fi
-
+at_cleanup
 # end of AT tests includes above lines
 
 # start multi-client tests
