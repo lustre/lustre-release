@@ -2057,3 +2057,73 @@ delayed_recovery_enabled () {
     do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age" > /dev/null 2>&1
 }
 
+################################################################################
+# The following functions are used to enable interop testing between
+# 1.8 and 2.0. The lprocfs layout changed from 1.8 to 2.0 as the followings:
+# mds -> mdt
+# {blocksize filesfree filestotal fstype kbytesavail kbytesfree kbytestotal mntdev} moved from mds to osd
+# mdt lov: fsname-mdtlov -> fsname-MDTXXXX-mdtlov
+# mdt osc: fsname-OSTXXXX-osc -> fsname-OSTXXXX-osc-MDTXXXX
+################################################################################
+
+get_lustre_version () {
+    local node=${1:-"mds"}    
+    do_facet $node $LCTL get_param -n version | head -n 1 | awk '{print $2}'
+}
+
+get_mds_version_major () {
+    local version=$(get_lustre_version mds)
+    echo $version | awk -F. '{print $1}'
+}
+
+get_mds_version_minor () {
+    local version=$(get_lustre_version mds)
+    echo $version | awk -F. '{print $2}'
+}
+
+get_mds_version_patch () {
+    local version=$(get_lustre_version mds)
+    echo $version | awk -F. '{print $3}'
+}
+
+get_mds_version_fix () {
+    local version=$(get_lustre_version mds)
+    echo $version | awk -F. '{print $4}'
+}
+
+get_mds_fsstat_proc_path() {
+    local major=$(get_mds_version_major)
+    local minor=$(get_mds_version_minor)
+    if [ $major -le 1 -a $minor -le 8 ] ; then
+        echo "mds"
+    else
+        echo "osd"
+    fi
+}
+
+get_mds_mntdev_proc_path() {
+    local fsstat_dev=$(get_mds_fsstat_proc_path)
+    echo "$fsstat_dev.*.mntdev"
+}
+
+get_mdtlov_proc_path() {
+    local fsname=$1
+    local major=$(get_mds_version_major)
+    local minor=$(get_mds_version_minor)
+    if [ $major -le 1 -a $minor -le 8 ] ; then
+        echo "$fsname-mdtlov"
+    else
+        echo "$fsname-MDT0000-mdtlov"
+    fi
+}
+
+get_mdtosc_proc_path() {
+    local ost=$1
+    local major=$(get_mds_version_major)
+    local minor=$(get_mds_version_minor)
+    if [ $major -le 1 -a $minor -le 8 ] ; then
+        echo "${ost}-osc"
+    else
+        echo "${ost}-osc-MDT0000"
+    fi
+}
