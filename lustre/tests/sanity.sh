@@ -3996,7 +3996,7 @@ test_102f() {
 	if [ "$TAR" == "tar" ]; then
 		TAR_OPTS="--xattrs"
 	fi
-	$TAR cf - $TAR_OPTS . | $TAR xf - $TAR_OPTS -C $DIR/d102f
+	$TAR cf - $TAR_OPTS $tdir | $TAR xf - $TAR_OPTS -C $DIR/d102f
 	cd $DIR/d102f/$tdir
 	compare_stripe_info1
 }
