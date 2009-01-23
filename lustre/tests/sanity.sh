@@ -920,8 +920,9 @@ exhaust_precreations() {
 	OST=$(lfs osts | grep ${OSTIDX}": " | \
 	    awk '{print $2}' | sed -e 's/_UUID$//')
 	# on the mdt's osc
-	last_id=$(do_facet mds lctl get_param -n osc.${OST}-osc.prealloc_last_id)
-	next_id=$(do_facet mds lctl get_param -n osc.${OST}-osc.prealloc_next_id)
+	local mdtosc=$(get_mdtosc_proc_path $OST)
+	last_id=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_last_id)
+	next_id=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_next_id)
 
 	mkdir -p $DIR/d27/${OST}
 	$SETSTRIPE $DIR/d27/${OST} -i $OSTIDX -c 1
@@ -929,7 +930,7 @@ exhaust_precreations() {
 	do_facet ost$((OSTIDX + 1)) lctl set_param fail_loc=0x215
 	echo "Creating to objid $last_id on ost $OST..."
 	createmany -o $DIR/d27/${OST}/f $next_id $((last_id - next_id + 2))
-	do_facet mds "lctl get_param -n osc.${OST}-osc.prealloc*" | grep '[0-9]'
+	do_facet mds "lctl get_param -n osc.$mdtosc.prealloc*" | grep '[0-9]'
 	reset_enospc $2
 }
 
@@ -2621,7 +2622,7 @@ run_test 56q "check lfs find -gid and ! -gid ==============================="
 test_57a() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
-	local MNTDEV="mds.*.mntdev"
+	local MNTDEV=$(get_mds_mntdev_proc_path)
 	DEV=$(do_facet mds lctl get_param -n $MNTDEV)
 	[ -z "$DEV" ] && error "can't access $MNTDEV"
 	for DEV in $(do_facet mds lctl get_param -n $MNTDEV); do
@@ -2651,7 +2652,8 @@ test_57b() {
 	$GETSTRIPE $FILE1 2>&1 | grep -q "no stripe" || error "$FILE1 has an EA"
 	$GETSTRIPE $FILEN 2>&1 | grep -q "no stripe" || error "$FILEN has an EA"
 
-	local MDSFREE=$(do_facet mds lctl get_param -n mds.*.kbytesfree)
+	local fsstat_dev=$(get_mds_fsstat_proc_path)
+	local MDSFREE=$(do_facet mds lctl get_param -n $fsstat_dev.*.kbytesfree)
 	local MDCFREE=$(lctl get_param -n mdc.*.kbytesfree | head -n 1)
 	echo "opening files to create objects/EAs"
 	local FILE
@@ -2664,7 +2666,7 @@ test_57b() {
 	$GETSTRIPE $FILEN | grep -q "obdidx" || error "$FILEN missing EA"
 
 	sleep 1 # make sure we get new statfs data
-	local MDSFREE2=$(do_facet mds lctl get_param -n mds.*.kbytesfree)
+	local MDSFREE2=$(do_facet mds lctl get_param -n $fsstat_dev.*.kbytesfree)
 	local MDCFREE2=$(lctl get_param -n mdc.*.kbytesfree | head -n 1)
 	if [ "$MDCFREE2" -lt "$((MDCFREE - 8))" ]; then
 		if [ "$MDSFREE" != "$MDSFREE2" ]; then
@@ -5314,7 +5316,8 @@ test_129() {
         [ "$FSTYPE" != "ldiskfs" ] && skip "not needed for FSTYPE=$FSTYPE" && return 0
         remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
-        DEV=$(basename $(do_facet mds lctl get_param -n mds.*.mntdev))
+        local MNTDEV=$(get_mds_mntdev_proc_path)
+        DEV=$(basename $(do_facet mds lctl get_param -n $MNTDEV))
         [ -z "$DEV" ] && error "can't access mds mntdev"
         EFBIG=27
         LDPROC=/proc/fs/ldiskfs/$DEV/max_dir_size
@@ -5822,12 +5825,14 @@ check_file_in_pool()
 	return 0
 }
 
+mdtlov=$(get_mdtlov_proc_path $FSNAME)
+
 test_200a() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	do_facet mgs $LCTL pool_new $FSNAME.$POOL
-	do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL
+	do_facet mgs $LCTL get_param -n lov.$mdtlov.pools.$POOL
 	[ $? == 0 ] || error "Pool creation of $POOL failed"
 }
 run_test 200a "Create new pool =========================================="
@@ -5840,7 +5845,7 @@ test_200b() {
 		$TGTPOOL_MAX | tr '\n' ' ')
 	do_facet mgs $LCTL pool_add $FSNAME.$POOL \
 		$FSNAME-OST[$TGTPOOL_FIRST-$TGTPOOL_MAX/$TGTPOOL_STEP]_UUID
-	res=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL |
+	res=$(do_facet mgs $LCTL get_param -n lov.$mdtlov.pools.$POOL |
 		sort | tr '\n' ' ')
 	[ "$res" = "$TGT" ] || error "Pool ($res) do not match requested ($TGT)"
 }
@@ -5904,10 +5909,10 @@ test_200g() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	TGT=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL |
+	TGT=$(do_facet mgs $LCTL get_param -n lov.$mdtlov.pools.$POOL |
 		head -1)
 	do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
-	res=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL |
+	res=$(do_facet mgs $LCTL get_param -n lov.$mdtlov.pools.$POOL |
 		grep $TGT)
 	[ "$res" = "" ] || error "$TGT not removed from $FSNAME.$POOL"
 }
@@ -5917,10 +5922,10 @@ test_200h() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	for TGT in $(do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL); do
+	for TGT in $(do_facet mgs $LCTL get_param -n lov.$mdtlov.pools.$POOL); do
 		do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
  	done
-	res=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL)
+	res=$(do_facet mgs $LCTL get_param -n lov.$mdtlov.pools.$POOL)
 	[ "$res" = "" ] || error "Pool $FSNAME.$POOL cannot be drained"
 }
 run_test 200h "Remove all targets from a pool =========================="
@@ -5930,7 +5935,7 @@ test_200i() {
 		skip "missing pools support on server" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
-	res=$(do_facet mgs "$LCTL get_param -n lov.$FSNAME-mdtlov.pools.$POOL 2>/dev/null")
+	res=$(do_facet mgs "$LCTL get_param -n lov.$mdtlov.pools.$POOL 2>/dev/null")
 	[ "$res" = "" ] || error "Pool $FSNAME.$POOL is not destroyed"
 }
 run_test 200i "Remove a pool ============================================"
