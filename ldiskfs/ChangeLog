@@ -1,4 +1,27 @@
 2009-02-07 Sun Microsystems, Inc.
+	* version 3.0.7
+
+Severity   : normal
+Bugzilla   : 16498
+Description: Get RAID stripe size from superblock
+Details    : RAID striping parameters are now saved in the superblock itself,
+	     so we should use these parameters instead of having to specify
+	     a mount option each time.
+
+Severity   : major
+Bugzilla   : 16438
+Description: Disable big-endian ldiskfs server support.
+Details    : The ldiskfs code is not tested on big-endian machines, and
+	     there are known compatibility problems in the extents code
+	     when running for most of the kernels.  Print an error message
+	     and refuse to mount, in case anyone tests this.  For existing
+	     filesystems that might have been created in this way it is
+	     possible to mount with the "bigendian_extents" option to
+	     force the mount.
+
+-------------------------------------------------------------------------------
+
+2008-08-31 Sun Microsystems, Inc.
 	* version 3.0.6
 
 Severity   : enhancement
@@ -36,15 +59,8 @@ Severity   : enhancement
 Bugzilla   : 10555
 Description: Add a FIEMAP(FIle Extent MAP) ioctl for ldiskfs
 Details    : FIEMAP ioctl will allow an application to efficiently fetch the
-             extent information of a file. It can be used to map logical blocks
-             in a file to physical blocks in the block device.
-
-Severity   : normal
-Bugzilla   : 16498
-Description: Get RAID stripe size from superblock
-Details    : RAID striping parameters are now saved in the superblock itself,
-	     so we should use these parameters instead of having to specify
-	     a mount option each time.
+	     extent information of a file. It can be used to map logical blocks
+	     in a file to physical blocks in the block device.
 
 Severity   : normal
 Bugzilla   : 17490
