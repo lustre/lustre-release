@@ -1733,19 +1733,26 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
 int ll_setattr(struct dentry *de, struct iattr *attr)
 {
-        int mode;
+        int mode = de->d_inode->i_mode;
 
         if ((attr->ia_valid & (ATTR_CTIME|ATTR_SIZE|ATTR_MODE)) ==
             (ATTR_CTIME|ATTR_SIZE|ATTR_MODE))
                 attr->ia_valid |= MDS_OPEN_OWNEROVERRIDE;
         if ((attr->ia_valid & (ATTR_MODE|ATTR_FORCE|ATTR_SIZE)) ==
             (ATTR_SIZE|ATTR_MODE)) {
-                mode = de->d_inode->i_mode;
                 if (((mode & S_ISUID) && (!(attr->ia_mode & S_ISUID))) ||
                     ((mode & S_ISGID) && (mode & S_IXGRP) &&
                     (!(attr->ia_mode & S_ISGID))))
                         attr->ia_valid |= ATTR_FORCE;
         }
+
+        if ((mode & S_ISUID) && S_ISREG(mode) &&
+            !(attr->ia_mode & S_ISUID))
+                attr->ia_valid |= ATTR_KILL_SUID;
+
+        if (((mode & (S_ISGID|S_IXGRP)) == (S_ISGID|S_IXGRP)) &&
+            S_ISREG(mode) && !(attr->ia_mode & S_ISGID))
+                attr->ia_valid |= ATTR_KILL_SGID;
 
         return ll_setattr_raw(de->d_inode, attr);
 }
