@@ -21,8 +21,6 @@ TESTDIR=$MOUNT
 # Requirements
 NUM_FILES=${NUM_FILES:-1000000}
 TIME_PERIOD=${TIME_PERIOD:-600}                        # seconds
-SINGLE_TARGET_RATE=5900                  # ops/sec
-AGGREGATE_TARGET_RATE=62000              # ops/sec
 
 LOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 CLIENT=$SINGLECLIENT
@@ -36,6 +34,11 @@ rm -f $LOG
 log "===== $0 ====== " 
 
 check_and_setup_lustre
+
+IFree=$(inodes_available)
+if [ $IFree -lt $NUM_FILES ]; then
+    NUM_FILES=$IFree
+fi
 
 generate_machine_file $NODES_TO_USE $MACHINEFILE || error "can not generate machinefile"
 
@@ -79,7 +82,6 @@ else
         [ -f $LOG ] && cat $LOG
         error "mpirun ... mdsrate ... failed, aborting"
     fi
-    check_rate lookup ${SINGLE_TARGET_RATE} 1 ${LOG} || true
 fi
 
 # 2
@@ -95,12 +97,11 @@ else
         [ -f $LOG ] && cat $LOG
         error "mpirun ... mdsrate ... failed, aborting"
     fi
-    check_rate lookup ${AGGREGATE_TARGET_RATE} ${NUM_CLIENTS} ${LOG} || true
 fi
 
 equals_msg `basename $0`: test complete, cleaning up
+mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES $TESTDIR 'f%%d'
 rm -f $MACHINEFILE
-zconf_umount_clients $NODES_TO_USE $MOUNT
 check_and_cleanup_lustre
 #rm -f $LOG
 
