@@ -2076,7 +2076,7 @@ delayed_recovery_enabled () {
 
 get_lustre_version () {
     local node=${1:-"mds"}    
-    do_facet $node $LCTL get_param -n version | head -n 1 | awk '{print $2}'
+    do_facet $node $LCTL get_param -n version |  awk '/^lustre:/ {print $2}'
 }
 
 get_mds_version_major () {
