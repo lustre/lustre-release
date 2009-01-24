@@ -13,9 +13,9 @@ MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
 TESTDIR=$MOUNT
 
 # Requirements
+# set NUM_FILES=0 to force TIME_PERIOD work  
+NUM_FILES=${NUM_FILES:-1000000}
 TIME_PERIOD=${TIME_PERIOD:-600}                        # seconds
-SINGLE_TARGET_RATE=$((1300 / OSTCOUNT))     # ops/sec
-AGGREGATE_TARGET_RATE=$((7000 / OSTCOUNT))  # ops/sec
 
 # Local test variables
 TESTDIR_SINGLE="${TESTDIR}/single"
@@ -32,6 +32,11 @@ log "===== $0 ====== "
 
 check_and_setup_lustre
 
+IFree=$(inodes_available)
+if [ $IFree -lt $NUM_FILES ]; then
+    NUM_FILES=$IFree
+fi
+
 generate_machine_file $NODES_TO_USE $MACHINEFILE || error "can not generate machinefile"
 
 $LFS setstripe $TESTDIR -c -1
@@ -47,7 +52,7 @@ else
     echo "Running creates on 1 node(s)."
 
     COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --create --time ${TIME_PERIOD}
-                        --dir ${TESTDIR_SINGLE} --filefmt 'f%%d'"
+                --nfiles ${NUM_FILES} --dir ${TESTDIR_SINGLE} --filefmt 'f%%d'"
     echo "+ ${COMMAND}"
     mpi_run -np 1 -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
@@ -56,14 +61,11 @@ else
 	error "mpirun ... mdsrate ... failed, aborting"
     fi
     
-    check_rate create ${SINGLE_TARGET_RATE} 1 ${LOG} || true
-
     log "===== $0 ### 1 NODE UNLINK ###"
     echo "Running unlinks on 1 node(s)."
 
-    let NUM_FILES=${SINGLE_TARGET_RATE}\*${TIME_PERIOD}
     COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --unlink --time ${TIME_PERIOD}
-                 --nfiles ${NUM_FILES} --dir ${TESTDIR_SINGLE} --filefmt 'f%%d'"
+                --nfiles ${NUM_FILES} --dir ${TESTDIR_SINGLE} --filefmt 'f%%d'"
     echo "+ ${COMMAND}"
     mpi_run -np 1 -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
  
@@ -71,8 +73,11 @@ else
 	[ -f $LOG ] && cat $LOG
 	error "mpirun ... mdsrate ... failed, aborting"
     fi
+fi
 
-    check_rate unlink ${SINGLE_TARGET_RATE} 1 ${LOG} || true
+IFree=$(inodes_available)
+if [ $IFree -lt $NUM_FILES ]; then
+    NUM_FILES=$IFree
 fi
 
 if [ -n "$NOMULTI" ]; then
@@ -83,7 +88,7 @@ else
     echo "Running creates on ${NUM_CLIENTS} node(s)."
 
     COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --create --time ${TIME_PERIOD}
-                        --dir ${TESTDIR_MULTI} --filefmt 'f%%d'"
+                --nfiles $NUM_FILES --dir ${TESTDIR_MULTI} --filefmt 'f%%d'"
     echo "+ ${COMMAND}"
     mpi_run -np ${NUM_CLIENTS} -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
@@ -91,14 +96,11 @@ else
 	[ -f $LOG ] && cat $LOG
 	error "mpirun ... mdsrate ... failed, aborting"
     fi
-
-    check_rate create ${AGGREGATE_TARGET_RATE} ${NUM_CLIENTS} ${LOG} || true
 
     echo "Running unlinks on ${NUM_CLIENTS} node(s)."
 
-    let NUM_FILES=${AGGREGATE_TARGET_RATE}\*${TIME_PERIOD}
     COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --unlink --time ${TIME_PERIOD}
-                  --nfiles ${NUM_FILES} --dir ${TESTDIR_MULTI} --filefmt 'f%%d'"
+                --nfiles ${NUM_FILES} --dir ${TESTDIR_MULTI} --filefmt 'f%%d'"
     echo "+ ${COMMAND}"
     mpi_run -np ${NUM_CLIENTS} -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
@@ -107,12 +109,10 @@ else
 	error "mpirun ... mdsrate ... failed, aborting"
     fi
 
-    check_rate unlink ${AGGREGATE_TARGET_RATE} ${NUM_CLIENTS} ${LOG} || true
 fi
 
 equals_msg `basename $0`: test complete, cleaning up
 rm -f $MACHINEFILE
-zconf_umount_clients $NODES_TO_USE $MOUNT
 check_and_cleanup_lustre
 #rm -f $LOG
 
