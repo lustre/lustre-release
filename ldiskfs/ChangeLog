@@ -8,7 +8,7 @@ Details    :
 
 
 -------------------------------------------------------------------------------
-01-15-2009  Sun Microsystems, Inc.
+2009-01-15  Sun Microsystems, Inc.
 	* version 3.0.6
 
 Severity   : enhancement
@@ -46,8 +46,8 @@ Severity   : enhancement
 Bugzilla   : 10555
 Description: Add a FIEMAP(FIle Extent MAP) ioctl for ldiskfs
 Details    : FIEMAP ioctl will allow an application to efficiently fetch the
-             extent information of a file. It can be used to map logical blocks
-             in a file to physical blocks in the block device.
+	     extent information of a file. It can be used to map logical blocks
+	     in a file to physical blocks in the block device.
 
 Severity   : normal
 Bugzilla   : 16498
@@ -64,7 +64,7 @@ Details    : correctly handle device paths using a subdirectory in /dev when
 
 -------------------------------------------------------------------------------
 
-04-26-2008  Sun Microsystems, Inc.
+2008-04-26  Sun Microsystems, Inc.
 	* version 3.0.5
 
 Severity   : normal
