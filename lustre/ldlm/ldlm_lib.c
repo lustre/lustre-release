@@ -209,12 +209,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         /* In a more perfect world, we would hang a ptlrpc_client off of
          * obd_type and just use the values from there. */
         if (!strcmp(name, LUSTRE_OSC_NAME)) {
-#ifdef __KERNEL__
-                /* Can be removed in Lustre 1.8, for compatibility only */
-                rq_portal = OST_IO_PORTAL;
-#else
                 rq_portal = OST_REQUEST_PORTAL;
-#endif
                 rp_portal = OSC_REPLY_PORTAL;
                 connect_op = OST_CONNECT;
         } else if (!strcmp(name, LUSTRE_MDC_NAME)) {
