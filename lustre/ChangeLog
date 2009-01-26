@@ -70,6 +70,13 @@ Bugzilla   : 18016
 Description: Slow reads beyond 8Tb offsets.
 Details    : Page index integer overflow in ll_read_ahead_page
 
+Severity   : normal
+Bugzilla   : 18304
+Description: Soft lockup on OSS after MDS failover
+Details    : MSG_CONNECT_INITIAL is not set on the initial MDS->OST connect.
+	     As a conseqence, the patch from bug 18224 is not operational
+	     and the MDS export cannot be reused on the OSTs until it gets
+	     evicted.
 
 -------------------------------------------------------------------------------
 2008-12-31 Sun Microsystems, Inc.

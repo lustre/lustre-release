@@ -674,6 +674,8 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                 spin_lock(&imp->imp_lock);
                 imp->imp_replayable = 1;
                 spin_unlock(&imp->imp_lock);
+                lustre_msg_add_op_flags(request->rq_reqmsg,
+                                        MSG_CONNECT_INITIAL);
         }
 
         DEBUG_REQ(D_RPCTRACE, request, "%sconnect request %d",
