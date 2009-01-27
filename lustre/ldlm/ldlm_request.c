@@ -1172,54 +1172,6 @@ static int ldlm_cancel_list(struct list_head *cancels, int count, int flags)
 
 /* Return 1 to stop lru processing and keep current lock cached. Return zero
  * otherwise. */
-static ldlm_policy_res_t ldlm_cancel_shrink_policy(struct ldlm_namespace *ns,
-                                                   struct ldlm_lock *lock,
-                                                   int unused, int added,
-                                                   int count)
-{
-        int lock_cost;
-        __u64 page_nr;
-
-        /* Stop lru processing when we reached passed @count or checked all
-         * locks in lru. */
-        if (count && added >= count)
-                return LDLM_POLICY_KEEP_LOCK;
-
-        if (lock->l_resource->lr_type == LDLM_EXTENT) {
-                struct ldlm_extent *l_extent;
-
-                /* For all extent locks cost is 1 + number of pages in
-                 * their extent. */
-                l_extent = &lock->l_policy_data.l_extent;
-                page_nr = (l_extent->end - l_extent->start);
-                do_div(page_nr, CFS_PAGE_SIZE);
-
-#ifdef __KERNEL__
-                /* XXX: In fact this is evil hack, we can't access inode
-                 * here. For doing it right we need somehow to have number
-                 * of covered by lock. This should be fixed later when 10718
-                 * is landed. */
-                if (lock->l_ast_data != NULL) {
-                        struct inode *inode = lock->l_ast_data;
-                        if (page_nr > inode->i_mapping->nrpages)
-                                page_nr = inode->i_mapping->nrpages;
-                }
-#endif
-                lock_cost = 1 + page_nr;
-        } else {
-                /* For all locks which are not extent ones cost is 1 */
-                lock_cost = 1;
-        }
-
-        /* Keep all expensive locks in lru for the memory pressure time
-         * cancel policy. They anyways may be canceled by lru resize
-         * pplicy if they have not small enough CLV. */
-        return lock_cost > ns->ns_shrink_thumb ?
-                LDLM_POLICY_KEEP_LOCK : LDLM_POLICY_CANCEL_LOCK;
-}
-
-/* Return 1 to stop lru processing and keep current lock cached. Return zero
- * otherwise. */
 static ldlm_policy_res_t ldlm_cancel_lrur_policy(struct ldlm_namespace *ns,
                                                  struct ldlm_lock *lock,
                                                  int unused, int added,
@@ -1302,7 +1254,8 @@ ldlm_cancel_lru_policy(struct ldlm_namespace *ns, int flags)
 {
         if (ns_connect_lru_resize(ns)) {
                 if (flags & LDLM_CANCEL_SHRINK)
-                        return ldlm_cancel_shrink_policy;
+                        /* We kill passed number of old locks. */
+                        return ldlm_cancel_passed_policy;
                 else if (flags & LDLM_CANCEL_LRUR)
                         return ldlm_cancel_lrur_policy;
                 else if (flags & LDLM_CANCEL_PASSED)
@@ -1444,45 +1397,6 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, struct list_head *cancels,
         RETURN(ldlm_cancel_list(cancels, added, cancel_flags));
 }
 
-/* Returns number of locks which could be canceled next time when
- * ldlm_cancel_lru() is called. Used from locks pool shrinker. */
-int ldlm_cancel_lru_estimate(struct ldlm_namespace *ns,
-                             int count, int max, int flags)
-{
-        ldlm_cancel_lru_policy_t pf;
-        struct ldlm_lock *lock;
-        int added = 0, unused;
-        ENTRY;
-
-        pf = ldlm_cancel_lru_policy(ns, flags);
-        LASSERT(pf != NULL);
-        spin_lock(&ns->ns_unused_lock);
-        unused = ns->ns_nr_unused;
-
-        list_for_each_entry(lock, &ns->ns_unused_list, l_lru) {
-                /* For any flags, stop scanning if @max is reached. */
-                if (max && added >= max)
-                        break;
-
-                /* Somebody is already doing CANCEL or there is a
-                 * blocking request will send cancel. Let's not count
-                 * this lock. */
-                if ((lock->l_flags & LDLM_FL_CANCELING) ||
-                    (lock->l_flags & LDLM_FL_BL_AST))
-                        continue;
-
-                /* Pass the lock through the policy filter and see if it
-                 * should stay in lru. */
-                if (pf(ns, lock, unused, added, count) == LDLM_POLICY_KEEP_LOCK)
-                        break;
-
-                added++;
-                unused--;
-        }
-        spin_unlock(&ns->ns_unused_lock);
-        RETURN(added);
-}
-
 /* when called with LDLM_ASYNC the blocking callback will be handled
  * in a thread and this function will return after the thread has been
  * asked to call the callback.  when called with LDLM_SYNC the blocking
@@ -1504,8 +1418,8 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t sync,
                         RETURN(count);
         }
 
-        /* If an error occured in ASYNC mode, or
-         * this is SYNC mode, cancel the list. */
+        /* If an error occured in ASYNC mode, or this is SYNC mode,
+         * cancel the list. */
         ldlm_cli_cancel_list(&cancels, count, NULL, 0);
         RETURN(count);
 }
