@@ -189,7 +189,14 @@ typedef enum {
 /* Flags sent in AST lock_flags to be mapped into the receiving lock. */
 #define LDLM_AST_FLAGS         (LDLM_FL_DISCARD_DATA)
 
-/* Used for marking lock as an target for -EINTR while cp_ast sleep situation
+/* 
+ * --------------------------------------------------------------------------
+ * NOTE! Starting from this point, that is, LDLM_FL_* flags with values above
+ * 0x80000000 will not be sent over the wire.
+ * --------------------------------------------------------------------------
+ */
+
+/* Used for marking lock as an target for -EINTR while cp_ast sleep
  * emulation + race with upcoming bl_ast.  */
 #define LDLM_FL_FAIL_LOC       0x100000000ULL
 
