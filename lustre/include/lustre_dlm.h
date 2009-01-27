@@ -370,14 +370,6 @@ typedef enum {
 } ldlm_appetite_t;
 
 /*
- * Default value for ->ns_shrink_thumb. If lock is not extent one its cost
- * is one page. Here we have 256 pages which is 1M on i386. Thus by default
- * all extent locks which have more than 1M long extent will be kept in lru,
- * others (including ibits locks) will be canceled on memory pressure event.
- */
-#define LDLM_LOCK_SHRINK_THUMB 256
-
-/*
  * Default values for the "max_nolock_size", "contention_time" and
  * "contended_locks" namespace tunables.
  */
@@ -442,11 +434,6 @@ struct ldlm_namespace {
           * Seconds.
           */
         unsigned int           ns_ctime_age_limit;
-
-        /**
-         * Lower limit to number of pages in lock to keep it in cache.
-         */
-        unsigned long          ns_shrink_thumb;
 
         /**
          * Next debug dump, jiffies.
