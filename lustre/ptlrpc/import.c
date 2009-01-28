@@ -353,7 +353,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
 
         atomic_dec(&imp->imp_inval_count);
-        cfs_waitq_signal(&imp->imp_recovery_waitq);
+        cfs_waitq_broadcast(&imp->imp_recovery_waitq);
 }
 
 /* unset imp_invalid */
@@ -1110,7 +1110,7 @@ finish:
         imp->imp_last_recon = 0;
         spin_unlock(&imp->imp_lock);
 
-        cfs_waitq_signal(&imp->imp_recovery_waitq);
+        cfs_waitq_broadcast(&imp->imp_recovery_waitq);
         RETURN(rc);
 }
 
@@ -1287,7 +1287,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
         }
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {
-                cfs_waitq_signal(&imp->imp_recovery_waitq);
+                cfs_waitq_broadcast(&imp->imp_recovery_waitq);
                 ptlrpc_wake_delayed(imp);
         }
 

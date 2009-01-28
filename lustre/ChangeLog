@@ -45,6 +45,14 @@ tbd Sun Microsystems, Inc.
 	  more information, please refer to bugzilla 17630.
 
 Severity   : normal
+Frequency  : rare
+Bugzilla   : 18154
+Descriptoin: don't lose wakeup for imp_recovery_waitq
+Details    : recover_import_no_retry or invalidate_import and import_close can
+             both sleep on imp_recovery_waitq, but we was send only one wakeup
+             to sleep queue.
+
+Severity   : normal
 Frequency  : start MDS on uncleanly shutdowned MDS device
 Bugzilla   : 16839
 Descriptoin: ll_sync thread stay in waiting mds<>ost recovery finished
