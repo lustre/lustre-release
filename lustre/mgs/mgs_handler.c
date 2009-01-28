@@ -191,7 +191,11 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
                            "mgs_ldlm_client", &obd->obd_ldlm_client);
 
-        LASSERT(!lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb)));
+        if (lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb))) {
+                CERROR("%s: Underlying device is marked as read-only. "
+                       "Setup failed\n", obd->obd_name);
+                GOTO(err_ops, rc = -EROFS);
+        }
 
         rc = mgs_fs_setup(obd, mnt);
         if (rc) {
