@@ -1427,7 +1427,7 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
                 spin_unlock(&imp->imp_lock);
 
                 set->set_remaining--;
-                cfs_waitq_signal(&imp->imp_recovery_waitq);
+                cfs_waitq_broadcast(&imp->imp_recovery_waitq);
         }
 
         /* If we hit an error, we want to recover promptly. */
@@ -2299,7 +2299,7 @@ after_send:
 
         LASSERT(!req->rq_receiving_reply);
         ptlrpc_rqphase_move(req, RQ_PHASE_INTERPRET);
-        cfs_waitq_signal(&imp->imp_recovery_waitq);
+        cfs_waitq_broadcast(&imp->imp_recovery_waitq);
         RETURN(rc);
 }
 

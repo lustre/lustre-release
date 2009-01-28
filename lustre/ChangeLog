@@ -14,6 +14,14 @@ tbd  Sun Microsystems, Inc.
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
 Severity   : normal
+Frequency  : rare
+Bugzilla   : 18154
+Descriptoin: don't lose wakeup for imp_recovery_waitq
+Details    : recover_import_no_retry or invalidate_import and import_close can
+             both sleep on imp_recovery_waitq, but we was send only one wakeup
+             to sleep queue.
+
+Severity   : normal
 Frequency  : always with long access acl
 Bugzilla   : 17636
 Descriptoin: mds can't pack reply with long acl.
