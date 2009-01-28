@@ -1,5 +1,11 @@
 tbd  Sun Microsystems, Inc.
-	* version 3.0.6
+	* version 3.0.8
+
+Severity   : enhancement
+Bugzilla   : 16114
+Description: return EXT_UNSET_BLOCK from ext3_ext_next_leaf_block()
+Details    : With 16TB-1 filesystem, 0xffffffff is valid block number so
+	     EXT_UNSET_BLOCK was introduced for ext3_ext_next_leaf_block()
 
 Severity   : normal
 Bugzilla   : 15320
