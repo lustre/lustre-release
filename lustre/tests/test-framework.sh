@@ -113,7 +113,7 @@ init_test_env() {
     export TUNEFS=${TUNEFS:-"$LUSTRE/utils/tunefs.lustre"}
     [ ! -f "$TUNEFS" ] && export TUNEFS=$(which tunefs.lustre)
     export CHECKSTAT="${CHECKSTAT:-"checkstat -v"} "
-    export FSYTPE=${FSTYPE:-"ldiskfs"}
+    export FSTYPE=${FSTYPE:-"ldiskfs"}
     export NAME=${NAME:-local}
     export DIR2
     export AT_MAX_PATH
