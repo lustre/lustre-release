@@ -126,6 +126,14 @@ Details    : MSG_CONNECT_INITIAL is not set on the initial MDS->OST connect.
 
 Severity   : normal
 Frequency  : rare
+Bugzilla   : 18154
+Descriptoin: don't lose wakeup for imp_recovery_waitq
+Details    : recover_import_no_retry or invalidate_import and import_close can
+             both sleep on imp_recovery_waitq, but we was send only one wakeup
+             to sleep queue.
+
+Severity   : normal
+Frequency  : rare
 Bugzilla   : 18238
 Descriptoin: panic in mds_open
 Details    : don't confuse mds_finish_transno() with PTR_ERR(-ENOENT)
