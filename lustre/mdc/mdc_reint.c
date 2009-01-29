@@ -277,7 +277,7 @@ int mdc_unlink(struct obd_export *exp, struct mdc_op_data *op_data,
         CFS_LIST_HEAD(cancels);
         struct obd_device *obd = class_exp2obd(exp);
         struct ptlrpc_request *req = *request;
-        __u32 size[5] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
+        __u32 size[6] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                         [REQ_REC_OFF] = sizeof(struct mds_rec_unlink),
                         [REQ_REC_OFF + 1] = op_data->namelen + 1,
                         [REQ_REC_OFF + 2] = sizeof(struct ldlm_request) };
@@ -312,7 +312,9 @@ int mdc_unlink(struct obd_export *exp, struct mdc_op_data *op_data,
         size[REPLY_REC_OFF] = sizeof(struct mdt_body);
         size[REPLY_REC_OFF + 1] = obd->u.cli.cl_max_mds_easize;
         size[REPLY_REC_OFF + 2] = obd->u.cli.cl_max_mds_cookiesize;
-        ptlrpc_req_set_repsize(req, 4, size);
+        size[REPLY_REC_OFF + 3] = sizeof(struct lustre_capa);
+        size[REPLY_REC_OFF + 4] = sizeof(struct lustre_capa);
+        ptlrpc_req_set_repsize(req, 6, size);
 
         mdc_unlink_pack(req, REQ_REC_OFF, op_data);
 
