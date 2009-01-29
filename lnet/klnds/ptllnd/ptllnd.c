@@ -497,9 +497,8 @@ kptllnd_startup (lnet_ni_t *ni)
                 return -EINVAL;
         }
 
-        /* kptl_msg_t::ptlm_credits is only a __u8 */
-        if (*kptllnd_tunables.kptl_peercredits > 255) {
-                CERROR("kptl_peercredits must be <= 255\n");
+        if (*kptllnd_tunables.kptl_peercredits > PTLLND_MSG_MAX_CREDITS) {
+                CERROR("peercredits must be <= %d\n", PTLLND_MSG_MAX_CREDITS);
                 return -EINVAL;
         }
 

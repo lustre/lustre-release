@@ -875,9 +875,10 @@ ptllnd_check_sends(ptllnd_peer_t *peer)
                 /*
                  * Return all the credits we have
                  */
-                tx->tx_msg.ptlm_credits = peer->plp_outstanding_credits;
-                peer->plp_sent_credits += peer->plp_outstanding_credits;
-                peer->plp_outstanding_credits = 0;
+                tx->tx_msg.ptlm_credits = MIN(PTLLND_MSG_MAX_CREDITS,
+                                              peer->plp_outstanding_credits);
+                peer->plp_sent_credits += tx->tx_msg.ptlm_credits;
+                peer->plp_outstanding_credits -= tx->tx_msg.ptlm_credits;
 
                 /*
                  * One less credit
