@@ -3033,9 +3033,10 @@ static void osd_it_ea_fini(const struct lu_env *env, struct dt_it *di)
 {
         struct osd_it_ea     *it   = (struct osd_it_ea *)di;
         struct osd_object    *obj  = it->oie_obj;
-
+        struct inode       *inode  = obj->oo_inode;
 
         ENTRY;
+        it->oie_file.f_op->release(inode, &it->oie_file);
         lu_object_put(env, &obj->oo_dt.do_lu);
         EXIT;
 }
@@ -3088,8 +3089,6 @@ static int osd_ldiskfs_filldir(char *buf, const char *name, int namelen,
 {
         struct osd_it_ea   *it     = (struct osd_it_ea *)buf;
         struct dirent64    *dirent = &it->oie_dirent64;
-        int                 reclen = LDISKFS_DIR_REC_LEN(namelen);
-
 
         ENTRY;
         if (it->oie_namelen)
@@ -3101,8 +3100,6 @@ static int osd_ldiskfs_filldir(char *buf, const char *name, int namelen,
         strncpy(dirent->d_name, name, LDISKFS_NAME_LEN);
         dirent->d_name[namelen] = 0;
         dirent->d_ino           = ino;
-        dirent->d_off           = offset;
-        dirent->d_reclen        = reclen;
         it->oie_namelen         = namelen;
         it->oie_curr_pos        = offset;
 
@@ -3134,7 +3131,7 @@ int osd_ldiskfs_it_fill(const struct dt_it *di)
 
         it->oie_next_pos = it->oie_file.f_pos;
 
-        if(!result && it->oie_namelen == 0)
+        if (it->oie_namelen == 0)
                 result = -EIO;
 
         RETURN(result);
@@ -3232,6 +3229,8 @@ static struct dt_rec *osd_it_ea_rec(const struct lu_env *env,
         }
 
         rc = osd_ea_fid_get(env, dentry, (struct dt_rec*) rec);
+        if (rc != 0)
+                rec = ERR_PTR(rc);
 
         iput(inode);
         RETURN((struct dt_rec *)rec);
@@ -3270,7 +3269,7 @@ static int osd_it_ea_load(const struct lu_env *env,
         int rc;
 
         ENTRY;
-        it->oie_curr_pos = it->oie_next_pos = hash;
+        it->oie_curr_pos = hash;
 
         rc =  osd_ldiskfs_it_fill(di);
         if (rc == 0)
