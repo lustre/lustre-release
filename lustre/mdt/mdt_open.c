@@ -1234,8 +1234,11 @@ int mdt_close(struct mdt_thread_info *info)
         req_capsule_set_size(info->mti_pill, &RMF_LOGCOOKIES, RCL_SERVER,
                              info->mti_mdt->mdt_max_cookiesize);
         rc = req_capsule_server_pack(info->mti_pill);
-        if (mdt_check_resent(info, mdt_reconstruct_generic, NULL))
+        if (mdt_check_resent(info, mdt_reconstruct_generic, NULL)) {
+                if (rc == 0)
+                        mdt_shrink_reply(info);
                 RETURN(lustre_msg_get_status(req->rq_repmsg));
+        }
 
         /* Continue to close handle even if we can not pack reply */
         if (rc == 0) {
