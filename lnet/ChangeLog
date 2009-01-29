@@ -17,6 +17,12 @@ Bugzilla   :
 Description:
 Details    :
 
+Severity   : minor
+Bugzilla   : 15984
+Description: uptllnd credit overflow fix
+Details    : kptl_msg_t::ptlm_credits could be overflown by uptllnd since
+             it is only a __u8.
+
 Severity   : major
 Bugzilla   : 14634
 Description: socklnd prtocol version 3 
