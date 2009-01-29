@@ -719,10 +719,12 @@ int mdc_close(struct obd_export *exp, struct mdc_op_data *data, struct obdo *oa,
         struct obd_device *obd = class_exp2obd(exp);
         __u32 reqsize[4] = { sizeof(struct ptlrpc_body),
                              sizeof(struct mdt_body) };
-        __u32 repsize[4] = { sizeof(struct ptlrpc_body),
+        __u32 repsize[6] = { sizeof(struct ptlrpc_body),
                              sizeof(struct mdt_body),
-                               obd->u.cli.cl_max_mds_easize,
-                               obd->u.cli.cl_max_mds_cookiesize };
+                             obd->u.cli.cl_max_mds_easize,
+                             obd->u.cli.cl_max_mds_cookiesize,
+                             sizeof(struct lustre_capa),
+                             sizeof(struct lustre_capa) };
         int rc;
         struct ptlrpc_request *req;
         struct mdc_open_data *mod;
@@ -768,7 +770,7 @@ int mdc_close(struct obd_export *exp, struct mdc_op_data *data, struct obdo *oa,
 
         mdc_close_pack(req, REQ_REC_OFF, data, oa, oa->o_valid, och);
 
-        ptlrpc_req_set_repsize(req, 4, repsize);
+        ptlrpc_req_set_repsize(req, 6, repsize);
         req->rq_commit_cb = mdc_commit_close;
         LASSERT(req->rq_cb_data == NULL);
         req->rq_cb_data = mod;
