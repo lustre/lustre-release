@@ -456,8 +456,10 @@ out:
 
 static inline void enc_pools_wakeup(void)
 {
+        LASSERT_SPIN_LOCKED(&page_pools.epp_lock);
+        LASSERT(page_pools.epp_waitqlen >= 0);
+
         if (unlikely(page_pools.epp_waitqlen)) {
-                LASSERT(page_pools.epp_waitqlen > 0);
                 LASSERT(cfs_waitq_active(&page_pools.epp_waitq));
                 cfs_waitq_broadcast(&page_pools.epp_waitq);
         }
@@ -476,11 +478,15 @@ static int enc_pools_should_grow(int page_needed, long now)
         if (page_pools.epp_total_pages < page_needed)
                 return 1;
 
-        /* if we just did a shrink due to memory tight, we'd better
-         * wait a while to grow again.
+        /*
+         * we wanted to return 0 here if there was a shrink just happened
+         * moment ago, but this may cause deadlock if both client and ost
+         * live on single node.
          */
+#if 0
         if (now - page_pools.epp_last_shrink < 2)
                 return 0;
+#endif
 
         /*
          * here we perhaps need consider other factors like wait queue
@@ -503,32 +509,32 @@ int sptlrpc_enc_pool_get_pages(struct ptlrpc_bulk_desc *desc)
         int             p_idx, g_idx;
         int             i;
 
-        LASSERT(desc->bd_max_iov > 0);
-        LASSERT(desc->bd_max_iov <= page_pools.epp_max_pages);
+        LASSERT(desc->bd_iov_count > 0);
+        LASSERT(desc->bd_iov_count <= page_pools.epp_max_pages);
 
-        /* resent bulk, enc pages might have been allocated previously */
-        if (desc->bd_enc_pages != NULL)
+        /* resent bulk, enc iov might have been allocated previously */
+        if (desc->bd_enc_iov != NULL)
                 return 0;
 
-        OBD_ALLOC(desc->bd_enc_pages,
-                  desc->bd_max_iov * sizeof(*desc->bd_enc_pages));
-        if (desc->bd_enc_pages == NULL)
+        OBD_ALLOC(desc->bd_enc_iov,
+                  desc->bd_iov_count * sizeof(*desc->bd_enc_iov));
+        if (desc->bd_enc_iov == NULL)
                 return -ENOMEM;
 
         spin_lock(&page_pools.epp_lock);
 
         page_pools.epp_st_access++;
 again:
-        if (unlikely(page_pools.epp_free_pages < desc->bd_max_iov)) {
+        if (unlikely(page_pools.epp_free_pages < desc->bd_iov_count)) {
                 if (tick == 0)
                         tick = cfs_time_current();
 
                 now = cfs_time_current_sec();
 
                 page_pools.epp_st_missings++;
-                page_pools.epp_pages_short += desc->bd_max_iov;
+                page_pools.epp_pages_short += desc->bd_iov_count;
 
-                if (enc_pools_should_grow(desc->bd_max_iov, now)) {
+                if (enc_pools_should_grow(desc->bd_iov_count, now)) {
                         page_pools.epp_growing = 1;
 
                         spin_unlock(&page_pools.epp_lock);
@@ -536,6 +542,8 @@ again:
                         spin_lock(&page_pools.epp_lock);
 
                         page_pools.epp_growing = 0;
+
+                        enc_pools_wakeup();
                 } else {
                         if (++page_pools.epp_waitqlen >
                             page_pools.epp_st_max_wqlen)
@@ -549,14 +557,13 @@ again:
                         spin_unlock(&page_pools.epp_lock);
                         cfs_waitq_wait(&waitlink, CFS_TASK_UNINT);
                         cfs_waitq_del(&page_pools.epp_waitq, &waitlink);
-                        spin_lock(&page_pools.epp_lock);
-
                         LASSERT(page_pools.epp_waitqlen > 0);
+                        spin_lock(&page_pools.epp_lock);
                         page_pools.epp_waitqlen--;
                 }
 
-                LASSERT(page_pools.epp_pages_short >= desc->bd_max_iov);
-                page_pools.epp_pages_short -= desc->bd_max_iov;
+                LASSERT(page_pools.epp_pages_short >= desc->bd_iov_count);
+                page_pools.epp_pages_short -= desc->bd_iov_count;
 
                 this_idle = 0;
                 goto again;
@@ -570,14 +577,15 @@ again:
         }
 
         /* proceed with rest of allocation */
-        page_pools.epp_free_pages -= desc->bd_max_iov;
+        page_pools.epp_free_pages -= desc->bd_iov_count;
 
         p_idx = page_pools.epp_free_pages / PAGES_PER_POOL;
         g_idx = page_pools.epp_free_pages % PAGES_PER_POOL;
 
-        for (i = 0; i < desc->bd_max_iov; i++) {
+        for (i = 0; i < desc->bd_iov_count; i++) {
                 LASSERT(page_pools.epp_pools[p_idx][g_idx] != NULL);
-                desc->bd_enc_pages[i] = page_pools.epp_pools[p_idx][g_idx];
+                desc->bd_enc_iov[i].kiov_page =
+                                        page_pools.epp_pools[p_idx][g_idx];
                 page_pools.epp_pools[p_idx][g_idx] = NULL;
 
                 if (++g_idx == PAGES_PER_POOL) {
@@ -612,26 +620,27 @@ void sptlrpc_enc_pool_put_pages(struct ptlrpc_bulk_desc *desc)
         int     p_idx, g_idx;
         int     i;
 
-        if (desc->bd_enc_pages == NULL)
+        if (desc->bd_enc_iov == NULL)
                 return;
-        if (desc->bd_max_iov == 0)
-                return;
+
+        LASSERT(desc->bd_iov_count > 0);
 
         spin_lock(&page_pools.epp_lock);
 
         p_idx = page_pools.epp_free_pages / PAGES_PER_POOL;
         g_idx = page_pools.epp_free_pages % PAGES_PER_POOL;
 
-        LASSERT(page_pools.epp_free_pages + desc->bd_max_iov <=
+        LASSERT(page_pools.epp_free_pages + desc->bd_iov_count <=
                 page_pools.epp_total_pages);
         LASSERT(page_pools.epp_pools[p_idx]);
 
-        for (i = 0; i < desc->bd_max_iov; i++) {
-                LASSERT(desc->bd_enc_pages[i] != NULL);
+        for (i = 0; i < desc->bd_iov_count; i++) {
+                LASSERT(desc->bd_enc_iov[i].kiov_page != NULL);
                 LASSERT(g_idx != 0 || page_pools.epp_pools[p_idx]);
                 LASSERT(page_pools.epp_pools[p_idx][g_idx] == NULL);
 
-                page_pools.epp_pools[p_idx][g_idx] = desc->bd_enc_pages[i];
+                page_pools.epp_pools[p_idx][g_idx] =
+                                        desc->bd_enc_iov[i].kiov_page;
 
                 if (++g_idx == PAGES_PER_POOL) {
                         p_idx++;
@@ -639,15 +648,15 @@ void sptlrpc_enc_pool_put_pages(struct ptlrpc_bulk_desc *desc)
                 }
         }
 
-        page_pools.epp_free_pages += desc->bd_max_iov;
+        page_pools.epp_free_pages += desc->bd_iov_count;
 
         enc_pools_wakeup();
 
         spin_unlock(&page_pools.epp_lock);
 
-        OBD_FREE(desc->bd_enc_pages,
-                 desc->bd_max_iov * sizeof(*desc->bd_enc_pages));
-        desc->bd_enc_pages = NULL;
+        OBD_FREE(desc->bd_enc_iov,
+                 desc->bd_iov_count * sizeof(*desc->bd_enc_iov));
+        desc->bd_enc_iov = NULL;
 }
 EXPORT_SYMBOL(sptlrpc_enc_pool_put_pages);
 
@@ -668,7 +677,8 @@ int sptlrpc_enc_pool_add_user(void)
         spin_unlock(&page_pools.epp_lock);
 
         if (need_grow) {
-                enc_pools_add_pages(PTLRPC_MAX_BRW_PAGES);
+                enc_pools_add_pages(PTLRPC_MAX_BRW_PAGES +
+                                    PTLRPC_MAX_BRW_PAGES);
 
                 spin_lock(&page_pools.epp_lock);
                 page_pools.epp_growing = 0;
@@ -815,9 +825,6 @@ static struct sptlrpc_hash_type hash_types[] = {
         [BULK_HASH_ALG_SHA256]  = { "sha256",   "sha256",       32 },
         [BULK_HASH_ALG_SHA384]  = { "sha384",   "sha384",       48 },
         [BULK_HASH_ALG_SHA512]  = { "sha512",   "sha512",       64 },
-        [BULK_HASH_ALG_WP256]   = { "wp256",    "wp256",        32 },
-        [BULK_HASH_ALG_WP384]   = { "wp384",    "wp384",        48 },
-        [BULK_HASH_ALG_WP512]   = { "wp512",    "wp512",        64 },
 };
 
 const struct sptlrpc_hash_type *sptlrpc_get_hash_type(__u8 hash_alg)
@@ -845,24 +852,21 @@ const char * sptlrpc_get_hash_name(__u8 hash_alg)
 }
 EXPORT_SYMBOL(sptlrpc_get_hash_name);
 
-int bulk_sec_desc_size(__u8 hash_alg, int request, int read)
+__u8 sptlrpc_get_hash_alg(const char *algname)
 {
-        int size = sizeof(struct ptlrpc_bulk_sec_desc);
+        int     i;
 
-        LASSERT(hash_alg < BULK_HASH_ALG_MAX);
-
-        /* read request don't need extra data */
-        if (!(read && request))
-                size += hash_types[hash_alg].sht_size;
-
-        return size;
+        for (i = 0; i < BULK_HASH_ALG_MAX; i++)
+                if (!strcmp(hash_types[i].sht_name, algname))
+                        break;
+        return i;
 }
-EXPORT_SYMBOL(bulk_sec_desc_size);
+EXPORT_SYMBOL(sptlrpc_get_hash_alg);
 
 int bulk_sec_desc_unpack(struct lustre_msg *msg, int offset)
 {
         struct ptlrpc_bulk_sec_desc *bsd;
-        int    size = msg->lm_buflens[offset];
+        int                          size = msg->lm_buflens[offset];
 
         bsd = lustre_msg_buf(msg, offset, sizeof(*bsd));
         if (bsd == NULL) {
@@ -870,35 +874,27 @@ int bulk_sec_desc_unpack(struct lustre_msg *msg, int offset)
                 return -EINVAL;
         }
 
-        /* nothing to swab */
+        if (lustre_msg_swabbed(msg)) {
+                __swab32s(&bsd->bsd_nob);
+        }
 
         if (unlikely(bsd->bsd_version != 0)) {
                 CERROR("Unexpected version %u\n", bsd->bsd_version);
                 return -EPROTO;
         }
 
-        if (unlikely(bsd->bsd_flags != 0)) {
-                CERROR("Unexpected flags %x\n", bsd->bsd_flags);
+        if (unlikely(bsd->bsd_type >= SPTLRPC_BULK_MAX)) {
+                CERROR("Invalid type %u\n", bsd->bsd_type);
                 return -EPROTO;
         }
 
-        if (unlikely(!sptlrpc_get_hash_type(bsd->bsd_hash_alg))) {
-                CERROR("Unsupported checksum algorithm %u\n",
-                       bsd->bsd_hash_alg);
-                return -EINVAL;
-        }
+        /* FIXME more sanity check here */
 
-        if (unlikely(!sptlrpc_get_ciph_type(bsd->bsd_ciph_alg))) {
-                CERROR("Unsupported cipher algorithm %u\n",
-                       bsd->bsd_ciph_alg);
-                return -EINVAL;
-        }
-
-        if (unlikely(size > sizeof(*bsd)) &&
-            size < sizeof(*bsd) + hash_types[bsd->bsd_hash_alg].sht_size) {
-                CERROR("Mal-formed checksum data: csum alg %u, size %d\n",
-                       bsd->bsd_hash_alg, size);
-                return -EINVAL;
+        if (unlikely(bsd->bsd_svc != SPTLRPC_BULK_SVC_NULL &&
+                     bsd->bsd_svc != SPTLRPC_BULK_SVC_INTG &&
+                     bsd->bsd_svc != SPTLRPC_BULK_SVC_PRIV)) {
+                CERROR("Invalid svc %u\n", bsd->bsd_svc);
+                return -EPROTO;
         }
 
         return 0;
@@ -957,14 +953,17 @@ static int do_bulk_checksum_crc32(struct ptlrpc_bulk_desc *desc, void *buf)
         return 0;
 }
 
-static int do_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u32 alg, void *buf)
+int sptlrpc_get_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u8 alg,
+                              void *buf, int buflen)
 {
         struct hash_desc    hdesc;
-        struct scatterlist *sl;
-        int i, rc = 0, bytes = 0;
+        int                 hashsize;
+        char                hashbuf[64];
+        struct scatterlist  sl;
+        int                 i;
 
-        LASSERT(alg > BULK_HASH_ALG_NULL &&
-                alg < BULK_HASH_ALG_MAX);
+        LASSERT(alg > BULK_HASH_ALG_NULL && alg < BULK_HASH_ALG_MAX);
+        LASSERT(buflen >= 4);
 
         switch (alg) {
         case BULK_HASH_ALG_ADLER32:
@@ -983,35 +982,35 @@ static int do_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u32 alg, void *buf)
                 CERROR("Unable to allocate TFM %s\n", hash_types[alg].sht_name);
                 return -ENOMEM;
         }
-        hdesc.flags = 0;
 
-        OBD_ALLOC(sl, sizeof(*sl) * desc->bd_iov_count);
-        if (sl == NULL) {
-                rc = -ENOMEM;
-                goto out_tfm;
-        }
+        hdesc.flags = 0;
+        ll_crypto_hash_init(&hdesc);
+
+        hashsize = ll_crypto_hash_digestsize(hdesc.tfm);
 
         for (i = 0; i < desc->bd_iov_count; i++) {
-                sl[i].page = desc->bd_iov[i].kiov_page;
-                sl[i].offset = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
-                sl[i].length = desc->bd_iov[i].kiov_len;
-                bytes += desc->bd_iov[i].kiov_len;
+                sl.page = desc->bd_iov[i].kiov_page;
+                sl.offset = desc->bd_iov[i].kiov_offset;
+                sl.length = desc->bd_iov[i].kiov_len;
+                ll_crypto_hash_update(&hdesc, &sl, sl.length);
         }
 
-        ll_crypto_hash_init(&hdesc);
-        ll_crypto_hash_update(&hdesc, sl, bytes);
-        ll_crypto_hash_final(&hdesc, buf);
+        if (hashsize > buflen) {
+                ll_crypto_hash_final(&hdesc, hashbuf);
+                memcpy(buf, hashbuf, buflen);
+        } else {
+                ll_crypto_hash_final(&hdesc, buf);
+        }
 
-        OBD_FREE(sl, sizeof(*sl) * desc->bd_iov_count);
-
-out_tfm:
         ll_crypto_free_hash(hdesc.tfm);
-        return rc;
+        return 0;
 }
+EXPORT_SYMBOL(sptlrpc_get_bulk_checksum);
 
 #else /* !__KERNEL__ */
 
-static int do_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u32 alg, void *buf)
+int sptlrpc_get_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u8 alg,
+                              void *buf, int buflen)
 {
         __u32   csum32;
         int     i;
@@ -1048,328 +1047,3 @@ static int do_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u32 alg, void *buf)
 }
 
 #endif /* __KERNEL__ */
-
-/*
- * perform algorithm @alg checksum on @desc, store result in @buf.
- * if anything goes wrong, leave 'alg' be BULK_HASH_ALG_NULL.
- */
-static
-int generate_bulk_csum(struct ptlrpc_bulk_desc *desc, __u32 alg,
-                       struct ptlrpc_bulk_sec_desc *bsd, int bsdsize)
-{
-        int rc;
-
-        LASSERT(bsd);
-        LASSERT(alg < BULK_HASH_ALG_MAX);
-
-        bsd->bsd_hash_alg = BULK_HASH_ALG_NULL;
-
-        if (alg == BULK_HASH_ALG_NULL)
-                return 0;
-
-        LASSERT(bsdsize >= sizeof(*bsd) + hash_types[alg].sht_size);
-
-        rc = do_bulk_checksum(desc, alg, bsd->bsd_csum);
-        if (rc == 0)
-                bsd->bsd_hash_alg = alg;
-
-        return rc;
-}
-
-static
-int verify_bulk_csum(struct ptlrpc_bulk_desc *desc, int read,
-                     struct ptlrpc_bulk_sec_desc *bsdv, int bsdvsize,
-                     struct ptlrpc_bulk_sec_desc *bsdr, int bsdrsize)
-{
-        char *csum_p;
-        char *buf = NULL;
-        int   csum_size, rc = 0;
-
-        LASSERT(bsdv);
-        LASSERT(bsdv->bsd_hash_alg < BULK_HASH_ALG_MAX);
-
-        if (bsdr)
-                bsdr->bsd_hash_alg = BULK_HASH_ALG_NULL;
-
-        if (bsdv->bsd_hash_alg == BULK_HASH_ALG_NULL)
-                return 0;
-
-        /* for all supported algorithms */
-        csum_size = hash_types[bsdv->bsd_hash_alg].sht_size;
-
-        if (bsdvsize < sizeof(*bsdv) + csum_size) {
-                CERROR("verifier size %d too small, require %d\n",
-                       bsdvsize, (int) sizeof(*bsdv) + csum_size);
-                return -EINVAL;
-        }
-
-        if (bsdr) {
-                LASSERT(bsdrsize >= sizeof(*bsdr) + csum_size);
-                csum_p = (char *) bsdr->bsd_csum;
-        } else {
-                OBD_ALLOC(buf, csum_size);
-                if (buf == NULL)
-                        return -EINVAL;
-                csum_p = buf;
-        }
-
-        rc = do_bulk_checksum(desc, bsdv->bsd_hash_alg, csum_p);
-
-        if (memcmp(bsdv->bsd_csum, csum_p, csum_size)) {
-                CERROR("BAD %s CHECKSUM (%s), data mutated during "
-                       "transfer!\n", read ? "READ" : "WRITE",
-                       hash_types[bsdv->bsd_hash_alg].sht_name);
-                rc = -EINVAL;
-        } else {
-                CDEBUG(D_SEC, "bulk %s checksum (%s) verified\n",
-                      read ? "read" : "write",
-                      hash_types[bsdv->bsd_hash_alg].sht_name);
-        }
-
-        if (bsdr) {
-                bsdr->bsd_hash_alg = bsdv->bsd_hash_alg;
-                memcpy(bsdr->bsd_csum, csum_p, csum_size);
-        } else {
-                LASSERT(buf);
-                OBD_FREE(buf, csum_size);
-        }
-
-        return rc;
-}
-
-int bulk_csum_cli_request(struct ptlrpc_bulk_desc *desc, int read,
-                          __u32 alg, struct lustre_msg *rmsg, int roff)
-{
-        struct ptlrpc_bulk_sec_desc *bsdr;
-        int    rsize, rc = 0;
-
-        rsize = rmsg->lm_buflens[roff];
-        bsdr = lustre_msg_buf(rmsg, roff, sizeof(*bsdr));
-
-        LASSERT(bsdr);
-        LASSERT(rsize >= sizeof(*bsdr));
-        LASSERT(alg < BULK_HASH_ALG_MAX);
-
-        if (read) {
-                bsdr->bsd_hash_alg = alg;
-        } else {
-                rc = generate_bulk_csum(desc, alg, bsdr, rsize);
-                if (rc)
-                        CERROR("bulk write: client failed to compute "
-                               "checksum: %d\n", rc);
-
-                /* For sending we only compute the wrong checksum instead
-                 * of corrupting the data so it is still correct on a redo */
-                if (rc == 0 && OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_SEND) &&
-                    bsdr->bsd_hash_alg != BULK_HASH_ALG_NULL)
-                        bsdr->bsd_csum[0] ^= 0x1;
-        }
-
-        return rc;
-}
-EXPORT_SYMBOL(bulk_csum_cli_request);
-
-int bulk_csum_cli_reply(struct ptlrpc_bulk_desc *desc, int read,
-                        struct lustre_msg *rmsg, int roff,
-                        struct lustre_msg *vmsg, int voff)
-{
-        struct ptlrpc_bulk_sec_desc *bsdv, *bsdr;
-        int    rsize, vsize;
-
-        rsize = rmsg->lm_buflens[roff];
-        vsize = vmsg->lm_buflens[voff];
-        bsdr = lustre_msg_buf(rmsg, roff, 0);
-        bsdv = lustre_msg_buf(vmsg, voff, 0);
-
-        if (bsdv == NULL || vsize < sizeof(*bsdv)) {
-                CERROR("Invalid checksum verifier from server: size %d\n",
-                       vsize);
-                return -EINVAL;
-        }
-
-        LASSERT(bsdr);
-        LASSERT(rsize >= sizeof(*bsdr));
-        LASSERT(vsize >= sizeof(*bsdv));
-
-        if (bsdr->bsd_hash_alg != bsdv->bsd_hash_alg) {
-                CERROR("bulk %s: checksum algorithm mismatch: client request "
-                       "%s but server reply with %s. try to use the new one "
-                       "for checksum verification\n",
-                       read ? "read" : "write",
-                       hash_types[bsdr->bsd_hash_alg].sht_name,
-                       hash_types[bsdv->bsd_hash_alg].sht_name);
-        }
-
-        if (read)
-                return verify_bulk_csum(desc, 1, bsdv, vsize, NULL, 0);
-        else {
-                char *cli, *srv, *new = NULL;
-                int csum_size = hash_types[bsdr->bsd_hash_alg].sht_size;
-
-                LASSERT(bsdr->bsd_hash_alg < BULK_HASH_ALG_MAX);
-                if (bsdr->bsd_hash_alg == BULK_HASH_ALG_NULL)
-                        return 0;
-
-                if (vsize < sizeof(*bsdv) + csum_size) {
-                        CERROR("verifier size %d too small, require %d\n",
-                               vsize, (int) sizeof(*bsdv) + csum_size);
-                        return -EINVAL;
-                }
-
-                cli = (char *) (bsdr + 1);
-                srv = (char *) (bsdv + 1);
-
-                if (!memcmp(cli, srv, csum_size)) {
-                        /* checksum confirmed */
-                        CDEBUG(D_SEC, "bulk write checksum (%s) confirmed\n",
-                               hash_types[bsdr->bsd_hash_alg].sht_name);
-                        return 0;
-                }
-
-                /* checksum mismatch, re-compute a new one and compare with
-                 * others, give out proper warnings. */
-                OBD_ALLOC(new, csum_size);
-                if (new == NULL)
-                        return -ENOMEM;
-
-                do_bulk_checksum(desc, bsdr->bsd_hash_alg, new);
-
-                if (!memcmp(new, srv, csum_size)) {
-                        CERROR("BAD WRITE CHECKSUM (%s): pages were mutated "
-                               "on the client after we checksummed them\n",
-                               hash_types[bsdr->bsd_hash_alg].sht_name);
-                } else if (!memcmp(new, cli, csum_size)) {
-                        CERROR("BAD WRITE CHECKSUM (%s): pages were mutated "
-                               "in transit\n",
-                               hash_types[bsdr->bsd_hash_alg].sht_name);
-                } else {
-                        CERROR("BAD WRITE CHECKSUM (%s): pages were mutated "
-                               "in transit, and the current page contents "
-                               "don't match the originals and what the server "
-                               "received\n",
-                               hash_types[bsdr->bsd_hash_alg].sht_name);
-                }
-                OBD_FREE(new, csum_size);
-
-                return -EINVAL;
-        }
-}
-EXPORT_SYMBOL(bulk_csum_cli_reply);
-
-#ifdef __KERNEL__
-static void corrupt_bulk_data(struct ptlrpc_bulk_desc *desc)
-{
-        char           *ptr;
-        unsigned int    off, i;
-
-        for (i = 0; i < desc->bd_iov_count; i++) {
-                if (desc->bd_iov[i].kiov_len == 0)
-                        continue;
-
-                ptr = cfs_kmap(desc->bd_iov[i].kiov_page);
-                off = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
-                ptr[off] ^= 0x1;
-                cfs_kunmap(desc->bd_iov[i].kiov_page);
-                return;
-        }
-}
-#else
-static void corrupt_bulk_data(struct ptlrpc_bulk_desc *desc)
-{
-}
-#endif /* __KERNEL__ */
-
-int bulk_csum_svc(struct ptlrpc_bulk_desc *desc, int read,
-                  struct ptlrpc_bulk_sec_desc *bsdv, int vsize,
-                  struct ptlrpc_bulk_sec_desc *bsdr, int rsize)
-{
-        int    rc;
-
-        LASSERT(vsize >= sizeof(*bsdv));
-        LASSERT(rsize >= sizeof(*bsdr));
-        LASSERT(bsdv && bsdr);
-
-        if (read) {
-                rc = generate_bulk_csum(desc, bsdv->bsd_hash_alg, bsdr, rsize);
-                if (rc)
-                        CERROR("bulk read: server failed to generate %s "
-                               "checksum: %d\n",
-                               hash_types[bsdv->bsd_hash_alg].sht_name, rc);
-
-                /* corrupt the data after we compute the checksum, to
-                 * simulate an OST->client data error */
-                if (rc == 0 && OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_RECEIVE))
-                        corrupt_bulk_data(desc);
-        } else {
-                rc = verify_bulk_csum(desc, 0, bsdv, vsize, bsdr, rsize);
-        }
-
-        return rc;
-}
-EXPORT_SYMBOL(bulk_csum_svc);
-
-/****************************************
- * Helpers to assist policy modules to  *
- * implement encryption funcationality  *
- ****************************************/
-
-/* FIXME */
-#ifndef __KERNEL__
-#define CRYPTO_TFM_MODE_ECB     (0)
-#define CRYPTO_TFM_MODE_CBC     (1)
-#endif
-
-static struct sptlrpc_ciph_type cipher_types[] = {
-        [BULK_CIPH_ALG_NULL]    = {
-                "null",         "null",       0,                   0,  0
-        },
-        [BULK_CIPH_ALG_ARC4]    = {
-                "arc4",         "ecb(arc4)",       0, 0,  16
-        },
-        [BULK_CIPH_ALG_AES128]  = {
-                "aes128",       "cbc(aes)",        0, 16, 16
-        },
-        [BULK_CIPH_ALG_AES192]  = {
-                "aes192",       "cbc(aes)",        0, 16, 24
-        },
-        [BULK_CIPH_ALG_AES256]  = {
-                "aes256",       "cbc(aes)",        0, 16, 32
-        },
-        [BULK_CIPH_ALG_CAST128] = {
-                "cast128",      "cbc(cast5)",      0, 8,  16
-        },
-        [BULK_CIPH_ALG_CAST256] = {
-                "cast256",      "cbc(cast6)",      0, 16, 32
-        },
-        [BULK_CIPH_ALG_TWOFISH128] = {
-                "twofish128",   "cbc(twofish)",    0, 16, 16
-        },
-        [BULK_CIPH_ALG_TWOFISH256] = {
-                "twofish256",   "cbc(twofish)",    0, 16, 32
-        },
-};
-
-const struct sptlrpc_ciph_type *sptlrpc_get_ciph_type(__u8 ciph_alg)
-{
-        struct sptlrpc_ciph_type *ct;
-
-        if (ciph_alg < BULK_CIPH_ALG_MAX) {
-                ct = &cipher_types[ciph_alg];
-                if (ct->sct_tfm_name)
-                        return ct;
-        }
-        return NULL;
-}
-EXPORT_SYMBOL(sptlrpc_get_ciph_type);
-
-const char *sptlrpc_get_ciph_name(__u8 ciph_alg)
-{
-        const struct sptlrpc_ciph_type *ct;
-
-        ct = sptlrpc_get_ciph_type(ciph_alg);
-        if (ct)
-                return ct->sct_name;
-        else
-                return "unknown";
-}
-EXPORT_SYMBOL(sptlrpc_get_ciph_name);

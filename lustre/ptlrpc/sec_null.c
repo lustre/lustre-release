@@ -59,13 +59,13 @@ static struct ptlrpc_cli_ctx    null_cli_ctx;
 static struct ptlrpc_svc_ctx    null_svc_ctx;
 
 /*
- * null sec temporarily use the third byte of lm_secflvr to identify
+ * we can temporarily use the topmost 8-bits of lm_secflvr to identify
  * the source sec part.
  */
 static inline
 void null_encode_sec_part(struct lustre_msg *msg, enum lustre_sec_part sp)
 {
-        msg->lm_secflvr |= (((__u32) sp) & 0xFF) << 16;
+        msg->lm_secflvr |= (((__u32) sp) & 0xFF) << 24;
 }
 
 static inline
@@ -73,9 +73,9 @@ enum lustre_sec_part null_decode_sec_part(struct lustre_msg *msg)
 {
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
-                return (msg->lm_secflvr >> 16) & 0xFF;
+                return (msg->lm_secflvr >> 24) & 0xFF;
         case LUSTRE_MSG_MAGIC_V2_SWABBED:
-                return (msg->lm_secflvr >> 8) & 0xFF;
+                return (msg->lm_secflvr) & 0xFF;
         default:
                 return LUSTRE_SP_ANY;
         }
@@ -135,14 +135,7 @@ struct ptlrpc_sec *null_create_sec(struct obd_import *imp,
                                    struct ptlrpc_svc_ctx *svc_ctx,
                                    struct sptlrpc_flavor *sf)
 {
-        LASSERT(RPC_FLVR_POLICY(sf->sf_rpc) == SPTLRPC_POLICY_NULL);
-
-        if (sf->sf_bulk_ciph != BULK_CIPH_ALG_NULL ||
-            sf->sf_bulk_hash != BULK_HASH_ALG_NULL) {
-                CERROR("null sec don't support bulk algorithm: %u/%u\n",
-                       sf->sf_bulk_ciph, sf->sf_bulk_hash);
-                return NULL;
-        }
+        LASSERT(SPTLRPC_FLVR_POLICY(sf->sf_rpc) == SPTLRPC_POLICY_NULL);
 
         /* general layer has take a module reference for us, because we never
          * really destroy the sec, simply release the reference here.
@@ -300,7 +293,8 @@ static struct ptlrpc_svc_ctx null_svc_ctx = {
 static
 int null_accept(struct ptlrpc_request *req)
 {
-        LASSERT(RPC_FLVR_POLICY(req->rq_flvr.sf_rpc) == SPTLRPC_POLICY_NULL);
+        LASSERT(SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) ==
+                SPTLRPC_POLICY_NULL);
 
         if (req->rq_flvr.sf_rpc != SPTLRPC_FLVR_NULL) {
                 CERROR("Invalid rpc flavor 0x%x\n", req->rq_flvr.sf_rpc);
@@ -428,8 +422,6 @@ static void null_init_internal(void)
         null_sec.ps_id = -1;
         null_sec.ps_import = NULL;
         null_sec.ps_flvr.sf_rpc = SPTLRPC_FLVR_NULL;
-        null_sec.ps_flvr.sf_bulk_ciph = BULK_CIPH_ALG_NULL;
-        null_sec.ps_flvr.sf_bulk_hash = BULK_HASH_ALG_NULL;
         null_sec.ps_flvr.sf_flags = 0;
         null_sec.ps_part = LUSTRE_SP_ANY;
         null_sec.ps_dying = 0;

@@ -194,7 +194,9 @@ void client_bulk_callback (lnet_event_t *ev)
                 desc->bd_sender = ev->sender;
         }
 
-        sptlrpc_enc_pool_put_pages(desc);
+        /* release the encrypted pages for write */
+        if (desc->bd_req->rq_bulk_write)
+                sptlrpc_enc_pool_put_pages(desc);
 
         /* NB don't unlock till after wakeup; desc can disappear under us
          * otherwise */

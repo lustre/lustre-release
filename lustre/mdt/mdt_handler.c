@@ -1168,6 +1168,10 @@ static int mdt_sendpage(struct mdt_thread_info *info,
         }
 
         LASSERT(desc->bd_nob == rdpg->rp_count);
+        rc = sptlrpc_svc_wrap_bulk(req, desc);
+        if (rc)
+                GOTO(free_desc, rc);
+
         rc = ptlrpc_start_bulk_transfer(desc);
         if (rc)
                 GOTO(free_desc, rc);
@@ -1327,6 +1331,9 @@ static int mdt_writepage(struct mdt_thread_info *info)
         ptlrpc_prep_bulk_page(desc, page, (int)reqbody->size,
                               (int)reqbody->nlink);
 
+        rc = sptlrpc_svc_prep_bulk(req, desc);
+        if (rc != 0)
+                GOTO(cleanup_page, rc);
         /*
          * Check if client was evicted while we were doing i/o before touching
          * network.
@@ -2771,6 +2778,15 @@ static int mdt_handle0(struct ptlrpc_request *req,
         if (likely(rc == 0)) {
                 rc = mdt_recovery(info);
                 if (likely(rc == +1)) {
+                        switch (lustre_msg_get_opc(msg)) {
+                        case MDS_READPAGE:
+                                req->rq_bulk_read = 1;
+                                break;
+                        case MDS_WRITEPAGE:
+                                req->rq_bulk_write = 1;
+                                break;
+                        }
+
                         h = mdt_handler_find(lustre_msg_get_opc(msg),
                                              supported);
                         if (likely(h != NULL)) {

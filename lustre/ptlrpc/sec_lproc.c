@@ -66,7 +66,7 @@
 struct proc_dir_entry *sptlrpc_proc_root = NULL;
 EXPORT_SYMBOL(sptlrpc_proc_root);
 
-void sec_flags2str(unsigned long flags, char *buf, int bufsize)
+char *sec_flags2str(unsigned long flags, char *buf, int bufsize)
 {
         buf[0] = '\0';
 
@@ -82,7 +82,7 @@ void sec_flags2str(unsigned long flags, char *buf, int bufsize)
                 strncat(buf, "-,", bufsize);
 
         buf[strlen(buf) - 1] = '\0';
-
+        return buf;
 }
 
 static int sptlrpc_info_lprocfs_seq_show(struct seq_file *seq, void *v)
@@ -90,7 +90,7 @@ static int sptlrpc_info_lprocfs_seq_show(struct seq_file *seq, void *v)
         struct obd_device *dev = seq->private;
         struct client_obd *cli = &dev->u.cli;
         struct ptlrpc_sec *sec = NULL;
-        char               flags_str[32];
+        char               str[32];
 
         LASSERT(strcmp(dev->obd_type->typ_name, LUSTRE_OSC_NAME) == 0 ||
                 strcmp(dev->obd_type->typ_name, LUSTRE_MDC_NAME) == 0 ||
@@ -101,14 +101,14 @@ static int sptlrpc_info_lprocfs_seq_show(struct seq_file *seq, void *v)
         if (sec == NULL)
                 goto out;
 
-        sec_flags2str(sec->ps_flvr.sf_flags, flags_str, sizeof(flags_str));
+        sec_flags2str(sec->ps_flvr.sf_flags, str, sizeof(str));
 
         seq_printf(seq, "rpc flavor:    %s\n",
-                   sptlrpc_rpcflavor2name(sec->ps_flvr.sf_rpc));
-        seq_printf(seq, "bulk flavor:   %s/%s\n",
-                   sptlrpc_get_hash_name(sec->ps_flvr.sf_bulk_hash),
-                   sptlrpc_get_ciph_name(sec->ps_flvr.sf_bulk_ciph));
-        seq_printf(seq, "flags:         %s\n", flags_str);
+                   sptlrpc_flavor2name_base(sec->ps_flvr.sf_rpc));
+        seq_printf(seq, "bulk flavor:   %s\n",
+                   sptlrpc_flavor2name_bulk(&sec->ps_flvr, str, sizeof(str)));
+        seq_printf(seq, "flags:         %s\n",
+                   sec_flags2str(sec->ps_flvr.sf_flags, str, sizeof(str)));
         seq_printf(seq, "id:            %d\n", sec->ps_id);
         seq_printf(seq, "refcount:      %d\n", atomic_read(&sec->ps_refcount));
         seq_printf(seq, "nctx:          %d\n", atomic_read(&sec->ps_nctx));

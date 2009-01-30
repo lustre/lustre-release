@@ -636,8 +636,12 @@ struct ptlrpc_bulk_desc {
         lnet_handle_md_t       bd_md_h;         /* associated MD */
         lnet_nid_t             bd_sender;       /* stash event::sender */
 
-        cfs_page_t           **bd_enc_pages;
 #if defined(__KERNEL__)
+        /*
+         * encrypt iov, size is either 0 or bd_iov_count.
+         */
+        lnet_kiov_t           *bd_enc_iov;
+
         lnet_kiov_t            bd_iov[0];
 #else
         lnet_md_iovec_t        bd_iov[0];

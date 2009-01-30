@@ -427,6 +427,10 @@ stop_gss_daemons() {
 init_gss() {
     if $GSS; then
         start_gss_daemons
+
+        if [ -n "$LGSS_KEYRING_DEBUG" ]; then
+            echo $LGSS_KEYRING_DEBUG > /proc/fs/lustre/sptlrpc/gss/lgss_keyring/debug_level
+        fi
     fi
 }
 

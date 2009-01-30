@@ -1175,7 +1175,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         /* size[REQ_REC_OFF] still sizeof (*body) */
         if (opc == OST_WRITE) {
                 if (unlikely(cli->cl_checksum) &&
-                    req->rq_flvr.sf_bulk_hash == BULK_HASH_ALG_NULL) {
+                    !sptlrpc_flavor_has_bulk(&req->rq_flvr)) {
                         /* store cl_cksum_type in a local variable since
                          * it can be changed via lprocfs */
                         cksum_type_t cksum_type = cli->cl_cksum_type;
@@ -1204,7 +1204,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                                      sizeof(__u32) * niocount);
         } else {
                 if (unlikely(cli->cl_checksum) &&
-                    req->rq_flvr.sf_bulk_hash == BULK_HASH_ALG_NULL) {
+                    !sptlrpc_flavor_has_bulk(&req->rq_flvr)) {
                         if ((body->oa.o_valid & OBD_MD_FLFLAGS) == 0)
                                 body->oa.o_flags = 0;
                         body->oa.o_flags |= cksum_type_pack(cli->cl_cksum_type);
@@ -1331,14 +1331,14 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
                 }
                 LASSERT(req->rq_bulk->bd_nob == aa->aa_requested_nob);
 
+                if (sptlrpc_cli_unwrap_bulk_write(req, req->rq_bulk))
+                        RETURN(-EAGAIN);
+
                 if ((aa->aa_oa->o_valid & OBD_MD_FLCKSUM) && client_cksum &&
                     check_write_checksum(&body->oa, peer, client_cksum,
                                          body->oa.o_cksum, aa->aa_requested_nob,
                                          aa->aa_page_count, aa->aa_ppga,
                                          cksum_type_unpack(aa->aa_oa->o_flags)))
-                        RETURN(-EAGAIN);
-
-                if (sptlrpc_cli_unwrap_bulk_write(req, req->rq_bulk))
                         RETURN(-EAGAIN);
 
                 rc = check_write_rcs(req, aa->aa_requested_nob,aa->aa_nio_count,
@@ -1347,6 +1347,11 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
         }
 
         /* The rest of this function executes only for OST_READs */
+
+        rc = sptlrpc_cli_unwrap_bulk_read(req, req->rq_bulk, rc);
+        if (rc < 0)
+                GOTO(out, rc);
+
         if (rc > aa->aa_requested_nob) {
                 CERROR("Unexpected rc %d (%d requested)\n", rc,
                        aa->aa_requested_nob);
@@ -1361,10 +1366,6 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 
         if (rc < aa->aa_requested_nob)
                 handle_short_read(rc, aa->aa_page_count, aa->aa_ppga);
-
-        if (sptlrpc_cli_unwrap_bulk_read(req, rc, aa->aa_page_count,
-                                         aa->aa_ppga))
-                GOTO(out, rc = -EAGAIN);
 
         if (body->oa.o_valid & OBD_MD_FLCKSUM) {
                 static int cksum_counter;

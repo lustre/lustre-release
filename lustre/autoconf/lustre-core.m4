@@ -623,7 +623,7 @@ dnl the AES symbol usually tied with arch, e.g. CRYPTO_AES_586
 dnl FIXME
 AC_DEFUN([LC_CONFIG_RMTCLIENT],
 [LB_LINUX_CONFIG_IM([CRYPTO_AES],[],[
-	AC_MSG_ERROR([Lustre remote client require that CONFIG_CRYPTO_AES is enabled in your kernel.])
+        AC_MSG_WARN([Lustre remote client require that CONFIG_CRYPTO_AES is enabled in your kernel.])
 ])
 ])
 
@@ -654,19 +654,19 @@ AC_DEFUN([LC_CONFIG_SUNRPC],
 AC_DEFUN([LC_CONFIG_GSS_KEYRING],
 [AC_MSG_CHECKING([whether to enable gss keyring backend])
  AC_ARG_ENABLE([gss_keyring],
-	       [AC_HELP_STRING([--disable-gss-keyring],
+               [AC_HELP_STRING([--disable-gss-keyring],
                                [disable gss keyring backend])],
-	       [],[enable_gss_keyring='yes'])
+               [],[enable_gss_keyring='yes'])
  AC_MSG_RESULT([$enable_gss_keyring])
 
  if test x$enable_gss_keyring != xno; then
-	LB_LINUX_CONFIG_IM([KEYS],[],
+        LB_LINUX_CONFIG_IM([KEYS],[],
                            [AC_MSG_ERROR([GSS keyring backend require that CONFIG_KEYS be enabled in your kernel.])])
 
-	AC_CHECK_LIB([keyutils], [keyctl_search], [],
+        AC_CHECK_LIB([keyutils], [keyctl_search], [],
                      [AC_MSG_ERROR([libkeyutils is not found, which is required by gss keyring backend])],)
 
-	AC_DEFINE([HAVE_GSS_KEYRING], [1],
+        AC_DEFINE([HAVE_GSS_KEYRING], [1],
                   [Define this if you enable gss keyring backend])
  fi
 ])
@@ -685,37 +685,29 @@ AC_DEFUN([LC_CONFIG_GSS],
  AC_MSG_RESULT([$enable_gss])
 
  if test x$enable_gss == xyes; then
-	LC_CONFIG_GSS_KEYRING
+        LC_CONFIG_GSS_KEYRING
         LC_CONFIG_SUNRPC
+
+        AC_DEFINE([HAVE_GSS], [1], [Define this if you enable gss])
 
         LB_LINUX_CONFIG_IM([CRYPTO_MD5],[],
                            [AC_MSG_WARN([kernel MD5 support is recommended by using GSS.])])
-	LB_LINUX_CONFIG_IM([CRYPTO_SHA1],[],
+        LB_LINUX_CONFIG_IM([CRYPTO_SHA1],[],
                            [AC_MSG_WARN([kernel SHA1 support is recommended by using GSS.])])
-	LB_LINUX_CONFIG_IM([CRYPTO_SHA256],[],
+        LB_LINUX_CONFIG_IM([CRYPTO_SHA256],[],
                            [AC_MSG_WARN([kernel SHA256 support is recommended by using GSS.])])
-	LB_LINUX_CONFIG_IM([CRYPTO_SHA512],[],
+        LB_LINUX_CONFIG_IM([CRYPTO_SHA512],[],
                            [AC_MSG_WARN([kernel SHA512 support is recommended by using GSS.])])
-	LB_LINUX_CONFIG_IM([CRYPTO_WP512],[],
-                           [AC_MSG_WARN([kernel WP512 support is recommended by using GSS.])])
-	LB_LINUX_CONFIG_IM([CRYPTO_ARC4],[],
-                           [AC_MSG_WARN([kernel ARC4 support is recommended by using GSS.])])
-        LB_LINUX_CONFIG_IM([CRYPTO_DES],[],
-                           [AC_MSG_WARN([kernel DES support is recommended by using GSS.])])
-        LB_LINUX_CONFIG_IM([CRYPTO_TWOFISH],[],
-                           [AC_MSG_WARN([kernel TWOFISH support is recommended by using GSS.])])
-        LB_LINUX_CONFIG_IM([CRYPTO_CAST6],[],
-                           [AC_MSG_WARN([kernel CAST6 support is recommended by using GSS.])])
 
-	AC_CHECK_LIB([gssapi], [gss_init_sec_context],
+        AC_CHECK_LIB([gssapi], [gss_init_sec_context],
                      [GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssapi"],
                      [AC_CHECK_LIB([gssglue], [gss_init_sec_context],
                                    [GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssglue"],
                                    [AC_MSG_ERROR([libgssapi or libgssglue is not found, which is required by GSS.])])],)
 
-	AC_SUBST(GSSAPI_LIBS)
+        AC_SUBST(GSSAPI_LIBS)
 
-	AC_KERBEROS_V5
+        AC_KERBEROS_V5
  fi
 ])
 

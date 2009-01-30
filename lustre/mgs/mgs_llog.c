@@ -2032,7 +2032,7 @@ static int mgs_srpc_set_param_mem(struct fs_db *fsdb,
                 rset = &fsdb->fsdb_srpc_gen;
         }
 
-        rc = sptlrpc_rule_set_merge(rset, &rule, 1);
+        rc = sptlrpc_rule_set_merge(rset, &rule);
 
         RETURN(rc);
 }
@@ -2046,6 +2046,9 @@ static int mgs_srpc_set_param(struct obd_device *obd,
         int                     rc, copy_size;
         ENTRY;
 
+#ifndef HAVE_GSS
+        RETURN(-EINVAL);
+#endif
         /* keep a copy of original param, which could be destroied
          * during parsing */
         copy_size = strlen(param) + 1;

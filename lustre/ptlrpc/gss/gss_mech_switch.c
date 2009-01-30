@@ -214,6 +214,8 @@ __u32 lgss_inquire_context(struct gss_ctx *context_handle,
 __u32 lgss_get_mic(struct gss_ctx *context_handle,
                    int msgcnt,
                    rawobj_t *msg,
+                   int iovcnt,
+                   lnet_kiov_t *iovs,
                    rawobj_t *mic_token)
 {
         LASSERT(context_handle);
@@ -225,6 +227,8 @@ __u32 lgss_get_mic(struct gss_ctx *context_handle,
                 ->gss_get_mic(context_handle,
                               msgcnt,
                               msg,
+                              iovcnt,
+                              iovs,
                               mic_token);
 }
 
@@ -232,6 +236,8 @@ __u32 lgss_get_mic(struct gss_ctx *context_handle,
 __u32 lgss_verify_mic(struct gss_ctx *context_handle,
                       int msgcnt,
                       rawobj_t *msg,
+                      int iovcnt,
+                      lnet_kiov_t *iovs,
                       rawobj_t *mic_token)
 {
         LASSERT(context_handle);
@@ -243,6 +249,8 @@ __u32 lgss_verify_mic(struct gss_ctx *context_handle,
                 ->gss_verify_mic(context_handle,
                                  msgcnt,
                                  msg,
+                                 iovcnt,
+                                 iovs,
                                  mic_token);
 }
 
@@ -276,19 +284,43 @@ __u32 lgss_unwrap(struct gss_ctx *context_handle,
 }
 
 
-__u32 lgss_plain_encrypt(struct gss_ctx *ctx,
-                         int decrypt,
-                         int length,
-                         void *in_buf,
-                         void *out_buf)
+__u32 lgss_prep_bulk(struct gss_ctx *context_handle,
+                     struct ptlrpc_bulk_desc *desc)
 {
-        LASSERT(ctx);
-        LASSERT(ctx->mech_type);
-        LASSERT(ctx->mech_type->gm_ops);
-        LASSERT(ctx->mech_type->gm_ops->gss_plain_encrypt);
+        LASSERT(context_handle);
+        LASSERT(context_handle->mech_type);
+        LASSERT(context_handle->mech_type->gm_ops);
+        LASSERT(context_handle->mech_type->gm_ops->gss_prep_bulk);
 
-        return ctx->mech_type->gm_ops
-                ->gss_plain_encrypt(ctx, decrypt, length, in_buf, out_buf);
+        return context_handle->mech_type->gm_ops
+                ->gss_prep_bulk(context_handle, desc);
+}
+
+__u32 lgss_wrap_bulk(struct gss_ctx *context_handle,
+                     struct ptlrpc_bulk_desc *desc,
+                     rawobj_t *token,
+                     int adj_nob)
+{
+        LASSERT(context_handle);
+        LASSERT(context_handle->mech_type);
+        LASSERT(context_handle->mech_type->gm_ops);
+        LASSERT(context_handle->mech_type->gm_ops->gss_wrap_bulk);
+
+        return context_handle->mech_type->gm_ops
+                ->gss_wrap_bulk(context_handle, desc, token, adj_nob);
+}
+
+__u32 lgss_unwrap_bulk(struct gss_ctx *context_handle,
+                       struct ptlrpc_bulk_desc *desc,
+                       rawobj_t *token)
+{
+        LASSERT(context_handle);
+        LASSERT(context_handle->mech_type);
+        LASSERT(context_handle->mech_type->gm_ops);
+        LASSERT(context_handle->mech_type->gm_ops->gss_unwrap_bulk);
+
+        return context_handle->mech_type->gm_ops
+                ->gss_unwrap_bulk(context_handle, desc, token);
 }
 
 /* gss_delete_sec_context: free all resources associated with context_handle.

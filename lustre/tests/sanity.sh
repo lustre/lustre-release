@@ -3432,6 +3432,7 @@ setup_f77() {
 }
 
 test_77a() { # bug 10889
+	$GSS && skip "could not run with gss" && return
 	[ ! -f $F77_TMP ] && setup_f77
 	set_checksums 1
 	dd if=$F77_TMP of=$DIR/$tfile bs=1M count=$F77SZ || error "dd error"
@@ -3441,6 +3442,7 @@ test_77a() { # bug 10889
 run_test 77a "normal checksum read/write operation ============="
 
 test_77b() { # bug 10889
+	$GSS && skip "could not run with gss" && return
 	[ ! -f $F77_TMP ] && setup_f77
 	#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
 	lctl set_param fail_loc=0x80000409
@@ -3454,6 +3456,7 @@ test_77b() { # bug 10889
 run_test 77b "checksum error on client write ===================="
 
 test_77c() { # bug 10889
+	$GSS && skip "could not run with gss" && return
 	[ ! -f $DIR/f77b ] && skip "requires 77b - skipping" && return
 	set_checksums 1
 	for algo in $CKSUM_TYPES; do
@@ -3470,6 +3473,7 @@ test_77c() { # bug 10889
 run_test 77c "checksum error on client read ==================="
 
 test_77d() { # bug 10889
+	$GSS && skip "could not run with gss" && return
 	#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
 	lctl set_param fail_loc=0x80000409
 	set_checksums 1
@@ -3481,6 +3485,7 @@ test_77d() { # bug 10889
 run_test 77d "checksum error on OST direct write ==============="
 
 test_77e() { # bug 10889
+	$GSS && skip "could not run with gss" && return
 	[ ! -f $DIR/f77 ] && skip "requires 77d - skipping" && return
 	#define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
 	lctl set_param fail_loc=0x80000408
@@ -3494,6 +3499,7 @@ test_77e() { # bug 10889
 run_test 77e "checksum error on OST direct read ================"
 
 test_77f() { # bug 10889
+	$GSS && skip "could not run with gss" && return
 	set_checksums 1
 	for algo in $CKSUM_TYPES; do
 		cancel_lru_locks osc
@@ -3510,6 +3516,7 @@ test_77f() { # bug 10889
 run_test 77f "repeat checksum error on write (expect error) ===="
 
 test_77g() { # bug 10889
+	$GSS && skip "could not run with gss" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	[ ! -f $F77_TMP ] && setup_f77
@@ -3526,6 +3533,7 @@ test_77g() { # bug 10889
 run_test 77g "checksum error on OST write ======================"
 
 test_77h() { # bug 10889
+	$GSS && skip "could not run with gss" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	[ ! -f $DIR/f77g ] && skip "requires 77g - skipping" && return
@@ -3540,6 +3548,7 @@ test_77h() { # bug 10889
 run_test 77h "checksum error on OST read ======================="
 
 test_77i() { # bug 13805
+	$GSS && skip "could not run with gss" && return
 	#define OBD_FAIL_OSC_CONNECT_CKSUM       0x40b
 	lctl set_param fail_loc=0x40b
 	remount_client $MOUNT
@@ -3554,6 +3563,7 @@ test_77i() { # bug 13805
 run_test 77i "client not supporting OSD_CONNECT_CKSUM =========="
 
 test_77j() { # bug 13805
+	$GSS && skip "could not run with gss" && return
 	#define OBD_FAIL_OSC_CKSUM_ADLER_ONLY    0x40c
 	lctl set_param fail_loc=0x40c
 	remount_client $MOUNT

@@ -1450,6 +1450,7 @@ static struct ptlrpc_sec_sops gss_sec_keyring_sops = {
         .authorize              = gss_svc_authorize,
         .free_rs                = gss_svc_free_rs,
         .free_ctx               = gss_svc_free_ctx,
+        .prep_bulk              = gss_svc_prep_bulk,
         .unwrap_bulk            = gss_svc_unwrap_bulk,
         .wrap_bulk              = gss_svc_wrap_bulk,
         .install_rctx           = gss_svc_install_rctx_kr,

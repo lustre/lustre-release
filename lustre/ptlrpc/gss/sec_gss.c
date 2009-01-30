@@ -182,7 +182,7 @@ static int gss_sign_msg(struct lustre_msg *msg,
                         rawobj_t *handle)
 {
         struct gss_header      *ghdr;
-        rawobj_t                text[3], mic;
+        rawobj_t                text[4], mic;
         int                     textcnt, max_textcnt, mic_idx;
         __u32                   major;
 
@@ -223,7 +223,7 @@ static int gss_sign_msg(struct lustre_msg *msg,
         mic.len = msg->lm_buflens[mic_idx];
         mic.data = lustre_msg_buf(msg, mic_idx, 0);
 
-        major = lgss_get_mic(mechctx, textcnt, text, &mic);
+        major = lgss_get_mic(mechctx, textcnt, text, 0, NULL, &mic);
         if (major != GSS_S_COMPLETE) {
                 CERROR("fail to generate MIC: %08x\n", major);
                 return -EPERM;
@@ -241,7 +241,7 @@ __u32 gss_verify_msg(struct lustre_msg *msg,
                      struct gss_ctx *mechctx,
                      __u32 svc)
 {
-        rawobj_t        text[3], mic;
+        rawobj_t        text[4], mic;
         int             textcnt, max_textcnt;
         int             mic_idx;
         __u32           major;
@@ -262,7 +262,7 @@ __u32 gss_verify_msg(struct lustre_msg *msg,
         mic.len = msg->lm_buflens[mic_idx];
         mic.data = lustre_msg_buf(msg, mic_idx, 0);
 
-        major = lgss_verify_mic(mechctx, textcnt, text, &mic);
+        major = lgss_verify_mic(mechctx, textcnt, text, 0, NULL, &mic);
         if (major != GSS_S_COMPLETE)
                 CERROR("mic verify error: %08x\n", major);
 
@@ -584,6 +584,33 @@ static inline int gss_cli_payload(struct ptlrpc_cli_ctx *ctx,
         return gss_mech_payload(NULL, msgsize, privacy);
 }
 
+static int gss_cli_bulk_payload(struct ptlrpc_cli_ctx *ctx,
+                                struct sptlrpc_flavor *flvr,
+                                int reply, int read)
+{
+        int     payload = sizeof(struct ptlrpc_bulk_sec_desc);
+
+        LASSERT(SPTLRPC_FLVR_BULK_TYPE(flvr->sf_rpc) == SPTLRPC_BULK_DEFAULT);
+
+        if ((!reply && !read) || (reply && read)) {
+                switch (SPTLRPC_FLVR_BULK_SVC(flvr->sf_rpc)) {
+                case SPTLRPC_BULK_SVC_NULL:
+                        break;
+                case SPTLRPC_BULK_SVC_INTG:
+                        payload += gss_cli_payload(ctx, 0, 0);
+                        break;
+                case SPTLRPC_BULK_SVC_PRIV:
+                        payload += gss_cli_payload(ctx, 0, 1);
+                        break;
+                case SPTLRPC_BULK_SVC_AUTH:
+                default:
+                        LBUG();
+                }
+        }
+
+        return payload;
+}
+
 int gss_cli_ctx_match(struct ptlrpc_cli_ctx *ctx, struct vfs_cred *vcred)
 {
         return (ctx->cc_vcred.vc_uid == vcred->vc_uid);
@@ -627,7 +654,7 @@ int gss_cli_ctx_sign(struct ptlrpc_cli_ctx *ctx,
         if (req->rq_ctx_init)
                 RETURN(0);
 
-        svc = RPC_FLVR_SVC(req->rq_flvr.sf_rpc);
+        svc = SPTLRPC_FLVR_SVC(req->rq_flvr.sf_rpc);
         if (req->rq_pack_bulk)
                 flags |= LUSTRE_GSS_PACK_BULK;
         if (req->rq_pack_udesc)
@@ -798,8 +825,10 @@ int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
                         gss_header_swabber(ghdr);
 
                 major = gss_verify_msg(msg, gctx->gc_mechctx, reqhdr->gh_svc);
-                if (major != GSS_S_COMPLETE)
+                if (major != GSS_S_COMPLETE) {
+                        CERROR("failed to verify reply: %x\n", major);
                         RETURN(-EPERM);
+                }
 
                 if (req->rq_early && reqhdr->gh_svc == SPTLRPC_SVC_NULL) {
                         __u32 cksum;
@@ -996,6 +1025,7 @@ int gss_cli_ctx_unseal(struct ptlrpc_cli_ctx *ctx,
                 major = gss_unseal_msg(gctx->gc_mechctx, msg,
                                        &msglen, req->rq_repdata_len);
                 if (major != GSS_S_COMPLETE) {
+                        CERROR("failed to unwrap reply: %x\n", major);
                         rc = -EPERM;
                         break;
                 }
@@ -1018,7 +1048,7 @@ int gss_cli_ctx_unseal(struct ptlrpc_cli_ctx *ctx,
                         }
 
                         /* bulk checksum is the last segment */
-                        if (bulk_sec_desc_unpack(msg, msg->lm_bufcount-1))
+                        if (bulk_sec_desc_unpack(msg, msg->lm_bufcount - 1))
                                 RETURN(-EPROTO);
                 }
 
@@ -1067,12 +1097,13 @@ int gss_sec_create_common(struct gss_sec *gsec,
         struct ptlrpc_sec   *sec;
 
         LASSERT(imp);
-        LASSERT(RPC_FLVR_POLICY(sf->sf_rpc) == SPTLRPC_POLICY_GSS);
+        LASSERT(SPTLRPC_FLVR_POLICY(sf->sf_rpc) == SPTLRPC_POLICY_GSS);
 
-        gsec->gs_mech = lgss_subflavor_to_mech(RPC_FLVR_SUB(sf->sf_rpc));
+        gsec->gs_mech = lgss_subflavor_to_mech(
+                                SPTLRPC_FLVR_BASE_SUB(sf->sf_rpc));
         if (!gsec->gs_mech) {
                 CERROR("gss backend 0x%x not found\n",
-                       RPC_FLVR_SUB(sf->sf_rpc));
+                       SPTLRPC_FLVR_BASE_SUB(sf->sf_rpc));
                 return -EOPNOTSUPP;
         }
 
@@ -1099,8 +1130,7 @@ int gss_sec_create_common(struct gss_sec *gsec,
                 sec->ps_gc_interval = 0;
         }
 
-        if (sec->ps_flvr.sf_bulk_ciph != BULK_CIPH_ALG_NULL &&
-            sec->ps_flvr.sf_flags & PTLRPC_SEC_FL_BULK)
+        if (SPTLRPC_FLVR_BULK_SVC(sec->ps_flvr.sf_rpc) == SPTLRPC_BULK_SVC_PRIV)
                 sptlrpc_enc_pool_add_user();
 
         CDEBUG(D_SEC, "create %s%s@%p\n", (svcctx ? "reverse " : ""),
@@ -1124,8 +1154,7 @@ void gss_sec_destroy_common(struct gss_sec *gsec)
 
         class_import_put(sec->ps_import);
 
-        if (sec->ps_flvr.sf_bulk_ciph != BULK_CIPH_ALG_NULL &&
-            sec->ps_flvr.sf_flags & PTLRPC_SEC_FL_BULK)
+        if (SPTLRPC_FLVR_BULK_SVC(sec->ps_flvr.sf_rpc) == SPTLRPC_BULK_SVC_PRIV)
                 sptlrpc_enc_pool_del_user();
 
         EXIT;
@@ -1247,9 +1276,9 @@ int gss_alloc_reqbuf_intg(struct ptlrpc_sec *sec,
         }
 
         if (req->rq_pack_bulk) {
-                buflens[bufcnt] = bulk_sec_desc_size(
-                                                req->rq_flvr.sf_bulk_hash, 1,
-                                                req->rq_bulk_read);
+                buflens[bufcnt] = gss_cli_bulk_payload(req->rq_cli_ctx,
+                                                       &req->rq_flvr,
+                                                       0, req->rq_bulk_read);
                 if (svc == SPTLRPC_SVC_INTG)
                         txtsize += buflens[bufcnt];
                 bufcnt++;
@@ -1313,9 +1342,9 @@ int gss_alloc_reqbuf_priv(struct ptlrpc_sec *sec,
         if (req->rq_pack_udesc)
                 ibuflens[ibufcnt++] = sptlrpc_current_user_desc_size();
         if (req->rq_pack_bulk)
-                ibuflens[ibufcnt++] = bulk_sec_desc_size(
-                                                req->rq_flvr.sf_bulk_hash, 1,
-                                                req->rq_bulk_read);
+                ibuflens[ibufcnt++] = gss_cli_bulk_payload(req->rq_cli_ctx,
+                                                           &req->rq_flvr, 0,
+                                                           req->rq_bulk_read);
 
         clearsize = lustre_msg_size_v2(ibufcnt, ibuflens);
         /* to allow append padding during encryption */
@@ -1375,7 +1404,7 @@ int gss_alloc_reqbuf(struct ptlrpc_sec *sec,
                      struct ptlrpc_request *req,
                      int msgsize)
 {
-        int     svc = RPC_FLVR_SVC(req->rq_flvr.sf_rpc);
+        int     svc = SPTLRPC_FLVR_SVC(req->rq_flvr.sf_rpc);
 
         LASSERT(!req->rq_pack_bulk ||
                 (req->rq_bulk_read || req->rq_bulk_write));
@@ -1400,7 +1429,7 @@ void gss_free_reqbuf(struct ptlrpc_sec *sec,
         ENTRY;
 
         LASSERT(!req->rq_pool || req->rq_reqbuf);
-        privacy = RPC_FLVR_SVC(req->rq_flvr.sf_rpc) == SPTLRPC_SVC_PRIV;
+        privacy = SPTLRPC_FLVR_SVC(req->rq_flvr.sf_rpc) == SPTLRPC_SVC_PRIV;
 
         if (!req->rq_clrbuf)
                 goto release_reqbuf;
@@ -1477,9 +1506,9 @@ int gss_alloc_repbuf_intg(struct ptlrpc_sec *sec,
                 txtsize += buflens[1];
 
         if (req->rq_pack_bulk) {
-                buflens[bufcnt] = bulk_sec_desc_size(
-                                                req->rq_flvr.sf_bulk_hash, 0,
-                                                req->rq_bulk_read);
+                buflens[bufcnt] = gss_cli_bulk_payload(req->rq_cli_ctx,
+                                                       &req->rq_flvr,
+                                                       1, req->rq_bulk_read);
                 if (svc == SPTLRPC_SVC_INTG)
                         txtsize += buflens[bufcnt];
                 bufcnt++;
@@ -1513,9 +1542,9 @@ int gss_alloc_repbuf_priv(struct ptlrpc_sec *sec,
         buflens[0] = msgsize;
 
         if (req->rq_pack_bulk)
-                buflens[bufcnt++] = bulk_sec_desc_size(
-                                                req->rq_flvr.sf_bulk_hash, 0,
-                                                req->rq_bulk_read);
+                buflens[bufcnt++] = gss_cli_bulk_payload(req->rq_cli_ctx,
+                                                         &req->rq_flvr,
+                                                         1, req->rq_bulk_read);
         txtsize = lustre_msg_size_v2(bufcnt, buflens);
         txtsize += GSS_MAX_CIPHER_BLOCK;
 
@@ -1535,7 +1564,7 @@ int gss_alloc_repbuf(struct ptlrpc_sec *sec,
                      struct ptlrpc_request *req,
                      int msgsize)
 {
-        int     svc = RPC_FLVR_SVC(req->rq_flvr.sf_rpc);
+        int     svc = SPTLRPC_FLVR_SVC(req->rq_flvr.sf_rpc);
         ENTRY;
 
         LASSERT(!req->rq_pack_bulk ||
@@ -1771,7 +1800,7 @@ int gss_enlarge_reqbuf(struct ptlrpc_sec *sec,
                        struct ptlrpc_request *req,
                        int segment, int newsize)
 {
-        int     svc = RPC_FLVR_SVC(req->rq_flvr.sf_rpc);
+        int     svc = SPTLRPC_FLVR_SVC(req->rq_flvr.sf_rpc);
 
         LASSERT(!req->rq_ctx_init && !req->rq_ctx_fini);
 
@@ -2066,8 +2095,10 @@ int gss_svc_verify_request(struct ptlrpc_request *req,
         }
 
         *major = gss_verify_msg(msg, gctx->gsc_mechctx, gw->gw_svc);
-        if (*major != GSS_S_COMPLETE)
+        if (*major != GSS_S_COMPLETE) {
+                CERROR("failed to verify request: %x\n", *major);
                 RETURN(-EACCES);
+        }
 
         if (gctx->gsc_reverse == 0 &&
             gss_check_seq_num(&gctx->gsc_seqdata, gw->gw_seq, 1)) {
@@ -2094,10 +2125,10 @@ verified:
                 offset++;
         }
 
-        /* check bulk cksum data */
+        /* check bulk_sec_desc data */
         if (gw->gw_flags & LUSTRE_GSS_PACK_BULK) {
                 if (msg->lm_bufcount < (offset + 1)) {
-                        CERROR("no bulk checksum included\n");
+                        CERROR("missing bulk sec descriptor\n");
                         RETURN(-EINVAL);
                 }
 
@@ -2133,8 +2164,10 @@ int gss_svc_unseal_request(struct ptlrpc_request *req,
 
         *major = gss_unseal_msg(gctx->gsc_mechctx, msg,
                                &msglen, req->rq_reqdata_len);
-        if (*major != GSS_S_COMPLETE)
+        if (*major != GSS_S_COMPLETE) {
+                CERROR("failed to unwrap request: %x\n", *major);
                 RETURN(-EACCES);
+        }
 
         if (gss_check_seq_num(&gctx->gsc_seqdata, gw->gw_seq, 1)) {
                 CERROR("phase 1+: discard replayed req: seq %u\n", gw->gw_seq);
@@ -2405,6 +2438,31 @@ int gss_svc_payload(struct gss_svc_reqctx *grctx, int early,
         return gss_mech_payload(NULL, msgsize, privacy);
 }
 
+static int gss_svc_bulk_payload(struct gss_svc_ctx *gctx,
+                                struct sptlrpc_flavor *flvr,
+                                int read)
+{
+        int     payload = sizeof(struct ptlrpc_bulk_sec_desc);
+
+        if (read) {
+                switch (SPTLRPC_FLVR_BULK_SVC(flvr->sf_rpc)) {
+                case SPTLRPC_BULK_SVC_NULL:
+                        break;
+                case SPTLRPC_BULK_SVC_INTG:
+                        payload += gss_mech_payload(NULL, 0, 0);
+                        break;
+                case SPTLRPC_BULK_SVC_PRIV:
+                        payload += gss_mech_payload(NULL, 0, 1);
+                        break;
+                case SPTLRPC_BULK_SVC_AUTH:
+                default:
+                        LBUG();
+                }
+        }
+
+        return payload;
+}
+
 int gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
 {
         struct gss_svc_reqctx       *grctx;
@@ -2422,7 +2480,7 @@ int gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
                 RETURN(-EPROTO);
         }
 
-        svc = RPC_FLVR_SVC(req->rq_flvr.sf_rpc);
+        svc = SPTLRPC_FLVR_SVC(req->rq_flvr.sf_rpc);
         early = (req->rq_packed_final == 0);
 
         grctx = gss_svc_ctx2reqctx(req->rq_svc_ctx);
@@ -2440,9 +2498,10 @@ int gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
                         LASSERT(grctx->src_reqbsd);
 
                         bsd_off = ibufcnt;
-                        ibuflens[ibufcnt++] = bulk_sec_desc_size(
-                                                grctx->src_reqbsd->bsd_hash_alg,
-                                                0, req->rq_bulk_read);
+                        ibuflens[ibufcnt++] = gss_svc_bulk_payload(
+                                                        grctx->src_ctx,
+                                                        &req->rq_flvr,
+                                                        req->rq_bulk_read);
                 }
 
                 txtsize = lustre_msg_size_v2(ibufcnt, ibuflens);
@@ -2465,9 +2524,10 @@ int gss_svc_alloc_rs(struct ptlrpc_request *req, int msglen)
                         LASSERT(grctx->src_reqbsd);
 
                         bsd_off = bufcnt;
-                        buflens[bufcnt] = bulk_sec_desc_size(
-                                                grctx->src_reqbsd->bsd_hash_alg,
-                                                0, req->rq_bulk_read);
+                        buflens[bufcnt] = gss_svc_bulk_payload(
+                                                        grctx->src_ctx,
+                                                        &req->rq_flvr,
+                                                        req->rq_bulk_read);
                         if (svc == SPTLRPC_SVC_INTG)
                                 txtsize += buflens[bufcnt];
                         bufcnt++;

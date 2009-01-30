@@ -433,12 +433,16 @@ int  __init gss_init_pipefs(void);
 void __exit gss_exit_pipefs(void);
 
 /* gss_bulk.c */
+int gss_cli_prep_bulk(struct ptlrpc_request *req,
+                      struct ptlrpc_bulk_desc *desc);
 int gss_cli_ctx_wrap_bulk(struct ptlrpc_cli_ctx *ctx,
                           struct ptlrpc_request *req,
                           struct ptlrpc_bulk_desc *desc);
 int gss_cli_ctx_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
                             struct ptlrpc_request *req,
                             struct ptlrpc_bulk_desc *desc);
+int gss_svc_prep_bulk(struct ptlrpc_request *req,
+                      struct ptlrpc_bulk_desc *desc);
 int gss_svc_unwrap_bulk(struct ptlrpc_request *req,
                         struct ptlrpc_bulk_desc *desc);
 int gss_svc_wrap_bulk(struct ptlrpc_request *req,

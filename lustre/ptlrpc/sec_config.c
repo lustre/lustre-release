@@ -102,222 +102,67 @@ EXPORT_SYMBOL(sptlrpc_target_sec_part);
  * user supplied flavor string parsing  *
  ****************************************/
 
-#ifdef HAVE_ADLER
-#define BULK_HASH_ALG_DEFAULT   BULK_HASH_ALG_ADLER32
-#else
-#define BULK_HASH_ALG_DEFAULT   BULK_HASH_ALG_CRC32
-#endif
-
-typedef enum {
-        BULK_TYPE_N = 0,
-        BULK_TYPE_I = 1,
-        BULK_TYPE_P = 2
-} bulk_type_t;
-
-static void get_default_flavor(struct sptlrpc_flavor *sf)
-{
-        sf->sf_rpc = SPTLRPC_FLVR_NULL;
-        sf->sf_bulk_ciph = BULK_CIPH_ALG_NULL;
-        sf->sf_bulk_hash = BULK_HASH_ALG_NULL;
-        sf->sf_flags = 0;
-}
-
-static void get_flavor_by_rpc(struct sptlrpc_flavor *flvr, __u16 rpc_flavor)
-{
-        get_default_flavor(flvr);
-
-        flvr->sf_rpc = rpc_flavor;
-
-        switch (rpc_flavor) {
-        case SPTLRPC_FLVR_NULL:
-                break;
-        case SPTLRPC_FLVR_PLAIN:
-        case SPTLRPC_FLVR_KRB5N:
-        case SPTLRPC_FLVR_KRB5A:
-                flvr->sf_bulk_hash = BULK_HASH_ALG_DEFAULT;
-                break;
-        case SPTLRPC_FLVR_KRB5P:
-                flvr->sf_bulk_ciph = BULK_CIPH_ALG_AES128;
-                /* fall through */
-        case SPTLRPC_FLVR_KRB5I:
-                flvr->sf_bulk_hash = BULK_HASH_ALG_SHA1;
-                break;
-        default:
-                LBUG();
-        }
-}
-
-static void get_flavor_by_bulk(struct sptlrpc_flavor *flvr,
-                               __u16 rpc_flavor, bulk_type_t bulk_type)
-{
-        switch (bulk_type) {
-        case BULK_TYPE_N:
-                flvr->sf_bulk_hash = BULK_HASH_ALG_NULL;
-                flvr->sf_bulk_ciph = BULK_CIPH_ALG_NULL;
-                break;
-        case BULK_TYPE_I:
-                switch (rpc_flavor) {
-                case SPTLRPC_FLVR_PLAIN:
-                case SPTLRPC_FLVR_KRB5N:
-                case SPTLRPC_FLVR_KRB5A:
-                        flvr->sf_bulk_hash = BULK_HASH_ALG_DEFAULT;
-                        break;
-                case SPTLRPC_FLVR_KRB5I:
-                case SPTLRPC_FLVR_KRB5P:
-                        flvr->sf_bulk_hash = BULK_HASH_ALG_SHA1;
-                        break;
-                default:
-                        LBUG();
-                }
-                flvr->sf_bulk_ciph = BULK_CIPH_ALG_NULL;
-                break;
-        case BULK_TYPE_P:
-                flvr->sf_bulk_hash = BULK_HASH_ALG_SHA1;
-                flvr->sf_bulk_ciph = BULK_CIPH_ALG_AES128;
-                break;
-        default:
-                LBUG();
-        }
-}
-
-static __u16 __flavors[] = {
-        SPTLRPC_FLVR_NULL,
-        SPTLRPC_FLVR_PLAIN,
-        SPTLRPC_FLVR_KRB5N,
-        SPTLRPC_FLVR_KRB5A,
-        SPTLRPC_FLVR_KRB5I,
-        SPTLRPC_FLVR_KRB5P,
-};
-
-#define __nflavors      ARRAY_SIZE(__flavors)
-
 /*
- * flavor string format: rpc[-bulk{n|i|p}[:cksum/enc]]
- * for examples:
- *  null
- *  plain-bulki
- *  krb5p-bulkn
- *  krb5i-bulkp
- *  krb5i-bulkp:sha512/arc4
+ * format: <base_flavor>[-<bulk_type:alg_spec>]
  */
 int sptlrpc_parse_flavor(const char *str, struct sptlrpc_flavor *flvr)
 {
-        const char     *f;
-        char           *bulk, *alg, *enc;
-        char            buf[64];
-        bulk_type_t     bulk_type;
-        __u8            i;
-        ENTRY;
+        char            buf[32];
+        char           *bulk, *alg;
+
+        memset(flvr, 0, sizeof(*flvr));
 
         if (str == NULL || str[0] == '\0') {
                 flvr->sf_rpc = SPTLRPC_FLVR_INVALID;
-                goto out;
+                return 0;
         }
 
-        for (i = 0; i < __nflavors; i++) {
-                f = sptlrpc_rpcflavor2name(__flavors[i]);
-                if (strncmp(str, f, strlen(f)) == 0)
-                        break;
-        }
+        strncpy(buf, str, sizeof(buf));
+        buf[sizeof(buf) - 1] = '\0';
 
-        if (i >= __nflavors)
-                GOTO(invalid, -EINVAL);
-
-        /* prepare local buffer thus we can modify it as we want */
-        strncpy(buf, str, 64);
-        buf[64 - 1] = '\0';
-
-        /* find bulk string */
         bulk = strchr(buf, '-');
         if (bulk)
                 *bulk++ = '\0';
 
-        /* now the first part must equal to rpc flavor name */
-        if (strcmp(buf, f) != 0)
-                GOTO(invalid, -EINVAL);
-
-        get_flavor_by_rpc(flvr, __flavors[i]);
-
-        if (bulk == NULL)
-                goto out;
-
-        /* find bulk algorithm string */
-        alg = strchr(bulk, ':');
-        if (alg)
-                *alg++ = '\0';
-
-        /* verify bulk section */
-        if (strcmp(bulk, "bulkn") == 0) {
-                flvr->sf_bulk_hash = BULK_HASH_ALG_NULL;
-                flvr->sf_bulk_ciph = BULK_CIPH_ALG_NULL;
-                bulk_type = BULK_TYPE_N;
-        } else if (strcmp(bulk, "bulki") == 0)
-                bulk_type = BULK_TYPE_I;
-        else if (strcmp(bulk, "bulkp") == 0)
-                bulk_type = BULK_TYPE_P;
-        else
-                GOTO(invalid, -EINVAL);
-
-        /* null flavor don't support bulk i/p */
-        if (__flavors[i] == SPTLRPC_FLVR_NULL && bulk_type != BULK_TYPE_N)
-                GOTO(invalid, -EINVAL);
-
-        /* plain policy dosen't support bulk p */
-        if (__flavors[i] == SPTLRPC_FLVR_PLAIN && bulk_type == BULK_TYPE_P)
-                GOTO(invalid, -EINVAL);
-
-        get_flavor_by_bulk(flvr, __flavors[i], bulk_type);
-
-        if (alg == NULL)
-                goto out;
-
-        /* find encryption algorithm string */
-        enc = strchr(alg, '/');
-        if (enc)
-                *enc++ = '\0';
-
-        /* checksum algorithm */
-        for (i = 0; i < BULK_HASH_ALG_MAX; i++) {
-                if (strcmp(alg, sptlrpc_get_hash_name(i)) == 0) {
-                        flvr->sf_bulk_hash = i;
-                        break;
-                }
-        }
-        if (i >= BULK_HASH_ALG_MAX)
-                GOTO(invalid, -EINVAL);
-
-        /* privacy algorithm */
-        if (enc) {
-                for (i = 0; i < BULK_CIPH_ALG_MAX; i++) {
-                        if (strcmp(enc, sptlrpc_get_ciph_name(i)) == 0) {
-                                flvr->sf_bulk_ciph = i;
-                                break;
-                        }
-                }
-                if (i >= BULK_CIPH_ALG_MAX)
-                        GOTO(invalid, -EINVAL);
-        }
+        flvr->sf_rpc = sptlrpc_name2flavor_base(buf);
+        if (flvr->sf_rpc == SPTLRPC_FLVR_INVALID)
+                goto err_out;
 
         /*
-         * bulk combination sanity checks
+         * currently only base flavor "plain" can have bulk specification.
          */
-        if (bulk_type == BULK_TYPE_P &&
-            flvr->sf_bulk_ciph == BULK_CIPH_ALG_NULL)
-                GOTO(invalid, -EINVAL);
+        if (flvr->sf_rpc == SPTLRPC_FLVR_PLAIN) {
+                flvr->u_bulk.hash.hash_alg = BULK_HASH_ALG_ADLER32;
+                if (bulk) {
+                        /*
+                         * format: plain-hash:<hash_alg>
+                         */
+                        alg = strchr(bulk, ':');
+                        if (alg == NULL)
+                                goto err_out;
+                        *alg++ = '\0';
 
-        if (bulk_type == BULK_TYPE_I &&
-            (flvr->sf_bulk_hash == BULK_HASH_ALG_NULL ||
-             flvr->sf_bulk_ciph != BULK_CIPH_ALG_NULL))
-                GOTO(invalid, -EINVAL);
+                        if (strcmp(bulk, "hash"))
+                                goto err_out;
 
-        if (bulk_type == BULK_TYPE_N &&
-            (flvr->sf_bulk_hash != BULK_HASH_ALG_NULL ||
-             flvr->sf_bulk_ciph != BULK_CIPH_ALG_NULL))
-                GOTO(invalid, -EINVAL);
+                        flvr->u_bulk.hash.hash_alg = sptlrpc_get_hash_alg(alg);
+                        if (flvr->u_bulk.hash.hash_alg >= BULK_HASH_ALG_MAX)
+                                goto err_out;
+                }
 
-out:
+                if (flvr->u_bulk.hash.hash_alg == BULK_HASH_ALG_NULL)
+                        flvr_set_bulk_svc(&flvr->sf_rpc, SPTLRPC_BULK_SVC_NULL);
+                else
+                        flvr_set_bulk_svc(&flvr->sf_rpc, SPTLRPC_BULK_SVC_INTG);
+        } else {
+                if (bulk)
+                        goto err_out;
+        }
+
+        flvr->sf_flags = 0;
         return 0;
-invalid:
+
+err_out:
         CERROR("invalid flavor string: %s\n", str);
         return -EINVAL;
 }
@@ -326,6 +171,14 @@ EXPORT_SYMBOL(sptlrpc_parse_flavor);
 /****************************************
  * configure rules                      *
  ****************************************/
+
+static void get_default_flavor(struct sptlrpc_flavor *sf)
+{
+        memset(sf, 0, sizeof(*sf));
+
+        sf->sf_rpc = SPTLRPC_FLVR_NULL;
+        sf->sf_flags = 0;
+}
 
 static void sptlrpc_rule_init(struct sptlrpc_rule *rule)
 {
@@ -411,18 +264,16 @@ EXPORT_SYMBOL(sptlrpc_rule_set_free);
 
 /*
  * return 0 if the rule set could accomodate one more rule.
- * if @expand != 0, the rule set might be expanded.
  */
-int sptlrpc_rule_set_expand(struct sptlrpc_rule_set *rset, int expand)
+int sptlrpc_rule_set_expand(struct sptlrpc_rule_set *rset)
 {
         struct sptlrpc_rule *rules;
         int nslot;
 
+        might_sleep();
+
         if (rset->srs_nrule < rset->srs_nslot)
                 return 0; 
-
-        if (expand == 0)
-                return -E2BIG;
 
         nslot = rset->srs_nslot + 8;
 
@@ -468,15 +319,16 @@ static inline int rule_match_net(struct sptlrpc_rule *r1,
 
 /*
  * merge @rule into @rset.
- * if @expand != 0 then @rset slots might be expanded.
+ * the @rset slots might be expanded.
  */
 int sptlrpc_rule_set_merge(struct sptlrpc_rule_set *rset, 
-                           struct sptlrpc_rule *rule,
-                           int expand)
+                           struct sptlrpc_rule *rule)
 {
         struct sptlrpc_rule      *p = rset->srs_rules;
         int                       spec_dir, spec_net;
         int                       rc, n, match = 0;
+
+        might_sleep();
 
         spec_net = rule_spec_net(rule);
         spec_dir = rule_spec_dir(rule);
@@ -537,7 +389,7 @@ int sptlrpc_rule_set_merge(struct sptlrpc_rule_set *rset,
                 LASSERT(n >= 0 && n <= rset->srs_nrule);
 
                 if (rule->sr_flvr.sf_rpc != SPTLRPC_FLVR_INVALID) {
-                        rc = sptlrpc_rule_set_expand(rset, expand);
+                        rc = sptlrpc_rule_set_expand(rset);
                         if (rc)
                                 return rc;
 
@@ -616,6 +468,8 @@ static int sptlrpc_rule_set_extract(struct sptlrpc_rule_set *gen,
         struct sptlrpc_rule     *rule;
         int                      i, n, rc;
 
+        might_sleep();
+
         /* merge general rules firstly, then target-specific rules */
         for (i = 0; i < 2; i++) {
                 if (src[i] == NULL)
@@ -633,7 +487,7 @@ static int sptlrpc_rule_set_extract(struct sptlrpc_rule_set *gen,
                             rule->sr_to != to)
                                 continue;
 
-                        rc = sptlrpc_rule_set_merge(rset, rule, 1);
+                        rc = sptlrpc_rule_set_merge(rset, rule);
                         if (rc) {
                                 CERROR("can't merge: %d\n", rc);
                                 return rc;
@@ -800,7 +654,7 @@ static int sptlrpc_conf_merge_rule(struct sptlrpc_conf *conf,
                 }
         }
 
-        return sptlrpc_rule_set_merge(rule_set, rule, 1);
+        return sptlrpc_rule_set_merge(rule_set, rule);
 }
 
 /**
@@ -829,7 +683,7 @@ static int __sptlrpc_process_config(struct lustre_cfg *lcfg,
                 RETURN(-EINVAL);
         }
 
-        CDEBUG(D_SEC, "got one rule: %s.%s\n", target, param);
+        CDEBUG(D_SEC, "processing rule: %s.%s\n", target, param);
 
         /* parse rule to make sure the format is correct */
         if (strncmp(param, PARAM_SRPC_FLVR, sizeof(PARAM_SRPC_FLVR) - 1) != 0) {
@@ -974,6 +828,13 @@ static void inline flavor_set_flags(struct sptlrpc_flavor *sf,
                                     enum lustre_sec_part to,
                                     unsigned int fl_udesc)
 {
+        /*
+         * null flavor doesn't need to set any flavor, and in fact
+         * we'd better not do that because everybody share a single sec.
+         */
+        if (sf->sf_rpc == SPTLRPC_FLVR_NULL)
+                return;
+
         if (from == LUSTRE_SP_MDT) {
                 /* MDT->MDT; MDT->OST */
                 sf->sf_flags |= PTLRPC_SEC_FL_ROOTONLY;

@@ -513,7 +513,13 @@ int client_disconnect_export(struct obd_export *exp)
                 to_be_freed = obd->obd_namespace;
         }
 
+        /*
+         * there's no necessary to hold sem during diconnecting an import,
+         * and actually it may cause deadlock in gss.
+         */
+        up_write(&cli->cl_sem);
         rc = ptlrpc_disconnect_import(imp, 0);
+        down_write(&cli->cl_sem);
 
         ptlrpc_invalidate_import(imp);
         /* set obd_namespace to NULL only after invalidate, because we can have
@@ -994,8 +1000,7 @@ dont_check_exports:
         else
                 revimp->imp_msghdr_flags &= ~MSGHDR_AT_SUPPORT;
 
-        rc = sptlrpc_import_sec_adapt(revimp, req->rq_svc_ctx,
-                                      req->rq_flvr.sf_rpc);
+        rc = sptlrpc_import_sec_adapt(revimp, req->rq_svc_ctx, &req->rq_flvr);
         if (rc) {
                 CERROR("Failed to get sec for reverse import: %d\n", rc);
                 export->exp_imp_reverse = NULL;
