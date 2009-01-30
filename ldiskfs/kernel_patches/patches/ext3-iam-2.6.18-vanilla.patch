@@ -1,0 +1,2348 @@
+Index: linux-stage/include/linux/ext3_fs.h
+===================================================================
+--- linux-stage.orig/include/linux/ext3_fs.h	2007-11-26 23:09:05.000000000 +0300
++++ linux-stage/include/linux/ext3_fs.h	2007-11-26 23:09:06.000000000 +0300
+@@ -812,6 +812,9 @@
+ #define DX_HASH_LEGACY		0
+ #define DX_HASH_HALF_MD4	1
+ #define DX_HASH_TEA		2
++#define DX_HASH_R5		3
++#define DX_HASH_SAME		4
++#define DX_HASH_MAX		4
+ 
+ #ifdef __KERNEL__
+ 
+@@ -942,9 +945,6 @@
+ extern void ext3_rsv_window_add(struct super_block *sb, struct ext3_reserve_window_node *rsv);
+ 
+ /* dir.c */
+-extern int ext3_check_dir_entry(const char *, struct inode *,
+-				struct ext3_dir_entry_2 *,
+-				struct buffer_head *, unsigned long);
+ extern int ext3_htree_store_dirent(struct file *dir_file, __u32 hash,
+ 				    __u32 minor_hash,
+ 				    struct ext3_dir_entry_2 *dirent);
+Index: linux-stage/include/linux/ext3_fs_i.h
+===================================================================
+--- linux-stage.orig/include/linux/ext3_fs_i.h	2007-11-26 23:09:04.000000000 +0300
++++ linux-stage/include/linux/ext3_fs_i.h	2007-11-26 23:16:00.000000000 +0300
+@@ -20,6 +20,7 @@
+ #include <linux/rbtree.h>
+ #include <linux/seqlock.h>
+ #include <linux/mutex.h>
++#include <linux/dynlocks.h>
+ 
+ #define HAVE_DISK_INODE_VERSION
+ 
+@@ -157,6 +157,11 @@
+ 	struct mutex truncate_mutex;
+ 	struct inode vfs_inode;
+ 
++	/* following fields for parallel directory operations -bzzz */
++	struct dynlock   i_htree_lock;
++	struct semaphore i_append_sem;
++	struct semaphore i_rename_sem;
++
+  	struct ext3_ext_cache i_cached_extent;
+ 
+ 	/* mballoc */
+Index: linux-stage/fs/ext3/super.c
+===================================================================
+--- linux-stage.orig/fs/ext3/super.c	2007-11-26 23:09:05.000000000 +0300
++++ linux-stage/fs/ext3/super.c	2007-11-26 23:09:06.000000000 +0300
+@@ -464,6 +464,10 @@
+ 	ei->i_block_alloc_info = NULL;
+ 	ei->vfs_inode.i_version = 1;
+ 
++	dynlock_init(&ei->i_htree_lock);
++	sema_init(&ei->i_rename_sem, 1);
++	sema_init(&ei->i_append_sem, 1);
++
+ 	memset(&ei->i_cached_extent, 0, sizeof(ei->i_cached_extent));
+ 	INIT_LIST_HEAD(&ei->i_prealloc_list);
+ 	spin_lock_init(&ei->i_prealloc_lock);
+@@ -695,6 +699,7 @@
+ 	Opt_grpquota,
+ 	Opt_extents, Opt_noextents, Opt_extdebug,
+ 	Opt_mballoc, Opt_nomballoc, Opt_stripe,
++	Opt_hashfunc,
+ };
+ 
+ static match_table_t tokens = {
+@@ -756,6 +760,7 @@
+ 	{Opt_stripe, "stripe=%u"},
+ 	{Opt_err, NULL},
+ 	{Opt_resize, "resize"},
++	{Opt_hashfunc,"hash=%s"},
+ };
+ 
+ static ext3_fsblk_t get_sb_block(void **data)
+@@ -779,6 +784,7 @@
+ 	return sb_block;
+ }
+ 
++int user_selected_hash_function = -1;
+ static int parse_options (char *options, struct super_block *sb,
+ 			  unsigned int *inum, unsigned long *journal_devnum,
+ 			  ext3_fsblk_t *n_blocks_count, int is_remount)
+@@ -1120,6 +1126,22 @@
+ 				return 0;
+ 			sbi->s_stripe = option;
+ 			break;
++		case Opt_hashfunc:
++			if (strncmp (args[0].from,"legacy",6) == 0){
++                                user_selected_hash_function = 0;
++                        } else if (strncmp (args[0].from,"half_md4",8) == 0){
++                                user_selected_hash_function = 1;
++                        } else if (strncmp (args[0].from,"tea",3) == 0){
++                                user_selected_hash_function = 2;
++                        } else if (strncmp (args[0].from,"r5",2) == 0){
++                                user_selected_hash_function = 3;
++                        } else if (strncmp (args[0].from,"same",4) == 0){
++                                user_selected_hash_function = 4;
++                        } else {
++                                printk ("Hashfunc name wrong\n");
++                                return 0;
++                        }
++		 	break;
+ 		default:
+ 			printk (KERN_ERR
+ 				"EXT3-fs: Unrecognized mount option \"%s\" "
+Index: linux-stage/fs/ext3/namei.c
+===================================================================
+--- linux-stage.orig/fs/ext3/namei.c	2007-11-26 23:09:04.000000000 +0300
++++ linux-stage/fs/ext3/namei.c	2007-11-26 23:09:06.000000000 +0300
+@@ -24,6 +24,7 @@
+  * 	Theodore Ts'o, 2002
+  */
+ 
++#include <linux/module.h>
+ #include <linux/fs.h>
+ #include <linux/pagemap.h>
+ #include <linux/jbd.h>
+@@ -36,6 +37,7 @@
+ #include <linux/quotaops.h>
+ #include <linux/buffer_head.h>
+ #include <linux/smp_lock.h>
++#include <linux/lustre_iam.h>
+ 
+ #include "namei.h"
+ #include "xattr.h"
+@@ -50,25 +52,29 @@
+ #define NAMEI_RA_SIZE        (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
+ #define NAMEI_RA_INDEX(c,b)  (((c) * NAMEI_RA_BLOCKS) + (b))
+ 
+-static struct buffer_head *ext3_append(handle_t *handle,
++
++struct buffer_head *ext3_append(handle_t *handle,
+ 					struct inode *inode,
+ 					u32 *block, int *err)
+ {
+ 	struct buffer_head *bh;
++	struct ext3_inode_info *ei = EXT3_I(inode);
+ 
++	/* with parallel dir operations all appends
++	 * have to be serialized -bzzz */
++	down(&ei->i_append_sem);
+ 	*block = inode->i_size >> inode->i_sb->s_blocksize_bits;
+ 
+-	if ((bh = ext3_bread(handle, inode, *block, 1, err))) {
++	bh = ext3_bread(handle, inode, *block, 1, err);
++	if (bh != NULL) {
+ 		inode->i_size += inode->i_sb->s_blocksize;
+-		EXT3_I(inode)->i_disksize = inode->i_size;
+-		ext3_journal_get_write_access(handle,bh);
++		ei->i_disksize = inode->i_size;
+ 	}
++	up(&ei->i_append_sem);
++	
+ 	return bh;
+ }
+ 
+-#ifndef assert
+-#define assert(test) J_ASSERT(test)
+-#endif
+ 
+ #ifndef swap
+ #define swap(x, y) do { typeof(x) z = x; x = y; y = z; } while (0)
+@@ -77,169 +83,87 @@
+ #ifdef DX_DEBUG
+ #define dxtrace(command) command
+ #else
+-#define dxtrace(command) 
++#define dxtrace(command)
+ #endif
+ 
+-struct fake_dirent
+-{
+-	__le32 inode;
+-	__le16 rec_len;
+-	u8 name_len;
+-	u8 file_type;
+-};
+-
+-struct dx_countlimit
+-{
+-	__le16 limit;
+-	__le16 count;
+-};
+-
+-struct dx_entry
+-{
+-	__le32 hash;
+-	__le32 block;
+-};
+-
+-/*
+- * dx_root_info is laid out so that if it should somehow get overlaid by a
+- * dirent the two low bits of the hash version will be zero.  Therefore, the
+- * hash version mod 4 should never be 0.  Sincerely, the paranoia department.
+- */
+-
+-struct dx_root
+-{
+-	struct fake_dirent dot;
+-	char dot_name[4];
+-	struct fake_dirent dotdot;
+-	char dotdot_name[4];
+-	struct dx_root_info
+-	{
+-		__le32 reserved_zero;
+-		u8 hash_version;
+-		u8 info_length; /* 8 */
+-		u8 indirect_levels;
+-		u8 unused_flags;
+-	}
+-	info;
+-	struct dx_entry	entries[0];
+-};
+-
+-struct dx_node
+-{
+-	struct fake_dirent fake;
+-	struct dx_entry	entries[0];
+-};
+-
+-
+-struct dx_frame
+-{
+-	struct buffer_head *bh;
+-	struct dx_entry *entries;
+-	struct dx_entry *at;
+-};
+-
+-struct dx_map_entry
+-{
+-	u32 hash;
+-	u32 offs;
+-};
+-
+ #ifdef CONFIG_EXT3_INDEX
+-static inline unsigned dx_get_block (struct dx_entry *entry);
+-static void dx_set_block (struct dx_entry *entry, unsigned value);
+-static inline unsigned dx_get_hash (struct dx_entry *entry);
+-static void dx_set_hash (struct dx_entry *entry, unsigned value);
+-static unsigned dx_get_count (struct dx_entry *entries);
+-static unsigned dx_get_limit (struct dx_entry *entries);
+-static void dx_set_count (struct dx_entry *entries, unsigned value);
+-static void dx_set_limit (struct dx_entry *entries, unsigned value);
+-static unsigned dx_root_limit (struct inode *dir, unsigned infosize);
+-static unsigned dx_node_limit (struct inode *dir);
+-static struct dx_frame *dx_probe(struct dentry *dentry,
+-				 struct inode *dir,
+-				 struct dx_hash_info *hinfo,
+-				 struct dx_frame *frame,
+-				 int *err);
+-static void dx_release (struct dx_frame *frames);
++static inline unsigned dx_get_block(struct iam_path *p, struct iam_entry *entry);
++static void dx_set_block(struct iam_path *p,
++			 struct iam_entry *entry, unsigned value);
++static unsigned dx_get_limit(struct iam_entry *entries);
++static void dx_set_count(struct iam_entry *entries, unsigned value);
++static void dx_set_limit(struct iam_entry *entries, unsigned value);
++static unsigned dx_root_limit(struct iam_path *p);
++static unsigned dx_node_limit(struct iam_path *p);
++static int dx_probe(struct qstr *name,
++		    struct inode *dir,
++		    struct dx_hash_info *hinfo,
++		    struct iam_path *path);
+ static int dx_make_map (struct ext3_dir_entry_2 *de, int size,
+ 			struct dx_hash_info *hinfo, struct dx_map_entry map[]);
+ static void dx_sort_map(struct dx_map_entry *map, unsigned count);
+ static struct ext3_dir_entry_2 *dx_move_dirents (char *from, char *to,
+ 		struct dx_map_entry *offsets, int count);
+ static struct ext3_dir_entry_2* dx_pack_dirents (char *base, int size);
+-static void dx_insert_block (struct dx_frame *frame, u32 hash, u32 block);
+-static int ext3_htree_next_block(struct inode *dir, __u32 hash,
+-				 struct dx_frame *frame,
+-				 struct dx_frame *frames, 
+-				 __u32 *start_hash);
+ static struct buffer_head * ext3_dx_find_entry(struct dentry *dentry,
+ 		       struct ext3_dir_entry_2 **res_dir, int *err);
+ static int ext3_dx_add_entry(handle_t *handle, struct dentry *dentry,
+ 			     struct inode *inode);
+-
+-/*
+- * Future: use high four bits of block for coalesce-on-delete flags
+- * Mask them off for now.
+- */
+-
+-static inline unsigned dx_get_block (struct dx_entry *entry)
++static inline void dx_set_limit(struct iam_entry *entries, unsigned value)
+ {
+-	return le32_to_cpu(entry->block) & 0x00ffffff;
+-}
+-
+-static inline void dx_set_block (struct dx_entry *entry, unsigned value)
+-{
+-	entry->block = cpu_to_le32(value);
+-}
+-
+-static inline unsigned dx_get_hash (struct dx_entry *entry)
+-{
+-	return le32_to_cpu(entry->hash);
+-}
+-
+-static inline void dx_set_hash (struct dx_entry *entry, unsigned value)
+-{
+-	entry->hash = cpu_to_le32(value);
+-}
+-
+-static inline unsigned dx_get_count (struct dx_entry *entries)
+-{
+-	return le16_to_cpu(((struct dx_countlimit *) entries)->count);
+-}
+-
+-static inline unsigned dx_get_limit (struct dx_entry *entries)
+-{
+-	return le16_to_cpu(((struct dx_countlimit *) entries)->limit);
++	((struct dx_countlimit *) entries)->limit = cpu_to_le16(value);
+ }
+ 
+-static inline void dx_set_count (struct dx_entry *entries, unsigned value)
++int dx_index_is_compat(struct iam_path *path)
+ {
+-	((struct dx_countlimit *) entries)->count = cpu_to_le16(value);
++	return iam_path_descr(path) == &iam_htree_compat_param;
+ }
+ 
+-static inline void dx_set_limit (struct dx_entry *entries, unsigned value)
+-{
+-	((struct dx_countlimit *) entries)->limit = cpu_to_le16(value);
+-}
+ 
+-static inline unsigned dx_root_limit (struct inode *dir, unsigned infosize)
++int dx_node_check(struct iam_path *p, struct iam_frame *f)
+ {
+-	unsigned entry_space = dir->i_sb->s_blocksize - EXT3_DIR_REC_LEN(1) -
+-		EXT3_DIR_REC_LEN(2) - infosize;
+-	return 0? 20: entry_space / sizeof(struct dx_entry);
+-}
++	struct iam_entry     *e;
++	struct iam_container *c;
++	unsigned count;
++	unsigned  i;
++	iam_ptr_t  blk;
++	iam_ptr_t  root;
++	struct inode *inode;
+ 
+-static inline unsigned dx_node_limit (struct inode *dir)
+-{
+-	unsigned entry_space = dir->i_sb->s_blocksize - EXT3_DIR_REC_LEN(0);
+-	return 0? 22: entry_space / sizeof(struct dx_entry);
++	c = p->ip_container;
++	e = dx_node_get_entries(p, f);
++	count = dx_get_count(e);
++	e = iam_entry_shift(p, e, 1);
++	root = iam_path_descr(p)->id_ops->id_root_ptr(c);
++
++	inode = iam_path_obj(p);
++	for (i = 0; i < count - 1; ++i, e = iam_entry_shift(p, e, 1)) {
++		iam_ikeycpy(c, iam_path_ikey(p, 0), iam_path_ikey(p, 1));
++		iam_get_ikey(p, e, iam_path_ikey(p, 1));
++		if (i > 0 &&
++		    iam_ikeycmp(c, iam_path_ikey(p, 0),
++				iam_path_ikey(p, 1)) > 0)
++			return 0;
++		blk = dx_get_block(p, e);
++		/*
++		 * Disable this check as it is racy.
++		 */
++		if (0 && inode->i_size < (blk + 1) * inode->i_sb->s_blocksize)
++	return 0;
++		/*
++		 * By definition of a tree, no node points to the root.
++		 */
++		if (blk == root)
++			return 0;
++		}
++	return 1;
+ }
+ 
+ /*
+  * Debug
+  */
+ #ifdef DX_DEBUG
+-static void dx_show_index (char * label, struct dx_entry *entries)
++static void dx_show_index (char * label, struct iam_entry *entries)
+ {
+         int i, n = dx_get_count (entries);
+         printk("%s index ", label);
+@@ -251,7 +175,7 @@
+ }
+ 
+ struct stats
+-{ 
++{
+ 	unsigned names;
+ 	unsigned space;
+ 	unsigned bcount;
+@@ -288,7 +212,7 @@
+ }
+ 
+ struct stats dx_show_entries(struct dx_hash_info *hinfo, struct inode *dir,
+-			     struct dx_entry *entries, int levels)
++			     struct iam_entry *entries, int levels)
+ {
+ 	unsigned blocksize = dir->i_sb->s_blocksize;
+ 	unsigned count = dx_get_count (entries), names = 0, space = 0, i;
+@@ -319,134 +243,379 @@
+ #endif /* DX_DEBUG */
+ 
+ /*
+- * Probe for a directory leaf block to search.
++ * Per-node tree locking.
++ *
++ *
++ *
++ *
++ *
++ *
++ *
++ *
++ *
++ *
+  *
+- * dx_probe can return ERR_BAD_DX_DIR, which means there was a format
+- * error in the directory index, and the caller should fall back to
+- * searching the directory normally.  The callers of dx_probe **MUST**
+- * check for this error code, and make sure it never gets reflected
+- * back to userspace.
+  */
+-static struct dx_frame *
+-dx_probe(struct dentry *dentry, struct inode *dir,
+-	 struct dx_hash_info *hinfo, struct dx_frame *frame_in, int *err)
+-{
+-	unsigned count, indirect;
+-	struct dx_entry *at, *entries, *p, *q, *m;
+-	struct dx_root *root;
+-	struct buffer_head *bh;
+-	struct dx_frame *frame = frame_in;
+-	u32 hash;
+ 
+-	frame->bh = NULL;
+-	if (dentry)
+-		dir = dentry->d_parent->d_inode;
+-	if (!(bh = ext3_bread (NULL,dir, 0, 0, err)))
+-		goto fail;
+-	root = (struct dx_root *) bh->b_data;
+-	if (root->info.hash_version != DX_HASH_TEA &&
+-	    root->info.hash_version != DX_HASH_HALF_MD4 &&
+-	    root->info.hash_version != DX_HASH_LEGACY) {
+-		ext3_warning(dir->i_sb, __FUNCTION__,
+-			     "Unrecognised inode hash code %d",
+-			     root->info.hash_version);
+-		brelse(bh);
+-		*err = ERR_BAD_DX_DIR;
+-		goto fail;
++/* FIXME: this should be reworked using bb_spin_lock
++ * introduced in -mm tree
++ */
++#define BH_DXLock	25
++
++#define DX_DEBUG (1)
++
++#if DX_DEBUG
++static struct dx_lock_stats {
++	unsigned dls_bh_lock;
++	unsigned dls_bh_busy;
++	unsigned dls_bh_again;
++	unsigned dls_bh_full_again;
++} dx_lock_stats = { 0, };
++#define DX_DEVAL(x) x
++#else
++#define DX_DEVAL(x)
++#endif
++
++static inline void dx_lock_bh(struct buffer_head volatile *bh)
++{
++	DX_DEVAL(dx_lock_stats.dls_bh_lock++);
++#ifdef CONFIG_SMP
++        while (test_and_set_bit(BH_DXLock, &bh->b_state)) {
++		DX_DEVAL(dx_lock_stats.dls_bh_busy++);
++                while (test_bit(BH_DXLock, &bh->b_state))
++                        cpu_relax();
++        }
++#endif
++}
++
++static inline void dx_unlock_bh(struct buffer_head *bh)
++{
++#ifdef CONFIG_SMP
++        smp_mb__before_clear_bit();
++        clear_bit(BH_DXLock, &bh->b_state);
++#endif
++}
++
++/*
++ * this locking primitives are used to protect parts
++ * of dir's htree. protection unit is block: leaf or index
++ */
++struct dynlock_handle *dx_lock_htree(struct inode *dir, unsigned long value,
++				     enum dynlock_type lt)
++{
++	return dynlock_lock(&EXT3_I(dir)->i_htree_lock, value, lt, GFP_NOFS);
++}
++
++void dx_unlock_htree(struct inode *dir, struct dynlock_handle *lh)
++{
++	if (lh != NULL)
++		dynlock_unlock(&EXT3_I(dir)->i_htree_lock, lh);
++}
++
++static void dx_unlock_array(struct inode *dir, struct dynlock_handle **lh)
++{
++	int i;
++
++	for (i = 0; i < DX_MAX_TREE_HEIGHT; ++i, ++lh) {
++		if (*lh != NULL) {
++			dx_unlock_htree(dir, *lh);
++			*lh = NULL;
++		}
+ 	}
+-	hinfo->hash_version = root->info.hash_version;
+-	hinfo->seed = EXT3_SB(dir->i_sb)->s_hash_seed;
+-	if (dentry)
+-		ext3fs_dirhash(dentry->d_name.name, dentry->d_name.len, hinfo);
+-	hash = hinfo->hash;
+-
+-	if (root->info.unused_flags & 1) {
+-		ext3_warning(dir->i_sb, __FUNCTION__,
+-			     "Unimplemented inode hash flags: %#06x",
+-			     root->info.unused_flags);
+-		brelse(bh);
+-		*err = ERR_BAD_DX_DIR;
+-		goto fail;
++}
++
++/*
++ * dx_find_position
++ *
++ * search position of specified hash in index
++ *
++ */
++
++struct iam_entry *dx_find_position(struct iam_path *path,
++				   struct iam_frame *frame)
++{
++	int count;
++	struct iam_entry *p;
++	struct iam_entry *q;
++	struct iam_entry *m;
++
++	count = dx_get_count(frame->entries);
++	assert_corr(count && count <= dx_get_limit(frame->entries));
++	p = iam_entry_shift(path, frame->entries,
++			    dx_index_is_compat(path) ? 1 : 2);
++	q = iam_entry_shift(path, frame->entries, count - 1);
++	while (p <= q) {
++		m = iam_entry_shift(path, p, iam_entry_diff(path, q, p) / 2);
++		if (iam_ikeycmp(path->ip_container, iam_ikey_at(path, m),
++				path->ip_ikey_target) > 0)
++			q = iam_entry_shift(path, m, -1);
++		else
++			p = iam_entry_shift(path, m, +1);
+ 	}
++	return iam_entry_shift(path, p, -1);
++}
+ 
+-	if ((indirect = root->info.indirect_levels) > 1) {
+-		ext3_warning(dir->i_sb, __FUNCTION__,
+-			     "Unimplemented inode hash depth: %#06x",
+-			     root->info.indirect_levels);
+-		brelse(bh);
+-		*err = ERR_BAD_DX_DIR;
+-		goto fail;
++static iam_ptr_t dx_find_ptr(struct iam_path *path, struct iam_frame *frame)
++{
++	return dx_get_block(path, dx_find_position(path, frame));
++}
++
++/*
++ * Fast check for frame consistency.
++ */
++static int dx_check_fast(struct iam_path *path, struct iam_frame *frame)
++{
++	struct iam_container *bag;
++	struct iam_entry *next;
++	struct iam_entry *last;
++	struct iam_entry *entries;
++	struct iam_entry *at;
++
++	bag     = path->ip_container;
++	at      = frame->at;
++	entries = frame->entries;
++	last    = iam_entry_shift(path, entries, dx_get_count(entries) - 1);
++
++	if (unlikely(at > last))
++		return -EAGAIN;
++
++	if (unlikely(dx_get_block(path, at) != frame->leaf))
++		return -EAGAIN;
++
++	if (unlikely(iam_ikeycmp(bag, iam_ikey_at(path, at),
++				 path->ip_ikey_target) > 0))
++		return -EAGAIN;
++
++	next = iam_entry_shift(path, at, +1);
++	if (next <= last) {
++		if (unlikely(iam_ikeycmp(bag, iam_ikey_at(path, next),
++					 path->ip_ikey_target) <= 0))
++			return -EAGAIN;
+ 	}
++	return 0;
++}
+ 
+-	entries = (struct dx_entry *) (((char *)&root->info) +
+-				       root->info.info_length);
+-	assert(dx_get_limit(entries) == dx_root_limit(dir,
+-						      root->info.info_length));
+-	dxtrace (printk("Look up %x", hash));
+-	while (1)
+-	{
+-		count = dx_get_count(entries);
+-		assert (count && count <= dx_get_limit(entries));
+-		p = entries + 1;
+-		q = entries + count - 1;
+-		while (p <= q)
+-		{
+-			m = p + (q - p)/2;
+-			dxtrace(printk("."));
+-			if (dx_get_hash(m) > hash)
+-				q = m - 1;
+-			else
+-				p = m + 1;
+-		}
++/*
++ * returns 0 if path was unchanged, -EAGAIN otherwise.
++ */
++static int dx_check_path(struct iam_path *path, struct iam_frame *frame)
++{
++	int equal;
+ 
+-		if (0) // linear search cross check
+-		{
+-			unsigned n = count - 1;
+-			at = entries;
+-			while (n--)
+-			{
+-				dxtrace(printk(","));
+-				if (dx_get_hash(++at) > hash)
+-				{
+-					at--;
+-					break;
+-				}
++	dx_lock_bh(frame->bh);
++	equal = dx_check_fast(path, frame) == 0 ||
++		frame->leaf == dx_find_ptr(path, frame);
++	DX_DEVAL(dx_lock_stats.dls_bh_again += !equal);
++	dx_unlock_bh(frame->bh);
++	
++	return equal ? 0 : -EAGAIN;
++}
++
++/*
++ * returns 0 if path was unchanged, -EAGAIN otherwise.
++ */
++static int dx_check_full_path(struct iam_path *path, int search)
++{
++	struct iam_frame *bottom;
++	struct iam_frame *scan;
++	int i;
++	int result;
++
++	do_corr(schedule());
++
++	for (bottom = path->ip_frames, i = 0;
++	     i < DX_MAX_TREE_HEIGHT && bottom->bh != NULL; ++bottom, ++i) {
++		; /* find last filled in frame */
++	}
++
++	/*
++	 * Lock frames, bottom to top.
++	 */
++	for (scan = bottom - 1; scan >= path->ip_frames; --scan)
++		dx_lock_bh(scan->bh);
++	/*
++	 * Check them top to bottom.
++	 */
++	result = 0;
++	for (scan = path->ip_frames; scan < bottom; ++scan) {
++		struct iam_entry *pos;
++
++		if (search) {
++			if (dx_check_fast(path, scan) == 0)
++				continue;
++
++			pos = dx_find_position(path, scan);
++			if (scan->leaf != dx_get_block(path, pos)) {
++				result = -EAGAIN;
++				break;
++			}
++			scan->at = pos;
++		} else {
++			pos = iam_entry_shift(path, scan->entries,
++					      dx_get_count(scan->entries) - 1);
++			if (scan->at > pos ||
++			    scan->leaf != dx_get_block(path, scan->at)) {
++				result = -EAGAIN;
++				break;
+ 			}
+-			assert (at == p - 1);
+ 		}
+-
+-		at = p - 1;
+-		dxtrace(printk(" %x->%u\n", at == entries? 0: dx_get_hash(at), dx_get_block(at)));
+-		frame->bh = bh;
+-		frame->entries = entries;
+-		frame->at = at;
+-		if (!indirect--) return frame;
+-		if (!(bh = ext3_bread (NULL,dir, dx_get_block(at), 0, err)))
+-			goto fail2;
+-		at = entries = ((struct dx_node *) bh->b_data)->entries;
+-		assert (dx_get_limit(entries) == dx_node_limit (dir));
+-		frame++;
+-	}
+-fail2:
+-	while (frame >= frame_in) {
+-		brelse(frame->bh);
+-		frame--;
+ 	}
+-fail:
+-	return NULL;
++
++	/*
++	 * Unlock top to bottom.
++	 */
++	for (scan = path->ip_frames; scan < bottom; ++scan)
++		dx_unlock_bh(scan->bh);
++	DX_DEVAL(dx_lock_stats.dls_bh_full_again += !!result);
++	do_corr(schedule());
++
++	return result;
+ }
+ 
+-static void dx_release (struct dx_frame *frames)
++static int dx_lookup_try(struct iam_path *path)
++{
++	u32 ptr;
++	int err = 0;
++	int i;
++
++	struct iam_descr *param;
++	struct iam_frame *frame;
++	struct iam_container *c;
++
++	param = iam_path_descr(path);
++	c = path->ip_container;
++	
++		     ptr = param->id_ops->id_root_ptr(c);
++	for (frame = path->ip_frames, i = 0; i <= path->ip_indirect;
++	     ++frame, ++i) {
++		err = param->id_ops->id_node_read(c, (iam_ptr_t)ptr, NULL,
++						  &frame->bh);
++		do_corr(schedule());
++
++		dx_lock_bh(frame->bh);
++		/*
++		 * node must be initialized under bh lock because concurrent
++		 * creation procedure may change it and dx_lookup_try() will
++		 * see obsolete tree height. -bzzz
++		 */
++		if (err != 0)
++			break;
++
++		if (EXT3_INVARIANT_ON) {
++			err = param->id_ops->id_node_check(path, frame);
++			if (err != 0)
++				break;
++		}
++
++		err = param->id_ops->id_node_load(path, frame);
++		if (err != 0)
++			break;
++
++		assert_inv(dx_node_check(path, frame));
++		/*
++		 * splitting may change root index block and move hash we're
++		 * looking for into another index block so, we have to check
++		 * this situation and repeat from begining if path got changed
++		 * -bzzz
++		 */
++		if (i > 0) {
++			err = dx_check_path(path, frame - 1);
++			if (err != 0)
++				break;
++		}
++
++		frame->at = dx_find_position(path, frame);
++		frame->curidx = ptr;
++		frame->leaf = ptr = dx_get_block(path, frame->at);
++
++		dx_unlock_bh(frame->bh);
++		do_corr(schedule());
++	}
++	if (err != 0)
++		dx_unlock_bh(frame->bh);
++	path->ip_frame = --frame;
++	return err;
++}
++
++static int dx_lookup(struct iam_path *path)
++{
++	int err;
++	int i;
++
++	for (i = 0; i < DX_MAX_TREE_HEIGHT; ++ i)
++		assert(path->ip_frames[i].bh == NULL);
++
++	do {
++		err = dx_lookup_try(path);
++		do_corr(schedule());
++		if (err != 0)
++			iam_path_fini(path);
++	} while (err == -EAGAIN);
++
++	return err;
++}
++
++/*
++ * Performs path lookup and returns with found leaf (if any) locked by htree
++ * lock.
++ */
++int dx_lookup_lock(struct iam_path *path,
++		   struct dynlock_handle **dl, enum dynlock_type lt)
+ {
+-	if (frames[0].bh == NULL)
+-		return;
++	int result;
++	struct inode *dir;
+ 
+-	if (((struct dx_root *) frames[0].bh->b_data)->info.indirect_levels)
+-		brelse(frames[1].bh);
+-	brelse(frames[0].bh);
++	dir = iam_path_obj(path);
++	while ((result = dx_lookup(path)) == 0) {
++		do_corr(schedule());
++		*dl = dx_lock_htree(dir, path->ip_frame->leaf, lt);
++		if (*dl == NULL) {
++			iam_path_fini(path);
++			result = -ENOMEM;
++			break;
++		}
++		do_corr(schedule());
++		/*
++		 * while locking leaf we just found may get split so we need
++		 * to check this -bzzz
++		 */
++		if (dx_check_full_path(path, 1) == 0)
++			break;
++		dx_unlock_htree(dir, *dl);
++		*dl = NULL;
++		iam_path_fini(path);
++	}
++	return result;
+ }
+ 
+ /*
++ * Probe for a directory leaf block to search.
++ *
++ * dx_probe can return ERR_BAD_DX_DIR, which means there was a format
++ * error in the directory index, and the caller should fall back to
++ * searching the directory normally.  The callers of dx_probe **MUST**
++ * check for this error code, and make sure it never gets reflected
++ * back to userspace.
++ */
++static int dx_probe(struct qstr *name, struct inode *dir,
++		    struct dx_hash_info *hinfo, struct iam_path *path)
++{
++	int err;
++	struct iam_path_compat *ipc;
++	
++	assert_corr(path->ip_data != NULL);
++	ipc = container_of(path->ip_data, struct iam_path_compat, ipc_descr);
++	ipc->ipc_qstr  = name;
++	ipc->ipc_hinfo = hinfo;
++
++	assert_corr(dx_index_is_compat(path));
++	err = dx_lookup(path);
++	assert_corr(err != 0 || path->ip_frames[path->ip_indirect].bh != NULL);
++	return err;
++}
++
++
++/*
+  * This function increments the frame pointer to search the next leaf
+  * block, and reads in the necessary intervening nodes if the search
+  * should be necessary.  Whether or not the search is necessary is
+@@ -463,17 +632,16 @@
+  * If start_hash is non-null, it will be filled in with the starting
+  * hash of the next page.
+  */
+-static int ext3_htree_next_block(struct inode *dir, __u32 hash,
+-				 struct dx_frame *frame,
+-				 struct dx_frame *frames, 
+-				 __u32 *start_hash)
++static int ext3_htree_advance(struct inode *dir, __u32 hash,
++			      struct iam_path *path, __u32 *start_hash,
++			      int compat)
+ {
+-	struct dx_frame *p;
++	struct iam_frame *p;
+ 	struct buffer_head *bh;
+ 	int err, num_frames = 0;
+ 	__u32 bhash;
+ 
+-	p = frame;
++	p = path->ip_frame;
+ 	/*
+ 	 * Find the next leaf page by incrementing the frame pointer.
+ 	 * If we run out of entries in the interior node, loop around and
+@@ -482,14 +650,26 @@
+ 	 * nodes need to be read.
+ 	 */
+ 	while (1) {
+-		if (++(p->at) < p->entries + dx_get_count(p->entries))
++		do_corr(schedule());
++		dx_lock_bh(p->bh);
++		p->at = iam_entry_shift(path, p->at, +1);
++		if (p->at < iam_entry_shift(path, p->entries,
++					    dx_get_count(p->entries))) {
++			p->leaf = dx_get_block(path, p->at);
++			dx_unlock_bh(p->bh);
+ 			break;
+-		if (p == frames)
++		}
++		dx_unlock_bh(p->bh);
++		if (p == path->ip_frames)
+ 			return 0;
+ 		num_frames++;
+-		p--;
++		--p;
+ 	}
+ 
++	if (compat) {
++		/*
++		 * Htree hash magic.
++		 */
+ 	/*
+ 	 * If the hash is 1, then continue only if the next page has a
+ 	 * continuation hash of any value.  This is used for readdir
+@@ -497,30 +677,146 @@
+ 	 * desired contiuation hash.  If it doesn't, return since
+ 	 * there's no point to read in the successive index pages.
+ 	 */
+-	bhash = dx_get_hash(p->at);
++		iam_get_ikey(path, p->at, (struct iam_ikey *)&bhash);
+ 	if (start_hash)
+ 		*start_hash = bhash;
+ 	if ((hash & 1) == 0) {
+ 		if ((bhash & ~1) != hash)
+ 			return 0;
+ 	}
++	}
+ 	/*
+ 	 * If the hash is HASH_NB_ALWAYS, we always go to the next
+ 	 * block so no check is necessary
+ 	 */
+ 	while (num_frames--) {
+-		if (!(bh = ext3_bread(NULL, dir, dx_get_block(p->at),
+-				      0, &err)))
++		iam_ptr_t idx;
++
++		do_corr(schedule());
++		dx_lock_bh(p->bh);
++		idx = p->leaf = dx_get_block(path, p->at);
++		dx_unlock_bh(p->bh);
++		err = iam_path_descr(path)->id_ops->
++			id_node_read(path->ip_container, idx, NULL, &bh);
++		if (err != 0)
+ 			return err; /* Failure */
+-		p++;
+-		brelse (p->bh);
++		++p;
++		brelse(p->bh);
++		assert_corr(p->bh != bh);
+ 		p->bh = bh;
+-		p->at = p->entries = ((struct dx_node *) bh->b_data)->entries;
++		p->entries = dx_node_get_entries(path, p);
++		p->at = iam_entry_shift(path, p->entries, !compat);
++		assert_corr(p->curidx != idx);
++		p->curidx = idx;
++		dx_lock_bh(p->bh);
++		assert_corr(p->leaf != dx_get_block(path, p->at));
++		p->leaf = dx_get_block(path, p->at);
++		dx_unlock_bh(p->bh);
++		assert_inv(dx_node_check(path, p));
+ 	}
+ 	return 1;
+ }
+ 
+-
++int iam_index_lock(struct iam_path *path, struct dynlock_handle **lh)
++{
++	struct iam_frame *f;
++
++	for (f = path->ip_frame; f >= path->ip_frames; --f, ++lh) {
++		do_corr(schedule());
++		*lh = dx_lock_htree(iam_path_obj(path), f->curidx, DLT_READ);
++		if (*lh == NULL)
++			return -ENOMEM;
++	}
++	return 0;
++}
++
++static int iam_index_advance(struct iam_path *path)
++{
++	return ext3_htree_advance(iam_path_obj(path), 0, path, NULL, 0);
++}
++
++/*
++ * Advance index part of @path to point to the next leaf. Returns 1 on
++ * success, 0, when end of container was reached. Leaf node is locked.
++ */
++int iam_index_next(struct iam_container *c, struct iam_path *path)
++{
++	iam_ptr_t cursor;
++	struct dynlock_handle *lh[DX_MAX_TREE_HEIGHT] = { 0, };
++	int result;
++	struct inode *object;
++
++	/*
++	 * Locking for iam_index_next()... is to be described.
++	 */
++
++	object = c->ic_object;
++	cursor = path->ip_frame->leaf;
++
++	while (1) {
++		result = iam_index_lock(path, lh);
++		do_corr(schedule());
++		if (result < 0)
++			break;
++		
++		result = dx_check_full_path(path, 0);
++		if (result == 0 && cursor == path->ip_frame->leaf) {
++			result = iam_index_advance(path);
++
++			assert_corr(result == 0 ||
++				    cursor != path->ip_frame->leaf);
++			break;
++		}
++		do {
++			dx_unlock_array(object, lh);
++
++			iam_path_release(path);
++			do_corr(schedule());
++
++			result = dx_lookup(path);
++			if (result < 0)
++				break;
++
++			while (path->ip_frame->leaf != cursor) {
++				do_corr(schedule());
++
++				result = iam_index_lock(path, lh);
++				do_corr(schedule());
++				if (result < 0)
++					break;
++
++				result = dx_check_full_path(path, 0);
++				if (result != 0)
++					break;
++
++				result = iam_index_advance(path);
++				if (result == 0) {
++					ext3_error(object->i_sb, __FUNCTION__,
++						   "cannot find cursor: %u\n",
++						   cursor);
++					result = -EIO;
++				}
++				if (result < 0)
++					break;
++				result = dx_check_full_path(path, 0);
++				if (result != 0)
++					break;
++				dx_unlock_array(object, lh);
++			}
++		} while (result == -EAGAIN);
++		if (result < 0)
++			break;
++	}
++	dx_unlock_array(object, lh);
++	return result;
++}
++
++int ext3_htree_next_block(struct inode *dir, __u32 hash,
++			  struct iam_path *path, __u32 *start_hash)
++{
++	return ext3_htree_advance(dir, hash, path, start_hash, 1);
++}
++
+ /*
+  * p is at least 6 bytes before the end of page
+  */
+@@ -593,7 +889,8 @@
+ {
+ 	struct dx_hash_info hinfo;
+ 	struct ext3_dir_entry_2 *de;
+-	struct dx_frame frames[2], *frame;
++	struct iam_path_compat cpath;
++	struct iam_path *path = &cpath.ipc_path;
+ 	struct inode *dir;
+ 	int block, err;
+ 	int count = 0;
+@@ -603,6 +900,7 @@
+ 	dxtrace(printk("In htree_fill_tree, start hash: %x:%x\n", start_hash,
+ 		       start_minor_hash));
+ 	dir = dir_file->f_dentry->d_inode;
++	iam_path_compat_init(&cpath, dir);
+ 	if (!(EXT3_I(dir)->i_flags & EXT3_INDEX_FL)) {
+ 		hinfo.hash_version = EXT3_SB(dir->i_sb)->s_def_hash_version;
+ 		hinfo.seed = EXT3_SB(dir->i_sb)->s_hash_seed;
+@@ -613,19 +911,19 @@
+ 	}
+ 	hinfo.hash = start_hash;
+ 	hinfo.minor_hash = 0;
+-	frame = dx_probe(NULL, dir_file->f_dentry->d_inode, &hinfo, frames, &err);
+-	if (!frame)
++	err = dx_probe(NULL, dir_file->f_dentry->d_inode, &hinfo, path);
++	if (err != 0)
+ 		return err;
+ 
+ 	/* Add '.' and '..' from the htree header */
+ 	if (!start_hash && !start_minor_hash) {
+-		de = (struct ext3_dir_entry_2 *) frames[0].bh->b_data;
++		de = (struct ext3_dir_entry_2 *) path->ip_frames[0].bh->b_data;
+ 		if ((err = ext3_htree_store_dirent(dir_file, 0, 0, de)) != 0)
+ 			goto errout;
+ 		count++;
+ 	}
+ 	if (start_hash < 2 || (start_hash ==2 && start_minor_hash==0)) {
+-		de = (struct ext3_dir_entry_2 *) frames[0].bh->b_data;
++		de = (struct ext3_dir_entry_2 *) path->ip_frames[0].bh->b_data;
+ 		de = ext3_next_entry(de);
+ 		if ((err = ext3_htree_store_dirent(dir_file, 2, 0, de)) != 0)
+ 			goto errout;
+@@ -633,7 +931,7 @@
+ 	}
+ 
+ 	while (1) {
+-		block = dx_get_block(frame->at);
++		block = dx_get_block(path, path->ip_frame->at);
+ 		ret = htree_dirblock_to_tree(dir_file, dir, block, &hinfo,
+ 					     start_hash, start_minor_hash);
+ 		if (ret < 0) {
+@@ -642,8 +940,8 @@
+ 		}
+ 		count += ret;
+ 		hashval = ~0;
+-		ret = ext3_htree_next_block(dir, HASH_NB_ALWAYS, 
+-					    frame, frames, &hashval);
++		ret = ext3_htree_next_block(dir,
++					    HASH_NB_ALWAYS, path, &hashval);
+ 		*next_hash = hashval;
+ 		if (ret < 0) {
+ 			err = ret;
+@@ -658,12 +956,12 @@
+ 		    (count && ((hashval & 1) == 0)))
+ 			break;
+ 	}
+-	dx_release(frames);
+-	dxtrace(printk("Fill tree: returned %d entries, next hash: %x\n", 
++	iam_path_fini(path);
++	dxtrace(printk("Fill tree: returned %d entries, next hash: %x\n",
+ 		       count, *next_hash));
+ 	return count;
+ errout:
+-	dx_release(frames);
++	iam_path_fini(path);
+ 	return (err);
+ }
+ 
+@@ -723,19 +1021,45 @@
+ 	} while(more);
+ }
+ 
+-static void dx_insert_block(struct dx_frame *frame, u32 hash, u32 block)
++void iam_insert_key(struct iam_path *path, struct iam_frame *frame,
++		    const struct iam_ikey *key, iam_ptr_t ptr)
+ {
+-	struct dx_entry *entries = frame->entries;
+-	struct dx_entry *old = frame->at, *new = old + 1;
++	struct iam_entry *entries = frame->entries;
++	struct iam_entry *new = iam_entry_shift(path, frame->at, +1);
+ 	int count = dx_get_count(entries);
+ 
+-	assert(count < dx_get_limit(entries));
+-	assert(old < entries + count);
+-	memmove(new + 1, new, (char *)(entries + count) - (char *)(new));
+-	dx_set_hash(new, hash);
+-	dx_set_block(new, block);
++	/*
++	 * Unfortunately we cannot assert this, as this function is sometimes
++	 * called by VFS under i_sem and without pdirops lock.
++	 */
++	assert_corr(1 || iam_frame_is_locked(path, frame));
++	assert_corr(count < dx_get_limit(entries));
++	assert_corr(frame->at < iam_entry_shift(path, entries, count));
++	assert_inv(dx_node_check(path, frame));
++
++	memmove(iam_entry_shift(path, new, 1), new,
++		(char *)iam_entry_shift(path, entries, count) - (char *)new);
++	dx_set_ikey(path, new, key);
++	dx_set_block(path, new, ptr);
+ 	dx_set_count(entries, count + 1);
++	assert_inv(dx_node_check(path, frame));
++}
++
++void iam_insert_key_lock(struct iam_path *path, struct iam_frame *frame,
++			 const struct iam_ikey *key, iam_ptr_t ptr)
++{
++	dx_lock_bh(frame->bh);
++	iam_insert_key(path, frame, key, ptr);
++	dx_unlock_bh(frame->bh);
++}
++
++void dx_insert_block(struct iam_path *path, struct iam_frame *frame,
++		     u32 hash, u32 block)
++{
++	assert_corr(dx_index_is_compat(path));
++	iam_insert_key(path, frame, (struct iam_ikey *)&hash, block);
+ }
++
+ #endif
+ 
+ 
+@@ -934,7 +1258,11 @@
+ 	struct super_block * sb;
+ 	struct dx_hash_info	hinfo;
+ 	u32 hash;
+-	struct dx_frame frames[2], *frame;
++	struct iam_path_compat cpath;
++	struct iam_path *path = &cpath.ipc_path;
++	struct iam_entry_compat dummy_dot = {
++		.block = 0
++	};
+ 	struct ext3_dir_entry_2 *de, *top;
+ 	struct buffer_head *bh;
+ 	unsigned long block;
+@@ -943,21 +1271,25 @@
+ 	const u8 *name = dentry->d_name.name;
+ 	struct inode *dir = dentry->d_parent->d_inode;
+ 
++	iam_path_compat_init(&cpath, dir);
++
+ 	sb = dir->i_sb;
+ 	/* NFS may look up ".." - look at dx_root directory block */
+ 	if (namelen > 2 || name[0] != '.'||(name[1] != '.' && name[1] != '\0')){
+-		if (!(frame = dx_probe(dentry, NULL, &hinfo, frames, err)))
++		*err = dx_probe(&dentry->d_name, NULL, &hinfo, path);
++		if (*err != 0)
+ 			return NULL;
+ 	} else {
+-		frame = frames;
+-		frame->bh = NULL;			/* for dx_release() */
+-		frame->at = (struct dx_entry *)frames;	/* hack for zero entry*/
+-		dx_set_block(frame->at, 0);		/* dx_root block is 0 */
++		path->ip_frame->bh = NULL;		/* for iam_path_fini() */
++		path->ip_frame->at = (void *)&dummy_dot;/* hack for zero entry*/
+ 	}
+ 	hash = hinfo.hash;
+ 	do {
+-		block = dx_get_block(frame->at);
+-		if (!(bh = ext3_bread (NULL,dir, block, 0, err)))
++		block = dx_get_block(path, path->ip_frame->at);
++		*err = iam_path_descr(path)->id_ops->id_node_read(path->ip_container,
++							  (iam_ptr_t)block,
++						     NULL, &bh);
++		if (*err != 0)
+ 			goto errout;
+ 		de = (struct ext3_dir_entry_2 *) bh->b_data;
+ 		top = (struct ext3_dir_entry_2 *) ((char *) de + sb->s_blocksize -
+@@ -972,13 +1304,12 @@
+ 				goto errout;
+ 			}
+ 			*res_dir = de;
+-			dx_release (frames);
++			iam_path_fini(path);
+ 			return bh;
+ 		}
+ 		brelse (bh);
+ 		/* Check to see if we should continue to search */
+-		retval = ext3_htree_next_block(dir, hash, frame,
+-					       frames, NULL);
++		retval = ext3_htree_next_block(dir, hash, path, NULL);
+ 		if (retval < 0) {
+ 			ext3_warning(sb, __FUNCTION__,
+ 			     "error reading index page in directory #%lu",
+@@ -991,7 +1322,7 @@
+ 	*err = -ENOENT;
+ errout:
+ 	dxtrace(printk("%s not found\n", name));
+-	dx_release (frames);
++	iam_path_fini(path);
+ 	return NULL;
+ }
+ #endif
+@@ -1063,7 +1394,7 @@
+ 		parent = ERR_PTR(-ENOMEM);
+ 	}
+ 	return parent;
+-} 
++}
+ 
+ #define S_SHIFT 12
+ static unsigned char ext3_type_by_mode[S_IFMT >> S_SHIFT] = {
+@@ -1124,19 +1455,69 @@
+ 	return prev;
+ }
+ 
+-static struct ext3_dir_entry_2 *do_split(handle_t *handle, struct inode *dir,
+-			struct buffer_head **bh,struct dx_frame *frame,
+-			struct dx_hash_info *hinfo, int *error)
++struct ext3_dir_entry_2 *move_entries(struct inode *dir,
++				      struct dx_hash_info *hinfo,
++				      struct buffer_head **bh1,
++				      struct buffer_head **bh2,
++				      __u32 *delim_hash)
+ {
++	char *data1;
++	char *data2;
+ 	unsigned blocksize = dir->i_sb->s_blocksize;
+-	unsigned count, continued;
++	unsigned count;
++	unsigned continued;
++	unsigned split;
++	u32 hash2;
++
++	struct dx_map_entry     *map;
++	struct ext3_dir_entry_2 *de1;
++	struct ext3_dir_entry_2 *de2;
++
++	data1 = (*bh1)->b_data;
++	data2 = (*bh2)->b_data;
++
++	/* create map in the end of data2 block */
++	map = (struct dx_map_entry *) (data2 + blocksize);
++	count = dx_make_map((struct ext3_dir_entry_2 *) data1,
++			    blocksize, hinfo, map);
++	map -= count;
++	split = count/2; // need to adjust to actual middle
++	dx_sort_map(map, count);
++	hash2 = map[split].hash;
++	continued = hash2 == map[split - 1].hash;
++	dxtrace(printk("Split block %i at %x, %i/%i\n",
++		frame->leaf, hash2, split, count - split));
++
++	/* Fancy dance to stay within two buffers */
++	de2 = dx_move_dirents(data1, data2, map + split, count - split);
++	de1 = dx_pack_dirents(data1, blocksize);
++	de1->rec_len = cpu_to_le16(data1 + blocksize - (char *) de1);
++	de2->rec_len = cpu_to_le16(data2 + blocksize - (char *) de2);
++	dxtrace(dx_show_leaf(hinfo,
++			     (struct ext3_dir_entry_2 *) data1, blocksize, 1));
++	dxtrace(dx_show_leaf(hinfo,
++			     (struct ext3_dir_entry_2 *) data2, blocksize, 1));
++
++	/* Which block gets the new entry? */
++	if (hinfo->hash >= hash2) {
++		swap(*bh1, *bh2);
++		de1 = de2;
++	}
++	*delim_hash = hash2 + continued;
++	return de1;
++}
++
++/* Allocate new node, and split leaf node @bh into it, inserting new pointer
++ * into parent node identified by @frame */
++static struct ext3_dir_entry_2 *do_split(handle_t *handle, struct iam_path *path,
++			struct buffer_head **bh,struct iam_frame *frame,
++			struct dx_hash_info *hinfo, int *error)
++{
++	struct inode *dir = iam_path_obj(path);
+ 	struct buffer_head *bh2;
+ 	u32 newblock;
+ 	u32 hash2;
+-	struct dx_map_entry *map;
+-	char *data1 = (*bh)->b_data, *data2;
+-	unsigned split;
+-	struct ext3_dir_entry_2 *de = NULL, *de2;
++	struct ext3_dir_entry_2 *de = NULL;
+ 	int	err;
+ 
+ 	bh2 = ext3_append (handle, dir, &newblock, error);
+@@ -1161,35 +1542,9 @@
+ 	if (err)
+ 		goto journal_error;
+ 
+-	data2 = bh2->b_data;
+-
+-	/* create map in the end of data2 block */
+-	map = (struct dx_map_entry *) (data2 + blocksize);
+-	count = dx_make_map ((struct ext3_dir_entry_2 *) data1,
+-			     blocksize, hinfo, map);
+-	map -= count;
+-	split = count/2; // need to adjust to actual middle
+-	dx_sort_map (map, count);
+-	hash2 = map[split].hash;
+-	continued = hash2 == map[split - 1].hash;
+-	dxtrace(printk("Split block %i at %x, %i/%i\n",
+-		dx_get_block(frame->at), hash2, split, count-split));
+-
+-	/* Fancy dance to stay within two buffers */
+-	de2 = dx_move_dirents(data1, data2, map + split, count - split);
+-	de = dx_pack_dirents(data1,blocksize);
+-	de->rec_len = cpu_to_le16(data1 + blocksize - (char *) de);
+-	de2->rec_len = cpu_to_le16(data2 + blocksize - (char *) de2);
+-	dxtrace(dx_show_leaf (hinfo, (struct ext3_dir_entry_2 *) data1, blocksize, 1));
+-	dxtrace(dx_show_leaf (hinfo, (struct ext3_dir_entry_2 *) data2, blocksize, 1));
++	de = move_entries(dir, hinfo, bh, &bh2, &hash2);
+ 
+-	/* Which block gets the new entry? */
+-	if (hinfo->hash >= hash2)
+-	{
+-		swap(*bh, bh2);
+-		de = de2;
+-	}
+-	dx_insert_block (frame, hash2 + continued, newblock);
++	dx_insert_block(path, frame, hash2, newblock);
+ 	err = ext3_journal_dirty_metadata (handle, bh2);
+ 	if (err)
+ 		goto journal_error;
+@@ -1203,6 +1558,63 @@
+ }
+ #endif
+ 
++struct ext3_dir_entry_2 *find_insertion_point(struct inode *dir,
++					      struct buffer_head *bh,
++					      const char *name, int namelen)
++{
++	struct ext3_dir_entry_2 *de;
++	char *top;
++	unsigned long offset;
++	int nlen;
++	int rlen;
++	int reclen;
++
++	reclen = EXT3_DIR_REC_LEN(namelen);
++	de = (struct ext3_dir_entry_2 *)bh->b_data;
++	top = bh->b_data + dir->i_sb->s_blocksize - reclen;
++	offset = 0;
++	while ((char *) de <= top) {
++		if (!ext3_check_dir_entry("ext3_add_entry",
++					  dir, de, bh, offset))
++			return ERR_PTR(-EIO);
++		if (ext3_match(namelen, name, de))
++			return ERR_PTR(-EEXIST);
++		nlen = EXT3_DIR_REC_LEN(de->name_len);
++		rlen = le16_to_cpu(de->rec_len);
++		if ((de->inode? rlen - nlen: rlen) >= reclen)
++			return de;
++		de = (struct ext3_dir_entry_2 *)((char *)de + rlen);
++		offset += rlen;
++	}
++	return ERR_PTR(-ENOSPC);
++}
++
++struct ext3_dir_entry_2 *split_entry(struct inode *dir,
++				     struct ext3_dir_entry_2 *de,
++				     unsigned long ino, mode_t mode,
++				     const char *name, int namelen)
++{
++	int nlen;
++	int rlen;
++
++	nlen = EXT3_DIR_REC_LEN(de->name_len);
++	rlen = le16_to_cpu(de->rec_len);
++	if (de->inode) {
++		struct ext3_dir_entry_2 *de1;
++
++		de1 = (struct ext3_dir_entry_2 *)((char *)de + nlen);
++		de1->rec_len = cpu_to_le16(rlen - nlen);
++		de->rec_len = cpu_to_le16(nlen);
++		de = de1;
++	}
++	de->file_type = EXT3_FT_UNKNOWN;
++	de->inode = cpu_to_le32(ino);
++	if (ino != 0)
++		ext3_set_de_type(dir->i_sb, de, mode);
++	de->name_len = namelen;
++	memcpy(de->name, name, namelen);
++	return de;
++}
+ 
+ /*
+  * Add a new entry into a directory (leaf) block.  If de is non-NULL,
+@@ -1211,7 +1623,7 @@
+  * add_dirent_to_buf will attempt search the directory block for
+  * space.  It will return -ENOSPC if no space is available, and -EIO
+  * and -EEXIST if directory entry already exists.
+- * 
++ *
+  * NOTE!  bh is NOT released in the case where ENOSPC is returned.  In
+  * all other cases bh is released.
+  */
+@@ -1222,34 +1634,16 @@
+ 	struct inode	*dir = dentry->d_parent->d_inode;
+ 	const char	*name = dentry->d_name.name;
+ 	int		namelen = dentry->d_name.len;
+-	unsigned long	offset = 0;
+-	unsigned short	reclen;
+-	int		nlen, rlen, err;
+-	char		*top;
++	int		err;
+ 
+-	reclen = EXT3_DIR_REC_LEN(namelen);
+ 	if (!de) {
+-		de = (struct ext3_dir_entry_2 *)bh->b_data;
+-		top = bh->b_data + dir->i_sb->s_blocksize - reclen;
+-		while ((char *) de <= top) {
+-			if (!ext3_check_dir_entry("ext3_add_entry", dir, de,
+-						  bh, offset)) {
+-				brelse (bh);
+-				return -EIO;
+-			}
+-			if (ext3_match (namelen, name, de)) {
+-				brelse (bh);
+-				return -EEXIST;
+-			}
+-			nlen = EXT3_DIR_REC_LEN(de->name_len);
+-			rlen = le16_to_cpu(de->rec_len);
+-			if ((de->inode? rlen - nlen: rlen) >= reclen)
+-				break;
+-			de = (struct ext3_dir_entry_2 *)((char *)de + rlen);
+-			offset += rlen;
++		de = find_insertion_point(dir, bh, name, namelen);
++		if (IS_ERR(de)) {
++			err = PTR_ERR(de);
++			if (err != -ENOSPC)
++				brelse(bh);
++			return err;
+ 		}
+-		if ((char *) de > top)
+-			return -ENOSPC;
+ 	}
+ 	BUFFER_TRACE(bh, "get_write_access");
+ 	err = ext3_journal_get_write_access(handle, bh);
+@@ -1260,22 +1654,9 @@
+ 	}
+ 
+ 	/* By now the buffer is marked for journaling */
+-	nlen = EXT3_DIR_REC_LEN(de->name_len);
+-	rlen = le16_to_cpu(de->rec_len);
+-	if (de->inode) {
+-		struct ext3_dir_entry_2 *de1 = (struct ext3_dir_entry_2 *)((char *)de + nlen);
+-		de1->rec_len = cpu_to_le16(rlen - nlen);
+-		de->rec_len = cpu_to_le16(nlen);
+-		de = de1;
+-	}
+-	de->file_type = EXT3_FT_UNKNOWN;
+-	if (inode) {
+-		de->inode = cpu_to_le32(inode->i_ino);
+-		ext3_set_de_type(dir->i_sb, de, inode->i_mode);
+-	} else
+-		de->inode = 0;
+-	de->name_len = namelen;
+-	memcpy (de->name, name, namelen);
++
++	split_entry(dir, de, inode ? inode->i_ino : 0,
++		    inode ? inode->i_mode : 0, name, namelen);
+ 	/*
+ 	 * XXX shouldn't update any times until successful
+ 	 * completion of syscall, but too many callers depend
+@@ -1304,6 +1685,7 @@
+  * This converts a one block unindexed directory to a 3 block indexed
+  * directory, and adds the dentry to the indexed directory.
+  */
++extern int user_selected_hash_function;
+ static int make_indexed_dir(handle_t *handle, struct dentry *dentry,
+ 			    struct inode *inode, struct buffer_head *bh)
+ {
+@@ -1312,8 +1694,9 @@
+ 	int		namelen = dentry->d_name.len;
+ 	struct buffer_head *bh2;
+ 	struct dx_root	*root;
+-	struct dx_frame	frames[2], *frame;
+-	struct dx_entry *entries;
++	struct iam_path_compat cpath;
++	struct iam_path *path = &cpath.ipc_path;
++	struct iam_entry *entries;
+ 	struct ext3_dir_entry_2	*de, *de2;
+ 	char		*data1, *top;
+ 	unsigned	len;
+@@ -1323,6 +1706,7 @@
+ 	u32		block;
+ 	struct fake_dirent *fde;
+ 
++	iam_path_compat_init(&cpath, dir);
+ 	blocksize =  dir->i_sb->s_blocksize;
+ 	dxtrace(printk("Creating index\n"));
+ 	retval = ext3_journal_get_write_access(handle, bh);
+@@ -1357,23 +1741,25 @@
+ 	memset (&root->info, 0, sizeof(root->info));
+ 	root->info.info_length = sizeof(root->info);
+ 	root->info.hash_version = EXT3_SB(dir->i_sb)->s_def_hash_version;
+-	entries = root->entries;
+-	dx_set_block (entries, 1);
++	if (user_selected_hash_function >= 0 &&
++	    user_selected_hash_function <= DX_HASH_MAX)
++		root->info.hash_version = user_selected_hash_function;
++	entries = (void *)root->entries;
++	dx_set_block (path, entries, 1);
+ 	dx_set_count (entries, 1);
+-	dx_set_limit (entries, dx_root_limit(dir, sizeof(root->info)));
++	dx_set_limit (entries, dx_root_limit(path));
+ 
+ 	/* Initialize as for dx_probe */
+ 	hinfo.hash_version = root->info.hash_version;
+ 	hinfo.seed = EXT3_SB(dir->i_sb)->s_hash_seed;
+ 	ext3fs_dirhash(name, namelen, &hinfo);
+-	frame = frames;
+-	frame->entries = entries;
+-	frame->at = entries;
+-	frame->bh = bh;
++	path->ip_frame->entries = entries;
++	path->ip_frame->at = entries;
++	path->ip_frame->bh = bh;
+ 	bh = bh2;
+-	de = do_split(handle,dir, &bh, frame, &hinfo, &retval);
+-	dx_release (frames);
+-	if (!(de))
++	de = do_split(handle, path, &bh, path->ip_frame, &hinfo, &retval);
++	iam_path_fini(path);
++	if (!de)
+ 		return retval;
+ 
+ 	return add_dirent_to_buf(handle, dentry, inode, de, bh);
+@@ -1444,139 +1830,384 @@
+ 	return add_dirent_to_buf(handle, dentry, inode, de, bh);
+ }
+ 
++static int shift_entries(struct iam_path *path,
++			 struct iam_frame *frame, unsigned count,
++			 struct iam_entry *entries, struct iam_entry *entries2,
++			 u32 newblock)
++{
++	unsigned count1;
++	unsigned count2;
++	int delta;
++
++	struct iam_frame *parent = frame - 1;
++	struct iam_ikey *pivot = iam_path_ikey(path, 3);
++
++	delta = dx_index_is_compat(path) ? 0 : +1;
++
++	count1 = count/2 + delta;
++	count2 = count - count1;
++	iam_get_ikey(path, iam_entry_shift(path, entries, count1), pivot);
++
++	dxtrace(printk("Split index %i/%i\n", count1, count2));
++
++	memcpy((char *) iam_entry_shift(path, entries2, delta),
++	       (char *) iam_entry_shift(path, entries, count1),
++	       count2 * iam_entry_size(path));
++
++	dx_set_count(entries2, count2 + delta);
++	dx_set_limit(entries2, dx_node_limit(path));
++
++	/*
++	 * NOTE: very subtle piece of code competing dx_probe() may find 2nd
++	 * level index in root index, then we insert new index here and set
++	 * new count in that 2nd level index. so, dx_probe() may see 2nd level
++	 * index w/o hash it looks for. the solution is to check root index
++	 * after we locked just founded 2nd level index -bzzz
++	 */
++	iam_insert_key_lock(path, parent, pivot, newblock);
++
++	/*
++	 * now old and new 2nd level index blocks contain all pointers, so
++	 * dx_probe() may find it in the both.  it's OK -bzzz
++	 */
++	dx_lock_bh(frame->bh);
++	dx_set_count(entries, count1);
++	dx_unlock_bh(frame->bh);
++
++	/*
++	 * now old 2nd level index block points to first half of leafs. it's
++	 * importand that dx_probe() must check root index block for changes
++	 * under dx_lock_bh(frame->bh) -bzzz
++	 */
++
++	return count1;
++}
++
+ #ifdef CONFIG_EXT3_INDEX
+-/*
+- * Returns 0 for success, or a negative error value
+- */
+-static int ext3_dx_add_entry(handle_t *handle, struct dentry *dentry,
+-			     struct inode *inode)
++int split_index_node(handle_t *handle, struct iam_path *path,
++		     struct dynlock_handle **lh)
+ {
+-	struct dx_frame frames[2], *frame;
+-	struct dx_entry *entries, *at;
+-	struct dx_hash_info hinfo;
+-	struct buffer_head * bh;
+-	struct inode *dir = dentry->d_parent->d_inode;
+-	struct super_block * sb = dir->i_sb;
+-	struct ext3_dir_entry_2 *de;
+-	int err;
+ 
+-	frame = dx_probe(dentry, NULL, &hinfo, frames, &err);
+-	if (!frame)
+-		return err;
+-	entries = frame->entries;
+-	at = frame->at;
++	struct iam_entry *entries;   /* old block contents */
++	struct iam_entry *entries2;  /* new block contents */
++ 	struct iam_frame *frame, *safe;
++	struct buffer_head *bh_new[DX_MAX_TREE_HEIGHT] = {0};
++	u32 newblock[DX_MAX_TREE_HEIGHT] = {0};
++	struct dynlock_handle *lock[DX_MAX_TREE_HEIGHT] = {NULL,};
++	struct dynlock_handle *new_lock[DX_MAX_TREE_HEIGHT] = {NULL,};
++	struct inode *dir = iam_path_obj(path);
++	struct iam_descr *descr;
++	int nr_splet;
++	int i, err;
+ 
+-	if (!(bh = ext3_bread(handle,dir, dx_get_block(frame->at), 0, &err)))
+-		goto cleanup;
++	descr = iam_path_descr(path);
++	/*
++	 * Algorithm below depends on this.
++	 */
++	assert_corr(dx_root_limit(path) < dx_node_limit(path));
+ 
+-	BUFFER_TRACE(bh, "get_write_access");
+-	err = ext3_journal_get_write_access(handle, bh);
+-	if (err)
+-		goto journal_error;
++	frame = path->ip_frame;
++	entries = frame->entries;
+ 
+-	err = add_dirent_to_buf(handle, dentry, inode, NULL, bh);
+-	if (err != -ENOSPC) {
+-		bh = NULL;
+-		goto cleanup;
+-	}
++	/*
++	 * Tall-tree handling: we might have to split multiple index blocks
++	 * all the way up to tree root. Tricky point here is error handling:
++	 * to avoid complicated undo/rollback we
++	 *
++	 *   - first allocate all necessary blocks
++	 *
++	 *   - insert pointers into them atomically.
++	 */
++
++	/*
++	 * Locking: leaf is already locked. htree-locks are acquired on all
++	 * index nodes that require split bottom-to-top, on the "safe" node,
++	 * and on all new nodes
++	 */
+ 
+-	/* Block full, should compress but for now just split */
+ 	dxtrace(printk("using %u of %u node entries\n",
+ 		       dx_get_count(entries), dx_get_limit(entries)));
+-	/* Need to split index? */
+-	if (dx_get_count(entries) == dx_get_limit(entries)) {
+-		u32 newblock;
+-		unsigned icount = dx_get_count(entries);
+-		int levels = frame - frames;
+-		struct dx_entry *entries2;
+-		struct dx_node *node2;
+-		struct buffer_head *bh2;
+ 
+-		if (levels && (dx_get_count(frames->entries) ==
+-			       dx_get_limit(frames->entries))) {
+-			ext3_warning(sb, __FUNCTION__,
+-				     "Directory index full!");
++	/* What levels need split? */
++	for (nr_splet = 0; frame >= path->ip_frames &&
++	     dx_get_count(frame->entries) == dx_get_limit(frame->entries);
++	     --frame, ++nr_splet) {
++		do_corr(schedule());
++		if (nr_splet == DX_MAX_TREE_HEIGHT) {
++			ext3_warning(dir->i_sb, __FUNCTION__,
++				     "Directory index full!\n");
+ 			err = -ENOSPC;
+ 			goto cleanup;
+ 		}
+-		bh2 = ext3_append (handle, dir, &newblock, &err);
+-		if (!(bh2))
++	}
++
++	safe = frame;
++
++	/*
++	 * Lock all nodes, bottom to top.
++	 */
++	for (frame = path->ip_frame, i = nr_splet; i >= 0; --i, --frame) {
++		do_corr(schedule());
++		lock[i] = dx_lock_htree(dir, frame->curidx, DLT_WRITE);
++		if (lock[i] == NULL) {
++			err = -ENOMEM;
++			goto cleanup;
++		}
++	}
++
++	/*
++	 * Check for concurrent index modification.
++	 */
++	err = dx_check_full_path(path, 1);
++	if (err)
++		goto cleanup;
++	/*
++	 * And check that the same number of nodes is to be split.
++	 */
++	for (i = 0, frame = path->ip_frame; frame >= path->ip_frames &&
++	     dx_get_count(frame->entries) == dx_get_limit(frame->entries);
++	     --frame, ++i) {
++		;
++	}
++	if (i != nr_splet) {
++		err = -EAGAIN;
++		goto cleanup;
++	}
++
++	/* Go back down, allocating blocks, locking them, and adding into
++	 * transaction... */
++	for (frame = safe + 1, i = 0; i < nr_splet; ++i, ++frame) {
++		bh_new[i] = ext3_append (handle, dir, &newblock[i], &err);
++		do_corr(schedule());
++		if (!bh_new[i] ||
++		    descr->id_ops->id_node_init(path->ip_container,
++						bh_new[i], 0) != 0)
++			goto cleanup;
++		new_lock[i] = dx_lock_htree(dir, newblock[i], DLT_WRITE);
++		if (new_lock[i] == NULL) {
++			err = -ENOMEM;
+ 			goto cleanup;
+-		node2 = (struct dx_node *)(bh2->b_data);
+-		entries2 = node2->entries;
+-		node2->fake.rec_len = cpu_to_le16(sb->s_blocksize);
+-		node2->fake.inode = 0;
++		}
++		do_corr(schedule());
+ 		BUFFER_TRACE(frame->bh, "get_write_access");
+ 		err = ext3_journal_get_write_access(handle, frame->bh);
+ 		if (err)
+ 			goto journal_error;
+-		if (levels) {
+-			unsigned icount1 = icount/2, icount2 = icount - icount1;
+-			unsigned hash2 = dx_get_hash(entries + icount1);
+-			dxtrace(printk("Split index %i/%i\n", icount1, icount2));
+-
+-			BUFFER_TRACE(frame->bh, "get_write_access"); /* index root */
+-			err = ext3_journal_get_write_access(handle,
+-							     frames[0].bh);
++	}
++	/* Add "safe" node to transaction too */
++	if (safe + 1 != path->ip_frames) {
++		do_corr(schedule());
++		err = ext3_journal_get_write_access(handle, safe->bh);
++		if (err)
++			goto journal_error;
++	}
++
++	/* Go through nodes once more, inserting pointers */
++	for (frame = safe + 1, i = 0; i < nr_splet; ++i, ++frame) {
++		unsigned count;
++		int idx;
++		struct buffer_head *bh2;
++		struct buffer_head *bh;
++
++		entries = frame->entries;
++		count = dx_get_count(entries);
++		idx = iam_entry_diff(path, frame->at, entries);
++
++		bh2 = bh_new[i];
++		entries2 = dx_get_entries(path, bh2->b_data, 0);
++
++		bh = frame->bh;
++		if (frame == path->ip_frames) {
++			/* splitting root node. Tricky point:
++			 *
++			 * In the "normal" B-tree we'd split root *and* add
++			 * new root to the tree with pointers to the old root
++			 * and its sibling (thus introducing two new nodes).
++			 *
++			 * In htree it's enough to add one node, because
++			 * capacity of the root node is smaller than that of
++			 * non-root one.
++			 */
++			struct iam_frame *frames;
++			struct iam_entry *next;
++
++			assert_corr(i == 0);
++
++			do_corr(schedule());
++
++			frames = path->ip_frames;
++			memcpy((char *) entries2, (char *) entries,
++			       count * iam_entry_size(path));
++			dx_set_limit(entries2, dx_node_limit(path));
++
++			/* Set up root */
++  			dx_lock_bh(frame->bh);
++			next = descr->id_ops->id_root_inc(path->ip_container,
++							  path, frame);
++			dx_set_block(path, next, newblock[0]);
++  			dx_unlock_bh(frame->bh);
++
++			do_corr(schedule());
++			/* Shift frames in the path */
++			memmove(frames + 2, frames + 1,
++				(sizeof path->ip_frames) - 2 * sizeof frames[0]);
++			/* Add new access path frame */
++			frames[1].at = iam_entry_shift(path, entries2, idx);
++			frames[1].entries = entries = entries2;
++			frames[1].bh = bh2;
++			assert_inv(dx_node_check(path, frame));
++			++ path->ip_frame;
++			++ frame;
++			assert_inv(dx_node_check(path, frame));
++			bh_new[0] = NULL; /* buffer head is "consumed" */
++			err = ext3_journal_get_write_access(handle, bh2);
+ 			if (err)
+ 				goto journal_error;
++			do_corr(schedule());
++		} else {
++			/* splitting non-root index node. */
++			struct iam_frame *parent = frame - 1;
+ 
+-			memcpy ((char *) entries2, (char *) (entries + icount1),
+-				icount2 * sizeof(struct dx_entry));
+-			dx_set_count (entries, icount1);
+-			dx_set_count (entries2, icount2);
+-			dx_set_limit (entries2, dx_node_limit(dir));
+-
++			do_corr(schedule());
++			count = shift_entries(path, frame, count,
++					      entries, entries2, newblock[i]);
+ 			/* Which index block gets the new entry? */
+-			if (at - entries >= icount1) {
+-				frame->at = at = at - entries - icount1 + entries2;
++			if (idx >= count) {
++				int d = dx_index_is_compat(path) ? 0 : +1;
++
++				frame->at = iam_entry_shift(path, entries2,
++							    idx - count + d);
+ 				frame->entries = entries = entries2;
++				frame->curidx = newblock[i];
+ 				swap(frame->bh, bh2);
++				assert_corr(lock[i + 1] != NULL);
++				assert_corr(new_lock[i] != NULL);
++				swap(lock[i + 1], new_lock[i]);
++				bh_new[i] = bh2;
++				parent->at = iam_entry_shift(path,
++							     parent->at, +1);
+ 			}
+-			dx_insert_block (frames + 0, hash2, newblock);
+-			dxtrace(dx_show_index ("node", frames[1].entries));
++			assert_inv(dx_node_check(path, frame));
++			assert_inv(dx_node_check(path, parent));
++			dxtrace(dx_show_index ("node", frame->entries));
+ 			dxtrace(dx_show_index ("node",
+ 			       ((struct dx_node *) bh2->b_data)->entries));
+ 			err = ext3_journal_dirty_metadata(handle, bh2);
+ 			if (err)
+ 				goto journal_error;
+-			brelse (bh2);
+-		} else {
+-			dxtrace(printk("Creating second level index...\n"));
+-			memcpy((char *) entries2, (char *) entries,
+-			       icount * sizeof(struct dx_entry));
+-			dx_set_limit(entries2, dx_node_limit(dir));
+-
+-			/* Set up root */
+-			dx_set_count(entries, 1);
+-			dx_set_block(entries + 0, newblock);
+-			((struct dx_root *) frames[0].bh->b_data)->info.indirect_levels = 1;
+-
+-			/* Add new access path frame */
+-			frame = frames + 1;
+-			frame->at = at = at - entries + entries2;
+-			frame->entries = entries = entries2;
+-			frame->bh = bh2;
+-			err = ext3_journal_get_write_access(handle,
+-							     frame->bh);
++			do_corr(schedule());
++			err = ext3_journal_dirty_metadata(handle, parent->bh);
+ 			if (err)
+ 				goto journal_error;
+ 		}
+-		ext3_journal_dirty_metadata(handle, frames[0].bh);
++		do_corr(schedule());
++		err = ext3_journal_dirty_metadata(handle, bh);
++		if (err)
++			goto journal_error;
++	}
++		/*
++		 * This function was called to make insertion of new leaf
++		 * possible. Check that it fulfilled its obligations.
++		 */
++		assert_corr(dx_get_count(path->ip_frame->entries) <
++			    dx_get_limit(path->ip_frame->entries));
++	assert_corr(lock[nr_splet] != NULL);
++	*lh = lock[nr_splet];
++	lock[nr_splet] = NULL;
++	if (nr_splet > 0) {
++		/*
++		 * Log ->i_size modification.
++		 */
++		err = ext3_mark_inode_dirty(handle, dir);
++		if (err)
++			goto journal_error;
++	}
++	goto cleanup;
++journal_error:
++	ext3_std_error(dir->i_sb, err);
++
++cleanup:
++	dx_unlock_array(dir, lock);
++	dx_unlock_array(dir, new_lock);
++
++	assert_corr(err || iam_frame_is_locked(path, path->ip_frame));
++
++	do_corr(schedule());
++	for (i = 0; i < ARRAY_SIZE(bh_new); ++i) {
++		if (bh_new[i] != NULL)
++			brelse(bh_new[i]);
++	}
++	return err;
++}
++
++/*
++ * Returns 0 for success, or a negative error value
++ */
++static int ext3_dx_add_entry(handle_t *handle, struct dentry *dentry,
++			     struct inode *inode)
++{
++	struct iam_path_compat cpath;
++	struct iam_path *path = &cpath.ipc_path;
++	struct iam_descr *param;
++	struct iam_frame *frame;
++	struct dx_hash_info hinfo;
++	struct buffer_head * bh = NULL;
++	struct inode *dir = dentry->d_parent->d_inode;
++	struct ext3_dir_entry_2 *de;
++	struct dynlock_handle *dummy = NULL;
++	int err;
++	size_t isize;
++
++	iam_path_compat_init(&cpath, dir);
++	param = iam_path_descr(path);
++
++	err = dx_probe(&dentry->d_name, NULL, &hinfo, path);
++	if (err != 0)
++		return err;
++	frame = path->ip_frame;
++
++	isize = dir->i_size;
++
++	err = param->id_ops->id_node_read(path->ip_container,
++			(iam_ptr_t)dx_get_block(path, frame->at),
++				  handle, &bh);
++	if (err != 0)
++		goto cleanup;
++
++	BUFFER_TRACE(bh, "get_write_access");
++	err = ext3_journal_get_write_access(handle, bh);
++	if (err)
++		goto journal_error;
++
++	err = add_dirent_to_buf(handle, dentry, inode, NULL, bh);
++	if (err != -ENOSPC) {
++		bh = NULL;
++		goto cleanup;
+ 	}
+-	de = do_split(handle, dir, &bh, frame, &hinfo, &err);
++	
++	err = split_index_node(handle, path, &dummy);
++	if (err)
++		goto cleanup;	
++
++	/*copy split inode too*/
++	de = do_split(handle, path, &bh, path->ip_frame, &hinfo, &err);
+ 	if (!de)
+ 		goto cleanup;
++
++	assert_inv(dx_node_check(path, frame));
+ 	err = add_dirent_to_buf(handle, dentry, inode, de, bh);
+-	bh = NULL;
+-	goto cleanup;
++	goto cleanup2;
+ 
+ journal_error:
+ 	ext3_std_error(dir->i_sb, err);
+ cleanup:
+ 	if (bh)
+ 		brelse(bh);
+-	dx_release(frames);
++cleanup2:
++	dx_unlock_htree(dir, dummy);
++	if (err)
++		inode->i_size = isize;
++	iam_path_fini(path);
+ 	return err;
+ }
+ #endif
+@@ -1585,7 +2216,7 @@
+  * ext3_delete_entry deletes a directory entry by merging it with the
+  * previous entry
+  */
+-static int ext3_delete_entry (handle_t *handle, 
++static int ext3_delete_entry (handle_t *handle,
+ 			      struct inode * dir,
+ 			      struct ext3_dir_entry_2 * de_del,
+ 			      struct buffer_head * bh)
+@@ -1678,6 +2309,26 @@
+ 	return ext3_new_inode(handle, dir, mode, inum);
+ }
+ 
++struct inode *ext3_create_inode(handle_t *handle, struct inode * dir, int mode)
++{
++	struct inode *inode;
++
++	inode = ext3_new_inode(handle, dir, mode, 0);
++	if (!IS_ERR(inode)) {
++		if (S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode)) {
++#ifdef CONFIG_LDISKFS_FS_XATTR
++			inode->i_op = &ext3_special_inode_operations;
++#endif
++		} else {
++			inode->i_op = &ext3_file_inode_operations;
++			inode->i_fop = &ext3_file_operations;
++			ext3_set_aops(inode);
++		}
++	}
++	return inode;
++}
++EXPORT_SYMBOL(ext3_create_inode);
++
+ /*
+  * By the time this is called, we already have created
+  * the directory cache entry for the new file, but it
+@@ -1854,7 +2505,7 @@
+ 	de1 = (struct ext3_dir_entry_2 *)
+ 			((char *) de + le16_to_cpu(de->rec_len));
+ 	if (le32_to_cpu(de->inode) != inode->i_ino ||
+-			!le32_to_cpu(de1->inode) || 
++			!le32_to_cpu(de1->inode) ||
+ 			strcmp (".", de->name) ||
+ 			strcmp ("..", de1->name)) {
+ 	    	ext3_warning (inode->i_sb, "empty_dir",
+@@ -1924,7 +2575,7 @@
+ 	 * being truncated, or files being unlinked. */
+ 
+ 	/* @@@ FIXME: Observation from aviro:
+-	 * I think I can trigger J_ASSERT in ext3_orphan_add().  We block 
++	 * I think I can trigger J_ASSERT in ext3_orphan_add().  We block
+ 	 * here (on lock_super()), so race with ext3_link() which might bump
+ 	 * ->i_nlink. For, say it, character device. Not a regular file,
+ 	 * not a directory, not a symlink and ->i_nlink > 0.
+@@ -2450,4 +3101,4 @@
+ 	.removexattr	= generic_removexattr,
+ #endif
+ 	.permission	= ext3_permission,
+-}; 
++};
+Index: linux-stage/fs/ext3/ioctl.c
+===================================================================
+--- linux-stage.orig/fs/ext3/ioctl.c	2007-11-26 23:09:03.000000000 +0300
++++ linux-stage/fs/ext3/ioctl.c	2007-11-26 23:09:06.000000000 +0300
+@@ -16,6 +16,7 @@
+ #include <asm/uaccess.h>
+ #include <linux/namei.h>
+ 
++#include <linux/lustre_iam.h>
+ 
+ int ext3_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
+ 		unsigned long arg)
+@@ -275,6 +276,6 @@
+ 
+ 
+ 	default:
+-		return -ENOTTY;
++		return iam_uapi_ioctl(inode, filp, cmd, arg);
+ 	}
+ }
+Index: linux-stage/fs/ext3/file.c
+===================================================================
+--- linux-stage.orig/fs/ext3/file.c	2007-11-26 23:08:59.000000000 +0300
++++ linux-stage/fs/ext3/file.c	2007-11-26 23:09:06.000000000 +0300
+@@ -23,6 +23,7 @@
+ #include <linux/jbd.h>
+ #include <linux/ext3_fs.h>
+ #include <linux/ext3_jbd.h>
++#include <linux/lustre_iam.h>
+ #include "xattr.h"
+ #include "acl.h"
+ 
+@@ -41,8 +42,12 @@
+ 		ext3_discard_reservation(inode);
+ 		mutex_unlock(&EXT3_I(inode)->truncate_mutex);
+ 	}
+-	if (is_dx(inode) && filp->private_data)
+-		ext3_htree_free_dir_info(filp->private_data);
++	if (is_dx(inode) && filp->private_data) {
++		if (S_ISDIR(inode->i_mode))
++			ext3_htree_free_dir_info(filp->private_data);
++		else
++			ext3_iam_release(filp, inode);
++	}
+ 
+ 	return 0;
+ }
+Index: linux-stage/fs/ext3/hash.c
+===================================================================
+--- linux-stage.orig/fs/ext3/hash.c	2007-11-26 23:08:59.000000000 +0300
++++ linux-stage/fs/ext3/hash.c	2007-11-26 23:09:06.000000000 +0300
+@@ -4,7 +4,7 @@
+  * Copyright (C) 2002 by Theodore Ts'o
+  *
+  * This file is released under the GPL v2.
+- * 
++ *
+  * This file may be redistributed under the terms of the GNU Public
+  * License.
+  */
+@@ -49,6 +49,23 @@
+ 	return (hash0 << 1);
+ }
+ 
++static __u32 dx_r5_hash(const signed char *msg, int len)
++{
++	__u32 a = 0;
++	while (len--) {
++		a += *msg << 4;
++		a += *msg >> 4;
++		a *= 11;
++		msg++;
++	}
++	return a;
++}
++
++static __u32 dx_same_hash(const signed char *msg, int len)
++{
++	return 0xcafebabeUL;
++}
++
+ static void str2hashbuf(const char *msg, int len, __u32 *buf, int num)
+ {
+ 	__u32	pad, val;
+@@ -80,11 +97,11 @@
+  * Returns the hash of a filename.  If len is 0 and name is NULL, then
+  * this function can be used to test whether or not a hash version is
+  * supported.
+- * 
++ *
+  * The seed is an 4 longword (32 bits) "secret" which can be used to
+  * uniquify a hash.  If the seed is all zero's, then some default seed
+  * may be used.
+- * 
++ *
+  * A particular hash version specifies whether or not the seed is
+  * represented, and whether or not the returned hash is 32 bits or 64
+  * bits.  32 bit hashes will return 0 for the minor hash.
+@@ -139,6 +156,12 @@
+ 		hash = buf[0];
+ 		minor_hash = buf[1];
+ 		break;
++	case DX_HASH_R5:
++		hash = dx_r5_hash(name, len);
++		break;
++	case DX_HASH_SAME:
++		hash = dx_same_hash(name, len);
++		break;
+ 	default:
+ 		hinfo->hash = 0;
+ 		return -1;
+Index: linux-stage/fs/ext3/Makefile
+===================================================================
+--- linux-stage.orig/fs/ext3/Makefile	2007-11-26 23:09:05.000000000 +0300
++++ linux-stage/fs/ext3/Makefile	2007-11-26 23:09:06.000000000 +0300
+@@ -6,7 +6,7 @@
+ 
+ ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
+ 	   ioctl.o namei.o super.o symlink.o hash.o resize.o extents.o \
+-	   mballoc.o dynlocks.o
++	   mballoc.o dynlocks.o iam.o iam_lfix.o iam_lvar.o iam_htree.o iam_uapi.o
+ 
+ ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
+ ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
+Index: linux-stage/fs/ext3/dir.c
+===================================================================
+--- linux-stage.orig/fs/ext3/dir.c	2007-11-26 23:09:04.000000000 +0300
++++ linux-stage/fs/ext3/dir.c	2007-11-26 23:09:06.000000000 +0300
+@@ -28,6 +28,7 @@
+ #include <linux/smp_lock.h>
+ #include <linux/slab.h>
+ #include <linux/rbtree.h>
++#include <linux/lustre_iam.h>
+ 
+ static unsigned char ext3_filetype_table[] = {
+ 	DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK
+@@ -61,6 +62,7 @@
+ }
+ 			       
+ 
++#if EXT3_INVARIANT_ON
+ int ext3_check_dir_entry (const char * function, struct inode * dir,
+ 			  struct ext3_dir_entry_2 * de,
+ 			  struct buffer_head * bh,
+@@ -90,6 +92,7 @@
+ 			rlen, de->name_len);
+ 	return error_msg == NULL ? 1 : 0;
+ }
++#endif
+ 
+ static int ext3_readdir(struct file * filp,
+ 			 void * dirent, filldir_t filldir)
+@@ -304,12 +307,14 @@
+ 	root->rb_node = NULL;
+ }
+ 
++extern struct iam_private_info *ext3_iam_alloc_info(int flags);
++extern void ext3_iam_release_info(struct iam_private_info *info);
+ 
+ static struct dir_private_info *create_dir_info(loff_t pos)
+ {
+ 	struct dir_private_info *p;
+ 
+-	p = kmalloc(sizeof(struct dir_private_info), GFP_KERNEL);
++	p = (void *)ext3_iam_alloc_info(GFP_KERNEL);
+ 	if (!p)
+ 		return NULL;
+ 	p->root.rb_node = NULL;
+@@ -325,6 +330,7 @@
+ void ext3_htree_free_dir_info(struct dir_private_info *p)
+ {
+ 	free_rb_tree_fname(&p->root);
++	ext3_iam_release_info((void *)p);
+ 	kfree(p);
+ }
+ 
