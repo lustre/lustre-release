@@ -772,17 +772,9 @@ kiblnd_create_conn (kib_peer_t *peer, struct rdma_cm_id *cmid, int state)
         init_qp_attr->send_cq = cq;
         init_qp_attr->recv_cq = cq;
 
-        rc = 0;
         write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
         switch (*kiblnd_tunables.kib_ib_mtu) {
-        default:
-                rc = *kiblnd_tunables.kib_ib_mtu;
-                /* fall through to... */
-        case 0: /* set tunable to the default
-                 * CAVEAT EMPTOR! this assumes the default is one of the MTUs
-                 * below, otherwise we'll WARN on the next QP create */
-                *kiblnd_tunables.kib_ib_mtu =
-                        ib_mtu_enum_to_int(cmid->route.path_rec->mtu);
+        case 0: /* don't force path MTU */
                 break;
         case 256:
                 cmid->route.path_rec->mtu = IB_MTU_256;
@@ -799,13 +791,12 @@ kiblnd_create_conn (kib_peer_t *peer, struct rdma_cm_id *cmid, int state)
         case 4096:
                 cmid->route.path_rec->mtu = IB_MTU_4096;
                 break;
+        default:
+                LBUG();
+                break;
         }
         write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
-        if (rc != 0)
-                CWARN("Invalid IB MTU value %d, using default value %d\n",
-                      rc, *kiblnd_tunables.kib_ib_mtu);
-                                
         rc = rdma_create_qp(cmid, net->ibn_dev->ibd_pd, init_qp_attr);
         if (rc != 0) {
                 CERROR("Can't create QP: %d\n", rc);
@@ -1052,16 +1043,23 @@ kiblnd_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
                 break;
         }
         case IOC_LIBCFS_GET_CONN: {
-                kib_conn_t *conn = kiblnd_get_conn_by_idx(ni, data->ioc_count);
+                kib_conn_t *conn;
 
+                rc = 0;
+                conn = kiblnd_get_conn_by_idx(ni, data->ioc_count);
                 if (conn == NULL) {
                         rc = -ENOENT;
-                } else {
-                        // kiblnd_debug_conn(conn);
-                        rc = 0;
-                        data->ioc_nid = conn->ibc_peer->ibp_nid;
-                        kiblnd_conn_decref(conn);
+                        break;
                 }
+
+                LASSERT (conn->ibc_cmid != NULL);
+                data->ioc_nid = conn->ibc_peer->ibp_nid;
+                if (conn->ibc_cmid->route.path_rec == NULL)
+                        data->ioc_u32[0] = 0; /* iWarp has no path MTU */
+                else
+                        data->ioc_u32[0] =
+                        ib_mtu_enum_to_int(conn->ibc_cmid->route.path_rec->mtu);
+                kiblnd_conn_decref(conn);
                 break;
         }
         case IOC_LIBCFS_CLOSE_CONNECTION: {
@@ -1427,17 +1425,10 @@ out:
 int
 kiblnd_base_startup (void)
 {
-        int               rc;
-        int               i;
+        int i;
+        int rc;
 
         LASSERT (kiblnd_data.kib_init == IBLND_INIT_NOTHING);
-
-        if (*kiblnd_tunables.kib_credits > *kiblnd_tunables.kib_ntx) {
-                CERROR("Can't set credits(%d) > ntx(%d)\n",
-                       *kiblnd_tunables.kib_credits,
-                       *kiblnd_tunables.kib_ntx);
-                return -EINVAL;
-        }
 
         PORTAL_MODULE_USE;
         memset(&kiblnd_data, 0, sizeof(kiblnd_data)); /* zero pointers, flags etc */

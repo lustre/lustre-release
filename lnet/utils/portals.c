@@ -786,6 +786,10 @@ jt_ptl_print_connections (int argc, char **argv)
                         printf ("%-20s [%d]\n",
                                 libcfs_nid2str(data.ioc_nid),
                                 data.ioc_u32[0] /* device id */);
+                } else if (g_net_is_compatible (NULL, O2IBLND, 0)) {
+                        printf ("%s mtu %d\n",
+                                libcfs_nid2str(data.ioc_nid),
+                                data.ioc_u32[0]); /* path MTU */
                 } else {
                         printf ("%s\n", libcfs_nid2str(data.ioc_nid));
                 }

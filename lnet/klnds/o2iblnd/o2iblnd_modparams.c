@@ -351,7 +351,23 @@ kiblnd_sysctl_fini (void)
 int
 kiblnd_tunables_init (void)
 {
-        kiblnd_sysctl_init();
+        if (*kiblnd_tunables.kib_credits > *kiblnd_tunables.kib_ntx) {
+                CERROR("Can't set credits(%d) > ntx(%d)\n",
+                       *kiblnd_tunables.kib_credits,
+                       *kiblnd_tunables.kib_ntx);
+                return -EINVAL;
+        }
+
+        if (*kiblnd_tunables.kib_ib_mtu != 0 &&
+            *kiblnd_tunables.kib_ib_mtu != 256 &&
+            *kiblnd_tunables.kib_ib_mtu != 512 &&
+            *kiblnd_tunables.kib_ib_mtu != 1024 &&
+            *kiblnd_tunables.kib_ib_mtu != 2048 &&
+            *kiblnd_tunables.kib_ib_mtu != 4096) {
+                CERROR("Invalid ib_mtu %d, expected 256/512/1024/2048/4096\n",
+                       *kiblnd_tunables.kib_ib_mtu);
+                return -EINVAL;
+        }
 
         if (*kiblnd_tunables.kib_concurrent_sends > IBLND_RX_MSGS)
                 *kiblnd_tunables.kib_concurrent_sends = IBLND_RX_MSGS;
@@ -364,6 +380,7 @@ kiblnd_tunables_init (void)
                       *kiblnd_tunables.kib_concurrent_sends, IBLND_MSG_QUEUE_SIZE);
         }
 
+        kiblnd_sysctl_init();
         return 0;
 }
 
