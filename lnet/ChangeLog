@@ -18,6 +18,12 @@ Description:
 Details    :
 
 Severity   : minor
+Bugzilla   : 11245
+Description: IB path MTU mistakenly set to 1st path MTU when ib_mtu is off
+Details    : See comment 46 in bug 11245 for details - it's indeed a bug
+             introduced by the original 11245 fix.
+
+Severity   : minor
 Bugzilla   : 15984
 Description: uptllnd credit overflow fix
 Details    : kptl_msg_t::ptlm_credits could be overflown by uptllnd since
