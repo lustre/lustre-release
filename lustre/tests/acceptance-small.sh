@@ -61,7 +61,7 @@ setup_if_needed() {
     local MOUNTED=$(mounted_lustre_filesystems)
     if $(echo $MOUNTED | grep -w -q $MOUNT); then
         check_config $MOUNT
-        init_versions_vars
+        init_param_vars
         return
     fi
 
