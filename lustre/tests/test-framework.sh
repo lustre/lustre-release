@@ -602,6 +602,34 @@ cleanup_check() {
     return 0
 }
 
+wait_update () {
+    local node=$1
+    local TEST=$2
+    local FINAL=$3
+    local MAX=${4:-90}
+
+        local RESULT
+        local WAIT=0
+        local sleep=5
+        while [ $WAIT -lt $MAX ]; do
+            sleep $sleep
+            RESULT=$(do_node $node "$TEST")
+            if [ $RESULT -eq $FINAL ]; then
+                echo "Updated after $WAIT sec: wanted $FINAL got $RESULT"
+                return 0
+            fi
+            WAIT=$((WAIT + sleep))
+            echo "Waiting $((MAX - WAIT)) secs for update"
+        done
+        echo "Update not seen after $MAX sec: wanted $FINAL got $RESULT"
+        return 3
+}
+
+wait_update_facet () {
+    local facet=$1
+    wait_update  $(facet_host $facet) $@
+}
+
 wait_delete_completed () {
     local TOTALPREV=`lctl get_param -n osc.*.kbytesavail | \
                      awk 'BEGIN{total=0}; {total+=$1}; END{print total}'`
@@ -621,14 +649,14 @@ wait_delete_completed () {
 }
 
 wait_for_host() {
-    HOST=$1
+    local HOST=$1
     check_network "$HOST" 900
     while ! do_node $HOST "ls -d $LUSTRE " > /dev/null; do sleep 5; done
 }
 
 wait_for() {
-    facet=$1
-    HOST=`facet_active_host $facet`
+    local facet=$1
+    local HOST=`facet_active_host $facet`
     wait_for_host $HOST
 }
 
@@ -637,8 +665,8 @@ wait_mds_recovery_done () {
 #define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 / 2)
 # as we are in process of changing obd_timeout in different ways
 # let's set MAX longer than that
-    MAX=$(( timeout * 4 ))
-    WAIT=0
+    local MAX=$(( timeout * 4 ))
+    local WAIT=0
     while [ $WAIT -lt $MAX ]; do
         STATUS=`do_facet mds "lctl get_param -n mds.*-MDT*.recovery_status | grep status"`
         echo $STATUS | grep COMPLETE && return 0
@@ -725,8 +753,8 @@ client_reconnect() {
 }
 
 facet_failover() {
-    facet=$1
-    sleep_time=$2
+    local facet=$1
+    local sleep_time=$2
     echo "Failing $facet on node `facet_active_host $facet`"
     shutdown_facet $facet
     [ -n "$sleep_time" ] && sleep $sleep_time
@@ -1068,16 +1096,6 @@ remount_client()
 	zconf_mount `hostname` $1 || error "mount failed"
 }
 
-set_obd_timeout() {
-    local facet=$1
-    local timeout=$2
-
-    do_facet $facet lsmod | grep -q obdclass || \
-        do_facet $facet "modprobe obdclass"
-
-    do_facet $facet "lctl set_param timeout=$timeout"
-}
-
 writeconf_facet () {
     local facet=$1
     local dev=$2
@@ -1102,7 +1120,6 @@ setupall() {
         echo $WRITECONF | grep -q "writeconf" && \
             writeconf_all
 
-        set_obd_timeout mds $TIMEOUT
         start mds $MDSDEV $MDS_MOUNT_OPTS
         # We started mds, now we should set failover variable properly.
         # Set mdsfailover_HOST if it is not set (the default failnode).
@@ -1110,7 +1127,6 @@ setupall() {
 
         for num in `seq $OSTCOUNT`; do
             DEVNAME=`ostdevname $num`
-            set_obd_timeout ost$num $TIMEOUT
             start ost$num $DEVNAME $OST_MOUNT_OPTS
 
             # We started ost$num, now we should set ost${num}failover variable properly.
@@ -1131,7 +1147,7 @@ setupall() {
         [ -n "$CLIENTS" ] && zconf_mount_clients $CLIENTS $MOUNT2
     fi
     sleep 5
-    init_versions_vars
+    init_param_vars
 }
 
 mounted_lustre_filesystems() {
@@ -1169,10 +1185,13 @@ init_facets_vars () {
     done
 }
 
-init_versions_vars () {
+init_param_vars () {
     export MDSVER=$(do_facet mds "lctl get_param version" | cut -d. -f1,2)
     export OSTVER=$(do_facet ost1 "lctl get_param version" | cut -d. -f1,2)
     export CLIVER=$(lctl get_param version | cut -d. -f 1,2)
+
+    TIMEOUT=$(do_facet mds "lctl get_param -n timeout")
+    log "Using TIMEOUT=$TIMEOUT"
 }
 
 check_config () {
@@ -1193,6 +1212,16 @@ check_config () {
     fi
 }
 
+check_timeout () {
+    local mdstimeout=$(do_facet mds "lctl get_param -n timeout")
+    local cltimeout=$(lctl get_param -n timeout)
+    echo $timeout
+    if [ $mdstimeout -ne $TIMEOUT ] || [ $mdstimeout -ne $cltimeout ]; then
+        error "timeouts are wrong! mds: $mdstimeout, client: $cltimeout, TIMEOUT=$TIMEOUT"
+        return 1
+    fi
+}
+
 check_and_setup_lustre() {
     local MOUNTED=$(mounted_lustre_filesystems)
     if [ -z "$MOUNTED" ] || ! $(echo $MOUNTED | grep -w -q $MOUNT); then
@@ -1204,7 +1233,7 @@ check_and_setup_lustre() {
     else
         check_config $MOUNT
         init_facets_vars
-        init_versions_vars
+        init_param_vars
     fi
     if [ "$ONLY" == "setup" ]; then
         exit 0
