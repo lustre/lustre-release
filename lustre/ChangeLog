@@ -31,6 +31,12 @@ tbd Sun Microsystems, Inc.
 	  of Lustre filesystem with 4K stack may cause a stack overflow. For
 	  more information, please refer to bugzilla 17630.
 
+Severity   : normal
+Frequency  : rare, connect and disconnect target at same time
+Bugzilla   : 17310
+Descriptoin: ASSERTION(atomic_read(&imp->imp_inflight) == 0
+Details    :  don't call obd_disconnect under lov_lock. this long time
+	      operation and can block ptlrpcd which answer to connect request.
 
 Severity   : enhancement
 Bugzilla   : 18061
