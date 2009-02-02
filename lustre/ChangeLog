@@ -928,6 +928,12 @@ Details    : In case of memory pressure, list_del() can be called twice on
 
 -------------------------------------------------------------------------------
 
+Severity   : normal
+Frequency  : rare, connect and disconnect target at same time
+Bugzilla   : 17310
+Descriptoin: ASSERTION(atomic_read(&imp->imp_inflight) == 0
+Details    : don't call obd_disconnect under lov_lock. this long time
+	      operation and can block ptlrpcd which answer to connect request.
 
 2008-05-26  Sun Microsystems, Inc.
        * version 1.6.5
