@@ -635,7 +635,6 @@ extern ldlm_mode_t ll_take_md_lock(struct inode *inode, __u64 bits,
                                    struct lustre_handle *lockh);
 int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
-int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
 int ll_glimpse_ioctl(struct ll_sb_info *sbi,
                      struct lov_stripe_md *lsm, lstat_t *st);
 int ll_local_open(struct file *file,

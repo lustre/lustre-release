@@ -696,15 +696,14 @@ out_openerr:
         return rc;
 }
 
-/* Fills the obdo with the attributes for the inode defined by lsm */
-int ll_inode_getattr(struct inode *inode, struct obdo *obdo)
+/* Fills the obdo with the attributes for the lsm */
+static int ll_lsm_getattr(struct lov_stripe_md *lsm, struct obd_export *exp,
+                          struct obd_capa *capa, struct obdo *obdo)
 {
         struct ptlrpc_request_set *set;
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct lov_stripe_md *lsm = lli->lli_smd;
+        struct obd_info            oinfo = { { { 0 } } };
+        int                        rc;
 
-        struct obd_info oinfo = { { { 0 } } };
-        int rc;
         ENTRY;
 
         LASSERT(lsm != NULL);
@@ -719,32 +718,44 @@ int ll_inode_getattr(struct inode *inode, struct obdo *obdo)
                                OBD_MD_FLBLKSZ | OBD_MD_FLATIME |
                                OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                                OBD_MD_FLGROUP;
-        oinfo.oi_capa = ll_mdscapa_get(inode);
+        oinfo.oi_capa = capa;
 
         set = ptlrpc_prep_set();
         if (set == NULL) {
                 CERROR("can't allocate ptlrpc set\n");
                 rc = -ENOMEM;
         } else {
-                rc = obd_getattr_async(ll_i2dtexp(inode), &oinfo, set);
+                rc = obd_getattr_async(exp, &oinfo, set);
                 if (rc == 0)
                         rc = ptlrpc_set_wait(set);
                 ptlrpc_set_destroy(set);
         }
-        capa_put(oinfo.oi_capa);
-        if (rc)
-                RETURN(rc);
+        if (rc == 0)
+                oinfo.oi_oa->o_valid &= (OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ |
+                                         OBD_MD_FLATIME | OBD_MD_FLMTIME |
+                                         OBD_MD_FLCTIME | OBD_MD_FLSIZE);
+        RETURN(rc);
+}
 
-        oinfo.oi_oa->o_valid &= (OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ |
-                                 OBD_MD_FLATIME | OBD_MD_FLMTIME |
-                                 OBD_MD_FLCTIME | OBD_MD_FLSIZE);
+/* Fills the obdo with the attributes for the inode defined by lsm */
+int ll_inode_getattr(struct inode *inode, struct obdo *obdo)
+{
+        struct ll_inode_info *lli  = ll_i2info(inode);
+        struct obd_capa      *capa = ll_mdscapa_get(inode);
+        int rc;
+        ENTRY;
 
-        obdo_refresh_inode(inode, oinfo.oi_oa, oinfo.oi_oa->o_valid);
-        CDEBUG(D_INODE, "objid "LPX64" size %Lu, blocks %llu, blksize %lu\n",
-               lli->lli_smd->lsm_object_id, i_size_read(inode),
-               (unsigned long long)inode->i_blocks,
-               (unsigned long)ll_inode_blksize(inode));
-        RETURN(0);
+        rc = ll_lsm_getattr(lli->lli_smd, ll_i2dtexp(inode), capa, obdo);
+        capa_put(capa);
+        if (rc == 0) {
+                obdo_refresh_inode(inode, obdo, obdo->o_valid);
+                CDEBUG(D_INODE,
+                       "objid "LPX64" size %Lu, blocks %llu, blksize %lu\n",
+                       lli->lli_smd->lsm_object_id, i_size_read(inode),
+                       (unsigned long long)inode->i_blocks,
+                       (unsigned long)ll_inode_blksize(inode));
+        }
+        RETURN(rc);
 }
 
 int ll_merge_lvb(struct inode *inode)
@@ -773,8 +784,18 @@ int ll_merge_lvb(struct inode *inode)
 int ll_glimpse_ioctl(struct ll_sb_info *sbi, struct lov_stripe_md *lsm,
                      lstat_t *st)
 {
-        /* XXX */
-        return -ENOSYS;
+        struct obdo obdo = { 0 };
+        int rc;
+
+        rc = ll_lsm_getattr(lsm, sbi->ll_dt_exp, NULL, &obdo);
+        if (rc == 0) {
+                st->st_size   = obdo.o_size;
+                st->st_blocks = obdo.o_blocks;
+                st->st_mtime  = obdo.o_mtime;
+                st->st_atime  = obdo.o_atime;
+                st->st_ctime  = obdo.o_ctime;
+        }
+        return rc;
 }
 
 void ll_io_init(struct cl_io *io, const struct file *file, int write)
