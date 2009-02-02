@@ -98,6 +98,16 @@ Details    : MSG_CONNECT_INITIAL is not set on the initial MDS->OST connect.
 	     and the MDS export cannot be reused on the OSTs until it gets
 	     evicted.
 
+Severity   : major
+Frequency  : rare, only if using MMP with Linux RAID
+Bugzilla   : 17895
+Description: MMP doesn't work with Linux RAID
+Details    : While using HA for Lustre servers with Linux RAID, it is possible
+	     that MMP will not detect multiple mounts. To make this work we
+	     need to unplug the device queue in RAID when the MMP block is being
+	     written. Also while reading the MMP block, we should read it from
+	     disk and not the cached one.
+
 --------------------------------------------------------------------------
 2009-01-15 Sun Microsystems, Inc.
 	* version 1.6.7
