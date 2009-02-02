@@ -829,6 +829,15 @@ Bugzilla   : 18016
 Description: Slow reads beyond 8Tb offsets.
 Details    : Page index integer overflow in ll_read_ahead_page
 
+Severity   : major
+Frequency  : rare, only if using MMP with Linux RAID
+Bugzilla   : 17895
+Description: MMP doesn't work with Linux RAID
+Details    : While using HA for Lustre servers with Linux RAID, it is possible
+	     that MMP will not detect multiple mounts. To make this work we
+	     need to unplug the device queue in RAID when the MMP block is being
+	     written. Also while reading the MMP block, we should read it from
+	     disk and not the cached one.
 
 -------------------------------------------------------------------------------
 

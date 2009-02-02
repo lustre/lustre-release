@@ -20,7 +20,7 @@ Index: linux-2.6.9-67.0.22/fs/ext3/super.c
  	if (sbi->s_dev_proc) {
  		remove_proc_entry(sbi->s_dev_proc->name, proc_root_ext3);
  		sbi->s_dev_proc = NULL;
-@@ -1430,6 +1434,314 @@ static unsigned long descriptor_loc(stru
+@@ -1441,6 +1445,330 @@ static unsigned long descriptor_loc(stru
  	return (first_data_block + has_super + (bg * sbi->s_blocks_per_group));
  }
  
@@ -54,9 +54,25 @@ Index: linux-2.6.9-67.0.22/fs/ext3/super.c
 +	if (*bh)
 +		clear_buffer_uptodate(*bh);
 +
++#if 0
 +	brelse(*bh);
 +
 +	*bh = sb_bread(sb, mmp_block);
++#else
++	if (!*bh)
++		*bh = sb_getblk(sb, mmp_block);
++	if (*bh) {
++		get_bh(*bh);
++		lock_buffer(*bh);
++		(*bh)->b_end_io = end_buffer_read_sync;
++		submit_bh(READ_SYNC, *bh);
++		wait_on_buffer(*bh);
++		if (!buffer_uptodate(*bh)) {
++			brelse(*bh);
++			*bh = NULL;
++		}
++	}
++#endif
 +	if (!*bh) {
 +		ext3_warning(sb, __FUNCTION__,
 +			     "Error while reading MMP block %lu", mmp_block);
@@ -335,7 +351,7 @@ Index: linux-2.6.9-67.0.22/fs/ext3/super.c
  
  static int ext3_fill_super (struct super_block *sb, void *data, int silent)
  {
-@@ -1754,6 +2066,11 @@ static int ext3_fill_super (struct super
+@@ -1765,6 +2093,11 @@ static int ext3_fill_super (struct super
  			  EXT3_HAS_INCOMPAT_FEATURE(sb,
  				    EXT3_FEATURE_INCOMPAT_RECOVER));
  
@@ -347,7 +363,7 @@ Index: linux-2.6.9-67.0.22/fs/ext3/super.c
  	/*
  	 * The first inode we look at is the journal inode.  Don't try
  	 * root first: it may be modified in the journal!
-@@ -1879,6 +2196,8 @@ static int ext3_fill_super (struct super
+@@ -1890,6 +2223,8 @@ static int ext3_fill_super (struct super
  failed_mount3:
  	journal_destroy(sbi->s_journal);
  failed_mount2:
@@ -356,7 +372,7 @@ Index: linux-2.6.9-67.0.22/fs/ext3/super.c
  	for (i = 0; i < db_count; i++)
  		brelse(sbi->s_group_desc[i]);
  	kfree(sbi->s_group_desc);
-@@ -2404,6 +2723,11 @@ int ext3_remount (struct super_block * s
+@@ -2415,6 +2750,11 @@ int ext3_remount (struct super_block * s
  				return ret;
  			if (!ext3_setup_super (sb, es, 0))
  				sb->s_flags &= ~MS_RDONLY;
