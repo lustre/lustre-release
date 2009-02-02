@@ -14,6 +14,13 @@ tbd  Sun Microsystems, Inc.
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
 Severity   : normal
+Frequency  : rare, connect and disconnect target at same time
+Bugzilla   : 17310
+Descriptoin: ASSERTION(atomic_read(&imp->imp_inflight) == 0
+Details    : don't call obd_disconnect under lov_lock. this long time
+	      operation and can block ptlrpcd which answer to connect request.
+
+Severity   : normal
 Frequency  : rare
 Bugzilla   : 18154
 Descriptoin: don't lose wakeup for imp_recovery_waitq

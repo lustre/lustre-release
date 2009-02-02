@@ -318,16 +318,6 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                         }
 
                         if (atomic_read(&imp->imp_unregistering) == 0) {
-                                /* XXX: This is temporary workaround for long 
-                                 * connect interpret due to locking in lov in 
-                                 * in import activation path, which causes
-                                 * connect rpc stay on sending list longer
-                                 * time. Let's wait longer insread of asserting
-                                 * here.
-                                 *
-                                 * Activation should not be blocking. Kill
-                                 * this #if 0 when activation code is fixed. */
-#if 0
                                 /* We know that only "unregistering" rpcs may
                                  * still survive in sending or delaying lists
                                  * (They are waiting for long reply unlink in
@@ -340,7 +330,6 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                                  * dropped to zero. No new inflights possible at
                                  * this point. */
                                 rc = 0;
-#endif
                         } else {
                                 CERROR("%s: RPCs in \"%s\" phase found (%d). "
                                        "Network is sluggish? Waiting them "
