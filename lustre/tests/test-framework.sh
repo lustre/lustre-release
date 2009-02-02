@@ -1216,7 +1216,6 @@ check_config () {
 check_timeout () {
     local mdstimeout=$(do_facet mds "lctl get_param -n timeout")
     local cltimeout=$(lctl get_param -n timeout)
-    echo $timeout
     if [ $mdstimeout -ne $TIMEOUT ] || [ $mdstimeout -ne $cltimeout ]; then
         error "timeouts are wrong! mds: $mdstimeout, client: $cltimeout, TIMEOUT=$TIMEOUT"
         return 1
