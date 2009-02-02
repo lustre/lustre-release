@@ -16,3 +16,4 @@ proc-sleep-2.6.16-sles10.patch
 export-nr_free_buffer_pages.patch 
 fmode-exec-2.6-sles10.patch
 quota-large-limits-sles10.patch
+md-mmp-unplug-dev-sles10.patch
