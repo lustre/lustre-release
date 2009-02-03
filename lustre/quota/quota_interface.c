@@ -388,7 +388,7 @@ static int quota_chk_acq_common(struct obd_device *obd, unsigned int uid,
 
                 /* please reference to dqacq_completion for the below */
                 /* a new request is finished, try again */
-                if (rc == -EAGAIN) {
+                if (rc == QUOTA_REQ_RETURNED) {
                         CDEBUG(D_QUOTA, "finish a quota req, try again\n");
                         continue;
                 }

@@ -627,8 +627,11 @@ out:
 
         compute_lqs_after_removing_qunit(qunit);
 
-        /* wake up all waiters */
+
+        if (rc == 0)
+                rc = QUOTA_REQ_RETURNED;
         QUNIT_SET_STATE_AND_RC(qunit, QUNIT_FINISHED, rc);
+        /* wake up all waiters */
         wake_up(&qunit->lq_waitq);
 
         /* this is for dqacq_in_flight() */
@@ -655,7 +658,7 @@ out:
                  CERROR("adjust slave's qunit size failed!(rc:%d)\n", rc1);
                  RETURN(rc1);
          }
-         if (err || (rc && rc != -EBUSY && rc1 == 0) ||
+         if (err || (rc < 0 && rc != -EBUSY && rc1 == 0) ||
              is_master(obd, qctxt, qdata->qd_id, QDATA_IS_GRP(qdata)))
                 RETURN(err);
 
@@ -972,16 +975,14 @@ wait_completion:
 
                 QDATA_DEBUG(p, "qunit(%p) is waiting for dqacq.\n", qunit);
                 l_wait_event(qunit->lq_waitq, got_qunit(qunit), &lwi);
-                /* rc = -EAGAIN, it means a quota req is finished;
+                /* rc = -EAGAIN, it means the quota master isn't ready yet
+                 * rc = QUOTA_REQ_RETURNED, it means a quota req is finished;
                  * rc = -EDQUOT, it means out of quota
                  * rc = -EBUSY, it means recovery is happening
                  * other rc < 0, it means real errors, functions who call
                  * schedule_dqacq should take care of this */
                 spin_lock(&qunit->lq_lock);
-                if (qunit->lq_rc == 0)
-                        rc = -EAGAIN;
-                else
-                        rc = qunit->lq_rc;
+                rc = qunit->lq_rc;
                 spin_unlock(&qunit->lq_lock);
                 CDEBUG(D_QUOTA, "qunit(%p) finishes waiting. (rc:%d)\n",
                        qunit, rc);
@@ -1077,10 +1078,7 @@ qctxt_wait_pending_dqacq(struct lustre_quota_ctxt *qctxt, unsigned int id,
                        qunit, qunit->lq_rc);
                 /* keep same as schedule_dqacq() b=17030 */
                 spin_lock(&qunit->lq_lock);
-                if (qunit->lq_rc == 0)
-                        rc = -EAGAIN;
-                else
-                        rc = qunit->lq_rc;
+                rc = qunit->lq_rc;
                 spin_unlock(&qunit->lq_lock);
                 /* this is for dqacq_in_flight() */
                 qunit_put(qunit);
