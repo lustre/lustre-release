@@ -5948,6 +5948,19 @@ err17935 () {
     fi
 }
 
+test_154() {
+	cp /etc/hosts $DIR/$tfile
+
+	fid=`$LFS path2fid $DIR/$tfile`
+	rc=$?
+	[ $rc -ne 0 ] && error "error: could not get fid for $DIR/$tfile."
+
+	diff $DIR/$tfile $DIR/.lustre/fid/$fid || error "open by fid failed: did not find expected data in file."
+
+	echo "Opening a file by FID succeeded"
+}
+run_test 154 "Opening a file by FID"
+
 #Changelogs
 test_160() {
     remote_mds && skip "remote MDS" && return

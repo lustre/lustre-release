@@ -60,12 +60,16 @@
 #include <lustre/lustre_idl.h>
 #include <lustre_disk.h>      /* for changelogs */
 #include <lustre_param.h>
+#include <lustre_fid.h>
 
 #include "mdd_internal.h"
 
 const struct md_device_operations mdd_ops;
+static struct lu_device_type mdd_device_type;
 
 static const char mdd_root_dir_name[] = "ROOT";
+static const char mdd_obf_dir_name[] = "fid";
+static const char mdd_dot_lustre_name[] = ".lustre";
 
 static int mdd_device_init(const struct lu_env *env, struct lu_device *d,
                            const char *name, struct lu_device *next)
@@ -112,6 +116,8 @@ static void mdd_device_shutdown(const struct lu_env *env,
         ENTRY;
         mdd_changelog_fini(env, m);
         dt_txn_callback_del(m->mdd_child, &m->mdd_txn_cb);
+        mdd_object_put(env, m->mdd_dot_lustre_objs.mdd_obf);
+        mdd_object_put(env, m->mdd_dot_lustre);
         if (m->mdd_obd_dev)
                 mdd_fini_obd(env, m, cfg);
         orph_index_fini(env, m);
@@ -300,6 +306,369 @@ int mdd_changelog_write_header(struct mdd_device *mdd, int markerflags)
         RETURN(rc);
 }
 
+/**
+ * Create ".lustre" directory.
+ */
+static int create_dot_lustre_dir(const struct lu_env *env, struct mdd_device *m)
+{
+        struct lu_fid *fid = &mdd_env_info(env)->mti_fid;
+        struct md_object *mdo;
+        int rc;
+
+        memcpy(fid, &LU_DOT_LUSTRE_FID, sizeof(struct lu_fid));
+        mdo = llo_store_create_index(env, &m->mdd_md_dev, m->mdd_child,
+                                     mdd_root_dir_name, mdd_dot_lustre_name,
+                                     fid, &dt_directory_features);
+        /* .lustre dir may be already present */
+        if (IS_ERR(mdo) && PTR_ERR(mdo) != -EEXIST) {
+                rc = PTR_ERR(mdo);
+                CERROR("creating obj [%s] fid = "DFID" rc = %d\n",
+                        mdd_dot_lustre_name, PFID(fid), rc);
+                RETURN(rc);
+        }
+
+        return 0;
+}
+
+static int dot_lustre_attr_get(const struct lu_env *env, struct md_object *obj,
+                               struct md_attr *ma)
+{
+        struct mdd_object *mdd_obj = md2mdd_obj(obj);
+
+        return mdd_attr_get_internal_locked(env, mdd_obj, ma);
+}
+
+static int dot_lustre_attr_set(const struct lu_env *env, struct md_object *obj,
+                               const struct md_attr *ma)
+{
+        return -EPERM;
+}
+
+static int dot_lustre_xattr_get(const struct lu_env *env,
+                                struct md_object *obj, struct lu_buf *buf,
+                                const char *name)
+{
+        return 0;
+}
+
+/**
+ * Direct access to the ".lustre" directory is not allowed.
+ */
+static int dot_lustre_mdd_open(const struct lu_env *env, struct md_object *obj,
+                               int flags)
+{
+        return -EPERM;
+}
+
+static int dot_lustre_path(const struct lu_env *env, struct md_object *obj,
+                           char *path, int pathlen, __u64 recno, int *linkno)
+{
+        return -ENOSYS;
+}
+
+static struct md_object_operations mdd_dot_lustre_obj_ops = {
+        .moo_attr_get   = dot_lustre_attr_get,
+        .moo_attr_set   = dot_lustre_attr_set,
+        .moo_xattr_get  = dot_lustre_xattr_get,
+        .moo_open       = dot_lustre_mdd_open,
+        .moo_path       = dot_lustre_path
+};
+
+static int dot_lustre_lookup(const struct lu_env *env, struct md_object *p,
+                             const struct lu_name *lname, struct lu_fid *f,
+                             struct md_op_spec *spec)
+{
+        if (strcmp(lname->ln_name, mdd_obf_dir_name) == 0)
+                *f = LU_OBF_FID;
+        else
+                return -ENOENT;
+
+        return 0;
+}
+
+static int dot_lustre_create(const struct lu_env *env, struct md_object *pobj,
+                             const struct lu_name *lname,
+                             struct md_object *child, struct md_op_spec *spec,
+                             struct md_attr* ma)
+{
+        return -EPERM;
+}
+
+static int dot_lustre_rename(const struct lu_env *env,
+                             struct md_object *src_pobj,
+                             struct md_object *tgt_pobj,
+                             const struct lu_fid *lf,
+                             const struct lu_name *lsname,
+                             struct md_object *tobj,
+                             const struct lu_name *ltname, struct md_attr *ma)
+{
+        return -EPERM;
+}
+
+static int dot_lustre_link(const struct lu_env *env, struct md_object *tgt_obj,
+                           struct md_object *src_obj,
+                           const struct lu_name *lname, struct md_attr *ma)
+{
+        return -EPERM;
+}
+
+static int dot_lustre_unlink(const struct lu_env *env, struct md_object *pobj,
+                             struct md_object *cobj, const struct lu_name *lname,
+                             struct md_attr *ma)
+{
+        return -EPERM;
+}
+
+static struct md_dir_operations mdd_dot_lustre_dir_ops = {
+        .mdo_lookup = dot_lustre_lookup,
+        .mdo_create = dot_lustre_create,
+        .mdo_rename = dot_lustre_rename,
+        .mdo_link   = dot_lustre_link,
+        .mdo_unlink = dot_lustre_unlink,
+};
+
+static int obf_attr_get(const struct lu_env *env, struct md_object *obj,
+                        struct md_attr *ma)
+{
+        int rc = 0;
+
+        if (ma->ma_need & MA_INODE) {
+                struct mdd_device *mdd = mdo2mdd(obj);
+
+                /* "fid" is a virtual object and hence does not have any "real"
+                 * attributes. So we reuse attributes of .lustre for "fid" dir */
+                ma->ma_need |= MA_INODE;
+                rc = dot_lustre_attr_get(env, &mdd->mdd_dot_lustre->mod_obj, ma);
+                if (rc)
+                        return rc;
+                ma->ma_valid |= MA_INODE;
+        }
+
+        /* "fid" directory does not have any striping information. */
+        if (ma->ma_need & MA_LOV) {
+                struct mdd_object *mdd_obj = md2mdd_obj(obj);
+
+                if (ma->ma_valid & MA_LOV)
+                        return 0;
+
+                if (!(S_ISREG(mdd_object_type(mdd_obj)) ||
+                      S_ISDIR(mdd_object_type(mdd_obj))))
+                        return 0;
+
+                if (ma->ma_need & MA_LOV_DEF) {
+                        rc = mdd_get_default_md(mdd_obj, ma->ma_lmm,
+                                        &ma->ma_lmm_size);
+                        if (rc > 0) {
+                                ma->ma_valid |= MA_LOV;
+                                rc = 0;
+                        }
+                }
+        }
+
+        return rc;
+}
+
+static int obf_attr_set(const struct lu_env *env, struct md_object *obj,
+                        const struct md_attr *ma)
+{
+        return -EPERM;
+}
+
+static int obf_xattr_get(const struct lu_env *env,
+                         struct md_object *obj, struct lu_buf *buf,
+                         const char *name)
+{
+        return 0;
+}
+
+static int obf_mdd_open(const struct lu_env *env, struct md_object *obj,
+                        int flags)
+{
+        struct mdd_object *mdd_obj = md2mdd_obj(obj);
+
+        mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
+        mdd_obj->mod_count++;
+        mdd_write_unlock(env, mdd_obj);
+
+        return 0;
+}
+
+static int obf_mdd_close(const struct lu_env *env, struct md_object *obj,
+                         struct md_attr *ma)
+{
+        struct mdd_object *mdd_obj = md2mdd_obj(obj);
+
+        mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
+        mdd_obj->mod_count--;
+        mdd_write_unlock(env, mdd_obj);
+
+        return 0;
+}
+
+/** Nothing to list in "fid" directory */
+static int obf_mdd_readpage(const struct lu_env *env, struct md_object *obj,
+                            const struct lu_rdpg *rdpg)
+{
+        return -EPERM;
+}
+
+static int obf_path(const struct lu_env *env, struct md_object *obj,
+                    char *path, int pathlen, __u64 recno, int *linkno)
+{
+        return -ENOSYS;
+}
+
+static struct md_object_operations mdd_obf_obj_ops = {
+        .moo_attr_get   = obf_attr_get,
+        .moo_attr_set   = obf_attr_set,
+        .moo_xattr_get  = obf_xattr_get,
+        .moo_open       = obf_mdd_open,
+        .moo_close      = obf_mdd_close,
+        .moo_readpage   = obf_mdd_readpage,
+        .moo_path       = obf_path
+};
+
+/**
+ * Lookup method for "fid" object. Only filenames with correct SEQ:OID format
+ * are valid. We also check if object with passed fid exists or not.
+ */
+static int obf_lookup(const struct lu_env *env, struct md_object *p,
+                      const struct lu_name *lname, struct lu_fid *f,
+                      struct md_op_spec *spec)
+{
+        char *name = (char *)lname->ln_name;
+        struct mdd_device *mdd = mdo2mdd(p);
+        struct mdd_object *child;
+        int rc = 0;
+
+        while (*name == '[')
+                name++;
+
+        sscanf(name, SFID, &(f->f_seq), &(f->f_oid),
+               &(f->f_ver));
+        if (!fid_is_sane(f)) {
+                CWARN("bad FID format [%s], should be "DFID"\n", lname->ln_name,
+                      (__u64)1, 2, 0);
+                GOTO(out, rc = -EINVAL);
+        }
+
+        /* Check if object with this fid exists */
+        child = mdd_object_find(env, mdd, f);
+        if (child == NULL)
+                GOTO(out, rc = 0);
+        if (IS_ERR(child))
+                GOTO(out, rc = PTR_ERR(child));
+
+        if (mdd_object_exists(child) == 0)
+                rc = -ENOENT;
+
+        mdd_object_put(env, child);
+
+out:
+        return rc;
+}
+
+static int obf_create(const struct lu_env *env, struct md_object *pobj,
+                      const struct lu_name *lname, struct md_object *child,
+                      struct md_op_spec *spec, struct md_attr* ma)
+{
+        return -EPERM;
+}
+
+static int obf_rename(const struct lu_env *env,
+                      struct md_object *src_pobj, struct md_object *tgt_pobj,
+                      const struct lu_fid *lf, const struct lu_name *lsname,
+                      struct md_object *tobj, const struct lu_name *ltname,
+                      struct md_attr *ma)
+{
+        return -EPERM;
+}
+
+static int obf_link(const struct lu_env *env, struct md_object *tgt_obj,
+                    struct md_object *src_obj, const struct lu_name *lname,
+                    struct md_attr *ma)
+{
+        return -EPERM;
+}
+
+static int obf_unlink(const struct lu_env *env, struct md_object *pobj,
+                      struct md_object *cobj, const struct lu_name *lname,
+                      struct md_attr *ma)
+{
+        return -EPERM;
+}
+
+static struct md_dir_operations mdd_obf_dir_ops = {
+        .mdo_lookup = obf_lookup,
+        .mdo_create = obf_create,
+        .mdo_rename = obf_rename,
+        .mdo_link   = obf_link,
+        .mdo_unlink = obf_unlink
+};
+
+/**
+ * Create special in-memory "fid" object for open-by-fid.
+ */
+static int mdd_obf_setup(const struct lu_env *env, struct mdd_device *m)
+{
+        struct mdd_object *mdd_obf;
+        struct lu_object *obf_lu_obj;
+        int rc = 0;
+
+        m->mdd_dot_lustre_objs.mdd_obf = mdd_object_find(env, m,
+                                                         &LU_OBF_FID);
+        if (m->mdd_dot_lustre_objs.mdd_obf == NULL ||
+            IS_ERR(m->mdd_dot_lustre_objs.mdd_obf))
+                GOTO(out, rc = -ENOENT);
+
+        mdd_obf = m->mdd_dot_lustre_objs.mdd_obf;
+        mdd_obf->mod_obj.mo_dir_ops = &mdd_obf_dir_ops;
+        mdd_obf->mod_obj.mo_ops = &mdd_obf_obj_ops;
+        /* Don't allow objects to be created in "fid" dir */
+        mdd_obf->mod_flags |= IMMUTE_OBJ;
+
+        obf_lu_obj = mdd2lu_obj(mdd_obf);
+        obf_lu_obj->lo_header->loh_attr |= (LOHA_EXISTS | S_IFDIR);
+
+out:
+        return rc;
+}
+
+/** Setup ".lustre" directory object */
+static int mdd_dot_lustre_setup(const struct lu_env *env, struct mdd_device *m)
+{
+        struct dt_object *dt_dot_lustre;
+        struct lu_fid *fid = &mdd_env_info(env)->mti_fid;
+        int rc;
+
+        rc = create_dot_lustre_dir(env, m);
+        if (rc)
+                return rc;
+
+        dt_dot_lustre = dt_store_open(env, m->mdd_child, mdd_root_dir_name,
+                                      mdd_dot_lustre_name, fid);
+        if (IS_ERR(dt_dot_lustre)) {
+                rc = PTR_ERR(dt_dot_lustre);
+                GOTO(out, rc);
+        }
+
+        /* references are released in mdd_device_shutdown() */
+        m->mdd_dot_lustre = lu2mdd_obj(lu_object_locate(dt_dot_lustre->do_lu.lo_header,
+                                                        &mdd_device_type));
+
+        lu_object_put(env, &dt_dot_lustre->do_lu);
+
+        m->mdd_dot_lustre->mod_obj.mo_dir_ops = &mdd_dot_lustre_dir_ops;
+        m->mdd_dot_lustre->mod_obj.mo_ops = &mdd_dot_lustre_obj_ops;
+
+        rc = mdd_obf_setup(env, m);
+        if (rc)
+                CERROR("Error initializing \"fid\" object - %d.\n", rc);
+
+out:
+        RETURN(rc);
+}
+
 static int mdd_process_config(const struct lu_env *env,
                               struct lu_device *d, struct lustre_cfg *cfg)
 {
@@ -435,8 +804,17 @@ static int mdd_prepare(const struct lu_env *env,
                 LASSERT(root != NULL);
                 lu_object_put(env, &root->do_lu);
                 rc = orph_index_init(env, mdd);
-        } else
+        } else {
                 rc = PTR_ERR(root);
+        }
+        if (rc)
+                GOTO(out, rc);
+
+        rc = mdd_dot_lustre_setup(env, mdd);
+        if (rc) {
+                CERROR("Error(%d) initializing .lustre objects\n", rc);
+                GOTO(out, rc);
+        }
 
 out:
         RETURN(rc);

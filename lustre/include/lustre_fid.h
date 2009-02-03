@@ -57,6 +57,8 @@ struct lu_context;
 extern const struct lu_seq_range LUSTRE_SEQ_SPACE_RANGE;
 extern const struct lu_seq_range LUSTRE_SEQ_ZERO_RANGE;
 extern const struct lu_fid LUSTRE_BFL_FID;
+extern const struct lu_fid LU_OBF_FID;
+extern const struct lu_fid LU_DOT_LUSTRE_FID;
 
 enum {
         /*
@@ -81,6 +83,9 @@ enum {
 
 /** special fid seq: used for local object create. */
 #define FID_SEQ_LOCAL_FILE      (FID_SEQ_START + 1)
+
+/** special fid seq: used for .lustre objects. */
+#define LU_DOT_LUSTRE_SEQ       (FID_SEQ_START + 0x02ULL)
 
 /** special OID for local objects */
 enum {

@@ -1948,6 +1948,12 @@ Details    : While using HA for Lustre servers with Linux RAID, it is possible
              written. Also while reading the MMP block, we should read it from
              disk and not the cached one.
 
+Severity   : enhancement
+Bugzilla   : 17187
+Description: open file using fid
+Details    : A file can be opened using just its fid, like
+	     <mntpt>/.lustre/fid/SEQ:OID:VER - this is needed for HSM and replication
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

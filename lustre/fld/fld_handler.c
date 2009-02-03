@@ -67,6 +67,7 @@
 #include <lustre_fid.h>
 #include <lustre_req_layout.h>
 #include "fld_internal.h"
+#include <lustre_fid.h>
 
 #ifdef __KERNEL__
 
@@ -466,6 +467,7 @@ int fld_server_init(struct lu_server_fld *fld, struct dt_device *dt,
                     int mds_node_id)
 {
         int cache_size, cache_threshold;
+        struct lu_seq_range range;
         int rc;
         ENTRY;
 
@@ -499,6 +501,13 @@ int fld_server_init(struct lu_server_fld *fld, struct dt_device *dt,
                 GOTO(out, rc);
 
         fld->lsf_control_exp = NULL;
+
+        /* Insert reserved sequence number of ".lustre" into fld cache. */
+        range.lsr_start = LU_DOT_LUSTRE_SEQ;
+        range.lsr_end = LU_DOT_LUSTRE_SEQ + 1;
+        range.lsr_mdt = 0;
+        fld_cache_insert(fld->lsf_cache, &range);
+
         EXIT;
 out:
         if (rc)

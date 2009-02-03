@@ -582,8 +582,8 @@ int mdd_iattr_get(const struct lu_env *env, struct mdd_object *mdd_obj,
         RETURN(rc);
 }
 
-static int mdd_get_default_md(struct mdd_object *mdd_obj,
-                struct lov_mds_md *lmm, int *size)
+int mdd_get_default_md(struct mdd_object *mdd_obj, struct lov_mds_md *lmm,
+                       int *size)
 {
         struct lov_desc *ldesc;
         struct mdd_device *mdd = mdo2mdd(&mdd_obj->mod_obj);

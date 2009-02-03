@@ -70,6 +70,7 @@
  *
  * The first 0x400 sequences of normal FID are reserved for special purpose.
  * FID_SEQ_START + 1 is for local file id generation.
+ * FID_SEQ_START + 2 is for .lustre directory and its objects
  */
 const struct lu_seq_range LUSTRE_SEQ_SPACE_RANGE = {
         FID_SEQ_START + 0x400ULL,
@@ -89,3 +90,15 @@ const struct lu_fid LUSTRE_BFL_FID = { .f_seq = 0x0000000000000003,
                                        .f_oid = 0x0000000000000001,
                                        .f_ver = 0x0000000000000000 };
 EXPORT_SYMBOL(LUSTRE_BFL_FID);
+
+/** Special fid for ".lustre" directory */
+const struct lu_fid LU_DOT_LUSTRE_FID = { .f_seq = LU_DOT_LUSTRE_SEQ,
+                                          .f_oid = 0x0000000000000001,
+                                          .f_ver = 0x0000000000000000 };
+EXPORT_SYMBOL(LU_DOT_LUSTRE_FID);
+
+/** Special fid for "fid" special object in .lustre */
+const struct lu_fid LU_OBF_FID = { .f_seq = LU_DOT_LUSTRE_SEQ,
+                                   .f_oid = 0x0000000000000002,
+                                   .f_ver = 0x0000000000000000 };
+EXPORT_SYMBOL(LU_OBF_FID);

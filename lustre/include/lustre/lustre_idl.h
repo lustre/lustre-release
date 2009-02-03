@@ -372,6 +372,7 @@ static inline __u32 lu_igif_gen(const struct lu_fid *fid)
 }
 
 #define DFID "["LPX64":0x%x:0x%x]"
+#define SFID "0x%llx:0x%x:0x%x"
 
 #define PFID(fid)     \
         fid_seq(fid), \
