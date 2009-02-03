@@ -1112,6 +1112,8 @@ test_53a() {
 run_test 53a "|X| close request while two MDC requests in flight"
 
 test_53b() {
+        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+
         mkdir -p $DIR/${tdir}-1
         mkdir -p $DIR/${tdir}-2
         multiop $DIR/${tdir}-1/f O_c &
@@ -1141,6 +1143,8 @@ test_53b() {
 run_test 53b "|X| open request while two MDC requests in flight"
 
 test_53c() {
+        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+
         mkdir -p $DIR/${tdir}-1
         mkdir -p $DIR/${tdir}-2
         multiop $DIR/${tdir}-1/f O_c &
@@ -1172,6 +1176,8 @@ test_53c() {
 run_test 53c "|X| open request and close request while two MDC requests in flight"
 
 test_53d() {
+        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+
         mkdir -p $DIR/${tdir}-1
         mkdir -p $DIR/${tdir}-2
         multiop $DIR/${tdir}-1/f O_c &
@@ -1198,6 +1204,8 @@ test_53d() {
 run_test 53d "|X| close reply while two MDC requests in flight"
 
 test_53e() {
+        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+
         mkdir -p $DIR/${tdir}-1
         mkdir -p $DIR/${tdir}-2
         multiop $DIR/${tdir}-1/f O_c &
@@ -1227,6 +1235,8 @@ test_53e() {
 run_test 53e "|X| open reply while two MDC requests in flight"
 
 test_53f() {
+        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+
         mkdir -p $DIR/${tdir}-1
         mkdir -p $DIR/${tdir}-2
         multiop $DIR/${tdir}-1/f O_c &
@@ -1258,6 +1268,8 @@ test_53f() {
 run_test 53f "|X| open reply and close reply while two MDC requests in flight"
 
 test_53g() {
+        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+
         mkdir -p $DIR/${tdir}-1
         mkdir -p $DIR/${tdir}-2
         multiop $DIR/${tdir}-1/f O_c &
@@ -1289,6 +1301,8 @@ test_53g() {
 run_test 53g "|X| drop open reply and close request while close and open are both in flight"
 
 test_53h() {
+        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+
         mkdir -p $DIR/${tdir}-1
         mkdir -p $DIR/${tdir}-2
         multiop $DIR/${tdir}-1/f O_c &
