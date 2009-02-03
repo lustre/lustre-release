@@ -130,18 +130,18 @@ static int filter_quota_clearinfo(struct obd_export *exp, struct obd_device *obd
 
         /* lquota may be not set up before destroying export, b=14896 */
         if (!obd->obd_set_up)
-                return 0;
+                RETURN(0);
 
         /* when exp->exp_imp_reverse is destroyed, the corresponding lqc_import
          * should be invalid b=12374 */
-        if (qctxt->lqc_import == exp->exp_imp_reverse) {
+        if (qctxt->lqc_import && qctxt->lqc_import == exp->exp_imp_reverse) {
                 spin_lock(&qctxt->lqc_lock);
                 qctxt->lqc_import = NULL;
+                spin_unlock(&qctxt->lqc_lock);
+                dqacq_interrupt(qctxt);
                 CDEBUG(D_QUOTA, "%s: lqc_import of obd(%p) is invalid now.\n",
                        obd->obd_name, obd);
-                spin_unlock(&qctxt->lqc_lock);
         }
-
         RETURN(0);
 }
 

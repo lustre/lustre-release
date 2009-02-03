@@ -760,25 +760,56 @@ int check_qm(struct lustre_quota_ctxt *qctxt)
         RETURN(rc);
 }
 
+/* wake up all waiting threads when lqc_import is NULL */
+void dqacq_interrupt(struct lustre_quota_ctxt *qctxt)
+{
+        struct lustre_qunit *qunit, *tmp;
+        int i;
+        ENTRY;
+
+        spin_lock(&qunit_hash_lock);
+        for (i = 0; i < NR_DQHASH; i++) {
+                list_for_each_entry_safe(qunit, tmp, &qunit_hash[i], lq_hash) {
+                        if (qunit->lq_ctxt != qctxt)
+                                continue;
+
+                        /* Wake up all waiters. Do not change lq_state.
+                         * The waiters will check lq_rc which is kept as 0
+                         * if no others change it, then the waiters will return
+                         * -EAGAIN to caller who can perform related quota
+                         * acq/rel if necessary. */
+                        wake_up_all(&qunit->lq_waitq);
+                }
+        }
+        spin_unlock(&qunit_hash_lock);
+        EXIT;
+}
+
 static int got_qunit(struct lustre_qunit *qunit)
 {
-        int rc;
+        struct lustre_quota_ctxt *qctxt = qunit->lq_ctxt;
+        int rc = 0;
         ENTRY;
 
         spin_lock(&qunit->lq_lock);
         switch (qunit->lq_state) {
         case QUNIT_IN_HASH:
         case QUNIT_RM_FROM_HASH:
-                rc = 0;
                 break;
         case QUNIT_FINISHED:
                 rc = 1;
                 break;
         default:
-                rc = 0;
                 CERROR("invalid qunit state %d\n", qunit->lq_state);
         }
         spin_unlock(&qunit->lq_lock);
+
+        if (!rc) {
+                spin_lock(&qctxt->lqc_lock);
+                rc = !qctxt->lqc_import || !qctxt->lqc_valid;
+                spin_unlock(&qctxt->lqc_lock);
+        }
+
         RETURN(rc);
 }
 

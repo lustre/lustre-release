@@ -2603,6 +2603,8 @@ static int filter_disconnect(struct obd_export *exp)
                 filter_grant_sanity_check(obd, __FUNCTION__);
         filter_grant_discard(exp);
 
+        lquota_clearinfo(filter_quota_interface_ref, exp, exp->exp_obd);
+
         /* Disconnect early so that clients can't keep using export */
         rc = class_disconnect(exp);
         if (exp->exp_obd->obd_namespace != NULL)

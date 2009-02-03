@@ -114,6 +114,7 @@ int compute_remquota(struct obd_device *obd,
                      struct lustre_quota_ctxt *qctxt, struct qunit_data *qdata,
                      int isblk);
 int check_qm(struct lustre_quota_ctxt *qctxt);
+void dqacq_interrupt(struct lustre_quota_ctxt *qctxt);
 /* quota_master.c */
 int lustre_dquot_init(void);
 void lustre_dquot_exit(void);
