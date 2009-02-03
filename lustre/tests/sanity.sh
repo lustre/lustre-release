@@ -3786,7 +3786,6 @@ setup_test102() {
 
 	trap cleanup_test102 EXIT
 	cd $DIR
-	# $1 = runas
 	$1 $SETSTRIPE $tdir -s $STRIPE_SIZE -i $STRIPE_OFFSET -c $STRIPE_COUNT
 	cd $DIR/$tdir
 	for num in 1 2 3 4
@@ -3803,10 +3802,7 @@ setup_test102() {
 	done
 
 	cd $DIR
-	if [ "$TAR" == "tar" ]; then
-		TAR_OPTS="--xattrs"
-	fi
-	$1 $TAR cf $TMP/f102.tar $tdir $TAR_OPTS
+	$1 $TAR cf $TMP/f102.tar $tdir --xattrs
 	SETUP_TEST102=yes
 }
 
@@ -3966,70 +3962,35 @@ compare_stripe_info2() {
 }
 
 find_lustre_tar() {
-	[ -n "$(which star 2>/dev/null)" ] && strings $(which star) | grep -q lustre && echo star && return
 	[ -n "$(which tar 2>/dev/null)" ] && strings $(which tar) | grep -q lustre && echo tar
 }
 
 test_102d() {
-	# b10930: (s)tar test for trusted.lov xattr
+	# b10930: tar test for trusted.lov xattr
 	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip "lustre-aware (s)tar is not installed" && return
+	[ -z "$TAR" ] && skip "lustre-aware tar is not installed" && return
 	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102d
-	if [ "$TAR" == "tar" ]; then
-		TAR_OPTS="--xattrs"
-	fi
-	$TAR xf $TMP/f102.tar -C $DIR/d102d $TAR_OPTS
+	$TAR xf $TMP/f102.tar -C $DIR/d102d --xattrs
 	cd $DIR/d102d/$tdir
 	compare_stripe_info1
 }
-run_test 102d "(s)tar restore stripe info from tarfile,not keep osts ==========="
-
-test_102e() {
-	# b10930: star test for trusted.lov xattr
-	TAR=$(find_lustre_tar)
-	[ "$TAR" != star ] && skip "lustre-aware star is not installed" && return
-	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
-	setup_test102
-	mkdir -p $DIR/d102e
-	star -x  -preserve-osts f=$TMP/f102.tar -C $DIR/d102e
-	cd $DIR/d102e/$tdir
-	compare_stripe_info2
-}
-run_test 102e "star restore stripe info from tarfile, keep osts ==========="
+run_test 102d "tar restore stripe info from tarfile,not keep osts ==========="
 
 test_102f() {
-	# b10930: (s)tar test for trusted.lov xattr
+	# b10930: tar test for trusted.lov xattr
 	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip "lustre-aware (s)tar is not installed" && return
+	[ -z "$TAR" ] && skip "lustre-aware tar is not installed" && return
 	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102f
 	cd $DIR
-	if [ "$TAR" == "tar" ]; then
-		TAR_OPTS="--xattrs"
-	fi
-	$TAR cf - $TAR_OPTS $tdir | $TAR xf - $TAR_OPTS -C $DIR/d102f
+	$TAR cf - --xattrs $tdir | $TAR xf - --xattrs -C $DIR/d102f
 	cd $DIR/d102f/$tdir
 	compare_stripe_info1
 }
-run_test 102f "(s)tar copy files, not keep osts ==========="
-
-test_102g() {
-	# b10930: star test for trusted.lov xattr
-	TAR=$(find_lustre_tar)
-	[ "$TAR" != star ] && skip "lustre-aware star is not installed" && return
-	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
-	setup_test102
-	mkdir -p $DIR/d102g
-	cd $DIR
-	star -copy -preserve-osts $tdir $DIR/d102g
-	cd $DIR/d102g/$tdir
-	compare_stripe_info2
-	cleanup_test102
-}
-run_test 102g "star copy files, keep osts ==========="
+run_test 102f "tar copy files, not keep osts ==========="
 
 test_102h() { # bug 15777
 	[ -z $(lctl get_param -n mdc.*.connect_flags | grep xattr) ] &&
@@ -4086,19 +4047,16 @@ run_test 102i "lgetxattr test on symbolic link ============"
 
 test_102j() {
 	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip "lustre-aware (s)tar is not installed" && return
+	[ -z "$TAR" ] && skip "lustre-aware tar is not installed" && return
 	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
 	setup_test102 "$RUNAS"
 	mkdir -p $DIR/d102j
 	chown $RUNAS_ID $DIR/d102j
-	if [ "$TAR" == "tar" ]; then
-		TAR_OPTS="--xattrs"
-	fi
-	$RUNAS $TAR xf $TMP/f102.tar -C $DIR/d102j $TAR_OPTS
+	$RUNAS $TAR xf $TMP/f102.tar -C $DIR/d102j --xattrs
 	cd $DIR/d102j/$tdir
 	compare_stripe_info1 "$RUNAS"
 }
-run_test 102j "non-root (s)tar restore stripe info from tarfile,not keep osts ="
+run_test 102j "non-root tar restore stripe info from tarfile, not keep osts ==="
 
 run_acl_subtest()
 {
