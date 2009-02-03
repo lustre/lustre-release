@@ -305,6 +305,16 @@ Details    : fix race due to two ll_sync threads processing the same lov target
 	     ACTIVATE event only if connect already finished and import is in
 	     FULL state.
 
+Severity   : major
+Frequency  : rare, only if using MMP with Linux RAID
+Bugzilla   : 17895
+Description: MMP doesn't work with Linux RAID
+Details    : While using HA for Lustre servers with Linux RAID, it is possible
+	     that MMP will not detect multiple mounts. To make this work we
+	     need to unplug the device queue in RAID when the MMP block is being
+	     written. Also while reading the MMP block, we should read it from
+	     disk and not the cached one.
+
 --------------------------------------------------------------------------
 
 2008-08-31 Sun Microsystems, Inc.

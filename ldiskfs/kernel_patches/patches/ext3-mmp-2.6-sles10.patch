@@ -20,7 +20,7 @@ Index: linux-2.6.16.60-0.31/fs/ext3/super.c
  	if (sbi->s_dev_proc) {
  		remove_proc_entry(sbi->s_dev_proc->name, proc_root_ext3);
  		sbi->s_dev_proc = NULL;
-@@ -1525,6 +1529,313 @@ static unsigned long descriptor_loc(stru
+@@ -1525,6 +1529,329 @@ static unsigned long descriptor_loc(stru
  	return (first_data_block + has_super + (bg * sbi->s_blocks_per_group));
  }
  
@@ -54,9 +54,25 @@ Index: linux-2.6.16.60-0.31/fs/ext3/super.c
 +	if (*bh)
 +		clear_buffer_uptodate(*bh);
 +
++#if 0
 +	brelse(*bh);
 +
 +	*bh = sb_bread(sb, mmp_block);
++#else
++	if (!*bh)
++		*bh = sb_getblk(sb, mmp_block);
++	if (*bh) {
++		get_bh(*bh);
++		lock_buffer(*bh);
++		(*bh)->b_end_io = end_buffer_read_sync;
++		submit_bh(READ_SYNC, *bh);
++		wait_on_buffer(*bh);
++		if (!buffer_uptodate(*bh)) {
++			brelse(*bh);
++			*bh = NULL;
++		}
++	}
++#endif
 +	if (!*bh) {
 +		ext3_warning(sb, __FUNCTION__,
 +			     "Error while reading MMP block %lu", mmp_block);
@@ -334,7 +350,7 @@ Index: linux-2.6.16.60-0.31/fs/ext3/super.c
  
  static int ext3_fill_super (struct super_block *sb, void *data, int silent)
  {
-@@ -1849,6 +2160,11 @@ static int ext3_fill_super (struct super
+@@ -1849,6 +2176,11 @@ static int ext3_fill_super (struct super
  			  EXT3_HAS_INCOMPAT_FEATURE(sb,
  				    EXT3_FEATURE_INCOMPAT_RECOVER));
  
@@ -346,7 +362,7 @@ Index: linux-2.6.16.60-0.31/fs/ext3/super.c
  	/*
  	 * The first inode we look at is the journal inode.  Don't try
  	 * root first: it may be modified in the journal!
-@@ -1991,6 +2307,8 @@ cantfind_ext3:
+@@ -1991,6 +2323,8 @@ cantfind_ext3:
  	goto failed_mount;
  
  failed_mount3:
@@ -355,7 +371,7 @@ Index: linux-2.6.16.60-0.31/fs/ext3/super.c
  	journal_destroy(sbi->s_journal);
  failed_mount2:
  	for (i = 0; i < db_count; i++)
-@@ -2463,7 +2781,7 @@ static int ext3_remount (struct super_bl
+@@ -2463,7 +2797,7 @@ static int ext3_remount (struct super_bl
  	unsigned long n_blocks_count = 0;
  	unsigned long old_sb_flags;
  	struct ext3_mount_options old_opts;
@@ -364,7 +380,7 @@ Index: linux-2.6.16.60-0.31/fs/ext3/super.c
  #ifdef CONFIG_QUOTA
  	int i;
  #endif
-@@ -2547,6 +2865,11 @@ static int ext3_remount (struct super_bl
+@@ -2547,6 +2881,11 @@ static int ext3_remount (struct super_bl
  			}
  			if (!ext3_setup_super (sb, es, 0))
  				sb->s_flags &= ~MS_RDONLY;
