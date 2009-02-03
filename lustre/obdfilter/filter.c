@@ -3059,6 +3059,8 @@ static int filter_disconnect(struct obd_export *exp)
         /* Flush any remaining cancel messages out to the target */
         filter_sync_llogs(obd, exp);
 
+        lquota_clearinfo(filter_quota_interface_ref, exp, exp->exp_obd);
+
         /* Disconnect early so that clients can't keep using export */
         rc = class_disconnect(exp);
         if (exp->exp_obd->obd_namespace != NULL)
