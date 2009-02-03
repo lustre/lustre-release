@@ -187,6 +187,8 @@ extern cfs_proc_dir_entry_t *lquota_type_proc_dir;
 #define LQS_INO_DECREASE 4
 #define LQS_INO_INCREASE 8
 
+/* the return status of quota operation */
+#define QUOTA_REQ_RETURNED 1
 
 #endif
 int client_quota_adjust_qunit(struct obd_export *exp,
