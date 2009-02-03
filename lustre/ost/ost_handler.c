@@ -1605,6 +1605,11 @@ static int ost_rw_hpreq_lock_match(struct ptlrpc_request *req,
         end = (nb[ioo->ioo_bufcnt - 1].offset +
                nb[ioo->ioo_bufcnt - 1].len - 1) | ~CFS_PAGE_MASK;
 
+        LASSERT(lock->l_resource != NULL);
+        if (!osc_res_name_eq(ioo->ioo_id, ioo->ioo_gr, 
+                             &lock->l_resource->lr_name))
+                RETURN(0);
+
         if (!(lock->l_granted_mode & mode))
                 RETURN(0);
 

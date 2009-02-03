@@ -639,7 +639,11 @@ struct ldlm_lock {
          */
         cfs_waitq_t           l_waitq;
 
-        struct timeval        l_enqueued_time;
+        /** 
+         * Seconds. it will be updated if there is any activity related to 
+         * the lock, e.g. enqueue the lock or send block AST.
+         */
+        cfs_time_t            l_last_activity;
 
         /**
          * Jiffies. Should be converted to time if needed.
@@ -790,12 +794,15 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 mask,
                       ...)
         __attribute__ ((format (printf, 4, 5)));
 
-#define LDLM_ERROR(lock, fmt, a...) do {                                \
+#define LDLM_DEBUG_LIMIT(mask, lock, fmt, a...) do {                    \
         static cfs_debug_limit_state_t _ldlm_cdls;                      \
-        ldlm_lock_debug(&_ldlm_cdls, D_ERROR, lock,                     \
+        ldlm_lock_debug(&_ldlm_cdls, mask, lock,                        \
                         __FILE__, __FUNCTION__, __LINE__,               \
                         "### " fmt , ##a);                              \
 } while (0)
+
+#define LDLM_ERROR(lock, fmt, a...) LDLM_DEBUG_LIMIT(D_ERROR, lock, fmt, ## a)
+#define LDLM_WARN(lock, fmt, a...)  LDLM_DEBUG_LIMIT(D_WARNING, lock, fmt, ## a)
 
 #define LDLM_DEBUG(lock, fmt, a...)   do {                              \
         ldlm_lock_debug(NULL, D_DLMTRACE, lock,                         \
