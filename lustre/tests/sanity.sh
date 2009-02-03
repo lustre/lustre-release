@@ -3923,30 +3923,6 @@ compare_stripe_info1() {
 	done
 }
 
-compare_stripe_info2() {
-	for num in 1 2 3 4
-	do
-		for count in `seq 1 $STRIPE_COUNT`
-		do
-			for offset in `seq 0 $[$STRIPE_COUNT - 1]`
-			do
-				local size=`expr $STRIPE_SIZE \* $num`
-				local file=file"$num-$offset-$count"
-				get_stripe_info client $PWD/$file
-				if [ $stripe_size -ne $size ]; then
-					error "$file: different stripe size $stripe_size, expected $size" && return
-				fi
-				if [ $stripe_count -ne $count ]; then
-					error "$file: different stripe count $stripe_count, expected $count" && return
-				fi
-				if [ $stripe_index -ne $offset ]; then
-					error "$file: different stripe offset $stripe_index, expected $offset" && return
-				fi
-			done
-		done
-	done
-}
-
 find_lustre_tar() {
 	[ -n "$(which tar 2>/dev/null)" ] && strings $(which tar) | grep -q lustre && echo tar
 }
