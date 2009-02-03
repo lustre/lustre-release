@@ -334,7 +334,8 @@ int filter_quota_adjust_qunit(struct obd_export *exp,
 
         if (rc > 0) {
                 rc = qctxt_adjust_qunit(obd, qctxt, uid, gid, 1, 0, NULL);
-                if (rc == -EDQUOT || rc == -EBUSY || rc == -EAGAIN) {
+                if (rc == -EDQUOT || rc == -EBUSY ||
+                    rc == QUOTA_REQ_RETURNED || rc == -EAGAIN) {
                         CDEBUG(D_QUOTA, "rc: %d.\n", rc);
                         rc = 0;
                 }
