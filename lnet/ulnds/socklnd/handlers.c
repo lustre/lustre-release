@@ -57,8 +57,8 @@ usocklnd_exception_handler(usock_conn_t *conn)
         if (conn->uc_state == UC_CONNECTING ||
             conn->uc_state == UC_SENDING_HELLO)
                 usocklnd_conn_kill_locked(conn);
-        
-        pthread_mutex_unlock(&conn->uc_lock);                
+
+        pthread_mutex_unlock(&conn->uc_lock);
 }
 
 int
@@ -72,7 +72,7 @@ usocklnd_read_handler(usock_conn_t *conn)
         rc = 0;
         pthread_mutex_lock(&conn->uc_lock);
         state = conn->uc_state;
-        
+
         /* process special case: LNET calls lnd_recv() asyncronously */
         if (state == UC_READY && conn->uc_rx_state == UC_RX_PARSE) {
                 /* still don't have usocklnd_recv() called */
@@ -93,7 +93,7 @@ usocklnd_read_handler(usock_conn_t *conn)
          * 2) usocklnd_shutdown() can change uc_state to UC_DEAD */
 
         switch (state) {
-                
+
         case UC_RECEIVING_HELLO:
         case UC_READY:
                 if (conn->uc_rx_nob_wanted != 0) {
@@ -117,7 +117,7 @@ usocklnd_read_handler(usock_conn_t *conn)
                         usocklnd_conn_kill(conn);
                         break;
                 }
-                
+
                 if (continue_reading)
                         goto read_again;
 
@@ -129,7 +129,7 @@ usocklnd_read_handler(usock_conn_t *conn)
         default:
                 LBUG();
         }
-        
+
         return rc;
 }
 
@@ -144,7 +144,7 @@ usocklnd_read_msg(usock_conn_t *conn, int *cont_flag)
 {
         int   rc = 0;
         __u64 cookie;
-        
+
        *cont_flag = 0;
 
         /* smth. new emerged in RX part - let's process it */
@@ -155,7 +155,7 @@ usocklnd_read_msg(usock_conn_t *conn, int *cont_flag)
                         __swab32s(&conn->uc_rx_msg.ksm_csum);
                         __swab64s(&conn->uc_rx_msg.ksm_zc_cookies[0]);
                         __swab64s(&conn->uc_rx_msg.ksm_zc_cookies[1]);
-                } 
+                }
 
                 /* we never send packets for wich zc-acking is required */
                 if (conn->uc_rx_msg.ksm_type != KSOCK_MSG_LNET ||
@@ -170,7 +170,7 @@ usocklnd_read_msg(usock_conn_t *conn, int *cont_flag)
                 usocklnd_rx_lnethdr_state_transition(conn);
                 *cont_flag = 1;
                 break;
-                
+
         case UC_RX_LNET_HEADER:
                 if (the_lnet.ln_pid & LNET_PID_USERFLAG) {
                         /* replace dest_nid,pid (ksocknal sets its own) */
@@ -178,24 +178,24 @@ usocklnd_read_msg(usock_conn_t *conn, int *cont_flag)
                                 cpu_to_le64(conn->uc_peer->up_ni->ni_nid);
                         conn->uc_rx_msg.ksm_u.lnetmsg.ksnm_hdr.dest_pid =
                                 cpu_to_le32(the_lnet.ln_pid);
-                        
-                } else if (conn->uc_peer->up_peerid.pid & LNET_PID_USERFLAG) { 
+
+                } else if (conn->uc_peer->up_peerid.pid & LNET_PID_USERFLAG) {
                         /* Userspace peer */
                         lnet_process_id_t *id = &conn->uc_peer->up_peerid;
                         lnet_hdr_t        *lhdr = &conn->uc_rx_msg.ksm_u.lnetmsg.ksnm_hdr;
-                        
+
                         /* Substitute process ID assigned at connection time */
                         lhdr->src_pid = cpu_to_le32(id->pid);
                         lhdr->src_nid = cpu_to_le64(id->nid);
                 }
-                
+
                 conn->uc_rx_state = UC_RX_PARSE;
                 usocklnd_conn_addref(conn); /* ++ref while parsing */
-                
-                rc = lnet_parse(conn->uc_peer->up_ni, 
-                                &conn->uc_rx_msg.ksm_u.lnetmsg.ksnm_hdr, 
+
+                rc = lnet_parse(conn->uc_peer->up_ni,
+                                &conn->uc_rx_msg.ksm_u.lnetmsg.ksnm_hdr,
                                 conn->uc_peerid.nid, conn, 0);
-                
+
                 if (rc < 0) {
                         /* I just received garbage: give up on this conn */
                         conn->uc_errored = 1;
@@ -207,24 +207,24 @@ usocklnd_read_msg(usock_conn_t *conn, int *cont_flag)
                 pthread_mutex_lock(&conn->uc_lock);
                 LASSERT (conn->uc_rx_state == UC_RX_PARSE ||
                          conn->uc_rx_state == UC_RX_LNET_PAYLOAD);
-                
+
                 /* check whether usocklnd_recv() got called */
                 if (conn->uc_rx_state == UC_RX_LNET_PAYLOAD)
                         *cont_flag = 1;
                 pthread_mutex_unlock(&conn->uc_lock);
                 break;
-                
+
         case UC_RX_PARSE:
                 LBUG(); /* it's error to be here, because this special
                          * case is handled by caller */
                 break;
-                
+
         case UC_RX_PARSE_WAIT:
                 LBUG(); /* it's error to be here, because the conn
                          * shouldn't wait for POLLIN event in this
                          * state */
                 break;
-                
+
         case UC_RX_LNET_PAYLOAD:
                 /* payload all received */
 
@@ -233,15 +233,15 @@ usocklnd_read_msg(usock_conn_t *conn, int *cont_flag)
                 cookie = conn->uc_rx_msg.ksm_zc_cookies[0];
                 if (cookie != 0)
                         rc = usocklnd_handle_zc_req(conn->uc_peer, cookie);
-                
+
                 if (rc != 0) {
                         /* change state not to finalize twice */
                         conn->uc_rx_state = UC_RX_KSM_HEADER;
                         return -EPROTO;
                 }
-                
+
                 /* Fall through */
-                
+
         case UC_RX_SKIPPING:
                 if (conn->uc_rx_nob_left != 0) {
                         usocklnd_rx_skipping_state_transition(conn);
@@ -276,13 +276,13 @@ usocklnd_handle_zc_req(usock_peer_t *peer, __u64 cookie)
         if (zc_ack == NULL)
                 return -ENOMEM;
         zc_ack->zc_cookie = cookie;
-        
+
         /* Let's assume that CONTROL is the best type for zcack,
          * but userspace clients don't use typed connections */
         if (the_lnet.ln_pid & LNET_PID_USERFLAG)
                 type = SOCKLND_CONN_ANY;
         else
-                type = SOCKLND_CONN_CONTROL;        
+                type = SOCKLND_CONN_CONTROL;
 
         rc = usocklnd_find_or_create_conn(peer, type, &conn, NULL, zc_ack,
                                           &dummy);
@@ -304,9 +304,9 @@ usocklnd_read_hello(usock_conn_t *conn, int *cont_flag)
 {
         int                rc = 0;
         ksock_hello_msg_t *hello = conn->uc_rx_hello;
-        
+
         *cont_flag = 0;
-        
+
         /* smth. new emerged in hello - let's process it */
         switch (conn->uc_rx_state) {
         case UC_RX_HELLO_MAGIC:
@@ -319,7 +319,7 @@ usocklnd_read_hello(usock_conn_t *conn, int *cont_flag)
 
                 usocklnd_rx_helloversion_state_transition(conn);
                 *cont_flag = 1;
-                break;                        
+                break;
 
         case UC_RX_HELLO_VERSION:
                 if ((!conn->uc_flip &&
@@ -331,7 +331,7 @@ usocklnd_read_hello(usock_conn_t *conn, int *cont_flag)
                 usocklnd_rx_hellobody_state_transition(conn);
                 *cont_flag = 1;
                 break;
-                
+
         case UC_RX_HELLO_BODY:
                 if (conn->uc_flip) {
                         ksock_hello_msg_t *hello = conn->uc_rx_hello;
@@ -351,8 +351,8 @@ usocklnd_read_hello(usock_conn_t *conn, int *cont_flag)
                                HIPQUAD(conn->uc_peer_ip), conn->uc_peer_port);
                         return -EPROTO;
                 }
-                
-                if (conn->uc_rx_hello->kshm_nips) {                        
+
+                if (conn->uc_rx_hello->kshm_nips) {
                         usocklnd_rx_helloIPs_state_transition(conn);
                         *cont_flag = 1;
                         break;
@@ -364,8 +364,8 @@ usocklnd_read_hello(usock_conn_t *conn, int *cont_flag)
                         rc = usocklnd_activeconn_hellorecv(conn);
                 else                          /* passive conn */
                         rc = usocklnd_passiveconn_hellorecv(conn);
-                
-                break;                
+
+                break;
 
         default:
                 LBUG(); /* unknown state */
@@ -398,7 +398,7 @@ usocklnd_activeconn_hellorecv(usock_conn_t *conn)
         }
 
         peer->up_last_alive = cfs_time_current();
-        
+
         /* peer says that we lost the race */
         if (hello->kshm_ctype == SOCKLND_CONN_NONE) {
                 /* Start new active conn, relink txs and zc_acks from
@@ -406,7 +406,7 @@ usocklnd_activeconn_hellorecv(usock_conn_t *conn)
                  * Actually, we're expecting that a passive conn will
                  * make us zombie soon and take care of our txs and
                  * zc_acks */
-                 
+
                 struct list_head tx_list, zcack_list;
                 usock_conn_t *conn2;
                 int idx = usocklnd_type2idx(conn->uc_type);
@@ -425,7 +425,7 @@ usocklnd_activeconn_hellorecv(usock_conn_t *conn)
                         pthread_mutex_unlock(&peer->up_lock);
                         return 0;
                 }
-                
+
                 LASSERT (peer == conn->uc_peer);
                 LASSERT (peer->up_conns[idx] == conn);
 
@@ -436,22 +436,22 @@ usocklnd_activeconn_hellorecv(usock_conn_t *conn)
                         pthread_mutex_unlock(&peer->up_lock);
                         return rc;
                 }
-                                
+
                 usocklnd_link_conn_to_peer(conn2, peer, idx);
                 conn2->uc_peer = peer;
-                
+
                 /* unlink txs and zcack from the conn */
                 list_add(&tx_list, &conn->uc_tx_list);
                 list_del_init(&conn->uc_tx_list);
                 list_add(&zcack_list, &conn->uc_zcack_list);
                 list_del_init(&conn->uc_zcack_list);
-                
+
                 /* link they to the conn2 */
                 list_add(&conn2->uc_tx_list, &tx_list);
                 list_del_init(&tx_list);
                 list_add(&conn2->uc_zcack_list, &zcack_list);
                 list_del_init(&zcack_list);
-                
+
                 /* make conn zombie */
                 conn->uc_peer = NULL;
                 usocklnd_peer_decref(peer);
@@ -464,11 +464,11 @@ usocklnd_activeconn_hellorecv(usock_conn_t *conn)
                 } else {
                         usocklnd_conn_kill_locked(conn);
                 }
-                
-                pthread_mutex_unlock(&conn->uc_lock);                
+
+                pthread_mutex_unlock(&conn->uc_lock);
                 pthread_mutex_unlock(&peer->up_lock);
                 usocklnd_conn_decref(conn);
-                
+
         } else { /* hello->kshm_ctype != SOCKLND_CONN_NONE */
                 if (conn->uc_type != usocklnd_invert_type(hello->kshm_ctype))
                         return -EPROTO;
@@ -477,7 +477,7 @@ usocklnd_activeconn_hellorecv(usock_conn_t *conn)
                 usocklnd_cleanup_stale_conns(peer, hello->kshm_src_incarnation,
                                              conn);
                 pthread_mutex_unlock(&peer->up_lock);
-                                
+
                 /* safely transit to UC_READY state */
                 /* rc == 0 */
                 pthread_mutex_lock(&conn->uc_lock);
@@ -490,7 +490,7 @@ usocklnd_activeconn_hellorecv(usock_conn_t *conn)
                         LASSERT (conn->uc_sending == 0);
                         if ( !list_empty(&conn->uc_tx_list) ||
                              !list_empty(&conn->uc_zcack_list) ) {
-                                
+
                                 conn->uc_tx_deadline =
                                         cfs_time_shift(usock_tuns.ut_timeout);
                                 conn->uc_tx_flag = 1;
@@ -502,7 +502,7 @@ usocklnd_activeconn_hellorecv(usock_conn_t *conn)
                         if (rc == 0)
                                 conn->uc_state = UC_READY;
                 }
-                pthread_mutex_unlock(&conn->uc_lock);                
+                pthread_mutex_unlock(&conn->uc_lock);
         }
 
         return rc;
@@ -532,7 +532,7 @@ usocklnd_passiveconn_hellorecv(usock_conn_t *conn)
         /* don't know parent peer yet and not zombie */
         LASSERT (conn->uc_peer == NULL &&
                  ni != NULL);
-        
+
         /* don't know peer's nid and incarnation yet */
         if (peer_port > LNET_ACCEPTOR_MAX_RESERVED_PORT) {
                 /* do not trust liblustre clients */
@@ -541,7 +541,7 @@ usocklnd_passiveconn_hellorecv(usock_conn_t *conn)
                                                  peer_ip);
                 if (hello->kshm_ctype != SOCKLND_CONN_ANY) {
                         lnet_ni_decref(ni);
-                        conn->uc_ni = NULL;                
+                        conn->uc_ni = NULL;
                         CERROR("Refusing to accept connection of type=%d from "
                                "userspace process %u.%u.%u.%u:%d\n", hello->kshm_ctype,
                                HIPQUAD(peer_ip), peer_port);
@@ -552,7 +552,7 @@ usocklnd_passiveconn_hellorecv(usock_conn_t *conn)
                 conn->uc_peerid.nid = hello->kshm_src_nid;
         }
         conn->uc_type = type = usocklnd_invert_type(hello->kshm_ctype);
-                
+
         rc = usocklnd_find_or_create_peer(ni, conn->uc_peerid, &peer);
         if (rc) {
                 lnet_ni_decref(ni);
@@ -561,14 +561,14 @@ usocklnd_passiveconn_hellorecv(usock_conn_t *conn)
         }
 
         peer->up_last_alive = cfs_time_current();
-        
+
         idx = usocklnd_type2idx(conn->uc_type);
 
         /* safely check whether we're first */
         pthread_mutex_lock(&peer->up_lock);
 
         usocklnd_cleanup_stale_conns(peer, hello->kshm_src_incarnation, NULL);
-        
+
         if (peer->up_conns[idx] == NULL) {
                 peer->up_last_alive = cfs_time_current();
                 conn->uc_peer = peer;
@@ -576,7 +576,7 @@ usocklnd_passiveconn_hellorecv(usock_conn_t *conn)
                 usocklnd_link_conn_to_peer(conn, peer, idx);
                 usocklnd_conn_addref(conn);
         } else {
-                usocklnd_peer_decref(peer);                                         
+                usocklnd_peer_decref(peer);
 
                 /* Resolve race in favour of higher NID */
                 if (conn->uc_peerid.nid < conn->uc_ni->ni_nid) {
@@ -588,7 +588,7 @@ usocklnd_passiveconn_hellorecv(usock_conn_t *conn)
                 /* if conn->uc_peerid.nid > conn->uc_ni->ni_nid,
                  * postpone race resolution till READY state
                  * (hopefully that conn[idx] will die because of
-                 * incoming hello of CONN_NONE type) */                 
+                 * incoming hello of CONN_NONE type) */
         }
         pthread_mutex_unlock(&peer->up_lock);
 
@@ -610,10 +610,10 @@ usocklnd_passiveconn_hellorecv(usock_conn_t *conn)
         conn->uc_tx_deadline = cfs_time_shift(usock_tuns.ut_timeout);
         conn->uc_tx_flag = 1;
         rc = usocklnd_add_pollrequest(conn, POLL_SET_REQUEST, POLLOUT);
-        
+
   passive_hellorecv_done:
         pthread_mutex_unlock(&conn->uc_lock);
-        return rc;        
+        return rc;
 }
 
 int
@@ -625,7 +625,7 @@ usocklnd_write_handler(usock_conn_t *conn)
         int           state;
         usock_peer_t *peer;
         lnet_ni_t    *ni;
-        
+
         pthread_mutex_lock(&conn->uc_lock); /* like membar */
         state = conn->uc_state;
         pthread_mutex_unlock(&conn->uc_lock);
@@ -650,8 +650,8 @@ usocklnd_write_handler(usock_conn_t *conn)
                         rc = usocklnd_activeconn_hellosent(conn);
                 else                          /* passive conn */
                         rc = usocklnd_passiveconn_hellosent(conn);
-                
-                break;                
+
+                break;
 
         case UC_READY:
                 pthread_mutex_lock(&conn->uc_lock);
@@ -665,7 +665,7 @@ usocklnd_write_handler(usock_conn_t *conn)
                         LASSERT(usock_tuns.ut_fair_limit > 1);
                         pthread_mutex_unlock(&conn->uc_lock);
                         return 0;
-                }                
+                }
 
                 tx = usocklnd_try_piggyback(&conn->uc_tx_list,
                                             &conn->uc_zcack_list);
@@ -678,7 +678,7 @@ usocklnd_write_handler(usock_conn_t *conn)
 
                 if (rc)
                         break;
-                
+
                 rc = usocklnd_send_tx(conn, tx);
                 if (rc == 0) { /* partial send or connection closed */
                         pthread_mutex_lock(&conn->uc_lock);
@@ -707,7 +707,7 @@ usocklnd_write_handler(usock_conn_t *conn)
                                 rc = ret;
                 }
                 pthread_mutex_unlock(&conn->uc_lock);
-                
+
                 break;
 
         case UC_DEAD:
@@ -719,7 +719,7 @@ usocklnd_write_handler(usock_conn_t *conn)
 
         if (rc < 0)
                 usocklnd_conn_kill(conn);
-        
+
         return rc;
 }
 
@@ -746,7 +746,7 @@ usocklnd_try_piggyback(struct list_head *tx_list_p,
                     tx->tx_resid != tx->tx_nob)
                         return tx;
         }
-                
+
         if (list_empty(zcack_list_p)) {
                 /* nothing to piggyback */
                 return tx;
@@ -754,15 +754,15 @@ usocklnd_try_piggyback(struct list_head *tx_list_p,
                 zc_ack = list_entry(zcack_list_p->next,
                                     usock_zc_ack_t, zc_list);
                 list_del(&zc_ack->zc_list);
-        }                        
-                
+        }
+
         if (tx != NULL)
                 /* piggyback the zc-ack cookie */
                 tx->tx_msg.ksm_zc_cookies[1] = zc_ack->zc_cookie;
         else
                 /* cannot piggyback, need noop */
-                tx = usocklnd_create_noop_tx(zc_ack->zc_cookie);                     
-        
+                tx = usocklnd_create_noop_tx(zc_ack->zc_cookie);
+
         LIBCFS_FREE (zc_ack, sizeof(*zc_ack));
         return tx;
 }
@@ -775,7 +775,7 @@ int
 usocklnd_activeconn_hellosent(usock_conn_t *conn)
 {
         int rc = 0;
-        
+
         pthread_mutex_lock(&conn->uc_lock);
 
         if (conn->uc_state != UC_DEAD) {
@@ -817,15 +817,15 @@ usocklnd_passiveconn_hellosent(usock_conn_t *conn)
 
         /* conn->uc_peer == NULL, so the conn isn't accessible via
          * peer hash list, so nobody can touch the conn but us */
-        
+
         if (conn->uc_ni == NULL) /* remove zombie conn */
                 goto passive_hellosent_connkill;
-        
+
         /* all code below is race resolution, because normally
          * passive conn is linked to peer just after receiving hello */
         CFS_INIT_LIST_HEAD (&tx_list);
         CFS_INIT_LIST_HEAD (&zcack_list);
-        
+
         /* conn is passive and isn't linked to any peer,
            so its tx and zc_ack lists have to be empty */
         LASSERT (list_empty(&conn->uc_tx_list) &&
@@ -836,10 +836,10 @@ usocklnd_passiveconn_hellosent(usock_conn_t *conn)
         if (rc)
                 return rc;
 
-        idx = usocklnd_type2idx(conn->uc_type);                        
+        idx = usocklnd_type2idx(conn->uc_type);
 
         /* try to link conn to peer */
-        pthread_mutex_lock(&peer->up_lock);        
+        pthread_mutex_lock(&peer->up_lock);
         if (peer->up_conns[idx] == NULL) {
                 usocklnd_link_conn_to_peer(conn, peer, idx);
                 usocklnd_conn_addref(conn);
@@ -866,7 +866,7 @@ usocklnd_passiveconn_hellosent(usock_conn_t *conn)
                 list_del_init(&conn2->uc_tx_list);
                 list_add(&zcack_list, &conn2->uc_zcack_list);
                 list_del_init(&conn2->uc_zcack_list);
-        
+
                 pthread_mutex_lock(&conn->uc_lock);
                 list_add_tail(&conn->uc_tx_list, &tx_list);
                 list_del_init(&tx_list);
@@ -874,7 +874,7 @@ usocklnd_passiveconn_hellosent(usock_conn_t *conn)
                 list_del_init(&zcack_list);
                 conn->uc_peer = peer;
                 pthread_mutex_unlock(&conn->uc_lock);
-                
+
                 conn2->uc_peer = NULL; /* make conn2 zombie */
                 pthread_mutex_unlock(&conn2->uc_lock);
                 usocklnd_conn_decref(conn2);
@@ -889,7 +889,7 @@ usocklnd_passiveconn_hellosent(usock_conn_t *conn)
         pthread_mutex_unlock(&peer->up_lock);
         usocklnd_peer_decref(peer);
 
-  passive_hellosent_done:        
+  passive_hellosent_done:
         /* safely transit to UC_READY state */
         /* rc == 0 */
         pthread_mutex_lock(&conn->uc_lock);
@@ -935,23 +935,23 @@ usocklnd_send_tx(usock_conn_t *conn, usock_tx_t *tx)
 {
         struct iovec *iov;
         int           nob;
-        int           fd = conn->uc_fd;
         cfs_time_t    t;
-        
+
         LASSERT (tx->tx_resid != 0);
 
         do {
                 usock_peer_t *peer = conn->uc_peer;
 
                 LASSERT (tx->tx_niov > 0);
-                
-                nob = libcfs_sock_writev(fd, tx->tx_iov, tx->tx_niov);
+
+                nob = libcfs_sock_writev(conn->uc_sock,
+                                         tx->tx_iov, tx->tx_niov);
                 if (nob < 0)
                         conn->uc_errored = 1;
                 if (nob <= 0) /* write queue is flow-controlled or error */
                         return nob;
-                
-                LASSERT (nob <= tx->tx_resid); 
+
+                LASSERT (nob <= tx->tx_resid);
                 tx->tx_resid -= nob;
                 t = cfs_time_current();
                 conn->uc_tx_deadline = cfs_time_add(t, cfs_time_seconds(usock_tuns.ut_timeout));
@@ -959,22 +959,22 @@ usocklnd_send_tx(usock_conn_t *conn, usock_tx_t *tx)
                 if(peer != NULL)
                         peer->up_last_alive = t;
 
-                /* "consume" iov */ 
+                /* "consume" iov */
                 iov = tx->tx_iov;
-                do { 
-                        LASSERT (tx->tx_niov > 0); 
-                        
-                        if (nob < iov->iov_len) { 
-                                iov->iov_base = (void *)(((unsigned long)(iov->iov_base)) + nob);
-                                iov->iov_len -= nob; 
-                                break; 
-                        } 
+                do {
+                        LASSERT (tx->tx_niov > 0);
 
-                        nob -= iov->iov_len; 
-                        tx->tx_iov = ++iov; 
-                        tx->tx_niov--; 
+                        if (nob < iov->iov_len) {
+                                iov->iov_base = (void *)(((unsigned long)(iov->iov_base)) + nob);
+                                iov->iov_len -= nob;
+                                break;
+                        }
+
+                        nob -= iov->iov_len;
+                        tx->tx_iov = ++iov;
+                        tx->tx_niov--;
                 } while (nob != 0);
-                
+
         } while (tx->tx_resid != 0);
 
         return 1; /* send complete */
@@ -994,16 +994,17 @@ usocklnd_read_data(usock_conn_t *conn)
 
         do {
                 usock_peer_t *peer = conn->uc_peer;
-                
+
                 LASSERT (conn->uc_rx_niov > 0);
-                
-                nob = libcfs_sock_readv(conn->uc_fd, conn->uc_rx_iov, conn->uc_rx_niov);                
+
+                nob = libcfs_sock_readv(conn->uc_sock,
+                                        conn->uc_rx_iov, conn->uc_rx_niov);
                 if (nob <= 0) {/* read nothing or error */
                         conn->uc_errored = 1;
                         return nob;
                 }
-                
-                LASSERT (nob <= conn->uc_rx_nob_wanted); 
+
+                LASSERT (nob <= conn->uc_rx_nob_wanted);
                 conn->uc_rx_nob_wanted -= nob;
                 conn->uc_rx_nob_left -= nob;
                 t = cfs_time_current();
@@ -1011,23 +1012,23 @@ usocklnd_read_data(usock_conn_t *conn)
 
                 if(peer != NULL)
                         peer->up_last_alive = t;
-                
-                /* "consume" iov */ 
-                iov = conn->uc_rx_iov;
-                do { 
-                        LASSERT (conn->uc_rx_niov > 0); 
-                        
-                        if (nob < iov->iov_len) { 
-                                iov->iov_base = (void *)(((unsigned long)(iov->iov_base)) + nob); 
-                                iov->iov_len -= nob; 
-                                break; 
-                        } 
 
-                        nob -= iov->iov_len; 
+                /* "consume" iov */
+                iov = conn->uc_rx_iov;
+                do {
+                        LASSERT (conn->uc_rx_niov > 0);
+
+                        if (nob < iov->iov_len) {
+                                iov->iov_base = (void *)(((unsigned long)(iov->iov_base)) + nob);
+                                iov->iov_len -= nob;
+                                break;
+                        }
+
+                        nob -= iov->iov_len;
                         conn->uc_rx_iov = ++iov;
-                        conn->uc_rx_niov--; 
+                        conn->uc_rx_niov--;
                 } while (nob != 0);
-                
+
         } while (conn->uc_rx_nob_wanted != 0);
 
         return 1; /* read complete */

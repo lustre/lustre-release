@@ -238,23 +238,6 @@ uid_t cfs_curproc_uid(void)
         return getuid();
 }
 
-int cfs_parse_int_tunable(int *value, char *name)
-{
-        char    *env = getenv(name);
-        char    *end;
-
-        if (env == NULL)
-                return 0;
-
-        *value = (int)strtoull(env, &end, 0);
-        if (*end == 0)
-                return 0;
-
-        CERROR("Can't parse tunable %s=%s\n", name, env);
-        return -EINVAL;
-}
-
-
 void cfs_enter_debugger(void)
 {
         /*

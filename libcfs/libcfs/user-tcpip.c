@@ -39,7 +39,7 @@
 #include <libcfs/libcfs.h>
 
 #include <sys/socket.h>
-#ifdef	HAVE_NETINET_IN_H
+#ifdef  HAVE_NETINET_IN_H
 #include <netinet/in.h>
 #endif
 #include <netinet/tcp.h>
@@ -238,93 +238,76 @@ libcfs_ipif_enumerate (char ***namesp)
  */
 
 int
-libcfs_sock_listen (int *sockp, __u32 local_ip, int local_port, int backlog)
+libcfs_sock_listen (cfs_socket_t **sockp,
+                    __u32 local_ip, int local_port, int backlog)
 {
-        int                rc;
-        int                option;
-        struct sockaddr_in locaddr;
-        
-        *sockp = socket(AF_INET, SOCK_STREAM, 0);
-        if (*sockp < 0) {
-                rc = -errno;
-                CERROR("socket() failed: errno==%d\n", errno);
+        int rc;
+        int fatal;
+
+        rc = libcfs_sock_create(sockp, &fatal, local_ip, local_port);
+        if (rc != 0)
                 return rc;
-        }
 
-        option = 1;
-        if ( setsockopt(*sockp, SOL_SOCKET, SO_REUSEADDR,
-                        (char *)&option, sizeof (option)) ) {
-                rc = -errno;
-                CERROR("setsockopt(SO_REUSEADDR) failed: errno==%d\n", errno);
-                goto failed;
-        }
-
-        if (local_ip != 0 || local_port != 0) {
-                memset(&locaddr, 0, sizeof(locaddr));
-                locaddr.sin_family = AF_INET;
-                locaddr.sin_port = htons(local_port);
-                locaddr.sin_addr.s_addr = (local_ip == 0) ?
-                                          INADDR_ANY : htonl(local_ip);
-
-                if ( bind(*sockp, (struct sockaddr *)&locaddr, sizeof(locaddr)) ) {
-                        rc = -errno;
-                        if ( errno == -EADDRINUSE )
-                                CDEBUG(D_NET, "Port %d already in use\n",
-                                       local_port);
-                        else
-                                CERROR("bind() to port %d failed: errno==%d\n",
-                                       local_port, errno);
-                        goto failed;
-                }
-        }
-
-        if ( listen(*sockp, backlog) ) {
+        if ( listen((*sockp)->s_fd, backlog) ) {
                 rc = -errno;
                 CERROR("listen() with backlog==%d failed: errno==%d\n",
                        backlog, errno);
                 goto failed;
         }
-        
+
         return 0;
 
   failed:
-        close(*sockp);
+        libcfs_sock_release(*sockp);
         return rc;
 }
 
+void
+libcfs_sock_release (cfs_socket_t *sock)
+{
+        close(sock->s_fd);
+        LIBCFS_FREE(sock, sizeof(cfs_socket_t));
+}
+
 int
-libcfs_sock_accept (int *newsockp, int sock, __u32 *peer_ip, int *peer_port)
+libcfs_sock_accept (cfs_socket_t **newsockp, cfs_socket_t *sock)
 {
         struct sockaddr_in accaddr;
-        socklen_t accaddr_len = sizeof(struct sockaddr_in);
+        socklen_t          accaddr_len = sizeof(struct sockaddr_in);
 
-        *newsockp = accept(sock, (struct sockaddr *)&accaddr, &accaddr_len);
-
-        if ( *newsockp < 0 ) {
-                CERROR("accept() failed: errno==%d\n", errno);
-                return -errno;
+        LIBCFS_ALLOC(*newsockp, sizeof(cfs_socket_t));
+        if (*newsockp == NULL) {
+                CERROR ("Can't alloc memory for cfs_socket_t\n");
+                return -ENOMEM;
         }
 
-        *peer_ip = ntohl(accaddr.sin_addr.s_addr);
-        *peer_port = ntohs(accaddr.sin_port);
-        
+        (*newsockp)->s_fd = accept(sock->s_fd,
+                                   (struct sockaddr *)&accaddr, &accaddr_len);
+
+        if ( (*newsockp)->s_fd < 0 ) {
+                int rc = -errno;
+                CERROR("accept() failed: errno==%d\n", -rc);
+                LIBCFS_FREE(*newsockp, sizeof(cfs_socket_t));
+                return rc;
+        }
+
         return 0;
 }
 
 int
-libcfs_sock_read (int sock, void *buffer, int nob, int timeout)
+libcfs_sock_read (cfs_socket_t *sock, void *buffer, int nob, int timeout)
 {
-        int rc;
+        int           rc;
         struct pollfd pfd;
-        cfs_time_t start_time = cfs_time_current();
+        cfs_time_t    start_time = cfs_time_current();
 
-        pfd.fd = sock;
+        pfd.fd = sock->s_fd;
         pfd.events = POLLIN;
         pfd.revents = 0;
 
         /* poll(2) measures timeout in msec */
         timeout *= 1000;
-        
+
         while (nob != 0 && timeout > 0) {
                 cfs_time_t current_time;
 
@@ -335,21 +318,70 @@ libcfs_sock_read (int sock, void *buffer, int nob, int timeout)
                         return -ETIMEDOUT;
                 if ((pfd.revents & POLLIN) == 0)
                         return -EIO;
-                                
-                rc = read(sock, buffer, nob);                
+
+                rc = read(sock->s_fd, buffer, nob);
                 if (rc < 0)
                         return -errno;
                 if (rc == 0)
                         return -EIO;
-                
+
                 buffer = ((char *)buffer) + rc;
                 nob -= rc;
 
                 current_time = cfs_time_current();
-                timeout -= cfs_duration_sec(cfs_time_sub(cfs_time_current(),
-                                                        start_time));
+                timeout -= 1000 *
+                        cfs_duration_sec(cfs_time_sub(current_time,
+                                                      start_time));
+                start_time = current_time;
         }
-        
+
+        if (nob == 0)
+                return 0;
+        else
+                return -ETIMEDOUT;
+}
+
+int
+libcfs_sock_write (cfs_socket_t *sock, void *buffer, int nob, int timeout)
+{
+        int           rc;
+        struct pollfd pfd;
+        cfs_time_t    start_time = cfs_time_current();
+
+        pfd.fd = sock->s_fd;
+        pfd.events = POLLOUT;
+        pfd.revents = 0;
+
+        /* poll(2) measures timeout in msec */
+        timeout *= 1000;
+
+        while (nob != 0 && timeout > 0) {
+                cfs_time_t current_time;
+
+                rc = poll(&pfd, 1, timeout);
+                if (rc < 0)
+                        return -errno;
+                if (rc == 0)
+                        return -ETIMEDOUT;
+                if ((pfd.revents & POLLOUT) == 0)
+                        return -EIO;
+
+                rc = write(sock->s_fd, buffer, nob);
+                if (rc < 0)
+                        return -errno;
+                if (rc == 0)
+                        return -EIO;
+
+                buffer = ((char *)buffer) + rc;
+                nob -= rc;
+
+                current_time = cfs_time_current();
+                timeout -= 1000 *
+                        cfs_duration_sec(cfs_time_sub(current_time,
+                                                      start_time));
+                start_time = current_time;
+        }
+
         if (nob == 0)
                 return 0;
         else
@@ -359,31 +391,62 @@ libcfs_sock_read (int sock, void *buffer, int nob, int timeout)
 /* Just try to connect to localhost to wake up entity that are
  * sleeping in accept() */
 void
-libcfs_sock_abort_accept(__u16 port)
+libcfs_sock_abort_accept(cfs_socket_t *sock)
 {
         int                fd, rc;
+        struct sockaddr_in remaddr;
         struct sockaddr_in locaddr;
+        socklen_t          alen = sizeof(struct sockaddr_in);
+
+        rc = getsockname(sock->s_fd, (struct sockaddr *)&remaddr, &alen);
+        if ( rc != 0 ) {
+                CERROR("getsockname() failed: errno==%d\n", errno);
+                return;
+        }
 
         memset(&locaddr, 0, sizeof(locaddr));
         locaddr.sin_family = AF_INET;
-        locaddr.sin_port = htons(port);
+        locaddr.sin_port = remaddr.sin_port;
         locaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
         fd = socket(AF_INET, SOCK_STREAM, 0);
         if ( fd < 0 ) {
                 CERROR("socket() failed: errno==%d\n", errno);
                 return;
-        }        
-        
+        }
+
         rc = connect(fd, (struct sockaddr *)&locaddr, sizeof(locaddr));
         if ( rc != 0 ) {
                 if ( errno != ECONNREFUSED )
                         CERROR("connect() failed: errno==%d\n", errno);
                 else
-                        CDEBUG(D_NET, "Nobody to wake up at %d\n", port);
+                        CDEBUG(D_NET, "Nobody to wake up at %d\n",
+                               ntohs(remaddr.sin_port));
         }
-        
+
         close(fd);
+}
+
+int
+libcfs_sock_getaddr(cfs_socket_t *sock, int remote, __u32 *ip, int *port)
+{
+        int                rc;
+        struct sockaddr_in peer_addr;
+        socklen_t          peer_addr_len = sizeof(peer_addr);
+
+        LASSERT(remote == 1);
+
+        rc = getpeername(sock->s_fd,
+                         (struct sockaddr *)&peer_addr, &peer_addr_len);
+        if (rc != 0)
+                return -errno;
+
+        if (ip != NULL)
+                *ip = ntohl(peer_addr.sin_addr.s_addr);
+        if (port != NULL)
+                *port = ntohs(peer_addr.sin_port);
+
+        return rc;
 }
 
 /*
@@ -391,80 +454,81 @@ libcfs_sock_abort_accept(__u16 port)
  */
 
 int
-libcfs_getpeername(int sock_fd, __u32 *ipaddr_p, __u16 *port_p)
+libcfs_socketpair(cfs_socket_t **sockp)
 {
-        int                rc;
-        struct sockaddr_in peer_addr;
-        socklen_t          peer_addr_len = sizeof(peer_addr);
+        int rc, i, fdp[2];
 
-        rc = getpeername(sock_fd, (struct sockaddr *)&peer_addr, &peer_addr_len);
-        if (rc != 0)
-                return -errno;
-        
-        if (ipaddr_p != NULL)
-                *ipaddr_p = ntohl(peer_addr.sin_addr.s_addr);
-        if (port_p != NULL)
-                *port_p = ntohs(peer_addr.sin_port);
+        LIBCFS_ALLOC(sockp[0], sizeof(cfs_socket_t));
+        if (sockp[0] == NULL) {
+                CERROR ("Can't alloc memory for cfs_socket_t (1)\n");
+                return -ENOMEM;
+        }
 
-        return 0;
-}
+        LIBCFS_ALLOC(sockp[1], sizeof(cfs_socket_t));
+        if (sockp[1] == NULL) {
+                CERROR ("Can't alloc memory for cfs_socket_t (2)\n");
+                LIBCFS_FREE(sockp[0], sizeof(cfs_socket_t));
+                return -ENOMEM;
+        }
 
-int
-libcfs_socketpair(int *fdp)
-{
-        int rc, i;
-        
         rc = socketpair(AF_UNIX, SOCK_STREAM, 0, fdp);
         if (rc != 0) {
                 rc = -errno;
                 CERROR ("Cannot create socket pair\n");
+                LIBCFS_FREE(sockp[0], sizeof(cfs_socket_t));
+                LIBCFS_FREE(sockp[1], sizeof(cfs_socket_t));
                 return rc;
         }
-        
+
+        sockp[0]->s_fd = fdp[0];
+        sockp[1]->s_fd = fdp[1];
+
         for (i = 0; i < 2; i++) {
-                rc = libcfs_fcntl_nonblock(fdp[i]);
+                rc = libcfs_fcntl_nonblock(sockp[i]);
                 if (rc) {
-                        close(fdp[0]);                        
-                        close(fdp[1]);
+                        libcfs_sock_release(sockp[0]);
+                        libcfs_sock_release(sockp[1]);
                         return rc;
                 }
         }
-        
+
         return 0;
 }
 
 int
-libcfs_fcntl_nonblock(int fd)
+libcfs_fcntl_nonblock(cfs_socket_t *sock)
 {
         int rc, flags;
-        
-        flags = fcntl(fd, F_GETFL, 0);
+
+        flags = fcntl(sock->s_fd, F_GETFL, 0);
         if (flags == -1) {
                 rc = -errno;
                 CERROR ("Cannot get socket flags\n");
                 return rc;
         }
-        
-        rc = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+
+        rc = fcntl(sock->s_fd, F_SETFL, flags | O_NONBLOCK);
         if (rc != 0) {
                 rc = -errno;
                 CERROR ("Cannot set socket flags\n");
                 return rc;
         }
-        
+
         return 0;
 }
 
 int
-libcfs_sock_set_nagle(int fd, int nagle)
+libcfs_sock_set_nagle(cfs_socket_t *sock, int nagle)
 {
         int rc;
         int option = nagle ? 0 : 1;
 
 #if defined(__sun__) || defined(__sun)
-        rc = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &option, sizeof(option));
+        rc = setsockopt(sock->s_fd,
+                        IPPROTO_TCP, TCP_NODELAY, &option, sizeof(option));
 #else
-        rc = setsockopt(fd, SOL_TCP, TCP_NODELAY, &option, sizeof(option));
+        rc = setsockopt(sock->s_fd,
+                        SOL_TCP, TCP_NODELAY, &option, sizeof(option));
 #endif
 
         if (rc != 0) {
@@ -477,14 +541,15 @@ libcfs_sock_set_nagle(int fd, int nagle)
 }
 
 int
-libcfs_sock_set_bufsiz(int fd, int bufsiz)
+libcfs_sock_set_bufsiz(cfs_socket_t *sock, int bufsiz)
 {
         int rc, option;
-        
+
         LASSERT (bufsiz != 0);
 
         option = bufsiz;
-        rc = setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &option, sizeof(option));
+        rc = setsockopt(sock->s_fd,
+                        SOL_SOCKET, SO_SNDBUF, &option, sizeof(option));
         if (rc != 0) {
                 rc = -errno;
                 CERROR ("Cannot set SNDBUF socket option\n");
@@ -492,7 +557,8 @@ libcfs_sock_set_bufsiz(int fd, int bufsiz)
         }
 
         option = bufsiz;
-        rc = setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &option, sizeof(option));
+        rc = setsockopt(sock->s_fd,
+                        SOL_SOCKET, SO_RCVBUF, &option, sizeof(option));
         if (rc != 0) {
                 rc = -errno;
                 CERROR ("Cannot set RCVBUF socket option\n");
@@ -503,51 +569,24 @@ libcfs_sock_set_bufsiz(int fd, int bufsiz)
 }
 
 int
-libcfs_sock_create(int *fdp)
-{
-        int rc, fd, option;
-
-        fd = socket(AF_INET, SOCK_STREAM, 0);
-        if (fd < 0) {
-                rc = -errno;
-                CERROR ("Cannot create socket\n");
-                return rc;
-        }
-
-        option = 1;
-        rc = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, 
-                        &option, sizeof(option));
-        if (rc != 0) {
-                rc = -errno;
-                CERROR  ("Cannot set SO_REUSEADDR for socket\n");
-                close(fd);
-                return rc;
-        } 
-        
-        *fdp = fd;
-        return 0;
-}
-
-void libcfs_sock_release(int fd)
-{
-        close(fd);
-}
-
-int
-libcfs_sock_bind_to_port(int fd, __u16 port)
+libcfs_sock_bind(cfs_socket_t *sock, __u32 ip, __u16 port)
 {
         int                rc;
         struct sockaddr_in locaddr;
 
-        memset(&locaddr, 0, sizeof(locaddr)); 
-        locaddr.sin_family = AF_INET; 
-        locaddr.sin_addr.s_addr = INADDR_ANY;
+        if (ip == 0 && port == 0)
+                return 0;
+
+        memset(&locaddr, 0, sizeof(locaddr));
+        locaddr.sin_family = AF_INET;
+        locaddr.sin_addr.s_addr = (ip == 0) ? INADDR_ANY : htonl(ip);
         locaddr.sin_port = htons(port);
 
-        rc = bind(fd, (struct sockaddr *)&locaddr, sizeof(locaddr));
+        rc = bind(sock->s_fd, (struct sockaddr *)&locaddr, sizeof(locaddr));
         if (rc != 0) {
                 rc = -errno;
-                CERROR  ("Cannot bind to port %d\n", port);
+                CERROR("Cannot bind to %d.%d.%d.%d %d: %d\n",
+                       HIPQUAD(ip), port, rc);
                 return rc;
         }
 
@@ -555,7 +594,50 @@ libcfs_sock_bind_to_port(int fd, __u16 port)
 }
 
 int
-libcfs_sock_connect(int fd, __u32 ip, __u16 port)
+libcfs_sock_create(cfs_socket_t **sockp, int *fatal,
+                   __u32 local_ip, int local_port)
+{
+        int rc, fd, option;
+
+        *fatal = 1;
+
+        LIBCFS_ALLOC(*sockp, sizeof(cfs_socket_t));
+        if (*sockp == NULL) {
+                CERROR("Can't alloc memory for cfs_socket_t\n");
+                return -ENOMEM;
+        }
+
+        fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (fd < 0) {
+                rc = -errno;
+                CERROR("Cannot create socket: %d\n", rc);
+                LIBCFS_FREE(*sockp, sizeof(cfs_socket_t));
+                return rc;
+        }
+
+        (*sockp)->s_fd = fd;
+
+        option = 1;
+        rc = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR,
+                        &option, sizeof(option));
+        if (rc != 0) {
+                rc = -errno;
+                CERROR("Cannot set SO_REUSEADDR for socket: %d\n", rc);
+                libcfs_sock_release(*sockp);
+                return rc;
+        }
+
+        rc = libcfs_sock_bind(*sockp, local_ip, local_port);
+        if (rc != 0) {
+                *fatal = 0;
+                libcfs_sock_release(*sockp);
+        }
+
+        return rc;
+}
+
+int
+libcfs_sock_connect(cfs_socket_t *sock, __u32 ip, __u16 port)
 {
         int                rc;
         struct sockaddr_in addr;
@@ -564,8 +646,8 @@ libcfs_sock_connect(int fd, __u32 ip, __u16 port)
         addr.sin_family      = AF_INET;
         addr.sin_addr.s_addr = htonl(ip);
         addr.sin_port        = htons(port);
-        
-        rc = connect(fd, (struct sockaddr *)&addr,
+
+        rc = connect(sock->s_fd, (struct sockaddr *)&addr,
                      sizeof(struct sockaddr_in));
 
         if(rc != 0 && errno != EINPROGRESS) {
@@ -582,16 +664,17 @@ libcfs_sock_connect(int fd, __u32 ip, __u16 port)
 /* NB: EPIPE and ECONNRESET are considered as non-fatal
  * because:
  * 1) it still makes sense to continue reading &&
- * 2) anyway, poll() will set up POLLHUP|POLLERR flags */ 
-int libcfs_sock_writev(int fd, const struct iovec *vector, int count)
+ * 2) anyway, poll() will set up POLLHUP|POLLERR flags */
+int
+libcfs_sock_writev(cfs_socket_t *sock, const struct iovec *vector, int count)
 {
         int rc;
-        
-        rc = syscall(SYS_writev, fd, vector, count);
-        
-        if (rc == 0) /* write nothing */ 
+
+        rc = syscall(SYS_writev, sock->s_fd, vector, count);
+
+        if (rc == 0) /* write nothing */
                 return 0;
-        
+
         if (rc < 0) {
                 if (errno == EAGAIN ||   /* write nothing   */
                     errno == EPIPE ||    /* non-fatal error */
@@ -604,15 +687,16 @@ int libcfs_sock_writev(int fd, const struct iovec *vector, int count)
         return rc;
 }
 
-int libcfs_sock_readv(int fd, const struct iovec *vector, int count)
+int
+libcfs_sock_readv(cfs_socket_t *sock, const struct iovec *vector, int count)
 {
         int rc;
-        
-        rc = syscall(SYS_readv, fd, vector, count);
-        
-        if (rc == 0) /* EOF */ 
+
+        rc = syscall(SYS_readv, sock->s_fd, vector, count);
+
+        if (rc == 0) /* EOF */
                 return -EIO;
-        
+
         if (rc < 0) {
                 if (errno == EAGAIN) /* read nothing */
                         return 0;

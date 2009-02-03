@@ -57,7 +57,7 @@ void cfs_cond_resched(void);
 void cfs_waitq_init(cfs_waitq_t *waitq);
 void cfs_waitlink_init(cfs_waitlink_t *link);
 void cfs_waitq_add(cfs_waitq_t *waitq, cfs_waitlink_t *link);
-void cfs_waitq_add_exclusive(cfs_waitq_t *waitq, 
+void cfs_waitq_add_exclusive(cfs_waitq_t *waitq,
                              cfs_waitlink_t *link);
 void cfs_waitq_del(cfs_waitq_t *waitq, cfs_waitlink_t *link);
 int  cfs_waitq_active(cfs_waitq_t *waitq);

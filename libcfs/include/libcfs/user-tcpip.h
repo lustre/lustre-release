@@ -58,26 +58,36 @@ int libcfs_ipif_enumerate (char ***namesp);
  * Network function used by user-land lnet acceptor
  */
 
-int libcfs_sock_listen (int *sockp, __u32 local_ip, int local_port, int backlog);
-int libcfs_sock_accept (int *newsockp, int sock, __u32 *peer_ip, int *peer_port);
-int libcfs_sock_read (int sock, void *buffer, int nob, int timeout);
-void libcfs_sock_abort_accept(__u16 port);
+typedef struct cfs_socket {
+        int s_fd;
+} cfs_socket_t;
+
+#define LIBCFS_SOCK2FD(sock) ((sock)->s_fd)
+
+int libcfs_sock_listen(cfs_socket_t **sockp, __u32 ip, int port, int backlog);
+int libcfs_sock_accept(cfs_socket_t **newsockp, cfs_socket_t *sock);
+int libcfs_sock_read(cfs_socket_t *sock, void *buffer, int nob, int timeout);
+int libcfs_sock_write(cfs_socket_t *sock, void *buffer, int nob, int timeout);
+void libcfs_sock_abort_accept(cfs_socket_t *sock);
+void libcfs_sock_release(cfs_socket_t *sock);
+int libcfs_sock_getaddr(cfs_socket_t *sock, int remote, __u32 *ip, int *port);
 
 /*
  * Network functions of common use
  */
 
-int libcfs_getpeername(int sock_fd, __u32 *ipaddr_p, __u16 *port_p);
-int libcfs_socketpair(int *fdp);
-int libcfs_fcntl_nonblock(int fd);
-int libcfs_sock_set_nagle(int fd, int nagle);
-int libcfs_sock_set_bufsiz(int fd, int bufsiz);
-int libcfs_sock_create(int *fdp);
-void libcfs_sock_release(int fd);
-int libcfs_sock_bind_to_port(int fd, __u16 port);
-int libcfs_sock_connect(int fd, __u32 ip, __u16 port);
-int libcfs_sock_writev(int fd, const struct iovec *vector, int count);
-int libcfs_sock_readv(int fd, const struct iovec *vector, int count);
+int libcfs_socketpair(cfs_socket_t **sockp);
+int libcfs_fcntl_nonblock(cfs_socket_t *sock);
+int libcfs_sock_set_nagle(cfs_socket_t *sock, int nagle);
+int libcfs_sock_set_bufsiz(cfs_socket_t *sock, int bufsiz);
+int libcfs_sock_connect(cfs_socket_t *sock, __u32 ip, __u16 port);
+int libcfs_sock_writev(cfs_socket_t *sock,
+                       const struct iovec *vector, int count);
+int libcfs_sock_readv(cfs_socket_t *sock,
+                      const struct iovec *vector, int count);
+int libcfs_sock_create(cfs_socket_t **sockp, int *fatal,
+                       __u32 local_ip, int local_port);
+
 
 /*
  * Macros for easy printing IP-adresses
