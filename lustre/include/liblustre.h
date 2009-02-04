@@ -379,6 +379,7 @@ typedef struct {
          int size;
 } kmem_cache_t;
 #define SLAB_HWCACHE_ALIGN 0
+#define SLAB_DESTROY_BY_RCU 0
 static inline kmem_cache_t *
 kmem_cache_create(const char *name, size_t objsize, size_t cdum,
                   unsigned long d,
@@ -902,10 +903,10 @@ void posix_acl_release(struct posix_acl *acl)
 }
 
 #ifdef LIBLUSTRE_POSIX_ACL
- #ifndef posix_acl_xattr_entry 
+ #ifndef posix_acl_xattr_entry
   #define posix_acl_xattr_entry xattr_acl_entry
  #endif
- #ifndef posix_acl_xattr_header 
+ #ifndef posix_acl_xattr_header
   #define posix_acl_xattr_header xattr_acl_header
  #endif
  #ifndef posix_acl_xattr_size

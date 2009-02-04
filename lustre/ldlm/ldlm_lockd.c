@@ -1135,7 +1135,7 @@ existing_lock:
         if (dlm_req->lock_desc.l_resource.lr_type == LDLM_EXTENT)
                 lock->l_req_extent = lock->l_policy_data.l_extent;
 
-        err = ldlm_lock_enqueue(obddev->obd_namespace, &lock, cookie, 
+        err = ldlm_lock_enqueue(obddev->obd_namespace, &lock, cookie,
                                 (int *)&flags);
         if (err)
                 GOTO(out, err);
@@ -1755,7 +1755,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
-        if ((lock->l_flags & LDLM_FL_FAIL_LOC) && 
+        if ((lock->l_flags & LDLM_FL_FAIL_LOC) &&
             lustre_msg_get_opc(req->rq_reqmsg) == LDLM_BL_CALLBACK)
                 OBD_RACE(OBD_FAIL_LDLM_CP_BL_RACE);
 
@@ -1999,8 +1999,8 @@ static int ldlm_bl_thread_main(void *arg)
 
 #endif
 
-/* 
- * Export handle<->lock hash operations. 
+/*
+ * Export handle<->lock hash operations.
  */
 static unsigned
 ldlm_export_lock_hash(lustre_hash_t *lh, void *key, unsigned mask)
@@ -2316,8 +2316,8 @@ int __init ldlm_init(void)
                 return -ENOMEM;
 
         ldlm_lock_slab = cfs_mem_cache_create("ldlm_locks",
-                                           sizeof(struct ldlm_lock), 0,
-                                           SLAB_HWCACHE_ALIGN);
+                                      sizeof(struct ldlm_lock), 0,
+                                      SLAB_HWCACHE_ALIGN | SLAB_DESTROY_BY_RCU);
         if (ldlm_lock_slab == NULL) {
                 cfs_mem_cache_destroy(ldlm_resource_slab);
                 return -ENOMEM;
