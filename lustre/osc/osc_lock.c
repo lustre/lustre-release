@@ -414,16 +414,15 @@ static void osc_lock_granted(const struct lu_env *env, struct osc_lock *olck,
                 olck->ols_state = OLS_GRANTED;
                 osc_lock_lvb_update(env, olck, rc);
 
-                /* release DLM spin-locks to allow cl_lock_modify() to take a
-                 * semaphore on a parent lock. This is safe, because
+                /* release DLM spin-locks to allow cl_lock_{modify,signal}()
+                 * to take a semaphore on a parent lock. This is safe, because
                  * spin-locks are needed to protect consistency of
                  * dlmlock->l_*_mode and LVB, and we have finished processing
                  * them. */
                 unlock_res_and_lock(dlmlock);
                 cl_lock_modify(env, lock, descr);
-                lock_res_and_lock(dlmlock);
-
                 cl_lock_signal(env, lock);
+                lock_res_and_lock(dlmlock);
         }
         EXIT;
 }
@@ -1061,6 +1060,7 @@ static void osc_lock_to_lockless(const struct lu_env *env,
                         slice->cls_ops = &osc_lock_lockless_ops;
                 }
         }
+        LASSERT(ergo(ols->ols_glimpse, !osc_lock_is_lockless(ols)));
 }
 
 /**
@@ -1296,7 +1296,7 @@ static int osc_lock_enqueue(const struct lu_env *env,
                         ols->ols_state = OLS_GRANTED;
                 }
         }
-
+        LASSERT(ergo(ols->ols_glimpse, !osc_lock_is_lockless(ols)));
         RETURN(result);
 }
 
