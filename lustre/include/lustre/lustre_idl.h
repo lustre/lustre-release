@@ -961,6 +961,29 @@ static inline int fid_is_idif(const struct lu_fid *fid)
 }
 
 /**
+ * Check if a fid sequence is sane or not
+ * \param seq the sequence to be tested.
+ * \return true if the sequence is a sane sequence; otherwise false.
+ */
+static inline int fid_seq_is_sane(__u64 seq)
+{
+        return seq != 0;
+}
+
+/**
+ * Check if a fid is sane or not
+ * \param fid the fid to be tested.
+ * \return true if the fid is sane; otherwise false.
+ */
+static inline int fid_is_sane(const struct lu_fid *fid)
+{
+        return
+                fid != NULL &&
+                ((fid_seq_is_sane(fid_seq(fid)) && fid_oid(fid) != 0
+                                                && fid_ver(fid) == 0) ||
+                fid_is_igif(fid));
+}
+/**
  * Check if a fid is zero.
  * \param fid the fid to be tested.
  * \return true if the fid is zero; otherwise false. 
@@ -994,7 +1017,7 @@ static inline __u32 lu_igif_gen(const struct lu_fid *fid)
  * Check if two fids are equal or not.
  * \param f0 the first fid
  * \param f1 the second fid
- * \return true if the two fids are equal; otherwise false. 
+ * \return true if the two fids are equal; otherwise false.
  */
 static inline int lu_fid_eq(const struct lu_fid *f0,
                             const struct lu_fid *f1)

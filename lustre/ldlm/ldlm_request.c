@@ -1922,10 +1922,11 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
 
         ldlm_lock2handle(lock, &body->lock_handle[0]);
         size[DLM_LOCKREPLY_OFF] = sizeof(*reply);
+        buffers = 3;
         if (lock->l_lvb_len != 0) {
-                buffers = 3;
                 size[DLM_REPLY_REC_OFF] = lock->l_lvb_len;
-        }
+        } else
+                size[DLM_REPLY_REC_OFF] = sizeof (struct ost_lvb);
         ptlrpc_req_set_repsize(req, buffers, size);
 
         LDLM_DEBUG(lock, "replaying lock:");

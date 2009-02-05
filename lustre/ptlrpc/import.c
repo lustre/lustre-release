@@ -529,9 +529,31 @@ static int import_select_connection(struct obd_import *imp)
         RETURN(0);
 }
 
+/**
+ * must be called under imp lock
+ */
+static int ptlrpc_first_transno(struct obd_import *imp, __u64 *transno)
+{
+        struct ptlrpc_request *req;
+        struct list_head *tmp;
+
+        if (list_empty(&imp->imp_replay_list))
+                return 0;
+        tmp = imp->imp_replay_list.next;
+        req = list_entry(tmp, struct ptlrpc_request, rq_replay_list);
+        *transno = req->rq_transno;
+        if (req->rq_transno == 0) {
+                DEBUG_REQ(D_ERROR, req, "zero transno in replay");
+                LBUG();
+        }
+
+        return 1;
+}
+
 int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
 {
         struct obd_device *obd = imp->imp_obd;
+        int set_transno = 0;
         int initial_connect = 0;
         int rc;
         __u64 committed_before_reconnect = 0;
@@ -573,6 +595,9 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                 initial_connect = 1;
         else
                 committed_before_reconnect = imp->imp_peer_committed_transno;
+
+        set_transno = ptlrpc_first_transno(imp,
+                                           &imp->imp_connect_data.ocd_transno);
 
         spin_unlock(&imp->imp_lock);
 
@@ -666,6 +691,10 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                 lustre_msg_add_op_flags(request->rq_reqmsg,
                                         MSG_CONNECT_INITIAL);
         }
+
+        if (set_transno)
+                lustre_msg_add_op_flags(request->rq_reqmsg,
+                                        MSG_CONNECT_TRANSNO);
 
         DEBUG_REQ(D_RPCTRACE, request, "%sconnect request %d",
                   aa->pcaa_initial_connect ? "initial " : "re",
@@ -1160,7 +1189,11 @@ static int signal_completed_replay(struct obd_import *imp)
 
         ptlrpc_req_set_repsize(req, 1, NULL);
         req->rq_send_state = LUSTRE_IMP_REPLAY_WAIT;
-        lustre_msg_add_flags(req->rq_reqmsg, MSG_LAST_REPLAY);
+        lustre_msg_add_flags(req->rq_reqmsg,
+                             MSG_LOCK_REPLAY_DONE |
+                             MSG_REQ_REPLAY_DONE |
+                             MSG_LAST_REPLAY);
+
         if (imp->imp_delayed_recovery)
                 lustre_msg_add_flags(req->rq_reqmsg, MSG_DELAY_REPLAY);
         req->rq_timeout *= 3;

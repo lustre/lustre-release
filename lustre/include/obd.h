@@ -1033,6 +1033,7 @@ enum obd_cleanup_stage {
 #define KEY_FIEMAP              "fiemap"
 /* XXX unused */
 #define KEY_ASYNC               "async"
+#define KEY_CAPA_KEY            "capa_key"
 
 struct obd_ops {
         struct module *o_owner;

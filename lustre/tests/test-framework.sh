@@ -663,13 +663,14 @@ wait_for() {
 
 wait_mds_recovery_done () {
     local timeout=`do_facet mds lctl get_param  -n timeout`
+    local mdtdevice=$(get_mds_mdt_device_proc_path)
 #define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 / 2)
 # as we are in process of changing obd_timeout in different ways
 # let's set MAX longer than that
     local MAX=$(( timeout * 4 ))
     local WAIT=0
     while [ $WAIT -lt $MAX ]; do
-        STATUS=`do_facet mds "lctl get_param -n mds.*-MDT*.recovery_status | grep status"`
+        STATUS=`do_facet mds "lctl get_param -n ${mdtdevice}.*-MDT*.recovery_status | grep status"`
         echo $STATUS | grep COMPLETE && return 0
         sleep 5
         WAIT=$((WAIT + 5))
@@ -799,7 +800,8 @@ replay_barrier_nodf() {
 
 mds_evict_client() {
     UUID=`lctl get_param -n mdc.${mds_svc}-mdc-*.uuid`
-    do_facet mds "lctl set_param -n mds.${mds_svc}.evict_client $UUID"
+    local mdtdevice=$(get_mds_mdt_device_proc_path)
+    do_facet mds "lctl set_param -n ${mdtdevice}.${mds_svc}.evict_client $UUID"
 }
 
 ost_evict_client() {
@@ -2152,3 +2154,15 @@ get_mdtosc_proc_path() {
         echo "${ost}-osc-MDT0000"
     fi
 }
+
+get_mds_mdt_device_proc_path() {
+    local major=$(get_mds_version_major)
+    local minor=$(get_mds_version_minor)
+    if [ $major -le 1 -a $minor -le 8 ] ; then
+        echo "mds"
+    else
+        echo "mdt"
+    fi
+}
+
+

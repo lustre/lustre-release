@@ -1958,8 +1958,8 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 #endif
 
         inode->i_ino = ll_fid_build_ino(sbi, &body->fid1);
-        if (body->valid & OBD_MD_FLGENER)
-                inode->i_generation = body->generation;
+        inode->i_generation = ll_fid_build_gen(sbi, &body->fid1);
+        *ll_inode_lu_fid(inode) = *((struct lu_fid*)&md->body->fid1);
 
         if (body->valid & OBD_MD_FLATIME) {
                 if (body->atime > LTIME_S(inode->i_atime))

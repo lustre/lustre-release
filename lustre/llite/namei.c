@@ -95,18 +95,30 @@ ino_t ll_fid_build_ino(struct ll_sb_info *sbi,
 
 }
 
+__u32 ll_fid_build_gen(struct ll_sb_info *sbi, struct ll_fid *fid)
+{
+        __u32 gen = 0;
+        ENTRY;
+
+        if (fid_is_igif((struct lu_fid*)fid)) {
+                gen = lu_igif_gen((struct lu_fid*)fid);
+        }
+        RETURN(gen);
+}
+
 /* called from iget5_locked->find_inode() under inode_lock spinlock */
 static int fid_test_inode(struct inode *inode, void *opaque)
 {
         struct lustre_md     *md = opaque;
+        struct lu_fid        *fid = (struct lu_fid*)&md->body->fid1;
 
         if (unlikely(!(md->body->valid & OBD_MD_FLID))) {
                 CERROR("MDS body missing FID\n");
                 return 0;
         }
 
-        return lu_fid_eq(ll_inode_lu_fid(inode),
-                         (struct lu_fid*)&md->body->fid1);
+        return fid_seq(ll_inode_lu_fid(inode)) == fid_seq(fid) &&
+               fid_oid(ll_inode_lu_fid(inode)) == fid_oid(fid);
 }
 
 static int fid_set_inode(struct inode *inode, void *opaque)

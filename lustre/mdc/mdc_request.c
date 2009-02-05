@@ -396,9 +396,9 @@ int mdc_getxattr(struct obd_export *exp, struct ll_fid *fid,
                                 input, input_size, output_size, 0, request);
 }
 
-/* This should be called with both the request and the reply still packed. */
-void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,
-                                int repoff)
+/* For the fid-less server */
+static void mdc_store_inode_generation_18(struct ptlrpc_request *req,
+                                          int reqoff, int repoff)
 {
         struct mds_rec_create *rec = lustre_msg_buf(req->rq_reqmsg, reqoff,
                                                     sizeof(*rec));
@@ -417,6 +417,41 @@ void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,
 
         DEBUG_REQ(D_INODE, req, "storing generation %u for ino "LPU64,
                   rec->cr_replayfid.generation, rec->cr_replayfid.id);
+}
+
+static void mdc_store_inode_generation_20(struct ptlrpc_request *req,
+                                          int reqoff, int repoff)
+{
+        struct mdt_rec_create *rec = lustre_msg_buf(req->rq_reqmsg, reqoff,
+                                                    sizeof(*rec));
+        struct mdt_body *body = lustre_msg_buf(req->rq_repmsg, repoff,
+                                               sizeof(*body));
+
+        LASSERT (rec != NULL);
+        LASSERT (body != NULL);
+
+        rec->cr_fid2 = body->fid1;
+        rec->cr_ioepoch = body->ioepoch;
+        rec->cr_old_handle.cookie = body->handle.cookie;
+
+        if (!fid_is_sane(&body->fid1)) {
+                DEBUG_REQ(D_ERROR, req, "saving replay request with"
+                          "insane fid");
+                LBUG();
+        }
+
+        DEBUG_REQ(D_INODE, req, "storing generation %u for ino "LPU64,
+                  rec->cr_fid1.f_oid, rec->cr_fid2.f_seq);
+}
+
+/* This should be called with both the request and the reply still packed. */
+void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,
+                                int repoff)
+{
+        if (mdc_req_is_2_0_server(req))
+                mdc_store_inode_generation_20(req, reqoff, repoff);
+        else
+                mdc_store_inode_generation_18(req, reqoff, repoff);
 }
 
 #ifdef CONFIG_FS_POSIX_ACL
@@ -569,7 +604,7 @@ static void mdc_commit_open(struct ptlrpc_request *req)
         if (mod->mod_och != NULL)
                 mod->mod_och->och_mod = NULL;
 
-        OBD_FREE(mod, sizeof(*mod));
+        OBD_FREE_PTR(mod);
         req->rq_cb_data = NULL;
 }
 
@@ -601,28 +636,99 @@ static void mdc_replay_open(struct ptlrpc_request *req)
                 file_fh = &och->och_fh;
                 CDEBUG(D_RPCTRACE, "updating handle from "LPX64" to "LPX64"\n",
                        file_fh->cookie, body->handle.cookie);
-                memcpy(&old, file_fh, sizeof(old));
-                memcpy(file_fh, &body->handle, sizeof(*file_fh));
+                old = *file_fh;
+                *file_fh = body->handle;
         }
 
         close_req = mod->mod_close_req;
+
         if (close_req != NULL) {
-                struct mds_body *close_body;
                 LASSERT(lustre_msg_get_opc(close_req->rq_reqmsg) == MDS_CLOSE);
-                close_body = lustre_msg_buf(close_req->rq_reqmsg, REQ_REC_OFF,
-                                            sizeof(*close_body));
-                if (och != NULL)
-                        LASSERT(!memcmp(&old, &close_body->handle, sizeof old));
-                DEBUG_REQ(D_RPCTRACE, close_req, "updating close with new fh");
-                memcpy(&close_body->handle, &body->handle,
-                       sizeof(close_body->handle));
+                if (mdc_req_is_2_0_server(close_req)) {
+                        struct mdt_epoch *epoch = NULL;
+
+                        epoch = lustre_msg_buf(close_req->rq_reqmsg,
+                                               REQ_REC_OFF, sizeof(*epoch));
+                        LASSERT(epoch);
+                        if (och != NULL)
+                                LASSERT(!memcmp(&old, &epoch->handle,
+                                        sizeof(old)));
+                        DEBUG_REQ(D_RPCTRACE, close_req,
+                                  "updating close with new fh");
+                        epoch->handle = body->handle;
+                 } else {
+                        struct mds_body *close_body = NULL;
+
+                        close_body = lustre_msg_buf(close_req->rq_reqmsg,
+                                                    REQ_REC_OFF,
+                                                    sizeof(*close_body));
+                        if (och != NULL)
+                                LASSERT(!memcmp(&old, &close_body->handle,
+                                        sizeof(old)));
+                        DEBUG_REQ(D_RPCTRACE, close_req,
+                                  "updating close with new fh");
+                        close_body->handle = body->handle;
+                 }
         }
 
         EXIT;
 }
 
-void mdc_set_open_replay_data(struct obd_client_handle *och,
-                              struct ptlrpc_request *open_req)
+static void mdc_set_open_replay_data_20(struct obd_client_handle *och,
+                                        struct ptlrpc_request *open_req)
+{
+	struct mdc_open_data  *mod;
+        struct obd_import     *imp = open_req->rq_import;
+        struct mdt_rec_create *rec = lustre_msg_buf(open_req->rq_reqmsg,
+                                                    DLM_INTENT_REC_OFF,
+                                                    sizeof(*rec));
+        struct mdt_body       *body = lustre_msg_buf(open_req->rq_repmsg,
+                                                     DLM_REPLY_REC_OFF,
+                                                     sizeof(*body));
+
+        /* If request is not eligible for replay, just bail out */
+        if (!open_req->rq_replay)
+                return;
+
+        /* incoming message in my byte order (it's been swabbed) */
+        LASSERT(rec != NULL);
+        LASSERT(lustre_rep_swabbed(open_req, DLM_REPLY_REC_OFF));
+        /* outgoing messages always in my byte order */
+        LASSERT(body != NULL);
+
+        /* Only if the import is replayable, we set replay_open data */
+        if (och && imp->imp_replayable) {
+                OBD_ALLOC_PTR(mod);
+                if (mod == NULL) {
+                        DEBUG_REQ(D_ERROR, open_req,
+                                  "can't allocate mdc_open_data");
+                        return;
+                }
+
+                spin_lock(&open_req->rq_lock);
+                och->och_mod = mod;
+                mod->mod_och = och;
+                mod->mod_open_req = open_req;
+                open_req->rq_cb_data = mod;
+                open_req->rq_commit_cb = mdc_commit_open;
+                spin_unlock(&open_req->rq_lock);
+        }
+
+        rec->cr_fid2 = body->fid1;
+        rec->cr_ioepoch = body->ioepoch;
+        rec->cr_old_handle.cookie = body->handle.cookie;
+        open_req->rq_replay_cb = mdc_replay_open;
+        if (!fid_is_sane(&body->fid1)) {
+                DEBUG_REQ(D_ERROR, open_req, "saving replay request with "
+                          "insane fid");
+                LBUG();
+        }
+
+        DEBUG_REQ(D_RPCTRACE, open_req, "set up replay data");
+}
+
+static void mdc_set_open_replay_data_18(struct obd_client_handle *och,
+                                        struct ptlrpc_request *open_req)
 {
         struct mdc_open_data *mod;
         struct mds_rec_create *rec = lustre_msg_buf(open_req->rq_reqmsg,
@@ -667,6 +773,15 @@ void mdc_set_open_replay_data(struct obd_client_handle *och,
         }
 
         DEBUG_REQ(D_RPCTRACE, open_req, "set up replay data");
+}
+
+void mdc_set_open_replay_data(struct obd_client_handle *och,
+                              struct ptlrpc_request *open_req)
+{
+        if (mdc_req_is_2_0_server(open_req))
+                mdc_set_open_replay_data_20(och, open_req);
+        else
+                mdc_set_open_replay_data_18(och, open_req);
 }
 
 void mdc_clear_open_replay_data(struct obd_client_handle *och)

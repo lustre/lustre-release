@@ -198,10 +198,16 @@ static void mdc_realloc_openmsg(struct ptlrpc_request *req,
         int old_len, new_size, old_size;
         struct lustre_msg *old_msg = req->rq_reqmsg;
         struct lustre_msg *new_msg;
+        int offset;
 
-        old_len = lustre_msg_buflen(old_msg, DLM_INTENT_REC_OFF + 2);
+        if (mdc_req_is_2_0_server(req))
+                offset = 4;
+        else
+                offset = 2;
+
+        old_len = lustre_msg_buflen(old_msg, DLM_INTENT_REC_OFF + offset);
         old_size = lustre_packed_msg_size(old_msg);
-        lustre_msg_set_buflen(old_msg, DLM_INTENT_REC_OFF + 2,
+        lustre_msg_set_buflen(old_msg, DLM_INTENT_REC_OFF + offset,
                               body->eadatasize);
         new_size = lustre_packed_msg_size(old_msg);
 
@@ -218,7 +224,8 @@ static void mdc_realloc_openmsg(struct ptlrpc_request *req,
 
                 OBD_FREE(old_msg, old_size);
         } else {
-                lustre_msg_set_buflen(old_msg, DLM_INTENT_REC_OFF + 2, old_len);
+                lustre_msg_set_buflen(old_msg,
+                                      DLM_INTENT_REC_OFF + offset, old_len);
                 body->valid &= ~OBD_MD_FLEASIZE;
                 body->eadatasize = 0;
         }
@@ -270,7 +277,7 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
                 size[DLM_INTENT_REC_OFF+1] = 0; /* capa */
                 bufcount = 8;
                 repsize[DLM_REPLY_REC_OFF+3]=sizeof(struct lustre_capa);
-                repsize[DLM_REPLY_REC_OFF+4]=sizeof(struct lustre_capa); 
+                repsize[DLM_REPLY_REC_OFF+4]=sizeof(struct lustre_capa);
                 repbufcount = 7;
         }
         rc = lustre_msg_size(class_exp2cliimp(exp)->imp_msg_magic,
@@ -541,8 +548,13 @@ static int mdc_finish_enqueue(struct obd_export *exp,
                          * large enough request buffer above we need to
                          * reallocate it here to hold the actual LOV EA. */
                         if (it->it_op & IT_OPEN) {
-                                int offset = DLM_INTENT_REC_OFF + 2;
+                                int offset = DLM_INTENT_REC_OFF;
                                 void *lmm;
+
+                                if (mdc_req_is_2_0_server(req))
+                                        offset += 4;
+                                else
+                                        offset += 2;
 
                                 if (lustre_msg_buflen(req->rq_reqmsg, offset) <
                                     body->eadatasize)

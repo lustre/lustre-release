@@ -1173,6 +1173,8 @@ void ll_iocontrol_unregister(void *magic);
 
 ino_t ll_fid_build_ino(struct ll_sb_info *sbi,
                        struct ll_fid *fid);
+__u32 ll_fid_build_gen(struct ll_sb_info *sbi,
+                       struct ll_fid *fid);
 
 #endif
 

@@ -3812,6 +3812,10 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
                 RETURN(-EINVAL);
         }
 
+        if (KEY_IS(KEY_CAPA_KEY)) {
+                RETURN(0);
+        }
+
         if (!KEY_IS(KEY_MDS_CONN))
                 RETURN(-EINVAL);
 
