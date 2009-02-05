@@ -31,7 +31,7 @@ Details    : kptl_msg_t::ptlm_credits could be overflown by uptllnd since
 
 Severity   : major
 Bugzilla   : 14634
-Description: socklnd prtocol version 3 
+Description: socklnd protocol version 3 
 Details    : With current protocol V2, connections on router can be
              blocked and can't receive any incoming messages when there is no
              more router buffer, so ZC-ACK can't be handled (LNet message
