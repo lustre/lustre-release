@@ -822,7 +822,7 @@ static inline struct obd_uuid *obd_get_uuid(struct obd_export *exp)
 }
 
 static inline int obd_connect(const struct lu_env *env,
-                              struct lustre_handle *conn,struct obd_device *obd,
+                              struct obd_export **exp,struct obd_device *obd,
                               struct obd_uuid *cluuid,
                               struct obd_connect_data *d,
                               void *localdata)
@@ -836,7 +836,7 @@ static inline int obd_connect(const struct lu_env *env,
         OBD_CHECK_DT_OP(obd, connect, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, connect);
 
-        rc = OBP(obd, connect)(env, conn, obd, cluuid, d, localdata);
+        rc = OBP(obd, connect)(env, exp, obd, cluuid, d, localdata);
         /* check that only subset is granted */
         LASSERT(ergo(d != NULL,
                      (d->ocd_connect_flags & ocf) == d->ocd_connect_flags));

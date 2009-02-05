@@ -2773,34 +2773,35 @@ static int filter_reconnect(const struct lu_env *env,
 
 /* nearly identical to mds_connect */
 static int filter_connect(const struct lu_env *env,
-                          struct lustre_handle *conn, struct obd_device *obd,
+                          struct obd_export **exp, struct obd_device *obd,
                           struct obd_uuid *cluuid,
                           struct obd_connect_data *data, void *localdata)
 {
         struct lvfs_run_ctxt saved;
-        struct obd_export *exp;
+        struct lustre_handle conn = { 0 };
+        struct obd_export *lexp;
         struct filter_export_data *fed;
         struct lsd_client_data *lcd = NULL;
         __u32 group;
         int rc;
         ENTRY;
 
-        if (conn == NULL || obd == NULL || cluuid == NULL)
+        if (exp == NULL || obd == NULL || cluuid == NULL)
                 RETURN(-EINVAL);
 
-        rc = class_connect(conn, obd, cluuid);
+        rc = class_connect(&conn, obd, cluuid);
         if (rc)
                 RETURN(rc);
-        exp = class_conn2export(conn);
-        LASSERT(exp != NULL);
+        lexp = class_conn2export(&conn);
+        LASSERT(lexp != NULL);
 
-        fed = &exp->exp_filter_data;
+        fed = &lexp->exp_filter_data;
 
-        rc = filter_connect_internal(exp, data);
+        rc = filter_connect_internal(lexp, data);
         if (rc)
                 GOTO(cleanup, rc);
 
-        filter_export_stats_init(obd, exp, localdata);
+        filter_export_stats_init(obd, lexp, localdata);
         if (obd->obd_replayable) {
                 OBD_ALLOC(lcd, sizeof(*lcd));
                 if (!lcd) {
@@ -2810,7 +2811,7 @@ static int filter_connect(const struct lu_env *env,
 
                 memcpy(lcd->lcd_uuid, cluuid, sizeof(lcd->lcd_uuid));
                 fed->fed_lcd = lcd;
-                rc = filter_client_add(obd, exp, -1);
+                rc = filter_client_add(obd, lexp, -1);
                 if (rc)
                         GOTO(cleanup, rc);
         }
@@ -2818,7 +2819,7 @@ static int filter_connect(const struct lu_env *env,
         group = data->ocd_group;
 
         CWARN("%s: Received MDS connection ("LPX64"); group %d\n",
-              obd->obd_name, exp->exp_handle.h_cookie, group);
+              obd->obd_name, lexp->exp_handle.h_cookie, group);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         rc = filter_read_groups(obd, group, 1);
@@ -2836,9 +2837,10 @@ cleanup:
                         OBD_FREE_PTR(lcd);
                         fed->fed_lcd = NULL;
                 }
-                class_disconnect(exp);
+                class_disconnect(lexp);
+                *exp = NULL;
         } else {
-                class_export_put(exp);
+                *exp = lexp;
         }
 
         RETURN(rc);

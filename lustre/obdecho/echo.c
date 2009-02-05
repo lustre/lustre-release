@@ -66,12 +66,22 @@ enum {
 };
 
 static int echo_connect(const struct lu_env *env,
-                        struct lustre_handle *conn, struct obd_device *obd,
+                        struct obd_export **exp, struct obd_device *obd,
                         struct obd_uuid *cluuid, struct obd_connect_data *data,
                         void *localdata)
 {
+        struct lustre_handle conn = { 0 };
+        int rc;
+
         data->ocd_connect_flags &= ECHO_CONNECT_SUPPORTED;
-        return class_connect(conn, obd, cluuid);
+        rc = class_connect(&conn, obd, cluuid);
+        if (rc) {
+                CERROR("can't connect %d\n", rc);
+                return rc;
+        }
+        *exp = class_conn2export(&conn);
+
+        return 0;
 }
 
 static int echo_disconnect(struct obd_export *exp)

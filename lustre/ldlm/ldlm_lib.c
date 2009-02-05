@@ -385,27 +385,29 @@ int client_obd_cleanup(struct obd_device *obddev)
 
 /* ->o_connect() method for client side (OSC and MDC and MGC) */
 int client_connect_import(const struct lu_env *env,
-                          struct lustre_handle *dlm_handle,
+                          struct obd_export **exp,
                           struct obd_device *obd, struct obd_uuid *cluuid,
                           struct obd_connect_data *data, void *localdata)
 {
         struct client_obd *cli = &obd->u.cli;
         struct obd_import *imp = cli->cl_import;
-        struct obd_export *exp;
         struct obd_connect_data *ocd;
         struct ldlm_namespace *to_be_freed = NULL;
+        struct lustre_handle conn = { 0 };
         int rc;
         ENTRY;
 
+        *exp = NULL;
         down_write(&cli->cl_sem);
-        rc = class_connect(dlm_handle, obd, cluuid);
+        rc = class_connect(&conn, obd, cluuid);
         if (rc)
                 GOTO(out_sem, rc);
+
+        *exp = class_conn2export(&conn);
 
         cli->cl_conn_count++;
         if (cli->cl_conn_count > 1)
                 GOTO(out_sem, rc);
-        exp = class_conn2export(dlm_handle);
 
         if (obd->obd_namespace != NULL)
                 CERROR("already have namespace!\n");
@@ -415,7 +417,7 @@ int client_connect_import(const struct lu_env *env,
         if (obd->obd_namespace == NULL)
                 GOTO(out_disco, rc = -ENOMEM);
 
-        imp->imp_dlm_handle = *dlm_handle;
+        imp->imp_dlm_handle = conn;
         rc = ptlrpc_init_import(imp);
         if (rc != 0)
                 GOTO(out_ldlm, rc);
@@ -431,7 +433,7 @@ int client_connect_import(const struct lu_env *env,
                 LASSERT (imp->imp_state == LUSTRE_IMP_DISCON);
                 GOTO(out_ldlm, rc);
         }
-        LASSERT(exp->exp_connection);
+        LASSERT((*exp)->exp_connection);
 
         if (data) {
                 LASSERTF((ocd->ocd_connect_flags & data->ocd_connect_flags) ==
@@ -451,9 +453,8 @@ out_ldlm:
                 obd->obd_namespace = NULL;
 out_disco:
                 cli->cl_conn_count--;
-                class_disconnect(exp);
-        } else {
-                class_export_put(exp);
+                class_disconnect(*exp);
+                *exp = NULL;
         }
 out_sem:
         up_write(&cli->cl_sem);
@@ -846,12 +847,17 @@ int target_handle_connect(struct ptlrpc_request *req)
                 } else {
 dont_check_exports:
                         rc = obd_connect(req->rq_svc_thread->t_env,
-                                         &conn, target, &cluuid, data,
+                                         &export, target, &cluuid, data,
                                          client_nid);
+                        if (rc == 0)
+                                conn.cookie = export->exp_handle.h_cookie;
                 }
         } else {
                 rc = obd_reconnect(req->rq_svc_thread->t_env,
                                    export, target, &cluuid, data, client_nid);
+                if (rc == 0)
+                        /* prevous done via class_conn2export */
+                        class_export_get(export);
         }
         if (rc)
                 GOTO(out, rc);
@@ -868,15 +874,6 @@ dont_check_exports:
         req->rq_status = 0;
 
         lustre_msg_set_handle(req->rq_repmsg, &conn);
-
-        /* ownership of this export ref transfers to the request AFTER we
-         * drop any previous reference the request had, but we don't want
-         * that to go to zero before we get our new export reference. */
-        export = class_conn2export(&conn);
-        if (!export) {
-                DEBUG_REQ(D_ERROR, req, "Missing export!");
-                GOTO(out, rc = -ENODEV);
-        }
 
         /* If the client and the server are the same node, we will already
          * have an export that really points to the client's DLM export,

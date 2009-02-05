@@ -858,6 +858,8 @@ static inline void oti_free_cookies(struct obd_trans_info *oti)
  * Events signalled through obd_notify() upcall-chain.
  */
 enum obd_notify_event {
+        /* Device connect start */
+        OBD_NOTIFY_CONNECT,
         /* Device activated */
         OBD_NOTIFY_ACTIVE,
         /* Device deactivated */
@@ -1215,7 +1217,7 @@ struct obd_ops {
          * granted by the target, which are guaranteed to be a subset of flags
          * asked for. If @ocd == NULL, use default parameters. */
         int (*o_connect)(const struct lu_env *env,
-                         struct lustre_handle *conn, struct obd_device *src,
+                         struct obd_export **exp, struct obd_device *src,
                          struct obd_uuid *cluuid, struct obd_connect_data *ocd,
                          void *localdata);
         int (*o_reconnect)(const struct lu_env *env,

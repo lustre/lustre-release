@@ -166,8 +166,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         struct obd_capa *oc = NULL;
         struct obd_statfs osfs;
         struct ptlrpc_request *request = NULL;
-        struct lustre_handle dt_conn = {0, };
-        struct lustre_handle md_conn = {0, };
         struct obd_connect_data *data = NULL;
         struct obd_uuid *uuid;
         struct lustre_md lmd;
@@ -232,7 +230,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         if (sbi->ll_flags & LL_SBI_RMT_CLIENT)
                 data->ocd_connect_flags |= OBD_CONNECT_RMT_CLIENT_FORCE;
 
-        err = obd_connect(NULL, &md_conn, obd, &sbi->ll_sb_uuid, data, NULL);
+        err = obd_connect(NULL, &sbi->ll_md_exp, obd, &sbi->ll_sb_uuid, data, NULL);
         if (err == -EBUSY) {
                 LCONSOLE_ERROR_MSG(0x14f, "An MDT (md %s) is performing "
                                    "recovery, of which this client is not a "
@@ -243,7 +241,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                 CERROR("cannot connect to %s: rc = %d\n", md, err);
                 GOTO(out, err);
         }
-        sbi->ll_md_exp = class_conn2export(&md_conn);
 
         err = obd_fid_init(sbi->ll_md_exp);
         if (err) {
@@ -372,7 +369,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         obd->obd_upcall.onu_upcall = cl_ocd_update;
         data->ocd_brw_size = PTLRPC_MAX_BRW_PAGES << CFS_PAGE_SHIFT;
 
-        err = obd_connect(NULL, &dt_conn, obd, &sbi->ll_sb_uuid, data, NULL);
+        err = obd_connect(NULL, &sbi->ll_dt_exp, obd, &sbi->ll_sb_uuid, data, NULL);
         if (err == -EBUSY) {
                 LCONSOLE_ERROR_MSG(0x150, "An OST (dt %s) is performing "
                                    "recovery, of which this client is not a "
@@ -383,8 +380,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                 CERROR("Cannot connect to %s: rc = %d\n", dt, err);
                 GOTO(out_md_fid, err);
         }
-
-        sbi->ll_dt_exp = class_conn2export(&dt_conn);
 
         err = obd_fid_init(sbi->ll_dt_exp);
         if (err) {

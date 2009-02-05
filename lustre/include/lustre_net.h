@@ -1271,7 +1271,7 @@ static inline int ptlrpc_req_get_repsize(struct ptlrpc_request *req)
 int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg);
 int client_obd_cleanup(struct obd_device *obddev);
 int client_connect_import(const struct lu_env *env,
-                          struct lustre_handle *conn, struct obd_device *obd,
+                          struct obd_export **exp, struct obd_device *obd,
                           struct obd_uuid *cluuid, struct obd_connect_data *,
                           void *localdata);
 int client_disconnect_export(struct obd_export *exp);

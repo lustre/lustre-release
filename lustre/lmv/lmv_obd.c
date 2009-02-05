@@ -239,7 +239,7 @@ static int lmv_notify(struct obd_device *obd, struct obd_device *watched,
  * caller that everything is okay. Real connection will be performed later.
  */
 static int lmv_connect(const struct lu_env *env,
-                       struct lustre_handle *conn, struct obd_device *obd,
+                       struct obd_export **exp, struct obd_device *obd,
                        struct obd_uuid *cluuid, struct obd_connect_data *data,
                        void *localdata)
 {
@@ -247,17 +247,9 @@ static int lmv_connect(const struct lu_env *env,
         struct proc_dir_entry *lmv_proc_dir;
 #endif
         struct lmv_obd        *lmv = &obd->u.lmv;
-        struct obd_export     *exp;
+        struct lustre_handle  conn = { 0 };
         int                    rc = 0;
         ENTRY;
-
-        rc = class_connect(conn, obd, cluuid);
-        if (rc) {
-                CERROR("class_connection() returned %d\n", rc);
-                RETURN(rc);
-        }
-
-        exp = class_conn2export(conn);
 
         /*
          * We don't want to actually do the underlying connections more than
@@ -265,11 +257,20 @@ static int lmv_connect(const struct lu_env *env,
          */
         lmv->refcount++;
         if (lmv->refcount > 1) {
-                class_export_put(exp);
+                *exp = NULL;
                 RETURN(0);
         }
 
-        lmv->exp = exp;
+        rc = class_connect(&conn, obd, cluuid);
+        if (rc) {
+                CERROR("class_connection() returned %d\n", rc);
+                RETURN(rc);
+        }
+
+        *exp = class_conn2export(&conn);
+        class_export_get(*exp);
+
+        lmv->exp = *exp;
         lmv->connected = 0;
         lmv->cluuid = *cluuid;
 
@@ -383,7 +384,6 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
         struct obd_uuid         *cluuid = &lmv->cluuid;
         struct obd_connect_data *mdc_data = NULL;
         struct obd_uuid          lmv_mdc_uuid = { "LMV_MDC_UUID" };
-        struct lustre_handle     conn = {0, };
         struct obd_device       *mdc_obd;
         struct obd_export       *mdc_exp;
         struct lu_fld_target     target;
@@ -407,14 +407,12 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
                 RETURN(-EINVAL);
         }
 
-        rc = obd_connect(NULL, &conn, mdc_obd, &lmv_mdc_uuid,
+        rc = obd_connect(NULL, &mdc_exp, mdc_obd, &lmv_mdc_uuid,
                          &lmv->conn_data, NULL);
         if (rc) {
                 CERROR("target %s connect error %d\n", tgt->ltd_uuid.uuid, rc);
                 RETURN(rc);
         }
-
-        mdc_exp = class_conn2export(&conn);
 
         /*
          * Init fid sequence client for this mdc and add new fld target.

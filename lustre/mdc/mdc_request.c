@@ -1799,7 +1799,7 @@ static int mdc_renew_capa(struct obd_export *exp, struct obd_capa *oc,
 }
 
 static int mdc_connect(const struct lu_env *env,
-                       struct lustre_handle *dlm_handle,
+                       struct obd_export **exp,
                        struct obd_device *obd, struct obd_uuid *cluuid,
                        struct obd_connect_data *data,
                        void *localdata)
@@ -1816,7 +1816,7 @@ static int mdc_connect(const struct lu_env *env,
                        obd->obd_name);
         }
 
-        return client_connect_import(env, dlm_handle, obd, cluuid, data, NULL);
+        return client_connect_import(env, exp, obd, cluuid, data, NULL);
 }
 
 struct obd_ops mdc_obd_ops = {

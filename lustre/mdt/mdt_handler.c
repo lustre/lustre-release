@@ -4842,39 +4842,40 @@ static int mdt_connect_check_sptlrpc(struct mdt_device *mdt,
 
 /* mds_connect copy */
 static int mdt_obd_connect(const struct lu_env *env,
-                           struct lustre_handle *conn, struct obd_device *obd,
+                           struct obd_export **exp, struct obd_device *obd,
                            struct obd_uuid *cluuid,
                            struct obd_connect_data *data,
                            void *localdata)
 {
         struct mdt_thread_info *info;
         struct lsd_client_data *lcd;
-        struct obd_export      *exp;
+        struct obd_export      *lexp;
+        struct lustre_handle    conn = { 0 };
         struct mdt_device      *mdt;
         struct ptlrpc_request  *req;
         int                     rc;
         ENTRY;
 
         LASSERT(env != NULL);
-        if (!conn || !obd || !cluuid)
+        if (!exp || !obd || !cluuid)
                 RETURN(-EINVAL);
 
         info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
         req = info->mti_pill->rc_req;
         mdt = mdt_dev(obd->obd_lu_dev);
 
-        rc = class_connect(conn, obd, cluuid);
+        rc = class_connect(&conn, obd, cluuid);
         if (rc)
                 RETURN(rc);
 
-        exp = class_conn2export(conn);
-        LASSERT(exp != NULL);
+        lexp = class_conn2export(&conn);
+        LASSERT(lexp != NULL);
 
-        rc = mdt_connect_check_sptlrpc(mdt, exp, req);
+        rc = mdt_connect_check_sptlrpc(mdt, lexp, req);
         if (rc)
                 GOTO(out, rc);
 
-        rc = mdt_connect_internal(exp, mdt, data);
+        rc = mdt_connect_internal(lexp, mdt, data);
         if (rc == 0) {
                 OBD_ALLOC_PTR(lcd);
                 if (lcd != NULL) {
@@ -4882,15 +4883,15 @@ static int mdt_obd_connect(const struct lu_env *env,
                         mti = lu_context_key_get(&env->le_ctx,
                                                  &mdt_thread_key);
                         LASSERT(mti != NULL);
-                        mti->mti_exp = exp;
+                        mti->mti_exp = lexp;
                         memcpy(lcd->lcd_uuid, cluuid, sizeof lcd->lcd_uuid);
-                        exp->exp_mdt_data.med_lcd = lcd;
+                        lexp->exp_mdt_data.med_lcd = lcd;
                         rc = mdt_client_new(env, mdt);
                         if (rc != 0) {
                                 OBD_FREE_PTR(lcd);
-                                exp->exp_mdt_data.med_lcd = NULL;
+                                lexp->exp_mdt_data.med_lcd = NULL;
                         } else {
-                                mdt_export_stats_init(obd, exp, localdata);
+                                mdt_export_stats_init(obd, lexp, localdata);
                         }
                 } else
                         rc = -ENOMEM;
@@ -4898,9 +4899,9 @@ static int mdt_obd_connect(const struct lu_env *env,
 
 out:
         if (rc != 0)
-                class_disconnect(exp);
+                class_disconnect(lexp);
         else
-                class_export_put(exp);
+                *exp = lexp;
 
         RETURN(rc);
 }

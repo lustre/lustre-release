@@ -601,7 +601,6 @@ out:
 int mds_lov_connect(struct obd_device *obd, char * lov_name)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct lustre_handle conn = {0,};
         struct obd_connect_data *data;
         int rc;
         ENTRY;
@@ -655,14 +654,13 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         /* send the list of supported checksum types */
         data->ocd_cksum_types = OBD_CKSUM_ALL;
         /* NB: lov_connect() needs to fill in .ocd_index for each OST */
-        rc = obd_connect(NULL, &conn, mds->mds_osc_obd, &obd->obd_uuid, data, NULL);
+        rc = obd_connect(NULL, &mds->mds_osc_exp, mds->mds_osc_obd, &obd->obd_uuid, data, NULL);
         OBD_FREE(data, sizeof(*data));
         if (rc) {
                 CERROR("MDS cannot connect to LOV %s (%d)\n", lov_name, rc);
                 mds->mds_osc_obd = ERR_PTR(rc);
                 RETURN(rc);
         }
-        mds->mds_osc_exp = class_conn2export(&conn);
 
         /* I want to see a callback happen when the OBD moves to a
          * "For General Use" state, and that's when we'll call

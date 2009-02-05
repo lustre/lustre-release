@@ -1870,7 +1870,6 @@ static int echo_client_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 {
         struct echo_client_obd *ec = &obddev->u.echo_client;
         struct obd_device *tgt;
-        struct lustre_handle conn = {0, };
         struct obd_uuid echo_uuid = { "ECHO_UUID" };
         struct obd_connect_data *ocd = NULL;
         int rc;
@@ -1906,7 +1905,7 @@ static int echo_client_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
         ocd->ocd_version = LUSTRE_VERSION_CODE;
         ocd->ocd_group = FILTER_GROUP_ECHO;
 
-        rc = obd_connect(NULL, &conn, tgt, &echo_uuid, ocd, NULL);
+        rc = obd_connect(NULL, &ec->ec_exp, tgt, &echo_uuid, ocd, NULL);
 
         OBD_FREE(ocd, sizeof(*ocd));
 
@@ -1915,7 +1914,6 @@ static int echo_client_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
                        lustre_cfg_string(lcfg, 1));
                 return (rc);
         }
-        ec->ec_exp = class_conn2export(&conn);
 
         RETURN(rc);
 }
@@ -1939,18 +1937,17 @@ static int echo_client_cleanup(struct obd_device *obddev)
 }
 
 static int echo_client_connect(const struct lu_env *env,
-                               struct lustre_handle *conn,
+                               struct obd_export **exp,
                                struct obd_device *src, struct obd_uuid *cluuid,
                                struct obd_connect_data *data, void *localdata)
 {
-        struct obd_export *exp;
         int                rc;
+        struct lustre_handle conn = { 0 };
 
         ENTRY;
-        rc = class_connect(conn, src, cluuid);
+        rc = class_connect(&conn, src, cluuid);
         if (rc == 0) {
-                exp = class_conn2export(conn);
-                class_export_put(exp);
+                *exp = class_conn2export(&conn);
         }
 
         RETURN (rc);

@@ -135,7 +135,6 @@ int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
         struct obd_uuid tgt_uuid;
         struct obd_device *tgt_obd;
         struct obd_uuid lov_osc_uuid = { "LOV_OSC_UUID" };
-        struct lustre_handle conn = {0, };
         struct obd_import *imp;
 
 #ifdef __KERNEL__
@@ -179,37 +178,26 @@ int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
                 ptlrpc_activate_import(imp);
         }
 
-        if (imp->imp_invalid) {
-                CERROR("not connecting OSC %s; administratively "
-                       "disabled\n", obd_uuid2str(&tgt_uuid));
-                rc = obd_register_observer(tgt_obd, obd);
-                if (rc) {
-                        CERROR("Target %s register_observer error %d; "
-                               "will not be able to reactivate\n",
-                               obd_uuid2str(&tgt_uuid), rc);
-                }
-                RETURN(0);
-        }
-
-        rc = obd_connect(NULL, &conn, tgt_obd, &lov_osc_uuid, data, NULL);
-        if (rc) {
-                CERROR("Target %s connect error %d\n",
-                       obd_uuid2str(&tgt_uuid), rc);
-                RETURN(rc);
-        }
-        lov->lov_tgts[index]->ltd_exp = class_conn2export(&conn);
-        if (!lov->lov_tgts[index]->ltd_exp) {
-                CERROR("Target %s: null export!\n", obd_uuid2str(&tgt_uuid));
-                RETURN(-ENODEV);
-        }
-
         rc = obd_register_observer(tgt_obd, obd);
         if (rc) {
                 CERROR("Target %s register_observer error %d\n",
                        obd_uuid2str(&tgt_uuid), rc);
-                obd_disconnect(lov->lov_tgts[index]->ltd_exp);
-                lov->lov_tgts[index]->ltd_exp = NULL;
                 RETURN(rc);
+        }
+
+
+        if (imp->imp_invalid) {
+                CERROR("not connecting OSC %s; administratively "
+                       "disabled\n", obd_uuid2str(&tgt_uuid));
+                RETURN(0);
+        }
+
+        rc = obd_connect(NULL, &lov->lov_tgts[index]->ltd_exp, tgt_obd,
+                         &lov_osc_uuid, data, NULL);
+        if (rc || !lov->lov_tgts[index]->ltd_exp) {
+                CERROR("Target %s connect error %d\n",
+                       obd_uuid2str(&tgt_uuid), rc);
+                RETURN(-ENODEV);
         }
 
         lov->lov_tgts[index]->ltd_reap = 0;
@@ -224,7 +212,7 @@ int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
 #ifdef __KERNEL__
         lov_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
         if (lov_proc_dir) {
-                struct obd_device *osc_obd = class_conn2obd(&conn);
+                struct obd_device *osc_obd = lov->lov_tgts[index]->ltd_exp->exp_obd;
                 cfs_proc_dir_entry_t *osc_symlink;
                 char name[MAX_STRING_SIZE];
 
@@ -254,20 +242,23 @@ int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
 }
 
 static int lov_connect(const struct lu_env *env,
-                       struct lustre_handle *conn, struct obd_device *obd,
+                       struct obd_export **exp, struct obd_device *obd,
                        struct obd_uuid *cluuid, struct obd_connect_data *data,
                        void *localdata)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
+        struct lustre_handle conn;
         int i, rc;
         ENTRY;
 
         CDEBUG(D_CONFIG, "connect #%d\n", lov->lov_connects);
 
-        rc = class_connect(conn, obd, cluuid);
+        rc = class_connect(&conn, obd, cluuid);
         if (rc)
                 RETURN(rc);
+
+        *exp = class_conn2export(&conn);
 
         /* Why should there ever be more than 1 connect? */
         lov->lov_connects++;
@@ -294,7 +285,7 @@ static int lov_connect(const struct lu_env *env,
                         continue;
 
                 rc = lov_notify(obd, lov->lov_tgts[i]->ltd_exp->exp_obd,
-                                OBD_NOTIFY_ACTIVE, (void *)&i);
+                                OBD_NOTIFY_CONNECT, (void *)&i);
                 if (rc) {
                         CERROR("%s error sending notify %d\n",
                                obd->obd_name, rc);
@@ -628,7 +619,7 @@ int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
                 GOTO(out, rc = 0);
 
         rc = lov_notify(obd, tgt->ltd_exp->exp_obd,
-                        active ? OBD_NOTIFY_ACTIVE : OBD_NOTIFY_INACTIVE,
+                        active ? OBD_NOTIFY_CONNECT : OBD_NOTIFY_INACTIVE,
                         (void *)&index);
 
 out:
