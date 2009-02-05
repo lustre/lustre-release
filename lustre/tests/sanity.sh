@@ -5577,7 +5577,7 @@ test_140() { #bug-17379
                 }
         done
         i=`expr $i - 1`
-        [ $i -eq 5 -o $i -eq 8 ] || error "Invalid symlink depth"
+        [ $i -eq 4 -o $i -eq 8 ] || error "Invalid symlink depth"
         echo "The symlink depth = $i"
 }
 run_test 140 "Check reasonable stack depth (shouldn't LBUG) ===="
