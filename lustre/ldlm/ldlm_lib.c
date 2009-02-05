@@ -552,11 +552,12 @@ int client_disconnect_export(struct obd_export *exp)
  * from old lib/target.c
  * -------------------------------------------------------------------------- */
 
-int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
-                            struct obd_uuid *cluuid, int mds_conn)
+static int target_handle_reconnect(struct lustre_handle *conn,
+                                   struct obd_export *exp,
+                                   struct obd_uuid *cluuid)
 {
         ENTRY;
-        if (exp->exp_connection && exp->exp_imp_reverse && !mds_conn) {
+        if (exp->exp_connection && exp->exp_imp_reverse) {
                 struct lustre_handle *hdl;
                 hdl = &exp->exp_imp_reverse->imp_remote_handle;
                 /* Might be a re-connect after a partition. */
@@ -735,15 +736,24 @@ int target_handle_connect(struct ptlrpc_request *req)
         spin_lock(&target->obd_dev_lock);
         export = lustre_hash_lookup(target->obd_uuid_hash, &cluuid);
 
-        if (export != NULL && export->exp_connecting) { /* bug 9635, et. al. */
+        if (export != NULL && mds_conn) {
+                /* mds reconnected after failover */
+                class_fail_export(export);
+                CWARN("%s: received MDS connection from NID %s,"
+                      " removing former export from NID %s\n",
+                      target->obd_name, libcfs_nid2str(req->rq_peer.nid),
+                      libcfs_nid2str(export->exp_connection->c_peer.nid));
+                class_export_put(export);
+                export = NULL;
+                rc = 0;
+        } else if (export != NULL && export->exp_connecting) { /* bug 9635, et. al. */
                 CWARN("%s: exp %p already connecting\n",
                       export->exp_obd->obd_name, export);
                 class_export_put(export);
                 export = NULL;
                 rc = -EALREADY;
         } else if (export != NULL && export->exp_connection != NULL &&
-                   req->rq_peer.nid != export->exp_connection->c_peer.nid &&
-                   !mds_conn) {
+                   req->rq_peer.nid != export->exp_connection->c_peer.nid) {
                 /* in mds failover we have static uuid but nid can be
                  * changed*/
                 CWARN("%s: cookie %s seen on new NID %s when "
@@ -759,15 +769,13 @@ int target_handle_connect(struct ptlrpc_request *req)
                 export->exp_connecting = 1;
                 spin_unlock(&export->exp_lock);
                 class_export_put(export);
-                spin_unlock(&target->obd_dev_lock);
                 LASSERT(export->exp_obd == target);
 
-                rc = target_handle_reconnect(&conn, export, &cluuid, mds_conn);
+                rc = target_handle_reconnect(&conn, export, &cluuid);
         }
 
         /* If we found an export, we already unlocked. */
         if (!export) {
-                spin_unlock(&target->obd_dev_lock);
                 OBD_FAIL_TIMEOUT(OBD_FAIL_TGT_DELAY_CONNECT, 2 * obd_timeout);
         } else if (req->rq_export == NULL &&
                    atomic_read(&export->exp_rpc_count) > 0) {
@@ -783,18 +791,13 @@ int target_handle_connect(struct ptlrpc_request *req)
                       libcfs_nid2str(req->rq_peer.nid),
                       export, atomic_read(&export->exp_rpc_count));
                 GOTO(out, rc = -EBUSY);
-        } else if (lustre_msg_get_conn_cnt(req->rq_reqmsg) == 1 &&
-                   !mds_conn) {
+        } else if (lustre_msg_get_conn_cnt(req->rq_reqmsg) == 1) {
                 CERROR("%s: NID %s (%s) reconnected with 1 conn_cnt; "
                        "cookies not random?\n", target->obd_name,
                        libcfs_nid2str(req->rq_peer.nid), cluuid.uuid);
                 GOTO(out, rc = -EALREADY);
         } else {
                 OBD_FAIL_TIMEOUT(OBD_FAIL_TGT_DELAY_RECONNECT, 2 * obd_timeout);
-                if (req->rq_export == NULL && mds_conn)
-                       export->exp_last_request_time =
-                               max(export->exp_last_request_time,
-                                   (time_t)cfs_time_current_sec());
         }
 
         if (rc < 0) {
@@ -888,9 +891,7 @@ dont_check_exports:
         req->rq_export = export;
 
         spin_lock(&export->exp_lock);
-        if (mds_conn) {
-                lustre_msg_set_conn_cnt(req->rq_repmsg, export->exp_conn_cnt + 1);
-        } else if (export->exp_conn_cnt >= lustre_msg_get_conn_cnt(req->rq_reqmsg)) {
+        if (export->exp_conn_cnt >= lustre_msg_get_conn_cnt(req->rq_reqmsg)) {
                 spin_unlock(&export->exp_lock);
                 CERROR("%s: %s already connected at higher conn_cnt: %d > %d\n",
                        cluuid.uuid, libcfs_nid2str(req->rq_peer.nid),
