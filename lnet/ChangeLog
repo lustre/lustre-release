@@ -1,5 +1,5 @@
 tbd  Sun Microsystems, Inc.
-	* version 1.6.6
+        * version 1.8.1
 	* Support for networks:
 	 socklnd   - any kernel supported by Lustre,
 	 qswlnd    - Qsnet kernel modules 5.20 and later,
@@ -12,10 +12,10 @@ tbd  Sun Microsystems, Inc.
 	 mxlnd     - MX 1.2.1 or later,
 	 ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
-Severity   : 
-Bugzilla   : 
-Description: 
-Details    : 
+Severity   :
+Bugzilla   :
+Description:
+Details    :
 
 Severity   : minor
 Bugzilla   : 11245
@@ -34,23 +34,39 @@ Bugzilla   : 14634
 Description: socklnd prtocol version 3
 Details    : With current protocol V2, connections on router can be
              blocked and can't receive any incoming messages when there is no
-             more router buffer, so ZC-ACK can't be handled (LNet message
-             can't be finalized) and will cause deadlock on router.
-             Protocol V3 has a dedicated connection for emergency messages
-             like ZC-ACK to router, messages on this dedicated connection
-             don't need any credit so will never be blocked. Also, V3 can send
-             keepalive ping in specified period for router healthy checking.
+	     more router buffer, so ZC-ACK can't be handled (LNet message
+	     can't be finalized) and will cause deadlock on router.
+	     Protocol V3 has a dedicated connection for emergency messages
+	     like ZC-ACK to router, messages on this dedicated connection
+	     don't need any credit so will never be blocked. Also, V3 can send
+	     keepalive ping in specified period for router healthy checking.
+
+-------------------------------------------------------------------------------
+
+12-31-2008  Sun Microsystems, Inc.
+        * version 1.8.0
+	* Support for networks:
+	 socklnd   - any kernel supported by Lustre,
+	 qswlnd    - Qsnet kernel modules 5.20 and later,
+	 openiblnd - IbGold 1.8.2,
+	 o2iblnd   - OFED 1.1, 1.2.0, 1.2.5, and 1.3
+	 viblnd    - Voltaire ibhost 3.4.5 and later,
+	 ciblnd    - Topspin 3.2.0,
+	 iiblnd    - Infiniserv 3.3 + PathBits patch,
+	 gmlnd     - GM 2.1.22 and later,
+	 mxlnd     - MX 1.2.1 or later,
+	 ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
 Severity   : major
 Bugzilla   : 15983
 Description: workaround for OOM from o2iblnd
 Details    : OFED needs allocate big chunk of memory for QP while creating
              connection for o2iblnd, OOM can happen if no such a contiguous
-             memory chunk.
-             QP size is decided by concurrent_sends and max_fragments of
-             o2iblnd, now we permit user to specify smaller value for
-             concurrent_sends of o2iblnd(i.e: concurrent_sends=7), which
-             will decrease memory block size required by creating QP.
+	     memory chunk.
+	     QP size is decided by concurrent_sends and max_fragments of
+	     o2iblnd, now we permit user to specify smaller value for
+	     concurrent_sends of o2iblnd(i.e: concurrent_sends=7), which
+	     will decrease memory block size required by creating QP.
 
 Severity   : major
 Bugzilla   : 15093
@@ -67,13 +83,7 @@ Bugzilla   : 16308
 Description: finalize network operation in reasonable time
 Details    : conf-sanity test_32a couldn't stop ost and mds because it
              tried to access non-existent peer and tcp connect took
-             quite long before timing out.
-
-Severity   : normal
-Bugzilla   : 13139
-Description: Remove portals compatibility
-Details    : Remove portals compatibility, not interoperable with releases
-             before 1.4.6
+	     quite long before timing out.
 
 Severity   : major
 Bugzilla   : 16338
@@ -92,6 +102,88 @@ Severity   : minor
 Bugzilla   : 16321
 Description: concurrent_sends in IB LNDs should not be changeable at run time
 Details    : concurrent_sends in IB LNDs should not be changeable at run time
+
+Severity   : normal
+Bugzilla   : 15272
+Description: ptl_send_rpc hits LASSERT when ptl_send_buf fails
+Details    : only hits under out-of-memory situations
+
+
+-------------------------------------------------------------------------------
+
+2009-02-07 Sun Microsystems, Inc.
+        * version 1.6.7
+	* Support for networks:
+	 socklnd   - any kernel supported by Lustre,
+	 qswlnd    - Qsnet kernel modules 5.20 and later,
+	 openiblnd - IbGold 1.8.2,
+	 o2iblnd   - OFED 1.1, 1.2.0, 1.2.5, and 1.3
+	 viblnd    - Voltaire ibhost 3.4.5 and later,
+	 ciblnd    - Topspin 3.2.0,
+	 iiblnd    - Infiniserv 3.3 + PathBits patch,
+	 gmlnd     - GM 2.1.22 and later,
+	 mxlnd     - MX 1.2.1 or later,
+	 ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+Severity   : major
+Bugzilla   : 15983
+Description: workaround for OOM from o2iblnd
+Details    : OFED needs allocate big chunk of memory for QP while creating
+             connection for o2iblnd, OOM can happen if no such a contiguous
+	     memory chunk.
+	     QP size is decided by concurrent_sends and max_fragments of
+	     o2iblnd, now we permit user to specify smaller value for
+	     concurrent_sends of o2iblnd(i.e: concurrent_sends=7), which
+	     will decrease memory block size required by creating QP.
+
+Severity   : major
+Bugzilla   : 15093
+Description: Support Zerocopy receive of Chelsio device
+Details    : Chelsio driver can support zerocopy for iov[1] if it's
+             contiguous and large enough.
+Severity   : normal
+Bugzilla   : 13490
+Description: fix credit flow deadlock in uptllnd
+
+Severity   : normal
+Bugzilla   : 16308
+Description: finalize network operation in reasonable time
+Details    : conf-sanity test_32a couldn't stop ost and mds because it
+             tried to access non-existent peer and tcp connect took
+	     quite long before timing out.
+
+Severity   : major
+Bugzilla   : 16338
+Description: Continuous recovery on 33 of 413 nodes after lustre oss failure
+Details    : Lost reference on conn prevents peer from being destroyed, which
+             could prevent new peer creation if peer count has reached upper
+	     limit.
+
+Severity   : normal
+Bugzilla   : 16102
+Description: LNET Selftest results in Soft lockup on OSS CPU
+Details    : only hits when 8 or more o2ib clients involved and a session is
+             torn down with 'lst end_session' without preceeding 'lst stop'.
+
+Severity   : minor
+Bugzilla   : 16321
+Description: concurrent_sends in IB LNDs should not be changeable at run time
+Details    : concurrent_sends in IB LNDs should not be changeable at run time
+
+-------------------------------------------------------------------------------
+
+11-03-2008  Sun Microsystems, Inc.
+        * version 1.6.6
+	* Support for networks:
+	 socklnd   - any kernel supported by Lustre,
+	 qswlnd    - Qsnet kernel modules 5.20 and later,
+	 openiblnd - IbGold 1.8.2,
+	 o2iblnd   - OFED 1.1, 1.2.0, 1.2.5, and 1.3
+	 viblnd    - Voltaire ibhost 3.4.5 and later,
+	 ciblnd    - Topspin 3.2.0,
+	 iiblnd    - Infiniserv 3.3 + PathBits patch,
+	 gmlnd     - GM 2.1.22 and later,
+	 mxlnd     - MX 1.2.1 or later,
+	 ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
 Severity   : normal
 Bugzilla   : 15272
