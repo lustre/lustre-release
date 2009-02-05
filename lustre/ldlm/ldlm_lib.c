@@ -733,7 +733,6 @@ int target_handle_connect(struct ptlrpc_request *req)
         if (obd_uuid_equals(&cluuid, &target->obd_uuid))
                 goto dont_check_exports;
 
-        spin_lock(&target->obd_dev_lock);
         export = lustre_hash_lookup(target->obd_uuid_hash, &cluuid);
 
         if (export != NULL && mds_conn) {
