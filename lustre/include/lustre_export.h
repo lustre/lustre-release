@@ -92,7 +92,6 @@ struct filter_export_data {
         int                        fed_mod_count;/* items in fed_writing list */
         long                       fed_pending;  /* bytes just being written */
         __u32                      fed_group;
-        struct brw_stats           fed_brw_stats;
 };
 
 typedef struct nid_stat_uuid {
