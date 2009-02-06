@@ -81,18 +81,32 @@ static void record_start_io(struct filter_iobuf *iobuf, int rw, int size,
                 atomic_inc(&filter->fo_r_in_flight);
                 lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_R_RPC_HIST],
                                  atomic_read(&filter->fo_r_in_flight));
-                lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_R_DISK_IOSIZE], size);
-                lprocfs_oh_tally(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_RPC_HIST],
-                                 atomic_read(&filter->fo_r_in_flight));
-                lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_DISK_IOSIZE], size);
+                lprocfs_oh_tally_log2(&filter->
+                                       fo_filter_stats.hist[BRW_R_DISK_IOSIZE],
+                                      size);
+                if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats) {
+                        lprocfs_oh_tally(&exp->exp_nid_stats->nid_brw_stats->
+                                          hist[BRW_R_RPC_HIST],
+                                         atomic_read(&filter->fo_r_in_flight));
+                        lprocfs_oh_tally_log2(&exp->exp_nid_stats->
+                                         nid_brw_stats->hist[BRW_R_DISK_IOSIZE],
+                                              size);
+                }
         } else {
                 atomic_inc(&filter->fo_w_in_flight);
                 lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_W_RPC_HIST],
                                  atomic_read(&filter->fo_w_in_flight));
-                lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_W_DISK_IOSIZE], size);
-                lprocfs_oh_tally(&exp->exp_filter_data.fed_brw_stats.hist[BRW_W_RPC_HIST],
-                                 atomic_read(&filter->fo_w_in_flight));
-                lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_W_DISK_IOSIZE], size);
+                lprocfs_oh_tally_log2(&filter->
+                                       fo_filter_stats.hist[BRW_W_DISK_IOSIZE],
+                                      size);
+                if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats) {
+                        lprocfs_oh_tally(&exp->exp_nid_stats->nid_brw_stats->
+                                          hist[BRW_W_RPC_HIST],
+                                         atomic_read(&filter->fo_r_in_flight));
+                        lprocfs_oh_tally_log2(&exp->exp_nid_stats->
+                                        nid_brw_stats->hist[BRW_W_DISK_IOSIZE],
+                                              size);
+                }
         }
 }
 
@@ -100,7 +114,7 @@ static void record_finish_io(struct filter_iobuf *iobuf, int rw, int rc)
 {
         struct filter_obd *filter = iobuf->dr_filter;
 
-        /* CAVEAT EMPTOR: possibly in IRQ context 
+        /* CAVEAT EMPTOR: possibly in IRQ context
          * DO NOT record procfs stats here!!! */
 
         if (rw == OBD_BRW_READ)
@@ -122,7 +136,7 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
         int i;
 #endif
 
-        /* CAVEAT EMPTOR: possibly in IRQ context 
+        /* CAVEAT EMPTOR: possibly in IRQ context
          * DO NOT record procfs stats here!!! */
 
         if (bio->bi_size)                       /* Not complete */
@@ -321,13 +335,13 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
                                 nblocks++;
 
 #ifdef HAVE_PAGE_CONSTANT
-                        /* I only set the page to be constant only if it 
-                         * is mapped to a contiguous underlying disk block(s). 
-                         * It will then make sure the corresponding device 
-                         * cache of raid5 will be overwritten by this page. 
+                        /* I only set the page to be constant only if it
+                         * is mapped to a contiguous underlying disk block(s).
+                         * It will then make sure the corresponding device
+                         * cache of raid5 will be overwritten by this page.
                          * - jay */
-                        if ((rw == OBD_BRW_WRITE) && 
-                            (nblocks == blocks_per_page) && 
+                        if ((rw == OBD_BRW_WRITE) &&
+                            (nblocks == blocks_per_page) &&
                             mapping_cap_page_constant_write(inode->i_mapping))
                                 SetPageConstant(page);
 #endif
@@ -401,31 +415,32 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
         wait_event(iobuf->dr_wait, atomic_read(&iobuf->dr_numreqs) == 0);
 
         if (rw == OBD_BRW_READ) {
-                lprocfs_oh_tally(&obd->u.filter.fo_filter_stats.hist[BRW_R_DIO_FRAGS], frags);
-                lprocfs_oh_tally(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_DIO_FRAGS],
+                lprocfs_oh_tally(&obd->u.filter.fo_filter_stats.
+                                  hist[BRW_R_DIO_FRAGS],
                                  frags);
-                lprocfs_oh_tally_log2(&obd->u.filter.fo_filter_stats.hist[BRW_R_IO_TIME],
+                lprocfs_oh_tally_log2(&obd->u.filter.
+                                       fo_filter_stats.hist[BRW_R_IO_TIME],
                                       jiffies - start_time);
-                lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_IO_TIME],
-                                 jiffies - start_time);
                 if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats) {
-                        lprocfs_oh_tally(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_R_DIO_FRAGS],
+                        lprocfs_oh_tally(&exp->exp_nid_stats->nid_brw_stats->
+                                          hist[BRW_R_DIO_FRAGS],
                                          frags);
-                        lprocfs_oh_tally_log2(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_R_IO_TIME],
+                        lprocfs_oh_tally_log2(&exp->exp_nid_stats->
+                                             nid_brw_stats->hist[BRW_R_IO_TIME],
                                               jiffies - start_time);
                 }
         } else {
-                lprocfs_oh_tally(&obd->u.filter.fo_filter_stats.hist[BRW_W_DIO_FRAGS], frags);
-                lprocfs_oh_tally(&exp->exp_filter_data.fed_brw_stats.hist[BRW_W_DIO_FRAGS],
-                                 frags);
-                lprocfs_oh_tally_log2(&obd->u.filter.fo_filter_stats.hist[BRW_W_IO_TIME],
+                lprocfs_oh_tally(&obd->u.filter.fo_filter_stats.
+                                  hist[BRW_W_DIO_FRAGS], frags);
+                lprocfs_oh_tally_log2(&obd->u.filter.fo_filter_stats.
+                                       hist[BRW_W_IO_TIME],
                                       jiffies - start_time);
-                lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_W_IO_TIME],
-                                 jiffies - start_time);
                 if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats) {
-                        lprocfs_oh_tally(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_W_DIO_FRAGS],
+                        lprocfs_oh_tally(&exp->exp_nid_stats->nid_brw_stats->
+                                          hist[BRW_W_DIO_FRAGS],
                                          frags);
-                        lprocfs_oh_tally_log2(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_W_IO_TIME],
+                        lprocfs_oh_tally_log2(&exp->exp_nid_stats->
+                                             nid_brw_stats->hist[BRW_W_IO_TIME],
                                               jiffies - start_time);
                 }
         }
@@ -769,7 +784,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                 save = iattr.ia_valid;
                 iattr.ia_valid &= (ATTR_UID | ATTR_GID);
                 rc = fsfilt_setattr(obd, res->dentry, oti->oti_handle, &iattr, 0);
-                CDEBUG(D_QUOTA, "set uid(%u)/gid(%u) to ino(%lu). rc(%d)\n", 
+                CDEBUG(D_QUOTA, "set uid(%u)/gid(%u) to ino(%lu). rc(%d)\n",
                                 iattr.ia_uid, iattr.ia_gid, inode->i_ino, rc);
                 iattr.ia_valid = save & ~(ATTR_UID | ATTR_GID);
         }

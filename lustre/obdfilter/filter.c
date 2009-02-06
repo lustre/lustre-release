@@ -198,12 +198,9 @@ static int filter_export_stats_init(struct obd_device *obd,
                                     struct obd_export *exp,
                                     void *client_nid)
 {
-        struct filter_export_data *fed = &exp->exp_filter_data;
         struct proc_dir_entry *brw_entry;
         int rc, newnid = 0;
         ENTRY;
-
-        init_brw_stats(&fed->fed_brw_stats);
 
         if (obd_uuid_equals(&exp->exp_client_uuid, &obd->obd_uuid))
                 /* Self-export gets no proc entry */
@@ -3129,7 +3126,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 cleanup_phase = 3;
 
                 CDEBUG(D_INODE, "%s: filter_precreate(od->o_gr="LPU64
-                       ",od->o_id="LPU64")\n", obd->obd_name, group, 
+                       ",od->o_id="LPU64")\n", obd->obd_name, group,
                        next_id);
 
                 /* We mark object SUID+SGID to flag it for accepting UID+GID

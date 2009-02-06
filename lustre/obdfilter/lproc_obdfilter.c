@@ -274,7 +274,6 @@ void filter_tally(struct obd_export *exp, struct page **pages, int nr_pages,
                   unsigned long *blocks, int blocks_per_page, int wr)
 {
         struct filter_obd *filter = &exp->exp_obd->u.filter;
-        struct filter_export_data *fed = &exp->exp_filter_data;
         struct page *last_page = NULL;
         unsigned long *last_block = NULL;
         unsigned long discont_pages = 0;
@@ -285,8 +284,6 @@ void filter_tally(struct obd_export *exp, struct page **pages, int nr_pages,
                 return;
 
         lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_R_PAGES + wr],
-                              nr_pages);
-        lprocfs_oh_tally_log2(&fed->fed_brw_stats.hist[BRW_R_PAGES + wr],
                               nr_pages);
         if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats)
                 lprocfs_oh_tally_log2(&exp->exp_nid_stats->nid_brw_stats->
@@ -306,11 +303,7 @@ void filter_tally(struct obd_export *exp, struct page **pages, int nr_pages,
 
         lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_R_DISCONT_PAGES +wr],
                          discont_pages);
-        lprocfs_oh_tally(&fed->fed_brw_stats.hist[BRW_R_DISCONT_PAGES + wr],
-                         discont_pages);
         lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_R_DISCONT_BLOCKS+wr],
-                         discont_blocks);
-        lprocfs_oh_tally(&fed->fed_brw_stats.hist[BRW_R_DISCONT_BLOCKS + wr],
                          discont_blocks);
 
         if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats) {
@@ -439,30 +432,6 @@ int lproc_filter_attach_seqstat(struct obd_device *dev)
                                       &filter_brw_stats_fops, dev);
 }
 
-static int filter_per_export_stats_seq_show(struct seq_file *seq, void *v)
-{
-        struct filter_export_data *fed = seq->private;
-
-        brw_stats_show(seq, &fed->fed_brw_stats);
-
-        return 0;
-}
-
-static ssize_t filter_per_export_stats_seq_write(struct file *file,
-                                       const char *buf, size_t len, loff_t *off)
-{
-        struct seq_file *seq = file->private_data;
-        struct filter_export_data *fed = seq->private;
-        int i;
-
-        for (i = 0; i < BRW_LAST; i++)
-                lprocfs_oh_clear(&fed->fed_brw_stats.hist[i]);
-
-        return len;
-}
-
-LPROC_SEQ_FOPS(filter_per_export_stats);
-
 void lprocfs_filter_init_vars(struct lprocfs_static_vars *lvars)
 {
     lvars->module_vars  = lprocfs_filter_module_vars;
@@ -471,10 +440,10 @@ void lprocfs_filter_init_vars(struct lprocfs_static_vars *lvars)
 
 static int filter_per_nid_stats_seq_show(struct seq_file *seq, void *v)
 {
-        nid_stat_t *tmp = seq->private;
+        nid_stat_t * stat = seq->private;
 
-        if (tmp->nid_brw_stats)
-                brw_stats_show(seq, tmp->nid_brw_stats);
+        if (stat->nid_brw_stats)
+                brw_stats_show(seq, stat->nid_brw_stats);
 
         return 0;
 }
@@ -483,13 +452,13 @@ static ssize_t filter_per_nid_stats_seq_write(struct file *file,
                                               const char *buf, size_t len,
                                               loff_t *off)
 {
-        struct seq_file *seq = file->private_data;
-        nid_stat_t *tmp = seq->private;
+        struct seq_file *seq  = file->private_data;
+        nid_stat_t      *stat = seq->private;
         int i;
 
-        if (tmp->nid_brw_stats)
+        if (stat->nid_brw_stats)
                 for (i = 0; i < BRW_LAST; i++)
-                        lprocfs_oh_clear(&tmp->nid_brw_stats->hist[i]);
+                        lprocfs_oh_clear(&stat->nid_brw_stats->hist[i]);
 
         return len;
 }
