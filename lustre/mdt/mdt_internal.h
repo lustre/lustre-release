@@ -373,7 +373,6 @@ struct mdt_thread_info {
         struct lr_server_data      mti_lsd;
         struct lsd_client_data     mti_lcd;
         loff_t                     mti_off;
-        struct txn_param           mti_txn_param;
         struct lu_buf              mti_buf;
         struct lustre_capa_key     mti_capa_key;
 
@@ -388,12 +387,6 @@ struct mdt_commit_cb {
         mdt_cb_t  mdt_cb_func;
         void     *mdt_cb_data;
 };
-
-enum mdt_txn_op {
-        MDT_TXN_CAPA_KEYS_WRITE_OP,
-        MDT_TXN_LAST_RCVD_WRITE_OP,
-};
-
 
 /*
  * Info allocated per-transaction.
@@ -595,13 +588,16 @@ int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *,
                            const struct md_attr *);
 void mdt_reconstruct_open(struct mdt_thread_info *, struct mdt_lock_handle *);
 
-void mdt_trans_credit_init(const struct lu_env *env,
-                           struct mdt_device *mdt,
-                           enum mdt_txn_op op);
-struct thandle* mdt_trans_start(const struct lu_env *env,
+struct thandle* mdt_trans_create(const struct lu_env *env,
                                 struct mdt_device *mdt);
+int mdt_trans_start(const struct lu_env *env,
+                                struct mdt_device *mdt,
+                                struct thandle *th);
 void mdt_trans_stop(const struct lu_env *env,
                     struct mdt_device *mdt, struct thandle *th);
+int mdt_declare_record_write(const struct lu_env *env,
+                             struct dt_object *dt, const loff_t size,
+                             loff_t pos, struct thandle *th);
 int mdt_record_write(const struct lu_env *env,
                      struct dt_object *dt, const struct lu_buf *buf,
                      loff_t *pos, struct thandle *th);

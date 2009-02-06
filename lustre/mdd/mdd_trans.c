@@ -59,13 +59,12 @@
 
 #include "mdd_internal.h"
 
-static int dto_txn_credits[DTO_NR];
-
-int mdd_txn_start_cb(const struct lu_env *env, struct txn_param *param,
+int mdd_txn_start_cb(const struct lu_env *env, struct thandle *txn,
                      void *cookie)
 {
         struct mdd_device *mdd = cookie;
         struct obd_device *obd = mdd2obd_dev(mdd);
+
         /* Each transaction updates lov objids, the credits should be added for
          * this */
         int blk, shift = mdd->mdd_dt_conf.ddp_block_shift;
@@ -73,8 +72,9 @@ int mdd_txn_start_cb(const struct lu_env *env, struct txn_param *param,
                (1 << shift) - 1) >> shift) + 1;
 
         /* add lov objids credits */
-        param->tp_credits += blk * dto_txn_credits[DTO_WRITE_BLOCK] +
-                             dto_txn_credits[DTO_WRITE_BASE];
+        /*LBUG();
+                rc = fsfilt_write_record(obd, mds->mds_lov_objid_filp, data,
+                                         size, &off, 0);*/
 
         return 0;
 }
@@ -95,16 +95,7 @@ int mdd_txn_commit_cb(const struct lu_env *env, struct thandle *txn,
         return 0;
 }
 
-void mdd_txn_param_build(const struct lu_env *env, struct mdd_device *mdd,
-                         enum mdd_txn_op op)
-{
-        LASSERT(0 <= op && op < MDD_TXN_LAST_OP);
-
-        txn_param_init(&mdd_env_info(env)->mti_param,
-                       mdd->mdd_tod[op].mod_credits);
-}
-
-int mdd_log_txn_param_build(const struct lu_env *env, struct md_object *obj,
+/*int mdd_log_txn_param_build(const struct lu_env *env, struct md_object *obj,
                             struct md_attr *ma, enum mdd_txn_op op)
 {
         struct mdd_device *mdd = mdo2mdd(&md2mdd_obj(obj)->mod_obj);
@@ -133,126 +124,22 @@ int mdd_log_txn_param_build(const struct lu_env *env, struct md_object *obj,
         log_credits = stripe * dto_txn_credits[DTO_LOG_REC];
         mdd_env_info(env)->mti_param.tp_credits += log_credits;
         RETURN(rc);
-}
+}*/
 
-int mdd_setattr_txn_param_build(const struct lu_env *env, struct md_object *obj,
-                                struct md_attr *ma, enum mdd_txn_op op)
-{
-        struct mdd_device *mdd = mdo2mdd(&md2mdd_obj(obj)->mod_obj);
-        ENTRY;
-
-        mdd_txn_param_build(env, mdd, op);
-        if (ma->ma_attr.la_valid & (LA_UID | LA_GID))
-                mdd_env_info(env)->mti_param.tp_credits =
-                                        dto_txn_credits[DTO_ATTR_SET_CHOWN];
-
-        RETURN(0);
-}
-
-static void mdd_txn_init_dto_credits(const struct lu_env *env,
-                                     struct mdd_device *mdd, int *dto_credits)
-{
-        int op, credits;
-        for (op = 0; op < DTO_NR; op++) {
-                credits = mdd_child_ops(mdd)->dt_credit_get(env, mdd->mdd_child,
-                                                            op);
-                LASSERT(credits > 0);
-                dto_txn_credits[op] = credits;
-        }
-}
-
-int mdd_txn_init_credits(const struct lu_env *env, struct mdd_device *mdd)
-{
-        int op;
-
-        /* Init credits for each ops. */
-        mdd_txn_init_dto_credits(env, mdd, dto_txn_credits);
-
-        /* Calculate the mdd credits. */
-        for (op = MDD_TXN_OBJECT_DESTROY_OP; op < MDD_TXN_LAST_OP; op++) {
-                int *c = &mdd->mdd_tod[op].mod_credits;
-                int *dt = dto_txn_credits;
-                mdd->mdd_tod[op].mod_op = op;
-                switch(op) {
-                        case MDD_TXN_OBJECT_DESTROY_OP:
-                                /* Unused now */
-                                *c = dt[DTO_OBJECT_DELETE];
-                                break;
-                        case MDD_TXN_OBJECT_CREATE_OP:
-                                /* OI INSERT + CREATE OBJECT */
-                                *c = dt[DTO_INDEX_INSERT] +
-                                     dt[DTO_OBJECT_CREATE];
-                                break;
-                        case MDD_TXN_ATTR_SET_OP:
-                                /* ATTR set + XATTR(lsm, lmv) set */
-                                *c = dt[DTO_ATTR_SET_BASE] +
-                                     dt[DTO_XATTR_SET];
-                                break;
-                        case MDD_TXN_XATTR_SET_OP:
-                                *c = dt[DTO_XATTR_SET];
-                                break;
-                        case MDD_TXN_INDEX_INSERT_OP:
-                                *c = dt[DTO_INDEX_INSERT];
-                                break;
-                        case MDD_TXN_INDEX_DELETE_OP:
-                                *c = dt[DTO_INDEX_DELETE];
-                                break;
-                        case MDD_TXN_LINK_OP:
-                                *c = dt[DTO_INDEX_INSERT];
-                                break;
-                        case MDD_TXN_UNLINK_OP:
-                                /* delete index + Unlink log +
-                                 * mdd orphan handling */
-                                *c = dt[DTO_INDEX_DELETE] +
-                                        dt[DTO_INDEX_DELETE] +
-                                        dt[DTO_INDEX_INSERT] * 2 +
-                                        dt[DTO_XATTR_SET] * 3;
-                                break;
-                        case MDD_TXN_RENAME_OP:
-                                /* 2 delete index + 1 insert + Unlink log */
-                                *c = 2 * dt[DTO_INDEX_DELETE] +
-                                        dt[DTO_INDEX_INSERT] +
-                                        dt[DTO_INDEX_DELETE] +
-                                        dt[DTO_INDEX_INSERT] * 2 +
-                                        dt[DTO_XATTR_SET] * 3;
-                                break;
-                        case MDD_TXN_RENAME_TGT_OP:
-                                /* index insert + index delete */
-                                *c = dt[DTO_INDEX_DELETE] +
-                                        dt[DTO_INDEX_INSERT] +
-                                        dt[DTO_INDEX_DELETE] +
-                                        dt[DTO_INDEX_INSERT] * 2 +
-                                        dt[DTO_XATTR_SET] * 3;
-                                break;
-                        case MDD_TXN_CREATE_DATA_OP:
-                                /* same as set xattr(lsm) */
-                                *c = dt[DTO_XATTR_SET];
-                                break;
-                        case MDD_TXN_MKDIR_OP:
-                                /* INDEX INSERT + OI INSERT +
-                                 * CREATE_OBJECT_CREDITS
-                                 * SET_MD CREDITS is already counted in
-                                 * CREATE_OBJECT CREDITS
-                                 */
-                                 *c = 2 * dt[DTO_INDEX_INSERT] +
-                                          dt[DTO_OBJECT_CREATE];
-                                break;
-                        default:
-                                CERROR("Invalid op %d init its credit\n", op);
-                                LBUG();
-                }
-        }
-        RETURN(0);
-}
-
-struct thandle* mdd_trans_start(const struct lu_env *env,
+struct thandle* mdd_trans_create(const struct lu_env *env,
                                 struct mdd_device *mdd)
 {
-        struct txn_param *p = &mdd_env_info(env)->mti_param;
         struct thandle *th;
-        
-        th = mdd_child_ops(mdd)->dt_trans_start(env, mdd->mdd_child, p);
+ 
+        th = mdd_child_ops(mdd)->dt_trans_create(env, mdd->mdd_child);
         return th;
+}
+
+int mdd_trans_start(const struct lu_env *env,
+                                struct mdd_device *mdd, struct thandle *handle)
+{
+                
+        return mdd_child_ops(mdd)->dt_trans_start(env, mdd->mdd_child, handle);
 }
 
 void mdd_trans_stop(const struct lu_env *env, struct mdd_device *mdd,

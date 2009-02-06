@@ -852,7 +852,7 @@ int mdd_attr_set_internal(const struct lu_env *env,
         int rc;
         ENTRY;
 
-        rc = mdo_attr_set(env, obj, attr, handle, mdd_object_capa(env, obj));
+        rc = mdo_attr_set(env, obj, attr, handle);
 #ifdef CONFIG_FS_POSIX_ACL
         if (!rc && (attr->la_valid & LA_MODE) && needacl)
                 rc = mdd_acl_chmod(env, obj, attr->la_mode, handle);
@@ -918,14 +918,13 @@ int __mdd_xattr_set(const struct lu_env *env, struct mdd_object *obj,
                     const struct lu_buf *buf, const char *name,
                     int fl, struct thandle *handle)
 {
-        struct lustre_capa *capa = mdd_object_capa(env, obj);
         int rc = -EINVAL;
         ENTRY;
 
         if (buf->lb_buf && buf->lb_len > 0)
-                rc = mdo_xattr_set(env, obj, buf, name, 0, handle, capa);
+                rc = mdo_xattr_set(env, obj, buf, name, 0, handle);
         else if (buf->lb_buf == NULL && buf->lb_len == 0)
-                rc = mdo_xattr_del(env, obj, name, handle, capa);
+                rc = mdo_xattr_del(env, obj, name, handle);
 
         RETURN(rc);
 }
@@ -1192,6 +1191,45 @@ static int mdd_changelog_data_store(const struct lu_env     *env,
         return 0;
 }
 
+static struct thandle *
+mdd_declare_and_start_attr_set(const struct lu_env *env, struct md_object *obj,
+                               const struct md_attr *ma)
+{
+        struct mdd_object *mdd_obj = md2mdd_obj(obj);
+        struct mdd_device *mdd = mdo2mdd(obj);
+        struct thandle *handle;
+        int rc;
+
+        handle = mdd_trans_create(env, mdd);
+        if (IS_ERR(handle))
+                RETURN(handle);
+
+        rc = mdo_declare_attr_set(env, mdd_obj, NULL, handle,
+                                  mdd_object_capa(env, mdd_obj));
+        if (rc)
+                GOTO(out, rc);
+        if (ma->ma_valid & MA_LOV) {
+                rc = mdo_declare_xattr_set(env, mdd_obj, ma->ma_lmm_size,
+                                           XATTR_NAME_LOV, 0, handle,
+                                           mdd_object_capa(env, mdd_obj));
+                if (rc)
+                        GOTO(out, rc);
+                rc = mdo_declare_xattr_del(env, mdd_obj, XATTR_NAME_LOV,
+                                           handle, mdd_object_capa(env,mdd_obj));
+                if (rc)
+                        GOTO(out, rc);
+        }
+
+        rc = mdd_trans_start(env, mdd, handle);
+
+out:
+        if (rc) {
+                mdd_trans_stop(env, mdd, rc, handle);
+                handle = ERR_PTR(rc);
+        }
+        RETURN(handle);
+}
+
 /* set attr and LOV EA at once, return updated attr */
 static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
                         const struct md_attr *ma)
@@ -1213,11 +1251,10 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 #endif
         ENTRY;
 
-        mdd_setattr_txn_param_build(env, obj, (struct md_attr *)ma,
-                                    MDD_TXN_ATTR_SET_OP);
-        handle = mdd_trans_start(env, mdd);
+        handle = mdd_declare_and_start_attr_set(env, obj, ma);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
+
         /*TODO: add lock here*/
         /* start a log jounal handle if needed */
         if (S_ISREG(mdd_object_type(mdd_obj)) &&
@@ -1391,10 +1428,16 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
         if (rc)
                 RETURN(rc);
 
-        mdd_txn_param_build(env, mdd, MDD_TXN_XATTR_SET_OP);
-        handle = mdd_trans_start(env, mdd);
+        handle = mdd_trans_create(env, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
+        rc = mdo_declare_xattr_set(env, mdd_obj, buf->lb_len, name, fl,
+                                   handle, mdd_object_capa(env, mdd_obj));
+        if (rc)
+                GOTO(cleanup, rc);
+        rc = mdd_trans_start(env, mdd, handle);
+        if (rc)
+                GOTO(cleanup, rc);
 
         rc = mdd_xattr_set_txn(env, mdd_obj, buf, name, fl, handle);
 
@@ -1403,6 +1446,7 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
             (strncmp("user.", name, 5) == 0))
                 rc = mdd_changelog_data_store(env, mdd, CL_XATTR, mdd_obj,
                                               handle);
+cleanup:
         mdd_trans_stop(env, mdd, rc, handle);
 
         RETURN(rc);
@@ -1425,14 +1469,19 @@ int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
         if (rc)
                 RETURN(rc);
 
-        mdd_txn_param_build(env, mdd, MDD_TXN_XATTR_SET_OP);
-        handle = mdd_trans_start(env, mdd);
+        handle = mdd_trans_create(env, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
+        rc = mdo_declare_xattr_del(env, mdd_obj, name, handle,
+                                   mdd_object_capa(env, mdd_obj));
+        if (rc)
+                GOTO(cleanup, rc);
+        rc = mdd_trans_start(env, mdd, handle);
+        if (rc)
+                GOTO(cleanup, rc);
 
         mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
-        rc = mdo_xattr_del(env, mdd_obj, name, handle,
-                           mdd_object_capa(env, mdd_obj));
+        rc = mdo_xattr_del(env, mdd_obj, name, handle);
         mdd_write_unlock(env, mdd_obj);
 
         /* Only record user xattr changes */
@@ -1441,6 +1490,7 @@ int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
                 rc = mdd_changelog_data_store(env, mdd, CL_XATTR, mdd_obj,
                                               handle);
 
+cleanup:
         mdd_trans_stop(env, mdd, rc, handle);
 
         RETURN(rc);
@@ -1472,13 +1522,21 @@ static int mdd_ref_del(const struct lu_env *env, struct md_object *obj,
 
         LASSERT(mdd_object_exists(mdd_obj) > 0);
 
-        rc = mdd_log_txn_param_build(env, obj, ma, MDD_TXN_UNLINK_OP);
-        if (rc)
-                RETURN(rc);
-
-        handle = mdd_trans_start(env, mdd);
+        handle = mdd_trans_create(env, mdd);
         if (IS_ERR(handle))
                 RETURN(-ENOMEM);
+
+        rc = mdo_declare_ref_del(env, mdd_obj, handle);
+        if (rc)
+                GOTO(cleanup2, rc);
+
+        rc = __mdd_declare_orphan_add(env, mdd_obj, handle);
+        if (rc)
+                GOTO(cleanup2, rc);
+
+        rc = mdd_trans_start(env, mdd, handle);
+        if (rc)
+                GOTO(cleanup2, rc);
 
         mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
 
@@ -1514,6 +1572,7 @@ static int mdd_ref_del(const struct lu_env *env, struct md_object *obj,
         EXIT;
 cleanup:
         mdd_write_unlock(env, mdd_obj);
+cleanup2:
         mdd_trans_stop(env, mdd, rc, handle);
 #ifdef HAVE_QUOTA_SUPPORT
         if (quota_opc)
@@ -1596,10 +1655,17 @@ static int mdd_object_create(const struct lu_env *env,
         }
 #endif
 
-        mdd_txn_param_build(env, mdd, MDD_TXN_OBJECT_CREATE_OP);
-        handle = mdd_trans_start(env, mdd);
+        handle = mdd_trans_create(env, mdd);
         if (IS_ERR(handle))
                 GOTO(out_pending, rc = PTR_ERR(handle));
+
+        rc = mdo_declare_create_obj(env, mdd_obj, &ma->ma_attr, NULL, NULL, handle);
+        if (rc)
+                GOTO(unlock, rc);
+
+        rc = mdd_trans_start(env, mdd, handle);
+        if (rc)
+                GOTO(unlock, rc);
 
         mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
         rc = mdd_oc_sanity_check(env, mdd_obj, ma);
@@ -1687,10 +1753,19 @@ static int mdd_ref_add(const struct lu_env *env, struct md_object *obj,
         int rc;
         ENTRY;
 
-        mdd_txn_param_build(env, mdd, MDD_TXN_XATTR_SET_OP);
-        handle = mdd_trans_start(env, mdd);
+        handle = mdd_trans_create(env, mdd);
         if (IS_ERR(handle))
                 RETURN(-ENOMEM);
+        rc = mdo_declare_ref_del(env, mdd_obj, handle);
+        if (rc)
+                GOTO(cleanup, rc);
+        rc = mdo_declare_attr_set(env, mdd_obj, &ma->ma_attr, handle, 
+                                  mdd_object_capa(env, mdd_obj));
+        if (rc)
+                GOTO(cleanup, rc);
+        rc = mdd_trans_start(env, mdd, handle);
+        if (rc)
+                GOTO(cleanup, rc);
 
         mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
         rc = mdd_link_sanity_check(env, NULL, NULL, mdd_obj);
@@ -1705,6 +1780,7 @@ static int mdd_ref_add(const struct lu_env *env, struct md_object *obj,
                 rc = mdd_attr_check_set_internal_locked(env, mdd_obj, la_copy,
                                                         handle, 0);
         }
+cleanup:
         mdd_trans_stop(env, mdd, 0, handle);
 
         RETURN(rc);
@@ -1853,12 +1929,18 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
 #endif
         ENTRY;
 
-        rc = mdd_log_txn_param_build(env, obj, ma, MDD_TXN_UNLINK_OP);
-        if (rc)
-                RETURN(rc);
-        handle = mdd_trans_start(env, mdo2mdd(obj));
+        handle = mdd_trans_create(env, mdo2mdd(obj));
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
+        rc = mdd_declare_finish_unlink(env, mdd_obj, ma, handle);
+        if (rc)
+                GOTO(cleanup, rc);
+        rc = __mdd_declare_orphan_del(env, mdd_obj, handle);
+        if (rc)
+                GOTO(cleanup, rc);
+        rc = mdd_trans_start(env, mdo2mdd(obj), handle);
+        if (rc)
+                GOTO(cleanup, rc);
 
         mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
         /* release open count */
@@ -1889,6 +1971,8 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
                 ma->ma_valid &= ~(MA_LOV | MA_COOKIE);
 
         mdd_write_unlock(env, mdd_obj);
+
+cleanup:
         mdd_trans_stop(env, mdo2mdd(obj), rc, handle);
 #ifdef HAVE_QUOTA_SUPPORT
         if (quota_opc)

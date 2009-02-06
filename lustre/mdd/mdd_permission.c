@@ -123,8 +123,7 @@ int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
         if (rc)
                 RETURN(rc);
 
-        rc = mdo_xattr_set(env, o, buf, XATTR_NAME_ACL_ACCESS,
-                           0, handle, BYPASS_CAPA);
+        rc = mdo_xattr_set(env, o, buf, XATTR_NAME_ACL_ACCESS, 0, handle);
         RETURN(rc);
 }
 
@@ -150,7 +149,7 @@ int __mdd_acl_init(const struct lu_env *env, struct mdd_object *obj,
 
         if (S_ISDIR(*mode)) {
                 rc = mdo_xattr_set(env, obj, buf, XATTR_NAME_ACL_DEFAULT, 0,
-                                   handle, BYPASS_CAPA);
+                                   handle);
                 if (rc)
                         RETURN(rc);
         }
@@ -159,8 +158,7 @@ int __mdd_acl_init(const struct lu_env *env, struct mdd_object *obj,
         if (rc <= 0)
                 RETURN(rc);
 
-        rc = mdo_xattr_set(env, obj, buf, XATTR_NAME_ACL_ACCESS, 0, handle,
-                           BYPASS_CAPA);
+        rc = mdo_xattr_set(env, obj, buf, XATTR_NAME_ACL_ACCESS, 0, handle);
         RETURN(rc);
 }
 #endif

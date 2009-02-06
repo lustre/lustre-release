@@ -150,9 +150,25 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
 
         credit = SEQ_TXN_STORE_CREDITS + FLD_TXN_INDEX_INSERT_CREDITS;
 
-        th = seq_store_trans_start(seq, env, credit);
+        th = seq_store_trans_create(seq, env);
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
+        rc = seq_declare_store_write(seq, env, th);
+        if (rc) {
+                seq_store_trans_stop(seq, env, th);
+                RETURN(rc);
+        }
+        rc = fld_declare_server_create(seq->lss_site->ms_server_fld, env, th);
+        if (rc) {
+                seq_store_trans_stop(seq, env, th);
+                RETURN(rc);
+        }
+
+        rc = seq_store_trans_start(seq, env, th);
+        if (rc) {
+                seq_store_trans_stop(seq, env, th);
+                RETURN(rc);
+        }
 
         rc = seq_store_write(seq, env, th);
         if (rc) {
@@ -307,9 +323,19 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                 range_alloc(out, space, seq->lss_width);
         }
 
-        th = seq_store_trans_start(seq, env, SEQ_TXN_STORE_CREDITS);
+        th = seq_store_trans_create(seq, env);
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
+        rc = seq_declare_store_write(seq, env, th);
+        if (rc) {
+                seq_store_trans_stop(seq, env, th);
+                RETURN(rc);
+        }
+        rc = seq_store_trans_start(seq, env, th);
+        if (rc) {
+                seq_store_trans_stop(seq, env, th);
+                RETURN(rc);
+        }
 
         rc = seq_store_write(seq, env, th);
         if (rc) {
@@ -563,9 +589,19 @@ int seq_server_init(struct lu_server_seq *seq,
                        "on store. Initialize space\n",
                        seq->lss_name);
 
-                th = seq_store_trans_start(seq, env, SEQ_TXN_STORE_CREDITS);
+                th = seq_store_trans_create(seq, env);
                 if (IS_ERR(th))
                         RETURN(PTR_ERR(th));
+                rc = seq_declare_store_write(seq, env, th);
+                if (rc) {
+                        seq_store_trans_stop(seq, env, th);
+                        RETURN(rc);
+                }
+                rc = seq_store_trans_start(seq, env, th);
+                if (rc) {
+                        seq_store_trans_stop(seq, env, th);
+                        RETURN(rc);
+                }
 
                 /* Save default controller value to store. */
                 rc = seq_store_write(seq, env, th);

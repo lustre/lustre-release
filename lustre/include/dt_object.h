@@ -62,7 +62,6 @@ struct proc_dir_entry;
 struct lustre_cfg;
 
 struct thandle;
-struct txn_param;
 struct dt_device;
 struct dt_object;
 struct dt_index_features;
@@ -75,25 +74,6 @@ struct dt_device_param {
 };
 
 /**
- * Basic transaction credit op
- */
-enum dt_txn_op {
-        DTO_INDEX_INSERT,
-        DTO_INDEX_DELETE,
-        DTO_IDNEX_UPDATE,
-        DTO_OBJECT_CREATE,
-        DTO_OBJECT_DELETE,
-        DTO_ATTR_SET_BASE,
-        DTO_XATTR_SET,
-        DTO_LOG_REC, /**< XXX temporary: dt layer knows nothing about llog. */
-        DTO_WRITE_BASE,
-        DTO_WRITE_BLOCK,
-        DTO_ATTR_SET_CHOWN,
-
-        DTO_NR
-};
-
-/**
  * Operations on dt device.
  */
 struct dt_device_operations {
@@ -103,11 +83,15 @@ struct dt_device_operations {
         int   (*dt_statfs)(const struct lu_env *env,
                            struct dt_device *dev, struct kstatfs *sfs);
         /**
+         * Create transaction, described by \a param.
+         */
+        struct thandle *(*dt_trans_create)(const struct lu_env *env,
+                                           struct dt_device *dev);
+        /**
          * Start transaction, described by \a param.
          */
-        struct thandle *(*dt_trans_start)(const struct lu_env *env,
-                                          struct dt_device *dev,
-                                          struct txn_param *param);
+        int   (*dt_trans_start)(const struct lu_env *env,
+                                struct dt_device *dev, struct thandle *th);
         /**
          * Finish previously started transaction.
          */
@@ -152,12 +136,6 @@ struct dt_device_operations {
         void (*dt_init_quota_ctxt)(const struct lu_env *env,
                                    struct dt_device *dev,
                                    struct dt_quota_ctxt *ctxt, void *data);
-
-        /**
-         *  get transaction credits for given \a op.
-         */
-        int (*dt_credit_get)(const struct lu_env *env, struct dt_device *dev,
-                             enum dt_txn_op);
 };
 
 struct dt_index_features {
@@ -277,11 +255,24 @@ struct dt_object_operations {
          *
          * precondition: dt_object_exists(dt);
          */
+        int   (*do_declare_attr_set)(const struct lu_env *env,
+                                     struct dt_object *dt,
+                                     const struct lu_attr *attr,
+                                     struct thandle *handle,
+                                     struct lustre_capa *capa);
         int   (*do_attr_set)(const struct lu_env *env,
                              struct dt_object *dt,
                              const struct lu_attr *attr,
-                             struct thandle *handle,
-                             struct lustre_capa *capa);
+                             struct thandle *handle);
+        /**
+         * Punch object's content
+         * precondition: regular object, not index
+         */
+        int   (*do_declare_punch)(const struct lu_env *, struct dt_object *,
+                                  __u64, __u64, struct thandle *,
+                                  struct lustre_capa *capa);
+        int   (*do_punch)(const struct lu_env *env, struct dt_object *dt,
+                          __u64 start, __u64 end, struct thandle *th);
         /**
          * Return a value of an extended attribute.
          *
@@ -297,19 +288,26 @@ struct dt_object_operations {
          *
          * precondition: dt_object_exists(dt);
          */
+        int   (*do_declare_xattr_set)(const struct lu_env *env,
+                                      struct dt_object *dt,
+                                      const int buflen, const char *name, int fl,
+                                      struct thandle *handle,
+                                      struct lustre_capa *capa);
         int   (*do_xattr_set)(const struct lu_env *env,
                               struct dt_object *dt, const struct lu_buf *buf,
-                              const char *name, int fl, struct thandle *handle,
-                              struct lustre_capa *capa);
+                              const char *name, int fl, struct thandle *handle);
         /**
          * Delete existing extended attribute.
          *
          * precondition: dt_object_exists(dt);
          */
+        int   (*do_declare_xattr_del)(const struct lu_env *env,
+                                      struct dt_object *dt,
+                                      const char *name, struct thandle *handle,
+                                      struct lustre_capa *capa);
         int   (*do_xattr_del)(const struct lu_env *env,
                               struct dt_object *dt,
-                              const char *name, struct thandle *handle,
-                              struct lustre_capa *capa);
+                              const char *name, struct thandle *handle);
         /**
          * Place list of existing extended attributes into \a buf (which has
          * length len).
@@ -336,6 +334,11 @@ struct dt_object_operations {
          * precondition: !dt_object_exists(dt);
          * postcondition: ergo(result == 0, dt_object_exists(dt));
          */
+        int   (*do_declare_create)(const struct lu_env *env, struct dt_object *dt,
+                                   struct lu_attr *attr,
+                                   struct dt_allocation_hint *hint,
+                                   struct dt_object_format *dof,
+                                   struct thandle *th);
         int   (*do_create)(const struct lu_env *env, struct dt_object *dt,
                            struct lu_attr *attr,
                            struct dt_allocation_hint *hint,
@@ -357,12 +360,16 @@ struct dt_object_operations {
          * Add nlink of the object
          * precondition: dt_object_exists(dt);
          */
+        int   (*do_declare_ref_add)(const struct lu_env *env,
+                                    struct dt_object *dt, struct thandle *th);
         void  (*do_ref_add)(const struct lu_env *env,
                             struct dt_object *dt, struct thandle *th);
         /**
          * Del nlink of the object
          * precondition: dt_object_exists(dt);
          */
+        int   (*do_declare_ref_del)(const struct lu_env *env,
+                                    struct dt_object *dt, struct thandle *th);
         void  (*do_ref_del)(const struct lu_env *env,
                             struct dt_object *dt, struct thandle *th);
 
@@ -393,10 +400,13 @@ struct dt_body_operations {
         /**
          * precondition: dt_object_exists(dt);
          */
+        ssize_t (*dbo_declare_write)(const struct lu_env *env, struct dt_object *dt,
+                                     const loff_t size, loff_t pos,
+                                     struct thandle *handle,
+                                     struct lustre_capa *capa);
         ssize_t (*dbo_write)(const struct lu_env *env, struct dt_object *dt,
                              const struct lu_buf *buf, loff_t *pos,
-                             struct thandle *handle, struct lustre_capa *capa,
-                             int ignore_quota);
+                             struct thandle *handle, int ignore_quota);
 };
 
 /**
@@ -427,16 +437,20 @@ struct dt_index_operations {
         /**
          * precondition: dt_object_exists(dt);
          */
+        int (*dio_declare_insert)(const struct lu_env *env, struct dt_object *dt,
+                                  const struct dt_rec *rec, const struct dt_key *key,
+                                  struct thandle *handle, struct lustre_capa *capa);
         int (*dio_insert)(const struct lu_env *env, struct dt_object *dt,
                           const struct dt_rec *rec, const struct dt_key *key,
-                          struct thandle *handle, struct lustre_capa *capa,
-                          int ignore_quota);
+                          struct thandle *handle, int ignore_quota);
         /**
          * precondition: dt_object_exists(dt);
          */
+        int (*dio_declare_delete)(const struct lu_env *env, struct dt_object *dt,
+                                 const struct dt_key *key, struct thandle *handle,
+                                 struct lustre_capa *capa);
         int (*dio_delete)(const struct lu_env *env, struct dt_object *dt,
-                          const struct dt_key *key, struct thandle *handle,
-                          struct lustre_capa *capa);
+                          const struct dt_key *key, struct thandle *handle);
         /**
          * Iterator interface
          */
@@ -514,19 +528,6 @@ static inline int dt_object_exists(const struct dt_object *dt)
         return lu_object_exists(&dt->do_lu);
 }
 
-struct txn_param {
-        /** number of blocks this transaction will modify */
-        unsigned int tp_credits;
-        /** sync transaction is needed */
-        __u32        tp_sync:1;
-};
-
-static inline void txn_param_init(struct txn_param *p, unsigned int credits)
-{
-        memset(p, 0, sizeof(*p));
-        p->tp_credits = credits;
-}
-
 /**
  * This is the general purpose transaction handle.
  * 1. Transaction Life Cycle
@@ -551,6 +552,9 @@ struct thandle {
         /** the last operation result in this transaction.
          * this value is used in recovery */
         __s32             th_result;
+
+        /** whether we need sync commit */
+        int               th_sync;
 };
 
 /**
@@ -566,7 +570,7 @@ struct thandle {
  */
 struct dt_txn_callback {
         int (*dtc_txn_start)(const struct lu_env *env,
-                             struct txn_param *param, void *cookie);
+                             struct thandle *txn, void *cookie);
         int (*dtc_txn_stop)(const struct lu_env *env,
                             struct thandle *txn, void *cookie);
         int (*dtc_txn_commit)(const struct lu_env *env,
@@ -579,7 +583,7 @@ void dt_txn_callback_add(struct dt_device *dev, struct dt_txn_callback *cb);
 void dt_txn_callback_del(struct dt_device *dev, struct dt_txn_callback *cb);
 
 int dt_txn_hook_start(const struct lu_env *env,
-                      struct dt_device *dev, struct txn_param *param);
+                      struct dt_device *dev, struct thandle *txn);
 int dt_txn_hook_stop(const struct lu_env *env, struct thandle *txn);
 int dt_txn_hook_commit(const struct lu_env *env, struct thandle *txn);
 

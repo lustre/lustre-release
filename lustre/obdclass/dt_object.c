@@ -90,7 +90,7 @@ void dt_txn_callback_del(struct dt_device *dev, struct dt_txn_callback *cb)
 EXPORT_SYMBOL(dt_txn_callback_del);
 
 int dt_txn_hook_start(const struct lu_env *env,
-                      struct dt_device *dev, struct txn_param *param)
+                      struct dt_device *dev, struct thandle *th)
 {
         int result;
         struct dt_txn_callback *cb;
@@ -99,7 +99,7 @@ int dt_txn_hook_start(const struct lu_env *env,
         list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
                 if (cb->dtc_txn_start == NULL)
                         continue;
-                result = cb->dtc_txn_start(env, param, cb->dtc_cookie);
+                result = cb->dtc_txn_start(env, th, cb->dtc_cookie);
                 if (result < 0)
                         break;
         }

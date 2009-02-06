@@ -50,6 +50,10 @@
 
 static int mdt_server_data_update(const struct lu_env *env,
                                   struct mdt_device *mdt,
+                                  struct thandle *th,
+                                  int need_sync);
+static int mdt_server_data_update_noth(const struct lu_env *env,
+                                  struct mdt_device *mdt,
                                   int need_sync);
 
 struct lu_buf *mdt_buf(const struct lu_env *env, void *area, ssize_t len)
@@ -94,6 +98,18 @@ int mdt_record_read(const struct lu_env *env,
         return rc;
 }
 
+int mdt_declare_record_write(const struct lu_env *env,
+                             struct dt_object *dt, const loff_t size,
+                             loff_t pos, struct thandle *th)
+{
+        int rc;
+
+        LASSERTF(dt != NULL, "dt is NULL when we want to write record\n");
+        LASSERT(th != NULL);
+        rc = dt->do_body_ops->dbo_declare_write(env, dt,size,pos,th,BYPASS_CAPA);
+        return rc;
+}
+
 int mdt_record_write(const struct lu_env *env,
                      struct dt_object *dt, const struct lu_buf *buf,
                      loff_t *pos, struct thandle *th)
@@ -102,7 +118,7 @@ int mdt_record_write(const struct lu_env *env,
 
         LASSERTF(dt != NULL, "dt is NULL when we want to write record\n");
         LASSERT(th != NULL);
-        rc = dt->do_body_ops->dbo_write(env, dt, buf, pos, th, BYPASS_CAPA, 1);
+        rc = dt->do_body_ops->dbo_write(env, dt, buf, pos, th, 1);
         if (rc == buf->lb_len)
                 rc = 0;
         else if (rc >= 0)
@@ -110,54 +126,24 @@ int mdt_record_write(const struct lu_env *env,
         return rc;
 }
 
-static inline int mdt_trans_credit_get(const struct lu_env *env,
-                                       struct mdt_device *mdt,
-                                       enum mdt_txn_op op)
-{
-        struct dt_device *dev = mdt->mdt_bottom;
-        int cr;
-        switch (op) {
-                case MDT_TXN_CAPA_KEYS_WRITE_OP:
-                case MDT_TXN_LAST_RCVD_WRITE_OP:
-                        cr = dev->dd_ops->dt_credit_get(env,
-                                                        dev,
-                                                        DTO_WRITE_BLOCK);
-                break;
-                default:
-                        LBUG();
-        }
-        return cr;
-}
-
-void mdt_trans_credit_init(const struct lu_env *env,
-                           struct mdt_device *mdt,
-                           enum mdt_txn_op op)
-{
-        struct mdt_thread_info *mti;
-        struct txn_param *p;
-        int cr;
-
-        mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-        p = &mti->mti_txn_param;
-
-        cr = mdt_trans_credit_get(env, mdt, op);
-        txn_param_init(p, cr);
-}
-
-struct thandle* mdt_trans_start(const struct lu_env *env,
+struct thandle* mdt_trans_create(const struct lu_env *env,
                                 struct mdt_device *mdt)
 {
-        struct mdt_thread_info *mti;
-        struct txn_param *p;
+        return mdt->mdt_bottom->dd_ops->dt_trans_create(env, mdt->mdt_bottom);
+}
 
+int mdt_trans_start(const struct lu_env *env,
+                                struct mdt_device *mdt, struct thandle *th)
+{
+
+        struct mdt_thread_info *mti;
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-        p = &mti->mti_txn_param;
 
         /* export can require sync operations */
         if (mti->mti_exp != NULL)
-                p->tp_sync = mti->mti_exp->exp_need_sync;
+                th->th_sync = mti->mti_exp->exp_need_sync;
 
-        return mdt->mdt_bottom->dd_ops->dt_trans_start(env, mdt->mdt_bottom, p);
+        return mdt->mdt_bottom->dd_ops->dt_trans_start(env, mdt->mdt_bottom, th);
 }
 
 void mdt_trans_stop(const struct lu_env *env,
@@ -253,10 +239,10 @@ static void mdt_client_cb(const struct mdt_device *mdt, __u64 transno,
 
 static inline int mdt_last_rcvd_header_write(const struct lu_env *env,
                                              struct mdt_device *mdt,
+                                             struct thandle *th,
                                              int need_sync)
 {
         struct mdt_thread_info *mti;
-        struct thandle *th;
         int rc;
         ENTRY;
 
@@ -267,10 +253,6 @@ static inline int mdt_last_rcvd_header_write(const struct lu_env *env,
                 mti->mti_exp->exp_need_sync = need_sync;
                 spin_unlock(&mti->mti_exp->exp_lock);
         }
-        mdt_trans_credit_init(env, mdt, MDT_TXN_LAST_RCVD_WRITE_OP);
-        th = mdt_trans_start(env, mdt);
-        if (IS_ERR(th))
-                RETURN(PTR_ERR(th));
 
         mti->mti_off = 0;
         lsd_cpu_to_le(&mdt->mdt_lsd, &mti->mti_lsd);
@@ -282,8 +264,6 @@ static inline int mdt_last_rcvd_header_write(const struct lu_env *env,
                               mdt_buf_const(env, &mti->mti_lsd,
                                             sizeof(mti->mti_lsd)),
                               &mti->mti_off, th);
-
-        mdt_trans_stop(env, mdt, th);
 
         CDEBUG(D_INFO, "write last_rcvd header rc = %d:\n"
                "uuid = %s\nlast_transno = "LPU64"\n",
@@ -578,8 +558,8 @@ static int mdt_server_data_init(const struct lu_env *env,
         lsd->lsd_mount_count = mdt->mdt_mount_count;
 
         /* save it, so mount count and last_transno is current */
-        rc = mdt_server_data_update(env, mdt, (mti->mti_exp && 
-                                               mti->mti_exp->exp_need_sync));
+        rc = mdt_server_data_update_noth(env, mdt, (mti->mti_exp && 
+                                         mti->mti_exp->exp_need_sync));
         if (rc)
                 GOTO(err_client, rc);
 
@@ -591,9 +571,39 @@ out:
         return rc;
 }
 
-static int mdt_server_data_update(const struct lu_env *env,
+static int mdt_server_data_update_noth(const struct lu_env *env,
                                   struct mdt_device *mdt,
                                   int need_sync)
+{
+        struct mdt_thread_info *mti;
+        struct thandle *th;
+        int rc;
+
+        mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+
+        th = mdt_trans_create(env, mdt);
+        if (IS_ERR(th))
+                RETURN(PTR_ERR(th));
+        rc = mdt_declare_record_write(env, mdt->mdt_last_rcvd,
+                        sizeof(mti->mti_lsd), mti->mti_off, th);
+        if (rc)
+                GOTO(cleanup, rc);
+        rc = mdt_trans_start(env, mdt, th);
+        if (rc)
+                GOTO(cleanup, rc);
+
+        rc = mdt_server_data_update(env, mdt, th, need_sync);
+
+cleanup:
+        mdt_trans_stop(env, mdt, th);
+
+        return rc;
+
+}
+
+static int mdt_server_data_update(const struct lu_env *env,
+                                  struct mdt_device *mdt,
+                                  struct thandle *th, int need_sync)
 {
         int rc = 0;
         ENTRY;
@@ -610,7 +620,7 @@ static int mdt_server_data_update(const struct lu_env *env,
          * mdt->mdt_last_rcvd may be NULL that time.
          */
         if (mdt->mdt_last_rcvd != NULL)
-                rc = mdt_last_rcvd_header_write(env, mdt, need_sync);
+                rc = mdt_last_rcvd_header_write(env, mdt, th, need_sync);
         RETURN(rc);
 }
 
@@ -665,11 +675,16 @@ int mdt_client_new(const struct lu_env *env, struct mdt_device *mdt)
 
         /* Write new client data. */
         off = med->med_lr_off;
-        mdt_trans_credit_init(env, mdt, MDT_TXN_LAST_RCVD_WRITE_OP);
-
-        th = mdt_trans_start(env, mdt);
+        th = mdt_trans_create(env, mdt);
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
+        rc = mdt_declare_record_write(env, mdt->mdt_last_rcvd,
+                                      sizeof(*lcd), off, th);
+        if (rc)
+                GOTO(cleanup, rc);
+        rc = mdt_trans_start(env, mdt, th);
+        if (rc)
+                GOTO(cleanup, rc);
 
         /* 
          * Until this operations will be committed the sync is needed
@@ -685,6 +700,7 @@ int mdt_client_new(const struct lu_env *env, struct mdt_device *mdt)
         rc = mdt_last_rcvd_write(env, mdt, lcd, &off, th);
         CDEBUG(D_INFO, "wrote client lcd at idx %u off %llu (len "LPSZ")\n",
                cl_idx, med->med_lr_off, sizeof(*lcd));
+cleanup:
         mdt_trans_stop(env, mdt, th);
 
         RETURN(rc);
@@ -802,15 +818,20 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
          * mdt->mdt_last_rcvd may be NULL that time.
          */
         if (mdt->mdt_last_rcvd != NULL) {
-                mdt_trans_credit_init(env, mdt, MDT_TXN_LAST_RCVD_WRITE_OP);
-
                 spin_lock(&exp->exp_lock);
                 exp->exp_need_sync = need_sync;
                 spin_unlock(&exp->exp_lock);
 
-                th = mdt_trans_start(env, mdt);
+                th = mdt_trans_create(env, mdt);
                 if (IS_ERR(th))
                         GOTO(free, rc = PTR_ERR(th));
+                rc = mdt_declare_record_write(env, mdt->mdt_last_rcvd,
+                                sizeof(*lcd), off, th);
+                if (rc)
+                        GOTO(cleanup, rc);
+                rc = mdt_trans_start(env, mdt, th);
+                if (rc)
+                        GOTO(cleanup, rc);
 
                 if (need_sync) {
                         /* 
@@ -825,6 +846,7 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
 
                 rc = mdt_last_rcvd_write(env, mdt, lcd, &off, th);
                 mutex_up(&med->med_lcd_lock);
+cleanup:
                 mdt_trans_stop(env, mdt, th);
         }
 
@@ -841,7 +863,7 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
          * after the client is freed so we know all the client's
          * transactions have been committed. 
          */
-        mdt_server_data_update(env, mdt, need_sync);
+        mdt_server_data_update_noth(env, mdt, need_sync);
 
         EXIT;
 free:
@@ -906,7 +928,7 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
          */
         if (mti->mti_transno == 0 &&
             *transno_p == mdt->mdt_last_transno)
-                mdt_server_data_update(mti->mti_env, mdt, 
+                mdt_server_data_update(mti->mti_env, mdt, th,
                                       (mti->mti_exp && 
                                        mti->mti_exp->exp_need_sync));
 
@@ -926,13 +948,22 @@ extern struct lu_context_key mdt_thread_key;
 
 /* add credits for last_rcvd update */
 static int mdt_txn_start_cb(const struct lu_env *env,
-                            struct txn_param *param, void *cookie)
+                            struct thandle *th, void *cookie)
 {
         struct mdt_device *mdt = cookie;
+        struct mdt_thread_info *mti;
+        loff_t off;
+        int rc;
 
-        param->tp_credits += mdt_trans_credit_get(env, mdt,
-                                                  MDT_TXN_LAST_RCVD_WRITE_OP);
-        return 0;
+        mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+
+        LASSERT(mdt->mdt_last_rcvd);
+        off = mti->mti_exp ? mti->mti_exp->exp_mdt_data.med_lr_off : 0;
+        rc = mdt_declare_record_write(env, mdt->mdt_last_rcvd,
+                                      sizeof(struct lsd_client_data), off, th);
+        rc = mdt_declare_record_write(env, mdt->mdt_last_rcvd,
+                                      sizeof(mti->mti_lsd), 0, th);
+        return rc;
 }
 
 /* Update last_rcvd records with latests transaction data */

@@ -48,7 +48,6 @@
 #ifdef __KERNEL__
 struct seq_thread_info {
         struct req_capsule     *sti_pill;
-        struct txn_param        sti_txn;
         struct lu_seq_range     sti_space;
         struct lu_buf           sti_buf;
 };
@@ -75,6 +74,10 @@ int seq_store_init(struct lu_server_seq *seq,
 void seq_store_fini(struct lu_server_seq *seq,
                     const struct lu_env *env);
 
+int seq_declare_store_write(struct lu_server_seq *seq,
+                            const struct lu_env *env,
+                            struct thandle *th);
+
 int seq_store_write(struct lu_server_seq *seq,
                     const struct lu_env *env,
                     struct thandle *th);
@@ -82,9 +85,11 @@ int seq_store_write(struct lu_server_seq *seq,
 int seq_store_read(struct lu_server_seq *seq,
                    const struct lu_env *env);
 
-struct thandle * seq_store_trans_start(struct lu_server_seq *seq,
+struct thandle * seq_store_trans_create(struct lu_server_seq *seq,
+                                       const struct lu_env *env);
+int seq_store_trans_start(struct lu_server_seq *seq,
                                        const struct lu_env *env,
-                                       int credits);
+                                       struct thandle *th);
 void seq_store_trans_stop(struct lu_server_seq *seq,
                           const struct lu_env *env,
                           struct thandle *th);
