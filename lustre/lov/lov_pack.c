@@ -492,7 +492,7 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
                         rc = lov_check_index_in_pool(lumv1->lmm_stripe_offset,
                                                      pool);
                         if (rc < 0) {
-                                lh_put(lov->lov_pools_hash_body, &pool->pool_hash);
+                                lov_pool_putref(pool);
                                 RETURN(-EINVAL);
                         }
                 }
@@ -500,7 +500,7 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 if (stripe_count > pool_tgt_count(pool))
                         stripe_count = pool_tgt_count(pool);
 
-                lh_put(lov->lov_pools_hash_body, &pool->pool_hash);
+                lov_pool_putref(pool);
         }
 
         rc = lov_alloc_memmd(lsmp, stripe_count, lumv1->lmm_pattern, lmm_magic);
