@@ -2140,7 +2140,8 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
         list_for_each_entry_safe(oap, tmp, &lop->lop_pending, oap_pending_item){
                 ops = oap->oap_caller_ops;
 
-                LASSERT(oap->oap_magic == OAP_MAGIC);
+                LASSERTF(oap->oap_magic == OAP_MAGIC, "Bad oap magic: oap %p, "
+                         "magic 0x%x\n", oap, oap->oap_magic);
 
                 if (page_count != 0 &&
                     srvlock != !!(oap->oap_brw_flags & OBD_BRW_SRVLOCK)) {
