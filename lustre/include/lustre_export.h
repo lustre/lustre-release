@@ -87,7 +87,6 @@ struct filter_export_data {
         struct list_head           fed_mod_list; /* files being modified */
         int                        fed_mod_count;/* items in fed_writing list */
         long                       fed_pending;  /* bytes just being written */
-        struct brw_stats           fed_brw_stats;
 };
 
 #define fed_lcd_lock    fed_led.led_lcd_lock

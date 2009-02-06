@@ -80,18 +80,32 @@ static void record_start_io(struct filter_iobuf *iobuf, int rw, int size,
                 atomic_inc(&filter->fo_r_in_flight);
                 lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_R_RPC_HIST],
                                  atomic_read(&filter->fo_r_in_flight));
-                lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_R_DISK_IOSIZE], size);
-                lprocfs_oh_tally(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_RPC_HIST],
-                                 atomic_read(&filter->fo_r_in_flight));
-                lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_DISK_IOSIZE], size);
+                lprocfs_oh_tally_log2(&filter->
+                                       fo_filter_stats.hist[BRW_R_DISK_IOSIZE],
+                                      size);
+                if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats) {
+                        lprocfs_oh_tally(&exp->exp_nid_stats->nid_brw_stats->
+                                          hist[BRW_R_RPC_HIST],
+                                         atomic_read(&filter->fo_r_in_flight));
+                        lprocfs_oh_tally_log2(&exp->exp_nid_stats->
+                                         nid_brw_stats->hist[BRW_R_DISK_IOSIZE],
+                                              size);
+                }
         } else {
                 atomic_inc(&filter->fo_w_in_flight);
                 lprocfs_oh_tally(&filter->fo_filter_stats.hist[BRW_W_RPC_HIST],
                                  atomic_read(&filter->fo_w_in_flight));
-                lprocfs_oh_tally_log2(&filter->fo_filter_stats.hist[BRW_W_DISK_IOSIZE], size);
-                lprocfs_oh_tally(&exp->exp_filter_data.fed_brw_stats.hist[BRW_W_RPC_HIST],
-                                 atomic_read(&filter->fo_w_in_flight));
-                lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_W_DISK_IOSIZE], size);
+                lprocfs_oh_tally_log2(&filter->
+                                       fo_filter_stats.hist[BRW_W_DISK_IOSIZE],
+                                      size);
+                if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats) {
+                        lprocfs_oh_tally(&exp->exp_nid_stats->nid_brw_stats->
+                                          hist[BRW_W_RPC_HIST],
+                                         atomic_read(&filter->fo_r_in_flight));
+                        lprocfs_oh_tally_log2(&exp->exp_nid_stats->
+                                        nid_brw_stats->hist[BRW_W_DISK_IOSIZE],
+                                              size);
+                }
         }
 }
 
@@ -403,31 +417,32 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
         wait_event(iobuf->dr_wait, atomic_read(&iobuf->dr_numreqs) == 0);
 
         if (rw == OBD_BRW_READ) {
-                lprocfs_oh_tally(&obd->u.filter.fo_filter_stats.hist[BRW_R_DIO_FRAGS], frags);
-                lprocfs_oh_tally(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_DIO_FRAGS],
+                lprocfs_oh_tally(&obd->u.filter.fo_filter_stats.
+                                  hist[BRW_R_DIO_FRAGS],
                                  frags);
-                lprocfs_oh_tally_log2(&obd->u.filter.fo_filter_stats.hist[BRW_R_IO_TIME],
+                lprocfs_oh_tally_log2(&obd->u.filter.
+                                       fo_filter_stats.hist[BRW_R_IO_TIME],
                                       jiffies - start_time);
-                lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_R_IO_TIME],
-                                 jiffies - start_time);
                 if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats) {
-                        lprocfs_oh_tally(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_R_DIO_FRAGS],
+                        lprocfs_oh_tally(&exp->exp_nid_stats->nid_brw_stats->
+                                          hist[BRW_R_DIO_FRAGS],
                                          frags);
-                        lprocfs_oh_tally_log2(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_R_IO_TIME],
+                        lprocfs_oh_tally_log2(&exp->exp_nid_stats->
+                                             nid_brw_stats->hist[BRW_R_IO_TIME],
                                               jiffies - start_time);
                 }
         } else {
-                lprocfs_oh_tally(&obd->u.filter.fo_filter_stats.hist[BRW_W_DIO_FRAGS], frags);
-                lprocfs_oh_tally(&exp->exp_filter_data.fed_brw_stats.hist[BRW_W_DIO_FRAGS],
-                                 frags);
-                lprocfs_oh_tally_log2(&obd->u.filter.fo_filter_stats.hist[BRW_W_IO_TIME],
+                lprocfs_oh_tally(&obd->u.filter.fo_filter_stats.
+                                  hist[BRW_W_DIO_FRAGS], frags);
+                lprocfs_oh_tally_log2(&obd->u.filter.fo_filter_stats.
+                                       hist[BRW_W_IO_TIME],
                                       jiffies - start_time);
-                lprocfs_oh_tally_log2(&exp->exp_filter_data.fed_brw_stats.hist[BRW_W_IO_TIME],
-                                 jiffies - start_time);
                 if (exp->exp_nid_stats && exp->exp_nid_stats->nid_brw_stats) {
-                        lprocfs_oh_tally(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_W_DIO_FRAGS],
+                        lprocfs_oh_tally(&exp->exp_nid_stats->nid_brw_stats->
+                                          hist[BRW_W_DIO_FRAGS],
                                          frags);
-                        lprocfs_oh_tally_log2(&exp->exp_nid_stats->nid_brw_stats->hist[BRW_W_IO_TIME],
+                        lprocfs_oh_tally_log2(&exp->exp_nid_stats->
+                                             nid_brw_stats->hist[BRW_W_IO_TIME],
                                               jiffies - start_time);
                 }
         }
