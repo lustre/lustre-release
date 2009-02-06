@@ -528,11 +528,11 @@ if test x$dmu_osd = xyes; then
 
 		AC_SUBST(spl_src)
 
-		LB_CHECK_FILE([$SPL_DIR/modules/spl/spl-generic.c],[],[
+		LB_CHECK_FILE([$SPL_DIR/module/spl/spl-generic.c],[],[
 			AC_MSG_ERROR([A complete SPL tree was not found in $SPL_DIR.])
 		])
 
-		LB_CHECK_FILE([$ZFS_DIR/zfs/lib/libzpool/dmu.c],[],[
+		LB_CHECK_FILE([$ZFS_DIR/module/zfs/dmu.c],[],[
 			AC_MSG_ERROR([A complete kernel DMU tree was not found in $ZFS_DIR.])
 		])
 
