@@ -841,11 +841,12 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 static int lov_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 {
         int rc = 0;
+        struct lov_obd *lov = &obd->u.lov;
+
         ENTRY;
 
         switch (stage) {
         case OBD_CLEANUP_EARLY: {
-                struct lov_obd *lov = &obd->u.lov;
                 int i;
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                         if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active)
@@ -870,22 +871,19 @@ static int lov_cleanup(struct obd_device *obd)
         struct list_head *pos, *tmp;
         struct pool_desc *pool;
 
-        lprocfs_obd_cleanup(obd);
-
-        /* Delete hash entries and kill hash table before freeing pools
-         * and get to use after free issue. */
-        lustre_hash_exit(lov->lov_pools_hash_body);
-
         list_for_each_safe(pos, tmp, &lov->lov_pool_list) {
                 pool = list_entry(pos, struct pool_desc, pool_list);
                 /* free pool structs */
+                CDEBUG(D_INFO, "delete pool %p\n", pool);
                 lov_pool_del(obd, pool->pool_name);
         }
+        lustre_hash_exit(lov->lov_pools_hash_body);
         lov_ost_pool_free(&(lov->lov_qos.lq_rr.lqr_pool));
         lov_ost_pool_free(&lov->lov_packed);
 
         if (lov->lov_tgts) {
                 int i;
+                lov_getref(obd);
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                         if (!lov->lov_tgts[i])
                                 continue;
@@ -902,10 +900,14 @@ static int lov_cleanup(struct obd_device *obd)
                                        atomic_read(&lov->lov_refcount));
                         lov_del_target(obd, i, 0, 0);
                 }
+                lov_putref(obd);
                 OBD_FREE(lov->lov_tgts, sizeof(*lov->lov_tgts) *
                          lov->lov_tgt_size);
                 lov->lov_tgt_size = 0;
         }
+
+        /* clear pools parent proc entry only after all pools is killed */
+        lprocfs_obd_cleanup(obd);
 
         RETURN(0);
 }

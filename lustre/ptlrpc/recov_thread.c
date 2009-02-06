@@ -591,6 +591,7 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
 
         mutex_down(&ctxt->loc_sem);
         lcm = ctxt->loc_lcm;
+        CDEBUG(D_INFO, "cancel on lsm %p\n", lcm);
 
         /*
          * Let's check if we have all structures alive. We also check for

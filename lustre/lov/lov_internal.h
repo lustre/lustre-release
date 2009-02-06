@@ -320,5 +320,6 @@ int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname);
 void lov_dump_pool(int level, struct pool_desc *pool);
 struct pool_desc *lov_find_pool(struct lov_obd *lov, char *poolname);
 int lov_check_index_in_pool(__u32 idx, struct pool_desc *pool);
+void lov_pool_putref(struct pool_desc *pool);
 
 #endif

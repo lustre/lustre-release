@@ -637,7 +637,7 @@ out:
         if (pool != NULL) {
                 up_read(&pool_tgt_rw_sem(pool));
                 /* put back ref got by lov_find_pool() */
-                lh_put(lov->lov_pools_hash_body, &pool->pool_hash);
+                lov_pool_putref(pool);
         }
 
         RETURN(rc);
@@ -729,7 +729,7 @@ out:
         if (pool != NULL) {
                 up_read(&pool_tgt_rw_sem(pool));
                 /* put back ref got by lov_find_pool() */
-                lh_put(lov->lov_pools_hash_body, &pool->pool_hash);
+                lov_pool_putref(pool);
         }
 
         RETURN(rc);
@@ -924,7 +924,7 @@ out_nolock:
         if (pool != NULL) {
                 up_read(&pool_tgt_rw_sem(pool));
                 /* put back ref got by lov_find_pool() */
-                lh_put(lov->lov_pools_hash_body, &pool->pool_hash);
+                lov_pool_putref(pool);
         }
 
         if (rc == -EAGAIN)
