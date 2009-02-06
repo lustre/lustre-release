@@ -984,6 +984,47 @@ test_48() {
 }
 run_test 48 "MDS->OSC failure during precreate cleanup (2824)"
 
+test_49a() {
+    multiop $DIR/$tfile O_c &
+    pid=$!
+    sleep 1
+    rm -rf $DIR/$tfile
+
+#define OBD_FAIL_MDS_ALL_REPLY_NET       0x122
+    do_facet mds "lctl set_param fail_loc=0x80000122"
+    kill -USR1 $pid
+    do_facet mds "lctl set_param fail_loc=0"
+
+    replay_barrier_nodf mds
+    fail mds
+
+    wait $pid || return 1
+    $CHECKSTAT -t file $DIR/$tfile && return 2
+    return 0
+}
+run_test 49a "mds fail after close reply is dropped: open|create "
+
+test_49c() {
+    touch $DIR/$tfile
+    multiop $DIR/$tfile o_c &
+    pid=$!
+    sleep 1
+    rm -rf $DIR/$tfile
+
+#define OBD_FAIL_MDS_ALL_REPLY_NET       0x122
+    do_facet mds "lctl set_param fail_loc=0x80000122"
+    kill -USR1 $pid
+    do_facet mds "lctl set_param fail_loc=0"
+
+    replay_barrier_nodf mds
+    fail mds
+
+    wait $pid || return 1
+    $CHECKSTAT -t file $DIR/$tfile && return 2
+    return 0
+}
+run_test 49c "mds fail after close reply is dropped: open"
+
 test_50() {
     local oscdev=`do_facet mds lctl get_param -n devices | grep ${ost1_svc}-osc | awk '{print $1}' | head -1`
     [ "$oscdev" ] || return 1
