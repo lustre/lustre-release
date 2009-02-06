@@ -92,7 +92,6 @@ struct filter_export_data {
         int                        fed_mod_count;/* items in fed_writing list */
         long                       fed_pending;  /* bytes just being written */
         __u32                      fed_group;
-        struct brw_stats           fed_brw_stats;
 };
 
 typedef struct nid_stat_uuid {
@@ -112,6 +111,12 @@ typedef struct nid_stat {
         struct brw_stats        *nid_brw_stats;
         int                      nid_exp_ref_count;
 }nid_stat_t;
+
+enum obd_option {
+        OBD_OPT_FORCE =         0x0001,
+        OBD_OPT_FAILOVER =      0x0002,
+        OBD_OPT_ABORT_RECOV =   0x0004,
+};
 
 struct obd_export {
         struct portals_handle     exp_handle;
@@ -137,7 +142,7 @@ struct obd_export {
         spinlock_t                exp_lock; /* protects flags int below */
         /* ^ protects exp_outstanding_replies too */
         __u64                     exp_connect_flags;
-        int                       exp_flags;
+        enum obd_option           exp_flags;
         unsigned long             exp_failed:1,
                                   exp_in_recovery:1,
                                   exp_disconnected:1,

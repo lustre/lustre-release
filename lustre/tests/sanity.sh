@@ -8,7 +8,7 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 # bug number for skipped test: 13297 2108 9789 3637 9789 3561 12622 12653 12653 5188 10764 16260
-ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   65a   65e   68   75    119d  $SANITY_EXCEPT"
+ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   65a   65e   68b   75    119d  $SANITY_EXCEPT"
 # bug number for skipped test: 2108 9789 3637 9789 3561 5188/5749 1443
 #ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27m 42a 42b 42c 42d 45 68 76"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
@@ -3075,12 +3075,15 @@ LLOOP=
 cleanup_68() {
 	trap 0
 	if [ ! -z "$LLOOP" ]; then
-		swapoff $LLOOP || error "swapoff failed"
+		if swapon -s | grep -q $LLOOP; then
+			swapoff $LLOOP || error "swapoff failed"
+		fi
+
 		$LCTL blockdev_detach $LLOOP || error "detach failed"
 		rm -f $LLOOP
 		unset LLOOP
 	fi
-	rm -f $DIR/f68
+	rm -f $DIR/f68*
 }
 
 meminfo() {
@@ -3091,10 +3094,29 @@ swap_used() {
 	swapon -s | awk '($1 == "'$1'") { print $4 }'
 }
 
+# test case for lloop driver, basic function
+test_68a() {
+	[ "$UID" != 0 ] && skip "must run as root" && return
+
+	grep -q llite_lloop /proc/modules
+	[ $? -ne 0 ] && skip "can't find module llite_lloop" && return
+
+	LLOOP=$TMP/lloop.`date +%s`.`date +%N`
+	dd if=/dev/zero of=$DIR/f68a bs=4k count=1024
+	$LCTL blockdev_attach $DIR/f68a $LLOOP || error "attach failed"
+
+	trap cleanup_68 EXIT
+
+	directio rdwr $LLOOP 0 1024 4096 || error "direct write failed"
+	directio rdwr $LLOOP 0 1025 4096 && error "direct write should fail"
+
+	cleanup_68
+}
+run_test 68a "lloop driver - basic test ========================"
 
 # excercise swapping to lustre by adding a high priority swapfile entry
 # and then consuming memory until it is used.
-test_68() {
+test_68b() {  # was test_68
 	[ "$UID" != 0 ] && skip "must run as root" && return
 	lctl get_param -n devices | grep -q obdfilter && \
 		skip "local OST" && return
@@ -3110,10 +3132,10 @@ test_68() {
 	[[ $NR_BLOCKS -le 2048 ]] && NR_BLOCKS=2048
 
 	LLOOP=$TMP/lloop.`date +%s`.`date +%N`
-	dd if=/dev/zero of=$DIR/f68 bs=64k seek=$NR_BLOCKS count=1
-	mkswap $DIR/f68
+	dd if=/dev/zero of=$DIR/f68b bs=64k seek=$NR_BLOCKS count=1
+	mkswap $DIR/f68b
 
-	$LCTL blockdev_attach $DIR/f68 $LLOOP || error "attach failed"
+	$LCTL blockdev_attach $DIR/f68b $LLOOP || error "attach failed"
 
 	trap cleanup_68 EXIT
 
@@ -3128,7 +3150,7 @@ test_68() {
 
 	[ $SWAPUSED -eq 0 ] && echo "no swap used???" || true
 }
-run_test 68 "support swapping to Lustre ========================"
+run_test 68b "support swapping to Lustre ========================"
 
 # bug5265, obdfilter oa2dentry return -ENOENT
 # #define OBD_FAIL_OST_ENOENT 0x217
@@ -3410,6 +3432,7 @@ setup_f77() {
 }
 
 test_77a() { # bug 10889
+	$GSS && skip "could not run with gss" && return
 	[ ! -f $F77_TMP ] && setup_f77
 	set_checksums 1
 	dd if=$F77_TMP of=$DIR/$tfile bs=1M count=$F77SZ || error "dd error"
@@ -3419,6 +3442,7 @@ test_77a() { # bug 10889
 run_test 77a "normal checksum read/write operation ============="
 
 test_77b() { # bug 10889
+	$GSS && skip "could not run with gss" && return
 	[ ! -f $F77_TMP ] && setup_f77
 	#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
 	lctl set_param fail_loc=0x80000409
@@ -3432,6 +3456,7 @@ test_77b() { # bug 10889
 run_test 77b "checksum error on client write ===================="
 
 test_77c() { # bug 10889
+	$GSS && skip "could not run with gss" && return
 	[ ! -f $DIR/f77b ] && skip "requires 77b - skipping" && return
 	set_checksums 1
 	for algo in $CKSUM_TYPES; do
@@ -3448,6 +3473,7 @@ test_77c() { # bug 10889
 run_test 77c "checksum error on client read ==================="
 
 test_77d() { # bug 10889
+	$GSS && skip "could not run with gss" && return
 	#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
 	lctl set_param fail_loc=0x80000409
 	set_checksums 1
@@ -3459,6 +3485,7 @@ test_77d() { # bug 10889
 run_test 77d "checksum error on OST direct write ==============="
 
 test_77e() { # bug 10889
+	$GSS && skip "could not run with gss" && return
 	[ ! -f $DIR/f77 ] && skip "requires 77d - skipping" && return
 	#define OBD_FAIL_OSC_CHECKSUM_RECEIVE    0x408
 	lctl set_param fail_loc=0x80000408
@@ -3472,6 +3499,7 @@ test_77e() { # bug 10889
 run_test 77e "checksum error on OST direct read ================"
 
 test_77f() { # bug 10889
+	$GSS && skip "could not run with gss" && return
 	set_checksums 1
 	for algo in $CKSUM_TYPES; do
 		cancel_lru_locks osc
@@ -3488,6 +3516,7 @@ test_77f() { # bug 10889
 run_test 77f "repeat checksum error on write (expect error) ===="
 
 test_77g() { # bug 10889
+	$GSS && skip "could not run with gss" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	[ ! -f $F77_TMP ] && setup_f77
@@ -3504,6 +3533,7 @@ test_77g() { # bug 10889
 run_test 77g "checksum error on OST write ======================"
 
 test_77h() { # bug 10889
+	$GSS && skip "could not run with gss" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	[ ! -f $DIR/f77g ] && skip "requires 77g - skipping" && return
@@ -3518,6 +3548,7 @@ test_77h() { # bug 10889
 run_test 77h "checksum error on OST read ======================="
 
 test_77i() { # bug 13805
+	$GSS && skip "could not run with gss" && return
 	#define OBD_FAIL_OSC_CONNECT_CKSUM       0x40b
 	lctl set_param fail_loc=0x40b
 	remount_client $MOUNT
@@ -3532,6 +3563,7 @@ test_77i() { # bug 13805
 run_test 77i "client not supporting OSD_CONNECT_CKSUM =========="
 
 test_77j() { # bug 13805
+	$GSS && skip "could not run with gss" && return
 	#define OBD_FAIL_OSC_CKSUM_ADLER_ONLY    0x40c
 	lctl set_param fail_loc=0x40c
 	remount_client $MOUNT
@@ -3866,7 +3898,6 @@ setup_test102() {
 
 	trap cleanup_test102 EXIT
 	cd $DIR
-	# $1 = runas
 	$1 $SETSTRIPE $tdir -s $STRIPE_SIZE -i $STRIPE_OFFSET -c $STRIPE_COUNT
 	cd $DIR/$tdir
 	for num in 1 2 3 4
@@ -3883,10 +3914,7 @@ setup_test102() {
 	done
 
 	cd $DIR
-	if [ "$TAR" == "tar" ]; then
-		TAR_OPTS="--xattrs"
-	fi
-	$1 $TAR cf $TMP/f102.tar $tdir $TAR_OPTS
+	$1 $TAR cf $TMP/f102.tar $tdir --xattrs
 	SETUP_TEST102=yes
 }
 
@@ -4047,70 +4075,35 @@ compare_stripe_info2() {
 }
 
 find_lustre_tar() {
-	[ -n "$(which star 2>/dev/null)" ] && strings $(which star) | grep -q lustre && echo star && return
 	[ -n "$(which tar 2>/dev/null)" ] && strings $(which tar) | grep -q lustre && echo tar
 }
 
 test_102d() {
-	# b10930: (s)tar test for trusted.lov xattr
+	# b10930: tar test for trusted.lov xattr
 	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip "lustre-aware (s)tar is not installed" && return
+	[ -z "$TAR" ] && skip "lustre-aware tar is not installed" && return
 	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102d
-	if [ "$TAR" == "tar" ]; then
-		TAR_OPTS="--xattrs"
-	fi
-	$TAR xf $TMP/f102.tar -C $DIR/d102d $TAR_OPTS
+	$TAR xf $TMP/f102.tar -C $DIR/d102d --xattrs
 	cd $DIR/d102d/$tdir
 	compare_stripe_info1
 }
-run_test 102d "(s)tar restore stripe info from tarfile,not keep osts ==========="
-
-test_102e() {
-	# b10930: star test for trusted.lov xattr
-	TAR=$(find_lustre_tar)
-	[ "$TAR" != star ] && skip "lustre-aware star is not installed" && return
-	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
-	setup_test102
-	mkdir -p $DIR/d102e
-	star -x  -preserve-osts f=$TMP/f102.tar -C $DIR/d102e
-	cd $DIR/d102e/$tdir
-	compare_stripe_info2
-}
-run_test 102e "star restore stripe info from tarfile, keep osts ==========="
+run_test 102d "tar restore stripe info from tarfile,not keep osts ==========="
 
 test_102f() {
-	# b10930: (s)tar test for trusted.lov xattr
+	# b10930: tar test for trusted.lov xattr
 	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip "lustre-aware (s)tar is not installed" && return
+	[ -z "$TAR" ] && skip "lustre-aware tar is not installed" && return
 	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102f
 	cd $DIR
-	if [ "$TAR" == "tar" ]; then
-		TAR_OPTS="--xattrs"
-	fi
-	$TAR cf - $TAR_OPTS . | $TAR xf - $TAR_OPTS -C $DIR/d102f
+	$TAR cf - --xattrs $tdir | $TAR xf - --xattrs -C $DIR/d102f
 	cd $DIR/d102f/$tdir
 	compare_stripe_info1
 }
-run_test 102f "(s)tar copy files, not keep osts ==========="
-
-test_102g() {
-	# b10930: star test for trusted.lov xattr
-	TAR=$(find_lustre_tar)
-	[ "$TAR" != star ] && skip "lustre-aware star is not installed" && return
-	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
-	setup_test102
-	mkdir -p $DIR/d102g
-	cd $DIR
-	star -copy -preserve-osts $tdir $DIR/d102g
-	cd $DIR/d102g/$tdir
-	compare_stripe_info2
-	cleanup_test102
-}
-run_test 102g "star copy files, keep osts ==========="
+run_test 102f "tar copy files, not keep osts ==========="
 
 test_102h() { # bug 15777
 	[ -z $(lctl get_param -n mdc.*.connect_flags | grep xattr) ] &&
@@ -4168,19 +4161,16 @@ run_test 102i "lgetxattr test on symbolic link ============"
 
 test_102j() {
 	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip "lustre-aware (s)tar is not installed" && return
+	[ -z "$TAR" ] && skip "lustre-aware tar is not installed" && return
 	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
 	setup_test102 "$RUNAS"
 	mkdir -p $DIR/d102j
 	chown $RUNAS_ID $DIR/d102j
-	if [ "$TAR" == "tar" ]; then
-		TAR_OPTS="--xattrs"
-	fi
-	$RUNAS $TAR xf $TMP/f102.tar -C $DIR/d102j $TAR_OPTS
+	$RUNAS $TAR xf $TMP/f102.tar -C $DIR/d102j --xattrs
 	cd $DIR/d102j/$tdir
 	compare_stripe_info1 "$RUNAS"
 }
-run_test 102j "non-root (s)tar restore stripe info from tarfile,not keep osts ="
+run_test 102j "non-root tar restore stripe info from tarfile, not keep osts ==="
 
 run_acl_subtest()
 {
@@ -5127,7 +5117,7 @@ test_123a() { # was test 123, statahead(bug 11401)
                 cancel_lru_locks mdc
                 cancel_lru_locks osc
                 stime=`date +%s`
-                time ls -l $DIR/$tdir > /dev/null
+                time ls -l $DIR/$tdir | wc -l
                 etime=`date +%s`
                 delta=$((etime - stime))
                 log "ls $i files without statahead: $delta sec"
@@ -5138,10 +5128,10 @@ test_123a() { # was test 123, statahead(bug 11401)
                 cancel_lru_locks mdc
                 cancel_lru_locks osc
                 stime=`date +%s`
-                time ls -l $DIR/$tdir > /dev/null
+                time ls -l $DIR/$tdir | wc -l
                 etime=`date +%s`
                 delta_sa=$((etime - stime))
-                log "ls $i files with statahead:    $delta_sa sec"
+                log "ls $i files with statahead: $delta_sa sec"
 		lctl get_param -n llite.*.statahead_stats
                 ewrong=`lctl get_param -n llite.*.statahead_stats | grep "statahead wrong:" | awk '{print $3}'`
 
@@ -5149,13 +5139,41 @@ test_123a() { # was test 123, statahead(bug 11401)
                         log "statahead was stopped, maybe too many locks held!"
                 fi
 
+                [ $delta -eq 0 ] && continue
+
                 if [ $((delta_sa * 100)) -gt $((delta * 105)) ]; then
                         if [  $SLOWOK -eq 0 ]; then
                                 error "ls $i files is slower with statahead!"
+
+                                max=`lctl get_param -n llite.*.statahead_max | head -n 1`
+                                lctl set_param -n llite.*.statahead_max 0
+                                lctl get_param llite.*.statahead_max
+                                cancel_lru_locks mdc
+                                cancel_lru_locks osc
+                                $LCTL dk > /dev/null
+                                stime=`date +%s`
+                                time ls -l $DIR/$tdir | wc -l
+                                etime=`date +%s`
+                                $LCTL dk > $TMP/sanity_test_123a_${i}_disable_${etime}.log
+                                delta=$((etime - stime))
+                                log "ls $i files without statahead: $delta sec, dump to $TMP/sanity_test_123a_${i}_disable_${etime}.log"
+                                lctl set_param llite.*.statahead_max=$max
+
+                                lctl get_param -n llite.*.statahead_max | grep '[0-9]'
+                                cancel_lru_locks mdc
+                                cancel_lru_locks osc
+                                $LCTL dk > /dev/null
+                                stime=`date +%s`
+                                time ls -l $DIR/$tdir | wc -l
+                                etime=`date +%s`
+                                $LCTL dk > $TMP/sanity_test_123a_${i}_enable_${etime}.log
+                                delta_sa=$((etime - stime))
+                                log "ls $i files with statahead: $delta_sa sec, dump to $TMP/sanity_test_123a_${i}_enable_${etime}.log"
+		                lctl get_param -n llite.*.statahead_stats
                         else
                                 log "ls $i files is slower with statahead!"
                         fi
-                        break;
+                        break
                 fi
 
                 [ $delta -gt 20 ] && break
@@ -5929,6 +5947,19 @@ err17935 () {
 	error $*
     fi
 }
+
+test_154() {
+	cp /etc/hosts $DIR/$tfile
+
+	fid=`$LFS path2fid $DIR/$tfile`
+	rc=$?
+	[ $rc -ne 0 ] && error "error: could not get fid for $DIR/$tfile."
+
+	diff $DIR/$tfile $DIR/.lustre/fid/$fid || error "open by fid failed: did not find expected data in file."
+
+	echo "Opening a file by FID succeeded"
+}
+run_test 154 "Opening a file by FID"
 
 #Changelogs
 test_160() {

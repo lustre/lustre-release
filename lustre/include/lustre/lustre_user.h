@@ -62,7 +62,7 @@
 #define EXT3_IOC_SETVERSION             _IOW('f', 4, long)
 #define EXT3_IOC_GETVERSION_OLD         _IOR('v', 1, long)
 #define EXT3_IOC_SETVERSION_OLD         _IOW('v', 2, long)
-#define EXT3_IOC_FIEMAP                 _IOWR('f', 10, struct ll_user_fiemap)
+#define EXT3_IOC_FIEMAP                 _IOWR('f', 11, struct ll_user_fiemap)
 #endif
 
 /* FIEMAP flags supported by Lustre */
@@ -173,6 +173,11 @@ struct lov_user_md_v3 {           /* LOV EA user data (host-endian) */
         char  lmm_pool_name[LOV_MAXPOOLNAME]; /* pool name */
         struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 } __attribute__((packed));
+
+#define copy_lov_mds2user(user_md, mds_md) do { \
+        memcpy(user_md, mds_md, sizeof(*(user_md))); \
+        (user_md)->lmm_stripe_offset = 0; \
+        (user_md)->lmm_stripe_count = (mds_md)->lmm_stripe_count; } while(0)
 
 /* Compile with -D_LARGEFILE64_SOURCE or -D_GNU_SOURCE (or #define) to
  * use this.  It is unsafe to #define those values in this header as it

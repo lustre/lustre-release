@@ -121,22 +121,24 @@ set_file_unitsz() {
 lustre_fail() {
 	local fail_node=$1
 	local fail_loc=$2
+	local fail_val=${3:-0}
 
-	case $fail_node in
-	    "mds" )
-		do_facet $SINGLEMDS "lctl set_param fail_loc=$fail_loc" ;;
-	    "ost" )
-		for num in `seq $OSTCOUNT`; do
-		    do_facet ost$num "lctl set_param fail_loc=$fail_loc"
-		done ;;
-	    "mds_ost" )
-		do_facet $SINGLEMDS "lctl set_param fail_loc=$fail_loc" ;
-		for num in `seq $OSTCOUNT`; do
-		    do_facet ost$num "lctl set_param fail_loc=$fail_loc"
-		done ;;
-	    * ) echo "usage: lustre_fail fail_node fail_loc" ;
-		return 1 ;;
-	esac
+ 	if [ $fail_node == "mds" ] || [ $fail_node == "mds_ost" ]; then
+ 	    if [ $((fail_loc & 0x10000000)) -ne 0  -a $fail_val -gt 0 ] || \
+ 		[ $((fail_loc)) -eq 0 ]; then
+ 		do_facet $SINGLEMDS "lctl set_param fail_val=$fail_val"
+ 	    fi
+ 	    do_facet $SINGLEMDS "lctl set_param fail_loc=$fail_loc"
+ 	fi
+ 	if [ $fail_node == "ost" ] || [ $fail_node == "mds_ost" ]; then
+ 	    for num in `seq $OSTCOUNT`; do
+ 		if [ $((fail_loc & 0x10000000)) -ne 0 -a $fail_val -gt 0 ] || \
+ 		    [ $((fail_loc)) -eq 0 ]; then
+ 		    do_facet ost$num "lctl set_param fail_val=$fail_val"
+ 		fi
+ 		do_facet ost$num "lctl set_param fail_loc=$fail_loc"
+ 	    done
+ 	fi
 }
 
 RUNAS="runas -u $TSTID -g $TSTID"
@@ -968,11 +970,6 @@ test_12() {
 	[ "$(grep $DIR2 /proc/mounts)" ] || mount_client $DIR2 || \
 		{ skip "Need lustre mounted on $MOUNT2 " && retutn 0; }
 
-	if [ $OSTCOUNT -lt 2 ]; then
-		skip "$OSTCOUNT < 2, too few osts"
-		return 0;
-	fi
-
 	LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) * 10)) # 10 bunits each sever
 	TESTFILE="$DIR/$tdir/$tfile-0"
 	TESTFILE2="$DIR2/$tdir/$tfile-1"
@@ -984,11 +981,12 @@ test_12() {
 
 	$LFS setstripe $TESTFILE -i 0 -c 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
-	$LFS setstripe $TESTFILE2 -i 1 -c 1
+	$LFS setstripe $TESTFILE2 -i 0 -c 1
 	chown $TSTUSR2.$TSTUSR2 $TESTFILE2
 
 	#define OBD_FAIL_OST_HOLD_WRITE_RPC      0x21f
-	lustre_fail ost 0x0000021f
+ 	#define OBD_FAIL_SOME        0x10000000 /* fail N times */
+ 	lustre_fail ost $((0x0000021f | 0x10000000)) 1
 
 	echo "   step1: write out of block quota ..."
 	$RUNAS2 dd if=/dev/zero of=$TESTFILE2 bs=$BLK_SZ count=102400 &
@@ -1785,24 +1783,25 @@ test_25_sub() {
 	chmod 0777 $DIR/$tdir
 	TESTFILE="$DIR/$tdir/$tfile-0"
 	rm -f $TESTFILE
+	LIMIT=$(( $BUNIT_SZ * ($OSTCOUNT + 1) + 4096 ))
 
 	wait_delete_completed
 
         # set quota for $TSTUSR
         log "setquota for $TSTUSR"
-	$LFS setquota $1 $TSTUSR -b 10240 -B 10240 -i 10 -I 10 $DIR
+	$LFS setquota $1 $TSTUSR -b $LIMIT -B $LIMIT -i 10 -I 10 $DIR
 	sleep 3
         show_quota $1 $TSTUSR
 
         # set quota for $TSTUSR2
         log "setquota for $TSTUSR2"
-	$LFS setquota $1 $TSTUSR2 -b 10240 -B 10240 -i 10 -I 10 $DIR
+	$LFS setquota $1 $TSTUSR2 -b $LIMIT -B $LIMIT -i 10 -I 10 $DIR
 	sleep 3
         show_quota $1 $TSTUSR2
 
         # set stripe index to 0
         log "setstripe for $DIR/$tdir to 0"
-	$LFS setstripe $DIR/$tdir -i 0
+	$LFS setstripe $DIR/$tdir -c 1 -i 0
 	MDS_UUID=`do_facet $SINGLEMDS $LCTL dl | grep -m1 " mdt " | awk '{print $((NF-1))}'`
 	OST0_UUID=`do_facet ost1 $LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
 	MDS_QUOTA_USED_OLD=`$LFS quota -o $MDS_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`

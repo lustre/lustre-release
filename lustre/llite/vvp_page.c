@@ -243,7 +243,12 @@ static void vvp_page_completion_common(const struct lu_env *env,
         struct cl_sync_io *anchor = cp->cpg_sync_io;
 
         LINVRNT(cl_page_is_vmlocked(env, clp));
-        KLASSERT(!PageWriteback(vmpage));
+
+        /* Don't assert the page writeback bit here because the lustre file
+         * may be as a backend of swap space. in this case, the page writeback
+         * is set by VM, and obvious we shouldn't clear it at all. Fortunately
+         * this type of pages are all TRANSIENT pages. */
+        KLASSERT(ergo(clp->cp_type == CPT_CACHEABLE, !PageWriteback(vmpage)));
 
         vvp_vmpage_error(inode, vmpage, ioret);
 

@@ -85,11 +85,9 @@ lh_hash(lustre_hash_t *lh, void *key, unsigned mask)
 {
         LASSERT(lh);
         LASSERT(LHO(lh));
+        LASSERT(LHP(lh, hash));
 
-        if (LHP(lh, hash))
-                return LHP(lh, hash)(lh, key, mask);
-
-        return -EOPNOTSUPP;
+        return LHP(lh, hash)(lh, key, mask);
 }
 
 static inline void *

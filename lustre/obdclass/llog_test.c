@@ -501,7 +501,6 @@ static int llog_test_6(struct obd_device *obd, char *name)
         struct obd_device *mgc_obd;
         struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
         struct obd_uuid *mgs_uuid = &ctxt->loc_exp->exp_obd->obd_uuid;
-        struct lustre_handle exph = {0, };
         struct obd_export *exp;
         struct obd_uuid uuid = {"LLOG_TEST6_UUID"};
         struct llog_handle *llh = NULL;
@@ -516,13 +515,13 @@ static int llog_test_6(struct obd_device *obd, char *name)
                 GOTO(ctxt_release, rc = -ENOENT);
         }
 
-        rc = obd_connect(NULL, &exph, mgc_obd, &uuid,
+        rc = obd_connect(NULL, &exp, mgc_obd, &uuid,
                          NULL /* obd_connect_data */, NULL);
         if (rc) {
                 CERROR("6: failed to connect to MGC: %s\n", mgc_obd->obd_name);
                 GOTO(ctxt_release, rc);
         }
-        exp = class_conn2export(&exph);
+        LASSERTF(exp->exp_obd == mgc_obd, "%p - %p - %p\n", exp, exp->exp_obd, mgc_obd);
 
         nctxt = llog_get_context(mgc_obd, LLOG_CONFIG_REPL_CTXT);
         rc = llog_create(nctxt, &llh, NULL, name);
@@ -552,6 +551,8 @@ parse_out:
         if (rc) {
                 CERROR("6: llog_close failed: rc = %d\n", rc);
         }
+	CDEBUG(D_INFO, "obd %p - %p - %p - %p\n",
+	       mgc_obd, exp, exp->exp_obd, exp->exp_obd->obd_type);
         rc = obd_disconnect(exp);
 ctxt_release:
         llog_ctxt_put(ctxt);

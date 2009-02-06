@@ -162,7 +162,7 @@ int lov_stripe_number(struct lov_stripe_md *lsm, obd_off lov_off);
 #define LOV_USES_ASSIGNED_STRIPE        0
 #define LOV_USES_DEFAULT_STRIPE         1
 int qos_add_tgt(struct obd_device *obd, __u32 index);
-int qos_del_tgt(struct obd_device *obd, __u32 index);
+int qos_del_tgt(struct obd_device *obd, struct lov_tgt_desc *tgt);
 void qos_shrink_lsm(struct lov_request_set *set);
 int qos_prep_create(struct obd_export *exp, struct lov_request_set *set);
 void qos_update(struct lov_obd *lov);
@@ -320,5 +320,6 @@ int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname);
 void lov_dump_pool(int level, struct pool_desc *pool);
 struct pool_desc *lov_find_pool(struct lov_obd *lov, char *poolname);
 int lov_check_index_in_pool(__u32 idx, struct pool_desc *pool);
+void lov_pool_putref(struct pool_desc *pool);
 
 #endif

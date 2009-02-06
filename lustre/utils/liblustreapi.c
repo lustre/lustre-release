@@ -1525,8 +1525,8 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
         }
 
 obd_matches:
-        /* If file still fits the request, ask osd for updated info.
-           The regulat stat is almost of the same speed as some new
+        /* If file still fits the request, ask ost for updated info.
+           The regular stat is almost of the same speed as some new
            'glimpse-size-ioctl'. */
         if (!decision && S_ISREG(st->st_mode) &&
             (param->lmd->lmd_lmm.lmm_stripe_count || param->size)) {

@@ -636,8 +636,12 @@ struct ptlrpc_bulk_desc {
         lnet_handle_md_t       bd_md_h;         /* associated MD */
         lnet_nid_t             bd_sender;       /* stash event::sender */
 
-        cfs_page_t           **bd_enc_pages;
 #if defined(__KERNEL__)
+        /*
+         * encrypt iov, size is either 0 or bd_iov_count.
+         */
+        lnet_kiov_t           *bd_enc_iov;
+
         lnet_kiov_t            bd_iov[0];
 #else
         lnet_md_iovec_t        bd_iov[0];
@@ -1267,7 +1271,7 @@ static inline int ptlrpc_req_get_repsize(struct ptlrpc_request *req)
 int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg);
 int client_obd_cleanup(struct obd_device *obddev);
 int client_connect_import(const struct lu_env *env,
-                          struct lustre_handle *conn, struct obd_device *obd,
+                          struct obd_export **exp, struct obd_device *obd,
                           struct obd_uuid *cluuid, struct obd_connect_data *,
                           void *localdata);
 int client_disconnect_export(struct obd_export *exp);

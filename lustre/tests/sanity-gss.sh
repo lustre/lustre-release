@@ -83,7 +83,7 @@ check_and_setup_lustre
 
 rm -rf $DIR/[df][0-9]*
 
-check_runas_id $RUNAS_ID $RUNAS
+check_runas_id $RUNAS_ID $RUNAS_ID $RUNAS
 
 build_test_filter
 
@@ -647,27 +647,39 @@ run_test 7 "exercise enlarge_reqbuf()"
 
 test_8()
 {
-    sleep $TIMEOUT
+    local ATHISTORY=$(do_facet mds "find /sys/ -name at_history")
+    local ATOLDBASE=$(do_facet mds "cat $ATHISTORY")
+    do_facet mds "echo 8 >> $ATHISTORY"
+
     $LCTL dk > /dev/null
     debugsave
     sysctl -w lnet.debug="+other"
 
+    mkdir -p $DIR/d8
+    chmod a+w $DIR/d8
+
+    REQ_DELAY=`lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts |
+               awk '/portal 12/ {print $5}' | tail -1`
+    REQ_DELAY=$((${REQ_DELAY} + ${REQ_DELAY} / 4 + 5))
+
     # sleep sometime in ctx handle
-    do_facet mds lctl set_param fail_val=30
+    do_facet mds lctl set_param fail_val=$REQ_DELAY
 #define OBD_FAIL_SEC_CTX_HDL_PAUSE       0x1204
     do_facet mds lctl set_param fail_loc=0x1204
 
     $RUNAS $LFS flushctx || error "can't flush ctx"
 
-    $RUNAS df $DIR &
-    DFPID=$!
-    echo "waiting df (pid $TOUCHPID) to finish..."
-    sleep 2 # give df a chance to really trigger context init rpc
+    $RUNAS touch $DIR/d8/f &
+    TOUCHPID=$!
+    echo "waiting for touch (pid $TOUCHPID) to finish..."
+    sleep 2 # give it a chance to really trigger context init rpc
     do_facet mds sysctl -w lustre.fail_loc=0
-    wait $DFPID || error "df should have succeeded"
+    wait $TOUCHPID || error "touch should have succeeded"
 
     $LCTL dk | grep "Early reply #" || error "No early reply"
+
     debugrestore
+    do_facet mds "echo $ATOLDBASE >> $ATHISTORY" || true
 }
 run_test 8 "Early reply sent for slow gss context negotiation"
 
@@ -675,98 +687,6 @@ run_test 8 "Early reply sent for slow gss context negotiation"
 # following tests will manipulate flavors and may end with any flavor set,
 # so each test should not assume any start flavor.
 #
-
-test_50() {
-    local sample=$TMP/sanity-gss-8
-    local tdir=$MOUNT/dir8
-    local iosize="256K"
-    local hash_algs="adler32 crc32 md5 sha1 sha256 sha384 sha512 wp256 wp384 wp512"
-
-    # create sample file with aligned size for direct i/o
-    dd if=/dev/zero of=$sample bs=$iosize count=1 || error
-    dd conv=notrunc if=/etc/termcap of=$sample bs=$iosize count=1 || error
-
-    rm -rf $tdir
-    mkdir $tdir || error "create dir $tdir"
-
-    restore_to_default_flavor
-
-    for alg in $hash_algs; do
-        echo "Testing $alg..."
-        flavor=krb5i-bulki:$alg/null
-        set_rule $FSNAME any cli2ost $flavor
-        wait_flavor cli2ost $flavor $cnt_cli2ost
-
-        dd if=$sample of=$tdir/$alg oflag=direct,dsync bs=$iosize || error "$alg write"
-        diff $sample $tdir/$alg || error "$alg read"
-    done
-
-    rm -rf $tdir
-    rm -f $sample
-}
-run_test 50 "verify bulk hash algorithms works"
-
-test_51() {
-    local s1=$TMP/sanity-gss-9.1
-    local s2=$TMP/sanity-gss-9.2
-    local s3=$TMP/sanity-gss-9.3
-    local s4=$TMP/sanity-gss-9.4
-    local tdir=$MOUNT/dir9
-    local s1_size=4194304   # n * pagesize (4M)
-    local s2_size=512       # n * blksize
-    local s3_size=111       # n * blksize + m
-    local s4_size=5         # m
-    local cipher_algs="arc4 aes128 aes192 aes256 cast128 cast256 twofish128 twofish256"
-
-    # create sample files for each situation
-    rm -f $s1 $s2 $s2 $s4
-    dd if=/dev/urandom of=$s1 bs=1M count=4 || error
-    dd if=/dev/urandom of=$s2 bs=$s2_size count=1 || error
-    dd if=/dev/urandom of=$s3 bs=$s3_size count=1 || error
-    dd if=/dev/urandom of=$s4 bs=$s4_size count=1 || error
-
-    rm -rf $tdir
-    mkdir $tdir || error "create dir $tdir"
-
-    restore_to_default_flavor
-
-    #
-    # different bulk data alignment will lead to different behavior of
-    # the implementation: (n > 0; 0 < m < encryption_block_size)
-    #  - full page i/o
-    #  - partial page, size = n * encryption_block_size
-    #  - partial page, size = n * encryption_block_size + m
-    #  - partial page, size = m
-    #
-    for alg in $cipher_algs; do
-        echo "Testing $alg..."
-        flavor=krb5p-bulkp:sha1/$alg
-        set_rule $FSNAME any cli2ost $flavor
-        wait_flavor cli2ost $flavor $cnt_cli2ost
-
-        # sync write
-        dd if=$s1 of=$tdir/$alg.1 oflag=dsync bs=1M || error "write $alg.1"
-        dd if=$s2 of=$tdir/$alg.2 oflag=dsync || error "write $alg.2"
-        dd if=$s3 of=$tdir/$alg.3 oflag=dsync || error "write $alg.3"
-        dd if=$s4 of=$tdir/$alg.4 oflag=dsync || error "write $alg.4"
-
-        # remount client
-        umount_client $MOUNT
-        umount_client $MOUNT2
-        mount_client $MOUNT
-        mount_client $MOUNT2
-
-        # read & compare
-        diff $tdir/$alg.1 $s1 || error "read $alg.1"
-        diff $tdir/$alg.2 $s2 || error "read $alg.2"
-        diff $tdir/$alg.3 $s3 || error "read $alg.3"
-        diff $tdir/$alg.4 $s4 || error "read $alg.4"
-    done
-
-    rm -rf $tdir
-    rm -f $sample
-}
-run_test 51 "bulk data alignment test under encryption mode"
 
 test_90() {
     if [ "$SLOW" = "no" ]; then

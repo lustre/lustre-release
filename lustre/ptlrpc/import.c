@@ -351,7 +351,7 @@ out:
         sptlrpc_import_flush_all_ctx(imp);
 
         atomic_dec(&imp->imp_inval_count);
-        cfs_waitq_signal(&imp->imp_recovery_waitq);
+        cfs_waitq_broadcast(&imp->imp_recovery_waitq);
 }
 
 /* unset imp_invalid */
@@ -810,14 +810,7 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
                         IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY_LOCKS);
                 } else {
                         IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
-                }
-
-                spin_lock(&imp->imp_lock);
-                if (imp->imp_invalid) {
-                        spin_unlock(&imp->imp_lock);
                         ptlrpc_activate_import(imp);
-                } else {
-                        spin_unlock(&imp->imp_lock);
                 }
 
                 GOTO(finish, rc = 0);
@@ -1146,7 +1139,7 @@ out:
         imp->imp_last_recon = 0;
         spin_unlock(&imp->imp_lock);
 
-        cfs_waitq_signal(&imp->imp_recovery_waitq);
+        cfs_waitq_broadcast(&imp->imp_recovery_waitq);
         RETURN(rc);
 }
 
@@ -1326,7 +1319,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
         }
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {
-                cfs_waitq_signal(&imp->imp_recovery_waitq);
+                cfs_waitq_broadcast(&imp->imp_recovery_waitq);
                 ptlrpc_wake_delayed(imp);
         }
 

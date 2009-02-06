@@ -389,8 +389,9 @@ void *lustre_msg_buf_v2(struct lustre_msg_v2 *m, int n, int min_size)
 
         buflen = m->lm_buflens[n];
         if (unlikely(buflen < min_size)) {
-                CERROR("msg %p buffer[%d] size %d too small (required %d)\n",
-                       m, n, buflen, min_size);
+                CERROR("msg %p buffer[%d] size %d too small "
+                       "(required %d, opc=%d)\n",
+                       m, n, buflen, min_size, lustre_msg_get_opc(m));
                 return NULL;
         }
 
@@ -1951,13 +1952,25 @@ void lustre_swab_lov_desc (struct lov_desc *ld)
         /* uuid endian insensitive */
 }
 
-/*begin adding MDT by huanghua@clusterfs.com*/
 void lustre_swab_lmv_desc (struct lmv_desc *ld)
 {
         __swab32s (&ld->ld_tgt_count);
         __swab32s (&ld->ld_active_tgt_count);
+        __swab32s (&ld->ld_default_stripe_count);
+        __swab32s (&ld->ld_pattern);
+        __swab64s (&ld->ld_default_hash_size);
+        __swab32s (&ld->ld_qos_maxage);
         /* uuid endian insensitive */
 }
+
+void lustre_swab_lmv_stripe_md (struct lmv_stripe_md *mea)
+{
+        __swab32s(&mea->mea_magic);
+        __swab32s(&mea->mea_count);
+        __swab32s(&mea->mea_master);
+        CLASSERT(offsetof(typeof(*mea), mea_padding) != 0);
+}
+
 
 static void print_lum (struct lov_user_md *lum)
 {
@@ -2011,6 +2024,19 @@ void lustre_swab_lov_user_md_v3(struct lov_user_md_v3 *lum)
         CDEBUG(D_IOCTL, "swabbing lov_user_md v3\n");
         lustre_swab_lov_user_md_common((struct lov_user_md_v1 *)lum);
         /* lmm_pool_name nothing to do with char */
+        EXIT;
+}
+
+void lustre_swab_lov_mds_md(struct lov_mds_md *lmm)
+{
+        ENTRY;
+        CDEBUG(D_IOCTL, "swabbing lov_mds_md\n");
+        __swab32s(&lmm->lmm_magic);
+        __swab32s(&lmm->lmm_pattern);
+        __swab64s(&lmm->lmm_object_id);
+        __swab64s(&lmm->lmm_object_gr);
+        __swab32s(&lmm->lmm_stripe_size);
+        __swab32s(&lmm->lmm_stripe_count);
         EXIT;
 }
 

@@ -648,6 +648,7 @@ struct lov_qos {
 };
 
 struct lov_tgt_desc {
+        struct list_head    ltd_kill;
         struct obd_uuid     ltd_uuid;
         struct obd_export  *ltd_exp;
         struct ltd_qos      ltd_qos;     /* qos info per target */
@@ -857,6 +858,8 @@ static inline void oti_free_cookies(struct obd_trans_info *oti)
  * Events signalled through obd_notify() upcall-chain.
  */
 enum obd_notify_event {
+        /* Device connect start */
+        OBD_NOTIFY_CONNECT,
         /* Device activated */
         OBD_NOTIFY_ACTIVE,
         /* Device deactivated */
@@ -1075,9 +1078,6 @@ struct obd_device {
         struct lu_ref          obd_reference;
 };
 
-#define OBD_OPT_FORCE           0x0001
-#define OBD_OPT_FAILOVER        0x0002
-
 #define OBD_LLOG_FL_SENDNOW     0x0001
 
 enum obd_cleanup_stage {
@@ -1111,7 +1111,7 @@ enum obd_cleanup_stage {
 #define KEY_CLEAR_FS            "clear_fs"
 #define KEY_BLOCKSIZE           "blocksize"
 #define KEY_BLOCKSIZE_BITS      "blocksize_bits"
-#define KEY_FIEMAP              "FIEMAP"
+#define KEY_FIEMAP              "fiemap"
 #define KEY_SPTLRPC_CONF        "sptlrpc_conf"
 #define KEY_MGSSEC              "mgssec"
 /* XXX unused ?*/
@@ -1217,7 +1217,7 @@ struct obd_ops {
          * granted by the target, which are guaranteed to be a subset of flags
          * asked for. If @ocd == NULL, use default parameters. */
         int (*o_connect)(const struct lu_env *env,
-                         struct lustre_handle *conn, struct obd_device *src,
+                         struct obd_export **exp, struct obd_device *src,
                          struct obd_uuid *cluuid, struct obd_connect_data *ocd,
                          void *localdata);
         int (*o_reconnect)(const struct lu_env *env,
@@ -1359,15 +1359,6 @@ struct obd_ops {
          * NOTE: If adding ops, add another LPROCFS_OBD_OP_INIT() line
          * to lprocfs_alloc_obd_stats() in obdclass/lprocfs_status.c.
          * Also, add a wrapper function in include/linux/obd_class.h. */
-};
-
-/* TODO: lmv_stripe_md should contain mds capabilities for all slave fids */
-struct lmv_stripe_md {
-        __u32         mea_magic;
-        __u32         mea_count;
-        __u32         mea_master;
-        __u32         mea_padding;
-        struct lu_fid mea_ids[0];
 };
 
 enum {

@@ -644,54 +644,65 @@ test_24() { # bug 11710 details correct fsync() behavior
 }
 run_test 24 "fsync error (should return error)"
 
+wait_client_evicted () {
+	local facet=$1
+	local exports=$2
+	local varsvc=${facet}_svc
+
+	wait_update $(facet_host $facet) "lctl get_param -n *.${!varsvc}.num_exports | cut -d' ' -f2" $((exports - 1)) $3
+}
+
 test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
 # this test can only run from a client on a separate node.
 	remote_ost || { skip "local OST" && return 0; }
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 	remote_mds || { skip "local MDS" && return 0; }
-	OST_FILE=obdfilter.${ost1_svc}.num_exports
-        OST_EXP="`do_facet ost1 lctl get_param -n $OST_FILE`"
-	OST_NEXP1=`echo $OST_EXP | cut -d' ' -f2`
-	echo starting with $OST_NEXP1 OST exports
+
+	check_timeout || return 1
+
+	local OST_NEXP=$(do_facet ost1 lctl get_param -n obdfilter.${ost1_svc}.num_exports | cut -d' ' -f2)
+
+	echo starting with $OST_NEXP OST exports
 # OBD_FAIL_PTLRPC_DROP_RPC 0x505
 	do_facet client lctl set_param fail_loc=0x505
         # evictor takes PING_EVICT_TIMEOUT + 3 * PING_INTERVAL to evict.
         # But if there's a race to start the evictor from various obds,
         # the loser might have to wait for the next ping.
-	echo Waiting for $(($TIMEOUT * 8)) secs
-	sleep $(($TIMEOUT * 8))
-        OST_EXP="`do_facet ost1 lctl get_param -n $OST_FILE`"
-	OST_NEXP2=`echo $OST_EXP | cut -d' ' -f2`
-	echo ending with $OST_NEXP2 OST exports
+
+	local rc=0
+	wait_client_evicted ost1 $OST_NEXP $((TIMEOUT * 2 + TIMEOUT * 3 / 4))
+	rc=$?
 	do_facet client lctl set_param fail_loc=0x0
-        [ $OST_NEXP1 -le $OST_NEXP2 ] && error "client not evicted"
-	return 0
+        [ $rc -eq 0 ] || error "client not evicted from OST"
 }
 run_test 26a "evict dead exports"
 
 test_26b() {      # bug 10140 - evict dead exports by pinger
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
+	check_timeout || return 1
 	client_df
-        zconf_mount `hostname` $MOUNT2 || error "Failed to mount $MOUNT2"
-        sleep 1 # wait connections being established
-	MDS_FILE=mdt.${mds1_svc}.num_exports
-        MDS_NEXP1="`do_facet $SINGLEMDS lctl get_param -n $MDS_FILE | cut -d' ' -f2`"
-        OST_FILE=obdfilter.${ost1_svc}.num_exports
-        OST_NEXP1="`do_facet ost1 lctl get_param -n $OST_FILE | cut -d' ' -f2`"
-        echo starting with $OST_NEXP1 OST and $MDS_NEXP1 MDS exports
-        zconf_umount `hostname` $MOUNT2 -f
-        # evictor takes PING_EVICT_TIMEOUT + 3 * PING_INTERVAL to evict.  
-        # But if there's a race to start the evictor from various obds, 
-        # the loser might have to wait for the next ping.
-        echo Waiting for $(($TIMEOUT * 3)) secs
-        sleep $(($TIMEOUT * 3))
-        OST_NEXP2="`do_facet ost1 lctl get_param -n $OST_FILE | cut -d' ' -f2`"
-        MDS_NEXP2="`do_facet $SINGLEMDS lctl get_param -n $MDS_FILE | cut -d' ' -f2`"
-        echo ending with $OST_NEXP2 OST and $MDS_NEXP2 MDS exports
-        [ $OST_NEXP1 -le $OST_NEXP2 ] && error "client not evicted from OST"
-        [ $MDS_NEXP1 -le $MDS_NEXP2 ] && error "client not evicted from MDS"
-	return 0
+	zconf_mount `hostname` $MOUNT2 || error "Failed to mount $MOUNT2"
+	sleep 1 # wait connections being established
+
+	local MDS_NEXP=$(do_facet $SINGLEMDS lctl get_param -n mdt.${mds1_svc}.num_exports | cut -d' ' -f2)
+	local OST_NEXP=$(do_facet ost1 lctl get_param -n obdfilter.${ost1_svc}.num_exports | cut -d' ' -f2)
+
+	echo starting with $OST_NEXP OST and $MDS_NEXP MDS exports
+
+	zconf_umount `hostname` $MOUNT2 -f
+
+	# evictor takes PING_EVICT_TIMEOUT + 3 * PING_INTERVAL to evict.  
+	# But if there's a race to start the evictor from various obds, 
+	# the loser might have to wait for the next ping.
+	# PING_INTERVAL max(obd_timeout / 4, 1U)
+	# sleep (2*PING_INTERVAL) 
+
+        local rc=0
+        wait_client_evicted ost1 $OST_NEXP $((TIMEOUT * 2 + TIMEOUT * 3 / 4)) || \
+		error "Client was not evicted by ost" rc=1
+	wait_client_evicted $SINGLEMDS $MDS_NEXP $((TIMEOUT * 2 + TIMEOUT * 3 / 4)) || \
+		error "Client was not evicted by mds"
 }
 run_test 26b "evict dead exports"
 

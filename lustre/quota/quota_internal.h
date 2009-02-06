@@ -113,6 +113,7 @@ int compute_remquota(struct obd_device *obd,
                      struct lustre_quota_ctxt *qctxt, struct qunit_data *qdata,
                      int isblk);
 int check_qm(struct lustre_quota_ctxt *qctxt);
+void dqacq_interrupt(struct lustre_quota_ctxt *qctxt);
 /* quota_master.c */
 int lustre_dquot_init(void);
 void lustre_dquot_exit(void);
@@ -186,6 +187,8 @@ extern cfs_proc_dir_entry_t *lquota_type_proc_dir;
 #define LQS_INO_DECREASE 4
 #define LQS_INO_INCREASE 8
 
+/* the return status of quota operation */
+#define QUOTA_REQ_RETURNED 1
 
 #endif
 int client_quota_adjust_qunit(struct obd_export *exp,

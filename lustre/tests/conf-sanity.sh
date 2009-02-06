@@ -501,7 +501,7 @@ test_18() {
         check_mount || return 41
 
         echo "check journal size..."
-        local FOUNDSIZE=`do_facet mds "$$DEBUGFS -c -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}'`
+        local FOUNDSIZE=`do_facet mds "$DEBUGFS -c -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}'`
         if [ $FOUNDSIZE -gt $((32 * 1024 * 1024)) ]; then
                 log "Success: mkfs creates large journals. Size: $((FOUNDSIZE >> 20))M"
         else
@@ -770,29 +770,6 @@ test_26() {
     unload_modules || return 203
 }
 run_test 26 "MDT startup failure cleans LOV (should return errs)"
-
-wait_update () {
-	local node=$1
-	local TEST=$2
-	local FINAL=$3
-
-	local RESULT
-	local MAX=90
-	local WAIT=0
-	local sleep=5
-	while [ $WAIT -lt $MAX ]; do
-	    RESULT=$(do_node $node "$TEST") 
-	    if [ $RESULT -eq $FINAL ]; then
-		echo "Updated config after $WAIT sec: wanted $FINAL got $RESULT"
-		return 0
-	    fi
-	    WAIT=$((WAIT + sleep))
-	    echo "Waiting $((MAX - WAIT)) secs for config update" 
-	    sleep $sleep
-	done
-	echo "Config update not seen after $MAX sec: wanted $FINAL got $RESULT"
-	return 3
-}
 
 set_and_check() {
 	local myfacet=$1

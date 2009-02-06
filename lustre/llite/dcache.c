@@ -496,6 +496,13 @@ do_lock:
                 if (rc != -ESTALE) {
                         CDEBUG(D_INFO, "ll_intent_lock: rc %d : it->it_status "
                                "%d\n", rc, it->d.lustre.it_status);
+                } else {
+#ifndef HAVE_VFS_INTENT_PATCHES
+                        if (it_disposition(it, DISP_OPEN_OPEN) &&
+                            !it_open_error(DISP_OPEN_OPEN, it))
+                                /* server have valid open - close file first*/
+                                ll_release_openhandle(de, it);
+#endif
                 }
                 GOTO(out, rc = 0);
         }
@@ -763,7 +770,7 @@ int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
  * nd->intent.open.file for error, so we need to return it as lookup's result
  * instead */
                                 if (IS_ERR(filp))
-                                        rc = 0;
+                                        rc = PTR_ERR(filp);
 #endif
                         }
 #else

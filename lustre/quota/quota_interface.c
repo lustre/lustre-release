@@ -137,6 +137,7 @@ static int filter_quota_clearinfo(struct obd_export *exp, struct obd_device *obd
                 spin_lock(&qctxt->lqc_lock);
                 qctxt->lqc_import = NULL;
                 spin_unlock(&qctxt->lqc_lock);
+                dqacq_interrupt(qctxt);
                 CDEBUG(D_QUOTA, "%s: lqc_import of obd(%p) is invalid now.\n",
                        obd->obd_name, obd);
         }
@@ -380,7 +381,7 @@ static int quota_chk_acq_common(struct obd_device *obd, unsigned int uid,
 
                 /* please reference to dqacq_completion for the below */
                 /* a new request is finished, try again */
-                if (rc == -EAGAIN) {
+                if (rc == QUOTA_REQ_RETURNED) {
                         CDEBUG(D_QUOTA, "finish a quota req, try again\n");
                         continue;
                 }

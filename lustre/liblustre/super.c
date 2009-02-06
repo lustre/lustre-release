@@ -1937,8 +1937,6 @@ llu_fsswop_mount(const char *source,
         struct obd_statfs osfs;
         static struct qstr noname = { NULL, 0, 0 };
         struct ptlrpc_request *request = NULL;
-        struct lustre_handle md_conn = {0, };
-        struct lustre_handle dt_conn = {0, };
         struct lustre_md md;
         class_uuid_t uuid;
         struct config_llog_instance cfg = {0, };
@@ -2026,12 +2024,11 @@ llu_fsswop_mount(const char *source,
         ocd.ocd_version = LUSTRE_VERSION_CODE;
 
         /* setup mdc */
-        err = obd_connect(NULL, &md_conn, obd, &sbi->ll_sb_uuid, &ocd, NULL);
+        err = obd_connect(NULL, &sbi->ll_md_exp, obd, &sbi->ll_sb_uuid, &ocd, NULL);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);
                 GOTO(out_free, err);
         }
-        sbi->ll_md_exp = class_conn2export(&md_conn);
 
         err = obd_statfs(obd, &osfs, 100000000, 0);
         if (err)
@@ -2057,12 +2054,11 @@ llu_fsswop_mount(const char *source,
                                 OBD_CONNECT_VERSION | OBD_CONNECT_TRUNCLOCK |
                                 OBD_CONNECT_FID | OBD_CONNECT_AT;
         ocd.ocd_version = LUSTRE_VERSION_CODE;
-        err = obd_connect(NULL, &dt_conn, obd, &sbi->ll_sb_uuid, &ocd, NULL);
+        err = obd_connect(NULL, &sbi->ll_dt_exp, obd, &sbi->ll_sb_uuid, &ocd, NULL);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
                 GOTO(out_md, err);
         }
-        sbi->ll_dt_exp = class_conn2export(&dt_conn);
         sbi->ll_lco.lco_flags = ocd.ocd_connect_flags;
         sbi->ll_lco.lco_md_exp = sbi->ll_md_exp;
         sbi->ll_lco.lco_dt_exp = sbi->ll_dt_exp;

@@ -187,8 +187,8 @@ int ldlm_lock_remove_from_lru_nolock(struct ldlm_lock *lock)
                 struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
                 LASSERT(lock->l_resource->lr_type != LDLM_FLOCK);
                 list_del_init(&lock->l_lru);
+                LASSERT(ns->ns_nr_unused > 0);
                 ns->ns_nr_unused--;
-                LASSERT(ns->ns_nr_unused >= 0);
                 rc = 1;
         }
         return rc;
@@ -998,11 +998,16 @@ static struct ldlm_lock *search_queue(struct list_head *queue,
         return NULL;
 }
 
+void ldlm_lock_allow_match_locked(struct ldlm_lock *lock)
+{
+        lock->l_flags |= LDLM_FL_LVB_READY;
+        cfs_waitq_signal(&lock->l_waitq);
+}
+
 void ldlm_lock_allow_match(struct ldlm_lock *lock)
 {
         lock_res_and_lock(lock);
-        lock->l_flags |= LDLM_FL_LVB_READY;
-        cfs_waitq_signal(&lock->l_waitq);
+        ldlm_lock_allow_match_locked(lock);
         unlock_res_and_lock(lock);
 }
 
@@ -1211,7 +1216,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
         struct ldlm_interval *node = NULL;
         ENTRY;
 
-        do_gettimeofday(&lock->l_enqueued_time);
+        lock->l_last_activity = cfs_time_current_sec();
         /* policies are not executed on the client or during replay */
         if ((*flags & (LDLM_FL_HAS_INTENT|LDLM_FL_REPLAY)) == LDLM_FL_HAS_INTENT
             && !local && ns->ns_policy) {

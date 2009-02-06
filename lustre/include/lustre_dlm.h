@@ -189,7 +189,14 @@ typedef enum {
 /* Flags sent in AST lock_flags to be mapped into the receiving lock. */
 #define LDLM_AST_FLAGS         (LDLM_FL_DISCARD_DATA)
 
-/* Used for marking lock as an target for -EINTR while cp_ast sleep situation
+/* 
+ * --------------------------------------------------------------------------
+ * NOTE! Starting from this point, that is, LDLM_FL_* flags with values above
+ * 0x80000000 will not be sent over the wire.
+ * --------------------------------------------------------------------------
+ */
+
+/* Used for marking lock as an target for -EINTR while cp_ast sleep
  * emulation + race with upcoming bl_ast.  */
 #define LDLM_FL_FAIL_LOC       0x100000000ULL
 
@@ -370,14 +377,6 @@ typedef enum {
 } ldlm_appetite_t;
 
 /*
- * Default value for ->ns_shrink_thumb. If lock is not extent one its cost
- * is one page. Here we have 256 pages which is 1M on i386. Thus by default
- * all extent locks which have more than 1M long extent will be kept in lru,
- * others (including ibits locks) will be canceled on memory pressure event.
- */
-#define LDLM_LOCK_SHRINK_THUMB 256
-
-/*
  * Default values for the "max_nolock_size", "contention_time" and
  * "contended_locks" namespace tunables.
  */
@@ -442,11 +441,6 @@ struct ldlm_namespace {
           * Seconds.
           */
         unsigned int           ns_ctime_age_limit;
-
-        /**
-         * Lower limit to number of pages in lock to keep it in cache.
-         */
-        unsigned long          ns_shrink_thumb;
 
         /**
          * Next debug dump, jiffies.
@@ -645,7 +639,11 @@ struct ldlm_lock {
          */
         cfs_waitq_t           l_waitq;
 
-        struct timeval        l_enqueued_time;
+        /** 
+         * Seconds. it will be updated if there is any activity related to 
+         * the lock, e.g. enqueue the lock or send block AST.
+         */
+        cfs_time_t            l_last_activity;
 
         /**
          * Jiffies. Should be converted to time if needed.
@@ -796,12 +794,15 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 mask,
                       ...)
         __attribute__ ((format (printf, 4, 5)));
 
-#define LDLM_ERROR(lock, fmt, a...) do {                                \
+#define LDLM_DEBUG_LIMIT(mask, lock, fmt, a...) do {                    \
         static cfs_debug_limit_state_t _ldlm_cdls;                      \
-        ldlm_lock_debug(&_ldlm_cdls, D_ERROR, lock,                     \
+        ldlm_lock_debug(&_ldlm_cdls, mask, lock,                        \
                         __FILE__, __FUNCTION__, __LINE__,               \
                         "### " fmt , ##a);                              \
 } while (0)
+
+#define LDLM_ERROR(lock, fmt, a...) LDLM_DEBUG_LIMIT(D_ERROR, lock, fmt, ## a)
+#define LDLM_WARN(lock, fmt, a...)  LDLM_DEBUG_LIMIT(D_WARNING, lock, fmt, ## a)
 
 #define LDLM_DEBUG(lock, fmt, a...)   do {                              \
         ldlm_lock_debug(NULL, D_DLMTRACE, lock,                         \
@@ -963,6 +964,7 @@ int  ldlm_lock_addref_try(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_decref_and_cancel(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_allow_match(struct ldlm_lock *lock);
+void ldlm_lock_allow_match_locked(struct ldlm_lock *lock);
 ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                             const struct ldlm_res_id *, ldlm_type_t type,
                             ldlm_policy_data_t *, ldlm_mode_t mode,

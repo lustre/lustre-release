@@ -2100,16 +2100,22 @@ enum cl_enq_flags {
          */
         CEF_DISCARD_DATA = 0x00000004,
         /**
-         * tell the sub layers that it must be a `real' lock.
+         * tell the sub layers that it must be a `real' lock. This is used for
+         * mmapped-buffer locks and glimpse locks that must be never converted
+         * into lockless mode.
+         *
+         * \see vvp_mmap_locks(), cl_glimpse_lock().
          */
         CEF_MUST         = 0x00000008,
         /**
-         * tell the sub layers that never request a `real' lock.
-         * currently, the CEF_MUST & CEF_NEVER are only used for mmap locks.
-         * cl_io::ci_lockreq and these two flags: ci_lockreq just describes
-         * generic information of lock requirement for this IO, especially for
-         * locks which belong to the object doing IO; however, lock itself may
-         * have precise requirements, this is described by the latter.
+         * tell the sub layers that never request a `real' lock. This flag is
+         * not used currently.
+         *
+         * cl_io::ci_lockreq and CEF_{MUST,NEVER} flags specify lockless
+         * conversion policy: ci_lockreq describes generic information of lock
+         * requirement for this IO, especially for locks which belong to the
+         * object doing IO; however, lock itself may have precise requirements
+         * that are described by the enqueue flags.
          */
         CEF_NEVER        = 0x00000010,
         /**

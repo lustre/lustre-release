@@ -896,9 +896,9 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         LASSERT(info->mti_pill->rc_fmt == &RQF_LDLM_INTENT_OPEN);
         ldlm_rep = req_capsule_server_get(info->mti_pill, &RMF_DLM_REP);
 
-        /* TODO: JOIN file */
+        /* JOIN file was deprecated since 1.6.5, but may be revived one day */
         if (create_flags & MDS_OPEN_JOIN_FILE) {
-                CERROR("JOIN file will be supported soon\n");
+                CERROR("file join is unsupported in this version of Lustre\n");
                 GOTO(out, result = err_serious(-EOPNOTSUPP));
         }
         msg_flags = lustre_msg_get_flags(req->rq_reqmsg);
@@ -1234,8 +1234,11 @@ int mdt_close(struct mdt_thread_info *info)
         req_capsule_set_size(info->mti_pill, &RMF_LOGCOOKIES, RCL_SERVER,
                              info->mti_mdt->mdt_max_cookiesize);
         rc = req_capsule_server_pack(info->mti_pill);
-        if (mdt_check_resent(info, mdt_reconstruct_generic, NULL))
+        if (mdt_check_resent(info, mdt_reconstruct_generic, NULL)) {
+                if (rc == 0)
+                        mdt_shrink_reply(info);
                 RETURN(lustre_msg_get_status(req->rq_repmsg));
+        }
 
         /* Continue to close handle even if we can not pack reply */
         if (rc == 0) {

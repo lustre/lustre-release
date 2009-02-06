@@ -804,8 +804,6 @@ test_34() { #16129
                 echo writing on client1
                 dd if=/dev/zero of=$DIR1/$tfile count=100 conv=notrunc > /dev/null 2>&1
                 sync &
-                # wait for the flush
-                sleep 1
                 echo reading on client2
                 dd of=/dev/null if=$DIR2/$tfile > /dev/null 2>&1
                 # wait for a lock timeout
@@ -883,6 +881,32 @@ test_35() { # bug 17645
         done
 }
 run_test 35 "-EINTR cp_ast vs. bl_ast race does not evict client"
+
+test_36() { #bug 16417
+    local SIZE
+    mkdir -p $MOUNT1/$tdir
+    lfs setstripe -c -1 $MOUNT1/$tdir
+    i=0
+    SIZE=100
+
+    while [ $i -le 10 ]; do
+	lctl mark "start test"
+	before=$($LFS df | awk '{if ($1 ~/^filesystem/) {print $5; exit} }')
+	dd if=/dev/zero of=$MOUNT1/$tdir/file000 bs=1M count=$SIZE
+	dd if=$MOUNT2/$tdir/file000 of=/dev/null bs=1M count=$SIZE &
+	read_pid=$!
+	sleep 0.1
+	rm -f $MOUNT1/$tdir/file000
+	wait $read_pid
+	after=$($LFS df | awk '{if ($1 ~/^filesystem/) {print $5; exit} }')
+	if [ $before -gt $after ]; then
+	    error "space leaked"
+	    exit;
+	fi
+	let i=i+1
+    done
+}
+run_test 36 "handle ESTALE/open-unlink corectly"
 
 log "cleanup: ======================================================"
 

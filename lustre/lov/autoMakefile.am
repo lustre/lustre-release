@@ -84,5 +84,4 @@ endif # MODULES
 
 install-data-hook: $(install_data_hook)
 
-DIST_SOURCES = $(lov-objs:.o=.c) lov_internal.h lov_cl_internal.h
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 

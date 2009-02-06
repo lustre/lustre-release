@@ -1193,6 +1193,7 @@ void *lu_context_key_get(const struct lu_context *ctx,
 {
         LINVRNT(ctx->lc_state == LCS_ENTERED);
         LINVRNT(0 <= key->lct_index && key->lct_index < ARRAY_SIZE(lu_keys));
+        LASSERT(lu_keys[key->lct_index] == key);
         return ctx->lc_value[key->lct_index];
 }
 EXPORT_SYMBOL(lu_context_key_get);

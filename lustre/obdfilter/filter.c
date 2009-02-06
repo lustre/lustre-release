@@ -202,11 +202,8 @@ static int filter_export_stats_init(struct obd_device *obd,
                                     struct obd_export *exp,
                                     void *client_nid)
 {
-        struct filter_export_data *fed = &exp->exp_filter_data;
         int rc, newnid = 0;
         ENTRY;
-
-        init_brw_stats(&fed->fed_brw_stats);
 
         if (obd_uuid_equals(&exp->exp_client_uuid, &obd->obd_uuid))
                 /* Self-export gets no proc entry */
@@ -357,12 +354,13 @@ static int filter_client_add(struct obd_device *obd, struct obd_export *exp,
         RETURN(0);
 }
 
+struct lsd_client_data zero_lcd; /* globals are implicitly zeroed */
+
 static int filter_client_free(struct obd_export *exp)
 {
         struct filter_export_data *fed = &exp->exp_filter_data;
         struct filter_obd *filter = &exp->exp_obd->u.filter;
         struct obd_device *obd = exp->exp_obd;
-        struct lsd_client_data zero_lcd;
         struct lvfs_run_ctxt saved;
         int rc;
         loff_t off;
@@ -399,23 +397,26 @@ static int filter_client_free(struct obd_export *exp)
         }
 
         if (!(exp->exp_flags & OBD_OPT_FAILOVER)) {
-                memset(&zero_lcd, 0, sizeof zero_lcd);
+                /* Don't force sync on disconnect if aborting recovery,
+                 * or it does num_clients * num_osts.  b=17194 */
+                int need_sync = (!exp->exp_libclient || exp->exp_need_sync) &&
+                                 !(exp->exp_flags&OBD_OPT_ABORT_RECOV);
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_write_record(obd, filter->fo_rcvd_filp, &zero_lcd,
-                                         sizeof(zero_lcd), &off,
-                                         (!exp->exp_libclient ||
-                                          exp->exp_need_sync));
+                                         sizeof(zero_lcd), &off, 0);
+
+                /* Make sure the server's last_transno is up to date. Do this
+                 * after the client is freed so we know all the client's
+                 * transactions have been committed. */
                 if (rc == 0)
-                        /* update server's transno */
                         filter_update_server_data(obd, filter->fo_rcvd_filp,
-                                                  filter->fo_fsd,
-                                                  !exp->exp_libclient);
+                                                  filter->fo_fsd, need_sync);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
                 CDEBUG(rc == 0 ? D_INFO : D_ERROR,
-                       "zeroing out client %s at idx %u (%llu) in %s rc %d\n",
+                       "zero out client %s at idx %u/%llu in %s %ssync rc %d\n",
                        fed->fed_lcd->lcd_uuid, fed->fed_lr_idx, fed->fed_lr_off,
-                       LAST_RCVD, rc);
+                       LAST_RCVD, need_sync ? "" : "a", rc);
         }
 
         if (!test_and_clear_bit(fed->fed_lr_idx, filter->fo_last_rcvd_slots)) {
@@ -2012,7 +2013,11 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         if (rc != 0)
                 GOTO(err_ops, rc);
 
-        LASSERT(!lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb)));
+        if (lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb))) {
+                CERROR("%s: Underlying device is marked as read-only. "
+                       "Setup failed\n", obd->obd_name);
+                GOTO(err_ops, rc = -EROFS);
+        }
 
         /* failover is the default */
         obd->obd_replayable = 1;
@@ -2765,34 +2770,35 @@ static int filter_reconnect(const struct lu_env *env,
 
 /* nearly identical to mds_connect */
 static int filter_connect(const struct lu_env *env,
-                          struct lustre_handle *conn, struct obd_device *obd,
+                          struct obd_export **exp, struct obd_device *obd,
                           struct obd_uuid *cluuid,
                           struct obd_connect_data *data, void *localdata)
 {
         struct lvfs_run_ctxt saved;
-        struct obd_export *exp;
+        struct lustre_handle conn = { 0 };
+        struct obd_export *lexp;
         struct filter_export_data *fed;
         struct lsd_client_data *lcd = NULL;
         __u32 group;
         int rc;
         ENTRY;
 
-        if (conn == NULL || obd == NULL || cluuid == NULL)
+        if (exp == NULL || obd == NULL || cluuid == NULL)
                 RETURN(-EINVAL);
 
-        rc = class_connect(conn, obd, cluuid);
+        rc = class_connect(&conn, obd, cluuid);
         if (rc)
                 RETURN(rc);
-        exp = class_conn2export(conn);
-        LASSERT(exp != NULL);
+        lexp = class_conn2export(&conn);
+        LASSERT(lexp != NULL);
 
-        fed = &exp->exp_filter_data;
+        fed = &lexp->exp_filter_data;
 
-        rc = filter_connect_internal(exp, data);
+        rc = filter_connect_internal(lexp, data);
         if (rc)
                 GOTO(cleanup, rc);
 
-        filter_export_stats_init(obd, exp, localdata);
+        filter_export_stats_init(obd, lexp, localdata);
         if (obd->obd_replayable) {
                 OBD_ALLOC(lcd, sizeof(*lcd));
                 if (!lcd) {
@@ -2802,7 +2808,7 @@ static int filter_connect(const struct lu_env *env,
 
                 memcpy(lcd->lcd_uuid, cluuid, sizeof(lcd->lcd_uuid));
                 fed->fed_lcd = lcd;
-                rc = filter_client_add(obd, exp, -1);
+                rc = filter_client_add(obd, lexp, -1);
                 if (rc)
                         GOTO(cleanup, rc);
         }
@@ -2810,7 +2816,7 @@ static int filter_connect(const struct lu_env *env,
         group = data->ocd_group;
 
         CWARN("%s: Received MDS connection ("LPX64"); group %d\n",
-              obd->obd_name, exp->exp_handle.h_cookie, group);
+              obd->obd_name, lexp->exp_handle.h_cookie, group);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         rc = filter_read_groups(obd, group, 1);
@@ -2828,9 +2834,10 @@ cleanup:
                         OBD_FREE_PTR(lcd);
                         fed->fed_lcd = NULL;
                 }
-                class_disconnect(exp);
+                class_disconnect(lexp);
+                *exp = NULL;
         } else {
-                class_export_put(exp);
+                *exp = lexp;
         }
 
         RETURN(rc);
@@ -3050,6 +3057,8 @@ static int filter_disconnect(struct obd_export *exp)
 
         /* Flush any remaining cancel messages out to the target */
         filter_sync_llogs(obd, exp);
+
+        lquota_clearinfo(filter_quota_interface_ref, exp, exp->exp_obd);
 
         /* Disconnect early so that clients can't keep using export */
         rc = class_disconnect(exp);
@@ -4327,9 +4336,11 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
         obd->u.filter.fo_mdc_conn.cookie = exp->exp_handle.h_cookie;
 
         /* setup llog imports */
-        LASSERT(val != NULL);
+        if (val != NULL)
+                group = (int)(*(__u32 *)val);
+        else
+                group = 0; /* default value */
 
-        group = (int)(*(__u32 *)val);
         LASSERT_MDS_GROUP(group);
         rc = filter_setup_llog_group(exp, obd, group);
         if (rc)

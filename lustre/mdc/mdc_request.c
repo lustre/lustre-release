@@ -961,7 +961,10 @@ int mdc_sendpage(struct obd_export *exp, const struct lu_fid *fid,
 
         ptlrpc_request_set_replen(req);
         rc = ptlrpc_queue_wait(req);
-        GOTO(out, rc);
+        if (rc)
+                GOTO(out, rc);
+
+        rc = sptlrpc_cli_unwrap_bulk_write(req, req->rq_bulk);
 out:
         ptlrpc_req_finished(req);
         return rc;
@@ -1007,6 +1010,13 @@ int mdc_readpage(struct obd_export *exp, const struct lu_fid *fid,
         ptlrpc_request_set_replen(req);
         rc = ptlrpc_queue_wait(req);
         if (rc) {
+                ptlrpc_req_finished(req);
+                RETURN(rc);
+        }
+
+        rc = sptlrpc_cli_unwrap_bulk_read(req, req->rq_bulk,
+                                          req->rq_bulk->bd_nob_transferred);
+        if (rc < 0) {
                 ptlrpc_req_finished(req);
                 RETURN(rc);
         }
@@ -1789,7 +1799,7 @@ static int mdc_renew_capa(struct obd_export *exp, struct obd_capa *oc,
 }
 
 static int mdc_connect(const struct lu_env *env,
-                       struct lustre_handle *dlm_handle,
+                       struct obd_export **exp,
                        struct obd_device *obd, struct obd_uuid *cluuid,
                        struct obd_connect_data *data,
                        void *localdata)
@@ -1806,7 +1816,7 @@ static int mdc_connect(const struct lu_env *env,
                        obd->obd_name);
         }
 
-        return client_connect_import(env, dlm_handle, obd, cluuid, data, NULL);
+        return client_connect_import(env, exp, obd, cluuid, data, NULL);
 }
 
 struct obd_ops mdc_obd_ops = {

@@ -14,6 +14,30 @@ tbd  Sun Microsystems, Inc.
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
 Severity   : normal
+Frequency  : start MDS on uncleanly shutdowned MDS device
+Bugzilla   : 16839
+Descriptoin: ll_sync thread stay in waiting mds<>ost recovery finished
+Details    : stay in waiting mds<>ost recovery finished produce random bugs
+             due race between two ll_sync thread for one lov target. send 
+             ACTIVATE event only if connect realy finished and import have
+             FULL state.
+
+Severity   : normal
+Frequency  : rare, connect and disconnect target at same time
+Bugzilla   : 17310
+Descriptoin: ASSERTION(atomic_read(&imp->imp_inflight) == 0
+Details    : don't call obd_disconnect under lov_lock. this long time
+	      operation and can block ptlrpcd which answer to connect request.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 18154
+Descriptoin: don't lose wakeup for imp_recovery_waitq
+Details    : recover_import_no_retry or invalidate_import and import_close can
+             both sleep on imp_recovery_waitq, but we was send only one wakeup
+             to sleep queue.
+
+Severity   : normal
 Frequency  : always with long access acl
 Bugzilla   : 17636
 Descriptoin: mds can't pack reply with long acl.
@@ -1922,6 +1946,22 @@ Details    : enable OBD_CONNECT_MDT flag when connecting from the MDS so that
 	     the OSTs know that the MDS "UUID" can be reused for the same export
 	     from a different NID, so we do not need to wait for the export to be
 	     evicted
+
+Severity   : major
+Frequency  : rare, only if using MMP with Linux RAID
+Bugzilla   : 17895
+Description: MMP doesn't work with Linux RAID
+Details    : While using HA for Lustre servers with Linux RAID, it is possible
+             that MMP will not detect multiple mounts. To make this work we
+             need to unplug the device queue in RAID when the MMP block is being
+             written. Also while reading the MMP block, we should read it from
+             disk and not the cached one.
+
+Severity   : enhancement
+Bugzilla   : 17187
+Description: open file using fid
+Details    : A file can be opened using just its fid, like
+	     <mntpt>/.lustre/fid/SEQ:OID:VER - this is needed for HSM and replication
 
 --------------------------------------------------------------------------------
 

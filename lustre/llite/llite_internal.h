@@ -635,7 +635,6 @@ extern ldlm_mode_t ll_take_md_lock(struct inode *inode, __u64 bits,
                                    struct lustre_handle *lockh);
 int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
-int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
 int ll_glimpse_ioctl(struct ll_sb_info *sbi,
                      struct lov_stripe_md *lsm, lstat_t *st);
 int ll_local_open(struct file *file,
@@ -1215,5 +1214,26 @@ static inline int cl_merge_lvb(struct inode *inode)
 #define cl_inode_mtime(inode) LTIME_S((inode)->i_mtime)
 
 struct obd_capa *cl_capa_lookup(struct inode *inode, enum cl_req_type crt);
+
+/** direct write pages */
+struct ll_dio_pages {
+        /** page array to be written. we don't support
+         * partial pages except the last one. */
+        struct page **ldp_pages;
+        /* offset of each page */
+        loff_t       *ldp_offsets;
+        /** if ldp_offsets is NULL, it means a sequential
+         * pages to be written, then this is the file offset
+         * of the * first page. */
+        loff_t        ldp_start_offset;
+        /** how many bytes are to be written. */
+        size_t        ldp_size;
+        /** # of pages in the array. */
+        int           ldp_nr;
+};
+
+extern ssize_t ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io,
+                                  int rw, struct inode *inode,
+                                  struct ll_dio_pages *pv);
 
 #endif /* LLITE_INTERNAL_H */

@@ -128,7 +128,7 @@ init_test_env() {
     export TUNEFS=${TUNEFS:-"$LUSTRE/utils/tunefs.lustre"}
     [ ! -f "$TUNEFS" ] && export TUNEFS=$(which tunefs.lustre)
     export CHECKSTAT="${CHECKSTAT:-"checkstat -v"} "
-    export FSYTPE=${FSTYPE:-"ldiskfs"}
+    export FSTYPE=${FSTYPE:-"ldiskfs"}
     export NAME=${NAME:-local}
     export LGSSD=${LGSSD:-"$LUSTRE/utils/gss/lgssd"}
     [ "$GSS_PIPEFS" = "true" ] && [ ! -f "$LGSSD" ] && \
@@ -252,6 +252,7 @@ load_modules() {
     load_module mgc/mgc
     if [ -z "$CLIENTONLY" ] && [ -z "$CLIENTMODSONLY" ]; then
         grep -q crc16 /proc/kallsyms || { modprobe crc16 2>/dev/null || true; }
+        grep -q jbd /proc/kallsyms || { modprobe jbd 2>/dev/null || true; }
         [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
         load_module mgs/mgs
         load_module mds/mds
@@ -427,6 +428,10 @@ stop_gss_daemons() {
 init_gss() {
     if $GSS; then
         start_gss_daemons
+
+        if [ -n "$LGSS_KEYRING_DEBUG" ]; then
+            echo $LGSS_KEYRING_DEBUG > /proc/fs/lustre/sptlrpc/gss/lgss_keyring/debug_level
+        fi
     fi
 }
 
@@ -753,6 +758,34 @@ cleanup_check() {
     return 0
 }
 
+wait_update () {
+    local node=$1
+    local TEST=$2
+    local FINAL=$3
+    local MAX=${4:-90}
+
+        local RESULT
+        local WAIT=0
+        local sleep=5
+        while [ $WAIT -lt $MAX ]; do
+            sleep $sleep
+            RESULT=$(do_node $node "$TEST")
+            if [ $RESULT -eq $FINAL ]; then
+                echo "Updated after $WAIT sec: wanted $FINAL got $RESULT"
+                return 0
+            fi
+            WAIT=$((WAIT + sleep))
+            echo "Waiting $((MAX - WAIT)) secs for update"
+        done
+        echo "Update not seen after $MAX sec: wanted $FINAL got $RESULT"
+        return 3
+}
+
+wait_update_facet () {
+    local facet=$1
+    wait_update  $(facet_host $facet) $@
+}
+
 wait_delete_completed () {
     local TOTALPREV=`lctl get_param -n osc.*.kbytesavail | \
                      awk 'BEGIN{total=0}; {total+=$1}; END{print total}'`
@@ -772,14 +805,14 @@ wait_delete_completed () {
 }
 
 wait_for_host() {
-    HOST=$1
+    local HOST=$1
     check_network "$HOST" 900
     while ! do_node $HOST "ls -d $LUSTRE " > /dev/null; do sleep 5; done
 }
 
 wait_for() {
-    facet=$1
-    HOST=`facet_active_host $facet`
+    local facet=$1
+    local HOST=`facet_active_host $facet`
     wait_for_host $HOST
 }
 
@@ -788,8 +821,8 @@ wait_mds_recovery_done () {
 #define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 / 2)
 # as we are in process of changing obd_timeout in different ways
 # let's set MAX longer than that
-    MAX=$(( timeout * 4 ))
-    WAIT=0
+    local MAX=$(( timeout * 4 ))
+    local WAIT=0
     while [ $WAIT -lt $MAX ]; do
         STATUS=`do_facet $SINGLEMDS "lctl get_param -n mdt.*-MDT0000.recovery_status | grep status"`
         echo $STATUS | grep COMPLETE && return 0
@@ -876,8 +909,8 @@ client_reconnect() {
 }
 
 facet_failover() {
-    facet=$1
-    sleep_time=$2
+    local facet=$1
+    local sleep_time=$2
     echo "Failing $facet on node `facet_active_host $facet`"
     shutdown_facet $facet
     [ -n "$sleep_time" ] && sleep $sleep_time
@@ -1292,16 +1325,6 @@ remount_client()
 	zconf_mount `hostname` $1 || error "mount failed"
 }
 
-set_obd_timeout() {
-    local facet=$1
-    local timeout=$2
-
-    do_facet $facet lsmod | grep -q obdclass || \
-        do_facet $facet "modprobe obdclass"
-
-    do_facet $facet "lctl set_param timeout=$timeout"
-}
-
 writeconf_facet () {
     local facet=$1
     local dev=$2
@@ -1330,7 +1353,6 @@ setupall() {
             writeconf_all
         for num in `seq $MDSCOUNT`; do
             DEVNAME=$(mdsdevname $num)
-            set_obd_timeout mds$num $TIMEOUT
             start mds$num $DEVNAME $MDS_MOUNT_OPTS
 
             # We started mds, now we should set failover variables properly.
@@ -1346,7 +1368,6 @@ setupall() {
         done
         for num in `seq $OSTCOUNT`; do
             DEVNAME=$(ostdevname $num)
-            set_obd_timeout ost$num $TIMEOUT
             start ost$num $DEVNAME $OST_MOUNT_OPTS
 
             # We started ost$num, now we should set ost${num}failover variable properly.
@@ -1371,7 +1392,7 @@ setupall() {
         [ -n "$CLIENTS" ] && zconf_mount_clients $CLIENTS $MOUNT2
     fi
 
-    init_versions_vars
+    init_param_vars
 
     # by remounting mdt before ost, initial connect from mdt to ost might
     # timeout because ost is not ready yet. wait some time to its fully
@@ -1425,10 +1446,13 @@ init_facets_vars () {
     done
 }
 
-init_versions_vars () {
+init_param_vars () {
     export MDSVER=$(do_facet $SINGLEMDS "lctl get_param version" | cut -d. -f1,2)
     export OSTVER=$(do_facet ost1 "lctl get_param version" | cut -d. -f1,2)
     export CLIVER=$(lctl get_param version | cut -d. -f 1,2)
+
+    TIMEOUT=$(do_facet $SINGLEMDS "lctl get_param -n timeout")
+    log "Using TIMEOUT=$TIMEOUT"
 }
 
 check_config () {
@@ -1449,6 +1473,15 @@ check_config () {
     fi
 }
 
+check_timeout () {
+    local mdstimeout=$(do_facet $SINGLEMDS "lctl get_param -n timeout")
+    local cltimeout=$(lctl get_param -n timeout)
+    if [ $mdstimeout -ne $TIMEOUT ] || [ $mdstimeout -ne $cltimeout ]; then
+        error "timeouts are wrong! mds: $mdstimeout, client: $cltimeout, TIMEOUT=$TIMEOUT"
+        return 1
+    fi
+}
+
 check_and_setup_lustre() {
     local MOUNTED=$(mounted_lustre_filesystems)
     if [ -z "$MOUNTED" ] || ! $(echo $MOUNTED | grep -w -q $MOUNT); then
@@ -1460,7 +1493,7 @@ check_and_setup_lustre() {
     else
         check_config $MOUNT
         init_facets_vars
-        init_versions_vars
+        init_param_vars
     fi
     if [ "$ONLY" == "setup" ]; then
         exit 0
@@ -2231,25 +2264,9 @@ multiop_bg_pause() {
     return 0
 }
 
-check_rate() {
-    local OP=$1
-    local TARGET_RATE=$2
-    local NUM_CLIENTS=$3
-    local LOG=$4
-
-    local RATE=$(awk '/^Rate: [0-9\.]+ '"${OP}"'s\/sec/ { print $2}' ${LOG})
-
-    # We need to use bc since the rate is a floating point number
-    local RES=$(echo "${RATE} < ${TARGET_RATE}" | bc -l )
-    if [ "${RES}" = 0 ]; then
-        echo "Success: ${RATE} ${OP}s/sec met target rate" \
-             "${TARGET_RATE} ${OP}s/sec for ${NUM_CLIENTS} client(s)."
-        return 0
-    else
-        echo "Failure: ${RATE} ${OP}s/sec did not meet target rate" \
-             "${TARGET_RATE} ${OP}s/sec for ${NUM_CLIENTS} client(s)."
-        return 1
-    fi
+inodes_available () {
+    local IFree=$($LFS df -i $MOUNT | grep ^$FSNAME | awk '{print $4}' | sort -un | head -1) || return 1
+    echo $IFree
 }
 
 # reset llite stat counters
@@ -2367,5 +2384,9 @@ mpi_run () {
     ls -ald $MOUNT
     echo "+ $command"
     eval $command
+}
+
+mdsrate_cleanup () {
+    mpi_run -np $1 -machinefile $2 ${MDSRATE} --unlink --nfiles $3 --dir $4 --filefmt $5
 }
 

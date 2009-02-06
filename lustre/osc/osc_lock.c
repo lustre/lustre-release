@@ -312,6 +312,8 @@ static void osc_ast_data_put(const struct lu_env *env, struct osc_lock *olck)
  *
  * This can be optimized to not update attributes when lock is a result of a
  * local match.
+ *
+ * Called under lock and resource spin-locks.
  */
 static void osc_lock_lvb_update(const struct lu_env *env, struct osc_lock *olck,
                                 int rc)
@@ -344,6 +346,8 @@ static void osc_lock_lvb_update(const struct lu_env *env, struct osc_lock *olck,
                 dlmlock = olck->ols_lock;
                 LASSERT(dlmlock != NULL);
 
+                /* re-grab LVB from a dlm lock under DLM spin-locks. */
+                *lvb = *(struct ost_lvb *)dlmlock->l_lvb_data;
                 size = lvb->lvb_size;
                 /* Extend KMS up to the end of this lock and no further
                  * A lock on [x,y] means a KMS of up to y + 1 bytes! */
@@ -360,7 +364,7 @@ static void osc_lock_lvb_update(const struct lu_env *env, struct osc_lock *olck,
                                    lvb->lvb_size, oinfo->loi_kms,
                                    dlmlock->l_policy_data.l_extent.end);
                 }
-                ldlm_lock_allow_match(dlmlock);
+                ldlm_lock_allow_match_locked(dlmlock);
         } else if (rc == -ENAVAIL && olck->ols_glimpse) {
                 CDEBUG(D_INODE, "glimpsed, setting rss="LPU64"; leaving"
                        " kms="LPU64"\n", lvb->lvb_size, oinfo->loi_kms);
@@ -375,6 +379,13 @@ static void osc_lock_lvb_update(const struct lu_env *env, struct osc_lock *olck,
         EXIT;
 }
 
+/**
+ * Called when a lock is granted, from an upcall (when server returned a
+ * granted lock), or from completion AST, when server returned a blocked lock.
+ *
+ * Called under lock and resource spin-locks, that are released temporarily
+ * here.
+ */
 static void osc_lock_granted(const struct lu_env *env, struct osc_lock *olck,
                              struct ldlm_lock *dlmlock, int rc)
 {
@@ -399,11 +410,19 @@ static void osc_lock_granted(const struct lu_env *env, struct osc_lock *olck,
                  * tell upper layers the extent of the lock that was actually
                  * granted
                  */
-                cl_lock_modify(env, lock, descr);
                 LINVRNT(osc_lock_invariant(olck));
                 olck->ols_state = OLS_GRANTED;
                 osc_lock_lvb_update(env, olck, rc);
+
+                /* release DLM spin-locks to allow cl_lock_{modify,signal}()
+                 * to take a semaphore on a parent lock. This is safe, because
+                 * spin-locks are needed to protect consistency of
+                 * dlmlock->l_*_mode and LVB, and we have finished processing
+                 * them. */
+                unlock_res_and_lock(dlmlock);
+                cl_lock_modify(env, lock, descr);
                 cl_lock_signal(env, lock);
+                lock_res_and_lock(dlmlock);
         }
         EXIT;
 }
@@ -424,7 +443,6 @@ static void osc_lock_upcall0(const struct lu_env *env, struct osc_lock *olck)
         LASSERT(olck->ols_lock == NULL);
         olck->ols_lock = dlmlock;
         spin_unlock(&osc_ast_guard);
-        unlock_res_and_lock(dlmlock);
 
         /*
          * Lock might be not yet granted. In this case, completion ast
@@ -433,6 +451,8 @@ static void osc_lock_upcall0(const struct lu_env *env, struct osc_lock *olck)
          */
         if (dlmlock->l_granted_mode == dlmlock->l_req_mode)
                 osc_lock_granted(env, olck, dlmlock, 0);
+        unlock_res_and_lock(dlmlock);
+
         /*
          * osc_enqueue_interpret() decrefs asynchronous locks, counter
          * this.
@@ -751,6 +771,7 @@ static int osc_ldlm_completion_ast(struct ldlm_lock *dlmlock,
                          * to lock->l_lvb_data, store it in osc_lock.
                          */
                         LASSERT(dlmlock->l_lvb_data != NULL);
+                        lock_res_and_lock(dlmlock);
                         olck->ols_lvb = *(struct ost_lvb *)dlmlock->l_lvb_data;
                         if (olck->ols_lock == NULL)
                                 /*
@@ -767,6 +788,7 @@ static int osc_ldlm_completion_ast(struct ldlm_lock *dlmlock,
                                 osc_lock_granted(env, olck, dlmlock, dlmrc);
                         if (dlmrc != 0)
                                 cl_lock_error(env, lock, dlmrc);
+                        unlock_res_and_lock(dlmlock);
                         cl_lock_mutex_put(env, lock);
                         osc_ast_data_put(env, olck);
                         result = 0;
@@ -1038,6 +1060,7 @@ static void osc_lock_to_lockless(const struct lu_env *env,
                         slice->cls_ops = &osc_lock_lockless_ops;
                 }
         }
+        LASSERT(ergo(ols->ols_glimpse, !osc_lock_is_lockless(ols)));
 }
 
 /**
@@ -1273,7 +1296,7 @@ static int osc_lock_enqueue(const struct lu_env *env,
                         ols->ols_state = OLS_GRANTED;
                 }
         }
-
+        LASSERT(ergo(ols->ols_glimpse, !osc_lock_is_lockless(ols)));
         RETURN(result);
 }
 

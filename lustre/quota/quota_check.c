@@ -114,6 +114,7 @@ static int target_quotacheck_thread(void *data)
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         rc = target_quotacheck_callback(exp, oqctl);
+        class_export_put(exp);
 
         atomic_inc(qta->qta_sem);
 
@@ -155,6 +156,9 @@ int target_quota_check(struct obd_device *obd, struct obd_export *exp,
                 }
         }
 
+        /* we get ref for exp because target_quotacheck_callback() will use this
+         * export later b=18126 */
+        class_export_get(exp);
         rc = kernel_thread(target_quotacheck_thread, qta, CLONE_VM|CLONE_FILES);
         if (rc >= 0) {
                 CDEBUG(D_INFO, "%s: target_quotacheck_thread: %d\n",
@@ -162,6 +166,7 @@ int target_quota_check(struct obd_device *obd, struct obd_export *exp,
                 RETURN(0);
         }
 
+        class_export_put(exp);
         CERROR("%s: error starting quotacheck_thread: %d\n",
                obd->obd_name, rc);
         OBD_FREE_PTR(qta);
@@ -274,12 +279,14 @@ int lov_quota_check(struct obd_device *unused, struct obd_export *exp,
         ENTRY;
 
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                int err;
-
                 if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active) {
                         CERROR("lov idx %d inactive\n", i);
                         RETURN(-EIO);
                 }
+        }
+
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                int err;
 
                 err = obd_quotacheck(lov->lov_tgts[i]->ltd_exp, oqctl);
                 if (err && !rc)

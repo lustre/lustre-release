@@ -130,7 +130,6 @@ static int mdc_obd_add(const struct lu_env *env,
                 CERROR("target %s not set up\n", mdc->obd_name);
                 rc = -EINVAL;
         } else {
-                struct lustre_handle *conn = &desc->cl_conn;
                 struct obd_connect_data *ocd;
 
                 CDEBUG(D_CONFIG, "connect to %s(%s)\n",
@@ -153,13 +152,12 @@ static int mdc_obd_add(const struct lu_env *env,
                                          OBD_CONNECT_MDS_MDS |
                                          OBD_CONNECT_FID |
                                          OBD_CONNECT_AT;
-                rc = obd_connect(env, conn, mdc, &mdc->obd_uuid, ocd, NULL);
+                rc = obd_connect(env, &desc->cl_exp, mdc, &mdc->obd_uuid, ocd, NULL);
                 OBD_FREE_PTR(ocd);
                 if (rc) {
                         CERROR("target %s connect error %d\n",
                                mdc->obd_name, rc);
                 } else {
-                        desc->cl_exp = class_conn2export(conn);
                         /* set seq controller export for MDC0 if exists */
                         if (mc->mc_num == 0)
                                 ms->ms_control_exp =

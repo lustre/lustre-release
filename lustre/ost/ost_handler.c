@@ -751,9 +751,9 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 if (exp->exp_failed)
                         rc = -ENOTCONN;
                 else {
-                        sptlrpc_svc_wrap_bulk(req, desc);
-
-                        rc = ptlrpc_start_bulk_transfer(desc);
+                        rc = sptlrpc_svc_wrap_bulk(req, desc);
+                        if (rc == 0)
+                                rc = ptlrpc_start_bulk_transfer(desc);
                 }
 
                 if (rc == 0) {
@@ -978,6 +978,10 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                       local_nb[i].offset & ~CFS_PAGE_MASK,
                                       local_nb[i].len);
 
+        rc = sptlrpc_svc_prep_bulk(req, desc);
+        if (rc != 0)
+                GOTO(out_lock, rc);
+
         /* Check if client was evicted while we were doing i/o before touching
            network */
         if (desc->bd_export->exp_failed)
@@ -1012,22 +1016,17 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         DEBUG_REQ(D_ERROR, req, "Eviction on bulk GET");
                         rc = -ENOTCONN;
                         ptlrpc_abort_bulk(desc);
-                } else if (!desc->bd_success ||
-                           desc->bd_nob_transferred != desc->bd_nob) {
-                        DEBUG_REQ(D_ERROR, req, "%s bulk GET %d(%d)",
-                                  desc->bd_success ?
-                                  "truncated" : "network error on",
-                                  desc->bd_nob_transferred, desc->bd_nob);
+                } else if (!desc->bd_success) {
+                        DEBUG_REQ(D_ERROR, req, "network error on bulk GET");
                         /* XXX should this be a different errno? */
                         rc = -ETIMEDOUT;
+                } else {
+                        rc = sptlrpc_svc_unwrap_bulk(req, desc);
                 }
         } else {
                 DEBUG_REQ(D_ERROR, req, "ptlrpc_bulk_get failed: rc %d", rc);
         }
         no_reply = rc != 0;
-
-        if (rc == 0)
-                sptlrpc_svc_unwrap_bulk(req, desc);
 
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
@@ -1605,6 +1604,11 @@ static int ost_rw_hpreq_lock_match(struct ptlrpc_request *req,
         start = nb[0].offset & CFS_PAGE_MASK;
         end = (nb[ioo->ioo_bufcnt - 1].offset +
                nb[ioo->ioo_bufcnt - 1].len - 1) | ~CFS_PAGE_MASK;
+
+        LASSERT(lock->l_resource != NULL);
+        if (!osc_res_name_eq(ioo->ioo_id, ioo->ioo_gr, 
+                             &lock->l_resource->lr_name))
+                RETURN(0);
 
         if (!(lock->l_granted_mode & mode))
                 RETURN(0);

@@ -94,7 +94,6 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         struct lustre_cfg *lcfg;
         char  *peer = "MGS_UUID";
         struct obd_device *obd;
-        struct lustre_handle mgc_conn = {0, };
         struct obd_export *exp;
         char  *name = "mgc_dev";
         class_uuid_t uuid;
@@ -184,14 +183,12 @@ int liblustre_process_log(struct config_llog_instance *cfg,
 #endif
         ocd->ocd_version = LUSTRE_VERSION_CODE;
 
-        rc = obd_connect(NULL, &mgc_conn, obd, &mgc_uuid, ocd, NULL);
+        rc = obd_connect(NULL, &exp, obd, &mgc_uuid, ocd, NULL);
         if (rc) {
                 CERROR("cannot connect to %s at %s: rc = %d\n",
                        LUSTRE_MGS_OBDNAME, mgsnid, rc);
                 GOTO(out_cleanup, rc);
         }
-
-        exp = class_conn2export(&mgc_conn);
 
         ctxt = llog_get_context(exp->exp_obd, LLOG_CONFIG_REPL_CTXT);
         cfg->cfg_flags |= CFG_F_COMPAT146;

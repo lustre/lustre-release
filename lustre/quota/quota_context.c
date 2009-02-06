@@ -636,8 +636,10 @@ out:
 
         compute_lqs_after_removing_qunit(qunit);
 
-        /* wake up all waiters */
+        if (rc == 0)
+                rc = QUOTA_REQ_RETURNED;
         QUNIT_SET_STATE_AND_RC(qunit, QUNIT_FINISHED, rc);
+        /* wake up all waiters */
         wake_up_all(&qunit->lq_waitq);
 
         /* this is for dqacq_in_flight() */
@@ -664,7 +666,7 @@ out:
                  CERROR("adjust slave's qunit size failed!(rc:%d)\n", rc1);
                  RETURN(rc1);
          }
-         if (err || (rc && rc != -EBUSY && rc1 == 0) || is_master(qctxt))
+         if (err || (rc < 0 && rc != -EBUSY && rc1 == 0) || is_master(qctxt))
                 RETURN(err);
 
         /* reschedule another dqacq/dqrel if needed */
@@ -774,25 +776,56 @@ int check_qm(struct lustre_quota_ctxt *qctxt)
         RETURN(rc);
 }
 
+/* wake up all waiting threads when lqc_import is NULL */
+void dqacq_interrupt(struct lustre_quota_ctxt *qctxt)
+{
+        struct lustre_qunit *qunit, *tmp;
+        int i;
+        ENTRY;
+
+        spin_lock(&qunit_hash_lock);
+        for (i = 0; i < NR_DQHASH; i++) {
+                list_for_each_entry_safe(qunit, tmp, &qunit_hash[i], lq_hash) {
+                        if (qunit->lq_ctxt != qctxt)
+                                continue;
+
+                        /* Wake up all waiters. Do not change lq_state.
+                         * The waiters will check lq_rc which is kept as 0
+                         * if no others change it, then the waiters will return
+                         * -EAGAIN to caller who can perform related quota
+                         * acq/rel if necessary. */
+                        wake_up_all(&qunit->lq_waitq);
+                }
+        }
+        spin_unlock(&qunit_hash_lock);
+        EXIT;
+}
+
 static int got_qunit(struct lustre_qunit *qunit)
 {
-        int rc;
+        struct lustre_quota_ctxt *qctxt = qunit->lq_ctxt;
+        int rc = 0;
         ENTRY;
 
         spin_lock(&qunit->lq_lock);
         switch (qunit->lq_state) {
         case QUNIT_IN_HASH:
         case QUNIT_RM_FROM_HASH:
-                rc = 0;
                 break;
         case QUNIT_FINISHED:
                 rc = 1;
                 break;
         default:
-                rc = 0;
                 CERROR("invalid qunit state %d\n", qunit->lq_state);
         }
         spin_unlock(&qunit->lq_lock);
+
+        if (!rc) {
+                spin_lock(&qctxt->lqc_lock);
+                rc = !qctxt->lqc_import || !qctxt->lqc_valid;
+                spin_unlock(&qctxt->lqc_lock);
+        }
+
         RETURN(rc);
 }
 
@@ -952,16 +985,14 @@ wait_completion:
 
                 QDATA_DEBUG(p, "qunit(%p) is waiting for dqacq.\n", qunit);
                 l_wait_event(qunit->lq_waitq, got_qunit(qunit), &lwi);
-                /* rc = -EAGAIN, it means a quota req is finished;
+                /* rc = -EAGAIN, it means the quota master isn't ready yet
+                 * rc = QUOTA_REQ_RETURNED, it means a quota req is finished;
                  * rc = -EDQUOT, it means out of quota
                  * rc = -EBUSY, it means recovery is happening
                  * other rc < 0, it means real errors, functions who call
                  * schedule_dqacq should take care of this */
                 spin_lock(&qunit->lq_lock);
-                if (qunit->lq_rc == 0)
-                        rc = -EAGAIN;
-                else
-                        rc = qunit->lq_rc;
+                rc = qunit->lq_rc;
                 spin_unlock(&qunit->lq_lock);
                 CDEBUG(D_QUOTA, "qunit(%p) finishes waiting. (rc:%d)\n",
                        qunit, rc);
@@ -1057,10 +1088,7 @@ qctxt_wait_pending_dqacq(struct lustre_quota_ctxt *qctxt, unsigned int id,
                        qunit, qunit->lq_rc);
                 /* keep same as schedule_dqacq() b=17030 */
                 spin_lock(&qunit->lq_lock);
-                if (qunit->lq_rc == 0)
-                        rc = -EAGAIN;
-                else
-                        rc = qunit->lq_rc;
+                rc = qunit->lq_rc;
                 spin_unlock(&qunit->lq_lock);
                 /* this is for dqacq_in_flight() */
                 qunit_put(qunit);

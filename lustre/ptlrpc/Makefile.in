@@ -30,6 +30,7 @@ l_lock.c: @LUSTRE@/ldlm/l_lock.c
 interval_tree.c: @LUSTRE@/ldlm/interval_tree.c
 	ln -sf $< $@
 
+EXTRA_DIST = $(ptlrpc_objs:.o=.c) ptlrpc_internal.h
 EXTRA_PRE_CFLAGS := -I@LUSTRE@/ldlm
 
 @INCLUDE_RULES@

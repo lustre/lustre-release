@@ -88,14 +88,14 @@
  *       cl_lock::cll_guard, and will be automatically cleared by the sub-lock
  *       when the latter is destroyed. When a sub-lock is canceled, a
  *       reference to it is removed from the top-lock array, and top-lock is
- *       moved into CLS_NEW state. It is guaranteed that all sub-locks exits
+ *       moved into CLS_NEW state. It is guaranteed that all sub-locks exist
  *       while their top-lock is in CLS_HELD or CLS_CACHED states.
  *
  *     - IO's are not reference counted.
  *
  * To implement a connection between top and sub entities, lov layer is split
  * into two pieces: lov ("upper half"), and lovsub ("bottom half"), both
- * implementing full set of cl-interfaces. For example, top-object has clu and
+ * implementing full set of cl-interfaces. For example, top-object has vvp and
  * lov layers, and it's sub-object has lovsub and osc layers. lovsub layer is
  * used to track child-parent relationship.
  *

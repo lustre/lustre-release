@@ -82,26 +82,43 @@ void lov_getref(struct obd_device *obd)
         return;
 }
 
-static void __lov_del_obd(struct obd_device *obd, __u32 index);
+static void __lov_del_obd(struct obd_device *obd, struct lov_tgt_desc *tgt);
 
 void lov_putref(struct obd_device *obd)
 {
         struct lov_obd *lov = &obd->u.lov;
+
         mutex_down(&lov->lov_lock);
         /* ok to dec to 0 more than once -- ltd_exp's will be null */
         if (atomic_dec_and_test(&lov->lov_refcount) && lov->lov_death_row) {
+                CFS_LIST_HEAD(kill);
                 int i;
+                struct lov_tgt_desc *tgt, *n;
                 CDEBUG(D_CONFIG, "destroying %d lov targets\n",
                        lov->lov_death_row);
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                        if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_reap)
+                        tgt = lov->lov_tgts[i];
+
+                        if (!tgt || !tgt->ltd_reap)
                                 continue;
-                        /* Disconnect and delete from list */
-                        __lov_del_obd(obd, i);
+                        list_add(&tgt->ltd_kill, &kill);
+                        /* XXX - right now there is a dependency on ld_tgt_count
+                         * being the maximum tgt index for computing the
+                         * mds_max_easize. So we can't shrink it. */
+                        lov_ost_pool_remove(&lov->lov_packed, i);
+                        lov->lov_tgts[i] = NULL;
                         lov->lov_death_row--;
                 }
+                mutex_up(&lov->lov_lock);
+
+                list_for_each_entry_safe(tgt, n, &kill, ltd_kill) {
+                        list_del(&tgt->ltd_kill);
+                        /* Disconnect */
+                        __lov_del_obd(obd, tgt);
+                }
+        } else {
+                mutex_up(&lov->lov_lock);
         }
-        mutex_up(&lov->lov_lock);
 }
 
 static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
@@ -118,7 +135,6 @@ int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
         struct obd_uuid tgt_uuid;
         struct obd_device *tgt_obd;
         struct obd_uuid lov_osc_uuid = { "LOV_OSC_UUID" };
-        struct lustre_handle conn = {0, };
         struct obd_import *imp;
 
 #ifdef __KERNEL__
@@ -162,37 +178,26 @@ int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
                 ptlrpc_activate_import(imp);
         }
 
-        if (imp->imp_invalid) {
-                CERROR("not connecting OSC %s; administratively "
-                       "disabled\n", obd_uuid2str(&tgt_uuid));
-                rc = obd_register_observer(tgt_obd, obd);
-                if (rc) {
-                        CERROR("Target %s register_observer error %d; "
-                               "will not be able to reactivate\n",
-                               obd_uuid2str(&tgt_uuid), rc);
-                }
-                RETURN(0);
-        }
-
-        rc = obd_connect(NULL, &conn, tgt_obd, &lov_osc_uuid, data, NULL);
-        if (rc) {
-                CERROR("Target %s connect error %d\n",
-                       obd_uuid2str(&tgt_uuid), rc);
-                RETURN(rc);
-        }
-        lov->lov_tgts[index]->ltd_exp = class_conn2export(&conn);
-        if (!lov->lov_tgts[index]->ltd_exp) {
-                CERROR("Target %s: null export!\n", obd_uuid2str(&tgt_uuid));
-                RETURN(-ENODEV);
-        }
-
         rc = obd_register_observer(tgt_obd, obd);
         if (rc) {
                 CERROR("Target %s register_observer error %d\n",
                        obd_uuid2str(&tgt_uuid), rc);
-                obd_disconnect(lov->lov_tgts[index]->ltd_exp);
-                lov->lov_tgts[index]->ltd_exp = NULL;
                 RETURN(rc);
+        }
+
+
+        if (imp->imp_invalid) {
+                CERROR("not connecting OSC %s; administratively "
+                       "disabled\n", obd_uuid2str(&tgt_uuid));
+                RETURN(0);
+        }
+
+        rc = obd_connect(NULL, &lov->lov_tgts[index]->ltd_exp, tgt_obd,
+                         &lov_osc_uuid, data, NULL);
+        if (rc || !lov->lov_tgts[index]->ltd_exp) {
+                CERROR("Target %s connect error %d\n",
+                       obd_uuid2str(&tgt_uuid), rc);
+                RETURN(-ENODEV);
         }
 
         lov->lov_tgts[index]->ltd_reap = 0;
@@ -207,7 +212,7 @@ int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
 #ifdef __KERNEL__
         lov_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
         if (lov_proc_dir) {
-                struct obd_device *osc_obd = class_conn2obd(&conn);
+                struct obd_device *osc_obd = lov->lov_tgts[index]->ltd_exp->exp_obd;
                 cfs_proc_dir_entry_t *osc_symlink;
                 char name[MAX_STRING_SIZE];
 
@@ -237,20 +242,23 @@ int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
 }
 
 static int lov_connect(const struct lu_env *env,
-                       struct lustre_handle *conn, struct obd_device *obd,
+                       struct obd_export **exp, struct obd_device *obd,
                        struct obd_uuid *cluuid, struct obd_connect_data *data,
                        void *localdata)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
+        struct lustre_handle conn;
         int i, rc;
         ENTRY;
 
         CDEBUG(D_CONFIG, "connect #%d\n", lov->lov_connects);
 
-        rc = class_connect(conn, obd, cluuid);
+        rc = class_connect(&conn, obd, cluuid);
         if (rc)
                 RETURN(rc);
+
+        *exp = class_conn2export(&conn);
 
         /* Why should there ever be more than 1 connect? */
         lov->lov_connects++;
@@ -277,7 +285,7 @@ static int lov_connect(const struct lu_env *env,
                         continue;
 
                 rc = lov_notify(obd, lov->lov_tgts[i]->ltd_exp->exp_obd,
-                                OBD_NOTIFY_ACTIVE, (void *)&i);
+                                OBD_NOTIFY_CONNECT, (void *)&i);
                 if (rc) {
                         CERROR("%s error sending notify %d\n",
                                obd->obd_name, rc);
@@ -288,26 +296,22 @@ static int lov_connect(const struct lu_env *env,
         RETURN(0);
 }
 
-static int lov_disconnect_obd(struct obd_device *obd, __u32 index)
+static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
 {
         cfs_proc_dir_entry_t *lov_proc_dir;
         struct lov_obd *lov = &obd->u.lov;
         struct obd_device *osc_obd;
         int rc;
-
         ENTRY;
 
-        if (lov->lov_tgts[index] == NULL)
-                RETURN(-EINVAL);
-
-        osc_obd = class_exp2obd(lov->lov_tgts[index]->ltd_exp);
+        osc_obd = class_exp2obd(tgt->ltd_exp);
         CDEBUG(D_CONFIG, "%s: disconnecting target %s\n",
                obd->obd_name, osc_obd->obd_name);
 
-        if (lov->lov_tgts[index]->ltd_active) {
-                lov->lov_tgts[index]->ltd_active = 0;
+        if (tgt->ltd_active) {
+                tgt->ltd_active = 0;
                 lov->desc.ld_active_tgt_count--;
-                lov->lov_tgts[index]->ltd_exp->exp_obd->obd_inactive = 1;
+                tgt->ltd_exp->exp_obd->obd_inactive = 1;
         }
 
         lov_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
@@ -336,16 +340,16 @@ static int lov_disconnect_obd(struct obd_device *obd, __u32 index)
 
         obd_register_observer(osc_obd, NULL);
 
-        rc = obd_disconnect(lov->lov_tgts[index]->ltd_exp);
+        rc = obd_disconnect(tgt->ltd_exp);
         if (rc) {
                 CERROR("Target %s disconnect error %d\n",
-                       lov_uuid2str(lov, index), rc);
+                       tgt->ltd_uuid.uuid, rc);
                 rc = 0;
         }
 
-        qos_del_tgt(obd, index);
+        qos_del_tgt(obd, tgt);
 
-        lov->lov_tgts[index]->ltd_exp = NULL;
+        tgt->ltd_exp = NULL;
         RETURN(0);
 }
 
@@ -615,7 +619,7 @@ int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
                 GOTO(out, rc = 0);
 
         rc = lov_notify(obd, tgt->ltd_exp->exp_obd,
-                        active ? OBD_NOTIFY_ACTIVE : OBD_NOTIFY_INACTIVE,
+                        active ? OBD_NOTIFY_CONNECT : OBD_NOTIFY_INACTIVE,
                         (void *)&index);
 
 out:
@@ -671,12 +675,9 @@ out:
         RETURN(rc);
 }
 
-/* We are holding lov_lock */
-static void __lov_del_obd(struct obd_device *obd, __u32 index)
+static void __lov_del_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
 {
-        struct lov_obd *lov = &obd->u.lov;
         struct obd_device *osc_obd;
-        struct lov_tgt_desc *tgt = lov->lov_tgts[index];
 
         LASSERT(tgt);
         LASSERT(tgt->ltd_reap);
@@ -684,18 +685,12 @@ static void __lov_del_obd(struct obd_device *obd, __u32 index)
         osc_obd = class_exp2obd(tgt->ltd_exp);
 
         CDEBUG(D_CONFIG, "Removing tgt %s : %s\n",
-               lov_uuid2str(lov, index),
+               tgt->ltd_uuid.uuid,
                osc_obd ? osc_obd->obd_name : "<no obd>");
 
         if (tgt->ltd_exp)
-                lov_disconnect_obd(obd, index);
+                lov_disconnect_obd(obd, tgt);
 
-        /* XXX - right now there is a dependency on ld_tgt_count being the
-         * maximum tgt index for computing the mds_max_easize. So we can't
-         * shrink it. */
-
-        lov_ost_pool_remove(&lov->lov_packed, index);
-        lov->lov_tgts[index] = NULL;
         OBD_FREE_PTR(tgt);
 
         /* Manual cleanup - no cleanup logs to clean up the osc's.  We must
@@ -846,11 +841,12 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 static int lov_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 {
         int rc = 0;
+        struct lov_obd *lov = &obd->u.lov;
+
         ENTRY;
 
         switch (stage) {
         case OBD_CLEANUP_EARLY: {
-                struct lov_obd *lov = &obd->u.lov;
                 int i;
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                         if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active)
@@ -875,22 +871,19 @@ static int lov_cleanup(struct obd_device *obd)
         struct list_head *pos, *tmp;
         struct pool_desc *pool;
 
-        lprocfs_obd_cleanup(obd);
-
-        /* Delete hash entries and kill hash table before freeing pools
-         * and get to use after free issue. */
-        lustre_hash_exit(lov->lov_pools_hash_body);
-
         list_for_each_safe(pos, tmp, &lov->lov_pool_list) {
                 pool = list_entry(pos, struct pool_desc, pool_list);
                 /* free pool structs */
+                CDEBUG(D_INFO, "delete pool %p\n", pool);
                 lov_pool_del(obd, pool->pool_name);
         }
+        lustre_hash_exit(lov->lov_pools_hash_body);
         lov_ost_pool_free(&(lov->lov_qos.lq_rr.lqr_pool));
         lov_ost_pool_free(&lov->lov_packed);
 
         if (lov->lov_tgts) {
                 int i;
+                lov_getref(obd);
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                         if (!lov->lov_tgts[i])
                                 continue;
@@ -907,10 +900,14 @@ static int lov_cleanup(struct obd_device *obd)
                                        atomic_read(&lov->lov_refcount));
                         lov_del_target(obd, i, 0, 0);
                 }
+                lov_putref(obd);
                 OBD_FREE(lov->lov_tgts, sizeof(*lov->lov_tgts) *
                          lov->lov_tgt_size);
                 lov->lov_tgt_size = 0;
         }
+
+        /* clear pools parent proc entry only after all pools is killed */
+        lprocfs_obd_cleanup(obd);
 
         RETURN(0);
 }

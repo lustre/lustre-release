@@ -336,7 +336,7 @@ repeat:
                 lock->l_resource->lr_namespace->ns_timeouts++;
                 LDLM_ERROR(lock, "lock callback timer expired after %lds: "
                            "evicting client at %s ",
-                           cfs_time_current_sec()- lock->l_enqueued_time.tv_sec,
+                           cfs_time_current_sec()- lock->l_last_activity,
                            libcfs_nid2str(
                                    lock->l_export->exp_connection->c_peer.nid));
 
@@ -391,7 +391,7 @@ static int __ldlm_add_waiting_lock(struct ldlm_lock *lock, int seconds)
 
         if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT) ||
             OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_TIMEOUT))
-                seconds = 2;
+                seconds = 1;
 
         timeout = cfs_time_shift(seconds);
         if (likely(cfs_time_after(timeout, lock->l_callback_timeout)))
@@ -795,7 +795,6 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         struct ldlm_cb_set_arg *arg = data;
         struct ldlm_request    *body;
         struct ptlrpc_request  *req;
-        struct timeval          granted_time;
         long                    total_enqueue_wait;
         int                     instant_cancel = 0;
         int                     rc = 0;
@@ -804,14 +803,13 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         LASSERT(lock != NULL);
         LASSERT(data != NULL);
 
-        do_gettimeofday(&granted_time);
-        total_enqueue_wait = cfs_timeval_sub(&granted_time,
-                                             &lock->l_enqueued_time, NULL);
+        total_enqueue_wait = cfs_time_sub(cfs_time_current_sec(),
+                                          lock->l_last_activity);
 
-        if (total_enqueue_wait / ONE_MILLION > obd_timeout)
+        if (total_enqueue_wait > obd_timeout)
                 /* non-fatal with AT - change to LDLM_DEBUG? */
-                LDLM_ERROR(lock, "enqueue wait took %luus from "CFS_TIME_T,
-                           total_enqueue_wait, lock->l_enqueued_time.tv_sec);
+                LDLM_WARN(lock, "enqueue wait took %lus from "CFS_TIME_T,
+                          total_enqueue_wait, lock->l_last_activity);
 
         req = ptlrpc_request_alloc(lock->l_export->exp_imp_reverse,
                                     &RQF_LDLM_CP_CALLBACK);
@@ -848,13 +846,13 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                 unlock_res_and_lock(lock);
         }
 
-        LDLM_DEBUG(lock, "server preparing completion AST (after %ldus wait)",
+        LDLM_DEBUG(lock, "server preparing completion AST (after %lds wait)",
                    total_enqueue_wait);
 
         /* Server-side enqueue wait time estimate, used in
             __ldlm_add_waiting_lock to set future enqueue timers */
         at_add(&lock->l_resource->lr_namespace->ns_at_estimate,
-               total_enqueue_wait / ONE_MILLION);
+               total_enqueue_wait);
 
         ptlrpc_request_set_replen(req);
 
@@ -867,6 +865,8 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         lock_res_and_lock(lock);
         if (lock->l_flags & LDLM_FL_AST_SENT) {
                 body->lock_flags |= LDLM_FL_AST_SENT;
+                /* copy ast flags like LDLM_FL_DISCARD_DATA */
+                body->lock_flags |= (lock->l_flags & LDLM_AST_FLAGS);
 
                 /* We might get here prior to ldlm_handle_enqueue setting
                  * LDLM_FL_CANCEL_ON_BLOCK flag. Then we will put this lock
@@ -1090,7 +1090,7 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
         if (!lock)
                 GOTO(out, rc = -ENOMEM);
 
-        do_gettimeofday(&lock->l_enqueued_time);
+        lock->l_last_activity = cfs_time_current_sec();
         lock->l_remote_handle = dlm_req->lock_handle[0];
         LDLM_DEBUG(lock, "server-side enqueue handler, new lock created");
 
@@ -1303,7 +1303,7 @@ int ldlm_handle_convert0(struct ptlrpc_request *req,
 
                 LDLM_DEBUG(lock, "server-side convert handler START");
 
-                do_gettimeofday(&lock->l_enqueued_time);
+                lock->l_last_activity = cfs_time_current_sec();
                 res = ldlm_lock_convert(lock, dlm_req->lock_desc.l_req_mode,
                                         &dlm_rep->lock_flags);
                 if (res) {
@@ -1812,7 +1812,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
-        if ((lock->l_flags & LDLM_FL_FAIL_LOC) && 
+        if ((lock->l_flags & LDLM_FL_FAIL_LOC) &&
             lustre_msg_get_opc(req->rq_reqmsg) == LDLM_BL_CALLBACK)
                 OBD_RACE(OBD_FAIL_LDLM_CP_BL_RACE);
 
@@ -2435,8 +2435,8 @@ int __init ldlm_init(void)
                 return -ENOMEM;
 
         ldlm_lock_slab = cfs_mem_cache_create("ldlm_locks",
-                                           sizeof(struct ldlm_lock), 0,
-                                           SLAB_HWCACHE_ALIGN);
+                                      sizeof(struct ldlm_lock), 0,
+                                      SLAB_HWCACHE_ALIGN | SLAB_DESTROY_BY_RCU);
         if (ldlm_lock_slab == NULL) {
                 cfs_mem_cache_destroy(ldlm_resource_slab);
                 return -ENOMEM;
@@ -2492,6 +2492,7 @@ EXPORT_SYMBOL(ldlm_lock_dump);
 EXPORT_SYMBOL(ldlm_lock_dump_handle);
 EXPORT_SYMBOL(ldlm_cancel_locks_for_export);
 EXPORT_SYMBOL(ldlm_reprocess_all_ns);
+EXPORT_SYMBOL(ldlm_lock_allow_match_locked);
 EXPORT_SYMBOL(ldlm_lock_allow_match);
 EXPORT_SYMBOL(ldlm_lock_downgrade);
 EXPORT_SYMBOL(ldlm_lock_convert);

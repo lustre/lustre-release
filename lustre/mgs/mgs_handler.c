@@ -63,37 +63,39 @@
 
 /* Establish a connection to the MGS.*/
 static int mgs_connect(const struct lu_env *env,
-                       struct lustre_handle *conn, struct obd_device *obd,
+                       struct obd_export **exp, struct obd_device *obd,
                        struct obd_uuid *cluuid, struct obd_connect_data *data,
                        void *localdata)
 {
-        struct obd_export *exp;
+        struct obd_export *lexp;
+        struct lustre_handle conn = { 0 };
         int rc;
         ENTRY;
 
-        if (!conn || !obd || !cluuid)
+        if (!exp || !obd || !cluuid)
                 RETURN(-EINVAL);
 
-        rc = class_connect(conn, obd, cluuid);
+        rc = class_connect(&conn, obd, cluuid);
         if (rc)
                 RETURN(rc);
-        exp = class_conn2export(conn);
-        LASSERT(exp);
 
-        mgs_counter_incr(exp, LPROC_MGS_CONNECT);
+        lexp = class_conn2export(&conn);
+        LASSERT(lexp);
+
+        mgs_counter_incr(lexp, LPROC_MGS_CONNECT);
 
         if (data != NULL) {
                 data->ocd_connect_flags &= MGS_CONNECT_SUPPORTED;
-                exp->exp_connect_flags = data->ocd_connect_flags;
+                lexp->exp_connect_flags = data->ocd_connect_flags;
                 data->ocd_version = LUSTRE_VERSION_CODE;
         }
 
-        rc = mgs_client_add(obd, exp, localdata);
+        rc = mgs_client_add(obd, lexp, localdata);
 
         if (rc) {
-                class_disconnect(exp);
+                class_disconnect(lexp);
         } else {
-                class_export_put(exp);
+                *exp = lexp;
         }
 
         RETURN(rc);
@@ -220,7 +222,11 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
                            "mgs_ldlm_client", &obd->obd_ldlm_client);
 
-        LASSERT(!lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb)));
+        if (lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb))) {
+                CERROR("%s: Underlying device is marked as read-only. "
+                       "Setup failed\n", obd->obd_name);
+                GOTO(err_ops, rc = -EROFS);
+        }
 
         rc = mgs_fs_setup(obd, mnt);
         if (rc) {

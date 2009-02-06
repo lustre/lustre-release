@@ -51,11 +51,15 @@ __u32 lgss_get_mic(
                 struct gss_ctx          *ctx,
                 int                      msgcnt,
                 rawobj_t                *msgs,
+                int                      iovcnt,
+                lnet_kiov_t             *iovs,
                 rawobj_t                *mic_token);
 __u32 lgss_verify_mic(
                 struct gss_ctx          *ctx,
                 int                      msgcnt,
                 rawobj_t                *msgs,
+                int                      iovcnt,
+                lnet_kiov_t             *iovs,
                 rawobj_t                *mic_token);
 __u32 lgss_wrap(
                 struct gss_ctx          *ctx,
@@ -68,12 +72,18 @@ __u32 lgss_unwrap(
                 rawobj_t                *gsshdr,
                 rawobj_t                *token,
                 rawobj_t                *out_msg);
-__u32 lgss_plain_encrypt(
-                struct gss_ctx          *ctx,
-                int                      decrypt,
-                int                      length,
-                void                    *in_buf,
-                void                    *out_buf);
+__u32 lgss_prep_bulk(
+                struct gss_ctx          *gctx,
+                struct ptlrpc_bulk_desc *desc);
+__u32 lgss_wrap_bulk(
+                struct gss_ctx          *gctx,
+                struct ptlrpc_bulk_desc *desc,
+                rawobj_t                *token,
+                int                      adj_nob);
+__u32 lgss_unwrap_bulk(
+                struct gss_ctx          *gctx,
+                struct ptlrpc_bulk_desc *desc,
+                rawobj_t                *token);
 __u32 lgss_delete_sec_context(
                 struct gss_ctx         **ctx);
 int lgss_display(
@@ -115,11 +125,15 @@ struct gss_api_ops {
                         struct gss_ctx         *ctx,
                         int                     msgcnt,
                         rawobj_t               *msgs,
+                        int                     iovcnt,
+                        lnet_kiov_t            *iovs,
                         rawobj_t               *mic_token);
         __u32 (*gss_verify_mic)(
                         struct gss_ctx         *ctx,
                         int                     msgcnt,
                         rawobj_t               *msgs,
+                        int                     iovcnt,
+                        lnet_kiov_t            *iovs,
                         rawobj_t               *mic_token);
         __u32 (*gss_wrap)(
                         struct gss_ctx         *ctx,
@@ -132,12 +146,18 @@ struct gss_api_ops {
                         rawobj_t               *gsshdr,
                         rawobj_t               *token,
                         rawobj_t               *out_msg);
-        __u32 (*gss_plain_encrypt)(
-                        struct gss_ctx         *ctx,
-                        int                     decrypt,
-                        int                     length,
-                        void                   *in_buf,
-                        void                   *out_buf);
+        __u32 (*gss_prep_bulk)(
+                        struct gss_ctx         *gctx,
+                        struct ptlrpc_bulk_desc *desc);
+        __u32 (*gss_wrap_bulk)(
+                        struct gss_ctx         *gctx,
+                        struct ptlrpc_bulk_desc *desc,
+                        rawobj_t               *token,
+                        int                     adj_nob);
+        __u32 (*gss_unwrap_bulk)(
+                        struct gss_ctx         *gctx,
+                        struct ptlrpc_bulk_desc *desc,
+                        rawobj_t               *token);
         void (*gss_delete_sec_context)(
                         void                   *ctx);
         int  (*gss_display)(

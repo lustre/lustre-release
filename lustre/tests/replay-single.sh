@@ -19,8 +19,8 @@ GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0
 
 # Skip these tests
-# bug number:  17466
-ALWAYS_EXCEPT="61d   $REPLAY_SINGLE_EXCEPT"
+# bug number:  17466 15962
+ALWAYS_EXCEPT="61d   33b $REPLAY_SINGLE_EXCEPT"
 
 if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
     CONFIG_EXCEPTIONS="0b 42 47 61a 61c"
@@ -730,7 +730,7 @@ test_33a() {	# was test_33
 }
 run_test 33a "abort recovery before client does replay"
 
-# Stale FID sequence
+# Stale FID sequence bug 15962
 test_33b() {	# was test_33a
     replay_barrier $SINGLEMDS
     createmany -o $DIR/$tfile-%d 10
@@ -1112,6 +1112,8 @@ test_53a() {
 run_test 53a "|X| close request while two MDC requests in flight"
 
 test_53b() {
+        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+
         mkdir -p $DIR/${tdir}-1
         mkdir -p $DIR/${tdir}-2
         multiop $DIR/${tdir}-1/f O_c &
@@ -1141,6 +1143,8 @@ test_53b() {
 run_test 53b "|X| open request while two MDC requests in flight"
 
 test_53c() {
+        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+
         mkdir -p $DIR/${tdir}-1
         mkdir -p $DIR/${tdir}-2
         multiop $DIR/${tdir}-1/f O_c &
@@ -1172,6 +1176,8 @@ test_53c() {
 run_test 53c "|X| open request and close request while two MDC requests in flight"
 
 test_53d() {
+        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+
         mkdir -p $DIR/${tdir}-1
         mkdir -p $DIR/${tdir}-2
         multiop $DIR/${tdir}-1/f O_c &
@@ -1198,6 +1204,8 @@ test_53d() {
 run_test 53d "|X| close reply while two MDC requests in flight"
 
 test_53e() {
+        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+
         mkdir -p $DIR/${tdir}-1
         mkdir -p $DIR/${tdir}-2
         multiop $DIR/${tdir}-1/f O_c &
@@ -1227,6 +1235,8 @@ test_53e() {
 run_test 53e "|X| open reply while two MDC requests in flight"
 
 test_53f() {
+        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+
         mkdir -p $DIR/${tdir}-1
         mkdir -p $DIR/${tdir}-2
         multiop $DIR/${tdir}-1/f O_c &
@@ -1258,6 +1268,8 @@ test_53f() {
 run_test 53f "|X| open reply and close reply while two MDC requests in flight"
 
 test_53g() {
+        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+
         mkdir -p $DIR/${tdir}-1
         mkdir -p $DIR/${tdir}-2
         multiop $DIR/${tdir}-1/f O_c &
@@ -1289,6 +1301,8 @@ test_53g() {
 run_test 53g "|X| drop open reply and close request while close and open are both in flight"
 
 test_53h() {
+        rm -rf $DIR/${tdir}-1 $DIR/${tdir}-2
+
         mkdir -p $DIR/${tdir}-1
         mkdir -p $DIR/${tdir}-2
         multiop $DIR/${tdir}-1/f O_c &
@@ -1513,10 +1527,31 @@ run_test 62 "don't mis-drop resent replay"
 
 #Adaptive Timeouts (bug 3055)
 AT_MAX_SET=0
-# Suppose that all osts have the same at_max
-for facet in mds client ost; do
-    eval AT_MAX_SAVE_${facet}=$(at_max_get $facet)
-done
+
+at_cleanup () {
+    local var
+    local facet
+    local at_new
+
+    echo "Cleaning up AT ..."
+    if [ -n "$ATOLDBASE" ]; then
+        local at_history=$(do_facet mds "find /sys/ -name at_history")
+        do_facet mds "echo $ATOLDBASE >> $at_history" || true
+        do_facet ost1 "echo $ATOLDBASE >> $at_history" || true
+    fi
+
+    if [ $AT_MAX_SET -ne 0 ]; then
+        for facet in mds client ost; do
+            var=AT_MAX_SAVE_${facet}
+            echo restore AT on $facet to saved value ${!var}
+            at_max_set ${!var} $facet
+            at_new=$(at_max_get $facet)
+            echo Restored AT value on $facet $at_new
+            [ $at_new -eq ${!var} ] || \
+            error "$facet : AT value was not restored SAVED ${!var} NEW $at_new"
+        done
+    fi
+}
 
 at_start()
 {
@@ -1526,8 +1561,15 @@ at_start()
         return 1
     fi
 
+    # Save at_max original values
+    local facet
+    if [ $AT_MAX_SET -eq 0 ]; then
+        # Suppose that all osts have the same at_max
+        for facet in mds client ost; do
+            eval AT_MAX_SAVE_${facet}=$(at_max_get $facet)
+        done
+    fi
     local at_max
-
     for facet in mds client ost; do
         at_max=$(at_max_get $facet)
         if [ $at_max -ne $at_max_new ]; then
@@ -1736,24 +1778,7 @@ test_68 () #bug 13813
 }
 run_test 68 "AT: verify slowing locks"
 
-if [ -n "$ATOLDBASE" ]; then
-    at_history=$(do_facet mds "find /sys/ -name at_history")
-    do_facet mds "echo $ATOLDBASE >> $at_history" || true
-    do_facet ost1 "echo $ATOLDBASE >> $at_history" || true
-fi
-
-if [ $AT_MAX_SET -ne 0 ]; then
-    for facet in mds client ost; do
-        var=AT_MAX_SAVE_${facet}
-        echo restore AT on $facet to saved value ${!var}
-        at_max_set ${!var} $facet
-        AT_NEW=$(at_max_get $facet)
-        echo Restored AT value on $facet $AT_NEW 
-        [ $AT_NEW -ne ${!var} ] && \
-            error "$facet : AT value was not restored SAVED ${!var} NEW $AT_NEW"
-    done
-fi
-
+at_cleanup
 # end of AT tests includes above lines
 
 

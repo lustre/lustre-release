@@ -50,7 +50,6 @@
 #include <md_object.h>
 
 struct mdc_cli_desc {
-        struct lustre_handle     cl_conn;
         /* uuid of remote MDT to connect */
         struct obd_uuid          cl_srv_uuid;
         /* mdc uuid */

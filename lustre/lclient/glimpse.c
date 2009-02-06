@@ -118,11 +118,17 @@ int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
                         *descr = whole_file;
                         descr->cld_obj   = clob;
                         descr->cld_mode  = CLM_PHANTOM;
-                        /* The lockreq for glimpse should be mandatory,
-                         * otherwise, osc may decide to use lockless */
-                        io->ci_lockreq = CILR_MANDATORY;
                         cio->cui_glimpse = 1;
-                        lock = cl_lock_request(env, io, descr, CEF_ASYNC,
+                        /*
+                         * CEF_ASYNC is used because glimpse sub-locks cannot
+                         * deadlock (because they never conflict with other
+                         * locks) and, hence, can be enqueued out-of-order.
+                         *
+                         * CEF_MUST protects glimpse lock from conversion into
+                         * a lockless mode.
+                         */
+                        lock = cl_lock_request(env, io, descr,
+                                               CEF_ASYNC|CEF_MUST,
                                                "glimpse", cfs_current());
                         cio->cui_glimpse = 0;
                         if (!IS_ERR(lock)) {

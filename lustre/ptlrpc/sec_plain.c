@@ -71,44 +71,124 @@ static struct ptlrpc_svc_ctx    plain_svc_ctx;
 static unsigned int plain_at_offset;
 
 /*
- * flavor flags (maximum 8 flags)
- */
-#define PLAIN_WFLVR_FLAGS_OFFSET        (12)
-#define PLAIN_WFLVR_FLAG_BULK           (1 << (0 + PLAIN_WFLVR_FLAGS_OFFSET))
-#define PLAIN_WFLVR_FLAG_USER           (1 << (1 + PLAIN_WFLVR_FLAGS_OFFSET))
-
-#define PLAIN_WFLVR_HAS_BULK(wflvr)      \
-        (((wflvr) & PLAIN_WFLVR_FLAG_BULK) != 0)
-#define PLAIN_WFLVR_HAS_USER(wflvr)      \
-        (((wflvr) & PLAIN_WFLVR_FLAG_USER) != 0)
-
-#define PLAIN_WFLVR_TO_RPC(wflvr)       \
-        ((wflvr) & ((1 << PLAIN_WFLVR_FLAGS_OFFSET) - 1))
-
-/*
- * similar to null sec, temporarily use the third byte of lm_secflvr to identify
- * the source sec part.
- */
-static inline
-void plain_encode_sec_part(struct lustre_msg *msg, enum lustre_sec_part sp)
-{
-        msg->lm_secflvr |= (((__u32) sp) & 0xFF) << 16;
-}
-
-static inline
-enum lustre_sec_part plain_decode_sec_part(struct lustre_msg *msg)
-{
-        return (msg->lm_secflvr >> 16) & 0xFF;
-}
-
-/*
  * for simplicity, plain policy rpc use fixed layout.
  */
-#define PLAIN_PACK_SEGMENTS             (3)
+#define PLAIN_PACK_SEGMENTS             (4)
 
-#define PLAIN_PACK_MSG_OFF              (0)
-#define PLAIN_PACK_USER_OFF             (1)
-#define PLAIN_PACK_BULK_OFF             (2)
+#define PLAIN_PACK_HDR_OFF              (0)
+#define PLAIN_PACK_MSG_OFF              (1)
+#define PLAIN_PACK_USER_OFF             (2)
+#define PLAIN_PACK_BULK_OFF             (3)
+
+#define PLAIN_FL_USER                   (0x01)
+#define PLAIN_FL_BULK                   (0x02)
+
+struct plain_header {
+        __u8            ph_ver;            /* 0 */
+        __u8            ph_flags;
+        __u8            ph_sp;             /* source */
+        __u8            ph_bulk_hash_alg;  /* complete flavor desc */
+        __u8            ph_pad[4];
+};
+
+struct plain_bulk_token {
+        __u8            pbt_hash[8];
+};
+
+#define PLAIN_BSD_SIZE \
+        (sizeof(struct ptlrpc_bulk_sec_desc) + sizeof(struct plain_bulk_token))
+
+/****************************************
+ * bulk checksum helpers                *
+ ****************************************/
+
+static int plain_unpack_bsd(struct lustre_msg *msg)
+{
+        struct ptlrpc_bulk_sec_desc *bsd;
+
+        if (bulk_sec_desc_unpack(msg, PLAIN_PACK_BULK_OFF))
+                return -EPROTO;
+
+        bsd = lustre_msg_buf(msg, PLAIN_PACK_BULK_OFF, PLAIN_BSD_SIZE);
+        if (bsd == NULL) {
+                CERROR("bulk sec desc has short size %d\n",
+                       lustre_msg_buflen(msg, PLAIN_PACK_BULK_OFF));
+                return -EPROTO;
+        }
+
+        if (bsd->bsd_svc != SPTLRPC_BULK_SVC_NULL &&
+            bsd->bsd_svc != SPTLRPC_BULK_SVC_INTG) {
+                CERROR("invalid bulk svc %u\n", bsd->bsd_svc);
+                return -EPROTO;
+        }
+
+        return 0;
+}
+
+static int plain_generate_bulk_csum(struct ptlrpc_bulk_desc *desc,
+                                    __u8 hash_alg,
+                                    struct plain_bulk_token *token)
+{
+        if (hash_alg == BULK_HASH_ALG_NULL)
+                return 0;
+
+        memset(token->pbt_hash, 0, sizeof(token->pbt_hash));
+        return sptlrpc_get_bulk_checksum(desc, hash_alg, token->pbt_hash,
+                                         sizeof(token->pbt_hash));
+}
+
+static int plain_verify_bulk_csum(struct ptlrpc_bulk_desc *desc,
+                                  __u8 hash_alg,
+                                  struct plain_bulk_token *tokenr)
+{
+        struct plain_bulk_token tokenv;
+        int                     rc;
+
+        if (hash_alg == BULK_HASH_ALG_NULL)
+                return 0;
+
+        memset(&tokenv.pbt_hash, 0, sizeof(tokenv.pbt_hash));
+        rc = sptlrpc_get_bulk_checksum(desc, hash_alg, tokenv.pbt_hash,
+                                       sizeof(tokenv.pbt_hash));
+        if (rc)
+                return rc;
+
+        if (memcmp(tokenr->pbt_hash, tokenv.pbt_hash, sizeof(tokenr->pbt_hash)))
+                return -EACCES;
+        return 0;
+}
+
+#ifdef __KERNEL__
+static void corrupt_bulk_data(struct ptlrpc_bulk_desc *desc)
+{
+        char           *ptr;
+        unsigned int    off, i;
+
+        for (i = 0; i < desc->bd_iov_count; i++) {
+                if (desc->bd_iov[i].kiov_len == 0)
+                        continue;
+
+                ptr = cfs_kmap(desc->bd_iov[i].kiov_page);
+                off = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
+                ptr[off] ^= 0x1;
+                cfs_kunmap(desc->bd_iov[i].kiov_page);
+                return;
+        }
+}
+#else
+static void corrupt_bulk_data(struct ptlrpc_bulk_desc *desc)
+{
+        unsigned int    i;
+
+        for (i = 0; i < desc->bd_iov_count; i++) {
+                if (desc->bd_iov[i].iov_len == 0)
+                        continue;
+
+                ((char *)desc->bd_iov[i].iov_base)[i] ^= 0x1;
+                return;
+        }
+}
+#endif /* __KERNEL__ */
 
 /****************************************
  * cli_ctx apis                         *
@@ -131,16 +211,22 @@ int plain_ctx_validate(struct ptlrpc_cli_ctx *ctx)
 static
 int plain_ctx_sign(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 {
-        struct lustre_msg_v2 *msg = req->rq_reqbuf;
+        struct lustre_msg   *msg = req->rq_reqbuf;
+        struct plain_header *phdr;
         ENTRY;
 
         msg->lm_secflvr = req->rq_flvr.sf_rpc;
-        if (req->rq_pack_bulk)
-                msg->lm_secflvr |= PLAIN_WFLVR_FLAG_BULK;
-        if (req->rq_pack_udesc)
-                msg->lm_secflvr |= PLAIN_WFLVR_FLAG_USER;
 
-        plain_encode_sec_part(msg, ctx->cc_sec->ps_part);
+        phdr = lustre_msg_buf(msg, PLAIN_PACK_HDR_OFF, 0);
+        phdr->ph_ver = 0;
+        phdr->ph_flags = 0;
+        phdr->ph_sp = ctx->cc_sec->ps_part;
+        phdr->ph_bulk_hash_alg = req->rq_flvr.u_bulk.hash.hash_alg;
+
+        if (req->rq_pack_udesc)
+                phdr->ph_flags |= PLAIN_FL_USER;
+        if (req->rq_pack_bulk)
+                phdr->ph_flags |= PLAIN_FL_BULK;
 
         req->rq_reqdata_len = lustre_msg_size_v2(msg->lm_bufcount,
                                                  msg->lm_buflens);
@@ -150,8 +236,9 @@ int plain_ctx_sign(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 static
 int plain_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 {
-        struct lustre_msg *msg = req->rq_repdata;
-        __u32              cksum;
+        struct lustre_msg   *msg = req->rq_repdata;
+        struct plain_header *phdr;
+        __u32                cksum;
         ENTRY;
 
         if (msg->lm_bufcount != PLAIN_PACK_SEGMENTS) {
@@ -159,9 +246,26 @@ int plain_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
                 RETURN(-EPROTO);
         }
 
+        phdr = lustre_msg_buf(msg, PLAIN_PACK_HDR_OFF, sizeof(*phdr));
+        if (phdr == NULL) {
+                CERROR("missing plain header\n");
+                RETURN(-EPROTO);
+        }
+
+        if (phdr->ph_ver != 0) {
+                CERROR("Invalid header version\n");
+                RETURN(-EPROTO);
+        }
+
         /* expect no user desc in reply */
-        if (PLAIN_WFLVR_HAS_USER(msg->lm_secflvr)) {
+        if (phdr->ph_flags & PLAIN_FL_USER) {
                 CERROR("Unexpected udesc flag in reply\n");
+                RETURN(-EPROTO);
+        }
+
+        if (phdr->ph_bulk_hash_alg != req->rq_flvr.u_bulk.hash.hash_alg) {
+                CERROR("reply bulk flavor %u != %u\n", phdr->ph_bulk_hash_alg,
+                       req->rq_flvr.u_bulk.hash.hash_alg);
                 RETURN(-EPROTO);
         }
 
@@ -179,16 +283,15 @@ int plain_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
                  * in reply, except for early reply */
                 if (!req->rq_early &&
                     !equi(req->rq_pack_bulk == 1,
-                          PLAIN_WFLVR_HAS_BULK(msg->lm_secflvr))) {
+                          phdr->ph_flags & PLAIN_FL_BULK)) {
                         CERROR("%s bulk checksum in reply\n",
                                req->rq_pack_bulk ? "Missing" : "Unexpected");
                         RETURN(-EPROTO);
                 }
 
-                if (PLAIN_WFLVR_HAS_BULK(msg->lm_secflvr) &&
-                    bulk_sec_desc_unpack(msg, PLAIN_PACK_BULK_OFF)) {
-                        CERROR("Mal-formed bulk checksum reply\n");
-                        RETURN(-EINVAL);
+                if (phdr->ph_flags & PLAIN_FL_BULK) {
+                        if (plain_unpack_bsd(msg))
+                                RETURN(-EPROTO);
                 }
         }
 
@@ -202,13 +305,42 @@ int plain_cli_wrap_bulk(struct ptlrpc_cli_ctx *ctx,
                         struct ptlrpc_request *req,
                         struct ptlrpc_bulk_desc *desc)
 {
+        struct ptlrpc_bulk_sec_desc *bsd;
+        struct plain_bulk_token     *token;
+        int                          rc;
+
         LASSERT(req->rq_pack_bulk);
         LASSERT(req->rq_reqbuf->lm_bufcount == PLAIN_PACK_SEGMENTS);
 
-        return bulk_csum_cli_request(desc, req->rq_bulk_read,
-                                     req->rq_flvr.sf_bulk_hash,
-                                     req->rq_reqbuf,
-                                     PLAIN_PACK_BULK_OFF);
+        bsd = lustre_msg_buf(req->rq_reqbuf, PLAIN_PACK_BULK_OFF, 0);
+        token = (struct plain_bulk_token *) bsd->bsd_data;
+
+        bsd->bsd_version = 0;
+        bsd->bsd_flags = 0;
+        bsd->bsd_type = SPTLRPC_BULK_DEFAULT;
+        bsd->bsd_svc = SPTLRPC_FLVR_BULK_SVC(req->rq_flvr.sf_rpc);
+
+        if (bsd->bsd_svc == SPTLRPC_BULK_SVC_NULL)
+                RETURN(0);
+
+        if (req->rq_bulk_read)
+                RETURN(0);
+
+        rc = plain_generate_bulk_csum(desc, req->rq_flvr.u_bulk.hash.hash_alg,
+                                      token);
+        if (rc) {
+                CERROR("bulk write: failed to compute checksum: %d\n", rc);
+        } else {
+                /*
+                 * for sending we only compute the wrong checksum instead
+                 * of corrupting the data so it is still correct on a redo
+                 */
+                if (OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_SEND) &&
+                    req->rq_flvr.u_bulk.hash.hash_alg != BULK_HASH_ALG_NULL)
+                        token->pbt_hash[0] ^= 0x1;
+        }
+
+        return rc;
 }
 
 static
@@ -216,13 +348,45 @@ int plain_cli_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
                           struct ptlrpc_request *req,
                           struct ptlrpc_bulk_desc *desc)
 {
+        struct ptlrpc_bulk_sec_desc *bsdr, *bsdv;
+        struct plain_bulk_token     *tokenr, *tokenv;
+        int                          rc;
+#ifdef __KERNEL__
+        int                          i, nob;
+#endif
+
         LASSERT(req->rq_pack_bulk);
         LASSERT(req->rq_reqbuf->lm_bufcount == PLAIN_PACK_SEGMENTS);
         LASSERT(req->rq_repdata->lm_bufcount == PLAIN_PACK_SEGMENTS);
 
-        return bulk_csum_cli_reply(desc, req->rq_bulk_read,
-                                   req->rq_reqbuf, PLAIN_PACK_BULK_OFF,
-                                   req->rq_repdata, PLAIN_PACK_BULK_OFF);
+        bsdr = lustre_msg_buf(req->rq_reqbuf, PLAIN_PACK_BULK_OFF, 0);
+        tokenr = (struct plain_bulk_token *) bsdr->bsd_data;
+        bsdv = lustre_msg_buf(req->rq_repdata, PLAIN_PACK_BULK_OFF, 0);
+        tokenv = (struct plain_bulk_token *) bsdv->bsd_data;
+
+        if (req->rq_bulk_write) {
+                if (bsdv->bsd_flags & BSD_FL_ERR)
+                        return -EIO;
+                return 0;
+        }
+
+#ifdef __KERNEL__
+        /* fix the actual data size */
+        for (i = 0, nob = 0; i < desc->bd_iov_count; i++) {
+                if (desc->bd_iov[i].kiov_len + nob > desc->bd_nob_transferred) {
+                        desc->bd_iov[i].kiov_len =
+                                desc->bd_nob_transferred - nob;
+                }
+                nob += desc->bd_iov[i].kiov_len;
+        }
+#endif
+
+        rc = plain_verify_bulk_csum(desc, req->rq_flvr.u_bulk.hash.hash_alg,
+                                    tokenv);
+        if (rc)
+                CERROR("bulk read: client verify failed: %d\n", rc);
+
+        return rc;
 }
 
 /****************************************
@@ -303,13 +467,7 @@ struct ptlrpc_sec *plain_create_sec(struct obd_import *imp,
         struct ptlrpc_cli_ctx  *ctx;
         ENTRY;
 
-        LASSERT(RPC_FLVR_POLICY(sf->sf_rpc) == SPTLRPC_POLICY_PLAIN);
-
-        if (sf->sf_bulk_ciph != BULK_CIPH_ALG_NULL) {
-                CERROR("plain policy don't support bulk cipher: %u\n",
-                       sf->sf_bulk_ciph);
-                RETURN(NULL);
-        }
+        LASSERT(SPTLRPC_FLVR_POLICY(sf->sf_rpc) == SPTLRPC_POLICY_PLAIN);
 
         OBD_ALLOC_PTR(plsec);
         if (plsec == NULL)
@@ -410,9 +568,10 @@ int plain_alloc_reqbuf(struct ptlrpc_sec *sec,
                        int msgsize)
 {
         __u32 buflens[PLAIN_PACK_SEGMENTS] = { 0, };
-        int alloc_len;
+        int   alloc_len;
         ENTRY;
 
+        buflens[PLAIN_PACK_HDR_OFF] = sizeof(struct plain_header);
         buflens[PLAIN_PACK_MSG_OFF] = msgsize;
 
         if (req->rq_pack_udesc)
@@ -420,10 +579,7 @@ int plain_alloc_reqbuf(struct ptlrpc_sec *sec,
 
         if (req->rq_pack_bulk) {
                 LASSERT(req->rq_bulk_read || req->rq_bulk_write);
-
-                buflens[PLAIN_PACK_BULK_OFF] = bulk_sec_desc_size(
-                                                req->rq_flvr.sf_bulk_hash, 1,
-                                                req->rq_bulk_read);
+                buflens[PLAIN_PACK_BULK_OFF] = PLAIN_BSD_SIZE;
         }
 
         alloc_len = lustre_msg_size_v2(PLAIN_PACK_SEGMENTS, buflens);
@@ -444,7 +600,7 @@ int plain_alloc_reqbuf(struct ptlrpc_sec *sec,
         }
 
         lustre_init_msg_v2(req->rq_reqbuf, PLAIN_PACK_SEGMENTS, buflens, NULL);
-        req->rq_reqmsg = lustre_msg_buf_v2(req->rq_reqbuf, 0, 0);
+        req->rq_reqmsg = lustre_msg_buf(req->rq_reqbuf, PLAIN_PACK_MSG_OFF, 0);
 
         if (req->rq_pack_udesc)
                 sptlrpc_pack_user_desc(req->rq_reqbuf, PLAIN_PACK_USER_OFF);
@@ -476,13 +632,12 @@ int plain_alloc_repbuf(struct ptlrpc_sec *sec,
         int alloc_len;
         ENTRY;
 
+        buflens[PLAIN_PACK_HDR_OFF] = sizeof(struct plain_header);
         buflens[PLAIN_PACK_MSG_OFF] = msgsize;
 
         if (req->rq_pack_bulk) {
                 LASSERT(req->rq_bulk_read || req->rq_bulk_write);
-                buflens[PLAIN_PACK_BULK_OFF] = bulk_sec_desc_size(
-                                                req->rq_flvr.sf_bulk_hash, 0,
-                                                req->rq_bulk_read);
+                buflens[PLAIN_PACK_BULK_OFF] = PLAIN_BSD_SIZE;
         }
 
         alloc_len = lustre_msg_size_v2(PLAIN_PACK_SEGMENTS, buflens);
@@ -581,24 +736,46 @@ static struct ptlrpc_svc_ctx plain_svc_ctx = {
 static
 int plain_accept(struct ptlrpc_request *req)
 {
-        struct lustre_msg *msg = req->rq_reqbuf;
+        struct lustre_msg   *msg = req->rq_reqbuf;
+        struct plain_header *phdr;
         ENTRY;
 
-        LASSERT(RPC_FLVR_POLICY(req->rq_flvr.sf_rpc) == SPTLRPC_POLICY_PLAIN);
+        LASSERT(SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) ==
+                SPTLRPC_POLICY_PLAIN);
+
+        if (SPTLRPC_FLVR_BASE(req->rq_flvr.sf_rpc) !=
+            SPTLRPC_FLVR_BASE(SPTLRPC_FLVR_PLAIN) ||
+            SPTLRPC_FLVR_BULK_TYPE(req->rq_flvr.sf_rpc) !=
+            SPTLRPC_FLVR_BULK_TYPE(SPTLRPC_FLVR_PLAIN)) {
+                CERROR("Invalid rpc flavor %x\n", req->rq_flvr.sf_rpc);
+                RETURN(SECSVC_DROP);
+        }
 
         if (msg->lm_bufcount < PLAIN_PACK_SEGMENTS) {
                 CERROR("unexpected request buf count %u\n", msg->lm_bufcount);
                 RETURN(SECSVC_DROP);
         }
 
-        if (req->rq_flvr.sf_rpc != SPTLRPC_FLVR_PLAIN) {
-                CERROR("Invalid rpc flavor %x\n", req->rq_flvr.sf_rpc);
-                RETURN(SECSVC_DROP);
+        phdr = lustre_msg_buf(msg, PLAIN_PACK_HDR_OFF, sizeof(*phdr));
+        if (phdr == NULL) {
+                CERROR("missing plain header\n");
+                RETURN(-EPROTO);
         }
 
-        req->rq_sp_from = plain_decode_sec_part(msg);
+        if (phdr->ph_ver != 0) {
+                CERROR("Invalid header version\n");
+                RETURN(-EPROTO);
+        }
 
-        if (PLAIN_WFLVR_HAS_USER(msg->lm_secflvr)) {
+        if (phdr->ph_bulk_hash_alg >= BULK_HASH_ALG_MAX) {
+                CERROR("invalid hash algorithm: %u\n", phdr->ph_bulk_hash_alg);
+                RETURN(-EPROTO);
+        }
+
+        req->rq_sp_from = phdr->ph_sp;
+        req->rq_flvr.u_bulk.hash.hash_alg = phdr->ph_bulk_hash_alg;
+
+        if (phdr->ph_flags & PLAIN_FL_USER) {
                 if (sptlrpc_unpack_user_desc(msg, PLAIN_PACK_USER_OFF)) {
                         CERROR("Mal-formed user descriptor\n");
                         RETURN(SECSVC_DROP);
@@ -608,11 +785,9 @@ int plain_accept(struct ptlrpc_request *req)
                 req->rq_user_desc = lustre_msg_buf(msg, PLAIN_PACK_USER_OFF, 0);
         }
 
-        if (PLAIN_WFLVR_HAS_BULK(msg->lm_secflvr)) {
-                if (bulk_sec_desc_unpack(msg, PLAIN_PACK_BULK_OFF)) {
-                        CERROR("Mal-formed bulk checksum request\n");
+        if (phdr->ph_flags & PLAIN_FL_BULK) {
+                if (plain_unpack_bsd(msg))
                         RETURN(SECSVC_DROP);
-                }
 
                 req->rq_pack_bulk = 1;
         }
@@ -630,24 +805,18 @@ static
 int plain_alloc_rs(struct ptlrpc_request *req, int msgsize)
 {
         struct ptlrpc_reply_state   *rs;
-        struct ptlrpc_bulk_sec_desc *bsd;
         __u32                        buflens[PLAIN_PACK_SEGMENTS] = { 0, };
         int                          rs_size = sizeof(*rs);
         ENTRY;
 
         LASSERT(msgsize % 8 == 0);
 
+        buflens[PLAIN_PACK_HDR_OFF] = sizeof(struct plain_header);
         buflens[PLAIN_PACK_MSG_OFF] = msgsize;
 
-        if (req->rq_pack_bulk && (req->rq_bulk_read || req->rq_bulk_write)) {
-                bsd = lustre_msg_buf(req->rq_reqbuf,
-                                     PLAIN_PACK_BULK_OFF, sizeof(*bsd));
-                LASSERT(bsd);
+        if (req->rq_pack_bulk && (req->rq_bulk_read || req->rq_bulk_write))
+                buflens[PLAIN_PACK_BULK_OFF] = PLAIN_BSD_SIZE;
 
-                buflens[PLAIN_PACK_BULK_OFF] = bulk_sec_desc_size(
-                                                        bsd->bsd_hash_alg, 0,
-                                                        req->rq_bulk_read);
-        }
         rs_size += lustre_msg_size_v2(PLAIN_PACK_SEGMENTS, buflens);
 
         rs = req->rq_reply_state;
@@ -693,6 +862,7 @@ int plain_authorize(struct ptlrpc_request *req)
 {
         struct ptlrpc_reply_state *rs = req->rq_reply_state;
         struct lustre_msg_v2      *msg = rs->rs_repbuf;
+        struct plain_header       *phdr;
         int                        len;
         ENTRY;
 
@@ -706,8 +876,14 @@ int plain_authorize(struct ptlrpc_request *req)
                 len = lustre_msg_size_v2(msg->lm_bufcount, msg->lm_buflens);
 
         msg->lm_secflvr = req->rq_flvr.sf_rpc;
+
+        phdr = lustre_msg_buf(msg, PLAIN_PACK_HDR_OFF, 0);
+        phdr->ph_ver = 0;
+        phdr->ph_flags = 0;
+        phdr->ph_bulk_hash_alg = req->rq_flvr.u_bulk.hash.hash_alg;
+
         if (req->rq_pack_bulk)
-                msg->lm_secflvr |= PLAIN_WFLVR_FLAG_BULK;
+                phdr->ph_flags |= PLAIN_FL_BULK;
 
         rs->rs_repdata_len = len;
 
@@ -730,44 +906,73 @@ static
 int plain_svc_unwrap_bulk(struct ptlrpc_request *req,
                           struct ptlrpc_bulk_desc *desc)
 {
-        struct ptlrpc_reply_state      *rs = req->rq_reply_state;
+        struct ptlrpc_reply_state   *rs = req->rq_reply_state;
+        struct ptlrpc_bulk_sec_desc *bsdr, *bsdv;
+        struct plain_bulk_token     *tokenr, *tokenv;
+        int                          rc;
 
-        LASSERT(rs);
+        LASSERT(req->rq_bulk_write);
         LASSERT(req->rq_pack_bulk);
-        LASSERT(req->rq_reqbuf->lm_bufcount >= PLAIN_PACK_SEGMENTS);
-        LASSERT(rs->rs_repbuf->lm_bufcount == PLAIN_PACK_SEGMENTS);
 
-        return bulk_csum_svc(desc, req->rq_bulk_read,
-                             lustre_msg_buf(req->rq_reqbuf,
-                                            PLAIN_PACK_BULK_OFF, 0),
-                             lustre_msg_buflen(req->rq_reqbuf,
-                                               PLAIN_PACK_BULK_OFF),
-                             lustre_msg_buf(rs->rs_repbuf,
-                                            PLAIN_PACK_BULK_OFF, 0),
-                             lustre_msg_buflen(rs->rs_repbuf,
-                                               PLAIN_PACK_BULK_OFF));
+        bsdr = lustre_msg_buf(req->rq_reqbuf, PLAIN_PACK_BULK_OFF, 0);
+        tokenr = (struct plain_bulk_token *) bsdr->bsd_data;
+        bsdv = lustre_msg_buf(rs->rs_repbuf, PLAIN_PACK_BULK_OFF, 0);
+        tokenv = (struct plain_bulk_token *) bsdv->bsd_data;
+
+        bsdv->bsd_version = 0;
+        bsdv->bsd_type = SPTLRPC_BULK_DEFAULT;
+        bsdv->bsd_svc = bsdr->bsd_svc;
+        bsdv->bsd_flags = 0;
+
+        if (bsdr->bsd_svc == SPTLRPC_BULK_SVC_NULL)
+                return 0;
+
+        rc = plain_verify_bulk_csum(desc, req->rq_flvr.u_bulk.hash.hash_alg,
+                                    tokenr);
+        if (rc) {
+                bsdv->bsd_flags |= BSD_FL_ERR;
+                CERROR("bulk write: server verify failed: %d\n", rc);
+        }
+
+        return rc;
 }
 
 static
 int plain_svc_wrap_bulk(struct ptlrpc_request *req,
                         struct ptlrpc_bulk_desc *desc)
 {
-        struct ptlrpc_reply_state      *rs = req->rq_reply_state;
+        struct ptlrpc_reply_state   *rs = req->rq_reply_state;
+        struct ptlrpc_bulk_sec_desc *bsdr, *bsdv;
+        struct plain_bulk_token     *tokenr, *tokenv;
+        int                          rc;
 
-        LASSERT(rs);
+        LASSERT(req->rq_bulk_read);
         LASSERT(req->rq_pack_bulk);
-        LASSERT(req->rq_reqbuf->lm_bufcount >= PLAIN_PACK_SEGMENTS);
-        LASSERT(rs->rs_repbuf->lm_bufcount == PLAIN_PACK_SEGMENTS);
 
-        return bulk_csum_svc(desc, req->rq_bulk_read,
-                             lustre_msg_buf(req->rq_reqbuf,
-                                            PLAIN_PACK_BULK_OFF, 0),
-                             lustre_msg_buflen(req->rq_reqbuf,
-                                               PLAIN_PACK_BULK_OFF),
-                             lustre_msg_buf(rs->rs_repbuf,
-                                            PLAIN_PACK_BULK_OFF, 0),
-                             lustre_msg_buflen(rs->rs_repbuf,
-                                               PLAIN_PACK_BULK_OFF));
+        bsdr = lustre_msg_buf(req->rq_reqbuf, PLAIN_PACK_BULK_OFF, 0);
+        tokenr = (struct plain_bulk_token *) bsdr->bsd_data;
+        bsdv = lustre_msg_buf(rs->rs_repbuf, PLAIN_PACK_BULK_OFF, 0);
+        tokenv = (struct plain_bulk_token *) bsdv->bsd_data;
+
+        bsdv->bsd_version = 0;
+        bsdv->bsd_type = SPTLRPC_BULK_DEFAULT;
+        bsdv->bsd_svc = bsdr->bsd_svc;
+        bsdv->bsd_flags = 0;
+
+        if (bsdr->bsd_svc == SPTLRPC_BULK_SVC_NULL)
+                return 0;
+
+        rc = plain_generate_bulk_csum(desc, req->rq_flvr.u_bulk.hash.hash_alg,
+                                      tokenv);
+        if (rc) {
+                CERROR("bulk read: server failed to compute "
+                       "checksum: %d\n", rc);
+        } else {
+                if (OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_RECEIVE))
+                        corrupt_bulk_data(desc);
+        }
+
+        return rc;
 }
 
 static struct ptlrpc_ctx_ops plain_ctx_ops = {
@@ -787,8 +992,8 @@ static struct ptlrpc_sec_cops plain_sec_cops = {
         .release_ctx            = plain_release_ctx,
         .flush_ctx_cache        = plain_flush_ctx_cache,
         .alloc_reqbuf           = plain_alloc_reqbuf,
-        .alloc_repbuf           = plain_alloc_repbuf,
         .free_reqbuf            = plain_free_reqbuf,
+        .alloc_repbuf           = plain_alloc_repbuf,
         .free_repbuf            = plain_free_repbuf,
         .enlarge_reqbuf         = plain_enlarge_reqbuf,
 };

@@ -110,6 +110,11 @@ struct mdd_changelog {
         __u64                            mc_starttime;
 };
 
+/** Objects in .lustre dir */
+struct mdd_dot_lustre_objs {
+        struct mdd_object *mdd_obf;
+};
+
 struct mdd_device {
         struct md_device                 mdd_md_dev;
         struct dt_device                *mdd_child;
@@ -123,6 +128,8 @@ struct mdd_device {
         struct mdd_txn_op_descr          mdd_tod[MDD_TXN_LAST_OP];
         struct mdd_changelog             mdd_cl;
         unsigned long                    mdd_atime_diff;
+        struct mdd_object               *mdd_dot_lustre;
+        struct mdd_dot_lustre_objs       mdd_dot_lustre_objs;
 };
 
 enum mod_flags {
@@ -362,6 +369,8 @@ extern const struct lu_device_operations mdd_lu_ops;
 struct mdd_object *mdd_object_find(const struct lu_env *env,
                                    struct mdd_device *d,
                                    const struct lu_fid *f);
+int mdd_get_default_md(struct mdd_object *mdd_obj, struct lov_mds_md *lmm,
+                       int *size);
 
 /* mdd_quota.c*/
 #ifdef HAVE_QUOTA_SUPPORT

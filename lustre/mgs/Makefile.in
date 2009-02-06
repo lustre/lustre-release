@@ -1,4 +1,6 @@
 MODULES := mgs
 mgs-objs := mgs_handler.o mgs_fs.o mgs_llog.o lproc_mgs.o
 
+EXTRA_DIST := $(mgs-objs:%.o=%.c) mgs_internal.h
+
 @INCLUDE_RULES@

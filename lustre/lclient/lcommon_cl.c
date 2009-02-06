@@ -635,7 +635,7 @@ int ccc_lock_fits_into(const struct lu_env *env,
 }
 
 /**
- * Implements cl_lock_operations::clo_state() method for vvp layer, invoked
+ * Implements cl_lock_operations::clo_state() method for ccc layer, invoked
  * whenever lock state changes. Transfers object attributes, that might be
  * updated as a result of lock acquiring into inode.
  */
