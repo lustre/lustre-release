@@ -168,6 +168,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_MDS_CLOSE_NET_REP       0x13b
 #define OBD_FAIL_MDS_BLOCK_QUOTA_REQ     0x13c
 #define OBD_FAIL_MDS_DROP_QUOTA_REQ      0x13d
+#define OBD_FAIL_MDS_FAIL_LOV_LOG_ADD    0x140
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201

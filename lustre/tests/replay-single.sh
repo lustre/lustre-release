@@ -1733,6 +1733,27 @@ test_70b () {
 run_test 70b "mds recovery; $CLIENTCOUNT clients"
 # end multi-client tests
 
+test_81a() {
+    mkdir -p $DIR/$tdir
+    createmany -o $DIR/$tdir/$tfile- 10 || return 1
+#define OBD_FAIL_MDS_FAIL_LOV_LOG_ADD       0x140
+    do_facet mds "lctl set_param fail_loc=0x80000140"
+    unlinkmany $DIR/$tdir/$tfile- 10 || return 2
+}
+run_test 81a "fail log_add during unlink recovery"
+
+test_81b() {
+    mkdir -p $DIR/$tdir
+    createmany -o $DIR/$tdir/$tfile- 10 || return 1
+    replay_barrier mds
+    unlinkmany $DIR/$tdir/$tfile- 10 || return 2
+#define OBD_FAIL_MDS_FAIL_LOV_LOG_ADD       0x140
+    do_facet mds "lctl set_param fail_loc=0x80000140"
+    fail mds
+}
+run_test 81b "fail log_add during unlink recovery"
+
+
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
