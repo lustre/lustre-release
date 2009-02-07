@@ -720,6 +720,40 @@ struct cmm_thread_info *cmm_env_info(const struct lu_env *env)
 /* type constructor/destructor: cmm_type_init/cmm_type_fini */
 LU_TYPE_INIT_FINI(cmm, &cmm_thread_key);
 
+/* 
+ * Kludge code : it should be moved mdc_device.c if mdc_(mds)_device
+ * is really stacked.
+ */
+static int __cmm_type_init(struct lu_device_type *t)
+{
+        int rc;
+        rc = lu_device_type_init(&mdc_device_type);
+        if (rc == 0) {
+                rc = cmm_type_init(t);
+                if (rc)
+                        lu_device_type_fini(&mdc_device_type);
+        }
+        return rc;
+}
+
+static void __cmm_type_fini(struct lu_device_type *t)
+{
+        lu_device_type_fini(&mdc_device_type);
+        cmm_type_fini(t);
+}
+
+static void __cmm_type_start(struct lu_device_type *t)
+{
+        mdc_device_type.ldt_ops->ldto_start(&mdc_device_type);
+        cmm_type_start(t);
+}
+
+static void __cmm_type_stop(struct lu_device_type *t)
+{
+        mdc_device_type.ldt_ops->ldto_stop(&mdc_device_type);
+        cmm_type_stop(t);
+}
+
 static int cmm_device_init(const struct lu_env *env, struct lu_device *d,
                            const char *name, struct lu_device *next)
 {
@@ -780,11 +814,11 @@ static struct lu_device *cmm_device_fini(const struct lu_env *env,
 }
 
 static struct lu_device_type_operations cmm_device_type_ops = {
-        .ldto_init = cmm_type_init,
-        .ldto_fini = cmm_type_fini,
+        .ldto_init = __cmm_type_init,
+        .ldto_fini = __cmm_type_fini,
 
-        .ldto_start = cmm_type_start,
-        .ldto_stop  = cmm_type_stop,
+        .ldto_start = __cmm_type_start,
+        .ldto_stop  = __cmm_type_stop,
 
         .ldto_device_alloc = cmm_device_alloc,
         .ldto_device_free  = cmm_device_free,
@@ -817,29 +851,15 @@ static void lprocfs_cmm_init_vars(struct lprocfs_static_vars *lvars)
 static int __init cmm_mod_init(void)
 {
         struct lprocfs_static_vars lvars;
-        int rc;
-
-        /* 
-         * Kludge code : it should be moved mdc_device.c if mdc_(mds)_device
-         * is really stacked.
-         */
-        rc = lu_device_type_init(&mdc_device_type);
-        if (rc)
-                return rc;
 
         lprocfs_cmm_init_vars(&lvars);
-        rc = class_register_type(&cmm_obd_device_ops, NULL, lvars.module_vars,
-                                 LUSTRE_CMM_NAME, &cmm_device_type);
-        if (rc)
-                lu_device_type_fini(&mdc_device_type);
-
-        return rc;
+        return class_register_type(&cmm_obd_device_ops, NULL, lvars.module_vars,
+                                   LUSTRE_CMM_NAME, &cmm_device_type);
 }
 
 static void __exit cmm_mod_exit(void)
 {
         class_unregister_type(LUSTRE_CMM_NAME);
-        lu_device_type_fini(&mdc_device_type);
 }
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
