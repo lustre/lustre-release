@@ -122,6 +122,8 @@ void mdc_readdir_pack(struct ptlrpc_request *req, __u64 pgoff,
         b->size = pgoff;                       /* !! */
         b->nlink = size;                        /* !! */
         __mdc_pack_body(b, -1);
+        b->mode = LUDA_FID | LUDA_TYPE;
+
         mdc_pack_capa(req, &RMF_CAPA1, oc);
 }
 

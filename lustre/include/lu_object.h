@@ -905,12 +905,18 @@ static inline void lu_object_ref_del_at(struct lu_object *o,
         lu_ref_del_at(&o->lo_header->loh_reference, link, scope, source);
 }
 
+/** input params, should be filled out by mdt */
 struct lu_rdpg {
-        /* input params, should be filled out by mdt */
-        __u64                   rp_hash;        /* hash */
-        int                     rp_count;       /* count in bytes       */
-        int                     rp_npages;      /* number of pages      */
-        struct page           **rp_pages;       /* pointers to pages    */
+        /** hash */
+        __u64                   rp_hash;
+        /** count in bytes */
+        unsigned int            rp_count;
+        /** number of pages */
+        unsigned int            rp_npages;
+        /** requested attr */
+        __u32                   rp_attrs;
+        /** pointers to pages */
+        struct page           **rp_pages;
 };
 
 enum lu_xattr_flags {

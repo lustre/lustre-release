@@ -1919,16 +1919,80 @@ static int mdd_readpage_sanity_check(const struct lu_env *env,
         RETURN(rc);
 }
 
-static int mdd_dir_page_build(const struct lu_env *env, int first,
-                              void *area, int nob, const struct dt_it_ops *iops,
-                              struct dt_it *it, __u64 *start, __u64 *end,
-                              struct lu_dirent **last)
+static int mdd_append_attrs(const struct lu_env *env,
+                             struct mdd_device *mdd,
+                             __u32 attr,
+                             const struct dt_it_ops *iops,
+                             struct dt_it *it,
+                             struct lu_dirent*ent)
 {
-        struct lu_fid          *fid  = &mdd_env_info(env)->mti_fid2;
-        struct mdd_thread_info *info = mdd_env_info(env);
-        struct lu_fid_pack     *pack = &info->mti_pack;
+        struct mdd_thread_info  *info = mdd_env_info(env);
+        struct lu_fid           *fid  = &info->mti_fid2;
+        int                      len = cpu_to_le16(ent->lde_namelen);
+        const unsigned           align = sizeof(struct luda_type) - 1;
+        struct lu_fid_pack      *pack;
+        struct mdd_object       *obj;
+        struct luda_type        *lt;
+        int rc = 0;
+
+        if (attr & LUDA_FID) {
+                pack = (struct lu_fid_pack *)iops->rec(env, it);
+                if (IS_ERR(pack)) {
+                        rc = PTR_ERR(pack);
+                        ent->lde_attrs = 0;
+                        goto out;
+                }
+                rc = fid_unpack(pack, fid);
+                if (rc != 0) {
+                        ent->lde_attrs = 0;
+                        goto out;
+                }
+
+                fid_cpu_to_le(&ent->lde_fid, fid);
+                ent->lde_attrs = LUDA_FID;
+        }
+
+        /* check if file type is required */
+        if (attr & LUDA_TYPE) {
+                if (!(attr & LUDA_FID)) {
+                        CERROR("wrong attr : [%x]\n",attr);
+                        rc = -EINVAL;
+                        goto out;
+                }
+
+                obj = mdd_object_find(env, mdd, fid);
+                if (obj == NULL) /* remote object */
+                        goto out;
+
+                if (IS_ERR(obj)) {
+                        rc = PTR_ERR(obj);
+                        goto out;
+                }
+
+                if (mdd_object_exists(obj) == +1) {
+                        len = (len + align) & ~align;
+
+                        lt = (void *) ent->lde_name + len;
+                        lt->lt_type = cpu_to_le16(mdd_object_type(obj));
+
+                        ent->lde_attrs |= LUDA_TYPE;
+                }
+                mdd_object_put(env, obj);
+        }
+out:
+        ent->lde_attrs = cpu_to_le32(ent->lde_attrs);
+        return rc;
+}
+
+static int mdd_dir_page_build(const struct lu_env *env, struct mdd_device *mdd,
+                              int first, void *area, int nob,
+                              const struct dt_it_ops *iops, struct dt_it *it,
+                              __u64 *start, __u64 *end,
+                              struct lu_dirent **last, __u32 attr)
+{
         int                     result;
         struct lu_dirent       *ent;
+        __u64  hash = 0;
 
         if (first) {
                 memset(area, 0, sizeof (struct lu_dirpage));
@@ -1936,56 +2000,64 @@ static int mdd_dir_page_build(const struct lu_env *env, int first,
                 nob  -= sizeof (struct lu_dirpage);
         }
 
-        LASSERT(nob > sizeof *ent);
-
         ent  = area;
-        result = 0;
         do {
                 char  *name;
                 int    len;
                 int    recsize;
-                __u64  hash;
 
-                name = (char *)iops->key(env, it);
                 len  = iops->key_size(env, it);
 
-                pack = (struct lu_fid_pack *)iops->rec(env, it);
-                result = fid_unpack(pack, fid);
-                if (result != 0)
-                        break;
+                /* IAM iterator can return record with zero len. */
+                if (len == 0)
+                        goto next;
 
-                recsize = (sizeof(*ent) + len + 7) & ~7;
+                name = (char *)iops->key(env, it);
                 hash = iops->store(env, it);
-                *end = hash;
 
-                CDEBUG(D_INFO, "%p %p %d "DFID": "LPU64" (%d) \"%*.*s\"\n",
-                       name, ent, nob, PFID(fid), hash, len, len, len, name);
+                if (unlikely(first)) {
+                        first = 0;
+                        *start = hash;
+                }
+
+                recsize = lu_dirent_calc_size(len, attr);
+
+                CDEBUG(D_INFO, "%p %p %d "LPU64" (%d) \"%*.*s\"\n",
+                                name, ent, nob, hash, len, len, len, name);
 
                 if (nob >= recsize) {
-                        ent->lde_fid = *fid;
-                        fid_cpu_to_le(&ent->lde_fid, &ent->lde_fid);
-                        ent->lde_hash = hash;
+                        ent->lde_hash    = cpu_to_le64(hash);
                         ent->lde_namelen = cpu_to_le16(len);
                         ent->lde_reclen  = cpu_to_le16(recsize);
                         memcpy(ent->lde_name, name, len);
-                        if (first && ent == area)
-                                *start = hash;
-                        *last = ent;
-                        ent = (void *)ent + recsize;
-                        nob -= recsize;
-                        result = iops->next(env, it);
+
+                        result = mdd_append_attrs(env, mdd, attr, iops, it, ent);
+                        if (result != 0)
+                                goto out;
                 } else {
                         /*
                          * record doesn't fit into page, enlarge previous one.
                          */
-                        LASSERT(*last != NULL);
-                        (*last)->lde_reclen =
-                                cpu_to_le16(le16_to_cpu((*last)->lde_reclen) +
-                                            nob);
-                        break;
+                        if (*last) {
+                                (*last)->lde_reclen =
+                                        cpu_to_le16(le16_to_cpu((*last)->lde_reclen) +
+                                                        nob);
+                                result = 0;
+                        } else
+                                result = -EINVAL;
+
+                        goto out;
                 }
+                *last = ent;
+                ent = (void *)ent + recsize;
+                nob -= recsize;
+
+next:
+                result = iops->next(env, it);
         } while (result == 0);
 
+out:
+        *end = hash;
         return result;
 }
 
@@ -1997,6 +2069,7 @@ static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
         const struct dt_it_ops  *iops;
         struct page       *pg;
         struct lu_dirent  *last = NULL;
+        struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
         int i;
         int rc;
         int nob;
@@ -2046,11 +2119,14 @@ static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
              i++, nob -= CFS_PAGE_SIZE) {
                 LASSERT(i < rdpg->rp_npages);
                 pg = rdpg->rp_pages[i];
-                rc = mdd_dir_page_build(env, !i, cfs_kmap(pg),
+                rc = mdd_dir_page_build(env, mdd, !i, cfs_kmap(pg),
                                         min_t(int, nob, CFS_PAGE_SIZE), iops,
-                                        it, &hash_start, &hash_end, &last);
-                if (rc != 0 || i == rdpg->rp_npages - 1)
-                        last->lde_reclen = 0;
+                                        it, &hash_start, &hash_end, &last,
+                                        rdpg->rp_attrs);
+                if (rc != 0 || i == rdpg->rp_npages - 1) {
+                        if (last)
+                                last->lde_reclen = 0;
+                }
                 cfs_kunmap(pg);
         }
         if (rc > 0) {
@@ -2064,13 +2140,14 @@ static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
                 struct lu_dirpage *dp;
 
                 dp = cfs_kmap(rdpg->rp_pages[0]);
-                dp->ldp_hash_start = rdpg->rp_hash;
-                dp->ldp_hash_end   = hash_end;
+                dp->ldp_hash_start = cpu_to_le64(rdpg->rp_hash);
+                dp->ldp_hash_end   = cpu_to_le64(hash_end);
                 if (i == 0)
                         /*
                          * No pages were processed, mark this.
                          */
                         dp->ldp_flags |= LDF_EMPTY;
+
                 dp->ldp_flags = cpu_to_le32(dp->ldp_flags);
                 cfs_kunmap(rdpg->rp_pages[0]);
         }
@@ -2112,8 +2189,8 @@ static int mdd_readpage(const struct lu_env *env, struct md_object *obj,
                 pg = rdpg->rp_pages[0];
                 dp = (struct lu_dirpage*)cfs_kmap(pg);
                 memset(dp, 0 , sizeof(struct lu_dirpage));
-                dp->ldp_hash_start = rdpg->rp_hash;
-                dp->ldp_hash_end   = DIR_END_OFF;
+                dp->ldp_hash_start = cpu_to_le64(rdpg->rp_hash);
+                dp->ldp_hash_end   = cpu_to_le64(DIR_END_OFF);
                 dp->ldp_flags |= LDF_EMPTY;
                 dp->ldp_flags = cpu_to_le32(dp->ldp_flags);
                 cfs_kunmap(pg);

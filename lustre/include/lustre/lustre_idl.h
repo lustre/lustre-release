@@ -490,16 +490,67 @@ static inline int lu_fid_cmp(const struct lu_fid *f0,
 
 /** \defgroup lu_dir lu_dir
  * @{ */
+
+/**
+ * Enumeration of possible directory entry attributes.
+ *
+ * Attributes follow directory entry header in the order they appear in this
+ * enumeration.
+ */
+enum lu_dirent_attrs {
+        LUDA_FID    = 0x0001,
+        LUDA_TYPE   = 0x0002,
+};
+
 /**
  * Layout of readdir pages, as transmitted on wire.
  */
 struct lu_dirent {
+        /** valid if LUDA_FID is set. */
         struct lu_fid lde_fid;
+        /** a unique entry identifier: a hash or an offset. */
         __u64         lde_hash;
+        /** total record length, including all attributes. */
         __u16         lde_reclen;
+        /** name length */
         __u16         lde_namelen;
-        __u32         lde_pad0;
+        /** optional variable size attributes following this entry.
+         *  taken from enum lu_dirent_attrs.
+         */
+        __u32         lde_attrs;
+        /** name is followed by the attributes indicated in ->ldp_attrs, in
+         *  their natural order. After the last attribute, padding bytes are
+         *  added to make ->lde_reclen a multiple of 8.
+         */
         char          lde_name[0];
+};
+
+/*
+ * Definitions of optional directory entry attributes formats.
+ *
+ * Individual attributes do not have their length encoded in a generic way. It
+ * is assumed that consumer of an attribute knows its format. This means that
+ * it is impossible to skip over an unknown attribute, except by skipping over all
+ * remaining attributes (by using ->lde_reclen), which is not too
+ * constraining, because new server versions will append new attributes at
+ * the end of an entry.
+ */
+
+/**
+ * Fid directory attribute: a fid of an object referenced by the entry. This
+ * will be almost always requested by the client and supplied by the server.
+ *
+ * Aligned to 8 bytes.
+ */
+/* To have compatibility with 1.8, lets have fid in lu_dirent struct. */
+
+/**
+ * File type.
+ *
+ * Aligned to 2 bytes.
+ */
+struct luda_type {
+        __u16 lt_type;
 };
 
 struct lu_dirpage {
@@ -534,11 +585,25 @@ static inline struct lu_dirent *lu_dirent_next(struct lu_dirent *ent)
         return next;
 }
 
+static inline int lu_dirent_calc_size(int namelen, __u16 attr)
+{
+        int size;
+
+        if (attr & LUDA_TYPE) {
+                const unsigned align = sizeof(struct luda_type) - 1;
+                size = (sizeof(struct lu_dirent) + namelen + align) & ~align;
+                size += sizeof(struct luda_type);
+        } else
+                size = sizeof(struct lu_dirent) + namelen;
+
+        return (size + 7) & ~7;
+}
+
 static inline int lu_dirent_size(struct lu_dirent *ent)
 {
         if (le16_to_cpu(ent->lde_reclen) == 0) {
-                return (sizeof(*ent) +
-                        le16_to_cpu(ent->lde_namelen) + 7) & ~7;
+                return lu_dirent_calc_size(le16_to_cpu(ent->lde_namelen),
+                                           le32_to_cpu(ent->lde_attrs));
         }
         return le16_to_cpu(ent->lde_reclen);
 }

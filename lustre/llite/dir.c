@@ -394,6 +394,7 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
         int rc;
         int done;
         int shift;
+        __u16 type;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) pos %lu/%llu\n",
@@ -457,9 +458,9 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                                 name = ent->lde_name;
                                 fid_le_to_cpu(&fid, &fid);
                                 ino  = ll_fid_build_ino(sbi, &fid);
-
+                                type = ll_dirent_type_get(ent);
                                 done = filldir(cookie, name, namelen,
-                                               (loff_t)hash, ino, DT_UNKNOWN);
+                                               (loff_t)hash, ino, type);
                         }
                         next = le64_to_cpu(dp->ldp_hash_end);
                         ll_put_page(page);
@@ -491,7 +492,7 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                 }
         }
 
-        filp->f_pos = (loff_t)(__s32)pos;
+        filp->f_pos = (loff_t)pos;
         filp->f_version = inode->i_version;
         touch_atime(filp->f_vfsmnt, filp->f_dentry);
 

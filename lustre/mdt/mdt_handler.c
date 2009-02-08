@@ -1414,6 +1414,8 @@ static int mdt_readpage(struct mdt_thread_info *info)
                        rdpg->rp_hash, reqbody->size);
                 RETURN(-EFAULT);
         }
+
+        rdpg->rp_attrs = reqbody->mode;
         rdpg->rp_count  = reqbody->nlink;
         rdpg->rp_npages = (rdpg->rp_count + CFS_PAGE_SIZE - 1)>>CFS_PAGE_SHIFT;
         OBD_ALLOC(rdpg->rp_pages, rdpg->rp_npages * sizeof rdpg->rp_pages[0]);
