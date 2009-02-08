@@ -221,7 +221,7 @@ static struct page *ll_dir_page_locate(struct inode *dir, __u64 hash,
          * radix_tree_gang_lookup() can be used to find a page with starting
          * hash _smaller_ than one we are looking for.
          */
-        unsigned long offset = hash_x_index((__u32)hash);
+        unsigned long offset = hash_x_index((unsigned long)hash);
         struct page *page;
         int found;
 
@@ -345,7 +345,7 @@ struct page *ll_get_dir_page(struct inode *dir, __u64 hash, int exact,
                 }
         }
 
-        page = read_cache_page(mapping, hash_x_index((__u32)hash),
+        page = read_cache_page(mapping, hash_x_index((unsigned long)hash),
                                (filler_t*)mapping->a_ops->readpage, NULL);
         if (IS_ERR(page))
                 GOTO(out_unlock, page);

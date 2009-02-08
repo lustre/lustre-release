@@ -132,8 +132,8 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         return rc;
 }
 
-static cfs_page_t *llu_dir_read_page(struct inode *ino, __u32 hash,
-                                      int exact, struct ll_dir_chain *chain)
+static cfs_page_t *llu_dir_read_page(struct inode *ino, __u64 hash,
+                                     int exact, struct ll_dir_chain *chain)
 {
         cfs_page_t *page;
         int rc;
