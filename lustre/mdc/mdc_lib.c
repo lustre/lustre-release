@@ -91,6 +91,7 @@ static void mdc_readdir_pack_20(struct ptlrpc_request *req, int offset,
         b->size = pg_off;                       /* !! */
         b->suppgid = -1;
         b->nlink = size;                        /* !! */
+        b->mode = LUDA_FID | LUDA_TYPE;
         EXIT;
 }
 

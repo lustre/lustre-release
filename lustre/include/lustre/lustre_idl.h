@@ -766,6 +766,19 @@ typedef enum {
 /* This FULL lock is useful to take on unlink sort of operations */
 #define MDS_INODELOCK_FULL ((1<<(MDS_INODELOCK_MAXSHIFT+1))-1)
 
+
+/**
+ * Enumeration of possible directory entry attributes.
+ *
+ * Attributes follow directory entry header in the order they appear in this
+ * enumeration.
+ */
+enum lu_dirent_attrs {
+        LUDA_FID    = 0x0001,
+        LUDA_TYPE   = 0x0002,
+};
+
+
 extern void lustre_swab_ll_fid (struct ll_fid *fid);
 
 struct lu_fid {
