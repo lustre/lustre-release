@@ -94,5 +94,6 @@ typedef struct file_lock cfs_flock_t;
 ssize_t cfs_user_write (cfs_file_t *filp, const char *buf, size_t count, loff_t *offset);
 
 #endif
+#define CFS_IFTODT(type)   (((type) & 0170000) >> 12)
 
 #endif
