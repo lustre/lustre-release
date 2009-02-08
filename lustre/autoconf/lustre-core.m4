@@ -1656,7 +1656,7 @@ LB_LINUX_TRY_COMPILE([
         AC_MSG_RESULT([yes])
 
 ],[
-        AC_MSG_WARN([You have got no 64-bit kernel quota support.])
+        AC_MSG_WARN([4 TB (or larger) block quota limits can only be used with OSTs not larger than 4 TB.])
         AC_MSG_WARN([Continuing with limited quota support.])
         AC_MSG_WARN([quotacheck is needed for filesystems with recent quota versions.])
         AC_MSG_RESULT([no])
