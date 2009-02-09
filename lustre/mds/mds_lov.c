@@ -55,6 +55,8 @@
 
 #include "mds_internal.h"
 
+static void mds_allow_cli(struct obd_device *obd, unsigned long flag);
+
 static void mds_lov_dump_objids(const char *label, struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
@@ -852,6 +854,8 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_ABORT_RECOVERY:
                 CERROR("aborting recovery for device %s\n", obd->obd_name);
                 target_abort_recovery(obd);
+                /* obd_recovering has been changed */
+                mds_allow_cli(obd, 0);
                 RETURN(0);
 
         default:
@@ -871,8 +875,8 @@ static void mds_allow_cli(struct obd_device *obd, unsigned long flag)
                 obd->u.mds.mds_fl_synced = 1;
         if (flag & CONFIG_TARGET)
                 obd->u.mds.mds_fl_target = 1;
-        if (obd->u.mds.mds_fl_cfglog && obd->u.mds.mds_fl_target
-            /* bz11778: && obd->u.mds.mds_fl_synced */)
+        if (obd->u.mds.mds_fl_cfglog && obd->u.mds.mds_fl_target &&
+            (!obd->obd_recovering || obd->u.mds.mds_fl_synced))
                 /* Open for clients */
                 obd->obd_no_conn = 0;
 }
