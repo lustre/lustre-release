@@ -107,24 +107,68 @@ test_4() {
 }
 run_test 4 "Fail OST during read, with verification"
 
+iozone_bg () {
+    local args=$@
+
+    local tmppipe=$TMP/${TESTSUITE}.${TESTNAME}.pipe
+    mkfifo $tmppipe
+
+    echo "+ iozone $args"
+    iozone $args > $tmppipe &
+
+    local pid=$!
+
+    echo "tmppipe=$tmppipe"
+    echo iozone pid=$pid
+
+    # iozone exit code is 0 even if iozone is not completed
+    # need to check iozone output  on "complete"
+    local iozonelog=$TMP/${TESTSUITE}.iozone.log
+    rm -f $iozonelog
+    cat $tmppipe | while read line ; do 
+        echo "$line"
+        echo "$line" >>$iozonelog
+    done;
+
+    local rc=0
+    wait $pid
+    rc=$?
+    if ! $(tail -1 $iozonelog | grep -q complete); then
+        echo iozone failed!
+        rc=1
+    fi
+    rm -f $tmppipe
+    rm -f $iozonelog
+    return $rc 
+}
+
 test_5() {
     [ -z "`which iozone 2> /dev/null`" ] && skip "iozone missing" && return 0
-    FREE=`df -P $TDIR | tail -n 1 | awk '{ print $4/2 }'`
-    GB=1048576  # 1048576KB == 1GB
-    if (( FREE > GB )); then
-        FREE=$GB
+
+    # striping is -c 1, get min of available
+    local minavail=$(lctl get_param -n osc.*[oO][sS][cC][-_]*.kbytesavail | sort -n | head -1)
+    local size=$(( minavail * 3/4 ))
+    local GB=1048576  # 1048576KB == 1GB
+
+    if (( size > GB )); then
+        size=$GB
     fi
-    IOZONE_OPTS="-i 0 -i 1 -i 2 -+d -r 4 -s $FREE"
-    iozone $IOZONE_OPTS -f $TDIR/$tfile &
-    PID=$!
+    local iozone_opts="-i 0 -i 1 -i 2 -+d -r 4 -s $size -f $TDIR/$tfile"
+
+    iozone_bg $iozone_opts &
+    local pid=$!
+
+    echo iozone bg pid=$pid
     
     sleep 8
     fail ost1
-    wait $PID
-    RC=$?
-    log "iozone rc=$RC"
+    local rc=0
+    wait $pid
+    rc=$?
+    log "iozone rc=$rc"
     rm -f $TDIR/$tfile
-    [ $RC -ne 0 ] && return $RC || true
+    [ $rc -eq 0 ] || error "iozone failed"
+    return $rc
 }
 run_test 5 "Fail OST during iozone"
 
