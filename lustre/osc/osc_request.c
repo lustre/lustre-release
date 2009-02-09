@@ -2147,7 +2147,8 @@ osc_send_oap_rpc(const struct lu_env *env, struct client_obd *cli,
                                  oap_pending_item) {
                 ops = oap->oap_caller_ops;
 
-                LASSERT(oap->oap_magic == OAP_MAGIC);
+                LASSERTF(oap->oap_magic == OAP_MAGIC, "Bad oap magic: oap %p, "
+                         "magic 0x%x\n", oap, oap->oap_magic);
 
                 if (clob == NULL) {
                         /* pin object in memory, so that completion call-backs
