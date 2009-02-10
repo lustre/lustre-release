@@ -17,6 +17,15 @@ Bugzilla   :
 Description:
 Details    :
 
+Severity   : enhancement
+Bugzilla   : 14132
+Description: acceptor.c cleanup
+Details    : Code duplication in acceptor.c for the cases of kernel and
+             user-space removed. User-space libcfs tcpip primitives
+             uniformed to have prototypes similar to kernel ones. Minor
+             cosmetic changes in usocklnd to use cfs_socket_t as
+             representation of socket.
+
 Severity   : minor
 Bugzilla   : 11245
 Description: IB path MTU mistakenly set to 1st path MTU when ib_mtu is off
