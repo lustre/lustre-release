@@ -607,6 +607,7 @@ struct lov_qos {
         __u32              *lq_rr_array;    /* round-robin optimized list */
         unsigned int        lq_rr_size;     /* rr array size */
         unsigned int        lq_prio_free;   /* priority for free space */
+        unsigned int        lq_threshold_rr;/* priority for rr */
         unsigned long       lq_dirty:1,     /* recalc qos data */
                             lq_dirty_rr:1,  /* recalc round-robin list */
                             lq_same_space:1,/* the ost's all have approx.

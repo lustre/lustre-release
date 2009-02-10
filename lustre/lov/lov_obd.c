@@ -853,6 +853,8 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         lov->lov_qos.lq_reset = 1;
         /* Default priority is toward free space balance */
         lov->lov_qos.lq_prio_free = 232;
+        /* Default threshold for rr (roughly 17%) */
+        lov->lov_qos.lq_threshold_rr = 43;
 
         lprocfs_lov_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
