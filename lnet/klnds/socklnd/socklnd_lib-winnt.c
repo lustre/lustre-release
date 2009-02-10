@@ -658,3 +658,15 @@ ksocknal_lib_zc_capable(ksock_conn_t *conn)
 {
         return 0;
 }
+
+int
+ksocknal_lib_memory_pressure(ksock_conn_t *conn)
+{
+        return 0;
+}
+
+int
+ksocknal_lib_bind_thread_to_cpu(int id)
+{
+        return 0;
+}

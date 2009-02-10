@@ -2247,6 +2247,21 @@ ksocknal_base_shutdown (void)
         PORTAL_MODULE_UNUSE;
 }
 
+__u64
+ksocknal_new_incarnation (void)
+{
+        struct timeval tv;
+
+        /* The incarnation number is the time this module loaded and it
+         * identifies this particular instance of the socknal.  Hopefully
+         * we won't be able to reboot more frequently than 1MHz for the
+         * forseeable future :) */
+
+        cfs_do_gettimeofday(&tv);
+
+        return (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
+}
+
 int
 ksocknal_base_startup (void)
 {
@@ -2526,7 +2541,7 @@ ksocknal_startup (lnet_ni_t *ni)
 
         memset(net, 0, sizeof(*net));
         cfs_spin_lock_init(&net->ksnn_lock);
-        net->ksnn_incarnation = ksocknal_lib_new_incarnation();
+        net->ksnn_incarnation = ksocknal_new_incarnation();
         ni->ni_data = net;
         ni->ni_maxtxcredits = *ksocknal_tunables.ksnd_credits;
         ni->ni_peertxcredits = *ksocknal_tunables.ksnd_peercredits;

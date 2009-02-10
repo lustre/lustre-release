@@ -57,7 +57,6 @@ typedef struct socket ks_tconn_t, cfs_socket_t;
 
 typedef VOID (*ks_schedule_cb)(struct socket*, int);
 
-#define SOCK_ERROR(s)          ((s->kstc_state >= ksts_disconnected) ? ECONNRESET : 0)
 #define SOCK_TEST_NOSPACE(s)   (1)
 
 //
@@ -483,7 +482,19 @@ struct socket {
         ks_schedule_cb              kstc_sched_cb;   /* notification callback routine of completion */
 };
 
-#define SOCK_WMEM_QUEUED(sock) (0)
+static inline int
+libcfs_sock_error(struct socket *sock)
+{
+        return (sock->kstc_state >= ksts_disconnected) ? ECONNRESET : 0;
+}
+
+
+static inline int
+libcfs_sock_wmem_queued(struct socket *sock)
+{
+        return 0;
+}
+
 #define TDINAL_WINDOW_DEFAULT_SIZE  (0x100000)
 #define TDINAL_MAX_TSDU_QUEUE_SIZE  (0x200000)
 

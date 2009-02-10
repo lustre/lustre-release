@@ -760,6 +760,44 @@ static inline int wait_for_completion_interruptible(struct completion *c)
     return 0;
 }
 
+/*
+ * spinlock "implementation"
+ */
+
+typedef spinlock_t cfs_spinlock_t;
+
+#define cfs_spin_lock_init(lock) spin_lock_init(lock)
+#define cfs_spin_lock(lock)      spin_lock(lock)
+#define cfs_spin_lock_bh(lock)   spin_lock_bh(lock)
+#define cfs_spin_unlock(lock)    spin_unlock(lock)
+#define cfs_spin_unlock_bh(lock) spin_unlock_bh(lock)
+
+/*
+ * rwlock "implementation"
+ */
+
+typedef rwlock_t cfs_rwlock_t;
+
+#define cfs_rwlock_init(lock)      rwlock_init(lock)
+#define cfs_read_lock(lock)        read_lock(lock)
+#define cfs_read_unlock(lock)      read_unlock(lock)
+#define cfs_write_lock_bh(lock)    write_lock_bh(lock)
+#define cfs_write_unlock_bh(lock)  write_unlock_bh(lock)
+
+/*
+ * atomic
+ */
+
+typedef atomic_t cfs_atomic_t;
+
+#define cfs_atomic_read(atom)         atomic_read(atom)
+#define cfs_atomic_inc(atom)          atomic_inc(atom)
+#define cfs_atomic_dec(atom)          atomic_dec(atom)
+#define cfs_atomic_dec_and_test(atom) atomic_dec_and_test(atom)
+#define cfs_atomic_set(atom, value)   atomic_set(atom, value)
+#define cfs_atomic_add(value, atom)   atomic_add(value, atom)
+#define cfs_atomic_sub(value, atom)   atomic_sub(value, atom)
+
 #else  /* !__KERNEL__ */
 #endif /* !__KERNEL__ */
 #endif

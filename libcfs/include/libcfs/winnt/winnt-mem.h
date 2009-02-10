@@ -258,9 +258,10 @@ extern cfs_mem_cache_t *cfs_page_p_slab;
 #define CFS_MMSPACE_CLOSE   do {} while(0)
 
 
-#define mb()    do {} while(0)
-#define rmb()   mb()
-#define wmb()   mb()
+#define mb()     do {} while(0)
+#define rmb()    mb()
+#define wmb()    mb()
+#define cfs_mb() mb()
 
 /*
  * MM defintions from (linux/mm.h)

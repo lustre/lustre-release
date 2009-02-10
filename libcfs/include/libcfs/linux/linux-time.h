@@ -306,6 +306,8 @@ static inline int cfs_time_beforeq_64(__u64 t1, __u64 t2)
 #define CFS_TIME_T              "%lu"
 #define CFS_DURATION_T          "%ld"
 
+#define cfs_do_gettimeofday(tv) do_gettimeofday(tv)
+
 #endif /* __LIBCFS_LINUX_LINUX_TIME_H__ */
 /*
  * Local variables:

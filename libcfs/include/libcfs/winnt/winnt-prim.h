@@ -646,8 +646,9 @@ typedef struct _TASK_SLOT {
 } TASK_SLOT, *PTASK_SLOT;
 
 
-#define current                 cfs_current()
-#define set_current_state(s)	do {;} while (0)
+#define current                      cfs_current()
+#define set_current_state(s)         do {;} while (0)
+#define cfs_set_current_state(state) set_current_state(state)
 
 #define wait_event(wq, condition)                               \
 do {                                                            \
@@ -867,6 +868,7 @@ libcfs_arch_cleanup(void);
 
 #define NR_IRQS				        512
 #define in_interrupt()			    (0)
+#define cfs_in_interrupt()                  in_interrupt()
 
 /*
  *  printk flags

@@ -586,5 +586,4 @@ extern void ksocknal_lib_tunables_fini(void);
 extern void ksocknal_lib_csum_tx(ksock_tx_t *tx);
 
 extern int ksocknal_lib_memory_pressure(ksock_conn_t *conn);
-extern __u64 ksocknal_lib_new_incarnation(void);
 extern int ksocknal_lib_bind_thread_to_cpu(int id);

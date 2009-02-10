@@ -125,6 +125,8 @@ static inline void do_gettimeofday(struct timeval *tv)
     tv->tv_usec = (suseconds_t) (Time.QuadPart % 10000000) / 10;
 }
 
+#define cfs_do_gettimeofday(tv) do_gettimeofday(tv)
+
 static inline LONGLONG JIFFIES()
 {
     LARGE_INTEGER Tick;
