@@ -1692,12 +1692,11 @@ static int __osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
         *t = inode->i_ctime;
         rc = inode->i_op->setxattr(dentry, name, buf->lb_buf,
                                    buf->lb_len, fs_flags);
-        if (likely(rc == 0)) {
-                spin_lock(&obj->oo_guard);
-                inode->i_ctime = *t;
-                spin_unlock(&obj->oo_guard);
-                mark_inode_dirty(inode);
-        }
+        /* ctime should not be updated with server-side time. */
+        spin_lock(&obj->oo_guard);
+        inode->i_ctime = *t;
+        spin_unlock(&obj->oo_guard);
+        mark_inode_dirty(inode);
         return rc;
 }
 
@@ -1962,13 +1961,11 @@ static int osd_xattr_del(const struct lu_env *env,
         dentry->d_inode = inode;
         *t = inode->i_ctime;
         rc = inode->i_op->removexattr(dentry, name);
-        if (likely(rc == 0)) {
-                /* ctime should not be updated with server-side time. */
-                spin_lock(&obj->oo_guard);
-                inode->i_ctime = *t;
-                spin_unlock(&obj->oo_guard);
-                mark_inode_dirty(inode);
-        }
+        /* ctime should not be updated with server-side time. */
+        spin_lock(&obj->oo_guard);
+        inode->i_ctime = *t;
+        spin_unlock(&obj->oo_guard);
+        mark_inode_dirty(inode);
         return rc;
 }
 
@@ -2429,10 +2426,20 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
                                       (char *)key, strlen((char *)key));
         bh = ldiskfs_find_entry(dentry, &de);
         if (bh) {
+                struct osd_thread_info *oti = osd_oti_get(env);
+                struct timespec *ctime = &oti->oti_time;
+                struct timespec *mtime = &oti->oti_time2;
+
+                *ctime = dir->i_ctime;
+                *mtime = dir->i_mtime;
                 rc = ldiskfs_delete_entry(oh->ot_handle,
                                 dir, de, bh);
-                if (!rc)
-                        mark_inode_dirty(dir);
+                /* xtime should not be updated with server-side time. */
+                spin_lock(&obj->oo_guard);
+                dir->i_ctime = *ctime;
+                dir->i_mtime = *mtime;
+                spin_unlock(&obj->oo_guard);
+                mark_inode_dirty(dir);
                 brelse(bh);
         } else
                 rc = -ENOENT;
@@ -2773,7 +2780,7 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
         const char               *name  = (const char *)key;
         struct osd_object        *child;
 #ifdef HAVE_QUOTA_SUPPORT
-        cfs_cap_t              save = current->cap_effective;
+        cfs_cap_t                 save  = current->cap_effective;
 #endif
         int rc;
 
@@ -2791,6 +2798,13 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
                 RETURN(rc);
         child = osd_object_find(env, dt, fid);
         if (!IS_ERR(child)) {
+                struct inode *inode = obj->oo_inode;
+                struct osd_thread_info *oti = osd_oti_get(env);
+                struct timespec *ctime = &oti->oti_time;
+                struct timespec *mtime = &oti->oti_time2;
+
+                *ctime = inode->i_ctime;
+                *mtime = inode->i_mtime;
 #ifdef HAVE_QUOTA_SUPPORT
                 if (ignore_quota)
                         current->cap_effective |= CFS_CAP_SYS_RESOURCE_MASK;
@@ -2803,6 +2817,12 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
                 current->cap_effective = save;
 #endif
                 osd_object_put(env, child);
+                /* xtime should not be updated with server-side time. */
+                spin_lock(&obj->oo_guard);
+                inode->i_ctime = *ctime;
+                inode->i_mtime = *mtime;
+                spin_unlock(&obj->oo_guard);
+                mark_inode_dirty(inode);
         } else {
                 rc = PTR_ERR(child);
         }
