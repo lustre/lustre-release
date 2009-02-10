@@ -1775,18 +1775,15 @@ test_70a () {
 run_test 70a "check multi client t-f"
 
 test_70b () {
-	[ -z "$CLIENTS" ] && \
-		{ skip "Need two or more clients." && return; }
-	[ $CLIENTCOUNT -lt 2 ] && \
-		{ skip "Need two or more clients, have $CLIENTCOUNT" && return; }
+	local clients=${CLIENTS:-$HOSTNAME}
 
-	zconf_mount_clients $CLIENTS $DIR
+	zconf_mount_clients $clients $DIR
 	
 	local duration=120
 	[ "$SLOW" = "no" ] && duration=60
 	local cmd="rundbench 1 -t $duration"
 	local PID=""
-	do_nodes $CLIENTS "set -x; MISSING_DBENCH_OK=$MISSING_DBENCH_OK \
+	do_nodes $clients "set -x; MISSING_DBENCH_OK=$MISSING_DBENCH_OK \
 		PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests/:$DBENCH_LIB \
 		DBENCH_LIB=$DBENCH_LIB TESTSUITE=$TESTSUITE TESTNAME=$TESTNAME \
 		LCTL=$LCTL $cmd" &
