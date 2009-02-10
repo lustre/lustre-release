@@ -237,6 +237,40 @@ static int lov_wr_qos_priofree(struct file *file, const char *buffer,
         return count;
 }
 
+static int lov_rd_qos_thresholdrr(char *page, char **start, off_t off,
+                                  int count, int *eof, void *data)
+{
+        struct obd_device *dev = (struct obd_device*) data;
+        struct lov_obd *lov;
+
+        LASSERT(dev != NULL);
+        lov = &dev->u.lov;
+        *eof = 1;
+        return snprintf(page, count, "%d%%\n",
+                        (lov->lov_qos.lq_threshold_rr * 100) >> 8);
+}
+
+static int lov_wr_qos_thresholdrr(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{
+        struct obd_device *dev = (struct obd_device *)data;
+        struct lov_obd *lov;
+        int val, rc;
+        LASSERT(dev != NULL);
+
+        lov = &dev->u.lov;
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val > 100 || val < 0)
+                return -EINVAL;
+
+        lov->lov_qos.lq_threshold_rr = (val << 8) / 100;
+        lov->lov_qos.lq_dirty = 1;
+        return count;
+}
+
 static int lov_rd_qos_maxage(char *page, char **start, off_t off, int count,
                              int *eof, void *data)
 {
@@ -347,6 +381,7 @@ struct lprocfs_vars lprocfs_lov_obd_vars[] = {
         { "kbytesavail",  lprocfs_rd_kbytesavail, 0, 0 },
         { "desc_uuid",    lov_rd_desc_uuid,       0, 0 },
         { "qos_prio_free",lov_rd_qos_priofree,    lov_wr_qos_priofree, 0 },
+        { "qos_threshold_rr",  lov_rd_qos_thresholdrr, lov_wr_qos_thresholdrr, 0 },
         { "qos_maxage",   lov_rd_qos_maxage,      lov_wr_qos_maxage, 0 },
         { 0 }
 };
