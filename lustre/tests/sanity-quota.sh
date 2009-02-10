@@ -17,7 +17,6 @@ SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 
 ONLY=${ONLY:-"$*"}
-# enable test_23 after bug 16542 fixed.
 ALWAYS_EXCEPT="10 $SANITY_QUOTA_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
@@ -119,26 +118,26 @@ set_file_unitsz() {
 }
 
 lustre_fail() {
-	local fail_node=$1
+        local fail_node=$1
 	local fail_loc=$2
 	local fail_val=${3:-0}
 
- 	if [ $fail_node == "mds" ] || [ $fail_node == "mds_ost" ]; then
- 	    if [ $((fail_loc & 0x10000000)) -ne 0  -a $fail_val -gt 0 ] || \
- 		[ $((fail_loc)) -eq 0 ]; then
- 		do_facet $SINGLEMDS "lctl set_param fail_val=$fail_val"
- 	    fi
- 	    do_facet $SINGLEMDS "lctl set_param fail_loc=$fail_loc"
- 	fi
- 	if [ $fail_node == "ost" ] || [ $fail_node == "mds_ost" ]; then
- 	    for num in `seq $OSTCOUNT`; do
- 		if [ $((fail_loc & 0x10000000)) -ne 0 -a $fail_val -gt 0 ] || \
- 		    [ $((fail_loc)) -eq 0 ]; then
- 		    do_facet ost$num "lctl set_param fail_val=$fail_val"
- 		fi
- 		do_facet ost$num "lctl set_param fail_loc=$fail_loc"
- 	    done
- 	fi
+	if [ $fail_node == "mds" ] || [ $fail_node == "mds_ost" ]; then
+	    if [ $((fail_loc & 0x10000000)) -ne 0  -a $fail_val -gt 0 ] || \
+		[ $((fail_loc)) -eq 0 ]; then
+		do_facet $SINGLEMDS "lctl set_param fail_val=$fail_val"
+	    fi
+	    do_facet $SINGLEMDS "lctl set_param fail_loc=$fail_loc"
+	fi
+	if [ $fail_node == "ost" ] || [ $fail_node == "mds_ost" ]; then
+	    for num in `seq $OSTCOUNT`; do
+		if [ $((fail_loc & 0x10000000)) -ne 0 -a $fail_val -gt 0 ] || \
+		    [ $((fail_loc)) -eq 0 ]; then
+		    do_facet ost$num "lctl set_param fail_val=$fail_val"
+		fi
+		do_facet ost$num "lctl set_param fail_loc=$fail_loc"
+	    done
+	fi
 }
 
 RUNAS="runas -u $TSTID -g $TSTID"
@@ -177,6 +176,43 @@ resetquota() {
        $LFS setquota "$1" "$2" -b 0 -B 0 -i 0 -I 0 $MOUNT || error "resetquota failed"
 }
 
+quota_error() {
+        LOCAL_UG=$1
+        LOCAL_ID=$2
+
+        if [ "$LOCAL_UG" == "a" -o "$LOCAL_UG" == "u" ]; then
+                log "Files for user ($LOCAL_ID):"
+                ($LFS find -user $LOCAL_ID $DIR | xargs stat 2>/dev/null)
+        fi
+
+        if [ "$LOCAL_UG" == "a" -o "$LOCAL_UG" == "g" ]; then
+                log "Files for group ($LOCAL_ID):"
+                ($LFS find -group $LOCAL_ID $DIR | xargs stat 2>/dev/null)
+        fi
+
+        shift 2
+        error "$*"
+}
+
+quota_show_check() {
+        LOCAL_BF=$1
+        LOCAL_UG=$2
+        LOCAL_ID=$3
+	PATTERN="`echo $DIR | sed 's/\//\\\\\//g'`"
+
+        $LFS quota -v -$LOCAL_UG $LOCAL_ID $DIR
+
+        if [ "$LOCAL_BF" == "a" -o "$LOCAL_BF" == "b" ]; then
+	        USAGE="`$LFS quota -$LOCAL_UG $LOCAL_ID $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $2 }'`"
+                [ $USAGE -ne 0 ] && quota_error $LOCAL_UG $LOCAL_ID "System is not clean for block ($LOCAL_UG:$LOCAL_ID:$USAGE)."
+        fi
+
+        if [ "$LOCAL_BF" == "a" -o "$LOCAL_BF" == "f" ]; then
+	        USAGE="`$LFS quota -$LOCAL_UG $LOCAL_ID $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $5 }'`"
+                [ $USAGE -ne 0 ] && quota_error $LOCAL_UG $LOCAL_ID "System is not clean for file ($LOCAL_UG:$LOCAL_ID:$USAGE)."
+        fi
+}
+
 # set quota
 test_0() {
 	$LFS quotaoff -ug $DIR
@@ -195,70 +231,70 @@ run_test_with_stat 0 "Set quota ============================="
 
 # test for specific quota limitation, qunit, qtune $1=block_quota_limit
 test_1_sub() {
-	LIMIT=$1
+        LIMIT=$1
 	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
-	TESTFILE="$DIR/$tdir/$tfile-0"
+        TESTFILE="$DIR/$tdir/$tfile-0"
 
 	wait_delete_completed
 
-	# test for user
-	log "  User quota (limit: $LIMIT kbytes)"
-	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
+        # test for user
+        log "  User quota (limit: $LIMIT kbytes)"
+        $LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
 	sleep 3
-	$SHOW_QUOTA_USER
+	quota_show_check b u $TSTUSR
 
-	$LFS setstripe $TESTFILE -c 1
-	chown $TSTUSR.$TSTUSR $TESTFILE
+        $LFS setstripe $TESTFILE -c 1
+        chown $TSTUSR.$TSTUSR $TESTFILE
 
-	log "    Write ..."
-	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$(($LIMIT/2)) || error "(usr) write failure, but expect success"
-	log "    Done"
-	log "    Write out of block quota ..."
+        log "    Write ..."
+	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$(($LIMIT/2)) || quota_error u $TSTUSR "(usr) write failure, but expect success"
+        log "    Done"
+        log "    Write out of block quota ..."
 	# this time maybe cache write,  ignore it's failure
-	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$(($LIMIT/2)) seek=$(($LIMIT/2)) || true
+        $RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$(($LIMIT/2)) seek=$(($LIMIT/2)) || true
 	# flush cache, ensure noquota flag is setted on client
-	cancel_lru_locks osc
-	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$BUNIT_SZ seek=$LIMIT && error "(usr) write success, but expect EDQUOT"
+        cancel_lru_locks osc
+	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$BUNIT_SZ seek=$LIMIT && quota_error u $TSTUSR "(usr) write success, but expect EDQUOT"
 
-	rm -f $TESTFILE
+        rm -f $TESTFILE
 	sync; sleep 1; sync;
 	OST0_UUID=`do_facet ost1 $LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
 	OST0_QUOTA_USED=`$LFS quota -o $OST0_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
 	echo $OST0_QUOTA_USED
 	[ $OST0_QUOTA_USED -ne 0 ] && \
-	    ($SHOW_QUOTA_USER; error "quota deleted isn't released")
+	    ($SHOW_QUOTA_USER; quota_error u $TSTUSR "(usr) quota deleted isn't released")
 	$SHOW_QUOTA_USER
         resetquota -u $TSTUSR
 
-	# test for group
+        # test for group
 	log "--------------------------------------"
-	log "  Group quota (limit: $LIMIT kbytes)"
-	$LFS setquota -g $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
+        log "  Group quota (limit: $LIMIT kbytes)"
+        $LFS setquota -g $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
 	sleep 3
-	$SHOW_QUOTA_GROUP
-	TESTFILE="$DIR/$tdir/$tfile-1"
+        quota_show_check b g $TSTUSR
+        TESTFILE="$DIR/$tdir/$tfile-1"
 
-	$LFS setstripe $TESTFILE -c 1
-	chown $TSTUSR.$TSTUSR $TESTFILE
+        $LFS setstripe $TESTFILE -c 1
+        chown $TSTUSR.$TSTUSR $TESTFILE
 
-	log "    Write ..."
-	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$(($LIMIT/2)) || error "(grp) write failure, but expect success"
-	log "    Done"
-	log "    Write out of block quota ..."
+        log "    Write ..."
+	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$(($LIMIT/2)) || quota_error g $TSTUSR "(grp) write failure, but expect success"
+        log "    Done"
+        log "    Write out of block quota ..."
 	# this time maybe cache write, ignore it's failure
-	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$(($LIMIT/2)) seek=$(($LIMIT/2)) || true
-	cancel_lru_locks osc
-	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$BUNIT_SZ seek=$LIMIT && error "(grp) write success, but expect EDQUOT"
+        $RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$(($LIMIT/2)) seek=$(($LIMIT/2)) || true
+        cancel_lru_locks osc
+	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$BUNIT_SZ seek=$LIMIT && quota_error g $TSTUSR "(grp) write success, but expect EDQUOT"
 
 	# cleanup
-	rm -f $TESTFILE
+        rm -f $TESTFILE
 	sync; sleep 1; sync;
 	OST0_UUID=`do_facet ost1 $LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
 	OST0_QUOTA_USED=`$LFS quota -o $OST0_UUID -g $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
 	echo $OST0_QUOTA_USED
 	[ $OST0_QUOTA_USED -ne 0 ] && \
-	    ($SHOW_QUOTA_USER; error "quota deleted isn't released")
+	    ($SHOW_QUOTA_GROUP; quota_error g $TSTUSR "(grp) quota deleted isn't released")
 	$SHOW_QUOTA_GROUP
         resetquota -g $TSTUSR
 }
@@ -278,32 +314,32 @@ test_1() {
 	    echo "=================================================="
 	    set_blk_unitsz $((128 * 1024))
 	    set_blk_tunesz $((128 * 1024 / 2))
-	done
+        done
 }
 run_test_with_stat 1 "Block hard limit (normal use and out of quota) ==="
 
 # test for specific quota limitation, qunit, qtune $1=block_quota_limit
 test_2_sub() {
-	LIMIT=$1
+        LIMIT=$1
 	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
-	TESTFILE="$DIR/$tdir/$tfile-0"
+        TESTFILE="$DIR/$tdir/$tfile-0"
 
 	wait_delete_completed
 
-	# test for user
-	log "  User quota (limit: $LIMIT files)"
-	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I $LIMIT $DIR
+        # test for user
+        log "  User quota (limit: $LIMIT files)"
+        $LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I $LIMIT $DIR
 	sleep 3
-	$SHOW_QUOTA_USER
+        quota_show_check f u $TSTUSR
 
 	log "    Create $LIMIT files ..."
 	$RUNAS createmany -m ${TESTFILE} $LIMIT || \
-		error "(usr) create failure, but expect success"
+		quota_error u $TSTUSR "(usr) create failure, but expect success"
 	log "    Done"
 	log "    Create out of file quota ..."
 	$RUNAS touch ${TESTFILE}_xxx && \
-		error "(usr) touch success, but expect EDQUOT"
+		quota_error u $TSTUSR "(usr) touch success, but expect EDQUOT"
 
 	unlinkmany ${TESTFILE} $LIMIT
 	rm -f ${TESTFILE}_xxx
@@ -313,25 +349,25 @@ test_2_sub() {
 	MDS_QUOTA_USED=`$LFS quota -o $MDS_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`
 	echo $MDS_QUOTA_USED
 	[ $MDS_QUOTA_USED -ne 0 ] && \
-	    ($SHOW_QUOTA_USER; error "quota deleted isn't released")
+	    ($SHOW_QUOTA_USER; quota_error u $TSTUSR "(usr) quota deleted isn't released")
 	$SHOW_QUOTA_USER
 	resetquota -u $TSTUSR
 
-	# test for group
+        # test for group
 	log "--------------------------------------"
-	log "  Group quota (limit: $LIMIT FILE)"
-	$LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I $LIMIT $DIR
+        log "  Group quota (limit: $LIMIT FILE)"
+        $LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I $LIMIT $DIR
 	sleep 3
-	$SHOW_QUOTA_GROUP
-	TESTFILE=$DIR/$tdir/$tfile-1
+        quota_show_check f g $TSTUSR
+        TESTFILE=$DIR/$tdir/$tfile-1
 
 	log "    Create $LIMIT files ..."
 	$RUNAS createmany -m ${TESTFILE} $LIMIT || \
-		error "(usr) create failure, but expect success"
+		quota_error g $TSTUSR "(grp) create failure, but expect success"
 	log "    Done"
 	log "    Create out of file quota ..."
 	$RUNAS touch ${TESTFILE}_xxx && \
-		error "(usr) touch success, but expect EDQUOT"
+		quota_error g $TSTUSR "(grp) touch success, but expect EDQUOT"
 
 	unlinkmany ${TESTFILE} $LIMIT
 	rm -f ${TESTFILE}_xxx
@@ -341,7 +377,7 @@ test_2_sub() {
 	MDS_QUOTA_USED=`$LFS quota -o $MDS_UUID -g $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`
 	echo $MDS_QUOTA_USED
 	[ $MDS_QUOTA_USED -ne 0 ] && \
-	    ($SHOW_QUOTA_USER; error "quota deleted isn't released")
+	    ($SHOW_QUOTA_GROUP; quota_error g $TSTUSR "(grp) quota deleted isn't released")
 	$SHOW_QUOTA_GROUP
         resetquota -g $TSTUSR
 }
@@ -357,18 +393,18 @@ test_2() {
 		# define ino_qunit is between 10 and 100
 		ino_qunit=$(( $RANDOM % 90 + 10 ))
 		ino_qtune=$(( $RANDOM % $ino_qunit ))
-		# RANDOM's maxium is 32767
+                # RANDOM's maxium is 32767
 		i_limit=$(( $RANDOM % 990 + 10 ))
 	    fi
 
-	    set_file_tunesz $ino_qtune
+            set_file_tunesz $ino_qtune
 	    set_file_unitsz $ino_qunit
 	    echo "cycle: $i(total $cycle) iunit:$ino_qunit, itune:$ino_qtune, ilimit:$i_limit"
 	    test_2_sub $i_limit
 	    echo "=================================================="
 	    set_file_unitsz 5120
 	    set_file_tunesz 2560
-	done
+        done
 }
 run_test_with_stat 2 "File hard limit (normal use and out of quota) ==="
 
@@ -382,9 +418,9 @@ test_block_soft() {
 	echo "    Write to exceed soft limit"
 	RUNDD="$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ"
 	$RUNDD count=$((BUNIT_SZ+1)) || \
-		error "write failure, but expect success"
+		quota_error a $TSTUSR "write failure, but expect success"
 	OFFSET=$((OFFSET + BUNIT_SZ + 1))
-	cancel_lru_locks osc
+        cancel_lru_locks osc
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
@@ -392,41 +428,41 @@ test_block_soft() {
 
 	echo "    Write before timer goes off"
 	$RUNDD count=$BUNIT_SZ seek=$OFFSET || \
-		error "write failure, but expect success"
+		quota_error a $TSTUSR "write failure, but expect success"
 	OFFSET=$((OFFSET + BUNIT_SZ))
-	cancel_lru_locks osc
+        cancel_lru_locks osc
 	echo "    Done"
 
-	echo "    Sleep $TIMER seconds ..."
-	sleep $TIMER
+        echo "    Sleep $TIMER seconds ..."
+        sleep $TIMER
 
-	$SHOW_QUOTA_USER
-	$SHOW_QUOTA_GROUP
-	$SHOW_QUOTA_INFO
+        $SHOW_QUOTA_USER
+        $SHOW_QUOTA_GROUP
+        $SHOW_QUOTA_INFO
 
 	echo "    Write after timer goes off"
 	# maybe cache write, ignore.
 	$RUNDD count=$BUNIT_SZ seek=$OFFSET || true
 	OFFSET=$((OFFSET + BUNIT_SZ))
-	cancel_lru_locks osc
+        cancel_lru_locks osc
 	$RUNDD count=$BUNIT_SZ seek=$OFFSET && \
-		error "write success, but expect EDQUOT"
+		quota_error a $TSTUSR "write success, but expect EDQUOT"
 
-	$SHOW_QUOTA_USER
-	$SHOW_QUOTA_GROUP
-	$SHOW_QUOTA_INFO
+        $SHOW_QUOTA_USER
+        $SHOW_QUOTA_GROUP
+        $SHOW_QUOTA_INFO
 
 	echo "    Unlink file to stop timer"
 	rm -f $TESTFILE
 	sync; sleep 1; sync
 	echo "    Done"
 
-	$SHOW_QUOTA_USER
-	$SHOW_QUOTA_GROUP
-	$SHOW_QUOTA_INFO
+        $SHOW_QUOTA_USER
+        $SHOW_QUOTA_GROUP
+        $SHOW_QUOTA_INFO
 
 	echo "    Write ..."
-	$RUNDD count=$BUNIT_SZ || error "write failure, but expect success"
+	$RUNDD count=$BUNIT_SZ || quota_error a $TSTUSR "write failure, but expect success"
 	echo "    Done"
 
 	# cleanup
@@ -439,7 +475,7 @@ test_3() {
 	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
 
-	# 1 bunit on mds and 1 bunit on every ost
+        # 1 bunit on mds and 1 bunit on every ost
 	LIMIT=$(( $BUNIT_SZ * ($OSTCOUNT + 1) ))
 	GRACE=10
 
@@ -478,13 +514,13 @@ test_file_soft() {
 
 	echo "    Create files to exceed soft limit"
 	$RUNAS createmany -m ${TESTFILE}_ $((LIMIT + 1)) || \
-		error "create failure, but expect success"
+		quota_error a $TSTUSR "create failure, but expect success"
 	sync; sleep 1; sync
 	echo "    Done"
 
 	echo "    Create file before timer goes off"
 	$RUNAS touch ${TESTFILE}_before || \
-		error "failed create before timer expired, but expect success"
+		quota_error a $TSTUSR "failed create before timer expired, but expect success"
 	sync; sleep 1; sync
 	echo "    Done"
 
@@ -497,11 +533,11 @@ test_file_soft() {
 
 	echo "    Create file after timer goes off"
 	# the least of inode qunit is 2, so there are at most 3(qunit:2+qtune:1)
-	# inode quota left here
+        # inode quota left here
 	$RUNAS touch ${TESTFILE}_after ${TESTFILE}_after1 ${TESTFILE}_after2 || true
 	sync; sleep 1; sync
 	$RUNAS touch ${TESTFILE}_after3 && \
-		error "create after timer expired, but expect EDQUOT"
+		quota_error a $TSTUSR "create after timer expired, but expect EDQUOT"
 	sync; sleep 1; sync
 
 	$SHOW_QUOTA_USER
@@ -514,7 +550,7 @@ test_file_soft() {
 
 	echo "    Create file"
 	$RUNAS touch ${TESTFILE}_xxx || \
-		error "touch after timer stop failure, but expect success"
+		quota_error a $TSTUSR "touch after timer stop failure, but expect success"
 	sync; sleep 1; sync
 	echo "    Done"
 
@@ -535,7 +571,7 @@ test_4a() {	# was test_4
 	echo "  User quota (soft limit: $LIMIT files  grace: $GRACE seconds)"
 	$LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace $GRACE $DIR
 	$LFS setquota -u $TSTUSR -b 0 -B 0 -i $LIMIT -I 0 $DIR
-	$SHOW_QUOTA_USER
+        quota_show_check f u $TSTUSR
 
 	test_file_soft $TESTFILE $LIMIT $GRACE
 	resetquota -u $TSTUSR
@@ -543,7 +579,7 @@ test_4a() {	# was test_4
 	echo "  Group quota (soft limit: $LIMIT files  grace: $GRACE seconds)"
 	$LFS setquota -t -g --block-grace $MAX_DQ_TIME --inode-grace $GRACE $DIR
 	$LFS setquota -g $TSTUSR -b 0 -B 0 -i $LIMIT -I 0 $DIR
-	$SHOW_QUOTA_GROUP
+        quota_show_check f g $TSTUSR
 	TESTFILE=$DIR/$tdir/$tfile-1
 
 	test_file_soft $TESTFILE $LIMIT $GRACE
@@ -556,30 +592,30 @@ test_4a() {	# was test_4
 run_test_with_stat 4a "File soft limit (start timer, timer goes off, stop timer) ==="
 
 test_4b() {	# was test_4a
-	GR_STR1="1w3d"
-	GR_STR2="1000s"
-	GR_STR3="5s"
-	GR_STR4="1w2d3h4m5s"
-	GR_STR5="5c"
-	GR_STR6="1111111111111111"
+        GR_STR1="1w3d"
+        GR_STR2="1000s"
+        GR_STR3="5s"
+        GR_STR4="1w2d3h4m5s"
+        GR_STR5="5c"
+        GR_STR6="1111111111111111"
 
 	wait_delete_completed
 
-	# test of valid grace strings handling
-	echo "  Valid grace strings test"
-	$LFS setquota -t -u --block-grace $GR_STR1 --inode-grace $GR_STR2 $DIR
-	$LFS quota -u -t $DIR | grep "Block grace time: $GR_STR1"
-	$LFS setquota -t -g --block-grace $GR_STR3 --inode-grace $GR_STR4 $DIR
-	$LFS quota -g -t $DIR | grep "Inode grace time: $GR_STR4"
+        # test of valid grace strings handling
+        echo "  Valid grace strings test"
+        $LFS setquota -t -u --block-grace $GR_STR1 --inode-grace $GR_STR2 $DIR
+        $LFS quota -u -t $DIR | grep "Block grace time: $GR_STR1"
+        $LFS setquota -t -g --block-grace $GR_STR3 --inode-grace $GR_STR4 $DIR
+        $LFS quota -g -t $DIR | grep "Inode grace time: $GR_STR4"
 
-	# test of invalid grace strings handling
-	echo "  Invalid grace strings test"
-	! $LFS setquota -t -u --block-grace $GR_STR4 --inode-grace $GR_STR5 $DIR
-	! $LFS setquota -t -g --block-grace $GR_STR4 --inode-grace $GR_STR6 $DIR
+        # test of invalid grace strings handling
+        echo "  Invalid grace strings test"
+        ! $LFS setquota -t -u --block-grace $GR_STR4 --inode-grace $GR_STR5 $DIR
+        ! $LFS setquota -t -g --block-grace $GR_STR4 --inode-grace $GR_STR6 $DIR
 
-	# cleanup
-	$LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace $MAX_IQ_TIME $DIR
-	$LFS setquota -t -g --block-grace $MAX_DQ_TIME --inode-grace $MAX_IQ_TIME $DIR
+        # cleanup
+        $LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace $MAX_IQ_TIME $DIR
+        $LFS setquota -t -g --block-grace $MAX_DQ_TIME --inode-grace $MAX_IQ_TIME $DIR
 }
 run_test_with_stat 4b "Grace time strings handling ==="
 
@@ -594,8 +630,8 @@ test_5() {
 	echo "  Set quota limit (0 $BLIMIT 0 $ILIMIT) for $TSTUSR.$TSTUSR"
 	$LFS setquota -u $TSTUSR -b 0 -B $BLIMIT -i 0 -I $ILIMIT $DIR
 	$LFS setquota -g $TSTUSR -b 0 -B $BLIMIT -i 0 -I $ILIMIT $DIR
-	$SHOW_QUOTA_USER
-	$SHOW_QUOTA_GROUP
+        quota_show_check a u $TSTUSR
+        quota_show_check a g $TSTUSR
 
 	echo "  Create more than $ILIMIT files and more than $BLIMIT kbytes ..."
 	createmany -m $DIR/$tdir/$tfile-0_ $((ILIMIT + 1)) || \
@@ -605,7 +641,7 @@ test_5() {
 	echo "  Chown files to $TSTUSR.$TSTUSR ..."
 	for i in `seq 0 $ILIMIT`; do
 	chown $TSTUSR.$TSTUSR $DIR/$tdir/$tfile-0_$i || \
-			error "chown failure, but expect success"
+			quota_error a $TSTUSR "chown failure, but expect success"
 	done
 
 	# cleanup
@@ -636,8 +672,8 @@ test_6() {
 	echo "  Set block limit $LIMIT kbytes to $TSTUSR.$TSTUSR"
 	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
 	$LFS setquota -g $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
-	$SHOW_QUOTA_USER
-	$SHOW_QUOTA_GROUP
+        quota_show_check b u $TSTUSR
+        quota_show_check b g $TSTUSR
 
 	echo "  Create filea on OST0 and fileb on OST1"
 	$LFS setstripe $FILEA -i 0 -c 1
@@ -646,33 +682,33 @@ test_6() {
 	chown $TSTUSR.$TSTUSR $FILEB
 
 	echo "  Exceed quota limit ..."
-	RUNDD="$RUNAS dd if=/dev/zero of=$FILEB bs=$BLK_SZ"
-	$RUNDD count=$((LIMIT - BUNIT_SZ * OSTCOUNT)) || \
-		error "write fileb failure, but expect success"
+        RUNDD="$RUNAS dd if=/dev/zero of=$FILEB bs=$BLK_SZ"
+        $RUNDD count=$((LIMIT - BUNIT_SZ * OSTCOUNT)) || \
+		quota_error a $TSTUSR "write fileb failure, but expect success"
 
-	cancel_lru_locks osc
-	$SHOW_QUOTA_USER
-	$SHOW_QUOTA_GROUP
-	$RUNDD seek=$LIMIT count=$((BUNIT_SZ * OSTCOUNT)) && \
-		error "write fileb success, but expect EDQUOT"
-	cancel_lru_locks osc
+        cancel_lru_locks osc
+        $SHOW_QUOTA_USER
+        $SHOW_QUOTA_GROUP
+        $RUNDD seek=$LIMIT count=$((BUNIT_SZ * OSTCOUNT)) && \
+		quota_error a $TSTUSR "write fileb success, but expect EDQUOT"
+        cancel_lru_locks osc
 	echo "  Write to OST0 return EDQUOT"
 	# this write maybe cache write, ignore it's failure
-	RUNDD="$RUNAS dd if=/dev/zero of=$FILEA bs=$BLK_SZ"
-	$RUNDD count=$(($BUNIT_SZ * 2)) || true
-	cancel_lru_locks osc
-	$SHOW_QUOTA_USER
-	$SHOW_QUOTA_GROUP
-	$RUNDD count=$((BUNIT_SZ * 2)) seek=$((BUNIT_SZ *2)) && \
-		error "write filea success, but expect EDQUOT"
+        RUNDD="$RUNAS dd if=/dev/zero of=$FILEA bs=$BLK_SZ"
+        $RUNDD count=$(($BUNIT_SZ * 2)) || true
+        cancel_lru_locks osc
+        $SHOW_QUOTA_USER
+        $SHOW_QUOTA_GROUP
+        $RUNDD count=$((BUNIT_SZ * 2)) seek=$((BUNIT_SZ *2)) && \
+		quota_error a $TSTUSR "write filea success, but expect EDQUOT"
 
 	echo "  Remove fileb to let OST1 release quota"
 	rm -f $FILEB
-	sync; sleep 10; sync; # need to allow journal commit for small fs
+        sync; sleep 10; sync; # need to allow journal commit for small fs
 
 	echo "  Write to OST0"
 	$RUNDD count=$((LIMIT - BUNIT_SZ * OSTCOUNT)) || \
-		error "write filea failure, expect success"
+		quota_error a $TSTUSR "write filea failure, expect success"
 	echo "  Done"
 
 	# cleanup
@@ -703,9 +739,9 @@ test_7()
 
 	echo "  Write to OST0..."
 	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$BUNIT_SZ || \
-		error "write failure, but expect success"
+		quota_error u $TSTUSR "write failure, but expect success"
 
-	#define OBD_FAIL_OBD_DQACQ	       0x604
+	#define OBD_FAIL_OBD_DQACQ               0x604
 	lustre_fail mds  0x604
 	echo "  Remove files on OST0"
 	rm -f $TESTFILE
@@ -726,8 +762,8 @@ test_7()
 	[ $TOTAL_LIMIT -eq $LIMIT ] || error "total limits not recovery!"
 	echo "  total limits = $TOTAL_LIMIT"
 
-	OST0_UUID=`do_facet ost1 "$LCTL dl | grep -m1 obdfilter" | awk '{print $((NF-1))}'`
-	[ -z "$OST0_UUID" ] && OST0_UUID=`do_facet ost1 "$LCTL dl | grep -m1 obdfilter" | awk '{print $((NF-1))}'`
+        OST0_UUID=`do_facet ost1 "$LCTL dl | grep -m1 obdfilter" | awk '{print $((NF-1))}'`
+        [ -z "$OST0_UUID" ] && OST0_UUID=`do_facet ost1 "$LCTL dl | grep -m1 obdfilter" | awk '{print $((NF-1))}'`
 	OST0_LIMIT="`$LFS quota -o $OST0_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $3 }'`"
 	[ $OST0_LIMIT -eq $BUNIT_SZ ] || error "high limits not released!"
 	echo "  limits on $OST0_UUID = $OST0_LIMIT"
@@ -753,7 +789,7 @@ test_8() {
 	chmod 0777 $DIR/$tdir
 	local duration=""
 	[ "$SLOW" = "no" ] && duration=" -t 120"
-	$RUNAS bash rundbench -D $DIR/$tdir 3 $duration || error "dbench failed!"
+	$RUNAS bash rundbench -D $DIR/$tdir 3 $duration || quota_error a $TSTUSR "dbench failed!"
 
 	sync; sleep 3; sync;
 
@@ -791,45 +827,45 @@ test_9() {
 
 	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
-	TESTFILE="$DIR/$tdir/$tfile-0"
+        TESTFILE="$DIR/$tdir/$tfile-0"
 
-	BLK_LIMIT=$((100 * KB * KB)) # 100G
-	FILE_LIMIT=1000000
-	echo "  Set block limit $BLK_LIMIT kbytes to $TSTUSR.$TSTUSR"
+        BLK_LIMIT=$((100 * KB * KB)) # 100G
+        FILE_LIMIT=1000000
+        echo "  Set block limit $BLK_LIMIT kbytes to $TSTUSR.$TSTUSR"
 
-	log "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for user: $TSTUSR"
-	$LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR
-	log "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for group: $TSTUSR"
-	$LFS setquota -g $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR
+        log "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for user: $TSTUSR"
+        $LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR
+        log "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for group: $TSTUSR"
+        $LFS setquota -g $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR
 
-	echo "  Set stripe"
+        quota_show_check a u $TSTUSR
+        quota_show_check a g $TSTUSR
+
+        echo "  Set stripe"
 	$LFS setstripe $TESTFILE -c 1
-	touch $TESTFILE
-	chown $TSTUSR.$TSTUSR $TESTFILE
+        touch $TESTFILE
+        chown $TSTUSR.$TSTUSR $TESTFILE
 
-	$SHOW_QUOTA_USER
-	$SHOW_QUOTA_GROUP
+        log "    Write the big file of 4.5G ..."
+        $RUNAS dd if=/dev/zero of=$TESTFILE  bs=$blksize count=$((size_file / blksize)) || \
+	       quota_error a $TSTUSR "(usr) write 4.5G file failure, but expect success"
 
-	log "    Write the big file of 4.5G ..."
-	$RUNAS dd if=/dev/zero of=$TESTFILE  bs=$blksize count=$((size_file / blksize)) || \
-	       error "(usr) write 4.5G file failure, but expect success"
+        $SHOW_QUOTA_USER
+        $SHOW_QUOTA_GROUP
 
-	$SHOW_QUOTA_USER
-	$SHOW_QUOTA_GROUP
-
-	log "    delete the big file of 4.5G..."
-	$RUNAS rm -f $TESTFILE
+        log "    delete the big file of 4.5G..."
+        $RUNAS rm -f $TESTFILE
 	sync; sleep 3; sync;
 
-	$SHOW_QUOTA_USER
-	$SHOW_QUOTA_GROUP
+        $SHOW_QUOTA_USER
+        $SHOW_QUOTA_GROUP
 
-	RC=$?
+        RC=$?
 
 	set_blk_unitsz $((128 * 1024))
 	set_blk_tunesz $((128 * 1024 / 2))
 
-	return $RC
+        return $RC
 }
 run_test_with_stat 9 "run for fixing bug10707(64bit) ==========="
 
@@ -858,27 +894,27 @@ test_10() {
 	log "  Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT) for group: $TSTUSR"
 	$LFS setquota -g $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR
 
+        quota_show_check a u $TSTUSR
+        quota_show_check a g $TSTUSR
+
 	echo "  Set stripe"
 	$LFS setstripe $TESTFILE -c 1
 	touch $TESTFILE
 	chown $TSTUSR.$TSTUSR $TESTFILE
 
-	$SHOW_QUOTA_USER
-	$SHOW_QUOTA_GROUP
+        log "    Write the big file of 4.5 G ..."
+        $RUNAS dd if=/dev/zero of=$TESTFILE  bs=$blksize count=$((size_file / blksize)) || \
+		quota_error a $TSTUSR "(usr) write 4.5 G file failure, but expect success"
 
-	log "    Write the big file of 4.5 G ..."
-	$RUNAS dd if=/dev/zero of=$TESTFILE  bs=$blksize count=$((size_file / blksize)) || \
-		error "(usr) write 4.5 G file failure, but expect success"
+        $SHOW_QUOTA_USER
+        $SHOW_QUOTA_GROUP
 
-	$SHOW_QUOTA_USER
-	$SHOW_QUOTA_GROUP
-
-	log "    delete the big file of 4.5 G..."
-	$RUNAS rm -f $TESTFILE
+        log "    delete the big file of 4.5 G..."
+        $RUNAS rm -f $TESTFILE
 	sync; sleep 3; sync;
 
-	$SHOW_QUOTA_USER
-	$SHOW_QUOTA_GROUP
+        $SHOW_QUOTA_USER
+        $SHOW_QUOTA_GROUP
 
 	RC=$?
 
@@ -921,12 +957,12 @@ test_11() {
 	   echo -n "    create a file for uid "
 	   for j in `seq 1 30`; do
 	       echo -n "$j "
-	       # 30MB per dd for a total of 900MB (if space even permits)
+               # 30MB per dd for a total of 900MB (if space even permits)
 	       runas -u $j dd if=/dev/zero of=$TESTDIR/$tfile  bs=$blksize count=15 > /dev/null 2>&1 &
 	   done
 	   echo ""
 	   PROCS=$(ps -ef | grep -v grep | grep "dd if /dev/zero of $TESTDIR" | wc -l)
-	   LAST_USED=0
+           LAST_USED=0
 	   while [ $PROCS -gt 0 ]; do 
 	     sleep 20
 	     SECS=$((SECS + sleep))
@@ -940,7 +976,7 @@ test_11() {
 		 RV=2
 		 break
 	     fi
-	     LAST_USED=$USED
+             LAST_USED=$USED
 	   done
 	   echo "    removing the test files..."
 	   rm -f $TESTDIR/$tfile
@@ -955,7 +991,7 @@ test_11() {
        sysctl -w vm.dirty_ratio=$orig_dr
        sysctl -w vm.dirty_writeback_centisecs=$orig_dwc
        if [ $RV -ne 0 ]; then
-	   error "Nothing was written for $SECS sec ... aborting"
+           error "Nothing was written for $SECS sec ... aborting"
        fi
        return $RV
 }
@@ -982,11 +1018,11 @@ test_12() {
 	$LFS setstripe $TESTFILE -i 0 -c 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
 	$LFS setstripe $TESTFILE2 -i 0 -c 1
-	chown $TSTUSR2.$TSTUSR2 $TESTFILE2
+        chown $TSTUSR2.$TSTUSR2 $TESTFILE2
 
 	#define OBD_FAIL_OST_HOLD_WRITE_RPC      0x21f
- 	#define OBD_FAIL_SOME        0x10000000 /* fail N times */
- 	lustre_fail ost $((0x0000021f | 0x10000000)) 1
+	#define OBD_FAIL_SOME        0x10000000 /* fail N times */
+	lustre_fail ost $((0x0000021f | 0x10000000)) 1
 
 	echo "   step1: write out of block quota ..."
 	$RUNAS2 dd if=/dev/zero of=$TESTFILE2 bs=$BLK_SZ count=102400 &
@@ -1001,7 +1037,7 @@ test_12() {
 	    count=$[count+1]
 	    if [ $count -gt 64 ]; then
 		lustre_fail ost 0
-		error "dd should be finished!"
+		quota_error u $TSTUSR2 "dd should be finished!"
 	    fi
 	    sleep 1
 	done
@@ -1016,14 +1052,14 @@ test_12() {
 	    if ! ps -p ${DDPID} > /dev/null 2>&1; then break; fi
 	    count=$[count+1]
 	    if [ $count -gt 150 ]; then
-		error "dd should be finished!"
+		quota_error u $TSTUSR "dd should be finished!"
 	    fi
 	    sleep 1
 	done
 	echo "(dd_pid=$DDPID, time=$count)successful"
 
 	rm -f $TESTFILE $TESTFILE2
-	sync; sleep 3; sync;
+        sync; sleep 3; sync;
 
         resetquota -u $TSTUSR
 }
@@ -1040,12 +1076,12 @@ test_13() {
 
 	echo "   User quota (limit: $LIMIT kbytes)"
 	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
-	$SHOW_QUOTA_USER
+        quota_show_check b u $TSTUSR
 
 	$LFS setstripe $TESTFILE -i 0 -c 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
 	$LFS setstripe $TESTFILE.2 -i 0 -c 1
-	chown $TSTUSR.$TSTUSR $TESTFILE.2
+        chown $TSTUSR.$TSTUSR $TESTFILE.2
 
 	echo "   step1: write out of block quota ..."
 	# one bunit will give mds
@@ -1060,7 +1096,7 @@ test_13() {
 	    if ! ps -p ${DDPID} > /dev/null 2>&1; then break; fi
 	    count=$[count+1]
 	    if [ $count -gt 64 ]; then
-		error "dd should be finished!"
+		quota_error u $TSTUSR "dd should be finished!"
 	    fi
 	    sleep 1
 	done
@@ -1071,7 +1107,7 @@ test_13() {
 	    if ! ps -p ${DDPID1} > /dev/null 2>&1 ; then break; fi
 	    count=$[count+1]
 	    if [ $count -gt 64 ]; then
-		error "dd should be finished!"
+		quota_error u $TSTUSR "dd should be finished!"
 	    fi
 	    sleep 1
 	done
@@ -1084,7 +1120,7 @@ test_13() {
 	fz2=`stat -c %s $TESTFILE.2`
 	$SHOW_QUOTA_USER
 	[ $((fz + fz2)) -lt $((BUNIT_SZ * BLK_SZ * 10)) ] && \
-		error "files too small $fz + $fz2 < $((BUNIT_SZ * BLK_SZ * 10))"
+                quota_error u $TSTUSR "files too small $fz + $fz2 < $((BUNIT_SZ * BLK_SZ * 10))"
 
 	rm -f $TESTFILE $TESTFILE.2
 	sync; sleep 3; sync;
@@ -1094,7 +1130,7 @@ test_13() {
 run_test_with_stat 13 "test multiple clients write block quota ==="
 
 check_if_quota_zero(){
-	line=`$LFS quota -v -$1 $2 $DIR | wc -l`
+        line=`$LFS quota -v -$1 $2 $DIR | wc -l`
 	for i in `seq 3 $line`; do
 	    if [ $i -eq 3 ]; then
 		field="3 4 6 7"
@@ -1103,7 +1139,7 @@ check_if_quota_zero(){
 	    fi
 	    for j in $field; do
 		tmp=`$LFS quota -v -$1 $2 $DIR | sed -n ${i}p |
-		     awk  '{print $'"$j"'}'`
+                     awk  '{print $'"$j"'}'`
 		[ -n "$tmp" ] && [ $tmp -ne 0 ] && $LFS quota -v -$1 $2 $DIR && \
 		    error "quota on $2 isn't clean"
 	    done
@@ -1114,22 +1150,22 @@ check_if_quota_zero(){
 test_14a() {	# was test_14 b=12223 -- setting quota on root
 	TESTFILE="$DIR/$tdir/$tfile"
 
-	# reboot the lustre
-	sync; sleep 5; sync
-	cleanup_and_setup_lustre
-	test_0
+        # reboot the lustre
+        sync; sleep 5; sync
+        cleanup_and_setup_lustre
+        test_0
 
 	mkdir -p $DIR/$tdir
 
 	# out of root's file and block quota
 	$LFS setquota -u root -b 10 -B 10 -i 10 -I 10 $DIR
 	createmany -m ${TESTFILE} 20 || \
-	    error "unexpected: user(root) create files failly!"
+	    quota_error u root "unexpected: user(root) create files failly!"
 	dd if=/dev/zero of=$TESTFILE bs=4k count=4096 || \
-	    error "unexpected: user(root) write files failly!"
+	    quota_error u root "unexpected: user(root) write files failly!"
 	chmod 666 $TESTFILE
 	$RUNAS dd if=/dev/zero of=${TESTFILE} seek=4096 bs=4k count=4096 && \
-	    error "unexpected: user(quota_usr) write a file successfully!"
+	    quota_error u root "unexpected: user(quota_usr) write a file successfully!"
 
 	# trigger the llog
 	chmod 777 $DIR
@@ -1150,42 +1186,42 @@ run_test_with_stat 14a "test setting quota on root ==="
 
 # save quota version (both administrative and operational quotas)
 quota_save_version() {
-	do_facet mgs "lctl conf_param ${FSNAME}-MDT*.mdd.quota_type=$1"
-	do_facet mgs "lctl conf_param ${FSNAME}-OST*.ost.quota_type=$1"
-	sleep 5
+        do_facet mgs "lctl conf_param ${FSNAME}-MDT*.mdd.quota_type=$1"
+        do_facet mgs "lctl conf_param ${FSNAME}-OST*.ost.quota_type=$1"
+        sleep 5
 }
 
 test_15(){
-	LIMIT=$((24 * 1024 * 1024 * 1024 * 1024)) # 24 TB
-	PATTERN="`echo $DIR | sed 's/\//\\\\\//g'`"
+        LIMIT=$((24 * 1024 * 1024 * 1024 * 1024)) # 24 TB
+        PATTERN="`echo $DIR | sed 's/\//\\\\\//g'`"
 
 	wait_delete_completed
 
-	# test for user
-	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
-	TOTAL_LIMIT="`$LFS quota -v -u $TSTUSR $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
-	[ $TOTAL_LIMIT -eq $LIMIT ] || error "  (user)total limits = $TOTAL_LIMIT; limit = $LIMIT, failed!"
-	echo "  (user)total limits = $TOTAL_LIMIT; limit = $LIMIT, successful!"
+        # test for user
+        $LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
+        TOTAL_LIMIT="`$LFS quota -v -u $TSTUSR $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
+        [ $TOTAL_LIMIT -eq $LIMIT ] || error "  (user)total limits = $TOTAL_LIMIT; limit = $LIMIT, failed!"
+        echo "  (user)total limits = $TOTAL_LIMIT; limit = $LIMIT, successful!"
         resetquota -u $TSTUSR
 
-	# test for group
-	$LFS setquota -g $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
-	TOTAL_LIMIT="`$LFS quota -v -g $TSTUSR $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
-	[ $TOTAL_LIMIT -eq $LIMIT ] || error "  (group)total limits = $TOTAL_LIMIT; limit = $LIMIT, failed!"
-	echo "  (group)total limits = $TOTAL_LIMIT; limit = $LIMIT, successful!"
+        # test for group
+        $LFS setquota -g $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
+        TOTAL_LIMIT="`$LFS quota -v -g $TSTUSR $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
+        [ $TOTAL_LIMIT -eq $LIMIT ] || error "  (group)total limits = $TOTAL_LIMIT; limit = $LIMIT, failed!"
+        echo "  (group)total limits = $TOTAL_LIMIT; limit = $LIMIT, successful!"
         resetquota -g $TSTUSR
-	$LFS quotaoff -ug $DIR
-	do_facet $SINGLEMDS "lctl set_param lquota.mdd_obd-${FSNAME}-MDT*.quota_type=ug" | grep "error writing" && \
+        $LFS quotaoff -ug $DIR
+        do_facet $SINGLEMDS "lctl set_param lquota.mdd_obd-${FSNAME}-MDT*.quota_type=ug" | grep "error writing" && \
                 error "fail to set version for $SINGLEMDS"
-	for j in `seq $OSTCOUNT`; do
-		do_facet ost$j "lctl set_param lquota.${FSNAME}-OST*.quota_type=ug" | grep "error writing" && \
+        for j in `seq $OSTCOUNT`; do
+                do_facet ost$j "lctl set_param lquota.${FSNAME}-OST*.quota_type=ug" | grep "error writing" && \
                         error "fail to set version for ost$j"
-	done
+        done
 
-	echo "invalidating quota files"
-	$LFS quotainv -ug $DIR
-	$LFS quotainv -ugf $DIR
-	$LFS quotacheck -ug $DIR
+        echo "invalidating quota files"
+        $LFS quotainv -ug $DIR
+        $LFS quotainv -ugf $DIR
+        $LFS quotacheck -ug $DIR
 }
 run_test_with_stat 15 "set block quota more than 4T ==="
 
@@ -1200,10 +1236,10 @@ test_16_tub() {
 	echo "  User quota (limit: $LIMIT kbytes)"
 	if [ $1 == "u" ]; then
 	    $LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
-	    $SHOW_QUOTA_USER
+            quota_show_check b u $TSTUSR
 	else
 	    $LFS setquota -g $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
-	    $SHOW_QUOTA_GROUP
+            quota_show_check b g $TSTUSR
 	fi
 
 	$LFS setstripe $TESTFILE -c 1
@@ -1211,19 +1247,19 @@ test_16_tub() {
 
 	echo "    Write ..."
 	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$((BUNIT_SZ * 4)) || \
-	    error "(usr) write failure, but expect success"
+	    quota_error a $TSTUSR "(usr) write failure, but expect success"
 	echo "    Done"
 	echo "    Write out of block quota ..."
 	# this time maybe cache write,  ignore it's failure
 	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$BUNIT_SZ seek=$((BUNIT_SZ * 4)) || true
 	# flush cache, ensure noquota flag is setted on client
-	cancel_lru_locks osc
+        cancel_lru_locks osc
 	if [ $2 -eq 1 ]; then
 	    $RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$BUNIT_SZ seek=$((BUNIT_SZ * 4)) || \
-		error "(write failure, but expect success"
+		quota_error a $TSTUSR "(write failure, but expect success"
 	else
 	    $RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$BUNIT_SZ seek=$((BUNIT_SZ * 4)) && \
-		error "(write success, but expect EDQUOT"
+		quota_error a $TSTUSR "(write success, but expect EDQUOT"
 	fi
 
 	rm -f $TESTFILE
@@ -1238,7 +1274,7 @@ test_16 () {
 	set_blk_unitsz $((BUNIT_SZ * 4))
 	for i in u g; do
 	    for j in 0 1; do
-		# define OBD_FAIL_QUOTA_WITHOUT_CHANGE_QS    0xA01
+                # define OBD_FAIL_QUOTA_WITHOUT_CHANGE_QS    0xA01
 		echo " grp/usr: $i, adjust qunit: $j"
 		echo "-------------------------------"
 		[ $j -eq 1 ] && lustre_fail mds_ost 0
@@ -1258,7 +1294,7 @@ test_17() {
 
 	wait_delete_completed
 
-	#define OBD_FAIL_QUOTA_RET_QDATA | OBD_FAIL_ONCE
+        #define OBD_FAIL_QUOTA_RET_QDATA | OBD_FAIL_ONCE
 	lustre_fail ost 0x80000A02
 
 	TESTFILE="$DIR/$tdir/$tfile-a"
@@ -1272,27 +1308,27 @@ test_17() {
 	log "  Set enough high limit(block:$BLK_LIMIT) for group: $TSTUSR"
 	$LFS setquota -g $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I 0 $DIR
 
+        quota_show_check b u $TSTUSR
+        quota_show_check b g $TSTUSR
+
 	touch $TESTFILE
 	chown $TSTUSR.$TSTUSR $TESTFILE
 	touch $TESTFILE2
 	chown $TSTUSR.$TSTUSR $TESTFILE2
 
-	$SHOW_QUOTA_USER
-	$SHOW_QUOTA_GROUP
-
 	log "    Write the test file1 ..."
 	$RUNAS dd if=/dev/zero of=$TESTFILE  bs=$BLK_SZ count=$(( 10 * 1024 )) \
-	    || echo "write 10M file failure"
+	    || quota_error a $TSTUSR "write 10M file failure"
 
-	$SHOW_QUOTA_USER
-	$SHOW_QUOTA_GROUP
+        $SHOW_QUOTA_USER
+        $SHOW_QUOTA_GROUP
 
 	log "    write the test file2 ..."
 	$RUNAS dd if=/dev/zero of=$TESTFILE2  bs=$BLK_SZ count=$(( 10 * 1024 )) \
-	    || error "write 10M file failure"
+	    || quota_error a $TSTUSR "write 10M file failure"
 
-	$SHOW_QUOTA_USER
-	$SHOW_QUOTA_GROUP
+        $SHOW_QUOTA_USER
+        $SHOW_QUOTA_GROUP
 
 	rm -f $TESTFILE $TESTFILE2
 	RC=$?
@@ -1325,7 +1361,7 @@ test_18() {
 
 	log "   User quota (limit: $LIMIT kbytes)"
 	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $MOUNT
-	$SHOW_QUOTA_USER
+        quota_show_check b u $TSTUSR
 
 	$LFS setstripe $TESTFILE -i 0 -c 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
@@ -1337,8 +1373,8 @@ test_18() {
 	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$((1024 * 100)) &
 	DDPID=$!
 
-	sleep 5
-	lustre_fail mds 0
+        sleep 5
+        lustre_fail mds 0
 
 	echo  "   step2: testing ......"
 	count=0
@@ -1351,15 +1387,15 @@ test_18() {
 	    if ! ps -p ${DDPID} > /dev/null 2>&1; then break; fi
 	    count=$[count+1]
 	    if [ $count -gt $((4 * $timeout)) ]; then
-		error "count=$count dd should be finished!"
+		quota_error u $TSTUSR "count=$count dd should be finished!"
 	    fi
 	    sleep 1
 	done
-	log "(dd_pid=$DDPID, time=$count, timeout=$timeout)"
+        log "(dd_pid=$DDPID, time=$count, timeout=$timeout)"
 
-	testfile_size=$(stat -c %s $TESTFILE)
-	[ $testfile_size -ne $((BLK_SZ * 1024 * 100)) ] && \
-	    error "expect $((BLK_SZ * 1024 * 100)), got ${testfile_size}. Verifying file failed!"
+        testfile_size=$(stat -c %s $TESTFILE)
+        [ $testfile_size -ne $((BLK_SZ * 1024 * 100)) ] && \
+	    quota_error u $TSTUSR "expect $((BLK_SZ * 1024 * 100)), got ${testfile_size}. Verifying file failed!"
 	rm -f $TESTFILE
 	sync; sleep 3; sync;
 
@@ -1372,7 +1408,7 @@ run_test_with_stat 18 "run for fixing bug14840 ==========="
 
 # test when mds drops a quota req, the ost still could work well b=14840
 test_18a() {
-	LIMIT=$((100 * 1024 * 1024)) # 100G
+        LIMIT=$((100 * 1024 * 1024)) # 100G
 	TESTFILE="$DIR/$tdir/$tfile-a"
 	mkdir -p $DIR/$tdir
 
@@ -1383,7 +1419,7 @@ test_18a() {
 
 	log "   User quota (limit: $LIMIT kbytes)"
 	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $MOUNT
-	$SHOW_QUOTA_USER
+        quota_show_check b u $TSTUSR
 
 	$LFS setstripe $TESTFILE -i 0 -c 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
@@ -1407,13 +1443,13 @@ test_18a() {
 	    count=$[count+1]
 	    if [ $count -gt $((6 * $timeout)) ]; then
 		lustre_fail mds 0
-		error "count=$count dd should be finished!"
+		quota_error u $TSTUSR "count=$count dd should be finished!"
 	    fi
 	    sleep 1
 	done
-	log "(dd_pid=$DDPID, time=$count, timeout=$timeout)"
+        log "(dd_pid=$DDPID, time=$count, timeout=$timeout)"
 
-	lustre_fail mds 0
+        lustre_fail mds 0
 
 	rm -f $TESTFILE
 	sync; sleep 3; sync;
@@ -1428,25 +1464,25 @@ run_test_with_stat 18a "run for fixing bug14840 ==========="
 # test when mds do failover, the ost still could work well without trigger
 # watchdog b=14840
 test_18bc_sub() {
-	type=$1
+        type=$1
 
-	LIMIT=$((110 * 1024 )) # 110M
-	TESTFILE="$DIR/$tdir/$tfile"
-	mkdir -p $DIR/$tdir
+        LIMIT=$((110 * 1024 )) # 110M
+        TESTFILE="$DIR/$tdir/$tfile"
+        mkdir -p $DIR/$tdir
 
-	wait_delete_completed
+        wait_delete_completed
 
-	set_blk_tunesz 512
-	set_blk_unitsz 1024
+        set_blk_tunesz 512
+        set_blk_unitsz 1024
 
-	log "   User quota (limit: $LIMIT kbytes)"
-	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $MOUNT
-	$SHOW_QUOTA_USER
+        log "   User quota (limit: $LIMIT kbytes)"
+        $LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $MOUNT
+        quota_show_check b u $TSTUSR
 
-	$LFS setstripe $TESTFILE -i 0 -c 1
-	chown $TSTUSR.$TSTUSR $TESTFILE
+        $LFS setstripe $TESTFILE -i 0 -c 1
+        chown $TSTUSR.$TSTUSR $TESTFILE
 
-	timeout=$(sysctl -n lustre.timeout)
+        timeout=$(sysctl -n lustre.timeout)
 
 	if [ $type = "directio" ]; then
 	    log "   write 100M block(directio) ..."
@@ -1456,43 +1492,43 @@ test_18bc_sub() {
 	    $RUNAS dd if=/dev/zero of=$TESTFILE bs=$((BLK_SZ * 1024)) count=100 &
 	fi
 
-	DDPID=$!
-	do_facet $SINGLEMDS "$LCTL conf_param ${FSNAME}-MDT*.mdd.quota_type=ug"
+        DDPID=$!
+        do_facet $SINGLEMDS "$LCTL conf_param ${FSNAME}-MDT*.mdd.quota_type=ug"
 
 	log "failing mds for $((2 * timeout)) seconds"
-	fail $SINGLEMDS $((2 * timeout))
+        fail $SINGLEMDS $((2 * timeout))
 
-	# check if quotaon successful
-	$LFS quota -u $TSTUSR $MOUNT 2>&1 | grep -q "quotas are not enabled"
-	if [ $? -eq 0 ]; then
-	    error "quotaon failed!"
-	    rm -rf $TESTFILE
-	    return
-	fi
+        # check if quotaon successful
+        $LFS quota -u $TSTUSR $MOUNT 2>&1 | grep -q "quotas are not enabled"
+        if [ $? -eq 0 ]; then
+            error "quotaon failed!"
+            rm -rf $TESTFILE
+            return
+        fi
 
-	count=0
-	if at_is_valid && at_is_enabled; then
+        count=0
+        if at_is_valid && at_is_enabled; then
 	    timeout=$(at_max_get mds)
-	else
+        else
 	    timeout=$(lctl get_param -n timeout)
-	fi
-	while [ true ]; do
+        fi
+        while [ true ]; do
 	    if ! ps -p ${DDPID} > /dev/null 2>&1; then break; fi
-	    if [ $((++count % (2 * timeout) )) -eq 0 ]; then
-		log "it took $count second"
-	    fi
-	    sleep 1
-	done
-	log "(dd_pid=$DDPID, time=$count, timeout=$timeout)"
-	sync; sleep 1; sync
+            if [ $((++count % (2 * timeout) )) -eq 0 ]; then
+                log "it took $count second"
+            fi
+            sleep 1
+        done
+        log "(dd_pid=$DDPID, time=$count, timeout=$timeout)"
+        sync; sleep 1; sync
 
-	testfile_size=$(stat -c %s $TESTFILE)
-	[ $testfile_size -ne $((BLK_SZ * 1024 * 100)) ] && \
-	    error "expect $((BLK_SZ * 1024 * 100)), got ${testfile_size}. Verifying file failed!"
-	$SHOW_QUOTA_USER
+        testfile_size=$(stat -c %s $TESTFILE)
+        [ $testfile_size -ne $((BLK_SZ * 1024 * 100)) ] && \
+	    quota_error u $TSTUSR "expect $((BLK_SZ * 1024 * 100)), got ${testfile_size}. Verifying file failed!"
+        $SHOW_QUOTA_USER
         resetquota -u $TSTUSR
-	rm -rf $TESTFILE
-	sync; sleep 1; sync
+        rm -rf $TESTFILE
+        sync; sleep 1; sync
 }
 
 # test when mds does failover, the ost still could work well
@@ -1501,13 +1537,13 @@ test_18b() {
 	test_18bc_sub normal
 	test_18bc_sub directio
 	# check if watchdog is triggered
- 	do_facet ost1 dmesg > $TMP/lustre-log-${TESTNAME}.log
- 	watchdog=`awk '/test 18b/ {start = 1;}
- 	               /Watchdog triggered/ {
- 			       if (start) {
- 				       print;
- 			       }
- 		       }' $TMP/lustre-log-${TESTNAME}.log`
+	do_facet ost1 dmesg > $TMP/lustre-log-${TESTNAME}.log
+	watchdog=`awk '/test 18b/ {start = 1;}
+	               /Watchdog triggered/ {
+			       if (start) {
+				       print;
+			       }
+		       }' $TMP/lustre-log-${TESTNAME}.log`
 	[ `echo "$watchdog" | wc -l` -ge 3 ] && error "$watchdog"
 	rm -f $TMP/lustre-log-${TESTNAME}.log
 }
@@ -1539,18 +1575,18 @@ run_to_block_limit() {
 
 	echo "  User quota (limit: $LIMIT kbytes)"
 	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $MOUNT
-	$SHOW_QUOTA_USER
+        quota_show_check b u $TSTUSR
 	echo "  Updating quota limits"
 	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $MOUNT
-	$SHOW_QUOTA_USER
+        quota_show_check b u $TSTUSR
 
 	RUNDD="$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ"
-	$RUNDD count=$BUNIT_SZ || error "(usr) write failure, but expect success"
+	$RUNDD count=$BUNIT_SZ || quota_error u $TSTUSR "(usr) write failure, but expect success"
 	# for now page cache of TESTFILE may still be dirty,
 	# let's push it to the corresponding OST, this will also
 	# cache NOQUOTA on the client from OST's reply
 	cancel_lru_locks osc
-	$RUNDD seek=$BUNIT_SZ && error "(usr) write success, should be EDQUOT"
+	$RUNDD seek=$BUNIT_SZ && quota_error u $TSTUSR "(usr) write success, should be EDQUOT"
 }
 
 test_19() {
@@ -1573,20 +1609,20 @@ run_test_with_stat 19 "test if administrative limits updates do not zero operati
 
 test_20()
 {
-	LSTR=(1t 2g 3m 4k) # limits strings
-	LVAL=($[1*1024*1024*1024] $[2*1024*1024] $[3*1024*1024] $[4*1024]) # limits values
+        LSTR=(1t 2g 3m 4k) # limits strings
+        LVAL=($[1*1024*1024*1024] $[2*1024*1024] $[3*1024*1024] $[4*1024]) # limits values
 
-	$LFS setquota -u $TSTUSR --block-softlimit ${LSTR[0]} \
-				 $MOUNT || error "could not set quota limits"
+        $LFS setquota -u $TSTUSR --block-softlimit ${LSTR[0]} \
+                                 $MOUNT || error "could not set quota limits"
 
-	$LFS setquota -u $TSTUSR --block-hardlimit ${LSTR[1]} \
-				 --inode-softlimit ${LSTR[2]} \
-				 --inode-hardlimit ${LSTR[3]} \
-				 $MOUNT || error "could not set quota limits"
+        $LFS setquota -u $TSTUSR --block-hardlimit ${LSTR[1]} \
+                                 --inode-softlimit ${LSTR[2]} \
+                                 --inode-hardlimit ${LSTR[3]} \
+                                 $MOUNT || error "could not set quota limits"
 
-	($LFS quota -v -u $TSTUSR $MOUNT  | \
-	    grep -E '^ *'$MOUNT' *[0-9]+\** *'${LVAL[0]}' *'${LVAL[1]}' *[0-9]+\** *'${LVAL[2]}' *'${LVAL[3]}) \
-		 || error "lfs quota output is unexpected"
+        ($LFS quota -v -u $TSTUSR $MOUNT  | \
+            grep -E '^ *'$MOUNT' *[0-9]+\** *'${LVAL[0]}' *'${LVAL[1]}' *[0-9]+\** *'${LVAL[2]}' *'${LVAL[3]}) \
+                 || error "lfs quota output is unexpected"
 
         resetquota -u $TSTUSR
 }
@@ -1644,7 +1680,7 @@ test_21() {
 	    if ! ps -p ${DDPID1} > /dev/null 2>&1; then break; fi
 	    count=$[count+1]
 	    if [ $count -gt 60 ]; then
-		error "dd should be finished!"
+		quota_error a $TSTUSR "dd should be finished!"
 	    fi
 	    sleep 1
 	done
@@ -1655,7 +1691,7 @@ test_21() {
 	    if ! ps -p ${DDPID2} > /dev/null 2>&1; then break; fi
 	    count=$[count+1]
 	    if [ $count -gt 60 ]; then
-		error "dd should be finished!"
+		quota_error a $TSTUSR "dd should be finished!"
 	    fi
 	    sleep 1
 	done
@@ -1671,25 +1707,25 @@ test_21() {
 run_test_with_stat 21 "run for fixing bug16053 ==========="
 
 test_22() {
-	local SAVEREFORMAT
+        local SAVEREFORMAT
 
-	SAVEREFORMAT=$REFORMAT
-	$LFS quotaoff -ug $DIR || error "could not turn quotas off"
+        SAVEREFORMAT=$REFORMAT
+        $LFS quotaoff -ug $DIR || error "could not turn quotas off"
 
-	quota_save_version "ug"
+        quota_save_version "ug"
 
-	REFORMAT="reformat"
-	stopall
-	mount
-	setupall
-	REFORMAT=$SAVEREFORMAT
+        REFORMAT="reformat"
+        stopall
+        mount
+        setupall
+        REFORMAT=$SAVEREFORMAT
 
-	echo "checking parameters"
+        echo "checking parameters"
 
-	do_facet $SINGLEMDS "lctl get_param mdd.${FSNAME}-MDT*.quota_type" | grep "ug" || error "admin failure"
-	do_facet ost1 "lctl get_param obdfilter.*.quota_type" | grep "ug" || error "op failure"
+        do_facet $SINGLEMDS "lctl get_param mdd.${FSNAME}-MDT*.quota_type" | grep "ug" || error "admin failure"
+        do_facet ost1 "lctl get_param obdfilter.*.quota_type" | grep "ug" || error "op failure"
 
-	run_test 0 "reboot lustre"
+        run_test 0 "reboot lustre"
 }
 run_test_with_stat 22 "test if quota_type saved as permanent parameter ===="
 
@@ -1707,20 +1743,20 @@ test_23_sub() {
 	log "  User quota (limit: $LIMIT kbytes)"
 	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
 	sleep 3
-	$SHOW_QUOTA_USER
+        quota_show_check b u $TSTUSR
 
 	$LFS setstripe $TESTFILE -c 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
 
 	log "    Step1: trigger quota with 0_DIRECT"
 	log "      Write half of file"
-	$RUNAS $DIRECTIO write $TESTFILE 0 $(($LIMIT/1024/2)) $bs_unit || error "(1) write failure, but expect success: $LIMIT"
+	$RUNAS $DIRECTIO write $TESTFILE 0 $(($LIMIT/1024/2)) $bs_unit || quota_error u $TSTUSR "(1) write failure, but expect success: $LIMIT"
 	log "      Write out of block quota ..."
-	$RUNAS $DIRECTIO write $TESTFILE $(($LIMIT/1024/2)) $(($LIMIT/1024/2)) $bs_unit && error "(2) write success, but expect EDQUOT: $LIMIT"
+	$RUNAS $DIRECTIO write $TESTFILE $(($LIMIT/1024/2)) $(($LIMIT/1024/2)) $bs_unit && quota_error u $TSTUSR "(2) write success, but expect EDQUOT: $LIMIT"
 	log "    Step1: done"
 
 	log "    Step2: rewrite should succeed"
-	$RUNAS $DIRECTIO write $TESTFILE $(($LIMIT/1024/2)) 1 $bs_unit || error "(3) write failure, but expect success: $LIMIT"
+	$RUNAS $DIRECTIO write $TESTFILE $(($LIMIT/1024/2)) 1 $bs_unit || quota_error u $TSTUSR "(3) write failure, but expect success: $LIMIT"
 	log "    Step2: done"
 
 	rm -f $TESTFILE
@@ -1729,7 +1765,7 @@ test_23_sub() {
 	OST0_QUOTA_USED=`$LFS quota -o $OST0_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
 	echo $OST0_QUOTA_USED
 	[ $OST0_QUOTA_USED -ne 0 ] && \
-	    ($SHOW_QUOTA_USER; error "quota deleted isn't released")
+	    ($SHOW_QUOTA_USER; quota_error u $TSTUSR "quota deleted isn't released")
 	$SHOW_QUOTA_USER
 	resetquota -u $TSTUSR
 }
@@ -1758,7 +1794,7 @@ test_24() {
 
 	set_blk_unitsz $((128 * 1024))
 	set_blk_tunesz $((128 * 1024 / 2))
-	
+        
 }
 run_test_with_stat 24 "test if lfs draws an asterix when limit is reached (16646) ==========="
 
@@ -1791,13 +1827,21 @@ test_25_sub() {
         log "setquota for $TSTUSR"
 	$LFS setquota $1 $TSTUSR -b $LIMIT -B $LIMIT -i 10 -I 10 $DIR
 	sleep 3
-        show_quota $1 $TSTUSR
+        if [ "$1" == "-u" ]; then
+                quota_show_check a u $TSTUSR
+        else
+                quota_show_check a g $TSTUSR
+        fi
 
         # set quota for $TSTUSR2
         log "setquota for $TSTUSR2"
 	$LFS setquota $1 $TSTUSR2 -b $LIMIT -B $LIMIT -i 10 -I 10 $DIR
 	sleep 3
-        show_quota $1 $TSTUSR2
+        if [ "$1" == "-u" ]; then
+                quota_show_check a u $TSTUSR2
+        else
+                quota_show_check a g $TSTUSR2
+        fi
 
         # set stripe index to 0
         log "setstripe for $DIR/$tdir to 0"
@@ -1811,42 +1855,42 @@ test_25_sub() {
 
         # TSTUSR write 4M
         log "$TSTUSR write 4M to $TESTFILE"
-        $RUNAS dd if=/dev/zero of=$TESTFILE bs=4K count=1K || error "dd failed"
+        $RUNAS dd if=/dev/zero of=$TESTFILE bs=4K count=1K || quota_error a $TSTUSR "dd failed"
         sync
 	show_quota $1 $TSTUSR
 	show_quota $1 $TSTUSR2
 	MDS_QUOTA_USED_NEW=`$LFS quota -o $MDS_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`
         [ $MDS_QUOTA_USED_NEW -ne $((MDS_QUOTA_USED_OLD + 1)) ] && \
-                error "$TSTUSR inode quota usage error: [$MDS_QUOTA_USED_OLD|$MDS_QUOTA_USED_NEW]"
+                quota_error a $TSTUSR "$TSTUSR inode quota usage error: [$MDS_QUOTA_USED_OLD|$MDS_QUOTA_USED_NEW]"
 	OST0_QUOTA_USED_NEW=`$LFS quota -o $OST0_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
         OST0_QUOTA_USED_DELTA=$((OST0_QUOTA_USED_NEW - OST0_QUOTA_USED_OLD))
         [ $OST0_QUOTA_USED_DELTA -lt 4096 ] && \
-                error "$TSTUSR block quota usage error: [$OST0_QUOTA_USED_OLD|$OST0_QUOTA_USED_NEW]"
+                quota_error a $TSTUSR "$TSTUSR block quota usage error: [$OST0_QUOTA_USED_OLD|$OST0_QUOTA_USED_NEW]"
 
         # chown/chgrp from $TSTUSR to $TSTUSR2
         if [ $1 = "-u" ]; then
                 log "chown from $TSTUSR to $TSTUSR2"
-                chown $TSTUSR2 $TESTFILE || error "chown failed"
+                chown $TSTUSR2 $TESTFILE || quota_error u $TSTUSR2 "chown failed"
         else
                 log "chgrp from $TSTUSR to $TSTUSR2"
-                chgrp $TSTUSR2 $TESTFILE || error "chgrp failed"
+                chgrp $TSTUSR2 $TESTFILE || quota_error g $TSTUSR2 "chgrp failed"
         fi
         sync
 	show_quota $1 $TSTUSR
 	show_quota $1 $TSTUSR2
 	MDS_QUOTA_USED2_NEW=`$LFS quota -o $MDS_UUID $1 $TSTUSR2 $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`
         [ $MDS_QUOTA_USED2_NEW -ne $((MDS_QUOTA_USED2_OLD + 1)) ] && \
-                error "$TSTUSR2 inode quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$MDS_QUOTA_USED2_OLD|$MDS_QUOTA_USED2_NEW]"
+                quota_error a $TSTUSR2 "$TSTUSR2 inode quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$MDS_QUOTA_USED2_OLD|$MDS_QUOTA_USED2_NEW]"
 	OST0_QUOTA_USED2_NEW=`$LFS quota -o $OST0_UUID $1 $TSTUSR2 $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
         OST0_QUOTA_USED2_DELTA=$((OST0_QUOTA_USED2_NEW - OST0_QUOTA_USED2_OLD))
         [ $OST0_QUOTA_USED2_DELTA -ne $OST0_QUOTA_USED_DELTA ] && \
-                error "$TSTUSR2 block quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$OST0_QUOTA_USED2_OLD|$OST0_QUOTA_USED2_NEW]"
+                quota_error a $TSTUSR2 "$TSTUSR2 block quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$OST0_QUOTA_USED2_OLD|$OST0_QUOTA_USED2_NEW]"
 	MDS_QUOTA_USED_NEW=`$LFS quota -o $MDS_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $4 }'`
         [ $MDS_QUOTA_USED_NEW -ne $MDS_QUOTA_USED_OLD ] && \
-                error "$TSTUSR inode quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$MDS_QUOTA_USED_OLD|$MDS_QUOTA_USED_NEW]"
+                quota_error a $TSTUSR "$TSTUSR inode quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$MDS_QUOTA_USED_OLD|$MDS_QUOTA_USED_NEW]"
 	OST0_QUOTA_USED_NEW=`$LFS quota -o $OST0_UUID $1 $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
         [ $OST0_QUOTA_USED_NEW -ne $OST0_QUOTA_USED_OLD ] && \
-                error "$TSTUSR block quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$OST0_QUOTA_USED_OLD|$OST0_QUOTA_USED_NEW]"
+                quota_error a $TSTUSR "$TSTUSR block quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$OST0_QUOTA_USED_OLD|$OST0_QUOTA_USED_NEW]"
 
 	rm -f $TESTFILE
 	wait_delete_completed
