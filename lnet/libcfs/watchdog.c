@@ -97,6 +97,11 @@ static spinlock_t lcw_pending_timers_lock = SPIN_LOCK_UNLOCKED; /* BH lock! */
 static struct list_head lcw_pending_timers = \
         LIST_HEAD_INIT(lcw_pending_timers);
 
+/* Last time a watchdog expired */
+static cfs_time_t lcw_last_watchdog_time;
+static int lcw_recent_watchdog_count;
+static spinlock_t lcw_last_watchdog_lock = SPIN_LOCK_UNLOCKED;
+
 #ifdef HAVE_TASKLIST_LOCK
 static void
 lcw_dump(struct lc_watchdog *lcw)
@@ -131,6 +136,8 @@ lcw_dump(struct lc_watchdog *lcw)
 static void lcw_cb(unsigned long data)
 {
         struct lc_watchdog *lcw = (struct lc_watchdog *)data;
+        cfs_time_t current_time;
+        cfs_duration_t delta_time;
 
         ENTRY;
 
@@ -140,14 +147,38 @@ static void lcw_cb(unsigned long data)
         }
 
         lcw->lcw_state = LC_WATCHDOG_EXPIRED;
+        current_time = cfs_time_current();
 
-        /* NB this warning should appear on the console, but may not get into
-         * the logs since we're running in a softirq handler */
+        /* Check to see if we should throttle the watchdog timer to avoid
+         * too many dumps going to the console thus triggering an NMI.
+         * Normally we would not hold the spin lock over the CWARN but in
+         * this case we hold it to ensure non ratelimited lcw_dumps are not
+         * interleaved on the console making them hard to read. */
+        spin_lock_bh(&lcw_last_watchdog_lock);
+        delta_time = cfs_duration_sec(current_time - lcw_last_watchdog_time);
 
-        CWARN("Watchdog triggered for pid %d: it was inactive for %lds\n",
-              (int)lcw->lcw_pid, cfs_duration_sec(lcw->lcw_time));
-        lcw_dump(lcw);
+        if (delta_time < libcfs_watchdog_ratelimit && lcw_recent_watchdog_count > 3) {
+                CWARN("Refusing to fire watchdog for pid %d: it was inactive "
+                      "for %ldms. Rate limiting 1 per %d seconds.\n",
+                      (int)lcw->lcw_pid,cfs_duration_sec(lcw->lcw_time) * 1000,
+                      libcfs_watchdog_ratelimit);
+        } else {
+                if (delta_time < libcfs_watchdog_ratelimit) {
+                        lcw_recent_watchdog_count++;
+                } else {
+                        memcpy(&lcw_last_watchdog_time, &current_time,
+                               sizeof(current_time));
+                        lcw_recent_watchdog_count = 0;
+                }
 
+		/* This warning should appear on the console, but may not get
+		 * into the logs since we're running in a softirq handler */
+                CWARN("Watchdog triggered for pid %d: it was inactive for %lds\n",
+                      (int)lcw->lcw_pid, cfs_duration_sec(lcw->lcw_time));
+                lcw_dump(lcw);
+	}
+
+        spin_unlock_bh(&lcw_last_watchdog_lock);
         spin_lock_bh(&lcw_pending_timers_lock);
 
         if (list_empty(&lcw->lcw_list)) {
