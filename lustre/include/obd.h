@@ -652,6 +652,7 @@ struct lov_qos {
         struct rw_semaphore lq_rw_sem;
         __u32               lq_active_oss_count;
         unsigned int        lq_prio_free;   /* priority for free space */
+        unsigned int        lq_threshold_rr;/* priority for rr */
         struct lov_qos_rr   lq_rr;          /* round robin qos data */
         unsigned long       lq_dirty:1,     /* recalc qos data */
                             lq_same_space:1,/* the ost's all have approx.
