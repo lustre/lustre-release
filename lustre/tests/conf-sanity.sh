@@ -1228,7 +1228,7 @@ test_35() { # bug 12459
 	# contact after the connection loss
 	$LCTL dk $TMP/lustre-log-$TESTNAME.log
 	NEXTCONN=`awk "/${MSG}/ {start = 1;}
-		       /import_select_connection.$device-mdc.* using connection/ {
+		       /import_select_connection.*$device-mdc.* using connection/ {
 				if (start) {
 					if (\\\$NF ~ /$FAKENID/)
 						print \\\$NF;
