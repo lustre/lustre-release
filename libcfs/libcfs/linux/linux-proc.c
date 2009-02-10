@@ -103,6 +103,7 @@ enum {
         PSDEV_LNET_DAEMON_FILE,   /* spool kernel debug buffer to file */
         PSDEV_LNET_DEBUG_MB,      /* size of debug buffer */
         PSDEV_LNET_DEBUG_LOG_UPCALL, /* debug log upcall script */
+        PSDEV_LNET_WATCHDOG_RATELIMIT,  /* ratelimit watchdog messages  */
 };
 #else
 #define CTL_LNET                        CTL_UNNUMBERED
@@ -187,6 +188,9 @@ static int __proc_dobitmasks(void *data, int write,
 }
 
 DECLARE_PROC_HANDLER(proc_dobitmasks)
+
+static int min_watchdog_ratelimit = 0;          /* disable ratelimiting */
+static int max_watchdog_ratelimit = (24*60*60); /* limit to once per day */
 
 static int __proc_dump_kernel(void *data, int write,
                               loff_t pos, void *buffer, int nob)
@@ -455,6 +459,16 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .procname = "debug_mb",
                 .mode     = 0644,
                 .proc_handler = &proc_debug_mb,
+        },
+        {
+                .ctl_name = PSDEV_LNET_WATCHDOG_RATELIMIT,
+                .procname = "watchdog_ratelimit",
+                .data     = &libcfs_watchdog_ratelimit,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec_minmax,
+                .extra1   = &min_watchdog_ratelimit,
+                .extra2   = &max_watchdog_ratelimit,
         },
         {0}
 };
