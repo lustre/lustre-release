@@ -12,7 +12,7 @@ set -e
 ONLY=${ONLY:-"$*"}
 
 # bug number for skipped test: 13739
-HEAD_EXCEPT="                  32a 32b"
+HEAD_EXCEPT="                  32a"
 
 # bug number for skipped test:                                 
 ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $HEAD_EXCEPT"
@@ -956,7 +956,7 @@ start32 () {
 }
 
 cleanup_nocli32 () {
-	stop32 mds -f
+	stop32 mds1 -f
 	stop32 ost1 -f
 	wait_exit_ST client
 }
