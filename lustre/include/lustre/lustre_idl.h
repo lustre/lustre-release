@@ -764,7 +764,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_CKSUM      0x20000000ULL /*support several cksum algos */
 #define OBD_CONNECT_FID        0x40000000ULL /*FID is supported by server */
 #define OBD_CONNECT_VBR        0x80000000ULL /*version based recovery */
-#define OBD_CONNECT_LOV_V3    0x100000000ULL /*client supports LOV v3 EA */
+#define OBD_CONNECT_LOV_V3      0x100000000ULL /*client supports LOV v3 EA */
+#define OBD_CONNECT_SKIP_ORPHAN 0x400000000ULL /* don't reuse orphan objids */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
@@ -794,7 +795,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_CHANGE_QS | \
                                 OBD_CONNECT_OSS_CAPA  | OBD_CONNECT_RMT_CLIENT | \
                                 OBD_CONNECT_RMT_CLIENT_FORCE | \
-                                OBD_CONNECT_MDS)
+                                OBD_CONNECT_MDS | OBD_CONNECT_SKIP_ORPHAN)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT)
 

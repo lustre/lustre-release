@@ -808,6 +808,8 @@ static const char *obd_connect_names[] = {
         "fid_is_enabled",
         "version_recovery",
         "pools",
+        "", /* reserved for simplified interop */
+        "skip_orphan",
         NULL
 };
 
