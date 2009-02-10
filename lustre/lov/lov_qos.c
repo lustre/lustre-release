@@ -253,10 +253,7 @@ static int qos_calc_ppo(struct obd_device *obd)
         /* If each ost has almost same free space,
          * do rr allocation for better creation performance */
         lov->lov_qos.lq_same_space = 0;
-        temp = ba_max - ba_min;
-        ba_min = (ba_min * 51) >> 8;     /* 51/256 = .20 */
-        if (temp < ba_min) {
-                /* Difference is less than 20% */
+        if ((ba_max * (256 - lov->lov_qos.lq_threshold_rr)) >> 8 < ba_min) {
                 lov->lov_qos.lq_same_space = 1;
                 /* Reset weights for the next time we enter qos mode */
                 lov->lov_qos.lq_reset = 1;
