@@ -3805,10 +3805,9 @@ setup_test102() {
 }
 
 cleanup_test102() {
-	[ "$SETUP_TEST102" = "yes" ] || return
 	trap 0
+	[ "$SETUP_TEST102" = "yes" ] || return
 	rm -f $TMP/f102.tar
-	rm -rf $DIR/$tdir
 	SETUP_TEST102=no
 }
 
@@ -4070,6 +4069,8 @@ test_102i() { # bug 17038
         rm -f $DIR/$tfile $DIR/${tfile}link
 }
 run_test 102i "lgetxattr test on symbolic link ============"
+
+cleanup_test102
 
 run_acl_subtest()
 {
@@ -4336,6 +4337,8 @@ test_116() {
 	echo "$MAXC files created on larger OST $MAXI1"
 	[ $MINC -gt 0 ] && echo "Wrote $(($MAXC * 100 / $MINC - 100))% more files to larger OST $MAXI1"
 	[ $MAXC -gt $MINC ] || error_ignore "stripe QOS didn't balance free space"
+
+	rm -rf $DIR/$tdir/OST${MINI}
 }
 run_test 116 "stripe QOS: free space balance ==================="
 
@@ -4365,7 +4368,7 @@ reset_async() {
 	FILE=$DIR/reset_async
 
 	# Ensure all OSCs are cleared
-	$SETSTRIPE $FILE 0 -1 -1
+	$SETSTRIPE -c -1 $FILE
         dd if=/dev/zero of=$FILE bs=64k count=$OSTCOUNT
 	sync
         rm $FILE
