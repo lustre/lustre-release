@@ -2157,8 +2157,8 @@ static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
         return rc;
 }
 
-static int mdd_readpage(const struct lu_env *env, struct md_object *obj,
-                        const struct lu_rdpg *rdpg)
+int mdd_readpage(const struct lu_env *env, struct md_object *obj,
+                 const struct lu_rdpg *rdpg)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         int rc;

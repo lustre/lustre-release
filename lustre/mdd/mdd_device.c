@@ -69,7 +69,6 @@ static struct lu_device_type mdd_device_type;
 
 static const char mdd_root_dir_name[] = "ROOT";
 static const char mdd_obf_dir_name[] = "fid";
-static const char mdd_dot_lustre_name[] = ".lustre";
 
 static int mdd_device_init(const struct lu_env *env, struct lu_device *d,
                            const char *name, struct lu_device *next)
@@ -351,13 +350,16 @@ static int dot_lustre_xattr_get(const struct lu_env *env,
         return 0;
 }
 
-/**
- * Direct access to the ".lustre" directory is not allowed.
- */
 static int dot_lustre_mdd_open(const struct lu_env *env, struct md_object *obj,
                                int flags)
 {
-        return -EPERM;
+        struct mdd_object *mdd_obj = md2mdd_obj(obj);
+
+        mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
+        mdd_obj->mod_count++;
+        mdd_write_unlock(env, mdd_obj);
+
+        return 0;
 }
 
 static int dot_lustre_path(const struct lu_env *env, struct md_object *obj,
@@ -366,11 +368,25 @@ static int dot_lustre_path(const struct lu_env *env, struct md_object *obj,
         return -ENOSYS;
 }
 
+static int dot_lustre_close(const struct lu_env *env, struct md_object *obj,
+                         struct md_attr *ma)
+{
+        struct mdd_object *mdd_obj = md2mdd_obj(obj);
+
+        mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
+        mdd_obj->mod_count--;
+        mdd_write_unlock(env, mdd_obj);
+
+        return 0;
+}
+
 static struct md_object_operations mdd_dot_lustre_obj_ops = {
         .moo_attr_get   = dot_lustre_attr_get,
         .moo_attr_set   = dot_lustre_attr_set,
         .moo_xattr_get  = dot_lustre_xattr_get,
         .moo_open       = dot_lustre_mdd_open,
+        .moo_close      = dot_lustre_close,
+        .moo_readpage   = mdd_readpage,
         .moo_path       = dot_lustre_path
 };
 
