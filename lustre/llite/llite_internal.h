@@ -647,7 +647,7 @@ int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);
 int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
 struct ll_file_data *ll_file_data_get(void);
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
+#ifndef HAVE_INODE_PERMISION_2ARGS
 int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd);
 #else
 int ll_inode_permission(struct inode *inode, int mask);
@@ -727,9 +727,6 @@ int ll_process_config(struct lustre_cfg *lcfg);
 /* llite/llite_nfs.c */
 extern struct export_operations lustre_export_operations;
 __u32 get_uuid2int(const char *name, int len);
-struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,
-                               int fhtype, int parent);
-int ll_dentry_to_fh(struct dentry *, __u32 *datap, int *lenp, int need_parent);
 
 /* llite/special.c */
 extern struct inode_operations ll_special_inode_operations;

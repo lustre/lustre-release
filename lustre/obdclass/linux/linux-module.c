@@ -419,13 +419,14 @@ int class_procfs_init(void)
         ENTRY;
 
         obd_sysctl_init();
-        proc_lustre_root = proc_mkdir("lustre", proc_root_fs);
+        proc_lustre_root = lprocfs_register("fs/lustre", NULL,
+                                              lprocfs_base, NULL);
         if (!proc_lustre_root) {
                 printk(KERN_ERR
                        "LustreError: error registering /proc/fs/lustre\n");
                 RETURN(-ENOMEM);
         }
-        proc_version = lprocfs_add_vars(proc_lustre_root, lprocfs_base, NULL);
+
         entry = create_proc_entry("devices", 0444, proc_lustre_root);
         if (entry == NULL) {
                 CERROR("error registering /proc/fs/lustre/devices\n");

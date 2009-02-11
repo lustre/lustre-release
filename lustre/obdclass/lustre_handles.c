@@ -232,7 +232,7 @@ static void cleanup_all_handles(void)
         int i;
 
         for (i = 0; i < HANDLE_HASH_SIZE; i++) {
-                struct list_head *tmp, *pos;
+                struct list_head *tmp, *pos = NULL;
                 spin_lock(&handle_hash[i].lock);
                 list_for_each_safe_rcu(tmp, pos, &(handle_hash[i].head)) {
                         struct portals_handle *h;

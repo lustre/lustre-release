@@ -1051,15 +1051,20 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_PAGE_CHECKED],
 [AC_MSG_CHECKING([kernel has PageChecked and SetPageChecked])
 LB_LINUX_TRY_COMPILE([
-        #include <linux/mm.h>
-        #include <linux/page-flags.h>
+        #include <linux/autoconf.h>
+#ifdef HAVE_LINUX_MMTYPES_H
+        #include <linux/mm_types.h>
+#endif
+	#include <linux/page-flags.h>
 ],[
-        #ifndef PageChecked
-        #error PageChecked not defined in kernel
-        #endif
-        #ifndef SetPageChecked
-        #error SetPageChecked not defined in kernel
-        #endif
+ 	struct page *p;
+
+        /* before 2.6.26 this define*/
+        #ifndef PageChecked	
+ 	/* 2.6.26 use function instead of define for it */
+ 	SetPageChecked(p);
+ 	PageChecked(p);
+ 	#endif
 ],[
         AC_MSG_RESULT(yes)
         AC_DEFINE(HAVE_PAGE_CHECKED, 1,
@@ -1177,6 +1182,9 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# 2.6.18
+
+
 # 2.6.23 have return type 'void' for unregister_blkdev
 AC_DEFUN([LC_UNREGISTER_BLKDEV_RETURN_INT],
 [AC_MSG_CHECKING([if unregister_blkdev return int])
@@ -1188,6 +1196,25 @@ LB_LINUX_TRY_COMPILE([
         AC_MSG_RESULT([yes])
         AC_DEFINE(HAVE_UNREGISTER_BLKDEV_RETURN_INT, 1, 
                 [unregister_blkdev return int])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.23 change .sendfile to .splice_read
+# RHEL4 (-92 kernel) have both sendfile and .splice_read API
+AC_DEFUN([LC_KERNEL_SENDFILE],
+[AC_MSG_CHECKING([if kernel has .sendfile])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        struct file_operations file;
+
+        file.sendfile = NULL;
+], [
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_KERNEL_SENDFILE, 1,
+                [kernel has .sendfile])
 ],[
         AC_MSG_RESULT([no])
 ])
@@ -1213,11 +1240,219 @@ LB_LINUX_TRY_COMPILE([
 
 # 2.6.23 extract nfs export related data into exportfs.h
 AC_DEFUN([LC_HAVE_EXPORTFS_H],
-[
-tmpfl="$CFLAGS"
-CFLAGS="$CFLAGS -I$LINUX_OBJ/include"
-AC_CHECK_HEADERS([linux/exportfs.h])
-CFLAGS="$tmpfl"
+[LB_CHECK_FILE([$LINUX/include/linux/exportfs.h], [
+        AC_DEFINE(HAVE_LINUX_EXPORTFS_H, 1,
+                [kernel has include/exportfs.h])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.23 have new page fault handling API
+AC_DEFUN([LC_VM_OP_FAULT],
+[AC_MSG_CHECKING([if kernel has .fault in vm_operation_struct])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
+],[
+        struct vm_operations_struct op;
+
+        op.fault = NULL;
+], [
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_VM_OP_FAULT, 1,
+                [if kernel has .fault in vm_operation_struct])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#2.6.23 has new shrinker API
+AC_DEFUN([LC_REGISTER_SHRINKER],
+[AC_MSG_CHECKING([if kernel has register_shrinker])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
+],[
+        register_shrinker(NULL);
+], [
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_REGISTER_SHRINKER, 1,
+                [if kernel has register_shrinker])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.24 has bio_endio with 2 args
+AC_DEFUN([LC_BIO_ENDIO_2ARG],
+[AC_MSG_CHECKING([if kernel has bio_endio with 2 args])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/bio.h>
+],[
+        bio_endio(NULL, 0);
+], [
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_BIO_ENDIO_2ARG, 1,
+                [if kernel has bio_endio with 2 args])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.24 has new members in exports struct.
+AC_DEFUN([LC_FH_TO_DENTRY],
+[AC_MSG_CHECKING([if kernel has .fh_to_dentry member in export_operations struct])
+LB_LINUX_TRY_COMPILE([
+#ifdef HAVE_LINUX_EXPORTFS_H
+        #include <linux/exportfs.h>
+#else
+        #include <linux/fs.h>
+#endif
+],[
+        struct export_operations exp;
+
+        exp.fh_to_dentry   = NULL;
+], [
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_FH_TO_DENTRY, 1,
+                [kernel has .fh_to_dentry member in export_operations struct])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.24 need linux/mm_types.h included
+AC_DEFUN([LC_HAVE_MMTYPES_H],
+[LB_CHECK_FILE([$LINUX/include/linux/mm_types.h], [
+        AC_DEFINE(HAVE_LINUX_MMTYPES_H, 1,
+                [kernel has include/mm_types.h])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.24 remove long aged procfs entry -> deleted member
+AC_DEFUN([LC_PROCFS_DELETED],
+[AC_MSG_CHECKING([if kernel has deleted member in procfs entry struct])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/proc_fs.h>
+],[
+        struct proc_dir_entry pde;
+
+        pde.deleted   = NULL;
+], [
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_PROCFS_DELETED, 1,
+                [kernel has deleted member in procfs entry struct])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.25 change define to inline
+AC_DEFUN([LC_MAPPING_CAP_WRITEBACK_DIRTY],
+[AC_MSG_CHECKING([if kernel have mapping_cap_writeback_dirty])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/backing-dev.h>
+],[
+        #ifndef mapping_cap_writeback_dirty
+        mapping_cap_writeback_dirty(NULL);
+        #endif
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_MAPPING_CAP_WRITEBACK_DIRTY, 1,
+                [kernel have mapping_cap_writeback_dirty])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+
+
+# 2.6.26 isn't export set_fs_pwd and change paramter in fs struct
+AC_DEFUN([LC_FS_STRUCT_USE_PATH],
+[AC_MSG_CHECKING([fs_struct use path structure])
+LB_LINUX_TRY_COMPILE([
+        #include <asm/atomic.h>
+        #include <linux/spinlock.h>
+        #include <linux/fs_struct.h>
+],[
+        struct path path;
+        struct fs_struct fs;
+
+        fs.pwd = path;
+], [
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_FS_STRUCT_USE_PATH, 1,
+                [fs_struct use path structure])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.26 remove path_release and use path_put instead
+AC_DEFUN([LC_PATH_RELEASE],
+[AC_MSG_CHECKING([if path_release exist])
+LB_LINUX_TRY_COMPILE([
+    #include <linux/dcache.h>
+    #include <linux/namei.h>
+],[
+    path_release(NULL);
+],[
+    AC_DEFINE(HAVE_PATH_RELEASE, 1, [path_release exist])
+    AC_MSG_RESULT([yes])
+],[
+    AC_MSG_RESULT([no]) 
+])
+])
+
+#2.6.27
+AC_DEFUN([LC_INODE_PERMISION_2ARGS],
+[AC_MSG_CHECKING([inode_operations->permission have two args])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        struct inode *inode;
+
+        inode->i_op->permission(NULL,0);
+],[
+        AC_DEFINE(HAVE_INODE_PERMISION_2ARGS, 1, 
+                  [inode_operations->permission have two args])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.27 have file_remove_suid instead of remove_suid
+AC_DEFUN([LC_FILE_REMOVE_SUID],
+[AC_MSG_CHECKING([kernel have file_remove_suid])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        file_remove_suid(NULL);
+],[
+        AC_DEFINE(HAVE_FILE_REMOVE_SUID, 1,
+                  [kernel have file_remove_suid])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.27 have new page locking API
+AC_DEFUN([LC_TRYLOCKPAGE],
+[AC_MSG_CHECKING([kernel use trylock_page for page lock])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/pagemap.h>
+],[
+        trylock_page(NULL);
+],[
+        AC_DEFINE(HAVE_TRYLOCK_PAGE, 1,
+                  [kernel use trylock_page for page lock])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
 ])
 
 #
@@ -1313,8 +1548,30 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_FS_RENAME_DOES_D_MOVE
           # 2.6.23
           LC_UNREGISTER_BLKDEV_RETURN_INT
+          LC_KERNEL_SENDFILE
           LC_KERNEL_SPLICE_READ
           LC_HAVE_EXPORTFS_H
+          LC_VM_OP_FAULT
+          LC_REGISTER_SHRINKER
+
+          #2.6.25
+          LC_MAPPING_CAP_WRITEBACK_DIRTY
+ 
+ 	  # 2.6.24
+ 	  LC_HAVE_MMTYPES_H
+          LC_BIO_ENDIO_2ARG
+          LC_FH_TO_DENTRY
+          LC_PROCFS_DELETED
+ 
+          # 2.6.26
+          LC_FS_STRUCT_USE_PATH
+          LC_RCU_LIST_SAFE
+          LC_PATH_RELEASE
+
+          # 2.6.27
+          LC_INODE_PERMISION_2ARGS
+          LC_FILE_REMOVE_SUID
+          LC_TRYLOCKPAGE
 ])
 
 #
@@ -1547,6 +1804,7 @@ LB_LINUX_TRY_COMPILE([
         ],[
                 AC_MSG_RESULT([no]) 
         ])
+
 ],[
         AC_MSG_RESULT([no])
 ])

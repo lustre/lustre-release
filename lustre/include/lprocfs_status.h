@@ -521,6 +521,8 @@ extern struct rw_semaphore _lprocfs_lock;
 #define LPROCFS_EXIT()            do {  \
         up_read(&_lprocfs_lock);        \
 } while(0)
+
+#ifdef HAVE_PROCFS_DELETED
 #define LPROCFS_ENTRY_AND_CHECK(dp) do {        \
         typecheck(struct proc_dir_entry *, dp); \
         LPROCFS_ENTRY();                        \
@@ -529,12 +531,21 @@ extern struct rw_semaphore _lprocfs_lock;
                 return -ENODEV;                 \
         }                                       \
 } while(0)
+#define LPROCFS_CHECK_DELETED(dp) ((dp)->deleted)
+#else
+
+#define LPROCFS_ENTRY_AND_CHECK(dp) \
+        LPROCFS_ENTRY();
+#define LPROCFS_CHECK_DELETED(dp) (0)
+#endif
+
 #define LPROCFS_WRITE_ENTRY()     do {  \
         down_write(&_lprocfs_lock);     \
 } while(0)
 #define LPROCFS_WRITE_EXIT()      do {  \
         up_write(&_lprocfs_lock);       \
 } while(0)
+
 
 /* You must use these macros when you want to refer to
  * the import in a client obd_device for a lprocfs entry */
