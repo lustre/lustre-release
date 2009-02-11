@@ -1032,7 +1032,7 @@ lnet_startup_lndnis (void)
 #ifdef __KERNEL__
                 if (lnd == NULL) {
                         LNET_MUTEX_UP(&the_lnet.ln_lnd_mutex);
-                        rc = request_module(libcfs_lnd2modname(lnd_type));
+                        rc = request_module("%s", libcfs_lnd2modname(lnd_type));
                         LNET_MUTEX_DOWN(&the_lnet.ln_lnd_mutex);
 
                         lnd = lnet_find_lnd_by_type(lnd_type);

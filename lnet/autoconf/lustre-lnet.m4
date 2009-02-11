@@ -1362,6 +1362,22 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# 2.6.27 have second argument to sock_map_fd
+AC_DEFUN([LN_SOCK_MAP_FD_2ARG],
+[AC_MSG_CHECKING([sock_map_fd have second argument])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/net.h>
+],[
+        sock_map_fd(NULL, 0);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_SOCK_MAP_FD_2ARG, 1,
+                  [sock_map_fd have second argument])
+],[
+        AC_MSG_RESULT(NO)
+])
+])
+
 #
 # LN_PROG_LINUX
 #
@@ -1410,6 +1426,8 @@ LN_SYSCTL_UNNUMBERED
 LN_SCATTERLIST_SETPAGE
 # 2.6.26
 LN_SEM_COUNT
+# 2.6.27
+LN_SOCK_MAP_FD_2ARG
 ])
 
 #
