@@ -228,7 +228,7 @@ case "$lustretag" in
    
     # params_tree 
     b_hd_params_tree)
-        lnettag="HEAD"
+        lnettag="b_hd_params_tree"
         ldiskfstag="$ldiskfstag_head"
         libcfstag="b_hd_params_tree"
         lustretag="b_hd_params_tree"
