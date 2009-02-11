@@ -2744,29 +2744,33 @@ test_57b() {
 	$GETSTRIPE $FILE1 2>&1 | grep -q "no stripe" || error "$FILE1 has an EA"
 	$GETSTRIPE $FILEN 2>&1 | grep -q "no stripe" || error "$FILEN has an EA"
 
+	sync
+	sleep 1
+	df $dir  #make sure we get new statfs data
 	local MDSFREE=$(do_facet $mymds lctl get_param -n osd.*MDT000$((num -1)).kbytesfree)
-	local MDCFREE=$(lctl get_param -n mdc.*.kbytesfree | head -n 1)
+	local MDCFREE=$(lctl get_param -n mdc.*MDT000$((num -1))-mdc-*.kbytesfree)
 	echo "opening files to create objects/EAs"
 	local FILE
 	for FILE in `seq -f $dir/f%g 1 $FILECOUNT`; do
-		$OPENFILE -f O_RDWR $FILE > /dev/null || error "opening $FILE"
+		$OPENFILE -f O_RDWR $FILE > /dev/null 2>&1 || error "opening $FILE"
 	done
 
 	# verify that files have EAs now
 	$GETSTRIPE $FILE1 | grep -q "obdidx" || error "$FILE1 missing EA"
 	$GETSTRIPE $FILEN | grep -q "obdidx" || error "$FILEN missing EA"
 
-#	sleep 1 # make sure we get new statfs data
-#	local MDSFREE2=$(do_facet $mymds lctl get_param -n osd.*MDT000$((num -1)).kbytesfree)
-#	local MDCFREE2=$(lctl get_param -n mdc.*.kbytesfree)
-#	if [ "$MDCFREE2" -lt "$((MDCFREE - 8))" ]; then
-#		if [ "$MDSFREE" != "$MDSFREE2" ]; then
-#			error "MDC before $MDCFREE != after $MDCFREE2"
-#		else
-#			echo "MDC before $MDCFREE != after $MDCFREE2"
-#			echo "unable to confirm if MDS has large inodes"
-#		fi
-#	fi
+	sleep 1  #make sure we get new statfs data
+	df $dir
+	local MDSFREE2=$(do_facet $mymds lctl get_param -n osd.*MDT000$((num -1)).kbytesfree)
+	local MDCFREE2=$(lctl get_param -n mdc.*MDT000$((num -1))-mdc-*.kbytesfree)
+	if [ "$MDCFREE2" -lt "$((MDCFREE - 8))" ]; then
+		if [ "$MDSFREE" != "$MDSFREE2" ]; then
+			error "MDC before $MDCFREE != after $MDCFREE2"
+		else
+			echo "MDC before $MDCFREE != after $MDCFREE2"
+			echo "unable to confirm if MDS has large inodes"
+		fi
+	fi
 	rm -rf $dir
 }
 run_test 57b "default LOV EAs are stored inside large inodes ==="
