@@ -61,6 +61,8 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
+#include <linux/page-flags.h>
+
 #include <lustre_lite.h>
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
@@ -223,7 +225,7 @@ void ll_truncate(struct inode *inode)
                 GOTO(out_unlock, 0);
         }
 
-        LASSERT(atomic_read(&lli->lli_size_sem.count) <= 0);
+        LASSERT(SEM_COUNT(&lli->lli_size_sem) <= 0);
 
         if (!srvlock) {
                 struct ost_lvb lvb;
@@ -2332,7 +2334,7 @@ ssize_t ll_file_lockless_io(struct file *file, const struct iovec *iov,
                 rc = generic_write_checks(file, ppos, &count, 0);
                 if (rc)
                         GOTO(out, rc);
-                rc = ll_remove_suid(file->f_dentry, file->f_vfsmnt);
+                rc = ll_remove_suid(file, file->f_vfsmnt);
                 if (rc)
                         GOTO(out, rc);
         }

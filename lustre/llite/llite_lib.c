@@ -1474,7 +1474,7 @@ static int ll_setattr_do_truncate(struct inode *inode, loff_t new_size)
                 rc = vmtruncate(inode, new_size);
                 clear_bit(LLI_F_SRVLOCK, &lli->lli_flags);
                 if (rc != 0) {
-                        LASSERT(atomic_read(&lli->lli_size_sem.count) <= 0);
+                        LASSERT(SEM_COUNT(&lli->lli_size_sem) <= 0);
                         ll_inode_size_unlock(inode, 0);
                 }
         }

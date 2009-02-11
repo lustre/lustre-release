@@ -177,8 +177,12 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
                 up(&lli->lli_size_sem);
         }
         if (rc) {
+#ifdef HAVE_PATH_RELEASE
                 path_release(nd); /* Kernel assumes that ->follow_link()
                                      releases nameidata on error */
+#else
+                path_put(&nd->path);
+#endif
                 GOTO(out, rc);
         }
 

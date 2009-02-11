@@ -57,6 +57,28 @@ struct ll_iattr_struct {
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14) */
 
 #ifndef HAVE_SET_FS_PWD
+
+#ifdef HAVE_FS_STRUCT_USE_PATH
+static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
+                struct dentry *dentry)
+{
+        struct path path;
+	struct path old_pwd;
+
+        path.mnt = mnt;
+        path.dentry = dentry;
+        write_lock(&fs->lock);
+        old_pwd = fs->pwd;
+        path_get(&path);
+        fs->pwd = path;
+        write_unlock(&fs->lock);
+
+	if (old_pwd.dentry)
+		path_put(&old_pwd);
+}
+
+#else
+
 static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
                 struct dentry *dentry)
 {
@@ -75,6 +97,7 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
                 mntput(old_pwdmnt);
         }
 }
+#endif
 #else
 #define ll_set_fs_pwd set_fs_pwd
 #endif /* HAVE_SET_FS_PWD */
@@ -151,7 +174,12 @@ void groups_free(struct group_info *ginfo);
 #endif
 
 /* XXX our code should be using the 2.6 calls, not the other way around */
+#ifndef HAVE_TRYLOCK_PAGE
 #define TryLockPage(page)               TestSetPageLocked(page)
+#else
+#define TryLockPage(page)               (!trylock_page(page))
+#endif
+
 #define Page_Uptodate(page)             PageUptodate(page)
 #define ll_redirty_page(page)           set_page_dirty(page)
 
@@ -333,7 +361,7 @@ static inline int filemap_fdatawrite_range(struct address_space *mapping,
         wbc.end = end;
 #endif
 
-#ifdef mapping_cap_writeback_dirty
+#ifdef HAVE_MAPPING_CAP_WRITEBACK_DIRTY
         if (!mapping_cap_writeback_dirty(mapping))
 		rc = 0;
 #else
@@ -403,8 +431,17 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #define LL_RENAME_DOES_D_MOVE	FS_ODD_RENAME
 #endif
 
+#ifdef HAVE_FILE_REMOVE_SUID
+#define ll_remove_suid(file, mnt)       file_remove_suid(file)
+#else
+ #ifdef HAVE_SECURITY_PLUG
+  #define ll_remove_suid(file,mnt)      remove_suid(file->f_dentry,mnt)
+ #else
+  #define ll_remove_suid(file,mnt)      remove_suid(file->f_dentry)
+ #endif
+#endif
+
 #ifdef HAVE_SECURITY_PLUG
-#define ll_remove_suid(inode,mnt)               remove_suid(inode,mnt)
 #define ll_vfs_rmdir(dir,entry,mnt)             vfs_rmdir(dir,entry,mnt)
 #define ll_vfs_mkdir(inode,dir,mnt,mode)        vfs_mkdir(inode,dir,mnt,mode)
 #define ll_vfs_link(old,mnt,dir,new,mnt1)       vfs_link(old,mnt,dir,new,mnt1)
@@ -416,7 +453,6 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #define ll_vfs_rename(old,old_dir,mnt,new,new_dir,mnt1) \
                 vfs_rename(old,old_dir,mnt,new,new_dir,mnt1)
 #else
-#define ll_remove_suid(inode,mnt)               remove_suid(inode)
 #define ll_vfs_rmdir(dir,entry,mnt)             vfs_rmdir(dir,entry)
 #define ll_vfs_mkdir(inode,dir,mnt,mode)        vfs_mkdir(inode,dir,mode)
 #define ll_vfs_link(old,mnt,dir,new,mnt1)       vfs_link(old,dir,new)
@@ -443,6 +479,57 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 
 #ifndef cpu_to_node
 #define cpu_to_node(cpu)         0
+#endif
+
+#ifdef HAVE_REGISTER_SHRINKER
+typedef int (*shrinker_t)(int nr_to_scan, gfp_t gfp_mask);
+
+static inline
+struct shrinker *set_shrinker(int seek, shrinker_t func)
+{
+        struct shrinker *s;
+
+        s = kmalloc(sizeof(*s), GFP_KERNEL);
+        if (s == NULL)
+                return (NULL);
+
+        s->shrink = func;
+        s->seeks = seek;
+
+        register_shrinker(s);
+
+        return s;
+}
+
+static inline
+void remove_shrinker(struct shrinker *shrinker) 
+{
+        if (shrinker == NULL)
+                return;
+
+        unregister_shrinker(shrinker);
+        kfree(shrinker);
+}
+#endif
+
+#ifdef HAVE_BIO_ENDIO_2ARG
+#define cfs_bio_io_error(a,b)   bio_io_error((a))
+#define cfs_bio_endio(a,b,c)    bio_endio((a),(c))
+#else
+#define cfs_bio_io_error(a,b)   bio_io_error((a),(b))
+#define cfs_bio_endio(a,b,c)    bio_endio((a),(b),(c))
+#endif
+
+#ifdef HAVE_FS_STRUCT_USE_PATH
+#define cfs_fs_pwd(fs)       ((fs)->pwd.dentry)
+#define cfs_fs_mnt(fs)       ((fs)->pwd.mnt)
+#else
+#define cfs_fs_pwd(fs)       ((fs)->pwd)
+#define cfs_fs_mnt(fs)       ((fs)->pwdmnt)
+#endif
+
+#ifndef list_for_each_safe_rcu
+#define list_for_each_safe_rcu(a,b,c) list_for_each_rcu(a, c)
 #endif
 
 #ifndef abs

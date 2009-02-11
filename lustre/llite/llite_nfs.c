@@ -68,36 +68,30 @@ static int ll_nfs_test_inode(struct inode *inode, void *opaque)
 }
 
 static struct inode * search_inode_for_lustre(struct super_block *sb,
-                                              unsigned long ino,
-                                              unsigned long generation,
-                                              int mode)
+                                              struct ll_fid *iid)
 {
         struct ptlrpc_request *req = NULL;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        struct ll_fid fid;
         unsigned long valid = 0;
         int eadatalen = 0, rc;
         struct inode *inode = NULL;
-        struct ll_fid iid = { .id = ino, .generation = generation };
         ENTRY;
 
-        inode = ILOOKUP(sb, ino, ll_nfs_test_inode, &iid);
+        inode = ILOOKUP(sb, iid->id, ll_nfs_test_inode, iid);
 
         if (inode)
                 RETURN(inode);
-        if (S_ISREG(mode)) {
-                rc = ll_get_max_mdsize(sbi, &eadatalen);
-                if (rc) 
-                        RETURN(ERR_PTR(rc));
-                valid |= OBD_MD_FLEASIZE;
-        }
-        fid.id = (__u64)ino;
-        fid.generation = generation;
-        fid.f_type = mode;
 
-        rc = mdc_getattr(sbi->ll_mdc_exp, &fid, valid, eadatalen, &req);
+        rc = ll_get_max_mdsize(sbi, &eadatalen);
+        if (rc)
+                RETURN(ERR_PTR(rc));
+
+        valid |= OBD_MD_FLEASIZE;
+
+        /* mds_fid2dentry is ignore f_type */
+        rc = mdc_getattr(sbi->ll_mdc_exp, iid, valid, eadatalen, &req);
         if (rc) {
-                CERROR("failure %d inode %lu\n", rc, ino);
+                CERROR("failure %d inode "LPU64"\n", rc, iid->id);
                 RETURN(ERR_PTR(rc));
         }
 
@@ -111,27 +105,27 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
         RETURN(inode);
 }
 
-static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
-                                      __u32 generation, umode_t mode)
+static struct dentry *ll_iget_for_nfs(struct super_block *sb,
+                                      struct ll_fid *iid)
 {
         struct inode *inode;
         struct dentry *result;
         ENTRY;
 
-        if (ino == 0)
+        if (iid->id == 0)
                 RETURN(ERR_PTR(-ESTALE));
 
-        inode = search_inode_for_lustre(sb, ino, generation, mode);
-        if (IS_ERR(inode)) {
+        inode = search_inode_for_lustre(sb, iid);
+        if (IS_ERR(inode))
                 RETURN(ERR_PTR(PTR_ERR(inode)));
-        }
+
         if (is_bad_inode(inode) ||
-            (generation && inode->i_generation != generation)){
+            (iid->generation && inode->i_generation != iid->generation)) {
                 /* we didn't find the right inode.. */
                 CERROR("Inode %lu, Bad count: %lu %d or version  %u %u\n",
                        inode->i_ino, (unsigned long)inode->i_nlink,
                        atomic_read(&inode->i_count), inode->i_generation,
-                       generation);
+                       iid->generation);
                 iput(inode);
                 RETURN(ERR_PTR(-ESTALE));
         }
@@ -146,56 +140,101 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
         RETURN(result);
 }
 
-struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,
-                               int fhtype, int parent)
+#define LUSTRE_NFS_FID                0x94
+
+struct lustre_nfs_fid {
+        struct ll_fid   child;
+        struct ll_fid   parent;
+        umode_t         mode;
+};
+
+/* The return value is file handle type:
+ * 1 -- contains child file handle;
+ * 2 -- contains child file handle and parent file handle;
+ * 255 -- error.
+ */
+static int ll_encode_fh(struct dentry *de, __u32 *fh, int *plen,
+                        int connectable)
 {
-        switch (fhtype) {
-                case 2:
-                        if (len < 5)
-                                break;
-                        if (parent)
-                                return ll_iget_for_nfs(sb, data[3], 0, data[4]);
-                case 1:
-                        if (len < 3)
-                                break;
-                        if (parent)
-                                break;
-                        return ll_iget_for_nfs(sb, data[0], data[1], data[2]);
-                default: break;
-        }
-        return ERR_PTR(-EINVAL);
+        struct inode *inode = de->d_inode;
+        struct inode *parent = de->d_parent->d_inode;
+        struct lustre_nfs_fid *nfs_fid = (void *)fh;
+        ENTRY;
+
+        CDEBUG(D_INFO, "encoding for (%lu) maxlen=%d minlen=%lu\n",
+              inode->i_ino, *plen,
+              sizeof(struct lustre_nfs_fid));
+
+        if (*plen < sizeof(struct lustre_nfs_fid))
+                RETURN(255);
+
+        ll_inode2fid(&nfs_fid->child, inode);
+        ll_inode2fid(&nfs_fid->parent, parent);
+
+        nfs_fid->mode = (S_IFMT & inode->i_mode);
+        *plen = sizeof(struct lustre_nfs_fid);
+
+        RETURN(LUSTRE_NFS_FID);
 }
 
-int ll_dentry_to_fh(struct dentry *dentry, __u32 *datap, int *lenp,
-                    int need_parent)
+#ifdef HAVE_FH_TO_DENTRY
+static struct dentry *ll_fh_to_dentry(struct super_block *sb, struct fid *fid,
+                                      int fh_len, int fh_type)
 {
-        if (*lenp < 3)
-                return 255;
-        *datap++ = dentry->d_inode->i_ino;
-        *datap++ = dentry->d_inode->i_generation;
-        *datap++ = (__u32)(S_IFMT & dentry->d_inode->i_mode);
+        struct lustre_nfs_fid *nfs_fid = (struct lustre_nfs_fid *)fid;
 
-        if (*lenp == 3 || S_ISDIR(dentry->d_inode->i_mode)) {
-                *lenp = 3;
-                return 1;
-        }
-        if (dentry->d_parent) {
-                *datap++ = dentry->d_parent->d_inode->i_ino;
-                *datap++ = (__u32)(S_IFMT & dentry->d_parent->d_inode->i_mode);
+        if (fh_type != LUSTRE_NFS_FID)
+                RETURN(ERR_PTR(-EINVAL));
 
-                *lenp = 5;
-                return 2;
-        }
-        *lenp = 3;
-        return 1;
+        RETURN(ll_iget_for_nfs(sb, &nfs_fid->child));
+}
+static struct dentry *ll_fh_to_parent(struct super_block *sb, struct fid *fid,
+                                      int fh_len, int fh_type)
+{
+        struct lustre_nfs_fid *nfs_fid = (struct lustre_nfs_fid *)fid;
+
+        if (fh_type != LUSTRE_NFS_FID)
+                RETURN(ERR_PTR(-EINVAL));
+        RETURN(ll_iget_for_nfs(sb, &nfs_fid->parent));
 }
 
-#if THREAD_SIZE >= 8192
+#else
+/*
+ * This length is counted as amount of __u32,
+ *  It is composed of a fid and a mode
+ */
+static struct dentry *ll_decode_fh(struct super_block *sb, __u32 *fh, int fh_len,
+                                     int fh_type,
+                                     int (*acceptable)(void *, struct dentry *),
+                                     void *context)
+{
+        struct lustre_nfs_fid *nfs_fid = (void *)fh;
+        struct dentry *entry;
+        ENTRY;
+
+        CDEBUG(D_INFO, "decoding for "LPU64" fh_len=%d fh_type=%x\n",
+                nfs_fid->child.id, fh_len, fh_type);
+
+        if (fh_type != LUSTRE_NFS_FID)
+                  RETURN(ERR_PTR(-ESTALE));
+
+        entry = sb->s_export_op->find_exported_dentry(sb, &nfs_fid->child,
+                                                      &nfs_fid->parent,
+                                                      acceptable, context);
+        RETURN(entry);
+}
+
+
 struct dentry *ll_get_dentry(struct super_block *sb, void *data)
 {
-        __u32 *inump = (__u32*)data;
-        return ll_iget_for_nfs(sb, inump[0], inump[1], S_IFREG);
+        struct lustre_nfs_fid *fid = data;
+        ENTRY;
+
+        RETURN(ll_iget_for_nfs(sb, &fid->child));
+
 }
+
+#endif
 
 struct dentry *ll_get_parent(struct dentry *dchild)
 {
@@ -208,11 +247,11 @@ struct dentry *ll_get_parent(struct dentry *dchild)
         char dotdot[] = "..";
         int  rc = 0;
         ENTRY;
-        
+
         LASSERT(dir && S_ISDIR(dir->i_mode));
-        
-        sbi = ll_s2sbi(dir->i_sb);       
- 
+
+        sbi = ll_s2sbi(dir->i_sb);
+
         fid.id = (__u64)dir->i_ino;
         fid.generation = dir->i_generation;
         fid.f_type = S_IFDIR;
@@ -223,11 +262,12 @@ struct dentry *ll_get_parent(struct dentry *dchild)
                 CERROR("failure %d inode %lu get parent\n", rc, dir->i_ino);
                 return ERR_PTR(rc);
         }
-        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof (*body)); 
-       
+        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof (*body));
+
         LASSERT((body->valid & OBD_MD_FLGENER) && (body->valid & OBD_MD_FLID));
-        
-        result = ll_iget_for_nfs(dir->i_sb, body->ino, body->generation, S_IFDIR);
+        fid.id = body->ino;
+        fid.generation = body->generation;
+        result = ll_iget_for_nfs(dir->i_sb, &fid);
 
         if (IS_ERR(result))
                 rc = PTR_ERR(result);
@@ -236,10 +276,18 @@ struct dentry *ll_get_parent(struct dentry *dchild)
         if (rc)
                 return ERR_PTR(rc);
         RETURN(result);
-} 
+}
 
+
+#if THREAD_SIZE >= 8192
 struct export_operations lustre_export_operations = {
-       .get_parent = ll_get_parent,
-       .get_dentry = ll_get_dentry, 
+        .encode_fh  = ll_encode_fh,
+#ifdef HAVE_FH_TO_DENTRY
+        .fh_to_dentry = ll_fh_to_dentry,
+        .fh_to_parent = ll_fh_to_parent,
+#else
+        .get_dentry = ll_get_dentry,
+        .decode_fh  = ll_decode_fh,
+#endif
 };
 #endif

@@ -145,7 +145,7 @@ struct lloop_device {
         atomic_t           lo_pending;
         wait_queue_head_t  lo_bh_wait;
 
-        request_queue_t    *lo_queue;
+        struct request_queue  *lo_queue;
 
         /* data to handle bio for lustre. */
         struct lo_request_data {
@@ -317,7 +317,7 @@ static unsigned int loop_get_bio(struct lloop_device *lo, struct bio **req)
         return count;
 }
 
-static int loop_make_request(request_queue_t *q, struct bio *old_bio)
+static int loop_make_request(struct request_queue *q, struct bio *old_bio)
 {
         struct lloop_device *lo = q->queuedata;
         int rw = bio_rw(old_bio);
@@ -347,14 +347,14 @@ static int loop_make_request(request_queue_t *q, struct bio *old_bio)
         loop_add_bio(lo, old_bio);
         return 0;
 err:
-        bio_io_error(old_bio, old_bio->bi_size);
+        cfs_bio_io_error(old_bio, old_bio->bi_size);
         return 0;
 }
 
 /*
  * kick off io on the underlying address space
  */
-static void loop_unplug(request_queue_t *q)
+static void loop_unplug(struct request_queue *q)
 {
         struct lloop_device *lo = q->queuedata;
 
@@ -369,7 +369,7 @@ static inline void loop_handle_bio(struct lloop_device *lo, struct bio *bio)
         while (bio) {
                 struct bio *tmp = bio->bi_next;
                 bio->bi_next = NULL;
-                bio_endio(bio, bio->bi_size, ret);
+                cfs_bio_endio(bio, bio->bi_size, ret);
                 bio = tmp;
         }
 }
@@ -793,7 +793,7 @@ static int __init lloop_init(void)
 
 out_mem4:
         while (i--)
-                blk_put_queue(loop_dev[i].lo_queue);
+                blk_cleanup_queue(loop_dev[i].lo_queue);
         i = max_loop;
 out_mem3:
         while (i--)
@@ -815,7 +815,7 @@ static void lloop_exit(void)
         ll_iocontrol_unregister(ll_iocontrol_magic);
         for (i = 0; i < max_loop; i++) {
                 del_gendisk(disks[i]);
-                blk_put_queue(loop_dev[i].lo_queue);
+                blk_cleanup_queue(loop_dev[i].lo_queue);
                 put_disk(disks[i]);
         }
         if (ll_unregister_blkdev(lloop_major, "lloop"))
