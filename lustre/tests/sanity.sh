@@ -3806,7 +3806,7 @@ setup_test102() {
 
 cleanup_test102() {
 	trap 0
-	[ "$SETUP_TEST102" = "yes" ] || return
+	[ "$SETUP_TEST102" = "yes" ] || return 0
 	rm -f $TMP/f102.tar
 	SETUP_TEST102=no
 }
