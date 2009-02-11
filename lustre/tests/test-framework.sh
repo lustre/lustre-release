@@ -2349,7 +2349,7 @@ get_stripe_info() {
 # CMD: determine mds index where directory inode presents
 get_mds_dir () {
     local dir=$1
-    local file=$dir/$tfile
+    local file=$dir/f0.get_mds_dir_tmpfile
 
     rm -f $file
     local iused=$(lfs df -i $dir | grep MDT | awk '{print $3}')
@@ -2364,7 +2364,7 @@ get_mds_dir () {
     for ((i=0; i<${#newused[@]}; i++)); do
          if [ ${oldused[$i]} -lt ${newused[$i]} ];  then
              echo $(( i + 1 ))
-             rm -f $dir/$tfile
+             rm -f $file
              return 0
          fi
     done

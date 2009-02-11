@@ -937,21 +937,28 @@ reset_enospc() {
 }
 
 exhaust_precreations() {
-	OSTIDX=$1
+	local OSTIDX=$1
+	local MDSIDX=$(get_mds_dir "$DIR/d27")
+	echo OSTIDX=$OSTIDX MDSIDX=$MDSIDX
 
-	OST=$(lfs osts | grep ${OSTIDX}": " | \
-	    awk '{print $2}' | sed -e 's/_UUID$//')
+	local OST=$(lfs osts | grep ${OSTIDX}": " | awk '{print $2}' | sed -e 's/_UUID$//')
+	local MDT_INDEX=$(lfs df | grep "\[MDT:$((MDSIDX - 1))\]" | awk '{print $1}' | \
+			  sed -e 's/_UUID$//;s/^.*-//')
+
 	# on the mdt's osc
-	last_id=$(do_facet $SINGLEMDS lctl get_param -n osc.*${OST}-osc-MDT0000.prealloc_last_id)
-	next_id=$(do_facet $SINGLEMDS lctl get_param -n osc.*${OST}-osc-MDT0000.prealloc_next_id)
+	local last_id=$(do_facet mds${MDSIDX} lctl get_param -n osc.*${OST}-osc-${MDT_INDEX}.prealloc_last_id)
+	local next_id=$(do_facet mds${MDSIDX} lctl get_param -n osc.*${OST}-osc-${MDT_INDEX}.prealloc_next_id)
 
-	mkdir -p $DIR/d27/${OST}
-	$SETSTRIPE $DIR/d27/${OST} -i $OSTIDX -c 1
+	echo ${OST}-osc-${MDT_INDEX}.prealloc_last_id=$last_id
+	echo ${OST}-osc-${MDT_INDEX}.prealloc_next_id=$next_id
+
+	mkdir -p $DIR/d27
+	$SETSTRIPE $DIR/d27 -i $OSTIDX -c 1
 #define OBD_FAIL_OST_ENOSPC              0x215
 	do_facet ost$((OSTIDX + 1)) lctl set_param fail_loc=0x215
 	echo "Creating to objid $last_id on ost $OST..."
-	createmany -o $DIR/d27/${OST}/f $next_id $((last_id - next_id + 2))
-	do_facet $SINGLEMDS lctl get_param -n osc.*${OST}-osc-MDT0000.prealloc* | grep '[0-9]'
+	createmany -o $DIR/d27/${OST}-f $next_id $((last_id - next_id + 2))
+	do_facet mds${MDSIDX} lctl get_param osc.*${OST}-osc-${MDT_INDEX}.prealloc* | grep '[0-9]'
 	reset_enospc $2
 }
 
