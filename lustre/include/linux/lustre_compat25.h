@@ -555,5 +555,9 @@ static inline long labs(long x)
 #define invalidate_mapping_pages(mapping,s,e) invalidate_inode_pages(mapping)
 #endif
 
+#ifndef SLAB_DESTROY_BY_RCU
+#define SLAB_DESTROY_BY_RCU 0
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */
