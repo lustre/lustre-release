@@ -424,6 +424,7 @@ if [ "$LARGE_SCALE" != "no" ]; then
         LARGE_SCALE="done"
 fi
 
+[ "$SLOW" = no ] && RECOVERY_MDS_SCALE="no"
 [ "$RECOVERY_MDS_SCALE" != "no" ] && skip_remmds recovery-mds-scale && RECOVERY_MDS_SCALE=no && MSKIPPED=1
 [ "$RECOVERY_MDS_SCALE" != "no" ] && skip_remost recovery-mds-scale && RECOVERY_MDS_SCALE=no && OSKIPPED=1
 if [ "$RECOVERY_MDS_SCALE" != "no" ]; then
