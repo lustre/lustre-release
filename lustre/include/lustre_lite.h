@@ -145,8 +145,8 @@ static inline void ll_dir_chain_fini(struct ll_dir_chain *chain)
 {
 }
 
-static inline __u32 hash_x_index(__u32 value)
+static inline unsigned long hash_x_index(unsigned long value)
 {
-        return ((__u32)~0) - value;
+        return ~0UL - value;
 }
 #endif

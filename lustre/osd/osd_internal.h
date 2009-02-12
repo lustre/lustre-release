@@ -170,9 +170,10 @@ struct osd_thread_info {
         struct lu_fid          oti_fid;
         struct osd_inode_id    oti_id;
         /*
-         * XXX temporary: fake dentry used by xattr calls.
+         * XXX temporary: for ->i_op calls.
          */
         struct timespec        oti_time;
+        struct timespec        oti_time2;
         /*
          * XXX temporary: fake struct file for osd_object_sync
          */

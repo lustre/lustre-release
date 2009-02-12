@@ -217,6 +217,7 @@ static void check_obd_connect_data(void)
         CHECK_CDEFINE(OBD_CONNECT_AT);
         CHECK_CDEFINE(OBD_CONNECT_CANCELSET);
         CHECK_CDEFINE(OBD_CONNECT_LRU_RESIZE);
+        CHECK_CDEFINE(OBD_CONNECT_SKIP_ORPHAN);
 }
 
 static void

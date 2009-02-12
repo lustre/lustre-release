@@ -12,7 +12,7 @@ set -e
 ONLY=${ONLY:-"$*"}
 
 # bug number for skipped test: 13739
-HEAD_EXCEPT="                  32a 32b"
+HEAD_EXCEPT="                  32a"
 
 # bug number for skipped test:                                 
 ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $HEAD_EXCEPT"
@@ -956,7 +956,7 @@ start32 () {
 }
 
 cleanup_nocli32 () {
-	stop32 mds -f
+	stop32 mds1 -f
 	stop32 ost1 -f
 	wait_exit_ST client
 }
@@ -1228,7 +1228,7 @@ test_35() { # bug 12459
 	# contact after the connection loss
 	$LCTL dk $TMP/lustre-log-$TESTNAME.log
 	NEXTCONN=`awk "/${MSG}/ {start = 1;}
-		       /import_select_connection.$device-mdc.* using connection/ {
+		       /import_select_connection.*$device-mdc.* using connection/ {
 				if (start) {
 					if (\\\$NF ~ /$FAKENID/)
 						print \\\$NF;

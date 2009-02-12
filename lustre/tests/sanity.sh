@@ -2649,11 +2649,11 @@ test_56o() {
 	setup_56 $NUMFILES $NUMDIRS
 	TDIR=$DIR/${tdir}g
 
-	utime $TDIR/file1 > /dev/null || error
-	utime $TDIR/file2 > /dev/null || error
-	utime $TDIR/dir1 > /dev/null || error
-	utime $TDIR/dir2 > /dev/null || error
-	utime $TDIR/dir1/file1 > /dev/null || error
+	utime $TDIR/file1 > /dev/null || error "utime (1)"
+	utime $TDIR/file2 > /dev/null || error "utime (2)"
+	utime $TDIR/dir1 > /dev/null || error "utime (3)"
+	utime $TDIR/dir2 > /dev/null || error "utime (4)"
+	utime $TDIR/dir1/file1 > /dev/null || error "utime (5)"
 
 	EXPECTED=5
 	NUMS=`$LFIND -mtime +1 $TDIR | wc -l`

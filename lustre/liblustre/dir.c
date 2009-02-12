@@ -132,8 +132,8 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         return rc;
 }
 
-static cfs_page_t *llu_dir_read_page(struct inode *ino, __u32 hash,
-                                      int exact, struct ll_dir_chain *chain)
+static cfs_page_t *llu_dir_read_page(struct inode *ino, __u64 hash,
+                                     int exact, struct ll_dir_chain *chain)
 {
         cfs_page_t *page;
         int rc;
@@ -211,6 +211,7 @@ ssize_t llu_iop_filldirentries(struct inode *dir, _SYSIO_OFF_T *basep,
         int rc;
         int done;
         int shift;
+        __u16 type;
         ENTRY;
 
         liblustre_wait_event(0);
@@ -272,9 +273,9 @@ ssize_t llu_iop_filldirentries(struct inode *dir, _SYSIO_OFF_T *basep,
                                 name = ent->lde_name;
                                 fid_le_to_cpu(&fid, &fid);
                                 ino  = llu_fid_build_ino(llu_i2sbi(dir), &fid);
-
+                                type = ll_dirent_type_get(ent);
                                 done = filldir(buf, nbytes, name, namelen,
-                                               (loff_t)hash, ino, DT_UNKNOWN,
+                                               (loff_t)hash, ino, type,
                                                &filled);
                         }
                         next = le64_to_cpu(dp->ldp_hash_end);
@@ -309,7 +310,7 @@ ssize_t llu_iop_filldirentries(struct inode *dir, _SYSIO_OFF_T *basep,
                                PFID(&lli->lli_fid), (unsigned long)pos, rc);
                 }
         }
-        lli->lli_dir_pos = (loff_t)(__s32)pos;
+        lli->lli_dir_pos = (loff_t)pos;
         *basep = lli->lli_dir_pos;
 out:
         ll_dir_chain_fini(&chain);

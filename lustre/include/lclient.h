@@ -358,6 +358,8 @@ int cl_inode_init(struct inode *inode, struct lustre_md *md);
 void cl_inode_fini(struct inode *inode);
 int cl_local_size(struct inode *inode);
 
+__u16 ll_dirent_type_get(struct lu_dirent *ent);
+
 #ifdef INVARIANT_CHECK
 # define CLOBINVRNT(env, clob, expr)                                    \
   do {                                                                  \
