@@ -494,5 +494,9 @@ static inline long labs(long x)
 #define __fls fls
 #endif
 
+#ifndef SLAB_DESTROY_BY_RCU
+#define SLAB_DESTROY_BY_RCU 0
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */
