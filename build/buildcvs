@@ -337,8 +337,9 @@ case "$lustretag" in
         ;;
 
     b_HEAD_*|b_head_*|b_hd_*)
-        lnettag="b1_x"
+        lnettag="HEAD"
         ldiskfstag="$ldiskfstag_head"
+        libcfstag="HEAD"
         ;;
 esac
 
