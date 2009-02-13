@@ -1188,6 +1188,24 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 
+# check if task_struct with rcu memeber
+AC_DEFUN([LN_TASK_RCU],
+[AC_MSG_CHECKING([if task_struct has a rcu field])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/sched.h>
+],[
+        struct task_struct tsk;
+
+        tsk.rcu.next = NULL;
+],[
+	AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_TASK_RCU, 1,
+                  [task_struct has rcu field])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
 # LN_TASKLIST_LOCK
 # 2.6.18 remove tasklist_lock export
 AC_DEFUN([LN_TASKLIST_LOCK],
@@ -1409,6 +1427,7 @@ LN_U64_LONG_LONG
 LN_SSIZE_T_LONG
 LN_SIZE_T_LONG
 LN_LE_TYPES
+LN_TASK_RCU
 # 2.6.18
 LN_TASKLIST_LOCK
 # 2.6.19
