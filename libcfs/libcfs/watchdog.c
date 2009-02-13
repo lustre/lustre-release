@@ -101,14 +101,20 @@ static cfs_time_t lcw_last_watchdog_time;
 static int lcw_recent_watchdog_count;
 static spinlock_t lcw_last_watchdog_lock = SPIN_LOCK_UNLOCKED;
 
-#ifdef HAVE_TASKLIST_LOCK
 static void
 lcw_dump(struct lc_watchdog *lcw)
 {
         cfs_task_t *tsk;
+#if defined(HAVE_TASKLIST_LOCK)
+        read_lock(&tasklist_lock);
+#elif defined(HAVE_TASK_RCU)
+        rcu_read_lock();
+#else
+        CERROR("unable to dump stack because of missing export\n"); 
+        return;
+#endif
         ENTRY;
 
-        read_lock(&tasklist_lock);
         tsk = find_task_by_pid(lcw->lcw_pid);
 
         if (tsk == NULL) {
@@ -120,17 +126,14 @@ lcw_dump(struct lc_watchdog *lcw)
         } else {
                 libcfs_debug_dumpstack(tsk);
         }
-        
+
+#if defined(HAVE_TASKLIST_LOCK)
         read_unlock(&tasklist_lock);
+#elif defined(HAVE_TASK_RCU)
+        rcu_read_unlock();
+#endif
         EXIT;
 }
-#else
-static void
-lcw_dump(struct lc_watchdog *lcw)
-{
-        CERROR("unable to dump stack because of missing export\n");
-}
-#endif
 
 static void lcw_cb(ulong_ptr_t data)
 {

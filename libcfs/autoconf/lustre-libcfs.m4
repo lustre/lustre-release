@@ -241,6 +241,24 @@ CFLAGS="$tmp_flags"
 ])
 
 
+# check if task_struct with rcu memeber
+AC_DEFUN([LIBCFS_TASK_RCU],
+[AC_MSG_CHECKING([if task_struct has a rcu field])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/sched.h>
+],[
+        struct task_struct tsk;
+
+        tsk.rcu.next = NULL;
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_TASK_RCU, 1,
+                  [task_struct has rcu field])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
 # LIBCFS_TASKLIST_LOCK
 # 2.6.18 remove tasklist_lock export
 AC_DEFUN([LIBCFS_TASKLIST_LOCK],
@@ -434,6 +452,7 @@ LIBCFS_FUNC_SHOW_TASK
 LIBCFS_U64_LONG_LONG
 LIBCFS_SSIZE_T_LONG
 LIBCFS_SIZE_T_LONG
+LIBCFS_TASK_RCU
 # 2.6.18
 LIBCFS_TASKLIST_LOCK
 # 2.6.19
