@@ -51,7 +51,9 @@ struct mds_filter_data {
         __u64 io_epoch;
 };
 
-#define MDS_FILTERDATA(inode) ((struct mds_filter_data *)(inode)->i_filterdata)
+#define MDS_FILTERDATA(inode) \
+                ((struct mds_filter_data *)INODE_PRIVATE_DATA(inode))
+
 
 static inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
 {

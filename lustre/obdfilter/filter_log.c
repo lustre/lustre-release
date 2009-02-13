@@ -66,7 +66,7 @@ int filter_log_sz_change(struct llog_handle *cathandle,
         ENTRY;
 
         LOCK_INODE_MUTEX(inode);
-        ofd = inode->i_filterdata;
+        ofd = INODE_PRIVATE_DATA(inode);
 
         if (ofd && ofd->ofd_epoch >= io_epoch) {
                 if (ofd->ofd_epoch > io_epoch)
@@ -83,7 +83,7 @@ int filter_log_sz_change(struct llog_handle *cathandle,
                 if (!ofd)
                         GOTO(out, rc = -ENOMEM);
                 igrab(inode);
-                inode->i_filterdata = ofd;
+                INODE_PRIVATE_DATA(inode) = ofd;
                 ofd->ofd_epoch = io_epoch;
         }
         /* the decision to write a record is now made, unlock */
