@@ -5,12 +5,12 @@ Index: linux-2.6.18-92.1.22/fs/ext3/ioctl.c
 ===================================================================
 --- linux-2.6.18-92.1.22.orig/fs/ext3/ioctl.c
 +++ linux-2.6.18-92.1.22/fs/ext3/ioctl.c
-@@ -15,7 +15,161 @@
- #include <linux/time.h>
- #include <asm/uaccess.h>
+@@ -17,6 +17,161 @@
  #include <linux/namei.h>
-+#include "fiemap.h"
  
+ #include <linux/lustre_iam.h>
++#include "fiemap.h"
++  
 +/* So that the fiemap access checks can't overflow on 32 bit machines. */
 +#define FIEMAP_MAX_EXTENTS     (UINT_MAX / sizeof(struct fiemap_extent))
 +
@@ -110,7 +110,7 @@ Index: linux-2.6.18-92.1.22/fs/ext3/ioctl.c
 + * userspace. For this reason, a return code of -EBADR should be preserved.
 + *
 + * Returns 0 on success, -EBADR on bad flags.
-+*/
++ */
 +int fiemap_check_flags(struct fiemap_extent_info *fieinfo, u32 fs_flags)
 +{
 +	u32 incompat_flags;
@@ -167,7 +167,7 @@ Index: linux-2.6.18-92.1.22/fs/ext3/ioctl.c
  
  int ext3_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
  		unsigned long arg)
-@@ -272,7 +426,9 @@ flags_err:
+@@ -273,7 +428,9 @@ flags_err:
  
  		return err;
  	}
@@ -177,7 +177,7 @@ Index: linux-2.6.18-92.1.22/fs/ext3/ioctl.c
 +	}
  
  	default:
- 		return -ENOTTY;
+ 		return iam_uapi_ioctl(inode, filp, cmd, arg);
 Index: linux-2.6.18-92.1.22/include/linux/ext3_fs.h
 ===================================================================
 --- linux-2.6.18-92.1.22.orig/include/linux/ext3_fs.h
@@ -204,7 +204,7 @@ Index: linux-2.6.18-92.1.22/include/linux/ext3_fs.h
  
  /*
   *  Mount options
-@@ -1041,6 +1045,9 @@ extern int ext3_block_truncate_page(hand
+@@ -1048,6 +1052,9 @@ extern int ext3_block_truncate_page(hand
  /* ioctl.c */
  extern int ext3_ioctl (struct inode *, struct file *, unsigned int,
  		       unsigned long);
@@ -214,7 +214,7 @@ Index: linux-2.6.18-92.1.22/include/linux/ext3_fs.h
  
  /* namei.c */
  extern int ext3_orphan_add(handle_t *, struct inode *);
-@@ -1118,7 +1125,6 @@ ext3_get_blocks_wrap(handle_t *handle, s
+@@ -1125,7 +1132,6 @@ ext3_get_blocks_wrap(handle_t *handle, s
  	return ret;
  }
  
@@ -415,7 +415,7 @@ Index: linux-2.6.18-92.1.22/fs/ext3/fiemap.h
 + * Copyright 2008 Sun Microsystems, Inc
 + *
 + * Author: Kalpak Shah <kalpak.shah@sun.com>
-+ *	 Andreas Dilger <adilger@sun.com>
++ *	    Andreas Dilger <adilger@sun.com>
 + */
 +
 +#ifndef _LINUX_EXT3_FIEMAP_H
