@@ -108,7 +108,7 @@ init_test_env() {
     fi
     export MDSRATE=${MDSRATE:-"$LUSTRE/tests/mdsrate"}
     [ ! -f "$MDSRATE" ] && export MDSRATE=$(which mdsrate 2> /dev/null)
-    if ! echo $PATH | grep -q $LUSTRE/test/racer; then
+    if ! echo $PATH | grep -q $LUSTRE/tests/racer; then
         export PATH=$PATH:$LUSTRE/tests/racer
     fi
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
