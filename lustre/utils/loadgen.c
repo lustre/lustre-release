@@ -965,7 +965,7 @@ static int loadgen_wait(int argc, char **argv)
 
 static int loadgen_init(int argc, char **argv)
 {
-        char *args[3];
+        char *args[4];
         int rc;
 
         sprintf(cmdname, "%s", argv[0]);
