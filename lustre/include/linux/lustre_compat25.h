@@ -56,8 +56,6 @@ struct ll_iattr_struct {
 #define ll_iattr_struct iattr
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14) */
 
-#ifndef HAVE_SET_FS_PWD
-
 #ifdef HAVE_FS_STRUCT_USE_PATH
 static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
                 struct dentry *dentry)
@@ -76,9 +74,7 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 	if (old_pwd.dentry)
 		path_put(&old_pwd);
 }
-
 #else
-
 static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
                 struct dentry *dentry)
 {
@@ -97,10 +93,7 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
                 mntput(old_pwdmnt);
         }
 }
-#endif
-#else
-#define ll_set_fs_pwd set_fs_pwd
-#endif /* HAVE_SET_FS_PWD */
+#endif /* HAVE_FS_STRUCT_USE_PATH */
 
 #ifdef HAVE_INODE_I_MUTEX
 #define UNLOCK_INODE_MUTEX(inode) do {mutex_unlock(&(inode)->i_mutex); } while(0)
@@ -557,6 +550,12 @@ static inline long labs(long x)
 
 #ifndef SLAB_DESTROY_BY_RCU
 #define SLAB_DESTROY_BY_RCU 0
+#endif
+
+#ifdef HAVE_INODE_IPRIVATE
+#define INODE_PRIVATE_DATA(inode)       ((inode)->i_private)
+#else
+#define INODE_PRIVATE_DATA(inode)       ((inode)->u.generic_ip)
 #endif
 
 #endif /* __KERNEL__ */

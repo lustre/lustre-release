@@ -590,14 +590,6 @@ AC_DEFUN([LC_LUSTRE_VERSION_H],
 ])
 ])
 
-AC_DEFUN([LC_FUNC_SET_FS_PWD],
-[LB_CHECK_SYMBOL_EXPORT([set_fs_pwd],
-[fs/namespace.c],[
-        AC_DEFINE(HAVE_SET_FS_PWD, 1, [set_fs_pwd is exported])
-],[
-])
-])
-
 #
 # check for FS_RENAME_DOES_D_MOVE flag
 #
@@ -896,6 +888,23 @@ LB_LINUX_TRY_COMPILE([
 	AC_MSG_RESULT(no)
 ])
 EXTRA_KCFLAGS="$tmp_flags"
+])
+
+# inode have i_private field since 2.6.17
+AC_DEFUN([LC_INODE_IPRIVATE],
+[AC_MSG_CHECKING([if inode has a i_private field])
+LB_LINUX_TRY_COMPILE([
+#include <linux/fs.h>
+],[
+	struct inode i;
+	i.i_private = NULL; 
+],[
+	AC_MSG_RESULT(yes)
+	AC_DEFINE(HAVE_INODE_IPRIVATE, 1,
+		[struct inode has i_private field])
+],[
+	AC_MSG_RESULT(no)
+])
 ])
 
 # 2.6.19 API changes
@@ -1565,7 +1574,6 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_STRUCT_INTENT_FILE
           LC_POSIX_ACL_XATTR_H
           LC_EXPORT___IGET
-          LC_FUNC_SET_FS_PWD
           LC_FUNC_MS_FLOCK_LOCK
           LC_FUNC_HAVE_CAN_SLEEP_ARG
           LC_FUNC_F_OP_FLOCK
@@ -1596,6 +1604,7 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_VFS_KERN_MOUNT
           LC_INVALIDATEPAGE_RETURN_INT
           LC_UMOUNTBEGIN_HAS_VFSMOUNT
+          LC_INODE_IPRIVATE
           LC_EXPORT_FILEMAP_FDATAWRITE_RANGE
           if test x$enable_server = xyes ; then
                 LC_EXPORT_INVALIDATE_MAPPING_PAGES

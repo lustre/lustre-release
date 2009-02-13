@@ -138,9 +138,9 @@ void mds_mfd_unlink(struct mds_file_data *mfd, int decref)
 /* Caller must hold mds->mds_epoch_sem */
 static int mds_alloc_filterdata(struct inode *inode)
 {
-        LASSERT(inode->i_filterdata == NULL);
-        OBD_ALLOC(inode->i_filterdata, sizeof(struct mds_filter_data));
-        if (inode->i_filterdata == NULL)
+        LASSERT(INODE_PRIVATE_DATA(inode) == NULL);
+        OBD_ALLOC(INODE_PRIVATE_DATA(inode), sizeof(struct mds_filter_data));
+        if (INODE_PRIVATE_DATA(inode) == NULL)
                 return -ENOMEM;
         LASSERT(igrab(inode) == inode);
         return 0;
@@ -149,9 +149,9 @@ static int mds_alloc_filterdata(struct inode *inode)
 /* Caller must hold mds->mds_epoch_sem */
 static void mds_free_filterdata(struct inode *inode)
 {
-        LASSERT(inode->i_filterdata != NULL);
-        OBD_FREE(inode->i_filterdata, sizeof(struct mds_filter_data));
-        inode->i_filterdata = NULL;
+        LASSERT(INODE_PRIVATE_DATA(inode) != NULL);
+        OBD_FREE(INODE_PRIVATE_DATA(inode), sizeof(struct mds_filter_data));
+        INODE_PRIVATE_DATA(inode) = NULL;
         iput(inode);
 }
 
@@ -186,9 +186,9 @@ static int mds_get_write_access(struct mds_obd *mds, struct inode *inode,
                 goto out;
         }
 
-        if (inode->i_filterdata == NULL)
+        if (MDS_FILTERDATA(inode) == NULL)
                 mds_alloc_filterdata(inode);
-        if (inode->i_filterdata == NULL) {
+        if (MDS_FILTERDATA(inode) == NULL) {
                 rc = -ENOMEM;
                 goto out;
         }
