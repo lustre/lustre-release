@@ -56,7 +56,6 @@ struct ll_iattr {
 #define ll_iattr iattr
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14) */
 
-#ifndef HAVE_SET_FS_PWD
 static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
                 struct dentry *dentry)
 {
@@ -75,9 +74,6 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
                 mntput(old_pwdmnt);
         }
 }
-#else
-#define ll_set_fs_pwd set_fs_pwd
-#endif /* HAVE_SET_FS_PWD */
 
 /*
  * set ATTR_BLOCKS to a high value to avoid any risk of collision with other
@@ -663,6 +659,12 @@ static inline long labs(long x)
 
 #ifdef HAVE_INVALIDATE_INODE_PAGES
 #define invalidate_mapping_pages(mapping,s,e) invalidate_inode_pages(mapping)
+#endif
+
+#ifdef HAVE_INODE_IPRIVATE
+#define INODE_PRIVATE_DATA(inode)       ((inode)->i_private)
+#else
+#define INODE_PRIVATE_DATA(inode)       ((inode)->u.generic_ip)
 #endif
 
 #ifndef SLAB_DESTROY_BY_RCU
