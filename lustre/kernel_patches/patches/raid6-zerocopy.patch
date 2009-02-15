@@ -1,15 +1,17 @@
-diff -pur linux-2.6.9.orig/drivers/md/raid6main.c linux-2.6.9/drivers/md/raid6main.c
---- linux-2.6.9.orig/drivers/md/raid6main.c	2008-01-10 14:02:08.000000000 +0800
-+++ linux-2.6.9/drivers/md/raid6main.c	2008-01-10 14:01:56.000000000 +0800
-@@ -430,6 +430,7 @@ static int raid6_end_read_request (struc
+diff -pur linux-2.6.9-67.orig/drivers/md/raid6main.c linux-2.6.9-67/drivers/md/raid6main.c
+--- linux-2.6.9-67.orig/drivers/md/raid6main.c	2009-02-15 10:24:30.000000000 +0800
++++ linux-2.6.9-67/drivers/md/raid6main.c	2009-02-15 10:26:17.000000000 +0800
+@@ -430,6 +430,9 @@ static int raid6_end_read_request (struc
  		clear_buffer_uptodate(bh);
  	}
  #endif
-+	BUG_ON(test_bit(R5_Direct, &sh->dev[i].flags));
++	/* Read on a Directing write is allowable */
++	/* BUG_ON(test_bit(R5_Direct, &sh->dev[i].flags)) */
++	BUG_ON(sh->dev[i].req.bi_io_vec[0].bv_page != sh->dev[i].page);
  	clear_bit(R5_LOCKED, &sh->dev[i].flags);
  	set_bit(STRIPE_HANDLE, &sh->state);
  	release_stripe(sh);
-@@ -468,6 +469,10 @@ static int raid6_end_write_request (stru
+@@ -468,6 +471,10 @@ static int raid6_end_write_request (stru
  
  	rdev_dec_pending(conf->disks[i].rdev, conf->mddev);
  
@@ -20,7 +22,7 @@ diff -pur linux-2.6.9.orig/drivers/md/raid6main.c linux-2.6.9/drivers/md/raid6ma
  	clear_bit(R5_LOCKED, &sh->dev[i].flags);
  	set_bit(STRIPE_HANDLE, &sh->state);
  	__release_stripe(conf, sh);
-@@ -664,7 +669,27 @@ static sector_t compute_blocknr(struct s
+@@ -664,7 +671,27 @@ static sector_t compute_blocknr(struct s
  	return r_sector;
  }
  
@@ -48,7 +50,7 @@ diff -pur linux-2.6.9.orig/drivers/md/raid6main.c linux-2.6.9/drivers/md/raid6ma
  
  /*
   * Copy data between a page in the stripe cache, and one or more bion
-@@ -731,6 +756,7 @@ static void compute_parity(struct stripe
+@@ -731,6 +758,7 @@ static void compute_parity(struct stripe
  	raid6_conf_t *conf = sh->raid_conf;
  	int i, pd_idx = sh->pd_idx, qd_idx, d0_idx, disks = conf->raid_disks, count;
  	struct bio *chosen;
@@ -56,7 +58,7 @@ diff -pur linux-2.6.9.orig/drivers/md/raid6main.c linux-2.6.9/drivers/md/raid6ma
  	/**** FIX THIS: This could be very bad if disks is close to 256 ****/
  	void *ptrs[disks];
  
-@@ -761,18 +787,46 @@ static void compute_parity(struct stripe
+@@ -761,18 +789,46 @@ static void compute_parity(struct stripe
  		BUG();		/* Not implemented yet */
  	}
  
@@ -112,7 +114,7 @@ diff -pur linux-2.6.9.orig/drivers/md/raid6main.c linux-2.6.9/drivers/md/raid6ma
  
  //	switch(method) {
  //	case RECONSTRUCT_WRITE:
-@@ -783,7 +837,10 @@ static void compute_parity(struct stripe
+@@ -783,7 +839,10 @@ static void compute_parity(struct stripe
  		count = 0;
  		i = d0_idx;
  		do {
@@ -124,7 +126,7 @@ diff -pur linux-2.6.9.orig/drivers/md/raid6main.c linux-2.6.9/drivers/md/raid6ma
  
  			i = raid6_next_disk(i, disks);
  		} while ( i != d0_idx );
-@@ -1185,7 +1242,8 @@ static void handle_stripe(struct stripe_
+@@ -1185,7 +1244,8 @@ static void handle_stripe(struct stripe_
  			if (sh->dev[i].written) {
  				dev = &sh->dev[i];
  				if (!test_bit(R5_LOCKED, &dev->flags) &&
@@ -134,7 +136,7 @@ diff -pur linux-2.6.9.orig/drivers/md/raid6main.c linux-2.6.9/drivers/md/raid6ma
  					/* We can return any write requests */
  					struct bio *wbi, *wbi2;
  					PRINTK("Return write for stripe %llu disc %d\n",
-@@ -1193,6 +1251,7 @@ static void handle_stripe(struct stripe_
+@@ -1193,6 +1253,7 @@ static void handle_stripe(struct stripe_
  					spin_lock_irq(&conf->device_lock);
  					wbi = dev->written;
  					dev->written = NULL;
@@ -142,7 +144,23 @@ diff -pur linux-2.6.9.orig/drivers/md/raid6main.c linux-2.6.9/drivers/md/raid6ma
  					while (wbi && wbi->bi_sector < dev->sector + STRIPE_SECTORS) {
  						wbi2 = r5_next_bio(wbi, dev->sector);
  						if (--wbi->bi_phys_segments == 0) {
-@@ -2008,6 +2067,7 @@ static int run (mddev_t *mddev)
+@@ -1503,6 +1564,15 @@ static void handle_stripe(struct stripe_
+ 		} else {
+ 			PRINTK("skip op %ld on disc %d for sector %llu\n",
+ 				bi->bi_rw, i, (unsigned long long)sh->sector);
++
++			if (test_bit(R5_Direct, &sh->dev[i].flags)) {
++				/* restore the page pointer of req, otherwise,
++				 * no any read is permitted on this stripe, this is
++				 * not what we want. -jay */
++				BUG_ON(sh->dev[i].req.bi_io_vec[0].bv_page == sh->dev[i].page);
++				sh->dev[i].req.bi_io_vec[0].bv_page = sh->dev[i].page;
++			}
++
+ 			clear_bit(R5_LOCKED, &sh->dev[i].flags);
+ 			set_bit(STRIPE_HANDLE, &sh->state);
+ 			atomic_dec(&conf->delayed);
+@@ -2008,6 +2078,7 @@ static int run (mddev_t *mddev)
  		if (mddev->queue->backing_dev_info.ra_pages < 2 * stripe)
  			mddev->queue->backing_dev_info.ra_pages = 2 * stripe;
  	}
@@ -150,7 +168,7 @@ diff -pur linux-2.6.9.orig/drivers/md/raid6main.c linux-2.6.9/drivers/md/raid6ma
  
  	/* Ok, everything is just fine now */
  	mddev->array_size =  mddev->size * (mddev->raid_disks - 2);
-@@ -2095,9 +2155,11 @@ static void status (struct seq_file *seq
+@@ -2095,9 +2166,11 @@ static void status (struct seq_file *seq
  		atomic_read(&conf->handled_in_raid5d),
  		atomic_read(&conf->out_of_stripes),
  		atomic_read(&conf->handle_called));
