@@ -410,7 +410,6 @@ static void osc_lock_granted(const struct lu_env *env, struct osc_lock *olck,
                  * tell upper layers the extent of the lock that was actually
                  * granted
                  */
-                LINVRNT(osc_lock_invariant(olck));
                 olck->ols_state = OLS_GRANTED;
                 osc_lock_lvb_update(env, olck, rc);
 
@@ -422,6 +421,7 @@ static void osc_lock_granted(const struct lu_env *env, struct osc_lock *olck,
                 unlock_res_and_lock(dlmlock);
                 cl_lock_modify(env, lock, descr);
                 cl_lock_signal(env, lock);
+                LINVRNT(osc_lock_invariant(olck));
                 lock_res_and_lock(dlmlock);
         }
         EXIT;
@@ -1637,7 +1637,7 @@ int osc_lock_init(const struct lu_env *env,
         struct osc_lock *clk;
         int result;
 
-        OBD_SLAB_ALLOC_PTR(clk, osc_lock_kmem);
+        OBD_SLAB_ALLOC_PTR_GFP(clk, osc_lock_kmem, CFS_ALLOC_IO);
         if (clk != NULL) {
                 osc_lock_build_einfo(env, lock, clk, &clk->ols_einfo);
                 clk->ols_state = OLS_NEW;
