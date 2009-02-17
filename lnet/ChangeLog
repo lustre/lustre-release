@@ -17,6 +17,11 @@ Bugzilla   :
 Description:
 Details    :
 
+Severity   : normal
+Bugzilla   : 16186
+Description: One down Lustre FS hangs ALL mounted Lustre filesystems
+Details    : Shared routing enhancements - peer health detection.
+
 Severity   : minor
 Bugzilla   : 11245
 Description: IB path MTU mistakenly set to 1st path MTU when ib_mtu is off
@@ -41,8 +46,7 @@ Details    : With current protocol V2, connections on router can be
              don't need any credit so will never be blocked. Also, V3 can send
              keepalive ping in specified period for router healthy checking.
 
--------------------------------------------------------------------------------
-
+------------------------------------------------------------------------------- 
 12-31-2008  Sun Microsystems, Inc.
 	* version 1.8.0
 	* Support for networks:

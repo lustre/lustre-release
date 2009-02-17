@@ -51,6 +51,7 @@ lnd_t the_ksocklnd = {
         .lnd_send       = ksocknal_send,
         .lnd_recv       = ksocknal_recv,
         .lnd_notify     = ksocknal_notify,
+        .lnd_query      = ksocknal_query,
         .lnd_accept     = ksocknal_accept,
 };
 
@@ -131,6 +132,7 @@ ksocknal_create_peer (ksock_peer_t **peerp, lnet_ni_t *ni, lnet_process_id_t id)
         peer->ksnp_closing = 0;
         peer->ksnp_accepting = 0;
         peer->ksnp_proto = NULL;
+        peer->ksnp_last_alive = 0;
         peer->ksnp_zc_next_cookie = SOCKNAL_KEEPALIVE_PING + 1;
 
         CFS_INIT_LIST_HEAD (&peer->ksnp_conns);
@@ -1793,6 +1795,62 @@ ksocknal_notify (lnet_ni_t *ni, lnet_nid_t gw_nid, int alive)
 }
 
 void
+ksocknal_query (lnet_ni_t *ni, lnet_nid_t nid, time_t *when)
+{
+        int                connect = 1;
+        cfs_time_t         last_alive = 0;
+        ksock_peer_t      *peer = NULL;
+        rwlock_t          *glock = &ksocknal_data.ksnd_global_lock;
+        lnet_process_id_t  id = {.nid = nid, .pid = LUSTRE_SRV_LNET_PID};
+
+        read_lock(glock);
+
+        peer = ksocknal_find_peer_locked(ni, id);
+        if (peer != NULL) {
+                struct list_head *tmp;
+                ksock_conn_t     *conn;
+                int               bufnob;
+
+                list_for_each (tmp, &peer->ksnp_conns) {
+                        conn = list_entry(tmp, ksock_conn_t, ksnc_list);
+                        bufnob = libcfs_sock_wmem_queued(conn->ksnc_sock);
+
+                        if (bufnob < conn->ksnc_tx_bufnob) {
+                                /* something got ACKed */
+                                conn->ksnc_tx_deadline =
+                                        cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
+                                peer->ksnp_last_alive = cfs_time_current();
+                                conn->ksnc_tx_bufnob = bufnob;
+                        }
+                }
+
+                last_alive = peer->ksnp_last_alive;
+                if (ksocknal_find_connectable_route_locked(peer) == NULL)
+                        connect = 0;
+        }
+
+        read_unlock(glock);
+
+        if (last_alive != 0)
+                *when = cfs_time_current_sec() -
+                        cfs_duration_sec(cfs_time_current() - last_alive);
+
+        if (!connect)
+                return;
+
+        ksocknal_add_peer(ni, id, LNET_NIDADDR(nid), lnet_acceptor_port());
+
+        write_lock_bh(glock);
+
+        peer = ksocknal_find_peer_locked(ni, id);
+        if (peer != NULL)
+                ksocknal_launch_all_connections_locked(peer);
+
+        write_unlock_bh(glock);
+        return;
+}
+
+void
 ksocknal_push_peer (ksock_peer_t *peer)
 {
         int               index;
@@ -2535,6 +2593,7 @@ ksocknal_startup (lnet_ni_t *ni)
         ni->ni_data = net;
         ni->ni_maxtxcredits = *ksocknal_tunables.ksnd_credits;
         ni->ni_peertxcredits = *ksocknal_tunables.ksnd_peercredits;
+        ni->ni_peertimeout = *ksocknal_tunables.ksnd_peertimeout;
 
         if (ni->ni_interfaces[0] == NULL) {
                 rc = ksocknal_enumerate_interfaces(net);

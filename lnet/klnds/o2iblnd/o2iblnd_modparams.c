@@ -64,6 +64,10 @@ static int peer_credits = 8;
 CFS_MODULE_PARM(peer_credits, "i", int, 0444,
                 "# concurrent sends to 1 peer");
 
+static int peer_timeout = 0;
+CFS_MODULE_PARM(peer_timeout, "i", int, 0444,
+                "Seconds without aliveness news to declare peer dead (<=0 to disable)");
+
 static char *ipif_name = "ib0";
 CFS_MODULE_PARM(ipif_name, "s", charp, 0444,
                 "IPoIB interface name");
@@ -114,6 +118,7 @@ kib_tunables_t kiblnd_tunables = {
         .kib_ntx                    = &ntx,
         .kib_credits                = &credits,
         .kib_peercredits            = &peer_credits,
+        .kib_peertimeout            = &peer_timeout,
         .kib_default_ipif           = &ipif_name,
         .kib_retry_count            = &retry_count,
         .kib_rnr_retry_count        = &rnr_retry_count,
@@ -139,6 +144,7 @@ enum {
         O2IBLND_NTX,
         O2IBLND_CREDITS,
         O2IBLND_PEER_CREDITS,
+        O2IBLND_PEER_TIMEOUT,
         O2IBLND_IPIF_BASENAME,
         O2IBLND_RETRY_COUNT,
         O2IBLND_RNR_RETRY_COUNT,
@@ -157,6 +163,7 @@ enum {
 #define O2IBLND_NTX              CTL_UNNUMBERED
 #define O2IBLND_CREDITS          CTL_UNNUMBERED
 #define O2IBLND_PEER_CREDITS     CTL_UNNUMBERED
+#define O2IBLND_PEER_TIMEOUT     CTL_UNNUMBERED
 #define O2IBLND_IPIF_BASENAME    CTL_UNNUMBERED
 #define O2IBLND_RETRY_COUNT      CTL_UNNUMBERED
 #define O2IBLND_RNR_RETRY_COUNT  CTL_UNNUMBERED
@@ -214,6 +221,14 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
                 .ctl_name = O2IBLND_PEER_CREDITS,
                 .procname = "peer_credits",
                 .data     = &peer_credits,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = O2IBLND_PEER_TIMEOUT,
+                .procname = "peer_timeout",
+                .data     = &peer_timeout,
                 .maxlen   = sizeof(int),
                 .mode     = 0444,
                 .proc_handler = &proc_dointvec

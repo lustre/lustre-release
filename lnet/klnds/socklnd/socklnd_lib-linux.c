@@ -44,6 +44,7 @@ enum {
         SOCKLND_TIMEOUT = 1,
         SOCKLND_CREDITS,
         SOCKLND_PEER_CREDITS,
+        SOCKLND_PEER_TIMEOUT,
         SOCKLND_NCONNDS,
         SOCKLND_RECONNECTS_MIN,
         SOCKLND_RECONNECTS_MAX,
@@ -71,6 +72,7 @@ enum {
 #define SOCKLND_TIMEOUT         CTL_UNNUMBERED
 #define SOCKLND_CREDITS         CTL_UNNUMBERED
 #define SOCKLND_PEER_CREDITS    CTL_UNNUMBERED
+#define SOCKLND_PEER_TIMEOUT    CTL_UNNUMBERED
 #define SOCKLND_NCONNDS         CTL_UNNUMBERED
 #define SOCKLND_RECONNECTS_MIN  CTL_UNNUMBERED
 #define SOCKLND_RECONNECTS_MAX  CTL_UNNUMBERED
@@ -120,6 +122,15 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
                 .maxlen   = sizeof (int),
                 .mode     = 0444,
                 .proc_handler = &proc_dointvec,
+                .strategy = &sysctl_intvec,
+        },
+        {
+                .ctl_name = SOCKLND_PEER_TIMEOUT,
+                .procname = "peer_timeout",
+                .data     = &ksocknal_tunables.ksnd_peertimeout,
+                .maxlen   = sizeof (int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
                 .strategy = &sysctl_intvec,
         },
         {

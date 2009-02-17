@@ -1080,6 +1080,8 @@ lnet_startup_lndnis (void)
                         goto failed;
                 }
 
+                LASSERT (ni->ni_peertimeout <= 0 || lnd->lnd_query != NULL);
+
                 list_del(&ni->ni_list);
 
                 LNET_LOCK();
@@ -1119,9 +1121,10 @@ lnet_startup_lndnis (void)
 
                 ni->ni_txcredits = ni->ni_mintxcredits = ni->ni_maxtxcredits;
 
-                CDEBUG(D_LNI, "Added LNI %s [%d/%d]\n",
+                CDEBUG(D_LNI, "Added LNI %s [%d/%d/%d]\n",
                        libcfs_nid2str(ni->ni_nid),
-                       ni->ni_peertxcredits, ni->ni_txcredits);
+                       ni->ni_peertxcredits, ni->ni_txcredits,
+                       ni->ni_peertimeout);
 
                 /* Handle nidstrings for network 0 just like this one */
                 if (the_lnet.ln_ptlcompat > 0) {

@@ -45,6 +45,7 @@ lnd_t the_kiblnd = {
         .lnd_startup    = kiblnd_startup,
         .lnd_shutdown   = kiblnd_shutdown,
         .lnd_ctl        = kiblnd_ctl,
+        .lnd_query      = kiblnd_query,
         .lnd_send       = kiblnd_send,
         .lnd_recv       = kiblnd_recv,
 };
@@ -320,7 +321,7 @@ kiblnd_create_peer (lnet_ni_t *ni, kib_peer_t **peerp, lnet_nid_t nid)
         peer->ibp_ni = ni;
         peer->ibp_nid = nid;
         peer->ibp_error = 0;
-        peer->ibp_last_alive = cfs_time_current();
+        peer->ibp_last_alive = 0;
         atomic_set(&peer->ibp_refcount, 1);     /* 1 ref for caller */
 
         INIT_LIST_HEAD(&peer->ibp_list);       /* not in the peer table yet */
@@ -1075,6 +1076,37 @@ kiblnd_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 }
 
 void
+kiblnd_query (lnet_ni_t *ni, lnet_nid_t nid, time_t *when)
+{
+        cfs_time_t     last_alive = 0;
+        rwlock_t      *glock = &kiblnd_data.kib_global_lock;
+        kib_peer_t    *peer;
+        unsigned long  flags;
+
+        read_lock_irqsave(glock, flags);
+
+        peer = kiblnd_find_peer_locked(nid);
+        if (peer != NULL) {
+                LASSERT (peer->ibp_connecting > 0 || /* creating conns */
+                         peer->ibp_accepting > 0 ||
+                         !list_empty(&peer->ibp_conns));  /* active conn */
+                last_alive = peer->ibp_last_alive;
+        }
+
+        read_unlock_irqrestore(glock, flags);
+
+        if (last_alive != 0)
+                *when = cfs_time_current_sec() -
+                        cfs_duration_sec(cfs_time_current() - last_alive);
+
+        /* peer is not persistent in hash, trigger peer creation
+         * and connection establishment with a NULL tx */
+        if (peer == NULL)
+                kiblnd_launch_tx(ni, NULL, nid);
+        return;
+}
+
+void
 kiblnd_free_pages (kib_pages_t *p)
 {
         int         npages = p->ibp_npages;
@@ -1517,6 +1549,7 @@ kiblnd_startup (lnet_ni_t *ni)
 
         ni->ni_maxtxcredits = *kiblnd_tunables.kib_credits;
         ni->ni_peertxcredits = *kiblnd_tunables.kib_peercredits;
+        ni->ni_peertimeout = *kiblnd_tunables.kib_peertimeout;
 
         spin_lock_init(&net->ibn_tx_lock);
         INIT_LIST_HEAD(&net->ibn_idle_txs);

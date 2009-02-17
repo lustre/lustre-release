@@ -358,6 +358,9 @@ typedef struct lnet_lnd
         /* notification of peer health */
         void (*lnd_notify)(struct lnet_ni *ni, lnet_nid_t peer, int alive);
 
+        /* query of peer aliveness */
+        void (*lnd_query)(struct lnet_ni *ni, lnet_nid_t peer, time_t *when);
+
 #ifdef __KERNEL__
         /* accept a new connection */
         int (*lnd_accept)(struct lnet_ni *ni, cfs_socket_t *sock);
@@ -383,6 +386,7 @@ typedef struct lnet_ni {
         int               ni_txcredits;         /* # tx credits free */
         int               ni_mintxcredits;      /* lowest it's been */
         int               ni_peertxcredits;     /* # per-peer send credits */
+        int               ni_peertimeout;       /* seconds to consider peer dead */
         lnet_nid_t        ni_nid;               /* interface's NID */
         void             *ni_data;              /* instance-specific data */
         lnd_t            *ni_lnd;               /* procedural interface */
@@ -407,6 +411,7 @@ typedef struct lnet_peer {
         int               lp_alive_count;       /* # times router went dead<->alive */
         long              lp_txqnob;            /* bytes queued for sending */
         time_t            lp_timestamp;         /* time of last aliveness news */
+        time_t            lp_last_alive;        /* when I was last alive */
         time_t            lp_ping_timestamp;    /* time of last ping attempt */
         time_t            lp_ping_deadline;     /* != 0 if ping reply expected */
         lnet_ni_t        *lp_ni;                /* interface peer is on */
