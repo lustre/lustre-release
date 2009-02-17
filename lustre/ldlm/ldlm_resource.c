@@ -774,7 +774,7 @@ static struct ldlm_resource *ldlm_resource_new(void)
         struct ldlm_resource *res;
         int idx;
 
-        OBD_SLAB_ALLOC(res, ldlm_resource_slab, CFS_ALLOC_IO, sizeof *res);
+        OBD_SLAB_ALLOC_PTR_GFP(res, ldlm_resource_slab, CFS_ALLOC_IO);
         if (res == NULL)
                 return NULL;
 

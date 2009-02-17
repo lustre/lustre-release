@@ -721,6 +721,8 @@ do {                                                                          \
         OBD_SLAB_ALLOC((ptr), (slab), CFS_ALLOC_STD, sizeof *(ptr))
 #define OBD_SLAB_FREE_PTR(ptr, slab)                                          \
         OBD_SLAB_FREE((ptr), (slab), sizeof *(ptr))
+#define OBD_SLAB_ALLOC_PTR_GFP(ptr, slab, gfp)                              \
+        OBD_SLAB_ALLOC((ptr), (slab), (gfp), sizeof *(ptr))
 
 #define KEY_IS(str) \
         (keylen >= (sizeof(str)-1) && memcmp(key, str, (sizeof(str)-1)) == 0)

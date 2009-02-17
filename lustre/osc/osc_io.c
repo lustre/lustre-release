@@ -641,7 +641,7 @@ int osc_req_init(const struct lu_env *env, struct cl_device *dev,
         struct osc_req *or;
         int result;
 
-        OBD_SLAB_ALLOC_PTR(or, osc_req_kmem);
+        OBD_SLAB_ALLOC_PTR_GFP(or, osc_req_kmem, CFS_ALLOC_IO);
         if (or != NULL) {
                 cl_req_slice_add(req, &or->or_cl, dev, &osc_req_ops);
                 result = 0;

@@ -1637,7 +1637,7 @@ int osc_lock_init(const struct lu_env *env,
         struct osc_lock *clk;
         int result;
 
-        OBD_SLAB_ALLOC_PTR(clk, osc_lock_kmem);
+        OBD_SLAB_ALLOC_PTR_GFP(clk, osc_lock_kmem, CFS_ALLOC_IO);
         if (clk != NULL) {
                 osc_lock_build_einfo(env, lock, clk, &clk->ols_einfo);
                 clk->ols_state = OLS_NEW;
