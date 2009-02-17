@@ -1406,8 +1406,8 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
         /* If I get here, I've committed to send, so I complete the tx with
          * failure on any problems */
 
-        LASSERT (tx->tx_conn == NULL);          /* only set when assigned a conn */
-        LASSERT (tx->tx_nwrq > 0);              /* work items have been set up */
+        LASSERT (tx == NULL || tx->tx_conn == NULL); /* only set when assigned a conn */
+        LASSERT (tx == NULL || tx->tx_nwrq > 0);     /* work items have been set up */
 
         /* First time, just use a read lock since I expect to find my peer
          * connected */
@@ -1421,7 +1421,8 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
 
                 read_unlock_irqrestore(g_lock, flags);
 
-                kiblnd_queue_tx(tx, conn);
+                if (tx != NULL)
+                        kiblnd_queue_tx(tx, conn);
                 kiblnd_conn_decref(conn); /* ...to here */
                 return;
         }
@@ -1436,15 +1437,17 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
                         /* found a peer, but it's still connecting... */
                         LASSERT (peer->ibp_connecting != 0 ||
                                  peer->ibp_accepting != 0);
-                        list_add_tail (&tx->tx_list, &peer->ibp_tx_queue);
+                        if (tx != NULL)
+                                list_add_tail(&tx->tx_list, &peer->ibp_tx_queue);
                         write_unlock_irqrestore(g_lock, flags);
                 } else {
                         conn = kiblnd_get_conn_locked(peer);
                         kiblnd_conn_addref(conn); /* 1 ref for me... */
                         
                         write_unlock_irqrestore(g_lock, flags);
-                        
-                        kiblnd_queue_tx(tx, conn);
+
+                        if (tx != NULL)
+                                kiblnd_queue_tx(tx, conn);
                         kiblnd_conn_decref(conn); /* ...to here */
                 }
                 return;
@@ -1456,9 +1459,11 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
         rc = kiblnd_create_peer(ni, &peer, nid);
         if (rc != 0) {
                 CERROR("Can't create peer %s\n", libcfs_nid2str(nid));
-                tx->tx_status = -EHOSTUNREACH;
-                tx->tx_waiting = 0;
-                kiblnd_tx_done(ni, tx);
+                if (tx != NULL) {
+                        tx->tx_status = -EHOSTUNREACH;
+                        tx->tx_waiting = 0;
+                        kiblnd_tx_done(ni, tx);
+                }
                 return;
         }
 
@@ -1470,15 +1475,17 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
                         /* found a peer, but it's still connecting... */
                         LASSERT (peer2->ibp_connecting != 0 ||
                                  peer2->ibp_accepting != 0);
-                        list_add_tail (&tx->tx_list, &peer2->ibp_tx_queue);
+                        if (tx != NULL)
+                                list_add_tail(&tx->tx_list, &peer2->ibp_tx_queue);
                         write_unlock_irqrestore(g_lock, flags);
                 } else {
                         conn = kiblnd_get_conn_locked(peer2);
                         kiblnd_conn_addref(conn); /* 1 ref for me... */
 
                         write_unlock_irqrestore(g_lock, flags);
-                        
-                        kiblnd_queue_tx(tx, conn);
+
+                        if (tx != NULL)
+                                kiblnd_queue_tx(tx, conn);
                         kiblnd_conn_decref(conn); /* ...to here */
                 }
 
@@ -1493,7 +1500,8 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
         /* always called with a ref on ni, which prevents ni being shutdown */
         LASSERT (((kib_net_t *)ni->ni_data)->ibn_shutdown == 0);
 
-        list_add_tail(&tx->tx_list, &peer->ibp_tx_queue);
+        if (tx != NULL)
+                list_add_tail(&tx->tx_list, &peer->ibp_tx_queue);
 
         kiblnd_peer_addref(peer);
         list_add_tail(&peer->ibp_list, kiblnd_nid2peerlist(nid));

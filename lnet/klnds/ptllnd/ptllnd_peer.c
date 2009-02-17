@@ -187,7 +187,7 @@ kptllnd_peer_allocate (lnet_process_id_t lpid, ptl_process_id_t ppid)
 
         peer->peer_state = PEER_STATE_ALLOCATED;
         peer->peer_error = 0;
-        peer->peer_last_alive = cfs_time_current();
+        peer->peer_last_alive = 0;
         peer->peer_id = lpid;
         peer->peer_ptlid = ppid;
         peer->peer_credits = 1;                 /* enough for HELLO */

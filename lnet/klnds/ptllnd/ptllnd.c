@@ -45,6 +45,7 @@ lnd_t kptllnd_lnd = {
         .lnd_startup    = kptllnd_startup,
         .lnd_shutdown   = kptllnd_shutdown,
         .lnd_ctl        = kptllnd_ctl,
+        .lnd_query      = kptllnd_query,
         .lnd_send       = kptllnd_send,
         .lnd_recv       = kptllnd_recv,
         .lnd_eager_recv = kptllnd_eager_recv,
@@ -474,6 +475,27 @@ kptllnd_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
         }
         CDEBUG(D_NET, "<<< kptllnd_ctl rc=%d\n", rc);
         return rc;
+}
+
+void
+kptllnd_query (lnet_ni_t *ni, lnet_nid_t nid, time_t *when)
+{
+        kptl_peer_t       *peer = NULL;
+        lnet_process_id_t  id = {.nid = nid, .pid = LUSTRE_SRV_LNET_PID};
+        unsigned long      flags;
+
+        /* NB: kptllnd_find_target connects to peer if necessary */
+        if (kptllnd_find_target(&peer, id) != 0)
+                return;
+
+        spin_lock_irqsave(&peer->peer_lock, flags);
+        if (peer->peer_last_alive != 0)
+                *when = cfs_time_current_sec() -
+                        cfs_duration_sec(cfs_time_current() -
+                                         peer->peer_last_alive);
+        spin_unlock_irqrestore(&peer->peer_lock, flags);
+        kptllnd_peer_decref(peer);
+        return;
 }
 
 int

@@ -433,7 +433,7 @@ lnet_router_seq_show (struct seq_file *s, void *iter)
 
         LNET_UNLOCK();
 
-        seq_printf(s, 
+        seq_printf(s,
                    "%-4d %7d %9d %6s %12lu %s\n", nrefs, nrtrrefs,
                    alive_cnt, alive ? "up" : "down",
                    last_ping, libcfs_nid2str(nid));
@@ -603,6 +603,7 @@ static int
 lnet_peer_seq_show (struct seq_file *s, void *iter)
 {
         lnet_peer_seq_iterator_t *lpsi = iter;
+        char                     *aliveness = "NA";
         lnet_peer_t              *lp;
         lnet_nid_t                nid;
         int                       maxcr;
@@ -610,8 +611,6 @@ lnet_peer_seq_show (struct seq_file *s, void *iter)
         int                       txcr;
         int                       minrtrcr;
         int                       rtrcr;
-        int                       alive;
-        int                       rtr;
         int                       txqnob;
         int                       nrefs;
 
@@ -639,16 +638,16 @@ lnet_peer_seq_show (struct seq_file *s, void *iter)
         mintxcr  = lp->lp_mintxcredits;
         rtrcr    = lp->lp_rtrcredits;
         minrtrcr = lp->lp_minrtrcredits;
-        rtr      = lnet_isrouter(lp);
-        alive    = lp->lp_alive;
         txqnob   = lp->lp_txqnob;
         nrefs    = lp->lp_refcount;
+
+        if (lnet_isrouter(lp) || lp->lp_ni->ni_peertimeout > 0)
+                aliveness = lp->lp_alive ? "up" : "down";
 
         LNET_UNLOCK();
 
         seq_printf(s, "%-24s %4d %5s %5d %5d %5d %5d %5d %d\n",
-                   libcfs_nid2str(nid), nrefs, 
-                   !rtr ? "~rtr" : (alive ? "up" : "down"),
+                   libcfs_nid2str(nid), nrefs, aliveness,
                    maxcr, rtrcr, minrtrcr, txcr, mintxcr, txqnob);
         return 0;
 }

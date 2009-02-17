@@ -602,6 +602,22 @@ ksocknal_launch_connection_locked (ksock_route_t *route)
         cfs_spin_unlock_bh (&ksocknal_data.ksnd_connd_lock);
 }
 
+void
+ksocknal_launch_all_connections_locked (ksock_peer_t *peer)
+{
+        ksock_route_t *route;
+
+        /* called holding write lock on ksnd_global_lock */
+        for (;;) {
+                /* launch any/all connections that need it */
+                route = ksocknal_find_connectable_route_locked(peer);
+                if (route == NULL)
+                        return;
+
+                ksocknal_launch_connection_locked(route);
+        }
+}
+
 ksock_conn_t *
 ksocknal_find_conn_locked(ksock_peer_t *peer, ksock_tx_t *tx, int nonblk)
 {
@@ -718,6 +734,8 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
                 /* First packet starts the timeout */
                 conn->ksnc_tx_deadline =
                         cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
+                if (conn->ksnc_tx_bufnob > 0) /* something got ACKed */
+                        conn->ksnc_peer->ksnp_last_alive = cfs_time_current();
                 conn->ksnc_tx_bufnob = 0;
                 cfs_mb(); /* order with adding to tx_queue */
         }
@@ -813,7 +831,6 @@ ksocknal_launch_packet (lnet_ni_t *ni, ksock_tx_t *tx, lnet_process_id_t id)
 {
         ksock_peer_t     *peer;
         ksock_conn_t     *conn;
-        ksock_route_t    *route;
         cfs_rwlock_t     *g_lock;
         int               retry;
         int               rc;
@@ -871,14 +888,7 @@ ksocknal_launch_packet (lnet_ni_t *ni, ksock_tx_t *tx, lnet_process_id_t id)
                 }
         }
 
-        for (;;) {
-                /* launch any/all connections that need it */
-                route = ksocknal_find_connectable_route_locked (peer);
-                if (route == NULL)
-                        break;
-
-                ksocknal_launch_connection_locked (route);
-        }
+        ksocknal_launch_all_connections_locked(peer);
 
         conn = ksocknal_find_conn_locked(peer, tx, tx->tx_nonblk);
         if (conn != NULL) {

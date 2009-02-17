@@ -33,6 +33,10 @@ static int peer_credits = 8;
 CFS_MODULE_PARM(peer_credits, "i", int, 0444,
                 "# concurrent sends to 1 peer");
 
+static int peer_timeout = 0;
+CFS_MODULE_PARM(peer_timeout, "i", int, 0444,
+                "Seconds without aliveness news to declare peer dead (<=0 to disable)");
+
 static int nconnds = 4;
 CFS_MODULE_PARM(nconnds, "i", int, 0444,
                 "# connection daemons");
@@ -172,6 +176,7 @@ int ksocknal_tunables_init(void)
         ksocknal_tunables.ksnd_keepalive_intvl    = &keepalive_intvl;
         ksocknal_tunables.ksnd_credits            = &credits;
         ksocknal_tunables.ksnd_peercredits        = &peer_credits;
+        ksocknal_tunables.ksnd_peertimeout        = &peer_timeout;
         ksocknal_tunables.ksnd_enable_csum        = &enable_csum;
         ksocknal_tunables.ksnd_inject_csum_error  = &inject_csum_error;
         ksocknal_tunables.ksnd_zc_min_payload     = &zc_min_payload;

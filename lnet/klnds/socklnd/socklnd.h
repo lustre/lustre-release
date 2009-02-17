@@ -116,6 +116,7 @@ typedef struct
         int              *ksnd_keepalive_intvl; /* time between probes */
         int              *ksnd_credits;         /* # concurrent sends */
         int              *ksnd_peercredits;     /* # concurrent sends to 1 peer */
+        int              *ksnd_peertimeout;     /* seconds to consider peer dead */
         int              *ksnd_enable_csum;     /* enable check sum */
         int              *ksnd_inject_csum_error; /* set non-zero to inject checksum error */
         unsigned int     *ksnd_zc_min_payload;  /* minimum zero copy payload size */
@@ -329,6 +330,7 @@ typedef struct ksock_route
 typedef struct ksock_peer
 {
         struct list_head    ksnp_list;          /* stash on global peer list */
+        cfs_time_t          ksnp_last_alive;    /* when (in jiffies) I was last alive */
         lnet_process_id_t   ksnp_id;            /* who's on the other end(s) */
         cfs_atomic_t        ksnp_refcount;      /* # users */
         int                 ksnp_sharecount;    /* lconf usage counter */
@@ -343,7 +345,6 @@ typedef struct ksock_peer
         struct list_head    ksnp_tx_queue;      /* waiting packets */
         cfs_spinlock_t      ksnp_lock;          /* serialize, NOT safe in g_lock */
         struct list_head    ksnp_zc_req_list;   /* zero copy requests wait for ACK  */
-        cfs_time_t          ksnp_last_alive;    /* when (in jiffies) I was last alive */
         cfs_time_t          ksnp_send_keepalive; /* time to send keepalive */
         lnet_ni_t          *ksnp_ni;            /* which network */
         int                 ksnp_n_passive_ips; /* # of... */
@@ -546,8 +547,11 @@ extern void ksocknal_next_tx_carrier(ksock_conn_t *conn);
 extern void ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn);
 extern void ksocknal_txlist_done (lnet_ni_t *ni, struct list_head *txlist, int error);
 extern void ksocknal_notify (lnet_ni_t *ni, lnet_nid_t gw_nid, int alive);
+extern void ksocknal_query (struct lnet_ni *ni, lnet_nid_t nid, time_t *when);
 extern int ksocknal_thread_start (int (*fn)(void *arg), void *arg);
 extern void ksocknal_thread_fini (void);
+extern void ksocknal_launch_all_connections_locked (ksock_peer_t *peer);
+extern ksock_route_t *ksocknal_find_connectable_route_locked (ksock_peer_t *peer);
 extern ksock_route_t *ksocknal_find_connecting_route_locked (ksock_peer_t *peer);
 extern int ksocknal_new_packet (ksock_conn_t *conn, int skip);
 extern int ksocknal_scheduler (void *arg);

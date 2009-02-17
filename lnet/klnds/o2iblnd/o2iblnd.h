@@ -137,6 +137,7 @@ typedef struct
         int              *kib_ntx;              /* # tx descs */
         int              *kib_credits;          /* # concurrent sends */
         int              *kib_peercredits;      /* # concurrent sends to 1 peer */
+        int              *kib_peertimeout;      /* seconds to consider peer dead */
         char            **kib_default_ipif;     /* default IPoIB interface */
         int              *kib_retry_count;
         int              *kib_rnr_retry_count;
@@ -721,6 +722,7 @@ static inline unsigned int kiblnd_sg_dma_len(struct ib_device *dev,
 int  kiblnd_startup (lnet_ni_t *ni);
 void kiblnd_shutdown (lnet_ni_t *ni);
 int  kiblnd_ctl (lnet_ni_t *ni, unsigned int cmd, void *arg);
+void kiblnd_query (struct lnet_ni *ni, lnet_nid_t nid, time_t *when);
 
 int  kiblnd_tunables_init(void);
 void kiblnd_tunables_fini(void);
@@ -754,6 +756,7 @@ void kiblnd_close_conn_locked (kib_conn_t *conn, int error);
 int  kiblnd_init_rdma (lnet_ni_t *ni, kib_tx_t *tx, int type,
                        int nob, kib_rdma_desc_t *dstrd, __u64 dstcookie);
 
+void kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid);
 void kiblnd_queue_tx_locked (kib_tx_t *tx, kib_conn_t *conn);
 void kiblnd_queue_tx (kib_tx_t *tx, kib_conn_t *conn);
 void kiblnd_init_tx_msg (lnet_ni_t *ni, kib_tx_t *tx, int type, int body_nob);

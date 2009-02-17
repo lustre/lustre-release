@@ -17,6 +17,11 @@ Bugzilla   :
 Description:
 Details    :
 
+Severity   : normal
+Bugzilla   : 16186
+Description: One down Lustre FS hangs ALL mounted Lustre filesystems
+Details    : Shared routing enhancements - peer health detection.
+
 Severity   : enhancement
 Bugzilla   : 14132
 Description: acceptor.c cleanup

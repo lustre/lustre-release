@@ -207,6 +207,12 @@ lnet_notify (lnet_ni_t *ni, lnet_nid_t nid, int alive, time_t when)
         return -EOPNOTSUPP;
 }
 
+void
+lnet_notify_locked (lnet_peer_t *lp, int notifylnd, int alive, time_t when)
+{
+        return;
+}
+
 #endif
 
 static void

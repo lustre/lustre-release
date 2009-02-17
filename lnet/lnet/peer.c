@@ -180,12 +180,13 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid)
 	CFS_INIT_LIST_HEAD(&lp->lp_txq);
         CFS_INIT_LIST_HEAD(&lp->lp_rtrq);
 	
-	lp->lp_alive = !lnet_peers_start_down(); /* 1 bit!! */
         lp->lp_notify = 0;
         lp->lp_notifylnd = 0;
         lp->lp_notifying = 0;
         lp->lp_alive_count = 0;
 	lp->lp_timestamp = 0;
+	lp->lp_alive = !lnet_peers_start_down(); /* 1 bit!! */
+        lp->lp_last_alive = cfs_time_current_sec(); /* assumes alive */
         lp->lp_ping_timestamp = 0;
 	lp->lp_nid = nid;
         lp->lp_refcount = 2;                    /* 1 for caller; 1 for hash */
@@ -239,11 +240,12 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid)
 void
 lnet_debug_peer(lnet_nid_t nid)
 {
+        char        *aliveness = "NA";
         int          rc;
         lnet_peer_t *lp;
 
         LNET_LOCK();
-        
+
         rc = lnet_nid2peer_locked(&lp, nid);
         if (rc != 0) {
                 LNET_UNLOCK();
@@ -251,11 +253,13 @@ lnet_debug_peer(lnet_nid_t nid)
                 return;
         }
 
+        if (lnet_isrouter(lp) || lp->lp_ni->ni_peertimeout > 0)
+                aliveness = lp->lp_alive ? "up" : "down";
+
         CDEBUG(D_WARNING, "%-24s %4d %5s %5d %5d %5d %5d %5d %ld\n",
-               libcfs_nid2str(lp->lp_nid), lp->lp_refcount, 
-               !lnet_isrouter(lp) ? "~rtr" : (lp->lp_alive ? "up" : "down"),
-               lp->lp_ni->ni_peertxcredits, 
-               lp->lp_rtrcredits, lp->lp_minrtrcredits, 
+               libcfs_nid2str(lp->lp_nid), lp->lp_refcount,
+               aliveness, lp->lp_ni->ni_peertxcredits,
+               lp->lp_rtrcredits, lp->lp_minrtrcredits,
                lp->lp_txcredits, lp->lp_mintxcredits, lp->lp_txqnob);
 
         lnet_peer_decref_locked(lp);
