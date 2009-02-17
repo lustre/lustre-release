@@ -1067,7 +1067,9 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_BRW_READ            0x01
 #define OBD_BRW_WRITE           0x02
 #define OBD_BRW_RWMASK          (OBD_BRW_READ | OBD_BRW_WRITE)
-#define OBD_BRW_SYNC            0x08
+#define OBD_BRW_SYNC            0x08 /* this page is a part of synchronous
+                                      * transfer and is not accounted in
+                                      * the grant. */
 #define OBD_BRW_CHECK           0x10
 #define OBD_BRW_FROM_GRANT      0x20 /* the osc manages this under llite */
 #define OBD_BRW_GRANTED         0x40 /* the ost manages this */

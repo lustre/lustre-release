@@ -1002,7 +1002,8 @@ static int check_write_rcs(struct ptlrpc_request *req,
 static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
 {
         if (p1->flag != p2->flag) {
-                unsigned mask = ~(OBD_BRW_FROM_GRANT|OBD_BRW_NOCACHE);
+                unsigned mask = ~(OBD_BRW_FROM_GRANT|
+                                  OBD_BRW_NOCACHE|OBD_BRW_SYNC);
 
                 /* warn if we try to combine flags that we don't know to be
                  * safe to combine */
