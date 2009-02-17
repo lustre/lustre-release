@@ -5744,6 +5744,14 @@ POOL_ROOT=${POOL_ROOT:-$DIR/d200.pools}
 POOL_DIR=$POOL_ROOT/dir_tst
 POOL_FILE=$POOL_ROOT/file_tst
 
+skip_pools()
+{
+	[ -z "$($LCTL get_param -n mdc.*.connect_flags | grep pools)" ] &&
+		skip "missing pools support on server" && return 1
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return 1
+	return 0
+}
+
 check_file_in_pool()
 {
 	file=$1
@@ -5765,52 +5773,39 @@ check_file_in_pool()
 mdtlov=$(get_mdtlov_proc_path $FSNAME)
 
 test_200a() {
-	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
-		skip "missing pools support on server" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	do_facet mgs $LCTL pool_new $FSNAME.$POOL
-	do_facet mgs $LCTL get_param -n lov.$mdtlov.pools.$POOL
-	[ $? == 0 ] || error "Pool creation of $POOL failed"
+        skip_pools || return
+        do_facet mgs $LCTL pool_new $FSNAME.$POOL
+        # get param should return err until pool is created
+        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "" || error "Pool creation of $POOL failed"
 }
 run_test 200a "Create new pool =========================================="
 
 test_200b() {
-	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
-		skip "missing pools support on server" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	TGT=$(seq -f $FSNAME-OST%04g_UUID $TGTPOOL_FIRST $TGTPOOL_STEP \
-		$TGTPOOL_MAX | tr '\n' ' ')
-	do_facet mgs $LCTL pool_add $FSNAME.$POOL \
-		$FSNAME-OST[$TGTPOOL_FIRST-$TGTPOOL_MAX/$TGTPOOL_STEP]_UUID
-	res=$(do_facet mgs $LCTL get_param -n lov.$mdtlov.pools.$POOL |
-		sort | tr '\n' ' ')
-	[ "$res" = "$TGT" ] || error "Pool ($res) do not match requested ($TGT)"
+        skip_pools || return
+        TGT=$(for i in `seq $TGTPOOL_FIRST $TGTPOOL_STEP $TGTPOOL_MAX`; do printf "$FSNAME-OST%04x_UUID " $i; done)
+        do_facet mgs $LCTL pool_add $FSNAME.$POOL \
+                $FSNAME-OST[$TGTPOOL_FIRST-$TGTPOOL_MAX/$TGTPOOL_STEP]
+        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | sort -u | tr '\n' ' ' " "$TGT" || error "Add to pool failed"
 }
 run_test 200b "Add targets to a pool ===================================="
 
 test_200c() {
-	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
-		skip "missing pools support on server" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	mkdir -p $POOL_DIR
-	$SETSTRIPE -c 2 -p $POOL $POOL_DIR
-	[ $? = 0 ] || error "Cannot set pool $POOL to $POOL_DIR"
+        skip_pools || return
+        mkdir -p $POOL_DIR
+        $SETSTRIPE -c 2 -p $POOL $POOL_DIR
+        [ $? = 0 ] || error "Cannot set pool $POOL to $POOL_DIR"
 }
 run_test 200c "Set pool on a directory ================================="
 
 test_200d() {
-	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
-		skip "missing pools support on server" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+        skip_pools || return
 	res=$($GETSTRIPE $POOL_DIR | grep pool: | cut -f8 -d " ")
 	[ "$res" = $POOL ] || error "Pool on $POOL_DIR is not $POOL"
 }
 run_test 200d "Check pool on a directory ==============================="
 
 test_200e() {
-	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
-		skip "missing pools support on server" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+        skip_pools || return
 	failed=0
 	for i in $(seq -w 1 $(($TGT_COUNT * 3))); do
 		file=$POOL_DIR/file-$i
@@ -5825,9 +5820,7 @@ test_200e() {
 run_test 200e "Check files allocation from directory pool =============="
 
 test_200f() {
-	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
-		skip "missing pools support on server" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+        skip_pools || return
 	mkdir -p $POOL_FILE
 	failed=0
 	for i in $(seq -w 1 $(($TGT_COUNT * 3))); do
@@ -5843,37 +5836,30 @@ test_200f() {
 run_test 200f "Create files in a pool ==================================="
 
 test_200g() {
-	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
-		skip "missing pools support on server" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	TGT=$(do_facet mgs $LCTL get_param -n lov.$mdtlov.pools.$POOL |
-		head -1)
-	do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
-	res=$(do_facet mgs $LCTL get_param -n lov.$mdtlov.pools.$POOL |
-		grep $TGT)
-	[ "$res" = "" ] || error "$TGT not removed from $FSNAME.$POOL"
+        skip_pools || return
+        TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
+        do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
+        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | grep $TGT" "" || error "$TGT not removed from $FSNAME.$POOL"
 }
 run_test 200g "Remove a target from a pool ============================="
 
 test_200h() {
-	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
-		skip "missing pools support on server" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	for TGT in $(do_facet mgs $LCTL get_param -n lov.$mdtlov.pools.$POOL); do
-		do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
- 	done
-	res=$(do_facet mgs $LCTL get_param -n lov.$mdtlov.pools.$POOL)
-	[ "$res" = "" ] || error "Pool $FSNAME.$POOL cannot be drained"
+        skip_pools || return
+        for TGT in $($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | sort -u)
+        do
+                do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
+        done
+        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL" ""\
+            || error "Pool $FSNAME.$POOL cannot be drained"
 }
 run_test 200h "Remove all targets from a pool =========================="
 
 test_200i() {
-	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep pools)" ] &&
-		skip "missing pools support on server" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
-	res=$(do_facet mgs "$LCTL get_param -n lov.$mdtlov.pools.$POOL 2>/dev/null")
-	[ "$res" = "" ] || error "Pool $FSNAME.$POOL is not destroyed"
+        skip_pools || return
+        do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
+        # get param should return err once pool is gone
+        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "foo" && return 0
+        error "Pool $FSNAME.$POOL is not destroyed"
 }
 run_test 200i "Remove a pool ============================================"
 
