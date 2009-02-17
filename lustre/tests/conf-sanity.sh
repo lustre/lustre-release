@@ -1000,19 +1000,6 @@ test_32a() {
 	$LCTL conf_param lustre-MDT0000.failover.node=$NID || return 10
 	echo "ok."
 
-	# With a new good MDT failover nid, we should be able to mount a client
-	# (but it cant talk to OST)
-	local mountopt="-o exclude=lustre-OST0000"
-
-	local device=`h2$NETTYPE $HOSTNAME`:/lustre
-	echo "Starting local client: $HOSTNAME: $mountopt $device $MOUNT"
-	mount -t lustre $mountopt $device $MOUNT || return 1
-
-	local old=$(lctl get_param -n mdc.*.max_rpcs_in_flight)
-	local new=$((old + 5))
-	lctl conf_param lustre-MDT0000.mdc.max_rpcs_in_flight=$new
-	wait_update $HOSTNAME "lctl get_param -n mdc.*.max_rpcs_in_flight" $new || return 11
-
 	cleanup_32
 
 	# mount a second time to make sure we didnt leave upgrade flag on
