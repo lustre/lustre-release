@@ -1045,7 +1045,7 @@ test_32b() {
 	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
 	[ -z "$TUNEFS" ] && skip "No tunefs" && return
 
-	local DISK1_8=$LUSTRE/tests/disk1_8.tgz
+	local DISK1_8=$LUSTRE/tests/disk1_8.tar.bz2
 	[ ! -r $DISK1_8 ] && skip "Cannot find $DISK1_8" && return 0
 	local tmpdir=$TMP/$tdir
 	mkdir -p $tmpdir
