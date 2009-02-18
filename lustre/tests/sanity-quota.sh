@@ -1729,6 +1729,21 @@ test_22() {
 }
 run_test_with_stat 22 "test if quota_type saved as permanent parameter ===="
 
+# It is triggered when test_23 failed, diagnostic for bug 18293
+test_23_dumppage()
+{
+        NUM=$1
+        DUMPPAGE=`find /proc/fs/${FSNAME}/llite/ -name dump_page_cache`
+        qtime=`date +%s`
+        cat $DUMPPAGE > $TMP/sanity-quota_test_23_${qtime}_${NUM}.log
+        fsize=`stat -c%s $TMP/sanity-quota_test_23_${qtime}_${NUM}.log`
+        if [ $fsize -eq 0 ]; then
+                rm -f $TMP/sanity-quota_test_23_${qtime}_${NUM}.log
+        else
+                error "some IO error was found during directIO"
+        fi
+}
+
 test_23_sub() {
 	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
@@ -1750,13 +1765,16 @@ test_23_sub() {
 
 	log "    Step1: trigger quota with 0_DIRECT"
 	log "      Write half of file"
-	$RUNAS $DIRECTIO write $TESTFILE 0 $(($LIMIT/1024/2)) $bs_unit || quota_error u $TSTUSR "(1) write failure, but expect success: $LIMIT"
+	$RUNAS $DIRECTIO write $TESTFILE 0 $(($LIMIT/1024/2)) $bs_unit || \
+                (quota_error u $TSTUSR "(1) write failure, but expect success: $LIMIT" && test_23_dumppage 1)
 	log "      Write out of block quota ..."
-	$RUNAS $DIRECTIO write $TESTFILE $(($LIMIT/1024/2)) $(($LIMIT/1024/2)) $bs_unit && quota_error u $TSTUSR "(2) write success, but expect EDQUOT: $LIMIT"
+	$RUNAS $DIRECTIO write $TESTFILE $(($LIMIT/1024/2)) $(($LIMIT/1024/2)) $bs_unit && \
+                quota_error u $TSTUSR "(2) write success, but expect EDQUOT: $LIMIT" && test_23_dumppage 2
 	log "    Step1: done"
 
 	log "    Step2: rewrite should succeed"
-	$RUNAS $DIRECTIO write $TESTFILE $(($LIMIT/1024/2)) 1 $bs_unit || quota_error u $TSTUSR "(3) write failure, but expect success: $LIMIT"
+	$RUNAS $DIRECTIO write $TESTFILE $(($LIMIT/1024/2)) 1 $bs_unit || \
+                (quota_error u $TSTUSR "(3) write failure, but expect success: $LIMIT" && test_23_dumppage 3)
 	log "    Step2: done"
 
 	rm -f $TESTFILE
