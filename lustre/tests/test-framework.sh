@@ -605,16 +605,16 @@ wait_update () {
         local WAIT=0
         local sleep=5
         while [ $WAIT -lt $MAX ]; do
-            sleep $sleep
             RESULT=$(do_node $node "$TEST")
-            if [ $RESULT -eq $FINAL ]; then
-                echo "Updated after $WAIT sec: wanted $FINAL got $RESULT"
+            if [ "$RESULT" == "$FINAL" ]; then
+                echo "Updated after $WAIT sec: wanted '$FINAL' got '$RESULT'"
                 return 0
             fi
-            WAIT=$((WAIT + sleep))
             echo "Waiting $((MAX - WAIT)) secs for update"
+            WAIT=$((WAIT + sleep))
+            sleep $sleep
         done
-        echo "Update not seen after $MAX sec: wanted $FINAL got $RESULT"
+        echo "Update not seen after $MAX sec: wanted '$FINAL' got '$RESULT'"
         return 3
 }
 
@@ -1807,6 +1807,13 @@ remote_ost ()
 remote_ost_nodsh()
 {
     remote_ost && [ "$PDSH" = "no_dsh" -o -z "$PDSH" -o -z "$ost_HOST" ]
+}
+
+remote_mgs_nodsh()
+{
+    local MGS
+    MGS=$(facet_host mgs)
+    remote_node $MGS && [ "$PDSH" = "no_dsh" -o -z "$PDSH" -o -z "$ost_HOST" ]
 }
 
 remote_servers () {

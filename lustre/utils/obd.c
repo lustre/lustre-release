@@ -183,7 +183,7 @@ static int get_mgs_device()
                 do_disconnect(NULL, 1);
                 rc = do_device("mgsioc", mgs);
                 if (rc) {
-                        fprintf(stderr, 
+                        fprintf(stderr,
                                 "This command must be run on the MGS.\n");
                         errno = ENODEV;
                         return -1;
@@ -2363,15 +2363,13 @@ static int find_target_obdpath(char *fsname, char *path)
                  "/proc/fs/lustre/lov/%s-*/target_obd",
                  fsname);
         rc = glob(pattern, GLOB_BRACE, NULL, &glob_info);
-        if (rc)
+        if (rc == GLOB_NOMATCH)
+                return -ENODEV;
+        else if (rc)
                 return -EINVAL;
-
-        if (glob_info.gl_pathc == 0) {
-                globfree(&glob_info);
-                return -EINVAL;
-        }
 
         strcpy(path, glob_info.gl_pathv[0]);
+        globfree(&glob_info);
         return 0;
 }
 
@@ -2385,15 +2383,15 @@ static int find_poolpath(char *fsname, char *poolname, char *poolpath)
                  "/proc/fs/lustre/lov/%s-*/pools/%s",
                  fsname, poolname);
         rc = glob(pattern, GLOB_BRACE, NULL, &glob_info);
+        /* If no pools, make sure the lov is available */
+        if ((rc == GLOB_NOMATCH) &&
+            (find_target_obdpath(fsname, poolpath) == -ENODEV))
+                return -ENODEV;
         if (rc)
                 return -EINVAL;
 
-        if (glob_info.gl_pathc == 0) {
-                globfree(&glob_info);
-                return -EINVAL;
-        }
-
         strcpy(poolpath, glob_info.gl_pathv[0]);
+        globfree(&glob_info);
         return 0;
 }
 
@@ -2425,14 +2423,18 @@ static int search_ost(char *fsname, char *poolname, char *ostname)
 
         while (fgets(buffer, sizeof(buffer), fd) != NULL) {
                 if (poolname == NULL) {
-                        /* we search ostname in target_obd */
-                        if (strncmp(buffer + 3, ostname, len) == 0) {
+                        char *ptr;
+                        /* Search for an ostname in the list of OSTs
+                           Line format is IDX: fsname-OSTxxxx_UUID STATUS */
+                        ptr = strchr(buffer, ' ');
+                        if ((ptr != NULL) &&
+                            (strncmp(ptr + 1, ostname, len) == 0)) {
                                 fclose(fd);
                                 return 1;
                         }
                 } else {
-                        /* we search a non empty pool or
-                           an ostname in a pool */
+                        /* Search for an ostname in a pool,
+                           (or an existing non-empty pool if no ostname) */
                         if ((ostname == NULL) ||
                             (strncmp(buffer, ostname, len) == 0)) {
                                 fclose(fd);
@@ -2464,7 +2466,7 @@ static int check_pool_cmd(enum lcfg_command_type cmd,
                 if (rc < 0) {
                         fprintf(stderr, "Pool %s.%s not found\n",
                                 fsname, poolname);
-                        return -ENOENT;
+                        return rc;
                 }
                 if (rc == 1) {
                         fprintf(stderr, "Pool %s.%s not empty, "
@@ -2485,7 +2487,7 @@ static int check_pool_cmd(enum lcfg_command_type cmd,
                 if (rc < 0) {
                         fprintf(stderr, "Pool %s.%s not found\n",
                                 fsname, poolname);
-                        return -ENOENT;
+                        return rc;
                 }
                 if (rc == 1) {
                         fprintf(stderr, "OST %s already in pool %s.%s\n",
@@ -2499,7 +2501,7 @@ static int check_pool_cmd(enum lcfg_command_type cmd,
                 if (rc < 0) {
                         fprintf(stderr, "Pool %s.%s not found\n",
                                 fsname, poolname);
-                        return -ENOENT;
+                        return rc;
                 }
                 if (rc == 0) {
                         fprintf(stderr, "OST %s not found in pool %s.%s\n",
@@ -2525,6 +2527,8 @@ static void check_pool_cmd_result(enum lcfg_command_type cmd,
         case LCFG_POOL_NEW: {
                 do {
                         rc = search_ost(fsname, poolname, NULL);
+                        if (rc == -ENODEV)
+                                return;
                         if (rc < 0)
                                 sleep(2);
                         cpt--;
@@ -2539,10 +2543,12 @@ static void check_pool_cmd_result(enum lcfg_command_type cmd,
         }
         case LCFG_POOL_DEL: {
                 do {
-                         rc = search_ost(fsname, poolname, NULL);
-                         if (rc >= 0)
+                        rc = search_ost(fsname, poolname, NULL);
+                        if (rc == -ENODEV)
+                                return;
+                        if (rc >= 0)
                                 sleep(2);
-                         cpt--;
+                        cpt--;
                 } while ((rc >= 0) && (cpt > 0));
                 if (rc < 0)
                         fprintf(stderr, "Pool %s.%s destroyed\n",
@@ -2555,6 +2561,8 @@ static void check_pool_cmd_result(enum lcfg_command_type cmd,
         case LCFG_POOL_ADD: {
                 do {
                         rc = search_ost(fsname, poolname, ostname);
+                        if (rc == -ENODEV)
+                                return;
                         if (rc != 1)
                                 sleep(2);
                         cpt--;
@@ -2570,6 +2578,8 @@ static void check_pool_cmd_result(enum lcfg_command_type cmd,
         case LCFG_POOL_REM: {
                 do {
                         rc = search_ost(fsname, poolname, ostname);
+                        if (rc == -ENODEV)
+                                return;
                         if (rc == 1)
                                 sleep(2);
                         cpt--;
@@ -2648,7 +2658,10 @@ static int pool_cmd(enum lcfg_command_type cmd,
         struct lustre_cfg *lcfg;
 
         rc = check_pool_cmd(cmd, fsname, poolname, ostname);
-        if (rc)
+        if (rc == -ENODEV)
+                fprintf(stderr, "Can't verify pool command since there "
+                        "is no local MDT or client, proceeding anyhow...\n");
+        else if (rc)
                 return rc;
 
         lustre_cfg_bufs_reset(&bufs, NULL);
@@ -2715,7 +2728,7 @@ static int get_array_idx(char *rule, char *format, int **array)
         end++;
         start++;
         /* put in format the printf format (the rule without the range) */
-        sprintf(format, "%s%%.4d%s", rule, end);
+        sprintf(format, "%s%%.4x%s", rule, end);
 
         array_idx = 0;
         array_sz = 0;
@@ -2723,7 +2736,7 @@ static int get_array_idx(char *rule, char *format, int **array)
         /* loop on , separator */
         do {
                 /* extract the 3 fields */
-                rc = sscanf(start, "%u-%u/%u", &lo, &hi, &step);
+                rc = sscanf(start, "%x-%x/%u", &lo, &hi, &step);
                 switch (rc) {
                 case 0: {
                         return 0;
@@ -2834,8 +2847,7 @@ int jt_pool_cmd(int argc, char **argv)
                 if (rc)
                         break;
 
-                rc = pool_cmd(cmd, argv[0], argv[1],
-                              fsname, poolname, NULL);
+                rc = pool_cmd(cmd, argv[0], argv[1], fsname, poolname, NULL);
                 if (rc)
                         break;
 
