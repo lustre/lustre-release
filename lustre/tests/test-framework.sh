@@ -1694,7 +1694,7 @@ run_one() {
     local SAVE_UMASK=`umask`
     umask 0022
 
-    BEFORE=`date +%s`
+    local BEFORE=`date +%s`
     log "== test $testnum: $message ============ `date +%H:%M:%S` ($BEFORE)"
     #check_mds
     export TESTNAME=test_$testnum
