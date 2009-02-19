@@ -3535,10 +3535,10 @@ run_test 79 "df report consistency check ======================="
 test_80() { # bug 10718
         dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1M
         sync; sleep 1; sync
-        BEFORE=`date +%s`
+        local BEFORE=`date +%s`
         cancel_lru_locks OSC
-        AFTER=`date +%s`
-        DIFF=$((AFTER-BEFORE))
+        local AFTER=`date +%s`
+        local DIFF=$((AFTER-BEFORE))
         if [ $DIFF -gt 1 ] ; then
                 error "elapsed for 1M@1T = $DIFF"
         fi
