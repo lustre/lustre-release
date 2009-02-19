@@ -900,6 +900,7 @@ void ll_lli_init(struct ll_inode_info *lli)
 #ifdef HAVE_CLOSE_THREAD
         INIT_LIST_HEAD(&lli->lli_pending_write_llaps);
 #endif
+        init_rwsem(&lli->lli_truncate_rwsem);
 }
 
 /* COMPAT_146 */
@@ -1429,6 +1430,7 @@ static int ll_setattr_do_truncate(struct inode *inode, loff_t new_size)
         UNLOCK_INODE_MUTEX(inode);
         UP_WRITE_I_ALLOC_SEM(inode);
 
+        down_write(&lli->lli_truncate_rwsem);
         if (sbi->ll_lockless_truncate_enable &&
             (sbi->ll_lco.lco_flags & OBD_CONNECT_TRUNCLOCK)) {
                 int n_matches = 0;
@@ -1491,6 +1493,7 @@ static int ll_setattr_do_truncate(struct inode *inode, loff_t new_size)
                                 rc = err;
                 }
         }
+        up_write(&lli->lli_truncate_rwsem);
         RETURN(rc);
 }
 

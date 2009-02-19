@@ -1504,9 +1504,13 @@ repeat:
                 nrsegs_copy = nr_segs;
         }
 
+        down_read(&lli->lli_truncate_rwsem); /* Bug 18233 */
+
         lock_style = ll_file_get_lock(file, (obd_off)(*ppos), end,
                                       iov_copy, nrsegs_copy, &cookie, &tree,
                                       OBD_BRW_READ);
+        if (lock_style < 0 || lock_style == LL_LOCK_STYLE_NOLOCK)
+                up_read(&lli->lli_truncate_rwsem);
         if (lock_style < 0)
                 GOTO(out, retval = lock_style);
 
@@ -1539,9 +1543,11 @@ repeat:
                 ll_inode_size_unlock(inode, 1);
                 retval = ll_glimpse_size(inode, LDLM_FL_BLOCK_GRANTED);
                 if (retval) {
-                        if (lock_style != LL_LOCK_STYLE_NOLOCK)
+                        if (lock_style != LL_LOCK_STYLE_NOLOCK) {
                                 ll_file_put_lock(inode, end, lock_style,
                                                  cookie, &tree, OBD_BRW_READ);
+                                up_read(&lli->lli_truncate_rwsem);
+                        }
                         goto out;
                 }
         } else {
@@ -1597,6 +1603,7 @@ repeat:
 #endif
                 ll_file_put_lock(inode, end, lock_style, cookie,
                                  &tree, OBD_BRW_READ);
+                up_read(&lli->lli_truncate_rwsem);
         } else {
                 /* lockless read
                  *

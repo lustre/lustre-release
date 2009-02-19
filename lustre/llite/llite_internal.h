@@ -179,6 +179,7 @@ struct ll_inode_info {
          * before child -- it is me should cleanup the dir readahead. */
         void                   *lli_opendir_key;
         struct ll_statahead_info *lli_sai;
+        struct rw_semaphore     lli_truncate_rwsem;
         /* the most recent attributes from mds, it is used for timestampts
          * only so far */
         struct ost_lvb         lli_lvb;
