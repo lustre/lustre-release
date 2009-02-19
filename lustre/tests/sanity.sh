@@ -3545,10 +3545,10 @@ run_test 79 "df report consistency check ======================="
 test_80() { # bug 10718
         dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1M
         sync; sleep 1; sync
-        BEFORE=`date +%s`
+        local BEFORE=`date +%s`
         cancel_lru_locks osc
-        AFTER=`date +%s`
-        DIFF=$((AFTER-BEFORE))
+        local AFTER=`date +%s`
+        local DIFF=$((AFTER-BEFORE))
         if [ $DIFF -gt 1 ] ; then
                 error "elapsed for 1M@1T = $DIFF"
         fi
@@ -5643,23 +5643,23 @@ test_151() {
 	$LCTL set_param obdfilter.*.writethrough_cache_enable=1
 
 	# pages should be in the case right after write
-        dd if=/dev/urandom of=$DIR/$tfile bs=4k count=$CPAGES||error "dd failed"
-	BEFORE=`roc_hit`
-        cancel_lru_locks osc
+	dd if=/dev/urandom of=$DIR/$tfile bs=4k count=$CPAGES || error "dd failed"
+	local BEFORE=`roc_hit`
+	cancel_lru_locks osc
 	cat $DIR/$tfile >/dev/null
-	AFTER=`roc_hit`
+	local AFTER=`roc_hit`
 	if let "AFTER - BEFORE != CPAGES"; then
 		error "NOT IN CACHE: before: $BEFORE, after: $AFTER"
 	fi
 
 	# the following read invalidates the cache
-        cancel_lru_locks osc
+	cancel_lru_locks osc
 	$LCTL set_param -n obdfilter.*.read_cache_enable 0
 	cat $DIR/$tfile >/dev/null
 
 	# now data shouldn't be found in the cache
 	BEFORE=`roc_hit`
-        cancel_lru_locks osc
+	cancel_lru_locks osc
 	cat $DIR/$tfile >/dev/null
 	AFTER=`roc_hit`
 	if let "AFTER - BEFORE != 0"; then
@@ -5668,7 +5668,7 @@ test_151() {
 
 	$LCTL set_param -n obdfilter.*.read_cache_enable=1
 	$LCTL set_param obdfilter.*.writethrough_cache_enable=1
-        rm -f $DIR/$tfile
+	rm -f $DIR/$tfile
 }
 run_test 151 "test cache on oss and controls ==============================="
 
