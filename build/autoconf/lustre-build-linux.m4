@@ -141,7 +141,13 @@ AC_DEFUN([LB_LINUX_PATH],
 AC_ARG_WITH([linux],
 	AC_HELP_STRING([--with-linux=path],
 		       [set path to Linux source (default=/usr/src/linux)]),
-	[LINUX=$with_linux],
+	[
+		if ! [[[ $with_linux = /* ]]]; then
+			AC_MSG_ERROR([You must provide an absolute pathname to the --with-linux= option.])
+		else
+			LINUX=$with_linux
+		fi
+	],
 	[LINUX=/usr/src/linux])
 AC_MSG_RESULT([$LINUX])
 AC_SUBST(LINUX)
