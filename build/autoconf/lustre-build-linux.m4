@@ -299,7 +299,7 @@ if test -e $LINUX/include/asm-um ; then
 		UML_CFLAGS='-O0'
 		AC_MSG_RESULT(yes)
     	else
-		AC_MSG_RESULT([no (asm doesn't point at asm-um)])
+		AC_MSG_RESULT([no])
 	fi
 else
 	AC_MSG_RESULT([no (asm-um missing)])
