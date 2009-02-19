@@ -5561,6 +5561,23 @@ test_153() {
 }
 run_test 153 "test if fdatasync does not crash ======================="
 
+test_154() {
+	# do directio so as not to populate the page cache
+	log "creating a 10 Mb file"
+	multiop $DIR/$tfile oO_CREAT:O_DIRECT:O_RDWR:w$((10*1048576))c || error "multiop failed while creating a file"
+	log "starting reads"
+	dd if=$DIR/$tfile of=/dev/null bs=4096 &
+	log "truncating the file"
+	multiop $DIR/$tfile oO_TRUNC:c || error "multiop failed while truncating the file"
+	log "killing dd"
+	kill %+ || true # reads might have finished
+	log "wait until dd is finished"
+	wait
+	log "removing the temporary file"
+	rm -rf $DIR/$tfile || error "tmp file removal failed"
+}
+run_test 154 "parallel read and truncate should not deadlock ======================="
+
 #
 # tests that do cleanup/setup should be run at the end
 #

@@ -174,6 +174,7 @@ struct ll_inode_info {
          * before child -- it is me should cleanup the dir readahead. */
         void                   *lli_opendir_key;
         struct ll_statahead_info *lli_sai;
+        struct rw_semaphore     lli_truncate_rwsem;
 };
 
 /*
