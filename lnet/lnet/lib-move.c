@@ -967,25 +967,6 @@ lnet_peer_alive_locked (lnet_peer_t *lp)
         return 0;
 }
 
-/* NB: returns 1 when alive, 0 when dead, negative when error;
- *     may drop the LNET_LOCK */
-int
-lnet_nid_alive_locked (lnet_nid_t nid)
-{
-        int          rc;
-        lnet_peer_t *lp;
-
-        rc = lnet_nid2peer_locked(&lp, nid);
-        if (rc != 0) {
-                CERROR("Error %d looking up %s\n", rc, libcfs_nid2str(nid));
-                return -ENOENT;
-        }
-
-        rc = lnet_peer_alive_locked(lp);
-        lnet_peer_decref_locked(lp);
-        return rc;
-}
-
 int
 lnet_post_send_locked (lnet_msg_t *msg, int do_send)
 {
