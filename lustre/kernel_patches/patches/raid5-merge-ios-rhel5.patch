@@ -1,7 +1,6 @@
-Index: linux-2.6.18-92.1.17/drivers/md/raid5.c
-===================================================================
---- linux-2.6.18-92.1.17.orig/drivers/md/raid5.c
-+++ linux-2.6.18-92.1.17/drivers/md/raid5.c
+diff -pur b/drivers/md/raid5.c a/drivers/md/raid5.c
+--- b/drivers/md/raid5.c	2009-02-20 15:56:36.000000000 +0800
++++ a/drivers/md/raid5.c	2009-02-20 15:57:49.000000000 +0800
 @@ -1277,7 +1277,26 @@ static void compute_block_2(struct strip
  	}
  }
@@ -175,7 +174,7 @@ Index: linux-2.6.18-92.1.17/drivers/md/raid5.c
  	release_stripe(sh);
  
  	return STRIPE_SECTORS;
-@@ -3091,7 +3128,7 @@ static void raid5d (mddev_t *mddev)
+@@ -3091,9 +3128,11 @@ static void raid5d (mddev_t *mddev)
  		
  		handled++;
  		atomic_inc(&conf->handled_in_raid5d);
@@ -183,4 +182,8 @@ Index: linux-2.6.18-92.1.17/drivers/md/raid5.c
 +		handle_stripe(sh, conf->spare_page, NULL);
  		release_stripe(sh);
  
++		cond_resched();
++
  		spin_lock_irq(&conf->device_lock);
+ 	}
+ 	PRINTK("%d stripes handled\n", handled);
