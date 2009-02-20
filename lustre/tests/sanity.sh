@@ -46,7 +46,6 @@ MCREATE=${MCREATE:-mcreate}
 OPENFILE=${OPENFILE:-openfile}
 OPENUNLINK=${OPENUNLINK:-openunlink}
 READS=${READS:-"reads"}
-TOEXCL=${TOEXCL:-toexcl}
 TRUNCATE=${TRUNCATE:-truncate}
 MUNLINK=${MUNLINK:-munlink}
 SOCKETSERVER=${SOCKETSERVER:-socketserver}
@@ -541,9 +540,12 @@ test_22() {
 run_test 22 "unpack tar archive as non-root user ==============="
 
 test_23() {
-	mkdir $DIR/d23
-	$TOEXCL $DIR/d23/f23
-	$TOEXCL -e $DIR/d23/f23 || error
+	mkdir -p $DIR/$tdir
+	local file=$DIR/$tdir/$tfile
+
+	openfile -f O_CREAT:O_EXCL $file || error "$file create failed"
+	openfile -f O_CREAT:O_EXCL $file &&
+		error "$file recreate succeeded" || true
 }
 run_test 23 "O_CREAT|O_EXCL in subdir =========================="
 
@@ -1140,7 +1142,9 @@ test_27w() { # bug 10997
 }
 run_test 27w "check lfs setstripe -c -s -i options ============="
 
-test_28() {
+# createtest also checks that device nodes are created and 
+# then visible correctly (#2091)
+test_28() { # bug 2091
 	mkdir $DIR/d28
 	$CREATETEST $DIR/d28/ct || error
 }
@@ -1739,9 +1743,15 @@ test_37() {
 run_test 37 "ls a mounted file system to check old content ====="
 
 test_38() {
-	o_directory $DIR/$tfile
+	local file=$DIR/$tfile
+	touch $file
+	openfile -f O_DIRECTORY $file
+	local RC=$?
+	local ENOTDIR=20
+	[ $RC -eq 0 ] && error "opened file $file with O_DIRECTORY" || true
+	[ $RC -eq $ENOTDIR ] || error "error $RC should be ENOTDIR ($ENOTDIR)"
 }
-run_test 38 "open a regular file with O_DIRECTORY =============="
+run_test 38 "open a regular file with O_DIRECTORY should return -ENOTDIR ==="
 
 test_39() {
 	touch $DIR/$tfile
@@ -2068,11 +2078,7 @@ test_46() {
 }
 run_test 46 "dirtying a previously written page ================"
 
-# Check that device nodes are created and then visible correctly (#2091)
-test_47() {
-	cmknod $DIR/test_47_node || error
-}
-run_test 47 "Device nodes check ================================"
+# test_47 is removed "Device nodes check" is moved to test_28 
 
 test_48a() { # bug 2399
 	check_kernel_version 34 || return 0
