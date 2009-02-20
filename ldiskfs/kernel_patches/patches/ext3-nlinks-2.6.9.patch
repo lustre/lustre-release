@@ -2,7 +2,7 @@ Index: linux-2.6.18-53.1.14/fs/ext3/namei.c
 ===================================================================
 --- linux-2.6.18-53.1.14/fs/ext3/namei.c	2008-12-02 13:21:14.000000000 +0530
 +++ linux-2.6.18-53.1.14_new/fs/ext3/namei.c	2008-12-02 15:11:09.000000000 +0530
-@@ -1656,13 +1656,24 @@ static int ext3_delete_entry (handle_t *
+@@ -1656,11 +1656,17 @@ static int ext3_delete_entry (handle_t *
  static inline void ext3_inc_count(handle_t *handle, struct inode *inode)
  {
  	inode->i_nlink++;
@@ -13,21 +13,14 @@ Index: linux-2.6.18-53.1.14/fs/ext3/namei.c
 +	}
  }
  
--static inline void ext3_dec_count(handle_t *handle, struct inode *inode)
-+static inline void drop_nlink(struct inode *inode)
+ static inline void ext3_dec_count(handle_t *handle, struct inode *inode)
  {
- 	inode->i_nlink--;
- }
- 
-+static inline void ext3_dec_count(handle_t *handle, struct inode *inode)
-+{
+-	inode->i_nlink--;
 +	if (!S_ISDIR(inode->i_mode) || inode->i_nlink > 2)
 +		drop_nlink(inode);
-+}
-+
+ }
+ 
  static int ext3_add_nondir(handle_t *handle,
- 		struct dentry *dentry, struct inode *inode)
- {
 @@ -1759,7 +1770,7 @@ static int ext3_mkdir(struct inode * dir
  	struct ext3_dir_entry_2 * de;
  	int err, retries = 0;
