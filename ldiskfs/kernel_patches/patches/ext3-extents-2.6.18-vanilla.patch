@@ -2337,20 +2337,20 @@ Index: linux-2.6.18.8/fs/ext3/inode.c
  	depth = ext3_block_to_path(inode,iblock,offsets,&blocks_to_boundary);
  
 @@ -984,12 +983,10 @@ static int ext3_get_block(struct inode *
+		started = 1;
+	}
  
- get_block:
- 	if (ret == 0) {
--		ret = ext3_get_blocks_handle(handle, inode, iblock,
-+		ret = ext3_get_blocks_wrap(handle, inode, iblock,
+-	ret = ext3_get_blocks_handle(handle, inode, iblock,
++	ret = ext3_get_blocks_wrap(handle, inode, iblock,
  					max_blocks, bh_result, create, 0);
--		if (ret > 0) {
--			bh_result->b_size = (ret << inode->i_blkbits);
-+		if (ret > 0)
- 			ret = 0;
--		}
- 	}
- 	return ret;
- }
+-	if (ret > 0) {
+-		bh_result->b_size = (ret << inode->i_blkbits);
++	if (ret > 0)
+ 		ret = 0;
+-	}
+	if (started)
+		ext3_journal_stop(handle);
+ out:
 @@ -1008,7 +1005,7 @@ struct buffer_head *ext3_getblk(handle_t
  	dummy.b_state = 0;
  	dummy.b_blocknr = -1000;
