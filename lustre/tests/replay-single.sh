@@ -87,12 +87,13 @@ test_2b() {
 run_test 2b "touch"
 
 test_3a() {
+    local file=$DIR/$tfile
     replay_barrier mds
-    mcreate $DIR/$tfile
-    o_directory $DIR/$tfile
+    mcreate $file
+    openfile -f O_DIRECTORY $file
     fail mds
-    $CHECKSTAT -t file $DIR/$tfile || return 2
-    rm $DIR/$tfile
+    $CHECKSTAT -t file $file || return 2
+    rm $file
 }
 run_test 3a "replay failed open(O_DIRECTORY)"
 
