@@ -588,9 +588,9 @@ Index: linux-2.6.18-8.1.8/fs/jbd/checkpoint.c
 -			retry = __process_buffer(journal, jh, bhs,&batch_count);
 +			retry = __process_buffer(journal, jh, bhs,&batch_count,
 +						 transaction);
-			if (retry < 0 && !result)
-				result = retry;
-			if (!retry && lock_need_resched(&journal->j_list_lock)){
+ 			if (!retry && lock_need_resched(&journal->j_list_lock)){
+ 				spin_unlock(&journal->j_list_lock);
+ 				retry = 1;
 @@ -667,6 +672,8 @@ void __journal_insert_checkpoint(struct 
  
  void __journal_drop_transaction(journal_t *journal, transaction_t *transaction)
