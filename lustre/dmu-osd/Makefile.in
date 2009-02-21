@@ -1,6 +1,6 @@
 MODULES := osd
 osd-objs := osd_handler.o udmu.o udmu_util.o
 
-EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LDISKFS_DIR@ -I@LDISKFS_DIR@/ldiskfs
+EXTRA_PRE_CFLAGS := -I@ZFS_DIR@/module/zcommon/include -I@ZFS_DIR@/module/avl/include -I@ZFS_DIR@/module/nvpair/include -I@ZFS_DIR@/module/zfs/include -I@SPL_DIR@/include -I@SPL_DIR@
 
 @INCLUDE_RULES@
