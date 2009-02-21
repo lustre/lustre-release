@@ -316,8 +316,8 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso,
 
         for (i = 0, j = 0; i < objcount; i++, fso++) {
                 /* two or more dindirect blocks in case we cross boundary */
-                int ndind = (long)((nb[j + fso->fso_bufcnt - 1].offset -
-                                    nb[j].offset) >>
+                int ndind = (long)((nb[j + fso->fso_bufcnt - 1].file_offset -
+                                    nb[j].file_offset) >>
                                    sb->s_blocksize_bits) /
                         (EXT3_ADDR_PER_BLOCK(sb) * EXT3_ADDR_PER_BLOCK(sb));
                 nbitmaps += min(fso->fso_bufcnt, ndind > 0 ? ndind : 2);
@@ -328,14 +328,14 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso,
                 j += fso->fso_bufcnt;
         }
 
-        next_indir = nb[0].offset +
+        next_indir = nb[0].file_offset +
                 (EXT3_ADDR_PER_BLOCK(sb) << sb->s_blocksize_bits);
         for (i = 1; i < niocount; i++) {
-                if (nb[i].offset >= next_indir) {
+                if (nb[i].file_offset >= next_indir) {
                         nbitmaps++;     /* additional indirect */
-                        next_indir = nb[i].offset +
+                        next_indir = nb[i].file_offset +
                                 (EXT3_ADDR_PER_BLOCK(sb)<<sb->s_blocksize_bits);
-                } else if (nb[i].offset != nb[i - 1].offset + sb->s_blocksize) {
+                } else if (nb[i].file_offset != nb[i-1].file_offset+sb->s_blocksize){
                         nbitmaps++;     /* additional indirect */
                 }
                 nbitmaps += blockpp;    /* each leaf in different group? */
@@ -696,7 +696,7 @@ static int fsfilt_ext3_add_journal_cb(struct obd_device *obd, __u64 last_rcvd,
 {
         struct fsfilt_cb_data *fcb;
 
-        OBD_SLAB_ALLOC(fcb, fcb_cache, CFS_ALLOC_IO, sizeof *fcb);
+        OBD_SLAB_ALLOC_PTR_GFP(fcb, fcb_cache, CFS_ALLOC_IO);
         if (fcb == NULL)
                 RETURN(-ENOMEM);
 
@@ -1125,18 +1125,17 @@ int fsfilt_ext3_map_bm_inode_pages(struct inode *inode, struct page **page,
 {
         int blocks_per_page = CFS_PAGE_SIZE >> inode->i_blkbits;
         unsigned long *b;
-        int rc = 0, i, *cr;
+        int rc = 0, i;
 
-        for (i = 0, cr = created, b = blocks; i < pages; i++, page++) {
-                rc = ext3_map_inode_page(inode, *page, b, cr, create);
+        for (i = 0, b = blocks; i < pages; i++, page++) {
+                rc = ext3_map_inode_page(inode, *page, b, NULL, create);
                 if (rc) {
-                        CERROR("ino %lu, blk %lu cr %u create %d: rc %d\n",
-                               inode->i_ino, *b, *cr, create, rc);
+                        CERROR("ino %lu, blk %lu create %d: rc %d\n",
+                               inode->i_ino, *b, create, rc);
                         break;
                 }
 
                 b += blocks_per_page;
-                cr += blocks_per_page;
         }
         return rc;
 }

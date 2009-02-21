@@ -83,6 +83,7 @@ struct ec_export_data { /* echo client */
 /* In-memory access to client data from OST struct */
 struct filter_export_data {
         spinlock_t                 fed_lock;      /* protects fed_open_head */
+        struct semaphore           fed_lastrcvd_lock;
         struct lsd_client_data    *fed_lcd;
         loff_t                     fed_lr_off;
         int                        fed_lr_idx;

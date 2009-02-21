@@ -286,20 +286,21 @@ struct filter_obd {
         /* NB this field MUST be first */
         struct obd_device_target fo_obt;
         const char          *fo_fstype;
-        struct vfsmount     *fo_vfsmnt;
+        
+        //struct vfsmount     *fo_vfsmnt;
 
         int                  fo_group_count;
-        cfs_dentry_t        *fo_dentry_O;
-        cfs_dentry_t       **fo_dentry_O_groups;
-        struct filter_subdirs   *fo_dentry_O_sub;
+        //cfs_dentry_t        *fo_dentry_O;
+        //cfs_dentry_t       **fo_dentry_O_groups;
+        ///struct filter_subdirs   *fo_dentry_O_sub;
         struct semaphore     fo_init_lock;      /* group initialization lock */
         int                  fo_committed_group;
 
 
         spinlock_t           fo_objidlock;      /* protect fo_lastobjid */
         spinlock_t           fo_translock;      /* protect fsd_last_transno */
-        struct file         *fo_rcvd_filp;
-        struct file         *fo_health_check_filp;
+        //struct file         *fo_rcvd_filp;
+        //struct file         *fo_health_check_filp;
         struct lr_server_data *fo_fsd;
         unsigned long       *fo_last_rcvd_slots;
         __u64                fo_mount_count;
@@ -321,7 +322,7 @@ struct filter_obd {
         struct obd_import   *fo_mdc_imp;
         struct obd_uuid      fo_mdc_uuid;
         struct lustre_handle fo_mdc_conn;
-        struct file        **fo_last_objid_files;
+        //struct file        **fo_last_objid_files;
         __u64               *fo_last_objids; /* last created objid for groups,
                                               * protected by fo_objidlock */
 
@@ -743,13 +744,15 @@ struct lmv_obd {
 };
 
 struct niobuf_local {
-        __u64 offset;
-        __u32 len;
-        __u32 flags;
-        cfs_page_t    *page;
-        cfs_dentry_t  *dentry;
-        int lnb_grant_used;
-        int rc;
+        __u64           file_offset;
+        __u32           page_offset;
+        __u32           len;
+        __u32           flags;
+        cfs_page_t     *page;
+        void           *obj;
+        int             lnb_grant_used;
+        unsigned long   bytes;
+        int             rc;
 };
 
 #define LUSTRE_FLD_NAME         "fld"
