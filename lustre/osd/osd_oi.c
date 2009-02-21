@@ -80,6 +80,16 @@ struct oi_descr {
         __u32 oid;
 };
 
+static struct super_block *osd_sb(const struct osd_device *dev)
+{
+        return dev->od_mount->lmi_mnt->mnt_sb;
+}
+
+static journal_t *osd_journal(const struct osd_device *dev)
+{
+        return LDISKFS_SB(osd_sb(dev))->s_journal;
+}
+
 /** to serialize concurrent OI index initialization */
 static struct mutex oi_init_lock;
 
@@ -103,42 +113,99 @@ static const struct oi_descr oi_descr[OSD_OI_FID_NR] = {
         }
 };
 
+struct dentry * osd_child_dentry_by_inode(const struct lu_env *env,
+                                                 struct inode *inode,
+                                                 const char *name,
+                                                 const int namelen);
+extern struct buffer_head * ldiskfs_find_entry(struct dentry *dentry,
+                                               struct ldiskfs_dir_entry_2
+                                               ** res_dir);
+
+static int osd_oi_index_create_one(struct osd_thread_info *info,
+                                   struct osd_device *osd, char *name,
+                                   struct dt_index_features *feat)
+{
+        const struct lu_env *env = info->oti_env;
+        struct osd_inode_id    *id     = &info->oti_id;
+        struct buffer_head *bh;
+        struct inode *inode;
+        struct ldiskfs_dir_entry_2 *de;
+        struct dentry *dentry;
+        handle_t *jh;
+        int rc;
+
+        dentry = osd_child_dentry_by_inode(env, osd_sb(osd)->s_root->d_inode,
+                                           name, strlen(name));
+        bh = ldiskfs_find_entry(dentry, &de);
+        if (bh) {
+                brelse(bh);
+
+                id->oii_ino = le32_to_cpu(de->inode);
+                id->oii_gen = OSD_OII_NOGEN;
+
+                inode = osd_iget(info, osd, id);
+                if (!IS_ERR(inode)) {
+                        iput(inode);
+                        RETURN(-EEXIST);
+                }
+                RETURN(PTR_ERR(inode));
+        }
+
+        jh = journal_start(osd_journal(osd), 100); 
+        LASSERT(!IS_ERR(jh));
+
+        inode = ldiskfs_create_inode(jh, osd_sb(osd)->s_root->d_inode,
+                                    (S_IFMT | S_IRWXUGO | S_ISVTX)); 
+        LASSERT(!IS_ERR(inode));
+
+        if (feat->dif_flags & DT_IND_VARKEY)
+                rc = iam_lvar_create(inode, feat->dif_keysize_max,
+                                     feat->dif_ptrsize, feat->dif_recsize_max, jh);
+        else
+                rc = iam_lfix_create(inode, feat->dif_keysize_max,
+                                     feat->dif_ptrsize, feat->dif_recsize_max, jh);
+
+        dentry = osd_child_dentry_by_inode(env, osd_sb(osd)->s_root->d_inode,
+                                           name, strlen(name));
+        rc = ldiskfs_add_entry(jh, dentry, inode);
+        LASSERT(rc == 0);
+
+        journal_stop(jh);
+        iput(inode);
+
+        return rc;
+}
+
 static int osd_oi_index_create(struct osd_thread_info *info,
-                               struct dt_device *dev,
-                               struct md_device *mdev)
+                               struct osd_device *osd)
 {
         const struct lu_env *env;
         struct lu_fid *oi_fid = &info->oti_fid;
-        struct md_object *mdo;
         int i;
         int rc;
 
         env = info->oti_env;
 
-        for (i = rc = 0; i < OSD_OI_FID_NR && rc == 0; ++i) {
+        for (i = rc = 0; i < OSD_OI_FID_NR; ++i) {
                 char *name;
                 name = oi_descr[i].name;
                 lu_local_obj_fid(oi_fid, oi_descr[i].oid);
-                oi_feat.dif_keysize_min = oi_descr[i].fid_size,
-                oi_feat.dif_keysize_max = oi_descr[i].fid_size,
+                oi_feat.dif_keysize_min = oi_descr[i].fid_size;
+                oi_feat.dif_keysize_max = oi_descr[i].fid_size;
 
-                mdo = llo_store_create_index(env, mdev, dev,
-                                             "", name,
-                                             oi_fid, &oi_feat);
-
-                if (IS_ERR(mdo))
-                        RETURN(PTR_ERR(mdo));
-
-                lu_object_put(env, &mdo->mo_lu);
+                rc = osd_oi_index_create_one(info, osd, name, &oi_feat);
+                
+                if (rc == -ESTALE || rc != -EEXIST)
+                        return(rc);
         }
         return 0;
 }
 
 int osd_oi_init(struct osd_thread_info *info,
                 struct osd_oi *oi,
-                struct dt_device *dev,
-                struct md_device *mdev)
+                struct osd_device *osd)
 {
+        struct dt_device *dev = &osd->od_dt_dev;
         const struct lu_env *env;
         int rc;
         int i;
@@ -147,8 +214,8 @@ int osd_oi_init(struct osd_thread_info *info,
 
         env = info->oti_env;
         mutex_lock(&oi_init_lock);
-        memset(oi, 0, sizeof *oi);
 retry:
+        memset(oi, 0, sizeof *oi);
         for (i = rc = 0; i < OSD_OI_FID_NR && rc == 0; ++i) {
                 const char       *name;
                 struct dt_object *obj;
@@ -169,8 +236,10 @@ retry:
                         }
                 } else {
                         rc = PTR_ERR(obj);
+                        while (--i >= 0)
+                                lu_object_put(env, &oi->oi_dir[i]->do_lu);
                         if (rc == -ENOENT) {
-                                rc = osd_oi_index_create(info, dev, mdev);
+                                rc = osd_oi_index_create(info, osd);
                                 if (!rc)
                                         goto retry;
                         }
@@ -244,6 +313,9 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
                         return -ENOENT;
 
                 key = oi_fid_key(info, oi, fid, &idx);
+                LASSERT(idx);
+                LASSERT(idx->do_index_ops);
+                LASSERT(idx->do_index_ops->dio_lookup);
                 rc = idx->do_index_ops->dio_lookup(info->oti_env, idx,
                                                    (struct dt_rec *)id, key,
                                                    BYPASS_CAPA);

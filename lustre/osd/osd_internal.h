@@ -63,6 +63,8 @@
 #include <obd_class.h>
 #include <lustre_disk.h>
 
+#include <lustre_fsfilt.h>
+
 #include <dt_object.h>
 #include "osd_oi.h"
 
@@ -78,6 +80,97 @@ struct osd_ctxt {
         __u32 oc_cap;
 };
 #endif
+
+#define OSD_TRACK_DECLARES
+#ifdef OSD_TRACK_DECLARES
+#define OSD_DECLARE_OP(oh,op)    {                               \
+        LASSERT(oh->ot_handle == NULL);                          \
+        ((oh)->ot_declare_ ##op)++;}
+#define OSD_EXEC_OP(handle,op)      {                            \
+        struct osd_thandle *oh;                                  \
+        oh = container_of0(handle, struct osd_thandle, ot_super);\
+        LASSERT((oh)->ot_declare_ ##op > 0);                     \
+        ((oh)->ot_declare_ ##op)--;}
+#else
+#define OSD_DECLARE_OP(oh,op)
+#define OSD_EXEC_OP(oh,op)
+#endif
+
+struct osd_thandle {
+        struct thandle          ot_super;
+        handle_t               *ot_handle;
+        struct journal_callback ot_jcb;
+        /* Link to the device, for debugging. */
+        struct lu_ref_link     *ot_dev_link;
+        int                     ot_credits;
+#ifdef OSD_TRACK_DECLARES
+        int                     ot_declare_attr_set;
+        int                     ot_declare_punch;
+        int                     ot_declare_xattr_set;
+        int                     ot_declare_xattr_del;
+        int                     ot_declare_create;
+        int                     ot_declare_ref_add;
+        int                     ot_declare_ref_del;
+        int                     ot_declare_write;
+        int                     ot_declare_insert;
+        int                     ot_declare_delete;
+#endif
+};
+
+/**
+ * Basic transaction credit op
+ */
+enum dt_txn_op {
+        DTO_INDEX_INSERT,
+        DTO_INDEX_DELETE,
+        DTO_IDNEX_UPDATE,
+        DTO_OBJECT_CREATE,
+        DTO_OBJECT_DELETE,
+        DTO_ATTR_SET_BASE,
+        DTO_XATTR_SET,
+        DTO_LOG_REC, /**< XXX temporary: dt layer knows nothing about llog. */
+        DTO_WRITE_BASE,
+        DTO_WRITE_BLOCK,
+        DTO_ATTR_SET_CHOWN,
+
+        DTO_NR
+};
+
+extern const int osd_dto_credits_noquota[DTO_NR];
+
+struct osd_directory {
+        struct iam_container od_container;
+        struct iam_descr     od_descr;
+        struct semaphore     od_sem;
+};
+
+struct osd_object {
+        struct dt_object       oo_dt;
+        /**
+         * Inode for file system object represented by this osd_object. This
+         * inode is pinned for the whole duration of lu_object life.
+         *
+         * Not modified concurrently (either setup early during object
+         * creation, or assigned by osd_object_create() under write lock).
+         */
+        struct inode          *oo_inode;
+        struct rw_semaphore    oo_sem;
+        struct osd_directory  *oo_dir;
+        /** protects inode attributes. */
+        spinlock_t             oo_guard;
+        /**
+         * Following two members are used to indicate the presence of dot and
+         * dotdot in the given directory. This is required for interop mode
+         * (b11826).
+         */
+        int oo_compat_dot_created;
+        int oo_compat_dotdot_created;
+
+        const struct lu_env   *oo_owner;
+#ifdef CONFIG_LOCKDEP
+        struct lockdep_map     oo_dep_map;
+#endif
+};
 
 /*
  * osd device.
@@ -126,6 +219,8 @@ struct osd_device {
          * It will be initialized, using mount param.
          */
         __u32                     od_iop_mode;
+
+        struct fsfilt_operations *od_fsops;
 };
 
 /**
@@ -154,6 +249,19 @@ struct osd_it_iam {
         struct osd_object     *oi_obj;
         struct iam_path_descr *oi_ipd;
         struct iam_iterator    oi_it;
+};
+
+#define MAX_BLOCKS_PER_PAGE (CFS_PAGE_SIZE / 512)
+
+struct filter_iobuf {
+        atomic_t          dr_numreqs;  /* number of reqs being processed */
+        wait_queue_head_t dr_wait;
+        int               dr_max_pages;
+        int               dr_npages;
+        int               dr_error;
+        struct page      *dr_pages[PTLRPC_MAX_BRW_PAGES];
+        unsigned long     dr_blocks[PTLRPC_MAX_BRW_PAGES*MAX_BLOCKS_PER_PAGE];
+        unsigned int      dr_ignore_quota:1;
 };
 
 struct osd_thread_info {
@@ -226,6 +334,9 @@ struct osd_thread_info {
 #ifdef HAVE_QUOTA_SUPPORT
         struct osd_ctxt        oti_ctxt;
 #endif
+
+        /** 0-copy IO */
+        struct filter_iobuf    oti_iobuf;
 };
 
 #ifdef LPROCFS
@@ -239,6 +350,25 @@ void osd_lprocfs_time_end(const struct lu_env *env,
 #endif
 int osd_statfs(const struct lu_env *env, struct dt_device *dev,
                struct kstatfs *sfs);
+
+struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
+                       const struct osd_inode_id *id);
+extern struct inode *ldiskfs_create_inode(handle_t *handle,
+                                          struct inode * dir, int mode);
+extern int iam_lvar_create(struct inode *obj, int keysize, int ptrsize,
+                           int recsize, handle_t *handle);
+
+extern int iam_lfix_create(struct inode *obj, int keysize, int ptrsize,
+                           int recsize, handle_t *handle);
+extern int ldiskfs_add_entry(handle_t *handle, struct dentry *dentry,
+                             struct inode *inode);
+extern int ldiskfs_delete_entry(handle_t *handle,
+                                struct inode * dir,
+                                struct ldiskfs_dir_entry_2 * de_del,
+                                struct buffer_head * bh);
+extern struct buffer_head * ldiskfs_find_entry(struct dentry *dentry,
+                                               struct ldiskfs_dir_entry_2
+                                               ** res_dir);
 
 #endif /* __KERNEL__ */
 #endif /* _OSD_INTERNAL_H */

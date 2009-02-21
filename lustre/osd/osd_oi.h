@@ -62,6 +62,7 @@ struct lu_site;
 struct thandle;
 
 struct dt_device;
+struct osd_device;
 
 enum {
         OSD_OI_FID_SMALL,
@@ -92,10 +93,8 @@ struct osd_inode_id {
 };
 
 int osd_oi_mod_init(void);
-int osd_oi_init(struct osd_thread_info *info,
-                struct osd_oi *oi,
-                struct dt_device *dev,
-                struct md_device *mdev);
+int osd_oi_init(struct osd_thread_info *info, struct osd_oi *oi,
+                struct osd_device *osd);
 void osd_oi_fini(struct osd_thread_info *info, struct osd_oi *oi);
 
 int  osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
