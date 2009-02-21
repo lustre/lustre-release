@@ -856,6 +856,43 @@ static void osd_ro(const struct lu_env *env, struct dt_device *d)
         EXIT;
 }
 
+static char *osd_get_label(const struct lu_env *env, struct dt_device *dt)
+{
+        struct super_block *sb = osd_sb(osd_dt_dev(dt));
+        LASSERT(sb);
+        return LDISKFS_SB(sb)->s_es->s_volume_name;
+}
+
+static int osd_set_label(const struct lu_env *env, struct dt_device *dt,
+                           char *label)
+{
+        struct super_block *sb = osd_sb(osd_dt_dev(dt));
+        journal_t *journal;
+        handle_t *handle;
+        int rc;
+
+        journal = LDISKFS_SB(sb)->s_journal;
+        handle = journal_start(journal, 1);
+        if (IS_ERR(handle)) {
+                CERROR("can't start transaction\n");
+                return(PTR_ERR(handle));
+        }
+
+        rc = ldiskfs_journal_get_write_access(handle, LDISKFS_SB(sb)->s_sbh);
+        if (rc)
+                goto out;
+
+        memcpy(LDISKFS_SB(sb)->s_es->s_volume_name, label,
+               sizeof(LDISKFS_SB(sb)->s_es->s_volume_name));
+
+        rc = ldiskfs_journal_dirty_metadata(handle, LDISKFS_SB(sb)->s_sbh);
+
+out:
+        journal_stop(handle);
+
+        return rc;
+}
+
 
 /*
  * Concurrency: serialization provided by callers.
@@ -1018,17 +1055,19 @@ static const int osd_dto_credits_quota[DTO_NR] = {
 };
 
 static const struct dt_device_operations osd_dt_ops = {
-        .dt_root_get       = osd_root_get,
-        .dt_statfs         = osd_statfs,
-        .dt_trans_create   = osd_trans_create,
-        .dt_trans_start    = osd_trans_start,
-        .dt_trans_stop     = osd_trans_stop,
-        .dt_conf_get       = osd_conf_get,
-        .dt_sync           = osd_sync,
-        .dt_ro             = osd_ro,
-        .dt_commit_async   = osd_commit_async,
-        .dt_init_capa_ctxt = osd_init_capa_ctxt,
-        .dt_init_quota_ctxt= osd_init_quota_ctxt,
+        .dt_root_get        = osd_root_get,
+        .dt_statfs          = osd_statfs,
+        .dt_trans_create    = osd_trans_create,
+        .dt_trans_start     = osd_trans_start,
+        .dt_trans_stop      = osd_trans_stop,
+        .dt_conf_get        = osd_conf_get,
+        .dt_sync            = osd_sync,
+        .dt_ro              = osd_ro,
+        .dt_commit_async    = osd_commit_async,
+        .dt_init_capa_ctxt  = osd_init_capa_ctxt,
+        .dt_init_quota_ctxt = osd_init_quota_ctxt,
+        .dt_get_label       = osd_get_label,
+        .dt_set_label       = osd_set_label
 };
 
 static void osd_object_read_lock(const struct lu_env *env,
