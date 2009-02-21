@@ -22,13 +22,11 @@ PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
 SIZE=${SIZE:-40960}
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
-CREATETEST=${CREATETEST:-createtest}
 GETSTRIPE=${GETSTRIPE:-lfs getstripe}
 SETSTRIPE=${SETSTRIPE:-lstripe}
 MCREATE=${MCREATE:-mcreate}
 OPENFILE=${OPENFILE:-openfile}
 OPENUNLINK=${OPENUNLINK:-openunlink}
-TOEXCL=${TOEXCL:-toexcl}
 TRUNCATE=${TRUNCATE:-truncate}
 export TMP=${TMP:-/tmp}
 MOUNT_2=${MOUNT_2:-"yes"}

@@ -164,6 +164,8 @@ static void osc_page_transfer_add(const struct lu_env *env,
 {
         struct osc_object *obj;
 
+        LINVRNT(cl_page_is_vmlocked(env, opg->ops_cl.cpl_page));
+
         obj = cl2osc(opg->ops_cl.cpl_obj);
         spin_lock(&obj->oo_seatbelt);
         list_add(&opg->ops_inflight, &obj->oo_inflight[crt]);
@@ -395,6 +397,7 @@ static int osc_completion(const struct lu_env *env,
         enum cl_req_type crt;
 
         LINVRNT(osc_page_protected(env, opg, CLM_READ, 1));
+        LINVRNT(cl_page_is_vmlocked(env, page));
 
         ENTRY;
 
@@ -467,7 +470,7 @@ struct cl_page *osc_page_init(const struct lu_env *env,
         struct osc_page   *opg;
         int result;
 
-        OBD_SLAB_ALLOC_PTR(opg, osc_page_kmem);
+        OBD_SLAB_ALLOC_PTR_GFP(opg, osc_page_kmem, CFS_ALLOC_IO);
         if (opg != NULL) {
                 void *oap = &opg->ops_oap;
 
@@ -495,6 +498,10 @@ struct cl_page *osc_page_init(const struct lu_env *env,
         return ERR_PTR(result);
 }
 
+/**
+ * Helper function called by osc_io_submit() for every page in an immediate
+ * transfer (i.e., transferred synchronously).
+ */
 void osc_io_submit_page(const struct lu_env *env,
                         struct osc_io *oio, struct osc_page *opg,
                         enum cl_req_type crt)

@@ -141,7 +141,7 @@ struct lu_object *lovsub_object_alloc(const struct lu_env *env,
         struct lu_object     *obj;
 
         ENTRY;
-        OBD_SLAB_ALLOC_PTR(los, lovsub_object_kmem);
+        OBD_SLAB_ALLOC_PTR_GFP(los, lovsub_object_kmem, CFS_ALLOC_IO);
         if (los != NULL) {
                 struct cl_object_header *hdr;
 

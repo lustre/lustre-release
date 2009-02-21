@@ -562,7 +562,7 @@ static struct lu_env *cl_env_new(__u32 tags, void *debug)
         struct lu_env *env;
         struct cl_env *cle;
 
-        OBD_SLAB_ALLOC_PTR(cle, cl_env_kmem);
+        OBD_SLAB_ALLOC_PTR_GFP(cle, cl_env_kmem, CFS_ALLOC_IO);
         if (cle != NULL) {
                 int rc;
 

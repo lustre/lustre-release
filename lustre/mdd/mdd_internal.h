@@ -377,6 +377,8 @@ struct mdd_object *mdd_object_find(const struct lu_env *env,
                                    const struct lu_fid *f);
 int mdd_get_default_md(struct mdd_object *mdd_obj, struct lov_mds_md *lmm,
                        int *size);
+int mdd_readpage(const struct lu_env *env, struct md_object *obj,
+                 const struct lu_rdpg *rdpg);
 
 /* mdd_quota.c*/
 #ifdef HAVE_QUOTA_SUPPORT

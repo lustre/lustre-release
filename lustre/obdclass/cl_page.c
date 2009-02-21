@@ -320,7 +320,7 @@ static int cl_page_alloc(const struct lu_env *env, struct cl_object *o,
 
         ENTRY;
         result = +1;
-        OBD_SLAB_ALLOC_PTR(page, cl_page_kmem);
+        OBD_SLAB_ALLOC_PTR_GFP(page, cl_page_kmem, CFS_ALLOC_IO);
         if (page != NULL) {
                 atomic_set(&page->cp_ref, 1);
                 page->cp_obj = o;

@@ -54,7 +54,7 @@ static struct inode *ll_alloc_inode(struct super_block *sb)
 {
         struct ll_inode_info *lli;
         ll_stats_ops_tally(ll_s2sbi(sb), LPROC_LL_ALLOC_INODE, 1);
-        OBD_SLAB_ALLOC_PTR(lli, ll_inode_cachep);
+        OBD_SLAB_ALLOC_PTR_GFP(lli, ll_inode_cachep, CFS_ALLOC_IO);
         if (lli == NULL)
                 return NULL;
 

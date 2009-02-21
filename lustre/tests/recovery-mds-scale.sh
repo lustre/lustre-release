@@ -66,6 +66,20 @@ OSTS=$(comma_list $OSTS)
 ERRORS_OK=""    # No application failures should occur during this test.
 FLAVOR=${FLAVOR:-"MDS"}
 
+if [ "$FLAVOR" == "MDS" ]; then
+    SERVERS=$MDTS
+else
+    SERVERS=$OSTS
+fi
+ 
+if [ "$SLOW" = "no" ]; then
+    DURATION=${DURATION:-$((60 * 30))}
+    SERVER_FAILOVER_PERIOD=${SERVER_FAILOVER_PERIOD:-$((60 * 5))}
+else
+    DURATION=${DURATION:-$((60 * 60 * 24))}
+    SERVER_FAILOVER_PERIOD=${SERVER_FAILOVER_PERIOD:-$((60 * 10))} # 10 minutes
+fi
+
 rm -f $END_RUN_FILE
 
 vmstatLOG=${TESTSUITELOG}_$(basename $0 .sh).vmstat
@@ -152,7 +166,6 @@ log "-----============= $0 starting =============-----"
 
 trap summary_and_cleanup EXIT INT
 
-DURATION=${DURATION:-$((60*60*24))}
 ELAPSED=0
 NUM_FAILOVERS=0
 
@@ -175,16 +188,6 @@ fi
 
 START_TS=$(date +%s)
 CURRENT_TS=$START_TS
-
-if [ "$FLAVOR" == "MDS" ]; then
-    SERVER_FAILOVER_PERIOD=$MDS_FAILOVER_PERIOD
-    SERVERS=$MDTS
-else
-    SERVER_FAILOVER_PERIOD=$OSS_FAILOVER_PERIOD
-    SERVERS=$OSTS
-fi
-
-SERVER_FAILOVER_PERIOD=${SERVER_FAILOVER_PERIOD:-$((60 * 10))} # 10 minutes
 
 MINSLEEP=${MINSLEEP:-120}
 REQFAIL_PERCENT=${REQFAIL_PERCENT:-3}	# bug17839 comment 62
@@ -213,7 +216,7 @@ while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
         exit 4
     fi
 
-    log "Starting failover on $SERVERNODE"
+    log "Starting failover on $SERVERFACET"
 
     facet_failover "$SERVERFACET" || exit 1
 

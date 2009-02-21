@@ -301,6 +301,29 @@ static int quota_check_common(struct obd_device *obd, unsigned int uid,
                                 lqs->lqs_iwrite_pending += *pending;
                         }
                 }
+
+                /* if xx_rec < 0, that means quota are releasing,
+                 * and it may return before we use quota. So if
+                 * we find this situation, we assuming it has
+                 * returned b=18491 */
+                if (isblk && lqs->lqs_blk_rec < 0) {
+                        if (qdata[i].qd_count < -lqs->lqs_blk_rec)
+                                qdata[i].qd_count = 0;
+                        else
+                                qdata[i].qd_count += lqs->lqs_blk_rec;
+                }
+                if (!isblk && lqs->lqs_ino_rec < 0) {
+                        if (qdata[i].qd_count < -lqs->lqs_ino_rec)
+                                qdata[i].qd_count = 0;
+                        else
+                                qdata[i].qd_count += lqs->lqs_ino_rec;
+                }
+
+
+                CDEBUG(D_QUOTA, "count: %d, lqs pending: %lu, qd_count: "LPU64
+                       ", metablocks: %d, isblk: %d, pending: %d.\n", count,
+                       isblk ? lqs->lqs_bwrite_pending : lqs->lqs_iwrite_pending,
+                       qdata[i].qd_count, mb, isblk, *pending);
                 if (rc2[i] == QUOTA_RET_OK) {
                         if (isblk && qdata[i].qd_count < lqs->lqs_bwrite_pending)
                                 rc2[i] = QUOTA_RET_ACQUOTA;
@@ -308,11 +331,8 @@ static int quota_check_common(struct obd_device *obd, unsigned int uid,
                             lqs->lqs_iwrite_pending)
                                 rc2[i] = QUOTA_RET_ACQUOTA;
                 }
+
                 spin_unlock(&lqs->lqs_lock);
-                CDEBUG(D_QUOTA, "count: %d, lqs pending: %lu, qd_count: "LPU64
-                       ", metablocks: %d, isblk: %d, pending: %d.\n", count,
-                       isblk ? lqs->lqs_bwrite_pending : lqs->lqs_iwrite_pending,
-                       qdata[i].qd_count, mb, isblk, *pending);
 
                 /* When cycle is zero, lqs_*_pending will be changed. We will
                  * get reference of the lqs here and put reference of lqs in

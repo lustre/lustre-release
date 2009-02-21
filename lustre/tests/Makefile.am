@@ -4,8 +4,8 @@ AM_CFLAGS = $(LLCFLAGS)
 # LDADD = -lldap
 # LDADD := -lreadline -ltermcap # -lefence
 
-noinst_DATA = disk1_4.zip
-noinst_SCRIPTS = leak_finder.pl llecho.sh llmount.sh llmountcleanup.sh
+noinst_DATA = disk1_8.tar.bz2
+noinst_SCRIPTS = leak_finder.pl llmount.sh llmountcleanup.sh
 noinst_SCRIPTS += test-framework.sh runvmstat runiozone runtests
 noinst_SCRIPTS += sanity.sh rundbench acceptance-small.sh compile.sh
 noinst_SCRIPTS += conf-sanity.sh insanity.sh lfscktest.sh oos.sh oos2.sh
@@ -35,12 +35,12 @@ EXTRA_DIST = $(noinst_SCRIPTS) $(noinst_DATA) \
              $(nobase_noinst_SCRIPTS) $(nobase_noinst_DATA)
 
 if TESTS
-noinst_PROGRAMS = openunlink truncate directio openme writeme mlink utime it_test
-noinst_PROGRAMS += tchmod toexcl fsx test_brw openclose createdestroy sendfile
+noinst_PROGRAMS = openunlink truncate directio writeme mlink utime it_test
+noinst_PROGRAMS += tchmod fsx test_brw sendfile
 noinst_PROGRAMS += createmany chownmany statmany multifstat createtest
-noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany fchdir_test checkstat
-noinst_PROGRAMS += statone runas openfile getdents o_directory rmdirmany
-noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify cmknod
+noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany checkstat
+noinst_PROGRAMS += statone runas openfile rmdirmany
+noinst_PROGRAMS += small_write multiop ll_sparseness_verify
 noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify mkdirmany
 noinst_PROGRAMS += openfilleddirunlink rename_many memhog iopentest1 iopentest2
 noinst_PROGRAMS += mmap_sanity flock_test writemany reads flocks_test
@@ -48,7 +48,7 @@ noinst_PROGRAMS += ll_getstripe_info write_time_limit rwv
 if MPITESTS
 noinst_PROGRAMS += parallel_grouplock write_append_truncate createmany_mpi mdsrate
 endif
-# noinst_PROGRAMS += ldaptest copy_attr mkdirdeep 
+# noinst_PROGRAMS += copy_attr mkdirdeep 
 bin_PROGRAMS = mcreate munlink
 testdir = $(libdir)/lustre/tests
 test_SCRIPTS = $(noinst_SCRIPTS) $(noinst_PROGRAMS)

@@ -108,7 +108,7 @@ init_test_env() {
     fi
     export MDSRATE=${MDSRATE:-"$LUSTRE/tests/mdsrate"}
     [ ! -f "$MDSRATE" ] && export MDSRATE=$(which mdsrate 2> /dev/null)
-    if ! echo $PATH | grep -q $LUSTRE/test/racer; then
+    if ! echo $PATH | grep -q $LUSTRE/tests/racer; then
         export PATH=$PATH:$LUSTRE/tests/racer
     fi
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
@@ -262,7 +262,7 @@ load_modules() {
         load_module cmm/cmm
         load_module osd/osd
         load_module ost/ost
-        load_module obdfilter/obdfilter
+        load_module ofd/ofd
     fi
 
     load_module llite/lustre
@@ -768,16 +768,16 @@ wait_update () {
         local WAIT=0
         local sleep=5
         while [ $WAIT -lt $MAX ]; do
-            sleep $sleep
             RESULT=$(do_node $node "$TEST")
-            if [ $RESULT -eq $FINAL ]; then
-                echo "Updated after $WAIT sec: wanted $FINAL got $RESULT"
+            if [ "$RESULT" == "$FINAL" ]; then
+                echo "Updated after $WAIT sec: wanted '$FINAL' got '$RESULT'"
                 return 0
             fi
-            WAIT=$((WAIT + sleep))
             echo "Waiting $((MAX - WAIT)) secs for update"
+            WAIT=$((WAIT + sleep))
+            sleep $sleep
         done
-        echo "Update not seen after $MAX sec: wanted $FINAL got $RESULT"
+        echo "Update not seen after $MAX sec: wanted '$FINAL' got '$RESULT'"
         return 3
 }
 
@@ -1957,7 +1957,7 @@ run_one() {
     local SAVE_UMASK=`umask`
     umask 0022
 
-    BEFORE=`date +%s`
+    local BEFORE=`date +%s`
     log "== test $testnum: $message ============ `date +%H:%M:%S` ($BEFORE)"
     #check_mds
     export TESTNAME=test_$testnum
@@ -2073,6 +2073,13 @@ remote_ost ()
 remote_ost_nodsh()
 {
     remote_ost && [ "$PDSH" = "no_dsh" -o -z "$PDSH" -o -z "$ost_HOST" ]
+}
+
+remote_mgs_nodsh()
+{
+    local MGS 
+    MGS=$(facet_host mgs)
+    remote_node $MGS && [ "$PDSH" = "no_dsh" -o -z "$PDSH" -o -z "$ost_HOST" ]
 }
 
 mdts_nodes () {
@@ -2349,7 +2356,7 @@ get_stripe_info() {
 # CMD: determine mds index where directory inode presents
 get_mds_dir () {
     local dir=$1
-    local file=$dir/$tfile
+    local file=$dir/f0.get_mds_dir_tmpfile
 
     rm -f $file
     local iused=$(lfs df -i $dir | grep MDT | awk '{print $3}')
@@ -2364,7 +2371,7 @@ get_mds_dir () {
     for ((i=0; i<${#newused[@]}; i++)); do
          if [ ${oldused[$i]} -lt ${newused[$i]} ];  then
              echo $(( i + 1 ))
-             rm -f $dir/$tfile
+             rm -f $file
              return 0
          fi
     done

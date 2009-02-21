@@ -194,6 +194,19 @@ static int osc_io_submit(const struct lu_env *env,
                 /*
                  * Don't keep client_obd_list_lock() for too long.
                  *
+                 * XXX client_obd_list lock has to be unlocked periodically to
+                 * avoid soft-lockups that tend to happen otherwise (see bug
+                 * 16651). On the other hand, osc_io_submit_page() queues a
+                 * page with ASYNC_URGENT flag and so all pages queued up
+                 * until this point are sent out immediately by
+                 * osc_io_unplug() resulting in sub-optimal RPCs (sub-optimal
+                 * RPCs only happen during `warm up' phase when less than
+                 * cl_max_rpcs_in_flight RPCs are in flight). To balance these
+                 * conflicting requirements, one might unplug once enough
+                 * pages to form a large RPC were queued (i.e., use
+                 * cli->cl_max_pages_per_rpc as OSC_QUEUE_GRAIN, see
+                 * lop_makes_rpc()), or ignore soft-lockup issue altogether.
+                 *
                  * XXX lock_need_resched() should be used here, but it is not
                  * available in the older of supported kernels.
                  */
@@ -641,7 +654,7 @@ int osc_req_init(const struct lu_env *env, struct cl_device *dev,
         struct osc_req *or;
         int result;
 
-        OBD_SLAB_ALLOC_PTR(or, osc_req_kmem);
+        OBD_SLAB_ALLOC_PTR_GFP(or, osc_req_kmem, CFS_ALLOC_IO);
         if (or != NULL) {
                 cl_req_slice_add(req, &or->or_cl, dev, &osc_req_ops);
                 result = 0;

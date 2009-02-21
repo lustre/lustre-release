@@ -837,7 +837,8 @@ static int cmr_object_init(const struct lu_env *env, struct lu_object *lo,
 static int cmr_object_print(const struct lu_env *env, void *cookie,
                             lu_printer_t p, const struct lu_object *lo)
 {
-        return (*p)(env, cookie, "[remote]");
+        const struct cmr_object *cro = lu2cmr_obj((struct lu_object *)lo);
+        return (*p)(env, cookie, "[remote](mds_num=%d)", cro->cmo_num);
 }
 
 static const struct lu_object_operations cmr_obj_ops = {

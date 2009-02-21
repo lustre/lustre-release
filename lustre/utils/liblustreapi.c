@@ -1161,6 +1161,10 @@ static int llapi_semantic_traverse(char *path, int size, DIR *parent,
                 if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, ".."))
                         continue;
 
+                /* Don't traverse .lustre directory */
+                if (!(strcmp(dent->d_name, mdd_dot_lustre_name)))
+                        continue;
+
                 path[len] = 0;
                 if ((len + dent->d_reclen + 2) > size) {
                         llapi_err(LLAPI_MSG_ERROR,

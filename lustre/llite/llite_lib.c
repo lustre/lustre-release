@@ -1006,7 +1006,6 @@ void ll_put_super(struct super_block *sb)
         lustre_common_put_super(sb);
 
         cl_env_cache_purge(~0);
-        lu_context_keys_dump();
 
         LCONSOLE_WARN("client %s umount complete\n", ll_instance);
 

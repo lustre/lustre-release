@@ -46,7 +46,6 @@ MCREATE=${MCREATE:-mcreate}
 OPENFILE=${OPENFILE:-openfile}
 OPENUNLINK=${OPENUNLINK:-openunlink}
 READS=${READS:-"reads"}
-TOEXCL=${TOEXCL:-toexcl}
 TRUNCATE=${TRUNCATE:-truncate}
 MUNLINK=${MUNLINK:-munlink}
 SOCKETSERVER=${SOCKETSERVER:-socketserver}
@@ -541,9 +540,12 @@ test_22() {
 run_test 22 "unpack tar archive as non-root user ==============="
 
 test_23() {
-	mkdir $DIR/d23
-	$TOEXCL $DIR/d23/f23
-	$TOEXCL -e $DIR/d23/f23 || error
+	mkdir -p $DIR/$tdir
+	local file=$DIR/$tdir/$tfile
+
+	openfile -f O_CREAT:O_EXCL $file || error "$file create failed"
+	openfile -f O_CREAT:O_EXCL $file &&
+		error "$file recreate succeeded" || true
 }
 run_test 23 "O_CREAT|O_EXCL in subdir =========================="
 
@@ -937,21 +939,28 @@ reset_enospc() {
 }
 
 exhaust_precreations() {
-	OSTIDX=$1
+	local OSTIDX=$1
+	local MDSIDX=$(get_mds_dir "$DIR/d27")
+	echo OSTIDX=$OSTIDX MDSIDX=$MDSIDX
 
-	OST=$(lfs osts | grep ${OSTIDX}": " | \
-	    awk '{print $2}' | sed -e 's/_UUID$//')
+	local OST=$(lfs osts | grep ${OSTIDX}": " | awk '{print $2}' | sed -e 's/_UUID$//')
+	local MDT_INDEX=$(lfs df | grep "\[MDT:$((MDSIDX - 1))\]" | awk '{print $1}' | \
+			  sed -e 's/_UUID$//;s/^.*-//')
+
 	# on the mdt's osc
-	last_id=$(do_facet $SINGLEMDS lctl get_param -n osc.*${OST}-osc-MDT0000.prealloc_last_id)
-	next_id=$(do_facet $SINGLEMDS lctl get_param -n osc.*${OST}-osc-MDT0000.prealloc_next_id)
+	local last_id=$(do_facet mds${MDSIDX} lctl get_param -n osc.*${OST}-osc-${MDT_INDEX}.prealloc_last_id)
+	local next_id=$(do_facet mds${MDSIDX} lctl get_param -n osc.*${OST}-osc-${MDT_INDEX}.prealloc_next_id)
 
-	mkdir -p $DIR/d27/${OST}
-	$SETSTRIPE $DIR/d27/${OST} -i $OSTIDX -c 1
+	echo ${OST}-osc-${MDT_INDEX}.prealloc_last_id=$last_id
+	echo ${OST}-osc-${MDT_INDEX}.prealloc_next_id=$next_id
+
+	mkdir -p $DIR/d27
+	$SETSTRIPE $DIR/d27 -i $OSTIDX -c 1
 #define OBD_FAIL_OST_ENOSPC              0x215
 	do_facet ost$((OSTIDX + 1)) lctl set_param fail_loc=0x215
 	echo "Creating to objid $last_id on ost $OST..."
-	createmany -o $DIR/d27/${OST}/f $next_id $((last_id - next_id + 2))
-	do_facet $SINGLEMDS lctl get_param -n osc.*${OST}-osc-MDT0000.prealloc* | grep '[0-9]'
+	createmany -o $DIR/d27/${OST}-f $next_id $((last_id - next_id + 2))
+	do_facet mds${MDSIDX} lctl get_param osc.*${OST}-osc-${MDT_INDEX}.prealloc* | grep '[0-9]'
 	reset_enospc $2
 }
 
@@ -1133,7 +1142,9 @@ test_27w() { # bug 10997
 }
 run_test 27w "check lfs setstripe -c -s -i options ============="
 
-test_28() {
+# createtest also checks that device nodes are created and 
+# then visible correctly (#2091)
+test_28() { # bug 2091
 	mkdir $DIR/d28
 	$CREATETEST $DIR/d28/ct || error
 }
@@ -1732,9 +1743,15 @@ test_37() {
 run_test 37 "ls a mounted file system to check old content ====="
 
 test_38() {
-	o_directory $DIR/$tfile
+	local file=$DIR/$tfile
+	touch $file
+	openfile -f O_DIRECTORY $file
+	local RC=$?
+	local ENOTDIR=20
+	[ $RC -eq 0 ] && error "opened file $file with O_DIRECTORY" || true
+	[ $RC -eq $ENOTDIR ] || error "error $RC should be ENOTDIR ($ENOTDIR)"
 }
-run_test 38 "open a regular file with O_DIRECTORY =============="
+run_test 38 "open a regular file with O_DIRECTORY should return -ENOTDIR ==="
 
 test_39() {
 	touch $DIR/$tfile
@@ -2061,11 +2078,7 @@ test_46() {
 }
 run_test 46 "dirtying a previously written page ================"
 
-# Check that device nodes are created and then visible correctly (#2091)
-test_47() {
-	cmknod $DIR/test_47_node || error
-}
-run_test 47 "Device nodes check ================================"
+# test_47 is removed "Device nodes check" is moved to test_28 
 
 test_48a() { # bug 2399
 	check_kernel_version 34 || return 0
@@ -2744,29 +2757,33 @@ test_57b() {
 	$GETSTRIPE $FILE1 2>&1 | grep -q "no stripe" || error "$FILE1 has an EA"
 	$GETSTRIPE $FILEN 2>&1 | grep -q "no stripe" || error "$FILEN has an EA"
 
+	sync
+	sleep 1
+	df $dir  #make sure we get new statfs data
 	local MDSFREE=$(do_facet $mymds lctl get_param -n osd.*MDT000$((num -1)).kbytesfree)
-	local MDCFREE=$(lctl get_param -n mdc.*.kbytesfree | head -n 1)
+	local MDCFREE=$(lctl get_param -n mdc.*MDT000$((num -1))-mdc-*.kbytesfree)
 	echo "opening files to create objects/EAs"
 	local FILE
 	for FILE in `seq -f $dir/f%g 1 $FILECOUNT`; do
-		$OPENFILE -f O_RDWR $FILE > /dev/null || error "opening $FILE"
+		$OPENFILE -f O_RDWR $FILE > /dev/null 2>&1 || error "opening $FILE"
 	done
 
 	# verify that files have EAs now
 	$GETSTRIPE $FILE1 | grep -q "obdidx" || error "$FILE1 missing EA"
 	$GETSTRIPE $FILEN | grep -q "obdidx" || error "$FILEN missing EA"
 
-#	sleep 1 # make sure we get new statfs data
-#	local MDSFREE2=$(do_facet $mymds lctl get_param -n osd.*MDT000$((num -1)).kbytesfree)
-#	local MDCFREE2=$(lctl get_param -n mdc.*.kbytesfree)
-#	if [ "$MDCFREE2" -lt "$((MDCFREE - 8))" ]; then
-#		if [ "$MDSFREE" != "$MDSFREE2" ]; then
-#			error "MDC before $MDCFREE != after $MDCFREE2"
-#		else
-#			echo "MDC before $MDCFREE != after $MDCFREE2"
-#			echo "unable to confirm if MDS has large inodes"
-#		fi
-#	fi
+	sleep 1  #make sure we get new statfs data
+	df $dir
+	local MDSFREE2=$(do_facet $mymds lctl get_param -n osd.*MDT000$((num -1)).kbytesfree)
+	local MDCFREE2=$(lctl get_param -n mdc.*MDT000$((num -1))-mdc-*.kbytesfree)
+	if [ "$MDCFREE2" -lt "$((MDCFREE - 8))" ]; then
+		if [ "$MDSFREE" != "$MDSFREE2" ]; then
+			error "MDC before $MDCFREE != after $MDCFREE2"
+		else
+			echo "MDC before $MDCFREE != after $MDCFREE2"
+			echo "unable to confirm if MDS has large inodes"
+		fi
+	fi
 	rm -rf $dir
 }
 run_test 57b "default LOV EAs are stored inside large inodes ==="
@@ -3655,10 +3672,10 @@ run_test 79 "df report consistency check ======================="
 test_80() { # bug 10718
         dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1M
         sync; sleep 1; sync
-        BEFORE=`date +%s`
+        local BEFORE=`date +%s`
         cancel_lru_locks osc
-        AFTER=`date +%s`
-        DIFF=$((AFTER-BEFORE))
+        local AFTER=`date +%s`
+        local DIFF=$((AFTER-BEFORE))
         if [ $DIFF -gt 1 ] ; then
                 error "elapsed for 1M@1T = $DIFF"
         fi
@@ -3919,10 +3936,9 @@ setup_test102() {
 }
 
 cleanup_test102() {
-	[ "$SETUP_TEST102" = "yes" ] || return
 	trap 0
+	[ "$SETUP_TEST102" = "yes" ] || return 0
 	rm -f $TMP/f102.tar
-	rm -rf $DIR/$tdir
 	SETUP_TEST102=no
 }
 
@@ -4171,6 +4187,8 @@ test_102j() {
 	compare_stripe_info1 "$RUNAS"
 }
 run_test 102j "non-root tar restore stripe info from tarfile, not keep osts ==="
+
+cleanup_test102
 
 run_acl_subtest()
 {
@@ -4468,6 +4486,8 @@ test_116() {
 	echo "$MAXC files created on larger OST $MAXI1"
 	[ $MINC -gt 0 ] && echo "Wrote $(($MAXC * 100 / $MINC - 100))% more files to larger OST $MAXI1"
 	[ $MAXC -gt $MINC ] || error_ignore "stripe QOS didn't balance free space"
+
+	rm -rf $DIR/$tdir/OST${MINI}
 }
 run_test 116 "stripe QOS: free space balance ==================="
 
@@ -4498,7 +4518,7 @@ reset_async() {
 	FILE=$DIR/reset_async
 
 	# Ensure all OSCs are cleared
-	$LSTRIPE $FILE 0 -1 -1
+	$LSTRIPE -c -1 $FILE
         dd if=/dev/zero of=$FILE bs=64k count=$OSTCOUNT
 	sync
         rm $FILE
@@ -5884,23 +5904,23 @@ test_151() {
 	$LCTL set_param -n obdfilter.*.writethrough_cache_enable 1
 
 	# pages should be in the case right after write
-        dd if=/dev/urandom of=$DIR/$tfile bs=4k count=$CPAGES || error "dd failed"
-	BEFORE=`roc_hit`
-        cancel_lru_locks osc
+	dd if=/dev/urandom of=$DIR/$tfile bs=4k count=$CPAGES || error "dd failed"
+	local BEFORE=`roc_hit`
+	cancel_lru_locks osc
 	cat $DIR/$tfile >/dev/null
-	AFTER=`roc_hit`
+	local AFTER=`roc_hit`
 	if ! let "AFTER - BEFORE == CPAGES"; then
 		error "NOT IN CACHE: before: $BEFORE, after: $AFTER"
 	fi
 
 	# the following read invalidates the cache
-        cancel_lru_locks osc
+	cancel_lru_locks osc
 	$LCTL set_param -n obdfilter.*.read_cache_enable 0
 	cat $DIR/$tfile >/dev/null
 
 	# now data shouldn't be found in the cache
 	BEFORE=`roc_hit`
-        cancel_lru_locks osc
+	cancel_lru_locks osc
 	cat $DIR/$tfile >/dev/null
 	AFTER=`roc_hit`
 	if let "AFTER - BEFORE != 0"; then
@@ -5908,7 +5928,7 @@ test_151() {
 	fi
 
 	$LCTL set_param -n obdfilter.*.read_cache_enable 1
-        rm -f $DIR/$tfile
+	rm -f $DIR/$tfile
 }
 run_test 151 "test cache on oss and controls ==============================="
 
@@ -6164,27 +6184,24 @@ check_file_in_pool()
 }
 
 test_200a() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 	do_facet mgs $LCTL pool_new $FSNAME.$POOL
-	do_facet mgs $LCTL get_param -n lov.$FSNAME-MDT0000-mdtlov.pools.$POOL
-	[ $? == 0 ] || error "Pool creation of $POOL failed"
+        # get param should return err until pool is created
+        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "" || error "Pool creation of $POOL failed"
 }
 run_test 200a "Create new pool =========================================="
 
 test_200b() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	TGT=$(seq -f $FSNAME-OST%04g_UUID $TGTPOOL_FIRST $TGTPOOL_STEP \
-		$TGTPOOL_MAX | tr '\n' ' ')
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+	TGT=$(for i in `seq $TGTPOOL_FIRST $TGTPOOL_STEP $TGTPOOL_MAX`; do printf "$FSNAME-OST%04x_UUID " $i; done)
 	do_facet mgs $LCTL pool_add $FSNAME.$POOL \
-		$FSNAME-OST[$TGTPOOL_FIRST-$TGTPOOL_MAX/$TGTPOOL_STEP]_UUID
-	res=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-MDT0000-mdtlov.pools.$POOL | sort \
-			| tr '\n' ' ')
-	[ "$res" = "$TGT" ] || error "Pool content ($res) do not match requested ($TGT)"
+		$FSNAME-OST[$TGTPOOL_FIRST-$TGTPOOL_MAX/$TGTPOOL_STEP]
+	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | sort -u | tr '\n' ' ' " "$TGT" || error "Add to pool failed"
 }
 run_test 200b "Add targets to a pool ===================================="
 
 test_200c() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 	mkdir -p $POOL_DIR
 	$SETSTRIPE -c 2 -p $POOL $POOL_DIR
 	[ $? = 0 ] || error "Cannot set pool $POOL to $POOL_DIR"
@@ -6192,14 +6209,14 @@ test_200c() {
 run_test 200c "Set pool on a directory ================================="
 
 test_200d() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 	res=$($GETSTRIPE $POOL_DIR | grep pool: | cut -f8 -d " ")
 	[ "$res" = $POOL ] || error "Pool on $POOL_DIR is not $POOL"
 }
 run_test 200d "Check pool on a directory ==============================="
 
 test_200e() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 	failed=0
 	for i in $(seq -w 1 $(($TGT_COUNT * 3)))
 	do
@@ -6216,7 +6233,7 @@ test_200e() {
 run_test 200e "Check files allocation from directory pool =============="
 
 test_200f() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 	mkdir -p $POOL_FILE
 	failed=0
 	for i in $(seq -w 1 $(($TGT_COUNT * 3)))
@@ -6234,30 +6251,30 @@ test_200f() {
 run_test 200f "Create files in a pool ==================================="
 
 test_200g() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	TGT=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-MDT0000-mdtlov.pools.$POOL | head -1)
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+	TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
 	do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
-	res=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-MDT0000-mdtlov.pools.$POOL | grep $TGT)
-	[ "$res" = "" ] || error "$TGT not removed from $FSNAME.$POOL"
+	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | grep $TGT" "" || error "$TGT not removed from $FSNAME.$POOL"
 }
 run_test 200g "Remove a target from a pool ============================="
 
 test_200h() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	for TGT in $(do_facet mgs $LCTL get_param -n lov.$FSNAME-MDT0000-mdtlov.pools.$POOL)
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+	for TGT in $($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | sort -u)
 	do
 		do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
  	done
-	res=$(do_facet mgs $LCTL get_param -n lov.$FSNAME-MDT0000-mdtlov.pools.$POOL)
-	[ "$res" = "" ] || error "Pool $FSNAME.$POOL cannot be drained"
+	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL" ""\
+	    || error "Pool $FSNAME.$POOL cannot be drained"
 }
 run_test 200h "Remove all targets from a pool =========================="
 
 test_200i() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 	do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
-	res=$(do_facet mgs "$LCTL get_param -n lov.$FSNAME-MDT0000-mdtlov.pools.$POOL 2>/dev/null")
-	[ "$res" = "" ] || error "Pool $FSNAME.$POOL is not destroyed"
+	# get param should return err once pool is gone
+	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "foo" && return 0
+	error "Pool $FSNAME.$POOL is not destroyed"
 }
 run_test 200i "Remove a pool ============================================"
 

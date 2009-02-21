@@ -851,29 +851,15 @@ static void lprocfs_cmm_init_vars(struct lprocfs_static_vars *lvars)
 static int __init cmm_mod_init(void)
 {
         struct lprocfs_static_vars lvars;
-        int rc;
-
-        /* 
-         * Kludge code : it should be moved mdc_device.c if mdc_(mds)_device
-         * is really stacked.
-         */
-        rc = lu_device_type_init(&mdc_device_type);
-        if (rc)
-                return rc;
 
         lprocfs_cmm_init_vars(&lvars);
-        rc = class_register_type(&cmm_obd_device_ops, NULL, lvars.module_vars,
-                                 LUSTRE_CMM_NAME, &cmm_device_type);
-        if (rc)
-                lu_device_type_fini(&mdc_device_type);
-
-        return rc;
+        return class_register_type(&cmm_obd_device_ops, NULL, lvars.module_vars,
+                                   LUSTRE_CMM_NAME, &cmm_device_type);
 }
 
 static void __exit cmm_mod_exit(void)
 {
         class_unregister_type(LUSTRE_CMM_NAME);
-        lu_device_type_fini(&mdc_device_type);
 }
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");

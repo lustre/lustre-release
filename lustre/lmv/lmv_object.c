@@ -78,8 +78,7 @@ struct lmv_object *lmv_object_alloc(struct obd_device *obd,
                 || mea->mea_magic == MEA_MAGIC_ALL_CHARS
                 || mea->mea_magic == MEA_MAGIC_HASH_SEGMENT);
 
-        OBD_SLAB_ALLOC(obj, lmv_object_cache, CFS_ALLOC_STD,
-                       sizeof(*obj));
+        OBD_SLAB_ALLOC_PTR(obj, lmv_object_cache);
         if (!obj)
                 return NULL;
 

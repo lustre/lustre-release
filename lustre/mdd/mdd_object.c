@@ -304,7 +304,11 @@ static void mdd_object_free(const struct lu_env *env, struct lu_object *o)
 static int mdd_object_print(const struct lu_env *env, void *cookie,
                             lu_printer_t p, const struct lu_object *o)
 {
-        return (*p)(env, cookie, LUSTRE_MDD_NAME"-object@%p", o);
+        struct mdd_object *mdd = lu2mdd_obj((struct lu_object *)o);
+        return (*p)(env, cookie, LUSTRE_MDD_NAME"-object@%p(open_count=%d, "
+                    "valid=%x, cltime=%llu, flags=%lx",
+                    mdd, mdd->mod_count, mdd->mod_valid,
+                    mdd->mod_cltime, mdd->mod_flags);
 }
 
 static const struct lu_object_operations mdd_lu_obj_ops = {
@@ -2241,8 +2245,8 @@ static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
         return rc;
 }
 
-static int mdd_readpage(const struct lu_env *env, struct md_object *obj,
-                        const struct lu_rdpg *rdpg)
+int mdd_readpage(const struct lu_env *env, struct md_object *obj,
+                 const struct lu_rdpg *rdpg)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         int rc;

@@ -1684,9 +1684,6 @@ int server_name2index(char *svname, __u32 *idx, char **endptr)
         if (!dash)
                 return(-EINVAL);
 
-        if (dash == svname) /* svname started w/ a `-' and only has one `-' */
-                return(-EINVAL);
-
         /* intepret <fsname>-MDTXXXXX-mdc as mdt, the better way is to pass
          * in the fsname, then determine the server index */
         if (!strcmp(LUSTRE_MDC_NAME, dash + 1)) {

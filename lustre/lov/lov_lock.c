@@ -144,7 +144,7 @@ static struct cl_lock *lov_sublock_alloc(const struct lu_env *env,
         LASSERT(idx < lck->lls_nr);
         ENTRY;
 
-        OBD_SLAB_ALLOC_PTR(link, lov_lock_link_kmem);
+        OBD_SLAB_ALLOC_PTR_GFP(link, lov_lock_link_kmem, CFS_ALLOC_IO);
         if (link != NULL) {
                 struct lov_sublock_env *subenv;
                 struct lov_lock_sub  *lls;
@@ -330,6 +330,7 @@ static int lov_lock_sub_init(const struct lu_env *env,
                         descr->cld_start = cl_index(descr->cld_obj, start);
                         descr->cld_end   = cl_index(descr->cld_obj, end);
                         descr->cld_mode  = parent->cll_descr.cld_mode;
+                        /* XXX has no effect */
                         lck->lls_sub[nr].sub_got = *descr;
                         lck->lls_sub[nr].sub_stripe = stripe;
                         nr++;
@@ -1024,7 +1025,7 @@ int lov_lock_init_raid0(const struct lu_env *env, struct cl_object *obj,
         int result;
 
         ENTRY;
-        OBD_SLAB_ALLOC_PTR(lck, lov_lock_kmem);
+        OBD_SLAB_ALLOC_PTR_GFP(lck, lov_lock_kmem, CFS_ALLOC_IO);
         if (lck != NULL) {
                 cl_lock_slice_add(lock, &lck->lls_cl, obj, &lov_lock_ops);
                 result = lov_lock_sub_init(env, lck, io);

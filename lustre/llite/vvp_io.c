@@ -377,7 +377,7 @@ static int vvp_io_trunc_start(const struct lu_env *env,
                          * Wait for the transfer completion for a partially
                          * truncated page to avoid dead-locking an OST with
                          * the concurrent page-wise overlapping WRITE and
-                         * PUNCH requests.
+                         * PUNCH requests. BUG:17397.
                          *
                          * Partial page is disowned in vvp_io_trunc_end().
                          */

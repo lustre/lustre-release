@@ -592,14 +592,6 @@ AC_DEFUN([LC_LUSTRE_VERSION_H],
 ])
 ])
 
-AC_DEFUN([LC_FUNC_SET_FS_PWD],
-[LB_CHECK_SYMBOL_EXPORT([set_fs_pwd],
-[fs/namespace.c],[
-        AC_DEFINE(HAVE_SET_FS_PWD, 1, [set_fs_pwd is exported])
-],[
-])
-])
-
 #
 # LC_CAPA_CRYPTO
 #
@@ -966,6 +958,23 @@ LB_LINUX_TRY_COMPILE([
 	AC_MSG_RESULT(no)
 ])
 EXTRA_KCFLAGS="$tmp_flags"
+])
+
+# inode have i_private field since 2.6.17
+AC_DEFUN([LC_INODE_IPRIVATE],
+[AC_MSG_CHECKING([if inode has a i_private field])
+LB_LINUX_TRY_COMPILE([
+#include <linux/fs.h>
+],[
+	struct inode i;
+	i.i_private = NULL; 
+],[
+	AC_MSG_RESULT(yes)
+	AC_DEFINE(HAVE_INODE_IPRIVATE, 1,
+		[struct inode has i_private field])
+],[
+	AC_MSG_RESULT(no)
+])
 ])
 
 # 2.6.19 API changes
@@ -1512,7 +1521,6 @@ AC_DEFUN([LC_PROG_LINUX],
 
          LC_STRUCT_INTENT_FILE
 
-         LC_FUNC_SET_FS_PWD
          LC_CAPA_CRYPTO
          LC_CONFIG_RMTCLIENT
          LC_CONFIG_GSS
@@ -1542,6 +1550,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_SECURITY_PLUG  # for SLES10 SP2
 
          # 2.6.17
+         LC_INODE_IPRIVATE
          LC_DQUOTOFF_MUTEX
 
          # 2.6.18
@@ -2001,6 +2010,7 @@ AM_CONDITIONAL(LIBLUSTRE_TESTS, test x$enable_liblustre_tests = xyes)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
+AM_CONDITIONAL(DMU, test x$with_dmu = xyes)
 AM_CONDITIONAL(QUOTA, test x$enable_quota_module = xyes)
 AM_CONDITIONAL(SPLIT, test x$enable_split = xyes)
 AM_CONDITIONAL(BLKID, test x$ac_cv_header_blkid_blkid_h = xyes)
@@ -2064,14 +2074,16 @@ lustre/obdclass/autoMakefile
 lustre/obdclass/linux/Makefile
 lustre/obdecho/Makefile
 lustre/obdecho/autoMakefile
-lustre/obdfilter/Makefile
-lustre/obdfilter/autoMakefile
+lustre/ofd/Makefile
+lustre/ofd/autoMakefile
 lustre/osc/Makefile
 lustre/osc/autoMakefile
 lustre/ost/Makefile
 lustre/ost/autoMakefile
 lustre/osd/Makefile
 lustre/osd/autoMakefile
+lustre/dmu-osd/Makefile
+lustre/dmu-osd/autoMakefile
 lustre/mgc/Makefile
 lustre/mgc/autoMakefile
 lustre/mgs/Makefile

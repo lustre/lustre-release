@@ -62,8 +62,9 @@ int dump_ioo(struct obd_ioobj *ioo)
 
 int dump_lniobuf(struct niobuf_local *nb)
 {
-        CERROR("niobuf_local: offset="LPD64", len=%d, page=%p, rc=%d\n",
-               nb->offset, nb->len, nb->page, nb->rc);
+        CERROR("niobuf_local: offset="LPD64"/%u, len=%d, page=%p, rc=%d\n",
+               nb->file_offset, (unsigned)nb->page_offset, nb->len, nb->page,
+               nb->rc);
         CERROR("nb->page: index = %ld\n", nb->page ? cfs_page_index(nb->page) : -1);
 
         return -EINVAL;

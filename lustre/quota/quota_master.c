@@ -141,7 +141,7 @@ static struct lustre_dquot *alloc_dquot(struct lustre_quota_info *lqi,
         struct lustre_dquot *dquot = NULL;
         ENTRY;
 
-        OBD_SLAB_ALLOC(dquot, lustre_dquot_cachep, CFS_ALLOC_IO, sizeof(*dquot));
+        OBD_SLAB_ALLOC_PTR_GFP(dquot, lustre_dquot_cachep, CFS_ALLOC_IO);
         if (dquot == NULL)
                 RETURN(NULL);
 
