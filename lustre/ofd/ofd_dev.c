@@ -701,6 +701,8 @@ err_free_site:
 
 static void filter_fini(const struct lu_env *env, struct filter_device *m)
 {
+        LBUG();
+#if 0
         struct filter_obd *filter = &obd->u.filter;
         ENTRY;
 
@@ -742,6 +744,7 @@ static void filter_fini(const struct lu_env *env, struct filter_device *m)
         LCONSOLE_INFO("OST %s has stopped.\n", obd->obd_name);
 
         RETURN(0);
+#endif
 }
 
 static struct lu_device* filter_device_fini(const struct lu_env *env,
