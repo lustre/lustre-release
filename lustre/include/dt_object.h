@@ -73,6 +73,8 @@ struct dt_device_param {
         unsigned           ddp_max_name_len;
         unsigned           ddp_max_nlink;
         unsigned           ddp_block_shift;
+        void              *ddp_mnt; /* XXX: old code can retrieve mnt -bzzz */
+        int                ddp_mount_type;
 };
 
 /**
@@ -138,6 +140,16 @@ struct dt_device_operations {
         void (*dt_init_quota_ctxt)(const struct lu_env *env,
                                    struct dt_device *dev,
                                    struct dt_quota_ctxt *ctxt, void *data);
+
+        /**
+         * Get disk label
+         */
+        char *(*dt_get_label)(const struct lu_env *env, struct dt_device *dev);
+
+        /**
+         * Set disk label
+         */
+        int   (*dt_set_label)(const struct lu_env *, struct dt_device *, char *);
 };
 
 struct dt_index_features {
