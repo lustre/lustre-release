@@ -83,6 +83,7 @@ int ldiskfsfs_dirhash(const char *name, int len, struct ldiskfs_dx_hash_info *hi
 #ifdef __KERNEL__
 void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid);
 void obdo_from_la(struct obdo *dst, struct lu_attr *la, obd_flag valid);
+void la_from_obdo(struct lu_attr *la, struct obdo *dst, obd_flag valid);
 void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 #endif

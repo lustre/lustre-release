@@ -1,0 +1,21 @@
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
+if LUSTRE_UOSS
+noinst_LIBRARIES = libofd.a
+libofd_a_SOURCES = ofd_clients.c ofd_recovery.c ofd_fs.c \
+                   ofd_objects.c ofd_llog.c ofd.c ofd_capa.c \
+                   ofd_lvb.c ofd_io.c ofd_obd.c ofd_grant.c ofd_fmd.c
+
+libofd_a_CPPFLAGS = $(LLCPPFLAGS) -DLUSTRE_VERSION=\"32\" -DBUILD_VERSION=\"1\"
+libofd_a_CFLAGS = $(LLCFLAGS)
+endif
+
+if MODULES
+modulefs_DATA = ofd$(KMODEXT)
+endif
+
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
+DIST_SOURCES = $(ofd-objs:%.o=%.c) ofd_internal.h
