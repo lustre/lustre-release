@@ -1,11 +1,12 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/osd/osd_internal.h
- *  Shared definitions and declarations for osd module
+ *  lustre/dmu/udmu.c
+ *  Module that interacts with the ZFS DMU and provides an abstraction
+ *  to the rest of Lustre.
  *
- *  Copyright (c) 2006 Cluster File Systems, Inc.
- *   Author: Nikita Danilov <nikita@clusterfs.com>
+ *  Copyright (c) 2007 Cluster File Systems, Inc.
+ *   Author: Manoj Joseph <manoj.joseph@sun.com>
  *
  *   This file is part of the Lustre file system, http://www.lustre.org
  *   Lustre is a trademark of Cluster File Systems, Inc.
@@ -26,32 +27,33 @@
  *   license text for more details.
  */
 
-#ifndef _OSD_INTERNAL_H
-#define _OSD_INTERNAL_H
+#ifndef _DMU_UTIL_H
+#define _DMU_UTIL_H
 
-#include <dt_object.h>
+#ifdef DMU_OSD
 
-struct inode;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-#define OSD_COUNTERS (0)
-#define DMU_RESERVED_MIN (1<<20)
-#define DMU_RESERVED_MAX (64ULL * DMU_RESERVED_MIN)
+int udmu_util_lookup(udmu_objset_t *uos, dmu_buf_t *parent_db,
+                     const char *name, dmu_buf_t **new_dbp, void *tag);
 
-struct osd_thread_info {
-        const struct lu_env   *oti_env;
+int udmu_util_create(udmu_objset_t *uos, dmu_buf_t *parent_db,
+                     const char *name, dmu_buf_t **new_db, void *tag);
 
-        struct lu_fid          oti_fid;
-        /*
-         * XXX temporary: for ->i_op calls.
-         */
-        struct timespec        oti_time;
-        /*
-         * XXX temporary: for capa operations.
-         */
-        struct lustre_capa_key oti_capa_key;
-        struct lustre_capa     oti_capa;
+int udmu_util_mkdir(udmu_objset_t *uos, dmu_buf_t *parent_db,
+                    const char *name, dmu_buf_t **new_db, void *tag);
 
-        struct lu_fid_pack     oti_pack;
-};
+int udmu_util_setattr(udmu_objset_t *uos, dmu_buf_t *db, vnattr_t *va);
 
-#endif /* _OSD_INTERNAL_H */
+int udmu_util_write(udmu_objset_t *uos, dmu_buf_t *db,
+                    uint64_t offset, uint64_t len, void *buf);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* DMU_OSD */
+
+#endif /* _DMU_UTIL_H */

@@ -8,7 +8,8 @@ subdir-m += obdecho
 subdir-m += mgc
 subdir-m += quota
 
-@SERVER_TRUE@subdir-m += mds obdfilter ost mgs mdt cmm mdd osd
+@SERVER_TRUE@subdir-m += mds ofd ost mgs mdt cmm mdd osd #obdfilter
 @CLIENT_TRUE@subdir-m += mdc lmv llite fld
+@KDMU_TRUE@subdir-m += dmu-osd
 
 @INCLUDE_RULES@
