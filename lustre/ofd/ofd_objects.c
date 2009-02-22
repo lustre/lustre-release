@@ -164,9 +164,9 @@ int filter_object_punch(const struct lu_env *env, struct filter_object *fo,
         filter_fmd_put(info->fti_exp, fmd);
 
         la_from_obdo(&attr, oa, OBD_MD_FLMTIME | OBD_MD_FLATIME | OBD_MD_FLCTIME);
-        CERROR("attr=%llu\n", oa->o_valid);
         attr.la_size = start;
         attr.la_valid |= LA_SIZE;
+        attr.la_valid &= ~LA_TYPE;
 
         th = filter_trans_create(env, ofd);
         if (IS_ERR(th))

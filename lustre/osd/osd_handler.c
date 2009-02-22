@@ -275,7 +275,7 @@ osd_pop_ctxt(struct osd_ctxt *save)
 
 static struct super_block *osd_sb(const struct osd_device *dev)
 {
-        return dev->od_mount->lmi_mnt->mnt_sb;
+        return dev->od_mnt->mnt_sb;
 }
 
 static journal_t *osd_journal(const struct osd_device *dev)
@@ -616,6 +616,9 @@ static void osd_conf_get(const struct lu_env *env,
         param->ddp_max_name_len  = LDISKFS_NAME_LEN;
         param->ddp_max_nlink     = LDISKFS_LINK_MAX;
         param->ddp_block_shift   = osd_sb(osd_dt_dev(dev))->s_blocksize_bits;
+        /* XXX: remove when new llog/mountconf over osd are ready -bzzz */
+        param->ddp_mnt           = osd_dt_dev(dev)->od_mnt;
+        param->ddp_mount_type    = LDD_MT_LDISKFS;
 }
 
 /**
@@ -918,7 +921,7 @@ static void osd_init_quota_ctxt(const struct lu_env *env, struct dt_device *d,
                                struct dt_quota_ctxt *ctxt, void *data)
 {
         struct obd_device *obd = (void *)ctxt;
-        struct vfsmount *mnt = (struct vfsmount *)data;
+        struct vfsmount *mnt = osd_dt_dev(d)->od_mnt;
         ENTRY;
 
         obd->u.obt.obt_sb = mnt->mnt_root->d_inode->i_sb;
@@ -3595,12 +3598,15 @@ static int osd_device_init(const struct lu_env *env, struct lu_device *d,
 {
         int rc;
         struct lu_context *ctx;
+        struct osd_device *osd = osd_dev(d);
 
         /* context for commit hooks */
-        ctx = &osd_dev(d)->od_env_for_commit.le_ctx;
+        ctx = &osd->od_env_for_commit.le_ctx;
         rc = lu_context_init(ctx, LCT_MD_THREAD|LCT_DT_THREAD|LCT_REMEMBER|LCT_NOREF);
         if (rc == 0) {
-                rc = osd_procfs_init(osd_dev(d), name);
+                /* XXX: somehow pass device name here */
+                if (name)
+                        rc = osd_procfs_init(osd_dev(d), name);
                 ctx->lc_cookie = 0x3;
         }
         return rc;
@@ -3627,41 +3633,47 @@ static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 static int osd_mount(const struct lu_env *env,
                      struct osd_device *o, struct lustre_cfg *cfg)
 {
-        struct lustre_mount_info *lmi;
-        const char               *dev  = lustre_cfg_string(cfg, 0);
-        struct lustre_disk_data  *ldd;
-        struct lustre_sb_info    *lsi;
+        const char               *dev = lustre_cfg_string(cfg, 0);
+        const char               *opts;
+        unsigned long             page, s_flags, ldd_flags;
+        struct page              *__page;
+        char                     *options = NULL;
 
         ENTRY;
 
-        if (o->od_mount != NULL) {
-                CERROR("Already mounted (%s)\n", dev);
-                RETURN(-EEXIST);
-        }
+        if (o->od_mnt != NULL)
+                RETURN(0);
+        
+        OBD_PAGE_ALLOC(__page, CFS_ALLOC_STD);
+        if (__page == NULL)
+                RETURN(-ENOMEM);
 
-        /* get mount */
-        lmi = server_get_mount(dev);
-        if (lmi == NULL) {
-                CERROR("Cannot get mount info for %s!\n", dev);
-                RETURN(-EFAULT);
-        }
+        s_flags = (unsigned long) lustre_cfg_buf(cfg, 1);
+        opts = lustre_cfg_string(cfg, 2);
+        ldd_flags = (unsigned long) lustre_cfg_buf(cfg, 3);
 
-        LASSERT(lmi != NULL);
-        /* save lustre_mount_info in dt_device */
-        o->od_mount = lmi;
+        page = (unsigned long)cfs_page_address(__page);
+        options = (char *)page;
+        memset(options, 0, CFS_PAGE_SIZE);
+        if (opts == NULL)
+                strcat(options, "user_xattr,acl,iopen_nopriv");
+        else
+                strcat(options, opts);
 
-        lsi = s2lsi(lmi->lmi_sb);
-        ldd = lsi->lsi_ldd;
+        o->od_mnt = ll_kern_mount("ldiskfs", s_flags, dev, (void *)options);
+        /* XXX: error handling */
+        LASSERTF(!IS_ERR(o->od_mnt), "%ld\n", PTR_ERR(o->od_mnt));
 
-        o->od_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
+        o->od_fsops = fsfilt_get_ops(mt_str(LDD_MT_LDISKFS));
         LASSERT(o->od_fsops);
 
-        if (ldd->ldd_flags & LDD_F_IAM_DIR) {
+        if (ldd_flags & LDD_F_IAM_DIR) {
                 o->od_iop_mode = 0;
                 LCONSOLE_WARN("OSD: IAM mode enabled\n");
         } else
                 o->od_iop_mode = 1;
 
+        OBD_PAGE_FREE(__page);
         o->od_obj_area = NULL;
 
         RETURN(0);
@@ -3682,10 +3694,17 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
                 RETURN (ERR_PTR(rc));
         }
 
+        if (osd_dev(d)->od_mnt) {
+                mntput(osd_dev(d)->od_mnt);
+                osd_dev(d)->od_mnt = NULL;
+        }
+
+#if 0
         if (osd_dev(d)->od_mount)
                 server_put_mount(osd_dev(d)->od_mount->lmi_name,
                                  osd_dev(d)->od_mount->lmi_mnt);
         osd_dev(d)->od_mount = NULL;
+#endif
 
         lu_context_fini(&osd_dev(d)->od_env_for_commit.le_ctx);
         RETURN(NULL);
@@ -3714,6 +3733,7 @@ static struct lu_device *osd_device_alloc(const struct lu_env *env,
                                 dt_device_fini(&o->od_dt_dev);
                                 l = ERR_PTR(-ENOMEM);
                         }
+                        o->od_iop_mode = 1;
                 } else
                         l = ERR_PTR(result);
 
@@ -3775,9 +3795,6 @@ static int osd_prepare(const struct lu_env *env,
                        struct lu_device *dev)
 {
         struct osd_device *osd = osd_dev(dev);
-        struct lustre_sb_info *lsi;
-        struct lustre_disk_data *ldd;
-        struct lustre_mount_info  *lmi;
         struct osd_thread_info *oti = osd_oti_get(env);
         struct dt_object *d;
         int result;
@@ -3787,10 +3804,6 @@ static int osd_prepare(const struct lu_env *env,
         result = osd_oi_init(oti, &osd->od_oi, osd);
         if (result != 0)
                 RETURN(result);
-
-        lmi = osd->od_mount;
-        lsi = s2lsi(lmi->lmi_sb);
-        ldd = lsi->lsi_ldd;
 
         if (lu_device_is_md(pdev)) {
                 /* 2. setup local objects */

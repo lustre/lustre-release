@@ -379,6 +379,7 @@ struct lu_object_operations filter_obj_ops = {
         .loo_object_print   = filter_object_print
 };
 
+#if 0
 static struct lu_device *filter_layer_setup(const struct lu_env *env,
                                          const char *typename,
                                          struct lu_device *child,
@@ -446,9 +447,11 @@ out_type:
 out:
         return ERR_PTR(rc);
 }
+#endif
 
 int filter_stack_init(const struct lu_env *env,
-                          struct filter_device *m, struct lustre_cfg *cfg)
+                          struct filter_device *m, struct lustre_cfg *cfg,
+                          struct lustre_mount_info  *lmi)
 {
         struct lu_device  *d = &m->ofd_dt_dev.dd_lu_dev;
         struct lu_device  *tmp;
@@ -456,10 +459,10 @@ int filter_stack_init(const struct lu_env *env,
         ENTRY;
 
         /* init the stack */
-        tmp = filter_layer_setup(env, LUSTRE_OSD_NAME, d, cfg);
-        if (IS_ERR(tmp)) {
-                RETURN(PTR_ERR(tmp));
-        }
+        tmp = &lmi->lmi_dt->dd_lu_dev;
+        LASSERT(tmp);
+        tmp->ld_site = d->ld_site;
+
         m->ofd_osd = lu2dt_dev(tmp);
 
         /* process setup config */
@@ -573,7 +576,7 @@ static int filter_init0(const struct lu_env *env, struct filter_device *m,
                         struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
         const char *dev = lustre_cfg_string(cfg, 0);
-        struct filter_thread_info *info;
+        struct filter_thread_info *info = NULL;
         struct filter_obd *filter;
         struct lustre_mount_info *lmi;
         struct obd_device *obd;
@@ -660,7 +663,7 @@ static int filter_init0(const struct lu_env *env, struct filter_device *m,
         }
 
         /* init the stack */
-        rc = filter_stack_init(env, m, cfg);
+        rc = filter_stack_init(env, m, cfg, lmi);
         if (rc) {
                 CERROR("Can't init device stack, rc %d\n", rc);
                 GOTO(err_fini_proc, rc);

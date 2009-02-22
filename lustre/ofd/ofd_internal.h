@@ -299,9 +299,11 @@ struct filter_thread_info * filter_info_init(const struct lu_env *env,
 
         info = lu_context_key_get(&env->le_ctx, &filter_thread_key);
         LASSERT(info);
+#if 0
         LASSERT(info->fti_exp == 0);
         LASSERT(info->fti_env == 0);
         LASSERT(info->fti_attr.la_valid == 0);
+#endif
 
         info->fti_env = env;
         info->fti_exp = exp;

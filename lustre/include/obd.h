@@ -454,6 +454,7 @@ struct client_obd {
         /* mgc datastruct */
         struct semaphore         cl_mgc_sem;
         struct vfsmount         *cl_mgc_vfsmnt;
+        struct dt_device        *cl_mgc_dt_dev;
         struct dentry           *cl_mgc_configs_dir;
         atomic_t                 cl_mgc_refcount;
         struct obd_export       *cl_mgc_mgsexp;
@@ -765,6 +766,7 @@ struct niobuf_local {
 #define LUSTRE_LMV_NAME         "lmv"
 #define LUSTRE_CMM_MDC_NAME     "cmm-mdc"
 #define LUSTRE_SLP_NAME         "slp"
+#define LUSTRE_DMU_NAME         "dmu"
 
 /* obd device type names */
  /* FIXME all the references to LUSTRE_MDS_NAME should be swapped with LUSTRE_MDT_NAME */
@@ -777,6 +779,7 @@ struct niobuf_local {
 #define LUSTRE_LOV_NAME         "lov"
 #define LUSTRE_MGS_NAME         "mgs"
 #define LUSTRE_MGC_NAME         "mgc"
+#define LUSTRE_MCF_NAME         "mountconf"
 
 #define LUSTRE_CACHEOBD_NAME    "cobd"
 #define LUSTRE_ECHO_NAME        "obdecho"

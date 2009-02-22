@@ -338,6 +338,7 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         struct vfsmount *mnt;
         struct lustre_sb_info *lsi;
         struct lustre_mount_info *lmi;
+        struct dt_device_param dt_param;
         struct dentry  *dentry;
         int rc = 0;
         ENTRY;
@@ -355,13 +356,17 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         LASSERT(lmi != NULL);
 
         lsi = s2lsi(lmi->lmi_sb);
-        mnt = lmi->lmi_mnt;
+        lmi->lmi_dt->dd_ops->dt_conf_get(NULL, lmi->lmi_dt, &dt_param);
+        mnt = dt_param.ddp_mnt;
+        LASSERT(mnt);
+
         /* FIXME: MDD LOV initialize objects.
          * we need only lmi here but not get mount
          * OSD did mount already, so put mount back
          */
         atomic_dec(&lsi->lsi_mounts);
-        mntput(mnt);
+        /* XXX: fix mntput/mntget */
+        //mntput(mnt);
         init_rwsem(&mds->mds_notify_lock);
 
         obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));

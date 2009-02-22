@@ -185,6 +185,7 @@ int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 RETURN(rc);
 
         mgs->mgs_vfsmnt = mnt;
+        mntget(mnt);
         mgs->mgs_sb = mnt->mnt_root->d_inode->i_sb;
 
         fsfilt_setup(obd, mgs->mgs_sb);
@@ -224,6 +225,8 @@ int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         }
 
 err_pop:
+        if (rc)
+                mntput(mnt);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         return rc;
 err_fid:
@@ -256,6 +259,9 @@ int mgs_fs_cleanup(struct obd_device *obd)
         dput(mgs->mgs_fid_de);
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+        if (mgs->mgs_vfsmnt)
+                mntput(mgs->mgs_vfsmnt);
 
         return rc;
 }

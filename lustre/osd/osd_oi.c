@@ -82,7 +82,7 @@ struct oi_descr {
 
 static struct super_block *osd_sb(const struct osd_device *dev)
 {
-        return dev->od_mount->lmi_mnt->mnt_sb;
+        return dev->od_mnt->mnt_sb;
 }
 
 static journal_t *osd_journal(const struct osd_device *dev)

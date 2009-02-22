@@ -89,6 +89,7 @@ enum ldd_mount_type {
         LDD_MT_SMFS,
         LDD_MT_REISERFS,
         LDD_MT_LDISKFS2,
+        LDD_MT_DMU,
         LDD_MT_LAST
 };
 
@@ -99,7 +100,8 @@ static inline char *mt_str(enum ldd_mount_type mt)
                 "ldiskfs",
                 "smfs",
                 "reiserfs",
-                "ldiskfs2"
+                "ldiskfs2",
+                "dmu"
         };
         return mount_type_string[mt];
 }
@@ -177,6 +179,8 @@ struct lustre_mount_data {
         char      *lmd_opts;          /* lustre mount options (as opposed to
                                          _device_ mount options) */
         __u32     *lmd_exclude;       /* array of OSTs to ignore */
+        char      *lmd_mgs;           /* MGS nid */
+        char      *lmd_fsname;        /* fs name for first mount */
 };
 
 #define LMD_FLG_SERVER       0x0001  /* Mounting a server */
@@ -284,7 +288,7 @@ struct lustre_sb_info {
         struct lustre_mount_data *lsi_lmd;     /* mount command info */
         struct lustre_disk_data  *lsi_ldd;     /* mount info on-disk */
         struct ll_sb_info        *lsi_llsbi;   /* add'l client sbi info */
-        struct vfsmount          *lsi_srv_mnt; /* the one server mount */
+        struct dt_device         *lsi_dt_dev; /* dt device to access disk fs*/
         atomic_t                  lsi_mounts;  /* references to the srv_mnt */
 };
 
@@ -304,7 +308,7 @@ struct lustre_sb_info {
 struct lustre_mount_info {
         char               *lmi_name;
         struct super_block *lmi_sb;
-        struct vfsmount    *lmi_mnt;
+        struct dt_device   *lmi_dt;
         struct list_head    lmi_list_chain;
 };
 
@@ -325,8 +329,8 @@ int lustre_end_log(struct super_block *sb, char *logname,
                        struct config_llog_instance *cfg);
 struct lustre_mount_info *server_get_mount(const char *name);
 struct lustre_mount_info *server_get_mount_2(const char *name);
-int server_put_mount(const char *name, struct vfsmount *mnt);
-int server_put_mount_2(const char *name, struct vfsmount *mnt);
+int server_put_mount(const char *name, struct dt_device *dt);
+int server_put_mount_2(const char *name, struct dt_device *dt);
 int server_register_target(struct super_block *sb);
 struct mgs_target_info;
 int server_mti_print(char *title, struct mgs_target_info *mti);

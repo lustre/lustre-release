@@ -179,7 +179,8 @@ struct osd_device {
         /* super-class */
         struct dt_device          od_dt_dev;
         /* information about underlying file system */
-        struct lustre_mount_info *od_mount;
+        //struct lustre_mount_info *od_mount;
+        struct vfsmount          *od_mnt;
         /* object index */
         struct osd_oi             od_oi;
         /*

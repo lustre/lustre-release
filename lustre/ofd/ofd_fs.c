@@ -48,9 +48,6 @@ void filter_last_id_set(struct filter_device *ofd, obd_id id, obd_gr group)
         spin_lock(&ofd->ofd_objid_lock);
         if (ofd->ofd_last_objids[group] < id)
                 ofd->ofd_last_objids[group] = id;
-        else
-                CWARN("Group ID "LPU64" is greater then new one "LPU64"!\n",
-                      ofd->ofd_last_objids[group], id);
         spin_unlock(&ofd->ofd_objid_lock);
 }
 
