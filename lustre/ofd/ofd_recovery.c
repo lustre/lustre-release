@@ -28,13 +28,24 @@
 
 #include "ofd_internal.h"
 
+struct thandle *filter_trans_create0(const struct lu_env *env,
+                                     struct filter_device *ofd)
+{
+        struct thandle *th;
+        th = dt_trans_create(env, ofd->ofd_osd);
+        return th;
+}
+
 struct thandle *filter_trans_create(const struct lu_env *env,
                                     struct filter_device *ofd)
 {
-        struct filter_thread_info *info = filter_info(env);
+        struct filter_thread_info *info;
         struct thandle *th;
         struct filter_export_data *fed;
         int rc;
+
+        info = lu_context_key_get(&env->le_ctx, &filter_thread_key);
+        LASSERT(info);
 
 #if 0
         /* export can require sync operations */
@@ -42,7 +53,7 @@ struct thandle *filter_trans_create(const struct lu_env *env,
                 p->tp_sync = info->fti_exp->exp_need_sync;
 #endif
 
-        th = dt_trans_create(env, ofd->ofd_osd);
+        th = filter_trans_create0(env, ofd);
         if (IS_ERR(th))
                 return th;
 
@@ -154,11 +165,12 @@ static int filter_txn_stop_cb(const struct lu_env *env,
 {
         struct filter_device *ofd = cookie;
         struct filter_txn_info *txi;
-        struct filter_thread_info *info = filter_info(env);
+        struct filter_thread_info *info;
         ENTRY;
 
         /* transno in two contexts - for commit_cb and for thread */
         txi = lu_context_key_get(&txn->th_ctx, &filter_txn_thread_key);
+        info = lu_context_key_get(&env->le_ctx, &filter_thread_key);
 
         if (info->fti_exp == NULL || info->fti_no_need_trans ||
             info->fti_exp->exp_filter_data.fed_lcd == NULL) {
@@ -271,19 +283,6 @@ int filter_fs_setup(const struct lu_env *env, struct filter_device *ofd,
         ofd->ofd_last_rcvd = filter_object_child(fo);
         rc = filter_server_data_init(env, ofd);
         LASSERT(rc == 0);
-#if 0
-        o = dt_store_open(env, ofd->ofd_osd, "", LAST_RCVD, &fid);
-        if (!IS_ERR(o)) {
-                ofd->ofd_last_rcvd = o;
-                rc = filter_server_data_init(env, ofd);
-                if (rc)
-                        GOTO(put_last_rcvd, rc);
-        } else {
-                rc = PTR_ERR(o);
-                CERROR("cannot open %s: rc = %d\n", LAST_RCVD, rc);
-                RETURN(rc);
-        }
-#endif
 
         lu_local_obj_fid(&fid, MDD_OBJECTS_OID);
         memset(&attr, 0, sizeof(attr));
@@ -295,19 +294,6 @@ int filter_fs_setup(const struct lu_env *env, struct filter_device *ofd,
         ofd->ofd_groups_file = filter_object_child(fo);
         rc = filter_groups_init(env, ofd);
         LASSERT(rc == 0);
-#if 0
-        o = dt_store_open(env, ofd->ofd_osd, "", FILTER_GROUPS_FILE, &fid);
-        if (!IS_ERR(o)) {
-                ofd->ofd_groups_file = o;
-                rc = filter_groups_init(env, ofd);
-                if (rc)
-                        GOTO(stop_recov, rc);
-        } else {
-                rc = PTR_ERR(o);
-                CERROR("cannot open %s: rc = %d\n", FILTER_GROUPS_FILE, rc);
-                RETURN(rc);
-        }
-#endif
 
         RETURN(0);
 
@@ -322,15 +308,33 @@ int filter_fs_setup(const struct lu_env *env, struct filter_device *ofd,
 
 void filter_fs_cleanup(const struct lu_env *env, struct filter_device *ofd)
 {
+        struct filter_thread_info *info = filter_info_init(env, NULL);
+        int i;
         ENTRY;
 
-        LBUG();
+        info->fti_no_need_trans = 1;
+
+        filter_server_data_update(env, ofd);
+
+        for (i = 0; i < ofd->ofd_max_group; i++)
+                filter_last_id_write(env, ofd, i, (i == ofd->ofd_max_group-1));
 
         /* Remove transaction callback */
         dt_txn_callback_del(ofd->ofd_osd, &ofd->ofd_txn_cb);
+
         if (ofd->ofd_last_rcvd)
                 lu_object_put(env, &ofd->ofd_last_rcvd->do_lu);
         ofd->ofd_last_rcvd = NULL;
+
+        if (ofd->ofd_groups_file)
+                lu_object_put(env, &ofd->ofd_groups_file->do_lu);
+        ofd->ofd_groups_file = NULL;
+
+        OBD_FREE(ofd->ofd_last_rcvd_slots, LR_MAX_CLIENTS / 8);
+
+        filter_free_capa_keys(ofd);
+        cleanup_capa_hash(ofd->ofd_capa_hash);
+
         EXIT;
 }
 

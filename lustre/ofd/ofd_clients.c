@@ -38,7 +38,7 @@ int filter_client_new(const struct lu_env *env, struct filter_device *ofd,
         struct obd_device *obd = filter_obd(ofd);
         unsigned long *bitmap = ofd->ofd_last_rcvd_slots;
         struct lsd_client_data *lcd = fed->fed_lcd;
-        struct filter_thread_info *info = filter_info(env);
+        loff_t off;
         int err, cl_idx = 0;
         struct thandle *th;
         ENTRY;
@@ -80,8 +80,8 @@ repeat:
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
         /* off is changed, use tmp value */
-        info->fti_off = fed->fed_lr_off;
-        dt_declare_record_write(env, ofd->ofd_last_rcvd, info->fti_off,
+        off = fed->fed_lr_off;
+        dt_declare_record_write(env, ofd->ofd_last_rcvd, off,
                                 sizeof(*lcd), th, BYPASS_CAPA);
         err = filter_trans_start(env, ofd, th);
         if (err)
@@ -95,7 +95,7 @@ repeat:
         spin_unlock(&mti->mti_exp->exp_lock);
         */
 
-        err = filter_last_rcvd_write(env, ofd, lcd, &info->fti_off, th);
+        err = filter_last_rcvd_write(env, ofd, lcd, &off, th);
 
         CDEBUG(D_INFO, "wrote client lcd at idx %u off %llu (len %u)\n",
                cl_idx, fed->fed_lr_off, sizeof(*fed->fed_lcd));
@@ -147,6 +147,7 @@ int filter_client_free(struct lu_env *env, struct obd_export *exp)
         struct filter_device *ofd = filter_exp(exp);
         struct lsd_client_data *lcd = fed->fed_lcd;
         struct thandle *th;
+        loff_t off;
         int rc;
         ENTRY;
 
@@ -171,7 +172,6 @@ int filter_client_free(struct lu_env *env, struct obd_export *exp)
         }
 
         if (!(exp->exp_flags & OBD_OPT_FAILOVER)) {
-                struct filter_thread_info *info = filter_info(env);
                 th = filter_trans_create(env, ofd);
                 if (IS_ERR(th))
                         GOTO(free, rc = PTR_ERR(th));
@@ -188,9 +188,8 @@ int filter_client_free(struct lu_env *env, struct obd_export *exp)
                 mutex_down(&fed->fed_lastrcvd_lock);
                 memset(lcd, 0, sizeof(*lcd));
                 /* off is changed after write, use tmp value */
-                info->fti_off = fed->fed_lr_off;
-                rc = filter_last_rcvd_write(env, ofd, lcd,
-                                            &info->fti_off, th);
+                off = fed->fed_lr_off;
+                rc = filter_last_rcvd_write(env, ofd, lcd, &off, th);
                 mutex_up(&fed->fed_lastrcvd_lock);
                 LASSERT(rc == 0);
 

@@ -210,6 +210,12 @@ static int filter_obd_connect(const struct lu_env *env, struct obd_export **_exp
         exp = class_conn2export(&conn);
         LASSERT(exp != NULL);
         fed = &exp->exp_filter_data;
+
+        rc = lu_env_refill((struct lu_env *)env);
+        if (rc != 0) {
+                CERROR("Failure to refill session: '%d'\n", rc);
+                GOTO(out, rc);
+        }
         info = filter_info_init(env, exp);
 
         rc = filter_parse_connect_data(env, exp, data);
@@ -310,6 +316,7 @@ static int filter_destroy_export(struct obd_export *exp)
          */
 
         target_destroy_export(exp);
+        ldlm_destroy_export(exp);
 
         if (obd_uuid_equals(&exp->exp_client_uuid, &obd->obd_uuid))
                 RETURN(0);

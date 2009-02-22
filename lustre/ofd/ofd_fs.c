@@ -58,6 +58,8 @@ int filter_last_id_read(const struct lu_env *env, struct filter_device *ofd,
                         obd_gr group)
 {
         struct filter_thread_info *info = filter_info(env);
+        struct lu_buf              buf;
+        loff_t                     off;
         obd_id tmp;
         int rc;
         ENTRY;
@@ -65,12 +67,11 @@ int filter_last_id_read(const struct lu_env *env, struct filter_device *ofd,
         LASSERT(ofd->ofd_groups_file != NULL);
         LASSERT(info);
 
-        info->fti_buf.lb_buf = &tmp;
-        info->fti_buf.lb_len = sizeof(tmp);
-        info->fti_off = group * sizeof(tmp);
+        buf.lb_buf = &tmp;
+        buf.lb_len = sizeof(tmp);
+        off = group * sizeof(tmp);
 
-        rc = dt_record_read(env, ofd->ofd_groups_file, &info->fti_buf,
-                            &info->fti_off, NULL);
+        rc = dt_record_read(env, ofd->ofd_groups_file, &buf, &off, NULL);
         if (rc >= 0) {
                 filter_last_id_set(ofd, le64_to_cpu(tmp), group);
                 CDEBUG(D_INODE, "%s: read last_objid for group "LPU64": "
@@ -85,10 +86,11 @@ int filter_last_id_read(const struct lu_env *env, struct filter_device *ofd,
 int filter_last_id_write(const struct lu_env *env, struct filter_device *ofd,
                          obd_gr group, int force_sync)
 {
-        struct filter_thread_info *info = filter_info(env);
         struct thandle *th;
-        obd_id tmp;
-        int rc;
+        struct lu_buf   buf;
+        obd_id          tmp;
+        loff_t          off;
+        int             rc;
         ENTRY;
 
         CDEBUG(D_INODE, "%s: write last_objid for group "LPU64": "LPU64"\n",
@@ -97,22 +99,21 @@ int filter_last_id_write(const struct lu_env *env, struct filter_device *ofd,
         LASSERT(ofd->ofd_groups_file != NULL);
 
         tmp = cpu_to_le64(filter_last_id(ofd, group));
-        info->fti_buf.lb_buf = &tmp;
-        info->fti_buf.lb_len = sizeof(tmp);
-        info->fti_off = group * sizeof(tmp);
+        buf.lb_buf = &tmp;
+        buf.lb_len = sizeof(tmp);
+        off = group * sizeof(tmp);
 
         th = filter_trans_create(env, ofd);
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
-        rc = dt_declare_record_write(env, ofd->ofd_groups_file, info->fti_off,
-                                     info->fti_buf.lb_len, th, BYPASS_CAPA);
+        rc = dt_declare_record_write(env, ofd->ofd_groups_file, off,
+                                     buf.lb_len, th, BYPASS_CAPA);
         LASSERT(rc == 0);
         rc = filter_trans_start(env, ofd, th);
         if (rc)
                 RETURN(rc);
 
-        rc = dt_record_write(env, ofd->ofd_groups_file, &info->fti_buf,
-                             &info->fti_off, th, 1);
+        rc = dt_record_write(env, ofd->ofd_groups_file, &buf, &off, th, 1);
         if (rc)
                 CERROR("write group "LPU64" last objid: rc = %d\n", group, rc);
 
@@ -126,6 +127,8 @@ int filter_groups_init(const struct lu_env *env, struct filter_device *ofd)
 {
         struct filter_thread_info *info = filter_info(env);
         unsigned long groups_size;
+        struct lu_buf buf;
+        loff_t        off;
         obd_id lastid;
         int rc, i;
 
@@ -151,11 +154,10 @@ int filter_groups_init(const struct lu_env *env, struct filter_device *ofd)
         ofd->ofd_max_group = groups_size / sizeof(lastid);
         LASSERT(ofd->ofd_max_group <= FILTER_MAX_GROUPS); /* XXX: dynamic? */
 
-        info->fti_off = 0;
-        info->fti_buf.lb_buf = &ofd->ofd_last_objids;
-        info->fti_buf.lb_len = sizeof(lastid) * ofd->ofd_max_group;
-        rc = dt_record_read(env, ofd->ofd_groups_file, &info->fti_buf,
-                            &info->fti_off, NULL);
+        off = 0;
+        buf.lb_buf = &ofd->ofd_last_objids;
+        buf.lb_len = sizeof(lastid) * ofd->ofd_max_group;
+        rc = dt_record_read(env, ofd->ofd_groups_file, &buf, &off, NULL);
         if (rc) {
                 CERROR("can't initialize last_ids: %d\n", rc);
                 RETURN(rc);
@@ -241,14 +243,15 @@ static int filter_last_rcvd_header_read(const struct lu_env *env,
                                         struct filter_device *ofd)
 {
         struct filter_thread_info *info = filter_info(env);
+        struct lu_buf              buf;
+        loff_t                     off;
         int rc;
 
-        info->fti_off = 0;
-        info->fti_buf.lb_buf = &info->fti_fsd;
-        info->fti_buf.lb_len = sizeof(info->fti_fsd);
+        off = 0;
+        buf.lb_buf = &info->fti_fsd;
+        buf.lb_len = sizeof(info->fti_fsd);
 
-        rc = dt_record_read(env, ofd->ofd_last_rcvd, &info->fti_buf,
-                            &info->fti_off, BYPASS_CAPA);
+        rc = dt_record_read(env, ofd->ofd_last_rcvd, &buf, &off, BYPASS_CAPA);
         if (rc == 0)
                 fsd_le_to_cpu(&info->fti_fsd, &ofd->ofd_fsd);
         return rc;
@@ -258,18 +261,22 @@ int filter_last_rcvd_header_write(const struct lu_env *env,
                                   struct filter_device *ofd,
                                   struct thandle *th)
 {
-        struct filter_thread_info *info = filter_info(env);
-        int rc;
+        struct filter_thread_info *info;
+        struct lu_buf              buf;
+        loff_t                     off;
+        int                        rc;
         ENTRY;
 
-        info->fti_buf.lb_buf = &info->fti_fsd;
-        info->fti_buf.lb_len = sizeof(info->fti_fsd);
-        info->fti_off = 0;
+        info = lu_context_key_get(&env->le_ctx, &filter_thread_key);
+        LASSERT(info);
+
+        buf.lb_buf = &info->fti_fsd;
+        buf.lb_len = sizeof(info->fti_fsd);
+        off = 0;
 
         fsd_cpu_to_le(&ofd->ofd_fsd, &info->fti_fsd);
 
-        rc = dt_record_write(env, ofd->ofd_last_rcvd, &info->fti_buf,
-                             &info->fti_off, th, 1);
+        rc = dt_record_write(env, ofd->ofd_last_rcvd, &buf, &off, th, 1);
         CDEBUG(D_INFO, "write last_rcvd header rc = %d:\n"
                "uuid = %s\nlast_transno = "LPU64"\n",
                rc, ofd->ofd_fsd.lsd_uuid, ofd->ofd_fsd.lsd_last_transno);
@@ -282,13 +289,13 @@ static int filter_last_rcvd_read(const struct lu_env *env,
                                  struct lsd_client_data *lcd, loff_t *off)
 {
         struct filter_thread_info *info = filter_info(env);
+        struct lu_buf              buf;
         int rc;
 
-        info->fti_buf.lb_buf = &info->fti_fsd;
-        info->fti_buf.lb_len = sizeof(info->fti_fsd);
+        buf.lb_buf = &info->fti_fsd;
+        buf.lb_len = sizeof(info->fti_fsd);
 
-        rc = dt_record_read(env, ofd->ofd_last_rcvd, &info->fti_buf,
-                            off, BYPASS_CAPA);
+        rc = dt_record_read(env, ofd->ofd_last_rcvd, &buf, off, BYPASS_CAPA);
         if (rc == 0)
                 lcd_le_to_cpu((struct lsd_client_data *) &info->fti_fsd, lcd);
         return rc;
@@ -300,14 +307,15 @@ int filter_last_rcvd_write(const struct lu_env *env,
                            loff_t *off, struct thandle *th)
 {
         struct filter_thread_info *info = filter_info(env);
+        struct lu_buf              buf;
         int rc;
 
         lcd_cpu_to_le(lcd, (struct lsd_client_data *) &info->fti_fsd);
 
-        info->fti_buf.lb_buf = &info->fti_fsd;
-        info->fti_buf.lb_len = sizeof(info->fti_fsd);
+        buf.lb_buf = &info->fti_fsd;
+        buf.lb_len = sizeof(info->fti_fsd);
 
-        rc = dt_record_write(env, ofd->ofd_last_rcvd, &info->fti_buf, off, th, 1);
+        rc = dt_record_write(env, ofd->ofd_last_rcvd, &buf, off, th, 1);
         return rc;
 }
 
@@ -433,7 +441,7 @@ int filter_server_data_update(const struct lu_env *env,
         if (ofd->ofd_last_rcvd != NULL) {
                 struct thandle *th;
 
-                th = filter_trans_create(env, ofd);
+                th = filter_trans_create0(env, ofd);
                 if (IS_ERR(th))
                         RETURN(PTR_ERR(th));
                 dt_declare_record_write(env, ofd->ofd_last_rcvd, 0,

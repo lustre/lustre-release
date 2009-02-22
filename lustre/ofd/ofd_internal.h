@@ -272,8 +272,6 @@ struct filter_thread_info {
         /* server and client data buffers */
         struct lr_server_data      fti_fsd;
         struct filter_client_data  fti_fcd;
-        struct lu_buf              fti_buf;
-        loff_t                     fti_off;
 
         /* Ops object filename */
         struct lu_name             fti_name;
@@ -300,6 +298,7 @@ struct filter_thread_info * filter_info_init(const struct lu_env *env,
         struct filter_thread_info *info;
 
         info = lu_context_key_get(&env->le_ctx, &filter_thread_key);
+        LASSERT(info);
         LASSERT(info->fti_exp == 0);
         LASSERT(info->fti_env == 0);
         LASSERT(info->fti_attr.la_valid == 0);
@@ -421,6 +420,8 @@ struct obd_llog_group *filter_find_olg(struct obd_device *obd, int group);
 extern struct ldlm_valblock_ops filter_lvbo;
 
 /* filter_recovery.c */
+struct thandle *filter_trans_create0(const struct lu_env *env,
+                                     struct filter_device *ofd);
 struct thandle *filter_trans_create(const struct lu_env *env,
                                     struct filter_device *ofd);
 int filter_trans_start(const struct lu_env *env,

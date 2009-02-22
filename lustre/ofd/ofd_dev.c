@@ -447,7 +447,7 @@ out:
         return ERR_PTR(rc);
 }
 
-static int filter_stack_init(const struct lu_env *env,
+int filter_stack_init(const struct lu_env *env,
                           struct filter_device *m, struct lustre_cfg *cfg)
 {
         struct lu_device  *d = &m->ofd_dt_dev.dd_lu_dev;
@@ -480,7 +480,37 @@ out:
 static void filter_stack_fini(const struct lu_env *env,
                            struct filter_device *m, struct lu_device *top)
 {
-        LBUG();
+        struct obd_device       *obd = filter_obd(m);
+        struct lustre_cfg_bufs   bufs;
+        struct lustre_cfg       *lcfg;
+        struct mdt_thread_info  *info;
+        char flags[3]="";
+        ENTRY;
+
+        info = lu_context_key_get(&env->le_ctx, &filter_thread_key);
+        LASSERT(info != NULL);
+
+        /* process cleanup, pass mdt obd name to get obd umount flags */
+        lustre_cfg_bufs_reset(&bufs, obd->obd_name);
+        if (obd->obd_force)
+                strcat(flags, "F");
+        if (obd->obd_fail)
+                strcat(flags, "A");
+        lustre_cfg_bufs_set_string(&bufs, 1, flags);
+        lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
+        if (!lcfg) {
+                CERROR("Cannot alloc lcfg!\n");
+                return;
+        }
+
+        LASSERT(top);
+        top->ld_ops->ldo_process_config(env, top, lcfg);
+        lustre_cfg_free(lcfg);
+
+        lu_stack_fini(env, top);
+        m->ofd_osd = NULL;
+
+        EXIT;
 }
 
 #if 0
@@ -543,7 +573,7 @@ static int filter_init0(const struct lu_env *env, struct filter_device *m,
                         struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
         const char *dev = lustre_cfg_string(cfg, 0);
-        struct filter_thread_info *info = filter_info_init(env, NULL);
+        struct filter_thread_info *info;
         struct filter_obd *filter;
         struct lustre_mount_info *lmi;
         struct obd_device *obd;
@@ -555,7 +585,7 @@ static int filter_init0(const struct lu_env *env, struct filter_device *m,
         if (rc != 0)
                 RETURN(rc);
 
-        LASSERT(info != NULL);
+        LASSERT(env);
 
         obd = class_name2obd(dev);
         LASSERT(obd != NULL);
@@ -636,6 +666,9 @@ static int filter_init0(const struct lu_env *env, struct filter_device *m,
                 GOTO(err_fini_proc, rc);
         }
 
+        info = filter_info_init(env, NULL);
+        LASSERT(info != NULL);
+
         snprintf(info->fti_u.ns_name, sizeof info->fti_u.ns_name,
                  LUSTRE_OST_NAME"-%p", m);
         m->ofd_namespace = ldlm_namespace_new(obd, info->fti_u.ns_name,
@@ -701,50 +734,64 @@ err_free_site:
 
 static void filter_fini(const struct lu_env *env, struct filter_device *m)
 {
-        LBUG();
+        struct obd_device *obd = filter_obd(m);
+        struct lu_device  *d = &m->ofd_dt_dev.dd_lu_dev;
+        struct lu_site    *ls = d->ld_site;
+        int                waited = 0;
+
+        /* At this point, obd exports might still be on the "obd_zombie_exports"
+         * list, and obd_zombie_impexp_thread() is trying to destroy them.
+         * We wait a little bit until all exports (except the self-export)
+         * have been destroyed, because the whole mdt stack might be accessed
+         * in mdt_destroy_export(). This will not be a long time, maybe one or
+         * two seconds are enough. This is not a problem while umounting.
+         *
+         * The three references that should be remaining are the
+         * obd_self_export and the attach and setup references.
+         */
+        while (atomic_read(&obd->obd_refcount) > 3) {
+                cfs_schedule_timeout(CFS_TASK_UNINT, cfs_time_seconds(1));
+                ++waited;
+                if (waited > 5 && IS_PO2(waited))
+                        LCONSOLE_WARN("Waiting for obd_zombie_impexp_thread "
+                                      "more than %d seconds to destroy all "
+                                      "the exports. The current obd refcount ="
+                                      " %d. Is it stuck there?\n",
+                                      waited, atomic_read(&obd->obd_refcount));
+        }
+        target_recovery_fini(obd);
+
 #if 0
-        struct filter_obd *filter = &obd->u.filter;
-        ENTRY;
+        filter_obd_llog_cleanup(obd);
+#endif
+        obd_zombie_barrier();
 
-        if (obd->obd_fail)
-                LCONSOLE_WARN("%s: shutting down for failover; client state "
-                              "will be preserved.\n", obd->obd_name);
+        filter_fs_cleanup(env, m);
 
-        if (!list_empty(&obd->obd_exports)) {
-                CERROR("%s: still has clients!\n", obd->obd_name);
-                class_disconnect_exports(obd);
-                if (!list_empty(&obd->obd_exports)) {
-                        CERROR("still has exports after forced cleanup?\n");
-                        RETURN(-EBUSY);
-                }
+        if (m->ofd_namespace != NULL) {
+                ldlm_namespace_free(m->ofd_namespace, NULL, d->ld_obd->obd_force);
+                d->ld_obd->obd_namespace = m->ofd_namespace = NULL;
         }
 
-        filter_procfs_fini();
+        filter_procfs_fini(m);
+        if (obd->obd_fsops)
+                fsfilt_put_ops(obd->obd_fsops);
 #if 0
-        lquota_cleanup(filter_quota_interface_ref, obd);
+        sptlrpc_rule_set_free(&m->mdt_sptlrpc_rset);
 #endif
+        /* 
+         * Finish the stack 
+         */
+        filter_stack_fini(env, m, &m->ofd_osd->dd_lu_dev);
 
-        /* Stop recovery before namespace cleanup. */
-        target_recovery_fini(obd);
-        target_cleanup_recovery(obd);
+        if (ls) {
+                lu_site_fini(ls);
+                OBD_FREE_PTR(ls);
+                d->ld_site = NULL;
+        }
+        LASSERT(atomic_read(&d->ld_ref) == 0);
 
-        ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
-
-        sptlrpc_rule_set_free(&filter->fo_sptlrpc_rset);
-
-        filter_post(obd);
-
-#if 0
-        LL_DQUOT_OFF(obd->u.obt.obt_sb);
-        shrink_dcache_parent(obd->u.obt.obt_sb->s_root);
-#endif
-
-        server_put_mount(obd->obd_name, filter->fo_vfsmnt);
-
-        LCONSOLE_INFO("OST %s has stopped.\n", obd->obd_name);
-
-        RETURN(0);
-#endif
+        EXIT;
 }
 
 static struct lu_device* filter_device_fini(const struct lu_env *env,
@@ -760,10 +807,8 @@ static struct lu_device *filter_device_free(const struct lu_env *env,
 {
         struct filter_device *m = filter_dev(d);
 
-        LBUG();
+        dt_device_fini(&m->ofd_dt_dev);
         OBD_FREE_PTR(m);
-        /* XXX: see mdt_device_free() */
-        LBUG();
         RETURN(NULL);
 }
 
@@ -791,7 +836,8 @@ static struct lu_device *filter_device_alloc(const struct lu_env *env,
 
 /* thread context key constructor/destructor */
 LU_KEY_INIT_FINI(filter, struct filter_thread_info);
-//LU_CONTEXT_KEY_DEFINE(filter, LCT_DT_THREAD);
+LU_CONTEXT_KEY_DEFINE(filter, LCT_DT_THREAD);
+#if 0
 static void filter_key_exit(const struct lu_context *ctx,
                             struct lu_context_key *key, void *data)
 {
@@ -805,6 +851,7 @@ struct lu_context_key filter_thread_key = {
         .lct_fini = filter_key_fini,
         .lct_exit = filter_key_exit
 };
+#endif
 
 /* transaction context key */
 LU_KEY_INIT_FINI(filter_txn, struct filter_txn_info);
