@@ -932,8 +932,6 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
                         CERROR("nothing to do?! i = %d, e_num = %u\n",
                                         i, cex->ec_len);
                 for (; i < cex->ec_len && bp->num; i++) {
-                        *(bp->created) = 0;
-                        bp->created++;
                         *(bp->blocks) = 0;
                         bp->blocks++;
                         bp->num--;
@@ -1013,16 +1011,12 @@ map:
                                         i, cex->ec_len);
                 for (; i < cex->ec_len && bp->num; i++) {
                         *(bp->blocks) = cex->ec_start + i;
-                        if (cex->ec_type == EXT3_EXT_CACHE_EXTENT) {
-                                *(bp->created) = 0;
-                        } else {
-                                *(bp->created) = 1;
+                        if (cex->ec_type != EXT3_EXT_CACHE_EXTENT) {
                                 /* unmap any possible underlying metadata from
                                  * the block device mapping.  bug 6998. */
                                 ll_unmap_underlying_metadata(inode->i_sb,
                                                              *(bp->blocks));
                         }
-                        bp->created++;
                         bp->blocks++;
                         bp->num--;
                         bp->start++;
