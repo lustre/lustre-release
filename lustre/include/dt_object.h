@@ -144,12 +144,14 @@ struct dt_device_operations {
         /**
          * Get disk label
          */
-        char *(*dt_get_label)(const struct lu_env *env, struct dt_device *dev);
+        char *(*dt_label_get)(const struct lu_env *env,
+                              const struct dt_device *dev);
 
         /**
          * Set disk label
          */
-        int   (*dt_set_label)(const struct lu_env *, struct dt_device *, char *);
+        int   (*dt_label_set)(const struct lu_env *,
+                              const struct dt_device *, char *);
 };
 
 struct dt_index_features {

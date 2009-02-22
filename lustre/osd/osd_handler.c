@@ -856,15 +856,15 @@ static void osd_ro(const struct lu_env *env, struct dt_device *d)
         EXIT;
 }
 
-static char *osd_get_label(const struct lu_env *env, struct dt_device *dt)
+static char *osd_label_get(const struct lu_env *env, const struct dt_device *dt)
 {
         struct super_block *sb = osd_sb(osd_dt_dev(dt));
         LASSERT(sb);
         return LDISKFS_SB(sb)->s_es->s_volume_name;
 }
 
-static int osd_set_label(const struct lu_env *env, struct dt_device *dt,
-                           char *label)
+static int osd_label_set(const struct lu_env *env, const struct dt_device *dt,
+                         char *label)
 {
         struct super_block *sb = osd_sb(osd_dt_dev(dt));
         journal_t *journal;
@@ -1066,8 +1066,8 @@ static const struct dt_device_operations osd_dt_ops = {
         .dt_commit_async    = osd_commit_async,
         .dt_init_capa_ctxt  = osd_init_capa_ctxt,
         .dt_init_quota_ctxt = osd_init_quota_ctxt,
-        .dt_get_label       = osd_get_label,
-        .dt_set_label       = osd_set_label
+        .dt_label_get       = osd_label_get,
+        .dt_label_set       = osd_label_set
 };
 
 static void osd_object_read_lock(const struct lu_env *env,
@@ -3610,6 +3610,11 @@ static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 {
         struct osd_thread_info *info = osd_oti_get(env);
         ENTRY;
+        if (o->od_fsops) {
+                fsfilt_put_ops(o->od_fsops);
+                o->od_fsops = NULL;
+        }
+
         if (o->od_obj_area != NULL) {
                 lu_object_put(env, &o->od_obj_area->do_lu);
                 o->od_obj_area = NULL;
