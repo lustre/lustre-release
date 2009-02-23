@@ -116,6 +116,9 @@ extern cfs_duration_t libcfs_console_min_delay;
 extern unsigned int libcfs_console_backoff;
 extern unsigned int libcfs_debug_binary;
 extern char debug_file_path_arr[1024];
+#ifdef __KERNEL__
+extern char *debug_file_path;
+#endif
 
 int libcfs_debug_mask2str(char *str, int size, int mask, int is_subsys);
 int libcfs_debug_str2mask(int *mask, const char *str, int is_subsys);

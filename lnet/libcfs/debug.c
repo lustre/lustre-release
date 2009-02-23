@@ -126,7 +126,7 @@ char debug_file_path_arr[1024] = "/r/tmp/lustre-log";
 char debug_file_path_arr[1024] = "/tmp/lustre-log";
 #endif
 /* We need to pass a pointer here, but elsewhere this must be a const */
-static char *debug_file_path = &debug_file_path_arr[0];
+char *debug_file_path = &debug_file_path_arr[0];
 CFS_MODULE_PARM(debug_file_path, "s", charp, 0644,
                 "Path for dumping debug logs, "
                 "set 'NONE' to prevent log dumping");
