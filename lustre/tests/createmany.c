@@ -37,6 +37,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <time.h>
 #include <errno.h>
 #include <string.h>
@@ -67,6 +68,13 @@ static char *get_file_name(const char *fmt, long n, int has_fmt_spec)
         return filename;
 }
 
+double now(void)
+{
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        return (double)tv.tv_sec + (double)tv.tv_usec / 1000000;
+}
+
 int main(int argc, char ** argv)
 {
         long i;
@@ -74,8 +82,8 @@ int main(int argc, char ** argv)
         int do_unlink = 0, do_mknod = 0;
         char *filename;
         char *fmt = NULL, *fmt_unlink = NULL, *tgt = NULL;
-        long start, last, end = ~0UL >> 1;
-        long begin = 0, count = ~0UL >> 1;
+        double start, last;
+        long begin = 0, end = ~0UL >> 1, count = ~0UL >> 1;
         int c, has_fmt_spec = 0, unlink_has_fmt_spec = 0;
 
         /* Handle the last argument in form of "-seconds" */
@@ -132,7 +140,7 @@ int main(int argc, char ** argv)
                 usage(argv[0]);
         }
 
-        start = last = time(NULL);
+        start = last = now();
 
         has_fmt_spec = strchr(fmt, '%') != NULL;
         if (do_unlink)
@@ -186,15 +194,15 @@ int main(int argc, char ** argv)
                         }
                 }
 
-                if ((i % 10000) == 0) {
-                        printf(" - created %ld (time %ld total %ld last %ld)\n",
-                               i, time(0), time(0) - start, time(0) - last);
-                        last = time(NULL);
+                if (i && (i % 10000) == 0) {
+                        printf(" - created %ld (time %.2f total %.2f last %.2f)"
+                               "\n", i, now(), now() - start, now() - last);
+                        last = now();
                 }
         }
-        printf("total: %ld creates%s in %ld seconds: %f creates/second\n", i,
+        printf("total: %ld creates%s in %.2f seconds: %.2f creates/second\n", i,
                do_unlink ? "/deletions" : "",
-               time(NULL) - start, ((float)i / (time(0) - start)));
+               now() - start, ((double)i / (now() - start)));
 
         return rc;
 }
