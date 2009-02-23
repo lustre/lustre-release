@@ -584,16 +584,10 @@ static int filter_init0(const struct lu_env *env, struct filter_device *m,
         int rc;
         ENTRY;
 
-        rc = lu_env_refill((struct lu_env *)env);
-        if (rc != 0)
-                RETURN(rc);
-
-        LASSERT(env);
-
         obd = class_name2obd(dev);
         LASSERT(obd != NULL);
 
-        lmi = server_get_mount_2(dev);
+        lmi = server_get_mount(dev);
         obd->obd_fsops = fsfilt_get_ops(MT_STR(s2lsi(lmi->lmi_sb)->lsi_ldd));
         LASSERT(obd->obd_fsops != NULL);
 
@@ -637,6 +631,11 @@ static int filter_init0(const struct lu_env *env, struct filter_device *m,
         m->ofd_dt_dev.dd_lu_dev.ld_obd = obd;
         /* set this lu_device to obd, because error handling need it */
         obd->obd_lu_dev = &m->ofd_dt_dev.dd_lu_dev;
+
+        rc = lu_env_refill((struct lu_env *)env);
+        if (rc != 0)
+                RETURN(rc);
+        LASSERT(env);
 
         rc = lu_site_init(s, &m->ofd_dt_dev.dd_lu_dev);
         if (rc) {
@@ -792,6 +791,7 @@ static void filter_fini(const struct lu_env *env, struct filter_device *m)
                 OBD_FREE_PTR(ls);
                 d->ld_site = NULL;
         }
+        server_put_mount(obd->obd_name);
         LASSERT(atomic_read(&d->ld_ref) == 0);
 
         EXIT;

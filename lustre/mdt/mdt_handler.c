@@ -4262,6 +4262,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
                 OBD_FREE_PTR(mite);
                 d->ld_site = NULL;
         }
+        server_put_mount(obd->obd_name);
         LASSERT(atomic_read(&d->ld_ref) == 0);
 
         EXIT;
@@ -4384,7 +4385,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         m->mdt_opts.mo_user_xattr = 0;
         m->mdt_opts.mo_acl = 0;
         m->mdt_opts.mo_cos = MDT_COS_DEFAULT;
-        lmi = server_get_mount_2(dev);
+        lmi = server_get_mount(dev);
         if (lmi == NULL) {
                 CERROR("Cannot get mount info for %s!\n", dev);
                 RETURN(-EFAULT);
@@ -4538,9 +4539,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                 GOTO(err_llog_cleanup, rc);
 #endif
 
-        server_put_mount_2(dev, lmi->lmi_dt);
-        lmi = NULL;
-
         target_recovery_init(obd, mdt_recovery_handle);
 
         rc = mdt_start_ptlrpc_service(m);
@@ -4606,7 +4604,7 @@ err_free_site:
         OBD_FREE_PTR(mite);
 err_lmi:
         if (lmi) 
-                server_put_mount_2(dev, lmi->lmi_dt);
+                server_put_mount(dev);
         return (rc);
 }
 

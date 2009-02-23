@@ -187,11 +187,10 @@ struct lustre_mount_info *server_get_mount(const char *name)
                 RETURN(NULL);
         }
         lsi = s2lsi(lmi->lmi_sb);
-        //mntget(lmi->lmi_mnt);
         atomic_inc(&lsi->lsi_mounts);
 
-        CDEBUG(D_MOUNT, "get_dt %p from %s, refs=%d\n",
-               lmi->lmi_dt, name, atomic_read(&lsi->lsi_mounts));
+        CDEBUG(D_MOUNT, "%p/%p from %s, refs=%d\n",
+               lmi->lmi_sb, lsi, name, atomic_read(&lsi->lsi_mounts));
 
         RETURN(lmi);
 }
@@ -229,17 +228,11 @@ static void unlock_mntput(struct vfsmount *mnt)
 static int lustre_put_lsi(struct super_block *sb);
 
 /* to be called from obd_cleanup methods */
-//int server_put_mount(const char *name, struct vfsmount *mnt)
-int server_put_mount(const char *name, struct dt_device *dt)
+int server_put_mount(const char *name)
 {
-#if 0
         struct lustre_mount_info *lmi;
         struct lustre_sb_info *lsi;
-        int count = atomic_read(&mnt->mnt_count) - 1;
         ENTRY;
-
-        /* This might be the last one, can't deref after this */
-        unlock_mntput(mnt);
 
         down(&lustre_mount_info_lock);
         lmi = server_find_mount(name);
@@ -249,27 +242,26 @@ int server_put_mount(const char *name, struct dt_device *dt)
                 RETURN(-ENOENT);
         }
         lsi = s2lsi(lmi->lmi_sb);
-        LASSERT(lmi->lmi_mnt == mnt);
 
-        CDEBUG(D_MOUNT, "put_mnt %p from %s, refs=%d, vfscount=%d\n",
-               lmi->lmi_mnt, name, atomic_read(&lsi->lsi_mounts), count);
+        CDEBUG(D_MOUNT, "%p/%p from %s, refs=%d\n",
+               lmi->lmi_sb, lsi, name, atomic_read(&lsi->lsi_mounts));
 
         if (lustre_put_lsi(lmi->lmi_sb)) {
-                CDEBUG(D_MOUNT, "Last put of mnt %p from %s, vfscount=%d\n",
-                       lmi->lmi_mnt, name, count);
+                CDEBUG(D_MOUNT, "Last put from %s\n", name);
+#if 0
                 /* last mount is the One True Mount */
                 if (count > 1)
                         CERROR("%s: mount busy, vfscount=%d!\n", name, count);
+#endif
         }
 
         /* this obd should never need the mount again */
         server_deregister_mount(name);
-#endif
         RETURN(0);
 }
 
 /* Corresponding to server_get_mount_2 */
-int server_put_mount_2(const char *name, struct dt_device *dt)
+int server_put_mount_2(const char *name)
 {
         ENTRY;
         RETURN(0);
@@ -472,6 +464,7 @@ static int server_start_mgs(struct super_block *sb)
            MGC wouldn't know which to connect to */
         lmi = server_find_mount(LUSTRE_MGS_OBDNAME);
         if (lmi) {
+                LASSERT(lmi->lmi_sb);
                 lsi = s2lsi(lmi->lmi_sb);
                 LCONSOLE_ERROR_MSG(0x15d, "The MGS service was already started"
                                    " from server %s\n",
@@ -1331,7 +1324,7 @@ static int lustre_put_lsi(struct super_block *sb)
 
         LASSERT(lsi != NULL);
 
-        CDEBUG(D_MOUNT, "put %p %d\n", sb, atomic_read(&lsi->lsi_mounts));
+        CDEBUG(D_MOUNT, "put %p/%p %d\n", sb, lsi, atomic_read(&lsi->lsi_mounts));
         if (atomic_dec_and_test(&lsi->lsi_mounts)) {
                 lustre_free_lsi(sb);
                 RETURN(1);

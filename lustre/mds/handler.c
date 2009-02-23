@@ -352,7 +352,8 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-EINVAL);
         }
         dev = lustre_cfg_string(lcfg, 4);
-        lmi = server_get_mount(dev);
+        /* MDT does all reference counting for us */
+        lmi = server_get_mount_2(dev);
         LASSERT(lmi != NULL);
 
         lsi = s2lsi(lmi->lmi_sb);
@@ -360,13 +361,6 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         mnt = dt_param.ddp_mnt;
         LASSERT(mnt);
 
-        /* FIXME: MDD LOV initialize objects.
-         * we need only lmi here but not get mount
-         * OSD did mount already, so put mount back
-         */
-        atomic_dec(&lsi->lsi_mounts);
-        /* XXX: fix mntput/mntget */
-        //mntput(mnt);
         init_rwsem(&mds->mds_notify_lock);
 
         obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
@@ -459,6 +453,7 @@ static int mds_cmd_cleanup(struct obd_device *obd)
         fsfilt_put_ops(obd->obd_fsops);
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        server_put_mount_2(obd->obd_name);
         RETURN(rc);
 }
 

@@ -329,8 +329,8 @@ int lustre_end_log(struct super_block *sb, char *logname,
                        struct config_llog_instance *cfg);
 struct lustre_mount_info *server_get_mount(const char *name);
 struct lustre_mount_info *server_get_mount_2(const char *name);
-int server_put_mount(const char *name, struct dt_device *dt);
-int server_put_mount_2(const char *name, struct dt_device *dt);
+int server_put_mount(const char *name);
+int server_put_mount_2(const char *name);
 int server_register_target(struct super_block *sb);
 struct mgs_target_info;
 int server_mti_print(char *title, struct mgs_target_info *mti);
