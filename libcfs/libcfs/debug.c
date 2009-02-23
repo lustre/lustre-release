@@ -118,7 +118,7 @@ static cfs_waitq_t debug_ctlwq;
 char debug_file_path_arr[1024] = DEBUG_FILE_PATH_DEFAULT;
 
 /* We need to pass a pointer here, but elsewhere this must be a const */
-static char *debug_file_path = &debug_file_path_arr[0];
+char *debug_file_path = &debug_file_path_arr[0];
 CFS_MODULE_PARM(debug_file_path, "s", charp, 0644,
                 "Path for dumping debug logs, "
                 "set 'NONE' to prevent log dumping");
