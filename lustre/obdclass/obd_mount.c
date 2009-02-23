@@ -1117,6 +1117,9 @@ static void stop_temp_site(struct super_block *sb)
         lu_env_fini(&env);
 
         lsi->lsi_dt_dev->dd_lu_dev.ld_site = NULL;
+
+        OBD_FREE_PTR(site);
+        OBD_FREE_PTR(mdev);
 }
 
 /* Start targets */
@@ -1594,9 +1597,6 @@ static struct dt_device *server_kernel_mount(struct super_block *sb)
                 LASSERT(rc == 0);
 
         RETURN(lu2dt_dev(mdev->mcf_bottom));
-
-
-
 
         /* In the past, we have always used flags = 0.
            Note ext3/ldiskfs can't be mounted ro. */
