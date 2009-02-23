@@ -97,7 +97,8 @@ int main(int argc, char *argv[])
 				if (st.st_rdev != 0x1234) {
 					fprintf(stderr, "%s: ERROR rdev %s: "
 					        "%lu != 0x1234",
-					        argv[0], name, st.st_rdev);
+					        argv[0], name,
+					        (long unsigned int)st.st_rdev);
 					exit(13);
 				}
 			}
