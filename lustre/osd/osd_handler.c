@@ -3638,15 +3638,18 @@ static int osd_mount(const struct lu_env *env,
         unsigned long             page, s_flags, ldd_flags;
         struct page              *__page;
         char                     *options = NULL;
+        int                      rc = 0;
 
         ENTRY;
 
         if (o->od_mnt != NULL)
                 RETURN(0);
         
+        o->od_obj_area = NULL;
+
         OBD_PAGE_ALLOC(__page, CFS_ALLOC_STD);
         if (__page == NULL)
-                RETURN(-ENOMEM);
+                GOTO(out, rc = -ENOMEM);
 
         s_flags = (unsigned long) lustre_cfg_buf(cfg, 1);
         opts = lustre_cfg_string(cfg, 2);
@@ -3662,7 +3665,8 @@ static int osd_mount(const struct lu_env *env,
 
         o->od_mnt = ll_kern_mount("ldiskfs", s_flags, dev, (void *)options);
         /* XXX: error handling */
-        LASSERTF(!IS_ERR(o->od_mnt), "%ld\n", PTR_ERR(o->od_mnt));
+        if (IS_ERR(o->od_mnt))
+                GOTO(out, rc = PTR_ERR(o->od_mnt));
 
         o->od_fsops = fsfilt_get_ops(mt_str(LDD_MT_LDISKFS));
         LASSERT(o->od_fsops);
@@ -3672,11 +3676,10 @@ static int osd_mount(const struct lu_env *env,
                 LCONSOLE_WARN("OSD: IAM mode enabled\n");
         } else
                 o->od_iop_mode = 1;
-
+out:
         OBD_PAGE_FREE(__page);
-        o->od_obj_area = NULL;
 
-        RETURN(0);
+        RETURN(rc);
 }
 
 static struct lu_device *osd_device_fini(const struct lu_env *env,

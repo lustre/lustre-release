@@ -1422,12 +1422,12 @@ static struct lu_device *try_start_osd(struct lustre_mount_data *lmd,
                                        char *typename,
                                        unsigned long s_flags)
 {
-        struct obd_type       *type;
+        struct obd_type       *type = NULL;
         struct lu_device_type *ldt;
         struct lu_device      *d = NULL;
         struct dt_device      *dt;
         struct lu_env          env;
-        int                    rc;
+        int                    rc = 0;
         struct                 lustre_cfg *lcfg;
         struct                 lustre_cfg_bufs bufs;
 
@@ -1470,11 +1470,21 @@ static struct lu_device *try_start_osd(struct lustre_mount_data *lmd,
         rc = dt->dd_lu_dev.ld_ops->ldo_process_config(&env, d, lcfg);
         lustre_cfg_free(lcfg);
 
+        if (rc)
+                GOTO(out, rc);
+
         lu_device_get(d);
         lu_ref_add(&d->ld_reference, "lu-stack", &lu_site_init);
 out_type:
 out_alloc:
 out:
+        if (rc) {
+                if (d)
+                        ldt->ldt_ops->ldto_device_free(&env, d);
+                if (type)
+                        class_put_type(type);
+                d = ERR_PTR(rc);
+        }
         lu_env_fini(&env);
         RETURN(d);
 }
@@ -1593,10 +1603,11 @@ static struct dt_device *server_kernel_mount(struct super_block *sb)
         if (rc == -ENOENT) {
                 /* no configuration found, use disk label */
                 stop_temp_site(sb);
-        } else
+        } else {
                 LASSERT(rc == 0);
+        }
 
-        RETURN(lu2dt_dev(mdev->mcf_bottom));
+        RETURN(lu2dt_dev(dev));
 
         /* In the past, we have always used flags = 0.
            Note ext3/ldiskfs can't be mounted ro. */
