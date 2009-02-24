@@ -658,6 +658,7 @@ kptllnd_startup (lnet_ni_t *ni)
          */
         rwlock_init(&kptllnd_data.kptl_peer_rw_lock);
         init_waitqueue_head(&kptllnd_data.kptl_watchdog_waitq);
+        atomic_set(&kptllnd_data.kptl_needs_ptltrace, 0);
         INIT_LIST_HEAD(&kptllnd_data.kptl_closing_peers);
         INIT_LIST_HEAD(&kptllnd_data.kptl_zombie_peers);
 

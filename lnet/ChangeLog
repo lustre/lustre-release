@@ -18,6 +18,12 @@ Description:
 Details    :
 
 Severity   : normal
+Bugzilla   : 16034
+Description: Change ptllnd timeout and watchdog timers
+Details    : Add ptltrace_on_nal_failed and bump ptllnd timeout to match
+             Portals wire timeout.
+
+Severity   : normal
 Bugzilla   : 16186
 Description: One down Lustre FS hangs ALL mounted Lustre filesystems
 Details    : Shared routing enhancements - peer health detection.

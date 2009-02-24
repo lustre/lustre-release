@@ -57,7 +57,8 @@ static int checksum = 0;
 CFS_MODULE_PARM(checksum, "i", int, 0644,
                 "set non-zero to enable message (not RDMA) checksums");
 
-static int timeout = 50;
+/* NB 250 is the Cray Portals wire timeout */
+static int timeout = 250;
 CFS_MODULE_PARM(timeout, "i", int, 0644,
                 "timeout (seconds)");
 
@@ -106,6 +107,10 @@ static int ptltrace_on_timeout = 0;
 CFS_MODULE_PARM(ptltrace_on_timeout, "i", int, 0644,
                 "dump ptltrace on timeout");
 
+static int ptltrace_on_fail = 1;
+CFS_MODULE_PARM(ptltrace_on_fail, "i", int, 0644,
+                "dump ptltrace on Portals failure");
+
 static char *ptltrace_basename = "/tmp/lnet-ptltrace";
 CFS_MODULE_PARM(ptltrace_basename, "s", charp, 0644,
                 "ptltrace dump file basename");
@@ -135,6 +140,7 @@ kptl_tunables_t kptllnd_tunables = {
         .kptl_ack_puts               = &ack_puts,
 #ifdef CRAY_XT3
         .kptl_ptltrace_on_timeout    = &ptltrace_on_timeout,
+        .kptl_ptltrace_on_fail       = &ptltrace_on_fail,
         .kptl_ptltrace_basename      = &ptltrace_basename,
 #endif
 #ifdef PJK_DEBUGGING
@@ -174,6 +180,7 @@ enum {
         KPTLLND_RESHEDULE_LOOPS,
         KPTLLND_ACK_PUTS,
         KPTLLND_TRACETIMEOUT,
+        KPTLLND_TRACEFAIL,
         KPTLLND_TRACEBASENAME,
         KPTLLND_SIMULATION_BITMAP
 };
@@ -194,6 +201,7 @@ enum {
 #define KPTLLND_RESHEDULE_LOOPS CTL_UNNUMBERED
 #define KPTLLND_ACK_PUTS        CTL_UNNUMBERED
 #define KPTLLND_TRACETIMEOUT    CTL_UNNUMBERED
+#define KPTLLND_TRACEFAIL       CTL_UNNUMBERED
 #define KPTLLND_TRACEBASENAME   CTL_UNNUMBERED
 #define KPTLLND_SIMULATION_BITMAP CTL_UNNUMBERED
 #endif
@@ -316,6 +324,14 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
                 .ctl_name = KPTLLND_TRACETIMEOUT,
                 .procname = "ptltrace_on_timeout",
                 .data     = &ptltrace_on_timeout,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = KPTLLND_TRACEFAIL,
+                .procname = "ptltrace_on_fail",
+                .data     = &ptltrace_on_fail,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec

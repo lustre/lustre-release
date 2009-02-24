@@ -430,7 +430,7 @@ kptllnd_rx_buffer_callback (ptl_event_t *ev)
                        kptllnd_evtype2str(ev->type), ev->type, rxb,
                        kptllnd_errtype2str(ev->ni_fail_type),
                        ev->ni_fail_type, unlinked);
-
+                kptllnd_schedule_ptltrace_dump();
         } else if (ev->type == PTL_EVENT_PUT_END &&
                    !rxbp->rxbp_shutdown) {
 
@@ -532,10 +532,12 @@ kptllnd_nak (kptl_rx_t *rx)
                     *kptllnd_tunables.kptl_portal, 0,
                     LNET_MSG_MATCHBITS, 0, 0);
 
-        if (rc != PTL_OK)
+        if (rc != PTL_OK) {
                 CWARN("Can't NAK %s: put failed %s(%d)\n",
                       kptllnd_ptlid2str(rx->rx_initiator),
                       kptllnd_errtype2str(rc), rc);
+                kptllnd_schedule_ptltrace_dump();
+        }
 }
 
 void

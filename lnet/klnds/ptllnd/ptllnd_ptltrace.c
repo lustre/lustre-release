@@ -38,7 +38,7 @@
 
 #ifdef CRAY_XT3
 static struct semaphore   ptltrace_mutex;
-static struct semaphore   ptltrace_signal;
+static cfs_waitq_t        ptltrace_debug_ctlwq;
 
 void
 kptllnd_ptltrace_to_file(char *filename)
@@ -136,7 +136,7 @@ kptllnd_dump_ptltrace_thread(void *arg)
 {
         static char fname[1024];
 
-        libcfs_daemonize("ptltracedump");
+        libcfs_daemonize("kpt_ptltrace_dump");
 
         /* serialise with other instances of me */
         mutex_down(&ptltrace_mutex);
@@ -150,8 +150,7 @@ kptllnd_dump_ptltrace_thread(void *arg)
         mutex_up(&ptltrace_mutex);
 
         /* unblock my creator */
-        mutex_up(&ptltrace_signal);
-        
+        cfs_waitq_signal(&ptltrace_debug_ctlwq);
         return 0;
 }
 
@@ -159,9 +158,13 @@ void
 kptllnd_dump_ptltrace(void)
 {
         int            rc;     
+        cfs_waitlink_t wait;
+        ENTRY;
 
-        if (!*kptllnd_tunables.kptl_ptltrace_on_timeout)
-                return;
+        /* taken from libcfs_debug_dumplog */
+        cfs_waitlink_init(&wait);
+        set_current_state(TASK_INTERRUPTIBLE);
+        cfs_waitq_add(&ptltrace_debug_ctlwq, &wait);
 
         rc = cfs_kernel_thread(kptllnd_dump_ptltrace_thread,
                                (void *)(long)cfs_curproc_pid(),
@@ -169,28 +172,19 @@ kptllnd_dump_ptltrace(void)
         if (rc < 0) {
                 CERROR("Error %d starting ptltrace dump thread\n", rc);
         } else {
-                /* block until thread completes */
-                mutex_down(&ptltrace_signal);
+                cfs_waitq_wait(&wait, CFS_TASK_INTERRUPTIBLE);
         }
+
+        /* teardown if kernel_thread() failed */
+        cfs_waitq_del(&ptltrace_debug_ctlwq, &wait);
+        set_current_state(TASK_RUNNING);
+        EXIT;
 }
 
 void
 kptllnd_init_ptltrace(void)
 {
+        cfs_waitq_init(&ptltrace_debug_ctlwq);
         init_mutex(&ptltrace_mutex);
-        init_mutex_locked(&ptltrace_signal);
 }
-
-#else
-
-void
-kptllnd_dump_ptltrace(void)
-{
-}
-
-void
-kptllnd_init_ptltrace(void)
-{
-}
-
 #endif
