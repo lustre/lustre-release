@@ -411,7 +411,7 @@ test_20b() { # bug 10480
 
     fail mds                            # start orphan recovery
     df -P $DIR || df -P $DIR || true    # reconnect
-    wait_mds_recovery_done || error "MDS recovery not done"
+    wait_recovery_complete mds || error "MDS recovery not done"
 
     # For interop with 2.0 only:
     # FIXME just because recovery is done doesn't mean we've finished

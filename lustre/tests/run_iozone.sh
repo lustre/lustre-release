@@ -31,7 +31,7 @@ trap signaled TERM
 # recovery-mds-scale uses this to signal the client loads to die
 echo $$ >$LOAD_PID_FILE
 
-TESTDIR=$MOUNT/iozone-$(hostname)
+TESTDIR=$MOUNT/d0.iozone-$(hostname)
 
 # needed to debug oom problem
 #echo 1 > /proc/sys/vm/vm_gfp_debug
