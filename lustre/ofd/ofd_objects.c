@@ -64,6 +64,8 @@ struct filter_object *filter_object_find_or_create(const struct lu_env *env,
         if (filter_object_exists(fo))
                 RETURN(fo);
 
+        dof.dof_type = dt_mode_to_dft(S_IFREG);
+
         next = filter_object_child(fo);
         LASSERT(next != NULL);
 
@@ -71,7 +73,7 @@ struct filter_object *filter_object_find_or_create(const struct lu_env *env,
         if (IS_ERR(th))
                 GOTO(out, rc = PTR_ERR(th));
 
-        rc = dt_declare_create(env, next, attr, NULL, NULL, th);
+        rc = dt_declare_create(env, next, attr, NULL, &dof, th);
         LASSERT(rc == 0);
 
         rc = filter_trans_start(env, ofd, th);
@@ -85,7 +87,6 @@ struct filter_object *filter_object_find_or_create(const struct lu_env *env,
         CDEBUG(D_OTHER, "create new object %lu:%llu\n",
                (unsigned long) fid->f_oid, fid->f_seq);
 
-        dof.dof_type = dt_mode_to_dft(S_IFREG);
         rc = dt_create(env, next, attr, NULL, &dof, th);
         LASSERT(rc == 0);
         LASSERT(filter_object_exists(fo));

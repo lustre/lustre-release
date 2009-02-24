@@ -589,7 +589,9 @@ static int filter_init0(const struct lu_env *env, struct filter_device *m,
 
         lmi = server_get_mount(dev);
         obd->obd_fsops = fsfilt_get_ops(MT_STR(s2lsi(lmi->lmi_sb)->lsi_ldd));
-        LASSERT(obd->obd_fsops != NULL);
+        if (obd->obd_fsops == NULL)
+                CERROR("this filesystem (%s) doesn't support fsfilt\n",
+                       MT_STR(s2lsi(lmi->lmi_sb)->lsi_ldd));
 
         spin_lock_init(&m->ofd_transno_lock);
         spin_lock_init(&m->ofd_client_bitmap_lock);
