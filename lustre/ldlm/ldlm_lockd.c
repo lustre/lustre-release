@@ -413,6 +413,7 @@ static int __ldlm_add_waiting_lock(struct ldlm_lock *lock, int seconds)
 static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
 {
         int ret;
+        int timeout = ldlm_get_enq_timeout(lock);
 
         LASSERT(!(lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK));
 
@@ -428,15 +429,16 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
                 return 0;
         }
 
-        ret = __ldlm_add_waiting_lock(lock, ldlm_get_enq_timeout(lock));
+        ret = __ldlm_add_waiting_lock(lock, timeout);
         if (ret)
                 /* grab ref on the lock if it has been added to the
                  * waiting list */
                 LDLM_LOCK_GET(lock);
         spin_unlock_bh(&waiting_locks_spinlock);
 
-        LDLM_DEBUG(lock, "%sadding to wait list",
-                   ret == 0 ? "not re-" : "");
+        LDLM_DEBUG(lock, "%sadding to wait list(timeout: %d, AT: %s)",
+                   ret == 0 ? "not re-" : "", timeout,
+                   AT_OFF ? "off" : "on");
         return ret;
 }
 
