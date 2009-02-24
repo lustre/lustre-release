@@ -117,6 +117,7 @@ typedef struct
         int             *kptl_ack_puts;         /* make portals ack PUTs */
 #ifdef CRAY_XT3
         int             *kptl_ptltrace_on_timeout; /* dump pltrace on timeout? */
+        int             *kptl_ptltrace_on_fail;    /* dump pltrace on PTL_NAL_FAILED? */
         char           **kptl_ptltrace_basename;  /* ptltrace dump file basename */
 #endif
 #ifdef PJK_DEBUGGING
@@ -282,6 +283,7 @@ struct kptl_data
         struct list_head        kptl_sched_rxbq;       /* rxb requiring reposting */
 
         wait_queue_head_t       kptl_watchdog_waitq;   /* watchdog sleeps here */
+        atomic_t                kptl_needs_ptltrace;   /* watchdog thread to dump ptltrace */
 
         kptl_rx_buffer_pool_t   kptl_rx_buffer_pool;   /* rx buffer pool */
         cfs_mem_cache_t*        kptl_rx_cache;         /* rx descripter cache */
@@ -333,6 +335,17 @@ kptllnd_lnet2ptlnid(lnet_nid_t lnet_nid)
                           LNET_NIDADDR(lnet_nid));
 #else
 	return LNET_NIDADDR(lnet_nid);
+#endif
+}
+
+static inline void
+kptllnd_schedule_ptltrace_dump (void)
+{
+#ifdef CRAY_XT3
+        if (*kptllnd_tunables.kptl_ptltrace_on_fail) {
+                atomic_inc(&kptllnd_data.kptl_needs_ptltrace);
+                wake_up(&kptllnd_data.kptl_watchdog_waitq);
+        }
 #endif
 }
 

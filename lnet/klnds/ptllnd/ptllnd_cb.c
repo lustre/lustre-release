@@ -301,6 +301,7 @@ kptllnd_active_rdma(kptl_rx_t *rx, lnet_msg_t *lntmsg, int type,
                 kptllnd_peer_close(peer, -EIO);
                 /* Everything (including this RDMA) queued on the peer will
                  * be completed with failure */
+                kptllnd_schedule_ptltrace_dump();
         }
 
         return 0;
@@ -686,6 +687,22 @@ kptllnd_watchdog(void *arg)
 
         /* threads shut down in phase 2 after all peers have been destroyed */
         while (kptllnd_data.kptl_shutdown < 2) {
+
+                /* add a check for needs ptltrace
+                 * yes, this is blatant hijacking of this thread
+                 * we can't dump directly from tx or rx _callbacks as it deadlocks portals
+                 * and takes out the node
+                */
+
+                if (atomic_read(&kptllnd_data.kptl_needs_ptltrace)) {
+#ifdef CRAY_XT3
+                        kptllnd_dump_ptltrace();
+                        /* we only dump once, no matter how many pending */
+                        atomic_set(&kptllnd_data.kptl_needs_ptltrace, 0);
+#else
+                        LBUG();
+#endif
+                }
 
                 timeout = (int)(deadline - jiffies);
 
