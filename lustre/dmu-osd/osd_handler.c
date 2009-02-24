@@ -704,6 +704,9 @@ static void osd_conf_get(const struct lu_env *env,
         param->ddp_max_name_len  = 256;
         param->ddp_max_nlink     = 256;
         param->ddp_block_shift   = 12; /* XXX */
+        /* XXX: remove when new llog/mountconf over osd are ready -bzzz */
+        param->ddp_mnt           = NULL;
+        param->ddp_mount_type    = LDD_MT_DMU;
 }
 
 /*
@@ -820,7 +823,7 @@ static void osd_trans_stop(const struct lu_env *env, struct thandle *th)
                 CERROR("Failure in transaction hook: %d\n", result);
 
         udmu_tx_commit(oh->ot_tx);
-        if (oh->ot_sync)
+        if (0 && oh->ot_sync)
                 udmu_wait_synced(&osd->od_objset, oh->ot_tx);
         EXIT;
 }
@@ -869,6 +872,8 @@ static int osd_init_capa_ctxt(const struct lu_env *env, struct dt_device *d,
 static char *osd_label_get(const struct lu_env *env, const struct dt_device *d)
 {
         struct osd_device *dev = osd_dt_dev(d);
+        CERROR("return label NEW:OST\n");
+        return ("NEW:OST");
         LBUG();
         RETURN(NULL);
 }
@@ -877,7 +882,7 @@ static int osd_label_set(const struct lu_env *env, const struct dt_device *d,
                          char *name)
 {
         struct osd_device *dev = osd_dt_dev(d);
-        LBUG();
+        CERROR("set new label to '%s'\n", name);
         RETURN(0);
 }
 
@@ -1104,6 +1109,7 @@ static int osd_declare_object_create(const struct lu_env *env,
 
         LASSERT(handle != NULL);
         oh = container_of0(handle, struct osd_thandle, ot_super);
+        LASSERT(oh != NULL);
         LASSERT(oh->ot_tx != NULL);
 
         switch (dof->dof_type) {
@@ -1244,6 +1250,7 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
         LASSERT(osd->od_objdir_db != NULL);
         LASSERT(osd_invariant(obj));
         LASSERT(!dt_object_exists(dt));
+        LASSERT(dof != NULL);
 
         LASSERT(th != NULL);
         oh = container_of0(th, struct osd_thandle, ot_super);
@@ -1257,7 +1264,7 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
 
         osd_fid2str(buf, fid);
 
-        db = osd_create_type_f(attr->la_mode)(info, osd, attr, oh);
+        db = osd_create_type_f(dof->dof_type)(info, osd, attr, oh);
 
         if(IS_ERR(db))
                 RETURN (PTR_ERR(th));
@@ -1273,7 +1280,7 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
         obj->oo_db = db;
 
         lu_attr2vnattr(attr , &vap);
-        udmu_object_setattr(db, NULL, &vap);
+        udmu_object_setattr(db, oh->ot_tx, &vap);
         udmu_object_getattr(db, &vap);
         vnattr2lu_attr(&vap, attr);
 
@@ -2439,11 +2446,11 @@ static int osd_oi_init(const struct lu_env *env, struct osd_device *o)
                 LASSERT(rc == 0);
 
                 udmu_tx_commit(tx);
-
-                RETURN(-rc);
         }
 
         o->od_objdir_db = objdb;
+
+        RETURN(0);
 }
 
 static int osd_mount(const struct lu_env *env,
@@ -2455,11 +2462,8 @@ static int osd_mount(const struct lu_env *env,
 
         ENTRY;
 
-        if (o->od_objset.os != NULL) {
-                CERROR("Already mounted (%s) (dev %p, lu %p)\n", dev, o,
-                        osd2lu_dev(o));
-                RETURN(-EEXIST);
-        }
+        if (o->od_objset.os != NULL)
+                RETURN(0);
 
         while (*dev && *dev == '/')
                 dev++;
@@ -2619,6 +2623,13 @@ static int osd_fid_lookup(const struct lu_env *env,
         RETURN(0);
 }
 
+static int osd_prepare(const struct lu_env *env,
+                       struct lu_device *pdev,
+                       struct lu_device *dev)
+{
+        RETURN(0);
+}
+
 /*
  * Helpers.
  */
@@ -2678,7 +2689,8 @@ static struct lu_object_operations osd_lu_obj_ops = {
 static struct lu_device_operations osd_lu_ops = {
         .ldo_object_alloc      = osd_object_alloc,
         .ldo_process_config    = osd_process_config,
-        .ldo_recovery_complete = osd_recovery_complete
+        .ldo_recovery_complete = osd_recovery_complete,
+        .ldo_prepare           = osd_prepare
 };
 
 static struct lu_device_type_operations osd_device_type_ops = {
