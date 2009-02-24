@@ -492,8 +492,11 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
                 int i;
                 lov_getref(obd);
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                        if (!lov->lov_tgts[i])
-                                continue;
+                        /* don't send sync event if target not
+                         * connected/activated */
+                        if (!lov->lov_tgts[i] ||
+                            !lov->lov_tgts[i]->ltd_active)
+                                 continue;
 
                         if ((ev == OBD_NOTIFY_SYNC) ||
                             (ev == OBD_NOTIFY_SYNC_NONBLOCK))
