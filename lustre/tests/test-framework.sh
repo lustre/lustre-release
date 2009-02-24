@@ -459,11 +459,36 @@ fi
 fi"
 }
 
+shudown_node_hard () {
+    local host=$1
+    local attempts=3
+
+    for i in $(seq $attempts) ; do
+        $POWER_DOWN $host
+        sleep 1
+        ping -w 3 -c 1 $host > /dev/null 2>&1 || return 0
+        echo "waiting for $host to fail attempts=$attempts"
+        [ $i -lt $attempts ] || \
+            { echo "$host still pingable after power down! attempts=$attempts" && return 1; } 
+    done
+}
+
+shutdown_client() {
+    local client=$1
+    local mnt=${2:-$MOUNT}
+    local attempts=3
+
+    if [ "$FAILURE_MODE" = HARD ]; then
+        shudown_node_hard $client 
+    else
+       zconf_umount_clients $client $mnt -f
+    fi
+}
+
 shutdown_facet() {
     local facet=$1
     if [ "$FAILURE_MODE" = HARD ]; then
-        $POWER_DOWN `facet_active_host $facet`
-        sleep 2
+        shudown_node_hard $(facet_active_host $facet)
     elif [ "$FAILURE_MODE" = SOFT ]; then
         stop $facet
     fi
@@ -498,30 +523,30 @@ check_progs_installed () {
 }
 
 start_client_load() {
-    local list=(${1//,/ })
-    local nodenum=$2
+    local client=$1
+    local var=${client}_load
 
-    local numloads=${#CLIENT_LOADS[@]}
-    local testnum=$((nodenum % numloads))
-
-    do_node ${list[nodenum]} "PATH=$PATH MOUNT=$MOUNT ERRORS_OK=$ERRORS_OK \
+    do_node $client "PATH=$PATH MOUNT=$MOUNT ERRORS_OK=$ERRORS_OK \
                               BREAK_ON_ERROR=$BREAK_ON_ERROR \
                               END_RUN_FILE=$END_RUN_FILE \
                               LOAD_PID_FILE=$LOAD_PID_FILE \
                               TESTSUITELOG=$TESTSUITELOG \
-                              run_${CLIENT_LOADS[testnum]}.sh" &
+                              run_${!var}.sh" &
     CLIENT_LOAD_PIDS="$CLIENT_LOAD_PIDS $!"
-    log "Started client load: ${CLIENT_LOADS[testnum]} on ${list[nodenum]}"
+    log "Started client load: ${!var} on $client"
 
-    eval export ${list[nodenum]}_load=${CLIENT_LOADS[testnum]}
     return 0
 }
 
 start_client_loads () {
     local clients=(${1//,/ })
+    local numloads=${#CLIENT_LOADS[@]}
+    local testnum
 
-    for ((num=0; num < ${#clients[@]}; num++ )); do
-        start_client_load $1 $num
+    for ((nodenum=0; nodenum < ${#clients[@]}; nodenum++ )); do
+        testnum=$((nodenum % numloads))
+        eval export ${clients[nodenum]}_load=${CLIENT_LOADS[testnum]}
+        start_client_load ${clients[nodenum]}
     done
 }
 
@@ -562,12 +587,38 @@ check_client_loads () {
 
    for client in $clients; do
       check_client_load $client
-      rc=$?
+      rc=${PIPESTATUS[0]}
       if [ "$rc" != 0 ]; then
         log "Client load failed on node $client, rc=$rc"
         return $rc
       fi
    done
+}
+
+restart_client_loads () {
+    local clients=${1//,/ }
+    local expectedfail=${2:-""}
+    local client=
+    local rc=0
+
+    for client in $clients; do
+        check_client_load $client
+        rc=${PIPESTATUS[0]}
+        if [ "$rc" != 0 -a "$expectedfail"]; then
+            start_client_load $client
+            echo "Restarted client load: on $client. Checking ..."
+            check_client_load $client 
+            rc=${PIPESTATUS[0]}
+            if [ "$rc" != 0 ]; then
+                log "Client load failed to restart on node $client, rc=$rc"
+                # failure one client load means test fail
+                # we do not need to check other 
+                return $rc
+            fi
+        else
+            return $rc
+        fi
+    done
 }
 # End recovery-scale functions
 
@@ -642,32 +693,39 @@ wait_delete_completed () {
 }
 
 wait_for_host() {
-    local HOST=$1
-    check_network "$HOST" 900
-    while ! do_node $HOST "ls -d $LUSTRE " > /dev/null; do sleep 5; done
+    local host=$1
+    check_network "$host" 900
+    while ! do_node $host "ls -d $LUSTRE " > /dev/null; do sleep 5; done
 }
 
 wait_for() {
     local facet=$1
-    local HOST=`facet_active_host $facet`
-    wait_for_host $HOST
+    local host=`facet_active_host $facet`
+    wait_for_host $host
 }
 
-wait_mds_recovery_done () {
-    local timeout=`do_facet mds lctl get_param  -n timeout`
-#define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 / 2)
-# as we are in process of changing obd_timeout in different ways
-# let's set MAX longer than that
-    local MAX=$(( timeout * 4 ))
+wait_recovery_complete () {
+    local facet=$1
+
+    # Use default policy if $2 is not passed by caller.
+    #define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 / 2)
+    # as we are in process of changing obd_timeout in different ways
+    # let's set MAX longer than that
+    local MAX=${2:-$(( TIMEOUT * 4 ))}
+ 
+    local var_svc=${facet}_svc
+    local procfile="*.${!var_svc}.recovery_status"
     local WAIT=0
+    local STATUS=
+
     while [ $WAIT -lt $MAX ]; do
-        STATUS=`do_facet mds "lctl get_param -n mds.*-MDT*.recovery_status | grep status"`
-        echo $STATUS | grep COMPLETE && return 0
+        STATUS=$(do_facet $facet lctl get_param -n $procfile | grep status)
+        [[ $STATUS = "status: COMPLETE" ]] && return 0
         sleep 5
         WAIT=$((WAIT + 5))
-        echo "Waiting $(($MAX - $WAIT)) secs for MDS recovery done"
+        echo "Waiting $((MAX - WAIT)) secs for $facet recovery done. $STATUS"
     done
-    echo "MDS recovery not done in $MAX sec"
+    echo "$facet recovery not done in $MAX sec. $STATUS"
     return 1
 }
 
@@ -757,7 +815,7 @@ facet_failover() {
     RECOVERY_START_TIME=`date +%s`
     echo "df pid is $DFPID"
     change_active $facet
-    TO=`facet_active_host $facet`
+    local TO=`facet_active_host $facet`
     echo "Failover $facet to $TO"
     wait_for $facet
     mount_facet $facet || error "Restart of $facet failed"
@@ -1292,18 +1350,39 @@ comma_list() {
     echo "$*" | tr -s " " "\n" | sort -b -u | tr "\n" " " | sed 's/ \([^$]\)/,\1/g'
 }
 
-# list is comma separated list
-exclude_item_from_list () {
+# list, excluded are the comma separated lists
+exclude_items_from_list () {
     local list=$1
     local excluded=$2
+    local item
 
     list=${list//,/ }
-    list=$(echo " $list " | sed -re "s/\s+$excluded\s+/ /g")
+    for item in ${excluded//,/ }; do
+        list=$(echo " $list " | sed -re "s/\s+$item\s+/ /g")
+    done
     echo $(comma_list $list) 
 }
 
 absolute_path() {
     (cd `dirname $1`; echo $PWD/`basename $1`)
+}
+
+get_facets () {
+    local name=$(echo $1 | tr "[:upper:]" "[:lower:]")
+    local type=$(echo $1 | tr "[:lower:]" "[:upper:]")
+
+    local list=""
+    MDS
+
+    case $type in
+        MDS )    list=mds;;
+        OST )    for ((i=1; i<=$OSTCOUNT; i++)) do
+                    list="$list ${name}$i"
+                 done;;
+          * )    error "Invalid facet type"
+                 exit 1;;
+    esac
+    echo $(comma_list $list)
 }
 
 ##################################
