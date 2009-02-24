@@ -229,8 +229,13 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
 
                 lov_getref(obd);
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                        if (!lov->lov_tgts[i])
+
+                        /* don't send sync event if target not
+                         * connected/activated */
+                        if (!lov->lov_tgts[i] ||
+                            !lov->lov_tgts[i]->ltd_active)
                                 continue;
+
                         tgt_obd = class_exp2obd(lov->lov_tgts[i]->ltd_exp);
 
                         rc = obd_notify_observer(obd, tgt_obd, ev, data);
