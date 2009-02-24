@@ -104,8 +104,7 @@ struct osd_device {
         /* super-class */
         struct dt_device          od_dt_dev;
         /* information about underlying file system */
-        udmu_objset_t            *od_objset;
-        //struct lustre_mount_info *od_mount;
+        udmu_objset_t             od_objset;
 
         /* Environment for transaction commit callback.
          * Currently, OSD is based on ext3/JBD. Transaction commit in ext3/JBD
@@ -201,8 +200,6 @@ static struct lu_device   *osd_device_alloc (const struct lu_env *env,
 static struct lu_object   *osd_object_alloc (const struct lu_env *env,
                                              const struct lu_object_header *hdr,
                                              struct lu_device *d);
-extern struct lustre_mount_info *server_get_mount(const char *name);
-extern int server_put_mount(const char *name, struct vfsmount *mnt);
 
 static struct lu_device_type_operations osd_device_type_ops;
 static struct lu_device_type            osd_device_type;
@@ -594,7 +591,7 @@ static int osd_object_destroy(const struct lu_env *env, struct osd_object *obj)
         osd_trans_start(env, &osd->od_dt_dev, th);
 
         /* remove obj ref from main obj. dir */
-        rc = udmu_zap_delete(osd->od_objset, zapdb, oh->ot_tx, buf);
+        rc = udmu_zap_delete(&osd->od_objset, zapdb, oh->ot_tx, buf);
         if (rc) {
                 CERROR("udmu_zap_delete() failed with error %d", rc);
                 RETURN (rc);
@@ -602,7 +599,7 @@ static int osd_object_destroy(const struct lu_env *env, struct osd_object *obj)
 
         udmu_object_getattr(obj->oo_db, &va);
         /* kill object */
-        rc = udmu_object_delete(osd->od_objset, &obj->oo_db,
+        rc = udmu_object_delete(&osd->od_objset, &obj->oo_db,
                                 oh->ot_tx, osd_object_tag);
         if (rc) {
                 CERROR("udmu_object_delete() failed with error %d", rc);
@@ -671,7 +668,7 @@ static int osd_statfs(const struct lu_env *env,
         spin_lock(&osd->od_osfs_lock);
         /* cache 1 second */
         if (cfs_time_before_64(osd->od_osfs_age, cfs_time_shift_64(-1))) {
-                rc = udmu_objset_statvfs(osd->od_objset, (struct statvfs64 *)kfs);
+                rc = udmu_objset_statfs(&osd->od_objset, (struct statfs64 *) kfs);
 
                /* Reserve 64MB for ZFS COW symantics so that grants won't
                 * consume all available space. COW needs space to duplicate
@@ -758,7 +755,7 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
         dmu_tx_t *tx;
         int hook_res, rc;
         ENTRY;
-        tx = udmu_tx_create(osd->od_objset);
+        tx = udmu_tx_create(&osd->od_objset);
         if (tx == NULL)
                 RETURN(ERR_PTR(-ENOMEM));
 
@@ -824,7 +821,7 @@ static void osd_trans_stop(const struct lu_env *env, struct thandle *th)
 
         udmu_tx_commit(oh->ot_tx);
         if (oh->ot_sync)
-                udmu_wait_synced(osd->od_objset, oh->ot_tx);
+                udmu_wait_synced(&osd->od_objset, oh->ot_tx);
         EXIT;
 }
 
@@ -835,7 +832,7 @@ static int osd_sync(const struct lu_env *env, struct dt_device *d)
 {
         struct osd_device  *osd = osd_dt_dev(d);
         CDEBUG(D_HA, "syncing OSD %s\n", LUSTRE_OSD_NAME);
-        udmu_wait_synced(osd->od_objset, NULL);
+        udmu_wait_synced(&osd->od_objset, NULL);
         return 0;
 }
 
@@ -869,6 +866,21 @@ static int osd_init_capa_ctxt(const struct lu_env *env, struct dt_device *d,
         RETURN(0);
 }
 
+static char *osd_label_get(const struct lu_env *env, const struct dt_device *d)
+{
+        struct osd_device *dev = osd_dt_dev(d);
+        LBUG();
+        RETURN(NULL);
+}
+
+static int osd_label_set(const struct lu_env *env, const struct dt_device *d,
+                         char *name)
+{
+        struct osd_device *dev = osd_dt_dev(d);
+        LBUG();
+        RETURN(0);
+}
+
 static struct dt_device_operations osd_dt_ops = {
         .dt_root_get       = osd_root_get,
         .dt_statfs         = osd_statfs,
@@ -878,7 +890,9 @@ static struct dt_device_operations osd_dt_ops = {
         .dt_conf_get       = osd_conf_get,
         .dt_sync           = osd_sync,
         .dt_ro             = osd_ro,
-        .dt_init_capa_ctxt = osd_init_capa_ctxt
+        .dt_init_capa_ctxt = osd_init_capa_ctxt,
+        .dt_label_get      = osd_label_get,
+        .dt_label_set      = osd_label_set
 };
 
 static void osd_object_read_lock(const struct lu_env *env,
@@ -1033,7 +1047,7 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
                                   start, len ? len : DMU_OBJECT_END);
          */
 
-        udmu_object_punch(osd->od_objset, obj->oo_db, oh->ot_tx, start, len);
+        udmu_object_punch(&osd->od_objset, obj->oo_db, oh->ot_tx, start, len);
 
         /* set new size */
 #if 0
@@ -1127,7 +1141,7 @@ static dmu_buf_t * osd_mkdir(struct osd_thread_info *info, struct osd_device  *o
         dmu_buf_t * db;
 
         LASSERT(S_ISDIR(attr->la_mode));
-        udmu_zap_create(osd->od_objset, &db, oh->ot_tx, osd_object_tag);
+        udmu_zap_create(&osd->od_objset, &db, oh->ot_tx, osd_object_tag);
 
         return db;
 }
@@ -1138,7 +1152,7 @@ static dmu_buf_t* osd_mkreg(struct osd_thread_info *info, struct osd_device  *os
 {
         dmu_buf_t * db;
         LASSERT(S_ISREG(attr->la_mode));
-        udmu_object_create(osd->od_objset, &db, oh->ot_tx, osd_object_tag);
+        udmu_object_create(&osd->od_objset, &db, oh->ot_tx, osd_object_tag);
         return db;
 }
 
@@ -1149,7 +1163,7 @@ static dmu_buf_t* osd_mksym(struct osd_thread_info *info, struct osd_device  *os
         dmu_buf_t * db;
 
         LASSERT(S_ISLNK(attr->la_mode));
-        udmu_object_create(osd->od_objset, &db, oh->ot_tx, osd_object_tag);
+        udmu_object_create(&osd->od_objset, &db, oh->ot_tx, osd_object_tag);
         return db;
 }
 
@@ -1164,7 +1178,7 @@ static dmu_buf_t* osd_mknod(struct osd_thread_info *info, struct osd_device  *os
         LASSERT(S_ISCHR(mode) || S_ISBLK(mode) ||
                 S_ISFIFO(mode) || S_ISSOCK(mode));
 
-        udmu_object_create(osd->od_objset, &db, oh->ot_tx, osd_object_tag);
+        udmu_object_create(&osd->od_objset, &db, oh->ot_tx, osd_object_tag);
 
         if (db && (S_ISCHR(mode)||S_ISBLK(mode))) {
                 vap.va_mask = DMU_AT_RDEV;
@@ -1251,7 +1265,7 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
         oid = udmu_object_get_id(db);
 
         /* XXX: zapdb should be replaced with zap-mapping-fids-to-dnode */
-        rc = udmu_zap_insert(osd->od_objset, zapdb, oh->ot_tx, buf,
+        rc = udmu_zap_insert(&osd->od_objset, zapdb, oh->ot_tx, buf,
                              &oid, sizeof (oid));
         if(rc)
                 goto out;
@@ -1301,7 +1315,7 @@ static struct dt_it *osd_zap_it_init(const struct lu_env *env,
 
         OBD_ALLOC_PTR(it);
         if (it != NULL) {
-                if (udmu_zap_cursor_init(&it->ozi_zc, osd->od_objset,
+                if (udmu_zap_cursor_init(&it->ozi_zc, &osd->od_objset,
                                          udmu_object_get_id(obj->oo_db)))
                         RETURN(ERR_PTR(-ENOMEM));
 
@@ -1463,7 +1477,7 @@ static int osd_zap_it_load(const struct lu_env *env,
         LBUG();
         RETURN(0);
 #if 0
-        udmu_zap_cursor_init_serialized(it->ozi_zc,  osd_obj2dev(obj)->od_objset,
+        udmu_zap_cursor_init_serialized(it->ozi_zc,  &osd_obj2dev(obj)->od_objset,
                                         udmu_object_get_id(obj->oo_db), hash);
 
         /* same as osd_zap_it_next()*/
@@ -1494,7 +1508,7 @@ static int osd_index_lookup(const struct lu_env *env, struct dt_object *dt,
         LASSERT(udmu_object_is_zap(obj->oo_db));
 
         if (osd_object_is_root(obj)) {
-                rc = udmu_zap_lookup(osd->od_objset, zapdb, (char *) key, &oid,
+                rc = udmu_zap_lookup(&osd->od_objset, zapdb, (char *) key, &oid,
                                      sizeof(uint64_t), sizeof(uint64_t));
                 if (rc) {
                         RETURN(-rc);
@@ -1507,7 +1521,7 @@ static int osd_index_lookup(const struct lu_env *env, struct dt_object *dt,
                 fid->f_seq = LUSTRE_FID_INIT_OID;
                 fid->f_oid = oid; /* XXX: f_oid is 32bit, oid - 64bit */
         } else {
-                rc = udmu_zap_lookup(osd->od_objset, zapdb, (char *) key,
+                rc = udmu_zap_lookup(&osd->od_objset, zapdb, (char *) key,
                                      rec, 17, 1);
         }
         RETURN(-rc);
@@ -1574,7 +1588,7 @@ static int osd_index_insert(const struct lu_env *env, struct dt_object *dt,
         pack = (struct lu_fid_pack *) rec;
 
         /* Insert (key,oid) into ZAP */
-        rc = udmu_zap_insert(osd->od_objset, zap_db, oh->ot_tx,
+        rc = udmu_zap_insert(&osd->od_objset, zap_db, oh->ot_tx,
                              (char *) key, pack, pack->fp_len);
 
         RETURN(-rc);
@@ -1627,7 +1641,7 @@ static int osd_index_delete(const struct lu_env *env, struct dt_object *dt,
         LASSERT(oh->ot_tx != NULL);
 
         /* Remove key from the ZAP */
-        rc = udmu_zap_delete(osd->od_objset, zap_db, oh->ot_tx, (char *) key);
+        rc = udmu_zap_delete(&osd->od_objset, zap_db, oh->ot_tx, (char *) key);
 
         if (rc) {
                 CERROR("udmu_zap_delete() failed with error %d", rc);
@@ -2048,7 +2062,7 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
         //loff_t offset = *pos;
         int rc;
 
-        rc = udmu_object_read(osd->od_objset, obj->oo_db, (uint64_t)(*pos),
+        rc = udmu_object_read(&osd->od_objset, obj->oo_db, (uint64_t)(*pos),
                               (uint64_t)buf->lb_len, buf->lb_buf);
         if (rc > 0)
                 *pos += rc;//buf->lb_len;
@@ -2094,7 +2108,7 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 
         udmu_object_getattr(obj->oo_db, &va);
 
-        udmu_object_write(osd->od_objset, obj->oo_db, oh->ot_tx, offset,
+        udmu_object_write(&osd->od_objset, obj->oo_db, oh->ot_tx, offset,
                           (uint64_t)buf->lb_len, buf->lb_buf);
         if (va.va_size < offset + buf->lb_len) {
                 va.va_size = offset + buf->lb_len;
@@ -2238,7 +2252,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
                 CDEBUG(D_OTHER, "write %u bytes at %u\n", (unsigned) lb->len,
                        (unsigned) lb->file_offset);
 
-                udmu_object_write(osd->od_objset, obj->oo_db, oh->ot_tx,
+                udmu_object_write(&osd->od_objset, obj->oo_db, oh->ot_tx,
                                   lb->file_offset, lb->len,kmap(lb->page));
                 kunmap(lb->page);
                 if (new_size < lb->file_offset + lb->len)
@@ -2389,57 +2403,82 @@ static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
         RETURN(0);
 }
 
+#define DMU_OSD_OI_NAME         "OBJ"
+
+static int osd_oi_init(const struct lu_env *env, struct osd_device *o)
+{
+        dmu_buf_t         *objdb;
+        uint64_t           objid;
+        int                rc;
+        ENTRY;
+        
+        rc = udmu_zap_lookup(&o->od_objset, o->od_root_db, DMU_OSD_OI_NAME, &objid,
+                             sizeof(uint64_t), sizeof(uint64_t));
+        if (rc == 0) {
+                rc = udmu_object_get_dmu_buf(&o->od_objset, objid,
+                                             &objdb, objdir_tag);
+        } else {
+                /* create fid-to-dnode index */
+                dmu_tx_t *tx = udmu_tx_create(&o->od_objset);
+                if (tx == NULL)
+                        RETURN(-ENOMEM);
+
+                udmu_tx_hold_zap(tx, DMU_NEW_OBJECT, 1, NULL);
+                udmu_tx_hold_bonus(tx, udmu_object_get_id(o->od_root_db));
+                udmu_tx_hold_zap(tx, udmu_object_get_id(o->od_root_db),
+                                 TRUE, DMU_OSD_OI_NAME);
+
+                rc = udmu_tx_assign(tx, TXG_WAIT);
+                LASSERT(rc == 0);
+
+                udmu_zap_create(&o->od_objset, &objdb, tx, osd_object_tag);
+                objid = udmu_object_get_id(objdb);
+
+                rc = udmu_zap_insert(&o->od_objset, o->od_root_db, tx,
+                                     DMU_OSD_OI_NAME, &objid, sizeof(objid));
+                LASSERT(rc == 0);
+
+                udmu_tx_commit(tx);
+
+                RETURN(-rc);
+        }
+
+        o->od_objdir_db = objdb;
+}
+
 static int osd_mount(const struct lu_env *env,
                      struct osd_device *o, struct lustre_cfg *cfg)
 {
-        //struct lustre_mount_info *lmi;
-        const char               *dev  = lustre_cfg_string(cfg, 0);
-        dmu_buf_t                *rootdb;
-        dmu_buf_t                *objdb;
-        uint64_t                  rootid;
-        uint64_t                  objid;
-        int                       rc;
+        char               *dev  = lustre_cfg_string(cfg, 0);
+        dmu_buf_t          *rootdb;
+        int                rc;
 
         ENTRY;
 
-        if (o->od_objset != NULL) {
+        if (o->od_objset.os != NULL) {
                 CERROR("Already mounted (%s) (dev %p, lu %p)\n", dev, o,
                         osd2lu_dev(o));
                 RETURN(-EEXIST);
         }
 
-#if 0
-        /* get mount */
-        lmi = server_get_mount(dev);
-        if (lmi == NULL) {
-                CERROR("Cannot get mount info for %s!\n", dev);
-                RETURN(-EFAULT);
+        while (*dev && *dev == '/')
+                dev++;
+
+        rc = udmu_objset_open(dev, NULL, 0, 0, &o->od_objset); 
+        if (rc) {
+                CERROR("can't open objset %s: %d\n", dev, rc);
+                RETURN(-rc);
         }
 
-        LASSERT(lmi != NULL);
-        /* save lustre_mount_info in dt_device */
-        o->od_mount = lmi;
-#endif
-
-        rc = udmu_objset_root(o->od_objset, &rootdb, root_tag);
+        rc = udmu_objset_root(&o->od_objset, &rootdb, root_tag);
         if (rc) {
                 CERROR("udmu_objset_root() failed with error %d\n", rc);
-                return (-rc);
+                RETURN(-rc);
         }
-        rootid = udmu_object_get_id(rootdb);
-
-        rc = udmu_zap_lookup(o->od_objset, rootdb, "OBJ", &objid,
-                             sizeof(uint64_t), sizeof(uint64_t));
-        if (rc == 0) {
-                rc = udmu_object_get_dmu_buf(o->od_objset, objid,
-                                             &objdb, objdir_tag);
-        } else {
-                CERROR("Cannot find OBJ directory (%d)\n", rc);
-                return (-rc);
-        }
-
-        o->od_objdir_db = objdb;
         o->od_root_db = rootdb;
+
+        rc = osd_oi_init(env, o);
+        LASSERT(rc == 0);
 
         RETURN(rc);
 }
@@ -2559,14 +2598,14 @@ static int osd_fid_lookup(const struct lu_env *env,
         } else {
                 osd_fid2str(buf, fid);
 
-                rc = udmu_zap_lookup(dev->od_objset, dev->od_objdir_db,
+                rc = udmu_zap_lookup(&dev->od_objset, dev->od_objdir_db,
                                      buf, &oid, sizeof(uint64_t),
                                      sizeof(uint64_t));
                 if (rc)
                         RETURN(-rc);
         }
 
-        rc = udmu_object_get_dmu_buf(dev->od_objset, oid, &obj->oo_db,
+        rc = udmu_object_get_dmu_buf(&dev->od_objset, oid, &obj->oo_db,
                                      osd_object_tag);
         if (rc == 0) {
                 LASSERT(obj->oo_db != NULL);
@@ -2655,7 +2694,7 @@ static struct lu_device_type_operations osd_device_type_ops = {
 
 static struct lu_device_type osd_device_type = {
         .ldt_tags     = LU_DEVICE_DT,
-        .ldt_name     = LUSTRE_OSD_NAME,
+        .ldt_name     = LUSTRE_DMU_NAME,
         .ldt_ops      = &osd_device_type_ops,
         .ldt_ctx_tags = LCT_MD_THREAD|LCT_DT_THREAD
 };
@@ -2694,13 +2733,14 @@ int __init osd_init(void)
 
         lprocfs_osd_init_vars(&lvars);
         return class_register_type(&osd_obd_device_ops, NULL, lvars.module_vars,
-                                   LUSTRE_OSD_NAME, &osd_device_type);
+                                   LUSTRE_DMU_NAME, &osd_device_type);
+        
 }
 
 #ifdef __KERNEL__
 void __exit osd_exit(void)
 {
-        class_unregister_type(LUSTRE_OSD_NAME);
+        class_unregister_type(LUSTRE_DMU_NAME);
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

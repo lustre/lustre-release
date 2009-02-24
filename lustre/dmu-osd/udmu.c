@@ -1,3 +1,4 @@
+#if 1
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
@@ -34,16 +35,13 @@
 #include <sys/dbuf.h>
 #include <sys/spa.h>
 #include <sys/stat.h>
-#include <sys/statvfs.h>
 #include <sys/zap.h>
 #include <sys/spa_impl.h>
 #include <sys/zfs_znode.h>
 #include <sys/dmu_tx.h>
 #include <sys/dmu_objset.h>
-#include <udmu.h>
-#include <sys/dbuf.h>
-#include <sys/dnode.h>
-#include <sys/dmu_ctl.h>
+#include "udmu.h"
+#include <linux/statfs.h>
 
 enum vtype iftovt_tab[] = {
         VNON, VFIFO, VCHR, VNON, VDIR, VNON, VBLK, VNON,
@@ -71,14 +69,17 @@ ushort_t vttoif_tab[] = {
 static int debug_level = LEVEL_CRITICAL;
 
 #define CONFIG_DIR "/var/run/zfs/udmu"
-static char config_path[MAXPATHLEN];
+//static char config_path[MAXPATHLEN];
 
 static void udmu_gethrestime(struct timespec *tp)
 {
+        struct timeval time;
+        do_gettimeofday(&time);
         tp->tv_nsec = 0;
-        time(&tp->tv_sec);
+        tp->tv_sec = time.tv_sec;
 }
 
+#if 0
 static void udmu_printf(int level, FILE *stream, char *message, ...)
 {
         va_list args;
@@ -89,73 +90,33 @@ static void udmu_printf(int level, FILE *stream, char *message, ...)
                 va_end(args);
         }
 }
+#else
+#define udmu_printf(level,stream,msg, a...)      \
+        printk(msg, ## a)
+#endif
 
 void udmu_debug(int level)
 {
         debug_level = level;
 }
 
-void udmu_init()
-{
-        char tmp[MAXPATHLEN];
-        struct rlimit rl = { 1024, 1024 };
-        int rc;
-
-        /*
-         * Set spa_config_path to /var/run/zfs/udmu/$pid/zpool.cache.
-         */
-        snprintf(config_path, MAXPATHLEN, "%s/%d", CONFIG_DIR, (int)getpid());
-
-        snprintf(tmp, MAXPATHLEN, "mkdir -p %s", config_path);
-        system(tmp);
-
-        /* Never hurts to be careful */
-        strncpy(tmp, config_path, MAXPATHLEN - 1);
-        tmp[MAXPATHLEN - 1] = '\0';
-
-        snprintf(config_path, MAXPATHLEN, "%s/zpool.cache", tmp);
-        spa_config_path = config_path;
-
-        (void) setvbuf(stdout, NULL, _IOLBF, 0);
-        (void) setrlimit(RLIMIT_NOFILE, &rl);
-
-        /* Initialize the emulation of kernel services in userland. */
-        kernel_init(FREAD | FWRITE);
-
-        rc = dctl_server_init(tmp, 2, 2);
-        if (rc != 0)
-                fprintf(stderr, "Error calling dctl_server_init(): %i\n"
-                    "lzpool and lzfs will not be functional!\n", rc);
-}
-
-void udmu_fini()
-{
-        int rc;
-
-        rc = dctl_server_fini();
-        if (rc != 0)
-                fprintf(stderr, "Error calling dctl_server_fini(): %i!\n", rc);
-
-        kernel_fini();
-}
-
 int udmu_objset_open(char *osname, char *import_dir, int import, int force,
                      udmu_objset_t *uos)
 {
         int error;
-        char cmd[MAXPATHLEN];
+        //char cmd[MAXPATHLEN];
         char *c;
         uint64_t version = ZPL_VERSION;
-        int tried_import = FALSE;
+        //int tried_import = FALSE;
 
         memset(uos, 0, sizeof(udmu_objset_t));
 
         c = strchr(osname, '/');
 
-top:
         /* Let's try to open the objset */
         error = dmu_objset_open(osname, DMU_OST_ZFS, DS_MODE_OWNER, &uos->os);
 
+#if 0
         if (error == ENOENT && import && !tried_import) {
                 /* objset not found, let's try to import the pool */
                 udmu_printf(LEVEL_INFO, stdout, "Importing pool %s\n", osname);
@@ -181,6 +142,7 @@ top:
                 tried_import = TRUE;
                 goto top;
         }
+#endif
 
         if (error) {
                 uos->os = NULL;
@@ -199,6 +161,7 @@ top:
                  */
                 error = EIO;
                 goto out;
+#if 0
         } else if (version != LUSTRE_ZPL_VERSION) {
                 udmu_printf(LEVEL_CRITICAL, stderr,
                             "Mismatched versions:  File system "
@@ -207,6 +170,7 @@ top:
                             (u_longlong_t)version, LUSTRE_ZPL_VERSION);
                 error = ENOTSUP;
                 goto out;
+#endif
         }
 
         error = zap_lookup(uos->os, MASTER_NODE_OBJ, ZFS_ROOT_OBJ,
@@ -220,6 +184,7 @@ top:
         ASSERT(uos->root != 0);
 
 out:
+#if 0
         if (error) {
                 if (uos->os == NULL && tried_import) {
                         if (c != NULL)
@@ -230,6 +195,7 @@ out:
                 } else if(uos->os != NULL)
                         udmu_objset_close(uos, tried_import);
         }
+#endif
 
         return (error);
 }
@@ -243,15 +209,17 @@ void udmu_wait_synced(udmu_objset_t *uos, dmu_tx_t *tx)
 
 void udmu_objset_close(udmu_objset_t *uos, int export_pool)
 {
-        spa_t *spa;
-        char pool_name[MAXPATHLEN];
 
         ASSERT(uos->os != NULL);
-        spa = uos->os->os->os_spa;
 
+#if 0
+        spa_t *spa;
+        char pool_name[MAXPATHLEN];
+        spa = uos->os->os->os_spa;
         spa_config_enter(spa, RW_READER, FTAG);
         strncpy(pool_name, spa_name(spa), sizeof(pool_name));
         spa_config_exit(spa, FTAG);
+#endif
 
         udmu_wait_synced(uos, NULL);
         /* close the object set */
@@ -259,11 +227,13 @@ void udmu_objset_close(udmu_objset_t *uos, int export_pool)
 
         uos->os = NULL;
 
+#if 0
         if (export_pool)
                 spa_export(pool_name, NULL, B_TRUE);
+#endif
 }
 
-int udmu_objset_statvfs(udmu_objset_t *uos, struct statvfs64 *statp)
+int udmu_objset_statfs(udmu_objset_t *uos, struct statfs64 *statp)
 {
         uint64_t refdbytes, availbytes, usedobjs, availobjs;
 
@@ -297,7 +267,7 @@ int udmu_objset_statvfs(udmu_objset_t *uos, struct statvfs64 *statp)
          * and the number of blocks (each object will take at least a block).
          */
         statp->f_ffree = MIN(availobjs, statp->f_bfree);
-        statp->f_favail = statp->f_ffree; /* no "root reservation" */
+        //statp->f_favail = statp->f_ffree; /* no "root reservation" */
         statp->f_files = statp->f_ffree + usedobjs;
 
         /* ZFSFUSE: not necessary? see 'man statfs' */
@@ -312,7 +282,7 @@ int udmu_objset_statvfs(udmu_objset_t *uos, struct statvfs64 *statp)
 
         statp->f_flag = vf_to_stf(vfsp->vfs_flag);*/
 
-        statp->f_namemax = 256;
+        statp->f_namelen = 256;
 
         return (0);
 }
@@ -525,7 +495,7 @@ int udmu_zap_cursor_retrieve_key(zap_cursor_t *zc, char *key)
         int err;
         zap_attribute_t za;
 
-        if (err = zap_cursor_retrieve(zc, &za))
+        if ((err = zap_cursor_retrieve(zc, &za)))
                 return err;
 
         if (key)
@@ -546,7 +516,7 @@ int udmu_zap_cursor_retrieve_value(zap_cursor_t *zc,  char *buf,
         zap_attribute_t za;
 
 
-        if (err = zap_cursor_retrieve(zc, &za))
+        if ((err = zap_cursor_retrieve(zc, &za)))
                 return err;
 
         if (za.za_integer_length <= 0)
@@ -585,10 +555,10 @@ int udmu_zap_cursor_move_to_key(zap_cursor_t *zc, const char *name)
         return zap_cursor_move_to_key(zc, name, MT_EXACT);
 }
 
-void udmu_zap_cursor_init_serialized(zap_cursor_t *zc, objset_t *ds,
+void udmu_zap_cursor_init_serialized(zap_cursor_t *zc, udmu_objset_t *uos,
                             uint64_t zapobj, uint64_t serialized)
 {
-        zap_cursor_init_serialized(zc, ds, zapobj, serialized);
+        zap_cursor_init_serialized(zc, uos->os, zapobj, serialized);
 }
 
 
@@ -876,17 +846,20 @@ void udmu_tx_commit(dmu_tx_t *tx)
 /* commit callback API */
 void * udmu_tx_cb_create(size_t bytes)
 {
-        return dmu_tx_callback_data_create(bytes);
+        return NULL;
+        //return dmu_tx_callback_data_create(bytes);
 }
 
 int udmu_tx_cb_add(dmu_tx_t *tx, void *func, void *data)
 {
-        return dmu_tx_callback_commit_add(tx, func, data);
+        return 0;
+        //return dmu_tx_callback_commit_add(tx, func, data);
 }
 
 int udmu_tx_cb_destroy(void *data)
 {
-        return dmu_tx_callback_data_destroy(data);
+        return 0;
+        //return dmu_tx_callback_data_destroy(data);
 }
 
 int udmu_indblk_overhead(dmu_buf_t *db, unsigned long *used,
@@ -908,24 +881,32 @@ int udmu_get_blocksize(dmu_buf_t *db, long *blksz)
         return 0;
 }
 
-int udmu_object_get_links(dmu_buf_t *db)
+uint64_t udmu_object_get_links(dmu_buf_t *db)
 {
-        /* XXX: not implemented yet */
-        BUG_ON(1);
-        return 0;
+        znode_phys_t *zp = db->db_data;
+
+        return zp->zp_links;
 }
 
 void udmu_object_links_inc(dmu_buf_t *db, dmu_tx_t *tx)
 {
-        /* XXX: not implemented yet */
-        BUG_ON(1);
+        znode_phys_t *zp = db->db_data;
+
+        if(tx)
+                dmu_buf_will_dirty(db, tx);
+        zp->zp_links++;
 }
 
 void udmu_object_links_dec(dmu_buf_t *db, dmu_tx_t *tx)
 {
-        /* XXX: not implemented yet */
-        BUG_ON(1);
+        znode_phys_t *zp = db->db_data;
+
+        ASSERT(zp->zp_links!=0);
+        if(tx)
+                dmu_buf_will_dirty(db, tx);
+        zp->zp_links--;
 }
+
 
 int udmu_get_xattr(dmu_buf_t *db, void *val, int vallen, const char *name)
 {
@@ -956,4 +937,4 @@ int udmu_list_xattr(dmu_buf_t *db, void *val, int vallen)
         return 0;
 }
 
-
+#endif

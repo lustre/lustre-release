@@ -1,3 +1,4 @@
+#if 0
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
@@ -239,3 +240,4 @@ int udmu_util_write(udmu_objset_t *uos, dmu_buf_t *db,
 
         return (len);
 }
+#endif

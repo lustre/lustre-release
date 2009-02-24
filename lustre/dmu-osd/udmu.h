@@ -52,9 +52,11 @@ extern "C" {
 #define DMU_AT_SEQ     0x8000
 #endif
 
+#if 0
 #define ACCESSED                (DMU_AT_ATIME)
 #define STATE_CHANGED           (DMU_AT_CTIME)
 #define CONTENT_MODIFIED        (DMU_AT_MTIME | DMU_AT_CTIME)
+#endif
 
 #define LOOKUP_DIR              0x01    /* want parent dir vp */
 #define LOOKUP_XATTR            0x02    /* lookup up extended attr dir */
@@ -63,17 +65,18 @@ extern "C" {
 #define S_IFDOOR        0xD000  /* door */
 #define S_IFPORT        0xE000  /* event port */
 
-struct statvfs64;
+struct statfs64;
 
 /* Data structures required for Solaris ZFS compatability */
 #if !defined(__sun__)
 
-#ifndef _SOL_SYS_TIME_H
+#ifndef _SPL_TYPES_H
 typedef struct timespec timestruc_t;
 #endif
 
 #endif
 
+#ifndef _SPL_VNODE_H
 typedef enum vtype {
         VNON    = 0,
         VREG    = 1,
@@ -88,10 +91,11 @@ typedef enum vtype {
         VPORT   = 10,
         VBAD    = 11
 } vtype_t;
+#endif
 
 typedef struct vnattr {
         unsigned int    va_mask;        /* bit-mask of attributes */
-        vtype_t         va_type;        /* vnode type (for create) */
+        enum vtype      va_type;        /* vnode type (for create) */
         mode_t          va_mode;        /* file access mode */
         uid_t           va_uid;         /* owner user id */
         gid_t           va_gid;         /* owner group id */
@@ -151,7 +155,7 @@ int udmu_objset_open(char *osname, char *import_dir, int import, int force, udmu
 
 void udmu_objset_close(udmu_objset_t *uos, int export_pool);
 
-int udmu_objset_statvfs(udmu_objset_t *uos, struct statvfs64 *statp);
+int udmu_objset_statfs(udmu_objset_t *uos, struct statfs64 *statp);
 
 int udmu_objset_root(udmu_objset_t *uos, dmu_buf_t **dbp, void *tag);
 
@@ -252,7 +256,7 @@ int udmu_indblk_overhead(dmu_buf_t *db, unsigned long *used, unsigned
 
 int udmu_get_blocksize(dmu_buf_t *db, long *blksz);
 
-int udmu_object_get_links(dmu_buf_t *db);
+uint64_t udmu_object_get_links(dmu_buf_t *db);
 void udmu_object_links_inc(dmu_buf_t *db, dmu_tx_t *tx);
 void udmu_object_links_dec(dmu_buf_t *db, dmu_tx_t *tx);
 
