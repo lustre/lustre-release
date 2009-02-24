@@ -334,6 +334,11 @@ static int quota_check_common(struct obd_device *obd, unsigned int uid,
 
                 spin_unlock(&lqs->lqs_lock);
 
+                if (lqs->lqs_blk_rec  < 0 &&
+                    qdata[i].qd_count <
+                    lqs->lqs_bwrite_pending - lqs->lqs_blk_rec - mb)
+                        OBD_FAIL_TIMEOUT(OBD_FAIL_QUOTA_DELAY_REL, 5);
+
                 /* When cycle is zero, lqs_*_pending will be changed. We will
                  * get reference of the lqs here and put reference of lqs in
                  * quota_pending_commit b=14784 */
