@@ -89,7 +89,7 @@ static void filter_free_dio_pages(int objcount, struct obd_ioobj *obj,
 /* Grab the dirty and seen grant announcements from the incoming obdo.
  * We will later calculate the clients new grant and return it.
  * Caller must hold osfs lock */
-static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
+void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
 {
         struct filter_export_data *fed;
         struct obd_device *obd = exp->exp_obd;
@@ -138,6 +138,26 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
         obd->u.filter.fo_tot_granted -= oa->o_dropped;
         fed->fed_grant -= oa->o_dropped;
         fed->fed_dirty = oa->o_dirty;
+
+        if (oa->o_flags & OBD_FL_SHRINK_GRANT) {
+                obd_size left_space = filter_grant_space_left(exp);
+                struct filter_obd *filter = &exp->exp_obd->u.filter;
+
+                /*Only if left_space < fo_tot_clients * 32M, 
+                 *then the grant space could be shrinked */
+                if (left_space < filter->fo_tot_granted_clients * 
+                                 FILTER_GRANT_SHRINK_LIMIT) { 
+                        fed->fed_grant -= oa->o_grant;
+                        filter->fo_tot_granted -= oa->o_grant;
+                        CDEBUG(D_CACHE, "%s: cli %s/%p shrink "LPU64
+                               "fed_grant %ld total "LPU64"\n",
+                               obd->obd_name, exp->exp_client_uuid.uuid,
+                               exp, oa->o_grant, fed->fed_grant,
+                               filter->fo_tot_granted);
+                        oa->o_grant = 0;
+                }
+        }
+
         if (fed->fed_dirty < 0 || fed->fed_grant < 0 || fed->fed_pending < 0) {
                 CERROR("%s: cli %s/%p dirty %ld pend %ld grant %ld\n",
                        obd->obd_name, exp->exp_client_uuid.uuid, exp,
@@ -298,7 +318,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 spin_lock(&obd->obd_osfs_lock);
                 filter_grant_incoming(exp, oa);
 
-                oa->o_grant = 0;
+                if (!(oa->o_flags & OBD_FL_SHRINK_GRANT))
+                        oa->o_grant = 0;
                 spin_unlock(&obd->obd_osfs_lock);
         }
 

@@ -44,6 +44,15 @@ tbd Sun Microsystems, Inc.
 	  of Lustre filesystem with 4K stack may cause a stack overflow. For
 	  more information, please refer to bugzilla 17630.
 
+Severity   : normal
+Frequency  : normal 
+Bugzilla   : 12069
+Descriptoin: OST grant too much space to client even there are not enough space. 
+Details    : Client will shrink its grant cache to OST if there are no write
+	     activity over 6 mins (GRANT_SHRINK_INTERVAL), and OST will retrieve
+	     this grant cache if there are already not enough avaible space
+	     (left_space < total_clients * 32M). 
+
 Severity   : enhancement
 Bugzilla   : 14250
 Description: Update client support to vanila kernels up to 2.6.27.
