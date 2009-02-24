@@ -31,7 +31,7 @@ trap signaled TERM
 # recovery-mds-scale uses this to signal the client loads to die
 echo $$ >$LOAD_PID_FILE
 
-TESTDIR=$MOUNT/dd-$(hostname)
+TESTDIR=$MOUNT/d0.dd-$(hostname)
 
 CONTINUE=true
 while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do

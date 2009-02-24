@@ -475,7 +475,7 @@ test_20b() { # bug 10480
 
     fail $SINGLEMDS                            # start orphan recovery
     df -P $DIR || df -P $DIR || true    # reconnect
-    wait_mds_recovery_done || error "MDS recovery not done"
+    wait_recovery_complete $SINGLEMDS || error "MDS recovery not done"
 
     # FIXME just because recovery is done doesn't mean we've finished
     # orphan cleanup.  Fake it with a sleep for now...
