@@ -1456,11 +1456,10 @@ int at_add(struct adaptive_timeout *at, unsigned int val)
         time_t binlimit = max_t(time_t, at_history / AT_BINS, 1);
 
         LASSERT(at);
-#if 0
-        CDEBUG(D_INFO, "add %u to %p time=%lu v=%u (%u %u %u %u)\n",
+        CDEBUG(D_OTHER, "add %u to %p time=%lu v=%u (%u %u %u %u)\n",
                val, at, now - at->at_binstart, at->at_current,
                at->at_hist[0], at->at_hist[1], at->at_hist[2], at->at_hist[3]);
-#endif
+
         if (val == 0)
                 /* 0's don't count, because we never want our timeout to
                    drop to 0, and because 0 could mean an error */
@@ -1512,14 +1511,12 @@ int at_add(struct adaptive_timeout *at, unsigned int val)
                 at->at_current =  min(at->at_current, at_max);
         at->at_current =  max(at->at_current, at_min);
 
-#if 0
         if (at->at_current != old)
-                CDEBUG(D_ADAPTTO, "AT %p change: old=%u new=%u delta=%d "
+                CDEBUG(D_OTHER, "AT %p change: old=%u new=%u delta=%d "
                        "(val=%u) hist %u %u %u %u\n", at,
                        old, at->at_current, at->at_current - old, val,
                        at->at_hist[0], at->at_hist[1], at->at_hist[2],
                        at->at_hist[3]);
-#endif
 
         /* if we changed, report the old value */
         old = (at->at_current != old) ? old : 0;
