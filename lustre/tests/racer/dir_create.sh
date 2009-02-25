@@ -8,7 +8,7 @@ create(){
 }
 
 while /bin/true ; do 
-    file=$(($RANDOM%$MAX))
+    file=$((RANDOM % MAX))
     mkdir -p $DIR/$file/$file/ 2> /dev/null
     create 2> /dev/null
 done
