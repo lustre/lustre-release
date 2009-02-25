@@ -432,7 +432,6 @@ static int mds_destroy_export(struct obd_export *export)
         if (obd_uuid_equals(&export->exp_client_uuid, &obd->obd_uuid))
                 RETURN(0);
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         /* Close any open files (which may also cause orphan unlinking). */
 
         lmm_sz = mds->mds_max_mdsize;
@@ -451,6 +450,8 @@ static int mds_destroy_export(struct obd_export *export)
                 OBD_FREE(lmm, lmm_sz);
                 GOTO(out, rc = -ENOMEM);
         }
+
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         CFS_INIT_LIST_HEAD(&closing_list);
         spin_lock(&med->med_open_lock);
