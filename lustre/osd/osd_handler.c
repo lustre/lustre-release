@@ -3665,8 +3665,11 @@ static int osd_mount(const struct lu_env *env,
 
         o->od_mnt = ll_kern_mount("ldiskfs", s_flags, dev, (void *)options);
         /* XXX: error handling */
-        if (IS_ERR(o->od_mnt))
-                GOTO(out, rc = PTR_ERR(o->od_mnt));
+        if (IS_ERR(o->od_mnt)) {
+                rc = PTR_ERR(o->od_mnt);
+                o->od_mnt = NULL;
+                GOTO(out, rc);
+        }
 
         o->od_fsops = fsfilt_get_ops(mt_str(LDD_MT_LDISKFS));
         LASSERT(o->od_fsops);
@@ -3688,8 +3691,10 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
         int rc;
         ENTRY;
 
-        shrink_dcache_sb(osd_sb(osd_dev(d)));
-        osd_sync(env, lu2dt_dev(d));
+        if (osd_dev(d)->od_mnt) {
+                shrink_dcache_sb(osd_sb(osd_dev(d)));
+                osd_sync(env, lu2dt_dev(d));
+        }
 
         rc = osd_procfs_fini(osd_dev(d));
         if (rc) {
