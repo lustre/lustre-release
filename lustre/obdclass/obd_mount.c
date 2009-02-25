@@ -1423,7 +1423,7 @@ static struct lu_device *try_start_osd(struct lustre_mount_data *lmd,
                                        unsigned long s_flags)
 {
         struct obd_type       *type = NULL;
-        struct lu_device_type *ldt;
+        struct lu_device_type *ldt = NULL;
         struct lu_device      *d = NULL;
         struct dt_device      *dt;
         struct lu_env          env;
@@ -1479,8 +1479,11 @@ out_type:
 out_alloc:
 out:
         if (rc) {
-                if (d)
+                if (d) {
+                        LASSERT(ldt);
+                        ldt->ldt_ops->ldto_device_fini(&env, d);
                         ldt->ldt_ops->ldto_device_free(&env, d);
+                }
                 if (type)
                         class_put_type(type);
                 d = ERR_PTR(rc);
