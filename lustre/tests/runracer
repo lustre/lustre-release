@@ -11,8 +11,15 @@ racer=`which racer.sh`
 [ -z "$racer" ] && echo racer is not installed && exit 1
 
 CLIENTS=${CLIENTS:-$HOSTNAME}
-RDIR=$DIR/racer
-mkdir -p $RDIR
+RACERDIRS=$@
+RACERDIRS=${RACERDIRS:-$DIR}
+echo RACERDIRS=$RACERDIRS
+for d in ${RACERDIRS}; do
+	RDIRS="$RDIRS $d/racer"
+	mkdir -p $d/racer
+#	lfs setstripe $d/racer -c -1
+done
+
 DURATION=${DURATION:-120}
 
 assert_env CLIENTS
@@ -30,6 +37,8 @@ do_racer_cleanup () {
 	local INTERVAL=5
         local pids
 	local rc=0
+
+	local RDIR=$1
 
 	echo "DOING RACER CLEANUP ... "
 
@@ -81,11 +90,16 @@ racer_cleanup () {
 		echo $timeout killing RACERPID=$RACERPID
 		kill $RACERPID || true
 		sleep 2	# give chance racer to kill it's processes
-		do_racer_cleanup
+		local dir
+		for dir in $RDIRS; do
+			do_racer_cleanup $dir
+		done
 	else
 		echo "Racer completed before DURATION=$DURATION expired. Cleaning up..."
 		kill $TIMERPID
-		do_racer_cleanup
+		for dir in $RDIRS; do
+			do_racer_cleanup $dir
+		done
 	fi
 }
 
@@ -104,10 +118,23 @@ trap racer_timeout ALRM
 
 timer_on $((DURATION + 5))
 
-do_nodes $CLIENTS "DURATION=$DURATION $racer $RDIR" &
-RACERPID=$!
+RACERPID=""
+for rdir in $RDIRS; do
+	do_nodes $CLIENTS "DURATION=$DURATION $racer $rdir $NUM_RACER_THREADS" &
+	pid=$!
+	RACERPID="$RACERPID $pid"
+done
+
 echo RACERPID=$RACERPID
-wait $RACERPID || RC=2
+for rpid in $RACERPID; do
+	wait $rpid
+	rc=$?
+	echo "rpid=$rpid rc=$rc"
+	if [ $rc != 0 ]; then
+		RC=$((RC + 1))
+	fi
+done
+
 racer_cleanup
 echo "$0: completed $RC"
 exit $RC
