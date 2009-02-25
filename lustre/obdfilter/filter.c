@@ -3780,14 +3780,10 @@ static int filter_get_info(struct obd_export *exp, __u32 keylen,
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_iocontrol(obd, dentry->d_inode, NULL,
                                       EXT3_IOC_FIEMAP, (long)fiemap);
-                if (rc) {
-                        f_dput(dentry);
-                        RETURN(rc);
-                }
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
                 f_dput(dentry);
-                RETURN(0);
+                RETURN(rc);
         }
 
         CDEBUG(D_IOCTL, "invalid key\n");
