@@ -5565,31 +5565,41 @@ test_153() {
 }
 run_test 153 "test if fdatasync does not crash ======================="
 
-test_160() {
+test_170() {
         $LCTL debug_daemon start $TMP/${tfile}_log_good
         touch $DIR/$tfile
         $LCTL debug_daemon stop
-        cat $TMP/${tfile}_log_good | sed -e "s/^...../a/g" > $TMP/${tfile}_log_bad
+        sed -e "s/^...../a/g" $TMP/${tfile}_log_good > $TMP/${tfile}_log_bad ||
+               error "sed failed to read log_good"
 
         $LCTL debug_daemon start $TMP/${tfile}_log_good
         rm -rf $DIR/$tfile
         $LCTL debug_daemon stop
 
-        $LCTL df $TMP/${tfile}_log_bad 2&> $TMP/${tfile}_log_bad.out
-        bad_line=`tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $9}'`
-        good_line1=`tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $5}'`
+        $LCTL df $TMP/${tfile}_log_bad 2&> $TMP/${tfile}_log_bad.out ||
+               error "lctl df log_bad failed"
+
+        local bad_line=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $9}')
+        local good_line1=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $5}')
 
         $LCTL df $TMP/${tfile}_log_good 2&>$TMP/${tfile}_log_good.out 
-        good_line2=`tail -n 1 $TMP/${tfile}_log_good.out | awk '{print $5}'`
+        local good_line2=$(tail -n 1 $TMP/${tfile}_log_good.out | awk '{print $5}')
 
+	[ "$bad_line" ] && [ "$good_line1" ] && [ "$good_line2" ] || 
+		error "bad_line good_line1 good_line2 are empty"
+ 
         cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt
         cat $TMP/${tfile}_log_bad >> $TMP/${tfile}_logs_corrupt 
         cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt           
 
         $LCTL df $TMP/${tfile}_logs_corrupt 2&> $TMP/${tfile}_log_bad.out
-        bad_line_new=`tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $9}'`
-        good_line_new=`tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $5}'`
-        expected_good=$((good_line1 + good_line2*2))
+        local bad_line_new=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $9}')
+        local good_line_new=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $5}')
+
+	[ "$bad_line_new" ] && [ "$good_line_new" ] || 
+		error "bad_line_new good_line_new are empty"
+ 
+        local expected_good=$((good_line1 + good_line2*2))
 
         rm -rf $TMP/${tfile}*
         if [ $bad_line -ne $bad_line_new ]; then
@@ -5603,8 +5613,7 @@ test_160() {
         fi
         true
 }
-run_test 160 "test lctl df to handle corruputed log ====================="
-
+run_test 170 "test lctl df to handle corrupted log ====================="
 
 #
 # tests that do cleanup/setup should be run at the end
