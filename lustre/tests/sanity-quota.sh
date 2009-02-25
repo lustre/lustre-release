@@ -175,7 +175,7 @@ resetquota() {
        $LFS setquota "$1" "$2" -b 0 -B 0 -i 0 -I 0 $MOUNT || error "resetquota failed"
 }
 
-quota_error() {
+quota_scan() {
         LOCAL_UG=$1
         LOCAL_ID=$2
 
@@ -188,9 +188,18 @@ quota_error() {
                 log "Files for group ($LOCAL_ID):"
                 ($LFS find -group $LOCAL_ID $DIR | xargs stat 2>/dev/null)
         fi
+}
 
+quota_error() {
+        quota_scan $1 $2
         shift 2
         error "$*"
+}
+
+quota_log() {
+        quota_scan $1 $2
+        shift 2
+        log "$*"
 }
 
 quota_show_check() {
@@ -203,12 +212,12 @@ quota_show_check() {
 
         if [ "$LOCAL_BF" == "a" -o "$LOCAL_BF" == "b" ]; then
 	        USAGE="`$LFS quota -$LOCAL_UG $LOCAL_ID $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $2 }'`"
-                [ $USAGE -ne 0 ] && quota_error $LOCAL_UG $LOCAL_ID "System is not clean for block ($LOCAL_UG:$LOCAL_ID:$USAGE)."
+                [ $USAGE -ne 0 ] && quota_log $LOCAL_UG $LOCAL_ID "System is not clean for block ($LOCAL_UG:$LOCAL_ID:$USAGE)."
         fi
 
         if [ "$LOCAL_BF" == "a" -o "$LOCAL_BF" == "f" ]; then
 	        USAGE="`$LFS quota -$LOCAL_UG $LOCAL_ID $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $5 }'`"
-                [ $USAGE -ne 0 ] && quota_error $LOCAL_UG $LOCAL_ID "System is not clean for file ($LOCAL_UG:$LOCAL_ID:$USAGE)."
+                [ $USAGE -ne 0 ] && quota_log $LOCAL_UG $LOCAL_ID "System is not clean for file ($LOCAL_UG:$LOCAL_ID:$USAGE)."
         fi
 }
 
@@ -790,6 +799,7 @@ test_8() {
 	[ "$SLOW" = "no" ] && duration=" -t 120"
 	$RUNAS bash rundbench -D $DIR/$tdir 3 $duration || quota_error a $TSTUSR "dbench failed!"
 
+        rm -rf $DIR/$tdir
 	sync; sleep 3; sync;
 
 	return 0
