@@ -2312,3 +2312,5 @@ void lustre_swab_lustre_capa_key (struct lustre_capa_key *k)
         __swab32s (&k->lk_keyid);
         __swab32s (&k->lk_padding);
 }
+
+

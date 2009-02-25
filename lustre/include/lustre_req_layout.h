@@ -226,6 +226,7 @@ extern const struct req_msg_field RMF_TGTUUID;
 extern const struct req_msg_field RMF_CLUUID;
 extern const struct req_msg_field RMF_SETINFO_VAL;
 extern const struct req_msg_field RMF_SETINFO_KEY;
+
 /*
  * connection handle received in MDS_CONNECT request.
  */

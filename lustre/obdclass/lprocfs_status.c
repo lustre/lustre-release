@@ -50,6 +50,8 @@
 #include <obd_class.h>
 #include <lprocfs_status.h>
 #include <lustre_fsfilt.h>
+#include <lustre_log.h>
+#include <lustre/lustre_idl.h>
 
 #if defined(LPROCFS)
 
@@ -2126,6 +2128,258 @@ int lprocfs_obd_wr_recovery_maxtime(struct file *file, const char *buffer,
         return count;
 }
 EXPORT_SYMBOL(lprocfs_obd_wr_recovery_maxtime);
+
+
+/**** Changelogs *****/
+#define D_CHANGELOG 0
+
+DECLARE_CHANGELOG_NAMES;
+
+/* How many records per seq_show.  Too small, we spawn llog_process threads
+   too often; too large, we run out of buffer space */
+#define CHANGELOG_CHUNK_SIZE 100
+
+static int changelog_show_cb(struct llog_handle *llh, struct llog_rec_hdr *hdr,
+                             void *data)
+{
+        struct seq_file *seq = (struct seq_file *)data;
+        struct changelog_seq_iter *csi = seq->private;
+        struct llog_changelog_rec *rec = (struct llog_changelog_rec *)hdr;
+        int rc;
+        ENTRY;
+
+        if ((rec->cr_hdr.lrh_type != CHANGELOG_REC) ||
+            (rec->cr_type >= CL_LAST)) {
+                CERROR("Not a changelog rec %d/%d\n", rec->cr_hdr.lrh_type,
+                       rec->cr_type);
+                RETURN(-EINVAL);
+        }
+
+        CDEBUG(D_CHANGELOG, "rec="LPU64" start="LPU64" cat=%d:%d start=%d:%d\n",
+               rec->cr_index, csi->csi_startrec,
+               llh->lgh_hdr->llh_cat_idx, llh->lgh_cur_idx,
+               csi->csi_startcat, csi->csi_startidx);
+
+        if (rec->cr_index < csi->csi_startrec)
+                /* Skip entries earlier than what we are interested in */
+                RETURN(0);
+        if (rec->cr_index == csi->csi_startrec) {
+                /* Remember where we started, since seq_read will re-read
+                 * the data when it reallocs space.  Sigh, if only there was
+                 * a way to tell seq_file how big the buf should be in the
+                 * first place...
+                 */
+                csi->csi_startcat = llh->lgh_hdr->llh_cat_idx;
+                csi->csi_startidx = rec->cr_hdr.lrh_index - 1;
+        }
+        if (csi->csi_wrote > CHANGELOG_CHUNK_SIZE) {
+                /* Stop at some point with a reasonable seq_file buffer size.
+                 * Start from here the next time.
+                 */
+                csi->csi_endrec = rec->cr_index - 1;
+                csi->csi_startcat = llh->lgh_hdr->llh_cat_idx;
+                csi->csi_startidx = rec->cr_hdr.lrh_index - 1;
+                csi->csi_wrote = 0;
+                RETURN(LLOG_PROC_BREAK);
+        }
+
+        rc = seq_printf(seq, LPU64" %02d%-5s "LPU64" 0x%x t="DFID,
+                        rec->cr_index, rec->cr_type,
+                        changelog_str[rec->cr_type], rec->cr_time,
+                        rec->cr_flags & CLF_FLAGMASK, PFID(&rec->cr_tfid));
+
+        if (rec->cr_namelen)
+                /* namespace rec includes parent and filename */
+                rc += seq_printf(seq, " p="DFID" %.*s\n", PFID(&rec->cr_pfid),
+                                 rec->cr_namelen, rec->cr_name);
+        else
+                rc += seq_puts(seq, "\n");
+
+        if (rc < 0) {
+                /* Ran out of room in the seq buffer. seq_read will dump
+                 * the whole buffer and re-seq_start with a larger one;
+                 * no point in continuing the llog_process */
+                CDEBUG(D_CHANGELOG, "rec="LPU64" overflow "LPU64"<-"LPU64"\n",
+                       rec->cr_index, csi->csi_startrec, csi->csi_endrec);
+                csi->csi_endrec = csi->csi_startrec - 1;
+                csi->csi_wrote = 0;
+                RETURN(LLOG_PROC_BREAK);
+        }
+
+        csi->csi_wrote++;
+        csi->csi_endrec = rec->cr_index;
+
+        RETURN(0);
+}
+
+static int changelog_seq_show(struct seq_file *seq, void *v)
+{
+        struct changelog_seq_iter *csi = seq->private;
+        int rc;
+        ENTRY;
+
+        if (csi->csi_fill) {
+                /* seq_read wants more data to fill his buffer. But we already
+                   filled the buf as much as we cared to; force seq_read to
+                   accept that by padding with 0's */
+                while (seq_putc(seq, 0) == 0);
+                RETURN(0);
+        }
+
+        /* Since we have to restart the llog_cat_process for each chunk of the
+           seq_ functions, start from where we left off. */
+        rc = llog_cat_process(csi->csi_llh, changelog_show_cb, seq,
+                              csi->csi_startcat, csi->csi_startidx);
+
+        CDEBUG(D_CHANGELOG,"seq_show "LPU64"-"LPU64" cat=%d:%d wrote=%d rc=%d\n",
+               csi->csi_startrec, csi->csi_endrec, csi->csi_startcat,
+               csi->csi_startidx, csi->csi_wrote, rc);
+
+        if (rc == 0)
+                csi->csi_done = 1;
+        if (rc == LLOG_PROC_BREAK)
+                /* more records left, but seq_show must return 0 */
+                rc = 0;
+        RETURN(rc);
+}
+
+static void *changelog_seq_start(struct seq_file *seq, loff_t *pos)
+{
+        struct changelog_seq_iter *csi = seq->private;
+        LASSERT(csi);
+
+        CDEBUG(D_CHANGELOG, "start "LPU64"-"LPU64" pos="LPU64"\n",
+               csi->csi_startrec, csi->csi_endrec, *pos);
+
+        csi->csi_fill = 0;
+
+        if (csi->csi_done)
+                /* no more records, seq_read should return 0 if buffer
+                   is empty */
+                return NULL;
+
+        if (*pos > csi->csi_pos) {
+                /* The seq_read implementation sucks.  It may call start
+                   multiple times, using pos to indicate advances, if any,
+                   by arbitrarily increasing it by 1. So ignore the actual
+                   value of pos, and just register any increase as
+                   "seq_read wants the next values". */
+                csi->csi_startrec = csi->csi_endrec + 1;
+                csi->csi_pos = *pos;
+        }
+        /* else use old startrec/startidx */
+
+        return csi;
+}
+
+static void changelog_seq_stop(struct seq_file *seq, void *v)
+{
+        struct changelog_seq_iter *csi = seq->private;
+
+        CDEBUG(D_CHANGELOG, "stop "LPU64"-"LPU64"\n",
+               csi->csi_startrec, csi->csi_endrec);
+}
+
+static void *changelog_seq_next(struct seq_file *seq, void *v, loff_t *pos)
+{
+        struct changelog_seq_iter *csi = seq->private;
+
+        CDEBUG(D_CHANGELOG, "next "LPU64"-"LPU64" pos="LPU64"\n",
+               csi->csi_startrec, csi->csi_endrec, *pos);
+
+        csi->csi_fill = 1;
+
+        return csi;
+}
+
+static struct seq_operations changelog_sops = {
+        .start = changelog_seq_start,
+        .stop = changelog_seq_stop,
+        .next = changelog_seq_next,
+        .show = changelog_seq_show,
+};
+
+int changelog_seq_open(struct inode *inode, struct file *file,
+                       struct changelog_seq_iter **csih)
+{
+        struct changelog_seq_iter *csi;
+        struct proc_dir_entry *dp = PDE(inode);
+        struct seq_file *seq;
+        int rc;
+
+        LPROCFS_ENTRY_AND_CHECK(dp);
+
+        rc = seq_open(file, &changelog_sops);
+        if (rc) {
+                LPROCFS_EXIT();
+                return rc;
+        }
+
+        OBD_ALLOC_PTR(csi);
+        if (csi == NULL) {
+                lprocfs_seq_release(inode, file);
+                return -ENOMEM;
+        }
+
+        csi->csi_dev = dp->data;
+        seq = file->private_data;
+        seq->private = csi;
+        *csih = csi;
+
+        return rc;
+}
+EXPORT_SYMBOL(changelog_seq_open);
+
+int changelog_seq_release(struct inode *inode, struct file *file)
+{
+        struct seq_file *seq = file->private_data;
+        struct changelog_seq_iter *csi = seq->private;
+
+        if (csi)
+                OBD_FREE_PTR(csi);
+
+        return lprocfs_seq_release(inode, file);
+}
+EXPORT_SYMBOL(changelog_seq_release);
+
+loff_t changelog_seq_lseek(struct file *file, loff_t offset, int origin)
+{
+        struct seq_file *seq = (struct seq_file *)file->private_data;
+        struct changelog_seq_iter *csi = seq->private;
+
+        CDEBUG(D_CHANGELOG,"seek "LPU64"-"LPU64" off="LPU64":%d fpos="LPU64"\n",
+               csi->csi_startrec, csi->csi_endrec, offset, origin, file->f_pos);
+
+        LL_SEQ_LOCK(seq);
+
+        switch (origin) {
+                case SEEK_CUR:
+                        offset += csi->csi_endrec;
+                        break;
+                case SEEK_END:
+                        /* we don't know the last rec */
+                        offset = -1;
+        }
+
+        /* SEEK_SET */
+
+        if (offset < 0) {
+                LL_SEQ_UNLOCK(seq);
+                return -EINVAL;
+        }
+
+        csi->csi_startrec = offset;
+        csi->csi_endrec = offset ? offset - 1 : 0;
+
+        /* drop whatever is left in sucky seq_read's buffer */
+        seq->count = 0;
+        seq->from = 0;
+        seq->index++;
+        LL_SEQ_UNLOCK(seq);
+        file->f_pos = csi->csi_startrec;
+        return csi->csi_startrec;
+}
+EXPORT_SYMBOL(changelog_seq_lseek);
 
 EXPORT_SYMBOL(lprocfs_register);
 EXPORT_SYMBOL(lprocfs_srch);

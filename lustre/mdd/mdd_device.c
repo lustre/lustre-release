@@ -132,16 +132,10 @@ static int changelog_init_cb(struct llog_handle *llh, struct llog_rec_hdr *hdr,
         struct llog_changelog_rec *rec = (struct llog_changelog_rec *)hdr;
         ENTRY;
 
-        if (!(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN)) {
-                CERROR("log is not plain\n");
-                RETURN(-EINVAL);
-        }
-        if (rec->cr_hdr.lrh_type != CHANGELOG_REC) {
-                CERROR("Not a changelog rec? %d\n", rec->cr_hdr.lrh_type);
-                RETURN(-EINVAL);
-        }
+        LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
+        LASSERT(rec->cr_hdr.lrh_type == CHANGELOG_REC);
 
-        CDEBUG(D_INODE,
+        CDEBUG(D_INFO,
                "seeing record at index %d/%d/"LPU64" t=%x %.*s in log "LPX64"\n",
                hdr->lrh_index, rec->cr_hdr.lrh_index, rec->cr_index,
                rec->cr_type, rec->cr_namelen, rec->cr_name,
@@ -151,32 +145,76 @@ static int changelog_init_cb(struct llog_handle *llh, struct llog_rec_hdr *hdr,
         RETURN(LLOG_PROC_BREAK);
 }
 
+static int changelog_user_init_cb(struct llog_handle *llh,
+                                  struct llog_rec_hdr *hdr, void *data)
+{
+        struct mdd_device *mdd = (struct mdd_device *)data;
+        struct llog_changelog_user_rec *rec =
+                (struct llog_changelog_user_rec *)hdr;
+        ENTRY;
+
+        LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
+        LASSERT(rec->cur_hdr.lrh_type == CHANGELOG_USER_REC);
+
+        CDEBUG(D_INFO, "seeing user at index %d/%d id=%d endrec="LPU64
+               " in log "LPX64"\n", hdr->lrh_index, rec->cur_hdr.lrh_index,
+               rec->cur_id, rec->cur_endrec, llh->lgh_id.lgl_oid);
+
+        spin_lock(&mdd->mdd_cl.mc_user_lock);
+        mdd->mdd_cl.mc_lastuser = rec->cur_id;
+        spin_unlock(&mdd->mdd_cl.mc_user_lock);
+
+        RETURN(LLOG_PROC_BREAK);
+}
+
+
 static int mdd_changelog_llog_init(struct mdd_device *mdd)
 {
         struct obd_device *obd = mdd2obd_dev(mdd);
         struct llog_ctxt *ctxt;
         int rc;
 
+        /* Find last changelog entry number */
         ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
         if (ctxt == NULL) {
-                CERROR("no context\n");
+                CERROR("no changelog context\n");
                 return -EINVAL;
         }
         if (!ctxt->loc_handle) {
-                CERROR("no handle\n");
+                llog_ctxt_put(ctxt);
                 return -EINVAL;
         }
+
         rc = llog_cat_reverse_process(ctxt->loc_handle, changelog_init_cb, mdd);
         llog_ctxt_put(ctxt);
 
-        if (rc < 0)
+        if (rc < 0) {
                 CERROR("changelog init failed: %d\n", rc);
-        else
-                rc = 0; /* llog_proc_break is ok */
+                return rc;
+        }
+        CDEBUG(D_INODE, "changelog starting index="LPU64"\n",
+               mdd->mdd_cl.mc_index);
 
-        CDEBUG(D_INODE, "changelog_init index="LPU64"\n", mdd->mdd_cl.mc_index);
+        /* Find last changelog user id */
+        ctxt = llog_get_context(obd, LLOG_CHANGELOG_USER_ORIG_CTXT);
+        if (ctxt == NULL) {
+                CERROR("no changelog user context\n");
+                return -EINVAL;
+        }
+        if (!ctxt->loc_handle) {
+                llog_ctxt_put(ctxt);
+                return -EINVAL;
+        }
 
-        return rc;
+        rc = llog_cat_reverse_process(ctxt->loc_handle, changelog_user_init_cb,
+                                      mdd);
+        llog_ctxt_put(ctxt);
+
+        if (rc < 0) {
+                CERROR("changelog user init failed: %d\n", rc);
+                return rc;
+        }
+        return 0;
 }
 
 static int mdd_changelog_init(const struct lu_env *env, struct mdd_device *mdd)
@@ -186,15 +224,18 @@ static int mdd_changelog_init(const struct lu_env *env, struct mdd_device *mdd)
         mdd->mdd_cl.mc_index = 0;
         spin_lock_init(&mdd->mdd_cl.mc_lock);
         cfs_waitq_init(&mdd->mdd_cl.mc_waitq);
-
         mdd->mdd_cl.mc_starttime = cfs_time_current_64();
         mdd->mdd_cl.mc_flags = 0; /* off by default */
-        mdd->mdd_cl.mc_mask = CL_DEFMASK;
+        mdd->mdd_cl.mc_mask = CHANGELOG_DEFMASK;
+        spin_lock_init(&mdd->mdd_cl.mc_user_lock);
+        mdd->mdd_cl.mc_lastuser = 0;
+
         rc = mdd_changelog_llog_init(mdd);
         if (rc) {
                 CERROR("Changelog setup during init failed %d\n", rc);
                 mdd->mdd_cl.mc_flags |= CLM_ERR;
         }
+
         return rc;
 }
 
@@ -254,19 +295,41 @@ int mdd_changelog_llog_cancel(struct mdd_device *mdd, long long endrec)
 {
         struct obd_device *obd = mdd2obd_dev(mdd);
         struct llog_ctxt *ctxt;
+        long long unsigned cur;
         int rc;
 
         ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
         if (ctxt == NULL)
                 return -ENXIO;
 
-        /* Some records purged; reset repeat-access time */
+        spin_lock(&mdd->mdd_cl.mc_lock);
+        cur = (long long)mdd->mdd_cl.mc_index;
+        spin_unlock(&mdd->mdd_cl.mc_lock);
+        if (endrec > cur)
+                endrec = cur;
+
+        /* purge to "0" is shorthand for everything */
+        if (endrec == 0)
+                endrec = cur;
+
+        /* If purging all records, write a header entry so we don't have an
+           empty catalog and we're sure to have a valid starting index next
+           time.  In case of crash, we just restart with old log so we're
+           allright. */
+        if (endrec == cur) {
+                rc = mdd_changelog_write_header(mdd, CLM_PURGE);
+                if (rc)
+                      goto out;
+        }
+
+        /* Some records were purged, so reset repeat-access time (so we
+           record new mtime update records, so users can see a file has been
+           changed since the last purge) */
         mdd->mdd_cl.mc_starttime = cfs_time_current_64();
 
         rc = llog_cancel(ctxt, NULL, 1, (struct llog_cookie *)&endrec, 0);
-
+out:
         llog_ctxt_put(ctxt);
-
         return rc;
 }
 
@@ -366,7 +429,7 @@ static int dot_lustre_mdd_open(const struct lu_env *env, struct md_object *obj,
 }
 
 static int dot_lustre_path(const struct lu_env *env, struct md_object *obj,
-                           char *path, int pathlen, __u64 recno, int *linkno)
+                           char *path, int pathlen, __u64 *recno, int *linkno)
 {
         return -ENOSYS;
 }
@@ -532,7 +595,7 @@ static int obf_mdd_readpage(const struct lu_env *env, struct md_object *obj,
 }
 
 static int obf_path(const struct lu_env *env, struct md_object *obj,
-                    char *path, int pathlen, __u64 recno, int *linkno)
+                    char *path, int pathlen, __u64 *recno, int *linkno)
 {
         return -ENOSYS;
 }
@@ -917,6 +980,15 @@ static int mdd_update_capa_key(const struct lu_env *env,
         RETURN(rc);
 }
 
+static int mdd_llog_ctxt_get(const struct lu_env *env, struct md_device *m,
+                             int idx, void **h)
+{
+        struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+
+        *h = llog_group_get_ctxt(&mdd2obd_dev(mdd)->obd_olg, idx);
+        return (*h == NULL ? -ENOENT : 0);
+}
+
 static struct lu_device *mdd_device_alloc(const struct lu_env *env,
                                           struct lu_device_type *t,
                                           struct lustre_cfg *lcfg)
@@ -992,6 +1064,202 @@ struct md_capainfo *md_capainfo(const struct lu_env *env)
 }
 EXPORT_SYMBOL(md_capainfo);
 
+static int mdd_changelog_user_register(struct mdd_device *mdd, int *id)
+{
+        struct llog_ctxt *ctxt;
+        struct llog_changelog_user_rec *rec;
+        int rc;
+        ENTRY;
+
+        ctxt = llog_get_context(mdd2obd_dev(mdd),LLOG_CHANGELOG_USER_ORIG_CTXT);
+        if (ctxt == NULL)
+                RETURN(-ENXIO);
+
+        OBD_ALLOC_PTR(rec);
+        if (rec == NULL) {
+                llog_ctxt_put(ctxt);
+                RETURN(-ENOMEM);
+        }
+
+        rec->cur_hdr.lrh_len = sizeof(*rec);
+        rec->cur_hdr.lrh_type = CHANGELOG_USER_REC;
+        rec->cur_endrec = 0ULL;
+        spin_lock(&mdd->mdd_cl.mc_user_lock);
+        if (mdd->mdd_cl.mc_lastuser == (unsigned int)(-1)) {
+                spin_unlock(&mdd->mdd_cl.mc_user_lock);
+                CERROR("Maximum number of changelog users exceeded!\n");
+                GOTO(out, rc = -EOVERFLOW);
+        }
+        *id = rec->cur_id = ++mdd->mdd_cl.mc_lastuser;
+        spin_unlock(&mdd->mdd_cl.mc_user_lock);
+        rc = llog_add(ctxt, &rec->cur_hdr, NULL, NULL, 0);
+
+        CDEBUG(D_INODE, "Registered changelog user %d\n", *id);
+out:
+        OBD_FREE_PTR(rec);
+        llog_ctxt_put(ctxt);
+        RETURN(rc);
+}
+
+struct mdd_changelog_user_data {
+        __u64 mcud_endrec; /**< purge record for this user */
+        __u64 mcud_minrec; /**< lowest changelog recno still referenced */
+        __u32 mcud_id;
+        __u32 mcud_minid;  /**< user id with lowest rec reference */
+        int   mcud_found:1;
+};
+
+/** Two things:
+ * 1. Find the smallest record everyone is willing to purge
+ * 2. Update the last purgeable record for this user
+ */
+static int mdd_changelog_user_purge_cb(struct llog_handle *llh,
+                                       struct llog_rec_hdr *hdr, void *data)
+{
+        struct llog_changelog_user_rec *rec;
+        struct mdd_changelog_user_data *mcud =
+                (struct mdd_changelog_user_data *)data;
+        int rc;
+        ENTRY;
+
+        LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
+
+        rec = (struct llog_changelog_user_rec *)hdr;
+
+        /* If we have a new endrec for this id, use it for the min check */
+        if (rec->cur_id == mcud->mcud_id)
+                rec->cur_endrec = max(rec->cur_endrec, mcud->mcud_endrec);
+
+        /* Track the minimum referenced record */
+        if (mcud->mcud_minid == 0 || mcud->mcud_minrec > rec->cur_endrec) {
+                mcud->mcud_minid = rec->cur_id;
+                mcud->mcud_minrec = rec->cur_endrec;
+        }
+
+        if (rec->cur_id != mcud->mcud_id)
+                RETURN(0);
+
+        /* Update this user's record */
+        mcud->mcud_found = 1;
+
+        /* Special case: unregister this user if endrec == -1 */
+        if (mcud->mcud_endrec == -1) {
+                struct llog_cookie cookie;
+                cookie.lgc_lgl = llh->lgh_id;
+                cookie.lgc_index = hdr->lrh_index;
+                rc = llog_cat_cancel_records(llh->u.phd.phd_cat_handle,
+                                             1, &cookie);
+                RETURN(rc);
+        }
+
+        /* Update the endrec */
+        CDEBUG(D_IOCTL, "Rewriting changelog user %d endrec to "LPU64"\n",
+               mcud->mcud_id, rec->cur_endrec);
+
+        /* hdr+1 is loc of data */
+        hdr->lrh_len -= sizeof(*hdr) + sizeof(struct llog_rec_tail);
+        rc = llog_write_rec(llh, hdr, NULL, 0, (void *)(hdr + 1),
+                            hdr->lrh_index);
+
+        RETURN(rc);
+}
+
+static int mdd_changelog_user_purge(struct mdd_device *mdd, int id,
+                                    long long endrec)
+{
+        struct mdd_changelog_user_data data;
+        struct llog_ctxt *ctxt;
+        int rc;
+        ENTRY;
+
+        CDEBUG(D_IOCTL, "Purge request: id=%d, endrec="LPD64"\n", id, endrec);
+
+        ctxt = llog_get_context(mdd2obd_dev(mdd),LLOG_CHANGELOG_USER_ORIG_CTXT);
+        if (ctxt == NULL)
+                return -ENXIO;
+        LASSERT(ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT);
+
+        data.mcud_id = id;
+        data.mcud_endrec = endrec;
+        data.mcud_minid = 0;
+        data.mcud_minrec = 0;
+        rc = llog_cat_process(ctxt->loc_handle, mdd_changelog_user_purge_cb,
+                              (void *)&data, 0, 0);
+        if ((rc >= 0) && (data.mcud_minrec > 0)) {
+                CDEBUG(D_INODE, "Purging CL entries up to "LPD64
+                       ", referenced by "CHANGELOG_USER_PREFIX"%d\n",
+                       data.mcud_minrec, data.mcud_minid);
+                rc = mdd_changelog_llog_cancel(mdd, data.mcud_minrec);
+        } else {
+                CWARN("Could not determine changelog records to purge; rc=%d\n",
+                      rc);
+        }
+
+        if (!data.mcud_found) {
+                CWARN("No entry for user %d.  Last changelog reference is "
+                      LPD64" by changelog user %d\n", data.mcud_id,
+                      data.mcud_minrec, data.mcud_minid);
+               rc = -ENOENT;
+        }
+
+        llog_ctxt_put(ctxt);
+        RETURN (rc);
+}
+
+/** mdd_iocontrol
+ * May be called remotely from mdt_iocontrol_handle or locally from
+ * mdt_iocontrol. Data may be freeform - remote handling doesn't enforce or
+ * swab an obd_ioctl_data format (but local ioctl handler does).
+ * \param cmd - ioc
+ * \param len - data len
+ * \param karg - ioctl data, in kernel space
+ */
+static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
+                         unsigned int cmd, int len, void *karg)
+{
+        struct mdd_device *mdd;
+        struct obd_ioctl_data *data = karg;
+        int rc;
+        ENTRY;
+
+        mdd = lu2mdd_dev(&m->md_lu_dev);
+
+        /* Doesn't use obd_ioctl_data */
+        if (cmd == OBD_IOC_CHANGELOG_CLEAR) {
+                struct changelog_setinfo *cs = karg;
+                if (len != sizeof(*cs)) {
+                        CERROR("Bad changelog_clear ioctl size %d\n", len);
+                        RETURN(-EINVAL);
+                }
+                rc = mdd_changelog_user_purge(mdd, cs->cs_id, cs->cs_recno);
+                RETURN(rc);
+        }
+
+        /* Below ioctls use obd_ioctl_data */
+        if (len != sizeof(*data)) {
+                CERROR("Bad ioctl size %d\n", len);
+                RETURN(-EINVAL);
+        }
+        if (data->ioc_version != OBD_IOCTL_VERSION) {
+                CERROR("Bad magic %x != %x\n", data->ioc_version,
+                       OBD_IOCTL_VERSION);
+                RETURN(-EINVAL);
+        }
+
+        switch (cmd) {
+        case OBD_IOC_CHANGELOG_REG:
+                rc = mdd_changelog_user_register(mdd, &data->ioc_u32_1);
+                break;
+        case OBD_IOC_CHANGELOG_DEREG:
+                rc = mdd_changelog_user_purge(mdd, data->ioc_u32_1, -1);
+                break;
+        default:
+                rc = -EOPNOTSUPP;
+        }
+
+        RETURN (rc);
+}
+
 /* type constructor/destructor: mdd_type_init, mdd_type_fini */
 LU_TYPE_INIT_FINI(mdd, &mdd_thread_key, &mdd_ucred_key, &mdd_capainfo_key);
 
@@ -1001,6 +1269,8 @@ const struct md_device_operations mdd_ops = {
         .mdo_maxsize_get    = mdd_maxsize_get,
         .mdo_init_capa_ctxt = mdd_init_capa_ctxt,
         .mdo_update_capa_key= mdd_update_capa_key,
+        .mdo_llog_ctxt_get  = mdd_llog_ctxt_get,
+        .mdo_iocontrol      = mdd_iocontrol,
 #ifdef HAVE_QUOTA_SUPPORT
         .mdo_quota          = {
                 .mqo_notify      = mdd_quota_notify,

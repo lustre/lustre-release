@@ -2188,20 +2188,20 @@ struct lov_mds_md_join {
 #define LLOG_OP_MASK  0xfff00000
 
 typedef enum {
-        LLOG_PAD_MAGIC   = LLOG_OP_MAGIC | 0x00000,
-        OST_SZ_REC       = LLOG_OP_MAGIC | 0x00f00,
-        OST_RAID1_REC    = LLOG_OP_MAGIC | 0x01000,
-        MDS_UNLINK_REC   = LLOG_OP_MAGIC | 0x10000 | (MDS_REINT << 8) | REINT_UNLINK,
-        MDS_SETATTR_REC  = LLOG_OP_MAGIC | 0x10000 | (MDS_REINT << 8) | REINT_SETATTR,
-        MDS_SETATTR64_REC= LLOG_OP_MAGIC | 0x90000 | (MDS_REINT << 8) | REINT_SETATTR,
-        OBD_CFG_REC      = LLOG_OP_MAGIC | 0x20000,
-        PTL_CFG_REC      = LLOG_OP_MAGIC | 0x30000, /* obsolete */
-        LLOG_GEN_REC     = LLOG_OP_MAGIC | 0x40000,
-        LLOG_JOIN_REC    = LLOG_OP_MAGIC | 0x50000,
-         /** changelog record type */
-        CHANGELOG_REC    = LLOG_OP_MAGIC | 0x60000,
-        LLOG_HDR_MAGIC   = LLOG_OP_MAGIC | 0x45539,
-        LLOG_LOGID_MAGIC = LLOG_OP_MAGIC | 0x4553b,
+        LLOG_PAD_MAGIC     = LLOG_OP_MAGIC | 0x00000,
+        OST_SZ_REC         = LLOG_OP_MAGIC | 0x00f00,
+        OST_RAID1_REC      = LLOG_OP_MAGIC | 0x01000,
+        MDS_UNLINK_REC     = LLOG_OP_MAGIC | 0x10000 | (MDS_REINT << 8) | REINT_UNLINK,
+        MDS_SETATTR_REC    = LLOG_OP_MAGIC | 0x10000 | (MDS_REINT << 8) | REINT_SETATTR,
+        MDS_SETATTR64_REC  = LLOG_OP_MAGIC | 0x90000 | (MDS_REINT << 8) | REINT_SETATTR,
+        OBD_CFG_REC        = LLOG_OP_MAGIC | 0x20000,
+        PTL_CFG_REC        = LLOG_OP_MAGIC | 0x30000, /* obsolete */
+        LLOG_GEN_REC       = LLOG_OP_MAGIC | 0x40000,
+        LLOG_JOIN_REC      = LLOG_OP_MAGIC | 0x50000,
+        CHANGELOG_REC      = LLOG_OP_MAGIC | 0x60000,
+        CHANGELOG_USER_REC = LLOG_OP_MAGIC | 0x70000,
+        LLOG_HDR_MAGIC     = LLOG_OP_MAGIC | 0x45539,
+        LLOG_LOGID_MAGIC   = LLOG_OP_MAGIC | 0x4553b,
 } llog_op_type;
 
 /*
@@ -2336,17 +2336,32 @@ enum changelog_rec_type {
         CL_LAST
 };
 
+/** Changelog entry type names. Must be defined in the same order as the
+ * \a changelog_rec_type enum.
+ */
+#define DECLARE_CHANGELOG_NAMES static const char *changelog_str[] =         \
+       {"MARK","CREAT","MKDIR","HLINK","SLINK","MKNOD","UNLNK","RMDIR",      \
+        "RNMFM","RNMTO","OPEN","CLOSE","IOCTL","TRUNC","SATTR","XATTR"}
+
 /** \a changelog_rec_type's that can't be masked */
-#define CL_MINMASK (1 << CL_MARK)
+#define CHANGELOG_MINMASK (1 << CL_MARK)
 /** bits covering all \a changelog_rec_type's */
-#define CL_ALLMASK 0XFFFF
+#define CHANGELOG_ALLMASK 0XFFFF
 /** default \a changelog_rec_type mask */
-#define CL_DEFMASK CL_ALLMASK
+#define CHANGELOG_DEFMASK CHANGELOG_ALLMASK
 
 /* per-record flags */
 #define CLF_VERSION  0x1000
 #define CLF_FLAGMASK 0x0FFF
 #define CLF_HSM      0x0001
+
+/* changelog llog name, needed by client replicators */
+#define CHANGELOG_CATALOG "changelog_catalog"
+
+struct changelog_setinfo {
+        __u64 cs_recno;
+        __u32 cs_id;
+};
 
 /** changelog record */
 struct llog_changelog_rec {
@@ -2366,6 +2381,16 @@ struct llog_changelog_rec {
                 char          cr_name[0];     /**< last element */
                 struct llog_rec_tail cr_tail; /**< for_sizezof_only */
         };
+} __attribute__((packed));
+
+#define CHANGELOG_USER_PREFIX "cl"
+
+struct llog_changelog_user_rec {
+        struct llog_rec_hdr   cur_hdr;
+        __u32                 cur_id;
+        __u32                 cur_padding;
+        __u64                 cur_endrec;
+        struct llog_rec_tail  cur_tail;
 } __attribute__((packed));
 
 struct llog_gen {

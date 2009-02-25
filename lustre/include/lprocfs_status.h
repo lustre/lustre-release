@@ -682,8 +682,33 @@ extern int lprocfs_quota_rd_qs_factor(char *page, char **start, off_t off,
                                       int count, int *eof, void *data);
 extern int lprocfs_quota_wr_qs_factor(struct file *file, const char *buffer,
                                       unsigned long count, void *data);
+
+/** struct for holding changelog data for seq_file processing */
+struct changelog_seq_iter {
+        void *csi_dev;
+        struct llog_ctxt *csi_ctxt;
+        struct llog_handle *csi_llh;
+        __u64 csi_startrec;
+        __u64 csi_endrec;
+        loff_t csi_pos;
+        int csi_wrote;
+        int csi_startcat;
+        int csi_startidx;
+        int csi_fill:1;
+        int csi_done:1;
+};
+int changelog_seq_open(struct inode *inode, struct file *file,
+                       struct changelog_seq_iter **csih);
+int changelog_seq_release(struct inode *inode, struct file *file);
+loff_t changelog_seq_lseek(struct file *file, loff_t offset, int origin);
+
+
+
 #else
 /* LPROCFS is not defined */
+
+
+
 static inline void lprocfs_counter_add(struct lprocfs_stats *stats,
                                        int index, long amount) { return; }
 static inline void lprocfs_counter_incr(struct lprocfs_stats *stats,

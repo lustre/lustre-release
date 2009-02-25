@@ -1382,8 +1382,8 @@ static void server_wait_finished(struct vfsmount *mnt)
         init_waitqueue_head(&waitq);
 
         while ((atomic_read(&mnt->mnt_count) > 1) && (retries > 0)) {
-                LCONSOLE_WARN("Mount still busy with %d refs, waiting for "
-                              "%d secs...\n",
+                LCONSOLE_WARN("%s: Mount still busy with %d refs, waiting for "
+                              "%d secs...\n", mnt->mnt_devname,
                               atomic_read(&mnt->mnt_count), retries);
 
                 /* Wait for a bit */
@@ -1392,8 +1392,8 @@ static void server_wait_finished(struct vfsmount *mnt)
                 l_wait_event(waitq, 0, &lwi);
         }
         if (atomic_read(&mnt->mnt_count) > 1) {
-                CERROR("Mount %p is still busy (%d refs), giving up.\n",
-                       mnt, atomic_read(&mnt->mnt_count));
+                CERROR("%s: Mount still busy (%d refs), giving up.\n",
+                       mnt->mnt_devname, atomic_read(&mnt->mnt_count));
         }
 }
 

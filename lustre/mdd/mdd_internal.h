@@ -108,6 +108,8 @@ struct mdd_changelog {
         int                              mc_mask;
         __u64                            mc_index;
         __u64                            mc_starttime;
+        spinlock_t                       mc_user_lock;
+        int                              mc_lastuser;
 };
 
 /** Objects in .lustre dir */

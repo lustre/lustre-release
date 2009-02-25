@@ -1068,12 +1068,15 @@ static int lu_device_is_mdt(struct lu_device *d)
         return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &mdt_lu_ops);
 }
 
+static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
+                         void *karg, void *uarg);
+
 static int mdt_set_info(struct mdt_thread_info *info)
 {
         struct ptlrpc_request *req = mdt_info_req(info);
         char *key;
-        __u32 *val;
-        int keylen, rc = 0;
+        void *val;
+        int keylen, vallen, rc = 0;
         ENTRY;
 
         rc = req_capsule_server_pack(info->mti_pill);
@@ -1095,19 +1098,35 @@ static int mdt_set_info(struct mdt_thread_info *info)
                 RETURN(-EFAULT);
         }
 
-        if (!KEY_IS(KEY_READ_ONLY))
+        vallen = req_capsule_get_size(info->mti_pill, &RMF_SETINFO_VAL,
+                                      RCL_CLIENT);
+
+        if (KEY_IS(KEY_READ_ONLY)) {
+                req->rq_status = 0;
+                lustre_msg_set_status(req->rq_repmsg, 0);
+
+                spin_lock(&req->rq_export->exp_lock);
+                if (*(__u32 *)val)
+                        req->rq_export->exp_connect_flags |= OBD_CONNECT_RDONLY;
+                else
+                        req->rq_export->exp_connect_flags &=~OBD_CONNECT_RDONLY;
+                spin_unlock(&req->rq_export->exp_lock);
+
+        } else if (KEY_IS(KEY_CHANGELOG_CLEAR)) {
+                if (lustre_msg_swabbed(req->rq_reqmsg)) {
+                        struct changelog_setinfo *cs =
+                                (struct changelog_setinfo *)val;
+                        __swab64s(&cs->cs_recno);
+                        __swab32s(&cs->cs_id);
+                }
+
+                rc = mdt_iocontrol(OBD_IOC_CHANGELOG_CLEAR, info->mti_exp,
+                                   vallen, val, NULL);
+                lustre_msg_set_status(req->rq_repmsg, rc);
+
+        } else {
                 RETURN(-EINVAL);
-
-        req->rq_status = 0;
-        lustre_msg_set_status(req->rq_repmsg, 0);
-
-        spin_lock(&req->rq_export->exp_lock);
-        if (*val)
-                req->rq_export->exp_connect_flags |= OBD_CONNECT_RDONLY;
-        else
-                req->rq_export->exp_connect_flags &= ~OBD_CONNECT_RDONLY;
-        spin_unlock(&req->rq_export->exp_lock);
-
+        }
         RETURN(0);
 }
 
@@ -1784,6 +1803,7 @@ static int mdt_quotactl_handle(struct mdt_thread_info *info)
 }
 #endif
 
+
 /*
  * OBD PING and other handlers.
  */
@@ -1808,6 +1828,101 @@ static int mdt_obd_log_cancel(struct mdt_thread_info *info)
 static int mdt_obd_qc_callback(struct mdt_thread_info *info)
 {
         return err_serious(-EOPNOTSUPP);
+}
+
+
+/*
+ * LLOG handlers.
+ */
+
+/** clone llog ctxt from child (mdd)
+ * This allows remote llog (replicator) access.
+ * We can either pass all llog RPCs (eg mdt_llog_create) on to child where the
+ * context was originally set up, or we can handle them directly.
+ * I choose the latter, but that means I need any llog
+ * contexts set up by child to be accessable by the mdt.  So we clone the
+ * context into our context list here.
+ */
+static int mdt_llog_ctxt_clone(const struct lu_env *env, struct mdt_device *mdt,
+                               int idx)
+{
+        struct md_device  *next = mdt->mdt_child;
+        struct llog_ctxt *ctxt;
+        int rc;
+
+        if (!llog_ctxt_null(mdt2obd_dev(mdt), idx))
+                return 0;
+
+        rc = next->md_ops->mdo_llog_ctxt_get(env, next, idx, (void **)&ctxt);
+        if (rc || ctxt == NULL) {
+                CERROR("Can't get mdd ctxt %d\n", rc);
+                return rc;
+        }
+
+        rc = llog_group_set_ctxt(&mdt2obd_dev(mdt)->obd_olg, ctxt, idx);
+        if (rc)
+                CERROR("Can't set mdt ctxt %d\n", rc);
+
+        return rc;
+}
+
+static int mdt_llog_ctxt_unclone(const struct lu_env *env,
+                                 struct mdt_device *mdt, int idx)
+{
+        struct llog_ctxt *ctxt;
+
+        ctxt = llog_get_context(mdt2obd_dev(mdt), idx);
+        if (ctxt == NULL)
+                return 0;
+        /* Put once for the get we just did, and once for the clone */
+        llog_ctxt_put(ctxt);
+        llog_ctxt_put(ctxt);
+        return 0;
+}
+
+static int mdt_llog_create(struct mdt_thread_info *info)
+{
+        int rc;
+
+        req_capsule_set(info->mti_pill, &RQF_LLOG_ORIGIN_HANDLE_CREATE);
+        rc = llog_origin_handle_create(mdt_info_req(info));
+        return (rc < 0 ? err_serious(rc) : rc);
+}
+
+static int mdt_llog_destroy(struct mdt_thread_info *info)
+{
+        int rc;
+
+        req_capsule_set(info->mti_pill, &RQF_LLOG_ORIGIN_HANDLE_DESTROY);
+        rc = llog_origin_handle_destroy(mdt_info_req(info));
+        return (rc < 0 ? err_serious(rc) : rc);
+}
+
+static int mdt_llog_read_header(struct mdt_thread_info *info)
+{
+        int rc;
+
+        req_capsule_set(info->mti_pill, &RQF_LLOG_ORIGIN_HANDLE_READ_HEADER);
+        rc = llog_origin_handle_read_header(mdt_info_req(info));
+        return (rc < 0 ? err_serious(rc) : rc);
+}
+
+static int mdt_llog_next_block(struct mdt_thread_info *info)
+{
+        int rc;
+
+        req_capsule_set(info->mti_pill, &RQF_LLOG_ORIGIN_HANDLE_NEXT_BLOCK);
+        rc = llog_origin_handle_next_block(mdt_info_req(info));
+        return (rc < 0 ? err_serious(rc) : rc);
+}
+
+static int mdt_llog_prev_block(struct mdt_thread_info *info)
+{
+        int rc;
+
+        req_capsule_set(info->mti_pill, &RQF_LLOG_ORIGIN_HANDLE_PREV_BLOCK);
+        rc = llog_origin_handle_prev_block(mdt_info_req(info));
+        return (rc < 0 ? err_serious(rc) : rc);
 }
 
 
@@ -2231,7 +2346,9 @@ static struct mdt_handler *mdt_handler_find(__u32 opc,
                 if (s->mos_opc_start <= opc && opc < s->mos_opc_end) {
                         h = s->mos_hs + (opc - s->mos_opc_start);
                         if (likely(h->mh_opc != 0))
-                                LASSERT(h->mh_opc == opc);
+                                LASSERTF(h->mh_opc == opc,
+                                         "opcode mismatch %d != %d\n",
+                                         h->mh_opc, opc);
                         else
                                 h = NULL; /* unsupported opc */
                         break;
@@ -2335,6 +2452,7 @@ static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags)
                 struct mdt_device *mdt = info->mti_mdt;
 
                 /* Pack reply. */
+
                 if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
                         req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
                                              mdt->mdt_max_mdsize);
@@ -2794,7 +2912,8 @@ static int mdt_handle0(struct ptlrpc_request *req,
                         if (likely(h != NULL)) {
                                 rc = mdt_req_handle(info, h, req);
                         } else {
-                                CERROR("The unsupported opc: 0x%x\n", lustre_msg_get_opc(msg) );
+                                CERROR("The unsupported opc: 0x%x\n",
+                                       lustre_msg_get_opc(msg) );
                                 req->rq_status = -ENOTSUPP;
                                 rc = ptlrpc_error(req);
                                 RETURN(rc);
@@ -4204,6 +4323,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 
         target_recovery_fini(obd);
         mdt_stop_ptlrpc_service(m);
+        mdt_llog_ctxt_unclone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
         mdt_obd_llog_cleanup(obd);
         obd_zombie_barrier();
 #ifdef HAVE_QUOTA_SUPPORT
@@ -4244,8 +4364,8 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         cfs_timer_disarm(&m->mdt_ck_timer);
         mdt_ck_thread_stop(m);
 
-        /* 
-         * Finish the stack 
+        /*
+         * Finish the stack
          */
         mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
 
@@ -4524,6 +4644,10 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         if (rc)
                 GOTO(err_fs_cleanup, rc);
 
+        rc = mdt_llog_ctxt_clone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
+        if (rc)
+                GOTO(err_llog_cleanup, rc);
+
         mdt_adapt_sptlrpc_conf(obd, 1);
 
 #ifdef HAVE_QUOTA_SUPPORT
@@ -4568,8 +4692,9 @@ err_recovery:
         target_recovery_fini(obd);
 #ifdef HAVE_QUOTA_SUPPORT
         next->md_ops->mdo_quota.mqo_cleanup(env, next);
-err_llog_cleanup:
 #endif
+err_llog_cleanup:
+        mdt_llog_ctxt_unclone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
         mdt_obd_llog_cleanup(obd);
 err_fs_cleanup:
         mdt_fs_cleanup(env, m);
@@ -4600,7 +4725,7 @@ err_fini_site:
 err_free_site:
         OBD_FREE_PTR(mite);
 err_lmi:
-        if (lmi) 
+        if (lmi)
                 server_put_mount_2(dev, lmi->lmi_mnt);
         return (rc);
 }
@@ -5234,7 +5359,7 @@ static int mdt_ioc_fid2path(struct lu_env *env, struct mdt_device *mdt,
                 GOTO(out_free, rc);
         }
 
-        rc = mo_path(env, md_object_next(&obj->mot_obj), path, pathlen, recno,
+        rc = mo_path(env, md_object_next(&obj->mot_obj), path, pathlen, &recno,
                      &linkno);
         mdt_object_put(env, obj);
         if (rc)
@@ -5243,6 +5368,7 @@ static int mdt_ioc_fid2path(struct lu_env *env, struct mdt_device *mdt,
         if (copy_to_user(data->ioc_pbuf1, path, pathlen))
                 rc = -EFAULT;
 
+        memcpy(data->ioc_inlbuf2, &recno, sizeof(recno));
         memcpy(data->ioc_inlbuf3, &linkno, sizeof(linkno));
 
         EXIT;
@@ -5254,6 +5380,31 @@ out_context:
         return rc;
 }
 
+/* Pass the ioc down */
+static int mdt_ioc_child(struct lu_env *env, struct mdt_device *mdt,
+                         unsigned int cmd, int len, void *data)
+{
+        struct lu_context ioctl_session;
+        struct md_device *next = mdt->mdt_child;
+        int rc;
+        ENTRY;
+
+        rc = lu_context_init(&ioctl_session, LCT_SESSION);
+        if (rc)
+                RETURN(rc);
+        ioctl_session.lc_thread = (struct ptlrpc_thread *)cfs_current();
+        lu_context_enter(&ioctl_session);
+        env->le_ses = &ioctl_session;
+
+        LASSERT(next->md_ops->mdo_iocontrol);
+        rc = next->md_ops->mdo_iocontrol(env, next, cmd, len, data);
+
+        lu_context_exit(&ioctl_session);
+        lu_context_fini(&ioctl_session);
+        RETURN(rc);
+}
+
+/* ioctls on obd dev */
 static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                          void *karg, void *uarg)
 {
@@ -5283,6 +5434,11 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 break;
         case OBD_IOC_FID2PATH:
                 rc = mdt_ioc_fid2path(&env, mdt, karg);
+                break;
+        case OBD_IOC_CHANGELOG_REG:
+        case OBD_IOC_CHANGELOG_DEREG:
+        case OBD_IOC_CHANGELOG_CLEAR:
+                rc = mdt_ioc_child(&env, mdt, cmd, len, karg);
                 break;
         default:
                 CERROR("Not supported cmd = %d for device %s\n",
@@ -5571,7 +5727,19 @@ static struct mdt_handler mdt_dlm_ops[] = {
         DEF_DLM_HNDL_0(0,            CP_CALLBACK,    mdt_cp_callback)
 };
 
+#define DEF_LLOG_HNDL(flags, name, fn)                   \
+        DEF_HNDL(LLOG, ORIGIN_HANDLE_CREATE, _NET, flags, name, fn, NULL)
+
 static struct mdt_handler mdt_llog_ops[] = {
+        DEF_LLOG_HNDL(0, ORIGIN_HANDLE_CREATE,      mdt_llog_create),
+        DEF_LLOG_HNDL(0, ORIGIN_HANDLE_NEXT_BLOCK,  mdt_llog_next_block),
+        DEF_LLOG_HNDL(0, ORIGIN_HANDLE_READ_HEADER, mdt_llog_read_header),
+        DEF_LLOG_HNDL(0, ORIGIN_HANDLE_WRITE_REC,   NULL),
+        DEF_LLOG_HNDL(0, ORIGIN_HANDLE_CLOSE,       NULL),
+        DEF_LLOG_HNDL(0, ORIGIN_CONNECT,            NULL),
+        DEF_LLOG_HNDL(0, CATINFO,                   NULL),
+        DEF_LLOG_HNDL(0, ORIGIN_HANDLE_PREV_BLOCK,  mdt_llog_prev_block),
+        DEF_LLOG_HNDL(0, ORIGIN_HANDLE_DESTROY,     mdt_llog_destroy),
 };
 
 #define DEF_SEC_CTX_HNDL(name, fn)                      \

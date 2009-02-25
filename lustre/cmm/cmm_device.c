@@ -65,7 +65,7 @@ static const struct lu_device_operations cmm_lu_ops;
 
 static inline int lu_device_is_cmm(struct lu_device *d)
 {
-	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &cmm_lu_ops);
+        return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &cmm_lu_ops);
 }
 
 int cmm_root_get(const struct lu_env *env, struct md_device *md,
@@ -84,7 +84,7 @@ static int cmm_statfs(const struct lu_env *env, struct md_device *md,
                       struct kstatfs *sfs)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
-	int rc;
+        int rc;
 
         ENTRY;
         rc = cmm_child_ops(cmm_dev)->mdo_statfs(env,
@@ -127,6 +127,18 @@ static int cmm_update_capa_key(const struct lu_env *env,
         rc = cmm_child_ops(cmm_dev)->mdo_update_capa_key(env,
                                                          cmm_dev->cmm_child,
                                                          key);
+        RETURN(rc);
+}
+
+static int cmm_llog_ctxt_get(const struct lu_env *env, struct md_device *m,
+                             int idx, void **h)
+{
+        struct cmm_device *cmm_dev = md2cmm_dev(m);
+        int rc;
+        ENTRY;
+
+        rc = cmm_child_ops(cmm_dev)->mdo_llog_ctxt_get(env, cmm_dev->cmm_child,
+                                                       idx, h);
         RETURN(rc);
 }
 
@@ -369,12 +381,26 @@ static int cmm_quota_finvalidate(const struct lu_env *env, struct md_device *m,
 }
 #endif
 
+int cmm_iocontrol(const struct lu_env *env, struct md_device *m,
+                  unsigned int cmd, int len, void *data)
+{
+        struct md_device *next = md2cmm_dev(m)->cmm_child;
+        int rc;
+
+        ENTRY;
+        rc = next->md_ops->mdo_iocontrol(env, next, cmd, len, data);
+        RETURN(rc);
+}
+
+
 static const struct md_device_operations cmm_md_ops = {
         .mdo_statfs          = cmm_statfs,
         .mdo_root_get        = cmm_root_get,
         .mdo_maxsize_get     = cmm_maxsize_get,
         .mdo_init_capa_ctxt  = cmm_init_capa_ctxt,
         .mdo_update_capa_key = cmm_update_capa_key,
+        .mdo_llog_ctxt_get   = cmm_llog_ctxt_get,
+        .mdo_iocontrol       = cmm_iocontrol,
 #ifdef HAVE_QUOTA_SUPPORT
         .mdo_quota           = {
                 .mqo_notify      = cmm_quota_notify,
@@ -632,7 +658,7 @@ static int cmm_prepare(const struct lu_env *env,
 }
 
 static const struct lu_device_operations cmm_lu_ops = {
-	.ldo_object_alloc      = cmm_object_alloc,
+        .ldo_object_alloc      = cmm_object_alloc,
         .ldo_process_config    = cmm_process_config,
         .ldo_recovery_complete = cmm_recovery_complete,
         .ldo_prepare           = cmm_prepare,

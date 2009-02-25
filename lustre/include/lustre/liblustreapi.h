@@ -174,9 +174,12 @@ extern int llapi_rgetfacl(int argc, char *argv[]);
 extern int llapi_cp(int argc, char *argv[]);
 extern int llapi_ls(int argc, char *argv[]);
 extern int llapi_changelog_open(const char *mdtname, long long startrec);
-extern int llapi_changelog_clear(const char *mdtname, long long endrec);
+extern int llapi_changelog_clear(const char *mdtname, const char *idstr,
+                                 long long endrec);
+extern int llapi_changelog_register(const char *mdtname);
+extern int llapi_changelog_unregister(const char *mdtname, int id);
 struct lu_fid;
 extern int llapi_fid2path(char *device, char *fid, char *path, int pathlen,
-                          __u64 recno, int *linkno);
+                          long long *recno, int *linkno);
 #endif
 

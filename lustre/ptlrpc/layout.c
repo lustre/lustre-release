@@ -889,7 +889,7 @@ const struct req_format RQF_MGS_TARGET_REG =
 EXPORT_SYMBOL(RQF_MGS_TARGET_REG);
 
 const struct req_format RQF_MGS_SET_INFO =
-        DEFINE_REQ_FMT0("MGS_SET_INTO", mgs_set_info,
+        DEFINE_REQ_FMT0("MGS_SET_INFO", mgs_set_info,
                          mgs_set_info);
 EXPORT_SYMBOL(RQF_MGS_SET_INFO);
 

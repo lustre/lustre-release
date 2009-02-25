@@ -353,6 +353,18 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_SEC_CTX_FINI_NET        0x1203
 #define OBD_FAIL_SEC_CTX_HDL_PAUSE       0x1204
 
+#define OBD_FAIL_LLOG                               0x1300
+#define OBD_FAIL_LLOG_ORIGIN_CONNECT_NET            0x1301
+#define OBD_FAIL_LLOG_ORIGIN_HANDLE_CREATE_NET      0x1302
+#define OBD_FAIL_LLOG_ORIGIN_HANDLE_DESTROY_NET     0x1303
+#define OBD_FAIL_LLOG_ORIGIN_HANDLE_READ_HEADER_NET 0x1304
+#define OBD_FAIL_LLOG_ORIGIN_HANDLE_NEXT_BLOCK_NET  0x1305
+#define OBD_FAIL_LLOG_ORIGIN_HANDLE_PREV_BLOCK_NET  0x1306
+#define OBD_FAIL_LLOG_ORIGIN_HANDLE_WRITE_REC_NET   0x1307
+#define OBD_FAIL_LLOG_ORIGIN_HANDLE_CLOSE_NET       0x1308
+#define OBD_FAIL_LLOG_CATINFO_NET                   0x1309
+
+
 /* Failure injection control */
 #define OBD_FAIL_MASK_SYS    0x0000FF00
 #define OBD_FAIL_MASK_LOC   (0x000000FF | OBD_FAIL_MASK_SYS)

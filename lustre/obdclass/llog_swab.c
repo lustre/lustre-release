@@ -166,6 +166,15 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
                 break;
         }
 
+        case CHANGELOG_USER_REC: {
+                struct llog_changelog_user_rec *cur =
+                        (struct llog_changelog_user_rec*)rec;
+
+                __swab32s(&cur->cur_id);
+                __swab64s(&cur->cur_endrec);
+                break;
+        }
+
         case MDS_SETATTR64_REC: {
                 struct llog_setattr64_rec *lsr = (struct llog_setattr64_rec *)rec;
 
