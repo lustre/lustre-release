@@ -2179,7 +2179,7 @@ static int osd_get_bufs(const struct lu_env *env, struct dt_object *dt,
         lu_object_get(&dt->do_lu);
         lb->obj = dt;
 
-        return 1;
+        return npages;
 out_err:
         lb = _lb;
         while (--i >= 0) {
@@ -2260,7 +2260,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
                        (unsigned) lb->file_offset);
 
                 udmu_object_write(&osd->od_objset, obj->oo_db, oh->ot_tx,
-                                  lb->file_offset, lb->len,kmap(lb->page));
+                                  lb->file_offset, lb->len, kmap(lb->page));
                 kunmap(lb->page);
                 if (new_size < lb->file_offset + lb->len)
                         new_size = lb->file_offset + lb->len;
