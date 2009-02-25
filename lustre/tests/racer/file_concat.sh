@@ -10,7 +10,7 @@ concat(){
 }
 
 while /bin/true ; do 
-    file=$(($RANDOM%$MAX))
-    new_file=$(($RANDOM%$MAX))
+    file=$((RANDOM % MAX))
+    new_file=$((RANDOM % MAX))
     concat 2> /dev/null
 done

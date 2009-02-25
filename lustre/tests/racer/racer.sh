@@ -10,40 +10,34 @@ NUM_THREADS=${NUM_THREADS:-3}
 
 mkdir -p $DIR
 
+RACER_PROGS="file_create dir_create file_rm file_rename file_link file_symlink
+file_list file_concat"
+
 racer_cleanup()
 {
-    killall file_create.sh 
-    killall dir_create.sh
-    killall file_rm.sh 
-    killall file_rename.sh 
-    killall file_link.sh 
-    killall file_symlink.sh 
-    killall file_list.sh 
-    killall file_concat.sh
-    trap 0
+	for P in $RACER_PROGS; do
+		killall $P.sh
+	done
+	trap 0
 }
 
 echo "Running $0 for $DURATION seconds. CTRL-C to exit"
 trap "
-    echo \"Cleaning up\" 
-    racer_cleanup
-    exit 0
+	echo \"Cleaning up\" 
+	racer_cleanup
+	exit 0
 " 2 15
 
 cd `dirname $0`
 for N in `seq 1 $NUM_THREADS`; do
-	./file_create.sh $DIR $MAX_FILES &
-	./dir_create.sh $DIR $MAX_FILES &
-	./file_rename.sh $DIR $MAX_FILES &
-	./file_link.sh $DIR $MAX_FILES &
-	./file_symlink.sh $DIR $MAX_FILES &
-	./file_concat.sh $DIR $MAX_FILES &
-	./file_list.sh $DIR &
-	./file_rm.sh $DIR $MAX_FILES &
+	for P in $RACER_PROGS; do
+		./$P.sh $DIR $MAX_FILES &
+	done
 done
 
-sleep $DURATION;
+sleep $DURATION
 racer_cleanup
+
 # Check our to see whether our test DIR is still available.
 df $DIR
 RC=$?
