@@ -572,9 +572,6 @@ int udmu_object_read(udmu_objset_t *uos, dmu_buf_t *db, uint64_t offset,
         vnattr_t va;
         int rc;
 
-        udmu_printf(LEVEL_INFO, stdout, "udmu_read(%lld, %lld, %lld)\n",
-                    oid, offset, size);
-
         udmu_object_getattr(db, &va);
         if (offset + size > va.va_size) {
                 if (va.va_size < offset)
