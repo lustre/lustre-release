@@ -1308,6 +1308,12 @@ static int lustre_free_lsi(struct super_block *sb)
                         OBD_FREE(lsi->lsi_lmd->lmd_exclude,
                                  sizeof(lsi->lsi_lmd->lmd_exclude[0]) *
                                  lsi->lsi_lmd->lmd_exclude_count);
+                if (lsi->lsi_lmd->lmd_mgs)
+                        OBD_FREE(lsi->lsi_lmd->lmd_mgs,
+                                        strlen(lsi->lsi_lmd->lmd_mgs) + 1);
+                if (lsi->lsi_lmd->lmd_fsname)
+                        OBD_FREE(lsi->lsi_lmd->lmd_fsname,
+                                        strlen(lsi->lsi_lmd->lmd_fsname) + 1);
                 OBD_FREE(lsi->lsi_lmd, sizeof(*lsi->lsi_lmd));
         }
 
@@ -1481,6 +1487,7 @@ out:
         if (rc) {
                 if (d) {
                         LASSERT(ldt);
+                        type->typ_refcnt--;
                         ldt->ldt_ops->ldto_device_fini(&env, d);
                         ldt->ldt_ops->ldto_device_free(&env, d);
                 }
