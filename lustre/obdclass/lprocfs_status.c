@@ -2342,6 +2342,11 @@ int changelog_seq_release(struct inode *inode, struct file *file)
 }
 EXPORT_SYMBOL(changelog_seq_release);
 
+#ifndef SEEK_CUR /* SLES10 needs this */
+#define SEEK_CUR        1
+#define SEEK_END        2
+#endif
+
 loff_t changelog_seq_lseek(struct file *file, loff_t offset, int origin)
 {
         struct seq_file *seq = (struct seq_file *)file->private_data;

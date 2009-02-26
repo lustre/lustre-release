@@ -59,11 +59,6 @@
 
 #include "mdd_internal.h"
 
-#ifndef SEEK_CUR /* SLES10 needs this */
-#define SEEK_CUR        1
-#define SEEK_END        2
-#endif
-
 static const char *mdd_counter_names[LPROC_MDD_NR] = {
 };
 
