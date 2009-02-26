@@ -180,6 +180,12 @@ int ll_setxattr(struct dentry *dentry, const char *name,
                 struct lov_user_md *lump = (struct lov_user_md *)value;
                 int rc = 0;
 
+                /* Attributes that are saved via getxattr will always have
+                 * the stripe_offset as 0.  Instead, the MDS should be
+                 * allowed to pick the starting OST index.   b=17846 */
+                if (lump->lmm_stripe_offset == 0)
+                        lump->lmm_stripe_offset = -1;
+
                 if (S_ISREG(inode->i_mode)) {
                         struct file f;
                         int flags = FMODE_WRITE;
