@@ -693,7 +693,7 @@ static inline int dt_record_read(const struct lu_env *env,
 
 static inline int dt_declare_record_write(const struct lu_env *env,
                                           struct dt_object *dt,
-                                          loff_t pos, int len,
+                                          int size, loff_t pos,
                                           struct thandle *th,
                                           struct lustre_capa *capa)
 {
@@ -701,7 +701,7 @@ static inline int dt_declare_record_write(const struct lu_env *env,
 
         LASSERTF(dt != NULL, "dt is NULL when we want to write record\n");
         LASSERT(th != NULL);
-        rc = dt->do_body_ops->dbo_declare_write(env, dt, pos, len, th, capa);
+        rc = dt->do_body_ops->dbo_declare_write(env, dt, size, pos, th, capa);
         return rc;
 }
 
