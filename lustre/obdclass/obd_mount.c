@@ -1442,7 +1442,7 @@ static struct lu_device *try_start_osd(struct lustre_mount_data *lmd,
         type = class_get_type(typename);
         if (!type) {
                 CERROR("Unknown type: '%s'\n", typename);
-                GOTO(out, rc = -ENODEV);
+                GOTO(out_env, rc = -ENODEV);
         }
 
         ldt = type->typ_lu;
@@ -1493,9 +1493,12 @@ out:
                 }
                 if (type)
                         class_put_type(type);
-                d = ERR_PTR(rc);
         }
         lu_env_fini(&env);
+out_env:
+        if (rc)
+                d = ERR_PTR(rc);
+
         RETURN(d);
 }
 
@@ -1507,7 +1510,7 @@ static struct lu_device *start_osd(struct lustre_mount_data *lmd,
 
         d = try_start_osd(lmd, LUSTRE_OSD_NAME, s_flags);
         if (IS_ERR(d))
-                d = try_start_osd(lmd, LUSTRE_DMU_NAME, s_flags);
+                d = try_start_osd(lmd, LUSTRE_ZFS_NAME, s_flags);
         RETURN(d);
 }
 
@@ -1588,7 +1591,11 @@ static struct dt_device *server_kernel_mount(struct super_block *sb)
 
         /* start OSD on given device */
         dev = start_osd(lmd, sb->s_flags);
-        LASSERT(!IS_ERR(dev));
+        if (IS_ERR(dev)) {
+                OBD_FREE(ldd, sizeof(*ldd));
+                lsi->lsi_ldd = NULL;
+                RETURN((void *) dev);
+        }
         
         lsi->lsi_dt_dev = lu2dt_dev(dev);
 
