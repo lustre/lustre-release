@@ -2222,17 +2222,13 @@ static int osd_declare_write_commit(const struct lu_env *env,
         struct osd_object  *obj = osd_dt_obj(dt);
         struct osd_thandle *oh;
         int                 i;
-        int                 l = 0;
         ENTRY;
 
         oh = container_of0(th, struct osd_thandle, ot_super);
 
-        for (i = 0; i < nr; i++, lb++) {
-                l += lb->len;
+        for (i = 0; i < nr; i++, lb++)
                 udmu_tx_hold_write(oh->ot_tx, udmu_object_get_id(obj->oo_db),
                                    lb->file_offset, lb->len);
-        }
-        printk("%d bytes declared\n", l);
 
         udmu_tx_hold_bonus(oh->ot_tx, udmu_object_get_id(obj->oo_db));
 
