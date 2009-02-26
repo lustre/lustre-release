@@ -187,6 +187,7 @@ extern const struct req_format RQF_OST_DESTROY;
 extern const struct req_format RQF_OST_BRW;
 extern const struct req_format RQF_OST_STATFS;
 extern const struct req_format RQF_OST_SET_INFO;
+extern const struct req_format RQF_OST_SET_GRANT_INFO;
 extern const struct req_format RQF_OST_GET_INFO_GENERIC;
 extern const struct req_format RQF_OST_GET_INFO_LAST_ID;
 extern const struct req_format RQF_OST_GET_INFO_FIEMAP;

@@ -14,6 +14,15 @@ tbd  Sun Microsystems, Inc.
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
 Severity   : normal
+Frequency  : normal 
+Bugzilla   : 12069
+Descriptoin: OST grant too much space to client even there are not enough space. 
+Details    : Client will shrink its grant cache to OST if there are no write
+	     activity over 6 mins (GRANT_SHRINK_INTERVAL), and OST will retrieve
+	     this grant cache if there are already not enough avaible space
+	     (left_space < total_clients * 32M). 
+
+Severity   : normal
 Frequency  : start MDS on uncleanly shutdowned MDS device
 Bugzilla   : 16839
 Descriptoin: ll_sync thread stay in waiting mds<>ost recovery finished

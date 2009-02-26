@@ -58,6 +58,7 @@ struct osc_brw_async_args {
         struct cl_req     *aa_clerq;
 };
 
+#define osc_grant_args osc_brw_async_args
 struct osc_async_args {
         struct obd_info   *aa_oi;
 };

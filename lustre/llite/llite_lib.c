@@ -339,7 +339,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                                   OBD_CONNECT_CANCELSET | OBD_CONNECT_FID      |
                                   OBD_CONNECT_SRVLOCK   | OBD_CONNECT_TRUNCLOCK|
                                   OBD_CONNECT_AT | OBD_CONNECT_RMT_CLIENT |
-                                  OBD_CONNECT_OSS_CAPA;
+                                  OBD_CONNECT_OSS_CAPA | OBD_CONNECT_GRANT_SHRINK;
 
         if (!OBD_FAIL_CHECK(OBD_FAIL_OSC_CONNECT_CKSUM)) {
                 /* OBD_CONNECT_CKSUM should always be set, even if checksums are
