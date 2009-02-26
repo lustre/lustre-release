@@ -484,20 +484,18 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 struct pool_desc *pool;
 
                 pool = lov_find_pool(lov, lumv3.lmm_pool_name);
-                if (pool == NULL)
-                        RETURN(-EINVAL);
+                if (pool != NULL) {
+                        if (lumv1->lmm_stripe_offset !=
+                            (typeof(lumv1->lmm_stripe_offset))(-1)) {
+                                rc = lov_check_index_in_pool(
+                                        lumv1->lmm_stripe_offset, pool);
+                                if (rc < 0)
+                                        RETURN(-EINVAL);
+                        }
 
-                if (lumv1->lmm_stripe_offset !=
-                    (typeof(lumv1->lmm_stripe_offset))(-1)) {
-                        rc = lov_check_index_in_pool(lumv1->lmm_stripe_offset,
-                                                     pool);
-                        if (rc < 0)
-                                RETURN(-EINVAL);
+                        if (stripe_count > pool_tgt_count(pool))
+                                stripe_count = pool_tgt_count(pool);
                 }
-
-                if (stripe_count > pool_tgt_count(pool))
-                        stripe_count = pool_tgt_count(pool);
-
         }
 
         rc = lov_alloc_memmd(lsmp, stripe_count, lumv1->lmm_pattern, lmm_magic);
