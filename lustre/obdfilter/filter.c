@@ -2275,6 +2275,7 @@ static int filter_connect_internal(struct obd_export *exp,
         data->ocd_version = LUSTRE_VERSION_CODE;
 
         if (exp->exp_connect_flags & OBD_CONNECT_GRANT) {
+                struct filter_obd *filter = &exp->exp_obd->u.filter;
                 struct filter_export_data *fed = &exp->exp_filter_data;
                 obd_size left, want;
 
@@ -2289,6 +2290,8 @@ static int filter_connect_internal(struct obd_export *exp,
                        LPU64" left: "LPU64"\n", exp->exp_obd->obd_name,
                        exp->exp_client_uuid.uuid, exp,
                        data->ocd_grant, want, left);
+                
+                filter->fo_tot_granted_clients ++;
         }
 
         if (data->ocd_connect_flags & OBD_CONNECT_INDEX) {
@@ -2596,6 +2599,12 @@ static int filter_disconnect(struct obd_export *exp)
                 llog_ctxt_put(ctxt);
         }
 
+        if (exp->exp_connect_flags & OBD_CONNECT_GRANT_SHRINK) {
+                struct filter_obd *filter = &exp->exp_obd->u.filter;
+                if (filter->fo_tot_granted_clients > 0)
+                        filter->fo_tot_granted_clients --;
+        }
+
         if (!(exp->exp_flags & OBD_OPT_FORCE))
                 filter_grant_sanity_check(obd, __FUNCTION__);
         filter_grant_discard(exp);
@@ -2878,7 +2887,7 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
         struct filter_obd *filter;
         struct ldlm_resource *res;
         struct dentry *dentry;
-        int rc;
+        int rc = 0;
         ENTRY;
 
         dentry = __filter_oa2dentry(exp->exp_obd, oinfo->oi_oa,
@@ -3640,7 +3649,7 @@ static int filter_truncate(struct obd_export *exp, struct obd_info *oinfo,
                        oinfo->oi_policy.l_extent.end);
                 RETURN(-EFAULT);
         }
-
+        
         CDEBUG(D_INODE, "calling truncate for object "LPU64", valid = "LPX64
                ", o_size = "LPD64"\n", oinfo->oi_oa->o_id,
                oinfo->oi_oa->o_valid, oinfo->oi_policy.l_extent.start);
@@ -3803,6 +3812,15 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
         if (obd == NULL) {
                 CDEBUG(D_IOCTL, "invalid export %p\n", exp);
                 RETURN(-EINVAL);
+        }
+
+	if (KEY_IS(KEY_GRANT_SHRINK)) {
+                struct ost_body *body = (struct ost_body *)val;
+                /* handle shrink grant */
+                spin_lock(&exp->exp_obd->obd_osfs_lock);
+                filter_grant_incoming(exp, &body->oa);
+                spin_unlock(&exp->exp_obd->obd_osfs_lock);
+                RETURN(rc);
         }
 
         if (KEY_IS(KEY_CAPA_KEY)) {

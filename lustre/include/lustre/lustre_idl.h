@@ -355,6 +355,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb, int msgsize);
 #define OBD_CONNECT_FID        0x40000000ULL /*FID is supported by server */
 #define OBD_CONNECT_VBR        0x80000000ULL /*version based recovery */
 #define OBD_CONNECT_LOV_V3    0x100000000ULL /*client supports LOV v3 EA */
+#define OBD_CONNECT_GRANT_SHRINK  0x200000000ULL /* support grant shrink */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
@@ -378,7 +379,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb, int msgsize);
                                 OBD_CONNECT_CANCELSET | OBD_CONNECT_AT | \
                                 LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_CKSUM | \
                                 OBD_CONNECT_VBR | OBD_CONNECT_CHANGE_QS | \
-                                OBD_CONNECT_MDS)
+                                OBD_CONNECT_MDS | OBD_CONNECT_GRANT_SHRINK)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT)
 
@@ -485,19 +486,12 @@ typedef __u32 obd_count;
 #define OBD_FL_NO_USRQUOTA   (0x00000100) /* the object's owner is over quota */
 #define OBD_FL_NO_GRPQUOTA   (0x00000200) /* the object's group is over quota */
 #define OBD_FL_CREATE_CROW   (0x00000400) /* object should be create on write */
+#define OBD_FL_TRUNCLOCK     (0x00000800) /* delegate DLM locking during punch */
+#define OBD_FL_CKSUM_CRC32   (0x00001000) /* CRC32 checksum type */
+#define OBD_FL_CKSUM_ADLER   (0x00002000) /* ADLER checksum type */
+#define OBD_FL_SHRINK_GRANT  (0x00004000) /* object shrink the grant */
 
-/*
- * set this to delegate DLM locking during obd_punch() to the OSTs. Only OSTs
- * that declared OBD_CONNECT_TRUNCLOCK in their connect flags support this
- * functionality.
- */
-#define OBD_FL_TRUNCLOCK     (0x00000800)
 
-/*
- * Checksum types
- */
-#define OBD_FL_CKSUM_CRC32    (0x00001000)
-#define OBD_FL_CKSUM_ADLER    (0x00002000)
 #define OBD_FL_CKSUM_ALL      (OBD_FL_CKSUM_CRC32 | OBD_FL_CKSUM_ADLER)
 
 #define LOV_MAGIC_V1      0x0BD10BD0

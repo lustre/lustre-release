@@ -302,6 +302,8 @@ EXPORT_SYMBOL(ptlrpc_import_setasync);
 /* pinger.c */
 EXPORT_SYMBOL(ptlrpc_pinger_add_import);
 EXPORT_SYMBOL(ptlrpc_pinger_del_import);
+EXPORT_SYMBOL(ptlrpc_add_timeout_client);
+EXPORT_SYMBOL(ptlrpc_del_timeout_client);
 EXPORT_SYMBOL(ptlrpc_pinger_sending_on_import);
 
 /* ptlrpcd.c */

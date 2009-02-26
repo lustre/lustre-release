@@ -332,6 +332,7 @@ struct filter_obd {
         obd_size             fo_tot_dirty;      /* protected by obd_osfs_lock */
         obd_size             fo_tot_granted;    /* all values in bytes */
         obd_size             fo_tot_pending;
+        int                  fo_tot_granted_clients;
 
         obd_size             fo_readcache_max_filesize;
         int                  fo_read_cache;
@@ -390,9 +391,20 @@ struct filter_obd {
 #define MDC_MAX_RIF_DEFAULT       8
 #define MDC_MAX_RIF_MAX         512
 
+
 struct mdc_rpc_lock;
 struct obd_import;
 struct lustre_cache;
+
+struct timeout_item {
+        enum timeout_event ti_event;
+        cfs_time_t         ti_timeout;
+        timeout_cb_t       ti_cb;
+        void              *ti_cb_data;
+        struct list_head   ti_obd_list;
+        struct list_head   ti_chain;
+};
+
 struct client_obd {
         struct rw_semaphore      cl_sem;
         struct obd_uuid          cl_target_uuid;
@@ -413,6 +425,9 @@ struct client_obd {
         long                     cl_avail_grant;   /* bytes of credit for ost */
         long                     cl_lost_grant;    /* lost credits (trunc) */
         struct list_head         cl_cache_waiters; /* waiting for cache/grant */
+        cfs_time_t               cl_next_shrink_grant;   /* jiffies */
+        struct list_head         cl_grant_shrink_list;  /* Timeout event list */
+        struct semaphore         cl_grant_sem;   /*grant shrink list semaphore*/
 
         /* keep track of objects that have lois that contain pages which
          * have been queued for async brw.  this lock also protects the
@@ -1035,6 +1050,7 @@ enum obd_cleanup_stage {
 /* XXX unused */
 #define KEY_ASYNC               "async"
 #define KEY_CAPA_KEY            "capa_key"
+#define KEY_GRANT_SHRINK        "grant_shrink"
 
 struct obd_ops {
         struct module *o_owner;

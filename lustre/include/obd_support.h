@@ -112,6 +112,12 @@ extern unsigned int obd_alloc_fail_rate;
 #endif
 #define LONG_UNLINK 300          /* Unlink should happen before now */
 
+/**
+ * Time interval of shrink, if the client is "idle" more than this interval,
+ * then the ll_grant thread will return the requested grant space to filter
+ */
+#define GRANT_SHRINK_INTERVAL             360/*6 minutes*/
+
 
 #define OBD_FAIL_MDS                     0x100
 #define OBD_FAIL_MDS_HANDLE_UNPACK       0x101
