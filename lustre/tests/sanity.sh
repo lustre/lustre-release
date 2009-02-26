@@ -5867,6 +5867,9 @@ test_200h() {
         done
         wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL" ""\
             || error "Pool $FSNAME.$POOL cannot be drained"
+        # striping on an empty pool should fall back to "pool of everything"
+        $SETSTRIPE -p $POOL ${POOL_FILE}/$tfile || \
+	    error "failed to create file with empty pool"
 }
 run_test 200h "Remove all targets from a pool =========================="
 
