@@ -652,7 +652,7 @@ static int osd_object_print(const struct lu_env *env, void *cookie,
 {
         struct osd_object *o = osd_obj(l);
 
-        return (*p)(env, cookie, LUSTRE_DMU_NAME"-object@%p", o);
+        return (*p)(env, cookie, LUSTRE_ZFS_NAME"-object@%p", o);
 }
 
 /*
@@ -706,7 +706,7 @@ static void osd_conf_get(const struct lu_env *env,
         param->ddp_block_shift   = 12; /* XXX */
         /* XXX: remove when new llog/mountconf over osd are ready -bzzz */
         param->ddp_mnt           = NULL;
-        param->ddp_mount_type    = LDD_MT_DMU;
+        param->ddp_mount_type    = LDD_MT_ZFS;
 }
 
 /*
@@ -834,7 +834,7 @@ static void osd_trans_stop(const struct lu_env *env, struct thandle *th)
 static int osd_sync(const struct lu_env *env, struct dt_device *d)
 {
         struct osd_device  *osd = osd_dt_dev(d);
-        CDEBUG(D_HA, "syncing OSD %s\n", LUSTRE_DMU_NAME);
+        CDEBUG(D_HA, "syncing OSD %s\n", LUSTRE_ZFS_NAME);
         udmu_wait_synced(&osd->od_objset, NULL);
         return 0;
 }
@@ -846,7 +846,7 @@ static void osd_ro(const struct lu_env *env, struct dt_device *d)
 {
         ENTRY;
 
-        CERROR("*** setting device %s read-only ***\n", LUSTRE_DMU_NAME);
+        CERROR("*** setting device %s read-only ***\n", LUSTRE_ZFS_NAME);
 
         /* XXX: not supported */
         EXIT;
@@ -2699,7 +2699,7 @@ static struct lu_device_type_operations osd_device_type_ops = {
 
 static struct lu_device_type osd_device_type = {
         .ldt_tags     = LU_DEVICE_DT,
-        .ldt_name     = LUSTRE_DMU_NAME,
+        .ldt_name     = LUSTRE_ZFS_NAME,
         .ldt_ops      = &osd_device_type_ops,
         .ldt_ctx_tags = LCT_MD_THREAD|LCT_DT_THREAD
 };
@@ -2738,18 +2738,18 @@ int __init osd_init(void)
 
         lprocfs_osd_init_vars(&lvars);
         return class_register_type(&osd_obd_device_ops, NULL, lvars.module_vars,
-                                   LUSTRE_DMU_NAME, &osd_device_type);
+                                   LUSTRE_ZFS_NAME, &osd_device_type);
         
 }
 
 #ifdef __KERNEL__
 void __exit osd_exit(void)
 {
-        class_unregister_type(LUSTRE_DMU_NAME);
+        class_unregister_type(LUSTRE_ZFS_NAME);
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Lustre Object Storage Device over ZFS/DMU (no recovery) ("LUSTRE_DMU_NAME")");
+MODULE_DESCRIPTION("Lustre Object Storage Device over ZFS/DMU (no recovery) ("LUSTRE_ZFS_NAME")");
 MODULE_LICENSE("GPL");
 
 cfs_module(osd, "0.0.2", osd_init, osd_exit);
