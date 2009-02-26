@@ -674,6 +674,8 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                                 sizeof(mop->mo_mkfsopts));
                 }
                 snprintf(mkfs_cmd, sizeof(mkfs_cmd), "mkreiserfs -ff ");
+        } else if (mop->mo_ldd.ldd_mount_type == LDD_MT_ZFS) {
+                snprintf(mkfs_cmd, sizeof(mkfs_cmd), "echo ");
         } else {
                 fprintf(stderr,"%s: unsupported fs type: %d (%s)\n",
                         progname, mop->mo_ldd.ldd_mount_type,
@@ -811,6 +813,11 @@ int write_local_files(struct mkfs_opts *mop)
         char *dev;
         FILE *filep;
         int ret = 0;
+
+        if (mop->mo_ldd.ldd_mount_type == LDD_MT_ZFS) {
+                /* XXX: no LDD on ZFS yet */
+                return 0;
+        }
 
         /* Mount this device temporarily in order to write these files */
         if (!mkdtemp(mntpt)) {
@@ -1514,6 +1521,9 @@ int main(int argc, char *const argv[])
                 mop.mo_flags |= MO_IS_LOOP;
                 sprintf(always_mountopts, "type=ext3,dev=%s",
                         mop.mo_device);
+                break;
+        }
+        case LDD_MT_ZFS: {
                 break;
         }
         default: {
