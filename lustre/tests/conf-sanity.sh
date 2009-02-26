@@ -783,9 +783,9 @@ set_and_check() {
 	    FINAL=$(($ORIG + 5))
 	fi
 	echo "Setting $PARAM from $ORIG to $FINAL"
-	do_facet $SINGLEMDS "$LCTL conf_param $PARAM=$FINAL" || error conf_param failed
+	do_facet $SINGLEMDS "$LCTL conf_param $PARAM='$FINAL'" || error conf_param failed
 
-	wait_update $(facet_host $myfacet) "$TEST" $FINAL || error check failed!
+	wait_update $(facet_host $myfacet) "$TEST" "$FINAL" || error check failed!
 }
 
 test_27a() {
@@ -1452,6 +1452,107 @@ test_42() { #bug 14693
         return 0
 }
 run_test 42 "invalid config param should not prevent client from mounting"
+
+test_43() {
+    [ $UID -ne 0 -o $RUNAS_ID -eq 0 ] && skip "run as root"
+    setup
+    chmod ugo+x $DIR || error "chmod 0 failed"
+    set_and_check mds                                        \
+        "lctl get_param -n mdt.$FSNAME-MDT0000.root_squash"  \
+        "$FSNAME.mdt.root_squash"                            \
+        "0:0"
+    set_and_check mds                                        \
+       "lctl get_param -n mdt.$FSNAME-MDT0000.nosquash_nids" \
+       "$FSNAME.mdt.nosquash_nids"                           \
+       "NONE"
+
+    #
+    # create set of test files
+    #
+    echo "111" > $DIR/$tfile-userfile || error "write 1 failed"
+    chmod go-rw $DIR/$tfile-userfile  || error "chmod 1 failed"
+    chown $RUNAS_ID.$RUNAS_ID $DIR/$tfile-userfile || error "chown failed"
+
+    echo "222" > $DIR/$tfile-rootfile || error "write 2 failed"
+    chmod go-rw $DIR/$tfile-rootfile  || error "chmod 2 faield"
+
+    mkdir $DIR/$tdir-rootdir -p       || error "mkdir failed"
+    chmod go-rwx $DIR/$tdir-rootdir   || error "chmod 3 failed"
+    touch $DIR/$tdir-rootdir/tfile-1  || error "touch failed"
+
+    #
+    # check root_squash:
+    #   set root squash UID:GID to RUNAS_ID
+    #   root should be able to access only files owned by RUNAS_ID
+    #
+    set_and_check mds                                        \
+       "lctl get_param -n mdt.$FSNAME-MDT0000.root_squash"   \
+       "$FSNAME.mdt.root_squash"                             \
+       "$RUNAS_ID:$RUNAS_ID"
+
+    ST=$(stat -c "%n: owner uid %u (%A)" $DIR/$tfile-userfile)
+    dd if=$DIR/$tfile-userfile 1>/dev/null 2>/dev/null || \
+        error "$ST: root read permission is denied"
+    echo "$ST: root read permission is granted - ok"
+
+    echo "444" | \
+    dd conv=notrunc if=$DIR/$tfile-userfile 1>/dev/null 2>/dev/null || \
+        error "$ST: root write permission is denied"
+    echo "$ST: root write permission is granted - ok"
+
+    ST=$(stat -c "%n: owner uid %u (%A)" $DIR/$tfile-rootfile)
+    dd if=$DIR/$tfile-rootfile 1>/dev/null 2>/dev/null && \
+        error "$ST: root read permission is granted"
+    echo "$ST: root read permission is denied - ok"
+
+    echo "555" | \
+    dd conv=notrunc of=$DIR/$tfile-rootfile 1>/dev/null 2>/dev/null && \
+        error "$ST: root write permission is granted"
+    echo "$ST: root write permission is denied - ok"
+
+    ST=$(stat -c "%n: owner uid %u (%A)" $DIR/$tdir-rootdir)
+    rm $DIR/$tdir-rootdir/tfile-1 1>/dev/null 2>/dev/null && \
+        error "$ST: root unlink permission is granted"
+    echo "$ST: root unlink permission is denied - ok"
+
+    touch $DIR/tdir-rootdir/tfile-2 1>/dev/null 2>/dev/null && \
+        error "$ST: root create permission is granted"
+    echo "$ST: root create permission is denied - ok"
+
+    #
+    # check nosquash_nids:
+    #   put client's NID into nosquash_nids list,
+    #   root should be able to access root file after that
+    #
+    local NIDLIST=$(lctl list_nids all | tr '\n' ' ')
+    NIDLIST="2@elan $NIDLIST 192.168.0.[2,10]@tcp"
+    NIDLIST=$(echo $NIDLIST | tr -s ' ' ' ')
+    set_and_check mds                                        \
+       "lctl get_param -n mdt.$FSNAME-MDT0000.nosquash_nids" \
+       "$FSNAME-MDTall.mdt.nosquash_nids"                    \
+       "$NIDLIST"
+
+    ST=$(stat -c "%n: owner uid %u (%A)" $DIR/$tfile-rootfile)
+    dd if=$DIR/$tfile-rootfile 1>/dev/null 2>/dev/null || \
+        error "$ST: root read permission is denied"
+    echo "$ST: root read permission is granted - ok"
+
+    echo "666" | \
+    dd conv=notrunc of=$DIR/$tfile-rootfile 1>/dev/null 2>/dev/null || \
+        error "$ST: root write permission is denied"
+    echo "$ST: root write permission is granted - ok"
+
+    ST=$(stat -c "%n: owner uid %u (%A)" $DIR/$tdir-rootdir)
+    rm $DIR/$tdir-rootdir/tfile-1 || \
+        error "$ST: root unlink permission is denied"
+    echo "$ST: root unlink permission is granted - ok"
+    touch $DIR/$tdir-rootdir/tfile-2 || \
+        error "$ST: root create permission is denied"
+    echo "$ST: root create permission is granted - ok"
+
+    return 0
+}
+run_test 43 "check root_squash and nosquash_nids"
 
 umount_client $MOUNT
 cleanup_nocli
