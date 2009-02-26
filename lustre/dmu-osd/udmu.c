@@ -602,9 +602,6 @@ void udmu_object_write(udmu_objset_t *uos, dmu_buf_t *db, struct dmu_tx *tx,
 {
         uint64_t oid = db->db_object;
 
-        udmu_printf(LEVEL_INFO, stdout, "udmu_write(%lld, %lld, %lld\n",
-                    oid, offset, size);
-
         dmu_write(uos->os, oid, offset, size, buf, tx);
 }
 
