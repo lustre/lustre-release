@@ -198,7 +198,7 @@ load_module() {
     module=$1
     shift
     BASE=`basename $module $EXT`
-    lsmod | grep -q ${BASE} || \
+    lsmod | grep -q "^${BASE}" || \
       if [ -f ${LUSTRE}/${module}${EXT} ]; then
         insmod ${LUSTRE}/${module}${EXT} $@
     else
@@ -254,6 +254,7 @@ load_modules() {
         grep -q crc16 /proc/kallsyms || { modprobe crc16 2>/dev/null || true; }
         grep -q jbd /proc/kallsyms || { modprobe jbd 2>/dev/null || true; }
         [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
+        [ "$OSTFSTYPE" = "zfs" ] && load_module "dmu-osd/dosd"
         load_module mgs/mgs
         load_module mds/mds
         load_module mdd/mdd
@@ -474,8 +475,13 @@ mount_facet() {
             lctl set_param debug_mb=${DEBUG_SIZE}; \
             sync"
 
+        if [ -d ${!dev} ]; then
         label=$(do_facet ${facet} "$E2LABEL ${!dev}")
-        [ -z "$label" ] && echo no label for ${!dev} && exit 1
+            [ -z "$label" ] && echo no label for ${!dev} && exit 1
+        else
+            echo "storage doesn't support labeling"
+            label=lustre-OST0000
+        fi
         eval export ${facet}_svc=${label}
         echo Started ${label}
     fi
@@ -1270,12 +1276,14 @@ formatall() {
         fi
     done
 
+    [ "$OSTFSTYPE" ] && FSTYPE_OPT="--backfstype $OSTFSTYPE"
+
     for num in `seq $OSTCOUNT`; do
         echo "Format ost$num: $(ostdevname $num)"
         if $VERBOSE; then
-            add ost$num $OST_MKFS_OPTS --reformat `ostdevname $num` || exit 10
+            add ost$num $OST_MKFS_OPTS $FSTYPE_OPT --reformat `ostdevname $num` || exit 10
         else
-            add ost$num $OST_MKFS_OPTS --reformat `ostdevname $num` > /dev/null || exit 10
+            add ost$num $OST_MKFS_OPTS $FSTYPE_OPT --reformat `ostdevname $num` > /dev/null || exit 10
         fi
     done
 }
