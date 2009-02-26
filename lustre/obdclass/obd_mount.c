@@ -1155,6 +1155,12 @@ static int server_start_targets(struct super_block *sb, struct dt_device *dt)
         }
 #endif
 
+        /* Register with MGS */
+        rc = server_register_target(sb);
+
+        /* destroy temporary site */
+        stop_temp_site(sb);
+
         /* If we're an OST, make sure the global OSS is running */
         if (lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_OST) {
                 /* make sure OSS is started */
@@ -1179,12 +1185,6 @@ static int server_start_targets(struct super_block *sb, struct dt_device *dt)
         rc = server_mgc_set_fs(lsi->lsi_mgc, sb);
         if (rc)
                 RETURN(rc);
-
-        /* Register with MGS */
-        rc = server_register_target(sb);
-
-        /* destroy temporary site */
-        stop_temp_site(sb);
 
         if (rc && (lsi->lsi_ldd->ldd_flags &
                    (LDD_F_NEED_INDEX | LDD_F_UPDATE | LDD_F_UPGRADE14))){
