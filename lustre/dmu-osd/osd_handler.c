@@ -652,7 +652,7 @@ static int osd_object_print(const struct lu_env *env, void *cookie,
 {
         struct osd_object *o = osd_obj(l);
 
-        return (*p)(env, cookie, LUSTRE_OSD_NAME"-object@%p", o);
+        return (*p)(env, cookie, LUSTRE_DMU_NAME"-object@%p", o);
 }
 
 /*
@@ -834,7 +834,7 @@ static void osd_trans_stop(const struct lu_env *env, struct thandle *th)
 static int osd_sync(const struct lu_env *env, struct dt_device *d)
 {
         struct osd_device  *osd = osd_dt_dev(d);
-        CDEBUG(D_HA, "syncing OSD %s\n", LUSTRE_OSD_NAME);
+        CDEBUG(D_HA, "syncing OSD %s\n", LUSTRE_DMU_NAME);
         udmu_wait_synced(&osd->od_objset, NULL);
         return 0;
 }
@@ -846,7 +846,7 @@ static void osd_ro(const struct lu_env *env, struct dt_device *d)
 {
         ENTRY;
 
-        CERROR("*** setting device %s read-only ***\n", LUSTRE_OSD_NAME);
+        CERROR("*** setting device %s read-only ***\n", LUSTRE_DMU_NAME);
 
         /* XXX: not supported */
         EXIT;
@@ -871,7 +871,7 @@ static int osd_init_capa_ctxt(const struct lu_env *env, struct dt_device *d,
 
 static char *osd_label_get(const struct lu_env *env, const struct dt_device *d)
 {
-        struct osd_device *dev = osd_dt_dev(d);
+        //struct osd_device *dev = osd_dt_dev(d);
         CERROR("return label NEW:OST\n");
         return ("NEW:OST");
         LBUG();
@@ -881,7 +881,7 @@ static char *osd_label_get(const struct lu_env *env, const struct dt_device *d)
 static int osd_label_set(const struct lu_env *env, const struct dt_device *d,
                          char *name)
 {
-        struct osd_device *dev = osd_dt_dev(d);
+        //struct osd_device *dev = osd_dt_dev(d);
         CERROR("set new label to '%s'\n", name);
         RETURN(0);
 }
@@ -2219,38 +2219,35 @@ static int osd_declare_write_commit(const struct lu_env *env,
                                     struct niobuf_local *lb, int nr,
                                     struct thandle *th)
 {
-        struct osd_object *obj  = osd_dt_obj(dt);
+        struct osd_object  *obj = osd_dt_obj(dt);
         struct osd_thandle *oh;
-        vnattr_t va;
-        int i;
-        uint64_t new_size = 0;
+        int                 i;
+        int                 l = 0;
         ENTRY;
 
         oh = container_of0(th, struct osd_thandle, ot_super);
 
         for (i = 0; i < nr; i++, lb++) {
+                l += lb->len;
                 udmu_tx_hold_write(oh->ot_tx, udmu_object_get_id(obj->oo_db),
                                    lb->file_offset, lb->len);
-                if (new_size < lb->file_offset + lb->len)
-                        new_size = lb->file_offset + lb->len;
         }
 
-        udmu_object_getattr(obj->oo_db, &va);
-        if (va.va_size < new_size)
-                udmu_tx_hold_bonus(oh->ot_tx, udmu_object_get_id(obj->oo_db));
+        udmu_tx_hold_bonus(oh->ot_tx, udmu_object_get_id(obj->oo_db));
 
-        return 0;
+        RETURN(0);
 }
 
 static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
                             struct niobuf_local *lb, int nr, struct thandle *th)
 {
-        struct osd_object *obj  = osd_dt_obj(dt);
-        struct osd_device *osd = osd_obj2dev(obj);
+        struct osd_object  *obj  = osd_dt_obj(dt);
+        struct osd_device  *osd = osd_obj2dev(obj);
         struct osd_thandle *oh;
-        vnattr_t va;
-        uint64_t new_size = 0;
-        int i;
+        vnattr_t            va;
+        uint64_t            new_size = 0;
+        int                 i;
+        ENTRY;
 
         LASSERT(th != NULL);
         oh = container_of0(th, struct osd_thandle, ot_super);
@@ -2275,7 +2272,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
                 udmu_object_setattr(obj->oo_db, oh->ot_tx, &va);
         }
 
-        return 0;
+        RETURN(0);
 }
 
 static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
@@ -2308,28 +2305,16 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
         return 0;
 }
 
-#if 0
-static int osd_get_blocksize(const struct lu_env *env, struct dt_object *dt,
-                             long *blksz)
-{
-        int rc = 0;
-        struct osd_object *osd_obj  = osd_dt_obj(dt);
-        rc = udmu_get_blocksize(osd_obj->oo_db, blksz);
-        return rc;
-}
-#endif
-
 static struct dt_body_operations osd_body_ops = {
-        .dbo_read          = osd_read,
-        .dbo_declare_write = osd_declare_write,
-        .dbo_write         = osd_write,
-        .dbo_get_bufs      = osd_get_bufs,
-        .dbo_put_bufs      = osd_put_bufs,
-        .dbo_write_prep    = osd_write_prep,
+        .dbo_read                 = osd_read,
+        .dbo_declare_write        = osd_declare_write,
+        .dbo_write                = osd_write,
+        .dbo_get_bufs             = osd_get_bufs,
+        .dbo_put_bufs             = osd_put_bufs,
+        .dbo_write_prep           = osd_write_prep,
         .dbo_declare_write_commit = osd_declare_write_commit,
-        .dbo_write_commit  = osd_write_commit,
-        .dbo_read_prep     = osd_read_prep,
-        //.dbo_get_blocksize = osd_get_blocksize
+        .dbo_write_commit         = osd_write_commit,
+        .dbo_read_prep            = osd_read_prep,
 };
 
 /*
@@ -2346,7 +2331,7 @@ static int osd_object_is_root(const struct osd_object *obj)
 }
 
 /*
- * OSD device type methods
+ * DMU OSD device type methods
  */
 static int osd_type_init(struct lu_device_type *t)
 {
@@ -2399,13 +2384,16 @@ static int osd_device_init(const struct lu_env *env, struct lu_device *d,
         return lu_context_init(&osd_dev(d)->od_env_for_commit.le_ctx,
                                LCT_DT_THREAD|LCT_MD_THREAD);
 }
-
 static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 {
         ENTRY;
 
-        udmu_object_put_dmu_buf(o->od_objdir_db, objdir_tag);
-        udmu_object_put_dmu_buf(o->od_root_db, root_tag);
+        if (o->od_objdir_db)
+                udmu_object_put_dmu_buf(o->od_objdir_db, objdir_tag);
+        if (o->od_root_db)
+                udmu_object_put_dmu_buf(o->od_root_db, root_tag);
+        if (o->od_objset.os)
+                udmu_objset_close(&o->od_objset, 0);
 
         RETURN(0);
 }
@@ -2453,6 +2441,7 @@ static int osd_oi_init(const struct lu_env *env, struct osd_device *o)
         RETURN(0);
 }
 
+
 static int osd_mount(const struct lu_env *env,
                      struct osd_device *o, struct lustre_cfg *cfg)
 {
@@ -2490,18 +2479,13 @@ static int osd_mount(const struct lu_env *env,
 static struct lu_device *osd_device_fini(const struct lu_env *env,
                                          struct lu_device *d)
 {
+        struct osd_device *o = osd_dev(d);
         ENTRY;
 
-        osd_sync(env, lu2dt_dev(d));
+        if (o->od_objset.os)
+                osd_sync(env, lu2dt_dev(d));
 
-#if 0
-        if (osd_dev(d)->od_mount)
-                server_put_mount(osd_dev(d)->od_mount->lmi_name,
-                                 osd_dev(d)->od_mount->lmi_mnt);
-        osd_dev(d)->od_mount = NULL;
-#endif
-
-        lu_context_fini(&osd_dev(d)->od_env_for_commit.le_ctx);
+        lu_context_fini(&o->od_env_for_commit.le_ctx);
         RETURN(NULL);
 }
 
@@ -2590,15 +2574,13 @@ static int osd_fid_lookup(const struct lu_env *env,
         if (fid->f_seq == LUSTRE_ROOT_FID_SEQ) {
                 if (fid->f_oid == udmu_object_get_id(dev->od_root_db)) {
                         /* root */
-                        obj->oo_db = dev->od_root_db;
-                        RETURN(0);
+                        oid = fid->f_oid;
+                } else {
+                        /* special fid found via ->index_lookup */
+                        CDEBUG(D_OTHER, "lookup special %llu:%lu\n",
+                               fid->f_seq, (unsigned long) fid->f_oid);
+                        oid = fid->f_oid;
                 }
-
-                /* special fid found via ->index_lookup */
-                CDEBUG(D_OTHER, "lookup special %llu:%lu\n",
-                       fid->f_seq, (unsigned long) fid->f_oid);
-
-                oid = fid->f_oid;
         } else {
                 osd_fid2str(buf, fid);
 
@@ -2693,9 +2675,20 @@ static struct lu_device_operations osd_lu_ops = {
         .ldo_prepare           = osd_prepare
 };
 
+static void osd_type_start(struct lu_device_type *t)
+{
+}
+
+static void osd_type_stop(struct lu_device_type *t)
+{
+}
+
 static struct lu_device_type_operations osd_device_type_ops = {
         .ldto_init = osd_type_init,
         .ldto_fini = osd_type_fini,
+
+        .ldto_start = osd_type_start,
+        .ldto_stop  = osd_type_stop,
 
         .ldto_device_alloc = osd_device_alloc,
         .ldto_device_free  = osd_device_free,
@@ -2756,7 +2749,7 @@ void __exit osd_exit(void)
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Lustre Object Storage Device over ZFS/DMU (no recovery) ("LUSTRE_OSD_NAME")");
+MODULE_DESCRIPTION("Lustre Object Storage Device over ZFS/DMU (no recovery) ("LUSTRE_DMU_NAME")");
 MODULE_LICENSE("GPL");
 
 cfs_module(osd, "0.0.2", osd_init, osd_exit);
