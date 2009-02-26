@@ -2232,6 +2232,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
                 udmu_tx_hold_write(oh->ot_tx, udmu_object_get_id(obj->oo_db),
                                    lb->file_offset, lb->len);
         }
+        printk("%d bytes declared\n", l);
 
         udmu_tx_hold_bonus(oh->ot_tx, udmu_object_get_id(obj->oo_db));
 
