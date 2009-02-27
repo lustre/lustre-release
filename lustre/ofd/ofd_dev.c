@@ -487,11 +487,15 @@ static void filter_stack_fini(const struct lu_env *env,
         struct lustre_cfg_bufs   bufs;
         struct lustre_cfg       *lcfg;
         struct mdt_thread_info  *info;
+        struct lu_device        *d = &m->ofd_dt_dev.dd_lu_dev;
+        struct lu_site          *ls = d->ld_site;
         char flags[3]="";
         ENTRY;
 
         info = lu_context_key_get(&env->le_ctx, &filter_thread_key);
         LASSERT(info != NULL);
+        
+        lu_site_purge(env, ls, ~0);
 
         /* process cleanup, pass mdt obd name to get obd umount flags */
         lustre_cfg_bufs_reset(&bufs, obd->obd_name);
@@ -589,9 +593,11 @@ static int filter_init0(const struct lu_env *env, struct filter_device *m,
 
         lmi = server_get_mount(dev);
         obd->obd_fsops = fsfilt_get_ops(MT_STR(s2lsi(lmi->lmi_sb)->lsi_ldd));
-        if (obd->obd_fsops == NULL)
+        if (IS_ERR(obd->obd_fsops)) {
+                obd->obd_fsops = NULL;
                 CERROR("this filesystem (%s) doesn't support fsfilt\n",
                        MT_STR(s2lsi(lmi->lmi_sb)->lsi_ldd));
+        }
 
         spin_lock_init(&m->ofd_transno_lock);
         spin_lock_init(&m->ofd_client_bitmap_lock);
