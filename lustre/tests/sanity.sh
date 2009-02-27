@@ -7,8 +7,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 13297 2108 9789 3637 9789 3561 12622 12653 12653 5188 10764 16260
-ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   65a   65e   68b   75    119d  $SANITY_EXCEPT"
+# bug number for skipped test: 16823 13297 2108 9789 3637 9789 3561 12622 12653 12653 5188 10764 16260
+ALWAYS_EXCEPT="                27s   27u   42a  42b  42c  42d  45   51d   65a   65e   68b   75    119d  $SANITY_EXCEPT"
 # bug number for skipped test: 2108 9789 3637 9789 3561 5188/5749 1443
 #ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27m 42a 42b 42c 42d 45 68 76"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
@@ -819,6 +819,7 @@ run_test 26f "rm -r of a directory which has recursive symlink ="
 test_27a() {
 	echo '== stripe sanity =============================================='
 	mkdir -p $DIR/d27 || error "mkdir failed"
+	$GETSTRIPE $DIR/d27
 	$SETSTRIPE $DIR/d27/f0 -c 1 || error "lstripe failed"
 	$CHECKSTAT -t file $DIR/d27/f0 || error "checkstat failed"
 	pass
@@ -934,10 +935,16 @@ run_test 27m "create file while OST0 was full =================="
 
 # osc's keep a NOSPC stick flag that gets unset with rmdir
 reset_enospc() {
-	[ "$1" ] && FAIL_LOC=$1 || FAIL_LOC=0
+	local FAIL_LOC=${1:-0}
+	local OSTIDX=${2:-""}
+
 	mkdir -p $DIR/d27/nospc
 	rmdir $DIR/d27/nospc
-	do_nodes $(comma_list $(osts_nodes)) lctl set_param fail_loc=$FAIL_LOC
+	local list=$(comma_list $(osts_nodes))
+	[ "$OSTIDX" ] && \
+		{ var=ost$((OSTIDX + 1))_HOST && list=${!var}; }
+
+	do_nodes $list lctl set_param fail_loc=$FAIL_LOC
 }
 
 exhaust_precreations() {
@@ -945,7 +952,8 @@ exhaust_precreations() {
 	local MDSIDX=$(get_mds_dir "$DIR/d27")
 	echo OSTIDX=$OSTIDX MDSIDX=$MDSIDX
 
-	local OST=$(lfs osts | grep ${OSTIDX}": " | awk '{print $2}' | sed -e 's/_UUID$//')
+	local OST=$(lfs osts | grep ${OSTIDX}": " | \
+		awk '{print $2}' | sed -e 's/_UUID$//')
 	local MDT_INDEX=$(lfs df | grep "\[MDT:$((MDSIDX - 1))\]" | awk '{print $1}' | \
 			  sed -e 's/_UUID$//;s/^.*-//')
 
@@ -963,7 +971,7 @@ exhaust_precreations() {
 	echo "Creating to objid $last_id on ost $OST..."
 	createmany -o $DIR/d27/${OST}-f $next_id $((last_id - next_id + 2))
 	do_facet mds${MDSIDX} lctl get_param osc.*${OST}-osc-${MDT_INDEX}.prealloc* | grep '[0-9]'
-	reset_enospc $2
+	reset_enospc $2 $OSTIDX
 }
 
 exhaust_all_precreations() {
@@ -981,6 +989,7 @@ test_27n() {
 
 	reset_enospc
 	rm -f $DIR/d27/f27n
+	$SETSTRIPE $DIR/d27 -c 1 -i -1
 	exhaust_precreations 0 0x80000215
 
 	touch $DIR/d27/f27n || error
@@ -1063,9 +1072,13 @@ test_27r() {
 run_test 27r "stripe file with some full OSTs (shouldn't LBUG) ="
 
 test_27s() { # bug 10725
-       mkdir -p $DIR/$tdir
-       $LSTRIPE $DIR/$tdir $((2048 * 1024 * 1024)) -1 2 && \
-               error "stripe width >= 2^32 succeeded" || true
+	mkdir -p $DIR/$tdir
+	local stripe_size=$((4096 * 1024 * 1024))	# 2^32
+	local stripe_count=0
+	[ $OSTCOUNT -eq 1 ] || stripe_count=2 
+	$SETSTRIPE $DIR/$tdir -s $stripe_size -c $stripe_count && \
+		error "stripe width >= 2^32 succeeded" || true
+
 }
 run_test 27s "lsm_xfersize overflow (should error) (bug 10725)"
 
@@ -1110,15 +1123,17 @@ test_27v() { # bug 4900
 
         touch $DIR/$tdir/$tfile
         #define OBD_FAIL_TGT_DELAY_PRECREATE     0x705
-        lctl set_param fail_loc=0x705
-        START=`date +%s`
-        for F in `seq 1 32`; do
-                touch $DIR/$tdir/$tfile.$F
+        # all except ost1
+        for (( i=0; i < OSTCOUNT; i++ )) ; do
+                do_facet ost$i lctl set_param fail_loc=0x705
         done
-        lctl set_param fail_loc=0
+        local START=`date +%s`
+        createmany -o $DIR/$tdir/$tfile 32
 
-        FINISH=`date +%s`
-        TIMEOUT=`lctl get_param -n timeout`
+        reset_enospc
+
+        local FINISH=`date +%s`
+        local TIMEOUT=`lctl get_param -n timeout`
         [ $((FINISH - START)) -ge $((TIMEOUT / 2)) ] && \
                error "$FINISH - $START >= $TIMEOUT / 2"
 
