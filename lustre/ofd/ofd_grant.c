@@ -414,15 +414,14 @@ int filter_grant_check(const struct lu_env *env, struct obd_export *exp,
  * much space is currently free and how much of that is already granted.
  * Caller must hold obd_osfs_lock.
  */
-long filter_grant(const struct lu_env *env, struct obd_export *exp,
-                  obd_size current_grant, obd_size want,
-                  obd_size fs_space_left)
+long _filter_grant(const struct lu_env *env, struct obd_export *exp,
+                   obd_size curgrant, obd_size want, obd_size fs_space_left)
 {
-        struct obd_device *obd = exp->exp_obd;
-        struct filter_device *ofd = filter_exp(exp);
-        struct filter_export_data *fed = &exp->exp_filter_data;
-        long frsize = obd->obd_osfs.os_bsize;
-        __u64 grant = 0;
+        struct obd_device          *obd = exp->exp_obd;
+        struct filter_device       *ofd = filter_exp(exp);
+        struct filter_export_data  *fed = &exp->exp_filter_data;
+        long                        frsize = obd->obd_osfs.os_bsize;
+        __u64                       grant = 0;
 
         LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
         LASSERT(frsize);
@@ -437,36 +436,50 @@ long filter_grant(const struct lu_env *env, struct obd_export *exp,
          * client consume its grant first.  Either it just has lots of RPCs
          * in flight, or it was evicted and its grants will soon be used up.
          */
-        if (want > 0x7fffffff) {
+        if (curgrant >= want || curgrant >= fed->fed_grant + FILTER_GRANT_CHUNK)
+                   return 0;
+
+#if 0
+        grant = (min(want, fs_space_left >> 3) / frsize) * frsize;
+#else
+        CERROR("not implemented yet\n");
+        grant = min(want, fs_space_left >> 3);
+#endif
+        if (grant) {
+                /* Allow >FILTER_GRANT_CHUNK size when clients
+                 * reconnect due to a server reboot.
+                 */
+                if ((grant > FILTER_GRANT_CHUNK) && (!obd->obd_recovering))
+                        grant = FILTER_GRANT_CHUNK;
+
+                ofd->ofd_tot_granted += grant;
+                fed->fed_grant += grant;
+
+                if (fed->fed_grant < 0) {
+                        CERROR("%s: cli %s/%p grant %ld want "LPU64
+                               "current"LPU64"\n", obd->obd_name,
+                                exp->exp_client_uuid.uuid, exp,
+                                fed->fed_grant, want, curgrant);
+                        spin_unlock(&obd->obd_osfs_lock);
+                        LBUG();
+                }
+        }
+
+        return grant;
+}
+
+long filter_grant(const struct lu_env *env, struct obd_export *exp,
+                  obd_size current_grant, obd_size want, obd_size fs_space_left)
+{
+        struct obd_device     *obd = exp->exp_obd;
+        struct filter_device  *ofd = filter_exp(exp);
+        __u64                  grant = 0;
+
+        if (want <= 0x7fffffff) {
+                grant = _filter_grant(env, exp, current_grant, want, fs_space_left);
+        } else {
                 CERROR("%s: client %s/%p requesting > 2GB grant "LPU64"\n",
                        obd->obd_name, exp->exp_client_uuid.uuid, exp, want);
-        } else if (current_grant < want &&
-                   current_grant < fed->fed_grant + FILTER_GRANT_CHUNK) {
-#if 0
-                grant = (min(want, fs_space_left >> 3) / frsize) * frsize;
-#else
-                CERROR("not implemented yet\n");
-                grant = min(want, fs_space_left >> 3);
-#endif
-                if (grant) {
-                        /* Allow >FILTER_GRANT_CHUNK size when clients
-                         * reconnect due to a server reboot.
-                         */
-                        if ((grant > FILTER_GRANT_CHUNK) &&
-                            (!obd->obd_recovering))
-                                grant = FILTER_GRANT_CHUNK;
-
-                        ofd->ofd_tot_granted += grant;
-                        fed->fed_grant += grant;
-                        if (fed->fed_grant < 0) {
-                                CERROR("%s: cli %s/%p grant %ld want "LPU64
-                                       "current"LPU64"\n", obd->obd_name,
-                                       exp->exp_client_uuid.uuid, exp,
-                                       fed->fed_grant, want, current_grant);
-                                spin_unlock(&obd->obd_osfs_lock);
-                                LBUG();
-                        }
-                }
         }
 
         CDEBUG(D_CACHE,
