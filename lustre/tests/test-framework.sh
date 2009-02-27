@@ -1381,7 +1381,6 @@ get_facets () {
     local type=$(echo $1 | tr "[:lower:]" "[:upper:]")
 
     local list=""
-    MDS
 
     case $type in
         MDS )    list=mds;;
