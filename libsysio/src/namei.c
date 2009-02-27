@@ -268,7 +268,7 @@ _sysio_path_walk(struct pnode *parent, struct nameidata *nd)
 			 * except the last component.
 			 */
 			ND_INIT(&nameidata,
-				(nd->nd_flags | ND_NEGOK),
+				nd->nd_flags,
 				lpath,
 				nd->nd_root,
 				!next.len ? nd->nd_intent : NULL);
