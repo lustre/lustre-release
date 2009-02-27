@@ -237,7 +237,7 @@ case "$lustretag" in
     # Network request scheduler
     b_hd_nrs)
         lnettag="HEAD"
-        ldiskfstag="$ldiskfstag"
+        ldiskfstag="$ldiskfstag_head"
         libcfstag="HEAD"
         ;;
  
