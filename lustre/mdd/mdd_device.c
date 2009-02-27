@@ -780,9 +780,6 @@ static int mdd_process_config(const struct lu_env *env,
                         CERROR("lov init error %d \n", rc);
                         GOTO(out, rc);
                 }
-                rc = mdd_txn_init_credits(env, m);
-                if (rc)
-                        break;
 
                 mdd_changelog_init(env, m);
                 break;
