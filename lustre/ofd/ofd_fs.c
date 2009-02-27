@@ -103,8 +103,8 @@ int filter_last_id_write(const struct lu_env *env, struct filter_device *ofd,
         th = filter_trans_create(env, ofd);
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
-        rc = dt_declare_record_write(env, ofd->ofd_groups_file, off,
-                                     buf.lb_len, th, BYPASS_CAPA);
+        rc = dt_declare_record_write(env, ofd->ofd_groups_file,
+                                     buf.lb_len, off, th, BYPASS_CAPA);
         LASSERT(rc == 0);
         rc = filter_trans_start(env, ofd, th);
         if (rc)
@@ -441,8 +441,8 @@ int filter_server_data_update(const struct lu_env *env,
                 th = filter_trans_create0(env, ofd);
                 if (IS_ERR(th))
                         RETURN(PTR_ERR(th));
-                dt_declare_record_write(env, ofd->ofd_last_rcvd, 0,
-                                        sizeof(ofd->ofd_fsd), th, BYPASS_CAPA);
+                dt_declare_record_write(env, ofd->ofd_last_rcvd,
+                                        sizeof(ofd->ofd_fsd), 0, th, BYPASS_CAPA);
                 rc = filter_trans_start(env, ofd, th);
                 if (rc)
                         RETURN(rc);

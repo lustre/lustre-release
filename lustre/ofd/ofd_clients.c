@@ -81,8 +81,8 @@ repeat:
                 RETURN(PTR_ERR(th));
         /* off is changed, use tmp value */
         off = fed->fed_lr_off;
-        dt_declare_record_write(env, ofd->ofd_last_rcvd, off,
-                                sizeof(*lcd), th, BYPASS_CAPA);
+        dt_declare_record_write(env, ofd->ofd_last_rcvd, sizeof(*lcd),
+                                off, th, BYPASS_CAPA);
         err = filter_trans_start(env, ofd, th);
         if (err)
                 RETURN(err);
@@ -176,11 +176,11 @@ int filter_client_free(struct lu_env *env, struct obd_export *exp)
                 if (IS_ERR(th))
                         GOTO(free, rc = PTR_ERR(th));
                 /* declare last_rcvd write */
-                dt_declare_record_write(env, ofd->ofd_last_rcvd, fed->fed_lr_off,
-                                        sizeof(*lcd), th, BYPASS_CAPA);
+                dt_declare_record_write(env, ofd->ofd_last_rcvd, sizeof(*lcd),
+                                        fed->fed_lr_off, th, BYPASS_CAPA);
                 /* declare header write */
-                dt_declare_record_write(env, ofd->ofd_last_rcvd, 0,
-                                        sizeof(ofd->ofd_fsd), th, BYPASS_CAPA);
+                dt_declare_record_write(env, ofd->ofd_last_rcvd,
+                                        sizeof(ofd->ofd_fsd), 0, th, BYPASS_CAPA);
 
                 rc = filter_trans_start(env, ofd, th);
                 if (rc)
