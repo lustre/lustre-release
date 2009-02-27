@@ -128,8 +128,6 @@ static int filter_preprw_write(const struct lu_env *env, struct obd_export *exp,
         rc = filter_grant_check(env, exp, oa, objcount, obj, nb,
                                 res, &left, &used, &ungranted);
 
-        rc = dt_write_prep(env, filter_object_child(fo), res, *nr_local, &used);
-
         rc = filter_grant_client_calc(exp, &left, &used, &ungranted);
 
         /* do not zero out oa->o_valid as it is used in
@@ -139,6 +137,9 @@ static int filter_preprw_write(const struct lu_env *env, struct obd_export *exp,
                 oa->o_grant = filter_grant(env, exp, oa->o_grant,
                                            oa->o_undirty, left);
         spin_unlock(&exp->exp_obd->obd_osfs_lock);
+
+        rc = dt_write_prep(env, filter_object_child(fo), res, *nr_local, &used);
+
         filter_object_put(env, fo);
         RETURN(rc);
 }
