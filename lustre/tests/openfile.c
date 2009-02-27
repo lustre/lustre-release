@@ -93,13 +93,13 @@ int main(int argc, char** argv)
         int    fd;
         int    flags = 0;
         mode_t mode = 0644;
-        char*  fname = NULL;
+        char  *fname = NULL;
         int    mode_set = 0;
         int    flag_set = 0;
         int    c;
         int    save_errno = 0;
         int    print_usage = 0;
-        char*  cloned_flags = NULL;
+        char  *cloned_flags = NULL;
 
         if (argc == 1)
                 Usage_and_abort();
@@ -126,7 +126,7 @@ int main(int argc, char** argv)
                                 break;
                         } else 
                                 flags = 0;
-                        
+
                         for (tmp = strtok(cloned_flags, ":|"); tmp;
                              tmp = strtok(NULL, ":|")) {
                                 int i = 0;
@@ -203,11 +203,10 @@ int main(int argc, char** argv)
         } else {
                 fprintf(stderr, "Error in opening file \"%s\"(flags=%s",
                         fname, cloned_flags);
+                if (mode_set)
+                        fprintf(stderr, ", mode=%o", mode);
+                fprintf(stderr, ") %d: %s\n", save_errno, strerror(save_errno));
         }
-
-        if (mode_set)
-                fprintf(stderr, ", mode=%o", mode);
-        fprintf(stderr, ") %d: %s\n", save_errno, strerror(save_errno));
 
 out:
         if (cloned_flags)
