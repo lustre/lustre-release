@@ -844,7 +844,7 @@ static int filter_create(struct obd_export *exp,
         LASSERT(group >= FILTER_GROUP_MDS0);
         LASSERT(oa->o_valid & OBD_MD_FLGROUP);
 
-        CDEBUG(D_INFO|D_ERROR, "filter_create(oa->o_gr="LPU64",oa->o_id="LPU64")\n",
+        CDEBUG(D_INFO, "filter_create(oa->o_gr="LPU64",oa->o_id="LPU64")\n",
                group, oa->o_id);
 
         if ((oa->o_valid & OBD_MD_FLFLAGS) &&
