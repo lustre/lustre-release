@@ -47,21 +47,12 @@ rm -rf $DIR/[df][0-9]*
 # -- remove hostname from clients list
 zconf_umount $(hostname) $MOUNT
 NODES_TO_USE=${NODES_TO_USE:-$CLIENTS}
-NODES_TO_USE=$(exclude_item_from_list $NODES_TO_USE $(hostname))
+NODES_TO_USE=$(exclude_items_from_list $NODES_TO_USE $(hostname))
 
 check_progs_installed $NODES_TO_USE ${CLIENT_LOADS[@]}
 
-MDTS=""
-for ((i=1; i<=$MDSCOUNT; i++)) do
-    MDTS="$MDTS mds$i"
-done
-MDTS=$(comma_list $MDTS)
-
-OSTS=""
-for ((i=1; i<=$OSTCOUNT; i++)) do
-    OSTS="$OSTS ost$i"
-done
-OSTS=$(comma_list $OSTS)
+MDTS=$(get_facets MDS)
+OSTS=$(get_facets OST)
 
 ERRORS_OK=""    # No application failures should occur during this test.
 FLAVOR=${FLAVOR:-"MDS"}

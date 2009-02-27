@@ -139,9 +139,18 @@ struct obd_ioctl_data {
         __u32 ioc_len;
         __u32 ioc_version;
 
-        __u64 ioc_cookie;
-        __u32 ioc_conn1;
-        __u32 ioc_conn2;
+        union {
+                __u64 ioc_cookie;
+                __u64 ioc_u64_1;
+        };
+        union {
+                __u32 ioc_conn1;
+                __u32 ioc_u32_1;
+        };
+        union {
+                __u32 ioc_conn2;
+                __u32 ioc_u32_2;
+        };
 
         struct obdo ioc_obdo1;
         struct obdo ioc_obdo2;
@@ -478,6 +487,9 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 
 #define OBD_IOC_GETDEVICE              _IOWR ('f', 149, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_FID2PATH               _IOWR ('f', 150, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_CHANGELOG_REG          _IOW ('f', 151, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_CHANGELOG_DEREG        _IOW ('f', 152, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_CHANGELOG_CLEAR        _IOW ('f', 153, OBD_IOC_DATA_TYPE)
 
 #define OBD_IOC_LOV_SETSTRIPE          _IOW ('f', 154, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_LOV_GETSTRIPE          _IOW ('f', 155, OBD_IOC_DATA_TYPE)

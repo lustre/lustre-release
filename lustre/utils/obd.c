@@ -3156,5 +3156,111 @@ void  llapi_ping_target(char *obd_type, char *obd_name,
         } else {
                 printf("%s active.\n", obd_name);
         }
-
 }
+
+int jt_changelog_register(int argc, char **argv)
+{
+        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+        struct obd_ioctl_data data;
+        char devname[30];
+        int rc;
+
+        if (argc > 2)
+                return CMD_HELP;
+        else if (argc == 2 && strcmp(argv[1], "-n") != 0)
+                return CMD_HELP;
+        if (cur_device < 0)
+                return CMD_HELP;
+
+        memset(&data, 0x00, sizeof(data));
+        data.ioc_dev = cur_device;
+        memset(buf, 0, sizeof(rawbuf));
+        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+        if (rc) {
+                fprintf(stderr, "error: %s: invalid ioctl\n",
+                        jt_cmdname(argv[0]));
+               return rc;
+        }
+
+        rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_CHANGELOG_REG, buf);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+                        strerror(rc = errno));
+                return rc;
+        }
+        obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
+
+        if (data.ioc_u32_1 == 0) {
+                fprintf(stderr, "received invalid userid!\n");
+                return EPROTO;
+        }
+
+        if (lcfg_get_devname() != NULL)
+                strcpy(devname, lcfg_get_devname());
+        else
+                sprintf(devname, "dev %d", cur_device);
+
+        if (argc == 2)
+                /* -n means bare name */
+                printf(CHANGELOG_USER_PREFIX"%u\n", data.ioc_u32_1);
+        else
+                printf("%s: Registered changelog userid '"CHANGELOG_USER_PREFIX
+                       "%u'\n", devname, data.ioc_u32_1);
+        return 0;
+}
+
+int jt_changelog_deregister(int argc, char **argv)
+{
+        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+        struct obd_ioctl_data data;
+        char devname[30];
+        int id, rc;
+
+        if (argc != 2 || cur_device < 0)
+                return CMD_HELP;
+
+        id = strtol(argv[1] + strlen(CHANGELOG_USER_PREFIX), NULL, 10);
+        if ((id == 0) || (strncmp(argv[1], CHANGELOG_USER_PREFIX,
+                                  strlen(CHANGELOG_USER_PREFIX)) != 0)) {
+                fprintf(stderr, "expecting id of the form '"
+                        CHANGELOG_USER_PREFIX"<num>'; got '%s'\n", argv[1]);
+                return CMD_HELP;
+        }
+
+        memset(&data, 0x00, sizeof(data));
+        data.ioc_dev = cur_device;
+        data.ioc_u32_1 = id;
+        memset(buf, 0, sizeof(rawbuf));
+        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+        if (rc) {
+                fprintf(stderr, "error: %s: invalid ioctl\n",
+                        jt_cmdname(argv[0]));
+                return rc;
+        }
+
+        rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_CHANGELOG_DEREG, buf);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+                        strerror(rc = errno));
+                return rc;
+        }
+        obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
+
+        if (data.ioc_u32_1 != id) {
+                fprintf(stderr, "No changelog user '%s'.  Blocking user"
+                        " is '"CHANGELOG_USER_PREFIX"%d'.\n", argv[1],
+                        data.ioc_u32_1);
+                return ENOENT;
+        }
+
+        if (lcfg_get_devname() != NULL)
+                strcpy(devname, lcfg_get_devname());
+        else
+                sprintf(devname, "dev %d", cur_device);
+
+        printf("%s: Deregistered changelog user '"CHANGELOG_USER_PREFIX"%d'\n",
+               devname, data.ioc_u32_1);
+        return 0;
+}
+
+

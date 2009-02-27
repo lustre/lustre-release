@@ -219,12 +219,14 @@ command_t cmdlist[] = {
          "Remote user list directory contents.\n"
          "usage: ls [OPTION]... [FILE]..."},
         {"changelog", lfs_changelog, 0,
-         "Show the metadata changes in a filesystem between two snapshot times."
-         "\nusage: changelog [--follow] <mdtname> [startrec [endrec]]"},
+         "Show the metadata changes on an MDT."
+         "\nusage: changelog [--follow] <mdtname> [startrec [endrec]]"
+         "\n(note: --follow is only valid when run on MDT node)"},
         {"changelog_clear", lfs_changelog_clear, 0,
-         "Purge old changelog records up to <endrec> to free up space.\n"
+         "Indicate that old changelog records up to <endrec> are no longer of "
+         "interest to consumer <id>, allowing the system to free up space.\n"
          "An <endrec> of 0 means all records.\n"
-         "usage: changelog_clear <mdtname> <endrec>"},
+         "usage: changelog_clear <mdtname> <id> <endrec>"},
         {"fid2path", lfs_fid2path, 0,
          "Resolve the full path to a given FID. For a specific hardlink "
          "specify link number <linkno>.\n"
@@ -2366,7 +2368,7 @@ static int lfs_changelog(int argc, char **argv)
         int fd, len;
         char c, *mdd, *ptr = NULL;
         struct option long_opts[] = {
-                {"follow", 0, 0, 'f'},
+                {"follow", no_argument, 0, 'f'},
                 {0, 0, 0, 0}
         };
         char short_opts[] = "f";
@@ -2426,7 +2428,7 @@ static int lfs_changelog(int argc, char **argv)
         close(fd);
 
         if (len < 0) {
-                printf("read err %d\n", errno);
+                fprintf(stderr, "read err %d\n", errno);
                 return -errno;
         }
 
@@ -2437,32 +2439,37 @@ static int lfs_changelog_clear(int argc, char **argv)
 {
         long long endrec;
 
-        if (argc != 3)
+        if (argc != 4)
                 return CMD_HELP;
 
-        endrec = strtoll(argv[2], NULL, 10);
+        endrec = strtoll(argv[3], NULL, 10);
 
-        return(llapi_changelog_clear(argv[1], endrec));
+        return(llapi_changelog_clear(argv[1], argv[2], endrec));
 }
 
 static int lfs_fid2path(int argc, char **argv)
 {
         struct option long_opts[] = {
-                {"link", 1, 0, 'l'},
-                {"rec", 1, 0, 'r'},
+                {"cur", no_argument, 0, 'c'},
+                {"link", required_argument, 0, 'l'},
+                {"rec", required_argument, 0, 'r'},
                 {0, 0, 0, 0}
         };
-        char c, short_opts[] = "l:r:";
+        char c, short_opts[] = "cl:r:";
         char *device, *fid, *path;
         long long recno = -1;
         int linkno = -1;
         int lnktmp;
+        int printcur = 0;
         int rc;
 
         optind = 0;
         while ((c = getopt_long(argc, argv, short_opts,
                                 long_opts, NULL)) != -1) {
                 switch (c) {
+                case 'c':
+                        printcur++;
+                        break;
                 case 'l':
                         linkno = strtol(optarg, NULL, 10);
                         break;
@@ -2488,15 +2495,20 @@ static int lfs_fid2path(int argc, char **argv)
         lnktmp = (linkno >= 0) ? linkno : 0;
         while (1) {
                 int oldtmp = lnktmp;
-                rc = llapi_fid2path(device, fid, path, PATH_MAX, recno,
+                long long rectmp = recno;
+                rc = llapi_fid2path(device, fid, path, PATH_MAX, &rectmp,
                                     &lnktmp);
                 if (rc < 0) {
                         fprintf(stderr, "%s error: %s\n", argv[0],
                                 strerror(errno = -rc));
                         break;
-                } else {
-                        fprintf(stdout, "%s\n", path);
                 }
+
+                if (printcur)
+                        fprintf(stdout, "%lld %s\n", recno, path);
+                else
+                        fprintf(stdout, "%s\n", path);
+
                 if (linkno >= 0)
                         /* specified linkno */
                         break;

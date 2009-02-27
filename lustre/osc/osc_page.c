@@ -75,6 +75,10 @@ static int osc_page_is_dlocked(const struct lu_env *env,
                               dlmmode, &flags, NULL, lockh, unref);
 }
 
+/**
+ * Checks an invariant that a page in the cache is covered by a lock, as
+ * needed.
+ */
 static int osc_page_protected(const struct lu_env *env,
                               const struct osc_page *opg,
                               enum cl_lock_mode mode, int unref)
@@ -87,11 +91,20 @@ static int osc_page_protected(const struct lu_env *env,
 
         LINVRNT(!opg->ops_temp);
 
+        page = opg->ops_cl.cpl_page;
+        if (page->cp_owner != NULL &&
+            cl_io_top(page->cp_owner)->ci_lockreq == CILR_NEVER)
+                /*
+                 * If IO is done without locks (liblustre, or lloop), lock is
+                 * not required.
+                 */
+                result = 1;
+        else
+                /* otherwise check for a DLM lock */
         result = osc_page_is_dlocked(env, opg, mode, 1, unref);
         if (result == 0) {
                 /* maybe this page is a part of a lockless io? */
                 hdr = cl_object_header(opg->ops_cl.cpl_obj);
-                page = opg->ops_cl.cpl_page;
                 descr = &osc_env_info(env)->oti_descr;
                 descr->cld_mode = mode;
                 descr->cld_start = page->cp_index;

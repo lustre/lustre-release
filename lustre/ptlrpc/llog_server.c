@@ -83,12 +83,15 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
                 name = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
                 if (name == NULL)
                         RETURN(-EFAULT);
-                CDEBUG(D_INFO, "opening log %s\n", name);
+                CDEBUG(D_INFO, "%s: opening log %s\n", obd->obd_name, name);
         }
 
         ctxt = llog_get_context(obd, body->lgd_ctxt_idx);
-        if (ctxt == NULL)
+        if (ctxt == NULL) {
+                CDEBUG(D_WARNING, "%s: no ctxt. group=%p idx=%d name=%s\n",
+                       obd->obd_name, &obd->obd_olg, body->lgd_ctxt_idx, name);
                 RETURN(-ENODEV);
+        }
         disk_obd = ctxt->loc_exp->exp_obd;
         push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
 
@@ -340,8 +343,8 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
         if (rc)
                 GOTO(out_pop, rc);
 
-        /* 
-         * llog_init_handle() reads the llog header 
+        /*
+         * llog_init_handle() reads the llog header
          */
         flags = body->lgd_llh_flags;
         rc = llog_init_handle(loghandle, flags, NULL);
@@ -407,28 +410,28 @@ int llog_origin_handle_cancel(struct ptlrpc_request *req)
                 handle = fsfilt_start_log(disk_obd, inode,
                                           FSFILT_OP_CANCEL_UNLINK, NULL, 1);
                 if (IS_ERR(handle)) {
-                        CERROR("fsfilt_start_log() failed: %ld\n", 
+                        CERROR("fsfilt_start_log() failed: %ld\n",
                                PTR_ERR(handle));
                         GOTO(pop_ctxt, rc = PTR_ERR(handle));
                 }
 
                 rc = llog_cat_cancel_records(cathandle, 1, logcookies);
 
-                /* 
+                /*
                  * Do not raise -ENOENT errors for resent rpcs. This rec already
-                 * might be killed. 
+                 * might be killed.
                  */
-                if (rc == -ENOENT && 
+                if (rc == -ENOENT &&
                     (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT)) {
-                        /* 
+                        /*
                          * Do not change this message, reply-single.sh test_59b
-                         * expects to find this in log. 
+                         * expects to find this in log.
                          */
                         CDEBUG(D_RPCTRACE, "RESENT cancel req %p - ignored\n",
                                req);
                         rc = 0;
                 } else if (rc == 0) {
-                        CDEBUG(D_RPCTRACE, "Canceled %d llog-records\n", 
+                        CDEBUG(D_RPCTRACE, "Canceled %d llog-records\n",
                                num_cookies);
                 }
 
@@ -446,7 +449,7 @@ int llog_origin_handle_cancel(struct ptlrpc_request *req)
 pop_ctxt:
         pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
         if (rc)
-                CERROR("Cancel %d of %d llog-records failed: %d\n", 
+                CERROR("Cancel %d of %d llog-records failed: %d\n",
                        failed, num_cookies, rc);
 
         llog_ctxt_put(ctxt);
@@ -543,7 +546,7 @@ static int llog_catinfo_cb(struct llog_handle *cat,
 
         if (!cbd->ctxt)
                 RETURN(-ENODEV);
-        
+
         lir = (struct llog_logid_rec *)rec;
         logid = &lir->lid_id;
         rc = llog_create(ctxt, &handle, logid, NULL);

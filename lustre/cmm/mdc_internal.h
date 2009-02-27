@@ -73,12 +73,12 @@ struct mdc_thread_info {
 };
 
 struct mdc_object {
-	struct md_object        mco_obj;
+        struct md_object        mco_obj;
 };
 
 static inline struct lu_device *mdc2lu_dev(struct mdc_device *mc)
 {
-	return (&mc->mc_md_dev.md_lu_dev);
+        return (&mc->mc_md_dev.md_lu_dev);
 }
 
 static inline struct mdc_device *md2mdc_dev(struct md_device *md)
@@ -88,22 +88,22 @@ static inline struct mdc_device *md2mdc_dev(struct md_device *md)
 
 static inline struct mdc_device *mdc_obj2dev(struct mdc_object *mco)
 {
-	return (md2mdc_dev(md_obj2dev(&mco->mco_obj)));
+        return (md2mdc_dev(md_obj2dev(&mco->mco_obj)));
 }
 
 static inline struct mdc_object *lu2mdc_obj(struct lu_object *lo)
 {
-	return container_of0(lo, struct mdc_object, mco_obj.mo_lu);
+        return container_of0(lo, struct mdc_object, mco_obj.mo_lu);
 }
 
 static inline struct mdc_object *md2mdc_obj(struct md_object *mo)
 {
-	return container_of0(mo, struct mdc_object, mco_obj);
+        return container_of0(mo, struct mdc_object, mco_obj);
 }
 
 static inline struct mdc_device *lu2mdc_dev(struct lu_device *ld)
 {
-	return container_of0(ld, struct mdc_device, mc_md_dev.md_lu_dev);
+        return container_of0(ld, struct mdc_device, mc_md_dev.md_lu_dev);
 }
 
 struct lu_object *mdc_object_alloc(const struct lu_env *,

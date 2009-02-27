@@ -111,11 +111,13 @@ check_and_setup_lustre
 DIR=${DIR:-$MOUNT}
 assert_DIR
 
-LOVNAME=`lctl get_param -n llite.*.lov.common_name | tail -n 1`
-OSTCOUNT=`lctl get_param -n lov.$LOVNAME.numobd`
-STRIPECOUNT=`lctl get_param -n lov.$LOVNAME.stripecount`
-STRIPESIZE=`lctl get_param -n lov.$LOVNAME.stripesize`
-ORIGFREE=`lctl get_param -n lov.$LOVNAME.kbytesavail`
+MDT0=$($LCTL get_param -n mdc.*.mds_server_uuid | \
+    awk '{gsub(/_UUID/,""); print $1}' | head -1)
+LOVNAME=$($LCTL get_param -n llite.*.lov.common_name | tail -n 1)
+OSTCOUNT=$($LCTL get_param -n lov.$LOVNAME.numobd)
+STRIPECOUNT=$($LCTL get_param -n lov.$LOVNAME.stripecount)
+STRIPESIZE=$($LCTL get_param -n lov.$LOVNAME.stripesize)
+ORIGFREE=$($LCTL get_param -n lov.$LOVNAME.kbytesavail)
 MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
 
 [ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
@@ -5960,6 +5962,21 @@ test_153() {
 }
 run_test 153 "test if fdatasync does not crash ======================="
 
+test_154() {
+	cp /etc/hosts $DIR/$tfile
+
+	fid=$($LFS path2fid $DIR/$tfile)
+	rc=$?
+	[ $rc -ne 0 ] && error "error: could not get fid for $DIR/$tfile."
+
+	echo "open fid $fid"
+	diff /etc/hosts $DIR/.lustre/fid/$fid || error "open by fid failed: did not find expected data in file."
+
+	echo "Opening a file by FID succeeded"
+}
+run_test 154 "Opening a file by FID"
+
+#Changelogs
 err17935 () {
     if [ $MDSCOUNT -gt 1 ]; then
 	error_ignore 17935 $*
@@ -5967,25 +5984,12 @@ err17935 () {
 	error $*
     fi
 }
-
-test_154() {
-	cp /etc/hosts $DIR/$tfile
-
-	fid=`$LFS path2fid $DIR/$tfile`
-	rc=$?
-	[ $rc -ne 0 ] && error "error: could not get fid for $DIR/$tfile."
-
-	diff $DIR/$tfile $DIR/.lustre/fid/$fid || error "open by fid failed: did not find expected data in file."
-
-	echo "Opening a file by FID succeeded"
-}
-run_test 154 "Opening a file by FID"
-
-#Changelogs
 test_160() {
-    remote_mds && skip "remote MDS" && return
-    lctl set_param -n mdd.*.changelog on
-    $LFS changelog_clear $FSNAME 0
+    do_facet $SINGLEMDS lctl set_param mdd.$MDT0.changelog on
+    USER=$(do_facet $SINGLEMDS lctl --device $MDT0 changelog_register -n)
+    echo "Registered as changelog user $USER"
+    do_facet $SINGLEMDS lctl get_param -n mdd.$MDT0.changelog_users | \
+	grep -q $USER || error "User $USER not found in changelog_users"
 
     # change something
     mkdir -p $DIR/$tdir/pics/2008/zachy
@@ -5997,29 +6001,40 @@ test_160() {
     rm $DIR/$tdir/pics/desktop.jpg
 
     # verify contents
-    $LFS changelog $FSNAME
-    # check target fid
-    fidc=$($LFS changelog $FSNAME | grep timestamp | grep "CREAT" | tail -1 | \
-	awk '{print $5}')
+    $LFS changelog $MDT0 | tail -5
+    echo "verifying target fid"
+    fidc=$($LFS changelog $MDT0 | grep timestamp | grep "CREAT" | \
+	tail -1 | awk '{print $5}')
     fidf=$($LFS path2fid $DIR/$tdir/pics/zach/timestamp)
     [ "$fidc" == "t=$fidf" ] || \
 	err17935 "fid in changelog $fidc != file fid $fidf"
-    # check parent fid
-    fidc=$($LFS changelog $FSNAME | grep timestamp | grep "CREAT" | tail -1 | \
-	awk '{print $6}')
+    echo "verifying parent fid"
+    fidc=$($LFS changelog $MDT0 | grep timestamp | grep "CREAT" | \
+	tail -1 | awk '{print $6}')
     fidf=$($LFS path2fid $DIR/$tdir/pics/zach)
     [ "$fidc" == "p=$fidf" ] || \
 	err17935 "pfid in changelog $fidc != dir fid $fidf" 
 
-    # verify purge
-    FIRST_REC=$($LFS changelog $FSNAME | head -1 | awk '{print $1}')
-    $LFS changelog_clear $FSNAME $(($FIRST_REC + 5)) 
-    PURGE_REC=$($LFS changelog $FSNAME | head -1 | awk '{print $1}')
-    [ $PURGE_REC == $(($FIRST_REC + 6)) ] || \
-     err17935 "first rec after purge should be $(($FIRST_REC + 6)); is $PURGE_REC"
-    # purge all
-    $LFS changelog_clear $FSNAME 0
-    lctl set_param -n mdd.*.changelog off
+    echo "verifying user clear"
+    USERS=$(( $(do_facet $SINGLEMDS lctl get_param -n \
+	mdd.$MDT0.changelog_users | wc -l) - 2 ))
+    FIRST_REC=$($LFS changelog $MDT0 | head -1 | awk '{print $1}')
+    $LFS changelog_clear $MDT0 $USER $(($FIRST_REC + 5))  
+    USER_REC=$(do_facet $SINGLEMDS lctl get_param -n \
+	mdd.$MDT0.changelog_users | grep $USER | awk '{print $2}')
+    [ $USER_REC == $(($FIRST_REC + 5)) ] || \
+	err17935 "user index should be $(($FIRST_REC + 5)); is $USER_REC"
+    CLEAR_REC=$($LFS changelog $MDT0 | head -1 | awk '{print $1}')
+    [ $CLEAR_REC == $(($FIRST_REC + 6)) -o $USERS -gt 1 ] || \
+	err17935 "first index should be $(($FIRST_REC + 6)); is $PURGE_REC"
+
+    echo "verifying user deregister"
+    do_facet $SINGLEMDS lctl --device $MDT0 changelog_deregister $USER
+    do_facet $SINGLEMDS lctl get_param -n mdd.$MDT0.changelog_users | \
+	grep -q $USER && error "User $USER still found in changelog_users"
+
+    [ $USERS -eq 1 ] && \
+	do_facet $SINGLEMDS lctl set_param mdd.$MDT0.changelog off || true
 }
 run_test 160 "changelog sanity"
 
@@ -6035,7 +6050,7 @@ test_161() {
     ln $DIR/$tdir/$tfile $DIR/$tdir/foo2/zachary
     ln $DIR/$tdir/$tfile $DIR/$tdir/foo1/luna
     ln $DIR/$tdir/$tfile $DIR/$tdir/foo2/thor
-    local FID=$($LFS path2fid $DIR/$tdir/$tfile)
+    local FID=$($LFS path2fid $DIR/$tdir/$tfile | tr -d '[')
     if [ "$($LFS fid2path ${mds1_svc} $FID | wc -l)" != "5" ]; then
 	$LFS fid2path ${mds1_svc} $FID
 	err17935 "bad link ea"
@@ -6096,19 +6111,19 @@ test_162() {
     touch $DIR/$tdir/d2/x2
     mkdir -p $DIR/$tdir/d2/a/b/c
     mkdir -p $DIR/$tdir/d2/p/q/r
-    fid=$($LFS path2fid $DIR/$tdir/d2/$tfile)
-    check_path "/$tdir/d2/$tfile" ${mds1_svc} $fid --link 0
+    FID=$($LFS path2fid $DIR/$tdir/d2/$tfile | tr -d '[')
+    check_path "/$tdir/d2/$tfile" ${mds1_svc} $FID --link 0
     ln $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/p/q/r/hlink
     mv $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/a/b/c/new_file
-    fid=$($LFS path2fid $DIR/$tdir/d2/a/b/c/new_file)
-    check_path "/$tdir/d2/a/b/c/new_file" ${mds1_svc} $fid --link 1
-    check_path "/$tdir/d2/p/q/r/hlink" ${mds1_svc} $fid --link 0
-    # check that there are 2 links, and that --rec doesnt break anything
-    ${LFS} fid2path ${mds1_svc} $fid --rec 20 | wc -l | grep -q 2 || \
+    FID=$($LFS path2fid $DIR/$tdir/d2/a/b/c/new_file | tr -d '[')
+    check_path "/$tdir/d2/a/b/c/new_file" ${mds1_svc} $FID --link 1
+    check_path "/$tdir/d2/p/q/r/hlink" ${mds1_svc} $FID --link 0
+    # check that there are 2 links
+    ${LFS} fid2path ${mds1_svc} $FID | wc -l | grep -q 2 || \
 	err17935 "expected 2 links" 
 
     rm $DIR/$tdir/d2/p/q/r/hlink
-    check_path "/$tdir/d2/a/b/c/new_file" ${mds1_svc} $fid --link 0
+    check_path "/$tdir/d2/a/b/c/new_file" ${mds1_svc} $FID --link 0
     # Doesnt work with CMD yet: 17935 
     return 0
 }
@@ -6118,27 +6133,37 @@ test_170() {
         $LCTL debug_daemon start $TMP/${tfile}_log_good
         touch $DIR/$tfile
         $LCTL debug_daemon stop
-        cat $TMP/${tfile}_log_good | sed -e "s/^...../a/g" > $TMP/${tfile}_log_bad
+        sed -e "s/^...../a/g" $TMP/${tfile}_log_good > $TMP/${tfile}_log_bad ||
+               error "sed failed to read log_good"
 
         $LCTL debug_daemon start $TMP/${tfile}_log_good
         rm -rf $DIR/$tfile
         $LCTL debug_daemon stop
 
-        $LCTL df $TMP/${tfile}_log_bad 2&> $TMP/${tfile}_log_bad.out
-        bad_line=`tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $9}'`
-        good_line1=`tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $5}'`
+        $LCTL df $TMP/${tfile}_log_bad 2&> $TMP/${tfile}_log_bad.out ||
+               error "lctl df log_bad failed"
+
+        local bad_line=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $9}')
+        local good_line1=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $5}')
 
         $LCTL df $TMP/${tfile}_log_good 2&>$TMP/${tfile}_log_good.out 
-        good_line2=`tail -n 1 $TMP/${tfile}_log_good.out | awk '{print $5}'`
+        local good_line2=$(tail -n 1 $TMP/${tfile}_log_good.out | awk '{print $5}')
 
+	[ "$bad_line" ] && [ "$good_line1" ] && [ "$good_line2" ] || 
+		error "bad_line good_line1 good_line2 are empty"
+ 
         cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt
         cat $TMP/${tfile}_log_bad >> $TMP/${tfile}_logs_corrupt 
         cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt           
 
         $LCTL df $TMP/${tfile}_logs_corrupt 2&> $TMP/${tfile}_log_bad.out
-        bad_line_new=`tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $9}'`
-        good_line_new=`tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $5}'`
-        expected_good=$((good_line1 + good_line2*2))
+        local bad_line_new=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $9}')
+        local good_line_new=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $5}')
+
+	[ "$bad_line_new" ] && [ "$good_line_new" ] || 
+		error "bad_line_new good_line_new are empty"
+ 
+        local expected_good=$((good_line1 + good_line2*2))
 
         rm -rf $TMP/${tfile}*
         if [ $bad_line -ne $bad_line_new ]; then
@@ -6152,7 +6177,7 @@ test_170() {
         fi
         true
 }
-run_test 170 "test lctl df to handle corruputed log ====================="
+run_test 170 "test lctl df to handle corrupted log ====================="
 
 # OST pools tests
 POOL=${POOL:-cea1}
@@ -6266,6 +6291,8 @@ test_200h() {
  	done
 	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL" ""\
 	    || error "Pool $FSNAME.$POOL cannot be drained"
+	# striping on an empty pool should fall back to "pool of everything"
+	$SETSTRIPE -p $POOL ${POOL_FILE}/$tfile || error "failed to create file with empty pool"
 }
 run_test 200h "Remove all targets from a pool =========================="
 

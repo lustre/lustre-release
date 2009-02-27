@@ -984,6 +984,10 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc != 0)
                 GOTO(out_lock, rc);
 
+        rc = sptlrpc_svc_prep_bulk(req, desc);
+        if (rc != 0)
+                GOTO(out_lock, rc);
+
         /* Check if client was evicted while we were doing i/o before touching
            network */
         if (desc->bd_export->exp_failed)
@@ -1154,6 +1158,8 @@ out:
 
 static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
 {
+        struct ost_body *body = NULL, *repbody;
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         char *key, *val = NULL;
         int keylen, vallen, rc = 0;
         ENTRY;
@@ -1165,13 +1171,33 @@ static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
         }
         keylen = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF);
 
-        rc = lustre_pack_reply(req, 1, NULL, NULL);
-        if (rc)
-                RETURN(rc);
+        if (KEY_IS(KEY_GRANT_SHRINK)) {
+                rc = lustre_pack_reply(req, 2, size, NULL);
+                if (rc)
+                        RETURN(rc); 
+        } else {
+                rc = lustre_pack_reply(req, 1, NULL, NULL);
+                if (rc)
+                        RETURN(rc);
+        }
 
         vallen = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF + 1);
-        if (vallen)
-                val = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1, 0);
+        if (vallen) {
+                if (KEY_IS(KEY_GRANT_SHRINK)) { 
+                        body = lustre_swab_reqbuf(req, REQ_REC_OFF + 1, 
+                                                  sizeof(*body),
+                                                  lustre_swab_ost_body);
+                        if (!body)
+                                RETURN(-EFAULT);
+
+                        repbody = lustre_msg_buf(req->rq_repmsg, 
+                                                 REPLY_REC_OFF,
+                                                 sizeof(*repbody));
+                        memcpy(repbody, body, sizeof(*body));
+                        val = (char*)repbody;
+                } else 
+                        val = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1,0);
+        }
 
         if (KEY_IS(KEY_EVICT_BY_NID)) {
                 if (val && vallen)

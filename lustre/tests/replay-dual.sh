@@ -436,21 +436,6 @@ test_21a() {
 }
 run_test 21a "commit on sharing"
 
-shutdown_client() {
-    local client=$1
-    local mnt=$2
-
-    if [ "$FAILURE_MODE" = HARD ]; then
-       $POWER_DOWN $client
-       while ping -w 3 -c 1 $client > /dev/null 2>&1; do
-           echo "waiting for node $client to fail"
-           sleep 1
-       done
-    else
-       zconf_umount_clients $client $mnt -f
-    fi
-}
-
 test_21b_sub () {
     local mds=$1 
     do_node $CLIENT1 rm -f $MOUNT1/$tfile-*

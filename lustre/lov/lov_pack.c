@@ -58,7 +58,7 @@ void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
 {
         struct lov_ost_data_v1 *lod;
         int i;
-        
+
         CDEBUG(level, "objid "LPX64", magic 0x%08x, pattern %#x\n",
                le64_to_cpu(lmm->lmm_object_id), le32_to_cpu(lmm->lmm_magic),
                le32_to_cpu(lmm->lmm_pattern));
@@ -476,23 +476,22 @@ static int __lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 struct pool_desc *pool;
 
                 pool = lov_find_pool(lov, lumv3.lmm_pool_name);
-                if (pool == NULL)
-                        RETURN(-EINVAL);
-
-                if (lumv3.lmm_stripe_offset !=
-                    (typeof(lumv3.lmm_stripe_offset))(-1)) {
-                        rc = lov_check_index_in_pool(lumv3.lmm_stripe_offset,
-                                                     pool);
-                        if (rc < 0) {
-                                lov_pool_putref(pool);
-                                RETURN(-EINVAL);
+                if (pool != NULL) {
+                        if (lumv3.lmm_stripe_offset !=
+                            (typeof(lumv3.lmm_stripe_offset))(-1)) {
+                                rc = lov_check_index_in_pool(
+                                        lumv3.lmm_stripe_offset, pool);
+                                if (rc < 0) {
+                                        lov_pool_putref(pool);
+                                        RETURN(-EINVAL);
+                                }
                         }
+
+                        if (stripe_count > pool_tgt_count(pool))
+                                stripe_count = pool_tgt_count(pool);
+
+                        lov_pool_putref(pool);
                 }
-
-                if (stripe_count > pool_tgt_count(pool))
-                        stripe_count = pool_tgt_count(pool);
-
-                lov_pool_putref(pool);
         }
 
         if ((__u64)lumv1->lmm_stripe_size * stripe_count > ~0UL) {

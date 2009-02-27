@@ -125,6 +125,12 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #endif
 #define LONG_UNLINK 300          /* Unlink should happen before now */
 
+/**
+ * Time interval of shrink, if the client is "idle" more than this interval,
+ * then the ll_grant thread will return the requested grant space to filter
+ */
+#define GRANT_SHRINK_INTERVAL             360/*6 minutes*/
+
 
 #define OBD_FAIL_MDS                     0x100
 #define OBD_FAIL_MDS_HANDLE_UNPACK       0x101
@@ -335,6 +341,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MGS_PAUSE_TARGET_REG    0x905
 
 #define OBD_FAIL_QUOTA_RET_QDATA         0xA02
+#define OBD_FAIL_QUOTA_DELAY_REL         0xA03
 
 #define OBD_FAIL_LPROC_REMOVE            0xB00
 
@@ -351,6 +358,18 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_SEC_CTX_INIT_CONT_NET   0x1202
 #define OBD_FAIL_SEC_CTX_FINI_NET        0x1203
 #define OBD_FAIL_SEC_CTX_HDL_PAUSE       0x1204
+
+#define OBD_FAIL_LLOG                               0x1300
+#define OBD_FAIL_LLOG_ORIGIN_CONNECT_NET            0x1301
+#define OBD_FAIL_LLOG_ORIGIN_HANDLE_CREATE_NET      0x1302
+#define OBD_FAIL_LLOG_ORIGIN_HANDLE_DESTROY_NET     0x1303
+#define OBD_FAIL_LLOG_ORIGIN_HANDLE_READ_HEADER_NET 0x1304
+#define OBD_FAIL_LLOG_ORIGIN_HANDLE_NEXT_BLOCK_NET  0x1305
+#define OBD_FAIL_LLOG_ORIGIN_HANDLE_PREV_BLOCK_NET  0x1306
+#define OBD_FAIL_LLOG_ORIGIN_HANDLE_WRITE_REC_NET   0x1307
+#define OBD_FAIL_LLOG_ORIGIN_HANDLE_CLOSE_NET       0x1308
+#define OBD_FAIL_LLOG_CATINFO_NET                   0x1309
+
 
 /* Failure injection control */
 #define OBD_FAIL_MASK_SYS    0x0000FF00

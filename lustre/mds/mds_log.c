@@ -178,8 +178,18 @@ int mds_changelog_llog_init(struct obd_device *obd, struct obd_device *tgt)
         rc = llog_setup_named(obd, &obd->obd_olg, LLOG_CHANGELOG_ORIG_CTXT,
                               tgt, 1, NULL, CHANGELOG_CATALOG,
                               &changelog_orig_logops);
-        if (rc)
+        if (rc) {
                 CERROR("changelog llog setup failed %d\n", rc);
+                RETURN(rc);
+        }
+
+        rc = llog_setup_named(obd, &obd->obd_olg, LLOG_CHANGELOG_USER_ORIG_CTXT,
+                              tgt, 1, NULL, CHANGELOG_USERS,
+                              &changelog_orig_logops);
+        if (rc) {
+                CERROR("changelog users llog setup failed %d\n", rc);
+                RETURN(rc);
+        }
 
         RETURN(rc);
 }
@@ -240,6 +250,12 @@ int mds_llog_finish(struct obd_device *obd, int count)
                 rc = rc2;
 
         ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
+        if (ctxt)
+                rc2 = llog_cleanup(ctxt);
+        if (!rc)
+                rc = rc2;
+
+        ctxt = llog_get_context(obd, LLOG_CHANGELOG_USER_ORIG_CTXT);
         if (ctxt)
                 rc2 = llog_cleanup(ctxt);
         if (!rc)

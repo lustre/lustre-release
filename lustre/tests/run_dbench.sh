@@ -33,7 +33,7 @@ trap signaled TERM
 # recovery-mds-scale uses this to signal the client loads to die
 echo $$ >$LOAD_PID_FILE
 
-TESTDIR=$MOUNT/dbench-$(hostname)
+TESTDIR=$MOUNT/d0.dbench-$(hostname)
 
 CONTINUE=true
 

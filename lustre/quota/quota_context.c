@@ -541,6 +541,10 @@ dqacq_completion(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
         QDATA_DEBUG(qdata, "obd(%s): complete %s quota req\n",
                     obd->obd_name, (opc == QUOTA_DQACQ) ? "acq" : "rel");
 
+        /* do it only when a releasing quota req more than 5MB b=18491 */
+        if (opc == QUOTA_DQREL && qdata->qd_count >= 5242880)
+                OBD_FAIL_TIMEOUT(OBD_FAIL_QUOTA_DELAY_REL, 5);
+
         /* update local operational quota file */
         if (rc == 0) {
                 __u64 count = QUSG(qdata->qd_count, QDATA_IS_BLK(qdata));
@@ -667,7 +671,11 @@ out:
                  RETURN(rc1);
          }
          if (err || (rc < 0 && rc != -EBUSY && rc1 == 0) || is_master(qctxt))
-                RETURN(err);
+                 RETURN(err);
+
+         if (opc == QUOTA_DQREL && qdata->qd_count >= 5242880 &&
+             OBD_FAIL_CHECK(OBD_FAIL_QUOTA_DELAY_REL))
+                 RETURN(err);
 
         /* reschedule another dqacq/dqrel if needed */
         qdata->qd_count = 0;

@@ -527,7 +527,7 @@ static int ptlrpc_lprocfs_wr_hp_ratio(struct file *file, const char *buffer,
 {
         struct ptlrpc_service *svc = data;
         int rc, val;
-        
+
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc < 0)
                 return rc;

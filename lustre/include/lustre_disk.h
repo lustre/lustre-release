@@ -57,7 +57,7 @@
 #define LOV_OBJID         "lov_objid"
 #define HEALTH_CHECK      "health_check"
 #define CAPA_KEYS         "capa_keys"
-#define CHANGELOG_CATALOG "changelog_catalog"
+#define CHANGELOG_USERS   "changelog_users"
 
 
 /****************** persistent mount data *********************/

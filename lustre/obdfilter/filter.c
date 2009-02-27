@@ -542,7 +542,7 @@ struct filter_mod_data *filter_fmd_get(struct obd_export *exp,
         struct filter_export_data *fed = &exp->exp_filter_data;
         struct filter_mod_data *found = NULL, *fmd_new = NULL;
 
-        OBD_SLAB_ALLOC(fmd_new, ll_fmd_cachep, CFS_ALLOC_IO, sizeof(*fmd_new));
+        OBD_SLAB_ALLOC_PTR_GFP(fmd_new, ll_fmd_cachep, CFS_ALLOC_IO);
 
         spin_lock(&fed->fed_lock);
         found = filter_fmd_find_nolock(&exp->exp_obd->u.filter,fed,objid,group);
@@ -2676,6 +2676,7 @@ static int filter_connect_internal(struct obd_export *exp,
                 RETURN(-EPROTO);
 
         if (exp->exp_connect_flags & OBD_CONNECT_GRANT) {
+                struct filter_obd *filter = &exp->exp_obd->u.filter;
                 obd_size left, want;
 
                 spin_lock(&exp->exp_obd->obd_osfs_lock);
@@ -2689,6 +2690,8 @@ static int filter_connect_internal(struct obd_export *exp,
                        LPU64" left: "LPU64"\n", exp->exp_obd->obd_name,
                        exp->exp_client_uuid.uuid, exp,
                        data->ocd_grant, want, left);
+                
+                filter->fo_tot_granted_clients ++;
         }
 
         if (data->ocd_connect_flags & OBD_CONNECT_INDEX) {
@@ -2985,6 +2988,12 @@ static int filter_destroy_export(struct obd_export *exp)
 
         filter_grant_discard(exp);
         filter_fmd_cleanup(exp);
+
+        if (exp->exp_connect_flags & OBD_CONNECT_GRANT_SHRINK) {
+                struct filter_obd *filter = &exp->exp_obd->u.filter;
+                if (filter->fo_tot_granted_clients > 0)
+                        filter->fo_tot_granted_clients --;
+        }
 
         if (!(exp->exp_flags & OBD_OPT_FORCE))
                 filter_grant_sanity_check(exp->exp_obd, __FUNCTION__);
@@ -4281,14 +4290,10 @@ static int filter_get_info(struct obd_export *exp, __u32 keylen,
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_iocontrol(obd, dentry->d_inode, NULL,
                                       EXT3_IOC_FIEMAP, (long)fiemap);
-                if (rc) {
-                        f_dput(dentry);
-                        RETURN(rc);
-                }
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
                 f_dput(dentry);
-                RETURN(0);
+                RETURN(rc);
         }
 
         CDEBUG(D_IOCTL, "invalid key\n");
@@ -4346,6 +4351,15 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
         if (KEY_IS(KEY_SPTLRPC_CONF)) {
                 filter_adapt_sptlrpc_conf(obd, 0);
                 RETURN(0);
+        }
+
+        if (KEY_IS(KEY_GRANT_SHRINK)) {
+                struct ost_body *body = (struct ost_body *)val;
+                /* handle shrink grant */
+                spin_lock(&exp->exp_obd->obd_osfs_lock);
+                filter_grant_incoming(exp, &body->oa);
+                spin_unlock(&exp->exp_obd->obd_osfs_lock);
+                RETURN(rc);
         }
 
         if (!KEY_IS(KEY_MDS_CONN))

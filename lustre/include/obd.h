@@ -266,7 +266,9 @@ enum llog_ctxt_id {
         LLOG_TEST_REPL_CTXT,
         LLOG_LOVEA_ORIG_CTXT,
         LLOG_LOVEA_REPL_CTXT,
-        LLOG_CHANGELOG_ORIG_CTXT,   /**< changelog context */
+        LLOG_CHANGELOG_ORIG_CTXT,      /**< changelog generation on mdd */
+        LLOG_CHANGELOG_REPL_CTXT,      /**< changelog access on clients */
+        LLOG_CHANGELOG_USER_ORIG_CTXT, /**< for multiple changelog consumers */
         LLOG_MAX_CTXTS
 };
 
@@ -314,6 +316,7 @@ struct filter_obd {
         obd_size             fo_tot_dirty;      /* protected by obd_osfs_lock */
         obd_size             fo_tot_granted;    /* all values in bytes */
         obd_size             fo_tot_pending;
+        int                  fo_tot_granted_clients;
 
         obd_size             fo_readcache_max_filesize;
         int                  fo_read_cache;
@@ -369,6 +372,14 @@ struct filter_obd {
         int                      fo_sec_level;
 };
 
+struct timeout_item {
+        enum timeout_event ti_event;
+        cfs_time_t         ti_timeout;
+        timeout_cb_t       ti_cb;
+        void              *ti_cb_data;
+        struct list_head   ti_obd_list;
+        struct list_head   ti_chain;
+};
 #define OSC_MAX_RIF_DEFAULT       8
 #define OSC_MAX_RIF_MAX         256
 #define OSC_MAX_DIRTY_DEFAULT  (OSC_MAX_RIF_DEFAULT * 4)
@@ -405,6 +416,9 @@ struct client_obd {
         long                     cl_avail_grant;   /* bytes of credit for ost */
         long                     cl_lost_grant;    /* lost credits (trunc) */
         struct list_head         cl_cache_waiters; /* waiting for cache/grant */
+        cfs_time_t               cl_next_shrink_grant;   /* jiffies */
+        struct list_head         cl_grant_shrink_list;  /* Timeout event list */
+        struct semaphore         cl_grant_sem;   /*grant shrink list semaphore*/
 
         /* keep track of objects that have lois that contain pages which
          * have been queued for async brw.  this lock also protects the
@@ -1095,35 +1109,36 @@ enum obd_cleanup_stage {
 };
 
 /* get/set_info keys */
-#define KEY_READ_ONLY           "read-only"
-#define KEY_MDS_CONN            "mds_conn"
-#define KEY_NEXT_ID             "next_id"
-#define KEY_LOVDESC             "lovdesc"
-#define KEY_INIT_RECOV          "initial_recov"
-#define KEY_INIT_RECOV_BACKUP   "init_recov_bk"
-#define KEY_FLUSH_CTX           "flush_ctx"
-#define KEY_CAPA_KEY            "capa_key"
-#define KEY_CONN_DATA           "conn_data"
-#define KEY_MAX_EASIZE          "max_easize"
-#define KEY_REVIMP_UPD          "revimp_update"
-#define KEY_LOV_IDX             "lov_idx"
-#define KEY_LAST_ID             "last_id"
-#define KEY_READONLY            "read-only"
-#define KEY_LOCK_TO_STRIPE      "lock_to_stripe"
-#define KEY_CHECKSUM            "checksum"
-#define KEY_UNLINKED            "unlinked"
-#define KEY_EVICT_BY_NID        "evict_by_nid"
-#define KEY_REGISTER_TARGET     "register_target"
-#define KEY_SET_FS              "set_fs"
-#define KEY_CLEAR_FS            "clear_fs"
-#define KEY_BLOCKSIZE           "blocksize"
 #define KEY_BLOCKSIZE_BITS      "blocksize_bits"
+#define KEY_BLOCKSIZE           "blocksize"
+#define KEY_CAPA_KEY            "capa_key"
+#define KEY_CHANGELOG_CLEAR     "changelog_clear"
+#define KEY_CHECKSUM            "checksum"
+#define KEY_CLEAR_FS            "clear_fs"
+#define KEY_CONN_DATA           "conn_data"
+#define KEY_EVICT_BY_NID        "evict_by_nid"
 #define KEY_FIEMAP              "fiemap"
-#define KEY_SPTLRPC_CONF        "sptlrpc_conf"
+#define KEY_FLUSH_CTX           "flush_ctx"
+#define KEY_INIT_RECOV_BACKUP   "init_recov_bk"
+#define KEY_INIT_RECOV          "initial_recov"
+#define KEY_LAST_ID             "last_id"
+#define KEY_LOCK_TO_STRIPE      "lock_to_stripe"
+#define KEY_LOVDESC             "lovdesc"
+#define KEY_LOV_IDX             "lov_idx"
+#define KEY_MAX_EASIZE          "max_easize"
+#define KEY_MDS_CONN            "mds_conn"
 #define KEY_MGSSEC              "mgssec"
+#define KEY_NEXT_ID             "next_id"
+#define KEY_READ_ONLY           "read-only"
+#define KEY_REGISTER_TARGET     "register_target"
+#define KEY_REVIMP_UPD          "revimp_update"
+#define KEY_SET_FS              "set_fs"
+#define KEY_SPTLRPC_CONF        "sptlrpc_conf"
+#define KEY_UNLINKED            "unlinked"
 /* XXX unused ?*/
 #define KEY_INTERMDS            "inter_mds"
 #define KEY_ASYNC               "async"
+#define KEY_GRANT_SHRINK        "grant_shrink"
 
 struct lu_context;
 

@@ -998,9 +998,6 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                                                                vallen, data);
                                         set_fs(oldfs);
                                 }
-                                if (rc < 0)
-                                        CERROR("writing proc entry %s err %d\n",
-                                               var->name, rc);
                                 break;
                         }
                         j++;
@@ -1014,6 +1011,10 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                                (char *)lustre_cfg_string(lcfg, 0), key);
                         /* rc = -EINVAL;	continue parsing other params */
                         skip++;
+                } else if (rc < 0) {
+                        CERROR("writing proc entry %s err %d\n",
+                               var->name, rc);
+                        rc = 0;
                 } else {
                         LCONSOLE_INFO("%s.%.*s: set parameter %.*s=%s\n",
                                       lustre_cfg_string(lcfg, 0),

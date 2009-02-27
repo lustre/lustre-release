@@ -248,7 +248,7 @@ struct md_object_operations {
         int (*moo_object_sync)(const struct lu_env *, struct md_object *);
 
         int (*moo_path)(const struct lu_env *env, struct md_object *obj,
-                        char *path, int pathlen, __u64 recno, int *linkno);
+                        char *path, int pathlen, __u64 *recno, int *linkno);
 };
 
 /**
@@ -325,6 +325,12 @@ struct md_device_operations {
         int (*mdo_update_capa_key)(const struct lu_env *env,
                                    struct md_device *m,
                                    struct lustre_capa_key *key);
+
+        int (*mdo_llog_ctxt_get)(const struct lu_env *env,
+                                 struct md_device *m, int idx, void **h);
+
+        int (*mdo_iocontrol)(const struct lu_env *env, struct md_device *m,
+                             unsigned int cmd, int len, void *data);
 
 #ifdef HAVE_QUOTA_SUPPORT
         struct md_quota_operations {
@@ -685,9 +691,10 @@ static inline int mo_capa_get(const struct lu_env *env,
 }
 
 static inline int mo_path(const struct lu_env *env, struct md_object *m,
-                          char *path, int pathlen, __u64 recno, int *linkno)
+                          char *path, int pathlen, __u64 *recno, int *linkno)
 {
-        LASSERT(m->mo_ops->moo_path);
+        if (m->mo_ops->moo_path == NULL)
+                return -ENOSYS;
         return m->mo_ops->moo_path(env, m, path, pathlen, recno, linkno);
 }
 

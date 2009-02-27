@@ -389,6 +389,7 @@ out:
 /** mdd_path() lookup structure. */
 struct path_lookup_info {
         __u64                pli_recno;        /**< history point */
+        __u64                pli_currec;       /**< current record */
         struct lu_fid        pli_fid;
         struct lu_fid        pli_fids[MAX_PATH_DEPTH]; /**< path, in fids */
         struct mdd_object   *pli_mdd_obj;
@@ -477,7 +478,12 @@ static int mdd_path_current(const struct lu_env *env,
                 pli->pli_fids[pli->pli_fidcount] = *tmpfid;
         }
 
-        /* Verify that our path hasn't changed since we started the lookup */
+        /* Verify that our path hasn't changed since we started the lookup.
+           Record the current index, and verify the path resolves to the
+           same fid. If it does, then the path is correct as of this index. */
+        spin_lock(&mdd->mdd_cl.mc_lock);
+        pli->pli_currec = mdd->mdd_cl.mc_index;
+        spin_unlock(&mdd->mdd_cl.mc_lock);
         rc = mdd_path2fid(env, mdd, ptr, &pli->pli_fid);
         if (rc) {
                 CDEBUG(D_INFO, "mdd_path2fid(%s) failed %d\n", ptr, rc);
@@ -501,9 +507,15 @@ out:
         return rc;
 }
 
+static int mdd_path_historic(const struct lu_env *env,
+                             struct path_lookup_info *pli)
+{
+        return 0;
+}
+
 /* Returns the full path to this fid, as of changelog record recno. */
 static int mdd_path(const struct lu_env *env, struct md_object *obj,
-                    char *path, int pathlen, __u64 recno, int *linkno)
+                    char *path, int pathlen, __u64 *recno, int *linkno)
 {
         struct path_lookup_info *pli;
         int tries = 3;
@@ -524,7 +536,7 @@ static int mdd_path(const struct lu_env *env, struct md_object *obj,
                 RETURN(-ENOMEM);
 
         pli->pli_mdd_obj = md2mdd_obj(obj);
-        pli->pli_recno = recno;
+        pli->pli_recno = *recno;
         pli->pli_path = path;
         pli->pli_pathlen = pathlen;
         pli->pli_linkno = *linkno;
@@ -533,7 +545,6 @@ static int mdd_path(const struct lu_env *env, struct md_object *obj,
         while (tries-- && rc == -EAGAIN)
                 rc = mdd_path_current(env, pli);
 
-#if 0   /* We need old path names only for replication */
         /* For historical path lookup, the current links may not have existed
          * at "recno" time.  We must switch over to earlier links/parents
          * by using the changelog records.  If the earlier parent doesn't
@@ -542,12 +553,13 @@ static int mdd_path(const struct lu_env *env, struct md_object *obj,
          * We may ignore this problem for the initial implementation and
          * state that an "original" hardlink must still exist for us to find
          * historic path name. */
-        if (pli->pli_recno != -1)
+        if (pli->pli_recno != -1) {
                 rc = mdd_path_historic(env, pli);
-#endif
-
-        /* return next link index to caller */
-        *linkno = pli->pli_linkno;
+        } else {
+                *recno = pli->pli_currec;
+                /* Return next link index to caller */
+                *linkno = pli->pli_linkno;
+        }
 
         OBD_FREE_PTR(pli);
 

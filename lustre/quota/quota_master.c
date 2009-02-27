@@ -1599,7 +1599,6 @@ free:
 int mds_quota_recovery(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct lov_obd *lov = &mds->mds_osc_obd->u.lov;
         struct qmaster_recov_thread_data data;
         int rc = 0;
         ENTRY;
@@ -1607,13 +1606,15 @@ int mds_quota_recovery(struct obd_device *obd)
         if (unlikely(!mds->mds_quota))
                 RETURN(rc);
 
-        mutex_down(&lov->lov_lock);
-        if (lov->desc.ld_tgt_count != lov->desc.ld_active_tgt_count) {
-                CWARN("Not all osts are active, abort quota recovery\n");
-                mutex_up(&lov->lov_lock);
+        mutex_down(&obd->obd_dev_sem);
+        if (mds->mds_lov_desc.ld_active_tgt_count != mds->mds_lov_objid_count) {
+                CWARN("Only %u/%u OSTs are active, abort quota recovery\n",
+                      mds->mds_lov_desc.ld_active_tgt_count,
+                      mds->mds_lov_objid_count);
+                mutex_up(&obd->obd_dev_sem);
                 RETURN(rc);
         }
-        mutex_up(&lov->lov_lock);
+        mutex_up(&obd->obd_dev_sem);
 
         data.obd = obd;
         init_completion(&data.comp);

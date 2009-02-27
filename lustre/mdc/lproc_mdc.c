@@ -39,6 +39,7 @@
 #include <linux/vfs.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
+#include <lustre_log.h>
 
 #ifdef LPROCFS
 
@@ -75,6 +76,61 @@ static int mdc_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
 
         return count;
 }
+
+static int mdc_changelog_seq_release(struct inode *inode, struct file *file)
+{
+        struct seq_file *seq = file->private_data;
+        struct changelog_seq_iter *csi = seq->private;
+
+        if (csi && csi->csi_llh)
+                llog_cat_put(csi->csi_llh);
+        if (csi && csi->csi_ctxt)
+                llog_ctxt_put(csi->csi_ctxt);
+
+        return (changelog_seq_release(inode, file));
+}
+
+static int mdc_changelog_seq_open(struct inode *inode, struct file *file)
+{
+        struct changelog_seq_iter *csi;
+        int rc;
+        ENTRY;
+
+        rc = changelog_seq_open(inode, file, &csi);
+        if (rc)
+                RETURN(rc);
+
+        /* Set up the remote catalog handle */
+        /* Note the proc file is set up with obd in data, not mdc_device */
+        csi->csi_ctxt = llog_get_context((struct obd_device *)csi->csi_dev,
+                                         LLOG_CHANGELOG_REPL_CTXT);
+        if (csi->csi_ctxt == NULL)
+                GOTO(out, rc = -ENOENT);
+        rc = llog_create(csi->csi_ctxt, &csi->csi_llh, NULL, CHANGELOG_CATALOG);
+        if (rc) {
+                CERROR("llog_create() failed %d\n", rc);
+                GOTO(out, rc);
+        }
+        rc = llog_init_handle(csi->csi_llh, LLOG_F_IS_CAT, NULL);
+        if (rc) {
+                CERROR("llog_init_handle failed %d\n", rc);
+                GOTO(out, rc);
+        }
+
+out:
+        if (rc)
+                mdc_changelog_seq_release(inode, file);
+        RETURN(rc);
+}
+
+static struct file_operations mdc_changelog_fops = {
+        .owner   = THIS_MODULE,
+        .open    = mdc_changelog_seq_open,
+        .read    = seq_read,
+        .llseek  = changelog_seq_lseek,
+        .release = mdc_changelog_seq_release,
+};
+
 static struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "ping",            0, lprocfs_wr_ping,     0, 0, 0222 },
@@ -92,6 +148,7 @@ static struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
                                 mdc_wr_max_rpcs_in_flight, 0 },
         { "timeouts",        lprocfs_rd_timeouts,    0, 0 },
         { "import",          lprocfs_rd_import,    0, 0 },
+        { "changelog",       0, 0, 0, &mdc_changelog_fops, 0400 },
         { 0 }
 };
 

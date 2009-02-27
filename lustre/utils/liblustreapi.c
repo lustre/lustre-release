@@ -303,7 +303,7 @@ int llapi_file_open_pool(const char *name, int flags, int mode,
                 ptr = strchr(pool_name, '.');
                 if (ptr != NULL) {
                         strncpy(fsname, pool_name, ptr - pool_name);
-                        fsname[ptr - pool_name] = '\0';
+                        *ptr = '\0';
                         /* if fsname matches a filesystem skip it
                          * if not keep the poolname as is */
                         if (poolpath(fsname, NULL, NULL) == 0)
@@ -395,8 +395,7 @@ static int print_pool_members(char *fs, char *pool_dir, char *pool_file)
 }
 
 /*
- * search lustre fsname from pathname
- *
+ * Resolve lustre fsname from pathname
  */
 static int search_fsname(char *pathname, char *fsname)
 {
@@ -433,6 +432,25 @@ static int search_fsname(char *pathname, char *fsname)
         return -ENOENT;
 }
 
+/* return the first file matching this pattern */
+static int first_match(char *pattern, char *buffer)
+{
+        glob_t glob_info;
+
+        if (glob(pattern, GLOB_BRACE, NULL, &glob_info))
+                return -ENOENT;
+
+        if (glob_info.gl_pathc < 1) {
+                globfree(&glob_info);
+                return -ENOENT;
+        }
+
+        strcpy(buffer, glob_info.gl_pathv[0]);
+
+        globfree(&glob_info);
+        return 0;
+}
+
 /*
  * find the pool directory path under /proc
  * (can be also used to test if a fsname is known)
@@ -440,7 +458,6 @@ static int search_fsname(char *pathname, char *fsname)
 static int poolpath(char *fsname, char *pathname, char *pool_pathname)
 {
         int rc = 0;
-        glob_t glob_info;
         char pattern[PATH_MAX + 1];
         char buffer[PATH_MAX];
 
@@ -455,18 +472,13 @@ static int poolpath(char *fsname, char *pathname, char *pool_pathname)
         snprintf(pattern, PATH_MAX,
                  "/proc/fs/lustre/lov/%s-*/pools",
                  fsname);
-        rc = glob(pattern, GLOB_BRACE, NULL, &glob_info);
+        rc = first_match(pattern, buffer);
         if (rc)
-                return -ENOENT;
-
-        if (glob_info.gl_pathc == 0) {
-                globfree(&glob_info);
-                return -ENOENT;
-        }
+                return rc;
 
         /* in fsname test mode, pool_pathname is NULL */
         if (pool_pathname != NULL)
-                strcpy(pool_pathname, glob_info.gl_pathv[0]);
+                strcpy(pool_pathname, buffer);
 
         return 0;
 }
@@ -2396,16 +2408,21 @@ static int get_mdtname(const char *name, char *format, char *buf)
         return sprintf(buf, format, name, suffix);
 }
 
-#define CHANGELOG_FILE "/proc/fs/lustre/mdd/%s%s/changelog"
 
-/* return a file desc to readable changelog */
+/* Return a file descriptor to a readable changelog */
 int llapi_changelog_open(const char *mdtname, long long startrec)
 {
         char path[256];
         int rc, fd;
 
-        if (get_mdtname(mdtname, CHANGELOG_FILE, path) <0)
+        /* Use either the mdd changelog (preferred) or a client mdc changelog */
+        if (get_mdtname(mdtname,
+                        "/proc/fs/lustre/md[cd]/%s%s{,-mdc-*}/changelog",
+                        path) < 0)
                 return -EINVAL;
+        rc = first_match(path, path);
+        if (rc)
+                return rc;
 
         if ((fd = open(path, O_RDONLY)) < 0) {
                 llapi_err(LLAPI_MSG_ERROR, "error: can't open |%s|\n", path);
@@ -2421,42 +2438,11 @@ int llapi_changelog_open(const char *mdtname, long long startrec)
         return fd;
 }
 
-int llapi_changelog_clear(const char *mdtname, long long endrec)
-{
-        char path[256];
-        char val[20];
-        int fd, len;
-
-        if (endrec < 0) {
-                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
-                          "can't purge negative records\n");
-                return -EINVAL;
-        }
-
-        if (get_mdtname(mdtname, CHANGELOG_FILE, path) <0)
-                return -EINVAL;
-
-        if ((fd = open(path, O_WRONLY)) < 0) {
-                llapi_err(LLAPI_MSG_ERROR, "error: can't open |%s|\n", path);
-                return errno;
-        }
-
-        snprintf(val, sizeof(val), "%llu", endrec);
-        len = write(fd, val, strlen(val));
-        close(fd);
-        if (len != strlen(val)) {
-                llapi_err(LLAPI_MSG_ERROR, "purge err\n");
-                return errno;
-        }
-
-        return 0;
-}
-
 static int dev_ioctl(struct obd_ioctl_data *data, int dev, int cmd)
 {
-        int rc;
         static char rawbuf[8192];
         static char *buf = rawbuf;
+        int rc;
 
         data->ioc_dev = dev;
         memset(buf, 0, sizeof(rawbuf));
@@ -2482,7 +2468,6 @@ static int dev_ioctl(struct obd_ioctl_data *data, int dev, int cmd)
         return rc;
 }
 
-/* should we just grep it from proc? */
 static int dev_name2dev(char *name)
 {
         struct obd_ioctl_data data;
@@ -2491,8 +2476,8 @@ static int dev_name2dev(char *name)
         memset(&data, 0, sizeof(data));
         data.ioc_inllen1 = strlen(name) + 1;
         data.ioc_inlbuf1 = name;
-        rc = dev_ioctl(&data, -1, OBD_IOC_NAME2DEV);
 
+        rc = dev_ioctl(&data, -1, OBD_IOC_NAME2DEV);
         if (rc < 0) {
                 llapi_err(LLAPI_MSG_ERROR, "Device %s not found %d\n", name,rc);
                 return rc;
@@ -2500,11 +2485,75 @@ static int dev_name2dev(char *name)
         return data.ioc_dev;
 }
 
+/* We need the full mdc name, and we shouldn't just grep from proc... */
+static void do_get_mdcname(char *obd_type_name, char *obd_name,
+                           char *obd_uuid, void *name)
+{
+        if (strncmp(obd_name, (char *)name, strlen((char *)name)) == 0)
+                strcpy((char *)name, obd_name);
+}
+
+static int get_mdcdev(const char *mdtname)
+{
+        char name[MAX_OBD_NAME];
+        char *type[] = { "mdc" };
+        int rc;
+
+        strcpy(name, mdtname);
+        rc = llapi_target_iterate(1, type, (void *)name, do_get_mdcname);
+        rc = rc < 0 ? : -rc;
+        if (rc < 0) {
+                llapi_err(LLAPI_MSG_ERROR, "Device %s not found %d\n", name,rc);
+                return rc;
+        }
+        return dev_name2dev(name);
+}
+
+int llapi_changelog_clear(const char *mdtname, const char *idstr,
+                          long long endrec)
+{
+        struct obd_ioctl_data data;
+        int dev, id, rc;
+
+        if (endrec < 0) {
+                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                          "can't purge negative records\n");
+                return -EINVAL;
+        }
+
+        id = strtol(idstr + strlen(CHANGELOG_USER_PREFIX), NULL, 10);
+        if ((id == 0) || (strncmp(idstr, CHANGELOG_USER_PREFIX,
+                                  strlen(CHANGELOG_USER_PREFIX)) != 0)) {
+                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                          "expecting id of the form '"CHANGELOG_USER_PREFIX
+                          "<num>'; got '%s'\n", idstr);
+                return -EINVAL;
+        }
+
+        dev = get_mdcdev(mdtname);
+        if (dev < 0) {
+                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                          "can't find mdc for '%s'\n", mdtname);
+                return dev;
+        }
+
+        memset(&data, 0, sizeof(data));
+        data.ioc_u32_1 = id;
+        data.ioc_u64_1 = endrec;
+        rc = dev_ioctl(&data, dev, OBD_IOC_CHANGELOG_CLEAR);
+        if (rc)
+                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                          "ioctl err %d", rc);
+        return rc;
+}
+
+
 int llapi_fid2path(char *device, char *fidstr, char *buf, int buflen,
-                   __u64 recno, int *linkno)
+                   long long *recno, int *linkno)
 {
         struct lu_fid fid;
         struct obd_ioctl_data data;
+        char buffer[256];
         int dev, rc;
 
         while (*fidstr == '[')
@@ -2519,14 +2568,18 @@ int llapi_fid2path(char *device, char *fidstr, char *buf, int buflen,
                 return -EINVAL;
         }
 
-        dev = dev_name2dev(device);
+        rc = get_mdtname(device, "%s%s", buffer);
+        if (rc < 0)
+                return rc;
+
+        dev = dev_name2dev(buffer);
         if (dev < 0)
                 return dev;
 
         memset(&data, 0, sizeof(data));
         data.ioc_inlbuf1 = (char *)&fid;
         data.ioc_inllen1 = sizeof(fid);
-        data.ioc_inlbuf2 = (char *)&recno;
+        data.ioc_inlbuf2 = (char *)recno;
         data.ioc_inllen2 = sizeof(__u64);
         data.ioc_inlbuf3 = (char *)linkno;
         data.ioc_inllen3 = sizeof(int);
@@ -2555,4 +2608,5 @@ int llapi_path2fid(const char *path, unsigned long long *seq,
         close(fd);
         return rc;
 }
+
 

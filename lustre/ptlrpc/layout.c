@@ -574,6 +574,7 @@ static const struct req_format *req_formats[] = {
         &RQF_OST_BRW,
         &RQF_OST_STATFS,
         &RQF_OST_SET_INFO,
+        &RQF_OST_SET_GRANT_INFO,
         &RQF_OST_GET_INFO_GENERIC,
         &RQF_OST_GET_INFO_LAST_ID,
         &RQF_OST_GET_INFO_FIEMAP,
@@ -889,7 +890,7 @@ const struct req_format RQF_MGS_TARGET_REG =
 EXPORT_SYMBOL(RQF_MGS_TARGET_REG);
 
 const struct req_format RQF_MGS_SET_INFO =
-        DEFINE_REQ_FMT0("MGS_SET_INTO", mgs_set_info,
+        DEFINE_REQ_FMT0("MGS_SET_INFO", mgs_set_info,
                          mgs_set_info);
 EXPORT_SYMBOL(RQF_MGS_SET_INFO);
 
@@ -1201,6 +1202,11 @@ EXPORT_SYMBOL(RQF_OST_STATFS);
 const struct req_format RQF_OST_SET_INFO =
         DEFINE_REQ_FMT0("OST_SET_INFO", ost_set_info_client, empty);
 EXPORT_SYMBOL(RQF_OST_SET_INFO);
+
+const struct req_format RQF_OST_SET_GRANT_INFO =
+        DEFINE_REQ_FMT0("OST_SET_GRANT_INFO", ost_set_info_client, 
+			 ost_body_only);
+EXPORT_SYMBOL(RQF_OST_SET_GRANT_INFO);
 
 const struct req_format RQF_OST_GET_INFO_GENERIC =
         DEFINE_REQ_FMT0("OST_GET_INFO", ost_get_info_generic_client,

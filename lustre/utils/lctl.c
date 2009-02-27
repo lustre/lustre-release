@@ -178,24 +178,6 @@ command_t cmdlist[] = {
          "provide gdb-friendly module information\n"
          "usage: modules <path>"},
 
-        /* Device configuration commands */
-        {"== device setup (these are not normally used post 1.4) ==",
-                jt_noop, 0, "device config"},
-        {"attach", jt_lcfg_attach, 0,
-         "set the type, name, and uuid of the current device\n"
-         "usage: attach type name uuid"},
-        {"detach", jt_obd_detach, 0,
-         "remove driver (and name and uuid) from current device\n"
-         "usage: detach"},
-        {"setup", jt_lcfg_setup, 0,
-         "type specific device configuration information\n"
-         "usage: setup <args...>"},
-        {"cleanup", jt_obd_cleanup, 0, "cleanup previously setup device\n"
-         "usage: cleanup [force | failover]"},
-        {"dump_cfg", jt_cfg_dump_log, 0,
-         "print log of recorded commands for this config to kernel debug log\n"
-         "usage: dump_cfg config-uuid-name"},
-
         /* virtual block operations */
         {"==== virtual block device ====", jt_noop, 0, "virtual block device"},
         {"blockdev_attach", jt_blockdev_attach, 0,
@@ -225,6 +207,33 @@ command_t cmdlist[] = {
         {"pool_list", jt_pool_cmd, 0,
          "list pools and pools members\n"
          "usage pool_list  <fsname>[.<poolname>] | <pathname>"},
+
+        /* Changelog commands */
+        {"===  Changelogs ==", jt_noop, 0, "changelog user management"},
+        {"changelog_register", jt_changelog_register, 0,
+         "register a new persistent changelog user, returns id\n"
+         "usage:\tdevice <mdtname>\n\tchangelog_register [-n]"},
+        {"changelog_deregister", jt_changelog_deregister, 0,
+         "deregister an existing changelog user\n"
+         "usage:\tdevice <mdtname>\n\tchangelog_deregister <id>"},
+
+        /* Device configuration commands */
+        {"== device setup (these are not normally used post 1.4) ==",
+                jt_noop, 0, "device config"},
+        {"attach", jt_lcfg_attach, 0,
+         "set the type, name, and uuid of the current device\n"
+         "usage: attach type name uuid"},
+        {"detach", jt_obd_detach, 0,
+         "remove driver (and name and uuid) from current device\n"
+         "usage: detach"},
+        {"setup", jt_lcfg_setup, 0,
+         "type specific device configuration information\n"
+         "usage: setup <args...>"},
+        {"cleanup", jt_obd_cleanup, 0, "cleanup previously setup device\n"
+         "usage: cleanup [force | failover]"},
+        {"dump_cfg", jt_cfg_dump_log, 0,
+         "print log of recorded commands for this config to kernel debug log\n"
+         "usage: dump_cfg config-uuid-name"},
 
         /* Test only commands */
         {"==== testing (DANGEROUS) ====", jt_noop, 0, "testing (DANGEROUS)"},

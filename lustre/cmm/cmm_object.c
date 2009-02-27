@@ -346,7 +346,7 @@ static int cml_capa_get(const struct lu_env *env, struct md_object *mo,
 }
 
 static int cml_path(const struct lu_env *env, struct md_object *mo,
-                    char *path, int pathlen, __u64 recno, int *linkno)
+                    char *path, int pathlen, __u64 *recno, int *linkno)
 {
         int rc;
         ENTRY;
@@ -943,7 +943,7 @@ static int cmr_capa_get(const struct lu_env *env, struct md_object *mo,
 }
 
 static int cmr_path(const struct lu_env *env, struct md_object *obj,
-                    char *path, int pathlen, __u64 recno, int *linkno)
+                    char *path, int pathlen, __u64 *recno, int *linkno)
 {
         return -EREMOTE;
 }

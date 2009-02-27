@@ -176,7 +176,7 @@ resetquota() {
        $LFS setquota "$1" "$2" -b 0 -B 0 -i 0 -I 0 $MOUNT || error "resetquota failed"
 }
 
-quota_error() {
+quota_scan() {
         LOCAL_UG=$1
         LOCAL_ID=$2
 
@@ -189,9 +189,18 @@ quota_error() {
                 log "Files for group ($LOCAL_ID):"
                 ($LFS find -group $LOCAL_ID $DIR | xargs stat 2>/dev/null)
         fi
+}
 
+quota_error() {
+        quota_scan $1 $2
         shift 2
         error "$*"
+}
+
+quota_log() {
+        quota_scan $1 $2
+        shift 2
+        log "$*"
 }
 
 quota_show_check() {
@@ -204,12 +213,12 @@ quota_show_check() {
 
         if [ "$LOCAL_BF" == "a" -o "$LOCAL_BF" == "b" ]; then
 	        USAGE="`$LFS quota -$LOCAL_UG $LOCAL_ID $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $2 }'`"
-                [ $USAGE -ne 0 ] && quota_error $LOCAL_UG $LOCAL_ID "System is not clean for block ($LOCAL_UG:$LOCAL_ID:$USAGE)."
+                [ $USAGE -ne 0 ] && quota_log $LOCAL_UG $LOCAL_ID "System is not clean for block ($LOCAL_UG:$LOCAL_ID:$USAGE)."
         fi
 
         if [ "$LOCAL_BF" == "a" -o "$LOCAL_BF" == "f" ]; then
 	        USAGE="`$LFS quota -$LOCAL_UG $LOCAL_ID $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $5 }'`"
-                [ $USAGE -ne 0 ] && quota_error $LOCAL_UG $LOCAL_ID "System is not clean for file ($LOCAL_UG:$LOCAL_ID:$USAGE)."
+                [ $USAGE -ne 0 ] && quota_log $LOCAL_UG $LOCAL_ID "System is not clean for file ($LOCAL_UG:$LOCAL_ID:$USAGE)."
         fi
 }
 
@@ -791,6 +800,7 @@ test_8() {
 	[ "$SLOW" = "no" ] && duration=" -t 120"
 	$RUNAS bash rundbench -D $DIR/$tdir 3 $duration || quota_error a $TSTUSR "dbench failed!"
 
+        rm -rf $DIR/$tdir
 	sync; sleep 3; sync;
 
 	return 0
@@ -1924,6 +1934,51 @@ test_25() {
 	test_25_sub -g
 }
 run_test_with_stat 25 "test whether quota usage is transfered when chown/chgrp (18081) ==========="
+
+test_26() {
+	mkdir -p $DIR/$tdir
+	chmod 0777 $DIR/$tdir
+	TESTFILE="$DIR/$tdir/$tfile-0"
+	TESTFILE2="$DIR/$tdir/$tfile-1"
+	set_blk_tunesz 512
+	set_blk_unitsz 1024
+
+	wait_delete_completed
+
+	# every quota slave gets 20MB
+	b_limit=$((OSTCOUNT * 20 * 1024))
+	log "limit: ${b_limit}KB"
+	$LFS setquota -u $TSTUSR -b 0 -B $b_limit -i 0 -I 0 $DIR
+	sleep 3
+	quota_show_check b u $TSTUSR
+
+	$LFS setstripe $TESTFILE  -c 1 -i 0
+	$LFS setstripe $TESTFILE2 -c 1 -i 0
+	chown $TSTUSR.$TSTUSR $TESTFILE
+	chown $TSTUSR.$TSTUSR $TESTFILE2
+
+	#define OBD_FAIL_QUOTA_DELAY_REL         0xA03
+	lustre_fail ost 0xA03
+
+	log "    Write the first file..."
+	$RUNAS $DIRECTIO write $TESTFILE 0 10 $((BLK_SZ * 1024)) || quota_error u $TSTUSR "write failure, but expect success"
+	log "    Delete the first file..."
+	rm -f $TESTFILE
+
+
+	wait_delete_completed
+
+	log "    Write the second file..."
+	$RUNAS $DIRECTIO write $TESTFILE2 0 10 $((BLK_SZ * 1024)) || quota_error u $TSTUSR "write failure, but expect success"
+	log "    Delete the second file..."
+	rm -f $TESTFILE2
+
+	lustre_fail ost 0
+	set_blk_unitsz $((128 * 1024))
+	set_blk_tunesz $((128 * 1024 / 2))
+	resetquota -u $TSTUSR
+}
+run_test_with_stat 26 "test for false quota error(bz18491) ======================================"
 
 # turn off quota
 test_99()

@@ -1047,6 +1047,14 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 return -EINVAL;
         }
         switch (cmd) {
+        case OBD_IOC_CHANGELOG_CLEAR: {
+                struct changelog_setinfo cs =
+                        {data->ioc_u64_1, data->ioc_u32_1};
+                rc = obd_set_info_async(exp, strlen(KEY_CHANGELOG_CLEAR),
+                                        KEY_CHANGELOG_CLEAR, sizeof(cs), &cs,
+                                        NULL);
+                GOTO(out, rc);
+        }
         case OBD_IOC_CLIENT_RECOVER:
                 rc = ptlrpc_recover_import(imp, data->ioc_inlbuf1);
                 if (rc < 0)
@@ -1097,19 +1105,6 @@ static int do_set_info_async(struct obd_export *exp,
         char                  *tmp;
         int                    rc;
         ENTRY;
-
-        if (vallen != sizeof(int))
-                RETURN(-EINVAL);
-
-        spin_lock(&imp->imp_lock);
-        if (*((int *)val)) {
-                imp->imp_connect_flags_orig |= OBD_CONNECT_RDONLY;
-                imp->imp_connect_data.ocd_connect_flags |= OBD_CONNECT_RDONLY;
-        } else {
-                imp->imp_connect_flags_orig &= ~OBD_CONNECT_RDONLY;
-                imp->imp_connect_data.ocd_connect_flags &= ~OBD_CONNECT_RDONLY;
-        }
-        spin_unlock(&imp->imp_lock);
 
         req = ptlrpc_request_alloc(imp, &RQF_MDS_SET_INFO);
         if (req == NULL)
@@ -1176,6 +1171,19 @@ int mdc_set_info_async(struct obd_export *exp,
                 RETURN(0);
         }
         if (KEY_IS(KEY_READ_ONLY)) {
+                if (vallen != sizeof(int))
+                        RETURN(-EINVAL);
+
+                spin_lock(&imp->imp_lock);
+                if (*((int *)val)) {
+                        imp->imp_connect_flags_orig |= OBD_CONNECT_RDONLY;
+                        imp->imp_connect_data.ocd_connect_flags |= OBD_CONNECT_RDONLY;
+                } else {
+                        imp->imp_connect_flags_orig &= ~OBD_CONNECT_RDONLY;
+                        imp->imp_connect_data.ocd_connect_flags &= ~OBD_CONNECT_RDONLY;
+                }
+                spin_unlock(&imp->imp_lock);
+
                 rc = do_set_info_async(exp, keylen, key, vallen, val, set);
                 RETURN(rc);
         }
@@ -1195,8 +1203,12 @@ int mdc_set_info_async(struct obd_export *exp,
                 imp->imp_server_timeout = 1;
                 spin_unlock(&imp->imp_lock);
                 imp->imp_client->cli_request_portal = MDS_MDS_PORTAL;
-                CDEBUG(D_OTHER|D_WARNING, "%s: timeout / 2\n", exp->exp_obd->obd_name);
+                CDEBUG(D_OTHER, "%s: timeout / 2\n", exp->exp_obd->obd_name);
                 RETURN(0);
+        }
+        if (KEY_IS(KEY_CHANGELOG_CLEAR)) {
+                rc = do_set_info_async(exp, keylen, key, vallen, val, set);
+                RETURN(rc);
         }
 
         RETURN(rc);
@@ -1665,8 +1677,16 @@ static int mdc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
 
         rc = llog_setup(obd, olg, LLOG_LOVEA_REPL_CTXT, tgt, 0, NULL,
                         &llog_client_ops);
+        if (rc)
+                RETURN(rc);
+        ctxt = llog_get_context(obd, LLOG_LOVEA_REPL_CTXT);
+        llog_initiator_connect(ctxt);
+        llog_ctxt_put(ctxt);
+
+        rc = llog_setup(obd, olg, LLOG_CHANGELOG_REPL_CTXT, tgt, 0, NULL,
+                        &llog_client_ops);
         if (rc == 0) {
-                ctxt = llog_get_context(obd, LLOG_LOVEA_REPL_CTXT);
+                ctxt = llog_group_get_ctxt(olg, LLOG_CHANGELOG_REPL_CTXT);
                 llog_initiator_connect(ctxt);
                 llog_ctxt_put(ctxt);
         }
@@ -1684,6 +1704,10 @@ static int mdc_llog_finish(struct obd_device *obd, int count)
         if (ctxt)
                 rc = llog_cleanup(ctxt);
 
+        ctxt = llog_get_context(obd, LLOG_CHANGELOG_REPL_CTXT);
+        if (ctxt)
+                rc = llog_cleanup(ctxt);
+
         RETURN(rc);
 }
 
@@ -1698,8 +1722,8 @@ static int mdc_process_config(struct obd_device *obd, obd_count len, void *buf)
         default:
                 rc = class_process_proc_param(PARAM_MDC, lvars.obd_vars,
                                               lcfg, obd);
-        	if (rc > 0)
-        		rc = 0;
+                if (rc > 0)
+                        rc = 0;
                 break;
         }
         return(rc);

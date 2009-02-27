@@ -795,6 +795,15 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
         client_obd_list_unlock(&cli->cl_loi_list_lock);
         CDEBUG(D_CACHE,"dirty: "LPU64" undirty: %u dropped %u grant: "LPU64"\n",
                oa->o_dirty, oa->o_undirty, oa->o_dropped, oa->o_grant);
+
+}
+
+static void osc_update_next_shrink(struct client_obd *cli)
+{
+        int time = GRANT_SHRINK_INTERVAL;
+        cli->cl_next_shrink_grant = cfs_time_shift(time);
+        CDEBUG(D_CACHE, "next time %ld to shrink grant \n",
+               cli->cl_next_shrink_grant);
 }
 
 /* caller must hold loi_list_lock */
@@ -809,6 +818,7 @@ static void osc_consume_write_grant(struct client_obd *cli,
         CDEBUG(D_CACHE, "using %lu grant credits for brw %p page %p\n",
                CFS_PAGE_SIZE, pga, pga->pg);
         LASSERT(cli->cl_avail_grant >= 0);
+        osc_update_next_shrink(cli);
 }
 
 /* the companion to osc_consume_write_grant, called when a brw has completed.
@@ -902,17 +912,6 @@ void osc_wake_cache_waiters(struct client_obd *cli)
         EXIT;
 }
 
-static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
-{
-        client_obd_list_lock(&cli->cl_loi_list_lock);
-        cli->cl_avail_grant = ocd->ocd_grant;
-        client_obd_list_unlock(&cli->cl_loi_list_lock);
-
-        CDEBUG(D_CACHE, "setting cl_avail_grant: %ld cl_lost_grant: %ld\n",
-               cli->cl_avail_grant, cli->cl_lost_grant);
-        LASSERT(cli->cl_avail_grant >= 0);
-}
-
 static void osc_update_grant(struct client_obd *cli, struct ost_body *body)
 {
         client_obd_list_lock(&cli->cl_loi_list_lock);
@@ -921,6 +920,135 @@ static void osc_update_grant(struct client_obd *cli, struct ost_body *body)
                 cli->cl_avail_grant += body->oa.o_grant;
         /* waiters are woken in brw_interpret */
         client_obd_list_unlock(&cli->cl_loi_list_lock);
+}
+
+static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
+                              void *key, obd_count vallen, void *val,
+                              struct ptlrpc_request_set *set);
+
+static int osc_shrink_grant_interpret(const struct lu_env *env,
+				      struct ptlrpc_request *req,
+                                      void *aa, int rc)
+{
+        struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
+        struct obdo *oa = ((struct osc_grant_args *)aa)->aa_oa;
+        struct ost_body *body;
+        
+        if (rc != 0) {
+                client_obd_list_lock(&cli->cl_loi_list_lock);
+                cli->cl_avail_grant += oa->o_grant;
+                client_obd_list_unlock(&cli->cl_loi_list_lock);
+                GOTO(out, rc);
+        }
+
+        body = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
+        LASSERT(body);
+        osc_update_grant(cli, body);
+out:
+        OBD_FREE_PTR(oa);
+        return rc;        
+}
+
+static void osc_shrink_grant_local(struct client_obd *cli, struct obdo *oa)
+{
+        client_obd_list_lock(&cli->cl_loi_list_lock);
+        oa->o_grant = cli->cl_avail_grant / 4;
+        cli->cl_avail_grant -= oa->o_grant; 
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
+        oa->o_flags |= OBD_FL_SHRINK_GRANT;
+        osc_update_next_shrink(cli);
+}
+
+static int osc_shrink_grant(struct client_obd *cli)
+{
+        int    rc = 0;
+        struct ost_body     *body;
+        ENTRY;
+
+        OBD_ALLOC_PTR(body);
+        if (!body)
+                RETURN(-ENOMEM);
+
+        osc_announce_cached(cli, &body->oa, 0);
+        osc_shrink_grant_local(cli, &body->oa);
+        rc = osc_set_info_async(cli->cl_import->imp_obd->obd_self_export,
+                                sizeof(KEY_GRANT_SHRINK), KEY_GRANT_SHRINK,
+                                sizeof(*body), body, NULL);
+        if (rc) {
+                client_obd_list_lock(&cli->cl_loi_list_lock);
+                cli->cl_avail_grant += body->oa.o_grant;
+                client_obd_list_unlock(&cli->cl_loi_list_lock);
+        }
+        if (body)
+               OBD_FREE_PTR(body);
+        RETURN(rc);
+}
+
+#define GRANT_SHRINK_LIMIT PTLRPC_MAX_BRW_SIZE
+static int osc_should_shrink_grant(struct client_obd *client)
+{
+        cfs_time_t time = cfs_time_current();
+        cfs_time_t next_shrink = client->cl_next_shrink_grant;
+        if (cfs_time_aftereq(time, next_shrink - 5 * CFS_TICK)) {
+                if (client->cl_import->imp_state == LUSTRE_IMP_FULL &&
+                    client->cl_avail_grant > GRANT_SHRINK_LIMIT)
+                        return 1;
+                else
+                        osc_update_next_shrink(client);
+        }
+        return 0;
+}
+
+static int osc_grant_shrink_grant_cb(struct timeout_item *item, void *data)
+{
+        struct client_obd *client;
+
+        list_for_each_entry(client, &item->ti_obd_list, cl_grant_shrink_list) {
+                if (osc_should_shrink_grant(client))
+                        osc_shrink_grant(client);
+        }
+        return 0;
+}
+
+static int osc_add_shrink_grant(struct client_obd *client)
+{
+        int rc;
+
+        rc = ptlrpc_add_timeout_client(GRANT_SHRINK_INTERVAL, 
+                                         TIMEOUT_GRANT,
+                                         osc_grant_shrink_grant_cb, NULL,
+                                         &client->cl_grant_shrink_list);
+        if (rc) {
+                CERROR("add grant client %s error %d\n", 
+                        client->cl_import->imp_obd->obd_name, rc);
+                return rc;
+        }
+        CDEBUG(D_CACHE, "add grant client %s \n", 
+               client->cl_import->imp_obd->obd_name);
+        osc_update_next_shrink(client);
+        return 0; 
+}
+
+static int osc_del_shrink_grant(struct client_obd *client)
+{
+        CDEBUG(D_CACHE, "del grant client %s \n", 
+               client->cl_import->imp_obd->obd_name);
+        return ptlrpc_del_timeout_client(&client->cl_grant_shrink_list);
+}
+
+static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
+{
+        client_obd_list_lock(&cli->cl_loi_list_lock);
+        cli->cl_avail_grant = ocd->ocd_grant;
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
+
+        if (ocd->ocd_connect_flags & OBD_CONNECT_GRANT_SHRINK &&
+            list_empty(&cli->cl_grant_shrink_list))
+                osc_add_shrink_grant(cli);
+
+        CDEBUG(D_CACHE, "setting cl_avail_grant: %ld cl_lost_grant: %ld \n",
+               cli->cl_avail_grant, cli->cl_lost_grant);
+        LASSERT(cli->cl_avail_grant >= 0);
 }
 
 /* We assume that the reason this OSC got a short read is because it read
@@ -1172,6 +1300,8 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                 (void *)(niobuf - niocount));
 
         osc_announce_cached(cli, &body->oa, opc == OST_WRITE ? requested_nob:0);
+        if (osc_should_shrink_grant(cli))
+                osc_shrink_grant_local(cli, &body->oa); 
 
         /* size[REQ_REC_OFF] still sizeof (*body) */
         if (opc == OST_WRITE) {
@@ -3615,7 +3745,7 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
-        if (!set)
+        if (!set && !KEY_IS(KEY_GRANT_SHRINK))
                 RETURN(-EINVAL);
 
         /* We pass all other commands directly to OST. Since nobody calls osc
@@ -3625,9 +3755,12 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
            Even if something bad goes through, we'd get a -EINVAL from OST
            anyway. */
 
-
-        req = ptlrpc_request_alloc(imp, &RQF_OST_SET_INFO);
-        if (req == NULL)
+	if (KEY_IS(KEY_GRANT_SHRINK))  
+       		req = ptlrpc_request_alloc(imp, &RQF_OST_SET_GRANT_INFO); 
+	else 
+		req = ptlrpc_request_alloc(imp, &RQF_OST_SET_INFO);
+        
+	if (req == NULL)
                 RETURN(-ENOMEM);
 
         req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_KEY,
@@ -3652,13 +3785,31 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
                 oscc->oscc_oa.o_valid |= OBD_MD_FLGROUP;
                 LASSERT_MDS_GROUP(oscc->oscc_oa.o_gr);
                 req->rq_interpret_reply = osc_setinfo_mds_conn_interpret;
-        }
+        } else if (KEY_IS(KEY_GRANT_SHRINK)) {
+                struct osc_grant_args *aa;
+                struct obdo *oa;
 
-        ptlrpc_request_set_replen(req);
-        ptlrpc_set_add_req(set, req);
-        ptlrpc_check_set(NULL, set);
-
-        RETURN(0);
+                CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
+                aa = ptlrpc_req_async_args(req);
+                OBD_ALLOC_PTR(oa);
+                if (!oa) {
+                        ptlrpc_req_finished(req);
+                        RETURN(-ENOMEM);
+                }
+                *oa = ((struct ost_body *)val)->oa;
+                aa->aa_oa = oa;
+	        req->rq_interpret_reply = osc_shrink_grant_interpret;
+	}
+       	
+	ptlrpc_request_set_replen(req);
+	if (!KEY_IS(KEY_GRANT_SHRINK)) {
+        	LASSERT(set != NULL);
+		ptlrpc_set_add_req(set, req);
+        	ptlrpc_check_set(NULL, set);
+	} else 
+        	ptlrpcd_add_req(req, PSCOPE_OTHER);
+        
+	RETURN(0);
 }
 
 
@@ -3779,6 +3930,7 @@ static int osc_disconnect(struct obd_export *exp)
                        obd);
         }
 
+        osc_del_shrink_grant(&obd->u.cli);
         rc = client_disconnect_export(exp);
         return rc;
 }
@@ -3901,6 +4053,9 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                         ptlrpc_init_rq_pool(cli->cl_max_rpcs_in_flight + 2,
                                             OST_MAXREQSIZE,
                                             ptlrpc_add_rqs_to_pool);
+		
+                CFS_INIT_LIST_HEAD(&cli->cl_grant_shrink_list);
+                sema_init(&cli->cl_grant_sem, 1);
         }
 
         RETURN(rc);

@@ -509,6 +509,7 @@ static inline int llog_write_rec(struct llog_handle *handle,
         if (lop->lop_write_rec == NULL)
                 RETURN(-EOPNOTSUPP);
 
+        /* FIXME:  Why doesn't caller just set the right lrh_len itself? */
         if (buf)
                 buflen = rec->lrh_len + sizeof(struct llog_rec_hdr)
                                 + sizeof(struct llog_rec_tail);

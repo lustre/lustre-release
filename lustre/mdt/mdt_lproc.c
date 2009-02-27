@@ -515,25 +515,20 @@ static int lprocfs_wr_root_squash(struct file *file, const char *buffer,
 {
         struct obd_device *obd = data;
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-        char kernbuf[50], *tmp, *end;
+        int rc;
+        char kernbuf[50], *tmp, *end, *errmsg;
         unsigned long uid, gid;
         int nouid, nogid;
         ENTRY;
 
-        if (count > (sizeof(kernbuf) - 1) ||
-            copy_from_user(kernbuf, buffer, count)) {
-                CWARN("%s: can't copy string to kernel space, "
-                      "uid:gid is expected, "
-                      "continue with %u:%u, "
-                      "there will be 0:0 on MDS restart\n",
-                      obd->obd_name, mdt->mdt_squash_uid,
-                      mdt->mdt_squash_gid);
-                RETURN(count);
+        if (count >= sizeof(kernbuf)) {
+                errmsg = "string too long";
+                GOTO(failed, rc = -EINVAL);
         }
-
-        if (copy_from_user(kernbuf, buffer, count))
-                RETURN(-EFAULT);
-
+        if (copy_from_user(kernbuf, buffer, count)) {
+                errmsg = "bad address";
+                GOTO(failed, rc = -EFAULT);
+        }
         kernbuf[count] = '\0';
 
         nouid = nogid = 0;
@@ -557,19 +552,20 @@ static int lprocfs_wr_root_squash(struct file *file, const char *buffer,
         mdt->mdt_squash_uid = uid;
         mdt->mdt_squash_gid = gid;
 
-        if (nouid || nogid)
-                CWARN("%s: can't parse \"\%s\", uid:gid is expected, "
-                      "continue with %u:%u, "
-                      "there will be %u:%u on MDS restart\n",
+        if (nouid && nogid) {
+                errmsg = "needs uid:gid format";
+                GOTO(failed, rc = -EINVAL);
+        }
+
+        LCONSOLE_INFO("%s: root_squash is set to %u:%u\n",
                       obd->obd_name,
-                      buffer, mdt->mdt_squash_uid, mdt->mdt_squash_gid,
-                      nouid ? 0 : mdt->mdt_squash_uid,
-                      nogid ? 0 : mdt->mdt_squash_gid);
-        else
-                LCONSOLE_INFO("%s: root_squash is set to %u:%u\n",
-                              obd->obd_name,
-                              mdt->mdt_squash_uid,  mdt->mdt_squash_gid);
+                      mdt->mdt_squash_uid,  mdt->mdt_squash_gid);
         RETURN(count);
+
+ failed:
+        CWARN("%s: failed to set root_squash to \"%s\", %s: rc %d\n",
+              obd->obd_name, buffer, errmsg, rc);
+        RETURN(rc);
 }
 
 static int lprocfs_rd_nosquash_nids(char *page, char **start, off_t off,
@@ -589,23 +585,22 @@ static int lprocfs_wr_nosquash_nids(struct file *file, const char *buffer,
         struct obd_device *obd = data;
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
         int rc;
-        char *new;
+        char *kernbuf, *errmsg;
         struct list_head tmp;
         ENTRY;
 
-        /* copy to kernel space */
-        OBD_ALLOC(new, count + 1);
-        if (new == 0)
+        OBD_ALLOC(kernbuf, count + 1);
+        if (kernbuf == NULL) {
+                errmsg = "no memory";
                 GOTO(failed, rc = -ENOMEM);
-
-        if (copy_from_user(new, buffer, count))
+        }
+        if (copy_from_user(kernbuf, buffer, count)) {
+                errmsg = "bad address";
                 GOTO(failed, rc = -EFAULT);
-
-        new[count] = 0;
-        if (strlen(new) != count)
-                GOTO(failed, rc = -EINVAL);
-
-        if (!strcmp(new, "NONE") || !strcmp(new, "clear")) {
+        }
+        kernbuf[count] = '\0';
+ 
+        if (!strcmp(kernbuf, "NONE") || !strcmp(kernbuf, "clear")) {
                 /* empty string is special case */
                 down_write(&mdt->mdt_squash_sem);
                 if (!list_empty(&mdt->mdt_nosquash_nids)) {
@@ -618,35 +613,36 @@ static int lprocfs_wr_nosquash_nids(struct file *file, const char *buffer,
                 up_write(&mdt->mdt_squash_sem);
                 LCONSOLE_INFO("%s: nosquash_nids is cleared\n",
                               obd->obd_name);
-                OBD_FREE(new, count + 1);
-                RETURN(0);
+                OBD_FREE(kernbuf, count + 1);
+                RETURN(count);
         }
 
         CFS_INIT_LIST_HEAD(&tmp);
-        if (cfs_parse_nidlist(new, count, &tmp) <= 0)
+        if (cfs_parse_nidlist(kernbuf, count, &tmp) <= 0) {
+                errmsg = "can't parse";
                 GOTO(failed, rc = -EINVAL);
+        }
 
         down_write(&mdt->mdt_squash_sem);
         if (!list_empty(&mdt->mdt_nosquash_nids)) {
                 cfs_free_nidlist(&mdt->mdt_nosquash_nids);
                 OBD_FREE(mdt->mdt_nosquash_str, mdt->mdt_nosquash_strlen);
         }
-        mdt->mdt_nosquash_str = new;
+        mdt->mdt_nosquash_str = kernbuf;
         mdt->mdt_nosquash_strlen = count + 1;
         list_splice(&tmp, &mdt->mdt_nosquash_nids);
 
-        LCONSOLE_INFO("%s: nosquash_nids is set to %s\n", obd->obd_name, new);
+        LCONSOLE_INFO("%s: nosquash_nids is set to %s\n",
+                      obd->obd_name, kernbuf);
         up_write(&mdt->mdt_squash_sem);
         RETURN(count);
 
  failed:
-        CWARN("%s: failed to set nosquash_nids (rc %d), "
-              "on MDS restart we will try to set it again, "
-              "continue with current nosquash_nids\n",
-              obd->obd_name, rc);
-        if (new)
-                OBD_FREE(new, count + 1);
-        RETURN(count);
+        CWARN("%s: failed to set nosquash_nids to \"%s\", %s: rc %d\n",
+              obd->obd_name, kernbuf, errmsg, rc);
+        if (kernbuf)
+                OBD_FREE(kernbuf, count + 1);
+        RETURN(rc);
 }
 
 static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
