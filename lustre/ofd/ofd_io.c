@@ -128,6 +128,8 @@ static int filter_preprw_write(const struct lu_env *env, struct obd_export *exp,
         rc = filter_grant_check(env, exp, oa, objcount, obj, nb,
                                 res, &left, &used, &ungranted);
 
+        /* XXX: how to we calculate used ? */
+
         rc = filter_grant_client_calc(exp, &left, &used, &ungranted);
 
         /* do not zero out oa->o_valid as it is used in
