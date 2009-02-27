@@ -233,7 +233,14 @@ case "$lustretag" in
         libcfstag="b_hd_params_tree"
         lustretag="b_hd_params_tree"
         ;;
-   
+  
+    # Network request scheduler
+    b_hd_nrs)
+        lnettag="HEAD"
+        ldiskfstag="$ldiskfstag"
+        libcfstag="HEAD"
+        ;;
+ 
     # uMDS
     b_dmu_umds)
         lnettag="b_uoss_umds"
