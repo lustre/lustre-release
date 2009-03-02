@@ -688,7 +688,6 @@ void ldlm_namespace_free(struct ldlm_namespace *ns,
 
 void ldlm_namespace_get_locked(struct ldlm_namespace *ns)
 {
-        LASSERT(ns->ns_refcount >= 0);
         ns->ns_refcount++;
 }
 

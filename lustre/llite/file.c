@@ -1527,7 +1527,7 @@ static int ll_file_join(struct inode *head, struct file *filp,
         struct file *tail_filp, *first_filp, *second_filp;
         struct ll_lock_tree first_tree, second_tree;
         struct ll_lock_tree_node *first_node, *second_node;
-        struct ll_inode_info *hlli = ll_i2info(head), *tlli;
+        struct ll_inode_info *hlli = ll_i2info(head);
         int rc = 0, cleanup_phase = 0;
         ENTRY;
 
@@ -1542,7 +1542,6 @@ static int ll_file_join(struct inode *head, struct file *filp,
         }
         tail = igrab(tail_filp->f_dentry->d_inode);
 
-        tlli = ll_i2info(tail);
         tail_dentry = tail_filp->f_dentry;
         LASSERT(tail_dentry);
         cleanup_phase = 1;
