@@ -52,7 +52,8 @@ static int filter_preprw_read(const struct lu_env *env,
                    and prepare the latter */
                 for (i = 0, j = 0; i < niocount; i++) {
                         rc = dt_bufs_get(env, filter_object_child(fo),
-                                         nb + i, res + j);
+                                         nb + i, res + j, 0,
+                                         filter_object_capa(env, fo));
                         LASSERT(rc > 0);
                         LASSERT(rc < PTLRPC_MAX_BRW_PAGES);
                         /* correct index for local buffers to continue with */
@@ -111,7 +112,8 @@ static int filter_preprw_write(const struct lu_env *env, struct obd_export *exp,
         /* parse remote buffers to local buffers and prepare the latter */
         for (i = 0, j = 0; i < obj->ioo_bufcnt; i++) {
                 rc = dt_bufs_get(env, filter_object_child(fo),
-                                 nb + i, res + j);
+                                 nb + i, res + j, 1,
+                                 filter_object_capa(env, fo));
                 LASSERT(rc > 0);
                 LASSERT(rc < PTLRPC_MAX_BRW_PAGES);
                 /* correct index for local buffers to continue with */
@@ -122,7 +124,7 @@ static int filter_preprw_write(const struct lu_env *env, struct obd_export *exp,
         LASSERT(*nr_local > 0 && *nr_local <= PTLRPC_MAX_BRW_PAGES);
 
         spin_lock(&exp->exp_obd->obd_osfs_lock);
-        filter_grant_incoming(exp, oa);
+        filter_grant_incoming(env, exp, oa);
         left = filter_grant_space_left(env, exp);
 
         rc = filter_grant_check(env, exp, oa, objcount, obj, nb,
@@ -188,9 +190,9 @@ int filter_preprw(int cmd, struct obd_export *exp, struct obdo *oa, int objcount
                         if (oa && oa->o_valid & OBD_MD_FLGRANT) {
                                 struct obd_device *obd = filter_obd(ofd);
                                 spin_lock(&obd->obd_osfs_lock);
-                                filter_grant_incoming(exp, oa);
-
-                                oa->o_grant = 0;
+                                filter_grant_incoming(&env, exp, oa);
+                                if (!(oa->o_flags & OBD_FL_SHRINK_GRANT))
+                                        oa->o_grant = 0;
                                 spin_unlock(&obd->obd_osfs_lock);
                         }
                         rc = filter_preprw_read(&env, ofd, &info->fti_fid,
@@ -265,8 +267,7 @@ filter_commitrw_write(const struct lu_env *env, struct filter_device *ofd,
         LASSERT(rc == 0);
 
         if (la->la_valid) {
-                rc = dt_declare_attr_set(env, filter_object_child(fo), la,
-                                         th, filter_object_capa(env, fo));
+                rc = dt_declare_attr_set(env, filter_object_child(fo), la, th);
                 LASSERT(rc == 0);
         }
 
@@ -278,7 +279,8 @@ filter_commitrw_write(const struct lu_env *env, struct filter_device *ofd,
         LASSERT(rc == 0);
 
         if (la->la_valid) {
-                rc = dt_attr_set(env, filter_object_child(fo), la, th);
+                rc = dt_attr_set(env, filter_object_child(fo), la, th,
+                                 filter_object_capa(env, fo));
                 LASSERT(rc == 0);
         }
 

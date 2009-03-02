@@ -130,15 +130,15 @@ int filter_attr_set(const struct lu_env *env, struct filter_object *fo,
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
 
-        rc = dt_declare_attr_set(env, filter_object_child(fo), la, th,
-                                 filter_object_capa(env, fo));
+        rc = dt_declare_attr_set(env, filter_object_child(fo), la, th);
         LASSERT(rc == 0);
 
         rc = filter_trans_start(env, ofd, th);
         if (rc)
                 RETURN(rc);
 
-        rc = dt_attr_set(env, filter_object_child(fo), la, th);
+        rc = dt_attr_set(env, filter_object_child(fo), la, th,
+                        filter_object_capa(env, fo));
 
         filter_trans_stop(env, ofd, th);
 
@@ -173,15 +173,15 @@ int filter_object_punch(const struct lu_env *env, struct filter_object *fo,
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
 
-        rc = dt_declare_attr_set(env, filter_object_child(fo), &attr, th,
-                                 filter_object_capa(env, fo));
+        rc = dt_declare_attr_set(env, filter_object_child(fo), &attr, th);
         LASSERT(rc == 0);
 
         rc = filter_trans_start(env, ofd, th);
         if (rc)
                 RETURN(rc);
 
-        rc = dt_attr_set(env, filter_object_child(fo), &attr, th);
+        rc = dt_attr_set(env, filter_object_child(fo), &attr, th,
+                         filter_object_capa(env, fo));
 
         filter_trans_stop(env, ofd, th);
 

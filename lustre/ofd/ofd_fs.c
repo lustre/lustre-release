@@ -104,13 +104,14 @@ int filter_last_id_write(const struct lu_env *env, struct filter_device *ofd,
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
         rc = dt_declare_record_write(env, ofd->ofd_groups_file,
-                                     buf.lb_len, off, th, BYPASS_CAPA);
+                                     buf.lb_len, off, th);
         LASSERT(rc == 0);
         rc = filter_trans_start(env, ofd, th);
         if (rc)
                 RETURN(rc);
 
-        rc = dt_record_write(env, ofd->ofd_groups_file, &buf, &off, th, 1);
+        rc = dt_record_write(env, ofd->ofd_groups_file, &buf, &off,
+                             th, BYPASS_CAPA, 1);
         if (rc)
                 CERROR("write group "LPU64" last objid: rc = %d\n", group, rc);
 
@@ -273,7 +274,8 @@ int filter_last_rcvd_header_write(const struct lu_env *env,
 
         fsd_cpu_to_le(&ofd->ofd_fsd, &info->fti_fsd);
 
-        rc = dt_record_write(env, ofd->ofd_last_rcvd, &buf, &off, th, 1);
+        rc = dt_record_write(env, ofd->ofd_last_rcvd, &buf,
+                             &off, th, BYPASS_CAPA, 1);
         CDEBUG(D_INFO, "write last_rcvd header rc = %d:\n"
                "uuid = %s\nlast_transno = "LPU64"\n",
                rc, ofd->ofd_fsd.lsd_uuid, ofd->ofd_fsd.lsd_last_transno);
@@ -312,7 +314,8 @@ int filter_last_rcvd_write(const struct lu_env *env,
         buf.lb_buf = &info->fti_fsd;
         buf.lb_len = sizeof(info->fti_fsd);
 
-        rc = dt_record_write(env, ofd->ofd_last_rcvd, &buf, off, th, 1);
+        rc = dt_record_write(env, ofd->ofd_last_rcvd, &buf,
+                             off, th, BYPASS_CAPA, 1);
         return rc;
 }
 
@@ -442,7 +445,7 @@ int filter_server_data_update(const struct lu_env *env,
                 if (IS_ERR(th))
                         RETURN(PTR_ERR(th));
                 dt_declare_record_write(env, ofd->ofd_last_rcvd,
-                                        sizeof(ofd->ofd_fsd), 0, th, BYPASS_CAPA);
+                                        sizeof(ofd->ofd_fsd), 0, th);
                 rc = filter_trans_start(env, ofd, th);
                 if (rc)
                         RETURN(rc);
@@ -465,8 +468,7 @@ int filter_server_data_init(const struct lu_env *env,
 #endif
         int rc;
 
-        rc = dt_attr_get(env, ofd->ofd_last_rcvd, &info->fti_attr,
-                         BYPASS_CAPA);
+        rc = dt_attr_get(env, ofd->ofd_last_rcvd, &info->fti_attr, BYPASS_CAPA);
         if (rc)
                 RETURN(rc);
 

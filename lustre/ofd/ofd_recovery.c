@@ -63,11 +63,12 @@ struct thandle *filter_trans_create(const struct lu_env *env,
 
         /* declare last_rcvd update */
         fed = &info->fti_exp->exp_filter_data;
-        rc = dt_declare_record_write(env, ofd->ofd_last_rcvd, sizeof(*fed->fed_lcd),
-                                     fed->fed_lr_off, th, BYPASS_CAPA);
+        rc = dt_declare_record_write(env, ofd->ofd_last_rcvd,
+                                     sizeof(*fed->fed_lcd),
+                                     fed->fed_lr_off, th);
         /* declare last_rcvd header update */
         rc = dt_declare_record_write(env, ofd->ofd_last_rcvd,
-                                     sizeof(ofd->ofd_fsd), 0, th, BYPASS_CAPA);
+                                     sizeof(ofd->ofd_fsd), 0, th);
         LASSERT(rc == 0);
 
         return th;
