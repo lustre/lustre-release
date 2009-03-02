@@ -2045,7 +2045,7 @@ static int lov_match(struct obd_export *exp, struct lov_stripe_md *lsm,
         struct obd_info oinfo;
         struct lov_request *req;
         struct list_head *pos;
-        struct lov_obd *lov = &exp->exp_obd->u.lov;
+        struct lov_obd *lov;
         struct lustre_handle *lov_lockhp;
         int lov_flags, rc = 0;
         ENTRY;
@@ -2120,7 +2120,7 @@ static int lov_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
         struct obd_info oinfo;
         struct lov_request *req;
         struct list_head *pos;
-        struct lov_obd *lov = &exp->exp_obd->u.lov;
+        struct lov_obd *lov;
         struct lustre_handle *lov_lockhp;
         ldlm_mode_t this_mode;
         int err = 0, rc = 0;
@@ -2672,7 +2672,7 @@ static int lov_fiemap(struct lov_obd *lov, __u32 keylen, void *key,
                                 GOTO(out, rc = -EINVAL);
 
                         /* If OST is inactive, return extent with UNKNOWN flag */
-                        if (lov && !lov->lov_tgts[ost_index]->ltd_active) {
+                        if (!lov->lov_tgts[ost_index]->ltd_active) {
                                 fm_local->fm_flags |= FIEMAP_EXTENT_LAST;
                                 fm_local->fm_mapped_extents = 1;
 

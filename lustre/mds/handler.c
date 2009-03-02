@@ -1648,9 +1648,8 @@ int mds_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_CONNECT_NET, 0);
                 rc = target_handle_connect(req, mds_handle);
                 if (!rc) {
-                        /* Now that we have an export, set mds. */
+                        /* Now that we have an export, set obd. */
                         obd = req->rq_export->exp_obd;
-                        mds = mds_req2mds(req);
                 }
                 break;
 
@@ -1741,9 +1740,8 @@ int mds_handle(struct ptlrpc_request *req)
                         __swab32s(&opc);
 
                 DEBUG_REQ(D_INODE, req, "reint %d (%s)", opc,
-                          (opc < sizeof(reint_names) / sizeof(reint_names[0]) ||
-                           reint_names[opc] == NULL) ? reint_names[opc] :
-                                                       "unknown opcode");
+                          (opc < REINT_MAX) ? reint_names[opc] :
+                          "unknown opcode");
 
                 switch (opc) {
                 case REINT_CREATE:

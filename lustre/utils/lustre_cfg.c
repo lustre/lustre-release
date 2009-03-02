@@ -366,35 +366,11 @@ int jt_lcfg_del_mount_option(int argc, char **argv)
 
 int jt_lcfg_set_timeout(int argc, char **argv)
 {
-        int rc;
-        struct lustre_cfg_bufs bufs;
-        struct lustre_cfg *lcfg;
-
         fprintf(stderr, "%s has been deprecated. Use conf_param instead.\n"
                 "e.g. conf_param lustre-MDT0000 obd_timeout=50\n",
                 jt_cmdname(argv[0]));
         return CMD_HELP;
-
-
-        if (argc != 2)
-                return CMD_HELP;
-
-        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
-        lcfg = lustre_cfg_new(LCFG_SET_TIMEOUT, &bufs);
-        lcfg->lcfg_num = atoi(argv[1]);
-        
-        rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
-        //rc = lcfg_mgs_ioctl(argv[0], OBD_DEV_ID, lcfg);
-
-        lustre_cfg_free(lcfg);
-        if (rc < 0) {
-                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-                        strerror(rc = errno));
-        }
-        return rc;
 }
-
-
 
 int jt_lcfg_add_conn(int argc, char **argv)
 {

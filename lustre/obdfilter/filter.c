@@ -373,12 +373,12 @@ static int filter_client_free(struct obd_export *exp)
         if (strcmp(fed->fed_lcd->lcd_uuid, obd->obd_uuid.uuid ) == 0)
                 GOTO(free, 0);
 
-        CDEBUG(D_INFO, "freeing client at idx %u, offset %lld with UUID '%s'\n",
-               fed->fed_lr_idx, fed->fed_lr_off, fed->fed_lcd->lcd_uuid);
-
         LASSERT(filter->fo_last_rcvd_slots != NULL);
 
         off = fed->fed_lr_off;
+
+        CDEBUG(D_INFO, "freeing client at idx %u, offset %lld with UUID '%s'\n",
+               fed->fed_lr_idx, fed->fed_lr_off, fed->fed_lcd->lcd_uuid);
 
         /* Don't clear fed_lr_idx here as it is likely also unset.  At worst
          * we leak a client slot that will be cleaned on the next recovery. */

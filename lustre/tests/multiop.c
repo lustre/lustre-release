@@ -185,6 +185,7 @@ int main(int argc, char **argv)
                 exit(1);
         }
 
+        memset(&st, 0, sizeof(st));
         signal(SIGUSR1, usr1_handler);
 
         fname = argv[1];
@@ -263,6 +264,11 @@ int main(int argc, char **argv)
                         }
                         break;
                 case 'M':
+                        if (st.st_size == 0) {
+                                fprintf(stderr, "mmap without preceeding stat, or on"
+                                        " zero length file.\n");
+                                exit(-1);
+                        }
                         mmap_len = st.st_size;
                         mmap_ptr = mmap(NULL, mmap_len, PROT_WRITE | PROT_READ,
                                         MAP_SHARED, fd, 0);

@@ -902,7 +902,7 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         int rc = 0;
         ENTRY;
 
-        LASSERT(lock != NULL);
+        LASSERT(lock != NULL && lock->l_export != NULL);
 
         req = ptlrpc_prep_req(lock->l_export->exp_imp_reverse,
                               LUSTRE_DLM_VERSION, LDLM_GL_CALLBACK, 2, size,

@@ -1550,16 +1550,15 @@ static void ras_stride_increase_window(struct ll_readahead_state *ras,
         unsigned long stride_len;
 
         LASSERT(ras->ras_stride_length > 0);
+        LASSERTF(ras->ras_window_start + ras->ras_window_len 
+                 >= ras->ras_stride_offset, "window_start %lu, window_len %lu"
+                 " stride_offset %lu\n", ras->ras_window_start,
+                 ras->ras_window_len, ras->ras_stride_offset);
 
         stride_len = ras->ras_window_start + ras->ras_window_len -
                      ras->ras_stride_offset;
 
-        LASSERTF(stride_len >= 0, "window_start %lu, window_len %lu"
-                 " stride_offset %lu\n", ras->ras_window_start,
-                 ras->ras_window_len, ras->ras_stride_offset);
-
         left = stride_len % ras->ras_stride_length;
-
         window_len = ras->ras_window_len - left;
 
         if (left < ras->ras_stride_pages)

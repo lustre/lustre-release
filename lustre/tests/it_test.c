@@ -84,11 +84,9 @@ static enum interval_iter cb(struct interval_node *n, void *args)
         static int count = 1;
 
         if (node->hit == 1) {
-                dprintf("NODE "__S" has ever been accessed\n",
-                        __F(&n->in_extent));
+                error("A duplicate node "__S" access found\n",
+                       __F(&n->in_extent));
                 return INTERVAL_ITER_CONT;
-                error("duplicate node accessing found\n");
-                return INTERVAL_ITER_STOP;
         }
         
         if (node->valid == 0) {

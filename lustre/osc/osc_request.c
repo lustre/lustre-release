@@ -1708,15 +1708,18 @@ static int osc_brw(int cmd, struct obd_export *exp, struct obd_info *oinfo,
         struct obdo *saved_oa = NULL;
         struct brw_page **ppga, **orig;
         struct obd_import *imp = class_exp2cliimp(exp);
-        struct client_obd *cli = &imp->imp_obd->u.cli;
+        struct client_obd *cli;
         int rc, page_count_orig;
         ENTRY;
+
+        LASSERT((imp != NULL) && (imp->imp_obd != NULL));
+        cli = &imp->imp_obd->u.cli;
 
         if (cmd & OBD_BRW_CHECK) {
                 /* The caller just wants to know if there's a chance that this
                  * I/O can succeed */
 
-                if (imp == NULL || imp->imp_invalid)
+                if (imp->imp_invalid)
                         RETURN(-EIO);
                 RETURN(0);
         }
