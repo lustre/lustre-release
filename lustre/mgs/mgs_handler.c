@@ -401,6 +401,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
 
         mti = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*mti),
                                  lustre_swab_mgs_target_info);
+        LASSERT(mti);
 
         if (!(mti->mti_flags & (LDD_F_WRITECONF | LDD_F_UPGRADE14 |
                                 LDD_F_UPDATE))) {

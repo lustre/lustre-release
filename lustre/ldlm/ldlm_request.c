@@ -966,9 +966,8 @@ int ldlm_cli_cancel_req(struct obd_export *exp,
                         struct list_head *cancels, int count)
 {
         struct ptlrpc_request *req = NULL;
-        struct ldlm_request *body;
         __u32 size[2] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
-                        [DLM_LOCKREQ_OFF]     = sizeof(*body) };
+                        [DLM_LOCKREQ_OFF]     = sizeof(struct ldlm_request) };
         struct obd_import *imp;
         int free, sent = 0;
         int rc = 0;
@@ -1007,8 +1006,10 @@ int ldlm_cli_cancel_req(struct obd_export *exp,
                 req->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
                 ptlrpc_at_set_req_timeout(req);
 
+                /*
                 body = lustre_msg_buf(req->rq_reqmsg, DLM_LOCKREQ_OFF,
                                       sizeof(*body));
+                */
                 ldlm_cancel_pack(req, DLM_LOCKREQ_OFF, cancels, count);
 
                 ptlrpc_req_set_repsize(req, 1, NULL);

@@ -1080,6 +1080,11 @@ static char *convert_hostnames(char *s1)
         lnet_nid_t nid;
 
         converted = malloc(left);
+        if (converted == NULL) {
+                fprintf(stderr, "out of memory: needed %d bytes\n",
+                        MAXNIDSTR);
+                return NULL;
+        }
         end = s1 + strlen(s1);
         c = converted;
         while ((left > 0) && (s1 < end)) {

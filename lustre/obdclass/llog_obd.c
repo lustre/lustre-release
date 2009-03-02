@@ -109,7 +109,7 @@ EXPORT_SYMBOL(__llog_ctxt_put);
 int llog_cleanup(struct llog_ctxt *ctxt)
 {
         struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
-        struct obd_device *obd = ctxt->loc_obd;
+        struct obd_device *obd;
         int rc, idx;
         ENTRY;
 
@@ -117,6 +117,7 @@ int llog_cleanup(struct llog_ctxt *ctxt)
                 CERROR("No ctxt\n");
                 RETURN(-ENODEV);
         }
+        obd = ctxt->loc_obd;
 
         /*banlance the ctxt get when calling llog_cleanup */
         llog_ctxt_put(ctxt);
