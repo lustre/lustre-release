@@ -349,7 +349,8 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
         id->oii_gen = cpu_to_be32(id0->oii_gen);
         return idx->do_index_ops->dio_insert(info->oti_env, idx,
                                              (const struct dt_rec *)id,
-                                             key, th, ignore_quota);
+                                             key, th, BYPASS_CAPA,
+                                             ignore_quota);
 }
 
 int osd_oi_delete(struct osd_thread_info *info,
@@ -363,7 +364,8 @@ int osd_oi_delete(struct osd_thread_info *info,
                 return 0;
 
         key = oi_fid_key(info, oi, fid, &idx);
-        return idx->do_index_ops->dio_delete(info->oti_env, idx, key, th);
+        return idx->do_index_ops->dio_delete(info->oti_env, idx,
+                                             key, th, BYPASS_CAPA);
 }
 
 int osd_oi_mod_init()

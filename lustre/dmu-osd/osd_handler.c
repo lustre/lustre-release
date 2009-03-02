@@ -962,8 +962,7 @@ static int osd_attr_get(const struct lu_env *env,
 static int osd_declare_attr_set(const struct lu_env *env,
                                 struct dt_object *dt,
                                 const struct lu_attr *attr,
-                                struct thandle *handle,
-                                struct lustre_capa *capa)
+                                struct thandle *handle)
 {
         struct osd_object *obj = osd_dt_obj(dt);
         struct osd_thandle *oh;
@@ -982,7 +981,8 @@ static int osd_declare_attr_set(const struct lu_env *env,
 }
 
 static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
-                        const struct lu_attr *attr, struct thandle *handle)
+                        const struct lu_attr *attr, struct thandle *handle,
+                        struct lustre_capa *capa)
 {
         struct osd_object *obj = osd_dt_obj(dt);
         struct osd_thandle *oh;
@@ -1005,8 +1005,7 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 }
 
 static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
-                             __u64 start, __u64 end, struct thandle *handle,
-                             struct lustre_capa *capa)
+                             __u64 start, __u64 end, struct thandle *handle)
 {
         struct osd_object *obj = osd_dt_obj(dt);
         struct osd_thandle *oh;
@@ -1023,7 +1022,8 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 }
 
 static int osd_punch(const struct lu_env *env, struct dt_object *dt,
-                     __u64 start, __u64 end, struct thandle *th)
+                     __u64 start, __u64 end, struct thandle *th,
+                     struct lustre_capa *capa)
 {
         struct osd_object *obj = osd_dt_obj(dt);
         struct osd_device *osd = osd_obj2dev(obj);
@@ -1538,8 +1538,7 @@ static int osd_declare_index_insert(const struct lu_env *env,
                                     struct dt_object *dt,
                                     const struct dt_rec *rec,
                                     const struct dt_key *key,
-                                    struct thandle *th,
-                                    struct lustre_capa *capa)
+                                    struct thandle *th)
 {
         struct osd_object *obj = osd_dt_obj(dt);
         uint64_t zapid;
@@ -1563,7 +1562,8 @@ static int osd_declare_index_insert(const struct lu_env *env,
 
 static int osd_index_insert(const struct lu_env *env, struct dt_object *dt,
                             const struct dt_rec *rec, const struct dt_key *key,
-                            struct thandle *th, int ignore_quota)
+                            struct thandle *th, struct lustre_capa *capa,
+                            int ignore_quota)
 {
         struct osd_object *obj = osd_dt_obj(dt);
         struct osd_device *osd = osd_obj2dev(obj);
@@ -1604,8 +1604,7 @@ static int osd_index_insert(const struct lu_env *env, struct dt_object *dt,
 static int osd_declare_index_delete(const struct lu_env *env,
                                     struct dt_object *dt,
                                     const struct dt_key *key,
-                                    struct thandle *th,
-                                    struct lustre_capa *capa)
+                                    struct thandle *th)
 {
         struct osd_object *obj = osd_dt_obj(dt);
         uint64_t zapid;
@@ -1631,7 +1630,8 @@ static int osd_declare_index_delete(const struct lu_env *env,
 }
 
 static int osd_index_delete(const struct lu_env *env, struct dt_object *dt,
-                            const struct dt_key *key, struct thandle *th)
+                            const struct dt_key *key, struct thandle *th,
+                            struct lustre_capa *capa)
 {
         struct osd_object *obj = osd_dt_obj(dt);
         struct osd_device *osd = osd_obj2dev(obj);
@@ -1691,7 +1691,7 @@ static int osd_declare_object_ref_add(const struct lu_env *env,
                                struct dt_object *dt,
                                struct thandle *th)
 {
-        return osd_declare_attr_set(env, dt, NULL, th, BYPASS_CAPA);
+        return osd_declare_attr_set(env, dt, NULL, th);
 }
 
 /*
@@ -1724,7 +1724,7 @@ static int osd_declare_object_ref_del(const struct lu_env *env,
                                        struct dt_object *dt,
                                        struct thandle *handle)
 {
-        return osd_declare_attr_set(env, dt, NULL, handle, BYPASS_CAPA);
+        return osd_declare_attr_set(env, dt, NULL, handle);
 }
 
 /*
@@ -1771,14 +1771,9 @@ int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
         RETURN(rc);
 }
 
-        int   (*do_declare_xattr_set)(const struct lu_env *env,
-                                      struct dt_object *dt,
-                                      const int buflen, const char *name, int fl,
-                                      struct thandle *handle,
-                                      struct lustre_capa *capa);
 int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
                           const int buflen, const char *name, int fl,
-                          struct thandle *handle, struct lustre_capa *capa)
+                          struct thandle *handle)
 {
         struct osd_object *obj = osd_dt_obj(dt);
         struct osd_thandle *oh;
@@ -1799,7 +1794,8 @@ int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
 
 int osd_xattr_set(const struct lu_env *env,
                 struct dt_object *dt, const struct lu_buf *buf,
-                const char *name, int fl, struct thandle *handle)
+                const char *name, int fl, struct thandle *handle,
+                struct lustre_capa *capa)
 {
         struct osd_object  *obj  = osd_dt_obj(dt);
         struct osd_thandle *oh;
@@ -1819,8 +1815,7 @@ int osd_xattr_set(const struct lu_env *env,
 
 
 int osd_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
-                          const char *name, struct thandle *handle,
-                          struct lustre_capa *capa)
+                          const char *name, struct thandle *handle)
 {
         struct osd_object *obj = osd_dt_obj(dt);
         struct osd_thandle *oh;
@@ -1840,7 +1835,8 @@ int osd_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
 }
 
 int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
-                  const char *name, struct thandle *handle)
+                  const char *name, struct thandle *handle,
+                  struct lustre_capa *capa)
 {
         struct osd_object  *obj  = osd_dt_obj(dt);
         struct osd_thandle *oh;
@@ -2078,8 +2074,7 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
 }
 
 static int osd_declare_write(const struct lu_env *env, struct dt_object *dt,
-                             const loff_t size, loff_t pos, struct thandle *th,
-                             struct lustre_capa *capa)
+                             const loff_t size, loff_t pos, struct thandle *th)
 {
         struct osd_object *obj  = osd_dt_obj(dt);
         struct osd_thandle *oh;
@@ -2100,7 +2095,8 @@ static int osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 
 static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
                          const struct lu_buf *buf, loff_t *pos,
-                         struct thandle *th, int ignore_quota)
+                         struct thandle *th, struct lustre_capa *capa,
+                         int ignore_quota)
 {
         struct osd_object *obj  = osd_dt_obj(dt);
         struct osd_device *osd = osd_obj2dev(obj);
@@ -2129,7 +2125,8 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 }
 
 static int osd_get_bufs(const struct lu_env *env, struct dt_object *dt,
-                        loff_t offset, ssize_t len, struct niobuf_local *_lb)
+                        loff_t offset, ssize_t len, struct niobuf_local *_lb,
+                        int rw, struct lustre_capa *capa)
 {
         struct niobuf_local *lb = _lb;
         //long blocksize;

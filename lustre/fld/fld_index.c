@@ -158,8 +158,7 @@ int fld_declare_index_create(struct lu_server_fld *fld,
 
         rc = dt_obj->do_index_ops->dio_declare_insert(env, dt_obj,
                                                       fld_rec(env, range),
-                                                      fld_key(env, start),
-                                                      th, BYPASS_CAPA);
+                                                      fld_key(env, start), th);
         RETURN(rc);
 }
 
@@ -193,7 +192,7 @@ int fld_index_create(struct lu_server_fld *fld,
         rc = dt_obj->do_index_ops->dio_insert(env, dt_obj,
                                               fld_rec(env, range),
                                               fld_key(env, start),
-                                              th, 1);
+                                              th, BYPASS_CAPA, 1);
 
         CDEBUG(D_INFO, "%s: insert given range : "DRANGE" rc = %d\n",
                fld->lsf_name, PRANGE(range), rc);
@@ -223,8 +222,8 @@ int fld_index_delete(struct lu_server_fld *fld,
         ENTRY;
 
         dt_dev = lu2dt_dev(fld->lsf_obj->do_lu.lo_dev);
-        rc = dt_obj->do_index_ops->dio_delete(env, dt_obj,
-                                              fld_key(env, seq), th);
+        rc = dt_obj->do_index_ops->dio_delete(env, dt_obj, fld_key(env, seq),
+                                              th, BYPASS_CAPA);
 
         CDEBUG(D_INFO, "%s: delete given range : "DRANGE" rc = %d\n",
                fld->lsf_name, PRANGE(range), rc);

@@ -368,8 +368,8 @@ static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
         RETURN(0);
 }
 
-int osd_get_bufs(const struct lu_env *env, struct dt_object *d,
-                              loff_t pos, ssize_t len, struct niobuf_local *l)
+int osd_get_bufs(const struct lu_env *env, struct dt_object *d, loff_t pos,
+                 ssize_t len, struct niobuf_local *l, int rw)
 {
         struct osd_object   *obj    = osd_dt_obj(d);
 	struct niobuf_local *lb;

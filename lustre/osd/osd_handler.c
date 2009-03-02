@@ -134,30 +134,6 @@ static int   osd_index_ea_lookup(const struct lu_env *env,
                                  struct dt_object *dt,
                                  struct dt_rec *rec, const struct dt_key *key,
                                  struct lustre_capa *capa);
-static int   osd_index_declare_iam_insert(const struct lu_env *env,
-                                          struct dt_object *dt,
-                                          const struct dt_rec *rec,
-                                          const struct dt_key *key,
-                                          struct thandle *handle,
-                                          struct lustre_capa *capa);
-static int   osd_index_iam_insert(const struct lu_env *env,
-                                  struct dt_object *dt,
-                                  const struct dt_rec *rec,
-                                  const struct dt_key *key,
-                                  struct thandle *handle,
-                                  int ingore_quota);
-static int   osd_index_ea_insert (const struct lu_env *env,
-                                  struct dt_object *dt,
-                                  const struct dt_rec *rec,
-                                  const struct dt_key *key,
-                                  struct thandle *handle,
-                                  int ingore_quota);
-static int   osd_index_iam_delete(const struct lu_env *env,
-                                  struct dt_object *dt, const struct dt_key *key,
-                                  struct thandle *handle);
-static int   osd_index_ea_delete (const struct lu_env *env,
-                                  struct dt_object *dt, const struct dt_key *key,
-                                  struct thandle *handle);
 
 static int   osd_iam_index_probe   (const struct lu_env *env,
                                     struct osd_object *o,
@@ -1254,16 +1230,12 @@ static int osd_attr_get(const struct lu_env *env,
 static int osd_declare_attr_set(const struct lu_env *env,
                                 struct dt_object *dt,
                                 const struct lu_attr *attr,
-                                struct thandle *handle,
-                                struct lustre_capa *capa)
+                                struct thandle *handle)
 {
         struct osd_thandle *oh;
 
         LASSERT(handle != NULL);
         LASSERT(osd_invariant(obj));
-
-        if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
-                return -EACCES;
 
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
@@ -1277,7 +1249,8 @@ static int osd_declare_attr_set(const struct lu_env *env,
 static int osd_attr_set(const struct lu_env *env,
                         struct dt_object *dt,
                         const struct lu_attr *attr,
-                        struct thandle *handle)
+                        struct thandle *handle,
+                        struct lustre_capa *capa)
 {
         struct osd_object *obj = osd_dt_obj(dt);
         int rc;
@@ -1286,6 +1259,9 @@ static int osd_attr_set(const struct lu_env *env,
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
         
+        if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
+                return -EACCES;
+
         OSD_EXEC_OP(handle, attr_set);
 
         spin_lock(&obj->oo_guard);
@@ -2033,14 +2009,11 @@ static int osd_xattr_get(const struct lu_env *env,
 
 static int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
                                  const int buflen, const char *name, int fl,
-                                 struct thandle *handle, struct lustre_capa *capa)
+                                 struct thandle *handle)
 {
         struct osd_thandle *oh;
 
         LASSERT(handle != NULL);
-
-        if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
-                return -EACCES;
 
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
@@ -2056,9 +2029,12 @@ static int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
  */
 static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
                          const struct lu_buf *buf, const char *name, int fl,
-                         struct thandle *handle)
+                         struct thandle *handle, struct lustre_capa *capa)
 {
         LASSERT(handle != NULL);
+
+        if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
+                return -EACCES;
 
         OSD_EXEC_OP(handle, xattr_set);
         return __osd_xattr_set(env, dt, buf, name, fl);
@@ -2091,16 +2067,12 @@ static int osd_xattr_list(const struct lu_env *env,
 static int osd_declare_xattr_del(const struct lu_env *env,
                                  struct dt_object *dt,
                                 const char *name,
-                                struct thandle *handle,
-                                struct lustre_capa *capa)
+                                struct thandle *handle)
 {
         struct osd_thandle *oh;
 
         LASSERT(dt_object_exists(dt));
         LASSERT(handle != NULL);
-
-        if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
-                return -EACCES;
 
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
@@ -2117,7 +2089,8 @@ static int osd_declare_xattr_del(const struct lu_env *env,
 static int osd_xattr_del(const struct lu_env *env,
                          struct dt_object *dt,
                          const char *name,
-                         struct thandle *handle)
+                         struct thandle *handle,
+                         struct lustre_capa *capa)
 {
         struct osd_object      *obj    = osd_dt_obj(dt);
         struct inode           *inode  = obj->oo_inode;
@@ -2131,6 +2104,9 @@ static int osd_xattr_del(const struct lu_env *env,
         LASSERT(osd_write_locked(env, obj));
         LASSERT(handle != NULL);
         
+        if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
+                return -EACCES;
+
         OSD_EXEC_OP(handle, xattr_del);
 
         dentry->d_inode = inode;
@@ -2459,16 +2435,12 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 static int osd_index_declare_iam_delete(const struct lu_env *env,
                                         struct dt_object *dt,
                                         const struct dt_key *key,
-                                        struct thandle *handle,
-                                        struct lustre_capa *capa)
+                                        struct thandle *handle)
 {
         struct osd_thandle    *oh;
 
         LASSERT(dt_object_exists(dt));
         LASSERT(handle != NULL);
-
-        if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_DELETE))
-                return -EACCES;
 
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
@@ -2492,7 +2464,8 @@ static int osd_index_declare_iam_delete(const struct lu_env *env,
  */
 
 static int osd_index_iam_delete(const struct lu_env *env, struct dt_object *dt,
-                                const struct dt_key *key, struct thandle *handle)
+                                const struct dt_key *key, struct thandle *handle,
+                                struct lustre_capa *capa)
 {
         struct osd_object     *obj = osd_dt_obj(dt);
         struct osd_thandle    *oh;
@@ -2506,6 +2479,9 @@ static int osd_index_iam_delete(const struct lu_env *env, struct dt_object *dt,
         LASSERT(dt_object_exists(dt));
         LASSERT(bag->ic_object == obj->oo_inode);
         LASSERT(handle != NULL);
+
+        if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_DELETE))
+                return -EACCES;
 
         OSD_EXEC_OP(handle, delete);
 
@@ -2526,16 +2502,12 @@ static int osd_index_iam_delete(const struct lu_env *env, struct dt_object *dt,
 static int osd_index_declare_ea_delete(const struct lu_env *env,
                                        struct dt_object *dt,
                                        const struct dt_key *key,
-                                       struct thandle *handle,
-                                       struct lustre_capa *capa)
+                                       struct thandle *handle)
 {
         struct osd_thandle *oh;
 
         LASSERT(dt_object_exists(dt));
         LASSERT(handle != NULL);
-
-        if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_DELETE))
-                return -EACCES;
 
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
@@ -2558,7 +2530,8 @@ static int osd_index_declare_ea_delete(const struct lu_env *env,
  * \retval -ve, on error
  */
 static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
-                               const struct dt_key *key, struct thandle *handle)
+                               const struct dt_key *key, struct thandle *handle,
+                               struct lustre_capa *capa)
 {
         struct osd_object          *obj    = osd_dt_obj(dt);
         struct inode               *dir    = obj->oo_inode;
@@ -2574,6 +2547,9 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
         LINVRNT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
         LASSERT(handle != NULL);
+
+        if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_DELETE))
+                return -EACCES;
 
         OSD_EXEC_OP(handle, delete);
 
@@ -2661,16 +2637,12 @@ static int osd_index_declare_iam_insert(const struct lu_env *env,
                                         struct dt_object *dt,
                                         const struct dt_rec *rec,
                                         const struct dt_key *key,
-                                        struct thandle *handle,
-                                        struct lustre_capa *capa)
+                                        struct thandle *handle)
 {
         struct osd_thandle *oh;
 
         LASSERT(dt_object_exists(dt));
         LASSERT(handle != NULL);
-
-        if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_INSERT))
-                return -EACCES;
 
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
@@ -2694,7 +2666,8 @@ static int osd_index_declare_iam_insert(const struct lu_env *env,
  */
 static int osd_index_iam_insert(const struct lu_env *env, struct dt_object *dt,
                                 const struct dt_rec *rec, const struct dt_key *key,
-                                struct thandle *th, int ignore_quota)
+                                struct thandle *th, struct lustre_capa *capa,
+                                int ignore_quota)
 {
         struct osd_object     *obj = osd_dt_obj(dt);
         struct iam_path_descr *ipd;
@@ -2711,6 +2684,9 @@ static int osd_index_iam_insert(const struct lu_env *env, struct dt_object *dt,
         LASSERT(dt_object_exists(dt));
         LASSERT(bag->ic_object == obj->oo_inode);
         LASSERT(th != NULL);
+
+        if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_INSERT))
+                return -EACCES;
 
         OSD_EXEC_OP(th, insert);
 
@@ -2943,16 +2919,12 @@ static int osd_index_declare_ea_insert(const struct lu_env *env,
                                        struct dt_object *dt,
                                        const struct dt_rec *rec,
                                        const struct dt_key *key,
-                                       struct thandle *handle,
-                                       struct lustre_capa *capa)
+                                       struct thandle *handle)
 {
         struct osd_thandle *oh;
 
         LASSERT(dt_object_exists(dt));
         LASSERT(handle != NULL);
-
-        if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_INSERT))
-                return -EACCES;
 
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
@@ -2977,7 +2949,7 @@ static int osd_index_declare_ea_insert(const struct lu_env *env,
 static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
                                const struct dt_rec *rec,
                                const struct dt_key *key, struct thandle *th,
-                               int ignore_quota)
+                               struct lustre_capa *capa, int ignore_quota)
 {
         struct osd_object        *obj   = osd_dt_obj(dt);
         struct lu_fid            *fid   = &osd_oti_get(env)->oti_fid;
@@ -2994,6 +2966,9 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
         LASSERT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
         LASSERT(th != NULL);
+
+        if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_INSERT))
+                return -EACCES;
 
         OSD_EXEC_OP(th, insert);
 

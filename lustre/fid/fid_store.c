@@ -119,7 +119,7 @@ int seq_declare_store_write(struct lu_server_seq *seq,
 
         rc = dt_obj->do_body_ops->dbo_declare_write(env, dt_obj,
                                                     sizeof(struct lu_seq_range),
-                                                    0, th, BYPASS_CAPA);
+                                                    0, th);
         return rc;
 }
 
@@ -144,7 +144,7 @@ int seq_store_write(struct lu_server_seq *seq,
 
         rc = dt_obj->do_body_ops->dbo_write(env, dt_obj,
                                             seq_store_buf(info),
-                                            &pos, th, 1);
+                                            &pos, th, BYPASS_CAPA, 1);
         if (rc == sizeof(info->sti_space)) {
                 CDEBUG(D_INFO, "%s: Space - "DRANGE"\n",
                        seq->lss_name, PRANGE(&seq->lss_space));

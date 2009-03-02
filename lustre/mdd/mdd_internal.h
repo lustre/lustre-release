@@ -681,22 +681,22 @@ static inline int mdo_attr_get(const struct lu_env *env, struct mdd_object *obj,
 static inline int mdo_declare_attr_set(const struct lu_env *env,
                                        struct mdd_object *obj,
                                        const struct lu_attr *la,
-                                       struct thandle *handle,
-                                       struct lustre_capa *capa)
+                                       struct thandle *handle)
 {
         struct dt_object *next = mdd_object_child(obj);
         LASSERT(next);
         LASSERT(next->do_ops);
         LASSERT(next->do_ops->do_declare_attr_set);
-        return next->do_ops->do_declare_attr_set(env, next, la, handle, capa);
+        return next->do_ops->do_declare_attr_set(env, next, la, handle);
 }
 
 static inline int mdo_attr_set(const struct lu_env *env, struct mdd_object *obj,
-                               const struct lu_attr *la, struct thandle *handle)
+                               const struct lu_attr *la, struct thandle *handle,
+                               struct lustre_capa *capa)
 {
         struct dt_object *next = mdd_object_child(obj);
         LASSERT(mdd_object_exists(obj));
-        return next->do_ops->do_attr_set(env, next, la, handle);
+        return next->do_ops->do_attr_set(env, next, la, handle, capa);
 }
 
 static inline int mdo_xattr_get(const struct lu_env *env,struct mdd_object *obj,
@@ -710,38 +710,38 @@ static inline int mdo_xattr_get(const struct lu_env *env,struct mdd_object *obj,
 static inline int mdo_declare_xattr_set(const struct lu_env *env,
                                         struct mdd_object *obj,
                                         const int buflen, const char *name,
-                                        int fl, struct thandle *handle,
-                                        struct lustre_capa *capa)
+                                        int fl, struct thandle *handle)
 {
         struct dt_object *next = mdd_object_child(obj);
         return next->do_ops->do_declare_xattr_set(env, next, buflen, name, fl,
-                                                  handle, capa);
+                                                  handle);
 }
 
 static inline int mdo_xattr_set(const struct lu_env *env,struct mdd_object *obj,
                                 const struct lu_buf *buf, const char *name,
-                                int fl, struct thandle *handle)
+                                int fl, struct thandle *handle,
+                                struct lustre_capa *capa)
 {
         struct dt_object *next = mdd_object_child(obj);
         LASSERT(mdd_object_exists(obj));
-        return next->do_ops->do_xattr_set(env, next, buf, name, fl, handle);
+        return next->do_ops->do_xattr_set(env, next, buf, name, fl, handle, capa);
 }
 
 static inline int mdo_declare_xattr_del(const struct lu_env *env,
                                         struct mdd_object *obj,
-                                        const char *name, struct thandle *handle,
-                                        struct lustre_capa *capa)
+                                        const char *name, struct thandle *handle)
 {
         struct dt_object *next = mdd_object_child(obj);
-        return next->do_ops->do_declare_xattr_del(env, next, name, handle, capa);
+        return next->do_ops->do_declare_xattr_del(env, next, name, handle);
 }
 
 static inline int mdo_xattr_del(const struct lu_env *env,struct mdd_object *obj,
-                                const char *name, struct thandle *handle)
+                                const char *name, struct thandle *handle,
+                                struct lustre_capa *capa)
 {
         struct dt_object *next = mdd_object_child(obj);
         LASSERT(mdd_object_exists(obj));
-        return next->do_ops->do_xattr_del(env, next, name, handle);
+        return next->do_ops->do_xattr_del(env, next, name, handle, capa);
 }
 
 static inline
@@ -816,11 +816,10 @@ int mdo_create_obj(const struct lu_env *env, struct mdd_object *o,
 static inline
 int mdo_dio_declare_insert(const struct lu_env *env, struct mdd_object *o,
                            const struct dt_rec *rec, const struct dt_key *key,
-                           struct thandle *handle, struct lustre_capa *capa)
+                           struct thandle *handle)
 {
         struct dt_object *next = mdd_object_child(o);
-        return next->do_index_ops->dio_declare_insert(env, next, rec, key,
-                                                      handle, capa);
+        return next->do_index_ops->dio_declare_insert(env, next, rec, key, handle);
 }
 
 static inline struct obd_capa *mdo_capa_get(const struct lu_env *env,
@@ -836,12 +835,11 @@ static inline struct obd_capa *mdo_capa_get(const struct lu_env *env,
 static inline ssize_t mdo_declare_write(const struct lu_env *env,
                                         struct mdd_object *obj,
                                         const loff_t size, loff_t pos,
-                                        struct thandle *th,
-                                        struct lustre_capa *capa)
+                                        struct thandle *th)
 {
         struct dt_object *next = mdd_object_child(obj);
         LASSERT(mdd_object_exists(obj));
-        return next->do_body_ops->dbo_declare_write(env,next,size,pos,th,capa);
+        return next->do_body_ops->dbo_declare_write(env, next, size, pos, th);
 }
 
 #endif

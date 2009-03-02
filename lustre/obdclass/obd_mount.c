@@ -313,13 +313,12 @@ static int ldd_write(struct dt_device *dt, struct lustre_disk_data *ldd)
 
         th = dt->dd_ops->dt_trans_create(&env, dt);
         LASSERT(!IS_ERR(th));
-        rc = file->do_body_ops->dbo_declare_write(&env, file, buf.lb_len, pos,
-                                                  th, BYPASS_CAPA);
+        rc = dt_declare_record_write(&env, file, buf.lb_len, pos, th);
         LASSERT(rc == 0);
         rc = dt->dd_ops->dt_trans_start(&env, dt, th);
         LASSERT(rc == 0);
 
-        rc = file->do_body_ops->dbo_write(&env, file, &buf, &pos, th, 1);
+        rc = dt_record_write(&env, file, &buf, &pos, th, BYPASS_CAPA, 1);
 
         dt->dd_ops->dt_trans_stop(&env, th);
 

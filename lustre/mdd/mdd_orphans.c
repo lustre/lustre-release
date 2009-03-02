@@ -144,7 +144,7 @@ static inline int mdd_declare_orphan_insert_obj(const struct lu_env *env,
 
         return  dor->do_index_ops->dio_declare_insert(env, dor,
                                                       __mdd_fid_rec(env, lf),
-                                                      key, th, BYPASS_CAPA);
+                                                      key, th);
 }
 
 static inline int mdd_orphan_insert_obj(const struct lu_env *env,
@@ -160,7 +160,7 @@ static inline int mdd_orphan_insert_obj(const struct lu_env *env,
 
         return  dor->do_index_ops->dio_insert(env, dor,
                                               __mdd_fid_rec(env, lf),
-                                              key, th, 1);
+                                              key, th, BYPASS_CAPA, 1);
 }
 
 static inline int mdd_declare_orphan_delete_obj(const struct lu_env *env,
@@ -172,7 +172,7 @@ static inline int mdd_declare_orphan_delete_obj(const struct lu_env *env,
         const struct lu_fid     *lf     = mdo2fid(obj);
         struct dt_key           *key    = orph_key_fill(env, lf, ORPH_OP_UNLINK);
 
-        return dor->do_index_ops->dio_declare_delete(env,dor,key,th,BYPASS_CAPA);
+        return dor->do_index_ops->dio_declare_delete(env, dor, key, th);
 }
 
 static inline int mdd_orphan_delete_obj(const struct lu_env *env,
@@ -183,7 +183,8 @@ static inline int mdd_orphan_delete_obj(const struct lu_env *env,
         struct dt_object        *dor    = mdd->mdd_orphans;
 
         return  dor->do_index_ops->dio_delete(env, dor,
-                                              key, th);
+                                              key, th,
+                                              BYPASS_CAPA);
 }
 
 static inline void mdd_orphan_ref_add(const struct lu_env *env,
@@ -243,11 +244,11 @@ static int orph_index_insert(const struct lu_env *env,
         if (!dt_try_as_dir(env, next))
                 goto out;
         next->do_index_ops->dio_delete(env, next,
-                                       dotdot, th);
+                                       dotdot, th, BYPASS_CAPA);
 
         next->do_index_ops->dio_insert(env, next,
                                        __mdd_fid_rec(env, lf_dor),
-                                       dotdot, th, 1);
+                                       dotdot, th, BYPASS_CAPA, 1);
 
 out:
         mdd_orphan_write_unlock(env, mdd);
@@ -531,13 +532,11 @@ int __mdd_declare_orphan_add(const struct lu_env *env, struct mdd_object *obj,
         if (!dt_try_as_dir(env, next))
                 return 0;
         rc = next->do_index_ops->dio_declare_delete(env, next,
-                                                    (struct dt_key *) dotdot,
-                                                    th, BYPASS_CAPA);
+                                                    (struct dt_key *) dotdot, th);
         if (rc)
                 return rc;
         rc = next->do_index_ops->dio_declare_insert(env, next, NULL,
-                                                    (struct dt_key *) dotdot,
-                                                    th, BYPASS_CAPA);
+                                                    (struct dt_key *) dotdot, th);
         return rc;
 }
 
