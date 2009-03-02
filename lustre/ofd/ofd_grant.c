@@ -152,7 +152,8 @@ void filter_grant_discard(struct obd_export *exp)
  * We will later calculate the clients new grant and return it. 
  * Caller must hold osfs lock. 
  */
-void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
+void filter_grant_incoming(const struct lu_env *env, struct obd_export *exp,
+                           struct obdo *oa)
 {
         struct filter_export_data *fed;
         struct filter_device *ofd = filter_exp(exp);
@@ -161,11 +162,8 @@ void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
 
         LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
 
-        /* Check if OST supports grants (OBD_MD_FLGRANT) or allocated block
-         * flag is set.
-         */ 
         if ((oa->o_valid & (OBD_MD_FLBLOCKS|OBD_MD_FLGRANT)) !=
-            (OBD_MD_FLBLOCKS|OBD_MD_FLGRANT)) {
+                                        (OBD_MD_FLBLOCKS|OBD_MD_FLGRANT)) {
                 oa->o_valid &= ~OBD_MD_FLGRANT;
                 EXIT;
                 return;
@@ -175,8 +173,7 @@ void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
 
         /* Add some margin, since there is a small race if other RPCs arrive
          * out-or-order and have already consumed some grant.  We want to
-         * leave this here in case there is a large error in accounting. 
-         */
+         * leave this here in case there is a large error in accounting. */
         CDEBUG(D_CACHE,
                "%s: cli %s/%p reports grant: "LPU64" dropped: %u, local: %lu\n",
                obd->obd_name, exp->exp_client_uuid.uuid, exp, oa->o_grant,
@@ -185,8 +182,7 @@ void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
         /* Update our accounting now so that statfs takes it into account.
          * Note that fed_dirty is only approximate and can become incorrect
          * if RPCs arrive out-of-order.  No important calculations depend
-         * on fed_dirty however, but we must check sanity to not assert. 
-         */
+         * on fed_dirty however, but we must check sanity to not assert. */
         if ((long long)oa->o_dirty < 0)
                 oa->o_dirty = 0;
         else if (oa->o_dirty > fed->fed_grant + 4 * FILTER_GRANT_CHUNK)
@@ -207,6 +203,25 @@ void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
         ofd->ofd_tot_granted -= oa->o_dropped;
         fed->fed_grant -= oa->o_dropped;
         fed->fed_dirty = oa->o_dirty;
+
+        if (oa->o_flags & OBD_FL_SHRINK_GRANT) {
+                obd_size left_space = filter_grant_space_left(env, exp);
+
+                /*Only if left_space < fo_tot_clients * 32M, 
+                 *then the grant space could be shrinked */
+                if (left_space < ofd->ofd_tot_granted_clients * 
+                                 FILTER_GRANT_SHRINK_LIMIT) { 
+                        fed->fed_grant -= oa->o_grant;
+                        ofd->ofd_tot_granted -= oa->o_grant;
+                        CDEBUG(D_CACHE, "%s: cli %s/%p shrink "LPU64
+                               "fed_grant %ld total "LPU64"\n",
+                               obd->obd_name, exp->exp_client_uuid.uuid,
+                               exp, oa->o_grant, fed->fed_grant,
+                               ofd->ofd_tot_granted);
+                        oa->o_grant = 0;
+                }
+        }
+
         if (fed->fed_dirty < 0 || fed->fed_grant < 0 || fed->fed_pending < 0) {
                 CERROR("%s: cli %s/%p dirty %ld pend %ld grant %ld\n",
                        obd->obd_name, exp->exp_client_uuid.uuid, exp,

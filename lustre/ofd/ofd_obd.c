@@ -107,6 +107,8 @@ static int filter_parse_connect_data(const struct lu_env *env,
                        LPU64" left: "LPU64"\n", exp->exp_obd->obd_name,
                        exp->exp_client_uuid.uuid, exp,
                        data->ocd_grant, want, left);
+
+                ofd->ofd_tot_granted_clients ++;
         }
 
         if (data->ocd_connect_flags & OBD_CONNECT_INDEX) {
@@ -286,6 +288,22 @@ static int filter_obd_disconnect(struct obd_export *exp)
         RETURN(rc);
 }
 
+/* reverse import is changed, sync all cancels */
+static void filter_revimp_update(struct obd_export *exp)
+{
+        ENTRY;
+
+        LASSERT(exp);
+        class_export_get(exp);
+
+        /* flush any remaining cancel messages out to the target */
+#if 0
+        filter_sync_llogs(exp->exp_obd, exp);
+#endif
+        class_export_put(exp);
+        EXIT;
+}
+
 static int filter_init_export(struct obd_export *exp)
 {
         spin_lock_init(&exp->exp_filter_data.fed_lock);
@@ -337,6 +355,11 @@ static int filter_destroy_export(struct obd_export *exp)
          * UOSS functionality is implemented. */
          filter_fmd_cleanup(exp);
 
+        if (exp->exp_connect_flags & OBD_CONNECT_GRANT_SHRINK) {
+                if (ofd->ofd_tot_granted_clients > 0)
+                        ofd->ofd_tot_granted_clients --;
+        }
+
         if (!(exp->exp_flags & OBD_OPT_FORCE))
                 filter_grant_sanity_check(exp->exp_obd, __FUNCTION__);
 
@@ -366,13 +389,39 @@ static inline int filter_setup_llog_group(struct obd_export *exp,
         return rc;
 }
 
+static int filter_adapt_sptlrpc_conf(struct obd_device *obd, int initial)
+{
+        struct filter_obd       *filter = &obd->u.filter;
+        struct sptlrpc_rule_set  tmp_rset;
+        int                      rc;
+
+        sptlrpc_rule_set_init(&tmp_rset);
+        rc = sptlrpc_conf_target_get_rules(obd, &tmp_rset, initial);
+        if (rc) {
+                CERROR("obd %s: failed get sptlrpc rules: %d\n",
+                       obd->obd_name, rc);
+                return rc;
+        }
+
+        sptlrpc_target_update_exp_flavor(obd, &tmp_rset);
+
+        write_lock(&filter->fo_sptlrpc_lock);
+        sptlrpc_rule_set_free(&filter->fo_sptlrpc_rset);
+        filter->fo_sptlrpc_rset = tmp_rset;
+        write_unlock(&filter->fo_sptlrpc_lock);
+
+        return 0;
+}
+
 static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
                                  void *key, __u32 vallen, void *val,
                                  struct ptlrpc_request_set *set)
 {
         struct filter_device *ofd = filter_exp(exp);
-        struct obd_device *obd;
-        int rc = 0, group;
+        struct obd_device    *obd;
+        int                   rc = 0;
+        int                   group;
+        struct                lu_env env;
         ENTRY;
 
         obd = exp->exp_obd;
@@ -381,15 +430,39 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
                 RETURN(-EINVAL);
         }
 
+        rc = lu_env_init(&env, LCT_DT_THREAD);
+        if (rc)
+                RETURN(rc);
+
         if (KEY_IS(KEY_CAPA_KEY)) {
                 rc = filter_update_capa_key(ofd, (struct lustre_capa_key *)val);
                 if (rc)
                         CERROR("filter update capability key failed: %d\n", rc);
-                RETURN(rc);
+                GOTO(out, rc);
+        }
+
+        if (KEY_IS(KEY_REVIMP_UPD)) {
+                filter_revimp_update(exp);
+                lquota_clearinfo(filter_quota_interface_ref, exp, exp->exp_obd);
+                GOTO(out, rc = 0);
+        }
+
+        if (KEY_IS(KEY_SPTLRPC_CONF)) {
+                filter_adapt_sptlrpc_conf(obd, 0);
+                GOTO(out, rc = 0);
+        }
+
+        if (KEY_IS(KEY_GRANT_SHRINK)) {
+                struct ost_body *body = (struct ost_body *)val;
+                /* handle shrink grant */
+                spin_lock(&exp->exp_obd->obd_osfs_lock);
+                filter_grant_incoming(&env, exp, &body->oa);
+                spin_unlock(&exp->exp_obd->obd_osfs_lock);
+                GOTO(out, rc = 0);
         }
 
         if (!KEY_IS(KEY_MDS_CONN))
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
 
         LCONSOLE_WARN("%s: received MDS connection from %s\n", obd->obd_name,
                       obd_export_nid2str(exp));
@@ -420,8 +493,9 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
                 /* setup llog group 1 for interop */
                 filter_setup_llog_group(exp, obd, FILTER_GROUP_LLOG);
         }
-out:
 #endif
+out:
+        lu_env_fini(&env);
         RETURN(rc);
 }
 

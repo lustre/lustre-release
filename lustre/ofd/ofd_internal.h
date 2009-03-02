@@ -31,6 +31,7 @@
                               OBD_INCOMPAT_COMMON_LR)
 
 #define FILTER_GRANT_CHUNK (2ULL * PTLRPC_MAX_BRW_SIZE)
+#define FILTER_GRANT_SHRINK_LIMIT (16ULL * FILTER_GRANT_CHUNK)
 #define GRANT_FOR_LLOG      16
 
 #define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
@@ -159,6 +160,7 @@ struct filter_device {
         obd_size                 ofd_tot_dirty;
         obd_size                 ofd_tot_granted;
         obd_size                 ofd_tot_pending;
+        int                      ofd_tot_granted_clients;
 
         /* filter mod data: filter_device wide values */
         int                      ofd_fmd_max_num; /* per ofd filter_mod_data */
@@ -481,7 +483,8 @@ int filter_attr_get(const struct lu_env *env, struct filter_object *fo,
 /* filter_grants.c */
 void filter_grant_discard(struct obd_export *exp);
 void filter_grant_sanity_check(struct obd_device *obd, const char *func);
-void filter_grant_incoming(struct obd_export *exp, struct obdo *oa);
+void filter_grant_incoming(const struct lu_env *env, struct obd_export *exp,
+                           struct obdo *oa);
 obd_size filter_grant_space_left(const struct lu_env *env,
                                  struct obd_export *exp);
 int filter_grant_client_calc(struct obd_export *exp, obd_size *left,
