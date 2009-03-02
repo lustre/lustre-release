@@ -505,12 +505,6 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
                         continue;
                 }
 
-                {
-                        unsigned long *pp = (void *) page_address(lb[i].page);
-                        if (*pp == 0)
-                                CERROR("page %lu starts with 0\n", lb[i].page->index);
-                }
-
                 LASSERT(PageLocked(lb[i].page));
                 LASSERT(!PageWriteback(lb[i].page));
 
@@ -567,13 +561,8 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
                         lb[i].rc = lb[i].len;
                 m += lb[i].len;
 
-                if (PageUptodate(lb[i].page)) {
-                        {
-                                unsigned long *pp = (void *) page_address(lb[i].page);
-                                if (*pp == 0)
-                                        CERROR("page %lu starts with 0\n", lb[i].page->index);
-                        }
-                }
+                if (PageUptodate(lb[i].page))
+                        continue;
 
                 filter_iobuf_add_page(iobuf, lb[i].page);
         }
