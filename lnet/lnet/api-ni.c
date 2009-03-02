@@ -100,13 +100,13 @@ lnet_get_portals_compatibility(void)
         }
 
         if (!strcmp(portals_compatibility, "weak")) {
-                return 1;
                 LCONSOLE_WARN("Starting in weak portals-compatible mode\n");
+                return 1;
         }
 
         if (!strcmp(portals_compatibility, "strong")) {
-                return 2;
                 LCONSOLE_WARN("Starting in strong portals-compatible mode\n");
+                return 2;
         }
 
         LCONSOLE_ERROR_MSG(0x102, "portals_compatibility=\"%s\" not supported\n",
