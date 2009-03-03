@@ -301,6 +301,8 @@ struct ptlrpc_request {
         struct ptlrpc_hpreq_ops *rq_ops;        /* server-side hp handlers */
 
         __u64            rq_history_seq;        /* history sequence # */
+        /* the index of service's srv_at_array into which request is linked */
+        time_t rq_at_index;
         int rq_status;
         spinlock_t rq_lock;
         /* client-side flags are serialized by rq_lock */
@@ -321,7 +323,8 @@ struct ptlrpc_request {
                 /* server-side flags */
                 rq_packed_final:1,  /* packed final reply */
                 rq_sent_final:1,    /* stop sending early replies */
-                rq_hp:1;            /* high priority RPC */
+                rq_hp:1,            /* high priority RPC */
+                rq_at_linked:1;     /* link into service's srv_at_array */
         enum rq_phase rq_phase;     /* one of RQ_PHASE_* */
         enum rq_phase rq_next_phase; /* one of RQ_PHASE_* to be used next */
         atomic_t rq_refcount;   /* client-side refcount for SENT race,
@@ -603,7 +606,7 @@ struct ptlrpc_service {
         /* AT stuff */
         struct adaptive_timeout srv_at_estimate;/* estimated rpc service time */
         spinlock_t        srv_at_lock;
-        struct list_head  srv_at_list;          /* reqs waiting for replies */
+        struct ptlrpc_at_array  srv_at_array;   /* reqs waiting for replies */
         cfs_timer_t       srv_at_timer;         /* early reply timer */
 
         int               srv_n_queued_reqs;    /* # reqs in either of the queues below */
