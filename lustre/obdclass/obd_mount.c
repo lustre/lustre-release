@@ -906,7 +906,6 @@ static int server_label2mti(struct super_block *sb, struct mgs_target_info *mti)
 {
         struct                 dt_device_param dt_param;
         struct lustre_sb_info *lsi = s2lsi(sb);
-        unsigned               newsv_flags;
         char *label;
 
         LASSERT(lsi);
@@ -918,29 +917,9 @@ static int server_label2mti(struct super_block *sb, struct mgs_target_info *mti)
         lsi->lsi_dt_dev->dd_ops->dt_conf_get(NULL, lsi->lsi_dt_dev, &dt_param);
         lsi->lsi_ldd->ldd_mount_type = dt_param.ddp_mount_type;
 
-        /* parse label: NEW:OST */
-        newsv_flags = LDD_F_VIRGIN | LDD_F_UPDATE | LDD_F_NEED_INDEX;
-        if (!strcmp(label, "NEW:OST")) {
-                mti->mti_flags |=  newsv_flags | LDD_F_SV_TYPE_OST;
-        } else if (!strcmp(label, "NEW:MDS")) {
-                mti->mti_flags |= newsv_flags | LDD_F_SV_TYPE_MDT;
-        } else if (strstr(label, "OST")) {
-                /* registered before service */
-                mti->mti_flags |= LDD_F_SV_TYPE_OST;
-                strcpy(mti->mti_svname, label);
-                strcpy(lsi->lsi_ldd->ldd_svname, label);
-        } else if (strstr(label, "MDT")) {
-                /* registered before service */
-                mti->mti_flags |= LDD_F_SV_TYPE_MDT;
-                strcpy(mti->mti_svname, label);
-                strcpy(lsi->lsi_ldd->ldd_svname, label);
-        } else {
-                LBUG();
-        }
-
-        if (lsi->lsi_lmd->lmd_fsname)
-                strncpy(mti->mti_fsname, lsi->lsi_lmd->lmd_fsname,
-                        sizeof(mti->mti_fsname));
+        mti->mti_flags = 0;
+        strncpy(mti->mti_svname, label, sizeof(mti->mti_svname));
+        mti->mti_svname[sizeof(mti->mti_svname) - 1] = '\0';
 
         return 0;
 }
@@ -1058,6 +1037,12 @@ int server_register_target(struct super_block *sb)
         if (rc)
                 GOTO(out, rc);
 
+        /* we don't have persistent ldd probably,
+         * but MGS * supplies us withservice name */
+        ldd->ldd_svindex = mti->mti_stripe_index;
+        strncpy(ldd->ldd_svname, mti->mti_svname,
+                        sizeof(ldd->ldd_svname));
+
         /* Always update our flags */
         ldd->ldd_flags = mti->mti_flags & ~LDD_F_REWRITE_LDD;
 
@@ -1069,9 +1054,6 @@ int server_register_target(struct super_block *sb)
                 CDEBUG(D_MOUNT, "Changing on-disk index from %#x to %#x "
                        "for %s\n", ldd->ldd_svindex, mti->mti_stripe_index,
                        mti->mti_svname);
-                ldd->ldd_svindex = mti->mti_stripe_index;
-                strncpy(ldd->ldd_svname, mti->mti_svname,
-                        sizeof(ldd->ldd_svname));
                 /* or ldd_make_sv_name(ldd); */
                 ldd_write(lsi->lsi_dt_dev, ldd);
                 err = mconf_set_label(lsi->lsi_dt_dev, mti->mti_svname);
@@ -1310,9 +1292,6 @@ static int lustre_free_lsi(struct super_block *sb)
                 if (lsi->lsi_lmd->lmd_mgs)
                         OBD_FREE(lsi->lsi_lmd->lmd_mgs,
                                         strlen(lsi->lsi_lmd->lmd_mgs) + 1);
-                if (lsi->lsi_lmd->lmd_fsname)
-                        OBD_FREE(lsi->lsi_lmd->lmd_fsname,
-                                        strlen(lsi->lsi_lmd->lmd_fsname) + 1);
                 OBD_FREE(lsi->lsi_lmd, sizeof(*lsi->lsi_lmd));
         }
 
@@ -1568,16 +1547,11 @@ out:
 /* Kernel mount using mount options in MOUNT_DATA_FILE */
 static struct dt_device *server_kernel_mount(struct super_block *sb)
 {
-        struct lvfs_run_ctxt mount_ctxt;
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct lustre_disk_data *ldd;
         struct lustre_mount_data *lmd = lsi->lsi_lmd;
         struct lu_device *dev;
         struct mconf_device *mdev;
-        struct vfsmount *mnt;
-        char *options = NULL;
-        unsigned long page, s_flags;
-        struct page *__page;
         struct lu_site *site;
         int rc;
 
@@ -1624,92 +1598,6 @@ static struct dt_device *server_kernel_mount(struct super_block *sb)
         }
 
         RETURN(lu2dt_dev(dev));
-
-        /* In the past, we have always used flags = 0.
-           Note ext3/ldiskfs can't be mounted ro. */
-        s_flags = sb->s_flags;
-
-        /* allocate memory for options */
-        OBD_PAGE_ALLOC(__page, CFS_ALLOC_STD);
-        if (!__page)
-                GOTO(out_free, rc = -ENOMEM);
-        page = (unsigned long)cfs_page_address(__page);
-        options = (char *)page;
-        memset(options, 0, CFS_PAGE_SIZE);
-
-        /* mount-line options must be added for pre-mount because it may
-         * contain mount options such as journal_dev which are required
-         * to mount successfuly the underlying filesystem */
-        if (lmd->lmd_opts && (*(lmd->lmd_opts) != 0))
-                strncat(options, lmd->lmd_opts, CFS_PAGE_SIZE - 1);
-
-        /* Pre-mount ldiskfs to read the MOUNT_DATA_FILE */
-        CDEBUG(D_MOUNT, "Pre-mount ldiskfs %s\n", lmd->lmd_dev);
-        mnt = ll_kern_mount("ldiskfs", s_flags, lmd->lmd_dev, (void *)options);
-        if (IS_ERR(mnt)) {
-                rc = PTR_ERR(mnt);
-                CERROR("premount %s:%#lx ldiskfs failed: %d "
-                        "Is the ldiskfs module available?\n",
-                        lmd->lmd_dev, s_flags, rc );
-                GOTO(out_free, rc);
-        }
-
-        OBD_SET_CTXT_MAGIC(&mount_ctxt);
-        mount_ctxt.pwdmnt = mnt;
-        mount_ctxt.pwd = mnt->mnt_root;
-        mount_ctxt.fs = get_ds();
-
-        //rc = ldd_parse(&mount_ctxt, ldd);
-        unlock_mntput(mnt);
-
-        if (rc) {
-                CERROR("premount parse options failed: rc = %d\n", rc);
-                GOTO(out_free, rc);
-        }
-
-        /* Done with our pre-mount, now do the real mount. */
-
-        /* Glom up mount options */
-        memset(options, 0, CFS_PAGE_SIZE);
-        strncpy(options, ldd->ldd_mount_opts, CFS_PAGE_SIZE - 2);
-
-        /* Add in any mount-line options */
-        if (lmd->lmd_opts && (*(lmd->lmd_opts) != 0)) {
-                int len = CFS_PAGE_SIZE - strlen(options) - 2;
-                if (*options != 0)
-                        strcat(options, ",");
-                strncat(options, lmd->lmd_opts, len);
-        }
-
-        /* Special permanent mount flags */
-        if (IS_OST(ldd))
-            s_flags |= MS_NOATIME | MS_NODIRATIME;
-
-        CDEBUG(D_MOUNT, "kern_mount: %s %s %s\n",
-               MT_STR(ldd), lmd->lmd_dev, options);
-        mnt = ll_kern_mount(MT_STR(ldd), s_flags, lmd->lmd_dev,
-                            (void *)options);
-        if (IS_ERR(mnt)) {
-                rc = PTR_ERR(mnt);
-                CERROR("ll_kern_mount failed: rc = %d\n", rc);
-                GOTO(out_free, rc);
-        }
-
-        if (lmd->lmd_flags & LMD_FLG_ABORT_RECOV)
-                simple_truncate(mnt->mnt_sb->s_root, mnt, LAST_RCVD,
-                                LR_CLIENT_START);
-
-        OBD_PAGE_FREE(__page);
-        lsi->lsi_ldd = ldd;   /* freed at lsi cleanup */
-        CDEBUG(D_SUPER, "%s: mnt = %p\n", lmd->lmd_dev, mnt);
-        RETURN(NULL);
-
-out_free:
-        if (__page)
-                OBD_PAGE_FREE(__page);
-        OBD_FREE(ldd, sizeof(*ldd));
-        lsi->lsi_ldd = NULL;
-        RETURN(ERR_PTR(rc));
 }
 
 static void server_wait_finished(struct vfsmount *mnt)
@@ -1741,7 +1629,6 @@ static void server_put_super(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device     *obd;
-        //struct vfsmount       *mnt = lsi->lsi_srv_mnt;
         struct vfsmount       *mnt = NULL; /* XXX: */
         char *tmpname, *extraname = NULL;
         int tmpname_sz;
@@ -1862,7 +1749,6 @@ static int server_statfs (struct dentry *dentry, struct kstatfs *buf)
 {
         struct super_block *sb = dentry->d_sb;
 #endif
-        //struct vfsmount *mnt = s2lsi(sb)->lsi_srv_mnt;
         struct vfsmount *mnt = NULL;
         ENTRY;
 
@@ -2233,31 +2119,6 @@ static int lmd_parse_mgs(struct lustre_mount_data *lmd, char *ptr)
         return 0;
 }
 
-static int lmd_parse_fsname(struct lustre_mount_data *lmd, char *ptr)
-{
-        char   *tail;
-        int     length;
-
-        if (lmd->lmd_fsname != NULL) {
-                OBD_FREE(lmd->lmd_fsname, strlen(lmd->lmd_fsname) + 1);
-                lmd->lmd_fsname = NULL;
-        }
-
-        tail = strchr(ptr, ',');
-        if (tail == NULL)
-                length = strlen(ptr);
-        else
-                length = tail - ptr;
-
-        OBD_ALLOC(lmd->lmd_fsname, length + 1);
-        if (lmd->lmd_fsname == NULL)
-                return -ENOMEM;
-
-        memcpy(lmd->lmd_fsname, ptr, length);
-        lmd->lmd_fsname[length] = '\0';
-        return 0;
-}
-
 /* mount -v -t lustre uml1:uml2:/lustre-client /mnt/lustre */
 static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 {
@@ -2318,11 +2179,6 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                         clear++;
                 } else if (strncmp(s1, "mgs=", 4) == 0) {
                         rc = lmd_parse_mgs(lmd, s1 + 4);
-                        if (rc)
-                                goto invalid;
-                        clear++;
-                } else if (strncmp(s1, "fsname=", 7) == 0) {
-                        rc = lmd_parse_fsname(lmd, s1 + 7);
                         if (rc)
                                 goto invalid;
                         clear++;

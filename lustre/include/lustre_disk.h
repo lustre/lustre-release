@@ -180,7 +180,6 @@ struct lustre_mount_data {
                                          _device_ mount options) */
         __u32     *lmd_exclude;       /* array of OSTs to ignore */
         char      *lmd_mgs;           /* MGS nid */
-        char      *lmd_fsname;        /* fs name for first mount */
 };
 
 #define LMD_FLG_SERVER       0x0001  /* Mounting a server */

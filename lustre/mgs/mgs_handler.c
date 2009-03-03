@@ -60,7 +60,6 @@
 #include <lustre_disk.h>
 #include "mgs_internal.h"
 
-
 /* Establish a connection to the MGS.*/
 static int mgs_connect(const struct lu_env *env,
                        struct obd_export **exp, struct obd_device *obd,
@@ -418,6 +417,74 @@ static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
         RETURN(rc);
 }
 
+static int mgs_parse_label_to_mti(struct mgs_target_info *mti)
+{
+        int i = 0, rc = 0;
+        ENTRY;
+
+        /*
+         * Format:
+         * registered target:   <fsname>-<OST|MDT><index>
+         * unregistered target: <fsname>*<OST|MDT><index>
+         */
+
+        if (mti->mti_fsname[0] != '\0') {
+                /* empty fsname expected with "label-only" registration */
+                GOTO(out, rc = -EINVAL);
+        }
+
+        while (i < MTI_NAME_MAXLEN) {
+                if (mti->mti_svname[i] == 0) {
+                        /* no delimiter found */
+                        GOTO(out, rc = -EINVAL);
+                }
+                if (mti->mti_svname[i] == '*') {
+                        mti->mti_flags |= LDD_F_VIRGIN | LDD_F_UPDATE;
+                        break;
+                }
+                if (mti->mti_svname[i] == '-') {
+                        break;
+                }
+                mti->mti_fsname[i] = mti->mti_svname[i];
+                i++;
+        }
+        mti->mti_fsname[i] = '\0';
+        i++;
+
+        if (i >= MTI_NAME_MAXLEN - 7)
+                GOTO(out, rc = -EINVAL);
+
+        if (!strncmp(mti->mti_svname + i, "OST", 3)) {
+                mti->mti_flags |= LDD_F_SV_TYPE_OST;
+        } else if (!strncmp(mti->mti_svname + i, "MDT", 3)) {
+                mti->mti_flags |= LDD_F_SV_TYPE_MDT;
+        } else {
+                /* unknown node type */
+                CERROR("unknown type %s\n", mti->mti_svname + i);
+                GOTO(out, rc = -EINVAL);
+        }
+        i += 3;
+
+        if (!strcmp(mti->mti_svname + i, "XXXX")) {
+                if (!(mti->mti_flags & LDD_F_VIRGIN)) {
+                        /* expected to be new */
+                        GOTO(out, rc = -EINVAL);
+                }
+
+                mti->mti_flags |= LDD_F_NEED_INDEX;
+                mti->mti_svname[0] = '\0';
+        } else {
+                mti->mti_stripe_index = simple_strtoul(mti->mti_svname+i,NULL,10);
+        }
+
+        CDEBUG(D_MOUNT, "register to %s with name '%s' and flags %u\n",
+               mti->mti_fsname, mti->mti_svname, mti->mti_flags);
+
+out:
+        RETURN(rc);
+}
+
+
 /* Called whenever a target starts up.  Flags indicate first connect, etc. */
 static int mgs_handle_target_reg(struct ptlrpc_request *req)
 {
@@ -430,6 +497,14 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         mgs_counter_incr(req->rq_export, LPROC_MGS_TARGET_REG);
 
         mti = req_capsule_client_get(&req->rq_pill, &RMF_MGS_TARGET_INFO);
+
+        /* if no other data is supplied, parse label */
+        if (mti->mti_flags == 0) {
+                rc = mgs_parse_label_to_mti(mti);
+                if (rc < 0)
+                        GOTO(out_nolock, rc);
+        }
+
         if (!(mti->mti_flags & (LDD_F_WRITECONF | LDD_F_UPGRADE14 |
                                 LDD_F_UPDATE))) {
                 /* We're just here as a startup ping. */
