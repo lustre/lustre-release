@@ -143,14 +143,43 @@ struct mds_file_data {
 int mds_reint_rec(struct mds_update_record *r, int offset,
                   struct ptlrpc_request *req, struct lustre_handle *);
 
-/* mds/mds_lov.c */
+/* mds/handler.c */
+static int inline ldlm_reply_disposition(struct ldlm_reply *rep, int flag)
+{
+        return (rep ? rep->lock_policy_res1 & flag : 0);
+}
+
+static void inline ldlm_reply_set_disposition(struct ldlm_reply *rep, int flag)
+{
+        if (rep)
+                rep->lock_policy_res1 |= flag;
+}
+
+static void inline ldlm_reply_clear_disposition(struct ldlm_reply *rep,
+                                                int flag)
+{
+        if (rep)
+                rep->lock_policy_res1 &= ~flag;
+}
 
 /* mdc/mdc_locks.c */
 struct md_enqueue_info;
 
-int it_disposition(struct lookup_intent *it, int flag);
-void it_set_disposition(struct lookup_intent *it, int flag);
-void it_clear_disposition(struct lookup_intent *it, int flag);
+static int inline it_disposition(struct lookup_intent *it, int flag)
+{
+        return it->d.lustre.it_disposition & flag;
+}
+
+static void inline it_set_disposition(struct lookup_intent *it, int flag)
+{
+        it->d.lustre.it_disposition |= flag;
+}
+
+static inline void it_clear_disposition(struct lookup_intent *it, int flag)
+{
+        it->d.lustre.it_disposition &= ~flag;
+}
+
 int it_open_error(int phase, struct lookup_intent *it);
 void mdc_set_lock_data(__u64 *lockh, void *data);
 int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid,
