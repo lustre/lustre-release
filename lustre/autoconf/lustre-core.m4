@@ -1464,6 +1464,27 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# 2.6.27 and some older have mapping->tree_lock as spin_lock
+AC_DEFUN([LC_RW_TREE_LOCK],
+[AC_MSG_CHECKING([mapping->tree_lock is rw_lock])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+],[
+	struct address_space *map = NULL;
+	
+	write_lock_irq(&map->tree_lock);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_RW_TREE_LOCK, 1,
+                [mapping->tree_lock is rw_lock])
+],[
+        AC_MSG_RESULT(no)
+])
+EXTRA_KCFLAGS="$tmp_flags"
+])
+
 #
 # LC_PROG_LINUX
 #
@@ -1581,6 +1602,7 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_INODE_PERMISION_2ARGS
           LC_FILE_REMOVE_SUID
           LC_TRYLOCKPAGE
+	  LC_RW_TREE_LOCK
 ])
 
 #
