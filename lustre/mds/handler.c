@@ -1003,7 +1003,7 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         cleanup_phase = 1; /* kernel context */
-        intent_set_disposition(rep, DISP_LOOKUP_EXECD);
+        ldlm_reply_set_disposition(rep, DISP_LOOKUP_EXECD);
 
         /* FIXME: handle raw lookup */
 #if 0
@@ -1086,12 +1086,12 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
         cleanup_phase = 2; /* dchild, dparent, locks */
 
         if (dchild->d_inode == NULL) {
-                intent_set_disposition(rep, DISP_LOOKUP_NEG);
+                ldlm_reply_set_disposition(rep, DISP_LOOKUP_NEG);
                 /* in the intent case, the policy clears this error:
                    the disposition is enough */
                 GOTO(cleanup, rc = -ENOENT);
         } else {
-                intent_set_disposition(rep, DISP_LOOKUP_POS);
+                ldlm_reply_set_disposition(rep, DISP_LOOKUP_POS);
         }
 
         if (req->rq_repmsg == NULL) {
@@ -2444,20 +2444,6 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req, int offset,
                   remote_hdl.cookie);
 }
 
-int intent_disposition(struct ldlm_reply *rep, int flag)
-{
-        if (!rep)
-                return 0;
-        return (rep->lock_policy_res1 & flag);
-}
-
-void intent_set_disposition(struct ldlm_reply *rep, int flag)
-{
-        if (!rep)
-                return;
-        rep->lock_policy_res1 |= flag;
-}
-
 #define IS_CLIENT_DISCONNECT_ERROR(error) \
                 (error == -ENOTCONN || error == -ENODEV)
 
@@ -2518,7 +2504,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
                 RETURN(req->rq_status = rc);
 
         rep = lustre_msg_buf(req->rq_repmsg, DLM_LOCKREPLY_OFF, sizeof(*rep));
-        intent_set_disposition(rep, DISP_IT_EXECD);
+        ldlm_reply_set_disposition(rep, DISP_IT_EXECD);
 
         /* execute policy */
         switch ((long)it->opc) {
@@ -2534,16 +2520,16 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
 #if 0
                 /* We abort the lock if the lookup was negative and
                  * we did not make it to the OPEN portion */
-                if (!intent_disposition(rep, DISP_LOOKUP_EXECD))
+                if (!ldlm_reply_disposition(rep, DISP_LOOKUP_EXECD))
                         RETURN(ELDLM_LOCK_ABORTED);
-                if (intent_disposition(rep, DISP_LOOKUP_NEG) &&
-                    !intent_disposition(rep, DISP_OPEN_OPEN))
+                if (ldlm_reply_disposition(rep, DISP_LOOKUP_NEG) &&
+                    !ldlm_reply_disposition(rep, DISP_OPEN_OPEN))
 #endif
 
                 /* If there was an error of some sort or if we are not
                  * returning any locks */
                  if (rep->lock_policy_res2 ||
-                     !intent_disposition(rep, DISP_OPEN_LOCK)) {
+                     !ldlm_reply_disposition(rep, DISP_OPEN_LOCK)) {
                         /* If it is the disconnect error (ENODEV & ENOCONN)
                          * ptlrpc layer should know this imediately, it should
                          * be replied by rq_stats, otherwise, return it by
@@ -2579,9 +2565,9 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
                    policy_res{1,2} with disposition and status.
                    - replay: returns 0 & req->status is old status
                    - otherwise: returns req->status */
-                if (intent_disposition(rep, DISP_LOOKUP_NEG))
+                if (ldlm_reply_disposition(rep, DISP_LOOKUP_NEG))
                         rep->lock_policy_res2 = 0;
-                if (!intent_disposition(rep, DISP_LOOKUP_POS) ||
+                if (!ldlm_reply_disposition(rep, DISP_LOOKUP_POS) ||
                     rep->lock_policy_res2)
                         RETURN(ELDLM_LOCK_ABORTED);
                 if (req->rq_status != 0) {
