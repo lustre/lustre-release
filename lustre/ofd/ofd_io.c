@@ -52,7 +52,7 @@ static int filter_preprw_read(const struct lu_env *env,
                               struct niobuf_local *res)
 {
         struct filter_object *fo;
-        int i, j, rc = 0;
+        int i, j, rc = -ENOENT;
         LASSERT(env != NULL);
 
         fo = filter_object_find(env, ofd, fid);
@@ -80,21 +80,6 @@ static int filter_preprw_read(const struct lu_env *env,
                 LASSERT(rc == 0);
                 rc = dt_read_prep(env, filter_object_child(fo), res,
                                   *nr_local);
-        } else {
-                /* CROW object. We have to simulate empty buffers */
-                for (i = 0, j = 0; i < niocount; i++) {
-                        res[j].file_offset = nb[i].offset;
-                        res[j].page_offset = 0;
-                        res[j].len = 0;
-                        res[j].page = NULL;
-                        res[j].lnb_grant_used = 0;
-                        res[j].bytes = 0;
-                        res[j].rc = 0;
-                        j++;
-                        LASSERT(j <= PTLRPC_MAX_BRW_PAGES);
-                }
-                *nr_local = j;
-                filter_attr_get(env, fo, la);
         }
 
         filter_object_put(env, fo);
@@ -116,7 +101,7 @@ static int filter_preprw_write(const struct lu_env *env, struct obd_export *exp,
         ENTRY;
         LASSERT(env != NULL);
 
-        fo = filter_object_find_or_create(env, ofd, fid, la);
+        fo = filter_object_find(env, ofd, fid);
         if (IS_ERR(fo))
                 RETURN(PTR_ERR(fo));
         LASSERT(fo != NULL);

@@ -470,6 +470,8 @@ filter_object *filter_object_find_or_create(const struct lu_env *env,
                                             struct filter_device *ofd,
                                             const struct lu_fid *fid,
                                             struct lu_attr *attr);
+int filter_precreate_object(const struct lu_env *env, struct filter_device *ofd,
+                            obd_id id, obd_gr group);
 
 void filter_object_put(const struct lu_env *env, struct filter_object *fo);
 int filter_attr_set(const struct lu_env *env, struct filter_object *fo,

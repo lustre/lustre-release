@@ -105,7 +105,7 @@ cleanup:
 static int filter_group_llog_finish(struct obd_llog_group *olg)
 {
         struct llog_ctxt *ctxt;
-        int rc = 0, rc2 = 0;
+        int rc = 0;
         ENTRY;
 
         ctxt = llog_group_get_ctxt(olg, LLOG_MDS_OST_REPL_CTXT);

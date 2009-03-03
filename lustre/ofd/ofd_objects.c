@@ -125,6 +125,84 @@ void filter_object_put(const struct lu_env *env, struct filter_object *fo)
         lu_object_put(env, &fo->ofo_obj.do_lu);
 }
 
+int filter_precreate_object(const struct lu_env *env, struct filter_device *ofd,
+                            obd_id id, obd_gr group)
+{
+        struct dt_object_format  dof;
+        struct filter_object    *fo;
+        struct dt_object        *next;
+        struct lu_attr           attr;
+        struct thandle          *th;
+        struct lu_buf            buf;
+        struct lu_fid            fid;
+        obd_id                   tmp;
+        loff_t                   off;
+        int                      rc;
+
+        lu_idif_build(&fid, id, group);
+
+        fo = filter_object_find(env, ofd, &fid);
+        if (IS_ERR(fo))
+                RETURN(PTR_ERR(fo));
+
+        attr.la_valid = LA_TYPE | LA_MODE;
+        attr.la_mode = S_IFREG | 0666;
+        dof.dof_type = dt_mode_to_dft(S_IFREG);
+
+        next = filter_object_child(fo);
+        LASSERT(next != NULL);
+
+        filter_write_lock(env, fo, 0);
+        if (filter_object_exists(fo)) {
+                /* underlying filesystem is broken - object must not exist */
+                CERROR("object %u/"LPD64" exists\n", (unsigned) group, id);
+                GOTO(out, rc = -EEXIST);
+        }
+
+        buf.lb_buf = &tmp;
+        buf.lb_len = sizeof(tmp);
+        off = group * sizeof(tmp);
+
+        th = filter_trans_create(env, ofd);
+        if (IS_ERR(th))
+                GOTO(out_unlock, rc = PTR_ERR(th));
+
+        rc = dt_declare_create(env, next, &attr, NULL, &dof, th);
+        if (rc)
+                GOTO(trans_stop, rc);
+
+        rc = dt_declare_record_write(env, ofd->ofd_groups_file,
+                                     sizeof(tmp), off, th);
+        if (rc)
+                GOTO(trans_stop, rc);
+
+        rc = filter_trans_start(env, ofd, th);
+        if (rc)
+                GOTO(trans_stop, rc);
+
+        CDEBUG(D_OTHER, "create new object %lu:%llu\n",
+               (unsigned long) fid.f_oid, fid.f_seq);
+
+        rc = dt_create(env, next, &attr, NULL, &dof, th);
+        if (rc)
+                GOTO(trans_stop, rc);
+        LASSERT(filter_object_exists(fo));
+
+        filter_last_id_set(ofd, id, group);
+        tmp = cpu_to_le64(filter_last_id(ofd, group));
+
+        rc = dt_record_write(env, ofd->ofd_groups_file, &buf, &off,
+                             th, BYPASS_CAPA, 1);
+
+trans_stop:
+        filter_trans_stop(env, ofd, th);
+out_unlock:
+        filter_write_unlock(env, fo);
+out:
+        filter_object_put(env, fo);
+        RETURN(rc);
+}
+
 int filter_attr_set(const struct lu_env *env, struct filter_object *fo,
                     const struct lu_attr *la)
 {

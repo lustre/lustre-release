@@ -670,8 +670,7 @@ int filter_setattr(struct obd_export *exp,
         info->fti_attr.la_valid = LA_MODE;
         info->fti_attr.la_mode = S_IFREG | 0666;
 
-        fo = filter_object_find_or_create(&env, ofd, &info->fti_fid,
-                                          &info->fti_attr);
+        fo = filter_object_find(&env, ofd, &info->fti_fid);
         if (IS_ERR(fo)) {
                 CERROR("can't find object %lu:%llu\n",
                        (long unsigned) info->fti_fid.f_oid,
@@ -742,8 +741,7 @@ static int filter_punch(struct obd_export *exp, struct obd_info *oinfo,
         info->fti_attr.la_valid = LA_MODE;
         info->fti_attr.la_mode = S_IFREG | 0666;
 
-        fo = filter_object_find_or_create(&env, ofd, &info->fti_fid,
-                                          &info->fti_attr);
+        fo = filter_object_find(&env, ofd, &info->fti_fid);
         if (IS_ERR(fo)) {
                 CERROR("can't find object %lu:%llu\n",
                        (unsigned long) info->fti_fid.f_oid,
@@ -997,18 +995,26 @@ static int filter_create(struct obd_export *exp,
                 }
         }
         if (diff > 0) {
-                obd_id next_id = filter_last_id(ofd, group) + diff;
+                obd_id next_id = filter_last_id(ofd, group);
+                int i;
 
                 /* TODO: check we have free space. Need DMU support */
                 CDEBUG(D_HA,
                        "%s: reserve %d objects in group "LPU64" at "LPU64"\n",
                        filter_obd(ofd)->obd_name, diff, group, next_id - diff);
-                filter_last_id_set(ofd, next_id, group);
+                for (i = 0; i < diff; i++) {
+                        rc = filter_precreate_object(&env, ofd, next_id + i, group);
+                        if (rc)
+                                break;
+                }
                 rc = filter_last_id_write(&env, ofd, group, 0);
-                if (rc)
-                        CERROR("unable to write lastobjid\n");
-                else
+                if (i > 0) {
+                        /* some objects got created, we can return
+                         * them, even if last creation failed */
                         oa->o_id = filter_last_id(ofd, group);
+                        rc = 0;
+                } else
+                        CERROR("unable to precreate: %d\n", rc);
 
                 LASSERT(oa->o_gr == group);
                 oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
