@@ -47,7 +47,7 @@
 struct lc_watchdog {
         cfs_timer_t       lcw_timer; /* kernel timer */
         struct list_head  lcw_list;
-        struct timeval    lcw_last_touched;
+        cfs_time_t        lcw_last_touched;
         cfs_task_t       *lcw_task;
 
         void            (*lcw_callback)(pid_t, void *);
@@ -141,6 +141,7 @@ static void lcw_cb(unsigned long data)
         struct lc_watchdog *lcw = (struct lc_watchdog *)data;
         cfs_time_t current_time;
         cfs_duration_t delta_time;
+        struct timeval timediff;
 
         ENTRY;
 
@@ -152,19 +153,24 @@ static void lcw_cb(unsigned long data)
         lcw->lcw_state = LC_WATCHDOG_EXPIRED;
         current_time = cfs_time_current();
 
+        delta_time = cfs_time_sub(current_time, lcw->lcw_last_touched);
+        cfs_duration_usec(delta_time, &timediff);
+
         /* Check to see if we should throttle the watchdog timer to avoid
          * too many dumps going to the console thus triggering an NMI.
          * Normally we would not hold the spin lock over the CWARN but in
          * this case we hold it to ensure non ratelimited lcw_dumps are not
          * interleaved on the console making them hard to read. */
         spin_lock_bh(&lcw_last_watchdog_lock);
-        delta_time = cfs_duration_sec(current_time - lcw_last_watchdog_time);
+        delta_time = cfs_duration_sec(cfs_time_sub(current_time,
+                                                   lcw_last_watchdog_time));
 
-        if (delta_time < libcfs_watchdog_ratelimit && lcw_recent_watchdog_count > 3) {
+        if (delta_time < libcfs_watchdog_ratelimit &&
+            lcw_recent_watchdog_count > 3) {
                 CWARN("Refusing to fire watchdog for pid %d: it was inactive "
-                      "for %ldms. Rate limiting 1 per %d seconds.\n",
-                      (int)lcw->lcw_pid,cfs_duration_sec(lcw->lcw_time) * 1000,
-                      libcfs_watchdog_ratelimit);
+                      "for %lu.%.02lus. Rate limiting 1 per %d seconds.\n",
+                      (int)lcw->lcw_pid, timediff.tv_sec,
+                      timediff.tv_usec / 10000, libcfs_watchdog_ratelimit);
         } else {
                 if (delta_time < libcfs_watchdog_ratelimit) {
                         lcw_recent_watchdog_count++;
@@ -176,8 +182,9 @@ static void lcw_cb(unsigned long data)
 
 		/* This warning should appear on the console, but may not get
 		 * into the logs since we're running in a softirq handler */
-                CWARN("Watchdog triggered for pid %d: it was inactive for %lds\n",
-                      (int)lcw->lcw_pid, cfs_duration_sec(lcw->lcw_time));
+                CWARN("Watchdog triggered for pid %d: it was inactive for "
+                      "%lu.%.02lus\n", (int)lcw->lcw_pid, timediff.tv_sec,
+                      timediff.tv_usec / 10000);
                 lcw_dump(lcw);
 	}
 
@@ -341,7 +348,7 @@ struct lc_watchdog *lc_watchdog_add(int timeout_ms,
 
         /* Keep this working in case we enable them by default */
         if (lcw->lcw_state == LC_WATCHDOG_ENABLED) {
-                do_gettimeofday(&lcw->lcw_last_touched);
+                lcw->lcw_last_touched = cfs_time_current();
                 add_timer(&lcw->lcw_timer);
         }
 
@@ -351,17 +358,17 @@ EXPORT_SYMBOL(lc_watchdog_add);
 
 static void lcw_update_time(struct lc_watchdog *lcw, const char *message)
 {
-        struct timeval newtime;
-        struct timeval timediff;
+        cfs_time_t newtime = cfs_time_current();;
 
-        do_gettimeofday(&newtime);
         if (lcw->lcw_state == LC_WATCHDOG_EXPIRED) {
-                cfs_timeval_sub(&newtime, &lcw->lcw_last_touched, &timediff);
-                CWARN("Expired watchdog for pid %d %s after %lu.%.4lus\n",
-                      lcw->lcw_pid,
-                      message,
-                      timediff.tv_sec,
-                      timediff.tv_usec / 100);
+                struct timeval timediff;
+                cfs_time_t delta_time = cfs_time_sub(newtime,
+                                                     lcw->lcw_last_touched);
+                cfs_duration_usec(delta_time, &timediff);
+
+                CWARN("Expired watchdog for pid %d %s after %lu.%.02lus\n",
+                      lcw->lcw_pid, message, timediff.tv_sec,
+                      timediff.tv_usec / 10000);
         }
         lcw->lcw_last_touched = newtime;
 }
