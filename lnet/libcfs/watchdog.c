@@ -47,7 +47,7 @@
 struct lc_watchdog {
         cfs_timer_t       lcw_timer; /* kernel timer */
         struct list_head  lcw_list;
-        struct timeval    lcw_last_touched;
+        cfs_time_t        lcw_last_touched;
         cfs_task_t       *lcw_task;
 
         void            (*lcw_callback)(pid_t, void *);
@@ -131,6 +131,8 @@ lcw_dump(struct lc_watchdog *lcw)
 static void lcw_cb(unsigned long data)
 {
         struct lc_watchdog *lcw = (struct lc_watchdog *)data;
+        cfs_duration_t delta_time;
+        struct timeval timediff;
 
         ENTRY;
 
@@ -140,12 +142,15 @@ static void lcw_cb(unsigned long data)
         }
 
         lcw->lcw_state = LC_WATCHDOG_EXPIRED;
+        delta_time = cfs_time_sub(cfs_time_current(), lcw->lcw_last_touched);
+        cfs_duration_usec(delta_time, &timediff);
 
         /* NB this warning should appear on the console, but may not get into
          * the logs since we're running in a softirq handler */
 
-        CWARN("Watchdog triggered for pid %d: it was inactive for %lds\n",
-              (int)lcw->lcw_pid, cfs_duration_sec(lcw->lcw_time));
+        CWARN("Watchdog triggered for pid %d: it was inactive for "
+              "%lu.%.02lus\n", (int)lcw->lcw_pid, timediff.tv_sec,
+              timediff.tv_usec / 10000);
         lcw_dump(lcw);
 
         spin_lock_bh(&lcw_pending_timers_lock);
@@ -307,7 +312,7 @@ struct lc_watchdog *lc_watchdog_add(int timeout_ms,
 
         /* Keep this working in case we enable them by default */
         if (lcw->lcw_state == LC_WATCHDOG_ENABLED) {
-                do_gettimeofday(&lcw->lcw_last_touched);
+                lcw->lcw_last_touched = cfs_time_current();
                 add_timer(&lcw->lcw_timer);
         }
 
@@ -317,17 +322,17 @@ EXPORT_SYMBOL(lc_watchdog_add);
 
 static void lcw_update_time(struct lc_watchdog *lcw, const char *message)
 {
-        struct timeval newtime;
-        struct timeval timediff;
+        cfs_time_t newtime = cfs_time_current();;
 
-        do_gettimeofday(&newtime);
         if (lcw->lcw_state == LC_WATCHDOG_EXPIRED) {
-                cfs_timeval_sub(&newtime, &lcw->lcw_last_touched, &timediff);
-                CWARN("Expired watchdog for pid %d %s after %lu.%.4lus\n",
-                      lcw->lcw_pid,
-                      message,
-                      timediff.tv_sec,
-                      timediff.tv_usec / 100);
+                struct timeval timediff;
+                cfs_time_t delta_time = cfs_time_sub(newtime,
+                                                     lcw->lcw_last_touched);
+                cfs_duration_usec(delta_time, &timediff);
+
+                CWARN("Expired watchdog for pid %d %s after %lu.%.02lus\n",
+                      lcw->lcw_pid, message, timediff.tv_sec,
+                      timediff.tv_usec / 10000);
         }
         lcw->lcw_last_touched = newtime;
 }
