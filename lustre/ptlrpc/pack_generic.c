@@ -670,7 +670,7 @@ void lustre_shrink_reply_v2(struct ptlrpc_request *req, int segment,
                 newpos = lustre_msg_buf_v2(msg, segment + 1, 0);
                 LASSERT(newpos <= tail);
                 if (newpos != tail)
-                        memcpy(newpos, tail, tail_len);
+                        memmove(newpos, tail, tail_len);
         }
 
         if (newlen == 0 && msg->lm_bufcount > segment + 1) {
