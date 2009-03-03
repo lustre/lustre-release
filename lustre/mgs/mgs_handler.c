@@ -477,7 +477,7 @@ static int mgs_parse_label_to_mti(struct mgs_target_info *mti)
                 mti->mti_stripe_index = simple_strtoul(mti->mti_svname+i,NULL,10);
         }
 
-        CDEBUG(D_MOUNT, "register to %s with name '%s' and flags %u\n",
+        CDEBUG(D_MGS, "register to %s with name '%s' and flags %u\n",
                mti->mti_fsname, mti->mti_svname, mti->mti_flags);
 
 out:

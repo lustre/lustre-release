@@ -872,8 +872,7 @@ static int osd_init_capa_ctxt(const struct lu_env *env, struct dt_device *d,
 static char *osd_label_get(const struct lu_env *env, const struct dt_device *d)
 {
         //struct osd_device *dev = osd_dt_dev(d);
-        CERROR("return label NEW:OST\n");
-        return ("NEW:OST");
+        return "lustre*OSTXXXX";
         LBUG();
         RETURN(NULL);
 }
