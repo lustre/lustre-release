@@ -533,10 +533,10 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
 
         /* copy rc, transno and disp; steal locks */
         mds_req_from_lcd(req, lcd);
-        intent_set_disposition(rep, le32_to_cpu(lcd->lcd_last_data));
+        ldlm_reply_set_disposition(rep, le32_to_cpu(lcd->lcd_last_data));
 
         /* Only replay if create or open actually happened. */
-        if (!intent_disposition(rep, DISP_OPEN_CREATE | DISP_OPEN_OPEN) ) {
+        if (!ldlm_reply_disposition(rep, DISP_OPEN_CREATE | DISP_OPEN_OPEN) ) {
                 EXIT;
                 return; /* error looking up parent or child */
         }
@@ -574,8 +574,8 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         /* At this point, we know we have a child. We'll send
          * it back _unless_ it not created and open failed.
          */
-        if (intent_disposition(rep, DISP_OPEN_OPEN) &&
-            !intent_disposition(rep, DISP_OPEN_CREATE) &&
+        if (ldlm_reply_disposition(rep, DISP_OPEN_OPEN) &&
+            !ldlm_reply_disposition(rep, DISP_OPEN_CREATE) &&
             req->rq_status) {
                 GOTO(out_dput, 0);
         }
@@ -622,7 +622,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         /* If we didn't get as far as trying to open, then some locking thing
          * probably went wrong, and we'll just bail here.
          */
-        if (!intent_disposition(rep, DISP_OPEN_OPEN))
+        if (!ldlm_reply_disposition(rep, DISP_OPEN_OPEN))
                 GOTO(out_dput, 0);
 
         /* If we failed, then we must have failed opening, so don't look for
@@ -681,14 +681,14 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
 
         mds_mfd_put(mfd);
 
-        if (!intent_disposition(rep, DISP_OPEN_LOCK))
+        if (!ldlm_reply_disposition(rep, DISP_OPEN_LOCK))
                 GOTO(out_dput, 0);
 
         /* child_lockh has been set in fixup_handle_for_resent_req called
          * in mds_intent_policy for resent request */
         if (child_lockh == NULL || !lustre_handle_is_used(child_lockh)) {
                 /* the lock is already canceled! clear DISP_OPEN_LOCK */
-                intent_disposition(rep, ~DISP_OPEN_LOCK);
+                ldlm_reply_clear_disposition(rep, DISP_OPEN_LOCK);
         }
 
  out_dput:
@@ -851,7 +851,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         if ((rc = mds_lov_prepare_objids(obd,lmm)) != 0)
                 RETURN(rc);
 
-        intent_set_disposition(rep, DISP_OPEN_OPEN);
+        ldlm_reply_set_disposition(rep, DISP_OPEN_OPEN);
         mfd = mds_dentry_open(dchild, mds->mds_vfsmnt, flags, req);
         if (IS_ERR(mfd))
                 RETURN(PTR_ERR(mfd));
@@ -903,8 +903,8 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
         }
 
         mds_pack_inode2body(body, dchild->d_inode);
-        intent_set_disposition(rep, DISP_LOOKUP_EXECD);
-        intent_set_disposition(rep, DISP_LOOKUP_POS);
+        ldlm_reply_set_disposition(rep, DISP_LOOKUP_EXECD);
+        ldlm_reply_set_disposition(rep, DISP_LOOKUP_POS);
 
         rc = mds_finish_open(req, dchild, body, flags, &handle, rec, rep, NULL);
         rc = mds_finish_transno(mds, NULL, handle,
@@ -1118,8 +1118,8 @@ int mds_open(struct mds_update_record *rec, int offset,
                 } else {
                         /* Just cannot find parent - make it look like
                          * usual negative lookup to avoid extra MDS RPC */
-                        intent_set_disposition(rep, DISP_LOOKUP_EXECD);
-                        intent_set_disposition(rep, DISP_LOOKUP_NEG);
+                        ldlm_reply_set_disposition(rep, DISP_LOOKUP_EXECD);
+                        ldlm_reply_set_disposition(rep, DISP_LOOKUP_NEG);
                 }
                 GOTO(cleanup, rc);
         }
@@ -1137,11 +1137,11 @@ int mds_open(struct mds_update_record *rec, int offset,
 
         cleanup_phase = 2; /* child dentry */
 
-        intent_set_disposition(rep, DISP_LOOKUP_EXECD);
+        ldlm_reply_set_disposition(rep, DISP_LOOKUP_EXECD);
         if (dchild->d_inode)
-                intent_set_disposition(rep, DISP_LOOKUP_POS);
+                ldlm_reply_set_disposition(rep, DISP_LOOKUP_POS);
         else
-                intent_set_disposition(rep, DISP_LOOKUP_NEG);
+                ldlm_reply_set_disposition(rep, DISP_LOOKUP_NEG);
 
         /*Step 3: If the child was negative, and we're supposed to, create it.*/
         if (dchild->d_inode == NULL) {
@@ -1180,7 +1180,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                                 current->fsuid, gid, 1, &rec_pending,
                                 NULL, NULL, 0);
 
-                intent_set_disposition(rep, DISP_OPEN_CREATE);
+                ldlm_reply_set_disposition(rep, DISP_OPEN_CREATE);
                 handle = fsfilt_start(obd, dparent->d_inode, FSFILT_OP_CREATE,
                                       NULL);
                 if (IS_ERR(handle)) {
@@ -1251,7 +1251,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                 /* for nfs and join - we need two locks for same fid, but
                  * with different mode */
                 if (need_open_lock && !use_parent)  {
-                        intent_set_disposition(rep, DISP_OPEN_LOCK);
+                        ldlm_reply_set_disposition(rep, DISP_OPEN_LOCK);
                         need_open_lock = 0;
                 }
         }
@@ -1304,7 +1304,7 @@ found_child:
                         GOTO(cleanup, rc = -EACCES);
                 }
                 if (ll_permission(dchild->d_inode, acc_mode, NULL)) {
-                        intent_set_disposition(rep, DISP_OPEN_OPEN);
+                        ldlm_reply_set_disposition(rep, DISP_OPEN_OPEN);
                         GOTO(cleanup, rc = -EACCES);
                 }
         } else if (rec->ur_flags & MDS_OPEN_DIRECTORY) {
@@ -1334,7 +1334,7 @@ found_child:
                         GOTO(cleanup, rc);
 
                 /* Let mds_intent_policy know that we have a lock to return */
-                intent_set_disposition(rep, DISP_OPEN_LOCK);
+                ldlm_reply_set_disposition(rep, DISP_OPEN_LOCK);
         }
 
         if (!S_ISREG(dchild->d_inode->i_mode) &&
