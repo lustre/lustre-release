@@ -161,9 +161,9 @@ static int ll_encode_fh(struct dentry *de, __u32 *fh, int *plen,
         struct lustre_nfs_fid *nfs_fid = (void *)fh;
         ENTRY;
 
-        CDEBUG(D_INFO, "encoding for (%lu) maxlen=%d minlen=%lu\n",
+        CDEBUG(D_INFO, "encoding for (%lu) maxlen=%d minlen=%u\n",
               inode->i_ino, *plen,
-              sizeof(struct lustre_nfs_fid));
+              (int)sizeof(struct lustre_nfs_fid));
 
         if (*plen < sizeof(struct lustre_nfs_fid))
                 RETURN(255);
