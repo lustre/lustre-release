@@ -4852,7 +4852,9 @@ static int mdt_object_print(const struct lu_env *env, void *cookie,
 {
         struct mdt_object *mdto = mdt_obj((struct lu_object *)o);
         return (*p)(env, cookie, LUSTRE_MDT_NAME"-object@%p(ioepoch=%llu "
-                   "flags=%llx)", mdto, mdto->mot_ioepoch, mdto->mot_flags);
+                    "flags=%llx, epochcount=%d, writecount=%d)",
+                    mdto, mdto->mot_ioepoch, mdto->mot_flags,
+                    mdto->mot_epochcount, mdto->mot_writecount);
 }
 
 static const struct lu_device_operations mdt_lu_ops = {

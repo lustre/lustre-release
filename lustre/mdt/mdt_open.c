@@ -470,13 +470,16 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
                         LASSERT(info->mti_rr.rr_handle != NULL);
                         old_mfd = mdt_handle2mfd(info, info->mti_rr.rr_handle);
                         if (old_mfd) {
-                                CDEBUG(D_HA, "del orph mfd %p cookie" LPX64"\n",
-                                       mfd, info->mti_rr.rr_handle->cookie);
+                                CDEBUG(D_HA, "del orph mfd %p fid=("DFID") "
+                                       "cookie=" LPX64"\n",
+                                       mfd, 
+                                       PFID(mdt_object_fid(mfd->mfd_object)),
+                                       info->mti_rr.rr_handle->cookie);
                                 spin_lock(&med->med_open_lock);
                                 class_handle_unhash(&old_mfd->mfd_handle);
                                 list_del_init(&old_mfd->mfd_list);
                                 spin_unlock(&med->med_open_lock);
-                                mdt_mfd_free(old_mfd);
+                                mdt_mfd_close(info, old_mfd);
                         }
                         CDEBUG(D_HA, "Store old cookie "LPX64" in new mfd\n",
                                info->mti_rr.rr_handle->cookie);
