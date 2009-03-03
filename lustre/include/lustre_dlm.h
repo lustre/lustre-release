@@ -873,11 +873,6 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
                                int lock_flags, int cancel_flags, void *opaque);
 int ldlm_cli_cancel_list(struct list_head *head, int count,
                          struct ptlrpc_request *req, int off);
-/* mds/handler.c */
-/* This has to be here because recursive inclusion sucks. */
-int intent_disposition(struct ldlm_reply *rep, int flag);
-void intent_set_disposition(struct ldlm_reply *rep, int flag);
-
 
 /* ioctls for trying requests */
 #define IOC_LDLM_TYPE                   'f'
