@@ -707,6 +707,14 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                 GOTO(cleanup, rc);
         cleanup_phase = 4;
 
+        /* Filter truncate first locks i_mutex then partally truncated
+         * page, filter write code first locks pages then take
+         * i_mutex.  To avoid a deadlock in case of concurrent
+         * punch/write requests from one client, filter writes and
+         * filter truncates are serialized by i_alloc_sem, allowing
+         * multiple writes or single truncate. */
+        down_read(&dentry->d_inode->i_alloc_sem);
+
         do_gettimeofday(&start);
         for (i = 0, lnb = res; i < *pages; i++, lnb++) {
 
@@ -797,6 +805,7 @@ cleanup:
                                 }
                         }
                         filter_grant_commit(exp, *pages, res);
+                        up_read(&dentry->d_inode->i_alloc_sem);
                 }
         case 3:
                 filter_iobuf_put(&exp->exp_obd->u.filter, iobuf, oti);
