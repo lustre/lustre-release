@@ -181,21 +181,28 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
                         DEBUG_REQ(D_ERROR, req, "Can't allocate "
                                   "md_open_data");
                 } else {
-                        CFS_INIT_LIST_HEAD(&(*mod)->mod_replay_list);
-                }
-        }
-        if (mod && *mod) {
-                req->rq_cb_data = *mod;
-                req->rq_commit_cb = mdc_commit_delayed;
-                list_add_tail(&req->rq_mod_list, &(*mod)->mod_replay_list);
-                /* This is not the last request in sequence for truncate. */
-                if (op_data->op_flags & MF_EPOCH_OPEN)
                         req->rq_replay = 1;
-                else
-                        req->rq_sequence = 1;
+                        req->rq_cb_data = *mod;
+                        (*mod)->mod_open_req = req;
+                        req->rq_commit_cb = mdc_commit_open;
+                }
         }
 
         rc = mdc_reint(req, rpc_lock, LUSTRE_IMP_FULL);
+
+        /* Save the obtained info in the original RPC for the replay case. */
+        if (rc == 0 && (op_data->op_flags & MF_EPOCH_OPEN)) {
+                struct mdt_epoch *epoch;
+                struct mdt_body  *body;
+
+                epoch = req_capsule_client_get(&req->rq_pill, &RMF_MDT_EPOCH);
+                body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+                LASSERT(epoch != NULL);
+                LASSERT(body != NULL);
+                epoch->handle = body->handle;
+                epoch->ioepoch = body->ioepoch;
+                req->rq_replay_cb = mdc_replay_open;
+        }
         *request = req;
         if (rc == -ERESTARTSYS)
                 rc = 0;

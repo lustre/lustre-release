@@ -331,8 +331,8 @@ int llu_objects_destroy(struct ptlrpc_request *req, struct inode *dir)
         return rc;
 }
 
-int llu_sizeonmds_update(struct inode *inode, struct md_open_data *mod,
-                         struct lustre_handle *fh, __u64 ioepoch)
+int llu_sizeonmds_update(struct inode *inode, struct lustre_handle *fh,
+                         __u64 ioepoch)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
@@ -362,7 +362,7 @@ int llu_sizeonmds_update(struct inode *inode, struct md_open_data *mod,
         op_data.op_ioepoch = ioepoch;
         op_data.op_flags |= MF_SOM_CHANGE;
 
-        rc = llu_md_setattr(inode, &op_data, &mod);
+        rc = llu_md_setattr(inode, &op_data, NULL);
         RETURN(rc);
 }
 
@@ -374,7 +374,7 @@ int llu_md_close(struct obd_export *md_exp, struct inode *inode)
         struct obd_client_handle *och = &fd->fd_mds_och;
         struct intnl_stat *st = llu_i2stat(inode);
         struct md_op_data op_data = { { 0 } };
-        int seq_end = 0, rc;
+        int rc;
         ENTRY;
 
         /* clear group lock, if present */
@@ -419,14 +419,11 @@ int llu_md_close(struct obd_export *md_exp, struct inode *inode)
         memcpy(&op_data.op_handle, &och->och_fh, sizeof(op_data.op_handle));
 
         rc = md_close(md_exp, &op_data, och->och_mod, &req);
-        if (rc != -EAGAIN)
-                seq_end = 1;
-
         if (rc == -EAGAIN) {
                 /* We are the last writer, so the MDS has instructed us to get
                  * the file size and any write cookies, then close again. */
                 LASSERT(fd->fd_flags & FMODE_WRITE);
-                rc = llu_sizeonmds_update(inode, och->och_mod, &och->och_fh,
+                rc = llu_sizeonmds_update(inode, &och->och_fh,
                                           op_data.op_ioepoch);
                 if (rc) {
                         CERROR("inode %llu mdc Size-on-MDS update failed: "
@@ -443,8 +440,6 @@ int llu_md_close(struct obd_export *md_exp, struct inode *inode)
                                (long long)st->st_ino, rc);
         }
 
-        if (seq_end)
-                ptlrpc_close_replay_seq(req);
         md_clear_open_replay_data(md_exp, och);
         ptlrpc_req_finished(req);
         och->och_fh.cookie = DEAD_HANDLE_MAGIC;

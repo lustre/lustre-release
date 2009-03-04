@@ -202,8 +202,8 @@ out:
         return;
 }
 
-int ll_sizeonmds_update(struct inode *inode, struct md_open_data *mod,
-                        struct lustre_handle *fh, __u64 ioepoch)
+int ll_sizeonmds_update(struct inode *inode, struct lustre_handle *fh,
+                        __u64 ioepoch)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct md_op_data *op_data;
@@ -243,7 +243,7 @@ int ll_sizeonmds_update(struct inode *inode, struct md_open_data *mod,
         op_data->op_ioepoch = ioepoch;
         op_data->op_flags |= MF_SOM_CHANGE;
 
-        rc = ll_md_setattr(inode, op_data, &mod);
+        rc = ll_md_setattr(inode, op_data, NULL);
         EXIT;
 out:
         if (oa)
@@ -278,12 +278,12 @@ static void ll_done_writing(struct inode *inode)
 
         ll_pack_inode2opdata(inode, op_data, &och->och_fh);
 
-        rc = md_done_writing(ll_i2sbi(inode)->ll_md_exp, op_data, och->och_mod);
+        rc = md_done_writing(ll_i2sbi(inode)->ll_md_exp, op_data, NULL);
         if (rc == -EAGAIN) {
                 /* MDS has instructed us to obtain Size-on-MDS attribute from
                  * OSTs and send setattr to back to MDS. */
-                rc = ll_sizeonmds_update(inode, och->och_mod,
-                                         &och->och_fh, op_data->op_ioepoch);
+                rc = ll_sizeonmds_update(inode, &och->och_fh,
+                                         op_data->op_ioepoch);
         } else if (rc) {
                 CERROR("inode %lu mdc done_writing failed: rc = %d\n",
                        inode->i_ino, rc);

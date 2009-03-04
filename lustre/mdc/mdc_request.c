@@ -616,10 +616,14 @@ int mdc_free_lustre_md(struct obd_export *exp, struct lustre_md *md)
         RETURN(0);
 }
 
-static void mdc_replay_open(struct ptlrpc_request *req)
+/**
+ * Handles both OPEN and SETATTR RPCs for OPEN-CLOSE and SETATTR-DONE_WRITING
+ * RPC chains.
+ */
+void mdc_replay_open(struct ptlrpc_request *req)
 {
         struct md_open_data *mod = req->rq_cb_data;
-        struct ptlrpc_request *cur, *tmp;
+        struct ptlrpc_request *close_req;
         struct obd_client_handle *och;
         struct lustre_handle old;
         struct mdt_body *body;
@@ -647,76 +651,38 @@ static void mdc_replay_open(struct ptlrpc_request *req)
                 old = *file_fh;
                 *file_fh = body->handle;
         }
-        list_for_each_entry_safe(cur, tmp, &mod->mod_replay_list, rq_mod_list) {
-                int opc = lustre_msg_get_opc(cur->rq_reqmsg);
-                struct mdt_epoch *epoch = NULL;
+        close_req = mod->mod_close_req;
+        if (close_req != NULL) {
+                __u32 opc = lustre_msg_get_opc(close_req->rq_reqmsg);
+                struct mdt_epoch *epoch;
 
-                if (opc == MDS_CLOSE || opc == MDS_DONE_WRITING) {
-                        epoch = req_capsule_client_get(&cur->rq_pill,
+                LASSERT(opc == MDS_CLOSE || opc == MDS_DONE_WRITING);
+                epoch = req_capsule_client_get(&close_req->rq_pill,
                                                &RMF_MDT_EPOCH);
-                        LASSERT(epoch);
-                        DEBUG_REQ(D_HA, cur, "updating %s body with new fh",
-                                  opc == MDS_CLOSE ? "CLOSE" : "DONE_WRITING");
-                } else if (opc == MDS_REINT) {
-                        struct mdt_rec_setattr *rec;
+                LASSERT(epoch);
 
-                        /* Check this is REINT_SETATTR. */
-                        rec = req_capsule_client_get(&cur->rq_pill,
-                                               &RMF_REC_REINT);
-                        LASSERT(rec && rec->sa_opcode == REINT_SETATTR);
-
-                        epoch = req_capsule_client_get(&cur->rq_pill,
-                                               &RMF_MDT_EPOCH);
-                        LASSERT(epoch);
-                        DEBUG_REQ(D_HA, cur, "updating REINT_SETATTR body "
-                                  "with new fh");
-                }
-                if (epoch) {
-                        if (och != NULL)
-                                LASSERT(!memcmp(&old, &epoch->handle,
-                                                sizeof(old)));
-                        epoch->handle = body->handle;
-                }
+                if (och != NULL)
+                        LASSERT(!memcmp(&old, &epoch->handle, sizeof(old)));
+                DEBUG_REQ(D_HA, close_req, "updating close body with new fh");
+                epoch->handle = body->handle;
         }
         EXIT;
 }
 
-void mdc_commit_delayed(struct ptlrpc_request *req)
+void mdc_commit_open(struct ptlrpc_request *req)
 {
         struct md_open_data *mod = req->rq_cb_data;
-        struct ptlrpc_request *cur, *tmp;
-
-        DEBUG_REQ(D_HA, req, "req committed");
-
         if (mod == NULL)
                 return;
 
+        if (mod->mod_close_req != NULL)
+                mod->mod_close_req->rq_cb_data = NULL;
+
+        if (mod->mod_och != NULL)
+                mod->mod_och->och_mod = NULL;
+
+        OBD_FREE(mod, sizeof(*mod));
         req->rq_cb_data = NULL;
-        req->rq_commit_cb = NULL;
-        list_del_init(&req->rq_mod_list);
-        if (req->rq_sequence) {
-                list_for_each_entry_safe(cur, tmp, &mod->mod_replay_list,
-                                         rq_mod_list) {
-                        LASSERT(cur != LP_POISON);
-                        LASSERT(cur->rq_type != LI_POISON);
-                        DEBUG_REQ(D_HA, cur, "req balanced");
-                        LASSERT(cur->rq_transno != 0);
-                        LASSERT(cur->rq_import == req->rq_import);
-
-                        /* We no longer want to preserve this for transno-
-                         * unconditional replay. */
-                        spin_lock(&cur->rq_lock);
-                        cur->rq_replay = 0;
-                        spin_unlock(&cur->rq_lock);
-                }
-        }
-
-        if (list_empty(&mod->mod_replay_list)) {
-                if (mod->mod_och != NULL)
-                        mod->mod_och->och_mod = NULL;
-
-                OBD_FREE_PTR(mod);
-        }
 }
 
 int mdc_set_open_replay_data(struct obd_export *exp,
@@ -747,14 +713,13 @@ int mdc_set_open_replay_data(struct obd_export *exp,
                                   "Can't allocate md_open_data");
                         RETURN(0);
                 }
-                CFS_INIT_LIST_HEAD(&mod->mod_replay_list);
 
                 spin_lock(&open_req->rq_lock);
                 och->och_mod = mod;
                 mod->mod_och = och;
+                mod->mod_open_req = open_req;
                 open_req->rq_cb_data = mod;
-                list_add_tail(&open_req->rq_mod_list, &mod->mod_replay_list);
-                open_req->rq_commit_cb = mdc_commit_delayed;
+                open_req->rq_commit_cb = mdc_commit_open;
                 spin_unlock(&open_req->rq_lock);
         }
 
@@ -779,8 +744,8 @@ int mdc_clear_open_replay_data(struct obd_export *exp,
         ENTRY;
 
         /*
-         * Don't free the structure now (it happens in mdc_commit_delayed(),
-         * after the last request is removed from its replay list),
+         * Don't free the structure now (it happens in mdc_commit_open(), after
+         * we're sure we won't need to fix up the close request in the future),
          * but make sure that replay doesn't poke at the och, which is about to
          * be freed.
          */
@@ -820,10 +785,20 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
         ptlrpc_at_set_req_timeout(req);
 
         /* Ensure that this close's handle is fixed up during replay. */
-        if (likely(mod != NULL))
-                list_add_tail(&req->rq_mod_list, &mod->mod_replay_list);
-        else
-                CDEBUG(D_HA, "couldn't find open req; expecting close error\n");
+        if (likely(mod != NULL)) {
+                LASSERTF(mod->mod_open_req->rq_type != LI_POISON,
+                         "POISONED open %p!\n", mod->mod_open_req);
+
+                mod->mod_close_req = req;
+                DEBUG_REQ(D_HA, mod->mod_open_req, "matched open");
+                /* We no longer want to preserve this open for replay even
+                 * though the open was committed. b=3632, b=3633 */
+                spin_lock(&mod->mod_open_req->rq_lock);
+                mod->mod_open_req->rq_replay = 0;
+                spin_unlock(&mod->mod_open_req->rq_lock);
+        } else {
+                 CDEBUG(D_HA, "couldn't find open req; expecting close error\n");
+        }
 
         mdc_close_pack(req, op_data);
 
@@ -833,11 +808,6 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
                              obd->u.cli.cl_max_mds_cookiesize);
 
         ptlrpc_request_set_replen(req);
-
-        req->rq_commit_cb = mdc_commit_delayed;
-        req->rq_replay = 1;
-        LASSERT(req->rq_cb_data == NULL);
-        req->rq_cb_data = mod;
 
         mdc_get_rpc_lock(obd->u.cli.cl_close_lock, NULL);
         rc = ptlrpc_queue_wait(req);
@@ -870,12 +840,8 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
                         rc = -EPROTO;
         }
 
-        EXIT;
-        if (rc != 0 && rc != -EAGAIN && req && req->rq_commit_cb)
-                req->rq_commit_cb(req);
-
         *request = req;
-        return rc;
+        RETURN(rc);
 }
 
 int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
@@ -898,29 +864,25 @@ int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
                 RETURN(rc);
         }
 
-        /* XXX: add DONE_WRITING request to och -- when Size-on-MDS
-         * recovery will be ready. */
+        if (mod != NULL) {
+                LASSERTF(mod->mod_open_req->rq_type != LI_POISON,
+                         "POISONED setattr %p!\n", mod->mod_open_req);
+
+                mod->mod_close_req = req;
+                DEBUG_REQ(D_HA, mod->mod_open_req, "matched setattr");
+                /* We no longer want to preserve this open for replay even
+                 * though the open was committed. b=3632, b=3633 */
+                spin_lock(&mod->mod_open_req->rq_lock);
+                mod->mod_open_req->rq_replay = 0;
+                spin_unlock(&mod->mod_open_req->rq_lock);
+        }
+
         mdc_close_pack(req, op_data);
         ptlrpc_request_set_replen(req);
-        req->rq_replay = 1;
-        req->rq_cb_data = mod;
-        req->rq_commit_cb = mdc_commit_delayed;
-        if (likely(mod != NULL))
-                list_add_tail(&req->rq_mod_list, &mod->mod_replay_list);
-        else
-                CDEBUG(D_HA, "couldn't find open req; expecting close error\n");
 
         mdc_get_rpc_lock(obd->u.cli.cl_close_lock, NULL);
         rc = ptlrpc_queue_wait(req);
         mdc_put_rpc_lock(obd->u.cli.cl_close_lock, NULL);
-
-        /* Close the open replay sequence if an error occured or no SOM
-         * attribute update is needed. */
-        if (rc != -EAGAIN)
-                ptlrpc_close_replay_seq(req);
-
-        if (rc && rc != -EAGAIN && req->rq_commit_cb)
-                req->rq_commit_cb(req);
 
         ptlrpc_req_finished(req);
         RETURN(rc);
@@ -1340,12 +1302,10 @@ static int mdc_pin(struct obd_export *exp, const struct lu_fid *fid,
 
         OBD_ALLOC_PTR(handle->och_mod);
         if (handle->och_mod == NULL) {
-                DEBUG_REQ(D_ERROR, req, "can't allocate mdc_open_data");
+                DEBUG_REQ(D_ERROR, req, "can't allocate md_open_data");
                 GOTO(err_out, rc = -ENOMEM);
         }
-        /* will be dropped by unpin */
-        CFS_INIT_LIST_HEAD(&handle->och_mod->mod_replay_list);
-        list_add_tail(&req->rq_mod_list, &handle->och_mod->mod_replay_list);
+        handle->och_mod->mod_open_req = req; /* will be dropped by unpin */
 
         RETURN(0);
 
@@ -1381,13 +1341,7 @@ static int mdc_unpin(struct obd_export *exp, struct obd_client_handle *handle,
                 CERROR("Unpin failed: %d\n", rc);
 
         ptlrpc_req_finished(req);
-
-        LASSERT(!list_empty(&handle->och_mod->mod_replay_list));
-        req = list_entry(handle->och_mod->mod_replay_list.next,
-                         typeof(*req), rq_mod_list);
-        list_del_init(&req->rq_mod_list);
-        ptlrpc_req_finished(req);
-        LASSERT(list_empty(&handle->och_mod->mod_replay_list));
+        ptlrpc_req_finished(handle->och_mod->mod_open_req);
 
         OBD_FREE(handle->och_mod, sizeof(*handle->och_mod));
         RETURN(rc);

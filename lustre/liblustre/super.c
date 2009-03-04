@@ -709,7 +709,7 @@ static int llu_setattr_done_writing(struct inode *inode,
         if (rc == -EAGAIN) {
                 /* MDS has instructed us to obtain Size-on-MDS attribute
                  * from OSTs and send setattr to back to MDS. */
-                rc = llu_sizeonmds_update(inode, mod, &op_data->op_handle,
+                rc = llu_sizeonmds_update(inode, &op_data->op_handle,
                                           op_data->op_ioepoch);
         } else if (rc) {
                 CERROR("inode %llu mdc truncate failed: rc = %d\n",
@@ -796,7 +796,8 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 memcpy(&op_data.op_attr, attr, sizeof(*attr));
 
                 /* Open epoch for truncate. */
-                if (ia_valid & ATTR_SIZE)
+                if ((llu_i2mdexp(inode)->exp_connect_flags & OBD_CONNECT_SOM) &&
+                    (ia_valid & ATTR_SIZE))
                         op_data.op_flags = MF_EPOCH_OPEN;
                 rc = llu_md_setattr(inode, &op_data, &mod);
                 if (rc)

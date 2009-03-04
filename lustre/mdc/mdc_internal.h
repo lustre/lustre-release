@@ -121,7 +121,8 @@ int mdc_set_open_replay_data(struct obd_export *exp,
 
 int mdc_clear_open_replay_data(struct obd_export *exp,
                                struct obd_client_handle *och);
-void mdc_commit_delayed(struct ptlrpc_request *req);
+void mdc_commit_open(struct ptlrpc_request *req);
+void mdc_replay_open(struct ptlrpc_request *req);
 
 int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
                const void *data, int datalen, int mode, __u32 uid, __u32 gid,

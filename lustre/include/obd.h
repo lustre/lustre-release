@@ -1408,7 +1408,8 @@ struct lustre_md {
 
 struct md_open_data {
         struct obd_client_handle *mod_och;
-        struct list_head          mod_replay_list;
+        struct ptlrpc_request    *mod_open_req;
+        struct ptlrpc_request    *mod_close_req;
 };
 
 struct lookup_intent;

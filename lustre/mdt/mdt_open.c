@@ -1330,8 +1330,10 @@ int mdt_done_writing(struct mdt_thread_info *info)
         if (mfd == NULL) {
                 spin_unlock(&med->med_open_lock);
                 CDEBUG(D_INODE, "no handle for done write: fid = "DFID
-                       ": cookie = "LPX64"\n", PFID(info->mti_rr.rr_fid1),
-                       info->mti_epoch->handle.cookie);
+                       ": cookie = "LPX64" ioepoch = "LPU64"\n",
+                       PFID(info->mti_rr.rr_fid1),
+                       info->mti_epoch->handle.cookie,
+                       info->mti_epoch->ioepoch);
                 RETURN(-ESTALE);
         }
 

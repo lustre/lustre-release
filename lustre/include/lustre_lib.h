@@ -106,7 +106,7 @@ struct md_open_data;
 struct obd_client_handle {
         struct lustre_handle  och_fh;
         struct lu_fid         och_fid;
-        struct md_open_data *och_mod;
+        struct md_open_data  *och_mod;
         __u32 och_magic;
         int och_flags;
 };
