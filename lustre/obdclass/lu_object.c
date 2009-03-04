@@ -845,8 +845,6 @@ void lu_device_fini(struct lu_device *d)
 
         t = d->ld_type;
         if (d->ld_obd != NULL) {
-                /* finish lprocfs */
-                lprocfs_obd_cleanup(d->ld_obd);
                 d->ld_obd->obd_lu_dev = NULL;
                 d->ld_obd = NULL;
         }

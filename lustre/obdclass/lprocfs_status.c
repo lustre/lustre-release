@@ -888,7 +888,10 @@ int lprocfs_obd_cleanup(struct obd_device *obd)
                 lprocfs_remove(&obd->obd_proc_exports_entry);
                 obd->obd_proc_exports_entry = NULL;
         }
-        lprocfs_remove(&obd->obd_proc_entry);
+        if (obd->obd_proc_entry) {
+                lprocfs_remove(&obd->obd_proc_entry);
+                obd->obd_proc_entry = NULL;
+        }
         return 0;
 }
 

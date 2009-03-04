@@ -4348,16 +4348,6 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         mdt_seq_fini(env, m);
         mdt_seq_fini_cli(m);
         mdt_fld_fini(env, m);
-        mdt_procfs_fini(m);
-        if (obd->obd_proc_exports_entry) {
-                lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
-                obd->obd_proc_exports_entry = NULL;
-        }
-        lprocfs_free_per_client_stats(obd);
-        lprocfs_free_obd_stats(obd);
-        ptlrpc_lprocfs_unregister_obd(d->ld_obd);
-        lprocfs_obd_cleanup(d->ld_obd);
-
         sptlrpc_rule_set_free(&m->mdt_sptlrpc_rset);
 
         next->md_ops->mdo_init_capa_ctxt(env, next, 0, 0, 0, NULL);
@@ -4368,6 +4358,16 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
          * Finish the stack
          */
         mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
+
+        mdt_procfs_fini(m);
+        if (obd->obd_proc_exports_entry) {
+                lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
+                obd->obd_proc_exports_entry = NULL;
+        }
+        lprocfs_free_per_client_stats(obd);
+        lprocfs_free_obd_stats(obd);
+        ptlrpc_lprocfs_unregister_obd(obd);
+        lprocfs_obd_cleanup(obd);
 
         if (ls) {
                 struct md_site *mite;
