@@ -292,9 +292,8 @@ ptllnd_get_tunables(lnet_ni_t *ni)
                                       "PTLLND_PEERCREDITS", PTLLND_PEERCREDITS);
         if (rc != 0)
                 return rc;
-        /* kptl_msg_t::ptlm_credits is only a __u8 */
-        if (plni->plni_peer_credits > 255) {
-                CERROR("PTLLND_PEERCREDITS must be <= 255\n");
+        if (plni->plni_peer_credits > PTLLND_MSG_MAX_CREDITS) {
+                CERROR("PTLLND_PEERCREDITS must be <= %d\n", PTLLND_MSG_MAX_CREDITS);
                 return -EINVAL;
         }
 
@@ -303,10 +302,6 @@ ptllnd_get_tunables(lnet_ni_t *ni)
                                       PTLLND_MAX_ULND_MSG_SIZE);
         if (rc != 0)
                 return rc;
-        if (plni->plni_peer_credits > PTLLND_MSG_MAX_CREDITS) {
-                CERROR("PTLLND_PEERCREDITS must be <= %d\n", PTLLND_MSG_MAX_CREDITS);
-                return -EINVAL;
-        }
 
         rc = ptllnd_parse_int_tunable(&msgs_per_buffer,
                                       "PTLLND_MSGS_PER_BUFFER", 64);
