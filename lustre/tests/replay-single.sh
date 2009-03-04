@@ -1459,8 +1459,8 @@ run_test 60 "test llog post recovery init vs llog unlink"
 #test race  llog recovery thread vs llog cleanup
 test_61a() {	# was test_61
     remote_ost_nodsh && skip "remote OST with nodsh" && return 0
-
-    mkdir $DIR/$tdir
+    
+    mkdir -p $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 800
     replay_barrier ost1 
 #   OBD_FAIL_OST_LLOG_RECOVERY_TIMEOUT 0x221 

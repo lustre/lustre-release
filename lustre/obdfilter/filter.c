@@ -2327,7 +2327,7 @@ filter_default_olg_init(struct obd_device *obd, struct obd_llog_group *olg,
                        LLOG_MDS_OST_REPL_CTXT);
                 GOTO(cleanup_olg, rc = -ENODEV);
         }
-        ctxt->loc_lcm = filter->fo_lcm;
+        ctxt->loc_lcm = lcm_get(filter->fo_lcm);
         ctxt->llog_proc_cb = filter_recov_log_mds_ost_cb;
         llog_ctxt_put(ctxt);
 
@@ -2366,7 +2366,7 @@ filter_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                 RETURN(-ENODEV);
         }
         ctxt->llog_proc_cb = filter_recov_log_mds_ost_cb;
-        ctxt->loc_lcm = filter->fo_lcm;
+        ctxt->loc_lcm = lcm_get(filter->fo_lcm);
         llog_ctxt_put(ctxt);
         RETURN(rc);
 }
@@ -2401,8 +2401,10 @@ static int filter_llog_finish(struct obd_device *obd, int count)
         }
 
         if (filter->fo_lcm) {
+                mutex_down(&ctxt->loc_sem);
                 llog_recov_thread_fini(filter->fo_lcm, obd->obd_force);
                 filter->fo_lcm = NULL;
+                mutex_up(&ctxt->loc_sem);
         }
         RETURN(filter_olg_fini(&obd->obd_olg));
 }
