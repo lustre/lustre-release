@@ -3210,7 +3210,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         unsigned int orig_ids[MAXQUOTAS] = {0, 0};
         struct llog_cookie *fcc = NULL;
         struct filter_obd *filter;
-        int rc, err, locked = 0, sync = 0;
+        int rc, err, sync = 0;
         loff_t old_size = 0;
         unsigned int ia_valid;
         struct inode *inode;
@@ -3233,12 +3233,15 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                 if (fcc != NULL)
                         *fcc = oa->o_lcookie;
         }
-
-        if (ia_valid & ATTR_SIZE || ia_valid & (ATTR_UID | ATTR_GID)) {
+        if (ia_valid & (ATTR_SIZE | ATTR_UID | ATTR_GID)) {
                 DQUOT_INIT(inode);
+                /* Filter truncates and writes are serialized by
+                 * i_alloc_sem, see the comment in
+                 * filter_preprw_write.*/
+                if (ia_valid & ATTR_SIZE)
+                        down_write(&inode->i_alloc_sem);
                 LOCK_INODE_MUTEX(inode);
                 old_size = i_size_read(inode);
-                locked = 1;
         }
 
         /* If the inode still has SUID+SGID bits set (see filter_precreate())
@@ -3328,16 +3331,12 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                         rc = err;
         }
 
-        if (locked) {
-                UNLOCK_INODE_MUTEX(inode);
-                locked = 0;
-        }
-
         EXIT;
 out_unlock:
-        if (locked)
+        if (ia_valid & (ATTR_SIZE | ATTR_UID | ATTR_GID))
                 UNLOCK_INODE_MUTEX(inode);
-
+        if (ia_valid & ATTR_SIZE)
+                up_write(&inode->i_alloc_sem);
         if (fcc)
                 OBD_FREE(fcc, sizeof(*fcc));
 
