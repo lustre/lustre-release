@@ -411,9 +411,15 @@ int client_connect_import(const struct lu_env *env,
 
         if (obd->obd_namespace != NULL)
                 CERROR("already have namespace!\n");
+
+        /*
+         * Deadlock case - bug 18380
+         */
+        up_write(&cli->cl_sem);
         obd->obd_namespace = ldlm_namespace_new(obd, obd->obd_name,
                                                 LDLM_NAMESPACE_CLIENT,
                                                 LDLM_NAMESPACE_GREEDY);
+        down_write(&cli->cl_sem);
         if (obd->obd_namespace == NULL)
                 GOTO(out_disco, rc = -ENOMEM);
 
