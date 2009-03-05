@@ -1,4 +1,4 @@
-tbd  Sun Microsystems, Inc.
+2009-03-20  Sun Microsystems, Inc.
 	* version 1.6.6
 	* Support for networks:
 	 socklnd   - any kernel supported by Lustre,
@@ -11,11 +11,6 @@ tbd  Sun Microsystems, Inc.
 	 gmlnd     - GM 2.1.22 and later,
 	 mxlnd     - MX 1.2.1 or later,
 	 ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
-
-Severity   : 
-Bugzilla   : 
-Description: 
-Details    : 
 
 Severity   : major
 Bugzilla   : 15983
