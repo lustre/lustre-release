@@ -325,14 +325,40 @@ void filter_invalidate_cache(struct obd_device *obd, struct obd_ioobj *obj,
         int i;
 
         LASSERT(inode != NULL);
-
         for (i = 0, rnb = nb; i < obj->ioo_bufcnt; i++, rnb++) {
-                invalidate_mapping_pages(inode->i_mapping, 
+                invalidate_mapping_pages(inode->i_mapping,
                                          rnb->offset >> CFS_PAGE_SHIFT,
                                          (rnb->offset + rnb->len) >>
                                          CFS_PAGE_SHIFT);
         }
-        
+}
+
+/*
+ * the invalidate above doesn't work during read because lnet pins pages.
+ * The truncate is used here instead to drop pages from cache
+ */
+void filter_truncate_cache(struct obd_device *obd, struct obd_ioobj *obj,
+                           struct niobuf_remote *nb, int pages,
+                           struct niobuf_local *res, struct inode *inode)
+{
+        struct niobuf_remote *rnb;
+        int i;
+
+        LASSERT(inode != NULL);
+#ifdef HAVE_TRUNCATE_RANGE
+        for (i = 0, rnb = nb; i < obj->ioo_bufcnt; i++, rnb++) {
+                /* remove pages in which range is fit */
+                truncate_inode_pages_range(inode->i_mapping,
+                                           rnb->offset & CFS_PAGE_MASK,
+                                           (rnb->offset + rnb->len - 1) |
+                                           ~CFS_PAGE_MASK);
+        }
+#elif (defined HAVE_TRUNCATE_COMPLETE)
+        for (i = 0, lnb = res; i < pages; i++, lnb++)
+                truncate_complete_page(inode->i_mapping, lnb->page);
+#else
+#error "Nor truncate_inode_pages_range or truncate_complete_page are supported"
+#endif
 }
 
 static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
@@ -874,15 +900,17 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
                 inode = res->dentry->d_inode;
 
         for (i = 0, lnb = res; i < pages; i++, lnb++) {
-                if (lnb->page != NULL) {
+                if (lnb->page != NULL)
                         page_cache_release(lnb->page);
-                        lnb->page = NULL;
-                }
         }
 
         if (inode && (fo->fo_read_cache == 0 ||
-                        i_size_read(inode) > fo->fo_readcache_max_filesize))
-                filter_invalidate_cache(exp->exp_obd, obj, rnb, inode);
+                      i_size_read(inode) > fo->fo_readcache_max_filesize))
+                filter_truncate_cache(exp->exp_obd, obj, rnb, pages, res,
+                                      inode);
+
+        for (i = 0, lnb = res; i < pages; i++, lnb++)
+                lnb->page = NULL;
 
         if (res->dentry != NULL)
                 f_dput(res->dentry);

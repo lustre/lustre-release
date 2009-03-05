@@ -1178,6 +1178,15 @@ AC_DEFINE(HAVE_TRUNCATE_COMPLETE_PAGE, 1,
 ])
 ])
 
+AC_DEFUN([LC_EXPORT_TRUNCATE_RANGE],
+[LB_CHECK_SYMBOL_EXPORT([truncate_inode_pages_range],
+[mm/truncate.c],[
+AC_DEFINE(HAVE_TRUNCATE_RANGE, 1,
+            [kernel export truncate_inode_pages_range])
+],[
+])
+])
+
 AC_DEFUN([LC_EXPORT_D_REHASH_COND],
 [LB_CHECK_SYMBOL_EXPORT([d_rehash_cond],
 [fs/dcache.c],[
@@ -1394,6 +1403,7 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_TASK_PPTR
           # RHEL4 patches
           LC_EXPORT_TRUNCATE_COMPLETE
+          LC_EXPORT_TRUNCATE_RANGE
           LC_EXPORT_D_REHASH_COND
           LC_EXPORT___D_REHASH
           LC_EXPORT_D_MOVE_LOCKED
