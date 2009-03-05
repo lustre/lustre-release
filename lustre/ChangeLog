@@ -125,6 +125,14 @@ Details    : While using HA for Lustre servers with Linux RAID, it is possible
 	     written. Also while reading the MMP block, we should read it from
 	     disk and not the cached one.
 
+Severity   : minor
+Frequency  : rare, during recovery
+Bugzilla   : 17895
+Description: Assertion failure in ldlm_lock_put
+Details    : Do not put cancelled locks into replay list, hold references on
+             locks in replay list
+
+
 --------------------------------------------------------------------------
 2009-01-15 Sun Microsystems, Inc.
 	* version 1.6.7
