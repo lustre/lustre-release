@@ -752,25 +752,34 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 goto dont_check_exports;
 
         export = lustre_hash_lookup(target->obd_uuid_hash, &cluuid);
+        if (!export)
+                goto no_export;
 
-        if (export != NULL && mds_conn) {
-                /* mds reconnected after failover */
-                class_fail_export(export);
-                CWARN("%s: received MDS connection from NID %s,"
-                      " removing former export from NID %s\n",
-                      target->obd_name, libcfs_nid2str(req->rq_peer.nid),
-                      libcfs_nid2str(export->exp_connection->c_peer.nid));
-                class_export_put(export);
-                export = NULL;
-                rc = 0;
-        } else  if (export != NULL && export->exp_connecting) {
+        /* we've found an export in the hash */
+        if (export->exp_connecting) {
                 /* bug 9635, et. al. */
                 CWARN("%s: exp %p already connecting\n",
                       export->exp_obd->obd_name, export);
                 class_export_put(export);
                 export = NULL;
                 rc = -EALREADY;
-        } else if (export != NULL && export->exp_connection != NULL &&
+        } else if (mds_conn && export->exp_connection) {
+                if (req->rq_peer.nid != export->exp_connection->c_peer.nid)
+                        /* mds reconnected after failover */
+                        CWARN("%s: received MDS connection from NID %s,"
+                              " removing former export from NID %s\n",
+                            target->obd_name, libcfs_nid2str(req->rq_peer.nid),
+                            libcfs_nid2str(export->exp_connection->c_peer.nid));
+                else
+                        /* new mds connection from the same nid */
+                        CWARN("%s: received new MDS connection from NID %s,"
+                              " removing former export from same NID\n",
+                            target->obd_name, libcfs_nid2str(req->rq_peer.nid));
+                class_fail_export(export);
+                class_export_put(export);
+                export = NULL;
+                rc = 0;
+        } else if (export->exp_connection &&
                    req->rq_peer.nid != export->exp_connection->c_peer.nid) {
                 CWARN("%s: cookie %s seen on new NID %s when "
                       "existing NID %s is already connected\n",
@@ -780,19 +789,19 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 rc = -EALREADY;
                 class_export_put(export);
                 export = NULL;
-        } else if (export != NULL && export->exp_failed) { /* bug 11327 */
+        } else if (export->exp_failed) { /* bug 11327 */
                 CDEBUG(D_HA, "%s: exp %p evict in progress - new cookie needed "
                       "for connect\n", export->exp_obd->obd_name, export);
                 class_export_put(export);
                 export = NULL;
                 rc = -ENODEV;
-        } else if (export != NULL && export->exp_delayed &&
+        } else if (export->exp_delayed &&
                    !(data && data->ocd_connect_flags & OBD_CONNECT_VBR)) {
                 class_fail_export(export);
                 class_export_put(export);
                 export = NULL;
                 GOTO(out, rc = -ENODEV);
-        } else if (export != NULL) {
+        } else {
                 spin_lock(&export->exp_lock);
                 export->exp_connecting = 1;
                 spin_unlock(&export->exp_lock);
@@ -804,6 +813,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         /* If we found an export, we already unlocked. */
         if (!export) {
+no_export:
                 OBD_FAIL_TIMEOUT(OBD_FAIL_TGT_DELAY_CONNECT, 2 * obd_timeout);
         } else if (req->rq_export == NULL &&
                    atomic_read(&export->exp_rpc_count) > 0) {
