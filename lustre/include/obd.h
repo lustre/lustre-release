@@ -190,7 +190,7 @@ struct obd_info {
          * level. E.g. it is used for update lsm->lsm_oinfo at every recieved
          * request in osc level for enqueue requests. It is also possible to
          * update some caller data from LOV layer if needed. */
-        obd_enqueue_update_f     oi_cb_up;
+        obd_enqueue_update_f    oi_cb_up;
 };
 
 /* compare all relevant fields. */
@@ -615,6 +615,10 @@ struct ltd_qos {
         unsigned int        ltq_usable:1;    /* usable for striping */
 };
 
+struct lov_statfs_data {
+        struct obd_info   lsd_oi;
+        struct obd_statfs lsd_statfs;
+};
 struct lov_qos {
         struct list_head    lq_oss_list;    /* list of OSSs that targets use */
         struct rw_semaphore lq_rw_sem;
@@ -627,7 +631,12 @@ struct lov_qos {
                             lq_dirty_rr:1,  /* recalc round-robin list */
                             lq_same_space:1,/* the ost's all have approx.
                                                the same space avail */
-                            lq_reset:1;     /* zero current penalties */
+                            lq_reset:1,     /* zero current penalties */
+                            lq_statfs_in_progress:1; /* statfs op in progress */
+        /* qos statfs data */
+        struct lov_statfs_data *lq_statfs_data;
+        cfs_waitq_t         lq_statfs_waitq; /* waitqueue to notify statfs
+                                              * requests completion */
 };
 
 struct lov_tgt_desc {

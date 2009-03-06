@@ -178,6 +178,8 @@ int qos_del_tgt(struct obd_device *obd, struct lov_tgt_desc *tgt);
 void qos_shrink_lsm(struct lov_request_set *set);
 int qos_prep_create(struct obd_export *exp, struct lov_request_set *set);
 void qos_update(struct lov_obd *lov);
+void qos_statfs_done(struct lov_obd *lov);
+void qos_statfs_update(struct obd_device *obd, __u64 max_age, int wait);
 int qos_remedy_create(struct lov_request_set *set, struct lov_request *req);
 
 /* lov_request.c */
@@ -248,6 +250,7 @@ void lov_update_statfs(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
 int lov_fini_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                     int success);
 int lov_fini_statfs_set(struct lov_request_set *set);
+int lov_statfs_interpret(struct ptlrpc_request_set *rqset, void *data, int rc);
 
 /* lov_obd.c */
 void lov_fix_desc(struct lov_desc *desc);
