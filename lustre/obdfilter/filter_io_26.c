@@ -763,11 +763,12 @@ cleanup:
                 lnb->page = NULL;
         }
 
-        if (inode && (fo->fo_writethrough_cache == 0 ||
-                        i_size_read(inode) > fo->fo_readcache_max_filesize))
-                filter_invalidate_cache(obd, obj, nb, inode);
-
-        up_read(&inode->i_alloc_sem);
+        if (inode) {
+                if (fo->fo_writethrough_cache == 0 ||
+                    i_size_read(inode) > fo->fo_readcache_max_filesize)
+                        filter_release_cache(obd, obj, nb, inode);
+                up_read(&inode->i_alloc_sem);
+        }
 
         RETURN(rc);
 }
