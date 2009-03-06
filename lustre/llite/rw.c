@@ -1620,7 +1620,6 @@ static void ras_increase_window(struct ll_readahead_state *ras,
 	if (rc)
 		step = INIT_RAS_WINDOW_PAGES;
 
-	LASSERT(step == 256);
 	if (stride_io_mode(ras))
 		ras_stride_increase_window(ras, ra, (unsigned long)step);
 	else
