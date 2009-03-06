@@ -31,6 +31,10 @@ tbd Sun Microsystems, Inc.
 	  of Lustre filesystem with 4K stack may cause a stack overflow. For
 	  more information, please refer to bugzilla 17630.
 
+Severity   : normal
+Bugzilla   : 18204
+Description: free_entry erroneously used groups_free instead of put_group_info
+
 Severity   : enhancement
 Bugzilla   : 17817 
 Description: Make read-ahead stripe size aligned. 
