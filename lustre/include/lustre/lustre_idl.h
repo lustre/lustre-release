@@ -627,9 +627,14 @@ struct obd_statfs {
 extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_STATFS_NODELAY      0x0001  /* requests should be send without delay
                                          * and resends for avoid deadlocks */
-
 #define OBD_STATFS_FROM_CACHE   0x0002  /* the statfs callback should not update
                                          * obd_osfs_age */
+#define OBD_STATFS_PTLRPCD      0x0004  /* requests will be sent via ptlrpcd
+                                         * instead of a specific set. This
+                                         * means that we cannot rely on the set
+                                         * interpret routine to be called.
+                                         * lov_statfs_fini() must thus be called
+                                         * by the request interpret routine */
 
 /* ost_body.data values for OST_BRW */
 
@@ -790,7 +795,7 @@ struct lu_fid {
         fid_oid(fid), \
         fid_ver(fid)
 
-enum { 
+enum {
         /** put FID sequence at this offset in ldlm_res_id. */
         LUSTRE_RES_ID_SEQ_OFF = 0,
         /** put FID oid at this offset in ldlm_res_id. */
@@ -950,7 +955,7 @@ static inline void fid_init(struct lu_fid *fid)
 /**
  * Check if a fid is igif or not.
  * \param fid the fid to be tested.
- * \return true if the fid is a igif; otherwise false. 
+ * \return true if the fid is a igif; otherwise false.
  */
 static inline int fid_is_igif(const struct lu_fid *fid)
 {
@@ -960,7 +965,7 @@ static inline int fid_is_igif(const struct lu_fid *fid)
 /**
  * Check if a fid is idif or not.
  * \param fid the fid to be tested.
- * \return true if the fid is a idif; otherwise false. 
+ * \return true if the fid is a idif; otherwise false.
  */
 static inline int fid_is_idif(const struct lu_fid *fid)
 {
@@ -993,7 +998,7 @@ static inline int fid_is_sane(const struct lu_fid *fid)
 /**
  * Check if a fid is zero.
  * \param fid the fid to be tested.
- * \return true if the fid is zero; otherwise false. 
+ * \return true if the fid is zero; otherwise false.
  */
 static inline int fid_is_zero(const struct lu_fid *fid)
 {
@@ -1014,7 +1019,7 @@ static inline ino_t lu_igif_ino(const struct lu_fid *fid)
  * Get inode generation from a igif.
  * \param fid a igif to get inode generation from.
  * \return inode generation for the igif.
- */ 
+ */
 static inline __u32 lu_igif_gen(const struct lu_fid *fid)
 {
         return fid_oid(fid);

@@ -113,7 +113,7 @@ int lov_update_common_set(struct lov_request_set *set,
         lov_update_set(set, req, rc);
 
         /* grace error on inactive ost */
-        if (rc && !(lov->lov_tgts[req->rq_idx] && 
+        if (rc && !(lov->lov_tgts[req->rq_idx] &&
                     lov->lov_tgts[req->rq_idx]->ltd_active))
                 rc = 0;
 
@@ -876,7 +876,7 @@ int lov_prep_brw_set(struct obd_export *exp, struct obd_info *oinfo,
                         continue;
 
                 loi = oinfo->oi_md->lsm_oinfo[i];
-                if (!lov->lov_tgts[loi->loi_ost_idx] || 
+                if (!lov->lov_tgts[loi->loi_ost_idx] ||
                     !lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
                         GOTO(out, rc = -EIO);
@@ -1075,7 +1075,7 @@ int lov_prep_destroy_set(struct obd_export *exp, struct obd_info *oinfo,
                 struct lov_request *req;
 
                 loi = lsm->lsm_oinfo[i];
-                if (!lov->lov_tgts[loi->loi_ost_idx] || 
+                if (!lov->lov_tgts[loi->loi_ost_idx] ||
                     !lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
                         continue;
@@ -1134,7 +1134,7 @@ int lov_update_setattr_set(struct lov_request_set *set,
         lov_update_set(set, req, rc);
 
         /* grace error on inactive ost */
-        if (rc && !(lov->lov_tgts[req->rq_idx] && 
+        if (rc && !(lov->lov_tgts[req->rq_idx] &&
                     lov->lov_tgts[req->rq_idx]->ltd_active))
                 rc = 0;
 
@@ -1576,7 +1576,7 @@ void lov_update_statfs(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
 }
 
 /* The callback for osc_statfs_async that finilizes a request info when a
- * response is recieved. */
+ * response is received. */
 static int cb_statfs_update(struct obd_info *oinfo, int rc)
 {
         struct lov_request *lovreq;
@@ -1602,7 +1602,7 @@ static int cb_statfs_update(struct obd_info *oinfo, int rc)
                 if (rc && !(lov->lov_tgts[lovreq->rq_idx] &&
                             lov->lov_tgts[lovreq->rq_idx]->ltd_active))
                         rc = 0;
-                RETURN(rc);
+                GOTO(out, rc);
         }
 
         spin_lock(&obd->obd_osfs_lock);
@@ -1613,6 +1613,14 @@ static int cb_statfs_update(struct obd_info *oinfo, int rc)
 
         lov_update_statfs(osfs, lov_sfs, success);
         qos_update(lov);
+out:
+        if (lovreq->rq_rqset->set_oi->oi_flags & OBD_STATFS_PTLRPCD &&
+            lovreq->rq_rqset->set_count == lovreq->rq_rqset->set_completes) {
+               lov_statfs_interpret(NULL, lovreq->rq_rqset,
+                                    lovreq->rq_rqset->set_success !=
+                                                  lovreq->rq_rqset->set_count);
+               qos_statfs_done(lov);
+        }
 
         RETURN(0);
 }
