@@ -1191,7 +1191,6 @@ static int signal_completed_replay(struct obd_import *imp)
 static int ptlrpc_invalidate_import_thread(void *data)
 {
         struct obd_import *imp = data;
-        int disconnect;
 
         ENTRY;
 
@@ -1203,13 +1202,6 @@ static int ptlrpc_invalidate_import_thread(void *data)
 
         ptlrpc_invalidate_import(imp);
 
-        /* is client_disconnect_export in flight ? */
-        spin_lock(&imp->imp_lock);
-        disconnect = imp->imp_deactive;
-        spin_unlock(&imp->imp_lock);
-        if (disconnect)
-                GOTO(out, 0 );
-
         if (obd_dump_on_eviction) {
                 CERROR("dump the log upon eviction\n");
                 libcfs_debug_dumplog();
@@ -1218,7 +1210,6 @@ static int ptlrpc_invalidate_import_thread(void *data)
         IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
         ptlrpc_import_recovery_state_machine(imp);
 
-out:
         class_import_put(imp);
         RETURN(0);
 }
