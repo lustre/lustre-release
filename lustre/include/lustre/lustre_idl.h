@@ -1053,9 +1053,14 @@ struct obd_statfs {
 extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_STATFS_NODELAY      0x0001  /* requests should be send without delay
                                          * and resends for avoid deadlocks */
-
 #define OBD_STATFS_FROM_CACHE   0x0002  /* the statfs callback should not update
                                          * obd_osfs_age */
+#define OBD_STATFS_PTLRPCD      0x0004  /* requests will be sent via ptlrpcd
+                                         * instead of a specific set. This
+                                         * means that we cannot rely on the set
+                                         * interpret routine to be called.
+                                         * lov_statfs_fini() must thus be called
+                                         * by the request interpret routine */
 
 /* ost_body.data values for OST_BRW */
 

@@ -47,6 +47,7 @@
 
 #include <obd_class.h>
 #include <obd_lov.h>
+#include <lustre/lustre_idl.h>
 #include "lov_internal.h"
 
 /* #define QOS_DEBUG 1 */
@@ -765,6 +766,11 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
 
         lov_getref(exp->exp_obd);
 
+        /* wait for fresh statfs info if needed, the rpcs are sent in
+         * lov_create() */
+        qos_statfs_update(exp->exp_obd,
+                          cfs_time_shift_64(-2 * lov->desc.ld_qos_maxage), 1);
+
         /* Detect -EAGAIN early, before expensive lock is taken. */
         if (!lov->lov_qos.lq_dirty && lov->lov_qos.lq_same_space)
                 GOTO(out_nolock, rc = -EAGAIN);
@@ -1102,4 +1108,111 @@ void qos_update(struct lov_obd *lov)
 {
         ENTRY;
         lov->lov_qos.lq_dirty = 1;
+}
+
+void qos_statfs_done(struct lov_obd *lov)
+{
+        LASSERT(lov->lov_qos.lq_statfs_in_progress);
+        down_write(&lov->lov_qos.lq_rw_sem);
+        lov->lov_qos.lq_statfs_in_progress = 0;
+        /* wake up any threads waiting for the statfs rpcs to complete */
+        cfs_waitq_signal(&lov->lov_qos.lq_statfs_waitq);
+        up_write(&lov->lov_qos.lq_rw_sem);
+}
+
+static int qos_statfs_ready(struct obd_device *obd, __u64 max_age)
+{
+        struct lov_obd         *lov = &obd->u.lov;
+        int rc;
+        ENTRY;
+        down_read(&lov->lov_qos.lq_rw_sem);
+        rc = lov->lov_qos.lq_statfs_in_progress == 0 ||
+             cfs_time_beforeq_64(max_age, obd->obd_osfs_age);
+        up_read(&lov->lov_qos.lq_rw_sem);
+        RETURN(rc);
+}
+
+/*
+ * Update statfs data if the current osfs age is older than max_age.
+ * If wait is not set, it means that we are called from lov_create()
+ * and we should just issue the rpcs without waiting for them to complete.
+ * If wait is set, we are called from alloc_qos() and we just have
+ * to wait for the request set to complete.
+ */
+void qos_statfs_update(struct obd_device *obd, __u64 max_age, int wait)
+{
+        struct lov_obd         *lov = &obd->u.lov;
+        struct obd_info        *oinfo;
+        int                     rc = 0;
+        struct ptlrpc_request_set *set = NULL;
+        ENTRY;
+
+        if (cfs_time_beforeq_64(max_age, obd->obd_osfs_age))
+                /* statfs data are quite recent, don't need to refresh it */
+                RETURN_EXIT;
+
+        if (!wait && lov->lov_qos.lq_statfs_in_progress)
+                /* statfs already in progress */
+                RETURN_EXIT;
+
+        down_write(&lov->lov_qos.lq_rw_sem);
+        if (lov->lov_qos.lq_statfs_in_progress) {
+                up_write(&lov->lov_qos.lq_rw_sem);
+                GOTO(out, rc = 0);
+        }
+        /* no statfs in flight, send rpcs */
+        lov->lov_qos.lq_statfs_in_progress = 1;
+        up_write(&lov->lov_qos.lq_rw_sem);
+
+        if (wait)
+                CDEBUG(D_QOS, "%s: did not manage to get fresh statfs data "
+                       "in a timely manner (osfs age "LPU64", max age "LPU64")"
+                       ", sending new statfs rpcs\n",
+                       obd_uuid2str(&lov->desc.ld_uuid), obd->obd_osfs_age,
+                       max_age);
+
+        /* need to send statfs rpcs */
+        CDEBUG(D_QOS, "sending new statfs requests\n");
+        memset(lov->lov_qos.lq_statfs_data, 0,
+               sizeof(*lov->lov_qos.lq_statfs_data));
+        oinfo = &lov->lov_qos.lq_statfs_data->lsd_oi;
+        oinfo->oi_osfs = &lov->lov_qos.lq_statfs_data->lsd_statfs;
+        oinfo->oi_flags = OBD_STATFS_NODELAY;
+        set = ptlrpc_prep_set();
+        if (!set)
+                GOTO(out_failed, rc = -ENOMEM);
+
+        rc = obd_statfs_async(obd, oinfo, max_age, set);
+        if (rc || list_empty(&set->set_requests)) {
+                if (rc)
+                        CWARN("statfs failed with %d\n", rc);
+                GOTO(out_failed, rc);
+        }
+        /* send requests via ptlrpcd */
+        oinfo->oi_flags |= OBD_STATFS_PTLRPCD;
+        ptlrpcd_add_rqset(set);
+        GOTO(out, rc);
+
+out_failed:
+        down_write(&lov->lov_qos.lq_rw_sem);
+        lov->lov_qos.lq_statfs_in_progress = 0;
+        /* wake up any threads waiting for the statfs rpcs to complete */
+        cfs_waitq_signal(&lov->lov_qos.lq_statfs_waitq);
+        up_write(&lov->lov_qos.lq_rw_sem);
+        wait = 0;
+out:
+        if (set)
+                ptlrpc_set_destroy(set);
+        if (wait) {
+                struct l_wait_info lwi = { 0 };
+                CDEBUG(D_QOS, "waiting for statfs requests to complete\n");
+                l_wait_event(lov->lov_qos.lq_statfs_waitq,
+                             qos_statfs_ready(obd, max_age), &lwi);
+                if (cfs_time_before_64(obd->obd_osfs_age, max_age))
+                        CDEBUG(D_QOS, "%s: still no fresh statfs data after "
+                                      "waiting (osfs age "LPU64", max age "
+                                      LPU64")\n",
+                                      obd_uuid2str(&lov->desc.ld_uuid),
+                                      obd->obd_osfs_age, max_age);
+        }
 }

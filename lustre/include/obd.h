@@ -648,6 +648,10 @@ struct lov_qos_rr {
         unsigned long       lqr_dirty:1;     /* recalc round-robin list */
 };
 
+struct lov_statfs_data {
+        struct obd_info   lsd_oi;
+        struct obd_statfs lsd_statfs;
+};
 /* Stripe placement optimization */
 struct lov_qos {
         struct list_head    lq_oss_list;    /* list of OSSs that targets use */
@@ -659,7 +663,12 @@ struct lov_qos {
         unsigned long       lq_dirty:1,     /* recalc qos data */
                             lq_same_space:1,/* the ost's all have approx.
                                                the same space avail */
-                            lq_reset:1;     /* zero current penalties */
+                            lq_reset:1,     /* zero current penalties */
+                            lq_statfs_in_progress:1; /* statfs op in progress */
+        /* qos statfs data */
+        struct lov_statfs_data *lq_statfs_data;
+        cfs_waitq_t         lq_statfs_waitq; /* waitqueue to notify statfs
+                                              * requests completion */
 };
 
 struct lov_tgt_desc {

@@ -1147,19 +1147,19 @@ ptlrpc_rqphase_move(struct ptlrpc_request *req, enum rq_phase new_phase)
 {
         if (req->rq_phase == new_phase)
                 return;
-        
+
         if (new_phase == RQ_PHASE_UNREGISTERING) {
                 req->rq_next_phase = req->rq_phase;
                 if (req->rq_import)
                         atomic_inc(&req->rq_import->imp_unregistering);
         }
-        
+
         if (req->rq_phase == RQ_PHASE_UNREGISTERING) {
                 if (req->rq_import)
                         atomic_dec(&req->rq_import->imp_unregistering);
         }
 
-        DEBUG_REQ(D_RPCTRACE, req, "move req \"%s\" -> \"%s\"", 
+        DEBUG_REQ(D_RPCTRACE, req, "move req \"%s\" -> \"%s\"",
                   ptlrpc_rqphase2str(req), ptlrpc_phase2str(new_phase));
 
         req->rq_phase = new_phase;
@@ -1274,7 +1274,7 @@ int import_set_conn_priority(struct obd_import *imp, struct obd_uuid *uuid);
 
 /* ptlrpc/pinger.c */
 enum timeout_event {
-        TIMEOUT_GRANT = 1 
+        TIMEOUT_GRANT = 1
 };
 struct timeout_item;
 typedef int (*timeout_cb_t)(struct timeout_item *, void *);
@@ -1316,6 +1316,7 @@ int ptlrpcd_start(const char *name, struct ptlrpcd_ctl *pc);
 void ptlrpcd_stop(struct ptlrpcd_ctl *pc, int force);
 void ptlrpcd_wake(struct ptlrpc_request *req);
 void ptlrpcd_add_req(struct ptlrpc_request *req, enum ptlrpcd_scope scope);
+void ptlrpcd_add_rqset(struct ptlrpc_request_set *set);
 int ptlrpcd_addref(void);
 void ptlrpcd_decref(void);
 
