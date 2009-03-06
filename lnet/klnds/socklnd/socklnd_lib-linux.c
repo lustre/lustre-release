@@ -130,7 +130,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
                 .data     = &ksocknal_tunables.ksnd_peertimeout,
                 .maxlen   = sizeof (int),
                 .mode     = 0444,
-                .proc_handler = &proc_dointvec
+                .proc_handler = &proc_dointvec,
                 .strategy = &sysctl_intvec,
         },
         {
