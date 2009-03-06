@@ -2914,7 +2914,21 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
         } else if (KEY_IS(KEY_FIEMAP)) {
                 rc = lov_fiemap(lov, keylen, key, vallen, val, lsm);
                 GOTO(out, rc);
-        }
+        } else if (KEY_IS(KEY_OFF_RPCSIZE)) {
+		__u64 *offset = val;
+                struct lov_tgt_desc *tgt;
+                struct lov_oinfo *loi;
+		int stripe;
+
+		LASSERT(*vallen == sizeof(__u64));
+		stripe = lov_stripe_number(lsm, *offset); 
+		loi = lsm->lsm_oinfo[stripe];
+		tgt = lov->lov_tgts[loi->loi_ost_idx];
+                if (!tgt || !tgt->ltd_active)
+                        GOTO(out, rc = -ESRCH);
+		rc = obd_get_info(tgt->ltd_exp, keylen, key, vallen, val, NULL);
+		GOTO(out, rc);	
+	}
 
         rc = -EINVAL;
 out:
@@ -3035,19 +3049,22 @@ static int lov_extent_calc(struct obd_export *exp, struct lov_stripe_md *lsm,
         __u64 start;
         __u32 ssize  = lsm->lsm_stripe_size;
 
+        if (cmd & OBD_CALC_STRIPE_RPC_ALIGN)
+                ssize = ssize > PTLRPC_MAX_BRW_SIZE ? 
+                        PTLRPC_MAX_BRW_SIZE : ssize;
+
         start = *offset;
         do_div(start, ssize);
         start = start * ssize;
 
         CDEBUG(D_DLMTRACE, "offset "LPU64", stripe %u, start "LPU64
                ", end "LPU64"\n", *offset, ssize, start, start + ssize - 1);
-        if (cmd == OBD_CALC_STRIPE_END) {
+        if (cmd & OBD_CALC_STRIPE_END) 
                 *offset = start + ssize - 1;
-        } else if (cmd == OBD_CALC_STRIPE_START) {
+        else if (cmd & OBD_CALC_STRIPE_START)
                 *offset = start;
-        } else {
+        else 
                 LBUG();
-        }
 
         RETURN(0);
 }

@@ -3730,7 +3730,7 @@ setup_101b() {
 	STRIPE_COUNT=$OSTCOUNT
 	STRIPE_OFFSET=0
 
-	trap cleanup_101b EXIT
+	trap cleanup_101 EXIT
 	# prepare the read-ahead file
 	$SETSTRIPE $DIR/$tfile -s $STRIPE_SIZE -i $STRIPE_OFFSET -c $OSTCOUNT
 
@@ -3738,7 +3738,7 @@ setup_101b() {
 	SETUP_TEST101b=yes
 }
 
-cleanup_101b() {
+cleanup_101() {
 	trap 0
 	rm -rf $DIR/$tdir $DIR/$tfile
 	SETUP_TEST101b=no
@@ -3788,10 +3788,58 @@ test_101b() {
 		cancel_lru_locks osc
 		ra_check_101b $BSIZE
 	done
-	cleanup_101b
 	true
 }
 run_test 101b "check stride-io mode read-ahead ================="
+  
+test_101c() {
+        local STRIPE_SIZE=1048576
+        local FILE_LENGTH=$((STRIPE_SIZE*100))
+        local nreads=10000
+
+        setup_test101
+
+        cancel_lru_locks osc
+        $LCTL set_param osc.*.rpc_stats 0
+        $READS -f $DIR/$tfile -s$FILE_LENGTH -b65536 -n$nreads -t 180 
+        for OSC in `$LCTL  get_param -N osc.*`
+        do
+                if [ "$OSC" == "osc.num_refs" ]; then
+                        continue
+                fi
+                lines=`$LCTL get_param -n ${OSC}.rpc_stats | wc | awk '{print $1}'`
+                if [ $lines -le 20 ]; then
+                        continue
+                fi
+                
+		rpc4k=$($LCTL get_param -n $OSC | awk '$1 == "1:" { print $2; exit; }')
+                rpc8k=$($LCTL get_param -n $OSC | awk '$1 == "2:" { print $2; exit; }')
+                rpc16k=$($LCTL get_param -n $OSC | awk '$1 == "4:" { print $2; exit; }')
+                rpc32k=$($LCTL get_param -n $OSC | awk '$1 == "8:" { print $2; exit; }')
+               
+                [ $rpc4k != 0 ]  && error "Small 4k read IO ${rpc4k}!"
+                [ $rpc8k != 0 ]  && error "Small 8k read IO ${rpc8k}!"
+                [ $rpc16k != 0 ] && error "Small 16k read IO ${rpc16k}!"
+                [ $rpc32k != 0 ] && error "Small 32k read IO ${rpc32k}!"
+
+                echo "Small rpc check passed!"
+       	        rpc64k=$($LCTL get_param -n $OSC | awk '$1 == "16:" { print $2; exit; }')
+                rpc128k=$($LCTL get_param -n $OSC | awk '$1 == "32:" { print $2; exit; }')
+                rpc256k=$($LCTL get_param -n $OSC | awk '$1 == "64:" { print $2; exit; }')
+                rpc512k=$($LCTL get_param -n $OSC | awk '$1 == "128:" { print $2; exit; }')
+                rpc1024k=$($LCTL get_param -n $OSC | awk '$1 == "256:" { print $2; exit; }')
+                   
+                [ $rpc64k == 0 ]   && error "No 64k readahead IO ${rpc64k}" 
+                [ $rpc128k == 0 ]  && error "No 128k readahead IO ${rpc128k}" 
+                [ $rpc256k == 0 ]  && error "No 256k readahead IO ${rpc256k}" 
+                [ $rpc512k == 0 ]  && error "No 512k readahead IO ${rpc256k}" 
+                [ $rpc1024k == 0 ] && error "No 1024k readahead IO ${rpc1024k}" 
+                echo "Big rpc check passed!"
+        done
+        cleanup_101
+        true
+}
+run_test 101c "check stripe_size aligned read-ahead ================="
 
 export SETUP_TEST102=no
 setup_test102() {

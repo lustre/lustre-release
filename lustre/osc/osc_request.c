@@ -3737,7 +3737,13 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
                 *vallen = sizeof(*stripe);
                 *stripe = 0;
                 RETURN(0);
-        } else if (KEY_IS(KEY_LAST_ID)) {
+        } else if (KEY_IS(KEY_OFF_RPCSIZE)) {
+		struct client_obd *cli = &exp->exp_obd->u.cli;
+		__u64 *rpcsize = val;
+		LASSERT(*vallen == sizeof(__u64));
+		*rpcsize = (__u64)cli->cl_max_pages_per_rpc;	
+		RETURN(0);
+	} else if (KEY_IS(KEY_LAST_ID)) {
                 struct ptlrpc_request *req;
                 obd_id *reply;
                 char *bufs[2] = { NULL, key };

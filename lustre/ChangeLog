@@ -32,6 +32,10 @@ tbd Sun Microsystems, Inc.
 	  more information, please refer to bugzilla 17630.
 
 Severity   : enhancement
+Bugzilla   : 17817 
+Description: Make read-ahead stripe size aligned. 
+
+Severity   : enhancement
 Bugzilla   : 17536
 Description: MDS create should not wait for statfs RPC while holding DLM lock.
 
