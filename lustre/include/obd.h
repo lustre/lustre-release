@@ -1312,7 +1312,7 @@ static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
                 return;
         }
         if (exp && transno > exp->exp_last_committed) {
-                CDEBUG(D_HA, "%s: transno "LPU64" committed\n",
+                CDEBUG(D_INFO, "%s: transno "LPU64" committed\n",
                        obd->obd_name, transno);
                 exp->exp_last_committed = transno;
                 ptlrpc_commit_replies(exp);
