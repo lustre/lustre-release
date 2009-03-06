@@ -1181,7 +1181,6 @@ static int signal_completed_replay(struct obd_import *imp)
 static int ptlrpc_invalidate_import_thread(void *data)
 {
         struct obd_import *imp = data;
-        int disconnect;
 
         ENTRY;
 
