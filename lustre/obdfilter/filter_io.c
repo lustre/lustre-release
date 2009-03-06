@@ -361,21 +361,22 @@ void filter_truncate_cache(struct obd_device *obd, struct obd_ioobj *obj,
                            struct niobuf_remote *nb, int pages,
                            struct niobuf_local *res, struct inode *inode)
 {
-        struct niobuf_remote *rnb;
         int i;
 
         LASSERT(inode != NULL);
 #ifdef HAVE_TRUNCATE_RANGE
-        for (i = 0, rnb = nb; i < obj->ioo_bufcnt; i++, rnb++) {
+        for (i = 0; i < obj->ioo_bufcnt; i++, nb++) {
                 /* remove pages in which range is fit */
                 truncate_inode_pages_range(inode->i_mapping,
-                                           rnb->offset & CFS_PAGE_MASK,
-                                           (rnb->offset + rnb->len - 1) |
+                                           nb->offset & CFS_PAGE_MASK,
+                                           (nb->offset + nb->len - 1) |
                                            ~CFS_PAGE_MASK);
         }
-#elif (defined HAVE_TRUNCATE_COMPLETE)
-        for (i = 0, lnb = res; i < pages; i++, lnb++)
-                truncate_complete_page(inode->i_mapping, lnb->page);
+#elif (defined HAVE_TRUNCATE_COMPLETE_PAGE)
+        for (i = 0; i < pages; i++, res++) {
+                if (res->page != NULL)
+                        truncate_complete_page(inode->i_mapping, res->page);
+        }
 #else
 #error "Nor truncate_inode_pages_range or truncate_complete_page are supported"
 #endif
