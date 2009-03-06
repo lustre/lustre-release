@@ -335,51 +335,32 @@ static int filter_map_remote_to_local(int objcount, struct obd_ioobj *obj,
 }
 
 /*
- * the function is used to free all pages used for request
- * just to mimic cacheless OSS which don't occupy much memory
+ * Invalidating the pages to get them out of cache doesn't work because
+ * LNET pins the pages.  Instead (on newer kernels) the pages are truncated
+ * from the cache, while older kernels (RHEL4 and SLES9) just leave them in
+ * the cache.  b=18718/
  */
-void filter_invalidate_cache(struct obd_device *obd, struct obd_ioobj *obj,
-                             struct niobuf_remote *nb, struct inode *inode)
+void filter_release_cache(struct obd_device *obd, struct obd_ioobj *obj,
+                          struct niobuf_remote *rnb, struct inode *inode)
 {
-        struct niobuf_remote *rnb;
         int i;
 
         LASSERT(inode != NULL);
-        for (i = 0, rnb = nb; i < obj->ioo_bufcnt; i++, rnb++) {
+        for (i = 0; i < obj->ioo_bufcnt; i++, rnb++) {
+#ifdef HAVE_TRUNCATE_RANGE
+                /* remove pages in which range is fit */
+                truncate_inode_pages_range(inode->i_mapping,
+                                           rnb->offset & CFS_PAGE_MASK,
+                                           (rnb->offset + rnb->len - 1) |
+                                           ~CFS_PAGE_MASK);
+#else
+                /* use invalidate for old kernels */
                 invalidate_mapping_pages(inode->i_mapping,
                                          rnb->offset >> CFS_PAGE_SHIFT,
                                          (rnb->offset + rnb->len) >>
                                          CFS_PAGE_SHIFT);
-        }
-}
-
-/*
- * the invalidate above doesn't work during read because lnet pins pages.
- * The truncate is used here instead to drop pages from cache
- */
-void filter_truncate_cache(struct obd_device *obd, struct obd_ioobj *obj,
-                           struct niobuf_remote *nb, int pages,
-                           struct niobuf_local *res, struct inode *inode)
-{
-        int i;
-
-        LASSERT(inode != NULL);
-#ifdef HAVE_TRUNCATE_RANGE
-        for (i = 0; i < obj->ioo_bufcnt; i++, nb++) {
-                /* remove pages in which range is fit */
-                truncate_inode_pages_range(inode->i_mapping,
-                                           nb->offset & CFS_PAGE_MASK,
-                                           (nb->offset + nb->len - 1) |
-                                           ~CFS_PAGE_MASK);
-        }
-#elif (defined HAVE_TRUNCATE_COMPLETE_PAGE)
-        for (i = 0; i < pages; i++, res++) {
-                if (res->page != NULL)
-                        truncate_complete_page(inode->i_mapping, res->page);
-        }
-#else
-#error "Nor truncate_inode_pages_range or truncate_complete_page are supported"
 #endif
+        }
 }
 
 static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
@@ -921,17 +902,15 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
                 inode = res->dentry->d_inode;
 
         for (i = 0, lnb = res; i < pages; i++, lnb++) {
-                if (lnb->page != NULL)
+                if (lnb->page != NULL) {
                         page_cache_release(lnb->page);
+                        lnb->page = NULL;
+                }
         }
 
         if (inode && (fo->fo_read_cache == 0 ||
                       i_size_read(inode) > fo->fo_readcache_max_filesize))
-                filter_truncate_cache(exp->exp_obd, obj, rnb, pages, res,
-                                      inode);
-
-        for (i = 0, lnb = res; i < pages; i++, lnb++)
-                lnb->page = NULL;
+                filter_release_cache(exp->exp_obd, obj, rnb, inode);
 
         if (res->dentry != NULL)
                 f_dput(res->dentry);

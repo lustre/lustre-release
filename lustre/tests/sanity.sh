@@ -5690,6 +5690,10 @@ function roc_hit() {
 }
 
 test_151() {
+	if ! grep -q truncate_inode_pages_range /proc/kallsyms; then  #b=18718
+		skip "old RHEL4/SLES9 kernel" && return
+	fi
+
 	local CPAGES=3
 
 	# check whether obdfilter is cache capable at all
