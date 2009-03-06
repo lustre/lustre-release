@@ -199,13 +199,13 @@ void ptlrpc_deactivate_import(struct obd_import *imp)
         ptlrpc_deactivate_and_unlock_import(imp);
 }
 
-static unsigned int 
+static unsigned int
 ptlrpc_inflight_deadline(struct ptlrpc_request *req, time_t now)
 {
         long dl;
 
         if (!(((req->rq_phase == RQ_PHASE_RPC) && !req->rq_waiting) ||
-              (req->rq_phase == RQ_PHASE_BULK) || 
+              (req->rq_phase == RQ_PHASE_BULK) ||
               (req->rq_phase == RQ_PHASE_NEW)))
                 return 0;
 
@@ -268,19 +268,19 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
         LASSERT(imp->imp_invalid);
 
         /* Wait forever until inflight == 0. We really can't do it another
-         * way because in some cases we need to wait for very long reply 
+         * way because in some cases we need to wait for very long reply
          * unlink. We can't do anything before that because there is really
          * no guarantee that some rdma transfer is not in progress right now. */
         do {
-                /* Calculate max timeout for waiting on rpcs to error 
+                /* Calculate max timeout for waiting on rpcs to error
                  * out. Use obd_timeout if calculated value is smaller
                  * than it. */
                 timeout = ptlrpc_inflight_timeout(imp);
                 timeout += timeout / 3;
-                
+
                 if (timeout == 0)
                         timeout = obd_timeout;
-                
+
                 CDEBUG(D_RPCTRACE, "Sleeping %d sec for inflight to error out\n",
                        timeout);
 
@@ -300,16 +300,16 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
 
                         spin_lock(&imp->imp_lock);
                         list_for_each_safe(tmp, n, &imp->imp_sending_list) {
-                                req = list_entry(tmp, struct ptlrpc_request, 
+                                req = list_entry(tmp, struct ptlrpc_request,
                                         rq_list);
                                 DEBUG_REQ(D_ERROR, req, "still on sending list");
                         }
                         list_for_each_safe(tmp, n, &imp->imp_delayed_list) {
-                                req = list_entry(tmp, struct ptlrpc_request, 
+                                req = list_entry(tmp, struct ptlrpc_request,
                                         rq_list);
                                 DEBUG_REQ(D_ERROR, req, "still on delayed list");
                         }
-                        
+
                         if (atomic_read(&imp->imp_unregistering) == 0) {
                                 /* We know that only "unregistering" rpcs may
                                  * still survive in sending or delaying lists
@@ -318,7 +318,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                                  * is no unregistering and inflight != 0 this
                                  * is bug. */
                                 LASSERT(atomic_read(&imp->imp_inflight) == 0);
-                                
+
                                 /* Let's save one loop as soon as inflight have
                                  * dropped to zero. No new inflights possible at
                                  * this point. */
@@ -1148,7 +1148,6 @@ static int signal_completed_replay(struct obd_import *imp)
 static int ptlrpc_invalidate_import_thread(void *data)
 {
         struct obd_import *imp = data;
-        int disconnect;
 
         ENTRY;
 
@@ -1160,13 +1159,6 @@ static int ptlrpc_invalidate_import_thread(void *data)
 
         ptlrpc_invalidate_import(imp);
 
-        /* is client_disconnect_export in flight ? */
-        spin_lock(&imp->imp_lock);
-        disconnect = imp->imp_deactive;
-        spin_unlock(&imp->imp_lock);
-        if (disconnect)
-                GOTO(out, 0 );
-
         if (obd_dump_on_eviction) {
                 CERROR("dump the log upon eviction\n");
                 libcfs_debug_dumplog();
@@ -1175,7 +1167,6 @@ static int ptlrpc_invalidate_import_thread(void *data)
         IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
         ptlrpc_import_recovery_state_machine(imp);
 
-out:
         class_import_put(imp);
         RETURN(0);
 }
