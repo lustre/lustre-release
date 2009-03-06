@@ -1561,9 +1561,7 @@ repeat:
                 /* initialize read-ahead window once per syscall */
                 if (ra == 0) {
                         ra = 1;
-                        bead.lrr_start = *ppos >> CFS_PAGE_SHIFT;
-                        bead.lrr_count = (count + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
-                        ll_ra_read_in(file, &bead);
+                        ll_ra_read_init(file, &bead, *ppos, count);
                 }
 
                 /* BUG: 5972 */
@@ -1889,9 +1887,7 @@ static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,
         CDEBUG(D_INFO, "Send ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
                inode->i_ino, count, *ppos, i_size_read(inode));
 
-        bead.lrr_start = *ppos >> CFS_PAGE_SHIFT;
-        bead.lrr_count = (count + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
-        ll_ra_read_in(in_file, &bead);
+        ll_ra_read_init(in_file, &bead, *ppos, count);
         /* BUG: 5972 */
         file_accessed(in_file);
         rc = generic_file_sendfile(in_file, ppos, count, actor, target);
@@ -1990,9 +1986,7 @@ static ssize_t ll_file_splice_read(struct file *in_file, loff_t *ppos,
         CDEBUG(D_INFO, "Send ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
                inode->i_ino, count, *ppos, i_size_read(inode));
 
-        bead.lrr_start = *ppos >> CFS_PAGE_SHIFT;
-        bead.lrr_count = (count + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
-        ll_ra_read_in(in_file, &bead);
+        ll_ra_read_init(in_file, &bead, *ppos, count);
         /* BUG: 5972 */
         file_accessed(in_file);
         rc = generic_file_splice_read(in_file, ppos, pipe, count, flags);

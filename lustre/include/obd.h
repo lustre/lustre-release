@@ -980,6 +980,7 @@ enum obd_cleanup_stage {
 /* XXX unused */
 #define KEY_ASYNC               "async"
 #define KEY_GRANT_SHRINK        "grant_shrink"
+#define KEY_OFF_RPCSIZE		"off_rpcsize"
 
 struct obd_ops {
         struct module *o_owner;
@@ -1211,8 +1212,14 @@ static inline struct lsm_operations *lsm_op_find(int magic)
 int lvfs_check_io_health(struct obd_device *obd, struct file *file);
 
 /* Requests for obd_extent_calc() */
-#define OBD_CALC_STRIPE_START   1
-#define OBD_CALC_STRIPE_END     2
+#define OBD_CALC_STRIPE_START  	       0x0001 
+#define OBD_CALC_STRIPE_END    	       0x0010 
+#define OBD_CALC_STRIPE_RPC_ALIGN      0x0100 
+
+#define OBD_CALC_STRIPE_RPC_START_ALIGN (OBD_CALC_STRIPE_START | \
+				         OBD_CALC_STRIPE_RPC_ALIGN)
+#define OBD_CALC_STRIPE_RPC_END_ALIGN (OBD_CALC_STRIPE_START | \
+				       OBD_CALC_STRIPE_RPC_ALIGN)
 
 static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
                                          int error)

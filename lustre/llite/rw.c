@@ -1116,11 +1116,15 @@ static struct ll_readahead_state *ll_ras_get(struct file *f)
         return &fd->fd_ras;
 }
 
-void ll_ra_read_in(struct file *f, struct ll_ra_read *rar)
+void ll_ra_read_init(struct file *f, struct ll_ra_read *rar, 
+                     loff_t offset, size_t count)
 {
         struct ll_readahead_state *ras;
 
         ras = ll_ras_get(f);
+
+        rar->lrr_start = offset >> CFS_PAGE_SHIFT;
+        rar->lrr_count = (count + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
 
         spin_lock(&ras->ras_lock);
         ras->ras_requests++;
@@ -1251,7 +1255,7 @@ struct ra_io_arg {
         ria->ria_start, ria->ria_end, ria->ria_stoff, ria->ria_length,\
         ria->ria_pages)
 
-#define RAS_INCREASE_STEP (1024 * 1024 >> CFS_PAGE_SHIFT)
+#define INIT_RAS_WINDOW_PAGES PTLRPC_MAX_BRW_PAGES
 
 static inline int stride_io_mode(struct ll_readahead_state *ras)
 {
@@ -1392,7 +1396,11 @@ static int ll_readahead(struct ll_readahead_state *ras,
         /* Enlarge the RA window to encompass the full read */
         if (bead != NULL && ras->ras_window_start + ras->ras_window_len <
             bead->lrr_start + bead->lrr_count) {
-                ras->ras_window_len = bead->lrr_start + bead->lrr_count -
+                obd_off read_end = (bead->lrr_start + bead->lrr_count) << 
+                                    CFS_PAGE_SHIFT;
+                obd_extent_calc(exp, lsm, OBD_CALC_STRIPE_RPC_END_ALIGN, 
+                                &read_end);
+                ras->ras_window_len = ((read_end + 1) >> CFS_PAGE_SHIFT) - 
                                       ras->ras_window_start;
         }
        	/* Reserve a part of the read-ahead window that we'll be issuing */
@@ -1464,7 +1472,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
 
 static void ras_set_start(struct ll_readahead_state *ras, unsigned long index)
 {
-        ras->ras_window_start = index & (~(RAS_INCREASE_STEP - 1));
+        ras->ras_window_start = index & (~(INIT_RAS_WINDOW_PAGES - 1));
 }
 
 /* called with the ras_lock held or from places where it doesn't matter */
@@ -1595,6 +1603,31 @@ static void ras_set_stride_offset(struct ll_readahead_state *ras)
         RAS_CDEBUG(ras);
 }
 
+static void ras_increase_window(struct ll_readahead_state *ras, 
+				struct ll_ra_info *ra, struct inode *inode)
+{
+	__u64 step;
+	__u32 size;
+	int rc;
+
+	step = ((loff_t)(ras->ras_window_start + 
+			 ras->ras_window_len)) << CFS_PAGE_SHIFT;
+	size = sizeof(step);
+	/*Get rpc_size for this offset (step) */
+        rc = obd_get_info(ll_i2obdexp(inode), sizeof(KEY_OFF_RPCSIZE), 
+			  KEY_OFF_RPCSIZE, &size, &step, 
+			  ll_i2info(inode)->lli_smd);
+	if (rc)
+		step = INIT_RAS_WINDOW_PAGES;
+
+	LASSERT(step == 256);
+	if (stride_io_mode(ras))
+		ras_stride_increase_window(ras, ra, (unsigned long)step);
+	else
+		ras->ras_window_len = min(ras->ras_window_len + (unsigned long)step,
+					  ra->ra_max_pages);
+}
+
 static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
                        struct ll_readahead_state *ras, unsigned long index,
                        unsigned hit)
@@ -1702,7 +1735,7 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
         /* Trigger RA in the mmap case where ras_consecutive_requests
          * is not incremented and thus can't be used to trigger RA */
         if (!ras->ras_window_len && ras->ras_consecutive_pages == 4) {
-                ras->ras_window_len = RAS_INCREASE_STEP;
+                ras->ras_window_len = INIT_RAS_WINDOW_PAGES;
                 GOTO(out_unlock, 0);
         }
 
@@ -1714,14 +1747,8 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
          * uselessly reading and discarding pages for random IO the window is
          * only increased once per consecutive request received. */
         if ((ras->ras_consecutive_requests > 1 &&
-            !ras->ras_request_index) || stride_detect) {
-                if (stride_io_mode(ras))
-                        ras_stride_increase_window(ras, ra, RAS_INCREASE_STEP);
-                else
-                        ras->ras_window_len = min(ras->ras_window_len +
-                                                  RAS_INCREASE_STEP,
-                                                  ra->ra_max_pages);
-        }
+            !ras->ras_request_index) || stride_detect) 
+		ras_increase_window(ras, ra, inode); 
         EXIT;
 out_unlock:
         RAS_CDEBUG(ras);

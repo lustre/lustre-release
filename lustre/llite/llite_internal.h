@@ -516,7 +516,8 @@ extern char *llap_origins[];
 #define ll_unregister_cache(cache) do {} while (0)
 #endif
 
-void ll_ra_read_in(struct file *f, struct ll_ra_read *rar);
+void ll_ra_read_init(struct file *f, struct ll_ra_read *rar, 
+                     loff_t offset, size_t count);
 void ll_ra_read_ex(struct file *f, struct ll_ra_read *rar);
 struct ll_ra_read *ll_ra_read_get(struct file *f);
 
