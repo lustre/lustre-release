@@ -1668,11 +1668,11 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_VM_OP_FAULT
           LC_REGISTER_SHRINKER
 
-          #2.6.25
+          # 2.6.25
           LC_MAPPING_CAP_WRITEBACK_DIRTY
  
- 	  # 2.6.24
- 	  LC_HAVE_MMTYPES_H
+          # 2.6.24
+          LC_HAVE_MMTYPES_H
           LC_BIO_ENDIO_2ARG
           LC_FH_TO_DENTRY
           LC_PROCFS_DELETED
@@ -1686,7 +1686,7 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_INODE_PERMISION_2ARGS
           LC_FILE_REMOVE_SUID
           LC_TRYLOCKPAGE
-	  LC_RW_TREE_LOCK
+          LC_RW_TREE_LOCK
 ])
 
 #
