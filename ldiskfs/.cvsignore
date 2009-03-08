@@ -17,6 +17,7 @@ lustre-ldiskfs-*.tar.gz
 lustre-ldiskfs.spec
 missing
 mkinstalldirs
+module.order
 Module.symvers
 Modules.symvers
 stamp-h1
