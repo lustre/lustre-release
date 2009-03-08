@@ -3912,6 +3912,8 @@ test_102c() {
 run_test 102c "non-root getfattr/setfattr for lustre.lov EAs ==========="
 
 compare_stripe_info1() {
+	local stripe_index_all_zero=1
+
 	for num in 1 2 3 4
 	do
 		for count in 1 2 3 4
@@ -3928,11 +3930,13 @@ compare_stripe_info1() {
 					error "$file: different stripe count" && return
 				fi
 				if [ $stripe_index -ne 0 ]; then
-					error "$file: different stripe offset" && return
+				       stripe_index_all_zero=0
 				fi
 			done
 		done
 	done
+	[ $stripe_index_all_zero -eq 1 ] && error "all files are being extracted starting from OST index 0"
+	return 0
 }
 
 compare_stripe_info2() {
