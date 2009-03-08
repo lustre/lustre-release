@@ -516,7 +516,7 @@ AC_DEFUN([LB_LINUX_CONDITIONALS],
 # 2.6 based kernels - put modversion info into $LINUX/Module.modvers
 # or check 
 AC_DEFUN([LB_CHECK_SYMBOL_EXPORT],
-[AC_MSG_CHECKING([if Linux was built with symbol $1 is exported])
+[AC_MSG_CHECKING([if Linux was built with symbol $1 exported])
 grep -q -E '[[[:space:]]]$1[[[:space:]]]' $LINUX/$SYMVERFILE 2>/dev/null
 rc=$?
 if test $rc -ne 0; then
