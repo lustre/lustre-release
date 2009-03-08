@@ -1,5 +1,6 @@
 Makefile
 autoMakefile
 autoMakefile.in
+modules.order
 .*.cmd
 .depend
