@@ -13,5 +13,7 @@ modules.order
 *.ko
 *.mod.c
 .*.flags
+.*.o.d
+.*.o.tmp
 .tmp_versions
 .depend
