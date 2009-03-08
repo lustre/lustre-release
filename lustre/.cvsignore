@@ -20,11 +20,12 @@ autom4te-2.53.cache
 autom4te.cache
 depcomp
 compile
-.*.cmd
-.mergeinfo-*
-Rules
+install-sh
 missing
 mkinstalldirs
-install-sh
+modules.order
+Rules
+.*.cmd
 .depend
+.mergeinfo-*
 .tmp_versions

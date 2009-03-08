@@ -9,6 +9,7 @@ TAGS
 fsfilt-*.c
 autoMakefile.in
 autoMakefile
+modules.order
 *.ko
 *.mod.c
 .*.flags
