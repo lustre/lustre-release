@@ -3686,7 +3686,7 @@ static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
          * stop creating files on MDS if OST is not good shape to create
          * objects.*/
         osfs->os_state = (filter->fo_obt.obt_sb->s_flags & MS_RDONLY) ?
-                EROFS : 0;
+                OS_STATE_READONLY : 0;
         RETURN(rc);
 }
 
