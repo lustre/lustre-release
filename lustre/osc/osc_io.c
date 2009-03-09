@@ -113,7 +113,8 @@ static void osc_io_unplug(const struct lu_env *env, struct osc_object *osc,
  */
 static int osc_io_submit(const struct lu_env *env,
                          const struct cl_io_slice *ios,
-                         enum cl_req_type crt, struct cl_2queue *queue)
+                         enum cl_req_type crt, struct cl_2queue *queue,
+                         enum cl_req_priority priority)
 {
         struct cl_page    *page;
         struct cl_page    *tmp;
@@ -148,6 +149,8 @@ static int osc_io_submit(const struct lu_env *env,
                 osc = cl2osc(opg->ops_cl.cpl_obj);
                 exp = osc_export(osc);
 
+                if (priority > CRP_NORMAL)
+                        oap->oap_async_flags |= ASYNC_HP;
                 /*
                  * This can be checked without cli->cl_loi_list_lock, because
                  * ->oap_*_item are always manipulated when the page is owned.

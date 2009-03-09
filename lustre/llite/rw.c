@@ -1116,7 +1116,8 @@ int ll_writepage(struct page *vmpage, struct writeback_control *_)
                          */
                         set_page_dirty(vmpage);
                         cl_2queue_init_page(queue, page);
-                        result = cl_io_submit_rw(env, io, CRT_WRITE, queue);
+                        result = cl_io_submit_rw(env, io, CRT_WRITE,
+                                                 queue, CRP_NORMAL);
                         cl_page_list_disown(env, io, &queue->c2_qin);
                         if (result != 0) {
                                 /*

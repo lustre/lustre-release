@@ -580,10 +580,10 @@ static int llu_queue_pio(const struct lu_env *env, struct cl_io *io,
         /* printk("Inited anchor with %d pages\n", npages); */
 
         if (rc == 0) {
-                rc = cl_io_submit_rw(env, io,
-                                     io->ci_type == CIT_READ ? CRT_READ :
-                                                               CRT_WRITE,
-                                     queue);
+                enum cl_req_type crt;
+
+                crt = io->ci_type == CIT_READ ? CRT_READ : CRT_WRITE;
+                rc = cl_io_submit_rw(env, io, crt, queue, CRP_NORMAL);
                 if (rc == 0) {
                         /* If some pages weren't sent for any reason, count
                          * then as completed, to avoid infinite wait. */
