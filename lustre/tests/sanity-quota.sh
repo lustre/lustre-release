@@ -1195,7 +1195,12 @@ run_test_with_stat 14a "test setting quota on root ==="
 # save quota version (both administrative and operational quotas)
 quota_save_version() {
         do_facet mgs "lctl conf_param ${FSNAME}-MDT*.mdt.quota_type=$1"
-        do_facet mgs "lctl conf_param ${FSNAME}-OST*.ost.quota_type=$1"
+        local varsvc
+        local osts=$(get_facets OST)
+        for ost in ${osts//,/ }; do
+                varsvc=${ost}_svc
+                do_facet mgs "lctl conf_param ${!varsvc}.ost.quota_type=$1"
+        done
 }
 
 # set quota version (both administrative and operational quotas)
