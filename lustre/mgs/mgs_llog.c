@@ -1410,6 +1410,29 @@ static int mgs_wlp_lcfg(struct obd_device *obd, struct fs_db *fsdb,
         return rc;
 }
 
+/* write global obd timeout or ldlm timeout param into log */
+static int mgs_write_log_timeout(struct obd_device *obd, struct fs_db *fsdb,
+                                 struct mgs_target_info *mti, char *value,
+                                 int cmd, char *comment)
+{
+        struct lustre_cfg_bufs bufs;
+        struct lustre_cfg *lcfg;
+        int timeout;
+        int rc;
+
+        timeout = simple_strtoul(value, NULL, 0);
+        CDEBUG(D_MGS, "timeout: %d (%s)\n", timeout, comment);
+
+        lustre_cfg_bufs_reset(&bufs, NULL);
+        lcfg = lustre_cfg_new(cmd, &bufs);
+        lcfg->lcfg_num = timeout;
+        /* modify all servers and clients */
+        rc = mgs_write_log_direct_all(obd, fsdb, mti, lcfg, mti->mti_fsname,
+                                      comment); 
+        lustre_cfg_free(lcfg);
+        return rc;
+}
+
 static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                                 struct mgs_target_info *mti)
 {
@@ -1467,20 +1490,16 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                 }
 
                 if (class_match_param(ptr, PARAM_SYS_TIMEOUT, &tmp) == 0) {
-                        /* Change obd timeout */
-                        int timeout;
-                        timeout = simple_strtoul(tmp, NULL, 0);
+                        rc = mgs_write_log_timeout(obd, fsdb, mti, tmp, 
+                                                   LCFG_SET_TIMEOUT,
+                                                   "obd_timeout");
+                        goto end_while;
+                }
 
-                        CDEBUG(D_MGS, "obd timeout %d\n", timeout);
-                        
-                        lustre_cfg_bufs_reset(&bufs, NULL);
-                        lcfg = lustre_cfg_new(LCFG_SET_TIMEOUT, &bufs);
-                        lcfg->lcfg_num = timeout;
-                        /* modify all servers and clients */
-                        rc = mgs_write_log_direct_all(obd, fsdb, mti, lcfg,
-                                                      mti->mti_fsname,
-                                                      "timeout"); 
-                        lustre_cfg_free(lcfg);
+                if (class_match_param(ptr, PARAM_SYS_LDLM_TIMEOUT, &tmp) == 0) {
+                        rc = mgs_write_log_timeout(obd, fsdb, mti, tmp, 
+                                                   LCFG_SET_LDLM_TIMEOUT,
+                                                   "ldlm_timeout");
                         goto end_while;
                 }
 
