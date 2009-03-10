@@ -422,7 +422,6 @@ int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
         RETURN(0);
 }
 
-
 /* Retrieve object striping information.
  *
  * @lump is a pointer to an in-core struct with lmm_ost_count indicating
@@ -447,6 +446,14 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (lum.lmm_magic != LOV_USER_MAGIC)
                 RETURN(-EINVAL);
 
+        if (lum.lmm_stripe_count && 
+            (lum.lmm_stripe_count < lsm->lsm_stripe_count)) {
+                /* Return right size of stripe to user */
+                lum.lmm_stripe_count = lsm->lsm_stripe_count;
+                copy_to_user(lump, &lum, sizeof(lum));
+                RETURN(-EOVERFLOW);
+        }
+
         rc = lov_packmd(exp, &lmmk, lsm);
         if (rc < 0)
                 RETURN(rc);
@@ -458,20 +465,24 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
         LASSERT(sizeof(lum.lmm_objects[0]) == sizeof(lmmk->lmm_objects[0]));
 
         if ((cpu_to_le32(LOV_MAGIC) != LOV_MAGIC) &&
-            (lmmk->lmm_magic == cpu_to_le32(LOV_MAGIC)))
+            (lmmk->lmm_magic == cpu_to_le32(LOV_MAGIC))) {
                 lustre_swab_lov_mds_md(lmmk);
-        /* User wasn't expecting this many OST entries */
-        if (lum.lmm_stripe_count == 0) {
-                copy_lov_mds2user(&lum, lmmk);
-                if (copy_to_user(lump, &lum, sizeof(lum)))
-                        rc = -EFAULT;
-        } else if (lum.lmm_stripe_count < lmmk->lmm_stripe_count) {
-                rc = -EOVERFLOW;
-        } else {
-                copy_lov_mds2user(&lum, lmmk);
-                if (copy_to_user(lump, &lum, lmm_size))
-                        rc = -EFAULT;
+                lustre_swab_lov_mds_md_objects(lmmk);
         }
+        /* User wasn't expecting this many OST entries */
+        if (lum.lmm_stripe_count == 0)
+                lmm_size = sizeof(lum);
+        else if (lum.lmm_stripe_count < lmmk->lmm_stripe_count)
+                RETURN(-EOVERFLOW);
+        /* 
+         * Have a different between lov_mds_md & lov_user_md.
+         * So we have to re-order the data before copy to user.
+         */
+        lum.lmm_stripe_count = lmmk->lmm_stripe_count;
+        ((struct lov_user_md*)lmmk)->lmm_stripe_offset = 0;
+        ((struct lov_user_md*)lmmk)->lmm_stripe_count = lum.lmm_stripe_count;
+        if (copy_to_user(lump, lmmk, lmm_size))
+                rc = -EFAULT;
 
         obd_free_diskmd(exp, &lmmk);
 

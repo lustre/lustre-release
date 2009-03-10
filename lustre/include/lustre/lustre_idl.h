@@ -1572,6 +1572,7 @@ extern void lustre_swab_lov_user_md(struct lov_user_md *lum);
 extern void lustre_swab_lov_user_md_objects(struct lov_user_md *lum);
 extern void lustre_swab_lov_user_md_join(struct lov_user_md_join *lumj);
 extern void lustre_swab_lov_mds_md(struct lov_mds_md *lmm);
+extern void lustre_swab_lov_mds_md_objects(struct lov_mds_md *lum);
 
 /* llog_swab.c */
 extern void lustre_swab_llogd_body (struct llogd_body *d);
