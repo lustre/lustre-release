@@ -489,7 +489,10 @@ typedef __u32 obd_count;
 #define OBD_FL_TRUNCLOCK     (0x00000800) /* delegate DLM locking during punch */
 #define OBD_FL_CKSUM_CRC32   (0x00001000) /* CRC32 checksum type */
 #define OBD_FL_CKSUM_ADLER   (0x00002000) /* ADLER checksum type */
-#define OBD_FL_SHRINK_GRANT  (0x00004000) /* object shrink the grant */
+#define OBD_FL_CKSUM_RESV1   (0x00004000) /* reserved for future checksum type */
+#define OBD_FL_CKSUM_RESV2   (0x00008000) /* reserved for future checksum type */
+#define OBD_FL_CKSUM_RESV3   (0x00010000) /* reserved for future checksum type */
+#define OBD_FL_SHRINK_GRANT  (0x00020000) /* object shrink the grant */
 
 
 #define OBD_FL_CKSUM_ALL      (OBD_FL_CKSUM_CRC32 | OBD_FL_CKSUM_ADLER)
