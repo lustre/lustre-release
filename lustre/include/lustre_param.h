@@ -66,6 +66,7 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 
 /* System global or special params not handled in obd's proc */
 #define PARAM_SYS_TIMEOUT          "sys.timeout="      /* global */
+#define PARAM_SYS_LDLM_TIMEOUT     "sys.ldlm_timeout=" /* global */
 #define PARAM_MGSNODE              "mgsnode="          /* during mount */
 #define PARAM_FAILNODE             "failover.node="    /* llog generation */
 #define PARAM_FAILMODE             "failover.mode="    /* llog generation */

@@ -47,7 +47,10 @@
 #define LCFG_HDR_SIZE(count) \
     size_round(offsetof (struct lustre_cfg, lcfg_buflens[(count)]))
 
-/* If not LCFG_REQUIRED, we can ignore this cmd and go on. */
+/* If the LCFG_REQUIRED bit is set in a configuration command,
+ * then the client is required to understand this parameter
+ * in order to mount the filesystem. If it does not understand
+ * a REQUIRED command the client mount will fail. */
 #define LCFG_REQUIRED         0x0001000
 
 enum lcfg_command_type {
@@ -77,6 +80,7 @@ enum lcfg_command_type {
         LCFG_POOL_ADD           = 0x00ce021,
         LCFG_POOL_REM           = 0x00ce022,
         LCFG_POOL_DEL           = 0x00ce023,
+        LCFG_SET_LDLM_TIMEOUT   = 0x00ce030,
 };
 
 struct lustre_cfg_bufs {

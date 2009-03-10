@@ -1687,6 +1687,65 @@ test_48() { # bug 17636
 }
 run_test 48 "too many acls on file"
 
+# check PARAM_SYS_LDLM_TIMEOUT option of MKFS.LUSTRE
+test_49() { # bug 17710
+	local OLD_MDS_MKFS_OPTS=$MDS_MKFS_OPTS
+	local OLD_OST_MKFS_OPTS=$OST_MKFS_OPTS
+	local OLD_TIMEOUT=$TIMEOUT
+
+	TIMEOUT=20
+
+	MDS_MKFS_OPTS="--mgs --mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT --param sys.ldlm_timeout=$TIMEOUT $MKFSOPT $MDSOPT"
+
+	reformat
+	start_mds
+	start_ost
+	mount_client $MOUNT
+	check_mount || return 1
+
+	echo "check ldlm_timout..."
+	LDLM_MDS="`do_facet mds lctl get_param -n ldlm_timeout`"
+	LDLM_OST1="`do_facet ost1 lctl get_param -n ldlm_timeout`"
+	LDLM_CLIENT="`do_facet client lctl get_param -n ldlm_timeout`"
+
+	if [ $LDLM_MDS -ne $LDLM_OST1 ] || [ $LDLM_MDS -ne $LDLM_CLIENT ]; then
+		error "Different LDLM_TIMEOUT: $LDLM_MDS $LDLM_OST $LDLM_CLIENT"
+	fi
+
+	if [ $LDLM_MDS -ne $((TIMEOUT / 3)) ]; then
+		error "LDLM_TIMEOUT($LDLM_MDS) is not correct"
+	fi
+
+	umount_client $MOUNT
+	stop_ost || return 2
+	stop_mds || return 3
+
+	OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID --param sys.timeout=$TIMEOUT --param sys.ldlm_timeout=$((TIMEOUT - 1)) $MKFSOPT $OSTOPT"
+	
+	reformat
+	start_mds || return 4
+	start_ost || return 5
+	mount_client $MOUNT || return 6
+	check_mount || return 7
+
+	LDLM_MDS="`do_facet mds lctl get_param -n ldlm_timeout`"
+	LDLM_OST1="`do_facet ost1 lctl get_param -n ldlm_timeout`"
+	LDLM_CLIENT="`do_facet client lctl get_param -n ldlm_timeout`"
+
+	if [ $LDLM_MDS -ne $LDLM_OST1 ] || [ $LDLM_MDS -ne $LDLM_CLIENT ]; then
+		error "Different LDLM_TIMEOUT: $LDLM_MDS $LDLM_OST $LDLM_CLIENT"
+	fi
+	
+	if [ $LDLM_MDS -ne $((TIMEOUT - 1)) ]; then
+		error "LDLM_TIMEOUT($LDLM_MDS) is not correct"
+	fi
+		
+	cleanup || return $?
+
+	MDS_MKFS_OPTS=$OLD_MDS_MKFS_OPTS
+	OST_MKFS_OPTS=$OLD_OST_MKFS_OPTS
+}
+run_test 49 "check PARAM_SYS_LDLM_TIMEOUT option of MKFS.LUSTRE"
 
 cleanup_gss
 equals_msg `basename $0`: test complete
