@@ -422,11 +422,6 @@ static int osd_put_bufs(const struct lu_env *env, struct dt_object *dt,
         for (i = 0; i < npages; i++) {
                 if (lb[i].page == NULL)
                         continue;
-                {
-                        unsigned long *pp = (void *) page_address(lb[i].page);
-                        if (*pp == 0)
-                                CERROR("page %lu starts with 0\n", lb[i].page->index);
-                }
                 LASSERT(PageLocked(lb[i].page));
                 unlock_page(lb[i].page);
                 page_cache_release(lb[i].page);
