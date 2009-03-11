@@ -758,7 +758,8 @@ static void osd_trans_commit_cb(void *cb_data, int error)
         th->th_dev = NULL;
         lu_context_exit(&th->th_ctx);
         lu_context_fini(&th->th_ctx);
-        udmu_tx_cb_destroy(oh);
+        OBD_FREE_PTR(oh);
+
         EXIT;
 }
 
@@ -769,14 +770,20 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
         struct osd_thandle *oh;
         struct thandle *th;
         dmu_tx_t *tx;
-        int hook_res, rc;
+        int hook_res;
         ENTRY;
+
         tx = udmu_tx_create(&osd->od_objset);
         if (tx == NULL)
                 RETURN(ERR_PTR(-ENOMEM));
 
         /* alloc callback data */
-        oh = udmu_tx_cb_create(sizeof(*oh));
+        OBD_ALLOC_PTR(oh);
+        if (oh == NULL) {
+                udmu_tx_abort(tx);
+                RETURN(ERR_PTR(-ENOMEM));
+        }
+
 #if 0
         oh->ot_sync = p->tp_sync;
 #endif
@@ -788,8 +795,7 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
         lu_context_init(&th->th_ctx, LCT_TX_HANDLE);
         lu_context_enter(&th->th_ctx);
         /* add commit callback */
-        rc = udmu_tx_cb_add(tx, osd_trans_commit_cb, (void *)oh);
-        LASSERT(rc == 0);
+        udmu_tx_cb_register(tx, osd_trans_commit_cb, (void *)oh);
 
         hook_res = dt_txn_hook_start(env, dt, th);
         if (hook_res != 0)

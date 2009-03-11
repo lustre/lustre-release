@@ -851,19 +851,9 @@ void udmu_tx_commit(dmu_tx_t *tx)
 }
 
 /* commit callback API */
-void * udmu_tx_cb_create(size_t bytes)
+void udmu_tx_cb_register(dmu_tx_t *tx, udmu_tx_callback_func_t *func, void *data)
 {
-        return dmu_tx_callback_data_create(bytes);
-}
-
-int udmu_tx_cb_add(dmu_tx_t *tx, void *func, void *data)
-{
-        return dmu_tx_callback_commit_add(tx, func, data);
-}
-
-int udmu_tx_cb_destroy(void *data)
-{
-        return dmu_tx_callback_data_destroy(data);
+        dmu_tx_callback_register(tx, func, data);
 }
 
 int udmu_indblk_overhead(dmu_buf_t *db, unsigned long *used,

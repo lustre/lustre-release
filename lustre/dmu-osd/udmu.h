@@ -258,11 +258,10 @@ int udmu_indblk_overhead(dmu_buf_t *db, unsigned long *used,
 
 void udmu_tx_commit(dmu_tx_t *tx);
 
-void * udmu_tx_cb_create(size_t bytes);
+/* Commit callbacks */
+typedef void udmu_tx_callback_func_t(void *dcb_data, int error);
+void udmu_tx_cb_register(dmu_tx_t *tx, udmu_tx_callback_func_t *func, void *data);
 
-int udmu_tx_cb_add(dmu_tx_t *tx, void *func, void *data);
-
-int udmu_tx_cb_destroy(void *data);
 
 int udmu_object_is_zap(dmu_buf_t *);
 
