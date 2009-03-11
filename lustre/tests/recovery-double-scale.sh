@@ -72,8 +72,10 @@ reboot_recover_node () {
        clients) for c in ${item//,/ }; do
                       shutdown_client $c
                       boot_node $c
+                      echo "Reintegrating $c"
+                      zconf_mount $c $MOUNT || return $?
                  done
-                 start_client_loads $list || return $?
+                 start_client_loads $item || return $?
                  ;;
        * )      error "reboot_recover_node: nodetype=$nodetype. Must be one of 'MDS', 'OST', or 'clients'."
                 exit 1;;
