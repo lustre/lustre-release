@@ -455,7 +455,7 @@ echo Stopping client \\\$(hostname) client $mnt opts:$force
 lsof -t $mnt || need_kill=no
 if [ "x$force" != "x" -a "x\\\$need_kill" != "xno" ]; then
     pids=\\\$(lsof -t $mnt | sort -u);
-    if [ -n \\\$pids ]; then
+    if [ -n \\\"\\\$pids\\\" ]; then
              kill -9 \\\$pids
     fi
 fi
@@ -612,7 +612,7 @@ restart_client_loads () {
     for client in $clients; do
         check_client_load $client
         rc=${PIPESTATUS[0]}
-        if [ "$rc" != 0 -a "$expectedfail"]; then
+        if [ "$rc" != 0 -a "$expectedfail" ]; then
             start_client_load $client
             echo "Restarted client load: on $client. Checking ..."
             check_client_load $client 
@@ -1372,6 +1372,16 @@ exclude_items_from_list () {
     echo $(comma_list $list) 
 }
 
+# list, expand  are the comma separated lists
+expand_list () {
+    local list=${1//,/ }
+    local expand=${2//,/ }
+    local expanded=
+
+    expanded=$(for i in $list $expand; do echo $i; done | sort -u)
+    echo $(comma_list $expanded)
+}
+
 absolute_path() {
     (cd `dirname $1`; echo $PWD/`basename $1`)
 }
@@ -1973,7 +1983,7 @@ get_random_entry () {
 
     local nodes=($rnodes)
     local num=${#nodes[@]} 
-    local i=$((RANDOM * num  / 65536))
+    local i=$((RANDOM * num * 2 / 65536))
 
     echo ${nodes[i]}
 }
