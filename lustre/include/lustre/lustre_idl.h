@@ -2095,6 +2095,7 @@ extern void lustre_swab_lov_user_md_v3(struct lov_user_md_v3 *lum);
 extern void lustre_swab_lov_user_md_objects(struct lov_user_ost_data *lod,
                                             int stripe_count);
 extern void lustre_swab_lov_user_md_join(struct lov_user_md_join *lumj);
+extern void lustre_swab_lov_mds_md(struct lov_mds_md *lmm);
 
 /* llog_swab.c */
 extern void lustre_swab_llogd_body (struct llogd_body *d);

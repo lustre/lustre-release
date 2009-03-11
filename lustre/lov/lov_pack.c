@@ -627,7 +627,7 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
                                 sizeof(struct lov_ost_data_v1));
                         lmm_size -= LOV_MAXPOOLNAME;
                 }
-        } else if {
+        } else {
                 /* if v3 we just have to update the lum_size */
                 lum_size = sizeof(struct lov_user_md_v3);
         }
