@@ -6003,7 +6003,6 @@ err17935 () {
     fi
 }
 test_160() {
-    do_facet $SINGLEMDS lctl set_param mdd.$MDT0.changelog on
     USER=$(do_facet $SINGLEMDS lctl --device $MDT0 changelog_register -n)
     echo "Registered as changelog user $USER"
     do_facet $SINGLEMDS lctl get_param -n mdd.$MDT0.changelog_users | \
@@ -6018,8 +6017,17 @@ test_160() {
     ln -s $DIR/$tdir/pics/2008/portland.jpg $DIR/$tdir/pics/desktop.jpg
     rm $DIR/$tdir/pics/desktop.jpg
 
-    # verify contents
     $LFS changelog $MDT0 | tail -5
+
+    echo "verifying changelog mask"
+    $LCTL set_param mdd.$MDT0.changelog_mask="-mkdir"
+    mkdir -p $DIR/$tdir/pics/2009/sofia
+    $LCTL set_param mdd.$MDT0.changelog_mask="+mkdir"
+    mkdir $DIR/$tdir/pics/2009/zachary
+    DIRS=$($LFS changelog $MDT0 | tail -5 | grep -c MKDIR)
+    [ $DIRS -eq 1 ] || err17935 "changelog mask count $DIRS != 1"
+
+    # verify contents
     echo "verifying target fid"
     fidc=$($LFS changelog $MDT0 | grep timestamp | grep "CREAT" | \
 	tail -1 | awk '{print $5}')
@@ -6033,26 +6041,40 @@ test_160() {
     [ "$fidc" == "p=$fidf" ] || \
 	err17935 "pfid in changelog $fidc != dir fid $fidf" 
 
-    echo "verifying user clear"
-    USERS=$(( $(do_facet $SINGLEMDS lctl get_param -n \
-	mdd.$MDT0.changelog_users | wc -l) - 2 ))
-    FIRST_REC=$($LFS changelog $MDT0 | head -1 | awk '{print $1}')
-    $LFS changelog_clear $MDT0 $USER $(($FIRST_REC + 5))  
-    USER_REC=$(do_facet $SINGLEMDS lctl get_param -n \
+    USER_REC1=$(do_facet $SINGLEMDS lctl get_param -n \
 	mdd.$MDT0.changelog_users | grep $USER | awk '{print $2}')
-    [ $USER_REC == $(($FIRST_REC + 5)) ] || \
-	err17935 "user index should be $(($FIRST_REC + 5)); is $USER_REC"
-    CLEAR_REC=$($LFS changelog $MDT0 | head -1 | awk '{print $1}')
-    [ $CLEAR_REC == $(($FIRST_REC + 6)) -o $USERS -gt 1 ] || \
-	err17935 "first index should be $(($FIRST_REC + 6)); is $PURGE_REC"
+    $LFS changelog_clear $MDT0 $USER $(($USER_REC1 + 5))  
+    USER_REC2=$(do_facet $SINGLEMDS lctl get_param -n \
+	mdd.$MDT0.changelog_users | grep $USER | awk '{print $2}')
+    echo "verifying user clear: $(( $USER_REC1 + 5 )) == $USER_REC2"
+    [ $USER_REC2 == $(($USER_REC1 + 5)) ] || \
+	err17935 "user index should be $(($USER_REC1 + 5)); is $USER_REC2"
+
+    MIN_REC=$(do_facet $SINGLEMDS lctl get_param mdd.$MDT0.changelog_users | \
+	awk 'min == "" || $2 < min {min = $2}; END {print min}')
+    FIRST_REC=$($LFS changelog $MDT0 | head -1 | awk '{print $1}')
+    echo "verifying min purge: $(( $MIN_REC + 1 )) == $FIRST_REC"
+    [ $FIRST_REC == $(($MIN_REC + 1)) ] || \
+	err17935 "first index should be $(($MIN_REC + 1)); is $FIRST_REC"
 
     echo "verifying user deregister"
     do_facet $SINGLEMDS lctl --device $MDT0 changelog_deregister $USER
     do_facet $SINGLEMDS lctl get_param -n mdd.$MDT0.changelog_users | \
 	grep -q $USER && error "User $USER still found in changelog_users"
 
-    [ $USERS -eq 1 ] && \
-	do_facet $SINGLEMDS lctl set_param mdd.$MDT0.changelog off || true
+    USERS=$(( $(do_facet $SINGLEMDS lctl get_param -n \
+	mdd.$MDT0.changelog_users | wc -l) - 2 ))
+    if [ $USERS -eq 0 ]; then
+	LAST_REC1=$(do_facet $SINGLEMDS lctl get_param -n \
+	    mdd.$MDT0.changelog_users | head -1 | awk '{print $3}')
+	touch $DIR/$tdir/chloe
+	LAST_REC2=$(do_facet $SINGLEMDS lctl get_param -n \
+	    mdd.$MDT0.changelog_users | head -1 | awk '{print $3}')
+	echo "verify changelogs are off if we were the only user: $LAST_REC1 == $LAST_REC2"
+	[ $LAST_REC1 == $LAST_REC2 ] || error "changelogs not off"
+    else
+	echo "$USERS other changelog users; can't verify off"
+    fi
 }
 run_test 160 "changelog sanity"
 
