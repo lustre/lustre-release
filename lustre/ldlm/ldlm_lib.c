@@ -1133,6 +1133,7 @@ static void target_finish_recovery(struct obd_device *obd)
         ldlm_reprocess_all_ns(obd->obd_namespace);
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (list_empty(&obd->obd_recovery_queue)) {
+                obd->obd_recovery_thread = NULL;
                 obd->obd_processing_task = 0;
         } else {
                 spin_unlock_bh(&obd->obd_processing_task_lock);
@@ -1458,6 +1459,9 @@ static void process_recovery_queue(struct obd_device *obd)
                         continue;
                 }
                 list_del_init(&req->rq_list);
+                LASSERT(obd->obd_recovery_thread);
+                /* replace request initial thread with current one, bug #18221 */
+                req->rq_svc_thread = obd->obd_recovery_thread;
                 obd->obd_requests_queued_for_recovery--;
                 spin_unlock_bh(&obd->obd_processing_task_lock);
 
@@ -1482,6 +1486,7 @@ static void process_recovery_queue(struct obd_device *obd)
                 spin_lock_bh(&obd->obd_processing_task_lock);
                 if (list_empty(&obd->obd_recovery_queue)) {
                         obd->obd_processing_task = 0;
+                        obd->obd_recovery_thread = NULL;
                         spin_unlock_bh(&obd->obd_processing_task_lock);
                         break;
                 }
@@ -1598,6 +1603,8 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
          * now, so we'll do the honours.
          */
         obd->obd_processing_task = cfs_curproc_pid();
+        /* save thread that handle recovery queue */
+        obd->obd_recovery_thread = req->rq_svc_thread;
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
         process_recovery_queue(obd);
