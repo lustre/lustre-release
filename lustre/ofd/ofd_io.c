@@ -113,7 +113,7 @@ static int filter_preprw_write(const struct lu_env *env, struct obd_export *exp,
                                  nb + i, res + j, 1,
                                  filter_object_capa(env, fo));
                 LASSERT(rc > 0);
-                LASSERT(rc < PTLRPC_MAX_BRW_PAGES);
+                LASSERT(rc <= PTLRPC_MAX_BRW_PAGES);
                 /* correct index for local buffers to continue with */
                 j += rc;
                 LASSERT(j <= PTLRPC_MAX_BRW_PAGES);

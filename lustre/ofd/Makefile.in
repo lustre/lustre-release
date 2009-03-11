@@ -2,6 +2,6 @@ MODULES := ofd
 
 ofd-objs := ofd_dev.o ofd_io.o ofd_llog.o ofd_obd.o ofd_objects.o
 ofd-objs += lproc_ofd.o ofd_lvb.o ofd_capa.o ofd_clients.o
-ofd-objs += ofd_grant.o ofd_recovery.o ofd_fs.o ofd_fmd.o
+ofd-objs += ofd_grant.o ofd_recovery.o ofd_fs.o ofd_fmd.o ofd_objid.o
 
 @INCLUDE_RULES@
