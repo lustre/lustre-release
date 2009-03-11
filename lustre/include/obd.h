@@ -951,6 +951,8 @@ struct obd_device {
         int                              obd_delayed_clients;
         spinlock_t                       obd_processing_task_lock; /* BH lock (timer) */
         pid_t                            obd_processing_task;
+        /* thread to handle recovery queue */
+        struct ptlrpc_thread            *obd_recovery_thread;
         __u64                            obd_next_recovery_transno;
         int                              obd_replayed_requests;
         int                              obd_requests_queued_for_recovery;
