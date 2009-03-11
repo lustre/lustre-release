@@ -1635,19 +1635,28 @@ test_68 () #bug 13813
     at_start || return 0
     local ldlm_enqueue_min=$(find /sys -name ldlm_enqueue_min)
     [ -z "$ldlm_enqueue_min" ] && skip "missing /sys/.../ldlm_enqueue_min" && return 0
+    local ldlm_enqueue_min_r=$(do_facet ost1 "find /sys -name ldlm_enqueue_min")
+    [ -z "$ldlm_enqueue_min_r" ] && skip "missing /sys/.../ldlm_enqueue_min in the ost1" && return 0
     local ENQ_MIN=$(cat $ldlm_enqueue_min)
+    local ENQ_MIN_R=$(do_facet ost1 "cat $ldlm_enqueue_min_r")
     echo $TIMEOUT >> $ldlm_enqueue_min
-    rm -f $DIR/${tfile}_[1-2]
-    lfs setstripe $DIR/$tfile --index=0 --count=1
+    do_facet ost1 "echo $TIMEOUT >> $ldlm_enqueue_min_r"
+
+    rm -rf $DIR/$tdir
+    mkdir -p $DIR/$tdir
+    lfs setstripe $DIR/$tdir --index=0 --count=1
 #define OBD_FAIL_LDLM_PAUSE_CANCEL       0x312
     lctl set_param fail_val=$(($TIMEOUT - 1))
     lctl set_param fail_loc=0x80000312
-    cp /etc/profile $DIR/${tfile}_1 || error "1st cp failed $?"
-    lctl set_param fail_val=$((TIMEOUT * 3 / 2))
+    cp /etc/profile $DIR/$tdir/${tfile}_1 || error "1st cp failed $?"
+    lctl set_param fail_val=$((TIMEOUT * 5 / 4))
     lctl set_param fail_loc=0x80000312
-    cp /etc/profile $DIR/${tfile}_2 || error "2nd cp failed $?"
+    cp /etc/profile $DIR/$tdir/${tfile}_2 || error "2nd cp failed $?"
     lctl set_param fail_loc=0
+
     echo $ENQ_MIN >> $ldlm_enqueue_min
+    do_facet ost1 "echo $ENQ_MIN_R >> $ldlm_enqueue_min_r"
+    rm -rf $DIR/$tdir
     return 0
 }
 run_test 68 "AT: verify slowing locks"
