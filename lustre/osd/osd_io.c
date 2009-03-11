@@ -369,7 +369,8 @@ static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
 }
 
 int osd_get_bufs(const struct lu_env *env, struct dt_object *d, loff_t pos,
-                 ssize_t len, struct niobuf_local *l, int rw)
+                 ssize_t len, struct niobuf_local *l, int rw,
+                 struct lustre_capa *capa)
 {
         struct osd_object   *obj    = osd_dt_obj(d);
 	struct niobuf_local *lb;
@@ -517,7 +518,6 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
                         clear_page_dirty_for_io(lb[i].page);
 #endif
                 LASSERT(!PageDirty(lb[i].page));
-
                 SetPageUptodate(lb[i].page);
 
                 filter_iobuf_add_page(iobuf, lb[i].page);
@@ -606,14 +606,12 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
 
 static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
                                  const loff_t size, loff_t pos,
-                                 struct thandle *handle, struct lustre_capa *capa)
+                                 struct thandle *handle)
 {
         struct osd_thandle *oh;
 
         LASSERT(handle != NULL);
 
-        if (osd_object_auth(env, dt, capa, CAPA_OPC_BODY_WRITE))
-                return -EACCES;
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
 
@@ -625,7 +623,8 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 
 static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
                          const struct lu_buf *buf, loff_t *pos,
-                         struct thandle *handle, int ignore_quota)
+                         struct thandle *handle, struct lustre_capa *capa,
+                         int ignore_quota)
 {
         struct inode       *inode = osd_dt_obj(dt)->oo_inode;
         struct osd_thandle *oh;
@@ -633,6 +632,9 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 #ifdef HAVE_QUOTA_SUPPORT
         cfs_cap_t           save = current->cap_effective;
 #endif
+
+        if (osd_object_auth(env, dt, capa, CAPA_OPC_BODY_WRITE))
+                return -EACCES;
 
         LASSERT(handle != NULL);
         OSD_EXEC_OP(handle, write);

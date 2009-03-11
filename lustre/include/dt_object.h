@@ -886,6 +886,43 @@ static inline void dt_ro(const struct lu_env *env, struct dt_device *dev)
         return dev->dd_ops->dt_ro(env, dev);
 }
 
+static inline int dt_declare_insert(const struct lu_env *env,
+                                    struct dt_object *dt,
+                                    const struct dt_rec *rec,
+                                    const struct dt_key *key,
+                                    struct thandle *th)
+{
+        return dt->do_index_ops->dio_declare_insert(env, dt, rec, key, th);
+}
+
+static inline int dt_insert(const struct lu_env *env,
+                                    struct dt_object *dt,
+                                    const struct dt_rec *rec,
+                                    const struct dt_key *key,
+                                    struct thandle *th,
+                                    struct lustre_capa *capa,
+                                    int noquota)
+{
+        return dt->do_index_ops->dio_insert(env, dt, rec, key, th, capa, noquota);
+}
+
+static inline int dt_declare_delete(const struct lu_env *env,
+                                    struct dt_object *dt,
+                                    const struct dt_key *key,
+                                    struct thandle *th)
+{
+        return dt->do_index_ops->dio_declare_delete(env, dt, key, th);
+}
+
+
+static inline int dt_delete(const struct lu_env *env,
+                                    struct dt_object *dt,
+                                    const struct dt_key *key,
+                                    struct thandle *th,
+                                    struct lustre_capa *capa)
+{
+        return dt->do_index_ops->dio_delete(env, dt, key, th, capa);
+}
 
 
 #endif /* __LUSTRE_DT_OBJECT_H */

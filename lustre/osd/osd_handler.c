@@ -1701,6 +1701,11 @@ static int osd_declare_object_create(const struct lu_env *env,
         OSD_DECLARE_OP(oh, create);
         oh->ot_credits += osd_dto_credits_noquota[DTO_OBJECT_CREATE];
         oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_INSERT];
+       
+        /* if this is directory, then we expect . and .. to be inserted as well */
+        OSD_DECLARE_OP(oh, insert);
+        OSD_DECLARE_OP(oh, insert);
+        oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_INSERT];
 
         return 0;
 }
