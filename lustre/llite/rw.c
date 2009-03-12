@@ -824,7 +824,7 @@ static struct ll_async_page *llap_from_page_with_lockh(struct page *page,
                 RETURN(ERR_PTR(-EINVAL));
 
         /* limit the number of lustre-cached pages */
-        cpu = get_cpu();
+        cpu = cfs_get_cpu();
         pd = LL_PGLIST_DATA(sbi);
         target = pd->llpd_count - pd->llpd_budget;
         if (target > 0) {
@@ -845,7 +845,7 @@ static struct ll_async_page *llap_from_page_with_lockh(struct page *page,
                 if ((rc == 0) && target > 0)
                         llap_shrink_cache_internal(sbi, cpu, target + 32);
         }
-        put_cpu();
+        cfs_put_cpu();
 
         OBD_SLAB_ALLOC(llap, ll_async_page_slab, CFS_ALLOC_STD,
                        ll_async_page_slab_size);

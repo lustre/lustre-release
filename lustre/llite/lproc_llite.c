@@ -735,7 +735,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         entry->data = sbi;
 
         sbi->ll_ra_stats = lprocfs_alloc_stats(LL_RA_STAT,
-                                               LPROCFS_STATS_FLAG_PERCPU);
+                                               LPROCFS_STATS_FLAG_NONE);
         for (id = 0; id < LL_RA_STAT; id++)
                 lprocfs_counter_init(sbi->ll_ra_stats, id, 0,
                         ra_stats_string[id], "pages");
@@ -763,7 +763,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
 
         /* File operations stats */
         sbi->ll_stats = lprocfs_alloc_stats(LPROC_LL_FILE_OPCODES,
-                                            LPROCFS_STATS_FLAG_PERCPU);
+                                            LPROCFS_STATS_FLAG_NONE);
         if (sbi->ll_stats == NULL)
                 GOTO(out, err = -ENOMEM);
         /* do counter init */

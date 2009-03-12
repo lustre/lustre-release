@@ -421,7 +421,7 @@ static inline struct ll_pglist_data *ll_pglist_double_lock(
                 struct ll_sb_info *sbi, 
                 int cpu, struct ll_pglist_data **pd_cpu)
 {
-        int current_cpu = get_cpu();
+        int current_cpu = cfs_get_cpu();
 
         if (cpu == current_cpu) {
                 ll_pglist_cpu_lock(sbi, cpu);
@@ -448,19 +448,19 @@ static inline void ll_pglist_double_unlock(struct ll_sb_info *sbi, int cpu)
                 ll_pglist_cpu_unlock(sbi, cpu);
                 ll_pglist_cpu_unlock(sbi, current_cpu);
         }
-        put_cpu();
+        cfs_put_cpu();
 }
 
 static inline struct ll_pglist_data *ll_pglist_lock(struct ll_sb_info *sbi)
 {
-        ll_pglist_cpu_lock(sbi, get_cpu());
+        ll_pglist_cpu_lock(sbi, cfs_get_cpu());
         return LL_PGLIST_DATA(sbi);
 }
 
 static inline void ll_pglist_unlock(struct ll_sb_info *sbi)
 {
         ll_pglist_cpu_unlock(sbi, smp_processor_id());
-        put_cpu();
+        cfs_put_cpu();
 }
 
 struct ll_ra_read {
