@@ -41,11 +41,6 @@
 #include <libcfs/kp30.h>
 #include "tracefile.h"
 
-#ifndef get_cpu
-#define get_cpu() smp_processor_id()
-#define put_cpu() do { } while (0)
-#endif
-
 /* three types of trace_data in linux */
 enum {
 	TCD_TYPE_PROC = 0,
@@ -151,7 +146,7 @@ void tracefile_write_unlock()
 char *
 trace_get_console_buffer(void)
 {
-	int  cpu = get_cpu();
+	int  cpu = cfs_get_cpu();
 	int  idx;
 
 	if (in_irq()) {
@@ -168,7 +163,7 @@ trace_get_console_buffer(void)
 void
 trace_put_console_buffer(char *buffer)
 {
-	put_cpu();
+	cfs_put_cpu();
 }
 
 struct trace_cpu_data *
@@ -177,7 +172,7 @@ trace_get_tcd(void)
 	struct trace_cpu_data *tcd;
 	int cpu;
 
-	cpu = get_cpu();
+	cpu = cfs_get_cpu();
 	if (in_irq())
 		tcd = &(*trace_data[TCD_TYPE_IRQ])[cpu].tcd;
 	else if (in_softirq())
@@ -195,7 +190,7 @@ trace_put_tcd (struct trace_cpu_data *tcd)
 {
 	trace_unlock_tcd(tcd);
 
-	put_cpu();
+	cfs_put_cpu();
 }
 
 int trace_lock_tcd(struct trace_cpu_data *tcd)

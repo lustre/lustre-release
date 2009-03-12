@@ -412,4 +412,17 @@ extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
 
 #undef _LWORDSIZE
 
+#ifndef get_cpu
+# ifdef CONFIG_PREEMPT
+#  define cfs_get_cpu()  ({ preempt_disable(); smp_processor_id(); })
+#  define cfs_put_cpu()  preempt_enable()
+# else
+#  define cfs_get_cpu()  smp_processor_id()
+#  define cfs_put_cpu()
+# endif
+#else
+# define cfs_get_cpu()   get_cpu()
+# define cfs_put_cpu()   put_cpu()
+#endif /* get_cpu & put_cpu */
+
 #endif
