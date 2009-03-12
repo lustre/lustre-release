@@ -8,5 +8,4 @@ linux-stage
 linux
 *.c
 *.h
-.*.o.d
 sources

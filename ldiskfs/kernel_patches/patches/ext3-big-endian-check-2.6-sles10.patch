@@ -2,25 +2,25 @@ Index: linux-2.6.16.60-0.27/fs/ext3/super.c
 ===================================================================
 --- linux-2.6.16.60-0.27.orig/fs/ext3/super.c
 +++ linux-2.6.16.60-0.27/fs/ext3/super.c
-@@ -100,6 +100,8 @@ handle_t *ext3_journal_start_sb(struct s
- 	return journal_start(journal, nblocks);
- }
+@@ -72,6 +72,8 @@ static void ext3_unlockfs(struct super_b
+ static void ext3_write_super (struct super_block * sb);
+ static void ext3_write_super_lockfs(struct super_block *sb);
  
 +static int bigendian_extents;
 +
  /* 
-  * The only special thing we need to do here is to make sure that all
-  * journal_stop calls result in the superblock being marked dirty, so
-@@ -703,7 +705,7 @@ enum {
+  * Wrappers for journal_start/end.
+  *
+@@ -709,7 +711,7 @@ enum {
  	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0, Opt_quota, Opt_noquota,
  	Opt_ignore, Opt_barrier, Opt_err, Opt_resize, Opt_usrquota,
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
 -	Opt_extents, Opt_noextents, Opt_extdebug,
 +	Opt_extents, Opt_noextents, Opt_bigendian_extents, Opt_extdebug,
  	Opt_mballoc, Opt_nomballoc, Opt_stripe,
- 	Opt_grpquota
+ 	Opt_grpquota, Opt_hashfunc
  };
-@@ -762,6 +764,7 @@ static match_table_t tokens = {
+@@ -768,6 +770,7 @@ static match_table_t tokens = {
  	{Opt_iopen_nopriv, "iopen_nopriv"},
  	{Opt_extents, "extents"},
  	{Opt_noextents, "noextents"},
@@ -28,7 +28,7 @@ Index: linux-2.6.16.60-0.27/fs/ext3/super.c
  	{Opt_extdebug, "extdebug"},
  	{Opt_barrier, "barrier=%u"},
  	{Opt_mballoc, "mballoc"},
-@@ -1122,6 +1125,9 @@ clear_qf_name:
+@@ -1130,6 +1133,9 @@ clear_qf_name:
  		case Opt_noextents:
  			clear_opt (sbi->s_mount_opt, EXTENTS);
  			break;
@@ -38,7 +38,7 @@ Index: linux-2.6.16.60-0.27/fs/ext3/super.c
  		case Opt_extdebug:
  			set_opt (sbi->s_mount_opt, EXTDEBUG);
  			break;
-@@ -2052,6 +2058,16 @@ static int ext3_fill_super (struct super
+@@ -2078,6 +2084,16 @@ static int ext3_fill_super (struct super
  			    NULL, 0))
  		goto failed_mount;
  
