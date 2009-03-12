@@ -702,7 +702,7 @@ start_client_load() {
 }
 
 start_client_loads () {
-    local clients=(${1//,/ })
+    local -a clients=(${1//,/ })
     local numloads=${#CLIENT_LOADS[@]}
     local testnum
 
@@ -2244,7 +2244,7 @@ get_random_entry () {
 
     rnodes=${rnodes//,/ }
 
-    local nodes=($rnodes)
+    local -a nodes=($rnodes)
     local num=${#nodes[@]} 
     local i=$((RANDOM * num * 2 / 65536))
 
