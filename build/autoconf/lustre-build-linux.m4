@@ -475,10 +475,6 @@ LB_LINUX_CONFIG([MODULES],[],[
 
 LB_LINUX_CONFIG([MODVERSIONS])
 
-LB_LINUX_CONFIG([PREEMPT],[
-	AC_MSG_ERROR([Lustre does not support kernels with preempt enabled.])
-])
-
 LB_LINUX_CONFIG([KALLSYMS],[],[
 if test "x$ARCH_UM" = "x" ; then
 	AC_MSG_ERROR([Lustre requires that CONFIG_KALLSYMS is enabled in your kernel.])
