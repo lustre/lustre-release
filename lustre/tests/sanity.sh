@@ -5650,6 +5650,7 @@ test_154() {
 run_test 154 "parallel read and truncate should not deadlock ======================="
 
 test_170() {
+        $LCTL clear	# bug 18514
         $LCTL debug_daemon start $TMP/${tfile}_log_good
         touch $DIR/$tfile
         $LCTL debug_daemon stop
@@ -5660,13 +5661,13 @@ test_170() {
         rm -rf $DIR/$tfile
         $LCTL debug_daemon stop
 
-        $LCTL df $TMP/${tfile}_log_bad 2&> $TMP/${tfile}_log_bad.out ||
+        $LCTL df $TMP/${tfile}_log_bad > $TMP/${tfile}_log_bad.out 2>&1 ||
                error "lctl df log_bad failed"
 
         local bad_line=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $9}')
         local good_line1=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $5}')
 
-        $LCTL df $TMP/${tfile}_log_good 2&>$TMP/${tfile}_log_good.out 
+        $LCTL df $TMP/${tfile}_log_good > $TMP/${tfile}_log_good.out 2>&1
         local good_line2=$(tail -n 1 $TMP/${tfile}_log_good.out | awk '{print $5}')
 
 	[ "$bad_line" ] && [ "$good_line1" ] && [ "$good_line2" ] || 
@@ -5676,7 +5677,7 @@ test_170() {
         cat $TMP/${tfile}_log_bad >> $TMP/${tfile}_logs_corrupt 
         cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt           
 
-        $LCTL df $TMP/${tfile}_logs_corrupt 2&> $TMP/${tfile}_log_bad.out
+        $LCTL df $TMP/${tfile}_logs_corrupt > $TMP/${tfile}_log_bad.out 2>&1
         local bad_line_new=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $9}')
         local good_line_new=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $5}')
 
@@ -5685,7 +5686,7 @@ test_170() {
  
         local expected_good=$((good_line1 + good_line2*2))
 
-        rm -rf $TMP/${tfile}*
+        rm -f $TMP/${tfile}*
         if [ $bad_line -ne $bad_line_new ]; then
                 error "expected $bad_line bad lines, but got $bad_line_new"
                 return 1 
