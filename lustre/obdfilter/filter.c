@@ -373,12 +373,12 @@ static int filter_client_free(struct obd_export *exp)
         if (strcmp(fed->fed_lcd->lcd_uuid, obd->obd_uuid.uuid ) == 0)
                 GOTO(free, 0);
 
-        CDEBUG(D_INFO, "freeing client at idx %u, offset %lld with UUID '%s'\n",
-               fed->fed_lr_idx, fed->fed_lr_off, fed->fed_lcd->lcd_uuid);
-
         LASSERT(filter->fo_last_rcvd_slots != NULL);
 
         off = fed->fed_lr_off;
+
+        CDEBUG(D_INFO, "freeing client at idx %u, offset %lld with UUID '%s'\n",
+               fed->fed_lr_idx, fed->fed_lr_off, fed->fed_lcd->lcd_uuid);
 
         /* Don't clear fed_lr_idx here as it is likely also unset.  At worst
          * we leak a client slot that will be cleaned on the next recovery. */
@@ -2327,7 +2327,7 @@ filter_default_olg_init(struct obd_device *obd, struct obd_llog_group *olg,
                        LLOG_MDS_OST_REPL_CTXT);
                 GOTO(cleanup_olg, rc = -ENODEV);
         }
-        ctxt->loc_lcm = filter->fo_lcm;
+        ctxt->loc_lcm = lcm_get(filter->fo_lcm);
         ctxt->llog_proc_cb = filter_recov_log_mds_ost_cb;
         llog_ctxt_put(ctxt);
 
@@ -2366,7 +2366,7 @@ filter_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                 RETURN(-ENODEV);
         }
         ctxt->llog_proc_cb = filter_recov_log_mds_ost_cb;
-        ctxt->loc_lcm = filter->fo_lcm;
+        ctxt->loc_lcm = lcm_get(filter->fo_lcm);
         llog_ctxt_put(ctxt);
         RETURN(rc);
 }
@@ -2401,8 +2401,10 @@ static int filter_llog_finish(struct obd_device *obd, int count)
         }
 
         if (filter->fo_lcm) {
+                mutex_down(&ctxt->loc_sem);
                 llog_recov_thread_fini(filter->fo_lcm, obd->obd_force);
                 filter->fo_lcm = NULL;
+                mutex_up(&ctxt->loc_sem);
         }
         RETURN(filter_olg_fini(&obd->obd_olg));
 }
@@ -3210,7 +3212,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         unsigned int orig_ids[MAXQUOTAS] = {0, 0};
         struct llog_cookie *fcc = NULL;
         struct filter_obd *filter;
-        int rc, err, locked = 0, sync = 0;
+        int rc, err, sync = 0;
         loff_t old_size = 0;
         unsigned int ia_valid;
         struct inode *inode;
@@ -3233,12 +3235,15 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                 if (fcc != NULL)
                         *fcc = oa->o_lcookie;
         }
-
-        if (ia_valid & ATTR_SIZE || ia_valid & (ATTR_UID | ATTR_GID)) {
+        if (ia_valid & (ATTR_SIZE | ATTR_UID | ATTR_GID)) {
                 DQUOT_INIT(inode);
+                /* Filter truncates and writes are serialized by
+                 * i_alloc_sem, see the comment in
+                 * filter_preprw_write.*/
+                if (ia_valid & ATTR_SIZE)
+                        down_write(&inode->i_alloc_sem);
                 LOCK_INODE_MUTEX(inode);
                 old_size = i_size_read(inode);
-                locked = 1;
         }
 
         /* If the inode still has SUID+SGID bits set (see filter_precreate())
@@ -3328,16 +3333,12 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                         rc = err;
         }
 
-        if (locked) {
-                UNLOCK_INODE_MUTEX(inode);
-                locked = 0;
-        }
-
         EXIT;
 out_unlock:
-        if (locked)
+        if (ia_valid & (ATTR_SIZE | ATTR_UID | ATTR_GID))
                 UNLOCK_INODE_MUTEX(inode);
-
+        if (ia_valid & ATTR_SIZE)
+                up_write(&inode->i_alloc_sem);
         if (fcc)
                 OBD_FREE(fcc, sizeof(*fcc));
 
@@ -3685,7 +3686,7 @@ static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
          * stop creating files on MDS if OST is not good shape to create
          * objects.*/
         osfs->os_state = (filter->fo_obt.obt_sb->s_flags & MS_RDONLY) ?
-                EROFS : 0;
+                OS_STATE_READONLY : 0;
         RETURN(rc);
 }
 

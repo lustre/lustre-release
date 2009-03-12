@@ -885,8 +885,13 @@ int mdd_finish_unlink(const struct lu_env *env,
                  * will be deleted during mdd_close() */
                 if (obj->mod_count) {
                         rc = __mdd_orphan_add(env, obj, th);
-                        if (rc == 0)
+                        if (rc == 0) {
                                 obj->mod_flags |= ORPHAN_OBJ;
+                                CDEBUG(D_HA, "Object "DFID" is going to be "
+                                        "an orphan, open count = %d\n",
+                                        PFID(mdd_object_fid(obj)),
+                                        obj->mod_count);
+                        }
                 }
 
                 obj->mod_flags |= DEAD_OBJ;

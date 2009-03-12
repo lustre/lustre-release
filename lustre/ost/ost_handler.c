@@ -538,6 +538,10 @@ static int ost_prolong_locks_iter(struct ldlm_lock *lock, void *data)
                 return LDLM_ITER_CONTINUE;
         }
 
+        CDEBUG(D_DLMTRACE,"refresh lock: "LPU64"/"LPU64" ("LPU64"->"LPU64")\n",
+               lock->l_resource->lr_name.name[0],
+               lock->l_resource->lr_name.name[1],
+               opd->opd_policy.l_extent.start, opd->opd_policy.l_extent.end);
         /* OK. this is a possible lock the user holds doing I/O
          * let's refresh eviction timer for it */
         ldlm_refresh_waiting_lock(lock, opd->opd_timeout);
@@ -569,7 +573,7 @@ static int ost_rw_prolong_locks(struct ptlrpc_request *req, struct obd_ioobj *ob
                           max(at_est2timeout(at_get(&req->rq_rqbd->
                               rqbd_service->srv_at_estimate)), ldlm_timeout);
 
-        CDEBUG(D_DLMTRACE,"refresh locks: "LPU64"/"LPU64" ("LPU64"->"LPU64")\n",
+        CDEBUG(D_INFO,"refresh locks: "LPU64"/"LPU64" ("LPU64"->"LPU64")\n",
                res_id.name[0], res_id.name[1], opd.opd_policy.l_extent.start,
                opd.opd_policy.l_extent.end);
 
@@ -988,6 +992,10 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc != 0)
                 GOTO(out_lock, rc);
 
+        rc = sptlrpc_svc_prep_bulk(req, desc);
+        if (rc != 0)
+                GOTO(out_lock, rc);
+
         /* Check if client was evicted while we were doing i/o before touching
            network */
         if (desc->bd_export->exp_failed)
@@ -1174,7 +1182,7 @@ static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
         if (KEY_IS(KEY_GRANT_SHRINK)) {
                 rc = lustre_pack_reply(req, 2, size, NULL);
                 if (rc)
-                        RETURN(rc); 
+                        RETURN(rc);
         } else {
                 rc = lustre_pack_reply(req, 1, NULL, NULL);
                 if (rc)
@@ -1183,19 +1191,19 @@ static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
 
         vallen = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF + 1);
         if (vallen) {
-                if (KEY_IS(KEY_GRANT_SHRINK)) { 
-                        body = lustre_swab_reqbuf(req, REQ_REC_OFF + 1, 
+                if (KEY_IS(KEY_GRANT_SHRINK)) {
+                        body = lustre_swab_reqbuf(req, REQ_REC_OFF + 1,
                                                   sizeof(*body),
                                                   lustre_swab_ost_body);
                         if (!body)
                                 RETURN(-EFAULT);
 
-                        repbody = lustre_msg_buf(req->rq_repmsg, 
+                        repbody = lustre_msg_buf(req->rq_repmsg,
                                                  REPLY_REC_OFF,
                                                  sizeof(*repbody));
                         memcpy(repbody, body, sizeof(*body));
                         val = (char*)repbody;
-                } else 
+                } else
                         val = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1,0);
         }
 
@@ -1634,7 +1642,7 @@ static int ost_rw_hpreq_lock_match(struct ptlrpc_request *req,
                nb[ioo->ioo_bufcnt - 1].len - 1) | ~CFS_PAGE_MASK;
 
         LASSERT(lock->l_resource != NULL);
-        if (!osc_res_name_eq(ioo->ioo_id, ioo->ioo_gr, 
+        if (!osc_res_name_eq(ioo->ioo_id, ioo->ioo_gr,
                              &lock->l_resource->lr_name))
                 RETURN(0);
 

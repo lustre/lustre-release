@@ -359,6 +359,34 @@ void filter_invalidate_cache(struct obd_device *obd, struct obd_ioobj *obj,
         }
 }
 
+/*
+ * the invalidate above doesn't work during read because lnet pins pages.
+ * The truncate is used here instead to drop pages from cache
+ */
+void filter_truncate_cache(struct obd_device *obd, struct obd_ioobj *obj,
+                           struct niobuf_remote *nb, int pages,
+                           struct niobuf_local *res, struct inode *inode)
+{
+        struct niobuf_remote *rnb;
+        int i;
+
+        LASSERT(inode != NULL);
+#ifdef HAVE_TRUNCATE_RANGE
+        for (i = 0, rnb = nb; i < obj->ioo_bufcnt; i++, rnb++) {
+                /* remove pages in which range is fit */
+                truncate_inode_pages_range(inode->i_mapping,
+                                           rnb->offset & CFS_PAGE_MASK,
+                                           (rnb->offset + rnb->len - 1) |
+                                           ~CFS_PAGE_MASK);
+        }
+#elif (defined HAVE_TRUNCATE_COMPLETE)
+        for (i = 0, lnb = res; i < pages; i++, lnb++)
+                truncate_complete_page(inode->i_mapping, lnb->page);
+#else
+#error "Nor truncate_inode_pages_range or truncate_complete_page are supported"
+#endif
+}
+
 static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                               int objcount, struct obd_ioobj *obj,
                               struct niobuf_remote *nb,
@@ -722,6 +750,15 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
         if (rc)
                 GOTO(cleanup, rc);
+        cleanup_phase = 4;
+
+        /* Filter truncate first locks i_mutex then partally truncated
+         * page, filter write code first locks pages then take
+         * i_mutex.  To avoid a deadlock in case of concurrent
+         * punch/write requests from one client, filter writes and
+         * filter truncates are serialized by i_alloc_sem, allowing
+         * multiple writes or single truncate. */
+        down_read(&dentry->d_inode->i_alloc_sem);
 
         do_gettimeofday(&start);
         for (i = 0, lnb = res; i < *npages; i++, lnb++) {
@@ -734,7 +771,6 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                 lnb->page = filter_get_page(obd, dentry->d_inode, lnb->offset);
                 if (lnb->page == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
-                cleanup_phase = 4;
 
                 /* DLM locking protects us from write and truncate competing
                  * for same region, but truncate can leave dirty page in the
@@ -811,6 +847,7 @@ cleanup:
                                         lnb->page = NULL;
                                 }
                         }
+                        up_read(&dentry->d_inode->i_alloc_sem);
                 }
         case 3:
                 filter_iobuf_put(&obd->u.filter, iobuf, oti);
@@ -882,16 +919,17 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
         if (res->dentry != NULL)
                 inode = res->dentry->d_inode;
 
-        for (i = 0, lnb = res; i < npages; i++, lnb++) {
-                if (lnb->page != NULL) {
+        for (i = 0, lnb = res; i < npages; i++, lnb++)
+                if (lnb->page != NULL)
                         page_cache_release(lnb->page);
-                        lnb->page = NULL;
-                }
-        }
 
         if (inode && (fo->fo_read_cache == 0 ||
-                        i_size_read(inode) > fo->fo_readcache_max_filesize))
-                filter_invalidate_cache(exp->exp_obd, obj, rnb, inode);
+                      i_size_read(inode) > fo->fo_readcache_max_filesize))
+                filter_truncate_cache(exp->exp_obd, obj, rnb, npages, res,
+                                      inode);
+
+        for (i = 0, lnb = res; i < npages; i++, lnb++)
+                lnb->page = NULL;
 
         if (res->dentry != NULL)
                 f_dput(res->dentry);

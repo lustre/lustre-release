@@ -712,7 +712,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
 
         /* File operations stats */
         sbi->ll_stats = lprocfs_alloc_stats(LPROC_LL_FILE_OPCODES,
-                                            LPROCFS_STATS_FLAG_PERCPU);
+                                            LPROCFS_STATS_FLAG_NONE);
         if (sbi->ll_stats == NULL)
                 GOTO(out, err = -ENOMEM);
         /* do counter init */
@@ -735,7 +735,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                 GOTO(out, err);
 
         sbi->ll_ra_stats = lprocfs_alloc_stats(ARRAY_SIZE(ra_stat_string),
-                                               LPROCFS_STATS_FLAG_PERCPU);
+                                               LPROCFS_STATS_FLAG_NONE);
         if (sbi->ll_ra_stats == NULL)
                 GOTO(out, err = -ENOMEM);
 

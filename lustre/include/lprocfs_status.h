@@ -165,9 +165,11 @@ struct lprocfs_percpu {
 #define LPROCFS_GET_SMP_ID  0x0002
 
 enum lprocfs_stats_flags {
-        LPROCFS_STATS_FLAG_PERCPU   = 0x0000, /* per cpu counter */
+        LPROCFS_STATS_FLAG_NONE     = 0x0000, /* per cpu counter */
         LPROCFS_STATS_FLAG_NOPERCPU = 0x0001, /* stats have no percpu
                                                * area and need locking */
+        LPROCFS_STATS_GET_SMP_ID    = 0x0002, /* just record locking with
+                                               * LPROCFS_GET_SMP_ID flag */
 };
 
 enum lprocfs_fields_flags {
@@ -354,8 +356,10 @@ static inline int lprocfs_stats_lock(struct lprocfs_stats *stats, int type)
         } else {
                 if (type & LPROCFS_GET_NUM_CPU)
                         rc = num_possible_cpus();
-                if (type & LPROCFS_GET_SMP_ID)
-                        rc = smp_processor_id();
+                if (type & LPROCFS_GET_SMP_ID) {
+			stats->ls_flags &= LPROCFS_STATS_GET_SMP_ID;
+                        rc = cfs_get_cpu();
+		}
         }
         return rc;
 }
@@ -364,6 +368,8 @@ static inline void lprocfs_stats_unlock(struct lprocfs_stats *stats)
 {
         if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU)
                 spin_unlock(&stats->ls_lock);
+	else if (stats->ls_flags & LPROCFS_STATS_GET_SMP_ID)
+		cfs_put_cpu();
 }
 
 /* Two optimized LPROCFS counter increment functions are provided:

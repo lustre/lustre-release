@@ -167,8 +167,8 @@ int seq_store_read(struct lu_server_seq *seq,
         struct dt_object *dt_obj = seq->lss_obj;
         struct seq_thread_info *info;
         loff_t pos = 0;
-	int rc;
-	ENTRY;
+        int rc;
+        ENTRY;
 
         info = lu_context_key_get(&env->le_ctx, &seq_thread_key);
         LASSERT(info != NULL);
@@ -189,7 +189,7 @@ int seq_store_read(struct lu_server_seq *seq,
                 rc = -EIO;
         }
 
-	RETURN(rc);
+        RETURN(rc);
 }
 
 int seq_store_init(struct lu_server_seq *seq,
@@ -208,10 +208,10 @@ int seq_store_init(struct lu_server_seq *seq,
         dt_obj = dt_store_open(env, dt, "", name, &fid);
         if (!IS_ERR(dt_obj)) {
                 seq->lss_obj = dt_obj;
-		rc = 0;
+                rc = 0;
         } else {
                 CERROR("%s: Can't find \"%s\" obj %d\n",
-		       seq->lss_name, name, (int)PTR_ERR(dt_obj));
+                       seq->lss_name, name, (int)PTR_ERR(dt_obj));
                 rc = PTR_ERR(dt_obj);
         }
 

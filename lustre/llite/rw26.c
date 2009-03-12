@@ -311,7 +311,7 @@ ssize_t ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io,
 
         if (rc == 0) {
                 rc = cl_io_submit_rw(env, io, rw == READ ? CRT_READ : CRT_WRITE,
-                                     queue);
+                                     queue, CRP_NORMAL);
                 if (rc == 0) {
                         /*
                          * If some pages weren't sent for any reason (e.g.,

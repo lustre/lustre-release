@@ -733,7 +733,7 @@ static int vvp_page_sync_io(const struct lu_env *env, struct cl_io *io,
         cl_sync_io_init(anchor, 1);
         cp->cpg_sync_io = anchor;
         cl_page_clip(env, page, 0, to);
-        result = cl_io_submit_rw(env, io, crt, queue);
+        result = cl_io_submit_rw(env, io, crt, queue, CRP_NORMAL);
         if (result == 0)
                 result = cl_sync_io_wait(env, io, &queue->c2_qout, anchor);
         else

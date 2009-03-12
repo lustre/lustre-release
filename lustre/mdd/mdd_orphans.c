@@ -385,9 +385,10 @@ static int orph_key_test_and_del(const struct lu_env *env,
 
         rc = -EBUSY;
         if (mdo->mod_count == 0) {
-                CWARN("Found orphan!\n");
+                CWARN("Found orphan! Delete it\n");
                 rc = orphan_object_destroy(env, mdo, key);
         } else {
+                CDEBUG(D_HA, "Found orphan, open count = %d\n", mdo->mod_count);
                 mdo->mod_flags |= ORPHAN_OBJ;
         }
 

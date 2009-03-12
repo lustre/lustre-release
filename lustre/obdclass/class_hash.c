@@ -84,6 +84,7 @@ lustre_hash_init(char *name, unsigned int cur_bits, unsigned int max_bits,
                 RETURN(NULL);
 
         strncpy(lh->lh_name, name, sizeof(lh->lh_name));
+        lh->lh_name[sizeof(lh->lh_name) - 1] = '\0';
         atomic_set(&lh->lh_rehash_count, 0);
         atomic_set(&lh->lh_count, 0);
         rwlock_init(&lh->lh_rwlock);
@@ -691,7 +692,7 @@ EXPORT_SYMBOL(lustre_hash_rehash_key);
 int lustre_hash_debug_header(char *str, int size)
 {
         return snprintf(str, size,
-                 "%-36s%6s%6s%6s%6s%6s%6s%6s%7s%6s%s\n",
+                 "%-*s%6s%6s%6s%6s%6s%6s%6s%7s%6s%s\n", LUSTRE_MAX_HASH_NAME,
                  "name", "cur", "min", "max", "theta", "t-min", "t-max",
                  "flags", "rehash", "count", " distribution");
 }
@@ -711,7 +712,8 @@ int lustre_hash_debug_str(lustre_hash_t *lh, char *str, int size)
         read_lock(&lh->lh_rwlock);
         theta = __lustre_hash_theta(lh);
 
-        c += snprintf(str + c, size - c, "%-36s ", lh->lh_name);
+        c += snprintf(str + c, size - c, "%-*s ",
+                      LUSTRE_MAX_HASH_NAME, lh->lh_name);
         c += snprintf(str + c, size - c, "%5d ",  1 << lh->lh_cur_bits);
         c += snprintf(str + c, size - c, "%5d ",  1 << lh->lh_min_bits);
         c += snprintf(str + c, size - c, "%5d ",  1 << lh->lh_max_bits);

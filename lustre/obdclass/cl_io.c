@@ -739,7 +739,7 @@ int cl_io_read_page(const struct lu_env *env, struct cl_io *io,
                 }
         }
         if (result == 0)
-                result = cl_io_submit_rw(env, io, CRT_READ, queue);
+                result = cl_io_submit_rw(env, io, CRT_READ, queue, CRP_NORMAL);
         /*
          * Unlock unsent pages in case of error.
          */
@@ -835,7 +835,8 @@ EXPORT_SYMBOL(cl_io_commit_write);
  * \see cl_io_operations::cio_submit()
  */
 int cl_io_submit_rw(const struct lu_env *env, struct cl_io *io,
-                    enum cl_req_type crt, struct cl_2queue *queue)
+                    enum cl_req_type crt, struct cl_2queue *queue,
+                    enum cl_req_priority priority)
 {
         const struct cl_io_slice *scan;
         int result = 0;
@@ -847,7 +848,7 @@ int cl_io_submit_rw(const struct lu_env *env, struct cl_io *io,
                 if (scan->cis_iop->req_op[crt].cio_submit == NULL)
                         continue;
                 result = scan->cis_iop->req_op[crt].cio_submit(env, scan, crt,
-                                                               queue);
+                                                               queue, priority);
                 if (result != 0)
                         break;
         }

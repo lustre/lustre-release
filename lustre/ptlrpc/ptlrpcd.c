@@ -103,6 +103,28 @@ void ptlrpcd_wake(struct ptlrpc_request *req)
 }
 
 /*
+ * Move all request from an existing request set to the ptlrpcd queue.
+ * All requests from the set must be in phase RQ_PHASE_NEW.
+ */
+void ptlrpcd_add_rqset(struct ptlrpc_request_set *set)
+{
+        struct list_head *tmp, *pos;
+
+        list_for_each_safe(pos, tmp, &set->set_requests) {
+                struct ptlrpc_request *req =
+                        list_entry(pos, struct ptlrpc_request, rq_set_chain);
+
+                LASSERT(req->rq_phase == RQ_PHASE_NEW);
+                list_del_init(&req->rq_set_chain);
+                req->rq_set = NULL;
+                ptlrpcd_add_req(req, PSCOPE_OTHER);
+                set->set_remaining--;
+        }
+        LASSERT(set->set_remaining == 0);
+}
+EXPORT_SYMBOL(ptlrpcd_add_rqset);
+
+/*
  * Requests that are added to the ptlrpcd queue are sent via
  * ptlrpcd_check->ptlrpc_check_set().
  */
@@ -263,7 +285,7 @@ static int ptlrpcd(void *arg)
                         exit++;
                 }
 
-                /* 
+                /*
                  * Let's make one more loop to make sure that ptlrpcd_check()
                  * copied all raced new rpcs into the set so we can kill them.
                  */

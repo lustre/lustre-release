@@ -288,27 +288,11 @@ static int mdd_changelog_write(struct file *file, const char *buffer,
         if (kernbuf[count - 1] == '\n')
                 kernbuf[count - 1] = '\0';
 
+        /* Forced on/off/purge rec, independent of changelog users! */
         if (strcmp(kernbuf, "on") == 0) {
-                LCONSOLE_INFO("changelog on\n");
-                if (mdd->mdd_cl.mc_flags & CLM_ERR) {
-                        CERROR("Changelogs cannot be enabled due to error "
-                               "condition.\n");
-                } else {
-                        spin_lock(&mdd->mdd_cl.mc_lock);
-                        mdd->mdd_cl.mc_flags |= CLM_ON;
-                        spin_unlock(&mdd->mdd_cl.mc_lock);
-                        rc = mdd_changelog_write_header(mdd, CLM_START);
-                        if (rc)
-                              return rc;
-                }
+                rc = mdd_changelog_on(mdd, 1);
         } else if (strcmp(kernbuf, "off") == 0) {
-                LCONSOLE_INFO("changelog off\n");
-                rc = mdd_changelog_write_header(mdd, CLM_FINI);
-                if (rc)
-                      return rc;
-                spin_lock(&mdd->mdd_cl.mc_lock);
-                mdd->mdd_cl.mc_flags &= ~CLM_ON;
-                spin_unlock(&mdd->mdd_cl.mc_lock);
+                rc = mdd_changelog_on(mdd, 0);
         } else {
                 /* purge to an index */
                 long long unsigned endrec;
@@ -320,10 +304,10 @@ static int mdd_changelog_write(struct file *file, const char *buffer,
                 LCONSOLE_INFO("changelog purge to %llu\n", endrec);
 
                 rc = mdd_changelog_llog_cancel(mdd, endrec);
-                if (rc < 0)
-                        return rc;
         }
 
+        if (rc < 0)
+                return rc;
         return count;
 
 out_usage:

@@ -898,7 +898,10 @@ typedef __u32 obd_count;
 #define OBD_FL_TRUNCLOCK     (0x00000800) /* delegate DLM locking during punch */
 #define OBD_FL_CKSUM_CRC32   (0x00001000) /* CRC32 checksum type */
 #define OBD_FL_CKSUM_ADLER   (0x00002000) /* ADLER checksum type */
-#define OBD_FL_SHRINK_GRANT  (0x00004000) /* object shrink the grant */
+#define OBD_FL_CKSUM_RESV1   (0x00004000) /* reserved for future checksum type */
+#define OBD_FL_CKSUM_RESV2   (0x00008000) /* reserved for future checksum type */
+#define OBD_FL_CKSUM_RESV3   (0x00010000) /* reserved for future checksum type */
+#define OBD_FL_SHRINK_GRANT  (0x00020000) /* object shrink the grant */
 
 #define OBD_FL_CKSUM_ALL      (OBD_FL_CKSUM_CRC32 | OBD_FL_CKSUM_ADLER)
 
@@ -1027,6 +1030,14 @@ struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
 /* don't forget obdo_fid which is way down at the bottom so it can
  * come after the definition of llog_cookie */
 
+enum obd_statfs_state {
+        OS_STATE_DEGRADED       = 0x00000001, /**< RAID degraded/rebuilding */
+        OS_STATE_READONLY       = 0x00000002, /**< filesystem is read-only */
+        OS_STATE_RDONLY_1       = 0x00000004, /**< obsolete 1.6, was EROFS=30 */
+        OS_STATE_RDONLY_2       = 0x00000008, /**< obsolete 1.6, was EROFS=30 */
+        OS_STATE_RDONLY_3       = 0x00000010, /**< obsolete 1.6, was EROFS=30 */
+};
+
 struct obd_statfs {
         __u64           os_type;
         __u64           os_blocks;
@@ -1038,7 +1049,7 @@ struct obd_statfs {
         __u32           os_bsize;
         __u32           os_namelen;
         __u64           os_maxbytes;
-        __u32           os_state;       /* positive error code on server */
+        __u32           os_state;       /**< obd_statfs_state OS_STATE_* flag */
         __u32           os_spare1;
         __u32           os_spare2;
         __u32           os_spare3;
@@ -1053,9 +1064,14 @@ struct obd_statfs {
 extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_STATFS_NODELAY      0x0001  /* requests should be send without delay
                                          * and resends for avoid deadlocks */
-
 #define OBD_STATFS_FROM_CACHE   0x0002  /* the statfs callback should not update
                                          * obd_osfs_age */
+#define OBD_STATFS_PTLRPCD      0x0004  /* requests will be sent via ptlrpcd
+                                         * instead of a specific set. This
+                                         * means that we cannot rely on the set
+                                         * interpret routine to be called.
+                                         * lov_statfs_fini() must thus be called
+                                         * by the request interpret routine */
 
 /* ost_body.data values for OST_BRW */
 

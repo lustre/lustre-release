@@ -1135,8 +1135,10 @@ static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
                 enum cl_req_type typ = rw == READ ? CRT_READ : CRT_WRITE;
 
                 async = async && (typ == CRT_WRITE);
-                rc = (async ? cl_echo_async_brw : cl_io_submit_rw)(env, io,
-                                                                   typ, queue);
+                if (async)
+                        rc = cl_echo_async_brw(env, io, typ, queue);
+                else
+                        rc = cl_io_submit_rw(env, io,typ, queue, CRP_NORMAL);
                 CDEBUG(D_INFO, "echo_client %s write returns %d\n",
                        async ? "async" : "sync", rc);
                 if (rc == 0) {

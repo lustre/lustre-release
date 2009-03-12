@@ -1916,6 +1916,11 @@ enum cl_io_state {
         CIS_FINI
 };
 
+enum cl_req_priority {
+        CRP_NORMAL,
+        CRP_CANCEL
+};
+
 /**
  * IO state private for a layer.
  *
@@ -2033,7 +2038,8 @@ struct cl_io_operations {
                 int  (*cio_submit)(const struct lu_env *env,
                                    const struct cl_io_slice *slice,
                                    enum cl_req_type crt,
-                                   struct cl_2queue *queue);
+                                   struct cl_2queue *queue,
+                                   enum cl_req_priority priority);
         } req_op[CRT_NR];
         /**
          * Read missing page.
@@ -2868,7 +2874,8 @@ int   cl_io_prepare_write(const struct lu_env *env, struct cl_io *io,
 int   cl_io_commit_write (const struct lu_env *env, struct cl_io *io,
                           struct cl_page *page, unsigned from, unsigned to);
 int   cl_io_submit_rw    (const struct lu_env *env, struct cl_io *io,
-                          enum cl_req_type iot, struct cl_2queue *queue);
+                          enum cl_req_type iot, struct cl_2queue *queue,
+                          enum cl_req_priority priority);
 void  cl_io_rw_advance   (const struct lu_env *env, struct cl_io *io,
                           size_t nob);
 int   cl_io_cancel       (const struct lu_env *env, struct cl_io *io,

@@ -439,7 +439,7 @@ int lustre_shrink_msg_v2(struct lustre_msg_v2 *msg, int segment,
                 newpos = lustre_msg_buf_v2(msg, segment + 1, 0);
                 LASSERT(newpos <= tail);
                 if (newpos != tail)
-                        memcpy(newpos, tail, tail_len);
+                        memmove(newpos, tail, tail_len);
         }
 out:
         return lustre_msg_size_v2(msg->lm_bufcount, msg->lm_buflens);

@@ -551,7 +551,8 @@ static struct cl_page_list *lov_io_submit_qin(struct lov_device *ld,
  */
 static int lov_io_submit(const struct lu_env *env,
                          const struct cl_io_slice *ios,
-                         enum cl_req_type crt, struct cl_2queue *queue)
+                         enum cl_req_type crt, struct cl_2queue *queue,
+                         enum cl_req_priority priority)
 {
         struct lov_io          *lio = cl2lov_io(env, ios);
         struct lov_object      *obj = lio->lis_object;
@@ -581,7 +582,8 @@ static int lov_io_submit(const struct lu_env *env,
                 sub = lov_sub_get(env, lio, idx);
                 LASSERT(!IS_ERR(sub));
                 LASSERT(sub->sub_io == &lio->lis_single_subio);
-                rc = cl_io_submit_rw(sub->sub_env, sub->sub_io, crt, queue);
+                rc = cl_io_submit_rw(sub->sub_env, sub->sub_io,
+                                     crt, queue, priority);
                 lov_sub_put(sub);
                 RETURN(rc);
         }
@@ -622,7 +624,7 @@ static int lov_io_submit(const struct lu_env *env,
                 sub = lov_sub_get(env, lio, stripe);
                 if (!IS_ERR(sub)) {
                         rc = cl_io_submit_rw(sub->sub_env, sub->sub_io,
-                                             crt, cl2q);
+                                             crt, cl2q, priority);
                         lov_sub_put(sub);
                 } else
                         rc = PTR_ERR(sub);

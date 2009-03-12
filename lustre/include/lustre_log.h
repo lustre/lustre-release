@@ -292,6 +292,10 @@ struct llog_commit_master {
          */
         atomic_t                   lcm_count;
         /**
+         * The refcount for lcm
+         */
+         atomic_t		   lcm_refcount;
+        /**
          * Thread control structure. Used for control commit thread.
          */
         struct ptlrpcd_ctl         lcm_pc;
@@ -308,6 +312,23 @@ struct llog_commit_master {
          */
         char                       lcm_name[LCM_NAME_SIZE];
 };
+
+static inline struct llog_commit_master 
+*lcm_get(struct llog_commit_master *lcm)
+{
+        LASSERT(atomic_read(&lcm->lcm_refcount) > 0);
+        atomic_inc(&lcm->lcm_refcount);
+        return lcm;
+}
+
+static inline void 
+lcm_put(struct llog_commit_master *lcm)
+{
+        if (!atomic_dec_and_test(&lcm->lcm_refcount)) {
+                return ;
+        }
+        OBD_FREE_PTR(lcm);	
+}
 
 struct llog_canceld_ctxt {
         /**

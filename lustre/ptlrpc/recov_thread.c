@@ -479,6 +479,7 @@ struct llog_commit_master *llog_recov_thread_init(char *name)
                  "ll_log_commit_%s", name);
 
         atomic_set(&lcm->lcm_count, 0);
+        atomic_set(&lcm->lcm_refcount, 1);
         spin_lock_init(&lcm->lcm_lock);
         CFS_INIT_LIST_HEAD(&lcm->lcm_llcds);
         rc = llog_recov_thread_start(lcm);
@@ -500,7 +501,7 @@ void llog_recov_thread_fini(struct llog_commit_master *lcm, int force)
 {
         ENTRY;
         llog_recov_thread_stop(lcm, force);
-        OBD_FREE_PTR(lcm);
+        lcm_put(lcm);
         EXIT;
 }
 EXPORT_SYMBOL(llog_recov_thread_fini);
@@ -590,9 +591,13 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
         LASSERT(ctxt != NULL);
 
         mutex_down(&ctxt->loc_sem);
+        if (!ctxt->loc_lcm) {
+                CDEBUG(D_RPCTRACE, "No lcm for ctxt %p\n", ctxt);
+                GOTO(out, rc = -ENODEV);
+        }
         lcm = ctxt->loc_lcm;
         CDEBUG(D_INFO, "cancel on lsm %p\n", lcm);
-
+		
         /*
          * Let's check if we have all structures alive. We also check for
          * possible shutdown. Do nothing if we're stopping.

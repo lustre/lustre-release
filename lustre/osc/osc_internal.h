@@ -48,6 +48,7 @@ enum async_flags {
         ASYNC_COUNT_STABLE = 0x4, /* ap_refresh_count will not be called
                                      to give the caller a chance to update
                                      or cancel the size of the io */
+        ASYNC_HP = 0x10,
 };
 
 struct obd_async_page_ops {

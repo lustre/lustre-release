@@ -192,7 +192,7 @@ static int mdd_changelog_llog_init(struct mdd_device *mdd)
                 CERROR("changelog init failed: %d\n", rc);
                 return rc;
         }
-        CDEBUG(D_INODE, "changelog starting index="LPU64"\n",
+        CDEBUG(D_IOCTL, "changelog starting index="LPU64"\n",
                mdd->mdd_cl.mc_index);
 
         /* Find last changelog user id */
@@ -214,7 +214,12 @@ static int mdd_changelog_llog_init(struct mdd_device *mdd)
                 CERROR("changelog user init failed: %d\n", rc);
                 return rc;
         }
-        return 0;
+
+        /* If we have registered users, assume we want changelogs on */
+        if (mdd->mdd_cl.mc_lastuser > 0)
+                rc = mdd_changelog_on(mdd, 1);
+
+        return rc;
 }
 
 static int mdd_changelog_init(const struct lu_env *env, struct mdd_device *mdd)
@@ -242,6 +247,34 @@ static int mdd_changelog_init(const struct lu_env *env, struct mdd_device *mdd)
 static void mdd_changelog_fini(const struct lu_env *env, struct mdd_device *mdd)
 {
         mdd->mdd_cl.mc_flags = 0;
+}
+
+/* Start / stop recording */
+int mdd_changelog_on(struct mdd_device *mdd, int on)
+{
+        int rc = 0;
+
+        if ((on == 1) && ((mdd->mdd_cl.mc_flags & CLM_ON) == 0)) {
+                LCONSOLE_INFO("%s: changelog on\n", mdd2obd_dev(mdd)->obd_name);
+                if (mdd->mdd_cl.mc_flags & CLM_ERR) {
+                        CERROR("Changelogs cannot be enabled due to error "
+                               "condition (see %s log).\n",
+                               mdd2obd_dev(mdd)->obd_name);
+                        rc = -ESRCH;
+                } else {
+                        spin_lock(&mdd->mdd_cl.mc_lock);
+                        mdd->mdd_cl.mc_flags |= CLM_ON;
+                        spin_unlock(&mdd->mdd_cl.mc_lock);
+                        rc = mdd_changelog_write_header(mdd, CLM_START);
+                }
+        } else if ((on == 0) && ((mdd->mdd_cl.mc_flags & CLM_ON) == CLM_ON)) {
+                LCONSOLE_INFO("%s: changelog off\n",mdd2obd_dev(mdd)->obd_name);
+                rc = mdd_changelog_write_header(mdd, CLM_FINI);
+                spin_lock(&mdd->mdd_cl.mc_lock);
+                mdd->mdd_cl.mc_flags &= ~CLM_ON;
+                spin_unlock(&mdd->mdd_cl.mc_lock);
+        }
+        return rc;
 }
 
 /** Add a changelog entry \a rec to the changelog llog
@@ -1078,9 +1111,13 @@ static int mdd_changelog_user_register(struct mdd_device *mdd, int *id)
                 RETURN(-ENOMEM);
         }
 
+        /* Assume we want it on since somebody registered */
+        rc = mdd_changelog_on(mdd, 1);
+        if (rc)
+                GOTO(out, rc);
+
         rec->cur_hdr.lrh_len = sizeof(*rec);
         rec->cur_hdr.lrh_type = CHANGELOG_USER_REC;
-        rec->cur_endrec = 0ULL;
         spin_lock(&mdd->mdd_cl.mc_user_lock);
         if (mdd->mdd_cl.mc_lastuser == (unsigned int)(-1)) {
                 spin_unlock(&mdd->mdd_cl.mc_user_lock);
@@ -1088,10 +1125,12 @@ static int mdd_changelog_user_register(struct mdd_device *mdd, int *id)
                 GOTO(out, rc = -EOVERFLOW);
         }
         *id = rec->cur_id = ++mdd->mdd_cl.mc_lastuser;
+        rec->cur_endrec = mdd->mdd_cl.mc_index;
         spin_unlock(&mdd->mdd_cl.mc_user_lock);
+
         rc = llog_add(ctxt, &rec->cur_hdr, NULL, NULL, 0);
 
-        CDEBUG(D_INODE, "Registered changelog user %d\n", *id);
+        CDEBUG(D_IOCTL, "Registered changelog user %d\n", *id);
 out:
         OBD_FREE_PTR(rec);
         llog_ctxt_put(ctxt);
@@ -1103,8 +1142,10 @@ struct mdd_changelog_user_data {
         __u64 mcud_minrec; /**< lowest changelog recno still referenced */
         __u32 mcud_id;
         __u32 mcud_minid;  /**< user id with lowest rec reference */
+        __u32 mcud_usercount;
         int   mcud_found:1;
 };
+#define MCUD_UNREGISTER -1LL
 
 /** Two things:
  * 1. Find the smallest record everyone is willing to purge
@@ -1123,7 +1164,10 @@ static int mdd_changelog_user_purge_cb(struct llog_handle *llh,
 
         rec = (struct llog_changelog_user_rec *)hdr;
 
-        /* If we have a new endrec for this id, use it for the min check */
+        mcud->mcud_usercount++;
+
+        /* If we have a new endrec for this id, use it for the following
+           min check instead of its old value */
         if (rec->cur_id == mcud->mcud_id)
                 rec->cur_endrec = max(rec->cur_endrec, mcud->mcud_endrec);
 
@@ -1139,13 +1183,15 @@ static int mdd_changelog_user_purge_cb(struct llog_handle *llh,
         /* Update this user's record */
         mcud->mcud_found = 1;
 
-        /* Special case: unregister this user if endrec == -1 */
-        if (mcud->mcud_endrec == -1) {
+        /* Special case: unregister this user */
+        if (mcud->mcud_endrec == MCUD_UNREGISTER) {
                 struct llog_cookie cookie;
                 cookie.lgc_lgl = llh->lgh_id;
                 cookie.lgc_index = hdr->lrh_index;
                 rc = llog_cat_cancel_records(llh->u.phd.phd_cat_handle,
                                              1, &cookie);
+                if (rc == 0)
+                        mcud->mcud_usercount--;
                 RETURN(rc);
         }
 
@@ -1171,19 +1217,28 @@ static int mdd_changelog_user_purge(struct mdd_device *mdd, int id,
 
         CDEBUG(D_IOCTL, "Purge request: id=%d, endrec="LPD64"\n", id, endrec);
 
+        data.mcud_id = id;
+        data.mcud_minid = 0;
+        data.mcud_minrec = 0;
+        data.mcud_usercount = 0;
+        data.mcud_endrec = endrec;
+        spin_lock(&mdd->mdd_cl.mc_lock);
+        endrec = mdd->mdd_cl.mc_index;
+        spin_unlock(&mdd->mdd_cl.mc_lock);
+        if ((data.mcud_endrec == 0) ||
+            ((data.mcud_endrec > endrec) &&
+             (data.mcud_endrec != MCUD_UNREGISTER)))
+                data.mcud_endrec = endrec;
+
         ctxt = llog_get_context(mdd2obd_dev(mdd),LLOG_CHANGELOG_USER_ORIG_CTXT);
         if (ctxt == NULL)
                 return -ENXIO;
         LASSERT(ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT);
 
-        data.mcud_id = id;
-        data.mcud_endrec = endrec;
-        data.mcud_minid = 0;
-        data.mcud_minrec = 0;
         rc = llog_cat_process(ctxt->loc_handle, mdd_changelog_user_purge_cb,
                               (void *)&data, 0, 0);
         if ((rc >= 0) && (data.mcud_minrec > 0)) {
-                CDEBUG(D_INODE, "Purging CL entries up to "LPD64
+                CDEBUG(D_IOCTL, "Purging changelog entries up to "LPD64
                        ", referenced by "CHANGELOG_USER_PREFIX"%d\n",
                        data.mcud_minrec, data.mcud_minid);
                 rc = mdd_changelog_llog_cancel(mdd, data.mcud_minrec);
@@ -1192,6 +1247,8 @@ static int mdd_changelog_user_purge(struct mdd_device *mdd, int id,
                       rc);
         }
 
+        llog_ctxt_put(ctxt);
+
         if (!data.mcud_found) {
                 CWARN("No entry for user %d.  Last changelog reference is "
                       LPD64" by changelog user %d\n", data.mcud_id,
@@ -1199,7 +1256,10 @@ static int mdd_changelog_user_purge(struct mdd_device *mdd, int id,
                rc = -ENOENT;
         }
 
-        llog_ctxt_put(ctxt);
+        if (!rc && data.mcud_usercount == 0)
+                /* No more users; turn changelogs off */
+                rc = mdd_changelog_on(mdd, 0);
+
         RETURN (rc);
 }
 
@@ -1248,7 +1308,8 @@ static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
                 rc = mdd_changelog_user_register(mdd, &data->ioc_u32_1);
                 break;
         case OBD_IOC_CHANGELOG_DEREG:
-                rc = mdd_changelog_user_purge(mdd, data->ioc_u32_1, -1);
+                rc = mdd_changelog_user_purge(mdd, data->ioc_u32_1,
+                                              MCUD_UNREGISTER);
                 break;
         default:
                 rc = -EOPNOTSUPP;

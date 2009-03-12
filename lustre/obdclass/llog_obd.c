@@ -91,7 +91,10 @@ int __llog_ctxt_put(struct llog_ctxt *ctxt)
         }
         olg->olg_ctxts[ctxt->loc_idx] = NULL;
         spin_unlock(&olg->olg_lock);
-
+        
+        if (ctxt->loc_lcm)
+                lcm_put(ctxt->loc_lcm);
+	
         obd = ctxt->loc_obd;
         spin_lock(&obd->obd_dev_lock);
         spin_unlock(&obd->obd_dev_lock); /* sync with llog ctxt user thread */

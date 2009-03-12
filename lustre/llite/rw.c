@@ -890,16 +890,15 @@ static void ras_stride_increase_window(struct ll_readahead_state *ras,
         unsigned long stride_len;
 
         LASSERT(ras->ras_stride_length > 0);
+        LASSERTF(ras->ras_window_start + ras->ras_window_len 
+                 >= ras->ras_stride_offset, "window_start %lu, window_len %lu"
+                 " stride_offset %lu\n", ras->ras_window_start,
+                 ras->ras_window_len, ras->ras_stride_offset);
 
         stride_len = ras->ras_window_start + ras->ras_window_len -
                      ras->ras_stride_offset;
 
-        LASSERTF(stride_len >= 0, "window_start %lu, window_len %lu"
-                 " stride_offset %lu\n", ras->ras_window_start,
-                 ras->ras_window_len, ras->ras_stride_offset);
-
         left = stride_len % ras->ras_stride_length;
-
         window_len = ras->ras_window_len - left;
 
         if (left < ras->ras_stride_pages)
@@ -1117,7 +1116,8 @@ int ll_writepage(struct page *vmpage, struct writeback_control *_)
                          */
                         set_page_dirty(vmpage);
                         cl_2queue_init_page(queue, page);
-                        result = cl_io_submit_rw(env, io, CRT_WRITE, queue);
+                        result = cl_io_submit_rw(env, io, CRT_WRITE,
+                                                 queue, CRP_NORMAL);
                         cl_page_list_disown(env, io, &queue->c2_qin);
                         if (result != 0) {
                                 /*

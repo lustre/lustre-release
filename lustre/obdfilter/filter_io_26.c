@@ -774,5 +774,7 @@ cleanup:
                         i_size_read(inode) > fo->fo_readcache_max_filesize))
                 filter_invalidate_cache(obd, obj, nb, inode);
 
+        up_read(&inode->i_alloc_sem);
+
         RETURN(rc);
 }

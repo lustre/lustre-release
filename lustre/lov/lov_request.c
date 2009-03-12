@@ -955,7 +955,7 @@ int lov_fini_getattr_set(struct lov_request_set *set)
 }
 
 /* The callback for osc_getattr_async that finilizes a request info when a
- * response is recieved. */
+ * response is received. */
 static int cb_getattr_update(void *cookie, int rc)
 {
         struct obd_info *oinfo = cookie;
@@ -1145,7 +1145,7 @@ int lov_update_setattr_set(struct lov_request_set *set,
 }
 
 /* The callback for osc_setattr_async that finilizes a request info when a
- * response is recieved. */
+ * response is received. */
 static int cb_setattr_update(void *cookie, int rc)
 {
         struct obd_info *oinfo = cookie;
@@ -1281,7 +1281,7 @@ int lov_update_punch_set(struct lov_request_set *set,
 }
 
 /* The callback for osc_punch that finilizes a request info when a response
- * is recieved. */
+ * is received. */
 static int cb_update_punch(void *cookie, int rc)
 {
         struct obd_info *oinfo = cookie;
@@ -1566,7 +1566,7 @@ void lov_update_statfs(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
 }
 
 /* The callback for osc_statfs_async that finilizes a request info when a
- * response is recieved. */
+ * response is received. */
 static int cb_statfs_update(void *cookie, int rc)
 {
         struct obd_info *oinfo = cookie;
@@ -1593,7 +1593,7 @@ static int cb_statfs_update(void *cookie, int rc)
                 if (rc && !(lov->lov_tgts[lovreq->rq_idx] &&
                             lov->lov_tgts[lovreq->rq_idx]->ltd_active))
                         rc = 0;
-                RETURN(rc);
+                GOTO(out, rc);
         }
 
         spin_lock(&obd->obd_osfs_lock);
@@ -1604,6 +1604,14 @@ static int cb_statfs_update(void *cookie, int rc)
 
         lov_update_statfs(osfs, lov_sfs, success);
         qos_update(lov);
+out:
+        if (lovreq->rq_rqset->set_oi->oi_flags & OBD_STATFS_PTLRPCD &&
+            lovreq->rq_rqset->set_count == lovreq->rq_rqset->set_completes) {
+               lov_statfs_interpret(NULL, lovreq->rq_rqset,
+                                    lovreq->rq_rqset->set_success !=
+                                                  lovreq->rq_rqset->set_count);
+               qos_statfs_done(lov);
+        }
 
         RETURN(0);
 }

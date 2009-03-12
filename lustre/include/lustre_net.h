@@ -344,6 +344,8 @@ struct ptlrpc_request {
         struct list_head rq_exp_list;           /* server-side per-export list */
         struct ptlrpc_hpreq_ops *rq_ops;        /* server-side hp handlers */
         __u64            rq_history_seq;        /* history sequence # */
+        /* the index of service's srv_at_array into which request is linked */
+        time_t rq_at_index;
         int rq_status;
         spinlock_t rq_lock;
         /* client-side flags are serialized by rq_lock */
@@ -354,20 +356,19 @@ struct ptlrpc_request {
                  * after server commits corresponding transaction. This is
                  * used for operations that require sequence of multiple
                  * requests to be replayed. The only example currently is file
-                 * open/close/dw/setattr. When last request in such a sequence
-                 * is committed, ->rq_replay is cleared on all requests in the
+                 * open/close. When last request in such a sequence is
+                 * committed, ->rq_replay is cleared on all requests in the
                  * sequence.
                  */
                 rq_replay:1,
-                /* this is the last request in the sequence. */
-                rq_sequence:1,
                 rq_no_resend:1, rq_waiting:1, rq_receiving_reply:1,
                 rq_no_delay:1, rq_net_err:1, rq_wait_ctx:1,
                 rq_early:1, rq_must_unlink:1,
                 /* server-side flags */
                 rq_packed_final:1,  /* packed final reply */
                 rq_sent_final:1,    /* stop sending early replies */
-                rq_hp:1;            /* high priority RPC */
+                rq_hp:1,            /* high priority RPC */
+                rq_at_linked:1;     /* link into service's srv_at_array */
 
         enum rq_phase rq_phase; /* one of RQ_PHASE_* */
         enum rq_phase rq_next_phase; /* one of RQ_PHASE_* to be used next */
@@ -389,7 +390,6 @@ struct ptlrpc_request {
         __u64 rq_transno;
         __u64 rq_xid;
         struct list_head rq_replay_list;
-        struct list_head rq_mod_list;
 
         struct ptlrpc_cli_ctx   *rq_cli_ctx;     /* client's half ctx */
         struct ptlrpc_svc_ctx   *rq_svc_ctx;     /* server's half ctx */
@@ -495,14 +495,6 @@ struct ptlrpc_request {
         /* request format */
         struct req_capsule          rq_pill;
 };
-
-static inline void ptlrpc_close_replay_seq(struct ptlrpc_request *req)
-{
-        spin_lock(&req->rq_lock);
-        req->rq_replay = 0;
-        req->rq_sequence = 1;
-        spin_unlock(&req->rq_lock);
-}
 
 static inline void lustre_set_req_swabbed(struct ptlrpc_request *req, int index)
 {
@@ -714,7 +706,7 @@ struct ptlrpc_service {
         /* AT stuff */
         struct adaptive_timeout srv_at_estimate;/* estimated rpc service time */
         spinlock_t        srv_at_lock;
-        struct list_head  srv_at_list;          /* reqs waiting for replies */
+        struct ptlrpc_at_array  srv_at_array;   /* reqs waiting for replies */
         cfs_timer_t       srv_at_timer;         /* early reply timer */
 
         int               srv_n_queued_reqs;    /* # reqs in either of the queues below */
@@ -1155,19 +1147,19 @@ ptlrpc_rqphase_move(struct ptlrpc_request *req, enum rq_phase new_phase)
 {
         if (req->rq_phase == new_phase)
                 return;
-        
+
         if (new_phase == RQ_PHASE_UNREGISTERING) {
                 req->rq_next_phase = req->rq_phase;
                 if (req->rq_import)
                         atomic_inc(&req->rq_import->imp_unregistering);
         }
-        
+
         if (req->rq_phase == RQ_PHASE_UNREGISTERING) {
                 if (req->rq_import)
                         atomic_dec(&req->rq_import->imp_unregistering);
         }
 
-        DEBUG_REQ(D_RPCTRACE, req, "move req \"%s\" -> \"%s\"", 
+        DEBUG_REQ(D_RPCTRACE, req, "move req \"%s\" -> \"%s\"",
                   ptlrpc_rqphase2str(req), ptlrpc_phase2str(new_phase));
 
         req->rq_phase = new_phase;
@@ -1282,7 +1274,7 @@ int import_set_conn_priority(struct obd_import *imp, struct obd_uuid *uuid);
 
 /* ptlrpc/pinger.c */
 enum timeout_event {
-        TIMEOUT_GRANT = 1 
+        TIMEOUT_GRANT = 1
 };
 struct timeout_item;
 typedef int (*timeout_cb_t)(struct timeout_item *, void *);
@@ -1324,6 +1316,7 @@ int ptlrpcd_start(const char *name, struct ptlrpcd_ctl *pc);
 void ptlrpcd_stop(struct ptlrpcd_ctl *pc, int force);
 void ptlrpcd_wake(struct ptlrpc_request *req);
 void ptlrpcd_add_req(struct ptlrpc_request *req, enum ptlrpcd_scope scope);
+void ptlrpcd_add_rqset(struct ptlrpc_request_set *set);
 int ptlrpcd_addref(void);
 void ptlrpcd_decref(void);
 

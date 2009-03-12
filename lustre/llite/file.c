@@ -112,7 +112,7 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
         struct ptlrpc_request *req = NULL;
         struct obd_device *obd = class_exp2obd(exp);
         int epoch_close = 1;
-        int seq_end = 0, rc;
+        int rc;
         ENTRY;
 
         if (obd == NULL) {
@@ -140,17 +140,14 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
         ll_prepare_close(inode, op_data, och);
         epoch_close = (op_data->op_flags & MF_EPOCH_CLOSE);
         rc = md_close(md_exp, op_data, och->och_mod, &req);
-        if (rc != -EAGAIN)
-                seq_end = 1;
-
         if (rc == -EAGAIN) {
                 /* This close must have the epoch closed. */
                 LASSERT(exp->exp_connect_flags & OBD_CONNECT_SOM);
                 LASSERT(epoch_close);
                 /* MDS has instructed us to obtain Size-on-MDS attribute from
                  * OSTs and send setattr to back to MDS. */
-                rc = ll_sizeonmds_update(inode, och->och_mod,
-                                         &och->och_fh, op_data->op_ioepoch);
+                rc = ll_sizeonmds_update(inode, &och->och_fh,
+                                         op_data->op_ioepoch);
                 if (rc) {
                         CERROR("inode %lu mdc Size-on-MDS update failed: "
                                "rc = %d\n", inode->i_ino, rc);
@@ -176,8 +173,6 @@ out:
             S_ISREG(inode->i_mode) && (och->och_flags & FMODE_WRITE)) {
                 ll_queue_done_writing(inode, LLIF_DONE_WRITING);
         } else {
-                if (seq_end)
-                        ptlrpc_close_replay_seq(req);
                 md_clear_open_replay_data(md_exp, och);
                 /* Free @och if it is not waiting for DONE_WRITING. */
                 och->och_fh.cookie = DEAD_HANDLE_MAGIC;
@@ -1527,7 +1522,7 @@ static int ll_file_join(struct inode *head, struct file *filp,
         struct file *tail_filp, *first_filp, *second_filp;
         struct ll_lock_tree first_tree, second_tree;
         struct ll_lock_tree_node *first_node, *second_node;
-        struct ll_inode_info *hlli = ll_i2info(head), *tlli;
+        struct ll_inode_info *hlli = ll_i2info(head);
         int rc = 0, cleanup_phase = 0;
         ENTRY;
 
@@ -1542,7 +1537,6 @@ static int ll_file_join(struct inode *head, struct file *filp,
         }
         tail = igrab(tail_filp->f_dentry->d_inode);
 
-        tlli = ll_i2info(tail);
         tail_dentry = tail_filp->f_dentry;
         LASSERT(tail_dentry);
         cleanup_phase = 1;

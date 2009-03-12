@@ -983,6 +983,7 @@ test_59() { # bug 10589
 run_test 59 "Read cancel race on client eviction"
 
 err17935 () {
+    # we assume that all md changes are in the MDT0 changelog
     if [ $MDSCOUNT -gt 1 ]; then
 	error_ignore 17935 $*
     else
@@ -991,17 +992,17 @@ err17935 () {
 }
 
 test_60() {
-	remote_mds && { skip "remote MDS" && return 0; }
+        MDT0=$($LCTL get_param -n mdc.*.mds_server_uuid | \
+	    awk '{gsub(/_UUID/,""); print $1}' | head -1)
 
 	NUM_FILES=15000
 	mkdir -p $DIR/$tdir
 
-	# Enable and clear changelog
-	$LCTL conf_param ${mds1_svc}.mdd.changelog=on
-	$LCTL set_param -n mdd.*.changelog on
-	$LFS changelog_clear $FSNAME 0
+	# Register (and start) changelog
+	USER=$(do_facet $SINGLEMDS lctl --device $MDT0 changelog_register -n)
+	echo "Registered as $MDT0 changelog user $USER"
 
-	# Create NUM_FILES in the background
+	# Generate a large number of changelog entries
 	createmany -o $DIR/$tdir/$tfile $NUM_FILES
 	sync
 	sleep 5
@@ -1011,29 +1012,61 @@ test_60() {
 	CLIENT_PID=$!
 	sleep 1
 
-	# Failover the MDS while creates are happening
+	# Failover the MDS while unlinks are happening
 	facet_failover $SINGLEMDS
 
 	# Wait for unlinkmany to finish
 	wait $CLIENT_PID
 
-	# Check if NUM_FILES create/unlink events were recorded
+	# Check if all the create/unlink events were recorded
 	# in the changelog
-	$LFS changelog $FSNAME >> $DIR/$tdir/changelog
+	$LFS changelog $MDT0 >> $DIR/$tdir/changelog
 	local cl_count=$(grep UNLNK $DIR/$tdir/changelog | wc -l)
-	echo "$cl_count unlinks in changelog"
+	echo "$cl_count unlinks in $MDT0 changelog"
 
-	[ $cl_count -eq $NUM_FILES ] || err17935 "Recorded ${cl_count} unlinks out
-of $NUM_FILES"
-
-	# Also make sure we can clear large changelogs
-	lctl set_param -n mdd.*.changelog off
-	$LFS changelog_clear $FSNAME 0
-
-	cl_count=$($LFS changelog $FSNAME | wc -l)
-	[ $cl_count -eq 1 ] || error "Changelog not empty: $cl_count entries"
+	do_facet $SINGLEMDS lctl --device $MDT0 changelog_deregister $USER
+	USERS=$(( $(do_facet $SINGLEMDS lctl get_param -n \
+	    mdd.$MDT0.changelog_users | wc -l) - 2 ))
+	if [ $USERS -eq 0 ]; then
+	    [ $cl_count -eq $NUM_FILES ] || \
+		err17935 "Recorded ${cl_count} unlinks out of $NUM_FILES"
+	    # Also make sure we can clear large changelogs
+	    cl_count=$($LFS changelog $FSNAME | wc -l)
+	    [ $cl_count -le 2 ] || \
+		error "Changelog not empty: $cl_count entries"
+	else
+	    # If there are other users, there may be other unlinks in the log
+	    [ $cl_count -ge $NUM_FILES ] || \
+		err17935 "Recorded ${cl_count} unlinks out of $NUM_FILES"
+	    echo "$USERS other changelog users; can't verify clear"
+	fi
 }
 run_test 60 "Add Changelog entries during MDS failover"
+
+test_61()
+{
+	local cflags='osc.*-OST0000-osc-MDT*.connect_flags'
+	do_facet $SINGLEMDS "lctl get_param -n $cflags" |grep -q skip_orphan
+	[ $? -ne 0 ] && skip "don't have skip orphan feature" && return
+
+	mkdir -p $DIR/$tdir || error "mkdir dir $DIR/$tdir failed"
+	# Set the default stripe of $DIR/$tdir to put the files to ost1
+	$LFS setstripe -c 1 --index 0 $DIR/$tdir
+
+	replay_barrier $SINGLEMDS
+	createmany -o $DIR/$tdir/$tfile-%d 10 
+	local oid=`do_facet ost1 "lctl get_param -n obdfilter.*OST0000.last_id"`
+
+	fail_abort $SINGLEMDS
+	
+	touch $DIR/$tdir/$tfile
+	local id=`$LFS getstripe $DIR/$tdir/$tfile |awk '$2 ~ /^[1-9]+/ {print $2}'`
+	[ $id -le $oid ] && error "the orphan objid was reused, failed"
+
+	# Cleanup
+	rm -rf $DIR/$tdir
+}
+run_test 61 "Verify to not reuse orphan objects - bug 17025"
 
 test_61()
 {

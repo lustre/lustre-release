@@ -810,6 +810,11 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         lov->lov_qos.lq_prio_free = 232;
         /* Default threshold for rr (roughly 17%) */
         lov->lov_qos.lq_threshold_rr = 43;
+        /* Init statfs fields */
+        OBD_ALLOC_PTR(lov->lov_qos.lq_statfs_data);
+        if (NULL == lov->lov_qos.lq_statfs_data)
+                RETURN(-ENOMEM);
+        cfs_waitq_init(&lov->lov_qos.lq_statfs_waitq);
 
         lov->lov_pools_hash_body = lustre_hash_init("POOLS", 7, 7,
                                                     &pool_hash_operations, 0);
@@ -914,6 +919,7 @@ static int lov_cleanup(struct obd_device *obd)
         /* clear pools parent proc entry only after all pools is killed */
         lprocfs_obd_cleanup(obd);
 
+        OBD_FREE_PTR(lov->lov_qos.lq_statfs_data);
         RETURN(0);
 }
 
@@ -1106,8 +1112,6 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
         struct obd_info oinfo;
         struct lov_request_set *set = NULL;
         struct lov_request *req;
-        struct obd_statfs osfs;
-        __u64 maxage;
         int rc = 0;
         ENTRY;
 
@@ -1133,8 +1137,11 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
                  GOTO(out, rc);
         }
 
-        maxage = cfs_time_shift_64(-lov->desc.ld_qos_maxage);
-        obd_statfs_rqset(exp->exp_obd, &osfs, maxage, OBD_STATFS_NODELAY);
+        /* issue statfs rpcs if the osfs data is older than qos_maxage - 1s,
+         * later in alloc_qos(), we will wait for those rpcs to complete if
+         * the osfs age is older than 2 * qos_maxage */
+        qos_statfs_update(exp->exp_obd,
+                          cfs_time_shift_64(-lov->desc.ld_qos_maxage) + HZ, 0);
 
         rc = lov_prep_create_set(exp, &oinfo, ea, src_oa, oti, &set);
         if (rc)
@@ -1751,7 +1758,7 @@ static int lov_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
         struct obd_info oinfo;
         struct lov_request *req;
         struct list_head *pos;
-        struct lov_obd *lov = &exp->exp_obd->u.lov;
+        struct lov_obd *lov;
         struct lustre_handle *lov_lockhp;
         int err = 0, rc = 0;
         ENTRY;
@@ -1847,8 +1854,7 @@ static int lov_cancel_unused(struct obd_export *exp,
         RETURN(rc);
 }
 
-static int lov_statfs_interpret(struct ptlrpc_request_set *rqset,
-                                void *data, int rc)
+int lov_statfs_interpret(struct ptlrpc_request_set *rqset, void *data, int rc)
 {
         struct lov_request_set *lovset = (struct lov_request_set *)data;
         int err;
@@ -2367,7 +2373,7 @@ static int lov_fiemap(struct lov_obd *lov, __u32 keylen, void *key,
                                 GOTO(out, rc = -EINVAL);
 
                         /* If OST is inactive, return extent with UNKNOWN flag */
-                        if (lov && !lov->lov_tgts[ost_index]->ltd_active) {
+                        if (!lov->lov_tgts[ost_index]->ltd_active) {
                                 fm_local->fm_flags |= FIEMAP_EXTENT_LAST;
                                 fm_local->fm_mapped_extents = 1;
 

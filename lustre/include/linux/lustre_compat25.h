@@ -620,16 +620,6 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
                 vfs_rename(old,old_dir,new,new_dir)
 #endif
 
-#ifndef get_cpu
-#ifdef CONFIG_PREEMPT
-#define get_cpu()       ({ preempt_disable(); smp_processor_id(); })
-#define put_cpu()       preempt_enable()
-#else
-#define get_cpu()       smp_processor_id()
-#define put_cpu()
-#endif
-#endif /* get_cpu & put_cpu */
-
 #ifndef for_each_possible_cpu
 #define for_each_possible_cpu(i) for_each_cpu(i)
 #endif

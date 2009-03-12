@@ -97,8 +97,8 @@ struct lov_oinfo {                 /* per-stripe data structure */
         /* used by the osc to keep track of what objects to build into rpcs */
         struct loi_oap_pages loi_read_lop;
         struct loi_oap_pages loi_write_lop;
-        /* _cli_ is poorly named, it should be _ready_ */
-        struct list_head loi_cli_item;
+        struct list_head loi_ready_item;
+        struct list_head loi_hp_ready_item;
         struct list_head loi_write_item;
         struct list_head loi_read_item;
 
@@ -122,7 +122,8 @@ static inline void loi_init(struct lov_oinfo *loi)
         CFS_INIT_LIST_HEAD(&loi->loi_write_lop.lop_pending);
         CFS_INIT_LIST_HEAD(&loi->loi_write_lop.lop_urgent);
         CFS_INIT_LIST_HEAD(&loi->loi_write_lop.lop_pending_group);
-        CFS_INIT_LIST_HEAD(&loi->loi_cli_item);
+        CFS_INIT_LIST_HEAD(&loi->loi_ready_item);
+        CFS_INIT_LIST_HEAD(&loi->loi_hp_ready_item);
         CFS_INIT_LIST_HEAD(&loi->loi_write_item);
         CFS_INIT_LIST_HEAD(&loi->loi_read_item);
 }
@@ -440,6 +441,7 @@ struct client_obd {
          */
         client_obd_lock_t        cl_loi_list_lock;
         struct list_head         cl_loi_ready_list;
+        struct list_head         cl_loi_hp_ready_list;
         struct list_head         cl_loi_write_list;
         struct list_head         cl_loi_read_list;
         int                      cl_r_in_flight;
@@ -650,6 +652,10 @@ struct lov_qos_rr {
         unsigned long       lqr_dirty:1;     /* recalc round-robin list */
 };
 
+struct lov_statfs_data {
+        struct obd_info   lsd_oi;
+        struct obd_statfs lsd_statfs;
+};
 /* Stripe placement optimization */
 struct lov_qos {
         struct list_head    lq_oss_list;    /* list of OSSs that targets use */
@@ -661,7 +667,12 @@ struct lov_qos {
         unsigned long       lq_dirty:1,     /* recalc qos data */
                             lq_same_space:1,/* the ost's all have approx.
                                                the same space avail */
-                            lq_reset:1;     /* zero current penalties */
+                            lq_reset:1,     /* zero current penalties */
+                            lq_statfs_in_progress:1; /* statfs op in progress */
+        /* qos statfs data */
+        struct lov_statfs_data *lq_statfs_data;
+        cfs_waitq_t         lq_statfs_waitq; /* waitqueue to notify statfs
+                                              * requests completion */
 };
 
 struct lov_tgt_desc {
@@ -1414,7 +1425,8 @@ struct lustre_md {
 
 struct md_open_data {
         struct obd_client_handle *mod_och;
-        struct list_head          mod_replay_list;
+        struct ptlrpc_request    *mod_open_req;
+        struct ptlrpc_request    *mod_close_req;
 };
 
 struct lookup_intent;
@@ -1573,7 +1585,7 @@ static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
                 return;
         }
         if (transno > obd->obd_last_committed) {
-                CDEBUG(D_HA, "%s: transno "LPD64" committed\n",
+                CDEBUG(D_INFO, "%s: transno "LPD64" committed\n",
                        obd->obd_name, transno);
                 obd->obd_last_committed = transno;
                 ptlrpc_commit_replies (obd);

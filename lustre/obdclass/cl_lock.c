@@ -1741,8 +1741,8 @@ int cl_lock_page_out(const struct lu_env *env, struct cl_lock *lock,
                 if (queue->c2_qin.pl_nr > 0) {
                         result = cl_page_list_unmap(env, io, &queue->c2_qin);
                         if (!discard) {
-                                rc0 = cl_io_submit_rw(env, io,
-                                                      CRT_WRITE, queue);
+                                rc0 = cl_io_submit_rw(env, io, CRT_WRITE,
+                                                      queue, CRP_CANCEL);
                                 rc1 = cl_page_list_own(env, io,
                                                        &queue->c2_qout);
                                 result = result ?: rc0 ?: rc1;
