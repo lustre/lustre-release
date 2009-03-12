@@ -361,6 +361,83 @@ stop() {
     wait_exit_ST ${facet}
 }
 
+# save quota version (both administrative and operational quotas)
+quota_save_version() {
+    local fsname=${2:-$FSNAME}
+    do_facet mgs "lctl conf_param ${fsname}-MDT*.mdt.quota_type=$1"
+    local varsvc
+    local osts=$(get_facets OST)
+    for ost in ${osts//,/ }; do
+        varsvc=${ost}_svc
+        do_facet mgs "lctl conf_param ${!varsvc}.ost.quota_type=$1"
+    done
+}
+
+# client could mount several lustre 
+quota_type () {
+    local fsname=${1:-$FSNAME}
+    local rc=0
+    do_facet mgs lctl get_param mds.${fsname}-MDT*.quota_type || rc=$?
+    do_nodes $(comma_list $(osts_nodes)) \
+        lctl get_param obdfilter.${fsname}-OST*.quota_type || rc=$?
+    return $rc 
+}
+
+restore_quota_type () {
+   local mntpt=${1:-$MOUNT}
+   local quota_type=$(quota_type $FSNAME | grep MDT | cut -d "=" -f2)
+   if [ ! "$old_QUOTA_TYPE" ] || [ "$quota_type" = "$old_QUOTA_TYPE" ]; then
+        return
+   fi
+   $LFS quotaoff $mntpt
+   quota_save_version $old_QUOTA_TYPE
+   $LFS quotacheck -ug $mntpt
+}
+
+setup_quota(){
+    local mntpt=$1
+
+    # We need:
+    # 1. run quotacheck only if quota is off
+    # 2. save the original quota_type params, restore them after testing
+
+    # Suppose that quota type the same on mds and ost
+    local quota_type=$(quota_type | grep MDT | cut -d "=" -f2)
+    [ ${PIPESTATUS[0]} -eq 0 ] || error "quota_type failed!"
+    if [ "$quota_type" != "$QUOTA_TYPE" ]; then
+        export old_QUOTA_TYPE=$quota_type
+        quota_save_version $QUOTA_TYPE
+        $LFS quotacheck -ug $mntpt
+    fi
+
+    local quota_usrs=$QUOTA_USERS
+
+    # get_filesystem_size
+    local disksz=$(lfs df | grep "filesystem summary:"  | awk '{print $3}')
+    local blk_soft=$((disksz + 1024))
+    local blk_hard=$((blk_soft + blk_soft / 20)) # Go 5% over
+
+    local Inodes=$(lfs df -i | grep "filesystem summary:"  | awk '{print $3}')
+    local i_soft=$Inodes
+    local i_hard=$((i_soft + i_soft / 20))
+
+    echo "Total disk size: $disksz  block-softlimit: $blk_soft block-hardlimit:
+        $blk_hard inode-softlimit: $i_soft inode-hardlimit: $i_hard"
+
+    local cmd
+    for usr in $quota_usrs; do
+        echo "Setting up quota on $client:$mntpt for $usr..."
+        for type in u g; do
+            cmd="$LFS setquota -$type $usr -b $blk_soft -B $blk_hard -i $i_soft -I $i_hard $mntpt"
+            echo "+ $cmd"
+            eval $cmd || error "$cmd FAILED!"
+        done
+        # display the quota status
+        echo "Quota settings for $usr : "
+        $LFS quota -v -u $usr $mntpt || true
+    done
+}
+
 zconf_mount() {
     local OPTIONS
     local client=$1
@@ -1252,6 +1329,11 @@ init_param_vars () {
 
     TIMEOUT=$(do_facet mds "lctl get_param -n timeout")
     log "Using TIMEOUT=$TIMEOUT"
+
+    if [ "$ENABLE_QUOTA" ]; then
+        setup_quota $MOUNT  || return 2
+    fi
+
 }
 
 check_config () {
@@ -1313,6 +1395,7 @@ cleanup_and_setup_lustre() {
 check_and_cleanup_lustre() {
     if [ "`mount | grep $MOUNT`" ]; then
         [ -n "$DIR" ] && rm -rf $DIR/[Rdfs][0-9]*
+        [ "$ENABLE_QUOTA" ] && restore_quota_type || true
     fi
     if [ "$I_MOUNTED" = "yes" ]; then
         cleanupall -f || error "cleanup failed"
