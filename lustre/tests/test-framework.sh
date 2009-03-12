@@ -2129,6 +2129,7 @@ check_catastrophe () {
 
 # $1 node
 # $2 file
+# $3 $RUNAS
 get_stripe_info() {
 	local tmp_file
 
