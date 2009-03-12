@@ -41,6 +41,8 @@ IUNIT_SZ=${IUNIT_SZ:-10}	# min inode quota unit
 MAX_DQ_TIME=604800
 MAX_IQ_TIME=604800
 
+unset ENABLE_QUOTA
+
 TRACE=${TRACE:-""}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
@@ -1138,12 +1140,6 @@ quota_set_version() {
         for j in `seq $OSTCOUNT`; do
                 do_facet ost$j "lctl set_param lquota.${FSNAME}-OST*.quota_type=$1"
         done
-}
-
-# save quota version (both administrative and operational quotas)
-quota_save_version() {
-        do_facet mgs "lctl conf_param ${FSNAME}-MDT*.mdt.quota_type=$1"
-        do_facet mgs "lctl conf_param ${FSNAME}-OST*.ost.quota_type=$1"
 }
 
 test_14b(){
