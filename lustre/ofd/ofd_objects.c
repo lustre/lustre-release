@@ -152,13 +152,6 @@ int filter_precreate_object(const struct lu_env *env, struct filter_device *ofd,
         next = filter_object_child(fo);
         LASSERT(next != NULL);
 
-        filter_write_lock(env, fo, 0);
-        if (filter_object_exists(fo)) {
-                /* underlying filesystem is broken - object must not exist */
-                CERROR("object %u/"LPD64" exists\n", (unsigned) group, id);
-                GOTO(out, rc = -EEXIST);
-        }
-
         buf.lb_buf = &tmp;
         buf.lb_len = sizeof(tmp);
         off = group * sizeof(tmp);
@@ -180,12 +173,20 @@ int filter_precreate_object(const struct lu_env *env, struct filter_device *ofd,
         if (rc)
                 GOTO(trans_stop, rc);
 
+        filter_write_lock(env, fo, 0);
+        if (filter_object_exists(fo)) {
+                /* underlying filesystem is broken - object must not exist */
+                CERROR("object %u/"LPD64" exists: "DFID"\n",
+                       (unsigned) group, id, PFID(&fid));
+                GOTO(trans_stop, rc = -EEXIST);
+        }
+
         CDEBUG(D_OTHER, "create new object %lu:%llu\n",
                (unsigned long) fid.f_oid, fid.f_seq);
 
         rc = dt_create(env, next, &attr, NULL, &dof, th);
         if (rc)
-                GOTO(trans_stop, rc);
+                GOTO(out_unlock, rc);
         LASSERT(filter_object_exists(fo));
 
         filter_last_id_set(ofd, id, group);
@@ -194,10 +195,10 @@ int filter_precreate_object(const struct lu_env *env, struct filter_device *ofd,
         rc = dt_record_write(env, ofd->ofd_groups_file, &buf, &off,
                              th, BYPASS_CAPA, 1);
 
-trans_stop:
-        filter_trans_stop(env, ofd, th);
 out_unlock:
         filter_write_unlock(env, fo);
+trans_stop:
+        filter_trans_stop(env, ofd, th);
 out:
         filter_object_put(env, fo);
         RETURN(rc);
