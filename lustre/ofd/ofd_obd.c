@@ -882,13 +882,20 @@ out:
 }
 
 static int filter_orphans_destroy(const struct lu_env *env,
+                                  struct obd_export *exp,
                                   struct filter_device *ofd,
-                                  obd_id mds_id, obd_gr gr)
+                                  struct obdo *oa)
 {
         struct filter_thread_info *info = filter_info(env);
-        obd_id last, id;
-        int rc;
+        obd_id                     last, id;
+        int                        skip_orphan;
+        int                        rc = 0;
+        obd_id                     mds_id = oa->o_id;
+        obd_gr                     gr = oa->o_gr;
         ENTRY;
+
+        LASSERT(exp != NULL);
+        skip_orphan = !!(exp->exp_connect_flags & OBD_CONNECT_SKIP_ORPHAN);
 
         //LASSERT(mutex_try_down(&ofd->ofd_create_locks[gr]) != 0);
 
@@ -902,15 +909,24 @@ static int filter_orphans_destroy(const struct lu_env *env,
                 if (rc && rc != -ENOENT) /* this is pretty fatal... */
                         CEMERG("error destroying precreated id "LPU64": %d\n",
                                id, rc);
-                filter_last_id_set(ofd, id - 1, gr);
-                /* update last_id on disk periodically so that if we restart
-                 * we don't need to re-scan all of the just-deleted objects. */
-                if ((id & 511) == 0)
-                        filter_last_id_write(env, ofd, gr, 0);
+                if (!skip_orphan) {
+                        filter_last_id_set(ofd, id - 1, gr);
+                        /* update last_id on disk periodically so that if we
+                         * restart * we don't need to re-scan all of the just
+                         * deleted objects. */
+                        if ((id & 511) == 0)
+                                filter_last_id_write(env, ofd, gr, 0);
+                }
         }
         CDEBUG(D_HA, "%s: after destroy: set last_objids["LPU64"] = "LPU64"\n",
                filter_obd(ofd)->obd_name, gr, mds_id);
-        rc = filter_last_id_write(env, ofd, gr, 1);
+        if (!skip_orphan) {
+                rc = filter_last_id_write(env, ofd, gr, 1);
+        } else {
+                /* don't reuse orphan object, return last used objid */
+                oa->o_id = last;
+                rc = 0;
+        }
         RETURN(rc);
 }
 
@@ -973,7 +989,7 @@ static int filter_create(struct obd_export *exp,
                         /* FIXME: should reset precreate_next_id on MDS */
                         rc = 0;
                 } else if (diff < 0) {
-                        rc = filter_orphans_destroy(&env, ofd, oa->o_id, group);
+                        rc = filter_orphans_destroy(&env, exp, ofd, oa);
                         clear_bit(group, &ofd->ofd_destroys_in_progress);
                 } else {
                         /* XXX: Used by MDS for the first time! */
@@ -995,7 +1011,7 @@ static int filter_create(struct obd_export *exp,
                 }
         }
         if (diff > 0) {
-                obd_id next_id = filter_last_id(ofd, group);
+                obd_id next_id = filter_last_id(ofd, group) + 1;
                 int i;
 
                 /* TODO: check we have free space. Need DMU support */
