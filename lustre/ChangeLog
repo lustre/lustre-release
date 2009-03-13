@@ -78,17 +78,17 @@ Frequency  : rare
 Bugzilla   : 18154
 Descriptoin: don't lose wakeup for imp_recovery_waitq
 Details    : recover_import_no_retry or invalidate_import and import_close can
-             both sleep on imp_recovery_waitq, but we was send only one wakeup
-             to sleep queue.
+	     both sleep on imp_recovery_waitq, but we was send only one wakeup
+	     to sleep queue.
 
 Severity   : normal
 Frequency  : start MDS on uncleanly shutdowned MDS device
 Bugzilla   : 16839
 Descriptoin: ll_sync thread stay in waiting mds<>ost recovery finished
 Details    : stay in waiting mds<>ost recovery finished produce random bugs
-             due race between two ll_sync thread for one lov target. send
-             ACTIVATE event only if connect realy finished and import have
-             FULL state.
+	     due race between two ll_sync thread for one lov target. Send 
+	     ACTIVATE event only if connect really finished and import has
+	     FULL state.
 
 Severity   : enhancement
 Bugzilla   : 18061
@@ -142,7 +142,7 @@ Frequency  : rare, during recovery
 Bugzilla   : 17895
 Description: Assertion failure in ldlm_lock_put
 Details    : Do not put cancelled locks into replay list, hold references on
-             locks in replay list
+	     locks in replay list
 
 
 --------------------------------------------------------------------------
@@ -202,7 +202,7 @@ Severity   : normal
 Frequency  : rare
 Bugzilla   : 17972
 Descriptoin: stuck in cache_remove_extent() or panic with accessing to already
-             freed look.
+	     freed lock.
 Details    : release lock refernce only after add page to pages list.
 
 Severity   : normal
@@ -210,7 +210,7 @@ Frequency  : always with long access acl
 Bugzilla   : 17636
 Descriptoin: mds can't pack reply with long acl.
 Details    : mds don't control size of acl but they limited by reint/getattr
-             reply buffer.
+	     reply buffer.
 
 Severity   : major
 Frequency  : on remount
