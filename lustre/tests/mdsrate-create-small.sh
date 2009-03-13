@@ -56,7 +56,8 @@ else
     if [ -n "$NOCREATE" ]; then
         echo "NO Test for creates for a single client."
     else
-        do_node ${CLIENT} "rm -rf $TESTDIR_SINGLE"
+        # We can use np = $NUM_CLIENTS to speed up the cleanup
+        mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES $TESTDIR_SINGLE 'f%%d' --ignore
 
         log "===== $0 ### 1 NODE CREATE ###"
         echo "Running creates on 1 node(s)."
@@ -101,7 +102,7 @@ else
     if [ -n "$NOCREATE" ]; then
         echo "NO test for create on multiple nodes."
     else
-        do_node $CLIENT rm -rf $TESTDIR_MULTI
+        mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES $TESTDIR_MULTI 'f%%d' --ignore
 
         log "===== $0 ### $NUM_CLIENTS NODES CREATE ###"
         echo "Running creates on ${NUM_CLIENTS} node(s) with $THREADS_PER_CLIENT threads per client."
@@ -136,6 +137,8 @@ else
 fi
 
 equals_msg `basename $0`: test complete, cleaning up
+mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES $TESTDIR_SINGLE 'f%%d' --ignore
+mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES $TESTDIR_MULTI 'f%%d' --ignore
 rm -f $MACHINEFILE 
 check_and_cleanup_lustre
 #rm -f $LOG
