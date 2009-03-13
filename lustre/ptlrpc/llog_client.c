@@ -57,7 +57,7 @@
 #include <lustre_net.h>
 #include <libcfs/list.h>
 
-#define  LLOG_CLIENT_ENTRY(ctxt, imp) do {                            \
+#define LLOG_CLIENT_ENTRY(ctxt, imp) do {                             \
         mutex_down(&ctxt->loc_sem);                                   \
         if (ctxt->loc_imp) {                                          \
                 imp = class_import_get(ctxt->loc_imp);                \
@@ -73,13 +73,13 @@
         mutex_up(&ctxt->loc_sem);                                     \
 } while(0)
 
-#define  LLOG_CLIENT_EXIT(ctxt, imp) do {                  \
-        mutex_down(&ctxt->loc_sem);                        \
-        if (ctxt->loc_imp != imp)                          \
-                CWARN("loc_imp has changed from %p to %p", \
-                       ctxt->loc_imp, imp);                \
-        class_import_put(imp);                             \
-        mutex_up(&ctxt->loc_sem);                          \
+#define LLOG_CLIENT_EXIT(ctxt, imp) do {                              \
+        mutex_down(&ctxt->loc_sem);                                   \
+        if (ctxt->loc_imp != imp)                                     \
+                CWARN("loc_imp has changed from %p to %p\n",          \
+                       ctxt->loc_imp, imp);                           \
+        class_import_put(imp);                                        \
+        mutex_up(&ctxt->loc_sem);                                     \
 } while(0)
 
 /* This is a callback from the llog_* functions.
