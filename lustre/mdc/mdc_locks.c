@@ -241,8 +241,8 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
         struct ptlrpc_request *req;
         struct obd_device     *obddev = class_exp2obd(exp);
         struct ldlm_intent    *lit;
-        int                    joinfile = !!((it->it_flags & O_JOIN_FILE) &&
-                                              op_data->op_data);
+        int           joinfile = !!((it->it_create_mode & M_JOIN_FILE) &&
+                                    op_data->op_data);
         CFS_LIST_HEAD(cancels);
         int                    count = 0;
         int                    mode;
@@ -630,7 +630,7 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                 policy = *(ldlm_policy_data_t *)lmm;
                 res_id.name[3] = LDLM_FLOCK;
         } else if (it->it_op & IT_OPEN) {
-                int joinfile = !!((it->it_flags & O_JOIN_FILE) &&
+                int joinfile = !!((it->it_create_mode & M_JOIN_FILE) &&
                                               op_data->op_data);
 
                 req = mdc_intent_open_pack(exp, it, op_data, lmm, lmmsize,
@@ -640,7 +640,7 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                         einfo->ei_cbdata = NULL;
                         lmm = NULL;
                 } else
-                        it->it_flags &= ~O_JOIN_FILE;
+                        it->it_create_mode &= ~M_JOIN_FILE;
         } else if (it->it_op & IT_UNLINK)
                 req = mdc_intent_unlink_pack(exp, it, op_data);
         else if (it->it_op & (IT_GETATTR | IT_LOOKUP))
@@ -723,7 +723,7 @@ static int mdc_finish_intent_lock(struct obd_export *exp,
         /* If we were revalidating a fid/name pair, mark the intent in
          * case we fail and get called again from lookup */
         if (fid_is_sane(&op_data->op_fid2) &&
-            it->it_flags & O_CHECK_STALE &&
+            it->it_create_mode & M_CHECK_STALE &&
             it->it_op != IT_GETATTR) {
                 it_set_disposition(it, DISP_ENQ_COMPLETE);
 
@@ -911,7 +911,7 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                 if (rc < 0)
                         RETURN(rc);
         } else if (!fid_is_sane(&op_data->op_fid2) ||
-                   !(it->it_flags & O_CHECK_STALE)) {
+                   !(it->it_create_mode & M_CHECK_STALE)) {
                 /* DISP_ENQ_COMPLETE set means there is extra reference on
                  * request referenced from this intent, saved for subsequent
                  * lookup.  This path is executed when we proceed to this

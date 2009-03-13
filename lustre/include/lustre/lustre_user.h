@@ -119,11 +119,7 @@ struct obd_statfs;
 #define LL_IOC_OBD_STATFS       IOC_OBD_STATFS
 #define IOC_MDC_GETSTRIPE       IOC_MDC_GETFILESTRIPE
 
-/* Do not define O_CHECK_STALE as 0200000000,
- * which is conflict with MDS_OPEN_OWNEROVERRIDE */
-#define O_CHECK_STALE       020000000  /* hopefully this does not conflict */
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
-#define O_JOIN_FILE        0400000000  /* hopefully this does not conflict */
 
 #define LL_FILE_IGNORE_LOCK             0x00000001
 #define LL_FILE_GROUP_LOCKED            0x00000002

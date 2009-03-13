@@ -607,9 +607,9 @@ restart:
                            would attempt to grab och_sem as well, that would
                            result in a deadlock */
                         up(&lli->lli_och_sem);
-                        it->it_flags |= O_CHECK_STALE;
+                        it->it_create_mode |= M_CHECK_STALE;
                         rc = ll_intent_file_open(file, NULL, 0, it);
-                        it->it_flags &= ~O_CHECK_STALE;
+                        it->it_create_mode &= ~M_CHECK_STALE;
                         if (rc) {
                                 ll_file_data_put(fd);
                                 GOTO(out_openerr, rc);
@@ -1464,7 +1464,8 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
 {
         struct dentry *tail_dentry = tail_filp->f_dentry;
         struct lookup_intent oit = {.it_op = IT_OPEN,
-                                   .it_flags = head_filp->f_flags|O_JOIN_FILE};
+                                    .it_flags = head_filp->f_flags,
+                                    .it_create_mode = M_JOIN_FILE};
         struct ldlm_enqueue_info einfo = { LDLM_IBITS, LCK_CW,
                 ll_md_blocking_ast, ldlm_completion_ast, NULL, NULL, NULL };
 
@@ -2177,14 +2178,14 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 if (IS_ERR(op_data))
                         RETURN(PTR_ERR(op_data));
 
-                oit.it_flags |= O_CHECK_STALE;
+                oit.it_create_mode |= M_CHECK_STALE;
                 rc = md_intent_lock(exp, op_data, NULL, 0,
                                     /* we are not interested in name
                                        based lookup */
                                     &oit, 0, &req,
                                     ll_md_blocking_ast, 0);
                 ll_finish_md_op_data(op_data);
-                oit.it_flags &= ~O_CHECK_STALE;
+                oit.it_create_mode &= ~M_CHECK_STALE;
                 if (rc < 0) {
                         rc = ll_inode_revalidate_fini(inode, rc);
                         GOTO (out, rc);

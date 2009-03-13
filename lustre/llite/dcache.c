@@ -470,11 +470,11 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
 
 do_lock:
         it->it_create_mode &= ~current->fs->umask;
-        it->it_flags |= O_CHECK_STALE;
+        it->it_create_mode |= M_CHECK_STALE;
         rc = md_intent_lock(exp, op_data, NULL, 0, it,
                             lookup_flags,
                             &req, ll_md_blocking_ast, 0);
-        it->it_flags &= ~O_CHECK_STALE;
+        it->it_create_mode &= ~M_CHECK_STALE;
         ll_finish_md_op_data(op_data);
         if (it->it_op == IT_GETATTR && !first)
                 /* If there are too many locks on client-side, then some
