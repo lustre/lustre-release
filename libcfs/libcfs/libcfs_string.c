@@ -128,5 +128,23 @@ int libcfs_str2mask(const char *str, const char *(*bit2str)(int bit),
         *oldmask = newmask;
         return 0;
 }
-EXPORT_SYMBOL(libcfs_str2mask);
 
+/* Duplicate a string in a platform-independent way */
+char *libcfs_strdup(const char *str, u_int32_t flags)
+{
+        size_t lenz; /* length of str + zero byte */
+        char *dup_str;
+
+        lenz = strlen(str) + 1;
+
+        dup_str = cfs_alloc(lenz, flags);
+        if (dup_str == NULL)
+                return NULL;
+
+        memcpy(dup_str, str, lenz);
+
+        return dup_str;
+}
+
+EXPORT_SYMBOL(libcfs_str2mask);
+EXPORT_SYMBOL(libcfs_strdup);
