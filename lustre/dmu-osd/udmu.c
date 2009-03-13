@@ -113,49 +113,15 @@ void udmu_debug(int level)
         debug_level = level;
 }
 
-int udmu_objset_open(char *osname, char *import_dir, int import, int force,
-                     udmu_objset_t *uos)
+int udmu_objset_open(char *osname, udmu_objset_t *uos)
 {
         int error;
-        //char cmd[MAXPATHLEN];
-        char *c;
         uint64_t version = ZPL_VERSION;
-        //int tried_import = FALSE;
 
         memset(uos, 0, sizeof(udmu_objset_t));
 
-        c = strchr(osname, '/');
-
         /* Let's try to open the objset */
         error = dmu_objset_open(osname, DMU_OST_ZFS, DS_MODE_OWNER, &uos->os);
-
-#if 0
-        if (error == ENOENT && import && !tried_import) {
-                /* objset not found, let's try to import the pool */
-                udmu_printf(LEVEL_INFO, stdout, "Importing pool %s\n", osname);
-
-                if (c != NULL)
-                        *c = '\0';
-
-                snprintf(cmd, sizeof(cmd), "lzpool import%s%s%s %s",
-                    force ? " -F" : "", import_dir ? " -d " : "",
-                    import_dir ? import_dir : "", osname);
-
-                if (c != NULL)
-                        *c = '/';
-
-                error = system(cmd);
-
-                if (error) {
-                        udmu_printf(LEVEL_CRITICAL, stderr, "\"%s\" failed:"
-                            " %d\n", cmd, error);
-                        return(error);
-                }
-
-                tried_import = TRUE;
-                goto top;
-        }
-#endif
 
         if (error) {
                 uos->os = NULL;
@@ -197,18 +163,8 @@ int udmu_objset_open(char *osname, char *import_dir, int import, int force,
         ASSERT(uos->root != 0);
 
 out:
-#if 0
-        if (error) {
-                if (uos->os == NULL && tried_import) {
-                        if (c != NULL)
-                                *c = '\0';
-                        spa_export(osname, NULL, B_TRUE);
-                        if (c != NULL)
-                                *c = '/';
-                } else if(uos->os != NULL)
-                        udmu_objset_close(uos, tried_import);
-        }
-#endif
+        if (error && uos->os != NULL)
+                dmu_objset_close(uos->os);
 
         return (error);
 }
@@ -220,30 +176,19 @@ void udmu_wait_synced(udmu_objset_t *uos, dmu_tx_t *tx)
                         tx ? tx->tx_txg : 0ULL);
 }
 
-void udmu_objset_close(udmu_objset_t *uos, int export_pool)
+void udmu_objset_close(udmu_objset_t *uos)
 {
-
         ASSERT(uos->os != NULL);
 
-#if 0
-        spa_t *spa;
-        char pool_name[MAXPATHLEN];
-        spa = uos->os->os->os_spa;
-        spa_config_enter(spa, RW_READER, FTAG);
-        strncpy(pool_name, spa_name(spa), sizeof(pool_name));
-        spa_config_exit(spa, FTAG);
-#endif
-
+        /* Force a txg sync.
+           This should not be needed, neither for correctness nor safety.
+           Presumably, we are only doing this to force commit callbacks to be called sooner. */
         udmu_wait_synced(uos, NULL);
+
         /* close the object set */
         dmu_objset_close(uos->os);
 
         uos->os = NULL;
-
-#if 0
-        if (export_pool)
-                spa_export(pool_name, NULL, B_TRUE);
-#endif
 }
 
 int udmu_objset_statfs(udmu_objset_t *uos, struct statfs64 *statp)

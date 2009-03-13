@@ -2405,7 +2405,7 @@ static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
         if (o->od_root_db)
                 udmu_object_put_dmu_buf(o->od_root_db, root_tag);
         if (o->od_objset.os)
-                udmu_objset_close(&o->od_objset, 0);
+                udmu_objset_close(&o->od_objset);
 
         RETURN(0);
 }
@@ -2466,10 +2466,7 @@ static int osd_mount(const struct lu_env *env,
         if (o->od_objset.os != NULL)
                 RETURN(0);
 
-        while (*dev && *dev == '/')
-                dev++;
-
-        rc = udmu_objset_open(dev, NULL, 0, 0, &o->od_objset); 
+        rc = udmu_objset_open(dev, &o->od_objset); 
         if (rc) {
                 CERROR("can't open objset %s: %d\n", dev, rc);
                 RETURN(-rc);
@@ -2478,6 +2475,7 @@ static int osd_mount(const struct lu_env *env,
         rc = udmu_objset_root(&o->od_objset, &rootdb, root_tag);
         if (rc) {
                 CERROR("udmu_objset_root() failed with error %d\n", rc);
+                udmu_objset_close(&o->od_objset);
                 RETURN(-rc);
         }
         o->od_root_db = rootdb;

@@ -166,9 +166,9 @@ void udmu_debug(int level);
 
 /* udmu object-set API */
 
-int udmu_objset_open(char *osname, char *import_dir, int import, int force, udmu_objset_t *uos);
+int udmu_objset_open(char *osname, udmu_objset_t *uos);
 
-void udmu_objset_close(udmu_objset_t *uos, int export_pool);
+void udmu_objset_close(udmu_objset_t *uos);
 
 int udmu_objset_statfs(udmu_objset_t *uos, struct statfs64 *statp);
 
