@@ -91,7 +91,7 @@ int filter_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
 
         LASSERT(ctxt != NULL);
         ctxt->llog_proc_cb = filter_recov_log_mds_ost_cb;
-        ctxt->loc_lcm = ofd->ofd_lcm;
+        ctxt->loc_lcm = lcm_get(ofd->ofd_lcm);
         llog_ctxt_put(ctxt);
 
 cleanup:
