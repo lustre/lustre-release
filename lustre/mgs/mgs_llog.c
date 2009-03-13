@@ -532,6 +532,7 @@ int mgs_set_index(struct obd_device *obd, struct mgs_target_info *mti)
                 if (rc == -1)
                         RETURN(-ERANGE);
                 mti->mti_stripe_index = rc;
+                mti->mti_flags &= ~LDD_F_NEED_INDEX;
         }
 
         if (mti->mti_stripe_index >= INDEX_MAP_SIZE * 8) {
@@ -2600,6 +2601,11 @@ int mgs_write_log_target(struct obd_device *obd,
 
         if (mti->mti_flags &
             (LDD_F_VIRGIN | LDD_F_UPGRADE14 | LDD_F_WRITECONF)) {
+                /* Update target name from fsname:XXXyyyy -> fsname-XXXyyyy */
+                mti->mti_flags &= ~LDD_F_VIRGIN;
+                server_make_name(mti->mti_flags, mti->mti_stripe_index,
+                                 mti->mti_fsname, mti->mti_svname);
+
                 /* Generate a log from scratch */
                 if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
                         rc = mgs_write_log_mdt(obd, fsdb, mti);

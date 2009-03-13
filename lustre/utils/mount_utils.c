@@ -59,7 +59,7 @@ void fatal(void)
         fprintf(stderr, "\n%s FATAL: ", progname);
 }
 
-int run_command(char *cmd, int cmdsz)
+int run_command_err(char *cmd, int cmdsz, char *error_msg)
 {
         char log[] = "/tmp/run_command_logXXXXXX";
         int fd = -1, rc;
@@ -85,7 +85,24 @@ int run_command(char *cmd, int cmdsz)
         /* Can't use popen because we need the rv of the command */
         rc = system(cmd);
         if (rc && (fd >= 0)) {
-                char buf[128];
+                char buf[256];
+
+                if (error_msg != NULL) {
+                        if (snprintf(buf, sizeof(buf), "grep -q \"%s\" %s",
+                                     error_msg, log) >= sizeof(buf)) {
+                                fatal();
+                                buf[sizeof(buf) - 1] = '\0';
+                                fprintf(stderr, "grep command buf overflow: "
+                                        "'%s'\n", buf);
+                                return ENOMEM;
+                        }
+                        if (system(buf) == 0) {
+                                /* The command had the expected error */
+                                rc = -2;
+                                goto out;
+                        }
+                }
+
                 FILE *fp;
                 fp = fopen(log, "r");
                 if (fp) {
@@ -95,9 +112,15 @@ int run_command(char *cmd, int cmdsz)
                         fclose(fp);
                 }
         }
+out:
         if (fd >= 0)
                 remove(log);
         return rc;
+}
+
+int run_command(char *cmd, int cmdsz)
+{
+        return run_command_err(cmd, cmdsz, NULL);
 }
 
 int get_mountdata(char *dev, struct lustre_disk_data *mo_ldd)
@@ -191,7 +214,7 @@ static int stclient(char *type, char *arch)
                 return 0;
         }
 
-        i = fread(cmd, 1, sizeof(cmd), fp);
+        i = fread(cmd, 1, sizeof(cmd) - 1, fp);
         if (i) {
                 cmd[i] = 0;
                 if (strcmp(cmd, "Record not found\n") != 0) {

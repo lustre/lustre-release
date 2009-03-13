@@ -1916,14 +1916,17 @@ int server_name2index(char *svname, __u32 *idx, char **endptr)
         unsigned long index;
         int rc;
         char *dash = strrchr(svname, '-');
-        if (!dash)
-                return(-EINVAL);
+        if (!dash) {
+                dash = strrchr(svname, ':');
+                if (!dash)
+                        return(-EINVAL);
+        }
 
         /* intepret <fsname>-MDTXXXXX-mdc as mdt, the better way is to pass
          * in the fsname, then determine the server index */
         if (!strcmp(LUSTRE_MDC_NAME, dash + 1)) {
                 dash--;
-                for (; dash > svname && *dash != '-'; dash--);
+                for (; dash > svname && *dash != '-' && *dash != ':'; dash--);
                 if (dash == svname)
                         return(-EINVAL);
         }
@@ -1934,10 +1937,18 @@ int server_name2index(char *svname, __u32 *idx, char **endptr)
                 rc = LDD_F_SV_TYPE_OST;
         else
                 return(-EINVAL);
-        if (strcmp(dash + 4, "all") == 0)
+
+        dash += 4;
+
+        if (strcmp(dash, "all") == 0)
                 return rc | LDD_F_SV_ALL;
 
-        index = simple_strtoul(dash + 4, endptr, 16);
+        if (*dash == 'u') {
+                rc |= LDD_F_NEED_INDEX;
+                dash++;
+        }
+
+        index = simple_strtoul(dash, endptr, 16);
         *idx = index;
         return rc;
 }

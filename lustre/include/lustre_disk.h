@@ -143,10 +143,16 @@ static inline int server_make_name(__u32 flags, __u16 index, char *fs,
                                    char *name)
 {
         if (flags & (LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST)) {
-                if (!(flags & LDD_F_SV_ALL))
-                        sprintf(name, "%.8s-%s%04x", fs,
-                                (flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST",
-                                index);
+                if (!(flags & LDD_F_SV_ALL)) {
+                        sprintf(name, "%.8s%c%s", fs,
+                                (flags & LDD_F_VIRGIN) ? ':' : '-',
+                                (flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST");
+
+                        if (flags & LDD_F_NEED_INDEX)
+                                sprintf(&name[strlen(name)], "u%03x", index);
+                        else
+                                sprintf(&name[strlen(name)], "%04x", index);
+                }
         } else if (flags & LDD_F_SV_TYPE_MGS) {
                 sprintf(name, "MGS");
         } else {
