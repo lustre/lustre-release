@@ -308,4 +308,9 @@ struct md_enqueue_info {
         void                   *mi_cbdata;
 };
 
+/* these are local flags, used only on the client, private */
+#define M_CHECK_STALE           0200000000 
+#define M_JOIN_FILE             0400000000 /* its counterpart is
+                                            * MDS_OPEN_JOIN_FILE */
+
 #endif

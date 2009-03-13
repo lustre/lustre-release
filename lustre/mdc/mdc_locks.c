@@ -242,7 +242,7 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
                                                         cl_max_mds_easize,
                            [DLM_REPLY_REC_OFF+2] = LUSTRE_POSIX_ACL_MAX_SIZE };
         CFS_LIST_HEAD(cancels);
-        int do_join = (it->it_flags & O_JOIN_FILE) && data->data;
+        int do_join = (it->it_create_mode & M_JOIN_FILE) && data->data;
         int count = 0;
         int bufcount = 6;
         int repbufcount = 5;
@@ -304,7 +304,7 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
                         mdc_join_pack(req, bufcount - 1, data, head_size);
         } else {
                 req = ldlm_prep_enqueue_req(exp, bufcount, size,&cancels,count);
-                it->it_flags &= ~O_JOIN_FILE;
+                it->it_create_mode &= ~M_JOIN_FILE;
         }
 
         if (req) {
@@ -584,7 +584,7 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                         }
                 }
                 req = mdc_intent_open_pack(exp, it, data, lmm, lmmsize);
-                if (it->it_flags & O_JOIN_FILE) {
+                if (it->it_create_mode & M_JOIN_FILE) {
                         policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
                 }
         } else if (it->it_op & IT_UNLINK) {
@@ -692,7 +692,7 @@ static int mdc_finish_intent_lock(struct obd_export *exp,
 
         if (data->fid2.id && (it->it_op != IT_GETATTR) &&
            ( !mdc_exp_is_2_0_server(exp) ||
-             (mdc_exp_is_2_0_server(exp) && (it->it_flags & O_CHECK_STALE)))) {
+             (mdc_exp_is_2_0_server(exp) && (it->it_create_mode & M_CHECK_STALE)))) {
                 it_set_disposition(it, DISP_ENQ_COMPLETE);
 
                 /* Also: did we find the same inode? */

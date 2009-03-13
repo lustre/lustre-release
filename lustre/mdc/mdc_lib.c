@@ -234,7 +234,7 @@ void mdc_create_pack(struct ptlrpc_request *req, int offset,
                                    mode, uid, gid, cap_effective, rdev);
 }
 
-static __u32 mds_pack_open_flags(__u32 flags)
+static __u32 mds_pack_open_flags(__u32 flags, __u32 mode)
 {
         __u32 cr_flags = (flags & (FMODE_READ | FMODE_WRITE |
                                    MDS_OPEN_DELAY_CREATE | MDS_OPEN_HAS_EA |
@@ -252,7 +252,7 @@ static __u32 mds_pack_open_flags(__u32 flags)
                 cr_flags |= MDS_OPEN_SYNC;
         if (flags & O_DIRECTORY)
                 cr_flags |= MDS_OPEN_DIRECTORY;
-        if (flags & O_JOIN_FILE)
+        if (mode  & M_JOIN_FILE)
                 cr_flags |= MDS_OPEN_JOIN_FILE;
 #ifdef FMODE_EXEC
         if (flags & FMODE_EXEC)
@@ -315,7 +315,7 @@ static void mdc_open_pack_18(struct ptlrpc_request *req, int offset,
         rec->cr_fid     = op_data->fid1;
         memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
         rec->cr_mode    = mode;
-        rec->cr_flags   = mds_pack_open_flags(flags);
+        rec->cr_flags   = mds_pack_open_flags(flags, mode);
         rec->cr_rdev    = rdev;
         rec->cr_time    = op_data->mod_time;
         rec->cr_suppgid = op_data->suppgids[0];
@@ -356,7 +356,7 @@ static void mdc_open_pack_20(struct ptlrpc_request *req, int offset,
         memcpy(&rec->cr_fid1, &op_data->fid1, sizeof(op_data->fid1));
         memcpy(&rec->cr_fid2, &op_data->fid2, sizeof(op_data->fid2));
         rec->cr_mode   = mode;
-        rec->cr_flags  = mds_pack_open_flags(flags);
+        rec->cr_flags  = mds_pack_open_flags(flags, mode);
         rec->cr_rdev   = rdev;
         rec->cr_time   = op_data->mod_time;
         rec->cr_suppgid1 = op_data->suppgids[0];

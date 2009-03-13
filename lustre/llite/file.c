@@ -524,9 +524,9 @@ restart:
                            would attempt to grab och_sem as well, that would
                            result in a deadlock */
                         up(&lli->lli_och_sem);
-                        it->it_flags |= O_CHECK_STALE;
+                        it->it_create_mode |= M_CHECK_STALE;
                         rc = ll_intent_file_open(file, NULL, 0, it);
-                        it->it_flags &= ~O_CHECK_STALE;
+                        it->it_create_mode &= ~M_CHECK_STALE;
                         if (rc) {
                                 ll_file_data_put(fd);
                                 GOTO(out_openerr, rc);
@@ -2444,7 +2444,8 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
 {
         struct dentry *tail_dentry = tail_filp->f_dentry;
         struct lookup_intent oit = {.it_op = IT_OPEN,
-                                   .it_flags = head_filp->f_flags|O_JOIN_FILE};
+                                    .it_flags = head_filp->f_flags,
+                                    .it_create_mode = M_JOIN_FILE};
         struct ldlm_enqueue_info einfo = { LDLM_IBITS, LCK_PW,
                 ll_mdc_blocking_ast, ldlm_completion_ast, NULL, NULL };
 
@@ -3147,13 +3148,13 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 /* Call getattr by fid, so do not provide name at all. */
                 ll_prepare_mdc_op_data(&op_data, dentry->d_parent->d_inode,
                                        dentry->d_inode, NULL, 0, 0, NULL);
-                oit.it_flags |= O_CHECK_STALE;
+                oit.it_create_mode |= M_CHECK_STALE;
                 rc = mdc_intent_lock(exp, &op_data, NULL, 0,
                                      /* we are not interested in name
                                         based lookup */
                                      &oit, 0, &req,
                                      ll_mdc_blocking_ast, 0);
-                oit.it_flags &= ~O_CHECK_STALE;
+                oit.it_create_mode &= ~M_CHECK_STALE;
                 if (rc < 0) {
                         rc = ll_inode_revalidate_fini(inode, rc);
                         GOTO (out, rc);

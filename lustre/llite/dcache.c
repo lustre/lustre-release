@@ -449,10 +449,10 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
 
 do_lock:
         it->it_create_mode &= ~current->fs->umask;
-        it->it_flags |= O_CHECK_STALE;
+        it->it_create_mode |= M_CHECK_STALE;
         rc = mdc_intent_lock(exp, &op_data, NULL, 0, it, lookup_flags,
                              &req, ll_mdc_blocking_ast, 0);
-        it->it_flags &= ~O_CHECK_STALE;
+        it->it_create_mode &= ~M_CHECK_STALE;
         if (it->it_op == IT_GETATTR && !first)
                 /* If there are too many locks on client-side, then some
                  * locks taken by statahead maybe dropped automatically
