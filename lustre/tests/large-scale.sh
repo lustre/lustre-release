@@ -71,6 +71,8 @@ delete_fake_exports () {
 }
 
 test_1b() {
+    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
+
     local FAKE_NUM
     local NUM
 
@@ -104,6 +106,8 @@ fail_mds () {
 }
 
 test_1c() {
+    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
+
     zconf_mount_clients $CLIENTS $DIR
 
     # sanity mds fail (to exclude the recults on fresh formatted fs)
