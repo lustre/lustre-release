@@ -754,7 +754,7 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
                 ATTR_ATIME_SET|ATTR_CTIME_SET|ATTR_MTIME_SET|
                 ATTR_ATTR_FLAG|ATTR_RAW|MDS_OPEN_OWNEROVERRIDE|
                 ATTR_FORCE|ATTR_KILL_SUID);
-        if (in != 0)
+        if (in != 0 && 0)
                 CERROR("Unknown attr bits: %#llx\n", in);
         return out;
 }
