@@ -616,7 +616,7 @@ else
 			AC_DEFINE(HAVE_OFED_IB_DMA_MAP, 1,
 				  [ib_dma_map_single defined])
 		],[
-			AC_MSG_RESULT(NO)
+			AC_MSG_RESULT(no)
 		])
 
 		LB_LINUX_TRY_COMPILE([
@@ -634,7 +634,7 @@ else
 			AC_DEFINE(HAVE_OFED_IB_COMP_VECTOR, 1,
 				  [has completion vector])
 		],[
-			AC_MSG_RESULT(NO)
+			AC_MSG_RESULT(no)
 		])
 
 		EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
@@ -1342,7 +1342,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_SYSCTL_UNNUMBERED, 1,
                   [sysctl has CTL_UNNUMBERED])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1358,7 +1358,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_SCATTERLIST_SETPAGE, 1,
                   [struct scatterlist has page member])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1376,7 +1376,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_SEM_COUNT_ATOMIC, 1,
                   [semaphore counter is atomic])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1392,7 +1392,7 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_SOCK_MAP_FD_2ARG, 1,
                   [sock_map_fd have second argument])
 ],[
-        AC_MSG_RESULT(NO)
+        AC_MSG_RESULT(no)
 ])
 ])
 
