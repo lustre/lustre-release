@@ -1945,6 +1945,6 @@ mpi_run () {
 }
 
 mdsrate_cleanup () {
-    mpi_run -np $1 -machinefile $2 ${MDSRATE} --unlink --nfiles $3 --dir $4 --filefmt $5
+    mpi_run -np $1 -machinefile $2 ${MDSRATE} --unlink --nfiles $3 --dir $4 --filefmt $5 $6
 }
 

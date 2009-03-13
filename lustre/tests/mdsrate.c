@@ -59,6 +59,7 @@ enum {
         RANDOM   = 'A',
         READDIR  = 'B',
         RECREATE = 'C',
+        IGNORE   = 'E',
         VERBOSE  = 'V',
         DEBUG    = 'v',
         HELP     = 'h',
@@ -85,6 +86,7 @@ struct option longOpts[] = {
         {"random_order",  0, NULL, RANDOM     },
         {"readdir_order", 0, NULL, READDIR    },
         {"recreate",      0, NULL, RECREATE   },
+        {"ignore",        0, NULL, IGNORE     },
         {"verbose",       0, NULL, VERBOSE    },
         {"debug",         0, NULL, DEBUG      },
         {"help",          0, NULL, HELP       },
@@ -123,6 +125,7 @@ struct sigaction act;
 int    order = RANDOM;
 int    seed;
 int    recreate;
+int    ignore;
 int    verbose;
 int    debug;
 struct stat statbuf;
@@ -149,7 +152,7 @@ struct stat statbuf;
 
 char *usage_msg = "usage: %s\n"
                   "    { --create [ --noexcl ] | --lookup | --mknod |\n"
-                  "      --open | --stat | --unlink  [ --recreate ] }\n"
+                  "      --open | --stat | --unlink  [ --recreate ] [ --ignore ] }\n"
                   "    [ --help ] [ --verbose ] [ --debug ]\n"
                   "    { [ --begin <num> ] --nfiles <num> }\n"
                   "    [ --iters <num> ] [ --time <secs> ]\n"
@@ -402,6 +405,9 @@ process_args(int argc, char *argv[])
                         }
                         order = c;
                         break;
+                case IGNORE:
+                        ++ignore;
+                        break;
                 case DEBUG:
                         ++debug;
                 case VERBOSE:
@@ -566,7 +572,7 @@ main(int argc, char *argv[])
 
         /* if we're not measuring creation rates then precreate
          * the files we're operating on. */
-        if ((mode != CREATE) && (mode != MKNOD)) {
+        if ((mode != CREATE) && (mode != MKNOD) && !ignore) {
                 /* create the files in reverse order. When we encounter
                  * a file that already exists, assume the remainder of 
                  * the files exist to save time. The timed performance
@@ -722,6 +728,8 @@ main(int argc, char *argv[])
                         if (rc) {
                                 if (((rc = errno) == EINTR) && alarm_caught)
                                         break;
+                                if (((rc = errno) == ENOENT) && ignore)
+                                        continue;
                                 fatal(myrank, "unlink(%s) error: %s\n",
                                       filename, strerror(rc));
                         }
