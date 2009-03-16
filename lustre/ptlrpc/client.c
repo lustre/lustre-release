@@ -1022,8 +1022,10 @@ static int after_reply(struct ptlrpc_request *req)
         /*
          * Store transno in reqmsg for replay.
          */
-        req->rq_transno = lustre_msg_get_transno(req->rq_repmsg);
-        lustre_msg_set_transno(req->rq_reqmsg, req->rq_transno);
+        if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)) {
+                req->rq_transno = lustre_msg_get_transno(req->rq_repmsg);
+                lustre_msg_set_transno(req->rq_reqmsg, req->rq_transno);
+        }
 
         if (req->rq_import->imp_replayable) {
                 spin_lock(&imp->imp_lock);
@@ -2327,8 +2329,12 @@ static int ptlrpc_replay_interpret(const struct lu_env *env,
                 GOTO(out, rc = lustre_msg_get_status(req->rq_repmsg));
 
         /* The transno had better not change over replay. */
-        LASSERT(lustre_msg_get_transno(req->rq_reqmsg) ==
-                lustre_msg_get_transno(req->rq_repmsg));
+        LASSERTF(lustre_msg_get_transno(req->rq_reqmsg) ==
+                 lustre_msg_get_transno(req->rq_repmsg) ||
+                 lustre_msg_get_transno(req->rq_repmsg) == 0,
+                 LPX64"/"LPX64"\n",
+                 lustre_msg_get_transno(req->rq_reqmsg),
+                 lustre_msg_get_transno(req->rq_repmsg));
 
         DEBUG_REQ(D_HA, req, "got rep");
 
