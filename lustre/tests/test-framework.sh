@@ -2159,6 +2159,7 @@ calc_sum () {
 }
 
 calc_osc_kbytes () {
+        df $MOUNT > /dev/null
         $LCTL get_param -n osc.*[oO][sS][cC][-_]*.$1 | calc_sum
 }
 
