@@ -92,7 +92,6 @@ static const char remote_obj_dir[] = "REM_OBJ_DIR";
 struct osd_directory {
         struct iam_container od_container;
         struct iam_descr     od_descr;
-        struct semaphore     od_sem;
 };
 
 struct osd_object {
@@ -105,6 +104,10 @@ struct osd_object {
          * creation, or assigned by osd_object_create() under write lock).
          */
         struct inode          *oo_inode;
+        /**
+         * to protect index ops.
+         */
+        struct rw_semaphore    oo_ext_idx_sem;
         struct rw_semaphore    oo_sem;
         struct osd_directory  *oo_dir;
         /** protects inode attributes. */
@@ -402,6 +405,7 @@ static struct lu_object *osd_object_alloc(const struct lu_env *env,
 
                 l->lo_ops = &osd_lu_obj_ops;
                 init_rwsem(&mo->oo_sem);
+                init_rwsem(&mo->oo_ext_idx_sem);
                 spin_lock_init(&mo->oo_guard);
                 return l;
         } else
@@ -1331,8 +1335,6 @@ static int osd_create_pre(struct osd_thread_info *info, struct osd_object *obj,
 static int osd_create_post(struct osd_thread_info *info, struct osd_object *obj,
                            struct lu_attr *attr, struct thandle *th)
 {
-        LASSERT(obj->oo_inode != NULL);
-
         osd_object_init0(obj);
         return 0;
 }
@@ -2302,7 +2304,6 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 
                 OBD_ALLOC_PTR(dir);
                 if (dir != NULL) {
-                        sema_init(&dir->od_sem, 1);
 
                         spin_lock(&obj->oo_guard);
                         if (obj->oo_dir == NULL)
@@ -2317,7 +2318,7 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
                          * Now, that we have container data, serialize its
                          * initialization.
                          */
-                        down(&obj->oo_dir->od_sem);
+                        down_write(&obj->oo_ext_idx_sem);
                         /*
                          * recheck under lock.
                          */
@@ -2325,7 +2326,7 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
                                 result = osd_iam_container_init(env, obj, dir);
                         else
                                 result = 0;
-                        up(&obj->oo_dir->od_sem);
+                        up_write(&obj->oo_ext_idx_sem);
                 } else
                         result = -ENOMEM;
         } else
@@ -2424,6 +2425,8 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 
         dentry = osd_child_dentry_get(env, obj,
                                       (char *)key, strlen((char *)key));
+
+        down_write(&obj->oo_ext_idx_sem);
         bh = ldiskfs_find_entry(dentry, &de);
         if (bh) {
                 struct osd_thread_info *oti = osd_oti_get(env);
@@ -2444,6 +2447,7 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
         } else
                 rc = -ENOENT;
 
+        up_write(&obj->oo_ext_idx_sem);
         LASSERT(osd_invariant(obj));
         RETURN(rc);
 }
@@ -2681,6 +2685,8 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 
         dentry = osd_child_dentry_get(env, obj,
                                       (char *)key, strlen((char *)key));
+
+        down_read(&obj->oo_ext_idx_sem);
         bh = ldiskfs_find_entry(dentry, &de);
         if (bh) {
                 ino = le32_to_cpu(de->inode);
@@ -2695,10 +2701,11 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
                         rc = osd_ea_fid_get(env, dentry, rec);
                         iput(inode);
                 } else
-                        rc = -ENOENT;
+                        rc = PTR_ERR(inode);
         } else
                 rc = -ENOENT;
 
+        up_read(&obj->oo_ext_idx_sem);
         RETURN (rc);
 }
 
@@ -2811,8 +2818,9 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
                 else
                         current->cap_effective &= ~CFS_CAP_SYS_RESOURCE_MASK;
 #endif
+                down_write(&obj->oo_ext_idx_sem);
                 rc = osd_ea_add_rec(env, obj, child, name, th);
-
+                up_write(&obj->oo_ext_idx_sem);
 #ifdef HAVE_QUOTA_SUPPORT
                 current->cap_effective = save;
 #endif
@@ -3040,7 +3048,6 @@ static struct dt_it *osd_it_ea_init(const struct lu_env *env,
         it->oie_file.f_op         = obj->oo_inode->i_fop;
         it->oie_file.private_data = NULL;
         lu_object_get(lo);
-
         RETURN((struct dt_it*) it);
 }
 
@@ -3146,9 +3153,11 @@ int osd_ldiskfs_it_fill(const struct dt_it *di)
         it->oie_namelen    = 0;
         it->oie_file.f_pos = it->oie_curr_pos;
 
+        down_read(&obj->oo_ext_idx_sem);
         result = inode->i_fop->readdir(&it->oie_file, it,
                                        (filldir_t) osd_ldiskfs_filldir);
 
+        up_read(&obj->oo_ext_idx_sem);
         it->oie_next_pos = it->oie_file.f_pos;
 
         if (it->oie_namelen == 0)
