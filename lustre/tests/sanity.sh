@@ -854,7 +854,7 @@ test_27e() {
 	$SETSTRIPE $DIR/d27/f12 -c 2 && error "lstripe succeeded twice"
 	$CHECKSTAT -t file $DIR/d27/f12 || error "checkstat failed"
 }
-run_test 27e "lstripe existing file (should return error) ======"
+run_test 27e "setstripe existing file (should return error) ======"
 
 test_27f() {
 	mkdir -p $DIR/d27
@@ -862,7 +862,7 @@ test_27f() {
 	dd if=/dev/zero of=$DIR/d27/f12 bs=4k count=4 || error "dd failed"
 	$GETSTRIPE $DIR/d27/fbad || error "lfs getstripe failed"
 }
-run_test 27f "lstripe with bad stripe size (should return error)"
+run_test 27f "setstripe with bad stripe size (should return error)"
 
 test_27g() {
 	mkdir -p $DIR/d27
@@ -881,7 +881,7 @@ test_27j() {
 	mkdir -p $DIR/d27
 	$SETSTRIPE $DIR/d27/f27j -i $OSTCOUNT && error "lstripe failed"||true
 }
-run_test 27j "lstripe with bad stripe offset (should return error)"
+run_test 27j "setstripe with bad stripe offset (should return error)"
 
 test_27k() { # bug 2844
 	mkdir -p $DIR/d27
@@ -4012,7 +4012,7 @@ test_102b() {
 	echo "get/set/list trusted.lov xattr ..."
 	[ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 	local testfile=$DIR/$tfile
-	$SETSTRIPE $testfile -s 65536 -i 1 -c 2
+	$SETSTRIPE -s 65536 -i 1 -c 2 $testfile || error "setstripe failed"
 	getfattr -d -m "^trusted" $testfile 2> /dev/null | \
 	grep "trusted.lov" || error "can't get trusted.lov from $testfile"
 
@@ -4039,7 +4039,7 @@ test_102c() {
 	mkdir -p $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
 	local testfile=$DIR/$tdir/$tfile
-	$RUNAS $SETSTRIPE $testfile -s 65536 -i 1 -c 2
+	$RUNAS $SETSTRIPE -s 65536 -i 1 -c 2 $testfile||error "setstripe failed"
 	$RUNAS getfattr -d -m "^lustre" $testfile 2> /dev/null | \
 	grep "lustre.lov" || error "can't get lustre.lov from $testfile"
 
@@ -4441,7 +4441,7 @@ test_116() {
 	declare -i FILL
 	FILL=$(($MINV / 4))
 	echo "Filling 25% remaining space in OST${MINI} with ${FILL}Kb"
-	$SETSTRIPE $DIR/$tdir/OST${MINI} -i $MINI -c 1
+	$SETSTRIPE -i $MINI -c 1 $DIR/$tdir/OST${MINI}||error "setstripe failed"
 	i=0
 	while [ $FILL -gt 0 ]; do
 	    i=$(($i + 1))
@@ -4900,7 +4900,7 @@ test_119b() # bug 11737
 {
         [ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 
-        $SETSTRIPE $DIR/$tfile -c 2
+        $SETSTRIPE -c 2 $DIR/$tfile || error "setstripe failed"
         dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1 || error "dd failed"
         sync
         multiop $DIR/$tfile oO_RDONLY:O_DIRECT:r$((2048 * 1024)) || \
@@ -5437,7 +5437,7 @@ test_126() { # bug 12829/13455
 run_test 126 "check that the fsgid provided by the client is taken into account"
 
 test_127() { # bug 15521
-        $LSTRIPE -i 0 -c 1 $DIR/$tfile
+        $SETSTRIPE -i 0 -c 1 $DIR/$tfile || error "setstripe failed"
         $LCTL set_param osc.*.stats=0
         FSIZE=$((2048 * 1024))
         dd if=/dev/zero of=$DIR/$tfile bs=$FSIZE count=1
@@ -6168,6 +6168,23 @@ test_162() {
     return 0
 }
 run_test 162 "path lookup sanity"
+
+test_154() {
+	# do directio so as not to populate the page cache
+	log "creating a 10 Mb file"
+	multiop $DIR/$tfile oO_CREAT:O_DIRECT:O_RDWR:w$((10*1048576))c || error "multiop failed while creating a file"
+	log "starting reads"
+	dd if=$DIR/$tfile of=/dev/null bs=4096 &
+	log "truncating the file"
+	multiop $DIR/$tfile oO_TRUNC:c || error "multiop failed while truncating the file"
+	log "killing dd"
+	kill %+ || true # reads might have finished
+	echo "wait until dd is finished"
+	wait
+	log "removing the temporary file"
+	rm -rf $DIR/$tfile || error "tmp file removal failed"
+}
+run_test 154 "parallel read and truncate should not deadlock ==="
 
 test_170() {
         $LCTL clear	# bug 18514
