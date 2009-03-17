@@ -1783,20 +1783,15 @@ test_21() {
 run_test_with_stat 21 "run for fixing bug16053 ==========="
 
 test_22() {
-        local SAVEREFORMAT
-
-        SAVEREFORMAT=$REFORMAT
         $LFS quotaoff -ug $DIR || error "could not turn quotas off"
         quota_set_version "1"
         $LFS quotacheck -ug $DIR || error "quotacheck failed"
 
         quota_save_version "ug1"
 
-        REFORMAT="reformat"
         stopall
         mount
         setupall
-        REFORMAT=$SAVEREFORMAT
 
         echo "checking parameters"
 
