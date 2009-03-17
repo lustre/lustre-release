@@ -305,19 +305,25 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         spin_unlock(&obd->obd_dev_lock);
 
         /* create an uuid-export lustre hash */
-        obd->obd_uuid_hash = lustre_hash_init("UUID_HASH", 7, 7,
+        obd->obd_uuid_hash = lustre_hash_init("UUID_HASH",
+                                              HASH_UUID_CUR_BITS,
+                                              HASH_UUID_MAX_BITS,
                                               &uuid_hash_ops, 0);
         if (!obd->obd_uuid_hash)
                 GOTO(err_hash, err = -ENOMEM);
 
         /* create a nid-export lustre hash */
-        obd->obd_nid_hash = lustre_hash_init("NID_HASH", 7, 7,
+        obd->obd_nid_hash = lustre_hash_init("NID_HASH",
+                                             HASH_NID_CUR_BITS,
+                                             HASH_NID_MAX_BITS,
                                              &nid_hash_ops, 0);
         if (!obd->obd_nid_hash)
                 GOTO(err_hash, err = -ENOMEM);
 
         /* create a nid-stats lustre hash */
-        obd->obd_nid_stats_hash = lustre_hash_init("NID_STATS", 7, 7,
+        obd->obd_nid_stats_hash = lustre_hash_init("NID_STATS",
+                                                   HASH_NID_STATS_CUR_BITS,
+                                                   HASH_NID_STATS_MAX_BITS,
                                                    &nid_stat_hash_ops, 0);
         if (!obd->obd_nid_stats_hash)
                 GOTO(err_hash, err = -ENOMEM);
@@ -812,7 +818,7 @@ int class_process_config(struct lustre_cfg *lcfg)
                 ldlm_timeout = max(lcfg->lcfg_num, 1U);
                 if (ldlm_timeout >= obd_timeout)
                         ldlm_timeout = max(obd_timeout / 3, 1U);
-                
+
                 GOTO(out, err = 0);
         }
         case LCFG_SET_UPCALL: {

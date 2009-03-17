@@ -874,7 +874,9 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
                 RETURN(-ENOMEM);
         cfs_waitq_init(&lov->lov_qos.lq_statfs_waitq);
 
-        lov->lov_pools_hash_body = lustre_hash_init("POOLS", 7, 7,
+        lov->lov_pools_hash_body = lustre_hash_init("POOLS",
+                                                    HASH_POOLS_CUR_BITS,
+                                                    HASH_POOLS_MAX_BITS,
                                                     &pool_hash_operations, 0);
         CFS_INIT_LIST_HEAD(&lov->lov_pool_list);
         lov->lov_pool_count = 0;
@@ -2921,7 +2923,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
 		int stripe;
 
 		LASSERT(*vallen == sizeof(__u64));
-		stripe = lov_stripe_number(lsm, *offset); 
+		stripe = lov_stripe_number(lsm, *offset);
 		loi = lsm->lsm_oinfo[stripe];
 		tgt = lov->lov_tgts[loi->loi_ost_idx];
                 if (!tgt || !tgt->ltd_active)
@@ -3050,7 +3052,7 @@ static int lov_extent_calc(struct obd_export *exp, struct lov_stripe_md *lsm,
         __u32 ssize  = lsm->lsm_stripe_size;
 
         if (cmd & OBD_CALC_STRIPE_RPC_ALIGN)
-                ssize = ssize > PTLRPC_MAX_BRW_SIZE ? 
+                ssize = ssize > PTLRPC_MAX_BRW_SIZE ?
                         PTLRPC_MAX_BRW_SIZE : ssize;
 
         start = *offset;
@@ -3059,11 +3061,11 @@ static int lov_extent_calc(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         CDEBUG(D_DLMTRACE, "offset "LPU64", stripe %u, start "LPU64
                ", end "LPU64"\n", *offset, ssize, start, start + ssize - 1);
-        if (cmd & OBD_CALC_STRIPE_END) 
+        if (cmd & OBD_CALC_STRIPE_END)
                 *offset = start + ssize - 1;
         else if (cmd & OBD_CALC_STRIPE_START)
                 *offset = start;
-        else 
+        else
                 LBUG();
 
         RETURN(0);

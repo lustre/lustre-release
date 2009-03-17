@@ -223,8 +223,22 @@ __lustre_hash_bucket_del(lustre_hash_t *lh,
         return lh_put(lh, hnode);
 }
 
+/* Some hash init argument constants */
+#define HASH_POOLS_CUR_BITS 3
+#define HASH_POOLS_MAX_BITS 7
+#define HASH_UUID_CUR_BITS 7
+#define HASH_UUID_MAX_BITS 12
+#define HASH_NID_CUR_BITS 7
+#define HASH_NID_MAX_BITS 12
+#define HASH_NID_STATS_CUR_BITS 7
+#define HASH_NID_STATS_MAX_BITS 12
+#define HASH_LQS_CUR_BITS 7
+#define HASH_LQS_MAX_BITS 12
+#define HASH_CONN_CUR_BITS 5
+#define HASH_CONN_MAX_BITS 15
+
 /* Hash init/cleanup functions */
-lustre_hash_t *lustre_hash_init(char *name, unsigned int cur_bits, 
+lustre_hash_t *lustre_hash_init(char *name, unsigned int cur_bits,
                                 unsigned int max_bits,
                                 lustre_hash_ops_t *ops, int flags);
 void lustre_hash_exit(lustre_hash_t *lh);
@@ -250,9 +264,9 @@ void lustre_hash_for_each_empty(lustre_hash_t *lh, lh_for_each_cb, void *data);
 void lustre_hash_for_each_key(lustre_hash_t *lh, void *key,
                               lh_for_each_cb, void *data);
 
-/* 
+/*
  * Rehash - Theta is calculated to be the average chained
- * hash depth assuming a perfectly uniform hash funcion. 
+ * hash depth assuming a perfectly uniform hash funcion.
  */
 int lustre_hash_rehash(lustre_hash_t *lh, int bits);
 void lustre_hash_rehash_key(lustre_hash_t *lh, void *old_key,
@@ -270,7 +284,7 @@ static inline int __lustre_hash_theta_int(int theta)
 /* Return a fractional value between 0 and 999 */
 static inline int __lustre_hash_theta_frac(int theta)
 {
-        return ((theta * 1000) >> LH_THETA_BITS) - 
+        return ((theta * 1000) >> LH_THETA_BITS) -
                (__lustre_hash_theta_int(theta) * 1000);
 }
 

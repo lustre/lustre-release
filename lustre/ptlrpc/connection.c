@@ -71,11 +71,11 @@ ptlrpc_connection_get(lnet_process_id_t peer, lnet_nid_t self,
         if (uuid)
                 obd_str2uuid(&conn->c_remote_uuid, uuid->uuid);
 
-        /* 
+        /*
          * Add the newly created conn to the hash, on key collision we
          * lost a racing addition and must destroy our newly allocated
          * connection.  The object which exists in the has will be
-         * returned and may be compared against out object. 
+         * returned and may be compared against out object.
          */
         conn2 = lustre_hash_findadd_unique(conn_hash, &peer, &conn->c_hash);
         if (conn != conn2) {
@@ -85,31 +85,31 @@ ptlrpc_connection_get(lnet_process_id_t peer, lnet_nid_t self,
         EXIT;
 out:
         CDEBUG(D_INFO, "conn=%p refcount %d to %s\n",
-               conn, atomic_read(&conn->c_refcount), 
+               conn, atomic_read(&conn->c_refcount),
                libcfs_nid2str(conn->c_peer.nid));
         return conn;
 }
-  
+
 int ptlrpc_connection_put(struct ptlrpc_connection *conn)
 {
         int rc = 0;
         ENTRY;
-  
+
         if (!conn)
                 RETURN(rc);
-  
+
         LASSERT(!hlist_unhashed(&conn->c_hash));
-  
+
         /*
-         * We do not remove connection from hashtable and 
+         * We do not remove connection from hashtable and
          * do not free it even if last caller released ref,
          * as we want to have it cached for the case it is
          * needed again.
          *
          * Deallocating it and later creating new connection
          * again would be wastful. This way we also avoid
-         * expensive locking to protect things from get/put 
-         * race when found cached connection is freed by 
+         * expensive locking to protect things from get/put
+         * race when found cached connection is freed by
          * ptlrpc_connection_put().
          *
          * It will be freed later in module unload time,
@@ -125,7 +125,7 @@ int ptlrpc_connection_put(struct ptlrpc_connection *conn)
 
         RETURN(rc);
 }
-  
+
 struct ptlrpc_connection *
 ptlrpc_connection_addref(struct ptlrpc_connection *conn)
 {
@@ -138,19 +138,21 @@ ptlrpc_connection_addref(struct ptlrpc_connection *conn)
 
         RETURN(conn);
 }
-  
+
 int ptlrpc_connection_init(void)
 {
         ENTRY;
 
-        conn_hash = lustre_hash_init("CONN_HASH", 5, 15,
+        conn_hash = lustre_hash_init("CONN_HASH",
+                                     HASH_CONN_CUR_BITS,
+                                     HASH_CONN_MAX_BITS,
                                      &conn_hash_ops, LH_REHASH);
         if (!conn_hash)
                 RETURN(-ENOMEM);
-  
+
         RETURN(0);
 }
-  
+
 void ptlrpc_connection_fini(void) {
         ENTRY;
         lustre_hash_exit(conn_hash);
@@ -216,13 +218,13 @@ conn_exit(struct hlist_node *hnode)
         struct ptlrpc_connection *conn;
 
         conn = hlist_entry(hnode, struct ptlrpc_connection, c_hash);
-        /* 
+        /*
          * Nothing should be left. Connection user put it and
          * connection also was deleted from table by this time
          * so we should have 0 refs.
          */
-        LASSERTF(atomic_read(&conn->c_refcount) == 0, 
-                 "Busy connection with %d refs\n", 
+        LASSERTF(atomic_read(&conn->c_refcount) == 0,
+                 "Busy connection with %d refs\n",
                  atomic_read(&conn->c_refcount));
         OBD_FREE_PTR(conn);
 }

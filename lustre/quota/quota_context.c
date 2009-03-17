@@ -1145,7 +1145,9 @@ qctxt_init(struct obd_device *obd, dqacq_handler_t handler)
         qctxt->lqc_sync_blk = 0;
         spin_unlock(&qctxt->lqc_lock);
 
-        qctxt->lqc_lqs_hash = lustre_hash_init("LQS_HASH", 7, 7,
+        qctxt->lqc_lqs_hash = lustre_hash_init("LQS_HASH",
+                                               HASH_LQS_CUR_BITS,
+                                               HASH_LQS_MAX_BITS,
                                                &lqs_hash_ops, 0);
         if (!qctxt->lqc_lqs_hash)
                 CERROR("initialize hash lqs for %s error!\n", obd->obd_name);
@@ -1365,7 +1367,7 @@ lqs_compare(void *key, struct hlist_node *hnode)
 static void *
 lqs_get(struct hlist_node *hnode)
 {
-        struct lustre_qunit_size *q = 
+        struct lustre_qunit_size *q =
             hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
         ENTRY;
 
@@ -1379,7 +1381,7 @@ lqs_get(struct hlist_node *hnode)
 static void *
 lqs_put(struct hlist_node *hnode)
 {
-        struct lustre_qunit_size *q = 
+        struct lustre_qunit_size *q =
             hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
         ENTRY;
 
@@ -1398,12 +1400,12 @@ lqs_exit(struct hlist_node *hnode)
         ENTRY;
 
         q = hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
-        /* 
+        /*
          * Nothing should be left. User of lqs put it and
          * lqs also was deleted from table by this time
          * so we should have 0 refs.
          */
-        LASSERTF(atomic_read(&q->lqs_refcount) == 0, 
+        LASSERTF(atomic_read(&q->lqs_refcount) == 0,
                  "Busy lqs %p with %d refs\n", q,
                  atomic_read(&q->lqs_refcount));
         OBD_FREE_PTR(q);
