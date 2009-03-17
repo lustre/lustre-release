@@ -831,7 +831,7 @@ test_27e() {
 	$SETSTRIPE $DIR/d27/f12 -c 2 && error "lstripe succeeded twice"
 	$CHECKSTAT -t file $DIR/d27/f12 || error "checkstat failed"
 }
-run_test 27e "lstripe existing file (should return error) ======"
+run_test 27e "setstripe existing file (should return error) ======"
 
 test_27f() {
 	mkdir -p $DIR/d27
@@ -839,7 +839,7 @@ test_27f() {
 	dd if=/dev/zero of=$DIR/d27/f12 bs=4k count=4 || error "dd failed"
 	$GETSTRIPE $DIR/d27/fbad || error "lfs getstripe failed"
 }
-run_test 27f "lstripe with bad stripe size (should return error)"
+run_test 27f "setstripe with bad stripe size (should return error)"
 
 test_27g() {
 	mkdir -p $DIR/d27
@@ -858,7 +858,7 @@ test_27j() {
 	mkdir -p $DIR/d27
 	$SETSTRIPE $DIR/d27/f27j -i $OSTCOUNT && error "lstripe failed"||true
 }
-run_test 27j "lstripe with bad stripe offset (should return error)"
+run_test 27j "setstripe with bad stripe offset (should return error)"
 
 test_27k() { # bug 2844
 	mkdir -p $DIR/d27
@@ -3934,7 +3934,7 @@ test_102b() {
 	echo "get/set/list trusted.lov xattr ..."
 	[ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 	local testfile=$DIR/$tfile
-	$SETSTRIPE $testfile -s 65536 -i 1 -c 2
+	$SETSTRIPE -s 65536 -i 1 -c 2 $testfile || error "setstripe failed"
 	getfattr -d -m "^trusted" $testfile 2> /dev/null | \
 	grep "trusted.lov" || error "can't get trusted.lov from $testfile"
 
@@ -3960,7 +3960,7 @@ test_102c() {
 	mkdir -p $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
 	local testfile=$DIR/$tdir/$tfile
-	$RUNAS $SETSTRIPE $testfile -s 65536 -i 1 -c 2
+	$RUNAS $SETSTRIPE -s 65536 -i 1 -c 2 $testfile||error "setstripe failed"
 	$RUNAS getfattr -d -m "^lustre" $testfile 2> /dev/null | \
 	grep "lustre.lov" || error "can't get lustre.lov from $testfile"
 
@@ -4309,7 +4309,7 @@ test_116() {
 	declare -i FILL
 	FILL=$(($MINV / 4))
 	echo "Filling 25% remaining space in OST${MINI} with ${FILL}Kb"
-	$SETSTRIPE $DIR/$tdir/OST${MINI} -i $MINI -c 1
+	$SETSTRIPE -i $MINI -c 1 $DIR/$tdir/OST${MINI}||error "setstripe failed"
 	i=1
 	while [ $FILL -gt 0 ]; do
 	    dd if=/dev/zero of=$DIR/$tdir/OST${MINI}/$tfile-$i bs=2M count=1 2>/dev/null
@@ -4755,7 +4755,7 @@ test_119b() # bug 11737
 {
         [ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 
-        $SETSTRIPE $DIR/$tfile -c 2
+        $SETSTRIPE -c 2 $DIR/$tfile || error "setstripe failed"
         dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1 || error "dd failed"
         sync
         multiop $DIR/$tfile oO_RDONLY:O_DIRECT:r$((2048 * 1024)) || \
@@ -5270,7 +5270,7 @@ test_126() { # bug 12829/13455
 run_test 126 "check that the fsgid provided by the client is taken into account"
 
 test_127() { # bug 15521
-        $SETSTRIPE -i 0 -c 1 $DIR/$tfile
+        $SETSTRIPE -i 0 -c 1 $DIR/$tfile || error "setstripe failed"
         $LCTL set_param osc.*.stats=0
         FSIZE=$((2048 * 1024))
         dd if=/dev/zero of=$DIR/$tfile bs=$FSIZE count=1
@@ -5768,6 +5768,23 @@ test_153() {
 }
 run_test 153 "test if fdatasync does not crash ======================="
 
+test_154() {
+	# do directio so as not to populate the page cache
+	log "creating a 10 Mb file"
+	multiop $DIR/$tfile oO_CREAT:O_DIRECT:O_RDWR:w$((10*1048576))c || error "multiop failed while creating a file"
+	log "starting reads"
+	dd if=$DIR/$tfile of=/dev/null bs=4096 &
+	log "truncating the file"
+	multiop $DIR/$tfile oO_TRUNC:c || error "multiop failed while truncating the file"
+	log "killing dd"
+	kill %+ || true # reads might have finished
+	echo "wait until dd is finished"
+	wait
+	log "removing the temporary file"
+	rm -rf $DIR/$tfile || error "tmp file removal failed"
+}
+run_test 154 "parallel read and truncate should not deadlock ==="
+
 test_170() {
         $LCTL clear	# bug 18514
         $LCTL debug_daemon start $TMP/${tfile}_log_good
@@ -5830,11 +5847,12 @@ POOL_ROOT=${POOL_ROOT:-$DIR/d200.pools}
 POOL_DIR=$POOL_ROOT/dir_tst
 POOL_FILE=$POOL_ROOT/file_tst
 
-skip_pools()
+test_pools()
 {
 	[ -z "$($LCTL get_param -n mdc.*.connect_flags | grep pools)" ] &&
 		skip "missing pools support on server" && return 1
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return 1
+	[ -z "$mdtlov" ] && mdtlov=$(get_mdtlov_proc_path $FSNAME)
 	return 0
 }
 
@@ -5856,10 +5874,10 @@ check_file_in_pool()
 	return 0
 }
 
-mdtlov=$(get_mdtlov_proc_path $FSNAME)
+export mdtlov=
 
 test_200a() {
-        skip_pools || return
+        test_pools || return 0
         do_facet mgs $LCTL pool_new $FSNAME.$POOL
         # get param should return err until pool is created
         wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "" || error "Pool creation of $POOL failed"
@@ -5867,7 +5885,7 @@ test_200a() {
 run_test 200a "Create new pool =========================================="
 
 test_200b() {
-        skip_pools || return
+        test_pools || return 0
         TGT=$(for i in `seq $TGTPOOL_FIRST $TGTPOOL_STEP $TGTPOOL_MAX`; do printf "$FSNAME-OST%04x_UUID " $i; done)
         do_facet mgs $LCTL pool_add $FSNAME.$POOL \
                 $FSNAME-OST[$TGTPOOL_FIRST-$TGTPOOL_MAX/$TGTPOOL_STEP]
@@ -5876,7 +5894,7 @@ test_200b() {
 run_test 200b "Add targets to a pool ===================================="
 
 test_200c() {
-        skip_pools || return
+        test_pools || return 0
         mkdir -p $POOL_DIR
         $SETSTRIPE -c 2 -p $POOL $POOL_DIR
         [ $? = 0 ] || error "Cannot set pool $POOL to $POOL_DIR"
@@ -5884,14 +5902,14 @@ test_200c() {
 run_test 200c "Set pool on a directory ================================="
 
 test_200d() {
-        skip_pools || return
+        test_pools || return 0
 	res=$($GETSTRIPE $POOL_DIR | grep pool: | cut -f8 -d " ")
 	[ "$res" = $POOL ] || error "Pool on $POOL_DIR is not $POOL"
 }
 run_test 200d "Check pool on a directory ==============================="
 
 test_200e() {
-        skip_pools || return
+        test_pools || return 0
 	failed=0
 	for i in $(seq -w 1 $(($TGT_COUNT * 3))); do
 		file=$POOL_DIR/file-$i
@@ -5906,7 +5924,7 @@ test_200e() {
 run_test 200e "Check files allocation from directory pool =============="
 
 test_200f() {
-        skip_pools || return
+        test_pools || return 0
 	mkdir -p $POOL_FILE
 	failed=0
 	for i in $(seq -w 1 $(($TGT_COUNT * 3))); do
@@ -5922,7 +5940,7 @@ test_200f() {
 run_test 200f "Create files in a pool ==================================="
 
 test_200g() {
-        skip_pools || return
+        test_pools || return 0
         TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
         do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
         wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | grep $TGT" "" || error "$TGT not removed from $FSNAME.$POOL"
@@ -5930,7 +5948,7 @@ test_200g() {
 run_test 200g "Remove a target from a pool ============================="
 
 test_200h() {
-        skip_pools || return
+        test_pools || return 0
         for TGT in $($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | sort -u)
         do
                 do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
@@ -5944,30 +5962,13 @@ test_200h() {
 run_test 200h "Remove all targets from a pool =========================="
 
 test_200i() {
-        skip_pools || return
+        test_pools || return 0
         do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
         # get param should return err once pool is gone
         wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "foo" && return 0
         error "Pool $FSNAME.$POOL is not destroyed"
 }
 run_test 200i "Remove a pool ============================================"
-
-test_154() {
-	# do directio so as not to populate the page cache
-	log "creating a 10 Mb file"
-	multiop $DIR/$tfile oO_CREAT:O_DIRECT:O_RDWR:w$((10*1048576))c || error "multiop failed while creating a file"
-	log "starting reads"
-	dd if=$DIR/$tfile of=/dev/null bs=4096 &
-	log "truncating the file"
-	multiop $DIR/$tfile oO_TRUNC:c || error "multiop failed while truncating the file"
-	log "killing dd"
-	kill %+ || true # reads might have finished
-	echo "wait until dd is finished"
-	wait
-	log "removing the temporary file"
-	rm -rf $DIR/$tfile || error "tmp file removal failed"
-}
-run_test 154 "parallel read and truncate should not deadlock ======================="
 
 #
 # tests that do cleanup/setup should be run at the end
