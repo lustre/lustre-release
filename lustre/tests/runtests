@@ -14,10 +14,6 @@ export NAME=${NAME:-local}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-SETUP=${SETUP:-setupall}
-FORMAT=${FORMAT:-formatall}
-CLEANUP=${CLEANUP:-stopall}
-
 ERROR=
 RUNTESTS_SRC=${RUNTESTS_SRC:-"/etc /bin"}
 [ "$COUNT" ] || COUNT=1000
@@ -27,24 +23,7 @@ RUNTESTS_SRC=${RUNTESTS_SRC:-"/etc /bin"}
 
 [ "$MKDIRMANY" ] || MKDIRMANY="createmany -d"
 
-while [ "$1" ]; do
-	case $1 in
-	*.xml) export NAME=`echo $1 | sed "s/.xml//"` ;;
-	*) OPTS="$OPTS $1" ;;
-	esac
-	shift
-done
-
-MOUNTED=$(mounted_lustre_filesystems | head -1)
-if [ -z "$MOUNTED" ]; then
-	formatall
-	setupall
-	MOUNTED="`mounted_lustre_filesystems`"
-	[ -z "$MOUNTED" ] && error "NAME=$NAME not mounted"
-	I_MOUNTED=yes
-fi
-
-MOUNT=$MOUNTED
+check_and_setup_lustre
 
 OSCTMP=`echo $MOUNT | tr "/" "."`
 USED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -n 1`
@@ -100,8 +79,8 @@ done
 [ "$ERROR" ] && error "old and new files are different" $ERROR
 log "finished at `date` ($(($(date +%s) - START)))"
 
-$CLEANUP || exit 19
-$SETUP || exit 20
+stopall || exit 19
+setupall || exit 20
 
 log "comparing previously copied files"
 for f in $FILES; do
@@ -111,8 +90,8 @@ done
 
 [ "$ERROR" ] && error "old and new files are different on second diff" $ERROR
 
-$CLEANUP || exit 19
-$SETUP || exit 20
+stopall || exit 21
+setupall || exit 22
 
 log "removing $DST"
 rm -r $V $DST || error "can't remove $DST" 37
@@ -143,6 +122,4 @@ if [ `expr $NOWUSED - $USED` -gt 1024 ]; then
 	echo "Space not all freed: now ${NOWUSED}kB, was ${USED}kB." 1>&2
 fi
 
-if [ "$I_MOUNTED" = "yes" ]; then
-	$CLEANUP
-fi
+check_and_cleanup_lustre
