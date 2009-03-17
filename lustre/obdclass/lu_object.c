@@ -1092,11 +1092,11 @@ void lu_context_key_degister(struct lu_context_key *key)
         lu_context_key_quiesce(key);
 
         ++key_set_version;
+        spin_lock(&lu_keys_guard);
         key_fini(&lu_shrink_env.le_ctx, key->lct_index);
 
         if (atomic_read(&key->lct_used) > 1)
                 CERROR("key has instances.\n");
-        spin_lock(&lu_keys_guard);
         lu_keys[key->lct_index] = NULL;
         spin_unlock(&lu_keys_guard);
 }
@@ -1240,6 +1240,7 @@ static void keys_fini(struct lu_context *ctx)
 {
         int i;
 
+        spin_lock(&lu_keys_guard);
         if (ctx->lc_value != NULL) {
                 for (i = 0; i < ARRAY_SIZE(lu_keys); ++i)
                         key_fini(ctx, i);
@@ -1247,6 +1248,7 @@ static void keys_fini(struct lu_context *ctx)
                          ARRAY_SIZE(lu_keys) * sizeof ctx->lc_value[0]);
                 ctx->lc_value = NULL;
         }
+        spin_unlock(&lu_keys_guard);
 }
 
 static int keys_fill(struct lu_context *ctx)
