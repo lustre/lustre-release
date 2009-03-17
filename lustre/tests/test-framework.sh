@@ -414,11 +414,11 @@ setup_quota(){
     local quota_usrs=$QUOTA_USERS
 
     # get_filesystem_size
-    local disksz=$(lfs df | grep "filesystem summary:"  | awk '{print $3}')
+    local disksz=$(lfs df $mntpt | grep "filesystem summary:"  | awk '{print $3}')
     local blk_soft=$((disksz + 1024))
     local blk_hard=$((blk_soft + blk_soft / 20)) # Go 5% over
 
-    local Inodes=$(lfs df -i | grep "filesystem summary:"  | awk '{print $3}')
+    local Inodes=$(lfs df -i $mntpt | grep "filesystem summary:"  | awk '{print $3}')
     local i_soft=$Inodes
     local i_hard=$((i_soft + i_soft / 20))
 
