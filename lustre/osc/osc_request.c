@@ -937,8 +937,6 @@ static int osc_add_shrink_grant(struct client_obd *client)
 
 static int osc_del_shrink_grant(struct client_obd *client)
 {
-        CDEBUG(D_CACHE, "del grant client %s \n", 
-               client->cl_import->imp_obd->obd_name);
         return ptlrpc_del_timeout_client(&client->cl_grant_shrink_list);
 }
 
@@ -3974,8 +3972,26 @@ static int osc_disconnect(struct obd_export *exp)
                        obd);
         }
 
-        osc_del_shrink_grant(&obd->u.cli);
         rc = client_disconnect_export(exp);
+        /**
+         * Initially we put del_shrink_grant before disconnect_export, but it
+         * causes the following problem if setup (connect) and cleanup
+         * (disconnect) are tangled together.
+         *      connect p1                     disconnect p2
+         *   ptlrpc_connect_import 
+         *     ...............               class_manual_cleanup
+         *                                     osc_disconnect
+         *                                     del_shrink_grant
+         *   ptlrpc_connect_interrupt
+         *     init_grant_shrink
+         *   add this client to shrink list                 
+         *                                      cleanup_osc
+         * Bang! pinger trigger the shrink.
+         * So the osc should be disconnected from the shrink list, after we
+         * are sure the import has been destroyed. BUG18662 
+         */
+        if (obd->u.cli.cl_import == NULL)
+                osc_del_shrink_grant(&obd->u.cli);
         return rc;
 }
 
