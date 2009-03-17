@@ -150,6 +150,8 @@ run_test 1c "VBR: recovery $CLIENTCOUNT clients with delayed exports"
 
 
 test_1d() {
+    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
+
     local FAKE_NUM
     local NUM
 
