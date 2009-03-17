@@ -45,7 +45,7 @@ DEBUG_SIZE=${DEBUG_SIZE:-10}
 SUBSYSTEM=${SUBSYSTEM:- 0xffb7e3ff}
 
 ENABLE_QUOTA=${ENABLE_QUOTA:-""}
-QUOTA_TYPE=${QUOTA_TYPE:-"ug"}
+QUOTA_TYPE="ug3"
 QUOTA_USERS=${QUOTA_USERS:-"quota_usr quota_2usr sanityusr sanityusr1"}
 
 MKFSOPT=""
