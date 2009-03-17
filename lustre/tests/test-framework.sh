@@ -1314,7 +1314,10 @@ init_facet_vars () {
 }
 
 init_facets_vars () {
-    init_facet_vars mds $MDSDEV $MDS_MOUNT_OPTS
+    remote_mds_nodsh || 
+        init_facet_vars mds $MDSDEV $MDS_MOUNT_OPTS
+
+    remote_ost_nodsh && return
 
     for num in `seq $OSTCOUNT`; do
         DEVNAME=`ostdevname $num`
@@ -1323,17 +1326,20 @@ init_facets_vars () {
 }
 
 init_param_vars () {
-    export MDSVER=$(do_facet mds "lctl get_param version" | cut -d. -f1,2)
-    export OSTVER=$(do_facet ost1 "lctl get_param version" | cut -d. -f1,2)
-    export CLIVER=$(lctl get_param version | cut -d. -f 1,2)
+    if ! remote_ost_nodsh && ! remote_mds_nodsh; then
+        export MDSVER=$(do_facet mds "lctl get_param version" | cut -d. -f1,2)
+        export OSTVER=$(do_facet ost1 "lctl get_param version" | cut -d. -f1,2)
+        export CLIVER=$(lctl get_param version | cut -d. -f 1,2)
+    fi
 
-    TIMEOUT=$(do_facet mds "lctl get_param -n timeout")
+    remote_mds_nodsh || 
+        TIMEOUT=$(do_facet mds "lctl get_param -n timeout")
+
     log "Using TIMEOUT=$TIMEOUT"
 
     if [ "$ENABLE_QUOTA" ]; then
         setup_quota $MOUNT  || return 2
     fi
-
 }
 
 check_config () {
@@ -1803,7 +1809,7 @@ log() {
     lsmod | grep lnet > /dev/null || load_modules
 
     local MSG="$*"
-    # Get rif of '
+    # Get rid of '
     MSG=${MSG//\'/\\\'}
     MSG=${MSG//\(/\\\(}
     MSG=${MSG//\)/\\\)}
@@ -1856,7 +1862,7 @@ run_one() {
     umask 0022
 
     local BEFORE=`date +%s`
-    log "== test $testnum: $message ============ `date +%H:%M:%S` ($BEFORE)"
+    log "== test $testnum: $message == `date +%H:%M:%S` ($BEFORE)"
     #check_mds
     export TESTNAME=test_$testnum
     TEST_FAILED=false
