@@ -99,8 +99,9 @@ static struct ll_sb_info *ll_init_sbi(void)
         } else {
                 sbi->ll_async_page_max = (pages / 4) * 3;
         }
-        sbi->ll_ra_info.ra_max_pages = min(pages / 32,
+        sbi->ll_ra_info.ra_max_pages_per_file = min(pages / 32,
                                            SBI_DEFAULT_READAHEAD_MAX);
+        sbi->ll_ra_info.ra_max_pages = sbi->ll_ra_info.ra_max_pages_per_file;
         sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
                                            SBI_DEFAULT_READAHEAD_WHOLE_MAX;
         sbi->ll_contention_time = SBI_DEFAULT_CONTENTION_SECONDS;
@@ -293,7 +294,7 @@ static int client_common_fill_super(struct super_block *sb,
         }
 
         data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_GRANT |
-                OBD_CONNECT_REQPORTAL | OBD_CONNECT_BRW_SIZE | 
+                OBD_CONNECT_REQPORTAL | OBD_CONNECT_BRW_SIZE |
                 OBD_CONNECT_SRVLOCK | OBD_CONNECT_CANCELSET | OBD_CONNECT_AT |
                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_GRANT_SHRINK;
 
@@ -658,7 +659,7 @@ void ll_kill_super(struct super_block *sb)
 
         sbi = ll_s2sbi(sb);
         /* we need restore s_dev from changed for clustred NFS before put_super
-         * because new kernels have cached s_dev and change sb->s_dev in 
+         * because new kernels have cached s_dev and change sb->s_dev in
          * put_super not affected real removing devices */
         if (sbi)
                 sb->s_dev = sbi->ll_sdev_orig;
@@ -1124,7 +1125,7 @@ void ll_put_super(struct super_block *sb)
 
         if (sbi->ll_mdc_exp) {
                 obd = class_exp2obd(sbi->ll_mdc_exp);
-                if (obd) 
+                if (obd)
                         force = obd->obd_force;
         }
 
@@ -1312,7 +1313,7 @@ static int ll_setattr_do_truncate(struct inode *inode, loff_t new_size)
         UP_WRITE_I_ALLOC_SEM(inode);
 
         down_write(&lli->lli_truncate_rwsem);
-        if (sbi->ll_lockless_truncate_enable && 
+        if (sbi->ll_lockless_truncate_enable &&
             (sbi->ll_lco.lco_flags & OBD_CONNECT_TRUNCLOCK)) {
                 int n_matches = 0;
 
@@ -1547,7 +1548,7 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
         if ((attr->ia_valid & (ATTR_CTIME|ATTR_SIZE|ATTR_MODE)) ==
             (ATTR_CTIME|ATTR_SIZE|ATTR_MODE))
                 attr->ia_valid |= MDS_OPEN_OWNEROVERRIDE;
-        if ((attr->ia_valid & (ATTR_MODE|ATTR_FORCE|ATTR_SIZE)) == 
+        if ((attr->ia_valid & (ATTR_MODE|ATTR_FORCE|ATTR_SIZE)) ==
             (ATTR_SIZE|ATTR_MODE)) {
                 mode = de->d_inode->i_mode;
                 if (((mode & S_ISUID) && (!(attr->ia_mode & S_ISUID))) ||
