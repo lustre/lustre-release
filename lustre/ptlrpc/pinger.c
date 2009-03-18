@@ -421,32 +421,28 @@ static struct timeout_item*
 ptlrpc_pinger_register_timeout(int time, enum timeout_event event,
                                timeout_cb_t cb, void *data)
 {
-        struct timeout_item *item;
-        struct timeout_item *ti = NULL;
+        struct timeout_item *item, *tmp;
 
         LASSERT_SEM_LOCKED(&pinger_sem);
-        list_for_each_entry_reverse(item, &timeout_list, ti_chain) {
-                if (item->ti_event == event) {
-                        ti = item;
-                        break;
-                }
-                if (item->ti_timeout < ti->ti_timeout) {
-                        ti = ptlrpc_new_timeout(time, event, cb, data);
-                        if (!ti) {
-                                ti = ERR_PTR(-ENOMEM);
-                                break;
+
+        list_for_each_entry(item, &timeout_list, ti_chain)
+                if (item->ti_event == event)
+                        goto out;
+
+        item = ptlrpc_new_timeout(time, event, cb, data);
+        if (item) {
+                list_for_each_entry_reverse(tmp, &timeout_list, ti_chain) {
+                        if (tmp->ti_timeout < time) {
+                                list_add(&item->ti_chain, &tmp->ti_chain);
+                                goto out;
                         }
-                        list_add(&ti->ti_chain, &item->ti_chain);
                 }
+                list_add(&item->ti_chain, &timeout_list);
         }
-        if (!ti) {
-                ti = ptlrpc_new_timeout(time, event, cb, data);
-                if (ti)
-                        list_add(&ti->ti_chain, &timeout_list);
-        }
-        
-        return ti;
+out:
+        return item;
 }
+
 /* Add a client_obd to the timeout event list, when timeout(@time) 
  * happens, the callback(@cb) will be called.
  */
