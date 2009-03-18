@@ -4960,7 +4960,6 @@ test_120a() {
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
         lru_resize_enable mdc
         lru_resize_enable osc
-#        rm -rf $DIR/$tdir
 }
 run_test 120a "Early Lock Cancel: mkdir test"
 
@@ -4981,7 +4980,6 @@ test_120b() {
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
         lru_resize_enable mdc
         lru_resize_enable osc
-#        rm -rf $DIR/$tdir
 }
 run_test 120b "Early Lock Cancel: create test"
 
@@ -5004,7 +5002,6 @@ test_120c() {
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
         lru_resize_enable mdc
         lru_resize_enable osc
-#        rm -rf $DIR/$tdir
 }
 run_test 120c "Early Lock Cancel: link test"
 
@@ -5026,7 +5023,6 @@ test_120d() {
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
         lru_resize_enable mdc
         lru_resize_enable osc
-#        rm -rf $DIR/$tdir
 }
 run_test 120d "Early Lock Cancel: setattr test"
 
@@ -5054,7 +5050,6 @@ test_120e() {
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
         lru_resize_enable mdc
         lru_resize_enable osc
-#        rm -rf $DIR/$tdir
 }
 run_test 120e "Early Lock Cancel: unlink test"
 
@@ -5085,7 +5080,6 @@ test_120f() {
         [ $blk1 -eq $blk2 ] || error $((blk2-blk1)) "blocking RPC occured."
         lru_resize_enable mdc
         lru_resize_enable osc
-#        rm -rf $DIR/$tdir
 }
 run_test 120f "Early Lock Cancel: rename test"
 
@@ -5127,7 +5121,6 @@ test_120g() {
         # wait for commitment of removal
         lru_resize_enable mdc
         lru_resize_enable osc
-#        rm -rf $DIR/$tdir
 }
 run_test 120g "Early Lock Cancel: performance test"
 

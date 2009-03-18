@@ -354,38 +354,6 @@ ptlrpc_schedule_difficult_reply (struct ptlrpc_reply_state *rs)
         EXIT;
 }
 
-void ptlrpc_commit_replies_alt(struct obd_export *exp)
-{
-        struct ptlrpc_reply_state *rs, *nxt;
-        struct list_head committed_list;
-        DECLARE_RS_BATCH(batch);
-        ENTRY;
-
-        CFS_INIT_LIST_HEAD(&committed_list);
-        spin_lock(&exp->exp_uncommitted_replies_lock);
-        list_for_each_entry_safe(rs, nxt, &exp->exp_uncommitted_replies,
-                                 rs_obd_list) {
-                LASSERT (rs->rs_difficult);
-                LASSERT(rs->rs_export);
-                if (likely(rs->rs_transno <= exp->exp_last_committed))
-                        list_move(&rs->rs_obd_list, &committed_list);
-                else
-                        break;
-        }
-        spin_unlock(&exp->exp_uncommitted_replies_lock);
-
-        /* XXX: do we need this in context of commit callback? maybe separate thread
-         * should work this out */
-        rs_batch_init(&batch);
-        /* get replies that have been committed and get their service
-         * to attend to complete them. */
-        list_for_each_entry_safe(rs, nxt, &committed_list, rs_obd_list) {
-                list_del_init(&rs->rs_obd_list);
-                rs_batch_add(&batch, rs);
-        }
-        rs_batch_fini(&batch);
-        EXIT;
-}
 void ptlrpc_commit_replies(struct obd_export *exp)
 {
         struct ptlrpc_reply_state *rs, *nxt;
