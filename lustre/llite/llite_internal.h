@@ -56,7 +56,7 @@
 typedef __u16 __le16;
 typedef __u32 __le32;
 #endif
- 
+
 /*
 struct lustre_intent_data {
         __u64 it_lock_handle[2];
@@ -89,15 +89,15 @@ static inline struct lookup_intent *ll_nd2it(struct nameidata *nd)
 
 struct ll_dir_entry {
         /* number of inode, referenced by this entry */
-	__le32	lde_inode;
+        __le32  lde_inode;
         /* total record length, multiple of LL_DIR_PAD */
-	__le16	lde_rec_len;
+        __le16  lde_rec_len;
         /* length of name */
-	__u8	lde_name_len;
+        __u8    lde_name_len;
         /* file type: regular, directory, device, etc. */
-	__u8	lde_file_type;
+        __u8    lde_file_type;
         /* name. NOT NUL-terminated */
-	char	lde_name[LL_DIR_NAME_LEN];
+        char    lde_name[LL_DIR_NAME_LEN];
 };
 
 struct ll_dentry_data {
@@ -173,7 +173,7 @@ struct ll_inode_info {
          * dir statahead.
          */
         pid_t                   lli_opendir_pid;
-        /* 
+        /*
          * since parent-child threads can share the same @file struct,
          * "opendir_key" is the token when dir close for case of parent exit
          * before child -- it is me should cleanup the dir readahead. */
@@ -241,11 +241,12 @@ enum ra_stat {
         [RA_STAT_EOF]               = "read-ahead to EOF",              \
         [RA_STAT_MAX_IN_FLIGHT]     = "hit max r-a issue",              \
         [RA_STAT_WRONG_GRAB_PAGE]   = "wrong page from grab_cache_page",\
-} 
+}
 
 struct ll_ra_info {
         atomic_t                  ra_cur_pages;
         unsigned long             ra_max_pages;
+        unsigned long             ra_max_pages_per_file;
         unsigned long             ra_max_read_ahead_whole_pages;
 };
 
@@ -311,10 +312,10 @@ struct ll_pglist_data {
         atomic_t                  llpd_sample_count;
         unsigned long             llpd_reblnc_count;
         /* the pages in this list shouldn't be over this number */
-        unsigned long             llpd_budget; 
+        unsigned long             llpd_budget;
         int                       llpd_cpu;
         /* which page the pglist data is in */
-        struct page              *llpd_page; 
+        struct page              *llpd_page;
 
         /* stats */
         unsigned long             llpd_hit;
@@ -324,7 +325,7 @@ struct ll_pglist_data {
 
 struct ll_sb_info {
         struct list_head          ll_list;
-        /* this protects pglist(only ll_async_page_max) and ra_info.  
+        /* this protects pglist(only ll_async_page_max) and ra_info.
          * It isn't safe to grab from interrupt contexts. */
         spinlock_t                ll_lock;
         spinlock_t                ll_pp_extent_lock; /* Lock for pp_extent entries */
@@ -405,7 +406,7 @@ struct ll_sb_info {
 #define LL_PGLIST_DATA(sbi)          LL_PGLIST_DATA_CPU(sbi, smp_processor_id())
 
 static inline struct ll_pglist_data *ll_pglist_cpu_lock(
-                struct ll_sb_info *sbi, 
+                struct ll_sb_info *sbi,
                 int cpu)
 {
         spin_lock(&sbi->ll_pglist[cpu]->llpd_lock);
@@ -418,7 +419,7 @@ static inline void ll_pglist_cpu_unlock(struct ll_sb_info *sbi, int cpu)
 }
 
 static inline struct ll_pglist_data *ll_pglist_double_lock(
-                struct ll_sb_info *sbi, 
+                struct ll_sb_info *sbi,
                 int cpu, struct ll_pglist_data **pd_cpu)
 {
         int current_cpu = cfs_get_cpu();
@@ -496,7 +497,7 @@ struct ll_readahead_state {
         unsigned long   ras_consecutive_pages;
         /*
          * number of read requests after the last read-ahead window reset
-         * As window is reset on each seek, this is effectively the number 
+         * As window is reset on each seek, this is effectively the number
          * on consecutive read request and is used to trigger read-ahead.
          */
         unsigned long   ras_consecutive_requests;
@@ -523,7 +524,7 @@ struct ll_readahead_state {
          */
         unsigned long   ras_requests;
         /*
-         * Page index with respect to the current request, these value 
+         * Page index with respect to the current request, these value
          * will not be accurate when dealing with reads issued via mmap.
          */
         unsigned long   ras_request_index;
@@ -533,12 +534,12 @@ struct ll_readahead_state {
          * protected by ->ras_lock.
          */
         struct list_head ras_read_beads;
-        /* 
+        /*
          * The following 3 items are used for detecting the stride I/O
-         * mode. 
- 	 * In stride I/O mode, 
-         * ...............|-----data-----|****gap*****|--------|******|.... 
-         *    offset      |-stride_pages-|-stride_gap-| 
+         * mode.
+         * In stride I/O mode,
+         * ...............|-----data-----|****gap*****|--------|******|....
+         *    offset      |-stride_pages-|-stride_gap-|
          * ras_stride_offset = offset;
          * ras_stride_length = stride_pages + stride_gap;
          * ras_stride_pages = stride_pages;
@@ -547,7 +548,7 @@ struct ll_readahead_state {
         unsigned long ras_stride_length;
         unsigned long ras_stride_pages;
         pgoff_t ras_stride_offset;
-        /* 
+        /*
          * number of consecutive stride request count, and it is similar as
          * ras_consecutive_requests, but used for stride I/O mode.
          * Note: only more than 2 consecutive stride request are detected,
@@ -650,7 +651,7 @@ struct cache_definition {
 #define ll_unregister_cache(cache) do {} while (0)
 #endif
 
-void ll_ra_read_init(struct file *f, struct ll_ra_read *rar, 
+void ll_ra_read_init(struct file *f, struct ll_ra_read *rar,
                      loff_t offset, size_t count);
 void ll_ra_read_ex(struct file *f, struct ll_ra_read *rar);
 struct ll_ra_read *ll_ra_read_get(struct file *f);
@@ -767,7 +768,7 @@ int ll_extent_unlock(struct ll_file_data *, struct inode *,
 int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
-int ll_glimpse_ioctl(struct ll_sb_info *sbi, 
+int ll_glimpse_ioctl(struct ll_sb_info *sbi,
                      struct lov_stripe_md *lsm, lstat_t *st);
 int ll_glimpse_size(struct inode *inode, int ast_flags);
 int ll_local_open(struct file *file,
@@ -796,7 +797,7 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
                              struct ptlrpc_request **request);
 int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
                      int set_default);
-int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmm, 
+int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmm,
                      int *lmm_size, struct ptlrpc_request **request);
 int ll_fsync(struct file *file, struct dentry *dentry, int data);
 int ll_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
@@ -1102,7 +1103,7 @@ int ll_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
          * "IT_GETATTR" for the first time, and the subsequent "IT_GETATTR"
          * will bypass interacting with statahead thread for checking:
          * "lld_sa_generation == lli_sai->sai_generation"
-         */ 
+         */
         if (ldd && lli->lli_sai &&
             ldd->lld_sa_generation == lli->lli_sai->sai_generation)
                 return -EAGAIN;
@@ -1140,32 +1141,32 @@ enum llioc_iter {
  * Parameters:
  *  @magic: Dynamic ioctl call routine will feed this vaule with the pointer
  *      returned to ll_iocontrol_register.  Callback functions should use this
- *      data to check the potential collasion of ioctl cmd. If collasion is 
+ *      data to check the potential collasion of ioctl cmd. If collasion is
  *      found, callback function should return LLIOC_CONT.
  *  @rcp: The result of ioctl command.
  *
  *  Return values:
- *      If @magic matches the pointer returned by ll_iocontrol_data, the 
+ *      If @magic matches the pointer returned by ll_iocontrol_data, the
  *      callback should return LLIOC_STOP; return LLIOC_STOP otherwise.
  */
-typedef enum llioc_iter (*llioc_callback_t)(struct inode *inode, 
+typedef enum llioc_iter (*llioc_callback_t)(struct inode *inode,
                 struct file *file, unsigned int cmd, unsigned long arg,
                 void *magic, int *rcp);
 
-enum llioc_iter ll_iocontrol_call(struct inode *inode, struct file *file, 
+enum llioc_iter ll_iocontrol_call(struct inode *inode, struct file *file,
                 unsigned int cmd, unsigned long arg, int *rcp);
 
 /* export functions */
-/* Register ioctl block dynamatically for a regular file. 
+/* Register ioctl block dynamatically for a regular file.
  *
  * @cmd: the array of ioctl command set
  * @count: number of commands in the @cmd
- * @cb: callback function, it will be called if an ioctl command is found to 
+ * @cb: callback function, it will be called if an ioctl command is found to
  *      belong to the command list @cmd.
  *
  * Return vaule:
- *      A magic pointer will be returned if success; 
- *      otherwise, NULL will be returned. 
+ *      A magic pointer will be returned if success;
+ *      otherwise, NULL will be returned.
  * */
 void *ll_iocontrol_register(llioc_callback_t cb, int count, unsigned int *cmd);
 void ll_iocontrol_unregister(void *magic);
