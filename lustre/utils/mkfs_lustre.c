@@ -88,11 +88,10 @@
 /* used to describe the options to format the lustre disk, not persistent */
 struct mkfs_opts {
         struct lustre_disk_data mo_ldd; /* to be written in MOUNT_DATA_FILE */
-        char  mo_device[128];           /* disk device name or ZFS pool name */
+        char  mo_device[256];           /* disk device name or ZFS objset name */
         char  **mo_pool_vdevs;          /* list of pool vdevs */
         char  mo_mkfsopts[128];         /* options to the backing-store mkfs */
         char  mo_loopdev[128];          /* in case a loop dev is needed */
-        char  mo_osname[256];           /* ZFS objset name */
         __u64 mo_device_sz;             /* in KB */
         int   mo_stripe_count;
         int   mo_flags;
@@ -110,15 +109,16 @@ void usage(FILE *out)
 {
         fprintf(out, "%s v"LUSTRE_VERSION_STRING"\n", progname);
         fprintf(out, "usage: %s <target types> [--backfstype=zfs] [options] "
-                "<pool name> [[<vdev type>] <device> [<device> ...] "
-                "[[vdev type>] ...]]\n", progname);
+                "<pool name>/<dataset name> [[<vdev type>] <device> "
+                "[<device> ...] [[vdev type>] ...]]\n", progname);
         fprintf(out, "usage: %s <target types> --backfstype=ext3|ldiskfs "
                 "[options] <device>\n", progname);
         fprintf(out,
                 "\t<device>:block device or file (e.g /dev/sda or /tmp/ost1)\n"
-                "\t<pool name>: name of the new ZFS pool. It can also be an "
-                "existing pool, in which case you should not provide a list "
-                "of devices.\n"
+                "\t<pool name>: name of the ZFS pool where to create the "
+                "target (e.g. tank)\n"
+                "\t<dataset name>: name of the new dataset (e.g. ost1). The "
+                "dataset name must be unique within the ZFS pool\n"
                 "\t<vdev type>: type of vdev (mirror, raidz, raidz2, spare, "
                 "cache, log)\n"
                 "\n"
@@ -695,11 +695,27 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                 }
                 snprintf(mkfs_cmd, sizeof(mkfs_cmd), "mkreiserfs -ff ");
         } else if (mop->mo_ldd.ldd_mount_type == LDD_MT_ZFS) {
+                char pool_name[128];
+                char *sep;
+
+                /* For convenience */
+                strncpy(pool_name, mop->mo_device, sizeof(pool_name));
+                pool_name[sizeof(pool_name) - 1] = '\0';
+                sep = strchr(pool_name, '/');
+                if (sep == NULL) {
+                        fatal();
+                        fprintf(stderr, "Pool name too long: %s...\n",
+                                pool_name);
+                        return ENAMETOOLONG;
+                }
+                sep[0] = '\0';
+
                 if (mop->mo_pool_vdevs != NULL) {
                         /* We are creating a new ZFS pool */
                         snprintf(mkfs_cmd, sizeof(mkfs_cmd),
                                  "zpool create %s%s", force_zpool ? "-f " : "",
-                                 mop->mo_device);
+                                 pool_name);
+                        mkfs_cmd[sizeof(mkfs_cmd) - 1] = '\0';
 
                         /* Add the vdevs to the cmd line */
                         while (*mop->mo_pool_vdevs != NULL) {
@@ -709,51 +725,49 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                                 mop->mo_pool_vdevs++; /* point to next vdev */
                         }
 
-                        vprint("\ncreating ZFS pool '%s'...\n", mop->mo_device);
+                        vprint("\ncreating ZFS pool '%s'...\n", pool_name);
                         vprint("zpool_cmd = '%s'\n", mkfs_cmd);
 
                         ret = run_command(mkfs_cmd, sizeof(mkfs_cmd));
                         if (ret) {
                                 fatal();
                                 fprintf(stderr, "Unable to create pool '%s' "
-                                        "(%d)\n", mop->mo_device, ret);
+                                        "(%d)\n", pool_name, ret);
                                 return ret;
                         }
                 }
 
-retry:
-                snprintf(mop->mo_osname, sizeof(mop->mo_osname), "%s/%s",
-                         mop->mo_device, mop->mo_ldd.ldd_svname);
-
                 /* Create the ZFS filesystem */
                 snprintf(mkfs_cmd, sizeof(mkfs_cmd), "zfs create%s%s %s",
                          mop->mo_mkfsopts[0] ? " -o " : "", mop->mo_mkfsopts,
-                         mop->mo_osname);
+                         mop->mo_device);
+                mkfs_cmd[sizeof(mkfs_cmd) - 1] = '\0';
 
-                vprint("\ncreating ZFS filesystem \"%s\"...\n", mop->mo_osname);
+                vprint("\ncreating ZFS filesystem \"%s\"...\n", mop->mo_device);
                 vprint("zfs_cmd = \"%s\"\n", mkfs_cmd);
 
-                ret = run_command_err(mkfs_cmd, sizeof(mkfs_cmd),
-                                      mop->mo_ldd.ldd_flags & LDD_F_NEED_INDEX ?
-                                      "dataset already exists" : NULL);
-
-                if (ret == -2 && mop->mo_ldd.ldd_flags & LDD_F_NEED_INDEX) {
-                        vprint("Dataset \"%s\" already exists, retrying with "
-                               "higher index.\n", mop->mo_osname);
-                        /* Dataset already exists.
-                           Increase svindex and retry */
-                        mop->mo_ldd.ldd_svindex++;
-                        server_make_name(mop->mo_ldd.ldd_flags,
-                                         mop->mo_ldd.ldd_svindex,
-                                         mop->mo_ldd.ldd_fsname,
-                                         mop->mo_ldd.ldd_svname);
-                        goto retry;
-                }
-
+                ret = run_command(mkfs_cmd, sizeof(mkfs_cmd));
                 if (ret) {
                         fatal();
                         fprintf(stderr, "Unable to create filesystem %s (%d)\n",
-                                mop->mo_osname, ret);
+                                mop->mo_device, ret);
+                        return ret;
+                }
+
+                /* Set the label */
+                snprintf(mkfs_cmd, sizeof(mkfs_cmd), "zfs set "
+                         "com.sun.lustre:label=%s %s", mop->mo_ldd.ldd_svname,
+                         mop->mo_device);
+                mkfs_cmd[sizeof(mkfs_cmd) - 1] = '\0';
+
+                vprint("\nsetting label to \"%s\"...\n", mop->mo_ldd.ldd_svname);
+                vprint("zfs_cmd = \"%s\"\n", mkfs_cmd);
+
+                ret = run_command(mkfs_cmd, sizeof(mkfs_cmd));
+                if (ret) {
+                        fatal();
+                        fprintf(stderr, "Unable to set label to %s (%d)\n",
+                                mop->mo_ldd.ldd_svname, ret);
                         return ret;
                 }
 
@@ -1466,7 +1480,14 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 /* Common mistake: user gave device name instead of pool name */
                 if (mop->mo_device[0] == '/') {
                         fatal();
-                        fprintf(stderr, "Pool name cannot start with '/': %s\n"
+                        fprintf(stderr, "Pool name cannot start with '/': '%s'"
+                                "\nPlease run '%s --help' for syntax help.\n",
+                                mop->mo_device, progname);
+                        return EINVAL;
+                }
+                if (strchr(mop->mo_device, '/') == NULL) {
+                        fatal();
+                        fprintf(stderr, "Incomplete pool/dataset name: '%s'\n"
                                 "Please run '%s --help' for syntax help.\n",
                                 mop->mo_device, progname);
                         return EINVAL;
