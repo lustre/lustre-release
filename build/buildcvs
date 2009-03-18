@@ -57,6 +57,12 @@ case "$lustretag" in
         portalstag="b_hd_newconfig"
         ;;
 
+    b_cmd_cray)
+        lnettag="HEAD"
+        ldiskfstag="$ldiskfstag_head"
+        libcfstag="HEAD"
+        ;;
+
     b_cmd*)
         portalstag="$lustretag"
         ;;
