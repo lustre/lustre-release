@@ -723,6 +723,7 @@ static void class_export_destroy(struct obd_export *exp)
                 ptlrpc_put_connection_superhack(exp->exp_connection);
 
         LASSERT(list_empty(&exp->exp_outstanding_replies));
+        LASSERT(list_empty(&exp->exp_uncommitted_replies));
         LASSERT(list_empty(&exp->exp_req_replay_queue));
         LASSERT(list_empty(&exp->exp_queued_rpc));
         obd_destroy_export(exp);
@@ -781,6 +782,8 @@ struct obd_export *class_new_export(struct obd_device *obd,
         atomic_set(&export->exp_rpc_count, 0);
         export->exp_obd = obd;
         CFS_INIT_LIST_HEAD(&export->exp_outstanding_replies);
+        spin_lock_init(&export->exp_uncommitted_replies_lock);
+        CFS_INIT_LIST_HEAD(&export->exp_uncommitted_replies);
         CFS_INIT_LIST_HEAD(&export->exp_req_replay_queue);
         CFS_INIT_LIST_HEAD(&export->exp_handle.h_link);
         CFS_INIT_LIST_HEAD(&export->exp_queued_rpc);
@@ -837,6 +840,15 @@ void class_unlink_export(struct obd_export *exp)
         exp->exp_obd->obd_num_exports--;
         spin_unlock(&exp->exp_obd->obd_dev_lock);
 
+        /* Keep these counter valid always */
+        spin_lock_bh(&exp->exp_obd->obd_processing_task_lock);
+        if (exp->exp_delayed)
+                exp->exp_obd->obd_delayed_clients--;
+        else if (exp->exp_in_recovery)
+                exp->exp_obd->obd_recoverable_clients--;
+        else if (exp->exp_obd->obd_recovering)
+                exp->exp_obd->obd_max_recoverable_clients--;
+        spin_unlock_bh(&exp->exp_obd->obd_processing_task_lock);
         class_export_put(exp);
 }
 EXPORT_SYMBOL(class_unlink_export);
@@ -1125,9 +1137,10 @@ void class_disconnect_exports(struct obd_device *obd)
         ENTRY;
 
         /* Move all of the exports from obd_exports to a work list, en masse. */
+        CFS_INIT_LIST_HEAD(&work_list);
         spin_lock(&obd->obd_dev_lock);
-        list_add(&work_list, &obd->obd_exports);
-        list_del_init(&obd->obd_exports);
+        list_splice_init(&obd->obd_exports, &work_list);
+        list_splice_init(&obd->obd_delayed_exports, &work_list);
         spin_unlock(&obd->obd_dev_lock);
 
         if (!list_empty(&work_list)) {
@@ -1161,8 +1174,7 @@ int class_disconnect_stale_exports(struct obd_device *obd,
                 if (test_export(exp))
                         continue;
 
-                list_del(&exp->exp_obd_chain);
-                list_add(&exp->exp_obd_chain, &work_list);
+                list_move(&exp->exp_obd_chain, &work_list);
                 /* don't count self-export as client */
                 if (obd_uuid_equals(&exp->exp_client_uuid,
                                      &exp->exp_obd->obd_uuid))

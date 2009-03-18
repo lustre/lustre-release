@@ -2078,6 +2078,35 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt)
         RETURN(rc);
 }
 
+/*
+ * Get the 64-bit version for an inode.
+ */
+static dt_obj_version_t osd_object_version_get(const struct lu_env *env,
+                                               struct dt_object *dt)
+{
+        struct inode *inode = osd_dt_obj(dt)->oo_inode;
+
+        CDEBUG(D_INFO, "Get version "LPX64" for inode %lu\n",
+               LDISKFS_I(inode)->i_fs_version, inode->i_ino);
+        return LDISKFS_I(inode)->i_fs_version;
+}
+
+/*
+ * Set the 64-bit version and return the old version.
+ */
+static void osd_object_version_set(const struct lu_env *env, struct dt_object *dt,
+                                   dt_obj_version_t new_version)
+{
+        struct inode *inode = osd_dt_obj(dt)->oo_inode;
+
+        CDEBUG(D_INFO, "Set version "LPX64" (old "LPX64") for inode %lu\n",
+               new_version, LDISKFS_I(inode)->i_fs_version, inode->i_ino);
+        LDISKFS_I(inode)->i_fs_version = new_version;
+        /** Version is set after all inode operations are finished,
+         *  so we should mark it dirty here */
+        inode->i_sb->s_op->dirty_inode(inode);
+}
+
 static int osd_data_get(const struct lu_env *env, struct dt_object *dt,
                         void **data)
 {
@@ -2106,6 +2135,8 @@ static const struct dt_object_operations osd_obj_ops = {
         .do_xattr_list   = osd_xattr_list,
         .do_capa_get     = osd_capa_get,
         .do_object_sync  = osd_object_sync,
+        .do_version_get  = osd_object_version_get,
+        .do_version_set  = osd_object_version_set,
         .do_data_get     = osd_data_get,
 };
 
@@ -2131,6 +2162,8 @@ static const struct dt_object_operations osd_obj_ea_ops = {
         .do_xattr_list   = osd_xattr_list,
         .do_capa_get     = osd_capa_get,
         .do_object_sync  = osd_object_sync,
+        .do_version_get  = osd_object_version_get,
+        .do_version_set  = osd_object_version_set,
         .do_data_get     = osd_data_get,
 };
 

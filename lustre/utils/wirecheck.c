@@ -171,6 +171,8 @@ check_ptlrpc_body(void)
         CHECK_MEMBER(ptlrpc_body, pb_service_time);
         CHECK_MEMBER(ptlrpc_body, pb_slv);
         CHECK_MEMBER(ptlrpc_body, pb_limit);
+        CHECK_CVALUE(PTLRPC_NUM_VERSIONS);
+        CHECK_MEMBER(ptlrpc_body, pb_pre_versions[PTLRPC_NUM_VERSIONS]);
 }
 
 static void check_obd_connect_data(void)
@@ -217,6 +219,7 @@ static void check_obd_connect_data(void)
         CHECK_CDEFINE(OBD_CONNECT_AT);
         CHECK_CDEFINE(OBD_CONNECT_CANCELSET);
         CHECK_CDEFINE(OBD_CONNECT_LRU_RESIZE);
+        CHECK_CDEFINE(OBD_CONNECT_VBR);
         CHECK_CDEFINE(OBD_CONNECT_SKIP_ORPHAN);
 }
 

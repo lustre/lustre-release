@@ -2231,6 +2231,24 @@ static int mdd_object_sync(const struct lu_env *env, struct md_object *obj)
         return next->do_ops->do_object_sync(env, next);
 }
 
+static dt_obj_version_t mdd_version_get(const struct lu_env *env,
+                                        struct md_object *obj)
+{
+        struct mdd_object *mdd_obj = md2mdd_obj(obj);
+
+        LASSERT(mdd_object_exists(mdd_obj));
+        return do_version_get(env, mdd_object_child(mdd_obj));
+}
+
+static void mdd_version_set(const struct lu_env *env, struct md_object *obj,
+                            dt_obj_version_t version)
+{
+        struct mdd_object *mdd_obj = md2mdd_obj(obj);
+
+        LASSERT(mdd_object_exists(mdd_obj));
+        return do_version_set(env, mdd_object_child(mdd_obj), version);
+}
+
 const struct md_object_operations mdd_obj_ops = {
         .moo_permission    = mdd_permission,
         .moo_attr_get      = mdd_attr_get,
@@ -2248,5 +2266,7 @@ const struct md_object_operations mdd_obj_ops = {
         .moo_readlink      = mdd_readlink,
         .moo_capa_get      = mdd_capa_get,
         .moo_object_sync   = mdd_object_sync,
+        .moo_version_get   = mdd_version_get,
+        .moo_version_set   = mdd_version_set,
         .moo_path          = mdd_path,
 };

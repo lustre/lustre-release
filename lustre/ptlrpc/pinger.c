@@ -124,6 +124,12 @@ void ptlrpc_ping_import_soon(struct obd_import *imp)
         imp->imp_next_ping = cfs_time_current();
 }
 
+static inline int imp_is_deactive(struct obd_import *imp)
+{
+        return (imp->imp_deactive ||
+                OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_IMP_DEACTIVE));
+}
+
 static inline int ptlrpc_next_reconnect(struct obd_import *imp)
 {
         if (imp->imp_server_timeout)
@@ -237,13 +243,13 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
                              this_ping) && force == 0)
                 return;
 
-        if (level == LUSTRE_IMP_DISCON && !imp->imp_deactive) {
+        if (level == LUSTRE_IMP_DISCON && !imp_is_deactive(imp)) {
                 /* wait at least a timeout before trying recovery again */
                 imp->imp_next_ping = ptlrpc_next_reconnect(imp);
                 ptlrpc_initiate_recovery(imp);
         } else if (level != LUSTRE_IMP_FULL ||
                    imp->imp_obd->obd_no_recov ||
-                   imp->imp_deactive) {
+                   imp_is_deactive(imp)) {
                 CDEBUG(D_HA, "not pinging %s (in recovery "
                        " or recovery disabled: %s)\n",
                        obd2cli_tgt(imp->imp_obd),
@@ -939,11 +945,13 @@ void ptlrpc_pinger_wake_up()
                 CDEBUG(D_RPCTRACE, "checking import %s->%s\n",
                        imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
 #ifdef ENABLE_LIBLUSTRE_RECOVERY
-                if (imp->imp_state == LUSTRE_IMP_DISCON && !imp->imp_deactive)
+                if (imp->imp_state == LUSTRE_IMP_DISCON &&
+                    !imp_is_deactive(imp))
 #else
                 /*XXX only recover for the initial connection */
                 if (!lustre_handle_is_used(&imp->imp_remote_handle) &&
-                    imp->imp_state == LUSTRE_IMP_DISCON && !imp->imp_deactive)
+                    imp->imp_state == LUSTRE_IMP_DISCON &&
+                    !imp_is_deactive(imp))
 #endif
                         ptlrpc_initiate_recovery(imp);
                 else if (imp->imp_state != LUSTRE_IMP_FULL)
@@ -951,7 +959,7 @@ void ptlrpc_pinger_wake_up()
                                      "state %d, deactive %d\n",
                                      imp->imp_obd->obd_uuid.uuid,
                                      obd2cli_tgt(imp->imp_obd), imp->imp_state,
-                                     imp->imp_deactive);
+                                     imp_is_deactive(imp));
         }
         EXIT;
 #endif

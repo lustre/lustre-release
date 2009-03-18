@@ -362,6 +362,18 @@ static int cml_object_sync(const struct lu_env *env, struct md_object *mo)
         RETURN(rc);
 }
 
+static dt_obj_version_t cml_version_get(const struct lu_env *env,
+                                        struct md_object *mo)
+{
+        return mo_version_get(env, md_object_next(mo));
+}
+
+static void cml_version_set(const struct lu_env *env, struct md_object *mo,
+                            dt_obj_version_t version)
+{
+        return mo_version_set(env, md_object_next(mo), version);
+}
+
 static const struct md_object_operations cml_mo_ops = {
         .moo_permission    = cml_permission,
         .moo_attr_get      = cml_attr_get,
@@ -379,6 +391,8 @@ static const struct md_object_operations cml_mo_ops = {
         .moo_readlink      = cml_readlink,
         .moo_capa_get      = cml_capa_get,
         .moo_object_sync   = cml_object_sync,
+        .moo_version_get   = cml_version_get,
+        .moo_version_set   = cml_version_set,
         .moo_path          = cml_path,
 };
 
@@ -953,6 +967,18 @@ static int cmr_object_sync(const struct lu_env *env, struct md_object *mo)
         return -EFAULT;
 }
 
+static dt_obj_version_t cmr_version_get(const struct lu_env *env,
+                                        struct md_object *mo)
+{
+        LBUG();
+}
+
+static void cmr_version_set(const struct lu_env *env, struct md_object *mo,
+                            dt_obj_version_t version)
+{
+        LBUG();
+}
+
 static const struct md_object_operations cmr_mo_ops = {
         .moo_permission    = cmr_permission,
         .moo_attr_get      = cmr_attr_get,
@@ -970,6 +996,8 @@ static const struct md_object_operations cmr_mo_ops = {
         .moo_readlink      = cmr_readlink,
         .moo_capa_get      = cmr_capa_get,
         .moo_object_sync   = cmr_object_sync,
+        .moo_version_get   = cmr_version_get,
+        .moo_version_set   = cmr_version_set,
         .moo_path          = cmr_path,
 };
 

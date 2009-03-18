@@ -940,6 +940,27 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
 }
 
 /**
+ * save pre-versions for replay
+ */
+static void ptlrpc_save_versions(struct ptlrpc_request *req)
+{
+        struct lustre_msg *repmsg = req->rq_repmsg;
+        struct lustre_msg *reqmsg = req->rq_reqmsg;
+        __u64 *versions = lustre_msg_get_versions(repmsg);
+        ENTRY;
+
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
+                return;
+
+        LASSERT(versions);
+        lustre_msg_set_versions(reqmsg, versions);
+        CDEBUG(D_INFO, "Client save versions ["LPX64"/"LPX64"]\n",
+               versions[0], versions[1]);
+
+        EXIT;
+}
+
+/**
  * Callback function called when client receives RPC reply for \a req.
  */
 static int after_reply(struct ptlrpc_request *req)
@@ -1027,7 +1048,7 @@ static int after_reply(struct ptlrpc_request *req)
                 lustre_msg_set_transno(req->rq_reqmsg, req->rq_transno);
         }
 
-        if (req->rq_import->imp_replayable) {
+        if (imp->imp_replayable) {
                 spin_lock(&imp->imp_lock);
                 /*
                  * No point in adding already-committed requests to the replay
@@ -1036,9 +1057,11 @@ static int after_reply(struct ptlrpc_request *req)
                 if (req->rq_transno != 0 &&
                     (req->rq_transno >
                      lustre_msg_get_last_committed(req->rq_repmsg) ||
-                     req->rq_replay))
+                     req->rq_replay)) {
+                        /** version recovery */
+                        ptlrpc_save_versions(req);
                         ptlrpc_retain_replayable_request(req, imp);
-                else if (req->rq_commit_cb != NULL) {
+                } else if (req->rq_commit_cb != NULL) {
                         spin_unlock(&imp->imp_lock);
                         req->rq_commit_cb(req);
                         spin_lock(&imp->imp_lock);
@@ -2328,13 +2351,31 @@ static int ptlrpc_replay_interpret(const struct lu_env *env,
              lustre_msg_get_status(req->rq_repmsg) == -ENODEV))
                 GOTO(out, rc = lustre_msg_get_status(req->rq_repmsg));
 
-        /* The transno had better not change over replay. */
-        LASSERTF(lustre_msg_get_transno(req->rq_reqmsg) ==
-                 lustre_msg_get_transno(req->rq_repmsg) ||
-                 lustre_msg_get_transno(req->rq_repmsg) == 0,
-                 LPX64"/"LPX64"\n",
-                 lustre_msg_get_transno(req->rq_reqmsg),
-                 lustre_msg_get_transno(req->rq_repmsg));
+        /** VBR: check version failure */
+        if (lustre_msg_get_status(req->rq_repmsg) == -EOVERFLOW) {
+                /** replay was failed due to version mismatch */
+                DEBUG_REQ(D_WARNING, req, "Version mismatch during replay\n");
+                spin_lock(&imp->imp_lock);
+                imp->imp_vbr_failed = 1;
+                imp->imp_no_lock_replay = 1;
+                spin_unlock(&imp->imp_lock);
+        } else {
+                /** The transno had better not change over replay. */
+                LASSERTF(lustre_msg_get_transno(req->rq_reqmsg) ==
+                         lustre_msg_get_transno(req->rq_repmsg) ||
+                         lustre_msg_get_transno(req->rq_repmsg) == 0,
+                         LPX64"/"LPX64"\n",
+                         lustre_msg_get_transno(req->rq_reqmsg),
+                         lustre_msg_get_transno(req->rq_repmsg));
+        }
+
+        spin_lock(&imp->imp_lock);
+        /** if replays by version then gap was occur on server, no trust to locks */
+        if (lustre_msg_get_flags(req->rq_repmsg) & MSG_VERSION_REPLAY)
+                imp->imp_no_lock_replay = 1;
+        imp->imp_last_replay_transno = lustre_msg_get_transno(req->rq_reqmsg);
+        spin_unlock(&imp->imp_lock);
+        LASSERT(imp->imp_last_replay_transno);
 
         DEBUG_REQ(D_HA, req, "got rep");
 

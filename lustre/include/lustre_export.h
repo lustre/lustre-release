@@ -42,23 +42,35 @@
 #include <lprocfs_status.h>
 #include <class_hash.h>
 
-/* Data stored per client in the last_rcvd file.  In le32 order. */
 struct mds_client_data;
 struct mdt_client_data;
 struct mds_idmap_table;
 struct mdt_idmap_table;
 
+struct lu_export_data {
+        /** Protects led_lcd below */
+        struct semaphore        led_lcd_lock;
+        /** Per-client data for each export */
+        struct lsd_client_data *led_lcd;
+        /** Offset of record in last_rcvd file */
+        loff_t                  led_lr_off;
+        /** Client index in last_rcvd file */
+        int                     led_lr_idx;
+};
+
 struct mdt_export_data {
+        struct lu_export_data   med_led;
         struct list_head        med_open_head;
         spinlock_t              med_open_lock; /* lock med_open_head, mfd_list*/
-        struct semaphore        med_lcd_lock;
-        struct lsd_client_data *med_lcd;
         __u64                   med_ibits_known;
-        loff_t                  med_lr_off;
-        int                     med_lr_idx;
         struct semaphore           med_idmap_sem;
         struct lustre_idmap_table *med_idmap;
 };
+
+#define med_lcd_lock    med_led.led_lcd_lock
+#define med_lcd         med_led.led_lcd
+#define med_lr_off      med_led.led_lr_off
+#define med_lr_idx      med_led.led_lr_idx
 
 struct osc_creator {
         spinlock_t              oscc_lock;
@@ -82,10 +94,8 @@ struct ec_export_data { /* echo client */
 
 /* In-memory access to client data from OST struct */
 struct filter_export_data {
-        spinlock_t                 fed_lock;      /* protects fed_open_head */
-        struct lsd_client_data    *fed_lcd;
-        loff_t                     fed_lr_off;
-        int                        fed_lr_idx;
+        struct lu_export_data      fed_led;
+        spinlock_t                 fed_lock;     /**< protects fed_mod_list */
         long                       fed_dirty;    /* in bytes */
         long                       fed_grant;    /* in bytes */
         struct list_head           fed_mod_list; /* files being modified */
@@ -93,6 +103,11 @@ struct filter_export_data {
         long                       fed_pending;  /* bytes just being written */
         __u32                      fed_group;
 };
+
+#define fed_lcd_lock    fed_led.led_lcd_lock
+#define fed_lcd         fed_led.led_lcd
+#define fed_lr_off      fed_led.led_lr_off
+#define fed_lr_idx      fed_led.led_lr_idx
 
 typedef struct nid_stat_uuid {
         struct list_head ns_uuid_list;
@@ -137,7 +152,10 @@ struct obd_export {
         lustre_hash_t            *exp_lock_hash; /* existing lock hash */
         spinlock_t                exp_lock_hash_lock;
         struct list_head          exp_outstanding_replies;
-        time_t                    exp_last_request_time;
+        struct list_head          exp_uncommitted_replies;
+        spinlock_t                exp_uncommitted_replies_lock;
+        __u64                     exp_last_committed;
+        cfs_time_t                exp_last_request_time;
         struct list_head          exp_req_replay_queue;
         spinlock_t                exp_lock; /* protects flags int below */
         /* ^ protects exp_outstanding_replies too */
@@ -147,6 +165,10 @@ struct obd_export {
                                   exp_in_recovery:1,
                                   exp_disconnected:1,
                                   exp_connecting:1,
+                                  /** VBR: export missed recovery */
+                                  exp_delayed:1,
+                                  /** VBR: failed version checking */
+                                  exp_vbr_failed:1,
                                   exp_req_replay_needed:1,
                                   exp_lock_replay_needed:1,
                                   exp_need_sync:1,
@@ -161,15 +183,24 @@ struct obd_export {
         cfs_time_t                exp_flvr_expire[2];   /* seconds */
 
         union {
+                struct lu_export_data     eu_target_data;
                 struct mdt_export_data    eu_mdt_data;
                 struct filter_export_data eu_filter_data;
                 struct ec_export_data     eu_ec_data;
         } u;
 };
 
+#define exp_target_data u.eu_target_data
 #define exp_mdt_data    u.eu_mdt_data
 #define exp_filter_data u.eu_filter_data
 #define exp_ec_data     u.eu_ec_data
+
+static inline int exp_expired(struct obd_export *exp, cfs_duration_t age)
+{
+        LASSERT(exp->exp_delayed);
+        return cfs_time_before(cfs_time_add(exp->exp_last_request_time, age),
+                               cfs_time_current_sec());
+}
 
 static inline int exp_connect_cancelset(struct obd_export *exp)
 {
@@ -195,6 +226,13 @@ static inline int client_is_remote(struct obd_export *exp)
 
         return !!(imp->imp_connect_data.ocd_connect_flags &
                   OBD_CONNECT_RMT_CLIENT);
+}
+
+static inline int exp_connect_vbr(struct obd_export *exp)
+{
+        LASSERT(exp != NULL);
+        LASSERT(exp->exp_connection);
+        return !!(exp->exp_connect_flags & OBD_CONNECT_VBR);
 }
 
 static inline int imp_connect_lru_resize(struct obd_import *imp)

@@ -61,7 +61,7 @@
 #error Unsupported operating system.
 #endif
 
-#include <obd.h>
+#include <obd_class.h>
 #include <obd_ost.h>
 #include <lustre/lustre_idl.h>
 
@@ -294,7 +294,7 @@ struct llog_commit_master {
         /**
          * The refcount for lcm
          */
-         atomic_t		   lcm_refcount;
+         atomic_t                  lcm_refcount;
         /**
          * Thread control structure. Used for control commit thread.
          */
@@ -313,7 +313,7 @@ struct llog_commit_master {
         char                       lcm_name[LCM_NAME_SIZE];
 };
 
-static inline struct llog_commit_master 
+static inline struct llog_commit_master
 *lcm_get(struct llog_commit_master *lcm)
 {
         LASSERT(atomic_read(&lcm->lcm_refcount) > 0);
@@ -321,13 +321,13 @@ static inline struct llog_commit_master
         return lcm;
 }
 
-static inline void 
+static inline void
 lcm_put(struct llog_commit_master *lcm)
 {
         if (!atomic_dec_and_test(&lcm->lcm_refcount)) {
                 return ;
         }
-        OBD_FREE_PTR(lcm);	
+        OBD_FREE_PTR(lcm);
 }
 
 struct llog_canceld_ctxt {
@@ -674,5 +674,10 @@ static inline int llog_connect(struct llog_ctxt *ctxt,
         rc = lop->lop_connect(ctxt, logid, gen, uuid);
         RETURN(rc);
 }
+
+int lustre_process_log(struct super_block *sb, char *logname,
+                       struct config_llog_instance *cfg);
+int lustre_end_log(struct super_block *sb, char *logname,
+                   struct config_llog_instance *cfg);
 
 #endif

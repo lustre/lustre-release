@@ -2557,7 +2557,6 @@ EXPORT_SYMBOL(client_obd_setup);
 EXPORT_SYMBOL(client_obd_cleanup);
 EXPORT_SYMBOL(client_connect_import);
 EXPORT_SYMBOL(client_disconnect_export);
-EXPORT_SYMBOL(target_start_recovery_thread);
 EXPORT_SYMBOL(target_stop_recovery_thread);
 EXPORT_SYMBOL(target_handle_connect);
 EXPORT_SYMBOL(target_cleanup_recovery);

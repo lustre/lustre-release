@@ -60,7 +60,7 @@
 #define IOC_MDC_MAX_NR       50
 
 #include <lustre/lustre_idl.h>
-#include <lu_object.h>
+#include <lu_target.h>
 #include <lu_ref.h>
 #include <lustre_lib.h>
 #include <lustre_export.h>
@@ -247,6 +247,20 @@ struct ost_server_data;
 /* hold common fields for "target" device */
 struct obd_device_target {
         struct super_block       *obt_sb;
+        /** last_rcvd file */
+        struct file              *obt_rcvd_filp;
+        /** server data in last_rcvd file */
+        struct lr_server_data    *obt_lsd;
+        /** Lock protecting client bitmap */
+        spinlock_t                obt_client_bitmap_lock;
+        /** Bitmap of known clients */
+        unsigned long            *obt_client_bitmap;
+        /** Server last transaction number */
+        __u64                     obt_last_transno;
+        /** Lock protecting last transaction number */
+        spinlock_t                obt_translock;
+        /** Number of mounts */
+        __u64                     obt_mount_count;
         atomic_t                  obt_quotachecking;
         struct lustre_quota_ctxt  obt_qctxt;
         lustre_quota_version_t    obt_qfmt;
@@ -288,6 +302,7 @@ struct filter_ext {
 struct filter_obd {
         /* NB this field MUST be first */
         struct obd_device_target fo_obt;
+        struct lu_target     fo_lut;
         const char          *fo_fstype;
         struct vfsmount     *fo_vfsmnt;
 
@@ -300,12 +315,7 @@ struct filter_obd {
 
 
         spinlock_t           fo_objidlock;      /* protect fo_lastobjid */
-        spinlock_t           fo_translock;      /* protect fsd_last_transno */
-        struct file         *fo_rcvd_filp;
         struct file         *fo_health_check_filp;
-        struct lr_server_data *fo_fsd;
-        unsigned long       *fo_last_rcvd_slots;
-        __u64                fo_mount_count;
 
         unsigned long        fo_destroys_in_progress;
         struct semaphore     fo_create_locks[FILTER_SUBDIR_COUNT];
@@ -372,6 +382,12 @@ struct filter_obd {
         int                      fo_sec_level;
 };
 
+#define fo_translock            fo_obt.obt_translock
+#define fo_rcvd_filp            fo_obt.obt_rcvd_filp
+#define fo_fsd                  fo_obt.obt_lsd
+#define fo_last_rcvd_slots      fo_obt.obt_client_bitmap
+#define fo_mount_count          fo_obt.obt_mount_count
+
 struct timeout_item {
         enum timeout_event ti_event;
         cfs_time_t         ti_timeout;
@@ -380,6 +396,7 @@ struct timeout_item {
         struct list_head   ti_obd_list;
         struct list_head   ti_chain;
 };
+
 #define OSC_MAX_RIF_DEFAULT       8
 #define OSC_MAX_RIF_MAX         256
 #define OSC_MAX_DIRTY_DEFAULT  (OSC_MAX_RIF_DEFAULT * 4)
@@ -516,15 +533,10 @@ struct mds_obd {
         cfs_dentry_t                    *mds_fid_de;
         int                              mds_max_mdsize;
         int                              mds_max_cookiesize;
-        struct file                     *mds_rcvd_filp;
-        spinlock_t                       mds_transno_lock;
-        __u64                            mds_last_transno;
-        __u64                            mds_mount_count;
         __u64                            mds_io_epoch;
         unsigned long                    mds_atime_diff;
         struct semaphore                 mds_epoch_sem;
         struct ll_fid                    mds_rootfid;
-        struct lr_server_data           *mds_server_data;
         cfs_dentry_t                    *mds_pending_dir;
         cfs_dentry_t                    *mds_logs_dir;
         cfs_dentry_t                    *mds_objects_dir;
@@ -548,8 +560,6 @@ struct mds_obd {
         __u32                            mds_lov_objid_lastidx;
 
         struct file                     *mds_health_check_filp;
-        unsigned long                   *mds_client_bitmap;
-//        struct upcall_cache             *mds_group_hash;
 
         struct lustre_quota_info         mds_quota_info;
         struct semaphore                 mds_qonoff_sem;
@@ -569,6 +579,13 @@ struct mds_obd {
         struct lustre_capa_key          *mds_capa_keys;
         struct rw_semaphore              mds_notify_lock;
 };
+
+#define mds_transno_lock         mds_obt.obt_translock
+#define mds_rcvd_filp            mds_obt.obt_rcvd_filp
+#define mds_server_data          mds_obt.obt_lsd
+#define mds_client_bitmap        mds_obt.obt_client_bitmap
+#define mds_mount_count          mds_obt.obt_mount_count
+#define mds_last_transno         mds_obt.obt_last_transno
 
 /* lov objid */
 extern __u32 mds_max_ost_index;
@@ -829,6 +846,8 @@ struct obd_trans_info {
         /* initial thread handling transaction */
         struct ptlrpc_thread *   oti_thread;
         __u32                    oti_conn_cnt;
+        /** VBR: versions */
+        __u64                    oti_pre_version;
 
         struct obd_uuid         *oti_ost_uuid;
 };
@@ -844,7 +863,15 @@ static inline void oti_init(struct obd_trans_info *oti,
                 return;
 
         oti->oti_xid = req->rq_xid;
+        /** VBR: take versions from request */
+        if (req->rq_reqmsg != NULL &&
+            lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                __u64 *pre_version = lustre_msg_get_versions(req->rq_reqmsg);
+                oti->oti_pre_version = pre_version ? pre_version[0] : 0;
+                oti->oti_transno = lustre_msg_get_transno(req->rq_reqmsg);
+        }
 
+        /** called from mds_create_objects */
         if (req->rq_repmsg != NULL)
                 oti->oti_transno = lustre_msg_get_transno(req->rq_repmsg);
         oti->oti_thread = req->rq_svc_thread;
@@ -990,7 +1017,8 @@ struct obd_device {
         unsigned long obd_attached:1,      /* finished attach */
                       obd_set_up:1,        /* finished setup */
                       obd_recovering:1,    /* there are recoverable clients */
-                      obd_abort_recovery:1,/* somebody ioctl'ed us to abort */
+                      obd_abort_recovery:1,/* recovery expired */
+                      obd_version_recov:1, /* obd uses version checking */
                       obd_replayable:1,    /* recovery is enabled; inform clients */
                       obd_no_transno:1,    /* no committed-transno notification */
                       obd_no_recov:1,      /* fail instead of retry messages */
@@ -1013,6 +1041,7 @@ struct obd_device {
         atomic_t                obd_refcount;
         cfs_waitq_t             obd_refcount_waitq;
         struct list_head        obd_exports;
+        struct list_head        obd_delayed_exports;
         int                     obd_num_exports;
         spinlock_t              obd_nid_lock;
         struct ldlm_namespace  *obd_namespace;
@@ -1041,13 +1070,12 @@ struct obd_device {
         int                              obd_max_recoverable_clients;
         int                              obd_connected_clients;
         int                              obd_recoverable_clients;
+        int                              obd_delayed_clients;
         spinlock_t                       obd_processing_task_lock; /* BH lock (timer) */
         __u64                            obd_next_recovery_transno;
         int                              obd_replayed_requests;
         int                              obd_requests_queued_for_recovery;
         cfs_waitq_t                      obd_next_transno_waitq;
-        struct list_head                 obd_uncommitted_replies;
-        spinlock_t                       obd_uncommitted_replies_lock;
         cfs_timer_t                      obd_recovery_timer;
         time_t                           obd_recovery_start; /* seconds */
         time_t                           obd_recovery_end; /* seconds, for lprocfs_status */
@@ -1571,22 +1599,24 @@ int lvfs_check_io_health(struct obd_device *obd, struct file *file);
 #define OBD_CALC_STRIPE_END     2
 
 static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
-                                         int error)
+                                         struct obd_export *exp, int error)
 {
         if (error) {
                 CERROR("%s: transno "LPU64" commit error: %d\n",
                        obd->obd_name, transno, error);
                 return;
         }
-        if (transno > obd->obd_last_committed) {
-                CDEBUG(D_INFO, "%s: transno "LPD64" committed\n",
+        if (exp && transno > exp->exp_last_committed) {
+                CDEBUG(D_HA, "%s: transno "LPU64" committed\n",
                        obd->obd_name, transno);
-                obd->obd_last_committed = transno;
-                ptlrpc_commit_replies (obd);
+                exp->exp_last_committed = transno;
+                ptlrpc_commit_replies(exp);
         } else {
-                CDEBUG(D_INFO, "%s: transno "LPD64" committed\n",
+                CDEBUG(D_INFO, "%s: transno "LPU64" committed\n",
                        obd->obd_name, transno);
         }
+        if (transno > obd->obd_last_committed)
+                obd->obd_last_committed = transno;
 }
 
 static inline void init_obd_quota_ops(quota_interface_t *interface,

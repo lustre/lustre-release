@@ -99,9 +99,9 @@ static int write_capa_keys(const struct lu_env *env,
         for (i = 0; i < 2; i++) {
                 lck_cpu_to_le(tmp, &keys[i]);
 
-                rc = mdt_record_write(env, mdt->mdt_ck_obj,
-                                      mdt_buf_const(env, tmp, sizeof(*tmp)),
-                                      &off, th);
+                rc = dt_record_write(env, mdt->mdt_ck_obj,
+                                     mdt_buf_const(env, tmp, sizeof(*tmp)),
+                                     &off, th);
                 if (rc)
                         break;
         }
@@ -125,8 +125,8 @@ static int read_capa_keys(const struct lu_env *env,
         tmp = &mti->mti_capa_key;
 
         for (i = 0; i < 2; i++) {
-                rc = mdt_record_read(env, mdt->mdt_ck_obj,
-                                     mdt_buf(env, tmp, sizeof(*tmp)), &off);
+                rc = dt_record_read(env, mdt->mdt_ck_obj,
+                                    mdt_buf(env, tmp, sizeof(*tmp)), &off);
                 if (rc)
                         return rc;
 

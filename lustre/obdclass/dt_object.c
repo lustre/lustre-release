@@ -97,7 +97,8 @@ int dt_txn_hook_start(const struct lu_env *env,
 
         result = 0;
         list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
-                if (cb->dtc_txn_start == NULL)
+                if (cb->dtc_txn_start == NULL ||
+                    !(cb->dtc_tag & env->le_ctx.lc_tags))
                         continue;
                 result = cb->dtc_txn_start(env, param, cb->dtc_cookie);
                 if (result < 0)
@@ -115,7 +116,8 @@ int dt_txn_hook_stop(const struct lu_env *env, struct thandle *txn)
 
         result = 0;
         list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
-                if (cb->dtc_txn_stop == NULL)
+                if (cb->dtc_txn_stop == NULL ||
+                    !(cb->dtc_tag & env->le_ctx.lc_tags))
                         continue;
                 result = cb->dtc_txn_stop(env, txn, cb->dtc_cookie);
                 if (result < 0)
@@ -133,7 +135,8 @@ int dt_txn_hook_commit(const struct lu_env *env, struct thandle *txn)
 
         result = 0;
         list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
-                if (cb->dtc_txn_commit == NULL)
+                if (cb->dtc_txn_commit == NULL ||
+                    !(cb->dtc_tag & env->le_ctx.lc_tags))
                         continue;
                 result = cb->dtc_txn_commit(env, txn, cb->dtc_cookie);
                 if (result < 0)
@@ -399,6 +402,39 @@ void dt_global_fini(void)
 {
         lu_context_key_degister(&dt_key);
 }
+
+int dt_record_read(const struct lu_env *env, struct dt_object *dt,
+                   struct lu_buf *buf, loff_t *pos)
+{
+        int rc;
+
+        LASSERTF(dt != NULL, "dt is NULL when we want to read record\n");
+
+        rc = dt->do_body_ops->dbo_read(env, dt, buf, pos, BYPASS_CAPA);
+
+        if (rc == buf->lb_len)
+                rc = 0;
+        else if (rc >= 0)
+                rc = -EFAULT;
+        return rc;
+}
+EXPORT_SYMBOL(dt_record_read);
+
+int dt_record_write(const struct lu_env *env, struct dt_object *dt,
+                    const struct lu_buf *buf, loff_t *pos, struct thandle *th)
+{
+        int rc;
+
+        LASSERTF(dt != NULL, "dt is NULL when we want to write record\n");
+        LASSERT(th != NULL);
+        rc = dt->do_body_ops->dbo_write(env, dt, buf, pos, th, BYPASS_CAPA, 1);
+        if (rc == buf->lb_len)
+                rc = 0;
+        else if (rc >= 0)
+                rc = -EFAULT;
+        return rc;
+}
+EXPORT_SYMBOL(dt_record_write);
 
 const struct dt_index_features dt_directory_features;
 EXPORT_SYMBOL(dt_directory_features);

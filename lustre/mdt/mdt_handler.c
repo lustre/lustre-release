@@ -2652,6 +2652,10 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
 
         info->mti_fail_id = OBD_FAIL_MDS_ALL_REPLY_NET;
         info->mti_transno = lustre_msg_get_transno(req->rq_reqmsg);
+        info->mti_mos[0] = NULL;
+        info->mti_mos[1] = NULL;
+        info->mti_mos[2] = NULL;
+        info->mti_mos[3] = NULL;
 
         memset(&info->mti_attr, 0, sizeof(info->mti_attr));
         info->mti_body = NULL;
@@ -3355,7 +3359,8 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
         rep->lock_policy_res2 = clear_serious(rc);
 
         lhc->mlh_reg_lh.cookie = 0ull;
-        if (rc == -ENOTCONN || rc == -ENODEV) {
+        if (rc == -ENOTCONN || rc == -ENODEV ||
+            rc == -EOVERFLOW) { /**< if VBR failure then return error */
                 /*
                  * If it is the disconnect error (ENODEV & ENOCONN), the error
                  * will be returned by rq_status, and client at ptlrpc layer
@@ -4298,6 +4303,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         int                waited = 0;
         ENTRY;
 
+        target_recovery_fini(obd);
         /* At this point, obd exports might still be on the "obd_zombie_exports"
          * list, and obd_zombie_impexp_thread() is trying to destroy them.
          * We wait a little bit until all exports (except the self-export)
@@ -4321,7 +4327,6 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 
         ping_evictor_stop();
 
-        target_recovery_fini(obd);
         mdt_stop_ptlrpc_service(m);
         mdt_llog_ctxt_unclone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
         mdt_obd_llog_cleanup(obd);
@@ -4329,6 +4334,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 #ifdef HAVE_QUOTA_SUPPORT
         next->md_ops->mdo_quota.mqo_cleanup(env, next);
 #endif
+        lut_fini(env, &m->mdt_lut);
         mdt_fs_cleanup(env, m);
         upcall_cache_cleanup(m->mdt_identity_cache);
         m->mdt_identity_cache = NULL;
@@ -4597,9 +4603,13 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                 GOTO(err_fini_proc, rc);
         }
 
-        rc = mdt_fld_init(env, obd->obd_name, m);
+        rc = lut_init(env, &m->mdt_lut, obd, m->mdt_bottom);
         if (rc)
                 GOTO(err_fini_stack, rc);
+
+        rc = mdt_fld_init(env, obd->obd_name, m);
+        if (rc)
+                GOTO(err_lut, rc);
 
         rc = mdt_seq_init(env, obd->obd_name, m);
         if (rc)
@@ -4660,7 +4670,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         server_put_mount_2(dev, lmi->lmi_mnt);
         lmi = NULL;
 
-        target_recovery_init(obd, mdt_recovery_handle);
+        target_recovery_init(&m->mdt_lut, mdt_recovery_handle);
 
         rc = mdt_start_ptlrpc_service(m);
         if (rc)
@@ -4710,6 +4720,8 @@ err_fini_seq:
         mdt_seq_fini(env, m);
 err_fini_fld:
         mdt_fld_fini(env, m);
+err_lut:
+        lut_fini(env, &m->mdt_lut);
 err_fini_stack:
         mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
 err_fini_proc:

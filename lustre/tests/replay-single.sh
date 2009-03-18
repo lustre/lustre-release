@@ -1459,19 +1459,19 @@ run_test 60 "test llog post recovery init vs llog unlink"
 #test race  llog recovery thread vs llog cleanup
 test_61a() {	# was test_61
     remote_ost_nodsh && skip "remote OST with nodsh" && return 0
-    
+
     mkdir -p $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 800
-    replay_barrier ost1 
-#   OBD_FAIL_OST_LLOG_RECOVERY_TIMEOUT 0x221 
-    unlinkmany $DIR/$tdir/$tfile-%d 800 
+    replay_barrier ost1
+#   OBD_FAIL_OST_LLOG_RECOVERY_TIMEOUT 0x221
+    unlinkmany $DIR/$tdir/$tfile-%d 800
     set_nodes_failloc "$(osts_nodes)" 0x80000221
     facet_failover ost1
-    sleep 10 
+    sleep 10
     fail ost1
     sleep 30
     set_nodes_failloc "$(osts_nodes)" 0x0
-    
+
     $CHECKSTAT -t file $DIR/$tdir/$tfile-* && return 1
     rmdir $DIR/$tdir
 }
@@ -1481,7 +1481,7 @@ run_test 61a "test race llog recovery vs llog cleanup"
 test_61b() {
 #   OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT 0x13a
     do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000013a"
-    facet_failover $SINGLEMDS 
+    facet_failover $SINGLEMDS
     sleep 10
     fail $SINGLEMDS
     do_facet client dd if=/dev/zero of=$DIR/$tfile bs=4k count=1 || return 1
@@ -1492,10 +1492,10 @@ run_test 61b "test race mds llog sync vs llog cleanup"
 test_61c() {
     remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
-#   OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT 0x222 
-    touch $DIR/$tfile 
+#   OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT 0x222
+    touch $DIR/$tfile
     set_nodes_failloc "$(osts_nodes)" 0x80000222
-    rm $DIR/$tfile    
+    rm $DIR/$tfile
     sleep 10
     fail ost1
     set_nodes_failloc "$(osts_nodes)" 0x0
@@ -1849,6 +1849,54 @@ test_70b () {
 }
 run_test 70b "mds recovery; $CLIENTCOUNT clients"
 # end multi-client tests
+
+test_73a() {
+    multiop_bg_pause $DIR/$tfile O_tSc || return 3
+    pid=$!
+    rm -f $DIR/$tfile
+
+    replay_barrier $SINGLEMDS
+#define OBD_FAIL_LDLM_ENQUEUE       0x302
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000302"
+    fail $SINGLEMDS
+    kill -USR1 $pid
+    wait $pid || return 1
+    [ -e $DIR/$tfile ] && return 2
+    return 0
+}
+run_test 73a "open(O_CREAT), unlink, replay, reconnect before open replay , close"
+
+test_73b() {
+    multiop_bg_pause $DIR/$tfile O_tSc || return 3
+    pid=$!
+    rm -f $DIR/$tfile
+
+    replay_barrier $SINGLEMDS
+#define OBD_FAIL_LDLM_REPLY       0x30c
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000030c"
+    fail $SINGLEMDS
+    kill -USR1 $pid
+    wait $pid || return 1
+    [ -e $DIR/$tfile ] && return 2
+    return 0
+}
+run_test 73b "open(O_CREAT), unlink, replay, reconnect at open_replay reply, close"
+
+test_73c() {
+    multiop_bg_pause $DIR/$tfile O_tSc || return 3
+    pid=$!
+    rm -f $DIR/$tfile
+
+    replay_barrier $SINGLEMDS
+#define OBD_FAIL_TGT_LAST_REPLAY       0x710
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000710"
+    fail $SINGLEMDS
+    kill -USR1 $pid
+    wait $pid || return 1
+    [ -e $DIR/$tfile ] && return 2
+    return 0
+}
+run_test 73c "open(O_CREAT), unlink, replay, reconnect at last_replay, close"
 
 test_80a() {
     [ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0

@@ -399,6 +399,11 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct ptlrpc_body, pb_limit));
         LASSERTF((int)sizeof(((struct ptlrpc_body *)0)->pb_limit) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct ptlrpc_body *)0)->pb_limit));
+        CLASSERT(PTLRPC_NUM_VERSIONS == 4);
+        LASSERTF((int)offsetof(struct ptlrpc_body, pb_pre_versions[4]) == 120, " found %lld\n",
+                 (long long)(int)offsetof(struct ptlrpc_body, pb_pre_versions[4]));
+        LASSERTF((int)sizeof(((struct ptlrpc_body *)0)->pb_pre_versions[4]) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct ptlrpc_body *)0)->pb_pre_versions[4]));
 
         /* Checks for struct obd_connect_data */
         LASSERTF((int)sizeof(struct obd_connect_data) == 72, " found %lld\n",
@@ -481,6 +486,7 @@ void lustre_assert_wire_constants(void)
         CLASSERT(OBD_CONNECT_AT == 0x01000000ULL);
         CLASSERT(OBD_CONNECT_CANCELSET == 0x400000ULL);
         CLASSERT(OBD_CONNECT_LRU_RESIZE == 0x02000000ULL);
+        CLASSERT(OBD_CONNECT_VBR == 0x80000000ULL);
         CLASSERT(OBD_CONNECT_SKIP_ORPHAN == 0x400000000ULL);
 
         /* Checks for struct obdo */
