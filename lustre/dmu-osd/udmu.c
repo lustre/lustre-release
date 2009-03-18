@@ -53,6 +53,7 @@
 #include <sys/zfs_znode.h>
 #include <sys/dmu_tx.h>
 #include <sys/dmu_objset.h>
+#include <sys/dsl_prop.h>
 #include "udmu.h"
 #include <linux/statfs.h>
 
@@ -120,9 +121,7 @@ int udmu_objset_open(char *osname, udmu_objset_t *uos)
 
         memset(uos, 0, sizeof(udmu_objset_t));
 
-        /* Let's try to open the objset */
         error = dmu_objset_open(osname, DMU_OST_ZFS, DS_MODE_OWNER, &uos->os);
-
         if (error) {
                 uos->os = NULL;
                 goto out;
@@ -243,6 +242,125 @@ int udmu_objset_statfs(udmu_objset_t *uos, struct statfs64 *statp)
         statp->f_namelen = 256;
 
         return (0);
+}
+
+/* Get the objset name.
+   buf must have at least MAXNAMELEN bytes */
+void udmu_objset_name_get(udmu_objset_t *uos, char *buf)
+{
+        dmu_objset_name(uos->os, buf);
+}
+
+static int udmu_userprop_setup(udmu_objset_t *uos, const char *prop_name,
+                           char **os_name, char **real_prop)
+{
+        if (os_name != NULL) {
+                *os_name = kmem_alloc(MAXNAMELEN, KM_SLEEP);
+                udmu_objset_name_get(uos, *os_name);
+        }
+
+        *real_prop = kmem_alloc(MAXNAMELEN, KM_SLEEP);
+
+        if (snprintf(*real_prop, MAXNAMELEN, "com.sun.lustre:%s", prop_name) >=
+            MAXNAMELEN) {
+                if (os_name != NULL)
+                        kmem_free(*os_name, MAXNAMELEN);
+                kmem_free(*real_prop, MAXNAMELEN);
+
+                udmu_printf(LEVEL_CRITICAL, stderr, "property name too long: "
+                            " %s\n", prop_name);
+                return ENAMETOOLONG;
+        }
+
+        return 0;
+}
+
+static void udmu_userprop_cleanup(char **os_name, char **real_prop)
+{
+        if (os_name != NULL)
+                kmem_free(*os_name, MAXNAMELEN);
+        kmem_free(*real_prop, MAXNAMELEN);
+}
+
+/* Set ZFS user property 'prop_name' of objset 'uos' to string 'val' */
+int udmu_userprop_set_str(udmu_objset_t *uos, const char *prop_name,
+                      const char *val)
+{
+        char *os_name;
+        char *real_prop;
+        int rc;
+
+        rc = udmu_userprop_setup(uos, prop_name, &os_name, &real_prop);
+        if (rc != 0)
+                return rc;
+
+        rc = dsl_prop_set(os_name, real_prop, 1, strlen(val) + 1, val);
+        udmu_userprop_cleanup(&os_name, &real_prop);
+
+        return rc;
+}
+
+/* Get ZFS user property 'prop_name' of objset 'uos' into buffer 'buf' of size
+   'buf_size' */
+int udmu_userprop_get_str(udmu_objset_t *uos, const char *prop_name, char *buf,
+                      size_t buf_size)
+{
+        char *real_prop;
+        char *nvp_val;
+        size_t nvp_len;
+        nvlist_t *nvl = NULL;
+        nvlist_t *nvl_val;
+        nvpair_t *elem = NULL;
+        int rc;
+
+        rc = udmu_userprop_setup(uos, prop_name, NULL, &real_prop);
+        if (rc != 0)
+                return rc;
+
+        /* We can't just pass buf_size to dsl_prop_get() because it expects the
+           exact value size (zap_lookup() requirement), so we must get all props
+           and extract the one we want. */
+        rc = dsl_prop_get_all(uos->os, &nvl, TRUE);
+        if (rc != 0) {
+                nvl = NULL;
+                goto out;
+        }
+
+        while ((elem = nvlist_next_nvpair(nvl, elem)) != NULL) {
+                const char *name = nvpair_name(elem);
+                if (strcmp(name, real_prop) != 0)
+                        continue;
+
+                /* Got the property we were looking for, but the val is not the
+                   string yet, it's an nvlist */
+
+                rc = nvpair_value_nvlist(elem, &nvl_val);
+                if (rc != 0)
+                        goto out;
+
+                rc = nvlist_lookup_string(nvl_val, ZPROP_VALUE, &nvp_val);
+                if (rc != 0)
+                        goto out;
+
+                nvp_len = strlen(nvp_val);
+                if (buf_size < nvp_len + 1) {
+                        udmu_printf(LEVEL_INFO, stderr, "buffer too small (%d)"
+                                    " for string(%d): '%s'\n", buf_size,
+                                    nvp_len, nvp_val);
+                        rc = EOVERFLOW;
+                        goto out;
+                }
+                strcpy(buf, nvp_val);
+                goto out;
+        }
+        /* Not found */
+        rc = ENOENT;
+out:
+        if (nvl != NULL)
+                nvlist_free(nvl);
+        udmu_userprop_cleanup(NULL, &real_prop);
+
+        return rc;
 }
 
 static int udmu_obj2dbuf(udmu_objset_t *uos, uint64_t oid, dmu_buf_t **dbp,

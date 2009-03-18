@@ -156,6 +156,10 @@ typedef struct zap_cursor zap_cursor_t;
 
 #define ZFS_DIRENT_MAKE(type, obj) (((uint64_t)type << 60) | obj)
 
+#ifndef MAXNAMELEN
+#define MAXNAMELEN 256
+#endif
+
 #define FTAG ((char *)__func__)
 
 void udmu_init(void);
@@ -175,6 +179,15 @@ int udmu_objset_statfs(udmu_objset_t *uos, struct statfs64 *statp);
 int udmu_objset_root(udmu_objset_t *uos, dmu_buf_t **dbp, void *tag);
 
 void udmu_wait_synced(udmu_objset_t *uos, dmu_tx_t *tx);
+
+/* buf must have at least MAXNAMELEN bytes */
+void udmu_objset_name_get(udmu_objset_t *uos, char *buf);
+
+/* Get/set ZFS user properties */
+int udmu_userprop_set_str(udmu_objset_t *uos, const char *prop_name,
+                      const char *val);
+int udmu_userprop_get_str(udmu_objset_t *uos, const char *prop_name, char *buf,
+                      size_t buf_size);
 
 /* udmu ZAP API */
 
@@ -274,6 +287,7 @@ uint64_t udmu_object_get_links(dmu_buf_t *db);
 void udmu_object_links_inc(dmu_buf_t *db, dmu_tx_t *tx);
 void udmu_object_links_dec(dmu_buf_t *db, dmu_tx_t *tx);
 
+/* Extended attributes */
 int udmu_get_xattr(dmu_buf_t *db, void *val, int vallen, const char *name);
 int udmu_set_xattr(dmu_buf_t *db, void *val, int vallen,
                    const char *name, dmu_tx_t *tx);

@@ -913,6 +913,8 @@ static int server_label2mti(struct super_block *sb, struct mgs_target_info *mti)
 
         /* first, retrieve label */
         label = mconf_get_label(lsi->lsi_dt_dev);
+        if (label == NULL)
+                return -EINVAL;
 
         lsi->lsi_dt_dev->dd_ops->dt_conf_get(NULL, lsi->lsi_dt_dev, &dt_param);
         lsi->lsi_ldd->ldd_mount_type = dt_param.ddp_mount_type;
@@ -953,7 +955,7 @@ static int server_sb2mti(struct super_block *sb, struct mgs_target_info *mti)
 
         if (ldd->ldd_magic == 0) {
                 /* no config, generate data for registration */
-                return server_label2mti(sb, mti);
+                RETURN(server_label2mti(sb, mti));
         }
 
         strncpy(mti->mti_fsname, ldd->ldd_fsname,

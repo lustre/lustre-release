@@ -84,6 +84,8 @@
 
 #define LUSTRE_ROOT_FID_SEQ     0
 
+#define DMU_PROP_NAME_LABEL     "label"
+
 struct osd_object {
         struct dt_object       oo_dt;
         /*
@@ -145,6 +147,8 @@ struct osd_device {
 
         dmu_buf_t                *od_root_db;
         dmu_buf_t                *od_objdir_db;
+
+        char                      od_label[MAXNAMELEN];
 };
 
 struct osd_thandle {
@@ -890,18 +894,34 @@ static int osd_init_capa_ctxt(const struct lu_env *env, struct dt_device *d,
 
 static char *osd_label_get(const struct lu_env *env, const struct dt_device *d)
 {
-        //struct osd_device *dev = osd_dt_dev(d);
-        return "lustre*OSTXXXX";
-        LBUG();
-        RETURN(NULL);
+        struct osd_device *dev = osd_dt_dev(d);
+        int rc;
+        ENTRY;
+
+        rc = -udmu_userprop_get_str(&dev->od_objset, DMU_PROP_NAME_LABEL,
+                                    dev->od_label, sizeof(dev->od_label));
+
+        if (rc != 0) {
+                CERROR("error getting ZFS label: %d\n", rc);
+                RETURN(NULL);
+        }
+
+        RETURN(&dev->od_label[0]);
 }
 
 static int osd_label_set(const struct lu_env *env, const struct dt_device *d,
                          char *name)
 {
-        //struct osd_device *dev = osd_dt_dev(d);
-        CERROR("set new label to '%s'\n", name);
-        RETURN(0);
+        struct osd_device *dev = osd_dt_dev(d);
+        int rc;
+        ENTRY;
+
+        rc = -udmu_userprop_set_str(&dev->od_objset, DMU_PROP_NAME_LABEL, name);
+
+        if (rc != 0)
+                CERROR("error setting ZFS label to '%s': %d\n", name, rc);
+
+        RETURN(rc);
 }
 
 static struct dt_device_operations osd_dt_ops = {

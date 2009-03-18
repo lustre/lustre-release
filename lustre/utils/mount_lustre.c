@@ -462,9 +462,12 @@ out:
 int main(int argc, char *const argv[])
 {
         char default_options[] = "";
-        char *usource, *source, *target, *ptr;
+        char *usource = NULL; /* setting to NULL to avoid gcc warning */
+        char *source = NULL; /* idem */
+        char *target, *ptr;
         char *options, *optcopy, *orig_options = default_options;
         int i, nargs = 3, opt, rc, flags, optlen;
+        size_t usource_len;
         static struct option long_opt[] = {
                 {"fake", 0, 0, 'f'},
                 {"force", 0, 0, 1},
@@ -525,9 +528,17 @@ int main(int argc, char *const argv[])
                 usage(stderr);
         }
 
-        source = convert_hostnames(usource);
-        if (!source) {
-                usage(stderr);
+        /* Only convert hostname if device ends in '-client', otherwise it's
+           probably a ZFS dataset name */
+        usource_len = strlen(usource);
+        if (usource_len > 7 &&
+            strcmp(&usource[usource_len - 8], "-client") == 0) {
+                source = convert_hostnames(usource);
+                if (!source) {
+                        usage(stderr);
+                }
+        } else {
+                source = strdup(usource);
         }
 
         target = argv[optind + 1];
