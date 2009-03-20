@@ -44,6 +44,13 @@
 	  information, please refer to bugzilla 17630.
 
 Severity   : normal
+Frequency  : rare, at shutdown
+Bugzilla   : 18773
+Descriptoin: panic at umount
+Details    : llap_shrinker can be raced with killing super block from list and
+             this produce panic with access to already freeded pointer
+
+Severity   : normal
 Frequency  : rare
 Bugzilla   : 18154
 Descriptoin: don't lose wakeup for imp_recovery_waitq

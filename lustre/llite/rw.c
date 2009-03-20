@@ -551,9 +551,10 @@ static inline int llap_shrink_cache_internal(struct ll_sb_info *sbi,
                 int keep;
 
                 if (unlikely(need_resched())) {
+                        list_del(&dummy_llap.llap_pglist_item);                
                         ll_pglist_cpu_unlock(sbi, cpu);
-                        cond_resched();
-                        ll_pglist_cpu_lock(sbi, cpu);
+                        /* vmscan::shrink_slab() have own schedule() */
+                        return count;
                 }
 
                 llap = llite_pglist_next_llap(head, 
