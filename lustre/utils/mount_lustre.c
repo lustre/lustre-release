@@ -528,11 +528,9 @@ int main(int argc, char *const argv[])
                 usage(stderr);
         }
 
-        /* Only convert hostname if device ends in '-client', otherwise it's
+        /* Only convert hostnames if usource contains a '@', otherwise it's
            probably a ZFS dataset name */
-        usource_len = strlen(usource);
-        if (usource_len > 7 &&
-            strcmp(&usource[usource_len - 8], "-client") == 0) {
+        if (strchr(usource, '@') != NULL) {
                 source = convert_hostnames(usource);
                 if (!source) {
                         usage(stderr);
