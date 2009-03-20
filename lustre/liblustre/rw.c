@@ -704,6 +704,15 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
                          */
                         if ((err = llu_glimpse_size(inode))) {
                                 GOTO(err_unlock, err);
+                        } else {
+                                /* If objective page index exceed end-of-file
+                                 * page index, return directly. --bug 17336 */
+                                size_t size = st->st_size;
+                                unsigned long cur_index = pos >> CFS_PAGE_SHIFT;
+
+                                if ((size == 0 && cur_index != 0) ||
+                                    (((size - 1) >> CFS_PAGE_SHIFT) < cur_index))
+                                        GOTO(err_unlock, err);
                         }
                 } else {
                         st->st_size = kms;
