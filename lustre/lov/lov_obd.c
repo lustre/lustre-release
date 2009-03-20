@@ -633,6 +633,13 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
                 RETURN(-ENOMEM);
         }
 
+        rc = lov_ost_pool_add(&lov->lov_packed, index, lov->lov_tgt_size);
+        if (rc) {
+                mutex_up(&lov->lov_lock);
+                OBD_FREE_PTR(tgt);
+                RETURN(rc);
+        }
+
         memset(tgt, 0, sizeof(*tgt));
         tgt->ltd_uuid = *uuidp;
         /* XXX - add a sanity check on the generation number. */
@@ -643,15 +650,11 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
         if (index >= lov->desc.ld_tgt_count)
                 lov->desc.ld_tgt_count = index + 1;
 
-        rc = lov_ost_pool_add(&lov->lov_packed, index, lov->lov_tgt_size);
-        if (rc)
-                RETURN(rc);
-
         mutex_up(&lov->lov_lock);
 
         CDEBUG(D_CONFIG, "idx=%d ltd_gen=%d ld_tgt_count=%d\n",
                 index, tgt->ltd_gen, lov->desc.ld_tgt_count);
-        
+
         if (lov->lov_connects == 0) { 
                 /* lov_connect hasn't been called yet. We'll do the
                    lov_connect_obd on this target when that fn first runs,
@@ -669,15 +672,15 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
         if (!tgt->ltd_exp)
                 GOTO(out, rc = 0);
 
-        rc = lov_notify(obd, tgt->ltd_exp->exp_obd, 
+        rc = lov_notify(obd, tgt->ltd_exp->exp_obd,
                         active ? OBD_NOTIFY_CONNECT : OBD_NOTIFY_INACTIVE,
                         (void *)&index);
-
 out:
         if (rc) {
-                CERROR("add failed (%d), deleting %s\n", rc, 
+                /* connect or notify failed - we can try connect later
+                 * instead of complete delete target */
+                CERROR("connect or notify failed (%d) for %s\n", rc,
                        obd_uuid2str(&tgt->ltd_uuid));
-                lov_del_target(obd, index, 0, 0);
         }
         lov_putref(obd);
         RETURN(rc);
