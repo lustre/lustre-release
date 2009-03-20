@@ -2520,7 +2520,7 @@ static int osc_max_rpc_in_flight(struct client_obd *cli, struct lov_oinfo *loi)
         }
 
         if (!hprpc && !list_empty(&loi->loi_read_lop.lop_urgent)) {
-                oap = list_entry(loi->loi_write_lop.lop_urgent.next,
+                oap = list_entry(loi->loi_read_lop.lop_urgent.next,
                                  struct osc_async_page, oap_urgent_item);
                 hprpc = !!(oap->oap_async_flags & ASYNC_HP);
         }
