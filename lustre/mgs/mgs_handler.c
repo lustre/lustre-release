@@ -419,63 +419,25 @@ static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
 
 static int mgs_parse_label_to_mti(struct mgs_target_info *mti)
 {
-        int i = 0, rc = 0;
+        int rc;
         ENTRY;
-
-        /*
-         * Format:
-         * registered target:   <fsname>-<OST|MDT><index>
-         * unregistered target: <fsname>*<OST|MDT><index>
-         */
 
         if (mti->mti_fsname[0] != '\0') {
                 /* empty fsname expected with "label-only" registration */
                 GOTO(out, rc = -EINVAL);
         }
 
-        while (i < MTI_NAME_MAXLEN) {
-                if (mti->mti_svname[i] == 0) {
-                        /* no delimiter found */
-                        GOTO(out, rc = -EINVAL);
-                }
-                if (mti->mti_svname[i] == '*') {
-                        mti->mti_flags |= LDD_F_VIRGIN | LDD_F_UPDATE;
-                        break;
-                }
-                if (mti->mti_svname[i] == '-') {
-                        break;
-                }
-                mti->mti_fsname[i] = mti->mti_svname[i];
-                i++;
-        }
-        mti->mti_fsname[i] = '\0';
-        i++;
+        rc = server_name2fsname(mti->mti_svname, mti->mti_fsname, NULL);
+        if (rc != 0)
+                goto out;
 
-        if (i >= MTI_NAME_MAXLEN - 7)
-                GOTO(out, rc = -EINVAL);
+        rc = server_name2index(mti->mti_svname, &mti->mti_stripe_index, NULL);
+        if (rc < 0)
+                goto out;
 
-        if (!strncmp(mti->mti_svname + i, "OST", 3)) {
-                mti->mti_flags |= LDD_F_SV_TYPE_OST;
-        } else if (!strncmp(mti->mti_svname + i, "MDT", 3)) {
-                mti->mti_flags |= LDD_F_SV_TYPE_MDT;
-        } else {
-                /* unknown node type */
-                CERROR("unknown type %s\n", mti->mti_svname + i);
-                GOTO(out, rc = -EINVAL);
-        }
-        i += 3;
-
-        if (!strcmp(mti->mti_svname + i, "XXXX")) {
-                if (!(mti->mti_flags & LDD_F_VIRGIN)) {
-                        /* expected to be new */
-                        GOTO(out, rc = -EINVAL);
-                }
-
-                mti->mti_flags |= LDD_F_NEED_INDEX;
-                mti->mti_svname[0] = '\0';
-        } else {
-                mti->mti_stripe_index = simple_strtoul(mti->mti_svname+i,NULL,10);
-        }
+        mti->mti_flags = rc;
+        if (mti->mti_flags & LDD_F_VIRGIN)
+                mti->mti_flags |= LDD_F_UPDATE;
 
         CDEBUG(D_MGS, "register to %s with name '%s' and flags %u\n",
                mti->mti_fsname, mti->mti_svname, mti->mti_flags);

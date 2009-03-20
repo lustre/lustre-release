@@ -162,6 +162,8 @@ static inline int server_make_name(__u32 flags, __u16 index, char *fs,
         return 0;
 }
 
+/* Get the fsname from the obd name */
+int server_name2fsname(char *svname, char *fsname, char **endptr);
 /* Get the index from the obd name */
 int server_name2index(char *svname, __u32 *idx, char **endptr);
 

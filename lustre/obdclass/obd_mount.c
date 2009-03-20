@@ -1909,6 +1909,39 @@ out_mnt:
         return rc;
 }
 
+/* Get the fsname from the obd name.
+   fsname must have at least 'strlen(svname) + 1' chars.
+   rc < 0  on error
+   if endptr isn't NULL it is set to end of fsname */
+int server_name2fsname(char *svname, char *fsname, char **endptr)
+{
+        char *dash = strrchr(svname, '-');
+        if (!dash) {
+                dash = strrchr(svname, ':');
+                if (!dash)
+                        return -EINVAL;
+        }
+
+        /* interpret <fsname>-MDTXXXXX-mdc as mdt, the better way is to pass
+         * in the fsname, then determine the server index */
+        if (!strcmp(LUSTRE_MDC_NAME, dash + 1)) {
+                dash--;
+                for (; dash > svname && *dash != '-' && *dash != ':'; dash--);
+                if (dash == svname)
+                        return -EINVAL;
+        }
+
+        if (fsname != NULL) {
+                strncpy(fsname, svname, dash - svname);
+                fsname[dash - svname] = '\0';
+        }
+
+        if (endptr != NULL)
+                *endptr = dash;
+
+        return 0;
+}
+
 /* Get the index from the obd name.
    rc = server type, or
    rc < 0  on error
@@ -1917,30 +1950,26 @@ int server_name2index(char *svname, __u32 *idx, char **endptr)
 {
         unsigned long index;
         int rc;
-        char *dash = strrchr(svname, '-');
-        if (!dash) {
-                dash = strrchr(svname, ':');
-                if (!dash)
-                        return(-EINVAL);
-        }
+        char *dash;
 
-        /* intepret <fsname>-MDTXXXXX-mdc as mdt, the better way is to pass
-         * in the fsname, then determine the server index */
-        if (!strcmp(LUSTRE_MDC_NAME, dash + 1)) {
-                dash--;
-                for (; dash > svname && *dash != '-' && *dash != ':'; dash--);
-                if (dash == svname)
-                        return(-EINVAL);
-        }
+        /* We use server_name2fsname() just for parsing */
+        rc = server_name2fsname(svname, NULL, &dash);
+        if (rc != 0)
+                return rc;
 
-        if (strncmp(dash + 1, "MDT", 3) == 0)
-                rc = LDD_F_SV_TYPE_MDT;
-        else if (strncmp(dash + 1, "OST", 3) == 0)
-                rc = LDD_F_SV_TYPE_OST;
+        if (*dash == ':')
+                rc |= LDD_F_VIRGIN;
+
+        dash++;
+
+        if (strncmp(dash, "MDT", 3) == 0)
+                rc |= LDD_F_SV_TYPE_MDT;
+        else if (strncmp(dash, "OST", 3) == 0)
+                rc |= LDD_F_SV_TYPE_OST;
         else
                 return(-EINVAL);
 
-        dash += 4;
+        dash += 3;
 
         if (strcmp(dash, "all") == 0)
                 return rc | LDD_F_SV_ALL;
@@ -2407,6 +2436,7 @@ EXPORT_SYMBOL(server_get_mount_2);
 EXPORT_SYMBOL(server_put_mount);
 EXPORT_SYMBOL(server_put_mount_2);
 EXPORT_SYMBOL(server_register_target);
+EXPORT_SYMBOL(server_name2fsname);
 EXPORT_SYMBOL(server_name2index);
 EXPORT_SYMBOL(server_mti_print);
 EXPORT_SYMBOL(do_lcfg);
