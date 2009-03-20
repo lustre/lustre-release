@@ -6020,9 +6020,9 @@ test_160() {
     $LFS changelog $MDT0 | tail -5
 
     echo "verifying changelog mask"
-    $LCTL set_param mdd.$MDT0.changelog_mask="-mkdir"
+    do_facet $SINGLEMDS lctl set_param mdd.$MDT0.changelog_mask="-mkdir"
     mkdir -p $DIR/$tdir/pics/2009/sofia
-    $LCTL set_param mdd.$MDT0.changelog_mask="+mkdir"
+    do_facet $SINGLEMDS lctl set_param mdd.$MDT0.changelog_mask="+mkdir"
     mkdir $DIR/$tdir/pics/2009/zachary
     DIRS=$($LFS changelog $MDT0 | tail -5 | grep -c MKDIR)
     [ $DIRS -eq 1 ] || err17935 "changelog mask count $DIRS != 1"
