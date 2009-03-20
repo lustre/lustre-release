@@ -206,6 +206,48 @@ void lbug_with_loc(const char *file, const char *func, const int line)
 
 #ifdef __KERNEL__
 
+#ifdef HAVE_DUMP_TRACE
+#include <linux/nmi.h>
+#include <asm/stacktrace.h>
+
+static void
+print_trace_warning_symbol(void *data, char *msg, unsigned long symbol)
+{
+	printk(data);
+	print_symbol(msg, symbol);
+	printk("\n");
+}
+
+static void print_trace_warning(void *data, char *msg)
+{
+	printk("%s%s\n", (char *)data, msg);
+}
+
+static int print_trace_stack(void *data, char *name)
+{
+	printk(" <%s> ", name);
+	return 0;
+}
+
+void printk_address(unsigned long address, int reliable)
+{
+	printk(" [<%016lx>] %s%pS\n", address, reliable ? "": "? ", (void *) address);
+}
+
+static void print_trace_address(void *data, unsigned long addr, int reliable)
+{
+	touch_nmi_watchdog();
+	printk_address(addr, reliable);
+}
+
+static const struct stacktrace_ops print_trace_ops = {
+	.warning = print_trace_warning,
+	.warning_symbol = print_trace_warning_symbol,
+	.stack = print_trace_stack,
+	.address = print_trace_address,
+};
+#endif
+
 void libcfs_debug_dumpstack(struct task_struct *tsk)
 {
 #if defined(__arch_um__)
@@ -221,6 +263,14 @@ void libcfs_debug_dumpstack(struct task_struct *tsk)
                 tsk = current;
         CWARN("showing stack for process %d\n", tsk->pid);
         show_task(tsk);
+#elif defined(HAVE_DUMP_TRACE)
+        /* dump_stack() */
+        /* show_trace() */
+	printk("Pid: %d, comm: %.20s\n", current->pid, current->comm);
+        /* show_trace_log_lvl() */
+	printk("\nCall Trace:\n");
+	dump_trace(tsk, NULL, NULL, 0, &print_trace_ops, "");
+	printk("\n");
 #else
         if ((tsk == NULL) || (tsk == current))
                 dump_stack();

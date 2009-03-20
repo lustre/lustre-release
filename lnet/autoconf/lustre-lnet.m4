@@ -1380,6 +1380,19 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+#
+# LN_FUNC_DUMP_TRACE
+#
+# 2.6.27 exports dump_trace() so we can dump_stack() on any task
+#
+AC_DEFUN([LN_FUNC_DUMP_TRACE],
+[LB_CHECK_SYMBOL_EXPORT([dump_trace],
+[kernel/ksyms.c arch/${LINUX_ARCH%_64}/kernel/traps_64.c],[
+	AC_DEFINE(HAVE_DUMP_TRACE, 1, [dump_trace is exported])
+],[
+])
+])
+
 # 2.6.27 have second argument to sock_map_fd
 AC_DEFUN([LN_SOCK_MAP_FD_2ARG],
 [AC_MSG_CHECKING([sock_map_fd have second argument])
@@ -1447,6 +1460,7 @@ LN_SCATTERLIST_SETPAGE
 LN_SEM_COUNT
 # 2.6.27
 LN_SOCK_MAP_FD_2ARG
+LN_FUNC_DUMP_TRACE
 ])
 
 #

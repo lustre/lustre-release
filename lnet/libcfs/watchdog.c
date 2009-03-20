@@ -105,27 +105,22 @@ static spinlock_t lcw_last_watchdog_lock = SPIN_LOCK_UNLOCKED;
 static void
 lcw_dump(struct lc_watchdog *lcw)
 {
-        cfs_task_t *tsk;
+        ENTRY;
+
 #if defined(HAVE_TASKLIST_LOCK)
         read_lock(&tasklist_lock);
 #elif defined(HAVE_TASK_RCU)
         rcu_read_lock();
 #else
         CERROR("unable to dump stack because of missing export\n"); 
-        return;
+        RETURN_EXIT;
 #endif
-        ENTRY;
-
-        tsk = find_task_by_pid(lcw->lcw_pid);
-
-        if (tsk == NULL) {
+        if (lcw->lcw_task == NULL) {
                 CWARN("Process %d was not found in the task list; "
-                      "watchdog callback may be incomplete\n", (int)lcw->lcw_pid);
-        } else if (tsk != lcw->lcw_task) {
-                CWARN("The current process %d did not set the watchdog; "
-                      "watchdog callback may be incomplete\n", (int)lcw->lcw_pid);
+                      "watchdog callback may be incomplete\n",
+                      (int)lcw->lcw_pid);
         } else {
-                libcfs_debug_dumpstack(tsk);
+                libcfs_debug_dumpstack(lcw->lcw_task);
         }
 
 #if defined(HAVE_TASKLIST_LOCK)
