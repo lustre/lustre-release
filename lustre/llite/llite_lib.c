@@ -66,7 +66,7 @@ extern struct address_space_operations ll_dir_aops;
 #define log2(n) ffz(~(n))
 #endif
 
-static inline void ll_pglist_fini(struct ll_sb_info *sbi)
+static void ll_pglist_fini(struct ll_sb_info *sbi)
 {
         struct page *page;
         int i;
@@ -86,7 +86,7 @@ static inline void ll_pglist_fini(struct ll_sb_info *sbi)
         sbi->ll_pglist = NULL;
 }
 
-static inline int ll_pglist_init(struct ll_sb_info *sbi)
+static int ll_pglist_init(struct ll_sb_info *sbi)
 {
         struct ll_pglist_data *pd;
         unsigned long budget;
@@ -226,10 +226,11 @@ void ll_free_sbi(struct super_block *sb)
         ENTRY;
 
         if (sbi != NULL) {
-                ll_pglist_fini(sbi);
                 spin_lock(&ll_sb_lock);
                 list_del(&sbi->ll_list);
                 spin_unlock(&ll_sb_lock);
+                /* dont allow find cache via sb list first */
+                ll_pglist_fini(sbi);
                 lcounter_destroy(&sbi->ll_async_page_count);
                 OBD_FREE(sbi->ll_async_page_sample,
                          sizeof(long) * num_possible_cpus());
@@ -1296,8 +1297,11 @@ ll_shrink_cache(int priority, unsigned int gfp_mask)
         struct ll_sb_info *sbi;
         int count = 0;
 
+        /* don't race with umount */
+        spin_lock(&ll_sb_lock);
         list_for_each_entry(sbi, &ll_super_blocks, ll_list)
                 count += llap_shrink_cache(sbi, priority);
+        spin_unlock(&ll_sb_lock);
 
 #if defined(HAVE_CACHE_RETURN_INT)
         return count;
