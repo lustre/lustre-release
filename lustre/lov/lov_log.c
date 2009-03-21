@@ -116,9 +116,14 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                         llog_ctxt_put(cctxt);
                         cctxt = NULL;
                 }
-                rc = llog_add(cctxt, rec, NULL, logcookies + cookies,
-                              numcookies - cookies);
+
+                if (cctxt && cctxt->loc_flags & LLOG_CTXT_FLAG_UNINITIALIZED)
+                        rc = -EAGAIN;
+                else
+                        rc = llog_add(cctxt, rec, NULL, logcookies + cookies,
+                                      numcookies - cookies);
                 llog_ctxt_put(cctxt);
+
                 if (rc < 0) {
                         CERROR("Can't add llog (rc = %d) for stripe %i\n",
                                rc, cookies);
