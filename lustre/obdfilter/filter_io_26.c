@@ -574,7 +574,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         struct filter_obd *fo = &obd->u.filter;
         void *wait_handle = NULL;
         int total_size = 0;
-        int rec_pending = 0;
+        int quota_rec_pending = 0, quota_pages = 0;
         unsigned int qcids[MAXQUOTAS] = {0, 0};
         int sync_journal_commit = obd->u.filter.fo_syncjournal;
         ENTRY;
@@ -585,11 +585,6 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
         if (rc != 0)
                 GOTO(cleanup, rc);
-
-        /* we try to get enough quota to write here, and let ldiskfs
-         * decide if it is out of quota or not b=14783 */
-        lquota_chkquota(filter_quota_interface_ref, obd, oa->o_uid, oa->o_gid,
-                        niocount, &rec_pending, oti, inode, obj->ioo_bufcnt);
 
         iobuf = filter_iobuf_get(&obd->u.filter, oti);
         if (IS_ERR(iobuf))
@@ -603,10 +598,16 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         for (i = 0, lnb = res; i < niocount; i++, lnb++) {
                 loff_t this_size;
 
-                /* If overwriting an existing block, we don't need a grant */
-                if (!(lnb->flags & OBD_BRW_GRANTED) && lnb->rc == -ENOSPC &&
-                    filter_range_is_mapped(inode, lnb->offset, lnb->len))
-                        lnb->rc = 0;
+
+                if (filter_range_is_mapped(inode, lnb->offset, lnb->len)) {
+                        /* If overwriting an existing block,
+                         * we don't need a grant */
+                        if (!(lnb->flags & OBD_BRW_GRANTED) &&
+                            lnb->rc == -ENOSPC)
+                                lnb->rc = 0;
+                } else {
+                        quota_pages++;
+                }
 
                 if (lnb->rc) { /* ENOSPC, network RPC error, etc. */
                         CDEBUG(D_INODE, "Skipping [%d] == %d\n", i, lnb->rc);
@@ -646,6 +647,12 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                         sync_journal_commit = 1;
                 }
         }
+
+        /* we try to get enough quota to write here, and let ldiskfs
+         * decide if it is out of quota or not b=14783 */
+        lquota_chkquota(filter_quota_interface_ref, obd, oa->o_uid, oa->o_gid,
+                        quota_pages, &quota_rec_pending, oti, inode,
+                        obj->ioo_bufcnt);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 2;
@@ -739,9 +746,9 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         fsfilt_check_slow(obd, now, "commitrw commit");
 
 cleanup:
-        if (rec_pending)
+        if (quota_rec_pending)
                 lquota_pending_commit(filter_quota_interface_ref, obd,
-                                      oa->o_uid, oa->o_gid, rec_pending);
+                                      oa->o_uid, oa->o_gid, quota_rec_pending);
 
         filter_grant_commit(exp, niocount, res);
 
