@@ -1573,8 +1573,16 @@ test_47() { #17674
 }
 run_test 47 "server restart does not make client loss lru_resize settings"
 
-# reformat after this test must need - if test will failed
-# we will have unkillable file at FS
+cleanup_48() {
+	trap 0
+
+	# reformat after this test is needed - if test will failed
+	# we will have unkillable file at FS
+	reformat
+	setup_noconfig
+	cleanup || error "can't cleanup"
+}
+
 test_48() { # bug 17636
 	reformat
 	setup_noconfig
@@ -1585,14 +1593,17 @@ test_48() { # bug 17636
 
 	echo "ok" > $MOUNT/widestripe
 	$LFS getstripe $MOUNT/widestripe || return 11
+
+	trap cleanup_48 EXIT ERR
+
 	# fill acl buffer for avoid expand lsm to them
-	awk -F : '{ print "u:"$1":rwx" }' /etc/passwd | while read acl; do  
+	getent passwd | awk -F : '{ print "u:"$1":rwx" }' |  while read acl; do
 	    setfacl -m $acl $MOUNT/widestripe
 	done
 
 	stat $MOUNT/widestripe || return 12
 	
-	cleanup || error "can't cleanup"
+	cleanup_48
 	return 0
 }
 run_test 48 "too many acls on file"
