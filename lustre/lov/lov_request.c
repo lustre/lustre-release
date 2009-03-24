@@ -736,6 +736,8 @@ int lov_prep_create_set(struct obd_export *exp, struct obd_info *oinfo,
         set->set_oti = oti;
 
         rc = qos_prep_create(exp, set);
+        /* qos_shrink_lsm() may have allocated a new lsm */
+        *lsmp = oinfo->oi_md;
         if (rc)
                 lov_fini_create_set(set, lsmp);
         else
