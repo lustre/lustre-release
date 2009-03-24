@@ -781,10 +781,12 @@ static void ccc_object_size_unlock(struct cl_object *obj, int vfslock)
  * the resulting races.
  */
 int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
-                  struct cl_io *io, loff_t pos, int vfslock)
+                  struct cl_io *io, loff_t start, size_t count, int vfslock,
+                  int *exceed)
 {
         struct cl_attr *attr  = &ccc_env_info(env)->cti_attr;
         struct inode   *inode = ccc_object_inode(obj);
+        loff_t          pos   = start + count - 1;
         loff_t kms;
         int result;
 
@@ -818,7 +820,21 @@ int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
                          * of the buffer (C)
                          */
                         ccc_object_size_unlock(obj, vfslock);
-                        return cl_glimpse_lock(env, io, inode, obj);
+                        result = cl_glimpse_lock(env, io, inode, obj);
+                        if (result == 0 && exceed != NULL) {
+                                /* If objective page index exceed end-of-file
+                                 * page index, return directly. Do not expect
+                                 * kernel will check such case correctly.
+                                 * linux-2.6.18-128.1.1 miss to do that.
+                                 * --bug 17336 */
+                                size_t size = cl_isize_read(inode);
+                                unsigned long cur_index = start >> CFS_PAGE_SHIFT;
+
+                                if ((size == 0 && cur_index != 0) ||
+                                    (((size - 1) >> CFS_PAGE_SHIFT) < cur_index))
+                                *exceed = 1;
+                        }
+                        return result;
                 } else {
                         /*
                          * region is within kms and, hence, within real file

@@ -647,6 +647,7 @@ static int slp_io_start(const struct lu_env *env, const struct cl_io_slice *ios)
         struct llu_inode_info *lli = llu_i2info(inode);
         struct llu_io_session *session = cl2slp_io(env, ios)->sio_session;
         int write = io->ci_type == CIT_WRITE;
+        int exceed = 0;
 
         CLOBINVRNT(env, obj, ccc_object_invariant(obj));
 
@@ -668,8 +669,8 @@ static int slp_io_start(const struct lu_env *env, const struct cl_io_slice *ios)
         if (IS_ERR(iogroup))
                 RETURN(PTR_ERR(iogroup));
 
-        err = ccc_prep_size(env, obj, io, pos + cnt - 1, 0);
-        if (err != 0)
+        err = ccc_prep_size(env, obj, io, pos, cnt, 0, &exceed);
+        if (err != 0 || (write == 0 && exceed != 0))
                 GOTO(out, err);
 
         CDEBUG(D_INODE,

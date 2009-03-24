@@ -327,7 +327,8 @@ int ccc_io_one_lock(const struct lu_env *env, struct cl_io *io,
                     loff_t start, loff_t end);
 void ccc_io_end(const struct lu_env *env, const struct cl_io_slice *ios);
 int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
-                  struct cl_io *io, loff_t pos, int vfslock);
+                  struct cl_io *io, loff_t start, size_t count, int vfslock,
+                  int *exceed);
 void ccc_req_completion(const struct lu_env *env,
                         const struct cl_req_slice *slice, int ioret);
 void ccc_req_attr_set(const struct lu_env *env,const struct cl_req_slice *slice,
