@@ -1187,7 +1187,7 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
                 goto err_req;
         }
 
-        CDEBUG(D_NET, "got req "LPD64"\n", req->rq_xid);
+        CDEBUG(D_NET, "got req "LPU64"\n", req->rq_xid);
 
         req->rq_export = class_conn2export(
                 lustre_msg_get_handle(req->rq_reqmsg));
@@ -1323,7 +1323,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                                     at_get(&svc->srv_at_estimate));
         }
 
-        CDEBUG(D_NET, "got req "LPD64"\n", request->rq_xid);
+        CDEBUG(D_NET, "got req "LPU64"\n", request->rq_xid);
 
         request->rq_svc_thread = thread;
         if (request->rq_export) {
