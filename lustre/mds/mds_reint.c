@@ -370,7 +370,7 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
 
                 if (lustre_msg_get_opc(oldrep->rs_msg) !=
                     lustre_msg_get_opc(req->rq_reqmsg))
-                        CERROR ("Resent req xid "LPX64" has mismatched opc: "
+                        CERROR ("Resent req xid "LPU64" has mismatched opc: "
                                 "new %d old %d\n", req->rq_xid,
                                 lustre_msg_get_opc(req->rq_reqmsg),
                                 lustre_msg_get_opc(oldrep->rs_msg));
