@@ -492,7 +492,6 @@ static void compute_lqs_after_removing_qunit(struct lustre_qunit *qunit)
                 /* this is for schedule_dqacq */
                 lqs_putref(lqs);
         }
-
 }
 
 static void remove_qunit_nolock(struct lustre_qunit *qunit)
