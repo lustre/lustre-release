@@ -25,6 +25,7 @@ Summary: The Linux kernel (the core of the Linux operating system)
 %define rhbuild @RHBUILD@
 %define susebuild @SUSEBUILD@
 %define linux26 @LINUX26@
+%define lmakeopts @LMAKEOPTS@
 
 # disable build root strip policy
 %define __spec_install_post /usr/lib/rpm/brp-compress || :
@@ -42,7 +43,7 @@ Summary: The Linux kernel (the core of the Linux operating system)
 %define dashtargetboard %{?targetboard:-%{targetboard}}
 %define withtargetboard 0
 %{?targetboard: %{expand: %%define withtargetboard 1}}
-	
+
 # Override generic defaults with per-arch defaults (which can
 # themselves be overridden with --with/--without).  These must
 # ONLY be "0", never "1"
@@ -384,7 +385,7 @@ sh -x ./build/lmake \
 	--unpack-kernel \
 	--target @LUSTRE_TARGET@ \
 	--target-arch %{_target_cpu} \
-	--kerneldir $RPM_SOURCE_DIR
+	--kerneldir $RPM_SOURCE_DIR %{lmakeopts}
 popd >/dev/null
 
 # handle both SuSE and Red Hat's new-kernel-pkg bits
@@ -521,7 +522,7 @@ DependKernel()
 	--target-arch %{_target_cpu} \
 	${target_config} \
 	--extraversion %{kextraver} \
-	-j $RPM_BUILD_NCPUS
+	-j $RPM_BUILD_NCPUS %{lmakeopts}
 }
 
 BuildKernel()
@@ -537,7 +538,7 @@ BuildKernel()
 	--extraversion %{kextraver} \
 	--kerneldir $RPM_SOURCE_DIR \
 	-j $RPM_BUILD_NCPUS \
-	--destdir $RPM_BUILD_ROOT \
+	--destdir $RPM_BUILD_ROOT %{lmakeopts} \
 	-- --enable-tests \
 	@CONFIGURE_FLAGS@
 }
@@ -554,7 +555,7 @@ BuildLustre()
 	--extraversion %{kextraver} \
 	--kerneldir $RPM_SOURCE_DIR \
 	-j $RPM_BUILD_NCPUS \
-	--destdir $RPM_BUILD_ROOT \
+	--destdir $RPM_BUILD_ROOT %{lmakeopts} \
 	-- --enable-utils \
 	--disable-doc --disable-tests \
 	--disable-modules --disable-liblustre \
@@ -570,7 +571,7 @@ SaveHeaders()
 	--target @LUSTRE_TARGET@ \
 	--target-arch %{_target_cpu} \
 	--extraversion %{kextraver} \
-	--destdir $RPM_BUILD_ROOT
+	--destdir $RPM_BUILD_ROOT %{lmakeopts}
 }
 
 pushd lustre >/dev/null
@@ -645,7 +646,7 @@ BuildObj ()
 	    if grep -q "$oc" Makefile ; then
 	        OLDCONFIG="$oc"
 		break
-   	    fi
+	    fi
         done
 	MAKE="make -s O=$o -C ${c}"
 	if [ "$CC" ] ; then
@@ -732,7 +733,7 @@ if [ "%{buildbase}" -ne 0 ] ; then
 	    if grep -q "$oc" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile ; then
 		OLDCONFIG="$oc"
 		break
-   	    fi
+	    fi
         done
 	if [ "$CC" ] ; then
 	    MAKE_CC="CC=$CC"

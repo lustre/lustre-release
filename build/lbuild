@@ -35,6 +35,7 @@ SKIPLDISKFSRPM="v1_4_* b1_4"
 SMPTYPES="smp bigsmp default ''"
 KERNCONFSMPTYPE=
 PATCHLESS=false
+XEN=false
 LINUXOBJ=
 REUSEDKERNELMASK=
 DISTRO=
@@ -220,6 +221,9 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
     checkouts. This is a workaround for a problem encountered when 
     using lbuild with tinderbox.
 
+  --xen
+    Builds a Xen domX kernel.
+
 EOF
 
 #   list_targets
@@ -404,6 +408,11 @@ load_target()
 
     . "$TARGET_FILE"
 
+    # doesn't make any sense to build OFED for xen domX's
+    if $XEN; then
+        OFED_VERSION=""
+    fi
+
     [ "$KERNEL"  ] || fatal 1 "Target $TARGET did not specify a kernel."
     [ "$VERSION" ] || fatal 1 "Target $TARGET did not specify a kernel version."
 
@@ -463,14 +472,18 @@ load_target()
         done
     fi
 
+    local XENPOSTFIX=""
+    if $XEN; then
+        XENPOSTFIX="-xen"
+    fi
     if [ -f $TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET-$TARGET_ARCH.config ]; then
-        CONFIG_FILE="$TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET-$TARGET_ARCH.config"
+        CONFIG_FILE="$TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET$XENPOSTFIX-$TARGET_ARCH.config"
     fi
     local smptype
     for smptype in $SMPTYPES; do
         [ "$smptype" = "''" ] && smptype=
         if [ -f $TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET-$TARGET_ARCH-${smptype}.config ]; then
-        CONFIG_FILE="$TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET-$TARGET_ARCH-${smptype}.config"
+        CONFIG_FILE="$TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET$XENPOSTFIX-$TARGET_ARCH-${smptype}.config"
         KERNCONFSMPTYPE=$smptype
     fi
     done
@@ -650,6 +663,10 @@ clean_linux()
 
 prep_kernel_build()
 {
+    local lmakeopts=""
+    if $XEN; then
+        lmakeopts="--xen"
+    fi
     # make .spec file
     ENABLE_INIT_SCRIPTS=""
     sed \
@@ -674,6 +691,7 @@ prep_kernel_build()
         -e "s^@SMP_ARCHS@^$SMP_ARCHS^g" \
         -e "s^@SUSEBUILD@^$SUSEBUILD^g" \
         -e "s^@UP_ARCHS@^$UP_ARCHS^g" \
+        -e "s^@LMAKEOPTS@^$lmakeopts^g" \
         < $TOPDIR/lustre/build/lustre-kernel-2.4.spec.in \
         > lustre-kernel-2.4.spec
     [ -d SRPMS ] || mkdir SRPMS
@@ -1563,7 +1581,7 @@ build_sequence()
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
-options=$(getopt -o d:D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ldiskfs,ccache,reuse:,norpm,disable-datestamp,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,publish,release,src,stage:,tag:,target:,target-archs:,with-linux: -- "$@")
+options=$(getopt -o d:D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ldiskfs,ccache,reuse:,norpm,disable-datestamp,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,publish,release,src,stage:,tag:,target:,target-archs:,with-linux:,xen -- "$@")
 
 if [ $? != 0 ] ; then
     usage 1
@@ -1684,6 +1702,10 @@ while [ "$1" ] ; do
             ;;
         --disable-datestamp)
             USE_DATESTAMP=
+            shift
+            ;;
+        --xen)
+            XEN=true
             shift
             ;;
         --)
