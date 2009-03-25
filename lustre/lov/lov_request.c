@@ -734,6 +734,8 @@ int lov_prep_create_set(struct obd_export *exp, struct obd_info *oinfo,
         set->set_oti = oti;
 
         rc = qos_prep_create(exp, set);
+        /* qos_shrink_lsm() may have allocated a new lsm */
+        *lsmp = oinfo->oi_md;
         if (rc)
                 lov_fini_create_set(set, lsmp);
         else
@@ -1563,7 +1565,7 @@ void lov_update_statfs(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
 }
 
 /* The callback for osc_statfs_async that finilizes a request info when a
- * response is recieved. */
+ * response is received. */
 static int cb_statfs_update(struct obd_info *oinfo, int rc)
 {
         struct lov_request *lovreq;
