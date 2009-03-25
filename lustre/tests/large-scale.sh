@@ -148,7 +148,6 @@ test_1c() {
 }
 run_test 1c "VBR: recovery $CLIENTCOUNT clients with delayed exports"
 
-
 test_1d() {
     delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
@@ -185,6 +184,85 @@ test_1d() {
 }
 run_test 1d "VBR: expire exports, connect $CLIENTCOUNT clients"
 # VBR scale tests end
+
+test_3a() {
+    assert_env CLIENTS MDSRATE MPIRUN
+
+    local -a nodes=(${CLIENTS//,/ })
+
+    # INCREMENT is a number of clients 
+    # a half of clients by default
+    increment=${INCREMENT:-$(( CLIENTCOUNT / 2 ))}
+
+    machinefile=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
+    local LOG=$TMP/${TESTSUITE}_$tfile
+
+    local var=mds_svc
+    local procfile="*.${!var}.recovery_status"
+    local iters=${ITERS:-3}
+    local nfiles=${NFILES:-50000}
+    local nthreads=${THREADS_PER_CLIENT:-3}
+
+    local IFree=$(inodes_available)
+    [ $IFree -gt $nfiles ] || nfiles=$IFree
+
+    local dir=$DIR/$tdir
+    mkdir -p $dir
+    chmod 0777 $dir
+
+    local pid
+    local list
+    local -a res
+
+    local num=$increment
+
+    while [ $num -le $CLIENTCOUNT ]; do
+        list=$(comma_list ${nodes[@]:0:$num}) 
+
+        generate_machine_file $list $machinefile ||
+            { error "can not generate machinefile"; exit 1; }
+
+        for i in $(seq $iters); do
+            mdsrate_cleanup $num $machinefile $nfiles $dir 'f%%d' --ignore
+
+            COMMAND="${MDSRATE} --create --nfiles $nfiles --dir $dir --filefmt 'f%%d'"
+            mpi_run -np $((num * nthreads)) -machinefile $machinefile ${COMMAND} | tee ${LOG} &
+
+            pid=$!
+            echo "pid=$pid"
+
+            # 2 threads 100000 creates 117 secs
+            sleep 20
+
+            log "$i : Starting failover on mds"
+            facet_failover mds
+            if ! wait_recovery_complete mds $((TIMEOUT * 10)); then
+                echo "mds recovery is not completed!"
+                kill -9 $pid
+                exit 7
+            fi
+
+            duration=$(do_facet mds lctl get_param -n $procfile | grep recovery_duration)
+            
+            res=( "${res[@]}" "$num" )
+            res=( "${res[@]}" "$duration" )
+            echo "RECOVERY TIME: NFILES=$nfiles number of clients: $num  $duration"
+            wait $pid
+
+        done
+        num=$((num + increment))
+    done
+
+    mdsrate_cleanup $num $machinefile $nfiles $dir 'f%%d' --ignore
+
+    i=0
+    while [ $i -lt ${#res[@]} ]; do
+        echo "RECOVERY TIME: NFILES=$nfiles number of clients: ${res[i]}  ${res[i+1]}"
+        i=$((i+2))
+    done
+}
+
+run_test 3a "recovery time, $CLIENTCOUNT clients"
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
