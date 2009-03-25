@@ -925,7 +925,9 @@ enum obd_notify_event {
         OBD_NOTIFY_SYNC_NONBLOCK,
         OBD_NOTIFY_SYNC,
         /* Configuration event */
-        OBD_NOTIFY_CONFIG
+        OBD_NOTIFY_CONFIG,
+        /* Trigger quota recovery */
+        OBD_NOTIFY_QUOTA
 };
 
 /* bit-mask flags for config events */

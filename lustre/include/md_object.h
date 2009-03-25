@@ -411,11 +411,13 @@ struct md_device_operations {
 };
 
 enum md_upcall_event {
-        /**sync the md layer*/
+        /** Sync the md layer*/
         MD_LOV_SYNC = (1 << 0),
         /** Just for split, no need trans, for replay */
         MD_NO_TRANS = (1 << 1),
-        MD_LOV_CONFIG = (1 << 2)
+        MD_LOV_CONFIG = (1 << 2),
+        /** Trigger quota recovery */
+        MD_LOV_QUOTA = (1 << 3)
 };
 
 struct md_upcall {

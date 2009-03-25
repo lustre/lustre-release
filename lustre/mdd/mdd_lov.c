@@ -77,6 +77,11 @@ static int mdd_notify(struct obd_device *host, struct obd_device *watched,
                 case OBD_NOTIFY_CONFIG:
                         rc = md_do_upcall(NULL, &mdd->mdd_md_dev, MD_LOV_CONFIG);
                         break;
+#ifdef HAVE_QUOTA_SUPPORT
+                case OBD_NOTIFY_QUOTA:
+                        rc = md_do_upcall(NULL, &mdd->mdd_md_dev, MD_LOV_QUOTA);
+                        break;
+#endif
                 default:
                         CDEBUG(D_INFO, "Unhandled notification %#x\n", ev);
         }

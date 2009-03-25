@@ -1427,6 +1427,18 @@ out:
         RETURN(rc);
 }
 
+void ptlrpc_cleanup_imp(struct obd_import *imp)
+{
+        ENTRY;
+
+        spin_lock(&imp->imp_lock);
+        IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_CLOSED);
+        imp->imp_generation++;
+        spin_unlock(&imp->imp_lock);
+        ptlrpc_abort_inflight(imp);
+
+        EXIT;
+}
 
 /* Adaptive Timeout utils */
 extern unsigned int at_min, at_max, at_history;

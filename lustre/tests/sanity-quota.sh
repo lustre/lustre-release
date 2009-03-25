@@ -173,9 +173,32 @@ run_test_with_stat() {
 #        resetquota -g groupname
 
 resetquota() {
-       [ "$#" != 2 ] && error "resetquota: wrong number of arguments: $#"
-       [ "$1" != "-u" -a "$1" != "-g" ] && error "resetquota: wrong specifier $1 passed"
-       $LFS setquota "$1" "$2" -b 0 -B 0 -i 0 -I 0 $MOUNT || error "resetquota failed"
+        [ "$#" != 2 ] && error "resetquota: wrong number of arguments: $#"
+        [ "$1" != "-u" -a "$1" != "-g" ] && error "resetquota: wrong specifier $1 passed"
+
+        count=0
+        if at_is_valid && at_is_enabled; then
+	    timeout=$(at_max_get mds)
+        else
+	    timeout=$(lctl get_param -n timeout)
+        fi
+
+        while [ $((count++)) -lt $timeout ]; do
+                $LFS setquota "$1" "$2" -b 0 -B 0 -i 0 -I 0 $MOUNT
+                RC=$?
+                if [ $RC -ne 0 ]; then
+                        if [ $RC -eq 240 ]; then # 240 means -EBUSY
+                                log "resetquota is blocked for quota master recovery, retry after 1 sec"
+                                sleep 1
+                                continue
+                        else
+                                error "resetquota failed: $RC"
+                        fi
+                fi
+                break
+        done
+
+        [ $count -lt $timeout ] || error "resetquota timeout: $timeout"
 }
 
 quota_scan() {
@@ -215,12 +238,20 @@ quota_show_check() {
 
         if [ "$LOCAL_BF" == "a" -o "$LOCAL_BF" == "b" ]; then
 	        USAGE="`$LFS quota -$LOCAL_UG $LOCAL_ID $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $2 }'`"
-                [ $USAGE -ne 0 ] && quota_log $LOCAL_UG $LOCAL_ID "System is not clean for block ($LOCAL_UG:$LOCAL_ID:$USAGE)."
+                if [ -z $USAGE ]; then
+                        quota_error $LOCAL_UG $LOCAL_ID "System is error when query quota for block ($LOCAL_UG:$LOCAL_ID)."
+                else
+                        [ $USAGE -ne 0 ] && quota_log $LOCAL_UG $LOCAL_ID "System is not clean for block ($LOCAL_UG:$LOCAL_ID:$USAGE)."
+                fi
         fi
 
         if [ "$LOCAL_BF" == "a" -o "$LOCAL_BF" == "f" ]; then
 	        USAGE="`$LFS quota -$LOCAL_UG $LOCAL_ID $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $5 }'`"
-                [ $USAGE -ne 0 ] && quota_log $LOCAL_UG $LOCAL_ID "System is not clean for file ($LOCAL_UG:$LOCAL_ID:$USAGE)."
+                if [ -z $USAGE ]; then
+                        quota_error $LOCAL_UG $LOCAL_ID "System is error when query quota for file ($LOCAL_UG:$LOCAL_ID)."
+                else
+                        [ $USAGE -ne 0 ] && quota_log $LOCAL_UG $LOCAL_ID "System is not clean for file ($LOCAL_UG:$LOCAL_ID:$USAGE)."
+                fi
         fi
 }
 
@@ -1397,15 +1428,18 @@ test_18() {
 	    sleep 1
 	done
         log "(dd_pid=$DDPID, time=$count, timeout=$timeout)"
+        sync
+        cancel_lru_locks mdc
+        cancel_lru_locks osc
 
         testfile_size=$(stat -c %s $TESTFILE)
         [ $testfile_size -ne $((BLK_SZ * 1024 * 100)) ] && \
 	    quota_error u $TSTUSR "expect $((BLK_SZ * 1024 * 100)), got ${testfile_size}. Verifying file failed!"
-	rm -f $TESTFILE
-	sync; sleep 3; sync;
+        $SHOW_QUOTA_USER
+        rm -f $TESTFILE
+        sync
 
 	resetquota -u $TSTUSR
-
 	set_blk_unitsz $((128 * 1024))
 	set_blk_tunesz $((128 * 1024 / 2))
 }
@@ -1455,12 +1489,10 @@ test_18a() {
         log "(dd_pid=$DDPID, time=$count, timeout=$timeout)"
 
         lustre_fail mds 0
-
 	rm -f $TESTFILE
-	sync; sleep 3; sync;
+	sync
 
 	resetquota -u $TSTUSR
-
 	set_blk_unitsz $((128 * 1024))
 	set_blk_tunesz $((128 * 1024 / 2))
 }
@@ -1525,15 +1557,20 @@ test_18bc_sub() {
             sleep 1
         done
         log "(dd_pid=$DDPID, time=$count, timeout=$timeout)"
-        sync; sleep 1; sync
+        sync
+        cancel_lru_locks mdc
+        cancel_lru_locks osc
 
         testfile_size=$(stat -c %s $TESTFILE)
         [ $testfile_size -ne $((BLK_SZ * 1024 * 100)) ] && \
 	    quota_error u $TSTUSR "expect $((BLK_SZ * 1024 * 100)), got ${testfile_size}. Verifying file failed!"
         $SHOW_QUOTA_USER
-        resetquota -u $TSTUSR
-        rm -rf $TESTFILE
-        sync; sleep 1; sync
+        rm -f $TESTFILE
+        sync
+
+	resetquota -u $TSTUSR
+	set_blk_unitsz $((128 * 1024))
+	set_blk_tunesz $((128 * 1024 / 2))
 }
 
 # test when mds does failover, the ost still could work well
@@ -1729,21 +1766,6 @@ test_22() {
 }
 run_test_with_stat 22 "test if quota_type saved as permanent parameter ===="
 
-# It is triggered when test_23 failed, diagnostic for bug 18293
-test_23_dumppage()
-{
-        NUM=$1
-        DUMPPAGE=`find /proc/fs/${FSNAME}/llite/ -name dump_page_cache`
-        qtime=`date +%s`
-        cat $DUMPPAGE > $TMP/sanity-quota_test_23_${qtime}_${NUM}.log
-        fsize=`stat -c%s $TMP/sanity-quota_test_23_${qtime}_${NUM}.log`
-        if [ $fsize -eq 0 ]; then
-                rm -f $TMP/sanity-quota_test_23_${qtime}_${NUM}.log
-        else
-                error "some IO error was found during directIO"
-        fi
-}
-
 test_23_sub() {
 	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
@@ -1766,15 +1788,15 @@ test_23_sub() {
 	log "    Step1: trigger quota with 0_DIRECT"
 	log "      Write half of file"
 	$RUNAS $DIRECTIO write $TESTFILE 0 $(($LIMIT/1024/2)) $bs_unit || \
-                (quota_error u $TSTUSR "(1) write failure, but expect success: $LIMIT" && test_23_dumppage 1)
+                quota_error u $TSTUSR "(1) write failure, but expect success: $LIMIT"
 	log "      Write out of block quota ..."
 	$RUNAS $DIRECTIO write $TESTFILE $(($LIMIT/1024/2)) $(($LIMIT/1024/2)) $bs_unit && \
-                quota_error u $TSTUSR "(2) write success, but expect EDQUOT: $LIMIT" && test_23_dumppage 2
+                quota_error u $TSTUSR "(2) write success, but expect EDQUOT: $LIMIT"
 	log "    Step1: done"
 
 	log "    Step2: rewrite should succeed"
-	$RUNAS $DIRECTIO write $TESTFILE $(($LIMIT/1024/2)) 1 $bs_unit || \
-                (quota_error u $TSTUSR "(3) write failure, but expect success: $LIMIT" && test_23_dumppage 3)
+	$RUNAS $DIRECTIO write $TESTFILE 0 1 $bs_unit || \
+                quota_error u $TSTUSR "(3) write failure, but expect success: $LIMIT"
 	log "    Step2: done"
 
 	rm -f $TESTFILE

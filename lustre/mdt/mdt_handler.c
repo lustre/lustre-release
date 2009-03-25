@@ -5269,10 +5269,6 @@ static int mdt_upcall(const struct lu_env *env, struct md_device *md,
                         CDEBUG(D_INFO, "get max mdsize %d max cookiesize %d\n",
                                      m->mdt_max_mdsize, m->mdt_max_cookiesize);
                         mdt_allow_cli(m, CONFIG_SYNC);
-#ifdef HAVE_QUOTA_SUPPORT
-                        if (md->md_lu_dev.ld_obd->obd_recovering == 0)
-                                next->md_ops->mdo_quota.mqo_recovery(env, next);
-#endif
                         break;
                 case MD_NO_TRANS:
                         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
@@ -5283,6 +5279,12 @@ static int mdt_upcall(const struct lu_env *env, struct md_device *md,
                         /* Check that MDT is not yet configured */
                         LASSERT(!m->mdt_fl_cfglog);
                         break;
+#ifdef HAVE_QUOTA_SUPPORT
+                case MD_LOV_QUOTA:
+                        if (md->md_lu_dev.ld_obd->obd_recovering == 0)
+                                next->md_ops->mdo_quota.mqo_recovery(env, next);
+                        break;
+#endif
                 default:
                         CERROR("invalid event\n");
                         rc = -EINVAL;

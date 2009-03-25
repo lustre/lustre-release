@@ -190,6 +190,7 @@ EXPORT_SYMBOL(ptlrpc_prep_bulk_exp);
 EXPORT_SYMBOL(ptlrpc_free_bulk);
 EXPORT_SYMBOL(ptlrpc_prep_bulk_page);
 EXPORT_SYMBOL(ptlrpc_abort_inflight);
+EXPORT_SYMBOL(ptlrpc_cleanup_imp);
 EXPORT_SYMBOL(ptlrpc_retain_replayable_request);
 EXPORT_SYMBOL(ptlrpc_next_xid);
 EXPORT_SYMBOL(ptlrpc_req_set_repsize);

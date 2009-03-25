@@ -64,15 +64,16 @@ static void mds_lov_dump_objids(const char *label, struct obd_device *obd)
                 GOTO(skip_bitmap, i);
         }
 
-        for(i=0;i<((mds->mds_lov_page_dirty->size/BITS_PER_LONG)+1);i++)
-                CDEBUG(D_INFO, "%u - %lx\n", i, mds->mds_lov_page_dirty->data[i]);
+        for(i = 0; i < mds->mds_lov_page_dirty->size / BITS_PER_LONG + 1; i++)
+                CDEBUG(D_INFO, "%u - %lx\n", i,
+                       mds->mds_lov_page_dirty->data[i]);
 skip_bitmap:
         if (mds->mds_lov_page_array == NULL) {
                 CERROR("not init page array!\n");
                 GOTO(skip_array, i);
 
         }
-        for(i=0;i<MDS_LOV_OBJID_PAGES_COUNT;i++) {
+        for(i = 0;i < MDS_LOV_OBJID_PAGES_COUNT; i++) {
                 obd_id *data = mds->mds_lov_page_array[i];
 
                 if (data == NULL)
@@ -81,7 +82,8 @@ skip_bitmap:
                 for(j=0; j < OBJID_PER_PAGE(); j++) {
                         if (data[j] == 0)
                                 continue;
-                        CDEBUG(D_INFO,"objid page %u idx %u - %llu \n", i,j,data[j]);
+                        CDEBUG(D_INFO,"objid page %u idx %u - "LPU64" \n",
+                               i, j, data[j]);
                 }
         }
 skip_array:
@@ -150,7 +152,7 @@ void mds_lov_destroy_objids(struct obd_device *obd)
         }
 
         if (mds->mds_lov_objid_filp) {
-                rc = filp_close((struct file *)mds->mds_lov_objid_filp, 0);
+                rc = filp_close((struct file *)mds->mds_lov_objid_filp, NULL);
                 mds->mds_lov_objid_filp = NULL;
                 if (rc)
                         CERROR("%s file won't close, rc=%d\n", LOV_OBJID, rc);
@@ -301,7 +303,6 @@ void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm)
 }
 EXPORT_SYMBOL(mds_lov_update_objids);
 
-
 static int mds_lov_update_from_read(struct mds_obd *mds, obd_id *data,
                                     __u32 count)
 {
@@ -332,7 +333,7 @@ static int mds_lov_read_objids(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
         loff_t off = 0;
-        int i, rc, count = 0, page = 0;
+        int i, rc = 0, count = 0, page = 0;
         unsigned long size;
         ENTRY;
 
@@ -345,8 +346,8 @@ static int mds_lov_read_objids(struct obd_device *obd)
 
         page = (size / (OBJID_PER_PAGE() * sizeof(obd_id))) + 1;
         CDEBUG(D_INFO, "file size %lu pages %d\n", size, page);
-
         for (i = 0; i < page; i++) {
+                obd_id *data;
                 loff_t off_old = off;
 
                 LASSERT(mds->mds_lov_page_array[i] == NULL);
@@ -354,21 +355,23 @@ static int mds_lov_read_objids(struct obd_device *obd)
                 if (mds->mds_lov_page_array[i] == NULL)
                         GOTO(out, rc = -ENOMEM);
 
-                rc = fsfilt_read_record(obd, mds->mds_lov_objid_filp, mds->mds_lov_page_array[i],
+                data = mds->mds_lov_page_array[i];
+
+                rc = fsfilt_read_record(obd, mds->mds_lov_objid_filp, data,
                                         OBJID_PER_PAGE()*sizeof(obd_id), &off);
                 if (rc < 0) {
                         CERROR("Error reading objids %d\n", rc);
                         GOTO(out, rc);
                 }
 
-                count += (off - off_old)/sizeof(obd_id);
-                if (mds_lov_update_from_read(mds, mds->mds_lov_page_array[i], count)) {
-                         CERROR("Can't update mds data\n");
-                         GOTO(out, rc = -EIO);
-                 }
+                count += (off - off_old) / sizeof(obd_id);
+                if (mds_lov_update_from_read(mds, data, count)) {
+                        CERROR("Can't update mds data\n");
+                        GOTO(out, rc = -EIO);
+                }
 
                 if (off == off_old)
-                        break; // eof
+                        break; /* eof */
         }
         mds->mds_lov_objid_lastpage = i;
         mds->mds_lov_objid_lastidx = count % OBJID_PER_PAGE();
@@ -378,13 +381,13 @@ static int mds_lov_read_objids(struct obd_device *obd)
 out:
         mds_lov_dump_objids("read",obd);
 
-        RETURN(0);
+        RETURN(rc);
 }
 
 int mds_lov_write_objids(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-        int i, rc = 0;
+        int i = 0, rc = 0;
         ENTRY;
 
         if (cfs_bitmap_check_empty(mds->mds_lov_page_dirty))
@@ -403,6 +406,7 @@ int mds_lov_write_objids(struct obd_device *obd)
                 if (i == mds->mds_lov_objid_lastpage)
                         size = (mds->mds_lov_objid_lastidx+1) * sizeof(obd_id);
 
+                CDEBUG(D_INFO, "write %lld - %u\n", off, size);
                 rc = fsfilt_write_record(obd, mds->mds_lov_objid_filp, data,
                                          size, &off, 0);
                 if (rc < 0)
@@ -441,8 +445,14 @@ static int mds_lov_get_objid(struct obd_device * obd,
                 if (rc)
                         GOTO(out, rc);
 
+                /* workaround for clean filter */
+                if (data[off] == 0)
+                        data[off] = 1;
+
                 cfs_bitmap_set(mds->mds_lov_page_dirty, page);
         }
+        CDEBUG(D_INFO, "idx "LPU64" - %p - %d/%d - "LPU64"\n",
+               idx, data, page, off, data[off]);
 out:
         RETURN(rc);
 }
@@ -466,6 +476,7 @@ int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
         oa.o_valid = OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
         if (ost_uuid != NULL)
                 oti.oti_ost_uuid = ost_uuid;
+
         rc = obd_create(mds->mds_osc_exp, &oa, &empty_ea, &oti);
 
         RETURN(rc);
@@ -522,7 +533,6 @@ static int mds_lov_update_desc(struct obd_device *obd, int idx,
         mutex_up(&obd->obd_dev_sem);
         if (rc != 0)
                 GOTO(out, rc );
-
 
         /* If we added a target we have to reconnect the llogs */
         /* We only _need_ to do this at first add (idx), or the first time
@@ -801,15 +811,17 @@ static int __mds_lov_synchronize(void *data)
                 GOTO(out, rc);
         }
 
+#ifdef HAVE_QUOTA_SUPPORT
         if (obd->obd_upcall.onu_owner) {
                 /*
                  * This is a hack for mds_notify->mdd_notify. When the mds obd
                  * in mdd is removed, This hack should be removed.
                  */
                  LASSERT(obd->obd_upcall.onu_upcall != NULL);
-                 rc = obd->obd_upcall.onu_upcall(obd, NULL, OBD_NOTIFY_ACTIVE,
+                 rc = obd->obd_upcall.onu_upcall(obd, NULL, OBD_NOTIFY_QUOTA,
                                                  obd->obd_upcall.onu_owner);
         }
+#endif
         EXIT;
 out:
         up_read(&mds->mds_notify_lock);
@@ -907,7 +919,6 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         case OBD_NOTIFY_SYNC_NONBLOCK:
                 /* sync event should be pass lov idx as argument */
                 break;
-        case OBD_NOTIFY_CONFIG:
         default:
                 RETURN(0);
         }
