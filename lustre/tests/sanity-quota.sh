@@ -257,7 +257,7 @@ test_1() {
 	    blk_qunit=$(( $RANDOM % 3072 + 1024 ))
 	    blk_qtune=$(( $RANDOM % $blk_qunit ))
 	    # other osts and mds will occupy at 1M blk quota
-	    b_limit=$(( ($RANDOM - 16384) / 8 +  $OSTCOUNT  * $blk_qunit * 4 ))
+	    b_limit=$(( ($RANDOM - 16384) / 8 +  $OSTCOUNT * $blk_qunit * 4 ))
 	    set_blk_tunesz $blk_qtune
 	    set_blk_unitsz $blk_qunit
 	    echo "cycle: $i(total $cycle) bunit:$blk_qunit, btune:$blk_qtune, blimit:$b_limit"
@@ -742,9 +742,10 @@ test_8() {
 	[ "$SLOW" = "no" ] && duration=" -t 120"
 	$RUNAS bash rundbench -D $DIR/$tdir 3 $duration || error "dbench failed!"
 
+        rm -rf $DIR/$tdir
 	sync; sleep 3; sync;
 
-	return 0 
+	return 0
 }
 run_test_with_stat 8 "Run dbench with quota enabled ==========="
 
@@ -773,8 +774,8 @@ test_9() {
 
 	wait_delete_completed
 
- 	set_blk_tunesz 512
- 	set_blk_unitsz 1024
+	set_blk_tunesz 512
+	set_blk_unitsz 1024
 
 	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
@@ -1408,15 +1409,18 @@ test_18() {
 	    sleep 1
 	done
         log "(dd_pid=$DDPID, time=$count, timeout=$timeout)"
+        sync
+        cancel_lru_locks mdc
+        cancel_lru_locks osc
 
         testfile_size=$(stat -c %s $TESTFILE)
         [ $testfile_size -ne $((BLK_SZ * 1024 * 100)) ] && \
 	    error "expect $((BLK_SZ * 1024 * 100)), got ${testfile_size}. Verifying file failed!"
+        $SHOW_QUOTA_USER
 	rm -f $TESTFILE
-	sync; sleep 3; sync;
+	sync
 
 	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $MOUNT
-
 	set_blk_unitsz $((128 * 1024))
 	set_blk_tunesz $((128 * 1024 / 2))
 }
@@ -1466,12 +1470,10 @@ test_18a() {
         log "(dd_pid=$DDPID, time=$count, timeout=$timeout)"
 
         lustre_fail mds 0
-
 	rm -f $TESTFILE
-	sync; sleep 3; sync;
+	sync
 
 	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $MOUNT
-
 	set_blk_unitsz $((128 * 1024))
 	set_blk_tunesz $((128 * 1024 / 2))
 }
@@ -1536,15 +1538,20 @@ test_18bc_sub() {
             sleep 1
         done
         log "(dd_pid=$DDPID, time=$count, timeout=$timeout)"
-        sync; sleep 1; sync
+        sync
+        cancel_lru_locks mdc
+        cancel_lru_locks osc
 
         testfile_size=$(stat -c %s $TESTFILE)
         [ $testfile_size -ne $((BLK_SZ * 1024 * 100)) ] && \
 	    error "expect $((BLK_SZ * 1024 * 100)), got ${testfile_size}. Verifying file failed!"
         $SHOW_QUOTA_USER
+        rm -f $TESTFILE
+        sync
+
         $LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $MOUNT
-        rm -rf $TESTFILE
-        sync; sleep 1; sync
+	set_blk_unitsz $((128 * 1024))
+	set_blk_tunesz $((128 * 1024 / 2))
 }
 
 # test when mds does failover, the ost still could work well
@@ -1642,7 +1649,6 @@ test_20()
 
         $LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 \
                                  $MOUNT || error "could not reset quota limits"
-
 }
 run_test_with_stat 20 "test if setquota specifiers work properly (15754)"
 
@@ -1753,6 +1759,7 @@ test_23_sub() {
 	mkdir -p $DIR/$tdir
 	chmod 0777 $DIR/$tdir
 	TESTFILE="$DIR/$tdir/$tfile-0"
+	rm -f $TESTFILE
 	local bs_unit=$((1024*1024))
 	LIMIT=$1
 
@@ -1775,7 +1782,7 @@ test_23_sub() {
 	log "    Step1: done"
 
 	log "    Step2: rewrite should succeed"
-	$RUNAS $DIRECTIO write $TESTFILE $(($LIMIT/1024/2)) 1 $bs_unit 2>&1 || error "(usr) write failure, but expect success"
+	$RUNAS $DIRECTIO write $TESTFILE 0 1 $bs_unit 2>&1 || error "(usr) write failure, but expect success"
 	log "    Step2: done"
 
 	rm -f $TESTFILE
@@ -1787,7 +1794,6 @@ test_23_sub() {
 	    ($SHOW_QUOTA_USER; error "quota deleted isn't released")
 	$SHOW_QUOTA_USER
 	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
-
 }
 
 test_23() {
