@@ -150,6 +150,7 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                 }
                 if (oqctl->qc_cmd == Q_FINVALIDATE &&
                     (obt->obt_qctxt.lqc_flags & UGQUOTA2LQC(oqctl->qc_type))) {
+                        atomic_inc(&obt->obt_quotachecking);
                         rc = -EBUSY;
                         break;
                 }

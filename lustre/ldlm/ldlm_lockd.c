@@ -1651,22 +1651,6 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
          * message buffers. */
 
         if (req->rq_export == NULL) {
-                struct ldlm_request *dlm_req;
-
-                CDEBUG(D_RPCTRACE, "operation %d from %s with bad "
-                       "export cookie "LPX64"; this is "
-                       "normal if this node rebooted with a lock held\n",
-                       lustre_msg_get_opc(req->rq_reqmsg),
-                       libcfs_id2str(req->rq_peer),
-                       lustre_msg_get_handle(req->rq_reqmsg)->cookie);
-
-                dlm_req = lustre_swab_reqbuf(req, DLM_LOCKREQ_OFF,
-                                             sizeof(*dlm_req),
-                                             lustre_swab_ldlm_request);
-                if (dlm_req != NULL)
-                        CDEBUG(D_RPCTRACE, "--> lock cookie: "LPX64"\n",
-                               dlm_req->lock_handle[0].cookie);
-
                 ldlm_callback_reply(req, -ENOTCONN);
                 RETURN(0);
         }
