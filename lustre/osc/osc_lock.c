@@ -786,9 +786,9 @@ static int osc_ldlm_completion_ast(struct ldlm_lock *dlmlock,
                                 ;
                         else if (dlmlock->l_granted_mode != LCK_MINMODE)
                                 osc_lock_granted(env, olck, dlmlock, dlmrc);
+                        unlock_res_and_lock(dlmlock);
                         if (dlmrc != 0)
                                 cl_lock_error(env, lock, dlmrc);
-                        unlock_res_and_lock(dlmlock);
                         cl_lock_mutex_put(env, lock);
                         osc_ast_data_put(env, olck);
                         result = 0;
@@ -1394,19 +1394,31 @@ static void osc_lock_cancel(const struct lu_env *env,
         struct cl_lock   *lock    = slice->cls_lock;
         struct osc_lock  *olck    = cl2osc_lock(slice);
         struct ldlm_lock *dlmlock = olck->ols_lock;
-        int               result;
+        int               result  = 0;
         int               discard;
 
         LASSERT(cl_lock_is_mutexed(lock));
         LINVRNT(osc_lock_invariant(olck));
 
         if (dlmlock != NULL) {
+                int do_cancel;
+
                 discard = dlmlock->l_flags & LDLM_FL_DISCARD_DATA;
                 result = osc_lock_flush(olck, discard);
                 if (olck->ols_hold)
                         osc_lock_unuse(env, slice);
-                LASSERT(dlmlock->l_readers == 0 && dlmlock->l_writers == 0);
-                result = ldlm_cli_cancel(&olck->ols_handle);
+
+                lock_res_and_lock(dlmlock);
+                /* Now that we're the only user of dlm read/write reference,
+                 * mostly the ->l_readers + ->l_writers should be zero.
+                 * However, there is a corner case.
+                 * See bug 18829 for details.*/
+                do_cancel = (dlmlock->l_readers == 0 &&
+                             dlmlock->l_writers == 0);
+                dlmlock->l_flags |= LDLM_FL_CBPENDING;
+                unlock_res_and_lock(dlmlock);
+                if (do_cancel)
+                        result = ldlm_cli_cancel(&olck->ols_handle);
                 if (result < 0)
                         CL_LOCK_DEBUG(D_ERROR, env, lock,
                                       "lock %p cancel failure with error(%d)\n",

@@ -1040,7 +1040,7 @@ static struct cl_lock_closure *lov_closure_get(const struct lu_env *env,
         struct cl_lock_closure *closure;
 
         closure = &lov_env_info(env)->lti_closure;
-        LINVRNT(list_empty(&closure->clc_list));
+        LASSERT(list_empty(&closure->clc_list));
         cl_lock_closure_init(env, closure, parent, 1);
         return closure;
 }

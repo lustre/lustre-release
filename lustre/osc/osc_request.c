@@ -3064,6 +3064,9 @@ static int osc_enqueue_interpret(const struct lu_env *env,
         /* Complete osc stuff. */
         rc = osc_enqueue_fini(req, aa->oa_lvb,
                               aa->oa_upcall, aa->oa_cookie, aa->oa_flags, rc);
+
+        OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_CP_CANCEL_RACE, 10);
+
         /* Release the lock for async request. */
         if (lustre_handle_is_used(&handle) && rc == ELDLM_OK)
                 /*

@@ -1244,7 +1244,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
 
         rc = ldlm_cli_cancel_local(lock);
         if (rc < 0 || rc == LDLM_FL_LOCAL_ONLY) {
-                LDLM_LOCK_RELEASE(lock);
+                LDLM_LOCK_PUT(lock);
                 RETURN(rc < 0 ? rc : 0);
         }
         /* Even if the lock is marked as LDLM_FL_BL_AST, this is a LDLM_CANCEL

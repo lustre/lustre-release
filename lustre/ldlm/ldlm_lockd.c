@@ -319,6 +319,7 @@ repeat:
                                 cont = 0;
 
                         LDLM_LOCK_GET(lock);
+
                         spin_unlock_bh(&waiting_locks_spinlock);
                         LDLM_DEBUG(lock, "prolong the busy lock");
                         ldlm_refresh_waiting_lock(lock,
@@ -326,11 +327,11 @@ repeat:
                         spin_lock_bh(&waiting_locks_spinlock);
 
                         if (!cont) {
-                                LDLM_LOCK_PUT(lock);
+                                LDLM_LOCK_RELEASE(lock);
                                 break;
                         }
 
-                        LDLM_LOCK_PUT(lock);
+                        LDLM_LOCK_RELEASE(lock);
                         continue;
                 }
                 lock->l_resource->lr_namespace->ns_timeouts++;

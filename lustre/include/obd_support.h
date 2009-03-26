@@ -289,6 +289,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_OSC_CKSUM_ADLER_ONLY    0x40c
 #define OBD_FAIL_OSC_DIO_PAUSE           0x40d
 #define OBD_FAIL_OSC_OBJECT_CONTENTION   0x40e
+#define OBD_FAIL_OSC_CP_CANCEL_RACE      0x40f
 
 #define OBD_FAIL_PTLRPC                  0x500
 #define OBD_FAIL_PTLRPC_ACK              0x501
@@ -716,7 +717,7 @@ do {                                                                          \
 })
 #define OBD_SLAB_ALLOC(ptr, slab, type, size)                                 \
 do {                                                                          \
-        LASSERT(!in_interrupt());                                             \
+        LASSERT(ergo(type != CFS_ALLOC_ATOMIC, !in_interrupt()));             \
         (ptr) = cfs_mem_cache_alloc(slab, (type));                            \
         if (likely((ptr) != NULL &&                                           \
                    (!HAS_FAIL_ALLOC_FLAG || obd_alloc_fail_rate == 0 ||       \

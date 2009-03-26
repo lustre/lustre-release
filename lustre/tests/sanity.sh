@@ -6372,6 +6372,17 @@ test_212() {
 }
 run_test 212 "Sendfile test ============================================"
 
+test_213() {
+	dd if=/dev/zero of=$DIR/$tfile bs=4k count=4
+	cancel_lru_locks osc
+	lctl set_param fail_loc=0x8000040f
+	# generate a read lock
+	cat $DIR/$tfile > /dev/null
+	# write to the file, it will try to cancel the above read lock.
+	cat /etc/hosts >> $DIR/$tfile
+}
+run_test 213 "OSC lock completion and cancel race don't crash - bug 18829"
+
 #
 # tests that do cleanup/setup should be run at the end
 #
