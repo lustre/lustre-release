@@ -3484,7 +3484,6 @@ test_77b() { # bug 10889
 		error "dd error: $?"
 	lctl set_param fail_loc=0
 	set_checksums 0
-	rm -f $DIR/f77b
 }
 run_test 77b "checksum error on client write ===================="
 
@@ -3502,6 +3501,7 @@ test_77c() { # bug 10889
 	done
 	set_checksums 0
 	set_checksum_type $ORIG_CSUM_TYPE
+	rm -f $DIR/f77b
 }
 run_test 77c "checksum error on client read ==================="
 
