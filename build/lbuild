@@ -663,7 +663,7 @@ clean_linux()
 
 prep_kernel_build()
 {
-    local lmakeopts=""
+    local lmakeopts="\"\""
     if $XEN; then
         lmakeopts="--xen"
     fi
