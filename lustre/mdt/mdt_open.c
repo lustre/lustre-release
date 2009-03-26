@@ -906,6 +906,10 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         }
         msg_flags = lustre_msg_get_flags(req->rq_reqmsg);
 
+        if ((create_flags & (MDS_OPEN_HAS_EA | MDS_OPEN_HAS_OBJS)) &&
+            info->mti_spec.u.sp_ea.eadata == NULL)
+                GOTO(out, result = err_serious(-EINVAL));
+
         CDEBUG(D_INODE, "I am going to open "DFID"/(%s->"DFID") "
                "cr_flag=0%o mode=0%06o msg_flag=0x%x\n",
                PFID(rr->rr_fid1), rr->rr_name,
