@@ -480,6 +480,20 @@ static int dot_lustre_close(const struct lu_env *env, struct md_object *obj,
         return 0;
 }
 
+static dt_obj_version_t dot_lustre_version_get(const struct lu_env *env,
+                                               struct md_object *obj)
+{
+        return 0;
+}
+
+static void dot_lustre_version_set(const struct lu_env *env,
+                                   struct md_object *obj,
+                                   dt_obj_version_t version)
+{
+        return;
+}
+
+
 static struct md_object_operations mdd_dot_lustre_obj_ops = {
         .moo_attr_get   = dot_lustre_attr_get,
         .moo_attr_set   = dot_lustre_attr_set,
@@ -487,6 +501,8 @@ static struct md_object_operations mdd_dot_lustre_obj_ops = {
         .moo_open       = dot_lustre_mdd_open,
         .moo_close      = dot_lustre_close,
         .moo_readpage   = mdd_readpage,
+        .moo_version_get = dot_lustre_version_get,
+        .moo_version_set = dot_lustre_version_set,
         .moo_path       = dot_lustre_path
 };
 
