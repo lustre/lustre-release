@@ -137,6 +137,11 @@ Description: Assertion failure in ldlm_lock_put
 Details    : Do not put cancelled locks into replay list, hold references on
 	     locks in replay list
 
+Severity   : normal
+Bugzilla   : 18577
+Description: 1.6.5 mdsrate performance is slower than 1.4.11/12 (MDS is not cpu bound!)
+Details    : create_count always drops to the min value (=32) because grow_count
+	     is being changed before the precreate RPC completes.
 
 -------------------------------------------------------------------------------
 2008-12-31 Sun Microsystems, Inc.
