@@ -1780,6 +1780,13 @@ int mds_handle(struct ptlrpc_request *req)
                 else
                         bufcount = 2;
 
+                /* if we do recovery we isn't send reply mds state is restored */
+                if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                        size[DLM_REPLY_REC_OFF] = 0;
+                        if (opc == REINT_UNLINK || opc == REINT_RENAME)
+                                size[DLM_REPLY_REC_OFF + 1] = 0;
+                }
+
                 rc = lustre_pack_reply(req, bufcount, size, NULL);
                 if (rc)
                         break;

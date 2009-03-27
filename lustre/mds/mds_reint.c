@@ -1771,9 +1771,11 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         case S_IFREG: {
                 struct lov_mds_md *lmm = lustre_msg_buf(req->rq_repmsg,
                                                         offset + 1, 0);
+                int sz = lustre_msg_buflen(req->rq_repmsg, offset + 1) > 0 ?
+                         le32_to_cpu(lmm->lmm_stripe_count) : 0;
+
                 handle = fsfilt_start_log(obd, dparent->d_inode,
-                                          FSFILT_OP_UNLINK, NULL,
-                                          le32_to_cpu(lmm->lmm_stripe_count));
+                                          FSFILT_OP_UNLINK, NULL, sz);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 LOCK_INODE_MUTEX(dparent->d_inode);
@@ -2286,7 +2288,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         struct lustre_handle dlm_handles[4];
         struct mds_body *body = NULL;
         struct lov_mds_md *lmm = NULL;
-        int rc = 0, lock_count = 3, cleanup_phase = 0;
+        int rc = 0, lock_count = 3, cleanup_phase = 0, sz;
         void *handle = NULL;
         unsigned int qcids[MAXQUOTAS] = { 0, 0 };
         unsigned int qpids[4] = { 0, 0, 0, 0 };
@@ -2386,9 +2388,12 @@ no_unlink:
                 GOTO(cleanup, rc = -EINVAL);
 
         lmm = lustre_msg_buf(req->rq_repmsg, offset + 1, 0);
-        handle = fsfilt_start_log(obd, de_tgtdir->d_inode, FSFILT_OP_RENAME,
-                                  NULL, le32_to_cpu(lmm->lmm_stripe_count));
+        /* check that lmm size is not 0 */
+        sz = lustre_msg_buflen(req->rq_repmsg, offset + 1) > 0 ?
+             le32_to_cpu(lmm->lmm_stripe_count) : 0;
 
+        handle = fsfilt_start_log(obd, de_tgtdir->d_inode, FSFILT_OP_RENAME,
+                                  NULL, sz);
         if (IS_ERR(handle))
                 GOTO(cleanup, rc = PTR_ERR(handle));
 
