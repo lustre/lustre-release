@@ -1586,11 +1586,9 @@ run_test 48 "too many acls on file"
 test_49() { # bug 17710
 	local OLD_MDS_MKFS_OPTS=$MDS_MKFS_OPTS
 	local OLD_OST_MKFS_OPTS=$OST_MKFS_OPTS
-	local OLD_TIMEOUT=$TIMEOUT
+	local LOCAL_TIMEOUT=20
 
-	TIMEOUT=20
-
-	MDS_MKFS_OPTS="--mgs --mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT --param sys.ldlm_timeout=$TIMEOUT $MKFSOPT $MDSOPT"
+	OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID --param sys.timeout=$LOCAL_TIMEOUT --param sys.ldlm_timeout=$LOCAL_TIMEOUT $MKFSOPT $OSTOPT"
 
 	reformat
 	start_mds
@@ -1604,10 +1602,10 @@ test_49() { # bug 17710
 	LDLM_CLIENT="`do_facet client lctl get_param -n ldlm_timeout`"
 
 	if [ $LDLM_MDS -ne $LDLM_OST1 ] || [ $LDLM_MDS -ne $LDLM_CLIENT ]; then
-		error "Different LDLM_TIMEOUT: $LDLM_MDS $LDLM_OST $LDLM_CLIENT"
+		error "Different LDLM_TIMEOUT:$LDLM_MDS $LDLM_OST1 $LDLM_CLIENT"
 	fi
 
-	if [ $LDLM_MDS -ne $((TIMEOUT / 3)) ]; then
+	if [ $LDLM_MDS -ne $((LOCAL_TIMEOUT / 3)) ]; then
 		error "LDLM_TIMEOUT($LDLM_MDS) is not correct"
 	fi
 
@@ -1615,7 +1613,7 @@ test_49() { # bug 17710
 	stop_ost || return 2
 	stop_mds || return 3
 
-	OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID --param sys.timeout=$TIMEOUT --param sys.ldlm_timeout=$((TIMEOUT - 1)) $MKFSOPT $OSTOPT"
+	OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID --param sys.timeout=$LOCAL_TIMEOUT --param sys.ldlm_timeout=$((LOCAL_TIMEOUT - 1)) $MKFSOPT $OSTOPT"
 	
 	reformat
 	start_mds || return 4
@@ -1628,10 +1626,10 @@ test_49() { # bug 17710
 	LDLM_CLIENT="`do_facet client lctl get_param -n ldlm_timeout`"
 
 	if [ $LDLM_MDS -ne $LDLM_OST1 ] || [ $LDLM_MDS -ne $LDLM_CLIENT ]; then
-		error "Different LDLM_TIMEOUT: $LDLM_MDS $LDLM_OST $LDLM_CLIENT"
+		error "Different LDLM_TIMEOUT:$LDLM_MDS $LDLM_OST1 $LDLM_CLIENT"
 	fi
 	
-	if [ $LDLM_MDS -ne $((TIMEOUT - 1)) ]; then
+	if [ $LDLM_MDS -ne $((LOCAL_TIMEOUT - 1)) ]; then
 		error "LDLM_TIMEOUT($LDLM_MDS) is not correct"
 	fi
 		
