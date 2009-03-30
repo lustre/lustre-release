@@ -457,10 +457,30 @@ int ptlrpc_add_timeout_client(int time, enum timeout_event event,
         return 0;
 }           
 
-int ptlrpc_del_timeout_client(struct list_head *obd_list)
+int ptlrpc_del_timeout_client(struct list_head *obd_list, 
+                              enum timeout_event event)
 {
+        struct timeout_item *ti = NULL, *item;
+
+        if (list_empty(obd_list))
+                return 0;  
         mutex_down(&pinger_sem);
         list_del_init(obd_list);
+        /**
+         * If there are no obd attached to the timeout event
+         * list, remove this timeout event from the pinger
+         */
+        list_for_each_entry(item, &timeout_list, ti_chain) {
+                if (item->ti_event == event) {
+                        ti = item;
+                        break;
+                }
+        }
+        LASSERTF(ti != NULL, "ti is NULL ! \n");
+        if (list_empty(&ti->ti_obd_list)) {
+                list_del(&ti->ti_chain);
+                OBD_FREE_PTR(ti);
+        }
         mutex_up(&pinger_sem);
         return 0;
 }  
@@ -822,7 +842,8 @@ int ptlrpc_add_timeout_client(int time, enum timeout_event event,
         return 0;
 }           
 
-int ptlrpc_del_timeout_client(struct list_head *obd_list)
+int ptlrpc_del_timeout_client(struct list_head *obd_list,
+                              enum timeout_event event)
 {
         return 0;
 }  

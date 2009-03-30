@@ -937,7 +937,8 @@ static int osc_add_shrink_grant(struct client_obd *client)
 
 static int osc_del_shrink_grant(struct client_obd *client)
 {
-        return ptlrpc_del_timeout_client(&client->cl_grant_shrink_list);
+        return ptlrpc_del_timeout_client(&client->cl_grant_shrink_list, 
+                                         TIMEOUT_GRANT);
 }
 
 static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
