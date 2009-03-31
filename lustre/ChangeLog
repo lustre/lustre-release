@@ -45,6 +45,13 @@ tbd Sun Microsystems, Inc.
 	  more information, please refer to bugzilla 17630.
 
 Severity   : normal
+Frequency  : rare
+Bugzilla   : 18902
+Descriptoin: allow kill process which wait statahead result
+Details    : for some reasons 'ls' can stick in waiting result from statahead,
+             in this case need way for kill this process.
+
+Severity   : normal
 Bugzilla   : 18645
 Description: Reduce small size read RPC
 Details    : Set read-ahead limite for every file and only do read-ahead when
