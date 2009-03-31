@@ -310,6 +310,104 @@ static int lovsub_lock_closure(const struct lu_env *env,
 }
 
 /**
+ * A helper function for lovsub_lock_delete() that deals with a given parent
+ * top-lock.
+ */
+static int lovsub_lock_delete_one(const struct lu_env *env,
+                                  struct cl_lock *child, struct lov_lock *lov)
+{
+        struct cl_lock       *parent;
+        int             result;
+        ENTRY;
+
+        parent  = lov->lls_cl.cls_lock;
+        result = 0;
+
+        switch (parent->cll_state) {
+        case CLS_NEW:
+        case CLS_QUEUING:
+        case CLS_ENQUEUED:
+        case CLS_FREEING:
+                cl_lock_signal(env, parent);
+                break;
+        case CLS_UNLOCKING:
+                /*
+                 * Here lies a problem: a sub-lock is canceled while top-lock
+                 * is being unlocked. Top-lock cannot be moved into CLS_NEW
+                 * state, because unlocking has to succeed eventually by
+                 * placing lock into CLS_CACHED (or failing it), see
+                 * cl_unuse_try(). Nor can top-lock be left in CLS_CACHED
+                 * state, because lov maintains an invariant that all
+                 * sub-locks exist in CLS_CACHED (this allows cached top-lock
+                 * to be reused immediately). Nor can we wait for top-lock
+                 * state to change, because this can be synchronous to the
+                 * current thread.
+                         *
+                 * We know for sure that lov_lock_unuse() will be called at
+                 * least one more time to finish un-using, so leave a mark on
+                 * the top-lock, that will be seen by the next call to
+                 * lov_lock_unuse().
+                 */
+                lov->lls_unuse_race = 1;
+                break;
+        case CLS_CACHED:
+                /*
+                 * if a sub-lock is canceled move its top-lock into CLS_NEW
+                 * state to preserve an invariant that a top-lock in
+                 * CLS_CACHED is immediately ready for re-use (i.e., has all
+                 * sub-locks), and so that next attempt to re-use the top-lock
+                 * enqueues missing sub-lock.
+                 */
+                cl_lock_state_set(env, parent, CLS_NEW);
+                /*
+                 * if last sub-lock is canceled, destroy the top-lock (which
+                 * is now `empty') proactively.
+                 */
+                if (lov->lls_nr_filled == 0) {
+                        /* ... but unfortunately, this cannot be done easily,
+                         * as cancellation of a top-lock might acquire mutices
+                         * of its other sub-locks, violating lock ordering,
+                         * see cl_lock_{cancel,delete}() preconditions.
+                         *
+                         * To work around this, the mutex of this sub-lock is
+                         * released, top-lock is destroyed, and sub-lock mutex
+                         * acquired again. The list of parents has to be
+                         * re-scanned from the beginning after this.
+                         *
+                         * Only do this if no mutices other than on @child and
+                         * @parent are held by the current thread.
+                         *
+                         * TODO: The lock modal here is too complex, because
+                         * the lock may be canceled and deleted by voluntarily:
+                         *    cl_lock_request
+                         *      -> osc_lock_enqueue_wait
+                         *        -> osc_lock_cancel_wait
+                         *          -> cl_lock_delete
+                         *            -> lovsub_lock_delete
+                         *              -> cl_lock_cancel/delete
+                         *                -> ...
+                         *
+                         * The better choice is to spawn a kernel thread for
+                         * this purpose. -jay
+                         */
+                        if (cl_lock_nr_mutexed(env) == 2) {
+                                cl_lock_mutex_put(env, child);
+                                cl_lock_cancel(env, parent);
+                                cl_lock_delete(env, parent);
+                                result = 1;
+                        }
+                }
+                break;
+        case CLS_HELD:
+        default:
+                CERROR("Impossible state: %i\n", parent->cll_state);
+                LBUG();
+        }
+
+        RETURN(result);
+}
+
+/**
  * An implementation of cl_lock_operations::clo_delete() method. This is
  * invoked in "bottom-to-top" delete, when lock destruction starts from the
  * sub-lock (e.g, as a result of ldlm lock LRU policy).
@@ -317,68 +415,43 @@ static int lovsub_lock_closure(const struct lu_env *env,
 static void lovsub_lock_delete(const struct lu_env *env,
                                const struct cl_lock_slice *slice)
 {
-        struct lovsub_lock   *sub = cl2lovsub_lock(slice);
-        struct lov_lock      *lov;
-        struct cl_lock       *parent;
-        struct lov_lock_link *scan;
-        struct lov_lock_link *temp;
-        struct lov_lock_sub  *subdata;
+        struct cl_lock     *child = slice->cls_lock;
+        struct lovsub_lock *sub   = cl2lovsub_lock(slice);
+        int restart;
 
-        LASSERT(cl_lock_is_mutexed(slice->cls_lock));
+        LASSERT(cl_lock_is_mutexed(child));
+
         ENTRY;
+        /*
+         * Destruction of a sub-lock might take multiple iterations, because
+         * when the last sub-lock of a given top-lock is deleted, top-lock is
+         * canceled proactively, and this requires to release sub-lock
+         * mutex. Once sub-lock mutex has been released, list of its parents
+         * has to be re-scanned from the beginning.
+         */
+        do {
+                struct lov_lock      *lov;
+                struct lov_lock_link *scan;
+                struct lov_lock_link *temp;
+                struct lov_lock_sub  *subdata;
 
-        list_for_each_entry_safe(scan, temp, &sub->lss_parents, lll_list) {
-                lov     = scan->lll_super;
-                subdata = &lov->lls_sub[scan->lll_idx];
-                parent  = lov->lls_cl.cls_lock;
-                lovsub_parent_lock(env, lov);
-                subdata->sub_got = subdata->sub_descr;
-                lov_lock_unlink(env, scan, sub);
-                CDEBUG(D_DLMTRACE, "%p %p %i %i\n", parent, sub,
-                       lov->lls_nr_filled, parent->cll_state);
-                switch (parent->cll_state) {
-                case CLS_NEW:
-                case CLS_QUEUING:
-                case CLS_ENQUEUED:
-                case CLS_FREEING:
-                        cl_lock_signal(env, parent);
-                        break;
-                case CLS_UNLOCKING:
-                        /*
-                         * Here lies a problem: a sub-lock is canceled while
-                         * top-lock is being unlocked. Top-lock cannot be
-                         * moved into CLS_NEW state, because unlocking has to
-                         * succeed eventually by placing lock into CLS_CACHED
-                         * (or failing it), see cl_unuse_try(). Nor can
-                         * top-lock be left in CLS_CACHED state, because lov
-                         * maintains an invariant that all sub-locks exist in
-                         * CLS_CACHED (this allows cached top-lock to be
-                         * reused immediately). Nor can we wait for top-lock
-                         * state to change, because this can be synchronous to
-                         * the current thread.
-                         *
-                         * We know for sure that lov_lock_unuse() will be
-                         * called at least one more time to finish un-using,
-                         * so leave a mark on the top-lock, that will be seen
-                         * by the next call to lov_lock_unuse().
-                         */
-                        lov->lls_unuse_race = 1;
-                        break;
-                case CLS_CACHED:
-                        cl_lock_state_set(env, parent, CLS_NEW);
-                        if (lov->lls_nr_filled == 0) {
-                                cl_lock_cancel(env, parent);
-                                cl_lock_delete(env, parent);
-                                cl_lock_signal(env, parent);
+                restart = 0;
+                list_for_each_entry_safe(scan, temp,
+                                         &sub->lss_parents, lll_list) {
+                        lov     = scan->lll_super;
+                        subdata = &lov->lls_sub[scan->lll_idx];
+                        lovsub_parent_lock(env, lov);
+                        subdata->sub_got = subdata->sub_descr;
+                        lov_lock_unlink(env, scan, sub);
+                        restart = lovsub_lock_delete_one(env, child, lov);
+                        lovsub_parent_unlock(env, lov);
+
+                        if (restart) {
+                                cl_lock_mutex_get(env, child);
+                                break;
                         }
-                        break;
-                case CLS_HELD:
-                default:
-                        CERROR("Impossible state: %i\n", parent->cll_state);
-                        LBUG();
-                }
-                lovsub_parent_unlock(env, lov);
-        }
+               }
+        } while (restart);
         EXIT;
 }
 

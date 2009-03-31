@@ -43,6 +43,36 @@
 #define CLT_PVEC_SIZE (14)
 
 /**
+ * Possible levels of the nesting. Currently this is 2: there are "top"
+ * entities (files, extent locks), and "sub" entities (stripes and stripe
+ * locks). This is used only for debugging counters right now.
+ */
+enum clt_nesting_level {
+        CNL_TOP,
+        CNL_SUB,
+        CNL_NR
+};
+
+/**
+ * Counters used to check correctness of cl_lock interface usage.
+ */
+struct cl_thread_counters {
+        /**
+         * Number of outstanding calls to cl_lock_mutex_get() made by the
+         * current thread. For debugging.
+         */
+        int           ctc_nr_locks_locked;
+        /** List of locked locks. */
+        struct lu_ref ctc_locks_locked;
+        /** Number of outstanding holds on locks. */
+        int           ctc_nr_held;
+        /** Number of outstanding uses on locks. */
+        int           ctc_nr_used;
+        /** Number of held extent locks. */
+        int           ctc_nr_locks_acquired;
+};
+
+/**
  * Thread local state internal for generic cl-code.
  */
 struct cl_thread_info {
@@ -58,24 +88,9 @@ struct cl_thread_info {
         struct cl_lock_descr clt_descr;
         struct cl_page_list  clt_list;
         /**
-         * \name debugging.
-         *
-         * Counters used to check correctness of cl_lock interface usage.
-         * @{
+         * Counters for every level of lock nesting.
          */
-        /**
-         * Number of outstanding calls to cl_lock_mutex_get() made by the
-         * current thread. For debugging.
-         */
-        int                  clt_nr_locks_locked;
-        /** List of locked locks. */
-        struct lu_ref        clt_locks_locked;
-        /** Number of outstanding holds on the top-level locks. */
-        int                  clt_nr_held;
-        /** Number of outstanding uses on the top-level locks. */
-        int                  clt_nr_used;
-        /** Number of held top-level extent locks. */
-        int                  clt_nr_locks_acquired;
+        struct cl_thread_counters clt_counters[CNL_NR];
         /** @} debugging */
 
         /*

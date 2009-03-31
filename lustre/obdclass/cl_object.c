@@ -995,8 +995,12 @@ static void *cl_key_init(const struct lu_context *ctx,
         struct cl_thread_info *info;
 
         info = cl0_key_init(ctx, key);
-        if (!IS_ERR(info))
-                lu_ref_init(&info->clt_locks_locked);
+        if (!IS_ERR(info)) {
+                int i;
+
+                for (i = 0; i < ARRAY_SIZE(info->clt_counters); ++i)
+                        lu_ref_init(&info->clt_counters[i].ctc_locks_locked);
+        }
         return info;
 }
 
@@ -1004,9 +1008,11 @@ static void cl_key_fini(const struct lu_context *ctx,
                         struct lu_context_key *key, void *data)
 {
         struct cl_thread_info *info;
+        int i;
 
         info = data;
-        lu_ref_fini(&info->clt_locks_locked);
+        for (i = 0; i < ARRAY_SIZE(info->clt_counters); ++i)
+                lu_ref_fini(&info->clt_counters[i].ctc_locks_locked);
         cl0_key_fini(ctx, key, data);
 }
 
@@ -1014,14 +1020,16 @@ static void cl_key_exit(const struct lu_context *ctx,
                         struct lu_context_key *key, void *data)
 {
         struct cl_thread_info *info = data;
+        int i;
 
-        LASSERT(info->clt_nr_locks_locked == 0);
-        LASSERT(info->clt_nr_held == 0);
-        LASSERT(info->clt_nr_used == 0);
-        LASSERT(info->clt_nr_locks_acquired == 0);
-
-        lu_ref_fini(&info->clt_locks_locked);
-        lu_ref_init(&info->clt_locks_locked);
+        for (i = 0; i < ARRAY_SIZE(info->clt_counters); ++i) {
+                LASSERT(info->clt_counters[i].ctc_nr_held == 0);
+                LASSERT(info->clt_counters[i].ctc_nr_used == 0);
+                LASSERT(info->clt_counters[i].ctc_nr_locks_acquired == 0);
+                LASSERT(info->clt_counters[i].ctc_nr_locks_locked == 0);
+                lu_ref_fini(&info->clt_counters[i].ctc_locks_locked);
+                lu_ref_init(&info->clt_counters[i].ctc_locks_locked);
+        }
 }
 
 static struct lu_context_key cl_key = {

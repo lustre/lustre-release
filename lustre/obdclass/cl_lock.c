@@ -104,6 +104,29 @@ static int cl_lock_invariant(const struct lu_env *env,
         return result;
 }
 
+/**
+ * Returns lock "nesting": 0 for a top-lock and 1 for a sub-lock.
+ */
+static enum clt_nesting_level cl_lock_nesting(const struct cl_lock *lock)
+{
+        return cl_object_header(lock->cll_descr.cld_obj)->coh_nesting;
+}
+
+/**
+ * Returns a set of counters for this lock, depending on a lock nesting.
+ */
+static struct cl_thread_counters *cl_lock_counters(const struct lu_env *env,
+                                                   const struct cl_lock *lock)
+{
+        struct cl_thread_info *info;
+        enum clt_nesting_level nesting;
+
+        info = cl_env_info(env);
+        nesting = cl_lock_nesting(lock);
+        LASSERT(nesting < ARRAY_SIZE(info->clt_counters));
+        return &info->clt_counters[nesting];
+}
+
 #define RETIP ((unsigned long)__builtin_return_address(0))
 
 #ifdef CONFIG_LOCKDEP
@@ -117,7 +140,7 @@ static void cl_lock_lockdep_init(struct cl_lock *lock)
 static void cl_lock_lockdep_acquire(const struct lu_env *env,
                                     struct cl_lock *lock, __u32 enqflags)
 {
-        cl_env_info(env)->clt_nr_locks_acquired++;
+        cl_lock_counters(env, lock)->ctc_nr_locks_acquired++;
         lock_acquire(&lock->dep_map, !!(enqflags & CEF_ASYNC),
                      /* try: */ 0, lock->cll_descr.cld_mode <= CLM_READ,
                      /* check: */ 2, RETIP);
@@ -126,7 +149,7 @@ static void cl_lock_lockdep_acquire(const struct lu_env *env,
 static void cl_lock_lockdep_release(const struct lu_env *env,
                                     struct cl_lock *lock)
 {
-        cl_env_info(env)->clt_nr_locks_acquired--;
+        cl_lock_counters(env, lock)->ctc_nr_locks_acquired--;
         lock_release(&lock->dep_map, 0, RETIP);
 }
 
@@ -545,23 +568,23 @@ const struct cl_lock_slice *cl_lock_at(const struct cl_lock *lock,
 }
 EXPORT_SYMBOL(cl_lock_at);
 
-static void cl_lock_trace(struct cl_thread_info *info,
+static void cl_lock_trace(struct cl_thread_counters *counters,
                           const char *prefix, const struct cl_lock *lock)
 {
         CDEBUG(D_DLMTRACE|D_TRACE, "%s: %i@%p %p %i %i\n", prefix,
                atomic_read(&lock->cll_ref), lock, lock->cll_guarder,
-               lock->cll_depth, info->clt_nr_locks_locked);
+               lock->cll_depth, counters->ctc_nr_locks_locked);
 }
 
 static void cl_lock_mutex_tail(const struct lu_env *env, struct cl_lock *lock)
 {
-        struct cl_thread_info *info;
+        struct cl_thread_counters *counters;
 
-        info = cl_env_info(env);
+        counters = cl_lock_counters(env, lock);
         lock->cll_depth++;
-        info->clt_nr_locks_locked++;
-        lu_ref_add(&info->clt_locks_locked, "cll_guard", lock);
-        cl_lock_trace(info, "got mutex", lock);
+        counters->ctc_nr_locks_locked++;
+        lu_ref_add(&counters->ctc_locks_locked, "cll_guard", lock);
+        cl_lock_trace(counters, "got mutex", lock);
 }
 
 /**
@@ -583,9 +606,17 @@ void cl_lock_mutex_get(const struct lu_env *env, struct cl_lock *lock)
                 LINVRNT(lock->cll_depth > 0);
         } else {
                 struct cl_object_header *hdr;
+                struct cl_thread_info   *info;
+                int i;
 
                 LINVRNT(lock->cll_guarder != cfs_current());
                 hdr = cl_object_header(lock->cll_descr.cld_obj);
+                /*
+                 * Check that mutices are taken in the bottom-to-top order.
+                 */
+                info = cl_env_info(env);
+                for (i = 0; i < hdr->coh_nesting; ++i)
+                        LASSERT(info->clt_counters[i].ctc_nr_locks_locked == 0);
                 mutex_lock_nested(&lock->cll_guard, hdr->coh_nesting);
                 lock->cll_guarder = cfs_current();
                 LINVRNT(lock->cll_depth == 0);
@@ -635,19 +666,19 @@ EXPORT_SYMBOL(cl_lock_mutex_try);
  */
 void cl_lock_mutex_put(const struct lu_env *env, struct cl_lock *lock)
 {
-        struct cl_thread_info *info;
+        struct cl_thread_counters *counters;
 
         LINVRNT(cl_lock_invariant(env, lock));
         LINVRNT(cl_lock_is_mutexed(lock));
         LINVRNT(lock->cll_guarder == cfs_current());
         LINVRNT(lock->cll_depth > 0);
 
-        info = cl_env_info(env);
-        LINVRNT(info->clt_nr_locks_locked > 0);
+        counters = cl_lock_counters(env, lock);
+        LINVRNT(counters->ctc_nr_locks_locked > 0);
 
-        cl_lock_trace(info, "put mutex", lock);
-        lu_ref_del(&info->clt_locks_locked, "cll_guard", lock);
-        info->clt_nr_locks_locked--;
+        cl_lock_trace(counters, "put mutex", lock);
+        lu_ref_del(&counters->ctc_locks_locked, "cll_guard", lock);
+        counters->ctc_nr_locks_locked--;
         if (--lock->cll_depth == 0) {
                 lock->cll_guarder = NULL;
                 mutex_unlock(&lock->cll_guard);
@@ -669,7 +700,19 @@ EXPORT_SYMBOL(cl_lock_is_mutexed);
  */
 int cl_lock_nr_mutexed(const struct lu_env *env)
 {
-        return cl_env_info(env)->clt_nr_locks_locked;
+        struct cl_thread_info *info;
+        int i;
+        int locked;
+
+        /*
+         * NOTE: if summation across all nesting levels (currently 2) proves
+         *       too expensive, a summary counter can be added to
+         *       struct cl_thread_info.
+         */
+        info = cl_env_info(env);
+        for (i = 0, locked = 0; i < ARRAY_SIZE(info->clt_counters); ++i)
+                locked += info->clt_counters[i].ctc_nr_locks_locked;
+        return locked;
 }
 EXPORT_SYMBOL(cl_lock_nr_mutexed);
 
@@ -737,33 +780,43 @@ static void cl_lock_delete0(const struct lu_env *env, struct cl_lock *lock)
         EXIT;
 }
 
+/**
+ * Mod(ifie)s cl_lock::cll_holds counter for a given lock. Also, for a
+ * top-lock (nesting == 0) accounts for this modification in the per-thread
+ * debugging counters. Sub-lock holds can be released by a thread different
+ * from one that acquired it.
+ */
 static void cl_lock_hold_mod(const struct lu_env *env, struct cl_lock *lock,
                              int delta)
 {
-        struct cl_thread_info   *cti;
-        struct cl_object_header *hdr;
+        struct cl_thread_counters *counters;
+        enum clt_nesting_level     nesting;
 
-        cti = cl_env_info(env);
-        hdr = cl_object_header(lock->cll_descr.cld_obj);
         lock->cll_holds += delta;
-        if (hdr->coh_nesting == 0) {
-                cti->clt_nr_held += delta;
-                LASSERT(cti->clt_nr_held >= 0);
+        nesting = cl_lock_nesting(lock);
+        if (nesting == CNL_TOP) {
+                counters = &cl_env_info(env)->clt_counters[CNL_TOP];
+                counters->ctc_nr_held += delta;
+                LASSERT(counters->ctc_nr_held >= 0);
         }
 }
 
+/**
+ * Mod(ifie)s cl_lock::cll_users counter for a given lock. See
+ * cl_lock_hold_mod() for the explanation of the debugging code.
+ */
 static void cl_lock_used_mod(const struct lu_env *env, struct cl_lock *lock,
                              int delta)
 {
-        struct cl_thread_info   *cti;
-        struct cl_object_header *hdr;
+        struct cl_thread_counters *counters;
+        enum clt_nesting_level     nesting;
 
-        cti = cl_env_info(env);
-        hdr = cl_object_header(lock->cll_descr.cld_obj);
         lock->cll_users += delta;
-        if (hdr->coh_nesting == 0) {
-                cti->clt_nr_used += delta;
-                LASSERT(cti->clt_nr_used >= 0);
+        nesting = cl_lock_nesting(lock);
+        if (nesting == CNL_TOP) {
+                counters = &cl_env_info(env)->clt_counters[CNL_TOP];
+                counters->ctc_nr_used += delta;
+                LASSERT(counters->ctc_nr_used >= 0);
         }
 }
 
@@ -1516,6 +1569,11 @@ EXPORT_SYMBOL(cl_lock_closure_fini);
  * cl_lock_put() to finish it.
  *
  * \pre atomic_read(&lock->cll_ref) > 0
+ * \pre ergo(cl_lock_nesting(lock) == CNL_TOP,
+ *           cl_lock_nr_mutexed(env) == 1)
+ *      [i.e., if a top-lock is deleted, mutices of no other locks can be
+ *      held, as deletion of sub-locks might require releasing a top-lock
+ *      mutex]
  *
  * \see cl_lock_operations::clo_delete()
  * \see cl_lock::cll_holds
@@ -1524,6 +1582,8 @@ void cl_lock_delete(const struct lu_env *env, struct cl_lock *lock)
 {
         LINVRNT(cl_lock_is_mutexed(lock));
         LINVRNT(cl_lock_invariant(env, lock));
+        LASSERT(ergo(cl_lock_nesting(lock) == CNL_TOP,
+                     cl_lock_nr_mutexed(env) == 1));
 
         ENTRY;
         if (lock->cll_holds == 0)
@@ -1540,6 +1600,10 @@ EXPORT_SYMBOL(cl_lock_delete);
  * time-out happens.
  *
  * \pre atomic_read(&lock->cll_ref) > 0
+ * \pre ergo(cl_lock_nesting(lock) == CNL_TOP,
+ *           cl_lock_nr_mutexed(env) == 1)
+ *      [i.e., if a top-lock failed, mutices of no other locks can be held, as
+ *      failing sub-locks might require releasing a top-lock mutex]
  *
  * \see clo_lock_delete()
  * \see cl_lock::cll_holds
@@ -1568,6 +1632,12 @@ EXPORT_SYMBOL(cl_lock_error);
  *
  * Cancellation notification is delivered to layers at most once.
  *
+ * \pre ergo(cl_lock_nesting(lock) == CNL_TOP,
+ *           cl_lock_nr_mutexed(env) == 1)
+ *      [i.e., if a top-lock is canceled, mutices of no other locks can be
+ *      held, as cancellation of sub-locks might require releasing a top-lock
+ *      mutex]
+ *
  * \see cl_lock_operations::clo_cancel()
  * \see cl_lock::cll_holds
  */
@@ -1575,6 +1645,9 @@ void cl_lock_cancel(const struct lu_env *env, struct cl_lock *lock)
 {
         LINVRNT(cl_lock_is_mutexed(lock));
         LINVRNT(cl_lock_invariant(env, lock));
+        LASSERT(ergo(cl_lock_nesting(lock) == CNL_TOP,
+                     cl_lock_nr_mutexed(env) == 1));
+
         ENTRY;
         if (lock->cll_holds == 0)
                 cl_lock_cancel0(env, lock);
