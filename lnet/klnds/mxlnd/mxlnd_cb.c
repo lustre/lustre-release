@@ -1485,7 +1485,7 @@ mxlnd_setup_iov(struct kmx_ctx *ctx, u32 niov, struct iovec *iov, u32 offset, u3
         ctx->mxc_nseg = nseg;
         sum = 0;
         for (i = 0; i < nseg; i++) {
-                seg[i].segment_ptr = MX_KVA_TO_U64(iov[first_iov + i].iov_base);
+                seg[i].segment_ptr = MX_PA_TO_U64(virt_to_phys(iov[first_iov + i].iov_base));
                 seg[i].segment_length = (u32) iov[first_iov + i].iov_len;
                 if (i == 0) {
                         seg[i].segment_ptr += (u64) first_iov_offset;
@@ -1497,7 +1497,7 @@ mxlnd_setup_iov(struct kmx_ctx *ctx, u32 niov, struct iovec *iov, u32 offset, u3
                 sum += seg[i].segment_length;
         }
         ctx->mxc_seg_list = seg;
-        ctx->mxc_pin_type = MX_PIN_KERNEL;
+        ctx->mxc_pin_type = MX_PIN_PHYSICAL;
 #ifdef MX_PIN_FULLPAGES
         ctx->mxc_pin_type |= MX_PIN_FULLPAGES;
 #endif
