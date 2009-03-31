@@ -190,6 +190,13 @@ Details    : create_count always drops to the min value (=32) because grow_count
 	  information, please refer to bugzilla 17630.
 
 Severity   : normal
+Frequency  : rare
+Bugzilla   : 18902
+Descriptoin: allow kill process which wait statahead result
+Details    : for some reasons 'ls' can stick in waiting result from statahead,
+             in this case need way for kill this process.
+
+Severity   : normal
 Frequency  : rare, at shutdown
 Bugzilla   : 18773
 Descriptoin: panic at umount

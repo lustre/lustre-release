@@ -1019,8 +1019,8 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
         struct ll_inode_info     *lli = ll_i2info(dir);
         struct ll_statahead_info *sai = lli->lli_sai;
         struct ll_sa_thread_args  sta;
-        struct l_wait_info        lwi = { 0 };
-        int                       rc;
+        struct l_wait_info        lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
+        int                       rc = 0;
         ENTRY;
 
         LASSERT(lli->lli_opendir_pid == cfs_curproc_pid());
@@ -1064,9 +1064,10 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
                         /*
                          * thread started already, avoid double-stat.
                          */
-                        l_wait_event(sai->sai_waitq,
-                                     ll_sai_entry_stated(sai) || sa_is_stopped(sai),
-                                     &lwi);
+                        rc = l_wait_event(sai->sai_waitq,
+                                          ll_sai_entry_stated(sai) ||
+                                          sa_is_stopped(sai),
+                                          &lwi);
                 }
 
                 if (lookup) {
@@ -1085,7 +1086,7 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
                 /*
                  * do nothing for revalidate.
                  */
-                RETURN(0);
+                RETURN(rc);
         }
 
          /*
