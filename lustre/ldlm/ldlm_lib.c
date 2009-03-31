@@ -366,7 +366,13 @@ err:
 
 int client_obd_cleanup(struct obd_device *obddev)
 {
+        struct client_obd *cli = &obddev->u.cli;
         ENTRY;
+
+        /* cleanup can be called for never connected obd */
+        if (cli->cl_import)
+                class_destroy_import(cli->cl_import);
+
         ldlm_put_ref();
         RETURN(0);
 }

@@ -44,6 +44,13 @@
 	  information, please refer to bugzilla 17630.
 
 Severity   : normal
+Frequency  : rare, on failed llog setup
+Bugzilla   : 18896
+Descriptoin: don't leak obd reference on failed llog setup
+Details    : for failed llog setup - mgc forget call class_destroy_import for
+             client import, move destroy import to more generic place.
+
+Severity   : normal
 Frequency  : rare
 Bugzilla   : 18902
 Descriptoin: allow kill process which wait statahead result
