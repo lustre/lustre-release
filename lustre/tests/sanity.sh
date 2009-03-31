@@ -633,7 +633,7 @@ test_24i() {
 	mrename $DIR/R9/f $DIR/R9/a
 	$CHECKSTAT -t file $DIR/R9/f || error
 	$CHECKSTAT -t dir  $DIR/R9/a || error
-	$CHECKSTAT -a file $DIR/R9/a/f || error
+	$CHECKSTAT -a $DIR/R9/a/f || error
 }
 run_test 24i "rename file to dir error: touch f ; mkdir a ; rename f a"
 
