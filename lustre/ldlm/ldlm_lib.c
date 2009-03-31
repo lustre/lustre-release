@@ -98,7 +98,7 @@ static int import_set_conn(struct obd_import *imp, struct obd_uuid *uuid,
         if (create) {
                 imp_conn->oic_conn = ptlrpc_conn;
                 imp_conn->oic_uuid = *uuid;
-                item->oic_last_attempt = 0;
+                imp_conn->oic_last_attempt = 0;
                 if (priority)
                         list_add(&imp_conn->oic_item, &imp->imp_conn_list);
                 else
