@@ -2029,6 +2029,22 @@ test_81b() {
 }
 run_test 81b "fail log_add during unlink recovery"
 
+test_82() { #bug 18927
+    multiop_bg_pause $DIR/$tfile O_c || return 1
+    pid1=$!
+    multiop_bg_pause $DIR/$tfile o:O_CREAT:O_RDONLY:_c || return 2
+    pid2=$!
+    rm -f $DIR/$tfile
+    replay_barrier mds
+    fail mds
+    kill -USR1 $pid1
+    wait $pid1 || return 3
+    kill -USR1 $pid2
+    wait $pid2 || return 4
+    [ -e $DIR/$tfile ] && return 5
+    return 0
+}
+run_test 82 "second open|creat in replay with open orphan"
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre

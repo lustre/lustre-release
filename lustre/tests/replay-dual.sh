@@ -442,6 +442,23 @@ test_20() { #16389
 }
 run_test 20 "recovery time is not increasing"
 
+test_22() { #bug 18927
+    multiop_bg_pause $MOUNT1/$tfile O_c || return 1
+    pid1=$!
+    multiop_bg_pause $MOUNT2/$tfile O_c || return 2
+    pid2=$!
+    rm -f $MOUNT1/$tfile
+    replay_barrier mds
+    fail mds
+    kill -USR1 $pid1
+    wait $pid1 || return 3
+    kill -USR1 $pid2
+    wait $pid2 || return 4
+    [ -e $MOUNT1/$tfile ] && return 5
+    return 0
+}
+run_test 22 "double open|creat in replay with open orphan from two mntp"
+
 equals_msg `basename $0`: test complete, cleaning up
 SLEEP=$((`date +%s` - $NOW))
 [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
