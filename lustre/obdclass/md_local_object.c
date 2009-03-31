@@ -292,7 +292,7 @@ static struct md_object *llo_create_obj(const struct lu_env *env,
         spec->sp_ck_split = 0;
 
         if (feat == &dt_directory_features)
-                la->la_mode = S_IFDIR;
+                la->la_mode = S_IFDIR | S_IXUGO;
         else
                 la->la_mode = S_IFREG;
 
