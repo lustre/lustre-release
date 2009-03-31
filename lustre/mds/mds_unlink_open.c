@@ -362,8 +362,10 @@ int mds_check_stale_orphan(struct obd_device *obd, struct ll_fid *fid)
         if (mds_inode_is_orphan(inode)) {
                 struct dentry *orphan;
 
-                /* The exactly same inode can't be orphan */
-                LASSERT(inode->i_generation != fid->generation);
+                /* bz18927: The exactly same inode can be marked as orphan
+                 * if there was open|creat replay and this is second one */
+                if (inode->i_generation == fid->generation)
+                        GOTO(unlock_child, rc);
 
                 if (mds_orphan_open_count(inode) > 0) {
                         CERROR("Orphan "LPU64"/%u is in use!\n",
