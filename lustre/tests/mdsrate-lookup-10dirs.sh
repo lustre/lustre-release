@@ -76,7 +76,7 @@ else
     echo "+" ${COMMAND}
     # For files creation we can use NUM_THREADS equal to NUM_DIRS 
     # This is just a test preparation, does not matter how many threads we use for files creation;
-    # we just shuold be aware that NUM_DIRS is less than or equal to the number of threads NUM_THREADS
+    # we just should be aware that NUM_DIRS is less than or equal to the number of threads NUM_THREADS
     mpi_run -np ${NUM_DIRS} -machinefile ${MACHINEFILE} ${COMMAND} 2>&1 
 
     # No lockup if error occurs on file creation, abort.
