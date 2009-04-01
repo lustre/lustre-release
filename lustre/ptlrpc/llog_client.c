@@ -113,6 +113,7 @@ static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                                  LLOG_ORIGIN_HANDLE_CREATE);
         if (rc) {
                 ptlrpc_request_free(req);
+                req = NULL;
                 GOTO(err_free, rc);
         }
         ptlrpc_request_set_replen(req);
