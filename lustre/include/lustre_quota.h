@@ -233,6 +233,9 @@ struct lustre_quota_ctxt {
                                              * b=14840 */
         struct proc_dir_entry *lqc_proc_dir;
         struct lprocfs_stats  *lqc_stats; /* lquota statistics */
+
+        atomic_t      lqc_lqs;              /* the number of used hashed lqs */
+        cfs_waitq_t   lqc_lqs_waitq;        /* no lqs are in use */
 };
 
 #define QUOTA_MASTER_READY(qctxt)   (qctxt)->lqc_setup = 1
@@ -274,7 +277,9 @@ struct lustre_qunit_size {
 
 static inline void lqs_getref(struct lustre_qunit_size *lqs)
 {
-        atomic_inc(&lqs->lqs_refcount);
+        if (atomic_inc_return(&lqs->lqs_refcount) == 2) /* quota_create_lqs */
+                atomic_inc(&lqs->lqs_ctxt->lqc_lqs);
+
         CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
                lqs, atomic_read(&lqs->lqs_refcount));
 }
@@ -289,7 +294,9 @@ static inline void lqs_putref(struct lustre_qunit_size *lqs)
                                 &lqs->lqs_key, &lqs->lqs_hash);
                 OBD_FREE_PTR(lqs);
         } else {
-                atomic_dec(&lqs->lqs_refcount);
+                if (atomic_dec_return(&lqs->lqs_refcount) == 1)
+                        if (atomic_dec_and_test(&lqs->lqs_ctxt->lqc_lqs))
+                                cfs_waitq_signal(&lqs->lqs_ctxt->lqc_lqs_waitq);
                 CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
                        lqs, atomic_read(&lqs->lqs_refcount));
 

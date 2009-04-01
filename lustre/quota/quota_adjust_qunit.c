@@ -188,8 +188,15 @@ int quota_create_lqs(struct qunit_data *qdata, struct quota_adjust_qunit *oqaq,
                 lqs->lqs_last_ishrink  = 0;
         }
         lqs_initref(lqs);
-        rc = lustre_hash_add_unique(qctxt->lqc_lqs_hash,
+
+        spin_lock(&qctxt->lqc_lock);
+        if (!qctxt->lqc_valid)
+                rc = -EBUSY;
+        else
+                rc = lustre_hash_add_unique(qctxt->lqc_lqs_hash,
                                     &lqs->lqs_key, &lqs->lqs_hash);
+        spin_unlock(&qctxt->lqc_lock);
+
         LQS_DEBUG(lqs, "create lqs\n");
         if (!rc) {
                 lqs_getref(lqs);
@@ -297,7 +304,6 @@ search_lqs:
         spin_unlock(&lqs->lqs_lock);
 
         lqs_putref(lqs);
-
         if (b_tmp > 0)
                 rc |= LQS_BLK_DECREASE;
         else if (b_tmp < 0)
