@@ -944,6 +944,20 @@ static void osc_lock_build_einfo(const struct lu_env *env,
         einfo->ei_cbdata = lock; /* value to be put into ->l_ast_data */
 }
 
+static int osc_lock_delete0(struct cl_lock *conflict)
+{
+        struct cl_env_nest    nest;
+        struct lu_env        *env;
+        int    rc = 0;        
+
+        env = cl_env_nested_get(&nest);
+        if (!IS_ERR(env)) {
+                cl_lock_delete(env, conflict);
+                cl_env_nested_put(&nest, env);
+        } else
+                rc = PTR_ERR(env);
+        return rc; 
+}
 /**
  * Cancels \a conflict lock and waits until it reached CLS_FREEING state. This
  * is called as a part of enqueuing to cancel conflicting locks early.
@@ -972,7 +986,9 @@ static int osc_lock_cancel_wait(const struct lu_env *env, struct cl_lock *lock,
         rc = 0;
         if (conflict->cll_state != CLS_FREEING) {
                 cl_lock_cancel(env, conflict);
-                cl_lock_delete(env, conflict);
+                rc = osc_lock_delete0(conflict);
+                if (rc)
+                        return rc; 
                 if (conflict->cll_flags & (CLF_CANCELPEND|CLF_DOOMED)) {
                         rc = -EWOULDBLOCK;
                         if (cl_lock_nr_mutexed(env) > 2)
