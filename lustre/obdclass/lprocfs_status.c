@@ -1484,8 +1484,8 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
             !exp->exp_obd->obd_nid_stats_hash)
                 RETURN(-EINVAL);
 
-	/* not test against zero because eric say:
-	 * You may only test nid against another nid, or LNET_NID_ANY.
+        /* not test against zero because eric say:
+         * You may only test nid against another nid, or LNET_NID_ANY.
          * Anything else is nonsense.*/
         if (!nid || *nid == LNET_NID_ANY)
                 RETURN(0);
@@ -1573,7 +1573,6 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
                                 lprocfs_exp_rd_hash, NULL, new_stat);
         if (rc) {
                 CWARN("Error adding the hash file\n");
-                lprocfs_remove(&new_stat->nid_proc);
                 GOTO(destroy_new_ns, rc);
         }
 
@@ -1587,6 +1586,8 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
         RETURN(rc);
 
 destroy_new_ns:
+        if (new_stat->nid_proc != NULL)
+                lprocfs_remove(&new_stat->nid_proc);
         lustre_hash_del(obd->obd_nid_stats_hash, nid, &new_stat->nid_hash);
         OBD_FREE_PTR(new_ns_uuid);
 
