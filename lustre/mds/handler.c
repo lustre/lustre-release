@@ -2190,7 +2190,9 @@ err_fs:
         mds_fs_cleanup(obd);
         upcall_cache_cleanup(mds->mds_group_hash);
         mds->mds_group_hash = NULL;
+        remove_proc_entry("clear", obd->obd_proc_exports_entry);
 err_ns:
+        lprocfs_free_per_client_stats(obd);
         lprocfs_free_obd_stats(obd);
         lprocfs_obd_cleanup(obd);
         ldlm_namespace_free(obd->obd_namespace, NULL, 0);
@@ -2637,7 +2639,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
 
         unlock_res_and_lock(new_lock);
         lustre_hash_add(new_lock->l_export->exp_lock_hash,
-                        &new_lock->l_remote_handle, 
+                        &new_lock->l_remote_handle,
                         &new_lock->l_exp_hash);
         LDLM_LOCK_PUT(new_lock);
 
