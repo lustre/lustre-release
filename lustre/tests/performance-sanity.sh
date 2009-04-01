@@ -17,8 +17,8 @@ which mpirun > /dev/null 2>&1 || \
 	FAIL_ON_ERROR=true error "No mpirun program. Aborting." 
 
 # Skip these tests
-# bug number:  15266 15266 15266
-ALWAYS_EXCEPT="1     2     6     $PERFORMANCE_SANITY_EXCEPT"
+# bug number:  15266 15266 
+ALWAYS_EXCEPT="1     2    $PERFORMANCE_SANITY_EXCEPT"
 
 build_test_filter
 
