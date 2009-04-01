@@ -441,7 +441,7 @@ if [ "$RECOVERY_DOUBLE_SCALE" != "no" ]; then
         RECOVERY_DOUBLE_SCALE="done"
 fi
 
-[ "$RECOVERY_RANDOM_SCALE" != "no" ] && skip_remmds recovery-double-scale && RECOVERY_RANDOM_SCALE=no && MSKIPPED=1
+[ "$RECOVERY_RANDOM_SCALE" != "no" ] && skip_remmds recovery-random-scale && RECOVERY_RANDOM_SCALE=no && MSKIPPED=1
 if [ "$RECOVERY_RANDOM_SCALE" != "no" ]; then
         title recovery-random-scale
         bash recovery-random-scale.sh
