@@ -345,6 +345,7 @@ check_cur_qunit(struct obd_device *obd,
 
         spin_unlock(&lqs->lqs_lock);
         lqs_putref(lqs);
+
         EXIT;
  out:
         OBD_FREE_PTR(qctl);
@@ -1121,6 +1122,8 @@ qctxt_init(struct obd_device *obd, dqacq_handler_t handler)
                 RETURN(rc);
 
         cfs_waitq_init(&qctxt->lqc_wait_for_qmaster);
+        cfs_waitq_init(&qctxt->lqc_lqs_waitq);
+        atomic_set(&qctxt->lqc_lqs, 0);
         spin_lock_init(&qctxt->lqc_lock);
         spin_lock(&qctxt->lqc_lock);
         qctxt->lqc_handler = handler;
@@ -1159,10 +1162,21 @@ qctxt_init(struct obd_device *obd, dqacq_handler_t handler)
         RETURN(rc);
 }
 
+static int check_lqs(struct lustre_quota_ctxt *qctxt)
+{
+        int rc;
+        ENTRY;
+
+        rc = !atomic_read(&qctxt->lqc_lqs);
+
+        RETURN(rc);
+}
+
 void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force)
 {
         struct lustre_qunit *qunit, *tmp;
         struct list_head tmp_list;
+        struct l_wait_info lwi = { 0 };
         int i;
         ENTRY;
 
@@ -1193,8 +1207,6 @@ void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force)
                 qunit_put(qunit);
         }
 
-        lustre_hash_exit(qctxt->lqc_lqs_hash);
-
         /* after qctxt_cleanup, qctxt might be freed, then check_qm() is
          * unpredicted. So we must wait until lqc_wait_for_qmaster is empty */
         while (cfs_waitq_active(&qctxt->lqc_wait_for_qmaster)) {
@@ -1202,6 +1214,9 @@ void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force)
                 cfs_schedule_timeout(CFS_TASK_INTERRUPTIBLE,
                                      cfs_time_seconds(1));
         }
+
+        l_wait_event(qctxt->lqc_lqs_waitq, check_lqs(qctxt), &lwi);
+        lustre_hash_exit(qctxt->lqc_lqs_hash);
 
         ptlrpcd_decref();
 
@@ -1370,7 +1385,8 @@ lqs_get(struct hlist_node *hnode)
             hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
         ENTRY;
 
-        atomic_inc(&q->lqs_refcount);
+        if (atomic_inc_return(&q->lqs_refcount) == 2) /* quota_search_lqs */
+                atomic_inc(&q->lqs_ctxt->lqc_lqs);
         CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
                q, atomic_read(&q->lqs_refcount));
 
@@ -1385,7 +1401,11 @@ lqs_put(struct hlist_node *hnode)
         ENTRY;
 
         LASSERT(atomic_read(&q->lqs_refcount) > 0);
-        atomic_dec(&q->lqs_refcount);
+
+        if (atomic_dec_return(&q->lqs_refcount) == 1)
+                if (atomic_dec_and_test(&q->lqs_ctxt->lqc_lqs))
+                        cfs_waitq_signal(&q->lqs_ctxt->lqc_lqs_waitq);
+
         CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
                q, atomic_read(&q->lqs_refcount));
 
