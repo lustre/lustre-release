@@ -201,11 +201,6 @@ int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
         }
 
         lov->lov_tgts[index]->ltd_reap = 0;
-        if (activate) {
-                lov->lov_tgts[index]->ltd_active = 1;
-                lov->desc.ld_active_tgt_count++;
-                lov->lov_tgts[index]->ltd_exp->exp_obd->obd_inactive = 0;
-        }
         CDEBUG(D_CONFIG, "Connected tgt idx %d %s (%s) %sactive\n", index,
                obd_uuid2str(&tgt_uuid), tgt_obd->obd_name, activate ? "":"in");
 
