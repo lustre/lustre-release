@@ -180,7 +180,7 @@ void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
         LASSERT(*procroot_ret == NULL);
         LASSERT(*stats_ret == NULL);
 
-        svc_stats = lprocfs_alloc_stats(EXTRA_MAX_OPCODES + LUSTRE_MAX_OPCODES, 0);
+        svc_stats = lprocfs_alloc_stats(EXTRA_MAX_OPCODES+LUSTRE_MAX_OPCODES,0);
         if (svc_stats == NULL)
                 return;
 
@@ -523,7 +523,7 @@ static int ptlrpc_lprocfs_wr_hp_ratio(struct file *file, const char *buffer,
 {
         struct ptlrpc_service *svc = data;
         int rc, val;
-        
+
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc < 0)
                 return rc;
