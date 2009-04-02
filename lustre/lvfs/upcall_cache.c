@@ -216,7 +216,7 @@ static int entry_set_group_info(struct upcall_cache_entry *entry, __u32 primary,
         entry->ue_primary = primary;
 
         for (i = 0; i < ginfo->nblocks; i++) {
-                int cp_count = min(NGROUPS_PER_BLOCK, (int)ngroups);
+                int cp_count = min((int)NGROUPS_PER_BLOCK, (int)ngroups);
                 int off = i * NGROUPS_PER_BLOCK;
 
                 for (j = 0; j < cp_count; j++)
