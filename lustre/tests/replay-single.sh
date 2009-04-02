@@ -1898,19 +1898,6 @@ test_73c() {
 }
 run_test 73c "open(O_CREAT), unlink, replay, reconnect at last_replay, close"
 
-# bug 18554
-test_74() {
-    stop ost1
-    zconf_umount $(hostname) $MOUNT
-    fail $SINGLEMDS
-    zconf_mount $(hostname) $MOUNT
-    mount_facet ost1
-    touch $DIR/$tfile || return 1
-    rm $DIR/$tfile || return 2
-    return 0
-}
-run_test 74 "Ensure applications don't fail waiting for OST reocvery"
-
 test_80a() {
     [ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
 
