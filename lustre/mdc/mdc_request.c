@@ -113,7 +113,7 @@ static int send_getstatus(struct obd_export *exp, struct ll_fid *rootfid,
         return rc;
 }
 
-/* This should be mdc_get_info("rootfid") */
+/* This should be mdc_get_info("ROOT") */
 int mdc_getstatus(struct obd_export *exp, struct ll_fid *rootfid)
 {
         return send_getstatus(exp, rootfid, LUSTRE_IMP_FULL, 0);
