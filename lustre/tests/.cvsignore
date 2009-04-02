@@ -65,6 +65,8 @@ ll_dirstripe_verify
 openfilleddirunlink
 copy_attr
 rename_many
+mdsrate
+parallel_grouplock
 memhog
 mmap_sanity
 rmdirmany
