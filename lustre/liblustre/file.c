@@ -335,7 +335,7 @@ int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
         struct ll_file_data *fd = lli->lli_file_data;
         struct ptlrpc_request *req = NULL;
         struct obd_client_handle *och = &fd->fd_mds_och;
-        struct obdo obdo;
+        struct obdo obdo = { 0 };
         int rc, valid;
         ENTRY;
 

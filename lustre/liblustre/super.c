@@ -798,7 +798,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 }
         } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
                 struct obd_info oinfo = { { { 0 } } };
-                struct obdo oa;
+                struct obdo oa = { 0 };
 
                 CDEBUG(D_INODE, "set mtime on OST inode %llu to %lu\n",
                        (long long)st->st_ino, LTIME_S(attr->ia_mtime));

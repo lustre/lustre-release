@@ -1437,7 +1437,6 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                                 struct mgs_target_info *mti)
 {
         struct lustre_cfg_bufs bufs;
-        struct lustre_cfg *lcfg;
         char *logname;
         char *ptr = mti->mti_params;
         char *endptr, *tmp;

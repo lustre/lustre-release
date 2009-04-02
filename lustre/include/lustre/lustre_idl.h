@@ -448,26 +448,32 @@ typedef __u32 obd_gid;
 typedef __u32 obd_flag;
 typedef __u32 obd_count;
 
-#define OBD_FL_INLINEDATA    (0x00000001)
-#define OBD_FL_OBDMDEXISTS   (0x00000002)
-#define OBD_FL_DELORPHAN     (0x00000004) /* if set in o_flags delete orphans */
-#define OBD_FL_NORPC         (0x00000008) /* set in o_flags do in OSC not OST */
-#define OBD_FL_IDONLY        (0x00000010) /* set in o_flags only adjust obj id*/
-#define OBD_FL_RECREATE_OBJS (0x00000020) /* recreate missing obj */
-#define OBD_FL_DEBUG_CHECK   (0x00000040) /* echo client/server debug check */
-#define OBD_FL_NO_USRQUOTA   (0x00000100) /* the object's owner is over quota */
-#define OBD_FL_NO_GRPQUOTA   (0x00000200) /* the object's group is over quota */
-#define OBD_FL_CREATE_CROW   (0x00000400) /* object should be create on write */
-#define OBD_FL_TRUNCLOCK     (0x00000800) /* delegate DLM locking during punch */
-#define OBD_FL_CKSUM_CRC32   (0x00001000) /* CRC32 checksum type */
-#define OBD_FL_CKSUM_ADLER   (0x00002000) /* ADLER checksum type */
-#define OBD_FL_CKSUM_RESV1   (0x00004000) /* reserved for future checksum type */
-#define OBD_FL_CKSUM_RESV2   (0x00008000) /* reserved for future checksum type */
-#define OBD_FL_CKSUM_RESV3   (0x00010000) /* reserved for future checksum type */
-#define OBD_FL_SHRINK_GRANT  (0x00020000) /* object shrink the grant */
+enum obdo_flags {
+        OBD_FL_INLINEDATA   = 0x00000001,
+        OBD_FL_OBDMDEXISTS  = 0x00000002,
+        OBD_FL_DELORPHAN    = 0x00000004, /* if set in o_flags delete orphans */
+        OBD_FL_NORPC        = 0x00000008, /* set in o_flags do in OSC not OST */
+        OBD_FL_IDONLY       = 0x00000010, /* set in o_flags only adjust obj id*/
+        OBD_FL_RECREATE_OBJS= 0x00000020, /* recreate missing obj */
+        OBD_FL_DEBUG_CHECK  = 0x00000040, /* echo client/server debug check */
+        OBD_FL_NO_USRQUOTA  = 0x00000100, /* the object's owner is over quota */
+        OBD_FL_NO_GRPQUOTA  = 0x00000200, /* the object's group is over quota */
+        OBD_FL_CREATE_CROW  = 0x00000400, /* object should be create on write */
+        OBD_FL_TRUNCLOCK    = 0x00000800, /* delegate DLM locking during punch*/
+        OBD_FL_CKSUM_CRC32  = 0x00001000, /* CRC32 checksum type */
+        OBD_FL_CKSUM_ADLER  = 0x00002000, /* ADLER checksum type */
+        OBD_FL_CKSUM_RSVD1  = 0x00004000, /* for future cksum types */
+        OBD_FL_CKSUM_RSVD2  = 0x00008000, /* for future cksum types */
+        OBD_FL_CKSUM_RSVD3  = 0x00010000, /* for future cksum types */
+        OBD_FL_SHRINK_GRANT = 0x00020000, /* object shrink the grant */
 
+        OBD_FL_CKSUM_ALL    = OBD_FL_CKSUM_CRC32 | OBD_FL_CKSUM_ADLER,
 
-#define OBD_FL_CKSUM_ALL      (OBD_FL_CKSUM_CRC32 | OBD_FL_CKSUM_ADLER)
+        /* mask for local-only flag, which won't be sent over network */
+        OBD_FL_LOCAL_MASK   = 0xF0000000,
+        /* temporary OBDO used by osc_brw_async (see bug 18364) */
+        OBD_FL_TEMPORARY    = 0x10000000,
+};
 
 #define LOV_MAGIC_V1      0x0BD10BD0
 #define LOV_MAGIC         LOV_MAGIC_V1
@@ -1549,6 +1555,23 @@ struct obdo {
 #define o_undirty o_mode
 #define o_dropped o_misc
 #define o_cksum   o_nlink
+
+static inline void lustre_set_wire_obdo(struct obdo *wobdo, struct obdo *lobdo)
+{
+        memcpy(wobdo, lobdo, sizeof(*lobdo));
+        wobdo->o_flags &= ~OBD_FL_LOCAL_MASK;
+}
+
+static inline void lustre_get_wire_obdo(struct obdo *lobdo, struct obdo *wobdo)
+{
+        obd_flag local_flags = lobdo->o_flags & OBD_FL_LOCAL_MASK;
+
+        LASSERT(!(wobdo->o_flags & OBD_FL_LOCAL_MASK));
+        
+        memcpy(lobdo, wobdo, sizeof(*lobdo));
+        lobdo->o_flags &= ~OBD_FL_LOCAL_MASK;
+        lobdo->o_flags |= local_flags;
+}
 
 extern void lustre_swab_obdo (struct obdo *o);
 
