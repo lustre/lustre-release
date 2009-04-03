@@ -37,8 +37,8 @@
 #ifndef __EXPORT_H
 #define __EXPORT_H
 
-#include <lustre/lustre_idl.h>
 #include <lustre_dlm.h>
+#include <lustre/lustre_idl.h>
 #include <lprocfs_status.h>
 #include <class_hash.h>
 

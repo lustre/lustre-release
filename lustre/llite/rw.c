@@ -127,7 +127,7 @@ int ll_file_punch(struct inode * inode, loff_t new_size, int srvlock)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct obd_info oinfo = { { { 0 } } };
-        struct obdo oa;
+        struct obdo oa = { 0 };
         obd_valid valid;
         int rc;
 
@@ -297,7 +297,7 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         obd_off offset = ((obd_off)page->index) << CFS_PAGE_SHIFT;
         struct obd_info oinfo = { { { 0 } } };
         struct brw_page pga;
-        struct obdo oa;
+        struct obdo oa = { 0 };
         struct ost_lvb lvb;
         int rc = 0;
         ENTRY;

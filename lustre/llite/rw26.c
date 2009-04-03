@@ -213,7 +213,7 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct ptlrpc_request_set *set;
         struct obd_info oinfo;
-        struct obdo oa;
+        struct obdo oa = { 0 };
         unsigned long seg;
         size_t size = MAX_DIO_SIZE;
         ENTRY;

@@ -176,7 +176,7 @@ static int osc_getattr_interpret(struct ptlrpc_request *req,
                                   lustre_swab_ost_body);
         if (body) {
                 CDEBUG(D_INODE, "mode: %o\n", body->oa.o_mode);
-                memcpy(aa->aa_oi->oi_oa, &body->oa, sizeof(*aa->aa_oi->oi_oa));
+                lustre_get_wire_obdo(aa->aa_oi->oi_oa, &body->oa);
 
                 /* This should really be sent by the OST */
                 aa->aa_oi->oi_oa->o_blksize = PTLRPC_MAX_BRW_SIZE;
@@ -206,7 +206,7 @@ static int osc_getattr_async(struct obd_export *exp, struct obd_info *oinfo,
                 RETURN(-ENOMEM);
 
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        memcpy(&body->oa, oinfo->oi_oa, sizeof(*oinfo->oi_oa));
+        lustre_set_wire_obdo(&body->oa, oinfo->oi_oa);
 
         ptlrpc_req_set_repsize(req, 2, size);
         req->rq_interpret_reply = osc_getattr_interpret;
@@ -233,7 +233,7 @@ static int osc_getattr(struct obd_export *exp, struct obd_info *oinfo)
                 RETURN(-ENOMEM);
 
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        memcpy(&body->oa, oinfo->oi_oa, sizeof(*oinfo->oi_oa));
+        lustre_set_wire_obdo(&body->oa, oinfo->oi_oa);        
 
         ptlrpc_req_set_repsize(req, 2, size);
 
@@ -251,7 +251,7 @@ static int osc_getattr(struct obd_export *exp, struct obd_info *oinfo)
         }
 
         CDEBUG(D_INODE, "mode: %o\n", body->oa.o_mode);
-        memcpy(oinfo->oi_oa, &body->oa, sizeof(*oinfo->oi_oa));
+        lustre_get_wire_obdo(oinfo->oi_oa, &body->oa);
 
         /* This should really be sent by the OST */
         oinfo->oi_oa->o_blksize = PTLRPC_MAX_BRW_SIZE;
@@ -278,7 +278,7 @@ static int osc_setattr(struct obd_export *exp, struct obd_info *oinfo,
                 RETURN(-ENOMEM);
 
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        memcpy(&body->oa, oinfo->oi_oa, sizeof(*oinfo->oi_oa));
+        lustre_set_wire_obdo(&body->oa, oinfo->oi_oa);        
 
         ptlrpc_req_set_repsize(req, 2, size);
 
@@ -291,7 +291,7 @@ static int osc_setattr(struct obd_export *exp, struct obd_info *oinfo,
         if (body == NULL)
                 GOTO(out, rc = -EPROTO);
 
-        memcpy(oinfo->oi_oa, &body->oa, sizeof(*oinfo->oi_oa));
+        lustre_get_wire_obdo(oinfo->oi_oa, &body->oa);        
 
         EXIT;
 out:
@@ -315,7 +315,7 @@ static int osc_setattr_interpret(struct ptlrpc_request *req,
                 GOTO(out, rc = -EPROTO);
         }
 
-        memcpy(aa->aa_oi->oi_oa, &body->oa, sizeof(*aa->aa_oi->oi_oa));
+        lustre_get_wire_obdo(aa->aa_oi->oi_oa, &body->oa);        
 out:
         rc = aa->aa_oi->oi_cb_up(aa->aa_oi, rc);
         RETURN(rc);
@@ -348,7 +348,7 @@ static int osc_setattr_async(struct obd_export *exp, struct obd_info *oinfo,
                 oinfo->oi_oa->o_lcookie = *oti->oti_logcookies;
         }
 
-        memcpy(&body->oa, oinfo->oi_oa, sizeof(*oinfo->oi_oa));
+        lustre_set_wire_obdo(&body->oa, oinfo->oi_oa);        
         ptlrpc_req_set_repsize(req, 2, size);
         /* do mds to ost setattr asynchronouly */
         if (!rqset) {
@@ -393,7 +393,7 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
                 GOTO(out, rc = -ENOMEM);
 
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        memcpy(&body->oa, oa, sizeof(body->oa));
+        lustre_set_wire_obdo(&body->oa, oa);        
 
         ptlrpc_req_set_repsize(req, 2, size);
         if ((oa->o_valid & OBD_MD_FLFLAGS) &&
@@ -415,7 +415,7 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
                 GOTO (out_req, rc = -EPROTO);
         }
 
-        memcpy(oa, &body->oa, sizeof(*oa));
+        lustre_get_wire_obdo(oa, &body->oa);        
 
         /* This should really be sent by the OST */
         oa->o_blksize = PTLRPC_MAX_BRW_SIZE;
@@ -464,7 +464,7 @@ static int osc_punch_interpret(struct ptlrpc_request *req,
                 GOTO(out, rc = -EPROTO);
         }
 
-        memcpy(aa->aa_oi->oi_oa, &body->oa, sizeof(*aa->aa_oi->oi_oa));
+        lustre_get_wire_obdo(aa->aa_oi->oi_oa, &body->oa);        
 out:
         rc = aa->aa_oi->oi_cb_up(aa->aa_oi, rc);
         RETURN(rc);
@@ -494,7 +494,7 @@ static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
         ptlrpc_at_set_req_timeout(req);
 
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        memcpy(&body->oa, oinfo->oi_oa, sizeof(*oinfo->oi_oa));
+        lustre_set_wire_obdo(&body->oa, oinfo->oi_oa);
 
         /* overload the size and blocks fields in the oa with start/end */
         body->oa.o_size = oinfo->oi_policy.l_extent.start;
@@ -555,7 +555,7 @@ static int osc_sync(struct obd_export *exp, struct obd_info *oinfo,
                 RETURN(-ENOMEM);
 
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        memcpy(&body->oa, oinfo->oi_oa, sizeof(*oinfo->oi_oa));
+        lustre_set_wire_obdo(&body->oa, oinfo->oi_oa);
 
         /* overload the size and blocks fields in the oa with start/end */
         body->oa.o_size = start;
@@ -673,7 +673,7 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                 oa->o_lcookie = *oti->oti_logcookies;
         }
 
-        memcpy(&body->oa, oa, sizeof(*oa));
+        lustre_set_wire_obdo(&body->oa, oa);
         ptlrpc_req_set_repsize(req, 2, size);
 
         /* don't throttle destroy RPCs for the MDT */
@@ -1158,8 +1158,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         niobuf = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 2,
                                 niocount * sizeof(*niobuf));
 
-        memcpy(&body->oa, oa, sizeof(*oa));
-
+        lustre_set_wire_obdo(&body->oa, oa);
         obdo_to_ioobj(oa, ioobj);
         ioobj->ioo_bufcnt = niocount;
 
@@ -1220,8 +1219,10 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                          * it can be changed via lprocfs */
                         cksum_type_t cksum_type = cli->cl_cksum_type;
 
-                        if ((body->oa.o_valid & OBD_MD_FLFLAGS) == 0)
-                                oa->o_flags = body->oa.o_flags = 0;
+                        if ((body->oa.o_valid & OBD_MD_FLFLAGS) == 0) {
+                                oa->o_flags &= OBD_FL_LOCAL_MASK;
+                                body->oa.o_flags = 0;
+                        }
                         body->oa.o_flags |= cksum_type_pack(cksum_type);
                         body->oa.o_valid |= OBD_MD_FLCKSUM | OBD_MD_FLFLAGS;
                         body->oa.o_cksum = osc_checksum_bulk(requested_nob,
@@ -1464,7 +1465,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
         }
 out:
         if (rc >= 0)
-                memcpy(aa->aa_oa, &body->oa, sizeof(*aa->aa_oa));
+                lustre_get_wire_obdo(aa->aa_oa, &body->oa);
 
         RETURN(rc);
 }
@@ -1823,6 +1824,7 @@ static int osc_brw_async(int cmd, struct obd_export *exp,
         sort_brw_pages(ppga, page_count);
         while (page_count) {
                 struct brw_page **copy;
+                struct obdo *oa;
                 obd_count pages_per_brw;
 
                 pages_per_brw = min_t(obd_count, page_count,
@@ -1836,15 +1838,29 @@ static int osc_brw_async(int cmd, struct obd_export *exp,
                         if (copy == NULL)
                                 GOTO(out, rc = -ENOMEM);
                         memcpy(copy, ppga, pages_per_brw * sizeof(*copy));
-                } else
+                        
+                        OBDO_ALLOC(oa);
+                        if (oa == NULL) {
+                                OBD_FREE(copy, pages_per_brw * sizeof(*copy));
+                                GOTO(out, rc = -ENOMEM);
+                        }
+                        memcpy(oa, oinfo->oi_oa, sizeof(*oa));
+                        oa->o_flags |= OBD_FL_TEMPORARY;
+                } else {
                         copy = ppga;
+                        oa = oinfo->oi_oa;
+                        LASSERT(!(oa->o_flags & OBD_FL_TEMPORARY));
+                }
 
-                rc = async_internal(cmd, exp, oinfo->oi_oa, oinfo->oi_md,
-                                    pages_per_brw, copy, set);
+                rc = async_internal(cmd, exp, oa, oinfo->oi_md, pages_per_brw,
+                                    copy, set);
 
                 if (rc != 0) {
                         if (copy != ppga)
                                 OBD_FREE(copy, pages_per_brw * sizeof(*copy));
+
+                        if (oa->o_flags & OBD_FL_TEMPORARY)
+                                OBDO_FREE(oa);
                         break;
                 }
 
@@ -2164,6 +2180,9 @@ static int brw_interpret(struct ptlrpc_request *request, void *data, int rc)
                 obd_count i;
                 for (i = 0; i < aa->aa_page_count; i++)
                         osc_release_write_grant(aa->aa_cli, aa->aa_ppga[i], 1);
+               
+                if (aa->aa_oa->o_flags & OBD_FL_TEMPORARY)
+                        OBDO_FREE(aa->aa_oa);
         }
         osc_wake_cache_waiters(cli);
         osc_check_rpcs(cli);

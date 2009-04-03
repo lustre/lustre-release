@@ -663,7 +663,7 @@ static void ec_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
 {
         struct echo_async_page *eap = EAP_FROM_COOKIE(data);
 
-        memcpy(oa, &eap->eap_eas->eas_oa, sizeof(*oa));
+        lustre_set_wire_obdo(oa, &eap->eap_eas->eas_oa);
 }
 
 static int ec_ap_completion(void *data, int cmd, struct obdo *oa, int rc)

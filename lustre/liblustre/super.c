@@ -790,7 +790,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 }
         } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
                 struct obd_info oinfo = { { { 0 } } };
-                struct obdo oa;
+                struct obdo oa = { 0 };
                 struct lustre_handle lockh = { 0 };
                 obd_valid valid;
 
