@@ -171,6 +171,12 @@ Description: 1.6.5 mdsrate performance is slower than 1.4.11/12 (MDS is not cpu 
 Details    : create_count always drops to the min value (=32) because grow_count
 	     is being changed before the precreate RPC completes.
 
+Severity   : critical
+Bugzilla   : 18695
+Descriptoin: Lustre detected file system corruption with inode out of bounds
+Details    : don't update i_size on MDS_CLOSE for directories. This causes
+	     directory corruptions on the MDT.
+
 --------------------------------------------------------------------------
 2009-01-15 Sun Microsystems, Inc.
 	* version 1.6.7
