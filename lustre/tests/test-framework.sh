@@ -18,17 +18,8 @@ export IDENTITY_UPCALL=default
 
 #export PDSH="pdsh -S -Rssh -w"
 
-# eg, assert_env LUSTRE MDSNODES OSTNODES CLIENTS
-assert_env() {
-    local failed=""
-    for name in $@; do
-        if [ -z "${!name}" ]; then
-            echo "$0: $name must be set"
-            failed=1
-        fi
-    done
-    [ $failed ] && exit 1 || true
-}
+# function used by scripts run on remote nodes
+. $(dirname $0)/functions.sh
 
 assert_DIR () {
     local failed=""
