@@ -1,0 +1,109 @@
+.\" Copyright  2008 Sun Microsystems, Inc. All rights reserved
+.\" Use is subject to license terms.
+.\"
+.\" Author: Andreas Dilger <adilger@sun.com>
+.TH write_append_truncate 1 "Oct 29, 2008" Lustre "utilities"
+.SH NAME
+write_append_truncate \- MPI test of concurrent file operation coherency
+.SH SYNOPSIS
+.B write_append_truncate
+.RB [ -a
+.IR append_max ]
+.RB [ -C ]
+.RB [ -n
+.IR nloops ]
+.RB [ -s
+.IR seed ]
+.RB [ -t
+.IR trunc_max ]
+.RB [ -T ]
+.RB [ -w
+.IR write_max ]
+.RB [ -W ]
+.I filename
+.I ...
+.SH DESCRIPTION
+The
+.B write_append_truncate
+program does data coherency testing for parallel filesystem using
+.BR mpi (7)
+to launch and co-ordinate processes.  It runs multiple parallel
+processes on one or more nodes, as specified to
+.BR mpirun (1),
+.BR pdsh (1),
+or other MPI job launcher, each operating on the same shared file.
+.sp
+The master process creates
+.I filename
+if it does not exist
+.I
+For each of the
+.I num_loops
+test iterations one process truncates the file to zero size and writes
+a random number of check bytes,
+.BR W
+between 1 and
+.I write_max
+to
+.IR filename .
+.sp
+Other processes wait on an MPI barrier until
+this is complete.  One of the processes is chosen, to do an append
+.RB ( write (2)
+with
+.BR O_APPEND ) of
+a random size,
+.BR A ,
+between 1 and 
+.I append_max
+bytes to the end of the file.  A second process does a concurrent
+.BR truncate (2)
+operation on the file to a random size,
+.BR W + T ,
+between 1 and
+.I trunc_max
+bytes beyond the end of the initial
+.B W
+bytes data.  This truncate will either extend the file size if it is
+done before the append, or it will truncate the file if it is done
+after the append.
+.sp
+A second MPI barrier ensures both of the processes have completed
+their respective operations, and then the master process reads the entire
+file and verifies the contents.
+.sp
+The beginning of the file is verified to contain the
+.B W
+check bytes up to the offset it was initially filled to.
+.br
+If the file size is equal to the truncated size,
+.BR W + T ,
+then the truncate operation was done
+.I after
+the append and the data beyond the initial write offset
+.BR W
+to the end of file
+.BR W + T
+should contain the
+.B A
+bytes of append check data, and possibly a zero-filled hole at the
+end of the file if
+.B T
+is larger than
+.BR A .
+.sp
+Otherwise, the truncate operation was done
+.I before
+the append and the data beyond the initial write offset
+.B W
+to the truncate offset
+.BR W + T
+should be a zero-filled hole.  Beyond the hole to the end of file
+there should be
+.B A
+bytes of append check data.  The total file size should be
+.BR W " + " T " + " A .
+.LP
+.SH SEE ALSO
+.BR mpirun (1)
+.BR pdsh (1)
