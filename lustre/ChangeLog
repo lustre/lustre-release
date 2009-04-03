@@ -39,7 +39,43 @@
 Severity   : critical
 Bugzilla   : 18695
 Descriptoin: Lustre detected file system corruption with inode out of bounds
-Details    : don't update i_size on MDS_CLOSE for directories.
+Details    : don't update i_size on MDS_CLOSE for directories. This causes
+	     directory corruptions on the MDT".
+
+Severity   : major
+Bugzilla   : 18810
+Description: ondisk corruption on OST
+Details    : Fix race between read_block_bitmap() and mark_diskspace_used()
+             causing the ldiskfs filesystem to be remounted read only.
+
+Severity   : rare
+Bugzilla   : 18895
+Description: replay-single test_61d: LustreError:
+	     17392:0:(lprocfs_status.c:859:lprocfs_obd_cleanup())
+	     ASSERTION(obd->obd_proc_exports_entry->subdir == NULL) failed
+Details    : cleanup lprocfs entries on error.
+
+Severity   : rare
+Bugzilla   : 18903
+Description: llmount.sh: BUG: spinlock wrong owner on CPU#0, mount.lustre/8180
+Details    : fix typo in import_set_conn() causing spinlock corruption.
+
+Severity   : rare, only when using group lock
+Bugzilla   : 18859
+Description: Group Lock in Lustre: write call is blocking
+Details    : fix wrong return code of ll_is_file_contended() causing processes
+	     to be blocked indefinitely.
+
+Severity   : normal
+Bugzilla   : 17757
+Description: ASSERTION(new_lock != NULL) failed:op 0x1 lockh 0x0
+Details    : DISP_OPEN_LOCK is not cleared properly in reconstruct_open() since
+	     intent_disposition() is used instead of intent_set_disposition().
+
+Severity   : major (only when using software RAID5)
+Bugzilla   : 15428
+Description: raid5 panics
+Details    : fix panic in raid5_end_read_request().
 
 --------------------------------------------------------------------------
 
