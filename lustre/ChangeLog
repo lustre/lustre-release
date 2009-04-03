@@ -40,7 +40,7 @@ Severity   : critical
 Bugzilla   : 18695
 Descriptoin: Lustre detected file system corruption with inode out of bounds
 Details    : don't update i_size on MDS_CLOSE for directories. This causes
-	     directory corruptions on the MDT".
+	     directory corruptions on the MDT.
 
 Severity   : major
 Bugzilla   : 18810
