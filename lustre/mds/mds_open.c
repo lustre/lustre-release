@@ -1537,7 +1537,8 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                  * rough decision making and will get the proper size later.
                  * * This is NOT guaranteed to be correct with multiple *
                  * writers, but is only needed until SOM is done. b=11063 */
-                if ((request_body->valid & OBD_MD_FLSIZE) &&
+                if (S_ISREG(inode->i_mode) &&
+                    (request_body->valid & OBD_MD_FLSIZE) &&
                     (iattr.ia_valid != 0)) {
                         iattr.ia_size = request_body->size;
                         iattr.ia_valid |= ATTR_SIZE;

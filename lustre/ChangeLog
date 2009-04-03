@@ -971,6 +971,12 @@ Details    : enable OBD_CONNECT_MDT flag when connecting from the MDS so that
 	     from a different NID, so we do not need to wait for the export to
 	     be evicted.
 
+Severity   : critical
+Bugzilla   : 18695
+Descriptoin: Lustre detected file system corruption with inode out of bounds
+Details    : don't update i_size on MDS_CLOSE for directories. This causes
+	     directory corruptions on the MDT.
+
 -------------------------------------------------------------------------------
 
 2008-05-26  Sun Microsystems, Inc.
