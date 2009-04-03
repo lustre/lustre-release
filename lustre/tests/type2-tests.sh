@@ -379,7 +379,7 @@ test_write_append_truncate() {
     # mpi_run uses mpiuser
     chmod 0777 $testdir
 
-    local cmd="write_append_truncate $file $write_REP"
+    local cmd="write_append_truncate -n $write_REP $file"
 
     echo "+ $cmd"
     mpi_run -np $((num_clients * $write_THREADS)) -machinefile ${MACHINEFILE} $cmd
