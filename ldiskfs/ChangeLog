@@ -1,3 +1,14 @@
+2009-04-06 Sun Microsystems, Inc.
+	* version 3.0.8
+
+Severity   : major
+Bugzilla   : 18810
+Description: ondisk corruption on OST
+Details    : Fix race between read_block_bitmap() and mark_diskspace_used()
+	     causing the ldiskfs filesystem to be remount read only.
+
+-------------------------------------------------------------------------------
+
 2009-02-07 Sun Microsystems, Inc.
 	* version 3.0.7
 
