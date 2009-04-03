@@ -867,6 +867,11 @@ Description: Assertion failure in ldlm_lock_put
 Details    : Do not put cancelled locks into replay list, hold references on
              locks in replay list
 
+Severity   : critical
+Bugzilla   : 18695
+Descriptoin: Lustre detected file system corruption with inode out of bounds
+Details    : don't update i_size on MDS_CLOSE for directories. This causes
+	     directory corruptions on the MDT.
 
 -------------------------------------------------------------------------------
 
