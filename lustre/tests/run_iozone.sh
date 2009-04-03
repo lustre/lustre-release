@@ -12,34 +12,16 @@ mkdir -p ${LOG%/*}
 rm -f $LOG $DEBUGLOG
 exec 2>$DEBUGLOG
 
-if [ -z "$MOUNT" -o -z "$END_RUN_FILE" -o -z "$LOAD_PID_FILE" ]; then
-    echo "The following must be set: MOUNT END_RUN_FILE LOAD_PID_FILE"
-    exit 1
-fi
+. $(dirname $0)/functions.sh
 
-echoerr () { echo "$@" 1>&2 ; }
-
-signaled() {
-    echoerr "$(date +'%F %H:%M:%S'): client load was signaled to terminate"
-    kill -TERM -$PPID
-    sleep 5
-    kill -KILL -$PPID
-}
+assert_env MOUNT END_RUN_FILE LOAD_PID_FILE
 
 trap signaled TERM
 
-# recovery-mds-scale uses this to signal the client loads to die
+# recovery-*-scale scripts use this to signal the client loads to die
 echo $$ >$LOAD_PID_FILE
 
 TESTDIR=$MOUNT/d0.iozone-$(hostname)
-
-# needed to debug oom problem
-#echo 1 > /proc/sys/vm/vm_gfp_debug
-#killpids=""
-#vmstat 1 1000000 >$TMP/iozone.vmstat.out &
-#killpids="$killpids $!"
-#$LUSTRE_TESTS/runvmstat > $TMP/iozone.runvmstat.out &
-#killpids="$killpids $!"
 
 CONTINUE=true
 while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
@@ -72,6 +54,3 @@ while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
 done
 
 echoerr "$(date +'%F %H:%M:%S'): iozone run exiting"
-#kill $killpids
-#sleep 5
-#kill -9 $killpids
