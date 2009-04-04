@@ -178,9 +178,7 @@ remote_server ()
 }
 
 test_4a() {
-    local var=${SINGLEMDS}_svc
-    do_facet $SINGLEMDS "$LCTL get_param -n mdd.${!var}.stale_export_age" > /dev/null 2>&1
-    [ $? -ne 0 ] && { skip "No delayed recovery support" && return; }
+    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
         { skip "Client $CLIENT2 is on the server node" && return 0; }
@@ -213,9 +211,7 @@ test_4a() {
 run_test 4a "fail MDS, delayed recovery"
 
 test_4b(){
-    local var=${SINGLEMDS}_svc
-    do_facet $SINGLEMDS "$LCTL get_param -n mdd.${!var}.stale_export_age" > /dev/null 2>&1
-    [ $? -ne 0 ] && { skip "No delayed recovery support" && return; }
+    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
         { skip "Client $CLIENT2 is on the server node" && return 0; }
@@ -247,9 +243,7 @@ test_4b(){
 run_test 4b "fail MDS, normal operation, delayed open recovery"
 
 test_4c() {
-    local var=${SINGLEMDS}_svc
-    do_facet $SINGLEMDS "$LCTL get_param -n mdd.${!var}.stale_export_age" > /dev/null 2>&1
-    [ $? -ne 0 ] && { skip "No delayed recovery support" && return; }
+    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
         { skip "Client $CLIENT2 is on the server node" && return 0; }
@@ -281,9 +275,7 @@ test_4c() {
 run_test 4c "fail MDS, normal operation, delayed recovery"
 
 test_5a() {
-    local var=${SINGLEMDS}_svc
-    do_facet $SINGLEMDS "$LCTL get_param -n mdd.${!var}.stale_export_age" > /dev/null 2>&1
-    [ $? -ne 0 ] && { skip "No delayed recovery support" && return; }
+    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
         { skip "Client $CLIENT2 is on the server node" && return 0; }
@@ -315,9 +307,7 @@ test_5a() {
 run_test 5a "fail MDS, delayed recovery should fail"
 
 test_5b() {
-    local var=${SINGLEMDS}_svc
-    do_facet $SINGLEMDS "$LCTL get_param -n mdd.${!var}.stale_export_age" > /dev/null 2>&1
-    [ $? -ne 0 ] && { skip "No delayed recovery support" && return; }
+    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
         { skip "Client $CLIENT2 is on the server node" && return 0; }
@@ -351,9 +341,7 @@ test_5b() {
 run_test 5b "fail MDS, normal operation, delayed recovery should fail"
 
 test_6a() {
-    local var=${SINGLEMDS}_svc
-    do_facet $SINGLEMDS "$LCTL get_param -n mdd.${!var}.stale_export_age" > /dev/null 2>&1
-    [ $? -ne 0 ] && { skip "No delayed recovery support" && return; }
+    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
         { skip "Client $CLIENT2 is on the server node" && return 0; }
@@ -392,9 +380,7 @@ test_6a() {
 run_test 6a "fail MDS, delayed recovery, fail MDS"
 
 test_7a() {
-    local var=${SINGLEMDS}_svc
-    do_facet $SINGLEMDS "$LCTL get_param -n mdd.${!var}.stale_export_age" > /dev/null 2>&1
-    [ $? -ne 0 ] && { skip "No delayed recovery support" && return; }
+    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
         { skip "Client $CLIENT2 is on the server node" && return 0; }
@@ -467,9 +453,7 @@ rmultiop_stop() {
 }
 
 test_8a() {
-    local var=${SINGLEMDS}_svc
-    do_facet $SINGLEMDS "$LCTL get_param -n mdd.${!var}.stale_export_age" > /dev/null 2>&1
-    [ $? -ne 0 ] && { skip "No delayed recovery support" && return; }
+    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
         { skip "Client $CLIENT2 is on the server node" && return 0; }
@@ -496,9 +480,7 @@ test_8a() {
 run_test 8a "orphans are kept until delayed recovery"
 
 test_8b() {
-    local var=${SINGLEMDS}_svc
-    do_facet $SINGLEMDS "$LCTL get_param -n mdd.${!var}.stale_export_age" > /dev/null 2>&1
-    [ $? -ne 0 ] && { skip "No delayed recovery support" && return; }
+    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
         { skip "Client $CLIENT2 is on the server node" && return 0; }
@@ -525,9 +507,7 @@ test_8b() {
 run_test 8b "open1 | unlink2 X delayed_replay1, close1"
 
 test_8c() {
-    local var=${SINGLEMDS}_svc
-    do_facet $SINGLEMDS "$LCTL get_param -n mdd.${!var}.stale_export_age" > /dev/null 2>&1
-    [ $? -ne 0 ] && { skip "No delayed recovery support" && return; }
+    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
         { skip "Client $CLIENT2 is on the server node" && return 0; }
@@ -554,9 +534,7 @@ test_8c() {
 run_test 8c "open1 | unlink2, close1 X delayed_replay1"
 
 test_8d() {
-    local var=${SINGLEMDS}_svc
-    do_facet $SINGLEMDS "$LCTL get_param -n mdd.${!var}.stale_export_age" > /dev/null 2>&1
-    [ $? -ne 0 ] && { skip "No delayed recovery support" && return; }
+    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
         { skip "Client $CLIENT2 is on the server node" && return 0; }
@@ -652,9 +630,8 @@ test_8g() {
 run_test 8g "create | unlink, create shouldn't fail"
 
 test_10 () {
-    local var=${SINGLEMDS}_svc
-    do_facet $SINGLEMDS $LCTL get_param -n mdd.${!var}.stale_export_age && \
-        { skip "No delayed recovery support" && return; }
+    delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
+
     [ -z "$DBENCH_LIB" ] && skip "DBENCH_LIB is not set" && return 0
 
     zconf_mount_clients $CLIENTS $DIR

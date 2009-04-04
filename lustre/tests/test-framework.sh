@@ -2631,3 +2631,8 @@ mdsrate_cleanup () {
     mpi_run -np $1 -machinefile $2 ${MDSRATE} --unlink --nfiles $3 --dir $4 --filefmt $5 $6
 }
 
+delayed_recovery_enabled () {
+    local var=${SINGLEMDS}_svc
+    do_facet $SINGLEMDS lctl get_param -n mdd.${!var}.stale_export_age > /dev/null 2>&1
+}
+
