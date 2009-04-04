@@ -491,6 +491,62 @@ zconf_umount() {
     fi
 }
 
+# nodes is comma list
+sanity_mount_check_nodes () {
+    local nodes=$1
+    shift
+    local mnts="$@"
+    local mnt
+
+    # FIXME: assume that all cluster nodes run the same os
+    [ "$(uname)" = Linux ] || return 0
+
+    local rc=0
+    for mnt in $mnts ; do
+        do_nodes $nodes "set -x; running=\\\$(grep -c $mnt' ' /proc/mounts);
+mpts=\\\$(mount | grep -w -c $mnt);
+if [ \\\$running -ne \\\$mpts ]; then
+    echo \\\$(hostname) env are INSANE!;
+    exit 1;
+fi"
+    [ $? -eq 0 ] || rc=1 
+    done
+    return $rc
+}
+
+sanity_mount_check_servers () {
+    echo Checking servers environments
+
+    # FIXME: modify get_facets to display all facets wo params
+    local facets="$(get_facets OST),$(get_facets MDS)"
+    local node
+    local mnt
+    local facet
+    for facet in ${facets//,/ }; do
+        node=$(facet_host ${facet})
+        mnt=${MOUNT%/*}/${facet}
+        sanity_mount_check_nodes $node $mnt ||
+            { error "server $node environments are insane!"; return 1; }
+    done
+}
+
+sanity_mount_check_clients () {
+    local clients=${1:-$CLIENTS}
+    local mntpt=${2:-$MOUNT}
+    local mntpt2=${3:-$MOUNT2}
+
+    [ -z $clients ] && clients=$(hostname)
+    echo Checking clients $clients environments
+
+    sanity_mount_check_nodes $clients $mntpt $mntpt2 ||
+       error "clients environments are insane!"
+}
+
+sanity_mount_check () {
+    sanity_mount_check_servers || return 1
+    sanity_mount_check_clients || return 2
+}
+
 # mount clients if not mouted
 zconf_mount_clients() {
     local OPTIONS
@@ -508,10 +564,19 @@ zconf_mount_clients() {
     fi
 
     echo "Starting client $clients: $OPTIONS $device $mnt"
-    do_nodes $clients "mount | grep $mnt || { mkdir -p $mnt && mount -t lustre $OPTIONS $device $mnt || false; }"
+
+    do_nodes $clients "set -x;
+running=\\\$(mount | grep -c $mnt' ')
+rc=0
+if [ \\\$running -eq 0 ] ; then
+    mkdir -p $mnt
+    mount -t lustre $OPTIONS $device $mnt
+    rc=$?
+fi
+exit $rc"
 
     echo "Started clients $clients: "
-    do_nodes $clients "mount | grep $mnt"
+    do_nodes $clients "mount | grep -w $mnt"
 
     do_nodes $clients "sysctl -w lnet.debug=$PTLDEBUG;
         sysctl -w lnet.subsystem_debug=${SUBSYSTEM# };
@@ -528,20 +593,20 @@ zconf_umount_clients() {
     [ "$3" ] && force=-f
 
     echo "Stopping clients: $clients $mnt (opts:$force)"
-    do_nodes $clients "set -x; running=\\\$(grep -c $mnt' ' /proc/mounts)
+    do_nodes $clients "set -x; running=\\\$(grep -c $mnt' ' /proc/mounts);
 if [ \\\$running -ne 0 ] ; then
-echo Stopping client \\\$(hostname) client $mnt opts:$force
-lsof -t $mnt || need_kill=no
+echo Stopping client \\\$(hostname) client $mnt opts:$force;
+lsof -t $mnt || need_kill=no;
 if [ "x$force" != "x" -a "x\\\$need_kill" != "xno" ]; then
     pids=\\\$(lsof -t $mnt | sort -u);
     if [ -n \\\"\\\$pids\\\" ]; then
-             kill -9 \\\$pids
+             kill -9 \\\$pids;
     fi
-fi
-busy=\\\$(umount $force $mnt 2>&1 | grep -c "busy")
+fi;
+busy=\\\$(umount $force $mnt 2>&1 | grep -c "busy");
 if [ \\\$busy -ne 0 ] ; then
-    echo "$mnt is still busy, wait one second" && sleep 1
-    umount $force $mnt
+    echo "$mnt is still busy, wait one second" && sleep 1;
+    umount $force $mnt;
 fi
 fi"
 }
@@ -856,6 +921,7 @@ wait_remote_prog () {
     local pids=$(ps  uax | grep "$PDSH.*$prog.*$MOUNT" | grep -v grep | awk '{print $2}')
     [ -z "$pids" ] && return 0
     echo "$PDSH processes still exists after $WAIT seconds.  Still running: $pids"
+    # FIXME: not portable
     for pid in $pids; do
         cat /proc/${pid}/status || true
         cat /proc/${pid}/wchan || true
@@ -1173,14 +1239,11 @@ stopall() {
         fail mds
     fi
 
-    # assume client mount is local
-    grep " $MOUNT " /proc/mounts && zconf_umount $HOSTNAME $MOUNT $*
-    grep " $MOUNT2 " /proc/mounts && zconf_umount $HOSTNAME $MOUNT2 $*
+    local clients=$CLIENTS
+    [ -z $clients ] && clients=$(hostname)
 
-    if [ -n "$CLIENTS" ]; then
-            zconf_umount_clients $CLIENTS $MOUNT "$*" || true
-            [ -n "$MOUNT2" ] && zconf_umount_clients $CLIENTS $MOUNT2 "$*" || true
-    fi
+    zconf_umount_clients $clients $MOUNT "$*" || true
+    [ -n "$MOUNT2" ] && zconf_umount_clients $clients $MOUNT2 "$*" || true
 
     [ "$CLIENTONLY" ] && return
     # The add fn does rm ${facet}active file, this would be enough
@@ -1250,6 +1313,9 @@ writeconf_all () {
 }
 
 setupall() {
+    sanity_mount_check ||
+        error "environments are insane!"
+
     load_modules
     if [ -z "$CLIENTONLY" ]; then
         echo Setup mdt, osts
@@ -1358,6 +1424,9 @@ check_config () {
             error "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST, NETTYPE=$NETTYPE
                    Please use correct config or set mds_HOST correctly!"
     fi
+
+    sanity_mount_check ||
+        error "environments are insane!"
 }
 
 check_timeout () {
