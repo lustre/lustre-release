@@ -111,6 +111,13 @@ struct imp_at {
         struct adaptive_timeout iat_service_estimate[IMP_AT_MAX_PORTALS];
 };
 
+/* state history */
+#define IMP_STATE_HIST_LEN 16
+struct import_state_hist {
+        enum lustre_imp_state ish_state;
+        time_t                ish_time;
+};
+
 struct obd_import {
         struct portals_handle     imp_handle;
         atomic_t                  imp_refcount;
@@ -136,8 +143,11 @@ struct obd_import {
         atomic_t                  imp_inflight;
         atomic_t                  imp_unregistering;
         atomic_t                  imp_replay_inflight;
-        atomic_t                  imp_inval_count;
+        atomic_t                  imp_inval_count;  /* in-progress invalidations */
+        atomic_t                  imp_timeouts;
         enum lustre_imp_state     imp_state;
+        struct import_state_hist  imp_state_hist[IMP_STATE_HIST_LEN];
+        int                       imp_state_hist_idx;
         int                       imp_generation;
         __u32                     imp_conn_cnt;
         int                       imp_last_generation_checked;
@@ -162,7 +172,7 @@ struct obd_import {
                                   imp_replayable:1,       /* try to recover the import */
                                   imp_dlm_fake:1,         /* don't run recovery (timeout instead) */
                                   imp_server_timeout:1,   /* use 1/2 timeout on MDS' OSCs */
-                                  imp_initial_recov:1,    /* retry the initial connection */  
+                                  imp_initial_recov:1,    /* retry the initial connection */
                                   imp_initial_recov_bk:1, /* turn off init_recov after trying all failover nids */
                                   imp_delayed_recovery:1, /* VBR: imp in delayed recovery */
                                   imp_no_lock_replay:1,   /* VBR: if gap was found then no lock replays */

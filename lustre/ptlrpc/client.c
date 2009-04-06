@@ -999,9 +999,11 @@ static int after_reply(struct ptlrpc_request *req)
 
         do_gettimeofday(&work_start);
         timediff = cfs_timeval_sub(&work_start, &req->rq_arrival_time, NULL);
-        if (obd->obd_svc_stats != NULL)
+        if (obd->obd_svc_stats != NULL) {
                 lprocfs_counter_add(obd->obd_svc_stats, PTLRPC_REQWAIT_CNTR,
                                     timediff);
+                ptlrpc_lprocfs_rpc_sent(req, timediff);
+        }
 
         if (lustre_msg_get_type(req->rq_repmsg) != PTL_RPC_MSG_REPLY &&
             lustre_msg_get_type(req->rq_repmsg) != PTL_RPC_MSG_ERR) {
@@ -1193,20 +1195,20 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
                         LASSERT(req->rq_next_phase != req->rq_phase);
                         LASSERT(req->rq_next_phase != RQ_PHASE_UNDEFINED);
 
-                        /* 
+                        /*
                          * Skip processing until reply is unlinked. We
                          * can't return to pool before that and we can't
                          * call interpret before that. We need to make
                          * sure that all rdma transfers finished and will
-                         * not corrupt any data. 
+                         * not corrupt any data.
                          */
                         if (ptlrpc_client_recv_or_unlink(req) ||
                             ptlrpc_client_bulk_active(req))
                                 continue;
-                     
-                        /* 
+
+                        /*
                          * Turn fail_loc off to prevent it from looping
-                         * forever. 
+                         * forever.
                          */
                         if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK)) {
                                 OBD_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK,
@@ -1217,9 +1219,9 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
                                                      OBD_FAIL_ONCE);
                         }
 
-                        /* 
-                         * Move to next phase if reply was successfully 
-                         * unlinked. 
+                        /*
+                         * Move to next phase if reply was successfully
+                         * unlinked.
                          */
                         ptlrpc_rqphase_move(req, req->rq_next_phase);
                 }
@@ -1230,14 +1232,14 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
                 if (req->rq_phase == RQ_PHASE_INTERPRET)
                         GOTO(interpret, req->rq_status);
 
-                /* 
-                 * Note that this also will start async reply unlink. 
+                /*
+                 * Note that this also will start async reply unlink.
                  */
                 if (req->rq_net_err && !req->rq_timedout) {
                         ptlrpc_expire_one_request(req, 1);
 
-                        /* 
-                         * Check if we still need to wait for unlink. 
+                        /*
+                         * Check if we still need to wait for unlink.
                          */
                         if (ptlrpc_client_recv_or_unlink(req) ||
                             ptlrpc_client_bulk_active(req))
@@ -1284,14 +1286,14 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 
                                 if (status != 0)  {
                                         req->rq_status = status;
-                                        ptlrpc_rqphase_move(req, 
+                                        ptlrpc_rqphase_move(req,
                                                 RQ_PHASE_INTERPRET);
                                         spin_unlock(&imp->imp_lock);
                                         GOTO(interpret, req->rq_status);
                                 }
                                 if (req->rq_no_resend && !req->rq_wait_ctx) {
                                         req->rq_status = -ENOTCONN;
-                                        ptlrpc_rqphase_move(req, 
+                                        ptlrpc_rqphase_move(req,
                                                 RQ_PHASE_INTERPRET);
                                         spin_unlock(&imp->imp_lock);
                                         GOTO(interpret, req->rq_status);
@@ -1306,7 +1308,7 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
                                 req->rq_waiting = 0;
 
                                 if (req->rq_timedout||req->rq_resend) {
-                                        /* This is re-sending anyways, 
+                                        /* This is re-sending anyways,
                                          * let's mark req as resend. */
                                         req->rq_resend = 1;
                                         if (req->rq_bulk) {
@@ -1442,7 +1444,7 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
                 spin_lock(&imp->imp_lock);
                 /* Request already may be not on sending or delaying list. This
                  * may happen in the case of marking it errorneous for the case
-                 * ptlrpc_import_delay_req(req, status) find it impossible to 
+                 * ptlrpc_import_delay_req(req, status) find it impossible to
                  * allow sending this rpc and returns *status != 0. */
                 if (!list_empty(&req->rq_list)) {
                         list_del_init(&req->rq_list);
@@ -1499,6 +1501,8 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
                 RETURN(1);
         }
 
+        atomic_inc(&imp->imp_timeouts);
+
         /* The DLM server doesn't want recovery run on its imports. */
         if (imp->imp_dlm_fake)
                 RETURN(1);
@@ -1539,8 +1543,8 @@ int ptlrpc_expired_set(void *data)
 
         LASSERT(set != NULL);
 
-        /* 
-         * A timeout expired. See which reqs it applies to... 
+        /*
+         * A timeout expired. See which reqs it applies to...
          */
         list_for_each (tmp, &set->set_requests) {
                 struct ptlrpc_request *req =
@@ -1555,7 +1559,7 @@ int ptlrpc_expired_set(void *data)
                        !req->rq_waiting && !req->rq_resend) ||
                       (req->rq_phase == RQ_PHASE_BULK)))
                         continue;
-  
+
                 if (req->rq_timedout ||     /* already dealt with */
                     req->rq_deadline > now) /* not expired */
                         continue;
@@ -1565,7 +1569,7 @@ int ptlrpc_expired_set(void *data)
                 ptlrpc_expire_one_request(req, 1);
         }
 
-        /* 
+        /*
          * When waiting for a whole set, we always to break out of the
          * sleep so we can recalculate the timeout, or enable interrupts
          * if everyone's timed out.
@@ -1592,7 +1596,7 @@ void ptlrpc_interrupted_set(void *data)
                 struct ptlrpc_request *req =
                         list_entry(tmp, struct ptlrpc_request, rq_set_chain);
 
-                if (req->rq_phase != RQ_PHASE_RPC && 
+                if (req->rq_phase != RQ_PHASE_RPC &&
                     req->rq_phase != RQ_PHASE_UNREGISTERING)
                         continue;
 
@@ -1600,8 +1604,8 @@ void ptlrpc_interrupted_set(void *data)
         }
 }
 
-/** 
- * Get the smallest timeout in the set; this does NOT set a timeout. 
+/**
+ * Get the smallest timeout in the set; this does NOT set a timeout.
  */
 int ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
 {
@@ -1617,22 +1621,22 @@ int ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
         list_for_each(tmp, &set->set_requests) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_set_chain);
 
-                /* 
-                 * Request in-flight? 
+                /*
+                 * Request in-flight?
                  */
                 if (!(((req->rq_phase == RQ_PHASE_RPC) && !req->rq_waiting) ||
                       (req->rq_phase == RQ_PHASE_BULK) ||
                       (req->rq_phase == RQ_PHASE_NEW)))
                         continue;
 
-                /* 
-                 * Already timed out. 
+                /*
+                 * Already timed out.
                  */
                 if (req->rq_timedout)
                         continue;
 
-                /* 
-                 * Waiting for ctx. 
+                /*
+                 * Waiting for ctx.
                  */
                 if (req->rq_wait_ctx)
                         continue;
@@ -1836,47 +1840,47 @@ int ptlrpc_unregister_reply(struct ptlrpc_request *request, int async)
         cfs_waitq_t       *wq;
         struct l_wait_info lwi;
 
-        /* 
-         * Might sleep. 
+        /*
+         * Might sleep.
          */
         LASSERT(!in_interrupt());
 
-        /* 
-         * Let's setup deadline for reply unlink. 
+        /*
+         * Let's setup deadline for reply unlink.
          */
-        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK) && 
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK) &&
             async && request->rq_reply_deadline == 0)
                 request->rq_reply_deadline = cfs_time_current_sec()+LONG_UNLINK;
 
-        /* 
-         * Nothing left to do. 
+        /*
+         * Nothing left to do.
          */
         if (!ptlrpc_client_recv_or_unlink(request))
                 RETURN(1);
 
         LNetMDUnlink(request->rq_reply_md_h);
 
-        /* 
-         * Let's check it once again. 
+        /*
+         * Let's check it once again.
          */
         if (!ptlrpc_client_recv_or_unlink(request))
                 RETURN(1);
 
-        /* 
-         * Move to "Unregistering" phase as reply was not unlinked yet. 
+        /*
+         * Move to "Unregistering" phase as reply was not unlinked yet.
          */
         ptlrpc_rqphase_move(request, RQ_PHASE_UNREGISTERING);
 
-        /* 
-         * Do not wait for unlink to finish. 
+        /*
+         * Do not wait for unlink to finish.
          */
         if (async)
                 RETURN(0);
 
-        /* 
+        /*
          * We have to l_wait_event() whatever the result, to give liblustre
          * a chance to run reply_in_callback(), and to make sure we've
-         * unlinked before returning a req to the pool. 
+         * unlinked before returning a req to the pool.
          */
         if (request->rq_set != NULL)
                 wq = &request->rq_set->set_waitq;
@@ -1894,7 +1898,7 @@ int ptlrpc_unregister_reply(struct ptlrpc_request *request, int async)
                         ptlrpc_rqphase_move(request, request->rq_next_phase);
                         RETURN(1);
                 }
-  
+
                 LASSERT(rc == -ETIMEDOUT);
                 DEBUG_REQ(D_WARNING, request, "Unexpectedly long timeout "
                           "rvcng=%d unlnk=%d", request->rq_receiving_reply,
@@ -2019,14 +2023,14 @@ static int expired_request(void *data)
         struct ptlrpc_request *req = data;
         ENTRY;
 
-        /* 
+        /*
          * Some failure can suspend regular timeouts.
          */
         if (ptlrpc_check_suspend())
                 RETURN(1);
 
-        /* 
-         * Deadline may have changed with an early reply. 
+        /*
+         * Deadline may have changed with an early reply.
          */
         if (req->rq_deadline > cfs_time_current_sec())
                 RETURN(1);

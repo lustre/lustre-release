@@ -594,7 +594,7 @@ void ptlrpc_lprocfs_register_obd(struct obd_device *obddev)
 }
 EXPORT_SYMBOL(ptlrpc_lprocfs_register_obd);
 
-void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req)
+void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req, long amount)
 {
         struct lprocfs_stats *svc_stats;
         __u32 op = lustre_msg_get_opc(req->rq_reqmsg);
@@ -605,7 +605,7 @@ void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req)
                 return;
         LASSERT(opc < LUSTRE_MAX_OPCODES);
         if (!(op == LDLM_ENQUEUE || op == MDS_REINT))
-                lprocfs_counter_add(svc_stats, opc + EXTRA_MAX_OPCODES, 0);
+                lprocfs_counter_add(svc_stats, opc + EXTRA_MAX_OPCODES, amount);
 }
 
 void ptlrpc_lprocfs_brw(struct ptlrpc_request *req, int bytes)
