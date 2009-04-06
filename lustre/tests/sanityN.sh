@@ -816,6 +816,21 @@ test_36() { #bug 16417
 }
 run_test 36 "handle ESTALE/open-unlink corectly"
 
+test_37() { # bug 18695
+	mkdir -p $DIR1/$tdir
+	multiop_bg_pause $DIR1/$tdir D_c || return 1
+	MULTIPID=$!
+	# create large directory (32kB seems enough from e2fsck, ~= 1000 files)
+	createmany -m $DIR2/$tdir/f 10000
+	# set mtime/atime backward
+	touch -t 198001010000 $DIR2/$tdir
+	kill -USR1 $MULTIPID
+	nr_files=`lfs find $DIR1/$tdir -type f | wc -l`
+	[ $nr_files -eq 10000 ] || error "$nr_files != 10000 truncated directory?"
+
+}
+run_test 37 "check i_size is not updated for directory on close (bug 18695) =============="
+
 log "cleanup: ======================================================"
 
 check_and_cleanup_lustre
