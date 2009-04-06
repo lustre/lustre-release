@@ -2286,7 +2286,7 @@ static void lustre_swab_lov_user_md_common(struct lov_user_md_v1 *lum)
         EXIT;
 }
 
-void lustre_swab_lov_user_md_v1(struct lov_user_md_v1 *lum)
+static void lustre_swab_lov_user_md_v1(struct lov_user_md_v1 *lum)
 {
         ENTRY;
         CDEBUG(D_IOCTL, "swabbing lov_user_md v1\n");
@@ -2294,13 +2294,35 @@ void lustre_swab_lov_user_md_v1(struct lov_user_md_v1 *lum)
         EXIT;
 }
 
-void lustre_swab_lov_user_md_v3(struct lov_user_md_v3 *lum)
+static void lustre_swab_lov_user_md_v3(struct lov_user_md_v3 *lum)
 {
         ENTRY;
         CDEBUG(D_IOCTL, "swabbing lov_user_md v3\n");
         lustre_swab_lov_user_md_common((struct lov_user_md_v1 *)lum);
         /* lmm_pool_name nothing to do with char */
         EXIT;
+}
+
+int lustre_swab_lov_user_md(struct lov_user_md_v1 *lum)
+{
+        ENTRY;
+        switch (lum->lmm_magic) {
+        case LOV_USER_MAGIC_V1:
+        case LOV_USER_MAGIC_V1_SWABBED:
+                lustre_swab_lov_user_md_v1(lum);
+                break;
+        case LOV_USER_MAGIC_V3:
+        case LOV_USER_MAGIC_V3_SWABBED:
+                lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)lum);
+                break;
+        default:
+                CDEBUG(D_IOCTL, "bad userland LOV MAGIC:"
+                                " %#08x != %#08x nor %#08x\n",
+                                lum->lmm_magic, LOV_USER_MAGIC_V1,
+                                LOV_USER_MAGIC_V3);
+                RETURN(-EINVAL);
+        }
+        RETURN(0);
 }
 
 void lustre_swab_lov_mds_md(struct lov_mds_md *lmm)
@@ -2330,18 +2352,36 @@ void lustre_swab_lov_user_md_join(struct lov_user_md_join *lumj)
         EXIT;
 }
 
-void lustre_swab_lov_user_md_objects(struct lov_user_ost_data *lod,
-                                     int stripe_count)
+int lustre_swab_lov_user_md_objects(struct lov_user_md *lum)
 {
-        int i;
+        int i, stripe_count = lum->lmm_stripe_count;
+        struct lov_user_ost_data *lod;
         ENTRY;
+        switch (lum->lmm_magic) {
+        case LOV_USER_MAGIC_V1_SWABBED:
+                __swab32s(&stripe_count);
+        case LOV_USER_MAGIC_V1:
+                lod = lum->lmm_objects;
+                break;
+        case LOV_USER_MAGIC_V3_SWABBED:
+                __swab32s(&stripe_count);
+        case LOV_USER_MAGIC_V3:
+                lod = ((struct lov_user_md_v3 *)lum)->lmm_objects;
+                break;
+        default:
+                CDEBUG(D_IOCTL, "bad userland LOV MAGIC:"
+                                " %#08x != %#08x nor %#08x\n",
+                                lum->lmm_magic, LOV_USER_MAGIC_V1,
+                                LOV_USER_MAGIC_V3);
+                RETURN(-EINVAL);
+        }
         for (i = 0; i < stripe_count; i++) {
                 __swab64s(&(lod[i].l_object_id));
                 __swab64s(&(lod[i].l_object_gr));
                 __swab32s(&(lod[i].l_ost_gen));
                 __swab32s(&(lod[i].l_ost_idx));
         }
-        EXIT;
+        RETURN(0);
 }
 
 void lustre_swab_ldlm_res_id (struct ldlm_res_id *id)

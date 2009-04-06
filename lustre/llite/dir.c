@@ -982,36 +982,23 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
         struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
         struct obd_device *mgc = lsi->lsi_mgc;
         char *fsname = NULL, *param = NULL;
-        int lum_size;
+        int lum_size = sizeof(struct lov_user_md_v1);
 
         struct iattr attr = { 0 };
         int rc = 0;
 
+        if (lump->lmm_magic == LOV_USER_MAGIC_V3)
+                lum_size = sizeof(struct lov_user_md_v3);
         /*
          * This is coming from userspace, so should be in
          * local endian.  But the MDS would like it in little
          * endian, so we swab it before we send it.
          */
-        switch (lump->lmm_magic) {
-        case LOV_USER_MAGIC_V1: {
-                if (lump->lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V1))
-                        lustre_swab_lov_user_md_v1(lump);
-                lum_size = sizeof(struct lov_user_md_v1);
-                break;
-                }
-        case LOV_USER_MAGIC_V3: {
-                if (lump->lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V3))
-                        lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)lump);
-                lum_size = sizeof(struct lov_user_md_v3);
-                break;
-                }
-        default: {
-                CDEBUG(D_IOCTL, "bad userland LOV MAGIC:"
-                                " %#08x != %#08x nor %#08x\n",
-                                lump->lmm_magic, LOV_USER_MAGIC_V1,
-                                LOV_USER_MAGIC_V3);
-                RETURN(-EINVAL);
-                }
+        if ((lump->lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V1)) &&
+            (lump->lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V3))) {
+                rc = lustre_swab_lov_user_md(lump);
+                if (rc) 
+                        return rc;
         }
 
         ll_prepare_mdc_op_data(&data, inode, NULL, NULL, 0, 0, NULL);
@@ -1112,18 +1099,12 @@ int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmmp,
          * passing it to userspace.
          */
         /* We don't swab objects for directories */
-        switch (le32_to_cpu(lmm->lmm_magic)) {
-        case LOV_MAGIC_V1:
-                if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC))
-                        lustre_swab_lov_user_md_v1((struct lov_user_md_v1 *)lmm);
-                break;
-        case LOV_MAGIC_V3:
-                if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC))
-                        lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)lmm);
-                break;
-        default:
-                CERROR("unknown magic: %lX\n", (unsigned long)lmm->lmm_magic);
-                rc = -EPROTO;
+        if (((le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V1) ||
+            (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V3)) &&
+            (LOV_MAGIC != cpu_to_le32(LOV_MAGIC))) {
+                rc = lustre_swab_lov_user_md((struct lov_user_md*)lmm);
+                if (rc)
+                        GOTO(out, rc);
         }
 
 out:
@@ -1338,27 +1319,15 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (rc)
                         GOTO(free_lmm, rc = -EFAULT);
 
-                switch (lmm->lmm_magic) {
-                case LOV_USER_MAGIC_V1:
-                        if (LOV_USER_MAGIC == cpu_to_le32(LOV_USER_MAGIC))
-                                break;
-                        /* swab objects first so that stripes num will be sane */
-                        lustre_swab_lov_user_md_objects(
-                                ((struct lov_user_md_v1 *)lmm)->lmm_objects,
-                                ((struct lov_user_md_v1 *)lmm)->lmm_stripe_count);
-                        lustre_swab_lov_user_md_v1((struct lov_user_md_v1 *)lmm);
-                        break;
-                case LOV_USER_MAGIC_V3:
-                        if (LOV_USER_MAGIC == cpu_to_le32(LOV_USER_MAGIC))
-                                break;
-                        /* swab objects first so that stripes num will be sane */
-                        lustre_swab_lov_user_md_objects(
-                                ((struct lov_user_md_v3 *)lmm)->lmm_objects,
-                                ((struct lov_user_md_v3 *)lmm)->lmm_stripe_count);
-                        lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)lmm);
-                        break;
-                default:
-                        GOTO(free_lmm, rc = -EINVAL);
+                if (LOV_USER_MAGIC != cpu_to_le32(LOV_USER_MAGIC)) {
+                        rc = lustre_swab_lov_user_md(
+                                                (struct lov_user_md_v1 *)lmm);
+                        if (rc) 
+                                GOTO(free_lmm, rc);
+                        rc = lustre_swab_lov_user_md_objects(
+                                                (struct lov_user_md*)lmm);
+                        if (rc) 
+                                GOTO(free_lmm, rc);
                 }
 
                 rc = obd_unpackmd(sbi->ll_osc_exp, &lsm, lmm, lmmsize);

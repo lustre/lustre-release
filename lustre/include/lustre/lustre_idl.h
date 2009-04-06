@@ -2175,10 +2175,8 @@ extern void lustre_swab_ost_body (struct ost_body *b);
 extern void lustre_swab_ost_last_id(obd_id *id);
 extern void lustre_swab_fiemap(struct ll_user_fiemap *fiemap);
 
-extern void lustre_swab_lov_user_md_v1(struct lov_user_md_v1 *lum);
-extern void lustre_swab_lov_user_md_v3(struct lov_user_md_v3 *lum);
-extern void lustre_swab_lov_user_md_objects(struct lov_user_ost_data *lod,
-                                            int stripe_count);
+extern int  lustre_swab_lov_user_md(struct lov_user_md_v1 *lum);
+extern int  lustre_swab_lov_user_md_objects(struct lov_user_md *lod);
 extern void lustre_swab_lov_user_md_join(struct lov_user_md_join *lumj);
 extern void lustre_swab_lov_mds_md(struct lov_mds_md *lmm);
 
