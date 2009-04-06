@@ -461,7 +461,7 @@ static int vvp_io_read_start(const struct lu_env *env,
         CLOBINVRNT(env, obj, ccc_object_invariant(obj));
         LASSERT(vio->cui_oneshot == 0);
 
-        CDEBUG(D_VFSTRACE, "read: -> [%lli, %lli)\n", pos, pos + cnt);
+        CDEBUG(D_VFSTRACE, "read: -> [%lli, %lli)\n", pos, pos + (long long)cnt);
 
         result = ccc_prep_size(env, obj, io, pos, tot, 1, &exceed);
         if (result != 0)
@@ -529,7 +529,7 @@ static int vvp_io_write_start(const struct lu_env *env,
                  */
                 pos = io->u.ci_wr.wr.crw_pos = i_size_read(inode);
 
-        CDEBUG(D_VFSTRACE, "write: [%lli, %lli)\n", pos, pos + cnt);
+        CDEBUG(D_VFSTRACE, "write: [%lli, %lli)\n", pos, pos + (long long)cnt);
 
         if (cl2vvp_io(env, ios)->cui_oneshot > 0)
                 result = 0;
