@@ -58,6 +58,17 @@ struct ptlrpc_connect_async_args {
         int pcaa_initial_connect;
 };
 
+static void __import_set_state(struct obd_import *imp,
+                               enum lustre_imp_state state)
+{
+        imp->imp_state = state;
+        imp->imp_state_hist[imp->imp_state_hist_idx].ish_state = state;
+        imp->imp_state_hist[imp->imp_state_hist_idx].ish_time =
+                cfs_time_current_sec();
+        imp->imp_state_hist_idx = (imp->imp_state_hist_idx + 1) %
+                IMP_STATE_HIST_LEN;
+}
+
 /* A CLOSED import should remain so. */
 #define IMPORT_SET_STATE_NOLOCK(imp, state)                                    \
 do {                                                                           \
@@ -66,7 +77,7 @@ do {                                                                           \
                       imp, obd2cli_tgt(imp->imp_obd),                          \
                       ptlrpc_import_state_name(imp->imp_state),                \
                       ptlrpc_import_state_name(state));                        \
-               imp->imp_state = state;                                         \
+               __import_set_state(imp, state);                                 \
         }                                                                      \
 } while(0)
 

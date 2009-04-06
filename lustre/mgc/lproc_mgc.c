@@ -49,6 +49,7 @@ static struct lprocfs_vars lprocfs_mgc_obd_vars[] = {
         { "mgs_server_uuid", lprocfs_rd_server_uuid,   0, 0 },
         { "mgs_conn_uuid",   lprocfs_rd_conn_uuid,     0, 0 },
         { "import",          lprocfs_rd_import,    0, 0 },
+        { "state",           lprocfs_rd_state,         0, 0 },
         { 0 }
 };
 

@@ -623,10 +623,8 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                           connection,
                           request->rq_request_portal,
                           request->rq_xid, 0);
-        if (rc == 0) {
-                ptlrpc_lprocfs_rpc_sent(request);
+        if (rc == 0)
                 RETURN(rc);
-        }
 
         ptlrpc_req_finished(request);
         if (noreply)

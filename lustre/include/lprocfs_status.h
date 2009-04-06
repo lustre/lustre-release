@@ -465,6 +465,8 @@ extern int lprocfs_rd_conn_uuid(char *page, char **start, off_t off,
                                 int count, int *eof, void *data);
 extern int lprocfs_rd_import(char *page, char **start, off_t off, int count,
                              int *eof, void *data);
+extern int lprocfs_rd_state(char *page, char **start, off_t off, int count,
+                            int *eof, void *data);
 extern int lprocfs_rd_connect_flags(char *page, char **start, off_t off,
                                     int count, int *eof, void *data);
 extern int lprocfs_rd_num_exports(char *page, char **start, off_t off,
@@ -514,11 +516,9 @@ void lprocfs_oh_tally_log2(struct obd_histogram *oh, unsigned int value);
 void lprocfs_oh_clear(struct obd_histogram *oh);
 unsigned long lprocfs_oh_sum(struct obd_histogram *oh);
 
-/* lprocfs_status.c: counter read/write functions */
-extern int lprocfs_counter_read(char *page, char **start, off_t off,
-                                int count, int *eof, void *data);
-extern int lprocfs_counter_write(struct file *file, const char *buffer,
-                                 unsigned long count, void *data);
+void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
+                           struct lprocfs_counter *cnt);
+
 
 /* lprocfs_status.c: recovery status */
 int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
@@ -769,8 +769,12 @@ static inline int lprocfs_rd_server_uuid(char *page, char **start, off_t off,
 static inline int lprocfs_rd_conn_uuid(char *page, char **start, off_t off,
                                        int count, int *eof, void *data)
 { return 0; }
-static inline int lprocfs_rd_import(char *page, char **start, off_t off, int count,
-                                    int *eof, void *data) { return 0; }
+static inline int lprocfs_rd_import(char *page, char **start, off_t off,
+                                    int count, int *eof, void *data)
+{ return 0; }
+static inline int lprocfs_rd_state(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data)
+{ return 0; }
 static inline int lprocfs_rd_connect_flags(char *page, char **start, off_t off,
                                            int count, int *eof, void *data)
 { return 0; }
@@ -844,11 +848,8 @@ void lprocfs_oh_clear(struct obd_histogram *oh) {}
 static inline
 unsigned long lprocfs_oh_sum(struct obd_histogram *oh) { return 0; }
 static inline
-int lprocfs_counter_read(char *page, char **start, off_t off,
-                         int count, int *eof, void *data) { return 0; }
-static inline
-int lprocfs_counter_write(struct file *file, const char *buffer,
-                          unsigned long count, void *data) { return 0; }
+void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
+                           struct lprocfs_counter *cnt) {}
 
 static inline
 __u64 lprocfs_stats_collector(struct lprocfs_stats *stats, int idx,

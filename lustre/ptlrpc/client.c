@@ -928,9 +928,11 @@ static int after_reply(struct ptlrpc_request *req)
 
         do_gettimeofday(&work_start);
         timediff = cfs_timeval_sub(&work_start, &req->rq_arrival_time, NULL);
-        if (obd->obd_svc_stats != NULL)
+        if (obd->obd_svc_stats != NULL) {
                 lprocfs_counter_add(obd->obd_svc_stats, PTLRPC_REQWAIT_CNTR,
                                     timediff);
+                ptlrpc_lprocfs_rpc_sent(req, timediff);
+        }
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_PAUSE_REP, obd_fail_val);
         ptlrpc_at_adj_service(req, lustre_msg_get_timeout(req->rq_repmsg));
@@ -1373,6 +1375,8 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
                 DEBUG_REQ(D_HA, req, "NULL import: already cleaned up?");
                 RETURN(1);
         }
+
+        atomic_inc(&imp->imp_timeouts);
 
         /* The DLM server doesn't want recovery run on its imports. */
         if (imp->imp_dlm_fake)

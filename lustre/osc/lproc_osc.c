@@ -476,6 +476,7 @@ static struct lprocfs_vars lprocfs_osc_obd_vars[] = {
         { "resend_count",  osc_rd_resend_count, osc_wr_resend_count, 0},
         { "timeouts",        lprocfs_rd_timeouts,      0, 0 },
         { "import",          lprocfs_rd_import,    0, 0 },
+        { "state",           lprocfs_rd_state,         0, 0 },
         { 0 }
 };
 
