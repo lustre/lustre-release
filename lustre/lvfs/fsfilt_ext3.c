@@ -511,7 +511,7 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
         int rc = 0;
 
         LASSERTF(!(iattr->ia_valid & ATTR_SIZE) || !S_ISDIR(inode->i_mode),
-                 "changing i_size on directory #%lu (%p) new %lu old %lu\n",
+                 "changing i_size on directory #%lu (%p) new "LPU64" old "LPU64"\n",
                  inode->i_ino, inode, iattr->ia_size, i_size_read(inode));
 
         /* Avoid marking the inode dirty on the superblock list unnecessarily.
