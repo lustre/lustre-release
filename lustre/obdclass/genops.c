@@ -755,7 +755,11 @@ void class_unlink_export(struct obd_export *exp)
         list_del_init(&exp->exp_obd_chain_timed);
         exp->exp_obd->obd_num_exports--;
         spin_unlock(&exp->exp_obd->obd_dev_lock);
-
+        /* Keep these counter valid always */
+        spin_lock_bh(&exp->exp_obd->obd_processing_task_lock);
+        if (exp->exp_replay_needed)
+                exp->exp_obd->obd_recoverable_clients--;
+        spin_unlock_bh(&exp->exp_obd->obd_processing_task_lock);
         class_export_put(exp);
 }
 EXPORT_SYMBOL(class_unlink_export);
