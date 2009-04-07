@@ -522,12 +522,16 @@ static int vvp_io_write_start(const struct lu_env *env,
 
         ENTRY;
 
-        if (cl_io_is_append(io))
+        if (cl_io_is_append(io)) {
                 /*
                  * PARALLEL IO This has to be changed for parallel IO doing
                  * out-of-order writes.
                  */
                 pos = io->u.ci_wr.wr.crw_pos = i_size_read(inode);
+#ifndef HAVE_FILE_WRITEV
+                cio->cui_iocb->ki_pos = pos;
+#endif
+        }
 
         CDEBUG(D_VFSTRACE, "write: [%lli, %lli)\n", pos, pos + (long long)cnt);
 
