@@ -184,6 +184,13 @@ lnet_notify (lnet_ni_t *ni, lnet_nid_t nid, int alive, time_t when)
                 return 0;
         }
 
+        /* We can't fully trust LND on reporting exact peer last_alive
+         * if he notifies us about dead peer. For example ksocklnd can
+         * call us with when == _time_when_the_node_was_booted_ if
+         * no connections were successfully established */
+        if (ni != NULL && !alive && when < lp->lp_last_alive)
+                when = lp->lp_last_alive;
+
         lnet_notify_locked(lp, ni == NULL, alive, when);
 
         LNET_UNLOCK();

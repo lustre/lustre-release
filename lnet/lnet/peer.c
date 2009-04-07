@@ -184,11 +184,12 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid)
         lp->lp_notifylnd = 0;
         lp->lp_notifying = 0;
         lp->lp_alive_count = 0;
-	lp->lp_timestamp = 0;
-	lp->lp_alive = !lnet_peers_start_down(); /* 1 bit!! */
+        lp->lp_timestamp = 0;
+        lp->lp_alive = !lnet_peers_start_down(); /* 1 bit!! */
         lp->lp_last_alive = cfs_time_current_sec(); /* assumes alive */
+        lp->lp_last_query = 0; /* didn't ask LND yet */
         lp->lp_ping_timestamp = 0;
-	lp->lp_nid = nid;
+        lp->lp_nid = nid;
         lp->lp_refcount = 2;                    /* 1 for caller; 1 for hash */
         lp->lp_rtr_refcount = 0;
 

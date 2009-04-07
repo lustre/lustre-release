@@ -564,8 +564,8 @@ typedef __u32 cfs_kernel_cap_t;
  * Task struct
  */
 
-#define MAX_SCHEDULE_TIMEOUT    ((long_ptr_t)(~0UL>>12))
-#define schedule_timeout(t)     cfs_schedule_timeout(0, t)
+#define CFS_MAX_SCHEDULE_TIMEOUT ((long_ptr_t)(~0UL>>12))
+#define schedule_timeout(t)      cfs_schedule_timeout(0, t)
 
 struct vfsmount;
 

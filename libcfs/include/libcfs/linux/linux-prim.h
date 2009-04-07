@@ -188,6 +188,7 @@ typedef sigset_t                        cfs_sigset_t;
  */
 typedef struct timer_list cfs_timer_t;
 
+#define CFS_MAX_SCHEDULE_TIMEOUT MAX_SCHEDULE_TIMEOUT
 
 #ifndef wait_event_timeout /* Only for RHEL3 2.4.21 kernel */
 #define __wait_event_timeout(wq, condition, timeout, ret)        \
