@@ -1684,41 +1684,35 @@ static int llu_lov_dir_setstripe(struct inode *ino, unsigned long arg)
         struct ptlrpc_request *request = NULL;
         struct mdc_op_data op_data;
         struct iattr attr = { 0 };
-        struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
-        int rc = 0;
+        struct lov_user_md_v3 lum;
+        struct lov_user_md *lump = (struct lov_user_md *)arg;
+        int rc = 0, lum_size = 0;
 
         llu_prepare_mdc_op_data(&op_data, ino, NULL, NULL, 0, 0);
 
-        LASSERT(sizeof(lum) == sizeof(*lump));
         LASSERT(sizeof(lum.lmm_objects[0]) ==
                 sizeof(lump->lmm_objects[0]));
-        rc = copy_from_user(&lum, lump, sizeof(lum));
+        rc = copy_from_user(&lum, lump, sizeof(*lump));
         if (rc)
                 return(-EFAULT);
-
-        switch (lum.lmm_magic) {
-        case LOV_USER_MAGIC_V1: {
-                if (lum.lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V1))
-                        lustre_swab_lov_user_md_v1(&lum);
-                break;
-                }
-        case LOV_USER_MAGIC_V3: {
-                if (lum.lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V3))
-                        lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)&lum);
-                break;
-                }
-        default: {
-                CDEBUG(D_IOCTL, "bad userland LOV MAGIC:"
-                                " %#08x != %#08x nor %#08x\n",
-                                lum.lmm_magic, LOV_USER_MAGIC_V1,
-                                LOV_USER_MAGIC_V3);
-                RETURN(-EINVAL);
+        lum_size = sizeof(struct lov_user_md_v1);
+        if (lum.lmm_magic == LOV_USER_MAGIC_V3) {
+                rc = copy_from_user(&lum, lump, sizeof(lum));
+                if (rc)
+                        return(-EFAULT);
+                lum_size = sizeof(struct lov_user_md_v3);
         }
+
+        if ((lum.lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V1)) &&
+            (lum.lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V3))) {
+                rc = lustre_swab_lov_user_md((struct lov_user_md_v1 *)&lum);
+                if (rc) 
+                        RETURN(rc);
         }
 
         /* swabbing is done in lov_setstripe() on server side */
         rc = mdc_setattr(sbi->ll_mdc_exp, &op_data,
-                         &attr, &lum, sizeof(lum), NULL, 0, &request);
+                         &attr, &lum, lum_size, NULL, 0, &request);
         if (rc) {
                 ptlrpc_req_finished(request);
                 if (rc != -EPERM && rc != -EACCES)

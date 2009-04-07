@@ -3450,6 +3450,7 @@ static int osc_getstripe(struct lov_stripe_md *lsm, struct lov_user_md *lump)
         /* we only need the header part from user space to get lmm_magic and
          * lmm_stripe_count, (the header part is common to v1 and v3) */
         lum_size = sizeof(struct lov_user_md_v1);
+        memset(&lum, 0x00, sizeof(lum));
         if (copy_from_user(&lum, lump, lum_size))
                 RETURN(-EFAULT);
 
@@ -3479,8 +3480,20 @@ static int osc_getstripe(struct lov_stripe_md *lsm, struct lov_user_md *lump)
                 lumk = &lum;
         }
 
-        lumk->lmm_object_id = lsm->lsm_object_id;
+        lumk->lmm_magic = lum.lmm_magic;
         lumk->lmm_stripe_count = 1;
+        lumk->lmm_object_id = lsm->lsm_object_id;
+
+        if ((lsm->lsm_magic == LOV_USER_MAGIC_V1_SWABBED) ||
+            (lsm->lsm_magic == LOV_USER_MAGIC_V3_SWABBED)) {
+               /* lsm not in host order, so count also need be in same order */
+                __swab32s(&lumk->lmm_magic);
+                __swab16s(&lumk->lmm_stripe_count);
+                lustre_swab_lov_user_md((struct lov_user_md_v1*)lumk);
+                if (lum.lmm_stripe_count > 0)
+                        lustre_swab_lov_user_md_objects(
+                                (struct lov_user_md_v1*)lumk);
+        }
 
         if (copy_to_user(lump, lumk, lum_size))
                 rc = -EFAULT;

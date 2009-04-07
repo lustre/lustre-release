@@ -2100,18 +2100,12 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
         if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC)) {
                 /* if function called for directory - we should
                  * avoid swab not existent lsm objects */
-                if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V1)) {
-                        lustre_swab_lov_user_md_v1((struct lov_user_md_v1 *)lmm);
+                if ((lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V1)) ||
+                    (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V3))) {
+                        lustre_swab_lov_user_md((struct lov_user_md*)lmm);
                         if (S_ISREG(body->mode))
                                 lustre_swab_lov_user_md_objects(
-                                 ((struct lov_user_md_v1 *)lmm)->lmm_objects,
-                                 ((struct lov_user_md_v1 *)lmm)->lmm_stripe_count);
-                } else if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V3)) {
-                        lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)lmm);
-                        if (S_ISREG(body->mode))
-                                lustre_swab_lov_user_md_objects(
-                                 ((struct lov_user_md_v3 *)lmm)->lmm_objects,
-                                 ((struct lov_user_md_v3 *)lmm)->lmm_stripe_count);
+                                                (struct lov_user_md*)lmm);
                 } else if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_JOIN)) {
                         lustre_swab_lov_user_md_join((struct lov_user_md_join *)lmm);
                 }
