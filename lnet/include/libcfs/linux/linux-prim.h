@@ -168,6 +168,7 @@ static inline int cfs_kernel_thread(int (*fn)(void *),
         return rc;
 }
 
+#define CFS_MAX_SCHEDULE_TIMEOUT MAX_SCHEDULE_TIMEOUT
 
 /*
  * Task struct
@@ -235,6 +236,7 @@ static inline cfs_time_t cfs_timer_deadline(cfs_timer_t *t)
         return t->expires;
 }
 
+#define CFS_MAX_SCHEDULE_TIMEOUT MAX_SCHEDULE_TIMEOUT
 
 /* deschedule for a bit... */
 static inline void cfs_pause(cfs_duration_t ticks)

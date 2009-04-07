@@ -18,6 +18,14 @@ Description:
 Details    :
 
 Severity   : normal
+Bugzilla   : 18414
+Description: Fixing 'running out of ports' issue
+Details    : Add a delay before next reconnect attempt in ksocklnd in
+             the case of lost race. Limit the frequency of query-requests
+             in lnet. Improved handling of 'dead peer' notifications in
+             lnet.
+
+Severity   : normal
 Bugzilla   : 16034
 Description: Change ptllnd timeout and watchdog timers
 Details    : Add ptltrace_on_nal_failed and bump ptllnd timeout to match

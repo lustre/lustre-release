@@ -913,6 +913,8 @@ lnet_ni_peer_alive(lnet_peer_t *lp)
         (ni->ni_lnd->lnd_query)(ni, lp->lp_nid, &last_alive);
         LNET_LOCK();
 
+        lp->lp_last_query = cfs_time_current_sec();
+
         if (last_alive != 0) /* NI has updated timestamp */
                 lp->lp_last_alive = last_alive;
         return;
@@ -941,6 +943,9 @@ lnet_peer_is_alive (lnet_peer_t *lp, time_t now)
         return alive;
 }
 
+/* don't query LND about aliveness of a dead peer more frequently than: */
+static int lnet_queryinterval = 1; /* 1 second */
+
 /* NB: returns 1 when alive, 0 when dead, negative when error;
  *     may drop the LNET_LOCK */
 int
@@ -957,7 +962,24 @@ lnet_peer_alive_locked (lnet_peer_t *lp)
         if (lnet_peer_is_alive(lp, now))
                 return 1;
 
-        /* peer appears dead, query LND for latest aliveness news */
+        /* peer appears dead, should we query right now? */
+        if (lp->lp_last_query != 0) {
+                time_t deadline =
+                        cfs_time_add(lp->lp_last_query,
+                                     lnet_queryinterval);
+
+                if (cfs_time_before(now, deadline)) {
+                        if (lp->lp_alive)
+                                CWARN("Unexpected aliveness of peer %s: "
+                                      "%d < %d (%d/%d)\n",
+                                      libcfs_nid2str(lp->lp_nid),
+                                      (int)now, (int)deadline,
+                                      lnet_queryinterval, ni->ni_peertimeout);
+                        return 0;
+                }
+        }
+
+        /* query LND for latest aliveness news */
         lnet_ni_peer_alive(lp);
 
         if (lnet_peer_is_alive(lp, now))

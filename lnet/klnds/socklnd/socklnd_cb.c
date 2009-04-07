@@ -1956,6 +1956,18 @@ ksocknal_connect (ksock_route_t *route)
         if (retry_later) {
                 /* re-queue for attention; this frees me up to handle
                  * the peer's incoming connection request */
+
+                if (rc == EALREADY) {
+                        /* We want to introduce a delay before next
+                         * attempt to connect if we lost conn race,
+                         * but the race is resolved quickly usually,
+                         * so min_reconnectms should be good heruistic */
+                        route->ksnr_retry_interval =
+                                cfs_time_seconds(*ksocknal_tunables.ksnd_min_reconnectms)/1000;
+                        route->ksnr_timeout = cfs_time_add(cfs_time_current(),
+                                                           route->ksnr_retry_interval);
+                }
+
                 ksocknal_launch_connection_locked(route);
         }
 
@@ -2011,30 +2023,36 @@ ksocknal_connect (ksock_route_t *route)
         ksocknal_txlist_done(peer->ksnp_ni, &zombies, 1);
 }
 
-static inline int
-ksocknal_connd_connect_route_locked(void)
+/* Go through connd_routes queue looking for a route that
+   we can process right now */
+static ksock_route_t *
+ksocknal_connd_get_route_locked(signed long *timeout_p)
 {
-        /* Only handle an outgoing connection request if there is someone left
-         * to handle incoming connections */
-        return !list_empty(&ksocknal_data.ksnd_connd_routes) &&
-                ((ksocknal_data.ksnd_connd_connecting + 1) <
-                 *ksocknal_tunables.ksnd_nconnds);
-}
+        ksock_route_t *route;
+        cfs_time_t     now;
 
-static inline int
-ksocknal_connd_ready(void)
-{
-        int            rc;
+        /* Only handle an outgoing connection request if there
+         * is someone left to handle incoming connections */
+        if ((ksocknal_data.ksnd_connd_connecting + 1) >=
+            *ksocknal_tunables.ksnd_nconnds)
+                return NULL;
 
-        cfs_spin_lock_bh (&ksocknal_data.ksnd_connd_lock);
+        now = cfs_time_current();
 
-        rc = ksocknal_data.ksnd_shuttingdown ||
-             !list_empty(&ksocknal_data.ksnd_connd_connreqs) ||
-             ksocknal_connd_connect_route_locked();
+        /* connd_routes can contain both pending and ordinary routes */
+        list_for_each_entry (route, &ksocknal_data.ksnd_connd_routes,
+                             ksnr_connd_list) {
 
-        cfs_spin_unlock_bh (&ksocknal_data.ksnd_connd_lock);
+                if (route->ksnr_retry_interval == 0 ||
+                    cfs_time_aftereq(now, route->ksnr_timeout))
+                        return route;
 
-        return rc;
+                if (*timeout_p == CFS_MAX_SCHEDULE_TIMEOUT ||
+                    (int)*timeout_p > (int)(route->ksnr_timeout - now))
+                        *timeout_p = (int)(route->ksnr_timeout - now);
+        }
+
+        return NULL;
 }
 
 int
@@ -2044,15 +2062,21 @@ ksocknal_connd (void *arg)
         char               name[16];
         ksock_connreq_t   *cr;
         ksock_route_t     *route;
-        int                rc = 0;
+        cfs_waitlink_t     wait;
+        signed long        timeout;
+        int                dropped_lock;
 
         snprintf (name, sizeof (name), "socknal_cd%02ld", id);
         cfs_daemonize (name);
         cfs_block_allsigs ();
 
+        cfs_waitlink_init (&wait);
+
         cfs_spin_lock_bh (&ksocknal_data.ksnd_connd_lock);
 
         while (!ksocknal_data.ksnd_shuttingdown) {
+
+                dropped_lock = 0;
 
                 if (!list_empty(&ksocknal_data.ksnd_connd_connreqs)) {
                         /* Connection accepted by the listener */
@@ -2061,6 +2085,7 @@ ksocknal_connd (void *arg)
 
                         list_del(&cr->ksncr_list);
                         cfs_spin_unlock_bh (&ksocknal_data.ksnd_connd_lock);
+                        dropped_lock = 1;
 
                         ksocknal_create_conn(cr->ksncr_ni, NULL,
                                              cr->ksncr_sock, SOCKLND_CONN_NONE);
@@ -2070,14 +2095,17 @@ ksocknal_connd (void *arg)
                         cfs_spin_lock_bh (&ksocknal_data.ksnd_connd_lock);
                 }
 
-                if (ksocknal_connd_connect_route_locked()) {
-                        /* Connection request */
-                        route = list_entry (ksocknal_data.ksnd_connd_routes.next,
-                                            ksock_route_t, ksnr_connd_list);
+                /* Sleep till explicit wake_up if no pending routes present */
+                timeout = CFS_MAX_SCHEDULE_TIMEOUT;
 
+                /* Connection request */
+                route = ksocknal_connd_get_route_locked(&timeout);
+
+                if (route != NULL) {
                         list_del (&route->ksnr_connd_list);
                         ksocknal_data.ksnd_connd_connecting++;
                         cfs_spin_unlock_bh (&ksocknal_data.ksnd_connd_lock);
+                        dropped_lock = 1;
 
                         ksocknal_connect (route);
                         ksocknal_route_decref(route);
@@ -2086,12 +2114,18 @@ ksocknal_connd (void *arg)
                         ksocknal_data.ksnd_connd_connecting--;
                 }
 
+                if (dropped_lock)
+                        continue;
+
+                /* Nothing to do for 'timeout'  */
+                cfs_set_current_state (CFS_TASK_INTERRUPTIBLE);
+                cfs_waitq_add_exclusive (&ksocknal_data.ksnd_connd_waitq, &wait);
                 cfs_spin_unlock_bh (&ksocknal_data.ksnd_connd_lock);
 
-                cfs_wait_event_interruptible_exclusive(
-                        ksocknal_data.ksnd_connd_waitq,
-                        ksocknal_connd_ready(), rc);
+                cfs_waitq_timedwait (&wait, CFS_TASK_INTERRUPTIBLE, timeout);
 
+                cfs_set_current_state (CFS_TASK_RUNNING);
+                cfs_waitq_del (&ksocknal_data.ksnd_connd_waitq, &wait);
                 cfs_spin_lock_bh (&ksocknal_data.ksnd_connd_lock);
         }
 

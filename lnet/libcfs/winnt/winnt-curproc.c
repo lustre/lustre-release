@@ -442,7 +442,7 @@ schedule_timeout(int64_t time)
     slot = CONTAINING_RECORD(task, TASK_SLOT, task);
     cfs_assert(slot->Magic == TASKSLT_MAGIC);
 
-    if (time == MAX_SCHEDULE_TIMEOUT) {
+    if (time == CFS_MAX_SCHEDULE_TIMEOUT) {
         time = 0;
     }
 

@@ -412,6 +412,7 @@ typedef struct lnet_peer {
         long              lp_txqnob;            /* bytes queued for sending */
         time_t            lp_timestamp;         /* time of last aliveness news */
         time_t            lp_last_alive;        /* when I was last alive */
+        time_t            lp_last_query;        /* when LND was queried last time */
         time_t            lp_ping_timestamp;    /* time of last ping attempt */
         time_t            lp_ping_deadline;     /* != 0 if ping reply expected */
         lnet_ni_t        *lp_ni;                /* interface peer is on */

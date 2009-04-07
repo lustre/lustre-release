@@ -427,8 +427,7 @@ typedef sigset_t cfs_sigset_t;
  * Task struct
  */
 
-#define MAX_SCHEDULE_TIMEOUT    ((long_ptr)(~0UL>>12))
-
+#define CFS_MAX_SCHEDULE_TIMEOUT ((long_ptr)(~0UL>>12))
 
 #define NGROUPS 1
 #define CFS_CURPROC_COMM_MAX (16)
