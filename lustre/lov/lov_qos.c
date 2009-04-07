@@ -121,19 +121,16 @@ out:
         RETURN(rc);
 }
 
-int qos_del_tgt(struct obd_device *obd, __u32 index)
+int qos_del_tgt(struct obd_device *obd, struct lov_tgt_desc *tgt)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct lov_qos_oss *oss;
         int rc = 0;
         ENTRY;
 
-        if (!lov->lov_tgts[index])
-                RETURN(0);
-
         down_write(&lov->lov_qos.lq_rw_sem);
 
-        oss = lov->lov_tgts[index]->ltd_qos.ltq_oss;
+        oss = tgt->ltd_qos.ltq_oss;
         if (!oss)
                 GOTO(out, rc = -ENOENT);
 

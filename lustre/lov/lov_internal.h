@@ -176,7 +176,7 @@ int lov_stripe_number(struct lov_stripe_md *lsm, obd_off lov_off);
 #define LOV_USES_ASSIGNED_STRIPE        0
 #define LOV_USES_DEFAULT_STRIPE         1
 int qos_add_tgt(struct obd_device *obd, __u32 index);
-int qos_del_tgt(struct obd_device *obd, __u32 index);
+int qos_del_tgt(struct obd_device *obd, struct lov_tgt_desc *tgt);
 void qos_shrink_lsm(struct lov_request_set *set);
 int qos_prep_create(struct obd_export *exp, struct lov_request_set *set);
 void qos_update(struct lov_obd *lov);

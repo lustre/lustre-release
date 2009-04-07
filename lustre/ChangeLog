@@ -44,6 +44,13 @@
 	  information, please refer to bugzilla 17630.
 
 Severity   : normal
+Frequency  : rare, connect and disconnect target at same time
+Bugzilla   : 17310
+Descriptoin: ASSERTION(atomic_read(&imp->imp_inflight) == 0
+Details    :  don't call obd_disconnect under lov_lock. this long time
+	      operation and can block ptlrpcd which answer to connect request.
+
+Severity   : normal
 Frequency  : rare, on failed llog setup
 Bugzilla   : 18896
 Descriptoin: don't leak obd reference on failed llog setup
