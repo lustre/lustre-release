@@ -44,6 +44,12 @@ tbd Sun Microsystems, Inc.
 	  of Lustre filesystem with 4K stack may cause a stack overflow. For
 	  more information, please refer to bugzilla 17630.
 
+Severity   : minor
+Bugzilla   : 18480
+Description: correct count of recoverable clients
+Details    : if recovery failed for client for some reasons (goal inode or
+             something else) server can wait failed clients for finish recovery.
+
 Severity   : normal
 Frequency  : rare, on failed llog setup
 Bugzilla   : 18896
