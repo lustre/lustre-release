@@ -13,6 +13,13 @@ tbd  Sun Microsystems, Inc.
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 18902
+Descriptoin: allow kill process which wait statahead result
+Details    : for some reasons 'ls' can stick in waiting result from statahead,
+             in this case need way for kill this process.
+
 Severity   : enhancement
 Bugzilla   : 18798
 Description: Add state history info file, enhance import info file
