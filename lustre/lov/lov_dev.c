@@ -243,18 +243,19 @@ static int lov_device_init(const struct lu_env *env, struct lu_device *d,
                 struct lov_tgt_desc  *desc;
 
                 desc = ld->ld_lov->lov_tgts[i];
-                if (desc->ltd_active) {
-                        cl = cl_type_setup(env, d->ld_site, &lovsub_device_type,
-                                           desc->ltd_exp->exp_obd->obd_lu_dev);
-                        if (IS_ERR(cl)) {
-                                rc = PTR_ERR(cl);
-                                break;
-                        }
-                        lsd = cl2lovsub_dev(cl);
-                        lsd->acid_idx = i;
-                        lsd->acid_super = ld;
-                        ld->ld_target[i] = lsd;
+                if (desc == NULL)
+                        continue;
+
+                cl = cl_type_setup(env, d->ld_site, &lovsub_device_type,
+                                   desc->ltd_obd->obd_lu_dev);
+                if (IS_ERR(cl)) {
+                        rc = PTR_ERR(cl);
+                        break;
                 }
+                lsd = cl2lovsub_dev(cl);
+                lsd->acid_idx = i;
+                lsd->acid_super = ld;
+                ld->ld_target[i] = lsd;
         }
 
         if (rc)
@@ -424,12 +425,19 @@ static int lov_cl_add_target(const struct lu_env *env, struct lu_device *dev,
 
         tgt = obd->u.lov.lov_tgts[index];
         LASSERT(tgt != NULL);
+        LASSERT(tgt->ltd_obd != NULL);
+
+        if (!tgt->ltd_obd->obd_set_up) {
+                CERROR("Target %s not set up\n", obd_uuid2str(&tgt->ltd_uuid));
+                RETURN(-EINVAL);
+        }
 
         rc = lov_expand_targets(env, ld);
         if (rc == 0 && ld->ld_flags & LOV_DEV_INITIALIZED) {
                 LASSERT(dev->ld_site != NULL);
+
                 cl = cl_type_setup(env, dev->ld_site, &lovsub_device_type,
-                                   tgt->ltd_exp->exp_obd->obd_lu_dev);
+                                   tgt->ltd_obd->obd_lu_dev);
                 if (!IS_ERR(cl)) {
                         lsd = cl2lovsub_dev(cl);
                         lsd->acid_idx = index;

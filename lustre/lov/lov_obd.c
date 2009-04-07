@@ -134,7 +134,7 @@ int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
         struct lov_obd *lov = &obd->u.lov;
         struct obd_uuid tgt_uuid;
         struct obd_device *tgt_obd;
-        struct obd_uuid lov_osc_uuid = { "LOV_OSC_UUID" };
+        static struct obd_uuid lov_osc_uuid = { "LOV_OSC_UUID" };
         struct obd_import *imp;
 
 #ifdef __KERNEL__
@@ -147,14 +147,8 @@ int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
                 RETURN(-EINVAL);
 
         tgt_uuid = lov->lov_tgts[index]->ltd_uuid;
+        tgt_obd = lov->lov_tgts[index]->ltd_obd;
 
-        tgt_obd = class_find_client_obd(&tgt_uuid, LUSTRE_OSC_NAME,
-                                        &obd->obd_uuid);
-
-        if (!tgt_obd) {
-                CERROR("Target %s not attached\n", obd_uuid2str(&tgt_uuid));
-                RETURN(-EINVAL);
-        }
         if (!tgt_obd->obd_set_up) {
                 CERROR("Target %s not set up\n", obd_uuid2str(&tgt_uuid));
                 RETURN(-EINVAL);
@@ -201,11 +195,7 @@ int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
         }
 
         lov->lov_tgts[index]->ltd_reap = 0;
-        if (activate) {
-                lov->lov_tgts[index]->ltd_active = 1;
-                lov->desc.ld_active_tgt_count++;
-                lov->lov_tgts[index]->ltd_exp->exp_obd->obd_inactive = 0;
-        }
+
         CDEBUG(D_CONFIG, "Connected tgt idx %d %s (%s) %sactive\n", index,
                obd_uuid2str(&tgt_uuid), tgt_obd->obd_name, activate ? "":"in");
 
@@ -453,7 +443,7 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
 {
         int rc = 0;
         ENTRY;
-	
+
         if (ev == OBD_NOTIFY_ACTIVE || ev == OBD_NOTIFY_INACTIVE) {
                 struct obd_uuid *uuid;
 
@@ -524,6 +514,7 @@ int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
 {
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
+        struct obd_device *tgt_obd;
         int rc;
         ENTRY;
 
@@ -535,6 +526,11 @@ int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
                        uuidp->uuid, gen);
                 RETURN(-EINVAL);
         }
+
+        tgt_obd = class_find_client_obd(uuidp, LUSTRE_OSC_NAME,
+                                        &obd->obd_uuid);
+        if (tgt_obd == NULL)
+                RETURN(-EINVAL);
 
         mutex_down(&lov->lov_lock);
 
@@ -587,6 +583,7 @@ int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
 
         memset(tgt, 0, sizeof(*tgt));
         tgt->ltd_uuid = *uuidp;
+        tgt->ltd_obd = tgt_obd;
         /* XXX - add a sanity check on the generation number. */
         tgt->ltd_gen = gen;
         tgt->ltd_index = index;
