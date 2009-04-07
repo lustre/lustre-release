@@ -262,7 +262,6 @@ typedef struct lnet_libmd {
         unsigned int      md_flags;
         void             *md_user_ptr;
         lnet_eq_t        *md_eq;
-        void             *md_addrkey;
         unsigned int      md_niov;                /* # frags */
         union {
                 struct iovec  iov[LNET_MAX_IOV];
