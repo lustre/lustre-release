@@ -473,6 +473,15 @@ test_17g() {
 }
 run_test 17g "symlinks: really long symlink name ==============================="
 
+test_17h() { #bug 17378
+        mkdir -p $DIR/$tdir
+        $SETSTRIPE $DIR/$tdir -c -1
+#define OBD_FAIL_MDS_LOV_PREP_CREATE 0x141
+        do_facet mds lctl set_param fail_loc=0x80000141
+        touch $DIR/$tdir/$tfile || true
+}
+run_test 17h "create objects: lov_free_memmd() doesn't lbug"
+
 test_18() {
 	touch $DIR/f
 	ls $DIR || error
@@ -1074,7 +1083,7 @@ test_27s() { # bug 10725
 	mkdir -p $DIR/$tdir
 	local stripe_size=$((4096 * 1024 * 1024))	# 2^32
 	local stripe_count=0
-	[ $OSTCOUNT -eq 1 ] || stripe_count=2 
+	[ $OSTCOUNT -eq 1 ] || stripe_count=2
 	$SETSTRIPE $DIR/$tdir -s $stripe_size -c $stripe_count && \
 		error "stripe width >= 2^32 succeeded" || true
 
@@ -1158,7 +1167,7 @@ test_27w() { # bug 10997
 }
 run_test 27w "check lfs setstripe -c -s -i options ============="
 
-# createtest also checks that device nodes are created and 
+# createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091
 	mkdir $DIR/d28
@@ -2094,7 +2103,7 @@ test_46() {
 }
 run_test 46 "dirtying a previously written page ================"
 
-# test_47 is removed "Device nodes check" is moved to test_28 
+# test_47 is removed "Device nodes check" is moved to test_28
 
 test_48a() { # bug 2399
 	check_kernel_version 34 || return 0
@@ -5304,7 +5313,7 @@ test_124a() {
         log "LVF=$LVF"
         local OLD_LVF=`lctl get_param -n $NSDIR.pool.lock_volume_factor`
         lctl set_param -n $NSDIR.pool.lock_volume_factor $LVF
-        
+
         # Let's make sure that we really have some margin. Client checks
         # cached locks every 10 sec.
         SLEEP=$((SLEEP+20))
@@ -6039,11 +6048,11 @@ test_160() {
 	tail -1 | awk '{print $6}')
     fidf=$($LFS path2fid $DIR/$tdir/pics/zach)
     [ "$fidc" == "p=$fidf" ] || \
-	err17935 "pfid in changelog $fidc != dir fid $fidf" 
+	err17935 "pfid in changelog $fidc != dir fid $fidf"
 
     USER_REC1=$(do_facet $SINGLEMDS lctl get_param -n \
 	mdd.$MDT0.changelog_users | grep $USER | awk '{print $2}')
-    $LFS changelog_clear $MDT0 $USER $(($USER_REC1 + 5))  
+    $LFS changelog_clear $MDT0 $USER $(($USER_REC1 + 5))
     USER_REC2=$(do_facet $SINGLEMDS lctl get_param -n \
 	mdd.$MDT0.changelog_users | grep $USER | awk '{print $2}')
     echo "verifying user clear: $(( $USER_REC1 + 5 )) == $USER_REC2"
@@ -6118,7 +6127,7 @@ test_161() {
     echo -n "${links}/1000 links in link EA"
     [ ${links} -gt 60 ] || err17935 "expected at least 60 links in link EA"
     unlinkmany $DIR/$tdir/foo2/$longname 1000 || \
-	error "failed to unlink many hardlinks" 
+	error "failed to unlink many hardlinks"
 }
 run_test 161 "link ea sanity"
 
@@ -6160,11 +6169,11 @@ test_162() {
     check_path "/$tdir/d2/p/q/r/hlink" ${mds1_svc} $FID --link 0
     # check that there are 2 links
     ${LFS} fid2path ${mds1_svc} $FID | wc -l | grep -q 2 || \
-	err17935 "expected 2 links" 
+	err17935 "expected 2 links"
 
     rm $DIR/$tdir/d2/p/q/r/hlink
     check_path "/$tdir/d2/a/b/c/new_file" ${mds1_svc} $FID --link 0
-    # Doesnt work with CMD yet: 17935 
+    # Doesnt work with CMD yet: 17935
     return 0
 }
 run_test 162 "path lookup sanity"
@@ -6207,31 +6216,31 @@ test_170() {
         $LCTL df $TMP/${tfile}_log_good > $TMP/${tfile}_log_good.out 2>&1
         local good_line2=$(tail -n 1 $TMP/${tfile}_log_good.out | awk '{print $5}')
 
-	[ "$bad_line" ] && [ "$good_line1" ] && [ "$good_line2" ] || 
+	[ "$bad_line" ] && [ "$good_line1" ] && [ "$good_line2" ] ||
 		error "bad_line good_line1 good_line2 are empty"
- 
+
         cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt
-        cat $TMP/${tfile}_log_bad >> $TMP/${tfile}_logs_corrupt 
-        cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt           
+        cat $TMP/${tfile}_log_bad >> $TMP/${tfile}_logs_corrupt
+        cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt
 
         $LCTL df $TMP/${tfile}_logs_corrupt > $TMP/${tfile}_log_bad.out 2>&1
         local bad_line_new=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $9}')
         local good_line_new=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $5}')
 
-	[ "$bad_line_new" ] && [ "$good_line_new" ] || 
+	[ "$bad_line_new" ] && [ "$good_line_new" ] ||
 		error "bad_line_new good_line_new are empty"
- 
+
         local expected_good=$((good_line1 + good_line2*2))
 
         rm -f $TMP/${tfile}*
         if [ $bad_line -ne $bad_line_new ]; then
                 error "expected $bad_line bad lines, but got $bad_line_new"
-                return 1 
+                return 1
         fi
 
         if [ $expected_good -ne $good_line_new ]; then
                 error "expected $expected_good good lines, but got $good_line_new"
-                return 2 
+                return 2
         fi
         true
 }
