@@ -204,6 +204,12 @@ Details    : create_count always drops to the min value (=32) because grow_count
 	  information, please refer to bugzilla 17630.
 
 Severity   : normal
+Frequency  : rare, on llog test 6
+Bugzilla   : 16839
+Descriptoin: don't allow connect to already connected import
+Details    : allowing connect to already connected import is hide connecting problem.
+
+Severity   : normal
 Frequency  : rare, on failed llog setup
 Bugzilla   : 18896
 Descriptoin: don't leak obd reference on failed llog setup
