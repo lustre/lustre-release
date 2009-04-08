@@ -462,9 +462,11 @@ void remove_shrinker(struct shrinker *shrinker)
 #ifdef HAVE_FS_STRUCT_USE_PATH
 #define cfs_fs_pwd(fs)       ((fs)->pwd.dentry)
 #define cfs_fs_mnt(fs)       ((fs)->pwd.mnt)
+#define cfs_path_put(nd)     path_put(&(nd)->path)
 #else
 #define cfs_fs_pwd(fs)       ((fs)->pwd)
 #define cfs_fs_mnt(fs)       ((fs)->pwdmnt)
+#define cfs_path_put(nd)     path_release(nd)
 #endif
 
 #ifndef list_for_each_safe_rcu
