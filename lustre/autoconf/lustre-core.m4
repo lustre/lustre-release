@@ -1472,22 +1472,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.26 remove path_release and use path_put instead
-AC_DEFUN([LC_PATH_RELEASE],
-[AC_MSG_CHECKING([if path_release exist])
-LB_LINUX_TRY_COMPILE([
-    #include <linux/dcache.h>
-    #include <linux/namei.h>
-],[
-    path_release(NULL);
-],[
-    AC_DEFINE(HAVE_PATH_RELEASE, 1, [path_release exist])
-    AC_MSG_RESULT([yes])
-],[
-    AC_MSG_RESULT([no]) 
-])
-])
-
 #2.6.27
 AC_DEFUN([LC_INODE_PERMISION_2ARGS],
 [AC_MSG_CHECKING([inode_operations->permission have two args])
@@ -1692,7 +1676,6 @@ AC_DEFUN([LC_PROG_LINUX],
           # 2.6.26
           LC_FS_STRUCT_USE_PATH
           LC_RCU_LIST_SAFE
-          LC_PATH_RELEASE
 
           # 2.6.27
           LC_INODE_PERMISION_2ARGS
