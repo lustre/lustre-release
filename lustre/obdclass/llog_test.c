@@ -502,8 +502,6 @@ static int llog_test_6(struct obd_device *obd, char *name)
         struct obd_device *mdc_obd;
         struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
         struct obd_uuid *mds_uuid = &ctxt->loc_exp->exp_obd->obd_uuid;
-        struct lustre_handle exph = {0, };
-        struct obd_export *exp;
         struct obd_uuid uuid = {"LLOG_TEST6_UUID"};
         struct llog_handle *llh = NULL;
         struct llog_ctxt *nctxt;
@@ -516,14 +514,6 @@ static int llog_test_6(struct obd_device *obd, char *name)
                        mds_uuid->uuid);
                 GOTO(ctxt_release, rc = -ENOENT);
         }
-
-        rc = obd_connect(&exph, mdc_obd, &uuid, NULL /* obd_connect_data */,
-                         NULL);
-        if (rc) {
-                CERROR("6: failed to connect to MDC: %s\n", mdc_obd->obd_name);
-                GOTO(ctxt_release, rc);
-        }
-        exp = class_conn2export(&exph);
 
         nctxt = llog_get_context(mdc_obd, LLOG_CONFIG_REPL_CTXT);
         rc = llog_create(nctxt, &llh, NULL, name);
@@ -553,7 +543,7 @@ parse_out:
         if (rc) {
                 CERROR("6: llog_close failed: rc = %d\n", rc);
         }
-        rc = obd_disconnect(exp);
+
 ctxt_release:
         llog_ctxt_put(ctxt);
         RETURN(rc);
