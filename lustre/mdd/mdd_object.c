@@ -2048,6 +2048,8 @@ static int mdd_dir_page_build(const struct lu_env *env, struct mdd_device *mdd,
                         memcpy(ent->lde_name, name, len);
 
                         result = mdd_append_attrs(env, mdd, attr, iops, it, ent);
+                        if (result == -ESTALE)
+                                goto next;
                         if (result != 0)
                                 goto out;
                 } else {
@@ -2070,6 +2072,8 @@ static int mdd_dir_page_build(const struct lu_env *env, struct mdd_device *mdd,
 
 next:
                 result = iops->next(env, it);
+                if (result == -ESTALE)
+                        goto next;
         } while (result == 0);
 
 out:

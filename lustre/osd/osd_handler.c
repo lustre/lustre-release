@@ -3286,7 +3286,6 @@ static struct dt_rec *osd_it_ea_rec(const struct lu_env *env,
                 dentry->d_inode = inode;
                 LASSERT(dentry->d_inode->i_sb == osd_sb(dev));
         } else {
-                CERROR("Error getting inode for ino =%d", id->oii_ino);
                 RETURN((struct dt_rec *) PTR_ERR(inode));
         }
 
@@ -3658,6 +3657,12 @@ static struct inode *osd_iget(struct osd_thread_info *info,
         } else if (id->oii_gen != OSD_OII_NOGEN &&
                    inode->i_generation != id->oii_gen) {
                 CERROR("stale inode\n");
+                iput(inode);
+                inode = ERR_PTR(-ESTALE);
+        } else if (inode->i_nlink == 0) {
+                /* due to parallel readdir and unlink,
+                * we can have dead inode here. */
+                make_bad_inode(inode);
                 iput(inode);
                 inode = ERR_PTR(-ESTALE);
         }
