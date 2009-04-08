@@ -1700,6 +1700,13 @@ static int target_recovery_thread(void *arg)
                 class_disconnect_stale_exports(obd, connect_done,
                                                exp_flags_from_obd(obd) |
                                                OBD_OPT_ABORT_RECOV);
+                /**
+                 * if recovery proceeds with versions then some clients may be
+                 * timed out waiting for others and trying to reconnect.
+                 * Extend timer for such reconnect cases.
+                 */
+                if (obd->obd_version_recov)
+                        reset_recovery_timer(obd, RECONNECT_DELAY_MAX * 2, 1);
         }
 
         /* next stage: replay requests */
@@ -1765,6 +1772,10 @@ static int target_recovery_thread(void *arg)
 
         /* The third stage: reply on final pings */
         CDEBUG(D_INFO, "3: final stage - process recovery completion pings\n");
+        /** evict exports failed VBR */
+        class_disconnect_stale_exports(obd, req_vbr_done,
+                                       exp_flags_from_obd(obd) |
+                                       OBD_OPT_ABORT_RECOV);
         /** Update server last boot epoch */
         lut_boot_epoch_update(lut);
         /* We drop recoverying flag to forward all new requests
@@ -1779,17 +1790,13 @@ static int target_recovery_thread(void *arg)
                 handle_recovery_req(thread, req,
                                     trd->trd_recovery_handler);
         }
-        /* evict exports failed VBR */
-        class_disconnect_stale_exports(obd, req_vbr_done,
-                                       exp_flags_from_obd(obd) |
-                                       OBD_OPT_ABORT_RECOV);
 
         delta = (jiffies - delta) / HZ;
         CDEBUG(D_INFO,"4: recovery completed in %lus - %d/%d reqs/locks\n",
               delta, obd->obd_replayed_requests, obd->obd_replayed_locks);
         LASSERT(atomic_read(&obd->obd_req_replay_clients) == 0);
         LASSERT(atomic_read(&obd->obd_lock_replay_clients) == 0);
-        if (delta > obd_timeout * 2) {
+        if (delta > obd_timeout * OBD_RECOVERY_FACTOR) {
                 CWARN("too long recovery - read logs\n");
                 libcfs_debug_dumplog();
         }

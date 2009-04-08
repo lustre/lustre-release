@@ -123,6 +123,9 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
    chance to generate adaptive timeout data. */
 #define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/2)
 #endif
+/* The max delay between connects is SWITCH_MAX + SWITCH_INC + INITIAL */
+#define RECONNECT_DELAY_MAX (CONNECTION_SWITCH_MAX + CONNECTION_SWITCH_INC + \
+                             INITIAL_CONNECT_TIMEOUT)
 #define LONG_UNLINK 300          /* Unlink should happen before now */
 
 /**

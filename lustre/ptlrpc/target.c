@@ -276,7 +276,8 @@ void lut_boot_epoch_update(struct lu_target *lut)
          */
         list_for_each_entry(req, &client_list, rq_list) {
                 LASSERT(!req->rq_export->exp_delayed);
-                lut_client_epoch_update(&env, lut, req->rq_export);
+                if (!req->rq_export->exp_vbr_failed)
+                        lut_client_epoch_update(&env, lut, req->rq_export);
         }
         /** return list back at once */
         spin_lock_bh(&lut->lut_obd->obd_processing_task_lock);
