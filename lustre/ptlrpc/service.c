@@ -680,7 +680,7 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
         struct ptlrpc_service *svc = req->rq_rqbd->rqbd_service;
         struct ptlrpc_request *rq = NULL;
         struct ptlrpc_at_array *array = &svc->srv_at_array;
-        __u32 index, wtimes;
+        __u32 index;
         int found = 0;
 
         if (AT_OFF)
@@ -698,13 +698,8 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
 
         LASSERT(list_empty(&req->rq_timed_list));
 
-        wtimes = req->rq_deadline / array->paa_size;
         index = req->rq_deadline % array->paa_size;
-        if (array->paa_reqs_count[index] > 0)
-                rq = list_entry(array->paa_reqs_array[index].next, 
-                                struct ptlrpc_request, rq_timed_list);
-
-        if (rq != NULL && (rq->rq_deadline / array->paa_size) < wtimes) {
+        if (array->paa_reqs_count[index] > 0) {
                 /* latest rpcs will have the latest deadlines in the list,
                  * so search backward. */
                 list_for_each_entry_reverse(rq, &array->paa_reqs_array[index], 
@@ -715,13 +710,11 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
                                 break;
                         }
                 }
-
-                /* AT array is corrupted? */
-                LASSERT(!list_empty(&req->rq_timed_list));
-        } else {
-                /* Add the request at the head of the list */
-                list_add(&req->rq_timed_list, &array->paa_reqs_array[index]);
         }
+        
+        /* Add the request at the head of the list */
+        if (list_empty(&req->rq_timed_list))
+                list_add(&req->rq_timed_list, &array->paa_reqs_array[index]);
 
         req->rq_at_linked = 1;
         req->rq_at_index = index;
