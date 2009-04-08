@@ -450,6 +450,15 @@ test_17g() {
 }
 run_test 17g "symlinks: really long symlink name ==============================="
 
+test_17h() { #bug 17378
+        mkdir -p $DIR/$tdir
+        $SETSTRIPE $DIR/$tdir -c -1
+#define OBD_FAIL_MDS_LOV_PREP_CREATE 0x141
+	do_facet mds lctl set_param fail_loc=0x80000141
+        touch $DIR/$tdir/$tfile || true
+}
+run_test 17h "create objects: lov_free_memmd() doesn't lbug"
+
 test_18() {
 	touch $DIR/f
 	ls $DIR || error
@@ -1043,7 +1052,7 @@ test_27s() { # bug 10725
 	mkdir -p $DIR/$tdir
 	local stripe_size=$((4096 * 1024 * 1024))	# 2^32
 	local stripe_count=0
-	[ $OSTCOUNT -eq 1 ] || stripe_count=2 
+	[ $OSTCOUNT -eq 1 ] || stripe_count=2
 	$SETSTRIPE $DIR/$tdir -s $stripe_size -c $stripe_count && \
 		error "stripe width >= 2^32 succeeded" || true
 }
@@ -1128,7 +1137,7 @@ test_27w() { # bug 10997
 }
 run_test 27w "check lfs setstripe -c -s -i options ============="
 
-# createtest also checks that device nodes are created and 
+# createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091
 	mkdir $DIR/d28
@@ -2034,7 +2043,7 @@ test_46() {
 }
 run_test 46 "dirtying a previously written page ================"
 
-# test_47 is removed "Device nodes check" is moved to test_28 
+# test_47 is removed "Device nodes check" is moved to test_28
 
 test_48a() { # bug 2399
 	check_kernel_version 34 || return 0
@@ -3791,7 +3800,7 @@ test_101b() {
 	true
 }
 run_test 101b "check stride-io mode read-ahead ================="
-  
+
 test_101c() {
         local STRIPE_SIZE=1048576
         local FILE_LENGTH=$((STRIPE_SIZE*100))
@@ -3801,7 +3810,7 @@ test_101c() {
 
         cancel_lru_locks osc
         $LCTL set_param osc.*.rpc_stats 0
-        $READS -f $DIR/$tfile -s$FILE_LENGTH -b65536 -n$nreads -t 180 
+        $READS -f $DIR/$tfile -s$FILE_LENGTH -b65536 -n$nreads -t 180
         for OSC in `$LCTL  get_param -N osc.*`
         do
                 if [ "$OSC" == "osc.num_refs" ]; then
@@ -3811,12 +3820,12 @@ test_101c() {
                 if [ $lines -le 20 ]; then
                         continue
                 fi
-                
+
 		rpc4k=$($LCTL get_param -n $OSC | awk '$1 == "1:" { print $2; exit; }')
                 rpc8k=$($LCTL get_param -n $OSC | awk '$1 == "2:" { print $2; exit; }')
                 rpc16k=$($LCTL get_param -n $OSC | awk '$1 == "4:" { print $2; exit; }')
                 rpc32k=$($LCTL get_param -n $OSC | awk '$1 == "8:" { print $2; exit; }')
-               
+
                 [ $rpc4k != 0 ]  && error "Small 4k read IO ${rpc4k}!"
                 [ $rpc8k != 0 ]  && error "Small 8k read IO ${rpc8k}!"
                 [ $rpc16k != 0 ] && error "Small 16k read IO ${rpc16k}!"
@@ -3828,12 +3837,12 @@ test_101c() {
                 rpc256k=$($LCTL get_param -n $OSC | awk '$1 == "64:" { print $2; exit; }')
                 rpc512k=$($LCTL get_param -n $OSC | awk '$1 == "128:" { print $2; exit; }')
                 rpc1024k=$($LCTL get_param -n $OSC | awk '$1 == "256:" { print $2; exit; }')
-                   
-                [ $rpc64k == 0 ]   && error "No 64k readahead IO ${rpc64k}" 
-                [ $rpc128k == 0 ]  && error "No 128k readahead IO ${rpc128k}" 
-                [ $rpc256k == 0 ]  && error "No 256k readahead IO ${rpc256k}" 
-                [ $rpc512k == 0 ]  && error "No 512k readahead IO ${rpc256k}" 
-                [ $rpc1024k == 0 ] && error "No 1024k readahead IO ${rpc1024k}" 
+
+                [ $rpc64k == 0 ]   && error "No 64k readahead IO ${rpc64k}"
+                [ $rpc128k == 0 ]  && error "No 128k readahead IO ${rpc128k}"
+                [ $rpc256k == 0 ]  && error "No 256k readahead IO ${rpc256k}"
+                [ $rpc512k == 0 ]  && error "No 512k readahead IO ${rpc256k}"
+                [ $rpc1024k == 0 ] && error "No 1024k readahead IO ${rpc1024k}"
                 echo "Big rpc check passed!"
         done
         cleanup_101
@@ -5152,7 +5161,7 @@ test_124a() {
         log "LVF=$LVF"
         local OLD_LVF=`lctl get_param -n $NSDIR.pool.lock_volume_factor`
         lctl set_param -n $NSDIR.pool.lock_volume_factor $LVF
-        
+
         # Let's make sure that we really have some margin. Client checks
         # cached locks every 10 sec.
         SLEEP=$((SLEEP+20))
@@ -5806,31 +5815,31 @@ test_170() {
         $LCTL df $TMP/${tfile}_log_good > $TMP/${tfile}_log_good.out 2>&1
         local good_line2=$(tail -n 1 $TMP/${tfile}_log_good.out | awk '{print $5}')
 
-	[ "$bad_line" ] && [ "$good_line1" ] && [ "$good_line2" ] || 
+	[ "$bad_line" ] && [ "$good_line1" ] && [ "$good_line2" ] ||
 		error "bad_line good_line1 good_line2 are empty"
- 
+
         cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt
-        cat $TMP/${tfile}_log_bad >> $TMP/${tfile}_logs_corrupt 
-        cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt           
+        cat $TMP/${tfile}_log_bad >> $TMP/${tfile}_logs_corrupt
+        cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt
 
         $LCTL df $TMP/${tfile}_logs_corrupt > $TMP/${tfile}_log_bad.out 2>&1
         local bad_line_new=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $9}')
         local good_line_new=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $5}')
 
-	[ "$bad_line_new" ] && [ "$good_line_new" ] || 
+	[ "$bad_line_new" ] && [ "$good_line_new" ] ||
 		error "bad_line_new good_line_new are empty"
- 
+
         local expected_good=$((good_line1 + good_line2*2))
 
         rm -f $TMP/${tfile}*
         if [ $bad_line -ne $bad_line_new ]; then
                 error "expected $bad_line bad lines, but got $bad_line_new"
-                return 1 
+                return 1
         fi
 
         if [ $expected_good -ne $good_line_new ]; then
                 error "expected $expected_good good lines, but got $good_line_new"
-                return 2 
+                return 2
         fi
         true
 }
