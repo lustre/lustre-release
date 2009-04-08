@@ -386,14 +386,15 @@ int client_connect_import(struct lustre_handle *dlm_handle,
         ENTRY;
 
         down_write(&cli->cl_sem);
-        rc = class_connect(dlm_handle, obd, cluuid);
-        if (rc)
-                GOTO(out_sem, rc);
-
         if (cli->cl_conn_count > 0)
                 GOTO(out_sem, rc = -EALREADY);
                 
         cli->cl_conn_count++;
+
+        rc = class_connect(dlm_handle, obd, cluuid);
+        if (rc)
+                GOTO(out_sem, rc);
+
         *exp = class_conn2export(dlm_handle);
 
         if (obd->obd_namespace != NULL)
