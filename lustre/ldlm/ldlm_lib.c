@@ -390,9 +390,10 @@ int client_connect_import(struct lustre_handle *dlm_handle,
         if (rc)
                 GOTO(out_sem, rc);
 
-        cli->cl_conn_count++;
-        if (cli->cl_conn_count > 1)
+        if (cli->cl_conn_count > 0)
                 GOTO(out_sem, rc = -EALREADY);
+                
+        cli->cl_conn_count++;
         *exp = class_conn2export(dlm_handle);
 
         if (obd->obd_namespace != NULL)
