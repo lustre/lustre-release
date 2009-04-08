@@ -971,6 +971,10 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
 
         if (stripes < lsm->lsm_stripe_count)
                 qos_shrink_lsm(set);
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_LOV_PREP_CREATE)) {
+                qos_shrink_lsm(set);
+                rc = -EIO;
+        }
 
         if (oti && (src_oa->o_valid & OBD_MD_FLCOOKIE)) {
                 oti_alloc_cookies(oti, set->set_count);
