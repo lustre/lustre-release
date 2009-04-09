@@ -1383,6 +1383,7 @@ static void obd_zombie_export_add(struct obd_export *exp) {
  * Add import to the obd_zombe thread and notify it.
  */
 static void obd_zombie_import_add(struct obd_import *imp) {
+        LASSERT(imp->imp_sec == NULL);
         spin_lock(&obd_zombie_impexp_lock);
         LASSERT(list_empty(&imp->imp_zombie_chain));
         list_add(&imp->imp_zombie_chain, &obd_zombie_imports);
