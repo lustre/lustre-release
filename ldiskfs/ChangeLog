@@ -2,17 +2,22 @@
 	* version 3.0.7.1
 
 Severity   : major
+Frequency  : rare
 Bugzilla   : 18810
-Description: ondisk corruption on OST
-Details    : Fix race between read_block_bitmap() and mark_diskspace_used()
-	     causing the ldiskfs filesystem to be remount read only.
+Description: fix racy locking of mballoc block bitmaps causing BUG
+Details    : The locking of the mballoc buddy bitmap and the in-memory
+	     block bitmap was using two different spin locks in some
+	     cases.  This made it possible to incorrectly access the
+	     mballoc bitmap while another process was modifying it,
+	     causing a sanity assertion to fail.  While no on-disk corruption
+	     was reported, there was some risk of this happening.
 
 -------------------------------------------------------------------------------
 
 2009-02-07 Sun Microsystems, Inc.
 	* version 3.0.7
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 16498
 Description: Get RAID stripe size from superblock
 Details    : RAID striping parameters are now saved in the superblock itself,
@@ -20,6 +25,7 @@ Details    : RAID striping parameters are now saved in the superblock itself,
 	     a mount option each time.
 
 Severity   : major
+Frequency  : only if server is running on unsupported big-endian machine
 Bugzilla   : 16438
 Description: Disable big-endian ldiskfs server support.
 Details    : The ldiskfs code is not tested on big-endian machines, and

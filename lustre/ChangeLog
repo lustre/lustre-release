@@ -37,48 +37,60 @@
 	  information, please refer to bugzilla 17630.
 
 Severity   : minor
+Frequency  : common
 Bugzilla   : 18480
 Description: correct count of recoverable clients
 Details    : if recovery failed for client for some reasons (goal inode or
-             something else) server can wait failed clients for finish recovery.
+	     something else) server can wait failed clients for finish recovery.
 
 Severity   : critical
+Frequency  : when directories had atime set in past (e.g. untar)
 Bugzilla   : 18695
 Descriptoin: Lustre detected file system corruption with inode out of bounds
 Details    : don't update i_size on MDS_CLOSE for directories. This causes
 	     directory corruptions on the MDT.
 
 Severity   : major
+Frequency  : rare
 Bugzilla   : 18810
-Description: ondisk corruption on OST
-Details    : Fix race between read_block_bitmap() and mark_diskspace_used()
-             causing the ldiskfs filesystem to be remounted read only.
+Description: fix racy locking of mballoc block bitmaps causing BUG
+Details    : The locking of the mballoc buddy bitmap and the in-memory
+	     block bitmap was using two different spin locks in some
+	     cases.  This made it possible to incorrectly access the
+	     mballoc bitmap while another process was modifying it,
+	     causing a sanity assertion to fail.  While no on-disk corruption
+	     was reported, there was some risk of this happening.
 
-Severity   : rare
+Severity   : normal
+Frequency  : on failed service startup
 Bugzilla   : 18895
 Description: replay-single test_61d: LustreError:
 	     17392:0:(lprocfs_status.c:859:lprocfs_obd_cleanup())
 	     ASSERTION(obd->obd_proc_exports_entry->subdir == NULL) failed
 Details    : cleanup lprocfs entries on error.
 
-Severity   : rare
+Severity   : normal
+Frequency  : rare
 Bugzilla   : 18903
 Description: llmount.sh: BUG: spinlock wrong owner on CPU#0, mount.lustre/8180
 Details    : fix typo in import_set_conn() causing spinlock corruption.
 
-Severity   : rare, only when using group lock
+Severity   : normal
+Frequency  : rare, only when using group lock on client
 Bugzilla   : 18859
 Description: Group Lock in Lustre: write call is blocking
 Details    : fix wrong return code of ll_is_file_contended() causing processes
 	     to be blocked indefinitely.
 
 Severity   : normal
+Frequency  : rare
 Bugzilla   : 17757
 Description: ASSERTION(new_lock != NULL) failed:op 0x1 lockh 0x0
 Details    : DISP_OPEN_LOCK is not cleared properly in reconstruct_open() since
 	     intent_disposition() is used instead of intent_set_disposition().
 
-Severity   : major (only when using software RAID5)
+Severity   : major
+Frequency  : occasional when using software RAID5
 Bugzilla   : 15428
 Description: raid5 panics
 Details    : fix panic in raid5_end_read_request().
@@ -149,7 +161,7 @@ Frequency  : always with long access acl
 Bugzilla   : 17636
 Descriptoin: mds can't pack reply with long acl.
 Details    : mds don't control size of acl but they limited by reint/getattr
-             reply buffer.
+	     reply buffer.
 
 Severity   : normal
 Frequency  : start MDS on uncleanly shutdowned MDS device
@@ -460,16 +472,16 @@ Bugzilla   : 15139
 Frequency  : rare
 Description: avoid ASSERTION(client_stat->nid_exp_ref_count == 0) failed
 Details    : release reference to stats when client disconnected, not
-             when export destroyed for avoid races when client destroyed
-             after main ost export.
+	     when export destroyed for avoid races when client destroyed
+	     after main ost export.
 
 Severity   : normal
 Bugzilla   : 16679
 Description: more cleanup in mds_lov
 Details    : add workaround for get valid ost count for avoid warnings about
-             drop too big messages, not init llog cat under semphore which
-             can be blocked on reconnect and break normal replay, fix access
-             to wrong pointer.
+	     drop too big messages, not init llog cat under semphore which
+	     can be blocked on reconnect and break normal replay, fix access
+	     to wrong pointer.
 
 Severity   : normal
 Bugzilla   : 16006
@@ -479,9 +491,9 @@ Details    : restore missing copy oi_flags to lov requests.
 Severity   : enhancement
 Bugzilla   : 16581
 Description: Add man pages for llobdstat(8), llstat(8), plot-llstat(8),
-           : l_getgroups(8), lst(8), routerstat(8)
+	   : l_getgroups(8), lst(8), routerstat(8)
 Details    : included man pages for llobdstat(8), llstat(8),
-           : plot-llstat(8), l_getgroups(8), lst(8), routerstat(8)
+	   : plot-llstat(8), l_getgroups(8), lst(8), routerstat(8)
 
 Severity   : enhancement
 Bugzilla   : 16208
@@ -498,9 +510,9 @@ Description: Update to RHEL4 kernel-2.6.9-67.0.22.EL.
 Severity   : enhancement
 Bugzilla   : 16091
 Description: configure's --enable-quota should check the
-           : kernel .config for CONFIG_QUOTA
+	   : kernel .config for CONFIG_QUOTA
 Details    : configure is terminated if --enable-quota is passed but
-           : no quota support is in kernel
+	   : no quota support is in kernel
 
 Severity   : normal
 Bugzilla   : 16317
@@ -511,8 +523,8 @@ Severity   : normal
 Bugzilla   : 16080
 Description: don't fail open with -ERANGE
 Details    : if client connected until mds will be know about real ost count
-             get LOV EA can be fail because mds not allocate enougth buffer
-             for LOV EA.
+	     get LOV EA can be fail because mds not allocate enougth buffer
+	     for LOV EA.
 
 Severity   : normal
 Frequency  : only for filesystems larger than 8TB
@@ -891,8 +903,8 @@ Severity   : enhancement
 Bugzilla   : 10555
 Description: Add a FIEMAP(FIle Extent MAP) ioctl for ldiskfs
 Details    : FIEMAP ioctl will allow an application to efficiently fetch the
-             extent information of a file. It can be used to map logical blocks
-             in a file to physical blocks in the block device.
+	     extent information of a file. It can be used to map logical blocks
+	     in a file to physical blocks in the block device.
 
 Severity   : minor
 Bugzilla   : 16717
