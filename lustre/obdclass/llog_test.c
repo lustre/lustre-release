@@ -517,11 +517,13 @@ static int llog_test_6(struct obd_device *obd, char *name)
 
         rc = obd_connect(NULL, &exp, mgc_obd, &uuid,
                          NULL /* obd_connect_data */, NULL);
-        if (rc) {
-                CERROR("6: failed to connect to MGC: %s\n", mgc_obd->obd_name);
-                GOTO(ctxt_release, rc);
+        if (rc != -EALREADY) {
+                CERROR("6: connect on connected MDC (%s) failed to return"
+                       " -EALREADY", mgc_obd->obd_name);
+                if (rc == 0)
+                        obd_disconnect(exp);
+                GOTO(ctxt_release, rc = -EINVAL);
         }
-        LASSERTF(exp->exp_obd == mgc_obd, "%p - %p - %p\n", exp, exp->exp_obd, mgc_obd);
 
         nctxt = llog_get_context(mgc_obd, LLOG_CONFIG_REPL_CTXT);
         rc = llog_create(nctxt, &llh, NULL, name);
@@ -551,9 +553,6 @@ parse_out:
         if (rc) {
                 CERROR("6: llog_close failed: rc = %d\n", rc);
         }
-	CDEBUG(D_INFO, "obd %p - %p - %p - %p\n",
-	       mgc_obd, exp, exp->exp_obd, exp->exp_obd->obd_type);
-        rc = obd_disconnect(exp);
 ctxt_release:
         llog_ctxt_put(ctxt);
         RETURN(rc);

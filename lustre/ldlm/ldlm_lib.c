@@ -400,15 +400,15 @@ int client_connect_import(const struct lu_env *env,
 
         *exp = NULL;
         down_write(&cli->cl_sem);
+        if (cli->cl_conn_count > 0 )
+                GOTO(out_sem, rc = -EALREADY);
+
         rc = class_connect(&conn, obd, cluuid);
         if (rc)
                 GOTO(out_sem, rc);
-
-        *exp = class_conn2export(&conn);
-
+                
         cli->cl_conn_count++;
-        if (cli->cl_conn_count > 1)
-                GOTO(out_sem, rc);
+        *exp = class_conn2export(&conn);
 
         if (obd->obd_namespace != NULL)
                 CERROR("already have namespace!\n");
