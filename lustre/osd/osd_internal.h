@@ -128,6 +128,15 @@ struct osd_device {
         __u32                     od_iop_mode;
 };
 
+struct osd_it_ea_dirent {
+        __u64           oied_ino;
+        __u64           oied_off;
+        unsigned short  oied_namelen;
+        char            oied_name[0];
+} __attribute__((packed));
+
+#define OSD_IT_EA_BUFSIZE       CFS_PAGE_SIZE
+
 /**
  * This is iterator's in-memory data structure in interoperability
  * mode (i.e. iterator over ldiskfs style directory)
@@ -136,15 +145,18 @@ struct osd_it_ea {
         struct osd_object   *oie_obj;
         /** used in ldiskfs iterator, to stored file pointer */
         struct file          oie_file;
-        /** used in ldiskfs iterator, to store directory entry */
-        struct dirent64      oie_dirent64;
         /** current file position */
-        __u64               oie_curr_pos;
+        __u64                oie_curr_pos;
         /** next file position */
-        __u64               oie_next_pos;
-        /** namelen of the file */
-        __u8                oie_namelen;
-
+        __u64                oie_next_pos;
+        /** how many entries have been read-cached from storage */
+        int                  oie_rd_dirent;
+        /** current entry is being iterated by caller */
+        int                  oie_it_dirent;
+        /** current processing entry */
+        struct osd_it_ea_dirent *oie_dirent;
+        /** buffer to hold entries, size == OSD_IT_EA_BUFSIZE */
+        void                *oie_buf;
 };
 
 /**
@@ -201,6 +213,8 @@ struct osd_thread_info {
                 struct osd_it_ea       oti_it_ea;
         };
 
+        /** pre-allocated buffer used by oti_it_ea, size OSD_IT_EA_BUFSIZE */
+        void                  *oti_it_ea_buf;
 
         /** IAM iterator for index operation. */
         struct iam_iterator    oti_idx_it;
