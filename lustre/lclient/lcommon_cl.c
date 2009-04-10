@@ -560,11 +560,15 @@ int ccc_transient_page_prep(const struct lu_env *env,
  *
  */
 
+void ccc_lock_delete(const struct lu_env *env,
+                     const struct cl_lock_slice *slice)
+{
+        CLOBINVRNT(env, slice->cls_obj, ccc_object_invariant(slice->cls_obj));
+}
+
 void ccc_lock_fini(const struct lu_env *env, struct cl_lock_slice *slice)
 {
         struct ccc_lock *clk = cl2ccc_lock(slice);
-
-        CLOBINVRNT(env, slice->cls_obj, ccc_object_invariant(slice->cls_obj));
         OBD_SLAB_FREE_PTR(clk, ccc_lock_kmem);
 }
 
@@ -1171,7 +1175,6 @@ void cl_inode_fini(struct inode *inode)
         int emergency;
 
         if (clob != NULL) {
-                struct lu_object_header *head = clob->co_lu.lo_header;
                 void                    *cookie;
 
                 cookie = cl_env_reenter();
@@ -1190,8 +1193,6 @@ void cl_inode_fini(struct inode *inode)
                  */
                 cl_object_kill(env, clob);
                 lu_object_ref_del(&clob->co_lu, "inode", inode);
-                /* XXX temporary: this is racy */
-                LASSERT(atomic_read(&head->loh_ref) == 1);
                 cl_object_put(env, clob);
                 lli->lli_clob = NULL;
                 if (emergency) {

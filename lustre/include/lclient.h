@@ -305,6 +305,8 @@ void ccc_transient_page_discard(const struct lu_env *env,
 int ccc_transient_page_prep(const struct lu_env *env,
                             const struct cl_page_slice *slice,
                             struct cl_io *io);
+void ccc_lock_delete(const struct lu_env *env,
+                     const struct cl_lock_slice *slice);
 void ccc_lock_fini(const struct lu_env *env,struct cl_lock_slice *slice);
 int ccc_lock_enqueue(const struct lu_env *env,const struct cl_lock_slice *slice,
                      struct cl_io *io, __u32 enqflags);

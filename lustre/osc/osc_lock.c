@@ -210,8 +210,7 @@ static void osc_lock_fini(const struct lu_env *env,
          */
         if (ols->ols_hold)
                 osc_lock_unuse(env, slice);
-        if (ols->ols_lock != NULL)
-                osc_lock_detach(env, ols);
+        LASSERT(ols->ols_lock == NULL);
 
         OBD_SLAB_FREE_PTR(ols, osc_lock_kmem);
 }

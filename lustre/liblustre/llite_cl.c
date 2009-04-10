@@ -414,6 +414,7 @@ static int slp_lock_enqueue(const struct lu_env *env,
 }
 
 static const struct cl_lock_operations slp_lock_ops = {
+        .clo_delete    = ccc_lock_delete,
         .clo_fini      = ccc_lock_fini,
         .clo_enqueue   = slp_lock_enqueue,
         .clo_wait      = ccc_lock_wait,
