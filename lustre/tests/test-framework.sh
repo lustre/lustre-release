@@ -566,13 +566,13 @@ zconf_mount_clients() {
     echo "Starting client $clients: $OPTIONS $device $mnt"
 
     do_nodes $clients "set -x;
-running=\\\$(mount | grep -c $mnt' ')
-rc=0
+running=\\\$(mount | grep -c $mnt' ');
+rc=0;
 if [ \\\$running -eq 0 ] ; then
-    mkdir -p $mnt
-    mount -t lustre $OPTIONS $device $mnt
-    rc=$?
-fi
+    mkdir -p $mnt;
+    mount -t lustre $OPTIONS $device $mnt;
+    rc=$?;
+fi;
 exit $rc"
 
     echo "Started clients $clients: "
