@@ -50,24 +50,30 @@ reformat() {
 }
 
 writeconf() {
-    local facet=$SINGLEMDS
-    local dev=${facet}_dev
-    shift
-    stop ${facet} -f
-    rm -f ${facet}active
-    # who knows if/where $TUNEFS is installed?  Better reformat if it fails...
-    do_facet ${facet} "$TUNEFS --writeconf ${!dev}" || echo "tunefs failed, reformatting instead" && reformat
+	local facet=$SINGLEMDS
+	local dev=${facet}_dev
+	shift
+	stop ${facet} -f
+	rm -f ${facet}active
+	# who knows if/where $TUNEFS is installed?  Better reformat if it fails...
+	do_facet ${facet} "$TUNEFS --writeconf ${!dev}" || echo "tunefs failed, reformatting instead" && reformat
+
+	gen_config
 }
 
 gen_config() {
-        reformat
-        # The MGS must be started before the OSTs for a new fs, so start
-        # and stop to generate the startup logs. 
+	# The MGS must be started before the OSTs for a new fs, so start
+	# and stop to generate the startup logs. 
 	start_mds
 	start_ost
 	sleep 5
 	stop_ost
 	stop_mds
+}
+
+reformat_and_config() {
+	reformat
+	gen_config
 }
 
 start_mds() {
@@ -193,7 +199,7 @@ init_gss
 
 #create single point mountpoint
 
-gen_config
+reformat_and_config
 
 test_0() {
         setup
@@ -452,7 +458,7 @@ test_17() {
 
         start_ost
 	start_mds && return 42
-	gen_config
+	reformat_and_config
 }
 run_test 17 "Verify failed mds_postsetup won't fail assertion (2936) (should return errs)"
 
@@ -495,7 +501,7 @@ test_18() {
 
         MDS_MKFS_OPTS="--mgs --mdt --fsname=$FSNAME --device-size=$myMDSSIZE --param sys.timeout=$TIMEOUT $MDSOPT"
 
-        gen_config
+        reformat_and_config
         echo "mount lustre system..."
 	setup
         check_mount || return 41
@@ -511,7 +517,7 @@ test_18() {
         cleanup || return $?
 
         MDS_MKFS_OPTS=$OLD_MDS_MKFS_OPTS
-        gen_config
+        reformat_and_config
 }
 run_test 18 "check mkfs creates large journals"
 
@@ -895,10 +901,6 @@ test_29() {
 	cleanup_nocli
 	#writeconf to remove all ost2 traces for subsequent tests
 	writeconf
-	start_mds
-	start_ost
-	sleep 5
-	cleanup
 }
 run_test 29 "permanently remove an OST"
 
@@ -1664,9 +1666,7 @@ cleanup_48() {
 
 	# reformat after this test is needed - if test will failed
 	# we will have unkillable file at FS
-	reformat
-	setup_noconfig
-	cleanup || error "can't cleanup"
+	reformat_and_config
 }
 
 test_48() { # bug 17636
