@@ -970,13 +970,15 @@ static int cmr_object_sync(const struct lu_env *env, struct md_object *mo)
 static dt_obj_version_t cmr_version_get(const struct lu_env *env,
                                         struct md_object *mo)
 {
-        LBUG();
+        /* Don't check remote object version */
+        return 0;
 }
 
 static void cmr_version_set(const struct lu_env *env, struct md_object *mo,
                             dt_obj_version_t version)
 {
-        LBUG();
+        /* No need to update remote object version here, it is done as a part
+         * of reintegration of partial operation on the remote server */
 }
 
 static const struct md_object_operations cmr_mo_ops = {
