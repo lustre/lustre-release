@@ -2326,6 +2326,12 @@ void __exit ldlm_exit(void)
                 CERROR("ldlm_refcount is %d in ldlm_exit!\n", ldlm_refcount);
         rc = cfs_mem_cache_destroy(ldlm_resource_slab);
         LASSERTF(rc == 0, "couldn't free ldlm resource slab\n");
+#ifdef __KERNEL__
+        /* ldlm_lock_put() use RCU to call ldlm_lock_free, so need call
+         * synchronize_rcu() to wait a grace period elapsed, so that
+         * ldlm_lock_free() get a chance to be called. */
+        synchronize_rcu();
+#endif
         rc = cfs_mem_cache_destroy(ldlm_lock_slab);
         LASSERTF(rc == 0, "couldn't free ldlm lock slab\n");
         rc = cfs_mem_cache_destroy(ldlm_interval_slab);
