@@ -908,6 +908,9 @@ static int vvp_io_commit_write(const struct lu_env *env,
                          */
                         result = vvp_page_sync_io(env, io, pg, cp,
                                                   to, CRT_WRITE);
+                        if (result)
+                                CERROR("Write page %lu of inode %p failed %d\n",
+                                       pg->cp_index, inode, result);
         } else {
                 tallyop = LPROC_LL_DIRTY_HITS;
                 result = 0;

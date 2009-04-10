@@ -244,19 +244,30 @@ static void vvp_page_completion_common(const struct lu_env *env,
 
         LINVRNT(cl_page_is_vmlocked(env, clp));
 
-        /* Don't assert the page writeback bit here because the lustre file
-         * may be as a backend of swap space. in this case, the page writeback
-         * is set by VM, and obvious we shouldn't clear it at all. Fortunately
-         * this type of pages are all TRANSIENT pages. */
-        KLASSERT(ergo(clp->cp_type == CPT_CACHEABLE, !PageWriteback(vmpage)));
-
-        vvp_vmpage_error(inode, vmpage, ioret);
-
         if (anchor != NULL) {
                 cp->cpg_sync_io  = NULL;
                 cl_sync_io_note(anchor, ioret);
-        } else if (clp->cp_type == CPT_CACHEABLE)
+        } else if (clp->cp_type == CPT_CACHEABLE) {
+                /*
+                 * Don't assert the page writeback bit here because the lustre
+                 * file may be as a backend of swap space. in this case, the
+                 * page writeback is set by VM, and obvious we shouldn't clear
+                 * it at all. Fortunately this type of pages are all TRANSIENT
+                 * pages.
+                 */
+                LASSERT(!PageWriteback(vmpage));
+
+                /*
+                 * Only mark the page error only when it's a cacheable page
+                 * and NOT a sync io.
+                 *
+                 * For sync IO and direct IO(CPT_TRANSIENT), the error is able
+                 * to be seen by application, so we don't need to mark a page
+                 * as error at all.
+                 */
+                vvp_vmpage_error(inode, vmpage, ioret);
                 unlock_page(vmpage);
+        }
 }
 
 static void vvp_page_completion_read(const struct lu_env *env,
@@ -290,14 +301,18 @@ static void vvp_page_completion_write_common(const struct lu_env *env,
 {
         struct ccc_page *cp = cl2ccc_page(slice);
 
-        if (ioret == 0) {
-                cp->cpg_write_queued = 0;
-                /*
-                 * Only ioret == 0, write succeed, then this page could be
-                 * deleted from the pending_writing count.
-                 */
-                vvp_write_complete(cl2ccc(slice->cpl_obj), cp);
-        }
+        /*
+         * TODO: Actually it makes sense to add the page into oap pending
+         * list again and so that we don't need to take the page out from
+         * SoM write pending list, if we just meet a recoverable error,
+         * -ENOMEM, etc.
+         * To implement this, we just need to return a non zero value in
+         * ->cpo_completion method. The underlying transfer should be notified
+         * and then re-add the page into pending transfer queue.  -jay
+         */
+        cp->cpg_write_queued = 0;
+        vvp_write_complete(cl2ccc(slice->cpl_obj), cp);
+
         vvp_page_completion_common(env, cp, ioret);
 }
 
