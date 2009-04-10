@@ -1600,10 +1600,6 @@ EXPORT_SYMBOL(cl_lock_delete);
  * time-out happens.
  *
  * \pre atomic_read(&lock->cll_ref) > 0
- * \pre ergo(cl_lock_nesting(lock) == CNL_TOP,
- *           cl_lock_nr_mutexed(env) == 1)
- *      [i.e., if a top-lock failed, mutices of no other locks can be held, as
- *      failing sub-locks might require releasing a top-lock mutex]
  *
  * \see clo_lock_delete()
  * \see cl_lock::cll_holds
@@ -1632,12 +1628,6 @@ EXPORT_SYMBOL(cl_lock_error);
  *
  * Cancellation notification is delivered to layers at most once.
  *
- * \pre ergo(cl_lock_nesting(lock) == CNL_TOP,
- *           cl_lock_nr_mutexed(env) == 1)
- *      [i.e., if a top-lock is canceled, mutices of no other locks can be
- *      held, as cancellation of sub-locks might require releasing a top-lock
- *      mutex]
- *
  * \see cl_lock_operations::clo_cancel()
  * \see cl_lock::cll_holds
  */
@@ -1645,8 +1635,6 @@ void cl_lock_cancel(const struct lu_env *env, struct cl_lock *lock)
 {
         LINVRNT(cl_lock_is_mutexed(lock));
         LINVRNT(cl_lock_invariant(env, lock));
-        LASSERT(ergo(cl_lock_nesting(lock) == CNL_TOP,
-                     cl_lock_nr_mutexed(env) == 1));
 
         ENTRY;
         if (lock->cll_holds == 0)

@@ -86,12 +86,13 @@ static void lovsub_parent_unlock(const struct lu_env *env, struct lov_lock *lov)
         EXIT;
 }
 
-static void lovsub_lock_state_one(const struct lu_env *env,
-                                  const struct lovsub_lock *lovsub,
-                                  struct lov_lock *lov)
+static int lovsub_lock_state_one(const struct lu_env *env,
+                                 const struct lovsub_lock *lovsub,
+                                 struct lov_lock *lov)
 {
-        struct cl_lock       *parent;
-        const struct cl_lock *child;
+        struct cl_lock *parent;
+        struct cl_lock *child;
+        int             restart = 0;
 
         ENTRY;
         parent = lov->lls_cl.cls_lock;
@@ -99,13 +100,24 @@ static void lovsub_lock_state_one(const struct lu_env *env,
 
         if (lovsub->lss_active != parent) {
                 lovsub_parent_lock(env, lov);
-                if (child->cll_error != 0)
+                if (child->cll_error != 0 && parent->cll_error == 0) {
+                        /*
+                         * This is a deadlock case:
+                         * cl_lock_error(for the parent lock)
+                         *   -> cl_lock_delete
+                         *     -> lov_lock_delete
+                         *       -> cl_lock_enclosure
+                         *         -> cl_lock_mutex_try(for the child lock)
+                         */
+                        cl_lock_mutex_put(env, child);
                         cl_lock_error(env, parent, child->cll_error);
-                else
+                        restart = 1;
+                } else {
                         cl_lock_signal(env, parent);
+                }
                 lovsub_parent_unlock(env, lov);
         }
-        EXIT;
+        RETURN(restart);
 }
 
 /**
@@ -119,23 +131,22 @@ static void lovsub_lock_state(const struct lu_env *env,
 {
         struct lovsub_lock   *sub = cl2lovsub_lock(slice);
         struct lov_lock_link *scan;
-        struct lov_lock_link *temp;
+        int                   restart = 0;
 
         LASSERT(cl_lock_is_mutexed(slice->cls_lock));
         ENTRY;
 
-        /*
-         * Use _safe() version, because
-         *
-         *     lovsub_lock_state_one()
-         *       ->cl_lock_error()
-         *         ->cl_lock_delete()
-         *           ->lov_lock_delete()
-         *
-         * can unlink parent from the parent list.
-         */
-        list_for_each_entry_safe(scan, temp, &sub->lss_parents, lll_list)
-                lovsub_lock_state_one(env, sub, scan->lll_super);
+        do {
+                restart = 0;
+                list_for_each_entry(scan, &sub->lss_parents, lll_list) {
+                        restart = lovsub_lock_state_one(env, sub,
+                                                        scan->lll_super);
+                        if (restart) {
+                                cl_lock_mutex_get(env, slice->cls_lock);
+                                break;
+                        }
+                }
+        } while(restart);
         EXIT;
 }
 
