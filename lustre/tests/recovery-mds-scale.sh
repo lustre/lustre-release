@@ -30,7 +30,7 @@ set -x
 [ $CLIENTCOUNT -ge 3 ] || \
     { skip "$0 Need two or more clients, have $CLIENTCOUNT" && exit 0; }
 
-END_RUN_FILE=${END_RUN_FILE:-$SHARED_DIRECTORY}/end_run_file}
+END_RUN_FILE=${END_RUN_FILE:-$SHARED_DIRECTORY/end_run_file}
 LOAD_PID_FILE=${LOAD_PID_FILE:-$TMP/client-load.pid}
 
 remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
