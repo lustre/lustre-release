@@ -167,7 +167,7 @@ struct lustre_mount_info *server_get_mount(char *name)
         lsi = s2lsi(lmi->lmi_sb);
         mntget(lmi->lmi_mnt);
         atomic_inc(&lsi->lsi_mounts);
-        
+
         CDEBUG(D_MOUNT, "get_mnt %p from %s, refs=%d, vfscount=%d\n",
                lmi->lmi_mnt, name, atomic_read(&lsi->lsi_mounts),
                atomic_read(&lmi->lmi_mnt->mnt_count));
@@ -1380,6 +1380,8 @@ static void server_put_super(struct super_block *sb)
         OBD_ALLOC(tmpname, tmpname_sz);
         memcpy(tmpname, lsi->lsi_ldd->ldd_svname, tmpname_sz);
         CDEBUG(D_MOUNT, "server put_super %s\n", tmpname);
+        if (IS_MDT(lsi->lsi_ldd) && (lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC))
+                snprintf(tmpname, tmpname_sz, "MGS");
 
         /* Stop the target */
         if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC) &&
@@ -1644,7 +1646,9 @@ static int server_fill_super(struct super_block *sb)
                 GOTO(out_mnt, rc);
 
         LCONSOLE_WARN("Server %s on device %s has started\n",
-                      lsi->lsi_ldd->ldd_svname, lsi->lsi_lmd->lmd_dev);
+                      ((lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC) &&
+                       (IS_MDT(lsi->lsi_ldd))) ? "MGS" : lsi->lsi_ldd->ldd_svname,
+                      lsi->lsi_lmd->lmd_dev);
 
         RETURN(0);
 out_mnt:
@@ -1990,7 +1994,7 @@ out:
                 CERROR("Unable to mount %s (%d)\n",
                        s2lsi(sb) ? lmd->lmd_dev : "", rc);
         } else {
-                CDEBUG(D_SUPER, "Mount %s complete\n", 
+                CDEBUG(D_SUPER, "Mount %s complete\n",
                        lmd->lmd_dev);
         }
         return rc;
