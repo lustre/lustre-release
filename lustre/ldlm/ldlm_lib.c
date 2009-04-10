@@ -1642,12 +1642,6 @@ static int handle_recovery_req(struct ptlrpc_thread *thread,
         RETURN(0);
 }
 
-static void resume_recovery_timer(struct obd_device *obd)
-{
-        /* to be safe, make it at least OBD_RECOVERY_FACTOR * obd_timeout */
-        reset_recovery_timer(obd, OBD_RECOVERY_FACTOR * obd_timeout, 1);
-}
-
 static int target_recovery_thread(void *arg)
 {
         struct lu_target *lut = arg;
@@ -1688,10 +1682,6 @@ static int target_recovery_thread(void *arg)
         l_wait_event(obd->obd_next_transno_waitq,
                      check_for_clients(obd), &lwi);
 
-        spin_lock_bh(&obd->obd_processing_task_lock);
-        target_cancel_recovery_timer(obd);
-        spin_unlock_bh(&obd->obd_processing_task_lock);
-
         /* If some clients haven't connected in time, evict them */
         if (obd->obd_connected_clients < obd->obd_max_recoverable_clients) {
                 CWARN("Some clients haven't connect in time (%d/%d),"
@@ -1715,7 +1705,6 @@ static int target_recovery_thread(void *arg)
         CDEBUG(D_INFO, "1: request replay stage - %d clients from t"LPU64"\n",
                atomic_read(&obd->obd_req_replay_clients),
                obd->obd_next_recovery_transno);
-        resume_recovery_timer(obd);
         while ((req = target_next_replay_req(obd))) {
                 LASSERT(trd->trd_processing_task == cfs_curproc_pid());
                 DEBUG_REQ(D_HA, req, "processing t"LPD64" from %s",
@@ -1728,10 +1717,6 @@ static int target_recovery_thread(void *arg)
                 obd->obd_next_recovery_transno++;
                 spin_unlock_bh(&obd->obd_processing_task_lock);
         }
-
-        spin_lock_bh(&obd->obd_processing_task_lock);
-        target_cancel_recovery_timer(obd);
-        spin_unlock_bh(&obd->obd_processing_task_lock);
 
         /* If some clients haven't replayed requests in time, evict them */
         if (obd->obd_abort_recovery) {
@@ -1746,7 +1731,6 @@ static int target_recovery_thread(void *arg)
         /* The second stage: replay locks */
         CDEBUG(D_INFO, "2: lock replay stage - %d clients\n",
                atomic_read(&obd->obd_lock_replay_clients));
-        resume_recovery_timer(obd);
         while ((req = target_next_replay_lock(obd))) {
                 LASSERT(trd->trd_processing_task == cfs_curproc_pid());
                 DEBUG_REQ(D_HA, req, "processing lock from %s: ",
@@ -1756,9 +1740,6 @@ static int target_recovery_thread(void *arg)
                 obd->obd_replayed_locks++;
         }
 
-        spin_lock_bh(&obd->obd_processing_task_lock);
-        target_cancel_recovery_timer(obd);
-        spin_unlock_bh(&obd->obd_processing_task_lock);
         /* If some clients haven't replayed requests in time, evict them */
         if (obd->obd_abort_recovery) {
                 int stale;
@@ -1782,6 +1763,7 @@ static int target_recovery_thread(void *arg)
          * to regular mds_handle() since now */
         spin_lock_bh(&obd->obd_processing_task_lock);
         obd->obd_recovering = obd->obd_abort_recovery = 0;
+        target_cancel_recovery_timer(obd);
         spin_unlock_bh(&obd->obd_processing_task_lock);
         while ((req = target_next_final_ping(obd))) {
                 LASSERT(trd->trd_processing_task == cfs_curproc_pid());
