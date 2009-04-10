@@ -5,10 +5,10 @@ Index: linux-2.6.22.14/fs/ext3/ioctl.c
 ===================================================================
 --- linux-2.6.22.14.orig/fs/ext3/ioctl.c
 +++ linux-2.6.22.14/fs/ext3/ioctl.c
-@@ -17,6 +17,161 @@
- #include <linux/smp_lock.h>
+@@ -18,6 +18,161 @@
  #include <asm/uaccess.h>
  #include <linux/namei.h>
+ #include <linux/lustre_iam.h>
 +#include "fiemap.h"
 +
 +/* So that the fiemap access checks can't overflow on 32 bit machines. */
@@ -110,7 +110,7 @@ Index: linux-2.6.22.14/fs/ext3/ioctl.c
 + * userspace. For this reason, a return code of -EBADR should be preserved.
 + *
 + * Returns 0 on success, -EBADR on bad flags.
-+*/
++ */
 +int fiemap_check_flags(struct fiemap_extent_info *fieinfo, u32 fs_flags)
 +{
 +	u32 incompat_flags;
@@ -167,7 +167,7 @@ Index: linux-2.6.22.14/fs/ext3/ioctl.c
  
  int ext3_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
  		unsigned long arg)
-@@ -274,7 +429,9 @@ flags_err:
+@@ -275,7 +430,9 @@ flags_err:
  
  		return err;
  	}
@@ -177,7 +177,7 @@ Index: linux-2.6.22.14/fs/ext3/ioctl.c
 +	}
  
  	default:
- 		return -ENOTTY;
+ 		return iam_uapi_ioctl(inode, filp, cmd, arg);
 Index: linux-2.6.22.14/include/linux/ext3_fs.h
 ===================================================================
 --- linux-2.6.22.14.orig/include/linux/ext3_fs.h
@@ -210,17 +210,17 @@ Index: linux-2.6.22.14/include/linux/ext3_fs.h
  
  /*
   *  Mount options
-@@ -1057,6 +1060,9 @@ extern int ext3_block_truncate_page(hand
+@@ -1064,6 +1067,9 @@ extern int ext3_block_truncate_page(hand
  extern int ext3_ioctl (struct inode *, struct file *, unsigned int,
  		       unsigned long);
  extern long ext3_compat_ioctl (struct file *, unsigned int, unsigned long);
 +struct fiemap_extent_info;
 +extern int ext3_fiemap(struct inode *, struct fiemap_extent_info *, __u64,
-+			__u64);
++		       __u64);
  
  /* namei.c */
  extern int ext3_orphan_add(handle_t *, struct inode *);
-@@ -1134,7 +1140,6 @@ ext3_get_blocks_wrap(handle_t *handle, s
+@@ -1141,7 +1147,6 @@ ext3_get_blocks_wrap(handle_t *handle, s
  	return ret;
  }
  
@@ -418,7 +418,7 @@ Index: linux-2.6.22.14/fs/ext3/fiemap.h
 +/*
 + * FIEMAP ioctl infrastructure.
 + *
-+ * Copyright 2008 Sun Microsystems, Inc.
++ * Copyright 2008 Sun Microsystems, Inc
 + *
 + * Author: Kalpak Shah <kalpak.shah@sun.com>
 + *	    Andreas Dilger <adilger@sun.com>

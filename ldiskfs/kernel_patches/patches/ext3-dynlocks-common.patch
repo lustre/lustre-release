@@ -1,0 +1,279 @@
+Index: linux-stage/include/linux/dynlocks.h
+===================================================================
+--- linux-stage.orig/include/linux/dynlocks.h	2006-06-16 16:07:58.000000000 +0300
++++ linux-stage/include/linux/dynlocks.h	2007-08-30 05:45:51.000000000 +0300
+@@ -0,0 +1,37 @@
++#ifndef _LINUX_DYNLOCKS_H
++#define _LINUX_DYNLOCKS_H
++
++#include <linux/list.h>
++#include <linux/wait.h>
++
++#define DYNLOCK_MAGIC		0xd19a10c
++#define DYNLOCK_MAGIC2		0xd1956ee
++
++struct dynlock;
++struct dynlock_handle;
++
++/*
++ * lock's namespace:
++ *   - list of locks
++ *   - lock to protect this list
++ */
++
++struct dynlock {
++	unsigned dl_magic;
++	struct list_head dl_list;
++	spinlock_t dl_list_lock;
++};
++
++enum dynlock_type {
++	DLT_WRITE,
++	DLT_READ
++};
++
++void dynlock_init(struct dynlock *dl);
++struct dynlock_handle *dynlock_lock(struct dynlock *dl, unsigned long value,
++				    enum dynlock_type lt, int gfp);
++void dynlock_unlock(struct dynlock *dl, struct dynlock_handle *lock);
++
++int dynlock_is_locked(struct dynlock *dl, unsigned long value);
++#endif
++
+Index: linux-stage/fs/ext3/dynlocks.c
+===================================================================
+--- linux-stage.orig/fs/ext3/dynlocks.c	2006-06-16 16:07:58.000000000 +0300
++++ linux-stage/fs/ext3/dynlocks.c	2007-08-30 05:45:51.000000000 +0300
+@@ -0,0 +1,232 @@
++/*
++ * Dynamic Locks
++ *
++ * struct dynlock is lockspace
++ * one may request lock (exclusive or shared) for some value
++ * in that lockspace
++ *
++ */
++
++#include <linux/dynlocks.h>
++#include <linux/module.h>
++#include <linux/slab.h>
++#include <linux/sched.h>
++
++static kmem_cache_t * dynlock_cachep = NULL;
++
++struct dynlock_handle {
++	unsigned 		dl_magic;
++	struct list_head	dl_list;
++	unsigned long		dl_value;	/* lock value */
++	int			dl_refcount;	/* number of users */
++	int			dl_readers;
++	int			dl_writers;
++	int			dl_pid;		/* holder of the lock */
++	wait_queue_head_t	dl_wait;
++};
++
++#define DYNLOCK_LIST_MAGIC	0x11ee91e6
++
++void __init dynlock_cache_init(void)
++{
++	printk(KERN_INFO "init dynlocks cache\n");
++	dynlock_cachep = kmem_cache_create("dynlock_cache",
++					 sizeof(struct dynlock_handle),
++					 0,
++					 SLAB_HWCACHE_ALIGN,
++					 NULL, NULL);
++	if (dynlock_cachep == NULL)
++		panic("Can't create dynlock cache");
++}
++
++void __exit dynlock_cache_exit(void)
++{
++	printk(KERN_INFO "exit dynlocks cache\n");
++	kmem_cache_destroy(dynlock_cachep);
++}
++
++/*
++ * dynlock_init
++ *
++ * initialize lockspace
++ *
++ */
++void dynlock_init(struct dynlock *dl)
++{
++	spin_lock_init(&dl->dl_list_lock);
++	INIT_LIST_HEAD(&dl->dl_list);
++	dl->dl_magic = DYNLOCK_LIST_MAGIC;
++}
++
++/*
++ * dynlock_lock
++ *
++ * acquires lock (exclusive or shared) in specified lockspace
++ * each lock in lockspace is allocated separately, so user have
++ * to specify GFP flags.
++ * routine returns pointer to lock. this pointer is intended to
++ * be passed to dynlock_unlock
++ *
++ */
++struct dynlock_handle *dynlock_lock(struct dynlock *dl, unsigned long value,
++				    enum dynlock_type lt, int gfp)
++{
++	struct dynlock_handle *nhl = NULL;
++	struct dynlock_handle *hl;
++
++	BUG_ON(dl == NULL);
++	BUG_ON(dl->dl_magic != DYNLOCK_LIST_MAGIC);
++
++repeat:
++	/* find requested lock in lockspace */
++	spin_lock(&dl->dl_list_lock);
++	BUG_ON(dl->dl_list.next == NULL);
++	BUG_ON(dl->dl_list.prev == NULL);
++	list_for_each_entry(hl, &dl->dl_list, dl_list) {
++		BUG_ON(hl->dl_list.next == NULL);
++		BUG_ON(hl->dl_list.prev == NULL);
++		BUG_ON(hl->dl_magic != DYNLOCK_MAGIC);
++		if (hl->dl_value == value) {
++			/* lock is found */
++			if (nhl) {
++				/* someone else just allocated
++				 * lock we didn't find and just created
++				 * so, we drop our lock
++				 */
++				kmem_cache_free(dynlock_cachep, nhl);
++				nhl = NULL;
++			}
++			hl->dl_refcount++;
++			goto found;
++		}
++	}
++	/* lock not found */
++	if (nhl) {
++		/* we already have allocated lock. use it */
++		hl = nhl;
++		nhl = NULL;
++		list_add(&hl->dl_list, &dl->dl_list);
++		goto found;
++	}
++	spin_unlock(&dl->dl_list_lock);
++	
++	/* lock not found and we haven't allocated lock yet. allocate it */
++	nhl = kmem_cache_alloc(dynlock_cachep, gfp);
++	if (nhl == NULL)
++		return NULL;
++	nhl->dl_refcount = 1;
++	nhl->dl_value = value;
++	nhl->dl_readers = 0;
++	nhl->dl_writers = 0;
++	nhl->dl_magic = DYNLOCK_MAGIC;
++	init_waitqueue_head(&nhl->dl_wait);
++
++	/* while lock is being allocated, someone else may allocate it
++	 * and put onto to list. check this situation
++	 */
++	goto repeat;
++
++found:
++	if (lt == DLT_WRITE) {
++		/* exclusive lock: user don't want to share lock at all
++		 * NOTE: one process may take the same lock several times
++		 * this functionaly is useful for rename operations */
++		while ((hl->dl_writers && hl->dl_pid != current->pid) ||
++				hl->dl_readers) {
++			spin_unlock(&dl->dl_list_lock);
++			wait_event(hl->dl_wait,
++				hl->dl_writers == 0 && hl->dl_readers == 0);
++			spin_lock(&dl->dl_list_lock);
++		}
++		hl->dl_writers++;
++	} else {
++		/* shared lock: user do not want to share lock with writer */
++		while (hl->dl_writers) {
++			spin_unlock(&dl->dl_list_lock);
++			wait_event(hl->dl_wait, hl->dl_writers == 0);
++			spin_lock(&dl->dl_list_lock);
++		}
++		hl->dl_readers++;
++	}
++	hl->dl_pid = current->pid;
++	spin_unlock(&dl->dl_list_lock);
++
++	return hl;
++}
++
++
++/*
++ * dynlock_unlock
++ *
++ * user have to specify lockspace (dl) and pointer to lock structure
++ * returned by dynlock_lock()
++ *
++ */
++void dynlock_unlock(struct dynlock *dl, struct dynlock_handle *hl)
++{
++	int wakeup = 0;
++	
++	BUG_ON(dl == NULL);
++	BUG_ON(hl == NULL);
++	BUG_ON(dl->dl_magic != DYNLOCK_LIST_MAGIC);
++
++	if (hl->dl_magic != DYNLOCK_MAGIC)
++		printk(KERN_EMERG "wrong lock magic: %#x\n", hl->dl_magic);
++
++	BUG_ON(hl->dl_magic != DYNLOCK_MAGIC);
++	BUG_ON(hl->dl_writers != 0 && current->pid != hl->dl_pid);
++
++	spin_lock(&dl->dl_list_lock);
++	if (hl->dl_writers) {
++		BUG_ON(hl->dl_readers != 0);
++		hl->dl_writers--;
++		if (hl->dl_writers == 0)
++			wakeup = 1;
++	} else if (hl->dl_readers) {
++		hl->dl_readers--;
++		if (hl->dl_readers == 0)
++			wakeup = 1;
++	} else {
++		BUG();
++	}
++	if (wakeup) {
++		hl->dl_pid = 0;
++		wake_up(&hl->dl_wait);
++	}
++	if (--(hl->dl_refcount) == 0) {
++		hl->dl_magic = DYNLOCK_MAGIC2;
++		list_del(&hl->dl_list);
++		kmem_cache_free(dynlock_cachep, hl);
++	}
++	spin_unlock(&dl->dl_list_lock);
++}
++
++int dynlock_is_locked(struct dynlock *dl, unsigned long value)
++{
++	struct dynlock_handle *hl;
++	int result;
++
++	result = 0;
++	/* find requested lock in lockspace */
++	spin_lock(&dl->dl_list_lock);
++	BUG_ON(dl->dl_list.next == NULL);
++	BUG_ON(dl->dl_list.prev == NULL);
++	list_for_each_entry(hl, &dl->dl_list, dl_list) {
++		BUG_ON(hl->dl_list.next == NULL);
++		BUG_ON(hl->dl_list.prev == NULL);
++		BUG_ON(hl->dl_magic != DYNLOCK_MAGIC);
++		if (hl->dl_value == value && hl->dl_pid == current->pid) {
++			/* lock is found */
++			result = 1;
++			break;
++		}
++	}
++	spin_unlock(&dl->dl_list_lock);
++	return result;
++}
++
++EXPORT_SYMBOL(dynlock_init);
++EXPORT_SYMBOL(dynlock_lock);
++EXPORT_SYMBOL(dynlock_unlock);
++EXPORT_SYMBOL(dynlock_is_locked);
++
