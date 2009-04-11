@@ -149,6 +149,7 @@ setup() {
 	start_ost
 	start_mds
 	mount_client $MOUNT
+	df $MOUNT
 }
 
 setup_noconfig() {
