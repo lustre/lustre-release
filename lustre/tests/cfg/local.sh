@@ -64,7 +64,7 @@ MKFSOPT=""
 [ "x$L_GETIDENTITY" != "x" ] &&
     MDSOPT=$MDSOPT" --param mdt.identity_upcall=$L_GETIDENTITY"
 MDSn_MKFS_OPTS=$MDS_MKFS_OPTS
-MDS_MKFS_OPTS="--mgs --mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MDSOPT $MDS_MKFS_OPTS"
+MDS_MKFS_OPTS="--mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MDSOPT $MDS_MKFS_OPTS"
 MDSn_MKFS_OPTS="--mgsnode=$MGSNID --mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MDSOPT $MDSn_MKFS_OPTS"
 
 MKFSOPT=""
@@ -82,6 +82,10 @@ OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID -
 
 MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS:-"-o loop,user_xattr,acl"}
 OST_MOUNT_OPTS=${OST_MOUNT_OPTS:-"-o loop"}
+
+MGSSIZE=${MGSSIZE:-30000}
+MGS_MKFS_OPTS="--mgs --fsname=$FSNAME --device-size=$MGSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT"
+MGS_MOUNT_OPTS=${MDS_MOUNT_OPTS:-"-o loop,user_xattr,acl"}
 
 #client
 MOUNTOPT=""

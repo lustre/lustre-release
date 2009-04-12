@@ -1257,6 +1257,13 @@ mdsdevname() {
     echo -n $DEVPTR
 }
 
+mgsdevname()
+{
+    DEVNAME=MGSDEV
+    eval DEVPTR=${!DEVNAME:=${MDSDEVBASE}}
+    echo -n $DEVPTR
+}
+
 ########
 ## MountConf setup
 
@@ -1324,6 +1331,12 @@ formatall() {
     # We need ldiskfs here, may as well load them all
     load_modules
     [ "$CLIENTONLY" ] && return
+    if [ ! -z $MGSDEV ]; then
+        add mgs $FSTYPE_OPT $MGS_MKFS_OPTS --reformat $MGSDEV || exit 11
+        MDS_MKFS_OPTS="$MDS_MKFS_OPTS --mgsnode=$MGSNID"
+    else
+        MDS_MKFS_OPTS="--mgs $MDS_MKFS_OPTS"
+    fi
     echo "Formatting mdts, osts"
     for num in `seq $MDSCOUNT`; do
         echo "Format mds$num: $(mdsdevname $num)"
@@ -1414,9 +1427,13 @@ setupall() {
     load_modules
     init_gss
     if [ -z "$CLIENTONLY" ]; then
-        echo "Setup mdts, osts"
         echo $WRITECONF | grep -q "writeconf" && \
             writeconf_all
+        if [ ! -z $MGSDEV ]; then
+            echo "Setup mgs"
+            start mgs $MGSDEV $MGS_MOUNT_OPTS
+        fi
+        echo "Setup mdts, osts"
         for num in `seq $MDSCOUNT`; do
             DEVNAME=$(mdsdevname $num)
             start mds$num $DEVNAME $MDS_MOUNT_OPTS
