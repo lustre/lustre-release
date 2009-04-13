@@ -470,7 +470,6 @@ long _filter_grant(const struct lu_env *env, struct obd_export *exp,
 #if 0
         grant = (min(want, fs_space_left >> 3) / frsize) * frsize;
 #else
-        CERROR("not implemented yet\n");
         grant = min(want, fs_space_left >> 3);
 #endif
         if (grant) {

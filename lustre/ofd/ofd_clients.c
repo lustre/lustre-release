@@ -82,7 +82,6 @@ repeat:
         fed->fed_lr_idx = cl_idx;
         fed->fed_lr_off = ofd->ofd_fsd.lsd_client_start +
                           cl_idx * ofd->ofd_fsd.lsd_client_size;
-        init_mutex(&fed->fed_lastrcvd_lock);
         LASSERTF(fed->fed_lr_off > 0, "fed_lr_off = %llu\n", fed->fed_lr_off);
 
         CDEBUG(D_INFO, "client at index %d (%llu) with UUID '%s' added\n",
@@ -146,7 +145,6 @@ int filter_client_add(const struct lu_env *env, struct filter_device *ofd,
         fed->fed_lr_idx = cl_idx;
         fed->fed_lr_off = ofd->ofd_fsd.lsd_client_start +
                           cl_idx * ofd->ofd_fsd.lsd_client_size;
-        init_mutex(&fed->fed_lastrcvd_lock);
         LASSERTF(fed->fed_lr_off > 0, "fed_lr_off = %llu\n", fed->fed_lr_off);
 
         CDEBUG(D_INFO, "client at index %d (%llu) with UUID '%s' added\n",
@@ -200,12 +198,10 @@ int filter_client_free(struct lu_env *env, struct obd_export *exp)
                 rc = filter_trans_start(env, ofd, th);
                 if (rc)
                         GOTO(free, rc);
-                mutex_down(&fed->fed_lastrcvd_lock);
                 memset(lcd, 0, sizeof(*lcd));
                 /* off is changed after write, use tmp value */
                 off = fed->fed_lr_off;
                 rc = filter_last_rcvd_write(env, ofd, lcd, &off, th);
-                mutex_up(&fed->fed_lastrcvd_lock);
                 LASSERT(rc == 0);
 
                 /* update server's transno */

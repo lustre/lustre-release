@@ -8,10 +8,11 @@
 #ifdef __KERNEL__
 # include <linux/spinlock.h>
 #endif
+#include <lustre/lustre_idl.h>
 #include <lustre_disk.h>
 #include <lustre_handles.h>
-#include <lustre_debug.h>
 #include <obd.h>
+#include <lustre_debug.h>
 #include <obd_cksum.h>
 #include <lprocfs_status.h>
 #include <lustre_fsfilt.h>
@@ -136,10 +137,8 @@ struct filter_device {
         __u64                    ofd_last_transno;
 
         /* last_rcvd file */
-        struct dt_object        *ofd_last_rcvd;
+        struct lu_target         ofd_lut;
         struct dt_object        *ofd_groups_file;
-        struct lr_server_data    ofd_fsd;
-        spinlock_t               ofd_client_bitmap_lock;
         unsigned long           *ofd_last_rcvd_slots;
 
         int                      ofd_subdir_count;
@@ -175,6 +174,9 @@ struct filter_device {
         struct list_head         ofd_capa_keys;
         struct hlist_head       *ofd_capa_hash;
 };
+
+#define ofd_last_rcvd ofd_lut.lut_last_rcvd
+#define ofd_fsd       ofd_lut.lut_lsd
 
 static inline struct filter_device *filter_dev(struct lu_device *d)
 {
@@ -345,7 +347,7 @@ static inline void filter_trans_add_cb(const struct thandle *th,
 
 
 extern void target_recovery_fini(struct obd_device *obd);
-extern void target_recovery_init(struct obd_device *obd,
+extern void target_recovery_init(struct lu_target *lut,
                                  svc_handler_t handler);
 
 static inline int filter_export_stats_init(struct filter_device *ofd,

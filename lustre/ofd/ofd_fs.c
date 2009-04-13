@@ -84,7 +84,7 @@ int filter_last_id_read(const struct lu_env *env, struct filter_device *ofd,
         buf.lb_len = sizeof(tmp);
         off = group * sizeof(tmp);
 
-        rc = dt_record_read(env, ofd->ofd_groups_file, &buf, &off, NULL);
+        rc = dt_record_read(env, ofd->ofd_groups_file, &buf, &off);
         if (rc >= 0) {
                 filter_last_id_set(ofd, le64_to_cpu(tmp), group);
                 CDEBUG(D_INODE, "%s: read last_objid for group "LPU64": "
@@ -126,8 +126,7 @@ int filter_last_id_write(const struct lu_env *env, struct filter_device *ofd,
         if (rc)
                 RETURN(rc);
 
-        rc = dt_record_write(env, ofd->ofd_groups_file, &buf, &off,
-                             th, BYPASS_CAPA, 1);
+        rc = dt_record_write(env, ofd->ofd_groups_file, &buf, &off, th);
         if (rc)
                 CERROR("write group "LPU64" last objid: rc = %d\n", group, rc);
 
@@ -171,7 +170,7 @@ int filter_groups_init(const struct lu_env *env, struct filter_device *ofd)
         off = 0;
         buf.lb_buf = &ofd->ofd_last_objids;
         buf.lb_len = sizeof(lastid) * ofd->ofd_max_group;
-        rc = dt_record_read(env, ofd->ofd_groups_file, &buf, &off, NULL);
+        rc = dt_record_read(env, ofd->ofd_groups_file, &buf, &off);
         if (rc) {
                 CERROR("can't initialize last_ids: %d\n", rc);
                 RETURN(rc);
@@ -231,28 +230,6 @@ static inline void fsd_cpu_to_le(struct lr_server_data *lsd,
         buf->lsd_mdt_index        = cpu_to_le32(lsd->lsd_mdt_index);
 }
 
-static inline void lcd_le_to_cpu(struct lsd_client_data *buf,
-                                 struct lsd_client_data *lcd)
-{
-        memcpy(lcd->lcd_uuid, buf->lcd_uuid, sizeof (lcd->lcd_uuid));
-        lcd->lcd_last_transno = le64_to_cpu(buf->lcd_last_transno);
-        lcd->lcd_last_xid  = le64_to_cpu(buf->lcd_last_xid);
-#if 0
-        lcd->lcd_group     = le32_to_cpu(buf->lcd_group);
-#endif
-}
-
-static inline void lcd_cpu_to_le(struct lsd_client_data *lcd,
-                                 struct lsd_client_data *buf)
-{
-        memcpy(buf->lcd_uuid, lcd->lcd_uuid, sizeof (lcd->lcd_uuid));
-        buf->lcd_last_transno = cpu_to_le64(lcd->lcd_last_transno);
-        buf->lcd_last_xid  = cpu_to_le64(lcd->lcd_last_xid);
-#if 0
-        buf->lcd_group     = cpu_to_le32(lcd->lcd_group);
-#endif
-}
-
 static int filter_last_rcvd_header_read(const struct lu_env *env,
                                         struct filter_device *ofd)
 {
@@ -265,7 +242,7 @@ static int filter_last_rcvd_header_read(const struct lu_env *env,
         buf.lb_buf = &info->fti_fsd;
         buf.lb_len = sizeof(info->fti_fsd);
 
-        rc = dt_record_read(env, ofd->ofd_last_rcvd, &buf, &off, BYPASS_CAPA);
+        rc = dt_record_read(env, ofd->ofd_last_rcvd, &buf, &off);
         if (rc == 0)
                 fsd_le_to_cpu(&info->fti_fsd, &ofd->ofd_fsd);
         return rc;
@@ -290,8 +267,7 @@ int filter_last_rcvd_header_write(const struct lu_env *env,
 
         fsd_cpu_to_le(&ofd->ofd_fsd, &info->fti_fsd);
 
-        rc = dt_record_write(env, ofd->ofd_last_rcvd, &buf,
-                             &off, th, BYPASS_CAPA, 1);
+        rc = dt_record_write(env, ofd->ofd_last_rcvd, &buf, &off, th);
         CDEBUG(D_INFO, "write last_rcvd header rc = %d:\n"
                "uuid = %s\nlast_transno = "LPU64"\n",
                rc, ofd->ofd_fsd.lsd_uuid, ofd->ofd_fsd.lsd_last_transno);
@@ -310,7 +286,7 @@ static int filter_last_rcvd_read(const struct lu_env *env,
         buf.lb_buf = &info->fti_fsd;
         buf.lb_len = sizeof(info->fti_fsd);
 
-        rc = dt_record_read(env, ofd->ofd_last_rcvd, &buf, off, BYPASS_CAPA);
+        rc = dt_record_read(env, ofd->ofd_last_rcvd, &buf, off);
         if (rc == 0)
                 lcd_le_to_cpu((struct lsd_client_data *) &info->fti_fsd, lcd);
         return rc;
@@ -330,8 +306,7 @@ int filter_last_rcvd_write(const struct lu_env *env,
         buf.lb_buf = &info->fti_fsd;
         buf.lb_len = sizeof(info->fti_fsd);
 
-        rc = dt_record_write(env, ofd->ofd_last_rcvd, &buf,
-                             off, th, BYPASS_CAPA, 1);
+        rc = dt_record_write(env, ofd->ofd_last_rcvd, &buf, off, th);
         return rc;
 }
 

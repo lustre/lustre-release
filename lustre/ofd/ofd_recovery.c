@@ -141,8 +141,6 @@ static int filter_last_rcvd_update(struct filter_thread_info *info,
         LASSERT(lcd);
         off = fed->fed_lr_off;
 
-        mutex_down(&fed->fed_lastrcvd_lock);
-
         transno_p = &lcd->lcd_last_transno;
         lcd->lcd_last_xid = info->fti_xid;
 
@@ -164,7 +162,6 @@ static int filter_last_rcvd_update(struct filter_thread_info *info,
         LASSERT(fed->fed_lr_off > 0);
         err = filter_last_rcvd_write(info->fti_env, ofd, lcd, &off, th);
 
-        mutex_up(&fed->fed_lastrcvd_lock);
         RETURN(err);
 }
 
@@ -237,24 +234,10 @@ static int filter_txn_commit_cb(const struct lu_env *env,
                                 struct thandle *txn, void *cookie)
 {
         struct filter_device *ofd = cookie;
-        struct obd_device *obd = filter_obd(ofd);
         struct filter_txn_info *txi;
         int i;
 
         txi = lu_context_key_get(&txn->th_ctx, &filter_txn_thread_key);
-
-        /* copy of obd_transno_commit_cb() but with locking */
-        spin_lock(&ofd->ofd_transno_lock);
-        if (txi->txi_transno > obd->obd_last_committed) {
-                obd->obd_last_committed = txi->txi_transno;
-                spin_unlock(&ofd->ofd_transno_lock);
-                ptlrpc_commit_replies(obd);
-        } else
-                spin_unlock(&ofd->ofd_transno_lock);
-
-        if (txi->txi_transno)
-                CDEBUG(D_HA, "%s: transno "LPD64" is committed\n",
-                       obd->obd_name, txi->txi_transno);
 
         /* iterate through all additional callbacks */
         for (i = 0; i < txi->txi_cb_count; i++) {
@@ -338,10 +321,6 @@ void filter_fs_cleanup(const struct lu_env *env, struct filter_device *ofd)
 
         /* Remove transaction callback */
         dt_txn_callback_del(ofd->ofd_osd, &ofd->ofd_txn_cb);
-
-        if (ofd->ofd_last_rcvd)
-                lu_object_put(env, &ofd->ofd_last_rcvd->do_lu);
-        ofd->ofd_last_rcvd = NULL;
 
         if (ofd->ofd_groups_file)
                 lu_object_put(env, &ofd->ofd_groups_file->do_lu);

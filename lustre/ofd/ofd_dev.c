@@ -616,7 +616,7 @@ static int filter_init0(const struct lu_env *env, struct filter_device *m,
         }
 
         spin_lock_init(&m->ofd_transno_lock);
-        spin_lock_init(&m->ofd_client_bitmap_lock);
+        //spin_lock_init(&m->ofd_client_bitmap_lock);
 
         m->ofd_fmd_max_num = FILTER_FMD_MAX_NUM_DEFAULT;
         m->ofd_fmd_max_age = FILTER_FMD_MAX_AGE_DEFAULT;
@@ -718,10 +718,14 @@ static int filter_init0(const struct lu_env *env, struct filter_device *m,
         if (rc)
                 GOTO(err_free_ns, rc);
 
+        rc = lut_init(env, &m->ofd_lut, obd, NULL);
+        if (rc)
+                GOTO(err_fs_cleanup, rc);
+
         rc = obd_llog_init(obd, &obd->obd_olg, obd, 1, NULL, NULL);
         if (rc) {
                 CERROR("failed to setup llogging subsystems\n");
-                GOTO(err_fs_cleanup, rc);
+                GOTO(err_lut_fini, rc);
         }
 
 
@@ -733,7 +737,7 @@ static int filter_init0(const struct lu_env *env, struct filter_device *m,
         LASSERT(rc == 0);
 #endif
 
-        target_recovery_init(obd, ost_handle);
+        target_recovery_init(&m->ofd_lut, ost_handle);
 
         rc = lu_site_init_finish(s);
         if (rc)
@@ -750,6 +754,8 @@ static int filter_init0(const struct lu_env *env, struct filter_device *m,
 err_fs_cleanup:
         target_recovery_fini(obd);
         filter_fs_cleanup(env, m);
+err_lut_fini:
+        lut_fini(env, &m->ofd_lut);
 err_free_ns:
         ldlm_namespace_free(m->ofd_namespace, 0, obd->obd_force);
         obd->obd_namespace = m->ofd_namespace = NULL;
@@ -799,6 +805,7 @@ static void filter_fini(const struct lu_env *env, struct filter_device *m)
 #endif
         obd_zombie_barrier();
 
+        lut_fini(env, &m->ofd_lut);
         filter_fs_cleanup(env, m);
 
         if (m->ofd_namespace != NULL) {

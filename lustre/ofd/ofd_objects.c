@@ -192,14 +192,12 @@ int filter_precreate_object(const struct lu_env *env, struct filter_device *ofd,
         filter_last_id_set(ofd, id, group);
         tmp = cpu_to_le64(filter_last_id(ofd, group));
 
-        rc = dt_record_write(env, ofd->ofd_groups_file, &buf, &off,
-                             th, BYPASS_CAPA, 1);
+        rc = dt_record_write(env, ofd->ofd_groups_file, &buf, &off, th);
 
 out_unlock:
         filter_write_unlock(env, fo);
 trans_stop:
         filter_trans_stop(env, ofd, th);
-out:
         filter_object_put(env, fo);
         RETURN(rc);
 }
