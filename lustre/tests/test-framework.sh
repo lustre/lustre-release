@@ -362,6 +362,12 @@ quota_save_version() {
         varsvc=${ost}_svc
         do_facet mgs "lctl conf_param ${!varsvc}.ost.quota_type=$1"
     done
+
+    # we must wait until the update has been triggered on the OST
+    for ost in ${osts//,/ }; do
+        wait_update_facet $ost "lctl get_param -n obdfilter.${!varsvc}.quota_type" $1
+    done
+    wait_update_facet mds "lctl get_param -n mds.${fsname}-MDT*.quota_type" $1
 }
 
 # client could mount several lustre 
@@ -836,7 +842,8 @@ wait_update () {
 
 wait_update_facet () {
     local facet=$1
-    wait_update  $(facet_host $facet) $@
+    shift
+    wait_update  $(facet_host $facet) "$@"
 }
 
 wait_delete_completed () {

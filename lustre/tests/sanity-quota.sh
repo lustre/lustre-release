@@ -1309,7 +1309,12 @@ test_15(){
         LIMIT=$((24 * 1024 * 1024 * 1024 * 1024)) # 24 TB
         PATTERN="`echo $DIR | sed 's/\//\\\\\//g'`"
 
-	wait_delete_completed
+        wait_delete_completed
+
+        # force using the latest version in case 14b was omitted
+        $LFS quotaoff -ug $DIR
+        quota_set_version 3 2>&1 | grep "Invalid argument" && quota_set_version 2
+        $LFS quotacheck -ug $DIR || error "quotacheck failed"
 
         # test for user
         $LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
@@ -1323,13 +1328,16 @@ test_15(){
         TOTAL_LIMIT="`$LFS quota -v -g $TSTUSR $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $4 }'`"
         [ $TOTAL_LIMIT -eq $LIMIT ] || error "  (group)total limits = $TOTAL_LIMIT; limit = $LIMIT, failed!"
         echo "  (group)total limits = $TOTAL_LIMIT; limit = $LIMIT, successful!"
+
         resetquota -g $TSTUSR
         $LFS quotaoff -ug $DIR
-        quota_set_version 1
+        quota_save_version 1
         $LFS quotacheck -ug $DIR || error "quotacheck failed"
 
         echo "Testing that >4GB quota limits fail on volume with quota v1"
-        ! $LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
+        $LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR && error "no error from setquota, but should have failed"
+
+        return 0
 }
 run_test_with_stat 15 "set block quota more than 4T ==="
 
