@@ -12,10 +12,33 @@ tbd  Sun Microsystems, Inc.
 	 mxlnd     - MX 1.2.1 or later,
 	 ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
-Severity   :
-Bugzilla   :
-Description:
-Details    :
+Severity   : 
+Bugzilla   : 
+Description: 
+Details    : 
+
+Severity   : major
+Bugzilla   : 13621, 15983
+Description: Protocol V2 of o2iblnd
+Details    : o2iblnd V2 has several new features:
+             . map-on-demand: map-on-demand is disabled by default, it can
+	       be enabled by using modparam "map_on_demand=@value@", @value@
+	       should >= 0 and < 256, 0 will disable map-on-demand, any other
+	       valid value will enable map-on-demand. 
+	       Oi2blnd will create FMR or physical MR for RDMA if fragments of
+	       RD > @value@.
+	       Enable map-on-demand will take less memory for new connection,
+	       but a little more CPU for RDMA.
+	     . iWARP : to support iWARP, please enable map-on-demand, 32 and 64
+	       are recommanded value. iWARP will probably fail for value >=128.
+	     . OOB NOOP message: to resolve deadlock on router.
+	     . tunable peer_credits_hiw: (high water to return credits),
+	       default value of peer_credits_hiw equals to (peer_credits -1),
+	       user can change it between peer_credits/2 and (peer_credits - 1).
+	       Lower value is recommended for high latency network.
+	     . tunable message queue size: it always equals to peer_credits,
+	       higher value is recommended for high latency network.
+	     . It's compatible with earlier version of o2iblnd
 
 Severity   : normal
 Bugzilla   : 16034

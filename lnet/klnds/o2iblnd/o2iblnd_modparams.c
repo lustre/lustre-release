@@ -64,6 +64,10 @@ static int peer_credits = 8;
 CFS_MODULE_PARM(peer_credits, "i", int, 0444,
                 "# concurrent sends to 1 peer");
 
+static int peer_credits_hiw = 0;
+CFS_MODULE_PARM(peer_credits_hiw, "i", int, 0444,
+                "when eagerly to return credits");
+
 static int peer_timeout = 0;
 CFS_MODULE_PARM(peer_timeout, "i", int, 0444,
                 "Seconds without aliveness news to declare peer dead (<=0 to disable)");
@@ -88,15 +92,14 @@ static int ib_mtu = 0;
 CFS_MODULE_PARM(ib_mtu, "i", int, 0444,
                 "IB MTU 256/512/1024/2048/4096");
 
-#if IBLND_MAP_ON_DEMAND
-static int concurrent_sends = IBLND_RX_MSGS;
-#else
-static int concurrent_sends = IBLND_MSG_QUEUE_SIZE;
-#endif
+static int concurrent_sends = 0;
 CFS_MODULE_PARM(concurrent_sends, "i", int, 0444,
                 "send work-queue sizing");
 
-#if IBLND_MAP_ON_DEMAND
+static int map_on_demand = 0;
+CFS_MODULE_PARM(map_on_demand, "i", int, 0444,
+                "map on demand");
+
 static int fmr_pool_size = 512;
 CFS_MODULE_PARM(fmr_pool_size, "i", int, 0444,
                 "size of the fmr pool (>= ntx)");
@@ -108,7 +111,10 @@ CFS_MODULE_PARM(fmr_flush_trigger, "i", int, 0444,
 static int fmr_cache = 1;
 CFS_MODULE_PARM(fmr_cache, "i", int, 0444,
                 "non-zero to enable FMR caching");
-#endif
+
+static int pmr_pool_size = 512;
+CFS_MODULE_PARM(pmr_pool_size, "i", int, 0444,
+                "size of the MR cache pmr pool");
 
 kib_tunables_t kiblnd_tunables = {
         .kib_service                = &service,
@@ -118,17 +124,18 @@ kib_tunables_t kiblnd_tunables = {
         .kib_ntx                    = &ntx,
         .kib_credits                = &credits,
         .kib_peercredits            = &peer_credits,
+        .kib_peercredits_hiw        = &peer_credits_hiw,
         .kib_peertimeout            = &peer_timeout,
         .kib_default_ipif           = &ipif_name,
         .kib_retry_count            = &retry_count,
         .kib_rnr_retry_count        = &rnr_retry_count,
         .kib_concurrent_sends       = &concurrent_sends,
         .kib_ib_mtu                 = &ib_mtu,
-#if IBLND_MAP_ON_DEMAND
+        .kib_map_on_demand          = &map_on_demand,
         .kib_fmr_pool_size          = &fmr_pool_size,
         .kib_fmr_flush_trigger      = &fmr_flush_trigger,
         .kib_fmr_cache              = &fmr_cache,
-#endif
+        .kib_pmr_pool_size          = &pmr_pool_size,
 };
 
 #if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
@@ -144,6 +151,7 @@ enum {
         O2IBLND_NTX,
         O2IBLND_CREDITS,
         O2IBLND_PEER_CREDITS,
+        O2IBLND_PEER_CREDITS_HIW,
         O2IBLND_PEER_TIMEOUT,
         O2IBLND_IPIF_BASENAME,
         O2IBLND_RETRY_COUNT,
@@ -151,9 +159,11 @@ enum {
         O2IBLND_KEEPALIVE,
         O2IBLND_CONCURRENT_SENDS,
         O2IBLND_IB_MTU,
+        O2IBLND_MAP_ON_DEMAND,
         O2IBLND_FMR_POOL_SIZE,
         O2IBLND_FMR_FLUSH_TRIGGER,
-        O2IBLND_FMR_CACHE
+        O2IBLND_FMR_CACHE,
+        O2IBLND_PMR_POOL_SIZE
 };
 #else
 
@@ -163,6 +173,7 @@ enum {
 #define O2IBLND_NTX              CTL_UNNUMBERED
 #define O2IBLND_CREDITS          CTL_UNNUMBERED
 #define O2IBLND_PEER_CREDITS     CTL_UNNUMBERED
+#define O2IBLND_PEER_CREDITS_HIW CTL_UNNUMBERED
 #define O2IBLND_PEER_TIMEOUT     CTL_UNNUMBERED
 #define O2IBLND_IPIF_BASENAME    CTL_UNNUMBERED
 #define O2IBLND_RETRY_COUNT      CTL_UNNUMBERED
@@ -170,9 +181,11 @@ enum {
 #define O2IBLND_KEEPALIVE        CTL_UNNUMBERED
 #define O2IBLND_CONCURRENT_SENDS CTL_UNNUMBERED
 #define O2IBLND_IB_MTU           CTL_UNNUMBERED
+#define O2IBLND_MAP_ON_DEMAND    CTL_UNNUMBERED
 #define O2IBLND_FMR_POOL_SIZE    CTL_UNNUMBERED
 #define O2IBLND_FMR_FLUSH_TRIGGER CTL_UNNUMBERED
 #define O2IBLND_FMR_CACHE        CTL_UNNUMBERED
+#define O2IBLND_PMR_POOL_SIZE    CTL_UNNUMBERED
 
 #endif
 
@@ -221,6 +234,14 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
                 .ctl_name = O2IBLND_PEER_CREDITS,
                 .procname = "peer_credits",
                 .data     = &peer_credits,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = O2IBLND_PEER_CREDITS_HIW,
+                .procname = "peer_credits_hiw",
+                .data     = &peer_credits_hiw,
                 .maxlen   = sizeof(int),
                 .mode     = 0444,
                 .proc_handler = &proc_dointvec
@@ -281,7 +302,15 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
                 .mode     = 0444,
                 .proc_handler = &proc_dointvec
         },
-#if IBLND_MAP_ON_DEMAND
+        {
+                .ctl_name = O2IBLND_MAP_ON_DEMAND,
+                .procname = "map_on_demand",
+                .data     = &map_on_demand,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+
         {
                 .ctl_name = O2IBLND_FMR_POOL_SIZE,
                 .procname = "fmr_pool_size",
@@ -306,7 +335,14 @@ static cfs_sysctl_table_t kiblnd_ctl_table[] = {
                 .mode     = 0444,
                 .proc_handler = &proc_dointvec
         },
-#endif
+        {
+                .ctl_name = O2IBLND_PMR_POOL_SIZE,
+                .procname = "pmr_pool_size",
+                .data     = &pmr_pool_size,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
         {0}
 };
 
@@ -373,26 +409,46 @@ kiblnd_tunables_init (void)
                 return -EINVAL;
         }
 
-        if (*kiblnd_tunables.kib_ib_mtu != 0 &&
-            *kiblnd_tunables.kib_ib_mtu != 256 &&
-            *kiblnd_tunables.kib_ib_mtu != 512 &&
-            *kiblnd_tunables.kib_ib_mtu != 1024 &&
-            *kiblnd_tunables.kib_ib_mtu != 2048 &&
-            *kiblnd_tunables.kib_ib_mtu != 4096) {
+        if (kiblnd_translate_mtu(*kiblnd_tunables.kib_ib_mtu) < 0) {
                 CERROR("Invalid ib_mtu %d, expected 256/512/1024/2048/4096\n",
                        *kiblnd_tunables.kib_ib_mtu);
                 return -EINVAL;
         }
 
-        if (*kiblnd_tunables.kib_concurrent_sends > IBLND_RX_MSGS)
-                *kiblnd_tunables.kib_concurrent_sends = IBLND_RX_MSGS;
-        if (*kiblnd_tunables.kib_concurrent_sends < IBLND_MSG_QUEUE_SIZE / 2)
-                *kiblnd_tunables.kib_concurrent_sends = IBLND_MSG_QUEUE_SIZE / 2;
+        if (*kiblnd_tunables.kib_peercredits < IBLND_CREDITS_DEFAULT)
+                *kiblnd_tunables.kib_peercredits = IBLND_CREDITS_DEFAULT;
 
-        if (*kiblnd_tunables.kib_concurrent_sends < IBLND_MSG_QUEUE_SIZE) {
+        if (*kiblnd_tunables.kib_peercredits > IBLND_CREDITS_MAX)
+                *kiblnd_tunables.kib_peercredits = IBLND_CREDITS_MAX;
+
+        if (*kiblnd_tunables.kib_peercredits_hiw < *kiblnd_tunables.kib_peercredits / 2)
+                *kiblnd_tunables.kib_peercredits_hiw = *kiblnd_tunables.kib_peercredits / 2;
+
+        if (*kiblnd_tunables.kib_peercredits_hiw >= *kiblnd_tunables.kib_peercredits)
+                *kiblnd_tunables.kib_peercredits_hiw = *kiblnd_tunables.kib_peercredits - 1;
+
+        if (*kiblnd_tunables.kib_map_on_demand < 0 ||
+            *kiblnd_tunables.kib_map_on_demand >= IBLND_MAX_RDMA_FRAGS)
+                *kiblnd_tunables.kib_map_on_demand = 0; /* disable map-on-demand */
+
+        if (*kiblnd_tunables.kib_concurrent_sends == 0) {
+                if (*kiblnd_tunables.kib_map_on_demand > 0 &&
+                    *kiblnd_tunables.kib_map_on_demand <= IBLND_MAX_RDMA_FRAGS / 8)
+                        *kiblnd_tunables.kib_concurrent_sends = (*kiblnd_tunables.kib_peercredits) * 2;
+                else
+                        *kiblnd_tunables.kib_concurrent_sends = (*kiblnd_tunables.kib_peercredits);
+        }
+
+        if (*kiblnd_tunables.kib_concurrent_sends > *kiblnd_tunables.kib_peercredits * 2)
+                *kiblnd_tunables.kib_concurrent_sends = *kiblnd_tunables.kib_peercredits * 2;
+
+        if (*kiblnd_tunables.kib_concurrent_sends < *kiblnd_tunables.kib_peercredits / 2)
+                *kiblnd_tunables.kib_concurrent_sends = *kiblnd_tunables.kib_peercredits / 2;
+
+        if (*kiblnd_tunables.kib_concurrent_sends < *kiblnd_tunables.kib_peercredits) {
                 CWARN("Concurrent sends %d is lower than message queue size: %d, "
                       "performance may drop slightly.\n",
-                      *kiblnd_tunables.kib_concurrent_sends, IBLND_MSG_QUEUE_SIZE);
+                      *kiblnd_tunables.kib_concurrent_sends, *kiblnd_tunables.kib_peercredits);
         }
 
         kiblnd_sysctl_init();
