@@ -3316,6 +3316,10 @@ static int osc_statfs_interpret(struct ptlrpc_request *req,
         struct obd_statfs *msfs;
         ENTRY;
 
+        if ((rc == -ENOTCONN || rc == -EAGAIN) &&
+            (aa->aa_oi->oi_flags & OBD_STATFS_NODELAY))
+                GOTO(out, rc = 0);
+
         if (rc != 0)
                 GOTO(out, rc);
 

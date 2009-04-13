@@ -52,6 +52,7 @@
 #include <lustre_disk.h>
 #include <lustre_param.h>
 #include <lustre_cache.h>
+#include <obd_support.h>
 #include "llite_internal.h"
 
 cfs_mem_cache_t *ll_file_data_slab;
@@ -865,6 +866,16 @@ static int ll_options(char *options, int *flags)
                         goto next;
                 }
                 tmp = ll_set_opt("nolruresize", s1, LL_SBI_LRU_RESIZE);
+                if (tmp) {
+                        *flags &= ~tmp;
+                        goto next;
+                }
+                tmp = ll_set_opt("lazystatfs", s1, LL_SBI_LAZYSTATFS);
+                if (tmp) {
+                        *flags |= tmp;
+                        goto next;
+                }
+                tmp = ll_set_opt("nolazystatfs", s1, LL_SBI_LAZYSTATFS);
                 if (tmp) {
                         *flags &= ~tmp;
                         goto next;
@@ -1779,6 +1790,9 @@ int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
         CDEBUG(D_SUPER, "MDC blocks "LPU64"/"LPU64" objects "LPU64"/"LPU64"\n",
                osfs->os_bavail, osfs->os_blocks, osfs->os_ffree,osfs->os_files);
 
+        if (sbi->ll_flags & LL_SBI_LAZYSTATFS)
+                flags |= OBD_STATFS_NODELAY;
+
         rc = obd_statfs_rqset(class_exp2obd(sbi->ll_osc_exp),
                               &obd_osfs, max_age, flags);
         if (rc) {
@@ -2454,6 +2468,9 @@ int ll_show_options(struct seq_file *seq, struct vfsmount *vfs)
 
         if (sbi->ll_flags & LL_SBI_ACL)
                 seq_puts(seq, ",acl");
+
+        if (sbi->ll_flags & LL_SBI_LAZYSTATFS)
+                seq_puts(seq, ",lazystatfs");
 
         RETURN(0);
 }
