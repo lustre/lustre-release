@@ -76,6 +76,24 @@ static const int lustre_disk_dqblk_sz[] = {
         [LUSTRE_QUOTA_V2] = sizeof(struct lustre_disk_dqblk_v2)
 };
 
+static const union
+{
+        struct lustre_disk_dqblk    r0;
+        struct lustre_disk_dqblk_v2 r1;
+} fakedquot[] = {
+        [LUSTRE_QUOTA_V1] = {.r0 = {.dqb_itime = __constant_cpu_to_le64(1LLU)} },
+        [LUSTRE_QUOTA_V2] = {.r1 = {.dqb_itime = __constant_cpu_to_le64(1LLU)} }
+};
+
+static const union
+{
+        struct lustre_disk_dqblk    r0;
+        struct lustre_disk_dqblk_v2 r1;
+} emptydquot[] = {
+        [LUSTRE_QUOTA_V1] = {.r0 = { 0 } },
+        [LUSTRE_QUOTA_V2] = {.r1 = { 0 } }
+};
+
 int check_quota_file(struct file *f, struct inode *inode, int type, 
                      lustre_quota_version_t version)
 {
@@ -422,7 +440,6 @@ static uint find_free_dqentry(struct lustre_dquot *dquot, int *err,
         void *ddquot;
         int dqblk_sz = lustre_disk_dqblk_sz[version];
         int dqstrinblk = lustre_dqstrinblk[version];
-        char fakedquot[dqblk_sz];
         dqbuf_t buf;
 
         *err = 0;
@@ -458,11 +475,11 @@ static uint find_free_dqentry(struct lustre_dquot *dquot, int *err,
                         goto out_buf;
                 }
         dh->dqdh_entries = cpu_to_le16(le16_to_cpu(dh->dqdh_entries) + 1);
-        memset(fakedquot, 0, dqblk_sz);
         /* Find free structure in block */
         for (i = 0; i < dqstrinblk &&
-             memcmp(fakedquot, (char*)ddquot + i * dqblk_sz, 
-                    sizeof(fakedquot)); i++);
+             memcmp((char *)&emptydquot[version],
+                    (char*)ddquot + i * dqblk_sz,
+                    dqblk_sz); i++);
 
         if (i == dqstrinblk) {
                 CERROR("VFS: Data block full but it shouldn't.\n");
@@ -560,7 +577,7 @@ static int lustre_write_dquot(struct lustre_dquot *dquot,
         loff_t offset;
         ssize_t ret;
         int dqblk_sz = lustre_disk_dqblk_sz[version];
-        char ddquot[dqblk_sz], empty[dqblk_sz];
+        char ddquot[dqblk_sz];
 
         ret = mem2diskdqb(ddquot, &dquot->dq_dqb, dquot->dq_id, version);
         if (ret < 0)
@@ -577,8 +594,7 @@ static int lustre_write_dquot(struct lustre_dquot *dquot,
         /* Argh... We may need to write structure full of zeroes but that would be
          * treated as an empty place by the rest of the code. Format change would
          * be definitely cleaner but the problems probably are not worth it */
-        memset(empty, 0, dqblk_sz);
-        if (!memcmp(empty, ddquot, dqblk_sz))
+        if (!memcmp((char *)&emptydquot[version], ddquot, dqblk_sz))
                 DQF_PUT(ddquot, version, dqb_itime, 1);
         fs = get_fs();
         set_fs(KERNEL_DS);
@@ -726,12 +742,10 @@ static loff_t find_block_dqentry(struct lustre_dquot *dquot, uint blk,
                      DQF_GET(ddquot+i*dqblk_sz, version, dqb_id) != dquot->dq_id;
                      i++) ;
         else {                  /* ID 0 as a bit more complicated searching... */
-                char fakedquot[dqblk_sz];
-
-                memset(fakedquot, 0, sizeof(fakedquot));
                 for (i = 0; i < dqstrinblk; i++)
                         if (!DQF_GET(ddquot + i*dqblk_sz, version, dqb_id)
-                            && memcmp(fakedquot, ddquot + i*dqblk_sz,
+                            && memcmp((char *)&emptydquot[version],
+                                      ddquot + i*dqblk_sz,
                                       dqblk_sz))
                                 break;
         }
@@ -785,6 +799,7 @@ static inline loff_t find_dqentry(struct lustre_dquot *dquot,
         return find_tree_dqentry(dquot, LUSTRE_DQTREEOFF, 0, version);
 }
 
+
 int lustre_read_dquot(struct lustre_dquot *dquot)
 {
         int type = dquot->dq_type;
@@ -813,7 +828,7 @@ int lustre_read_dquot(struct lustre_dquot *dquot)
                 memset(&dquot->dq_dqb, 0, sizeof(struct lustre_mem_dqblk));
                 ret = offset;
         } else {
-                char ddquot[dqblk_sz], empty[dqblk_sz];
+                char ddquot[dqblk_sz];
 
                 dquot->dq_off = offset;
                 fs = get_fs();
@@ -828,9 +843,8 @@ int lustre_read_dquot(struct lustre_dquot *dquot)
                 } else {
                         ret = 0;
                         /* We need to escape back all-zero structure */
-                        memset(empty, 0, dqblk_sz);
-                        DQF_PUT(empty, version, dqb_itime, 1);
-                        if (!memcmp(empty, ddquot, dqblk_sz))
+                        if (!memcmp((char *)&fakedquot[version],
+                                    ddquot, dqblk_sz))
                                 DQF_PUT(ddquot, version, dqb_itime, 0);
                 }
                 set_fs(fs);
@@ -1063,7 +1077,6 @@ int lustre_get_qids(struct file *fp, struct inode *inode, int type,
         list_for_each_entry(blk_item, &blk_list, link) {
                 loff_t ret = 0;
                 int i, dqblk_sz = lustre_disk_dqblk_sz[version];
-                char fakedquot[dqblk_sz];
 
                 memset(buf, 0, LUSTRE_DQBLKSIZE);
                 if ((ret = quota_read(fp, inode, type, blk_item->blk, buf))<0) {
@@ -1072,11 +1085,11 @@ int lustre_get_qids(struct file *fp, struct inode *inode, int type,
                         GOTO(out_free, rc = ret);
                 }
 
-                memset(fakedquot, 0, dqblk_sz);
                 for (i = 0; i < lustre_dqstrinblk[version]; i++) {
                         struct dquot_id *dqid;
                         /* skip empty entry */
-                        if (!memcmp(fakedquot, ddquot + i*dqblk_sz, dqblk_sz))
+                        if (!memcmp((char *)&emptydquot[version],
+                                    ddquot + i*dqblk_sz, dqblk_sz))
                                 continue;
 
                         dqid = kmalloc(sizeof(*dqid), GFP_NOFS);
