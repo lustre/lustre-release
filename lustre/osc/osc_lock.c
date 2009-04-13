@@ -788,7 +788,6 @@ static int osc_ldlm_completion_ast(struct ldlm_lock *dlmlock,
                         unlock_res_and_lock(dlmlock);
                         if (dlmrc != 0)
                                 cl_lock_error(env, lock, dlmrc);
-                        unlock_res_and_lock(dlmlock);
                         cl_lock_mutex_put(env, lock);
                         osc_ast_data_put(env, olck);
                         result = 0;
