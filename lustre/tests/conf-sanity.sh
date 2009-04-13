@@ -50,24 +50,30 @@ reformat() {
 }
 
 writeconf() {
-    local facet=$SINGLEMDS
-    local dev=${facet}_dev
-    shift
-    stop ${facet} -f
-    rm -f ${facet}active
-    # who knows if/where $TUNEFS is installed?  Better reformat if it fails...
-    do_facet ${facet} "$TUNEFS --writeconf ${!dev}" || echo "tunefs failed, reformatting instead" && reformat
+	local facet=$SINGLEMDS
+	local dev=${facet}_dev
+	shift
+	stop ${facet} -f
+	rm -f ${facet}active
+	# who knows if/where $TUNEFS is installed?  Better reformat if it fails...
+	do_facet ${facet} "$TUNEFS --writeconf ${!dev}" || echo "tunefs failed, reformatting instead" && reformat
+
+	gen_config
 }
 
 gen_config() {
-        reformat
-        # The MGS must be started before the OSTs for a new fs, so start
-        # and stop to generate the startup logs. 
+	# The MGS must be started before the OSTs for a new fs, so start
+	# and stop to generate the startup logs. 
 	start_mds
 	start_ost
 	sleep 5
 	stop_ost
 	stop_mds
+}
+
+reformat_and_config() {
+	reformat
+	gen_config
 }
 
 start_mds() {
@@ -193,7 +199,7 @@ init_gss
 
 #create single point mountpoint
 
-gen_config
+reformat_and_config
 
 test_0() {
         setup
@@ -452,7 +458,7 @@ test_17() {
 
         start_ost
 	start_mds && return 42
-	gen_config
+	reformat_and_config
 }
 run_test 17 "Verify failed mds_postsetup won't fail assertion (2936) (should return errs)"
 
@@ -495,7 +501,7 @@ test_18() {
 
         MDS_MKFS_OPTS="--mgs --mdt --fsname=$FSNAME --device-size=$myMDSSIZE --param sys.timeout=$TIMEOUT $MDSOPT"
 
-        gen_config
+        reformat_and_config
         echo "mount lustre system..."
 	setup
         check_mount || return 41
@@ -511,7 +517,7 @@ test_18() {
         cleanup || return $?
 
         MDS_MKFS_OPTS=$OLD_MDS_MKFS_OPTS
-        gen_config
+        reformat_and_config
 }
 run_test 18 "check mkfs creates large journals"
 
@@ -895,10 +901,6 @@ test_29() {
 	cleanup_nocli
 	#writeconf to remove all ost2 traces for subsequent tests
 	writeconf
-	start_mds
-	start_ost
-	sleep 5
-	cleanup
 }
 run_test 29 "permanently remove an OST"
 
@@ -1659,8 +1661,14 @@ test_47() { #17674
 }
 run_test 47 "server restart does not make client loss lru_resize settings"
 
-# reformat after this test must need - if test will failed
-# we will have unkillable file at FS
+cleanup_48() {
+	trap 0
+
+	# reformat after this test is needed - if test will failed
+	# we will have unkillable file at FS
+	reformat_and_config
+}
+
 test_48() { # bug 17636
 	reformat
 	setup_noconfig
@@ -1671,18 +1679,17 @@ test_48() { # bug 17636
 
 	echo "ok" > $MOUNT/widestripe
 	$LFS getstripe $MOUNT/widestripe || return 11
-	# fill acl buffer for avoid expand lsm to them
-	awk -F : '{ print "u:"$1":rwx" }' /etc/passwd | while read acl; do  
-	    setfacl -m $acl $MOUNT/widestripe
-	done
-	awk -F : '{ print "g:"$1":rwx" }' /etc/groups | while read acl; do  
-	    setfacl -m $acl $MOUNT/widestripe
-	done
 
+	trap cleanup_48 EXIT ERR
+
+	# fill acl buffer for avoid expand lsm to them
+	getent passwd | awk -F : '{ print "u:"$1":rwx" }' |  while read acl; do
+	    setfacl -m $acl $MOUNT/widestripe
+	done
 
 	stat $MOUNT/widestripe || return 12
-	
-	cleanup || error "can't cleanup"
+
+	cleanup_48
 	return 0
 }
 run_test 48 "too many acls on file"
@@ -1691,11 +1698,10 @@ run_test 48 "too many acls on file"
 test_49() { # bug 17710
 	local OLD_MDS_MKFS_OPTS=$MDS_MKFS_OPTS
 	local OLD_OST_MKFS_OPTS=$OST_MKFS_OPTS
-	local OLD_TIMEOUT=$TIMEOUT
+	local LOCAL_TIMEOUT=20
 
-	TIMEOUT=20
 
-	MDS_MKFS_OPTS="--mgs --mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT --param sys.ldlm_timeout=$TIMEOUT $MKFSOPT $MDSOPT"
+	OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID --param sys.timeout=$LOCAL_TIMEOUT --param sys.ldlm_timeout=$LOCAL_TIMEOUT $MKFSOPT $OSTOPT"
 
 	reformat
 	start_mds
@@ -1709,10 +1715,10 @@ test_49() { # bug 17710
 	LDLM_CLIENT="`do_facet client lctl get_param -n ldlm_timeout`"
 
 	if [ $LDLM_MDS -ne $LDLM_OST1 ] || [ $LDLM_MDS -ne $LDLM_CLIENT ]; then
-		error "Different LDLM_TIMEOUT: $LDLM_MDS $LDLM_OST $LDLM_CLIENT"
+		error "Different LDLM_TIMEOUT:$LDLM_MDS $LDLM_OST1 $LDLM_CLIENT"
 	fi
 
-	if [ $LDLM_MDS -ne $((TIMEOUT / 3)) ]; then
+	if [ $LDLM_MDS -ne $((LOCAL_TIMEOUT / 3)) ]; then
 		error "LDLM_TIMEOUT($LDLM_MDS) is not correct"
 	fi
 
@@ -1720,7 +1726,7 @@ test_49() { # bug 17710
 	stop_ost || return 2
 	stop_mds || return 3
 
-	OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID --param sys.timeout=$TIMEOUT --param sys.ldlm_timeout=$((TIMEOUT - 1)) $MKFSOPT $OSTOPT"
+	OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID --param sys.timeout=$LOCAL_TIMEOUT --param sys.ldlm_timeout=$((LOCAL_TIMEOUT - 1)) $MKFSOPT $OSTOPT"
 	
 	reformat
 	start_mds || return 4
@@ -1733,10 +1739,10 @@ test_49() { # bug 17710
 	LDLM_CLIENT="`do_facet client lctl get_param -n ldlm_timeout`"
 
 	if [ $LDLM_MDS -ne $LDLM_OST1 ] || [ $LDLM_MDS -ne $LDLM_CLIENT ]; then
-		error "Different LDLM_TIMEOUT: $LDLM_MDS $LDLM_OST $LDLM_CLIENT"
+		error "Different LDLM_TIMEOUT:$LDLM_MDS $LDLM_OST1 $LDLM_CLIENT"
 	fi
 	
-	if [ $LDLM_MDS -ne $((TIMEOUT - 1)) ]; then
+	if [ $LDLM_MDS -ne $((LOCAL_TIMEOUT - 1)) ]; then
 		error "LDLM_TIMEOUT($LDLM_MDS) is not correct"
 	fi
 		

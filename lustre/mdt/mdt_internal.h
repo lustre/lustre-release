@@ -60,28 +60,17 @@
  * struct lustre_handle
  */
 #include <lustre/lustre_idl.h>
+#include <lustre_disk.h>
+#include <lu_target.h>
 #include <md_object.h>
-#include <dt_object.h>
 #include <lustre_fid.h>
 #include <lustre_fld.h>
 #include <lustre_req_layout.h>
-/* LR_CLIENT_SIZE, etc. */
-#include <lustre_disk.h>
 #include <lustre_sec.h>
 #include <lvfs.h>
 #include <lustre_idmap.h>
 #include <lustre_eacl.h>
 #include <lustre_fsfilt.h>
-
-static inline __u64 lcd_last_transno(struct lsd_client_data *lcd)
-{
-        return max(lcd->lcd_last_transno, lcd->lcd_last_close_transno);
-}
-
-static inline __u64 lcd_last_xid(struct lsd_client_data *lcd)
-{
-        return max(lcd->lcd_last_xid, lcd->lcd_last_close_xid);
-}
 
 /* check if request's xid is equal to last one or not*/
 static inline int req_xid_is_last(struct ptlrpc_request *req)
@@ -120,6 +109,8 @@ struct mdt_device {
         /* underlying device */
         struct md_device          *mdt_child;
         struct dt_device          *mdt_bottom;
+        /** target device */
+        struct lu_target           mdt_lut;
         /*
          * Options bit-fields.
          */
@@ -138,25 +129,13 @@ struct mdt_device {
         spinlock_t                 mdt_ioepoch_lock;
         __u64                      mdt_ioepoch;
 
-        /* Transaction related stuff here */
-        spinlock_t                 mdt_transno_lock;
-        __u64                      mdt_last_transno;
-
         /* transaction callbacks */
         struct dt_txn_callback     mdt_txn_cb;
-        /* last_rcvd file */
-        struct dt_object          *mdt_last_rcvd;
 
         /* these values should be updated from lov if necessary.
          * or should be placed somewhere else. */
         int                        mdt_max_mdsize;
         int                        mdt_max_cookiesize;
-        __u64                      mdt_mount_count;
-
-        /* last_rcvd data */
-        struct lr_server_data      mdt_lsd;
-        spinlock_t                 mdt_client_bitmap_lock;
-        unsigned long              mdt_client_bitmap[(LR_MAX_CLIENTS >> 3) / sizeof(long)];
 
         struct upcall_cache        *mdt_identity_cache;
 
@@ -187,6 +166,14 @@ struct mdt_device {
         struct lprocfs_stats      *mdt_stats;
         int                        mdt_sec_level;
 };
+
+#define mdt_transno_lock        mdt_lut.lut_translock
+#define mdt_last_transno        mdt_lut.lut_last_transno
+#define mdt_last_rcvd           mdt_lut.lut_last_rcvd
+#define mdt_mount_count         mdt_lut.lut_mount_count
+#define mdt_lsd                 mdt_lut.lut_lsd
+#define mdt_client_bitmap_lock  mdt_lut.lut_client_bitmap_lock
+#define mdt_client_bitmap       mdt_lut.lut_client_bitmap
 
 #define MDT_SERVICE_WATCHDOG_FACTOR     (2000)
 #define MDT_ROCOMPAT_SUPP       (OBD_ROCOMPAT_LOVOBJID)
@@ -332,6 +319,9 @@ struct mdt_thread_info {
          */
         struct mdt_reint_record    mti_rr;
 
+        /** md objects included in operation */
+        struct mdt_object         *mti_mos[PTLRPC_NUM_VERSIONS];
+
         /*
          * Operation specification (currently create and lookup)
          */
@@ -381,6 +371,11 @@ struct mdt_thread_info {
         struct md_attr             mti_tmp_attr;
 };
 
+#define mti_parent      mti_mos[0]
+#define mti_child       mti_mos[1]
+#define mti_parent1     mti_mos[2]
+#define mti_child1      mti_mos[3]
+
 typedef void (*mdt_cb_t)(const struct mdt_device *mdt, __u64 transno,
                          void *data, int err);
 struct mdt_commit_cb {
@@ -395,13 +390,13 @@ struct mdt_commit_cb {
 struct mdt_txn_info {
         __u64                 txi_transno;
         unsigned int          txi_cb_count;
-        struct mdt_commit_cb  txi_cb[MDT_MAX_COMMIT_CB];
+        struct lut_commit_cb  txi_cb[MDT_MAX_COMMIT_CB];
 };
 
 extern struct lu_context_key mdt_txn_key;
 
 static inline void mdt_trans_add_cb(const struct thandle *th,
-                                    mdt_cb_t cb_func, void *cb_data)
+                                    lut_cb_t cb_func, void *cb_data)
 {
         struct mdt_txn_info *txi;
 
@@ -409,8 +404,8 @@ static inline void mdt_trans_add_cb(const struct thandle *th,
         LASSERT(txi->txi_cb_count < ARRAY_SIZE(txi->txi_cb));
 
         /* add new callback */
-        txi->txi_cb[txi->txi_cb_count].mdt_cb_func = cb_func;
-        txi->txi_cb[txi->txi_cb_count].mdt_cb_data = cb_data;
+        txi->txi_cb[txi->txi_cb_count].lut_cb_func = cb_func;
+        txi->txi_cb[txi->txi_cb_count].lut_cb_data = cb_data;
         txi->txi_cb_count++;
 }
 
@@ -539,7 +534,7 @@ void mdt_reconstruct_generic(struct mdt_thread_info *mti,
                              struct mdt_lock_handle *lhc);
 
 extern void target_recovery_fini(struct obd_device *obd);
-extern void target_recovery_init(struct obd_device *obd,
+extern void target_recovery_init(struct lu_target *lut,
                                  svc_handler_t handler);
 int mdt_fs_setup(const struct lu_env *, struct mdt_device *,
                  struct obd_device *, struct lustre_sb_info *lsi);
@@ -614,6 +609,7 @@ int mdt_check_ucred(struct mdt_thread_info *);
 int mdt_init_ucred(struct mdt_thread_info *, struct mdt_body *);
 int mdt_init_ucred_reint(struct mdt_thread_info *);
 void mdt_exit_ucred(struct mdt_thread_info *);
+int mdt_version_get_check(struct mdt_thread_info *, int);
 
 /* mdt_idmap.c */
 int mdt_init_sec_level(struct mdt_thread_info *);

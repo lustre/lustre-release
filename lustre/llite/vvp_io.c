@@ -456,15 +456,18 @@ static int vvp_io_read_start(const struct lu_env *env,
         loff_t  pos = io->u.ci_rd.rd.crw_pos;
         size_t  cnt = io->u.ci_rd.rd.crw_count;
         size_t  tot = cio->cui_tot_count;
+        int     exceed = 0;
 
         CLOBINVRNT(env, obj, ccc_object_invariant(obj));
         LASSERT(vio->cui_oneshot == 0);
 
-        CDEBUG(D_VFSTRACE, "read: -> [%lli, %lli)\n", pos, pos + cnt);
+        CDEBUG(D_VFSTRACE, "read: -> [%lli, %lli)\n", pos, pos + (long long)cnt);
 
-        result = ccc_prep_size(env, obj, io, pos + tot - 1, 1);
+        result = ccc_prep_size(env, obj, io, pos, tot, 1, &exceed);
         if (result != 0)
                 return result;
+        else if (exceed != 0)
+                goto out;
 
         LU_OBJECT_HEADER(D_INODE, env, &obj->co_lu,
                         "Read ino %lu, "LPSZ" bytes, offset %lld, size %llu\n",
@@ -493,6 +496,7 @@ static int vvp_io_read_start(const struct lu_env *env,
                 result = lustre_generic_file_read(file, cio, &pos);
         }
 
+out:
         if (result >= 0) {
                 if (result < cnt)
                         io->ci_continue = 0;
@@ -518,14 +522,18 @@ static int vvp_io_write_start(const struct lu_env *env,
 
         ENTRY;
 
-        if (cl_io_is_append(io))
+        if (cl_io_is_append(io)) {
                 /*
                  * PARALLEL IO This has to be changed for parallel IO doing
                  * out-of-order writes.
                  */
                 pos = io->u.ci_wr.wr.crw_pos = i_size_read(inode);
+#ifndef HAVE_FILE_WRITEV
+                cio->cui_iocb->ki_pos = pos;
+#endif
+        }
 
-        CDEBUG(D_VFSTRACE, "write: [%lli, %lli)\n", pos, pos + cnt);
+        CDEBUG(D_VFSTRACE, "write: [%lli, %lli)\n", pos, pos + (long long)cnt);
 
         if (cl2vvp_io(env, ios)->cui_oneshot > 0)
                 result = 0;
@@ -567,7 +575,7 @@ static int vvp_io_fault_start(const struct lu_env *env,
         /* offset of the last byte on the page */
         offset = cl_offset(obj, fio->ft_index + 1) - 1;
         LASSERT(cl_index(obj, offset) == fio->ft_index);
-        result = ccc_prep_size(env, obj, io, offset, 0);
+        result = ccc_prep_size(env, obj, io, 0, offset + 1, 0, NULL);
         if (result != 0)
                 return result;
 
@@ -900,6 +908,9 @@ static int vvp_io_commit_write(const struct lu_env *env,
                          */
                         result = vvp_page_sync_io(env, io, pg, cp,
                                                   to, CRT_WRITE);
+                        if (result)
+                                CERROR("Write page %lu of inode %p failed %d\n",
+                                       pg->cp_index, inode, result);
         } else {
                 tallyop = LPROC_LL_DIRTY_HITS;
                 result = 0;

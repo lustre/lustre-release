@@ -18,17 +18,8 @@ export IDENTITY_UPCALL=default
 
 #export PDSH="pdsh -S -Rssh -w"
 
-# eg, assert_env LUSTRE MDSNODES OSTNODES CLIENTS
-assert_env() {
-    local failed=""
-    for name in $@; do
-        if [ -z "${!name}" ]; then
-            echo "$0: $name must be set"
-            failed=1
-        fi
-    done
-    [ $failed ] && exit 1 || true
-}
+# function used by scripts run on remote nodes
+. $(dirname $0)/functions.sh
 
 assert_DIR () {
     local failed=""
@@ -520,6 +511,83 @@ stop() {
     wait_exit_ST ${facet}
 }
 
+# save quota version (both administrative and operational quotas)
+quota_save_version() {
+    local fsname=${2:-$FSNAME}
+    do_facet mgs "lctl conf_param ${fsname}-MDT*.mdd.quota_type=$1"
+    local varsvc
+    local osts=$(get_facets OST)
+    for ost in ${osts//,/ }; do
+        varsvc=${ost}_svc
+        do_facet mgs "lctl conf_param ${!varsvc}.ost.quota_type=$1"
+    done
+}
+
+# client could mount several lustre 
+quota_type () {
+    local fsname=${1:-$FSNAME}
+    local rc=0
+    do_facet mgs lctl get_param mdd.${fsname}-MDT*.quota_type || rc=$?
+    do_nodes $(comma_list $(osts_nodes)) \
+        lctl get_param obdfilter.${fsname}-OST*.quota_type || rc=$?
+    return $rc 
+}
+
+restore_quota_type () {
+   local mntpt=${1:-$MOUNT}
+   local quota_type=$(quota_type $FSNAME | grep MDT | cut -d "=" -f2)
+   if [ ! "$old_QUOTA_TYPE" ] || [ "$quota_type" = "$old_QUOTA_TYPE" ]; then
+        return
+   fi
+   $LFS quotaoff $mntpt
+   quota_save_version $old_QUOTA_TYPE
+   $LFS quotacheck -ug $mntpt
+}
+
+setup_quota(){
+    local mntpt=$1
+
+    # We need:
+    # 1. run quotacheck only if quota is off
+    # 2. save the original quota_type params, restore them after testing
+
+    # Suppose that quota type the same on mds and ost
+    local quota_type=$(quota_type | grep MDT | cut -d "=" -f2)
+    [ ${PIPESTATUS[0]} -eq 0 ] || error "quota_type failed!"
+    if [ "$quota_type" != "$QUOTA_TYPE" ]; then
+        export old_QUOTA_TYPE=$quota_type
+        quota_save_version $QUOTA_TYPE
+        $LFS quotacheck -ug $mntpt
+    fi
+
+    local quota_usrs=$QUOTA_USERS
+
+    # get_filesystem_size
+    local disksz=$(lfs df $mntpt | grep "filesystem summary:"  | awk '{print $3}')
+    local blk_soft=$((disksz + 1024))
+    local blk_hard=$((blk_soft + blk_soft / 20)) # Go 5% over
+
+    local Inodes=$(lfs df -i $mntpt | grep "filesystem summary:"  | awk '{print $3}')
+    local i_soft=$Inodes
+    local i_hard=$((i_soft + i_soft / 20))
+
+    echo "Total disk size: $disksz  block-softlimit: $blk_soft block-hardlimit:
+        $blk_hard inode-softlimit: $i_soft inode-hardlimit: $i_hard"
+
+    local cmd
+    for usr in $quota_usrs; do
+        echo "Setting up quota on $client:$mntpt for $usr..."
+        for type in u g; do
+            cmd="$LFS setquota -$type $usr -b $blk_soft -B $blk_hard -i $i_soft -I $i_hard $mntpt"
+            echo "+ $cmd"
+            eval $cmd || error "$cmd FAILED!"
+        done
+        # display the quota status
+        echo "Quota settings for $usr : "
+        $LFS quota -v -u $usr $mntpt || true
+    done
+}
+
 zconf_mount() {
     local OPTIONS
     local client=$1
@@ -572,6 +640,62 @@ zconf_umount() {
     fi
 }
 
+# nodes is comma list
+sanity_mount_check_nodes () {
+    local nodes=$1
+    shift
+    local mnts="$@"
+    local mnt
+
+    # FIXME: assume that all cluster nodes run the same os
+    [ "$(uname)" = Linux ] || return 0
+
+    local rc=0
+    for mnt in $mnts ; do
+        do_nodes $nodes "set -x; running=\\\$(grep -c $mnt' ' /proc/mounts);
+mpts=\\\$(mount | grep -w -c $mnt);
+if [ \\\$running -ne \\\$mpts ]; then
+    echo \\\$(hostname) env are INSANE!;
+    exit 1;
+fi"
+    [ $? -eq 0 ] || rc=1 
+    done
+    return $rc
+}
+
+sanity_mount_check_servers () {
+    echo Checking servers environments
+
+    # FIXME: modify get_facets to display all facets wo params
+    local facets="$(get_facets OST),$(get_facets MDS)"
+    local node
+    local mnt
+    local facet
+    for facet in ${facets//,/ }; do
+        node=$(facet_host ${facet})
+        mnt=${MOUNT%/*}/${facet}
+        sanity_mount_check_nodes $node $mnt ||
+            { error "server $node environments are insane!"; return 1; }
+    done
+}
+
+sanity_mount_check_clients () {
+    local clients=${1:-$CLIENTS}
+    local mntpt=${2:-$MOUNT}
+    local mntpt2=${3:-$MOUNT2}
+
+    [ -z $clients ] && clients=$(hostname)
+    echo Checking clients $clients environments
+
+    sanity_mount_check_nodes $clients $mntpt $mntpt2 ||
+       error "clients environments are insane!"
+}
+
+sanity_mount_check () {
+    sanity_mount_check_servers || return 1
+    sanity_mount_check_clients || return 2
+}
+
 # mount clients if not mouted
 zconf_mount_clients() {
     local OPTIONS
@@ -590,10 +714,19 @@ zconf_mount_clients() {
     fi
 
     echo "Starting client $clients: $OPTIONS $device $mnt"
-    do_nodes $clients "mount | grep $mnt || { mkdir -p $mnt && mount -t lustre $OPTIONS $device $mnt || false; }"
+
+    do_nodes $clients "set -x;
+running=\\\$(mount | grep -c $mnt' ');
+rc=0;
+if [ \\\$running -eq 0 ] ; then
+    mkdir -p $mnt;
+    mount -t lustre $OPTIONS $device $mnt;
+    rc=$?;
+fi;
+exit $rc"
 
     echo "Started clients $clients: "
-    do_nodes $clients "mount | grep $mnt"
+    do_nodes $clients "mount | grep -w $mnt"
 
     do_nodes $clients "lctl set_param debug=$PTLDEBUG;
         lctl set_param subsystem_debug=${SUBSYSTEM# };
@@ -610,20 +743,20 @@ zconf_umount_clients() {
     [ "$3" ] && force=-f
 
     echo "Stopping clients: $clients $mnt (opts:$force)"
-    do_nodes $clients "set -x; running=\\\$(grep -c $mnt' ' /proc/mounts)
+    do_nodes $clients "set -x; running=\\\$(grep -c $mnt' ' /proc/mounts);
 if [ \\\$running -ne 0 ] ; then
-echo Stopping client \\\$(hostname) client $mnt opts:$force
-lsof -t $mnt || need_kill=no
+echo Stopping client \\\$(hostname) client $mnt opts:$force;
+lsof -t $mnt || need_kill=no;
 if [ "x$force" != "x" -a "x\\\$need_kill" != "xno" ]; then
     pids=\\\$(lsof -t $mnt | sort -u);
     if [ -n \\\"\\\$pids\\\" ]; then
-             kill -9 \\\$pids
+             kill -9 \\\$pids;
     fi
-fi
-busy=\\\$(umount $force $mnt 2>&1 | grep -c "busy")
+fi;
+busy=\\\$(umount $force $mnt 2>&1 | grep -c "busy");
 if [ \\\$busy -ne 0 ] ; then
-    echo "$mnt is still busy, wait one second" && sleep 1
-    umount $force $mnt
+    echo "$mnt is still busy, wait one second" && sleep 1;
+    umount $force $mnt;
 fi
 fi"
 }
@@ -708,7 +841,7 @@ start_client_load() {
 }
 
 start_client_loads () {
-    local clients=(${1//,/ })
+    local -a clients=(${1//,/ })
     local numloads=${#CLIENT_LOADS[@]}
     local testnum
 
@@ -938,6 +1071,7 @@ wait_remote_prog () {
     local pids=$(ps  uax | grep "$PDSH.*$prog.*$MOUNT" | grep -v grep | awk '{print $2}')
     [ -z "$pids" ] && return 0
     echo "$PDSH processes still exists after $WAIT seconds.  Still running: $pids"
+    # FIXME: not portable
     for pid in $pids; do
         cat /proc/${pid}/status || true
         cat /proc/${pid}/wchan || true
@@ -1275,14 +1409,11 @@ stopall() {
         fail mds1
     fi
 
-    # assume client mount is local
-    grep " $MOUNT " /proc/mounts && zconf_umount $HOSTNAME $MOUNT $*
-    grep " $MOUNT2 " /proc/mounts && zconf_umount $HOSTNAME $MOUNT2 $*
+    local clients=$CLIENTS
+    [ -z $clients ] && clients=$(hostname)
 
-    if [ -n "$CLIENTS" ]; then
-            zconf_umount_clients $CLIENTS $MOUNT "$*" || true
-            [ -n "$MOUNT2" ] && zconf_umount_clients $CLIENTS $MOUNT2 "$*" || true
-    fi
+    zconf_umount_clients $clients $MOUNT "$*" || true
+    [ -n "$MOUNT2" ] && zconf_umount_clients $clients $MOUNT2 "$*" || true
 
     [ "$CLIENTONLY" ] && return
     # The add fn does rm ${facet}active file, this would be enough
@@ -1424,6 +1555,9 @@ writeconf_all () {
 }
 
 setupall() {
+    sanity_mount_check ||
+        error "environments are insane!"
+
     load_modules
     init_gss
     if [ -z "$CLIENTONLY" ]; then
@@ -1518,10 +1652,14 @@ init_facet_vars () {
 init_facets_vars () {
     local DEVNAME
 
-    for num in `seq $MDSCOUNT`; do
-        DEVNAME=`mdsdevname $num`
-        init_facet_vars mds$num $DEVNAME $MDS_MOUNT_OPTS
-    done
+    if ! remote_mds_nodsh; then 
+        for num in `seq $MDSCOUNT`; do
+            DEVNAME=`mdsdevname $num`
+            init_facet_vars mds$num $DEVNAME $MDS_MOUNT_OPTS
+        done
+    fi
+
+    remote_ost_nodsh && return
 
     for num in `seq $OSTCOUNT`; do
         DEVNAME=`ostdevname $num`
@@ -1530,12 +1668,20 @@ init_facets_vars () {
 }
 
 init_param_vars () {
-    export MDSVER=$(do_facet $SINGLEMDS "lctl get_param version" | cut -d. -f1,2)
-    export OSTVER=$(do_facet ost1 "lctl get_param version" | cut -d. -f1,2)
-    export CLIVER=$(lctl get_param version | cut -d. -f 1,2)
+    if ! remote_ost_nodsh && ! remote_mds_nodsh; then
+        export MDSVER=$(do_facet $SINGLEMDS "lctl get_param version" | cut -d. -f1,2)
+        export OSTVER=$(do_facet ost1 "lctl get_param version" | cut -d. -f1,2)
+        export CLIVER=$(lctl get_param version | cut -d. -f 1,2)
+    fi
 
-    TIMEOUT=$(do_facet $SINGLEMDS "lctl get_param -n timeout")
+    remote_mds_nodsh ||
+        TIMEOUT=$(do_facet $SINGLEMDS "lctl get_param -n timeout")
+
     log "Using TIMEOUT=$TIMEOUT"
+
+    if [ "$ENABLE_QUOTA" ]; then
+        setup_quota $MOUNT  || return 2
+    fi
 }
 
 check_config () {
@@ -1553,6 +1699,18 @@ check_config () {
         FAIL_ON_ERROR=true \
             error "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST, NETTYPE=$NETTYPE
                    Please use correct config or set mds_HOST correctly!"
+    fi
+
+    sanity_mount_check ||
+        error "environments are insane!"
+}
+
+check_timeout () {
+    local mdstimeout=$(do_facet $SINGLEMDS "lctl get_param -n timeout")
+    local cltimeout=$(lctl get_param -n timeout)
+    if [ $mdstimeout -ne $TIMEOUT ] || [ $mdstimeout -ne $cltimeout ]; then
+        error "timeouts are wrong! mds: $mdstimeout, client: $cltimeout, TIMEOUT=$TIMEOUT"
+        return 1
     fi
 }
 
@@ -1597,6 +1755,7 @@ cleanup_and_setup_lustre() {
 check_and_cleanup_lustre() {
     if [ "`mount | grep $MOUNT`" ]; then
         [ -n "$DIR" ] && rm -rf $DIR/[Rdfs][0-9]*
+        [ "$ENABLE_QUOTA" ] && restore_quota_type || true
     fi
     if [ "$I_MOUNTED" = "yes" ]; then
         cleanupall -f || error "cleanup failed"
@@ -2013,7 +2172,7 @@ log() {
     lsmod | grep lnet > /dev/null || load_modules
 
     local MSG="$*"
-    # Get rif of '
+    # Get rid of '
     MSG=${MSG//\'/\\\'}
     MSG=${MSG//\(/\\\(}
     MSG=${MSG//\)/\\\)}
@@ -2066,7 +2225,7 @@ run_one() {
     umask 0022
 
     local BEFORE=`date +%s`
-    log "== test $testnum: $message ============ `date +%H:%M:%S` ($BEFORE)"
+    log "== test $testnum: $message == `date +%H:%M:%S` ($BEFORE)"
     #check_mds
     export TESTNAME=test_$testnum
     TEST_FAILED=false
@@ -2269,7 +2428,7 @@ get_random_entry () {
 
     rnodes=${rnodes//,/ }
 
-    local nodes=($rnodes)
+    local -a nodes=($rnodes)
     local num=${#nodes[@]} 
     local i=$((RANDOM * num * 2 / 65536))
 
@@ -2413,6 +2572,7 @@ calc_sum () {
 }
 
 calc_osc_kbytes () {
+        df $MOUNT > /dev/null
         $LCTL get_param -n osc.*[oO][sS][cC][-_][0-9a-f]*.$1 | calc_sum
 }
 
@@ -2489,6 +2649,8 @@ get_mds_dir () {
 mpi_run () {
     local mpirun="$MPIRUN $MPIRUN_OPTIONS"
     local command="$mpirun $@"
+    local mpilog=$TMP/mpi.log
+    local rc
 
     if [ "$MPI_USER" != root -a $mpirun ]; then
         echo "+ chmod 0777 $MOUNT"
@@ -2498,7 +2660,23 @@ mpi_run () {
 
     ls -ald $MOUNT
     echo "+ $command"
-    eval $command
+    eval $command 2>&1 > $mpilog || true
+
+    rc=${PIPESTATUS[0]}
+    if [ $rc -eq 0 ] && grep -q "p4_error: : [^0]" $mpilog ; then
+       rc=1
+    fi
+    cat $mpilog
+    return $rc
+}
+
+mdsrate_cleanup () {
+    mpi_run -np $1 -machinefile $2 ${MDSRATE} --unlink --nfiles $3 --dir $4 --filefmt $5 $6
+}
+
+delayed_recovery_enabled () {
+    local var=${SINGLEMDS}_svc
+    do_facet $SINGLEMDS lctl get_param -n mdd.${!var}.stale_export_age > /dev/null 2>&1
 }
 
 mdsrate_cleanup () {

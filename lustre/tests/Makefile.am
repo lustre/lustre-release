@@ -5,13 +5,13 @@ AM_CFLAGS = $(LLCFLAGS)
 # LDADD := -lreadline -ltermcap # -lefence
 
 noinst_DATA = disk1_8.tar.bz2
-noinst_SCRIPTS = leak_finder.pl llmount.sh llmountcleanup.sh
+noinst_SCRIPTS = leak_finder.pl llmount.sh llmountcleanup.sh functions.sh
 noinst_SCRIPTS += test-framework.sh runvmstat runiozone runtests
 noinst_SCRIPTS += sanity.sh rundbench acceptance-small.sh compile.sh
 noinst_SCRIPTS += conf-sanity.sh insanity.sh lfscktest.sh oos.sh oos2.sh
 noinst_SCRIPTS += llog-test.sh recovery-small.sh replay-dual.sh sanity-quota.sh
 noinst_SCRIPTS += replay-ost-single.sh replay-single.sh run-llog.sh sanityN.sh
-noinst_SCRIPTS += runracer
+noinst_SCRIPTS += large-scale.sh runracer replay-vbr.sh
 noinst_SCRIPTS += performance-sanity.sh mdsrate-create-small.sh
 noinst_SCRIPTS += mdsrate-create-large.sh mdsrate-lookup-1dir.sh
 noinst_SCRIPTS += mdsrate-stat-small.sh mdsrate-stat-large.sh

@@ -23,7 +23,7 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval lctl set_param debug=\"$DEBUG_LVL\""
 [ "$DEBUG_ON" ] || DEBUG_ON="eval lctl set_param debug=0x33f0484"
 
-export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA SANITY_SEC SANITY_GSS PERFORMANCE_SANITY RECOVERY_MDS_SCALE RECOVERY_DOUBLE_SCALE RECOVERY_RANDOM_SCALE"
+export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL REPLAY_VBR INSANITY SANITY_QUOTA SANITY_SEC SANITY_GSS PERFORMANCE_SANITY LARGE_SCALE RECOVERY_MDS_SCALE RECOVERY_DOUBLE_SCALE RECOVERY_RANDOM_SCALE"
 
 if [ "$ACC_SM_ONLY" ]; then
     for O in $TESTSUITE_LIST; do
@@ -62,6 +62,7 @@ setup_if_needed() {
     local MOUNTED=$(mounted_lustre_filesystems)
     if $(echo $MOUNTED | grep -w -q $MOUNT); then
         check_config $MOUNT
+        init_facets_vars
         init_param_vars
         return
     fi
@@ -393,6 +394,13 @@ if [ "$REPLAY_DUAL" != "no" ]; then
         REPLAY_DUAL="done"
 fi
 
+[ "$REPLAY_VBR" != "no" ] && skip_remmds replay-vbr && REPLAY_VBR=no && MSKIPPED=1
+if [ "$REPLAY_VBR" != "no" ]; then
+        title replay-vbr
+        bash replay-vbr.sh
+        REPLAY_VBR="done"
+fi
+
 [ "$INSANITY" != "no" ] && skip_remmds insanity && INSANITY=no && MSKIPPED=1
 [ "$INSANITY" != "no" ] && skip_remost insanity && INSANITY=no && OSKIPPED=1
 if [ "$INSANITY" != "no" ]; then
@@ -431,6 +439,13 @@ if [ "$PERFORMANCE_SANITY" != "no" ]; then
         title performance-sanity
         bash performance-sanity.sh
         PERFORMANCE_SANITY="done"
+fi
+
+[ "$LARGE_SCALE" != "no" ] && skip_remmds large-scale && LARGE_SCALE=no && MSKIPPED=1
+if [ "$LARGE_SCALE" != "no" ]; then
+        title large-scale
+        bash large-scale.sh
+        LARGE_SCALE="done"
 fi
 
 [ "$RECOVERY_MDS_SCALE" != "no" ] && skip_remmds recovery-mds-scale && RECOVERY_MDS_SCALE=no && MSKIPPED=1

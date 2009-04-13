@@ -151,6 +151,7 @@ int filter_quota_ctl(struct obd_device *unused, struct obd_export *exp,
                 }
                 if (oqctl->qc_cmd == Q_FINVALIDATE &&
                     (obt->obt_qctxt.lqc_flags & UGQUOTA2LQC(oqctl->qc_type))) {
+                        atomic_inc(&obt->obt_quotachecking);
                         rc = -EBUSY;
                         break;
                 }

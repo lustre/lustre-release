@@ -236,6 +236,9 @@ struct dt_object_format {
 
 enum dt_format_type dt_mode_to_dft(__u32 mode);
 
+/** Version type. May differ in DMU and ldiskfs */
+typedef __u64 dt_obj_version_t;
+
 /**
  * Per-dt-object operations.
  */
@@ -394,6 +397,10 @@ struct dt_object_operations {
                                         struct lustre_capa *old,
                                         __u64 opc);
         int (*do_object_sync)(const struct lu_env *, struct dt_object *);
+        dt_obj_version_t (*do_version_get)(const struct lu_env *env,
+                                           struct dt_object *dt);
+        void (*do_version_set)(const struct lu_env *env, struct dt_object *dt,
+                               dt_obj_version_t new_version);
         /**
          * Get object info of next level. Currently, only get inode from osd.
          * This is only used by quota b=16542
@@ -636,6 +643,7 @@ struct dt_txn_callback {
         int (*dtc_txn_commit)(const struct lu_env *env,
                               struct thandle *txn, void *cookie);
         void            *dtc_cookie;
+        __u32            dtc_tag;
         struct list_head dtc_linkage;
 };
 
@@ -673,25 +681,49 @@ struct dt_object *dt_locate(const struct lu_env *env,
                             struct dt_device *dev,
                             const struct lu_fid *fid);
 
+static inline dt_obj_version_t do_version_get(const struct lu_env *env,
+                                              struct dt_object *o)
+{
+        LASSERT(o->do_ops->do_version_get);
+        return o->do_ops->do_version_get(env, o);
+}
+
+static inline void do_version_set(const struct lu_env *env,
+                                  struct dt_object *o, dt_obj_version_t v)
+{
+        LASSERT(o->do_ops->do_version_set);
+        return o->do_ops->do_version_set(env, o, v);
+}
+
+int dt_record_read(const struct lu_env *env, struct dt_object *dt,
+                   struct lu_buf *buf, loff_t *pos);
+int dt_record_write(const struct lu_env *env, struct dt_object *dt,
+                    const struct lu_buf *buf, loff_t *pos, struct thandle *th);
+
+
+static inline struct thandle *dt_trans_create(const struct lu_env *env,
+                                              struct dt_device *d)
+{
+        LASSERT(d->dd_ops->dt_trans_create);
+        return d->dd_ops->dt_trans_create(env, d);
+}
+static inline int dt_trans_start(const struct lu_env *env,
+                                             struct dt_device *d,
+                                             struct thandle *th)
+{
+        LASSERT(d->dd_ops->dt_trans_start);
+        return d->dd_ops->dt_trans_start(env, d, th);
+}
+
+static inline void dt_trans_stop(const struct lu_env *env,
+                                 struct dt_device *d,
+                                 struct thandle *th)
+{
+        LASSERT(d->dd_ops->dt_trans_stop);
+        return d->dd_ops->dt_trans_stop(env, th);
+}
 /** @} dt */
 
-
-static inline int dt_record_read(const struct lu_env *env,
-                                 struct dt_object *dt, struct lu_buf *buf,
-                                 loff_t *pos, void *arg)
-{
-        int rc;
-
-        LASSERTF(dt != NULL, "dt is NULL when we want to read record\n");
-
-        rc = dt->do_body_ops->dbo_read(env, dt, buf, pos, arg);
-
-        if (rc == buf->lb_len)
-                rc = 0;
-        else if (rc >= 0)
-                rc = -EFAULT;
-        return rc;
-}
 
 static inline int dt_declare_record_write(const struct lu_env *env,
                                           struct dt_object *dt,
@@ -703,25 +735,6 @@ static inline int dt_declare_record_write(const struct lu_env *env,
         LASSERTF(dt != NULL, "dt is NULL when we want to write record\n");
         LASSERT(th != NULL);
         rc = dt->do_body_ops->dbo_declare_write(env, dt, size, pos, th);
-        return rc;
-}
-
-static inline int dt_record_write(const struct lu_env *env,
-                                  struct dt_object *dt,
-                                  const struct lu_buf *buf, loff_t *pos,
-                                  struct thandle *th,
-                                  struct lustre_capa *capa,
-                                  int ignore_quota)
-{
-        int rc;
-
-        LASSERTF(dt != NULL, "dt is NULL when we want to write record\n");
-        LASSERT(th != NULL);
-        rc = dt->do_body_ops->dbo_write(env, dt, buf, pos, th, capa, ignore_quota);
-        if (rc == buf->lb_len)
-                rc = 0;
-        else if (rc >= 0)
-                rc = -EFAULT;
         return rc;
 }
 
@@ -855,12 +868,6 @@ static inline int dt_statfs(const struct lu_env *env, struct dt_device *dev,
                             struct kstatfs *sfs)
 {
         return dev->dd_ops->dt_statfs(env, dev, sfs);
-}
-
-static inline struct thandle * dt_trans_create(const struct lu_env *env,
-                                               struct dt_device *dev)
-{
-        return dev->dd_ops->dt_trans_create(env, dev);
 }
 
 static inline int dt_root_get(const struct lu_env *env, struct dt_device *dev,

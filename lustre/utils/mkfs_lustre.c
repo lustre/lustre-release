@@ -612,7 +612,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                         if (journal_sz > 1024L)
                                 journal_sz = 1024L;
                         /* man mkfs.ext3 */
-                        max_sz = (256000 * L_BLOCK_SIZE) >> 20; /* 1GB */
+                        max_sz = (102400 * L_BLOCK_SIZE) >> 20; /* 400MB */
                         if (journal_sz > max_sz)
                                 journal_sz = max_sz;
                         if (journal_sz) {

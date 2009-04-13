@@ -3,8 +3,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 3192 15528/3811 16929 9977 15528/11549
-ALWAYS_EXCEPT="                14b  19         22    28   29          $SANITYN_EXCEPT"
+# bug number for skipped test: 3192 15528/3811 16929 9977 15528/11549 18080
+ALWAYS_EXCEPT="                14b  19         22    28   29          35    $SANITYN_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # bug number for skipped test:                                                    12652 12652
@@ -427,7 +427,7 @@ test_22() { # Bug 9926
 	cat $DIR2/d21/no_joined || error "cat error"
 	rm -rf $DIR2/d21/no_joined || error "unlink normal file error"
 }
-run_test 22 " After joining in one dir,  open/close unlink file in anther dir" 
+run_test 22 " After joining in one dir,  open/close unlink file in anther dir"
 
 test_23() { # Bug 5972
 	echo "others should see updated atime while another read" > $DIR1/f23
@@ -507,8 +507,8 @@ test_26b() {
         chmod a+x $DIR2/$tfile
         mt1=`stat -c %Y $DIR1/$tfile`
         mt2=`stat -c %Y $DIR2/$tfile`
-        
-        if [ x"$mt1" != x"$mt2" ]; then 
+
+        if [ x"$mt1" != x"$mt2" ]; then
                 error "not equal mtime, client1: "$mt1", client2: "$mt2"."
         fi
 }
@@ -551,7 +551,7 @@ test_28() { # bug 9977
 
 	tECHOID=`$LCTL dl | grep $ECHO_UUID | awk '{print $1}'`
 	$LCTL --device $tECHOID destroy "${tOBJID}:0"
-    
+
     	$LCTL <<-EOF
 		cfg_device ECHO_osc1
 		cleanup
@@ -678,7 +678,7 @@ test_32b() { # bug 11270
                 save_lustre_params $node "ldlm.namespaces.filter-*.contention_seconds" >> $p
         done
         clear_osc_stats
-        # agressive lockless i/o settings 
+        # agressive lockless i/o settings
         for node in $(osts_nodes); do
                 do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 2000000; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 0; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 60'
         done
@@ -687,7 +687,7 @@ test_32b() { # bug 11270
                 dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
                 dd if=/dev/zero of=$DIR2/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
         done
-        [ $(calc_osc_stats lockless_write_bytes) -ne 0 ] || error "lockless i/o was not triggered" 
+        [ $(calc_osc_stats lockless_write_bytes) -ne 0 ] || error "lockless i/o was not triggered"
         # disable lockless i/o (it is disabled by default)
         for node in $(osts_nodes); do
                 do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 0; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 32; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 0'
@@ -701,7 +701,7 @@ test_32b() { # bug 11270
                 dd if=/dev/zero of=$DIR2/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
         done
         [ $(calc_osc_stats lockless_write_bytes) -eq 0 ] ||
-                error "lockless i/o works when disabled" 
+                error "lockless i/o works when disabled"
         rm -f $DIR1/$tfile
         restore_lustre_params <$p
         rm -f $p
@@ -710,7 +710,7 @@ run_test 32b "lockless i/o"
 
 print_jbd_stat () {
     local dev=$(basename $(do_facet $SINGLEMDS lctl get_param -n osd.*MDT*.mntdev))
-    do_facet $SINGLEMDS cat /proc/fs/jbd/$dev/info | head -1 
+    do_facet $SINGLEMDS cat /proc/fs/jbd/$dev/info | head -1
 }
 
 do_and_time () {
@@ -753,12 +753,12 @@ test_33a() {
 
             do_nodes $CLIENT1,$CLIENT2 "mkdir -p $DIR1/$tdir-\\\$(hostname)-$i"
 
-            jbdold=$(print_jbd_stat) 
+            jbdold=$(print_jbd_stat)
             echo "=== START createmany $jbdold"
             do_and_time "do_nodes $CLIENT1,$CLIENT2 createmany -o $DIR1/$tdir-\\\$(hostname)-$i/f- -r $DIR2/$tdir-\\\$(hostname)-$i/f- $nfiles"
             jbdnew=$(print_jbd_stat)
             jbd=$((`echo $jbdnew | cut -d" " -f1` - `echo $jbdold | cut -d" " -f1`))
-            echo "=== END   createmany $jbdnew :  $jbd transactions  nfiles $nfiles time $ELAPSED COS=$COS" 
+            echo "=== END   createmany $jbdnew :  $jbd transactions  nfiles $nfiles time $ELAPSED COS=$COS"
             avgjbd=$(( avgjbd + jbd ))
             avgtime=$(( avgtime + ELAPSED ))
         done
@@ -767,7 +767,7 @@ test_33a() {
     done
 
     echo "COS=0 transactions (avg): $cos0_jbd  time (avg): $cos0_time"
-    echo "COS=1 transactions (avg): $cos1_jbd  time (avg): $cos1_time" 
+    echo "COS=1 transactions (avg): $cos1_jbd  time (avg): $cos1_time"
     [ "$cos0_jbd" != 0 ] && echo "COS=1 vs COS=0 jbd:  $((((cos1_jbd/cos0_jbd - 1)) * 100 )) %"
     [ "$cos0_time" != 0 ] && echo "COS=1 vs COS=0 time: $((((cos1_time/cos0_time - 1)) * 100 )) %"
 
@@ -807,7 +807,7 @@ test_34() { #16129
                 # wait for a lock timeout
                 sleep 4
                 lock_out=$(do_nodes $(osts_nodes) "lctl get_param -n ldlm.namespaces.filter-*.lock_timeouts" | calc_sum)
-                if [ $OPER == "timeout" ] ; then 
+                if [ $OPER == "timeout" ] ; then
                         if [ $lock_in == $lock_out ]; then
                                 error "no lock timeout happened"
                         else
@@ -851,11 +851,11 @@ test_35() { # bug 17645
                 createmany -o $MOUNT2/$tfile/a 4000 &
                 pid1=$!
                 sleep 1
-        
+
                 # Let's make conflict and bl_ast
                 ls -la $MOUNT1/$tfile > /dev/null &
                 pid2=$!
-                
+
                 log "Wait for $pid1 $pid2 for $timeout sec..."
                 sleep $timeout
                 kill -9 $pid1 $pid2 > /dev/null 2>&1
@@ -882,27 +882,36 @@ run_test 35 "-EINTR cp_ast vs. bl_ast race does not evict client"
 
 test_36() { #bug 16417
     local SIZE
-    mkdir -p $MOUNT1/$tdir
-    lfs setstripe -c -1 $MOUNT1/$tdir
+    local SIZE_B
+    local i
+
+    mkdir -p $DIR1/$tdir
+    $LFS setstripe -c -1 $DIR1/$tdir
     i=0
-    SIZE=100
+    SIZE=50
+    let SIZE_B=SIZE*1024*1024
 
     while [ $i -le 10 ]; do
-	lctl mark "start test"
-	before=$($LFS df | awk '{if ($1 ~/^filesystem/) {print $5; exit} }')
-	dd if=/dev/zero of=$MOUNT1/$tdir/file000 bs=1M count=$SIZE
-	dd if=$MOUNT2/$tdir/file000 of=/dev/null bs=1M count=$SIZE &
-	read_pid=$!
-	sleep 0.1
-	rm -f $MOUNT1/$tdir/file000
-	wait $read_pid
-	after=$($LFS df | awk '{if ($1 ~/^filesystem/) {print $5; exit} }')
-	if [ $before -gt $after ]; then
-	    error "space leaked"
-	    exit;
-	fi
-	let i=i+1
-    done
+        lctl mark "start test"
+        local before=$($LFS df | awk '{if ($1 ~/^filesystem/) {print $5; exit} }')
+        dd if=/dev/zero of=$DIR1/$tdir/file000 bs=1M count=$SIZE
+        sync
+        local after_dd=$($LFS df | awk '{if ($1 ~/^filesystem/) {print $5; exit} }')
+        multiop_bg_pause $DIR2/$tdir/file000 O_r${SIZE_B}c || return 3
+        read_pid=$!
+        rm -f $DIR1/$tdir/file000
+        kill -USR1 $read_pid
+        wait $read_pid
+        sleep 1
+        local after=$($LFS df | awk '{if ($1 ~/^filesystem/) {print $5; exit} }')
+        echo "*** cycle($i) *** before($before):after_dd($after_dd):after($after)"
+        # this free space! not used
+        if [ $after_dd -ge $after ]; then
+            error "space leaked"
+            return 1;
+        fi
+        let i=i+1
+            done
 }
 run_test 36 "handle ESTALE/open-unlink corectly"
 

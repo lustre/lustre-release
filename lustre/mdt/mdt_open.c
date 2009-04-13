@@ -906,6 +906,10 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         }
         msg_flags = lustre_msg_get_flags(req->rq_reqmsg);
 
+        if ((create_flags & (MDS_OPEN_HAS_EA | MDS_OPEN_HAS_OBJS)) &&
+            info->mti_spec.u.sp_ea.eadata == NULL)
+                GOTO(out, result = err_serious(-EINVAL));
+
         CDEBUG(D_INODE, "I am going to open "DFID"/(%s->"DFID") "
                "cr_flag=0%o mode=0%06o msg_flag=0x%x\n",
                PFID(rr->rr_fid1), rr->rr_name,
@@ -1002,6 +1006,12 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         if (result == -ENOENT) {
                 /* Not found and with MDS_OPEN_CREAT: let's create it. */
                 mdt_set_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
+
+                info->mti_mos[0] = parent;
+                info->mti_mos[1] = child;
+                result = mdt_version_get_check(info, 0);
+                if (result)
+                        GOTO(out_child, result);
 
                 /* Let lower layers know what is lock mode on directory. */
                 info->mti_spec.sp_cr_mode =

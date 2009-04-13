@@ -57,7 +57,7 @@
 # include <lustre_quota.h>
 #endif
 
-static struct obd_ops cmm_obd_device_ops = {
+struct obd_ops cmm_obd_device_ops = {
         .o_owner           = THIS_MODULE
 };
 

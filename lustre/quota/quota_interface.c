@@ -137,6 +137,7 @@ static int filter_quota_clearinfo(struct obd_export *exp, struct obd_device *obd
                 spin_lock(&qctxt->lqc_lock);
                 qctxt->lqc_import = NULL;
                 spin_unlock(&qctxt->lqc_lock);
+                ptlrpc_cleanup_imp(exp->exp_imp_reverse);
                 dqacq_interrupt(qctxt);
                 CDEBUG(D_QUOTA, "%s: lqc_import of obd(%p) is invalid now.\n",
                        obd->obd_name, obd);

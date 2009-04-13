@@ -495,7 +495,7 @@ static inline __u64 fsfilt_set_version(struct obd_device *obd,
 static inline __u64 fsfilt_get_version(struct obd_device *obd,
                                        struct inode *inode)
 {
-        if (obd->obd_fsops->fs_set_version)
+        if (obd->obd_fsops->fs_get_version)
                 return obd->obd_fsops->fs_get_version(inode);
         return -EOPNOTSUPP;
 }

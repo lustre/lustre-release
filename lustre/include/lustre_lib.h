@@ -62,9 +62,8 @@ void ll_get_random_bytes(void *buf, int size);
 
 /* target.c */
 struct ptlrpc_request;
-struct recovd_data;
-struct recovd_obd;
 struct obd_export;
+struct lu_target;
 #include <lustre_ha.h>
 #include <lustre_net.h>
 #include <lvfs.h>
@@ -89,8 +88,6 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req);
 #define OBD_RECOVERY_MAX_TIME (obd_timeout * 18) /* b13079 */
 
 void target_cancel_recovery_timer(struct obd_device *obd);
-int target_start_recovery_thread(struct obd_device *obd,
-                                 svc_handler_t handler);
 void target_stop_recovery_thread(struct obd_device *obd);
 void target_cleanup_recovery(struct obd_device *obd);
 int target_queue_recovery_request(struct ptlrpc_request *req,

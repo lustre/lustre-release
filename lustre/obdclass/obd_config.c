@@ -247,14 +247,15 @@ int class_attach(struct lustre_cfg *lcfg)
         LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC,
                  "obd %p obd_magic %08X != %08X\n",
                  obd, obd->obd_magic, OBD_DEVICE_MAGIC);
-        LASSERTF(strncmp(obd->obd_name, name, strlen(name)) == 0, "%p obd_name %s != %s\n",
-                 obd, obd->obd_name, name);
+        LASSERTF(strncmp(obd->obd_name, name, strlen(name)) == 0,
+                 "%p obd_name %s != %s\n", obd, obd->obd_name, name);
 
         rwlock_init(&obd->obd_pool_lock);
         obd->obd_pool_limit = 0;
         obd->obd_pool_slv = 0;
 
         CFS_INIT_LIST_HEAD(&obd->obd_exports);
+        CFS_INIT_LIST_HEAD(&obd->obd_delayed_exports);
         CFS_INIT_LIST_HEAD(&obd->obd_exports_timed);
         CFS_INIT_LIST_HEAD(&obd->obd_nid_stats);
         spin_lock_init(&obd->obd_nid_lock);
@@ -276,9 +277,6 @@ int class_attach(struct lustre_cfg *lcfg)
         CFS_INIT_LIST_HEAD(&obd->obd_final_req_queue);
 
         llog_group_init(&obd->obd_olg, FILTER_GROUP_LLOG);
-
-        spin_lock_init(&obd->obd_uncommitted_replies_lock);
-        CFS_INIT_LIST_HEAD(&obd->obd_uncommitted_replies);
 
         len = strlen(uuid);
         if (len >= sizeof(obd->obd_uuid)) {
@@ -499,7 +497,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
         /* Leave this on forever */
         obd->obd_stopping = 1;
         spin_unlock(&obd->obd_dev_lock);
-        
+
         if (lcfg->lcfg_bufcount >= 2 && LUSTRE_CFG_BUFLEN(lcfg, 1) > 0) {
                 for (flag = lustre_cfg_string(lcfg, 1); *flag != 0; flag++)
                         switch (*flag) {
@@ -859,7 +857,7 @@ int class_process_config(struct lustre_cfg *lcfg)
                 ldlm_timeout = max(lcfg->lcfg_num, 1U);
                 if (ldlm_timeout >= obd_timeout)
                         ldlm_timeout = max(obd_timeout / 3, 1U);
-                
+
                 GOTO(out, err = 0);
         }
         case LCFG_SET_UPCALL: {

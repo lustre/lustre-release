@@ -1092,11 +1092,11 @@ void lu_context_key_degister(struct lu_context_key *key)
         lu_context_key_quiesce(key);
 
         ++key_set_version;
+        spin_lock(&lu_keys_guard);
         key_fini(&lu_shrink_env.le_ctx, key->lct_index);
 
         if (atomic_read(&key->lct_used) > 1)
                 CERROR("key has instances.\n");
-        spin_lock(&lu_keys_guard);
         lu_keys[key->lct_index] = NULL;
         spin_unlock(&lu_keys_guard);
 }
@@ -1240,6 +1240,7 @@ static void keys_fini(struct lu_context *ctx)
 {
         int i;
 
+        spin_lock(&lu_keys_guard);
         if (ctx->lc_value != NULL) {
                 for (i = 0; i < ARRAY_SIZE(lu_keys); ++i)
                         key_fini(ctx, i);
@@ -1247,6 +1248,7 @@ static void keys_fini(struct lu_context *ctx)
                          ARRAY_SIZE(lu_keys) * sizeof ctx->lc_value[0]);
                 ctx->lc_value = NULL;
         }
+        spin_unlock(&lu_keys_guard);
 }
 
 static int keys_fill(struct lu_context *ctx)
@@ -1427,8 +1429,11 @@ static int lu_cache_shrink(int nr, unsigned int gfp_mask)
         int remain = nr;
         CFS_LIST_HEAD(splice);
 
-        if (nr != 0 && !(gfp_mask & __GFP_FS))
-                return -1;
+        if (nr != 0) {
+                if (!(gfp_mask & __GFP_FS))
+                        return -1;
+                CDEBUG(D_INODE, "Shrink %d objects\n", nr);
+        }
 
         down(&lu_sites_guard);
         list_for_each_entry_safe(s, tmp, &lu_sites, ls_linkage) {
@@ -1443,11 +1448,15 @@ static int lu_cache_shrink(int nr, unsigned int gfp_mask)
                 read_lock(&s->ls_guard);
                 cached += s->ls_total - s->ls_busy;
                 read_unlock(&s->ls_guard);
-                if (remain <= 0)
+                if (nr && remain <= 0)
                         break;
         }
         list_splice(&splice, lu_sites.prev);
         up(&lu_sites_guard);
+
+        cached = (cached / 100) * sysctl_vfs_cache_pressure;
+        if (nr == 0)
+                CDEBUG(D_INODE, "%d objects cached\n", cached);
         return cached;
 }
 

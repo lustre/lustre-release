@@ -774,6 +774,12 @@ void *lustre_swab_repbuf(struct ptlrpc_request *req, int index, int min_size,
         return lustre_swab_buf(req->rq_repmsg, index, min_size, swabber);
 }
 
+static inline struct ptlrpc_body *lustre_msg_ptlrpc_body(struct lustre_msg *msg)
+{
+        return lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF,
+                                 sizeof(struct ptlrpc_body));
+}
+
 __u32 lustre_msghdr_get_flags(struct lustre_msg *msg)
 {
         switch (msg->lm_magic) {
@@ -809,9 +815,7 @@ __u32 lustre_msg_get_flags(struct lustre_msg *msg)
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 if (!pb) {
                         CERROR("invalid msg %p: no ptlrpc body!\n", msg);
                         return 0;
@@ -829,9 +833,7 @@ void lustre_msg_add_flags(struct lustre_msg *msg, int flags)
 {
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
                 pb->pb_flags |= flags;
                 return;
@@ -845,9 +847,7 @@ void lustre_msg_set_flags(struct lustre_msg *msg, int flags)
 {
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
                 pb->pb_flags = flags;
                 return;
@@ -862,9 +862,7 @@ void lustre_msg_clear_flags(struct lustre_msg *msg, int flags)
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
                 pb->pb_flags &= ~(MSG_GEN_FLAG_MASK & flags);
                 return;
@@ -879,9 +877,7 @@ __u32 lustre_msg_get_op_flags(struct lustre_msg *msg)
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 if (!pb) {
                         CERROR("invalid msg %p: no ptlrpc body!\n", msg);
                         return 0;
@@ -897,9 +893,7 @@ void lustre_msg_add_op_flags(struct lustre_msg *msg, int flags)
 {
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
                 pb->pb_op_flags |= flags;
                 return;
@@ -913,9 +907,7 @@ void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 {
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
                 pb->pb_op_flags |= flags;
                 return;
@@ -930,9 +922,7 @@ struct lustre_handle *lustre_msg_get_handle(struct lustre_msg *msg)
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 if (!pb) {
                         CERROR("invalid msg %p: no ptlrpc body!\n", msg);
                         return NULL;
@@ -950,9 +940,7 @@ __u32 lustre_msg_get_type(struct lustre_msg *msg)
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 if (!pb) {
                         CERROR("invalid msg %p: no ptlrpc body!\n", msg);
                         return PTL_RPC_MSG_ERR;
@@ -970,9 +958,7 @@ __u32 lustre_msg_get_version(struct lustre_msg *msg)
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 if (!pb) {
                         CERROR("invalid msg %p: no ptlrpc body!\n", msg);
                         return 0;
@@ -990,9 +976,7 @@ void lustre_msg_add_version(struct lustre_msg *msg, int version)
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
                 pb->pb_version |= version;
                 return;
@@ -1007,9 +991,7 @@ __u32 lustre_msg_get_opc(struct lustre_msg *msg)
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 if (!pb) {
                         CERROR("invalid msg %p: no ptlrpc body!\n", msg);
                         return 0;
@@ -1027,9 +1009,7 @@ __u64 lustre_msg_get_last_xid(struct lustre_msg *msg)
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 if (!pb) {
                         CERROR("invalid msg %p: no ptlrpc body!\n", msg);
                         return 0;
@@ -1047,9 +1027,7 @@ __u64 lustre_msg_get_last_committed(struct lustre_msg *msg)
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 if (!pb) {
                         CERROR("invalid msg %p: no ptlrpc body!\n", msg);
                         return 0;
@@ -1062,14 +1040,31 @@ __u64 lustre_msg_get_last_committed(struct lustre_msg *msg)
         }
 }
 
+__u64 *lustre_msg_get_versions(struct lustre_msg *msg)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+                return NULL;
+        case LUSTRE_MSG_MAGIC_V2: {
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+                if (!pb) {
+                        CERROR("invalid msg %p: no ptlrpc body!\n", msg);
+                        return NULL;
+                }
+                return pb->pb_pre_versions;
+        }
+        default:
+                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+                return NULL;
+        }
+}
+
 __u64 lustre_msg_get_transno(struct lustre_msg *msg)
 {
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 if (!pb) {
                         CERROR("invalid msg %p: no ptlrpc body!\n", msg);
                         return 0;
@@ -1087,9 +1082,7 @@ int lustre_msg_get_status(struct lustre_msg *msg)
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 if (!pb) {
                         CERROR("invalid msg %p: no ptlrpc body!\n", msg);
                         return -EINVAL;
@@ -1108,9 +1101,7 @@ __u64 lustre_msg_get_slv(struct lustre_msg *msg)
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 if (!pb) {
                         CERROR("invalid msg %p: no ptlrpc body!\n", msg);
                         return -EINVAL;
@@ -1129,9 +1120,7 @@ void lustre_msg_set_slv(struct lustre_msg *msg, __u64 slv)
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 if (!pb) {
                         CERROR("invalid msg %p: no ptlrpc body!\n", msg);
                         return;
@@ -1150,9 +1139,7 @@ __u32 lustre_msg_get_limit(struct lustre_msg *msg)
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 if (!pb) {
                         CERROR("invalid msg %p: no ptlrpc body!\n", msg);
                         return -EINVAL;
@@ -1171,9 +1158,7 @@ void lustre_msg_set_limit(struct lustre_msg *msg, __u64 limit)
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 if (!pb) {
                         CERROR("invalid msg %p: no ptlrpc body!\n", msg);
                         return;
@@ -1192,9 +1177,7 @@ __u32 lustre_msg_get_conn_cnt(struct lustre_msg *msg)
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 if (!pb) {
                         CERROR("invalid msg %p: no ptlrpc body!\n", msg);
                         return 0;
@@ -1238,9 +1221,7 @@ __u32 lustre_msg_get_timeout(struct lustre_msg *msg)
                 return 0;
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 if (!pb) {
                         CERROR("invalid msg %p: no ptlrpc body!\n", msg);
                         return 0;
@@ -1262,9 +1243,7 @@ __u32 lustre_msg_get_service_time(struct lustre_msg *msg)
                 return 0;
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 if (!pb) {
                         CERROR("invalid msg %p: no ptlrpc body!\n", msg);
                         return 0;
@@ -1301,8 +1280,7 @@ __u32 lustre_msg_calc_cksum(struct lustre_msg *msg)
                 return 0;
         case LUSTRE_MSG_MAGIC_V2:
         case LUSTRE_MSG_MAGIC_V2_SWABBED: {
-                struct ptlrpc_body *pb;
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
                 return crc32_le(~(__u32)0, (unsigned char *)pb, sizeof(*pb));
         }
@@ -1316,9 +1294,7 @@ void lustre_msg_set_handle(struct lustre_msg *msg, struct lustre_handle *handle)
 {
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
                 pb->pb_handle = *handle;
                 return;
@@ -1332,9 +1308,7 @@ void lustre_msg_set_type(struct lustre_msg *msg, __u32 type)
 {
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
                 pb->pb_type = type;
                 return;
@@ -1348,9 +1322,7 @@ void lustre_msg_set_opc(struct lustre_msg *msg, __u32 opc)
 {
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
                 pb->pb_opc = opc;
                 return;
@@ -1364,9 +1336,7 @@ void lustre_msg_set_last_xid(struct lustre_msg *msg, __u64 last_xid)
 {
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
                 pb->pb_last_xid = last_xid;
                 return;
@@ -1380,11 +1350,28 @@ void lustre_msg_set_last_committed(struct lustre_msg *msg, __u64 last_committed)
 {
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
                 pb->pb_last_committed = last_committed;
+                return;
+        }
+        default:
+                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+        }
+}
+
+void lustre_msg_set_versions(struct lustre_msg *msg, __u64 *versions)
+{
+        switch (msg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+                return;
+        case LUSTRE_MSG_MAGIC_V2: {
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
+                pb->pb_pre_versions[0] = versions[0];
+                pb->pb_pre_versions[1] = versions[1];
+                pb->pb_pre_versions[2] = versions[2];
+                pb->pb_pre_versions[3] = versions[3];
                 return;
         }
         default:
@@ -1396,9 +1383,7 @@ void lustre_msg_set_transno(struct lustre_msg *msg, __u64 transno)
 {
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
                 pb->pb_transno = transno;
                 return;
@@ -1412,9 +1397,7 @@ void lustre_msg_set_status(struct lustre_msg *msg, __u32 status)
 {
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
                 pb->pb_status = status;
                 return;
@@ -1428,9 +1411,7 @@ void lustre_msg_set_conn_cnt(struct lustre_msg *msg, __u32 conn_cnt)
 {
         switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
                 pb->pb_conn_cnt = conn_cnt;
                 return;
@@ -1446,9 +1427,7 @@ void lustre_msg_set_timeout(struct lustre_msg *msg, __u32 timeout)
         case LUSTRE_MSG_MAGIC_V1:
                 return;
         case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
                 pb->pb_timeout = timeout;
                 return;
@@ -1464,9 +1443,7 @@ void lustre_msg_set_service_time(struct lustre_msg *msg, __u32 service_time)
         case LUSTRE_MSG_MAGIC_V1:
                 return;
         case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb;
-
-                pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
+                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
                 pb->pb_service_time = service_time;
                 return;

@@ -16,7 +16,8 @@ init_test_env $@
 assert_env CLIENTS MDSRATE SINGLECLIENT MPIRUN
 
 MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
-TESTDIR=$MOUNT
+# Do not use name [df][0-9]* to avoid cleanup by rm, bug 18045
+TESTDIR=$MOUNT/mdsrate
 
 # Requirements
 NUM_FILES=${NUM_FILES:-1000000}
@@ -34,6 +35,13 @@ rm -f $LOG
 log "===== $0 ====== " 
 
 check_and_setup_lustre
+mkdir -p $TESTDIR
+chmod 0777 $TESTDIR
+
+IFree=$(inodes_available)
+if [ $IFree -lt $NUM_FILES ]; then
+    NUM_FILES=$IFree
+fi
 
 IFree=$(inodes_available)
 if [ $IFree -lt $NUM_FILES ]; then
@@ -48,6 +56,8 @@ get_stripe $TESTDIR
 if [ -n "$NOCREATE" ]; then
     echo "NOCREATE=$NOCREATE  => no file creation."
 else
+    mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES $TESTDIR 'f%%d' --ignore
+
     log "===== $0 Test preparation: creating ${NUM_FILES} files."
     echo "Test preparation: creating ${NUM_FILES} files."
 

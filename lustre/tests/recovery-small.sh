@@ -1068,31 +1068,6 @@ test_61()
 }
 run_test 61 "Verify to not reuse orphan objects - bug 17025"
 
-test_61()
-{
-	local cflags='osc.*-OST0000-osc-MDT*.connect_flags'
-	do_facet $SINGLEMDS "lctl get_param -n $cflags" |grep -q skip_orphan
-	[ $? -ne 0 ] && skip "don't have skip orphan feature" && return
-
-	mkdir -p $DIR/$tdir || error "mkdir dir $DIR/$tdir failed"
-	# Set the default stripe of $DIR/$tdir to put the files to ost1
-	$LFS setstripe -c 1 --index 0 $DIR/$tdir
-
-	replay_barrier $SINGLEMDS
-	createmany -o $DIR/$tdir/$tfile-%d 10 
-	local oid=`do_facet ost1 "lctl get_param -n obdfilter.*OST0000.last_id"`
-
-	fail_abort $SINGLEMDS
-	
-	touch $DIR/$tdir/$tfile
-	local id=`$LFS getstripe $DIR/$tdir/$tfile |awk '$2 ~ /^[1-9]+/ {print $2}'`
-	[ $id -le $oid ] && error "the orphan objid was reused, failed"
-
-	# Cleanup
-	rm -rf $DIR/$tdir
-}
-run_test 61 "Verify to not reuse orphan objects - bug 17025"
-
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

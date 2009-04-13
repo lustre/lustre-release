@@ -318,7 +318,7 @@ static int ldd_write(struct dt_device *dt, struct lustre_disk_data *ldd)
         rc = dt->dd_ops->dt_trans_start(&env, dt, th);
         LASSERT(rc == 0);
 
-        rc = dt_record_write(&env, file, &buf, &pos, th, BYPASS_CAPA, 1);
+        rc = dt_record_write(&env, file, &buf, &pos, th);
 
         dt->dd_ops->dt_trans_stop(&env, th);
 

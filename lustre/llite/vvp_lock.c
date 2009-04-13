@@ -73,6 +73,7 @@ static unsigned long vvp_lock_weigh(const struct lu_env *env,
 }
 
 static const struct cl_lock_operations vvp_lock_ops = {
+        .clo_delete    = ccc_lock_delete,
         .clo_fini      = ccc_lock_fini,
         .clo_enqueue   = ccc_lock_enqueue,
         .clo_wait      = ccc_lock_wait,

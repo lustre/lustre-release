@@ -77,10 +77,6 @@ static struct key_type gss_key_type;
 static int sec_install_rctx_kr(struct ptlrpc_sec *sec,
                                struct ptlrpc_svc_ctx *svc_ctx);
 
-#ifndef task_aux
-#define task_aux(tsk)           (tsk)
-#endif
-
 /*
  * the timeout is only for the case that upcall child process die abnormally.
  * in any other cases it should finally update kernel key.
@@ -103,10 +99,10 @@ static int sec_install_rctx_kr(struct ptlrpc_sec *sec,
               tsk->comm, tsk->pid, tsk->uid, tsk->fsuid,                \
               tsk->parent->comm, tsk->parent->pid,                      \
               tsk->parent->uid, tsk->parent->fsuid,                     \
-              task_aux(tsk)->request_key_auth ?                         \
-              task_aux(tsk)->request_key_auth->serial : 0,              \
-              task_aux(tsk)->thread_keyring ?                           \
-              task_aux(tsk)->thread_keyring->serial : 0,                \
+              tsk->request_key_auth ?                                   \
+              tsk->request_key_auth->serial : 0,                        \
+              tsk->thread_keyring ?                                     \
+              tsk->thread_keyring->serial : 0,                          \
               tsk->signal->process_keyring ?                            \
               tsk->signal->process_keyring->serial : 0,                 \
               tsk->signal->session_keyring ?                            \
@@ -115,7 +111,7 @@ static int sec_install_rctx_kr(struct ptlrpc_sec *sec,
               tsk->user->uid_keyring->serial : 0,                       \
               tsk->user->session_keyring ?                              \
               tsk->user->session_keyring->serial : 0,                   \
-              task_aux(tsk)->jit_keyring                                \
+              tsk->jit_keyring                                          \
              );                                                         \
 }
 
@@ -648,10 +644,10 @@ static void request_key_unlink(struct key *key)
         struct task_struct *tsk = current;
         struct key *ring;
 
-        switch (task_aux(tsk)->jit_keyring) {
+        switch (tsk->jit_keyring) {
         case KEY_REQKEY_DEFL_DEFAULT:
         case KEY_REQKEY_DEFL_THREAD_KEYRING:
-                ring = key_get(task_aux(tsk)->thread_keyring);
+                ring = key_get(tsk->thread_keyring);
                 if (ring)
                         break;
         case KEY_REQKEY_DEFL_PROCESS_KEYRING:

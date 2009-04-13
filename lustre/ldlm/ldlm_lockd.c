@@ -319,6 +319,7 @@ repeat:
                                 cont = 0;
 
                         LDLM_LOCK_GET(lock);
+
                         spin_unlock_bh(&waiting_locks_spinlock);
                         LDLM_DEBUG(lock, "prolong the busy lock");
                         ldlm_refresh_waiting_lock(lock,
@@ -326,11 +327,11 @@ repeat:
                         spin_lock_bh(&waiting_locks_spinlock);
 
                         if (!cont) {
-                                LDLM_LOCK_PUT(lock);
+                                LDLM_LOCK_RELEASE(lock);
                                 break;
                         }
 
-                        LDLM_LOCK_PUT(lock);
+                        LDLM_LOCK_RELEASE(lock);
                         continue;
                 }
                 lock->l_resource->lr_namespace->ns_timeouts++;
@@ -1692,21 +1693,6 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
         req_capsule_init(&req->rq_pill, req, RCL_SERVER);
 
         if (req->rq_export == NULL) {
-                struct ldlm_request *dlm_req;
-
-                CDEBUG(D_RPCTRACE, "operation %d from %s with bad "
-                       "export cookie "LPX64"; this is "
-                       "normal if this node rebooted with a lock held\n",
-                       lustre_msg_get_opc(req->rq_reqmsg),
-                       libcfs_id2str(req->rq_peer),
-                       lustre_msg_get_handle(req->rq_reqmsg)->cookie);
-
-                req_capsule_set(&req->rq_pill, &RQF_LDLM_CALLBACK);
-                dlm_req = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
-                if (dlm_req != NULL)
-                        CDEBUG(D_RPCTRACE, "--> lock cookie: "LPX64"\n",
-                               dlm_req->lock_handle[0].cookie);
-
                 ldlm_callback_reply(req, -ENOTCONN);
                 RETURN(0);
         }
@@ -2557,7 +2543,6 @@ EXPORT_SYMBOL(client_obd_setup);
 EXPORT_SYMBOL(client_obd_cleanup);
 EXPORT_SYMBOL(client_connect_import);
 EXPORT_SYMBOL(client_disconnect_export);
-EXPORT_SYMBOL(target_start_recovery_thread);
 EXPORT_SYMBOL(target_stop_recovery_thread);
 EXPORT_SYMBOL(target_handle_connect);
 EXPORT_SYMBOL(target_cleanup_recovery);

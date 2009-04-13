@@ -732,41 +732,41 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define MSG_CONNECT_TRANSNO     0x00000100 /* report transno */
 
 /* Connect flags */
-#define OBD_CONNECT_RDONLY            0x1ULL /*client allowed read-only access*/
-#define OBD_CONNECT_INDEX             0x2ULL /*connect to specific LOV idx */
-#define OBD_CONNECT_MDS               0x4ULL /*connect from MDT to OST */
-#define OBD_CONNECT_GRANT             0x8ULL /*OSC acquires grant at connect */
-#define OBD_CONNECT_SRVLOCK          0x10ULL /*server takes locks for client */
-#define OBD_CONNECT_VERSION          0x20ULL /*Lustre versions in ocd */
-#define OBD_CONNECT_REQPORTAL        0x40ULL /*Separate non-IO request portal */
-#define OBD_CONNECT_ACL              0x80ULL /*access control lists */
-#define OBD_CONNECT_XATTR           0x100ULL /*client use extended attributes */
-#define OBD_CONNECT_CROW            0x200ULL /*MDS+OST create objects on write*/
-#define OBD_CONNECT_TRUNCLOCK       0x400ULL /*locks on server for punch */
-#define OBD_CONNECT_TRANSNO         0x800ULL /*replay sends initial transno */
-#define OBD_CONNECT_IBITS          0x1000ULL /*support for inodebits locks */
-#define OBD_CONNECT_JOIN           0x2000ULL /*files can be concatenated */
-#define OBD_CONNECT_ATTRFID        0x4000ULL /*Server supports GetAttr By Fid */
-#define OBD_CONNECT_NODEVOH        0x8000ULL /*No open handle on special nodes*/
-#define OBD_CONNECT_RMT_CLIENT 0x00010000ULL /*Remote client */
-#define OBD_CONNECT_RMT_CLIENT_FORCE 0x00020000ULL /*Remote client by force */
-#define OBD_CONNECT_BRW_SIZE      0x40000ULL /*Max bytes per rpc */
-#define OBD_CONNECT_QUOTA64       0x80000ULL /*64bit qunit_data.qd_count */
-#define OBD_CONNECT_MDS_CAPA     0x100000ULL /*MDS capability */
-#define OBD_CONNECT_OSS_CAPA     0x200000ULL /*OSS capability */
-#define OBD_CONNECT_CANCELSET    0x400000ULL /*Early batched cancels. */
-#define OBD_CONNECT_SOM        0x00800000ULL /*Size on MDS */
-#define OBD_CONNECT_AT         0x01000000ULL /*client uses adaptive timeouts */
-#define OBD_CONNECT_LRU_RESIZE 0x02000000ULL /*LRU resize feature. */
-#define OBD_CONNECT_MDS_MDS    0x04000000ULL /*MDS-MDS connection */
-#define OBD_CONNECT_REAL       0x08000000ULL /*real connection */
-#define OBD_CONNECT_CHANGE_QS  0x10000000ULL /*shrink/enlarge qunit b=10600 */
-#define OBD_CONNECT_CKSUM      0x20000000ULL /*support several cksum algos */
-#define OBD_CONNECT_FID        0x40000000ULL /*FID is supported by server */
-#define OBD_CONNECT_VBR        0x80000000ULL /*version based recovery */
-#define OBD_CONNECT_LOV_V3      0x100000000ULL /*client supports LOV v3 EA */
+#define OBD_CONNECT_RDONLY                0x1ULL /*client allowed read-only access*/
+#define OBD_CONNECT_INDEX                 0x2ULL /*connect to specific LOV idx */
+#define OBD_CONNECT_MDS                   0x4ULL /*connect from MDT to OST */
+#define OBD_CONNECT_GRANT                 0x8ULL /*OSC acquires grant at connect */
+#define OBD_CONNECT_SRVLOCK              0x10ULL /*server takes locks for client */
+#define OBD_CONNECT_VERSION              0x20ULL /*Lustre versions in ocd */
+#define OBD_CONNECT_REQPORTAL            0x40ULL /*Separate non-IO request portal */
+#define OBD_CONNECT_ACL                  0x80ULL /*access control lists */
+#define OBD_CONNECT_XATTR               0x100ULL /*client use extended attributes */
+#define OBD_CONNECT_CROW                0x200ULL /*MDS+OST create objects on write*/
+#define OBD_CONNECT_TRUNCLOCK           0x400ULL /*locks on server for punch */
+#define OBD_CONNECT_TRANSNO             0x800ULL /*replay sends initial transno */
+#define OBD_CONNECT_IBITS              0x1000ULL /*support for inodebits locks */
+#define OBD_CONNECT_JOIN               0x2000ULL /*files can be concatenated */
+#define OBD_CONNECT_ATTRFID            0x4000ULL /*Server supports GetAttr By Fid */
+#define OBD_CONNECT_NODEVOH            0x8000ULL /*No open handle on special nodes*/
+#define OBD_CONNECT_RMT_CLIENT        0x10000ULL /*Remote client */
+#define OBD_CONNECT_RMT_CLIENT_FORCE  0x20000ULL /*Remote client by force */
+#define OBD_CONNECT_BRW_SIZE          0x40000ULL /*Max bytes per rpc */
+#define OBD_CONNECT_QUOTA64           0x80000ULL /*64bit qunit_data.qd_count */
+#define OBD_CONNECT_MDS_CAPA         0x100000ULL /*MDS capability */
+#define OBD_CONNECT_OSS_CAPA         0x200000ULL /*OSS capability */
+#define OBD_CONNECT_CANCELSET        0x400000ULL /*Early batched cancels. */
+#define OBD_CONNECT_SOM              0x800000ULL /*Size on MDS */
+#define OBD_CONNECT_AT              0x1000000ULL /*client uses adaptive timeouts */
+#define OBD_CONNECT_LRU_RESIZE      0x2000000ULL /*LRU resize feature. */
+#define OBD_CONNECT_MDS_MDS         0x4000000ULL /*MDS-MDS connection */
+#define OBD_CONNECT_REAL            0x8000000ULL /*real connection */
+#define OBD_CONNECT_CHANGE_QS      0x10000000ULL /*shrink/enlarge qunit b=10600 */
+#define OBD_CONNECT_CKSUM          0x20000000ULL /*support several cksum algos */
+#define OBD_CONNECT_FID            0x40000000ULL /*FID is supported by server */
+#define OBD_CONNECT_VBR            0x80000000ULL /*version based recovery */
+#define OBD_CONNECT_LOV_V3        0x100000000ULL /*client supports LOV v3 EA */
 #define OBD_CONNECT_GRANT_SHRINK  0x200000000ULL /* support grant shrink */
-#define OBD_CONNECT_SKIP_ORPHAN 0x400000000ULL /* don't reuse orphan objids */
+#define OBD_CONNECT_SKIP_ORPHAN   0x400000000ULL /* don't reuse orphan objids */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
@@ -785,7 +785,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_RMT_CLIENT_FORCE | \
                                 OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA | \
                                 OBD_CONNECT_MDS_MDS | OBD_CONNECT_FID | \
-                                LRU_RESIZE_CONNECT_FLAG | \
+                                LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_VBR | \
                                 OBD_CONNECT_LOV_V3)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
@@ -795,9 +795,9 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_CKSUM | \
                                 OBD_CONNECT_CHANGE_QS | \
                                 OBD_CONNECT_OSS_CAPA  | OBD_CONNECT_RMT_CLIENT | \
-                                OBD_CONNECT_RMT_CLIENT_FORCE | \
+                                OBD_CONNECT_RMT_CLIENT_FORCE | OBD_CONNECT_VBR | \
                                 OBD_CONNECT_MDS | OBD_CONNECT_SKIP_ORPHAN | \
-				OBD_CONNECT_GRANT_SHRINK)
+                                OBD_CONNECT_GRANT_SHRINK)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT)
 

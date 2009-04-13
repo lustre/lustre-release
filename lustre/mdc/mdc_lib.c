@@ -164,7 +164,7 @@ void mdc_create_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
         }
 }
 
-static __u32 mds_pack_open_flags(__u32 flags)
+static __u32 mds_pack_open_flags(__u32 flags, __u32 mode)
 {
         __u32 cr_flags = (flags & (FMODE_READ | FMODE_WRITE |
                                    MDS_OPEN_HAS_EA | MDS_OPEN_HAS_OBJS | 
@@ -181,7 +181,7 @@ static __u32 mds_pack_open_flags(__u32 flags)
                 cr_flags |= MDS_OPEN_SYNC;
         if (flags & O_DIRECTORY)
                 cr_flags |= MDS_OPEN_DIRECTORY;
-        if (flags & O_JOIN_FILE)
+        if (mode  & M_JOIN_FILE)
                 cr_flags |= MDS_OPEN_JOIN_FILE;
 #ifdef FMODE_EXEC
         if (flags & FMODE_EXEC)
@@ -226,7 +226,7 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
                 rec->cr_fid2 = op_data->op_fid2;
         }
         rec->cr_mode     = mode;
-        rec->cr_flags    = mds_pack_open_flags(flags);
+        rec->cr_flags    = mds_pack_open_flags(flags, mode);
         rec->cr_rdev     = rdev;
         rec->cr_time     = op_data->op_mod_time;
         rec->cr_suppgid1 = op_data->op_suppgids[0];

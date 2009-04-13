@@ -305,6 +305,8 @@ void ccc_transient_page_discard(const struct lu_env *env,
 int ccc_transient_page_prep(const struct lu_env *env,
                             const struct cl_page_slice *slice,
                             struct cl_io *io);
+void ccc_lock_delete(const struct lu_env *env,
+                     const struct cl_lock_slice *slice);
 void ccc_lock_fini(const struct lu_env *env,struct cl_lock_slice *slice);
 int ccc_lock_enqueue(const struct lu_env *env,const struct cl_lock_slice *slice,
                      struct cl_io *io, __u32 enqflags);
@@ -327,7 +329,8 @@ int ccc_io_one_lock(const struct lu_env *env, struct cl_io *io,
                     loff_t start, loff_t end);
 void ccc_io_end(const struct lu_env *env, const struct cl_io_slice *ios);
 int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
-                  struct cl_io *io, loff_t pos, int vfslock);
+                  struct cl_io *io, loff_t start, size_t count, int vfslock,
+                  int *exceed);
 void ccc_req_completion(const struct lu_env *env,
                         const struct cl_req_slice *slice, int ioret);
 void ccc_req_attr_set(const struct lu_env *env,const struct cl_req_slice *slice,

@@ -134,6 +134,28 @@ static int   osd_index_ea_lookup(const struct lu_env *env,
                                  struct dt_object *dt,
                                  struct dt_rec *rec, const struct dt_key *key,
                                  struct lustre_capa *capa);
+static int   osd_index_iam_insert(const struct lu_env *env,
+                                  struct dt_object *dt,
+                                  const struct dt_rec *rec,
+                                  const struct dt_key *key,
+                                  struct thandle *handle,
+                                  struct lustre_capa *capa,
+                                  int ingore_quota);
+static int   osd_index_ea_insert (const struct lu_env *env,
+                                  struct dt_object *dt,
+                                  const struct dt_rec *rec,
+                                  const struct dt_key *key,
+                                  struct thandle *handle,
+                                  struct lustre_capa *capa,
+                                  int ingore_quota);
+static int   osd_index_iam_delete(const struct lu_env *env,
+                                  struct dt_object *dt, const struct dt_key *key,
+                                  struct thandle *handle,
+                                  struct lustre_capa *capa);
+static int   osd_index_ea_delete (const struct lu_env *env,
+                                  struct dt_object *dt, const struct dt_key *key,
+                                  struct thandle *handle,
+                                  struct lustre_capa *capa);
 
 static int   osd_iam_index_probe   (const struct lu_env *env,
                                     struct osd_object *o,
@@ -347,6 +369,7 @@ static struct lu_object *osd_object_alloc(const struct lu_env *env,
 
                 l->lo_ops = &osd_lu_obj_ops;
                 init_rwsem(&mo->oo_sem);
+                init_rwsem(&mo->oo_ext_idx_sem);
                 spin_lock_init(&mo->oo_guard);
                 return l;
         } else
@@ -897,7 +920,7 @@ static void osd_init_quota_ctxt(const struct lu_env *env, struct dt_device *d,
                                struct dt_quota_ctxt *ctxt, void *data)
 {
         struct obd_device *obd = (void *)ctxt;
-        struct vfsmount *mnt = osd_dt_dev(d)->od_mnt;
+        struct vfsmount *mnt = (struct vfsmount *)data;
         ENTRY;
 
         obd->u.obt.obt_sb = mnt->mnt_root->d_inode->i_sb;
@@ -1258,7 +1281,7 @@ static int osd_attr_set(const struct lu_env *env,
         LASSERT(handle != NULL);
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
-        
+
         if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
                 return -EACCES;
 
@@ -1370,12 +1393,21 @@ static int osd_create_pre(struct osd_thread_info *info, struct osd_object *obj,
 static int osd_create_post(struct osd_thread_info *info, struct osd_object *obj,
                            struct lu_attr *attr, struct thandle *th)
 {
-        LASSERT(obj->oo_inode != NULL);
-
         osd_object_init0(obj);
         return 0;
 }
 
+extern struct inode *ldiskfs_create_inode(handle_t *handle,
+                                          struct inode * dir, int mode);
+extern int ldiskfs_add_entry(handle_t *handle, struct dentry *dentry,
+                             struct inode *inode);
+extern int ldiskfs_delete_entry(handle_t *handle,
+                                struct inode * dir,
+                                struct ldiskfs_dir_entry_2 * de_del,
+                                struct buffer_head * bh);
+extern struct buffer_head * ldiskfs_find_entry(struct dentry *dentry,
+                                               struct ldiskfs_dir_entry_2
+                                               ** res_dir);
 extern int ldiskfs_add_dot_dotdot(handle_t *handle, struct inode *dir,
                                   struct inode *inode);
 
@@ -1468,6 +1500,11 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
 }
 
 
+extern int iam_lvar_create(struct inode *obj, int keysize, int ptrsize,
+                           int recsize, handle_t *handle);
+
+extern int iam_lfix_create(struct inode *obj, int keysize, int ptrsize,
+                           int recsize, handle_t *handle);
 
 
 enum {
@@ -2108,7 +2145,7 @@ static int osd_xattr_del(const struct lu_env *env,
         LASSERT(inode->i_op != NULL && inode->i_op->removexattr != NULL);
         LASSERT(osd_write_locked(env, obj));
         LASSERT(handle != NULL);
-        
+
         if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
                 return -EACCES;
 
@@ -2232,6 +2269,35 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt)
         RETURN(rc);
 }
 
+/*
+ * Get the 64-bit version for an inode.
+ */
+static dt_obj_version_t osd_object_version_get(const struct lu_env *env,
+                                               struct dt_object *dt)
+{
+        struct inode *inode = osd_dt_obj(dt)->oo_inode;
+
+        CDEBUG(D_INFO, "Get version "LPX64" for inode %lu\n",
+               LDISKFS_I(inode)->i_fs_version, inode->i_ino);
+        return LDISKFS_I(inode)->i_fs_version;
+}
+
+/*
+ * Set the 64-bit version and return the old version.
+ */
+static void osd_object_version_set(const struct lu_env *env, struct dt_object *dt,
+                                   dt_obj_version_t new_version)
+{
+        struct inode *inode = osd_dt_obj(dt)->oo_inode;
+
+        CDEBUG(D_INFO, "Set version "LPX64" (old "LPX64") for inode %lu\n",
+               new_version, LDISKFS_I(inode)->i_fs_version, inode->i_ino);
+        LDISKFS_I(inode)->i_fs_version = new_version;
+        /** Version is set after all inode operations are finished,
+         *  so we should mark it dirty here */
+        inode->i_sb->s_op->dirty_inode(inode);
+}
+
 static int osd_data_get(const struct lu_env *env, struct dt_object *dt,
                         void **data)
 {
@@ -2266,6 +2332,8 @@ static const struct dt_object_operations osd_obj_ops = {
         .do_xattr_list        = osd_xattr_list,
         .do_capa_get          = osd_capa_get,
         .do_object_sync       = osd_object_sync,
+        .do_version_get       = osd_object_version_get,
+        .do_version_set       = osd_object_version_set,
         .do_data_get          = osd_data_get,
 };
 
@@ -2297,6 +2365,8 @@ static const struct dt_object_operations osd_obj_ea_ops = {
         .do_xattr_list        = osd_xattr_list,
         .do_capa_get          = osd_capa_get,
         .do_object_sync       = osd_object_sync,
+        .do_version_get  = osd_object_version_get,
+        .do_version_set  = osd_object_version_set,
         .do_data_get          = osd_data_get,
 };
 
@@ -2399,7 +2469,6 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 
                 OBD_ALLOC_PTR(dir);
                 if (dir != NULL) {
-                        sema_init(&dir->od_sem, 1);
 
                         spin_lock(&obj->oo_guard);
                         if (obj->oo_dir == NULL)
@@ -2414,7 +2483,7 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
                          * Now, that we have container data, serialize its
                          * initialization.
                          */
-                        down(&obj->oo_dir->od_sem);
+                        down_write(&obj->oo_ext_idx_sem);
                         /*
                          * recheck under lock.
                          */
@@ -2422,7 +2491,7 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
                                 result = osd_iam_container_init(env, obj, dir);
                         else
                                 result = 0;
-                        up(&obj->oo_dir->od_sem);
+                        up_write(&obj->oo_ext_idx_sem);
                 } else
                         result = -ENOMEM;
         } else
@@ -2564,6 +2633,8 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 
         dentry = osd_child_dentry_get(env, obj,
                                       (char *)key, strlen((char *)key));
+
+        down_write(&obj->oo_ext_idx_sem);
         bh = ldiskfs_find_entry(dentry, &de);
         if (bh) {
                 struct osd_thread_info *oti = osd_oti_get(env);
@@ -2584,6 +2655,7 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
         } else
                 rc = -ENOENT;
 
+        up_write(&obj->oo_ext_idx_sem);
         LASSERT(osd_invariant(obj));
         RETURN(rc);
 }
@@ -2843,6 +2915,8 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 
         dentry = osd_child_dentry_get(env, obj,
                                       (char *)key, strlen((char *)key));
+
+        down_read(&obj->oo_ext_idx_sem);
         bh = ldiskfs_find_entry(dentry, &de);
         if (bh) {
                 ino = le32_to_cpu(de->inode);
@@ -2857,10 +2931,11 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
                         rc = osd_ea_fid_get(env, dentry, rec);
                         iput(inode);
                 } else
-                        rc = -ENOENT;
+                        rc = PTR_ERR(inode);
         } else
                 rc = -ENOENT;
 
+        up_read(&obj->oo_ext_idx_sem);
         RETURN (rc);
 }
 
@@ -2995,8 +3070,9 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
                 else
                         current->cap_effective &= ~CFS_CAP_SYS_RESOURCE_MASK;
 #endif
+                down_write(&obj->oo_ext_idx_sem);
                 rc = osd_ea_add_rec(env, obj, child, name, th);
-
+                up_write(&obj->oo_ext_idx_sem);
 #ifdef HAVE_QUOTA_SUPPORT
                 current->cap_effective = save;
 #endif
@@ -3217,16 +3293,18 @@ static struct dt_it *osd_it_ea_init(const struct lu_env *env,
         obj_dentry->d_sb = osd_sb(osd_obj2dev(obj));
         obj_dentry->d_name.hash = 0;
 
-        it->oie_namelen         = 0;
+        it->oie_rd_dirent       = 0;
+        it->oie_it_dirent       = 0;
         it->oie_curr_pos        = 0;
         it->oie_next_pos        = 0;
+        it->oie_dirent          = NULL;
+        it->oie_buf             = info->oti_it_ea_buf;
         it->oie_obj             = obj;
         it->oie_file.f_dentry   = obj_dentry;
         it->oie_file.f_mapping    = obj->oo_inode->i_mapping;
         it->oie_file.f_op         = obj->oo_inode->i_fop;
         it->oie_file.private_data = NULL;
         lu_object_get(lo);
-
         RETURN((struct dt_it*) it);
 }
 
@@ -3264,9 +3342,11 @@ static int osd_it_ea_get(const struct lu_env *env,
 
         ENTRY;
         LASSERT(((const char *)key)[0] == '\0');
-        it->oie_namelen         = 0;
         it->oie_curr_pos        = 0;
         it->oie_next_pos        = 0;
+        it->oie_rd_dirent       = 0;
+        it->oie_it_dirent       = 0;
+        it->oie_dirent          = NULL;
 
         RETURN(+1);
 }
@@ -3293,22 +3373,27 @@ static int osd_ldiskfs_filldir(char *buf, const char *name, int namelen,
                                loff_t offset, ino_t ino,
                                unsigned int d_type)
 {
-        struct osd_it_ea   *it     = (struct osd_it_ea *)buf;
-        struct dirent64    *dirent = &it->oie_dirent64;
-
+        struct osd_it_ea        *it = (struct osd_it_ea *)buf;
+        struct osd_it_ea_dirent *ent = it->oie_dirent;
         ENTRY;
-        if (it->oie_namelen)
-                RETURN(-ENOENT);
 
-        if (namelen == 0 || namelen > LDISKFS_NAME_LEN)
+        /* this should never happen */
+        if (unlikely(namelen == 0 || namelen > LDISKFS_NAME_LEN)) {
+                CERROR("ldiskfs return invalid namelen %d\n", namelen);
                 RETURN(-EIO);
+        }
 
-        strncpy(dirent->d_name, name, LDISKFS_NAME_LEN);
-        dirent->d_name[namelen] = 0;
-        dirent->d_ino           = ino;
-        it->oie_namelen         = namelen;
-        it->oie_curr_pos        = offset;
+        if ((void *) ent - it->oie_buf + sizeof(*ent) + namelen >
+            OSD_IT_EA_BUFSIZE)
+                RETURN(1);
 
+        ent->oied_ino     = ino;
+        ent->oied_off     = offset;
+        ent->oied_namelen = namelen;
+        memcpy(ent->oied_name, name, namelen);
+
+        it->oie_rd_dirent++;
+        it->oie_dirent = (void *) ent + size_round(sizeof(*ent) + namelen);
         RETURN(0);
 }
 
@@ -3321,7 +3406,7 @@ static int osd_ldiskfs_filldir(char *buf, const char *name, int namelen,
  * \retval   0, on success
  * \retval -ve, on error
  */
-int osd_ldiskfs_it_fill(const struct dt_it *di)
+static int osd_ldiskfs_it_fill(const struct dt_it *di)
 {
         struct osd_it_ea   *it    = (struct osd_it_ea *)di;
         struct osd_object  *obj   = it->oie_obj;
@@ -3329,16 +3414,23 @@ int osd_ldiskfs_it_fill(const struct dt_it *di)
         int                result = 0;
 
         ENTRY;
-        it->oie_namelen    = 0;
+        it->oie_dirent = it->oie_buf;
+        it->oie_rd_dirent = 0;
         it->oie_file.f_pos = it->oie_curr_pos;
 
+        down_read(&obj->oo_ext_idx_sem);
         result = inode->i_fop->readdir(&it->oie_file, it,
                                        (filldir_t) osd_ldiskfs_filldir);
 
+        up_read(&obj->oo_ext_idx_sem);
         it->oie_next_pos = it->oie_file.f_pos;
 
-        if (it->oie_namelen == 0)
+        if (it->oie_rd_dirent == 0) {
                 result = -EIO;
+        } else {
+                it->oie_dirent = it->oie_buf;
+                it->oie_it_dirent = 1;
+        }
 
         RETURN(result);
 }
@@ -3360,12 +3452,21 @@ static int osd_it_ea_next(const struct lu_env *env, struct dt_it *di)
         int rc;
 
         ENTRY;
-        it->oie_curr_pos = it->oie_next_pos;
 
-        if (it->oie_curr_pos == LDISKFS_HTREE_EOF)
-                rc = +1;
-        else
-                rc = osd_ldiskfs_it_fill(di);
+        if (it->oie_it_dirent < it->oie_rd_dirent) {
+                it->oie_dirent = (void *) it->oie_dirent +
+                                 size_round(sizeof(struct osd_it_ea_dirent) +
+                                            it->oie_dirent->oied_namelen);
+                it->oie_it_dirent++;
+                RETURN(0);
+        } else {
+                it->oie_curr_pos = it->oie_next_pos;
+
+                if (it->oie_curr_pos == LDISKFS_HTREE_EOF)
+                        rc = +1;
+                else
+                        rc = osd_ldiskfs_it_fill(di);
+        }
 
         RETURN(rc);
 }
@@ -3382,7 +3483,7 @@ static struct dt_key *osd_it_ea_key(const struct lu_env *env,
 {
         struct osd_it_ea *it = (struct osd_it_ea *)di;
         ENTRY;
-        RETURN((struct dt_key *)it->oie_dirent64.d_name);
+        RETURN((struct dt_key *)it->oie_dirent->oied_name);
 }
 
 /**
@@ -3396,7 +3497,7 @@ static int osd_it_ea_key_size(const struct lu_env *env, const struct dt_it *di)
 {
         struct osd_it_ea *it = (struct osd_it_ea *)di;
         ENTRY;
-        RETURN(it->oie_namelen);
+        RETURN(it->oie_dirent->oied_namelen);
 }
 
 /**
@@ -3423,14 +3524,13 @@ static struct dt_rec *osd_it_ea_rec(const struct lu_env *env,
 
         ENTRY;
         dev  = osd_dev(ldev);
-        id->oii_ino = it->oie_dirent64.d_ino;
+        id->oii_ino = it->oie_dirent->oied_ino;
         id->oii_gen = OSD_OII_NOGEN;
         inode = osd_iget(info, dev, id);
         if (!IS_ERR(inode)) {
                 dentry->d_inode = inode;
                 LASSERT(dentry->d_inode->i_sb == osd_sb(dev));
         } else {
-                CERROR("Error getting inode for ino =%d", id->oii_ino);
                 RETURN((struct dt_rec *) PTR_ERR(inode));
         }
 
@@ -3455,7 +3555,7 @@ static __u64 osd_it_ea_store(const struct lu_env *env, const struct dt_it *di)
 {
         struct osd_it_ea *it = (struct osd_it_ea *)di;
         ENTRY;
-        RETURN(it->oie_curr_pos);
+        RETURN(it->oie_dirent->oied_off);
 }
 
 /**
@@ -3553,15 +3653,29 @@ static void *osd_key_init(const struct lu_context *ctx,
         struct osd_thread_info *info;
 
         OBD_ALLOC_PTR(info);
-        if (info != NULL)
-                info->oti_env = container_of(ctx, struct lu_env, le_ctx);
-        else
+        if (info != NULL) {
+                OBD_ALLOC(info->oti_it_ea_buf, OSD_IT_EA_BUFSIZE);
+                if (info->oti_it_ea_buf != NULL) {
+                        info->oti_env = container_of(ctx, struct lu_env,
+                                                     le_ctx);
+                } else {
+                        OBD_FREE_PTR(info);
+                        info = ERR_PTR(-ENOMEM);
+                }
+        } else {
                 info = ERR_PTR(-ENOMEM);
+        }
         return info;
 }
 
-/* context key destructor: osd_key_fini */
-LU_KEY_FINI(osd, struct osd_thread_info);
+static void osd_key_fini(const struct lu_context *ctx,
+                         struct lu_context_key *key, void* data)
+{
+        struct osd_thread_info *info = data;
+
+        OBD_FREE(info->oti_it_ea_buf, OSD_IT_EA_BUFSIZE);
+        OBD_FREE_PTR(info);
+}
 
 static void osd_key_exit(const struct lu_context *ctx,
                          struct lu_context_key *key, void *data)
@@ -3578,11 +3692,10 @@ static int osd_device_init(const struct lu_env *env, struct lu_device *d,
 {
         int rc;
         struct lu_context *ctx;
-        struct osd_device *osd = osd_dev(d);
 
         /* context for commit hooks */
-        ctx = &osd->od_env_for_commit.le_ctx;
-        rc = lu_context_init(ctx, LCT_MD_THREAD|LCT_DT_THREAD|LCT_REMEMBER|LCT_NOREF);
+        ctx = &osd_dev(d)->od_env_for_commit.le_ctx;
+        rc = lu_context_init(ctx, LCT_MD_THREAD|LCT_REMEMBER|LCT_NOREF);
         if (rc == 0) {
                 /* XXX: somehow pass device name here */
                 if (name)
@@ -3833,6 +3946,12 @@ struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
         } else if (id->oii_gen != OSD_OII_NOGEN &&
                    inode->i_generation != id->oii_gen) {
                 CERROR("stale inode\n");
+                iput(inode);
+                inode = ERR_PTR(-ESTALE);
+        } else if (inode->i_nlink == 0) {
+                /* due to parallel readdir and unlink,
+                * we can have dead inode here. */
+                make_bad_inode(inode);
                 iput(inode);
                 inode = ERR_PTR(-ESTALE);
         }

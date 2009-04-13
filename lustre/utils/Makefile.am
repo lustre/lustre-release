@@ -21,7 +21,7 @@ EXTRA_PROGRAMS = wirecheck
 rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl wiretest \
 	l_getidentity llverfs llverdev \
-	llog_reader lr_reader
+	llog_reader lr_reader lshowmount
 if LIBPTHREAD
 sbin_PROGRAMS += loadgen
 endif
@@ -43,6 +43,8 @@ lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 loadgen_SOURCES = loadgen.c lustre_cfg.c obd.c
 loadgen_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS)
 loadgen_DEPENDENCIES := $(LIBPTLCTL)
+
+lshowmount_SOURCES = lshowmount.c nidlist.c nidlist.h
 
 if EXT2FS_DEVEL
 EXT2FSLIB = -lext2fs

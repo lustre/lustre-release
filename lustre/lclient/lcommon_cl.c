@@ -560,11 +560,15 @@ int ccc_transient_page_prep(const struct lu_env *env,
  *
  */
 
+void ccc_lock_delete(const struct lu_env *env,
+                     const struct cl_lock_slice *slice)
+{
+        CLOBINVRNT(env, slice->cls_obj, ccc_object_invariant(slice->cls_obj));
+}
+
 void ccc_lock_fini(const struct lu_env *env, struct cl_lock_slice *slice)
 {
         struct ccc_lock *clk = cl2ccc_lock(slice);
-
-        CLOBINVRNT(env, slice->cls_obj, ccc_object_invariant(slice->cls_obj));
         OBD_SLAB_FREE_PTR(clk, ccc_lock_kmem);
 }
 
@@ -781,10 +785,12 @@ static void ccc_object_size_unlock(struct cl_object *obj, int vfslock)
  * the resulting races.
  */
 int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
-                  struct cl_io *io, loff_t pos, int vfslock)
+                  struct cl_io *io, loff_t start, size_t count, int vfslock,
+                  int *exceed)
 {
         struct cl_attr *attr  = &ccc_env_info(env)->cti_attr;
         struct inode   *inode = ccc_object_inode(obj);
+        loff_t          pos   = start + count - 1;
         loff_t kms;
         int result;
 
@@ -818,7 +824,21 @@ int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
                          * of the buffer (C)
                          */
                         ccc_object_size_unlock(obj, vfslock);
-                        return cl_glimpse_lock(env, io, inode, obj);
+                        result = cl_glimpse_lock(env, io, inode, obj);
+                        if (result == 0 && exceed != NULL) {
+                                /* If objective page index exceed end-of-file
+                                 * page index, return directly. Do not expect
+                                 * kernel will check such case correctly.
+                                 * linux-2.6.18-128.1.1 miss to do that.
+                                 * --bug 17336 */
+                                size_t size = cl_isize_read(inode);
+                                unsigned long cur_index = start >> CFS_PAGE_SHIFT;
+
+                                if ((size == 0 && cur_index != 0) ||
+                                    (((size - 1) >> CFS_PAGE_SHIFT) < cur_index))
+                                *exceed = 1;
+                        }
+                        return result;
                 } else {
                         /*
                          * region is within kms and, hence, within real file
@@ -1155,7 +1175,6 @@ void cl_inode_fini(struct inode *inode)
         int emergency;
 
         if (clob != NULL) {
-                struct lu_object_header *head = clob->co_lu.lo_header;
                 void                    *cookie;
 
                 cookie = cl_env_reenter();
@@ -1174,8 +1193,6 @@ void cl_inode_fini(struct inode *inode)
                  */
                 cl_object_kill(env, clob);
                 lu_object_ref_del(&clob->co_lu, "inode", inode);
-                /* XXX temporary: this is racy */
-                LASSERT(atomic_read(&head->loh_ref) == 1);
                 cl_object_put(env, clob);
                 lli->lli_clob = NULL;
                 if (emergency) {

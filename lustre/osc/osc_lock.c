@@ -210,8 +210,7 @@ static void osc_lock_fini(const struct lu_env *env,
          */
         if (ols->ols_hold)
                 osc_lock_unuse(env, slice);
-        if (ols->ols_lock != NULL)
-                osc_lock_detach(env, ols);
+        LASSERT(ols->ols_lock == NULL);
 
         OBD_SLAB_FREE_PTR(ols, osc_lock_kmem);
 }
@@ -786,6 +785,7 @@ static int osc_ldlm_completion_ast(struct ldlm_lock *dlmlock,
                                 ;
                         else if (dlmlock->l_granted_mode != LCK_MINMODE)
                                 osc_lock_granted(env, olck, dlmlock, dlmrc);
+                        unlock_res_and_lock(dlmlock);
                         if (dlmrc != 0)
                                 cl_lock_error(env, lock, dlmrc);
                         unlock_res_and_lock(dlmlock);
@@ -944,6 +944,20 @@ static void osc_lock_build_einfo(const struct lu_env *env,
         einfo->ei_cbdata = lock; /* value to be put into ->l_ast_data */
 }
 
+static int osc_lock_delete0(struct cl_lock *conflict)
+{
+        struct cl_env_nest    nest;
+        struct lu_env        *env;
+        int    rc = 0;        
+
+        env = cl_env_nested_get(&nest);
+        if (!IS_ERR(env)) {
+                cl_lock_delete(env, conflict);
+                cl_env_nested_put(&nest, env);
+        } else
+                rc = PTR_ERR(env);
+        return rc; 
+}
 /**
  * Cancels \a conflict lock and waits until it reached CLS_FREEING state. This
  * is called as a part of enqueuing to cancel conflicting locks early.
@@ -972,7 +986,9 @@ static int osc_lock_cancel_wait(const struct lu_env *env, struct cl_lock *lock,
         rc = 0;
         if (conflict->cll_state != CLS_FREEING) {
                 cl_lock_cancel(env, conflict);
-                cl_lock_delete(env, conflict);
+                rc = osc_lock_delete0(conflict);
+                if (rc)
+                        return rc; 
                 if (conflict->cll_flags & (CLF_CANCELPEND|CLF_DOOMED)) {
                         rc = -EWOULDBLOCK;
                         if (cl_lock_nr_mutexed(env) > 2)
@@ -1394,19 +1410,31 @@ static void osc_lock_cancel(const struct lu_env *env,
         struct cl_lock   *lock    = slice->cls_lock;
         struct osc_lock  *olck    = cl2osc_lock(slice);
         struct ldlm_lock *dlmlock = olck->ols_lock;
-        int               result;
+        int               result  = 0;
         int               discard;
 
         LASSERT(cl_lock_is_mutexed(lock));
         LINVRNT(osc_lock_invariant(olck));
 
         if (dlmlock != NULL) {
+                int do_cancel;
+
                 discard = dlmlock->l_flags & LDLM_FL_DISCARD_DATA;
                 result = osc_lock_flush(olck, discard);
                 if (olck->ols_hold)
                         osc_lock_unuse(env, slice);
-                LASSERT(dlmlock->l_readers == 0 && dlmlock->l_writers == 0);
-                result = ldlm_cli_cancel(&olck->ols_handle);
+
+                lock_res_and_lock(dlmlock);
+                /* Now that we're the only user of dlm read/write reference,
+                 * mostly the ->l_readers + ->l_writers should be zero.
+                 * However, there is a corner case.
+                 * See bug 18829 for details.*/
+                do_cancel = (dlmlock->l_readers == 0 &&
+                             dlmlock->l_writers == 0);
+                dlmlock->l_flags |= LDLM_FL_CBPENDING;
+                unlock_res_and_lock(dlmlock);
+                if (do_cancel)
+                        result = ldlm_cli_cancel(&olck->ols_handle);
                 if (result < 0)
                         CL_LOCK_DEBUG(D_ERROR, env, lock,
                                       "lock %p cancel failure with error(%d)\n",

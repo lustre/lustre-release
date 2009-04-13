@@ -55,6 +55,66 @@ Details    : recover_import_no_retry or invalidate_import and import_close can
              to sleep queue.
 
 Severity   : normal
+Frequency  : rare, on llog test 6
+Bugzilla   : 16839
+Descriptoin: don't allow connect to already connected import
+Details    : allowing connect to already connected import is hide connecting problem.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 18902
+Descriptoin: allow kill process which wait statahead result
+Details    : for some reasons 'ls' can stick in waiting result from statahead,
+             in this case need way for kill this process.
+
+Severity   : enhancement
+Bugzilla   : 18798
+Description: Add state history info file, enhance import info file
+Details    : Track import connection state changes in a new osc/mdc proc file;
+             add overview-type data to the osc/mdc import proc file.
+	
+Severity   : enhancement
+Bugzilla   : 17536
+Description: MDS create should not wait for statfs RPC while holding DLM lock.
+
+Severity   : enhancement
+Bugzilla   : 18289
+Description: Update to RHEL5U3 kernel-2.6.18-128.1.1.el5.
+
+Severity   : normal
+Frequency  : normal
+Bugzilla   : 12069
+Descriptoin: OST grant too much space to client even there are not enough space.
+Details    : Client will shrink its grant cache to OST if there are no write
+	     activity over 6 mins (GRANT_SHRINK_INTERVAL), and OST will retrieve
+	     this grant cache if there are already not enough avaible space
+	     (left_space < total_clients * 32M).
+
+Severity   : normal
+Frequency  : start MDS on uncleanly shutdowned MDS device
+Bugzilla   : 16839
+Descriptoin: ll_sync thread stay in waiting mds<>ost recovery finished
+Details    : stay in waiting mds<>ost recovery finished produce random bugs
+             due race between two ll_sync thread for one lov target. send
+             ACTIVATE event only if connect realy finished and import have
+             FULL state.
+
+Severity   : normal
+Frequency  : rare, connect and disconnect target at same time
+Bugzilla   : 17310
+Descriptoin: ASSERTION(atomic_read(&imp->imp_inflight) == 0
+Details    : don't call obd_disconnect under lov_lock. this long time
+	      operation and can block ptlrpcd which answer to connect request.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 18154
+Descriptoin: don't lose wakeup for imp_recovery_waitq
+Details    : recover_import_no_retry or invalidate_import and import_close can
+             both sleep on imp_recovery_waitq, but we was send only one wakeup
+             to sleep queue.
+
+Severity   : normal
 Frequency  : always with long access acl
 Bugzilla   : 17636
 Descriptoin: mds can't pack reply with long acl.

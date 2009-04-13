@@ -336,7 +336,7 @@ static struct llog_canceld_ctxt *llcd_detach(struct llog_ctxt *ctxt)
 static struct llog_canceld_ctxt *llcd_get(struct llog_ctxt *ctxt)
 {
         struct llog_canceld_ctxt *llcd;
-
+        LASSERT(ctxt);
         llcd = llcd_alloc(ctxt->loc_lcm);
         if (!llcd) {
                 CERROR("Can't alloc an llcd for ctxt %p\n", ctxt);
@@ -597,7 +597,7 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
         }
         lcm = ctxt->loc_lcm;
         CDEBUG(D_INFO, "cancel on lsm %p\n", lcm);
-		
+
         /*
          * Let's check if we have all structures alive. We also check for
          * possible shutdown. Do nothing if we're stopping.

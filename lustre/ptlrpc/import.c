@@ -59,6 +59,17 @@ struct ptlrpc_connect_async_args {
         int pcaa_initial_connect;
 };
 
+static void __import_set_state(struct obd_import *imp,
+                               enum lustre_imp_state state)
+{
+        imp->imp_state = state;
+        imp->imp_state_hist[imp->imp_state_hist_idx].ish_state = state;
+        imp->imp_state_hist[imp->imp_state_hist_idx].ish_time =
+                cfs_time_current_sec();
+        imp->imp_state_hist_idx = (imp->imp_state_hist_idx + 1) %
+                IMP_STATE_HIST_LEN;
+}
+
 /* A CLOSED import should remain so. */
 #define IMPORT_SET_STATE_NOLOCK(imp, state)                                    \
 do {                                                                           \
@@ -67,7 +78,7 @@ do {                                                                           \
                       imp, obd2cli_tgt(imp->imp_obd),                          \
                       ptlrpc_import_state_name(imp->imp_state),                \
                       ptlrpc_import_state_name(state));                        \
-               imp->imp_state = state;                                         \
+               __import_set_state(imp, state);                                 \
         }                                                                      \
 } while(0)
 
@@ -1149,12 +1160,23 @@ static int completed_replay_interpret(const struct lu_env *env,
 {
         ENTRY;
         atomic_dec(&req->rq_import->imp_replay_inflight);
-        if (req->rq_status == 0) {
+        if (req->rq_status == 0 &&
+            !req->rq_import->imp_vbr_failed) {
                 ptlrpc_import_recovery_state_machine(req->rq_import);
         } else {
-                CDEBUG(D_HA, "%s: LAST_REPLAY message error: %d, "
-                       "reconnecting\n",
-                       req->rq_import->imp_obd->obd_name, req->rq_status);
+                if (req->rq_import->imp_vbr_failed) {
+                        CDEBUG(D_WARNING,
+                               "%s: version recovery fails, reconnecting\n",
+                               req->rq_import->imp_obd->obd_name);
+                        spin_lock(&req->rq_import->imp_lock);
+                        req->rq_import->imp_vbr_failed = 0;
+                        spin_unlock(&req->rq_import->imp_lock);
+                } else {
+                        CDEBUG(D_HA, "%s: LAST_REPLAY message error: %d, "
+                                     "reconnecting\n",
+                               req->rq_import->imp_obd->obd_name,
+                               req->rq_status);
+                }
                 ptlrpc_connect_import(req->rq_import, NULL);
         }
 
@@ -1408,7 +1430,6 @@ out:
         else
                 IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_CLOSED);
         memset(&imp->imp_remote_handle, 0, sizeof(imp->imp_remote_handle));
-        imp->imp_conn_cnt = 0;
         /* Try all connections in the future - bz 12758 */
         imp->imp_last_recon = 0;
         spin_unlock(&imp->imp_lock);
@@ -1416,6 +1437,18 @@ out:
         RETURN(rc);
 }
 
+void ptlrpc_cleanup_imp(struct obd_import *imp)
+{
+        ENTRY;
+
+        spin_lock(&imp->imp_lock);
+        IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_CLOSED);
+        imp->imp_generation++;
+        spin_unlock(&imp->imp_lock);
+        ptlrpc_abort_inflight(imp);
+
+        EXIT;
+}
 
 /* Adaptive Timeout utils */
 extern unsigned int at_min, at_max, at_history;

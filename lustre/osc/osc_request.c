@@ -1031,9 +1031,8 @@ static int osc_add_shrink_grant(struct client_obd *client)
 
 static int osc_del_shrink_grant(struct client_obd *client)
 {
-        CDEBUG(D_CACHE, "del grant client %s \n", 
-               client->cl_import->imp_obd->obd_name);
-        return ptlrpc_del_timeout_client(&client->cl_grant_shrink_list);
+        return ptlrpc_del_timeout_client(&client->cl_grant_shrink_list, 
+                                         TIMEOUT_GRANT);
 }
 
 static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
@@ -3066,6 +3065,9 @@ static int osc_enqueue_interpret(const struct lu_env *env,
         /* Complete osc stuff. */
         rc = osc_enqueue_fini(req, aa->oa_lvb,
                               aa->oa_upcall, aa->oa_cookie, aa->oa_flags, rc);
+
+        OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_CP_CANCEL_RACE, 10);
+
         /* Release the lock for async request. */
         if (lustre_handle_is_used(&handle) && rc == ELDLM_OK)
                 /*
@@ -4004,6 +4006,25 @@ static int osc_disconnect(struct obd_export *exp)
 
         osc_del_shrink_grant(&obd->u.cli);
         rc = client_disconnect_export(exp);
+        /**
+         * Initially we put del_shrink_grant before disconnect_export, but it
+         * causes the following problem if setup (connect) and cleanup
+         * (disconnect) are tangled together.
+         *      connect p1                     disconnect p2
+         *   ptlrpc_connect_import 
+         *     ...............               class_manual_cleanup
+         *                                     osc_disconnect
+         *                                     del_shrink_grant
+         *   ptlrpc_connect_interrupt
+         *     init_grant_shrink
+         *   add this client to shrink list                 
+         *                                      cleanup_osc
+         * Bang! pinger trigger the shrink.
+         * So the osc should be disconnected from the shrink list, after we
+         * are sure the import has been destroyed. BUG18662 
+         */
+        if (obd->u.cli.cl_import == NULL)
+                osc_del_shrink_grant(&obd->u.cli);
         return rc;
 }
 

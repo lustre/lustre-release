@@ -62,7 +62,7 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
         static const char       user_string[] = "user.";
         int                     size, rc;
         ENTRY;
-        
+
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK))
                 RETURN(-ENOMEM);
 
@@ -75,7 +75,7 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
                 if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_XATTR) &&
                     !strncmp(xattr_name, user_string, sizeof(user_string) - 1))
                         RETURN(-EOPNOTSUPP);
-                
+
                 size = mo_xattr_get(info->mti_env,
                                     mdt_object_child(info->mti_object),
                                     &LU_BUF_NULL, xattr_name);
@@ -351,6 +351,11 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
         obj = mdt_object_find_lock(info, rr->rr_fid1, lh, lockpart);
         if (IS_ERR(obj))
                 GOTO(out, rc =  PTR_ERR(obj));
+
+        info->mti_mos[0] = obj;
+        rc = mdt_version_get_check(info, 0);
+        if (rc)
+                GOTO(out_unlock, rc);
 
         if (unlikely(!(valid & OBD_MD_FLCTIME))) {
                 CWARN("client miss to set OBD_MD_FLCTIME when "

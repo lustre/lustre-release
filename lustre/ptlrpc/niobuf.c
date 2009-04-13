@@ -286,7 +286,7 @@ int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async)
         LASSERT(!in_interrupt());     /* might sleep */
 
         /* Let's setup deadline for reply unlink. */
-        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_BULK_UNLINK) && 
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_BULK_UNLINK) &&
             async && req->rq_bulk_deadline == 0)
                 req->rq_bulk_deadline = cfs_time_current_sec() + LONG_UNLINK;
 
@@ -345,7 +345,8 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
             (req->rq_type != PTL_RPC_MSG_ERR) &&
             (req->rq_reqmsg != NULL) &&
             !(lustre_msg_get_flags(req->rq_reqmsg) &
-              (MSG_RESENT | MSG_REPLAY | MSG_LAST_REPLAY))) {
+              (MSG_RESENT | MSG_REPLAY |
+               MSG_REQ_REPLAY_DONE | MSG_LOCK_REPLAY_DONE))) {
                 /* early replies, errors and recovery requests don't count
                  * toward our service time estimate */
                 int oldse = at_add(&svc->srv_at_estimate, service_time);
@@ -642,10 +643,8 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                           connection,
                           request->rq_request_portal,
                           request->rq_xid, 0);
-        if (rc == 0) {
-                ptlrpc_lprocfs_rpc_sent(request);
+        if (rc == 0)
                 RETURN(rc);
-        }
 
         ptlrpc_req_finished(request);
         if (noreply)

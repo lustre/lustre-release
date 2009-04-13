@@ -124,6 +124,12 @@ void ptlrpc_ping_import_soon(struct obd_import *imp)
         imp->imp_next_ping = cfs_time_current();
 }
 
+static inline int imp_is_deactive(struct obd_import *imp)
+{
+        return (imp->imp_deactive ||
+                OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_IMP_DEACTIVE));
+}
+
 static inline int ptlrpc_next_reconnect(struct obd_import *imp)
 {
         if (imp->imp_server_timeout)
@@ -237,13 +243,13 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
                              this_ping) && force == 0)
                 return;
 
-        if (level == LUSTRE_IMP_DISCON && !imp->imp_deactive) {
+        if (level == LUSTRE_IMP_DISCON && !imp_is_deactive(imp)) {
                 /* wait at least a timeout before trying recovery again */
                 imp->imp_next_ping = ptlrpc_next_reconnect(imp);
                 ptlrpc_initiate_recovery(imp);
         } else if (level != LUSTRE_IMP_FULL ||
                    imp->imp_obd->obd_no_recov ||
-                   imp->imp_deactive) {
+                   imp_is_deactive(imp)) {
                 CDEBUG(D_HA, "not pinging %s (in recovery "
                        " or recovery disabled: %s)\n",
                        obd2cli_tgt(imp->imp_obd),
@@ -471,32 +477,28 @@ static struct timeout_item*
 ptlrpc_pinger_register_timeout(int time, enum timeout_event event,
                                timeout_cb_t cb, void *data)
 {
-        struct timeout_item *item;
-        struct timeout_item *ti = NULL;
+        struct timeout_item *item, *tmp;
 
         LASSERT_SEM_LOCKED(&pinger_sem);
-        list_for_each_entry_reverse(item, &timeout_list, ti_chain) {
-                if (item->ti_event == event) {
-                        ti = item;
-                        break;
-                }
-                if (item->ti_timeout < ti->ti_timeout) {
-                        ti = ptlrpc_new_timeout(time, event, cb, data);
-                        if (!ti) {
-                                ti = ERR_PTR(-ENOMEM);
-                                break;
+
+        list_for_each_entry(item, &timeout_list, ti_chain)
+                if (item->ti_event == event)
+                        goto out;
+
+        item = ptlrpc_new_timeout(time, event, cb, data);
+        if (item) {
+                list_for_each_entry_reverse(tmp, &timeout_list, ti_chain) {
+                        if (tmp->ti_timeout < time) {
+                                list_add(&item->ti_chain, &tmp->ti_chain);
+                                goto out;
                         }
-                        list_add(&ti->ti_chain, &item->ti_chain);
                 }
+                list_add(&item->ti_chain, &timeout_list);
         }
-        if (!ti) {
-                ti = ptlrpc_new_timeout(time, event, cb, data);
-                if (ti)
-                        list_add(&ti->ti_chain, &timeout_list);
-        }
-        
-        return ti;
+out:
+        return item;
 }
+
 /* Add a client_obd to the timeout event list, when timeout(@time) 
  * happens, the callback(@cb) will be called.
  */
@@ -517,10 +519,30 @@ int ptlrpc_add_timeout_client(int time, enum timeout_event event,
         return 0;
 }           
 
-int ptlrpc_del_timeout_client(struct list_head *obd_list)
+int ptlrpc_del_timeout_client(struct list_head *obd_list, 
+                              enum timeout_event event)
 {
+        struct timeout_item *ti = NULL, *item;
+
+        if (list_empty(obd_list))
+                return 0;  
         mutex_down(&pinger_sem);
         list_del_init(obd_list);
+        /**
+         * If there are no obd attached to the timeout event
+         * list, remove this timeout event from the pinger
+         */
+        list_for_each_entry(item, &timeout_list, ti_chain) {
+                if (item->ti_event == event) {
+                        ti = item;
+                        break;
+                }
+        }
+        LASSERTF(ti != NULL, "ti is NULL ! \n");
+        if (list_empty(&ti->ti_obd_list)) {
+                list_del(&ti->ti_chain);
+                OBD_FREE_PTR(ti);
+        }
         mutex_up(&pinger_sem);
         return 0;
 }  
@@ -891,7 +913,8 @@ int ptlrpc_add_timeout_client(int time, enum timeout_event event,
         return 0;
 }           
 
-int ptlrpc_del_timeout_client(struct list_head *obd_list)
+int ptlrpc_del_timeout_client(struct list_head *obd_list,
+                              enum timeout_event event)
 {
         return 0;
 }  
@@ -939,11 +962,13 @@ void ptlrpc_pinger_wake_up()
                 CDEBUG(D_RPCTRACE, "checking import %s->%s\n",
                        imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
 #ifdef ENABLE_LIBLUSTRE_RECOVERY
-                if (imp->imp_state == LUSTRE_IMP_DISCON && !imp->imp_deactive)
+                if (imp->imp_state == LUSTRE_IMP_DISCON &&
+                    !imp_is_deactive(imp))
 #else
                 /*XXX only recover for the initial connection */
                 if (!lustre_handle_is_used(&imp->imp_remote_handle) &&
-                    imp->imp_state == LUSTRE_IMP_DISCON && !imp->imp_deactive)
+                    imp->imp_state == LUSTRE_IMP_DISCON &&
+                    !imp_is_deactive(imp))
 #endif
                         ptlrpc_initiate_recovery(imp);
                 else if (imp->imp_state != LUSTRE_IMP_FULL)
@@ -951,7 +976,7 @@ void ptlrpc_pinger_wake_up()
                                      "state %d, deactive %d\n",
                                      imp->imp_obd->obd_uuid.uuid,
                                      obd2cli_tgt(imp->imp_obd), imp->imp_state,
-                                     imp->imp_deactive);
+                                     imp_is_deactive(imp));
         }
         EXIT;
 #endif

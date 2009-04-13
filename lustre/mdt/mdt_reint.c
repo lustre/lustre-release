@@ -96,6 +96,51 @@ static int mdt_create_pack_capa(struct mdt_thread_info *info, int rc,
         RETURN(rc);
 }
 
+int mdt_version_get_check(struct mdt_thread_info *info, int index)
+{
+        /** version recovery */
+        struct md_object *mo;
+        struct ptlrpc_request *req = mdt_info_req(info);
+        __u64 curr_version, *pre_versions;
+        ENTRY;
+
+        if (!exp_connect_vbr(req->rq_export))
+                RETURN(0);
+
+        LASSERT(info->mti_mos[index]);
+        LASSERT(mdt_object_exists(info->mti_mos[index]));
+        mo = mdt_object_child(info->mti_mos[index]);
+
+        curr_version = mo_version_get(info->mti_env, mo);
+        CDEBUG(D_INODE, "Version is "LPX64"\n", curr_version);
+        /** VBR: version is checked always because costs nothing */
+        if (lustre_msg_get_transno(req->rq_reqmsg) != 0) {
+                pre_versions = lustre_msg_get_versions(req->rq_reqmsg);
+                LASSERT(index < PTLRPC_NUM_VERSIONS);
+                /** Sanity check for malformed buffers */
+                if (pre_versions == NULL) {
+                        CERROR("No versions in request buffer\n");
+                        spin_lock(&req->rq_export->exp_lock);
+                        req->rq_export->exp_vbr_failed = 1;
+                        spin_unlock(&req->rq_export->exp_lock);
+                        RETURN(-EOVERFLOW);
+                } else if (pre_versions[index] != curr_version) {
+                        CDEBUG(D_INODE, "Version mismatch "LPX64" != "LPX64"\n",
+                               pre_versions[index], curr_version);
+                        spin_lock(&req->rq_export->exp_lock);
+                        req->rq_export->exp_vbr_failed = 1;
+                        spin_unlock(&req->rq_export->exp_lock);
+                        RETURN(-EOVERFLOW);
+                }
+        }
+        /** save pre-versions in reply */
+        LASSERT(req->rq_repmsg != NULL);
+        pre_versions = lustre_msg_get_versions(req->rq_repmsg);
+        if (pre_versions)
+                pre_versions[index] = curr_version;
+        RETURN(0);
+}
+
 static int mdt_md_create(struct mdt_thread_info *info)
 {
         struct mdt_device       *mdt = info->mti_mdt;
@@ -136,6 +181,12 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                                OBD_FAIL_MDS_REINT_CREATE_WRITE);
 
+                info->mti_mos[0] = parent;
+                info->mti_mos[1] = child;
+                rc = mdt_version_get_check(info, 0);
+                if (rc)
+                        GOTO(out_put_child, rc);
+
                 /* Let lower layer know current lock mode. */
                 info->mti_spec.sp_cr_mode =
                         mdt_dlm_mode2mdl_mode(lh->mlh_pdo_mode);
@@ -158,6 +209,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
                                 mdt_pack_attr2body(info, repbody, &ma->ma_attr,
                                                    mdt_object_fid(child));
                 }
+out_put_child:
                 mdt_object_put(info->mti_env, child);
         } else
                 rc = PTR_ERR(child);
@@ -227,6 +279,7 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo, int flags)
         struct md_attr          *ma = &info->mti_attr;
         struct mdt_lock_handle  *lh;
         int som_update = 0;
+        int do_vbr = ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID);
         int rc;
         ENTRY;
 
@@ -270,6 +323,14 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo, int flags)
         /* This is only for set ctime when rename's source is on remote MDS. */
         if (unlikely(ma->ma_attr.la_valid == LA_CTIME))
                 ma->ma_attr_flags |= MDS_VTX_BYPASS;
+
+        /* VBR: update version if attr changed are important for recovery */
+        if (do_vbr) {
+                info->mti_mos[0] = mo;
+                rc = mdt_version_get_check(info, 0);
+                if (rc)
+                        GOTO(out_unlock, rc);
+        }
 
         /* all attrs are packed into mti_attr in unpack_setattr */
         rc = mo_attr_set(info->mti_env, mdt_object_child(mo), ma);
@@ -315,6 +376,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
         if (IS_ERR(mo))
                 GOTO(out, rc = PTR_ERR(mo));
 
+        /* start a log jounal handle if needed */
         if (!(mdt_conn_flags(info) & OBD_CONNECT_SOM)) {
                 if ((ma->ma_attr.la_valid & LA_SIZE) ||
                     (rr->rr_flags & MRF_SETATTR_LOCKED)) {
@@ -497,6 +559,11 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                 GOTO(out, rc);
         }
 
+        info->mti_mos[0] = mp;
+        rc = mdt_version_get_check(info, 0);
+        if (rc)
+                GOTO(out_unlock_parent, rc);
+
         mdt_reint_init_ma(info, ma);
         if (!ma->ma_lmm || !ma->ma_cookie)
                 GOTO(out_unlock_parent, rc = -EINVAL);
@@ -542,6 +609,11 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_UNLINK_WRITE);
 
+        info->mti_mos[1] = mc;
+        rc = mdt_version_get_check(info, 1);
+        if (rc)
+                GOTO(out_unlock_child, rc);
+
         /*
          * Now we can only make sure we need MA_INODE, in mdd layer, will check
          * whether need MA_LOV and MA_COOKIE.
@@ -555,6 +627,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                 mdt_handle_last_unlink(info, mc, ma);
 
         EXIT;
+out_unlock_child:
         mdt_object_unlock_put(info, mc, child_lh, rc);
 out_unlock_parent:
         mdt_object_unlock_put(info, mp, parent_lh, rc);
@@ -614,6 +687,11 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         if (IS_ERR(mp))
                 RETURN(PTR_ERR(mp));
 
+        info->mti_mos[0] = mp;
+        rc = mdt_version_get_check(info, 0);
+        if (rc)
+                GOTO(out_unlock_parent, rc);
+
         /* step 2: find & lock the source */
         lhs = &info->mti_lh[MDT_LH_CHILD];
         mdt_lock_reg_init(lhs, LCK_EX);
@@ -633,11 +711,17 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_LINK_WRITE);
 
+        info->mti_mos[1] = ms;
+        rc = mdt_version_get_check(info, 1);
+        if (rc)
+                GOTO(out_unlock_child, rc);
+
         lname = mdt_name(info->mti_env, (char *)rr->rr_name, rr->rr_namelen);
         rc = mdo_link(info->mti_env, mdt_object_child(mp),
                       mdt_object_child(ms), lname, ma);
 
         EXIT;
+out_unlock_child:
         mdt_object_unlock_put(info, ms, lhs, rc);
 out_unlock_parent:
         mdt_object_unlock_put(info, mp, lhp, rc);
@@ -871,6 +955,11 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         if (IS_ERR(msrcdir))
                 GOTO(out_rename_lock, rc = PTR_ERR(msrcdir));
 
+        info->mti_mos[0] = msrcdir;
+        rc = mdt_version_get_check(info, 0);
+        if (rc)
+                GOTO(out_unlock_source, rc);
+
         /* step 2: find & lock the target dir. */
         lh_tgtdirp = &info->mti_lh[MDT_LH_CHILD];
         mdt_lock_pdo_init(lh_tgtdirp, LCK_PW, rr->rr_tgt,
@@ -892,7 +981,14 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                         rc = mdt_object_lock(info, mtgtdir, lh_tgtdirp,
                                              MDS_INODELOCK_UPDATE,
                                              MDT_LOCAL_LOCK);
-                        if (rc != 0)
+                        if (rc != 0) {
+                                mdt_object_put(info->mti_env, mtgtdir);
+                                GOTO(out_unlock_source, rc);
+                        }
+
+                        info->mti_mos[1] = mtgtdir;
+                        rc = mdt_version_get_check(info, 1);
+                        if (rc)
                                 GOTO(out_unlock_target, rc);
                 }
         }
@@ -920,6 +1016,12 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                 mdt_object_put(info->mti_env, mold);
                 GOTO(out_unlock_target, rc);
         }
+
+        info->mti_mos[2] = mold;
+        rc = mdt_version_get_check(info, 2);
+        if (rc)
+                GOTO(out_unlock_old, rc);
+
         mdt_set_capainfo(info, 2, old_fid, BYPASS_CAPA);
 
         /* step 4: find & lock the new object. */
@@ -947,6 +1049,12 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                         mdt_object_put(info->mti_env, mnew);
                         GOTO(out_unlock_old, rc);
                 }
+
+                info->mti_mos[3] = mnew;
+                rc = mdt_version_get_check(info, 3);
+                if (rc)
+                        GOTO(out_unlock_new, rc);
+
                 mdt_set_capainfo(info, 3, new_fid, BYPASS_CAPA);
         } else if (rc != -EREMOTE && rc != -ENOENT)
                 GOTO(out_unlock_old, rc);

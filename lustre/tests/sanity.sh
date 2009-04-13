@@ -473,6 +473,15 @@ test_17g() {
 }
 run_test 17g "symlinks: really long symlink name ==============================="
 
+test_17h() { #bug 17378
+        mkdir -p $DIR/$tdir
+        $SETSTRIPE $DIR/$tdir -c -1
+#define OBD_FAIL_MDS_LOV_PREP_CREATE 0x141
+        do_facet mds lctl set_param fail_loc=0x80000141
+        touch $DIR/$tdir/$tfile || true
+}
+run_test 17h "create objects: lov_free_memmd() doesn't lbug"
+
 test_18() {
 	touch $DIR/f
 	ls $DIR || error
@@ -633,7 +642,7 @@ test_24i() {
 	mrename $DIR/R9/f $DIR/R9/a
 	$CHECKSTAT -t file $DIR/R9/f || error
 	$CHECKSTAT -t dir  $DIR/R9/a || error
-	$CHECKSTAT -a file $DIR/R9/a/f || error
+	$CHECKSTAT -a $DIR/R9/a/f || error
 }
 run_test 24i "rename file to dir error: touch f ; mkdir a ; rename f a"
 
@@ -854,7 +863,7 @@ test_27e() {
 	$SETSTRIPE $DIR/d27/f12 -c 2 && error "lstripe succeeded twice"
 	$CHECKSTAT -t file $DIR/d27/f12 || error "checkstat failed"
 }
-run_test 27e "lstripe existing file (should return error) ======"
+run_test 27e "setstripe existing file (should return error) ======"
 
 test_27f() {
 	mkdir -p $DIR/d27
@@ -862,7 +871,7 @@ test_27f() {
 	dd if=/dev/zero of=$DIR/d27/f12 bs=4k count=4 || error "dd failed"
 	$GETSTRIPE $DIR/d27/fbad || error "lfs getstripe failed"
 }
-run_test 27f "lstripe with bad stripe size (should return error)"
+run_test 27f "setstripe with bad stripe size (should return error)"
 
 test_27g() {
 	mkdir -p $DIR/d27
@@ -881,7 +890,7 @@ test_27j() {
 	mkdir -p $DIR/d27
 	$SETSTRIPE $DIR/d27/f27j -i $OSTCOUNT && error "lstripe failed"||true
 }
-run_test 27j "lstripe with bad stripe offset (should return error)"
+run_test 27j "setstripe with bad stripe offset (should return error)"
 
 test_27k() { # bug 2844
 	mkdir -p $DIR/d27
@@ -1074,7 +1083,7 @@ test_27s() { # bug 10725
 	mkdir -p $DIR/$tdir
 	local stripe_size=$((4096 * 1024 * 1024))	# 2^32
 	local stripe_count=0
-	[ $OSTCOUNT -eq 1 ] || stripe_count=2 
+	[ $OSTCOUNT -eq 1 ] || stripe_count=2
 	$SETSTRIPE $DIR/$tdir -s $stripe_size -c $stripe_count && \
 		error "stripe width >= 2^32 succeeded" || true
 
@@ -1158,7 +1167,7 @@ test_27w() { # bug 10997
 }
 run_test 27w "check lfs setstripe -c -s -i options ============="
 
-# createtest also checks that device nodes are created and 
+# createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091
 	mkdir $DIR/d28
@@ -2094,7 +2103,7 @@ test_46() {
 }
 run_test 46 "dirtying a previously written page ================"
 
-# test_47 is removed "Device nodes check" is moved to test_28 
+# test_47 is removed "Device nodes check" is moved to test_28
 
 test_48a() { # bug 2399
 	check_kernel_version 34 || return 0
@@ -3484,7 +3493,6 @@ test_77b() { # bug 10889
 		error "dd error: $?"
 	lctl set_param fail_loc=0
 	set_checksums 0
-	rm -f $DIR/f77b
 }
 run_test 77b "checksum error on client write ===================="
 
@@ -3502,6 +3510,7 @@ test_77c() { # bug 10889
 	done
 	set_checksums 0
 	set_checksum_type $ORIG_CSUM_TYPE
+	rm -f $DIR/f77b
 }
 run_test 77c "checksum error on client read ==================="
 
@@ -4012,7 +4021,7 @@ test_102b() {
 	echo "get/set/list trusted.lov xattr ..."
 	[ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 	local testfile=$DIR/$tfile
-	$SETSTRIPE $testfile -s 65536 -i 1 -c 2
+	$SETSTRIPE -s 65536 -i 1 -c 2 $testfile || error "setstripe failed"
 	getfattr -d -m "^trusted" $testfile 2> /dev/null | \
 	grep "trusted.lov" || error "can't get trusted.lov from $testfile"
 
@@ -4039,7 +4048,7 @@ test_102c() {
 	mkdir -p $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
 	local testfile=$DIR/$tdir/$tfile
-	$RUNAS $SETSTRIPE $testfile -s 65536 -i 1 -c 2
+	$RUNAS $SETSTRIPE -s 65536 -i 1 -c 2 $testfile||error "setstripe failed"
 	$RUNAS getfattr -d -m "^lustre" $testfile 2> /dev/null | \
 	grep "lustre.lov" || error "can't get lustre.lov from $testfile"
 
@@ -4441,7 +4450,7 @@ test_116() {
 	declare -i FILL
 	FILL=$(($MINV / 4))
 	echo "Filling 25% remaining space in OST${MINI} with ${FILL}Kb"
-	$SETSTRIPE $DIR/$tdir/OST${MINI} -i $MINI -c 1
+	$SETSTRIPE -i $MINI -c 1 $DIR/$tdir/OST${MINI}||error "setstripe failed"
 	i=0
 	while [ $FILL -gt 0 ]; do
 	    i=$(($i + 1))
@@ -4900,7 +4909,7 @@ test_119b() # bug 11737
 {
         [ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 
-        $SETSTRIPE $DIR/$tfile -c 2
+        $SETSTRIPE -c 2 $DIR/$tfile || error "setstripe failed"
         dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1 || error "dd failed"
         sync
         multiop $DIR/$tfile oO_RDONLY:O_DIRECT:r$((2048 * 1024)) || \
@@ -5181,7 +5190,7 @@ test_123a() { # was test 123, statahead(bug 11401)
 
                 [ $delta -eq 0 ] && continue
 
-                if [ $((delta_sa * 100)) -gt $((delta * 105)) ]; then
+                if [ $((delta_sa * 100)) -gt $((delta * 105)) -a $delta_sa -gt $((delta + 2)) ]; then
                         if [  $SLOWOK -eq 0 ]; then
                                 error "ls $i files is slower with statahead!"
 
@@ -5190,25 +5199,25 @@ test_123a() { # was test 123, statahead(bug 11401)
                                 lctl get_param llite.*.statahead_max
                                 cancel_lru_locks mdc
                                 cancel_lru_locks osc
-                                $LCTL dk > /dev/null
+                                $LCTL clear
                                 stime=`date +%s`
                                 time ls -l $DIR/$tdir | wc -l
                                 etime=`date +%s`
-                                $LCTL dk > $TMP/sanity_test_123a_${i}_disable_${etime}.log
+                                $LCTL dk $TMP/lustre_${TESTSUITE}_${TESTNAME}_${i}_disable.$(etime)
                                 delta=$((etime - stime))
-                                log "ls $i files without statahead: $delta sec, dump to $TMP/sanity_test_123a_${i}_disable_${etime}.log"
+                                log "ls $i files without statahead: $delta sec, dump to $TMP/lustre_${TESTSUITE}_${TESTNAME}_${i}_disable.$(etime)"
                                 lctl set_param llite.*.statahead_max=$max
 
                                 lctl get_param -n llite.*.statahead_max | grep '[0-9]'
                                 cancel_lru_locks mdc
                                 cancel_lru_locks osc
-                                $LCTL dk > /dev/null
+                                $LCTL clear
                                 stime=`date +%s`
                                 time ls -l $DIR/$tdir | wc -l
                                 etime=`date +%s`
-                                $LCTL dk > $TMP/sanity_test_123a_${i}_enable_${etime}.log
+                                $LCTL dk $TMP/lustre_${TESTSUITE}_${TESTNAME}_${i}_enable.$(etime)
                                 delta_sa=$((etime - stime))
-                                log "ls $i files with statahead: $delta_sa sec, dump to $TMP/sanity_test_123a_${i}_enable_${etime}.log"
+                                log "ls $i files with statahead: $delta_sa sec, dump to $TMP/lustre_${TESTSUITE}_${TESTNAME}_${i}_enable.$(etime)"
 		                lctl get_param -n llite.*.statahead_stats
                         else
                                 log "ls $i files is slower with statahead!"
@@ -5218,7 +5227,7 @@ test_123a() { # was test 123, statahead(bug 11401)
 
                 [ $delta -gt 20 ] && break
                 [ $delta -gt 8 ] && MULT=$((50 / delta))
-                [ "$SLOW" = "no" -a $delta -gt 3 ] && break
+                [ "$SLOW" = "no" -a $delta -gt 5 ] && break
         done
         log "ls done"
 
@@ -5304,7 +5313,7 @@ test_124a() {
         log "LVF=$LVF"
         local OLD_LVF=`lctl get_param -n $NSDIR.pool.lock_volume_factor`
         lctl set_param -n $NSDIR.pool.lock_volume_factor $LVF
-        
+
         # Let's make sure that we really have some margin. Client checks
         # cached locks every 10 sec.
         SLEEP=$((SLEEP+20))
@@ -5437,7 +5446,7 @@ test_126() { # bug 12829/13455
 run_test 126 "check that the fsgid provided by the client is taken into account"
 
 test_127() { # bug 15521
-        $LSTRIPE -i 0 -c 1 $DIR/$tfile
+        $SETSTRIPE -i 0 -c 1 $DIR/$tfile || error "setstripe failed"
         $LCTL set_param osc.*.stats=0
         FSIZE=$((2048 * 1024))
         dd if=/dev/zero of=$DIR/$tfile bs=$FSIZE count=1
@@ -6020,9 +6029,9 @@ test_160() {
     $LFS changelog $MDT0 | tail -5
 
     echo "verifying changelog mask"
-    $LCTL set_param mdd.$MDT0.changelog_mask="-mkdir"
+    do_facet $SINGLEMDS lctl set_param mdd.$MDT0.changelog_mask="-mkdir"
     mkdir -p $DIR/$tdir/pics/2009/sofia
-    $LCTL set_param mdd.$MDT0.changelog_mask="+mkdir"
+    do_facet $SINGLEMDS lctl set_param mdd.$MDT0.changelog_mask="+mkdir"
     mkdir $DIR/$tdir/pics/2009/zachary
     DIRS=$($LFS changelog $MDT0 | tail -5 | grep -c MKDIR)
     [ $DIRS -eq 1 ] || err17935 "changelog mask count $DIRS != 1"
@@ -6039,11 +6048,11 @@ test_160() {
 	tail -1 | awk '{print $6}')
     fidf=$($LFS path2fid $DIR/$tdir/pics/zach)
     [ "$fidc" == "p=$fidf" ] || \
-	err17935 "pfid in changelog $fidc != dir fid $fidf" 
+	err17935 "pfid in changelog $fidc != dir fid $fidf"
 
     USER_REC1=$(do_facet $SINGLEMDS lctl get_param -n \
 	mdd.$MDT0.changelog_users | grep $USER | awk '{print $2}')
-    $LFS changelog_clear $MDT0 $USER $(($USER_REC1 + 5))  
+    $LFS changelog_clear $MDT0 $USER $(($USER_REC1 + 5))
     USER_REC2=$(do_facet $SINGLEMDS lctl get_param -n \
 	mdd.$MDT0.changelog_users | grep $USER | awk '{print $2}')
     echo "verifying user clear: $(( $USER_REC1 + 5 )) == $USER_REC2"
@@ -6118,7 +6127,7 @@ test_161() {
     echo -n "${links}/1000 links in link EA"
     [ ${links} -gt 60 ] || err17935 "expected at least 60 links in link EA"
     unlinkmany $DIR/$tdir/foo2/$longname 1000 || \
-	error "failed to unlink many hardlinks" 
+	error "failed to unlink many hardlinks"
 }
 run_test 161 "link ea sanity"
 
@@ -6160,16 +6169,34 @@ test_162() {
     check_path "/$tdir/d2/p/q/r/hlink" ${mds1_svc} $FID --link 0
     # check that there are 2 links
     ${LFS} fid2path ${mds1_svc} $FID | wc -l | grep -q 2 || \
-	err17935 "expected 2 links" 
+	err17935 "expected 2 links"
 
     rm $DIR/$tdir/d2/p/q/r/hlink
     check_path "/$tdir/d2/a/b/c/new_file" ${mds1_svc} $FID --link 0
-    # Doesnt work with CMD yet: 17935 
+    # Doesnt work with CMD yet: 17935
     return 0
 }
 run_test 162 "path lookup sanity"
 
+test_154() {
+	# do directio so as not to populate the page cache
+	log "creating a 10 Mb file"
+	multiop $DIR/$tfile oO_CREAT:O_DIRECT:O_RDWR:w$((10*1048576))c || error "multiop failed while creating a file"
+	log "starting reads"
+	dd if=$DIR/$tfile of=/dev/null bs=4096 &
+	log "truncating the file"
+	multiop $DIR/$tfile oO_TRUNC:c || error "multiop failed while truncating the file"
+	log "killing dd"
+	kill %+ || true # reads might have finished
+	echo "wait until dd is finished"
+	wait
+	log "removing the temporary file"
+	rm -rf $DIR/$tfile || error "tmp file removal failed"
+}
+run_test 154 "parallel read and truncate should not deadlock ==="
+
 test_170() {
+        $LCTL clear	# bug 18514
         $LCTL debug_daemon start $TMP/${tfile}_log_good
         touch $DIR/$tfile
         $LCTL debug_daemon stop
@@ -6180,40 +6207,40 @@ test_170() {
         rm -rf $DIR/$tfile
         $LCTL debug_daemon stop
 
-        $LCTL df $TMP/${tfile}_log_bad 2&> $TMP/${tfile}_log_bad.out ||
+        $LCTL df $TMP/${tfile}_log_bad > $TMP/${tfile}_log_bad.out 2>&1 ||
                error "lctl df log_bad failed"
 
         local bad_line=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $9}')
         local good_line1=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $5}')
 
-        $LCTL df $TMP/${tfile}_log_good 2&>$TMP/${tfile}_log_good.out 
+        $LCTL df $TMP/${tfile}_log_good > $TMP/${tfile}_log_good.out 2>&1
         local good_line2=$(tail -n 1 $TMP/${tfile}_log_good.out | awk '{print $5}')
 
-	[ "$bad_line" ] && [ "$good_line1" ] && [ "$good_line2" ] || 
+	[ "$bad_line" ] && [ "$good_line1" ] && [ "$good_line2" ] ||
 		error "bad_line good_line1 good_line2 are empty"
- 
-        cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt
-        cat $TMP/${tfile}_log_bad >> $TMP/${tfile}_logs_corrupt 
-        cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt           
 
-        $LCTL df $TMP/${tfile}_logs_corrupt 2&> $TMP/${tfile}_log_bad.out
+        cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt
+        cat $TMP/${tfile}_log_bad >> $TMP/${tfile}_logs_corrupt
+        cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt
+
+        $LCTL df $TMP/${tfile}_logs_corrupt > $TMP/${tfile}_log_bad.out 2>&1
         local bad_line_new=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $9}')
         local good_line_new=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $5}')
 
-	[ "$bad_line_new" ] && [ "$good_line_new" ] || 
+	[ "$bad_line_new" ] && [ "$good_line_new" ] ||
 		error "bad_line_new good_line_new are empty"
- 
+
         local expected_good=$((good_line1 + good_line2*2))
 
-        rm -rf $TMP/${tfile}*
+        rm -f $TMP/${tfile}*
         if [ $bad_line -ne $bad_line_new ]; then
                 error "expected $bad_line bad lines, but got $bad_line_new"
-                return 1 
+                return 1
         fi
 
         if [ $expected_good -ne $good_line_new ]; then
                 error "expected $expected_good good lines, but got $good_line_new"
-                return 2 
+                return 2
         fi
         true
 }
@@ -6353,6 +6380,17 @@ test_212() {
 	rm -f $DIR/f212 $DIR/f212.xyz
 }
 run_test 212 "Sendfile test ============================================"
+
+test_213() {
+	dd if=/dev/zero of=$DIR/$tfile bs=4k count=4
+	cancel_lru_locks osc
+	lctl set_param fail_loc=0x8000040f
+	# generate a read lock
+	cat $DIR/$tfile > /dev/null
+	# write to the file, it will try to cancel the above read lock.
+	cat /etc/hosts >> $DIR/$tfile
+}
+run_test 213 "OSC lock completion and cancel race don't crash - bug 18829"
 
 #
 # tests that do cleanup/setup should be run at the end

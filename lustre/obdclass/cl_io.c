@@ -228,7 +228,7 @@ int cl_io_rw_init(const struct lu_env *env, struct cl_io *io,
 
         LU_OBJECT_HEADER(D_VFSTRACE, env, &io->ci_obj->co_lu,
                          "io range: %i [%llu, %llu) %i %i\n",
-                         iot, (__u64)pos, (__u64)pos + count,
+                         iot, (__u64)pos, (__u64)(pos + count),
                          io->u.ci_rw.crw_nonblock, io->u.ci_wr.wr_append);
         io->u.ci_rw.crw_pos    = pos;
         io->u.ci_rw.crw_count  = count;
@@ -466,7 +466,7 @@ void cl_io_unlock(const struct lu_env *env, struct cl_io *io)
                         scan->cis_iop->op[io->ci_type].cio_unlock(env, scan);
         }
         io->ci_state = CIS_UNLOCKED;
-        LASSERT(cl_env_info(env)->clt_nr_locks_acquired == 0);
+        LASSERT(!cl_env_info(env)->clt_counters[CNL_TOP].ctc_nr_locks_acquired);
         EXIT;
 }
 EXPORT_SYMBOL(cl_io_unlock);

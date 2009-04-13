@@ -996,6 +996,10 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc != 0)
                 GOTO(out_lock, rc);
 
+        rc = sptlrpc_svc_prep_bulk(req, desc);
+        if (rc != 0)
+                GOTO(out_lock, rc);
+
         /* Check if client was evicted while we were doing i/o before touching
            network */
         if (desc->bd_export->exp_failed)

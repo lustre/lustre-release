@@ -99,7 +99,7 @@ static int import_set_conn(struct obd_import *imp, struct obd_uuid *uuid,
         if (create) {
                 imp_conn->oic_conn = ptlrpc_conn;
                 imp_conn->oic_uuid = *uuid;
-                item->oic_last_attempt = 0;
+                imp_conn->oic_last_attempt = 0;
                 if (priority)
                         list_add(&imp_conn->oic_item, &imp->imp_conn_list);
                 else
@@ -188,7 +188,7 @@ out:
         RETURN(rc);
 }
 
-static void destroy_import(struct obd_import *imp)
+void client_destroy_import(struct obd_import *imp)
 {
         /* drop security policy instance after all rpc finished/aborted
          * to let all busy contexts be released. */
@@ -400,15 +400,15 @@ int client_connect_import(const struct lu_env *env,
 
         *exp = NULL;
         down_write(&cli->cl_sem);
+        if (cli->cl_conn_count > 0 )
+                GOTO(out_sem, rc = -EALREADY);
+
         rc = class_connect(&conn, obd, cluuid);
         if (rc)
                 GOTO(out_sem, rc);
-
-        *exp = class_conn2export(&conn);
-
+                
         cli->cl_conn_count++;
-        if (cli->cl_conn_count > 1)
-                GOTO(out_sem, rc);
+        *exp = class_conn2export(&conn);
 
         if (obd->obd_namespace != NULL)
                 CERROR("already have namespace!\n");
@@ -539,7 +539,7 @@ int client_disconnect_export(struct obd_export *exp)
                 ptlrpc_free_rq_pool(imp->imp_rq_pool);
                 imp->imp_rq_pool = NULL;
         }
-        destroy_import(imp);
+        client_destroy_import(imp);
         cli->cl_import = NULL;
 
         EXIT;
@@ -962,7 +962,7 @@ dont_check_exports:
                 atomic_inc(&target->obd_lock_replay_clients);
                 if (target->obd_connected_clients ==
                     target->obd_max_recoverable_clients)
-                        wake_up(&target->obd_next_transno_waitq);
+                        cfs_waitq_signal(&target->obd_next_transno_waitq);
         }
         spin_unlock_bh(&target->obd_processing_task_lock);
         tmp = req_capsule_client_get(&req->rq_pill, &RMF_CONN);
@@ -986,7 +986,7 @@ dont_check_exports:
                  */
                 sptlrpc_import_inval_all_ctx(export->exp_imp_reverse);
 
-                destroy_import(export->exp_imp_reverse);
+                client_destroy_import(export->exp_imp_reverse);
         }
 
         /* for the rest part, we return -ENOTCONN in case of errors
@@ -1055,7 +1055,7 @@ void target_destroy_export(struct obd_export *exp)
         /* exports created from last_rcvd data, and "fake"
            exports created by lctl don't have an import */
         if (exp->exp_imp_reverse != NULL)
-                destroy_import(exp->exp_imp_reverse);
+                client_destroy_import(exp->exp_imp_reverse);
 
         /* We cancel locks at disconnect time, but this will catch any locks
          * granted in a race with recovery-induced disconnect. */
@@ -1189,7 +1189,7 @@ static void target_finish_recovery(struct obd_device *obd)
             list_empty(&obd->obd_final_req_queue)) {
                 obd->obd_processing_task = 0;
         } else {
-                CERROR("%s: Recovery queues ( %s%s%s) are empty\n",
+                CERROR("%s: Recovery queues ( %s%s%s) are not empty\n",
                        obd->obd_name,
                        list_empty(&obd->obd_req_replay_queue) ? "" : "req ",
                        list_empty(&obd->obd_lock_replay_queue) ? "" : "lock ",
@@ -1465,7 +1465,8 @@ static int check_for_next_transno(struct obd_device *obd)
                  * to replay requests that demand on already committed ones
                  * also, we can replay first non-committed transation */
                 LASSERT(req_transno != 0);
-                if (req_transno == obd->obd_last_committed + 1) {
+                if (obd->obd_version_recov ||
+                    req_transno == obd->obd_last_committed + 1) {
                         obd->obd_next_recovery_transno = req_transno;
                 } else if (req_transno > obd->obd_last_committed) {
                         /* can't continue recovery: have no needed transno */
@@ -1564,11 +1565,21 @@ static struct ptlrpc_request *target_next_final_ping(struct obd_device *obd)
                 req = list_entry(obd->obd_final_req_queue.next,
                                  struct ptlrpc_request, rq_list);
                 list_del_init(&req->rq_list);
+                if (req->rq_export->exp_in_recovery) {
+                        spin_lock(&req->rq_export->exp_lock);
+                        req->rq_export->exp_in_recovery = 0;
+                        spin_unlock(&req->rq_export->exp_lock);
+                }
         } else {
                 req = NULL;
         }
         spin_unlock_bh(&obd->obd_processing_task_lock);
         return req;
+}
+
+static inline int req_vbr_done(struct obd_export *exp)
+{
+        return (exp->exp_vbr_failed == 0);
 }
 
 static inline int req_replay_done(struct obd_export *exp)
@@ -1588,7 +1599,7 @@ static inline int connect_done(struct obd_export *exp)
 
 static int check_for_clients(struct obd_device *obd)
 {
-        if (obd->obd_abort_recovery)
+        if (obd->obd_abort_recovery || obd->obd_version_recov)
                 return 1;
         LASSERT(obd->obd_connected_clients <= obd->obd_max_recoverable_clients);
         if (obd->obd_no_conn == 0 &&
@@ -1631,15 +1642,10 @@ static int handle_recovery_req(struct ptlrpc_thread *thread,
         RETURN(0);
 }
 
-static void resume_recovery_timer(struct obd_device *obd)
-{
-        /* to be safe, make it at least OBD_RECOVERY_FACTOR * obd_timeout */
-        reset_recovery_timer(obd, OBD_RECOVERY_FACTOR * obd_timeout, 1);
-}
-
 static int target_recovery_thread(void *arg)
 {
-        struct obd_device *obd = arg;
+        struct lu_target *lut = arg;
+        struct obd_device *obd = lut->lut_obd;
         struct ptlrpc_request *req;
         struct target_recovery_data *trd = &obd->obd_recovery_data;
         struct l_wait_info lwi = { 0 };
@@ -1665,8 +1671,8 @@ static int target_recovery_thread(void *arg)
         env.le_ctx.lc_thread = thread;
 
         CERROR("%s: started recovery thread pid %d\n", obd->obd_name,
-               current->pid);
-        trd->trd_processing_task = current->pid;
+               cfs_curproc_pid());
+        trd->trd_processing_task = cfs_curproc_pid();
 
         obd->obd_recovering = 1;
         complete(&trd->trd_starting);
@@ -1676,29 +1682,31 @@ static int target_recovery_thread(void *arg)
         l_wait_event(obd->obd_next_transno_waitq,
                      check_for_clients(obd), &lwi);
 
-        spin_lock_bh(&obd->obd_processing_task_lock);
-        target_cancel_recovery_timer(obd);
-        spin_unlock_bh(&obd->obd_processing_task_lock);
-
         /* If some clients haven't connected in time, evict them */
-        if (obd->obd_abort_recovery) {
+        if (obd->obd_connected_clients < obd->obd_max_recoverable_clients) {
                 CWARN("Some clients haven't connect in time (%d/%d),"
                        "evict them\n", obd->obd_connected_clients,
                        obd->obd_max_recoverable_clients);
-                obd->obd_abort_recovery = obd->obd_stopping;
-                class_disconnect_stale_exports(obd, connect_done, 
-                                               exp_flags_from_obd(obd) | 
+                class_disconnect_stale_exports(obd, connect_done,
+                                               exp_flags_from_obd(obd) |
                                                OBD_OPT_ABORT_RECOV);
+                /**
+                 * if recovery proceeds with versions then some clients may be
+                 * timed out waiting for others and trying to reconnect.
+                 * Extend timer for such reconnect cases.
+                 */
+                if (obd->obd_version_recov)
+                        reset_recovery_timer(obd, RECONNECT_DELAY_MAX * 2, 1);
         }
+
         /* next stage: replay requests */
         delta = jiffies;
         obd->obd_req_replaying = 1;
         CDEBUG(D_INFO, "1: request replay stage - %d clients from t"LPU64"\n",
-              atomic_read(&obd->obd_req_replay_clients),
-              obd->obd_next_recovery_transno);
-        resume_recovery_timer(obd);
+               atomic_read(&obd->obd_req_replay_clients),
+               obd->obd_next_recovery_transno);
         while ((req = target_next_replay_req(obd))) {
-                LASSERT(trd->trd_processing_task == current->pid);
+                LASSERT(trd->trd_processing_task == cfs_curproc_pid());
                 DEBUG_REQ(D_HA, req, "processing t"LPD64" from %s",
                           lustre_msg_get_transno(req->rq_reqmsg),
                           libcfs_nid2str(req->rq_peer.nid));
@@ -1710,56 +1718,55 @@ static int target_recovery_thread(void *arg)
                 spin_unlock_bh(&obd->obd_processing_task_lock);
         }
 
-        spin_lock_bh(&obd->obd_processing_task_lock);
-        target_cancel_recovery_timer(obd);
-        spin_unlock_bh(&obd->obd_processing_task_lock);
-
         /* If some clients haven't replayed requests in time, evict them */
         if (obd->obd_abort_recovery) {
-                CDEBUG(D_ERROR, "req replay timed out, aborting ...\n");
-                obd->obd_abort_recovery = obd->obd_stopping;
-                class_disconnect_stale_exports(obd, req_replay_done, 
-                                               exp_flags_from_obd(obd) | 
+                CDEBUG(D_WARNING, "req replay is aborted\n");
+                class_disconnect_stale_exports(obd, req_replay_done,
+                                               exp_flags_from_obd(obd) |
                                                OBD_OPT_ABORT_RECOV);
                 abort_req_replay_queue(obd);
         }
+        LASSERT(list_empty(&obd->obd_req_replay_queue));
 
         /* The second stage: replay locks */
         CDEBUG(D_INFO, "2: lock replay stage - %d clients\n",
                atomic_read(&obd->obd_lock_replay_clients));
-        resume_recovery_timer(obd);
         while ((req = target_next_replay_lock(obd))) {
-                LASSERT(trd->trd_processing_task == current->pid);
-                DEBUG_REQ(D_HA|D_WARNING, req, "processing lock from %s: ",
+                LASSERT(trd->trd_processing_task == cfs_curproc_pid());
+                DEBUG_REQ(D_HA, req, "processing lock from %s: ",
                           libcfs_nid2str(req->rq_peer.nid));
                 handle_recovery_req(thread, req,
                                     trd->trd_recovery_handler);
                 obd->obd_replayed_locks++;
         }
 
-        spin_lock_bh(&obd->obd_processing_task_lock);
-        target_cancel_recovery_timer(obd);
-        spin_unlock_bh(&obd->obd_processing_task_lock);
         /* If some clients haven't replayed requests in time, evict them */
         if (obd->obd_abort_recovery) {
                 int stale;
-                CERROR("lock replay timed out, aborting ...\n");
-                obd->obd_abort_recovery = obd->obd_stopping;
-                stale = class_disconnect_stale_exports(obd, lock_replay_done, 
-                                                       exp_flags_from_obd(obd) | 
+                CERROR("lock replay is aborted\n");
+                stale = class_disconnect_stale_exports(obd, lock_replay_done,
+                                                       exp_flags_from_obd(obd) |
                                                        OBD_OPT_ABORT_RECOV);
                 abort_lock_replay_queue(obd);
         }
+        LASSERT(list_empty(&obd->obd_lock_replay_queue));
 
+        /* The third stage: reply on final pings */
+        CDEBUG(D_INFO, "3: final stage - process recovery completion pings\n");
+        /** evict exports failed VBR */
+        class_disconnect_stale_exports(obd, req_vbr_done,
+                                       exp_flags_from_obd(obd) |
+                                       OBD_OPT_ABORT_RECOV);
+        /** Update server last boot epoch */
+        lut_boot_epoch_update(lut);
         /* We drop recoverying flag to forward all new requests
          * to regular mds_handle() since now */
         spin_lock_bh(&obd->obd_processing_task_lock);
         obd->obd_recovering = obd->obd_abort_recovery = 0;
+        target_cancel_recovery_timer(obd);
         spin_unlock_bh(&obd->obd_processing_task_lock);
-        /* The third stage: reply on final pings */
-        CDEBUG(D_INFO, "3: final stage - process recovery completion pings\n");
         while ((req = target_next_final_ping(obd))) {
-                LASSERT(trd->trd_processing_task == current->pid);
+                LASSERT(trd->trd_processing_task == cfs_curproc_pid());
                 DEBUG_REQ(D_HA, req, "processing final ping from %s: ",
                           libcfs_nid2str(req->rq_peer.nid));
                 handle_recovery_req(thread, req,
@@ -1771,7 +1778,7 @@ static int target_recovery_thread(void *arg)
               delta, obd->obd_replayed_requests, obd->obd_replayed_locks);
         LASSERT(atomic_read(&obd->obd_req_replay_clients) == 0);
         LASSERT(atomic_read(&obd->obd_lock_replay_clients) == 0);
-        if (delta > obd_timeout * 2) {
+        if (delta > obd_timeout * OBD_RECOVERY_FACTOR) {
                 CWARN("too long recovery - read logs\n");
                 libcfs_debug_dumplog();
         }
@@ -1784,8 +1791,10 @@ static int target_recovery_thread(void *arg)
         RETURN(rc);
 }
 
-int target_start_recovery_thread(struct obd_device *obd, svc_handler_t handler)
+static int target_start_recovery_thread(struct lu_target *lut,
+                                        svc_handler_t handler)
 {
+        struct obd_device *obd = lut->lut_obd;
         int rc = 0;
         struct target_recovery_data *trd = &obd->obd_recovery_data;
 
@@ -1794,7 +1803,7 @@ int target_start_recovery_thread(struct obd_device *obd, svc_handler_t handler)
         init_completion(&trd->trd_finishing);
         trd->trd_recovery_handler = handler;
 
-        if (kernel_thread(target_recovery_thread, obd, 0) > 0) {
+        if (kernel_thread(target_recovery_thread, lut, 0) > 0) {
                 wait_for_completion(&trd->trd_starting);
                 LASSERT(obd->obd_recovering != 0);
         } else
@@ -1810,7 +1819,7 @@ void target_stop_recovery_thread(struct obd_device *obd)
                 struct target_recovery_data *trd = &obd->obd_recovery_data;
                 CERROR("%s: Aborting recovery\n", obd->obd_name);
                 obd->obd_abort_recovery = 1;
-                wake_up(&obd->obd_next_transno_waitq);
+                cfs_waitq_signal(&obd->obd_next_transno_waitq);
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 wait_for_completion(&trd->trd_finishing);
         } else {
@@ -1834,21 +1843,26 @@ static void target_recovery_expired(unsigned long castmeharder)
                       obd->obd_name, obd->obd_recoverable_clients,
                       cfs_time_current_sec()- obd->obd_recovery_start,
                       obd->obd_connected_clients);
+
         spin_lock_bh(&obd->obd_processing_task_lock);
-        if (obd->obd_recovering)
-                obd->obd_abort_recovery = 1;
+        obd->obd_version_recov = 1;
+        CDEBUG(D_INFO, "VBR is used for %d clients from t"LPU64"\n",
+               atomic_read(&obd->obd_req_replay_clients),
+               obd->obd_next_recovery_transno);
         cfs_waitq_signal(&obd->obd_next_transno_waitq);
         spin_unlock_bh(&obd->obd_processing_task_lock);
 }
 
-void target_recovery_init(struct obd_device *obd, svc_handler_t handler)
+void target_recovery_init(struct lu_target *lut, svc_handler_t handler)
 {
+        struct obd_device *obd = lut->lut_obd;
         if (obd->obd_max_recoverable_clients == 0)
                 return;
 
         CWARN("RECOVERY: service %s, %d recoverable clients, "
               "last_transno "LPU64"\n", obd->obd_name,
               obd->obd_max_recoverable_clients, obd->obd_last_committed);
+        LASSERT(obd->obd_stopping == 0);
         obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
         obd->obd_recovery_start = 0;
         obd->obd_recovery_end = 0;
@@ -1856,13 +1870,14 @@ void target_recovery_init(struct obd_device *obd, svc_handler_t handler)
         /* bz13079: this should be set to desired value for ost but not for mds */
         obd->obd_recovery_max_time = OBD_RECOVERY_MAX_TIME;
         cfs_timer_init(&obd->obd_recovery_timer, target_recovery_expired, obd);
-        target_start_recovery_thread(obd, handler);
+        target_start_recovery_thread(lut, handler);
 }
 EXPORT_SYMBOL(target_recovery_init);
 
 #endif
 
-int target_process_req_flags(struct obd_device *obd, struct ptlrpc_request *req)
+static int target_process_req_flags(struct obd_device *obd,
+                                    struct ptlrpc_request *req)
 {
         struct obd_export *exp = req->rq_export;
         LASSERT(exp != NULL);
@@ -1879,7 +1894,6 @@ int target_process_req_flags(struct obd_device *obd, struct ptlrpc_request *req)
                         obd->obd_recoverable_clients--;
                         if (atomic_read(&obd->obd_req_replay_clients) == 0)
                                 CDEBUG(D_HA, "all clients have replayed reqs\n");
-                        wake_up(&obd->obd_next_transno_waitq);
                 }
                 spin_unlock_bh(&obd->obd_processing_task_lock);
         }
@@ -1895,7 +1909,6 @@ int target_process_req_flags(struct obd_device *obd, struct ptlrpc_request *req)
                         atomic_dec(&obd->obd_lock_replay_clients);
                         if (atomic_read(&obd->obd_lock_replay_clients) == 0)
                                 CDEBUG(D_HA, "all clients have replayed locks\n");
-                        wake_up(&obd->obd_next_transno_waitq);
                 }
                 spin_unlock_bh(&obd->obd_processing_task_lock);
         }
@@ -1909,7 +1922,6 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
         struct list_head *tmp;
         int inserted = 0;
         __u64 transno = lustre_msg_get_transno(req->rq_reqmsg);
-
         ENTRY;
 
         if (obd->obd_recovery_data.trd_processing_task == cfs_curproc_pid()) {
@@ -1927,6 +1939,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
                         RETURN(-ENOMEM);
                 DEBUG_REQ(D_HA, req, "queue final req");
                 spin_lock_bh(&obd->obd_processing_task_lock);
+                cfs_waitq_signal(&obd->obd_next_transno_waitq);
                 if (obd->obd_recovering)
                         list_add_tail(&req->rq_list, &obd->obd_final_req_queue);
                 else {
@@ -1948,6 +1961,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
                         RETURN(-ENOMEM);
                 DEBUG_REQ(D_HA, req, "queue lock replay req");
                 spin_lock_bh(&obd->obd_processing_task_lock);
+                cfs_waitq_signal(&obd->obd_next_transno_waitq);
                 LASSERT(obd->obd_recovering);
                 /* usually due to recovery abort */
                 if (!req->rq_export->exp_in_recovery) {
@@ -1958,7 +1972,6 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
                 LASSERT(req->rq_export->exp_lock_replay_needed);
                 list_add_tail(&req->rq_list, &obd->obd_lock_replay_queue);
                 spin_unlock_bh(&obd->obd_processing_task_lock);
-                wake_up(&obd->obd_next_transno_waitq);
                 RETURN(0);
         }
 
@@ -2043,7 +2056,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
                 list_add_tail(&req->rq_list, &obd->obd_req_replay_queue);
 
         obd->obd_requests_queued_for_recovery++;
-        wake_up(&obd->obd_next_transno_waitq);
+        cfs_waitq_signal(&obd->obd_next_transno_waitq);
         spin_unlock_bh(&obd->obd_processing_task_lock);
         RETURN(0);
 }
@@ -2156,21 +2169,18 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         rs->rs_transno   = req->rq_transno;
         rs->rs_export    = exp;
 
-        spin_lock(&obd->obd_uncommitted_replies_lock);
-
+        spin_lock(&exp->exp_uncommitted_replies_lock);
         CDEBUG(D_NET, "rs transno = "LPU64", last committed = "LPU64"\n",
-               rs->rs_transno, obd->obd_last_committed);
-        if (rs->rs_transno > obd->obd_last_committed) {
+               rs->rs_transno, exp->exp_last_committed);
+        if (rs->rs_transno > exp->exp_last_committed) {
                 /* not committed already */
-                list_add_tail (&rs->rs_obd_list,
-                               &obd->obd_uncommitted_replies);
+                list_add_tail(&rs->rs_obd_list,
+                              &exp->exp_uncommitted_replies);
         }
+        spin_unlock (&exp->exp_uncommitted_replies_lock);
 
-        spin_unlock (&obd->obd_uncommitted_replies_lock);
-        spin_lock (&exp->exp_lock);
-
-        list_add_tail (&rs->rs_exp_list, &exp->exp_outstanding_replies);
-
+        spin_lock(&exp->exp_lock);
+        list_add_tail(&rs->rs_exp_list, &exp->exp_outstanding_replies);
         spin_unlock(&exp->exp_lock);
 
         netrc = target_send_reply_msg (req, rc, fail_id);
@@ -2191,7 +2201,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         }
 
         spin_lock(&rs->rs_lock);
-        if (rs->rs_transno <= obd->obd_last_committed ||
+        if (rs->rs_transno <= exp->exp_last_committed ||
             (!rs->rs_on_net && !rs->rs_no_ack) ||
              list_empty(&rs->rs_exp_list) ||     /* completed already */
              list_empty(&rs->rs_obd_list)) {
@@ -2214,26 +2224,19 @@ int target_handle_ping(struct ptlrpc_request *req)
 
 void target_committed_to_req(struct ptlrpc_request *req)
 {
-        struct obd_device *obd;
+        struct obd_export *exp = req->rq_export;
 
-        if (req == NULL || req->rq_export == NULL)
-                return;
-
-        obd = req->rq_export->exp_obd;
-        if (obd == NULL)
-                return;
-
-        if (!obd->obd_no_transno && req->rq_repmsg != NULL)
+        if (!exp->exp_obd->obd_no_transno && req->rq_repmsg != NULL)
                 lustre_msg_set_last_committed(req->rq_repmsg,
-                                              obd->obd_last_committed);
+                                              exp->exp_last_committed);
         else
                 DEBUG_REQ(D_IOCTL, req, "not sending last_committed update (%d/"
-                          "%d)", obd->obd_no_transno, req->rq_repmsg == NULL);
+                          "%d)", exp->exp_obd->obd_no_transno,
+                          req->rq_repmsg == NULL);
 
         CDEBUG(D_INFO, "last_committed "LPU64", transno "LPU64", xid "LPU64"\n",
-               obd->obd_last_committed, req->rq_transno, req->rq_xid);
+               exp->exp_last_committed, req->rq_transno, req->rq_xid);
 }
-
 EXPORT_SYMBOL(target_committed_to_req);
 
 int target_handle_qc_callback(struct ptlrpc_request *req)

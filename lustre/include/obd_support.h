@@ -123,6 +123,9 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
    chance to generate adaptive timeout data. */
 #define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/2)
 #endif
+/* The max delay between connects is SWITCH_MAX + SWITCH_INC + INITIAL */
+#define RECONNECT_DELAY_MAX (CONNECTION_SWITCH_MAX + CONNECTION_SWITCH_INC + \
+                             INITIAL_CONNECT_TIMEOUT)
 #define LONG_UNLINK 300          /* Unlink should happen before now */
 
 /**
@@ -196,6 +199,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MDS_DROP_QUOTA_REQ      0x13d
 #define OBD_FAIL_MDS_REMOVE_COMMON_EA    0x13e
 #define OBD_FAIL_MDS_ALLOW_COMMON_EA_SETTING   0x13f
+#define OBD_FAIL_MDS_LOV_PREP_CREATE     0x141
 
 /* CMD */
 #define OBD_FAIL_MDS_IS_SUBDIR_NET       0x180
@@ -289,6 +293,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_OSC_CKSUM_ADLER_ONLY    0x40c
 #define OBD_FAIL_OSC_DIO_PAUSE           0x40d
 #define OBD_FAIL_OSC_OBJECT_CONTENTION   0x40e
+#define OBD_FAIL_OSC_CP_CANCEL_RACE      0x40f
 
 #define OBD_FAIL_PTLRPC                  0x500
 #define OBD_FAIL_PTLRPC_ACK              0x501
@@ -327,6 +332,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_TGT_REPLAY_DROP         0x707
 #define OBD_FAIL_TGT_FAKE_EXP            0x708
 #define OBD_FAIL_TGT_REPLAY_DELAY        0x709
+#define OBD_FAIL_TGT_LAST_REPLAY         0x710
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 #define OBD_FAIL_MDC_ENQUEUE_PAUSE       0x801
@@ -715,7 +721,7 @@ do {                                                                          \
 })
 #define OBD_SLAB_ALLOC(ptr, slab, type, size)                                 \
 do {                                                                          \
-        LASSERT(!in_interrupt());                                             \
+        LASSERT(ergo(type != CFS_ALLOC_ATOMIC, !in_interrupt()));             \
         (ptr) = cfs_mem_cache_alloc(slab, (type));                            \
         if (likely((ptr) != NULL &&                                           \
                    (!HAS_FAIL_ALLOC_FLAG || obd_alloc_fail_rate == 0 ||       \

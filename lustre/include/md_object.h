@@ -56,7 +56,7 @@
 /*
  * super-class definitions.
  */
-#include <lu_object.h>
+#include <dt_object.h>
 #include <lvfs.h>
 
 struct md_device;
@@ -246,7 +246,10 @@ struct md_object_operations {
                             struct lustre_capa *, int renewal);
 
         int (*moo_object_sync)(const struct lu_env *, struct md_object *);
-
+        dt_obj_version_t (*moo_version_get)(const struct lu_env *,
+                                            struct md_object *);
+        void (*moo_version_set)(const struct lu_env *, struct md_object *,
+                                dt_obj_version_t);
         int (*moo_path)(const struct lu_env *env, struct md_object *obj,
                         char *path, int pathlen, __u64 *recno, int *linkno);
 };
@@ -408,11 +411,13 @@ struct md_device_operations {
 };
 
 enum md_upcall_event {
-        /**sync the md layer*/
+        /** Sync the md layer*/
         MD_LOV_SYNC = (1 << 0),
         /** Just for split, no need trans, for replay */
         MD_NO_TRANS = (1 << 1),
-        MD_LOV_CONFIG = (1 << 2)
+        MD_LOV_CONFIG = (1 << 2),
+        /** Trigger quota recovery */
+        MD_LOV_QUOTA = (1 << 3)
 };
 
 struct md_upcall {
@@ -702,6 +707,20 @@ static inline int mo_object_sync(const struct lu_env *env, struct md_object *m)
 {
         LASSERT(m->mo_ops->moo_object_sync);
         return m->mo_ops->moo_object_sync(env, m);
+}
+
+static inline dt_obj_version_t mo_version_get(const struct lu_env *env,
+                                              struct md_object *m)
+{
+        LASSERT(m->mo_ops->moo_version_get);
+        return m->mo_ops->moo_version_get(env, m);
+}
+
+static inline void mo_version_set(const struct lu_env *env,
+                                  struct md_object *m, dt_obj_version_t ver)
+{
+        LASSERT(m->mo_ops->moo_version_set);
+        return m->mo_ops->moo_version_set(env, m, ver);
 }
 
 static inline int mdo_lookup(const struct lu_env *env,
