@@ -1,4 +1,4 @@
-2009-04-06 Sun Microsystems, Inc.
+2009-04-06  Sun Microsystems, Inc.
 	* version 3.0.7.1
 
 Severity   : major
@@ -14,7 +14,7 @@ Details    : The locking of the mballoc buddy bitmap and the in-memory
 
 -------------------------------------------------------------------------------
 
-2009-02-07 Sun Microsystems, Inc.
+2009-02-07  Sun Microsystems, Inc.
 	* version 3.0.7
 
 Severity   : enhancement
@@ -38,7 +38,7 @@ Details    : The ldiskfs code is not tested on big-endian machines, and
 
 -------------------------------------------------------------------------------
 
-2008-08-31 Sun Microsystems, Inc.
+2008-08-31  Sun Microsystems, Inc.
 	* version 3.0.6
 
 Severity   : enhancement
@@ -87,7 +87,7 @@ Details    : correctly handle device paths using a subdirectory in /dev when
 
 -------------------------------------------------------------------------------
 
-04-26-2008  Sun Microsystems, Inc.
+2008-04-26  Sun Microsystems, Inc.
 	* version 3.0.5
 
 Severity   : normal
