@@ -179,7 +179,7 @@ case "$lustretag" in
 
     b_hd_lnet_perf)
         # Tag for lnet performance tests
-        lnettag="HEAD"
+        lnettag="lnet_smp_lnet"
         ldiskfstag="lnet_smp_ldiskfs"
         lustretag="lnet_smp_lustre"
         libcfstag="lnet_smp_libcfs"
