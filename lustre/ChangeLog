@@ -203,6 +203,12 @@ Details    : create_count always drops to the min value (=32) because grow_count
 	  Lustre filesystem with 4K stack may cause a stack overflow. For more
 	  information, please refer to bugzilla 17630.
 
+Severity   : enhancement
+Bugzilla   : 17974
+Description: add lazystatfs mount option to allow statfs(2) to skip down OSTs
+Details    : allow skip disconnected ost for send statfs request and hide error
+             in this case.
+
 Severity   : normal
 Frequency  : rare, on llog test 6
 Bugzilla   : 16839
