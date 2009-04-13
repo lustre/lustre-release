@@ -1641,5 +1641,201 @@ test_49() { # bug 17710
 }
 run_test 49 "check PARAM_SYS_LDLM_TIMEOUT option of MKFS.LUSTRE"
 
+lazystatfs() {
+        # Test both statfs and lfs df and fail if either one fails
+	multiop_bg_pause $1 f_
+	RC1=$?
+	PID=$!
+	killall -USR1 multiop
+	[ $RC1 -ne 0 ] && log "lazystatfs multiop failed"
+	wait $PID || { RC1=$?; log "multiop return error "; }
+
+	$LFS df &
+	PID=$!
+	sleep 5
+	kill -s 0 $PID
+	RC2=$?
+	if [ $RC2 -eq 0 ]; then
+	    kill -s 9 $PID
+	    log "lazystatfs df failed"
+	fi
+
+	RC=0
+	[[ $RC1 -ne 0 || $RC2 -eq 0 ]] && RC=1
+	return $RC
+}
+
+test_50a() {
+	setup
+	lctl set_param llite.$FSNAME-*.lazystatfs=1
+	touch $DIR/$tfile
+
+	lazystatfs $MOUNT || error "lazystatfs failed but no down servers"
+
+	cleanup || return $?
+}
+run_test 50a "lazystatfs all servers available =========================="
+
+test_50b() {
+	setup
+	lctl set_param llite.$FSNAME-*.lazystatfs=1
+	touch $DIR/$tfile
+
+	# Wait for client to detect down OST
+	stop_ost || error "Unable to stop OST1"
+	CONN_PROC="osc.$FSNAME-OST0000-osc.ost_server_uuid"
+	CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
+	while [ ${CONN_STATE} = "FULL" ]; do
+		sleep 1
+		CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
+	done
+	lazystatfs $MOUNT || error "lazystatfs should don't have returned EIO"
+
+	umount_client $MOUNT || error "Unable to unmount client"
+	stop_mds || error "Unable to stop MDS"
+}
+run_test 50b "lazystatfs all servers down =========================="
+
+test_50c() {
+	start_mds || error "Unable to start MDS"
+	start_ost || error "Unable to start OST1"
+	start_ost2 || error "Unable to start OST2"
+	mount_client $MOUNT || error "Unable to mount client"
+	lctl set_param llite.$FSNAME-*.lazystatfs=1
+	touch $DIR/$tfile
+
+	# Wait for client to detect down OST
+	stop_ost || error "Unable to stop OST1"
+	CONN_PROC="osc.$FSNAME-OST0000-osc.ost_server_uuid"
+	CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
+	while [ ${CONN_STATE} = "FULL" ]; do
+		sleep 1
+		CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
+	done
+	lazystatfs $MOUNT || error "lazystatfs failed with one down server"
+
+ 	umount_client $MOUNT || error "Unable to unmount client"
+	stop_ost2 || error "Unable to stop OST2"
+	stop_mds || error "Unable to stop MDS"
+}
+run_test 50c "lazystatfs one server down =========================="
+
+test_50d() {
+	start_mds || error "Unable to start MDS"
+	start_ost || error "Unable to start OST1"
+	start_ost2 || error "Unable to start OST2"
+	mount_client $MOUNT || error "Unable to mount client"
+	lctl set_param llite.$FSNAME-*.lazystatfs=1
+	touch $DIR/$tfile
+
+	# Issue the statfs during the window where the client still
+	# belives the OST to be available but it is in fact down.
+	# No failure just a statfs which hangs for a timeout interval.
+	stop_ost || error "Unable to stop OST1"
+	lazystatfs $MOUNT || error "lazystatfs failed with one down server"
+
+ 	umount_client $MOUNT || error "Unable to unmount client"
+	stop_ost2 || error "Unable to stop OST2"
+	stop_mds || error "Unable to stop MDS"
+}
+run_test 50d "lazystatfs client/server conn race =========================="
+
+test_50e() {
+	local RC1
+	local pid
+	CONN_PROC="osc.$FSNAME-OST0000-osc.ost_server_uuid"
+	
+	start_mds || return 1
+	#first client should see only one ost
+	start_ost || return 2
+	CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
+	while [ ${CONN_STATE} != "FULL" ]; do
+		sleep 1
+		CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
+	done
+
+	lctl set_param llite.$FSNAME-*.lazystatfs=0
+
+	# Wait for client to detect down OST
+	stop_ost || error "Unable to stop OST1"
+
+	CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
+	while [ ${CONN_STATE} = "FULL" ]; do
+		sleep 1
+		CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
+	done
+	
+	mount_client $MOUNT || error "Unable to mount client"
+	
+	multiop_bg_pause $MOUNT _f
+	RC1=$?
+	pid=$!
+
+	if [ $RC1 -ne 0 ]; then
+		log "lazystatfs multiop failed $RC1"
+	else
+	    kill -USR1 $pid
+	    sleep $(( $TIMEOUT+1 ))
+	    kill -0 $pid
+	    [ $? -ne 0 ] && error "process isn't sleep"
+	    start_ost || error "Unable to start OST1"    	    
+	    wait $pid || error "statfs failed"
+	fi
+
+	umount_client $MOUNT || error "Unable to unmount client"
+	stop_ost || error "Unable to stop OST1"	
+	stop_mds || error "Unable to stop MDS"
+}
+run_test 50e "normal statfs all servers down =========================="
+
+test_50f() {
+	local RC1
+	local pid
+	CONN_PROC="osc.$FSNAME-OST0001-osc.ost_server_uuid"
+	
+	start_mds || error "Unable to start mds"
+	#first client should see only one ost
+	start_ost || error "Unable to start OST1"
+	start_ost2 || error "Unable to start OST2"
+	CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
+	while [ ${CONN_STATE} != "FULL" ]; do
+		sleep 1
+		CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
+	done
+
+	lctl set_param llite.$FSNAME-*.lazystatfs=0
+
+	# Wait for client to detect down OST
+	stop_ost2 || error "Unable to stop OST2"
+
+	CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
+	while [ ${CONN_STATE} = "FULL" ]; do
+		sleep 1
+		CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
+	done
+	
+	mount_client $MOUNT || error "Unable to mount client"
+	
+	multiop_bg_pause $MOUNT _f
+	RC1=$?
+	pid=$!
+
+	if [ $RC1 -ne 0 ]; then
+		log "lazystatfs multiop failed $RC1"
+	else
+	    kill -USR1 $pid
+	    sleep $(( $TIMEOUT+1 ))
+	    kill -0 $pid
+	    [ $? -ne 0 ] && error "process isn't sleep"
+	    start_ost2 || error "Unable to start OST1"    	    
+	    wait $pid || error "statfs failed"
+	fi
+
+	umount_client $MOUNT || error "Unable to unmount client"
+	stop_ost || error "Unable to stop OST1"	
+	stop_mds || error "Unable to stop MDS"
+}
+run_test 50f "normal statfs one server in down =========================="
+
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
