@@ -58,7 +58,7 @@ mmap_sanity_SOURCES= mmap_sanity.c
 
 LIBLUSTREAPI := $(top_builddir)/lustre/utils/liblustreapi.a
 ll_getstripe_info_LDADD=$(LIBLUSTREAPI)
-multiop_LDADD=$(LIBLUSTREAPI)
+multiop_LDADD=$(LIBLUSTREAPI) -lrt
 
 ll_dirstripe_verify_SOURCES= ll_dirstripe_verify.c
 ll_dirstripe_verify_LDADD= -L$(top_builddir)/lustre/utils -llustreapi
