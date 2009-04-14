@@ -1683,7 +1683,9 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 
         LASSERT(ll_i2info(inode)->lli_smd != NULL);
 
-        down(&ll_i2info(inode)->lli_write_sem);
+        /* signal(7) specifies that write(2) and writev(2) should be restarted */
+        if (down_interruptible(&ll_i2info(inode)->lli_write_sem))
+                RETURN(-ERESTARTSYS);
 
 repeat:
         chunk = 0; /* just to fix gcc's warning */
