@@ -1,17 +1,48 @@
 tbd  Sun Microsystems, Inc.
 	* version 3.0.8
 
-Severity   : 
-Bugzilla   : 
-Description: 
-Details    : 
+Severity   : minor
+Bugzilla   : 16114
+Description: minor fixes and cleanups
+Details    : use EXT_UNSET_BLOCK to avoid confusion with EXT_MAX_BLOCK.
+	     Initialize 'ix' variable in extents patch to stop compiler warning.
+
+Severity   : feature
+Bugzilla   : 17942
+Description: update FIEMAP ioctl to match upstream kernel version
+Details    : the FIEMAP block-mapping ioctl had a prototype version in
+	     ldiskfs 3.0.7 but this release updates it to match the
+	     interface in the upstream kernel, with a new ioctl number.
+
+Severity   : normal
+Frequency  : only if MMP is active and detects filesystem is in use
+Bugzilla   : 18173
+Description: if MMP startup fails, an oops is triggered
+Details    : if ldiskfs mounting doesn't succeed the error handling doesn't
+	     clean up the MMP data correctly, causing an oops.
 
 -------------------------------------------------------------------------------
 
-2009-01-15  Sun Microsystems, Inc.
+2009-04-06  Sun Microsystems, Inc.
+	* version 3.0.7.1
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 18810
+Description: fix racy locking of mballoc block bitmaps causing BUG
+Details    : The locking of the mballoc buddy bitmap and the in-memory
+	     block bitmap was using two different spin locks in some
+	     cases.  This made it possible to incorrectly access the
+	     mballoc bitmap while another process was modifying it,
+	     causing a sanity assertion to fail.  While no on-disk corruption
+	     was reported, there was some risk of this happening.
+
+-------------------------------------------------------------------------------
+
+2009-02-07  Sun Microsystems, Inc.
 	* version 3.0.7
 
-Severity   : normal
+Severity   : enhancement
 Bugzilla   : 16498
 Description: Get RAID stripe size from superblock
 Details    : RAID striping parameters are now saved in the superblock itself,
@@ -19,6 +50,7 @@ Details    : RAID striping parameters are now saved in the superblock itself,
 	     a mount option each time.
 
 Severity   : major
+Frequency  : only if server is running on unsupported big-endian machine
 Bugzilla   : 16438
 Description: Disable big-endian ldiskfs server support.
 Details    : The ldiskfs code is not tested on big-endian machines, and
@@ -28,6 +60,14 @@ Details    : The ldiskfs code is not tested on big-endian machines, and
 	     filesystems that might have been created in this way it is
 	     possible to mount with the "bigendian_extents" option to
 	     force the mount.
+
+Severity   : major
+Frequency  : only with software RAID-5
+Bugzilla   : 17895
+Description: MMP block reads may fail to detect another user of the filesystem
+Details    : with software RAID it is possible that the RAID driver will
+	     cache the MMP block and not refetch it from disk.  Force the
+	     read to invalidate the RAID page cache and go directly to disk.
 
 -------------------------------------------------------------------------------
 
