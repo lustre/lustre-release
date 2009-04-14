@@ -105,13 +105,6 @@ Details    : FIEMAP ioctl will allow an application to efficiently fetch the
 	     in a file to physical blocks in the block device.
 
 Severity   : normal
-Bugzilla   : 16498
-Description: Get RAID stripe size from superblock
-Details    : RAID striping parameters are now saved in the superblock itself,
-	     so we should use these parameters instead of having to specify
-	     a mount option each time.
-
-Severity   : normal
 Bugzilla   : 17490
 Description: mkfs.lustre: Unable to mount /dev/cciss/c0d1:Cannot allocate memory
 Details    : correctly handle device paths using a subdirectory in /dev when
