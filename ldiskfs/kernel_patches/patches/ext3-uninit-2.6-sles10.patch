@@ -535,9 +535,9 @@ Index: linux-2.6.16.60-0.27/fs/ext3/mballoc.c
  			&meta_group_info[j]->bb_state);
  
 @@ -2945,9 +2957,17 @@ int ext3_mb_mark_diskspace_used(struct e
+ 	mb_set_bits(NULL, bitmap_bh->b_data,
  		    ac->ac_b_ex.fe_start, ac->ac_b_ex.fe_len);
  
- 	spin_lock(sb_bgl_lock(sbi, ac->ac_b_ex.fe_group));
 +	if (gdp->bg_flags & cpu_to_le16(EXT3_BG_BLOCK_UNINIT)) {
 +		gdp->bg_flags &= cpu_to_le16(~EXT3_BG_BLOCK_UNINIT);
 +		gdp->bg_free_blocks_count =
