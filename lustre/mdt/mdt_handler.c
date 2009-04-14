@@ -2585,7 +2585,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         }
 
         /* If we're DISCONNECTing, the mdt_export_data is already freed */
-        if (likely(rc == 0 && h->mh_opc != MDS_DISCONNECT))
+        if (likely(rc == 0 && req->rq_export && h->mh_opc != MDS_DISCONNECT))
                 target_committed_to_req(req);
 
         if (unlikely((lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) &&
