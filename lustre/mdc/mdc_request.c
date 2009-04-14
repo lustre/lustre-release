@@ -1267,7 +1267,9 @@ static int mdc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                         imp = obd->u.cli.cl_import;
                         CERROR("client import never connected\n");
                         ptlrpc_invalidate_import(imp);
+                        class_destroy_import(imp);
                         up_write(&obd->u.cli.cl_sem);
+                        obd->u.cli.cl_import = NULL;
                 }
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
