@@ -4264,10 +4264,19 @@ static int osc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                 /* If we set up but never connected, the
                    client import will not have been cleaned. */
                 if (obd->u.cli.cl_import) {
-                        struct obd_import *imp = obd->u.cli.cl_import;
+                        struct obd_import *imp;
+                        down_write(&obd->u.cli.cl_sem);
+                        imp = obd->u.cli.cl_import;
                         CDEBUG(D_CONFIG, "%s: client import never connected\n",
                                obd->obd_name);
                         ptlrpc_invalidate_import(imp);
+                        if (imp->imp_rq_pool) {
+                                ptlrpc_free_rq_pool(imp->imp_rq_pool);
+                                imp->imp_rq_pool = NULL;
+                        }
+                        class_destroy_import(imp);
+                        up_write(&obd->u.cli.cl_sem);
+                        obd->u.cli.cl_import = NULL;
                 }
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
@@ -4285,7 +4294,6 @@ static int osc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 int osc_cleanup(struct obd_device *obd)
 {
         struct osc_creator *oscc = &obd->u.cli.cl_oscc;
-        struct obd_import *imp = obd->u.cli.cl_import;
         int rc;
 
         ENTRY;
@@ -4301,11 +4309,6 @@ int osc_cleanup(struct obd_device *obd)
         lquota_cleanup(quota_interface, obd);
 
         cache_destroy(obd->u.cli.cl_cache);
-        if (imp && imp->imp_rq_pool) {
-                ptlrpc_free_rq_pool(imp->imp_rq_pool);
-                imp->imp_rq_pool = NULL;
-        }
-
         rc = client_obd_cleanup(obd);
 
         ptlrpcd_decref();
