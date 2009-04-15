@@ -128,6 +128,8 @@ usocklnd_tear_peer_conn(usock_conn_t *conn)
         lnet_process_id_t id;
         int               decref_flag  = 0;
         int               killall_flag = 0;
+        void             *rx_lnetmsg   = NULL; 
+        CFS_LIST_HEAD    (zombie_txs);
         
         if (peer == NULL) /* nothing to tear */
                 return;
@@ -142,11 +144,12 @@ usocklnd_tear_peer_conn(usock_conn_t *conn)
                 if (conn->uc_rx_state == UC_RX_LNET_PAYLOAD) {
                         /* change state not to finalize twice */
                         conn->uc_rx_state = UC_RX_KSM_HEADER;
-                        lnet_finalize(peer->up_ni, conn->uc_rx_lnetmsg, -EIO);                        
+                        /* stash lnetmsg while holding locks */
+                        rx_lnetmsg = conn->uc_rx_lnetmsg;
                 }
                 
-                usocklnd_destroy_txlist(peer->up_ni,
-                                        &conn->uc_tx_list);
+                /* we cannot finilize txs right now (bug #18844) */
+                list_splice_init(&conn->uc_tx_list, &zombie_txs);
 
                 peer->up_conns[idx] = NULL;
                 conn->uc_peer = NULL;
@@ -154,6 +157,9 @@ usocklnd_tear_peer_conn(usock_conn_t *conn)
 
                 if(conn->uc_errored && !peer->up_errored)
                         peer->up_errored = killall_flag = 1;
+
+                /* prevent queueing new txs to this conn */
+                conn->uc_errored = 1;
         }
         
         pthread_mutex_unlock(&conn->uc_lock);
@@ -165,6 +171,11 @@ usocklnd_tear_peer_conn(usock_conn_t *conn)
         
         if (!decref_flag)
                 return;
+
+        if (rx_lnetmsg != NULL)
+                lnet_finalize(ni, rx_lnetmsg, -EIO);
+        
+        usocklnd_destroy_txlist(ni, &zombie_txs);
 
         usocklnd_conn_decref(conn);
         usocklnd_peer_decref(peer);
@@ -852,6 +863,13 @@ usocklnd_find_or_create_conn(usock_peer_t *peer, int type,
 
         LASSERT(tx == NULL || zc_ack == NULL);
         if (tx != NULL) {
+                /* usocklnd_tear_peer_conn() could signal us stop queueing */
+                if (conn->uc_errored) {
+                        rc = -EIO;
+                        pthread_mutex_unlock(&conn->uc_lock);
+                        goto find_or_create_conn_failed;
+                }
+
                 usocklnd_enqueue_tx(conn, tx, send_immediately);
         } else {
                 rc = usocklnd_enqueue_zcack(conn, zc_ack);        

@@ -999,7 +999,8 @@ usocklnd_read_data(usock_conn_t *conn)
                 
                 nob = libcfs_sock_readv(conn->uc_fd, conn->uc_rx_iov, conn->uc_rx_niov);                
                 if (nob <= 0) {/* read nothing or error */
-                        conn->uc_errored = 1;
+                        if (nob < 0)
+                                conn->uc_errored = 1;
                         return nob;
                 }
                 
