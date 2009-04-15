@@ -17,6 +17,14 @@ Bugzilla   :
 Description: 
 Details    : 
 
+Severity   : normal
+Bugzilla   : 18844
+Description: Fixing deadlock in usocklnd
+Details    : A deadlock was possible in usocklnd due to race condition while
+             tearing connection down. The problem resulted from erroneous
+             assumption that lnet_finalize() could have been called holding
+             some lnd-level locks.
+
 Severity   : major
 Bugzilla   : 13621, 15983
 Description: Protocol V2 of o2iblnd

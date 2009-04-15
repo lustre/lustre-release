@@ -87,6 +87,18 @@ CFS_MODULE_PARM(accept_backlog, "i", int, 0444,
 CFS_MODULE_PARM(accept_timeout, "i", int, 0644,
                 "Acceptor's timeout (seconds)");
 
+static char *accept_type = NULL;
+
+int
+lnet_acceptor_get_tunables(void)
+{
+        /* Userland acceptor uses 'accept_type' instead of 'accept', due to
+         * conflict with 'accept(2)', but kernel acceptor still uses 'accept'
+         * for compatibility. Hence the trick. */
+        accept_type = accept;
+        return 0;
+}
+
 int
 lnet_acceptor_timeout(void)
 {
@@ -221,7 +233,7 @@ EXPORT_SYMBOL(lnet_connect);
 
 #else /* below is multi-threaded user-space code */
 
-static char *accept_type    = "secure";
+static char *accept_type = "secure";
 
 int
 lnet_acceptor_get_tunables()
@@ -418,11 +430,7 @@ lnet_acceptor(void *arg)
 
                 lnet_acceptor_state.pta_sock = NULL;
         } else {
-#ifdef __KERNEL__
-                LCONSOLE(0, "Accept %s, port %d\n", accept, accept_port);
-#else
                 LCONSOLE(0, "Accept %s, port %d\n", accept_type, accept_port);
-#endif
         }
 
         /* set init status and unblock parent */
@@ -517,23 +525,18 @@ lnet_acceptor_start(void)
 
         LASSERT (lnet_acceptor_state.pta_sock == NULL);
 
-#ifndef __KERNEL__
-        /* kernel version uses CFS_MODULE_PARM */
         rc = lnet_acceptor_get_tunables();
         if (rc != 0)
                 return rc;
 
+#ifndef __KERNEL__
         /* Do nothing if we're liblustre clients */
         if ((the_lnet.ln_pid & LNET_PID_USERFLAG) != 0)
                 return 0;
 #endif
         cfs_init_completion(&lnet_acceptor_state.pta_signal);
 
-#ifdef __KERNEL__
-        rc = accept2secure(accept, &secure);
-#else
         rc = accept2secure(accept_type, &secure);
-#endif
         if (rc <= 0) {
                 cfs_fini_completion(&lnet_acceptor_state.pta_signal);
                 return rc;
