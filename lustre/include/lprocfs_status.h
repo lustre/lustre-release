@@ -330,7 +330,7 @@ static inline int lprocfs_stats_lock(struct lprocfs_stats *stats, int type)
                 if (type & LPROCFS_GET_NUM_CPU)
                         rc = num_possible_cpus();
                 if (type & LPROCFS_GET_SMP_ID) {
-			stats->ls_flags &= LPROCFS_STATS_GET_SMP_ID;
+			stats->ls_flags |= LPROCFS_STATS_GET_SMP_ID;
                         rc = cfs_get_cpu();
 		}
         }
