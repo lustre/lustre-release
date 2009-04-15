@@ -2593,6 +2593,7 @@ get_mds_dir () {
     local file=$dir/f0.get_mds_dir_tmpfile
 
     rm -f $file
+    sleep 1
     local iused=$(lfs df -i $dir | grep MDT | awk '{print $3}')
     local oldused=($iused)
 
