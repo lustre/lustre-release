@@ -528,7 +528,8 @@ test_22() {
 }
 run_test 22 "unpack tar archive as non-root user ==============="
 
-test_23() {
+# was test_23
+test_23a() {
 	mkdir -p $DIR/$tdir
 	local file=$DIR/$tdir/$tfile
 
@@ -536,7 +537,19 @@ test_23() {
 	openfile -f O_CREAT:O_EXCL $file &&
 		error "$file recreate succeeded" || true
 }
-run_test 23 "O_CREAT|O_EXCL in subdir =========================="
+run_test 23a "O_CREAT|O_EXCL in subdir =========================="
+
+test_23b() { # bug 18988
+	mkdir -p $DIR/$tdir
+	local file=$DIR/$tdir/$tfile
+
+        rm -f $file
+        echo foo > $file || error "write filed"
+        echo bar >> $file || error "append filed"
+        $CHECKSTAT -s 8 $file || error "wrong size"
+        rm $file
+}
+run_test 23b "O_APPEND check =========================="
 
 test_24a() {
 	echo '== rename sanity =============================================='
