@@ -323,6 +323,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
 {
         struct lov_stripe_md *lsm;
         struct osc_creator *oscc = &exp->exp_obd->u.cli.cl_oscc;
+        struct obd_import  *imp  = exp->exp_obd->u.cli.cl_import;
         int try_again = 1, rc = 0;
         ENTRY;
         LASSERT(oa);
@@ -365,10 +366,18 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 spin_lock(&oscc->oscc_lock);
                 oscc->oscc_flags &= ~OSCC_FLAG_SYNC_IN_PROGRESS;
                 if (rc == 0 || rc == -ENOSPC) {
+                        struct obd_connect_data *ocd;
+
                         if (rc == -ENOSPC)
                                 oscc->oscc_flags |= OSCC_FLAG_NOSPC;
                         oscc->oscc_flags &= ~OSCC_FLAG_RECOVERING;
                         oscc->oscc_last_id = oa->o_id;
+                        ocd = &imp->imp_connect_data;
+                        if (ocd->ocd_connect_flags & OBD_CONNECT_SKIP_ORPHAN) {
+                                CWARN("Skip orphan set, reset last objid\n");
+                                oscc->oscc_next_id = oa->o_id + 1;
+                        }
+
                         CDEBUG(D_HA, "%s: oscc recovery finished, last_id: "
                                LPU64", rc: %d\n", oscc->oscc_obd->obd_name,
                                oscc->oscc_last_id, rc);

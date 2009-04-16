@@ -776,6 +776,8 @@ static const char *obd_connect_names[] = {
         "fid_is_enabled",
         "version_recovery",
         "pools",
+        "",
+        "skip_orpahn",
         NULL
 };
 

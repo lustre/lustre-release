@@ -994,6 +994,31 @@ test_59() { # bug 10589
 }
 run_test 59 "Read cancel race on client eviction"
 
+test_61()
+{
+	local cflags='osc.*-OST0000-osc.connect_flags'
+	do_facet mds "lctl get_param -n $cflags |grep -q skip_orphan"
+	[ $? -ne 0 ] && skip "don't have skip orphan feature" && return
+
+	mkdir -p $DIR/d61 || error "mkdir dir $DIR/d61 failed"
+	# Set the default stripe of $DIR/d61 to put the files to ost1
+	$LFS setstripe -c 1 --index 0 $DIR/d61
+
+	replay_barrier mds
+	createmany -o $DIR/d61/$tfile-%d 10 
+	local oid=`do_facet ost1 "lctl get_param -n obdfilter.*OST0000.last_id"`
+
+	fail_abort mds
+	
+	touch $DIR/d61/$tfile
+	local id=`$LFS getstripe $DIR/d61/$tfile | awk '$2 ~ /^[1-9]+/ {print $2}'`
+	[ $id -le $oid ] && error "the orphan objid was reused, failed"
+
+	# Cleanup
+	rm -rf $DIR/d61
+}
+run_test 61 "Verify to not reuse orphan objects - bug 17485"
+
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
