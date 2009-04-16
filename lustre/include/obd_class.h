@@ -192,6 +192,7 @@ void class_del_profiles(void);
         exp_;                                                                  \
 })
 
+/* class_export_put() is non-blocking */
 #define class_export_put(exp)                                                  \
 do {                                                                           \
         LASSERT((exp) != NULL);                                                \

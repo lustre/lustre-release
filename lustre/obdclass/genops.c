@@ -644,6 +644,8 @@ static void export_handle_addref(void *export)
         class_export_get(export);
 }
 
+/* called from mds_commit_cb() in context of journal commit callback
+ * and cannot call any blocking functions. */
 void __class_export_put(struct obd_export *exp)
 {
         if (atomic_dec_and_test(&exp->exp_refcount)) {

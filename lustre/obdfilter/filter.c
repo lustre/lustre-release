@@ -84,7 +84,11 @@ static void filter_commit_cb(struct obd_device *obd, __u64 transno,
                              void *cb_data, int error)
 {
         struct obd_export *exp = cb_data;
+        LASSERTF(exp->exp_obd == obd,
+                 "%s: bad export (%p), obd (%p) != exp->exp_obd (%p)\n",
+                 obd->obd_name, exp, obd, exp->exp_obd);
         obd_transno_commit_cb(obd, transno, exp, error);
+        class_export_put(exp);
 }
 
 int filter_version_get_check(struct obd_export *exp,
@@ -167,13 +171,13 @@ int filter_finish_transno(struct obd_export *exp, struct inode *inode,
                                                            last_rcvd,
                                                            oti->oti_handle,
                                                            filter_commit_cb,
-                                                           exp);
+                                                           class_export_get(exp));
 
                 err = fsfilt_write_record(exp->exp_obd, filter->fo_rcvd_filp,
                                           lcd, sizeof(*lcd), &off,
                                           force_sync | exp->exp_need_sync);
                 if (force_sync)
-                        filter_commit_cb(exp->exp_obd, last_rcvd, exp, err);
+                        filter_commit_cb(exp->exp_obd, last_rcvd, class_export_get(exp), err);
         }
         if (err) {
                 log_pri = D_ERROR;
