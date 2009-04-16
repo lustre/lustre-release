@@ -2274,6 +2274,11 @@ static int filter_connect_internal(struct obd_export *exp,
         exp->exp_connect_flags = data->ocd_connect_flags;
         data->ocd_version = LUSTRE_VERSION_CODE;
 
+        /* Kindly make sure the SKIP_ORPHAN flag is from MDS. */
+        if (!ergo(data->ocd_connect_flags & OBD_CONNECT_SKIP_ORPHAN,
+                  data->ocd_connect_flags & OBD_CONNECT_MDS))
+                RETURN(-EPROTO);
+
         if (exp->exp_connect_flags & OBD_CONNECT_GRANT) {
                 struct filter_obd *filter = &exp->exp_obd->u.filter;
                 struct filter_export_data *fed = &exp->exp_filter_data;
@@ -2994,7 +2999,8 @@ static int filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
 {
         struct obdo doa = { 0 }; /* XXX obdo on stack */
         obd_id last, id;
-        int rc;
+        int rc = 0;
+        int skip_orphan;
         ENTRY;
 
         LASSERT(oa);
@@ -3016,25 +3022,37 @@ static int filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
         }
 
         last = filter_last_id(filter, doa.o_gr);
-        CWARN("%s: deleting orphan objects from "LPU64" to "LPU64"\n",
-               exp->exp_obd->obd_name, oa->o_id + 1, last);
+        skip_orphan = !!(exp->exp_connect_flags & OBD_CONNECT_SKIP_ORPHAN);
+
+        CWARN("%s: deleting orphan objects from "LPU64" to "LPU64"%s\n",
+               exp->exp_obd->obd_name, oa->o_id + 1, last,
+               skip_orphan ? ", orphan objids won't be reused any more." : ".");
+
         for (id = last; id > oa->o_id; id--) {
                 doa.o_id = id;
                 rc = filter_destroy(exp, &doa, NULL, NULL, NULL);
                 if (rc && rc != -ENOENT) /* this is pretty fatal... */
                         CEMERG("error destroying precreate objid "LPU64": %d\n",
                                id, rc);
-                filter_set_last_id(filter, id - 1, doa.o_gr);
                 /* update last_id on disk periodically so that if we restart
                  * we don't need to re-scan all of the just-deleted objects. */
-                if ((id & 511) == 0)
+                if ((id & 511) == 0 && !skip_orphan) {
+                        filter_set_last_id(filter, id - 1, doa.o_gr);
                         filter_update_last_objid(exp->exp_obd, doa.o_gr, 0);
+                }
         }
 
         CDEBUG(D_HA, "%s: after destroy: set last_objids["LPU64"] = "LPU64"\n",
                exp->exp_obd->obd_name, doa.o_gr, oa->o_id);
 
-        rc = filter_update_last_objid(exp->exp_obd, doa.o_gr, 1);
+        if (!skip_orphan) {
+                filter_set_last_id(filter, id, doa.o_gr);
+                rc = filter_update_last_objid(exp->exp_obd, doa.o_gr, 1);
+        } else {
+                /* don't reuse orphan object, return last used objid */
+                oa->o_id = last;
+                rc = 0;
+        }
         filter->fo_destroy_in_progress = 0;
 
         RETURN(rc);

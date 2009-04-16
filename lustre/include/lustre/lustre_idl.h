@@ -356,6 +356,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb, int msgsize);
 #define OBD_CONNECT_VBR        0x80000000ULL /*version based recovery */
 #define OBD_CONNECT_LOV_V3    0x100000000ULL /*client supports LOV v3 EA */
 #define OBD_CONNECT_GRANT_SHRINK  0x200000000ULL /* support grant shrink */
+#define OBD_CONNECT_SKIP_ORPHAN   0x400000000ULL /* don't reuse orphan objids */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
@@ -379,7 +380,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb, int msgsize);
                                 OBD_CONNECT_CANCELSET | OBD_CONNECT_AT | \
                                 LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_CKSUM | \
                                 OBD_CONNECT_VBR | OBD_CONNECT_CHANGE_QS | \
-                                OBD_CONNECT_MDS | OBD_CONNECT_GRANT_SHRINK)
+                                OBD_CONNECT_MDS | OBD_CONNECT_GRANT_SHRINK | \
+                                OBD_CONNECT_SKIP_ORPHAN)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT)
 
