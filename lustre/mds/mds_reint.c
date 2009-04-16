@@ -65,7 +65,11 @@ void mds_commit_cb(struct obd_device *obd, __u64 transno, void *data,
                    int error)
 {
         struct obd_export *exp = data;
+        LASSERTF(exp->exp_obd == obd,
+                 "%s: bad export (%p), obd (%p) != exp->exp_obd (%p)\n",
+                 obd->obd_name, exp, obd, exp->exp_obd);
         obd_transno_commit_cb(obd, transno, exp, error);
+        class_export_put(exp);
 }
 
 struct mds_logcancel_data {
@@ -319,13 +323,13 @@ int mds_finish_transno(struct mds_obd *mds, struct inode **inodes, void *handle,
                 if (!force_sync)
                         force_sync = fsfilt_add_journal_cb(obd, transno,
                                                            handle, mds_commit_cb,
-                                                           exp);
+                                                           class_export_get(exp));
 
                 err = fsfilt_write_record(obd, mds->mds_rcvd_filp, lcd,
                                           sizeof(*lcd), &off,
                                           force_sync | exp->exp_need_sync);
                 if (force_sync)
-                        mds_commit_cb(obd, transno, exp, err);
+                        mds_commit_cb(obd, transno, class_export_get(exp), err);
         }
 
         if (err) {

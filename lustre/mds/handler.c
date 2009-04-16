@@ -406,10 +406,22 @@ int mds_init_export(struct obd_export *exp)
         RETURN(ldlm_init_export(exp));
 }
 
-static int mds_destroy_export(struct obd_export *export)
+static int mds_destroy_export(struct obd_export *exp)
+{
+        int rc = 0;
+        ENTRY;
+
+        target_destroy_export(exp);
+        ldlm_destroy_export(exp);
+
+        LASSERT(list_empty(&exp->exp_mds_data.med_open_head));
+        mds_client_free(exp);
+}
+
+static int mds_cleanup_mfd(struct obd_export *exp)
 {
         struct mds_export_data *med;
-        struct obd_device *obd = export->exp_obd;
+        struct obd_device *obd = exp->exp_obd;
         struct mds_obd *mds = &obd->u.mds;
         struct lvfs_run_ctxt saved;
         struct lov_mds_md *lmm;
@@ -420,12 +432,26 @@ static int mds_destroy_export(struct obd_export *export)
         int rc = 0;
         ENTRY;
 
-        med = &export->exp_mds_data;
-        target_destroy_export(export);
-        ldlm_destroy_export(export);
+        med = &exp->exp_mds_data;
 
-        if (obd_uuid_equals(&export->exp_client_uuid, &obd->obd_uuid))
+        spin_lock(&med->med_open_lock);
+        if (list_empty(&med->med_open_head)) {
+                spin_unlock(&med->med_open_lock);
                 RETURN(0);
+        }
+
+        CFS_INIT_LIST_HEAD(&closing_list);
+        while (!list_empty(&med->med_open_head)) {
+                struct list_head *tmp = med->med_open_head.next;
+                struct mds_file_data *mfd =
+                        list_entry(tmp, struct mds_file_data, mfd_list);
+
+                /* Remove mfd handle so it can't be found again.
+                 * We are consuming the mfd_list reference here. */
+                mds_mfd_unlink(mfd, 0);
+                list_add_tail(&mfd->mfd_list, &closing_list);
+        }
+        spin_unlock(&med->med_open_lock);
 
         lmm_sz = mds->mds_max_mdsize;
         OBD_ALLOC(lmm, lmm_sz);
@@ -446,20 +472,6 @@ static int mds_destroy_export(struct obd_export *export)
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         /* Close any open files (which may also cause orphan unlinking). */
-        CFS_INIT_LIST_HEAD(&closing_list);
-        spin_lock(&med->med_open_lock);
-        while (!list_empty(&med->med_open_head)) {
-                struct list_head *tmp = med->med_open_head.next;
-                struct mds_file_data *mfd =
-                        list_entry(tmp, struct mds_file_data, mfd_list);
-
-                /* Remove mfd handle so it can't be found again.
-                 * We are consuming the mfd_list reference here. */
-                mds_mfd_unlink(mfd, 0);
-                list_add_tail(&mfd->mfd_list, &closing_list);
-        }
-        spin_unlock(&med->med_open_lock);
-
         list_for_each_entry_safe(mfd, n, &closing_list, mfd_list) {
                 int lmm_size = lmm_sz;
                 umode_t mode = mfd->mfd_dentry->d_inode->i_mode;
@@ -485,7 +497,7 @@ static int mds_destroy_export(struct obd_export *export)
 
                 list_del_init(&mfd->mfd_list);
                 rc = mds_mfd_close(NULL, REQ_REC_OFF, obd, mfd,
-                                   !(export->exp_flags & OBD_OPT_FAILOVER),
+                                   !(exp->exp_flags & OBD_OPT_FAILOVER),
                                    lmm, lmm_size, logcookies,
                                    mds->mds_max_cookiesize,
                                    &valid);
@@ -505,14 +517,10 @@ static int mds_destroy_export(struct obd_export *export)
                 }
 
         }
-
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         OBD_FREE(logcookies, cookie_sz);
         OBD_FREE(lmm, lmm_sz);
-
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        mds_client_free(export);
-
- out:
+out:
         RETURN(rc);
 }
 
@@ -546,6 +554,7 @@ static int mds_disconnect(struct obd_export *exp)
                 spin_unlock(&svc->srv_lock);
         }
         spin_unlock(&exp->exp_lock);
+        rc = mds_cleanup_mfd(exp);
 
         class_export_put(exp);
         RETURN(rc);
