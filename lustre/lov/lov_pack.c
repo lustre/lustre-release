@@ -436,7 +436,7 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 if (rc)
                         RETURN(rc);
         } else if ((lumv1->lmm_magic != LOV_USER_MAGIC_V1) &&
-                   (lumv1->lmm_magic != LOV_USER_MAGIC_V3_SWABBED)) {
+                   (lumv1->lmm_magic != LOV_USER_MAGIC_V3)) {
                 CDEBUG(D_IOCTL, "bad userland LOV MAGIC: %#08x\n",
                        lumv1->lmm_magic);
                 RETURN(-EINVAL);
