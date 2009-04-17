@@ -324,8 +324,12 @@ for NAME in $CONFIGS; do
 		#export LIBLUSTRE_DEBUG_MASK=`lctl get_param -n debug`
 		if [ -x $LIBLUSTRETESTS/sanity ]; then
 			mkdir -p $MOUNT2
-			echo $LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET
-			$LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET
+			if [ "$LIBLUSTRE_EXCEPT" ]; then
+				LIBLUSTRE_OPT="$LIBLUSTRE_OPT \
+					$(echo ' '$LIBLUSTRE_EXCEPT  | sed -re 's/\s+/ -e /g')"
+			fi
+			echo $LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET $LIBLUSTRE_OPT
+			$LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET $LIBLUSTRE_OPT
 		fi
 		$CLEANUP
 		#$SETUP
