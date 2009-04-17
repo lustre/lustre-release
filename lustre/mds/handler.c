@@ -408,7 +408,6 @@ int mds_init_export(struct obd_export *exp)
 
 static int mds_destroy_export(struct obd_export *exp)
 {
-        int rc = 0;
         ENTRY;
 
         target_destroy_export(exp);
@@ -416,6 +415,8 @@ static int mds_destroy_export(struct obd_export *exp)
 
         LASSERT(list_empty(&exp->exp_mds_data.med_open_head));
         mds_client_free(exp);
+
+        RETURN(0);
 }
 
 static int mds_cleanup_mfd(struct obd_export *exp)
