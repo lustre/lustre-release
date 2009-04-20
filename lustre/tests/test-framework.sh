@@ -216,8 +216,8 @@ load_modules() {
 
     echo Loading modules from $LUSTRE
     load_module ../libcfs/libcfs/libcfs
-    [ "$PTLDEBUG" ] && lctl set_param debug=$PTLDEBUG
-    [ "$SUBSYSTEM" ] && lctl set_param subsystem_debug=${SUBSYSTEM# }
+    [ "$PTLDEBUG" ] && lctl set_param debug="$PTLDEBUG"
+    [ "$SUBSYSTEM" ] && lctl set_param subsystem_debug="${SUBSYSTEM# }"
     local MODPROBECONF=
     [ -f /etc/modprobe.conf ] && MODPROBECONF=/etc/modprobe.conf
     [ ! "$MODPROBECONF" -a -d /etc/modprobe.d ] && MODPROBECONF=/etc/modprobe.d/Lustre
@@ -460,8 +460,8 @@ mount_facet() {
         echo "mount -t lustre $@ ${!dev} ${MOUNT%/*}/${facet}"
         echo "Start of ${!dev} on ${facet} failed ${RC}"
     else
-        do_facet ${facet} "lctl set_param debug=$PTLDEBUG; \
-            lctl set_param subsystem_debug=${SUBSYSTEM# }; \
+        do_facet ${facet} "lctl set_param debug=\\\"$PTLDEBUG\\\"; \
+            lctl set_param subsystem_debug=\\\"${SUBSYSTEM# }\\\"; \
             lctl set_param debug_mb=${DEBUG_SIZE}; \
             sync"
 
@@ -600,8 +600,8 @@ zconf_mount() {
     do_node $client mkdir -p $mnt
     do_node $client mount -t lustre $OPTIONS $device $mnt || return 1
 
-    do_node $client "lctl set_param debug=$PTLDEBUG;
-        lctl set_param subsystem_debug=${SUBSYSTEM# };
+    do_node $client "lctl set_param debug=\\\"$PTLDEBUG\\\";
+        lctl set_param subsystem_debug=\\\"${SUBSYSTEM# }\\\";
         lctl set_param debug_mb=${DEBUG_SIZE}"
 
     return 0
@@ -722,8 +722,8 @@ exit $rc"
     echo "Started clients $clients: "
     do_nodes $clients "mount | grep -w $mnt"
 
-    do_nodes $clients "lctl set_param debug=$PTLDEBUG;
-        lctl set_param subsystem_debug=${SUBSYSTEM# };
+    do_nodes $clients "lctl set_param debug=\\\"$PTLDEBUG\\\";
+        lctl set_param subsystem_debug=\\\"${SUBSYSTEM# }\\\";
         lctl set_param debug_mb=${DEBUG_SIZE};"
 
     return 0
