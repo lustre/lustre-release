@@ -70,6 +70,7 @@ static int ll_close_inode_openhandle(struct inode *inode,
         struct obd_device *obd;
         struct obdo *oa;
         struct mdc_op_data data = { { 0 } };
+        obd_flag valid;
         int rc;
         ENTRY;
 
@@ -94,10 +95,11 @@ static int ll_close_inode_openhandle(struct inode *inode,
 
         oa->o_id = inode->i_ino;
         oa->o_valid = OBD_MD_FLID;
-        obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                                   OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
-                                   OBD_MD_FLATIME | OBD_MD_FLMTIME |
-                                   OBD_MD_FLCTIME);
+        valid = OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLATIME |
+                OBD_MD_FLMTIME | OBD_MD_FLCTIME;
+        if (S_ISREG(inode->i_mode))
+                valid |=  OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+        obdo_from_inode(oa, inode, valid);
         if (ll_is_inode_dirty(inode)) {
                 oa->o_flags = MDS_BFLAG_UNCOMMITTED_WRITES;
                 oa->o_valid |= OBD_MD_FLFLAGS;
