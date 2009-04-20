@@ -2176,9 +2176,11 @@ reset_fail_loc () {
     local myNODES=$(nodes_list)
     local NODE
 
+    echo -n "Resetting fail_loc on all nodes..."
     for NODE in $myNODES; do
-        do_node $NODE "lctl set_param fail_loc=0 2>/dev/null || true"
+        do_node $NODE "lctl set_param -n fail_loc=0 2>/dev/null || true"
     done
+    echo done.
 }
 
 run_one() {
@@ -2191,6 +2193,7 @@ run_one() {
     umask 0022
 
     local BEFORE=`date +%s`
+    echo
     log "== test $testnum: $message == `date +%H:%M:%S` ($BEFORE)"
     #check_mds
     export TESTNAME=test_$testnum
@@ -2559,12 +2562,15 @@ restore_lustre_params() {
         done
 }
 
-check_catastrophe () {
+check_catastrophe() {
     local rnodes=${1:-$(comma_list $(remote_nodes_list))}
+    local C=$CATASTROPHE
+    [ -f $C ] && [ $(cat $C) -ne 0 ] && return 1
 
-    [ -f $CATASTROPHE ] && [ $(cat $CATASTROPHE) -ne 0 ] && return 1
     if [ $rnodes ]; then
-        do_nodes $rnodes "set -x; [ -f $CATASTROPHE ] && { [ \`cat $CATASTROPHE\` -eq 0 ] || false; } || true"
+        do_nodes $rnodes "rc=\\\$([ -f $C ] && echo \\\$(< $C) || echo 0);
+if [ \\\$rc -ne 0 ]; then echo \\\$(hostname): \\\$rc; fi
+exit \\\$rc;"
     fi 
 }
 
