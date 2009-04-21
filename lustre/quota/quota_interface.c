@@ -397,7 +397,8 @@ static int quota_chk_acq_common(struct obd_device *obd, unsigned int uid,
                         l_wait_event(qctxt->lqc_wait_for_qmaster, check_qm(qctxt),
                                      &lwi);
                         CDEBUG(D_QUOTA, "wake up when quota master is back\n");
-                        lc_watchdog_touch(oti->oti_thread->t_watchdog);
+                        lc_watchdog_touch(oti->oti_thread->t_watchdog,
+                                 GET_TIMEOUT(oti->oti_thread->t_svc));
                 } else {
                         spin_unlock(&qctxt->lqc_lock);
                 }
@@ -428,7 +429,8 @@ static int quota_chk_acq_common(struct obd_device *obd, unsigned int uid,
                         struct l_wait_info lwi;
 
                         if (oti && oti->oti_thread && oti->oti_thread->t_watchdog)
-                                lc_watchdog_touch(oti->oti_thread->t_watchdog);
+                                lc_watchdog_touch(oti->oti_thread->t_watchdog,
+                                         GET_TIMEOUT(oti->oti_thread->t_svc));
                         CDEBUG(D_QUOTA, "rc: %d, count_err: %d\n", rc,
                                count_err++);
 

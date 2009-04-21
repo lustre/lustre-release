@@ -220,7 +220,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         mgs->mgs_service =
                 ptlrpc_init_svc(MGS_NBUFS, MGS_BUFSIZE, MGS_MAXREQSIZE,
                                 MGS_MAXREPSIZE, MGS_REQUEST_PORTAL,
-                                MGC_REPLY_PORTAL, 2000,
+                                MGC_REPLY_PORTAL, 2,
                                 mgs_handle, LUSTRE_MGS_NAME,
                                 obd->obd_proc_entry, NULL,
                                 MGS_THREADS_AUTO_MIN, MGS_THREADS_AUTO_MAX,
