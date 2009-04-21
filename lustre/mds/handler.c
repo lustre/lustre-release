@@ -1162,7 +1162,7 @@ static int mds_statfs(struct ptlrpc_request *req)
         /* This will trigger a watchdog timeout */
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_STATFS_LCW_SLEEP,
                          (MDS_SERVICE_WATCHDOG_FACTOR *
-                          at_get(&svc->srv_at_estimate) / 1000) + 1);
+                          at_get(&svc->srv_at_estimate)) + 1);
         OBD_COUNTER_INCREMENT(obd, statfs);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK))
