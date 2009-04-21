@@ -1917,10 +1917,7 @@ static int ptlrpc_main(void *arg)
          */
         cfs_waitq_signal(&thread->t_ctl_waitq);
 
-        thread->t_watchdog = lc_watchdog_add(max_t(int, obd_timeout, AT_OFF ? 0 :
-                                                   at_get(&svc->srv_at_estimate))
-                                             *  svc->srv_watchdog_factor,
-                                             NULL, NULL);
+        thread->t_watchdog = lc_watchdog_add(GET_TIMEOUT(svc), NULL, NULL);
 
         spin_lock(&svc->srv_lock);
         svc->srv_threads_running++;
@@ -1953,10 +1950,7 @@ static int ptlrpc_main(void *arg)
                               svc->srv_at_check,
                               &lwi);
 
-                lc_watchdog_touch_ms(thread->t_watchdog, max_t(int, obd_timeout,
-                                     AT_OFF ? 0 :
-                                     at_get(&svc->srv_at_estimate)) *
-                                     svc->srv_watchdog_factor);
+                lc_watchdog_touch(thread->t_watchdog, GET_TIMEOUT(svc));
 
                 ptlrpc_check_rqbd_pool(svc);
 
@@ -2256,6 +2250,7 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc)
         id = svc->srv_threads_started++;
         spin_unlock(&svc->srv_lock);
 
+        thread->t_svc = svc;
         thread->t_id = id;
         sprintf(name, "%s_%02d", svc->srv_thread_name, id);
         d.dev = dev;

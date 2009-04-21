@@ -140,8 +140,10 @@ struct lc_watchdog *lc_watchdog_add(int time,
                                     void *data);
 
 /* Enables a watchdog and resets its timer. */
-void lc_watchdog_touch_ms(struct lc_watchdog *lcw, int timeout_ms);
-void lc_watchdog_touch(struct lc_watchdog *lcw);
+void lc_watchdog_touch(struct lc_watchdog *lcw, int timeout);
+#define GET_TIMEOUT(svc) (max_t(int, obd_timeout,                       \
+                          AT_OFF ? 0 : at_get(&svc->srv_at_estimate)) * \
+                          svc->srv_watchdog_factor)
 
 /* Disable a watchdog; touch it to restart it. */
 void lc_watchdog_disable(struct lc_watchdog *lcw);

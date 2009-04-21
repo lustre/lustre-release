@@ -53,7 +53,6 @@ struct lc_watchdog {
         void             *lcw_data;
 
         pid_t             lcw_pid;
-        cfs_duration_t    lcw_time; /* time until watchdog fires, jiffies */
 
         enum {
                 LC_WATCHDOG_DISABLED,
@@ -255,8 +254,7 @@ static int lcw_dispatch_main(void *data)
                         list_del_init(&lcw->lcw_list);
                         spin_unlock_bh(&lcw_pending_timers_lock);
 
-                        CDEBUG(D_INFO, "found lcw for pid " LPPID ": inactive for "
-                               "%lds\n", lcw->lcw_pid, cfs_duration_sec(lcw->lcw_time));
+                        CDEBUG(D_INFO, "found lcw for pid " LPPID "\n", lcw->lcw_pid);
 
                         if (lcw->lcw_state != LC_WATCHDOG_DISABLED)
                                 lcw->lcw_callback(lcw->lcw_pid, lcw->lcw_data);
@@ -312,7 +310,7 @@ static void lcw_dispatch_stop(void)
         EXIT;
 }
 
-struct lc_watchdog *lc_watchdog_add(int timeout_ms,
+struct lc_watchdog *lc_watchdog_add(int timeout,
                                     void (*callback)(pid_t, void *),
                                     void *data)
 {
@@ -327,7 +325,6 @@ struct lc_watchdog *lc_watchdog_add(int timeout_ms,
 
         lcw->lcw_task     = cfs_current();
         lcw->lcw_pid      = cfs_curproc_pid();
-        lcw->lcw_time     = cfs_time_seconds(timeout_ms) / 1000;
         lcw->lcw_callback = (callback != NULL) ? callback : lc_watchdog_dumplog;
         lcw->lcw_data     = data;
         lcw->lcw_state    = LC_WATCHDOG_DISABLED;
@@ -343,7 +340,7 @@ struct lc_watchdog *lc_watchdog_add(int timeout_ms,
         /* Keep this working in case we enable them by default */
         if (lcw->lcw_state == LC_WATCHDOG_ENABLED) {
                 lcw->lcw_last_touched = cfs_time_current();
-                cfs_timer_arm(&lcw->lcw_timer, lcw->lcw_time + 
+                cfs_timer_arm(&lcw->lcw_timer, cfs_time_seconds(timeout) +
                               cfs_time_current());
         }
 
@@ -368,7 +365,7 @@ static void lcw_update_time(struct lc_watchdog *lcw, const char *message)
         lcw->lcw_last_touched = newtime;
 }
 
-void lc_watchdog_touch_ms(struct lc_watchdog *lcw, int timeout_ms)
+void lc_watchdog_touch(struct lc_watchdog *lcw, int timeout)
 {
         ENTRY;
         LASSERT(lcw != NULL);
@@ -381,16 +378,9 @@ void lc_watchdog_touch_ms(struct lc_watchdog *lcw, int timeout_ms)
         lcw->lcw_state = LC_WATCHDOG_ENABLED;
 
         cfs_timer_arm(&lcw->lcw_timer, cfs_time_current() +
-                      cfs_time_seconds(timeout_ms) / 1000);
+                      cfs_time_seconds(timeout));
 
         EXIT;
-}
-EXPORT_SYMBOL(lc_watchdog_touch_ms);
-
-/* deprecated - use above instead */
-void lc_watchdog_touch(struct lc_watchdog *lcw)
-{
-        lc_watchdog_touch_ms(lcw, (int)cfs_duration_sec(lcw->lcw_time) * 1000);
 }
 EXPORT_SYMBOL(lc_watchdog_touch);
 
@@ -448,7 +438,7 @@ EXPORT_SYMBOL(lc_watchdog_dumplog);
 
 #else   /* !defined(WITH_WATCHDOG) */
 
-struct lc_watchdog *lc_watchdog_add(int timeout_ms,
+struct lc_watchdog *lc_watchdog_add(int timeout,
                                     void (*callback)(pid_t pid, void *),
                                     void *data)
 {
@@ -457,12 +447,7 @@ struct lc_watchdog *lc_watchdog_add(int timeout_ms,
 }
 EXPORT_SYMBOL(lc_watchdog_add);
 
-void lc_watchdog_touch_ms(struct lc_watchdog *lcw, int timeout_ms)
-{
-}
-EXPORT_SYMBOL(lc_watchdog_touch_ms);
-
-void lc_watchdog_touch(struct lc_watchdog *lcw)
+void lc_watchdog_touch(struct lc_watchdog *lcw, int timeout)
 {
 }
 EXPORT_SYMBOL(lc_watchdog_touch);
