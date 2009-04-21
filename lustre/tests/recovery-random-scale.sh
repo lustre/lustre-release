@@ -212,7 +212,7 @@ while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
     it_time_start=$(date +%s)
     
     FAIL_CLIENT=$(get_random_entry $NODES_TO_USE)
-    client_var=${FAIL_CLIENT}_nums
+    client_var=$(client_var_name $FAIL_CLIENT)_nums
 
     # store the list of failed clients
     # lists are comma separated
