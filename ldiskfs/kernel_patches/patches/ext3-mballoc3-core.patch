@@ -288,7 +288,7 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 ===================================================================
 --- /dev/null
 +++ linux-2.6.22.19/fs/ext3/mballoc.c
-@@ -0,0 +1,4475 @@
+@@ -0,0 +1,4480 @@
 +/*
 + * Copyright 2008 Sun Microsystems, Inc.
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -1456,7 +1456,10 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +			cur += 32;
 +			continue;
 +		}
-+		mb_clear_bit_atomic(lock, cur, bm);
++		if (lock)
++			mb_clear_bit_atomic(lock, cur, bm);
++		else
++			mb_clear_bit(cur, bm);
 +		cur++;
 +	}
 +}
@@ -1474,7 +1477,10 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +			cur += 32;
 +			continue;
 +		}
-+		mb_set_bit_atomic(lock, cur, bm);
++		if (lock)
++			mb_set_bit_atomic(lock, cur, bm);
++		else
++			mb_set_bit(cur, bm);
 +		cur++;
 +	}
 +}
@@ -1646,6 +1652,7 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +		e3b->bd_info->bb_fragments--;
 +
 +	/* let's maintain buddy itself */
++	spin_lock(sb_bgl_lock(EXT3_SB(e3b->bd_sb), ex->fe_group));
 +	while (len) {
 +		ord = mb_find_order_for_block(e3b, start);
 +
@@ -1681,9 +1688,9 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +		e3b->bd_info->bb_counters[ord]++;
 +	}
 +
-+	mb_set_bits(sb_bgl_lock(EXT3_SB(e3b->bd_sb), ex->fe_group),
-+		    EXT3_MB_BITMAP(e3b), ex->fe_start, len0);
++	mb_set_bits(NULL, EXT3_MB_BITMAP(e3b), ex->fe_start, len0);
 +	mb_check_buddy(e3b);
++	spin_unlock(sb_bgl_lock(EXT3_SB(e3b->bd_sb), ex->fe_group));
 +
 +	return ret;
 +}
@@ -3253,15 +3260,17 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +		}
 +	}
 +#endif
-+	mb_set_bits(sb_bgl_lock(sbi, ac->ac_b_ex.fe_group), bitmap_bh->b_data,
++	ext3_lock_group(sb, ac->ac_b_ex.fe_group);
++	spin_lock(sb_bgl_lock(sbi, ac->ac_b_ex.fe_group));
++	mb_set_bits(NULL, bitmap_bh->b_data,
 +		    ac->ac_b_ex.fe_start, ac->ac_b_ex.fe_len);
 +
-+	spin_lock(sb_bgl_lock(sbi, ac->ac_b_ex.fe_group));
 +	gdp->bg_free_blocks_count =
 +		cpu_to_le16(le16_to_cpu(gdp->bg_free_blocks_count)
 +				- ac->ac_b_ex.fe_len);
 +	spin_unlock(sb_bgl_lock(sbi, ac->ac_b_ex.fe_group));
 +	percpu_counter_mod(&sbi->s_freeblocks_counter, - ac->ac_b_ex.fe_len);
++	ext3_unlock_group(sb, ac->ac_b_ex.fe_group);
 +
 +	err = ext3_journal_dirty_metadata(handle, bitmap_bh);
 +	if (err)
@@ -4566,7 +4575,6 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +	BUG_ON(e3b->bd_bitmap_page == NULL);
 +	BUG_ON(e3b->bd_buddy_page == NULL);
 +
-+	ext3_lock_group(sb, group);
 +	for (i = 0; i < count; i++) {
 +		md = db->bb_md_cur;
 +		if (md && db->bb_tid != handle->h_transaction->t_tid) {
@@ -4611,7 +4619,6 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +			db->bb_md_cur = NULL;
 +		}
 +	}
-+	ext3_unlock_group(sb, group);
 +	return 0;
 +}
 +
@@ -4711,35 +4718,33 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +			BUG_ON(!mb_test_bit(bit + i, bitmap_bh->b_data));
 +	}
 +#endif
-+	mb_clear_bits(sb_bgl_lock(sbi, block_group), bitmap_bh->b_data, bit,
-+			count);
-+
-+	/* We dirtied the bitmap block */
-+	BUFFER_TRACE(bitmap_bh, "dirtied bitmap block");
-+	err = ext3_journal_dirty_metadata(handle, bitmap_bh);
-+
-+	ac.ac_b_ex.fe_group = block_group;
-+	ac.ac_b_ex.fe_start = bit;
-+	ac.ac_b_ex.fe_len = count;
-+	ext3_mb_store_history(&ac);
++	ext3_lock_group(sb, block_group);
++	spin_lock(sb_bgl_lock(sbi, block_group));
++	mb_clear_bits(NULL, bitmap_bh->b_data, bit, count);
++	gdp->bg_free_blocks_count =
++		cpu_to_le16(le16_to_cpu(gdp->bg_free_blocks_count) + count);
++	spin_unlock(sb_bgl_lock(sbi, block_group));
++	percpu_counter_mod(&sbi->s_freeblocks_counter, count);
 +
 +	if (metadata) {
 +		/* blocks being freed are metadata. these blocks shouldn't
 +		 * be used until this transaction is committed */
 +		ext3_mb_free_metadata(handle, &e3b, block_group, bit, count);
 +	} else {
-+		ext3_lock_group(sb, block_group);
 +		err = mb_free_blocks(inode, &e3b, bit, count);
 +		ext3_mb_return_to_preallocation(inode, &e3b, block, count);
-+		ext3_unlock_group(sb, block_group);
 +		BUG_ON(err != 0);
 +	}
++	ext3_unlock_group(sb, block_group);
 +
-+	spin_lock(sb_bgl_lock(sbi, block_group));
-+	gdp->bg_free_blocks_count =
-+		cpu_to_le16(le16_to_cpu(gdp->bg_free_blocks_count) + count);
-+	spin_unlock(sb_bgl_lock(sbi, block_group));
-+	percpu_counter_mod(&sbi->s_freeblocks_counter, count);
++	ac.ac_b_ex.fe_group = block_group;
++	ac.ac_b_ex.fe_start = bit;
++	ac.ac_b_ex.fe_len = count;
++	ext3_mb_store_history(&ac);
++
++	/* We dirtied the bitmap block */
++	BUFFER_TRACE(bitmap_bh, "dirtied bitmap block");
++	err = ext3_journal_dirty_metadata(handle, bitmap_bh);
 +
 +	ext3_mb_release_desc(&e3b);
 +
