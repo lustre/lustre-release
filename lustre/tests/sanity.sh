@@ -916,8 +916,7 @@ reset_enospc() {
 	mkdir -p $DIR/d27/nospc
 	rmdir $DIR/d27/nospc
 	local list=$(comma_list $(osts_nodes))
-	[ "$OSTIDX" ] && \
-		{ var=ost$((OSTIDX + 1))_HOST && list=${!var}; }
+	[ "$OSTIDX" ] && list=$(facet_host ost$((OSTIDX + 1)))
 
 	do_nodes $list lctl set_param fail_loc=$FAIL_LOC
 }
