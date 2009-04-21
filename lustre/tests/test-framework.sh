@@ -669,18 +669,24 @@ check_progs_installed () {
         eval \\\$status"
 }
 
+client_var_name() {
+    echo __$(echo $1 | tr '-' 'X')
+}
+
 start_client_load() {
     local client=$1
-    local var=${client}_load
+    local load=$2
+    local var=$(client_var_name $client)_load
+    eval export ${var}=$load
 
     do_node $client "PATH=$PATH MOUNT=$MOUNT ERRORS_OK=$ERRORS_OK \
                               BREAK_ON_ERROR=$BREAK_ON_ERROR \
                               END_RUN_FILE=$END_RUN_FILE \
                               LOAD_PID_FILE=$LOAD_PID_FILE \
                               TESTSUITELOG=$TESTSUITELOG \
-                              run_${!var}.sh" &
+                              run_${load}.sh" &
     CLIENT_LOAD_PIDS="$CLIENT_LOAD_PIDS $!"
-    log "Started client load: ${!var} on $client"
+    log "Started client load: ${load} on $client"
 
     return 0
 }
@@ -692,16 +698,14 @@ start_client_loads () {
 
     for ((nodenum=0; nodenum < ${#clients[@]}; nodenum++ )); do
         testnum=$((nodenum % numloads))
-        eval export ${clients[nodenum]}_load=${CLIENT_LOADS[testnum]}
-        start_client_load ${clients[nodenum]}
+        start_client_load ${clients[nodenum]} ${CLIENT_LOADS[testnum]}
     done
 }
 
 # only for remote client 
 check_client_load () {
     local client=$1
-    local var=${client}_load
-
+    local var=$(client_var_name $client)_load
     local TESTLOAD=run_${!var}.sh
 
     ps auxww | grep -v grep | grep $client | grep -q "$TESTLOAD" || return 1
