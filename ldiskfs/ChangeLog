@@ -7,6 +7,12 @@ Bugzilla   :
 Description:
 Details    :
 
+Severity   : minor
+Frequency  : in recovery
+Bugzilla   : 18192
+Description: don't mix llog inodes with normal.
+Details    : allocate inodes for log in last inode group
+
 -------------------------------------------------------------------------------
 
 2009-04-20  Sun Microsystems, Inc.

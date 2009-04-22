@@ -28,3 +28,4 @@ ext3-xattr-no-update-ctime-suse.patch
 ext3-check-bad-inode.patch
 ext3-get-raid-stripe-from-sb-2.6-suse.patch
 ext3-big-endian-check-2.6-suse.patch
+alloc-policy-2.6-rhlel5.diff
