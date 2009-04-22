@@ -39,6 +39,11 @@ Details    : The Lustre timeout value in /proc/sys/lustre/timeout is now
 	     unnecessarily causing lengthy recovery times.
 
 Severity   : enhancement
+Bugzilla   : 15899
+Description: Add OST Pools support
+Details    : File striping can now be set to use an arbitrary pool of OSTs
+
+Severity   : enhancement
 Bugzilla   : 17974
 Description: add lazystatfs mount option to allow statfs(2) to skip down OSTs
 Details    : allow skip disconnected ost for send statfs request and hide error
@@ -156,6 +161,10 @@ Severity   : enhancement
 Bugzilla   : 17201
 Description: Update to RHEL5 kernel-2.6.18-92.1.17.el5.
 
+Severity   : enhancement
+Bugzilla   : 17458
+Description: Update to SLES10 SP2 kernel-2.6.16.60-0.31.
+
 Severity   : normal
 Frequency  : rare, need acl's on inode.
 Bugzilla   : 16492
@@ -164,14 +173,6 @@ Details    : if ost was added after client connected to mds client can have
 	     hit lnet_try_match_md ... to big messages to wide striped files.
 	     in this case need teach client to handle config events about add
 	     lov target and update client max ea size at that event.
-
-Severity   : enhancement
-Bugzilla   : 17374
-Description: Update to sles9 kernel-2.6.5-7.314.
-
-Severity   : enhancement
-Bugzilla   : 17458
-Description: Update to SLES10 SP2 kernel-2.6.16.60-0.31.
 
 Severity   : normal
 Frequency  : Create a symlink file with a very long name
@@ -260,20 +261,12 @@ Details    : if client reconnected to restarted server we need join to recovery
 	     instead of find server handler is changed and process self eviction
 	     with cancel all locks.
 
-Severity   : enhancement
-Bugzilla   : 16633
-Description: Update to RHEL5 kernel-2.6.18-92.1.10.el5.
-
 Severity   : normal
 Bugzilla   : 15825
 Description: Kernel BUG tries to release flock
 Details    : Lustre does not destroy flock lock before last reference goes
 	     away. So always drop flock locks when client is evicted and
 	     perform unlock regardless of successfulness of speaking to MDS.
-
-Severity   : enhancement
-Bugzilla   : 16547
-Description: Update to SLES10 SP2 kernel-2.6.16.60-0.27.
 
 Severity   : enhancement
 Bugzilla   : 16566
@@ -315,10 +308,6 @@ Details    : add workaround for get valid ost count for avoid warnings about
 	     to wrong pointer.
 
 Severity   : enhancement
-Bugzilla   : 15899
-Description: File striping can now be set to use an arbitrary pool of OSTs.
-
-Severity   : enhancement
 Bugzilla   : 16573
 Description: Export bytes_read/bytes_write count on OSC/OST.
 
@@ -349,14 +338,6 @@ Severity   : enhancement
 Bugzilla   : 16208
 Description: Implement lustre ll_show_options method.
 
-Severity   : enhancement
-Bugzilla   : 16188
-Description: Update to SLES9 kernel-2.6.5-7.312.
-
-Severity   : enhancement
-Bugzilla   : 16503
-Description: Update to RHEL4 kernel-2.6.9-67.0.22.EL.
-
 Severity   : normal
 Bugzilla   : 16317
 Description: exports in /proc are broken
@@ -381,14 +362,6 @@ Description: configure's --enable-quota should check the
 	   : kernel .config for CONFIG_QUOTA
 Details    : configure is terminated if --enable-quota is passed but
 	   : no quota support is in kernel
-
-Severity   : enhancement
-Bugzilla   : 15308
-Description: Update to SLES10 SP2 kernel-2.6.16.60-0.23.
-
-Severity   : enhancement
-Bugzilla   : 16190
-Description: Update to RHEL5 kernel-2.6.18-92.1.6.el5.
 
 Severity   : normal
 Bugzilla   : 16318
@@ -423,10 +396,6 @@ Frequency  : occasional
 Bugzilla   : 15210
 Description: add refcount for osc callbacks, so avoid panic on shutdown
 
-Severity   : enhancement
-Bugzilla   : 16189
-Description: Update to RHEL4 kernel-2.6.9-67.0.20.
-
 Severity   : normal
 Frequency  : testing only
 Bugzilla   : 12653
@@ -438,10 +407,6 @@ Frequency  : only in unusual configurations
 Bugzilla   : 16014
 Description: Kernel panic with find ost index.
 Details    : lov_obd have panic if some OST's have sparse indexes.
-
-Severity   : enhancement
-Bugzilla   : 15865
-Description: Update to RHEL5 kernel-2.6.18-53.1.21.el5.
 
 Severity   : major
 Frequency  : rarely, if filesystem is mounted with -o flock
@@ -484,14 +449,6 @@ Frequency  : only with broken builds/installations
 Bugzilla   : 15779
 Description: no LBUG if lquota.ko and fsfilt_ldiskfs.ko are different versions
 Details    : just return an error to a user, put a console error message
-
-Severity   : enhancement
-Bugzilla   : 15741
-Description: Update to RHEL5 kernel-2.6.18-53.1.19.el5.
-
-Severity   : enhancement
-Bugzilla   : 15742
-Description: Update to RHEL4 kernel-2.6.9-67.0.15.
 
 Severity   : enhancement
 Bugzilla   : 14134
