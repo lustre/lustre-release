@@ -838,9 +838,14 @@ Details    : Do not put cancelled locks into replay list, hold references on
 
 Severity   : critical
 Bugzilla   : 18695
-Descriptoin: Lustre detected file system corruption with inode out of bounds
+Description: Lustre detected file system corruption with inode out of bounds
 Details    : don't update i_size on MDS_CLOSE for directories. This causes
 	     directory corruptions on the MDT.
+
+Severity   : normal
+Bugzilla   : 19223
+Description: client doesn't try to reconnect
+Details    : correctly skip time estimate if in recovery
 
 -------------------------------------------------------------------------------
 
