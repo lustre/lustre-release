@@ -1,4 +1,4 @@
-2009-03-20 Sun Microsystems, Inc.
+2009-04-30 Sun Microsystems, Inc.
 	* version 1.8.0
 	* Support for kernels:
 	 2.6.16.60-0.31 (SLES 10),
@@ -13,6 +13,24 @@
 	* NFS export disabled when stack size < 8192. Since the NFSv4 export of
 	  Lustre filesystem with 4K stack may cause a stack overflow. For more
 	  information, please refer to bugzilla 17630.
+
+Severity   : enhancement
+Bugzilla   : 12182
+Description: Caching OSS
+Details    : introduce data caching on the OSS. The OSS now relies on the linux
+	     kernel page cache to keep recently accessed data in memory.
+	     It is worth noting that all write requests are still flushed
+	     synchronously as in lustre 1.6.
+
+Severity   : enhancement
+Bugzilla   : 10609
+Description: version based recovery
+Details    : introduce finer grained recovery able to detect transaction
+	     dependencies and can deal with transaction gaps.
+
+Severity   : enhancement
+Bugzilla   : 3055
+Description: Enable adaptive timeouts by default
 
 Severity   : enhancement
 Bugzilla   : 17974
