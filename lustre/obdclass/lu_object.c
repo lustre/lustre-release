@@ -1094,11 +1094,11 @@ void lu_context_key_degister(struct lu_context_key *key)
         ++key_set_version;
         spin_lock(&lu_keys_guard);
         key_fini(&lu_shrink_env.le_ctx, key->lct_index);
-
-        if (atomic_read(&key->lct_used) > 1)
-                CERROR("key has instances.\n");
         lu_keys[key->lct_index] = NULL;
         spin_unlock(&lu_keys_guard);
+
+        LASSERTF(atomic_read(&key->lct_used) == 1, "key has instances: %d\n",
+                 atomic_read(&key->lct_used));
 }
 EXPORT_SYMBOL(lu_context_key_degister);
 
