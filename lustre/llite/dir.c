@@ -1220,6 +1220,23 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                                  sizeof(struct lu_fid)))
                         RETURN(-EFAULT);
                 RETURN(0);
+        case OBD_IOC_CHANGELOG_CLEAR: {
+                struct ioc_changelog_clear *icc;
+                int rc;
+
+                OBD_ALLOC_PTR(icc);
+                if (icc == NULL)
+                        RETURN(-ENOMEM);
+                if (copy_from_user(icc, (void *)arg, sizeof(*icc)))
+                        GOTO(icc_free, rc = -EFAULT);
+
+                rc = obd_iocontrol(cmd, sbi->ll_md_exp, sizeof(*icc), icc,NULL);
+
+icc_free:
+                OBD_FREE_PTR(icc);
+                RETURN(rc);
+        }
+
         default:
                 RETURN(obd_iocontrol(cmd, sbi->ll_dt_exp,0,NULL,(void *)arg));
         }

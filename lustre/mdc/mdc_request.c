@@ -1010,8 +1010,9 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         }
         switch (cmd) {
         case OBD_IOC_CHANGELOG_CLEAR: {
+                struct ioc_changelog_clear *icc = karg;
                 struct changelog_setinfo cs =
-                        {data->ioc_u64_1, data->ioc_u32_1};
+                        {icc->icc_recno, icc->icc_id};
                 rc = obd_set_info_async(exp, strlen(KEY_CHANGELOG_CLEAR),
                                         KEY_CHANGELOG_CLEAR, sizeof(cs), &cs,
                                         NULL);

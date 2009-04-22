@@ -432,6 +432,48 @@ static int search_fsname(char *pathname, char *fsname)
         return -ENOENT;
 }
 
+/*
+ * Return an open fd to the named Lustre fs root
+ */
+static int get_root_fd(char *fsname)
+{
+        char *ptr;
+        FILE *fp;
+        struct mntent *mnt = NULL;
+        int fd;
+
+        /* get the mount point */
+        fp = setmntent(MOUNTED, "r");
+        if (fp == NULL) {
+                 llapi_err(LLAPI_MSG_ERROR,
+                           "setmntent(%s) failed: %s:", MOUNTED,
+                           strerror (errno));
+                 return -EIO;
+        }
+        mnt = getmntent(fp);
+        while ((feof(fp) == 0) && ferror(fp) == 0) {
+                if (llapi_is_lustre_mnt(mnt)) {
+                        ptr = strrchr(mnt->mnt_fsname, '/');
+                        if (!ptr)
+                                return -EINVAL;
+                        ptr++;
+
+                        if (strcmp(ptr, fsname) == 0) {
+                                fd = open(mnt->mnt_dir, O_RDONLY | O_DIRECTORY);
+                                if (fd < 0) {
+                                        perror("open");
+                                        return -errno;
+                                }
+                                endmntent(fp);
+                                return fd;
+                        }
+                }
+                mnt = getmntent(fp);
+        }
+        endmntent(fp);
+        return -ENOENT;
+}
+
 /* return the first file matching this pattern */
 static int first_match(char *pattern, char *buffer)
 {
@@ -2391,7 +2433,9 @@ int llapi_ls(int argc, char *argv[])
         exit(execvp(argv[0], argv));
 }
 
-/* format must have %s%s, buf must be > 16 */
+/* Print mdtname 'name' into 'buf' using 'format'.  Add -MDT0000 if needed.
+ * format must have %s%s, buf must be > 16
+ */
 static int get_mdtname(const char *name, char *format, char *buf)
 {
         char suffix[]="-MDT0000";
@@ -2436,6 +2480,53 @@ int llapi_changelog_open(const char *mdtname, long long startrec)
         }
 
         return fd;
+}
+
+int llapi_changelog_clear(const char *mdtname, const char *idstr,
+                          long long endrec)
+{
+        struct ioc_changelog_clear data;
+        char *ptr;
+        int id, fd, index, rc;
+
+        if (endrec < 0) {
+                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                          "can't purge negative records\n");
+                return -EINVAL;
+        }
+
+        id = strtol(idstr + strlen(CHANGELOG_USER_PREFIX), NULL, 10);
+        if ((id == 0) || (strncmp(idstr, CHANGELOG_USER_PREFIX,
+                                  strlen(CHANGELOG_USER_PREFIX)) != 0)) {
+                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                          "expecting id of the form '"CHANGELOG_USER_PREFIX
+                          "<num>'; got '%s'\n", idstr);
+                return -EINVAL;
+        }
+
+        ptr = strstr(mdtname, "-MDT");
+        if (!ptr)
+                return -EINVAL;
+        index = strtol(ptr + 1, NULL, 10);
+        *ptr = '\0';
+
+        fd = get_root_fd((char *)mdtname);
+        if (fd < 0) {
+                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                          "can't open fs root for '%s': %d\n", mdtname, fd);
+                return fd;
+        }
+
+        data.icc_mdtindex = index;
+        data.icc_id = id;
+        data.icc_recno = endrec;
+        rc = ioctl(fd, OBD_IOC_CHANGELOG_CLEAR, &data);
+        if (rc)
+                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                          "ioctl err %d", rc);
+
+        close(fd);
+        return rc;
 }
 
 static int dev_ioctl(struct obd_ioctl_data *data, int dev, int cmd)
@@ -2484,69 +2575,6 @@ static int dev_name2dev(char *name)
         }
         return data.ioc_dev;
 }
-
-/* We need the full mdc name, and we shouldn't just grep from proc... */
-static void do_get_mdcname(char *obd_type_name, char *obd_name,
-                           char *obd_uuid, void *name)
-{
-        if (strncmp(obd_name, (char *)name, strlen((char *)name)) == 0)
-                strcpy((char *)name, obd_name);
-}
-
-static int get_mdcdev(const char *mdtname)
-{
-        char name[MAX_OBD_NAME];
-        char *type[] = { "mdc" };
-        int rc;
-
-        strcpy(name, mdtname);
-        rc = llapi_target_iterate(1, type, (void *)name, do_get_mdcname);
-        rc = rc < 0 ? : -rc;
-        if (rc < 0) {
-                llapi_err(LLAPI_MSG_ERROR, "Device %s not found %d\n", name,rc);
-                return rc;
-        }
-        return dev_name2dev(name);
-}
-
-int llapi_changelog_clear(const char *mdtname, const char *idstr,
-                          long long endrec)
-{
-        struct obd_ioctl_data data;
-        int dev, id, rc;
-
-        if (endrec < 0) {
-                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
-                          "can't purge negative records\n");
-                return -EINVAL;
-        }
-
-        id = strtol(idstr + strlen(CHANGELOG_USER_PREFIX), NULL, 10);
-        if ((id == 0) || (strncmp(idstr, CHANGELOG_USER_PREFIX,
-                                  strlen(CHANGELOG_USER_PREFIX)) != 0)) {
-                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
-                          "expecting id of the form '"CHANGELOG_USER_PREFIX
-                          "<num>'; got '%s'\n", idstr);
-                return -EINVAL;
-        }
-
-        dev = get_mdcdev(mdtname);
-        if (dev < 0) {
-                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
-                          "can't find mdc for '%s'\n", mdtname);
-                return dev;
-        }
-
-        memset(&data, 0, sizeof(data));
-        data.ioc_u32_1 = id;
-        data.ioc_u64_1 = endrec;
-        rc = dev_ioctl(&data, dev, OBD_IOC_CHANGELOG_CLEAR);
-        if (rc)
-                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
-                          "ioctl err %d", rc);
-        return rc;
-}
-
 
 int llapi_fid2path(char *device, char *fidstr, char *buf, int buflen,
                    long long *recno, int *linkno)

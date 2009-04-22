@@ -1285,8 +1285,8 @@ static int mdd_changelog_user_purge(struct mdd_device *mdd, int id,
 
 /** mdd_iocontrol
  * May be called remotely from mdt_iocontrol_handle or locally from
- * mdt_iocontrol. Data may be freeform - remote handling doesn't enforce or
- * swab an obd_ioctl_data format (but local ioctl handler does).
+ * mdt_iocontrol. Data may be freeform - remote handling doesn't enforce
+ * an obd_ioctl_data format (but local ioctl handler does).
  * \param cmd - ioc
  * \param len - data len
  * \param karg - ioctl data, in kernel space
@@ -1304,10 +1304,6 @@ static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
         /* Doesn't use obd_ioctl_data */
         if (cmd == OBD_IOC_CHANGELOG_CLEAR) {
                 struct changelog_setinfo *cs = karg;
-                if (len != sizeof(*cs)) {
-                        CERROR("Bad changelog_clear ioctl size %d\n", len);
-                        RETURN(-EINVAL);
-                }
                 rc = mdd_changelog_user_purge(mdd, cs->cs_id, cs->cs_recno);
                 RETURN(rc);
         }

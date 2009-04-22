@@ -70,7 +70,7 @@
 
 struct obd_statfs;
 
-/* 
+/*
  * The ioctl naming rules:
  * LL_*     - works on the currently opened filehandle instead of parent dir
  * *_OBD_*  - gets data for both OSC or MDC (LOV, LMV indirectly)
@@ -213,7 +213,7 @@ static inline void obd_str2uuid(struct obd_uuid *uuid, const char *tmp)
 }
 
 /* For printf's only, make sure uuid is terminated */
-static inline char *obd_uuid2str(struct obd_uuid *uuid) 
+static inline char *obd_uuid2str(struct obd_uuid *uuid)
 {
         if (uuid->uuid[sizeof(*uuid) - 1] != '\0') {
                 /* Obviously not safe, but for printfs, no real harm done...
@@ -350,6 +350,12 @@ struct if_quotactl {
         struct obd_dqblk        qc_dqblk;
         char                    obd_type[16];
         struct obd_uuid         obd_uuid;
+};
+
+struct ioc_changelog_clear {
+        __u32 icc_mdtindex;
+        __u32 icc_id;
+        __u64 icc_recno;
 };
 
 #ifndef offsetof

@@ -1113,9 +1113,13 @@ static int mdt_set_info(struct mdt_thread_info *info)
                 spin_unlock(&req->rq_export->exp_lock);
 
         } else if (KEY_IS(KEY_CHANGELOG_CLEAR)) {
+                struct changelog_setinfo *cs =
+                        (struct changelog_setinfo *)val;
+                if (vallen != sizeof(*cs)) {
+                        CERROR("Bad changelog_clear setinfo size %d\n", vallen);
+                        RETURN(-EINVAL);
+                }
                 if (lustre_msg_swabbed(req->rq_reqmsg)) {
-                        struct changelog_setinfo *cs =
-                                (struct changelog_setinfo *)val;
                         __swab64s(&cs->cs_recno);
                         __swab32s(&cs->cs_id);
                 }
