@@ -846,6 +846,7 @@ int mdc_close(struct obd_export *exp, struct mdc_op_data *data, struct obdo *oa,
                         req = NULL;
                         GOTO(out, rc = -EIO);
                 }
+                och->och_mod->mod_close_req = req;
                 DEBUG_REQ(D_RPCTRACE, req, "close req");
                 DEBUG_REQ(D_RPCTRACE, open_req, "clear open replay");
 
