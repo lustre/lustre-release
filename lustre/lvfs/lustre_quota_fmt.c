@@ -867,7 +867,7 @@ int lustre_read_dquot(struct lustre_dquot *dquot)
                         /* We need to escape back all-zero structure */
                         if (!memcmp((char *)&fakedquot[version],
                                     ddquot, dqblk_sz))
-                                ((struct lustre_disk_dqblk_v2 *)empty)->dqb_itime = cpu_to_le64(0);
+                                ((struct lustre_disk_dqblk_v2 *)ddquot)->dqb_itime = cpu_to_le64(0);
                 }
                 set_fs(fs);
                 disk2memdqb(&dquot->dq_dqb, ddquot, version);
