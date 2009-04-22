@@ -814,6 +814,8 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                 }
                 if (!(body->valid & OBD_MD_FLEASIZE) &&
                     !(body->valid & OBD_MD_FLMODEASIZE)) {
+                        /* split open transactions here */
+                        OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_SPLIT_OPEN, 10);
                         /* no EA: create objects */
                         rc = mds_create_objects(req, DLM_REPLY_REC_OFF + 1, rec,
                                                 mds, obd, dchild, handle, &lmm);
@@ -874,10 +876,11 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
 {
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_obd *mds = mds_req2mds(req);
-        struct dentry *dchild;
+        struct dentry *dchild, *dparent = NULL;
         char fidname[LL_FID_NAMELEN];
         int fidlen = 0, rc;
         void *handle = NULL;
+        struct inode *inodes[PTLRPC_NUM_VERSIONS] = { NULL };
         ENTRY;
 
         fidlen = ll_fid2str(fidname, fid->id, fid->generation);
@@ -893,6 +896,7 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
                 CWARN("Orphan %s found and opened in PENDING directory\n",
                        fidname);
         } else {
+                __u64 *pre_versions = lustre_msg_get_versions(req->rq_reqmsg);
                 l_dput(dchild);
 
                 /* We didn't find it in PENDING so it isn't an orphan.  See
@@ -900,6 +904,33 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
                 dchild = mds_fid2dentry(mds, fid, NULL);
                 if (IS_ERR(dchild))
                         RETURN(PTR_ERR(dchild));
+                /**
+                 * bug19224
+                 * this can be replay of partially committed open|create,
+                 * the create itself was committed while LOV EA weren't
+                 * We need to set versions again if conditions are:
+                 * - this is replay
+                 * - the transaction is greater than last_committed
+                 * - this was open|create
+                 * - there was real create so parent pre_version was saved
+                 */
+                if ((lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) &&
+                    (lustre_msg_get_transno(req->rq_reqmsg) >
+                     req->rq_export->exp_last_committed) &&
+                    (rec->ur_flags & MDS_OPEN_CREAT) &&
+                    pre_versions[0] != 0) {
+                        /* need parent to set version */
+                        dparent = mds_fid2dentry(mds, rec->ur_fid1, NULL);
+                        if (IS_ERR(dparent)) {
+                                CERROR("Can't find parent for open replay\n");
+                                l_dput(dchild);
+                                RETURN(PTR_ERR(dparent));
+                        }
+                        /* though file was created, the versions were not
+                         * changed yet, need to replay that too */
+                        inodes[0] = dparent->d_inode;
+                        inodes[1] = dchild->d_inode;
+                }
         }
 
         mds_pack_inode2body(body, dchild->d_inode);
@@ -907,10 +938,11 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
         ldlm_reply_set_disposition(rep, DISP_LOOKUP_POS);
 
         rc = mds_finish_open(req, dchild, body, flags, &handle, rec, rep, NULL);
-        rc = mds_finish_transno(mds, NULL, handle,
+        rc = mds_finish_transno(mds, inodes, handle,
                                 req, rc, rep ? rep->lock_policy_res1 : 0, 0);
         /* XXX what do we do here if mds_finish_transno itself failed? */
 
+        l_dput(dparent);
         l_dput(dchild);
         RETURN(rc);
 }

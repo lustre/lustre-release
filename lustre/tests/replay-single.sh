@@ -799,7 +799,6 @@ test_40(){
 }
 run_test 40 "cause recovery in ptlrpc, ensure IO continues"
 
-
 #b=2814
 # make sure that a read to one osc doesn't try to double-unlock its page just
 # because another osc is invalid.  trigger_group_io used to mistakenly return
@@ -2045,6 +2044,25 @@ test_82() { #bug 18927
     return 0
 }
 run_test 82 "second open|creat in replay with open orphan"
+
+test_83() { #bug 19224
+#define OBD_FAIL_MDS_SPLIT_OPEN  0x142
+    do_facet mds "lctl set_param fail_loc=0x80000142"
+    # open will sleep after first transaction
+    touch $DIR/$tfile &
+    PID=$!
+    sleep 2
+    # set barrier between open transactions
+    replay_barrier_nodf mds
+    createmany -o $DIR/$tfile- 10
+    # open should finish now
+    wait $PID || return 1
+    fail mds
+    rm $DIR/$tfile || return 2
+    unlinkmany $DIR/$tfile- 10 || return 3
+    return 0
+}
+run_test 83 "open replay with barrier between transactions"
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
