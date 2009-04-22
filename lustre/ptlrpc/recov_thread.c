@@ -476,7 +476,7 @@ struct llog_commit_master *llog_recov_thread_init(char *name)
          * Try to create threads with unique names.
          */
         snprintf(lcm->lcm_name, sizeof(lcm->lcm_name),
-                 "ll_log_commit_%s", name);
+                 "lcm_%s", name);
 
         atomic_set(&lcm->lcm_count, 0);
         atomic_set(&lcm->lcm_refcount, 1);
