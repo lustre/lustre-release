@@ -838,6 +838,7 @@ build_lustre()
     fi
 
     $RPMBUILD $targets $rpmbuildopt ../lustre.spec \
+        ${PATCHLESS:+--define "lustre_name lustre-client"} \
         --define "_tmppath $TMPDIR" \
         --define "_topdir $TOPDIR" || \
         fatal 1 "Error building rpms for $BUILD_ARCHS."
