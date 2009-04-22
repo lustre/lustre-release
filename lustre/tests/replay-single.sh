@@ -1995,6 +1995,25 @@ test_82() { #bug 18927
 }
 run_test 82 "second open|creat in replay with open orphan"
 
+test_83() { #bug 19224
+#define OBD_FAIL_MDS_SPLIT_OPEN  0x141
+    do_facet mds "lctl set_param fail_loc=0x80000141"
+    # open will sleep after first transaction
+    touch $DIR/$tfile &
+    PID=$!
+    sleep 2
+    # set barrier between open transactions
+    replay_barrier_nodf mds
+    createmany -o $DIR/$tfile- 10
+    # open should finish now
+    wait $PID || return 1
+    fail mds
+    rm $DIR/$tfile || return 2
+    unlinkmany $DIR/$tfile- 10 || return 3
+    return 0
+}
+run_test 83 "open replay with barrier between transactions"
+
 
 
 equals_msg `basename $0`: test complete, cleaning up
