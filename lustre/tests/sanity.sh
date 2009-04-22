@@ -1471,9 +1471,9 @@ test_33b() {
         rm -fr $DIR/d33
         mkdir -p $DIR/d33
         chown $RUNAS_ID $DIR/d33
-        $RUNAS $OPENFILE -f 1286739555 $DIR/d33/f33 && error "create" || true
+        $RUNAS $OPENFILE -f 1286739555 $DIR/d33/f33 || true
 }
-run_test 33b "test open file with malformed flags (No panic and return error)"
+run_test 33b "test open file with malformed flags (No panic)"
 
 TEST_34_SIZE=${TEST_34_SIZE:-2000000000000}
 test_34a() {
