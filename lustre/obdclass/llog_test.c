@@ -502,7 +502,6 @@ static int llog_test_6(struct obd_device *obd, char *name)
         struct obd_device *mdc_obd;
         struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
         struct obd_uuid *mds_uuid = &ctxt->loc_exp->exp_obd->obd_uuid;
-        struct obd_uuid uuid = {"LLOG_TEST6_UUID"};
         struct llog_handle *llh = NULL;
         struct llog_ctxt *nctxt;
         int rc;
