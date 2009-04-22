@@ -7,8 +7,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:  13297 19115 2108 9789 3637 9789 3561 12622 15528/2330 5188 10764 16410
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27u 33b  42a  42b  42c  42d  45   51d   62         68   75    76 $SANITY_EXCEPT"}
+# bug number for skipped test:  13297 2108 9789 3637 9789 3561 12622 15528/2330 5188 10764 16410
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27u  42a  42b  42c  42d  45   51d   62         68   75    76 $SANITY_EXCEPT"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # Tests that fail on uml, maybe elsewhere, FIXME
@@ -1492,9 +1492,9 @@ test_33b() {
         rm -fr $DIR/d33
         mkdir -p $DIR/d33
         chown $RUNAS_ID $DIR/d33
-        $RUNAS $OPENFILE -f 1286739555 $DIR/d33/f33 && error "create" || true
+        $RUNAS $OPENFILE -f 1286739555 $DIR/d33/f33 || true
 }
-run_test 33b "test open file with malformed flags (No panic and return error)"
+run_test 33b "test open file with malformed flags (No panic)"
 
 TEST_34_SIZE=${TEST_34_SIZE:-2000000000000}
 test_34a() {
