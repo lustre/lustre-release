@@ -809,6 +809,68 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
         RETURN(rc);
 }
 
+static int mdt_open_anon_by_fid(struct mdt_thread_info* info,
+                                struct ldlm_reply *rep, 
+                                struct mdt_lock_handle *lhc)
+{
+        __u32                    flags = info->mti_spec.sp_cr_flags;
+        struct mdt_reint_record *rr = &info->mti_rr;
+        struct md_attr          *ma = &info->mti_attr;
+        struct mdt_object       *o;
+        int                      rc;
+        ldlm_mode_t              lm;
+        ENTRY;
+
+        o = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid2);
+        if (IS_ERR(o))
+                RETURN(rc = PTR_ERR(o));
+
+        rc = mdt_object_exists(o);
+        if (rc == 0) {
+                mdt_set_disposition(info, rep, (DISP_LOOKUP_EXECD |
+                                    DISP_LOOKUP_NEG));
+                GOTO(out, rc = -ENOENT);
+        } else if (rc < 0) {
+                CERROR("NFS remote open shouldn't happen.\n");
+                GOTO(out, rc);
+        }
+
+        mdt_set_disposition(info, rep, (DISP_IT_EXECD |
+                                        DISP_LOOKUP_EXECD |
+                                        DISP_LOOKUP_POS));
+
+        if (flags & FMODE_WRITE)
+                lm = LCK_CW;
+        else if (flags & MDS_FMODE_EXEC)
+                lm = LCK_PR;
+        else
+                lm = LCK_CR;
+
+        mdt_lock_handle_init(lhc);
+        mdt_lock_reg_init(lhc, lm);
+        rc = mdt_object_lock(info, o, lhc,
+                             MDS_INODELOCK_LOOKUP | MDS_INODELOCK_OPEN,
+                             MDT_CROSS_LOCK);
+        if (rc)
+                GOTO(out, rc);
+
+        rc = mo_attr_get(info->mti_env, mdt_object_child(o), ma);
+        if (rc)
+                GOTO(out, rc);
+
+        if (flags & MDS_OPEN_LOCK)
+                mdt_set_disposition(info, rep, DISP_OPEN_LOCK);
+        rc = mdt_finish_open(info, NULL, o, flags, 0, rep);
+
+        if (!(flags & MDS_OPEN_LOCK))
+                mdt_object_unlock(info, o, lhc, 1);
+
+        GOTO(out, rc);
+out:
+        mdt_object_put(info->mti_env, o);
+        return rc;
+}
+
 int mdt_pin(struct mdt_thread_info* info)
 {
         ENTRY;
@@ -937,6 +999,10 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 }
                 CDEBUG(D_INFO, "Open replay did find object, continue as "
                        "regular open\n");
+        } else if (rr->rr_namelen == 0 && !info->mti_cross_ref) {
+                result = mdt_open_anon_by_fid(info, ldlm_rep, lhc);
+                if (result != -ENOENT)
+                        GOTO(out, result);
         }
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK))

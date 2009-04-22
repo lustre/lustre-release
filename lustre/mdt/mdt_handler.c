@@ -3358,7 +3358,6 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
         }
         rep->lock_policy_res2 = clear_serious(rc);
 
-        lhc->mlh_reg_lh.cookie = 0ull;
         if (rc == -ENOTCONN || rc == -ENODEV ||
             rc == -EOVERFLOW) { /**< if VBR failure then return error */
                 /*
@@ -3367,6 +3366,7 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                  * will detect this, then disconnect, reconnect the import
                  * immediately, instead of impacting the following the rpc.
                  */
+                lhc->mlh_reg_lh.cookie = 0ull;
                 RETURN(rc);
         } else {
                 /*
@@ -3377,7 +3377,14 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                   * FIXME: when open lock is finished, that should be
                   * checked here.
                   */
-                RETURN(ELDLM_LOCK_ABORTED);
+                if (lustre_handle_is_used(&lhc->mlh_reg_lh)) {
+                        rep->lock_policy_res2 = 0;
+                        rc = mdt_intent_lock_replace(info, lockp, NULL, lhc, flags);
+                        RETURN(rc);
+                } else {
+                        lhc->mlh_reg_lh.cookie = 0ull;
+                        RETURN(ELDLM_LOCK_ABORTED);
+                }
         }
 }
 
