@@ -627,7 +627,7 @@ int jt_dbg_debug_kernel(int argc, char **argv)
                 return 1;
         }
         if (argc > 1) {
-                fdout = open(argv[1], O_WRONLY|O_CREAT);
+                fdout = open(argv[1], O_WRONLY|O_CREAT|O_TRUNC);
                 if (fdout < 0) {
                         fprintf(stderr, "fopen(%s) failed: %s\n", argv[1],
                                 strerror(errno));
