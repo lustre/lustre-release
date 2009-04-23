@@ -221,7 +221,7 @@ test_5() {
     done
     fail $SINGLEMDS
     for i in `seq 220`; do
-      grep -q "tag-$i" $DIR/$tfile-$i || error "f1c-$i"
+      grep -q "tag-$i" $DIR/$tfile-$i || error "$tfile-$i"
     done
     rm -rf $DIR/$tfile-*
     sleep 3
@@ -1503,8 +1503,8 @@ test_61c() {
 run_test 61c "test race mds llog sync vs llog cleanup"
 
 test_61d() { # bug 16002 # bug 17466
-#define OBD_FAIL_OBD_LLOG_SETUP        0x605
     shutdown_facet $SINGLEMDS
+#define OBD_FAIL_OBD_LLOG_SETUP        0x605
     do_facet $SINGLEMDS "lctl set_param fail_loc=0x605"
     start $SINGLEMDS `mdsdevname 1` $MDS_MOUNT_OPTS && error "mds start should have failed"
     do_facet $SINGLEMDS "lctl set_param fail_loc=0"
@@ -1516,7 +1516,7 @@ test_62() { # Bug 15756 - don't mis-drop resent replay
     mkdir -p $DIR/$tdir
     replay_barrier $SINGLEMDS
     createmany -o $DIR/$tdir/$tfile- 25
-#define OBD_FAIL_TGT_REPLAY_DROP         0x706
+#define OBD_FAIL_TGT_REPLAY_DROP         0x707
     do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000707"
     facet_failover $SINGLEMDS
     df $MOUNT || return 1
@@ -1810,7 +1810,7 @@ test_70a () {
 				error "dd failed on $CLIENT"
 	done
 
-	local prev_client=$(echo $clients | sed 's/^.* \(.\+\)$/\1/') 
+	local prev_client=$(echo $clients | sed 's/^.* \(.\+\)$/\1/')
 	for C in ${CLIENTS//,/ }; do
 		do_node $prev_client dd if=$DIR/${tfile}_${C} of=/dev/null 2>/dev/null || \
 			error "dd if=$DIR/${tfile}_${C} failed on $prev_client"
@@ -1838,14 +1838,13 @@ test_70b () {
 	log "Started rundbench load PID=$PID ..."
 
 	sleep $((duration / 4))
-	replay_barrier $SINGLEMDS 
+	replay_barrier $SINGLEMDS
 	sleep 3 # give clients a time to do operations
 
 	log "$TESTNAME fail mds 1"
 	fail $SINGLEMDS
 
 	wait $PID || error "rundbench load on $CLIENTS failed!"
-
 }
 run_test 70b "mds recovery; $CLIENTCOUNT clients"
 # end multi-client tests
