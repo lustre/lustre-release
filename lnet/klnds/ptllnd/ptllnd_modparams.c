@@ -86,6 +86,10 @@ static int peercredits = PTLLND_PEERCREDITS;    /* <lnet/ptllnd_wire.h> */
 CFS_MODULE_PARM(peercredits, "i", int, 0444,
                 "concurrent sends to 1 peer");
 
+static int peer_buffer_credits = 0;
+CFS_MODULE_PARM(peer_buffer_credits, "i", int, 0444,
+                "# per-peer router buffer credits");
+
 static int max_msg_size = PTLLND_MAX_KLND_MSG_SIZE;  /* <lnet/ptllnd_wire.h> */
 CFS_MODULE_PARM(max_msg_size, "i", int, 0444,
                 "max size of immediate message");
@@ -133,7 +137,8 @@ kptl_tunables_t kptllnd_tunables = {
         .kptl_rxb_npages             = &rxb_npages,
         .kptl_rxb_nspare             = &rxb_nspare,
         .kptl_credits                = &credits,
-        .kptl_peercredits            = &peercredits,
+        .kptl_peertxcredits          = &peercredits,
+        .kptl_peerrtrcredits         = &peer_buffer_credits,
         .kptl_max_msg_size           = &max_msg_size,
         .kptl_peer_hash_table_size   = &peer_hash_table_size,
         .kptl_reschedule_loops       = &reschedule_loops,
@@ -174,7 +179,8 @@ enum {
         KPTLLND_PID,
         KPTLLND_RXB_PAGES,
         KPTLLND_CREDITS,
-        KPTLLND_PEERCREDITS,
+        KPTLLND_PEERTXCREDITS,
+        KPTLLND_PEERRTRCREDITS,
         KPTLLND_MAX_MSG_SIZE,
         KPTLLND_PEER_HASH_SIZE,
         KPTLLND_RESHEDULE_LOOPS,
@@ -195,7 +201,8 @@ enum {
 #define KPTLLND_PID             CTL_UNNUMBERED
 #define KPTLLND_RXB_PAGES       CTL_UNNUMBERED
 #define KPTLLND_CREDITS         CTL_UNNUMBERED
-#define KPTLLND_PEERCREDITS     CTL_UNNUMBERED
+#define KPTLLND_PEERTXCREDITS   CTL_UNNUMBERED
+#define KPTLLND_PEERRTRCREDITS  CTL_UNNUMBERED
 #define KPTLLND_MAX_MSG_SIZE    CTL_UNNUMBERED
 #define KPTLLND_PEER_HASH_SIZE  CTL_UNNUMBERED
 #define KPTLLND_RESHEDULE_LOOPS CTL_UNNUMBERED
@@ -280,9 +287,17 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = KPTLLND_PEERCREDITS,
+                .ctl_name = KPTLLND_PEERTXCREDITS,
                 .procname = "peercredits",
                 .data     = &peercredits,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = KPTLLND_PEERRTRCREDITS,
+                .procname = "peer_buffer_credits",
+                .data     = &peer_buffer_credits,
                 .maxlen   = sizeof(int),
                 .mode     = 0444,
                 .proc_handler = &proc_dointvec

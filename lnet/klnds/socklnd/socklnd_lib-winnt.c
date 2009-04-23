@@ -79,7 +79,15 @@ ksocknal_lib_tunables_init ()
 
         ksocknal_ctl_table[i].ctl_name = j++;
         ksocknal_ctl_table[i].procname = "peer_credits";
-        ksocknal_ctl_table[i].data     = ksocknal_tunables.ksnd_peercredits;
+        ksocknal_ctl_table[i].data     = ksocknal_tunables.ksnd_peertxcredits;
+        ksocknal_ctl_table[i].maxlen   = sizeof (int);
+        ksocknal_ctl_table[i].mode     = 0444;
+        ksocknal_ctl_table[i].proc_handler = &proc_dointvec;
+        i++;
+
+        ksocknal_ctl_table[i].ctl_name = j++;
+        ksocknal_ctl_table[i].procname = "peer_buffer_credits";
+        ksocknal_ctl_table[i].data     = ksocknal_tunables.ksnd_peerrtrcredits;
         ksocknal_ctl_table[i].maxlen   = sizeof (int);
         ksocknal_ctl_table[i].mode     = 0444;
         ksocknal_ctl_table[i].proc_handler = &proc_dointvec;

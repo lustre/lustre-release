@@ -221,12 +221,10 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid)
                 return the_lnet.ln_shutdown ? -ESHUTDOWN : -EHOSTUNREACH;
         }
 
-	lp->lp_txcredits = 
-                lp->lp_mintxcredits = lp->lp_ni->ni_peertxcredits;
-
-        /* As a first approximation; allow this peer the same number of router
-         * buffers as it is allowed outstanding sends */
-        lp->lp_rtrcredits = lp->lp_minrtrcredits = lp->lp_txcredits;
+        lp->lp_txcredits    =
+        lp->lp_mintxcredits = lp->lp_ni->ni_peertxcredits;
+        lp->lp_rtrcredits    =
+        lp->lp_minrtrcredits = lnet_peer_buffer_credits(lp->lp_ni);
 
         LASSERT (!the_lnet.ln_shutdown);
         /* can't add peers after shutdown starts */

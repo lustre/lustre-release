@@ -62,7 +62,7 @@ SYSCTL_INT(_lnet_ksocknal,    OID_AUTO,         credits,
            CTLTYPE_INT | CTLFLAG_RW ,           &ksocknal_tunables.ksnd_credits, 
            0,                                   "credits");
 SYSCTL_INT(_lnet_ksocknal,    OID_AUTO,         peer_credits, 
-           CTLTYPE_INT | CTLFLAG_RW ,           &ksocknal_tunables.ksnd_peercredits, 
+           CTLTYPE_INT | CTLFLAG_RW ,           &ksocknal_tunables.ksnd_peertxcredits, 
            0,                                   "peer_credits");
 SYSCTL_INT(_lnet_ksocknal,    OID_AUTO,         nconnds, 
            CTLTYPE_INT | CTLFLAG_RW ,           &ksocknal_tunables.ksnd_nconnds, 
