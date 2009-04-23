@@ -723,37 +723,76 @@ test_6() {
 	chown $TSTUSR.$TSTUSR $FILEB
 
 	echo "  Exceed quota limit ..."
-        RUNDD="$RUNAS dd if=/dev/zero of=$FILEB bs=$BLK_SZ"
+        RUNDD="$RUNAS dd if=/dev/zero of=$FILEA bs=$BLK_SZ"
         $RUNDD count=$((LIMIT - BUNIT_SZ * OSTCOUNT)) || \
-		quota_error a $TSTUSR "write fileb failure, but expect success"
+		quota_error a $TSTUSR "write filea failure, but expect success"
 
         cancel_lru_locks osc
         $SHOW_QUOTA_USER
         $SHOW_QUOTA_GROUP
         $RUNDD seek=$LIMIT count=$((BUNIT_SZ * OSTCOUNT)) && \
-		quota_error a $TSTUSR "write fileb success, but expect EDQUOT"
+		quota_error a $TSTUSR "write filea success, but expect EDQUOT"
         cancel_lru_locks osc
-	echo "  Write to OST0 return EDQUOT"
+	echo "  Write to OST1 return EDQUOT"
 	# this write maybe cache write, ignore it's failure
-        RUNDD="$RUNAS dd if=/dev/zero of=$FILEA bs=$BLK_SZ"
+        RUNDD="$RUNAS dd if=/dev/zero of=$FILEB bs=$BLK_SZ"
         $RUNDD count=$(($BUNIT_SZ * 2)) || true
         cancel_lru_locks osc
         $SHOW_QUOTA_USER
         $SHOW_QUOTA_GROUP
         $RUNDD count=$((BUNIT_SZ * 2)) seek=$((BUNIT_SZ *2)) && \
-		quota_error a $TSTUSR "write filea success, but expect EDQUOT"
+		quota_error a $TSTUSR "write fileb success, but expect EDQUOT"
 
-	echo "  Remove fileb to let OST1 release quota"
-	rm -f $FILEB
-        sync; sleep 10; sync; # need to allow journal commit for small fs
+	echo "  Remove filea to let OST0 release quota"
+	rm -f $FILEA
 
-	echo "  Write to OST0"
+        if at_is_valid && at_is_enabled; then
+	    timeout=$(at_max_get mds)
+        else
+	    timeout=$(lctl get_param -n timeout)
+        fi
+        count=$((timeout / 5))
+        OST0_UUID=`do_facet ost1 $LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
+
+        while [ $((count--)) -gt 0 ]; do
+                sync && sleep 5
+
+	        OST0_QUOTA_HOLD=`$LFS quota -o $OST0_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $3 }'`
+                if [ -z $OST0_QUOTA_HOLD ]; then
+                        error "System is error when query quota for block (U:$TSTUSR)."
+                else
+                        [ $OST0_QUOTA_HOLD -gt $BUNIT_SZ ] && continue
+                fi
+
+                break
+        done
+
+        [ ! $count -gt 0 ] && error "Release quota for block timeout (U:$TSTUSR)."
+        $SHOW_QUOTA_USER
+
+        while [ $((count--)) -gt 0 ]; do
+                sync && sleep 5
+
+	        OST0_QUOTA_HOLD=`$LFS quota -o $OST0_UUID -g $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $3 }'`
+                if [ -z $OST0_QUOTA_HOLD ]; then
+                        error "System is error when query quota for block (G:$TSTUSR)."
+                else
+                        [ $OST0_QUOTA_HOLD -gt $BUNIT_SZ ] && continue
+                fi
+
+                break
+        done
+
+        [ ! $count -gt 0 ] && error "Release quota for block timeout (G:$TSTUSR)."
+        $SHOW_QUOTA_GROUP
+
+	echo "  Write to OST1"
 	$RUNDD count=$((LIMIT - BUNIT_SZ * OSTCOUNT)) || \
-		quota_error a $TSTUSR "write filea failure, expect success"
+		quota_error a $TSTUSR "write fileb failure, expect success"
 	echo "  Done"
 
 	# cleanup
-	rm -f $FILEA
+	rm -f $FILEB
 	sync; sleep 3; sync;
 
 	resetquota -u $TSTUSR
