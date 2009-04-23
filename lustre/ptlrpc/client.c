@@ -226,7 +226,8 @@ static void ptlrpc_at_adj_service(struct ptlrpc_request *req,
         struct imp_at *at;
 
         /* do estimate only if is not in recovery */
-        if (!(req->rq_send_state & (LUSTRE_IMP_FULL | LUSTRE_IMP_CONNECTING)))
+        if ((req->rq_send_state != LUSTRE_IMP_FULL) &&
+             (req->rq_send_state != LUSTRE_IMP_CONNECTING))
                 return;
 
         LASSERT(req->rq_import);
