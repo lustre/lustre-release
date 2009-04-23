@@ -33,6 +33,11 @@ Bugzilla   : 3055
 Description: Enable adaptive timeouts by default
 
 Severity   : normal
+Bugzilla   : 19223
+Descriptoin: correctly skip time estimate if in recovery
+Details    : rq_send_state insn't bitmask so using bitwise ops is forbid.
+
+Severity   : normal
 Bugzilla   : 18192
 Descriptoin: fix goal inodes
 Details    : Allocate inodes for llog in last inode group for avoid broke

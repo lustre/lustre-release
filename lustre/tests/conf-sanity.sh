@@ -1771,6 +1771,7 @@ test_50e() {
 	local pid
 	CONN_PROC="osc.$FSNAME-OST0000-osc.ost_server_uuid"
 	
+	reformat_and_config
 	start_mds || return 1
 	#first client should see only one ost
 	start_ost || return 2
