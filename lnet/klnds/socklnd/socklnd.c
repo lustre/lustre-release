@@ -2591,9 +2591,10 @@ ksocknal_startup (lnet_ni_t *ni)
         cfs_spin_lock_init(&net->ksnn_lock);
         net->ksnn_incarnation = ksocknal_lib_new_incarnation();
         ni->ni_data = net;
-        ni->ni_maxtxcredits = *ksocknal_tunables.ksnd_credits;
-        ni->ni_peertxcredits = *ksocknal_tunables.ksnd_peercredits;
-        ni->ni_peertimeout = *ksocknal_tunables.ksnd_peertimeout;
+        ni->ni_peertimeout    = *ksocknal_tunables.ksnd_peertimeout;
+        ni->ni_maxtxcredits   = *ksocknal_tunables.ksnd_credits;
+        ni->ni_peertxcredits  = *ksocknal_tunables.ksnd_peertxcredits;
+        ni->ni_peerrtrcredits = *ksocknal_tunables.ksnd_peerrtrcredits;
 
         if (ni->ni_interfaces[0] == NULL) {
                 rc = ksocknal_enumerate_interfaces(net);

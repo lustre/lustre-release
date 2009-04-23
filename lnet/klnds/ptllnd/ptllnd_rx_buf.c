@@ -376,7 +376,7 @@ kptllnd_rx_done(kptl_rx_t *rx, int post_credit)
 
                 LASSERT (peer->peer_outstanding_credits +
                          peer->peer_sent_credits <=
-                         *kptllnd_tunables.kptl_peercredits);
+                         *kptllnd_tunables.kptl_peertxcredits);
 
                 CDEBUG(D_NETTRACE, "%s[%d/%d+%d]: rx %p done\n",
                        libcfs_id2str(peer->peer_id), peer->peer_credits,

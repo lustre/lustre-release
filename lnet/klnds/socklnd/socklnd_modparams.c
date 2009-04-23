@@ -33,6 +33,10 @@ static int peer_credits = 8;
 CFS_MODULE_PARM(peer_credits, "i", int, 0444,
                 "# concurrent sends to 1 peer");
 
+static int peer_buffer_credits = 0;
+CFS_MODULE_PARM(peer_buffer_credits, "i", int, 0444,
+                "# per-peer router buffer credits");
+
 static int peer_timeout = 0;
 CFS_MODULE_PARM(peer_timeout, "i", int, 0444,
                 "Seconds without aliveness news to declare peer dead (<=0 to disable)");
@@ -156,7 +160,8 @@ CFS_MODULE_PARM(protocol, "i", int, 0644,
 ksock_tunables_t ksocknal_tunables = {
         .ksnd_timeout         = &sock_timeout,
         .ksnd_credits         = &credits,
-        .ksnd_peercredits     = &peer_credits,
+        .ksnd_peertxcredits   = &peer_credits,
+        .ksnd_peerrtrcredits  = &peer_buffer_credits,
         .ksnd_peertimeout     = &peer_timeout,
         .ksnd_nconnds         = &nconnds,
         .ksnd_min_reconnectms = &min_reconnectms,

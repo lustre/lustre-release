@@ -61,7 +61,10 @@ ksocknal_lib_tunables_init ()
 		{j++, "credits", ksocknal_tunables.ksnd_credits, 
 		 sizeof (int), 0444, NULL, &proc_dointvec};
         ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "peer_credits", ksocknal_tunables.ksnd_peercredits, 
+		{j++, "peer_credits", ksocknal_tunables.ksnd_peertxcredits, 
+		 sizeof (int), 0444, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "peer_buffer_credits", ksocknal_tunables.ksnd_peerrtrcredits, 
 		 sizeof (int), 0444, NULL, &proc_dointvec};
         ksocknal_ctl_table[i++] = (ctl_table)
 		{j++, "nconnds", ksocknal_tunables.ksnd_nconnds, 

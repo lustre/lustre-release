@@ -39,6 +39,9 @@ CFS_MODULE_PARM(small_router_buffers, "i", int, 0444,
 static int large_router_buffers = 512;
 CFS_MODULE_PARM(large_router_buffers, "i", int, 0444,
                 "# of large messages to buffer in the router");
+static int peer_buffer_credits = 0;
+CFS_MODULE_PARM(peer_buffer_credits, "i", int, 0444,
+                "# router buffer credits per peer");
 
 static int auto_down = 1;
 CFS_MODULE_PARM(auto_down, "i", int, 0444,
@@ -64,6 +67,20 @@ int
 lnet_peers_start_down(void)
 {
         return check_routers_before_use;
+}
+
+int
+lnet_peer_buffer_credits(lnet_ni_t *ni)
+{
+        /* NI option overrides LNet default */
+        if (ni->ni_peerrtrcredits > 0)
+                return ni->ni_peerrtrcredits;
+        if (peer_buffer_credits > 0)
+                return peer_buffer_credits;
+
+        /* As an approximation, allow this peer the same number of router
+         * buffers as it is allowed outstanding sends */
+        return ni->ni_peertxcredits;
 }
 
 void
@@ -1053,6 +1070,12 @@ lnet_alloc_rtrpools(int im_a_router)
 
 int
 lnet_peers_start_down(void)
+{
+        return 0;
+}
+
+int
+lnet_peer_buffer_credits(lnet_ni_t *ni)
 {
         return 0;
 }
