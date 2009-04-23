@@ -11,8 +11,8 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 
-# bug number for skipped test: 13739
-HEAD_EXCEPT="                  32a"
+# bug number for skipped test: 13739 19280
+HEAD_EXCEPT="                  32a    50e 50f"
 
 # bug number for skipped test:                                 
 ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $HEAD_EXCEPT"
