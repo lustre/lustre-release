@@ -613,8 +613,7 @@ struct req_msg_field {
 };
 
 enum rmf_flags {
-        RMF_F_STRING = 1 << 0,
-        RMF_F_NO_SIZE_CHECK = 1 << 1
+        RMF_F_STRING = 1 << 0
 };
 
 struct req_capsule;
@@ -647,7 +646,8 @@ const struct req_msg_field RMF_MGS_SEND_PARAM =
 EXPORT_SYMBOL(RMF_MGS_SEND_PARAM);
 
 const struct req_msg_field RMF_SETINFO_VAL =
-        DEFINE_MSGF("setinfo_val", 0, -1, NULL);
+        DEFINE_MSGF("setinfo_val", 0,
+                    sizeof(__u32), lustre_swab_generic_32s);
 EXPORT_SYMBOL(RMF_SETINFO_VAL);
 
 const struct req_msg_field RMF_SEQ_OPC =
@@ -756,13 +756,12 @@ const struct req_msg_field RMF_CONN =
 EXPORT_SYMBOL(RMF_CONN);
 
 const struct req_msg_field RMF_CONNECT_DATA =
-        DEFINE_MSGF("cdata",
-                    RMF_F_NO_SIZE_CHECK /* we allow extra space for interop */,
+        DEFINE_MSGF("cdata", 0,
                     sizeof(struct obd_connect_data), lustre_swab_connect);
 EXPORT_SYMBOL(RMF_CONNECT_DATA);
 
 const struct req_msg_field RMF_DLM_REQ =
-        DEFINE_MSGF("dlm_req", RMF_F_NO_SIZE_CHECK /* ldlm_request_bufsize */,
+        DEFINE_MSGF("dlm_req", 0,
                     sizeof(struct ldlm_request), lustre_swab_ldlm_request);
 EXPORT_SYMBOL(RMF_DLM_REQ);
 
@@ -781,7 +780,7 @@ const struct req_msg_field RMF_DLM_LVB =
 EXPORT_SYMBOL(RMF_DLM_LVB);
 
 const struct req_msg_field RMF_MDT_MD =
-        DEFINE_MSGF("mdt_md", RMF_F_NO_SIZE_CHECK, MIN_MD_SIZE, NULL);
+        DEFINE_MSGF("mdt_md", 0, MIN_MD_SIZE, NULL);
 EXPORT_SYMBOL(RMF_MDT_MD);
 
 const struct req_msg_field RMF_REC_REINT =
@@ -799,13 +798,11 @@ const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, -1, NULL);
 EXPORT_SYMBOL(RMF_EADATA);
 
 const struct req_msg_field RMF_ACL =
-        DEFINE_MSGF("acl", RMF_F_NO_SIZE_CHECK,
-                    LUSTRE_POSIX_ACL_MAX_SIZE, NULL);
+        DEFINE_MSGF("acl", 0, LUSTRE_POSIX_ACL_MAX_SIZE, NULL);
 EXPORT_SYMBOL(RMF_ACL);
 
 const struct req_msg_field RMF_LOGCOOKIES =
-        DEFINE_MSGF("logcookies", RMF_F_NO_SIZE_CHECK /* multiple cookies */,
-                    sizeof(struct llog_cookie), NULL);
+        DEFINE_MSGF("logcookies", 0, sizeof(struct llog_cookie), NULL);
 EXPORT_SYMBOL(RMF_LOGCOOKIES);
 
 const struct req_msg_field RMF_CAPA1 =
@@ -1503,15 +1500,6 @@ void req_capsule_set_size(struct req_capsule *pill,
                           enum req_location loc, int size)
 {
         LASSERT(loc == RCL_SERVER || loc == RCL_CLIENT);
-
-        if ((size != field->rmf_size) &&
-            (field->rmf_size != -1) &&
-            !(field->rmf_flags & RMF_F_NO_SIZE_CHECK) &&
-            (size > 0)) {
-                CERROR("%s: field size mismatch %d != %d (%d)\n",
-                       field->rmf_name, size, field->rmf_size, loc);
-                //LBUG();
-        }
 
         pill->rc_area[loc][__req_capsule_offset(pill, field, loc)] = size;
 }

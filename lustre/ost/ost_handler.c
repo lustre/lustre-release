@@ -1200,10 +1200,8 @@ static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
         if (KEY_IS(KEY_EVICT_BY_NID)) {
                 if (val && vallen)
                         obd_export_evict_by_nid(exp->exp_obd, val);
+
                 GOTO(out, rc = 0);
-        } else if (KEY_IS(KEY_MDS_CONN) && lustre_msg_swabbed(req->rq_reqmsg)) {
-                /* Val's are not swabbed automatically */
-                __swab32s((__u32 *)val);
         }
 
         rc = obd_set_info_async(exp, keylen, key, vallen, val, NULL);
