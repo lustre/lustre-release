@@ -1,12 +1,9 @@
 lnxmaj="2.6.18"
 lnxrel="128.1.1.el5"
 
-KERNEL=linux-${lnxmaj}-${lnxrel}.tar.bz2
+KERNEL_SRPM=kernel-$lnxmaj-$lnxrel.src.rpm
 SERIES=2.6-rhel5.series
-VERSION=${lnxmaj}
 EXTRA_VERSION=${lnxrel}_lustre.@VERSION@
-RHBUILD=1
-LINUX26=1
 LUSTRE_VERSION=@VERSION@
 
 OFED_VERSION=inkernel
@@ -15,7 +12,9 @@ BASE_ARCHS="i686 x86_64 ia64 ppc64"
 BIGMEM_ARCHS=""
 BOOT_ARCHS=""
 JENSEN_ARCHS=""
-SMP_ARCHS="i686 x86_64 ia64 ppc64"
+#SMP_ARCHS="i686 x86_64 ia64 ppc64"
+# RHEL5 doesn't use smp specific kernels
+SMP_ARCHS=""
 UP_ARCHS=""
 
 for cc in gcc ; do
