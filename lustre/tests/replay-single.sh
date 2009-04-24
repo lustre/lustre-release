@@ -1906,6 +1906,7 @@ test_74() {
     mount_facet ost1
     touch $DIR/$tfile || return 1
     rm $DIR/$tfile || return 2
+    df $MOUNT || error "df failed: $?"
     return 0
 }
 run_test 74 "Ensure applications don't fail waiting for OST reocvery"
