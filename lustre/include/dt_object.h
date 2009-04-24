@@ -809,6 +809,9 @@ static inline int dt_declare_punch(const struct lu_env *env,
                                    struct dt_object *dt, __u64 start,
                                    __u64 end, struct thandle *th)
 {
+        LASSERT(dt);
+        LASSERT(dt->do_ops);
+        LASSERT(dt->do_ops->do_declare_punch);
         return dt->do_ops->do_declare_punch(env, dt, start, end, th);
 }
 
@@ -816,6 +819,9 @@ static inline int dt_punch(const struct lu_env *env, struct dt_object *dt,
                            __u64 start, __u64 end, struct thandle *th,
                            struct lustre_capa *capa)
 {
+        LASSERT(dt);
+        LASSERT(dt->do_ops);
+        LASSERT(dt->do_ops->do_punch);
         return dt->do_ops->do_punch(env, dt, start, end, th, capa);
 }
 
