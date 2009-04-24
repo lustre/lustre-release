@@ -75,7 +75,6 @@ Conflicts: %{name}-deps-sles
 This package has RPM dependencies appropriate for RHEL, RHL, and FC
 systems.
 
-%if ! %{is_client}
 %package tests
 Summary: Lustre testing framework
 Group: Development/Kernel
@@ -85,7 +84,6 @@ Requires: %{name} = %{version}, %{name}-modules = %{version}
 %description tests
 This package contains a set of test binaries and scripts that are intended
 to be used by the Lustre testing framework.
-%endif
 
 %prep
 %setup -qn lustre-%{version}
@@ -119,11 +117,6 @@ rm -f $RPM_BUILD_ROOT%{_libdir}/libsysio.a
 # Remove ldiskfs module(s) - they are packaged by the ldiskfs .spec.
 rm -rf $RPM_BUILD_ROOT/lib/modules/%{kversion}/kernel/fs/lustre-ldiskfs
 
-%if %{is_client}
-# remove the tests that were installed
-rm -rf $RPM_BUILD_ROOT%{_libdir}/lustre/tests \
-       $RPM_BUILD_ROOT%{_libdir}/lustre/liblustre/tests
-%else
 # hack to include the llog_test module in lustre-tests
 llog_base=$RPM_BUILD_DIR/lustre-%{version}/lustre/obdclass/llog_test
 if [ -e ${llog_base}.ko ]; then
@@ -139,7 +132,6 @@ rm -f lustre-source
 ln -s $RPM_BUILD_ROOT/usr/src lustre-source
 make distdir distdir=lustre-source/lustre-%{version}
 chmod -R go-w lustre-source/lustre-%{version}
-%endif
 
 cat >lustre.files <<EOF
 %attr(-, root, root) /sbin/mount.lustre
@@ -211,9 +203,7 @@ popd >/dev/null
 # %files deps-sles
 # %files deps-rhel
 
-%if ! %{is_client}
 %files tests -f lustre-tests.files
-%endif
 
 %post modules
 if [ -f /boot/System.map-%{kversion} ]; then
@@ -258,7 +248,6 @@ else
 	depmod -ae %{kversion} || exit 0
 fi
 
-%if ! %{is_client}
 %post tests
 if [ -f /boot/System.map-%{kversion} ]; then
 	depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
@@ -272,7 +261,6 @@ if [ -f /boot/System.map-%{kversion} ]; then
 else
 	depmod -ae %{kversion} || exit 0
 fi
-%endif
 
 %clean
 rm -rf $RPM_BUILD_ROOT
