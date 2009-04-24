@@ -369,6 +369,7 @@ download_srpm() {
     local target=$1
     local srpm=$2
 
+    # ~sigh~  the download site doesn't actually have these kernels
     echo "Downloading http://downloads.lustre.org/public/kernels/$target/old/$srpm..."
     if ! wget -nv "http://downloads.lustre.org/public/kernels/$target/old/$srpm" \
         -O "$KERNELDIR/$srpm"; then
@@ -658,11 +659,8 @@ build_lustre() {
         echo NORPM mode. Only compiling.
     fi
 
-    if $PATCHLESS; then
-        rpmbuildopt="$rpmbuildopt --define \"lustre_name lustre-client\""
-    fi
-
     $RPMBUILD $targets $rpmbuildopt ../lustre.spec \
+        ${PATCHLESS:+--define "lustre_name lustre-client"} \
         --define "_tmppath $TMPDIR" \
         --define "_topdir $TOPDIR" || \
         fatal 1 "Error building rpms for $BUILD_ARCHS."
