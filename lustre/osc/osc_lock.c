@@ -471,14 +471,18 @@ static void osc_lock_upcall0(const struct lu_env *env, struct osc_lock *olck)
  */
 static int osc_lock_upcall(void *cookie, int errcode)
 {
-        struct osc_lock         *olck  = cookie;
-        struct cl_lock_slice    *slice = &olck->ols_cl;
-        struct cl_lock          *lock  = slice->cls_lock;
-        struct lu_env           *env;
-        struct cl_env_nest       nest;
+        struct osc_lock      *olck  = cookie;
+        struct cl_lock_slice *slice = &olck->ols_cl;
+        struct cl_lock       *lock  = slice->cls_lock;
+        struct lu_env        *env;
+
+        int refcheck;
 
         ENTRY;
-        env = cl_env_nested_get(&nest);
+        /*
+         * XXX environment should be created in ptlrpcd.
+         */
+        env = cl_env_get(&refcheck);
         if (!IS_ERR(env)) {
                 int rc;
 
@@ -544,7 +548,7 @@ static int osc_lock_upcall(void *cookie, int errcode)
                 /* release cookie reference, acquired by osc_lock_enqueue() */
                 lu_ref_del(&lock->cll_reference, "upcall", lock);
                 cl_lock_put(env, lock);
-                cl_env_nested_put(&nest, env);
+                cl_env_put(env, &refcheck);
         } else
                 /* should never happen, similar to osc_ldlm_blocking_ast(). */
                 LBUG();
@@ -719,10 +723,9 @@ static int osc_ldlm_blocking_ast(struct ldlm_lock *dlmlock,
          * new environment has to be created to not corrupt outer context.
          */
         env = cl_env_nested_get(&nest);
-        if (!IS_ERR(env)) {
+        if (!IS_ERR(env))
                 result = osc_dlm_blocking_ast0(env, dlmlock, data, flag);
-                cl_env_nested_put(&nest, env);
-        } else {
+        else {
                 result = PTR_ERR(env);
                 /*
                  * XXX This should never happen, as cl_lock is
@@ -737,23 +740,26 @@ static int osc_ldlm_blocking_ast(struct ldlm_lock *dlmlock,
                 else
                         CERROR("BAST failed: %d\n", result);
         }
+        cl_env_nested_put(&nest, env);
         return result;
 }
 
 static int osc_ldlm_completion_ast(struct ldlm_lock *dlmlock,
                                    int flags, void *data)
 {
-        struct cl_env_nest nest;
-        struct lu_env     *env;
-        struct osc_lock   *olck;
-        struct cl_lock    *lock;
+        struct lu_env   *env;
+        void            *env_cookie;
+        struct osc_lock *olck;
+        struct cl_lock  *lock;
+        int refcheck;
         int result;
         int dlmrc;
 
         /* first, do dlm part of the work */
         dlmrc = ldlm_completion_ast_async(dlmlock, flags, data);
         /* then, notify cl_lock */
-        env = cl_env_nested_get(&nest);
+        env_cookie = cl_env_reenter();
+        env = cl_env_get(&refcheck);
         if (!IS_ERR(env)) {
                 olck = osc_ast_data_get(dlmlock);
                 if (olck != NULL) {
@@ -787,9 +793,10 @@ static int osc_ldlm_completion_ast(struct ldlm_lock *dlmlock,
                         result = 0;
                 } else
                         result = -ELDLM_NO_LOCK_DATA;
-                cl_env_nested_put(&nest, env);
+                cl_env_put(env, &refcheck);
         } else
                 result = PTR_ERR(env);
+        cl_env_reexit(env_cookie);
         return dlmrc ?: result;
 }
 
@@ -799,15 +806,15 @@ static int osc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data)
         struct osc_lock        *olck;
         struct cl_lock         *lock;
         struct cl_object       *obj;
-        struct cl_env_nest      nest;
         struct lu_env          *env;
         struct ost_lvb         *lvb;
         struct req_capsule     *cap;
         int                     result;
+        int                     refcheck;
 
         LASSERT(lustre_msg_get_opc(req->rq_reqmsg) == LDLM_GL_CALLBACK);
 
-        env = cl_env_nested_get(&nest);
+        env = cl_env_get(&refcheck);
         if (!IS_ERR(env)) {
                 /*
                  * osc_ast_data_get() has to go after environment is
@@ -840,7 +847,7 @@ static int osc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data)
                         lustre_pack_reply(req, 1, NULL, NULL);
                         result = -ELDLM_NO_LOCK_DATA;
                 }
-                cl_env_nested_put(&nest, env);
+                cl_env_put(env, &refcheck);
         } else
                 result = PTR_ERR(env);
         req->rq_status = result;
@@ -864,14 +871,16 @@ static unsigned long osc_lock_weigh(const struct lu_env *env,
  */
 static unsigned long osc_ldlm_weigh_ast(struct ldlm_lock *dlmlock)
 {
-        struct cl_env_nest       nest;
         struct lu_env           *env;
+        int                      refcheck;
+        void                    *cookie;
         struct osc_lock         *lock;
         struct cl_lock          *cll;
         unsigned long            weight;
         ENTRY;
 
         might_sleep();
+        cookie = cl_env_reenter();
         /*
          * osc_ldlm_weigh_ast has a complex context since it might be called
          * because of lock canceling, or from user's input. We have to make
@@ -879,10 +888,12 @@ static unsigned long osc_ldlm_weigh_ast(struct ldlm_lock *dlmlock)
          * the upper context because cl_lock_put don't modify environment
          * variables. But in case of ..
          */
-        env = cl_env_nested_get(&nest);
-        if (IS_ERR(env))
+        env = cl_env_get(&refcheck);
+        if (IS_ERR(env)) {
                 /* Mostly because lack of memory, tend to eliminate this lock*/
+                cl_env_reexit(cookie);
                 RETURN(0);
+        }
 
         LASSERT(dlmlock->l_resource->lr_type == LDLM_EXTENT);
         lock = osc_ast_data_get(dlmlock);
@@ -902,7 +913,8 @@ static unsigned long osc_ldlm_weigh_ast(struct ldlm_lock *dlmlock)
         EXIT;
 
 out:
-        cl_env_nested_put(&nest, env);
+        cl_env_put(env, &refcheck);
+        cl_env_reexit(cookie);
         return weight;
 }
 

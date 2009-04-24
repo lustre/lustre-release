@@ -879,12 +879,7 @@ struct lu_env *cl_env_nested_get(struct cl_env_nest *nest)
                 }
         }
         env = cl_env_get(&nest->cen_refcheck);
-        if (IS_ERR(env)) {
-                cl_env_reexit(nest->cen_cookie);
-                return env;
-        }
-
-        LASSERT(!cl_io_is_going(env));
+        LASSERT(ergo(!IS_ERR(env), !cl_io_is_going(env)));
         return env;
 }
 EXPORT_SYMBOL(cl_env_nested_get);
