@@ -9,15 +9,11 @@ EXTRA_VERSION_DELIMITER="."
 # defaults to empty
 TARGET_DELIMITER="-"
 
-KERNEL=linux-$lnxmaj.$lnxrel.tar.bz2
+KERNEL_SRPM=kernel-source-$lnxmaj.$lnxrel.src.rpm
 SERIES=2.6-sles10.series
 VERSION=$lnxmaj
 EXTRA_VERSION="${lnxrel}_lustre.@VERSION@"
 LUSTRE_VERSION=@VERSION@
-RHBUILD=0
-LINUX26=1
-# No /boot/Kerntypes* in SLES10
-SUSEBUILD=0
 
 OFED_VERSION=1.3.1
 
@@ -30,6 +26,7 @@ BIGSMP_ARCHS="i686"
 PSERIES64_ARCHS="ppc"
 UP_ARCHS=""
 SRC_ARCHS=""
+#RPMSMPTYPE="smp"
 
 for cc in gcc ; do
     if which $cc >/dev/null 2>/dev/null ; then
