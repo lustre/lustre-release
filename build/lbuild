@@ -3,6 +3,7 @@
 # vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
 #set -x
+shopt -s extdebug
 
 TOPDIR=$PWD
 
@@ -11,8 +12,12 @@ KERNELDIR=
 LINUX=
 LUSTRE=
 RELEASE=false
-DO_SRC=0
-DOWNLOAD=1
+# XXX - some recent hacking has pretty much neutered this option.
+#       search through this file (and lbuild.old_school -- but that will
+#       be going away soon) for "-bb" and see how many places
+#       simply don't account for this option
+DO_SRC=false
+DOWNLOAD=true
 TAG=
 CANONICAL_TARGET=
 TARGET=
@@ -27,8 +32,11 @@ LUSTRE_EXTRA_VERSION=
 STAGEDIR=
 TMPDIR=${TMPDIR:-"/var/tmp"}
 TIMESTAMP=
+# XXX - i think these two parameters/arguments/variables need to be
+#       cleaned up and merged.  they effectively do the same thing
 REUSERPM=
 REUSEBUILD=
+# what does this do exactly?  does it imply no kernel build?
 NORPM=false
 LDISKFSRPM=true
 SKIPLDISKFSRPM="v1_4_* b1_4"
@@ -37,30 +45,15 @@ KERNCONFSMPTYPE=
 PATCHLESS=false
 XEN=false
 LINUXOBJ=
-REUSEDKERNELMASK=
 DISTRO=
 KERNELTREE=
 
 # patchless build
 KERNELRPMSBASE=
-KERNELRPM=
-KERNELSOURCERPM=
 RPMSMPTYPE=
-KERNELRPMCONFIG=
-KERNELRPMRELEASE=
-KERNELCOMPILEDIR=
 
 # from target file
-KERNEL=
 SERIES=
-CONFIG=
-VERSION=
-
-RHBUILD=0
-SUSEBUILD=0
-LINUX26=0
-SUSEBUILD=0
-
 BASE_ARCHS=
 BIGMEM_ARCHS=
 BOOT_ARCHS=
@@ -70,10 +63,15 @@ BIGSMP_ARCHS=
 PSERIES64_ARCHS=
 UP_ARCHS=
 
+# not in the target file any more
+CONFIG=
+
 DATE=$(date)
 
 USE_DATESTAMP=1
 RPMBUILD=
+
+OLD_SCHOOL=false
 
 export CC=${CC:-gcc}
 
@@ -89,35 +87,27 @@ readlink() {
     fi
 }
 
-cleanup()
-{
+cleanup() {
+
     true
 }
 
-error()
-{
-    [ "$1" ] && echo -e "\n${0##*/}: $1"
+error() {
+    local msg="$1"
+
+    [ -n "$msg" ] && echo -e "\n${0##*/}: $msg" >&2
+
 }
 
-fatal()
-{
+fatal() {
+
     cleanup
     error "$2"
     exit $1
+
 }
 
-list_targets()
-{
-    echo -n "Available targets:"
-    for target in $TOPDIR/lustre/lustre/kernel_patches/targets/*.target ; do
-        target_file=${target##*/}
-        echo -n " ${target_file%%.target}"
-    done
-    echo
-}
-
-usage()
-{
+usage() {
     cat <<EOF
 Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
 
@@ -133,10 +123,6 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
 
   --extraversion=EXTRAVERSION
     Text to use for the rpm release and kernel extraversion.
-
-  --kerneldir=KERNELDIR
-    Directory containing Linux source tarballs referenced by target
-    files.
 
   --timestamp=TIMESTAMP
     Date of building lustre in format YYYYMMDDhhmmss
@@ -162,11 +148,15 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
   --distro=DISTRO
     Which distro using. Autodetect by default
 
+  --kerneldir=KERNELDIR
+    Directory containing Linux source tarballs referenced by target
+    files.
+
   --kerneltree=KERNELTREE
     Directory containing dirs with Linux source tarballs referenced by target
     files. Dir names in format kernel version ('2.6.9', etc.)
 
-  --linux=LINUX
+  --linux=LINUX --with-linux=LINUX
     Directory of Linux kernel sources.  When this option is used, only
     Lustre modules and userspace are built.
 
@@ -217,8 +207,8 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
     will be built - there will be no lustre-lite-utils package.
 
   --disable-datestamp
-    Prevents the datestamp flag (-D) from being passed to cvs for 
-    checkouts. This is a workaround for a problem encountered when 
+    Prevents the datestamp flag (-D) from being passed to cvs for
+    checkouts. This is a workaround for a problem encountered when
     using lbuild with tinderbox.
 
   --xen
@@ -231,9 +221,25 @@ EOF
     fatal "$1" "$2"
 }
 
-check_options()
-{
-    if [ "$LUSTRE" ] ; then
+# canonicalize a relative path
+canon_path() {
+    local PATH="$1"
+
+    if [ ! -d "$PATH" ]; then
+        return 1
+    fi
+
+    pushd "$PATH" >/dev/null || return 1
+    local CANONPATH=$PWD
+    popd >/dev/null
+
+    echo "$CANONPATH"
+    return 0
+}
+
+check_options() {
+
+    if [ "$LUSTRE" ]; then
         [ -r "$LUSTRE" ] || \
             usage 1 "Could not find Lustre source tarball '$LUSTRE'."
     else
@@ -243,7 +249,7 @@ check_options()
             usage 1 "A branch/tag name must be specified with --tag when not building from a tarball."
     fi
 
-    if [ -z "$LINUX" ] ; then
+    if [ -z "$LINUX" ]; then
         [ "$KERNELDIR" -o "$KERNELTREE" ] || \
             usage 1 "A kernel directory must be specified with --kerneldir or --kerneltree."
 
@@ -303,108 +309,110 @@ check_options()
             usage 1 "Could not find binary for making rpms (tried rpmbuild and rpm)."
         fi
     fi
-    
-    if [ -n "$CCACHE" ]; then 
-        which "$CCACHE" 2>/dev/null && export CCACHE && export CC="ccache gcc"
+
+    if [ -n "$CCACHE" ]; then
         which "$DISTCC" 2>/dev/null && export DISTCC RPM_BUILD_NCPUS
-        local bindir="/cache/build/bin"
-        [ -d $bindir ] || mkdir -p $bindir
-        [ -d $bindir ] && rm ${bindir}/* > /dev/null 2>&1
-        which "$CCACHE" 2>/dev/null && [ -d $bindir ] && ln -s `which "$CCACHE"` ${bindir}/ccache
-        which "$CCACHE" 2>/dev/null && [ -d $bindir ] && ln -s `which "$CCACHE"` ${bindir}/cc
-        which "$CCACHE" 2>/dev/null && [ -d $bindir ] && ln -s `which "$CCACHE"` ${bindir}/gcc
-        [ -d $bindir ] && export PATH=$bindir:$PATH
-    fi
 
-    [ -z "$DISTRO" ] && autodetect_distro
-}
+        if which "$CCACHE" 2>/dev/null; then
+            local ccache=$(which "$CCACHE")
+            local bindir="$TOPDIR/bin"
 
-#autodetect used Distro
-autodetect_distro()
-{
-    if [ -f /etc/SuSE-release ]; then
-        DISTRO=sles10
-    elif [ -f /etc/redhat-release ]; then
-        local distroname=$(head -1 /etc/redhat-release | grep -e "CentOS\|Red")
-        if [ ! "$distroname" = "" ]; then
-            local version=$(echo "$distroname" | sed -e s/[^0-9.]*//g | sed -e s/\\..*// )
-            distroname="rhel"
-            [ "$version" = "" ] || DISTRO="${distroname}${version}"
-        fi
-    fi
-    [ "$DISTRO" = "" ] && DISTRO="sles9" #default distro
-}
-
-uniqify()
-{
-    echo $(echo "$*" | xargs -n 1 | sort -u)
-}
-
-build_tarball() {
-    local TARGET=$1
-    local SRPM=$2
-
-    if [ "$TARGET" = "rhel-2.6" -o "$TARGET" = "rhel-2.4" ]; then
-        local SPEC=""
-        if [ "$TARGET" = "rhel-2.6" ]; then
-            SPEC=kernel-2.6.spec
-            OLDCONFIG=nonint_oldconfig
-        elif [ "$TARGET" = "rhel-2.4" ]; then
-            SPEC=kernel-2.4.spec
-            OLDCONFIG=oldconfig
-        fi
-
-        RPMTOPDIR=$(mktemp -d $KERNELDIR/rpm_XXXXXX)
-        mkdir $RPMTOPDIR/BUILD/
-        rpm -ivh $KERNELDIR/$SRPM --define "_topdir $RPMTOPDIR" || \
-            { rm -rf $RPMTOPDIR; fatal 1 "Error installing kernel SRPM."; }
-        $RPMBUILD -bp --nodeps --target i686 $RPMTOPDIR/SPECS/$SPEC --define "_topdir $RPMTOPDIR"
-        pushd $RPMTOPDIR/BUILD/kernel-${lnxmaj}/linux-${lnxmaj} && {
-            make mrproper
-            cp configs/kernel-${lnxmaj}-i686-smp.config .config
-            if ! make $OLDCONFIG > /dev/null; then
-                fatal 1 "error trying to make $OLDCONFIG while building a tarball from SRPM."
+            [ -d $bindir ] || mkdir -p $bindir
+            if [ -d $bindir ]; then
+                rm ${bindir}/* > /dev/null 2>&1
+                ln -s "$ccache" ${bindir}/ccache
+                ln -s "$ccache" ${bindir}/cc
+                ln -s "$ccache" ${bindir}/$CC
+                export PATH=$bindir:$PATH
             fi
-            make include/linux/version.h 
-            rm -f .config
-            cd ..
-            tar cjf $KERNEL_FILE linux-${lnxmaj}
-        }
-        popd
-        rm -rf $RPMTOPDIR
+            export CCACHE && export CC="ccache $CC"
+            # zero the cache so we can see how effective we are being with it
+            ccache -z
+        fi
     fi
+
+    [ -z "$DISTRO" ] && DISTRO=$(autodetect_distro)
 }
 
-download_and_build_tarball() {
+# autodetect used Distro
+autodetect_distro() {
+
+    local name
+    local version
+
+    if [ -f /etc/SuSE-release ]; then
+        name=sles
+        version=$(grep ^VERSION /etc/SuSE-release)
+        version=${version#*= }
+    elif [ -f /etc/redhat-release ]; then
+        name=$(head -1 /etc/redhat-release)
+        version=$(echo "$distroname" |
+                  sed -e 's/^[^0-9.]*//g' | sed -e 's/[ \.].*//')
+    fi
+    if [ -z "$name" -o -z "$version" ]; then
+        fatal 1 "I don't know how to determine distro type/version.\n" \
+                "Either update autodetect_distro() or use the --distro argument"
+    fi
+
+    echo ${name}${version}
+    return 0
+
+}
+
+uniqify() {
+
+    echo $(echo "$*" | xargs -n 1 | sort -u)
+
+}
+
+download_srpm() {
     local target=$1
-    local kernel_file=$2
+    local srpm=$2
 
-    local srpm=kernel-${lnxmaj}-${lnxrel}.src.rpm
-
+    # ~sigh~  the download site doesn't actually have these kernels
     echo "Downloading http://downloads.lustre.org/public/kernels/$target/old/$srpm..."
     if ! wget -nv "http://downloads.lustre.org/public/kernels/$target/old/$srpm" \
-        -O "$KERNELDIR/$srpm" ; then
-        fatal 1 "Could not download target $kernel_file's kernel SRPM $srpm from downloads.lustre.org."
+        -O "$KERNELDIR/$srpm"; then
+        fatal 1 "Could not download target $target's kernel SRPM $srpm from downloads.lustre.org."
     fi
     [ -s "$KERNELDIR/$srpm" ] || {
         rm -rf $KERNELDIR/$srpm
-        fatal 1 "Could not download target $kernel_file's kernel SRPM $srpm from downloads.lustre.org."
+        fatal 1 "Could not download target $target's kernel SRPM $srpm from downloads.lustre.org."
     }
 
-    build_tarball $target $srpm
 }
 
-load_target()
-{
+download_ofed() {
+
+    if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ] && \
+       [ ! -r "$KERNELTREE/OFED-${OFED_VERSION}.tgz" ]; then
+        if $DOWNLOAD; then
+            local location="http://downloads.lustre.org/public/OFED/"
+            echo "Downloading $location/OFED-${OFED_VERSION}.tgz..."
+            if ! wget -nv "$location/OFED-${OFED_VERSION}.tgz" \
+                -O "$KERNELTREE/OFED-${OFED_VERSION}.tgz"; then
+                fatal 1 "Could not download OFED-${OFED_VERSION}.tgz" \
+                        "from downloads.lustre.org."
+            fi
+        else
+            fatal 1 "OFED-${OFED_VERSION}.tgz not found in kernel" \
+                    "directory $KERNELTREE."
+        fi
+    fi
+
+}
+
+load_target() {
+
     EXTRA_VERSION_save="$EXTRA_VERSION"
-    for patchesdir in "$EXTERNAL_PATCHES" "$TOPDIR/lustre/lustre/kernel_patches" ; do
+    for patchesdir in "$EXTERNAL_PATCHES" \
+                      "$TOPDIR/lustre/lustre/kernel_patches"; do
         TARGET_FILE="$patchesdir/targets/$TARGET.target"
         [ -r "$TARGET_FILE" ] && break
     done
-    [ -r "$TARGET_FILE" ] || \
-        fatal 1 "Target $TARGET was not found."
+    [ -r "$TARGET_FILE" ] || fatal 1 "Target $TARGET was not found."
 
-    echo "Loading target config file $TARGET.target..."        
+    echo "Loading target config file $TARGET.target..."
 
     . "$TARGET_FILE"
 
@@ -413,65 +421,33 @@ load_target()
         OFED_VERSION=""
     fi
 
-    [ "$KERNEL"  ] || fatal 1 "Target $TARGET did not specify a kernel."
-    [ "$VERSION" ] || fatal 1 "Target $TARGET did not specify a kernel version."
+    # XXX - set_rpm_smp_type is an ugly undeterministic hack.  it needs to
+    #       go away and the target just specify the $RPMSMPTYPE
+    [ -z "$RPMSMPTYPE" ] && set_rpm_smp_type
 
-    #CC was overwriten in TARGET_FILE
-    which "$CCACHE" 2>/dev/null && export CCACHE && export CC="ccache gcc"
+    # CC might have been overwriten in TARGET_FILE
+    if [[ $CC != ccache\ * ]] && which "$CCACHE" 2>/dev/null; then
+        export CCACHE && export CC="ccache $CC"
+    fi
 
     if [ ! "$KERNELTREE" = "" ] && [ -d "$KERNELTREE" ]; then
         KERNELDIR="$KERNELTREE/${lnxmaj}"
         [ -d "$KERNELDIR" ] || mkdir "$KERNELDIR"
     fi
 
-    if [ "$KERNELDIR" ] ; then
-        KERNEL_FILE="$KERNELDIR/$KERNEL"
-        if [ ! -r "$KERNEL_FILE" ] ; then
-            # see if we have an SRPM we can build a tarball for
-            KERNEL_SRPM=kernel-${lnxmaj}-${lnxrel}.src.rpm
-            if [ -r "$KERNELDIR/$KERNEL_SRPM" ] ; then
-                build_tarball $CANONICAL_TARGET $KERNEL_SRPM
-            else
-                if (( $DOWNLOAD )) ; then
-                    echo "Downloading http://downloads.lustre.org/public/kernels/$DISTRO/old/$KERNEL..."
-                    if ! wget -nv "http://downloads.lustre.org/public/kernels/$DISTRO/old/$KERNEL" -O "$KERNELDIR/$KERNEL" ; then
-                        # see if we can do it with an SRPM from the download site
-                        download_and_build_tarball $CANONICAL_TARGET $KERNEL_FILE
-                    else
-                        [ -s "$KERNELDIR/$KERNEL" ] || {
-                            rm -rf "$KERNELDIR/$KERNEL"
-                            fatal 1 "Target $TARGET's kernel $KERNEL not found in directory $KERNELDIR."
-                        }
-                    fi
-                else
-                    fatal 1 "Target $TARGET's kernel file $KERNEL not found in kernel directory $KERNELDIR."
-                fi
-            fi
-        fi
-        if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ] && \
-           [ ! -r "$KERNELTREE/../OFED-${OFED_VERSION}.tgz" ] ; then
-            if (( $DOWNLOAD )) ; then
-                local location="http://downloads.lustre.org/public/OFED/"
-                echo "Downloading $location/OFED-${OFED_VERSION}.tgz..."
-                if ! wget -nv "$location/OFED-${OFED_VERSION}.tgz" \
-                    -O "$KERNELTREE/../OFED-${OFED_VERSION}.tgz" ; then
-                    fatal 1 "Could not download OFED-${OFED_VERSION}.tgz from downloads.lustre.org."
-                fi
-            else
-                fatal 1 "OFED-${OFED_VERSION}.tgz not found in kernel directory $KERNELDIR."
-            fi
-        fi
-    fi
-
-    if [ "$SERIES" ] ; then
-        for series in $SERIES ; do
-            for patchesdir in "$EXTERNAL_PATCHES" "$TOPDIR/lustre/lustre/kernel_patches" ; do
+    # verify the series is available
+    if [ "$SERIES" ]; then
+        for series in $SERIES; do
+            for patchesdir in "$EXTERNAL_PATCHES" "$TOPDIR/lustre/lustre/kernel_patches"; do
                 [ -r "$patchesdir/series/$series" ] && continue 2
             done
-            fatal 1 "Target $TARGET's series $SERIES could not be found.\nSearched:\n\t$EXTERNAL_PATCHES/series\n\t$TOPDIR/lustre/lustre/kernel_patches/series."
+            fatal 1 "Target $TARGET's series $SERIES could not be" \
+                    "found.\nSearched:\n\t$EXTERNAL_PATCHES/series\n" \
+                    "\t$TOPDIR/lustre/lustre/kernel_patches/series."
         done
     fi
 
+    # set the location of the .config file
     local XENPOSTFIX=""
     if $XEN; then
         XENPOSTFIX="-xen"
@@ -479,22 +455,31 @@ load_target()
     if [ -f $TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET-$TARGET_ARCH.config ]; then
         CONFIG_FILE="$TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET$XENPOSTFIX-$TARGET_ARCH.config"
     fi
+
+    # figure out our smp kernel type and set the .config if we have one
     local smptype
     for smptype in $SMPTYPES; do
         [ "$smptype" = "''" ] && smptype=
         if [ -f $TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET-$TARGET_ARCH-${smptype}.config ]; then
-        CONFIG_FILE="$TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET$XENPOSTFIX-$TARGET_ARCH-${smptype}.config"
-        KERNCONFSMPTYPE=$smptype
+            CONFIG_FILE="$TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET$XENPOSTFIX-$TARGET_ARCH-${smptype}.config"
+            KERNCONFSMPTYPE=$smptype
     fi
     done
 
     local lnxrelnew=${lnxrel//-/_}
 
+    # remember the EXTRA_VERSION before we diddle it here
+    # XXX - we really should not diddle with any values read in from the
+    #       target file.  if we want to modify a value, we should create
+    #       a new variable.
+    PRISTINE_EXTRA_VERSION=$EXTRA_VERSION
+
     if ! $PATCHLESS && [ ! -f "$CONFIG_FILE" ]; then
-        fatal 1 "Config file for target $TARGET missing from $TOPDIR/lustre/lustre/kernel_patches/kernel_configs/."
+        fatal 1 "Config file for target $TARGET missing from" \
+                "$TOPDIR/lustre/lustre/kernel_patches/kernel_configs/."
     fi
 
-    if [ "$EXTRA_VERSION_save" ] ; then
+    if [ "$EXTRA_VERSION_save" ]; then
         EXTRA_VERSION="$EXTRA_VERSION_save"
     elif ! $RELEASE; then
         # if there is no patch series, then this is not a lustre specific
@@ -508,22 +493,12 @@ load_target()
     fi
     # EXTRA_VERSION=${EXTRA_VERSION//-/_}
 
-    [ -z $REUSEDKERNELMASK ] && \
-        # create mask for kernel RPM/builddir which could be reused
-        if $NORPM; then
-            REUSEDKERNELMASK=${KERNCONFSMPTYPE}-${lnxmaj}-${lnxrelnew}_lustre.${LUSTRE_VERSION}.*${TARGET_ARCH}
-        elif $RELEASE; then
-            REUSEDKERNELMASK=${KERNCONFSMPTYPE}-${lnxmaj}-${lnxrelnew}_lustre.${LUSTRE_VERSION}.${TARGET_ARCH}
-        else
-            REUSEDKERNELMASK=${KERNCONFSMPTYPE}-${lnxmaj}-${lnxrelnew}_lustre.${LUSTRE_VERSION}.${TIMESTAMP}.${TARGET_ARCH}
-        fi
-        # kernel-lustre-smp-2.6.9-55.0.2.EL_lustre.1.6.1.i686.rpm 
-
     ALL_ARCHS="$BASE_ARCHS $BIGMEM_ARCHS $BOOT_ARCHS $JENSEN_ARCHS $SMP_ARCHS $BIGSMP_ARCHS $PSERIES64_ARCHS $UP_ARCHS"
 
     BUILD_ARCHS=
-    for arch in $(uniqify "$ALL_ARCHS") ; do
-        if [ -z "$TARGET_ARCHS" ] || echo "$TARGET_ARCHS" | grep -w "$arch" >/dev/null 2>/dev/null ; then
+    for arch in $(uniqify "$ALL_ARCHS"); do
+        if [ -z "$TARGET_ARCHS" ] ||
+           [[ \ $TARGET_ARCHS\  = *\ $arch\ * ]]; then
             BUILD_ARCHS="$BUILD_ARCHS $arch"
         fi
     done
@@ -531,9 +506,10 @@ load_target()
     echo "Building for: $BUILD_ARCHS"
 }
 
-tarflags()
-{
-    case "$1" in
+tarflags() {
+    local file="$1"
+
+    case "$file" in
         '')
             fatal 1 "tarflags(): File name argument missing."
             ;;
@@ -550,35 +526,34 @@ tarflags()
             fatal 1 "tarflags(): Unrecognized tar extension in file: $1"
             ;;
     esac
+
 }
 
-untar()
-{
-    echo "Untarring ${1##*/}..."
-    tar $(tarflags "$1") "$1"
+untar() {
+    local file="$1"
+
+    echo "Untarring ${file##*/}..."
+    tar $(tarflags "$file") "$file"
+
 }
 
-unpack_ofed()
-{
-    untar "$KERNELTREE/../OFED-${OFED_VERSION}.tgz"
+unpack_ofed() {
+
+    untar "$KERNELTREE/OFED-${OFED_VERSION}.tgz" || fatal 1 "Error unpacking OFED tarball"
     [ -d OFED ] || ln -sf OFED-[0-9].[0-9]* OFED
-    pwd
-    ls -ld OFED OFED-[0-9].[0-9]*
-    ls -l OFED OFED-[0-9].[0-9]*
+
 }
 
-unpack_lustre()
-{
-    DIRNAME="lustre-$TAG-$TIMESTAMP"
-    if [ "$LUSTRE" ] ; then
-        untar "$LUSTRE"
-        [ -d lustre ] || ln -sf lustre-[0-9].[0-9]* lustre
-    else
-        if [ "$USE_DATESTAMP" ]; then
+unpack_lustre() {
+
+    if [ -z "$LUSTRE" ]; then
+        local DATESTAMP=""
+
+        if [ -n "$USE_DATESTAMP" ]; then
             DATESTAMP="-D '$DATE'"
-        else
-            DATESTAMP=""
-        fi            
+        fi
+
+        local DIRNAME="lustre-$TAG-$TIMESTAMP"
 
         cvs -d "$CVSROOT" -qz3 co $DATESTAMP -d "$DIRNAME" lustre || \
             fatal 1 "There was an error checking out toplevel Lustre from CVS."
@@ -590,206 +565,53 @@ unpack_lustre()
         ./configure --disable-{modules,utils,liblustre,tests,doc} || \
             fatal 1 "There was an error running ./configure to create makefiles."
         make dist || fatal 1 "There was an error running 'make dist'."
+        LUSTRE=$PWD/lustre-*.tar.gz
         popd > /dev/null
-        fname=$(basename $DIRNAME/lustre-*.tar.gz)
-        cp $DIRNAME/$fname . || fatal 1 "There was an error copying lustre tarball."
-        LUSTRE="$PWD/$fname"
-        ln -sf "$DIRNAME" lustre
     fi
+
+    untar "$LUSTRE" || fatal 1 "Error unpacking Lustre tarball"
+    [ -d lustre ] || ln -sf lustre-[0-9].[0-9]* lustre
+
 }
 
-unpack_linux()
-{
-    untar "$KERNEL_FILE"
-    [ -d linux ] || ln -sf linux* linux
-}
+do_patch_linux() {
 
-patch_linux()
-{
-    [ "$SERIES" ] || return 0
+    local do_patch=${1:-true}
+
     FULL_PATCH="$PWD/lustre-kernel-${TARGET}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}.patch"
     [ -f "$FULL_PATCH" ] && rm -f "$FULL_PATCH"
-    pushd linux >/dev/null
-    for series in $SERIES ; do
+    $do_patch && pushd linux >/dev/null
+    for series in $SERIES; do
         echo -n "Applying series $series:"
-        for patchesdir in "$EXTERNAL_PATCHES" "$TOPDIR/lustre/lustre/kernel_patches" ; do
+        for patchesdir in "$EXTERNAL_PATCHES" "$TOPDIR/lustre/lustre/kernel_patches"; do
             [ -r "$patchesdir/series/$series" ] || continue
             SERIES_FILE="$patchesdir/series/$series"
-            for patch in $(<"$SERIES_FILE") ; do
+            for patch in $(<"$SERIES_FILE"); do
                 echo -n " $patch"
                 PATCH_FILE="$patchesdir/patches/$patch"
                 [ -r "$PATCH_FILE" ] || \
                     fatal 1 "Patch $patch does not exist in Lustre tree."
-                cat "$PATCH_FILE" >> "$FULL_PATCH" || \
+                cat "$PATCH_FILE" >> "$FULL_PATCH" || {
+                    rm -f $FULL_PATCH
                     fatal 1 "Error adding patch $patch to full patch."
-                patch -s -p1 < "$PATCH_FILE" || fatal 1 "Error applying patch $patch."
+                }
+                if $do_patch; then
+                    patch -s -p1 < "$PATCH_FILE" || {
+                        rm -f $FULL_PATCH
+                        fatal 1 "Error applying patch $patch."
+                    }
+                fi
             done
             break
         done
         echo
     done
-    popd >/dev/null
+    $do_patch && popd >/dev/null
     echo "Full patch has been saved in ${FULL_PATCH##*/}."
-    echo "Replacing .config files..."
-    [ -d linux/configs ] || mkdir linux/configs || \
-        fatal 1 "Error creating configs directory."
-    rm -f linux/configs/*
-    copysuccess=0
-    for patchesdir in "$EXTERNAL_PATCHES" "lustre/lustre/kernel_patches" ; do
-        [ "$patchesdir" ] && \
-            cp -v $patchesdir/kernel_configs/kernel-${VERSION}-${TARGET}*.config linux/configs/ >/dev/null && copysuccess=1
-    done
-    [ "$copysuccess" = "1" ] || \
-        fatal 1 "Error copying in kernel configs."
+
 }
 
-pack_linux()
-{
-    TARBALL="$(readlink linux)-$EXTRA_VERSION.tar.gz"
-    echo "Creating patched linux tarball $TARBALL..."
-    tar zcf "$TARBALL" "$(readlink linux)" \
-        --exclude "CVS" --exclude ".cvsignore" || \
-        --exclude "*.orig" --exclude "*~" --exclude "*.rej" || \
-        fatal 1 "Error creating patched Linux tarball."
-}
-
-clean_linux()
-{
-    [ -d linux ] || return 0
-    echo "Cleaning linux..."
-    [ -L linux ] && rm -rf $(readlink linux)
-    rm -rf linux
-}
-
-prep_kernel_build()
-{
-    local lmakeopts="\"\""
-    if $XEN; then
-        lmakeopts="--xen"
-    fi
-    # make .spec file
-    ENABLE_INIT_SCRIPTS=""
-    sed \
-        -e "s^@BASE_ARCHS@^$BASE_ARCHS^g" \
-        -e "s^@BIGMEM_ARCHS@^$BIGMEM_ARCHS^g" \
-        -e "s^@BIGSMP_ARCHS@^$BIGSMP_ARCHS^g" \
-        -e "s^@BOOT_ARCHS@^$BOOT_ARCHS^g" \
-        -e "s^@CONFIGURE_FLAGS@^$CONFIGURE_FLAGS^g" \
-        -e "s^@ENABLE_INIT_SCRIPTS@^$ENABLE_INIT_SCRIPTS^g" \
-        -e "s^@JENSEN_ARCHS@^$BOOT_ARCHS^g" \
-        -e "s^@KERNEL_EXTRA_VERSION@^$EXTRA_VERSION^g" \
-        -e "s^@KERNEL_EXTRA_VERSION_DELIMITER@^$EXTRA_VERSION_DELIMITER^g" \
-        -e "s^@KERNEL_TARGET_DELIMITER@^$TARGET_DELIMITER^g" \
-        -e "s^@KERNEL_RELEASE@^${EXTRA_VERSION//-/_}^g" \
-        -e "s^@KERNEL_SOURCE@^$KERNEL^g" \
-        -e "s^@KERNEL_VERSION@^$VERSION^g" \
-        -e "s^@LINUX26@^$LINUX26^g" \
-        -e "s^@LUSTRE_SOURCE@^${LUSTRE##*/}^g" \
-        -e "s^@LUSTRE_TARGET@^$TARGET^g" \
-        -e "s^@PSERIES64_ARCHS@^$PSERIES64_ARCHS^g" \
-        -e "s^@RHBUILD@^$RHBUILD^g" \
-        -e "s^@SMP_ARCHS@^$SMP_ARCHS^g" \
-        -e "s^@SUSEBUILD@^$SUSEBUILD^g" \
-        -e "s^@UP_ARCHS@^$UP_ARCHS^g" \
-        -e "s^@LMAKEOPTS@^$lmakeopts^g" \
-        < $TOPDIR/lustre/build/lustre-kernel-2.4.spec.in \
-        > lustre-kernel-2.4.spec
-    [ -d SRPMS ] || mkdir SRPMS
-    [ -d RPMS ] || mkdir RPMS
-    [ -d BUILD ] || mkdir BUILD
-    [ -d SOURCES ] || mkdir SOURCES
-    for script in linux-{rhconfig.h,merge-config.awk,merge-modules.awk} \
-        suse-{functions.sh,post.sh,postun.sh,trigger-script.sh.in} \
-        sles8-{pre,post,postun,update_{INITRD_MODULES,rcfile_setting}}.sh ; do
-        cp $TOPDIR/lustre/build/$script SOURCES
-    done
-    cp "$LUSTRE" "$KERNEL_FILE" SOURCES
-    if [ "$EXTERNAL_PATCHES" -a -d "$EXTERNAL_PATCHES" ] ; then
-        tar zcf SOURCES/external-patches.tar.gz -C "$EXTERNAL_PATCHES" series targets patches kernel_configs
-    else
-        touch SOURCES/external-patches.tar.gz
-    fi
-}
-
-clean_lustre()
-{
-    [ -d lustre ] || return 0
-    echo "Cleaning Lustre..."
-    [ -L lustre ] && rm -rf $(readlink lustre)
-    rm -rf lustre
-}
-
-build_kernel()
-{
-    echo "Building kernel + Lustre RPMs for: $BUILD_ARCHS..."
-    targets=
-    for arch in $BUILD_ARCHS ; do
-        targets="--target $arch $targets"
-    done
-
-    local rpmbuildopt='-bb'
-#    if $NORPM; then
-#        rpmbuildopt='-bc'
-#        echo NORPM mode. Only compiling.
-#        echo "XXX: need to fix lmake - add options to do rpmbuild -bc instead of -bb"
-#    fi
-
-    $RPMBUILD $targets $rpmbuildopt lustre-kernel-2.4.spec \
-        --define "_tmppath $TMPDIR" \
-        --define "_topdir $TOPDIR" || \
-        fatal 1 "Error building rpms for $BUILD_ARCHS."
-
-    if (( $DO_SRC )) ; then
-        $RPMBUILD -bs lustre-kernel-2.4.spec \
-            --define "_tmppath $TMPDIR" \
-            --define "_topdir $TOPDIR" || \
-            fatal 1 "Error building .src.rpm."
-    fi
-
-    ( $(skeep_ldiskfs_rpm $TAG) ) && return
-
-    pushd $TOPDIR/BUILD/lustre*/ldiskfs || return 255
-    make dist
-    if [ "$?" != "0" ] ; then
-        popd
-        return 255
-    fi
-    cp lustre-ldiskfs*.tar.gz $TOPDIR/SOURCES
-
-    gen_lustre_version
-
-    local ldiskfs_spec=lustre-ldiskfs.spec
-    [ -f "$ldiskfs_spec" ] && sed \
-    -e "s^Release: .*$^Release: $LUSTRE_EXTRA_VERSION^" \
-    < $ldiskfs_spec \
-    > ../lustre-ldiskfs.spec
-
-    $RPMBUILD $targets $rpmbuildopt ../lustre-ldiskfs.spec \
-        --define "_tmppath /var/tmp" \
-        --define "_topdir $TOPDIR"
-    if [ "$?" != "0" ] ; then
-        popd
-        return 255
-    fi
-
-    if (( $DO_SRC )) ; then
-            $RPMBUILD -bs ../lustre-ldiskfs.spec \
-            --define "_tmppath /var/tmp" \
-            --define "_topdir $TOPDIR"
-        if [ "$?" != "0" ] ; then
-            popd
-            return 255
-        fi
-    fi
-    popd
-}
-
-build_lustre()
-{
-    [ -d SRPMS ] || mkdir SRPMS
-    [ -d RPMS ] || mkdir RPMS
-    [ -d BUILD ] || mkdir BUILD
-    [ -d SOURCES ] || mkdir SOURCES
+build_lustre() {
 
     cp "$LUSTRE" SOURCES
 
@@ -797,7 +619,7 @@ build_lustre()
 
     echo "Building Lustre RPMs for: $BUILD_ARCHS..."
     targets=
-    for arch in $BUILD_ARCHS ; do
+    for arch in $BUILD_ARCHS; do
         targets="--target $arch $targets"
     done
 
@@ -806,11 +628,11 @@ build_lustre()
         confoptions="--with-linux=${LINUX} --disable-server"
     fi
     if [ ! "$LINUXOBJ" = "" ]; then
-        confoptions="$confoptions --with-linux-obj=${LINUXOBJ}" 
+        confoptions="$confoptions --with-linux-obj=${LINUXOBJ}"
     fi
-    
+
     ./configure $confoptions ${CONFIGURE_FLAGS}
-    if [ "$?" != "0" ] ; then
+    if [ "$?" != "0" ]; then
         local saved_config="../config.log.$(date +%s)"
         cp config.log $saved_config
         chmod a+r $saved_config
@@ -822,7 +644,7 @@ build_lustre()
     gen_lustre_version
 
     # hack. Somebody move build/lustre.spec to lustre.spec for b1_6
-    local lustre_spec=
+    local lustre_spec
     [ -f lustre.spec ] && lustre_spec=lustre.spec
     [ -f build/lustre.spec ] && lustre_spec=build/lustre.spec
 
@@ -848,7 +670,7 @@ build_lustre()
 
     pushd lustre/ldiskfs || return 255
     make dist
-    if [ "$?" != "0" ] ; then
+    if [ "$?" != "0" ]; then
         popd
         return 255
     fi
@@ -865,33 +687,34 @@ build_lustre()
     $RPMBUILD $targets $rpmbuildopt ../lustre-ldiskfs.spec \
         --define "_tmppath /var/tmp" \
         --define "_topdir $TOPDIR"
-    if [ "$?" != "0" ] ; then
+    if [ "$?" != "0" ]; then
         popd
         return 255
     fi
 
-    if (( $DO_SRC )) ; then
+    if $DO_SRC; then
             $RPMBUILD -bs ../lustre-ldiskfs.spec \
             --define "_tmppath /var/tmp" \
             --define "_topdir $TOPDIR"
-        if [ "$?" != "0" ] ; then
+        if [ "$?" != "0" ]; then
             popd
             return 255
         fi
     fi
     popd
+
 }
 
-stage()
-{
+stage() {
+
     [ "$STAGEDIR" ] || return 0
 
-    for arch in $BUILD_ARCHS ; do
+    for arch in $BUILD_ARCHS; do
         rpmdir="${STAGEDIR}/${CANONICAL_TARGET}-${arch}"
         echo "${0##*/}: Copying RPMs into ${rpmdir}"
         mkdir -p "${rpmdir}"
         cp -v RPMS/${arch}/*.rpm "${rpmdir}"
-        if [ -d RPMS/noarch ] ; then
+        if [ -d RPMS/noarch ]; then
             cp -v RPMS/noarch/*.rpm "${rpmdir}"
         fi
     done
@@ -900,10 +723,11 @@ stage()
 }
 
 #check if we need to build separate ldiskfs RPM
-skeep_ldiskfs_rpm()
-{
-        local tag=$1
+skeep_ldiskfs_rpm() {
+        local tag="$1"
+
         local skip=false
+
         if ! $LDISKFSRPM; then
             skip=true
         elif $PATCHLESS; then
@@ -914,132 +738,33 @@ skeep_ldiskfs_rpm()
             done
         fi
         echo $skip
-}
 
-#get date of last changed target/config/series/patches
-get_last_source_date()
-{
-    local filelist="${TOPDIR}/lustre/lustre/kernel_patches/series/${SERIES} \
-        $CONFIG_FILE"
-    local TOPDIRnew=$(echo ${TOPDIR} | sed -e s/\\//\\\\\\//g)
-    filelist="$filelist $( \
-        cat ${TOPDIR}/lustre/lustre/kernel_patches/series/${SERIES} | \
-        sed -e s/^/${TOPDIRnew}\\/lustre\\/lustre\\/kernel_patches\\/patches\\// 2>&1)"
-    local sourcelastdate=$( find ${filelist} -name CVS -prune -o \
-                -type f -printf "%T@\n" 2>&1 | sort | tail -1 )
-    is_integer $sourcelastdate && echo $sourcelastdate
-}
-
-#check if variable is integer
-is_integer()
-{
-    local invariable=$1
-    [ "$invariable" = "" ] && return 255
-    local invariableint=$( echo $invariable | sed -e s/[^0-9]//g )
-    [ "$invariable" = "$invariableint" ] || return 255
 }
 
 #generate LUSTRE_EXTRA_VERSION from EXTRA_VERSION
-gen_lustre_version()
-{
-    local smptype=smp
-    [ "$KERNCONFSMPTYPE" = "" ] || smptype=$KERNCONFSMPTYPE
-    [ "$RPMSMPTYPE" = "" ] || smptype=$RPMSMPTYPE
+gen_lustre_version() {
 
-    LUSTRE_EXTRA_VERSION="${lnxmaj}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}${TARGET_DELIMITER}${smptype}"
+    LUSTRE_EXTRA_VERSION="${lnxmaj}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}${TARGET_DELIMITER}${RPMSMPTYPE:-${KERNCONFSMPTYPE:-"smp"}}"
     LUSTRE_EXTRA_VERSION=${LUSTRE_EXTRA_VERSION//-/_}
+
 }
 
-#store RPMs and/or BUILD dir for future reuse
-store_for_reuse()
-{
-    local rpmonly=$1
-    if [ ! "$REUSEBUILD" = "" ] && [ -d  "/$REUSEBUILD/" ] ; then
-        [ -d "${REUSEBUILD}/${TIMESTAMP}" ] || mkdir "${REUSEBUILD}/${TIMESTAMP}"
-        [ -d "${REUSEBUILD}/${TIMESTAMP}" ] || return 255
-    else
-        return 255
-    fi
+set_rpm_smp_type() {
 
-    local lnxrelnew=${lnxrel//-/_}
-    local EXTRA_VERSIONnew=${EXTRA_VERSION//-/_}
-    local KERNELRPMnew=$(basename "$KERNELRPM")
-    if [ ! "$rpmonly" = "rpmonly" ]; then
-	    local builddir=
-        if [ ! "$KERNELCOMPILEDIR" = "" ]; then
-            builddir="$KERNELCOMPILEDIR"
-        else
-            builddir="BUILD/lustre-kernel-${lnxmaj}/lustre/linux-${lnxmaj}"
-	    [ "$KERNELCOMPILEDIR" = "" ] || builddir="$KERNELCOMPILEDIR"
-            [ -d "$builddir" ] || builddir="BUILD/lustre-kernel-${lnxmaj}/lustre/linux-${lnxmaj}.${lnxrel}"
-            [ -d "$builddir" ] || builddir="BUILD/lustre-kernel-${lnxmaj}/lustre/linux-${lnxmaj}-${lnxrel}"
-	    if [ ! -d "$builddir" ]; then
-                pushd "BUILD/lustre-kernel-${lnxmaj}/lustre/" || return 255
-                local basebuilddir=$(ls -d linux-${lnxmaj}* | head -1)
-                [ "$basebuilddir" = "" ] || builddir="BUILD/lustre-kernel-${lnxmaj}/lustre/${basebuilddir}"
-                popd
-	    fi
-        fi
-        [ -d "$builddir" ] || return 255
-	local dstdir="${REUSEBUILD}/${TIMESTAMP}/linux-${KERNCONFSMPTYPE}-${lnxmaj}-${EXTRA_VERSIONnew}.${TARGET_ARCH}"
-	( $PATCHLESS ) && dstdir="${REUSEBUILD}/${TIMESTAMP}/linux-$KERNELRPMnew" && \
-	        dstdir="${dstdir%.rpm}"
-	[ -d "$dstdir" ] && rm -rf "$dstdir"
-        mv "${builddir}" "$dstdir" || return 255
-        if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
-            # move the OFED kernel-ib-devel tree as well
-            mv "${builddir%/*}/kernel-ib-devel/usr/src/ofa_kernel" "${dstdir%/*}" || return 255
-        fi
-    fi
-    #store kernel rpm
-    local kernelrpmname="kernel-lustre-${KERNCONFSMPTYPE}-${lnxmaj}-${EXTRA_VERSIONnew}.${TARGET_ARCH}.rpm"
-    [ -f "RPMS/${TARGET_ARCH}/${kernelrpmname}" ] || kernelrpmname="kernel-${KERNCONFSMPTYPE}-${lnxmaj}-${EXTRA_VERSNnew}.${TARGET_ARCH}.rpm"
-    ( $PATCHLESS ) && [ -f "$KERNELRPM" ] && kernelrpmname="$KERNELRPMnew"
-    if [ "$rpmonly" = "rpmonly" ] && [ -f "${REUSEBUILD}/${TIMESTAMP}/${kernelrpmname}" ]; then
-        echo "RPM already exist in store directory tree"
-    else
-        [ -f "RPMS/${TARGET_ARCH}/${kernelrpmname}" ] && cp -f "RPMS/${TARGET_ARCH}/${kernelrpmname}" "${REUSEBUILD}/${TIMESTAMP}/"
-    fi
-    #store kernel source rpm
-    kernelrpmname="kernel-lustre-source-${lnxmaj}-${EXTRA_VERSIONnew}.${TARGET_ARCH}.rpm"
-    [ -f "RPMS/${TARGET_ARCH}/${kernelrpmname}" ] || kernelrpmname="kernel-source-${lnxmaj}-${EXTRA_VERSIONnew}.${TARGET_ARCH}.rpm"
-    ( $PATCHLESS ) && [ -f "$KERNELSOURCERPM" ] && kernelrpmname=$(basename "$KERNELSOURCERPM")
-    if [ "$rpmonly" = "rpmonly" ] && [ -f "${REUSEBUILD}/${TIMESTAMP}/${kernelrpmname}" ]; then
-        echo "RPM already exist in store directory tree"
-    else
-	    [ -f "RPMS/${TARGET_ARCH}/${kernelrpmname}" ] && cp -f "RPMS/${TARGET_ARCH}/${kernelrpmname}" "${REUSEBUILD}/${TIMESTAMP}/"
-    fi
-    if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
-        # store kernel-ib RPMs
-        local rpmname
-        for rpmname in "kernel-ib" "kernel-ib-devel"; do
-            rpmname="${rpmname}-${OFED_VERSION}"
-            if $PATCHLESS; then
-                rpmname="${rpmname}-${LINUXRELEASE//-/_}"
-            else
-                rpmname="${rpmname}-${lnxmaj}${EXTRA_VERSION_DELIMITER//-/_}${EXTRA_VERSIONnew}${TARGET_DELIMITER//-/_}${KERNCONFSMPTYPE}"
-            fi
-            rpmname="${rpmname}.${TARGET_ARCH}.rpm"
-            if [ "$rpmonly" = "rpmonly" ] && [ -f "${REUSEBUILD}/${TIMESTAMP}/${rpmname}" ]; then
-                echo "RPM already exist in store directory tree"
-            else
-                [ -f "RPMS/${TARGET_ARCH}/${rpmname}" ] && cp -f "RPMS/${TARGET_ARCH}/${rpmname}" "${REUSEBUILD}/${TIMESTAMP}/"
-            fi
-        done
-    fi
-}
+    local infact_arch="${TARGET_ARCH}"
 
-set_rpm_smp_type()
-{
-    local infact_arch=${TARGET_ARCH}
     RPMSMPTYPE=default
     [ "$infact_arch" == "i586" ] && infact_arch="i686"
+
+    local smp_type
     for smp_type in $SMP_ARCHS; do
         [ $infact_arch == $smp_type ] && RPMSMPTYPE=smp && break
     done
+
     for smp_type in $BIGSMP_ARCHS; do
         [ $infact_arch == $smp_type ] && RPMSMPTYPE=bigsmp && break
     done
+
 }
 
 # This function takes a linux source pool and digs out the linux release
@@ -1056,38 +781,57 @@ find_linux_release() {
 
 }
 
-#unpack kernel(/source/devel) RPM
-unpack_linux_rpm()
-{
-    local prefix=$1
+find_linux_rpm() {
+    local prefix="$1"
     local delimiter=${2:-"-"}
+
     local pathtorpms="${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}"
-    local kernelbinaryrpm=
     [ -d $pathtorpms ] || return 255
-    local rpmfile=
+
+    local kernelbinaryrpm rpmfile
     local wanted_kernel="${lnxmaj}${delimiter}${lnxrel}"
+
+    local arch ret=1
     for arch in $TARGET_ARCHS_ALL; do
+        local found_rpm="" rpm
         for rpm in ${pathtorpms}/${arch}/*.rpm; do
-            local provides=$(rpm -q --provides -p $rpm)
-            if (echo $provides | grep -q "kernel${prefix} = $wanted_kernel"); then
-                KERNELRPM=$rpm
+            if rpm -q --provides -p "$rpm" | grep -q "kernel${prefix} = $wanted_kernel"; then
+                found_rpm="$rpm"
+                ret=0
+                break
             fi
         done
-        [ -f "$KERNELRPM" ] && TARGET_ARCH="$arch" && BUILD_ARCHS="$arch" && break
+        [ -f "$found_rpm" ] && TARGET_ARCH="$arch" && BUILD_ARCHS="$arch" && break
     done
 
-    # bleah
-    set_rpm_smp_type
+    echo "$found_rpm"
+    return $ret
 
-    [ -f "$KERNELRPM" ] || return 255
+}
+
+#unpack kernel(/source/devel) RPM
+#
+# This function and it's setting of $LINUX and $LINUXOBJ is a total hack that
+# needs to completely refactored.  It completely ingores that $BUILD_ARCHS may
+# contain a list of arches for which rpmbuild commands (including the one for
+# lustre itself)
+unpack_linux_rpm() {
+    local kernelrpm="${1}"
+    local delimiter=${2:-"-"}
+
+    [ -f "$kernelrpm" ] || return 255
     [ -d $TOPDIR/reused ] || mkdir $TOPDIR/reused
+
     pushd $TOPDIR/reused || return 255
-    RC=0
-    rpm2cpio < "$KERNELRPM" | cpio -idc > /dev/null 2>&1
+
+    local RC=0
+
+    rpm2cpio < "$kernelrpm" | cpio -id > /dev/null 2>&1
     if [ ${PIPESTATUS[0]} -eq 0 ]; then
         # RHEL-style and SLES-style rpms
         local paths="kernels/${lnxmaj}${delimiter}${lnxrel}-${TARGET_ARCH} linux-${lnxmaj}${delimiter}${lnxrel}"
 
+        local path
         for path in $paths; do
             local src='usr/src'
 
@@ -1096,7 +840,7 @@ unpack_linux_rpm()
             fi
             # SLES has a separate -obj tree
             if [ -d "$src/${path}-obj" ]; then
-                src="$src/${path}-obj"
+                local src="$src/${path}-obj"
                 local objects="$TARGET_ARCH/$RPMSMPTYPE"
 
                 # Novell, are you *TRYING* to make life hard for me?
@@ -1126,173 +870,7 @@ unpack_linux_rpm()
     return $RC
 }
 
-#look for kernel source RPM
-find_linux_source_rpm()
-{
-    local rpmfile=
-    local findarch=true
-    local arch=
-    local pathtorpms=
-    [ ! "$TARGET_ARCH" = "" ] && arch=$TARGET_ARCH && findarch=false
-    
-    if ! $findarch; then
-        pathtorpms="${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}/${arch}"
-        [ -d $pathtorpms ] || return 255
-        case "$DISTRO" in
-            rhel4)
-                rpmfile="kernel-${lnxmaj}-${lnxrel}.src.rpm"
-            ;;
-            sles10)
-                rpmfile="kernel-source-${lnxmaj}.${lnxrel}.${arch}.rpm"
-            ;;
-            *)
-                rpmfile="kernel-source-${lnxmaj}-${lnxrel}.${arch}.rpm"
-            ;;
-        esac
-        [ -f "${pathtorpms}/${rpmfile}" ] || return 255
-        KERNELSOURCERPM="${pathtorpms}/${rpmfile}"
-    else
-        for arch in $TARGET_ARCHS_ALL; do
-        pathtorpms="${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}/${arch}"
-        [ -d $pathtorpms ] || continue
-        case "$DISTRO" in
-            rhel4)
-                rpmfile="kernel-${lnxmaj}-${lnxrel}.src.rpm"
-            ;;
-            sles10)
-                rpmfile="kernel-source-${lnxmaj}.${lnxrel}.${arch}.rpm"
-            ;;
-            *)
-                rpmfile="kernel-source-${lnxmaj}-${lnxrel}.${arch}.rpm"
-            ;;
-        esac
-        [ -f "${pathtorpms}/${rpmfile}" ] || continue
-        KERNELSOURCERPM="${pathtorpms}/${rpmfile}"
-        TARGET_ARCH=${arch}
-        break
-        done
-    fi
-    [ -f "${KERNELSOURCERPM}" ] || return 255
-}
-
-#unpack and make symlinks for reusing kernel RPM
-reuse_kernel_rpm()
-{
-    local pathtorpm=$1
-    local pathtokernelibrpm=$2
-    [ "$pathtorpm" = "" ] && return 255
-    [ -f "$pathtorpm" ] || return 255
-    [ -d $TOPDIR/reused ] || mkdir $TOPDIR/reused
-    pushd $TOPDIR/reused || return 255
-
-    rpm2cpio < $pathtorpm | cpio -idc
-    [ ${PIPESTATUS[0]} -eq 0 ] || return 255
-
-    if [ -n "$pathtokernelibrpm" ] && [ -f "$pathtokernelibrpm" ]; then
-        rpm2cpio < $pathtokernelibrpm | cpio -idc
-        [ ${PIPESTATUS[0]} -eq 0 -o ${PIPESTATUS[1]} -eq 0 ] || return 255
-        CONFIGURE_FLAGS="--with-o2ib=$(pwd)/usr/src/ofa_kernel ${CONFIGURE_FLAGS}"
-    fi
-
-    local smptype=
-    if pushd usr/src/linux-*-obj/${TARGET_ARCH}; then
-        local smptypes="$SMPTYPES"
-        [ "$RPMSMPTYPE" = "" ] || smptypes=$RPMSMPTYPE
-        ( ! $PATCHLESS ) && [ ! "$KERNCONFSMPTYPE" = "" ] && smptypes="$KERNCONFSMPTYPE"
-        local cursmptype=
-        for cursmptype in $smptypes; do
-            [ "$cursmptype" = "''" ] && continue
-            [ -d $cursmptype ] && smptype=$cursmptype
-            [ -d $smptype ] && break
-        done
-        popd
-    fi
-    if [ "${smptype}" = "" ]; then
-        popd
-        return 255 # cannot detect smp type
-    fi
-    if pushd usr/src/linux-*-obj/${TARGET_ARCH}/$smptype/include2; then
-        local base=$(readlink asm)
-        if [ ! -d "/${base}/" ]; then
-            rm -f asm
-            base=$(basename "$base")
-            if pushd ../../../../linux-*/include; then
-                local lsrc=$(pwd)
-                popd
-                [ -d "$lsrc/${base}" ] && ln -s $lsrc/${base} asm
-            fi
-        fi
-        popd
-        read a b < <(echo $(pwd)/usr/src/linux-*)
-        if [[ $a == $(pwd)/* && $b = $(pwd)/* ]]; then
-            cp -f $a/include/linux/config.h $b/${TARGET_ARCH}/$smptype/include/linux/
-            cp $b/${TARGET_ARCH}/$smptype/.config $a/
-            [ -f "$b/${TARGET_ARCH}/$smptype/.config" ] && KERNELRPMCONFIG="$b/${TARGET_ARCH}/$smptype/.config"
-            cp $b/${TARGET_ARCH}/$smptype/.kernelrelease $a/
-            [ -f "$b/${TARGET_ARCH}/$smptype/.kernelrelease" ] && KERNELRPMRELEASE="$b/${TARGET_ARCH}/$smptype/.kernelrelease"
-            LINUX=$a
-            LINUXOBJ=$b/${TARGET_ARCH}/$smptype
-#            local fname=$(basename $kernel_rpm)
-#            KERNELRPMSDIR=${kernel_rpm%$fname}
-        fi
-    fi
-    popd
-    [ "$LINUX" = "" ] && return 255
-    [ -d "$LINUX" ] || return 255
-}
-
-#build linux kernel rpm
-build_linux_rpm()
-{
-    pushd $LINUX || return 255
-    make binrpm-pkg || ( popd ; return 255 )
-    local addlnxrel=
-    [ -f ".version" ] && addlnxrel="-$(cat .version)"
-    popd
-    local arch=
-    for arch in $TARGET_ARCHS_ALL; do
-        [ -f "/usr/src/rpm/RPMS/$arch/kernel-$lnxmaj.${lnxrel}${addlnxrel}.$arch.rpm" ] && \
-            KERNELRPM="/usr/src/rpm/RPMS/$arch/kernel-$lnxmaj.${lnxrel}${addlnxrel}.$arch.rpm" && \
-            TARGET_ARCH="$arch"
-        [ -f "/usr/src/packages/RPMS/$arch/kernel-$lnxmaj.${lnxrel}${addlnxrel}.$arch.rpm" ] && \
-            KERNELRPM="/usr/src/packages/RPMS/$arch/kernel-$lnxmaj.${lnxrel}${addlnxrel}.$arch.rpm" && \
-            TARGET_ARCH="$arch"
-    done
-    [ "$KERNELRPM" = "" ] || return
-    return 255
-}
-
-#build linux kernel
-build_linux()
-{
-    local nofullmake=$1
-    local nocopykernel=$2
-    pushd $LINUX || fatal 1 "Kernel source not found"
-    [ "$nofullmake" = "nofullmake" ] || make mrproper
-    [ "$nofullmake" = "nofullmake" ] || rm -f rpm-release
-#    [ "$nocopykernel" = "copyrpmkernel" ] || rm -f localversion-*
-    [ "$nocopykernel" = "copykernel" ] && [ -f "$CONFIG_FILE" ] && cp $CONFIG_FILE .config
-    if [ "$nocopykernel" = "copyrpmkernel" ]; then
-        [ -f "$KERNELRPMCONFIG" ] && cp $KERNELRPMCONFIG .config
-        if [ -f "$KERNELRPMRELEASE" ]; then
-            cp $KERNELRPMRELEASE .
-        else
-            sed -e "s/^EXTRAVERSION\s\+=\s\+.*$/EXTRAVERSION = -${lnxrel}/" < Makefile > Makefile.new
-            [ -f "Makefile.new" ] && mv Makefile.new Makefile
-        fi
-    fi
-    [ -f ".config" ] || ( popd ; echo "Cannot find .config file"; return 255 )
-    make oldconfig || ( popd ; return 255 )
-    make include/linux/version.h
-    if [ ! "$nofullmake" = "nofullmake" ]; then
-        make || ( popd ; return 255 )
-    fi
-    popd
-    return
-}
-
-build_kernel_ib()
-{
+build_kernel_ib() {
     # build kernel-ib{,-devel}
     # some I/B drivers are architecture dependent and kernel-ib's configure
     # does not figure it out for us ~sigh~
@@ -1331,266 +909,355 @@ build_kernel_ib()
     popd >/dev/null
 }
 
-#build patchless lustre
-patchless_build_sequence()
-{
-    if [ -f $LINUX/Makefile ]; then
-        # Get the correct kernel release - I'm unsure how this can ever
-        # work otherwise, unless you're using the exact same kernel version
-        # Lustre is shipped with.
+store_for_reuse() {
+        local articles="$1"
+        local module="$2"
+        local location="$3"
+        local signature="$4"
+        local use_links="$5"
 
-        local LINUXRELEASE=$(find_linux_release ${LINUXOBJ:-$LINUX})
-        if [ -z "$LINUXRELEASE" ]; then
-            echo "Failed to find linux release in ${LINUXOBJ:-$LINUX}"
-            RC=255
+        local linkflag=""
+        if $use_links; then
+            linkflag="l"
         fi
 
-	lnxmaj=$(echo $LINUXRELEASE | cut -f1 -d-)
-	EXTRA_VERSION=$(echo $LINUXRELEASE | cut -f2 -d-)_lustre.$LUSTRE_VERSION
-        RPMSMPTYPE=" "
-        build_lustre && buildsuccess=true
+        location="$location"/"$signature"/"$module"
+        mkdir -p "$location"
+        ## use eval/echo here to make sure shell expansions are performed
+        #if ! cp -a${linkflag} $(eval echo $articles) "$location"; then
+        local article
+        for article in $(eval echo $articles); do
+            if ! cp -a${linkflag} "$article" "$location"; then
+                error "Failed to copy \"$article\" to \"$location\" in store_for_reuse()"
+                return 1
+            fi
+        done
+
+        return 0
+
+}
+
+reuse() {
+    local module="$1"
+    local dest="$2"
+    local use_links="${3:-false}"
+    local signature="$4"
+
+    if [ -n "$REUSEBUILD" ] && [ -d $REUSEBUILD/$signature/$module ]; then
+        # so that we know how stale this entry is
+        touch $REUSEBUILD/$signature/$module/.lastused
+        if $use_links; then
+            if ls $REUSEBUILD/$signature/$module/* >/dev/null 2>&1; then
+                cp -al $REUSEBUILD/$signature/$module/* $dest/
+            fi
+        else
+            # copying is pretty heavy
+            # cp -a $REUSEBUILD/$signature/$module/* $dest/
+            # do some creative symlinking instead
+            local dir
+            for dir in BUILD SRPMS SPECS; do
+                if ls $REUSEBUILD/$signature/$module/$dir/* >/dev/null 2>&1; then
+                    ln -s $REUSEBUILD/$signature/$module/$dir/* $dest/$dir
+                fi
+            done
+            # sources have to be copied by file because we need SOURCES to
+            # be a dir we can write into
+# could overrun ls's arg list here
+            #ls $REUSEBUILD/$signature/$module/SOURCES/* |
+            find $REUSEBUILD/$signature/$module/SOURCES/ -type f |
+                xargs ln -t $dest/SOURCES -s
+
+            # same for RPMS/* dirs
+# could overrun ls's arg list here
+            #ls $REUSEBUILD/$signature/$module/RPMS/$TARGET_ARCH/* |
+            local dir
+            for dir in $REUSEBUILD/$signature/$module/RPMS/*; do
+                mkdir -p $dest/RPMS/${dir##*/}
+                find $dir -type f |
+                  xargs ln -t $dest/RPMS/${dir##*/} -s
+            done
+                     
+        fi
+        return 0
     else
-    #try to build from kernel-devel RPM (RHEL)
-    LINUX=
-    TARGET_ARCH=
-    local rpmfound=false
-    local buildsuccess=false
-    local storeforreuse=false
-    if [ "$KERNELRPMSBASE" = "" ] || [ ! -d "$KERNELRPMSBASE" ]; then
-        return 255
+        return 1
     fi
-    [ -d $TOPDIR/reused ] && rm -rf $TOPDIR/reused
+}
 
-    local delimiter=${EXTRA_VERSION_DELIMITER:-"-"}
-    # default to source type -source and special case below
-    local type=-source
-    case "$DISTRO" in
-        rhel*)
-            type=-devel
-            ;;
-    esac
+basearch() {
+    local arch="$1"
 
-    unpack_linux_rpm $type $delimiter && rpmfound=true
+    if [[ $arch = i[3456]86 ]]; then
+        echo "i386"
+    else
+        echo "$arch"
+    fi
 
-    [ -d SRPMS ] || mkdir SRPMS
-    [ -d RPMS ] || mkdir RPMS
+}
+
+build_kernel_with_srpm() {
+
+    # need to generate the patch for this target
+    do_patch_linux false >&2	# sets global $FULL_PATCH (yeah, yuck)
+
+    # get an md5sum of the kernel patch + config for reuse check
+    # XXX really, there needs to be a signature and a CONFIG_FILE per arch
+    #     in BUILD_ARCHS
+    local REUSE_SIGNATURE=$(cat $CONFIG_FILE $TARGET_FILE $FULL_PATCH | md5sum | cut -d" " -f1)
+
+    # see if we can link to the reuse pool
+    # XXX - hrm.  i'm not convinced this doesn't belong in the reuse "library"
+    local CAN_LINK_FOR_REUSE=false
+    touch $REUSEBUILD/$$
+    if cp -al $REUSEBUILD/$$ $TOPDIR/; then
+        CAN_LINK_FOR_REUSE=true
+    fi
+    rm $REUSEBUILD/$$
+
+    # the extra version string to use for the kernel (which might be a reused
+    # kernel, remember)
+    local kernel_extra_version=""
+    if $REUSERPM && reuse kernel "$TOPDIR" "$CAN_LINK_FOR_REUSE" \
+                                 "$REUSE_SIGNATURE"; then
+        # figure out the EXTRA_VERSION of the kernel we are re-using
+        kernel_extra_version=$(ls $TOPDIR/RPMS/$TARGET_ARCH/kernel-lustre-*${lnxmaj}${EXTRA_VERSION_DELIMITER}${PRISTINE_EXTRA_VERSION}.*.$TARGET_ARCH.rpm)
+        kernel_extra_version=${kernel_extra_version##*kernel-lustre-*${lnxmaj}${EXTRA_VERSION_DELIMITER}}
+        kernel_extra_version=${kernel_extra_version%%.$TARGET_ARCH.rpm}
+    else
+        # nothing cached, build from scratch
+        if [ ! -r "$KERNELDIR/$KERNEL_SRPM" ]; then
+            download_srpm "$CANONICAL_TARGET" "$KERNEL_SRPM"
+        fi
+
+        rpm -ivh $KERNELDIR/$KERNEL_SRPM --define "_topdir $TOPDIR" >&2 || {
+    	# should we clean this up or leave it for analysis?
+            #rm -rf $RPMTOPDIR
+            fatal 1 "Error installing kernel SRPM."
+        }
+
+        # put the Lustre kernel patch into the RPM build tree
+        cp $FULL_PATCH $TOPDIR/SOURCES/linux-${lnxmaj}-lustre.patch
+        prepare_and_build_srpm
+
+        # store the resulting kernel RPM build tree for future use
+        if ! store_for_reuse "$TOPDIR/{SPECS,SOURCES,BUILD,SRPMS,RPMS}" \
+                             "kernel" "$REUSEBUILD" "$REUSE_SIGNATURE" \
+                             "$CAN_LINK_FOR_REUSE"; then
+            error "Failed to store kernel RPMS for reuse"
+            echo "unknown"
+            return 1
+        fi
+        kernel_extra_version=$EXTRA_VERSION
+    fi	# build reuse
+
+    # should now have the following RPMs
+    # $TOPDIR/RPMS/$arch/kernel-lustre-2.6.18-53.1.21.el5_lustre.1.6.5.1.$arch.rpm
+    # $TOPDIR/RPMS/$arch/kernel-lustre-devel-2.6.18-53.1.21.el5_lustre.1.6.5.1.$arch.rpm
+    # $TOPDIR/RPMS/$arch/kernel-lustre-headers-2.6.18-53.1.21.el5_lustre.1.6.5.1.$arch.rpm
+    # $TOPDIR/RPMS/$arch/kernel-lustre-debuginfo-common-2.6.18-53.1.21.el5_lustre.1.6.5.1.$arch.rpm
+    # $TOPDIR/RPMS/$arch/kernel-lustre-debuginfo-2.6.18-53.1.21.el5_lustre.1.6.5.1.$arch.rpm
+
+    echo $kernel_extra_version
+    return 0
+
+}
+
+build_with_srpm() {
+
+    if ! $PATCHLESS; then
+        local kernel_extra_version
+        if ! kernel_extra_version=$(build_kernel_with_srpm); then
+            fatal 1 "Failed to build the kernel from it's SRPM"
+        fi
+#local kernel_extra_version="60-0.33_lustre.1.8.0.50.20090311172757"
+
+        for arch in $BUILD_ARCHS; do
+
+            local kernel_devel_rpm="$TOPDIR/RPMS/$arch/$(devel_kernel_name true)-$lnxmaj$EXTRA_VERSION_DELIMITER$kernel_extra_version.$arch.rpm"
+
+            # install the -devel RPM in preparation for the lustre build
+            if ! lnxrel="$kernel_extra_version" unpack_linux_rpm \
+                           $kernel_devel_rpm $EXTRA_VERSION_DELIMITER; then
+                fatal 1 "Could not find the Linux tree in $kernel_devel_rpm"
+            fi
+
+            # XXX - superhack of all superhacks!  kernel-lustre-devel doesn't
+            #       have have sources in it, so we need to pull them out of
+            #       the SRPM
+            #       yeah.  blech.
+            cp BUILD/kernel-lustre-${lnxmaj}/linux-${lnxmaj}.$arch/fs/ext3/*.[ch] \
+               $TOPDIR/reused/usr/src/kernels/${lnxmaj}${EXTRA_VERSION_DELIMITER}${kernel_extra_version}-${arch}/fs/ext3
+        done
+    else
+        # need to find and unpack the vendor's own kernel-devel for patchless
+        # client build
+        local kernelrpm
+        if ! kernelrpm=$(find_linux_rpm "-$DEVEL_KERNEL_TYPE" ${EXTRA_VERSION_DELIMITER:-"-"}); then
+            fatal 1 "Could not find the kernel-$DEVEL_KERNEL_TYPE RPM in ${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}"
+        fi
+        if ! lnxrel="$lnxrel" unpack_linux_rpm "$kernelrpm" \
+                                               "${EXTRA_VERSION_DELIMITER:--}"; then
+            fatal 1 "Could not find the Linux tree in $kernelrpm"
+        fi
+    fi
+
+    # before lustre, build kernel-ib
+    if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
+        # see if we can link to the reuse pool
+        # XXX - hrm.  i'm not convinced this doesn't belong in the reuse "library"
+        local CAN_LINK_FOR_REUSE=false
+        touch $REUSEBUILD/$$
+        if cp -al $REUSEBUILD/$$ $TOPDIR/; then
+            CAN_LINK_FOR_REUSE=true
+        fi
+        rm $REUSEBUILD/$$
+
+        local REUSE_SIGNATURE=$({ echo "$OFED_VERSION"; echo "$(find_linux_release ${LINUXOBJ:-$LINUX})"; cat "${LINUXOBJ:-${LINUX}}/include/linux/autoconf.h"; } | md5sum | cut -d" " -f1)
+        if ! reuse ofed "$TOPDIR" "$CAN_LINK_FOR_REUSE" \
+                        "$REUSE_SIGNATURE"; then
+            # stash away the existing built articles for a moment
+            mkdir bak
+            mv {BUILD,{S,}RPMS,S{OURCE,PEC}S} bak
+            function mv_back {
+                pushd bak
+                find . | cpio -pudlm ..
+                popd
+                rm -rf bak
+            }
+            create_rpmbuild_dirs
+            # build it
+            build_kernel_ib
+            if ! store_for_reuse "$TOPDIR/{SPECS,SOURCES,BUILD,SRPMS,RPMS}" \
+                                 "ofed" "$REUSEBUILD" "$REUSE_SIGNATURE" \
+                                 "$CAN_LINK_FOR_REUSE"; then
+                error "Failed to store OFED RPMS for reuse"
+                mv_back
+                return 1
+            fi
+            # put the stuff we stashed away back
+            mv_back
+        fi
+    fi
+
+    # now build Lustre
+    if build_lustre; then
+        # the build worked.  resolve any symlinked files (i.e. from reuse)
+        # in RPMS/$arch to real files so that that that huge mess of
+        # complication knows as LTS can copy them yet somewhere else.
+        # is it any wonder this whole process is so damn so?  anyone ever
+        # heard of hardlinks?  it this cool new thing that allows you save
+        # tons of time and space by creating... well you can go read about
+        # them if you have not heard about them yet.
+        # can i say how much the implemenation of all of this really impedes
+        # RPM reuse?
+        pushd RPMS/$TARGET_ARCH
+            for file in *; do
+                if [ -h $file ]; then
+                    cp $file foo
+                    mv foo $file
+                fi
+            done
+        popd
+    fi
+}
+
+create_rpmbuild_dirs() {
+
+    if [ ! -d RPMS ]; then
+        mkdir -p RPMS
+        for arch in $BUILD_ARCHS; do
+            mkdir RPMS/$arch
+        done
+    fi
     [ -d BUILD ] || mkdir BUILD
     [ -d SOURCES ] || mkdir SOURCES
+    [ -d SPECS ] || mkdir SPECS
+    [ -d SRPMS ] || mkdir SRPMS
 
-    # first build kernel-ib
-    if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
-        $rpmfound && build_kernel_ib
-    fi
-    ( $rpmfound ) && build_lustre && buildsuccess=true && find_linux_source_rpm
-    fi
-
-    if $buildsuccess; then
-        [ -d "RPMS/${TARGET_ARCH}" ] && [ -f "$KERNELRPM" ] && \
-            cp "$KERNELRPM" RPMS/${TARGET_ARCH}/
-        [ -d "RPMS/${TARGET_ARCH}" ] && [ -f "$KERNELSOURCERPM" ] && \
-            cp "$KERNELSOURCERPM" RPMS/${TARGET_ARCH}/
-        KERNELCOMPILEDIR="$LINUX"
-        if $storeforreuse; then
-            store_for_reuse || echo "Cannot store for future reuse"
-        fi
-
-        return
-    elif ! $rpmfound; then
-        echo "COULD NOT FIND VENDOR -devel or -source RPM for $DISTRO/$TARGET_ARCH: $lnxmaj-$lnxrel in $KERNELRPMSBASE"
-        return 255
-    else
-        echo "Patchless build failed."
-        return 255
-    fi
 }
 
-#check timestamp value. should bi 14-digits string
-check_timestamp()
-{
-    local invalue=$1
-    local timestampnodig=$(echo $invalue | sed -e s/[0-9]*//g)
-    [ "$timestampnodig" = "" ] || return 255
-    local timestamplength="${#invalue}"
-    [ $timestamplength -eq 14 ] || return 255
+new_list() {
+
+    echo ""
+
 }
 
-# get list of suitable directories with potential reused staff
-get_reuse_dir_list()
-{
-    local rpmonly=$1
-    local reusedkernelmasknew=$2
-    local buildtimestamp=
-    local dirsforreuse=
-    local sourcelastdate=$(get_last_source_date)
-    for buildtimestamp in $(ls "$REUSEBUILD/" 2>&1); do
-        [ -d "$REUSEBUILD/$buildtimestamp" ] || continue
-	check_timestamp "$buildtimestamp" || continue
-        local buildtimestampstr=$(echo $buildtimestamp | \
-            sed -e "s^\(....\)\(..\)\(..\)\(..\)\(..\)\(..\)^\1-\2-\3 \4:\5:\6 GMT^g")
-        local buildtimestampepoch=$(date --date="$buildtimestampstr"  +%s )
-        #check for suitable date
-	    if ! $PATCHLESS; then
-            [ $buildtimestampepoch -ge $sourcelastdate ] || continue
-	    fi
-        #check for suitable version
-        if [ "$rpmonly" = "rpmonly" ]; then
-            local reusedkernelprefix="kernel-lustre-"
-            ( $PATCHLESS ) && reusedkernelprefix=
-            local rpmmask="${reusedkernelprefix}${REUSEDKERNELMASK}"
-            [ "$reusedkernelmasknew" = "" ] || rpmmask="$reusedkernelmasknew"
-            [ -f $REUSEBUILD/$buildtimestamp/${rpmmask}.rpm ] && \
-                dirsforreuse="$dirsforreuse $REUSEBUILD/$buildtimestamp"
-        else
-            local rpmmask="$REUSEDKERNELMASK"
-            [ "$reusedkernelmasknew" = "" ] || rpmmask="$reusedkernelmasknew"
-            pushd $REUSEBUILD/$buildtimestamp/linux-${rpmmask} > /dev/null 2>&1 || continue
-            local curdir=$(pwd)
-            dirsforreuse="$dirsforreuse $curdir"
-            popd
-        fi
+add_list() {
+    local list="$1"
+    local item="$2"
+
+    echo "$list $item"
+
+}
+
+is_list_member() {
+    local list="$1"
+    local item="$2"
+
+    [[ $list\  == *\ $item\ * ]]
+
+}
+
+#########################################################################
+# Generate a backtrace through the call stack.
+#
+# Input: None
+# Output: None
+#########################################################################
+backtrace() {
+    local strip=${1:-1}
+
+    local funcname="" sourcefile="" lineno="" n
+
+    echo "Call stack: (most recent first)"
+    for (( n = $strip ; n < ${#FUNCNAME[@]} ; ++n )) ; do
+        funcname=${FUNCNAME[$n - 1]}
+        sourcefile=$(basename ${BASH_SOURCE[$n]})
+        lineno=${BASH_LINENO[$n - 1]}
+        # Display function arguments
+        if [[ ! -z "${BASH_ARGV[@]}" ]]; then
+            local args newarg j p=0
+            for (( j = ${BASH_ARGC[$n - 1]}; j > 0; j-- )); do
+                newarg=${BASH_ARGV[$j + $p - 1]}
+                args="${args:+${args} }'${newarg}'"
+            done
+            let p+=${BASH_ARGC[$n - 1]}
+	fi
+        echo "  ${funcname} ${args:+${args} }at ${sourcefile}:${lineno}"
     done
-    echo "$dirsforreuse"
-}
 
-#try to reuse old RPM
-build_sequence_rpm_reuse()
-{
-    local sourcerpm=$1
-    [ "$REUSERPM" = "" ] && [ "$REUSEBUILD" = "" ] && return 255
-    local dirsforreuse=
-    if ! [ "$REUSEBUILD" = "" ] && [ -d "$REUSEBUILD" ]; then #try to reuse RPM
-        local REUSEDKERNELMASKnew=$(echo $REUSEDKERNELMASK | sed -e "s/^[^0-9]*//")
-        REUSEDKERNELMASKnew="kernel-lustre-source-${REUSEDKERNELMASKnew}"
-        local dirsforreuse="$(get_reuse_dir_list rpmonly $REUSEDKERNELMASKnew)"
-        local buildsuccess=false
-        LINUXOBJ=
-        for curdir in $(echo $dirsforreuse); do
-            [ -d "$curdir" ] || continue
-            local reusedkernelprefix="kernel-lustre-"
-            local reusedkernelrpm=
-            [ -f ${curdir}/${reusedkernelprefix}${REUSEDKERNELMASK}.rpm ] && \
-                reusedkernelrpm=$(ls ${curdir}/${reusedkernelprefix}${REUSEDKERNELMASK}.rpm | head -1 )
-            [ -f "$reusedkernelrpm" ] || continue
+    echo
+    echo "BEGIN BACKTRACE"
 
-            local reusedkernelsourcerpm=
-            [ -f ${curdir}/${REUSEDKERNELMASKnew}.rpm ] && \
-                reusedkernelsourcerpm=$(ls ${curdir}/${REUSEDKERNELMASKnew}.rpm | head -1 )
-            [ -f "$reusedkernelsourcerpm" ] || continue
+    #echo ${BASH_LINENO[*]}
+    #echo ${BASH_SOURCE[*]}
+    #echo ${FUNCNAME[*]}
+    local i=$((${#FUNCNAME[@]} - 1))
+    while [ $i -ge 0 ]; do
+        local SOURCELINE="${BASH_SOURCE[$i + 1]}:${BASH_LINENO[$i]}"
+        # Can't figure out how to get function args from other frames...
+        local FUNCTION="${FUNCNAME[$i]}()"
+        echo "$SOURCELINE:$FUNCTION"
+        i=$((i - 1))
+    done
 
-            # don't need to check for kernel-ib RPM reuse here because sles9 is not supported
-            # by OFED >= 1.3.0 and this function appears to only be used for sles9
+    echo "END BACKTRACE"
 
-            [ -d $TOPDIR/reused ] && rm -rf $TOPDIR/reused
-            reuse_kernel_rpm "$reusedkernelsourcerpm" "" && build_linux nofullmake copyrpmkernel && build_lustre && buildsuccess=true
-            ( $buildsuccess ) || continue
-            if ( ! $NORPM ) && ( ! $PATCHLESS ) ; then
-                [ -f "$reusedkernelrpm" ] && \
-                    cp -f  "$reusedkernelrpm"  RPMS/${TARGET_ARCH}/ > /dev/null 2>&1
- 
-                [ -f "$reusedkernelsourcerpm" ] && \
-                    cp -f  "$reusedkernelsourcerpm"  RPMS/${TARGET_ARCH}/ > /dev/null 2>&1 && \
-                    touch RPMS/${TARGET_ARCH}/kernel_was_reused
-            fi
-            return
-        done
-    fi
-    return 255
-}
+    echo $BACKTRACE
 
-#try to reuse old BUILD dir
-build_sequence_reuse()
-{
-    local sourcerpm=$1
-    [ "$REUSERPM" = "" ] && [ "$REUSEBUILD" = "" ] && return 255
-    local dirsforreuse=
-    if [ ! "$REUSEBUILD" = "" ] && [ -d "$REUSEBUILD" ]; then #try to reuse old kernel build directory
-        local dirsforreuse="$(get_reuse_dir_list)"
-        local buildsuccess=false
-        LINUXOBJ=
-        local REUSEDKERNELMASKnew=$(echo $REUSEDKERNELMASK | sed -e "s/^[^0-9]*//")
-        for curdir in $(echo $dirsforreuse); do
-            local reusedkernelrpm=
-            local reusedkernelsourcerpm=
-            local reusedkernelibrpm=
-            [ -d "$curdir" ] || continue
-            [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" -a 
-	      ! -d "${curdir%/*}/ofa_kernel" ] && continue
-            local reusedkernelprefix="kernel-lustre-"
-            ( $PATCHLESS ) && reusedkernelprefix=
-            [ -f ${curdir}/../${reusedkernelprefix}${REUSEDKERNELMASK}.rpm ] && \
-                reusedkernelrpm=$(ls ${curdir}/../${reusedkernelprefix}${REUSEDKERNELMASK}.rpm | head -1 )
-            reusedkernelprefix="kernel-lustre-source-"
-            [ -f ${curdir}/../${reusedkernelprefix}${REUSEDKERNELMASKnew}.rpm ] && \
-                reusedkernelsourcerpm=$(ls ${curdir}/../${reusedkernelprefix}${REUSEDKERNELMASKnew}.rpm | head -1 ) 
-            if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
-                gen_lustre_version
-                reusedkernelprefix="kernel-ib-"
-                [ -f ${curdir}/../${reusedkernelprefix}${OFED_VERSION}-${LUSTRE_EXTRA_VERSION}.${TARGET_ARCH}.rpm ] && \
-                    reusedkernelibrpm=$(ls ${curdir}/../${reusedkernelprefix}${OFED_VERSION}-${LUSTRE_EXTRA_VERSION}.${TARGET_ARCH}.rpm | head -1 ) 
-                    reusedkernelibdevelrpm=$(ls ${curdir}/../${reusedkernelprefix}devel-${OFED_VERSION}-${LUSTRE_EXTRA_VERSION}.${TARGET_ARCH}.rpm | head -1 ) 
-            fi
-            if ! ( $NORPM ) && ! [ -f "$reusedkernelrpm" ]; then #kernel rpm not found. Build all
-                continue
-            fi
-            if ! ( $NORPM ) && ! [ -f "$reusedkernelsourcerpm" ]; then #kernel source rpm not found. Build all
-                continue
-            fi
-            if [ -n "$OFED_VERSION" ]; then
-            	if [ "$OFED_VERSION" != "inkernel" ]; then
-                if ! ( $NORPM ) && [ ! -f "$reusedkernelibrpm" -o ! -f "$reusedkernelibdevelrpm"]; then #kernel-ib{,-devel} rpm not found. Build all
-                    continue
-                fi
-                CONFIGURE_FLAGS="--with-o2ib=${curdir%/*}/ofa_kernel ${CONFIGURE_FLAGS}"
-                else
-                    CONFIGURE_FLAGS="--with-o2ib=yes ${CONFIGURE_FLAGS}"
-		fi
-            fi
-            LINUX="$curdir"
-            build_lustre || continue
-            touch "$curdir/../"
-            buildsuccess=true
-            if ( ! $NORPM ) && ( ! $PATCHLESS ) ; then
-                [ -f "$reusedkernelrpm" ] && \
-                    cp -f  "$reusedkernelrpm"  RPMS/${TARGET_ARCH}/ > /dev/null 2>&1 && \
-                    touch RPMS/${TARGET_ARCH}/kernel_was_reused
-                [ -f "$reusedkernelsourcerpm" ] && \
-                    cp -f  "$reusedkernelsourcerpm"  RPMS/${TARGET_ARCH}/ > /dev/null 2>&1
-                [ -f "$reusedkernelibrpm" ] && \
-                    cp -f  "$reusedkernelibrpm"  RPMS/${TARGET_ARCH}/ > /dev/null 2>&1
-                    cp -f  "$reusedkernelibdevelrpm"  RPMS/${TARGET_ARCH}/ > /dev/null 2>&1
-            fi
-            return
-        done
-    fi
-    return 255
-}
-
-
-build_sequence()
-{
-    if (( $DO_SRC )) ; then
-        unpack_linux
-        patch_linux
-        pack_linux
-        clean_linux
-    fi
-    prep_kernel_build || return 255
-    clean_lustre || return 255
-
-    build_kernel || return 255
 }
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
 options=$(getopt -o d:D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ldiskfs,ccache,reuse:,norpm,disable-datestamp,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,publish,release,src,stage:,tag:,target:,target-archs:,with-linux:,xen -- "$@")
 
-if [ $? != 0 ] ; then
+if [ $? != 0 ]; then
     usage 1
 fi
 
 eval set -- "$options"
-    
-while [ "$1" ] ; do
+
+while [ "$1" ]; do
     case "$1" in
         '')
             usage 1
@@ -1623,11 +1290,15 @@ while [ "$1" ] ; do
             shift 2
             ;;
         --kerneltree)
-            KERNELTREE=$2
+            if ! KERNELTREE=$(canon_path "$2"); then
+                fatal 1 "Could not determine the canonical location of $2"
+            fi
             shift 2
             ;;
         --linux | --with-linux)
-            LINUX=$2
+            if ! LINUX=$(canon_path "$2"); then
+                fatal 1 "Could not determine the canonical location of $2"
+            fi
             shift 2
             ;;
         --distro)
@@ -1639,7 +1310,9 @@ while [ "$1" ] ; do
             shift 2
             ;;
         --reusebuild)
-            REUSEBUILD=$2
+            if ! REUSEBUILD=$(canon_path "$2"); then
+                fatal 1 "Could not determine the canonical location of $2"
+            fi
             shift 2
             ;;
         --norpm)
@@ -1655,7 +1328,9 @@ while [ "$1" ] ; do
             shift
             ;;
         --kernelrpm)
-            KERNELRPMSBASE=$2
+            if ! KERNELRPMSBASE=$(canon_path "$2"); then
+                fatal 1 "Could not determine the canonical location of $2"
+            fi
             shift 2
             ;;
         --timestamp)
@@ -1667,11 +1342,11 @@ while [ "$1" ] ; do
             shift 2
             ;;
         --nodownload)
-            DOWNLOAD=0
+            DOWNLOAD=false
             shift 1
             ;;
         --nosrc)
-            DO_SRC=0
+            DO_SRC=false
             shift 1
             ;;
         --publish)
@@ -1682,7 +1357,7 @@ while [ "$1" ] ; do
             shift
             ;;
         --src)
-            DO_SRC=1
+            DO_SRC=true
             shift 1
             ;;
         --stage)
@@ -1714,7 +1389,7 @@ while [ "$1" ] ; do
             CONFIGURE_FLAGS=$@
             CONFIGURE_FLAGS="$CONFIGURE_FLAGS --enable-liblustre --enable-liblustre-tests"
             break
-            ;; 
+            ;;
         *)
             usage 1 "Unrecognized option: $1"
             ;;
@@ -1729,26 +1404,64 @@ load_target
 EXTRA_VERSION_DELIMITER=${EXTRA_VERSION_DELIMITER:-"-"}
 
 if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
+    download_ofed
     unpack_ofed
 fi
 
-build_success=false
-if $PATCHLESS; then
-    patchless_build_sequence && build_success=true 
-elif [ -z "$LINUX" ] ; then
-    [ "$DISTRO" = "sles9" ] && build_sequence_rpm_reuse && build_success=true
-    if ! $build_success; then
-        build_sequence_reuse && build_success=true
-        if ! $build_success; then
-            build_sequence && build_success=true
-            if $build_success; then
-                store_for_reuse || echo "Cannot store for future reuse"
+# make sure the RPM build environment is set up
+create_rpmbuild_dirs
+
+trap '[ -n "$CCACHE" ] && ccache -s' EXIT
+
+# if an unpacked kernel source tree was given on the command line
+# just build lustre with it (nothing distro kernel specific here)
+if [ -n "$LINUX" ]; then
+    build_lustre
+else
+    if [ -f "${0%/*}/lbuild-$DISTRO" ]; then
+        seen_list=$(new_list)
+        trap '(echo "Untrapped error"
+echo
+# have we seen this one
+echo "checking seen list for ${BASH_SOURCE[0]}:${BASH_LINENO[0]}"
+
+if is_list_member "$seen_list" "${BASH_SOURCE[0]}:${BASH_LINENO[0]}"; then
+  echo "seen this one already"
+else
+  seen_list=$(add_list "$seen_list" "${BASH_SOURCE[0]}:${BASH_LINENO[0]}")
+fi
+backtrace
+echo
+echo "Environment:"
+set
+) | tee >(mail -s "Untrapped error in lbuild on $MACHINENAME" brian@sun.com) >&2' ERR
+        set -E
+
+        source ${0%/*}/lbuild-$DISTRO
+
+        build_with_srpm || fatal 1 "Failed to build_with_srpm"
+    else
+        source ${0%/*}/lbuild.old_school
+
+        old_school_download_kernel
+
+        build_success=false
+        if $PATCHLESS; then
+            patchless_build_sequence && build_success=true
+        else
+            [ "$DISTRO" = "sles9" ] && build_sequence_rpm_reuse && build_success=true
+            if ! $build_success; then
+                build_sequence_reuse && build_success=true
+                if ! $build_success; then
+                    build_sequence && build_success=true
+                    if $build_success; then
+                        store_for_reuse || echo "Cannot store for future reuse"
+                    fi
+                fi
             fi
         fi
+        ( $build_success ) || fatal 1 "Cannot build lustre"
     fi
-else
-    build_lustre && build_success=true
 fi
-( $build_success ) || fatal 1 "Cannot build lustre"
 
 stage

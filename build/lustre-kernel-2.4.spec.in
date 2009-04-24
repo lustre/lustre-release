@@ -381,7 +381,7 @@ pushd lustre >/dev/null
 if [ -s "%{SOURCE2}" ] ; then
        tar zxf "%{SOURCE2}" -C lustre/kernel_patches
 fi
-sh -x ./build/lmake \
+bash -x ./build/lmake \
 	--unpack-kernel \
 	--target @LUSTRE_TARGET@ \
 	--target-arch %{_target_cpu} \
@@ -516,7 +516,7 @@ mkdir -p $RPM_BUILD_ROOT
 DependKernel()
 {
   target_config=${1:+--target-config $1}
-  sh -x ./build/lmake \
+  bash -x ./build/lmake \
 	--depend-kernel \
 	--target @LUSTRE_TARGET@ \
 	--target-arch %{_target_cpu} \
@@ -528,7 +528,7 @@ DependKernel()
 BuildKernel()
 {
   target_config=${1:+--target-config $1}
-  sh -x ./build/lmake \
+  bash -x ./build/lmake \
 	--build-kernel --build-lustre \
 	--install \
 	--save-headers \
@@ -546,7 +546,7 @@ BuildKernel()
 BuildLustre()
 {
   target_config=${1:+--target-config $1}
-  sh -x ./build/lmake \
+  bash -x ./build/lmake \
 	--build-lustre \
 	--install-lustre \
 	--target @LUSTRE_TARGET@ \
@@ -566,7 +566,7 @@ BuildLustre()
 
 SaveHeaders()
 {
-  sh -x ./build/lmake \
+  bash -x ./build/lmake \
 	--save-headers \
 	--target @LUSTRE_TARGET@ \
 	--target-arch %{_target_cpu} \
@@ -662,7 +662,7 @@ BuildObj ()
 $(set -- 2.6.5 ; echo ${*//./ })
 EOF
 	rm -f $o/Makefile
-	ARCH=%{_target_cpu} /bin/sh scripts/mkmakefile ../../../linux-%{KVERREL} $o \
+	ARCH=%{_target_cpu} /bin/bash scripts/mkmakefile ../../../linux-%{KVERREL} $o \
 		$VERSION $PATCHLEVEL > $o/Makefile.in
 	if [ -f $o/Makefile ] ; then
 		# will exist only for 2.6.17 and newer because mkmakefile

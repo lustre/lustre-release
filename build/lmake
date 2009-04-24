@@ -242,7 +242,7 @@ load_target()
 #    [ "$SERIES" ] || fatal 1 "Target $TARGET did not specify a patch series."
 #    [ "$CONFIG" ] || fatal 1 "Target $TARGET did not specify a kernel config."
     [ "$VERSION" ] || fatal 1 "Target $TARGET did not specify the kernel version."
-    
+
     if [ "$KERNELDIR" ] ; then
 	KERNEL_FILE="$KERNELDIR/$KERNEL"
 	[ -r "$KERNELDIR/$KERNEL" ] || \
@@ -284,10 +284,10 @@ setup_ccache_distcc()
             unset DISTCC
         fi
     fi
-    
+
     CC=${CC:-gcc}
     if [ "$CCACHE" ]; then
-        CC="$CCACHE $CC"
+        [[ $CC != ccache\ * ]] && CC="$CCACHE $CC"
         [ "$DISTCC" ] && export CCACHE_PREFIX="$DISTCC"
     else
         [ "$DISTCC" ] && CC="$DISTCC $CC"
@@ -330,7 +330,7 @@ extract_kernel()
 	[ -L linux ] && rm -rf $(readlink linux)
 	rm -rf linux
     fi
-    untar "$KERNEL_FILE"
+    untar "$KERNEL_FILE" || fatal 1 "Error unpacking Linux tarball"
     [ -d linux ] || ln -sf linux* linux
     popd >/dev/null
 }
