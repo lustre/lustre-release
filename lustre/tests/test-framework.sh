@@ -125,7 +125,7 @@ init_test_env() {
     [ "$GSS_PIPEFS" = "true" ] && [ ! -f "$LGSSD" ] && \
         export LGSSD=$(which lgssd)
     export LSVCGSSD=${LSVCGSSD:-"$LUSTRE/utils/gss/lsvcgssd"}
-    [ ! -f "$LSVCGSSD" ] && export LSVCGSSD=$(which lsvcgssd)
+    [ ! -f "$LSVCGSSD" ] && export LSVCGSSD=$(which lsvcgssd 2> /dev/null)
     export KRB5DIR=${KRB5DIR:-"/usr/kerberos"}
     export DIR2
     export SAVE_PWD=${SAVE_PWD:-$LUSTRE/tests}
@@ -2041,9 +2041,10 @@ error_ignore() {
 }
 
 skip () {
-	log " SKIP: ${TESTSUITE} ${TESTNAME} $@"
-	[ "$TESTSUITELOG" ] && \
-		echo "${TESTSUITE}: SKIP: $TESTNAME $@" >> $TESTSUITELOG || true
+    echo
+    log " SKIP: ${TESTSUITE} ${TESTNAME} $@"
+    [ "$TESTSUITELOG" ] && \
+        echo "${TESTSUITE}: SKIP: $TESTNAME $@" >> $TESTSUITELOG || true
 }
 
 build_test_filter() {
