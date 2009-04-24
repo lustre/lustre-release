@@ -68,7 +68,11 @@ case "$lustretag" in
 
     # These use special build directories 
 
+    # Maintenance mode -- isolate build system changes
     b1_4*) buildtag="b1_4" ;;
+
+    # Maintenance mode -- isolate build system changes
+    b1_6*) buildtag="b1_6" ;;
 
     b_release_1_4_6-patchless) buildtag="b1_4" ;;
     b_release_1_4_7-test) buildtag="b_release_1_4_7" ;;
