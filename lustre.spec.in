@@ -31,14 +31,12 @@ Group: Development/Kernel
 %description modules
 Lustre file system, server and network drivers for Linux %{kversion}.
 
-%if ! %{is_client}
 %package source
 Summary: Object-Based Disk storage driver source
 Group: Development/Kernel
 
 %description source
 Lustre sources for further development
-%endif
 
 # Since the RPMs we ship are to be used on both SLES and RHEL, we
 # can't include any dependency information (since the package names
@@ -194,10 +192,8 @@ popd >/dev/null
 %files modules -f lustre-modules.files
 %attr(-, root, root) %doc COPYING
 
-%if ! %{is_client}
 %files source
 %attr(-, root, root) /usr/src/lustre-%{version}
-%endif
 
 # uncomment these lines to enable deps packages
 # %files deps-sles
