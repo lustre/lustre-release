@@ -14,7 +14,8 @@ export CATASTROPHE=${CATASTROPHE:-/proc/sys/lnet/catastrophe}
 #export PDSH="pdsh -S -Rssh -w"
 
 # function used by scripts run on remote nodes
-. $(dirname $0)/functions.sh
+LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+. $LUSTRE/tests/functions.sh
 
 assert_DIR () {
     local failed=""
