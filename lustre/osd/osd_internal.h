@@ -103,6 +103,7 @@ struct osd_thandle {
         /* Link to the device, for debugging. */
         struct lu_ref_link     *ot_dev_link;
         int                     ot_credits;
+        struct osd_object      *ot_alloc_sem_obj;
 #ifdef OSD_TRACK_DECLARES
         int                     ot_declare_attr_set;
         int                     ot_declare_punch;

@@ -410,6 +410,14 @@ int osd_get_bufs(const struct lu_env *env, struct dt_object *d, loff_t pos,
         }
         rc = i;
 
+        /* Filter truncate first locks i_mutex then partally truncated
+         * page, filter write code first locks pages then take
+         * i_mutex.  To avoid a deadlock in case of concurrent
+         * punch/write requests from one client, filter writes and
+         * filter truncates are serialized by i_alloc_sem, allowing
+         * multiple writes or single truncate. */
+        down_read(&obj->oo_inode->i_alloc_sem);
+
 cleanup:
         RETURN(rc);
 }
@@ -417,7 +425,10 @@ cleanup:
 static int osd_put_bufs(const struct lu_env *env, struct dt_object *dt,
                 struct niobuf_local *lb, int npages)
 {
-        int i;
+        struct osd_object *obj    = osd_dt_obj(dt);
+        int                i;
+
+        up_read(&obj->oo_inode->i_alloc_sem);
 
         for (i = 0; i < npages; i++) {
                 if (lb[i].page == NULL)
@@ -475,8 +486,28 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 }
 
 static int osd_declare_write_commit(const struct lu_env *env, struct dt_object *dt,
-                struct niobuf_local *lb, int npages, struct thandle *thandle)
+                struct niobuf_local *lb, int npages, struct thandle *handle)
 {
+        struct osd_thandle  *oh;
+        int                  extents = 1;
+        int                  i;
+
+        LASSERT(handle != NULL);
+        oh = container_of0(handle, struct osd_thandle, ot_super);
+        LASSERT(oh->ot_handle == NULL);
+
+        /* allocate each block in different group (bitmap + gd) */
+        oh->ot_credits += npages * 2;
+
+        /* calculate number of extents (probably better to pass nb) */
+        for (i = 1; i < npages; i++)
+                if (lb[i].file_offset != lb[i-1].file_offset + lb[i-1].len)
+                        extents++;
+
+        /* each extent can go into new leaf causing a split */
+        /* 5 is max tree depth, 2 is bitmap + gd */
+        oh->ot_credits += (5 * (2 + 1)) * extents;
+        
         RETURN(0);
 }
 
