@@ -4951,30 +4951,19 @@ test_122() { #bug 11544
 run_test 122 "fail client bulk callback (shouldn't LBUG) ======="
 
 test_123a() { # was test 123, statahead(bug 11401)
+        SLOWOK=0
         if [ -z "$(grep "processor.*: 1" /proc/cpuinfo)" ]; then
                 log "testing on UP system. Performance may be not as good as expected."
+		SLOWOK=1
         fi
 
-        remount_client $MOUNT
+        rm -rf $DIR/$tdir
         mkdir -p $DIR/$tdir
-        error=0
         NUMFREE=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
         [ $NUMFREE -gt 100000 ] && NUMFREE=100000 || NUMFREE=$((NUMFREE-1000))
         MULT=10
-        for ((i=1, j=0; i<=$NUMFREE; j=$i, i=$((i * MULT)) )); do
+        for ((i=100, j=0; i<=$NUMFREE; j=$i, i=$((i * MULT)) )); do
                 createmany -o $DIR/$tdir/$tfile $j $((i - j))
-
-                swrong=`lctl get_param -n llite.*.statahead_stats | grep "statahead wrong:" | awk '{print $3}'`
-                lctl get_param -n llite.*.statahead_max | grep '[0-9]'
-                cancel_lru_locks mdc
-                cancel_lru_locks osc
-                stime=`date +%s`
-                ls -l $DIR/$tdir > /dev/null
-                etime=`date +%s`
-                delta_sa=$((etime - stime))
-                log "ls $i files with statahead:    $delta_sa sec"
-		lctl get_param -n llite.*.statahead_stats
-                ewrong=`lctl get_param -n llite.*.statahead_stats | grep "statahead wrong:" | awk '{print $3}'`
 
                 max=`lctl get_param -n llite.*.statahead_max | head -n 1`
                 lctl set_param -n llite.*.statahead_max 0
@@ -4982,23 +4971,69 @@ test_123a() { # was test 123, statahead(bug 11401)
                 cancel_lru_locks mdc
                 cancel_lru_locks osc
                 stime=`date +%s`
-                ls -l $DIR/$tdir > /dev/null
+                time ls -l $DIR/$tdir | wc -l
                 etime=`date +%s`
                 delta=$((etime - stime))
                 log "ls $i files without statahead: $delta sec"
-
                 lctl set_param llite.*.statahead_max=$max
+
+                swrong=`lctl get_param -n llite.*.statahead_stats | grep "statahead wrong:" | awk '{print $3}'`
+                lctl get_param -n llite.*.statahead_max | grep '[0-9]'
+                cancel_lru_locks mdc
+                cancel_lru_locks osc
+                stime=`date +%s`
+                time ls -l $DIR/$tdir | wc -l
+                etime=`date +%s`
+                delta_sa=$((etime - stime))
+                log "ls $i files with statahead: $delta_sa sec"
+		lctl get_param -n llite.*.statahead_stats
+                ewrong=`lctl get_param -n llite.*.statahead_stats | grep "statahead wrong:" | awk '{print $3}'`
+
                 if [ $swrong -lt $ewrong ]; then
                         log "statahead was stopped, maybe too many locks held!"
                 fi
-                if [ $delta_sa -gt $(($delta + 2)) ]; then
-                        log "ls $i files is slower with statahead!"
-                        error=1
+
+                [ $delta -eq 0 -o $delta_sa -eq 0 ] && continue
+
+                if [ $((delta_sa * 100)) -gt $((delta * 105)) -a $delta_sa -gt $((delta + 2)) ]; then
+                        if [  $SLOWOK -eq 0 ]; then
+                                error "ls $i files is slower with statahead!"
+                                debugsave
+
+                                lctl set_param debug=-1
+                                max=`lctl get_param -n llite.*.statahead_max | head -n 1`
+                                lctl set_param -n llite.*.statahead_max 0
+                                lctl get_param llite.*.statahead_max
+                                cancel_lru_locks mdc
+                                cancel_lru_locks osc
+                                $LCTL clear
+                                stime=`date +%s`
+                                time ls -l $DIR/$tdir | wc -l
+                                etime=`date +%s`
+                                error "ls $i files (again) without statahead: $((etime - stime)) sec"
+
+                                lctl set_param debug=-1
+                                lctl set_param llite.*.statahead_max=$max
+                                lctl get_param -n llite.*.statahead_max | grep '[0-9]'
+                                cancel_lru_locks mdc
+                                cancel_lru_locks osc
+                                $LCTL clear
+                                stime=`date +%s`
+                                time ls -l $DIR/$tdir | wc -l
+                                etime=`date +%s`
+                                error "ls $i files (again) with statahead: $((etime - stime)) sec"
+		                lctl get_param -n llite.*.statahead_stats
+
+                                debugrestore
+                        else
+                                log "ls $i files is slower with statahead!"
+                        fi
+                        break
                 fi
 
                 [ $delta -gt 20 ] && break
                 [ $delta -gt 8 ] && MULT=$((50 / delta))
-                [ "$SLOW" = "no" -a $delta -gt 3 ] && break
+                [ "$SLOW" = "no" -a $delta -gt 5 ] && break
         done
         log "ls done"
 
@@ -5010,10 +5045,6 @@ test_123a() { # was test 123, statahead(bug 11401)
         log "rm -r $DIR/$tdir/: $delta seconds"
         log "rm done"
         lctl get_param -n llite.*.statahead_stats
-        # wait for commitment of removal
-        sleep 2
-        [ $error -ne 0 ] && error "statahead is slow!"
-        return 0
 }
 run_test 123a "verify statahead work"
 
