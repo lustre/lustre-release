@@ -833,16 +833,6 @@ static int ll_options(char *options, int *flags)
                         *flags &= ~tmp;
                         goto next;
                 }
-                tmp = ll_set_opt("lazystatfs", s1, LL_SBI_LAZYSTATFS);
-                if (tmp) {
-                        *flags |= tmp;
-                        goto next;
-                }
-                tmp = ll_set_opt("nolazystatfs", s1, LL_SBI_LAZYSTATFS);
-                if (tmp) {
-                        *flags &= ~tmp;
-                        goto next;
-                }
 
                 LCONSOLE_ERROR_MSG(0x152, "Unknown option '%s', won't mount.\n",
                                    s1);
@@ -1401,9 +1391,6 @@ int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
 
         CDEBUG(D_SUPER, "MDC blocks "LPU64"/"LPU64" objects "LPU64"/"LPU64"\n",
                osfs->os_bavail, osfs->os_blocks, osfs->os_ffree,osfs->os_files);
-
-        if (sbi->ll_flags & LL_SBI_LAZYSTATFS)
-                flags |= OBD_STATFS_NODELAY;
 
         rc = obd_statfs_rqset(class_exp2obd(sbi->ll_dt_exp),
                               &obd_osfs, max_age, flags);
@@ -2165,9 +2152,6 @@ int ll_show_options(struct seq_file *seq, struct vfsmount *vfs)
 
         if (sbi->ll_flags & LL_SBI_ACL)
                 seq_puts(seq, ",acl");
-
-        if (sbi->ll_flags & LL_SBI_LAZYSTATFS)
-                seq_puts(seq, ",lazystatfs");
 
         RETURN(0);
 }

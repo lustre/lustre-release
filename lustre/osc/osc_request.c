@@ -3360,10 +3360,6 @@ static int osc_statfs_interpret(const struct lu_env *env,
         struct obd_statfs *msfs;
         ENTRY;
 
-        if ((rc == -ENOTCONN || rc == -EAGAIN) &&
-            (aa->aa_oi->oi_flags & OBD_STATFS_NODELAY))
-                GOTO(out, rc = 0);
-
         if (rc != 0)
                 GOTO(out, rc);
 

@@ -533,35 +533,6 @@ static int ll_rd_statahead_stats(char *page, char **start, off_t off,
                         sbi->ll_sa_miss);
 }
 
-static int ll_rd_lazystatfs(char *page, char **start, off_t off,
-                            int count, int *eof, void *data)
-{
-        struct super_block *sb = data;
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-
-        return snprintf(page, count, "%u\n",
-                        (sbi->ll_flags & LL_SBI_LAZYSTATFS) ? 1 : 0);
-}
-
-static int ll_wr_lazystatfs(struct file *file, const char *buffer,
-                            unsigned long count, void *data)
-{
-        struct super_block *sb = data;
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-        int val, rc;
-
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-
-        if (val)
-                sbi->ll_flags |= LL_SBI_LAZYSTATFS;
-        else
-                sbi->ll_flags &= ~LL_SBI_LAZYSTATFS;
-
-        return count;
-}
-
 static struct lprocfs_vars lprocfs_llite_obd_vars[] = {
         { "uuid",         ll_rd_sb_uuid,          0, 0 },
         //{ "mntpt_path",   ll_rd_path,             0, 0 },
@@ -587,7 +558,6 @@ static struct lprocfs_vars lprocfs_llite_obd_vars[] = {
         { "stats_track_gid",  ll_rd_track_gid, ll_wr_track_gid, 0 },
         { "statahead_max",    ll_rd_statahead_max, ll_wr_statahead_max, 0 },
         { "statahead_stats",  ll_rd_statahead_stats, 0, 0 },
-        { "lazystatfs",         ll_rd_lazystatfs, ll_wr_lazystatfs, 0 },
         { 0 }
 };
 
