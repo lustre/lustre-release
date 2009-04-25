@@ -241,11 +241,12 @@ int filter_attr_set(const struct lu_env *env, struct filter_object *fo,
 int filter_object_punch(const struct lu_env *env, struct filter_object *fo,
                         __u64 start, __u64 end, struct obdo *oa)
 {
-        struct thandle *th;
-        struct filter_device *ofd = filter_obj2dev(fo);
         struct filter_thread_info *info = filter_info(env);
-        struct filter_mod_data *fmd;
-        struct lu_attr attr;
+        struct filter_device      *ofd = filter_obj2dev(fo);
+        struct filter_mod_data    *fmd;
+        struct dt_object          *dob = filter_object_child(fo);
+        struct thandle            *th;
+        struct lu_attr             attr;
         int rc;
         ENTRY;
 
@@ -266,15 +267,20 @@ int filter_object_punch(const struct lu_env *env, struct filter_object *fo,
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
 
-        rc = dt_declare_attr_set(env, filter_object_child(fo), &attr, th);
+        rc = dt_declare_attr_set(env, dob, &attr, th);
+        LASSERT(rc == 0);
+
+        rc = dt_declare_punch(env, dob, start, OBD_OBJECT_EOF, th);
         LASSERT(rc == 0);
 
         rc = filter_trans_start(env, ofd, th);
         if (rc)
                 RETURN(rc);
 
-        rc = dt_attr_set(env, filter_object_child(fo), &attr, th,
-                         filter_object_capa(env, fo));
+        rc = dt_punch(env, dob, start, OBD_OBJECT_EOF, th,
+                      filter_object_capa(env, fo));
+
+        rc = dt_attr_set(env, dob, &attr, th, filter_object_capa(env, fo));
 
         filter_trans_stop(env, ofd, th);
 
