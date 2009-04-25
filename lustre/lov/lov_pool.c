@@ -544,7 +544,7 @@ int lov_pool_add(struct obd_device *obd, char *poolname, char *ostname)
         obd_str2uuid(&ost_uuid, ostname);
 
         /* search ost in lov array */
-        lov_getref(obd);
+        obd_getref(obd);
         for (lov_idx = 0; lov_idx < lov->desc.ld_tgt_count; lov_idx++) {
                 if (!lov->lov_tgts[lov_idx])
                         continue;
@@ -567,7 +567,7 @@ int lov_pool_add(struct obd_device *obd, char *poolname, char *ostname)
         rc = 0;
         EXIT;
 out:
-        lov_putref(obd);
+        obd_putref(obd);
         lov_pool_putref(pool);
         return rc;
 }
@@ -591,7 +591,7 @@ int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
         obd_str2uuid(&ost_uuid, ostname);
 
         /* search ost in lov array, to get index */
-        lov_getref(obd);
+        obd_getref(obd);
         for (lov_idx = 0; lov_idx < lov->desc.ld_tgt_count; lov_idx++) {
                 if (!lov->lov_tgts[lov_idx])
                         continue;
@@ -613,7 +613,7 @@ int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
         rc = 0;
         EXIT;
 out:
-        lov_putref(obd);
+        obd_putref(obd);
         lov_pool_putref(pool);
         return rc;
 }

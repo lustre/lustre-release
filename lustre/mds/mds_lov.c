@@ -1160,7 +1160,8 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         rc = mds_lov_start_synchronize(obd, watched, data,
                                        !(ev == OBD_NOTIFY_SYNC));
 
-        lquota_recovery(mds_quota_interface_ref, obd);
+        if (likely(obd->obd_stopping == 0))
+                lquota_recovery(mds_quota_interface_ref, obd);
 
         RETURN(rc);
 }

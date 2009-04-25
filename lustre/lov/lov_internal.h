@@ -37,6 +37,7 @@
 #ifndef LOV_INTERNAL_H
 #define LOV_INTERNAL_H
 
+#include <obd_class.h>
 #include <lustre/lustre_user.h>
 
 struct lov_lock_handles {
@@ -260,8 +261,6 @@ void lov_fix_desc_stripe_count(__u32 *val);
 void lov_fix_desc_pattern(__u32 *val);
 void lov_fix_desc_qos_maxage(__u32 *val);
 int lov_get_stripecnt(struct lov_obd *lov, __u32 stripe_count);
-void lov_getref(struct obd_device *obd);
-void lov_putref(struct obd_device *obd);
 
 /* lov_log.c */
 int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
