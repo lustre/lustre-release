@@ -616,7 +616,6 @@ static int filter_init0(const struct lu_env *env, struct filter_device *m,
         }
 
         spin_lock_init(&m->ofd_transno_lock);
-        //spin_lock_init(&m->ofd_client_bitmap_lock);
 
         m->ofd_fmd_max_num = FILTER_FMD_MAX_NUM_DEFAULT;
         m->ofd_fmd_max_age = FILTER_FMD_MAX_AGE_DEFAULT;
@@ -635,6 +634,7 @@ static int filter_init0(const struct lu_env *env, struct filter_device *m,
         rwlock_init(&filter->fo_sptlrpc_lock);
         sptlrpc_rule_set_init(&filter->fo_sptlrpc_rset);
 #endif
+        spin_lock_init(&filter->fo_obt.obt_translock);
 
         m->ofd_fl_oss_capa = 0;
         CFS_INIT_LIST_HEAD(&m->ofd_capa_keys);
