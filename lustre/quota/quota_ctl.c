@@ -325,6 +325,7 @@ int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                 RETURN(-EFAULT);
         }
 
+        obd_getref(obd);
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 int err;
 
@@ -350,6 +351,7 @@ int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                         bhardlimit += oqctl->qc_dqblk.dqb_bhardlimit;
                 }
         }
+        obd_putref(obd);
 
         if (oqctl->qc_cmd == Q_GETOQUOTA) {
                 oqctl->qc_dqblk.dqb_curspace = curspace;

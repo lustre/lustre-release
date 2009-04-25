@@ -2309,7 +2309,8 @@ int mds_postrecov(struct obd_device *obd)
                    OBD_NOTIFY_SYNC, NULL);
 
         /* quota recovery */
-        lquota_recovery(mds_quota_interface_ref, obd);
+        if (likely(obd->obd_stopping == 0))
+                lquota_recovery(mds_quota_interface_ref, obd);
 
 out:
         RETURN(rc);

@@ -1256,6 +1256,8 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats,stats,unregister_page_removal_cb);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, register_lock_cancel_cb);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats,unregister_lock_cancel_cb);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, getref);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, putref);
 }
 
 void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats)

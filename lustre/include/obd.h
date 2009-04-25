@@ -1171,6 +1171,8 @@ struct obd_ops {
                                        obd_lock_cancel_cb cb);
         int (*o_unregister_lock_cancel_cb)(struct obd_device *obd,
                                          obd_lock_cancel_cb cb);
+        void (*o_getref)(struct obd_device *obd);
+        void (*o_putref)(struct obd_device *obd);
 
         /*
          * NOTE: If adding ops, add another LPROCFS_OBD_OP_INIT() line
