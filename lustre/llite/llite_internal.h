@@ -297,6 +297,7 @@ enum stats_track_type {
 #define LL_SBI_OSS_CAPA         0x100 /* support oss capa */
 #define LL_SBI_LOCALFLOCK       0x200 /* Local flocks support by kernel */
 #define LL_SBI_LRU_RESIZE       0x400 /* lru resize support */
+#define LL_SBI_LAZYSTATFS       0x800 /* lazystatfs mount option */
 
 /* default value for ll_sb_info->contention_time */
 #define SBI_DEFAULT_CONTENTION_SECONDS     60

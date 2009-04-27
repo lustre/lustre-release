@@ -44,6 +44,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <sys/vfs.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -66,6 +67,7 @@ char usage[] =
 "        C[num] create with optional stripes\n"
 "        d  mkdir\n"
 "        D  open(O_DIRECTORY)\n"
+"        f  statfs\n"
 "        L  link\n"
 "        l  symlink\n"
 "        m  mknod\n"
@@ -186,6 +188,7 @@ int main(int argc, char **argv)
         char *fname, *commands;
         const char *newfile;
         struct stat st;
+        struct statfs stfs;
         size_t mmap_len = 0, i;
         unsigned char *mmap_ptr = NULL, junk = 0;
         int rc, len, fd = -1;
@@ -245,6 +248,13 @@ int main(int argc, char **argv)
                         if (fd == -1) {
                                 save_errno = errno;
                                 perror("open(O_DIRECTORY)");
+                                exit(save_errno);
+                        }
+                        break;
+                case 'f':
+                        if (statfs(fname, &stfs) == -1) {
+                                save_errno = errno;
+                                perror("statfs()");
                                 exit(save_errno);
                         }
                         break;
