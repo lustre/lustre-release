@@ -43,8 +43,7 @@
 enum {
         SOCKLND_TIMEOUT = 1,
         SOCKLND_CREDITS,
-        SOCKLND_PEER_TXCREDITS,
-        SOCKLND_PEER_RTRCREDITS,
+        SOCKLND_PEER_CREDITS,
         SOCKLND_PEER_TIMEOUT,
         SOCKLND_NCONNDS,
         SOCKLND_RECONNECTS_MIN,
@@ -72,8 +71,7 @@ enum {
 
 #define SOCKLND_TIMEOUT         CTL_UNNUMBERED
 #define SOCKLND_CREDITS         CTL_UNNUMBERED
-#define SOCKLND_PEER_TXCREDITS  CTL_UNNUMBERED
-#define SOCKLND_PEER_RTRCREDITS  CTL_UNNUMBERED
+#define SOCKLND_PEER_CREDITS    CTL_UNNUMBERED
 #define SOCKLND_PEER_TIMEOUT    CTL_UNNUMBERED
 #define SOCKLND_NCONNDS         CTL_UNNUMBERED
 #define SOCKLND_RECONNECTS_MIN  CTL_UNNUMBERED
@@ -118,18 +116,9 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
                 .strategy = &sysctl_intvec,
         },
          {
-                .ctl_name = SOCKLND_PEER_TXCREDITS,
+                .ctl_name = SOCKLND_PEER_CREDITS,
                 .procname = "peer_credits",
-                .data     = &ksocknal_tunables.ksnd_peertxcredits,
-                .maxlen   = sizeof (int),
-                .mode     = 0444,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-         {
-                .ctl_name = SOCKLND_PEER_RTRCREDITS,
-                .procname = "peer_buffer_credits",
-                .data     = &ksocknal_tunables.ksnd_peerrtrcredits,
+                .data     = &ksocknal_tunables.ksnd_peercredits,
                 .maxlen   = sizeof (int),
                 .mode     = 0444,
                 .proc_handler = &proc_dointvec,

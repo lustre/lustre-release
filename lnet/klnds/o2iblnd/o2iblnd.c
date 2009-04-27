@@ -2037,10 +2037,9 @@ kiblnd_startup (lnet_ni_t *ni)
         do_gettimeofday(&tv);
         net->ibn_incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
 
-        ni->ni_peertimeout    = *kiblnd_tunables.kib_peertimeout;
-        ni->ni_maxtxcredits   = *kiblnd_tunables.kib_credits;
-        ni->ni_peertxcredits  = *kiblnd_tunables.kib_peertxcredits;
-        ni->ni_peerrtrcredits = *kiblnd_tunables.kib_peerrtrcredits;
+        ni->ni_maxtxcredits = *kiblnd_tunables.kib_credits;
+        ni->ni_peertxcredits = *kiblnd_tunables.kib_peercredits;
+        ni->ni_peertimeout = *kiblnd_tunables.kib_peertimeout;
 
         spin_lock_init(&net->ibn_tx_lock);
         INIT_LIST_HEAD(&net->ibn_idle_txs);

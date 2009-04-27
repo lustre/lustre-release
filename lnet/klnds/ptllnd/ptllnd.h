@@ -95,7 +95,7 @@
 # define PTLLND_N_SCHED         1                   /* # schedulers */
 #endif
 
-#define PTLLND_CREDIT_HIGHWATER ((*kptllnd_tunables.kptl_peertxcredits)-1)
+#define PTLLND_CREDIT_HIGHWATER ((*kptllnd_tunables.kptl_peercredits)-1)
   /* when eagerly to return credits */
 
 typedef struct
@@ -110,8 +110,7 @@ typedef struct
         int             *kptl_rxb_npages;       /* number of pages for rx buffer */
         int             *kptl_rxb_nspare;       /* number of spare rx buffers */
         int             *kptl_credits;          /* number of credits */
-        int             *kptl_peertxcredits;    /* number of peer tx credits */
-        int             *kptl_peerrtrcredits;   /* number of peer router credits */
+        int             *kptl_peercredits;      /* number of credits */
         int             *kptl_max_msg_size;     /* max immd message size*/
         int             *kptl_peer_hash_table_size; /* # slots in peer hash table */
         int             *kptl_reschedule_loops; /* scheduler yield loops */
@@ -526,14 +525,14 @@ kptllnd_reserve_buffers(int n)
 static inline int
 kptllnd_peer_reserve_buffers(void)
 {
-        return kptllnd_reserve_buffers(*kptllnd_tunables.kptl_peertxcredits);
+        return kptllnd_reserve_buffers(*kptllnd_tunables.kptl_peercredits);
 }
 
 static inline void
 kptllnd_peer_unreserve_buffers(void)
 {
         kptllnd_rx_buffer_pool_unreserve(&kptllnd_data.kptl_rx_buffer_pool,
-                                         *kptllnd_tunables.kptl_peertxcredits);
+                                         *kptllnd_tunables.kptl_peercredits);
 }
 
 /*

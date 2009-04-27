@@ -192,7 +192,7 @@ kptllnd_peer_allocate (lnet_process_id_t lpid, ptl_process_id_t ppid)
         peer->peer_ptlid = ppid;
         peer->peer_credits = 1;                 /* enough for HELLO */
         peer->peer_next_matchbits = PTL_RESERVED_MATCHBITS;
-        peer->peer_outstanding_credits = *kptllnd_tunables.kptl_peertxcredits - 1;
+        peer->peer_outstanding_credits = *kptllnd_tunables.kptl_peercredits - 1;
         peer->peer_sent_credits = 1;           /* HELLO credit is implicit */
         peer->peer_max_msg_size = PTLLND_MIN_BUFFER_SIZE; /* until we know better */
 
@@ -620,7 +620,7 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
                 LASSERT (peer->peer_sent_credits >= 0);
                 LASSERT (peer->peer_sent_credits +
                          peer->peer_outstanding_credits <=
-                         *kptllnd_tunables.kptl_peertxcredits);
+                         *kptllnd_tunables.kptl_peercredits);
                 LASSERT (peer->peer_credits >= 0);
 
                 msg_type = tx->tx_msg->ptlm_type;

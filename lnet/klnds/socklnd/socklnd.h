@@ -115,8 +115,7 @@ typedef struct
         int              *ksnd_keepalive_count; /* # probes */
         int              *ksnd_keepalive_intvl; /* time between probes */
         int              *ksnd_credits;         /* # concurrent sends */
-        int              *ksnd_peertxcredits;   /* # concurrent sends to 1 peer */
-        int              *ksnd_peerrtrcredits;  /* # per-peer router buffer credits */
+        int              *ksnd_peercredits;     /* # concurrent sends to 1 peer */
         int              *ksnd_peertimeout;     /* seconds to consider peer dead */
         int              *ksnd_enable_csum;     /* enable check sum */
         int              *ksnd_inject_csum_error; /* set non-zero to inject checksum error */

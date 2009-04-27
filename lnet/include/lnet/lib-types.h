@@ -383,7 +383,6 @@ typedef struct lnet_ni {
         int               ni_txcredits;         /* # tx credits free */
         int               ni_mintxcredits;      /* lowest it's been */
         int               ni_peertxcredits;     /* # per-peer send credits */
-        int               ni_peerrtrcredits;    /* # per-peer router buffer credits */
         int               ni_peertimeout;       /* seconds to consider peer dead */
         lnet_nid_t        ni_nid;               /* interface's NID */
         void             *ni_data;              /* instance-specific data */
