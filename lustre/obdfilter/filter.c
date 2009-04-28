@@ -2760,6 +2760,10 @@ static int filter_connect_internal(struct obd_export *exp,
                                            data->ocd_index);
                         RETURN(-EBADF);
                 }
+                /* FIXME: Do the same with the MDS UUID and fsd_peeruuid.
+                 * FIXME: We don't strictly need the COMPAT flag for that,
+                 * FIXME: as fsd_peeruuid[0] will tell us if that is set.
+                 * FIXME: We needed it for the index, as index 0 is valid. */
         }
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_SIZE)) {
@@ -2793,11 +2797,6 @@ static int filter_connect_internal(struct obd_export *exp,
                                    exp->exp_obd->obd_name,
                                    obd_export_nid2str(exp));
         }
-
-        /* FIXME: Do the same with the MDS UUID and fsd_peeruuid.
-         * FIXME: We don't strictly need the COMPAT flag for that,
-         * FIXME: as fsd_peeruuid[0] will tell us if that is set.
-         * FIXME: We needed it for the index, as index 0 is valid. */
 
         RETURN(0);
 }
@@ -4375,9 +4374,20 @@ static inline int filter_setup_llog_group(struct obd_export *exp,
         llog_ctxt_put(ctxt);
         return rc;
 }
-static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
-                                 void *key, __u32 vallen, void *val,
-                                 struct ptlrpc_request_set *set)
+
+static int filter_set_grant_shrink(struct obd_export *exp,
+                                   struct ost_body *body)
+{
+        /* handle shrink grant */
+        spin_lock(&exp->exp_obd->obd_osfs_lock);
+        filter_grant_incoming(exp, &body->oa);
+        spin_unlock(&exp->exp_obd->obd_osfs_lock);
+
+        RETURN(0);
+
+}
+
+static int filter_set_mds_conn(struct obd_export *exp, void *val)
 {
         struct obd_device *obd;
         int rc = 0, group;
@@ -4388,36 +4398,6 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
                 CDEBUG(D_IOCTL, "invalid export %p\n", exp);
                 RETURN(-EINVAL);
         }
-
-        if (KEY_IS(KEY_CAPA_KEY)) {
-                rc = filter_update_capa_key(obd, (struct lustre_capa_key *)val);
-                if (rc)
-                        CERROR("filter update capability key failed: %d\n", rc);
-                RETURN(rc);
-        }
-
-        if (KEY_IS(KEY_REVIMP_UPD)) {
-                filter_revimp_update(exp);
-                lquota_clearinfo(filter_quota_interface_ref, exp, exp->exp_obd);
-                RETURN(0);
-        }
-
-        if (KEY_IS(KEY_SPTLRPC_CONF)) {
-                filter_adapt_sptlrpc_conf(obd, 0);
-                RETURN(0);
-        }
-
-        if (KEY_IS(KEY_GRANT_SHRINK)) {
-                struct ost_body *body = (struct ost_body *)val;
-                /* handle shrink grant */
-                spin_lock(&exp->exp_obd->obd_osfs_lock);
-                filter_grant_incoming(exp, &body->oa);
-                spin_unlock(&exp->exp_obd->obd_osfs_lock);
-                RETURN(rc);
-        }
-
-        if (!KEY_IS(KEY_MDS_CONN))
-                RETURN(-EINVAL);
 
         LCONSOLE_WARN("%s: received MDS connection from %s\n", obd->obd_name,
                       obd_export_nid2str(exp));
@@ -4442,6 +4422,47 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
         }
 out:
         RETURN(rc);
+}
+
+static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
+                                 void *key, __u32 vallen, void *val,
+                                 struct ptlrpc_request_set *set)
+{
+        struct obd_device *obd;
+        ENTRY;
+
+        obd = exp->exp_obd;
+        if (obd == NULL) {
+                CDEBUG(D_IOCTL, "invalid export %p\n", exp);
+                RETURN(-EINVAL);
+        }
+
+        if (KEY_IS(KEY_CAPA_KEY)) {
+                int rc;
+                rc = filter_update_capa_key(obd, (struct lustre_capa_key *)val);
+                if (rc)
+                        CERROR("filter update capability key failed: %d\n", rc);
+                RETURN(rc);
+        }
+
+        if (KEY_IS(KEY_REVIMP_UPD)) {
+                filter_revimp_update(exp);
+                lquota_clearinfo(filter_quota_interface_ref, exp, exp->exp_obd);
+                RETURN(0);
+        }
+
+        if (KEY_IS(KEY_SPTLRPC_CONF)) {
+                filter_adapt_sptlrpc_conf(obd, 0);
+                RETURN(0);
+        }
+
+        if (KEY_IS(KEY_MDS_CONN))
+                RETURN(filter_set_mds_conn(exp, val));
+
+        if (KEY_IS(KEY_GRANT_SHRINK))
+                RETURN(filter_set_grant_shrink(exp, val));
+
+        RETURN(-EINVAL);
 }
 
 int filter_iocontrol(unsigned int cmd, struct obd_export *exp,

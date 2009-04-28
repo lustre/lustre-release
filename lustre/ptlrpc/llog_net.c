@@ -122,6 +122,7 @@ int llog_origin_connect(struct llog_ctxt *ctxt,
         req_body->lgdc_ctxt_idx = ctxt->loc_idx + 1;
         ptlrpc_request_set_replen(req);
 
+        req->rq_no_resend = req->rq_no_delay = 1;
         rc = ptlrpc_queue_wait(req);
         ptlrpc_req_finished(req);
 

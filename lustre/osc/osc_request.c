@@ -3669,6 +3669,7 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
                 tmp = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_KEY);
                 memcpy(tmp, key, keylen);
 
+                req->rq_no_delay = req->rq_no_resend = 1;
                 ptlrpc_request_set_replen(req);
                 rc = ptlrpc_queue_wait(req);
                 if (rc)
@@ -3730,27 +3731,20 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
         RETURN(-EINVAL);
 }
 
-static int osc_setinfo_mds_conn_interpret(const struct lu_env *env,
-                                          struct ptlrpc_request *req,
-                                          void *aa, int rc)
+static int osc_setinfo_mds_connect_import(struct obd_import *imp)
 {
         struct llog_ctxt *ctxt;
-        struct obd_import *imp = req->rq_import;
+        int rc = 0;
         ENTRY;
-
-        if (rc != 0)
-                RETURN(rc);
 
         ctxt = llog_get_context(imp->imp_obd, LLOG_MDS_OST_ORIG_CTXT);
         if (ctxt) {
-                if (rc == 0)
-                        rc = llog_initiator_connect(ctxt);
-                else
-                        CERROR("cannot establish connection for "
-                               "ctxt %p: %d\n", ctxt, rc);
+                rc = llog_initiator_connect(ctxt);
+                llog_ctxt_put(ctxt);
+        } else {
+                /* XXX return an error? skip setting below flags? */
         }
 
-        llog_ctxt_put(ctxt);
         spin_lock(&imp->imp_lock);
         imp->imp_server_timeout = 1;
         imp->imp_pingable = 1;
@@ -3758,6 +3752,17 @@ static int osc_setinfo_mds_conn_interpret(const struct lu_env *env,
         CDEBUG(D_RPCTRACE, "pinging OST %s\n", obd2cli_tgt(imp->imp_obd));
 
         RETURN(rc);
+}
+
+static int osc_setinfo_mds_conn_interpret(const struct lu_env *env,
+                                          struct ptlrpc_request *req,
+                                          void *aa, int rc)
+{
+        ENTRY;
+        if (rc != 0)
+                RETURN(rc);
+
+        RETURN(osc_setinfo_mds_connect_import(req->rq_import));
 }
 
 static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
@@ -3826,6 +3831,12 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
         if (!set && !KEY_IS(KEY_GRANT_SHRINK))
                 RETURN(-EINVAL);
 
+        /* If OST understood OBD_CONNECT_MDS we don't need to tell it we
+         * are the MDS again.  Just do the local setup.  b=16839 */
+        if (KEY_IS(KEY_MDS_CONN) &&
+            (imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_MDS))
+                RETURN(osc_setinfo_mds_connect_import(imp));
+
         /* We pass all other commands directly to OST. Since nobody calls osc
            methods directly and everybody is supposed to go through LOV, we
            assume lov checked invalid values for us.
@@ -3862,6 +3873,7 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
                 oscc->oscc_oa.o_gr = (*(__u32 *)val);
                 oscc->oscc_oa.o_valid |= OBD_MD_FLGROUP;
                 LASSERT_MDS_GROUP(oscc->oscc_oa.o_gr);
+                req->rq_no_delay = req->rq_no_resend = 1;
                 req->rq_interpret_reply = osc_setinfo_mds_conn_interpret;
         } else if (KEY_IS(KEY_GRANT_SHRINK)) {
                 struct osc_grant_args *aa;

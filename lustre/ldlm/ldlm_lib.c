@@ -1003,6 +1003,11 @@ dont_check_exports:
         revimp->imp_remote_handle = conn;
         revimp->imp_dlm_fake = 1;
         revimp->imp_state = LUSTRE_IMP_FULL;
+        /* this is a bit of a layering violation, but much less risk than
+	  * changing this very complex and race-prone code.  bug=16839 */
+        if (data->ocd_connect_flags & OBD_CONNECT_MDS)
+                obd_set_info_async(export, sizeof(KEY_MDS_CONN), KEY_MDS_CONN,
+                                   0, NULL, NULL);
 
         /* unknown versions will be caught in
          * ptlrpc_handle_server_req_in->lustre_unpack_msg() */
