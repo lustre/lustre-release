@@ -398,6 +398,10 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
  #endif
 #endif
 
+#ifndef HAVE_SYNCHRONIZE_RCU
+#define synchronize_rcu() synchronize_kernel()
+#endif
+
 #ifdef HAVE_SECURITY_PLUG
 #define ll_vfs_rmdir(dir,entry,mnt)             vfs_rmdir(dir,entry,mnt)
 #define ll_vfs_mkdir(inode,dir,mnt,mode)        vfs_mkdir(inode,dir,mnt,mode)

@@ -713,6 +713,17 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# LC_EXPORT_SYNCHRONIZE_RCU
+# after 2.6.12 synchronize_rcu is preferred over synchronize_kernel
+AC_DEFUN([LC_EXPORT_SYNCHRONIZE_RCU],
+[LB_CHECK_SYMBOL_EXPORT([synchronize_rcu],
+[kernel/rcupdate.c],[
+        AC_DEFINE(HAVE_SYNCHRONIZE_RCU, 1,
+                [in 2.6.12 synchronize_rcu preferred over synchronize_kernel])
+],[
+])
+])
+
 # LC_INODE_I_MUTEX
 # after 2.6.15 inode have i_mutex intead of i_sem
 AC_DEFUN([LC_INODE_I_MUTEX],
@@ -1522,6 +1533,9 @@ AC_DEFUN([LC_PROG_LINUX],
 
           # does the kernel have VFS intent patches?
           LC_VFS_INTENT_PATCHES
+
+          # 2.6.12
+          LC_EXPORT_SYNCHRONIZE_RCU
 
           # 2.6.15
           LC_INODE_I_MUTEX
