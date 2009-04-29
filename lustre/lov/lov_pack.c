@@ -424,7 +424,8 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
         rc = copy_from_user(&lumv3, lump, sizeof(struct lov_user_md_v1));
         if (rc)
                 RETURN(-EFAULT);
-        if (lumv1->lmm_magic == LOV_USER_MAGIC_V3) {
+        if ((lumv1->lmm_magic == LOV_USER_MAGIC_V3) ||
+            (lumv1->lmm_magic == LOV_USER_MAGIC_V3_SWABBED)) {
                 rc = copy_from_user(&lumv3, lump, sizeof(lumv3));
                 if (rc)
                         RETURN(-EFAULT);
@@ -638,6 +639,12 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (copy_to_user(lump, lmmk, lmm_size))
                 rc = -EFAULT;
 
+        /* Restore the LE endian to ensure obd_free_diskmd works well */
+        if (cpu_to_le32(LOV_MAGIC) != LOV_MAGIC) {
+                lmmk->lmm_stripe_count = lum.lmm_stripe_count;
+                lustre_swab_lov_mds_md(lmmk);
+        }
+        
         obd_free_diskmd(exp, &lmmk);
 
         RETURN(rc);

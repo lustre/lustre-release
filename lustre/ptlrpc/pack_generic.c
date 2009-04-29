@@ -2354,17 +2354,18 @@ void lustre_swab_lov_user_md_join(struct lov_user_md_join *lumj)
 
 int lustre_swab_lov_user_md_objects(struct lov_user_md *lum)
 {
-        int i, stripe_count = lum->lmm_stripe_count;
+        int i;
+        __u16 stripe_count = lum->lmm_stripe_count;
         struct lov_user_ost_data *lod;
         ENTRY;
         switch (lum->lmm_magic) {
         case LOV_USER_MAGIC_V1_SWABBED:
-                __swab32s(&stripe_count);
+                __swab16s(&stripe_count);
         case LOV_USER_MAGIC_V1:
                 lod = lum->lmm_objects;
                 break;
         case LOV_USER_MAGIC_V3_SWABBED:
-                __swab32s(&stripe_count);
+                __swab16s(&stripe_count);
         case LOV_USER_MAGIC_V3:
                 lod = ((struct lov_user_md_v3 *)lum)->lmm_objects;
                 break;
