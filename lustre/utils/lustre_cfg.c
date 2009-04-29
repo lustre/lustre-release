@@ -82,7 +82,7 @@ int lcfg_set_devname(char *name)
                 /* quietly strip the unnecessary '$' */
                 if (*name == '$' || *name == '%')
                         name++;
-                if (isdigit(*name)) { 
+                if (isdigit(*name)) {
                         /* We can't translate from dev # to name */
                         lcfg_devname = NULL;
                 } else {
@@ -90,7 +90,7 @@ int lcfg_set_devname(char *name)
                 }
         } else {
                 lcfg_devname = NULL;
-        } 
+        }
         return 0;
 }
 
@@ -154,8 +154,8 @@ int jt_lcfg_setup(int argc, char **argv)
 
         if (lcfg_devname == NULL) {
                 fprintf(stderr, "%s: please use 'device name' to set the "
-                        "device name for config commands.\n", 
-                        jt_cmdname(argv[0])); 
+                        "device name for config commands.\n",
+                        jt_cmdname(argv[0]));
                 return -EINVAL;
         }
 
@@ -186,8 +186,8 @@ int jt_obd_detach(int argc, char **argv)
 
         if (lcfg_devname == NULL) {
                 fprintf(stderr, "%s: please use 'device name' to set the "
-                        "device name for config commands.\n", 
-                        jt_cmdname(argv[0])); 
+                        "device name for config commands.\n",
+                        jt_cmdname(argv[0]));
                 return -EINVAL;
         }
 
@@ -218,8 +218,8 @@ int jt_obd_cleanup(int argc, char **argv)
 
         if (lcfg_devname == NULL) {
                 fprintf(stderr, "%s: please use 'device name' to set the "
-                        "device name for config commands.\n", 
-                        jt_cmdname(argv[0])); 
+                        "device name for config commands.\n",
+                        jt_cmdname(argv[0]));
                 return -EINVAL;
         }
 
@@ -256,8 +256,8 @@ int jt_obd_cleanup(int argc, char **argv)
         return rc;
 }
 
-static 
-int do_add_uuid(char * func, char *uuid, lnet_nid_t nid) 
+static
+int do_add_uuid(char * func, char *uuid, lnet_nid_t nid)
 {
         int rc;
         struct lustre_cfg_bufs bufs;
@@ -269,7 +269,7 @@ int do_add_uuid(char * func, char *uuid, lnet_nid_t nid)
 
         lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
         lcfg->lcfg_nid = nid;
-        /* Poison NAL -- pre 1.4.6 will LASSERT on 0 NAL, this way it 
+        /* Poison NAL -- pre 1.4.6 will LASSERT on 0 NAL, this way it
            doesn't work without crashing (bz 10130) */
         lcfg->lcfg_nal = 0x5a;
 
@@ -292,8 +292,8 @@ int do_add_uuid(char * func, char *uuid, lnet_nid_t nid)
 int jt_lcfg_add_uuid(int argc, char **argv)
 {
         lnet_nid_t nid;
-        
-        if (argc != 3) {                
+
+        if (argc != 3) {
                 return CMD_HELP;
         }
 
@@ -325,7 +325,7 @@ int jt_lcfg_del_uuid(int argc, char **argv)
         lustre_cfg_bufs_reset(&bufs, lcfg_devname);
         if (strcmp (argv[1], "_all_"))
                 lustre_cfg_bufs_set_string(&bufs, 1, argv[1]);
-        
+
         lcfg = lustre_cfg_new(LCFG_DEL_UUID, &bufs);
         rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
         lustre_cfg_free(lcfg);
@@ -336,9 +336,6 @@ int jt_lcfg_del_uuid(int argc, char **argv)
         }
         return 0;
 }
-
-
-
 
 int jt_lcfg_del_mount_option(int argc, char **argv)
 {
@@ -388,8 +385,8 @@ int jt_lcfg_add_conn(int argc, char **argv)
 
         if (lcfg_devname == NULL) {
                 fprintf(stderr, "%s: please use 'device name' to set the "
-                        "device name for config commands.\n", 
-                        jt_cmdname(argv[0])); 
+                        "device name for config commands.\n",
+                        jt_cmdname(argv[0]));
                 return -EINVAL;
         }
 
@@ -421,8 +418,8 @@ int jt_lcfg_del_conn(int argc, char **argv)
 
         if (lcfg_devname == NULL) {
                 fprintf(stderr, "%s: please use 'device name' to set the "
-                        "device name for config commands.\n", 
-                        jt_cmdname(argv[0])); 
+                        "device name for config commands.\n",
+                        jt_cmdname(argv[0]));
                 return -EINVAL;
         }
 
@@ -460,7 +457,7 @@ int jt_lcfg_param(int argc, char **argv)
         }
 
         lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
-        
+
         rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
         lustre_cfg_free(lcfg);
         if (rc < 0) {
@@ -496,7 +493,7 @@ int jt_lcfg_mgsparam(int argc, char **argv)
                 fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
                         strerror(rc = errno));
         }
-        
+
         return rc;
 }
 
@@ -537,12 +534,52 @@ static char *strnchr(const char *p, char c, size_t n)
        return (0);
 }
 
+static char *globerrstr(int glob_rc)
+{
+        switch(glob_rc) {
+        case GLOB_NOSPACE:
+                return "Out of memory";
+        case GLOB_ABORTED:
+                return "Read error";
+        case GLOB_NOMATCH:
+                return "Found no match";
+        }
+        return "Unknow error";
+}
+
+static void clean_path(char *path)
+{
+        char *tmp;
+
+        /* If the input is in form Eg. obdfilter.*.stats */
+        if (strchr(path, '.')) {
+                tmp = path;
+                while (*tmp != '\0') {
+                        if ((*tmp == '.') &&
+                            (tmp != path) && (*(tmp - 1) != '\\'))
+                                *tmp = '/';
+                        tmp ++;
+                }
+        }
+        /* get rid of '\', glob doesn't like it */
+        if ((tmp = strrchr(path, '\\')) != NULL) {
+                char *tail = path + strlen(path);
+                while (tmp != path) {
+                        if (*tmp == '\\') {
+                                memmove(tmp, tmp + 1, tail - tmp);
+                                --tail;
+                        }
+                        --tmp;
+                }
+        }
+}
+
 int jt_lcfg_getparam(int argc, char **argv)
 {
         int fp;
         int rc = 0, i, show_path = 0, only_path = 0;
         char pattern[PATH_MAX];
-        char *path, *tmp, *buf;
+        char *path, *buf;
         glob_t glob_info;
 
         if (argc == 3 && (strcmp(argv[1], "-n") == 0 ||
@@ -559,15 +596,7 @@ int jt_lcfg_getparam(int argc, char **argv)
                 return CMD_HELP;
         }
 
-        /* If the input is in form Eg. obdfilter.*.stats */
-        if (strchr(path, '.')) {
-                tmp = path;
-                while (*tmp != '\0') {
-                        if (*tmp == '.')
-                                *tmp = '/';
-                        tmp ++;
-                }
-        }
+        clean_path(path);
 
         /* If the entire path is specified as input */
         fp = open(path, O_RDONLY);
@@ -581,7 +610,8 @@ int jt_lcfg_getparam(int argc, char **argv)
 
         rc = glob(pattern, GLOB_BRACE, NULL, &glob_info);
         if (rc) {
-                fprintf(stderr, "error : glob %s: %s \n", pattern,strerror(rc));
+                fprintf(stderr, "error : glob %s: %s \n", pattern,
+                        globerrstr(rc));
                 return rc;
         }
 
@@ -647,13 +677,12 @@ int jt_lcfg_getparam(int argc, char **argv)
         return rc;
 }
 
-
 int jt_lcfg_setparam(int argc, char **argv)
 {
         int rc = 0, i;
         int fp, show_path = 0;
         char pattern[PATH_MAX];
-        char *path, *value, *tmp;
+        char *path, *value;
         glob_t glob_info;
 
         path = argv[1];
@@ -688,15 +717,7 @@ int jt_lcfg_setparam(int argc, char **argv)
                 return CMD_HELP;
         }
 
-        /* If the input is in form Eg. obdfilter.*.stats */
-        if (strchr(path, '.')) {
-                tmp = path;
-                while (*tmp != '\0') {
-                        if (*tmp == '.')
-                                *tmp = '/';
-                        tmp ++;
-                }
-        }
+        clean_path(path);
 
         fp = open(path, O_RDONLY);
         if (fp < 0)
@@ -709,7 +730,8 @@ int jt_lcfg_setparam(int argc, char **argv)
 
         rc = glob(pattern, GLOB_BRACE, NULL, &glob_info);
         if (rc) {
-                fprintf(stderr, "error : glob %s: %s \n", pattern,strerror(rc));
+                fprintf(stderr, "error : glob %s: %s \n", pattern,
+                        globerrstr(rc));
                 return rc;
         }
         for (i = 0; i  < glob_info.gl_pathc; i++) {
