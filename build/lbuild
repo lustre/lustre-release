@@ -369,7 +369,6 @@ download_srpm() {
     local target=$1
     local srpm=$2
 
-    # ~sigh~  the download site doesn't actually have these kernels
     echo "Downloading http://downloads.lustre.org/public/kernels/$target/old/$srpm..."
     if ! wget -nv "http://downloads.lustre.org/public/kernels/$target/old/$srpm" \
         -O "$KERNELDIR/$srpm"; then
@@ -659,8 +658,15 @@ build_lustre() {
         echo NORPM mode. Only compiling.
     fi
 
+    # convert the $PATCHLESS boolean to an empty/no-empty boolean
+    # as silly as this seems, it makes the syntax of the rpmbuild command
+    # simpler and not need an eval to deal with the quotes in the quotes 
+    local is_patchless=""
+    if $PATCHLESS; then
+        is_patchless="yes"
+    fi
     $RPMBUILD $targets $rpmbuildopt ../lustre.spec \
-        ${PATCHLESS:+--define "lustre_name lustre-client"} \
+        ${is_patchless:+--define "lustre_name lustre-client"} \
         --define "_tmppath $TMPDIR" \
         --define "_topdir $TOPDIR" || \
         fatal 1 "Error building rpms for $BUILD_ARCHS."
@@ -929,6 +935,12 @@ store_for_reuse() {
         for article in $(eval echo $articles); do
             if ! cp -a${linkflag} "$article" "$location"; then
                 error "Failed to copy \"$article\" to \"$location\" in store_for_reuse()"
+                # rename the cache location so that it's not cached
+                # product, but is around for analysis
+                mv "$location"{,-bad-$(date +%s)} || 
+                    error "failed to clean up a failed cache attempt" \
+                          "in \"$location\" -- manual cleanup will be" \
+                          "necessary"
                 return 1
             fi
         done
@@ -1434,7 +1446,7 @@ backtrace
 echo
 echo "Environment:"
 set
-) | tee >(mail -s "Untrapped error in lbuild on $MACHINENAME" brian@sun.com) >&2' ERR
+) | tee >(mail -s "Untrapped error at ${BASH_SOURCE[0]##*/}:${BASH_LINENO[0]} on $HOSTNAME" brian@sun.com) >&2' ERR
         set -E
 
         source ${0%/*}/lbuild-$DISTRO
