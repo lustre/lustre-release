@@ -2244,7 +2244,7 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
         va_start(args, fmt);
         libcfs_debug_vmsg2(data->msg_cdls, data->msg_subsys, mask, data->msg_file,
                            data->msg_fn, data->msg_line, fmt, args,
-                           " req@%p x"LPD64"/t"LPD64"("LPD64") o%d->%s@%s:%d/%d"
+                           " req@%p x"LPU64"/t"LPD64"("LPD64") o%d->%s@%s:%d/%d"
                            " lens %d/%d e %d to %d dl "CFS_TIME_T" ref %d "
                            "fl "REQ_FLAGS_FMT"/%x/%x rc %d/%d\n",
                            req, req->rq_xid, req->rq_transno,

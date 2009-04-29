@@ -133,7 +133,7 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
                 rc = ptlrpc_replay_req(req);
                 if (rc) {
                         CERROR("recovery replay error %d for req "
-                               LPD64"\n", rc, req->rq_xid);
+                               LPU64"\n", rc, req->rq_xid);
                         RETURN(rc);
                 }
                 *inflight = 1;
