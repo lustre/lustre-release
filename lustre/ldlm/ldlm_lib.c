@@ -1245,7 +1245,7 @@ static void abort_lock_replay_queue(struct obd_device *obd)
         spin_lock_bh(&obd->obd_processing_task_lock);
         list_splice_init(&obd->obd_lock_replay_queue, &abort_list);
         spin_unlock_bh(&obd->obd_processing_task_lock);
-        list_for_each_entry_safe(req, n, &obd->obd_lock_replay_queue, rq_list){
+        list_for_each_entry_safe(req, n, &abort_list, rq_list){
                 DEBUG_REQ(D_ERROR, req, "aborted:");
                 req->rq_status = -ENOTCONN;
                 if (ptlrpc_error(req)) {
