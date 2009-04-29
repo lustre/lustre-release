@@ -354,19 +354,25 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         spin_unlock(&obd->obd_dev_lock);
 
         /* create an uuid-export lustre hash */
-        obd->obd_uuid_hash = lustre_hash_init("UUID_HASH", 7, 7,
+        obd->obd_uuid_hash = lustre_hash_init("UUID_HASH",
+                                              HASH_UUID_CUR_BITS,
+                                              HASH_UUID_MAX_BITS,
                                               &uuid_hash_ops, 0);
         if (!obd->obd_uuid_hash)
                 GOTO(err_hash, err = -ENOMEM);
- 
+
         /* create a nid-export lustre hash */
-        obd->obd_nid_hash = lustre_hash_init("NID_HASH", 7, 7,
+        obd->obd_nid_hash = lustre_hash_init("NID_HASH",
+                                             HASH_NID_CUR_BITS,
+                                             HASH_NID_MAX_BITS,
                                              &nid_hash_ops, 0);
         if (!obd->obd_nid_hash)
                 GOTO(err_hash, err = -ENOMEM);
- 
+
         /* create a nid-stats lustre hash */
-        obd->obd_nid_stats_hash = lustre_hash_init("NID_STATS", 7, 7,
+        obd->obd_nid_stats_hash = lustre_hash_init("NID_STATS",
+                                                   HASH_NID_STATS_CUR_BITS,
+                                                   HASH_NID_STATS_MAX_BITS,
                                                    &nid_stat_hash_ops, 0);
         if (!obd->obd_nid_stats_hash)
                 GOTO(err_hash, err = -ENOMEM);
@@ -1016,7 +1022,7 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                             RETURN(-ENOSYS);
                         CERROR("%s: unknown param %s\n",
                                (char *)lustre_cfg_string(lcfg, 0), key);
-                        /* rc = -EINVAL;	continue parsing other params */
+                        /* rc = -EINVAL;        continue parsing other params */
                         skip++;
                 } else if (rc < 0) {
                         CERROR("writing proc entry %s err %d\n",
@@ -1132,7 +1138,7 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 {
                         char *typename = lustre_cfg_string(lcfg, 1);
                         char *index = lustre_cfg_string(lcfg, 2);
-                        
+
                         if ((lcfg->lcfg_command == LCFG_ATTACH && typename &&
                              strcmp(typename, "mds") == 0)) {
                                 CWARN("For 1.8 interoperability, rename obd "

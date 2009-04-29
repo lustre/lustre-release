@@ -813,7 +813,9 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-ENOMEM);
         cfs_waitq_init(&lov->lov_qos.lq_statfs_waitq);
 
-        lov->lov_pools_hash_body = lustre_hash_init("POOLS", 7, 7,
+        lov->lov_pools_hash_body = lustre_hash_init("POOLS",
+                                                    HASH_POOLS_CUR_BITS,
+                                                    HASH_POOLS_MAX_BITS,
                                                     &pool_hash_operations, 0);
         CFS_INIT_LIST_HEAD(&lov->lov_pool_list);
         lov->lov_pool_count = 0;
@@ -965,8 +967,8 @@ int lov_process_config_base(struct obd_device *obd, struct lustre_cfg *lcfg,
 
                 rc = class_process_proc_param(PARAM_LOV, lvars.obd_vars,
                                               lcfg, obd);
-        	if (rc > 0)
-        		rc = 0;
+                if (rc > 0)
+                        rc = 0;
                 GOTO(out, rc);
         }
         case LCFG_POOL_NEW:
