@@ -641,7 +641,7 @@ int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
         unsigned long total, want, percpu_want, count = 0;
         int cpu, nr_cpus;
 
-        total = lcounter_read(&sbi->ll_async_page_count);
+        total = lcounter_read_positive(&sbi->ll_async_page_count);
         if (total == 0)
                 return 0;
 
@@ -690,7 +690,7 @@ int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
                count, want, total);
 
 #ifdef HAVE_SHRINKER_CACHE
-        return lcounter_read(&sbi->ll_async_page_count);
+        return lcounter_read_positive(&sbi->ll_async_page_count);
 #else
         return count;
 #endif
