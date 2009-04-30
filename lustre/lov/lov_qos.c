@@ -764,7 +764,7 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
                 lqr = &(pool->pool_rr);
         }
 
-        lov_getref(exp->exp_obd);
+        obd_getref(exp->exp_obd);
 
         /* wait for fresh statfs info if needed, the rpcs are sent in
          * lov_create() */
@@ -933,7 +933,7 @@ out_nolock:
         if (rc == -EAGAIN)
                 rc = alloc_rr(lov, idx_arr, stripe_cnt, poolname, flags);
 
-        lov_putref(exp->exp_obd);
+        obd_putref(exp->exp_obd);
         RETURN(rc);
 }
 

@@ -132,7 +132,7 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt,
         int i, rc = 0, err = 0;
         ENTRY;
 
-        lov_getref(obd);
+        obd_getref(obd);
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 struct obd_device *child;
                 struct llog_ctxt *cctxt;
@@ -153,7 +153,7 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt,
                                 err = rc;
                 }
         }
-        lov_putref(obd);
+        obd_putref(obd);
 
         RETURN(err);
 }
@@ -171,7 +171,7 @@ static int lov_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
         LASSERT(count == lsm->lsm_stripe_count);
 
         lov = &obd->u.lov;
-        lov_getref(obd);
+        obd_getref(obd);
         for (i = 0; i < count; i++, cookies++) {
                 struct lov_oinfo *loi = lsm->lsm_oinfo[i];
                 struct obd_device *child =
@@ -190,7 +190,7 @@ static int lov_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
                                 rc = err;
                 }
         }
-        lov_putref(obd);
+        obd_putref(obd);
         RETURN(rc);
 }
 
@@ -226,7 +226,7 @@ int lov_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
         if (rc)
                 GOTO(err_cleanup, rc);
 
-        lov_getref(obd);
+        obd_getref(obd);
         /* count may not match lov->desc.ld_tgt_count during dynamic ost add */
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active)
@@ -243,7 +243,7 @@ int lov_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                                rc);
                 break;
         }
-        lov_putref(obd);
+        obd_putref(obd);
         GOTO(err_cleanup, rc);
 err_cleanup:
         if (rc) {

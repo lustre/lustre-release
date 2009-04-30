@@ -5292,7 +5292,8 @@ static int mdt_upcall(const struct lu_env *env, struct md_device *md,
                         break;
 #ifdef HAVE_QUOTA_SUPPORT
                 case MD_LOV_QUOTA:
-                        if (md->md_lu_dev.ld_obd->obd_recovering == 0)
+                        if (md->md_lu_dev.ld_obd->obd_recovering == 0 &&
+                            likely(md->md_lu_dev.ld_obd->obd_stopping == 0))
                                 next->md_ops->mdo_quota.mqo_recovery(env, next);
                         break;
 #endif
@@ -5493,7 +5494,8 @@ int mdt_postrecov(const struct lu_env *env, struct mdt_device *mdt)
 
         rc = ld->ld_ops->ldo_recovery_complete(env, ld);
 #ifdef HAVE_QUOTA_SUPPORT
-        next->md_ops->mdo_quota.mqo_recovery(env, next);
+        if (likely(obd->obd_stopping == 0))
+                next->md_ops->mdo_quota.mqo_recovery(env, next);
 #endif
         RETURN(rc);
 }

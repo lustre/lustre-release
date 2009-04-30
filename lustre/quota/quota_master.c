@@ -1553,17 +1553,18 @@ static int qmaster_recovery_main(void *arg)
 {
         struct qmaster_recov_thread_data *data = arg;
         struct obd_device *obd = data->obd;
+        struct mds_obd *mds = &obd->u.mds;
+        struct lustre_quota_info *qinfo = &mds->mds_quota_info;
         int rc = 0;
         unsigned short type;
         ENTRY;
 
         ptlrpc_daemonize("qmaster_recovd");
 
+        class_incref(obd, "qmaster_recovd", obd);
         complete(&data->comp);
 
         for (type = USRQUOTA; type < MAXQUOTAS; type++) {
-                struct mds_obd *mds = &obd->u.mds;
-                struct lustre_quota_info *qinfo = &mds->mds_quota_info;
                 struct list_head id_list;
                 struct dquot_id *dqid, *tmp;
 
@@ -1593,6 +1594,7 @@ free:
                         kfree(dqid);
                 }
         }
+        class_decref(obd, "qmaster_recovd", obd);
         RETURN(rc);
 }
 
