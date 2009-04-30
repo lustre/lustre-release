@@ -98,7 +98,7 @@ struct osd_object {
         dmu_buf_t               *oo_db;
 
         /* protects inode attributes. */
-        spinlock_t             oo_guard;
+        struct semaphore       oo_guard;
         struct rw_semaphore    oo_sem;
 
         uint64_t                oo_mode;
@@ -459,7 +459,7 @@ static struct lu_object *osd_object_alloc(const struct lu_env *env,
                 mo->oo_dt.do_ops = &osd_obj_ops;
                 l->lo_ops = &osd_lu_obj_ops;
                 init_rwsem(&mo->oo_sem);
-                spin_lock_init(&mo->oo_guard);
+                sema_init(&mo->oo_guard, 1);
                 return l;
         } else
                 return NULL;
@@ -988,9 +988,9 @@ static int osd_attr_get(const struct lu_env *env,
         LASSERT(osd_invariant(obj));
 
 
-        spin_lock(&obj->oo_guard);
+        down(&obj->oo_guard);
         udmu_object_getattr(obj->oo_db, &vap);
-        spin_unlock(&obj->oo_guard);
+        up(&obj->oo_guard);
         vnattr2lu_attr(&vap, attr);
 
         CDEBUG(D_OTHER, "size = %lu\n", (unsigned long) attr->la_size);
@@ -1035,9 +1035,9 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
         LASSERT(oh->ot_tx != NULL);
 
         lu_attr2vnattr((struct lu_attr *)attr, &vap);
-        spin_lock(&obj->oo_guard);
+        down(&obj->oo_guard);
         udmu_object_setattr(obj->oo_db, oh->ot_tx, &vap);
-        spin_unlock(&obj->oo_guard);
+        up(&obj->oo_guard);
 
         RETURN(rc);
 }
@@ -1753,9 +1753,9 @@ static void osd_object_ref_add(const struct lu_env *env,
                 LASSERT(oh->ot_tx != NULL);
                 tx = oh->ot_tx;
         }
-        spin_lock(&obj->oo_guard);
+        down(&obj->oo_guard);
         udmu_object_links_inc(obj->oo_db, tx);
-        spin_unlock(&obj->oo_guard);
+        up(&obj->oo_guard);
 }
 
 static int osd_declare_object_ref_del(const struct lu_env *env,
