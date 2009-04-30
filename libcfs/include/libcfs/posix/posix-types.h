@@ -42,7 +42,9 @@
 #ifndef _LUSTRE_POSIX_TYPES_H
 #define _LUSTRE_POSIX_TYPES_H
 
+#ifndef HAVE_UMODE_T
 typedef unsigned short umode_t;
+#endif
 
 /*
  * __xx is ok: it doesn't pollute the POSIX namespace. Use these in the
@@ -58,8 +60,12 @@ typedef unsigned short __u16;
 typedef __signed__ int __s32;
 typedef unsigned int __u32;
 
+#ifndef HAVE___S64
 typedef __signed__ long long __s64;
+#endif
+#ifndef HAVE___U64
 typedef unsigned long long __u64;
+#endif
 
 /* long integer with size equal to pointer */
 typedef unsigned long ulong_ptr_t;
