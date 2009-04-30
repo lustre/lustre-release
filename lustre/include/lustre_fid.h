@@ -107,6 +107,10 @@ enum {
         MDT_LAST_RECV_OID       = 11UL,
         /** \see osd_mod_init */
         OSD_REM_OBJ_DIR_OID     = 12UL,
+        OFD_LAST_RECV_OID       = 19UL,
+        OFD_GROUP0_LAST_ID      = 20UL,
+        OFD_GROUP4K_LAST_ID     = 20UL+4096,
+        OFD_LAST_GROUP          = 4117UL
 };
 
 static inline void lu_local_obj_fid(struct lu_fid *fid, __u32 oid)

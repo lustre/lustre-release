@@ -138,7 +138,7 @@ struct filter_device {
 
         /* last_rcvd file */
         struct lu_target         ofd_lut;
-        struct dt_object        *ofd_groups_file;
+        struct dt_object        *ofd_last_group_file;
         unsigned long           *ofd_last_rcvd_slots;
 
         int                      ofd_subdir_count;
@@ -151,6 +151,7 @@ struct filter_device {
         int                      ofd_max_group;
         obd_id                   ofd_last_objids[FILTER_MAX_GROUPS];
         struct semaphore         ofd_create_locks[FILTER_MAX_GROUPS];
+        struct dt_object        *ofd_lastid_obj[FILTER_MAX_GROUPS];
         spinlock_t               ofd_objid_lock;
         unsigned long            ofd_destroys_in_progress;
 
@@ -447,7 +448,7 @@ void filter_fs_cleanup(const struct lu_env *env, struct filter_device *ofd);
 obd_id filter_last_id(struct filter_device *ofd, obd_gr group);
 void filter_last_id_set(struct filter_device *ofd, obd_id id, obd_gr group);
 int filter_last_id_write(const struct lu_env *env, struct filter_device *ofd,
-                         obd_gr group, int force_sync);
+                         obd_gr group, struct thandle *th);
 int filter_last_id_read(const struct lu_env *env, struct filter_device *ofd,
                         obd_gr group);
 int filter_groups_init(const struct lu_env *env, struct filter_device *ofd);
@@ -462,6 +463,9 @@ int filter_server_data_init(const struct lu_env *env,
                             struct filter_device *ofd);
 int filter_server_data_update(const struct lu_env *env,
                               struct filter_device *ofd);
+int filter_group_load(const struct lu_env *env,
+                      struct filter_device *ofd, int group);
+int filter_last_group_write(const struct lu_env *env, struct filter_device *ofd);
 
 /* filter_objects.c */
 struct filter_object *filter_object_find(const struct lu_env *env,
@@ -508,7 +512,7 @@ void filter_grant_commit(struct obd_export *exp, int niocount,
 static inline void lu_idif_build(struct lu_fid *fid, obd_id id, obd_gr gr)
 {
         LASSERT((id >> 48) == 0);
-        fid->f_seq = (0x200000000ULL | id >> 32);
+        fid->f_seq = (IDIF_SEQ_START| id >> 32);
         fid->f_oid = (__u32)(id & 0xffffffff);
         fid->f_ver = gr;
 }

@@ -297,12 +297,16 @@ static inline int fid_is_oi_fid(const struct lu_fid *fid)
                 fid_oid(fid) == OSD_OI_FID_OTHER_OID)));
 }
 
-int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
+int osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
                   const struct lu_fid *fid, struct osd_inode_id *id)
 {
+        struct osd_oi *oi = &osd->od_oi;
         int rc;
 
-        if (fid_is_igif(fid)) {
+        if (fid_is_idif(fid)) {
+                /* old OSD obj id */
+                rc = osd_compat_objid_lookup(info, osd, fid, id);
+        } else if (fid_is_igif(fid)) {
                 lu_igif_to_id(fid, id);
                 rc = 0;
         } else {
@@ -329,7 +333,7 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
         return rc;
 }
 
-int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
+int osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
                   const struct lu_fid *fid, const struct osd_inode_id *id0,
                   struct thandle *th, int ignore_quota)
 {
@@ -343,10 +347,18 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
         if (fid_is_oi_fid(fid))
                 return 0;
 
-        key = oi_fid_key(info, oi, fid, &idx);
+        if (fid_is_idif(fid))
+                return osd_compat_objid_insert(info, osd, fid, id0, th);
+
+        /* notice we don't return immediately, but continue to get into OI */
+        if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE))
+                osd_compat_spec_insert(info, osd, fid, id0, th);
+
+        key = oi_fid_key(info, &osd->od_oi, fid, &idx);
         id  = &info->oti_id;
         id->oii_ino = cpu_to_be32(id0->oii_ino);
         id->oii_gen = cpu_to_be32(id0->oii_gen);
+
         return idx->do_index_ops->dio_insert(info->oti_env, idx,
                                              (const struct dt_rec *)id,
                                              key, th, BYPASS_CAPA,
@@ -354,7 +366,7 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
 }
 
 int osd_oi_delete(struct osd_thread_info *info,
-                  struct osd_oi *oi, const struct lu_fid *fid,
+                  struct osd_device *osd, const struct lu_fid *fid,
                   struct thandle *th)
 {
         struct dt_object    *idx;
@@ -363,7 +375,12 @@ int osd_oi_delete(struct osd_thread_info *info,
         if (fid_is_igif(fid))
                 return 0;
 
-        key = oi_fid_key(info, oi, fid, &idx);
+        LASSERT(fid_seq(fid) != FID_SEQ_LOCAL_FILE);
+
+        if (fid_is_idif(fid))
+                return osd_compat_objid_delete(info, osd, fid, th);
+
+        key = oi_fid_key(info, &osd->od_oi, fid, &idx);
         return idx->do_index_ops->dio_delete(info->oti_env, idx,
                                              key, th, BYPASS_CAPA);
 }

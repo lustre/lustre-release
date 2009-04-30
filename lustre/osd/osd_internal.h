@@ -176,6 +176,8 @@ struct osd_object {
 #endif
 };
 
+struct osd_compat_objid;
+
 /*
  * osd device.
  */
@@ -226,6 +228,8 @@ struct osd_device {
         __u32                     od_iop_mode;
 
         struct fsfilt_operations *od_fsops;
+
+        struct osd_compat_objid  *od_ost_map;
 };
 
 struct osd_it_ea_dirent {
@@ -356,6 +360,9 @@ struct osd_thread_info {
 
         /** 0-copy IO */
         struct filter_iobuf    oti_iobuf;
+
+        /** used by compat stuff */
+        struct inode           oti_inode;
 };
 
 #ifdef LPROCFS
@@ -388,6 +395,21 @@ extern int ldiskfs_delete_entry(handle_t *handle,
 extern struct buffer_head * ldiskfs_find_entry(struct dentry *dentry,
                                                struct ldiskfs_dir_entry_2
                                                ** res_dir);
+
+int osd_compat_init(struct osd_device *osd);
+void osd_compat_fini(const struct osd_device *dev);
+int osd_compat_objid_lookup(struct osd_thread_info *info, struct osd_device *osd,
+                            const struct lu_fid *fid, struct osd_inode_id *id);
+int osd_compat_objid_insert(struct osd_thread_info *info, struct osd_device *osd,
+                            const struct lu_fid *fid, const struct osd_inode_id *id,
+                            struct thandle *th);
+int osd_compat_objid_delete(struct osd_thread_info *info, struct osd_device *osd,
+                            const struct lu_fid *fid, struct thandle *th);
+int osd_compat_spec_lookup(struct osd_thread_info *info, struct osd_device *osd,
+                           const struct lu_fid *fid, struct osd_inode_id *id);
+int osd_compat_spec_insert(struct osd_thread_info *info, struct osd_device *osd,
+                           const struct lu_fid *fid, const struct osd_inode_id *id,
+                           struct thandle *th);
 
 #endif /* __KERNEL__ */
 #endif /* _OSD_INTERNAL_H */

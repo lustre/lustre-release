@@ -273,7 +273,7 @@ int filter_fs_setup(const struct lu_env *env, struct filter_device *ofd,
 
         dt_txn_callback_add(ofd->ofd_osd, &ofd->ofd_txn_cb);
 
-        lu_local_obj_fid(&fid, MDT_LAST_RECV_OID);
+        lu_local_obj_fid(&fid, OFD_LAST_RECV_OID);
         memset(&attr, 0, sizeof(attr));
         attr.la_valid = LA_MODE;
         attr.la_mode = S_IFREG | 0666;
@@ -284,14 +284,14 @@ int filter_fs_setup(const struct lu_env *env, struct filter_device *ofd,
         rc = filter_server_data_init(env, ofd);
         LASSERT(rc == 0);
 
-        lu_local_obj_fid(&fid, MDD_OBJECTS_OID);
+        lu_local_obj_fid(&fid, OFD_LAST_GROUP);
         memset(&attr, 0, sizeof(attr));
         attr.la_valid = LA_MODE;
         attr.la_mode = S_IFREG | 0666;
 
         fo = filter_object_find_or_create(env, ofd, &fid, &attr);
         LASSERT(!IS_ERR(fo));
-        ofd->ofd_groups_file = filter_object_child(fo);
+        ofd->ofd_last_group_file = filter_object_child(fo);
         rc = filter_groups_init(env, ofd);
         LASSERT(rc == 0);
 
@@ -316,15 +316,18 @@ void filter_fs_cleanup(const struct lu_env *env, struct filter_device *ofd)
 
         filter_server_data_update(env, ofd);
 
-        for (i = 0; i < ofd->ofd_max_group; i++)
-                filter_last_id_write(env, ofd, i, (i == ofd->ofd_max_group-1));
+        for (i = 0; i <= ofd->ofd_max_group; i++) {
+                filter_last_id_write(env, ofd, i, NULL);
+                if (ofd->ofd_lastid_obj[i])
+                        lu_object_put(env, &ofd->ofd_lastid_obj[i]->do_lu);
+        }
 
         /* Remove transaction callback */
         dt_txn_callback_del(ofd->ofd_osd, &ofd->ofd_txn_cb);
 
-        if (ofd->ofd_groups_file)
-                lu_object_put(env, &ofd->ofd_groups_file->do_lu);
-        ofd->ofd_groups_file = NULL;
+        if (ofd->ofd_last_group_file)
+                lu_object_put(env, &ofd->ofd_last_group_file->do_lu);
+        ofd->ofd_last_group_file = NULL;
 
         OBD_FREE(ofd->ofd_last_rcvd_slots, LR_MAX_CLIENTS / 8);
 

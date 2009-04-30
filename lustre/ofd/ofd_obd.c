@@ -263,7 +263,9 @@ static int filter_obd_connect(const struct lu_env *env, struct obd_export **_exp
         if (group > ofd->ofd_max_group) {
                 ofd->ofd_max_group = group;
                 filter_last_id_set(ofd, FILTER_INIT_OBJID, group);
-                filter_last_id_write(env, ofd, group, 1);
+                filter_last_id_write(env, ofd, group, NULL);
+                filter_last_group_write(env, ofd);
+                rc = filter_group_load(env, ofd, group);
         }
 
 out:
@@ -921,7 +923,7 @@ static int filter_orphans_destroy(const struct lu_env *env,
         CDEBUG(D_HA, "%s: after destroy: set last_objids["LPU64"] = "LPU64"\n",
                filter_obd(ofd)->obd_name, gr, mds_id);
         if (!skip_orphan) {
-                rc = filter_last_id_write(env, ofd, gr, 1);
+                rc = filter_last_id_write(env, ofd, gr, NULL);
         } else {
                 /* don't reuse orphan object, return last used objid */
                 oa->o_id = last;

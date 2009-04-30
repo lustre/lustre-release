@@ -504,7 +504,7 @@ static int osd_inode_remove(const struct lu_env *env, struct osd_object *obj)
 
         result = osd_trans_start(env, &osd->od_dt_dev, th);
         if (result == 0)
-                result = osd_oi_delete(oti, &osd->od_oi, fid, th);
+                result = osd_oi_delete(oti, osd, fid, th);
         osd_trans_stop(env, th);
         return result;
 }
@@ -1813,7 +1813,7 @@ static int __osd_oi_insert(const struct lu_env *env, struct osd_object *obj,
         id->oii_ino = obj->oo_inode->i_ino;
         id->oii_gen = obj->oo_inode->i_generation;
 
-        return osd_oi_insert(info, &osd->od_oi, fid, id, th,
+        return osd_oi_insert(info, osd, fid, id, th,
                              uc ? uc->mu_cap & CFS_CAP_SYS_RESOURCE_MASK : 1);
 }
 
@@ -3885,6 +3885,8 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
         int rc;
         ENTRY;
 
+        osd_compat_fini(osd_dev(d));
+
         if (osd_dev(d)->od_mnt) {
                 shrink_dcache_sb(osd_sb(osd_dev(d)));
                 osd_sync(env, lu2dt_dev(d));
@@ -4007,6 +4009,10 @@ static int osd_prepare(const struct lu_env *env,
         if (result != 0)
                 RETURN(result);
 
+        result = osd_compat_init(osd);
+        if (result != 0)
+                RETURN(result);
+
         if (lu_device_is_md(pdev)) {
                 /* 2. setup local objects */
                 result = llo_local_objects_setup(env, lu2md_dev(pdev),
@@ -4068,13 +4074,12 @@ static int osd_fid_lookup(const struct lu_env *env,
         struct lu_device       *ldev = obj->oo_dt.do_lu.lo_dev;
         struct osd_device      *dev;
         struct osd_inode_id    *id;
-        struct osd_oi          *oi;
         struct inode           *inode;
         int                     result;
 
         LINVRNT(osd_invariant(obj));
         LASSERT(obj->oo_inode == NULL);
-        LASSERT(fid_is_sane(fid));
+        LASSERT(fid_is_sane(fid) || fid_is_idif(fid));
         /*
          * This assertion checks that osd layer sees only local
          * fids. Unfortunately it is somewhat expensive (does a
@@ -4087,12 +4092,11 @@ static int osd_fid_lookup(const struct lu_env *env,
         info = osd_oti_get(env);
         dev  = osd_dev(ldev);
         id   = &info->oti_id;
-        oi   = &dev->od_oi;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT))
                 RETURN(-ENOENT);
 
-        result = osd_oi_lookup(info, oi, fid, id);
+        result = osd_oi_lookup(info, dev, fid, id);
         if (result == 0) {
                 inode = osd_iget(info, dev, id);
                 if (!IS_ERR(inode)) {
