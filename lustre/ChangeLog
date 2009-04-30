@@ -45,6 +45,12 @@ tbd Sun Microsystems, Inc.
 	  more information, please refer to bugzilla 17630.
 
 Severity   : enhancement
+Bugzilla   : 18775
+Descriptoin: improve lctl set/get_param
+Details    : handle the bad options, support more than one arguments,
+	     add '-F' option to append the indicator to the parameters.
+
+Severity   : enhancement
 Bugzilla   : 19024
 Description: Update kernel to RHEL5.3 2.6.18-128.1.6.el5.
 
