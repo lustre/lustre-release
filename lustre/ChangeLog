@@ -37,6 +37,12 @@ TBD Sun Microsystems, Inc.
 	  information, please refer to bugzilla 17630.
 
 Severity   : enhancement
+Bugzilla   : 18775
+Descriptoin: improve lctl set/get_param
+Details    : handle the bad options, support more than one arguments,
+	     add '-F' option to append the indicator to the parameters.
+
+Severity   : enhancement
 Bugzilla   : 19212
 Description: Update kernel to SLES10 SP2 2.6.16.60-0.37.
 
