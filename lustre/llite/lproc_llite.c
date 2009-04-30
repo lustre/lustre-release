@@ -329,7 +329,8 @@ static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
                 LL_PGLIST_DATA_CPU(sbi, cpu)->llpd_budget = budget;
         spin_unlock(&sbi->ll_async_page_reblnc_lock);
 
-        if (lcounter_read(&sbi->ll_async_page_count) >= sbi->ll_async_page_max)
+        if (lcounter_read_positive(&sbi->ll_async_page_count) >=
+            sbi->ll_async_page_max)
                 llap_shrink_cache(sbi, -1);
 
         return count;
