@@ -1826,7 +1826,7 @@ test_70b () {
 
 	zconf_mount_clients $clients $DIR
 	
-	local duration=120
+	local duration=300
 	[ "$SLOW" = "no" ] && duration=60
 	local cmd="rundbench 1 -t $duration"
 	local PID=""
@@ -1836,14 +1836,21 @@ test_70b () {
 		LCTL=$LCTL $cmd" &
 	PID=$!
 	log "Started rundbench load PID=$PID ..."
-
-	sleep $((duration / 4))
-	replay_barrier $SINGLEMDS
-	sleep 3 # give clients a time to do operations
-
-	log "$TESTNAME fail mds 1"
-	fail $SINGLEMDS
-
+	ELAPSED=0
+	NUM_FAILOVERS=0
+	START_TS=$(date +%s)
+	CURRENT_TS=$START_TS
+	while [ $ELAPSED -lt $duration ]; do
+		sleep 1
+		replay_barrier $SINGLEMDS
+		sleep 1 # give clients a time to do operations
+		# Increment the number of failovers
+		NUM_FAILOVERS=$((NUM_FAILOVERS+1))
+		log "$TESTNAME fail mds1 $NUM_FAILOVERS times"
+		facet_failover $SINGLEMDS
+		CURRENT_TS=$(date +%s)
+		ELAPSED=$((CURRENT_TS - START_TS))
+	done
 	wait $PID || error "rundbench load on $CLIENTS failed!"
 }
 run_test 70b "mds recovery; $CLIENTCOUNT clients"
