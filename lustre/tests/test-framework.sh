@@ -108,7 +108,6 @@ init_test_env() {
     export FSTYPE=${FSTYPE:-"ldiskfs"}
     export NAME=${NAME:-local}
     export DIR2
-    export AT_MAX_PATH
     export SAVE_PWD=${SAVE_PWD:-$LUSTRE/tests}
 
     if [ "$ACCEPTOR_PORT" ]; then
@@ -1591,19 +1590,9 @@ get_facets () {
 ##################################
 # Adaptive Timeouts funcs
 
-at_is_valid() {
-    if [ -z "$AT_MAX_PATH" ]; then
-        AT_MAX_PATH=$(do_facet mds "find /sys/ -name at_max")
-        [ -z "$AT_MAX_PATH" ] && echo "missing /sys/.../at_max " && return 1
-    fi
-    return 0
-}
-
 at_is_enabled() {
-    at_is_valid || error "invalid call"
-
     # only check mds, we assume at_max is the same on all nodes
-    local at_max=$(do_facet mds "cat $AT_MAX_PATH")
+    local at_max=$(do_facet mds "lctl get_param -n at_max")
     if [ $at_max -eq 0 ]; then
         return 1
     else
@@ -1614,13 +1603,11 @@ at_is_enabled() {
 at_max_get() {
     local facet=$1
 
-    at_is_valid || error "invalid call"
-
     # suppose that all ost-s has the same at_max set
     if [ $facet == "ost" ]; then
-        do_facet ost1 "cat $AT_MAX_PATH"
+        do_facet ost1 "lctl get_param -n at_max"
     else
-        do_facet $facet "cat $AT_MAX_PATH"
+        do_facet $facet "lctl get_param -n at_max"
     fi
 }
 
@@ -1628,16 +1615,14 @@ at_max_set() {
     local at_max=$1
     shift
 
-    at_is_valid || error "invalid call"
-
     local facet
     for facet in $@; do
         if [ $facet == "ost" ]; then
             for i in `seq $OSTCOUNT`; do
-                do_facet ost$i "echo $at_max > $AT_MAX_PATH"
+                do_facet ost$i "lctl set_param at_max=$at_max"
             done
         else
-            do_facet $facet "echo $at_max > $AT_MAX_PATH"
+            do_facet $facet "lctl set_param at_max=$at_max"
         fi
     done
 }

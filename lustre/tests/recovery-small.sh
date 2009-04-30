@@ -221,7 +221,7 @@ test_17() {
     remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
     # With adaptive timeouts, bulk_get won't expire until adaptive_timeout_max
-    if at_is_valid && at_is_enabled; then
+    if at_is_enabled; then
         at_max_saved=$(at_max_get ost1)
         at_max_set $TIMEOUT ost1
     fi

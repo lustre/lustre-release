@@ -54,18 +54,23 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 
 
 /****************** User-settable parameter keys *********************/
-/* e.g. 
+/* e.g.
         tunefs.lustre --param="failover.node=192.168.0.13@tcp0" /dev/sda
         lctl conf_param testfs-OST0000 failover.node=3@elan,192.168.0.3@tcp0
                     ... testfs-MDT0000.lov.stripesize=4M
                     ... testfs-OST0000.ost.client_cache_seconds=15
-                    ... testfs.sys.timeout=<secs> 
+                    ... testfs.sys.timeout=<secs>
                     ... testfs.llite.max_read_ahead_mb=16
 */
 
 /* System global or special params not handled in obd's proc */
-#define PARAM_SYS_TIMEOUT          "sys.timeout="      /* global */
-#define PARAM_SYS_LDLM_TIMEOUT     "sys.ldlm_timeout=" /* global */
+#define PARAM_TIMEOUT              "timeout="          /* global */
+#define PARAM_LDLM_TIMEOUT         "ldlm_timeout="     /* global */
+#define PARAM_AT_MIN               "at_min="           /* global */
+#define PARAM_AT_MAX               "at_max="           /* global */
+#define PARAM_AT_EXTRA             "at_extra="         /* global */
+#define PARAM_AT_EARLY_MARGIN      "at_early_margin="  /* global */
+#define PARAM_AT_HISTORY           "at_history="       /* global */
 #define PARAM_MGSNODE              "mgsnode="          /* during mount */
 #define PARAM_FAILNODE             "failover.node="    /* llog generation */
 #define PARAM_FAILMODE             "failover.mode="    /* llog generation */
@@ -79,5 +84,6 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 #define PARAM_MDC                  "mdc."
 #define PARAM_LLITE                "llite."
 #define PARAM_LOV                  "lov."
+#define PARAM_SYS                  "sys."              /* global */
 
 #endif /* _LUSTRE_PARAM_H */

@@ -49,30 +49,18 @@
 int test_req_buffer_pressure = 0;
 CFS_MODULE_PARM(test_req_buffer_pressure, "i", int, 0444,
                 "set non-zero to put pressure on request buffer pools");
-unsigned int at_min = 0;
+
 CFS_MODULE_PARM(at_min, "i", int, 0644,
                 "Adaptive timeout minimum (sec)");
-
-#ifdef HAVE_AT_SUPPORT
-unsigned int at_max = 600;
-#else
-unsigned int at_max = 0;
-#endif
-
-EXPORT_SYMBOL(at_max);
 CFS_MODULE_PARM(at_max, "i", int, 0644,
                 "Adaptive timeout maximum (sec)");
-unsigned int at_history = 600;
 CFS_MODULE_PARM(at_history, "i", int, 0644,
                 "Adaptive timeouts remember the slowest event that took place "
                 "within this period (sec)");
-static int at_early_margin = 5;
 CFS_MODULE_PARM(at_early_margin, "i", int, 0644,
                 "How soon before an RPC deadline to send an early reply");
-static int at_extra = 30;
 CFS_MODULE_PARM(at_extra, "i", int, 0644,
                 "How much extra time to give with each early reply");
-
 
 /* forward ref */
 static int ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc);
@@ -367,14 +355,14 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
         array->paa_count = 0;
         array->paa_deadline = -1;
 
-        /* allocate memory for srv_at_array (ptlrpc_at_array) */ 
+        /* allocate memory for srv_at_array (ptlrpc_at_array) */
         OBD_ALLOC(array->paa_reqs_array, sizeof(struct list_head) * size);
         if (array->paa_reqs_array == NULL)
                 GOTO(failed, NULL);
 
         for (index = 0; index < size; index++)
                 CFS_INIT_LIST_HEAD(&array->paa_reqs_array[index]);
-        
+
         OBD_ALLOC(array->paa_reqs_count, sizeof(__u32) * size);
         if (array->paa_reqs_count == NULL)
                 GOTO(failed, NULL);
@@ -538,8 +526,8 @@ static void ptlrpc_server_finish_request(struct ptlrpc_request *req)
         if (req->rq_at_linked) {
                 struct ptlrpc_at_array *array = &svc->srv_at_array;
                 __u32 index = req->rq_at_index;
-        
-                req->rq_at_linked = 0;        
+
+                req->rq_at_linked = 0;
                 array->paa_reqs_count[index]--;
                 array->paa_count--;
         }
@@ -703,10 +691,10 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
         if (array->paa_reqs_count[index] > 0) {
                 /* latest rpcs will have the latest deadlines in the list,
                  * so search backward. */
-                list_for_each_entry_reverse(rq, &array->paa_reqs_array[index], 
+                list_for_each_entry_reverse(rq, &array->paa_reqs_array[index],
                                             rq_timed_list) {
                         if (req->rq_deadline >= rq->rq_deadline) {
-                                list_add(&req->rq_timed_list, 
+                                list_add(&req->rq_timed_list,
                                          &rq->rq_timed_list);
                                 break;
                         }
@@ -900,7 +888,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
         count = array->paa_count;
         while (count > 0) {
                 count -= array->paa_reqs_count[index];
-                list_for_each_entry_safe(rq, n, &array->paa_reqs_array[index], 
+                list_for_each_entry_safe(rq, n, &array->paa_reqs_array[index],
                                          rq_timed_list) {
                         if (rq->rq_deadline <= now + at_early_margin) {
                                 list_move(&rq->rq_timed_list, &work_list);
@@ -910,14 +898,14 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
                                 rq->rq_at_linked = 0;
                                 continue;
                         }
-                        
+
                         /* update the earliest deadline */
                         if (deadline == -1 || rq->rq_deadline < deadline)
                                 deadline = rq->rq_deadline;
 
                         break;
                 }
-                
+
                 if (++index >= array->paa_size)
                         index = 0;
         }
@@ -2019,17 +2007,17 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
         cfs_timer_disarm(&service->srv_at_timer);
 
         if (array->paa_reqs_array != NULL) {
-                OBD_FREE(array->paa_reqs_array, 
+                OBD_FREE(array->paa_reqs_array,
                          sizeof(struct list_head) * array->paa_size);
                 array->paa_reqs_array = NULL;
         }
-        
+
         if (array->paa_reqs_count != NULL) {
-                OBD_FREE(array->paa_reqs_count, 
+                OBD_FREE(array->paa_reqs_count,
                          sizeof(__u32) * array->paa_size);
                 array->paa_reqs_count= NULL;
         }
-        
+
         OBD_FREE(service, sizeof(*service));
         return 0;
 }

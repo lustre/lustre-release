@@ -64,11 +64,21 @@ cfs_mem_cache_t *obd_lvfs_ctxt_cache;
 unsigned int obd_debug_peer_on_timeout;
 unsigned int obd_dump_on_timeout;
 unsigned int obd_dump_on_eviction;
+unsigned int obd_max_dirty_pages = 256;
 unsigned int obd_timeout = OBD_TIMEOUT_DEFAULT;   /* seconds */
 unsigned int ldlm_timeout = LDLM_TIMEOUT_DEFAULT; /* seconds */
-unsigned int obd_max_dirty_pages = 256;
-atomic_t obd_dirty_pages;
+/* Adaptive timeout defs here instead of ptlrpc module for /proc/sys/ access */
+unsigned int at_min = 0;
+#ifdef HAVE_AT_SUPPORT
+unsigned int at_max = 600;
+#else
+unsigned int at_max = 0;
+#endif
+unsigned int at_history = 600;
+int at_early_margin = 5;
+int at_extra = 30;
 
+atomic_t obd_dirty_pages;
 cfs_waitq_t obd_race_waitq;
 int obd_race_state;
 
@@ -399,6 +409,11 @@ EXPORT_SYMBOL(obd_timeout);
 EXPORT_SYMBOL(ldlm_timeout);
 EXPORT_SYMBOL(obd_max_dirty_pages);
 EXPORT_SYMBOL(obd_dirty_pages);
+EXPORT_SYMBOL(at_min);
+EXPORT_SYMBOL(at_max);
+EXPORT_SYMBOL(at_extra);
+EXPORT_SYMBOL(at_early_margin);
+EXPORT_SYMBOL(at_history);
 EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
 
 EXPORT_SYMBOL(proc_lustre_root);

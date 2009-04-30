@@ -870,7 +870,7 @@ test_44a() {	# was test_44
     [ "$mdcdev" ] || exit 2
 
     # adaptive timeouts slow this way down
-    if at_is_valid && at_is_enabled; then
+    if at_is_enabled; then
         at_max_saved=$(at_max_get mds)
         at_max_set 40 mds
     fi
@@ -1500,9 +1500,9 @@ at_cleanup () {
 
     echo "Cleaning up AT ..."
     if [ -n "$ATOLDBASE" ]; then
-        local at_history=$(do_facet mds "find /sys/ -name at_history")
-        do_facet mds "echo $ATOLDBASE >> $at_history" || true
-        do_facet ost1 "echo $ATOLDBASE >> $at_history" || true
+        local at_history=$($LCTL get_param -n at_history)
+        do_facet mds "lctl set_param at_history=$at_history" || true
+        do_facet ost1 "lctl set_param at_history=$at_history" || true
     fi
 
     if [ $AT_MAX_SET -ne 0 ]; then
@@ -1521,10 +1521,6 @@ at_cleanup () {
 at_start()
 {
     local at_max_new=600
-    if ! at_is_valid; then
-        skip "AT env is invalid"
-        return 1
-    fi
 
     # Save at_max original values
     local facet
@@ -1545,12 +1541,10 @@ at_start()
     done
 
     if [ -z "$ATOLDBASE" ]; then
-	local at_history=$(do_facet mds "find /sys/ -name at_history")
-	[ -z "$at_history" ] && skip "missing /sys/.../at_history " && return 1
-	ATOLDBASE=$(do_facet mds "cat $at_history")
+	ATOLDBASE=$(do_facet mds "lctl get_param -n at_history")
         # speed up the timebase so we can check decreasing AT
-	do_facet mds "echo 8 >> $at_history"
-	do_facet ost1 "echo 8 >> $at_history"
+        do_facet mds "lctl set_param at_history=8" || true
+        do_facet ost1 "lctl set_param at_history=8" || true
 
 	# sleep for a while to cool down, should be > 8s and also allow
 	# at least one ping to be sent. simply use TIMEOUT to be safe.
