@@ -193,7 +193,7 @@ static int   osd_index_try     (const struct lu_env *env,
 static void  osd_conf_get      (const struct lu_env *env,
                                 const struct dt_device *dev,
                                 struct dt_device_param *param);
-static void  osd_trans_stop    (const struct lu_env *env,
+static int   osd_trans_stop    (const struct lu_env *env,
                                 struct thandle *th);
 static int   osd_object_is_root(const struct osd_object *obj);
 
@@ -201,7 +201,6 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
                                        struct dt_device *dt);
 static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
                            struct thandle *th);
-static void osd_trans_stop(const struct lu_env *env, struct thandle *th);
 
 static struct osd_object  *osd_obj          (const struct lu_object *o);
 static struct osd_device  *osd_dev          (const struct lu_device *d);
@@ -832,7 +831,7 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 /*
  * Concurrency: shouldn't matter.
  */
-static void osd_trans_stop(const struct lu_env *env, struct thandle *th)
+static int osd_trans_stop(const struct lu_env *env, struct thandle *th)
 {
         struct osd_device  *osd = osd_dt_dev(th->th_dev);
         struct osd_thandle *oh;
@@ -848,7 +847,8 @@ static void osd_trans_stop(const struct lu_env *env, struct thandle *th)
         udmu_tx_commit(oh->ot_tx);
         if (0 && oh->ot_sync)
                 udmu_wait_synced(&osd->od_objset, oh->ot_tx);
-        EXIT;
+
+        RETURN(result);
 }
 
 /*

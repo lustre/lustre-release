@@ -328,7 +328,12 @@ static int osd_do_bio(struct inode *inode, struct filter_iobuf *iobuf, int rw)
         }
 
  out:
-        wait_event(iobuf->dr_wait, atomic_read(&iobuf->dr_numreqs) == 0);
+        /* in order to achieve better IO throughput, we don't wait for writes
+         * completion here. instead we proceed with transaction commit in
+         * parallel and wait for IO completion once transaction is stopped
+         * see osd_trans_stop() for more details -bzzz */
+        if (rw == OBD_BRW_WRITE)
+                wait_event(iobuf->dr_wait, atomic_read(&iobuf->dr_numreqs) == 0);
 
         if (rc == 0)
                 rc = iobuf->dr_error;
@@ -540,6 +545,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 
                 /* preceding filemap_write_and_wait() should have clean pages */
 #if 0
+                /* XXX */
                 if (fo->fo_writethrough_cache)
                         clear_page_dirty_for_io(lb[i].page);
 #endif

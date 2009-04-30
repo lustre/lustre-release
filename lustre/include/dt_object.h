@@ -99,7 +99,7 @@ struct dt_device_operations {
         /**
          * Finish previously started transaction.
          */
-        void  (*dt_trans_stop)(const struct lu_env *env,
+        int   (*dt_trans_stop)(const struct lu_env *env,
                                struct thandle *th);
         /**
          * Return fid of root index object.
@@ -715,7 +715,7 @@ static inline int dt_trans_start(const struct lu_env *env,
         return d->dd_ops->dt_trans_start(env, d, th);
 }
 
-static inline void dt_trans_stop(const struct lu_env *env,
+static inline int dt_trans_stop(const struct lu_env *env,
                                  struct dt_device *d,
                                  struct thandle *th)
 {

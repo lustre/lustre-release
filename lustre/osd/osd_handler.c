@@ -183,7 +183,7 @@ static int   osd_it_ea_key_size(const struct lu_env *env,
 static void  osd_conf_get      (const struct lu_env *env,
                                 const struct dt_device *dev,
                                 struct dt_device_param *param);
-static void  osd_trans_stop    (const struct lu_env *env,
+static int   osd_trans_stop    (const struct lu_env *env,
                                 struct thandle *th);
 static int   osd_object_is_root(const struct osd_object *obj);
 
@@ -778,11 +778,12 @@ out:
 /*
  * Concurrency: shouldn't matter.
  */
-static void osd_trans_stop(const struct lu_env *env, struct thandle *th)
+static int osd_trans_stop(const struct lu_env *env, struct thandle *th)
 {
-        int result;
-        struct osd_thandle *oh;
+        int                     result;
+        struct osd_thandle     *oh;
         struct osd_thread_info *oti = osd_oti_get(env);
+        struct filter_iobuf    *iobuf = &oti->oti_iobuf;
 
         ENTRY;
 
@@ -822,7 +823,19 @@ static void osd_trans_stop(const struct lu_env *env, struct thandle *th)
         } else {
                 OBD_FREE_PTR(oh);
         }
-        EXIT;
+
+        /* as we want IO to journal and data IO be concurrent, we don't block
+         * awaiting data IO completion in osd_do_bio(), instead we wait here
+         * once transaction is submitted to the journal.
+         *
+         * IMPORTANT: we have to wait till any IO submited by the thread is
+         * completed otherwise iobuf may be corrupted by different request
+         */
+        wait_event(iobuf->dr_wait, atomic_read(&iobuf->dr_numreqs) == 0);
+        if (!result)
+                result = iobuf->dr_error;
+
+        RETURN(result);
 }
 
 /*
