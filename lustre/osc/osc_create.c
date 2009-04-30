@@ -85,11 +85,26 @@ static int osc_interpret_create(const struct lu_env *env,
                 if (body) {
                         int diff = body->oa.o_id - oscc->oscc_last_id;
 
-                        if (diff < oscc->oscc_grow_count)
-                                oscc->oscc_grow_count =
-                                        max(diff/3, OST_MIN_PRECREATE);
-                        else
+                        /* oscc_internal_create() stores the original value of
+                         * grow_count in rq_async_args.space[0].
+                         * We can't compare against oscc_grow_count directly,
+                         * because it may have been increased while the RPC
+                         * is in flight, so we would always find ourselves
+                         * having created fewer objects and decreasing the
+                         * precreate request size.  b=18577 */
+                        if (diff < (int) req->rq_async_args.space[0]) {
+                                /* the OST has not managed to create all the
+                                 * objects we asked for */
+                                oscc->oscc_grow_count = max(diff,
+                                                            OST_MIN_PRECREATE);
+                                /* don't bump grow_count next time */
+                                oscc->oscc_flags |= OSCC_FLAG_LOW;
+                        } else {
+                                /* the OST is able to keep up with the work,
+                                 * we could consider increasing grow_count
+                                 * next time if needed */
                                 oscc->oscc_flags &= ~OSCC_FLAG_LOW;
+                        }
                         oscc->oscc_last_id = body->oa.o_id;
                 }
                 spin_unlock(&oscc->oscc_lock);
@@ -186,6 +201,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
         body->oa.o_gr = oscc->oscc_oa.o_gr;
         LASSERT_MDS_GROUP(body->oa.o_gr);
         body->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
+        request->rq_async_args.space[0] = oscc->oscc_grow_count;
         spin_unlock(&oscc->oscc_lock);
         CDEBUG(D_RPCTRACE, "prealloc through id "LPU64" (last seen "LPU64")\n",
                body->oa.o_id, oscc->oscc_last_id);
