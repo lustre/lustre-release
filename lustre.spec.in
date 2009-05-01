@@ -5,6 +5,8 @@
 %{!?lustre_name: %define lustre_name lustre}
 
 %define is_client %(bash -c "if [[ %{lustre_name} = *-client ]]; then echo -n '1'; else echo -n '0'; fi")
+# for those uses that don't want the -smp/-bigsmp on the end of %kversion
+%define krequires %(bash -c "echo %{kversion} | sed -e 's/-[^0-9]*smp$//'")
 
 Summary: Lustre File System
 Name: %{lustre_name}
@@ -25,7 +27,7 @@ Userspace tools and files for the Lustre file system.
 
 %package modules
 Summary: Kernel Lustre modules for Linux %{kversion}
-Requires: modutils >= 2.4.10, kernel = %{kversion}
+Requires: modutils >= 2.4.10, kernel = %{krequires}
 Group: Development/Kernel
 
 %description modules
