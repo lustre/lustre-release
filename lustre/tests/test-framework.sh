@@ -1007,8 +1007,8 @@ replay_barrier() {
     do_facet $facet sync
     df $MOUNT
     local svc=${facet}_svc
-    do_facet $facet $LCTL --device %${!svc} readonly
     do_facet $facet $LCTL --device %${!svc} notransno
+    do_facet $facet $LCTL --device %${!svc} readonly
     do_facet $facet $LCTL mark "$facet REPLAY BARRIER on ${!svc}"
     $LCTL mark "local REPLAY BARRIER on ${!svc}"
 }
@@ -1018,8 +1018,8 @@ replay_barrier_nodf() {
     do_facet $facet sync
     local svc=${facet}_svc
     echo Replay barrier on ${!svc}
-    do_facet $facet $LCTL --device %${!svc} readonly
     do_facet $facet $LCTL --device %${!svc} notransno
+    do_facet $facet $LCTL --device %${!svc} readonly
     do_facet $facet $LCTL mark "$facet REPLAY BARRIER on ${!svc}"
     $LCTL mark "local REPLAY BARRIER on ${!svc}"
 }
@@ -1446,8 +1446,7 @@ check_config () {
     mgshost=$(echo $mgshost | awk -F: '{print $1}')
 
     if [ "$mgshost" != "$myMGS_host" ]; then
-        FAIL_ON_ERROR=true \
-            error "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST, NETTYPE=$NETTYPE
+            log "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST, NETTYPE=$NETTYPE
                    Please use correct config or set mds_HOST correctly!"
     fi
 
