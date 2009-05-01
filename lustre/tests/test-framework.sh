@@ -993,8 +993,8 @@ replay_barrier() {
     do_facet $facet sync
     df $MOUNT
     local svc=${facet}_svc
-    do_facet $facet $LCTL --device %${!svc} readonly
     do_facet $facet $LCTL --device %${!svc} notransno
+    do_facet $facet $LCTL --device %${!svc} readonly
     do_facet $facet $LCTL mark "$facet REPLAY BARRIER on ${!svc}"
     $LCTL mark "local REPLAY BARRIER on ${!svc}"
 }
@@ -1004,8 +1004,8 @@ replay_barrier_nodf() {
     do_facet $facet sync
     local svc=${facet}_svc
     echo Replay barrier on ${!svc}
-    do_facet $facet $LCTL --device %${!svc} readonly
     do_facet $facet $LCTL --device %${!svc} notransno
+    do_facet $facet $LCTL --device %${!svc} readonly
     do_facet $facet $LCTL mark "$facet REPLAY BARRIER on ${!svc}"
     $LCTL mark "local REPLAY BARRIER on ${!svc}"
 }
