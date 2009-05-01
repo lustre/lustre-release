@@ -182,6 +182,19 @@ Description: 1.6.5 mdsrate performance is slower than 1.4.11/12 (MDS is not cpu 
 Details    : create_count always drops to the min value (=32) because grow_count
 	     is being changed before the precreate RPC completes.
 
+Severity   : normal
+Frequency  : Only in RHEL5 when mounting multiple ext3 filesystems
+	     simultaneously
+Bugzilla   : 19184
+Description: "kmem_cache_create: duplicate cache jbd_4k" error message
+Details    : add proper locking for creation of jbd_4k slab cache
+
+Severity   : normal
+Bugzilla   : 19058
+Description: MMP check in ext3_remount() fails without displaying any error
+Details    : When multiple mount protection fails during remount, proper error
+	     should be returned
+
 -------------------------------------------------------------------------------
 2008-12-31 Sun Microsystems, Inc.
 	* version 1.8.0
