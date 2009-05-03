@@ -225,6 +225,13 @@ Descriptoin: Lustre detected file system corruption with inode out of bounds
 Details    : don't update i_size on MDS_CLOSE for directories. This causes
 	     directory corruptions on the MDT.
 
+Severity   : normal
+Frequency  : Only in RHEL5 when mounting multiple ext3 filesystems
+             simultaneously
+Bugzilla   : 19184
+Description: "kmem_cache_create: duplicate cache jbd_4k" error message
+Details    : add proper locking for creation of jbd_4k slab cache
+
 --------------------------------------------------------------------------
 2009-01-15 Sun Microsystems, Inc.
 	* version 1.6.7
