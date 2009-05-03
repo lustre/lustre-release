@@ -2016,6 +2016,13 @@ Description: open file using fid
 Details    : A file can be opened using just its fid, like
 	     <mntpt>/.lustre/fid/SEQ:OID:VER - this is needed for HSM and replication
 
+Severity   : normal
+Frequency  : Only in RHEL5 when mounting multiple ext3 filesystems
+	     simultaneously
+Bugzilla   : 19184
+Description: "kmem_cache_create: duplicate cache jbd_4k" error message
+Details    : add proper locking for creation of jbd_4k slab cache
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

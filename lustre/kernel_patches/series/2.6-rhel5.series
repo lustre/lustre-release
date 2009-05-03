@@ -22,3 +22,4 @@ jbd-journal-chksum-2.6.18-vanilla.patch
 quota-large-limits-rhel5.patch
 raid5-mmp-unplug-dev.patch
 small-fixes-about-jbd.patch
+jbd-slab-race-2.6-rhel5.patch
