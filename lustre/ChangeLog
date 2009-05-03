@@ -232,6 +232,12 @@ Bugzilla   : 19184
 Description: "kmem_cache_create: duplicate cache jbd_4k" error message
 Details    : add proper locking for creation of jbd_4k slab cache
 
+Severity   : normal
+Bugzilla   : 19058
+Description: MMP check in ext3_remount() fails without displaying any error
+Details    : When multiple mount protection fails during remount, proper error
+             should be returned
+
 --------------------------------------------------------------------------
 2009-01-15 Sun Microsystems, Inc.
 	* version 1.6.7
