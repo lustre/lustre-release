@@ -1,4 +1,8 @@
 lnxmaj="2.6.16"
+lnxmin=".60"
+# when we fix up this lnxmaj/lnxmin/lnxrel business...
+#lnxrel="0.33"
+# and note that this means we get rid of the EXTRA_VERSION_DELIMITER crap!!
 lnxrel="60-0.33"
 
 # this is the delimeter that goes between $lnxmaj and $lnxrel
