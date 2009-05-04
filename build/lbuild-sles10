@@ -90,3 +90,12 @@ devel_kernel_name() {
     fi
 
 }
+
+rpm_BUILD_kernel_dirname() {
+    local rpmsmptype="$1"
+    local lnxmaj="$2"
+    local lnxmin="$3"
+    local arch="$4"
+
+    echo kernel-lustre-${rpmsmptype}-${lnxmaj}${lnxmin}/linux-${lnxmaj}
+}

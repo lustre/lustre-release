@@ -42,6 +42,8 @@ Patch99995: linux-%{kversion}-lustre.patch' \
 %patch99995 -p1\
 ' \
            -e '/^%prep$/,/^# END OF PATCH APPLICATIONS$/s/kernel-%{kversion}/%{name}-%{kversion}/g' \
+           -e '/find $RPM_BUILD_ROOT\/lib\/modules\/$KernelVer/a\
+    cp -a fs/ext3/* $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext3' \
            -e '/^Provides: glibc-kernheaders = /a\
 Provides: kernel-headers = %{rpmversion}-%{release}
 ' \
@@ -146,4 +148,13 @@ devel_kernel_name() {
         echo "kernel-$DEVEL_KERNEL_TYPE"
     fi
 
+}
+
+rpm_BUILD_kernel_dirname() {
+    local rpmsmptype="$1"
+    local lnxmaj="$2"
+    local lnxmin="$3"
+    local arch="$4"
+
+    echo kernel-lustre${lnxmaj}${lnxmin}/linux-${lnxmaj}.$arch
 }

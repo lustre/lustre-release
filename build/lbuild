@@ -41,7 +41,6 @@ NORPM=false
 LDISKFSRPM=true
 SKIPLDISKFSRPM="v1_4_* b1_4"
 SMPTYPES="smp bigsmp default ''"
-KERNCONFSMPTYPE=
 PATCHLESS=false
 XEN=false
 LINUXOBJ=
@@ -451,19 +450,10 @@ load_target() {
     if $XEN; then
         XENPOSTFIX="-xen"
     fi
-    if [ -f $TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET-$TARGET_ARCH.config ]; then
-        CONFIG_FILE="$TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET$XENPOSTFIX-$TARGET_ARCH.config"
-    fi
 
-    # figure out our smp kernel type and set the .config if we have one
-    local smptype
-    for smptype in $SMPTYPES; do
-        [ "$smptype" = "''" ] && smptype=
-        if [ -f $TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET-$TARGET_ARCH-${smptype}.config ]; then
-            CONFIG_FILE="$TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET$XENPOSTFIX-$TARGET_ARCH-${smptype}.config"
-            KERNCONFSMPTYPE=$smptype
+    if [ -f $TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET-$TARGET_ARCH.config ]; then
+        CONFIG_FILE="$TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET$XENPOSTFIX-$TARGET_ARCH${RPMSMPTYPE:+-}${RPMSMPTYPE}.config"
     fi
-    done
 
     local lnxrelnew=${lnxrel//-/_}
 
@@ -750,7 +740,7 @@ skeep_ldiskfs_rpm() {
 #generate LUSTRE_EXTRA_VERSION from EXTRA_VERSION
 gen_lustre_version() {
 
-    LUSTRE_EXTRA_VERSION="${lnxmaj}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}${TARGET_DELIMITER}${RPMSMPTYPE:-${KERNCONFSMPTYPE:-"smp"}}"
+    LUSTRE_EXTRA_VERSION="${lnxmaj}${EXTRA_VERSION_DELIMITER}${EXTRA_VERSION}${TARGET_DELIMITER}${RPMSMPTYPE}"
     LUSTRE_EXTRA_VERSION=${LUSTRE_EXTRA_VERSION//-/_}
 
 }
@@ -759,7 +749,7 @@ set_rpm_smp_type() {
 
     local infact_arch="${TARGET_ARCH}"
 
-    RPMSMPTYPE=default
+    RPMSMPTYPE=""
     [ "$infact_arch" == "i586" ] && infact_arch="i686"
 
     local smp_type
@@ -807,7 +797,7 @@ find_linux_rpm() {
                 break
             fi
         done
-        [ -f "$found_rpm" ] && TARGET_ARCH="$arch" && BUILD_ARCHS="$arch" && break
+        [ -f "$found_rpm" ] && break
     done
 
     echo "$found_rpm"
@@ -815,7 +805,7 @@ find_linux_rpm() {
 
 }
 
-#unpack kernel(/source/devel) RPM
+# unpack kernel(/source/devel) RPM
 #
 # This function and it's setting of $LINUX and $LINUXOBJ is a total hack that
 # needs to completely refactored.  It completely ingores that $BUILD_ARCHS may
@@ -823,6 +813,9 @@ find_linux_rpm() {
 # lustre itself)
 unpack_linux_rpm() {
     local kernelrpm="${1}"
+    # it's worth noting that neither sles10 nor rhel5 appear to use their
+    # extra_version delimiter for the dirname under /usr/src, so we could
+    # probably just get rid of this parameter
     local delimiter=${2:-"-"}
 
     [ -f "$kernelrpm" ] || return 255
@@ -835,7 +828,11 @@ unpack_linux_rpm() {
     rpm2cpio < "$kernelrpm" | cpio -id > /dev/null 2>&1
     if [ ${PIPESTATUS[0]} -eq 0 ]; then
         # RHEL-style and SLES-style rpms
-        local paths="kernels/${lnxmaj}${delimiter}${lnxrel}-${TARGET_ARCH} linux-${lnxmaj}${delimiter}${lnxrel}"
+        # XXX - this rhel/sles goop needs abstracting out into the
+        #       lbuild-{rhel5,sles10} method files
+        # XXX - until bug 19336 cleans this up, we need to extricate the
+        #       ${lnxmin}- from the $lnxrel
+        local paths="kernels/${lnxmaj}${lnxmin}${delimiter}${lnxrel}-${TARGET_ARCH} linux-${lnxmaj}${lnxmin}${delimiter}${lnxrel##${lnxmin#.}-}"
 
         local path
         for path in $paths; do
@@ -945,6 +942,10 @@ store_for_reuse() {
             fi
         done
 
+        # flag the cache as complete (i.e. in case lbuild was previously
+        # interrupted while caching)
+        touch "$location/.lastused"
+
         return 0
 
 }
@@ -955,9 +956,21 @@ reuse() {
     local use_links="${3:-false}"
     local signature="$4"
 
-    if [ -n "$REUSEBUILD" ] && [ -d $REUSEBUILD/$signature/$module ]; then
+    if [ -n "$REUSEBUILD" ] && [ -d "$REUSEBUILD/$signature/$module" ]; then
+        if [ ! -f "$REUSEBUILD/$signature/$module/.lastused" ]; then
+            # the .lastused flag is populated at the end of the caching to
+            # signal that the caching was completeld.  if that flag is not
+            # there, then the cache is invalid (and should be removed in fact) 
+            mv "$REUSEBUILD/$signature/$module"{,-bad-$(date +%s)} || 
+                fatal 1 "failed to clean up a bad cache in location" \
+                      "\"$REUSEBUILD/$signature/$module\" -- manual cleanup" \
+                      "will be necessary"
+            return 1
+        fi
+
         # so that we know how stale this entry is
         touch $REUSEBUILD/$signature/$module/.lastused
+
         if $use_links; then
             if ls $REUSEBUILD/$signature/$module/* >/dev/null 2>&1; then
                 cp -al $REUSEBUILD/$signature/$module/* $dest/
@@ -1007,6 +1020,42 @@ basearch() {
 
 }
 
+#
+# in a given directory, find the first rpm matching given requirements
+#
+find_rpm() {
+    local dir="$1"
+    local match_type="$2"
+    local match="$3"
+
+    pushd "$dir" > /dev/null || \
+        fatal 1 "Unable to chdir to directory \"$dir\" in find_rpm()"
+
+    local file
+    for file in $(ls); do
+        if [ ! -f "$file" ]; then
+            continue
+        fi
+        case "$match_type" in
+            provides)
+                # match is any valid ERE (i.e. given to egrep) match
+                if rpm -q --provides -p "$file" | egrep -q "$match"; then
+                    echo "$file"
+                    popd >/dev/null
+                    return 0
+                fi
+                ;;
+            *)
+                popd >/dev/null
+                fatal 1 "Unknown match type \"$match_type\" given to find_rpm()"
+                ;;
+        esac
+    done
+
+    popd >/dev/null
+    return 1
+}
+
 build_kernel_with_srpm() {
 
     # need to generate the patch for this target
@@ -1032,9 +1081,11 @@ build_kernel_with_srpm() {
     if $REUSERPM && reuse kernel "$TOPDIR" "$CAN_LINK_FOR_REUSE" \
                                  "$REUSE_SIGNATURE"; then
         # figure out the EXTRA_VERSION of the kernel we are re-using
-        kernel_extra_version=$(ls $TOPDIR/RPMS/$TARGET_ARCH/kernel-lustre-*${lnxmaj}${EXTRA_VERSION_DELIMITER}${PRISTINE_EXTRA_VERSION}.*.$TARGET_ARCH.rpm)
-        kernel_extra_version=${kernel_extra_version##*kernel-lustre-*${lnxmaj}${EXTRA_VERSION_DELIMITER}}
-        kernel_extra_version=${kernel_extra_version%%.$TARGET_ARCH.rpm}
+        local KERNEL_RPM
+        if ! KERNEL_RPM=$(find_rpm "$TOPDIR/RPMS/$TARGET_ARCH/" provides "^kernel ="); then
+            fatal 1 "Failed to find a kernel RPM in $TOPDIR/RPMS/$TARGET_ARCH/"
+        fi
+        kernel_extra_version=$(rpm -q --queryformat "%{RELEASE}" -p $TOPDIR/RPMS/$TARGET_ARCH/$KERNEL_RPM)
     else
         # nothing cached, build from scratch
         if [ ! -r "$KERNELDIR/$KERNEL_SRPM" ]; then
@@ -1081,24 +1132,21 @@ build_with_srpm() {
         if ! kernel_extra_version=$(build_kernel_with_srpm); then
             fatal 1 "Failed to build the kernel from it's SRPM"
         fi
-#local kernel_extra_version="60-0.33_lustre.1.8.0.50.20090311172757"
 
         for arch in $BUILD_ARCHS; do
 
-            local kernel_devel_rpm="$TOPDIR/RPMS/$arch/$(devel_kernel_name true)-$lnxmaj$EXTRA_VERSION_DELIMITER$kernel_extra_version.$arch.rpm"
-
-            # install the -devel RPM in preparation for the lustre build
-            if ! lnxrel="$kernel_extra_version" unpack_linux_rpm \
-                           $kernel_devel_rpm $EXTRA_VERSION_DELIMITER; then
-                fatal 1 "Could not find the Linux tree in $kernel_devel_rpm"
+            local kernel_devel_rpm
+            if ! kernel_devel_rpm=$(find_rpm "$TOPDIR/RPMS/$arch/" provides "^$(devel_kernel_name true) ="); then
+                fatal 1 "Failed to find a kernel development RPM in $TOPDIR/RPMS/$arch/"
             fi
 
-            # XXX - superhack of all superhacks!  kernel-lustre-devel doesn't
-            #       have have sources in it, so we need to pull them out of
-            #       the SRPM
-            #       yeah.  blech.
-            cp BUILD/kernel-lustre-${lnxmaj}/linux-${lnxmaj}.$arch/fs/ext3/*.[ch] \
-               $TOPDIR/reused/usr/src/kernels/${lnxmaj}${EXTRA_VERSION_DELIMITER}${kernel_extra_version}-${arch}/fs/ext3
+            # install the -devel RPM in preparation for the lustre build
+            # note that the EXTRA_VERSION_DELIMITER is *NOT* used in the
+            # version of the directory name under /usr/src
+            if ! lnxrel="$kernel_extra_version" unpack_linux_rpm \
+                           "$TOPDIR/RPMS/$arch/$kernel_devel_rpm" "-"; then
+                fatal 1 "Could not find the Linux tree in $TOPDIR/RPMS/$arch/$kernel_devel_rpm"
+            fi
         done
     else
         # need to find and unpack the vendor's own kernel-devel for patchless
@@ -1107,8 +1155,7 @@ build_with_srpm() {
         if ! kernelrpm=$(find_linux_rpm "-$DEVEL_KERNEL_TYPE" ${EXTRA_VERSION_DELIMITER:-"-"}); then
             fatal 1 "Could not find the kernel-$DEVEL_KERNEL_TYPE RPM in ${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}"
         fi
-        if ! lnxrel="$lnxrel" unpack_linux_rpm "$kernelrpm" \
-                                               "${EXTRA_VERSION_DELIMITER:--}"; then
+        if ! lnxrel="$lnxrel" unpack_linux_rpm "$kernelrpm" "-"; then
             fatal 1 "Could not find the Linux tree in $kernelrpm"
         fi
     fi

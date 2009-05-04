@@ -524,9 +524,15 @@ patchless_build_sequence() {
 
     local kernel_devel_rpm
 
-    if ! kernel_devel_rpm=$(find_linux_rpm "$type" "$delimeter"); then
+    if ! kernel_devel_rpm=$(find_linux_rpm "$type" "$delimiter"); then
         fatal 1 "Could not find the kernel$type RPM in ${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}"
     fi
+
+    # find_linux_rpm() used to set these globals, but now it's a function
+    # run in a subshell so it's unable to set globals in our namespace
+    TARGET_ARCH=$(rpm -q --queryformat "%{ARCH}" -p "$kernel_devel_rpm")
+    BUILD_ARCHS="$TARGET_ARCH"
+
     unpack_linux_rpm "$kernel_devel_rpm" "$delimiter" && rpmfound=true
 
     [ -d SRPMS ] || mkdir SRPMS
