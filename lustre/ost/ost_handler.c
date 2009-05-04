@@ -1461,6 +1461,12 @@ static int ost_connect_check_sptlrpc(struct ptlrpc_request *req)
         struct sptlrpc_flavor  flvr;
         int                    rc = 0;
 
+        if (unlikely(strcmp(exp->exp_obd->obd_type->typ_name,
+                            LUSTRE_ECHO_NAME) == 0)) {
+                exp->exp_flvr.sf_rpc = SPTLRPC_FLVR_ANY;
+                return 0;
+        }
+
         if (exp->exp_flvr.sf_rpc == SPTLRPC_FLVR_INVALID) {
                 read_lock(&filter->fo_sptlrpc_lock);
                 sptlrpc_target_choose_flavor(&filter->fo_sptlrpc_rset,
