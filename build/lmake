@@ -415,7 +415,7 @@ depend_kernel()
     if [ -n "${TARGET_CONFIG}" ]; then
 	extra_version="${extra_version}${TARGET_DELIMITER}${TARGET_CONFIG}"
     fi
-    perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = ${extra_version}/" Makefile
+    sed -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = ${extra_version}/" Makefile
     echo "Making depend in $PWD..."
     $MAKE "$MAKE_CC" mrproper || fatal 1 "Error running make mrproper"
     rm -f rpm-release
@@ -543,7 +543,7 @@ build_kernel_ib()
 	      --define "KVERSION ${FULL_VERSION}" \
 	      --define "$K_SRC ${PWD}/linux" \
 	      --define "LIB_MOD_DIR /lib/modules/${FULL_VERSION}" \
-	      --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --without-srp-target-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" $(lbuild_topdir)/OFED/SRPMS/ofa_kernel-${OFED_VERSION}-ofed${OFED_VERSION}.src.rpm
+	      --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --without-srp-target-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" $(lbuild_topdir)/OFED/SRPMS/ofa_kernel-*.src.rpm
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
         fatal 1 "Error building kernel-ib"
@@ -553,7 +553,7 @@ build_kernel_ib()
     rm -rf kernel-ib-devel
     mkdir kernel-ib-devel
     cd kernel-ib-devel
-    local rpm=$(ls $(lbuild_topdir)/RPMS/*/kernel-ib-devel-${OFED_VERSION}-${FULL_VERSION//-/_}.*.rpm)
+    local rpm=$(ls $(lbuild_topdir)/RPMS/*/kernel-ib-devel-*-${FULL_VERSION//-/_}.*.rpm)
     rpm2cpio -itv < $rpm | cpio -id
     CONFIGURE_FLAGS="--with-o2ib=$(pwd)/usr/src/ofa_kernel ${CONFIGURE_FLAGS}"
     popd >/dev/null

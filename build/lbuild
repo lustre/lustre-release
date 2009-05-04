@@ -367,28 +367,39 @@ uniqify() {
 download_srpm() {
     local target=$1
     local srpm=$2
+    local force="${3:-false}"
 
-    echo "Downloading http://downloads.lustre.org/public/kernels/$target/old/$srpm..."
-    if ! wget -nv "http://downloads.lustre.org/public/kernels/$target/old/$srpm" \
-        -O "$KERNELDIR/$srpm"; then
-        fatal 1 "Could not download target $target's kernel SRPM $srpm from downloads.lustre.org."
+    if $force || [ ! -r "$KERNELDIR/$srpm" ] ||
+       [ ! -s "$KERNELDIR/$srpm" ]; then
+        if $DOWNLOAD; then
+            local location="http://downloads.lustre.org/public/kernels/$target/old"
+            echo "Downloading $location/$srpm..."
+            if ! wget -nv "$location/$srpm" -O "$KERNELDIR/$srpm" ||
+               [ ! -s "$KERNELDIR/$srpm" ]; then
+                rm -f $KERNELDIR/$srpm
+                fatal 1 "Could not download target $target's kernel SRPM" \
+                        "$srpm from $location."
+            fi
+        else
+            fatal 1 "$srpm not found in directory $KERNELDIR."
+        fi
     fi
-    [ -s "$KERNELDIR/$srpm" ] || {
-        rm -rf $KERNELDIR/$srpm
-        fatal 1 "Could not download target $target's kernel SRPM $srpm from downloads.lustre.org."
-    }
 
 }
 
 download_ofed() {
+    local force="${1:-false}"
 
-    if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ] && \
-       [ ! -r "$KERNELTREE/OFED-${OFED_VERSION}.tgz" ]; then
+    if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ] &&
+       ( $force || [ ! -r "$KERNELTREE/OFED-${OFED_VERSION}.tgz" ] ||
+           [ ! -s "$KERNELTREE/OFED-${OFED_VERSION}.tgz" ] ); then
         if $DOWNLOAD; then
             local location="http://downloads.lustre.org/public/OFED/"
             echo "Downloading $location/OFED-${OFED_VERSION}.tgz..."
             if ! wget -nv "$location/OFED-${OFED_VERSION}.tgz" \
-                -O "$KERNELTREE/OFED-${OFED_VERSION}.tgz"; then
+                -O "$KERNELTREE/OFED-${OFED_VERSION}.tgz" ||
+               [ ! -s "$KERNELTREE/OFED-${OFED_VERSION}.tgz" ]; then
+                rm -f $KERNELTREE/OFED-${OFED_VERSION}.tgz
                 fatal 1 "Could not download OFED-${OFED_VERSION}.tgz" \
                         "from downloads.lustre.org."
             fi
@@ -528,7 +539,9 @@ untar() {
 
 unpack_ofed() {
 
-    untar "$KERNELTREE/OFED-${OFED_VERSION}.tgz" || fatal 1 "Error unpacking OFED tarball"
+    if ! untar "$KERNELTREE/OFED-${OFED_VERSION}.tgz"; then
+        return 1
+    fi
     [ -d OFED ] || ln -sf OFED-[0-9].[0-9]* OFED
 
 }
@@ -626,6 +639,11 @@ build_lustre() {
         cp config.log $saved_config
         chmod a+r $saved_config
         echo "Saved config.log is at $saved_config"
+        cat /proc/mounts
+        ls -l /proc/$$
+        pwd
+        echo "config.log contents:"
+        cat config.log
         popd
         return 255
     fi
@@ -716,6 +734,7 @@ stage() {
     done
 
     cp -v "$LUSTRE" "$STAGEDIR"
+
 }
 
 #check if we need to build separate ldiskfs RPM
@@ -896,20 +915,12 @@ build_kernel_ib() {
 	      --define "KVERSION ${LINUXRELEASE}" \
 	      --define "$K_SRC ${LINUXOBJ:-${LINUX}}" \
 	      --define "LIB_MOD_DIR /lib/modules/${LINUXRELEASE}/updates" \
-	      --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --without-srp-target-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" ${TOPDIR}/OFED/SRPMS/ofa_kernel-${OFED_VERSION}-ofed${OFED_VERSION}.src.rpm
+	      --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --without-srp-target-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" ${TOPDIR}/OFED/SRPMS/ofa_kernel-*.src.rpm
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
         fatal 1 "Error building kernel-ib"
     fi
 
-    pushd "$TOPDIR" >/dev/null
-    rm -rf kernel-ib-devel
-    mkdir kernel-ib-devel
-    cd kernel-ib-devel
-    local rpm=$(ls $TOPDIR/RPMS/*/kernel-ib-devel-${OFED_VERSION}-${LINUXRELEASE//-/_}.*.rpm)
-    rpm2cpio -itv < $rpm | cpio -id
-    CONFIGURE_FLAGS="--with-o2ib=$(pwd)/usr/src/ofa_kernel ${CONFIGURE_FLAGS}"
-    popd >/dev/null
 }
 
 store_for_reuse() {
@@ -1196,6 +1207,19 @@ build_with_srpm() {
             # put the stuff we stashed away back
             mv_back
         fi
+
+        pushd "$TOPDIR" >/dev/null
+        rm -rf kernel-ib-devel
+        mkdir kernel-ib-devel
+        cd kernel-ib-devel
+        # the actual ofed RPMs don't have the -rc$n or -$date string appened that
+        # might be present on the file
+        local ofed_version=$(echo $OFED_VERSION |
+                         sed -re 's/-(20[0-9]{6,6}-[0-9]{4,4}|rc[0-9]*)$//')
+        local rpm=$(ls $TOPDIR/RPMS/*/kernel-ib-devel-${ofed_version}-${LINUXRELEASE//-/_}.*.rpm)
+        rpm2cpio -itv < $rpm | cpio -id
+        CONFIGURE_FLAGS="--with-o2ib=$(pwd)/usr/src/ofa_kernel ${CONFIGURE_FLAGS}"
+        popd >/dev/null
     fi
 
     # now build Lustre
@@ -1217,7 +1241,10 @@ build_with_srpm() {
                 fi
             done
         popd
+    else
+        return 1
     fi
+
 }
 
 create_rpmbuild_dirs() {
@@ -1464,7 +1491,7 @@ EXTRA_VERSION_DELIMITER=${EXTRA_VERSION_DELIMITER:-"-"}
 
 if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
     download_ofed
-    unpack_ofed
+    unpack_ofed || fatal 1 "Error unpacking OFED tarball"
 fi
 
 # make sure the RPM build environment is set up
