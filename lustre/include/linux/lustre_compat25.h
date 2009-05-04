@@ -283,23 +283,27 @@ static inline int mapping_has_pages(struct address_space *mapping)
 #define KIOBUF_GET_BLOCKS(k) ((k)->blocks)
 #endif
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7))
-#define ll_set_dflags(dentry, flags) do { dentry->d_vfs_flags |= flags; } while(0)
+#ifdef HAVE_SECURITY_PLUG
+#define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
+                vfs_symlink(dir, dentry, mnt, path, mode)
+#else
+#ifdef HAVE_4ARGS_VFS_SYMLINK
+#define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
+                vfs_symlink(dir, dentry, path, mode)
+#else
 #define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
                        vfs_symlink(dir, dentry, path)
+#endif
+#endif
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7))
+#define ll_set_dflags(dentry, flags) do { dentry->d_vfs_flags |= flags; } while(0)
 #else
 #define ll_set_dflags(dentry, flags) do { \
                 spin_lock(&dentry->d_lock); \
                 dentry->d_flags |= flags; \
                 spin_unlock(&dentry->d_lock); \
         } while(0)
-#ifdef HAVE_SECURITY_PLUG
-#define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
-                vfs_symlink(dir, dentry, mnt, path, mode)
-#else
-#define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
-                vfs_symlink(dir, dentry, path, mode)
-#endif
 #endif
 
 #ifndef container_of
