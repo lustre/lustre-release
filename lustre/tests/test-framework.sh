@@ -452,7 +452,7 @@ ostdevlabel() {
 mount_facet() {
     local facet=$1
     shift
-    local dev=${facet}_dev
+    local dev=$(facet_active $facet)_dev
     local opt=${facet}_opt
     echo "Starting ${facet}: ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}"
     do_facet ${facet} mount -t lustre ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}
@@ -482,6 +482,14 @@ start() {
     shift
     eval export ${facet}_dev=${device}
     eval export ${facet}_opt=\"$@\"
+
+    local varname=${facet}failover_dev
+    if [ -n "${!varname}" ] ; then
+        eval export ${facet}failover_dev=${!varname}
+    else
+        eval export ${facet}failover_dev=$device
+    fi
+
     do_facet ${facet} mkdir -p ${MOUNT%/*}/${facet}
     mount_facet ${facet}
     RC=$?
@@ -972,7 +980,7 @@ wait_update () {
 
 wait_update_facet () {
     local facet=$1
-    wait_update  $(facet_host $facet) $@
+    wait_update  $(facet_active_host $facet) "$@"
 }
 
 wait_delete_completed () {
@@ -1286,17 +1294,17 @@ facet_active_host() {
 
 change_active() {
     local facet=$1
-    failover=${facet}failover
+    local failover=${facet}failover
     host=`facet_host $failover`
     [ -z "$host" ] && return
-    curactive=`facet_active $facet`
+    local curactive=`facet_active $facet`
     if [ -z "${curactive}" -o "$curactive" == "$failover" ] ; then
         eval export ${facet}active=$facet
     else
         eval export ${facet}active=$failover
     fi
     # save the active host for this facet
-    activevar=${facet}active
+    local activevar=${facet}active
     echo "$activevar=${!activevar}" > $TMP/$activevar
 }
 
@@ -1358,9 +1366,9 @@ do_nodes() {
 }
 
 do_facet() {
-    facet=$1
+    local facet=$1
     shift
-    HOST=`facet_active_host $facet`
+    local HOST=`facet_active_host $facet`
     [ -z $HOST ] && echo No host defined for facet ${facet} && exit 1
     do_node $HOST "$@"
 }
@@ -1626,6 +1634,14 @@ init_facet_vars () {
     local varname=${facet}failover_HOST
     if [ -z "${!varname}" ]; then
        eval $varname=$(facet_host $facet) 
+    fi
+
+    # ${facet}failover_dev is set in cfg file
+    varname=${facet}failover_dev
+    if [ -n "${!varname}" ] ; then
+        eval export ${facet}failover_dev=${!varname}
+    else
+        eval export ${facet}failover_dev=$device
     fi
 }
 
