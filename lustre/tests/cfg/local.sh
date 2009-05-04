@@ -15,6 +15,8 @@ MDSDEV=${MDSDEV:-$TMP/${FSNAME}-mdt}
 MDSSIZE=${MDSSIZE:-400000}
 MDSOPT=${MDSOPT:-"--mountfsoptions=acl"}
 
+mdsfailover_dev=${mdsfailover_dev:-$MDSDEV}
+
 OSTCOUNT=${OSTCOUNT:-2}
 OSTDEVBASE=${OSTDEVBASE:-$TMP/${FSNAME}-ost}
 OSTSIZE=${OSTSIZE:-300000}
