@@ -94,23 +94,30 @@ struct filter_export_data {
 #define fed_lr_off      fed_led.led_lr_off
 #define fed_lr_idx      fed_led.led_lr_idx
 
-typedef struct nid_stat_uuid {
-        struct list_head ns_uuid_list;
-        struct obd_uuid  ns_uuid;
-} nid_stat_uuid_t;
-
 typedef struct nid_stat {
         lnet_nid_t               nid;
         struct hlist_node        nid_hash;
         struct list_head         nid_list;
-        struct list_head         nid_uuid_list;
         struct obd_device       *nid_obd;
         struct proc_dir_entry   *nid_proc;
         struct lprocfs_stats    *nid_stats;
         struct brw_stats        *nid_brw_stats;
         struct lprocfs_stats    *nid_ldlm_stats;
-        int                      nid_exp_ref_count;
+        atomic_t                 nid_exp_ref_count; /* for obd_nid_stats_hash
+                                                           exp_nid_stats */
 } nid_stat_t;
+
+#define nidstat_getref(nidstat)                                                \
+do {                                                                           \
+        atomic_inc(&(nidstat)->nid_exp_ref_count);                             \
+} while(0)
+
+#define nidstat_putref(nidstat)                                                \
+do {                                                                           \
+        atomic_dec(&(nidstat)->nid_exp_ref_count);                             \
+        LASSERTF(atomic_read(&(nidstat)->nid_exp_ref_count) >= 0,              \
+                 "stat %p nid_exp_ref_count < 0\n", nidstat);                  \
+} while(0)
 
 enum obd_option {
         OBD_OPT_FORCE =         0x0001,

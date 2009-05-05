@@ -1528,7 +1528,7 @@ nidstats_get(struct hlist_node *hnode)
         struct nid_stat *ns;
 
         ns = hlist_entry(hnode, struct nid_stat, nid_hash);
-        ns->nid_exp_ref_count++;
+        nidstat_getref(ns);
 
         RETURN(ns);
 }
@@ -1539,7 +1539,7 @@ nidstats_put(struct hlist_node *hnode)
         struct nid_stat *ns;
 
         ns = hlist_entry(hnode, struct nid_stat, nid_hash);
-        ns->nid_exp_ref_count--;
+        nidstat_putref(ns);
 
         RETURN(ns);
 }
