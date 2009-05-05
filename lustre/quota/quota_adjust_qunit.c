@@ -145,25 +145,34 @@ struct lustre_qunit_size *quota_search_lqs(unsigned long long lqs_key,
                                            struct lustre_quota_ctxt *qctxt,
                                            int create)
 {
-        int rc = 0;
         struct lustre_qunit_size *lqs;
+        int rc = 0;
 
  search_lqs:
         lqs = lustre_hash_lookup(qctxt->lqc_lqs_hash, &lqs_key);
-        if (lqs == NULL && create) {
+        if (IS_ERR(lqs))
+                GOTO(out, rc = PTR_ERR(lqs));
+
+        if (create && lqs == NULL) {
+                /* if quota_create_lqs is successful, it will get a
+                 * ref to the lqs. The ref will be released when
+                 * qctxt_cleanup() or quota is nullified */
                 lqs = quota_create_lqs(lqs_key, qctxt);
                 if (IS_ERR(lqs))
                         rc = PTR_ERR(lqs);
-                if (rc == -EALREADY) {
-                        rc = 0;
-                        goto search_lqs;
-                }
+                if (rc == -EALREADY)
+                        GOTO(search_lqs, rc = 0);
+                /* get a reference for the caller when creating lqs
+                 * successfully */
+                if (rc == 0)
+                        lqs_getref(lqs);
         }
 
-        if (lqs)
+        if (lqs && rc == 0)
                 LQS_DEBUG(lqs, "%s\n",
                           (create == 1 ? "create lqs" : "search lqs"));
 
+ out:
         if (rc == 0) {
                 return lqs;
         } else {
@@ -182,24 +191,22 @@ int quota_adjust_slave_lqs(struct quota_adjust_qunit *oqaq,
         int rc = 0;
         ENTRY;
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_QUOTA_WITHOUT_CHANGE_QS))
-                RETURN(0);
-
         LASSERT(qctxt);
         lqs = quota_search_lqs(LQS_KEY(QAQ_IS_GRP(oqaq), oqaq->qaq_id),
-                               qctxt, 1);
-        if (lqs == NULL || IS_ERR(lqs))
+                               qctxt, 0);
+        if (lqs == NULL || IS_ERR(lqs)){
+                CDEBUG(D_ERROR, "fail to find a lqs(%s id: %u)!\n",
+                       QAQ_IS_GRP(oqaq) ? "group" : "user", oqaq->qaq_id);
                 RETURN(PTR_ERR(lqs));
+        }
 
-        /* deleting the lqs, because a user sets lfs quota 0 0 0 0  */
-        if (!oqaq->qaq_bunit_sz && !oqaq->qaq_iunit_sz && QAQ_IS_ADJBLK(oqaq) &&
-            QAQ_IS_ADJINO(oqaq)) {
-                LQS_DEBUG(lqs, "release lqs\n");
-                /* this is for quota_search_lqs */
+        if (OBD_FAIL_CHECK(OBD_FAIL_QUOTA_WITHOUT_CHANGE_QS)) {
+                lqs->lqs_bunit_sz = qctxt->lqc_bunit_sz;
+                lqs->lqs_btune_sz = qctxt->lqc_btune_sz;
+                lqs->lqs_iunit_sz = qctxt->lqc_iunit_sz;
+                lqs->lqs_itune_sz = qctxt->lqc_itune_sz;
                 lqs_putref(lqs);
-                /* kill lqs */
-                lqs_putref(lqs);
-                RETURN(rc);
+                RETURN(0);
         }
 
         lbunit = &lqs->lqs_bunit_sz;

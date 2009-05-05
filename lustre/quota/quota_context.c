@@ -281,9 +281,12 @@ check_cur_qunit(struct obd_device *obd,
                 GOTO(out, ret = 0);
 
         lqs = quota_search_lqs(LQS_KEY(QDATA_IS_GRP(qdata), qdata->qd_id),
-                               qctxt, 1);
-        if (IS_ERR(lqs))
-                GOTO (out, ret = PTR_ERR(lqs));
+                               qctxt, 0);
+        if (IS_ERR(lqs) || lqs == NULL) {
+                CDEBUG(D_ERROR, "fail to find a lqs(%s id: %u)!\n",
+                       QDATA_IS_GRP(qdata) ? "group" : "user", qdata->qd_id);
+                GOTO (out, ret = 0);
+        }
         spin_lock(&lqs->lqs_lock);
 
         if (QDATA_IS_BLK(qdata)) {
@@ -1070,8 +1073,7 @@ qctxt_adjust_qunit(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
         struct qunit_data qdata[MAXQUOTAS];
         ENTRY;
 
-        CLASSERT(MAXQUOTAS < 4);
-        if (!sb_any_quota_enabled(qctxt->lqc_sb))
+        if (quota_is_set(obd, uid, gid, isblk ? QB_SET : QI_SET) == 0)
                 RETURN(0);
 
         for (i = 0; i < MAXQUOTAS; i++) {
@@ -1220,6 +1222,12 @@ static int check_lqs(struct lustre_quota_ctxt *qctxt)
         RETURN(rc);
 }
 
+
+void hash_put_lqs(void *obj, void *data)
+{
+        lqs_putref((struct lustre_qunit_size *)obj);
+}
+
 void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force)
 {
         struct lustre_qunit *qunit, *tmp;
@@ -1263,6 +1271,7 @@ void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force)
                                      cfs_time_seconds(1));
         }
 
+        lustre_hash_for_each_safe(qctxt->lqc_lqs_hash, hash_put_lqs, NULL);
         l_wait_event(qctxt->lqc_lqs_waitq, check_lqs(qctxt), &lwi);
         lustre_hash_exit(qctxt->lqc_lqs_hash);
 
@@ -1355,7 +1364,7 @@ static int qslave_recovery_main(void *arg)
                                        "qslave recovery failed! (id:%d type:%d "
                                        " rc:%d)\n", dqid->di_id, type, rc);
 free:
-                        kfree(dqid);
+                        OBD_FREE_PTR(dqid);
                 }
         }
 

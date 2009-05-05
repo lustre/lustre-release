@@ -1089,14 +1089,6 @@ int dquot_create_oqaq(struct lustre_quota_ctxt *qctxt,
 
         }
 
-        if (!dquot->dq_dqb.dqb_bhardlimit && !dquot->dq_dqb.dqb_bsoftlimit &&
-            !dquot->dq_dqb.dqb_ihardlimit && !dquot->dq_dqb.dqb_isoftlimit) {
-                oqaq->qaq_bunit_sz = 0;
-                oqaq->qaq_iunit_sz = 0;
-                QAQ_SET_ADJBLK(oqaq);
-                QAQ_SET_ADJINO(oqaq);
-        }
-
         QAQ_DEBUG(oqaq, "the oqaq computed\n");
 
         RETURN(rc);
@@ -1111,6 +1103,7 @@ static int mds_init_slave_ilimits(struct obd_device *obd,
         struct lustre_quota_ctxt *qctxt = &obt->obt_qctxt;
         unsigned int uid = 0, gid = 0;
         struct obd_quotactl *ioqc = NULL;
+        struct lustre_qunit_size *lqs;
         int flag;
         int rc;
         ENTRY;
@@ -1131,6 +1124,23 @@ static int mds_init_slave_ilimits(struct obd_device *obd,
         ioqc->qc_type = oqctl->qc_type;
         ioqc->qc_dqblk.dqb_valid = QIF_ILIMITS;
         ioqc->qc_dqblk.dqb_ihardlimit = flag ? MIN_QLIMIT : 0;
+
+        /* build lqs for mds */
+        lqs = quota_search_lqs(LQS_KEY(oqctl->qc_type, oqctl->qc_id),
+                               qctxt, flag ? 1 : 0);
+        if (lqs && !IS_ERR(lqs)) {
+                if (flag)
+                        lqs->lqs_flags |= QI_SET;
+                else
+                        lqs->lqs_flags &= ~QI_SET;
+                lqs_putref(lqs);
+        } else {
+                CERROR("fail to %s lqs for inode(%s id: %u)!\n",
+                       flag ? "create" : "search",
+                       oqctl->qc_type ? "group" : "user",
+                       oqctl->qc_id);
+                GOTO(out, rc = PTR_ERR(lqs));
+        }
 
         if (QAQ_IS_ADJINO(oqaq)) {
                 /* adjust the mds slave's inode qunit size */
@@ -1178,6 +1188,7 @@ static int mds_init_slave_blimits(struct obd_device *obd,
         struct lustre_quota_ctxt *qctxt = &obt->obt_qctxt;
         struct mds_obd *mds = &obd->u.mds;
         struct obd_quotactl *ioqc;
+        struct lustre_qunit_size *lqs;
         unsigned int uid = 0, gid = 0;
         int rc, rc1 = 0;
         int flag;
@@ -1199,6 +1210,24 @@ static int mds_init_slave_blimits(struct obd_device *obd,
         ioqc->qc_type = oqctl->qc_type;
         ioqc->qc_dqblk.dqb_valid = QIF_BLIMITS;
         ioqc->qc_dqblk.dqb_bhardlimit = flag ? MIN_QLIMIT : 0;
+
+        /* build lqs for mds */
+        lqs = quota_search_lqs(LQS_KEY(oqctl->qc_type, oqctl->qc_id),
+                               qctxt, flag ? 1 : 0);
+        if (lqs && !IS_ERR(lqs)) {
+                if (flag)
+                        lqs->lqs_flags |= QB_SET;
+                else
+                        lqs->lqs_flags &= ~QB_SET;
+                lqs_putref(lqs);
+        } else {
+                CERROR("fail to %s lqs for block(%s id: %u)!\n",
+                       flag ? "create" : "search",
+                       oqctl->qc_type ? "group" : "user",
+                       oqctl->qc_id);
+                GOTO(out, rc = PTR_ERR(lqs));
+        }
+
         if (QAQ_IS_ADJBLK(oqaq)) {
                 /* adjust the mds slave's block qunit size */
                 rc1 = quota_adjust_slave_lqs(oqaq, qctxt);
@@ -1621,7 +1650,7 @@ static int qmaster_recovery_main(void *arg)
                                 CERROR("qmaster recovery failed! (id:%d type:%d"
                                        " rc:%d)\n", dqid->di_id, type, rc);
 free:
-                        kfree(dqid);
+                        OBD_FREE_PTR(dqid);
                 }
         }
         class_decref(obd);

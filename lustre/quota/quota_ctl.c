@@ -64,6 +64,54 @@
 
 #ifdef HAVE_QUOTA_SUPPORT
 #ifdef __KERNEL__
+
+/* When quotaon, build a lqs for every uid/gid who has been set limitation
+ * for quota. After quota_search_lqs, it will hold one ref for the lqs.
+ * It will be released when qctxt_cleanup() is executed b=18574 */
+void build_lqs(struct obd_device *obd)
+{
+        struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
+        struct list_head id_list;
+        int i, rc;
+
+        INIT_LIST_HEAD(&id_list);
+        for (i = 0; i < MAXQUOTAS; i++) {
+                struct dquot_id *dqid, *tmp;
+
+#ifndef KERNEL_SUPPORTS_QUOTA_READ
+                rc = fsfilt_qids(obd, sb_dqopt(qctxt->lqc_sb)->files[i], NULL,
+                                 i, &id_list);
+#else
+                rc = fsfilt_qids(obd, NULL, sb_dqopt(qctxt->lqc_sb)->files[i],
+                                 i, &id_list);
+#endif
+                if (rc) {
+                        CDEBUG(D_ERROR, "fail to get %s qids!\n",
+                               i ? "group" : "user");
+                        continue;
+                }
+
+                list_for_each_entry_safe(dqid, tmp, &id_list,
+                                         di_link) {
+                        struct lustre_qunit_size *lqs;
+
+                        list_del_init(&dqid->di_link);
+                        lqs = quota_search_lqs(LQS_KEY(i, dqid->di_id),
+                                               qctxt, 1);
+                        if (lqs && !IS_ERR(lqs)) {
+                                lqs->lqs_flags |= dqid->di_flag;
+                                lqs_putref(lqs);
+                        } else {
+                                CDEBUG(D_ERROR, "fail to create a lqs"
+                                       "(%s id: %u)!\n", i ? "group" : "user",
+                                       dqid->di_id);
+                        }
+
+                        OBD_FREE_PTR(dqid);
+                }
+        }
+}
+
 int mds_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 {
         struct obd_device *obd = exp->exp_obd;
@@ -80,6 +128,8 @@ int mds_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         case Q_QUOTAON:
                 oqctl->qc_id = obt->obt_qfmt; /* override qfmt version */
                 rc = mds_quota_on(obd, oqctl);
+                /* when quotaon, create lqs for every quota uid/gid b=18574 */
+                build_lqs(obd);
                 break;
         case Q_QUOTAOFF:
                 oqctl->qc_id = obt->obt_qfmt; /* override qfmt version */
@@ -131,6 +181,7 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         struct obd_device_target *obt = &obd->u.obt;
         struct lvfs_run_ctxt saved;
         struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
+        struct lustre_qunit_size *lqs;
         struct timeval work_start;
         struct timeval work_end;
         long timediff;
@@ -179,6 +230,10 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                                 obt->obt_qctxt.lqc_flags &= ~UGQUOTA2LQC(oqctl->qc_type);
                         atomic_inc(&obt->obt_quotachecking);
                 }
+
+                /* when quotaon, create lqs for every quota uid/gid b=18574 */
+                if (oqctl->qc_cmd == Q_QUOTAON)
+                        build_lqs(obd);
                 break;
         case Q_SETQUOTA:
                 /* currently, it is only used for nullifying the quota */
@@ -194,6 +249,16 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                         oqctl->qc_cmd = Q_SETQUOTA;
                 }
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+                lqs = quota_search_lqs(LQS_KEY(oqctl->qc_type, oqctl->qc_id),
+                                       qctxt, 0);
+                if (lqs == NULL || IS_ERR(lqs)){
+                        CDEBUG(D_ERROR, "fail to create lqs when setquota\n");
+                } else {
+                        lqs->lqs_flags &= ~QB_SET;
+                        lqs_putref(lqs);
+                }
+
                 break;
         case Q_INITQUOTA:
                 {
@@ -228,6 +293,22 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                 if (rc)
                         RETURN(rc);
 adjust:
+                lqs = quota_search_lqs(LQS_KEY(oqctl->qc_type, oqctl->qc_id),
+                                       qctxt, 1);
+                if (lqs == NULL || IS_ERR(lqs)){
+                        CDEBUG(D_ERROR, "fail to create lqs when setquota\n");
+                        break;
+                } else {
+                        lqs->lqs_flags |= QB_SET;
+                        if (OBD_FAIL_CHECK(OBD_FAIL_QUOTA_WITHOUT_CHANGE_QS)) {
+                                lqs->lqs_bunit_sz = qctxt->lqc_bunit_sz;
+                                lqs->lqs_btune_sz = qctxt->lqc_btune_sz;
+                                lqs->lqs_iunit_sz = qctxt->lqc_iunit_sz;
+                                lqs->lqs_itune_sz = qctxt->lqc_itune_sz;
+                        }
+                        lqs_putref(lqs);
+                }
+
                 /* Trigger qunit pre-acquire */
                 if (oqctl->qc_type == USRQUOTA)
                         uid = oqctl->qc_id;
