@@ -825,10 +825,11 @@ no_export:
                 GOTO(out, rc = -EBUSY);
         } else if (req->rq_export != NULL &&
                    atomic_read(&export->exp_rpc_count) > 1) {
+                /* the current connect rpc has increased exp_rpc_count */
                 CWARN("%s: refuse reconnection from %s@%s to 0x%p; still busy "
                       "with %d active RPCs\n", target->obd_name, cluuid.uuid,
                       libcfs_nid2str(req->rq_peer.nid),
-                      export, atomic_read(&export->exp_rpc_count));
+                      export, atomic_read(&export->exp_rpc_count) - 1);
                 GOTO(out, rc = -EBUSY);
         } else if (lustre_msg_get_conn_cnt(req->rq_reqmsg) == 1) {
                 CERROR("%s: NID %s (%s) reconnected with 1 conn_cnt; "
