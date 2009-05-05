@@ -3763,6 +3763,19 @@ static int filter_use_existing_obj(struct obd_device *obd,
         return rc;
 }
 
+static __u64 filter_calc_free_inodes(struct obd_device *obd)
+{
+        int rc;
+        __u64 os_ffree = -1;
+
+        spin_lock(&obd->obd_osfs_lock);
+        rc = fsfilt_statfs(obd, obd->u.obt.obt_sb, cfs_time_shift_64(1));
+        if (rc == 0)
+                os_ffree = obd->obd_osfs.os_ffree;
+        spin_unlock(&obd->obd_osfs_lock);
+
+        return os_ffree;
+}
 
 /* We rely on the fact that only one thread will be creating files in a given
  * group at a time, which is why we don't need an atomic filter_get_new_id.
@@ -3783,6 +3796,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
         struct obd_statfs *osfs;
         int err = 0, rc = 0, recreate_obj = 0, i;
         cfs_time_t enough_time = cfs_time_shift(DISK_TIMEOUT/2);
+        __u64 os_ffree;
         obd_id next_id;
         void *handle = NULL;
         ENTRY;
@@ -3895,6 +3909,12 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                                    S_IFREG |  S_ISUID | S_ISGID | 0666, NULL);
                 if (rc) {
                         CERROR("create failed rc = %d\n", rc);
+                        if (rc == -ENOSPC) {
+                                os_ffree = filter_calc_free_inodes(obd);
+                                if (os_ffree != -1)
+                                        CERROR("%s: free inode "LPU64"\n",
+                                               obd->obd_name, os_ffree);
+                        }
                         GOTO(cleanup, rc);
                 }
 
