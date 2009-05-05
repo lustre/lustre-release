@@ -144,7 +144,11 @@ Severity   : enhancement
 Bugzilla   : 16919
 Descriptoin: Don't sync journal after every i/o
 Details    : Implement write RPC replay to allow server replies for write RPCs
-	     before data is on disk.
+	     before data is on disk. However, this feature is disabled by
+	     default since some issues leading to data corruptions have been
+	     found during recovery (e.g. bug 19128). This feature can be enabled
+	     by running the following command on the OSSs:
+	     lctl set_param obdfilter.*.sync_journal=0
 
 Severity   : low
 Bugzilla   : 18016
