@@ -817,12 +817,13 @@ wait_update () {
         local RESULT
         local WAIT=0
         local sleep=5
-        while [ $WAIT -lt $MAX ]; do
+        while [ true ]; do
             RESULT=$(do_node $node "$TEST")
             if [ "$RESULT" = "$FINAL" ]; then
                 echo "Updated after $WAIT sec: wanted $FINAL got $RESULT"
                 return 0
             fi
+            [ $WAIT -ge $MAX ] && break
             echo "Waiting $((MAX - WAIT)) secs for update"
             sleep $sleep
             WAIT=$((WAIT + sleep))
