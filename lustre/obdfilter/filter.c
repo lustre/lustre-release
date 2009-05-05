@@ -1938,7 +1938,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         filter->fo_readcache_max_filesize = FILTER_MAX_CACHE_SIZE;
         filter->fo_fmd_max_num = FILTER_FMD_MAX_NUM_DEFAULT;
         filter->fo_fmd_max_age = FILTER_FMD_MAX_AGE_DEFAULT;
-        filter->fo_syncjournal = 0; /* Don't sync journals on i/o by default */
+        filter->fo_syncjournal = 1; /* Sync journals on i/o by default b=19128 */
 
         rc = filter_prep(obd);
         if (rc)
