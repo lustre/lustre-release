@@ -1346,18 +1346,13 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
         int rc = 0;
         ENTRY;
 
-        DEBUG_REQ(D_NETERROR, req, "%s (sent at %lu, %lus ago)",
-                  req->rq_net_err ? "network error" : "timeout",
-                  (long)req->rq_sent, cfs_time_current_sec() - req->rq_sent);
-
-        if (imp) {
-                LCONSOLE_WARN("Request x"LPU64" sent from %s to NID %s %lus ago"
-                              " has timed out (limit %lus).\n", req->rq_xid,
-                              req->rq_import->imp_obd->obd_name,
-                              libcfs_nid2str(imp->imp_connection->c_peer.nid),
-                              cfs_time_current_sec() - req->rq_sent,
-                              req->rq_deadline - req->rq_sent);
-        }
+        DEBUG_REQ(D_WARNING, req, "Request x"LPU64" sent from %s to NID %s"
+                  " %lus ago has %s (limit %lus).\n", req->rq_xid,
+                  imp ? imp->imp_obd->obd_name : "<?>",
+                  imp ? libcfs_nid2str(imp->imp_connection->c_peer.nid) : "<?>",
+                  cfs_time_current_sec() - req->rq_sent,
+                  req->rq_net_err ? "failed due to network error" : "timed out",
+                  req->rq_deadline - req->rq_sent);
 
         if (imp != NULL && obd_debug_peer_on_timeout)
                 LNetCtl(IOC_LIBCFS_DEBUG_PEER, &imp->imp_connection->c_peer);
