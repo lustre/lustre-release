@@ -275,18 +275,10 @@ check_cur_qunit(struct obd_device *obd,
         if (!limit)
                 GOTO(out, ret = 0);
 
- search_lqs:
-        quota_search_lqs(qdata, NULL, qctxt, &lqs);
-        if (!lqs) {
-                CDEBUG(D_QUOTA, "Can't find the lustre qunit size!\n");
-                ret = quota_create_lqs(qdata, NULL, qctxt, &lqs);
-                if (ret == -EALREADY) {
-                        ret = 0;
-                        goto search_lqs;
-                }
-                if (ret < 0)
-                        GOTO (out, ret);
-        }
+        lqs = quota_search_lqs(LQS_KEY(QDATA_IS_GRP(qdata), qdata->qd_id),
+                               qctxt, 1);
+        if (IS_ERR(lqs))
+                GOTO (out, ret = PTR_ERR(lqs));
         spin_lock(&lqs->lqs_lock);
 
         if (QDATA_IS_BLK(qdata)) {
@@ -473,10 +465,12 @@ insert_qunit_nolock(struct lustre_quota_ctxt *qctxt, struct lustre_qunit *qunit)
 
 static void compute_lqs_after_removing_qunit(struct lustre_qunit *qunit)
 {
-        struct lustre_qunit_size *lqs = NULL;
+        struct lustre_qunit_size *lqs;
 
-        quota_search_lqs(&qunit->lq_data, NULL, qunit->lq_ctxt, &lqs);
-        if (lqs) {
+        lqs = quota_search_lqs(LQS_KEY(QDATA_IS_GRP(&qunit->lq_data),
+                                       qunit->lq_data.qd_id),
+                               qunit->lq_ctxt, 0);
+        if (lqs && !IS_ERR(lqs)) {
                 spin_lock(&lqs->lqs_lock);
                 if (qunit->lq_opc == QUOTA_DQACQ)
                         quota_compute_lqs(&qunit->lq_data, lqs, 0, 1);
@@ -516,6 +510,20 @@ static int
 schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                struct qunit_data *qdata, int opc, int wait,
                struct obd_trans_info *oti);
+
+static inline void qdata_to_oqaq(struct qunit_data *qdata,
+                                 struct quota_adjust_qunit *oqaq)
+{
+        LASSERT(qdata);
+        LASSERT(oqaq);
+
+        oqaq->qaq_flags = qdata->qd_flags;
+        oqaq->qaq_id    = qdata->qd_id;
+        if (QDATA_IS_ADJBLK(qdata))
+                oqaq->qaq_bunit_sz = qdata->qd_qunit;
+        if (QDATA_IS_ADJINO(qdata))
+                oqaq->qaq_iunit_sz = qdata->qd_qunit;
+}
 
 static int
 dqacq_completion(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
@@ -859,8 +867,9 @@ schedule_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
         insert_qunit_nolock(qctxt, qunit);
         spin_unlock(&qunit_hash_lock);
 
-        quota_search_lqs(qdata, NULL, qctxt, &lqs);
-        if (lqs) {
+        lqs = quota_search_lqs(LQS_KEY(QDATA_IS_GRP(qdata), qdata->qd_id),
+                               qctxt, 0);
+        if (lqs && !IS_ERR(lqs)) {
                 spin_lock(&lqs->lqs_lock);
                 quota_compute_lqs(qdata, lqs, 1, (opc == QUOTA_DQACQ) ? 1 : 0);
                 /* when this qdata returned from mds, it will call lqs_putref */
@@ -1362,18 +1371,15 @@ lqs_hash(lustre_hash_t *lh, void *key, unsigned mask)
 static int
 lqs_compare(void *key, struct hlist_node *hnode)
 {
-        struct quota_adjust_qunit *lqs_key;
         struct lustre_qunit_size *q;
         int rc;
         ENTRY;
 
         LASSERT(key);
-        lqs_key = (struct quota_adjust_qunit *)key;
         q = hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
 
         spin_lock(&q->lqs_lock);
-        rc = ((lqs_key->qaq_id == q->lqs_id) &&
-              (QAQ_IS_GRP(lqs_key) == LQS_IS_GRP(q)));
+        rc = (q->lqs_key == *((unsigned long long *)key));
         spin_unlock(&q->lqs_lock);
 
         RETURN(rc);
