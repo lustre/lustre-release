@@ -235,8 +235,8 @@ static void init_oqaq(struct quota_adjust_qunit *oqaq,
 
         oqaq->qaq_id = id;
         oqaq->qaq_flags = type;
-        quota_search_lqs(NULL, oqaq, qctxt, &lqs);
-        if (lqs) {
+        lqs = quota_search_lqs(LQS_KEY(type, id), qctxt, 0);
+        if (lqs && !IS_ERR(lqs)) {
                 spin_lock(&lqs->lqs_lock);
                 oqaq->qaq_bunit_sz = lqs->lqs_bunit_sz;
                 oqaq->qaq_iunit_sz = lqs->lqs_iunit_sz;
@@ -440,28 +440,23 @@ out:
                 dqacq_adjust_qunit_sz(obd, qdata->qd_id, QDATA_IS_GRP(qdata),
                                       QDATA_IS_BLK(qdata));
 
-        quota_search_lqs(qdata, NULL, qctxt, &lqs);
-        if (QDATA_IS_BLK(qdata)) {
-                if (!lqs) {
-                        CDEBUG(D_INFO, "Can't find the lustre qunit size!\n");
-                        qdata->qd_qunit  = qctxt->lqc_bunit_sz;
-                } else {
-                        spin_lock(&lqs->lqs_lock);
-                        qdata->qd_qunit  = lqs->lqs_bunit_sz;
-                        spin_unlock(&lqs->lqs_lock);
-                }
-                QDATA_SET_ADJBLK(qdata);
+        lqs = quota_search_lqs(LQS_KEY(QDATA_IS_GRP(qdata), qdata->qd_id),
+                               qctxt, 0);
+        if (lqs == NULL || IS_ERR(lqs)) {
+                CDEBUG(D_INFO, "Can't find the lustre qunit size!\n");
+                qdata->qd_qunit  = QDATA_IS_BLK(qdata) ? qctxt->lqc_bunit_sz :
+                                                         qctxt->lqc_iunit_sz;
         } else {
-                if (!lqs) {
-                        CDEBUG(D_INFO, "Can't find the lustre qunit size!\n");
-                        qdata->qd_qunit  = qctxt->lqc_iunit_sz;
-                } else {
-                        spin_lock(&lqs->lqs_lock);
-                        qdata->qd_qunit  = lqs->lqs_iunit_sz;
-                        spin_unlock(&lqs->lqs_lock);
-                }
-                QDATA_SET_ADJINO(qdata);
+                spin_lock(&lqs->lqs_lock);
+                qdata->qd_qunit  = QDATA_IS_BLK(qdata) ? lqs->lqs_bunit_sz :
+                                                         lqs->lqs_iunit_sz;
+                spin_unlock(&lqs->lqs_lock);
         }
+
+        if (QDATA_IS_BLK(qdata))
+                QDATA_SET_ADJBLK(qdata);
+        else
+                QDATA_SET_ADJINO(qdata);
 
         QDATA_DEBUG(qdata, "alloc/release qunit in dqacq_handler\n");
         if (lqs)

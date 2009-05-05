@@ -263,7 +263,7 @@ struct lustre_qunit_size {
         cfs_time_t lqs_last_bshrink;   /* time of last block shrink */
         cfs_time_t lqs_last_ishrink;   /* time of last inode shrink */
         spinlock_t lqs_lock;
-        struct quota_adjust_qunit lqs_key; /* hash key */
+        unsigned long long lqs_key; /* hash key */
         struct lustre_quota_ctxt *lqs_ctxt; /* quota ctxt */
 };
 
@@ -274,6 +274,13 @@ struct lustre_qunit_size {
 #define LQS_SET_GRP(lqs)    ((lqs)->lqs_flags |= LQUOTA_FLAGS_GRP)
 #define LQS_SET_ADJBLK(lqs) ((lqs)->lqs_flags |= LQUOTA_FLAGS_ADJBLK)
 #define LQS_SET_ADJINO(lqs) ((lqs)->lqs_flags |= LQUOTA_FLAGS_ADJINO)
+
+/* In the hash for lustre_qunit_size, the key is decided by
+ * grp_or_usr and uid/gid, in here, I combine these two values,
+ * which will make comparing easier and more efficient */
+#define LQS_KEY(is_grp, id)  ((is_grp ? 1ULL << 32: 0) + id)
+#define LQS_KEY_ID(key)      (key & 0xffffffff)
+#define LQS_KEY_GRP(key)     (key >> 32)
 
 static inline void lqs_getref(struct lustre_qunit_size *lqs)
 {

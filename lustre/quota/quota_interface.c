@@ -163,6 +163,7 @@ static int filter_quota_enforce(struct obd_device *obd, unsigned int ignore)
         RETURN(0);
 }
 
+#define GET_OA_ID(flag, oa) (flag == USRQUOTA ? oa->o_uid : oa->o_gid)
 static int filter_quota_getflag(struct obd_device *obd, struct obdo *oa)
 {
         struct obd_device_target *obt = &obd->u.obt;
@@ -185,14 +186,14 @@ static int filter_quota_getflag(struct obd_device *obd, struct obdo *oa)
         oa->o_flags &= ~(OBD_FL_NO_USRQUOTA | OBD_FL_NO_GRPQUOTA);
 
         for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
-                struct quota_adjust_qunit oqaq_tmp;
                 struct lustre_qunit_size *lqs = NULL;
 
-                oqaq_tmp.qaq_flags = cnt;
-                oqaq_tmp.qaq_id = (cnt == USRQUOTA) ? oa->o_uid : oa->o_gid;
-
-                quota_search_lqs(NULL, &oqaq_tmp, qctxt, &lqs);
-                if (lqs) {
+                lqs = quota_search_lqs(LQS_KEY(cnt, GET_OA_ID(cnt, oa)),
+                                       qctxt, 0);
+                if (lqs == NULL || IS_ERR(lqs)) {
+                        rc = PTR_ERR(lqs);
+                        break;
+                } else {
                         spin_lock(&lqs->lqs_lock);
                         if (lqs->lqs_bunit_sz <= qctxt->lqc_sync_blk) {
                                 oa->o_flags |= (cnt == USRQUOTA) ?
@@ -283,8 +284,8 @@ static int quota_check_common(struct obd_device *obd, unsigned int uid,
                 if (qdata[i].qd_id == 0 && !QDATA_IS_GRP(&qdata[i]))
                         continue;
 
-                quota_search_lqs(&qdata[i], NULL, qctxt, &lqs);
-                if (!lqs)
+                lqs = quota_search_lqs(LQS_KEY(i, id[i]), qctxt, 0);
+                if (lqs == NULL || IS_ERR(lqs))
                         continue;
 
                 rc2[i] = compute_remquota(obd, qctxt, &qdata[i], isblk);
@@ -499,6 +500,7 @@ static int quota_pending_commit(struct obd_device *obd, unsigned int uid,
         do_gettimeofday(&work_start);
         for (i = 0; i < MAXQUOTAS; i++) {
                 struct lustre_qunit_size *lqs = NULL;
+                int flag = 0;
 
                 qdata[i].qd_id = id[i];
                 qdata[i].qd_flags = i;
@@ -509,39 +511,36 @@ static int quota_pending_commit(struct obd_device *obd, unsigned int uid,
                 if (qdata[i].qd_id == 0 && !QDATA_IS_GRP(&qdata[i]))
                         continue;
 
-                quota_search_lqs(&qdata[i], NULL, qctxt, &lqs);
-                if (lqs) {
-                        int flag = 0;
-                        spin_lock(&lqs->lqs_lock);
-                        if (isblk) {
-                                if (lqs->lqs_bwrite_pending >= pending) {
-                                        lqs->lqs_bwrite_pending -= pending;
-                                        flag = 1;
-                                } else {
-                                        CDEBUG(D_ERROR,
-                                               "there are too many blocks!\n");
-                                }
-                        } else {
-                                if (lqs->lqs_iwrite_pending >= pending) {
-                                        lqs->lqs_iwrite_pending -= pending;
-                                        flag = 1;
-                                } else {
-                                        CDEBUG(D_ERROR,
-                                               "there are too many files!\n");
-                                }
-                        }
-                        CDEBUG(D_QUOTA, "lqs pending: %lu, pending: %d, "
-                               "isblk: %d.\n",
-                               isblk ? lqs->lqs_bwrite_pending :
-                               lqs->lqs_iwrite_pending, pending, isblk);
+                lqs = quota_search_lqs(LQS_KEY(i, qdata[i].qd_id), qctxt, 0);
+                if (lqs == NULL || IS_ERR(lqs))
+                        continue;
 
-                        spin_unlock(&lqs->lqs_lock);
-                        lqs_putref(lqs);
-                        /* When lqs_*_pening is changed back, we'll putref lqs
-                         * here b=14784 */
-                        if (flag)
-                                lqs_putref(lqs);
+                spin_lock(&lqs->lqs_lock);
+                if (isblk) {
+                        if (lqs->lqs_bwrite_pending >= pending) {
+                                lqs->lqs_bwrite_pending -= pending;
+                                flag = 1;
+                        } else {
+                                CDEBUG(D_ERROR, "there are too many blocks!\n");
+                        }
+                } else {
+                        if (lqs->lqs_iwrite_pending >= pending) {
+                                lqs->lqs_iwrite_pending -= pending;
+                                flag = 1;
+                        } else {
+                                CDEBUG(D_ERROR, "there are too many files!\n");
+                        }
                 }
+                CDEBUG(D_QUOTA, "lqs pending: %lu, pending: %d, isblk: %d.\n",
+                       isblk ? lqs->lqs_bwrite_pending :
+                       lqs->lqs_iwrite_pending, pending, isblk);
+
+                spin_unlock(&lqs->lqs_lock);
+                lqs_putref(lqs);
+                /* When lqs_*_pening is changed back, we'll putref lqs
+                 * here b=14784 */
+                if (flag)
+                        lqs_putref(lqs);
         }
         do_gettimeofday(&work_end);
         timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
