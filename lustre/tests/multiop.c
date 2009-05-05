@@ -321,7 +321,10 @@ int main(int argc, char **argv)
                 case 'o':
                         len = get_flags(commands+1, &flags);
                         commands += len;
-                        fd = open(fname, flags);
+                        if (flags & O_CREAT)
+                                fd = open(fname, flags, 0666);
+                        else
+                                fd = open(fname, flags);
                         if (fd == -1) {
                                 save_errno = errno;
                                 perror("open");
