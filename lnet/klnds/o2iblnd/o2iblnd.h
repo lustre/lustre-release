@@ -107,7 +107,8 @@ typedef struct
         int              *kib_keepalive;        /* keepalive timeout (seconds) */
         int              *kib_ntx;              /* # tx descs */
         int              *kib_credits;          /* # concurrent sends */
-        int              *kib_peercredits;      /* # concurrent sends to 1 peer */
+        int              *kib_peertxcredits;    /* # concurrent sends to 1 peer */
+        int              *kib_peerrtrcredits;   /* # per-peer router buffer credits */
         int              *kib_peercredits_hiw;  /* # when eagerly to return credits */
         int              *kib_peertimeout;      /* seconds to consider peer dead */
         char            **kib_default_ipif;     /* default IPoIB interface */
@@ -136,7 +137,7 @@ extern kib_tunables_t  kiblnd_tunables;
 
 #define IBLND_MSG_QUEUE_SIZE(v)    ((v) == IBLND_MSG_VERSION_1 ? \
                                      IBLND_MSG_QUEUE_SIZE_V1 :   \
-                                     *kiblnd_tunables.kib_peercredits) /* # messages/RDMAs in-flight */
+                                     *kiblnd_tunables.kib_peertxcredits) /* # messages/RDMAs in-flight */
 #define IBLND_CREDITS_HIGHWATER(v) ((v) == IBLND_MSG_VERSION_1 ? \
                                      IBLND_CREDIT_HIGHWATER_V1 : \
                                      *kiblnd_tunables.kib_peercredits_hiw) /* when eagerly to return credits */

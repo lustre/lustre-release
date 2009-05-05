@@ -519,7 +519,7 @@ kptllnd_startup (lnet_ni_t *ni)
                 return -EINVAL;
         }
 
-        if (*kptllnd_tunables.kptl_peercredits > PTLLND_MSG_MAX_CREDITS) {
+        if (*kptllnd_tunables.kptl_peertxcredits > PTLLND_MSG_MAX_CREDITS) {
                 CERROR("peercredits must be <= %d\n", PTLLND_MSG_MAX_CREDITS);
                 return -EINVAL;
         }
@@ -572,8 +572,9 @@ kptllnd_startup (lnet_ni_t *ni)
         /*
          * Setup Credits
          */
-        ni->ni_maxtxcredits = *kptllnd_tunables.kptl_credits;
-        ni->ni_peertxcredits = *kptllnd_tunables.kptl_peercredits;
+        ni->ni_maxtxcredits   = *kptllnd_tunables.kptl_credits;
+        ni->ni_peertxcredits  = *kptllnd_tunables.kptl_peertxcredits;
+        ni->ni_peerrtrcredits = *kptllnd_tunables.kptl_peerrtrcredits;
 
         kptllnd_data.kptl_expected_peers =
                 *kptllnd_tunables.kptl_max_nodes *
