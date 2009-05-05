@@ -1135,7 +1135,7 @@ struct obd_ops {
         int (*o_brw_async)(int rw, struct obd_export *exp,
                            struct obd_info *oinfo, obd_count oa_bufs,
                            struct brw_page *pgarr, struct obd_trans_info *oti,
-                           struct ptlrpc_request_set *);
+                           struct ptlrpc_request_set *, int pshift);
         int (*o_prep_async_page)(struct obd_export *exp,
                                  struct lov_stripe_md *lsm,
                                  struct lov_oinfo *loi,

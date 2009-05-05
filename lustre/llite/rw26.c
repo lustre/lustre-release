@@ -160,10 +160,11 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
                                    struct obd_info *oinfo,
                                    struct ptlrpc_request_set *set,
                                    size_t size, loff_t file_offset,
-                                   struct page **pages, int page_count)
+                                   struct page **pages, int page_count,
+                                   unsigned long user_addr)
 {
         struct brw_page *pga;
-        int i, rc = 0;
+        int i, rc = 0, pshift;
         size_t length;
         ENTRY;
 
@@ -174,21 +175,32 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
                 RETURN(-ENOMEM);
         }
 
-        for (i = 0, length = size; length > 0;
-             length -=pga[i].count, file_offset +=pga[i].count,i++) {/*i last!*/
+        /*
+         * pshift is something we'll add to ->off to get the in-memory offset,
+         * also see the OSC_FILE2MEM_OFF macro
+         */
+        pshift = (user_addr & ~CFS_PAGE_MASK) - (file_offset & ~CFS_PAGE_MASK);
+
+        for (i = 0, length = size; length > 0; i++) {/*i last!*/
+                LASSERT(i < page_count);
+
                 pga[i].pg = pages[i];
                 pga[i].off = file_offset;
                 /* To the end of the page, or the length, whatever is less */
-                pga[i].count = min_t(int, CFS_PAGE_SIZE -(file_offset & ~CFS_PAGE_MASK),
+                pga[i].count = min_t(int, CFS_PAGE_SIZE -(user_addr & ~CFS_PAGE_MASK),
                                      length);
                 pga[i].flag = OBD_BRW_SYNC;
                 if (rw == READ)
                         POISON_PAGE(pages[i], 0x0d);
+
+                length -= pga[i].count;
+                file_offset += pga[i].count;
+                user_addr += pga[i].count;
         }
 
         rc = obd_brw_async(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
                            ll_i2obdexp(inode), oinfo, page_count,
-                           pga, NULL, set);
+                           pga, NULL, set, pshift);
         if (rc == 0)
                 rc = size;
 
@@ -221,10 +233,6 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         if (!lli->lli_smd || !lli->lli_smd->lsm_object_id)
                 RETURN(-EBADF);
 
-        /* FIXME: io smaller than CFS_PAGE_SIZE is broken on ia64 ??? */
-        if ((file_offset & (~CFS_PAGE_MASK)) || (count & ~CFS_PAGE_MASK))
-                RETURN(-EINVAL);
-
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), size="LPSZ" (max %lu), "
                "offset=%lld=%llx, pages "LPSZ" (max %lu)\n",
                inode->i_ino, inode->i_generation, inode, count, MAX_DIO_SIZE,
@@ -235,13 +243,6 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                 ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_DIRECT_WRITE, count);
         else
                 ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_DIRECT_READ, count);
-
-        /* Check that all user buffers are aligned as well */
-        for (seg = 0; seg < nr_segs; seg++) {
-                if (((unsigned long)iov[seg].iov_base & ~CFS_PAGE_MASK) ||
-                    (iov[seg].iov_len & ~CFS_PAGE_MASK))
-                        RETURN(-EINVAL);
-        }
 
         set = ptlrpc_prep_set();
         if (set == NULL)
@@ -255,7 +256,6 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
          *size changing by concurrent truncates and writes. */
         if (rw == READ)
                 LOCK_INODE_MUTEX(inode);
-
         for (seg = 0; seg < nr_segs; seg++) {
                 size_t iov_left = iov[seg].iov_len;
                 unsigned long user_addr = (unsigned long)iov[seg].iov_base;
@@ -282,7 +282,8 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                                                              &oinfo, set,
                                                              min(size,iov_left),
                                                              file_offset, pages,
-                                                             page_count);
+                                                             page_count,
+                                                             user_addr);
                                 ll_free_user_pages(pages, page_count, rw==READ);
                         } else {
                                 result = 0;

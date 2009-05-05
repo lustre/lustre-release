@@ -577,7 +577,7 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
         oinfo.oi_oa = oa;
         oinfo.oi_md = lsm;
 
-        rc = obd_brw_async(rw, ec->ec_exp, &oinfo, npages, pga, oti, set);
+        rc = obd_brw_async(rw, ec->ec_exp, &oinfo, npages, pga, oti, set, 0);
         if (rc == 0) {
                 rc = ptlrpc_set_wait(set);
                 if (rc)

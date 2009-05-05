@@ -1764,7 +1764,7 @@ static int lov_brw_interpret(struct ptlrpc_request_set *reqset, void *data,
 static int lov_brw_async(int cmd, struct obd_export *exp,
                          struct obd_info *oinfo, obd_count oa_bufs,
                          struct brw_page *pga, struct obd_trans_info *oti,
-                         struct ptlrpc_request_set *set)
+                         struct ptlrpc_request_set *set, int pshift)
 {
         struct lov_request_set *lovset;
         struct lov_request *req;
@@ -1793,7 +1793,7 @@ static int lov_brw_async(int cmd, struct obd_export *exp,
                 sub_exp = lov->lov_tgts[req->rq_idx]->ltd_exp;
                 sub_pga = lovset->set_pga + req->rq_pgaidx;
                 rc = obd_brw_async(cmd, sub_exp, &req->rq_oi, req->rq_oabufs,
-                                   sub_pga, oti, set);
+                                   sub_pga, oti, set, pshift);
                 if (rc)
                         GOTO(out, rc);
                 lov_update_common_set(lovset, req, rc);

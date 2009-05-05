@@ -130,5 +130,5 @@ static inline int osc_exp_is_2_0_server(struct obd_export *exp) {
        return !!(exp->exp_connect_flags & OBD_CONNECT_FID);
 }
 
-
+#define OSC_FILE2MEM_OFF(fileoff,pshift) ((fileoff) + (pshift))
 #endif /* OSC_INTERNAL_H */

@@ -1062,7 +1062,7 @@ static inline int obd_brw(int cmd, struct obd_export *exp,
 static inline int obd_brw_async(int cmd, struct obd_export *exp,
                                 struct obd_info *oinfo, obd_count oa_bufs,
                                 struct brw_page *pg, struct obd_trans_info *oti,
-                                struct ptlrpc_request_set *set)
+                                struct ptlrpc_request_set *set, int pshift)
 {
         int rc;
         ENTRY;
@@ -1075,7 +1075,8 @@ static inline int obd_brw_async(int cmd, struct obd_export *exp,
                 LBUG();
         }
 
-        rc = OBP(exp->exp_obd, brw_async)(cmd, exp, oinfo, oa_bufs, pg,oti,set);
+        rc = OBP(exp->exp_obd, brw_async)(cmd, exp, oinfo, oa_bufs,
+                                          pg, oti,set, pshift);
         RETURN(rc);
 }
 
@@ -1095,7 +1096,7 @@ static inline int obd_brw_rqset(int cmd, struct obd_export *exp,
 
         oinfo.oi_oa = oa;
         oinfo.oi_md = lsm;
-        rc = obd_brw_async(cmd, exp, &oinfo, oa_bufs, pg, oti, set);
+        rc = obd_brw_async(cmd, exp, &oinfo, oa_bufs, pg, oti, set, 0);
         if (rc == 0) {
                 rc = ptlrpc_set_wait(set);
                 if (rc)
