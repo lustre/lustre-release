@@ -857,7 +857,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         }
 
         case OBD_IOC_ABORT_RECOVERY:
-                LCONSOLE_WARN("%s: Aborting recovery.\n", obd->obd_name);
+                CERROR("aborting recovery for device %s\n", obd->obd_name);
                 target_abort_recovery(obd);
                 /* obd_recovering has been changed */
                 mds_allow_cli(obd, 0);

@@ -1854,14 +1854,17 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         if (obd->obd_recovering) {
                 LCONSOLE_WARN("OST %s now serving %s (%s%s%s), but will be in "
                               "recovery for at least %d:%.02d, or until %d "
-                              "client%s reconnect%s.\n",
+                              "client%s reconnect. During this time new clients"
+                              " will not be allowed to connect. "
+                              "Recovery progress can be monitored by watching "
+                              "/proc/fs/lustre/obdfilter/%s/recovery_status.\n",
                               obd->obd_name, lustre_cfg_string(lcfg, 1),
                               label ?: "", label ? "/" : "", str,
                               obd->obd_recovery_timeout / 60,
                               obd->obd_recovery_timeout % 60,
                               obd->obd_max_recoverable_clients,
-                              obd->obd_max_recoverable_clients == 1 ? "":"s",
-                              obd->obd_max_recoverable_clients == 1 ? "s":"");
+                              (obd->obd_max_recoverable_clients == 1) ? "":"s",
+                              obd->obd_name);
         } else {
                 LCONSOLE_INFO("OST %s now serving %s (%s%s%s) with recovery "
                               "%s\n", obd->obd_name, lustre_cfg_string(lcfg, 1),
@@ -2859,7 +2862,7 @@ static int filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
         last = filter_last_id(filter, doa.o_gr);
         skip_orphan = !!(exp->exp_connect_flags & OBD_CONNECT_SKIP_ORPHAN);
 
-        CDEBUG(D_HA, "%s: deleting orphan objects from "LPU64" to "LPU64"%s\n",
+        CWARN("%s: deleting orphan objects from "LPU64" to "LPU64"%s\n",
                exp->exp_obd->obd_name, oa->o_id + 1, last,
                skip_orphan ? ", orphan objids won't be reused any more." : ".");
 
