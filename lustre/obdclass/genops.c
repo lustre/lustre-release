@@ -1059,22 +1059,22 @@ void class_disconnect_stale_exports(struct obd_device *obd,
         struct list_head work_list;
         struct list_head *pos, *n;
         struct obd_export *exp;
-        int cnt = 0;
         ENTRY;
 
         CFS_INIT_LIST_HEAD(&work_list);
         spin_lock(&obd->obd_dev_lock);
+        obd->obd_stale_clients = 0;
         list_for_each_safe(pos, n, &obd->obd_exports) {
                 exp = list_entry(pos, struct obd_export, exp_obd_chain);
                 if (exp->exp_replay_needed) {
                         list_move(&exp->exp_obd_chain, &work_list);
-                        cnt++;
+                        obd->obd_stale_clients++;
                 }
         }
         spin_unlock(&obd->obd_dev_lock);
 
-        CDEBUG(D_ERROR, "%s: disconnecting %d stale clients\n",
-               obd->obd_name, cnt);
+        CDEBUG(D_HA, "%s: disconnecting %d stale clients\n",
+               obd->obd_name, obd->obd_stale_clients);
         class_disconnect_export_list(&work_list, flags);
         EXIT;
 }
