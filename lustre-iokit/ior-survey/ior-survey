@@ -1,0 +1,354 @@
+#!/bin/bash
+
+# the value of these can be set in the environment.
+# This test assumes a typical pdsh naming scheme, where
+# node names can be expressed as a string
+# forllowed by a number 
+# cluster name (all node names are this followed by the node number)
+cluster=${cluster:-""}
+if [ -z "$cluster" ];then  echo  "cluster not defined"; exit 1; fi
+
+# client node numbers (individual numbers or inclusive ranges)
+clients=${clients:-""}
+if [ -z "$clients" ]; then echo "clients not defined"; exit 1; fi
+
+# numbers of clients to survey
+clients_lo=${clients_lo:-1}
+clients_hi=${clients_hi:-3}
+clients_iterator=${clients_iterator:-"+=1"}
+
+# numbers of tasks per client to survey
+tasks_per_client_lo=${task_per_client_lo:-1}
+tasks_per_client_hi=${tasks_per_client_hi:-8}
+tasks_per_client_iterator=${tasks_per_client_iterator:-"*=2"}
+
+# record sizes to survey
+rsize_lo=${rsize_lo:-1M}
+rsize_hi=${rsize_hi:-1M}
+rsize_iterator=${rsize_iterator:-"*=2"}
+
+## which tests to run (first must be write)
+# clear_cache)   not really a test; just uncache everything
+# *write*)   write
+# *)         read
+tests=(write rewrite clear_cache read reread)
+
+# total # bytes written/read by any client node
+min_per_client_size=${min_per_client_size:-"1G"}
+min_total_size=${min_total_size:-"2G"}
+
+# should each task do I/O to its own file?
+file_per_task=${file_per_task:-1}
+
+# the binaries
+IOR=${IOR:-"/usr/local/sbin/IOR"}
+llmount=${llmount:-"llmount"}
+# Select mpirun, yod, or pdsh
+fanout_cmd=${fanout_cmd:-"pdsh"}
+# mpirun still uses pdsh for cleanup
+pdsh=${pdsh:-"pdsh"}
+pdsh_args="-R ssh -S -b -w "
+
+# the result file prefix (date/time + hostname makes unique)
+rslt_loc=${rslt_loc:-"/tmp"}
+rslt=${rslt:-"$rslt_loc/ior_survey_`date +%F@%R`_`uname -n`"}
+
+# where lustre is mounted on the clients
+lustre=${lustre:-"/mnt/lustre"}
+
+# basename of the test file(s)
+testfile=${testfile:-"${lustre}/ior/ior_survey_testfile"}
+
+#don't spin for MPI completions
+export LIBELAN_WAITTYPE=0
+
+################################################################################
+# dont change stuff below here unless you know what you're doing...
+
+# This is to allow use of yod, pdsh, etc.
+fanout() {
+	local clients=$1; shift
+	local tmpfile=$1; shift
+	local result
+	case $fanout_cmd in
+	'pdsh')
+		$fanout_cmd $pdsh_args "$clients" "$@" >> $tmpfile 2>&1
+		echo $?
+		return
+		;;
+	'mpirun')
+		# horrible misuse of globals
+		$fanout_cmd -np $((ntask*nclnt)) "$@" >> $tmpfile 2>&1
+		echo $?
+		return
+		;;
+	'yod')
+		# and another
+		$fanout_cmd -np $((ntask*nclnt)) "$@" >> $tmpfile 2>&1
+		echo $?
+		return
+		;;
+		
+	*)
+		echo "255"
+		return
+		;;
+	esac
+}
+
+dump_cache() {
+	# we are assuming mpi uses will also have pdsh
+	local clients=$1;shift
+	local tmpfile=$1;shift
+	clear_cache='for LRU in /proc/fs/lustre/ldlm/namespaces/*/lru_size; 
+		do sudo /bin/bash -c "echo clear > $LRU"; done'
+        echo "=> $clear_cache" >> $tmpfile
+        $pdsh $pdsh_args "$test_clients" "$clear_cache" >> $tmpfile 2>&1 
+        status=$?
+        echo "Completion Status: $status" >> $tmpfile
+
+        if ((status)); then
+              echo "ERROR"
+        else
+              echo "OK"
+	fi
+}
+count_range() {
+    echo $1 | awk '{ nvals=split($1, vals, "-");\
+	             if (nvals == 1) print 1;\
+	             else if (nvals == 2) printf "%d\n", vals[2] - vals[1] + 1;}'
+}
+
+base_range() {
+    echo $1 | awk '{ split($1, vals, "-"); print vals[1]; }'
+}
+
+idx2nodenum() {
+    local n=$1; shift
+    while ((1)); do
+	local range=$1; shift
+	if [ -z "$range" ]; then
+	    return
+	fi
+	chunk=`count_range $range`
+	if ((chunk > $n)); then
+	    base=`base_range $range`
+	    echo $((base + n))
+	    return
+	fi
+	n=$((n-chunk))
+    done
+}
+
+n2noderange() {
+    local n=$1; shift
+    sep=""
+    nodes="["
+    while ((n > 0)); do
+	local range=$1; shift
+	if [ -z "$range" ]; then
+            return
+	fi
+	local base=`base_range $range`
+	local chunk=`count_range $range`
+	if ((chunk > $n)); then chunk=$n; fi
+	local nodes="${nodes}${sep}${base}"; sep=","
+	if ((chunk > 1)); then nodes="${nodes}-$((base+chunk-1))"; fi
+	n=$((n-chunk))
+    done
+    echo "${nodes}]"
+}
+
+countnodes() {
+    local radix=16384
+    local n=0
+    while ((radix > 0)); do
+	local nodes=`n2noderange $((n+radix)) $@`
+	if [ -n "$nodes" ]; then
+	    n=$((n+radix))
+        fi
+	radix=$((radix/2))
+    done
+    echo $n
+}
+
+parse_number() {
+    local str=$1
+    case $str in
+	*G|*g) n=`echo $str | sed 's/[gG]//'`; echo $((n*1024*1024*1024));;
+	*M|*m) n=`echo $str | sed 's/[Mm]//'`; echo $((n*1024*1024));;
+	*K|*k) n=`echo $str | sed 's/[Kk]//'`; echo $((n*1024));;
+	*)     echo $1;;
+    esac
+}
+
+pp_number() {
+    local n=$1
+    local G=$((1024*1024*1024))
+    local M=$((1024*1024))
+    local K=$((1024))
+    if ((n%G == 0 && n >= $G)); then
+	echo "$((n/G))G"
+    elif ((n%M == 0 && n >= $M)); then
+	echo "$((n/M))M"
+    elif ((n%K == 0 && n >= $K)); then
+	echo "$((n/K))K"
+    else
+	echo $n
+    fi
+}
+
+if [ ${#tests[@]} -eq 0 -o "${tests[0]}" != "write" ]; then
+    echo "First test must be 'write'" 1>&2
+    exit 1
+fi
+
+rsltf="${rslt}.summary"
+workf="${rslt}.detail"
+echo -n > $rsltf
+echo -n > $workf
+
+print_summary () {
+    if [ "$1" = "-n" ]; then
+	minusn=$1; shift
+    else
+	minusn=""
+    fi
+    echo $minusn "$*" >> $rsltf
+    echo $minusn "$*"
+}
+
+check_mount() {
+    local lustre=$1; shift
+    local tmpb=$1; shift
+    local clients=$1; shift
+    local tmpfile=${tmpb}_tmp
+    # check lustre is mounted everywhere it's needed
+   cmd="grep $lustre /proc/mounts"
+   $pdsh $pdsh_args "$clients" "$cmd" >> $tmpfile
+   status=$?
+   	if (($status)); then
+		print_summary "Lustre NOT mounted on $lustre somewhere"
+	exit 1
+   	fi
+
+}
+# convert params to actual numbers
+min_per_client_size=`parse_number $min_per_client_size`
+min_total_size=`parse_number $min_total_size`
+
+rsize_lo=`parse_number $rsize_lo`
+rsize_hi=`parse_number $rsize_hi`
+
+# check on actual numbers of client nodes
+nclients=`countnodes ${clients[@]}`
+if ((clients_hi > $nclients)); then clients_hi=$nclients; fi
+
+cur_date=`date`
+machine=`uname -n`
+script_name=`echo $0 | cut -d "/" -f2`
+
+echo "$cur_date $script_name on $lustre from $machine" >> $workf
+
+for ((rsize=$rsize_lo; rsize<=$rsize_hi; rsize$rsize_iterator)); do
+    pp_rsize=`pp_number $rsize`
+
+    for ((nclnt=$clients_lo; nclnt<=$clients_hi; nclnt$clients_iterator)); do
+	test_clients="${cluster}`n2noderange $nclnt ${clients[@]}`"
+	echo $test_clients
+	if [ "$fanout_cmd" = "pdsh" ] || [ "$fanout_cmd" = "mpirun" ];then
+		check_mount $lustre $workf $test_clients
+	fi
+	per_client_size=$((min_total_size/nclnt))
+	if ((per_client_size < $min_per_client_size)); then
+	    per_client_size=$min_per_client_size
+	fi
+
+	for ((ntask=$tasks_per_client_lo; ntask <= $tasks_per_client_hi; \
+		ntask$tasks_per_client_iterator)); do
+	    per_task_size=$((per_client_size/ntask))
+	    if ((per_task_size%rsize != 0)); then
+		per_task_size=$(((per_task_size/rsize + 1)*rsize))
+	    fi
+	    total_size=`pp_number $((per_task_size*nclnt*ntask))`
+	    
+	    hdrstr=`printf "Total: %5sB rsize: %4sB clients: %4d tasks: %3d: " \
+		$total_size $pp_rsize $nclnt $ntask`
+	    print_summary -n "$hdrstr"
+
+	    for ((test_idx=0; test_idx < ${#tests[@]}; test_idx++)); do
+	        test=${tests[$test_idx]}
+		
+		print_summary -n "$test "
+		echo "===========> ${hdrstr} on $test_clients doing $test" >> $workf
+		tmpf=${workf}_tmp
+		echo -n > $tmpf
+
+		if [ "$test" = "clear_cache" ]; then
+		    if [ "$fanout_cmd" = "pdsh" ] || [ "$fanout_cmd" = "mpirun" ]; then
+				result=`dump_cache $test_clients $tmpf`
+		     else
+				echo "Haven't figured out how to clear cache" >> $tmpf
+				result="N/A"
+		     fi
+		else
+
+		    cmdline=(
+		    $IOR                     # the command
+		    -o${testfile}            # test file prefix
+		    -b${per_task_size}       # bytes per task
+		    -t${rsize}               # record size
+		    -e                       # fsync before close
+		    -q                       # quit on error
+		    )
+
+		    idx=${#cmdline[@]}
+
+                    # keep the test file(s) unless this is the last test
+		    #((test_idx < ${#tests[@]}-1)) && cmdline[$((idx++))]="-k"
+		    cmdline[$((idx++))]="-k"
+
+		    # use the existing test file(s) unless this is the first test
+		    ((test_idx > 0)) && cmdline[$((idx++))]="-E"
+
+		    # file-per-task
+		    (($file_per_task)) && cmdline[$((idx++))]="-F"
+
+		    case "$test" in
+		    *write*) cmdline[$((idx++))]="-w"
+			     awkstr="Max Write";;
+                    *)       cmdline[$((idx++))]="-r"
+		             awkstr="Max Read";;
+                    esac
+
+		    echo "=> ${cmdline[@]}" >> $tmpf
+	
+		    status=`fanout $test_clients $tmpf ${cmdline[@]}`
+
+		    echo "Completion Status: $status" >> $tmpf
+	       
+		    if (($status)); then
+			result="ERROR"
+		    else
+			# pdsh adds an extra field
+			if [ "$fanout_cmd" = "pdsh" ]; then 
+				result=`awk < $tmpf "/$awkstr/ {print $ 4; found=1; exit}\
+			                     END       {if (!found) print \"ERROR\"}"`
+			else
+				result=`awk < $tmpf "/$awkstr/ {print $ 3; found=1; exit}\
+			                     END       {if (!found) print \"ERROR\"}"`
+			fi
+		    fi
+		fi
+
+		cat $tmpf >> $workf
+		rm $tmpf
+
+	        str=`printf "%8s" "$result"`
+		print_summary -n "$str "
+	    done
+	    print_summary ""
+	done
+    done
+done
+

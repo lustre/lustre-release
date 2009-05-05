@@ -1,0 +1,78 @@
+# Directories building kernel modules should have two files:
+#
+# Makefile.in:
+#
+# MODULES := <module-name>
+# <module-name>-objs := file1.o file2.o file3.o
+# @INCLUDE_RULES@
+#
+# and autoMakefile.am:
+#
+# if LIBLUSTRE
+# <liblustre rules>
+# endif
+#
+# if MODULES
+# modulefs_DATA = <module-name>$(KMODEXT)
+# endif
+#
+# DIST_SOURCES = $(<module-name>-objs:.o=.c) <other sources>
+# MOSTLYCLEANFILES = *.o *.ko *.mod.c
+
+ifeq ($(PATCHLEVEL),)
+
+include autoMakefile
+
+# The kernel ABI files for the nonfree modules.
+KABIS := $(NONFREE_MODULES:%$(KMODEXT)=%.kabi)
+
+all: archive-nonfree-modules
+
+# Where to archive the nonfree modules for binary distribution.
+# If this directory has a colon in it, SSH/SCP are used to go out on the network.
+nonfreedir := $$HOME/nonfree
+#nonfreedir := moraine.clusterfs.com:/home/lustre-nonfree
+
+# Put the nonfree modules and corresponding KABI files into the binary
+# archive.  We assume that if the CVS subdirectory doesn't exist, we
+# don't want to archive.
+archive-nonfree-modules: $(KABIS) $(NONFREE_MODULES)
+	test -d CVS || exit 0; \
+	list="$(NONFREE_MODULES)"; for mod in $$list; do \
+	  perl $(top_srcdir)/build/kabi -v archive $(nonfreedir) $$mod || exit $$?; \
+	done
+
+# Generate the Kernel ABI files for the nonfree modules.
+$(KABIS): $(NONFREE_MODULES)
+	for mod in $(NONFREE_MODULES); do \
+	  CC="$(CC)" perl $(top_srcdir)/build/kabi --with-linux="$(LINUX)" module $$mod || exit $$?; \
+	done
+
+fix-kext-ownership:
+	@if test -d $(DESTDIR)$(kextdir) ; then \
+		echo chown -R root:wheel $(DESTDIR)$(kextdir) ; \
+		chown -R root:wheel $(DESTDIR)$(kextdir) || \
+			echo >&2 "*** WARNING: Could not fix kext ownership for $(DESTDIR)$(kextdir)" ; \
+	fi
+
+else
+
+include @LINUX_CONFIG@
+
+EXTRA_CFLAGS := $(EXTRA_PRE_CFLAGS)
+EXTRA_CFLAGS += @EXTRA_KCFLAGS@ @UML_CFLAGS@ @CFLAGS@
+EXTRA_CFLAGS += $(EXTRA_POST_CFLAGS)
+
+obj-m := $(patsubst %,%.o,$(MODULES))
+
+ifeq ($(PATCHLEVEL),4)
+# 2.4 rules
+O_TARGET := $(firstword $(obj-m))
+obj-y := $($(firstword $(MODULES))-objs)
+export-objs := $(obj-y) $(filter-out $(O_TARGET),$(obj-m))
+include $(TOPDIR)/Rules.make
+$(MODINCL)/%.ver: %.c
+	@true
+endif # PATCHLEVEL
+
+endif # KERNELRELEASE

@@ -1,0 +1,27 @@
+if MODULES
+if LINUX
+
+  modulenet_DATA := ksocklnd$(KMODEXT)
+
+endif # LINUX
+endif # MODULES
+
+if DARWIN
+
+  macos_PROGRAMS := ksocklnd
+
+  nodist_ksocklnd_SOURCES := socklnd.c socklnd_cb.c socklnd_proto.c socklnd_modparams.c socklnd_lib-darwin.c
+
+  ksocklnd_CFLAGS := $(EXTRA_KCFLAGS)
+  ksocklnd_LDFLAGS := $(EXTRA_KLDFLAGS)
+  ksocklnd_LDADD := $(EXTRA_KLIBS)
+
+  plist_DATA := Info.plist
+  install_data_hook := fix-kext-ownership
+
+  EXTRA_DIST := socklnd_lib-darwin.c socklnd_lib-darwin.h $(plist_DATA)
+endif # DARWIN
+
+install-data-hook: $(install_data_hook)
+
+MOSTLYCLEANFILES = @MOSTLYCLEANFILES@ socklnd_lib.c

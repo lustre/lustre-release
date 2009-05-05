@@ -1,0 +1,7 @@
+MODULES := kiiblnd
+kiiblnd-objs := iiblnd.o iiblnd_cb.o iiblnd_modparams.o
+
+EXTRA_DIST = $(kiiblnd-objs:%.o=%.c) iiblnd.h
+EXTRA_POST_CFLAGS := @IIBCPPFLAGS@
+
+@INCLUDE_RULES@

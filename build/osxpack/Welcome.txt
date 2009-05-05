@@ -1,0 +1,4 @@
+Welcome to the Lustre OS X client installation  
+
+You will be guided through the steps necessary to install this software.  During installation you will be required to reboot your Mac, so make sure you have saved all your data and closed applications before continuing the installation.
+

@@ -1,0 +1,86 @@
+WARNING: Running sgp_dd will ERASE the contents of the disk devices.
+         This is NOT to be run on any OST where you care about any data
+	 or you are not expecting to reformat the filesystem afterward.
+
+Requirements
+------------
+
+. sg3_utils (for sgp_dd)
+  SCSI device
+  Or, if using non-scsi disk
+  raw device support
+  sg3_utils
+
+Overview
+--------
+
+This survey may be used to characterise the performance of a SCSI device.
+It simulates an OST serving multiple stripe files.  The data gathered by it
+can help set expectations for the performance of a lustre OST exporting the
+device.
+
+The script uses sgp_dd to do raw sequential disk I/O.  It runs with
+variable numbers of sgp_dd threads to show how performance varies with
+different request queue depths.
+
+The script spawns variable numbers of sgp_dd instances, each reading or
+writing a separate area of the disk to show how performance varies with the
+number of concurrent stripe files.
+
+The device(s) used must meet one of two tests:
+SCSI device:
+	Must appear in the output of 'sg_map'
+	(make sure the kernel module "sg" is loaded)
+Raw device:
+	Must appear in the output of 'raw -qa'
+
+	If you need to create raw devices in order to use this tool, note that
+	raw device 0 can not be used due to a bug in certain versions of the
+	"raw" utility (including that shipped with RHEL4U4.)
+
+You may not mix raw and SCSI devices in the test specification.
+
+Running
+-------
+
+The script must be customised according to the particular device under test
+and where it should keep its working files.   Customisation variables are
+described clearly at the start of the script.
+
+e.g.: scsidevs=/dev/sda size=128 crghi=16 thrhi=32 ./sgpdd-survey
+
+When the script runs, it creates a number of working files and a pair of
+result files.  All files start with the prefix given by ${rslt}.
+
+${rslt}_<date/time>.summary    same as stdout
+${rslt}_<date/time>_*          tmp files
+${rslt}_<date/time>.detail     collected tmp files for post-mortem
+
+The summary file and stdout contain lines like...
+
+total_size  8388608K rsz 1024 thr     1 crg   1  180.45 MB/s   1 x  180.50 =  180.50 MB/s
+
+The number immediately before the first MB/s is the bandwidth computed by
+measuring total data and elapsed time.  The other numbers are a check on
+the bandwidths reported by the individual sgp_dd instances.
+
+If there are so many threads that sgp_dd is unlikely to be able to allocate
+I/O buffers, "ENOMEM" is printed.
+
+If not all the sgp_dd instances successfully reported a bandwidth number
+"failed" is printed.
+
+Visualising Results
+-------------------
+
+I've found it most useful to import the summary data (it's fixed width)
+into Excel (or any graphing package) and graph bandwidth v. # threads for
+varying numbers of concurrent regions.  This shows how the device performs
+with varying queue depth.  If the series (varying numbers of concurrent
+regions) all seem to land on top of each other, it shows the device is
+phased by seeks at the given record size.
+
+The included script "plot-sgpdd" will process output files and create
+.dat (similar to csv) files for spreadsheet import. It also plots the 
+results directly using gnuplot and creates .png files.
+

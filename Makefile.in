@@ -1,0 +1,5 @@
+subdir-m += @LIBCFS_SUBDIR@ lnet
+subdir-m += lustre
+subdir-m += lustre-iokit
+
+@INCLUDE_RULES@

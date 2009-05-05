@@ -1,0 +1,7 @@
+MODULES := kmxlnd
+kmxlnd-objs := mxlnd.o mxlnd_cb.o mxlnd_modparams.o
+
+EXTRA_DIST = $(kmxlnd-objs:%.o=%.c) mxlnd.h
+EXTRA_POST_CFLAGS := @MXCPPFLAGS@
+
+@INCLUDE_RULES@

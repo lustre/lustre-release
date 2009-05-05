@@ -1,0 +1,169 @@
+ fs/ext3/balloc.c |   99 ++++++++++++++++++++++++++++++++++++++++++++----------
+ 1 files changed, 81 insertions(+), 18 deletions(-)
+diff --git a/fs/ext3/balloc.c b/fs/ext3/balloc.c
+index ff3428e..a9140ea 100644
+Index: linux-stage/fs/ext3/balloc.c
+===================================================================
+--- linux-stage.orig/fs/ext3/balloc.c
++++ linux-stage/fs/ext3/balloc.c
+@@ -143,9 +143,96 @@ unsigned ext3_init_block_bitmap(struct s
+ 	return free_blocks - sbi->s_itb_per_group - 2;
+ }
+ 
+-/*
+- * Read the bitmap for a given block_group, reading into the specified 
+- * slot in the superblock's bitmap cache.
++/**
++* bh_uptodate_or_lock: Test whether the buffer is uptodate
++* @bh: struct buffer_head
++*
++* Return true if the buffer is up-to-date and false,
++* with the buffer locked, if not.
++*/
++int bh_uptodate_or_lock(struct buffer_head *bh)
++{
++	if (!buffer_uptodate(bh)) {
++		lock_buffer(bh);
++		if (!buffer_uptodate(bh))
++			return 0;
++		unlock_buffer(bh);
++	}
++	return 1;
++}
++
++/**
++* bh_submit_read: Submit a locked buffer for reading
++* @bh: struct buffer_head
++*
++* Returns a negative error
++*/
++int bh_submit_read(struct buffer_head *bh)
++{
++	if (!buffer_locked(bh))
++		lock_buffer(bh);
++	if (buffer_uptodate(bh))
++		return 0;
++	get_bh(bh);
++	bh->b_end_io = end_buffer_read_sync;
++	submit_bh(READ, bh);
++	wait_on_buffer(bh);
++	if (buffer_uptodate(bh))
++		return 0;
++	return -EIO;
++}
++
++static int ext3_valid_block_bitmap(struct super_block *sb,
++				   struct ext3_group_desc *desc,
++				   unsigned int block_group,
++				   struct buffer_head *bh)
++{
++	ext3_grpblk_t offset;
++	ext3_grpblk_t next_zero_bit;
++	ext3_fsblk_t bitmap_blk;
++	ext3_fsblk_t group_first_block;
++
++	group_first_block = ext3_group_first_block_no(sb, block_group);
++
++	/* check whether block bitmap block number is set */
++	bitmap_blk = le32_to_cpu(desc->bg_block_bitmap);
++	offset = bitmap_blk - group_first_block;
++	if (!ext3_test_bit(offset, bh->b_data))
++		/* bad block bitmap */
++		goto err_out;
++
++	/* check whether the inode bitmap block number is set */
++	bitmap_blk = le32_to_cpu(desc->bg_inode_bitmap);
++	offset = bitmap_blk - group_first_block;
++	if (!ext3_test_bit(offset, bh->b_data))
++		/* bad block bitmap */
++		goto err_out;
++
++	/* check whether the inode table block number is set */
++	bitmap_blk = le32_to_cpu(desc->bg_inode_table);
++	offset = bitmap_blk - group_first_block;
++	next_zero_bit = ext3_find_next_zero_bit(bh->b_data,
++				offset + EXT3_SB(sb)->s_itb_per_group,
++				offset);
++	if (next_zero_bit >= offset + EXT3_SB(sb)->s_itb_per_group)
++		/* good bitmap for inode tables */
++		return 1;
++
++err_out:
++	ext3_error(sb, __FUNCTION__,
++		   "Invalid block bitmap - "
++		   "block_group = %d, block = %lu",
++		   (int)block_group, bitmap_blk);
++	return 0;
++}
++
++/**
++ * read_block_bitmap()
++ * @sb:	         super block
++ * @block_group: given block group
++ *
++ * Read the bitmap for a given block_group,and validate the
++ * bits for block/inode/inode tables are set in the bitmaps.
+  *
+  * Return buffer_head on success or NULL in case of failure.
+  */
+@@ -154,29 +241,42 @@ read_block_bitmap(struct super_block *sb
+ {
+ 	struct ext3_group_desc * desc;
+ 	struct buffer_head * bh = NULL;
++	ext3_fsblk_t bitmap_blk;
+ 
+ 	desc = ext3_get_group_desc (sb, block_group, NULL);
+ 	if (!desc)
+-		goto error_out;
++		return NULL;
++	bitmap_blk = desc->bg_block_bitmap;
++	bh = sb_getblk(sb, bitmap_blk);
++	if (unlikely(!bh)) {
++		ext3_error(sb, __FUNCTION__,
++			   "Can not read block bitmap - "
++			   "block group = %d, block_bitmap = %lu",
++			   (int)block_group, bitmap_blk);
++		return NULL;
++	}
++	if (bh_uptodate_or_lock(bh))
++		return bh;
++
+ 	if (desc->bg_flags & cpu_to_le16(EXT3_BG_BLOCK_UNINIT)) {
+-		bh = sb_getblk(sb, le32_to_cpu(desc->bg_block_bitmap));
+-		if (!buffer_uptodate(bh)) {
+-			lock_buffer(bh);
+-			if (!buffer_uptodate(bh)) {
+-				ext3_init_block_bitmap(sb, bh,block_group,desc);
+-				set_buffer_uptodate(bh);
+-			}
+-			unlock_buffer(bh);
+-		}
+-	} else {
+-		bh = sb_bread(sb, le32_to_cpu(desc->bg_block_bitmap));
++		ext3_init_block_bitmap(sb, bh, block_group, desc);
++		set_buffer_uptodate(bh);
++		unlock_buffer(bh);
++		return bh;
++	}
++	if (bh_submit_read(bh) < 0) {
++		brelse(bh);
++		ext3_error(sb, __FUNCTION__,
++			   "Cannot read block bitmap - "
++			   "block group = %d block_bitmap = %lu",
++			   (int)block_group, bitmap_blk);
++		return NULL;
++	}
++	if (!ext3_valid_block_bitmap(sb, desc, block_group, bh)) {
++		brelse(bh);
++		return NULL;
+ 	}
+-	if (!bh)
+-		ext3_error (sb, "read_block_bitmap",
+-			    "Cannot read block bitmap - "
+-			    "block_group = %d, block_bitmap = %u",
+-			    block_group, le32_to_cpu(desc->bg_block_bitmap));
+-error_out:
++
+ 	return bh;
+ }
+ /*

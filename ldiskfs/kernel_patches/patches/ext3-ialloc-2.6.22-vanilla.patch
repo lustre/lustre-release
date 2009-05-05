@@ -1,0 +1,128 @@
+Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/fs/ext3/ialloc.c
+===================================================================
+--- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/fs/ext3/ialloc.c	2005-05-16 14:10:54.000000000 -0600
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/fs/ext3/ialloc.c	2005-05-16 14:18:29.000000000 -0600
+@@ -352,13 +352,17 @@
+ 	return -1;
+ }
+ 
+-static int find_group_other(struct super_block *sb, struct inode *parent)
++static int find_group_other(struct super_block *sb, struct inode *parent,
++			    int mode)
+ {
+ 	int parent_group = EXT3_I(parent)->i_block_group;
++	struct ext3_sb_info *sbi = EXT3_SB(sb);
+ 	int ngroups = EXT3_SB(sb)->s_groups_count;
+ 	struct ext3_group_desc *desc;
+ 	struct buffer_head *bh;
+ 	int group, i;
++	int best_group = -1;
++	int avefreeb, freeb, best_group_freeb = 0;
+ 
+ 	/*
+ 	 * Try to place the inode in its parent directory
+@@ -366,9 +370,9 @@
+ 	group = parent_group;
+ 	desc = ext3_get_group_desc (sb, group, &bh);
+ 	if (desc && le16_to_cpu(desc->bg_free_inodes_count) &&
+-			le16_to_cpu(desc->bg_free_blocks_count))
++	    (!S_ISREG(mode) || le16_to_cpu(desc->bg_free_blocks_count)))
+ 		return group;
+-
++	avefreeb = le32_to_cpu(sbi->s_es->s_free_blocks_count) / ngroups;
+ 	/*
+ 	 * We're going to place this inode in a different blockgroup from its
+ 	 * parent.  We want to cause files in a common directory to all land in
+@@ -381,33 +385,47 @@
+ 	group = (group + parent->i_ino) % ngroups;
+ 
+ 	/*
+-	 * Use a quadratic hash to find a group with a free inode and some free
+-	 * blocks.
++	 * Use a quadratic hash to find a group with a free inode and
++	 * average number of free blocks.
+ 	 */
+ 	for (i = 1; i < ngroups; i <<= 1) {
+ 		group += i;
+ 		if (group >= ngroups)
+ 			group -= ngroups;
+ 		desc = ext3_get_group_desc (sb, group, &bh);
+-		if (desc && le16_to_cpu(desc->bg_free_inodes_count) &&
+-				le16_to_cpu(desc->bg_free_blocks_count))
++		if (!desc || !desc->bg_free_inodes_count)
++			continue;
++		if (!S_ISREG(mode))
++			return group;
++		if (le16_to_cpu(desc->bg_free_blocks_count) >= avefreeb)
+ 			return group;
+ 	}
+ 
+ 	/*
+-	 * That failed: try linear search for a free inode, even if that group
+-	 * has no free blocks.
++	 * That failed: start from last group used to allocate inode
++	 * try linear search for a free inode and prefereably
++	 * free blocks.
+ 	 */
+-	group = parent_group;
++	group = sbi->s_last_alloc_group;
++	if (group == -1)
++		group = parent_group;
++
+ 	for (i = 0; i < ngroups; i++) {
+ 		if (++group >= ngroups)
+ 			group = 0;
+ 		desc = ext3_get_group_desc (sb, group, &bh);
+-		if (desc && le16_to_cpu(desc->bg_free_inodes_count))
+-			return group;
++		if (!desc || !desc->bg_free_inodes_count)
++			continue;
++		freeb = le16_to_cpu(desc->bg_free_blocks_count);
++		if (freeb > best_group_freeb) {
++			best_group_freeb = freeb;
++			best_group = group;
++			if (freeb >= avefreeb || !S_ISREG(mode))
++				break;
++		}
+ 	}
+-
+-	return -1;
++	sbi->s_last_alloc_group = best_group;
++	return best_group;
+ }
+ 
+ /*
+@@ -454,7 +472,7 @@
+ 		else
+ 			group = find_group_orlov(sb, dir);
+ 	} else
+-		group = find_group_other(sb, dir);
++		group = find_group_other(sb, dir, mode);
+ 
+ 	err = -ENOSPC;
+ 	if (group == -1)
+Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/fs/ext3/super.c
+===================================================================
+--- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/fs/ext3/super.c	2005-05-16 14:10:54.000000000 -0600
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/fs/ext3/super.c	2005-05-16 14:17:14.000000000 -0600
+@@ -1297,6 +1297,7 @@
+ 	percpu_counter_init(&sbi->s_dirs_counter);
+ 	bgl_lock_init(&sbi->s_blockgroup_lock);
+ 
++	sbi->s_last_alloc_group = -1;
+ 	for (i = 0; i < db_count; i++) {
+ 		block = descriptor_loc(sb, logic_sb_block, i);
+ 		sbi->s_group_desc[i] = sb_bread(sb, block);
+Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/linux/ext3_fs_sb.h
+===================================================================
+--- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/linux/ext3_fs_sb.h	2005-05-16 14:10:54.000000000 -0600
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/linux/ext3_fs_sb.h	2005-05-16 14:17:14.000000000 -0600
+@@ -59,6 +59,8 @@
+ 	struct percpu_counter s_freeinodes_counter;
+ 	struct percpu_counter s_dirs_counter;
+ 	struct blockgroup_lock s_blockgroup_lock;
++	/* Last group used to allocate inode */
++	int s_last_alloc_group;
+ 
+ 	/* root of the per fs reservation window tree */
+ 	spinlock_t s_rsv_window_lock;

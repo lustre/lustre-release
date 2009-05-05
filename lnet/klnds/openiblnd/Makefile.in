@@ -1,0 +1,7 @@
+MODULES := kopeniblnd
+kopeniblnd-objs := openiblnd.o openiblnd_cb.o openiblnd_modparams.o
+
+EXTRA_DIST = $(kopeniblnd-objs:%.o=%.c) openiblnd.h
+EXTRA_POST_CFLAGS := @OPENIBCPPFLAGS@
+
+@INCLUDE_RULES@

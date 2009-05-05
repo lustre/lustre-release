@@ -1,0 +1,13 @@
+#!/bin/sh
+/usr/sbin/nvram boot-args="debug=0xe zsize=256"
+
+# Delete cache files
+if [ -f /System/Library/Extensions.kextcache ]; then
+	rm -f /System/Library/Extensions.kextcache
+fi
+
+if [ -d /System/Library/Caches/com.apple.kernelcaches ]; then
+	rm -rf /System/Library/Caches/com.apple.kernelcaches
+fi
+
+touch /System/Library

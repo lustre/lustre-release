@@ -1,0 +1,7 @@
+MODULES := ksocklnd
+
+ksocklnd-objs := socklnd.o socklnd_cb.o socklnd_proto.o socklnd_modparams.o socklnd_lib-linux.o
+
+EXTRA_DIST := $(ksocklnd-objs:%.o=%.c) socklnd_lib-linux.h socklnd.h
+
+@INCLUDE_RULES@

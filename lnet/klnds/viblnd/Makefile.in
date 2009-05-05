@@ -1,0 +1,7 @@
+MODULES := kviblnd
+kviblnd-objs := viblnd.o viblnd_cb.o viblnd_modparams.o
+
+EXTRA_DIST = $(kviblnd-objs:%.o=%.c) viblnd.h viblnd_wire.h
+EXTRA_POST_CFLAGS := @VIBCPPFLAGS@
+
+@INCLUDE_RULES@

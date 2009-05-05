@@ -1,0 +1,74 @@
+#!/usr/bin/expect -f
+
+#enables some diagnostic output
+exp_internal 1
+
+# log all interaction to a file to diagnose failures
+log_file -a [lindex $argv 0]
+
+# and not stddout
+log_user 0
+
+set spawnid [spawn make oldconfig]
+
+#match_max 200
+
+# need to allow for the config tool to be built initially
+set timeout 30
+
+expect {
+    timeout {
+        puts "timeout in update_oldconfig waiting for a prompt we recognize"
+        exit 1
+    }
+    -re "\n *(\[^\n]* \\\[N\/y\/\\?] \\(NEW\\)) " {
+         puts "$expect_out(1,string) n"
+         send "n\r"
+         exp_continue
+    }
+    -re "\n *(\[^\n]* \\\[N\/m\/y\/\\?] \\(NEW\\)) " {
+        puts "$expect_out(1,string) m"
+        send "m\r"
+        exp_continue
+    }
+    -re "\n *(\[^\n]* \\\[N\/y\/m\/\\?] \\(NEW\\)) " {
+        puts "$expect_out(1,string) m"
+        send "m\r"
+        exp_continue
+    }
+    -re "\n *(\[^\n]* \\\[N\/m\/\\?] \\(NEW\\)) " {
+        puts "$expect_out(1,string) m"
+        send "m\r"
+        exp_continue
+    }
+    -re "\n *(\[^\n]* \\\[Y\/n\/\\?] \\(NEW\\)) " {
+        puts "$expect_out(1,string) y"
+        send "y\r"
+        exp_continue
+    }
+    -re "\n *(\[^\n]* \\\[\[0-9]*] \\(NEW\\)) " {
+        puts "$expect_out(1,string) <cr>"
+        send "\r"
+        exp_continue
+    }
+    -re "\n *(\[^\n]* \\\[M\/n\/\\?] \\(NEW\\)) " {
+        puts "$expect_out(1,string) m"
+        send "m\r"
+        exp_continue
+    }
+    -re "\n *(\[^\n]* \\\[M\/n\/y\/\\?] \\(NEW\\)) " {
+        puts "$expect_out(1,string) m"
+        send "m\r"
+        exp_continue
+    }
+    -re "\n *(\[^\n]* \\\[Y\/n\/m\/\\?] \\(NEW\\)) " {
+        puts "$expect_out(1,string) m"
+        send "m\r"
+        exp_continue
+    }
+    -re "\n *(\[^\n]* \\\[Y\/\\?] \\(NEW\\)) " {
+        puts "$expect_out(1,string) y"
+        send "y\r"
+        exp_continue
+    }
+}

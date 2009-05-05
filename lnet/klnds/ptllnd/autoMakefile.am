@@ -1,0 +1,7 @@
+if MODULES
+if BUILD_PTLLND
+modulenet_DATA = kptllnd$(KMODEXT)
+endif
+endif
+
+MOSTLYCLEANFILES = @MOSTLYCLEANFILES@

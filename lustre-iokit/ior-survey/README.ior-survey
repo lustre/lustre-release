@@ -1,0 +1,190 @@
+Introduction :
+
+  The ior_survey script can be used to test the performance of the lustre
+file systems. It uses IOR (Interleaved Or Random), a script used for testing
+performance of parallel file systems using various interfaces and access 
+patterns.  IOR uses MPI for process synchronization.
+
+General Description:
+
+  ior_mpiio is a parallel file system test developed by the SIOP (Scalable
+I/O Project) at LLNL. This parallel program performs parallel writes and
+reads to/from a file using MPI-IO and reporting the throughput rates.
+
+  MPI is used for process synchronization.  Under the control of compile-time
+defined constants (and, to a lesser extent, environment variables), I/O is done
+via MPI-IO. The data are written and read using independent parallel transfers
+of equal-sized blocks of contiguous bytes that cover the file with no gaps and
+that do not overlap each other. The test consists of creating a new file, 
+writing it with data, then reading the data back.
+
+  The data written are C integers. If the program runs successfully to
+completion, it returns 0. If a problem is detected with any I/O routine, the
+program exits with a value of IO_ERR.
+
+  If a non-I/O problem is detected, the program exits with a value of
+INTERNAL_ERR (this can be caused by a bug in the test program, or a problem in
+MPI, or by inconsistencies in the environment variable settings).
+
+Requirements :
+	To run the ior_survey script following items are required.
+
+1: IOR
+
+  The IOR test should be obtained at
+  ftp://ftp.llnl.gov/pub/siop/ior/
+
+2: pdsh
+	The tarball can be obtained from
+   http://sourceforge.net/project/showfiles.php?group_id=33530&package_id=183641
+
+3: pdsh-rcmd-ssh module
+	The rpm for this could be found at
+   http://sourceforge.net/project/showfiles.php?group_id=33530&package_id=183641
+
+4: lam/mpi
+	The tarball can be obtained from
+   http://www.lam-mpi.org/7.1/download.php
+
+5: You need to be a non-root user to execute the script and should have the 
+   super-user privileges.
+
+6: The user should have login on all the nodes without password on which the
+   test is going to be run.
+
+
+
+To make an entry into the sudoers file :
+
+1: Become super user (root)
+
+2: type visudo
+
+3: make an entry as
+        username   ALL=(ALL) NOPASSWD: ALL //(username is the name of the user)
+ 
+
+Building IOR :
+
+  Type 'gmake mpiio' from the IOR/ directory.  In
+  IOR/src/C, the file Makefile.config currently has settings for AIX, Linux,
+  OSF1 (TRU64), and IRIX64 to model on.  Note that MPI must be present for
+  building/running IOR, and that MPI I/O must be available for MPI I/O, HDF5,
+  and Parallel netCDF builds.  As well, HDF5 and Parallel netCDF libraries are
+  necessary for those builds.  All IOR builds include the POSIX interface.
+
+  Copy the IOR binary file in IOR/src/C/ to /usr/local/sbin/ using
+
+	sudo cp IOR/src/C/IOR /usr/local/sbin/
+
+
+
+Installing pdsh and pdsh-rcmd-ssh module :
+
+1: Download the pdsh tarball
+
+2: untar it using tar -xzvf (if tar.gz) or tar -xjvf(if tar.bz2) 
+
+3: go to the pdsh directory and type ./bootstrap
+
+4: configure it using the following command
+
+	./configure --with-ssh
+
+5: Build it using "make"
+
+6: Install it using "sudo make install"
+
+7: Download the pdsh-rcmd-ssh rpm
+
+8: Install the rpm using "rpm -ivh pdsh-rcmd-ssh*"
+
+
+Installing lam/mpi :
+
+1: Download the lam tarball
+
+2: untar it using tar -xzvf (if tar.gz) or tar -xjvf(if tar.bz2)
+
+3: go to the lam directory and type ./configure
+
+4: Build it using "make"
+
+5: Install it using "sudo make install"
+
+	The lam, IOR, pdsh should be installed on all the nodes on which the
+	test is going to be run.
+	
+Note: Please make sure that you have installed the same version of lam on all
+the nodes on which the test is going to be run.
+
+
+
+Running the ior_survey script :
+
+1: Lustre should be mounted at /mnt/lustre. Do 
+	"touch /mnt/lustre/ior_survey_testfile"
+
+2: Make a hostfile in which the ip addresses of all the nodes are present on
+   the node from where the script is going to be executed.
+
+3: run the lam using "lamboot -v -d hostfile". This will start lamd on all the
+   nodes.
+
+4: run the ior_survey script using "./ior_survey"
+
+Note:
+     The node names of the clients should be like rhea1, rhea2, rhea3, so on.
+   The name of the cluster (1st part of the node name) should be set in the 
+   ior_survey script in the cluster name field.
+   e.g.  cluster=rhea //name of the cluster
+
+     The client node numbers should be set as last part of the node name i.e.
+   numeral part.
+   e.g. client=(1)   //to run test on one node only node1.
+	client=(1-2) //to run test on two nodes node1, node2.
+
+	Please note that the hostfile should contain the ip addresses of only
+   those nodes on which the lustre filesystem is mounted i.e. clients are 
+   mounted.
+
+	The details of the test can be found on the node from where the
+   test was run as /tmp/ior_survey_run_date@start_time_nodename.detail
+
+	The output of the IOR looks like
+	
+host1: access    bw(MiB/s)  block(KiB) xfer(KiB)  open(s)    wr/rd(s)   close(s)   iter
+host1: ------    ---------  ---------- ---------  --------   --------   --------   ----
+host1: write     1.58       2097152    1024.00    0.000873   1299.37    0.000132   0
+host1:
+host1: Max Write: 1.58 MiB/sec (1.65 MB/sec)
+ 
+	where, 
+		host1 : node on which the test is run
+		access: the test which is run (write, rewrite, read, reread)
+		bw    : band width
+		block : total size to be written
+		xfer  : block size to transfer here 1MB
+		open  : time taken for open
+		close : time taken for close
+		wr/rd : time taken for read/write
+		iteration : iteration no.
+		Max write : Max_write speed obtained
+		
+Note : MB is defined as 1,000,000 bytes and MiB is 1,048,576 bytes.
+
+	The summary of the test can be found on the node from where the
+   test was run as /tmp/ior_survey_run_date@start_time_nodename.summary
+   It contains the tests run and the status of those tests.
+
+
+Instructions for graphing IOR results
+
+        The plot-ior.pl script will plot the results from the .detail file
+   generated by ior-survery. It will create a data file for writes as
+   /tmp/ior_survey_run_date@start_time_nodename.detail.dat1 and for reads
+   as /tmp/ior_survey_run_date@start_time_nodename.detail.dat2 and gnuplot
+   file as /tmp/ior_survey_run_date@start_time_nodename.detail.scr.
+
+        $ perl parse-ior.pl /tmp/ior_survey_run_date@start_time_nodename.detail
+

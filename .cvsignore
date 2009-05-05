@@ -30,8 +30,15 @@ install-sh
 .tmp_versions
 config.h
 config.h.in
+Module.markers
+Module.symvers
+Module.symvers.old
+Modules.symvers
+modules.order
 stamp-h1
 INSTALL
 .pc
 patches
 series
+lustre.spec
+acl.size

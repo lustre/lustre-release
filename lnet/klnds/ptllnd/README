@@ -1,0 +1,47 @@
+1. This version of the Portals LND is intended to work on the Cray XT3 using
+   Cray Portals as a network transport.
+
+2. To enable the building of the Portals LND (ptllnd.ko) configure with the
+   following option:
+   ./configure --with-portals=<path-to-portals-headers>
+
+3. The following configuration options are supported
+
+        ntx:
+            The total number of message descritprs
+
+        concurrent_peers:
+            The maximum number of conncurent peers.  Peers attemting
+            to connect beyond the maximum will not be allowd.
+
+        peer_hash_table_size:
+            The number of hash table slots for the peers. This number
+            should scale with concurrent_peers.
+
+        cksum:
+            Set to non-zero to enable message (not RDMA) checksums for
+            outgoing packets.   Incoming packets will always be checksumed
+            if necssary, independnt of this value.
+
+        timeout:
+            The amount of time a request can linger in a peers active
+            queue, before the peer is considered dead.  Units: seconds.
+
+        portal:
+            The portal ID to use for the ptllnd traffic.
+
+        rxb_npages:
+            The number of pages in a RX Buffer.
+
+        credits:
+            The maximum total number of concurrent sends that are
+            outstanding at any given instant.
+
+        peercredits:
+            The maximum number of concurrent sends that are
+            outstanding to a single piere at any given instant.
+
+        max_msg_size:
+            The maximum immedate message size.  This MUST be
+            the same on all nodes in a cluster.  A peer connecting
+            with a diffrent max_msg_size will be rejected.

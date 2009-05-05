@@ -1,0 +1,86 @@
+Index: linux-2.6.18.8/fs/ext3/inode.c
+===================================================================
+--- linux-2.6.18.8.orig/fs/ext3/inode.c	2007-06-20 18:10:33.000000000 +0200
++++ linux-2.6.18.8/fs/ext3/inode.c	2007-06-20 18:53:48.000000000 +0200
+@@ -3222,3 +3222,66 @@ int ext3_change_inode_journal_flag(struc
+ 
+ 	return err;
+ }
++
++int ext3_map_inode_page(struct inode *inode, struct page *page,
++			unsigned long *blocks, int *created, int create)
++{
++	unsigned int blocksize, blocks_per_page;
++	unsigned long iblock;
++	struct buffer_head dummy;
++	void *handle;
++	int i, rc = 0, failed = 0, needed_blocks;
++
++	blocksize = inode->i_sb->s_blocksize;
++	blocks_per_page = PAGE_SIZE >> inode->i_sb->s_blocksize_bits;
++	iblock = page->index * blocks_per_page;
++
++	for (i = 0; i < blocks_per_page; i++, iblock++) {
++		blocks[i] = ext3_bmap(inode->i_mapping, iblock);
++		if (blocks[i] == 0) {
++			failed++;
++			if (created)
++				created[i] = -1;
++		} else if (created) {
++			created[i] = 0;
++		}
++	}
++
++	if (failed == 0 || create == 0)
++		return 0;
++
++	needed_blocks = ext3_writepage_trans_blocks(inode);
++	handle = ext3_journal_start(inode, needed_blocks);
++	if (IS_ERR(handle))
++		return PTR_ERR(handle);
++
++	iblock = page->index * blocks_per_page;
++	for (i = 0; i < blocks_per_page; i++, iblock++) {
++		if (blocks[i] != 0)
++			continue;
++
++		rc = ext3_get_blocks_handle(handle, inode, iblock, 1, &dummy, 1, 1);
++		if (rc < 0) {
++			printk(KERN_INFO "ext3_map_inode_page: error reading "
++					"block %ld\n", iblock);
++			goto out;
++		} else {
++			if (rc > 1)
++				WARN_ON(1);
++			rc = 0;
++		}
++		/* Unmap any metadata buffers from the block mapping, to avoid
++		 * data corruption due to direct-write from Lustre being
++		 * clobbered by a later flush of the blockdev metadata buffer.*/
++		if (buffer_new(&dummy))
++			unmap_underlying_metadata(dummy.b_bdev,
++					dummy.b_blocknr);
++		blocks[i] = dummy.b_blocknr;
++		if (created)
++			created[i] = 1;
++	}
++
++out:
++	ext3_journal_stop(handle);
++	return rc;
++}
+Index: linux-2.6.18.8/fs/ext3/super.c
+===================================================================
+--- linux-2.6.18.8.orig/fs/ext3/super.c	2007-06-20 18:10:33.000000000 +0200
++++ linux-2.6.18.8/fs/ext3/super.c	2007-06-20 18:51:12.000000000 +0200
+@@ -2765,6 +2765,10 @@ static void __exit exit_ext3_fs(void)
+ 	exit_ext3_xattr();
+ }
+ 
++int ext3_map_inode_page(struct inode *inode, struct page *page,
++			unsigned long *blocks, int *created, int create);
++EXPORT_SYMBOL(ext3_map_inode_page);
++
+ MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
+ MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");
+ MODULE_LICENSE("GPL");

@@ -1,0 +1,198 @@
+Overview
+--------
+
+This survey script does sequential I/O with varying numbers of threads and
+objects (files) by using lctl to drive the echo_client connected
+to local or remote obdfilter instances, or remote obdecho instances.
+
+It can be used to characterise the performance of the following lustre
+components.
+
+1. The Object Storage Targets.
+
+   Here the script directly exercises one or more instances of obdfilter.
+   They may be running on 1 or more nodes, e.g. when they are all attached
+   to the same multi-ported disk subsystem.
+
+   You need to tell the script all the names of the obdfilter instances.
+   These should be up and running already .  If some are on different
+   nodes, you need to specify their hostnames too (e.g. node1:ost1). 
+   --OR--
+   You just need to pass parameter case=disk to the script. The script will 
+   automatically detect the local obdfilter instances.
+
+   All the obdfilter instances are driven directly.  The script
+   automatically loads the obdecho module if required and creates one
+   instance of echo_client for each obdfilter instance.
+
+2. The Network.
+
+   Here the script drives one or more instances of obdecho server via instances
+   of echo_client running on 1 or more nodes.
+
+   You just need to pass parameters case=network and 
+   targets="<hostname/ip_of_server>" to the script. The script will do the 
+   required setup for network case. 
+   
+3. The Stripe F/S over the Network.
+
+   Here the script drives one or more instances of obdfilter via instances
+   of echo_client running on 1 or more nodes.
+
+   You need to tell the script all the names of the OSC's, which should be
+   up and running.
+   --OR--
+   You just need to pass parameter case=netdisk to the script. The script will
+   use all of the local OSCs.
+
+Note that the script is _NOT_ scalable to 100s of nodes since it is only
+intended to measure individual servers, not the scalability of the system
+as a whole.
+   
+Running
+-------
+
+The script must be customised according to the components under test and
+where it should keep its working files. Customization variables are
+described clearly at Customization variables Section in the script.
+Please see maximum suported value ranges for customization variables
+in the srcipt.
+
+To run against a local disk:
+---------------------------
+- Create a Lustre configuraton using your normal methods
+
+1. Automated run:
+Setup the Lustre filesystem with required OST's. Make sure that obdecho.ko
+module is present. Then invoke the obdfilter-survey script with parameter
+case=disk.
+e.g. : $ nobjhi=2 thrhi=2 size=1024 case=disk sh obdfilter-survey
+
+--OR--
+
+2. Manual run:
+- You do not need to specify and MDS or LOV 
+- List all OSTs that you wish to test
+- On all OSS machines:
+  Remember, write tests are destructive! This test should be run prior to
+startup of your actual Lustre filesystem. If that is the case, you will not
+need to reformat to restart Lustre - however, if the test is terminated before
+completion, you may have to remove objects from the disk. 
+
+- Determine the obdfilter instance names on all the clients, column 4
+of 'lctl dl'.  For example:
+
+# pdsh -w oss[01-02] lctl dl |grep obdfilter |sort
+oss01:   0 UP obdfilter oss01-sdb oss01-sdb_UUID 3
+oss01:   2 UP obdfilter oss01-sdd oss01-sdd_UUID 3
+oss02:   0 UP obdfilter oss02-sdi oss02-sdi_UUID 3
+...
+
+Here the obdfilter instance names are oss01-sdb, oss01-sdd, oss02-sdi.
+
+Since you are driving obdfilter instances directly, set the shell array
+variable 'targets' to the names of the obdfilter instances. 
+
+Example:
+
+targets='oss01:oss01-sdb oss01:oss01-sdd oss02:oss02-sdi' \
+   ./obdfilter-survey
+
+To run against a network:
+------------------------
+For the second case i.e. obdfilter-survey over network, following setup
+is to be done.
+- Install all lustre modules including obdecho.
+- Start lctl and check for the device list. The device list must be empty.
+- It is suggested that there should be passwordless enrty between client 
+  and server machine to avoid typing password. 
+1. Automated run:
+   To run obdfilter-surevy against network you just need to pass parameter 
+   case=netdisk and targets="<hostname/ip_of_server>" to the script.
+ 
+e.g. $ nobjhi=2 thrhi=2 size=1024 targets="<hostname/ip_of_server>" \
+       case=network sh obdfilter-survey
+
+On server side you can see the stats at : 
+        /proc/fs/lustre/obdecho/<echo_srv>/stats
+where, 'echo_srv' is the obdecho server created through script.
+
+NOTE: In network test only automated run is supported.
+
+To run against network-disk:
+----------------------------
+- Create a Lustre configuraton using your normal methods
+
+1. Automated run:
+Setup the lustre with required OST's. Make sure that obdecho.ko module is
+present. Then invoke the obdfilter-survey script with parameter case=netdisk.
+e.g. : $ nobjhi=2 thrhi=2 size=1024 case=netdisk sh obdfilter-survey
+
+2. Manual run:
+While running manually you need to tell the script all the names of the
+echo_client instances, which should already be up and running.
+e.g. $ nobjhi=2 thrhi=2 size=1024 targets="<osc_name> ..." \
+       sh obdfilter-survey
+
+
+Output files:
+-------------
+
+When the script runs, it creates a number of working files and a pair of
+result files.  All files start with the prefix given by ${rslt}.
+
+${rslt}.summary           same as stdout
+${rslt}.script_*          per-host test script files
+${rslt}.detail_tmp*       per-ost result files
+${rslt}.detail            collected result files for post-mortem
+
+The script iterates over the given numbers of threads and objects
+performing all the specified tests and checking that all test processes
+completed successfully.
+
+Note that the script may not clean up properly if it is aborted or if it
+encounters an unrecoverable error.  In this case, manual cleanup may be
+required, possibly including killing any running instances of 'lctl' (local
+or remote), removing echo_client instances created by the script and
+unloading obdecho.
+
+
+Script output
+-------------
+
+The summary file and stdout contain lines like...
+
+ost 8 sz 67108864K rsz 1024 obj    8 thr    8 write  613.54 [ 64.00, 82.00] 
+
+ost 8          is the total number of OSTs under test.
+sz 67108864K   is the total amount of data read or written (in KB).
+rsz 1024       is the record size (size of each echo_client I/O, in KB).
+obj    8       is the total number of objects over all OSTs
+thr    8       is the total number of threads over all OSTs and objects
+write          is the test name.  If more tests have been specified they
+               all appear on the same line.
+613.54         is the aggregate bandwidth over all OSTs measured by
+	       dividing the total number of MB by the elapsed time.
+[64.00, 82.00] are the minimum and maximum instantaneous bandwidths seen on
+               any individual OST.  
+
+Note that although the numbers of threads and objects are specifed per-OST
+in the customization section of the script, results are reported aggregated
+over all OSTs.
+
+
+Visualising Results
+-------------------
+
+I've found it most useful to import the summary data (it's fixed width)
+into gnuplot, Excel (or any graphing package) and graph bandwidth v. 
+# threads for varying numbers of concurrent regions.  This shows how
+the OSS performs for a given number of concurrently accessed objects
+(i.e. files) with varying numbers of I/Os in flight.
+
+It is also extremely useful to record average disk I/O sizes during each
+test.  These numbers help find pathologies in file the file system block
+allocator and the block device elevator.
+
+The included plot-obdfilter script is an example of processing the output
+files to a .csv format and plotting graph using gnuplot.

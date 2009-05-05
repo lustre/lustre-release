@@ -1,0 +1,158 @@
+Index: linux-2.6.18-53.1.14/fs/ext3/namei.c
+===================================================================
+--- linux-2.6.18-53.1.14/fs/ext3/namei.c	2008-12-02 13:21:14.000000000 +0530
++++ linux-2.6.18-53.1.14_new/fs/ext3/namei.c	2008-12-02 15:11:09.000000000 +0530
+@@ -1656,11 +1656,17 @@ static int ext3_delete_entry (handle_t *
+ static inline void ext3_inc_count(handle_t *handle, struct inode *inode)
+ {
+ 	inode->i_nlink++;
++	if (is_dx(inode) && inode->i_nlink > 1) {
++		/* limit is 16-bit i_links_count */
++		if (inode->i_nlink >= EXT3_LINK_MAX || inode->i_nlink == 2)
++			inode->i_nlink = 1;
++	}
+ }
+ 
+ static inline void ext3_dec_count(handle_t *handle, struct inode *inode)
+ {
+-	inode->i_nlink--;
++	if (!S_ISDIR(inode->i_mode) || inode->i_nlink > 2)
++		drop_nlink(inode);
+ }
+ 
+ static int ext3_add_nondir(handle_t *handle,
+@@ -1759,7 +1770,7 @@ static int ext3_mkdir(struct inode * dir
+ 	struct ext3_dir_entry_2 * de;
+ 	int err, retries = 0;
+ 
+-	if (dir->i_nlink >= EXT3_LINK_MAX)
++	if (EXT3_DIR_LINK_MAX(dir))
+ 		return -EMLINK;
+ 
+ retry:
+@@ -1782,7 +1793,7 @@ retry:
+ 	inode->i_size = EXT3_I(inode)->i_disksize = inode->i_sb->s_blocksize;
+ 	dir_block = ext3_bread (handle, inode, 0, 1, &err);
+ 	if (!dir_block) {
+-		inode->i_nlink--; /* is this nlink == 0? */
++		drop_nlink(inode); /* is this nlink == 0? */
+ 		ext3_mark_inode_dirty(handle, inode);
+ 		iput (inode);
+ 		goto out_stop;
+@@ -1814,7 +1825,7 @@ retry:
+ 		iput (inode);
+ 		goto out_stop;
+ 	}
+-	dir->i_nlink++;
++	ext3_inc_count(handle, dir);
+ 	ext3_update_dx_flag(dir);
+ 	ext3_mark_inode_dirty(handle, dir);
+ 	d_instantiate(dentry, inode);
+@@ -2079,10 +2090,10 @@ static int ext3_rmdir (struct inode * di
+ 	retval = ext3_delete_entry(handle, dir, de, bh);
+ 	if (retval)
+ 		goto end_rmdir;
+-	if (inode->i_nlink != 2)
+-		ext3_warning (inode->i_sb, "ext3_rmdir",
+-			      "empty directory has nlink!=2 (%d)",
+-			      inode->i_nlink);
++	if (!EXT3_DIR_LINK_EMPTY(inode))
++		ext3_warning(inode->i_sb, "ext3_rmdir",
++			     "empty directory has too many links (%d)",
++			     inode->i_nlink);
+ 	inode->i_version++;
+ 	inode->i_nlink = 0;
+ 	/* There's no need to set i_disksize: the fact that i_nlink is
+@@ -2092,7 +2103,7 @@ static int ext3_rmdir (struct inode * di
+ 	ext3_orphan_add(handle, inode);
+ 	inode->i_ctime = dir->i_ctime = dir->i_mtime = CURRENT_TIME_SEC;
+ 	ext3_mark_inode_dirty(handle, inode);
+-	dir->i_nlink--;
++	ext3_dec_count(handle, dir);
+ 	ext3_update_dx_flag(dir);
+ 	ext3_mark_inode_dirty(handle, dir);
+ 
+@@ -2143,7 +2154,7 @@ static int ext3_unlink(struct inode * di
+ 	dir->i_ctime = dir->i_mtime = CURRENT_TIME_SEC;
+ 	ext3_update_dx_flag(dir);
+ 	ext3_mark_inode_dirty(handle, dir);
+-	inode->i_nlink--;
++	ext3_dec_count(handle, inode);
+ 	if (!inode->i_nlink)
+ 		ext3_orphan_add(handle, inode);
+ 	inode->i_ctime = dir->i_ctime;
+@@ -2219,7 +2230,7 @@ static int ext3_link (struct dentry * ol
+ 	struct inode *inode = old_dentry->d_inode;
+ 	int err, retries = 0;
+ 
+-	if (inode->i_nlink >= EXT3_LINK_MAX)
++	if (EXT3_DIR_LINK_MAX(inode))
+ 		return -EMLINK;
+ 	/*
+ 	 * Return -ENOENT if we've raced with unlink and i_nlink is 0.  Doing
+@@ -2313,8 +2324,8 @@ static int ext3_rename (struct inode * o
+ 		if (le32_to_cpu(PARENT_INO(dir_bh->b_data)) != old_dir->i_ino)
+ 			goto end_rename;
+ 		retval = -EMLINK;
+-		if (!new_inode && new_dir!=old_dir &&
+-				new_dir->i_nlink >= EXT3_LINK_MAX)
++		if (!new_inode && new_dir != old_dir &&
++		    EXT3_DIR_LINK_MAX(new_dir))
+ 			goto end_rename;
+ 	}
+ 	if (!new_bh) {
+@@ -2371,7 +2382,7 @@ static int ext3_rename (struct inode * o
+ 	}
+ 
+ 	if (new_inode) {
+-		new_inode->i_nlink--;
++		ext3_dec_count(handle, new_inode);
+ 		new_inode->i_ctime = CURRENT_TIME_SEC;
+ 	}
+ 	old_dir->i_ctime = old_dir->i_mtime = CURRENT_TIME_SEC;
+@@ -2382,11 +2393,13 @@ static int ext3_rename (struct inode * o
+ 		PARENT_INO(dir_bh->b_data) = cpu_to_le32(new_dir->i_ino);
+ 		BUFFER_TRACE(dir_bh, "call ext3_journal_dirty_metadata");
+ 		ext3_journal_dirty_metadata(handle, dir_bh);
+-		old_dir->i_nlink--;
++		ext3_dec_count(handle, old_dir);
+ 		if (new_inode) {
+-			new_inode->i_nlink--;
++			/* checked empty_dir above, can't have another parent,
++			 * ext3_dec_count() won't work for many-linked dirs */
++			new_inode->i_nlink = 0;
+ 		} else {
+-			new_dir->i_nlink++;
++			ext3_inc_count(handle, new_dir);
+ 			ext3_update_dx_flag(new_dir);
+ 			ext3_mark_inode_dirty(handle, new_dir);
+ 		}
+Index: linux-2.6.18-53.1.14/include/linux/ext3_fs.h
+===================================================================
+--- linux-2.6.18-53.1.14/include/linux/ext3_fs.h	2008-12-02 13:21:23.000000000 +0530
++++ linux-2.6.18-53.1.14_new/include/linux/ext3_fs.h	2008-12-02 13:22:04.000000000 +0530
+@@ -74,7 +74,7 @@
+ /*
+  * Maximal count of links to a file
+  */
+-#define EXT3_LINK_MAX		32000
++#define EXT3_LINK_MAX		65000
+ 
+ /*
+  * Macro-instructions used to manage several block sizes
+@@ -563,6 +563,7 @@ static inline int ext3_valid_inum(struct
+ #define EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER	0x0001
+ #define EXT3_FEATURE_RO_COMPAT_LARGE_FILE	0x0002
+ #define EXT3_FEATURE_RO_COMPAT_BTREE_DIR	0x0004
++#define EXT4_FEATURE_RO_COMPAT_DIR_NLINK	0x0020
+ 
+ #define EXT3_FEATURE_INCOMPAT_COMPRESSION	0x0001
+ #define EXT3_FEATURE_INCOMPAT_FILETYPE		0x0002
+@@ -576,6 +577,7 @@ static inline int ext3_valid_inum(struct
+ 					 EXT3_FEATURE_INCOMPAT_META_BG)
+ #define EXT3_FEATURE_RO_COMPAT_SUPP	(EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER| \
+ 					 EXT3_FEATURE_RO_COMPAT_LARGE_FILE| \
++					 EXT4_FEATURE_RO_COMPAT_DIR_NLINK| \
+ 					 EXT3_FEATURE_RO_COMPAT_BTREE_DIR)
+ 
+ /*

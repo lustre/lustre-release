@@ -1,0 +1,15 @@
+MODULES := kptllnd
+
+
+kptllnd-objs := ptllnd.o                \
+                ptllnd_cb.o             \
+                ptllnd_modparams.o      \
+                ptllnd_peer.o           \
+                ptllnd_rx_buf.o         \
+                ptllnd_tx.o		\
+                ptllnd_ptltrace.o
+
+EXTRA_DIST = $(kptllnd-objs:%.o=%.c) ptllnd.h
+EXTRA_POST_CFLAGS := @PTLLNDCPPFLAGS@
+
+@INCLUDE_RULES@
