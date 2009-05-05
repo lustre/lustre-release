@@ -1092,12 +1092,16 @@ int lustre_get_qids(struct file *fp, struct inode *inode, int type,
                                     ddquot + i*dqblk_sz, dqblk_sz))
                                 continue;
 
-                        dqid = kmalloc(sizeof(*dqid), GFP_NOFS);
-                        if (!dqid) 
+                        OBD_ALLOC_GFP(dqid, sizeof(*dqid), GFP_NOFS);
+                        if (!dqid)
                                 GOTO(out_free, rc = -ENOMEM);
 
-                        dqid->di_id = DQF_GET(ddquot + i * dqblk_sz, 
+                        dqid->di_id = DQF_GET(ddquot + i * dqblk_sz,
                                               version, dqb_id);
+                        dqid->di_flag = DQF_GET(ddquot + i * dqblk_sz, version,
+                                                dqb_ihardlimit) ? QI_SET : 0;
+                        dqid->di_flag |= DQF_GET(ddquot + i * dqblk_sz, version,
+                                                 dqb_bhardlimit) ? QB_SET : 0;
                         INIT_LIST_HEAD(&dqid->di_link);
                         list_add(&dqid->di_link, list);
                 }

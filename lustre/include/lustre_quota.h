@@ -150,7 +150,12 @@ struct lustre_dquot {
 struct dquot_id {
         struct list_head        di_link;
         __u32                   di_id;
+        __u32                   di_flag;
 };
+/* set inode quota limitation on a quota uid/gid */
+#define QI_SET                (1 << 30)
+/* set block quota limitation on a quota uid/gid */
+#define QB_SET                (1 << 31)
 
 #define QFILE_CHK               1
 #define QFILE_RD_INFO           2
@@ -226,7 +231,7 @@ struct lustre_quota_ctxt {
         int           lqc_sync_blk;         /* when blk qunit reaches this value,
                                              * later write reqs from client
                                              * should be sync b=16642 */
-        spinlock_t    lqc_lock;         /* guard lqc_imp_valid now */
+        spinlock_t    lqc_lock;             /* guard lqc_imp_valid now */
         cfs_waitq_t   lqc_wait_for_qmaster; /* when mds isn't connected, threads
                                              * on osts who send the quota reqs
                                              * with wait==1 will be put here
@@ -244,7 +249,8 @@ struct lustre_quota_ctxt {
 struct lustre_qunit_size {
         struct hlist_node lqs_hash; /* the hash entry */
         unsigned int lqs_id;        /* id of user/group */
-        unsigned long lqs_flags;    /* is user/group; FULLBUF or LESSBUF */
+        unsigned long lqs_flags;    /* 31st bit is QB_SET, 30th bit is QI_SET
+                                     * other bits are same as LQUOTA_FLAGS_* */
         unsigned long lqs_iunit_sz; /* Unit size of file quota currently */
         unsigned long lqs_itune_sz; /* Trigger dqacq when available file quota
                                      * less than this value, trigger dqrel

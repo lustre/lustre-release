@@ -260,10 +260,6 @@ static int quota_check_common(struct obd_device *obd, unsigned int uid,
         int rc = 0, rc2[2] = { 0, 0 };
         ENTRY;
 
-        CLASSERT(MAXQUOTAS < 4);
-        if (!sb_any_quota_enabled(qctxt->lqc_sb))
-                RETURN(rc);
-
         spin_lock(&qctxt->lqc_lock);
         if (!qctxt->lqc_valid){
                 spin_unlock(&qctxt->lqc_lock);
@@ -469,13 +465,38 @@ static int quota_chk_acq_common(struct obd_device *obd, unsigned int uid,
         RETURN(rc);
 }
 
+int quota_is_set(struct obd_device *obd, unsigned int uid,
+                 unsigned int gid, int flag)
+{
+        struct lustre_qunit_size *lqs;
+        __u32 id[MAXQUOTAS] = { uid, gid };
+        int i, q_set = 0;
+
+        if (!sb_any_quota_enabled(obd->u.obt.obt_qctxt.lqc_sb))
+                RETURN(0);
+
+        for (i = 0; i < MAXQUOTAS; i++) {
+                lqs = quota_search_lqs(LQS_KEY(i, id[i]),
+                                       &obd->u.obt.obt_qctxt, 0);
+                if (lqs && !IS_ERR(lqs)) {
+                        if (lqs->lqs_flags & flag)
+                                q_set = 1;
+                        lqs_putref(lqs);
+                }
+        }
+
+        return q_set;
+}
+
 static int filter_quota_check(struct obd_device *obd, unsigned int uid,
                               unsigned int gid, int npage, int *pending,
                               quota_acquire acquire, struct obd_trans_info *oti,
                               struct inode *inode, int frags)
 {
-        return quota_chk_acq_common(obd, uid, gid, npage, pending, LQUOTA_FLAGS_BLK,
-                                    acquire, oti, inode, frags);
+        return quota_is_set(obd, uid, gid, QB_SET) ?
+                quota_chk_acq_common(obd, uid, gid, npage, pending,
+                                     LQUOTA_FLAGS_BLK, acquire, oti, inode,
+                                     frags) : 0;
 }
 
 /* when a block_write or inode_create rpc is finished, adjust the record for
@@ -619,8 +640,9 @@ static int mds_quota_check(struct obd_device *obd, unsigned int uid,
                            quota_acquire acquire, struct obd_trans_info *oti,
                            struct inode *inode, int frags)
 {
-        return quota_chk_acq_common(obd, uid, gid, inodes, pending, 0,
-                                    acquire, oti, inode, frags);
+        return quota_is_set(obd, uid, gid, QI_SET) ?
+                quota_chk_acq_common(obd, uid, gid, inodes, pending, 0,
+                                     acquire, oti, inode, frags) : 0;
 }
 
 static int mds_quota_acquire(struct obd_device *obd, unsigned int uid,
