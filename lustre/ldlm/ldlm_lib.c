@@ -1115,7 +1115,17 @@ static void target_release_saved_req(struct ptlrpc_request *req)
 
 static void target_send_delayed_replies(struct obd_device *obd)
 {
+        int max_clients = obd->obd_max_recoverable_clients;
         struct ptlrpc_request *req, *tmp;
+        time_t elapsed_time = max_t(time_t, 1, cfs_time_current_sec() -
+                                    obd->obd_recovery_start);
+
+        LCONSOLE_INFO("%s: Recovery period over after %d:%.02d, of %d clients "
+                      "%d recovered and %d %s evicted.\n", obd->obd_name,
+                      (int)elapsed_time/60, (int)elapsed_time%60, max_clients,
+                      max_clients - obd->obd_recoverable_clients,
+                      obd->obd_stale_clients,
+                      obd->obd_stale_clients == 1 ? "was" : "were");
 
         LCONSOLE_INFO("%s: sending delayed replies to recovered clients\n",
                       obd->obd_name);
@@ -1147,8 +1157,9 @@ static void target_finish_recovery(struct obd_device *obd)
         /* when recovery finished, cleanup orphans on mds and ost */
         if (OBT(obd) && OBP(obd, postrecov)) {
                 int rc = OBP(obd, postrecov)(obd);
-                LCONSOLE_WARN("%s: recovery %s: rc %d\n", obd->obd_name,
-                              rc < 0 ? "failed" : "complete", rc);
+                if (rc < 0)
+                        LCONSOLE_WARN("%s: Post recovery failed, rc %d\n",
+                                      obd->obd_name, rc);
         }
         target_send_delayed_replies(obd);
 }
@@ -1272,11 +1283,11 @@ static void reset_recovery_timer(struct obd_device *, int, int);
 static void target_recovery_expired(unsigned long castmeharder)
 {
         struct obd_device *obd = (struct obd_device *)castmeharder;
-        LCONSOLE_WARN("%s: recovery period over; %d clients never reconnected "
-                      "after %lds (%d clients did)\n",
-                      obd->obd_name, obd->obd_recoverable_clients,
-                      cfs_time_current_sec()- obd->obd_recovery_start,
-                      obd->obd_connected_clients);
+        CDEBUG(D_HA, "%s: recovery period over; %d clients never reconnected "
+               "after %lds (%d clients did)\n", obd->obd_name,
+               obd->obd_recoverable_clients,
+               cfs_time_current_sec() - obd->obd_recovery_start,
+               obd->obd_connected_clients);
 
         spin_lock_bh(&obd->obd_processing_task_lock);
         obd->obd_abort_recovery = 1;
@@ -1340,7 +1351,7 @@ static void check_and_start_recovery_timer(struct obd_device *obd,
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 return;
         }
-        CWARN("%s: starting recovery timer\n", obd->obd_name);
+        CDEBUG(D_HA, "%s: starting recovery timer\n", obd->obd_name);
         obd->obd_recovery_start = cfs_time_current_sec();
         /* minimum */
         obd->obd_recovery_timeout = OBD_RECOVERY_FACTOR * obd_timeout;

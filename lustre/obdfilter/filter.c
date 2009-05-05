@@ -1990,17 +1990,14 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         if (obd->obd_recovering) {
                 LCONSOLE_WARN("OST %s now serving %s (%s%s%s), but will be in "
                               "recovery for at least %d:%.02d, or until %d "
-                              "client%s reconnect. During this time new clients"
-                              " will not be allowed to connect. "
-                              "Recovery progress can be monitored by watching "
-                              "/proc/fs/lustre/obdfilter/%s/recovery_status.\n",
+                              "client%s reconnect%s.\n",
                               obd->obd_name, lustre_cfg_string(lcfg, 1),
                               label ?: "", label ? "/" : "", str,
                               obd->obd_recovery_timeout / 60,
                               obd->obd_recovery_timeout % 60,
                               obd->obd_recoverable_clients,
-                              (obd->obd_recoverable_clients == 1) ? "":"s",
-                              obd->obd_name);
+                              obd->obd_recoverable_clients == 1 ? "":"s",
+                              obd->obd_recoverable_clients == 1 ? "s":"");
         } else {
                 LCONSOLE_INFO("OST %s now serving %s (%s%s%s) with recovery "
                               "%s\n", obd->obd_name, lustre_cfg_string(lcfg, 1),
