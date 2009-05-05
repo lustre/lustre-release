@@ -1469,7 +1469,7 @@ static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
         }
 
 repeat:
-        if (sbi->ll_max_rw_chunk != 0) {
+        if (sbi->ll_max_rw_chunk != 0 && !(file->f_flags & O_DIRECT)) {
                 /* first, let's know the end of the current stripe */
                 end = *ppos;
                 obd_extent_calc(sbi->ll_osc_exp, lsm, OBD_CALC_STRIPE_END,&end);
@@ -1730,7 +1730,7 @@ repeat:
                 lock_end = OBD_OBJECT_EOF;
                 iov_copy = (struct iovec *)iov;
                 nrsegs_copy = nr_segs;
-        } else if (sbi->ll_max_rw_chunk != 0) {
+        } else if (sbi->ll_max_rw_chunk != 0 && !(file->f_flags & O_DIRECT)) {
                 /* first, let's know the end of the current stripe */
                 end = *ppos;
                 obd_extent_calc(sbi->ll_osc_exp, lsm, OBD_CALC_STRIPE_END,
