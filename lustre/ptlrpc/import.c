@@ -512,10 +512,9 @@ static int import_select_connection(struct obd_import *imp)
 
         if (imp->imp_conn_current != imp_conn) {
                 if (imp->imp_conn_current)
-                        LCONSOLE_INFO("Changing connection for %s to %s/%s\n",
-                                      imp->imp_obd->obd_name,
-                                      imp_conn->oic_uuid.uuid,
-                                      libcfs_nid2str(imp_conn->oic_conn->c_peer.nid));
+                        CDEBUG(D_HA, "Changing connection for %s to %s/%s\n",
+                               imp->imp_obd->obd_name, imp_conn->oic_uuid.uuid,
+                               libcfs_nid2str(imp_conn->oic_conn->c_peer.nid));
                 imp->imp_conn_current = imp_conn;
         }
 
