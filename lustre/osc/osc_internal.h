@@ -91,11 +91,12 @@ struct osc_cache_waiter {
 
 int osc_precreate(struct obd_export *exp);
 int osc_create(struct obd_export *exp, struct obdo *oa,
-	       struct lov_stripe_md **ea, struct obd_trans_info *oti);
+               struct lov_stripe_md **ea, struct obd_trans_info *oti);
 int osc_real_create(struct obd_export *exp, struct obdo *oa,
-	       struct lov_stripe_md **ea, struct obd_trans_info *oti);
+                    struct lov_stripe_md **ea, struct obd_trans_info *oti);
 void oscc_init(struct obd_device *obd);
 void osc_wake_cache_waiters(struct client_obd *cli);
+int osc_shrink_grant_to_target(struct client_obd *cli, long target);
 
 #ifdef LPROCFS
 int lproc_osc_attach_seqstat(struct obd_device *dev);
@@ -121,8 +122,8 @@ static inline int osc_recoverable_error(int rc)
 /* return 1 if osc should be resend request */
 static inline int osc_should_resend(int resend, struct client_obd *cli)
 {
-        return atomic_read(&cli->cl_resends) ? 
-                atomic_read(&cli->cl_resends) > resend : 1; 
+        return atomic_read(&cli->cl_resends) ?
+                atomic_read(&cli->cl_resends) > resend : 1;
 }
 
 static inline int osc_exp_is_2_0_server(struct obd_export *exp) {
