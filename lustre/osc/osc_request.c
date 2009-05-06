@@ -810,6 +810,7 @@ static void osc_update_next_shrink(struct client_obd *cli)
 static void osc_consume_write_grant(struct client_obd *cli,
                                     struct brw_page *pga)
 {
+        LASSERT_SPIN_LOCKED(&cli->cl_loi_list_lock);
         LASSERT(!(pga->flag & OBD_BRW_FROM_GRANT));
         atomic_inc(&obd_dirty_pages);
         cli->cl_dirty += CFS_PAGE_SIZE;
@@ -829,6 +830,7 @@ static void osc_release_write_grant(struct client_obd *cli,
         int blocksize = cli->cl_import->imp_obd->obd_osfs.os_bsize ? : 4096;
         ENTRY;
 
+        LASSERT_SPIN_LOCKED(&cli->cl_loi_list_lock);
         if (!(pga->flag & OBD_BRW_FROM_GRANT)) {
                 EXIT;
                 return;
@@ -912,14 +914,19 @@ void osc_wake_cache_waiters(struct client_obd *cli)
         EXIT;
 }
 
-static void osc_update_grant(struct client_obd *cli, struct ost_body *body)
+static void __osc_update_grant(struct client_obd *cli, obd_size grant)
 {
         client_obd_list_lock(&cli->cl_loi_list_lock);
-        CDEBUG(D_CACHE, "got "LPU64" extra grant\n", body->oa.o_grant);
-        if (body->oa.o_valid & OBD_MD_FLGRANT)
-                cli->cl_avail_grant += body->oa.o_grant;
-        /* waiters are woken in brw_interpret */
+        cli->cl_avail_grant += grant;
         client_obd_list_unlock(&cli->cl_loi_list_lock);
+}
+ 
+static void osc_update_grant(struct client_obd *cli, struct ost_body *body)
+{
+        if (body->oa.o_valid & OBD_MD_FLGRANT) {
+                CDEBUG(D_CACHE, "got "LPU64" extra grant\n", body->oa.o_grant);
+                __osc_update_grant(cli, body->oa.o_grant);
+        }
 }
 
 static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
@@ -935,9 +942,7 @@ static int osc_shrink_grant_interpret(const struct lu_env *env,
         struct ost_body *body;
         
         if (rc != 0) {
-                client_obd_list_lock(&cli->cl_loi_list_lock);
-                cli->cl_avail_grant += oa->o_grant;
-                client_obd_list_unlock(&cli->cl_loi_list_lock);
+                __osc_update_grant(cli, oa->o_grant);
                 GOTO(out, rc);
         }
 
@@ -974,11 +979,8 @@ static int osc_shrink_grant(struct client_obd *cli)
         rc = osc_set_info_async(cli->cl_import->imp_obd->obd_self_export,
                                 sizeof(KEY_GRANT_SHRINK), KEY_GRANT_SHRINK,
                                 sizeof(*body), body, NULL);
-        if (rc) {
-                client_obd_list_lock(&cli->cl_loi_list_lock);
-                cli->cl_avail_grant += body->oa.o_grant;
-                client_obd_list_unlock(&cli->cl_loi_list_lock);
-        }
+        if (rc != 0)
+                __osc_update_grant(cli, body->oa.o_grant);
         if (body)
                OBD_FREE_PTR(body);
         RETURN(rc);
