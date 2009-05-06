@@ -453,6 +453,72 @@ fi
 ])
 
 #
+# LB_CONFIG_OFED_BACKPORTS
+#
+# include any OFED backport headers in all compile commands
+# NOTE: this does only include the backport paths, not the OFED headers
+#       adding the OFED headers is done in the lnet portion
+AC_DEFUN([LB_CONFIG_OFED_BACKPORTS],
+[AC_MSG_CHECKING([whether to use any OFED backport headers])
+# set default
+AC_ARG_WITH([o2ib],
+	AC_HELP_STRING([--with-o2ib=path],
+	               [build o2iblnd against path]),
+	[
+		case $with_o2ib in
+		yes)    O2IBPATHS="$LINUX $LINUX/drivers/infiniband"
+			ENABLEO2IB=2
+			;;
+		no)     ENABLEO2IB=0
+			;;
+		*)      O2IBPATHS=$with_o2ib
+			ENABLEO2IB=3
+			;;
+		esac
+	],[
+		O2IBPATHS="$LINUX $LINUX/drivers/infiniband"
+		ENABLEO2IB=1
+	])
+if test $ENABLEO2IB -eq 0; then
+	AC_MSG_RESULT([no])
+else
+	o2ib_found=false
+	for O2IBPATH in $O2IBPATHS; do
+		if test \( -f ${O2IBPATH}/include/rdma/rdma_cm.h -a \
+			   -f ${O2IBPATH}/include/rdma/ib_cm.h -a \
+			   -f ${O2IBPATH}/include/rdma/ib_verbs.h -a \
+			   -f ${O2IBPATH}/include/rdma/ib_fmr_pool.h \); then
+			o2ib_found=true
+			break
+		fi
+	done
+	if ! $o2ib_found; then
+		AC_MSG_RESULT([no])
+		case $ENABLEO2IB in
+			1) ;;
+			2) AC_MSG_ERROR([kernel OpenIB gen2 headers not present]);;
+			3) AC_MSG_ERROR([bad --with-o2ib path]);;
+			*) AC_MSG_ERROR([internal error]);;
+		esac
+	else
+                if test -f $O2IBPATH/config.mk; then
+			. $O2IBPATH/config.mk
+                elif test -f $O2IBPATH/ofed_patch.mk; then
+			. $O2IBPATH/ofed_patch.mk
+		fi
+		if test -n "$BACKPORT_INCLUDES"; then
+			OFED_BACKPORT_PATH=`echo $BACKPORT_INCLUDES | sed "s#.*/src/ofa_kernel/#$O2IBPATH/#"`
+			EXTRA_LNET_INCLUDE="-I$OFED_BACKPORT_PATH $EXTRA_LNET_INCLUDE"
+			AC_MSG_RESULT([yes])
+		else
+			AC_MSG_RESULT([no])
+                fi
+	fi
+fi
+])
+
+
+#
 # LB_PROG_LINUX
 #
 # linux tests
@@ -487,6 +553,10 @@ LB_LINUX_CONFIG([KMOD],[],[
 
 #LB_LINUX_CONFIG_BIG_STACK
 
+# it's ugly to be doing anything with OFED outside of the lnet module, but
+# this has to be done here so that the backports path is set before all of
+# the LN_PROG_LINUX checks are done
+LB_CONFIG_OFED_BACKPORTS
 ])
 
 #
@@ -534,4 +604,32 @@ else
     AC_MSG_RESULT([yes])
     $3
 fi
+])
+
+#
+# Like AC_CHECK_HEADER but checks for a kernel-space header
+#
+m4_define([LB_CHECK_LINUX_HEADER],
+[AS_VAR_PUSHDEF([ac_Header], [ac_cv_header_$1])dnl
+AC_CACHE_CHECK([for $1], ac_Header,
+	       [LB_LINUX_COMPILE_IFELSE([LB_LANG_PROGRAM([@%:@include <$1>])],
+				  [modules],
+				  [test -s build/conftest.o],
+				  [AS_VAR_SET(ac_Header, [yes])],
+				  [AS_VAR_SET(ac_Header, [no])])])
+AS_IF([test AS_VAR_GET(ac_Header) = yes], [$2], [$3])[]dnl
+AS_VAR_POPDEF([ac_Header])dnl
+])
+
+#
+# Like AC_CHECK_HEADERS but for kernel space headers
+#
+AC_DEFUN([LB_CHECK_LINUX_HEADERS],
+[AH_CHECK_HEADERS([$1])dnl
+for ac_header in $1
+do
+LB_CHECK_LINUX_HEADER($ac_header,
+		[AC_DEFINE_UNQUOTED(AS_TR_CPP(HAVE_$ac_header)) $2],
+		[$3])dnl
+done
 ])

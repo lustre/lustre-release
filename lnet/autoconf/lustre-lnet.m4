@@ -546,7 +546,8 @@ else
 		O2IBCPPFLAGS="-I$O2IBPATH/include"
 		EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
 		EXTRA_KCFLAGS="$EXTRA_KCFLAGS $O2IBCPPFLAGS"
-		EXTRA_LNET_INCLUDE="$O2IBCPPFLAGS $EXTRA_LNET_INCLUDE"
+		EXTRA_LNET_INCLUDE="$EXTRA_LNET_INCLUDE $O2IBCPPFLAGS"
+
 		LB_LINUX_TRY_COMPILE([
 		        #include <linux/version.h>
 		        #include <linux/pci.h>
@@ -594,13 +595,19 @@ else
 			if test -n $O2IB_SYMVER ; then
 				AC_MSG_NOTICE([adding $O2IBPATH/Module.symvers to $PWD/$SYMVERFILE])
 				# strip out the existing symbols versions first
+				if test -f $PWD/$SYMVERFILE; then
 				egrep -v $(echo $(awk '{ print $2 }' $O2IBPATH/$O2IB_SYMVER) | tr ' ' '|') $PWD/$SYMVERFILE > $PWD/$SYMVERFILE.old
+				else
+				    touch $PWD/$SYMVERFILE.old
+				fi
 				cat $PWD/$SYMVERFILE.old $O2IBPATH/$O2IB_SYMVER > $PWD/$SYMVERFILE
+				rm $PWD/$SYMVERFILE.old
 			else
 				AC_MSG_ERROR([an external source tree was specified for o2iblnd however I could not find a $O2IBPATH/Module.symvers there])
 			fi
 		fi
 
+		AC_MSG_CHECKING([for ib_dma_map_single support])
 		LB_LINUX_TRY_COMPILE([
 			#include <linux/version.h>
 			#include <linux/pci.h>
@@ -619,6 +626,7 @@ else
 			AC_MSG_RESULT(NO)
 		])
 
+		AC_MSG_CHECKING([for OFED completion vector])
 		LB_LINUX_TRY_COMPILE([
 			#include <linux/version.h>
 			#include <linux/pci.h>

@@ -1390,6 +1390,29 @@ AC_DEFUN([LC_HAVE_SYSCTL_VFS_CACHE_PRESSURE],
 ])
 ])
 
+# vfs_symlink seems to have started out with 3 args until 2.6.7 where a
+# "mode" argument was added, but then again, in some later version it was
+# removed
+AC_DEFUN([LC_4ARGS_VFS_SYMLINK],
+[AC_MSG_CHECKING([if vfs_symlink wants 4 args])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+],[
+	struct inode *dir;
+	struct dentry *dentry;
+	const char *oldname = NULL;
+	int mode = 0;
+
+	vfs_symlink(dir, dentry, oldname, mode);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_4ARGS_VFS_SYMLINK, 1,
+                  [vfs_symlink wants 4 args])
+],[
+        AC_MSG_RESULT(no)
+])
+])
+
 #
 # LC_PROG_LINUX
 #
@@ -1450,6 +1473,7 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_FUNC_RCU
           LC_PERCPU_COUNTER
           LC_QUOTA64
+          LC_4ARGS_VFS_SYMLINK
 
           # does the kernel have VFS intent patches?
           LC_VFS_INTENT_PATCHES
