@@ -1475,10 +1475,10 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_VFS_KERN_MOUNT
           LC_INVALIDATEPAGE_RETURN_INT
           LC_UMOUNTBEGIN_HAS_VFSMOUNT
-         if test x$enable_server = xyes ; then
+          LC_EXPORT_FILEMAP_FDATAWRITE_RANGE
+          if test x$enable_server = xyes ; then
                 LC_EXPORT_INVALIDATE_MAPPING_PAGES
-                LC_EXPORT_FILEMAP_FDATAWRITE_RANGE
-         fi
+          fi
 
           #2.6.18 + RHEL5 (fc6)
           LC_PG_FS_MISC
