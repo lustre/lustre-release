@@ -1,8 +1,30 @@
+tbd Sun Microsystems, Inc.
+	* version 1.8.0.1
+	* Support for kernels:
+	 2.6.16.60-0.31 (SLES 10),
+	 2.6.18-128.1.6.el5 (RHEL 5),
+	 2.6.22.14 vanilla (kernel.org)
+	* Client support for unpatched kernels:
+	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
+	  2.6.16 - 2.6.22 vanilla (kernel.org)
+	* Recommended e2fsprogs version: 1.40.11-sun1
+	* File join has been disabled, refer to Bugzilla 16929.
+	* A new Lustre ADIO driver is available for MPICH2-1.0.7.
+	* NFS export disabled when stack size < 8192. Since the NFSv4 export of
+	  Lustre filesystem with 4K stack may cause a stack overflow. For more
+	  information, please refer to bugzilla 17630.
+
+Severity   : enhancement
+Bugzilla   : 19024
+Description: Update to RHEL5.3 kernel-2.6.18-128.1.6.el5.
+
+-------------------------------------------------------------------------------
+
 2009-04-30 Sun Microsystems, Inc.
 	* version 1.8.0
 	* Support for kernels:
 	 2.6.16.60-0.31 (SLES 10),
-	 2.6.18-128.1.6.el5 (RHEL 5),
+	 2.6.18-92.1.17.el5 (RHEL 5),
 	 2.6.22.14 vanilla (kernel.org)
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
@@ -15,10 +37,6 @@
 	  information, please refer to bugzilla 17630.
 
 Severity   : enhancement
-Bugzilla   : 19024
-Description: Update to RHEL5.3 kernel-2.6.18-128.1.6.el5.
-
-Severity   : enhancement
 Bugzilla   : 12182
 Description: Caching OSS
 Details    : introduce data caching on the OSS. The OSS now relies on the linux
@@ -28,7 +46,7 @@ Details    : introduce data caching on the OSS. The OSS now relies on the linux
 
 Severity   : enhancement
 Bugzilla   : 10609
-Description: version based recovery
+Description: Version based recovery
 Details    : introduce finer grained recovery able to detect transaction
 	     dependencies and can deal with transaction gaps caused by clients
 	     failing at the same time as the server.
