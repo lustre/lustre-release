@@ -3688,23 +3688,22 @@ static struct inode *osd_iget(struct osd_thread_info *info,
         if (inode == NULL) {
                 CERROR("no inode\n");
                 inode = ERR_PTR(-EACCES);
-        } else if (is_bad_inode(inode)) {
-                CERROR("bad inode\n");
-                iput(inode);
-                inode = ERR_PTR(-ENOENT);
         } else if (id->oii_gen != OSD_OII_NOGEN &&
                    inode->i_generation != id->oii_gen) {
-                CERROR("stale inode\n");
                 iput(inode);
                 inode = ERR_PTR(-ESTALE);
         } else if (inode->i_nlink == 0) {
                 /* due to parallel readdir and unlink,
                 * we can have dead inode here. */
+                CWARN("stale inode\n");
                 make_bad_inode(inode);
                 iput(inode);
                 inode = ERR_PTR(-ESTALE);
+        } else if (is_bad_inode(inode)) {
+                CERROR("bad inode %lx\n",inode->i_ino);
+                iput(inode);
+                inode = ERR_PTR(-ENOENT);
         }
-
         return inode;
 
 }
