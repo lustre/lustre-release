@@ -1440,7 +1440,7 @@ kiblnd_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
                 tx = kiblnd_get_idle_tx(ni);
                 if (tx == NULL) {
-                        CERROR("Can allocate txd for GET to %s: \n",
+                        CERROR("Can't allocate txd for GET to %s: \n",
                                libcfs_nid2str(target.nid));
                         return -ENOMEM;
                 }
