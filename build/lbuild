@@ -439,7 +439,7 @@ load_target()
                 fi
             fi
         fi
-        if [ -n "$OFED_VERSION" ] && \
+        if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ] && \
            [ ! -r "$KERNELTREE/../OFED-${OFED_VERSION}.tgz" ] ; then
             if (( $DOWNLOAD )) ; then
                 local location="http://downloads.lustre.org/public/OFED/"
@@ -965,7 +965,7 @@ store_for_reuse()
 	        dstdir="${dstdir%.rpm}"
 	[ -d "$dstdir" ] && rm -rf "$dstdir"
         mv "${builddir}" "$dstdir" || return 255
-        if [ -n "$OFED_VERSION" ]; then
+        if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
             # move the OFED kernel-ib-devel tree as well
             mv "${builddir%/*}/kernel-ib-devel/usr/src/ofa_kernel" "${dstdir%/*}" || return 255
         fi
@@ -988,7 +988,7 @@ store_for_reuse()
     else
 	    [ -f "RPMS/${TARGET_ARCH}/${kernelrpmname}" ] && cp -f "RPMS/${TARGET_ARCH}/${kernelrpmname}" "${REUSEBUILD}/${TIMESTAMP}/"
     fi
-    if [ -n "$OFED_VERSION" ]; then
+    if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
         # store kernel-ib RPMs
         local rpmname
         for rpmname in "kernel-ib" "kernel-ib-devel"; do
@@ -1357,7 +1357,7 @@ patchless_build_sequence()
     [ -d SOURCES ] || mkdir SOURCES
 
     # first build kernel-ib
-    if [ -n "$OFED_VERSION" ]; then
+    if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
         $rpmfound && build_kernel_ib
     fi
     ( $rpmfound ) && build_lustre && buildsuccess=true && find_linux_source_rpm
@@ -1492,7 +1492,8 @@ build_sequence_reuse()
             local reusedkernelsourcerpm=
             local reusedkernelibrpm=
             [ -d "$curdir" ] || continue
-            [ -n "$OFED_VERSION" -a ! -d "${curdir%/*}/ofa_kernel" ] && continue
+            [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" -a 
+	      ! -d "${curdir%/*}/ofa_kernel" ] && continue
             local reusedkernelprefix="kernel-lustre-"
             ( $PATCHLESS ) && reusedkernelprefix=
             [ -f ${curdir}/../${reusedkernelprefix}${REUSEDKERNELMASK}.rpm ] && \
@@ -1500,7 +1501,7 @@ build_sequence_reuse()
             reusedkernelprefix="kernel-lustre-source-"
             [ -f ${curdir}/../${reusedkernelprefix}${REUSEDKERNELMASKnew}.rpm ] && \
                 reusedkernelsourcerpm=$(ls ${curdir}/../${reusedkernelprefix}${REUSEDKERNELMASKnew}.rpm | head -1 ) 
-            if [ -n "$OFED_VERSION" ]; then
+            if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
                 gen_lustre_version
                 reusedkernelprefix="kernel-ib-"
                 [ -f ${curdir}/../${reusedkernelprefix}${OFED_VERSION}-${LUSTRE_EXTRA_VERSION}.${TARGET_ARCH}.rpm ] && \
@@ -1514,10 +1515,14 @@ build_sequence_reuse()
                 continue
             fi
             if [ -n "$OFED_VERSION" ]; then
+            	if [ "$OFED_VERSION" != "inkernel" ]; then
                 if ! ( $NORPM ) && [ ! -f "$reusedkernelibrpm" -o ! -f "$reusedkernelibdevelrpm"]; then #kernel-ib{,-devel} rpm not found. Build all
                     continue
                 fi
                 CONFIGURE_FLAGS="--with-o2ib=${curdir%/*}/ofa_kernel ${CONFIGURE_FLAGS}"
+                else
+                    CONFIGURE_FLAGS="--with-o2ib=yes ${CONFIGURE_FLAGS}"
+		fi
             fi
             LINUX="$curdir"
             build_lustre || continue
@@ -1698,7 +1703,7 @@ unpack_lustre
 load_target
 EXTRA_VERSION_DELIMITER=${EXTRA_VERSION_DELIMITER:-"-"}
 
-if [ -n "$OFED_VERSION" ]; then
+if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
     unpack_ofed
 fi
 

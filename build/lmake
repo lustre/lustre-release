@@ -874,7 +874,11 @@ depend_kernel
 build_kernel
 
 if [ -n "$OFED_VERSION" ]; then
+    if [ "$OFED_VERSION" = "inkernel" ]; then
+	CONFIGURE_FLAGS="--with-o2ib=yes ${CONFIGURE_FLAGS}"
+    else
     build_kernel_ib
+    fi
 fi
 
 configure_lustre
