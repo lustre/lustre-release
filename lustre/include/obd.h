@@ -428,6 +428,7 @@ struct client_obd {
         cfs_time_t               cl_next_shrink_grant;   /* jiffies */
         struct list_head         cl_grant_shrink_list;  /* Timeout event list */
         struct semaphore         cl_grant_sem;   /*grant shrink list semaphore*/
+        int                      cl_grant_shrink_interval; /* seconds */
 
         /* keep track of objects that have lois that contain pages which
          * have been queued for async brw.  this lock also protects the
@@ -542,7 +543,7 @@ struct mds_obd {
         char                            *mds_profile;
         struct obd_export               *mds_osc_exp; /* XXX lov_exp */
         struct lov_desc                  mds_lov_desc;
-	
+
         /* mark pages dirty for write. */
         bitmap_t                         *mds_lov_page_dirty;
         /* array for store pages with obd_id */
@@ -1063,7 +1064,7 @@ enum obd_cleanup_stage {
 #define KEY_ASYNC               "async"
 #define KEY_CAPA_KEY            "capa_key"
 #define KEY_GRANT_SHRINK        "grant_shrink"
-#define KEY_OFF_RPCSIZE		"off_rpcsize"
+#define KEY_OFF_RPCSIZE         "off_rpcsize"
 
 struct obd_ops {
         struct module *o_owner;
@@ -1316,14 +1317,14 @@ static inline struct lsm_operations *lsm_op_find(int magic)
 int lvfs_check_io_health(struct obd_device *obd, struct file *file);
 
 /* Requests for obd_extent_calc() */
-#define OBD_CALC_STRIPE_START  	       0x0001 
-#define OBD_CALC_STRIPE_END    	       0x0010 
-#define OBD_CALC_STRIPE_RPC_ALIGN      0x0100 
+#define OBD_CALC_STRIPE_START          0x0001
+#define OBD_CALC_STRIPE_END            0x0010
+#define OBD_CALC_STRIPE_RPC_ALIGN      0x0100
 
 #define OBD_CALC_STRIPE_RPC_START_ALIGN (OBD_CALC_STRIPE_START | \
-				         OBD_CALC_STRIPE_RPC_ALIGN)
+                                         OBD_CALC_STRIPE_RPC_ALIGN)
 #define OBD_CALC_STRIPE_RPC_END_ALIGN (OBD_CALC_STRIPE_START | \
-				       OBD_CALC_STRIPE_RPC_ALIGN)
+                                       OBD_CALC_STRIPE_RPC_ALIGN)
 
 static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
                                          struct obd_export *exp, int error)
