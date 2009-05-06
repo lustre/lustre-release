@@ -2513,7 +2513,7 @@ int llapi_changelog_clear(const char *mdtname, const char *idstr,
         fd = get_root_fd((char *)mdtname);
         if (fd < 0) {
                 llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
-                          "can't open fs root for '%s': %d\n", mdtname, fd);
+                          "can't open fs root for '%s': %d", mdtname, fd);
                 return fd;
         }
 
@@ -2522,8 +2522,7 @@ int llapi_changelog_clear(const char *mdtname, const char *idstr,
         data.icc_recno = endrec;
         rc = ioctl(fd, OBD_IOC_CHANGELOG_CLEAR, &data);
         if (rc)
-                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
-                          "ioctl err %d", rc);
+                llapi_err(LLAPI_MSG_ERROR, "ioctl err %d", rc);
 
         close(fd);
         return rc;

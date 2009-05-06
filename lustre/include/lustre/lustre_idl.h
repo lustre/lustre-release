@@ -2372,7 +2372,7 @@ enum changelog_rec_type {
 struct changelog_setinfo {
         __u64 cs_recno;
         __u32 cs_id;
-};
+} __attribute__((packed));
 
 /** changelog record */
 struct llog_changelog_rec {
