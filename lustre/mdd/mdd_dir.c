@@ -448,6 +448,9 @@ int mdd_link_sanity_check(const struct lu_env *env,
         int rc = 0;
         ENTRY;
 
+        if (mdd_is_dead_obj(src_obj))
+                RETURN(-ESTALE);
+
         /* Local ops, no lookup before link, check filename length here. */
         if (lname && (lname->ln_namelen > m->mdd_dt_conf.ddp_max_name_len))
                 RETURN(-ENAMETOOLONG);
@@ -795,6 +798,9 @@ int mdd_unlink_sanity_check(const struct lu_env *env, struct mdd_object *pobj,
 {
         int rc;
         ENTRY;
+
+        if (mdd_is_dead_obj(cobj))
+                RETURN(-ESTALE);
 
         rc = mdd_may_delete(env, pobj, cobj, ma, 1, 1);
 
@@ -1158,7 +1164,7 @@ static int mdd_rt_sanity_check(const struct lu_env *env,
          * processed in cmr_rename_tgt before mdd_rename_tgt and enable
          * MDS_PERM_BYPASS.
          * So check may_delete, but not check nlink of tgt_pobj. */
-        LASSERT(tobj);
+
         rc = mdd_may_delete(env, tgt_pobj, tobj, ma, 1, 1);
 
         RETURN(rc);
@@ -1925,6 +1931,10 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
          * the other case has been processed in cml_rename
          * before mdd_rename and enable MDS_PERM_BYPASS. */
         LASSERT(sobj);
+
+        if (mdd_is_dead_obj(sobj))
+                RETURN(-ESTALE);
+
         rc = mdd_may_delete(env, src_pobj, sobj, ma, 1, 0);
         if (rc)
                 RETURN(rc);
@@ -2102,6 +2112,13 @@ static int mdd_rename(const struct lu_env *env,
          */
         if (tobj && mdd_object_exists(mdd_tobj)) {
                 mdd_write_lock(env, mdd_tobj, MOR_TGT_CHILD);
+                if (mdd_is_dead_obj(mdd_tobj)) {
+                        mdd_write_unlock(env, mdd_tobj);
+                        /* shld not be dead, something is wrong */
+                        CERROR("tobj is dead\n");
+                        rc = -EINVAL;
+                        goto cleanup;
+                }
                 __mdd_ref_del(env, mdd_tobj, handle, 0);
 
                 /* Remove dot reference. */
