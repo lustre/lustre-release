@@ -241,6 +241,7 @@ struct osd_thread_info {
 #ifdef HAVE_QUOTA_SUPPORT
         struct osd_ctxt        oti_ctxt;
 #endif
+        struct lu_env          oti_obj_delete_tx_env;
 };
 
 #ifdef LPROCFS

@@ -523,17 +523,22 @@ static int osd_inode_remove(const struct lu_env *env, struct osd_object *obj)
         struct osd_device      *osd = osd_obj2dev(obj);
         struct osd_thread_info *oti = osd_oti_get(env);
         struct txn_param       *prm = &oti->oti_txn;
+        struct lu_env          *env_del_obj = &oti->oti_obj_delete_tx_env;
         struct thandle         *th;
         int result;
 
+        lu_env_init(env_del_obj, LCT_DT_THREAD);
         txn_param_init(prm, OSD_TXN_OI_DELETE_CREDITS +
                             OSD_TXN_INODE_DELETE_CREDITS);
-        th = osd_trans_start(env, &osd->od_dt_dev, prm);
+        th = osd_trans_start(env_del_obj, &osd->od_dt_dev, prm);
         if (!IS_ERR(th)) {
-                result = osd_oi_delete(oti, &osd->od_oi, fid, th);
-                osd_trans_stop(env, th);
+                result = osd_oi_delete(osd_oti_get(env_del_obj),
+                                       &osd->od_oi, fid, th);
+                osd_trans_stop(env_del_obj, th);
         } else
                 result = PTR_ERR(th);
+
+        lu_env_fini(env_del_obj);
         return result;
 }
 
