@@ -2,8 +2,8 @@
 
 set -e
 
-# bug number:
-ALWAYS_EXCEPT="3c 4b 4c 10 $REPLAY_VBR_EXCEPT"
+# bug number: 18946
+ALWAYS_EXCEPT="2 3c 4b 4c 10 $REPLAY_VBR_EXCEPT"
 
 SAVE_PWD=$PWD
 PTLDEBUG=${PTLDEBUG:--1}
@@ -74,7 +74,6 @@ test_2() {
     replay_barrier mds
     do_node $CLIENT2 mcreate $DIR/$tdir/$tfile
     do_node $CLIENT1 createmany -o $DIR/$tfile- 25
-    #do_node $CLIENT2 createmany -o $DIR/$tdir/$tfile-2- 1
     do_node $CLIENT1 $CHECKSTAT $DIR/$tdir/$tfile
     do_node $CLIENT1 createmany -o $DIR/$tfile-3- 25
     zconf_umount $CLIENT2 $DIR
