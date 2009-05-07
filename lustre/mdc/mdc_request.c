@@ -677,7 +677,7 @@ static void mdc_replay_open(struct ptlrpc_request *req)
 static void mdc_set_open_replay_data_20(struct obd_client_handle *och,
                                         struct ptlrpc_request *open_req)
 {
-	struct mdc_open_data  *mod;
+        struct mdc_open_data  *mod;
         struct obd_import     *imp = open_req->rq_import;
         struct mdt_rec_create *rec = lustre_msg_buf(open_req->rq_reqmsg,
                                                     DLM_INTENT_REC_OFF,
@@ -1461,16 +1461,17 @@ static int mdc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         case OBD_CLEANUP_EXPORTS:
                 /* If we set up but never connected, the
                    client import will not have been cleaned. */
+                down_write(&obd->u.cli.cl_sem);
                 if (obd->u.cli.cl_import) {
                         struct obd_import *imp;
-                        down_write(&obd->u.cli.cl_sem);
                         imp = obd->u.cli.cl_import;
                         CERROR("client import never connected\n");
                         ptlrpc_invalidate_import(imp);
                         class_destroy_import(imp);
-                        up_write(&obd->u.cli.cl_sem);
                         obd->u.cli.cl_import = NULL;
                 }
+                up_write(&obd->u.cli.cl_sem);
+
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
                         CERROR("failed to cleanup llogging subsystems\n");
