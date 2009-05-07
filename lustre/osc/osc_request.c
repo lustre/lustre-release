@@ -4300,9 +4300,9 @@ static int osc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         case OBD_CLEANUP_EXPORTS: {
                 /* If we set up but never connected, the
                    client import will not have been cleaned. */
+                down_write(&obd->u.cli.cl_sem);
                 if (obd->u.cli.cl_import) {
                         struct obd_import *imp;
-                        down_write(&obd->u.cli.cl_sem);
                         imp = obd->u.cli.cl_import;
                         CDEBUG(D_CONFIG, "%s: client import never connected\n",
                                obd->obd_name);
@@ -4312,9 +4312,10 @@ static int osc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                                 imp->imp_rq_pool = NULL;
                         }
                         class_destroy_import(imp);
-                        up_write(&obd->u.cli.cl_sem);
                         obd->u.cli.cl_import = NULL;
                 }
+                up_write(&obd->u.cli.cl_sem);
+
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
                         CERROR("failed to cleanup llogging subsystems\n");
