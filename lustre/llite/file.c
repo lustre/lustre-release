@@ -2147,13 +2147,14 @@ static int ll_inode_revalidate_fini(struct inode *inode, int rc) {
         return 0;
 }
 
-int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
+int __ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it,
+                             __u64 ibits)
 {
         struct inode *inode = dentry->d_inode;
         struct ptlrpc_request *req = NULL;
         struct ll_sb_info *sbi;
         struct obd_export *exp;
-        int rc;
+        int rc = 0;
         ENTRY;
 
         if (!inode) {
@@ -2210,8 +2211,8 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 }
 
                 ll_lookup_finish_locks(&oit, dentry);
-        } else if (!ll_have_md_lock(dentry->d_inode, MDS_INODELOCK_UPDATE |
-                                                     MDS_INODELOCK_LOOKUP)) {
+        } else if (!ll_have_md_lock(dentry->d_inode, ibits)) {
+
                 struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
                 obd_valid valid = OBD_MD_FLGETATTR;
                 struct obd_capa *oc;
@@ -2236,21 +2237,31 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 }
 
                 rc = ll_prep_inode(&inode, req, NULL);
-                if (rc)
-                        GOTO(out, rc);
         }
-
-        /* if object not yet allocated, don't validate size */
-        if (ll_i2info(inode)->lli_smd == NULL)
-                GOTO(out, rc = 0);
-
-        /* cl_glimpse_size will prefer locally cached writes if they extend
-         * the file */
-        rc = cl_glimpse_size(inode);
-        EXIT;
 out:
         ptlrpc_req_finished(req);
         return rc;
+}
+
+int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
+{
+        int rc;
+        ENTRY;
+
+        rc = __ll_inode_revalidate_it(dentry, it, MDS_INODELOCK_UPDATE |
+                                                  MDS_INODELOCK_LOOKUP);
+
+        /* if object not yet allocated, don't validate size */
+        if (rc == 0 && ll_i2info(dentry->d_inode)->lli_smd == NULL)
+                RETURN(0);
+
+        /* cl_glimpse_size will prefer locally cached writes if they extend
+         * the file */
+
+        if (rc == 0)
+                rc = cl_glimpse_size(dentry->d_inode);
+
+        RETURN(rc);
 }
 
 int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
@@ -2323,13 +2334,31 @@ int lustre_check_acl(struct inode *inode, int mask)
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10))
 int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
 {
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), mask %o\n",
-               inode->i_ino, inode->i_generation, inode, mask);
+        int rc = 0;
+        ENTRY;
+
+       /* as root inode are NOT getting validated in lookup operation,
+        * need to do it before permission check. */
+
+        if (inode == inode->i_sb->s_root->d_inode) {
+                struct lookup_intent it = { .it_op = IT_GETATTR };
+
+                rc = __ll_inode_revalidate_it(inode->i_sb->s_root, &it,
+                                              MDS_INODELOCK_LOOKUP);
+                if (rc)
+                        RETURN(rc);
+        }
+
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), inode mode %x mask %o\n",
+               inode->i_ino, inode->i_generation, inode, inode->i_mode, mask);
+
         if (ll_i2sbi(inode)->ll_flags & LL_SBI_RMT_CLIENT)
                 return lustre_check_remote_perm(inode, mask);
 
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_INODE_PERM, 1);
-        return generic_permission(inode, mask, lustre_check_acl);
+        rc = generic_permission(inode, mask, lustre_check_acl);
+
+        RETURN(rc);
 }
 #else
 int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
