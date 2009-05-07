@@ -1,7 +1,7 @@
-Index: linux-2.6.18-128.1.6/fs/ext3/super.c
+Index: linux-2.6.18-128.1.1/fs/ext3/super.c
 ===================================================================
---- linux-2.6.18-128.1.6.orig/fs/ext3/super.c
-+++ linux-2.6.18-128.1.6/fs/ext3/super.c
+--- linux-2.6.18-128.1.1.orig/fs/ext3/super.c
++++ linux-2.6.18-128.1.1/fs/ext3/super.c
 @@ -35,6 +35,8 @@
  #include <linux/namei.h>
  #include <linux/quotaops.h>
@@ -394,10 +394,10 @@ Index: linux-2.6.18-128.1.6/fs/ext3/super.c
  		}
  	}
  #ifdef CONFIG_QUOTA
-Index: linux-2.6.18-128.1.6/include/linux/ext3_fs.h
+Index: linux-2.6.18-128.1.1/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.18-128.1.6.orig/include/linux/ext3_fs.h
-+++ linux-2.6.18-128.1.6/include/linux/ext3_fs.h
+--- linux-2.6.18-128.1.1.orig/include/linux/ext3_fs.h
++++ linux-2.6.18-128.1.1/include/linux/ext3_fs.h
 @@ -594,13 +594,17 @@ struct ext3_super_block {
  	__le32	s_first_meta_bg;	/* First metablock block group */
  	__le32	s_mkfs_time;		/* When the filesystem was created */
@@ -475,10 +475,10 @@ Index: linux-2.6.18-128.1.6/include/linux/ext3_fs.h
   * Function prototypes
   */
  
-Index: linux-2.6.18-128.1.6/include/linux/ext3_fs_sb.h
+Index: linux-2.6.18-128.1.1/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.6.18-128.1.6.orig/include/linux/ext3_fs_sb.h
-+++ linux-2.6.18-128.1.6/include/linux/ext3_fs_sb.h
+--- linux-2.6.18-128.1.1.orig/include/linux/ext3_fs_sb.h
++++ linux-2.6.18-128.1.1/include/linux/ext3_fs_sb.h
 @@ -158,6 +158,7 @@ struct ext3_sb_info {
  	/* locality groups */
  	struct ext3_locality_group *s_locality_groups;
