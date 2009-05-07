@@ -716,8 +716,9 @@ struct mds_lov_sync_info {
         __u32              mlsi_index;   /* index of target */
 };
 
-static int mds_propagate_capa_keys(struct mds_obd *mds)
+static int mds_propagate_capa_keys(struct mds_obd *mds, struct obd_uuid *uuid)
 {
+        struct mds_capa_info    info = { .uuid = uuid };
         struct lustre_capa_key *key;
         int i, rc = 0;
 
@@ -730,8 +731,9 @@ static int mds_propagate_capa_keys(struct mds_obd *mds)
                 key = &mds->mds_capa_keys[i];
                 DEBUG_CAPA_KEY(D_SEC, key, "propagate");
 
+                info.capa = key;
                 rc = obd_set_info_async(mds->mds_osc_exp, sizeof(KEY_CAPA_KEY),
-                                        KEY_CAPA_KEY, sizeof(*key), key, NULL);
+                                        KEY_CAPA_KEY, sizeof(info), &info, NULL);
                 if (rc) {
                         DEBUG_CAPA_KEY(D_ERROR, key,
                                        "propagate failed (rc = %d) for", rc);
@@ -785,7 +787,7 @@ static int __mds_lov_synchronize(void *data)
         if (rc != 0)
                 GOTO(out, rc);
         /* propagate capability keys */
-        rc = mds_propagate_capa_keys(mds);
+        rc = mds_propagate_capa_keys(mds, uuid);
         if (rc)
                 GOTO(out, rc);
 

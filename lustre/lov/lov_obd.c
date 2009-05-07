@@ -2559,7 +2559,7 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
         struct lov_tgt_desc *tgt;
         unsigned incr, check_uuid,
                  do_inactive, no_set;
-        unsigned next_id = 0,  mds_con = 0;
+        unsigned next_id = 0,  mds_con = 0, capa = 0;
         ENTRY;
 
         incr = check_uuid = do_inactive = no_set = 0;
@@ -2587,6 +2587,8 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
                 /* use defaults:  do_inactive = incr = 0; */
         } else if (KEY_IS(KEY_MDS_CONN)) {
                 mds_con = 1;
+        } else if (KEY_IS(KEY_CAPA_KEY)) {
+                capa = 1;
         }
 
         for (i = 0; i < count; i++, val = (char *)val + incr) {
@@ -2621,7 +2623,21 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
                         err = obd_set_info_async(tgt->ltd_exp,
                                          keylen, key, vallen,
                                          ((struct obd_id_info*)val)->data, set);
-                } else  {
+                } else if (capa) {
+                        struct mds_capa_info *info = (struct mds_capa_info*)val;
+
+                        LASSERT(vallen == sizeof(*info));
+
+                         /* Only want a specific OSC */
+                        if (info->uuid &&
+                            !obd_uuid_equals(info->uuid, &tgt->ltd_uuid))
+                                continue;
+
+                        err = obd_set_info_async(tgt->ltd_exp, keylen, key,
+                                                 sizeof(*info->capa),
+                                                 info->capa, set);
+                       
+                } else {
                         /* Only want a specific OSC */
                         if (check_uuid &&
                             !obd_uuid_equals(val, &tgt->ltd_uuid))

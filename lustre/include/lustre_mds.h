@@ -65,6 +65,11 @@ struct mds_group_info {
         int group;
 };
 
+struct mds_capa_info {
+        struct obd_uuid        *uuid;
+        struct lustre_capa_key *capa;
+};
+
 /* mds/mds_lov.c */
 int mds_lov_write_objids(struct obd_device *obd);
 int mds_lov_prepare_objids(struct obd_device *obd, struct lov_mds_md *lmm);

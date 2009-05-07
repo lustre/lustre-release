@@ -1020,13 +1020,14 @@ static int mdd_update_capa_key(const struct lu_env *env,
                                struct md_device *m,
                                struct lustre_capa_key *key)
 {
+        struct mds_capa_info info = { .uuid = NULL, .capa = key };
         struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
         struct obd_export *lov_exp = mdd2obd_dev(mdd)->u.mds.mds_osc_exp;
         int rc;
         ENTRY;
 
         rc = obd_set_info_async(lov_exp, sizeof(KEY_CAPA_KEY), KEY_CAPA_KEY,
-                                sizeof(*key), key, NULL);
+                                sizeof(info), &info, NULL);
         RETURN(rc);
 }
 
