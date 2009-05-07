@@ -592,7 +592,7 @@ else
 					break;
 				fi
 			done
-			if test -n $O2IB_SYMVER ; then
+			if test -n "$O2IB_SYMVER"; then
 				AC_MSG_NOTICE([adding $O2IBPATH/Module.symvers to $PWD/$SYMVERFILE])
 				# strip out the existing symbols versions first
 				if test -f $PWD/$SYMVERFILE; then
