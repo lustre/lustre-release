@@ -935,8 +935,8 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         struct mds_obd *mds = &exp->exp_obd->u.mds;
         struct inode *parent_inode = mds->mds_objects_dir->d_inode;
         unsigned int tmpname = ll_rand();
-        struct file *filp;
-        struct dentry *new_child;
+        struct dentry *dchild, *new_child;
+        struct lvfs_dentry_params dp = LVFS_DENTRY_PARAMS_INIT;
         struct lvfs_run_ctxt *saved = NULL;
         char fidname[LL_FID_NAMELEN];
         void *handle;
@@ -955,31 +955,32 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
 
         push_ctxt(saved, &exp->exp_obd->obd_lvfs_ctxt, &ucred);
 
-        sprintf(fidname, "OBJECTS/%u.%u", tmpname, current->pid);
-        filp = filp_open(fidname, O_CREAT | O_EXCL, 0666);
-        if (IS_ERR(filp)) {
-                rc = PTR_ERR(filp);
-                if (rc == -EEXIST) {
-                        CERROR("impossible object name collision %u\n",
-                               tmpname);
-                        LBUG();
-                }
-                CERROR("error creating tmp object %u: rc %d\n", tmpname, rc);
-                GOTO(out_pop, rc);
+        sprintf(fidname, "%u.%u", tmpname, current->pid);
+        dchild = lookup_one_len(fidname, mds->mds_objects_dir, strlen(fidname));
+        if (IS_ERR(dchild)) {
+                CERROR("getting neg dentry for obj: %u\n", tmpname);
+                GOTO(out_pop, rc = PTR_ERR(dchild));
+        }
+        if (dchild->d_inode != NULL) {
+                CERROR("impossible non-negative obj dentry: %u\n", tmpname);
+                LBUG();
         }
 
-        LASSERT(mds->mds_objects_dir == filp->f_dentry->d_parent);
-
-        oa->o_id = filp->f_dentry->d_inode->i_ino;
-        oa->o_generation = filp->f_dentry->d_inode->i_generation;
-        namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
+        dchild->d_fsdata = (void *)&dp;
+        dp.ldp_ptr   = (void *)DP_LASTGROUP_REVERSE;
 
         LOCK_INODE_MUTEX(parent_inode);
+        rc = ll_vfs_create(parent_inode, dchild, S_IFREG | 0666, NULL);
+
+        oa->o_id = dchild->d_inode->i_ino;
+        oa->o_generation = dchild->d_inode->i_generation;
+        namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
+
         new_child = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
 
         if (IS_ERR(new_child)) {
                 CERROR("getting neg dentry for obj rename: %d\n", rc);
-                GOTO(out_close, rc = PTR_ERR(new_child));
+                GOTO(out_dput, rc = PTR_ERR(new_child));
         }
         if (new_child->d_inode != NULL) {
                 CERROR("impossible non-negative obj dentry " LPU64":%u!\n",
@@ -990,12 +991,11 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         handle = fsfilt_start(exp->exp_obd, mds->mds_objects_dir->d_inode,
                               FSFILT_OP_RENAME, NULL);
         if (IS_ERR(handle))
-                GOTO(out_dput, rc = PTR_ERR(handle));
+                GOTO(out_dput2, rc = PTR_ERR(handle));
 
         lock_kernel();
-        rc = ll_vfs_rename(mds->mds_objects_dir->d_inode, filp->f_dentry,
-                           filp->f_vfsmnt, mds->mds_objects_dir->d_inode,
-                           new_child, filp->f_vfsmnt);
+        rc = ll_vfs_rename(parent_inode, dchild, mds->mds_vfsmnt,
+                           parent_inode, new_child, mds->mds_vfsmnt);
         unlock_kernel();
         if (rc)
                 CERROR("error renaming new object "LPU64":%u: rc %d\n",
@@ -1007,16 +1007,11 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
                 oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGENER;
         else if (!rc)
                 rc = err;
-out_dput:
+out_dput2:
         dput(new_child);
-out_close:
+out_dput:
+        dput(dchild);
         UNLOCK_INODE_MUTEX(parent_inode);
-        err = filp_close(filp, 0);
-        if (err) {
-                CERROR("closing tmpfile %u: rc %d\n", tmpname, rc);
-                if (!rc)
-                        rc = err;
-        }
 out_pop:
         pop_ctxt(saved, &exp->exp_obd->obd_lvfs_ctxt, &ucred);
         OBD_SLAB_FREE_PTR(saved, obd_lvfs_ctxt_cache);

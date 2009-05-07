@@ -2,6 +2,12 @@
 	* version 3.0.8
 
 Severity   : minor
+Frequency  : in recovery
+Bugzilla   : 18192
+Description: don't mix llog inodes with normal.
+Details    : allocate inodes for log in last inode group
+
+Severity   : minor
 Bugzilla   : 16114
 Description: minor fixes and cleanups
 Details    : use EXT_UNSET_BLOCK to avoid confusion with EXT_MAX_BLOCK.
