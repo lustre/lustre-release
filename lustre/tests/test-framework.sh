@@ -2675,3 +2675,87 @@ delayed_recovery_enabled () {
     do_facet $SINGLEMDS lctl get_param -n mdd.${!var}.stale_export_age > /dev/null 2>&1
 }
 
+########################
+convert_facet2name() {
+    case "$1" in
+        "ost" ) echo "OST0000" ;;
+        "ost1") echo "OST0000" ;;
+        "ost2") echo "OST0001" ;;
+        "ost3") echo "OST0002" ;;
+        "ost4") echo "OST0003" ;;
+        "ost5") echo "OST0004" ;;
+        *) error "unknown facet!" ;;
+    esac
+}
+
+get_clientosc_proc_path() {
+    local ost=$1
+
+    echo "{$1}-osc-*"
+}
+
+get_lustre_version () {
+    local node=${1:-"mds"}    
+    do_facet $node $LCTL get_param -n version |  awk '/^lustre:/ {print $2}'
+}
+
+get_mds_version_major () {
+    local version=$(get_lustre_version mds)
+    echo $version | awk -F. '{print $1}'
+}
+
+get_mds_version_minor () {
+    local version=$(get_lustre_version mds)
+    echo $version | awk -F. '{print $2}'
+}
+
+get_mdtosc_proc_path() {
+    local ost=$1
+    local major=$(get_mds_version_major)
+    local minor=$(get_mds_version_minor)
+    if [ $major -le 1 -a $minor -le 8 ] ; then
+        echo "${ost}-osc"
+    else
+        echo "${ost}-osc-MDT0000"
+    fi
+}
+
+get_osc_import_name() {
+    local node=$1
+    local ost=$2
+    local name=$(convert_facet2name $ost)
+
+    if [ "$node" == "mds" ]; then
+        get_mdtosc_proc_path $name
+        return 0
+    fi
+
+    get_clientosc_proc_path $name
+    return 0
+}
+
+wait_osc_import_state() {
+    local node=$1
+    local ost_facet=$2
+    local expected=$3
+    local ost=$(get_osc_import_name $node $ost_facet)
+    local CONN_PROC
+    local CONN_STATE
+    local i=0
+
+    CONN_PROC="osc.${FSNAME}-${ost}.ost_server_uuid"
+    CONN_STATE=$(do_facet $node lctl get_param -n $CONN_PROC | cut -f2)
+    while [ "${CONN_STATE}" != "${expected}" ]; do
+        # for disconn we can check after proc entry is removed
+        [ "x${CONN_STATE}" == "x" -a "${expected}" == "DISCONN" ] && return 0
+        # disconnect rpc should be wait not more obd_timeout
+        [ $i -ge $(($TIMEOUT * 3 / 2)) ] && \
+            error "can't put import for ${ost}(${ost_facet}) into ${expected} state" && return 1
+        sleep 1
+        CONN_STATE=$(do_facet $node lctl get_param -n $CONN_PROC | cut -f2)
+        i=$(($i + 1))
+    done
+
+    log "${ost_facet} now in ${CONN_STATE} state"
+    return 0
+}
