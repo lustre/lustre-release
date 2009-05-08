@@ -3305,6 +3305,9 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                         CERROR("create failed rc = %d\n", rc);
                         GOTO(cleanup, rc);
                 }
+                if (dchild->d_inode)
+                        CDEBUG(D_INFO, "objid "LPU64" got inum %lu\n", next_id,
+                                       dchild->d_inode->i_ino);
 
 set_last_id:
                 if (!recreate_obj) {

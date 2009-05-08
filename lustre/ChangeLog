@@ -18,6 +18,12 @@ Severity   : enhancement
 Bugzilla   : 19024
 Description: Update to RHEL5.3 kernel-2.6.18-128.1.6.el5.
 
+Severity   : major, only with big OST
+Bugzilla   : 18518
+Description: Very poor metadata performance on Infiniband lustre configuration
+Details    : OST object precreation becomes very slow on big OSTs. This is due
+	     to the ialloc patch spending too much time scanning groups.
+
 -------------------------------------------------------------------------------
 
 2009-04-30 Sun Microsystems, Inc.
