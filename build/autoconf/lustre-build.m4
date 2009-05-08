@@ -524,12 +524,11 @@ if test x$dmu_osd = xyes; then
 		AC_CONFIG_SUBDIRS(lustre/zfs-lustre)
 	else
 		# Kernel DMU
-		SPL_DIR="$PWD/spl"
-		ZFS_DIR="$PWD/zfs"
-		AC_SUBST(SPL_DIR)
-		AC_SUBST(ZFS_DIR)
+		SPL_SUBDIR="spl"
+		ZFS_SUBDIR="zfs"
 
-		AC_SUBST(spl_src)
+		SPL_DIR="$PWD/$SPL_SUBDIR"
+		ZFS_DIR="$PWD/$ZFS_SUBDIR"
 
 		LB_CHECK_FILE([$SPL_DIR/module/spl/spl-generic.c],[],[
 			AC_MSG_ERROR([A complete SPL tree was not found in $SPL_DIR.])
@@ -544,6 +543,10 @@ if test x$dmu_osd = xyes; then
 		AC_CONFIG_SUBDIRS(zfs)
 	fi
 fi
+AC_SUBST(SPL_SUBDIR)
+AC_SUBST(ZFS_SUBDIR)
+AC_SUBST(SPL_DIR)
+AC_SUBST(ZFS_DIR)
 AM_CONDITIONAL(DMU_OSD_ENABLED, test x$dmu_osd = xyes)
 AM_CONDITIONAL(KDMU, test x$dmu_osd$enable_uoss = xyesno)
 ])
