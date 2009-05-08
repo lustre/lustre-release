@@ -3,8 +3,8 @@ Index: linux-2.6.18-53.1.21/drivers/scsi/Kconfig
 --- linux-2.6.18-53.1.21.orig/drivers/scsi/Kconfig
 +++ linux-2.6.18-53.1.21/drivers/scsi/Kconfig
 @@ -66,6 +66,14 @@ config BLK_DEV_SD
- 	  In this case, do not compile the driver for your SCSI host adapter
- 	  (below) as a module either.
+ 	   polling I/O.  If it doesn't, LKCD will fall back to ordinary
+ 	   interrupt-driven I/O.
  
 +config SD_IOSTATS
 +   bool "Enable SCSI disk I/O stats"
