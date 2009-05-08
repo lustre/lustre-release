@@ -18,6 +18,10 @@ Severity   : enhancement
 Bugzilla   : 19024
 Description: Update to RHEL5.3 kernel-2.6.18-128.1.6.el5.
 
+Severity   : enhancement
+Bugzilla   : 17671
+Description: Update OFED release to 1.4.1 RC4
+
 Severity   : major, only with big OST
 Bugzilla   : 18518
 Description: Very poor metadata performance on Infiniband lustre configuration
