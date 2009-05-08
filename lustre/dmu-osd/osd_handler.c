@@ -1786,9 +1786,9 @@ static void osd_object_ref_del(const struct lu_env *env,
                 LASSERT(oh->ot_tx != NULL);
                 tx = oh->ot_tx;
         }
-        spin_lock(&obj->oo_guard);
+        down(&obj->oo_guard);
         udmu_object_links_dec(obj->oo_db, tx);
-        spin_unlock(&obj->oo_guard);
+        up(&obj->oo_guard);
 }
 
 int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
