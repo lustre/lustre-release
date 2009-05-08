@@ -175,7 +175,7 @@ struct mdt_device {
 #define mdt_client_bitmap_lock  mdt_lut.lut_client_bitmap_lock
 #define mdt_client_bitmap       mdt_lut.lut_client_bitmap
 
-#define MDT_SERVICE_WATCHDOG_FACTOR     (2000)
+#define MDT_SERVICE_WATCHDOG_FACTOR     (2)
 #define MDT_ROCOMPAT_SUPP       (OBD_ROCOMPAT_LOVOBJID)
 #define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR)
 #define MDT_COS_DEFAULT         (1)
