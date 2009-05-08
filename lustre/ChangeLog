@@ -37,6 +37,14 @@ TBD Sun Microsystems, Inc.
 	  information, please refer to bugzilla 17630.
 
 Severity   : enhancement
+Bugzilla   : 18289
+Description: allow the use of the kernel provided OFED stack
+Details    : This patch allows for lbuild to use the OFED stack provided
+	     by the kernel vendor.
+	     For the RHEL4 and RHEL5 kernels, we enable the kernel supplied
+	     OFED stack.
+
+Severity   : enhancement
 Bugzilla   : 18775
 Descriptoin: improve lctl set/get_param
 Details    : handle the bad options, support more than one arguments,

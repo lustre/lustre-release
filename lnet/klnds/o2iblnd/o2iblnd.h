@@ -158,7 +158,7 @@ typedef struct
         struct page      *ibp_pages[0];
 } kib_pages_t;
 
-typedef struct 
+typedef struct
 {
         struct list_head     ibd_list;          /* chain on kib_devs */
         __u32                ibd_ifip;          /* IPoIB interface IP */
@@ -259,7 +259,7 @@ typedef struct
         kib_rdma_frag_t   rd_frags[0];          /* buffer frags */
 } WIRE_ATTR kib_rdma_desc_t;
 #endif
-        
+
 typedef struct
 {
         lnet_hdr_t        ibprm_hdr;            /* portals header */
@@ -386,7 +386,7 @@ typedef struct kib_tx                           /* transmit message */
         int                       tx_nfrags;    /* # entries in... */
         struct scatterlist       *tx_frags;     /* dma_map_sg descriptor */
         int                       tx_dmadir;    /* dma direction */
-#endif        
+#endif
 } kib_tx_t;
 
 typedef struct kib_connvars
@@ -606,10 +606,10 @@ kiblnd_rd_size (kib_rdma_desc_t *rd)
 {
         int   i;
         int   size;
-        
+
         for (i = size = 0; i < rd->rd_nfrags; i++)
                 size += rd->rd_frags[i].rf_nob;
-        
+
         return size;
 }
 #endif
