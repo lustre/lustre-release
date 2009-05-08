@@ -23,7 +23,7 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval lctl set_param debug=\"$DEBUG_LVL\""
 [ "$DEBUG_ON" ] || DEBUG_ON="eval lctl set_param debug=0x33f0484"
 
-export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA PERFORMANCE_SANITY TYPE2_TESTS"
+export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA PERFORMANCE_SANITY PARALLEL_SCALE"
 
 if [ "$ACC_SM_ONLY" ]; then
     for O in $TESTSUITE_LIST; do
@@ -410,11 +410,11 @@ if [ "$PERFORMANCE_SANITY" != "no" ]; then
         PERFORMANCE_SANITY="done"
 fi
 
-which mpirun > /dev/null 2>&1 || TYPE2_TESTS="no"
-if [ "$TYPE2_TESTS" != "no" ]; then
-        title type2 tests
-        bash type2-tests.sh
-        TYPE2_TESTS="done"
+which mpirun > /dev/null 2>&1 || PARALLEL_SCALE="no"
+if [ "$PARALLEL_SCALE" != "no" ]; then
+        title parallel-scale
+        bash parallel-scale.sh
+        PARALLEL_SCALE="done"
 fi
 
 RC=$?
