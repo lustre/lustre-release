@@ -1304,7 +1304,11 @@ build_kernel_ib()
     rm -rf kernel-ib-devel
     mkdir kernel-ib-devel
     cd kernel-ib-devel
-    local rpm=$(ls $TOPDIR/RPMS/*/kernel-ib-devel-${OFED_VERSION}-${LINUXRELEASE//-/_}.*.rpm)
+    # the actual ofed RPMs don't have the -rc$n or -$date string appened that
+    # might be present on the file
+    local ofed_version=$(echo $OFED_VERSION |
+                         sed -re 's/-(20[0-9]{6,6}-[0-9]{4,4}|rc[0-9]*)$//')
+    local rpm=$(ls $TOPDIR/RPMS/*/kernel-ib-devel-${ofed_version}-${LINUXRELEASE//-/_}.*.rpm)
     rpm2cpio -itv < $rpm | cpio -id
     CONFIGURE_FLAGS="--with-o2ib=$(pwd)/usr/src/ofa_kernel ${CONFIGURE_FLAGS}"
     popd >/dev/null
