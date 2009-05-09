@@ -1,8 +1,8 @@
 2009-04-20  Sun Microsystems, Inc.
 	* version 3.0.8
 
-Severity   : minor
-Frequency  : in recovery
+Severity   : normal
+Frequency  : during recovery
 Bugzilla   : 18192
 Description: don't mix llog inodes with normal.
 Details    : allocate inodes for log in last inode group

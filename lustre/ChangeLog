@@ -28,6 +28,12 @@ Description: Very poor metadata performance on Infiniband lustre configuration
 Details    : OST object precreation becomes very slow on big OSTs. This is due
 	     to the ialloc patch spending too much time scanning groups.
 
+Severity   : normal
+Frequency  : during recovery
+Bugzilla   : 18192
+Description: don't mix llog inodes with normal.
+Details    : allocate inodes for log in last inode group
+
 -------------------------------------------------------------------------------
 
 2009-04-30 Sun Microsystems, Inc.
