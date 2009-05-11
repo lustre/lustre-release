@@ -424,19 +424,25 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
         rc = copy_from_user(&lumv3, lump, sizeof(struct lov_user_md_v1));
         if (rc)
                 RETURN(-EFAULT);
-        if ((lumv1->lmm_magic == LOV_USER_MAGIC_V3) ||
-            (lumv1->lmm_magic == LOV_USER_MAGIC_V3_SWABBED)) {
+
+        switch (lumv1->lmm_magic) {
+        case LOV_USER_MAGIC_V3_SWABBED:
                 rc = copy_from_user(&lumv3, lump, sizeof(lumv3));
                 if (rc)
-                        RETURN(-EFAULT);
-        }
-
-        if ((lumv1->lmm_magic == LOV_USER_MAGIC_V1_SWABBED) ||
-            (lumv1->lmm_magic == LOV_USER_MAGIC_V3_SWABBED)) {
+                        break;
+        case LOV_USER_MAGIC_V1_SWABBED:
                 rc = lustre_swab_lov_user_md(lumv1);
-                if (rc)
-                        RETURN(rc);
+                break;
+        case LOV_USER_MAGIC_V3:
+                rc = copy_from_user(&lumv3, lump, sizeof(lumv3));
+        case LOV_USER_MAGIC_V1:
+                break;
+        default:
+                CERROR("bad lsm magic %08x\n", lumv1->lmm_magic);
+                RETURN(-EINVAL);
         }
+        if (rc)
+                RETURN(rc);
 
         /* in the rest of the tests, as *lumv1 and lumv3 have the same
          * fields, we use lumv1 to avoid code duplication */
