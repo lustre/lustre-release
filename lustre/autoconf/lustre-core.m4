@@ -1796,46 +1796,48 @@ fi
 # --enable-mpitest
 #
 AC_ARG_ENABLE(mpitests,
-	AC_HELP_STRING([--enable-mpitest=yes|no|mpich directory],
+	AC_HELP_STRING([--enable-mpitests=yes|no|mpicc wrapper],
                            [include mpi tests]),
 	[
 	 enable_mpitests=yes
          case $enableval in
          yes)
-		MPI_ROOT=/opt/mpich
-		LDFLAGS="$LDFLAGS -L$MPI_ROOT/ch-p4/lib -L$MPI_ROOT/ch-p4/lib64"
-		CFLAGS="$CFLAGS -I$MPI_ROOT/include"
+		MPICC_WRAPPER=mpicc
 		;;
          no)
 		enable_mpitests=no
 		;;
-	 [[\\/$]]* | ?:[[\\/]]* )
-		MPI_ROOT=$enableval
-		LDFLAGS="$LDFLAGS -L$with_mpi/lib"
-		CFLAGS="$CFLAGS -I$MPI_ROOT/include"
-                ;;
          *)
-                 AC_MSG_ERROR([expected absolute directory name for --enable-mpitests or yes or no])
+		MPICC_WRAPPER=$enableval
                  ;;
 	 esac
 	],
 	[
-	MPI_ROOT=/opt/mpich
-        LDFLAGS="$LDFLAGS -L$MPI_ROOT/ch-p4/lib -L$MPI_ROOT/ch-p4/lib64"
-        CFLAGS="$CFLAGS -I$MPI_ROOT/include"
+	MPICC_WRAPPER=mpicc
 	enable_mpitests=yes
 	]
 )
-AC_SUBST(MPI_ROOT)
 
 if test x$enable_mpitests != xno; then
-	AC_MSG_CHECKING([whether to mpitests can be built])
-        AC_CHECK_FILE([$MPI_ROOT/include/mpi.h],
-                      [AC_CHECK_LIB([mpich],[MPI_Start],[enable_mpitests=yes],[enable_mpitests=no])],
-                      [enable_mpitests=no])
+	AC_MSG_CHECKING([whether mpitests can be built])
+	oldcc=$CC
+	CC=$MPICC_WRAPPER
+	AC_LINK_IFELSE(
+	    [AC_LANG_PROGRAM([[
+		    #include <mpi.h>
+	        ]],[[
+		    int flag;
+		    MPI_Initialized(&flag);
+		]])],
+	    [
+		    AC_MSG_RESULT([yes])
+	    ],[
+		    AC_MSG_RESULT([no])
+		    enable_mpitests=no
+	])
+	CC=$oldcc
 fi
-AC_MSG_RESULT([$enable_mpitests])
-
+AC_SUBST(MPICC_WRAPPER)
 
 AC_MSG_NOTICE([Enabling Lustre configure options for libsysio])
 ac_configure_args="$ac_configure_args --with-lustre-hack --with-sockets"
@@ -2175,6 +2177,7 @@ lustre/kernel_patches/targets/sles-2.4.target
 lustre/ldlm/Makefile
 lustre/liblustre/Makefile
 lustre/liblustre/tests/Makefile
+lustre/liblustre/tests/mpi/Makefile
 lustre/llite/Makefile
 lustre/llite/autoMakefile
 lustre/lov/Makefile
@@ -2207,6 +2210,7 @@ lustre/quota/autoMakefile
 lustre/scripts/Makefile
 lustre/scripts/version_tag.pl
 lustre/tests/Makefile
+lustre/tests/mpi/Makefile
 lustre/utils/Makefile
 ])
 case $lb_target_os in
