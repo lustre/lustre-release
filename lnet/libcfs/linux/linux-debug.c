@@ -229,23 +229,23 @@ static int print_trace_stack(void *data, char *name)
 	return 0;
 }
 
-void printk_address(unsigned long address, int reliable)
-{
-	printk(" [<%016lx>] %s%pS\n", address, reliable ? "": "? ", (void *) address);
-}
-
+#ifdef HAVE_TRACE_ADDRESS_RELIABLE
+# define RELIABLE reliable
+# define DUMP_TRACE_CONST const
 static void print_trace_address(void *data, unsigned long addr, int reliable)
+#else
+/* before 2.6.24 there was no reliable arg */
+# define RELIABLE 1
+# define DUMP_TRACE_CONST
+static void print_trace_address(void *data, unsigned long addr)
+#endif
 {
+        char fmt[32];
 	touch_nmi_watchdog();
-	printk_address(addr, reliable);
+        sprintf(fmt, " [<%016lx>] %s%%s\n", addr, RELIABLE ? "": "? ");
+	__print_symbol(fmt, addr);
 }
 
-static const struct stacktrace_ops print_trace_ops = {
-	.warning = print_trace_warning,
-	.warning_symbol = print_trace_warning_symbol,
-	.stack = print_trace_stack,
-	.address = print_trace_address,
-};
 #endif
 
 void libcfs_debug_dumpstack(struct task_struct *tsk)
@@ -264,12 +264,22 @@ void libcfs_debug_dumpstack(struct task_struct *tsk)
         CWARN("showing stack for process %d\n", tsk->pid);
         show_task(tsk);
 #elif defined(HAVE_DUMP_TRACE)
+static DUMP_TRACE_CONST struct stacktrace_ops print_trace_ops = {
+	.warning = print_trace_warning,
+	.warning_symbol = print_trace_warning_symbol,
+	.stack = print_trace_stack,
+	.address = print_trace_address,
+};
         /* dump_stack() */
         /* show_trace() */
 	printk("Pid: %d, comm: %.20s\n", current->pid, current->comm);
         /* show_trace_log_lvl() */
 	printk("\nCall Trace:\n");
-	dump_trace(tsk, NULL, NULL, 0, &print_trace_ops, "");
+	dump_trace(tsk, NULL, NULL,
+#ifdef HAVE_TRACE_ADDRESS_RELIABLE
+                   0,
+#endif /* HAVE_TRACE_ADDRESS_RELIABLE */
+                   &print_trace_ops, NULL);
 	printk("\n");
 #else
         if ((tsk == NULL) || (tsk == current))
