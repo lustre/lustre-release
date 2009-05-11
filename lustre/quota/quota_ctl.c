@@ -337,6 +337,7 @@ int lov_quota_ctl(struct obd_device *unused, struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;
+        struct lov_tgt_desc *tgt;
         __u64 curspace = 0;
         __u64 bhardlimit = 0;
         int i, rc = 0;
@@ -352,11 +353,13 @@ int lov_quota_ctl(struct obd_device *unused, struct obd_export *exp,
                 RETURN(-EFAULT);
         }
 
+        /* for lov tgt */
         obd_getref(obd);
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 int err;
 
-                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active) {
+                tgt = lov->lov_tgts[i];
+                if (!tgt || !tgt->ltd_active || tgt->ltd_reap) {
                         if (oqctl->qc_cmd == Q_GETOQUOTA) {
                                 CERROR("ost %d is inactive\n", i);
                                 rc = -EIO;
@@ -366,9 +369,9 @@ int lov_quota_ctl(struct obd_device *unused, struct obd_export *exp,
                         continue;
                 }
 
-                err = obd_quotactl(lov->lov_tgts[i]->ltd_exp, oqctl);
+                err = obd_quotactl(tgt->ltd_exp, oqctl);
                 if (err) {
-                        if (lov->lov_tgts[i]->ltd_active && !rc)
+                        if (tgt->ltd_active && !rc)
                                 rc = err;
                         continue;
                 }

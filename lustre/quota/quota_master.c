@@ -1561,7 +1561,11 @@ static int qmaster_recovery_main(void *arg)
 
         ptlrpc_daemonize("qmaster_recovd");
 
-        class_incref(obd, "qmaster_recovd", obd);
+        /* for mds */
+        class_incref(obd, "qmaster_recovd_mds", obd);
+        /* for lov */
+        class_incref(mds->mds_osc_obd, "qmaster_recovd_lov", mds->mds_osc_obd);
+
         complete(&data->comp);
 
         for (type = USRQUOTA; type < MAXQUOTAS; type++) {
@@ -1594,7 +1598,8 @@ free:
                         kfree(dqid);
                 }
         }
-        class_decref(obd, "qmaster_recovd", obd);
+        class_decref(mds->mds_osc_obd, "qmaster_recovd_lov", mds->mds_osc_obd);
+        class_decref(obd, "qmaster_recovd_mds", obd);
         RETURN(rc);
 }
 
@@ -1605,7 +1610,7 @@ int mds_quota_recovery(struct obd_device *obd)
         int rc = 0;
         ENTRY;
 
-        if (unlikely(!mds->mds_quota))
+        if (unlikely(!mds->mds_quota || obd->obd_stopping))
                 RETURN(rc);
 
         mutex_down(&obd->obd_dev_sem);

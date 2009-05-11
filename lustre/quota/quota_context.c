@@ -1252,10 +1252,15 @@ static int qslave_recovery_main(void *arg)
 
         ptlrpc_daemonize("qslave_recovd");
 
+        /* for obdfilter */
+        class_incref(obd, "qslave_recovd_filter", obd);
+
         complete(&data->comp);
 
-        if (qctxt->lqc_recovery)
+        if (qctxt->lqc_recovery) {
+                class_decref(obd, "qslave_recovd_filter", obd);
                 RETURN(0);
+        }
         qctxt->lqc_recovery = 1;
 
         for (type = USRQUOTA; type < MAXQUOTAS; type++) {
@@ -1316,6 +1321,7 @@ free:
                 }
         }
 
+        class_decref(obd, "qslave_recovd_filter", obd);
         qctxt->lqc_recovery = 0;
         RETURN(rc);
 }
