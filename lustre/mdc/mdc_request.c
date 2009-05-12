@@ -56,6 +56,7 @@
 #include <lprocfs_status.h>
 #include <lustre_param.h>
 #include "mdc_internal.h"
+#include <lustre/lustre_idl.h>
 
 #define REQUEST_MINOR 244
 
@@ -994,6 +995,60 @@ int mdc_readpage(struct obd_export *exp, const struct lu_fid *fid,
         RETURN(0);
 }
 
+/* This routine is quite similar to mdt_ioc_fid2path() */
+int mdc_ioc_fid2path(struct obd_export *exp, struct obd_ioctl_data *data)
+{
+        struct getinfo_fid2path *fp = NULL;
+        int keylen = size_round(sizeof(KEY_FID2PATH)) + sizeof(*fp);
+        int pathlen = data->ioc_plen1;
+        __u32 vallen = pathlen + sizeof(*fp);
+        int alloclen = keylen + vallen;
+        void *buf;
+        int rc;
+
+        if (pathlen > PATH_MAX)
+                RETURN(-EINVAL);
+        if (pathlen < 2)
+                RETURN(-EINVAL);
+
+        OBD_ALLOC(buf, alloclen);
+        if (buf == NULL)
+                RETURN(-ENOMEM);
+        fp = buf + size_round(sizeof(KEY_FID2PATH));
+        memcpy(buf, KEY_FID2PATH, sizeof(KEY_FID2PATH));
+        memcpy(&fp->gf_fid, data->ioc_inlbuf1, sizeof(struct lu_fid));
+        memcpy(&fp->gf_recno, data->ioc_inlbuf2, sizeof(fp->gf_recno));
+        memcpy(&fp->gf_linkno, data->ioc_inlbuf3,
+               sizeof(fp->gf_linkno));
+        fp->gf_pathlen = pathlen;
+
+        CDEBUG(D_IOCTL, "path get "DFID" from "LPU64" #%d\n",
+               PFID(&fp->gf_fid), fp->gf_recno, fp->gf_linkno);
+
+        if (!fid_is_sane(&fp->gf_fid))
+                GOTO(out, rc = -EINVAL);
+
+        rc = obd_get_info(exp, keylen, buf, &vallen, fp, NULL);
+        if (rc)
+                GOTO(out, rc);
+
+        if (vallen < sizeof(*fp) + 1)
+                GOTO(out, rc = -EPROTO);
+        else if (vallen - sizeof(*fp) > pathlen)
+                GOTO(out, rc = -EOVERFLOW);
+        if (copy_to_user(data->ioc_pbuf1, fp->gf_path,
+                         pathlen))
+                GOTO(out, rc = -EFAULT);
+        memcpy(data->ioc_inlbuf2, &fp->gf_recno, sizeof(fp->gf_recno));
+        memcpy(data->ioc_inlbuf3, &fp->gf_linkno,
+               sizeof(fp->gf_linkno));
+
+out:
+        OBD_FREE(buf, alloclen);
+
+        return rc;
+}
+
 static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                          void *karg, void *uarg)
 {
@@ -1016,6 +1071,10 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 rc = obd_set_info_async(exp, strlen(KEY_CHANGELOG_CLEAR),
                                         KEY_CHANGELOG_CLEAR, sizeof(cs), &cs,
                                         NULL);
+                GOTO(out, rc);
+        }
+        case OBD_IOC_FID2PATH: {
+                rc = mdc_ioc_fid2path(exp, data);
                 GOTO(out, rc);
         }
         case OBD_IOC_CLIENT_RECOVER:
@@ -1097,6 +1156,55 @@ static int do_set_info_async(struct obd_export *exp,
                 rc = ptlrpc_queue_wait(req);
                 ptlrpc_req_finished(req);
         }
+
+        RETURN(rc);
+}
+
+int mdc_get_info_rpc(struct obd_export *exp,
+                     obd_count keylen, void *key,
+                     int vallen, void *val)
+{
+        struct obd_import      *imp = class_exp2cliimp(exp);
+        struct ptlrpc_request  *req;
+        char                   *tmp;
+        int                     rc = -EINVAL;
+        ENTRY;
+
+        req = ptlrpc_request_alloc(imp, &RQF_MDS_GET_INFO);
+        if (req == NULL)
+                RETURN(-ENOMEM);
+
+        req_capsule_set_size(&req->rq_pill, &RMF_GETINFO_KEY,
+                             RCL_CLIENT, keylen);
+        req_capsule_set_size(&req->rq_pill, &RMF_GETINFO_VALLEN,
+                             RCL_CLIENT, sizeof(__u32));
+
+        rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_GET_INFO);
+        if (rc) {
+                ptlrpc_request_free(req);
+                RETURN(rc);
+        }
+
+        tmp = req_capsule_client_get(&req->rq_pill, &RMF_GETINFO_KEY);
+        memcpy(tmp, key, keylen);
+        tmp = req_capsule_client_get(&req->rq_pill, &RMF_GETINFO_VALLEN);
+        memcpy(tmp, &vallen, sizeof(__u32));
+
+        req_capsule_set_size(&req->rq_pill, &RMF_GETINFO_VAL,
+                             RCL_SERVER, vallen);
+        ptlrpc_request_set_replen(req);
+
+        rc = ptlrpc_queue_wait(req);
+        if (!rc) {
+                tmp = req_capsule_server_get(&req->rq_pill, &RMF_GETINFO_VAL);
+                memcpy(val, tmp, vallen);
+                if (lustre_msg_swabbed(req->rq_repmsg)) {
+                        if (KEY_IS(KEY_FID2PATH)) {
+                                lustre_swab_fid2path(val);
+                        }
+                }
+        }
+        ptlrpc_req_finished(req);
 
         RETURN(rc);
 }
@@ -1204,6 +1312,8 @@ int mdc_get_info(struct obd_export *exp, __u32 keylen, void *key,
                 *data = imp->imp_connect_data;
                 RETURN(0);
         }
+
+        rc = mdc_get_info_rpc(exp, keylen, key, *vallen, val);
 
         RETURN(rc);
 }

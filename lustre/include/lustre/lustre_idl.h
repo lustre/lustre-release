@@ -1159,6 +1159,7 @@ typedef enum {
         MDS_SETXATTR     = 50, /* obsolete, now it's MDS_REINT op */
         MDS_WRITEPAGE    = 51,
         MDS_IS_SUBDIR    = 52,
+        MDS_GET_INFO     = 53,
         MDS_LAST_OPC
 } mds_cmd_t;
 
@@ -2373,6 +2374,17 @@ struct changelog_setinfo {
         __u64 cs_recno;
         __u32 cs_id;
 } __attribute__((packed));
+
+/** fid2path request/reply structure */
+struct getinfo_fid2path {
+        struct lu_fid   gf_fid;
+        __u64           gf_recno;
+        __u32           gf_linkno;
+        __u32           gf_pathlen;
+        char            gf_path[0];
+};
+
+void lustre_swab_fid2path (struct getinfo_fid2path *gf);
 
 /** changelog record */
 struct llog_changelog_rec {

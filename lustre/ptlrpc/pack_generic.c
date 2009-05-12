@@ -1778,6 +1778,15 @@ void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa)
         CLASSERT(offsetof(typeof(*sa), sa_padding) != 0);
 }
 
+void lustre_swab_fid2path(struct getinfo_fid2path *gf)
+{
+        lustre_swab_lu_fid(&gf->gf_fid);
+        __swab64s(&gf->gf_recno);
+        __swab32s(&gf->gf_linkno);
+        __swab32s(&gf->gf_pathlen);
+}
+EXPORT_SYMBOL(lustre_swab_fid2path);
+
 void lustre_swab_mds_rec_join (struct mds_rec_join *jr)
 {
         __swab64s(&jr->jr_headsize);

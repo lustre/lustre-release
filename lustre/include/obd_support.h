@@ -208,6 +208,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MDS_WRITEPAGE_NET       0x183
 #define OBD_FAIL_MDS_WRITEPAGE_PACK      0x184
 #define OBD_FAIL_MDS_RECOVERY_ACCEPTS_GAPS 0x185
+#define OBD_FAIL_MDS_GET_INFO_NET        0x186
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201

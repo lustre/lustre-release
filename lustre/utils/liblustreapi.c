@@ -2568,11 +2568,37 @@ static int dev_name2dev(char *name)
         data.ioc_inlbuf1 = name;
 
         rc = dev_ioctl(&data, -1, OBD_IOC_NAME2DEV);
+        if (rc < 0)
+                return rc;
+
+        return data.ioc_dev;
+}
+
+
+static void do_get_mdcname(char *obd_type_name, char *obd_name,
+                           char *obd_uuid, void *name)
+{
+        if (strncmp(obd_name, (char *)name, strlen((char *)name)) == 0)
+                strcpy((char *)name, obd_name);
+}
+
+static int get_mdcdev(const char *mdtname)
+{
+        char name[MAX_OBD_NAME];
+        char *type[] = { "mdc" };
+        int rc;
+
+        strcpy(name, mdtname);
+        rc = llapi_target_iterate(1, type, (void *)name, do_get_mdcname);
+        rc = rc < 0 ? : -rc;
         if (rc < 0) {
                 llapi_err(LLAPI_MSG_ERROR, "Device %s not found %d\n", name,rc);
                 return rc;
         }
-        return data.ioc_dev;
+        rc = dev_name2dev(name);
+        if (rc < 0)
+                llapi_err(LLAPI_MSG_ERROR, "Device %s not found %d\n", name,rc);
+        return rc;
 }
 
 int llapi_fid2path(char *device, char *fidstr, char *buf, int buflen,
@@ -2580,7 +2606,7 @@ int llapi_fid2path(char *device, char *fidstr, char *buf, int buflen,
 {
         struct lu_fid fid;
         struct obd_ioctl_data data;
-        char buffer[256];
+        char mdtname[256];
         int dev, rc;
 
         while (*fidstr == '[')
@@ -2595,13 +2621,20 @@ int llapi_fid2path(char *device, char *fidstr, char *buf, int buflen,
                 return -EINVAL;
         }
 
-        rc = get_mdtname(device, "%s%s", buffer);
+        /* If the node is an MDS, issue the ioctl to the MDT . If not,
+           issue it to the MDC. */        
+        rc = get_mdtname(device, "%s%s", mdtname);
         if (rc < 0)
                 return rc;
-
-        dev = dev_name2dev(buffer);
-        if (dev < 0)
-                return dev;
+        dev = dev_name2dev(mdtname);
+        if (dev < 0) {
+                dev = get_mdcdev(mdtname);
+                if (dev < 0) {
+                        llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                                  "can't find mdc for '%s'\n", mdtname);
+                        return dev;
+                }
+        }
 
         memset(&data, 0, sizeof(data));
         data.ioc_inlbuf1 = (char *)&fid;
@@ -2635,5 +2668,4 @@ int llapi_path2fid(const char *path, unsigned long long *seq,
         close(fd);
         return rc;
 }
-
 

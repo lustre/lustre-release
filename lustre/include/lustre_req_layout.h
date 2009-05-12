@@ -153,6 +153,7 @@ extern const struct req_format RQF_MDS_UNPIN;
 extern const struct req_format RQF_MDS_CONNECT;
 extern const struct req_format RQF_MDS_DISCONNECT;
 extern const struct req_format RQF_MDS_SET_INFO;
+extern const struct req_format RQF_MDS_GET_INFO;
 extern const struct req_format RQF_MDS_READPAGE;
 extern const struct req_format RQF_MDS_WRITEPAGE;
 extern const struct req_format RQF_MDS_IS_SUBDIR;
@@ -227,6 +228,9 @@ extern const struct req_msg_field RMF_TGTUUID;
 extern const struct req_msg_field RMF_CLUUID;
 extern const struct req_msg_field RMF_SETINFO_VAL;
 extern const struct req_msg_field RMF_SETINFO_KEY;
+extern const struct req_msg_field RMF_GETINFO_VAL;
+extern const struct req_msg_field RMF_GETINFO_VALLEN;
+extern const struct req_msg_field RMF_GETINFO_KEY;
 
 /*
  * connection handle received in MDS_CONNECT request.

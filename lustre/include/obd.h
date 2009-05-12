@@ -1149,6 +1149,7 @@ enum obd_cleanup_stage {
 #define KEY_BLOCKSIZE           "blocksize"
 #define KEY_CAPA_KEY            "capa_key"
 #define KEY_CHANGELOG_CLEAR     "changelog_clear"
+#define KEY_FID2PATH            "fid2path"
 #define KEY_CHECKSUM            "checksum"
 #define KEY_CLEAR_FS            "clear_fs"
 #define KEY_CONN_DATA           "conn_data"

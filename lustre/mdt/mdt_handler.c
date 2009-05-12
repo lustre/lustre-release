@@ -165,6 +165,8 @@ static struct mdt_opc_slice mdt_fld_handlers[];
 static struct mdt_device *mdt_dev(struct lu_device *d);
 static int mdt_regular_handle(struct ptlrpc_request *req);
 static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags);
+static int mdt_fid2path(struct lu_env *env, struct mdt_device *mdt,
+                        struct getinfo_fid2path *fp);
 
 static const struct lu_object_operations mdt_obj_ops;
 
@@ -2840,6 +2842,7 @@ static int mdt_msg_check_version(struct lustre_msg *msg)
         case MDS_GETXATTR:
         case MDS_SETXATTR:
         case MDS_SET_INFO:
+        case MDS_GET_INFO:
         case MDS_QUOTACHECK:
         case MDS_QUOTACTL:
         case QUOTA_DQACQ:
@@ -5331,31 +5334,90 @@ static int mdt_obd_notify(struct obd_device *host,
         RETURN(0);
 }
 
+/* This routine is quite similar to mdc_ioc_fid2path() */
 static int mdt_ioc_fid2path(struct lu_env *env, struct mdt_device *mdt,
                             struct obd_ioctl_data *data)
 {
+        struct getinfo_fid2path *fp = NULL;
+        int pathlen;
+        int alloclen;
+        int rc;
+
+        ENTRY;
+
+        pathlen = data->ioc_plen1;
+        if (pathlen > PATH_MAX)
+                GOTO(out, rc = -EINVAL);
+        if (pathlen < 2)
+                GOTO(out, rc = -EINVAL);
+
+        alloclen = sizeof(*fp) + pathlen;
+        OBD_ALLOC(fp, alloclen);
+        if (fp == NULL)
+                GOTO(out, rc = -ENOMEM);
+
+        memcpy(&fp->gf_fid, data->ioc_inlbuf1, sizeof(struct lu_fid));
+        memcpy(&fp->gf_recno, data->ioc_inlbuf2, sizeof(fp->gf_recno));
+        memcpy(&fp->gf_linkno, data->ioc_inlbuf3,
+               sizeof(fp->gf_linkno));
+        fp->gf_pathlen = pathlen;
+
+        if (!fid_is_sane(&fp->gf_fid))
+                GOTO(out, rc = -EINVAL);
+
+        rc = mdt_fid2path(env, mdt, fp);
+
+        if (!rc && copy_to_user(data->ioc_pbuf1, fp->gf_path, pathlen))
+                GOTO(out, rc = -EFAULT);
+        memcpy(data->ioc_inlbuf2, &fp->gf_recno, sizeof(fp->gf_recno));
+        memcpy(data->ioc_inlbuf3, &fp->gf_linkno, sizeof(fp->gf_linkno));
+out:
+        if (fp)
+                OBD_FREE(fp, alloclen);
+        RETURN(rc);
+}
+
+static int mdt_rpc_fid2path(struct mdt_thread_info *info, void *key,
+                            int keylen, void *val, int vallen)
+{
+        struct lu_env      env;
+        struct mdt_device *mdt = mdt_dev(info->mti_exp->exp_obd->obd_lu_dev);
+        struct ptlrpc_request *req = mdt_info_req(info);
+        struct getinfo_fid2path *fpout, *fpin;
+        int rc = 0;
+
+        fpin = key + size_round(sizeof(KEY_FID2PATH));
+        fpout = val;
+
+        if (lustre_msg_swabbed(req->rq_reqmsg))
+                lustre_swab_fid2path(fpin);
+
+        memcpy(fpout, fpin, sizeof(*fpin));
+        if (fpout->gf_pathlen != vallen - sizeof(*fpin))
+                RETURN(-EINVAL);
+
+        rc = lu_env_init(&env, LCT_MD_THREAD);
+        if (rc)
+                RETURN(rc);
+        rc = mdt_fid2path(&env, mdt, fpout);
+        lu_env_fini(&env);
+
+        RETURN(rc);
+}
+
+static int mdt_fid2path(struct lu_env *env, struct mdt_device *mdt,
+                        struct getinfo_fid2path *fp)
+{
         struct lu_context  ioctl_session;
         struct mdt_object *obj;
-        struct lu_fid     *fid;
-        char  *path = NULL;
-        __u64  recno;
-        int    pathlen = data->ioc_plen1;
-        int    linkno;
         int    rc;
         ENTRY;
 
-
-        fid = (struct lu_fid *)data->ioc_inlbuf1;
-        memcpy(&recno, data->ioc_inlbuf2, sizeof(recno));
-        memcpy(&linkno, data->ioc_inlbuf3, sizeof(linkno));
         CDEBUG(D_IOCTL, "path get "DFID" from "LPU64" #%d\n",
-               PFID(fid), recno, linkno);
+               PFID(&fp->gf_fid), fp->gf_recno, fp->gf_linkno);
 
-        if (!fid_is_sane(fid))
+        if (!fid_is_sane(&fp->gf_fid))
                 RETURN(-EINVAL);
-
-        if (pathlen < 3)
-                RETURN(-EOVERFLOW);
 
         rc = lu_context_init(&ioctl_session, LCT_SESSION);
         if (rc)
@@ -5364,15 +5426,11 @@ static int mdt_ioc_fid2path(struct lu_env *env, struct mdt_device *mdt,
         lu_context_enter(&ioctl_session);
         env->le_ses = &ioctl_session;
 
-        OBD_ALLOC(path, pathlen);
-        if (path == NULL)
-                GOTO(out_context, rc = -ENOMEM);
-
-        obj = mdt_object_find(env, mdt, fid);
+        obj = mdt_object_find(env, mdt, &fp->gf_fid);
         if (obj == NULL || IS_ERR(obj)) {
-                CDEBUG(D_IOCTL, "no object "DFID": %ld\n", PFID(fid),
+                CDEBUG(D_IOCTL, "no object "DFID": %ld\n",PFID(&fp->gf_fid),
                        PTR_ERR(obj));
-                GOTO(out_free, rc = -EINVAL);
+                GOTO(out, rc = -EINVAL);
         }
 
         rc = lu_object_exists(&obj->mot_obj.mo_lu);
@@ -5382,30 +5440,76 @@ static int mdt_ioc_fid2path(struct lu_env *env, struct mdt_device *mdt,
                 else
                         rc = -ENOENT;
                 mdt_object_put(env, obj);
-                CDEBUG(D_IOCTL, "nonlocal object "DFID": %d\n", PFID(fid),
-                       rc);
-                GOTO(out_free, rc);
+                CDEBUG(D_IOCTL, "nonlocal object "DFID": %d\n",
+                       PFID(&fp->gf_fid), rc);
+                GOTO(out, rc);
         }
 
-        rc = mo_path(env, md_object_next(&obj->mot_obj), path, pathlen, &recno,
-                     &linkno);
+        rc = mo_path(env, md_object_next(&obj->mot_obj), fp->gf_path,
+                     fp->gf_pathlen, &fp->gf_recno, &fp->gf_linkno);
         mdt_object_put(env, obj);
-        if (rc)
-               GOTO(out_free, rc);
-
-        if (copy_to_user(data->ioc_pbuf1, path, pathlen))
-                rc = -EFAULT;
-
-        memcpy(data->ioc_inlbuf2, &recno, sizeof(recno));
-        memcpy(data->ioc_inlbuf3, &linkno, sizeof(linkno));
 
         EXIT;
-out_free:
-        OBD_FREE(path, pathlen);
-out_context:
+
+out:
         lu_context_exit(&ioctl_session);
         lu_context_fini(&ioctl_session);
         return rc;
+}
+
+static int mdt_get_info(struct mdt_thread_info *info)
+{
+        char *key;
+        int keysize;
+        int keylen;
+        __u32 *valin;
+        __u32 vallen;
+        int valsize;
+        void *valout;
+        int rc;
+        struct ptlrpc_request *req = mdt_info_req(info);
+
+        ENTRY;
+
+        key = req_capsule_client_get(info->mti_pill, &RMF_GETINFO_KEY);
+        if (key == NULL) {
+                CDEBUG(D_IOCTL, "No GETINFO key");
+                RETURN(-EFAULT);
+        }
+        keysize = req_capsule_get_size(info->mti_pill, &RMF_GETINFO_KEY,
+                                      RCL_CLIENT);
+        keylen = strnlen(key, keysize);
+
+        valin = req_capsule_client_get(info->mti_pill, &RMF_GETINFO_VALLEN);
+        if (valin == NULL) {
+                CDEBUG(D_IOCTL, "Unable to get RMF_GETINFO_VALLEN buffer");
+                RETURN(-EFAULT);
+        }
+        valsize = req_capsule_get_size(info->mti_pill, &RMF_GETINFO_VALLEN,
+                                      RCL_CLIENT);
+        if (valsize != sizeof(vallen)) {
+                CDEBUG(D_IOCTL, "RMF_GETINFO_VALLEN has invalid size");
+                RETURN(-EINVAL);
+        }
+        vallen = *valin;
+
+        req_capsule_set_size(info->mti_pill, &RMF_GETINFO_VAL, RCL_SERVER,
+                             vallen);
+        rc = req_capsule_server_pack(info->mti_pill);
+        valout = req_capsule_server_get(info->mti_pill, &RMF_GETINFO_VAL);
+        if (valout == NULL) {
+                CDEBUG(D_IOCTL, "Unable to get get-info RPC out buffer");
+                RETURN(-EFAULT);
+        }
+
+        if (KEY_IS(KEY_FID2PATH))
+                rc = mdt_rpc_fid2path(info, key, keysize, valout, vallen);
+        else
+                rc = -EINVAL;
+
+        lustre_msg_set_status(req->rq_repmsg, rc);
+
+        RETURN(rc);
 }
 
 /* Pass the ioc down */
@@ -5717,6 +5821,7 @@ static struct mdt_handler mdt_mds_ops[] = {
 DEF_MDT_HNDL_F(0,                         CONNECT,      mdt_connect),
 DEF_MDT_HNDL_F(0,                         DISCONNECT,   mdt_disconnect),
 DEF_MDT_HNDL_F(0,                         SET_INFO,     mdt_set_info),
+DEF_MDT_HNDL_F(0,                         GET_INFO,     mdt_get_info),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, GETSTATUS,    mdt_getstatus),
 DEF_MDT_HNDL_F(HABEO_CORPUS,              GETATTR,      mdt_getattr),
 DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, GETATTR_NAME, mdt_getattr_name),

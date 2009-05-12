@@ -6102,9 +6102,6 @@ test_160() {
 run_test 160 "changelog sanity"
 
 test_161() {
-    # need local MDT for fid2path
-    remote_mds && skip "remote MDS" && return
-
     mkdir -p $DIR/$tdir
     cp /etc/hosts $DIR/$tdir/$tfile
     mkdir $DIR/$tdir/foo1
@@ -6164,9 +6161,6 @@ check_path() {
 }
 
 test_162() {
-    # need local MDT for fid2path
-    remote_mds && skip "remote MDS" && return
-
     # Make changes to filesystem
     mkdir -p $DIR/$tdir/d2
     touch $DIR/$tdir/d2/$tfile

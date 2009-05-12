@@ -286,6 +286,17 @@ static const struct req_msg_field *mds_set_info_client[] = {
         &RMF_SETINFO_VAL
 };
 
+static const struct req_msg_field *mds_getinfo_client[] = {
+        &RMF_PTLRPC_BODY,
+        &RMF_GETINFO_KEY,
+        &RMF_GETINFO_VALLEN
+};
+
+static const struct req_msg_field *mds_getinfo_server[] = {
+        &RMF_PTLRPC_BODY,
+        &RMF_GETINFO_VAL,
+};
+
 static const struct req_msg_field *ldlm_enqueue_client[] = {
         &RMF_PTLRPC_BODY,
         &RMF_DLM_REQ
@@ -532,6 +543,7 @@ static const struct req_format *req_formats[] = {
         &RQF_MDS_CONNECT,
         &RQF_MDS_DISCONNECT,
         &RQF_MDS_SET_INFO,
+        &RQF_MDS_GET_INFO,
         &RQF_MDS_GETSTATUS,
         &RQF_MDS_STATFS,
         &RQF_MDS_GETATTR,
@@ -649,6 +661,19 @@ EXPORT_SYMBOL(RMF_MGS_SEND_PARAM);
 const struct req_msg_field RMF_SETINFO_VAL =
         DEFINE_MSGF("setinfo_val", 0, -1, NULL);
 EXPORT_SYMBOL(RMF_SETINFO_VAL);
+
+const struct req_msg_field RMF_GETINFO_KEY =
+        DEFINE_MSGF("getinfo_key", 0, -1, NULL);
+EXPORT_SYMBOL(RMF_GETINFO_KEY);
+
+const struct req_msg_field RMF_GETINFO_VALLEN =
+        DEFINE_MSGF("getinfo_vallen", 0,
+                    sizeof(__u32), lustre_swab_generic_32s);
+EXPORT_SYMBOL(RMF_GETINFO_VALLEN);
+
+const struct req_msg_field RMF_GETINFO_VAL =
+        DEFINE_MSGF("getinfo_val", 0, -1, NULL);
+EXPORT_SYMBOL(RMF_GETINFO_VAL);
 
 const struct req_msg_field RMF_SEQ_OPC =
         DEFINE_MSGF("seq_query_opc", 0,
@@ -1030,6 +1055,11 @@ EXPORT_SYMBOL(RQF_MDS_DISCONNECT);
 const struct req_format RQF_MDS_SET_INFO =
         DEFINE_REQ_FMT0("MDS_SET_INFO", mds_set_info_client, empty);
 EXPORT_SYMBOL(RQF_MDS_SET_INFO);
+
+const struct req_format RQF_MDS_GET_INFO =
+        DEFINE_REQ_FMT0("MDS_GET_INFO", mds_getinfo_client,
+                        mds_getinfo_server);
+EXPORT_SYMBOL(RQF_MDS_GET_INFO);
 
 const struct req_format RQF_LDLM_ENQUEUE =
         DEFINE_REQ_FMT0("LDLM_ENQUEUE",
