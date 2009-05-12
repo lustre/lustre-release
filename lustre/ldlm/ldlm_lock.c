@@ -1337,6 +1337,8 @@ int ldlm_run_bl_ast_work(struct list_head *rpc_list)
         ENTRY;
 
         arg.set = ptlrpc_prep_set();
+        if (NULL == arg.set)
+                RETURN(-ERESTART);
         atomic_set(&arg.restart, 0);
         arg.type = LDLM_BL_CALLBACK;
 
@@ -1394,6 +1396,8 @@ int ldlm_run_cp_ast_work(struct list_head *rpc_list)
         ENTRY;
 
         arg.set = ptlrpc_prep_set();
+        if (NULL == arg.set)
+                RETURN(-ERESTART);
         atomic_set(&arg.restart, 0);
         arg.type = LDLM_CP_CALLBACK;
 
