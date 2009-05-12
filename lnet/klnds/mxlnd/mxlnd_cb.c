@@ -43,6 +43,15 @@
 
 #include "mxlnd.h"
 
+mx_endpoint_addr_t MX_EPA_NULL; /* use to determine if an endpoint is NULL */
+
+inline int
+mxlnd_endpoint_addr_null(mx_endpoint_addr_t epa)
+{
+        /* if memcmp() == 0, it is NULL */
+        return !(memcmp(&epa, &MX_EPA_NULL, sizeof(epa)));
+}
+
 inline void mxlnd_noop(char *s, ...)
 {
         return;
@@ -101,6 +110,8 @@ mxlnd_msgtype_to_str(int type) {
                 return "MXLND_MSG_CONN_REQ";
         case MXLND_MSG_CONN_ACK:
                 return "MXLND_MSG_CONN_ACK";
+        case MXLND_MSG_BYE:
+                return "MXLND_MSG_BYE";
         case MXLND_MSG_NOOP:
                 return "MXLND_MSG_NOOP";
         case MXLND_MSG_PUT_REQ:
@@ -144,25 +155,26 @@ mxlnd_create_match(struct kmx_ctx *ctx, u8 error)
 {
         u64 type        = (u64) ctx->mxc_msg_type;
         u64 err         = (u64) error;
-        u64 match       = 0LL;
+        u64 match       = 0ULL;
 
         LASSERT(ctx->mxc_msg_type != 0);
-        LASSERT(ctx->mxc_cookie >> 52 == 0);
-        match = (type << 60) | (err << 52) | ctx->mxc_cookie;
+        LASSERT(ctx->mxc_cookie >> MXLND_ERROR_OFFSET == 0);
+        match = (type << MXLND_MSG_OFFSET) | (err << MXLND_ERROR_OFFSET) | ctx->mxc_cookie;
         return match;
 }
 
 static inline void
 mxlnd_parse_match(u64 match, u8 *msg_type, u8 *error, u64 *cookie)
 {
-        *msg_type = (u8) (match >> 60);
-        *error    = (u8) ((match >> 52) & 0xFF);
-        *cookie   = match & 0xFFFFFFFFFFFFFLL;
-        LASSERT(match == (MXLND_MASK_ICON_REQ & 0xF000000000000000LL) ||
-                match == (MXLND_MASK_ICON_ACK & 0xF000000000000000LL) ||
-                *msg_type == MXLND_MSG_EAGER    ||
+        *msg_type = (u8) MXLND_MSG_TYPE(match);
+        *error    = (u8) MXLND_ERROR_VAL(match);
+        *cookie   = match & MXLND_MAX_COOKIE;
+        LASSERT(*msg_type == MXLND_MSG_EAGER    ||
+                *msg_type == MXLND_MSG_ICON_REQ ||
                 *msg_type == MXLND_MSG_CONN_REQ ||
+                *msg_type == MXLND_MSG_ICON_ACK ||
                 *msg_type == MXLND_MSG_CONN_ACK ||
+                *msg_type == MXLND_MSG_BYE      ||
                 *msg_type == MXLND_MSG_NOOP     ||
                 *msg_type == MXLND_MSG_PUT_REQ  ||
                 *msg_type == MXLND_MSG_PUT_ACK  ||
@@ -296,6 +308,9 @@ mxlnd_get_idle_tx(void)
         return tx;
 }
 
+void
+mxlnd_conn_disconnect(struct kmx_conn *conn, int mx_dis, int send_bye);
+
 int
 mxlnd_put_idle_tx(struct kmx_ctx *tx)
 {
@@ -311,8 +326,12 @@ mxlnd_put_idle_tx(struct kmx_ctx *tx)
                 return -EINVAL;
         }
         if (!(tx->mxc_status.code == MX_STATUS_SUCCESS ||
-              tx->mxc_status.code == MX_STATUS_TRUNCATED))
+              tx->mxc_status.code == MX_STATUS_TRUNCATED)) {
+                struct kmx_conn *conn   = tx->mxc_conn;
+
                 result = -EIO;
+                mxlnd_conn_disconnect(conn, 0, 1);
+        }
 
         lntmsg[0] = tx->mxc_lntmsg[0];
         lntmsg[1] = tx->mxc_lntmsg[1];
@@ -346,16 +365,13 @@ mxlnd_conn_free(struct kmx_conn *conn)
                  list_empty (&conn->mxk_tx_free_queue) &&
                  list_empty (&conn->mxk_pending));
         if (!list_empty(&conn->mxk_list)) {
-                spin_lock(&peer->mxp_lock);
                 list_del_init(&conn->mxk_list);
                 if (peer->mxp_conn == conn) {
                         peer->mxp_conn = NULL;
-                        if (!(conn->mxk_epa.stuff[0] == 0 && conn->mxk_epa.stuff[1] == 0)) {
+                        if (!mxlnd_endpoint_addr_null(conn->mxk_epa))
                                 mx_set_endpoint_addr_context(conn->mxk_epa,
                                                              (void *) NULL);
-                        }
                 }
-                spin_unlock(&peer->mxp_lock);
         }
         mxlnd_peer_decref(conn->mxk_peer); /* drop conn's ref to peer */
         MXLND_FREE (conn, sizeof (*conn));
@@ -409,15 +425,19 @@ mxlnd_conn_cancel_pending_rxs(struct kmx_conn *conn)
 /**
  * mxlnd_conn_disconnect - shutdown a connection
  * @conn - a kmx_conn pointer
+ * @mx_dis - call mx_disconnect()
+ * @send_bye - send peer a BYE msg
  *
  * This function sets the status to DISCONNECT, completes queued
  * txs with failure, calls mx_disconnect, which will complete
  * pending txs and matched rxs with failure.
  */
 void
-mxlnd_conn_disconnect(struct kmx_conn *conn, int mx_dis, int notify)
+mxlnd_conn_disconnect(struct kmx_conn *conn, int mx_dis, int send_bye)
 {
+        mx_endpoint_addr_t      epa     = conn->mxk_epa;
         struct list_head        *tmp    = NULL;
+        int                     valid   = !mxlnd_endpoint_addr_null(epa);
 
         spin_lock(&conn->mxk_lock);
         if (conn->mxk_status == MXLND_CONN_DISCONNECT) {
@@ -452,24 +472,33 @@ mxlnd_conn_disconnect(struct kmx_conn *conn, int mx_dis, int notify)
         /* cancel pending rxs */
         mxlnd_conn_cancel_pending_rxs(conn);
 
+        if (send_bye && valid) {
+                u64 match = ((u64) MXLND_MSG_BYE) << MXLND_MSG_OFFSET;
+                /* send a BYE to the peer */
+                CDEBUG(D_NET, "%s: sending a BYE msg to %s\n", __func__,
+                                libcfs_nid2str(conn->mxk_peer->mxp_nid));
+                mx_kisend(kmxlnd_data.kmx_endpt, NULL, 0, MX_PIN_PHYSICAL,
+                                epa, match, NULL, NULL);
+                /* wait to allow the peer to ack our message */
+                mxlnd_sleep(msecs_to_jiffies(20));
+        }
+
         if (kmxlnd_data.kmx_shutdown != 1) {
+                time_t          last_alive      = 0;
+                unsigned long   last_msg        = 0;
 
-                if (mx_dis) mx_disconnect(kmxlnd_data.kmx_endpt, conn->mxk_epa);
+                /* notify LNET that we are giving up on this peer */
+                if (time_after(conn->mxk_last_rx, conn->mxk_last_tx))
+                        last_msg = conn->mxk_last_rx;
+                else
+                        last_msg = conn->mxk_last_tx;
 
-                if (notify) {
-                        time_t          last_alive      = 0;
-                        unsigned long   last_msg        = 0;
+                last_alive = cfs_time_current_sec() -
+                             cfs_duration_sec(cfs_time_current() - last_msg);
+                lnet_notify(kmxlnd_data.kmx_ni, conn->mxk_peer->mxp_nid, 0, last_alive);
 
-                        /* notify LNET that we are giving up on this peer */
-                        if (time_after(conn->mxk_last_rx, conn->mxk_last_tx)) {
-                                last_msg = conn->mxk_last_rx;
-                        } else {
-                                last_msg = conn->mxk_last_tx;
-                        }
-                        last_alive = cfs_time_current_sec() -
-                                     cfs_duration_sec(cfs_time_current() - last_msg);
-                        lnet_notify(kmxlnd_data.kmx_ni, conn->mxk_peer->mxp_nid, 0, last_alive);
-                }
+                if (mx_dis && valid)
+                        mx_disconnect(kmxlnd_data.kmx_endpt, epa);
         }
         mxlnd_conn_decref(conn); /* drop the owning peer's reference */
 
@@ -534,9 +563,9 @@ int
 mxlnd_conn_alloc(struct kmx_conn **connp, struct kmx_peer *peer)
 {
         int ret = 0;
-        spin_lock(&peer->mxp_lock);
+        write_lock(&kmxlnd_data.kmx_global_lock);
         ret = mxlnd_conn_alloc_locked(connp, peer);
-        spin_unlock(&peer->mxp_lock);
+        write_unlock(&kmxlnd_data.kmx_global_lock);
         return ret;
 }
 
@@ -600,15 +629,14 @@ mxlnd_deq_pending_ctx(struct kmx_ctx *ctx)
 void
 mxlnd_peer_free(struct kmx_peer *peer)
 {
-        CDEBUG(D_NET, "freeing peer 0x%p\n", peer);
+        CDEBUG(D_NET, "freeing peer 0x%p %s\n", peer,
+                        peer == kmxlnd_data.kmx_localhost ? "(*** localhost ***)" : "");
 
         LASSERT (atomic_read(&peer->mxp_refcount) == 0);
 
-        if (peer->mxp_host != NULL) {
-                spin_lock(&peer->mxp_host->mxh_lock);
-                peer->mxp_host->mxh_peer = NULL;
-                spin_unlock(&peer->mxp_host->mxh_lock);
-        }
+        if (peer == kmxlnd_data.kmx_localhost)
+                LASSERT(kmxlnd_data.kmx_shutdown);
+
         if (!list_empty(&peer->mxp_peers)) {
                 /* assume we are locked */
                 list_del_init(&peer->mxp_peers);
@@ -619,31 +647,60 @@ mxlnd_peer_free(struct kmx_peer *peer)
         return;
 }
 
-void
-mxlnd_peer_hostname_to_nic_id(struct kmx_peer *peer)
-{
-        u64             nic_id  = 0LL;
-        char            name[MX_MAX_HOSTNAME_LEN + 1];
-        mx_return_t     mxret   = MX_SUCCESS;
+#define MXLND_LOOKUP_COUNT 10
 
-        memset(name, 0, sizeof(name));
-        snprintf(name, sizeof(name), "%s:%d", peer->mxp_host->mxh_hostname, peer->mxp_host->mxh_board);
-        mxret = mx_hostname_to_nic_id(name, &nic_id);
-        if (mxret == MX_SUCCESS) {
-                peer->mxp_nic_id = nic_id;
-        } else {
-                CDEBUG(D_NETERROR, "mx_hostname_to_nic_id() failed for %s "
-                                   "with %s\n", name, mx_strerror(mxret));
-                mxret = mx_hostname_to_nic_id(peer->mxp_host->mxh_hostname, &nic_id);
-                if (mxret == MX_SUCCESS) {
-                        peer->mxp_nic_id = nic_id;
-                } else {
-                        CDEBUG(D_NETERROR, "mx_hostname_to_nic_id() failed for %s "
-                                           "with %s\n", peer->mxp_host->mxh_hostname,
-                                           mx_strerror(mxret));
-                }
+/* We only want the MAC address of the peer's Myricom NIC. We
+ * require that each node has the IPoMX interface (myriN) up.
+ * We will not pass any traffic over IPoMX, but it allows us
+ * to get the MAC address. */
+static int
+mxlnd_ip2nic_id(u32 ip, u64 *nic_id)
+{
+        int                     ret     = 0;
+        int                     try     = 1;
+        int                     fatal   = 0;
+        u64                     tmp_id  = 0ULL;
+        unsigned char           *haddr  = NULL;
+        struct net_device       *dev    = NULL;
+        struct neighbour        *n      = NULL;
+        cfs_socket_t            *sock   = NULL;
+        __be32                  dst_ip  = htonl(ip);
+
+        dev = dev_get_by_name(*kmxlnd_tunables.kmx_default_ipif);
+        if (dev == NULL) {
+                return -ENODEV;
         }
-        return;
+
+        haddr = (unsigned char *) &tmp_id + 2; /* MAC is only 6 bytes */
+
+        do {
+                n = neigh_lookup(&arp_tbl, &dst_ip, dev);
+                if (n) {
+                        n->used = jiffies;
+                        if (n->nud_state & NUD_VALID) {
+                                memcpy(haddr, n->ha, dev->addr_len);
+                                neigh_release(n);
+                                ret = 0;
+                                break;
+                        }
+                }
+                /* not found, try to connect (force an arp) */
+                libcfs_sock_connect(&sock, &fatal, 0, 0, ip, 987);
+                if (!fatal)
+                        libcfs_sock_release(sock);
+                schedule_timeout_interruptible(HZ/10 * try); /* add a little backoff */
+        } while (try++ < MXLND_LOOKUP_COUNT);
+
+        dev_put(dev);
+
+        if (tmp_id == 0ULL)
+                ret = -EHOSTUNREACH;
+#ifdef __LITTLE_ENDIAN
+        *nic_id = ___arch__swab64(tmp_id);
+#else
+        *nic_id = tmp_id;
+#endif
+        return ret;
 }
 
 /**
@@ -654,13 +711,12 @@ mxlnd_peer_hostname_to_nic_id(struct kmx_peer *peer)
  * Returns 0 on success and -ENOMEM on failure
  */
 int
-mxlnd_peer_alloc(struct kmx_peer **peerp, lnet_nid_t nid)
+mxlnd_peer_alloc(struct kmx_peer **peerp, lnet_nid_t nid, u32 board, u32 ep_id, u64 nic_id)
 {
         int                     i       = 0;
         int                     ret     = 0;
-        u32                     addr    = LNET_NIDADDR(nid);
+        u32                     ip      = LNET_NIDADDR(nid);
         struct kmx_peer        *peer    = NULL;
-        struct kmx_host        *host    = NULL;
 
         LASSERT (nid != LNET_NID_ANY && nid != 0LL);
 
@@ -673,28 +729,25 @@ mxlnd_peer_alloc(struct kmx_peer **peerp, lnet_nid_t nid)
 
         memset(peer, 0, sizeof(*peer));
 
-        list_for_each_entry(host, &kmxlnd_data.kmx_hosts, mxh_list) {
-                if (addr == host->mxh_addr) {
-                        peer->mxp_host = host;
-                        spin_lock(&host->mxh_lock);
-                        host->mxh_peer = peer;
-                        spin_unlock(&host->mxh_lock);
-                        break;
-                }
-        }
-        if (peer->mxp_host == NULL) {
-                CDEBUG(D_NETERROR, "unknown host for NID 0x%llx\n", nid);
-                MXLND_FREE(peer, sizeof(*peer));
-                return -ENXIO;
-        }
-
         peer->mxp_nid = nid;
         /* peer->mxp_incarnation */
         atomic_set(&peer->mxp_refcount, 1);     /* ref for kmx_peers list */
-        mxlnd_peer_hostname_to_nic_id(peer);
+
+        peer->mxp_ip = ip;
+        peer->mxp_ep_id = *kmxlnd_tunables.kmx_ep_id;
+        peer->mxp_board = board;
+        peer->mxp_nic_id = nic_id;
+
+        if (nic_id == 0ULL) {
+                ret = mxlnd_ip2nic_id(ip, &nic_id);
+                if (ret != 0)
+                        CERROR("%s: mxlnd_ip2nic_id() returned %d\n", __func__, ret);
+                mx_nic_id_to_board_number(nic_id, &peer->mxp_board);
+        }
+
+        peer->mxp_nic_id = nic_id; /* may be 0ULL if ip2nic_id() failed */
 
         INIT_LIST_HEAD(&peer->mxp_peers);
-        spin_lock_init(&peer->mxp_lock);
         INIT_LIST_HEAD(&peer->mxp_conns);
         ret = mxlnd_conn_alloc(&peer->mxp_conn, peer); /* adds 2nd conn ref here... */
         if (ret != 0) {
@@ -725,19 +778,6 @@ mxlnd_peer_alloc(struct kmx_peer **peerp, lnet_nid_t nid)
         return 0;
 }
 
-/**
- * mxlnd_nid_to_hash - hash the nid
- * @nid - msg pointer
- *
- * Takes the u64 nid and XORs the lowest N bits by the next lowest N bits.
- */
-static inline int
-mxlnd_nid_to_hash(lnet_nid_t nid)
-{
-        return (nid & MXLND_HASH_MASK) ^
-               ((nid & (MXLND_HASH_MASK << MXLND_HASH_BITS)) >> MXLND_HASH_BITS);
-}
-
 static inline struct kmx_peer *
 mxlnd_find_peer_by_nid_locked(lnet_nid_t nid)
 {
@@ -762,9 +802,9 @@ mxlnd_find_peer_by_nid(lnet_nid_t nid)
 {
         struct kmx_peer *peer   = NULL;
 
-        read_lock(&kmxlnd_data.kmx_peers_lock);
+        read_lock(&kmxlnd_data.kmx_global_lock);
         peer = mxlnd_find_peer_by_nid_locked(nid);
-        read_unlock(&kmxlnd_data.kmx_peers_lock);
+        read_unlock(&kmxlnd_data.kmx_global_lock);
         return peer;
 }
 
@@ -1017,7 +1057,7 @@ mxlnd_recv_msg(lnet_msg_t *lntmsg, struct kmx_ctx *rx, u8 msg_type, u64 cookie, 
 {
         int             ret     = 0;
         mx_return_t     mxret   = MX_SUCCESS;
-        uint64_t        mask    = 0xF00FFFFFFFFFFFFFLL;
+        uint64_t        mask    = ~(MXLND_ERROR_MASK);
 
         rx->mxc_msg_type = msg_type;
         rx->mxc_lntmsg[0] = lntmsg; /* may be NULL if EAGER */
@@ -1035,7 +1075,7 @@ mxlnd_recv_msg(lnet_msg_t *lntmsg, struct kmx_ctx *rx, u8 msg_type, u64 cookie, 
                           cookie, mask, (void *) rx, &rx->mxc_mxreq);
         if (mxret != MX_SUCCESS) {
                 mxlnd_deq_pending_ctx(rx);
-                CDEBUG(D_NETERROR, "mx_kirecv() failed with %s (%d)\n", 
+                CDEBUG(D_NETERROR, "mx_kirecv() failed with %s (%d)\n",
                                    mx_strerror(mxret), (int) mxret);
                 return -1;
         }
@@ -1048,7 +1088,7 @@ mxlnd_recv_msg(lnet_msg_t *lntmsg, struct kmx_ctx *rx, u8 msg_type, u64 cookie, 
  *                         unexpected receives
  * @context - NULL, ignore
  * @source - the peer's mx_endpoint_addr_t
- * @match_value - the msg's bit, should be MXLND_MASK_EAGER
+ * @match_value - the msg's bit, should be MXLND_MSG_EAGER
  * @length - length of incoming message
  * @data_if_available - ignore
  *
@@ -1072,7 +1112,7 @@ mxlnd_unexpected_recv(void *context, mx_endpoint_addr_t source,
         mx_ksegment_t   seg;
         u8              msg_type        = 0;
         u8              error           = 0;
-        u64             cookie          = 0LL;
+        u64             cookie          = 0ULL;
 
         if (context != NULL) {
                 CDEBUG(D_NETERROR, "unexpected receive with non-NULL context\n");
@@ -1082,9 +1122,22 @@ mxlnd_unexpected_recv(void *context, mx_endpoint_addr_t source,
         CDEBUG(D_NET, "unexpected_recv() bits=0x%llx length=%d\n", match_value, length);
 #endif
 
+        mxlnd_parse_match(match_value, &msg_type, &error, &cookie);
+        if (msg_type == MXLND_MSG_BYE) {
+                struct kmx_peer *peer   = NULL;
+
+                mx_get_endpoint_addr_context(source, (void **) &peer);
+                if (peer && peer->mxp_conn) {
+                        CDEBUG(D_NET, "peer %s sent BYE msg\n",
+                                        libcfs_nid2str(peer->mxp_nid));
+                        mxlnd_conn_disconnect(peer->mxp_conn, 1, 0);
+                }
+
+                return MX_RECV_FINISHED;
+        }
+
         rx = mxlnd_get_idle_rx();
         if (rx != NULL) {
-                mxlnd_parse_match(match_value, &msg_type, &error, &cookie);
                 if (length <= MXLND_EAGER_SIZE) {
                         ret = mxlnd_recv_msg(NULL, rx, msg_type, match_value, length);
                 } else {
@@ -1100,22 +1153,20 @@ mxlnd_unexpected_recv(void *context, mx_endpoint_addr_t source,
 
                         /* NOTE to avoid a peer disappearing out from under us,
                          *      read lock the peers lock first */
-                        read_lock(&kmxlnd_data.kmx_peers_lock);
+                        read_lock(&kmxlnd_data.kmx_global_lock);
                         mx_get_endpoint_addr_context(source, (void **) &peer);
                         if (peer != NULL) {
                                 mxlnd_peer_addref(peer); /* add a ref... */
-                                spin_lock(&peer->mxp_lock);
                                 conn = peer->mxp_conn;
                                 if (conn) {
                                         mxlnd_conn_addref(conn); /* add ref until rx completed */
                                         mxlnd_peer_decref(peer); /* and drop peer ref */
                                         rx->mxc_conn = conn;
                                 }
-                                spin_unlock(&peer->mxp_lock);
                                 rx->mxc_peer = peer;
                                 rx->mxc_nid = peer->mxp_nid;
                         }
-                        read_unlock(&kmxlnd_data.kmx_peers_lock);
+                        read_unlock(&kmxlnd_data.kmx_global_lock);
                 } else {
                         CDEBUG(D_NETERROR, "could not post receive\n");
                         mxlnd_put_idle_rx(rx);
@@ -1129,10 +1180,10 @@ mxlnd_unexpected_recv(void *context, mx_endpoint_addr_t source,
                         /* ret != 0 */
                         CDEBUG(D_NETERROR, "disconnected peer - dropping rx\n");
                 }
-                seg.segment_ptr = 0LL;
+                seg.segment_ptr = 0ULL;
                 seg.segment_length = 0;
                 mx_kirecv(kmxlnd_data.kmx_endpt, &seg, 1, MX_PIN_PHYSICAL,
-                          match_value, 0xFFFFFFFFFFFFFFFFLL, NULL, NULL);
+                          match_value, ~0ULL, NULL, NULL);
         }
 
         return MX_RECV_CONTINUE;
@@ -1146,19 +1197,18 @@ mxlnd_get_peer_info(int index, lnet_nid_t *nidp, int *count)
         int                      ret    = -ENOENT;
         struct kmx_peer         *peer   = NULL;
 
-        read_lock(&kmxlnd_data.kmx_peers_lock);
+        read_lock(&kmxlnd_data.kmx_global_lock);
         for (i = 0; i < MXLND_HASH_SIZE; i++) {
                 list_for_each_entry(peer, &kmxlnd_data.kmx_peers[i], mxp_peers) {
-                        if (index-- > 0)
-                                continue;
-
-                        *nidp = peer->mxp_nid;
-                        *count = atomic_read(&peer->mxp_refcount);
-                        ret = 0;
-                        break;
+                        if (index-- == 0) {
+                                *nidp = peer->mxp_nid;
+                                *count = atomic_read(&peer->mxp_refcount);
+                                ret = 0;
+                                break;
+                        }
                 }
         }
-        read_unlock(&kmxlnd_data.kmx_peers_lock);
+        read_unlock(&kmxlnd_data.kmx_global_lock);
 
         return ret;
 }
@@ -1167,7 +1217,7 @@ void
 mxlnd_del_peer_locked(struct kmx_peer *peer)
 {
         list_del_init(&peer->mxp_peers); /* remove from the global list */
-        if (peer->mxp_conn) mxlnd_conn_disconnect(peer->mxp_conn, 1, 0);
+        if (peer->mxp_conn) mxlnd_conn_disconnect(peer->mxp_conn, 1, 1);
         mxlnd_peer_decref(peer); /* drop global list ref */
         return;
 }
@@ -1183,10 +1233,13 @@ mxlnd_del_peer(lnet_nid_t nid)
         if (nid != LNET_NID_ANY) {
                 peer = mxlnd_find_peer_by_nid(nid); /* adds peer ref */
         }
-        write_lock(&kmxlnd_data.kmx_peers_lock);
+        write_lock(&kmxlnd_data.kmx_global_lock);
         if (nid != LNET_NID_ANY) {
                 if (peer == NULL) {
                         ret = -ENOENT;
+                } if (peer == kmxlnd_data.kmx_localhost) {
+                        mxlnd_peer_decref(peer); /* and drops it */
+                        CERROR("cannot free this host's NID 0x%llx\n", nid);
                 } else {
                         mxlnd_peer_decref(peer); /* and drops it */
                         mxlnd_del_peer_locked(peer);
@@ -1195,11 +1248,12 @@ mxlnd_del_peer(lnet_nid_t nid)
                 for (i = 0; i < MXLND_HASH_SIZE; i++) {
                         list_for_each_entry_safe(peer, next,
                                                  &kmxlnd_data.kmx_peers[i], mxp_peers) {
-                                mxlnd_del_peer_locked(peer);
+                                if (peer != kmxlnd_data.kmx_localhost)
+                                        mxlnd_del_peer_locked(peer);
                         }
                 }
         }
-        write_unlock(&kmxlnd_data.kmx_peers_lock);
+        write_unlock(&kmxlnd_data.kmx_global_lock);
 
         return ret;
 }
@@ -1211,24 +1265,21 @@ mxlnd_get_conn_by_idx(int index)
         struct kmx_peer         *peer   = NULL;
         struct kmx_conn         *conn   = NULL;
 
-        read_lock(&kmxlnd_data.kmx_peers_lock);
+        read_lock(&kmxlnd_data.kmx_global_lock);
         for (i = 0; i < MXLND_HASH_SIZE; i++) {
                 list_for_each_entry(peer, &kmxlnd_data.kmx_peers[i], mxp_peers) {
-                        spin_lock(&peer->mxp_lock);
                         list_for_each_entry(conn, &peer->mxp_conns, mxk_list) {
                                 if (index-- > 0) {
                                         continue;
                                 }
 
                                 mxlnd_conn_addref(conn); /* add ref here, dec in ctl() */
-                                spin_unlock(&peer->mxp_lock);
-                                read_unlock(&kmxlnd_data.kmx_peers_lock);
+                                read_unlock(&kmxlnd_data.kmx_global_lock);
                                 return conn;
                         }
-                        spin_unlock(&peer->mxp_lock);
                 }
         }
-        read_unlock(&kmxlnd_data.kmx_peers_lock);
+        read_unlock(&kmxlnd_data.kmx_global_lock);
 
         return NULL;
 }
@@ -1239,11 +1290,11 @@ mxlnd_close_matching_conns_locked(struct kmx_peer *peer)
         struct kmx_conn *conn   = NULL;
         struct kmx_conn *next   = NULL;
 
-        spin_lock(&peer->mxp_lock);
-        list_for_each_entry_safe(conn, next, &peer->mxp_conns, mxk_list) {
-                mxlnd_conn_disconnect(conn, 0 , 0);
-        }
-        spin_unlock(&peer->mxp_lock);
+        if (peer == kmxlnd_data.kmx_localhost) return;
+
+        list_for_each_entry_safe(conn, next, &peer->mxp_conns, mxk_list)
+                mxlnd_conn_disconnect(conn, 0, 1);
+
         return;
 }
 
@@ -1254,7 +1305,7 @@ mxlnd_close_matching_conns(lnet_nid_t nid)
         int             ret     = 0;
         struct kmx_peer *peer   = NULL;
 
-        read_lock(&kmxlnd_data.kmx_peers_lock);
+        read_lock(&kmxlnd_data.kmx_global_lock);
         if (nid != LNET_NID_ANY) {
                 peer = mxlnd_find_peer_by_nid(nid); /* adds peer ref */
                 if (peer == NULL) {
@@ -1269,7 +1320,7 @@ mxlnd_close_matching_conns(lnet_nid_t nid)
                                 mxlnd_close_matching_conns_locked(peer);
                 }
         }
-        read_unlock(&kmxlnd_data.kmx_peers_lock);
+        read_unlock(&kmxlnd_data.kmx_global_lock);
 
         return ret;
 }
@@ -1584,7 +1635,7 @@ mxlnd_send_nak(struct kmx_ctx *tx, lnet_nid_t nid, int type, int status, __u64 c
         mxlnd_init_tx_msg(tx, type, sizeof(kmx_putack_msg_t), tx->mxc_nid);
         tx->mxc_cookie = cookie;
         tx->mxc_msg->mxm_u.put_ack.mxpam_src_cookie = cookie;
-        tx->mxc_msg->mxm_u.put_ack.mxpam_dst_cookie = ((u64) status << 52); /* error code */
+        tx->mxc_msg->mxm_u.put_ack.mxpam_dst_cookie = ((u64) status << MXLND_ERROR_OFFSET); /* error code */
         tx->mxc_match = mxlnd_create_match(tx, status);
 
         mxlnd_queue_tx(tx);
@@ -1618,7 +1669,7 @@ mxlnd_send_data(lnet_ni_t *ni, lnet_msg_t *lntmsg, struct kmx_peer *peer, u8 msg
         LASSERT(lntmsg != NULL);
         LASSERT(peer != NULL);
         LASSERT(msg_type == MXLND_MSG_PUT_DATA || msg_type == MXLND_MSG_GET_DATA);
-        LASSERT((cookie>>52) == 0);
+        LASSERT((cookie>>MXLND_ERROR_OFFSET) == 0);
 
         tx = mxlnd_get_idle_tx();
         if (tx == NULL) {
@@ -1685,14 +1736,15 @@ failed_0:
 int
 mxlnd_recv_data(lnet_ni_t *ni, lnet_msg_t *lntmsg, struct kmx_ctx *rx, u8 msg_type, u64 cookie)
 {
-        int                     ret             = 0;
-        lnet_process_id_t       target          = lntmsg->msg_target;
-        unsigned int            niov            = lntmsg->msg_niov;
-        struct iovec           *iov             = lntmsg->msg_iov;
-        lnet_kiov_t            *kiov            = lntmsg->msg_kiov;
-        unsigned int            offset          = lntmsg->msg_offset;
-        unsigned int            nob             = lntmsg->msg_len;
-        mx_return_t             mxret           = MX_SUCCESS;
+        int                     ret     = 0;
+        lnet_process_id_t       target  = lntmsg->msg_target;
+        unsigned int            niov    = lntmsg->msg_niov;
+        struct iovec           *iov     = lntmsg->msg_iov;
+        lnet_kiov_t            *kiov    = lntmsg->msg_kiov;
+        unsigned int            offset  = lntmsg->msg_offset;
+        unsigned int            nob     = lntmsg->msg_len;
+        mx_return_t             mxret   = MX_SUCCESS;
+        u64                     mask    = ~(MXLND_ERROR_MASK);
 
         /* above assumes MXLND_MSG_PUT_DATA */
         if (msg_type == MXLND_MSG_GET_DATA) {
@@ -1706,7 +1758,7 @@ mxlnd_recv_data(lnet_ni_t *ni, lnet_msg_t *lntmsg, struct kmx_ctx *rx, u8 msg_ty
         LASSERT(lntmsg != NULL);
         LASSERT(rx != NULL);
         LASSERT(msg_type == MXLND_MSG_PUT_DATA || msg_type == MXLND_MSG_GET_DATA);
-        LASSERT((cookie>>52) == 0); /* ensure top 12 bits are 0 */
+        LASSERT((cookie>>MXLND_ERROR_OFFSET) == 0); /* ensure top 12 bits are 0 */
 
         rx->mxc_msg_type = msg_type;
         rx->mxc_deadline = jiffies + MXLND_COMM_TIMEOUT;
@@ -1747,7 +1799,7 @@ mxlnd_recv_data(lnet_ni_t *ni, lnet_msg_t *lntmsg, struct kmx_ctx *rx, u8 msg_ty
         mxret = mx_kirecv(kmxlnd_data.kmx_endpt,
                           rx->mxc_seg_list, rx->mxc_nseg,
                           rx->mxc_pin_type, rx->mxc_match,
-                          0xF00FFFFFFFFFFFFFLL, (void *) rx,
+                          mask, (void *) rx,
                           &rx->mxc_mxreq);
         if (mxret != MX_SUCCESS) {
                 if (rx->mxc_conn != NULL) {
@@ -1812,17 +1864,18 @@ mxlnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 if (unlikely(peer->mxp_incompatible)) {
                         mxlnd_peer_decref(peer); /* drop ref taken above */
                 } else {
-                        spin_lock(&peer->mxp_lock);
+                        read_lock(&kmxlnd_data.kmx_global_lock);
                         conn = peer->mxp_conn;
                         if (conn) {
                                 mxlnd_conn_addref(conn);
                                 mxlnd_peer_decref(peer); /* drop peer ref taken above */
                         }
-                        spin_unlock(&peer->mxp_lock);
+                        read_unlock(&kmxlnd_data.kmx_global_lock);
                 }
         }
+        CDEBUG(D_NET, "%s: peer 0x%llx is 0x%p\n", __func__, nid, peer);
         if (conn == NULL && peer != NULL) {
-                CDEBUG(D_NETERROR, "conn==NULL peer=0x%p nid=0x%llx payload_nob=%d type=%s\n",
+                CDEBUG(D_NET, "conn==NULL peer=0x%p nid=0x%llx payload_nob=%d type=%s\n",
                        peer, nid, payload_nob, mxlnd_lnetmsg_to_str(type));
         }
 
@@ -2027,7 +2080,7 @@ mxlnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
         struct kmx_msg          *txmsg          = NULL;
         struct kmx_peer         *peer           = rx->mxc_peer;
         struct kmx_conn         *conn           = peer->mxp_conn;
-        u64                      cookie         = 0LL;
+        u64                      cookie         = 0ULL;
         int                      msg_type       = rxmsg->mxm_type;
         int                      repost         = 1;
         int                      credit         = 0;
@@ -2236,13 +2289,13 @@ mxlnd_tx_queued(void *arg)
                 peer = mxlnd_find_peer_by_nid(tx->mxc_nid); /* adds peer ref */
                 if (peer != NULL) {
                         tx->mxc_peer = peer;
-                        spin_lock(&peer->mxp_lock);
+                        write_lock(&kmxlnd_data.kmx_global_lock);
                         if (peer->mxp_conn == NULL) {
                                 ret = mxlnd_conn_alloc_locked(&peer->mxp_conn, peer);
                                 if (ret != 0) {
                                         /* out of memory, give up and fail tx */
                                         tx->mxc_status.code = -ENOMEM;
-                                        spin_unlock(&peer->mxp_lock);
+                                        write_unlock(&kmxlnd_data.kmx_global_lock);
                                         mxlnd_peer_decref(peer);
                                         mxlnd_put_idle_tx(tx);
                                         continue;
@@ -2250,7 +2303,7 @@ mxlnd_tx_queued(void *arg)
                         }
                         tx->mxc_conn = peer->mxp_conn;
                         mxlnd_conn_addref(tx->mxc_conn); /* for this tx */
-                        spin_unlock(&peer->mxp_lock);
+                        write_unlock(&kmxlnd_data.kmx_global_lock);
                         mxlnd_peer_decref(peer); /* drop peer ref taken above */
                         mxlnd_queue_tx(tx);
                         found = 1;
@@ -2266,7 +2319,9 @@ mxlnd_tx_queued(void *arg)
                                 tx->mxc_msg_type != MXLND_MSG_GET_DATA);
                         /* create peer */
                         /* adds conn ref for this function */
-                        ret = mxlnd_peer_alloc(&peer, tx->mxc_nid);
+                        ret = mxlnd_peer_alloc(&peer, tx->mxc_nid,
+                                        *kmxlnd_tunables.kmx_board,
+                                        *kmxlnd_tunables.kmx_ep_id, 0ULL);
                         if (ret != 0) {
                                 /* finalize message */
                                 tx->mxc_status.code = ret;
@@ -2280,7 +2335,7 @@ mxlnd_tx_queued(void *arg)
                         /* add peer to global peer list, but look to see
                          * if someone already created it after we released
                          * the read lock */
-                        write_lock(&kmxlnd_data.kmx_peers_lock);
+                        write_lock(&kmxlnd_data.kmx_global_lock);
                         list_for_each_entry(old, &kmxlnd_data.kmx_peers[hash], mxp_peers) {
                                 if (old->mxp_nid == peer->mxp_nid) {
                                         /* somebody beat us here, we created a duplicate */
@@ -2294,18 +2349,16 @@ mxlnd_tx_queued(void *arg)
                                 atomic_inc(&kmxlnd_data.kmx_npeers);
                         } else {
                                 tx->mxc_peer = old;
-                                spin_lock(&old->mxp_lock);
                                 tx->mxc_conn = old->mxp_conn;
                                 /* FIXME can conn be NULL? */
                                 LASSERT(old->mxp_conn != NULL);
                                 mxlnd_conn_addref(old->mxp_conn);
-                                spin_unlock(&old->mxp_lock);
                                 mxlnd_reduce_idle_rxs(*kmxlnd_tunables.kmx_credits - 1);
                                 mxlnd_conn_decref(peer->mxp_conn); /* drop ref taken above.. */
                                 mxlnd_conn_decref(peer->mxp_conn); /* drop peer's ref */
                                 mxlnd_peer_decref(peer);
                         }
-                        write_unlock(&kmxlnd_data.kmx_peers_lock);
+                        write_unlock(&kmxlnd_data.kmx_global_lock);
 
                         mxlnd_queue_tx(tx);
                 }
@@ -2318,34 +2371,39 @@ mxlnd_tx_queued(void *arg)
 void
 mxlnd_iconnect(struct kmx_peer *peer, u64 mask)
 {
-        mx_return_t             mxret   = MX_SUCCESS;
-        mx_request_t            request;
-        struct kmx_conn         *conn   = peer->mxp_conn;
+        mx_return_t     mxret           = MX_SUCCESS;
+        mx_request_t    request;
+        struct kmx_conn *conn           = peer->mxp_conn;
+        u8              msg_type        = (u8) MXLND_MSG_TYPE(mask);
 
         /* NOTE we are holding a conn ref every time we call this function,
          * we do not need to lock the peer before taking another ref */
         mxlnd_conn_addref(conn); /* hold until CONN_REQ or CONN_ACK completes */
 
-        LASSERT(mask == MXLND_MASK_ICON_REQ ||
-                mask == MXLND_MASK_ICON_ACK);
+        LASSERT(msg_type == MXLND_MSG_ICON_REQ || msg_type == MXLND_MSG_ICON_ACK);
 
         if (peer->mxp_reconnect_time == 0) {
                 peer->mxp_reconnect_time = jiffies;
         }
 
-        if (peer->mxp_nic_id == 0LL) {
-                mxlnd_peer_hostname_to_nic_id(peer);
-                if (peer->mxp_nic_id == 0LL) {
+        if (peer->mxp_nic_id == 0ULL) {
+                int             ret     = 0;
+
+                ret = mxlnd_ip2nic_id(peer->mxp_ip, &peer->mxp_nic_id);
+                if (ret == 0) {
+                        mx_nic_id_to_board_number(peer->mxp_nic_id, &peer->mxp_board);
+                }
+                if (peer->mxp_nic_id == 0ULL) {
                         /* not mapped yet, return */
                         spin_lock(&conn->mxk_lock);
                         conn->mxk_status = MXLND_CONN_INIT;
                         spin_unlock(&conn->mxk_lock);
                         if (time_after(jiffies, peer->mxp_reconnect_time + MXLND_WAIT_TIMEOUT)) {
                                 /* give up and notify LNET */
-                                mxlnd_conn_disconnect(conn, 0, 1);
+                                mxlnd_conn_disconnect(conn, 0, 0);
                                 mxlnd_conn_alloc(&peer->mxp_conn, peer); /* adds ref for this
                                                                             function... */
-                                mxlnd_conn_decref(peer->mxp_conn); /* which we no 
+                                mxlnd_conn_decref(peer->mxp_conn); /* which we no
                                                                       longer need */
                         }
                         mxlnd_conn_decref(conn);
@@ -2354,7 +2412,7 @@ mxlnd_iconnect(struct kmx_peer *peer, u64 mask)
         }
 
         mxret = mx_iconnect(kmxlnd_data.kmx_endpt, peer->mxp_nic_id,
-                            peer->mxp_host->mxh_ep_id, MXLND_MSG_MAGIC, mask,
+                            peer->mxp_ep_id, MXLND_MSG_MAGIC, mask,
                             (void *) peer, &request);
         if (unlikely(mxret != MX_SUCCESS)) {
                 spin_lock(&conn->mxk_lock);
@@ -2390,12 +2448,12 @@ mxlnd_check_sends(struct kmx_peer *peer)
                 LASSERT(peer != NULL);
                 return -1;
         }
-        spin_lock(&peer->mxp_lock);
+        write_lock(&kmxlnd_data.kmx_global_lock);
         conn = peer->mxp_conn;
         /* NOTE take a ref for the duration of this function since it is called
          * when there might not be any queued txs for this peer */
         if (conn) mxlnd_conn_addref(conn); /* for duration of this function */
-        spin_unlock(&peer->mxp_lock);
+        write_unlock(&kmxlnd_data.kmx_global_lock);
 
         /* do not add another ref for this tx */
 
@@ -2453,10 +2511,11 @@ mxlnd_check_sends(struct kmx_peer *peer)
         if (unlikely(conn->mxk_status == MXLND_CONN_INIT ||
             conn->mxk_status == MXLND_CONN_FAIL ||
             conn->mxk_status == MXLND_CONN_REQ)) {
+                u64 match = (u64) MXLND_MSG_ICON_REQ << MXLND_MSG_OFFSET;
                 CDEBUG(D_NET, "status=%s\n", mxlnd_connstatus_to_str(conn->mxk_status));
                 conn->mxk_status = MXLND_CONN_WAIT;
                 spin_unlock(&conn->mxk_lock);
-                mxlnd_iconnect(peer, MXLND_MASK_ICON_REQ);
+                mxlnd_iconnect(peer, match);
                 goto done;
         }
         spin_unlock(&conn->mxk_lock);
@@ -2821,14 +2880,16 @@ mxlnd_handle_rx_completion(struct kmx_ctx *rx)
         struct kmx_peer        *peer            = rx->mxc_peer;
         struct kmx_conn        *conn            = rx->mxc_conn;
         u8                      type            = rx->mxc_msg_type;
-        u64                     seq             = 0LL;
+        u64                     seq             = 0ULL;
         lnet_msg_t             *lntmsg[2];
         int                     result          = 0;
-        u64                     nic_id          = 0LL;
+        u64                     nic_id          = 0ULL;
         u32                     ep_id           = 0;
+        u32                     sid             = 0;
         int                     peer_ref        = 0;
         int                     conn_ref        = 0;
         int                     incompatible    = 0;
+        u64                     match           = 0ULL;
 
         /* NOTE We may only know the peer's nid if it is a PUT_REQ, GET_REQ, 
          * failed GET reply, CONN_REQ, or a CONN_ACK */
@@ -2856,7 +2917,7 @@ mxlnd_handle_rx_completion(struct kmx_ctx *rx)
 #endif
 
         if (conn == NULL && peer != NULL) {
-                spin_lock(&peer->mxp_lock);
+                write_lock(&kmxlnd_data.kmx_global_lock);
                 conn = peer->mxp_conn;
                 if (conn) {
                         mxlnd_conn_addref(conn); /* conn takes ref... */
@@ -2864,7 +2925,7 @@ mxlnd_handle_rx_completion(struct kmx_ctx *rx)
                         conn_ref = 1;
                         peer_ref = 0;
                 }
-                spin_unlock(&peer->mxp_lock);
+                write_unlock(&kmxlnd_data.kmx_global_lock);
                 rx->mxc_conn = conn;
         }
 
@@ -2887,8 +2948,8 @@ mxlnd_handle_rx_completion(struct kmx_ctx *rx)
         if (nob == 0) {
                 /* this may be a failed GET reply */
                 if (type == MXLND_MSG_GET_DATA) {
-                        bits = rx->mxc_status.match_info & 0x0FF0000000000000LL;
-                        ret = (u32) (bits>>52);
+                        /* get the error (52-59) bits from the match bits */
+                        ret = (u32) MXLND_ERROR_VAL(rx->mxc_status.match_info);
                         lntmsg[0] = rx->mxc_lntmsg[0];
                         result = -ret;
                         goto cleanup;
@@ -2998,7 +3059,7 @@ mxlnd_handle_rx_completion(struct kmx_ctx *rx)
                 if (cookie > MXLND_MAX_COOKIE) {
                         CDEBUG(D_NETERROR, "NAK for msg_type %d from %s\n", rx->mxc_msg_type,
                                            libcfs_nid2str(rx->mxc_nid));
-                        result = -((cookie >> 52) & 0xff);
+                        result = -((u32) MXLND_ERROR_VAL(cookie));
                         lntmsg[0] = rx->mxc_lntmsg[0];
                 } else {
                         mxlnd_send_data(kmxlnd_data.kmx_ni, rx->mxc_lntmsg[0],
@@ -3037,6 +3098,7 @@ mxlnd_handle_rx_completion(struct kmx_ctx *rx)
                                         (int) MXLND_EAGER_SIZE);
                         incompatible = 1;
                 }
+                mx_decompose_endpoint_addr2(rx->mxc_status.source, &nic_id, &ep_id, &sid);
                 if (peer == NULL) {
                         peer = mxlnd_find_peer_by_nid(msg->mxm_srcnid); /* adds peer ref */
                         if (peer == NULL) {
@@ -3044,17 +3106,18 @@ mxlnd_handle_rx_completion(struct kmx_ctx *rx)
                                 struct kmx_peer *existing_peer    = NULL;
                                 hash = mxlnd_nid_to_hash(msg->mxm_srcnid);
 
-                                mx_decompose_endpoint_addr(rx->mxc_status.source,
-                                                           &nic_id, &ep_id);
                                 rx->mxc_nid = msg->mxm_srcnid;
 
                                 /* adds conn ref for peer and one for this function */
-                                ret = mxlnd_peer_alloc(&peer, msg->mxm_srcnid);
+                                ret = mxlnd_peer_alloc(&peer, msg->mxm_srcnid,
+                                                *kmxlnd_tunables.kmx_board,
+                                                *kmxlnd_tunables.kmx_ep_id, 0ULL);
                                 if (ret != 0) {
                                         goto cleanup;
                                 }
-                                LASSERT(peer->mxp_host->mxh_ep_id == ep_id);
-                                write_lock(&kmxlnd_data.kmx_peers_lock);
+                                peer->mxp_sid = sid;
+                                LASSERT(peer->mxp_ep_id == ep_id);
+                                write_lock(&kmxlnd_data.kmx_global_lock);
                                 existing_peer = mxlnd_find_peer_by_nid_locked(msg->mxm_srcnid);
                                 if (existing_peer) {
                                         mxlnd_conn_decref(peer->mxp_conn);
@@ -3064,10 +3127,11 @@ mxlnd_handle_rx_completion(struct kmx_ctx *rx)
                                 } else {
                                         list_add_tail(&peer->mxp_peers,
                                                       &kmxlnd_data.kmx_peers[hash]);
-                                        write_unlock(&kmxlnd_data.kmx_peers_lock);
                                         atomic_inc(&kmxlnd_data.kmx_npeers);
                                 }
+                                write_unlock(&kmxlnd_data.kmx_global_lock);
                         } else {
+                                /* FIXME should write lock here */
                                 ret = mxlnd_conn_alloc(&conn, peer); /* adds 2nd ref */
                                 mxlnd_peer_decref(peer); /* drop ref taken above */
                                 if (ret != 0) {
@@ -3077,38 +3141,44 @@ mxlnd_handle_rx_completion(struct kmx_ctx *rx)
                         }
                         conn_ref = 1; /* peer/conn_alloc() added ref for this function */
                         conn = peer->mxp_conn;
-                } else {
+                } else { /* found peer */
                         struct kmx_conn *old_conn       = conn;
 
-                        /* do not call mx_disconnect() */
-                        mxlnd_conn_disconnect(old_conn, 0, 0);
+                        if (sid != peer->mxp_sid) {
+                                /* do not call mx_disconnect() or send a BYE */
+                                mxlnd_conn_disconnect(old_conn, 0, 0);
 
-                        /* the ref for this rx was taken on the old_conn */
-                        mxlnd_conn_decref(old_conn);
+                                /* the ref for this rx was taken on the old_conn */
+                                mxlnd_conn_decref(old_conn);
 
-                        /* This allocs a conn, points peer->mxp_conn to this one.
-                         * The old conn is still on the peer->mxp_conns list.
-                         * As the pending requests complete, they will call
-                         * conn_decref() which will eventually free it. */
-                        ret = mxlnd_conn_alloc(&conn, peer);
-                        if (ret != 0) {
-                                CDEBUG(D_NETERROR, "Cannot allocate peer->mxp_conn\n");
-                                goto cleanup;
+                                /* This allocs a conn, points peer->mxp_conn to this one.
+                                * The old conn is still on the peer->mxp_conns list.
+                                * As the pending requests complete, they will call
+                                * conn_decref() which will eventually free it. */
+                                ret = mxlnd_conn_alloc(&conn, peer);
+                                if (ret != 0) {
+                                        CDEBUG(D_NETERROR, "Cannot allocate peer->mxp_conn\n");
+                                        goto cleanup;
+                                }
+                                /* conn_alloc() adds one ref for the peer and one
+                                 * for this function */
+                                conn_ref = 1;
+
+                                peer->mxp_sid = sid;
                         }
-                        /* conn_alloc() adds one ref for the peer and one for this function */
-                        conn_ref = 1;
                 }
-                spin_lock(&peer->mxp_lock);
+                write_lock(&kmxlnd_data.kmx_global_lock);
                 peer->mxp_incarnation = msg->mxm_srcstamp;
                 peer->mxp_incompatible = incompatible;
-                spin_unlock(&peer->mxp_lock);
+                write_unlock(&kmxlnd_data.kmx_global_lock);
                 spin_lock(&conn->mxk_lock);
                 conn->mxk_incarnation = msg->mxm_srcstamp;
                 conn->mxk_status = MXLND_CONN_WAIT;
                 spin_unlock(&conn->mxk_lock);
 
                 /* handle_conn_ack() will create the CONN_ACK msg */
-                mxlnd_iconnect(peer, MXLND_MASK_ICON_ACK);
+                match = (u64) MXLND_MSG_ICON_ACK << MXLND_MSG_OFFSET;
+                mxlnd_iconnect(peer, match);
 
                 break;
 
@@ -3144,10 +3214,10 @@ mxlnd_handle_rx_completion(struct kmx_ctx *rx)
                         incompatible = 1;
                         ret = -1;
                 }
-                spin_lock(&peer->mxp_lock);
+                write_lock(&kmxlnd_data.kmx_global_lock);
                 peer->mxp_incarnation = msg->mxm_srcstamp;
                 peer->mxp_incompatible = incompatible;
-                spin_unlock(&peer->mxp_lock);
+                write_unlock(&kmxlnd_data.kmx_global_lock);
                 spin_lock(&conn->mxk_lock);
                 conn->mxk_credits = *kmxlnd_tunables.kmx_credits;
                 conn->mxk_outstanding = 0;
@@ -3169,7 +3239,7 @@ mxlnd_handle_rx_completion(struct kmx_ctx *rx)
 
 failed:
         if (ret < 0) {
-                MXLND_PRINT("setting PEER_CONN_FAILED\n");
+                CDEBUG(D_NET, "setting PEER_CONN_FAILED\n");
                 spin_lock(&conn->mxk_lock);
                 conn->mxk_status = MXLND_CONN_FAIL;
                 spin_unlock(&conn->mxk_lock);
@@ -3241,12 +3311,11 @@ mxlnd_handle_conn_req(struct kmx_peer *peer, mx_status_t status)
                 if (time_after(jiffies, peer->mxp_reconnect_time + MXLND_WAIT_TIMEOUT)) {
                         struct kmx_conn *new_conn       = NULL;
                         CDEBUG(D_NETERROR, "timeout, calling conn_disconnect()\n");
-                        mxlnd_conn_disconnect(conn, 0, 1);
+                        /* FIXME write lock here ? */
+                        mxlnd_conn_disconnect(conn, 0, 0);
                         mxlnd_conn_alloc(&new_conn, peer); /* adds a ref for this function */
                         mxlnd_conn_decref(new_conn); /* which we no longer need */
-                        spin_lock(&peer->mxp_lock);
                         peer->mxp_reconnect_time = 0;
-                        spin_unlock(&peer->mxp_lock);
                 }
 
                 mxlnd_conn_decref(conn);
@@ -3261,9 +3330,9 @@ mxlnd_handle_conn_req(struct kmx_peer *peer, mx_status_t status)
         mx_set_endpoint_addr_context(conn->mxk_epa, (void *) peer);
 
         /* mx_iconnect() succeeded, reset delay to 0 */
-        spin_lock(&peer->mxp_lock);
+        write_lock(&kmxlnd_data.kmx_global_lock);
         peer->mxp_reconnect_time = 0;
-        spin_unlock(&peer->mxp_lock);
+        write_unlock(&kmxlnd_data.kmx_global_lock);
 
         /* marshal CONN_REQ msg */
         /* we are still using the conn ref from iconnect() - do not take another */
@@ -3297,6 +3366,9 @@ mxlnd_handle_conn_ack(struct kmx_peer *peer, mx_status_t status)
         struct kmx_ctx  *tx     = NULL;
         struct kmx_msg  *txmsg   = NULL;
         struct kmx_conn *conn   = peer->mxp_conn;
+        u64             nic_id  = 0ULL;
+        u32             ep_id   = 0;
+        u32             sid     = 0;
 
         /* a conn ref was taken when calling mx_iconnect(), 
          * hold it until CONN_REQ or CONN_ACK completes */
@@ -3304,12 +3376,12 @@ mxlnd_handle_conn_ack(struct kmx_peer *peer, mx_status_t status)
         CDEBUG(D_NET, "entering\n");
         if (status.code != MX_STATUS_SUCCESS) {
                 CDEBUG(D_NETERROR, "mx_iconnect() failed for CONN_ACK with %s (%d) "
-                       "to %s mxp_nid = 0x%llx mxp_nic_id = 0x%0llx mxh_ep_id = %d\n",
+                       "to %s mxp_nid = 0x%llx mxp_nic_id = 0x%0llx mxp_ep_id = %d\n",
                         mx_strstatus(status.code), status.code,
                         libcfs_nid2str(peer->mxp_nid),
                         peer->mxp_nid,
                         peer->mxp_nic_id,
-                        peer->mxp_host->mxh_ep_id);
+                        peer->mxp_ep_id);
                 spin_lock(&conn->mxk_lock);
                 conn->mxk_status = MXLND_CONN_FAIL;
                 spin_unlock(&conn->mxk_lock);
@@ -3317,18 +3389,18 @@ mxlnd_handle_conn_ack(struct kmx_peer *peer, mx_status_t status)
                 if (time_after(jiffies, peer->mxp_reconnect_time + MXLND_WAIT_TIMEOUT)) {
                         struct kmx_conn *new_conn       = NULL;
                         CDEBUG(D_NETERROR, "timeout, calling conn_disconnect()\n");
+                        /* FIXME write lock here? */
                         mxlnd_conn_disconnect(conn, 0, 1);
                         mxlnd_conn_alloc(&new_conn, peer); /* adds ref for 
                                                               this function... */
                         mxlnd_conn_decref(new_conn); /* which we no longer need */
-                        spin_lock(&peer->mxp_lock);
                         peer->mxp_reconnect_time = 0;
-                        spin_unlock(&peer->mxp_lock);
                 }
 
                 mxlnd_conn_decref(conn);
                 return;
         }
+        mx_decompose_endpoint_addr2(status.source, &nic_id, &ep_id, &sid);
         spin_lock(&conn->mxk_lock);
         conn->mxk_epa = status.source;
         if (likely(!peer->mxp_incompatible)) {
@@ -3340,9 +3412,10 @@ mxlnd_handle_conn_ack(struct kmx_peer *peer, mx_status_t status)
         mx_set_endpoint_addr_context(conn->mxk_epa, (void *) peer);
 
         /* mx_iconnect() succeeded, reset delay to 0 */
-        spin_lock(&peer->mxp_lock);
+        write_lock(&kmxlnd_data.kmx_global_lock);
         peer->mxp_reconnect_time = 0;
-        spin_unlock(&peer->mxp_lock);
+        peer->mxp_sid = sid;
+        write_unlock(&kmxlnd_data.kmx_global_lock);
 
         /* marshal CONN_ACK msg */
         tx = mxlnd_get_idle_tx();
@@ -3402,20 +3475,22 @@ mxlnd_request_waitd(void *arg)
         CDEBUG(D_NET, "%s starting\n", name);
 
         while (!kmxlnd_data.kmx_shutdown) {
+                u8      msg_type        = 0;
+
                 mxret = MX_SUCCESS;
                 result = 0;
 #if MXLND_POLLING
                 if (id == 0 && count++ < *kmxlnd_tunables.kmx_polling) {
-                        mxret = mx_test_any(kmxlnd_data.kmx_endpt, 0LL, 0LL,
+                        mxret = mx_test_any(kmxlnd_data.kmx_endpt, 0ULL, 0ULL,
                                             &status, &result);
                 } else {
                         count = 0;
                         mxret = mx_wait_any(kmxlnd_data.kmx_endpt, MXLND_WAIT_TIMEOUT,
-                                            0LL, 0LL, &status, &result);
+                                            0ULL, 0ULL, &status, &result);
                 }
 #else
                 mxret = mx_wait_any(kmxlnd_data.kmx_endpt, MXLND_WAIT_TIMEOUT,
-                                    0LL, 0LL, &status, &result);
+                                    0ULL, 0ULL, &status, &result);
 #endif
                 if (unlikely(kmxlnd_data.kmx_shutdown))
                         break;
@@ -3432,12 +3507,14 @@ mxlnd_request_waitd(void *arg)
                                (u64) status.match_info, status.msg_length);
                 }
 
+                msg_type = MXLND_MSG_TYPE(status.match_info);
+
                 /* This may be a mx_iconnect() request completing,
                  * check the bit mask for CONN_REQ and CONN_ACK */
-                if (status.match_info == MXLND_MASK_ICON_REQ ||
-                    status.match_info == MXLND_MASK_ICON_ACK) {
+                if (msg_type == MXLND_MSG_ICON_REQ ||
+                    msg_type == MXLND_MSG_ICON_ACK) {
                         peer = (struct kmx_peer*) status.context;
-                        if (status.match_info == MXLND_MASK_ICON_REQ) {
+                        if (msg_type == MXLND_MSG_ICON_REQ) {
                                 mxlnd_handle_conn_req(peer, status);
                         } else {
                                 mxlnd_handle_conn_ack(peer, status);
@@ -3499,25 +3576,23 @@ mxlnd_check_timeouts(unsigned long now)
         struct  kmx_peer        *peer           = NULL;
         struct  kmx_conn        *conn           = NULL;
 
-        read_lock(&kmxlnd_data.kmx_peers_lock);
+        read_lock(&kmxlnd_data.kmx_global_lock);
         for (i = 0; i < MXLND_HASH_SIZE; i++) {
                 list_for_each_entry(peer, &kmxlnd_data.kmx_peers[i], mxp_peers) {
 
                         if (unlikely(kmxlnd_data.kmx_shutdown)) {
-                                read_unlock(&kmxlnd_data.kmx_peers_lock);
+                                read_unlock(&kmxlnd_data.kmx_global_lock);
                                 return next;
                         }
 
-                        spin_lock(&peer->mxp_lock);
                         conn = peer->mxp_conn;
                         if (conn) {
                                 mxlnd_conn_addref(conn);
-                                spin_unlock(&peer->mxp_lock);
                         } else {
-                                spin_unlock(&peer->mxp_lock);
                                 continue;
                         }
 
+                        /* FIXMEis this needed? */
                         spin_lock(&conn->mxk_lock);
 
                         /* if nothing pending (timeout == 0) or
@@ -3525,6 +3600,7 @@ mxlnd_check_timeouts(unsigned long now)
                          * skip this conn */
                         if (conn->mxk_timeout == 0 ||
                             conn->mxk_status == MXLND_CONN_DISCONNECT) {
+                                /* FIXME is this needed? */
                                 spin_unlock(&conn->mxk_lock);
                                 mxlnd_conn_decref(conn);
                                 continue;
@@ -3551,7 +3627,7 @@ mxlnd_check_timeouts(unsigned long now)
                         mxlnd_conn_decref(conn);
                 }
         }
-        read_unlock(&kmxlnd_data.kmx_peers_lock);
+        read_unlock(&kmxlnd_data.kmx_global_lock);
         if (next == 0) next = now + MXLND_COMM_TIMEOUT;
 
         return next;
@@ -3590,25 +3666,28 @@ mxlnd_timeoutd(void *arg)
                         next = mxlnd_check_timeouts(now);
                 }
 
-               read_lock(&kmxlnd_data.kmx_peers_lock);
+               read_lock(&kmxlnd_data.kmx_global_lock);
                 for (i = 0; i < MXLND_HASH_SIZE; i++) {
                         list_for_each_entry(peer, &kmxlnd_data.kmx_peers[i], mxp_peers) {
-                                spin_lock(&peer->mxp_lock);
+                                /* FIXME upgrade to write lock?
+                                 * is any lock needed? */
                                 conn = peer->mxp_conn;
                                 if (conn) mxlnd_conn_addref(conn); /* take ref... */
-                                spin_unlock(&peer->mxp_lock);
 
                                 if (conn == NULL)
                                         continue;
 
                                 if (conn->mxk_status != MXLND_CONN_DISCONNECT &&
                                     time_after(now, conn->mxk_last_tx + HZ)) {
+                                        /* FIXME drop lock or call check_sends_locked */
+                                        read_unlock(&kmxlnd_data.kmx_global_lock);
                                         mxlnd_check_sends(peer);
+                                        read_lock(&kmxlnd_data.kmx_global_lock);
                                 }
                                 mxlnd_conn_decref(conn); /* until here */
                         }
                 }
-                read_unlock(&kmxlnd_data.kmx_peers_lock);
+                read_unlock(&kmxlnd_data.kmx_global_lock);
 
                 mxlnd_sleep(delay);
         }

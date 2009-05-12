@@ -68,9 +68,9 @@ mxlnd_ctx_free(struct kmx_ctx *ctx)
 
         if (ctx->mxc_page != NULL) {
                 __free_page(ctx->mxc_page);
-                spin_lock(&kmxlnd_data.kmx_global_lock);
+                write_lock(&kmxlnd_data.kmx_global_lock);
                 kmxlnd_data.kmx_mem_used -= MXLND_EAGER_SIZE;
-                spin_unlock(&kmxlnd_data.kmx_global_lock);
+                write_unlock(&kmxlnd_data.kmx_global_lock);
         }
 
         if (ctx->mxc_seg_list != NULL) {
@@ -111,9 +111,9 @@ mxlnd_ctx_alloc(struct kmx_ctx **ctxp, enum kmx_req_type type)
                 ret = -ENOMEM;
                 goto failed;
         }
-        spin_lock(&kmxlnd_data.kmx_global_lock);
+        write_lock(&kmxlnd_data.kmx_global_lock);
         kmxlnd_data.kmx_mem_used += MXLND_EAGER_SIZE;
-        spin_unlock(&kmxlnd_data.kmx_global_lock);
+        write_unlock(&kmxlnd_data.kmx_global_lock);
         ctx->mxc_msg = (struct kmx_msg *)((char *)page_address(ctx->mxc_page));
         ctx->mxc_seg.segment_ptr = MX_PA_TO_U64(lnet_page2phys(ctx->mxc_page));
         ctx->mxc_state = MXLND_CTX_IDLE;
@@ -294,242 +294,8 @@ mxlnd_free_peers(void)
         }
 }
 
-int
-mxlnd_host_alloc(struct kmx_host **hostp)
-{
-        struct kmx_host *host   = NULL;
-
-        MXLND_ALLOC(host, sizeof (*host));
-        if (host == NULL) {
-                CDEBUG(D_NETERROR, "Cannot allocate host\n");
-                return -1;
-        }
-        memset(host, 0, sizeof(*host));
-        spin_lock_init(&host->mxh_lock);
-
-        *hostp = host;
-
-        return 0;
-}
-
-void
-mxlnd_host_free(struct kmx_host *host)
-{
-        if (host == NULL) return;
-
-        if (host->mxh_hostname != NULL)
-                MXLND_FREE(host->mxh_hostname, strlen(host->mxh_hostname) + 1);
-
-        MXLND_FREE(host, sizeof(*host));
-        return;
-}
-
 /**
- * mxlnd_free_hosts - free kmx_hosts
- *
- * Called from mxlnd_shutdown()
- */
-void
-mxlnd_free_hosts(void)
-{
-        struct kmx_host         *host   = NULL;
-        struct kmx_host         *next   = NULL;
-
-        list_for_each_entry_safe(host, next, &kmxlnd_data.kmx_hosts, mxh_list) {
-                list_del_init(&host->mxh_list);
-                mxlnd_host_free(host);
-        }
-        return;
-}
-
-#define xstr(s) #s
-#define str(s) xstr(s)
-#define MXLND_MAX_BOARD 4       /* we expect hosts to have fewer NICs than this */
-#define MXLND_MAX_EP_ID 16      /* we expect hosts to have less than this endpoints */
-
-/* this parses a line that consists of:
- * 
- * IP              HOSTNAME           BOARD        ENDPOINT ID
- * 169.192.0.113   mds01              0            3
- * 
- * By default MX uses the alias (short hostname). If you override
- * it using mx_hostname to use the FQDN or some other name, the hostname
- * here must match exactly.
- */
-
-/* MX_MAX_HOSTNAME_LEN = 80. See myriexpress.h */
-int
-mxlnd_parse_line(char *line)
-{
-        int             i               = 0;
-        int             ret             = 0;
-        int             len             = 0;
-        u32             ip[4]           = { 0, 0, 0, 0 };
-        char            hostname[MX_MAX_HOSTNAME_LEN];
-        u32             board           = -1;
-        u32             ep_id           = -1;
-        struct kmx_host *host           = NULL;
-
-        if (line == NULL) return -1;
-
-        len = strlen(line);
-
-        if (len == 0) return -1;
-
-        /* convert tabs to spaces */
-        for (i = 0; i < len; i++) {
-                if (line[i] == '\t') line[i] = ' ';
-        }
-
-        memset(&hostname, 0 , sizeof(hostname));
-        ret = sscanf(line, "%d.%d.%d.%d %" str(MX_MAX_HOSTNAME_LEN) "s %d %d", 
-                     &ip[0], &ip[1], &ip[2], &ip[3], hostname, &board, &ep_id);
-
-        if (ret != 7) {
-                return -1;
-        }
-
-        /* check for valid values */
-        /* we assume a valid IP address (all <= 255), number of NICs,
-         * and number of endpoint IDs */
-        if (ip[0] > 255 || ip [1] > 255 || ip[2] > 255 || ip[3] > 255 ||
-            board > MXLND_MAX_BOARD || ep_id > MXLND_MAX_EP_ID) {
-                CDEBUG(D_NETERROR, "Illegal value in \"%s\". Ignoring "
-                                   "this host.\n", line);
-                return -1;
-        }
-
-        ret = mxlnd_host_alloc(&host);
-        if (ret != 0) return -1;
-
-        host->mxh_addr = ((ip[0]<<24)|(ip[1]<<16)|(ip[2]<<8)|ip[3]);
-        len = strlen(hostname);
-        MXLND_ALLOC(host->mxh_hostname, len + 1);
-        if (host->mxh_hostname == NULL) {
-                mxlnd_host_free(host);
-                return -ENOMEM;
-        }
-        memset(host->mxh_hostname, 0, len + 1);
-        strncpy(host->mxh_hostname, hostname, len);
-        host->mxh_board = board;
-        host->mxh_ep_id = ep_id;
-
-        spin_lock(&kmxlnd_data.kmx_hosts_lock);
-        list_add_tail(&host->mxh_list, &kmxlnd_data.kmx_hosts);
-        spin_unlock(&kmxlnd_data.kmx_hosts_lock);
-
-        return 0;
-}
-
-void
-mxlnd_print_hosts(void)
-{
-#if MXLND_DEBUG
-        struct kmx_host         *host   = NULL;
-
-        list_for_each_entry(host, &kmxlnd_data.kmx_hosts, mxh_list) {
-                int             ip[4];
-                u32             addr    = host->mxh_addr;
-
-                ip[0] = (addr >> 24) & 0xff;
-                ip[1] = (addr >> 16) & 0xff;
-                ip[2] = (addr >>  8) & 0xff;
-                ip[3] = addr & 0xff;
-                CDEBUG(D_NET, "\tip= %d.%d.%d.%d\n\thost= %s\n\tboard= %d\n\tep_id= %d\n\n",
-                            ip[0], ip[1], ip[2], ip[3],
-                            host->mxh_hostname, host->mxh_board, host->mxh_ep_id);
-        }
-#endif
-        return;
-}
-
-#define MXLND_BUFSIZE (PAGE_SIZE - 1)
-
-int
-mxlnd_parse_hosts(char *filename)
-{
-        int             ret             = 0;
-        s32             size            = 0;
-        s32             bufsize         = MXLND_BUFSIZE;
-        s32             allocd          = 0;
-        loff_t          offset          = 0;
-        struct file     *filp           = NULL;
-        struct inode    *inode          = NULL;
-        char            *buf            = NULL;
-        s32             buf_off         = 0;
-        char            *sep            = NULL;
-        char            *line           = NULL;
-
-        if (filename == NULL) return -1;
-
-        filp = filp_open(filename, O_RDONLY, 0);
-        if (IS_ERR(filp)) {
-                CERROR("filp_open() failed for %s\n", filename);
-                return -1;
-        }
-
-        inode = filp->f_dentry->d_inode;
-        if (!S_ISREG(inode->i_mode)) {
-                CERROR("%s is not a regular file\n", filename);
-                return -1;
-        }
-
-        size = (s32) inode->i_size;
-        if (size < MXLND_BUFSIZE) bufsize = size;
-        allocd = bufsize;
-        MXLND_ALLOC(buf, allocd + 1);
-        if (buf == NULL) {
-                CERROR("Cannot allocate buf\n");
-                filp_close(filp, current->files);
-                return -1;
-        }
-
-        while (offset < size) {
-                memset(buf, 0, bufsize + 1);
-                ret = kernel_read(filp, (unsigned long) offset, buf, (unsigned long) bufsize);
-                if (ret < 0) {
-                        CDEBUG(D_NETERROR, "kernel_read() returned %d - closing %s\n", ret, filename);
-                        filp_close(filp, current->files);
-                        MXLND_FREE(buf, allocd + 1);
-                        return -1;
-                }
-
-                if (ret < bufsize) bufsize = ret;
-                buf_off = 0;
-                while (buf_off < bufsize) {
-                        sep = strchr(buf + buf_off, '\n');
-                        if (sep != NULL) {
-                                /* we have a line */
-                                line = buf + buf_off;
-                                *sep = '\0';
-                                ret = mxlnd_parse_line(line);
-                                if (ret != 0 && strlen(line) != 0) {
-                                        CDEBUG(D_NETERROR, "Failed to parse \"%s\". Ignoring this host.\n", line);
-                                }
-                                buf_off += strlen(line) + 1;
-                        } else {
-                                /* last line or we need to read more */
-                                line = buf + buf_off;
-                                ret = mxlnd_parse_line(line);
-                                if (ret != 0) {
-                                        bufsize -= strlen(line) + 1;
-                                }
-                                buf_off += strlen(line) + 1;
-                        }
-                }
-                offset += bufsize;
-                bufsize = MXLND_BUFSIZE;
-        }
-
-        MXLND_FREE(buf, allocd + 1);
-        filp_close(filp, current->files);
-        mxlnd_print_hosts();
-
-        return 0;
-}
-
-/**
- * mxlnd_init_mx - open the endpoint, set out ID, register the EAGER callback
+ * mxlnd_init_mx - open the endpoint, set our ID, register the EAGER callback
  * @ni - the network interface
  *
  * Returns 0 on success, -1 on failure
@@ -538,13 +304,17 @@ int
 mxlnd_init_mx(lnet_ni_t *ni)
 {
         int                     ret     = 0;
-        int                     found   = 0;
+        int                     hash    = 0;
         mx_return_t             mxret;
-        mx_endpoint_addr_t      addr;
+        mx_endpoint_addr_t      epa;
         u32                     board   = *kmxlnd_tunables.kmx_board;
         u32                     ep_id   = *kmxlnd_tunables.kmx_ep_id;
         u64                     nic_id  = 0LL;
-        struct kmx_host         *host   = NULL;
+        char                    *ifname = NULL;
+        __u32                   ip;
+        __u32                   netmask;
+        int                     up      = 0;
+        struct kmx_peer         *peer   = NULL;
 
         mxret = mx_init();
         if (mxret != MX_SUCCESS) {
@@ -552,49 +322,70 @@ mxlnd_init_mx(lnet_ni_t *ni)
                 return -1;
         }
 
-        ret = mxlnd_parse_hosts(*kmxlnd_tunables.kmx_hosts);
+        if (ni->ni_interfaces[0] != NULL) {
+                /* Use the IPoMX interface specified in 'networks=' */
+
+                CLASSERT (LNET_MAX_INTERFACES > 1);
+                if (ni->ni_interfaces[1] != NULL) {
+                        CERROR("Multiple interfaces not supported\n");
+                        goto failed_with_init;
+                }
+
+                ifname = ni->ni_interfaces[0];
+        } else {
+                ifname = *kmxlnd_tunables.kmx_default_ipif;
+        }
+
+        ret = libcfs_ipif_query(ifname, &up, &ip, &netmask);
         if (ret != 0) {
-                if (*kmxlnd_tunables.kmx_hosts != NULL) {
-                        CERROR("mxlnd_parse_hosts(%s) failed\n", *kmxlnd_tunables.kmx_hosts);
-                }
-                mx_finalize();
-                return -1;
+                CERROR("Can't query IPoMX interface %s: %d\n",
+                       ifname, ret);
+                goto failed_with_init;
         }
 
-        list_for_each_entry(host, &kmxlnd_data.kmx_hosts, mxh_list) {
-                if (strcmp(host->mxh_hostname, system_utsname.nodename) == 0) {
-                        /* override the defaults and module parameters with 
-                         * the info from the hosts file */
-                        board = host->mxh_board;
-                        ep_id = host->mxh_ep_id;
-                        kmxlnd_data.kmx_localhost = host;
-                        CDEBUG(D_NET, "my hostname is %s board %d ep_id %d\n", kmxlnd_data.kmx_localhost->mxh_hostname, kmxlnd_data.kmx_localhost->mxh_board, kmxlnd_data.kmx_localhost->mxh_ep_id);
-                        found = 1;
-                        break;
-                }
+        if (!up) {
+                CERROR("Can't query IPoMX interface %s: it's down\n",
+                       ifname);
+                goto failed_with_init;
         }
 
-        if (found == 0) {
-                CERROR("no host entry found for localhost\n");
-                mx_finalize();
-                return -1;
-        }
-
-        mxret = mx_open_endpoint(board, ep_id, MXLND_MSG_MAGIC, 
+        mxret = mx_open_endpoint(board, ep_id, MXLND_MSG_MAGIC,
                                  NULL, 0, &kmxlnd_data.kmx_endpt);
         if (mxret != MX_SUCCESS) {
                 CERROR("mx_open_endpoint() failed with %d\n", mxret);
-                mx_finalize();
-                return -1;
+                goto failed_with_init;
         }
 
-        mx_get_endpoint_addr(kmxlnd_data.kmx_endpt, &addr);
-        mx_decompose_endpoint_addr(addr, &nic_id, &ep_id);
+        mx_get_endpoint_addr(kmxlnd_data.kmx_endpt, &epa);
+        mx_decompose_endpoint_addr(epa, &nic_id, &ep_id);
 
-        LASSERT(host != NULL);
-        ni->ni_nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), host->mxh_addr);
-
+        ni->ni_nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), ip);
         CDEBUG(D_NET, "My NID is 0x%llx\n", ni->ni_nid);
+
+        ret = mxlnd_peer_alloc(&peer, ni->ni_nid, board, ep_id, nic_id);
+        if (ret != 0) {
+                goto failed_with_endpoint;
+        }
+        peer->mxp_conn->mxk_epa = epa;
+
+        peer->mxp_incarnation = kmxlnd_data.kmx_incarnation;
+        peer->mxp_incompatible = 0;
+        spin_lock(&peer->mxp_conn->mxk_lock);
+        peer->mxp_conn->mxk_credits = *kmxlnd_tunables.kmx_credits;
+        peer->mxp_conn->mxk_outstanding = 0;
+        peer->mxp_conn->mxk_incarnation = kmxlnd_data.kmx_incarnation;
+        peer->mxp_conn->mxk_timeout = 0;
+        peer->mxp_conn->mxk_status = MXLND_CONN_READY;
+        spin_unlock(&peer->mxp_conn->mxk_lock);
+        mx_set_endpoint_addr_context(peer->mxp_conn->mxk_epa, (void *) peer);
+
+        hash = mxlnd_nid_to_hash(ni->ni_nid);
+        list_add_tail(&peer->mxp_peers, &kmxlnd_data.kmx_peers[hash]);
+        atomic_inc(&kmxlnd_data.kmx_npeers);
+
+        mxlnd_conn_decref(peer->mxp_conn); /* drop 2nd ref taken in peer_alloc */
+
+        kmxlnd_data.kmx_localhost = peer;
 
         /* this will catch all unexpected receives. */
         mxret = mx_register_unexp_handler(kmxlnd_data.kmx_endpt,
@@ -603,19 +394,25 @@ mxlnd_init_mx(lnet_ni_t *ni)
         if (mxret != MX_SUCCESS) {
                 CERROR("mx_register_unexp_callback() failed with %s\n", 
                          mx_strerror(mxret));
-                mx_close_endpoint(kmxlnd_data.kmx_endpt);
-                mx_finalize();
-                return -1;
+                goto failed_with_peer;
         }
         mxret = mx_set_request_timeout(kmxlnd_data.kmx_endpt, NULL, MXLND_COMM_TIMEOUT/HZ*1000);
         if (mxret != MX_SUCCESS) {
                 CERROR("mx_set_request_timeout() failed with %s\n", 
                         mx_strerror(mxret));
-                mx_close_endpoint(kmxlnd_data.kmx_endpt);
-                mx_finalize();
-                return -1;
+                goto failed_with_peer;
         }
         return 0;
+
+failed_with_peer:
+        mxlnd_conn_decref(peer->mxp_conn);
+        mxlnd_conn_decref(peer->mxp_conn);
+        mxlnd_peer_decref(peer);
+failed_with_endpoint:
+        mx_close_endpoint(kmxlnd_data.kmx_endpt);
+failed_with_init:
+        mx_finalize();
+        return -1;
 }
 
 
@@ -689,6 +486,10 @@ mxlnd_shutdown (lnet_ni_t *ni)
                 up(&kmxlnd_data.kmx_tx_queue_sem);
                 mxlnd_sleep(2 * HZ);
 
+                read_lock(&kmxlnd_data.kmx_global_lock);
+                mxlnd_close_matching_conns(LNET_NID_ANY);
+                read_unlock(&kmxlnd_data.kmx_global_lock);
+
                 /* fall through */
 
         case MXLND_INIT_THREADS:
@@ -717,9 +518,6 @@ mxlnd_shutdown (lnet_ni_t *ni)
                 mx_wakeup(kmxlnd_data.kmx_endpt);
                 mx_close_endpoint(kmxlnd_data.kmx_endpt);
                 mx_finalize();
-
-                CDEBUG(D_NET, "mxlnd_free_hosts();\n");
-                mxlnd_free_hosts();
 
                 /* fall through */
 
@@ -805,19 +603,17 @@ mxlnd_startup (lnet_ni_t *ni)
         kmxlnd_data.kmx_incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
         CDEBUG(D_NET, "my incarnation is %lld\n", kmxlnd_data.kmx_incarnation);
 
-        spin_lock_init (&kmxlnd_data.kmx_global_lock);
+        rwlock_init (&kmxlnd_data.kmx_global_lock);
+        spin_lock_init (&kmxlnd_data.kmx_mem_lock);
 
         INIT_LIST_HEAD (&kmxlnd_data.kmx_conn_req);
         spin_lock_init (&kmxlnd_data.kmx_conn_lock);
         sema_init(&kmxlnd_data.kmx_conn_sem, 0);
 
-        INIT_LIST_HEAD (&kmxlnd_data.kmx_hosts);
-        spin_lock_init (&kmxlnd_data.kmx_hosts_lock);
-
         for (i = 0; i < MXLND_HASH_SIZE; i++) {
                 INIT_LIST_HEAD (&kmxlnd_data.kmx_peers[i]);
         }
-        rwlock_init (&kmxlnd_data.kmx_peers_lock);
+        //rwlock_init (&kmxlnd_data.kmx_peers_lock);
 
         INIT_LIST_HEAD (&kmxlnd_data.kmx_txs);
         INIT_LIST_HEAD (&kmxlnd_data.kmx_tx_idle);
@@ -953,4 +749,4 @@ module_exit(mxlnd_exit);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Myricom, Inc. - help@myri.com");
 MODULE_DESCRIPTION("Kernel MyrinetExpress LND");
-MODULE_VERSION("0.5.0");
+MODULE_VERSION("0.6.0");

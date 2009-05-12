@@ -71,14 +71,16 @@
 #include <linux/sysctl.h>
 #include <linux/random.h>
 #include <linux/utsname.h>
+#include <linux/jiffies.h>      /* msecs_to_jiffies */
 
 #include <net/sock.h>
 #include <linux/in.h>
 
-#include <linux/netdevice.h>    /* these are needed for ARP */
-#include <linux/if_arp.h>
-#include <net/arp.h>
-#include <linux/inetdevice.h>
+#include <asm/byteorder.h>      /* __LITTLE_ENDIAN */
+#include <net/arp.h>            /* arp table */
+#include <linux/netdevice.h>    /* get_device_by_name */
+#include <linux/inetdevice.h>   /* neigh_lookup, etc. */
+#include <linux/net.h>          /* sock_create_kern, kernel_connect, sock_release */
 
 #define DEBUG_SUBSYSTEM S_LND
 
@@ -95,6 +97,9 @@
     #error LNET_MAX_IOV is greater then MX_MAX_SEGMENTS
 #endif
 
+#define MXLND_MSG_MAGIC         0x4d583130              /* unique magic 'MX10' */
+#define MXLND_MSG_VERSION       0x02
+
 /* Using MX's 64 match bits
  * We are using the match bits to specify message type and the cookie.  The
  * highest four bits (60-63) are reserved for message type. Below we specify
@@ -105,21 +110,33 @@
  * should allow unique cookies for 4 KB messages at 10 Gbps line rate without
  * rollover for about 8 years. That should be enough. */
 
-/* constants */
-#define MXLND_MASK_ICON_REQ (0xBLL << 60) /* it is a mx_iconnect() completion */
-#define MXLND_MASK_CONN_REQ (0xCLL << 60) /* CONN_REQ msg */
-#define MXLND_MASK_ICON_ACK (0x9LL << 60) /* it is a mx_iconnect() completion */
-#define MXLND_MASK_CONN_ACK (0xALL << 60) /* CONN_ACK msg*/
-#define MXLND_MASK_EAGER    (0xELL << 60) /* EAGER msg */
-#define MXLND_MASK_NOOP     (0x1LL << 60) /* NOOP msg */
-#define MXLND_MASK_PUT_REQ  (0x2LL << 60) /* PUT_REQ msg */
-#define MXLND_MASK_PUT_ACK  (0x3LL << 60) /* PUT_ACK msg */
-#define MXLND_MASK_PUT_DATA (0x4LL << 60) /* PUT_DATA msg */
-#define MXLND_MASK_GET_REQ  (0x5LL << 60) /* GET_REQ msg */
-#define MXLND_MASK_GET_DATA (0x6LL << 60) /* GET_DATA msg */
-//#define MXLND_MASK_NAK      (0x7LL << 60) /* NAK msg */
+#define MXLND_MSG_OFFSET        60      /* msg type offset */
+#define MXLND_MSG_BITS          (64 - MXLND_MSG_OFFSET)
+#define MXLND_MSG_MASK          (((1ULL<<MXLND_MSG_BITS) - 1) << MXLND_MSG_OFFSET)
+#define MXLND_MSG_TYPE(x)       (((x) & MXLND_MSG_MASK) >> MXLND_MSG_OFFSET)
 
-#define MXLND_MAX_COOKIE    ((1LL << 52) - 1)         /* when to roll-over the cookie value */
+#define MXLND_ERROR_OFFSET      52      /* error value offset */
+#define MXLND_ERROR_BITS        (MXLND_MSG_OFFSET - MXLND_ERROR_OFFSET)
+#define MXLND_ERROR_MASK        (((1ULL<<MXLND_ERROR_BITS) - 1) << MXLND_ERROR_OFFSET)
+#define MXLND_ERROR_VAL(x)      (((x) & MXLND_ERROR_MASK) >> MXLND_ERROR_OFFSET)
+
+/* message types */
+#define MXLND_MSG_ICON_REQ      0xb     /* mx_iconnect() before CONN_REQ */
+#define MXLND_MSG_CONN_REQ      0xc     /* connection request */
+#define MXLND_MSG_ICON_ACK      0x9     /* mx_iconnect() before CONN_ACK */
+#define MXLND_MSG_CONN_ACK      0xa     /* connection request response */
+#define MXLND_MSG_BYE           0xd     /* disconnect msg */
+#define MXLND_MSG_EAGER         0xe     /* eager message */
+#define MXLND_MSG_NOOP          0x1     /* no msg, return credits */
+#define MXLND_MSG_PUT_REQ       0x2     /* put request src->sink */
+#define MXLND_MSG_PUT_ACK       0x3     /* put ack     src<-sink */
+#define MXLND_MSG_PUT_DATA      0x4     /* put payload src->sink */
+#define MXLND_MSG_GET_REQ       0x5     /* get request sink->src */
+#define MXLND_MSG_GET_DATA      0x6     /* get payload sink<-src */
+
+/* when to roll-over the cookie value */
+#define MXLND_MAX_COOKIE    ((1ULL << MXLND_ERROR_OFFSET) - 1)
+
 #define MXLND_NCOMPLETIONS  (MXLND_N_SCHED + 2)   /* max threads for completion array */
 
 /* defaults for configurable parameters */
@@ -148,36 +165,29 @@
 
 /* debugging features */
 #define MXLND_CKSUM             0               /* checksum kmx_msg_t */
-#define MXLND_DEBUG             0               /* turn on printk()s */
-
-extern inline void mxlnd_noop(char *s, ...);
-#if MXLND_DEBUG
-        #define MXLND_PRINT printk
-#else
-        #define MXLND_PRINT mxlnd_noop
-#endif
+#define MXLND_DEBUG             0               /* additional CDEBUG messages */
 
 /* provide wrappers around LIBCFS_ALLOC/FREE to keep MXLND specific
  * memory usage stats that include pages */
 
 #define MXLND_ALLOC(x, size) \
         do { \
-                spin_lock(&kmxlnd_data.kmx_global_lock); \
+                spin_lock(&kmxlnd_data.kmx_mem_lock); \
                 kmxlnd_data.kmx_mem_used += size; \
-                spin_unlock(&kmxlnd_data.kmx_global_lock); \
+                spin_unlock(&kmxlnd_data.kmx_mem_lock); \
                 LIBCFS_ALLOC(x, size); \
-                if (x == NULL) { \
-                        spin_lock(&kmxlnd_data.kmx_global_lock); \
+                if (unlikely(x == NULL)) { \
+                        spin_lock(&kmxlnd_data.kmx_mem_lock); \
                         kmxlnd_data.kmx_mem_used -= size; \
-                        spin_unlock(&kmxlnd_data.kmx_global_lock); \
+                        spin_unlock(&kmxlnd_data.kmx_mem_lock); \
                 } \
         } while (0)
 
 #define MXLND_FREE(x, size) \
         do { \
-                spin_lock(&kmxlnd_data.kmx_global_lock); \
+                spin_lock(&kmxlnd_data.kmx_mem_lock); \
                 kmxlnd_data.kmx_mem_used -= size; \
-                spin_unlock(&kmxlnd_data.kmx_global_lock); \
+                spin_unlock(&kmxlnd_data.kmx_mem_lock); \
                 LIBCFS_FREE(x, size); \
         } while (0)
 
@@ -190,21 +200,10 @@ typedef struct kmx_tunables {
         int     *kmx_credits;           /* concurrent sends to 1 peer */
         int     *kmx_board;             /* MX board (NIC) number */
         int     *kmx_ep_id;             /* MX endpoint number */
+        char    **kmx_default_ipif;     /* IPoMX interface name */
         int     *kmx_polling;           /* if 0, block. if > 0, poll this many
                                            iterations before blocking */
-        char    **kmx_hosts;            /* Location of hosts file, if used */
 } kmx_tunables_t;
-
-/* structure to hold IP-to-hostname resolution data */
-struct kmx_host {
-        struct kmx_peer    *mxh_peer;           /* pointer to matching peer */
-        u32                 mxh_addr;           /* IP address as int */
-        char               *mxh_hostname;       /* peer's hostname */
-        u32                 mxh_board;          /* peer's board rank */
-        u32                 mxh_ep_id;          /* peer's MX endpoint ID */
-        struct list_head    mxh_list;           /* position on kmx_hosts */
-        spinlock_t          mxh_lock;           /* lock */
-};
 
 /* global interface state */
 typedef struct kmx_data
@@ -216,21 +215,19 @@ typedef struct kmx_data
         lnet_ni_t          *kmx_ni;             /* the LND instance */
         u64                 kmx_incarnation;    /* my incarnation value - unused */
         long                kmx_mem_used;       /* memory used */
-        struct kmx_host    *kmx_localhost;      /* pointer to my kmx_host info */
+        struct kmx_peer    *kmx_localhost;      /* pointer to my kmx_peer info */
         mx_endpoint_t       kmx_endpt;          /* the MX endpoint */
 
-        spinlock_t          kmx_global_lock;    /* global lock */
+        rwlock_t            kmx_global_lock;    /* global lock */
+        spinlock_t          kmx_mem_lock;       /* memory accounting lock */
 
         struct list_head    kmx_conn_req;       /* list of connection requests */
         spinlock_t          kmx_conn_lock;      /* connection list lock */
         struct semaphore    kmx_conn_sem;       /* semaphore for connection request list */
 
-        struct list_head    kmx_hosts;          /* host lookup info */
-        spinlock_t          kmx_hosts_lock;     /* hosts list lock */
-
         struct list_head    kmx_peers[MXLND_HASH_SIZE];
                                                 /* list of all known peers */
-        rwlock_t            kmx_peers_lock;     /* peer list rw lock */
+        //rwlock_t            kmx_peers_lock;     /* peer list rw lock */
         atomic_t            kmx_npeers;         /* number of peers */
 
         struct list_head    kmx_txs;            /* all tx descriptors */
@@ -256,7 +253,67 @@ typedef struct kmx_data
 #define MXLND_INIT_THREADS      5       /* waitd, timeoutd, tx_queued threads */
 #define MXLND_INIT_ALL          6       /* startup completed */
 
-#include "mxlnd_wire.h"
+/************************************************************************
+ * MXLND Wire message format.
+ * These are sent in sender's byte order (i.e. receiver flips).
+ */
+
+typedef struct kmx_connreq_msg
+{
+        u32             mxcrm_queue_depth;              /* per peer max messages in flight */
+        u32             mxcrm_eager_size;               /* size of preposted eager messages */
+} WIRE_ATTR kmx_connreq_msg_t;
+
+typedef struct kmx_eager_msg
+{
+        lnet_hdr_t      mxem_hdr;                       /* lnet header */
+        char            mxem_payload[0];                /* piggy-backed payload */
+} WIRE_ATTR kmx_eager_msg_t;
+
+typedef struct kmx_putreq_msg
+{
+        lnet_hdr_t      mxprm_hdr;                      /* lnet header */
+        u64             mxprm_cookie;                   /* opaque completion cookie */
+} WIRE_ATTR kmx_putreq_msg_t;
+
+typedef struct kmx_putack_msg
+{
+        u64             mxpam_src_cookie;               /* reflected completion cookie */
+        u64             mxpam_dst_cookie;               /* opaque completion cookie */
+} WIRE_ATTR kmx_putack_msg_t;
+
+typedef struct kmx_getreq_msg
+{
+        lnet_hdr_t      mxgrm_hdr;                      /* lnet header */
+        u64             mxgrm_cookie;                   /* opaque completion cookie */
+} WIRE_ATTR kmx_getreq_msg_t;
+
+typedef struct kmx_msg
+{
+        /* First two fields fixed for all time */
+        u32             mxm_magic;                      /* MXLND message */
+        u16             mxm_version;                    /* version number */
+
+        u8              mxm_type;                       /* message type */
+        u8              mxm_credits;                    /* returned credits */
+        u32             mxm_nob;                        /* # of bytes in whole message */
+        u32             mxm_cksum;                      /* checksum (0 == no checksum) */
+        u64             mxm_srcnid;                     /* sender's NID */
+        u64             mxm_srcstamp;                   /* sender's incarnation */
+        u64             mxm_dstnid;                     /* destination's NID */
+        u64             mxm_dststamp;                   /* destination's incarnation */
+        u64             mxm_seq;                        /* sequence number */
+
+        union {
+                kmx_connreq_msg_t       conn_req;
+                kmx_eager_msg_t         eager;
+                kmx_putreq_msg_t        put_req;
+                kmx_putack_msg_t        put_ack;
+                kmx_getreq_msg_t        get_req;
+        } WIRE_ATTR mxm_u;
+} WIRE_ATTR kmx_msg_t;
+
+/***********************************************************************/
 
 enum kmx_req_type {
         MXLND_REQ_TX    = 0,
@@ -356,13 +413,15 @@ struct kmx_peer
 {
         lnet_nid_t          mxp_nid;            /* peer's LNET NID */
         u64                 mxp_incarnation;    /* peer's incarnation value */
+        u32                 mxp_sid;            /* MX session ID */
         atomic_t            mxp_refcount;       /* reference counts */
 
-        struct kmx_host    *mxp_host;           /* peer lookup info */
+        u32                 mxp_ip;             /* IP address as int */
+        u32                 mxp_board;          /* peer's board rank */
+        u32                 mxp_ep_id;          /* peer's MX endpoint ID */
         u64                 mxp_nic_id;         /* remote's MX nic_id for mx_connect() */
 
         struct list_head    mxp_peers;          /* for placing on kmx_peers */
-        spinlock_t          mxp_lock;           /* lock */
 
         struct list_head    mxp_conns;          /* list of connections */
         struct kmx_conn    *mxp_conn;           /* current connection */
@@ -388,8 +447,8 @@ extern void mxlnd_thread_stop(long id);
 extern int  mxlnd_ctx_alloc(struct kmx_ctx **ctxp, enum kmx_req_type type);
 extern void mxlnd_ctx_free(struct kmx_ctx *ctx);
 extern void mxlnd_ctx_init(struct kmx_ctx *ctx);
-extern lnet_nid_t mxlnd_nic_id2nid(lnet_ni_t *ni, u64 nic_id);
-extern u64 mxlnd_nid2nic_id(lnet_nid_t nid);
+extern int  mxlnd_peer_alloc(struct kmx_peer **peerp, lnet_nid_t nid,
+                u32 board, u32 ep_id, u64 nic_id);
 
 /* in mxlnd_cb.c */
 void mxlnd_eager_recv(void *context, uint64_t match_value, uint32_t length);
@@ -398,6 +457,8 @@ extern mx_unexp_handler_action_t mxlnd_unexpected_recv(void *context,
                 void *data_if_available);
 extern void mxlnd_peer_free(struct kmx_peer *peer);
 extern void mxlnd_conn_free(struct kmx_conn *conn);
+extern void mxlnd_conn_disconnect(struct kmx_conn *conn, int mx_dis, int send_bye);
+extern int mxlnd_close_matching_conns(lnet_nid_t nid);
 extern void mxlnd_sleep(unsigned long timeout);
 extern int  mxlnd_tx_queued(void *arg);
 extern void mxlnd_handle_rx_completion(struct kmx_ctx *rx);
@@ -407,6 +468,20 @@ extern int  mxlnd_request_waitd(void *arg);
 extern int  mxlnd_unex_recvd(void *arg);
 extern int  mxlnd_timeoutd(void *arg);
 extern int  mxlnd_connd(void *arg);
+
+/**
+ * mxlnd_nid_to_hash - hash the nid
+ * @nid - LNET ID
+ *
+ * Takes the u64 nid and XORs the lowest N bits by the next lowest N bits.
+ */
+static inline int
+mxlnd_nid_to_hash(lnet_nid_t nid)
+{
+        return (nid & MXLND_HASH_MASK) ^
+               ((nid & (MXLND_HASH_MASK << MXLND_HASH_BITS)) >> MXLND_HASH_BITS);
+}
+
 
 #define mxlnd_peer_addref(peer)                                 \
 do {                                                            \

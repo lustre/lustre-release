@@ -18,6 +18,11 @@ Description:
 Details    : 
 
 Severity   : enhancement
+Bugzilla   : 18654
+Description: MXLND: eliminate hosts file, use arp for peer nic_id resolution
+Details    : an update from the upstream developer Scott Atchley.
+
+Severity   : enhancement
 Bugzilla   : 15332
 Description: add a new LND optiion to control peer buffer credits on routers
 
