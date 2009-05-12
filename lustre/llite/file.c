@@ -1556,7 +1556,7 @@ repeat:
                          * index, return directly. Do not expect kernel will
                          * check such case correctly. linux-2.6.18-128.1.1 miss
                          * to do that. --bug 17336 */
-                        size_t size = i_size_read(inode);
+                        loff_t size = i_size_read(inode);
                         unsigned long cur_index = *ppos >> CFS_PAGE_SHIFT;
 
                         if ((size == 0 && cur_index != 0) ||
