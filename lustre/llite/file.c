@@ -1542,12 +1542,10 @@ repeat:
 
                         if ((size == 0 && cur_index != 0) ||
                             (((size - 1) >> CFS_PAGE_SHIFT) < cur_index)) {
-                                if (lock_style != LL_LOCK_STYLE_NOLOCK) {
+                                if (lock_style != LL_LOCK_STYLE_NOLOCK)
                                         ll_file_put_lock(inode, end, lock_style,
                                                          cookie, &tree,
                                                          OBD_BRW_READ);
-                                        up_read(&lli->lli_truncate_rwsem);
-                                }
                                 goto out;
                         }
                 }
