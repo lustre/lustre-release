@@ -1532,6 +1532,24 @@ repeat:
                                 ll_file_put_lock(inode, end, lock_style,
                                                  cookie, &tree, OBD_BRW_READ);
                         goto out;
+                } else {
+                        /* If objective page index exceed the end-of-file page
+                         * index, return directly. Do not expect kernel will
+                         * check such case correctly. linux-2.6.18-128.1.1 miss
+                         * to do that. --bug 17336 */
+                        loff_t size = i_size_read(inode);
+                        unsigned long cur_index = *ppos >> CFS_PAGE_SHIFT;
+
+                        if ((size == 0 && cur_index != 0) ||
+                            (((size - 1) >> CFS_PAGE_SHIFT) < cur_index)) {
+                                if (lock_style != LL_LOCK_STYLE_NOLOCK) {
+                                        ll_file_put_lock(inode, end, lock_style,
+                                                         cookie, &tree,
+                                                         OBD_BRW_READ);
+                                        up_read(&lli->lli_truncate_rwsem);
+                                }
+                                goto out;
+                        }
                 }
         } else {
                 /* region is within kms and, hence, within real file size (A).
