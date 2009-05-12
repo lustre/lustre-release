@@ -1,8 +1,8 @@
-Index: linux-269-5502/fs/open.c
+Index: linux-2.6.9-78.0.22/fs/open.c
 ===================================================================
---- linux-269-5502.orig/fs/open.c
-+++ linux-269-5502/fs/open.c
-@@ -1029,6 +1029,8 @@ out_error:
+--- linux-2.6.9-78.0.22.orig/fs/open.c	2009-05-11 23:20:26.000000000 -0600
++++ linux-2.6.9-78.0.22/fs/open.c	2009-05-11 23:21:42.000000000 -0600
+@@ -1031,6 +1031,8 @@
  	goto out;
  }
  
@@ -11,11 +11,11 @@ Index: linux-269-5502/fs/open.c
  #ifndef __alpha__
  
  /*
-Index: linux-269-5502/fs/read_write.c
+Index: linux-2.6.9-78.0.22/fs/read_write.c
 ===================================================================
---- linux-269-5502.orig/fs/read_write.c
-+++ linux-269-5502/fs/read_write.c
-@@ -145,6 +145,7 @@ asmlinkage off_t sys_lseek(unsigned int 
+--- linux-2.6.9-78.0.22.orig/fs/read_write.c	2009-05-08 09:59:03.000000000 -0600
++++ linux-2.6.9-78.0.22/fs/read_write.c	2009-05-11 23:21:42.000000000 -0600
+@@ -145,6 +145,7 @@
  bad:
  	return retval;
  }
@@ -23,19 +23,19 @@ Index: linux-269-5502/fs/read_write.c
  
  #ifdef __ARCH_WANT_SYS_LLSEEK
  asmlinkage long sys_llseek(unsigned int fd, unsigned long offset_high,
-Index: linux-269-5502/fs/select.c
+Index: linux-2.6.9-78.0.22/fs/select.c
 ===================================================================
---- linux-269-5502.orig/fs/select.c
-+++ linux-269-5502/fs/select.c
-@@ -539,3 +539,4 @@ out_fds:
+--- linux-2.6.9-78.0.22.orig/fs/select.c	2009-05-08 09:59:03.000000000 -0600
++++ linux-2.6.9-78.0.22/fs/select.c	2009-05-11 23:21:42.000000000 -0600
+@@ -539,3 +539,4 @@
  	poll_freewait(&table);
  	return err;
  }
 +EXPORT_SYMBOL_GPL(sys_poll);
-Index: linux-269-5502/fs/exec.c
+Index: linux-2.6.9-78.0.22/fs/exec.c
 ===================================================================
---- linux-269-5502.orig/fs/exec.c
-+++ linux-269-5502/fs/exec.c
+--- linux-2.6.9-78.0.22.orig/fs/exec.c	2009-05-11 23:20:26.000000000 -0600
++++ linux-2.6.9-78.0.22/fs/exec.c	2009-05-11 23:21:42.000000000 -0600
 @@ -56,6 +56,8 @@
  #include <linux/kmod.h>
  #endif
@@ -45,7 +45,7 @@ Index: linux-269-5502/fs/exec.c
  int core_uses_pid;
  char core_pattern[65] = "core";
  int suid_dumpable = 0;
-@@ -1214,6 +1216,9 @@ int do_execve(char * filename,
+@@ -1233,6 +1235,9 @@
  	if (retval < 0)
  		goto out;
  
@@ -55,11 +55,11 @@ Index: linux-269-5502/fs/exec.c
  	retval = search_binary_handler(bprm,regs);
  	if (retval >= 0) {
  		free_arg_pages(bprm);
-Index: linux-269-5502/arch/i386/Kconfig
+Index: linux-2.6.9-78.0.22/arch/i386/Kconfig
 ===================================================================
---- linux-269-5502.orig/arch/i386/Kconfig
-+++ linux-269-5502/arch/i386/Kconfig
-@@ -960,6 +960,9 @@ config REGPARM
+--- linux-2.6.9-78.0.22.orig/arch/i386/Kconfig	2009-05-08 09:59:03.000000000 -0600
++++ linux-2.6.9-78.0.22/arch/i386/Kconfig	2009-05-11 23:21:42.000000000 -0600
+@@ -967,6 +967,9 @@
  	generate incorrect output with certain kernel constructs when
  	-mregparm=3 is used.
  
@@ -69,11 +69,11 @@ Index: linux-269-5502/arch/i386/Kconfig
  endmenu
  
  
-Index: linux-269-5502/arch/i386/defconfig
+Index: linux-2.6.9-78.0.22/arch/i386/defconfig
 ===================================================================
---- linux-269-5502.orig/arch/i386/defconfig
-+++ linux-269-5502/arch/i386/defconfig
-@@ -119,6 +119,8 @@ CONFIG_MTRR=y
+--- linux-2.6.9-78.0.22.orig/arch/i386/defconfig	2009-05-08 09:59:03.000000000 -0600
++++ linux-2.6.9-78.0.22/arch/i386/defconfig	2009-05-11 23:21:42.000000000 -0600
+@@ -119,6 +119,8 @@
  CONFIG_IRQBALANCE=y
  CONFIG_HAVE_DEC_LOCK=y
  # CONFIG_REGPARM is not set
@@ -82,11 +82,11 @@ Index: linux-269-5502/arch/i386/defconfig
  
  #
  # Power management options (ACPI, APM)
-Index: linux-269-5502/arch/ia64/Kconfig
+Index: linux-2.6.9-78.0.22/arch/ia64/Kconfig
 ===================================================================
---- linux-269-5502.orig/arch/ia64/Kconfig
-+++ linux-269-5502/arch/ia64/Kconfig
-@@ -316,6 +316,9 @@ config IA64_PALINFO
+--- linux-2.6.9-78.0.22.orig/arch/ia64/Kconfig	2009-05-08 09:59:03.000000000 -0600
++++ linux-2.6.9-78.0.22/arch/ia64/Kconfig	2009-05-11 23:21:42.000000000 -0600
+@@ -316,6 +316,9 @@
  	  To use this option, you have to ensure that the "/proc file system
  	  support" (CONFIG_PROC_FS) is enabled, too.
  
@@ -96,11 +96,11 @@ Index: linux-269-5502/arch/ia64/Kconfig
  source "drivers/firmware/Kconfig"
  
  source "fs/Kconfig.binfmt"
-Index: linux-269-5502/arch/ia64/defconfig
+Index: linux-2.6.9-78.0.22/arch/ia64/defconfig
 ===================================================================
---- linux-269-5502.orig/arch/ia64/defconfig
-+++ linux-269-5502/arch/ia64/defconfig
-@@ -83,6 +83,8 @@ CONFIG_IA32_SUPPORT=y
+--- linux-2.6.9-78.0.22.orig/arch/ia64/defconfig	2009-05-08 09:59:03.000000000 -0600
++++ linux-2.6.9-78.0.22/arch/ia64/defconfig	2009-05-11 23:21:42.000000000 -0600
+@@ -83,6 +83,8 @@
  CONFIG_COMPAT=y
  CONFIG_PERFMON=y
  CONFIG_IA64_PALINFO=y
@@ -109,11 +109,11 @@ Index: linux-269-5502/arch/ia64/defconfig
  
  #
  # Firmware Drivers
-Index: linux-269-5502/arch/x86_64/Kconfig
+Index: linux-2.6.9-78.0.22/arch/x86_64/Kconfig
 ===================================================================
---- linux-269-5502.orig/arch/x86_64/Kconfig
-+++ linux-269-5502/arch/x86_64/Kconfig
-@@ -401,6 +401,9 @@ config X86_MCE_AMD
+--- linux-2.6.9-78.0.22.orig/arch/x86_64/Kconfig	2009-05-08 09:59:03.000000000 -0600
++++ linux-2.6.9-78.0.22/arch/x86_64/Kconfig	2009-05-11 23:21:42.000000000 -0600
+@@ -408,6 +408,9 @@
   	   Additional support for AMD specific MCE features such as
   	   the DRAM Error Threshold.
  
@@ -123,11 +123,11 @@ Index: linux-269-5502/arch/x86_64/Kconfig
  endmenu
  
  
-Index: linux-269-5502/arch/x86_64/defconfig
+Index: linux-2.6.9-78.0.22/arch/x86_64/defconfig
 ===================================================================
---- linux-269-5502.orig/arch/x86_64/defconfig
-+++ linux-269-5502/arch/x86_64/defconfig
-@@ -87,6 +87,8 @@ CONFIG_NR_CPUS=8
+--- linux-2.6.9-78.0.22.orig/arch/x86_64/defconfig	2009-05-08 09:59:03.000000000 -0600
++++ linux-2.6.9-78.0.22/arch/x86_64/defconfig	2009-05-11 23:21:42.000000000 -0600
+@@ -87,6 +87,8 @@
  CONFIG_GART_IOMMU=y
  CONFIG_SWIOTLB=y
  CONFIG_X86_MCE=y
@@ -136,10 +136,10 @@ Index: linux-269-5502/arch/x86_64/defconfig
  
  #
  # Power management options
-Index: linux-269-5502/kernel/ptrack.c
+Index: linux-2.6.9-78.0.22/kernel/ptrack.c
 ===================================================================
---- /dev/null
-+++ linux-269-5502/kernel/ptrack.c
+--- linux-2.6.9-78.0.22.orig/kernel/ptrack.c	2009-04-18 06:33:31.404506136 -0600
++++ linux-2.6.9-78.0.22/kernel/ptrack.c	2009-05-11 23:21:42.000000000 -0600
 @@ -0,0 +1,145 @@
 +/*
 + *    Copyright (C) 2000  Regents of the University of California
@@ -286,11 +286,11 @@ Index: linux-269-5502/kernel/ptrack.c
 +EXPORT_SYMBOL(ptrack_register);
 +EXPORT_SYMBOL(ptrack_deregister);
 +EXPORT_SYMBOL(ptrack_registered);
-Index: linux-269-5502/kernel/signal.c
+Index: linux-2.6.9-78.0.22/kernel/signal.c
 ===================================================================
---- linux-269-5502.orig/kernel/signal.c
-+++ linux-269-5502/kernel/signal.c
-@@ -2329,6 +2329,7 @@ sys_kill(int pid, int sig)
+--- linux-2.6.9-78.0.22.orig/kernel/signal.c	2009-05-08 09:59:02.000000000 -0600
++++ linux-2.6.9-78.0.22/kernel/signal.c	2009-05-11 23:21:42.000000000 -0600
+@@ -2355,6 +2355,7 @@
  
  	return kill_something_info(sig, &info, pid);
  }
@@ -298,10 +298,10 @@ Index: linux-269-5502/kernel/signal.c
  
  /**
   *  sys_tgkill - send signal to one specific thread
-Index: linux-269-5502/kernel/Kconfig
+Index: linux-2.6.9-78.0.22/kernel/Kconfig
 ===================================================================
---- /dev/null
-+++ linux-269-5502/kernel/Kconfig
+--- linux-2.6.9-78.0.22.orig/kernel/Kconfig	2009-04-18 06:33:31.404506136 -0600
++++ linux-2.6.9-78.0.22/kernel/Kconfig	2009-05-11 23:21:42.000000000 -0600
 @@ -0,0 +1,14 @@
 +#
 +# Kernel subsystem specific config
@@ -317,11 +317,11 @@ Index: linux-269-5502/kernel/Kconfig
 +	created and destoryed in order for a resource management 
 +	system to know which processes are a member of a "job" and 
 +	to be able to clean up when the job is terminated.
-Index: linux-269-5502/kernel/Makefile
+Index: linux-2.6.9-78.0.22/kernel/Makefile
 ===================================================================
---- linux-269-5502.orig/kernel/Makefile
-+++ linux-269-5502/kernel/Makefile
-@@ -26,6 +26,7 @@ obj-$(CONFIG_AUDIT) += audit.o
+--- linux-2.6.9-78.0.22.orig/kernel/Makefile	2009-05-08 09:59:02.000000000 -0600
++++ linux-2.6.9-78.0.22/kernel/Makefile	2009-05-11 23:21:42.000000000 -0600
+@@ -26,6 +26,7 @@
  obj-$(CONFIG_AUDITSYSCALL) += auditsc.o
  obj-$(CONFIG_AUDITFILESYSTEM) += auditfs.o
  obj-$(CONFIG_KPROBES) += kprobes.o
@@ -329,11 +329,11 @@ Index: linux-269-5502/kernel/Makefile
  
  ifneq ($(CONFIG_IA64),y)
  # According to Alan Modra <alan@linuxcare.com.au>, the -fno-omit-frame-pointer is
-Index: linux-269-5502/kernel/exit.c
+Index: linux-2.6.9-78.0.22/kernel/exit.c
 ===================================================================
---- linux-269-5502.orig/kernel/exit.c
-+++ linux-269-5502/kernel/exit.c
-@@ -32,6 +32,8 @@
+--- linux-2.6.9-78.0.22.orig/kernel/exit.c	2009-05-11 23:21:10.000000000 -0600
++++ linux-2.6.9-78.0.22/kernel/exit.c	2009-05-11 23:21:42.000000000 -0600
+@@ -33,6 +33,8 @@
  #include <asm/pgtable.h>
  #include <asm/mmu_context.h>
  
@@ -342,7 +342,7 @@ Index: linux-269-5502/kernel/exit.c
  extern void sem_exit (void);
  extern struct task_struct *child_reaper;
  
-@@ -825,6 +827,9 @@ asmlinkage NORET_TYPE void do_exit(long 
+@@ -852,6 +854,9 @@
  		current->tux_exit();
  	}
  
@@ -352,10 +352,10 @@ Index: linux-269-5502/kernel/exit.c
  	if (unlikely(tsk->audit_context))
  		audit_free(tsk);
  	__exit_mm(tsk);
-Index: linux-269-5502/kernel/fork.c
+Index: linux-2.6.9-78.0.22/kernel/fork.c
 ===================================================================
---- linux-269-5502.orig/kernel/fork.c
-+++ linux-269-5502/kernel/fork.c
+--- linux-2.6.9-78.0.22.orig/kernel/fork.c	2009-05-08 09:59:02.000000000 -0600
++++ linux-2.6.9-78.0.22/kernel/fork.c	2009-05-11 23:21:42.000000000 -0600
 @@ -14,6 +14,7 @@
  #include <linux/config.h>
  #include <linux/slab.h>
@@ -364,7 +364,7 @@ Index: linux-269-5502/kernel/fork.c
  #include <linux/unistd.h>
  #include <linux/smp_lock.h>
  #include <linux/module.h>
-@@ -443,6 +444,9 @@ static struct mm_struct * mm_init(struct
+@@ -541,6 +542,9 @@
  	mm->page_table_lock = SPIN_LOCK_UNLOCKED;
  	mm->ioctx_list_lock = RW_LOCK_UNLOCKED;
  	mm->ioctx_list = NULL;
@@ -374,7 +374,7 @@ Index: linux-269-5502/kernel/fork.c
  	mm->default_kioctx = (struct kioctx)INIT_KIOCTX(mm->default_kioctx, *mm);
  	mm->free_area_cache = TASK_UNMAPPED_BASE;
  
-@@ -1312,6 +1316,11 @@ long do_fork(unsigned long clone_flags,
+@@ -1423,6 +1427,11 @@
  			set_tsk_thread_flag(p, TIF_SIGPENDING);
  		}
  
@@ -386,10 +386,10 @@ Index: linux-269-5502/kernel/fork.c
  		if (!(clone_flags & CLONE_STOPPED))
  			wake_up_new_task(p, clone_flags);
  		else
-Index: linux-269-5502/Makefile
+Index: linux-2.6.9-78.0.22/Makefile
 ===================================================================
---- linux-269-5502.orig/Makefile
-+++ linux-269-5502/Makefile
+--- linux-2.6.9-78.0.22.orig/Makefile	2009-05-08 09:59:03.000000000 -0600
++++ linux-2.6.9-78.0.22/Makefile	2009-05-11 23:21:42.000000000 -0600
 @@ -1,7 +1,7 @@
  VERSION = 2
  PATCHLEVEL = 6
@@ -397,12 +397,12 @@ Index: linux-269-5502/Makefile
 -EXTRAVERSION = -prep
 +EXTRAVERSION = -prep.qp3.5.34.4qsnet
  RHEL_VERSION = 4
- RHEL_UPDATE = 5
+ RHEL_UPDATE = 7
  NAME=AC 1
-Index: linux-269-5502/Documentation/vm/ioproc.txt
+Index: linux-2.6.9-78.0.22/Documentation/vm/ioproc.txt
 ===================================================================
---- /dev/null
-+++ linux-269-5502/Documentation/vm/ioproc.txt
+--- linux-2.6.9-78.0.22.orig/Documentation/vm/ioproc.txt	2009-04-18 06:33:31.404506136 -0600
++++ linux-2.6.9-78.0.22/Documentation/vm/ioproc.txt	2009-05-11 23:21:42.000000000 -0600
 @@ -0,0 +1,467 @@
 +Linux IOPROC patch overview
 +===========================
@@ -871,10 +871,10 @@ Index: linux-269-5502/Documentation/vm/ioproc.txt
 +	ioproc_invalidate_range
 +
 +-- Last update Daniel J Blueman - 24 Mar 2006
-Index: linux-269-5502/mm/ioproc.c
+Index: linux-2.6.9-78.0.22/mm/ioproc.c
 ===================================================================
---- /dev/null
-+++ linux-269-5502/mm/ioproc.c
+--- linux-2.6.9-78.0.22.orig/mm/ioproc.c	2009-04-18 06:33:31.404506136 -0600
++++ linux-2.6.9-78.0.22/mm/ioproc.c	2009-05-11 23:21:42.000000000 -0600
 @@ -0,0 +1,52 @@
 +/*
 + *    Copyright (C) 2006 Quadrics Ltd
@@ -928,10 +928,10 @@ Index: linux-269-5502/mm/ioproc.c
 +}
 +
 +EXPORT_SYMBOL_GPL(ioproc_unregister_ops);
-Index: linux-269-5502/mm/hugetlb.c
+Index: linux-2.6.9-78.0.22/mm/hugetlb.c
 ===================================================================
---- linux-269-5502.orig/mm/hugetlb.c
-+++ linux-269-5502/mm/hugetlb.c
+--- linux-2.6.9-78.0.22.orig/mm/hugetlb.c	2009-05-08 09:59:02.000000000 -0600
++++ linux-2.6.9-78.0.22/mm/hugetlb.c	2009-05-11 23:21:42.000000000 -0600
 @@ -10,6 +10,7 @@
  #include <linux/hugetlb.h>
  #include <linux/sysctl.h>
@@ -940,7 +940,7 @@ Index: linux-269-5502/mm/hugetlb.c
  
  const unsigned long hugetlb_zero = 0, hugetlb_infinity = ~0UL;
  static unsigned long nr_huge_pages, free_huge_pages;
-@@ -260,6 +261,7 @@ void zap_hugepage_range(struct vm_area_s
+@@ -260,6 +261,7 @@
  	struct mm_struct *mm = vma->vm_mm;
  
  	spin_lock(&mm->page_table_lock);
@@ -948,10 +948,10 @@ Index: linux-269-5502/mm/hugetlb.c
  	unmap_hugepage_range(vma, start, start + length);
  	spin_unlock(&mm->page_table_lock);
  }
-Index: linux-269-5502/mm/Kconfig
+Index: linux-2.6.9-78.0.22/mm/Kconfig
 ===================================================================
---- /dev/null
-+++ linux-269-5502/mm/Kconfig
+--- linux-2.6.9-78.0.22.orig/mm/Kconfig	2009-04-18 06:33:31.404506136 -0600
++++ linux-2.6.9-78.0.22/mm/Kconfig	2009-05-11 23:21:42.000000000 -0600
 @@ -0,0 +1,15 @@
 +#
 +# VM subsystem specific config
@@ -968,11 +968,11 @@ Index: linux-269-5502/mm/Kconfig
 +	incorporate advanced RDMA capabilities can be kept in sync with CPU 
 +	page table changes.
 +	See Documentation/vm/ioproc.txt for more details.
-Index: linux-269-5502/mm/Makefile
+Index: linux-2.6.9-78.0.22/mm/Makefile
 ===================================================================
---- linux-269-5502.orig/mm/Makefile
-+++ linux-269-5502/mm/Makefile
-@@ -16,6 +16,7 @@ obj-$(CONFIG_SWAP)	+= page_io.o swap_sta
+--- linux-2.6.9-78.0.22.orig/mm/Makefile	2009-05-08 09:59:02.000000000 -0600
++++ linux-2.6.9-78.0.22/mm/Makefile	2009-05-11 23:21:42.000000000 -0600
+@@ -16,6 +16,7 @@
  obj-$(CONFIG_X86_4G)	+= usercopy.o
  obj-$(CONFIG_HUGETLBFS)	+= hugetlb.o
  obj-$(CONFIG_NUMA) 	+= mempolicy.o
@@ -980,10 +980,10 @@ Index: linux-269-5502/mm/Makefile
  obj-$(CONFIG_SHMEM) += shmem.o
  obj-$(CONFIG_TINY_SHMEM) += tiny-shmem.o
  
-Index: linux-269-5502/mm/mprotect.c
+Index: linux-2.6.9-78.0.22/mm/mprotect.c
 ===================================================================
---- linux-269-5502.orig/mm/mprotect.c
-+++ linux-269-5502/mm/mprotect.c
+--- linux-2.6.9-78.0.22.orig/mm/mprotect.c	2009-05-08 09:59:02.000000000 -0600
++++ linux-2.6.9-78.0.22/mm/mprotect.c	2009-05-11 23:21:42.000000000 -0600
 @@ -10,6 +10,7 @@
  
  #include <linux/mm.h>
@@ -992,7 +992,7 @@ Index: linux-269-5502/mm/mprotect.c
  #include <linux/slab.h>
  #include <linux/shm.h>
  #include <linux/mman.h>
-@@ -100,6 +101,7 @@ change_protection(struct vm_area_struct 
+@@ -100,6 +101,7 @@
  	if (start >= end)
  		BUG();
  	spin_lock(&current->mm->page_table_lock);
@@ -1000,10 +1000,10 @@ Index: linux-269-5502/mm/mprotect.c
  	do {
  		change_pmd_range(dir, start, end - start, newprot);
  		start = (start + PGDIR_SIZE) & PGDIR_MASK;
-Index: linux-269-5502/mm/msync.c
+Index: linux-2.6.9-78.0.22/mm/msync.c
 ===================================================================
---- linux-269-5502.orig/mm/msync.c
-+++ linux-269-5502/mm/msync.c
+--- linux-2.6.9-78.0.22.orig/mm/msync.c	2009-05-08 09:59:02.000000000 -0600
++++ linux-2.6.9-78.0.22/mm/msync.c	2009-05-11 23:21:42.000000000 -0600
 @@ -12,6 +12,7 @@
  #include <linux/mm.h>
  #include <linux/mman.h>
@@ -1012,7 +1012,7 @@ Index: linux-269-5502/mm/msync.c
  
  #include <asm/pgtable.h>
  #include <asm/tlbflush.h>
-@@ -115,6 +116,7 @@ static int filemap_sync(struct vm_area_s
+@@ -115,6 +116,7 @@
  
  	if (address >= end)
  		BUG();
@@ -1020,10 +1020,10 @@ Index: linux-269-5502/mm/msync.c
  	do {
  		error |= filemap_sync_pmd_range(dir, address, end, vma, flags);
  		address = (address + PGDIR_SIZE) & PGDIR_MASK;
-Index: linux-269-5502/mm/mremap.c
+Index: linux-2.6.9-78.0.22/mm/mremap.c
 ===================================================================
---- linux-269-5502.orig/mm/mremap.c
-+++ linux-269-5502/mm/mremap.c
+--- linux-2.6.9-78.0.22.orig/mm/mremap.c	2009-05-08 09:59:02.000000000 -0600
++++ linux-2.6.9-78.0.22/mm/mremap.c	2009-05-11 23:21:42.000000000 -0600
 @@ -9,6 +9,7 @@
  
  #include <linux/mm.h>
@@ -1032,7 +1032,7 @@ Index: linux-269-5502/mm/mremap.c
  #include <linux/slab.h>
  #include <linux/shm.h>
  #include <linux/mman.h>
-@@ -148,6 +149,8 @@ static unsigned long move_page_tables(st
+@@ -148,6 +149,8 @@
  {
  	unsigned long offset;
  
@@ -1041,10 +1041,10 @@ Index: linux-269-5502/mm/mremap.c
  	flush_cache_range(vma, old_addr, old_addr + len);
  
  	/*
-Index: linux-269-5502/mm/fremap.c
+Index: linux-2.6.9-78.0.22/mm/fremap.c
 ===================================================================
---- linux-269-5502.orig/mm/fremap.c
-+++ linux-269-5502/mm/fremap.c
+--- linux-2.6.9-78.0.22.orig/mm/fremap.c	2009-05-08 09:59:02.000000000 -0600
++++ linux-2.6.9-78.0.22/mm/fremap.c	2009-05-11 23:21:42.000000000 -0600
 @@ -12,6 +12,7 @@
  #include <linux/mman.h>
  #include <linux/pagemap.h>
@@ -1053,7 +1053,7 @@ Index: linux-269-5502/mm/fremap.c
  #include <linux/rmap.h>
  #include <linux/module.h>
  
-@@ -29,6 +30,7 @@ static inline void zap_pte(struct mm_str
+@@ -29,6 +30,7 @@
  	if (pte_present(pte)) {
  		unsigned long pfn = pte_pfn(pte);
  
@@ -1061,7 +1061,7 @@ Index: linux-269-5502/mm/fremap.c
  		flush_cache_page(vma, addr);
  		pte = ptep_clear_flush(vma, addr, ptep);
  		if (pfn_valid(pfn)) {
-@@ -93,6 +95,7 @@ int install_page(struct mm_struct *mm, s
+@@ -93,6 +95,7 @@
  	pte_val = *pte;
  	pte_unmap(pte);
  	update_mmu_cache(vma, addr, pte_val);
@@ -1069,7 +1069,7 @@ Index: linux-269-5502/mm/fremap.c
  
  	err = 0;
  err_unlock:
-@@ -132,6 +135,7 @@ int install_file_pte(struct mm_struct *m
+@@ -132,6 +135,7 @@
  	pte_val = *pte;
  	pte_unmap(pte);
  	update_mmu_cache(vma, addr, pte_val);
@@ -1077,10 +1077,10 @@ Index: linux-269-5502/mm/fremap.c
  	spin_unlock(&mm->page_table_lock);
  	return 0;
  
-Index: linux-269-5502/mm/rmap.c
+Index: linux-2.6.9-78.0.22/mm/rmap.c
 ===================================================================
---- linux-269-5502.orig/mm/rmap.c
-+++ linux-269-5502/mm/rmap.c
+--- linux-2.6.9-78.0.22.orig/mm/rmap.c	2009-05-08 09:59:02.000000000 -0600
++++ linux-2.6.9-78.0.22/mm/rmap.c	2009-05-11 23:21:42.000000000 -0600
 @@ -51,6 +51,7 @@
  #include <linux/slab.h>
  #include <linux/init.h>
@@ -1089,7 +1089,7 @@ Index: linux-269-5502/mm/rmap.c
  #include <linux/rcupdate.h>
  
  #include <asm/tlbflush.h>
-@@ -566,6 +567,7 @@ static int try_to_unmap_one(struct page 
+@@ -594,6 +595,7 @@
  	}
  
  	/* Nuke the page table entry. */
@@ -1097,7 +1097,7 @@ Index: linux-269-5502/mm/rmap.c
  	flush_cache_page(vma, address);
  	pteval = ptep_clear_flush(vma, address, pte);
  
-@@ -673,6 +675,7 @@ static void try_to_unmap_cluster(unsigne
+@@ -701,6 +703,7 @@
  			continue;
  
  		/* Nuke the page table entry. */
@@ -1105,10 +1105,10 @@ Index: linux-269-5502/mm/rmap.c
  		flush_cache_page(vma, address);
  		pteval = ptep_clear_flush(vma, address, pte);
  
-Index: linux-269-5502/mm/memory.c
+Index: linux-2.6.9-78.0.22/mm/memory.c
 ===================================================================
---- linux-269-5502.orig/mm/memory.c
-+++ linux-269-5502/mm/memory.c
+--- linux-2.6.9-78.0.22.orig/mm/memory.c	2009-05-08 09:59:02.000000000 -0600
++++ linux-2.6.9-78.0.22/mm/memory.c	2009-05-11 23:21:42.000000000 -0600
 @@ -43,6 +43,7 @@
  #include <linux/swap.h>
  #include <linux/highmem.h>
@@ -1117,7 +1117,7 @@ Index: linux-269-5502/mm/memory.c
  #include <linux/rmap.h>
  #include <linux/module.h>
  #include <linux/init.h>
-@@ -630,6 +631,7 @@ void zap_page_range(struct vm_area_struc
+@@ -648,6 +649,7 @@
  
  	lru_add_drain();
  	spin_lock(&mm->page_table_lock);
@@ -1125,7 +1125,7 @@ Index: linux-269-5502/mm/memory.c
  	tlb = tlb_gather_mmu(mm, 0);
  	unmap_vmas(&tlb, mm, vma, address, end, &nr_accounted, details);
  	tlb_finish_mmu(tlb, address, end);
-@@ -998,6 +1000,7 @@ int zeromap_page_range(struct vm_area_st
+@@ -1016,6 +1018,7 @@
  		BUG();
  
  	spin_lock(&mm->page_table_lock);
@@ -1133,7 +1133,7 @@ Index: linux-269-5502/mm/memory.c
  	do {
  		pmd_t *pmd = pmd_alloc(mm, dir, address);
  		error = -ENOMEM;
-@@ -1012,6 +1015,7 @@ int zeromap_page_range(struct vm_area_st
+@@ -1030,6 +1033,7 @@
  	/*
  	 * Why flush? zeromap_pte_range has a BUG_ON for !pte_none()
  	 */
@@ -1141,7 +1141,7 @@ Index: linux-269-5502/mm/memory.c
  	flush_tlb_range(vma, beg, end);
  	spin_unlock(&mm->page_table_lock);
  	return error;
-@@ -1092,6 +1096,7 @@ int remap_page_range(struct vm_area_stru
+@@ -1110,6 +1114,7 @@
  	vma->vm_flags |= VM_IO | VM_RESERVED;
  
  	spin_lock(&mm->page_table_lock);
@@ -1149,7 +1149,7 @@ Index: linux-269-5502/mm/memory.c
  	do {
  		pmd_t *pmd = pmd_alloc(mm, dir, from);
  		error = -ENOMEM;
-@@ -1106,6 +1111,7 @@ int remap_page_range(struct vm_area_stru
+@@ -1124,6 +1129,7 @@
  	/*
  	 * Why flush? remap_pte_range has a BUG_ON for !pte_none()
  	 */
@@ -1157,7 +1157,7 @@ Index: linux-269-5502/mm/memory.c
  	flush_tlb_range(vma, beg, end);
  	spin_unlock(&mm->page_table_lock);
  	return error;
-@@ -1194,6 +1200,7 @@ static int do_wp_page(struct mm_struct *
+@@ -1212,6 +1218,7 @@
  			update_mmu_cache(vma, address, entry);
  			lazy_mmu_prot_update(entry);
  			pte_unmap(page_table);
@@ -1165,7 +1165,7 @@ Index: linux-269-5502/mm/memory.c
  			spin_unlock(&mm->page_table_lock);
  			return VM_FAULT_MINOR;
  		}
-@@ -1226,6 +1233,7 @@ static int do_wp_page(struct mm_struct *
+@@ -1244,6 +1251,7 @@
  			++mm->rss;
  		else
  			page_remove_rmap(old_page);
@@ -1173,7 +1173,7 @@ Index: linux-269-5502/mm/memory.c
  		break_cow(vma, new_page, address, page_table);
  		lru_cache_add_active(new_page);
  		page_add_anon_rmap(new_page, vma, address);
-@@ -1234,6 +1242,7 @@ static int do_wp_page(struct mm_struct *
+@@ -1252,6 +1260,7 @@
  		new_page = old_page;
  	}
  	pte_unmap(page_table);
@@ -1181,7 +1181,7 @@ Index: linux-269-5502/mm/memory.c
  	page_cache_release(new_page);
  	page_cache_release(old_page);
  	spin_unlock(&mm->page_table_lock);
-@@ -1630,6 +1639,7 @@ static int do_swap_page(struct mm_struct
+@@ -1648,6 +1657,7 @@
  	update_mmu_cache(vma, address, pte);
  	lazy_mmu_prot_update(pte);
  	pte_unmap(page_table);
@@ -1189,7 +1189,7 @@ Index: linux-269-5502/mm/memory.c
  	spin_unlock(&mm->page_table_lock);
  out:
  	return ret;
-@@ -1695,6 +1705,7 @@ do_anonymous_page(struct mm_struct *mm, 
+@@ -1713,6 +1723,7 @@
  	/* No need to invalidate - it was non-present before */
  	update_mmu_cache(vma, addr, entry);
  	lazy_mmu_prot_update(entry);
@@ -1197,7 +1197,7 @@ Index: linux-269-5502/mm/memory.c
  	spin_unlock(&mm->page_table_lock);
  out:
  	return VM_FAULT_MINOR;
-@@ -1813,6 +1824,7 @@ retry:
+@@ -1836,6 +1847,7 @@
  
  	/* no need to invalidate: a not-present page shouldn't be cached */
  	update_mmu_cache(vma, address, entry);
@@ -1205,7 +1205,7 @@ Index: linux-269-5502/mm/memory.c
  	spin_unlock(&mm->page_table_lock);
  out:
  	return ret;
-@@ -1998,6 +2010,7 @@ int make_pages_present(unsigned long add
+@@ -2021,6 +2033,7 @@
  		return ret;
  	return ret == len ? 0 : -1;
  }
@@ -1213,10 +1213,10 @@ Index: linux-269-5502/mm/memory.c
  
  /* 
   * Map a vmalloc()-space virtual address to the physical page.
-Index: linux-269-5502/mm/mmap.c
+Index: linux-2.6.9-78.0.22/mm/mmap.c
 ===================================================================
---- linux-269-5502.orig/mm/mmap.c
-+++ linux-269-5502/mm/mmap.c
+--- linux-2.6.9-78.0.22.orig/mm/mmap.c	2009-05-08 09:59:02.000000000 -0600
++++ linux-2.6.9-78.0.22/mm/mmap.c	2009-05-11 23:21:42.000000000 -0600
 @@ -15,6 +15,7 @@
  #include <linux/init.h>
  #include <linux/file.h>
@@ -1225,7 +1225,7 @@ Index: linux-269-5502/mm/mmap.c
  #include <linux/personality.h>
  #include <linux/security.h>
  #include <linux/hugetlb.h>
-@@ -1703,6 +1704,7 @@ static void unmap_region(struct mm_struc
+@@ -1721,6 +1722,7 @@
  	unsigned long nr_accounted = 0;
  
  	lru_add_drain();
@@ -1233,7 +1233,7 @@ Index: linux-269-5502/mm/mmap.c
  	tlb = tlb_gather_mmu(mm, 0);
  	unmap_vmas(&tlb, mm, vma, start, end, &nr_accounted, NULL);
  	vm_unacct_memory(nr_accounted);
-@@ -1995,6 +1997,7 @@ void exit_mmap(struct mm_struct *mm)
+@@ -2013,6 +2015,7 @@
  
  	spin_lock(&mm->page_table_lock);
  
@@ -1241,10 +1241,10 @@ Index: linux-269-5502/mm/mmap.c
  	tlb = tlb_gather_mmu(mm, 1);
  	flush_cache_mm(mm);
  	/* Use ~0UL here to ensure all VMAs in the mm are unmapped */
-Index: linux-269-5502/ipc/shm.c
+Index: linux-2.6.9-78.0.22/ipc/shm.c
 ===================================================================
---- linux-269-5502.orig/ipc/shm.c
-+++ linux-269-5502/ipc/shm.c
+--- linux-2.6.9-78.0.22.orig/ipc/shm.c	2009-05-08 09:59:02.000000000 -0600
++++ linux-2.6.9-78.0.22/ipc/shm.c	2009-05-11 23:21:42.000000000 -0600
 @@ -26,6 +26,7 @@
  #include <linux/proc_fs.h>
  #include <linux/shmem_fs.h>
@@ -1253,7 +1253,7 @@ Index: linux-269-5502/ipc/shm.c
  #include <linux/audit.h>
  #include <asm/uaccess.h>
  
-@@ -856,6 +857,44 @@ asmlinkage long sys_shmdt(char __user *s
+@@ -856,6 +857,44 @@
  	return retval;
  }
  
@@ -1298,10 +1298,10 @@ Index: linux-269-5502/ipc/shm.c
  #ifdef CONFIG_PROC_FS
  static int sysvipc_shm_read_proc(char *buffer, char **start, off_t offset, int length, int *eof, void *data)
  {
-Index: linux-269-5502/include/linux/init_task.h
+Index: linux-2.6.9-78.0.22/include/linux/init_task.h
 ===================================================================
---- linux-269-5502.orig/include/linux/init_task.h
-+++ linux-269-5502/include/linux/init_task.h
+--- linux-2.6.9-78.0.22.orig/include/linux/init_task.h	2009-05-08 09:59:03.000000000 -0600
++++ linux-2.6.9-78.0.22/include/linux/init_task.h	2009-05-11 23:21:42.000000000 -0600
 @@ -2,6 +2,7 @@
  #define _LINUX__INIT_TASK_H
  
@@ -1310,7 +1310,7 @@ Index: linux-269-5502/include/linux/init_task.h
  
  #define INIT_FILES \
  { 							\
-@@ -112,6 +113,7 @@ extern struct group_info init_groups;
+@@ -112,6 +113,7 @@
  	.proc_lock	= SPIN_LOCK_UNLOCKED,				\
  	.switch_lock	= SPIN_LOCK_UNLOCKED,				\
  	.journal_info	= NULL,						\
@@ -1318,10 +1318,10 @@ Index: linux-269-5502/include/linux/init_task.h
  }
  
  
-Index: linux-269-5502/include/linux/ioproc.h
+Index: linux-2.6.9-78.0.22/include/linux/ioproc.h
 ===================================================================
---- /dev/null
-+++ linux-269-5502/include/linux/ioproc.h
+--- linux-2.6.9-78.0.22.orig/include/linux/ioproc.h	2009-04-18 06:33:31.404506136 -0600
++++ linux-2.6.9-78.0.22/include/linux/ioproc.h	2009-05-11 23:21:42.000000000 -0600
 @@ -0,0 +1,270 @@
 +/*
 + *    Copyright (C) 2006 Quadrics Ltd
@@ -1593,11 +1593,11 @@ Index: linux-269-5502/include/linux/ioproc.h
 +
 +#endif				/* CONFIG_IOPROC */
 +#endif				/* __LINUX_IOPROC_H__ */
-Index: linux-269-5502/include/linux/sched.h
+Index: linux-2.6.9-78.0.22/include/linux/sched.h
 ===================================================================
---- linux-269-5502.orig/include/linux/sched.h
-+++ linux-269-5502/include/linux/sched.h
-@@ -185,6 +185,9 @@ extern signed long schedule_timeout_unin
+--- linux-2.6.9-78.0.22.orig/include/linux/sched.h	2009-05-08 09:59:03.000000000 -0600
++++ linux-2.6.9-78.0.22/include/linux/sched.h	2009-05-11 23:21:42.000000000 -0600
+@@ -186,6 +186,9 @@
  asmlinkage void schedule(void);
  
  struct namespace;
@@ -1607,7 +1607,7 @@ Index: linux-269-5502/include/linux/sched.h
  
  /* Maximum number of active map areas.. This is a random (large) number */
  #define DEFAULT_MAX_MAP_COUNT	65536
-@@ -260,6 +263,11 @@ struct mm_struct {
+@@ -277,6 +280,11 @@
  	struct kioctx		*ioctx_list;
  
  	struct kioctx		default_kioctx;
@@ -1619,7 +1619,7 @@ Index: linux-269-5502/include/linux/sched.h
  };
  
  extern int mmlist_nr;
-@@ -635,6 +643,10 @@ struct task_struct {
+@@ -655,6 +663,10 @@
    	struct mempolicy *mempolicy;
    	short il_next;		/* could be shared with used_math */
  #endif
@@ -1630,10 +1630,10 @@ Index: linux-269-5502/include/linux/sched.h
  };
  
  static inline pid_t process_group(struct task_struct *tsk)
-Index: linux-269-5502/include/linux/ptrack.h
+Index: linux-2.6.9-78.0.22/include/linux/ptrack.h
 ===================================================================
---- /dev/null
-+++ linux-269-5502/include/linux/ptrack.h
+--- linux-2.6.9-78.0.22.orig/include/linux/ptrack.h	2009-04-18 06:33:31.404506136 -0600
++++ linux-2.6.9-78.0.22/include/linux/ptrack.h	2009-05-11 23:21:42.000000000 -0600
 @@ -0,0 +1,65 @@
 +/*
 + *    Copyright (C) 2000  Regents of the University of California
@@ -1700,10 +1700,10 @@ Index: linux-269-5502/include/linux/ptrack.h
 +#endif
 +
 +#endif /* __LINUX_PTRACK_H */
-Index: linux-269-5502/include/asm-ia64/param.h
+Index: linux-2.6.9-78.0.22/include/asm-ia64/param.h
 ===================================================================
---- linux-269-5502.orig/include/asm-ia64/param.h
-+++ linux-269-5502/include/asm-ia64/param.h
+--- linux-2.6.9-78.0.22.orig/include/asm-ia64/param.h	2009-05-08 09:59:03.000000000 -0600
++++ linux-2.6.9-78.0.22/include/asm-ia64/param.h	2009-05-11 23:21:42.000000000 -0600
 @@ -27,7 +27,7 @@
     */
  #  define HZ	  32
@@ -1713,10 +1713,10 @@ Index: linux-269-5502/include/asm-ia64/param.h
  # endif
  # define USER_HZ	HZ
  # define CLOCKS_PER_SEC	HZ	/* frequency at which times() counts */
-Index: linux-269-5502/include/asm-i386/param.h
+Index: linux-2.6.9-78.0.22/include/asm-i386/param.h
 ===================================================================
---- linux-269-5502.orig/include/asm-i386/param.h
-+++ linux-269-5502/include/asm-i386/param.h
+--- linux-2.6.9-78.0.22.orig/include/asm-i386/param.h	2009-05-08 09:59:03.000000000 -0600
++++ linux-2.6.9-78.0.22/include/asm-i386/param.h	2009-05-11 23:21:42.000000000 -0600
 @@ -2,7 +2,7 @@
  #define _ASMi386_PARAM_H
  
@@ -1726,10 +1726,10 @@ Index: linux-269-5502/include/asm-i386/param.h
  # define USER_HZ	100		/* .. some user interfaces are in "ticks" */
  # define CLOCKS_PER_SEC		(USER_HZ)	/* like times() */
  #endif
-Index: linux-269-5502/include/asm-x86_64/param.h
+Index: linux-2.6.9-78.0.22/include/asm-x86_64/param.h
 ===================================================================
---- linux-269-5502.orig/include/asm-x86_64/param.h
-+++ linux-269-5502/include/asm-x86_64/param.h
+--- linux-2.6.9-78.0.22.orig/include/asm-x86_64/param.h	2009-05-08 09:59:03.000000000 -0600
++++ linux-2.6.9-78.0.22/include/asm-x86_64/param.h	2009-05-11 23:21:42.000000000 -0600
 @@ -2,7 +2,7 @@
  #define _ASMx86_64_PARAM_H
  

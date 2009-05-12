@@ -1,9 +1,9 @@
-Index: linux-2.6.16.60-0.33/drivers/md/raid5.c
+Index: linux-2.6.9-78.0.22/drivers/md/raid5.c
 ===================================================================
---- linux-2.6.16.60-0.33.orig/drivers/md/raid5.c
-+++ linux-2.6.16.60-0.33/drivers/md/raid5.c
-@@ -900,6 +900,8 @@ static int add_stripe_bio(struct stripe_
- 		bi->bi_next = *bip;
+--- linux-2.6.9-78.0.22.orig/drivers/md/raid5.c	2009-05-11 23:23:39.000000000 -0600
++++ linux-2.6.9-78.0.22/drivers/md/raid5.c	2009-05-11 23:25:08.000000000 -0600
+@@ -928,6 +928,8 @@
+ #endif
  	*bip = bi;
  	bi->bi_phys_segments ++;
 +	if (bio_sync(bi) && !forwrite)
@@ -11,7 +11,7 @@ Index: linux-2.6.16.60-0.33/drivers/md/raid5.c
  	spin_unlock_irq(&conf->device_lock);
  	spin_unlock(&sh->lock);
  
-@@ -1617,6 +1619,8 @@ static int make_request (request_queue_t
+@@ -1676,6 +1678,8 @@
  		bi->bi_end_io(bi, bytes, 0);
  	}
  	spin_unlock_irq(&conf->device_lock);
