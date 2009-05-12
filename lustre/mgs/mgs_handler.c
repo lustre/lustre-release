@@ -774,6 +774,10 @@ out:
 
 static inline int mgs_init_export(struct obd_export *exp)
 {
+        spin_lock(&exp->exp_lock);
+        exp->exp_connecting = 1;
+        spin_unlock(&exp->exp_lock);
+
         return ldlm_init_export(exp);
 }
 
