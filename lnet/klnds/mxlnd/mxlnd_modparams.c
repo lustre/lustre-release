@@ -70,13 +70,17 @@ CFS_MODULE_PARM(board, "i", int, 0444,
 static int ep_id = MXLND_MX_EP_ID;
 CFS_MODULE_PARM(ep_id, "i", int, 0444, "MX endpoint ID");
 
+static char *ipif_name = "myri0";
+CFS_MODULE_PARM(ipif_name, "s", charp, 0444,
+                "IPoMX interface name");
+
 static int polling = MXLND_POLLING;
 CFS_MODULE_PARM(polling, "i", int, 0444,
                 "Use 0 to block (wait). A value > 0 will poll that many times before blocking");
 
 static char *hosts = NULL;
 CFS_MODULE_PARM(hosts, "s", charp, 0444,
-                "IP-to-hostname resolution file");
+                "Unused - was IP-to-hostname resolution file");
 
 kmx_tunables_t kmxlnd_tunables = {
         .kmx_n_waitd            = &n_waitd,
@@ -86,6 +90,179 @@ kmx_tunables_t kmxlnd_tunables = {
         .kmx_credits            = &credits,
         .kmx_board              = &board,
         .kmx_ep_id              = &ep_id,
-        .kmx_polling            = &polling,
-        .kmx_hosts              = &hosts
+        .kmx_default_ipif       = &ipif_name,
+        .kmx_polling            = &polling
 };
+
+#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
+
+static char ipif_basename_space[32];
+
+#ifndef HAVE_SYSCTL_UNNUMBERED
+
+enum {
+        MXLND_N_WAITD   = 1,
+        MXLND_MAX_PEERS,
+        MXLND_CKSUM,
+        MXLND_NNTX,
+        MXLND_CREDITS,
+        MXLND_BOARD,
+        MXLND_EP_ID,
+        MXLND_IPIF_BASENAME,
+        MXLND_POLLING
+};
+#else
+
+#define MXLND_N_WAITD           CTL_UNNUMBERED
+#define MXLND_MAX_PEERS         CTL_UNNUMBERED
+#define MXLND_CKSUM             CTL_UNNUMBERED
+#define MXLND_NNTX              CTL_UNNUMBERED
+#define MXLND_CREDITS           CTL_UNNUMBERED
+#define MXLND_BOARD             CTL_UNNUMBERED
+#define MXLND_EP_ID             CTL_UNNUMBERED
+#define MXLND_IPIF_BASENAME     CTL_UNNUMBERED
+#define MXLND_POLLING           CTL_UNNUMBERED
+
+#endif
+
+static cfs_sysctl_table_t kmxlnd_ctl_table[] = {
+        {
+                .ctl_name = 1,
+                .procname = "n_waitd",
+                .data     = &n_waitd,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 2,
+                .procname = "max_peers",
+                .data     = &max_peers,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 3,
+                .procname = "cksum",
+                .data     = &cksum,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 4,
+                .procname = "ntx",
+                .data     = &ntx,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 5,
+                .procname = "credits",
+                .data     = &credits,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 6,
+                .procname = "board",
+                .data     = &board,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 7,
+                .procname = "ep_id",
+                .data     = &ep_id,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {
+                .ctl_name = 8,
+                .procname = "ipif_name",
+                .data     = ipif_basename_space,
+                .maxlen   = sizeof(ipif_basename_space),
+                .mode     = 0444,
+                .proc_handler = &proc_dostring
+        },
+        {
+                .ctl_name = 9,
+                .procname = "polling",
+                .data     = &polling,
+                .maxlen   = sizeof(int),
+                .mode     = 0444,
+                .proc_handler = &proc_dointvec
+        },
+        {0}
+};
+
+static cfs_sysctl_table_t kmxlnd_top_ctl_table[] = {
+        {
+                .ctl_name = 208,
+                .procname = "mxlnd",
+                .data     = NULL,
+                .maxlen   = 0,
+                .mode     = 0555,
+                .child    = kmxlnd_ctl_table
+        },
+        {0}
+};
+
+void
+kmxlnd_initstrtunable(char *space, char *str, int size)
+{
+        strncpy(space, str, size);
+        space[size-1] = 0;
+}
+
+void
+kmxlnd_sysctl_init (void)
+{
+        kmxlnd_initstrtunable(ipif_basename_space, ipif_name,
+                              sizeof(ipif_basename_space));
+
+        kmxlnd_tunables.kib_sysctl =
+                cfs_register_sysctl_table(kmxlnd_top_ctl_table, 0);
+
+        if (kmxlnd_tunables.kib_sysctl == NULL)
+                CWARN("Can't setup /proc tunables\n");
+}
+
+void
+kmxlnd_sysctl_fini (void)
+{
+        if (kmxlnd_tunables.kib_sysctl != NULL)
+                cfs_unregister_sysctl_table(kmxlnd_tunables.kib_sysctl);
+}
+
+#else
+
+void
+kmxlnd_sysctl_init (void)
+{
+}
+
+void
+kmxlnd_sysctl_fini (void)
+{
+}
+
+#endif
+
+int
+kmxlnd_tunables_init (void)
+{
+        kmxlnd_sysctl_init();
+        return 0;
+}
+
+void
+kmxlnd_tunables_fini (void)
+{
+        kmxlnd_sysctl_fini();
+}
