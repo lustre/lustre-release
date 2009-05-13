@@ -1,5 +1,9 @@
 # vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
+# increment this if you have made a change that should force a new kernel
+# to build built
+BUILD_GEN=1
+
 DEVEL_KERNEL_TYPE="devel"
 
 prepare_and_build_srpm() {
@@ -50,6 +54,9 @@ Patch99995: linux-%{kversion}-lustre.patch' \
     cp -a fs/ext3/* $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext3' \
            -e '/^Provides: glibc-kernheaders = /a\
 Provides: kernel-headers = %{rpmversion}-%{release}
+' \
+           -e '/^Provides: kernel-%{_target_cpu} = %{rpmversion}-%{release}$/a\
+Provides: kernel = %{rpmversion}-%{release}
 ' \
            -e '/^Provides: kernel-devel-%{_target_cpu} = %{rpmversion}-%{release}$/a\
 Provides: kernel-devel = %{rpmversion}-%{release}

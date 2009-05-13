@@ -1075,7 +1075,7 @@ build_kernel_with_srpm() {
     # get an md5sum of the kernel patch + config for reuse check
     # XXX really, there needs to be a signature and a CONFIG_FILE per arch
     #     in BUILD_ARCHS
-    local REUSE_SIGNATURE=$(cat $CONFIG_FILE $TARGET_FILE $FULL_PATCH | md5sum | cut -d" " -f1)
+    local REUSE_SIGNATURE=$((echo $BUILD_GEN; cat $CONFIG_FILE $TARGET_FILE $FULL_PATCH) | md5sum | cut -d" " -f1)
 
     # see if we can link to the reuse pool
     # XXX - hrm.  i'm not convinced this doesn't belong in the reuse "library"
