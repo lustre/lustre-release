@@ -61,9 +61,8 @@ struct ost_thread_local_cache {
         struct page          *page  [OST_THREAD_POOL_SIZE];
         struct niobuf_local   local [OST_THREAD_POOL_SIZE];
         struct niobuf_remote  remote[OST_THREAD_POOL_SIZE];
+        unsigned int          temporary:1;
 };
-
-struct ost_thread_local_cache *ost_tls(struct ptlrpc_request *r);
 
 #define OSS_DEF_CREATE_THREADS  2UL
 #define OSS_MAX_CREATE_THREADS 16UL
