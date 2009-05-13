@@ -90,6 +90,8 @@ extern unsigned int obd_alloc_fail_rate;
 #define PING_INTERVAL max(obd_timeout / 4, 1U)
 /* a bit more than maximal journal commit time in seconds */
 #define PING_INTERVAL_SHORT 7
+/* maximum server ping service time excluding network latency */
+#define PING_SVC_TIMEOUT 15
 /* Client may skip 1 ping; we must wait at least 2.5. But for multiple
  * failover targets the client only pings one server at a time, and pings
  * can be lost on a loaded network. Since eviction has serious consequences,
@@ -101,8 +103,8 @@ extern unsigned int obd_alloc_fail_rate;
  /* Max connect interval for nonresponsive servers; ~50s to avoid building up
     connect requests in the LND queues, but within obd_timeout so we don't
     miss the recovery window */
-#define CONNECTION_SWITCH_MAX min(50U, max(CONNECTION_SWITCH_MIN,obd_timeout))
-#define CONNECTION_SWITCH_INC 5  /* Connection timeout backoff */
+#define CONNECTION_SWITCH_MAX min(25U, max(CONNECTION_SWITCH_MIN,obd_timeout))
+#define CONNECTION_SWITCH_INC 1  /* Connection timeout backoff */
 #ifndef CRAY_XT3
 /* In general this should be low to have quick detection of a system
    running on a backup server. (If it's too low, import_select_connection

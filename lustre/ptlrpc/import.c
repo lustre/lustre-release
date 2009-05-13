@@ -499,8 +499,8 @@ static int import_select_connection(struct obd_import *imp)
                 if (at_get(&imp->imp_at.iat_net_latency) <
                     CONNECTION_SWITCH_MAX) {
                         at_add(&imp->imp_at.iat_net_latency,
-                               at_get(&imp->imp_at.iat_net_latency) +
-                               CONNECTION_SWITCH_INC);
+                               MIN(at_get(&imp->imp_at.iat_net_latency) +
+                               CONNECTION_SWITCH_INC, CONNECTION_SWITCH_MAX));
                 }
                 LASSERT(imp_conn->oic_last_attempt);
                 CWARN("%s: tried all connections, increasing latency to %ds\n",
