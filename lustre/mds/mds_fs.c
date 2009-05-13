@@ -743,7 +743,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 
         /* setup the directory tree */
         push_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
-        dentry = simple_mkdir(current->fs->pwd, mnt, "ROOT", 0755, 0);
+        dentry = simple_mkdir(cfs_fs_pwd(current->fs), mnt, "ROOT", 0755, 0);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create ROOT directory: rc = %d\n", rc);
@@ -756,7 +756,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 
         dput(dentry);
 
-        dentry = lookup_one_len("__iopen__", current->fs->pwd,
+        dentry = lookup_one_len("__iopen__", cfs_fs_pwd(current->fs),
                                 strlen("__iopen__"));
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
@@ -771,7 +771,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 GOTO(err_fid, rc);
         }
 
-        dentry = simple_mkdir(current->fs->pwd, mnt, "PENDING", 0777, 1);
+        dentry = simple_mkdir(cfs_fs_pwd(current->fs), mnt, "PENDING", 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create PENDING directory: rc = %d\n", rc);
@@ -780,7 +780,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         mds->mds_pending_dir = dentry;
 
         /* COMPAT_146 */
-        dentry = simple_mkdir(current->fs->pwd, mnt, MDT_LOGS_DIR, 0777, 1);
+        dentry = simple_mkdir(cfs_fs_pwd(current->fs), mnt, MDT_LOGS_DIR, 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create %s directory: rc = %d\n",
@@ -790,7 +790,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         mds->mds_logs_dir = dentry;
         /* end COMPAT_146 */
 
-        dentry = simple_mkdir(current->fs->pwd, mnt, "OBJECTS", 0777, 1);
+        dentry = simple_mkdir(cfs_fs_pwd(current->fs), mnt, "OBJECTS", 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create OBJECTS directory: rc = %d\n", rc);
