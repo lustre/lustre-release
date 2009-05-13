@@ -2981,9 +2981,9 @@ test_65k() { # bug11679
 run_test 65k "validate manual striping works properly with deactivated OSCs"
 
 test_65l() { # bug 12836
-	mkdir -p $DIR/$tdir
-	$SETSTRIPE $DIR/$tdir -c -1
-	$LFS find -mtime -1 $DIR >/dev/null
+	mkdir -p $DIR/$tdir/test_dir
+	$SETSTRIPE $DIR/$tdir/test_dir -c -1
+	$LFS find -mtime -1 $DIR/$tdir > /dev/null
 }
 run_test 65l "lfs find on -1 stripe dir ========================"
 
