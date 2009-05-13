@@ -2030,7 +2030,7 @@ error_noexit() {
     ERRLOG=$TMP/lustre_${TESTSUITE}_${TESTNAME}.$(date +%s)
     echo "Dumping lctl log to $ERRLOG"
     # We need to dump the logs on all nodes
-    local NODES=$(nodes_list)
+    local NODES=${NODES:-$(nodes_list)}
     for NODE in $NODES; do
         do_node $NODE $LCTL dk $ERRLOG
     done

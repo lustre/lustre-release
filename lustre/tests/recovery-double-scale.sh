@@ -25,6 +25,9 @@ env >&2
 echo "--- env ---" >&2
 set -x
 
+[ "$SHARED_DIRECTORY" ] || \
+    { skip "$0: Empty SHARED_DIRECTORY" && exit 0; }
+
 [ -n "$CLIENTS" ] || { skip "$0 Need two or more remote clients" && exit 0; }
 [ $CLIENTCOUNT -ge 3 ] || \
     { skip "$0 Need two or more remote clients, have $CLIENTCOUNT" && exit 0; }
@@ -73,11 +76,14 @@ reboot_recover_node () {
                       shutdown_client $c
                       boot_node $c
                       echo "Reintegrating $c"
-                      zconf_mount $c $MOUNT || return $?
+                      # one client fails; need dk logs from this client only 
+                      zconf_mount $c $MOUNT || NODES="$c $(mdts_nodes) $(osts_nodes)" error_exit "zconf_mount failed"
                  done
-                 start_client_loads $item || return $?
+                 start_client_loads $item
                  ;;
-       * )      error "reboot_recover_node: nodetype=$nodetype. Must be one of 'MDS', 'OST', or 'clients'."
+                # script failure:
+                # don't use error (), the logs from all nodes not needed
+       * )      echo "reboot_recover_node: nodetype=$nodetype. Must be one of 'MDS', 'OST', or 'clients'."
                 exit 1;;
     esac
 }
@@ -92,7 +98,9 @@ get_item_type () {
        OST )    list=$OSTS;;
        clients) list=$NODES_TO_USE
                 ;;
-       * )      error "Invalid type=$type. Must be one of 'MDS', 'OST', or 'clients'."
+                # script failure:
+                # don't use error (), the logs from all nodes not needed
+       * )      echo "Invalid type=$type. Must be one of 'MDS', 'OST', or 'clients'."
                 exit 1;;
     esac
 
@@ -148,7 +156,7 @@ failover_pair() {
 
     log "Done checking client loads. Failing type1=$type1 item1=$item1 ... "
 
-    reboot_recover_node $item1 $type1 || return $?
+    reboot_recover_node $item1 $type1
 
     # Hendrix test17 description: 
     # Introduce a failure, wait at
@@ -163,7 +171,7 @@ failover_pair() {
     # do not need a sleep between failures for "double failures"
 
     log "                            Failing type2=$type2 item2=$item2 ... "    
-    reboot_recover_node $item2 $type2 || return $?
+    reboot_recover_node $item2 $type2
 
     # Client loads are allowed to die while in recovery, so we just
     # restart them.
