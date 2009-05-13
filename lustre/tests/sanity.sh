@@ -1044,7 +1044,7 @@ test_27s() { # bug 10725
 	mkdir -p $DIR/$tdir
 	local stripe_size=$((4096 * 1024 * 1024))	# 2^32
 	local stripe_count=0
-	[ $OSTCOUNT -eq 1 ] || stripe_count=2 
+	[ $OSTCOUNT -eq 1 ] || stripe_count=2
 	$SETSTRIPE $DIR/$tdir -s $stripe_size -c $stripe_count && \
 		error "stripe width >= 2^32 succeeded" || true
 }
@@ -1129,7 +1129,7 @@ test_27w() { # bug 10997
 }
 run_test 27w "check lfs setstripe -c -s -i options ============="
 
-# createtest also checks that device nodes are created and 
+# createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091
 	mkdir $DIR/d28
@@ -2035,7 +2035,7 @@ test_46() {
 }
 run_test 46 "dirtying a previously written page ================"
 
-# test_47 is removed "Device nodes check" is moved to test_28 
+# test_47 is removed "Device nodes check" is moved to test_28
 
 test_48a() { # bug 2399
 	check_kernel_version 34 || return 0
@@ -2960,9 +2960,9 @@ test_65k() { # bug11679
 run_test 65k "validate manual striping works properly with deactivated OSCs"
 
 test_65l() { # bug 12836
-	mkdir -p $DIR/$tdir
-	$SETSTRIPE $DIR/$tdir -c -1
-	$LFS find -mtime -1 $DIR >/dev/null
+	mkdir -p $DIR/$tdir/test_dir
+	$SETSTRIPE $DIR/$tdir/test_dir -c -1
+	$LFS find -mtime -1 $DIR/$tdir > /dev/null
 }
 run_test 65l "lfs find on -1 stripe dir ========================"
 
@@ -5106,7 +5106,7 @@ test_124a() {
         log "LVF=$LVF"
         local OLD_LVF=`lctl get_param -n $NSDIR.pool.lock_volume_factor`
         lctl set_param -n $NSDIR.pool.lock_volume_factor $LVF
-        
+
         # Let's make sure that we really have some margin. Client checks
         # cached locks every 10 sec.
         SLEEP=$((SLEEP+20))
