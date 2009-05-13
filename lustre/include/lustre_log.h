@@ -251,7 +251,6 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
 int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                       char *name, int idx, int count, struct llog_catid *idarray);
 
-#define LLOG_CTXT_FLAG_UNINITIALIZED     0x00000001
 struct llog_ctxt {
         int                      loc_idx; /* my index the obd array of ctxt's */
         struct llog_gen          loc_gen;
@@ -266,7 +265,6 @@ struct llog_ctxt {
         atomic_t                 loc_refcount;
         struct llog_commit_master *loc_lcm;
         void                    *llog_proc_cb;
-        long                    loc_flags; /* flags, see above defines */
 };
 
 #define LCM_NAME_SIZE 64

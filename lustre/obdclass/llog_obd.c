@@ -60,7 +60,6 @@ static struct llog_ctxt* llog_new_ctxt(struct obd_device *obd)
 
         ctxt->loc_obd = obd;
         atomic_set(&ctxt->loc_refcount, 1);
-        ctxt->loc_flags = LLOG_CTXT_FLAG_UNINITIALIZED;
 
         return ctxt;
 }
@@ -195,10 +194,6 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
                 CERROR("obd %s ctxt %d lop_setup=%p failed %d\n",
                        obd->obd_name, index, op->lop_setup, rc);
                 llog_ctxt_put(ctxt);
-        } else {
-                CDEBUG(D_CONFIG, "obd %s ctxt %d is initialized\n",
-                       obd->obd_name, index);
-                ctxt->loc_flags &= ~LLOG_CTXT_FLAG_UNINITIALIZED;
         }
 out:
         mutex_up(&obd->obd_llog_alloc);
