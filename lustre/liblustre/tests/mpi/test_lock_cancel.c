@@ -54,7 +54,7 @@
 #include <sysio.h>
 #include <mount.h>
 
-#include <test_common.h>
+#include <../test_common.h>
 
 #include <mpi.h>
 
