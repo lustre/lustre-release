@@ -66,6 +66,11 @@ static int mds_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
         ENTRY;
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
+        if (lctxt && lctxt->loc_flags & LLOG_CTXT_FLAG_UNINITIALIZED) {
+                llog_ctxt_put(lctxt);
+                RETURN(-EAGAIN);
+        }
+        /* "lctxt == NULL" will be checked in llog_add */
         rc = llog_add(lctxt, rec, lsm, logcookies, numcookies);
         llog_ctxt_put(lctxt);
 
