@@ -1,5 +1,9 @@
 # vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
+# increment this if you have made a change that should force a new kernel
+# to build built
+BUILD_GEN=1
+
 DEVEL_KERNEL_TYPE="source"
 
 prepare_and_build_srpm() {
@@ -18,6 +22,9 @@ prepare_and_build_srpm() {
         #cp $TOPDIR/SPECS/kernel-$spec.spec{,.orig}
         sed -i -e 's/^\(Name:.*kernel-\)\(.*\)/\1lustre-\2/' \
                -e "s/^Release:.*/&_${buildid}/" \
+               -e "/^Provides:  *kernel = /a\
+Provides:       kernel-$spec = %{version}-%{release}
+" \
                -e "s/^ExclusiveArch:.*/& ppc ppc64/" \
                -e '/^# Apply the patches needed for this architecture\./a\
 cp  %_sourcedir/linux-2.6.16-lustre.patch %_builddir/%{name}-%{version}/lustre.patch\
