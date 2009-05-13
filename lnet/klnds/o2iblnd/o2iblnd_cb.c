@@ -1226,6 +1226,7 @@ void
 kiblnd_connect_peer (kib_peer_t *peer)
 {
         struct rdma_cm_id *cmid;
+        kib_dev_t         *dev;
         kib_net_t         *net = peer->ibp_ni->ni_data;
         struct sockaddr_in srcaddr;
         struct sockaddr_in dstaddr;
@@ -1242,9 +1243,10 @@ kiblnd_connect_peer (kib_peer_t *peer)
                 goto failed;
         }
 
+        dev = net->ibn_dev;
         memset(&srcaddr, 0, sizeof(srcaddr));
         srcaddr.sin_family = AF_INET;
-        srcaddr.sin_addr.s_addr = htonl(net->ibn_dev->ibd_ifip);
+        srcaddr.sin_addr.s_addr = htonl(dev->ibd_ifip);
 
         memset(&dstaddr, 0, sizeof(dstaddr));
         dstaddr.sin_family = AF_INET;
@@ -1257,8 +1259,13 @@ kiblnd_connect_peer (kib_peer_t *peer)
                                (struct sockaddr *)&srcaddr,
                                (struct sockaddr *)&dstaddr,
                                *kiblnd_tunables.kib_timeout * 1000);
-        if (rc == 0)
+        if (rc == 0) {
+                LASSERT (cmid->device != NULL);
+                CDEBUG(D_NET, "%s: connection bound to %s:%u.%u.%u.%u:%s\n",
+                       libcfs_nid2str(peer->ibp_nid), dev->ibd_ifname,
+                       HIPQUAD(dev->ibd_ifip), cmid->device->name);
                 return;
+        }
 
         /* Can't initiate address resolution:  */
         CERROR("Can't resolve addr for %s: %d\n",
@@ -2171,8 +2178,11 @@ kiblnd_passive_connect (struct rdma_cm_id *cmid, void *priv, int priv_nob)
         if (ni == NULL ||                         /* no matching net */
             ni->ni_nid != reqmsg->ibm_dstnid ||   /* right NET, wrong NID! */
             net->ibn_dev != ibdev) {              /* wrong device */
-                CERROR("Can't accept %s: bad dst nid %s\n",
-                       libcfs_nid2str(nid),
+                CERROR("Can't accept %s on %s (%s:%d:%u.%u.%u.%u): "
+                       "bad dst nid %s\n", libcfs_nid2str(nid),
+                       ni == NULL ? "NA" : libcfs_nid2str(ni->ni_nid),
+                       ibdev->ibd_ifname, ibdev->ibd_nnets,
+                       HIPQUAD(ibdev->ibd_ifip),
                        libcfs_nid2str(reqmsg->ibm_dstnid));
 
                 goto failed;
@@ -2435,6 +2445,12 @@ kiblnd_rejected (kib_conn_t *conn, int reason, void *priv, int priv_nob)
         case IB_CM_REJ_STALE_CONN:
                 kiblnd_reconnect(conn, IBLND_MSG_VERSION, 0,
                                  IBLND_REJECT_CONN_STALE, NULL);
+                break;
+
+        case IB_CM_REJ_INVALID_SERVICE_ID:
+                CDEBUG(D_NETERROR, "%s rejected: no listener at %d\n",
+                       libcfs_nid2str(peer->ibp_nid),
+                       *kiblnd_tunables.kib_service);
                 break;
 
         case IB_CM_REJ_CONSUMER_DEFINED:

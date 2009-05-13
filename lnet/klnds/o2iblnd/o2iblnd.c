@@ -2125,6 +2125,9 @@ kiblnd_startup (lnet_ni_t *ni)
 
                 /* Binding should have assigned me an IB device */
                 LASSERT (id->device != NULL);
+                CDEBUG(D_CONSOLE, "Listener bound to %s:%u.%u.%u.%u:%d:%s\n",
+                       ifname, HIPQUAD(ip), *kiblnd_tunables.kib_service,
+                       id->device->name);
 
                 pd = ib_alloc_pd(id->device);
                 if (IS_ERR(pd)) {
