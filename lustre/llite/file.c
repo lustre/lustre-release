@@ -232,14 +232,8 @@ int ll_md_close(struct obd_export *md_exp, struct inode *inode,
         ENTRY;
 
         /* clear group lock, if present */
-        if (unlikely(fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
-#if 0 /* XXX */
-                struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
-                fd->fd_flags &= ~(LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK);
-                rc = ll_extent_unlock(fd, inode, lsm, LCK_GROUP,
-                                      &fd->fd_cwlockh);
-#endif
-        }
+        if (unlikely(fd->fd_flags & LL_FILE_GROUP_LOCKED))
+                ll_put_grouplock(inode, file, fd->fd_grouplock.cg_gid);
 
         /* Let's see if we have good enough OPEN lock on the file and if
            we can skip talking to MDS */
@@ -806,10 +800,13 @@ void ll_io_init(struct cl_io *io, const struct file *file, int write)
                 io->u.ci_wr.wr_append = file->f_flags & O_APPEND;
         io->ci_obj     = ll_i2info(inode)->lli_clob;
         io->ci_lockreq = CILR_MAYBE;
-        if (fd->fd_flags & LL_FILE_IGNORE_LOCK || sbi->ll_flags & LL_SBI_NOLCK)
+        if (fd->fd_flags & LL_FILE_IGNORE_LOCK ||
+            sbi->ll_flags & LL_SBI_NOLCK) {
                 io->ci_lockreq = CILR_NEVER;
-        else if (file->f_flags & O_APPEND)
+                io->ci_no_srvlock = 1;
+        } else if (file->f_flags & O_APPEND) {
                 io->ci_lockreq = CILR_MANDATORY;
+        }
 }
 
 static ssize_t ll_file_io_generic(const struct lu_env *env,
@@ -1421,18 +1418,77 @@ static int ll_lov_getstripe(struct inode *inode, unsigned long arg)
                             (void *)arg);
 }
 
-static int ll_get_grouplock(struct inode *inode, struct file *file,
-                            unsigned long arg)
+int ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg)
 {
-        /* XXX */
-        return -ENOSYS;
+        struct ll_inode_info   *lli = ll_i2info(inode);
+        struct ll_file_data    *fd = LUSTRE_FPRIVATE(file);
+        struct ccc_grouplock    grouplock;
+        int                     rc;
+        ENTRY;
+
+        spin_lock(&lli->lli_lock);
+        if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
+                CERROR("group lock already existed with gid %lu\n",
+                       fd->fd_grouplock.cg_gid);
+                spin_unlock(&lli->lli_lock);
+                RETURN(-EINVAL);
+        }
+        LASSERT(fd->fd_grouplock.cg_lock == NULL);
+        spin_unlock(&lli->lli_lock);
+
+        rc = cl_get_grouplock(cl_i2info(inode)->lli_clob,
+                              arg, (file->f_flags & O_NONBLOCK), &grouplock);
+        if (rc)
+                RETURN(rc);
+
+        spin_lock(&lli->lli_lock);
+        if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
+                spin_unlock(&lli->lli_lock);
+                CERROR("another thread just won the race\n");
+                cl_put_grouplock(&grouplock);
+                RETURN(-EINVAL);
+        }
+
+        fd->fd_flags |= (LL_FILE_GROUP_LOCKED | LL_FILE_IGNORE_LOCK);
+        fd->fd_grouplock = grouplock;
+        spin_unlock(&lli->lli_lock);
+
+        CDEBUG(D_INFO, "group lock %lu obtained\n", arg);
+        RETURN(0);
 }
 
-static int ll_put_grouplock(struct inode *inode, struct file *file,
-                            unsigned long arg)
+int ll_put_grouplock(struct inode *inode, struct file *file, unsigned long arg)
 {
-        /* XXX */
-        return -ENOSYS;
+        struct ll_inode_info   *lli = ll_i2info(inode);
+        struct ll_file_data    *fd = LUSTRE_FPRIVATE(file);
+        struct ccc_grouplock    grouplock;
+        ENTRY;
+
+        spin_lock(&lli->lli_lock);
+        if (!(fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
+                spin_unlock(&lli->lli_lock);
+                CERROR("no group lock held\n");
+                RETURN(-EINVAL);
+        }
+        LASSERT(fd->fd_grouplock.cg_lock != NULL);
+
+        if (fd->fd_grouplock.cg_gid != arg) {
+                CERROR("group lock %lu doesn't match current id %lu\n",
+                       arg, fd->fd_grouplock.cg_gid);
+                spin_unlock(&lli->lli_lock);
+                RETURN(-EINVAL);
+        }
+
+        grouplock = fd->fd_grouplock;
+        fd->fd_grouplock.cg_env = NULL;
+        fd->fd_grouplock.cg_lock = NULL;
+        fd->fd_grouplock.cg_gid = 0;
+        fd->fd_flags &= ~(LL_FILE_GROUP_LOCKED | LL_FILE_IGNORE_LOCK);
+        spin_unlock(&lli->lli_lock);
+
+        cl_put_grouplock(&grouplock);
+        CDEBUG(D_INFO, "group lock %lu released\n", arg);
+        RETURN(0);
 }
 
 #if LUSTRE_FIX >= 50

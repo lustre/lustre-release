@@ -201,7 +201,7 @@ static int osc_page_cache_add(const struct lu_env *env,
         ENTRY;
 
         /* Set the OBD_BRW_SRVLOCK before the page is queued. */
-        brw_flags = oio->oi_lockless ? OBD_BRW_SRVLOCK : 0;
+        brw_flags = osc_io_srvlock(oio) ? OBD_BRW_SRVLOCK : 0;
         if (!client_is_remote(osc_export(obj)) &&
             cfs_capable(CFS_CAP_SYS_RESOURCE)) {
                 brw_flags |= OBD_BRW_NOQUOTA;
@@ -528,7 +528,7 @@ void osc_io_submit_page(const struct lu_env *env,
         oap->oap_page_off   = opg->ops_from;
         oap->oap_count      = opg->ops_to - opg->ops_from;
         oap->oap_brw_flags |= OBD_BRW_SYNC;
-        if (oio->oi_lockless)
+        if (osc_io_srvlock(oio))
                 oap->oap_brw_flags |= OBD_BRW_SRVLOCK;
 
         oap->oap_cmd = crt == CRT_WRITE ? OBD_BRW_WRITE : OBD_BRW_READ;

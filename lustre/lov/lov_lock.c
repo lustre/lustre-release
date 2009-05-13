@@ -330,6 +330,7 @@ static int lov_lock_sub_init(const struct lu_env *env,
                         descr->cld_start = cl_index(descr->cld_obj, start);
                         descr->cld_end   = cl_index(descr->cld_obj, end);
                         descr->cld_mode  = parent->cll_descr.cld_mode;
+                        descr->cld_gid   = parent->cll_descr.cld_gid;
                         /* XXX has no effect */
                         lck->lls_sub[nr].sub_got = *descr;
                         lck->lls_sub[nr].sub_stripe = stripe;
@@ -402,6 +403,7 @@ static int lov_sublock_release(const struct lu_env *env, struct lov_lock *lck,
                  * while sub-lock is being paged out.
                  */
                 dying = (sublock->cll_descr.cld_mode == CLM_PHANTOM ||
+                         sublock->cll_descr.cld_mode == CLM_GROUP ||
                          (sublock->cll_flags & (CLF_CANCELPEND|CLF_DOOMED))) &&
                         sublock->cll_holds == 1;
                 if (dying)
@@ -824,6 +826,7 @@ static int lov_lock_stripe_is_matching(const struct lu_env *env,
 
                 subd->cld_obj  = NULL;   /* don't need sub object at all */
                 subd->cld_mode = descr->cld_mode;
+                subd->cld_gid  = descr->cld_gid;
                 result = lov_stripe_intersects(lsm, stripe, start, end,
                                                &sub_start, &sub_end);
                 LASSERT(result);
@@ -857,7 +860,12 @@ static int lov_lock_fits_into(const struct lu_env *env,
 
         ENTRY;
 
-        if (lov->lls_nr == 1) {
+        if (need->cld_mode == CLM_GROUP)
+                /*
+                 * always allow to match group lock.
+                 */
+                result = cl_lock_ext_match(&lov->lls_orig, need);
+        else if (lov->lls_nr == 1) {
                 struct cl_lock_descr *got = &lov->lls_sub[0].sub_got;
                 result = lov_lock_stripe_is_matching(env,
                                                      cl2lov(slice->cls_obj),

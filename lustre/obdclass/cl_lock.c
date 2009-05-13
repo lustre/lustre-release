@@ -194,12 +194,18 @@ EXPORT_SYMBOL(cl_lock_slice_add);
  */
 int cl_lock_mode_match(enum cl_lock_mode has, enum cl_lock_mode need)
 {
-        LINVRNT(need == CLM_READ || need == CLM_WRITE || need == CLM_PHANTOM);
-        LINVRNT(has == CLM_READ || has == CLM_WRITE || has == CLM_PHANTOM);
+        LINVRNT(need == CLM_READ || need == CLM_WRITE ||
+                need == CLM_PHANTOM || need == CLM_GROUP);
+        LINVRNT(has == CLM_READ || has == CLM_WRITE ||
+                has == CLM_PHANTOM || has == CLM_GROUP);
         CLASSERT(CLM_PHANTOM < CLM_READ);
         CLASSERT(CLM_READ < CLM_WRITE);
+        CLASSERT(CLM_WRITE < CLM_GROUP);
 
-        return need <= has;
+        if (has != CLM_GROUP)
+                return need <= has;
+        else
+                return need == has;
 }
 EXPORT_SYMBOL(cl_lock_mode_match);
 
@@ -212,7 +218,8 @@ int cl_lock_ext_match(const struct cl_lock_descr *has,
         return
                 has->cld_start <= need->cld_start &&
                 has->cld_end >= need->cld_end &&
-                cl_lock_mode_match(has->cld_mode, need->cld_mode);
+                cl_lock_mode_match(has->cld_mode, need->cld_mode) &&
+                (has->cld_mode != CLM_GROUP || has->cld_gid == need->cld_gid);
 }
 EXPORT_SYMBOL(cl_lock_ext_match);
 
@@ -831,10 +838,11 @@ static void cl_lock_hold_release(const struct lu_env *env, struct cl_lock *lock,
         lu_ref_del(&lock->cll_holders, scope, source);
         cl_lock_hold_mod(env, lock, -1);
         if (lock->cll_holds == 0) {
-                if (lock->cll_descr.cld_mode == CLM_PHANTOM)
+                if (lock->cll_descr.cld_mode == CLM_PHANTOM ||
+                    lock->cll_descr.cld_mode == CLM_GROUP)
                         /*
-                         * If lock is still phantom when user is done with
-                         * it---destroy the lock.
+                         * If lock is still phantom or grouplock when user is
+                         * done with it---destroy the lock.
                          */
                         lock->cll_flags |= CLF_CANCELPEND|CLF_DOOMED;
                 if (lock->cll_flags & CLF_CANCELPEND) {
@@ -2077,7 +2085,8 @@ const char *cl_lock_mode_name(const enum cl_lock_mode mode)
         static const char *names[] = {
                 [CLM_PHANTOM] = "PHANTOM",
                 [CLM_READ]    = "READ",
-                [CLM_WRITE]   = "WRITE"
+                [CLM_WRITE]   = "WRITE",
+                [CLM_GROUP]   = "GROUP"
         };
         if (0 <= mode && mode < ARRAY_SIZE(names))
                 return names[mode];

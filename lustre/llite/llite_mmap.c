@@ -182,10 +182,12 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
 
                         /* mmap lock should be MANDATORY or NEVER. */
                         if (fd->fd_flags & LL_FILE_IGNORE_LOCK ||
-                            sbi->ll_flags & LL_SBI_NOLCK)
+                            sbi->ll_flags & LL_SBI_NOLCK) {
                                 io->ci_lockreq = CILR_NEVER;
-                        else
+                                io->ci_no_srvlock = 1;
+                        } else {
                                 io->ci_lockreq = CILR_MANDATORY;
+                        }
 
                         vio->u.fault.ft_vma     = vma;
                         vio->u.fault.ft_address = address;

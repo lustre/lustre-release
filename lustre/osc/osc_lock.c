@@ -242,6 +242,7 @@ static void osc_lock_build_policy(const struct lu_env *env,
         const struct cl_lock_descr *d = &lock->cll_descr;
 
         osc_index2policy(policy, d->cld_obj, d->cld_start, d->cld_end);
+        policy->l_extent.gid = d->cld_gid;
 }
 
 static int osc_enq2ldlm_flags(__u32 enqflags)
@@ -405,6 +406,7 @@ static void osc_lock_granted(const struct lu_env *env, struct osc_lock *olck,
                 descr->cld_mode  = osc_ldlm2cl_lock(dlmlock->l_granted_mode);
                 descr->cld_start = cl_index(descr->cld_obj, ext->start);
                 descr->cld_end   = cl_index(descr->cld_obj, ext->end);
+                descr->cld_gid   = ext->gid;
                 /*
                  * tell upper layers the extent of the lock that was actually
                  * granted
@@ -1116,6 +1118,14 @@ static int osc_lock_enqueue_wait(const struct lu_env *env,
                         continue;
 
                 /* overlapped and living locks. */
+
+                /* We're not supposed to give up group lock. */
+                if (scan->cll_descr.cld_mode == CLM_GROUP) {
+                        LASSERT(descr->cld_mode != CLM_GROUP ||
+                                descr->cld_gid != scan->cll_descr.cld_gid);
+                        continue;
+                }
+
                 /* A tricky case for lockless pages:
                  * We need to cancel the compatible locks if we're enqueuing
                  * a lockless lock, for example:

@@ -381,4 +381,14 @@ int cl_ocd_update(struct obd_device *host,
                   struct obd_device *watched,
                   enum obd_notify_event ev, void *owner);
 
+struct ccc_grouplock {
+        struct lu_env   *cg_env;
+        struct cl_lock  *cg_lock;
+        unsigned long    cg_gid;
+};
+
+int  cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
+                      struct ccc_grouplock *cg);
+void cl_put_grouplock(struct ccc_grouplock *cg);
+
 #endif /*LCLIENT_H */

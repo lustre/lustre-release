@@ -504,8 +504,7 @@ struct lustre_handle;
 struct ll_file_data {
         struct ll_readahead_state fd_ras;
         int fd_omode;
-        struct lustre_handle fd_cwlockh;
-        unsigned long fd_gid;
+        struct ccc_grouplock fd_grouplock;
         struct ll_file_dir fd_dir;
         __u32 fd_flags;
         struct file *fd_file;
@@ -678,6 +677,8 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data);
 int ll_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
               int num_bytes);
 int ll_merge_lvb(struct inode *inode);
+int ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg);
+int ll_put_grouplock(struct inode *inode, struct file *file, unsigned long arg);
 
 /* llite/dcache.c */
 /* llite/namei.c */

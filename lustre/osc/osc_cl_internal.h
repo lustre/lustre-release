@@ -388,14 +388,24 @@ static inline struct osc_object *cl2osc(const struct cl_object *obj)
 
 static inline ldlm_mode_t osc_cl_lock2ldlm(enum cl_lock_mode mode)
 {
-        LASSERT(mode == CLM_READ || mode == CLM_WRITE);
-        return mode == CLM_READ ? LCK_PR : LCK_PW;
+        LASSERT(mode == CLM_READ || mode == CLM_WRITE || mode == CLM_GROUP);
+        if (mode == CLM_READ)
+                return LCK_PR;
+        else if (mode == CLM_WRITE)
+                return LCK_PW;
+        else
+                return LCK_GROUP;
 }
 
 static inline enum cl_lock_mode osc_ldlm2cl_lock(ldlm_mode_t mode)
 {
-        LASSERT(mode == LCK_PR || mode == LCK_PW);
-        return mode == LCK_PR ? CLM_READ : CLM_WRITE;
+        LASSERT(mode == LCK_PR || mode == LCK_PW || mode == LCK_GROUP);
+        if (mode == LCK_PR)
+                return CLM_READ;
+        else if (mode == LCK_PW)
+                return CLM_WRITE;
+        else
+                return CLM_GROUP;
 }
 
 static inline struct osc_page *cl2osc_page(const struct cl_page_slice *slice)
@@ -413,6 +423,11 @@ static inline struct osc_lock *cl2osc_lock(const struct cl_lock_slice *slice)
 static inline struct osc_lock *osc_lock_at(const struct cl_lock *lock)
 {
         return cl2osc_lock(cl_lock_at(lock, &osc_device_type));
+}
+
+static inline int osc_io_srvlock(struct osc_io *oio)
+{
+        return (oio->oi_lockless && !oio->oi_cl.cis_io->ci_no_srvlock);
 }
 
 /** @} osc */
