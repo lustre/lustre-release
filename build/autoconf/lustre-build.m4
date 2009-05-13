@@ -53,7 +53,7 @@ AS_VAR_POPDEF([lb_File])dnl
 AC_DEFUN([LB_CHECK_FILES],
 [AC_FOREACH([AC_FILE_NAME], [$1],
   [LB_CHECK_FILE(AC_FILE_NAME,
-                 [AC_DEFINE_UNQUOTED([AS_TR_CPP(HAVE_[]AC_FILE_NAME)], 1,
+                 [AC_DEFINE_UNQUOTED(AS_TR_CPP(HAVE_[]AC_FILE_NAME), 1,
                                     [Define to 1 if you have the
                                      file `]AC_File['.])
 $2],
