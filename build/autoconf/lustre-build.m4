@@ -45,19 +45,6 @@ AS_IF([test AS_VAR_GET(lb_File) = yes], [$2], [$3])[]dnl
 AS_VAR_POPDEF([lb_File])dnl
 ])# LB_CHECK_FILE
 
-#
-# LB_CHECK_FILES
-#
-# LB_CHECK_FILE over multiple files
-#
-AC_DEFUN([LB_CHECK_FILES],
-[AC_FOREACH([AC_FILE_NAME], [$1],
-  [LB_CHECK_FILE(AC_FILE_NAME,
-                 [AC_DEFINE_UNQUOTED(AS_TR_CPP(HAVE_[]AC_FILE_NAME), 1,
-                                    [Define to 1 if you have the
-                                     file `]AC_File['.])
-$2],
-                 [$3])])])
 
 #
 # LB_ARG_LIBS_INCLUDES

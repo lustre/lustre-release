@@ -109,6 +109,7 @@ LB_LINUX_TRY_COMPILE([
 		#endif
 	],[
 		RHEL_KENEL="yes"
+		RHEL_KERNEL="yes"
 		AC_MSG_RESULT([yes])
 	],[
 	        AC_MSG_RESULT([no])
@@ -192,9 +193,9 @@ LB_CHECK_FILE([$LINUX_CONFIG],[],
 # at 2.6.19 # $LINUX/include/linux/config.h is removed
 # and at more old has only one line
 # include <autoconf.h>
-LB_CHECK_FILES([$LINUX_OBJ/include/linux/autoconf.h
-		$LINUX_OBJ/include/linux/version.h
-		],[],
+LB_CHECK_FILE([$LINUX_OBJ/include/linux/autoconf.h],[],
+	[AC_MSG_ERROR([Run make config in $LINUX.])])
+LB_CHECK_FILE([$LINUX_OBJ/include/linux/version.h],[],
 	[AC_MSG_ERROR([Run make config in $LINUX.])])
 
 # ------------ rhconfig.h includes runtime-generated bits --
@@ -621,17 +622,4 @@ AC_CACHE_CHECK([for $1], ac_Header,
 				  [AS_VAR_SET(ac_Header, [no])])])
 AS_IF([test AS_VAR_GET(ac_Header) = yes], [$2], [$3])[]dnl
 AS_VAR_POPDEF([ac_Header])dnl
-])
-
-#
-# Like AC_CHECK_HEADERS but for kernel space headers
-#
-AC_DEFUN([LB_CHECK_LINUX_HEADERS],
-[AH_CHECK_HEADERS([$1])dnl
-for ac_header in $1
-do
-LB_CHECK_LINUX_HEADER($ac_header,
-		[AC_DEFINE_UNQUOTED(AS_TR_CPP(HAVE_$ac_header)) $2],
-		[$3])dnl
-done
 ])
