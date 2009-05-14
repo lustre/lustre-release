@@ -15,10 +15,8 @@ BASE_ARCHS="i686 x86_64 ia64 ppc64"
 BIGMEM_ARCHS=""
 BOOT_ARCHS=""
 JENSEN_ARCHS=""
-#SMP_ARCHS="i686 x86_64 ia64 ppc64"
-SMP_ARCHS=""
-#UP_ARCHS=""
-UP_ARCHS="i686 x86_64 ia64 ppc64"
+SMP_ARCHS="i686 x86_64 ia64 ppc64"
+UP_ARCHS=""
 
 for cc in gcc ; do
     if which $cc >/dev/null 2>/dev/null ; then
