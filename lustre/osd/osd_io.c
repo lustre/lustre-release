@@ -332,7 +332,7 @@ static int osd_do_bio(struct inode *inode, struct filter_iobuf *iobuf, int rw)
          * completion here. instead we proceed with transaction commit in
          * parallel and wait for IO completion once transaction is stopped
          * see osd_trans_stop() for more details -bzzz */
-        if (rw == OBD_BRW_WRITE)
+        if (rw != OBD_BRW_WRITE)
                 wait_event(iobuf->dr_wait, atomic_read(&iobuf->dr_numreqs) == 0);
 
         if (rc == 0)

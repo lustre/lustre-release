@@ -686,9 +686,14 @@ static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
 static struct thandle *osd_trans_create(const struct lu_env *env,
                                         struct dt_device *d)
 {
-        struct osd_thandle *oh;
-        struct thandle     *th;
+        struct osd_thread_info *oti = osd_oti_get(env);
+        struct filter_iobuf    *iobuf = &oti->oti_iobuf;
+        struct osd_thandle     *oh;
+        struct thandle         *th;
         ENTRY;
+       
+        /* on pending IO in this thread should left from prev. request */
+        LASSERT(atomic_read(&iobuf->dr_numreqs) == 0);
 
         th = ERR_PTR(-ENOMEM);
         OBD_ALLOC_GFP(oh, sizeof *oh, CFS_ALLOC_IO);
@@ -826,7 +831,9 @@ static int osd_trans_stop(const struct lu_env *env, struct thandle *th)
 
         /* as we want IO to journal and data IO be concurrent, we don't block
          * awaiting data IO completion in osd_do_bio(), instead we wait here
-         * once transaction is submitted to the journal.
+         * once transaction is submitted to the journal. all reqular requests
+         * don't do direct IO (except read/write), thus this wait_even becomes
+         * no-op for them.
          *
          * IMPORTANT: we have to wait till any IO submited by the thread is
          * completed otherwise iobuf may be corrupted by different request
