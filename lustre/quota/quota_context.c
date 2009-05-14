@@ -235,7 +235,7 @@ check_cur_qunit(struct obd_device *obd,
         int ret = 0;
         ENTRY;
 
-        if (!sb_any_quota_enabled(sb))
+        if (!ll_sb_any_quota_active(sb))
                 RETURN(0);
 
         spin_lock(&qctxt->lqc_lock);
@@ -357,7 +357,7 @@ int compute_remquota(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
         int ret = QUOTA_RET_OK;
         ENTRY;
 
-        if (!sb_any_quota_enabled(sb))
+        if (!ll_sb_any_quota_active(sb))
                 RETURN(QUOTA_RET_NOQUOTA);
 
         /* ignore root user */
@@ -1279,7 +1279,7 @@ static int qslave_recovery_main(void *arg)
                 int ret;
 
                 LOCK_DQONOFF_MUTEX(dqopt);
-                if (!sb_has_quota_enabled(qctxt->lqc_sb, type)) {
+                if (!ll_sb_has_quota_active(qctxt->lqc_sb, type)) {
                         UNLOCK_DQONOFF_MUTEX(dqopt);
                         break;
                 }
@@ -1340,7 +1340,7 @@ qslave_start_recovery(struct obd_device *obd, struct lustre_quota_ctxt *qctxt)
         int rc;
         ENTRY;
 
-        if (!sb_any_quota_enabled(qctxt->lqc_sb))
+        if (!ll_sb_any_quota_active(qctxt->lqc_sb))
                 goto exit;
 
         data.obd = obd;

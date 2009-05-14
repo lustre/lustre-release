@@ -1586,6 +1586,71 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# 2.6.27 sles11 remove the bi_hw_segments
+AC_DEFUN([LC_BI_HW_SEGMENTS],
+[AC_MSG_CHECKING([struct bio has a bi_hw_segments field])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/bio.h>
+],[
+        struct bio io;
+        io.bi_hw_segments = 0;
+],[
+        AC_DEFINE(HAVE_BI_HW_SEGMENTS, 1,
+                [struct bio has a bi_hw_segments field])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.27 sles11 move the quotaio_v1.h to fs
+AC_DEFUN([LC_HAVE_QUOTAIO_V1_H],
+[LB_CHECK_FILE([$LINUX/include/linux/quotaio_v1.h],[
+        AC_DEFINE(HAVE_QUOTAIO_V1_H, 1,
+                [kernel has include/linux/quotaio_v1.h])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# sles10 sp2 need 5 parameter for vfs_symlink
+AC_DEFUN([LC_VFS_SYMLINK_5ARGS],
+[AC_MSG_CHECKING([vfs_symlink need 5 parameter])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        struct inode *dir = NULL;
+        struct dentry *dentry = NULL;
+        struct vfsmount *mnt = NULL;
+        const char * path = NULL;
+        vfs_symlink(dir, dentry, mnt, path, 0);
+],[
+        AC_DEFINE(HAVE_VFS_SYMLINK_5ARGS, 1,
+                [vfs_symlink need 5 parameteres])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.27 removed the read_inode from super_operations.
+AC_DEFUN([LC_READ_INODE_IN_SBOPS],
+[AC_MSG_CHECKING([super_operations has a read_inode field])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        struct super_operations *sop;
+        sop->read_inode(NULL);
+],[
+        AC_DEFINE(HAVE_READ_INODE_IN_SBOPS, 1,
+                [super_operations has a read_inode])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#
 # Ensure stack size big than 8k in Lustre server
 AC_DEFUN([LC_STACK_SIZE],
 [AC_MSG_CHECKING([stack size big than 8k])
@@ -1735,6 +1800,12 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_FILE_REMOVE_SUID
           LC_TRYLOCKPAGE
           LC_RW_TREE_LOCK
+          LC_READ_INODE_IN_SBOPS
+
+          # 2.6.27.15-2 sles11
+          LC_BI_HW_SEGMENTS
+          LC_HAVE_QUOTAIO_V1_H
+          LC_VFS_SYMLINK_5ARGS
 ])
 
 #

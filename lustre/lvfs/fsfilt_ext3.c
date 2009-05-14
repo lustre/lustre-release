@@ -52,8 +52,15 @@
 #include <linux/version.h>
 #include <linux/bitops.h>
 #include <linux/quota.h>
-#include <linux/quotaio_v1.h>
-#include <linux/quotaio_v2.h>
+#ifdef HAVE_QUOTAIO_V1_H
+# include <linux/quotaio_v1.h>
+# include <linux/quotaio_v2.h>
+#else
+# include <quotaio_v1.h>
+# include <quotaio_v2.h>
+# include <quota_tree.h>
+# define V2_DQTREEOFF    QT_TREEOFF
+#endif
 #include <linux/parser.h>
 #include <ext3/xattr.h>
 
@@ -364,7 +371,7 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso,
         /* We assume that there will be 1 bit set in s_dquot.flags for each
          * quota file that is active.  This is at least true for now.
          */
-        needed += hweight32(sb_any_quota_enabled(sb)) *
+        needed += hweight32(ll_sb_any_quota_active(sb)) *
                 FSFILT_SINGLEDATA_TRANS_BLOCKS(sb);
 #endif
 
@@ -1427,28 +1434,22 @@ static int fsfilt_ext3_quotactl(struct super_block *sb,
                                 lustre_quota_version_t qfmt = oqc->qc_id;
                                 char *name[][MAXQUOTAS] = LUSTRE_OPQFILES_NAMES;
 
-                                if (!qcop->quota_on)
-                                        GOTO(out, rc = -ENOSYS);
-
-                                rc = qcop->quota_on(sb, i, QFMT_VFS_V0,
-                                                    name[qfmt][i]);
+                                rc = ll_quota_on(sb, i, QFMT_VFS_V0,
+                                                 name[qfmt][i], 0);
 #ifdef HAVE_QUOTA64
                                 if (rc == -ENOENT || rc == -EINVAL) {
                                         /* see bug 13904 */
                                         rc = lustre_slave_quota_convert(qfmt, i);
                                         if (!rc)
-                                                rc = qcop->quota_on(sb, i,
-                                                                QFMT_VFS_V0,
-                                                                name[qfmt][i]);
+                                                rc = ll_quota_on(sb, i,
+                                                              QFMT_VFS_V0,
+                                                              name[qfmt][i], 0);
                                         else if (rc == -ESTALE)
                                                 rc = -ENOENT;
                                 }
 #endif
-                        } else if (oqc->qc_cmd == Q_QUOTAOFF) {
-                                if (!qcop->quota_off)
-                                        GOTO(out, rc = -ENOSYS);
-                                rc = qcop->quota_off(sb, i);
-                        }
+                        } else if (oqc->qc_cmd == Q_QUOTAOFF)
+                                rc = ll_quota_off(sb, i, 0);
 
                         if (rc == -EBUSY)
                                 error = rc;
@@ -1684,8 +1685,11 @@ static inline struct inode *ext3_iget_inuse(struct super_block *sb,
         struct inode *inode = NULL;
 
         if (ext3_test_bit(index, bitmap_bh->b_data))
+#ifdef HAVE_READ_INODE_IN_SBOPS
                 inode = iget(sb, ino);
-
+#else
+                inode = ext3_iget(sb, ino);
+#endif
         return inode;
 }
 
@@ -1747,11 +1751,7 @@ static int add_inode_quota(struct inode *inode, struct qchk_ctxt *qctxt,
 static int v2_write_dqheader(struct file *f, int type)
 {
         static const __u32 quota_magics[] = V2_INITQMAGICS;
-#ifdef HAVE_QUOTA64
-        static const __u32 quota_versions[] = V2_INITQVERSIONS_R0;
-#else
-        static const __u32 quota_versions[] = V2_INITQVERSIONS;
-#endif
+        static const __u32 quota_versions[] = LUSTRE_INITQVERSIONS_V1;
         struct v2_disk_dqheader dqhead;
         loff_t offset = 0;
 
@@ -1793,7 +1793,7 @@ static int v2_write_dqinfo(struct file *f, int type, struct if_dqinfo *info)
 static int v3_write_dqheader(struct file *f, int type)
 {
         static const __u32 quota_magics[] = V2_INITQMAGICS;
-        static const __u32 quota_versions[] = V2_INITQVERSIONS_R1;
+        static const __u32 quota_versions[] = LUSTRE_INITQVERSIONS_V2;
         struct v2_disk_dqheader dqhead;
         loff_t offset = 0;
 

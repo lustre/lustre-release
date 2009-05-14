@@ -62,7 +62,7 @@
 }
 
 /* for the verson 1 of lustre_disk_dqblk*/
-#define LUSTRE_INITQVERSIONS {\
+#define LUSTRE_INITQVERSIONS_V1 {\
         0,              /* USRQUOTA */\
         0               /* GRPQUOTA */\
 }

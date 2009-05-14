@@ -50,7 +50,9 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/slab.h>
-#include <linux/quotaio_v1.h>
+#ifdef HAVE_QUOTAIO_V1_H
+# include <linux/quotaio_v1.h>
+#endif
 
 #include <asm/byteorder.h>
 #include <asm/uaccess.h>
