@@ -562,5 +562,44 @@ static inline long labs(long x)
 #define	sysctl_vfs_cache_pressure	100
 #endif
 
+#ifdef HAVE_SB_HAS_QUOTA_ACTIVE
+#define ll_sb_has_quota_active(sb, type) sb_has_quota_active(sb, type)
+#else
+#define ll_sb_has_quota_active(sb, type) sb_has_quota_enabled(sb, type)
+#endif
+
+#ifdef HAVE_SB_ANY_QUOTA_ACTIVE
+#define ll_sb_any_quota_active(sb) sb_any_quota_active(sb)
+#else
+#define ll_sb_any_quota_active(sb) sb_any_quota_enabled(sb)
+#endif
+
+static inline int
+ll_quota_on(struct super_block *sb, int off, int ver, char *name, int remount)
+{
+        if (sb->s_qcop->quota_on) {
+                return sb->s_qcop->quota_on(sb, off, ver, name
+#ifdef HAVE_QUOTA_ON_5ARGS
+                                            , remount
+#endif
+                                           );
+        }
+        else
+                return -ENOSYS;
+}
+
+static inline int ll_quota_off(struct super_block *sb, int off, int remount)
+{
+        if (sb->s_qcop->quota_off) {
+                return sb->s_qcop->quota_off(sb, off
+#ifdef HAVE_QUOTA_OFF_3ARGS
+                                             , remount
+#endif
+                                            );
+        }
+        else
+                return -ENOSYS;
+}
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */

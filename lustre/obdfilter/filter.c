@@ -2240,7 +2240,7 @@ static int filter_cleanup(struct obd_device *obd)
 
         filter_post(obd);
 
-        LL_DQUOT_OFF(obd->u.obt.obt_sb);
+        LL_DQUOT_OFF(obd->u.obt.obt_sb, 0);
         shrink_dcache_sb(obd->u.obt.obt_sb);
 
         server_put_mount(obd->obd_name, filter->fo_vfsmnt);

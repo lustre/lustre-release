@@ -67,7 +67,7 @@ static int quotfmt_initialize(struct lustre_quota_info *lqi,
 {
         struct lustre_disk_dqheader dqhead;
         static const uint quota_magics[] = LUSTRE_INITQMAGICS;
-        static const uint quota_versions[] = LUSTRE_INITQVERSIONS;
+        static const uint quota_versions[] = LUSTRE_INITQVERSIONS_V1;
         struct file *fp;
         struct inode *parent_inode = tgt->obd_lvfs_ctxt.pwd->d_inode;
         size_t size;

@@ -50,7 +50,9 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/slab.h>
-#include <linux/quotaio_v1.h>
+#ifdef HAVE_QUOTAIO_V1_H
+# include <linux/quotaio_v1.h>
+#endif
 
 #include <asm/byteorder.h>
 #include <asm/uaccess.h>
@@ -62,7 +64,7 @@
 #ifdef HAVE_QUOTA_SUPPORT
 
 static const uint lustre_initqversions[][MAXQUOTAS] = {
-        [LUSTRE_QUOTA_V1] = LUSTRE_INITQVERSIONS,
+        [LUSTRE_QUOTA_V1] = LUSTRE_INITQVERSIONS_V1,
         [LUSTRE_QUOTA_V2] = LUSTRE_INITQVERSIONS_V2
 };
 
