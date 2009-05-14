@@ -195,7 +195,7 @@ int main(int argc, char *argv[])
 
         time1 = time(NULL);
         if (unlink(test_file_name)) {
-                printf("Node %d: error unlink file: %d\n", rank, fd);
+                printf("Node %d: error unlink file: %s\n", rank, test_file_name);
                 fflush(stdout);
                 goto cleanup;
         }
