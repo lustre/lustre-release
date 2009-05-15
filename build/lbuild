@@ -780,6 +780,10 @@ set_rpm_smp_type() {
         [ $infact_arch == $smp_type ] && RPMSMPTYPE=bigsmp && break
     done
 
+    for smp_type in $DEFAULT_ARCHS; do
+        [ $infact_arch == $smp_type ] && RPMSMPTYPE=default && break
+    done
+
 }
 
 # This function takes a linux source pool and digs out the linux release

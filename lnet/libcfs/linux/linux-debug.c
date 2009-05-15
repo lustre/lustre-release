@@ -281,6 +281,14 @@ static DUMP_TRACE_CONST struct stacktrace_ops print_trace_ops = {
 #endif /* HAVE_TRACE_ADDRESS_RELIABLE */
                    &print_trace_ops, NULL);
 	printk("\n");
+#elif defined(HAVE_SCHED_SHOW_TASK)
+        /* exported by lustre patch on 2.6.27 kernel */
+        extern void show_task(struct task_struct *);
+
+        if (tsk == NULL)
+                tsk = current;
+        CWARN("showing stack for process %d\n", tsk->pid);
+        sched_show_task(tsk);
 #else
         if ((tsk == NULL) || (tsk == current))
                 dump_stack();

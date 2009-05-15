@@ -180,7 +180,12 @@ void groups_free(struct group_info *ginfo);
 
 #define LTIME_S(time)                   (time.tv_sec)
 #define ll_path_lookup                  path_lookup
+
+#ifdef HAVE_EXPORT_INODE_PERMISSION
+#define ll_permission(inode,mask,nd)    inode_permission(inode,mask)
+#else
 #define ll_permission(inode,mask,nd)    permission(inode,mask,nd)
+#endif
 
 #define ll_pgcache_lock(mapping)          spin_lock(&mapping->page_lock)
 #define ll_pgcache_unlock(mapping)        spin_unlock(&mapping->page_lock)
@@ -284,8 +289,13 @@ static inline int mapping_has_pages(struct address_space *mapping)
 #endif
 
 #ifdef HAVE_SECURITY_PLUG
+#ifdef HAVE_VFS_SYMLINK_5ARGS
 #define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
                 vfs_symlink(dir, dentry, mnt, path, mode)
+#else
+#define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
+                vfs_symlink(dir, dentry, mnt, path)
+#endif
 #else
 #ifdef HAVE_4ARGS_VFS_SYMLINK
 #define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
@@ -600,6 +610,10 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
         else
                 return -ENOSYS;
 }
+
+#ifndef HAVE_BI_HW_SEGMENTS
+#define bio_hw_segments(q, bio) 0
+#endif
 
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */
