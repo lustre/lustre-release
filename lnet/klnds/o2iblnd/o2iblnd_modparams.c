@@ -436,6 +436,9 @@ kiblnd_tunables_init (void)
         if (*kiblnd_tunables.kib_peertxcredits > IBLND_CREDITS_MAX)
                 *kiblnd_tunables.kib_peertxcredits = IBLND_CREDITS_MAX;
 
+        if (*kiblnd_tunables.kib_peertxcredits > *kiblnd_tunables.kib_credits)
+                *kiblnd_tunables.kib_peertxcredits = *kiblnd_tunables.kib_credits;
+
         if (*kiblnd_tunables.kib_peercredits_hiw < *kiblnd_tunables.kib_peertxcredits / 2)
                 *kiblnd_tunables.kib_peercredits_hiw = *kiblnd_tunables.kib_peertxcredits / 2;
 
@@ -443,8 +446,11 @@ kiblnd_tunables_init (void)
                 *kiblnd_tunables.kib_peercredits_hiw = *kiblnd_tunables.kib_peertxcredits - 1;
 
         if (*kiblnd_tunables.kib_map_on_demand < 0 ||
-            *kiblnd_tunables.kib_map_on_demand >= IBLND_MAX_RDMA_FRAGS)
+            *kiblnd_tunables.kib_map_on_demand > IBLND_MAX_RDMA_FRAGS)
                 *kiblnd_tunables.kib_map_on_demand = 0; /* disable map-on-demand */
+
+        if (*kiblnd_tunables.kib_map_on_demand == 1)
+                *kiblnd_tunables.kib_map_on_demand = 2; /* don't make sense to create map if only one fragment */
 
         if (*kiblnd_tunables.kib_concurrent_sends == 0) {
                 if (*kiblnd_tunables.kib_map_on_demand > 0 &&

@@ -1439,7 +1439,7 @@ kiblnd_find_rd_dma_mr(kib_net_t *net, kib_rdma_desc_t *rd)
         LASSERT (net->ibn_dev->ibd_mrs[0] != NULL);
 
         if (*kiblnd_tunables.kib_map_on_demand > 0 &&
-            *kiblnd_tunables.kib_map_on_demand < rd->rd_nfrags)
+            *kiblnd_tunables.kib_map_on_demand <= rd->rd_nfrags)
                 return NULL;
 
         if (net->ibn_dev->ibd_nmrs == 1)
@@ -1678,7 +1678,7 @@ kiblnd_dev_get_attr(kib_dev_t *ibdev)
                 return rc;
         }
 
-#if 1
+#ifdef HAVE_OFED_TRANSPORT_IWARP
         /* XXX We can't trust this value returned by Chelsio driver, it's wrong
          * and we have reported the bug, remove these in the future when Chelsio
          * bug got fixed. */

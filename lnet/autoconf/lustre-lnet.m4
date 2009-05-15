@@ -575,6 +575,24 @@ else
 			AC_MSG_RESULT(no)
 		])
 
+		LB_LINUX_TRY_COMPILE([
+			#include <linux/version.h>
+			#include <linux/pci.h>
+			#if !HAVE_GFP_T
+			typedef int gfp_t;
+			#endif
+			#include <rdma/ib_verbs.h>
+		],[
+			return RDMA_TRANSPORT_IWARP ==
+			       rdma_node_get_transport(RDMA_NODE_RNIC);
+		],[
+			AC_MSG_RESULT(yes)
+			AC_DEFINE(HAVE_OFED_TRANSPORT_IWARP, 1,
+				  [has transport iWARP])
+		],[
+			AC_MSG_RESULT(no)
+		])
+
 		EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 	fi
 fi
