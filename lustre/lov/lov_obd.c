@@ -580,6 +580,13 @@ int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
                 RETURN(-ENOMEM);
         }
 
+        rc = lov_ost_pool_add(&lov->lov_packed, index, lov->lov_tgt_size);
+        if (rc) {
+                mutex_up(&lov->lov_lock);
+                OBD_FREE_PTR(tgt);
+                RETURN(rc);
+        }
+
         memset(tgt, 0, sizeof(*tgt));
         tgt->ltd_uuid = *uuidp;
         tgt->ltd_obd = tgt_obd;
@@ -590,10 +597,6 @@ int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
         lov->lov_tgts[index] = tgt;
         if (index >= lov->desc.ld_tgt_count)
                 lov->desc.ld_tgt_count = index + 1;
-
-        rc = lov_ost_pool_add(&lov->lov_packed, index, lov->lov_tgt_size);
-        if (rc)
-                RETURN(rc);
 
         mutex_up(&lov->lov_lock);
 
