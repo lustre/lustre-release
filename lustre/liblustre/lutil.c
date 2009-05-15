@@ -129,6 +129,7 @@ void liblustre_init_random()
                 if (syscall(SYS_read, _rand_dev_fd,
                             &seed, sizeof(seed)) == sizeof(seed)) {
                         ll_srand(seed[0], seed[1]);
+                        syscall(SYS_close, _rand_dev_fd);
                         return;
                 }
                 syscall(SYS_close, _rand_dev_fd);
