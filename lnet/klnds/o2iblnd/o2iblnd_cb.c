@@ -2654,6 +2654,8 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
 
 	switch (event->event) {
 	default:
+                CERROR("Unexpected event: %d, status: %d\n",
+                       event->event, event->status);
                 LBUG();
 
 	case RDMA_CM_EVENT_CONNECT_REQUEST:
@@ -2782,6 +2784,11 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
                 /* net keeps its ref on conn! */
                 return 0;
 
+#ifdef HAVE_OFED_RDMA_CMEV_TIMEWAIT_EXIT
+        case RDMA_CM_EVENT_TIMEWAIT_EXIT:
+                CDEBUG(D_NET, "Ignore TIMEWAIT_EXIT event\n");
+                return 0;
+#endif
 	case RDMA_CM_EVENT_DISCONNECTED:
                 conn = (kib_conn_t *)cmid->context;
                 if (conn->ibc_state < IBLND_CONN_ESTABLISHED) {
@@ -2801,6 +2808,12 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
                 /* Can't remove network from underneath LNET for now, so I have
                  * to ignore this */
                 return 0;
+
+#ifdef HAVE_OFED_RDMA_CMEV_ADDRCHANGE
+        case RDMA_CM_EVENT_ADDR_CHANGE:
+                LCONSOLE_INFO("Physical link changed (eg hca/port)\n");
+                return 0;
+#endif
         }
 }
 

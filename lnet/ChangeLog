@@ -12,6 +12,10 @@ tbd Sun Microsystems, Inc.
 	 mxlnd     - MX 1.2.1 or later,
 	 ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
+Severity   : major
+Bugzilla   : 19520
+Description: Handle new CM events in OFED 1.4
+
 Severity   : enhancement
 Bugzilla   : 17671
 Description: Update OFED release to 1.4.1 RC4
