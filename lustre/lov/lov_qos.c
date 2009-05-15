@@ -1042,6 +1042,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                 req->rq_stripe = i;
                 /* create data objects with "parent" OA */
                 memcpy(req->rq_oi.oi_oa, src_oa, sizeof(*req->rq_oi.oi_oa));
+                req->rq_oi.oi_cb_up = cb_create_update;
 
                 /* XXX When we start creating objects on demand, we need to
                  *     make sure that we always create the object on the

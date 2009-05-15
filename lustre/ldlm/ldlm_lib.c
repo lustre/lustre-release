@@ -382,7 +382,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
         down_write(&cli->cl_sem);
         if (cli->cl_conn_count > 0)
                 GOTO(out_sem, rc = -EALREADY);
-        
+
         rc = class_connect(dlm_handle, obd, cluuid);
         if (rc)
                 GOTO(out_sem, rc);

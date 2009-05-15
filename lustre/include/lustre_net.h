@@ -395,11 +395,24 @@ struct ptlrpc_request {
         /* Multi-rpc bits */
         struct list_head rq_set_chain;
         struct ptlrpc_request_set *rq_set;
-        void *rq_interpret_reply;               /* Async completion handler */
+        int (*rq_interpret_reply)(struct ptlrpc_request *req, void *data,
+                                  int rc); /* async interpret handler */
         union ptlrpc_async_args rq_async_args;  /* Async completion context */
         struct ptlrpc_request_pool *rq_pool;    /* Pool if request from
                                                    preallocated list */
 };
+
+static inline int ptlrpc_req_interpret(struct ptlrpc_request *req, int rc)
+{
+        if (req->rq_interpret_reply != NULL) {
+                int (*interpreter)(struct ptlrpc_request *, void *, int) =
+                     req->rq_interpret_reply;
+
+                req->rq_status = interpreter(req, &req->rq_async_args, rc);
+                return req->rq_status;
+        }
+        return rc;
+}
 
 static inline void lustre_set_req_swabbed(struct ptlrpc_request *req, int index)
 {
@@ -839,6 +852,11 @@ ptlrpc_init_rq_pool(int, int,
                     void (*populate_pool)(struct ptlrpc_request_pool *, int));
 
 void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req);
+struct ptlrpc_request *ptlrpc_prep_fakereq(unsigned int timeout,
+                                           int (*interpreter)(struct ptlrpc_request *,
+                                                              void *, int));
+void ptlrpc_fakereq_finished(struct ptlrpc_request *req);
+
 struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version,
                                        int opcode, int count, __u32 *lengths,
                                        char **bufs);
@@ -1140,7 +1158,7 @@ void ping_evictor_stop(void);
 int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc);
 void ptlrpcd_stop(struct ptlrpcd_ctl *pc, int force);
 void ptlrpcd_wake(struct ptlrpc_request *req);
-void ptlrpcd_add_req(struct ptlrpc_request *req);
+int ptlrpcd_add_req(struct ptlrpc_request *req);
 void ptlrpcd_add_rqset(struct ptlrpc_request_set *set);
 int ptlrpcd_addref(void);
 void ptlrpcd_decref(void);

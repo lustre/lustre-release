@@ -617,6 +617,63 @@ ptlrpc_prep_req(struct obd_import *imp, __u32 version, int opcode, int count,
                                     NULL);
 }
 
+struct ptlrpc_request *ptlrpc_prep_fakereq(unsigned int timeout,
+                                           int (*interpreter)(struct ptlrpc_request *,
+                                                              void *, int))
+{
+        struct ptlrpc_request *request = NULL;
+        ENTRY;
+
+        OBD_ALLOC(request, sizeof(*request));
+        if (!request) {
+                CERROR("request allocation out of memory\n");
+                RETURN(NULL);
+        }
+
+        request->rq_send_state = LUSTRE_IMP_FULL;
+        request->rq_type = PTL_RPC_MSG_REQUEST;
+        request->rq_import = NULL;
+        request->rq_export = NULL;
+
+        request->rq_sent = cfs_time_current_sec();
+        request->rq_reply_deadline = request->rq_sent + timeout;
+        request->rq_interpret_reply = interpreter;
+        request->rq_phase = RQ_PHASE_RPC;
+        request->rq_next_phase = RQ_PHASE_INTERPRET;
+        /* don't want reply */
+        request->rq_receiving_reply = 0;
+        request->rq_must_unlink = 0;
+        request->rq_no_delay = request->rq_no_resend = 1;
+
+        spin_lock_init(&request->rq_lock);
+        CFS_INIT_LIST_HEAD(&request->rq_list);
+        CFS_INIT_LIST_HEAD(&request->rq_replay_list);
+        CFS_INIT_LIST_HEAD(&request->rq_set_chain);
+        CFS_INIT_LIST_HEAD(&request->rq_history_list);
+        CFS_INIT_LIST_HEAD(&request->rq_exp_list);
+        cfs_waitq_init(&request->rq_reply_waitq);
+
+        request->rq_xid = ptlrpc_next_xid();
+        atomic_set(&request->rq_refcount, 1);
+
+        RETURN(request);
+}
+
+void ptlrpc_fakereq_finished(struct ptlrpc_request *req)
+{
+        /* if we kill request before timeout - need adjust counter */
+        if (req->rq_phase == RQ_PHASE_RPC) {
+                struct ptlrpc_request_set *set = req->rq_set;
+
+                if (set)
+                        set->set_remaining --;
+        }
+
+        ptlrpc_rqphase_move(req, RQ_PHASE_COMPLETE);
+        list_del_init(&req->rq_list);
+}
+
+
 struct ptlrpc_request_set *ptlrpc_prep_set(void)
 {
         struct ptlrpc_request_set *set;
@@ -655,7 +712,8 @@ void ptlrpc_set_destroy(struct ptlrpc_request_set *set)
                 n++;
         }
 
-        LASSERT(set->set_remaining == 0 || set->set_remaining == n);
+        LASSERTF(set->set_remaining == 0 || set->set_remaining == n, "%d / %d\n",
+                 set->set_remaining, n);
 
         list_for_each_safe(tmp, next, &set->set_requests) {
                 struct ptlrpc_request *req =
@@ -1176,7 +1234,6 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                 if (req->rq_err) {
                         if (req->rq_status == 0)
                                 req->rq_status = -EIO;
-                        ptlrpc_rqphase_move(req, RQ_PHASE_INTERPRET);
                         GOTO(interpret, req->rq_status);
                 }
 
@@ -1187,7 +1244,6 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                  * interrupted rpcs after they have timed out */
                 if (req->rq_intr && (req->rq_timedout || req->rq_waiting)) {
                         req->rq_status = -EINTR;
-                        ptlrpc_rqphase_move(req, RQ_PHASE_INTERPRET);
                         GOTO(interpret, req->rq_status);
                 }
 
@@ -1210,15 +1266,11 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
 
                                 if (status != 0)  {
                                         req->rq_status = status;
-                                        ptlrpc_rqphase_move(req, 
-                                                RQ_PHASE_INTERPRET);
                                         spin_unlock(&imp->imp_lock);
                                         GOTO(interpret, req->rq_status);
                                 }
                                 if (req->rq_no_resend) {
                                         req->rq_status = -ENOTCONN;
-                                        ptlrpc_rqphase_move(req, 
-                                                RQ_PHASE_INTERPRET);
                                         spin_unlock(&imp->imp_lock);
                                         GOTO(interpret, req->rq_status);
                                 }
@@ -1293,10 +1345,8 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                          * process the reply. Similarly if the RPC returned
                          * an error, and therefore the bulk will never arrive.
                          */
-                        if (req->rq_bulk == NULL || req->rq_status != 0) {
-                                ptlrpc_rqphase_move(req, RQ_PHASE_INTERPRET);
+                        if (req->rq_bulk == NULL || req->rq_status != 0)
                                 GOTO(interpret, req->rq_status);
-                        }
 
                         ptlrpc_rqphase_move(req, RQ_PHASE_BULK);
                 }
@@ -1312,14 +1362,10 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                          * the ACK for her PUT. */
                         DEBUG_REQ(D_ERROR, req, "bulk transfer failed");
                         req->rq_status = -EIO;
-                        ptlrpc_rqphase_move(req, RQ_PHASE_INTERPRET);
                         GOTO(interpret, req->rq_status);
                 }
-
+      interpret:
                 ptlrpc_rqphase_move(req, RQ_PHASE_INTERPRET);
-
-        interpret:
-                LASSERT(req->rq_phase == RQ_PHASE_INTERPRET);
 
                 /* This moves to "unregistering" phase we need to wait for
                  * reply unlink. */
@@ -1333,12 +1379,8 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                  * finished. */
                 LASSERT(!req->rq_receiving_reply);
 
-                if (req->rq_interpret_reply != NULL) {
-                        int (*interpreter)(struct ptlrpc_request *,void *,int) =
-                                req->rq_interpret_reply;
-                        req->rq_status = interpreter(req, &req->rq_async_args,
-                                                     req->rq_status);
-                }
+                ptlrpc_req_interpret(req, req->rq_status);
+
                 ptlrpc_rqphase_move(req, RQ_PHASE_COMPLETE);
 
                 CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:nid:"

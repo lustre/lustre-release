@@ -95,7 +95,7 @@ EXPORT_SYMBOL(ptlrpcd_add_rqset);
  * Requests that are added to the ptlrpcd queue are sent via
  * ptlrpcd_check->ptlrpc_check_set().
  */
-void ptlrpcd_add_req(struct ptlrpc_request *req)
+int ptlrpcd_add_req(struct ptlrpc_request *req)
 {
         struct ptlrpcd_ctl *pc;
         int rc;
@@ -106,11 +106,6 @@ void ptlrpcd_add_req(struct ptlrpc_request *req)
                 pc = &ptlrpcd_recovery_pc;
         rc = ptlrpc_set_add_new_req(pc, req);
         if (rc) {
-                int (*interpreter)(struct ptlrpc_request *,
-                                   void *, int);
-
-                interpreter = req->rq_interpret_reply;
-
                 /*
                  * Thread is probably in stop now so we need to
                  * kill this rpc as it was not added. Let's call
@@ -118,12 +113,12 @@ void ptlrpcd_add_req(struct ptlrpc_request *req)
                  * so that higher levels might free assosiated
                  * resources.
                 */
-                req->rq_status = -EBADR;
-                interpreter(req, &req->rq_async_args,
-                            req->rq_status);
+
+                ptlrpc_req_interpret(req, -EBADR);
                 req->rq_set = NULL;
                 ptlrpc_req_finished(req);
         }
+        return rc;
 }
 
 static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
