@@ -62,7 +62,7 @@ gen_config() {
 	# and stop to generate the startup logs.
 	start_mds
 	start_ost
-	sleep 5
+	wait_osc_import_state mds ost FULL
 	stop_ost
 	stop_mds
 }
@@ -562,6 +562,7 @@ run_test 20 "remount ro,rw mounts work and doesn't break /etc/mtab"
 test_21a() {
         start_mds
 	start_ost
+	wait_osc_import_state mds ost FULL
 	stop_ost
 	stop_mds
 }
@@ -570,6 +571,7 @@ run_test 21a "start mds before ost, stop ost first"
 test_21b() {
         start_ost
 	start_mds
+	wait_osc_import_state mds ost FULL
 	stop_mds
 	stop_ost
 }
@@ -579,6 +581,8 @@ test_21c() {
         start_ost
 	start_mds
 	start_ost2
+	wait_osc_import_state mds ost2 FULL
+
 	stop_ost
 	stop_ost2
 	stop_mds
@@ -592,9 +596,7 @@ test_22() {
 
 	echo Client mount with ost in logs, but none running
 	start_ost
-	# wait until mds connected to ost and open client connection
-        # 2*ping_interval + 1
-        sleep $((TIMEOUT / 2 + 1))
+	wait_osc_import_state mds ost FULL
 	stop_ost
 	mount_client $MOUNT
 	# check_mount will block trying to contact ost
@@ -1506,6 +1508,7 @@ test_46a() {
 	start_mds || return 1
 	#first client should see only one ost
 	start_ost || return 2
+	wait_osc_import_state mds ost FULL
 	#start_client
 	mount_client $MOUNT || return 3
 	
@@ -1513,10 +1516,11 @@ test_46a() {
 	start ost3 `ostdevname 3` $OST_MOUNT_OPTS || return 5
 	start ost4 `ostdevname 4` $OST_MOUNT_OPTS || return 6
 	start ost5 `ostdevname 5` $OST_MOUNT_OPTS || return 7
-	# wait until ost2-5 is sync
-        # 2*ping_interval + 1
-        sleep $((TIMEOUT / 2 + 1))
-	#second client see both ost's
+        wait_osc_import_state mds ost2 FULL
+        wait_osc_import_state mds ost3 FULL
+        wait_osc_import_state mds ost4 FULL
+        wait_osc_import_state mds ost5 FULL
+        #second client see all ost's
 
 	mount_client $MOUNT2 || return 8
 	$LFS setstripe $MOUNT2 -c -1 || return 9
@@ -1709,12 +1713,8 @@ test_50b() {
 
 	# Wait for client to detect down OST
 	stop_ost || error "Unable to stop OST1"
-	CONN_PROC="osc.$FSNAME-OST0000-osc.ost_server_uuid"
-	CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	while [ ${CONN_STATE} = "FULL" ]; do
-		sleep 1
-		CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	done
+	wait_osc_import_state mds ost DISCONN
+
 	lazystatfs $MOUNT || error "lazystatfs should don't have returned EIO"
 
 	umount_client $MOUNT || error "Unable to unmount client"
@@ -1732,12 +1732,7 @@ test_50c() {
 
 	# Wait for client to detect down OST
 	stop_ost || error "Unable to stop OST1"
-	CONN_PROC="osc.$FSNAME-OST0000-osc.ost_server_uuid"
-	CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	while [ ${CONN_STATE} = "FULL" ]; do
-		sleep 1
-		CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	done
+	wait_osc_import_state mds ost DISCONN
 	lazystatfs $MOUNT || error "lazystatfs failed with one down server"
 
  	umount_client $MOUNT || error "Unable to unmount client"
@@ -1769,30 +1764,19 @@ run_test 50d "lazystatfs client/server conn race =========================="
 test_50e() {
 	local RC1
 	local pid
-	CONN_PROC="osc.$FSNAME-OST0000-osc.ost_server_uuid"
 	
 	reformat_and_config
 	start_mds || return 1
 	#first client should see only one ost
 	start_ost || return 2
-	CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	while [ ${CONN_STATE} != "FULL" ]; do
-		sleep 1
-		CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	done
-
-	lctl set_param llite.$FSNAME-*.lazystatfs=0
+	wait_osc_import_state mds ost FULL
 
 	# Wait for client to detect down OST
 	stop_ost || error "Unable to stop OST1"
-
-	CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	while [ ${CONN_STATE} = "FULL" ]; do
-		sleep 1
-		CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	done
+	wait_osc_import_state mds ost DISCONN
 	
 	mount_client $MOUNT || error "Unable to mount client"
+	lctl set_param llite.$FSNAME-*.lazystatfs=0
 	
 	multiop_bg_pause $MOUNT _f
 	RC1=$?
@@ -1823,25 +1807,17 @@ test_50f() {
 	start_mds || error "Unable to start mds"
 	#first client should see only one ost
 	start_ost || error "Unable to start OST1"
-	start_ost2 || error "Unable to start OST2"
-	CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	while [ ${CONN_STATE} != "FULL" ]; do
-		sleep 1
-		CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	done
+	wait_osc_import_state mds ost FULL
 
-	lctl set_param llite.$FSNAME-*.lazystatfs=0
+	start_ost2 || error "Unable to start OST2"
+	wait_osc_import_state mds ost2 FULL
 
 	# Wait for client to detect down OST
 	stop_ost2 || error "Unable to stop OST2"
-
-	CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	while [ ${CONN_STATE} = "FULL" ]; do
-		sleep 1
-		CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	done
+	wait_osc_import_state mds ost2 DISCONN
 	
 	mount_client $MOUNT || error "Unable to mount client"
+	lctl set_param llite.$FSNAME-*.lazystatfs=0
 	
 	multiop_bg_pause $MOUNT _f
 	RC1=$?
