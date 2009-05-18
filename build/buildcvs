@@ -8,8 +8,11 @@ ldiskfstag="HEAD"
 ldiskfstag_head="b1_8_iam"
 lustreiokittag="HEAD"
 libcfstag="b1_x"
-dmutag=""
+dmutag="" # uDMU
+spltag=""
+zfstag=""
 hg_base_url="http://www.wizy.org/mercurial"
+git_base_url="git@git.lustre.org:%s.git"
 
 export LC_COLLATE=C
 
@@ -308,10 +311,19 @@ case "$lustretag" in
 
     # Branches that have been updated to include
     # the libcfs split should be added here
-    HEAD|b_head_capa|b_hd_cfld|b_hd_changelog|b_hd_sptlrpc|HD_SPTLRPC_BASE|b_som|b_hd_kdmu|b_hd_recov|b_hd_transapi)
+    HEAD|b_head_capa|b_hd_cfld|b_hd_changelog|b_hd_sptlrpc|HD_SPTLRPC_BASE|b_som|b_hd_recov|b_hd_transapi)
         lnettag="HEAD"
         ldiskfstag="$ldiskfstag_head"
         libcfstag="HEAD"
+        ;;
+
+    b_hd_kdmu)
+        # Identical to HEAD + spl and zfs
+        lnettag="HEAD"
+        ldiskfstag="$ldiskfstag_head"
+        libcfstag="HEAD"
+        spltag="pre-alpha"
+        zfstag="top"
         ;;
 
     b_head_libcfs)
@@ -357,5 +369,7 @@ cvs_cmd ldiskfs ldiskfs "$ldiskfstag"
 cvs_cmd lustre-iokit lustre-iokit "$lustreiokittag"
 hg_cmd lustre/zfs-lustre "$hg_base_url" "$dmutag"
 cvs_cmd libcfs libcfs "$libcfstag"
+git_cmd spl spl "$spltag" "$git_base_url"
+git_cmd zfs zfs "$zfstag" "$git_base_url"
 
 [ -a ldiskfs/build ] || ln -sf ../build ldiskfs/build
