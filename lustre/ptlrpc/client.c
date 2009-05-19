@@ -914,6 +914,31 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
         return rc;
 }
 
+/* Conditionally suppress specific console messages */
+static int ptlrpc_console_allow(struct ptlrpc_request *req)
+{
+        __u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
+        int err;
+
+        /* Suppress particular reconnect errors which are to be expected.  No
+         * errors are suppressed for the initial connection on an import */
+        if ((lustre_handle_is_used(&req->rq_import->imp_remote_handle)) &&
+            (opc == OST_CONNECT || opc == MDS_CONNECT || opc == MGS_CONNECT)) {
+
+                /* Suppress timed out reconnect requests */
+                if (req->rq_timedout)
+                        return 0;
+
+                /* Suppress unavailable/again reconnect requests */
+                err = lustre_msg_get_status(req->rq_repmsg);
+                if (err == -ENODEV || err == -EAGAIN)
+                        return 0;
+        }
+
+        return 1;
+}
+
+
 static int ptlrpc_check_status(struct ptlrpc_request *req)
 {
         int err;
@@ -935,6 +960,21 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
         } else if (err > 0) {
                 /* XXX: translate this error from net to host */
                 DEBUG_REQ(D_INFO, req, "status is %d", err);
+        }
+
+        if (lustre_msg_get_type(req->rq_repmsg) == PTL_RPC_MSG_ERR) {
+                struct obd_import *imp = req->rq_import;
+                __u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
+
+                if (ptlrpc_console_allow(req))
+                        LCONSOLE_ERROR_MSG(0x011,"an error occurred while "
+                                           "communicating with %s. The %s "
+                                           "operation failed with %d\n",
+                                           libcfs_nid2str(
+                                           imp->imp_connection->c_peer.nid),
+                                           ll_opcode2str(opc), err);
+
+                RETURN(err < 0 ? err : -EINVAL);
         }
 
         RETURN(err);
@@ -1468,6 +1508,10 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
         int rc = 0;
         ENTRY;
 
+        spin_lock(&req->rq_lock);
+        req->rq_timedout = 1;
+        spin_unlock(&req->rq_lock);
+
         DEBUG_REQ(D_WARNING, req, "Request x"LPU64" sent from %s to NID %s "
                   CFS_DURATION_T"s ago has %s (limit "CFS_DURATION_T"s).\n",
                   req->rq_xid, imp ? imp->imp_obd->obd_name : "<?>",
@@ -1478,10 +1522,6 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
 
         if (imp != NULL && obd_debug_peer_on_timeout)
                 LNetCtl(IOC_LIBCFS_DEBUG_PEER, &imp->imp_connection->c_peer);
-
-        spin_lock(&req->rq_lock);
-        req->rq_timedout = 1;
-        spin_unlock(&req->rq_lock);
 
         ptlrpc_unregister_reply(req, async_unlink);
         ptlrpc_unregister_bulk(req, async_unlink);

@@ -1208,8 +1208,9 @@ static void target_finish_recovery(struct obd_device *obd)
         /* when recovery finished, cleanup orphans on mds and ost */
         if (OBT(obd) && OBP(obd, postrecov)) {
                 int rc = OBP(obd, postrecov)(obd);
-                LCONSOLE_WARN("%s: recovery %s: rc %d\n", obd->obd_name,
-                              rc < 0 ? "failed" : "complete", rc);
+                if (rc < 0)
+                        LCONSOLE_WARN("%s: Post recovery failed, rc %d\n",
+                                      obd->obd_name, rc);
         }
 
         obd->obd_recovery_end = cfs_time_current_sec();
@@ -1363,7 +1364,7 @@ static void check_and_start_recovery_timer(struct obd_device *obd)
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 return;
         }
-        CWARN("%s: starting recovery timer\n", obd->obd_name);
+        CDEBUG(D_HA, "%s: starting recovery timer\n", obd->obd_name);
         obd->obd_recovery_start = cfs_time_current_sec();
         /* minimum */
         obd->obd_recovery_timeout = OBD_RECOVERY_FACTOR * obd_timeout;
@@ -1748,11 +1749,10 @@ static int target_recovery_thread(void *arg)
 
         /* If some clients haven't replayed requests in time, evict them */
         if (obd->obd_abort_recovery) {
-                int stale;
                 CERROR("lock replay is aborted\n");
-                stale = class_disconnect_stale_exports(obd, lock_replay_done,
-                                                       exp_flags_from_obd(obd) |
-                                                       OBD_OPT_ABORT_RECOV);
+                class_disconnect_stale_exports(obd, lock_replay_done,
+                                               exp_flags_from_obd(obd) |
+                                               OBD_OPT_ABORT_RECOV);
                 abort_lock_replay_queue(obd);
         }
         LASSERT(list_empty(&obd->obd_lock_replay_queue));
@@ -1844,11 +1844,11 @@ EXPORT_SYMBOL(target_recovery_fini);
 static void target_recovery_expired(unsigned long castmeharder)
 {
         struct obd_device *obd = (struct obd_device *)castmeharder;
-        LCONSOLE_WARN("%s: recovery timed out; %d clients never reconnected "
-                      "after %lds (%d clients did)\n",
-                      obd->obd_name, obd->obd_recoverable_clients,
-                      cfs_time_current_sec()- obd->obd_recovery_start,
-                      obd->obd_connected_clients);
+        CDEBUG(D_HA, "%s: recovery timed out; %d clients never reconnected "
+               "after %lds (%d clients did)\n",
+               obd->obd_name, obd->obd_recoverable_clients,
+               cfs_time_current_sec()- obd->obd_recovery_start,
+               obd->obd_connected_clients);
 
         spin_lock_bh(&obd->obd_processing_task_lock);
         obd->obd_version_recov = 1;

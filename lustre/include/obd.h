@@ -1073,6 +1073,7 @@ struct obd_device {
         int                              obd_max_recoverable_clients;
         int                              obd_connected_clients;
         int                              obd_recoverable_clients;
+        int                              obd_stale_clients;
         int                              obd_delayed_clients;
         spinlock_t                       obd_processing_task_lock; /* BH lock (timer) */
         __u64                            obd_next_recovery_transno;
