@@ -617,12 +617,12 @@ Index: linux-2.6.5-7.311/fs/ext3/xattr.c
 +	if (value) {
 +		int offs = min_offs - value_len;
 +		/* use last to create new entry */
++		memset(last, 0, esize);
 +		last->e_name_len = strlen(name);
 +		last->e_name_index = name_index;
 +		last->e_value_offs = cpu_to_le16(offs);
 +		last->e_value_size = cpu_to_le32(value_len);
 +		last->e_hash = last->e_value_block = 0;
-+		memset(last->e_name, 0, esize);
 +		memcpy(last->e_name, name, last->e_name_len);
 +		if (start + offs + value_len > end)
 +			printk("ALERT at %s:%d: 0x%p + %d + %zd > 0x%p\n",
