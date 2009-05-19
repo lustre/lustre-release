@@ -2,8 +2,8 @@
 
 set -e
 
-# bug number:  13129 13129 10124 
-ALWAYS_EXCEPT="2     3     15c   $REPLAY_DUAL_EXCEPT"
+# bug number:  10124
+ALWAYS_EXCEPT="15c   $REPLAY_DUAL_EXCEPT"
 
 SAVE_PWD=$PWD
 PTLDEBUG=${PTLDEBUG:--1}
@@ -26,7 +26,7 @@ init_test_env $@
 
 remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="1 2 3 4 5 14"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="21b"
 
 build_test_filter
 
