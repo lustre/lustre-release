@@ -648,7 +648,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         struct obd_device *obd = exp->exp_obd;
         void *wait_handle;
         int total_size = 0;
-        int rec_pending = 0;
+        int quota_pending[2] = {0, 0};
         unsigned int qcids[MAXQUOTAS] = {0, 0};
         ENTRY;
 
@@ -662,7 +662,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         /* we try to get enough quota to write here, and let ldiskfs
          * decide if it is out of quota or not b=14783 */
         lquota_chkquota(filter_quota_interface_ref, obd, oa->o_uid, oa->o_gid,
-                        niocount, &rec_pending, oti, inode, obj->ioo_bufcnt);
+                        niocount, quota_pending, oti, inode, obj->ioo_bufcnt);
 
         iobuf = filter_iobuf_get(&obd->u.filter, oti);
         if (IS_ERR(iobuf))
@@ -792,9 +792,9 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         fsfilt_check_slow(obd, now, "commitrw commit");
 
 cleanup:
-        if (rec_pending)
+        if (quota_pending[0] || quota_pending[1])
                 lquota_pending_commit(filter_quota_interface_ref, obd, oa->o_uid,
-                                      oa->o_gid, rec_pending);
+                                      oa->o_gid, quota_pending);
 
         filter_grant_commit(exp, niocount, res);
 

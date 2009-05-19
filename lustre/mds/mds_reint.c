@@ -830,7 +830,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         unsigned int qcids[MAXQUOTAS] = { current->fsuid, current->fsgid };
         unsigned int qpids[MAXQUOTAS] = { 0, 0 };
         struct lvfs_dentry_params dp = LVFS_DENTRY_PARAMS_INIT;
-        int rec_pending = 0;
+        int quota_pending[2] = {0, 0};
         unsigned int gid = current->fsgid;
         ENTRY;
 
@@ -901,7 +901,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
          * FIXME: after CMD is used, pointer to obd_trans_info* couldn't
          * be NULL, b=14840 */
         lquota_chkquota(mds_quota_interface_ref, obd,
-                        current->fsuid, gid, 1, &rec_pending, NULL, NULL, 0);
+                        current->fsuid, gid, 1, quota_pending, NULL, NULL, 0);
 
         switch (type) {
         case S_IFREG:{
@@ -1027,9 +1027,9 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 
 cleanup:
         err = mds_finish_transno(mds, dir, handle, req, rc, 0, 0);
-        if (rec_pending)
+        if (quota_pending[0] || quota_pending[1])
                 lquota_pending_commit(mds_quota_interface_ref, obd,
-                                      current->fsuid, gid, rec_pending);
+                                      current->fsuid, gid, quota_pending);
 
         if (rc && created) {
                 /* Destroy the file we just created.  This should not need
