@@ -3639,7 +3639,7 @@ test_100() {
 			error "local: $LPORT > 1024, remote: $RPORT"
 		fi
 	done
-	[ "$rc" = 0 ] || error "privileged port not found" )
+	[ "$rc" = 0 ] || { error "privileged port not found"; exit 1; } )
 }
 run_test 100 "check local port using privileged port ==========="
 
