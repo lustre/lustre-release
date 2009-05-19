@@ -15,41 +15,13 @@ tbd Sun Microsystems, Inc.
 	  more information, please refer to bugzilla 17630.
 
 Severity   : enhancement
-Bugzilla   : 19024
-Description: Update kernel to RHEL5.3 2.6.18-128.1.6.el5.
-
-Severity   : enhancement
 Bugzilla   : 19212
 Description: Update kernel to SLES10 SP2 2.6.16.60-0.37.
-
-Severity   : enhancement
-Bugzilla   : 12182
-Description: Caching OSS
-Details    : introduce data caching on the OSS. The OSS now relies on the linux
-             kernel page cache to keep recently accessed data in memory.
-	     It is worth noting that all write requests are still flushed
-	     synchronously as in lustre 1.6.
-
-Severity   : enhancement
-Bugzilla   : 10609
-Description: version based recovery
-Details    : introduce finer grained recovery able to detect transaction
-             dependencies and can deal with transaction gaps.
-
-Severity   : enhancement
-Bugzilla   : 3055
-Description: Enable adaptive timeouts by default
 
 Severity   : normal
 Bugzilla   : 19223
 Descriptoin: correctly skip time estimate if in recovery
 Details    : rq_send_state insn't bitmask so using bitwise ops is forbid.
-
-Severity   : normal
-Bugzilla   : 18192
-Descriptoin: fix goal inodes
-Details    : Allocate inodes for llog in last inode group for avoid broke
-             recovery.
 
 Severity   : normal
 Bugzilla   : 18399
@@ -140,16 +112,6 @@ Bugzilla   : 18049
 Descriptoin: aborting recovery hang on MDS
 Details    : don't throttle destroy RPCs for the MDT.
 
-Severity   : enhancement
-Bugzilla   : 16919
-Descriptoin: Don't sync journal after every i/o
-Details    : Implement write RPC replay to allow server replies for write RPCs
-	     before data is on disk. However, this feature is disabled by
-	     default since some issues leading to data corruptions have been
-	     found during recovery (e.g. bug 19128). This feature can be enabled
-	     by running the following command on the OSSs:
-	     lctl set_param obdfilter.*.sync_journal=0
-
 Severity   : low
 Bugzilla   : 18016
 Description: Slow reads beyond 8Tb offsets.
@@ -199,6 +161,44 @@ Description: MMP check in ext3_remount() fails without displaying any error
 Details    : When multiple mount protection fails during remount, proper error
 	     should be returned
 
+-------------------------------------------------------------------------------
+
+tbd Sun Microsystems, Inc.
+        * version 1.8.0.1
+        * Support for kernels:
+         2.6.16.60-0.31 (SLES 10),
+         2.6.18-128.1.6.el5 (RHEL 5),
+         2.6.22.14 vanilla (kernel.org)
+        * Client support for unpatched kernels:
+          (see http://wiki.lustre.org/index.php?title=Patchless_Client)
+          2.6.16 - 2.6.22 vanilla (kernel.org)
+        * Recommended e2fsprogs version: 1.40.11-sun1
+        * File join has been disabled, refer to Bugzilla 16929.
+        * A new Lustre ADIO driver is available for MPICH2-1.0.7.
+        * NFS export disabled when stack size < 8192. Since the NFSv4 export of
+          Lustre filesystem with 4K stack may cause a stack overflow. For more
+          information, please refer to bugzilla 17630.
+
+Severity   : enhancement
+Bugzilla   : 19024
+Description: Update to RHEL5.3 kernel-2.6.18-128.1.6.el5.
+
+Severity   : enhancement
+Bugzilla   : 17671
+Description: Update OFED release to 1.4.1 RC4
+
+Severity   : major, only with big OST
+Bugzilla   : 18518
+Description: Very poor metadata performance on Infiniband lustre configuration
+Details    : OST object precreation becomes very slow on big OSTs. This is due
+	     to the ialloc patch spending too much time scanning groups.
+
+Severity   : normal
+Frequency  : during recovery
+Bugzilla   : 18192
+Description: don't mix llog inodes with normal.
+Details    : allocate inodes for log in last inode group
+
 Severity   : major
 Frequency  : rare
 Bugzilla   : 19495
@@ -215,6 +215,7 @@ Details    : This patch fixes:
                 -                RETURN(0);
 
 -------------------------------------------------------------------------------
+
 2008-12-31 Sun Microsystems, Inc.
 	* version 1.8.0
 	* Support for kernels:
@@ -259,6 +260,35 @@ Details    : This patch fixes:
 	* NFS export disabled when stack size < 8192. Since the NFSv4 export of
 	  Lustre filesystem with 4K stack may cause a stack overflow. For more
 	  information, please refer to bugzilla 17630.
+
+Severity   : enhancement
+Bugzilla   : 12182
+Description: Caching OSS
+Details    : introduce data caching on the OSS. The OSS now relies on the linux
+	     kernel page cache to keep recently accessed data in memory.
+	     It is worth noting that all write requests are still flushed
+	     synchronously as in lustre 1.6.
+
+Severity   : enhancement
+Bugzilla   : 10609
+Description: Version based recovery
+Details    : introduce finer grained recovery able to detect transaction
+	     dependencies and can deal with transaction gaps caused by clients
+	     failing at the same time as the server.
+
+Severity   : enhancement
+Bugzilla   : 3055
+Description: Enable adaptive timeouts by default
+Details    : The Lustre timeout value in /proc/sys/lustre/timeout is now
+	     managed dynamically based on server load and should not need
+	     to be tuned manually based on cluster size. This allows Lustre
+	     to work under a wider variety of system sizes and loads, without
+	     unnecessarily causing lengthy recovery times.
+
+Severity   : enhancement
+Bugzilla   : 15899
+Description: Add OST Pools support
+Details    : File striping can now be set to use an arbitrary pool of OSTs
 
 Severity   : enhancement
 Bugzilla   : 17974
@@ -514,10 +544,6 @@ Details    : add workaround for get valid ost count for avoid warnings about
 	     drop too big messages, not init llog cat under semphore which
 	     can be blocked on reconnect and break normal replay, fix access
 	     to wrong pointer.
-
-Severity   : enhancement
-Bugzilla   : 15899
-Description: File striping can now be set to use an arbitrary pool of OSTs.
 
 Severity   : enhancement
 Bugzilla   : 16573
@@ -1045,6 +1071,15 @@ Details    : With AT enabled, the recovery window can be excessively long (6000+
 	     timeout no longer depends on the service time, it is set to
 	     INITIAL_CONNECT_TIMEOUT now) and clients report the old service
 	     time via pb_service_time.
+
+Bugzilla   : 16919
+Descriptoin: Don't sync journal after every i/o
+Details    : Implement write RPC replay to allow server replies for write RPCs
+	     before data is on disk. However, this feature is disabled by
+	     default since some issues leading to data corruptions have been
+	     found during recovery (e.g. bug 19128). This feature can be enabled
+	     by running the following command on the OSSs:
+	     lctl set_param obdfilter.*.sync_journal=0
 
 Severity   : normal
 Bugzilla   : 16522
