@@ -1020,7 +1020,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         /* Always returning LOOKUP lock if open succesful to guard
            dentry on client. */
         int lock_flags = 0;
-        int rec_pending = 0;
+        int quota_pending[2] = {0, 0};
         int use_parent, need_open_lock;
         unsigned int gid = current->fsgid;
         ENTRY;
@@ -1208,7 +1208,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                  * FIXME: after CMD is used, pointer to obd_trans_info* couldn't
                  * be NULL, b=14840 */
                 lquota_chkquota(mds_quota_interface_ref, obd,
-                                current->fsuid, gid, 1, &rec_pending,
+                                current->fsuid, gid, 1, quota_pending,
                                 NULL, NULL, 0);
 
                 ldlm_reply_set_disposition(rep, DISP_OPEN_CREATE);
@@ -1388,9 +1388,9 @@ found_child:
                                 rep ? rep->lock_policy_res1 : 0, 0);
 
  cleanup_no_trans:
-        if (rec_pending)
+        if (quota_pending[0] || quota_pending[1])
                 lquota_pending_commit(mds_quota_interface_ref, obd,
-                                      current->fsuid, gid, rec_pending);
+                                      current->fsuid, gid, quota_pending);
         switch (cleanup_phase) {
         case 2:
                 if (rc && created) {
