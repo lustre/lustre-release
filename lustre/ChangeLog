@@ -28,7 +28,8 @@ Details    : This patch fixes:
                 for user and group, but only send one return via "pending".
                 In most cases, the pendings should be same. But that is not
                 always the case.
-             2. If quotaoff runs between lquota_chkquota() and                lquota_pending_commit(), the same thing will happen too.
+             2. If quotaoff runs between lquota_chkquota() and
+                lquota_pending_commit(), the same thing will happen too.
                 That is why it comes:
                 -        if (!ll_sb_any_quota_active(qctxt->lqc_sb))
                 -                RETURN(0);
