@@ -667,7 +667,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         struct obd_device *obd = exp->exp_obd;
         void *wait_handle = NULL;
         int total_size = 0;
-        int quota_rec_pending = 0, quota_pages = 0;
+        int quota_pending[2] = {0, 0}, quota_pages = 0;
         unsigned int qcids[MAXQUOTAS] = {0, 0};
         int sync_journal_commit = obd->u.filter.fo_syncjournal;
         ENTRY;
@@ -733,7 +733,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         /* we try to get enough quota to write here, and let ldiskfs
          * decide if it is out of quota or not b=14783 */
         lquota_chkquota(filter_quota_interface_ref, obd, oa->o_uid, oa->o_gid,
-                        quota_pages, &quota_rec_pending, oti, inode,
+                        quota_pages, quota_pending, oti, inode,
                         obj->ioo_bufcnt);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
@@ -828,9 +828,9 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         fsfilt_check_slow(obd, now, "commitrw commit");
 
 cleanup:
-        if (quota_rec_pending)
+        if (quota_pending[0] || quota_pending[1])
                 lquota_pending_commit(filter_quota_interface_ref, obd, oa->o_uid,
-                                      oa->o_gid, quota_rec_pending);
+                                      oa->o_gid, quota_pending);
 
         filter_grant_commit(exp, niocount, res);
 
