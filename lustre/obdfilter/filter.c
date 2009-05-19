@@ -166,18 +166,19 @@ int filter_finish_transno(struct obd_export *exp, struct inode *inode,
                        fed->fed_lr_idx, fed->fed_lr_off);
                 err = -EINVAL;
         } else {
+                class_export_get(exp); /* released when the cb is called */
                 if (!force_sync)
                         force_sync = fsfilt_add_journal_cb(exp->exp_obd,
                                                            last_rcvd,
                                                            oti->oti_handle,
                                                            filter_commit_cb,
-                                                           class_export_get(exp));
+                                                           exp);
 
                 err = fsfilt_write_record(exp->exp_obd, filter->fo_rcvd_filp,
                                           lcd, sizeof(*lcd), &off,
                                           force_sync | exp->exp_need_sync);
                 if (force_sync)
-                        filter_commit_cb(exp->exp_obd, last_rcvd, class_export_get(exp), err);
+                        filter_commit_cb(exp->exp_obd, last_rcvd, exp, err);
         }
         if (err) {
                 log_pri = D_ERROR;
