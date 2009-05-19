@@ -420,12 +420,12 @@ typedef struct {
          * can finish a block_write or inode_create rpc. It updates the pending
          * record of block and inode, acquires quota if necessary */
         int (*quota_chkquota) (struct obd_device *, unsigned int, unsigned int,
-                               int, int *, quota_acquire,
+                               int, int [], quota_acquire,
                                struct obd_trans_info *, struct inode *, int);
 
         /* For quota client, the actions after the pending write is committed */
         int (*quota_pending_commit) (struct obd_device *, unsigned int,
-                                     unsigned int, int);
+                                     unsigned int, int []);
 #endif
         /* For quota client, poll if the quota check done */
         int (*quota_poll_check) (struct obd_export *, struct if_quotacheck *);
@@ -637,7 +637,7 @@ static inline int lquota_acquire(quota_interface_t *interface,
 static inline int lquota_chkquota(quota_interface_t *interface,
                                   struct obd_device *obd,
                                   unsigned int uid, unsigned int gid, int count,
-                                  int *flag, struct obd_trans_info *oti,
+                                  int pending[2], struct obd_trans_info *oti,
                                   struct inode *inode, int frags)
 {
         int rc;
@@ -645,7 +645,7 @@ static inline int lquota_chkquota(quota_interface_t *interface,
 
         QUOTA_CHECK_OP(interface, chkquota);
         QUOTA_CHECK_OP(interface, acquire);
-        rc = QUOTA_OP(interface, chkquota)(obd, uid, gid, count, flag,
+        rc = QUOTA_OP(interface, chkquota)(obd, uid, gid, count, pending,
                                            QUOTA_OP(interface, acquire), oti,
                                            inode, frags);
         RETURN(rc);
@@ -654,7 +654,7 @@ static inline int lquota_chkquota(quota_interface_t *interface,
 static inline int lquota_pending_commit(quota_interface_t *interface,
                                         struct obd_device *obd,
                                         unsigned int uid, unsigned int gid,
-                                        int pending)
+                                        int pending[2])
 {
         int rc;
         ENTRY;
