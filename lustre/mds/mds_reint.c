@@ -320,16 +320,17 @@ int mds_finish_transno(struct mds_obd *mds, struct inode **inodes, void *handle,
         } else {
                 struct obd_export *exp = req->rq_export;
 
+                class_export_get(exp); /* released once the cb is called */
                 if (!force_sync)
                         force_sync = fsfilt_add_journal_cb(obd, transno,
                                                            handle, mds_commit_cb,
-                                                           class_export_get(exp));
+                                                           exp);
 
                 err = fsfilt_write_record(obd, mds->mds_rcvd_filp, lcd,
                                           sizeof(*lcd), &off,
                                           force_sync | exp->exp_need_sync);
                 if (force_sync)
-                        mds_commit_cb(obd, transno, class_export_get(exp), err);
+                        mds_commit_cb(obd, transno, exp, err);
         }
 
         if (err) {
