@@ -36,6 +36,14 @@
 	  Lustre filesystem with 4K stack may cause a stack overflow. For more
 	  information, please refer to bugzilla 17630.
 
+Severity   : critical, only with RHEL4/SLES9 MDS
+Bugzilla   : 19453
+Description: user xattr corruption
+Details    : setting extended attributes can corrupt other attributes stored in
+	     the inode body. Both user & lustre internal (LOV EA) attributes
+	     are concerned. In the latter case, the lustre filesystem can be
+	     damaged.
+
 Severity   : enhancement
 Bugzilla   : 18289
 Description: allow the use of the kernel provided OFED stack
@@ -46,7 +54,7 @@ Details    : This patch allows for lbuild to use the OFED stack provided
 
 Severity   : enhancement
 Bugzilla   : 18775
-Descriptoin: improve lctl set/get_param
+Description: improve lctl set/get_param
 Details    : handle the bad options, support more than one arguments,
 	     add '-F' option to append the indicator to the parameters.
 
