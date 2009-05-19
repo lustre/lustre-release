@@ -2,7 +2,7 @@
         * version 1.6.7.2
         * Support for kernels:
 	 2.6.5-7.314 (SLES 9),
-	 2.6.9-67.0.22.EL (RHEL 4),
+	 2.6.9-78.0.22.EL (RHEL 4),
 	 2.6.16.60-0.37 (SLES 10),
 	 2.6.18-92.1.17.el5 (RHEL 5),
 	 2.6.22.14 vanilla (kernel.org)
@@ -43,6 +43,10 @@ Details    : setting extended attributes can corrupt other attributes stored in
 	     the inode body. Both user & lustre internal (LOV EA) attributes
 	     are concerned. In the latter case, the lustre filesystem can be
 	     damaged.
+
+Severity   : enhancement
+Bugzilla   : 16504
+Description: Update kernel to RHEL4.7 2.6.9-78.0.22.
 
 Severity   : enhancement
 Bugzilla   : 18289
