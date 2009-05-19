@@ -62,6 +62,20 @@ Severity   : enhancement
 Bugzilla   : 19212
 Description: Update kernel to SLES10 SP2 2.6.16.60-0.37.
 
+Severity   : major
+Frequency  : rare
+Bugzilla   : 19495
+Description: fix lqs' reference which won't be put in some situations
+Details    : This patch fixes:
+             1. In quota_check_common(), this function will check quota
+                for user and group, but only send one return via "pending".
+                In most cases, the pendings should be same. But that is not
+                always the case.
+             2. If quotaoff runs between lquota_chkquota() and                lquota_pending_commit(), the same thing will happen too.
+                That is why it comes:
+                -        if (!ll_sb_any_quota_active(qctxt->lqc_sb))
+                -                RETURN(0);
+
 --------------------------------------------------------------------------
 
 2009-04-06 Sun Microsystems, Inc.
