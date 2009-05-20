@@ -822,7 +822,7 @@ test_36() { #bug 16417
             return 1;
         fi
         let i=i+1
-            done
+    done
 }
 run_test 36 "handle ESTALE/open-unlink corectly"
 
