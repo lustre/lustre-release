@@ -143,6 +143,7 @@ static int lov_obd_unregister_page_removal_cb(struct obd_device *obd,
                                               obd_page_removal_cb_t func)
 {
         struct lov_obd *lov = &obd->u.lov;
+        int i, rc = 0;
 
         if (lov->lov_page_removal_cb && lov->lov_page_removal_cb != func)
                 return -EINVAL;
@@ -150,7 +151,16 @@ static int lov_obd_unregister_page_removal_cb(struct obd_device *obd,
         lov->lov_page_removal_cb = NULL;
         lov->lov_page_pin_cb = NULL;
 
-        return 0;
+        lov_getref(obd);
+        for (i = 0; i < lov->desc.ld_tgt_count; ++i) {
+                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_exp)
+                        continue;
+                rc |= obd_unregister_page_removal_cb(
+                                lov->lov_tgts[i]->ltd_exp->exp_obd, func);
+        }
+        lov_putref(obd);
+
+        return rc;
 }
 
 static int lov_obd_register_lock_cancel_cb(struct obd_device *obd,
@@ -2929,20 +2939,20 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                 rc = lov_fiemap(lov, keylen, key, vallen, val, lsm);
                 GOTO(out, rc);
         } else if (KEY_IS(KEY_OFF_RPCSIZE)) {
-		__u64 *offset = val;
+                __u64 *offset = val;
                 struct lov_tgt_desc *tgt;
                 struct lov_oinfo *loi;
-		int stripe;
+                int stripe;
 
-		LASSERT(*vallen == sizeof(__u64));
-		stripe = lov_stripe_number(lsm, *offset);
-		loi = lsm->lsm_oinfo[stripe];
-		tgt = lov->lov_tgts[loi->loi_ost_idx];
+                LASSERT(*vallen == sizeof(__u64));
+                stripe = lov_stripe_number(lsm, *offset);
+                loi = lsm->lsm_oinfo[stripe];
+                tgt = lov->lov_tgts[loi->loi_ost_idx];
                 if (!tgt || !tgt->ltd_active)
                         GOTO(out, rc = -ESRCH);
-		rc = obd_get_info(tgt->ltd_exp, keylen, key, vallen, val, NULL);
-		GOTO(out, rc);	
-	}
+                rc = obd_get_info(tgt->ltd_exp, keylen, key, vallen, val, NULL);
+                GOTO(out, rc);
+        }
 
         rc = -EINVAL;
 out:
