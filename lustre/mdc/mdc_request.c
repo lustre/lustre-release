@@ -828,14 +828,7 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
                                   "= %d", rc);
                         if (rc > 0)
                                 rc = -rc;
-                } else if (mod == NULL) {
-                        if (req->rq_import->imp_replayable)
-                                CERROR("Unexpected: can't find md_open_data,"
-                                       "but close succeeded with replayable imp"
-                                       "Please tell "
-                                       "http://bugzilla.lustre.org/\n");
                 }
-
                 body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
                 if (body == NULL)
                         rc = -EPROTO;
