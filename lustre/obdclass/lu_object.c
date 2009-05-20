@@ -1689,6 +1689,11 @@ void fid_pack(struct lu_fid_pack *pack, const struct lu_fid *fid,
         } else {
                 unsigned char *small_befider;
 
+                /* as lower 24 bits of FID_SEQ_START are zero, no need to
+                 * subtract its value from seq */
+
+                CLASSERT((FID_SEQ_START & 0xffffff) == 0);
+
                 small_befider = (unsigned char *)befider;
 
                 small_befider[0] = seq >> 16;
