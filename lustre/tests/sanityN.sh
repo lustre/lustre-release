@@ -423,17 +423,17 @@ test_22() { # Bug 9926
 	cat $DIR2/d21/no_joined || error "cat error"
 	rm -rf $DIR2/d21/no_joined || error "unlink normal file error"
 }
-run_test 22 " After joining in one dir,  open/close unlink file in anther dir" 
+run_test 22 " After joining in one dir,  open/close unlink file in anther dir"
 
 test_23() { # Bug 5972
 	echo "others should see updated atime while another read" > $DIR1/f23
-	
+
 	# clear the lock(mode: LCK_PW) gotten from creating operation
 	cancel_lru_locks osc
-	
-	time1=`date +%s`	
+
+	time1=`date +%s`
 	sleep 2
-	
+
 	multiop_bg_pause $DIR1/f23 or20_c || return 1
 	MULTIPID=$!
 
@@ -458,7 +458,7 @@ test_24() {
 	lfs df -i $DIR2 || error "lfs df -i $DIR2 failed"
 	lfs df $DIR1/$tfile || error "lfs df $DIR1/$tfile failed"
 	lfs df -ih $DIR2/$tfile || error "lfs df -ih $DIR2/$tfile failed"
-	
+
 	OSC=`lctl dl | awk '/-osc-|OSC.*MNT/ {print $4}' | head -n 1`
 	lctl --device %$OSC deactivate
 	lfs df -i || error "lfs df -i with deactivated OSC failed"
@@ -502,8 +502,8 @@ test_26b() {
         chmod a+x $DIR2/$tfile
         mt1=`stat -c %Y $DIR1/$tfile`
         mt2=`stat -c %Y $DIR2/$tfile`
-        
-        if [ x"$mt1" != x"$mt2" ]; then 
+
+        if [ x"$mt1" != x"$mt2" ]; then
                 error "not equal mtime, client1: "$mt1", client2: "$mt2"."
         fi
 }
@@ -516,11 +516,11 @@ test_27() {
 	DD2_PID=$!
 	sleep 0.050s
 	log "dd 1 started"
-	
+
 	dd if=/dev/zero of=$DIR1/$tfile bs=$((16384-1024))k conv=notrunc count=1 seek=4 &
 	DD1_PID=$!
 	log "dd 2 started"
-	
+
 	sleep 1
 	dd if=/dev/zero of=$DIR1/$tfile bs=8k conv=notrunc count=1 seek=0
 	log "dd 3 finished"
@@ -538,7 +538,7 @@ test_28() { # bug 9977
 	dd if=/dev/zero of=$DIR1/$tfile bs=1024k count=2
 
 	$LCTL --device $ostID destroy "${tOBJID}"
-    
+
 	# reading of 1st stripe should pass
 	dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 || error
 	# reading of 2nd stripe should fail (this stripe was destroyed)
@@ -659,7 +659,7 @@ test_32b() { # bug 11270
                 save_lustre_params $node "ldlm.namespaces.filter-*.contention_seconds" >> $p
         done
         clear_llite_stats
-        # agressive lockless i/o settings 
+        # agressive lockless i/o settings
         for node in $(osts_nodes); do
                 do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 2000000; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 0; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 60'
         done
@@ -668,7 +668,7 @@ test_32b() { # bug 11270
                 dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
                 dd if=/dev/zero of=$DIR2/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
         done
-        [ $(calc_llite_stats lockless_write_bytes) -ne 0 ] || error "lockless i/o was not triggered" 
+        [ $(calc_llite_stats lockless_write_bytes) -ne 0 ] || error "lockless i/o was not triggered"
         # disable lockless i/o (it is disabled by default)
         for node in $(osts_nodes); do
                 do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 0; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 32; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 0'
@@ -682,7 +682,7 @@ test_32b() { # bug 11270
                 dd if=/dev/zero of=$DIR2/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
         done
         [ $(calc_llite_stats lockless_write_bytes) -eq 0 ] ||
-                error "lockless i/o works when disabled" 
+                error "lockless i/o works when disabled"
         rm -f $DIR1/$tfile
         restore_lustre_params <$p
         rm -f $p
@@ -717,7 +717,7 @@ test_33() { #16129
                 # wait for a lock timeout
                 sleep 4
                 lock_out=$(do_nodes $(osts_nodes) "lctl get_param -n ldlm.namespaces.filter-*.lock_timeouts" | calc_sum)
-                if [ $OPER == "timeout" ] ; then 
+                if [ $OPER == "timeout" ] ; then
                         if [ $lock_in == $lock_out ]; then
                                 error "no lock timeout happened"
                         else
@@ -761,11 +761,11 @@ test_35() { # bug 17645
                 createmany -o $MOUNT2/$tfile/a 4000 &
                 pid1=$!
                 sleep 1
-        
+
                 # Let's make conflict and bl_ast
                 ls -la $MOUNT1/$tfile > /dev/null &
                 pid2=$!
-                
+
                 log "Wait for $pid1 $pid2 for $timeout sec..."
                 sleep $timeout
                 kill -9 $pid1 $pid2 > /dev/null 2>&1
@@ -792,27 +792,37 @@ run_test 35 "-EINTR cp_ast vs. bl_ast race does not evict client"
 
 test_36() { #bug 16417
     local SIZE
-    mkdir -p $MOUNT1/$tdir
-    lfs setstripe -c -1 $MOUNT1/$tdir
+    local SIZE_B
+    local i
+
+    mkdir -p $DIR1/$tdir
+    $LFS setstripe -c -1 $DIR1/$tdir
     i=0
-    SIZE=100
+    SIZE=50
+    let SIZE_B=SIZE*1024*1024
 
     while [ $i -le 10 ]; do
-	lctl mark "start test"
-	before=$($LFS df | awk '{if ($1 ~/^filesystem/) {print $5; exit} }')
-	dd if=/dev/zero of=$MOUNT1/$tdir/file000 bs=1M count=$SIZE
-	dd if=$MOUNT2/$tdir/file000 of=/dev/null bs=1M count=$SIZE &
-	read_pid=$!
-	sleep 0.1
-	rm -f $MOUNT1/$tdir/file000
-	wait $read_pid
-	after=$($LFS df | awk '{if ($1 ~/^filesystem/) {print $5; exit} }')
-	if [ $before -gt $after ]; then
-	    error "space leaked"
-	    exit;
-	fi
-	let i=i+1
-    done
+        lctl mark "start test"
+        local before=$($LFS df | awk '{if ($1 ~/^filesystem/) {print $5; exit} }')
+        dd if=/dev/zero of=$DIR1/$tdir/file000 bs=1M count=$SIZE
+        sync
+        sleep 1
+        local after_dd=$($LFS df | awk '{if ($1 ~/^filesystem/) {print $5; exit} }')
+        multiop_bg_pause $DIR2/$tdir/file000 O_r${SIZE_B}c || return 3
+        read_pid=$!
+        rm -f $DIR1/$tdir/file000
+        kill -USR1 $read_pid
+        wait $read_pid
+        sleep 1
+        local after=$($LFS df | awk '{if ($1 ~/^filesystem/) {print $5; exit} }')
+        echo "*** cycle($i) *** before($before):after_dd($after_dd):after($after)"
+        # this free space! not used
+        if [ $after_dd -ge $after ]; then
+            error "space leaked"
+            return 1;
+        fi
+        let i=i+1
+            done
 }
 run_test 36 "handle ESTALE/open-unlink corectly"
 
