@@ -879,10 +879,8 @@ int mdc_close(struct obd_export *exp, struct mdc_op_data *data, struct obdo *oa,
                                   "= %d", rc);
                         if (rc > 0)
                                 rc = -rc;
-                } else if (och->och_mod == NULL) {
-                        CERROR("Unexpected: can't find mdc_open_data, but the "
-                               "close succeeded.  Please tell <http://bugzilla.lustre.org/>.\n");
                 }
+
                 if (!lustre_swab_repbuf(req, REPLY_REC_OFF,
                                         sizeof(struct mds_body),
                                         lustre_swab_mds_body)) {
