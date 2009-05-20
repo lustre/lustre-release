@@ -362,22 +362,32 @@ stop() {
     wait_exit_ST ${facet}
 }
 
+# set quota version (both administrative and operational quotas)
+quota_set_version() {
+        do_facet mds "lctl set_param lquota.${FSNAME}-MDT*.quota_type=$1"
+        for j in `seq $OSTCOUNT`; do
+                do_facet ost$j "lctl set_param lquota.${FSNAME}-OST*.quota_type=$1"
+        done
+}
+
 # save quota version (both administrative and operational quotas)
+# the function will also switch to the new version and the new type
 quota_save_version() {
-    local fsname=${2:-$FSNAME}
-    do_facet mgs "lctl conf_param ${fsname}-MDT*.mdt.quota_type=$1"
+    local spec=$1
+    local ver=$(tr -c -d "123" <<< $spec)
+    local type=$(tr -c -d "ug" <<< $spec)
+
+    $LFS quotaoff -ug $MOUNT # just in case
+    [ -n "$ver" ] && quota_set_version $ver
+    [ -n "$type" ] && { $LFS quotacheck -$type $MOUNT || error "quotacheck has failed"; }
+
+    do_facet mgs "lctl conf_param ${FSNAME}-MDT*.mdt.quota_type=$spec"
     local varsvc
     local osts=$(get_facets OST)
     for ost in ${osts//,/ }; do
         varsvc=${ost}_svc
-        do_facet mgs "lctl conf_param ${!varsvc}.ost.quota_type=$1"
+        do_facet mgs "lctl conf_param ${!varsvc}.ost.quota_type=$spec"
     done
-
-    # we must wait until the update has been triggered on the OST
-    for ost in ${osts//,/ }; do
-        wait_update_facet $ost "lctl get_param -n obdfilter.${!varsvc}.quota_type" $1
-    done
-    wait_update_facet mds "lctl get_param -n mds.${fsname}-MDT*.quota_type" $1
 }
 
 # client could mount several lustre 
@@ -396,9 +406,7 @@ restore_quota_type () {
    if [ ! "$old_QUOTA_TYPE" ] || [ "$quota_type" = "$old_QUOTA_TYPE" ]; then
         return
    fi
-   $LFS quotaoff $mntpt
    quota_save_version $old_QUOTA_TYPE
-   $LFS quotacheck -ug $mntpt
 }
 
 setup_quota(){
@@ -414,7 +422,6 @@ setup_quota(){
     if [ "$quota_type" != "$QUOTA_TYPE" ]; then
         export old_QUOTA_TYPE=$quota_type
         quota_save_version $QUOTA_TYPE
-        $LFS quotacheck -ug $mntpt
     fi
 
     local quota_usrs=$QUOTA_USERS

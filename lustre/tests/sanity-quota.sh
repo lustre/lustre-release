@@ -1264,14 +1264,6 @@ test_14a() {	# was test_14 b=12223 -- setting quota on root
 }
 run_test_with_stat 14a "test setting quota on root ==="
 
-# set quota version (both administrative and operational quotas)
-quota_set_version() {
-        do_facet mds "lctl set_param lquota.${FSNAME}-MDT*.quota_type=$1"
-        for j in `seq $OSTCOUNT`; do
-                do_facet ost$j "lctl set_param lquota.${FSNAME}-OST*.quota_type=$1"
-        done
-}
-
 test_14b(){
         local l
         local CURSPACE
@@ -1369,9 +1361,8 @@ test_15(){
         echo "  (group)total limits = $TOTAL_LIMIT; limit = $LIMIT, successful!"
 
         resetquota -g $TSTUSR
-        $LFS quotaoff -ug $DIR
-        quota_save_version 1
-        $LFS quotacheck -ug $DIR || error "quotacheck failed"
+
+        quota_save_version "ug1"
 
         echo "Testing that >4GB quota limits fail on volume with quota v1"
         $LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR && error "no error from setquota, but should have failed"
@@ -1854,10 +1845,6 @@ test_21() {
 run_test_with_stat 21 "run for fixing bug16053 ==========="
 
 test_22() {
-        $LFS quotaoff -ug $DIR || error "could not turn quotas off"
-        quota_set_version "1"
-        $LFS quotacheck -ug $DIR || error "quotacheck failed"
-
         quota_save_version "ug1"
 
         stopall
