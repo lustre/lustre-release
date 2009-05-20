@@ -1249,7 +1249,7 @@ void cl_page_completion(const struct lu_env *env,
 
         ENTRY;
         CL_PAGE_HEADER(D_TRACE, env, pg, "%i %i\n", crt, ioret);
-        if (crt == CRT_READ) {
+        if (crt == CRT_READ && ioret == 0) {
                 PASSERT(env, pg, !(pg->cp_flags & CPF_READ_COMPLETED));
                 pg->cp_flags |= CPF_READ_COMPLETED;
         }

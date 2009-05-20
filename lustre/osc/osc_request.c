@@ -1480,9 +1480,10 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 
         /* The rest of this function executes only for OST_READs */
 
+        /* if unwrap_bulk failed, return -EAGAIN to retry */
         rc = sptlrpc_cli_unwrap_bulk_read(req, req->rq_bulk, rc);
         if (rc < 0)
-                GOTO(out, rc);
+                GOTO(out, rc = -EAGAIN);
 
         if (rc > aa->aa_requested_nob) {
                 CERROR("Unexpected rc %d (%d requested)\n", rc,
