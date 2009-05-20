@@ -3664,10 +3664,10 @@ test_100() {
 		if [ $LPORT -ge 1024 ]; then
 			echo "bad: $PROT $SND $RCV $LOCAL $REMOTE $STAT"
 			netstat -tna
-			error "local: $LPORT > 1024, remote: $RPORT"
+			error_exit "local: $LPORT > 1024, remote: $RPORT"
 		fi
 	done
-	[ "$rc" = 0 ] || { error "privileged port not found"; exit 1; } )
+	[ "$rc" = 0 ] || error_exit "privileged port not found" )
 }
 run_test 100 "check local port using privileged port ==========="
 
