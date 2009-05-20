@@ -58,6 +58,23 @@
 
 #ifdef USE_LU_REF
 
+/**
+ * Asserts a condition for a given lu_ref. Must be called with
+ * lu_ref::lf_guard held.
+ */
+#define REFASSERT(ref, expr)                            \
+  do {                                                  \
+          struct lu_ref *__ref = (ref);                 \
+                                                        \
+          if (unlikely(!(expr))) {                      \
+                  lu_ref_print(__ref);                  \
+                  spin_unlock(&__ref->lf_guard);        \
+                  lu_ref_print_all();                   \
+                  spin_lock(&__ref->lf_guard);          \
+                  LASSERT(0);                           \
+          }                                             \
+  } while (0)
+
 struct lu_ref_link {
         struct lu_ref    *ll_ref;
         struct list_head  ll_linkage;
@@ -78,35 +95,75 @@ static struct lu_kmem_descr lu_ref_caches[] = {
         }
 };
 
+/**
+ * Global list of active (initialized, but not finalized) lu_ref's.
+ *
+ * Protected by lu_ref_refs_guard.
+ */
+static CFS_LIST_HEAD(lu_ref_refs);
+static spinlock_t lu_ref_refs_guard;
+static struct lu_ref lu_ref_marker = {
+        .lf_guard   = SPIN_LOCK_UNLOCKED,
+        .lf_list    = CFS_LIST_HEAD_INIT(lu_ref_marker.lf_list),
+        .lf_linkage = CFS_LIST_HEAD_INIT(lu_ref_marker.lf_linkage)
+};
+
 void lu_ref_print(const struct lu_ref *ref)
 {
         struct lu_ref_link *link;
 
-        CERROR("lu_ref: %p %d\n", ref, ref->lf_failed);
+        CERROR("lu_ref: %p %d %d %s:%d\n",
+               ref, ref->lf_refs, ref->lf_failed, ref->lf_func, ref->lf_line);
         list_for_each_entry(link, &ref->lf_list, ll_linkage) {
                 CERROR("     link: %s %p\n", link->ll_scope, link->ll_source);
         }
 }
 EXPORT_SYMBOL(lu_ref_print);
 
-void lu_ref_init(struct lu_ref *ref)
+static int lu_ref_is_marker(const struct lu_ref *ref)
 {
-        spin_lock_init(&ref->lf_guard);
-        CFS_INIT_LIST_HEAD(&ref->lf_list);
+        return (ref == &lu_ref_marker);
 }
-EXPORT_SYMBOL(lu_ref_init);
 
-void lu_ref_fini(struct lu_ref *ref)
+void lu_ref_print_all(void)
 {
-        if (!list_empty(&ref->lf_list)) {
+        struct lu_ref *ref;
+
+        spin_lock(&lu_ref_refs_guard);
+        list_for_each_entry(ref, &lu_ref_refs, lf_linkage) {
+                if (lu_ref_is_marker(ref))
+                        continue;
+
                 spin_lock(&ref->lf_guard);
                 lu_ref_print(ref);
                 spin_unlock(&ref->lf_guard);
         }
-        LASSERT(list_empty(&ref->lf_list));
+        spin_unlock(&lu_ref_refs_guard);
+}
+EXPORT_SYMBOL(lu_ref_print_all);
+
+void lu_ref_init_loc(struct lu_ref *ref, const char *func, const int line)
+{
+        ref->lf_refs = 0;
+        ref->lf_func = func;
+        ref->lf_line = line;
+        spin_lock_init(&ref->lf_guard);
+        CFS_INIT_LIST_HEAD(&ref->lf_list);
+        spin_lock(&lu_ref_refs_guard);
+        list_add(&ref->lf_linkage, &lu_ref_refs);
+        spin_unlock(&lu_ref_refs_guard);
+}
+EXPORT_SYMBOL(lu_ref_init_loc);
+
+void lu_ref_fini(struct lu_ref *ref)
+{
+        REFASSERT(ref, list_empty(&ref->lf_list));
+        REFASSERT(ref, ref->lf_refs == 0);
+        spin_lock(&lu_ref_refs_guard);
+        list_del_init(&ref->lf_linkage);
+        spin_unlock(&lu_ref_refs_guard);
 }
 EXPORT_SYMBOL(lu_ref_fini);
-int lu_ref_global_init(void);
 
 static struct lu_ref_link *lu_ref_add_context(struct lu_ref *ref,
                                               enum cfs_alloc_flags flags,
@@ -115,19 +172,16 @@ static struct lu_ref_link *lu_ref_add_context(struct lu_ref *ref,
 {
         struct lu_ref_link *link;
 
-        /* this can be called so early in lustre initialization, that
-         * lu_ref_link_kmem slab is not yet created. */
-        lu_ref_global_init();
-
         link = NULL;
         if (lu_ref_link_kmem != NULL) {
-                OBD_SLAB_ALLOC(link, lu_ref_link_kmem, flags, sizeof(*link));
+                OBD_SLAB_ALLOC_PTR_GFP(link, lu_ref_link_kmem, flags);
                 if (link != NULL) {
                         link->ll_ref    = ref;
                         link->ll_scope  = scope;
                         link->ll_source = source;
                         spin_lock(&ref->lf_guard);
                         list_add_tail(&link->ll_linkage, &ref->lf_list);
+                        ref->lf_refs++;
                         spin_unlock(&ref->lf_guard);
                 }
         }
@@ -138,6 +192,7 @@ static struct lu_ref_link *lu_ref_add_context(struct lu_ref *ref,
                 spin_unlock(&ref->lf_guard);
                 link = ERR_PTR(-ENOMEM);
         }
+
         return link;
 }
 
@@ -202,10 +257,11 @@ void lu_ref_del(struct lu_ref *ref, const char *scope, const void *source)
         link = lu_ref_find(ref, scope, source);
         if (link != NULL) {
                 list_del(&link->ll_linkage);
+                ref->lf_refs--;
                 spin_unlock(&ref->lf_guard);
                 OBD_SLAB_FREE(link, lu_ref_link_kmem, sizeof(*link));
         } else {
-                LASSERT(ref->lf_failed > 0);
+                REFASSERT(ref, ref->lf_failed > 0);
                 ref->lf_failed--;
                 spin_unlock(&ref->lf_guard);
         }
@@ -218,11 +274,11 @@ void lu_ref_set_at(struct lu_ref *ref, struct lu_ref_link *link,
 {
         spin_lock(&ref->lf_guard);
         if (link != ERR_PTR(-ENOMEM)) {
-                LASSERT(link->ll_ref == ref);
-                LASSERT(lu_ref_link_eq(link, scope, source0));
+                REFASSERT(ref, link->ll_ref == ref);
+                REFASSERT(ref, lu_ref_link_eq(link, scope, source0));
                 link->ll_source = source1;
         } else {
-                LASSERT(ref->lf_failed > 0);
+                REFASSERT(ref, ref->lf_failed > 0);
         }
         spin_unlock(&ref->lf_guard);
 }
@@ -232,38 +288,177 @@ void lu_ref_del_at(struct lu_ref *ref, struct lu_ref_link *link,
                    const char *scope, const void *source)
 {
         if (link != ERR_PTR(-ENOMEM)) {
-                LASSERT(link->ll_ref == ref);
-                LASSERT(lu_ref_link_eq(link, scope, source));
                 spin_lock(&ref->lf_guard);
+                REFASSERT(ref, link->ll_ref == ref);
+                REFASSERT(ref, lu_ref_link_eq(link, scope, source));
                 list_del(&link->ll_linkage);
+                ref->lf_refs--;
                 spin_unlock(&ref->lf_guard);
                 OBD_SLAB_FREE(link, lu_ref_link_kmem, sizeof(*link));
         } else {
-                LASSERT(ref->lf_failed > 0);
                 spin_lock(&ref->lf_guard);
+                REFASSERT(ref, ref->lf_failed > 0);
                 ref->lf_failed--;
                 spin_unlock(&ref->lf_guard);
         }
 }
 EXPORT_SYMBOL(lu_ref_del_at);
 
-static int lu_ref_initialized = 0;
+#if defined(__KERNEL__) && defined(LPROCFS)
+
+static void *lu_ref_seq_start(struct seq_file *seq, loff_t *pos)
+{
+        struct lu_ref *ref = seq->private;
+
+        spin_lock(&lu_ref_refs_guard);
+        if (list_empty(&ref->lf_linkage))
+                ref = NULL;
+        spin_unlock(&lu_ref_refs_guard);
+
+        return ref;
+}
+
+static void *lu_ref_seq_next(struct seq_file *seq, void *p, loff_t *pos)
+{
+        struct lu_ref *ref = p;
+        struct lu_ref *next;
+
+        LASSERT(seq->private == p);
+        LASSERT(!list_empty(&ref->lf_linkage));
+
+        spin_lock(&lu_ref_refs_guard);
+        next = list_entry(ref->lf_linkage.next, struct lu_ref, lf_linkage);
+        if (&next->lf_linkage == &lu_ref_refs) {
+                p = NULL;
+        } else {
+                (*pos)++;
+                list_move(&ref->lf_linkage, &next->lf_linkage);
+        }
+        spin_unlock(&lu_ref_refs_guard);
+        return p;
+}
+
+static void lu_ref_seq_stop(struct seq_file *seq, void *p)
+{
+        /* Nothing to do */
+}
+
+
+static int lu_ref_seq_show(struct seq_file *seq, void *p)
+{
+        struct lu_ref *ref  = p;
+        struct lu_ref *next; 
+
+        spin_lock(&lu_ref_refs_guard);
+        next = list_entry(ref->lf_linkage.next, struct lu_ref, lf_linkage);
+        if ((&next->lf_linkage == &lu_ref_refs) || lu_ref_is_marker(next)) {
+                spin_unlock(&lu_ref_refs_guard);
+                return 0;
+        }
+
+        /* print the entry */
+
+        spin_lock(&next->lf_guard);
+        seq_printf(seq, "lu_ref: %p %d %d %s:%d\n",
+                   next, next->lf_refs, next->lf_failed,
+                   next->lf_func, next->lf_line);
+        if (next->lf_refs > 64) {
+                seq_printf(seq, "  too many references, skip\n");
+        } else {
+                struct lu_ref_link *link;
+                int i = 0;
+
+                list_for_each_entry(link, &next->lf_list, ll_linkage)
+                        seq_printf(seq, "  #%d link: %s %p\n",
+                                   i++, link->ll_scope, link->ll_source);
+        }
+        spin_unlock(&next->lf_guard);
+        spin_unlock(&lu_ref_refs_guard);
+
+        return 0;
+}
+
+static struct seq_operations lu_ref_seq_ops = {
+        .start = lu_ref_seq_start,
+        .stop  = lu_ref_seq_stop,
+        .next  = lu_ref_seq_next,
+        .show  = lu_ref_seq_show
+};
+
+static int lu_ref_seq_open(struct inode *inode, struct file *file)
+{
+        struct lu_ref *marker = &lu_ref_marker;
+        int result = 0;
+
+        result = seq_open(file, &lu_ref_seq_ops);
+        if (result == 0) {
+                spin_lock(&lu_ref_refs_guard);
+                if (!list_empty(&marker->lf_linkage))
+                        result = -EAGAIN;
+                else
+                        list_add(&marker->lf_linkage, &lu_ref_refs);
+                spin_unlock(&lu_ref_refs_guard);
+
+                if (result == 0) {
+                        struct seq_file *f = file->private_data;
+                        f->private = marker;
+                } else {
+                        seq_release(inode, file);
+                }
+        }
+
+        return result;
+}
+
+static int lu_ref_seq_release(struct inode *inode, struct file *file)
+{
+        struct lu_ref *ref = ((struct seq_file *)file->private_data)->private;
+
+        spin_lock(&lu_ref_refs_guard);
+        list_del_init(&ref->lf_linkage);
+        spin_unlock(&lu_ref_refs_guard);
+
+        return seq_release(inode, file);
+}
+
+static struct file_operations lu_ref_dump_fops = {
+        .owner   = THIS_MODULE,
+        .open    = lu_ref_seq_open,
+        .read    = seq_read,
+        .llseek  = seq_lseek,
+        .release = lu_ref_seq_release
+};
+
+#endif
+
 int lu_ref_global_init(void)
 {
         int result;
 
-        if (lu_ref_initialized == 0) {
-                lu_ref_initialized = 1;
-                CDEBUG(D_CONSOLE,
-                       "lu_ref tracking is enabled. Performance isn't.\n");
-                result = lu_kmem_init(lu_ref_caches);
-        } else
-                result = 0;
+        CDEBUG(D_CONSOLE,
+               "lu_ref tracking is enabled. Performance isn't.\n");
+
+
+        spin_lock_init(&lu_ref_refs_guard);
+        result = lu_kmem_init(lu_ref_caches);
+
+#if defined(__KERNEL__) && defined(LPROCFS)
+        if (result == 0) {
+                result = lprocfs_seq_create(proc_lustre_root, "lu_refs",
+                                            0444, &lu_ref_dump_fops, NULL);
+                if (result)
+                        lu_kmem_fini(lu_ref_caches);
+        }
+#endif
+
         return result;
 }
 
 void lu_ref_global_fini(void)
 {
+#if defined(__KERNEL__) && defined(LPROCFS)
+        lprocfs_remove_proc_entry("lu_refs", proc_lustre_root);
+#endif
         lu_kmem_fini(lu_ref_caches);
 }
 

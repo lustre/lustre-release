@@ -1094,7 +1094,10 @@ void lu_context_key_degister(struct lu_context_key *key)
         ++key_set_version;
         spin_lock(&lu_keys_guard);
         key_fini(&lu_shrink_env.le_ctx, key->lct_index);
-        lu_keys[key->lct_index] = NULL;
+        if (lu_keys[key->lct_index]) {
+                lu_keys[key->lct_index] = NULL;
+                lu_ref_fini(&key->lct_reference);
+        }
         spin_unlock(&lu_keys_guard);
 
         LASSERTF(atomic_read(&key->lct_used) == 1, "key has instances: %d\n",
@@ -1535,6 +1538,10 @@ int lu_global_init(void)
 
         CDEBUG(D_CONSOLE, "Lustre LU module (%p).\n", &lu_keys);
 
+        result = lu_ref_global_init();
+        if (result != 0)
+                return result;
+
         LU_CONTEXT_KEY_INIT(&lu_global_key);
         result = lu_context_key_register(&lu_global_key);
         if (result != 0)
@@ -1550,9 +1557,6 @@ int lu_global_init(void)
         if (result != 0)
                 return result;
 
-        result = lu_ref_global_init();
-        if (result != 0)
-                return result;
         /*
          * seeks estimation: 3 seeks to read a record from oi, one to read
          * inode, one for ea. Unfortunately setting this high value results in

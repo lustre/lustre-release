@@ -598,13 +598,17 @@ int init_obdclass(void)
         err = obd_init_caches();
         if (err)
                 return err;
-        err = lu_global_init();
-        if (err)
-                return err;
 #ifdef __KERNEL__
         err = class_procfs_init();
         if (err)
                 return err;
+#endif
+
+        err = lu_global_init();
+        if (err)
+                return err;
+
+#ifdef __KERNEL__
         err = lustre_register_fs();
 #endif
 
