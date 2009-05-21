@@ -1650,6 +1650,97 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# 2.6.27 sles11 has sb_any_quota_active
+AC_DEFUN([LC_SB_ANY_QUOTA_ACTIVE],
+[AC_MSG_CHECKING([Kernel has sb_any_quota_active])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/quotaops.h>
+],[
+        sb_any_quota_active(NULL);
+],[
+        AC_DEFINE(HAVE_SB_ANY_QUOTA_ACTIVE, 1,
+                [Kernel has a sb_any_quota_active])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.27 sles11 has sb_has_quota_active
+AC_DEFUN([LC_SB_HAS_QUOTA_ACTIVE],
+[AC_MSG_CHECKING([Kernel has sb_has_quota_active])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/quotaops.h>
+],[
+        sb_has_quota_active(NULL, 0);
+],[
+        AC_DEFINE(HAVE_SB_HAS_QUOTA_ACTIVE, 1,
+                [Kernel has a sb_has_quota_active])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.27 has inode_permission instead of permisson
+AC_DEFUN([LC_EXPORT_INODE_PERMISSION],
+[LB_CHECK_SYMBOL_EXPORT([inode_permission],
+[fs/namei.c],[
+AC_DEFINE(HAVE_EXPORT_INODE_PERMISSION, 1,
+            [inode_permission is exported by the kernel])
+],[
+])
+])
+
+# 2.6.27 use 5th parameter in quota_on for remount.
+AC_DEFUN([LC_QUOTA_ON_5ARGS],
+[AC_MSG_CHECKING([quota_on needs 5 parameters])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/quota.h>
+],[
+        struct quotactl_ops *qop;
+        qop->quota_on(NULL, 0, 0, NULL, 0);
+],[
+        AC_DEFINE(HAVE_QUOTA_ON_5ARGS, 1,
+                [quota_on needs 5 paramters])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.27 use 3th parameter in quota_off for remount.
+AC_DEFUN([LC_QUOTA_OFF_3ARGS],
+[AC_MSG_CHECKING([quota_off needs 3 parameters])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/quota.h>
+],[
+        struct quotactl_ops *qop;
+        qop->quota_off(NULL, 0, 0);
+],[
+        AC_DEFINE(HAVE_QUOTA_OFF_3ARGS, 1,
+                [quota_off needs 3 paramters])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.27 has vfs_dq_off inline function.
+AC_DEFUN([LC_VFS_DQ_OFF],
+[AC_MSG_CHECKING([vfs_dq_off is defined])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/quotaops.h>
+],[
+        vfs_dq_off(NULL, 0);
+],[
+        AC_DEFINE(HAVE_VFS_DQ_OFF, 1, [vfs_dq_off is defined])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
 #
 # Ensure stack size big than 8k in Lustre server
 AC_DEFUN([LC_STACK_SIZE],
@@ -1801,11 +1892,17 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_TRYLOCKPAGE
           LC_RW_TREE_LOCK
           LC_READ_INODE_IN_SBOPS
+          LC_EXPORT_INODE_PERMISSION
+          LC_QUOTA_ON_5ARGS
+          LC_QUOTA_OFF_3ARGS
+          LC_VFS_DQ_OFF
 
           # 2.6.27.15-2 sles11
           LC_BI_HW_SEGMENTS
           LC_HAVE_QUOTAIO_V1_H
           LC_VFS_SYMLINK_5ARGS
+          LC_SB_ANY_QUOTA_ACTIVE
+          LC_SB_HAS_QUOTA_ACTIVE
 ])
 
 #
@@ -2240,6 +2337,7 @@ lustre/kernel_patches/targets/2.6-rhel5.target
 lustre/kernel_patches/targets/2.6-fc5.target
 lustre/kernel_patches/targets/2.6-patchless.target
 lustre/kernel_patches/targets/2.6-sles10.target
+lustre/kernel_patches/targets/2.6-sles11.target
 lustre/kernel_patches/targets/hp_pnnl-2.4.target
 lustre/kernel_patches/targets/rh-2.4.target
 lustre/kernel_patches/targets/rhel-2.4.target
