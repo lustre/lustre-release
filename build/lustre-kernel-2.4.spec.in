@@ -15,6 +15,7 @@ Summary: The Linux kernel (the core of the Linux operating system)
 %define release @KERNEL_RELEASE@
 # /usr/src/%{kslnk} -> /usr/src/linux-%{KVERREL}
 %define kslnk linux-2.4
+%define kprovides %(bash -c "echo %{kversion}%{kextraverdelim}%{kextraver} | sed -e 's/-[^0-9]*smp$//'")
 
 # groups of related archs
 %define all_x86 i386 i686 i586 athlon
@@ -158,7 +159,7 @@ Group: System Environment/Kernel
 ExclusiveArch: %{all_x86} x86_64 ia64 ppc ppc64
 ExclusiveOS: Linux
 Obsoletes: kernel-modules, kernel-sparc
-Provides: kernel = %{version}
+Provides: kernel = %{kprovides}
 BuildConflicts: rhbuildsys(DiscFree) < 500Mb
 %ifarch %{all_x86} ia64 x86_64
 Provides: kernel-drm = 4.1.0, kernel-drm = 4.2.0, kernel-drm = 4.3.0, kernel-drm = 4.2.99.3
@@ -230,7 +231,7 @@ options that can be passed to Linux kernel modules at load time.
 %package smp
 Summary: The Linux kernel compiled for SMP machines.
 Group: System Environment/Kernel
-Provides: module-info, kernel = %{version}
+Provides: module-info, kernel = %{kprovides}
 %ifarch %{all_x86} ia64 x86_64
 Provides: kernel-drm = 4.1.0, kernel-drm = 4.2.0, kernel-drm = 4.3.0, kernel-drm = 4.2.99.3
 %endif
@@ -249,7 +250,7 @@ Install the kernel-smp package if your machine uses two or more CPUs.
 %package bigsmp
 Summary: The Linux kernel compiled for SMP machines.
 Group: System/Kernel
-Provides: module-info, kernel = %{version}, k_smp4G
+Provides: module-info, kernel = %{kprovides}, k_smp4G
 Obsoletes: k_smp4G
 %ifarch %{all_x86} ia64 x86_64
 Provides: kernel-drm = 4.1.0, kernel-drm = 4.2.0, kernel-drm = 4.3.0, kernel-drm = 4.2.99.3
@@ -269,7 +270,7 @@ Install the kernel-bigsmp package if your machine uses two or more CPUs.
 %package pseries64
 Summary: Standard Kernel for 64-bit Power based SMP and LPAR Machines
 Group: System/Kernel
-Provides: module-info, kernel = %{version}, k_smp4G
+Provides: module-info, kernel = %{kprovides}, k_smp4G
 %ifarch %{all_x86} ia64 x86_64
 Provides: kernel-drm = 4.1.0, kernel-drm = 4.2.0, kernel-drm = 4.3.0, kernel-drm = 4.2.99.3
 %endif
@@ -288,7 +289,7 @@ machines.
 %package bigmem
 Summary: The Linux Kernel for machines with more than 4 Gigabyte of memory.
 Group: System Environment/Kernel
-Provides: module-info, kernel = %{version}
+Provides: module-info, kernel = %{kprovides}
 %ifarch %{all_x86} ia64 x86_64
 Provides: kernel-drm = 4.1.0, kernel-drm = 4.2.0, kernel-drm = 4.3.0, kernel-drm = 4.2.99.3
 %endif
@@ -305,7 +306,7 @@ enabled for Pentium III machines with 4 Gigabyte of memory or more.
 %package BOOT
 Summary: The version of the Linux kernel used on installation boot disks.
 Group: System Environment/Kernel
-Provides: kernel = %{version}
+Provides: kernel = %{kprovides}
 %if %{rhbuild}
 Prereq: %{BOOT_kernel_prereq}
 Conflicts: %{kernel_conflicts}
@@ -320,7 +321,7 @@ turned off because of the size constraints.
 %package BOOTsmp
 Summary: The Linux kernel used on installation boot disks for SMP machines.
 Group: System Environment/Kernel
-Provides: kernel = %{version}
+Provides: kernel = %{kprovides}
 %if %{rhbuild}
 Prereq: %{BOOT_kernel_prereq}
 Conflicts: %{kernel_conflicts}
@@ -336,7 +337,7 @@ machines that have trouble coming up to life with the uniprocessor kernel.
 %package jensen
 Summary: The Linux Kernel compiled for the Alpha Jensen platform.
 Group: System Environment/Kernel
-Provides: kernel = %{version}
+Provides: kernel = %{kprovides}
 %if %{rhbuild}
 Prereq: %{kernel_prereq}
 Conflicts: %{kernel_conflicts}
