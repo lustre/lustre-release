@@ -518,8 +518,13 @@ stop() {
 }
 
 # save quota version (both administrative and operational quotas)
+# add an additional parameter if mountpoint is ever different from $MOUNT
 quota_save_version() {
     local fsname=${2:-$FSNAME}
+
+    $LFS quotaoff -ug $MOUNT # just in case
+    [ -n "$1" ] && { $LFS quotacheck -$1 $MOUNT || error "quotacheck has failed"; }
+
     do_facet mgs "lctl conf_param ${fsname}-MDT*.mdd.quota_type=$1"
     local varsvc
     local osts=$(get_facets OST)
@@ -545,9 +550,7 @@ restore_quota_type () {
    if [ ! "$old_QUOTA_TYPE" ] || [ "$quota_type" = "$old_QUOTA_TYPE" ]; then
         return
    fi
-   $LFS quotaoff $mntpt
    quota_save_version $old_QUOTA_TYPE
-   $LFS quotacheck -ug $mntpt
 }
 
 setup_quota(){
@@ -563,7 +566,6 @@ setup_quota(){
     if [ "$quota_type" != "$QUOTA_TYPE" ]; then
         export old_QUOTA_TYPE=$quota_type
         quota_save_version $QUOTA_TYPE
-        $LFS quotacheck -ug $mntpt
     fi
 
     local quota_usrs=$QUOTA_USERS
