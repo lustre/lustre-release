@@ -3819,7 +3819,7 @@ test_101c() {
         local FILE_LENGTH=$((STRIPE_SIZE*100))
         local nreads=10000
 
-        setup_test101
+        setup_101b
 
         cancel_lru_locks osc
         $LCTL set_param osc.*.rpc_stats 0
