@@ -1788,8 +1788,6 @@ test_21() {
 run_test_with_stat 21 "run for fixing bug16053 ==========="
 
 test_22() {
-        $LFS quotaoff -ug $DIR || error "could not turn quotas off"
-
         quota_save_version "ug"
 
         stopall
