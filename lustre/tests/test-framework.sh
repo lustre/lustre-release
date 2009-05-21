@@ -181,10 +181,12 @@ load_modules() {
         LNETOPTS=$(awk '/^options lnet/ { print $0}' $MODPROBECONF | sed 's/^options lnet //g')
     echo $LNETOPTS | grep -q "accept=all"  || LNETOPTS="$LNETOPTS accept=all";
     # bug 19380
-    if [ "$NETTYPE" = "tcp" -o "$NETTYPE" = "o2ib" -o "$NETTYPE" = "ptl" ]; then
-        echo $LNETOPTS | grep -q "local_nid_dist_zero=0" ||
-        LNETOPTS="$LNETOPTS local_nid_dist_zero=0"
-    fi
+    # disable it for now since it only hides the stack overflow upon test w/
+    # local servers
+#    if [ "$NETTYPE" = "tcp" -o "$NETTYPE" = "o2ib" -o "$NETTYPE" = "ptl" ]; then
+#        echo $LNETOPTS | grep -q "local_nid_dist_zero=0" ||
+#        LNETOPTS="$LNETOPTS local_nid_dist_zero=0"
+#    fi
     echo "lnet options: '$LNETOPTS'"
     # note that insmod will ignore anything in modprobe.conf
     load_module ../lnet/lnet/lnet $LNETOPTS
@@ -396,14 +398,14 @@ quota_save_version() {
     done
 }
 
-# client could mount several lustre 
+# client could mount several lustre
 quota_type () {
     local fsname=${1:-$FSNAME}
     local rc=0
     do_facet mgs lctl get_param mds.${fsname}-MDT*.quota_type || rc=$?
     do_nodes $(comma_list $(osts_nodes)) \
         lctl get_param obdfilter.${fsname}-OST*.quota_type || rc=$?
-    return $rc 
+    return $rc
 }
 
 restore_quota_type () {
@@ -486,7 +488,7 @@ zconf_umount() {
     local client=$1
     local mnt=$2
     local force
-    local busy 
+    local busy
     local need_kill
 
     [ "$3" ] && force=-f
@@ -527,7 +529,7 @@ if [ \\\$running -ne \\\$mpts ]; then
     echo \\\$(hostname) env are INSANE!;
     exit 1;
 fi"
-    [ $? -eq 0 ] || rc=1 
+    [ $? -eq 0 ] || rc=1
     done
     return $rc
 }
@@ -639,7 +641,7 @@ shudown_node_hard () {
         ping -w 3 -c 1 $host > /dev/null 2>&1 || return 0
         echo "waiting for $host to fail attempts=$attempts"
         [ $i -lt $attempts ] || \
-            { echo "$host still pingable after power down! attempts=$attempts" && return 1; } 
+            { echo "$host still pingable after power down! attempts=$attempts" && return 1; }
     done
 }
 
@@ -649,7 +651,7 @@ shutdown_client() {
     local attempts=3
 
     if [ "$FAILURE_MODE" = HARD ]; then
-        shudown_node_hard $client 
+        shudown_node_hard $client
     else
        zconf_umount_clients $client $mnt -f
     fi
@@ -729,14 +731,14 @@ start_client_loads () {
     done
 }
 
-# only for remote client 
+# only for remote client
 check_client_load () {
     local client=$1
     local var=$(client_var_name $client)_load
     local TESTLOAD=run_${!var}.sh
 
     ps auxww | grep -v grep | grep $client | grep -q "$TESTLOAD" || return 1
-    
+
     # bug 18914: try to connect several times not only when
     # check ps, but  while check_catastrophe also
     local tries=3
@@ -809,12 +811,12 @@ restart_client_loads () {
         if [ "$rc" != 0 -a "$expectedfail" ]; then
             start_client_load $client
             echo "Restarted client load: on $client. Checking ..."
-            check_client_load $client 
+            check_client_load $client
             rc=${PIPESTATUS[0]}
             if [ "$rc" != 0 ]; then
                 log "Client load failed to restart on node $client, rc=$rc"
                 # failure one client load means test fail
-                # we do not need to check other 
+                # we do not need to check other
                 return $rc
             fi
         else
@@ -916,7 +918,7 @@ wait_recovery_complete () {
     # as we are in process of changing obd_timeout in different ways
     # let's set MAX longer than that
     local MAX=${2:-$(( TIMEOUT * 4 ))}
- 
+
     local var_svc=${facet}_svc
     local procfile="*.${!var_svc}.recovery_status"
     local WAIT=0
@@ -1444,7 +1446,7 @@ init_facet_vars () {
 }
 
 init_facets_vars () {
-    remote_mds_nodsh || 
+    remote_mds_nodsh ||
         init_facet_vars mds $MDSDEV $MDS_MOUNT_OPTS
 
     remote_ost_nodsh && return
@@ -1462,7 +1464,7 @@ init_param_vars () {
         export CLIVER=$(lctl get_param version | cut -d. -f 1,2)
     fi
 
-    remote_mds_nodsh || 
+    remote_mds_nodsh ||
         TIMEOUT=$(do_facet mds "lctl get_param -n timeout")
 
     log "Using TIMEOUT=$TIMEOUT"
@@ -1474,9 +1476,9 @@ init_param_vars () {
 
 check_config () {
     local mntpt=$1
-    local myMGS_host=$mgs_HOST   
+    local myMGS_host=$mgs_HOST
     if [ "$NETTYPE" = "ptl" ]; then
-        myMGS_host=$(h2ptl $mgs_HOST | sed -e s/@ptl//) 
+        myMGS_host=$(h2ptl $mgs_HOST | sed -e s/@ptl//)
     fi
 
     echo Checking config lustre mounted on $mntpt
@@ -1590,7 +1592,7 @@ exclude_items_from_list () {
     for item in ${excluded//,/ }; do
         list=$(echo " $list " | sed -re "s/\s+$item\s+/ /g")
     done
-    echo $(comma_list $list) 
+    echo $(comma_list $list)
 }
 
 # list, expand  are the comma separated lists
@@ -1971,7 +1973,7 @@ trace() {
 }
 
 pass() {
-    $TEST_FAILED && echo -n "FAIL " || echo -n "PASS " 
+    $TEST_FAILED && echo -n "FAIL " || echo -n "PASS "
     echo $@
 }
 
@@ -2192,7 +2194,7 @@ get_random_entry () {
     rnodes=${rnodes//,/ }
 
     local -a nodes=($rnodes)
-    local num=${#nodes[@]} 
+    local num=${#nodes[@]}
     local i=$((RANDOM * num * 2 / 65536))
 
     echo ${nodes[i]}
@@ -2387,7 +2389,7 @@ delayed_recovery_enabled () {
 ################################################################################
 
 get_lustre_version () {
-    local node=${1:-"mds"}    
+    local node=${1:-"mds"}
     do_facet $node $LCTL get_param -n version |  awk '/^lustre:/ {print $2}'
 }
 
@@ -2505,7 +2507,7 @@ wait_osc_import_state() {
     while [ "${CONN_STATE}" != "${expected}" ]; do
         # for disconn we can check after proc entry is removed
         [ "x${CONN_STATE}" == "x" -a "${expected}" == "DISCONN" ] && return 0
-        # disconnect rpc should be wait not more obd_timeout 
+        # disconnect rpc should be wait not more obd_timeout
         [ $i -ge $(($TIMEOUT * 3 / 2)) ] && \
             error "can't put import for ${ost}(${ost_facet}) into ${expected} state" && return 1
         sleep 1
