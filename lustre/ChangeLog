@@ -4,7 +4,7 @@
 	 2.6.5-7.314 (SLES 9),
 	 2.6.9-78.0.22.EL (RHEL 4),
 	 2.6.16.60-0.37 (SLES 10),
-	 2.6.18-92.1.17.el5 (RHEL 5),
+	 2.6.18-92.1.26.el5 (RHEL 5),
 	 2.6.22.14 vanilla (kernel.org)
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
@@ -35,6 +35,10 @@
 	* NFS export disabled when stack size < 8192. Since the NFSv4 export of
 	  Lustre filesystem with 4K stack may cause a stack overflow. For more
 	  information, please refer to bugzilla 17630.
+
+Severity   : enhancement
+Bugzilla   : 19601
+Description: Update kernel to RHEL5.2 2.6.18-92.1.26.
 
 Severity   : critical, only with RHEL4/SLES9 MDS
 Bugzilla   : 19453
