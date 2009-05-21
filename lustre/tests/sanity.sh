@@ -2663,7 +2663,7 @@ test_57b() {
 
 	rm -rf $dir || error "removing $dir"
 	mkdir -p $dir || error "creating $dir"
-	
+
 	echo "mcreating $FILECOUNT files"
 	createmany -m $dir/f 1 $FILECOUNT || \
 		error "creating files in $dir"
@@ -3004,7 +3004,7 @@ test_67b() { # bug 3285 - supplementary group fails on MDS, passes on client
 	# needs to be in /etc/groups on MDS, gid == uid
 	# Let's use RUNAS_ID
 	T67_UID=${T67_UID:-$RUNAS_ID}
-	
+
 	[ "$UID" = "$T67_UID" ] && skip "UID = T67_UID = $UID -- skipping" && return
 	check_kernel_version 35 || return 0
 	do_facet mds grep -q ":$T67_UID:$T67_UID" /etc/passwd || \
@@ -3582,7 +3582,7 @@ test_99a() {
 	chown $RUNAS_ID $DIR/d99cvsroot || error "chown $DIR/d99cvsroot failed"
 	local oldPWD=$PWD	# bug 13584, use $TMP as working dir
 	cd $TMP
-	
+
 	$RUNAS cvs -d $DIR/d99cvsroot init || error "cvs init failed"
 	cd $oldPWD
 }
@@ -3894,9 +3894,9 @@ test_102b() {
 	local testfile2=${testfile}2
 	local value=`getfattr -n trusted.lov $testfile 2> /dev/null | \
 		     grep "trusted.lov" |sed -e 's/[^=]\+=//'`
-	
+
 	$MCREATE $testfile2
-	setfattr -n trusted.lov -v $value $testfile2 	
+	setfattr -n trusted.lov -v $value $testfile2
 	local tmp_file=${testfile}3
 	$GETSTRIPE -v $testfile2 > $tmp_file
 	local stripe_size=`grep "size"  $tmp_file| awk '{print $2}'`
@@ -3920,9 +3920,9 @@ test_102c() {
 	local testfile2=${testfile}2
 	local value=`getfattr -n lustre.lov $testfile 2> /dev/null | \
 		     grep "lustre.lov" |sed -e 's/[^=]\+=//'  `
-	
+
 	$RUNAS $MCREATE $testfile2
-	$RUNAS setfattr -n lustre.lov -v $value $testfile2 	
+	$RUNAS setfattr -n lustre.lov -v $value $testfile2
 	local tmp_file=${testfile}3
 	$RUNAS $GETSTRIPE -v $testfile2 > $tmp_file
 	local stripe_size=`grep "size"  $tmp_file| awk '{print $2}'`
@@ -4106,7 +4106,7 @@ test_104() {
 	lfs df -i $DIR || error "lfs df -i $DIR failed"
 	lfs df $DIR/$tfile || error "lfs df $DIR/$tfile failed"
 	lfs df -ih $DIR/$tfile || error "lfs df -ih $DIR/$tfile failed"
-	
+
 	OSC=`lctl get_param -n devices | awk '/-osc-|OSC.*MNT/ {print $4}' | head -n 1`
 	lctl --device %$OSC deactivate
 	lfs df || error "lfs df with deactivated OSC failed"
@@ -4364,7 +4364,7 @@ reset_async() {
 test_118a() #bug 11710
 {
 	reset_async
-	
+
  	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
 	DIRTY=$(lctl get_param -n "llite.*.dump_page_cache" | grep -c dirty)
         WRITEBACK=$(lctl get_param "llite.*.dump_page_cache" | grep -c writeback)
@@ -4406,7 +4406,7 @@ test_118b()
 	# until a subsequent RPC completes successfully without error.
 	multiop $DIR/$tfile Ow4096yc
 	rm -f $DIR/$tfile
-	
+
 	return 0
 }
 run_test 118b "Reclaim dirty pages on fatal error =========="
@@ -4446,7 +4446,7 @@ test_118c()
 	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
 	fi
-	
+
 	rm -f $DIR/$tfile
 	echo "Dirty pages flushed via fsync on EROFS"
 	return 0
@@ -4462,7 +4462,7 @@ test_118d()
 	#define OBD_FAIL_OST_BRW_PAUSE_BULK
 	set_nodes_failloc "$(osts_nodes)" 0x214
 	# multiop should block due to fsync until pages are written
-	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &	
+	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &
 	MULTIPID=$!
 	sleep 1
 
@@ -4502,7 +4502,7 @@ test_118f() {
 	if [[ $RC -eq 0 ]]; then
 		error "Must return error due to dropped pages, rc=$RC"
 	fi
-	
+
         lctl set_param fail_loc=0x0
 
         LOCKED=$(lctl get_param -n "llite.*.dump_page_cache" | grep -c locked)
@@ -4533,7 +4533,7 @@ test_118g() {
 	# simulate local -ENOMEM
         multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
         RC=$?
-	
+
         lctl set_param fail_loc=0
 	if [[ $RC -eq 0 ]]; then
 		error "Must return error due to dropped pages, rc=$RC"
@@ -4545,7 +4545,7 @@ test_118g() {
 	if [[ $LOCKED -ne 0 ]]; then
 		error "Locked pages remain in cache, locked=$LOCKED"
 	fi
-	
+
 	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
 	fi
@@ -4568,7 +4568,7 @@ test_118h() {
 	# Should simulate ENOMEM error which is recoverable and should be handled by timeout
         multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
         RC=$?
-	
+
         set_nodes_failloc "$(osts_nodes)" 0
 	if [[ $RC -eq 0 ]]; then
 		error "Must return error due to dropped pages, rc=$RC"
@@ -4580,7 +4580,7 @@ test_118h() {
 	if [[ $LOCKED -ne 0 ]]; then
 		error "Locked pages remain in cache, locked=$LOCKED"
 	fi
-	
+
 	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
 	fi
@@ -4599,13 +4599,13 @@ test_118i() {
 
 	#define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
         set_nodes_failloc "$(osts_nodes)" 0x20e
-	
+
 	# Should simulate ENOMEM error which is recoverable and should be handled by timeout
         multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &
 	PID=$!
 	sleep 5
 	set_nodes_failloc "$(osts_nodes)" 0
-	
+
 	wait $PID
         RC=$?
 	if [[ $RC -ne 0 ]]; then
@@ -4618,7 +4618,7 @@ test_118i() {
 	if [[ $LOCKED -ne 0 ]]; then
 		error "Locked pages remain in cache, locked=$LOCKED"
 	fi
-	
+
 	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
 	fi
@@ -4652,7 +4652,7 @@ test_118j() {
 	if [[ $LOCKED -ne 0 ]]; then
 		error "Locked pages remain in cache, locked=$LOCKED"
 	fi
-	
+
 	# in recoverable error on OST we want resend and stay until it finished
 	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
@@ -5038,7 +5038,7 @@ run_test 123a "verify statahead work"
 test_123b () { # statahead(bug 15027)
 	mkdir -p $DIR/$tdir
 	createmany -o $DIR/$tdir/$tfile-%d 1000
-	
+
         cancel_lru_locks mdc
         cancel_lru_locks osc
 
@@ -5236,7 +5236,7 @@ test_127() { # bug 15521
                 echo "got $COUNT $NAME"
                 [ ! $MIN ] && error "Missing min value for $NAME proc entry"
                 eval $NAME=$COUNT || error "Wrong proc format"
-		
+
                 case $NAME in
                         read_bytes|write_bytes)
                         [ $MIN -lt 4096 ] && error "min is too small: $MIN"
@@ -5576,7 +5576,7 @@ test_140() { #bug-17379
         cd $DIR/$tdir || error "Changing to $DIR/$tdir"
         cp /usr/bin/stat . || error "Copying stat to $DIR/$tdir"
 
-        # VFS limits max symlink depth to 5(4KSTACK) or 8
+        # VFS limits max symlink depth to 5(4KSTACK) or 7(8KSTACK) or 8
         local i=0
         while i=`expr $i + 1`; do
                 mkdir -p $i || error "Creating dir $i"
@@ -5596,8 +5596,8 @@ test_140() { #bug-17379
                 }
         done
         i=`expr $i - 1`
-        [ $i -eq 4 -o $i -eq 8 ] || error "Invalid symlink depth"
         echo "The symlink depth = $i"
+        [ $i -eq 5 -o $i -eq 7 -o $i -eq 8 ] || error "Invalid symlink depth"
 }
 run_test 140 "Check reasonable stack depth (shouldn't LBUG) ===="
 
@@ -5702,7 +5702,7 @@ test_152() {
         cp $TF $DIR/$tfile
         sync || error "sync failed"
         lctl set_param fail_loc=0
-	
+
         # discard client's cache
         cancel_lru_locks osc
 
