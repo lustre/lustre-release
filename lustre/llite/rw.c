@@ -555,7 +555,7 @@ static inline int llap_shrink_cache_internal(struct ll_sb_info *sbi,
                 int keep;
 
                 if (unlikely(need_resched())) {
-                        list_del(&dummy_llap.llap_pglist_item);                
+                        list_del(&dummy_llap.llap_pglist_item);
                         ll_pglist_cpu_unlock(sbi, cpu);
                         /* vmscan::shrink_slab() have own schedule() */
                         return count;
@@ -746,18 +746,20 @@ static inline int llap_async_cache_rebalance(struct ll_sb_info *sbi)
                                         (slice * cpu_sample[cpu]) * w2 / base;
                         cpu_set(cpu, mask);
                 }
-                surplus -= pd->llpd_budget;
+                surplus -= min_t(int, pd->llpd_budget, surplus);
         }
         surplus /= cpus_weight(mask) ?: 1;
         for_each_cpu_mask(cpu, mask)
                 LL_PGLIST_DATA_CPU(sbi, cpu)->llpd_budget += surplus;
         spin_unlock(&sbi->ll_async_page_reblnc_lock);
 
-        /* TODO: do we really need to call llap_shrink_cache_internal
-         * for every cpus with its page_count greater than budget?
-         * for_each_cpu_mask(cpu, mask)
-         *      ll_shrink_cache_internal(...)
-         */
+        /* We need to call llap_shrink_cache_internal() for every cpu to
+         * ensure the sbi->ll_async_page_max limit is enforced. */
+        for_each_cpu_mask(cpu, mask) {
+                pd = LL_PGLIST_DATA_CPU(sbi, cpu);
+                llap_shrink_cache_internal(sbi, cpu, max_t(int, pd->llpd_count-
+                                           pd->llpd_budget, 0) + 32);
+        }
 
         return 0;
 }
