@@ -2882,17 +2882,13 @@ int osc_set_async_flags_base(struct client_obd *cli,
         struct loi_oap_pages *lop;
         ENTRY;
 
-        if (cli->cl_import == NULL || cli->cl_import->imp_invalid)
-                RETURN(-EIO);
+        LASSERT(!list_empty(&oap->oap_pending_item));
 
         if (oap->oap_cmd & OBD_BRW_WRITE) {
                 lop = &loi->loi_write_lop;
         } else {
                 lop = &loi->loi_read_lop;
         }
-
-        if (list_empty(&oap->oap_pending_item))
-                RETURN(-EINVAL);
 
         if ((oap->oap_async_flags & async_flags) == async_flags)
                 RETURN(0);
