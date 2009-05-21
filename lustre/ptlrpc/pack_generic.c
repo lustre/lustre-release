@@ -2137,43 +2137,32 @@ void lustre_swab_qdata(struct qunit_data *d)
 /**
  * got qdata from request(req/rep)
  */
-int quota_get_qdata(void *request, struct qunit_data *qdata,
-                    int is_req, int is_exp)
+struct qunit_data *quota_get_qdata(void *request, int is_req, int is_exp)
 {
         struct ptlrpc_request *req = (struct ptlrpc_request *)request;
-        struct qunit_data *new;
+        struct qunit_data *qdata;
         __u64  flags = is_exp ? req->rq_export->exp_connect_flags :
                        req->rq_import->imp_connect_data.ocd_connect_flags;
-        int rc = 0;
 
         LASSERT(req);
-        LASSERT(qdata);
+        /* support for quota64 */
+        LASSERT(flags & OBD_CONNECT_QUOTA64);
+        /* support for change_qs */
+        LASSERT(flags & OBD_CONNECT_CHANGE_QS);
 
-        /* support for quota64 and change_qs */
-        if (flags & OBD_CONNECT_CHANGE_QS) {
-                if (!(flags & OBD_CONNECT_QUOTA64)) {
-                        CDEBUG(D_ERROR, "Wire protocol for qunit is broken!\n");
-                        return -EINVAL;
-                }
-                if (is_req == QUOTA_REQUEST)
-                        new = lustre_swab_reqbuf(req, REQ_REC_OFF,
-                                                 sizeof(struct qunit_data),
-                                                 lustre_swab_qdata);
-                else
-                        new = lustre_swab_repbuf(req, REPLY_REC_OFF,
-                                                 sizeof(struct qunit_data),
-                                                 lustre_swab_qdata);
-                if (new == NULL)
-                        GOTO(out, rc = -EPROTO);
-                *qdata = *new;
-                QDATA_SET_CHANGE_QS(qdata);
-                return 0;
-        } else {
-                QDATA_CLR_CHANGE_QS(qdata);
-        }
+        if (is_req == QUOTA_REQUEST)
+                qdata = lustre_swab_reqbuf(req, REQ_REC_OFF,
+                                           sizeof(struct qunit_data),
+                                           lustre_swab_qdata);
+        else
+                qdata = lustre_swab_repbuf(req, REPLY_REC_OFF,
+                                           sizeof(struct qunit_data),
+                                           lustre_swab_qdata);
+        if (qdata == NULL)
+                return ERR_PTR(-EPROTO);
 
-out:
-        return rc;
+        QDATA_SET_CHANGE_QS(qdata);
+        return qdata;
 }
 EXPORT_SYMBOL(quota_get_qdata);
 
@@ -2187,31 +2176,25 @@ int quota_copy_qdata(void *request, struct qunit_data *qdata,
         void *target;
         __u64  flags = is_exp ? req->rq_export->exp_connect_flags :
                 req->rq_import->imp_connect_data.ocd_connect_flags;
-        int rc = 0;
 
         LASSERT(req);
         LASSERT(qdata);
+        /* support for quota64 */
+        LASSERT(flags & OBD_CONNECT_QUOTA64);
+        /* support for change_qs */
+        LASSERT(flags & OBD_CONNECT_CHANGE_QS);
 
-        /* support for quota64 and change_qs */
-        if (flags & OBD_CONNECT_CHANGE_QS) {
-                if (!(flags & OBD_CONNECT_QUOTA64)) {
-                        CERROR("Wire protocol for qunit is broken!\n");
-                        return -EINVAL;
-                }
-                if (is_req == QUOTA_REQUEST)
-                        target = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF,
-                                                sizeof(struct qunit_data));
-                else
-                        target = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                                                sizeof(struct qunit_data));
-                if (!target)
-                        GOTO(out, rc = -EPROTO);
-                memcpy(target, qdata, sizeof(*qdata));
-                return 0;
-        }
+        if (is_req == QUOTA_REQUEST)
+                target = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF,
+                                        sizeof(struct qunit_data));
+        else
+                target = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
+                                        sizeof(struct qunit_data));
+        if (target == NULL)
+                return -EPROTO;
 
-out:
-        return rc;
+        memcpy(target, qdata, sizeof(*qdata));
+        return 0;
 }
 EXPORT_SYMBOL(quota_copy_qdata);
 #endif /* __KERNEL__ */

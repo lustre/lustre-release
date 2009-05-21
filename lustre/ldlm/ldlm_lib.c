@@ -1004,11 +1004,6 @@ dont_check_exports:
         revimp->imp_remote_handle = conn;
         revimp->imp_dlm_fake = 1;
         revimp->imp_state = LUSTRE_IMP_FULL;
-        /* this is a bit of a layering violation, but much less risk than
-	  * changing this very complex and race-prone code.  bug=16839 */
-        if (data->ocd_connect_flags & OBD_CONNECT_MDS)
-                obd_set_info_async(export, sizeof(KEY_MDS_CONN), KEY_MDS_CONN,
-                                   0, NULL, NULL);
 
         /* unknown versions will be caught in
          * ptlrpc_handle_server_req_in->lustre_unpack_msg() */
@@ -2284,12 +2279,11 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
 
         LASSERT(req->rq_export);
 
-        OBD_ALLOC(qdata, sizeof(struct qunit_data));
-        if (!qdata)
-                RETURN(-ENOMEM);
-        rc = quota_get_qdata(req, qdata, QUOTA_REQUEST, QUOTA_EXPORT);
-        if (rc < 0) {
+        qdata = quota_get_qdata(req, QUOTA_REQUEST, QUOTA_EXPORT);
+        if (IS_ERR(qdata)) {
+                rc = PTR_ERR(qdata);
                 CDEBUG(D_ERROR, "Can't unpack qunit_data(rc: %d)\n", rc);
+                req->rq_status = rc;
                 GOTO(out, rc);
         }
 
@@ -2297,7 +2291,7 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         if (!obd->obd_observer || !obd->obd_observer->obd_observer) {
                 CERROR("Can't find the observer, it is recovering\n");
                 req->rq_status = -EAGAIN;
-                GOTO(send_reply, rc = -EAGAIN);
+                GOTO(out, rc);
         }
 
         master_obd = obd->obd_observer->obd_observer;
@@ -2311,7 +2305,6 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
                 CDEBUG(D_QUOTA, "quota_type not processed yet, return "
                        "-EAGAIN\n");
                 req->rq_status = -EAGAIN;
-                rc = ptlrpc_reply(req);
                 GOTO(out, rc);
         }
 
@@ -2324,7 +2317,6 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
                 CDEBUG(D_QUOTA, "quota_ctxt is not ready yet, return "
                        "-EAGAIN\n");
                 req->rq_status = -EAGAIN;
-                rc = ptlrpc_reply(req);
                 GOTO(out, rc);
         }
 
@@ -2334,24 +2326,22 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         up_read(&obt->obt_rwsem);
         if (rc && rc != -EDQUOT)
                 CDEBUG(rc == -EBUSY  ? D_QUOTA : D_ERROR,
-                       "dqacq failed! (rc:%d)\n", rc);
+                       "dqacq/dqrel failed! (rc:%d)\n", rc);
         req->rq_status = rc;
 
-        /* there are three forms of qunit(historic causes), so we need to
-         * adjust the same form to different forms slaves needed */
         rc = quota_copy_qdata(req, qdata, QUOTA_REPLY, QUOTA_EXPORT);
         if (rc < 0) {
-                CDEBUG(D_ERROR, "Can't pack qunit_data(rc: %d)\n", rc);
+                CERROR("Can't pack qunit_data(rc: %d)\n", rc);
                 GOTO(out, rc);
         }
 
         /* Block the quota req. b=14840 */
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_BLOCK_QUOTA_REQ, obd_timeout);
-send_reply:
-        rc = ptlrpc_reply(req);
+        EXIT;
+
 out:
-        OBD_FREE(qdata, sizeof(struct qunit_data));
-        RETURN(rc);
+        rc = ptlrpc_reply(req);
+        return rc;
 #else
         return 0;
 #endif /* !__KERNEL__ */

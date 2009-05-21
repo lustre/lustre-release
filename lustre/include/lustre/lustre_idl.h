@@ -2633,8 +2633,7 @@ struct qunit_data {
 #define QDATA_CLR_CHANGE_QS(qdata)  ((qdata)->qd_flags &= ~LQUOTA_FLAGS_CHG_QS)
 
 extern void lustre_swab_qdata(struct qunit_data *d);
-extern int quota_get_qdata(void*req, struct qunit_data *qdata,
-                           int is_req, int is_exp);
+extern struct qunit_data *quota_get_qdata(void*req, int is_req, int is_exp);
 extern int quota_copy_qdata(void *request, struct qunit_data *qdata,
                             int is_req, int is_exp);
 

@@ -4437,12 +4437,12 @@ static int filter_set_mds_conn(struct obd_export *exp, void *val)
         if (rc)
                 goto out;
 
-        lquota_setinfo(filter_quota_interface_ref, obd, exp);
-
         if (group == FILTER_GROUP_MDS0) {
                 /* setup llog group 1 for interop */
                 filter_setup_llog_group(exp, obd, FILTER_GROUP_LLOG);
         }
+
+        lquota_setinfo(filter_quota_interface_ref, obd, exp);
 out:
         RETURN(rc);
 }

@@ -97,50 +97,65 @@ static int filter_quota_setinfo(struct obd_device *obd, void *data)
 {
         struct obd_export *exp = data;
         struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
-        struct obd_import *imp;
+        struct obd_import *imp = exp->exp_imp_reverse;
         ENTRY;
+
+        LASSERT(imp != NULL);
 
         /* setup the quota context import */
         spin_lock(&qctxt->lqc_lock);
-        qctxt->lqc_import = exp->exp_imp_reverse;
-        spin_unlock(&qctxt->lqc_lock);
-        CDEBUG(D_QUOTA, "%s: lqc_import(%p) of obd(%p) is reactivated now, \n",
-               obd->obd_name,exp->exp_imp_reverse, obd);
-
-        /* make imp's connect flags equal relative exp's connect flags
-         * adding it to avoid the scan export list
-         */
-        imp = qctxt->lqc_import;
-        if (likely(imp))
+        if (qctxt->lqc_import != NULL) {
+                spin_unlock(&qctxt->lqc_lock);
+                if (qctxt->lqc_import == imp)
+                        CDEBUG(D_WARNING, "%s: lqc_import(%p) of obd(%p) was "
+                               "activated already.\n", obd->obd_name, imp, obd);
+                else
+                        CDEBUG(D_ERROR, "%s: lqc_import(%p:%p) of obd(%p) was "
+                               "activated by others.\n", obd->obd_name,
+                               qctxt->lqc_import, imp, obd);
+        } else {
+                qctxt->lqc_import = imp;
+                /* make imp's connect flags equal relative exp's connect flags
+                 * adding it to avoid the scan export list */
                 imp->imp_connect_data.ocd_connect_flags |=
-                        (exp->exp_connect_flags &
-                         (OBD_CONNECT_QUOTA64 | OBD_CONNECT_CHANGE_QS));
+                                (exp->exp_connect_flags &
+                                 (OBD_CONNECT_QUOTA64 | OBD_CONNECT_CHANGE_QS));
+                spin_unlock(&qctxt->lqc_lock);
+                CDEBUG(D_QUOTA, "%s: lqc_import(%p) of obd(%p) is reactivated "
+                       "now.\n", obd->obd_name, imp, obd);
 
-        cfs_waitq_signal(&qctxt->lqc_wait_for_qmaster);
-        /* start quota slave recovery thread. (release high limits) */
-        qslave_start_recovery(obd, qctxt);
+                cfs_waitq_signal(&qctxt->lqc_wait_for_qmaster);
+                /* start quota slave recovery thread. (release high limits) */
+                qslave_start_recovery(obd, qctxt);
+        }
         RETURN(0);
 }
 
 static int filter_quota_clearinfo(struct obd_export *exp, struct obd_device *obd)
 {
         struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
+        struct obd_import *imp = exp->exp_imp_reverse;
         ENTRY;
 
         /* lquota may be not set up before destroying export, b=14896 */
         if (!obd->obd_set_up)
                 RETURN(0);
 
+        if (unlikely(imp == NULL))
+                RETURN(0);
+
         /* when exp->exp_imp_reverse is destroyed, the corresponding lqc_import
          * should be invalid b=12374 */
-        if (qctxt->lqc_import && qctxt->lqc_import == exp->exp_imp_reverse) {
-                spin_lock(&qctxt->lqc_lock);
+        spin_lock(&qctxt->lqc_lock);
+        if (qctxt->lqc_import == imp) {
                 qctxt->lqc_import = NULL;
                 spin_unlock(&qctxt->lqc_lock);
-                ptlrpc_cleanup_imp(exp->exp_imp_reverse);
+                CDEBUG(D_QUOTA, "%s: lqc_import(%p) of obd(%p) is invalid now.\n",
+                       obd->obd_name, imp, obd);
+                ptlrpc_cleanup_imp(imp);
                 dqacq_interrupt(qctxt);
-                CDEBUG(D_QUOTA, "%s: lqc_import of obd(%p) is invalid now.\n",
-                       obd->obd_name, obd);
+        } else {
+                spin_unlock(&qctxt->lqc_lock);
         }
         RETURN(0);
 }

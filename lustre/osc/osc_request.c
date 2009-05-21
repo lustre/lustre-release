@@ -3834,12 +3834,6 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
         if (!set && !KEY_IS(KEY_GRANT_SHRINK))
                 RETURN(-EINVAL);
 
-        /* If OST understood OBD_CONNECT_MDS we don't need to tell it we
-         * are the MDS again.  Just do the local setup.  b=16839 */
-        if (KEY_IS(KEY_MDS_CONN) &&
-            (imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_MDS))
-                RETURN(osc_setinfo_mds_connect_import(imp));
-
         /* We pass all other commands directly to OST. Since nobody calls osc
            methods directly and everybody is supposed to go through LOV, we
            assume lov checked invalid values for us.

@@ -165,7 +165,7 @@ int filter_quota_ctl(struct obd_device *unused, struct obd_export *exp,
                  * dqacq/dqrel done then return the correct limits to master */
                 if (oqctl->qc_stat == QUOTA_RECOVERING)
                         qctxt_wait_pending_dqacq(&obd->u.obt.obt_qctxt,
-                                                 oqctl->qc_id, oqctl->qc_type, 
+                                                 oqctl->qc_id, oqctl->qc_type,
                                                  1);
 
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
