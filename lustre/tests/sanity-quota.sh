@@ -1143,9 +1143,23 @@ quota_set_version() {
 }
 
 # save quota version (both administrative and operational quotas)
+# the function will also switch to the new version and the new type
 quota_save_version() {
-        do_facet mgs "lctl conf_param ${FSNAME}-MDT*.mdt.quota_type=$1"
-        do_facet mgs "lctl conf_param ${FSNAME}-OST*.ost.quota_type=$1"
+    local spec=$1
+    local ver=$(tr -c -d "123" <<< $spec)
+    local type=$(tr -c -d "ug" <<< $spec)
+
+    $LFS quotaoff -ug $MOUNT # just in case
+    [ -n "$ver" ] && quota_set_version $ver
+    [ -n "$type" ] && { $LFS quotacheck -$type $MOUNT || error "quotacheck has failed"; }
+
+    do_facet mgs "lctl conf_param ${FSNAME}-MDT*.mdt.quota_type=$spec"
+    local varsvc
+    local osts=$(get_facets OST)
+    for ost in ${osts//,/ }; do
+        varsvc=${ost}_svc
+        do_facet mgs "lctl conf_param ${!varsvc}.ost.quota_type=$spec"
+    done
 }
 
 test_14b(){
@@ -1239,9 +1253,8 @@ test_15(){
         [ $TOTAL_LIMIT -eq $LIMIT ] || error "  (group)total limits = $TOTAL_LIMIT; limit = $LIMIT, failed!"
         echo "  (group)total limits = $TOTAL_LIMIT; limit = $LIMIT, successful!"
         $LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
-        $LFS quotaoff -ug $DIR
-        quota_set_version 1
-        $LFS quotacheck -ug $DIR || error "quotacheck failed"
+
+        quota_save_version "ug1"
 
         echo "Testing that >4GB quota limits fail on volume with quota v1"
         ! $LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
@@ -1721,9 +1734,6 @@ test_22() {
         local SAVEREFORMAT
 
         SAVEREFORMAT=$REFORMAT
-        $LFS quotaoff -ug $DIR || error "could not turn quotas off"
-        quota_set_version "1"
-        $LFS quotacheck -ug $DIR || error "quotacheck failed"
 
         quota_save_version "ug1"
 
