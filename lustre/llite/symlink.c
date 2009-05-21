@@ -80,7 +80,7 @@ static int ll_readlink_internal(struct inode *inode,
                 CERROR("OBD_MD_LINKNAME not set on reply\n");
                 GOTO(failed, rc = -EPROTO);
         }
-        
+
         LASSERT(symlen != 0);
         if (body->eadatasize != symlen) {
                 CERROR("inode %lu: symlink length %d not expected %d\n",
@@ -168,8 +168,11 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry, struct n
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
         /* Limit the recursive symlink depth to 5 instead of default
-         * 8 links when kernel has 4k stack to prevent stack overflow. */
-        if (THREAD_SIZE < 8192 && current->link_count >= 5) {
+         * 8 links when kernel has 4k stack to prevent stack overflow.
+         * For 8k stacks we need to limit it to 7 for local servers. */
+        if (THREAD_SIZE < 8192 && current->link_count >= 6) {
+                rc = -ELOOP;
+        } else if (THREAD_SIZE == 8192 && current->link_count >= 8) {
                 rc = -ELOOP;
         } else {
                 down(&lli->lli_size_sem);
