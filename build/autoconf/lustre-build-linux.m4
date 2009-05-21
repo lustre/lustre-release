@@ -368,7 +368,7 @@ AC_DEFUN([LB_LINUX_ARCH],
          [AC_MSG_CHECKING([Linux kernel architecture])
           AS_IF([rm -f $PWD/build/arch
                  make -s --no-print-directory echoarch -f $PWD/build/Makefile \
-                     LUSTRE_LINUX_CONFIG=$LINUX_CONFIG -C $LINUX_OBJ $ARCH_UM \
+                     LUSTRE_LINUX_CONFIG=$LINUX_CONFIG -C $LINUX $ARCH_UM \
                      ARCHFILE=$PWD/build/arch && LINUX_ARCH=`cat $PWD/build/arch`],
                 [AC_MSG_RESULT([$LINUX_ARCH])],
                 [AC_MSG_ERROR([Could not determine the kernel architecture.])])
