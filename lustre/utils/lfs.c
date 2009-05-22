@@ -1723,6 +1723,11 @@ int lfs_setquota_times(int argc, char **argv)
                 return CMD_HELP;
         }
 
+        if (limit_mask == 0) {
+                fprintf(stderr, "error: at least one limit must be specified\n");
+                return CMD_HELP;
+        }
+
         if (optind != argc - 1) {
                 fprintf(stderr, "error: unexpected parameters encountered\n");
                 return CMD_HELP;
@@ -2196,8 +2201,10 @@ ug_output:
                              (qctl.qc_type == USRQUOTA) ? USER : GROUP);
                 if (rc)
                         name = "<unknown>";
+        /* lfs quota -u username /path/to/lustre/mount */
         } else if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA) {
-                if (optind + 2 != argc) {
+                /* options should be followed by u/g-name and mntpoint */
+                if (optind + 2 != argc || qctl.qc_type == UGQUOTA) {
                         fprintf(stderr, "error: missing quota argument(s)\n");
                         return CMD_HELP;
                 }
@@ -2210,7 +2217,7 @@ ug_output:
                                 name, strerror(errno));
                         return CMD_HELP;
                 }
-        } else if (optind + 1 != argc) {
+        } else if (optind + 1 != argc || qctl.qc_type == UGQUOTA) {
                 fprintf(stderr, "error: missing quota info argument(s)\n");
                 return CMD_HELP;
         }
