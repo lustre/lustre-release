@@ -2,17 +2,29 @@ tbd Sun Microsystems, Inc.
 	* version 1.8.1
 	* Support for kernels:
 	 2.6.16.60-0.37 (SLES 10),
+	 2.6.27.21-0.1 (SLES11)
 	 2.6.18-128.1.6.el5 (RHEL 5),
-	 2.6.22.14 vanilla (kernel.org)
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
-	  2.6.16 - 2.6.22 vanilla (kernel.org)
+	  2.6.16 - 2.6.27 vanilla (kernel.org)
 	* Recommended e2fsprogs version: 1.40.11-sun1
 	* File join has been disabled in this release, refer to Bugzilla 16929.
 	* A new Lustre ADIO driver is available for MPICH2-1.0.7.
 	* NFS export disabled when stack size < 8192. Since the NFSv4 export
 	  of Lustre filesystem with 4K stack may cause a stack overflow. For
 	  more information, please refer to bugzilla 17630.
+
+Severity   : enhancement
+Bugzilla   : 19625, 16893, 18668
+Description: Add support for SLES11 2.6.27.21-0.1.
+
+Severity   : enhancement
+Bugzilla   : 18289
+Description: Update to RHEL5U3 kernel-2.6.18-128.1.1.el5.
+
+Severity   : enhancement
+Bugzilla   : 14250
+Description: Update client support to vanila kernels up to 2.6.27.
 
 Severity   : enhancement
 Bugzilla   : 19212
@@ -70,28 +82,12 @@ Details    : Client will shrink its grant cache to OST if there are no write
 	     this grant cache if there are already not enough avaible space
 	     (left_space < total_clients * 32M).
 
-Severity   : enhancement
-Bugzilla   : 18289
-Description: Update to RHEL5U3 kernel-2.6.18-128.1.1.el5.
-
-Severity   : enhancement
-Bugzilla   : 14250
-Description: Update client support to vanila kernels up to 2.6.27.
-
 Severity   : normal
 Frequency  : rare, connect and disconnect target at same time
 Bugzilla   : 17310
 Descriptoin: ASSERTION(atomic_read(&imp->imp_inflight) == 0
 Details    :  don't call obd_disconnect under lov_lock. this long time
 	      operation and can block ptlrpcd which answer to connect request.
-
-Severity   : enhancement
-Bugzilla   : 18061
-Description: Update to SLES10 kernel-2.6.16.60-0.33.
-
-Severity   : enhancement
-Bugzilla   : 18062
-Description: Update to sles9 kernel-2.6.5-7.315.
 
 Severity   : normal
 Frequency  : start MDS on uncleanly shutdowned MDS device
@@ -101,10 +97,6 @@ Details    : stay in waiting mds<>ost recovery finished produce random bugs
 	     due race between two ll_sync thread for one lov target. send
 	     ACTIVATE event only if connect realy finished and import have
 	     FULL state.
-
-Severity   : enhancement
-Bugzilla   : 18060
-Description: Update to RHEL5 kernel-2.6.18-92.1.22.el5.
 
 Severity   : normal
 Frequency  : start MDS on uncleanly shutdowned MDS device

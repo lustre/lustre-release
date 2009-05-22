@@ -20,31 +20,29 @@ prepare_and_build_srpm() {
     local spec
     for spec in $RPMSMPTYPE source; do
         #cp $TOPDIR/SPECS/kernel-$spec.spec{,.orig}
-        sed -i -e 's/^\(Name:.*kernel-\)\(.*\)/\1lustre-\2/' \
+        sed -i -e 's/^\(BuildRequires: .*\)$/#NOU \1/g' \
                -e "s/^Release:.*/&_${buildid}/" \
                -e "/^Provides:  *kernel = /a\
 Provides:       kernel-$spec = %{version}-%{release}
 " \
                -e "s/^ExclusiveArch:.*/& ppc ppc64/" \
-               -e '/^# Apply the patches needed for this architecture\./a\
-cp  %_sourcedir/linux-2.6.16-lustre.patch %_builddir/%{name}-%{version}/lustre.patch\
-! grep -q lustre.patch %_sourcedir/series.conf && echo -e "\\n\\tlustre.patch" >> %_sourcedir/series.conf' \
-               -e "/flavor=\${config/a\
-    [ \"\$flavor\" == \"$RPMSMPTYPE\" ] || continue" \
-               -e 's/\(.*\)\([^#].*\)fookernel-source/\1\2kernel-lustre-source/g' \
                -e '/^%build/,/^%changelog/s/kernel-\({*\)source/kernel-\1lustre-source/g' \
+               -e 's/\(.*\)\([^#].*\)fookernel-source/\1\2kernel-lustre-source/g' \
+	-e "s/^\(%package.*kernel-\)default/\1lustre-default/" \
+	-e "s/^\(%description.*kernel-\)default/\1lustre-default/" \
+	-e "s/^\(%files.*kernel-\)default/\1lustre-default/" \
+	-e "s/^\(Provides:.*kernel-\)default/\1lustre-default/" \
+	-e "s/^\(Requires:.*kernel-\)default/\1lustre-default/" \
+	-e "s/^\(Supplements:.*kernel-\)default/\1lustre-default/" \
+	-e "s/^\(Name:.*kernel-\)default/\1lustre-default/" \
+	-e "s/^\(Release:.*\)<RELEASE1>/\11/" \
+               -e '/^# Apply the patches needed for this architecture\./a\
+cp  %_sourcedir/linux-2.6.27-lustre.patch %_builddir/%{name}-%{version}/lustre.patch\
+! grep -q lustre.patch %_sourcedir/series.conf && echo -e "\\n\\tlustre.patch" >> %_sourcedir/series.conf' \
           SPECS/kernel-${spec}.spec
 
     # XXX - a building-on-Ubuntu hack
-    if grep -q "Ubuntu" /etc/issue; then
-        sed -i -e '/^%_sourcedir\/install-configs %_sourcedir .*/i\
-curl ftp://ftp.kernel.org/pub/linux/kernel/people/akpm/patches/2.6/2.6.17/2.6.17-mm1/broken-out/i386-use-c-code-for-current_thread_info.patch | patch -p1' \
-               -e 's/^\(BuildRequires: .*\)$/#NOU \1/g' \
-               -e 's/%(\(chmod .*\))$/%(bash -c "\1")/' \
-               -e 's/ -a 109//' \
-          SPECS/kernel-${spec}.spec
-     fi
-done
+    done
 
     # XXX - need to flesh this out per the rhel5 method
     local targets
