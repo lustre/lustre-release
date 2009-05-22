@@ -1,19 +1,19 @@
-Index: linux-2.6.16.60-0.33/drivers/md/raid5.c
+Index: linux-2.6.27.21-0.1/drivers/md/raid5.c
 ===================================================================
---- linux-2.6.16.60-0.33.orig/drivers/md/raid5.c
-+++ linux-2.6.16.60-0.33/drivers/md/raid5.c
-@@ -900,6 +900,8 @@ static int add_stripe_bio(struct stripe_
+--- linux-2.6.27.21-0.1.orig/drivers/md/raid5.c	2009-04-23 02:12:52.000000000 -0600
++++ linux-2.6.27.21-0.1/drivers/md/raid5.c	2009-05-22 08:38:38.000000000 -0600
+@@ -1760,6 +1760,8 @@
  		bi->bi_next = *bip;
  	*bip = bi;
-	bi->bi_phys_segments++;
+ 	bi->bi_phys_segments++;
 +	if (bio_sync(bi) && !forwrite)
 +		clear_bit(R5_UPTODATE, &sh->dev[dd_idx].flags); /* force to read from disk. */
-	spin_unlock_irq(&conf->device_lock);
+ 	spin_unlock_irq(&conf->device_lock);
  	spin_unlock(&sh->lock);
  
-@@ -1617,6 +1619,8 @@ static int make_request (request_queue_t
+@@ -3513,6 +3515,8 @@
  
- 		bi->bi_end_io(bi, bytes, 0);
+ 		bio_endio(bi, 0);
  	}
 +	if (bio_sync(bi))
 +		raid5_unplug_device(q);

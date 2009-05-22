@@ -1,8 +1,8 @@
-Index: linux-2.6.22.5/block/blk-core.c
+Index: linux-2.6.27.21-0.1/block/blk-core.c
 ===================================================================
---- linux-2.6.22.5.orig/block/blk-core.c
-+++ linux-2.6.22.5/block/blk-core.c
-@@ -3101,6 +3101,8 @@ static inline int should_fail_request(st
+--- linux-2.6.27.21-0.1.orig/block/blk-core.c	2009-04-23 02:12:51.000000000 -0600
++++ linux-2.6.27.21-0.1/block/blk-core.c	2009-05-22 08:38:02.000000000 -0600
+@@ -1335,6 +1335,8 @@
  
  #endif /* CONFIG_FAIL_MAKE_REQUEST */
  
@@ -11,7 +11,7 @@ Index: linux-2.6.22.5/block/blk-core.c
  /*
   * Check whether this bio extends beyond the end of the device.
   */
-@@ -3185,6 +3187,12 @@ end_io:
+@@ -1436,6 +1438,12 @@
  
  		if (unlikely(test_bit(QUEUE_FLAG_DEAD, &q->queue_flags)))
  			goto end_io;
@@ -24,7 +24,7 @@ Index: linux-2.6.22.5/block/blk-core.c
  
  		if (should_fail_request(bio))
  			goto end_io;
-@@ -3850,6 +3858,91 @@ void swap_io_context(struct io_context *
+@@ -2189,6 +2197,91 @@
  }
  EXPORT_SYMBOL(kblockd_flush_work);
  
@@ -115,12 +115,12 @@ Index: linux-2.6.22.5/block/blk-core.c
 +EXPORT_SYMBOL(dev_check_rdonly);
  int __init blk_dev_init(void)
  {
- 	int i;
-Index: linux-2.6.22.5/fs/block_dev.c
+ 	kblockd_workqueue = create_workqueue("kblockd");
+Index: linux-2.6.27.21-0.1/fs/block_dev.c
 ===================================================================
---- linux-2.6.22.5.orig/fs/block_dev.c
-+++ linux-2.6.22.5/fs/block_dev.c
-@@ -1294,6 +1294,7 @@ static int __blkdev_put(struct block_dev
+--- linux-2.6.27.21-0.1.orig/fs/block_dev.c	2009-04-23 02:12:56.000000000 -0600
++++ linux-2.6.27.21-0.1/fs/block_dev.c	2009-05-22 08:38:02.000000000 -0600
+@@ -1208,6 +1208,7 @@
  		if (bdev != bdev->bd_contains)
  			victim = bdev->bd_contains;
  		bdev->bd_contains = NULL;
@@ -128,11 +128,11 @@ Index: linux-2.6.22.5/fs/block_dev.c
  	}
  	unlock_kernel();
  	mutex_unlock(&bdev->bd_mutex);
-Index: linux-2.6.22.5/include/linux/fs.h
+Index: linux-2.6.27.21-0.1/include/linux/fs.h
 ===================================================================
---- linux-2.6.22.5.orig/include/linux/fs.h
-+++ linux-2.6.22.5/include/linux/fs.h
-@@ -1744,6 +1744,10 @@ struct bio;
+--- linux-2.6.27.21-0.1.orig/include/linux/fs.h	2009-05-22 08:38:00.000000000 -0600
++++ linux-2.6.27.21-0.1/include/linux/fs.h	2009-05-22 08:38:02.000000000 -0600
+@@ -1898,6 +1898,10 @@
  extern void submit_bio(int, struct bio *);
  extern int bdev_read_only(struct block_device *);
  #endif
