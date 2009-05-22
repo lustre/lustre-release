@@ -44,18 +44,6 @@ check_vbr || \
 FAKE_NUM_MAX=${FAKE_NUM_MAX:-1000}
 [ "$SLOW" = "no" ] && FAKE_NUM_MAX=100
 
-do_and_time () {
-   local cmd=$1
-
-   local start_ts=`date +%s`
-
-   $cmd
-
-   local current_ts=`date +%s`
-   ELAPSED=`expr $current_ts - $start_ts`
-   echo "===== START $start_ts CURRENT $current_ts"
-}
-
 delete_fake_exports () {
     NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
 
@@ -87,8 +75,8 @@ test_1b() {
         NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|wc -l")
         [ $NUM -lt $FAKE_NUM ] && error "fake exports $NUM -ne $FAKE_NUM"
         echo "===== STALE EXPORTS: FAKE_NUM=$FAKE_NUM NUM=$NUM"
-        do_and_time "zconf_mount_clients $CLIENTS $DIR"
-        echo "==== $TESTNAME ===== CONNECTION TIME $ELAPSED: FAKE_NUM=$FAKE_NUM CLIENTCOUNT=$CLIENTCOUNT"
+        local elapsed=$(do_and_time "zconf_mount_clients $CLIENTS $DIR")
+        echo "==== $TESTNAME ===== CONNECTION TIME $elapsed: FAKE_NUM=$FAKE_NUM CLIENTCOUNT=$CLIENTCOUNT"
 
         # do_facet mds "lctl set_param mds.${mds_svc}.flush_stale_exports=1"
         delete_fake_exports
@@ -174,8 +162,8 @@ test_1d() {
         EX_NUM=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep -c EXPIRED")
         [ "$EX_NUM" -eq "$NUM" ] || error "not all exports are expired $EX_NUM != $NUM"
 
-        do_and_time "zconf_mount_clients $CLIENTS $DIR"
-        echo "==== $TESTNAME===== CONNECTION TIME $ELAPSED: expired FAKE_NUM=$FAKE_NUM CLIENTCOUNT=$CLIENTCOUNT"
+        local elapsed=$(do_and_time "zconf_mount_clients $CLIENTS $DIR")
+        echo "==== $TESTNAME===== CONNECTION TIME $elapsed: expired FAKE_NUM=$FAKE_NUM CLIENTCOUNT=$CLIENTCOUNT"
 
         do_facet mds "lctl set_param mds.${mds_svc}.stale_export_age=$OLD_AGE"
     done
