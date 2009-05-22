@@ -106,3 +106,16 @@ rpm_BUILD_kernel_dirname() {
 
     echo kernel-lustre-${rpmsmptype}-${lnxmaj}${lnxmin}/linux-${lnxmaj}
 }
+
+unpack_linux_devel_rpm-sles11() {
+    local kernelrpm
+    if ! kernelrpm=$(find_linux_rpm "-default-base" ${EXTRA_VERSION_DELIMITER:-"-"}); then
+        fatal 1 "Could not find the kernel-base-default in ${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}"
+    fi
+
+    if ! rpm2cpio < "$kernelrpm" | cpio -id > /dev/null 2>&1; then
+        fatal 1 "Unpack error for $kernelrpm"
+    fi
+
+}
+
