@@ -1309,10 +1309,22 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LN_FUNC_DUMP_TRACE],
 [LB_CHECK_SYMBOL_EXPORT([dump_trace],
 [kernel/ksyms.c arch/${LINUX_ARCH%_64}/kernel/traps_64.c],[
-	AC_DEFINE(HAVE_DUMP_TRACE, 1, [dump_trace is exported])
-	AC_MSG_CHECKING([whether print_trace_address has reliable argument])
 	tmp_flags="$EXTRA_KCFLAGS"
 	EXTRA_KCFLAGS="-Werror"
+	AC_MSG_CHECKING([whether we can really use dump_stack])
+	LB_LINUX_TRY_COMPILE([
+		struct task_struct;
+		struct pt_regs;
+		#include <asm/stacktrace.h>
+	],[
+	],[
+		AC_MSG_RESULT(yes)
+		AC_DEFINE(HAVE_DUMP_TRACE, 1, [dump_trace is exported])
+	],[
+		AC_MSG_RESULT(no)
+	],[
+	])
+	AC_MSG_CHECKING([whether print_trace_address has reliable argument])
 	LB_LINUX_TRY_COMPILE([
 		struct task_struct;
 		struct pt_regs;
