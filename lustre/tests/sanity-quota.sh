@@ -67,7 +67,7 @@ OSTCOUNT=`lctl get_param -n lov.$LOVNAME.numobd`
 
 SHOW_QUOTA_USER="$LFS quota -v -u $TSTUSR $DIR"
 SHOW_QUOTA_GROUP="$LFS quota -v -g $TSTUSR $DIR"
-SHOW_QUOTA_INFO="$LFS quota -t $DIR"
+SHOW_QUOTA_INFO="$LFS quota -t -u $DIR; $LFS quota -t -g $DIR"
 
 # control the time of tests
 cycle=30
@@ -1815,6 +1815,13 @@ test_24() {
         
 }
 run_test_with_stat 24 "test if lfs draws an asterix when limit is reached (16646) ==========="
+
+test_27() {
+        $LFS quota $TSTUSR $DIR && error "lfs succeeded with no type, but should have failed"
+        $LFS setquota $TSTUSR $DIR && error "lfs succeeded with no type, but should have failed"
+        return 0
+}
+run_test_with_stat 27 "lfs quota/setquota should handle wrong arguments (19612) ================="
 
 # turn off quota
 test_99()
