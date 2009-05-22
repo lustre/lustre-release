@@ -609,6 +609,11 @@ int mds_quota_invalidate(struct obd_device *obd, struct obd_quotactl *oqctl)
         char name[64];
         struct lvfs_run_ctxt saved;
 
+        if (oqctl->qc_type != USRQUOTA &&
+            oqctl->qc_type != GRPQUOTA &&
+            oqctl->qc_type != UGQUOTA)
+                return -EINVAL;
+
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         down(&mds->mds_qonoff_sem);
@@ -653,6 +658,11 @@ int mds_quota_finvalidate(struct obd_device *obd, struct obd_quotactl *oqctl)
         struct mds_obd *mds = &obd->u.mds;
         int rc;
         struct lvfs_run_ctxt saved;
+
+        if (oqctl->qc_type != USRQUOTA &&
+            oqctl->qc_type != GRPQUOTA &&
+            oqctl->qc_type != UGQUOTA)
+                RETURN(-EINVAL);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         down(&mds->mds_qonoff_sem);
@@ -885,6 +895,11 @@ int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
         int rc;
         ENTRY;
 
+        if (oqctl->qc_type != USRQUOTA &&
+            oqctl->qc_type != GRPQUOTA &&
+            oqctl->qc_type != UGQUOTA)
+                RETURN(-EINVAL);
+
         if (!atomic_dec_and_test(&obt->obt_quotachecking)) {
                 CDEBUG(D_INFO, "other people are doing quotacheck\n");
                 atomic_inc(&obt->obt_quotachecking);
@@ -920,6 +935,11 @@ int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
         int rc, rc2;
         ENTRY;
 
+        if (oqctl->qc_type != USRQUOTA &&
+            oqctl->qc_type != GRPQUOTA &&
+            oqctl->qc_type != UGQUOTA)
+                RETURN(-EINVAL);
+
         if (!atomic_dec_and_test(&obt->obt_quotachecking)) {
                 CDEBUG(D_INFO, "other people are doing quotacheck\n");
                 atomic_inc(&obt->obt_quotachecking);
@@ -951,6 +971,10 @@ int mds_set_dqinfo(struct obd_device *obd, struct obd_quotactl *oqctl)
         int rc;
         ENTRY;
 
+        if (oqctl->qc_type != USRQUOTA &&
+            oqctl->qc_type != GRPQUOTA)
+                RETURN(-EINVAL);
+
         down(&mds->mds_qonoff_sem);
         if (qinfo->qi_files[oqctl->qc_type] == NULL) {
                 rc = -ESRCH;
@@ -975,6 +999,10 @@ int mds_get_dqinfo(struct obd_device *obd, struct obd_quotactl *oqctl)
         struct obd_dqinfo *dqinfo = &oqctl->qc_dqinfo;
         int rc = 0;
         ENTRY;
+
+        if (oqctl->qc_type != USRQUOTA &&
+            oqctl->qc_type != GRPQUOTA)
+                RETURN(-EINVAL);
 
         down(&mds->mds_qonoff_sem);
         if (qinfo->qi_files[oqctl->qc_type] == NULL) {
@@ -1290,6 +1318,10 @@ int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
         int rc, rc2 = 0, flag = 0;
         ENTRY;
 
+        if (oqctl->qc_type != USRQUOTA &&
+            oqctl->qc_type != GRPQUOTA)
+                RETURN(-EINVAL);
+
         OBD_ALLOC_PTR(oqaq);
         if (!oqaq)
                 RETURN(-ENOMEM);
@@ -1483,6 +1515,10 @@ int mds_get_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
         struct obd_dqblk *dqblk = &oqctl->qc_dqblk;
         int rc;
         ENTRY;
+
+        if (oqctl->qc_type != USRQUOTA &&
+            oqctl->qc_type != GRPQUOTA)
+                RETURN(-EINVAL);
 
         down(&mds->mds_qonoff_sem);
         dqblk->dqb_valid = 0;
