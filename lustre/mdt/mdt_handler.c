@@ -1515,6 +1515,8 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
                 GOTO(out_shrink, rc = err_serious(rc));
         }
 
+        OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_REINT_DELAY, 10);
+
         /* for replay no cookkie / lmm need, because client have this already */
         if (info->mti_spec.no_create == 1)  {
                 if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))

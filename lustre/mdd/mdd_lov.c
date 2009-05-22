@@ -397,9 +397,10 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
         int                    rc = 0;
         ENTRY;
 
-        if (!md_should_create(create_flags))
+        if (!md_should_create(create_flags)) {
+                *lmm_size = 0;
                 RETURN(0);
-
+        }
         oti_init(oti, NULL);
 
         /* replay case, has objects already, only get lov from eadata */
@@ -449,7 +450,9 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                                                XATTR_NAME_LOV);
                         if (rc > 0)
                                 rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
-                                                   lov_exp, 0, &lsm, _lmm);
+                                                   lov_exp, *lmm_size,
+                                                   &lsm, _lmm);
+
                         if (rc)
                                 GOTO(out_oti, rc);
                 }

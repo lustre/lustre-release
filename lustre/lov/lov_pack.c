@@ -391,7 +391,8 @@ int lov_unpackmd(struct obd_export *exp,  struct lov_stripe_md **lsmp,
         RETURN(lsm_size);
 }
 
-static int __lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
+static int __lov_setstripe(struct obd_export *exp, int max_lmm_size,
+                           struct lov_stripe_md **lsmp,
                            struct lov_user_md *lump)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -457,6 +458,17 @@ static int __lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
         }
         stripe_count = lov_get_stripecnt(lov, lumv1->lmm_stripe_count);
 
+        if (max_lmm_size) {
+                int max_stripes = (max_lmm_size -
+                                   lov_mds_md_size(0, lmm_magic)) /
+                                   sizeof(struct lov_ost_data_v1);
+                if (unlikely(max_stripes < stripe_count)) {
+                        CDEBUG(D_IOCTL, "stripe count reset from %d to %d\n",
+                               stripe_count, max_stripes);
+                        stripe_count = max_stripes;
+                }
+        }
+
         if (lmm_magic == LOV_USER_MAGIC_V3) {
                 struct pool_desc *pool;
 
@@ -507,8 +519,8 @@ static int __lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
  * lmm_stripe_offset, and lmm_stripe_pattern.  lmm_magic must be LOV_MAGIC.
  * @lsmp is a pointer to an in-core stripe MD that needs to be filled in.
  */
-int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
-                  struct lov_user_md *lump)
+int lov_setstripe(struct obd_export *exp, int max_lmm_size,
+                  struct lov_stripe_md **lsmp, struct lov_user_md *lump)
 {
         int rc;
         mm_segment_t seg;
@@ -516,7 +528,7 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
         seg = get_fs();
         set_fs(KERNEL_DS);
 
-        rc = __lov_setstripe(exp, lsmp, lump);
+        rc = __lov_setstripe(exp, max_lmm_size, lsmp, lump);
         set_fs(seg);
         RETURN(rc);
 }
@@ -554,7 +566,7 @@ int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 }
         }
 
-        rc = lov_setstripe(exp, lsmp, lump);
+        rc = lov_setstripe(exp, 0, lsmp, lump);
         if (rc)
                 RETURN(rc);
 

@@ -2027,7 +2027,7 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 break;
         }
         case LL_IOC_LOV_SETSTRIPE:
-                rc = lov_setstripe(exp, karg, uarg);
+                rc = lov_setstripe(exp, len, karg, uarg);
                 break;
         case LL_IOC_LOV_GETSTRIPE:
                 rc = lov_getstripe(exp, karg, uarg);

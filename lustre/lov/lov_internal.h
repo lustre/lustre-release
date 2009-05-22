@@ -266,7 +266,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmm,
                struct lov_stripe_md *lsm);
 int lov_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
                  struct lov_mds_md *lmm, int lmm_bytes);
-int lov_setstripe(struct obd_export *exp,
+int lov_setstripe(struct obd_export *exp, int max_lmm_size,
                   struct lov_stripe_md **lsmp, struct lov_user_md *lump);
 int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
               struct lov_user_md *lump);

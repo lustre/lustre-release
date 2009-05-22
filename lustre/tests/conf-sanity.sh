@@ -1929,6 +1929,28 @@ test_50f() {
 }
 run_test 50f "normal statfs one server in down =========================="
 
+test_51() {
+	local LOCAL_TIMEOUT=20
+
+	reformat
+	start_mds
+	start_ost
+	mount_client $MOUNT
+	check_mount || return 1
+
+	mkdir $MOUNT/d1
+	$LFS setstripe -c -1 $MOUNT/d1
+        #define OBD_FAIL_MDS_REINT_DELAY         0x142
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x142"
+	touch $MOUNT/d1/f1 &
+	local pid=$!
+	sleep 2
+	start_ost2 || return 2
+	wait $pid
+	stop_ost2 || return 3
+	cleanup
+}
+run_test 51 "Verify that mdt_reint handles RMF_MDT_MD correctly when an OST is added"
 
 cleanup_gss
 equals_msg `basename $0`: test complete

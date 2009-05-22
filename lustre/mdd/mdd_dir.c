@@ -1344,7 +1344,7 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
 
         if (!md_should_create(spec->sp_cr_flags))
                 RETURN(0);
-
+        lmm_size = ma->ma_lmm_size;
         rc = mdd_lov_create(env, mdd, mdd_pobj, son, &lmm, &lmm_size,
                             spec, attr);
         if (rc)
@@ -1692,6 +1692,7 @@ static int mdd_create(const struct lu_env *env,
          * first.
          */
         if (S_ISREG(attr->la_mode)) {
+                lmm_size = ma->ma_lmm_size;
                 rc = mdd_lov_create(env, mdd, mdd_pobj, son, &lmm, &lmm_size,
                                     spec, attr);
                 if (rc)
