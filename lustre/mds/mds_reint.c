@@ -771,7 +771,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 GOTO(cleanup, rc);
 
         if (rec->ur_iattr.ia_valid & ATTR_ATTR_FLAG) {  /* ioctl */
-                rc = fsfilt_iocontrol(obd, inode, NULL, EXT3_IOC_SETFLAGS,
+                rc = fsfilt_iocontrol(obd, inode, NULL, FSFILT_IOC_SETFLAGS,
                                       (long)&rec->ur_flags);
         } else if (rec->ur_iattr.ia_valid) {            /* setattr */
                 rc = fsfilt_setattr(obd, de, handle, &rec->ur_iattr, 0);

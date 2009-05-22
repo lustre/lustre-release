@@ -2254,7 +2254,8 @@ test_52a() {
 	link $DIR/d52a/foo $DIR/d52a/foo_link 2>/dev/null && error "link worked"
 	echo foo >> $DIR/d52a/foo || error "append foo failed"
 	mrename $DIR/d52a/foo $DIR/d52a/foo_ren && error "rename worked"
-	lsattr $DIR/d52a/foo | egrep -q "^-+a-+ $DIR/d52a/foo" || error "lsattr"
+	# new lsattr displays 'e' flag for extents
+	lsattr $DIR/d52a/foo | egrep -q "^-+a[-e]+ $DIR/d52a/foo" || error "lsattr"
 	chattr -a $DIR/d52a/foo || error "chattr -a failed"
 
 	rm -fr $DIR/d52a || error "cleanup rm failed"
@@ -2274,7 +2275,7 @@ test_52b() {
 	mrename $DIR/d52b/foo $DIR/d52b/foo_ren && error
 	[ -f $DIR/d52b/foo ] || error
 	[ -f $DIR/d52b/foo_ren ] && error
-	lsattr $DIR/d52b/foo | egrep -q "^-+i-+ $DIR/d52b/foo" || error
+	lsattr $DIR/d52b/foo | egrep -q "^-+i[-e]+ $DIR/d52b/foo" || error
 	chattr -i $DIR/d52b/foo || error
 
 	rm -fr $DIR/d52b || error
@@ -2289,7 +2290,7 @@ test_52c() { # 12848 simulating client < 1.4.7
 #define OBD_FAIL_MDC_OLD_EXT_FLAGS       0x802
         lctl set_param fail_loc=0x802
         chattr =i $DIR/d52c/foo || error
-        lsattr $DIR/d52c/foo | egrep -q "^-+i-+ $DIR/d52c/foo" || error
+        lsattr $DIR/d52c/foo | egrep -q "^-+i[-e]+ $DIR/d52c/foo" || error
         chattr -i $DIR/d52c/foo || error
         lctl set_param -n fail_loc=0
 

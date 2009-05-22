@@ -785,7 +785,7 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
 
                 /* We only return the full set of flags on ioctl, otherwise we
                  * get enough flags from the inode in mds_pack_inode2body(). */
-                rc = fsfilt_iocontrol(obd, inode, NULL, EXT3_IOC_GETFLAGS,
+                rc = fsfilt_iocontrol(obd, inode, NULL, FSFILT_IOC_GETFLAGS,
                                       (long)&flags);
                 if (rc == 0)
                         body->flags = flags | MDS_BFLAG_EXT_FLAGS;

@@ -2111,7 +2111,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
         ENTRY;
 
         switch(cmd) {
-        case EXT3_IOC_GETFLAGS: {
+        case FSFILT_IOC_GETFLAGS: {
                 struct ll_fid fid;
                 struct mds_body *body;
 
@@ -2133,7 +2133,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 
                 RETURN(put_user(flags, (int *)arg));
         }
-        case EXT3_IOC_SETFLAGS: {
+        case FSFILT_IOC_SETFLAGS: {
                 struct mdc_op_data op_data = { { 0 } };
                 struct ll_iattr_struct attr;
                 struct obd_info oinfo = { { { 0 } } };
