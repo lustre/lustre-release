@@ -33,6 +33,13 @@ $2
 esac
 ])
 
+AC_DEFUN([LC_KERNEL_WITH_EXT4],
+[if test -f $LINUX/fs/ext4/ext4.h ; then
+$1
+else
+$2
+fi
+])
 
 AC_MSG_CHECKING([whether to build kernel modules])
 AC_ARG_ENABLE([modules],
@@ -83,6 +90,26 @@ AM_CONDITIONAL(USE_QUILT, test x$QUILT != xno)
 
 LB_DEFINE_LDISKFS_OPTIONS
 
+AC_MSG_CHECKING([whether to build ldisk based on ext4])
+AC_ARG_ENABLE([ext4],
+	      AC_HELP_STRING([--enable-ext4],
+			     [enable building of ldiskfs based on ext4]),
+			     [LC_KERNEL_WITH_EXT4([enable_ext4='yes'],
+			     [enable_ext4='no'])],[])
+AC_MSG_RESULT([$enable_ext4])
+
+if test x$enable_ext4 = xyes ; then
+        AC_DEFINE(HAVE_EXT4_LDISKFS, 1, [ldiskfs based on ext4])
+        BACKFS=ext4
+else
+        BACKFS=ext3
+fi
+AC_SUBST(BACKFS)
+BACKFSU=${BACKFS/ext/EXT}
+AC_SUBST(BACKFSU) # We need a Upper string
+
+AM_CONDITIONAL(USE_EXT4, test x$enable_ext4 = xyes)
+
 AC_MSG_CHECKING([which ldiskfs series to use])
 case $LINUXRELEASE in
 2.6.5*) LDISKFS_SERIES="2.6-suse.series" ;;
@@ -94,12 +121,17 @@ case $LINUXRELEASE in
 2.6.16*) LDISKFS_SERIES="2.6-sles10.series";;
 2.6.18*)
 	if test x$RHEL_KENEL = xyes; then
-		LDISKFS_SERIES="2.6-rhel5.series"
+                if test x$enable_ext4 = xyes; then
+		        LDISKFS_SERIES="2.6-rhel5-ext4.series"
+                else
+		        LDISKFS_SERIES="2.6-rhel5.series"
+                fi
 	else
 		LDISKFS_SERIES="2.6.18-vanilla.series"
 	fi
 	;;
 2.6.22*) LDISKFS_SERIES="2.6.22-vanilla.series";;
+2.6.27*) LDISKFS_SERIES="2.6-sles11.series";;
 *) AC_MSG_WARN([Unknown kernel version $LINUXRELEASE, fix ldiskfs/configure.ac])
 esac
 AC_MSG_RESULT([$LDISKFS_SERIES])
