@@ -205,6 +205,54 @@ void lbug_with_loc(const char *file, const char *func, const int line)
 
 #ifdef __KERNEL__
 
+#ifdef HAVE_DUMP_TRACE
+#include <linux/nmi.h>
+#include <asm/stacktrace.h>
+
+static void
+print_trace_warning_symbol(void *data, char *msg, unsigned long symbol)
+{
+	printk(data);
+	print_symbol(msg, symbol);
+	printk("\n");
+}
+
+static void print_trace_warning(void *data, char *msg)
+{
+	printk("%s%s\n", (char *)data, msg);
+}
+
+static int print_trace_stack(void *data, char *name)
+{
+	printk(" <%s> ", name);
+	return 0;
+}
+
+#ifdef HAVE_TRACE_ADDRESS_RELIABLE
+# define RELIABLE reliable
+# define DUMP_TRACE_CONST const
+static void print_trace_address(void *data, unsigned long addr, int reliable)
+#else
+/* before 2.6.24 there was no reliable arg */
+# define RELIABLE 1
+# define DUMP_TRACE_CONST
+static void print_trace_address(void *data, unsigned long addr)
+#endif
+{
+        char fmt[32];
+	touch_nmi_watchdog();
+        sprintf(fmt, " [<%016lx>] %s%%s\n", addr, RELIABLE ? "": "? ");
+	__print_symbol(fmt, addr);
+}
+
+static DUMP_TRACE_CONST struct stacktrace_ops print_trace_ops = {
+	.warning = print_trace_warning,
+	.warning_symbol = print_trace_warning_symbol,
+	.stack = print_trace_stack,
+	.address = print_trace_address,
+};
+#endif
+
 void libcfs_debug_dumpstack(struct task_struct *tsk)
 {
 #if defined(__arch_um__)
@@ -212,6 +260,18 @@ void libcfs_debug_dumpstack(struct task_struct *tsk)
                 CWARN("stack dump for pid %d (%d) requested; wake up gdb.\n",
                       tsk->pid, UML_PID(tsk));
         //asm("int $3");
+#elif defined(HAVE_DUMP_TRACE)
+        /* dump_stack() */
+        /* show_trace() */
+	printk("Pid: %d, comm: %.20s\n", current->pid, current->comm);
+        /* show_trace_log_lvl() */
+	printk("\nCall Trace:\n");
+	dump_trace(tsk, NULL, NULL,
+#ifdef HAVE_TRACE_ADDRESS_RELIABLE
+                   0,
+#endif /* HAVE_TRACE_ADDRESS_RELIABLE */
+                   &print_trace_ops, NULL);
+	printk("\n");
 #elif defined(HAVE_SHOW_TASK)
         /* this is exported by lustre kernel version 42 */
         extern void show_task(struct task_struct *);
