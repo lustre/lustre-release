@@ -126,10 +126,10 @@ static void record_finish_io(struct filter_iobuf *iobuf, int rw, int rc)
 }
 
 #ifdef HAVE_BIO_ENDIO_2ARG
-#define DIO_RETURN(a)   return
+#define DIO_RETURN(a)
 static void dio_complete_routine(struct bio *bio, int error)
 #else
-#define DIO_RETURN(a)   return a
+#define DIO_RETURN(a)   (a)
 static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
 #endif
 {
@@ -148,7 +148,7 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
 	 * the bio_end_io routine is never called for partial completions,
 	 * so this check is no longer needed. */
 	if (bio->bi_size)		       /* Not complete */
-		DIO_RETURN(1);
+		return DIO_RETURN(1);
 #endif
 
         if (unlikely(iobuf == NULL)) {
@@ -166,7 +166,7 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
                        bio->bi_rw, bio->bi_vcnt, bio->bi_idx, bio->bi_size,
                        bio->bi_end_io, atomic_read(&bio->bi_cnt),
                        bio->bi_private);
-                DIO_RETURN(0);
+                return DIO_RETURN(0);
         }
 
         /* the check is outside of the cycle for performance reason -bzzz */
@@ -197,7 +197,7 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
          * deadlocking the OST.  The bios are now released as soon as complete
          * so the pool cannot be exhausted while IOs are competing. bug 10076 */
         bio_put(bio);
-        DIO_RETURN(0);
+        return DIO_RETURN(0);
 }
 
 static int can_be_merged(struct bio *bio, sector_t sector)
