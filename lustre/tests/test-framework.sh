@@ -2297,6 +2297,19 @@ multiop_bg_pause() {
     return 0
 }
 
+do_and_time () {
+    local cmd=$1
+    local rc
+
+    SECONDS=0
+    eval '$cmd'
+    
+    [ ${PIPESTATUS[0]} -eq 0 ] || rc=1
+
+    echo $SECONDS
+    return $rc
+}
+
 inodes_available () {
     local IFree=$($LFS df -i $MOUNT | grep ^$FSNAME | awk '{print $4}' | sort -un | head -1) || return 1
     echo $IFree
