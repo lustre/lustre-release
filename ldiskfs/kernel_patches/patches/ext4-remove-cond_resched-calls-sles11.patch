@@ -1,0 +1,29 @@
+Index: linux-2.6.27.21-0.1/fs/ext4/ialloc.c
+===================================================================
+--- linux-2.6.27.21-0.1.orig/fs/ext4/ialloc.c
++++ linux-2.6.27.21-0.1/fs/ext4/ialloc.c
+@@ -1120,7 +1120,6 @@ unsigned long ext4_count_free_inodes(str
+ 		if (!gdp)
+ 			continue;
+ 		desc_count += ext4_free_inodes_count(sb, gdp);
+-		cond_resched();
+ 	}
+ 	return desc_count;
+ #endif
+Index: linux-2.6.27.21-0.1/fs/ext4/super.c
+===================================================================
+--- linux-2.6.27.21-0.1.orig/fs/ext4/super.c
++++ linux-2.6.27.21-0.1/fs/ext4/super.c
+@@ -3263,11 +3263,9 @@ static int ext4_statfs(struct dentry *de
+ 		 * block group descriptors.  If the sparse superblocks
+ 		 * feature is turned on, then not all groups have this.
+ 		 */
+-		for (i = 0; i < ngroups; i++) {
++		for (i = 0; i < ngroups; i++)
+ 			overhead += ext4_bg_has_super(sb, i) +
+ 				ext4_bg_num_gdb(sb, i);
+-			cond_resched();
+-		}
+ 
+ 		/*
+ 		 * Every block group has an inode bitmap, a block

@@ -1,0 +1,20 @@
+Index: linux-2.6.18.i386/fs/ext4/ext4.h
+===================================================================
+--- linux-2.6.18.i386.orig/fs/ext4/ext4.h
++++ linux-2.6.18.i386/fs/ext4/ext4.h
+@@ -541,12 +541,13 @@ do {									       \
+ #define EXT4_MOUNT_IOPEN		0x8000000 /* Allow access via iopen */
+ #define EXT4_MOUNT_IOPEN_NOPRIV		0x10000000 /* Make iopen world-readable */
+ /* Compatibility, for having both ext2_fs.h and ext4_fs.h included at once */
+-#ifndef _LINUX_EXT2_FS_H
++#ifndef clear_opt
+ #define clear_opt(o, opt)		o &= ~EXT4_MOUNT_##opt
+ #define set_opt(o, opt)			o |= EXT4_MOUNT_##opt
+ #define test_opt(sb, opt)		(EXT4_SB(sb)->s_mount_opt & \
+ 					 EXT4_MOUNT_##opt)
+-#else
++#endif
++#ifndef EXT2_MOUNT_NOLOAD
+ #define EXT2_MOUNT_NOLOAD		EXT4_MOUNT_NOLOAD
+ #define EXT2_MOUNT_ABORT		EXT4_MOUNT_ABORT
+ #define EXT2_MOUNT_DATA_FLAGS		EXT4_MOUNT_DATA_FLAGS
