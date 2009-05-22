@@ -1,8 +1,8 @@
-Index: linux-2.6.22.19/drivers/scsi/Kconfig
+Index: linux-2.6.27.21-0.1/drivers/scsi/Kconfig
 ===================================================================
---- linux-2.6.22.19.orig/drivers/scsi/Kconfig
-+++ linux-2.6.22.19/drivers/scsi/Kconfig
-@@ -76,6 +76,14 @@ config BLK_DEV_SD
+--- linux-2.6.27.21-0.1.orig/drivers/scsi/Kconfig	2009-04-23 02:12:56.000000000 -0600
++++ linux-2.6.27.21-0.1/drivers/scsi/Kconfig	2009-05-22 08:38:28.000000000 -0600
+@@ -82,6 +82,14 @@
  	  In this case, do not compile the driver for your SCSI host adapter
  	  (below) as a module either.
  
@@ -17,10 +17,10 @@ Index: linux-2.6.22.19/drivers/scsi/Kconfig
  config CHR_DEV_ST
  	tristate "SCSI tape support"
  	depends on SCSI
-Index: linux-2.6.22.19/drivers/scsi/scsi_proc.c
+Index: linux-2.6.27.21-0.1/drivers/scsi/scsi_proc.c
 ===================================================================
---- linux-2.6.22.19.orig/drivers/scsi/scsi_proc.c
-+++ linux-2.6.22.19/drivers/scsi/scsi_proc.c
+--- linux-2.6.27.21-0.1.orig/drivers/scsi/scsi_proc.c	2009-04-23 02:12:56.000000000 -0600
++++ linux-2.6.27.21-0.1/drivers/scsi/scsi_proc.c	2009-05-22 08:38:28.000000000 -0600
 @@ -40,7 +40,8 @@
  /* 4K page size, but our output routines, use some slack for overruns */
  #define PROC_BLOCK_SIZE (3*1024)
@@ -31,11 +31,11 @@ Index: linux-2.6.22.19/drivers/scsi/scsi_proc.c
  
  /* Protect sht->present and sht->proc_dir */
  static DEFINE_MUTEX(global_host_template_mutex);
-Index: linux-2.6.22.19/drivers/scsi/sd.c
+Index: linux-2.6.27.21-0.1/drivers/scsi/sd.c
 ===================================================================
---- linux-2.6.22.19.orig/drivers/scsi/sd.c
-+++ linux-2.6.22.19/drivers/scsi/sd.c
-@@ -94,6 +94,24 @@ static DEFINE_SPINLOCK(sd_index_lock);
+--- linux-2.6.27.21-0.1.orig/drivers/scsi/sd.c	2009-04-23 02:12:56.000000000 -0600
++++ linux-2.6.27.21-0.1/drivers/scsi/sd.c	2009-05-22 08:38:28.000000000 -0600
+@@ -108,6 +108,24 @@
   * object after last put) */
  static DEFINE_MUTEX(sd_ref_mutex);
  
@@ -60,16 +60,16 @@ Index: linux-2.6.22.19/drivers/scsi/sd.c
  static const char *sd_cache_types[] = {
  	"write through", "none", "write back",
  	"write back, no read (daft)"
-@@ -498,6 +516,8 @@ static int sd_init_command(struct scsi_c
- 	 */
- 	SCpnt->done = sd_rw_intr;
+@@ -571,6 +589,8 @@
+ 	if (sdkp->protection_type || scsi_prot_sg_count(SCpnt))
+ 		sd_dif_op(SCpnt, sdkp->protection_type, scsi_prot_sg_count(SCpnt));
  
 +	sd_iostats_start_req(SCpnt);
 +
  	/*
- 	 * This indicates that the command is ready from our end to be
- 	 * queued.
-@@ -980,6 +1000,7 @@ static void sd_done(struct scsi_cmnd 
+ 	 * We shouldn't disconnect in the middle of a sector, so with a dumb
+ 	 * host adapter, it's safe to assume that we can at least transfer
+@@ -1091,6 +1111,7 @@
  		break;
  	}
   out:
@@ -77,7 +77,7 @@ Index: linux-2.6.22.19/drivers/scsi/sd.c
  	if (rq_data_dir(SCpnt->request) == READ && scsi_prot_sg_count(SCpnt))
  		sd_dif_complete(SCpnt, good_bytes);
  
-@@ -1666,6 +1687,36 @@ static int sd_probe(struct device *dev)
+@@ -1873,6 +1894,36 @@
  	if (sdp->removable)
  		gd->flags |= GENHD_FL_REMOVABLE;
  
@@ -113,8 +113,8 @@ Index: linux-2.6.22.19/drivers/scsi/sd.c
 +#endif
  	dev_set_drvdata(dev, sdkp);
  	add_disk(gd);
- 
-@@ -1709,6 +1760,366 @@ static int sd_remove(struct device *dev)
+ 	sd_dif_config_host(sdkp);
+@@ -1923,6 +1974,366 @@
  	return 0;
  }
  
@@ -480,9 +480,9 @@ Index: linux-2.6.22.19/drivers/scsi/sd.c
 +
  /**
   *	scsi_disk_release - Called to free the scsi_disk structure
-  *	@cdev: pointer to embedded class device
-@@ -1727,10 +2138,16 @@ static void scsi_disk_release(struct cla
- 	idr_remove(&sd_index_idr, sdkp->index);
+  *	@dev: pointer to embedded class device
+@@ -1941,10 +2352,16 @@
+ 	ida_remove(&sd_index_ida, sdkp->index);
  	spin_unlock(&sd_index_lock);
  
 +#if (defined(CONFIG_SD_IOSTATS) && defined(CONFIG_PROC_FS))
@@ -499,7 +499,7 @@ Index: linux-2.6.22.19/drivers/scsi/sd.c
  	kfree(sdkp);
  }
  
-@@ -1845,6 +2262,8 @@ static int __init init_sd(void)
+@@ -2061,6 +2478,8 @@
  	if (!majors)
  		return -ENODEV;
  
@@ -508,7 +508,7 @@ Index: linux-2.6.22.19/drivers/scsi/sd.c
  	err = class_register(&sd_disk_class);
  	if (err)
  		goto err_out;
-@@ -1860,6 +2279,7 @@ err_out_class:
+@@ -2076,6 +2495,7 @@
  err_out:
  	for (i = 0; i < SD_MAJORS; i++)
  		unregister_blkdev(sd_major(i), "sd");
@@ -516,13 +516,13 @@ Index: linux-2.6.22.19/drivers/scsi/sd.c
  	return err;
  }
  
-Index: linux-2.6.22.19/include/scsi/sd.h
+Index: linux-2.6.27.21-0.1/drivers/scsi/sd.h
 ===================================================================
---- linux-2.6.22.19.orig/drivers/scsi/sd.h
-+++ linux-2.6.22.19/drivers/scsi/sd.h
-@@ -31,6 +31,46 @@
+--- linux-2.6.27.21-0.1.orig/drivers/scsi/sd.h	2009-04-23 02:12:56.000000000 -0600
++++ linux-2.6.27.21-0.1/drivers/scsi/sd.h	2009-05-22 08:38:28.000000000 -0600
+@@ -37,6 +37,46 @@
   */
- #define SD_BUF_SIZE		512
+ #define SD_LAST_BUGGY_SECTORS	8
  
 +#if (defined(CONFIG_SD_IOSTATS) && defined(CONFIG_PROC_FS))
 +typedef struct {
@@ -567,7 +567,7 @@ Index: linux-2.6.22.19/include/scsi/sd.h
  struct scsi_disk {
  	struct scsi_driver *driver;	/* always &sd_template */
  	struct scsi_device *device;
-@@ -44,6 +84,9 @@ struct scsi_disk {
+@@ -53,6 +93,9 @@
  	unsigned	WCE : 1;	/* state of disk WCE bit */
  	unsigned	RCD : 1;	/* state of disk RCD bit, unused */
  	unsigned	DPOFUA : 1;	/* state of disk DPOFUA bit */
@@ -575,5 +575,5 @@ Index: linux-2.6.22.19/include/scsi/sd.h
 +	iostat_stats_t	*stats;		/* scsi disk statistics */
 +#endif
  };
- #define to_scsi_disk(obj) container_of(obj,struct scsi_disk,cdev)
+ #define to_scsi_disk(obj) container_of(obj,struct scsi_disk,dev)
  
