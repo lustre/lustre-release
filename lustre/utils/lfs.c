@@ -1721,11 +1721,6 @@ int lfs_setquota_times(int argc, char **argv)
                 return CMD_HELP;
         }
 
-        if (limit_mask == 0) {
-                fprintf(stderr, "error: at least one limit must be specified\n");
-                return CMD_HELP;
-        }
-
         if (optind != argc - 1) {
                 fprintf(stderr, "error: unexpected parameters encountered\n");
                 return CMD_HELP;
@@ -1853,6 +1848,11 @@ int lfs_setquota(int argc, char **argv)
 
         if (qctl.qc_type == UGQUOTA) {
                 fprintf(stderr, "error: neither -u nor -g are specified\n");
+                return CMD_HELP;
+        }
+
+        if (limit_mask == 0) {
+                fprintf(stderr, "error: at least one limit must be specified\n");
                 return CMD_HELP;
         }
 
