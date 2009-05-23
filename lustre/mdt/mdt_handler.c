@@ -2685,6 +2685,11 @@ static void mdt_thread_info_fini(struct mdt_thread_info *info)
 
         req_capsule_fini(info->mti_pill);
         if (info->mti_object != NULL) {
+                /*
+                 * freeing an object may lead to OSD level transaction, do not
+                 * let it mess with MDT. bz19385.
+                 */
+                info->mti_no_need_trans = 1;
                 mdt_object_put(info->mti_env, info->mti_object);
                 info->mti_object = NULL;
         }
