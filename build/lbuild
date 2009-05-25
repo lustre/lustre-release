@@ -279,6 +279,9 @@ check_options() {
         2.6-sles10)
             CANONICAL_TARGET="sles10-2.6"
             ;;
+        2.6-sles11)
+            CANONICAL_TARGET="sles11"
+            ;;
         hp_pnnl-2.4)
             CANONICAL_TARGET="hp-pnnl-2.4"
             ;;
@@ -834,7 +837,7 @@ find_linux_rpm() {
 # needs to completely refactored.  It completely ingores that $BUILD_ARCHS may
 # contain a list of arches for which rpmbuild commands (including the one for
 # lustre itself)
-unpack_linux_rpm() {
+unpack_linux_devel_rpm() {
     local kernelrpm="${1}"
     # it's worth noting that neither sles10 nor rhel5 appear to use their
     # extra_version delimiter for the dirname under /usr/src, so we could
@@ -842,17 +845,36 @@ unpack_linux_rpm() {
     local delimiter=${2:-"-"}
 
     [ -f "$kernelrpm" ] || return 255
-    [ -d $TOPDIR/reused ] || mkdir $TOPDIR/reused
+    [ -d $TOPDIR/reused ] || mkdir $TOPDIR/reused || return 255
 
     pushd $TOPDIR/reused || return 255
 
+    if ! rpm2cpio < "$kernelrpm" | cpio -id > /dev/null 2>&1; then
+        return 255
+    fi
+
+    # call a distro specific hook, if available
+    if type -p unpack_linux_devel_rpm-$DISTRO; then
+        unpack_linux_devel_rpm-$DISTRO
+    fi
+
+    popd
+
+    find_linux_devel_paths $TOPDIR/reused
+
+    return 0
+
+}
+
+# XXX - this rhel/sles goop needs abstracting out into the
+#       lbuild-{rhel5,sles10} method files
+find_linux_devel_paths() {
+    local path="$1"
+
     local RC=0
 
-    rpm2cpio < "$kernelrpm" | cpio -id > /dev/null 2>&1
-    if [ ${PIPESTATUS[0]} -eq 0 ]; then
+    pushd $path
         # RHEL-style and SLES-style rpms
-        # XXX - this rhel/sles goop needs abstracting out into the
-        #       lbuild-{rhel5,sles10} method files
         # XXX - until bug 19336 cleans this up, we need to extricate the
         #       ${lnxmin}- from the $lnxrel
         local paths="kernels/${lnxmaj}${lnxmin}${delimiter}${lnxrel}-${TARGET_ARCH} linux-${lnxmaj}${lnxmin}${delimiter}${lnxrel##${lnxmin#.}-}"
@@ -889,9 +911,6 @@ unpack_linux_rpm() {
                 RC=255
             fi
         fi
-    else
-        RC=255
-    fi
     popd
     return $RC
 }
@@ -1158,7 +1177,7 @@ build_with_srpm() {
             # install the -devel RPM in preparation for the lustre build
             # note that the EXTRA_VERSION_DELIMITER is *NOT* used in the
             # version of the directory name under /usr/src
-            if ! lnxrel="$kernel_extra_version" unpack_linux_rpm \
+            if ! lnxrel="$kernel_extra_version" unpack_linux_devel_rpm \
                            "$TOPDIR/RPMS/$arch/$kernel_devel_rpm" "-"; then
                 fatal 1 "Could not find the Linux tree in $TOPDIR/RPMS/$arch/$kernel_devel_rpm"
             fi
@@ -1170,7 +1189,7 @@ build_with_srpm() {
         if ! kernelrpm=$(find_linux_rpm "-$DEVEL_KERNEL_TYPE" ${EXTRA_VERSION_DELIMITER:-"-"}); then
             fatal 1 "Could not find the kernel-$DEVEL_KERNEL_TYPE RPM in ${KERNELRPMSBASE}/${lnxmaj}/${DISTRO}"
         fi
-        if ! lnxrel="$lnxrel" unpack_linux_rpm "$kernelrpm" "-"; then
+        if ! lnxrel="$lnxrel" unpack_linux_devel_rpm "$kernelrpm" "-"; then
             fatal 1 "Could not find the Linux tree in $kernelrpm"
         fi
     fi

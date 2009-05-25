@@ -4,105 +4,81 @@
 # to build built
 BUILD_GEN=1
 
-DEVEL_KERNEL_TYPE="source"
+source ${0%/*}/lbuild-sles
 
-prepare_and_build_srpm() {
+# this is what lnxrel really should be, once bug 19336 lands
+real_lnxrel=${lnxrel##${lnxmin#.}-}
 
-    pushd $TOPDIR >/dev/null
-    # seems there is a bug (on Ubuntu at least) where all of the .specs
-    # are not put into SPECS
-    mv SOURCES/*.spec SPECS/
-
-    # generate our buildid
-    local buildid="lustre${EXTRA_VERSION##*_lustre}"
+edit_specs() {
 
     # edit the SPECs with our changes
     local spec
     for spec in $RPMSMPTYPE source; do
         #cp $TOPDIR/SPECS/kernel-$spec.spec{,.orig}
         sed -i -e 's/^\(Name:.*kernel-\)\(.*\)/\1lustre-\2/' \
-               -e "s/^Release:.*/&_${buildid}/" \
+               -e "s/^\(Release: *\).*$/\1${real_lnxrel}_${buildid}/" \
                -e "/^Provides:  *kernel = /a\
 Provides:       kernel-$spec = %{version}-%{release}
 " \
                -e "s/^ExclusiveArch:.*/& ppc ppc64/" \
-               -e '/^# Apply the patches needed for this architecture\./a\
-cp  %_sourcedir/linux-2.6.16-lustre.patch %_builddir/%{name}-%{version}/lustre.patch\
+               -e '/^%setup /a\
+cp  %_sourcedir/linux-2.6.27-lustre.patch %_builddir/%{name}-%{version}/lustre.patch\
 ! grep -q lustre.patch %_sourcedir/series.conf && echo -e "\\n\\tlustre.patch" >> %_sourcedir/series.conf' \
                -e "/flavor=\${config/a\
     [ \"\$flavor\" == \"$RPMSMPTYPE\" ] || continue" \
-               -e 's/\(.*\)\([^#].*\)fookernel-source/\1\2kernel-lustre-source/g' \
-               -e '/^%build/,/^%changelog/s/kernel-\({*\)source/kernel-\1lustre-source/g' \
+               -e 's/^\([ 	][ 	]*-i %_builddir\/kernel-\)\(source-2.6.27.21\/\$patch; then\)/\1lustre-\2/' \
+               -e '/^%build/,/^%changelog/s/\(kernel-\)\(source\.files\)/\1lustre-\2/g' \
+               -e "s/^\(%package -n kernel-\)\(.*\)/\1lustre-\2/" \
+               -e "s/^\(%description -n kernel-\)\(.*\)/\1lustre-\2/" \
+               -e "s/^\(%files -n kernel-\)\(.*\)/\1lustre-\2/" \
+               -e "s/^\(Provides:.*kernel-\)\(.*\)/\1lustre-\2/" \
+               -e "s/^\(Requires:.*kernel-\)\(.*\)/\1lustre-\2/" \
+               -e "s/^\(Supplements:.*kernel-\)\(.*\)/\1lustre-\2/" \
+               -e "s/^\(BuildRequires:  kernel-dummy\)/# \1/" \
           SPECS/kernel-${spec}.spec
 
     # XXX - a building-on-Ubuntu hack
-    if grep -q "Ubuntu" /etc/issue; then
-        sed -i -e '/^%_sourcedir\/install-configs %_sourcedir .*/i\
+        if grep -q "Ubuntu" /etc/issue; then
+            sed -i -e '/^%_sourcedir\/install-configs %_sourcedir .*/i\
 curl ftp://ftp.kernel.org/pub/linux/kernel/people/akpm/patches/2.6/2.6.17/2.6.17-mm1/broken-out/i386-use-c-code-for-current_thread_info.patch | patch -p1' \
-               -e 's/^\(BuildRequires: .*\)$/#NOU \1/g' \
-               -e 's/%(\(chmod .*\))$/%(bash -c "\1")/' \
-               -e 's/ -a 109//' \
-          SPECS/kernel-${spec}.spec
-     fi
-done
-
-    # XXX - need to flesh this out per the rhel5 method
-    local targets
-    for arch in $BUILD_ARCHS; do
-        targets="--target $arch $targets"
-        mkdir -p config/$(basearch $arch)
-        cp $CONFIG_FILE config/$(basearch $arch)/$RPMSMPTYPE
+                   -e 's/^\(BuildRequires: .*\)$/#NOU \1/g' \
+                   -e 's/%(\(chmod .*\))$/%(bash -c "\1")/' \
+                   -e 's/ -a 109//' \
+              SPECS/kernel-${spec}.spec
+    fi
     done
+}
 
-    tar cjf SOURCES/config.tar.bz2 config
-    rm -rf config
-
-    # do we need any special rpm build options
-    local rpmbuildopt="-bb"
-    if $DO_SRC; then
-        rpmbuildopt="-ba"
+unpack_linux_devel_rpm-sles11() {
+    local kernelrpm
+    if ! kernelrpm=$(find_rpm "$TOPDIR/RPMS/$arch/" provides "^kernel-lustre-default-base ="); then
+        fatal 1 "Could not find the kernel-lustre-default-base in $TOPDIR/RPMS/$arch/"
     fi
 
-    # XXX - ignore the kabi changes.  need to figure out what this is really
-    #       all about.
-    touch SOURCES/IGNORE-KABI-BADNESS
-
-
-# XXX temp speedup hack
-#if false; then
-    # now build it
-    if ! $RPMBUILD $rpmbuildopt $targets \
-                   --define "_topdir $TOPDIR" \
-                   $TOPDIR/SPECS/kernel-$RPMSMPTYPE.spec >&2; then
-        fatal 1 "Failed to build kernel RPM"
-    fi
-#fi
-
-    # for SLES10, we also need to build the kernel-source rpm
-    if ! $RPMBUILD $rpmbuildopt $targets \
-                   --define "_topdir $TOPDIR" \
-                   $TOPDIR/SPECS/kernel-source.spec >&2; then
-        fatal 1 "Failed to build kernel source RPM"
+    if ! rpm2cpio < "$TOPDIR/RPMS/$arch/$kernelrpm" | cpio -id > /dev/null 2>&1; then
+        fatal 1 "Unpack error for $kernelrpm"
     fi
 
 }
 
-devel_kernel_name() {
-    local lustre=${1:-false}
+# this is actually valid for sles10 and sles11 but let's test it on sles11 only, first
+find_linux_devel_paths() {
+    local path="$1"
 
-    if $lustre; then
-        echo "kernel-lustre-$DEVEL_KERNEL_TYPE"
-    else
-        echo "kernel-$DEVEL_KERNEL_TYPE"
+    LINUX=$path/usr/src/linux-${lnxmaj}${lnxmin}${delimiter}${lnxrel##${lnxmin#.}-}
+
+    local objects=$TARGET_ARCH/$RPMSMPTYPE
+    if [ -d $path/usr/src/linux-${lnxmaj}${lnxmin}${delimiter}${lnxrel##${lnxmin#.}-}-obj/powerpc ]; then
+        objects="powerpc/$TARGET_ARCH"
+    elif [ $TARGET_ARCH == 'i686' ]; then
+        objects="i386/$RPMSMPTYPE"
     fi
 
-}
+    LINUXOBJ=$path/usr/src/linux-${lnxmaj}${lnxmin}${delimiter}${lnxrel##${lnxmin#.}-}-obj/$objects
 
-rpm_BUILD_kernel_dirname() {
-    local rpmsmptype="$1"
-    local lnxmaj="$2"
-    local lnxmin="$3"
-    local arch="$4"
-
-    echo kernel-lustre-${rpmsmptype}-${lnxmaj}${lnxmin}/linux-${lnxmaj}
+    LINUXRELEASE=$(find_linux_release ${LINUXOBJ:-$LINUX})
+    if [ -z "$LINUXRELEASE" ]; then
+        echo "Failed to find linux release in ${LINUXOBJ:-$LINUX}"
+        RC=255
+    fi
 }

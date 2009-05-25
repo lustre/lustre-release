@@ -533,7 +533,7 @@ patchless_build_sequence() {
     TARGET_ARCH=$(rpm -q --queryformat "%{ARCH}" -p "$kernel_devel_rpm")
     BUILD_ARCHS="$TARGET_ARCH"
 
-    unpack_linux_rpm "$kernel_devel_rpm" "$delimiter" && rpmfound=true
+    unpack_linux_devel_rpm "$kernel_devel_rpm" "$delimiter" && rpmfound=true
 
     [ -d SRPMS ] || mkdir SRPMS
     [ -d RPMS ] || mkdir RPMS

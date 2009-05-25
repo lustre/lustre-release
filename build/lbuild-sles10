@@ -4,17 +4,9 @@
 # to build built
 BUILD_GEN=1
 
-DEVEL_KERNEL_TYPE="source"
+source ${0%/*}/lbuild-sles
 
-prepare_and_build_srpm() {
-
-    pushd $TOPDIR >/dev/null
-    # seems there is a bug (on Ubuntu at least) where all of the .specs
-    # are not put into SPECS
-    mv SOURCES/*.spec SPECS/
-
-    # generate our buildid
-    local buildid="lustre${EXTRA_VERSION##*_lustre}"
+edit_specs() {
 
     # edit the SPECs with our changes
     local spec
@@ -44,65 +36,5 @@ curl ftp://ftp.kernel.org/pub/linux/kernel/people/akpm/patches/2.6/2.6.17/2.6.17
                -e 's/ -a 109//' \
           SPECS/kernel-${spec}.spec
      fi
-done
-
-    # XXX - need to flesh this out per the rhel5 method
-    local targets
-    for arch in $BUILD_ARCHS; do
-        targets="--target $arch $targets"
-        mkdir -p config/$(basearch $arch)
-        cp $CONFIG_FILE config/$(basearch $arch)/$RPMSMPTYPE
     done
-
-    tar cjf SOURCES/config.tar.bz2 config
-    rm -rf config
-
-    # do we need any special rpm build options
-    local rpmbuildopt="-bb"
-    if $DO_SRC; then
-        rpmbuildopt="-ba"
-    fi
-
-    # XXX - ignore the kabi changes.  need to figure out what this is really
-    #       all about.
-    touch SOURCES/IGNORE-KABI-BADNESS
-
-
-# XXX temp speedup hack
-#if false; then
-    # now build it
-    if ! $RPMBUILD $rpmbuildopt $targets \
-                   --define "_topdir $TOPDIR" \
-                   $TOPDIR/SPECS/kernel-$RPMSMPTYPE.spec >&2; then
-        fatal 1 "Failed to build kernel RPM"
-    fi
-#fi
-
-    # for SLES10, we also need to build the kernel-source rpm
-    if ! $RPMBUILD $rpmbuildopt $targets \
-                   --define "_topdir $TOPDIR" \
-                   $TOPDIR/SPECS/kernel-source.spec >&2; then
-        fatal 1 "Failed to build kernel source RPM"
-    fi
-
-}
-
-devel_kernel_name() {
-    local lustre=${1:-false}
-
-    if $lustre; then
-        echo "kernel-lustre-$DEVEL_KERNEL_TYPE"
-    else
-        echo "kernel-$DEVEL_KERNEL_TYPE"
-    fi
-
-}
-
-rpm_BUILD_kernel_dirname() {
-    local rpmsmptype="$1"
-    local lnxmaj="$2"
-    local lnxmin="$3"
-    local arch="$4"
-
-    echo kernel-lustre-${rpmsmptype}-${lnxmaj}${lnxmin}/linux-${lnxmaj}
 }
