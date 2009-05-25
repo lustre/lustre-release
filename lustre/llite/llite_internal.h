@@ -227,6 +227,7 @@ enum ra_stat {
 struct ll_ra_info {
         atomic_t                  ra_cur_pages;
         unsigned long             ra_max_pages;
+        unsigned long             ra_max_pages_per_file;
         unsigned long             ra_max_read_ahead_whole_pages;
 };
 
@@ -476,7 +477,7 @@ struct ll_readahead_state {
         /*
          * The following 3 items are used for detecting the stride I/O
          * mode.
- 	 * In stride I/O mode,
+         * In stride I/O mode,
          * ...............|-----data-----|****gap*****|--------|******|....
          *    offset      |-stride_pages-|-stride_gap-|
          * ras_stride_offset = offset;

@@ -13,6 +13,13 @@ tbd  Sun Microsystems, Inc.
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
+Severity   : normal
+Bugzilla   : 18645
+Description: Reduce small size read RPC
+Details    : Set read-ahead limite for every file and only do read-ahead when
+	     available read-ahead pages are bigger than 1M to avoid small size
+	     read RPC.
+
 Severity   : enhancement
 Bugzilla   : 17974
 Description: add lazystatfs mount option to allow statfs(2) to skip down OSTs
@@ -48,7 +55,7 @@ Bugzilla   : 18798
 Description: Add state history info file, enhance import info file
 Details    : Track import connection state changes in a new osc/mdc proc file;
              add overview-type data to the osc/mdc import proc file.
-	
+
 Severity   : enhancement
 Bugzilla   : 17536
 Description: MDS create should not wait for statfs RPC while holding DLM lock.
@@ -311,7 +318,7 @@ Details    : When connection is reused this not moved from CONN_UNUSED_HASH
 Severity   : enhancement
 Bugzilla   : 15899
 Description: File striping can now be set to use an arbitrary pool of OSTs.
-	
+
 Severity   : enhancement
 Bugzilla   : 16573
 Description: Export bytes_read/bytes_write count on OSC/OST.
@@ -1797,7 +1804,7 @@ Bugzilla   : 16450
 Description: Add lockdep annotations to llog code.
 Details    : Use appropriately tagged _nested() locking calls in the places
 	     where llog takes more than one ->lgh_lock lock.
-	
+
 Severity   : minor
 Bugzilla   : 16450
 Description: Add loi_kms_set().
@@ -2414,7 +2421,7 @@ Details    : The __iget() symbol export is missing.  To avoid the need for
 	     this on patchless clients the deathrow inode reaper is turned
 	     off, and we depend on the VM to clean up old inodes.  This
 	     dependency was during via the fix for bug 12181.
-	
+
 --------------------------------------------------------------------------------
 
 2007-04-19  Cluster File Systems, Inc. <info@clusterfs.com>
@@ -2449,7 +2456,7 @@ Bugzilla   : 9851
 Description: startup order invariance
 Details    : MDTs and OSTs can be started in any order.  Clients only
 	     require the MDT to complete startup.
-	
+
 Severity   : enhancement
 Bugzilla   : 4899
 Description: parallel, asynchronous orphan cleanup
@@ -2462,13 +2469,13 @@ Description: optimized stripe assignment
 Details    : stripe assignments are now made based on ost space available,
 	     ost previous usage, and OSS previous usage, in order to try
 	     to optimize storage space and networking resources.
-	
+
 Severity   : enhancement
 Bugzilla   : 4226
 Description: Permanently set tunables
 Details    : All writable /proc/fs/lustre tunables can now be permanently
 	     set on a per-server basis, at mkfs time or on a live system.
-	
+
 Severity   : enhancement
 Bugzilla   : 10547
 Description: Lustre message v2
@@ -2485,7 +2492,7 @@ Bugzilla   : 6062
 Description: SPEC SFS validation failure on NFS v2 over lustre.
 Details    : Changes the blocksize for regular files to be 2x RPC size,
 	     and not depend on stripe size.
-	
+
 Severity   : enhancement
 Bugzilla   : 9293
 Description: Multiple MD RPCs in flight.
@@ -3754,7 +3761,7 @@ Description: Configuration change for the XT3
 	     Rather --with-portals=<path-to-portals-includes> is used to
 	     enable building on the XT3.  In addition to enable XT3 specific
 	     features the option --enable-cray-xt3 must be used.
-	
+
 Severity   : major
 Frequency  : rare
 Bugzilla   : 7407
@@ -5692,7 +5699,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	* add hard link support
 	* change obdfile creation method
 	* kernel patch changed
-	
+
 2002-09-19  Peter Braam  <braam@clusterfs.com>
 	* version 0_5_9
 	* bug fix

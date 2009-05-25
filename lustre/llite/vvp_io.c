@@ -683,7 +683,7 @@ static int vvp_io_read_page(const struct lu_env *env,
 
         ENTRY;
 
-        if (sbi->ll_ra_info.ra_max_pages)
+        if (sbi->ll_ra_info.ra_max_pages_per_file)
                 ras_update(sbi, inode, ras, page->cp_index,
                            cp->cpg_defer_uptodate);
 
@@ -710,7 +710,7 @@ static int vvp_io_read_page(const struct lu_env *env,
          * this will unlock it automatically as part of cl_page_list_disown().
          */
         cl_2queue_add(queue, page);
-        if (sbi->ll_ra_info.ra_max_pages)
+        if (sbi->ll_ra_info.ra_max_pages_per_file)
                 ll_readahead(env, io, ras,
                              vmpage->mapping, &queue->c2_qin, fd->fd_flags);
 
