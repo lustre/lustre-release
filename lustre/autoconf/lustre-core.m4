@@ -1480,6 +1480,15 @@ LB_LINUX_TRY_COMPILE([
 EXTRA_KCFLAGS="$tmp_flags"
 ])
 
+# 2.6.5 sles9 hasn't define sysctl_vfs_cache_pressure
+AC_DEFUN([LC_HAVE_SYSCTL_VFS_CACHE_PRESSURE],
+[LB_CHECK_SYMBOL_EXPORT([sysctl_vfs_cache_pressure],
+[fs/dcache.c],[
+        AC_DEFINE(HAVE_SYSCTL_VFS_CACHE_PRESSURE, 1, [kernel exports sysctl_vfs_cache_pressure])
+],[
+])
+])
+
 #
 # LC_PROG_LINUX
 #
@@ -1533,6 +1542,9 @@ AC_DEFUN([LC_PROG_LINUX],
 
           # does the kernel have VFS intent patches?
           LC_VFS_INTENT_PATCHES
+
+	  # 2.6.5 sles9
+	  LC_HAVE_SYSCTL_VFS_CACHE_PRESSURE
 
           # 2.6.12
           LC_EXPORT_SYNCHRONIZE_RCU

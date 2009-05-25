@@ -506,5 +506,9 @@ static inline long labs(long x)
 #define INODE_PRIVATE_DATA(inode)       ((inode)->u.generic_ip)
 #endif
 
+#ifndef	HAVE_SYSCTL_VFS_CACHE_PRESSURE
+#define	sysctl_vfs_cache_pressure	100
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */
