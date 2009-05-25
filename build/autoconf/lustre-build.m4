@@ -227,6 +227,10 @@ AC_SUBST(LDISKFS_DIR)
 AC_SUBST(LDISKFS_SUBDIR)
 AM_CONDITIONAL(LDISKFS_ENABLED, test x$with_ldiskfs != xno)
 
+if test x$enable_ext4 = xyes ; then
+	AC_DEFINE(HAVE_EXT4_LDISKFS, 1, [build ext4 based ldiskfs])
+fi
+
 # We have to configure even if we don't build here for make dist to work
 AC_CONFIG_SUBDIRS(ldiskfs)
 ])
