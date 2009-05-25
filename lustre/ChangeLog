@@ -7,7 +7,7 @@ tbd Sun Microsystems, Inc.
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
 	  2.6.16 - 2.6.27 vanilla (kernel.org)
-	* Recommended e2fsprogs version: 1.40.11-sun1
+	* Recommended e2fsprogs version: 1.41.5-sun2
 	* File join has been disabled in this release, refer to Bugzilla 16929.
 	* A new Lustre ADIO driver is available for MPICH2-1.0.7.
 	* NFS export disabled when stack size < 8192. Since the NFSv4 export
