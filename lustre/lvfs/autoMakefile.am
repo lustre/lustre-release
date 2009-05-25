@@ -77,6 +77,9 @@ ldiskfs_sed_flags = \
 
 fsfilt_ldiskfs.c: fsfilt_ext3.c
 	sed $(strip $(ldiskfs_sed_flags)) $< > $@
+	if grep -q '^#define\(.*\)HAVE_EXT4_LDISKFS' @LDISKFS_DIR@/config.h ; then \
+		sed -i -e "/DEBUG_SUBSYSTEM\(.*\)S_FILTER/a\#define HAVE_EXT4_LDISKFS 1" $@ ;\
+	fi
 fsfilt_ldiskfs_quota.h: fsfilt_ext3_quota.h
 	sed $(strip $(ldiskfs_sed_flags)) $< > $@
 
