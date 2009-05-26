@@ -23,3 +23,4 @@ quota-large-limits-rhel5.patch
 md-mmp-unplug-dev.patch
 prune-icache-use-trylock-rhel5.patch
 jbd-slab-race-2.6-rhel5.patch
+mpt-fusion-max-sge.patch

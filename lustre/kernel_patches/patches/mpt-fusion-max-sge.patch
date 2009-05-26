@@ -1,0 +1,36 @@
+diff -Nrup linux-2.6.18-92.1.10.orig/drivers/message/fusion/Kconfig linux-2.6.18-92.1.10/drivers/message/fusion/Kconfig
+--- linux-2.6.18-92.1.10.orig/drivers/message/fusion/Kconfig	2008-12-11 10:27:02.000000000 +1100
++++ linux-2.6.18-92.1.10/drivers/message/fusion/Kconfig	2008-12-11 10:28:42.000000000 +1100
+@@ -61,13 +61,13 @@ config FUSION_SAS
+ 	  LSISAS1078
+ 
+ config FUSION_MAX_SGE
+-	int "Maximum number of scatter gather entries for SAS and SPI (16 - 128)"
+-	default "128"
+-	range 16 128
++	int "Maximum number of scatter gather entries for SAS and SPI (16 - 256)"
++	default "256"
++	range 16 256
+ 	help
+ 	  This option allows you to specify the maximum number of scatter-
+-	  gather entries per I/O. The driver default is 128, which matches
+-	  SAFE_PHYS_SEGMENTS.  However, it may decreased down to 16.
++	  gather entries per I/O. The driver default is 256, which matches
++	  MAX_PHYS_SEGMENTS.  However, it may decreased down to 16.
+ 	  Decreasing this parameter will reduce memory requirements
+ 	  on a per controller instance.
+ 
+diff -Nrup linux-2.6.18-92.1.10.orig/drivers/message/fusion/mptbase.h linux-2.6.18-92.1.10/drivers/message/fusion/mptbase.h
+--- linux-2.6.18-92.1.10.orig/drivers/message/fusion/mptbase.h	2008-12-11 10:27:03.000000000 +1100
++++ linux-2.6.18-92.1.10/drivers/message/fusion/mptbase.h	2008-12-11 10:30:55.000000000 +1100
+@@ -168,8 +168,8 @@
+ #ifdef  CONFIG_FUSION_MAX_SGE
+ #if     CONFIG_FUSION_MAX_SGE  < 16
+ #define MPT_SCSI_SG_DEPTH	16
+-#elif   CONFIG_FUSION_MAX_SGE  > 128
+-#define MPT_SCSI_SG_DEPTH	128
++#elif   CONFIG_FUSION_MAX_SGE  > 256 
++#define MPT_SCSI_SG_DEPTH	256
+ #else
+ #define MPT_SCSI_SG_DEPTH	CONFIG_FUSION_MAX_SGE
+ #endif
