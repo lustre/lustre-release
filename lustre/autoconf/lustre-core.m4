@@ -1455,12 +1455,50 @@ CFLAGS="$tmp_flags"
 AC_DEFUN([LC_ASYNC_BLOCK_CIPHER],
 [AC_MSG_CHECKING([if kernel has block cipher support])
 LB_LINUX_TRY_COMPILE([
+        #include <linux/err.h>
         #include <linux/crypto.h>
 ],[
-        int v = CRYPTO_ALG_TYPE_BLKCIPHER;
+        struct crypto_blkcipher *tfm;
+        tfm = crypto_alloc_blkcipher("aes", 0, 0 );
 ],[
         AC_MSG_RESULT([yes])
         AC_DEFINE(HAVE_ASYNC_BLOCK_CIPHER, 1, [kernel has block cipher support])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#
+# check for struct hash_desc
+#
+AC_DEFUN([LC_STRUCT_HASH_DESC],
+[AC_MSG_CHECKING([if kernel has struct hash_desc])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/err.h>
+        #include <linux/crypto.h>
+],[
+        struct hash_desc foo;
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_STRUCT_HASH_DESC, 1, [kernel has struct hash_desc])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#
+# check for struct blkcipher_desc
+#
+AC_DEFUN([LC_STRUCT_BLKCIPHER_DESC],
+[AC_MSG_CHECKING([if kernel has struct blkcipher_desc])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/err.h>
+        #include <linux/crypto.h>
+],[
+        struct blkcipher_desc foo;
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_STRUCT_BLKCIPHER_DESC, 1, [kernel has struct blkcipher_desc])
 ],[
         AC_MSG_RESULT([no])
 ])
@@ -1480,6 +1518,29 @@ LB_LINUX_TRY_COMPILE([
         AC_DEFINE(HAVE_FS_RENAME_DOES_D_MOVE, 1, [kernel has FS_RENAME_DOES_D_MOVE flag])
 ],[
         AC_MSG_RESULT([no])
+])
+])
+
+# vfs_symlink seems to have started out with 3 args until 2.6.7 where a
+# "mode" argument was added, but then again, in some later version it was
+# removed
+AC_DEFUN([LC_4ARGS_VFS_SYMLINK],
+[AC_MSG_CHECKING([if vfs_symlink wants 4 args])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+],[
+	struct inode *dir;
+	struct dentry *dentry;
+	const char *oldname = NULL;
+	int mode = 0;
+
+	vfs_symlink(dir, dentry, oldname, mode);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_4ARGS_VFS_SYMLINK, 1,
+                  [vfs_symlink wants 4 args])
+],[
+        AC_MSG_RESULT(no)
 ])
 ])
 
@@ -1542,6 +1603,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_FUNC_RCU
          LC_PERCPU_COUNTER
          LC_QUOTA64
+         LC_4ARGS_VFS_SYMLINK
 
          # does the kernel have VFS intent patches?
          LC_VFS_INTENT_PATCHES
@@ -1594,6 +1656,8 @@ AC_DEFUN([LC_PROG_LINUX],
 	 # 2.6.22
          LC_INVALIDATE_BDEV_2ARG
          LC_ASYNC_BLOCK_CIPHER
+         LC_STRUCT_HASH_DESC
+         LC_STRUCT_BLKCIPHER_DESC
          LC_FS_RENAME_DOES_D_MOVE
          # 2.6.23
          LC_UNREGISTER_BLKDEV_RETURN_INT
