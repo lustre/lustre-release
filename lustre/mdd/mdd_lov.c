@@ -700,6 +700,8 @@ int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,
         if ((ma->ma_cookie_size > 0) &&
             (mdd_log_op_unlink(obd, ma->ma_lmm, ma->ma_lmm_size,
                                ma->ma_cookie, ma->ma_cookie_size) > 0)) {
+                CDEBUG(D_HA, "DEBUG: unlink log is added for object "DFID"\n",
+                       PFID(mdd_object_fid(mdd_cobj)));
                 ma->ma_valid |= MA_COOKIE;
         }
         return 0;

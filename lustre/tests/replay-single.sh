@@ -460,6 +460,8 @@ test_20a() {	# was test_20
 run_test 20a "|X| open(O_CREAT), unlink, replay, close (test mds_cleanup_orphans)"
 
 test_20b() { # bug 10480
+    # XXX increase the debug level temporary 
+    do_nodes $(comma_list $(nodes_list)) "$LCTL set_param debug=0x33f0406; $LCTL set_param debug_mb=150"
     BEFOREUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
 
     dd if=/dev/zero of=$DIR/$tfile bs=4k count=10000 &
@@ -484,6 +486,8 @@ test_20b() { # bug 10480
     log "before $BEFOREUSED, after $AFTERUSED"
     [ $AFTERUSED -gt $((BEFOREUSED + 20)) ] && \
         error "after $AFTERUSED > before $BEFOREUSED"
+    # XXX decrease it back
+    do_nodes $(comma_list $(nodes_list)) "$LCTL set_param debug=$PTLDEBUG; $LCTL set_param debug_mb=$DEBUG_SIZE"
     return 0
 }
 run_test 20b "write, unlink, eviction, replay, (test mds_cleanup_orphans)"
