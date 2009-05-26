@@ -1543,8 +1543,8 @@ AC_DEFUN([LC_PROG_LINUX],
           # does the kernel have VFS intent patches?
           LC_VFS_INTENT_PATCHES
 
-	  # 2.6.5 sles9
-	  LC_HAVE_SYSCTL_VFS_CACHE_PRESSURE
+          # 2.6.5 sles9
+          LC_HAVE_SYSCTL_VFS_CACHE_PRESSURE
 
           # 2.6.12
           LC_EXPORT_SYNCHRONIZE_RCU
