@@ -1,0 +1,63 @@
+Index: linux-2.6.18.i386/fs/ext4/iopen.c
+===================================================================
+--- linux-2.6.18.i386.orig/fs/ext4/iopen.c
++++ linux-2.6.18.i386/fs/ext4/iopen.c
+@@ -91,9 +91,12 @@ static struct dentry *iopen_lookup(struc
+ 		assert(!(alternate->d_flags & DCACHE_DISCONNECTED));
+ 	}
+ 
+-	if (!list_empty(&inode->i_dentry)) {
+-		alternate = list_entry(inode->i_dentry.next,
+-				       struct dentry, d_alias);
++	list_for_each(lp, &inode->i_dentry) {
++		alternate = list_entry(lp, struct dentry, d_alias);
++		/* ignore dentries created for ".." to preserve
++		 * proper dcache hierarchy -- bug 10458 */
++		if (alternate->d_flags & DCACHE_NFSFS_RENAMED)
++			continue;
+ 		dget_locked(alternate);
+ 		spin_lock(&alternate->d_lock);
+ 		alternate->d_flags |= DCACHE_REFERENCED;
+Index: linux-2.6.18.i386/fs/ext4/namei.c
+===================================================================
+--- linux-2.6.18.i386.orig/fs/ext4/namei.c
++++ linux-2.6.18.i386/fs/ext4/namei.c
+@@ -1067,6 +1067,38 @@ static struct dentry *ext4_lookup(struct
+ 			return ERR_CAST(inode);
+ 	}
+ 
++	/* ".." shouldn't go into dcache to preserve dcache hierarchy
++	 * otherwise we'll get parent being a child of actual child.
++	 * see bug 10458 for details -bzzz */
++	if (inode && (dentry->d_name.name[0] == '.' && (dentry->d_name.len == 1 ||
++		(dentry->d_name.len == 2 && dentry->d_name.name[1] == '.')))) {
++		struct dentry *tmp, *goal = NULL;
++		struct list_head *lp;
++
++		/* first, look for an existing dentry - any one is good */
++		spin_lock(&dcache_lock);
++		list_for_each(lp, &inode->i_dentry) {
++			tmp = list_entry(lp, struct dentry, d_alias);
++			goal = tmp;
++			dget_locked(goal);
++			break;
++		}
++		if (goal == NULL) {
++			/* there is no alias, we need to make current dentry:
++			 *  a) inaccessible for __d_lookup()
++			 *  b) inaccessible for iopen */
++			J_ASSERT(list_empty(&dentry->d_alias));
++			dentry->d_flags |= DCACHE_NFSFS_RENAMED;
++			/* this is d_instantiate() ... */
++			list_add(&dentry->d_alias, &inode->i_dentry);
++			dentry->d_inode = inode;
++		}
++		spin_unlock(&dcache_lock);
++		if (goal)
++			iput(inode);
++		return goal;
++	}
++
+ 	return iopen_connect_dentry(dentry, inode, 1);
+ }
+ 

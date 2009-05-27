@@ -1,0 +1,25 @@
+Index: linux-2.6.27.21-0.1/fs/ext4/ext4_i.h
+===================================================================
+--- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_i.h
++++ linux-2.6.27.21-0.1/fs/ext4/ext4_i.h
+@@ -135,6 +135,8 @@ struct ext4_inode_info {
+ 	__u16 i_extra_isize;
+ 
+ 	spinlock_t i_block_reservation_lock;
++
++	void *i_filterdata;
+ };
+ 
+ #endif	/* _EXT4_I */
+Index: linux-2.6.27.21-0.1/fs/ext4/super.c
+===================================================================
+--- linux-2.6.27.21-0.1.orig/fs/ext4/super.c
++++ linux-2.6.27.21-0.1/fs/ext4/super.c
+@@ -624,6 +624,7 @@ static struct inode *ext4_alloc_inode(st
+ 	memset(&ei->i_cached_extent, 0, sizeof(struct ext4_ext_cache));
+ 	INIT_LIST_HEAD(&ei->i_prealloc_list);
+ 	spin_lock_init(&ei->i_prealloc_lock);
++	ei->i_filterdata = NULL;
+ 	jbd2_journal_init_jbd_inode(&ei->jinode, &ei->vfs_inode);
+ 	ei->i_reserved_data_blocks = 0;
+ 	ei->i_reserved_meta_blocks = 0;

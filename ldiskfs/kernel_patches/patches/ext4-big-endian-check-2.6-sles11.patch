@@ -1,0 +1,56 @@
+Index: linux-2.6.27.21-0.1/fs/ext4/super.c
+===================================================================
+--- linux-2.6.27.21-0.1.orig/fs/ext4/super.c
++++ linux-2.6.27.21-0.1/fs/ext4/super.c
+@@ -74,6 +74,8 @@ static void ext4_write_super_lockfs(stru
+ 
+ struct proc_dir_entry *proc_root_ext4;
+ 
++static int bigendian_extents;
++
+ ext4_fsblk_t ext4_block_bitmap(struct super_block *sb,
+ 			       struct ext4_group_desc *bg)
+ {
+@@ -1291,7 +1293,7 @@ enum {
+ 	Opt_ignore, Opt_barrier, Opt_err, Opt_resize, Opt_usrquota,
+ 	Opt_grpquota, Opt_extents, Opt_noextents, Opt_i_version,
+ 	Opt_stripe, Opt_delalloc, Opt_nodelalloc,
+-	Opt_inode_readahead_blks,
++	Opt_inode_readahead_blks, Opt_bigendian_extents,
+ 	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
+ };
+ 
+@@ -1353,6 +1355,7 @@ static const match_table_t tokens = {
+ 	{Opt_delalloc, "delalloc"},
+ 	{Opt_nodelalloc, "nodelalloc"},
+ 	{Opt_inode_readahead_blks, "inode_readahead_blks=%u"},
++	{Opt_bigendian_extents, "bigendian_extents"},
+ 	{Opt_err, NULL},
+ };
+ 
+@@ -1768,6 +1771,9 @@ set_qf_format:
+ 				return 0;
+ 			sbi->s_inode_readahead_blks = option;
+ 			break;
++		case Opt_bigendian_extents:
++			bigendian_extents = 1;
++			break;
+ 		default:
+ 			printk(KERN_ERR
+ 			       "EXT4-fs: Unrecognized mount option \"%s\" "
+@@ -2673,6 +2679,15 @@ static int ext4_fill_super(struct super_
+ 				 &sbi->s_inode_readahead_blks);
+ #endif
+ 
++#ifdef __BIG_ENDIAN
++	if (bigendian_extents == 0) {
++		printk(KERN_ERR "EXT4-fs: extents feature is not guaranteed to "
++		       "work on big-endian systems. Use \"bigendian_extents\" "
++		       "mount option to override.\n");
++		goto failed_mount;
++	}
++#endif
++
+ 	bgl_lock_init(&sbi->s_blockgroup_lock);
+ 
+ 	sbi->s_last_alloc_group = -1;
