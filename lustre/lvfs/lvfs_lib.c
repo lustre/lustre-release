@@ -246,7 +246,6 @@ int obd_fail_check(__u32 id)
         }
 
         if (obd_fail_loc & OBD_FAIL_RAND) {
-                unsigned int ll_rand(void);
                 if (obd_fail_val < 2)
                         return 0;
                 if (ll_rand() % obd_fail_val > 0)
