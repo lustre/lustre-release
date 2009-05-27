@@ -2171,12 +2171,24 @@ LB_LINUX_TRY_COMPILE([
 ],[],[
         AC_DEFINE(HAVE_QUOTA64, 1, [have quota64])
         AC_MSG_RESULT([yes])
-
 ],[
-        AC_MSG_WARN([4 TB (or larger) block quota limits can only be used with OSTs not larger than 4 TB.])
-        AC_MSG_WARN([Continuing with limited quota support.])
-        AC_MSG_WARN([quotacheck is needed for filesystems with recent quota versions.])
-        AC_MSG_RESULT([no])
+        tmp_flags="$EXTRA_KCFLAGS"
+        EXTRA_KCFLAGS="-I $LINUX/fs"
+        LB_LINUX_TRY_COMPILE([
+                #include <linux/kernel.h>
+                #include <linux/fs.h>
+                #include <quotaio_v2.h>
+                struct v2r1_disk_dqblk dqblk_r1;
+        ],[],[
+                AC_DEFINE(HAVE_QUOTA64, 1, [have quota64])
+                AC_MSG_RESULT([yes])
+        ],[
+                AC_MSG_WARN([4 TB (or larger) block quota limits can only be used with OSTs not larger than 4 TB.])
+                AC_MSG_WARN([Continuing with limited quota support.])
+                AC_MSG_WARN([quotacheck is needed for filesystems with recent quota versions.])
+                AC_MSG_RESULT([no])
+        ])
+        EXTRA_KCFLAGS=$tmp_flags
 ])
 ])
 
