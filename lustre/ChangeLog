@@ -6,7 +6,7 @@ tbd Sun Microsystems, Inc.
 	  2.6.22.14 vanilla (kernel.org)
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
-	  2.6.16 - 2.6.22 vanilla (kernel.org)
+	  2.6.16 - 2.6.27 vanilla (kernel.org)
 	* Recommended e2fsprogs version: 1.41.5.sun2
 	* File join has been disabled in this release, refer to Bugzilla 16929.
 	* A new Lustre ADIO driver is available for MPICH2-1.0.7.
@@ -16,30 +16,30 @@ tbd Sun Microsystems, Inc.
 
 Severity   : normal
 Bugzilla   : 18382
-Descriptoin: don't return error if have particaly created objects for file.
-Details    : lov_update_create_set uses set->set_success as index for created objects,
-             so if some requests will be failed, they will have hole at end of
-             array and we can use qos_shrink_lsm for allocate correct lsm.
+Descriptoin: don't return error if we created a subset of objects for file.
+Details    : lov_update_create_set() uses set->set_success as index for created
+	     objects, so if some requests failed, they will have hole at end of
+	     array and we can use qos_shrink_lsm for allocate correct lsm.
 
 Severity   : enhancement
 Bugzilla   : 18357
 Description: implement async create (obd_async_create) method for osc, to avoid
-             too long waiting new ost objects with holding ldlm lock.
+	     too long waiting new ost objects with holding ldlm lock.
 
 Severity   : major
 Frequency  : rare
 Bugzilla   : 19495
 Description: fix lqs' reference which won't be put in some situations
 Details    : This patch fixes:
-             1. In quota_check_common(), this function will check quota
-                for user and group, but only send one return via "pending".
-                In most cases, the pendings should be same. But that is not
-                always the case.
-             2. If quotaoff runs between lquota_chkquota() and
-                lquota_pending_commit(), the same thing will happen too.
-                That is why it comes:
-                -        if (!ll_sb_any_quota_active(qctxt->lqc_sb))
-                -                RETURN(0);
+	     1. In quota_check_common(), this function will check quota
+	        for user and group, but only send one return via "pending".
+	        In most cases, the pendings should be same. But that is not
+	        always the case.
+	     2. If quotaoff runs between lquota_chkquota() and
+	        lquota_pending_commit(), the same thing will happen too.
+	        That is why it comes:
+	        -        if (!ll_sb_any_quota_active(qctxt->lqc_sb))
+	        -                RETURN(0);
 
 ------------------------------------------------------------------------------
 tbd Sun Microsystems, Inc.
@@ -50,7 +50,7 @@ tbd Sun Microsystems, Inc.
 	 2.6.22.14 vanilla (kernel.org)
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
-	  2.6.16 - 2.6.22 vanilla (kernel.org)
+	  2.6.16 - 2.6.27 vanilla (kernel.org)
 	* Recommended e2fsprogs version: 1.41.5-sun2
 	* File join has been disabled in this release, refer to Bugzilla 16929.
 	* A new Lustre ADIO driver is available for MPICH2-1.0.7.
@@ -70,7 +70,7 @@ Severity   : enhancement
 Bugzilla   : 12182
 Description: Caching OSS
 Details    : introduce data caching on the OSS. The OSS now relies on the linux
-             kernel page cache to keep recently accessed data in memory.
+	     kernel page cache to keep recently accessed data in memory.
 	     It is worth noting that all write requests are still flushed
 	     synchronously as in lustre 1.6.
 
@@ -78,7 +78,7 @@ Severity   : enhancement
 Bugzilla   : 10609
 Description: version based recovery
 Details    : introduce finer grained recovery able to detect transaction
-             dependencies and can deal with transaction gaps.
+	     dependencies and can deal with transaction gaps.
 
 Severity   : enhancement
 Bugzilla   : 3055
@@ -92,8 +92,8 @@ Details    : rq_send_state insn't bitmask so using bitwise ops is forbid.
 Severity   : normal
 Bugzilla   : 18192
 Descriptoin: fix goal inodes
-Details    : Allocate inodes for llog in last inode group for avoid broke
-             recovery.
+Details    : Allocate inodes for llog in last inode group for avoid broken
+	     recovery.
 
 Severity   : normal
 Bugzilla   : 18399
@@ -143,23 +143,15 @@ Details    : Client will shrink its grant cache to OST if there are no write
 	     (left_space < total_clients * 32M).
 
 Severity   : enhancement
-Bugzilla   : 18289
-Description: Update to RHEL5U3 kernel-2.6.18-128.1.1.el5.
-
-Severity   : enhancement
 Bugzilla   : 14250
-Description: Update client support to vanila kernels up to 2.6.27.
+Description: Update client support to vanilla kernels up to 2.6.27.
 
 Severity   : normal
 Frequency  : rare, connect and disconnect target at same time
 Bugzilla   : 17310
 Descriptoin: ASSERTION(atomic_read(&imp->imp_inflight) == 0
-Details    :  don't call obd_disconnect under lov_lock. this long time
-	      operation and can block ptlrpcd which answer to connect request.
-
-Severity   : enhancement
-Bugzilla   : 18061
-Description: Update to SLES10 kernel-2.6.16.60-0.33.
+Details    : Don't call obd_disconnect under lov_lock. this long time
+	     operation and can block ptlrpcd which answer to connect request.
 
 Severity   : enhancement
 Bugzilla   : 18062
@@ -169,20 +161,16 @@ Severity   : normal
 Frequency  : start MDS on uncleanly shutdowned MDS device
 Bugzilla   : 16839
 Descriptoin: ll_sync thread stay in waiting mds<>ost recovery finished
-Details    : stay in waiting mds<>ost recovery finished produce random bugs
+Details    : Stay in waiting mds<>ost recovery finished produce random bugs
 	     due race between two ll_sync thread for one lov target. send
 	     ACTIVATE event only if connect realy finished and import have
 	     FULL state.
-
-Severity   : enhancement
-Bugzilla   : 18060
-Description: Update to RHEL5 kernel-2.6.18-92.1.22.el5.
 
 Severity   : normal
 Frequency  : start MDS on uncleanly shutdowned MDS device
 Bugzilla   : 18049
 Descriptoin: aborting recovery hang on MDS
-Details    : don't throttle destroy RPCs for the MDT.
+Details    : Don't throttle destroy RPCs for the MDT.
 
 Severity   : enhancement
 Bugzilla   : 16919
@@ -190,9 +178,9 @@ Descriptoin: Don't sync journal after every i/o
 Details    : Implement write RPC replay to allow server replies for write RPCs
 	     before data is on disk. However, this feature is disabled by
 	     default since some issues leading to data corruptions have been
-	     found during recovery (e.g. bug 19128). This feature can be enabled
-	     by running the following command on the OSSs:
-	     lctl set_param obdfilter.*.sync_journal=0
+	     found during recovery (e.g. bug 19128).  This feature can be
+	     enabled by running the following command on the OSSs:
+		lctl set_param obdfilter.*.sync_journal=0
 
 Severity   : low
 Bugzilla   : 18016
@@ -226,7 +214,7 @@ Details    : Do not put cancelled locks into replay list, hold references on
 
 Severity   : normal
 Bugzilla   : 18577
-Description: 1.6.5 mdsrate performance is slower than 1.4.11/12 (MDS is not cpu bound!)
+Description: 1.6.5 mdsrate performance is slower than 1.4.11 (MDS not cpu bound)
 Details    : create_count always drops to the min value (=32) because grow_count
 	     is being changed before the precreate RPC completes.
 
@@ -269,7 +257,7 @@ Details    : When multiple mount protection fails during remount, proper error
 	  the following command on the MDS:
 		'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	  For more information, please refer to bugzilla 13904.
-	* A new quota file format was introduced in 1.6.6/1.8.0 (kernels 2.6.16+).
+	* A new quota file format was introduced in 1.6.6/1.8.0 (kernel 2.6.16+)
 	  The format conversion from prior releases is handled transparently,
 	  but releases older than 1.6.6/1.8.0 don't understand this new
 	  format. The automatic format conversion can be avoided by running
@@ -292,43 +280,43 @@ Details    : When multiple mount protection fails during remount, proper error
 Severity   : enhancement
 Bugzilla   : 17974
 Description: add lazystatfs mount option to allow statfs(2) to skip down OSTs
-Details    : allow skip disconnected ost for send statfs request and hide error
-             in this case.
+Details    : Allow skip disconnected ost for send statfs request and hide error
+	     in this case.
 
 Severity   : normal
 Frequency  : rare, on llog test 6
 Bugzilla   : 16839
 Descriptoin: don't allow connect to already connected import
-Details    : allowing connect to already connected import is hide connecting problem.
+Details    : Connect to already connected import hides connection problem.
 
 Severity   : normal
 Frequency  : rare, on failed llog setup
 Bugzilla   : 18896
 Descriptoin: don't leak obd reference on failed llog setup
-Details    : for failed llog setup - mgc forget call class_destroy_import for
-             client import, move destroy import to more generic place.
+Details    : For failed llog setup - mgc forget call class_destroy_import for
+	     client import, move destroy import to more generic place.
 
 Severity   : normal
 Frequency  : rare
 Bugzilla   : 18902
 Descriptoin: allow kill process which wait statahead result
-Details    : for some reasons 'ls' can stick in waiting result from statahead,
-             in this case need way for kill this process.
+Details    : For some reasons 'ls' can stick in waiting result from statahead,
+	     in this case need way for kill this process.
 
 Severity   : normal
 Frequency  : rare, at shutdown
 Bugzilla   : 18773
 Descriptoin: panic at umount
 Details    : llap_shrinker can be raced with killing super block from list and
-             this produce panic with access to already freeded pointer
+	     this produce panic with access to already freeded pointer
 
 Severity   : normal
 Frequency  : rare
 Bugzilla   : 18154
 Descriptoin: don't lose wakeup for imp_recovery_waitq
-Details    : recover_import_no_retry or invalidate_import and import_close can
-             both sleep on imp_recovery_waitq, but we was send only one wakeup
-             to sleep queue.
+Details    : Recover_import_no_retry or invalidate_import and import_close can
+	     both sleep on imp_recovery_waitq, but we was send only one wakeup
+	     to sleep queue.
 
 Severity   : normal
 Frequency  : rare
@@ -341,7 +329,7 @@ Frequency  : rare
 Bugzilla   : 17972
 Descriptoin: stuck in cache_remove_extent() or panic with accessing to already
 	     freed look.
-Details    : release lock refernce only after add page to pages list.
+Details    : Release lock refernce only after add page to pages list.
 
 Severity   : normal
 Frequency  : always with long access acl
@@ -414,7 +402,7 @@ Severity   : major
 Frequency  : rare
 Bugzilla   : 16492
 Description: mds is deadlocked
-Details    : in rare cases, inode in catalog can have i_no less than have parent
+Details    : In rare cases, inode in catalog can have i_no less than have parent
 	     i_no, this produce wrong order for locking during open, and
 	     parallel unlink can be lock open. this need teach mds_open to grab
 	     locks in resource id order, not at parent -> child order.
@@ -479,14 +467,14 @@ Details    : Only when device name contains ":/" will mount treat it as
 Severity   : normal
 Bugzilla   : 15927
 Frequency  : rare
-Description: replace ptlrpcd with the statahead thread to interpret the async
+Description: Replace ptlrpcd with the statahead thread to interpret the async
 	     statahead RPC callback
 
 Severity   : normal
 Bugzilla   : 16611
 Frequency  : on recovery
 Description: I/O failures after umount during fail back
-Details    : if client reconnected to restarted server we need join to recovery
+Details    : If client reconnected to restarted server we need join to recovery
 	     instead of find server handler is changed and process self eviction
 	     with cancel all locks.
 
@@ -532,14 +520,14 @@ Severity   : normal
 Bugzilla   : 15139
 Frequency  : rare
 Description: avoid ASSERTION(client_stat->nid_exp_ref_count == 0) failed
-Details    : release reference to stats when client disconnected, not
+Details    : Release reference to stats when client disconnected, not
 	     when export destroyed for avoid races when client destroyed
 	     after main ost export.
 
 Severity   : normal
 Bugzilla   : 16679
 Description: more cleanup in mds_lov
-Details    : add workaround for get valid ost count for avoid warnings about
+Details    : Add workaround for get valid ost count for avoid warnings about
 	     drop too big messages, not init llog cat under semphore which
 	     can be blocked on reconnect and break normal replay, fix access
 	     to wrong pointer.
@@ -561,7 +549,7 @@ Details    : Apply the MGS_CONNECT_SUPPORTED mask at reconnect time so
 Severity   : normal
 Bugzilla   : 16006
 Description: Properly propagate oinfo flags from lov to osc for statfs
-Details    : restore missing copy oi_flags to lov requests.
+Details    : Restore missing copy oi_flags to lov requests.
 
 Severity   : normal
 Bugzilla   : 16317
@@ -572,7 +560,7 @@ Severity   : enhancement
 Bugzilla   : 16581
 Description: Add man pages for llobdstat(8), llstat(8), plot-llstat(8),
 	   : l_getgroups(8), lst(8), routerstat(8)
-Details    : included man pages for llobdstat(8), llstat(8),
+Details    : Included man pages for llobdstat(8), llstat(8),
 	   : plot-llstat(8), l_getgroups(8), lst(8), routerstat(8)
 
 Severity   : enhancement
@@ -590,12 +578,12 @@ Description: Update to RHEL4 kernel-2.6.9-67.0.22.EL.
 Severity   : normal
 Bugzilla   : 16317
 Description: exports in /proc are broken
-Details    : recreate /proc entries for clients when they reconnect.
+Details    : Recreate /proc entries for clients when they reconnect.
 
 Severity   : normal
 Bugzilla   : 16080
 Description: don't fail open with -ERANGE
-Details    : if client connected until mds will be know about real ost count
+Details    : If client connected until mds will be know about real ost count
 	     get LOV EA can be fail because mds not allocate enougth buffer
 	     for LOV EA.
 
@@ -608,9 +596,9 @@ Details    : Prevent proc handler from accessing devices added to the
 Severity   : enhancement
 Bugzilla   : 16091
 Description: configure's --enable-quota should check the
-	   : kernel .config for CONFIG_QUOTA
-Details    : configure is terminated if --enable-quota is passed but
-	   : no quota support is in kernel
+	     kernel .config for CONFIG_QUOTA
+Details    : Configure is terminated if --enable-quota is passed but
+	     no quota support is in kernel
 
 Severity   : enhancement
 Bugzilla   : 15308
@@ -625,12 +613,12 @@ Bugzilla   : 16318
 Frequency  : rare, on PPC clients
 Description: don't swab ost objects in response about directory, because
 	     this not exist.
-Details    : bug similar bug 14856, but in different function.
+Details    : Bug similar bug 14856, but in different function.
 
 Severity   : enhancement
 Bugzilla   : 15754
 Description: lfs quota tool enhancement
-Details    : added units specifiers support for setquota, default to
+Details    : Added units specifiers support for setquota, default to
 	     current uid/gid for quota report, short quota stats by
 	     default, nonpositional parameters for setquota, added
 	     llapi_quotactl manual page.
@@ -638,7 +626,7 @@ Details    : added units specifiers support for setquota, default to
 Severity   : enhancement
 Bugzilla   : 15625
 Description: *optional* service tags registration
-Details    : if the "service tags" package is installed on a Lustre node
+Details    : If the "service tags" package is installed on a Lustre node
 	     When the filesystem is mounted, a local-node service tag will
 	     be created.  See http://inventory.sun.com/ for more information
 	     about the Service Tags asset management system.
@@ -667,7 +655,7 @@ Severity   : normal
 Frequency  : testing only
 Bugzilla   : 12653
 Description: sanity test 65a fails if stripecount of -1 is set
-Details    : handle -1 striping on filesystem in ll_dirstripe_verify
+Details    : Handle -1 striping on filesystem in ll_dirstripe_verify
 
 Severity   : normal
 Frequency  : only in unusual configurations
@@ -683,7 +671,7 @@ Severity   : major
 Frequency  : rarely, if filesystem is mounted with -o flock
 Bugzilla   : 15924
 Description: do not process already freed flock
-Details    : flock can possibly be freed by another thread before it reaches
+Details    : Flock can possibly be freed by another thread before it reaches
 	     to ldlm_flock_completion_ast.
 
 Severity   : normal
@@ -696,7 +684,7 @@ Severity   : minor
 Frequency  : rarely, if binaries are being run from Lustre
 Bugzilla   : 15837
 Description: oops in page fault handler
-Details    : kernel page fault handler can return two special 'pages' in
+Details    : Kernel page fault handler can return two special 'pages' in
 	     error case, don't try dereference NOPAGE_SIGBUS and NOPAGE_OMM.
 
 Severity   : minor
@@ -712,14 +700,14 @@ Frequency  : rarely
 Bugzilla   : 14742
 Frequency  : rare
 Description: ASSERTION(CheckWriteback(page,cmd)) failed
-Details    : badly clear PG_Writeback bit in ll_ap_completion can produce false
+Details    : Badly clear PG_Writeback bit in ll_ap_completion can produce false
 	     positive assertion.
 
 Severity   : normal
 Frequency  : only with broken builds/installations
 Bugzilla   : 15779
 Description: no LBUG if lquota.ko and fsfilt_ldiskfs.ko are different versions
-Details    : just return an error to a user, put a console error message
+Details    : Just return an error to a user, put a console error message.
 
 Severity   : enhancement
 Bugzilla   : 15741
