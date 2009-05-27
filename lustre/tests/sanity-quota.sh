@@ -746,7 +746,7 @@ test_6() {
 	echo "  Remove filea to let OST0 release quota"
 	rm -f $FILEA
 
-        if at_is_valid && at_is_enabled; then
+        if at_is_enabled; then
 	    timeout=$(at_max_get mds)
         else
 	    timeout=$(lctl get_param -n timeout)

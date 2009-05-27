@@ -15,6 +15,11 @@ tbd Sun Microsystems, Inc.
 	  more information, please refer to bugzilla 17630.
 
 Severity   : enhancement
+Bugzilla   : 19293
+Description: move AT tunable parameters for more consistent usage
+Details    : add AT tunables under /proc/sys/lustre, add to conf_param parsing
+
+Severity   : enhancement
 Bugzilla   : 19625, 16893, 18668
 Description: Add support for SLES11 2.6.27.21-0.1.
 
