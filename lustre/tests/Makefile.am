@@ -72,5 +72,3 @@ ll_dirstripe_verify_LDADD= -L$(top_builddir)/lustre/utils -llustreapi
 
 flocks_test_SOURCES=flocks_test.c
 flocks_test_LDADD=-lpthread
-
-#copy_attr_LDADD= -lattr
