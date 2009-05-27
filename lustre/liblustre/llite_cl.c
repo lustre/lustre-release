@@ -429,9 +429,10 @@ static const struct cl_lock_operations slp_lock_ops = {
  */
 
 static int slp_io_rw_lock(const struct lu_env *env,
-                             const struct cl_io_slice *ios)
+                          const struct cl_io_slice *ios)
 {
-        struct cl_io *io = ios->cis_io;
+        struct ccc_io *cio = ccc_env_io(env);
+        struct cl_io *io   = ios->cis_io;
         loff_t start;
         loff_t end;
 
@@ -442,6 +443,9 @@ static int slp_io_rw_lock(const struct lu_env *env,
                 start = io->u.ci_wr.wr.crw_pos;
                 end   = start + io->u.ci_wr.wr.crw_count - 1;
         }
+
+        ccc_io_update_iov(env, cio, io);
+
         /*
          * This acquires real DLM lock only in O_APPEND case, because of
          * the io->ci_lockreq setting in llu_io_init().
@@ -726,9 +730,12 @@ static int slp_io_start(const struct lu_env *env, const struct cl_io_slice *ios)
         }
         LASSERT(cnt == 0 || io->ci_type == CIT_READ); /* libsysio should guarantee this */
 
-        session->lis_groups[session->lis_ngroups++] = iogroup;
+        if (!iogroup->lig_rc)
+                session->lis_rwcount += iogroup->lig_rwcount;
+        else if (!session->lis_rc)
+                session->lis_rc = iogroup->lig_rc;
+        err = 0;
 
-        return 0;
 out:
         put_io_group(iogroup);
         return err;
@@ -740,13 +747,15 @@ static const struct cl_io_operations ccc_io_ops = {
                         .cio_fini      = ccc_io_fini,
                         .cio_lock      = slp_io_rw_lock,
                         .cio_start     = slp_io_start,
-                        .cio_end       = ccc_io_end
+                        .cio_end       = ccc_io_end,
+                        .cio_advance   = ccc_io_advance
                 },
                 [CIT_WRITE] = {
                         .cio_fini      = ccc_io_fini,
                         .cio_lock      = slp_io_rw_lock,
                         .cio_start     = slp_io_start,
-                        .cio_end       = ccc_io_end
+                        .cio_end       = ccc_io_end,
+                        .cio_advance   = ccc_io_advance
                 },
                 [CIT_TRUNC] = {
                         .cio_fini       = ccc_io_fini,

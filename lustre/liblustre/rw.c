@@ -366,7 +366,7 @@ struct llu_io_session *get_io_session(struct inode *ino, int ngroups, int cmd)
 {
         struct llu_io_session *session;
 
-        OBD_ALLOC(session, LLU_IO_SESSION_SIZE(ngroups));
+        OBD_ALLOC_PTR(session);
         if (!session)
                 return NULL;
 
@@ -379,17 +379,8 @@ struct llu_io_session *get_io_session(struct inode *ino, int ngroups, int cmd)
 
 static void put_io_session(struct llu_io_session *session)
 {
-        int i;
-
-        for (i = 0; i < session->lis_ngroups; i++) {
-                if (session->lis_groups[i]) {
-                        put_io_group(session->lis_groups[i]);
-                        session->lis_groups[i] = NULL;
-                }
-        }
-
         I_RELE(session->lis_inode);
-        OBD_FREE(session, LLU_IO_SESSION_SIZE(session->lis_max_groups));
+        OBD_FREE_PTR(session);
 }
 
 static int llu_file_rwx(struct inode *ino,
@@ -503,8 +494,6 @@ int llu_iop_write(struct inode *ino,
 int llu_iop_iodone(struct ioctx *ioctx)
 {
         struct llu_io_session *session;
-        struct llu_io_group *group;
-        int i, rc = 0;
         struct lu_env *env;
         struct cl_io  *io;
         int refcheck;
@@ -523,22 +512,12 @@ int llu_iop_iodone(struct ioctx *ioctx)
         LASSERT(session);
         LASSERT(!IS_ERR(session));
 
-        for (i = 0; i < session->lis_ngroups; i++) {
-                group = session->lis_groups[i];
-                if (group) {
-                        if (!rc)
-                                rc = group->lig_rc;
-                        if (!rc)
-                                ioctx->ioctx_cc += group->lig_rwcount;
-                        put_io_group(group);
-                        session->lis_groups[i] = NULL;
-                }
-        }
-
-        if (rc) {
-                LASSERT(rc < 0);
+        if (session->lis_rc == 0) {
+                ioctx->ioctx_cc = session->lis_rwcount;
+        } else {
+                LASSERT(session->lis_rc < 0);
                 ioctx->ioctx_cc = -1;
-                ioctx->ioctx_errno = -rc;
+                ioctx->ioctx_errno = -session->lis_rc;
         }
 
         put_io_session(session);

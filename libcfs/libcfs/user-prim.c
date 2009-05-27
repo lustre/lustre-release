@@ -117,6 +117,9 @@ void cfs_waitq_wait(struct cfs_waitlink *link, cfs_task_state_t state)
 {
         LASSERT(link != NULL);
         (void)link;
+
+        /* well, wait for something to happen */
+        call_wait_handler(0);
 }
 
 int64_t cfs_waitq_timedwait(struct cfs_waitlink *link, cfs_task_state_t state,
@@ -124,6 +127,7 @@ int64_t cfs_waitq_timedwait(struct cfs_waitlink *link, cfs_task_state_t state,
 {
         LASSERT(link != NULL);
         (void)link;
+        call_wait_handler(timeout);
         return 0;
 }
 

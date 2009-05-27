@@ -183,36 +183,6 @@ static int vvp_mmap_locks(const struct lu_env *env,
         RETURN(0);
 }
 
-static void vvp_io_update_iov(const struct lu_env *env,
-                              struct ccc_io *vio, struct cl_io *io)
-{
-        int i;
-        size_t size = io->u.ci_rw.crw_count;
-
-        vio->cui_iov_olen = 0;
-        if (cl_io_is_sendfile(io) || size == vio->cui_tot_count)
-                return;
-
-        if (vio->cui_tot_nrsegs == 0)
-                vio->cui_tot_nrsegs =  vio->cui_nrsegs;
-
-        for (i = 0; i < vio->cui_tot_nrsegs; i++) {
-                struct iovec *iv = &vio->cui_iov[i];
-
-                if (iv->iov_len < size)
-                        size -= iv->iov_len;
-                else {
-                        if (iv->iov_len > size) {
-                                vio->cui_iov_olen = iv->iov_len;
-                                iv->iov_len = size;
-                        }
-                        break;
-                }
-        }
-
-        vio->cui_nrsegs = i + 1;
-}
-
 static int vvp_io_rw_lock(const struct lu_env *env, struct cl_io *io,
                           enum cl_lock_mode mode, loff_t start, loff_t end)
 {
@@ -224,7 +194,7 @@ static int vvp_io_rw_lock(const struct lu_env *env, struct cl_io *io,
         LASSERT(vvp_env_io(env)->cui_oneshot == 0);
         ENTRY;
 
-        vvp_io_update_iov(env, cio, io);
+        ccc_io_update_iov(env, cio, io);
 
         if (io->u.ci_rw.crw_nonblock)
                 ast_flags |= CEF_NONBLOCK;
@@ -631,37 +601,6 @@ static int vvp_io_fault_start(const struct lu_env *env,
         return result;
 }
 
-static void vvp_io_advance(const struct lu_env *env,
-                           const struct cl_io_slice *ios, size_t nob)
-{
-        struct ccc_io    *vio = cl2ccc_io(env, ios);
-        struct cl_io     *io  = ios->cis_io;
-        struct cl_object *obj = ios->cis_io->ci_obj;
-
-        CLOBINVRNT(env, obj, ccc_object_invariant(obj));
-
-        if (!cl_io_is_sendfile(io) && io->ci_continue) {
-                /* update the iov */
-                LASSERT(vio->cui_tot_nrsegs >= vio->cui_nrsegs);
-                LASSERT(vio->cui_tot_count  >= nob);
-
-                vio->cui_iov        += vio->cui_nrsegs;
-                vio->cui_tot_nrsegs -= vio->cui_nrsegs;
-                vio->cui_tot_count  -= nob;
-
-                if (vio->cui_iov_olen) {
-                        struct iovec *iv;
-
-                        vio->cui_iov--;
-                        vio->cui_tot_nrsegs++;
-                        iv = &vio->cui_iov[0];
-                        iv->iov_base += iv->iov_len;
-                        LASSERT(vio->cui_iov_olen > iv->iov_len);
-                        iv->iov_len = vio->cui_iov_olen - iv->iov_len;
-                }
-        }
-}
-
 static int vvp_io_read_page(const struct lu_env *env,
                             const struct cl_io_slice *ios,
                             const struct cl_page_slice *slice)
@@ -934,13 +873,13 @@ static const struct cl_io_operations vvp_io_ops = {
                         .cio_fini      = vvp_io_fini,
                         .cio_lock      = vvp_io_read_lock,
                         .cio_start     = vvp_io_read_start,
-                        .cio_advance   = vvp_io_advance
+                        .cio_advance   = ccc_io_advance
                 },
                 [CIT_WRITE] = {
                         .cio_fini      = vvp_io_fini,
                         .cio_lock      = vvp_io_write_lock,
                         .cio_start     = vvp_io_write_start,
-                        .cio_advance   = vvp_io_advance
+                        .cio_advance   = ccc_io_advance
                 },
                 [CIT_TRUNC] = {
                         .cio_fini       = vvp_io_trunc_fini,

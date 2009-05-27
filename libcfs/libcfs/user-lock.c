@@ -154,6 +154,13 @@ void init_completion_module(cfs_wait_handler_t handler)
         wait_handler = handler;
 }
 
+int call_wait_handler(int timeout)
+{
+        if (!wait_handler)
+                return -ENOSYS;
+        return wait_handler(timeout);
+}
+
 void init_completion(struct completion *c)
 {
         LASSERT(c != NULL);
@@ -172,9 +179,7 @@ void wait_for_completion(struct completion *c)
 {
         LASSERT(c != NULL);
         do {
-                if (wait_handler)
-                        wait_handler(1000);
-                else
+                if (call_wait_handler(1000) < 0)
                         break;
         } while (c->done == 0);
 }
@@ -183,9 +188,7 @@ int wait_for_completion_interruptible(struct completion *c)
 {
         LASSERT(c != NULL);
         do {
-                if (wait_handler)
-                        wait_handler(1000);
-                else
+                if (call_wait_handler(1000) < 0)
                         break;
         } while (c->done == 0);
         return 0;

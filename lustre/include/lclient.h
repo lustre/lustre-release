@@ -328,6 +328,10 @@ int ccc_io_one_lock(const struct lu_env *env, struct cl_io *io,
                     __u32 enqflags, enum cl_lock_mode mode,
                     loff_t start, loff_t end);
 void ccc_io_end(const struct lu_env *env, const struct cl_io_slice *ios);
+void ccc_io_advance(const struct lu_env *env, const struct cl_io_slice *ios,
+                    size_t nob);
+void ccc_io_update_iov(const struct lu_env *env, struct ccc_io *cio,
+                       struct cl_io *io);
 int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
                   struct cl_io *io, loff_t start, size_t count, int vfslock,
                   int *exceed);

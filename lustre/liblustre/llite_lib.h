@@ -327,15 +327,13 @@ static inline void inode_init_lvb(struct inode *inode, struct ost_lvb *lvb)
           sizeof(cfs_page_t) + \
           llap_cookie_size) * (x))
 
-#define LLU_IO_SESSION_SIZE(x)  \
-        (sizeof(struct llu_io_session) + (x) * 2 * sizeof(void *))
-
 struct llu_io_session {
         struct inode           *lis_inode;
         int                     lis_cmd;
         int                     lis_max_groups;
         int                     lis_ngroups;
-        struct llu_io_group    *lis_groups[0];
+        int                     lis_rc;
+        __u64                   lis_rwcount;
 };
 
 struct llu_io_group
