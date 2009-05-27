@@ -803,6 +803,8 @@ find_linux_release() {
 
 }
 
+# XXX this needs to be re-written as a wrapper around find_rpm
+#     or just gotten rid of.  :-)
 find_linux_rpm() {
     local prefix="$1"
     local delimiter=${2:-"-"}
@@ -855,7 +857,7 @@ unpack_linux_devel_rpm() {
 
     # call a distro specific hook, if available
     if type -p unpack_linux_devel_rpm-$DISTRO; then
-        unpack_linux_devel_rpm-$DISTRO
+        unpack_linux_devel_rpm-$DISTRO "$kernelrpm"
     fi
 
     popd

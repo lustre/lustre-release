@@ -50,12 +50,18 @@ curl ftp://ftp.kernel.org/pub/linux/kernel/people/akpm/patches/2.6/2.6.17/2.6.17
 }
 
 unpack_linux_devel_rpm-sles11() {
+    local callers_rpm="$1"
+
+    local rpmdir="${callers_rpm%/*}"
+
     local kernelrpm
-    if ! kernelrpm=$(find_rpm "$TOPDIR/RPMS/$arch/" provides "^kernel-lustre-default-base ="); then
-        fatal 1 "Could not find the kernel-lustre-default-base in $TOPDIR/RPMS/$arch/"
+    # this is a hack that should go away when the modified lustre kernel
+    # Provides kernel-default-base                        vvvvvvvvv
+    if ! kernelrpm=$(find_rpm "$rpmdir" provides "^kernel-(lustre-)?default-base ="); then
+        fatal 1 "Could not find the kernel-default-base in $rpmdir/"
     fi
 
-    if ! rpm2cpio < "$TOPDIR/RPMS/$arch/$kernelrpm" | cpio -id > /dev/null 2>&1; then
+    if ! rpm2cpio < "$rpmdir/$kernelrpm" | cpio -id > /dev/null 2>&1; then
         fatal 1 "Unpack error for $kernelrpm"
     fi
 
