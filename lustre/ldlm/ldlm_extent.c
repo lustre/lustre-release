@@ -859,6 +859,7 @@ void ldlm_extent_add_lock(struct ldlm_resource *res,
         int idx;
 
         LASSERT(lock->l_granted_mode == lock->l_req_mode);
+        LASSERT(!lock->l_destroyed);
 
         node = lock->l_tree_node;
         LASSERT(node != NULL);
