@@ -1208,8 +1208,13 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
         if (!local && (*flags & LDLM_FL_REPLAY) && res->lr_type == LDLM_EXTENT)
                 OBD_SLAB_ALLOC(node, ldlm_interval_slab, CFS_ALLOC_IO,
                                sizeof(*node));
+        if(res->lr_type == LDLM_EXTENT)
+                OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_ENQUEUE_LOCAL, 30);
 
         lock_res_and_lock(lock);
+        if (lock->l_destroyed)
+                GOTO(out, rc = -EAGAIN);
+
         if (local && lock->l_req_mode == lock->l_granted_mode) {
                 /* The server returned a blocked lock, but it was granted
                  * before we got a chance to actually enqueue it.  We don't
@@ -1649,6 +1654,10 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                  "new_mode %u, granted %u\n", new_mode, lock->l_granted_mode);
 
         lock_res_and_lock(lock);
+        if (unlikely(lock->l_destroyed != 0)) {
+                unlock_res_and_lock(lock);
+                RETURN(NULL);
+        }
 
         res = lock->l_resource;
         ns = res->lr_namespace;

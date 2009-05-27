@@ -403,6 +403,29 @@ test_20b() {	# bug 2986 - ldlm_handle_enqueue error during open
 }
 run_test 20b "ldlm_handle_enqueue error (should return error)"
 
+test_20c() {
+        # bug 19039 -- a race between ldlm_enqueue and lock
+        # destroying when the client export is disconnected
+
+        local ddpid
+
+        mkdir -p $DIR/$tdir
+        rm -f $DIR/$tdir/$tfile
+        # OBD_FAIL_LDLM_ENQUEUE_LOCAL 0x319
+        do_facet ost1 lctl set_param fail_loc=0x80000319
+        lfs setstripe -c 1 -o 0 $DIR/$tdir/$tfile
+        dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M conv=notrunc count=1 &
+        ddpid=$!
+        sleep 3
+        kill  $ddpid
+        stop ost1
+        sleep 30
+        start ost1 $(ostdevname 1) $OST_MOUNT_OPTS
+        rm -rf $DIR/$tdir
+        return 0
+}
+run_test 20c "ldlm_lock_enqueue is called for a destroyed lock (shouldn't LBUG)"
+
 test_21a() {
        mkdir -p $DIR/$tdir-1
        mkdir -p $DIR/$tdir-2
