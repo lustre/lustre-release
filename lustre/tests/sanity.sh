@@ -1010,11 +1010,10 @@ test_27n() {
 
 	reset_enospc
 	rm -f $DIR/d27/f27n
-	$SETSTRIPE $DIR/d27 -c 1 -i -1
 	exhaust_precreations 0 0x80000215
-
+	$SETSTRIPE -c -1 $DIR/d27
 	touch $DIR/d27/f27n || error
-
+	$GETSTRIPE $DIR/d27/f27n
 	reset_enospc
 }
 run_test 27n "create file with some full OSTs =================="

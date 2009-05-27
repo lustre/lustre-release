@@ -509,12 +509,13 @@ int qos_remedy_create(struct lov_request_set *set, struct lov_request *req)
                         continue;
                 /* check if objects has been created on this ost */
                 for (stripe = 0; stripe < lsm->lsm_stripe_count; stripe++) {
+                        /* we try send create to this ost but he is failed */
                         if (stripe == req->rq_stripe)
                                 continue;
+                        /* already have object at this stripe */
                         if (ost_idx == lsm->lsm_oinfo[stripe]->loi_ost_idx)
                                 break;
                 }
-
                 if (stripe >= lsm->lsm_stripe_count) {
                         req->rq_idx = ost_idx;
                         rc = obd_create(lov->lov_tgts[ost_idx]->ltd_exp,
