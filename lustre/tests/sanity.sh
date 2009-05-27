@@ -2247,7 +2247,7 @@ test_52a() {
 	[ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
 	mkdir -p $DIR/d52a
 	touch $DIR/d52a/foo
-	chattr =a $DIR/d52a/foo || error "chattr =a failed"
+	chattr +a $DIR/d52a/foo || error "chattr +a failed"
 	echo bar >> $DIR/d52a/foo || error "append bar failed"
 	cp /etc/hosts $DIR/d52a/foo && error "cp worked"
 	rm -f $DIR/d52a/foo 2>/dev/null && error "rm worked"
@@ -2266,19 +2266,19 @@ test_52b() {
 	[ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
 	mkdir -p $DIR/d52b
 	touch $DIR/d52b/foo
-	chattr =i $DIR/d52b/foo || error
-	cat test > $DIR/d52b/foo && error
-	cp /etc/hosts $DIR/d52b/foo && error
-	rm -f $DIR/d52b/foo 2>/dev/null && error
-	link $DIR/d52b/foo $DIR/d52b/foo_link 2>/dev/null && error
-	echo foo >> $DIR/d52b/foo && error
-	mrename $DIR/d52b/foo $DIR/d52b/foo_ren && error
+	chattr +i $DIR/d52b/foo || error "chattr +a failed"
+	cat test > $DIR/d52b/foo && error "cat test worked"
+	cp /etc/hosts $DIR/d52b/foo && error "cp worked"
+	rm -f $DIR/d52b/foo 2>/dev/null && error "rm worked"
+	link $DIR/d52b/foo $DIR/d52b/foo_link 2>/dev/null && error "link worked"
+	echo foo >> $DIR/d52b/foo && error "echo worked"
+	mrename $DIR/d52b/foo $DIR/d52b/foo_ren && error "rename worked"
 	[ -f $DIR/d52b/foo ] || error
 	[ -f $DIR/d52b/foo_ren ] && error
-	lsattr $DIR/d52b/foo | egrep -q "^-+i[-e]+ $DIR/d52b/foo" || error
-	chattr -i $DIR/d52b/foo || error
+	lsattr $DIR/d52b/foo | egrep -q "^-+i[-e]+ $DIR/d52b/foo" || error "lsattr"
+	chattr -i $DIR/d52b/foo || error "chattr failed"
 
-	rm -fr $DIR/d52b || error
+	rm -fr $DIR/d52b || error "remove failed"
 }
 run_test 52b "immutable flag test (should return errors) ======="
 
@@ -2289,9 +2289,9 @@ test_52c() { # 12848 simulating client < 1.4.7
         # skip MDS_BFLAG_EXT_FLAGS in mdc_getattr_pack
 #define OBD_FAIL_MDC_OLD_EXT_FLAGS       0x802
         lctl set_param fail_loc=0x802
-        chattr =i $DIR/d52c/foo || error
-        lsattr $DIR/d52c/foo | egrep -q "^-+i[-e]+ $DIR/d52c/foo" || error
-        chattr -i $DIR/d52c/foo || error
+        chattr +i $DIR/d52c/foo || error
+        lsattr $DIR/d52c/foo | egrep -q "^-+i[-e]+ $DIR/d52c/foo" || error "lsattr failed"
+        chattr -i $DIR/d52c/foo || error "chattr failed"
         lctl set_param -n fail_loc=0
 
         rm -fr $DIR/d52c || error
