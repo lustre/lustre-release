@@ -1090,7 +1090,7 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
                                   start, len ? len : DMU_OBJECT_END);
          */
 
-        udmu_object_punch(&osd->od_objset, obj->oo_db, oh->ot_tx, start, len);
+        rc = udmu_object_punch(&osd->od_objset, obj->oo_db, oh->ot_tx, start, len);
 
         /* set new size */
 #if 0
@@ -1796,16 +1796,21 @@ int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
                 struct lustre_capa *capa)
 {
         struct osd_object  *obj  = osd_dt_obj(dt);
-        int rc;
+        int rc, size;
 
         ENTRY;
         LASSERT(obj->oo_db != NULL);
         LASSERT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
 
-        rc = udmu_get_xattr(obj->oo_db, buf->lb_buf, buf->lb_len, name);
+        down(&obj->oo_guard);
+        rc = -udmu_xattr_get(obj->oo_db, buf->lb_buf, buf->lb_len, name, &size);
+        up(&obj->oo_guard);
+
         if(rc == -ENOENT)
                 rc = -ENODATA;
+        if(rc == 0)
+                rc = size;
         RETURN(rc);
 }
 
@@ -1825,7 +1830,9 @@ int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_tx != NULL);
 
-        udmu_tx_hold_bonus(oh->ot_tx, udmu_object_get_id(obj->oo_db));
+        down(&obj->oo_guard);
+        udmu_xattr_declare_set(obj->oo_db, buflen, name, oh->ot_tx);
+        up(&obj->oo_guard);
 
         RETURN(0);
 }
@@ -1847,7 +1854,10 @@ int osd_xattr_set(const struct lu_env *env,
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_tx != NULL);
 
-        rc = udmu_set_xattr(obj->oo_db, buf->lb_buf, buf->lb_len, name, oh->ot_tx);
+        down(&obj->oo_guard);
+        rc = -udmu_xattr_set(obj->oo_db, buf->lb_buf, buf->lb_len, name, oh->ot_tx);
+        up(&obj->oo_guard);
+
         RETURN(rc);
 }
 
@@ -1867,7 +1877,9 @@ int osd_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_tx != NULL);
 
-        udmu_tx_hold_bonus(oh->ot_tx, udmu_object_get_id(obj->oo_db));
+        down(&obj->oo_guard);
+        udmu_xattr_declare_del(obj->oo_db, name, oh->ot_tx);
+        up(&obj->oo_guard);
 
         RETURN(0);
 }
@@ -1888,7 +1900,10 @@ int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_tx != NULL);
 
-        rc = udmu_del_xattr(obj->oo_db, name, oh->ot_tx);
+        down(&obj->oo_guard);
+        rc = -udmu_xattr_del(obj->oo_db, name, oh->ot_tx);
+        up(&obj->oo_guard);
+
         RETURN(rc);
 }
 
@@ -1904,7 +1919,10 @@ int osd_xattr_list(const struct lu_env *env,
         LASSERT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
 
-        rc = udmu_list_xattr(obj->oo_db, buf->lb_buf, buf->lb_len);
+        down(&obj->oo_guard);
+        rc = -udmu_xattr_list(obj->oo_db, buf->lb_buf, buf->lb_len);
+        up(&obj->oo_guard);
+
         RETURN(rc);
 
 }

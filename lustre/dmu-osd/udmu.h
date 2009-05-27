@@ -242,7 +242,7 @@ void udmu_object_getattr(dmu_buf_t *db, vnattr_t *vap);
 
 void udmu_object_setattr(dmu_buf_t *db, dmu_tx_t *tx, vnattr_t *vap);
 
-void udmu_object_punch(udmu_objset_t *uos, dmu_buf_t *db, dmu_tx_t *tx,
+int udmu_object_punch(udmu_objset_t *uos, dmu_buf_t *db, dmu_tx_t *tx,
                       uint64_t offset, uint64_t len);
 
 int udmu_object_delete(udmu_objset_t *uos, dmu_buf_t **db, dmu_tx_t *tx, void *tag);
@@ -288,11 +288,15 @@ void udmu_object_links_inc(dmu_buf_t *db, dmu_tx_t *tx);
 void udmu_object_links_dec(dmu_buf_t *db, dmu_tx_t *tx);
 
 /* Extended attributes */
-int udmu_get_xattr(dmu_buf_t *db, void *val, int vallen, const char *name);
-int udmu_set_xattr(dmu_buf_t *db, void *val, int vallen,
+int udmu_xattr_get(dmu_buf_t *db, void *buf, int buflen, const char *name, int *size);
+int udmu_xattr_list(dmu_buf_t *db, void *val, int vallen);
+
+void udmu_xattr_declare_set(dmu_buf_t *db, int vallen, const char *name, dmu_tx_t *tx);
+int udmu_xattr_set(dmu_buf_t *db, void *val, int vallen,
                    const char *name, dmu_tx_t *tx);
-int udmu_del_xattr(dmu_buf_t *db, const char *name, dmu_tx_t *tx);
-int udmu_list_xattr(dmu_buf_t *db, void *val, int vallen);
+
+void udmu_xattr_declare_del(dmu_buf_t *db, const char *name, dmu_tx_t *tx);
+int udmu_xattr_del(dmu_buf_t *db, const char *name, dmu_tx_t *tx);
 
 #ifdef  __cplusplus
 }
