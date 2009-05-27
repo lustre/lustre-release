@@ -14,6 +14,13 @@ tbd Sun Microsystems, Inc.
 	  of Lustre filesystem with 4K stack may cause a stack overflow. For
 	  more information, please refer to bugzilla 17630.
 
+Severity   : normal
+Bugzilla   : 18382
+Descriptoin: don't return error if have particaly created objects for file.
+Details    : lov_update_create_set uses set->set_success as index for created objects,
+             so if some requests will be failed, they will have hole at end of
+             array and we can use qos_shrink_lsm for allocate correct lsm.
+
 Severity   : enhancement
 Bugzilla   : 18357
 Description: implement async create (obd_async_create) method for osc, to avoid

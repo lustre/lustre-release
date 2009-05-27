@@ -593,9 +593,6 @@ static int create_done(struct obd_export *exp, struct lov_request_set *set,
 
                         rc = qos_remedy_create(set, req);
                         lov_update_create_set(set, req, rc);
-
-                        if (rc)
-                                break;
                 }
         }
 
@@ -603,11 +600,7 @@ static int create_done(struct obd_export *exp, struct lov_request_set *set,
         if (set->set_success == 0)
                 GOTO(cleanup, rc);
 
-        /* If there was an explicit stripe set, fail.  Otherwise, we
-         * got some objects and that's not bad. */
         if (set->set_count != set->set_success) {
-                if (*lsmp)
-                        GOTO(cleanup, rc);
                 set->set_count = set->set_success;
                 qos_shrink_lsm(set);
         }
