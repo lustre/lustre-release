@@ -694,7 +694,7 @@ static struct lu_device *echo_device_alloc(const struct lu_env *env,
         tgt = class_name2obd(lustre_cfg_string(cfg, 1));
         LASSERT(tgt != NULL);
         next = tgt->obd_lu_dev;
-        if (!lu_device_is_cl(next))
+        if (next != NULL && !lu_device_is_cl(next))
                 next = NULL;
 
         /*
