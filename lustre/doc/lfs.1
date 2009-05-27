@@ -35,33 +35,31 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs quotainv [-ug] [-f] <filesystem>
 .br
-.B lfs setquota [-u|--user|-g|--group] <username|groupname>
+.B lfs setquota <-u|--user|-g|--group> <username|groupname>
              \fB[--block-softlimit <block-softlimit>]
              \fB[--block-hardlimit <block-hardlimit>]
              \fB[--inode-softlimit <inode-softlimit>]
              \fB[--inode-hardlimit <inode-hardlimit>]
              \fB<filesystem>\fR
 .br
-.B lfs setquota [-u|--user|-g|--group] <username|groupname>
+.B lfs setquota <-u|--user|-g|--group> <username|groupname>
              \fB[-b <block-softlimit>] [-B <block-hardlimit>]
              \fB[-i <inode-softlimit>] [-I <inode-hardlimit>]
              \fB<filesystem>\fR
 .br
-.B lfs setquota -t [-u|-g]
+.B lfs setquota -t <-u|-g>
              \fB[--block-grace <block-grace>]
              \fB[--inode-grace <inode-grace>]
              \fB<filesystem>\fR
 .br
-.B lfs setquota -t [-u|-g]
+.B lfs setquota -t <-u|-g>
              \fB[-b <block-grace>] [-i <inode-grace>]
              \fB<filesystem>\fR
 .br
 
-.B lfs quota [-v] [-o obd_uuid] [-u|-g] <username|groupname> <filesystem>
+.B lfs quota [-v] [-o obd_uuid] [-u <username>|-g <groupname>] <filesystem>
 .br
-.B lfs quota <filesystem>
-.br
-.B lfs quota -t [-u|-g] <filesystem>
+.B lfs quota -t <-u|-g> <filesystem>
 .br
 .B lfs help
 .SH DESCRIPTION
