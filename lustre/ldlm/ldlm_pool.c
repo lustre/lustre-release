@@ -528,7 +528,7 @@ static int ldlm_cli_pool_shrink(struct ldlm_pool *pl,
          * Do not cancel locks in case lru resize is disabled for this ns.
          */
         if (!ns_connect_lru_resize(ns))
-                RETURN(0);
+                return 0;
 
         /*
          * Make sure that pool knows last SLV and Limit from obd.
