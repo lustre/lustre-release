@@ -14,8 +14,7 @@ autoMakefile.in
 tags
 TAGS
 lustre*.tar.gz
-cscope.files
-cscope.out
+cscope.*
 autom4te-2.53.cache
 autom4te.cache
 depcomp
