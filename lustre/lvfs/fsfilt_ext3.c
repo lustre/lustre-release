@@ -43,12 +43,17 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/fs.h>
-#include <linux/jbd.h>
 #include <linux/slab.h>
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
+#ifdef HAVE_EXT4_LDISKFS
+#include <ext4/ext4.h>
+#include <ext4/ext4_jbd2.h>
+#else
+#include <linux/jbd.h>
 #include <linux/ext3_fs.h>
 #include <linux/ext3_jbd.h>
+#endif
 #include <linux/version.h>
 #include <linux/bitops.h>
 #include <linux/quota.h>
@@ -72,7 +77,11 @@
 #include <linux/lprocfs_status.h>
 
 #ifdef EXT3_MULTIBLOCK_ALLOCATOR
+#ifdef HAVE_EXT4_LDISKFS
+#include <ext4/ext4_extents.h>
+#else
 #include <linux/ext3_extents.h>
+#endif
 #endif
 
 #include "lustre_quota_fmt.h"
@@ -109,6 +118,19 @@ struct fsfilt_cb_data {
 #define XATTR_NO_CTIME 0x80
 #endif
 
+#ifdef HAVE_EXT4_LDISKFS
+#define fsfilt_log_start_commit(journal, tid) jbd2_log_start_commit(journal, tid)
+#define fsfilt_log_wait_commit(journal, tid) jbd2_log_wait_commit(journal, tid)
+#define fsfilt_journal_callback_set(handle, func, jcb) jbd2_journal_callback_set(handle, func, jcb)
+#else
+#define fsfilt_log_start_commit(journal, tid) log_start_commit(journal, tid)
+#define fsfilt_log_wait_commit(journal, tid) log_wait_commit(journal, tid)
+#define fsfilt_journal_callback_set(handle, func, jcb) journal_callback_set(handle, func, jcb)
+#define ext_pblock(ex) (ex)->ee_start
+#define ext3_ext_store_pblock(ex, pblock)  ((ex)->ee_start = pblock)
+#define ext3_inode_bitmap(sb,desc) le32_to_cpu((desc)->bg_inode_bitmap)
+#endif
+
 static char *fsfilt_ext3_get_label(struct super_block *sb)
 {
         return EXT3_SB(sb)->s_es->s_volume_name;
@@ -122,7 +144,7 @@ static int fsfilt_ext3_set_label(struct super_block *sb, char *label)
         int err;
 
         journal = EXT3_SB(sb)->s_journal;
-        handle = journal_start(journal, 1);
+        handle = ext3_journal_start_sb(sb, 1);
         if (IS_ERR(handle)) {
                 CERROR("can't start transaction\n");
                 return(PTR_ERR(handle));
@@ -138,7 +160,7 @@ static int fsfilt_ext3_set_label(struct super_block *sb, char *label)
         err = ext3_journal_dirty_metadata(handle, EXT3_SB(sb)->s_sbh);
 
 out:
-        journal_stop(handle);
+        ext3_journal_stop(handle);
 
         return(err);
 }
@@ -214,7 +236,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                 nblocks += 3;
                 /* no break */
         case FSFILT_OP_CREATE: {
-#if defined(EXT3_EXTENTS_FL) && defined(EXT3_INDEX_FL)
+#if defined(EXT3_EXTENTS_FL) && defined(EXT3_INDEX_FL) && !defined(HAVE_EXT4_LDISKFS)
                 static int warned;
                 if (!warned) {
                         if (!test_opt(inode->i_sb, EXTENTS)) {
@@ -222,7 +244,8 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                         } else if (((EXT3_I(inode)->i_flags &
                               cpu_to_le32(EXT3_EXTENTS_FL | EXT3_INDEX_FL)) ==
                               cpu_to_le32(EXT3_EXTENTS_FL | EXT3_INDEX_FL))) {
-                                CWARN("extent-mapped directory found - contact "
+                                CWARN("extent-mapped directory found with "
+                                      "ext3-based ldiskfs - contact "
                                       "http://bugzilla.lustre.org/\n");
                                 warned = 1;
                         }
@@ -446,11 +469,11 @@ static int fsfilt_ext3_extend(struct inode *inode, unsigned int nblocks,void *h)
 
        if (handle->h_buffer_credits > nblocks)
                 return 0;
-       if (journal_extend(handle, nblocks) == 0)
+       if (ext3_journal_extend(handle, nblocks) == 0)
                 return 0;
 
        ext3_mark_inode_dirty(handle, inode);
-       return journal_restart(handle, nblocks);
+       return ext3_journal_restart(handle, nblocks);
 }
 
 static int fsfilt_ext3_commit(struct inode *inode, void *h, int force_sync)
@@ -488,7 +511,7 @@ static int fsfilt_ext3_commit_async(struct inode *inode, void *h,
                 CERROR("error while stopping transaction: %d\n", rc);
                 return rc;
         }
-        log_start_commit(journal, tid);
+        fsfilt_log_start_commit(journal, tid);
 
         *wait_handle = (void *) tid;
         CDEBUG(D_INODE, "commit async: %lu\n", (unsigned long) tid);
@@ -504,7 +527,7 @@ static int fsfilt_ext3_commit_wait(struct inode *inode, void *h)
         if (unlikely(is_journal_aborted(journal)))
                 return -EIO;
 
-        log_wait_commit(EXT3_JOURNAL(inode), tid);
+        fsfilt_log_wait_commit(EXT3_JOURNAL(inode), tid);
 
         if (unlikely(is_journal_aborted(journal)))
                 return -EIO;
@@ -578,6 +601,7 @@ static int fsfilt_ext3_iocontrol(struct inode * inode, struct file *file,
                                  unsigned int cmd, unsigned long arg)
 {
         int rc = 0;
+        struct file dummy_file;
         ENTRY;
 
         /* FIXME: Can't do this because of nested transaction deadlock */
@@ -586,8 +610,25 @@ static int fsfilt_ext3_iocontrol(struct inode * inode, struct file *file,
                 RETURN(-EPERM);
         }
 
+#ifdef HAVE_EXT4_LDISKFS
+        /* ext4_ioctl does not have a inode argument, so create a dummy file */
+        if (file == NULL) {
+                OBD_ALLOC_PTR(dummy_file.f_dentry);
+                if (dummy_file.f_dentry == NULL) {
+                        RETURN(-ENOMEM);
+                }
+
+                dummy_file.f_dentry->d_inode = inode;
+        }
+        if (inode->i_fop->unlocked_ioctl)
+                rc = inode->i_fop->unlocked_ioctl(file ?: &dummy_file, cmd,arg);
+
+        if (file == NULL)
+                OBD_FREE_PTR(dummy_file.f_dentry);
+#else
         if (inode->i_fop->ioctl)
                 rc = inode->i_fop->ioctl(inode, file, cmd, arg);
+#endif
         else
                 RETURN(-ENOTTY);
 
@@ -722,8 +763,8 @@ static int fsfilt_ext3_add_journal_cb(struct obd_device *obd, __u64 last_rcvd,
         fcb->cb_data = cb_data;
 
         CDEBUG(D_EXT2, "set callback for last_rcvd: "LPD64"\n", last_rcvd);
-        journal_callback_set(handle, fsfilt_ext3_cb_func,
-                             (struct journal_callback *)fcb);
+        fsfilt_journal_callback_set(handle, fsfilt_ext3_cb_func,
+                                    (struct journal_callback *)fcb);
 
         return 0;
 }
@@ -767,11 +808,16 @@ static int fsfilt_ext3_sync(struct super_block *sb)
 
 #ifdef EXT3_MULTIBLOCK_ALLOCATOR
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17))
-#define ext3_up_truncate_sem(inode)  up(&EXT3_I(inode)->truncate_sem);
-#define ext3_down_truncate_sem(inode)  down(&EXT3_I(inode)->truncate_sem);
+#define fsfilt_up_truncate_sem(inode)  up(&EXT3_I(inode)->truncate_sem);
+#define fsfilt_down_truncate_sem(inode)  down(&EXT3_I(inode)->truncate_sem);
 #else
-#define ext3_up_truncate_sem(inode)  mutex_unlock(&EXT3_I(inode)->truncate_mutex);
-#define ext3_down_truncate_sem(inode)  mutex_lock(&EXT3_I(inode)->truncate_mutex);
+#ifdef HAVE_EXT4_LDISKFS
+#define fsfilt_up_truncate_sem(inode) up_write((&EXT4_I(inode)->i_data_sem));
+#define fsfilt_down_truncate_sem(inode) down_write((&EXT4_I(inode)->i_data_sem));
+#else
+#define fsfilt_up_truncate_sem(inode)  mutex_unlock(&EXT3_I(inode)->truncate_mutex);
+#define fsfilt_down_truncate_sem(inode)  mutex_lock(&EXT3_I(inode)->truncate_mutex);
+#endif
 #endif
 
 #ifndef EXT_ASSERT
@@ -780,10 +826,14 @@ static int fsfilt_ext3_sync(struct super_block *sb)
 
 #ifdef EXT3_EXT_HAS_NO_TREE
 /* for kernels 2.6.18 and later */
+#ifdef HAVE_EXT4_LDISKFS
+#define EXT_GENERATION(inode)           (EXT4_I(inode)->i_ext_generation)
+#else
+#define EXT_GENERATION(inode)           ext_generation(inode)
+#endif
 #define ext3_ext_base                   inode
 #define ext3_ext_base2inode(inode)      (inode)
 #define EXT_DEPTH(inode)                ext_depth(inode)
-#define EXT_GENERATION(inode)           ext_generation(inode)
 #define fsfilt_ext3_ext_walk_space(inode, block, num, cb, cbdata) \
                         ext3_ext_walk_space(inode, block, num, cb, cbdata);
 #else
@@ -794,15 +844,6 @@ static int fsfilt_ext3_sync(struct super_block *sb)
 #endif
 
 #include <linux/lustre_version.h>
-#if EXT3_EXT_MAGIC == 0xf301
-#define ee_start e_start
-#define ee_block e_block
-#define ee_len   e_num
-#endif
-#ifndef EXT3_BB_MAX_BLOCKS
-#define ext3_mb_new_blocks(handle, inode, goal, count, aflags, err) \
-        ext3_new_blocks(handle, inode, count, goal, err)
-#endif
 
 struct bpointers {
         unsigned long *blocks;
@@ -836,7 +877,7 @@ static int ext3_ext_find_goal(struct inode *inode, struct ext3_ext_path *path,
                         if (ex->ee_block + ex->ee_len == block)
                                 *aflags |= 1;
 #endif
-                        return ex->ee_start + (block - ex->ee_block);
+                        return ext_pblock(ex) + (block - ex->ee_block);
                 }
 
                 /* it looks index is empty
@@ -962,15 +1003,14 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
 
         tgen = EXT_GENERATION(base);
         count = ext3_ext_calc_credits_for_insert(base, path);
-        ext3_up_truncate_sem(inode);
-
+        fsfilt_up_truncate_sem(inode);
         handle = ext3_journal_start(inode, count+EXT3_ALLOC_NEEDED+1);
         if (IS_ERR(handle)) {
-                ext3_down_truncate_sem(inode);
+                fsfilt_down_truncate_sem(inode);
                 return PTR_ERR(handle);
         }
 
-        ext3_down_truncate_sem(inode);
+        fsfilt_down_truncate_sem(inode);
         if (tgen != EXT_GENERATION(base)) {
                 /* the tree has changed. so path can be invalid at moment */
                 ext3_journal_stop(handle);
@@ -985,7 +1025,7 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
 
         /* insert new extent */
         nex.ee_block = cex->ec_block;
-        nex.ee_start = pblock;
+        ext3_ext_store_pblock(&nex, pblock);
         nex.ee_len = count;
         err = ext3_ext_insert_extent(handle, base, path, &nex);
         if (err) {
@@ -995,7 +1035,7 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
 #ifdef EXT3_MB_HINT_GROUP_ALLOC
                 ext3_mb_discard_inode_preallocations(inode);
 #endif
-                ext3_free_blocks(handle, inode, nex.ee_start, nex.ee_len, 0);
+                ext3_free_blocks(handle, inode, ext_pblock(&nex), nex.ee_len, 0);
                 goto out;
         }
 
@@ -1005,7 +1045,7 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
          * scaning after that block
          */
         cex->ec_len = nex.ee_len;
-        cex->ec_start = nex.ee_start;
+        cex->ec_start = ext_pblock(&nex);
         BUG_ON(nex.ee_len == 0);
         BUG_ON(nex.ee_block != cex->ec_block);
 
@@ -1018,9 +1058,10 @@ map:
                         CERROR("hmm. why do we find this extent?\n");
                         CERROR("initial space: %lu:%u\n",
                                 bp->start, bp->init_num);
-                        CERROR("current extent: %u/%u/%u %d\n",
+                        CERROR("current extent: %u/%u/%llu %d\n",
                                 cex->ec_block, cex->ec_len,
-                                cex->ec_start, cex->ec_type);
+                                (unsigned long long)cex->ec_start,
+                                cex->ec_type);
                 }
                 i = 0;
                 if (cex->ec_block < bp->start)
@@ -1074,10 +1115,10 @@ int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
         bp.init_num = bp.num = num;
         bp.create = create;
 
-        ext3_down_truncate_sem(inode);
+        fsfilt_down_truncate_sem(inode);
         err = fsfilt_ext3_ext_walk_space(base, block, num, ext3_ext_new_extent_cb, &bp);
         ext3_ext_invalidate_cache(base);
-        ext3_up_truncate_sem(inode);
+        fsfilt_up_truncate_sem(inode);
 
         return err;
 }
@@ -1673,8 +1714,7 @@ read_inode_bitmap(struct super_block *sb, unsigned long group)
         struct buffer_head *bh;
 
         desc = get_group_desc(sb, group);
-        bh = sb_bread(sb, le32_to_cpu(desc->bg_inode_bitmap));
-
+        bh = sb_bread(sb, ext3_inode_bitmap(sb, desc));
         return bh;
 }
 

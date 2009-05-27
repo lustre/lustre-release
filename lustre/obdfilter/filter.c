@@ -2822,7 +2822,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
 
         if (oa->o_valid & OBD_MD_FLFLAGS) {
                 rc = fsfilt_iocontrol(exp->exp_obd, inode, NULL,
-                                      EXT3_IOC_SETFLAGS, (long)&oa->o_flags);
+                                      FSFILT_IOC_SETFLAGS, (long)&oa->o_flags);
         } else {
                 rc = fsfilt_setattr(exp->exp_obd, dentry, handle, &iattr, 1);
                 if (fcc != NULL)
@@ -3806,8 +3806,9 @@ static int filter_get_info(struct obd_export *exp, __u32 keylen,
 
                 memcpy(fiemap, &fm_key->fiemap, sizeof(*fiemap));
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
                 rc = fsfilt_iocontrol(obd, dentry->d_inode, NULL,
-                                      EXT3_IOC_FIEMAP, (long)fiemap);
+                                      FSFILT_IOC_FIEMAP, (long)fiemap);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
                 f_dput(dentry);

@@ -2737,7 +2737,7 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                 RETURN(ll_lov_getstripe(inode, arg));
         case LL_IOC_RECREATE_OBJ:
                 RETURN(ll_lov_recreate_obj(inode, file, arg));
-        case EXT3_IOC_FIEMAP: {
+        case FSFILT_IOC_FIEMAP: {
                 struct ll_user_fiemap *fiemap_s;
                 size_t num_bytes, ret_bytes;
                 unsigned int extent_count;
@@ -2803,11 +2803,11 @@ error:
                 OBD_VFREE(fiemap_s, num_bytes);
                 RETURN(rc);
         }
-        case EXT3_IOC_GETFLAGS:
-        case EXT3_IOC_SETFLAGS:
+        case FSFILT_IOC_GETFLAGS:
+        case FSFILT_IOC_SETFLAGS:
                 RETURN(ll_iocontrol(inode, file, cmd, arg));
-        case EXT3_IOC_GETVERSION_OLD:
-        case EXT3_IOC_GETVERSION:
+        case FSFILT_IOC_GETVERSION_OLD:
+        case FSFILT_IOC_GETVERSION:
                 RETURN(put_user(inode->i_generation, (int *)arg));
         case LL_IOC_JOIN: {
 #if LUSTRE_FIX >= 50
