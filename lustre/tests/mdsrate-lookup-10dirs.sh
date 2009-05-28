@@ -61,26 +61,19 @@ else
     done
 
     log "===== $0 Test preparation: creating ${NUM_DIRS} dirs with ${NUM_FILES} files."
-    echo "Test preparation: creating ${NUM_DIRS} dirs with ${NUM_FILES} files."
-
-    MDSCOUNT=1
-    NUM_CLIENTS=$(get_node_count ${NODES_TO_USE//,/ })
-
-    log "===== $0 Test preparation: creating ${NUM_DIRS} dirs with ${NUM_FILES} files."
-    echo "Test preparation: creating ${NUM_DIRS} dirs with ${NUM_FILES} files."
 
     COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --mknod
                         --ndirs ${NUM_DIRS} --dirfmt '${DIRfmt}'
                         --nfiles ${NUM_FILES} --filefmt 'f%%d'"
 
     echo "+" ${COMMAND}
-    # For files creation we can use NUM_THREADS equal to NUM_DIRS 
+    # For files creation we can use -np equal to NUM_DIRS 
     # This is just a test preparation, does not matter how many threads we use for files creation;
-    # we just should be aware that NUM_DIRS is less than or equal to the number of threads NUM_THREADS
+    # we just should be aware that NUM_DIRS is less than or equal to the number of threads np
     mpi_run -np ${NUM_DIRS} -machinefile ${MACHINEFILE} ${COMMAND} 2>&1 
 
-    # No lockup if error occurs on file creation, abort.
-    [ ${PIPESTATUS[0]} != 0 ] && error "mpirun ... mdsrate ... file creation failed, aborting"
+    # No lookup if error occurs on file creation, abort.
+    [ ${PIPESTATUS[0]} != 0 ] && error "mdsrate file creation failed, aborting"
 fi
 
 COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --lookup --time ${TIME_PERIOD} ${SEED_OPTION}
@@ -92,28 +85,27 @@ if [ -n "$NOSINGLE" ]; then
     echo "NO Test for lookups on a single client."
 else
     log "===== $0 ### 1 NODE LOOKUPS ###"
-    echo "Running lookups on 1 node(s)."
     echo "+" ${COMMAND}
     mpi_run -np 1 -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
-        [ -f $LOG ] && cat $LOG
-        error "mpirun ... mdsrate ... failed, aborting"
+        [ -f $LOG ] && sed -e "s/^/log: /" $LOG
+        error "mdsrate lookups on a single client failed, aborting"
     fi
 fi
 
 # 2
+[ $NUM_CLIENTS -eq 1 ] && NOMULTI=yes
 if [ -n "$NOMULTI" ]; then
     echo "NO test for lookups on multiple nodes."
 else
     log "===== $0 ### ${NUM_CLIENTS} NODES LOOKUPS ###"
-    echo "Running lookups on ${NUM_CLIENTS} node(s)."
     echo "+" ${COMMAND}
     mpi_run -np ${NUM_CLIENTS} -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
-        [ -f $LOG ] && cat $LOG
-        error "mpirun ... mdsrate ... failed, aborting"
+        [ -f $LOG ] && sed -e "s/^/log: /" $LOG
+        error "mdsrate lookups on multiple nodes failed, aborting"
     fi
 fi
 
