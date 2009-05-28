@@ -282,6 +282,7 @@ sfw_init_session (sfw_session_t *sn, lst_sid_t sid, const char *name)
         memset(sn, 0, sizeof(sfw_session_t));
         CFS_INIT_LIST_HEAD(&sn->sn_list);
         CFS_INIT_LIST_HEAD(&sn->sn_batches);
+        atomic_set(&sn->sn_refcount, 1);        /* +1 for caller */
         atomic_set(&sn->sn_brw_errors, 0);
         atomic_set(&sn->sn_ping_errors, 0);
         strncpy(&sn->sn_name[0], name, LST_NAME_SIZE);
@@ -439,13 +440,24 @@ sfw_make_session (srpc_mksn_reqst_t *request, srpc_mksn_reply_t *reply)
                 return 0;
         }
 
-        if (sn != NULL && !request->mksn_force) {
-                reply->mksn_sid    = sn->sn_id;
-                reply->mksn_status = EBUSY;
-                strncpy(&reply->mksn_name[0], &sn->sn_name[0], LST_NAME_SIZE);
-                return 0;
+        if (sn != NULL) {
+                reply->mksn_status  = 0;
+                reply->mksn_sid     = sn->sn_id;
+                reply->mksn_timeout = sn->sn_timeout;
+
+                if (sfw_sid_equal(request->mksn_sid, sn->sn_id)) {
+                        atomic_inc(&sn->sn_refcount);
+                        return 0;
+                }
+
+                if (!request->mksn_force) {
+                        reply->mksn_status = EBUSY;
+                        strncpy(&reply->mksn_name[0], &sn->sn_name[0], LST_NAME_SIZE);
+                        return 0;
+                }
         }
-        
+
+        /* brand new or create by force */
         LIBCFS_ALLOC(sn, sizeof(sfw_session_t));
         if (sn == NULL) {
                 CERROR ("Dropping RPC (mksn) under memory pressure.\n");
@@ -482,6 +494,11 @@ sfw_remove_session (srpc_rmsn_reqst_t *request, srpc_rmsn_reply_t *reply)
 
         if (sn == NULL || !sfw_sid_equal(request->rmsn_sid, sn->sn_id)) {
                 reply->rmsn_status = (sn == NULL) ? ESRCH : EBUSY;
+                return 0;
+        }
+
+        if (!atomic_dec_and_test(&sn->sn_refcount)) {
+                reply->rmsn_status = 0;
                 return 0;
         }
 
@@ -950,9 +967,9 @@ sfw_run_batch (sfw_batch_t *tsb)
         sfw_test_instance_t *tsi;
 
         if (sfw_batch_active(tsb)) {
-                CDEBUG (D_NET, "Can't start active batch: "LPU64" (%d)\n",
-                        tsb->bat_id.bat_id, atomic_read(&tsb->bat_nactive));
-                return -EPERM;
+                CDEBUG(D_NET, "Batch already active: "LPU64" (%d)\n",
+                       tsb->bat_id.bat_id, atomic_read(&tsb->bat_nactive));
+                return 0;
         }
 
         cfs_list_for_each_entry_typed (tsi, &tsb->bat_tests,
@@ -984,8 +1001,10 @@ sfw_stop_batch (sfw_batch_t *tsb, int force)
         sfw_test_instance_t *tsi;
         srpc_client_rpc_t   *rpc;
 
-        if (!sfw_batch_active(tsb))
-                return -EPERM;
+        if (!sfw_batch_active(tsb)) {
+                CDEBUG(D_NET, "Batch "LPU64" inactive\n", tsb->bat_id.bat_id);
+                return 0;
+        }
 
         cfs_list_for_each_entry_typed (tsi, &tsb->bat_tests,
                                        sfw_test_instance_t, tsi_list) {
