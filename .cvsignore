@@ -41,3 +41,4 @@ patches
 series
 lustre.spec
 acl.size
+.git
