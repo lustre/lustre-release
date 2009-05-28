@@ -53,6 +53,9 @@
 #include <linux/smp_lock.h>
 #include <linux/unistd.h>
 #include <linux/uio.h>
+#ifdef HAVE_SCATTERLIST_SETPAGE
+# include <linux/scatterlist.h>
+#endif
 
 #include <asm/system.h>
 #include <asm/uaccess.h>
