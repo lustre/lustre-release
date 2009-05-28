@@ -206,7 +206,7 @@ void lbug_with_loc(const char *file, const char *func, const int line)
 
 #ifdef __KERNEL__
 
-#ifdef HAVE_DUMP_TRACE
+#if defined(HAVE_DUMP_TRACE) && !(defined(HAVE_SHOW_TASK))
 #include <linux/nmi.h>
 #include <asm/stacktrace.h>
 
