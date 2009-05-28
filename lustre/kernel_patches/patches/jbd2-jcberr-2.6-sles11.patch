@@ -103,9 +103,9 @@ Index: linux-2.6.27.21-0.1/fs/jbd2/commit.c
 ===================================================================
 --- linux-2.6.27.21-0.1.orig/fs/jbd2/commit.c
 +++ linux-2.6.27.21-0.1/fs/jbd2/commit.c
-@@ -928,6 +928,30 @@ restart_loop:
- 
- 	/* Done with this transaction! */
+@@ -805,6 +805,30 @@ wait_for_iobuf:
+            transaction can be removed from any checkpoint list it was on
+            before. */
  
 +	/*
 +	 * Call any callbacks that had been registered for handles in this
@@ -131,9 +131,9 @@ Index: linux-2.6.27.21-0.1/fs/jbd2/commit.c
 +	}
 +	spin_unlock(&commit_transaction->t_jcb_lock);
 +
- 	jbd_debug(3, "JBD: commit phase 7\n");
+ 	jbd_debug(3, "JBD: commit phase 6\n");
  
- 	J_ASSERT(commit_transaction->t_state == T_COMMIT);
+ 	J_ASSERT(list_empty(&commit_transaction->t_inode_list));
 Index: linux-2.6.27.21-0.1/fs/jbd2/journal.c
 ===================================================================
 --- linux-2.6.27.21-0.1.orig/fs/jbd2/journal.c
