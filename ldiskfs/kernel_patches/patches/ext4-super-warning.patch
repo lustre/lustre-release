@@ -1,0 +1,14 @@
+Index: linux-2.6.27.21-0.1/fs/ext4/super.c
+===================================================================
+--- linux-2.6.27.21-0.1.orig/fs/ext4/super.c
++++ linux-2.6.27.21-0.1/fs/ext4/super.c
+@@ -1299,7 +1299,7 @@ enum {
+ 	Opt_mballoc
+ };
+ 
+-static const match_table_t tokens = {
++static match_table_t tokens = {
+ 	{Opt_bsd_df, "bsddf"},
+ 	{Opt_minix_df, "minixdf"},
+ 	{Opt_grpid, "grpid"},
+
