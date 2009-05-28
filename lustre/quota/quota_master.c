@@ -259,7 +259,7 @@ int dqacq_adjust_qunit_sz(struct obd_device *obd, qid_t id, int type,
         struct lov_obd *lov = &lov_mds_obd->u.lov;
         __u32 ost_num = lov->desc.ld_tgt_count, mdt_num = 1;
         struct quota_adjust_qunit *oqaq = NULL;
-        unsigned int uid = 0, gid = 0;
+        unsigned int qid[MAXQUOTAS] = { 0, 0 };
         struct lustre_quota_info *info = &mds->mds_quota_info;
         struct lustre_dquot *dquot = NULL;
         int adjust_res = 0;
@@ -305,13 +305,13 @@ int dqacq_adjust_qunit_sz(struct obd_device *obd, qid_t id, int type,
         }
 
         if (type)
-                gid = dquot->dq_id;
+                qid[GRPQUOTA] = dquot->dq_id;
         else
-                uid = dquot->dq_id;
+                qid[USRQUOTA] = dquot->dq_id;
 
         up(&dquot->dq_sem);
 
-        rc = qctxt_adjust_qunit(obd, qctxt, uid, gid, is_blk, 0, NULL);
+        rc = qctxt_adjust_qunit(obd, qctxt, qid, is_blk, 0, NULL);
         if (rc == -EDQUOT || rc == -EBUSY) {
                 CDEBUG(D_QUOTA, "rc: %d.\n", rc);
                 rc = 0;
@@ -471,8 +471,8 @@ out:
         return rc;
 }
 
-int mds_quota_adjust(struct obd_device *obd, unsigned int qcids[],
-                     unsigned int qpids[], int rc, int opc)
+int mds_quota_adjust(struct obd_device *obd, const unsigned int qcids[],
+                     const unsigned int qpids[], int rc, int opc)
 {
         struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
         int rc2 = 0;
@@ -484,67 +484,53 @@ int mds_quota_adjust(struct obd_device *obd, unsigned int qcids[],
         switch (opc) {
         case FSFILT_OP_SETATTR:
                 /* release file quota on original owner */
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 0, 0,
-                                          NULL);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids, 0, 0, NULL);
                 /* release block quota on original owner */
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 1, 0,
-                                          NULL);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids, 1, 0, NULL);
                 /* acquire file quota on current owner */
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 0, 0,
-                                          NULL);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids, 0, 0, NULL);
                 /* acquire block quota on current owner */
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 1, 0,
-                                          NULL);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids, 1, 0, NULL);
                 break;
         case FSFILT_OP_UNLINK_PARTIAL_CHILD:
                 /* release file quota on child */
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 0, 0,
-                                          NULL);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids, 0, 0, NULL);
                 /* rlease block quota on child */
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 1, 0,
-                                          NULL);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids, 1, 0, NULL);
                 break;
         case FSFILT_OP_CREATE_PARTIAL_CHILD:
                 /* acquire file quota on child */
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 0, 0,
-                                          NULL);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids, 0, 0, NULL);
                 /* acquire block quota on child */
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 1, 0,
-                                          NULL);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids, 1, 0, NULL);
                 break;
         case FSFILT_OP_LINK:
                 /* acquire block quota on parent */
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 1, 0,
-                                          NULL);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids, 1, 0, NULL);
                 break;
         case FSFILT_OP_UNLINK:
                 /* release block quota on parent */
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 1, 0,
-                                          NULL);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids, 1, 0, NULL);
                 /* release file quota on child */
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 0, 0,
-                                          NULL);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids, 0, 0, NULL);
                 if (qpids[0] != qcids[0] || qpids[1] != qcids[1])
                         /* release block quota on child */
-                        rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0],
-                                                  qcids[1], 1, 0, NULL);
+                        rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids, 1, 0,
+                                                  NULL);
                 break;
         case FSFILT_OP_UNLINK_PARTIAL_PARENT:
                 /* release block quota on parent */
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 1, 0,
-                                          NULL);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids, 1, 0, NULL);
                 break;
         case FSFILT_OP_CREATE:
                 /* acquire block quota on parent */
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 1, 0,
-                                          NULL);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qpids, 1, 0, NULL);
                 /* acquire file quota on child */
-                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 0, 0,
-                                          NULL);
+                rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids, 0, 0, NULL);
                 if (qpids[0] != qcids[0] || qpids[1] != qcids[1])
                         /* acquire block quota on child */
-                        rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids[0],
-                                                  qcids[1], 1, 0, NULL);
+                        rc2 |= qctxt_adjust_qunit(obd, qctxt, qcids, 1, 0,
+                                                  NULL);
                 break;
         default:
                 LBUG();
@@ -558,8 +544,8 @@ int mds_quota_adjust(struct obd_device *obd, unsigned int qcids[],
         RETURN(0);
 }
 
-int filter_quota_adjust(struct obd_device *obd, unsigned int qcids[],
-                        unsigned int qpids[], int rc, int opc)
+int filter_quota_adjust(struct obd_device *obd, const unsigned int qcids[],
+                        const unsigned int qpids[], int rc, int opc)
 {
         struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
         int rc2 = 0;
@@ -571,17 +557,14 @@ int filter_quota_adjust(struct obd_device *obd, unsigned int qcids[],
         switch (opc) {
         case FSFILT_OP_SETATTR:
                 /* acquire/release block quota on original & current owner */
-                rc = qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 1, 0,
-                                        NULL);
-                rc2 = qctxt_adjust_qunit(obd, qctxt, qpids[0], qpids[1], 1, 0,
-                                         NULL);
+                rc = qctxt_adjust_qunit(obd, qctxt, qcids, 1, 0, NULL);
+                rc2 = qctxt_adjust_qunit(obd, qctxt, qpids, 1, 0, NULL);
                 break;
         case FSFILT_OP_UNLINK:
                 /* release block quota on this owner */
         case FSFILT_OP_CREATE: /* XXX for write operation on obdfilter */
                 /* acquire block quota on this owner */
-                rc = qctxt_adjust_qunit(obd, qctxt, qcids[0], qcids[1], 1, 0,
-                                        NULL);
+                rc = qctxt_adjust_qunit(obd, qctxt, qcids, 1, 0, NULL);
                 break;
         default:
                 LBUG();
@@ -1019,14 +1002,14 @@ int dquot_create_oqaq(struct lustre_quota_ctxt *qctxt,
 
         if ((type & LQUOTA_FLAGS_ADJBLK) && blimit) {
                 __u64 b_limitation =
-                        oqaq->qaq_bunit_sz * ost_num * shrink_qunit_limit;
+                        oqaq->qaq_bunit_sz * (ost_num + 1) * shrink_qunit_limit;
                 /* enlarge block qunit size */
                 while (blimit >
                        QUSG(dquot->dq_dqb.dqb_curspace + 2 * b_limitation, 1)) {
                         oqaq->qaq_bunit_sz =
                                 QUSG(oqaq->qaq_bunit_sz * cqs_factor, 1)
                                 << QUOTABLOCK_BITS;
-                        b_limitation = oqaq->qaq_bunit_sz * ost_num *
+                        b_limitation = oqaq->qaq_bunit_sz * (ost_num + 1) *
                                 shrink_qunit_limit;
                 }
 
@@ -1039,7 +1022,7 @@ int dquot_create_oqaq(struct lustre_quota_ctxt *qctxt,
                         do_div(oqaq->qaq_bunit_sz , cqs_factor);
                         oqaq->qaq_bunit_sz = QUSG(oqaq->qaq_bunit_sz, 1) <<
                                 QUOTABLOCK_BITS;
-                        b_limitation = oqaq->qaq_bunit_sz * ost_num *
+                        b_limitation = oqaq->qaq_bunit_sz * (ost_num + 1) *
                                 shrink_qunit_limit;
                         if (oqaq->qaq_bunit_sz <  qctxt->lqc_cqs_least_bunit)
                                 break;
@@ -1105,7 +1088,7 @@ static int mds_init_slave_ilimits(struct obd_device *obd,
         /* XXX: for file limits only adjust local now */
         struct obd_device_target *obt = &obd->u.obt;
         struct lustre_quota_ctxt *qctxt = &obt->obt_qctxt;
-        unsigned int uid = 0, gid = 0;
+        unsigned int id[MAXQUOTAS] = { 0, 0 };
         struct obd_quotactl *ioqc = NULL;
         int flag;
         int rc;
@@ -1143,12 +1126,11 @@ static int mds_init_slave_ilimits(struct obd_device *obd,
 
         /* trigger local qunit pre-acquire */
         if (oqctl->qc_type == USRQUOTA)
-                uid = oqctl->qc_id;
+                id[USRQUOTA] = oqctl->qc_id;
         else
-                gid = oqctl->qc_id;
+                id[GRPQUOTA] = oqctl->qc_id;
 
-        rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, uid, gid, 0, 0,
-                                NULL);
+        rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, id, 0, 0, NULL);
         if (rc == -EDQUOT || rc == -EBUSY) {
                 CDEBUG(D_QUOTA, "rc: %d.\n", rc);
                 rc = 0;
@@ -1174,7 +1156,7 @@ static int mds_init_slave_blimits(struct obd_device *obd,
         struct lustre_quota_ctxt *qctxt = &obt->obt_qctxt;
         struct mds_obd *mds = &obd->u.mds;
         struct obd_quotactl *ioqc;
-        unsigned int uid = 0, gid = 0;
+        unsigned int id[MAXQUOTAS] = { 0, 0 };
         int rc, rc1 = 0;
         int flag;
         ENTRY;
@@ -1209,15 +1191,14 @@ static int mds_init_slave_blimits(struct obd_device *obd,
 
         /* trigger local qunit pre-acquire */
         if (oqctl->qc_type == USRQUOTA)
-                uid = oqctl->qc_id;
+                id[USRQUOTA] = oqctl->qc_id;
         else
-                gid = oqctl->qc_id;
+                id[GRPQUOTA] = oqctl->qc_id;
 
         /* initialize all slave's limit */
         rc = obd_quotactl(mds->mds_osc_exp, ioqc);
 
-        rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, uid, gid, 1, 0,
-                                NULL);
+        rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, id, 1, 0, NULL);
         if (rc == -EDQUOT || rc == -EBUSY) {
                 CDEBUG(D_QUOTA, "rc: %d.\n", rc);
                 rc = 0;

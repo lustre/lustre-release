@@ -667,7 +667,7 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
         struct obd_device *obd = mdd->mdd_obd_dev;
         struct mds_obd *mds = &obd->u.mds;
         unsigned int qids[MAXQUOTAS] = { 0, 0 };
-        int quota_opc = 0, rec_pending = 0;
+        int quota_opc = 0, rec_pending[MAXQUOTAS] = { 0, 0 };
 #endif
         int rc;
         ENTRY;
@@ -684,9 +684,8 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
                         mdd_quota_wrapper(la_tmp, qids);
                         /* get block quota for parent */
                         lquota_chkquota(mds_quota_interface_ref, obd,
-                                        qids[USRQUOTA], qids[GRPQUOTA], 1,
-                                        &rec_pending, NULL, LQUOTA_FLAGS_BLK,
-                                        data, 1);
+                                        qids, rec_pending, 1, NULL,
+                                        LQUOTA_FLAGS_BLK, data, 1);
                 }
         }
 #endif
@@ -738,10 +737,8 @@ out_trans:
 out_pending:
 #ifdef HAVE_QUOTA_SUPPORT
         if (quota_opc) {
-                if (rec_pending)
-                        lquota_pending_commit(mds_quota_interface_ref, obd,
-                                              qids[USRQUOTA], qids[GRPQUOTA],
-                                              rec_pending, 1);
+                lquota_pending_commit(mds_quota_interface_ref, obd,
+                                      qids, rec_pending, 1);
                 /* Trigger dqacq for the parent owner. If failed,
                  * the next call for lquota_chkquota will process it. */
                 lquota_adjust(mds_quota_interface_ref, obd, 0, qids, rc,
@@ -960,7 +957,7 @@ static int mdd_name_insert(const struct lu_env *env,
         struct obd_device *obd = mdd->mdd_obd_dev;
         struct mds_obd *mds = &obd->u.mds;
         unsigned int qids[MAXQUOTAS] = { 0, 0 };
-        int quota_opc = 0, rec_pending = 0;
+        int quota_opc = 0, rec_pending[MAXQUOTAS] = { 0, 0 };
         cfs_cap_t save = uc->mu_cap;
 #endif
         int rc;
@@ -979,8 +976,7 @@ static int mdd_name_insert(const struct lu_env *env,
                                 mdd_quota_wrapper(la_tmp, qids);
                                 /* get block quota for parent */
                                 lquota_chkquota(mds_quota_interface_ref, obd,
-                                                qids[USRQUOTA], qids[GRPQUOTA],
-                                                1, &rec_pending, NULL,
+                                                qids, rec_pending, 1, NULL,
                                                 LQUOTA_FLAGS_BLK, data, 1);
                         }
                 } else {
@@ -1027,11 +1023,8 @@ out_pending:
 #ifdef HAVE_QUOTA_SUPPORT
         if (mds->mds_quota) {
                 if (quota_opc) {
-                        if (rec_pending)
-                                lquota_pending_commit(mds_quota_interface_ref,
-                                                      obd, qids[USRQUOTA],
-                                                      qids[GRPQUOTA],
-                                                      rec_pending, 1);
+                        lquota_pending_commit(mds_quota_interface_ref,
+                                              obd, qids, rec_pending, 1);
                         /* Trigger dqacq for the parent owner. If failed,
                          * the next call for lquota_chkquota will process it*/
                         lquota_adjust(mds_quota_interface_ref, obd, 0, qids,
@@ -1188,7 +1181,8 @@ static int mdd_rename_tgt(const struct lu_env *env,
         struct mds_obd *mds = &obd->u.mds;
         unsigned int qcids[MAXQUOTAS] = { 0, 0 };
         unsigned int qpids[MAXQUOTAS] = { 0, 0 };
-        int quota_opc = 0, rec_pending = 0;
+        int quota_copc = 0, quota_popc = 0;
+        int rec_pending[MAXQUOTAS] = { 0, 0 };
 #endif
         int rc;
         ENTRY;
@@ -1201,13 +1195,12 @@ static int mdd_rename_tgt(const struct lu_env *env,
                 if (!rc) {
                         void *data = NULL;
                         mdd_data_get(env, mdd_tpobj, &data);
-                        quota_opc = FSFILT_OP_LINK;
+                        quota_popc = FSFILT_OP_LINK;
                         mdd_quota_wrapper(la_tmp, qpids);
                         /* get block quota for target parent */
                         lquota_chkquota(mds_quota_interface_ref, obd,
-                                        qpids[USRQUOTA], qpids[GRPQUOTA], 1,
-                                        &rec_pending, NULL, LQUOTA_FLAGS_BLK,
-                                        data, 1);
+                                        qpids, rec_pending, 1, NULL,
+                                        LQUOTA_FLAGS_BLK, data, 1);
                 }
         }
 #endif
@@ -1271,7 +1264,7 @@ static int mdd_rename_tgt(const struct lu_env *env,
 #ifdef HAVE_QUOTA_SUPPORT
                 if (mds->mds_quota && ma->ma_valid & MA_INODE &&
                     ma->ma_attr.la_nlink == 0 && mdd_tobj->mod_count == 0) {
-                        quota_opc = FSFILT_OP_UNLINK_PARTIAL_CHILD;
+                        quota_copc = FSFILT_OP_UNLINK_PARTIAL_CHILD;
                         mdd_quota_wrapper(&ma->ma_attr, qcids);
                 }
 #endif
@@ -1292,17 +1285,16 @@ out_trans:
 out_pending:
 #ifdef HAVE_QUOTA_SUPPORT
         if (mds->mds_quota) {
-                if (rec_pending)
+                if (quota_popc)
                         lquota_pending_commit(mds_quota_interface_ref, obd,
-                                              qpids[USRQUOTA],
-                                              qpids[GRPQUOTA],
-                                              rec_pending, 1);
-                if (quota_opc)
-                        /* Trigger dqrel/dqacq on the target owner of child and
-                         * parent. If failed, the next call for lquota_chkquota
+                                              qpids, rec_pending, 1);
+
+                if (quota_copc)
+                        /* Trigger dqrel on the target owner of child.
+                         * If failed, the next call for lquota_chkquota
                          * will process it. */
-                        lquota_adjust(mds_quota_interface_ref, obd, qcids,
-                                      qpids, rc, quota_opc);
+                        lquota_adjust(mds_quota_interface_ref, obd, qcids, qpids,
+                                      rc, quota_copc);
         }
 #endif
         return rc;
@@ -1597,7 +1589,9 @@ static int mdd_create(const struct lu_env *env,
         unsigned int qcids[MAXQUOTAS] = { 0, 0 };
         unsigned int qpids[MAXQUOTAS] = { 0, 0 };
         int quota_opc = 0, block_count = 0;
-        int inode_pending = 0, block_pending = 0, parent_pending = 0;
+        int inode_pending[MAXQUOTAS] = { 0, 0 };
+        int block_pending[MAXQUOTAS] = { 0, 0 };
+        int parent_pending[MAXQUOTAS] = { 0, 0 };
 #endif
         ENTRY;
 
@@ -1654,9 +1648,8 @@ static int mdd_create(const struct lu_env *env,
                         mdd_quota_wrapper(&ma->ma_attr, qcids);
                         mdd_quota_wrapper(la_tmp, qpids);
                         /* get file quota for child */
-                        lquota_chkquota(mds_quota_interface_ref, obd,
-                                        qcids[USRQUOTA], qcids[GRPQUOTA], 1,
-                                        &inode_pending, NULL, 0, NULL, 0);
+                        lquota_chkquota(mds_quota_interface_ref, obd, qcids,
+                                        inode_pending, 1, NULL, 0, NULL, 0);
                         switch (ma->ma_attr.la_mode & S_IFMT) {
                         case S_IFLNK:
                         case S_IFDIR:
@@ -1674,14 +1667,12 @@ static int mdd_create(const struct lu_env *env,
                         /* get block quota for child and parent */
                         if (block_count)
                                 lquota_chkquota(mds_quota_interface_ref, obd,
-                                                qcids[USRQUOTA], qcids[GRPQUOTA],
-                                                block_count,
-                                                &block_pending, NULL,
+                                                qcids, block_pending,
+                                                block_count, NULL,
                                                 LQUOTA_FLAGS_BLK, NULL, 0);
                         if (!same)
                                 lquota_chkquota(mds_quota_interface_ref, obd,
-                                                qpids[USRQUOTA], qpids[GRPQUOTA], 1,
-                                                &parent_pending, NULL,
+                                                qpids, parent_pending, 1, NULL,
                                                 LQUOTA_FLAGS_BLK, NULL, 0);
                 }
         }
@@ -1852,18 +1843,12 @@ out_free:
 out_pending:
 #ifdef HAVE_QUOTA_SUPPORT
         if (quota_opc) {
-                if (inode_pending)
-                        lquota_pending_commit(mds_quota_interface_ref, obd,
-                                              qcids[USRQUOTA], qcids[GRPQUOTA],
-                                              inode_pending, 0);
-                if (block_pending)
-                        lquota_pending_commit(mds_quota_interface_ref, obd,
-                                              qcids[USRQUOTA], qcids[GRPQUOTA],
-                                              block_pending, 1);
-                if (parent_pending)
-                        lquota_pending_commit(mds_quota_interface_ref, obd,
-                                              qpids[USRQUOTA], qpids[GRPQUOTA],
-                                              parent_pending, 1);
+                lquota_pending_commit(mds_quota_interface_ref, obd, qcids,
+                                      inode_pending, 0);
+                lquota_pending_commit(mds_quota_interface_ref, obd, qcids,
+                                      block_pending, 1);
+                lquota_pending_commit(mds_quota_interface_ref, obd, qpids,
+                                      parent_pending, 1);
                 /* Trigger dqacq on the owner of child and parent. If failed,
                  * the next call for lquota_chkquota will process it. */
                 lquota_adjust(mds_quota_interface_ref, obd, qcids, qpids, rc,
@@ -1987,7 +1972,8 @@ static int mdd_rename(const struct lu_env *env,
         unsigned int qspids[MAXQUOTAS] = { 0, 0 };
         unsigned int qtcids[MAXQUOTAS] = { 0, 0 };
         unsigned int qtpids[MAXQUOTAS] = { 0, 0 };
-        int quota_opc = 0, rec_pending = 0;
+        int quota_copc = 0, quota_popc = 0;
+        int rec_pending[MAXQUOTAS] = { 0, 0 };
 #endif
         ENTRY;
 
@@ -2010,13 +1996,12 @@ static int mdd_rename(const struct lu_env *env,
                                 if (!rc) {
                                         void *data = NULL;
                                         mdd_data_get(env, mdd_tpobj, &data);
-                                        quota_opc = FSFILT_OP_LINK;
+                                        quota_popc = FSFILT_OP_LINK;
                                         mdd_quota_wrapper(la_tmp, qtpids);
                                         /* get block quota for target parent */
                                         lquota_chkquota(mds_quota_interface_ref,
-                                                        obd, qtpids[USRQUOTA],
-                                                        qtpids[GRPQUOTA], 1,
-                                                        &rec_pending, NULL,
+                                                        obd, qtpids,
+                                                        rec_pending, 1, NULL,
                                                         LQUOTA_FLAGS_BLK,
                                                         data, 1);
                                 }
@@ -2146,7 +2131,7 @@ static int mdd_rename(const struct lu_env *env,
 #ifdef HAVE_QUOTA_SUPPORT
                 if (mds->mds_quota && ma->ma_valid & MA_INODE &&
                     ma->ma_attr.la_nlink == 0 && mdd_tobj->mod_count == 0) {
-                        quota_opc = FSFILT_OP_UNLINK_PARTIAL_CHILD;
+                        quota_copc = FSFILT_OP_UNLINK_PARTIAL_CHILD;
                         mdd_quota_wrapper(&ma->ma_attr, qtcids);
                 }
 #endif
@@ -2230,22 +2215,23 @@ cleanup_unlocked:
 out_pending:
 #ifdef HAVE_QUOTA_SUPPORT
         if (mds->mds_quota) {
-                if (rec_pending)
+                if (quota_popc)
                         lquota_pending_commit(mds_quota_interface_ref, obd,
-                                              qtpids[USRQUOTA],
-                                              qtpids[GRPQUOTA],
-                                              rec_pending, 1);
-                /* Trigger dqrel on the source owner of parent.
-                 * If failed, the next call for lquota_chkquota will
-                 * process it. */
-                lquota_adjust(mds_quota_interface_ref, obd, 0, qspids, rc,
-                              FSFILT_OP_UNLINK_PARTIAL_PARENT);
-                if (quota_opc)
-                        /* Trigger dqrel/dqacq on the target owner of child and
-                         * parent. If failed, the next call for lquota_chkquota
+                                              qtpids, rec_pending, 1);
+
+                if (quota_copc) {
+                        /* Trigger dqrel on the source owner of parent.
+                         * If failed, the next call for lquota_chkquota will
+                         * process it. */
+                        lquota_adjust(mds_quota_interface_ref, obd, 0, qspids, rc,
+                                      FSFILT_OP_UNLINK_PARTIAL_PARENT);
+
+                        /* Trigger dqrel on the target owner of child.
+                         * If failed, the next call for lquota_chkquota
                          * will process it. */
                         lquota_adjust(mds_quota_interface_ref, obd, qtcids,
-                                      qtpids, rc, quota_opc);
+                                      qtpids, rc, quota_copc);
+                }
         }
 #endif
         return rc;

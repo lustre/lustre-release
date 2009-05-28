@@ -1225,7 +1225,8 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
         unsigned int qnids[MAXQUOTAS] = { 0, 0 };
         unsigned int qoids[MAXQUOTAS] = { 0, 0 };
         int quota_opc = 0, block_count = 0;
-        int inode_pending = 0, block_pending = 0;
+        int inode_pending[MAXQUOTAS] = { 0, 0 };
+        int block_pending[MAXQUOTAS] = { 0, 0 };
 #endif
         ENTRY;
 
@@ -1269,20 +1270,17 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
                         mdd_quota_wrapper(la_copy, qnids);
                         mdd_quota_wrapper(la_tmp, qoids);
                         /* get file quota for new owner */
-                        lquota_chkquota(mds_quota_interface_ref, obd,
-                                        qnids[USRQUOTA], qnids[GRPQUOTA], 1,
-                                        &inode_pending, NULL, 0, NULL, 0);
+                        lquota_chkquota(mds_quota_interface_ref, obd, qnids,
+                                        inode_pending, 1, NULL, 0, NULL, 0);
                         block_count = (la_tmp->la_blocks + 7) >> 3;
                         if (block_count) {
                                 void *data = NULL;
                                 mdd_data_get(env, mdd_obj, &data);
                                 /* get block quota for new owner */
                                 lquota_chkquota(mds_quota_interface_ref, obd,
-                                                qnids[USRQUOTA],
-                                                qnids[GRPQUOTA],
-                                                block_count, &block_pending,
-                                                NULL, LQUOTA_FLAGS_BLK,
-                                                data, 1);
+                                                qnids, block_pending,
+                                                block_count, NULL,
+                                                LQUOTA_FLAGS_BLK, data, 1);
                         }
                 }
         }
@@ -1335,14 +1333,10 @@ cleanup:
         }
 #ifdef HAVE_QUOTA_SUPPORT
         if (quota_opc) {
-                if (inode_pending)
-                        lquota_pending_commit(mds_quota_interface_ref, obd,
-                                              qnids[USRQUOTA], qnids[GRPQUOTA],
-                                              inode_pending, 0);
-                if (block_pending)
-                        lquota_pending_commit(mds_quota_interface_ref, obd,
-                                              qnids[USRQUOTA], qnids[GRPQUOTA],
-                                              block_pending, 1);
+                lquota_pending_commit(mds_quota_interface_ref, obd, qnids,
+                                      inode_pending, 0);
+                lquota_pending_commit(mds_quota_interface_ref, obd, qnids,
+                                      block_pending, 1);
                 /* Trigger dqrel/dqacq for original owner and new owner.
                  * If failed, the next call for lquota_chkquota will
                  * process it. */
@@ -1581,7 +1575,8 @@ static int mdd_object_create(const struct lu_env *env,
         struct mds_obd *mds = &obd->u.mds;
         unsigned int qids[MAXQUOTAS] = { 0, 0 };
         int quota_opc = 0, block_count = 0;
-        int inode_pending = 0, block_pending = 0;
+        int inode_pending[MAXQUOTAS] = { 0, 0 };
+        int block_pending[MAXQUOTAS] = { 0, 0 };
 #endif
         int rc = 0;
         ENTRY;
@@ -1591,9 +1586,8 @@ static int mdd_object_create(const struct lu_env *env,
                 quota_opc = FSFILT_OP_CREATE_PARTIAL_CHILD;
                 mdd_quota_wrapper(&ma->ma_attr, qids);
                 /* get file quota for child */
-                lquota_chkquota(mds_quota_interface_ref, obd, qids[USRQUOTA],
-                                qids[GRPQUOTA], 1, &inode_pending, NULL, 0,
-                                NULL, 0);
+                lquota_chkquota(mds_quota_interface_ref, obd, qids,
+                                inode_pending, 1, NULL, 0, NULL, 0);
                 switch (ma->ma_attr.la_mode & S_IFMT) {
                 case S_IFLNK:
                 case S_IFDIR:
@@ -1605,9 +1599,8 @@ static int mdd_object_create(const struct lu_env *env,
                 }
                 /* get block quota for child */
                 if (block_count)
-                        lquota_chkquota(mds_quota_interface_ref, obd,
-                                        qids[USRQUOTA], qids[GRPQUOTA],
-                                        block_count, &block_pending, NULL,
+                        lquota_chkquota(mds_quota_interface_ref, obd, qids,
+                                        block_pending, block_count, NULL,
                                         LQUOTA_FLAGS_BLK, NULL, 0);
         }
 #endif
@@ -1675,18 +1668,14 @@ unlock:
 out_pending:
 #ifdef HAVE_QUOTA_SUPPORT
         if (quota_opc) {
-                if (inode_pending)
-                        lquota_pending_commit(mds_quota_interface_ref, obd,
-                                              qids[USRQUOTA], qids[GRPQUOTA],
-                                              inode_pending, 0);
-                if (block_pending)
-                        lquota_pending_commit(mds_quota_interface_ref, obd,
-                                              qids[USRQUOTA], qids[GRPQUOTA],
-                                              block_pending, 1);
+                lquota_pending_commit(mds_quota_interface_ref, obd, qids,
+                                      inode_pending, 0);
+                lquota_pending_commit(mds_quota_interface_ref, obd, qids,
+                                      block_pending, 1);
                 /* Trigger dqacq on the owner of child. If failed,
                  * the next call for lquota_chkquota will process it. */
                 lquota_adjust(mds_quota_interface_ref, obd, qids, 0, rc,
-                              FSFILT_OP_CREATE_PARTIAL_CHILD);
+                              quota_opc);
         }
 #endif
         return rc;

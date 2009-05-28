@@ -101,7 +101,7 @@
 void qunit_cache_cleanup(void);
 int qunit_cache_init(void);
 int qctxt_adjust_qunit(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
-                       uid_t uid, gid_t gid, __u32 isblk, int wait,
+                       const unsigned int id[], __u32 isblk, int wait,
                        struct obd_trans_info *oti);
 int qctxt_wait_pending_dqacq(struct lustre_quota_ctxt *qctxt, unsigned int id,
                              unsigned short type, int isblk);
@@ -118,10 +118,10 @@ void dqacq_interrupt(struct lustre_quota_ctxt *qctxt);
 int lustre_dquot_init(void);
 void lustre_dquot_exit(void);
 int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc);
-int mds_quota_adjust(struct obd_device *obd, unsigned int qcids[],
-                     unsigned int qpids[], int rc, int opc);
-int filter_quota_adjust(struct obd_device *obd, unsigned int qcids[],
-                        unsigned int qpids[], int rc, int opc);
+int mds_quota_adjust(struct obd_device *obd, const unsigned int qcids[],
+                     const unsigned int qpids[], int rc, int opc);
+int filter_quota_adjust(struct obd_device *obd, const unsigned int qcids[],
+                        const unsigned int qpids[], int rc, int opc);
 int init_admin_quotafiles(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_quota_get_version(struct obd_device *obd, lustre_quota_version_t *ver);
 int mds_quota_invalidate(struct obd_device *obd, struct obd_quotactl *oqctl);

@@ -412,9 +412,8 @@ struct quotacheck_thread_args {
 };
 
 struct obd_trans_info;
-typedef int (*quota_acquire)(struct obd_device *obd, unsigned int uid,
-                             unsigned int gid, struct obd_trans_info *oti,
-                             int isblk);
+typedef int (*quota_acquire)(struct obd_device *obd, const unsigned int id[],
+                             struct obd_trans_info *oti, int isblk);
 
 typedef struct {
         int (*quota_init) (void);
@@ -434,8 +433,8 @@ typedef struct {
         /**
          * For quota master/slave, adjust quota limit after fs operation
          */
-        int (*quota_adjust) (struct obd_device *, unsigned int[],
-                             unsigned int[], int, int);
+        int (*quota_adjust) (struct obd_device *, const unsigned int[],
+                             const unsigned int[], int, int);
 
         /**
          * For quota slave, set import, trigger quota recovery,
@@ -462,7 +461,7 @@ typedef struct {
         /**
          * For quota slave, acquire/release quota from master if needed
          */
-        int (*quota_acquire) (struct obd_device *, unsigned int, unsigned int,
+        int (*quota_acquire) (struct obd_device *, const unsigned int [],
                               struct obd_trans_info *, int);
 
         /**
@@ -470,16 +469,16 @@ typedef struct {
          * can finish a block_write or inode_create rpc. It updates the pending
          * record of block and inode, acquires quota if necessary
          */
-        int (*quota_chkquota) (struct obd_device *, unsigned int, unsigned int,
-                               int, int *, quota_acquire,
+        int (*quota_chkquota) (struct obd_device *, const unsigned int [],
+                               int [], int, quota_acquire,
                                struct obd_trans_info *, int, struct inode *,
                                int);
 
         /**
          * For quota client, the actions after the pending write is committed
          */
-        int (*quota_pending_commit) (struct obd_device *, unsigned int,
-                                     unsigned int, int, int);
+        int (*quota_pending_commit) (struct obd_device *, const unsigned int [],
+                                     int [], int);
 #endif
 
         /**
@@ -490,12 +489,12 @@ typedef struct {
         /**
          * For quota client, check whether specified uid/gid is over quota
          */
-        int (*quota_chkdq) (struct client_obd *, unsigned int, unsigned int);
+        int (*quota_chkdq) (struct client_obd *, const unsigned int []);
 
         /**
          * For quota client, set over quota flag for specifed uid/gid
          */
-        int (*quota_setdq) (struct client_obd *, unsigned int, unsigned int,
+        int (*quota_setdq) (struct client_obd *, const unsigned int [],
                             obd_flag, obd_flag);
 
         /**
@@ -612,8 +611,8 @@ static inline int lquota_ctl(quota_interface_t *interface,
 
 static inline int lquota_adjust(quota_interface_t *interface,
                                 struct obd_device *obd,
-                                unsigned int qcids[],
-                                unsigned int qpids[],
+                                const unsigned int qcids[],
+                                const unsigned int qpids[],
                                 int rc, int opc)
 {
         int ret;
@@ -625,27 +624,25 @@ static inline int lquota_adjust(quota_interface_t *interface,
 }
 
 static inline int lquota_chkdq(quota_interface_t *interface,
-                               struct client_obd *cli,
-                               unsigned int uid, unsigned int gid)
+                               struct client_obd *cli, const unsigned int qid[])
 {
         int rc;
         ENTRY;
 
         QUOTA_CHECK_OP(interface, chkdq);
-        rc = QUOTA_OP(interface, chkdq)(cli, uid, gid);
+        rc = QUOTA_OP(interface, chkdq)(cli, qid);
         RETURN(rc);
 }
 
 static inline int lquota_setdq(quota_interface_t *interface,
-                               struct client_obd *cli,
-                               unsigned int uid, unsigned int gid,
+                               struct client_obd *cli, const unsigned int qid[],
                                obd_flag valid, obd_flag flags)
 {
         int rc;
         ENTRY;
 
         QUOTA_CHECK_OP(interface, setdq);
-        rc = QUOTA_OP(interface, setdq)(cli, uid, gid, valid, flags);
+        rc = QUOTA_OP(interface, setdq)(cli, qid, valid, flags);
         RETURN(rc);
 }
 
@@ -711,8 +708,8 @@ static inline int lquota_getflag(quota_interface_t *interface,
 #ifdef __KERNEL__
 static inline int lquota_chkquota(quota_interface_t *interface,
                                   struct obd_device *obd,
-                                  unsigned int uid, unsigned int gid, int count,
-                                  int *flag, struct obd_trans_info *oti,
+                                  const unsigned int id[], int pending[],
+                                  int count, struct obd_trans_info *oti,
                                   int isblk, void *data, int frags)
 {
         int rc;
@@ -720,7 +717,7 @@ static inline int lquota_chkquota(quota_interface_t *interface,
 
         QUOTA_CHECK_OP(interface, chkquota);
         QUOTA_CHECK_OP(interface, acquire);
-        rc = QUOTA_OP(interface, chkquota)(obd, uid, gid, count, flag,
+        rc = QUOTA_OP(interface, chkquota)(obd, id, pending, count,
                                            QUOTA_OP(interface, acquire), oti,
                                            isblk, (struct inode *)data, frags);
         RETURN(rc);
@@ -728,14 +725,14 @@ static inline int lquota_chkquota(quota_interface_t *interface,
 
 static inline int lquota_pending_commit(quota_interface_t *interface,
                                         struct obd_device *obd,
-                                        unsigned int uid, unsigned int gid,
-                                        int pending, int isblk)
+                                        const unsigned int id[],
+                                        int pending[], int isblk)
 {
         int rc;
         ENTRY;
 
         QUOTA_CHECK_OP(interface, pending_commit);
-        rc = QUOTA_OP(interface, pending_commit)(obd, uid, gid, pending, isblk);
+        rc = QUOTA_OP(interface, pending_commit)(obd, id, pending, isblk);
         RETURN(rc);
 }
 #endif

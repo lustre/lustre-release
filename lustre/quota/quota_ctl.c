@@ -198,7 +198,7 @@ int filter_quota_ctl(struct obd_device *unused, struct obd_export *exp,
                 break;
         case Q_INITQUOTA:
                 {
-                unsigned int uid = 0, gid = 0;
+                unsigned int id[MAXQUOTAS] = { 0, 0 };
 
                 /* Initialize quota limit to MIN_QLIMIT */
                 LASSERT(oqctl->qc_dqblk.dqb_valid == QIF_BLIMITS);
@@ -231,12 +231,12 @@ int filter_quota_ctl(struct obd_device *unused, struct obd_export *exp,
 adjust:
                 /* Trigger qunit pre-acquire */
                 if (oqctl->qc_type == USRQUOTA)
-                        uid = oqctl->qc_id;
+                        id[USRQUOTA] = oqctl->qc_id;
                 else
-                        gid = oqctl->qc_id;
+                        id[GRPQUOTA] = oqctl->qc_id;
 
                 rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt,
-                                        uid, gid, 1, 0, NULL);
+                                        id, 1, 0, NULL);
                 if (rc == -EDQUOT || rc == -EBUSY) {
                         CDEBUG(D_QUOTA, "rc: %d.\n", rc);
                         rc = 0;

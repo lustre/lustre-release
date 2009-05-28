@@ -62,8 +62,8 @@ extern quota_interface_t *mds_quota_interface_ref;
 
 static inline void mdd_quota_wrapper(struct lu_attr *la, unsigned int *qids)
 {
-        qids[0] = la->la_uid;
-        qids[1] = la->la_gid;
+        qids[USRQUOTA] = la->la_uid;
+        qids[GRPQUOTA] = la->la_gid;
 }
 #endif
 
