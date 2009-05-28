@@ -1544,6 +1544,22 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# Ensure stack size big than 8k in Lustre server
+AC_DEFUN([LC_STACK_SIZE],
+[AC_MSG_CHECKING([stack size big than 8k])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/thread_info.h>
+],[
+        #if THREAD_SIZE < 8192
+        #error "stack size < 8192"
+        #endif
+],[
+        AC_MSG_RESULT(yes)
+],[
+        AC_MSG_ERROR([Lustre requires that Linux is configured with at least a 8KB stack.])
+])
+])
+
 #
 # LC_PROG_LINUX
 #
@@ -1553,6 +1569,7 @@ AC_DEFUN([LC_PROG_LINUX],
          [LC_LUSTRE_VERSION_H
          if test x$enable_server = xyes ; then
              AC_DEFINE(HAVE_SERVER_SUPPORT, 1, [support server])
+             LC_STACK_SIZE
              LC_CONFIG_BACKINGFS
          fi
          LC_CONFIG_PINGER
