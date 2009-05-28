@@ -1708,8 +1708,8 @@ lstcon_session_new(char *name, int key,
         if (rc != 0) {
                 lstcon_batch_t *bat;
 
-                lstcon_batch_find(LST_DEFAULT_BATCH, &bat);
-                lstcon_batch_destroy(bat);
+                if (lstcon_batch_find(LST_DEFAULT_BATCH, &bat) == 0)
+                        lstcon_batch_destroy(bat);
 
                 return rc;
         }

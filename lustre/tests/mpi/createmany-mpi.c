@@ -72,7 +72,7 @@ int rprintf(int rank, int loop, const char *fmt, ...)
 int main(int argc, char ** argv)
 {
         int i, rc = 0, do_open = 0, do_link = 0, rank;
-        char format[4096], *fmt, *tgt;
+        char format[4096], *fmt, *tgt = NULL;
         char filename[4096];
         long start, last, end;
         long begin = 0, count;
