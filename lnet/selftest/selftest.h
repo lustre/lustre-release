@@ -371,6 +371,7 @@ typedef struct {
         stt_timer_t       sn_timer;
         struct list_head  sn_batches; /* list of batches */
         char              sn_name[LST_NAME_SIZE];
+        atomic_t          sn_refcount;
         atomic_t          sn_brw_errors;
         atomic_t          sn_ping_errors;
 } sfw_session_t;
