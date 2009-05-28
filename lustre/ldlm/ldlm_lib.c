@@ -830,6 +830,12 @@ no_export:
                       "with %d active RPCs\n", target->obd_name, cluuid.uuid,
                       libcfs_nid2str(req->rq_peer.nid),
                       export, atomic_read(&export->exp_rpc_count) - 1);
+                spin_lock(&export->exp_lock);
+                if (req->rq_export->exp_conn_cnt <
+                    lustre_msg_get_conn_cnt(req->rq_reqmsg))
+                        /* try to abort active requests */
+                        req->rq_export->exp_abort_active_req = 1;
+                spin_unlock(&export->exp_lock);
                 GOTO(out, rc = -EBUSY);
         } else if (lustre_msg_get_conn_cnt(req->rq_reqmsg) == 1) {
                 CERROR("%s: NID %s (%s) reconnected with 1 conn_cnt; "
@@ -951,6 +957,7 @@ no_export:
                 GOTO(out, rc = -EALREADY);
         }
         export->exp_conn_cnt = lustre_msg_get_conn_cnt(req->rq_reqmsg);
+        export->exp_abort_active_req = 0;
 
         /* request from liblustre?  Don't evict it for not pinging. */
         if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {

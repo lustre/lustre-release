@@ -15,6 +15,11 @@ tbd Sun Microsystems, Inc.
 	  more information, please refer to bugzilla 17630.
 
 Severity   : normal
+Bugzilla   : 18674
+Description: abort bulk too early if client is reconnected
+
+Severity   : normal
+Frequency  : rare, if used wide striped file and one ost in down.
 Bugzilla   : 18382
 Descriptoin: don't return error if we created a subset of objects for file.
 Details    : lov_update_create_set() uses set->set_success as index for created

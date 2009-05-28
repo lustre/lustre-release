@@ -773,7 +773,9 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                                            desc);
                                 rc = l_wait_event(desc->bd_waitq,
                                                   !ptlrpc_server_bulk_active(desc) ||
-                                                  exp->exp_failed, &lwi);
+                                                  exp->exp_failed ||
+                                                  exp->exp_abort_active_req,
+                                                  &lwi);
                                 LASSERT(rc == 0 || rc == -ETIMEDOUT);
                                 /* Wait again if we changed deadline */
                         } while ((rc == -ETIMEDOUT) &&
@@ -789,6 +791,11 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         } else if (exp->exp_failed) {
                                 DEBUG_REQ(D_ERROR, req, "Eviction on bulk PUT");
                                 rc = -ENOTCONN;
+                                ptlrpc_abort_bulk(desc);
+                        } else if (exp->exp_abort_active_req) {
+                                DEBUG_REQ(D_ERROR, req, "Reconnect on bulk PUT");
+                                /* we don't reply anyway */
+                                rc = -ETIMEDOUT;
                                 ptlrpc_abort_bulk(desc);
                         } else if (!desc->bd_success ||
                                    desc->bd_nob_transferred != desc->bd_nob) {
@@ -990,7 +997,9 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                                    ost_bulk_timeout, desc);
                         rc = l_wait_event(desc->bd_waitq,
                                           !ptlrpc_server_bulk_active(desc) ||
-                                          desc->bd_export->exp_failed, &lwi);
+                                          desc->bd_export->exp_failed ||
+                                          desc->bd_export->exp_abort_active_req,
+                                          &lwi);
                         LASSERT(rc == 0 || rc == -ETIMEDOUT);
                         /* Wait again if we changed deadline */
                 } while ((rc == -ETIMEDOUT) &&
@@ -1006,6 +1015,11 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 } else if (desc->bd_export->exp_failed) {
                         DEBUG_REQ(D_ERROR, req, "Eviction on bulk GET");
                         rc = -ENOTCONN;
+                        ptlrpc_abort_bulk(desc);
+                } else if (desc->bd_export->exp_abort_active_req) {
+                        DEBUG_REQ(D_ERROR, req, "Reconnect on bulk GET");
+                        /* we don't reply anyway */
+                        rc = -ETIMEDOUT;
                         ptlrpc_abort_bulk(desc);
                 } else if (!desc->bd_success ||
                            desc->bd_nob_transferred != desc->bd_nob) {
