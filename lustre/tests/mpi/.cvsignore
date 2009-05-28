@@ -6,7 +6,7 @@ Makefile
 Makefile.in
 .deps
 TAGS
-createmany-mpi
+createmany_mpi
 mdsrate
 parallel_grouplock
 write_append_truncate
