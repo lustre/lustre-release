@@ -14,6 +14,12 @@ tbd Sun Microsystems, Inc.
 	  of Lustre filesystem with 4K stack may cause a stack overflow. For
 	  more information, please refer to bugzilla 17630.
 
+Severity   : normal
+Bugzilla   : 19528
+Description: resolve race between obd_disconnect and class_disconnect_exports
+Details    : if obd_disconnect will be called to already disconnected export he
+             forget release one reference and osc module can't unloaded.
+
 Severity   : enhancement
 Bugzilla   : 19293
 Description: move AT tunable parameters for more consistent usage
