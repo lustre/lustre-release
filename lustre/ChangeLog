@@ -32,6 +32,11 @@ Details    : Set read-ahead limite for every file and only do read-ahead when
 	     read RPC.
 
 Severity   : enhancement
+Bugzilla   : 19293
+Description: move AT tunable parameters for more consistent usage
+Details    : add AT tunables under /proc/sys/lustre, add to conf_param parsing
+	
+Severity   : enhancement
 Bugzilla   : 17974
 Description: add lazystatfs mount option to allow statfs(2) to skip down OSTs
 Details    : allow skip disconnected ost for send statfs request and hide error

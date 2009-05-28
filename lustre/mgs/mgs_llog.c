@@ -1855,25 +1855,41 @@ static int mgs_wlp_lcfg(struct obd_device *obd, struct fs_db *fsdb,
         lustre_cfg_free(lcfg);
         return rc;
 }
-/* write global obd timeout or ldlm timeout param into log */
-static int mgs_write_log_timeout(struct obd_device *obd, struct fs_db *fsdb,
-                                 struct mgs_target_info *mti, char *value,
-                                 int cmd, char *comment)
+
+/* write global variable settings into log */
+static int mgs_write_log_sys(struct obd_device *obd, struct fs_db *fsdb,
+                             struct mgs_target_info *mti, char *sys, char *ptr)
 {
         struct lustre_cfg_bufs bufs;
         struct lustre_cfg *lcfg;
-        int timeout;
+        char *tmp;
+        int cmd, val;
         int rc;
 
-        timeout = simple_strtoul(value, NULL, 0);
-        CDEBUG(D_MGS, "timeout: %d (%s)\n", timeout, comment);
+        if (class_match_param(ptr, PARAM_TIMEOUT, &tmp) == 0)
+                cmd = LCFG_SET_TIMEOUT;
+        else if (class_match_param(ptr, PARAM_LDLM_TIMEOUT, &tmp) == 0)
+                cmd = LCFG_SET_LDLM_TIMEOUT;
+        /* Check for known params here so we can return error to lctl */
+        else if ((class_match_param(ptr, PARAM_AT_MIN, &tmp) == 0)
+                 || (class_match_param(ptr, PARAM_AT_MAX, &tmp) == 0)
+                 || (class_match_param(ptr, PARAM_AT_EXTRA, &tmp) == 0)
+                 || (class_match_param(ptr, PARAM_AT_EARLY_MARGIN, &tmp) == 0)
+                 || (class_match_param(ptr, PARAM_AT_HISTORY, &tmp) == 0))
+                cmd = LCFG_PARAM;
+        else
+                return -EINVAL;
+
+        val = simple_strtoul(tmp, NULL, 0);
+        CDEBUG(D_MGS, "global %s = %d\n", ptr, val);
 
         lustre_cfg_bufs_reset(&bufs, NULL);
+        lustre_cfg_bufs_set_string(&bufs, 1, sys);
         lcfg = lustre_cfg_new(cmd, &bufs);
-        lcfg->lcfg_num = timeout;
+        lcfg->lcfg_num = val;
         /* modify all servers and clients */
         rc = mgs_write_log_direct_all(obd, fsdb, mti, lcfg, mti->mti_fsname,
-                                      comment); 
+                                      ptr);
         lustre_cfg_free(lcfg);
         return rc;
 }
@@ -2271,16 +2287,8 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
                 GOTO(end, rc);
         }
 
-        if (class_match_param(ptr, PARAM_SYS_TIMEOUT, &tmp) == 0) {
-                rc = mgs_write_log_timeout(obd, fsdb, mti, tmp, 
-                                           LCFG_SET_TIMEOUT, "obd_timeout");
-                GOTO(end, rc);
-        }
-
-        if (class_match_param(ptr, PARAM_SYS_LDLM_TIMEOUT, &tmp) == 0) {
-                rc = mgs_write_log_timeout(obd, fsdb, mti, tmp, 
-                                           LCFG_SET_LDLM_TIMEOUT,
-                                           "ldlm_timeout");
+        if (class_match_param(ptr, PARAM_SYS, &tmp) == 0) {
+                rc = mgs_write_log_sys(obd, fsdb, mti, ptr, tmp);
                 GOTO(end, rc);
         }
 

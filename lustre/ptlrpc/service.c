@@ -49,21 +49,15 @@
 int test_req_buffer_pressure = 0;
 CFS_MODULE_PARM(test_req_buffer_pressure, "i", int, 0444,
                 "set non-zero to put pressure on request buffer pools");
-unsigned int at_min = 0;
 CFS_MODULE_PARM(at_min, "i", int, 0644,
                 "Adaptive timeout minimum (sec)");
-unsigned int at_max = 600;
-EXPORT_SYMBOL(at_max);
 CFS_MODULE_PARM(at_max, "i", int, 0644,
                 "Adaptive timeout maximum (sec)");
-unsigned int at_history = 600;
 CFS_MODULE_PARM(at_history, "i", int, 0644,
                 "Adaptive timeouts remember the slowest event that took place "
                 "within this period (sec)");
-static int at_early_margin = 5;
 CFS_MODULE_PARM(at_early_margin, "i", int, 0644,
                 "How soon before an RPC deadline to send an early reply");
-static int at_extra = 30;
 CFS_MODULE_PARM(at_extra, "i", int, 0644,
                 "How much extra time to give with each early reply");
 
@@ -873,16 +867,16 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
         if (array->paa_reqs_count[index] > 0) {
                 /* latest rpcs will have the latest deadlines in the list,
                  * so search backward. */
-                list_for_each_entry_reverse(rq, &array->paa_reqs_array[index], 
+                list_for_each_entry_reverse(rq, &array->paa_reqs_array[index],
                                             rq_timed_list) {
                         if (req->rq_deadline >= rq->rq_deadline) {
-                                list_add(&req->rq_timed_list, 
+                                list_add(&req->rq_timed_list,
                                          &rq->rq_timed_list);
                                 break;
                         }
                 }
         }
-        
+
         /* Add the request at the head of the list */
         if (list_empty(&req->rq_timed_list))
                 list_add(&req->rq_timed_list, &array->paa_reqs_array[index]);
@@ -1076,7 +1070,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
         count = array->paa_count;
         while (count > 0) {
                 count -= array->paa_reqs_count[index];
-                list_for_each_entry_safe(rq, n, &array->paa_reqs_array[index], 
+                list_for_each_entry_safe(rq, n, &array->paa_reqs_array[index],
                                          rq_timed_list) {
                         if (rq->rq_deadline <= now + at_early_margin) {
                                 list_move(&rq->rq_timed_list, &work_list);

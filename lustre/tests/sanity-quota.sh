@@ -177,7 +177,7 @@ resetquota() {
         [ "$1" != "-u" -a "$1" != "-g" ] && error "resetquota: wrong specifier $1 passed"
 
         count=0
-        if at_is_valid && at_is_enabled; then
+        if at_is_enabled; then
 	    timeout=$(at_max_get mds)
         else
 	    timeout=$(lctl get_param -n timeout)
@@ -747,7 +747,7 @@ test_6() {
 	echo "  Remove filea to let OST0 release quota"
 	rm -f $FILEA
 
-        if at_is_valid && at_is_enabled; then
+        if at_is_enabled; then
 	    timeout=$(at_max_get mds)
         else
 	    timeout=$(lctl get_param -n timeout)
@@ -1453,7 +1453,7 @@ test_18() {
 
 	echo  "   step2: testing ......"
 	count=0
-	if at_is_valid && at_is_enabled; then
+	if at_is_enabled; then
 	    timeout=$(at_max_get mds)
 	else
 	    timeout=$(lctl get_param -n timeout)
@@ -1511,7 +1511,7 @@ test_18a() {
 
 	echo  "   step2: testing ......"
 	count=0
-	if at_is_valid && at_is_enabled; then
+	if at_is_enabled; then
 	    timeout=$(at_max_get mds)
 	else
 	    timeout=$(lctl get_param -n timeout)
@@ -1583,7 +1583,7 @@ test_18bc_sub() {
         fi
 
         count=0
-        if at_is_valid && at_is_enabled; then
+	if at_is_enabled; then
 	    timeout=$(at_max_get mds)
         else
 	    timeout=$(lctl get_param -n timeout)

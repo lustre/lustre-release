@@ -790,6 +790,28 @@ void class_del_profiles(void)
         EXIT;
 }
 
+static int class_set_global(char *ptr, int val) {
+        ENTRY;
+
+        if (class_match_param(ptr, PARAM_AT_MIN, NULL) == 0)
+            at_min = val;
+        else if (class_match_param(ptr, PARAM_AT_MAX, NULL) == 0)
+                at_max = val;
+        else if (class_match_param(ptr, PARAM_AT_EXTRA, NULL) == 0)
+                at_extra = val;
+        else if (class_match_param(ptr, PARAM_AT_EARLY_MARGIN, NULL) == 0)
+                at_early_margin = val;
+        else if (class_match_param(ptr, PARAM_AT_HISTORY, NULL) == 0)
+                at_history = val;
+        else
+                RETURN(-EINVAL);
+
+        CDEBUG(D_IOCTL, "global %s = %d\n", ptr, val);
+
+        RETURN(0);
+}
+
+
 /* We can't call ll_process_config directly because it lives in a module that
    must be loaded after this one. */
 static int (*client_process_config)(struct lustre_cfg *lcfg) = NULL;
@@ -879,13 +901,24 @@ int class_process_config(struct lustre_cfg *lcfg)
                 GOTO(out, err = 0);
         }
         case LCFG_PARAM: {
+                char *tmp;
                 /* llite has no obd */
                 if ((class_match_param(lustre_cfg_string(lcfg, 1),
                                        PARAM_LLITE, 0) == 0) &&
                     client_process_config) {
                         err = (*client_process_config)(lcfg);
                         GOTO(out, err);
+                } else if ((class_match_param(lustre_cfg_string(lcfg, 1),
+                                              PARAM_SYS, &tmp) == 0)) {
+                        /* Global param settings */
+                        err = class_set_global(tmp, lcfg->lcfg_num);
+                        /* Note that since LCFG_PARAM is LCFG_REQUIRED, new
+                           unknown globals would cause config to fail */
+                        if (err)
+                                CWARN("Ignoring unknown param %s\n", tmp);
+                        GOTO(out, 0);
                 }
+
                 /* Fall through */
                 break;
         }
@@ -988,7 +1021,7 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                 sval = strchr(key, '=');
                 if (!sval || (*(sval + 1) == 0)) {
                         CERROR("Can't parse param %s (missing '=')\n", key);
-                        /* rc = -EINVAL; continue parsing other params */
+                        /* rc = -EINVAL;        continue parsing other params */
                         continue;
                 }
                 keylen = sval - key;
