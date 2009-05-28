@@ -271,7 +271,7 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
 
                 while (iov_left > 0) {
                         struct page **pages;
-                        int page_count, max_pages;
+                        int page_count, max_pages = 0;
                         size_t bytes;
 
                         bytes = min(size,iov_left);
