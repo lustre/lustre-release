@@ -34,6 +34,10 @@
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE     /* for strnlen() in string.h */
+#endif
+
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/wait.h>
