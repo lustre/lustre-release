@@ -1184,7 +1184,7 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
                       struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct lov_obd *lov;
-        struct obd_info oinfo;
+        struct obd_info *oinfo;
         struct lov_request_set *set = NULL;
         struct lov_request *req;
         struct l_wait_info  lwi = { 0 };
@@ -1205,6 +1205,10 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
         if (!lov->desc.ld_active_tgt_count)
                 RETURN(-EIO);
 
+        OBD_ALLOC_PTR(oinfo);
+        if (NULL == oinfo)
+                RETURN(-ENOMEM);
+
         obd_getref(exp->exp_obd);
         /* Recreate a specific object id at the given OST index */
         if ((src_oa->o_valid & OBD_MD_FLFLAGS) &&
@@ -1219,7 +1223,7 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
         qos_statfs_update(exp->exp_obd,
                           cfs_time_shift_64(-lov->desc.ld_qos_maxage) + HZ, 0);
 
-        rc = lov_prep_create_set(exp, &oinfo, ea, src_oa, oti, &set);
+        rc = lov_prep_create_set(exp, oinfo, ea, src_oa, oti, &set);
         if (rc)
                 GOTO(out, rc);
 
@@ -1240,6 +1244,7 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
         rc = lov_fini_create_set(set, ea);
 out:
         obd_putref(exp->exp_obd);
+        OBD_FREE_PTR(oinfo);
         RETURN(rc);
 }
 
@@ -1257,7 +1262,7 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                        struct obd_export *md_exp)
 {
         struct lov_request_set *set;
-        struct obd_info oinfo;
+        struct obd_info *oinfo;
         struct lov_request *req;
         struct list_head *pos;
         struct lov_obd *lov;
@@ -1274,9 +1279,13 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                 LASSERT(oti->oti_logcookies);
         }
 
+        OBD_ALLOC_PTR(oinfo);
+        if (NULL == oinfo)
+                RETURN(-ENOMEM);
+
         lov = &exp->exp_obd->u.lov;
         obd_getref(exp->exp_obd);
-        rc = lov_prep_destroy_set(exp, &oinfo, oa, lsm, oti, &set);
+        rc = lov_prep_destroy_set(exp, oinfo, oa, lsm, oti, &set);
         if (rc)
                 GOTO(out, rc);
 
@@ -1306,6 +1315,7 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
         err = lov_fini_destroy_set(set);
 out:
         obd_putref(exp->exp_obd);
+        OBD_FREE_PTR(oinfo);
         RETURN(rc ? rc : err);
 }
 

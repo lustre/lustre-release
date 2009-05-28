@@ -1588,6 +1588,7 @@ repeat:
 
         /* turn off the kernel's read-ahead */
         if (lock_style != LL_LOCK_STYLE_NOLOCK) {
+                struct ost_lvb *xtimes;
                 /* read under locks
                  *
                  * 1. update inode's atime as long as concurrent stat
@@ -1595,14 +1596,21 @@ repeat:
                  *
                  * 2. update lsm so that next stat (via
                  * ll_glimpse_size) could get correct values in lsm */
-                struct ost_lvb xtimes;
+                OBD_ALLOC_PTR(xtimes);
+                if (NULL == xtimes) {
+                        ll_file_put_lock(inode, end, lock_style, cookie,
+                                         &tree, OBD_BRW_READ);
+                        up_read(&lli->lli_truncate_rwsem);
+                        GOTO(out, retval = -ENOMEM);
+                }
 
                 lov_stripe_lock(lsm);
                 LTIME_S(inode->i_atime) = LTIME_S(CURRENT_TIME);
-                xtimes.lvb_atime = LTIME_S(inode->i_atime);
-                obd_update_lvb(sbi->ll_osc_exp, lsm, &xtimes,
+                xtimes->lvb_atime = LTIME_S(inode->i_atime);
+                obd_update_lvb(sbi->ll_osc_exp, lsm, xtimes,
                                OBD_MD_FLATIME);
                 lov_stripe_unlock(lsm);
+                OBD_FREE_PTR(xtimes);
 
                 file->f_ra.ra_pages = 0;
                 /* initialize read-ahead window once per syscall */
@@ -1798,6 +1806,7 @@ repeat:
         CDEBUG(D_INFO, "Writing inode %lu, "LPSZ" bytes, offset %Lu\n",
                inode->i_ino, chunk, *ppos);
         if (tree_locked) {
+                struct ost_lvb *xtimes;
                 /* write under locks
                  *
                  * 1. update inode's mtime and ctime as long as
@@ -1806,16 +1815,19 @@ repeat:
                  *
                  * 2. update lsm so that next stat (via
                  * ll_glimpse_size) could get correct values in lsm */
-                struct ost_lvb xtimes;
+                OBD_ALLOC_PTR(xtimes);
+                if (NULL == xtimes)
+                        GOTO(out_unlock, retval = -ENOMEM);
 
                 lov_stripe_lock(lsm);
                 LTIME_S(inode->i_mtime) = LTIME_S(CURRENT_TIME);
                 LTIME_S(inode->i_ctime) = LTIME_S(CURRENT_TIME);
-                xtimes.lvb_mtime = LTIME_S(inode->i_mtime);
-                xtimes.lvb_ctime = LTIME_S(inode->i_ctime);
-                obd_update_lvb(sbi->ll_osc_exp, lsm, &xtimes,
+                xtimes->lvb_mtime = LTIME_S(inode->i_mtime);
+                xtimes->lvb_ctime = LTIME_S(inode->i_ctime);
+                obd_update_lvb(sbi->ll_osc_exp, lsm, xtimes,
                                OBD_MD_FLMTIME | OBD_MD_FLCTIME);
                 lov_stripe_unlock(lsm);
+                OBD_FREE_PTR(xtimes);
 
 #ifdef HAVE_FILE_WRITEV
                 retval = generic_file_writev(file, iov_copy, nrsegs_copy, ppos);
@@ -1978,7 +1990,7 @@ static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,
 }
 #endif
 
-/* change based on 
+/* change based on
  * http://git.kernel.org/?p=linux/kernel/git/torvalds/linux-2.6.git;a=commit;h=f0930fffa99e7fe0a0c4b6c7d9a244dc88288c27
  */
 #ifdef HAVE_KERNEL_SPLICE_READ

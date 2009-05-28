@@ -705,7 +705,7 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
 {
         obd_count npages, i;
         struct echo_async_page *eap;
-        struct echo_async_state eas;
+        struct echo_async_state *eas;
         int rc = 0;
         struct echo_async_page **aps = NULL;
 
@@ -732,19 +732,23 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
         /* XXX think again with misaligned I/O */
         npages = batching >> CFS_PAGE_SHIFT;
 
-        memcpy(&eas.eas_oa, oa, sizeof(*oa));
-        eas.eas_next_offset = offset;
-        eas.eas_end_offset = offset + count;
-        spin_lock_init(&eas.eas_lock);
-        cfs_waitq_init(&eas.eas_waitq);
-        eas.eas_in_flight = 0;
-        eas.eas_rc = 0;
-        eas.eas_lsm = lsm;
-        CFS_INIT_LIST_HEAD(&eas.eas_avail);
+        OBD_ALLOC_PTR(eas);
+        if (NULL == eas)
+                return(-ENOMEM);
+
+        memcpy(&eas->eas_oa, oa, sizeof(*oa));
+        eas->eas_next_offset = offset;
+        eas->eas_end_offset = offset + count;
+        spin_lock_init(&eas->eas_lock);
+        cfs_waitq_init(&eas->eas_waitq);
+        eas->eas_in_flight = 0;
+        eas->eas_rc = 0;
+        eas->eas_lsm = lsm;
+        CFS_INIT_LIST_HEAD(&eas->eas_avail);
 
         OBD_ALLOC(aps, npages * sizeof aps[0]);
         if (aps == NULL)
-                return (-ENOMEM);
+                GOTO(free_eas, rc = -ENOMEM);
 
         /* prepare the group of pages that we're going to be keeping
          * in flight */
@@ -762,31 +766,31 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
 
                 eap->eap_magic = EAP_MAGIC;
                 eap->eap_page = page;
-                eap->eap_eas = &eas;
-                list_add_tail(&eap->eap_item, &eas.eas_avail);
+                eap->eap_eas = eas;
+                list_add_tail(&eap->eap_item, &eas->eas_avail);
                 aps[i] = eap;
         }
 
         /* first we spin queueing io and being woken by its completion */
-        spin_lock(&eas.eas_lock);
+        spin_lock(&eas->eas_lock);
         for(;;) {
                 int rc;
 
                 /* sleep until we have a page to send */
-                spin_unlock(&eas.eas_lock);
-                rc = wait_event_interruptible(eas.eas_waitq,
-                                              eas_should_wake(&eas));
-                spin_lock(&eas.eas_lock);
-                if (rc && !eas.eas_rc)
-                        eas.eas_rc = rc;
-                if (eas.eas_rc)
+                spin_unlock(&eas->eas_lock);
+                rc = wait_event_interruptible(eas->eas_waitq,
+                                              eas_should_wake(eas));
+                spin_lock(&eas->eas_lock);
+                if (rc && !eas->eas_rc)
+                        eas->eas_rc = rc;
+                if (eas->eas_rc)
                         break;
-                if (list_empty(&eas.eas_avail))
+                if (list_empty(&eas->eas_avail))
                         continue;
-                eap = list_entry(eas.eas_avail.next, struct echo_async_page,
+                eap = list_entry(eas->eas_avail.next, struct echo_async_page,
                                  eap_item);
                 list_del(&eap->eap_item);
-                spin_unlock(&eas.eas_lock);
+                spin_unlock(&eas->eas_lock);
 
                 /* unbind the eap from its old page offset */
                 if (eap->eap_cookie != NULL) {
@@ -795,15 +799,15 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
                         eap->eap_cookie = NULL;
                 }
 
-                eas.eas_next_offset += CFS_PAGE_SIZE;
-                eap->eap_off = eas.eas_next_offset;
+                eas->eas_next_offset += CFS_PAGE_SIZE;
+                eap->eap_off = eas->eas_next_offset;
 
                 rc = obd_prep_async_page(exp, lsm, NULL, eap->eap_page,
                                          eap->eap_off, &ec_async_page_ops,
                                          eap, &eap->eap_cookie, 1, NULL);
                 if (rc) {
-                        spin_lock(&eas.eas_lock);
-                        eas.eas_rc = rc;
+                        spin_lock(&eas->eas_lock);
+                        eas->eas_rc = rc;
                         break;
                 }
 
@@ -819,26 +823,26 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
                                         rw, 0, CFS_PAGE_SIZE, 0,
                                         ASYNC_READY | ASYNC_URGENT |
                                         ASYNC_COUNT_STABLE);
-                spin_lock(&eas.eas_lock);
-                if (rc && !eas.eas_rc) {
-                        eas.eas_rc = rc;
+                spin_lock(&eas->eas_lock);
+                if (rc && !eas->eas_rc) {
+                        eas->eas_rc = rc;
                         break;
                 }
-                eas.eas_in_flight++;
-                if (eas.eas_next_offset == eas.eas_end_offset)
+                eas->eas_in_flight++;
+                if (eas->eas_next_offset == eas->eas_end_offset)
                         break;
         }
 
         /* still hold the eas_lock here.. */
 
         /* now we just spin waiting for all the rpcs to complete */
-        while(eas.eas_in_flight) {
-                spin_unlock(&eas.eas_lock);
-                wait_event_interruptible(eas.eas_waitq,
-                                         eas.eas_in_flight == 0);
-                spin_lock(&eas.eas_lock);
+        while(eas->eas_in_flight) {
+                spin_unlock(&eas->eas_lock);
+                wait_event_interruptible(eas->eas_waitq,
+                                         eas->eas_in_flight == 0);
+                spin_lock(&eas->eas_lock);
         }
-        spin_unlock(&eas.eas_lock);
+        spin_unlock(&eas->eas_lock);
 
 out:
         if (aps != NULL) {
@@ -855,6 +859,8 @@ out:
                 }
                 OBD_FREE(aps, npages * sizeof aps[0]);
         }
+free_eas:
+        OBD_FREE_PTR(eas);
 
         RETURN(rc);
 }

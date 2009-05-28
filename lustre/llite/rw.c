@@ -166,6 +166,7 @@ int ll_file_punch(struct inode * inode, loff_t new_size, int srvlock)
                 oa.o_mtime = oa.o_ctime = LTIME_S(CURRENT_TIME);
                 oa.o_valid |= OBD_MD_FLMTIME | OBD_MD_FLCTIME;
         } else {
+                struct ost_lvb *xtimes;
                 /* truncate under locks
                  *
                  * 1. update inode's mtime and ctime as long as
@@ -174,16 +175,19 @@ int ll_file_punch(struct inode * inode, loff_t new_size, int srvlock)
                  *
                  * 2. update lsm so that next stat (via
                  * ll_glimpse_size) could get correct values in lsm */
-                struct ost_lvb xtimes;
+                OBD_ALLOC_PTR(xtimes);
+                if (NULL == xtimes)
+                        RETURN(-ENOMEM);
 
                 lov_stripe_lock(lli->lli_smd);
                 LTIME_S(inode->i_mtime) = LTIME_S(CURRENT_TIME);
                 LTIME_S(inode->i_ctime) = LTIME_S(CURRENT_TIME);
-                xtimes.lvb_mtime = LTIME_S(inode->i_mtime);
-                xtimes.lvb_ctime = LTIME_S(inode->i_ctime);
-                obd_update_lvb(ll_i2obdexp(inode), lli->lli_smd, &xtimes,
+                xtimes->lvb_mtime = LTIME_S(inode->i_mtime);
+                xtimes->lvb_ctime = LTIME_S(inode->i_ctime);
+                obd_update_lvb(ll_i2obdexp(inode), lli->lli_smd, xtimes,
                                OBD_MD_FLMTIME | OBD_MD_FLCTIME);
                 lov_stripe_unlock(lli->lli_smd);
+                OBD_FREE_PTR(xtimes);
 
                 valid |= OBD_MD_FLMTIME | OBD_MD_FLCTIME;
         }

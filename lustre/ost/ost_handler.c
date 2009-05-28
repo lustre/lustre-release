@@ -135,7 +135,7 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
 static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
 {
         struct ost_body *body, *repbody;
-        struct obd_info oinfo = { { { 0 } } };
+        struct obd_info *oinfo;
         __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int rc;
         ENTRY;
@@ -149,12 +149,18 @@ static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
         if (rc)
                 RETURN(rc);
 
+        OBD_ALLOC_PTR(oinfo);
+        if (NULL == oinfo)
+                RETURN(-ENOMEM);
+
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
 
-        oinfo.oi_oa = &repbody->oa;
-        req->rq_status = obd_getattr(exp, &oinfo);
+        oinfo->oi_oa = &repbody->oa;
+        req->rq_status = obd_getattr(exp, oinfo);
+
+        OBD_FREE_PTR(oinfo);
         RETURN(0);
 }
 
@@ -202,7 +208,7 @@ static int ost_create(struct obd_export *exp, struct ptlrpc_request *req,
                                  sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
         oti->oti_logcookies = &repbody->oa.o_lcookie;
-        
+
         req->rq_status = obd_create(exp, &repbody->oa, NULL, oti);
         //obd_log_cancel(conn, NULL, 1, oti->oti_logcookies, 0);
         RETURN(0);
@@ -273,7 +279,7 @@ static void ost_punch_lock_put(struct obd_export *exp, struct obdo *oa,
 static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
                      struct obd_trans_info *oti)
 {
-        struct obd_info oinfo = { { { 0 } } };
+        struct obd_info *oinfo;
         struct ost_body *body, *repbody;
         __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
         int rc;
@@ -287,41 +293,48 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
 
-        oinfo.oi_oa = &body->oa;
-        oinfo.oi_policy.l_extent.start = oinfo.oi_oa->o_size;
-        oinfo.oi_policy.l_extent.end = oinfo.oi_oa->o_blocks;
+        OBD_ALLOC_PTR(oinfo);
+        if (NULL == oinfo)
+                RETURN(-ENOMEM);
 
-        if ((oinfo.oi_oa->o_valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) !=
+        oinfo->oi_oa = &body->oa;
+        oinfo->oi_policy.l_extent.start = oinfo->oi_oa->o_size;
+        oinfo->oi_policy.l_extent.end = oinfo->oi_oa->o_blocks;
+
+        if ((oinfo->oi_oa->o_valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) !=
             (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS))
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
 
         rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
-                RETURN(rc);
+                GOTO(out, rc);
 
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
-        rc = ost_punch_lock_get(exp, oinfo.oi_oa, &lh);
+        rc = ost_punch_lock_get(exp, oinfo->oi_oa, &lh);
         if (rc == 0) {
-                if (oinfo.oi_oa->o_valid & OBD_MD_FLFLAGS &&
-                    oinfo.oi_oa->o_flags == OBD_FL_TRUNCLOCK)
+                if (oinfo->oi_oa->o_valid & OBD_MD_FLFLAGS &&
+                    oinfo->oi_oa->o_flags == OBD_FL_TRUNCLOCK)
                         /*
                          * If OBD_FL_TRUNCLOCK is the only bit set in
                          * ->o_flags, clear OBD_MD_FLFLAGS to avoid falling
                          * through filter_setattr() to filter_iocontrol().
                          */
-                        oinfo.oi_oa->o_valid &= ~OBD_MD_FLFLAGS;
+                        oinfo->oi_oa->o_valid &= ~OBD_MD_FLFLAGS;
 
-                req->rq_status = obd_punch(exp, &oinfo, oti, NULL);
-                ost_punch_lock_put(exp, oinfo.oi_oa, &lh);
+                req->rq_status = obd_punch(exp, oinfo, oti, NULL);
+                ost_punch_lock_put(exp, oinfo->oi_oa, &lh);
         }
-        repbody->oa = *oinfo.oi_oa;
+
+        repbody->oa = *oinfo->oi_oa;
+out:
+        OBD_FREE_PTR(oinfo);
         RETURN(rc);
 }
 
 static int ost_sync(struct obd_export *exp, struct ptlrpc_request *req)
 {
-        struct obd_info oinfo = { { { 0 } } };
+        struct obd_info *oinfo;
         struct ost_body *body, *repbody;
         __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
         int rc;
@@ -336,13 +349,19 @@ static int ost_sync(struct obd_export *exp, struct ptlrpc_request *req)
         if (rc)
                 RETURN(rc);
 
+        OBD_ALLOC_PTR(oinfo);
+        if (NULL == oinfo)
+                RETURN(-ENOMEM);
+
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
 
-        oinfo.oi_oa = &body->oa;
-        req->rq_status = obd_sync(exp, &oinfo, repbody->oa.o_size,
+        oinfo->oi_oa = &body->oa;
+        req->rq_status = obd_sync(exp, oinfo, repbody->oa.o_size,
                                   repbody->oa.o_blocks, NULL);
-        repbody->oa = *oinfo.oi_oa;
+        repbody->oa = *oinfo->oi_oa;
+
+        OBD_FREE_PTR(oinfo);
         RETURN(0);
 }
 
@@ -352,7 +371,7 @@ static int ost_setattr(struct obd_export *exp, struct ptlrpc_request *req,
         struct ost_body *body, *repbody;
         __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
         int rc;
-        struct obd_info oinfo = { { { 0 } } };
+        struct obd_info *oinfo = NULL;
         ENTRY;
 
         body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
@@ -364,12 +383,18 @@ static int ost_setattr(struct obd_export *exp, struct ptlrpc_request *req,
         if (rc)
                 RETURN(rc);
 
+        OBD_ALLOC_PTR(oinfo);
+        if (NULL == oinfo)
+                RETURN(-ENOMEM);
+
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
 
-        oinfo.oi_oa = &repbody->oa;
-        req->rq_status = obd_setattr(exp, &oinfo, oti);
+        oinfo->oi_oa = &repbody->oa;
+        req->rq_status = obd_setattr(exp, oinfo, oti);
+
+        OBD_FREE_PTR(oinfo);
         RETURN(0);
 }
 

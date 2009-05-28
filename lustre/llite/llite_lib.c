@@ -1533,7 +1533,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data = { { 0 } };
+        struct mdc_op_data *op_data;
         struct lustre_md md;
         int ia_valid = attr->ia_valid;
         int rc = 0;
@@ -1584,11 +1584,14 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         if (lsm)
                 attr->ia_valid &= ~ATTR_SIZE;
 
+        OBD_ALLOC_PTR(op_data);
+        if (NULL == op_data)
+                RETURN(-ENOMEM);
         /* We always do an MDS RPC, even if we're only changing the size;
          * only the MDS knows whether truncate() should fail with -ETXTBUSY */
-        ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0, NULL);
+        ll_prepare_mdc_op_data(op_data, inode, NULL, NULL, 0, 0, NULL);
 
-        rc = mdc_setattr(sbi->ll_mdc_exp, &op_data,
+        rc = mdc_setattr(sbi->ll_mdc_exp, op_data,
                          attr, NULL, 0, NULL, 0, &request);
 
         if (rc) {
@@ -1602,8 +1605,10 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                                 rc = inode_setattr(inode, attr);
                 } else if (rc != -EPERM && rc != -EACCES && rc != -ETXTBSY)
                         CERROR("mdc_setattr fails: rc = %d\n", rc);
+                OBD_FREE_PTR(op_data);
                 RETURN(rc);
         }
+        OBD_FREE_PTR(op_data);
 
         rc = mdc_req2lustre_md(request, REPLY_REC_OFF, sbi->ll_osc_exp, &md);
         if (rc) {
@@ -1634,10 +1639,14 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         if (ia_valid & ATTR_SIZE) {
                 rc = ll_setattr_do_truncate(inode, attr->ia_size);
         } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
-                struct obd_info oinfo = { { { 0 } } };
+                struct obd_info *oinfo;
                 struct obdo *oa;
                 struct lustre_handle lockh = { 0 };
                 obd_valid valid;
+
+                OBD_ALLOC_PTR(oinfo);
+                if (NULL == oinfo)
+                        RETURN(-ENOMEM);
 
                 CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
                        inode->i_ino, LTIME_S(attr->ia_mtime));
@@ -1655,13 +1664,15 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
                                 /* setting mtime to past is performed under PW
                                  * EOF extent lock */
-                                oinfo.oi_policy.l_extent.start = 0;
-                                oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
+                                oinfo->oi_policy.l_extent.start = 0;
+                                oinfo->oi_policy.l_extent.end = OBD_OBJECT_EOF;
                                 rc = ll_extent_lock(NULL, inode, lsm, LCK_PW,
-                                                    &oinfo.oi_policy,
+                                                    &oinfo->oi_policy,
                                                     &lockh, 0);
-                                if (rc)
+                                if (rc) {
+                                        OBD_FREE_PTR(oinfo);
                                         RETURN(rc);
+                                }
 
                                 /* setattr under locks
                                  *
@@ -1724,10 +1735,10 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
                         obdo_from_inode(oa, inode, valid);
 
-                        oinfo.oi_oa = oa;
-                        oinfo.oi_md = lsm;
+                        oinfo->oi_oa = oa;
+                        oinfo->oi_md = lsm;
 
-                        rc = obd_setattr_rqset(sbi->ll_osc_exp, &oinfo, NULL);
+                        rc = obd_setattr_rqset(sbi->ll_osc_exp, oinfo, NULL);
                         if (rc)
                                 CERROR("obd_setattr_async fails: rc=%d\n", rc);
 
@@ -1747,6 +1758,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 } else {
                         rc = -ENOMEM;
                 }
+                OBD_FREE_PTR(oinfo);
         }
         RETURN(rc);
 }
