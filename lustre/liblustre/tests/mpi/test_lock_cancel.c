@@ -106,7 +106,7 @@ int main(int argc, char *argv[])
                 {"dumpfile", 1, 0, 0},
                 {0, 0, 0, 0}
         };
-	int fd;
+	int fd = 0;
         long time1, time2;
         struct stat statbuf;
 
