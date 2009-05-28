@@ -13,6 +13,14 @@ tbd  Sun Microsystems, Inc.
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
+Severity   : enhancement
+Bugzilla   : 18688
+Description: Allow tuning service thread via /proc
+Details    : For each service a new
+	     /proc/fs/lustre/{service}/*/thread_{min,max,started} entry is
+	     created that can be used to set min/max thread counts, and get the
+	     current number of running threads.
+
 Severity   : normal
 Bugzilla   : 18382
 Descriptoin: don't return error if have particaly created objects for file.
@@ -35,7 +43,7 @@ Severity   : enhancement
 Bugzilla   : 19293
 Description: move AT tunable parameters for more consistent usage
 Details    : add AT tunables under /proc/sys/lustre, add to conf_param parsing
-	
+
 Severity   : enhancement
 Bugzilla   : 17974
 Description: add lazystatfs mount option to allow statfs(2) to skip down OSTs

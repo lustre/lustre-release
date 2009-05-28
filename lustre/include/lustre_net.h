@@ -104,9 +104,8 @@
  * considered full when less than ?_MAXREQSIZE is left in them.
  */
 
-#define LDLM_THREADS_AUTO_MIN                                                 \
-        min((int)(num_online_cpus() * num_online_cpus() * 2), 8)
-#define LDLM_THREADS_AUTO_MAX (LDLM_THREADS_AUTO_MIN * 16)
+#define LDLM_THREADS_AUTO_MIN (2)
+#define LDLM_THREADS_AUTO_MAX min(num_online_cpus()*num_online_cpus()*32, 128)
 #define LDLM_BL_THREADS  LDLM_THREADS_AUTO_MIN
 #define LDLM_NBUFS      (64 * num_online_cpus())
 #define LDLM_BUFSIZE    (8 * 1024)
@@ -146,7 +145,7 @@
  * except in the open case where there are a large number of OSTs in a LOV.
  */
 #define MDS_MAXREQSIZE  (5 * 1024)
-#define MDS_MAXREPSIZE  max(9 * 1024, 280 + LOV_MAX_STRIPE_COUNT * 56)
+#define MDS_MAXREPSIZE  max(9 * 1024, 362 + LOV_MAX_STRIPE_COUNT * 56)
 
 /* FLD_MAXREQSIZE == lustre_msg + __u32 padding + ptlrpc_body + opc + md_fld */
 #define FLD_MAXREQSIZE  (160)
@@ -1291,7 +1290,7 @@ int ptlrpc_pinger_del_import(struct obd_import *imp);
 int ptlrpc_add_timeout_client(int time, enum timeout_event event,
                               timeout_cb_t cb, void *data,
                               struct list_head *obd_list);
-int ptlrpc_del_timeout_client(struct list_head *obd_list, 
+int ptlrpc_del_timeout_client(struct list_head *obd_list,
                               enum timeout_event event);
 struct ptlrpc_request * ptlrpc_prep_ping(struct obd_import *imp);
 int ptlrpc_obd_ping(struct obd_device *obd);
