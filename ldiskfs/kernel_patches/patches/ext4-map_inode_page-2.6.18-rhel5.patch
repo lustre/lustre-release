@@ -1,0 +1,86 @@
+Index: linux-2.6.18.i386/fs/ext4/inode.c
+===================================================================
+--- linux-2.6.18.i386.orig/fs/ext4/inode.c
++++ linux-2.6.18.i386/fs/ext4/inode.c
+@@ -3666,3 +3666,66 @@ out_unlock:
+ 	unlock_page(page);
+ 	return ret;
+ }
++
++int ext4_map_inode_page(struct inode *inode, struct page *page,
++			unsigned long *blocks, int *created, int create)
++{
++	unsigned int blocksize, blocks_per_page;
++	unsigned long iblock;
++	struct buffer_head dummy;
++	void *handle;
++	int i, rc = 0, failed = 0, needed_blocks;
++
++	blocksize = inode->i_sb->s_blocksize;
++	blocks_per_page = PAGE_SIZE >> inode->i_sb->s_blocksize_bits;
++	iblock = page->index * blocks_per_page;
++
++	for (i = 0; i < blocks_per_page; i++, iblock++) {
++		blocks[i] = ext4_bmap(inode->i_mapping, iblock);
++		if (blocks[i] == 0) {
++			failed++;
++			if (created)
++				created[i] = -1;
++		} else if (created) {
++			created[i] = 0;
++		}
++	}
++
++	if (failed == 0 || create == 0)
++		return 0;
++
++	needed_blocks = ext4_writepage_trans_blocks(inode);
++	handle = ext4_journal_start(inode, needed_blocks);
++	if (IS_ERR(handle))
++		return PTR_ERR(handle);
++
++	iblock = page->index * blocks_per_page;
++	for (i = 0; i < blocks_per_page; i++, iblock++) {
++		if (blocks[i] != 0)
++			continue;
++
++		rc = ext4_get_blocks_handle(handle, inode, iblock, 1, &dummy, 1, 1);
++		if (rc < 0) {
++			printk(KERN_INFO "ext4_map_inode_page: error reading "
++					"block %ld\n", iblock);
++			goto out;
++		} else {
++			if (rc > 1)
++				WARN_ON(1);
++			rc = 0;
++		}
++		/* Unmap any metadata buffers from the block mapping, to avoid
++		 * data corruption due to direct-write from Lustre being
++		 * clobbered by a later flush of the blockdev metadata buffer.*/
++		if (buffer_new(&dummy))
++			unmap_underlying_metadata(dummy.b_bdev,
++					dummy.b_blocknr);
++		blocks[i] = dummy.b_blocknr;
++		if (created)
++			created[i] = 1;
++	}
++
++out:
++	ext4_journal_stop(handle);
++	return rc;
++}
+Index: linux-2.6.18.i386/fs/ext4/super.c
+===================================================================
+--- linux-2.6.18.i386.orig/fs/ext4/super.c
++++ linux-2.6.18.i386/fs/ext4/super.c
+@@ -3498,6 +3498,10 @@ static void __exit exit_ext4_fs(void)
+ 	__free_page(ext4_zero_page);
+ }
+ 
++int ext4_map_inode_page(struct inode *inode, struct page *page,
++			unsigned long *blocks, int *created, int create);
++EXPORT_SYMBOL(ext4_map_inode_page);
++
+ MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
+ MODULE_DESCRIPTION("Fourth Extended Filesystem with extents");
+ MODULE_LICENSE("GPL");
