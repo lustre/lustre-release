@@ -1,0 +1,35 @@
+Index: linux-2.6.18.i386/fs/ext4/super.c
+===================================================================
+--- linux-2.6.18.i386.orig/fs/ext4/super.c
++++ linux-2.6.18.i386/fs/ext4/super.c
+@@ -185,6 +185,8 @@ void ext4_journal_abort_handle(const cha
+ 	jbd2_journal_abort_handle(handle);
+ }
+ 
++EXPORT_SYMBOL(ext4_journal_abort_handle);
++
+ /* Deal with the reporting of failure conditions on a filesystem such as
+  * inconsistencies detected or read IO failures.
+  *
+@@ -2459,6 +2461,8 @@ out_fail:
+ 	return ret;
+ }
+ 
++EXPORT_SYMBOL(ext4_force_commit);
++
+ /*
+  * Setup any per-fs journal parameters now.  We'll do this both on
+  * initial mount, once the journal has been initialised but before we've
+@@ -3502,6 +3506,12 @@ int ext4_map_inode_page(struct inode *in
+ 			unsigned long *blocks, int *created, int create);
+ EXPORT_SYMBOL(ext4_map_inode_page);
+ 
++EXPORT_SYMBOL(ext4_xattr_get);
++EXPORT_SYMBOL(ext4_xattr_set_handle);
++EXPORT_SYMBOL(ext4_bread);
++EXPORT_SYMBOL(ext4_journal_start_sb);
++EXPORT_SYMBOL(__ext4_journal_stop);
++
+ MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
+ MODULE_DESCRIPTION("Fourth Extended Filesystem with extents");
+ MODULE_LICENSE("GPL");
