@@ -155,6 +155,13 @@ Description: MMP check in ext3_remount() fails without displaying any error
 Details    : When multiple mount protection fails during remount, proper error
 	     should be returned
 
+Severity   : Low
+Bugzilla   : 15010
+Description: Rare Client crash on resend if the file was deleted.
+Details    : When file is opened, but open reply is lost and file is
+             subsequently deleted before resend, resend processing logic
+	     breaks trying to open the file again, should not try to open.
+
 -------------------------------------------------------------------------------
 
 tbd Sun Microsystems, Inc.
