@@ -493,12 +493,12 @@ int client_disconnect_export(struct obd_export *exp)
         if (!cli->cl_conn_count) {
                 CERROR("disconnecting disconnected device (%s)\n",
                        obd->obd_name);
-                GOTO(out_sem, rc = -EINVAL);
+                GOTO(out_disconnect, rc = -EINVAL);
         }
 
         cli->cl_conn_count--;
         if (cli->cl_conn_count)
-                GOTO(out_no_disconnect, rc = 0);
+                GOTO(out_disconnect, rc = 0);
 
         /* Mark import deactivated now, so we don't try to reconnect if any
          * of the cleanup RPCs fails (e.g. ldlm cancel, etc).  We don't
@@ -543,11 +543,14 @@ int client_disconnect_export(struct obd_export *exp)
         cli->cl_import = NULL;
 
         EXIT;
- out_no_disconnect:
+
+ out_disconnect:
+        /* use server style - class_disconnect should be always called for
+         * o_disconnect */
         err = class_disconnect(exp);
         if (!rc && err)
                 rc = err;
- out_sem:
+
         up_write(&cli->cl_sem);
         if (to_be_freed)
                 ldlm_namespace_free_post(to_be_freed);

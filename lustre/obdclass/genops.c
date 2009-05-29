@@ -1039,10 +1039,12 @@ void class_export_recovery_cleanup(struct obd_export *exp)
         spin_unlock_bh(&obd->obd_processing_task_lock);
 }
 
-/* This function removes two references from the export: one for the
- * hash entry and one for the export pointer passed in.  The export
- * pointer passed to this function is destroyed should not be used
- * again. */
+/* This function removes 1-3 references from the export:
+ * 1 - for export pointer passed
+ * and if disconnect really need
+ * 2 - removing from hash
+ * 3 - in client_unlink_export
+ * The export pointer passed to this function can destroyed */
 int class_disconnect(struct obd_export *export)
 {
         int already_disconnected;
@@ -1057,25 +1059,25 @@ int class_disconnect(struct obd_export *export)
         spin_lock(&export->exp_lock);
         already_disconnected = export->exp_disconnected;
         export->exp_disconnected = 1;
-
-        if (!hlist_unhashed(&export->exp_nid_hash))
-                lustre_hash_del(export->exp_obd->obd_nid_hash,
-                                &export->exp_connection->c_peer.nid,
-                                &export->exp_nid_hash);
-
         spin_unlock(&export->exp_lock);
 
         /* class_cleanup(), abort_recovery(), and class_fail_export()
          * all end up in here, and if any of them race we shouldn't
          * call extra class_export_puts(). */
         if (already_disconnected)
-                RETURN(0);
+                GOTO(no_disconn, already_disconnected);
 
         CDEBUG(D_IOCTL, "disconnect: cookie "LPX64"\n",
                export->exp_handle.h_cookie);
 
+        if (!hlist_unhashed(&export->exp_nid_hash))
+                lustre_hash_del(export->exp_obd->obd_nid_hash,
+                                &export->exp_connection->c_peer.nid,
+                                &export->exp_nid_hash);
+
         class_export_recovery_cleanup(export);
         class_unlink_export(export);
+no_disconn:
         class_export_put(export);
         RETURN(0);
 }
@@ -1084,14 +1086,14 @@ static void class_disconnect_export_list(struct list_head *list,
                                          enum obd_option flags)
 {
         int rc;
-        struct lustre_handle fake_conn;
-        struct obd_export *fake_exp, *exp;
+        struct obd_export *exp;
         ENTRY;
 
         /* It's possible that an export may disconnect itself, but
          * nothing else will be added to this list. */
         while (!list_empty(list)) {
                 exp = list_entry(list->next, struct obd_export, exp_obd_chain);
+                /* need for safe call CDEBUG after obd_disconnect */
                 class_export_get(exp);
 
                 spin_lock(&exp->exp_lock);
@@ -1110,22 +1112,16 @@ static void class_disconnect_export_list(struct list_head *list,
                         continue;
                 }
 
-                fake_conn.cookie = exp->exp_handle.h_cookie;
-                fake_exp = class_conn2export(&fake_conn);
-                if (!fake_exp) {
-                        class_export_put(exp);
-                        continue;
-                }
-
-                spin_lock(&fake_exp->exp_lock);
-                fake_exp->exp_flags = flags;
-                spin_unlock(&fake_exp->exp_lock);
-
+                class_export_get(exp);
                 CDEBUG(D_HA, "%s: disconnecting export at %s (%p), "
                        "last request at "CFS_TIME_T"\n",
                        exp->exp_obd->obd_name, obd_export_nid2str(exp),
                        exp, exp->exp_last_request_time);
-                rc = obd_disconnect(fake_exp);
+                /* release one export reference anyway */
+                rc = obd_disconnect(exp);
+
+                CDEBUG(D_HA, "disconnected export at %s (%p): rc %d\n",
+                       obd_export_nid2str(exp), exp, rc);
                 class_export_put(exp);
         }
         EXIT;

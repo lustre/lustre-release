@@ -13,6 +13,12 @@ tbd  Sun Microsystems, Inc.
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
+Severity   : normal
+Bugzilla   : 19528
+Description: resolve race between obd_disconnect and class_disconnect_exports
+Details    : if obd_disconnect will be called to already disconnected export he
+             forget release one reference and osc module can't unloaded.
+
 Severity   : enhancement
 Bugzilla   : 18688
 Description: Allow tuning service thread via /proc
