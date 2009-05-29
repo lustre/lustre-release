@@ -397,7 +397,7 @@ static int print_pool_members(char *fs, char *pool_dir, char *pool_file)
 /*
  * Resolve lustre fsname from pathname
  */
-static int search_fsname(char *pathname, char *fsname)
+static int search_fsname(const char *pathname, char *fsname)
 {
         char *ptr;
         FILE *fp;
@@ -2574,6 +2574,10 @@ static int dev_name2dev(char *name)
         return data.ioc_dev;
 }
 
+int llapi_search_fsname(const char *pathname, char *fsname)
+{
+        return search_fsname(pathname, fsname);
+}
 
 static void do_get_mdcname(char *obd_type_name, char *obd_name,
                            char *obd_uuid, void *name)
