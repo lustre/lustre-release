@@ -516,14 +516,13 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         struct mds_export_data *med = &req->rq_export->exp_mds_data;
         struct lsd_client_data *lcd = med->med_lcd;
         struct mds_obd *mds = mds_req2mds(req);
-        struct mds_file_data *mfd;
+        struct mds_file_data *mfd = NULL;
         struct obd_export *exp = req->rq_export;
         struct obd_device *obd = exp->exp_obd;
         struct dentry *parent, *dchild;
         struct ldlm_reply *rep;
         struct mds_body *body;
         int rc;
-        struct list_head *t;
         int put_child = 1;
         ENTRY;
 
@@ -541,31 +540,57 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 return; /* error looking up parent or child */
         }
 
-        parent = mds_fid2dentry(mds, rec->ur_fid1, NULL);
-        if (IS_ERR(parent)) {
-                rc = PTR_ERR(parent);
-                LCONSOLE_WARN("Parent "LPU64"/%u lookup error %d."
-                              " Evicting client %s with export %s.\n",
-                              rec->ur_fid1->id, rec->ur_fid1->generation, rc,
-                              obd_uuid2str(&exp->exp_client_uuid),
-                              obd_export_nid2str(exp));
-                mds_export_evict(exp);
+        /* If we failed, then we must have failed opening, so don't look for
+         * file descriptor or anything, just give the client the bad news.
+         */
+        if (req->rq_status) {
                 EXIT;
                 return;
         }
 
-        dchild = mds_lookup(obd, rec->ur_name, parent, rec->ur_namelen - 1);
-        if (IS_ERR(dchild)) {
-                rc = PTR_ERR(dchild);
-                LCONSOLE_WARN("Child "LPU64"/%u lookup error %d."
-                              " Evicting client %s with export %s.\n",
-                              rec->ur_fid1->id, rec->ur_fid1->generation, rc,
-                              obd_uuid2str(&exp->exp_client_uuid),
-                              obd_export_nid2str(exp));
-                mds_export_evict(exp);
-                l_dput(parent);
-                EXIT;
-                return;
+        /* Now let's see if we have file descriptor present.
+         * No need to lookup child as it could be already deleted by another
+         * thread (bug 15010) */
+        spin_lock(&med->med_open_lock);
+        list_for_each_entry(mfd, &med->med_open_head, mfd_list) {
+                if (mfd->mfd_xid == req->rq_xid) {
+                        mds_mfd_addref(mfd);
+                        break;
+                }
+                mfd = NULL;
+        }
+        spin_unlock(&med->med_open_lock);
+
+        if (mfd && mfd->mfd_dentry && mfd->mfd_dentry->d_inode) {
+                dchild = mfd->mfd_dentry;
+                put_child = 0;
+        } else {
+                parent = mds_fid2dentry(mds, rec->ur_fid1, NULL);
+                if (IS_ERR(parent)) {
+                        rc = PTR_ERR(parent);
+                        LCONSOLE_WARN("Parent "LPU64"/%u lookup error %d."
+                                      " Evicting client %s with export %s.\n",
+                                      rec->ur_fid1->id,rec->ur_fid1->generation,
+                                      rc, obd_uuid2str(&exp->exp_client_uuid),
+                                      obd_export_nid2str(exp));
+                        mds_export_evict(exp);
+                        EXIT;
+                        return;
+                }
+
+                dchild = mds_lookup(obd, rec->ur_name, parent, rec->ur_namelen - 1);
+                if (IS_ERR(dchild)) {
+                        rc = PTR_ERR(dchild);
+                        LCONSOLE_WARN("Child "LPU64"/%u lookup error %d."
+                                      " Evicting client %s with export %s.\n",
+                                      rec->ur_fid1->id,rec->ur_fid1->generation,
+                                      rc, obd_uuid2str(&exp->exp_client_uuid),
+                                      obd_export_nid2str(exp));
+                        mds_export_evict(exp);
+                        l_dput(parent);
+                        EXIT;
+                        return;
+                }
         }
 
         if (!dchild->d_inode)
@@ -610,39 +635,6 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                         req->rq_status = rc;
         }
 
-        /* If we have -EEXIST as the status, and we were asked to create
-         * exclusively, we can tell we failed because the file already existed.
-         */
-        if (req->rq_status == -EEXIST &&
-            ((rec->ur_flags & (MDS_OPEN_CREAT | MDS_OPEN_EXCL)) ==
-             (MDS_OPEN_CREAT | MDS_OPEN_EXCL))) {
-                GOTO(out_dput, 0);
-        }
-
-        /* If we didn't get as far as trying to open, then some locking thing
-         * probably went wrong, and we'll just bail here.
-         */
-        if (!ldlm_reply_disposition(rep, DISP_OPEN_OPEN))
-                GOTO(out_dput, 0);
-
-        /* If we failed, then we must have failed opening, so don't look for
-         * file descriptor or anything, just give the client the bad news.
-         */
-        if (req->rq_status)
-                GOTO(out_dput, 0);
-
-        mfd = NULL;
-        spin_lock(&med->med_open_lock);
-        list_for_each(t, &med->med_open_head) {
-                mfd = list_entry(t, struct mds_file_data, mfd_list);
-                if (mfd->mfd_xid == req->rq_xid) {
-                        mds_mfd_addref(mfd);
-                        break;
-                }
-                mfd = NULL;
-        }
-        spin_unlock(&med->med_open_lock);
-
         /* #warning "XXX fixme" bug 2991 */
         /* Here it used to LASSERT(mfd) if exp_outstanding_reply != NULL.
          * Now that exp_outstanding_reply is a list, it's just using mfd != NULL
@@ -679,8 +671,6 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                        mfd->mfd_handle.h_cookie);
         }
 
-        mds_mfd_put(mfd);
-
         if (!ldlm_reply_disposition(rep, DISP_OPEN_LOCK))
                 GOTO(out_dput, 0);
 
@@ -692,9 +682,11 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         }
 
  out_dput:
+        if (mfd)
+                mds_mfd_put(mfd);
+
         if (put_child)
                 l_dput(dchild);
-        l_dput(parent);
         EXIT;
 }
 
