@@ -713,17 +713,6 @@ print_jbd_stat () {
     do_facet $SINGLEMDS cat /proc/fs/jbd/$dev/info | head -1
 }
 
-do_and_time () {
-   local cmd=$1
-
-   local start_ts=`date +%s`
-
-   $cmd
-
-   current_ts=`date +%s`
-   ELAPSED=`expr $current_ts - $start_ts`
-}
-
 # commit on sharing tests
 test_33a() {
     remote_mds_nodsh && skip "remote MDS with nodsh" && return
@@ -750,17 +739,16 @@ test_33a() {
         avgjbd=0
         avgtime=0
         for i in 1 2 3; do
-
             do_nodes $CLIENT1,$CLIENT2 "mkdir -p $DIR1/$tdir-\\\$(hostname)-$i"
 
             jbdold=$(print_jbd_stat)
             echo "=== START createmany $jbdold"
-            do_and_time "do_nodes $CLIENT1,$CLIENT2 createmany -o $DIR1/$tdir-\\\$(hostname)-$i/f- -r $DIR2/$tdir-\\\$(hostname)-$i/f- $nfiles"
+            local elapsed=$(do_and_time "do_nodes $CLIENT1,$CLIENT2 createmany -o $DIR1/$tdir-\\\$(hostname)-$i/f- -r $DIR2/$tdir-\\\$(hostname)-$i/f- $nfiles > /dev/null 2>&1")
             jbdnew=$(print_jbd_stat)
             jbd=$((`echo $jbdnew | cut -d" " -f1` - `echo $jbdold | cut -d" " -f1`))
-            echo "=== END   createmany $jbdnew :  $jbd transactions  nfiles $nfiles time $ELAPSED COS=$COS"
+            echo "=== END   createmany $jbdnew :  $jbd transactions  nfiles $nfiles time $elapsed COS=$COS"
             avgjbd=$(( avgjbd + jbd ))
-            avgtime=$(( avgtime + ELAPSED ))
+            avgtime=$(( avgtime + elapsed ))
         done
         eval cos${COS}_jbd=$((avgjbd / 3))
         eval cos${COS}_time=$((avgtime / 3))

@@ -3940,6 +3940,51 @@ test_101b() {
 }
 run_test 101b "check stride-io mode read-ahead ================="
 
+set_read_ahead() {
+   lctl get_param -n llite.*.max_read_ahead_mb | head -n 1
+   lctl set_param -n llite.*.max_read_ahead_mb $1 > /dev/null 2>&1
+}
+
+test_101d() {
+    local file=$DIR/$tfile
+    local size=${FILESIZE_101c:-500}
+    local ra_MB=${READAHEAD_MB:-40}
+
+    local space=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
+    [ $space -gt $((size / 1024)) ] || 
+        { skip "Need free space ${size}M, have $space" && return; }
+
+    echo Creating ${size}M test file $file
+    dd if=/dev/zero of=$file bs=1M count=$size
+    echo Cancel LRU locks on lustre client to flush the client cache
+    cancel_lru_locks osc
+
+    echo Disable read-ahead
+    local old_READAHEAD=$(set_read_ahead 0)
+
+    echo Reading the test file $file with read-ahead disabled
+    time_ra_OFF=$(do_and_time "dd if=$file of=/dev/null bs=1M count=$size")
+
+    echo Cancel LRU locks on lustre client to flush the client cache
+    cancel_lru_locks osc
+    echo Enable read-ahead with ${ra_MB}MB
+    set_read_ahead $ra_MB
+
+    echo Reading the test file $file with read-ahead enabled
+    time_ra_ON=$(do_and_time "dd if=$file of=/dev/null bs=1M count=$size")
+
+    echo read-ahead disabled time read $time_ra_OFF
+    echo read-ahead enabled  time read $time_ra_ON
+
+    set_read_ahead $old_READAHEAD
+    rm -f $file
+
+    [ $time_ra_ON -lt $time_ra_OFF ] ||
+        error "read-ahead enabled  time read (${time_ra_ON}s) is more than
+               read-ahead disabled time read (${time_ra_OFF}s) filesize ${size}M"
+}
+run_test 101d "file read with and without read-ahead enabled  ================="
+
 export SETUP_TEST102=no
 setup_test102() {
 	[ "$SETUP_TEST102" = "yes" ] && return
