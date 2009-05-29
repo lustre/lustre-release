@@ -510,7 +510,7 @@ static int filter_client_free(struct obd_export *exp)
         if (!(exp->exp_flags & OBD_OPT_FAILOVER)) {
                 /* Don't force sync on disconnect if aborting recovery,
                  * or it does num_clients * num_osts.  b=17194 */
-                int need_sync = (!exp->exp_libclient || exp->exp_need_sync) &&
+                int need_sync = exp->exp_need_sync &&
                                 !(exp->exp_flags&OBD_OPT_ABORT_RECOV);
 
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
