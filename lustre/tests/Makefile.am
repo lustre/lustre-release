@@ -16,6 +16,7 @@ noinst_SCRIPTS += replay-ost-single.sh replay-single.sh run-llog.sh sanityN.sh
 noinst_SCRIPTS += large-scale.sh runracer replay-vbr.sh
 noinst_SCRIPTS += performance-sanity.sh mdsrate-create-small.sh
 noinst_SCRIPTS += mdsrate-create-large.sh mdsrate-lookup-1dir.sh
+noinst_SCRIPTS += mdsrate-lookup-10dirs.sh
 noinst_SCRIPTS += mdsrate-stat-small.sh mdsrate-stat-large.sh
 noinst_SCRIPTS += lockorder.sh socketclient socketserver runmultiop_bg_pause
 noinst_SCRIPTS += sanity-sec.sh sanity-gss.sh krb5_login.sh setup_kerberos.sh
