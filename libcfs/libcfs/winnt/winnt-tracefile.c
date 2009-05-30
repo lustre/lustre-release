@@ -40,18 +40,6 @@
 #include <libcfs/libcfs.h>
 #include "tracefile.h"
 
-#ifndef get_cpu
-#define get_cpu() smp_processor_id()
-#define put_cpu() do { } while (0)
-#endif
-
-/* only define one trace_data type for windows */
-enum {
-        TCD_TYPE_PASSIVE = 0,
-        TCD_TYPE_DISPATCH,
-        TCD_TYPE_MAX
-};
-
 /* percents to share the total debug memory for each type */
 static unsigned int pages_factor[TCD_TYPE_MAX] = {
         90,  /* 90% pages for TCD_TYPE_PASSIVE */
@@ -147,42 +135,13 @@ void tracefile_write_unlock()
 	up_write(&tracefile_sem);
 }
 
-char *
-trace_get_console_buffer(void)
+trace_buf_type_t
+trace_buf_idx_get()
 {
-        int cpu  = get_cpu();
-        int type = 0;
-        
         if (KeGetCurrentIrql() >= DISPATCH_LEVEL)
-                type = TCD_TYPE_DISPATCH;
+                return TCD_TYPE_DISPATCH;
         else
-                type = TCD_TYPE_PASSIVE;
-	return trace_console_buffers[cpu][type];
-}
-
-void
-trace_put_console_buffer(char *buffer)
-{
-	put_cpu();
-}
-
-struct trace_cpu_data *
-trace_get_tcd(void)
-{
-        int cpu  = get_cpu();
-        int type = 0;
-        
-        if (KeGetCurrentIrql() >= DISPATCH_LEVEL)
-                type = TCD_TYPE_DISPATCH;
-        else
-                type = TCD_TYPE_PASSIVE;
-	return &(*trace_data[type])[cpu].tcd;
-}
-
-void
-trace_put_tcd (struct trace_cpu_data *tcd)
-{
-	put_cpu();
+                return TCD_TYPE_PASSIVE;
 }
 
 int trace_lock_tcd(struct trace_cpu_data *tcd)

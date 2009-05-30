@@ -40,14 +40,6 @@
 #include <libcfs/libcfs.h>
 #include "tracefile.h"
 
-/* three types of trace_data in linux */
-enum {
-	TCD_TYPE_PROC = 0,
-	TCD_TYPE_SOFTIRQ,
-	TCD_TYPE_IRQ,
-	TCD_TYPE_MAX
-};
-
 /* percents to share the total debug memory for each type */
 static unsigned int pages_factor[TCD_TYPE_MAX] = {
 	80,  /* 80% pages for TCD_TYPE_PROC */
@@ -55,7 +47,7 @@ static unsigned int pages_factor[TCD_TYPE_MAX] = {
 	10   /* 10% pages for TCD_TYPE_IRQ */
 };
 
-char *trace_console_buffers[NR_CPUS][3];
+char *trace_console_buffers[NR_CPUS][TCD_TYPE_MAX];
 
 struct rw_semaphore tracefile_sem;
 
@@ -144,54 +136,15 @@ void tracefile_write_unlock()
 	up_write(&tracefile_sem);
 }
 
-char *
-trace_get_console_buffer(void)
+trace_buf_type_t
+trace_buf_idx_get()
 {
-	int  cpu = cfs_get_cpu();
-	int  idx;
-
-	if (in_irq()) {
-		idx = 0;
-	} else if (in_softirq()) {
-		idx = 1;
-	} else {
-		idx = 2;
-	}
-
-	return trace_console_buffers[cpu][idx];
-}
-
-void
-trace_put_console_buffer(char *buffer)
-{
-	cfs_put_cpu();
-}
-
-struct trace_cpu_data *
-trace_get_tcd(void)
-{
-	struct trace_cpu_data *tcd;
-	int cpu;
-
-	cpu = cfs_get_cpu();
 	if (in_irq())
-		tcd = &(*trace_data[TCD_TYPE_IRQ])[cpu].tcd;
+		return TCD_TYPE_IRQ;
 	else if (in_softirq())
-		tcd = &(*trace_data[TCD_TYPE_SOFTIRQ])[cpu].tcd;
+		return TCD_TYPE_SOFTIRQ;
 	else
-		tcd = &(*trace_data[TCD_TYPE_PROC])[cpu].tcd;
-
-	trace_lock_tcd(tcd);
-
-	return tcd;
-}
-
-void
-trace_put_tcd (struct trace_cpu_data *tcd)
-{
-	trace_unlock_tcd(tcd);
-
-	cfs_put_cpu();
+		return TCD_TYPE_PROC;
 }
 
 int trace_lock_tcd(struct trace_cpu_data *tcd)

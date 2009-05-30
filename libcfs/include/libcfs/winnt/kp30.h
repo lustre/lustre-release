@@ -92,6 +92,14 @@ void libcfs_unregister_panic_notifier();
 
 #define cfs_assert     _ASSERT
 
+#ifndef get_cpu
+#define cfs_get_cpu() smp_processor_id()
+#define cfs_put_cpu() do { } while (0)
+#else
+#define cfs_get_cpu() get_cpu()
+#define cfs_put_cpu() put_cpu()
+#endif
+
 #endif /* End of !__KERNEL__ */
 
 /******************************************************************************/

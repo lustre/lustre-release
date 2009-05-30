@@ -39,6 +39,14 @@
 
 #include <libcfs/libcfs.h>
 
+#if defined(__linux__)
+#include "linux/linux-tracefile.h"
+#elif defined(__WINNT__)
+#include "winnt/winnt-tracefile.h"
+#else
+#error Unsupported operating system.
+#endif
+
 /* trace file lock routines */
 
 #define TRACEFILE_NAME_SIZE 1024
@@ -256,12 +264,51 @@ extern void set_ptldebug_header(struct ptldebug_header *header,
 extern void print_to_console(struct ptldebug_header *hdr, int mask, const char *buf,
 			     int len, const char *file, const char *fn);
 
-extern struct trace_cpu_data *trace_get_tcd(void);
-extern void trace_put_tcd(struct trace_cpu_data *tcd);
 extern int trace_lock_tcd(struct trace_cpu_data *tcd);
 extern void trace_unlock_tcd(struct trace_cpu_data *tcd);
-extern char *trace_get_console_buffer(void);
-extern void trace_put_console_buffer(char *buffer);
+
+/**
+ * trace_buf_type_t, trace_buf_idx_get() and trace_console_buffers[][]
+ * are not public libcfs API; they should be defined in
+ * platform-specific tracefile include files
+ * (see, for example, linux-tracefile.h).
+ */
+
+extern char *trace_console_buffers[NR_CPUS][TCD_TYPE_MAX];
+extern trace_buf_type_t trace_buf_idx_get(void);
+
+static inline char *
+trace_get_console_buffer(void)
+{
+        return trace_console_buffers[cfs_get_cpu()][trace_buf_idx_get()];
+}
+
+static inline void
+trace_put_console_buffer(char *buffer)
+{
+        cfs_put_cpu();
+}
+
+extern union trace_data_union (*trace_data[TCD_MAX_TYPES])[NR_CPUS];
+
+static inline struct trace_cpu_data *
+trace_get_tcd(void)
+{
+	struct trace_cpu_data *tcd =
+                &(*trace_data[trace_buf_idx_get()])[cfs_get_cpu()].tcd;
+
+	trace_lock_tcd(tcd);
+
+	return tcd;
+}
+
+static inline void
+trace_put_tcd (struct trace_cpu_data *tcd)
+{
+	trace_unlock_tcd(tcd);
+
+	cfs_put_cpu();
+}
 
 int trace_refill_stock(struct trace_cpu_data *tcd, int gfp,
 		       struct list_head *stock);
