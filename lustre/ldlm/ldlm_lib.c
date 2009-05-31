@@ -1512,7 +1512,6 @@ static struct ptlrpc_request *target_next_replay_req(struct obd_device *obd)
         } else if (!list_empty(&obd->obd_req_replay_queue)) {
                 req = list_entry(obd->obd_req_replay_queue.next,
                                  struct ptlrpc_request, rq_list);
-                target_exp_dequeue_req_replay(req);
                 list_del_init(&req->rq_list);
                 obd->obd_requests_queued_for_recovery--;
         } else {
@@ -1648,8 +1647,19 @@ static int handle_recovery_req(struct ptlrpc_thread *thread,
         if (!req_replay_done(req->rq_export) ||
             !lock_replay_done(req->rq_export))
                 reset_recovery_timer(class_exp2obd(req->rq_export),
-                       AT_OFF ? obd_timeout :
+                                     AT_OFF ? obd_timeout :
                        at_get(&req->rq_rqbd->rqbd_service->srv_at_estimate), 1);
+
+        /**
+         * bz18031: increase next_recovery_transno before ptlrpc_free_clone()
+         * will drop exp_rpc reference
+         */
+        if (!req_replay_done(req->rq_export)) {
+                spin_lock_bh(&req->rq_export->exp_obd->obd_processing_task_lock);
+                req->rq_export->exp_obd->obd_next_recovery_transno++;
+                spin_unlock_bh(&req->rq_export->exp_obd->obd_processing_task_lock);
+                target_exp_dequeue_req_replay(req);
+        }
         ptlrpc_free_clone(req);
         RETURN(0);
 }
@@ -1725,9 +1735,6 @@ static int target_recovery_thread(void *arg)
                 handle_recovery_req(thread, req,
                                     trd->trd_recovery_handler);
                 obd->obd_replayed_requests++;
-                spin_lock_bh(&obd->obd_processing_task_lock);
-                obd->obd_next_recovery_transno++;
-                spin_unlock_bh(&obd->obd_processing_task_lock);
         }
 
         /* If some clients haven't replayed requests in time, evict them */
