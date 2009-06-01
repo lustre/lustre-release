@@ -1752,6 +1752,42 @@ int ll_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
         RETURN(rc);
 }
 
+int ll_fid2path(struct obd_export *exp, void *arg)
+{
+        struct getinfo_fid2path *gfout, *gfin;
+        int outsize, rc;
+        ENTRY;
+
+        /* Need to get the buflen */
+        OBD_ALLOC_PTR(gfin);
+        if (gfin == NULL)
+                RETURN(-ENOMEM);
+        if (copy_from_user(gfin, arg, sizeof(*gfin))) {
+                OBD_FREE_PTR(gfin);
+                RETURN(-EFAULT);
+        }
+
+        outsize = sizeof(*gfout) + gfin->gf_pathlen;
+        OBD_ALLOC(gfout, outsize);
+        if (gfout == NULL) {
+                OBD_FREE_PTR(gfin);
+                RETURN(-ENOMEM);
+        }
+        memcpy(gfout, gfin, sizeof(*gfout));
+        OBD_FREE_PTR(gfin);
+
+        /* Call mdc_iocontrol */
+        rc = obd_iocontrol(OBD_IOC_FID2PATH, exp, outsize, gfout, NULL);
+        if (rc)
+                GOTO(gf_free, rc);
+        if (copy_to_user(arg, gfout, outsize))
+                rc = -EFAULT;
+
+gf_free:
+        OBD_FREE(gfout, outsize);
+        RETURN(rc);
+}
+
 int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                   unsigned long arg)
 {
@@ -1912,6 +1948,9 @@ error:
 
                 RETURN(0);
         }
+        case OBD_IOC_FID2PATH:
+                RETURN(ll_fid2path(ll_i2mdexp(inode), (void *)arg));
+
         default: {
                 int err;
 

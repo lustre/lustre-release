@@ -5341,62 +5341,18 @@ static int mdt_obd_notify(struct obd_device *host,
         RETURN(0);
 }
 
-/* This routine is quite similar to mdc_ioc_fid2path() */
-static int mdt_ioc_fid2path(struct lu_env *env, struct mdt_device *mdt,
-                            struct obd_ioctl_data *data)
-{
-        struct getinfo_fid2path *fp = NULL;
-        int pathlen;
-        int alloclen;
-        int rc;
-
-        ENTRY;
-
-        pathlen = data->ioc_plen1;
-        if (pathlen > PATH_MAX)
-                GOTO(out, rc = -EINVAL);
-        if (pathlen < 2)
-                GOTO(out, rc = -EINVAL);
-
-        alloclen = sizeof(*fp) + pathlen;
-        OBD_ALLOC(fp, alloclen);
-        if (fp == NULL)
-                GOTO(out, rc = -ENOMEM);
-
-        memcpy(&fp->gf_fid, data->ioc_inlbuf1, sizeof(struct lu_fid));
-        memcpy(&fp->gf_recno, data->ioc_inlbuf2, sizeof(fp->gf_recno));
-        memcpy(&fp->gf_linkno, data->ioc_inlbuf3,
-               sizeof(fp->gf_linkno));
-        fp->gf_pathlen = pathlen;
-
-        if (!fid_is_sane(&fp->gf_fid))
-                GOTO(out, rc = -EINVAL);
-
-        rc = mdt_fid2path(env, mdt, fp);
-
-        if (!rc && copy_to_user(data->ioc_pbuf1, fp->gf_path, pathlen))
-                GOTO(out, rc = -EFAULT);
-        memcpy(data->ioc_inlbuf2, &fp->gf_recno, sizeof(fp->gf_recno));
-        memcpy(data->ioc_inlbuf3, &fp->gf_linkno, sizeof(fp->gf_linkno));
-out:
-        if (fp)
-                OBD_FREE(fp, alloclen);
-        RETURN(rc);
-}
-
 static int mdt_rpc_fid2path(struct mdt_thread_info *info, void *key,
-                            int keylen, void *val, int vallen)
+                            void *val, int vallen)
 {
         struct lu_env      env;
         struct mdt_device *mdt = mdt_dev(info->mti_exp->exp_obd->obd_lu_dev);
-        struct ptlrpc_request *req = mdt_info_req(info);
         struct getinfo_fid2path *fpout, *fpin;
         int rc = 0;
 
         fpin = key + size_round(sizeof(KEY_FID2PATH));
         fpout = val;
 
-        if (lustre_msg_swabbed(req->rq_reqmsg))
+        if (lustre_msg_swabbed(mdt_info_req(info)->rq_reqmsg))
                 lustre_swab_fid2path(fpin);
 
         memcpy(fpout, fpin, sizeof(*fpin));
@@ -5466,16 +5422,12 @@ out:
 
 static int mdt_get_info(struct mdt_thread_info *info)
 {
+        struct ptlrpc_request *req = mdt_info_req(info);
         char *key;
-        int keysize;
         int keylen;
-        __u32 *valin;
-        __u32 vallen;
-        int valsize;
+        __u32 *vallen;
         void *valout;
         int rc;
-        struct ptlrpc_request *req = mdt_info_req(info);
-
         ENTRY;
 
         key = req_capsule_client_get(info->mti_pill, &RMF_GETINFO_KEY);
@@ -5483,25 +5435,17 @@ static int mdt_get_info(struct mdt_thread_info *info)
                 CDEBUG(D_IOCTL, "No GETINFO key");
                 RETURN(-EFAULT);
         }
-        keysize = req_capsule_get_size(info->mti_pill, &RMF_GETINFO_KEY,
+        keylen = req_capsule_get_size(info->mti_pill, &RMF_GETINFO_KEY,
                                       RCL_CLIENT);
-        keylen = strnlen(key, keysize);
 
-        valin = req_capsule_client_get(info->mti_pill, &RMF_GETINFO_VALLEN);
-        if (valin == NULL) {
+        vallen = req_capsule_client_get(info->mti_pill, &RMF_GETINFO_VALLEN);
+        if (vallen == NULL) {
                 CDEBUG(D_IOCTL, "Unable to get RMF_GETINFO_VALLEN buffer");
                 RETURN(-EFAULT);
         }
-        valsize = req_capsule_get_size(info->mti_pill, &RMF_GETINFO_VALLEN,
-                                      RCL_CLIENT);
-        if (valsize != sizeof(vallen)) {
-                CDEBUG(D_IOCTL, "RMF_GETINFO_VALLEN has invalid size");
-                RETURN(-EINVAL);
-        }
-        vallen = *valin;
 
         req_capsule_set_size(info->mti_pill, &RMF_GETINFO_VAL, RCL_SERVER,
-                             vallen);
+                             *vallen);
         rc = req_capsule_server_pack(info->mti_pill);
         valout = req_capsule_server_get(info->mti_pill, &RMF_GETINFO_VAL);
         if (valout == NULL) {
@@ -5510,7 +5454,7 @@ static int mdt_get_info(struct mdt_thread_info *info)
         }
 
         if (KEY_IS(KEY_FID2PATH))
-                rc = mdt_rpc_fid2path(info, key, keysize, valout, vallen);
+                rc = mdt_rpc_fid2path(info, key, valout, *vallen);
         else
                 rc = -EINVAL;
 
@@ -5570,9 +5514,6 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 CERROR("Aborting recovery for device %s\n", obd->obd_name);
                 target_stop_recovery_thread(obd);
                 rc = 0;
-                break;
-        case OBD_IOC_FID2PATH:
-                rc = mdt_ioc_fid2path(&env, mdt, karg);
                 break;
         case OBD_IOC_CHANGELOG_REG:
         case OBD_IOC_CHANGELOG_DEREG:

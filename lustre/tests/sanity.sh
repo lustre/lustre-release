@@ -6155,8 +6155,8 @@ test_161() {
     ln $DIR/$tdir/$tfile $DIR/$tdir/foo1/luna
     ln $DIR/$tdir/$tfile $DIR/$tdir/foo2/thor
     local FID=$($LFS path2fid $DIR/$tdir/$tfile | tr -d '[')
-    if [ "$($LFS fid2path ${mds1_svc} $FID | wc -l)" != "5" ]; then
-	$LFS fid2path ${mds1_svc} $FID
+    if [ "$($LFS fid2path $DIR $FID | wc -l)" != "5" ]; then
+	$LFS fid2path $DIR $FID
 	err17935 "bad link ea"
     fi
     # middle
@@ -6167,9 +6167,9 @@ test_161() {
     rm $DIR/$tdir/$tfile
     # rename
     mv $DIR/$tdir/foo1/sofia $DIR/$tdir/foo2/maggie
-    if [ "$($LFS fid2path ${mds1_svc} --link 1 $FID)" != "/$tdir/foo2/maggie" ]
+    if [ "$($LFS fid2path $DIR --link 1 $FID)" != "/$tdir/foo2/maggie" ]
 	then
-	$LFS fid2path ${mds1_svc} $FID
+	$LFS fid2path $DIR $FID
 	err17935 "bad link rename"
     fi
     rm $DIR/$tdir/foo2/maggie
@@ -6178,7 +6178,7 @@ test_161() {
     local longname=filename_avg_len_is_thirty_two_
     createmany -l$DIR/$tdir/foo1/luna $DIR/$tdir/foo2/$longname 1000 || \
 	error "failed to hardlink many files"
-    links=$($LFS fid2path ${mds1_svc} $FID | wc -l)
+    links=$($LFS fid2path $DIR $FID | wc -l)
     echo -n "${links}/1000 links in link EA"
     [ ${links} -gt 60 ] || err17935 "expected at least 60 links in link EA"
     unlinkmany $DIR/$tdir/foo2/$longname 1000 || \
@@ -6213,24 +6213,25 @@ test_162() {
     mkdir -p $DIR/$tdir/d2/a/b/c
     mkdir -p $DIR/$tdir/d2/p/q/r
     FID=$($LFS path2fid $DIR/$tdir/d2/$tfile | tr -d '[')
-    check_path "/$tdir/d2/$tfile" ${mds1_svc} $FID --link 0
+    check_path "/$tdir/d2/$tfile" $DIR $FID --link 0
     ln $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/p/q/r/hlink
     mv $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/a/b/c/new_file
     FID=$($LFS path2fid $DIR/$tdir/d2/a/b/c/new_file | tr -d '[')
-    check_path "/$tdir/d2/a/b/c/new_file" ${mds1_svc} $FID --link 1
-    check_path "/$tdir/d2/p/q/r/hlink" ${mds1_svc} $FID --link 0
+    # fid2path dir/fsname should both work
+    check_path "/$tdir/d2/a/b/c/new_file" $FSNAME $FID --link 1
+    check_path "/$tdir/d2/p/q/r/hlink" $DIR $FID --link 0
     # check that there are 2 links
-    ${LFS} fid2path ${mds1_svc} $FID | wc -l | grep -q 2 || \
+    ${LFS} fid2path $DIR $FID | wc -l | grep -q 2 || \
 	err17935 "expected 2 links"
 
     rm $DIR/$tdir/d2/p/q/r/hlink
-    check_path "/$tdir/d2/a/b/c/new_file" ${mds1_svc} $FID --link 0
+    check_path "/$tdir/d2/a/b/c/new_file" $DIR $FID --link 0
     # Doesnt work with CMD yet: 17935
     return 0
 }
 run_test 162 "path lookup sanity"
 
-test_154() {
+test_169() {
 	# do directio so as not to populate the page cache
 	log "creating a 10 Mb file"
 	multiop $DIR/$tfile oO_CREAT:O_DIRECT:O_RDWR:w$((10*1048576))c || error "multiop failed while creating a file"
@@ -6245,7 +6246,7 @@ test_154() {
 	log "removing the temporary file"
 	rm -rf $DIR/$tfile || error "tmp file removal failed"
 }
-run_test 154 "parallel read and truncate should not deadlock ==="
+run_test 169 "parallel read and truncate should not deadlock ==="
 
 test_170() {
         $LCTL clear	# bug 18514

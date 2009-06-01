@@ -179,7 +179,6 @@ extern int llapi_changelog_clear(const char *mdtname, const char *idstr,
                                  long long endrec);
 extern int llapi_changelog_register(const char *mdtname);
 extern int llapi_changelog_unregister(const char *mdtname, int id);
-struct lu_fid;
 extern int llapi_fid2path(char *device, char *fid, char *path, int pathlen,
                           long long *recno, int *linkno);
 #endif

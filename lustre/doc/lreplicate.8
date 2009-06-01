@@ -5,9 +5,11 @@ lreplicate \- Utility to replicate a Lustre Filesystem
 .br
 .B lreplicate --source|-s <src> --target|-t <tgt> 
 .br
-.B\t\t\t --mdt|-m <mdt>  --user|-u <user id> --xattr|-x <yes|no>
+.B\t\t\t --mdt|-m <mdt>  [--user|-u <user id>] 
 .br
-.B\t\t\t --verbose|-v --statuslog|-l <log> --dry-run
+.B\t\t\t [--xattr|-x <yes|no>] [--verbose|-v]
+.br
+.B\t\t\t [--statuslog|-l <log>] [--dry-run] [--abort-on-err]
 .br
 
 .br
@@ -85,6 +87,10 @@ Produce a verbose output.
 .B --dry-run
 .br
 Shows what the program would do without actually replicating data.
+
+.B --abort-on-err
+.br
+Stop processing upon first error.  Default is to continue processing.
 
 .SH EXAMPLES
 

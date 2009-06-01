@@ -2375,17 +2375,6 @@ struct changelog_setinfo {
         __u32 cs_id;
 } __attribute__((packed));
 
-/** fid2path request/reply structure */
-struct getinfo_fid2path {
-        struct lu_fid   gf_fid;
-        __u64           gf_recno;
-        __u32           gf_linkno;
-        __u32           gf_pathlen;
-        char            gf_path[0];
-};
-
-void lustre_swab_fid2path (struct getinfo_fid2path *gf);
-
 /** changelog record */
 struct llog_changelog_rec {
         struct llog_rec_hdr   cr_hdr;
@@ -2768,6 +2757,18 @@ struct link_ea_entry {
         /** logically after lee_parent_fid; don't use directly */
         char               lee_name[0];
 };
+
+/** fid2path request/reply structure */
+struct getinfo_fid2path {
+        struct lu_fid   gf_fid;
+        __u64           gf_recno;
+        __u32           gf_linkno;
+        __u32           gf_pathlen;
+        char            gf_path[0];
+} __attribute__((packed));
+
+void lustre_swab_fid2path (struct getinfo_fid2path *gf);
+
 
 #endif
 /** @} lustreidl */

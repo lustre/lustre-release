@@ -1236,6 +1236,8 @@ icc_free:
                 OBD_FREE_PTR(icc);
                 RETURN(rc);
         }
+        case OBD_IOC_FID2PATH:
+                RETURN(ll_fid2path(ll_i2mdexp(inode), (void *)arg));
 
         default:
                 RETURN(obd_iocontrol(cmd, sbi->ll_dt_exp,0,NULL,(void *)arg));

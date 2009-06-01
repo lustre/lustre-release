@@ -231,7 +231,8 @@ command_t cmdlist[] = {
          "Resolve the full path to a given FID. For a specific hardlink "
          "specify link number <linkno>.\n"
          /* "For a historical name, specify changelog record <recno>.\n" */
-         "usage: fid2path <mdtname> <fid> [--link <linkno>]"/*[--rec <recno>]*/},
+         "usage: fid2path <fsname|rootpath> <fid> [--link <linkno>]"
+                /*[--rec <recno>]*/},
         {"path2fid", lfs_path2fid, 0, "Display the fid for a given path.\n"
          "usage: path2fid <path>"},
         {"help", Parser_help, 0, "help"},
@@ -2406,8 +2407,11 @@ static int lfs_changelog(int argc, char **argv)
                 endrec = strtoll(argv[optind++], NULL, 10);
 
         fd = llapi_changelog_open(mdd, startrec);
-        if (fd < 0)
+        if (fd < 0) {
+                fprintf(stderr, "%s Can't open changelog: %s\n", argv[0],
+                        strerror(errno = -fd));
                 return fd;
+        }
 
         while ((len = get_next_full_line(fd, &ptr)) >= 0) {
                 if (len == 0) {
@@ -2445,13 +2449,18 @@ static int lfs_changelog(int argc, char **argv)
 static int lfs_changelog_clear(int argc, char **argv)
 {
         long long endrec;
+        int rc;
 
         if (argc != 4)
                 return CMD_HELP;
 
         endrec = strtoll(argv[3], NULL, 10);
 
-        return(llapi_changelog_clear(argv[1], argv[2], endrec));
+        rc = llapi_changelog_clear(argv[1], argv[2], endrec);
+        if (rc)
+                fprintf(stderr, "%s error: %s\n", argv[0],
+                        strerror(errno = -rc));
+        return rc;
 }
 
 static int lfs_fid2path(int argc, char **argv)
@@ -2512,7 +2521,7 @@ static int lfs_fid2path(int argc, char **argv)
                 }
 
                 if (printcur)
-                        fprintf(stdout, "%lld %s\n", recno, path);
+                        fprintf(stdout, "%lld %s\n", rectmp, path);
                 else
                         fprintf(stdout, "%s\n", path);
 

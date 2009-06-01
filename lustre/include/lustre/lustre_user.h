@@ -362,6 +362,6 @@ struct ioc_changelog_clear {
 # define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
 #endif
 
-#define mdd_dot_lustre_name ".lustre"
+#define dot_lustre_name ".lustre"
 
 #endif /* _LUSTRE_USER_H */

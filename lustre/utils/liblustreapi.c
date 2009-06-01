@@ -66,7 +66,6 @@
 #include <unistd.h>
 #endif
 
-#include <libcfs/libcfsutil.h>  /* l_ioctl */
 #include <liblustre.h>
 #include <lnet/lnetctl.h>
 #include <obd.h>
@@ -374,7 +373,6 @@ int llapi_file_create_pool(const char *name, unsigned long stripe_size,
         return 0;
 }
 
-
 static int print_pool_members(char *fs, char *pool_dir, char *pool_file)
 {
         char path[PATH_MAX + 1];
@@ -395,13 +393,20 @@ static int print_pool_members(char *fs, char *pool_dir, char *pool_file)
 }
 
 /*
- * Resolve lustre fsname from pathname
+ * Find the fsname, the full path, and/or an open fd.
+ * Either the fsname or path must not be NULL
  */
-static int search_fsname(const char *pathname, char *fsname)
+#define WANT_PATH   0x1
+#define WANT_FSNAME 0x2
+#define WANT_FD     0x4
+static int get_root_path(int want, char *fsname, int *outfd, char *path)
 {
+        struct mntent mnt;
+        char buf[PATH_MAX];
         char *ptr;
         FILE *fp;
-        struct mntent *mnt = NULL;
+        int fd;
+        int rc = -ENODEV;
 
         /* get the mount point */
         fp = setmntent(MOUNTED, "r");
@@ -411,67 +416,54 @@ static int search_fsname(const char *pathname, char *fsname)
                            strerror (errno));
                  return -EIO;
         }
-        mnt = getmntent(fp);
-        while ((feof(fp) == 0) && ferror(fp) == 0) {
-                if (llapi_is_lustre_mnt(mnt)) {
-                        /* search by pathname */
-                        if (strncmp(mnt->mnt_dir, pathname,
-                                    max(strlen(pathname),
-                                        strlen(mnt->mnt_dir))) == 0) {
-                                ptr = strchr(mnt->mnt_fsname, '/');
-                                if (ptr == NULL)
-                                        return -EINVAL;
-                                ptr++;
-                                strcpy(fsname, ptr);
-                                return 0;
+        while (1) {
+                if (getmntent_r(fp, &mnt, buf, sizeof(buf)) == NULL)
+                        break;
+
+                if (!llapi_is_lustre_mnt(&mnt))
+                        continue;
+
+                ptr = strrchr(mnt.mnt_fsname, '/');
+                if (!ptr) {
+                        rc = -EINVAL;
+                        break;
+                }
+                ptr++;
+
+                /* If path was specified and matches, store the fsname */
+                if ((want & WANT_FSNAME) && (strcmp(mnt.mnt_dir, path) == 0))
+                        strcpy(fsname, ptr);
+                /* Else check the fsname for a match */
+                else if (strcmp(ptr, fsname) != 0)
+                        continue;
+
+                /* Found it */
+                rc = 0;
+                if (want & WANT_PATH)
+                        strcpy(path, mnt.mnt_dir);
+                if (want & WANT_FD) {
+                        fd = open(mnt.mnt_dir,
+                                  O_RDONLY | O_DIRECTORY | O_NONBLOCK);
+                        if (fd < 0) {
+                                perror("open");
+                                rc = -errno;
+                        } else {
+                                *outfd = fd;
                         }
                 }
-                mnt = getmntent(fp);
+                break;
         }
         endmntent(fp);
-        return -ENOENT;
+        if (rc)
+                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                          "can't find fs root for '%s': %d",
+                          (want & WANT_PATH) ? fsname : path, rc);
+        return rc;
 }
 
-/*
- * Return an open fd to the named Lustre fs root
- */
-static int get_root_fd(char *fsname)
+int llapi_search_fsname(const char *pathname, char *fsname)
 {
-        char *ptr;
-        FILE *fp;
-        struct mntent *mnt = NULL;
-        int fd;
-
-        /* get the mount point */
-        fp = setmntent(MOUNTED, "r");
-        if (fp == NULL) {
-                 llapi_err(LLAPI_MSG_ERROR,
-                           "setmntent(%s) failed: %s:", MOUNTED,
-                           strerror (errno));
-                 return -EIO;
-        }
-        mnt = getmntent(fp);
-        while ((feof(fp) == 0) && ferror(fp) == 0) {
-                if (llapi_is_lustre_mnt(mnt)) {
-                        ptr = strrchr(mnt->mnt_fsname, '/');
-                        if (!ptr)
-                                return -EINVAL;
-                        ptr++;
-
-                        if (strcmp(ptr, fsname) == 0) {
-                                fd = open(mnt->mnt_dir, O_RDONLY | O_DIRECTORY);
-                                if (fd < 0) {
-                                        perror("open");
-                                        return -errno;
-                                }
-                                endmntent(fp);
-                                return fd;
-                        }
-                }
-                mnt = getmntent(fp);
-        }
-        endmntent(fp);
-        return -ENOENT;
+        return get_root_path(WANT_FSNAME, fsname, NULL, (char *)pathname);
 }
 
 /* return the first file matching this pattern */
@@ -504,16 +496,14 @@ static int poolpath(char *fsname, char *pathname, char *pool_pathname)
         char buffer[PATH_MAX];
 
         if (fsname == NULL) {
-                rc = search_fsname(pathname, buffer);
+                rc = get_root_path(WANT_FSNAME, buffer, NULL, pathname);
                 if (rc != 0)
                         return rc;
                 fsname = buffer;
                 strcpy(pathname, fsname);
         }
 
-        snprintf(pattern, PATH_MAX,
-                 "/proc/fs/lustre/lov/%s-*/pools",
-                 fsname);
+        snprintf(pattern, PATH_MAX, "/proc/fs/lustre/lov/%s-*/pools", fsname);
         rc = first_match(pattern, buffer);
         if (rc)
                 return rc;
@@ -541,19 +531,15 @@ int llapi_poollist(char *name)
                         return -EINVAL;
                 if (!realpath(name, rname)) {
                         rc = -errno;
-                        llapi_err(LLAPI_MSG_ERROR,
-                                  "llapi_poollist: invalid path '%s'",
-                                  name);
+                        llapi_err(LLAPI_MSG_ERROR, "invalid path '%s'", name);
                         return rc;
                 }
 
                 rc = poolpath(NULL, rname, pathname);
                 if (rc != 0) {
                         errno = -rc;
-                        llapi_err(LLAPI_MSG_ERROR,
-                                  "llapi_poollist: '%s' is not"
-                                  " a Lustre filesystem",
-                                  name);
+                        llapi_err(LLAPI_MSG_ERROR, "'%s' is not"
+                                  " a Lustre filesystem", name);
                         return rc;
                 }
                 fsname = rname;
@@ -567,18 +553,10 @@ int llapi_poollist(char *name)
                         poolname++;
                 }
                 rc = poolpath(fsname, NULL, pathname);
-                if (rc != 0) {
-                        errno = -rc;
-                        llapi_err(LLAPI_MSG_ERROR,
-                                  "llapi_poollist: Lustre filesystem '%s'"
-                                  " not found", name);
-                        return rc;
-                }
         }
         if (rc != 0) {
                 errno = -rc;
-                llapi_err(LLAPI_MSG_ERROR,
-                          "llapi_poollist: Lustre filesystem '%s' not found",
+                llapi_err(LLAPI_MSG_ERROR, "Lustre filesystem '%s' not found",
                           name);
                 return rc;
         }
@@ -1216,7 +1194,7 @@ static int llapi_semantic_traverse(char *path, int size, DIR *parent,
                         continue;
 
                 /* Don't traverse .lustre directory */
-                if (!(strcmp(dent->d_name, mdd_dot_lustre_name)))
+                if (!(strcmp(dent->d_name, dot_lustre_name)))
                         continue;
 
                 path[len] = 0;
@@ -2441,23 +2419,32 @@ static int get_mdtname(const char *name, char *format, char *buf)
         char suffix[]="-MDT0000";
         int len = strlen(name);
 
-        if (len > 16) {
-                llapi_err(LLAPI_MSG_ERROR, "bad MDT name |%s|\n", name);
-                return -EINVAL;
+        if (len > 8) {
+                if ((len <= 16) && strncmp(name + len - 8, "-MDT", 4) == 0) {
+                        suffix[0] = '\0';
+                } else {
+                        /* Not enough room to add suffix */
+                        llapi_err(LLAPI_MSG_ERROR, "MDT name too long |%s|\n",
+                                  name);
+                        return -EINVAL;
+                }
         }
-
-        if ((len > 8) && (strncmp(name + len - 8, "-MDT", 4) == 0))
-                suffix[0] = '\0';
 
         return sprintf(buf, format, name, suffix);
 }
 
 
 /* Return a file descriptor to a readable changelog */
-int llapi_changelog_open(const char *mdtname, long long startrec)
+int llapi_changelog_open(const char *device, long long startrec)
 {
         char path[256];
+        char mdtname[17];
         int rc, fd;
+
+        if (device[0] == '/')
+                rc = get_root_path(WANT_FSNAME, mdtname, NULL, (char *)device);
+        else
+                strncpy(mdtname, device, sizeof(mdtname));
 
         /* Use either the mdd changelog (preferred) or a client mdc changelog */
         if (get_mdtname(mdtname,
@@ -2486,6 +2473,7 @@ int llapi_changelog_clear(const char *mdtname, const char *idstr,
                           long long endrec)
 {
         struct ioc_changelog_clear data;
+        char fsname[17];
         char *ptr;
         int id, fd, index, rc;
 
@@ -2504,17 +2492,23 @@ int llapi_changelog_clear(const char *mdtname, const char *idstr,
                 return -EINVAL;
         }
 
-        ptr = strstr(mdtname, "-MDT");
-        if (!ptr)
-                return -EINVAL;
-        index = strtol(ptr + 1, NULL, 10);
-        *ptr = '\0';
-
-        fd = get_root_fd((char *)mdtname);
-        if (fd < 0) {
+        /* Take path, fsname, or MDTNAME.  Assume MDT0000 in the former cases */
+        if (mdtname[0] == '/') {
+                index = 0;
+                fd = open(mdtname, O_RDONLY | O_DIRECTORY | O_NONBLOCK);
+                rc = fd < 0 ? -errno : 0;
+        } else {
+                if (get_mdtname(mdtname, "%s%s", fsname) < 0)
+                        return -EINVAL;
+                ptr = fsname + strlen(fsname) - 8;
+                *ptr = '\0';
+                index = strtol(ptr + 4, NULL, 10);
+                rc = get_root_path(WANT_FD, fsname, &fd, NULL);
+        }
+        if (rc < 0) {
                 llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
-                          "can't open fs root for '%s': %d", mdtname, fd);
-                return fd;
+                          "Can't open %s: %d\n", mdtname, rc);
+                return rc;
         }
 
         data.icc_mdtindex = index;
@@ -2528,90 +2522,13 @@ int llapi_changelog_clear(const char *mdtname, const char *idstr,
         return rc;
 }
 
-static int dev_ioctl(struct obd_ioctl_data *data, int dev, int cmd)
-{
-        static char rawbuf[8192];
-        static char *buf = rawbuf;
-        int rc;
-
-        data->ioc_dev = dev;
-        memset(buf, 0, sizeof(rawbuf));
-
-        if ((rc = obd_ioctl_pack(data, &buf, sizeof(rawbuf)))) {
-                llapi_err(LLAPI_MSG_ERROR,
-                          "error: ioctl pack (%d) failed: rc %d", cmd, rc);
-                return rc;
-        }
-
-        rc = l_ioctl(OBD_DEV_ID, cmd, buf);
-        if (rc < 0) {
-                /* ioctl returns -1 with errno set */
-                rc = -errno;
-                return rc;
-        }
-
-        if (obd_ioctl_unpack(data, buf, sizeof(rawbuf))) {
-                llapi_err(LLAPI_MSG_ERROR,
-                          "error: invalid reply\n");
-                return -EPROTO;
-        }
-        return rc;
-}
-
-static int dev_name2dev(char *name)
-{
-        struct obd_ioctl_data data;
-        int rc;
-
-        memset(&data, 0, sizeof(data));
-        data.ioc_inllen1 = strlen(name) + 1;
-        data.ioc_inlbuf1 = name;
-
-        rc = dev_ioctl(&data, -1, OBD_IOC_NAME2DEV);
-        if (rc < 0)
-                return rc;
-
-        return data.ioc_dev;
-}
-
-int llapi_search_fsname(const char *pathname, char *fsname)
-{
-        return search_fsname(pathname, fsname);
-}
-
-static void do_get_mdcname(char *obd_type_name, char *obd_name,
-                           char *obd_uuid, void *name)
-{
-        if (strncmp(obd_name, (char *)name, strlen((char *)name)) == 0)
-                strcpy((char *)name, obd_name);
-}
-
-static int get_mdcdev(const char *mdtname)
-{
-        char name[MAX_OBD_NAME];
-        char *type[] = { "mdc" };
-        int rc;
-
-        strcpy(name, mdtname);
-        rc = llapi_target_iterate(1, type, (void *)name, do_get_mdcname);
-        rc = rc < 0 ? : -rc;
-        if (rc < 0) {
-                llapi_err(LLAPI_MSG_ERROR, "Device %s not found %d\n", name,rc);
-                return rc;
-        }
-        rc = dev_name2dev(name);
-        if (rc < 0)
-                llapi_err(LLAPI_MSG_ERROR, "Device %s not found %d\n", name,rc);
-        return rc;
-}
-
 int llapi_fid2path(char *device, char *fidstr, char *buf, int buflen,
                    long long *recno, int *linkno)
 {
+        char path[PATH_MAX];
         struct lu_fid fid;
-        struct obd_ioctl_data data;
-        char mdtname[256];
-        int dev, rc;
+        struct getinfo_fid2path *gf;
+        int fd, rc;
 
         while (*fidstr == '[')
                 fidstr++;
@@ -2625,32 +2542,35 @@ int llapi_fid2path(char *device, char *fidstr, char *buf, int buflen,
                 return -EINVAL;
         }
 
-        /* If the node is an MDS, issue the ioctl to the MDT . If not,
-           issue it to the MDC. */        
-        rc = get_mdtname(device, "%s%s", mdtname);
-        if (rc < 0)
-                return rc;
-        dev = dev_name2dev(mdtname);
-        if (dev < 0) {
-                dev = get_mdcdev(mdtname);
-                if (dev < 0) {
-                        llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
-                                  "can't find mdc for '%s'\n", mdtname);
-                        return dev;
-                }
+        /* Take path or fsname */
+        if (device[0] == '/') {
+                strcpy(path, device);
+        } else {
+                rc = get_root_path(WANT_PATH, device, NULL, path);
+                if (rc < 0)
+                        return rc;
+        }
+        sprintf(path, "%s/%s/fid/%s", path, dot_lustre_name, fidstr);
+        fd = open(path, O_RDONLY | O_NONBLOCK);
+        if (fd < 0)
+                return -errno;
+
+        gf = malloc(sizeof(*gf) + buflen);
+        gf->gf_fid = fid;
+        gf->gf_recno = *recno;
+        gf->gf_linkno = *linkno;
+        gf->gf_pathlen = buflen;
+        rc = ioctl(fd, OBD_IOC_FID2PATH, gf);
+        if (rc) {
+                llapi_err(LLAPI_MSG_ERROR, "ioctl err %d", rc);
+        } else {
+                memcpy(buf, gf->gf_path, gf->gf_pathlen);
+                *recno = gf->gf_recno;
+                *linkno = gf->gf_linkno;
         }
 
-        memset(&data, 0, sizeof(data));
-        data.ioc_inlbuf1 = (char *)&fid;
-        data.ioc_inllen1 = sizeof(fid);
-        data.ioc_inlbuf2 = (char *)recno;
-        data.ioc_inllen2 = sizeof(__u64);
-        data.ioc_inlbuf3 = (char *)linkno;
-        data.ioc_inllen3 = sizeof(int);
-        data.ioc_plen1 = buflen;
-        data.ioc_pbuf1 = buf;
-        rc = dev_ioctl(&data, dev, OBD_IOC_FID2PATH);
-
+        free(gf);
+        close(fd);
         return rc;
 }
 

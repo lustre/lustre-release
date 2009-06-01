@@ -988,57 +988,48 @@ int mdc_readpage(struct obd_export *exp, const struct lu_fid *fid,
         RETURN(0);
 }
 
-/* This routine is quite similar to mdt_ioc_fid2path() */
-int mdc_ioc_fid2path(struct obd_export *exp, struct obd_ioctl_data *data)
+static int mdc_ioc_fid2path(struct obd_export *exp, struct getinfo_fid2path *gf)
 {
-        struct getinfo_fid2path *fp = NULL;
-        int keylen = size_round(sizeof(KEY_FID2PATH)) + sizeof(*fp);
-        int pathlen = data->ioc_plen1;
-        __u32 vallen = pathlen + sizeof(*fp);
-        int alloclen = keylen + vallen;
-        void *buf;
+        __u32 keylen, vallen;
+        void *key;
         int rc;
 
-        if (pathlen > PATH_MAX)
-                RETURN(-EINVAL);
-        if (pathlen < 2)
-                RETURN(-EINVAL);
+        if (gf->gf_pathlen > PATH_MAX)
+                RETURN(-ENAMETOOLONG);
+        if (gf->gf_pathlen < 2)
+                RETURN(-EOVERFLOW);
 
-        OBD_ALLOC(buf, alloclen);
-        if (buf == NULL)
+        /* Key is KEY_FID2PATH + getinfo_fid2path description */
+        keylen = size_round(sizeof(KEY_FID2PATH)) + sizeof(*gf);
+        OBD_ALLOC(key, keylen);
+        if (key == NULL)
                 RETURN(-ENOMEM);
-        fp = buf + size_round(sizeof(KEY_FID2PATH));
-        memcpy(buf, KEY_FID2PATH, sizeof(KEY_FID2PATH));
-        memcpy(&fp->gf_fid, data->ioc_inlbuf1, sizeof(struct lu_fid));
-        memcpy(&fp->gf_recno, data->ioc_inlbuf2, sizeof(fp->gf_recno));
-        memcpy(&fp->gf_linkno, data->ioc_inlbuf3,
-               sizeof(fp->gf_linkno));
-        fp->gf_pathlen = pathlen;
+        memcpy(key, KEY_FID2PATH, sizeof(KEY_FID2PATH));
+        memcpy(key + size_round(sizeof(KEY_FID2PATH)), gf, sizeof(*gf));
 
         CDEBUG(D_IOCTL, "path get "DFID" from "LPU64" #%d\n",
-               PFID(&fp->gf_fid), fp->gf_recno, fp->gf_linkno);
+               PFID(&gf->gf_fid), gf->gf_recno, gf->gf_linkno);
 
-        if (!fid_is_sane(&fp->gf_fid))
+        if (!fid_is_sane(&gf->gf_fid))
                 GOTO(out, rc = -EINVAL);
 
-        rc = obd_get_info(exp, keylen, buf, &vallen, fp, NULL);
+        /* Val is struct getinfo_fid2path result plus path */
+        vallen = sizeof(*gf) + gf->gf_pathlen;
+
+        rc = obd_get_info(exp, keylen, key, &vallen, gf, NULL);
         if (rc)
                 GOTO(out, rc);
 
-        if (vallen < sizeof(*fp) + 1)
+        if (vallen <= sizeof(*gf))
                 GOTO(out, rc = -EPROTO);
-        else if (vallen - sizeof(*fp) > pathlen)
+        else if (vallen > sizeof(*gf) + gf->gf_pathlen)
                 GOTO(out, rc = -EOVERFLOW);
-        if (copy_to_user(data->ioc_pbuf1, fp->gf_path,
-                         pathlen))
-                GOTO(out, rc = -EFAULT);
-        memcpy(data->ioc_inlbuf2, &fp->gf_recno, sizeof(fp->gf_recno));
-        memcpy(data->ioc_inlbuf3, &fp->gf_linkno,
-               sizeof(fp->gf_linkno));
+
+        CDEBUG(D_IOCTL, "path get "DFID" from "LPU64" #%d\n%s\n",
+               PFID(&gf->gf_fid), gf->gf_recno, gf->gf_linkno, gf->gf_path);
 
 out:
-        OBD_FREE(buf, alloclen);
-
+        OBD_FREE(key, keylen);
         return rc;
 }
 
@@ -1067,7 +1058,7 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 GOTO(out, rc);
         }
         case OBD_IOC_FID2PATH: {
-                rc = mdc_ioc_fid2path(exp, data);
+                rc = mdc_ioc_fid2path(exp, karg);
                 GOTO(out, rc);
         }
         case OBD_IOC_CLIENT_RECOVER:
@@ -1188,7 +1179,7 @@ int mdc_get_info_rpc(struct obd_export *exp,
         ptlrpc_request_set_replen(req);
 
         rc = ptlrpc_queue_wait(req);
-        if (!rc) {
+        if (rc == 0) {
                 tmp = req_capsule_server_get(&req->rq_pill, &RMF_GETINFO_VAL);
                 memcpy(val, tmp, vallen);
                 if (lustre_msg_swabbed(req->rq_repmsg)) {

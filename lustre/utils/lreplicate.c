@@ -121,7 +121,7 @@
 #include <libcfs/libcfsutil.h>
 #include <lustre/liblustreapi.h>
 #include <lustre/lustre_idl.h>
-#include <lustre/lreplicate.h>
+#include "lreplicate.h"
 
 #define REPLICATE_STATUS_VER 1
 #define CLEAR_INTERVAL 100
@@ -188,6 +188,8 @@ int use_rsync;  /* Flag to turn on use of rsync to copy data */
 long long rsync_threshold = DEFAULT_RSYNC_THRESHOLD;
 int quit;       /* Flag to stop processing the changelog; set on the
                    receipt of a signal */
+int abort_on_err = 0;
+
 char rsync[PATH_MAX];
 char rsync_ver[PATH_MAX];
 struct lr_parent_child_list *parents;
@@ -199,16 +201,17 @@ struct option long_opts[] = {
         {"mdt",         required_argument, 0, 'm'},
         {"user",        required_argument, 0, 'u'},
         {"statuslog",   required_argument, 0, 'l'},
-        {"verbose",     no_argument, 0, 'v'},
+        {"verbose",     no_argument,       0, 'v'},
         {"xattr",       required_argument, 0, 'x'},
-        {"dry-run",     no_argument, 0, 'z'},
+        {"dry-run",     no_argument,       0, 'z'},
         /* Undocumented options follow */
         {"cl-clear",    required_argument, 0, 'c'},
-        {"use-rsync",   no_argument, 0, 'r'},
+        {"use-rsync",   no_argument,       0, 'r'},
         {"rsync-threshold", required_argument, 0, 'y'},
         {"start-recno", required_argument, 0, 'n'},
+        {"abort-on-err",no_argument,       0, 'a'},
         {"debug",       required_argument, 0, 'd'},
-        {0, 0, 0, 0}    
+        {0, 0, 0, 0}
 };
 
 /* Command line usage */
@@ -218,7 +221,12 @@ void lr_usage()
                 "-m <mdt> -r <user id> -l <status log>\n"
                 "lreplicate can also pick up parameters from a "
                 "status log created earlier.\n"
-                "\tlreplicate -l <log_file>\n");
+                "\tlreplicate -l <log_file>\n"
+                "options:\n"
+                "\t--xattr <yes|no> replicate EAs\n"
+                "\t--abort-on-err   abort at first err\n"
+                "\t--verbose\n"
+                "\t--dry-run        don't write anything\n");
 }
 
 /* Print debug information. This is controlled by the value of the
@@ -488,12 +496,11 @@ int lr_get_path_ln(struct lr_info *info, char *fidstr, int linkno)
         long long recno = -1;
         int rc;
 
-        rc = llapi_fid2path(status->ls_mdt_device, fidstr, info->path,
+        rc = llapi_fid2path(status->ls_source, fidstr, info->path,
                             PATH_MAX, &recno, &linkno);
         if (rc < 0 && rc != -ENOENT) {
                 fprintf(stderr, "fid2path error: (%s, %s) %d %s\n",
-                        status->ls_mdt_device, fidstr,
-                        -rc, strerror(errno = -rc));
+                        status->ls_source, fidstr, -rc, strerror(errno = -rc));
         }
 
         return rc;
@@ -510,7 +517,7 @@ int lr_get_path(struct lr_info *info, char *fidstr)
 void lr_get_FID_PATH(char *mntpt, char *fidstr, char *buf, int bufsize)
 {
         /* Open-by-FID path is <mntpt>/.lustre/fid/[SEQ:OID:VER] */
-        snprintf(buf, bufsize, "%s/%s/fid/%s", mntpt, mdd_dot_lustre_name,
+        snprintf(buf, bufsize, "%s/%s/fid/%s", mntpt, dot_lustre_name,
                  fidstr + 2);
         return;
 }
@@ -926,11 +933,10 @@ int lr_link(struct lr_info *info)
                 for (i = 0; i < st.st_nlink && (info->src[0] == 0 ||
                                                 info->dest[0] == 0); i++) {
                         rc1 = lr_get_path_ln(info, info->tfid + 3, i);
+                        lr_debug(rc1 ? 0:DTRACE, "\tfid2path %s, %s, %d rc=%d\n",
+                                 info->path, info->name, i, rc1);
                         if (rc1)
                                 break;
-                        else
-                                lr_debug(DTRACE, "\tfid2path %s, %s, %d\n",
-                                         info->path, info->name, i);
 
                         len = strlen(info->path) - strlen(info->name);
                         if (len > 0 && strcmp(info->path + len,
@@ -965,8 +971,8 @@ int lr_link(struct lr_info *info)
                                 SPECIAL_DIR, info->tfid + 2);
 
                 rc1 = link(info->src, info->dest);
-                lr_debug(DINFO, "link: %s [to] %s; rc1=%d,errno=%d\n",
-                         info->src, info->dest, rc1, errno);
+                lr_debug(rc1?0:DINFO, "link: %s [to] %s; rc1=%d %s\n",
+                         info->src, info->dest, rc1, strerror(errno));
 
                 if (rc1)
                         rc = rc1;
@@ -1364,7 +1370,7 @@ int lr_replicate()
         info = calloc(1, sizeof(struct lr_info));
         if (info == NULL)
                 return -ENOMEM;
-        
+
         rc = llapi_search_fsname(status->ls_source, status->ls_source_fs);
         if (rc) {
                 fprintf(stderr, "Source path is not a valid Lustre client "
@@ -1464,6 +1470,8 @@ int lr_replicate()
                                 "index %lld failed: %d\n",
                                 info->type, info->recno, rc);
                         errors++;
+                        if (abort_on_err)
+                                break;
                 }
                 lr_clear_cl(info, 0);
                 if (debug) {
@@ -1507,9 +1515,13 @@ int main(int argc, char *argv[])
         if ((rc = lr_init_status()) != 0)
                 return rc;
 
-        while ((c = getopt_long(argc, argv, "s:t:m:u:l:vx:zc:ry:n:d:",
+        while ((c = getopt_long(argc, argv, "as:t:m:u:l:vx:zc:ry:n:d:",
                                 long_opts, NULL)) >= 0) {
                 switch (c) {
+                case 'a':
+                        /* Assume absolute paths */
+                        abort_on_err++;
+                        break;
                 case 's':
                         /* Assume absolute paths */
                         strncpy(status->ls_source, optarg, PATH_MAX);
@@ -1549,7 +1561,7 @@ int main(int argc, char *argv[])
                         (void) lr_read_log();
                         break;
                 case 'v':
-                        verbose = 1;
+                        verbose++;
                         break;
                 case 'x':
                         if (strcmp("no", optarg) == 0) {

@@ -413,13 +413,13 @@ static int create_dot_lustre_dir(const struct lu_env *env, struct mdd_device *m)
 
         memcpy(fid, &LU_DOT_LUSTRE_FID, sizeof(struct lu_fid));
         mdo = llo_store_create_index(env, &m->mdd_md_dev, m->mdd_child,
-                                     mdd_root_dir_name, mdd_dot_lustre_name,
+                                     mdd_root_dir_name, dot_lustre_name,
                                      fid, &dt_directory_features);
         /* .lustre dir may be already present */
         if (IS_ERR(mdo) && PTR_ERR(mdo) != -EEXIST) {
                 rc = PTR_ERR(mdo);
                 CERROR("creating obj [%s] fid = "DFID" rc = %d\n",
-                        mdd_dot_lustre_name, PFID(fid), rc);
+                        dot_lustre_name, PFID(fid), rc);
                 RETURN(rc);
         }
 
@@ -778,7 +778,7 @@ static int mdd_dot_lustre_setup(const struct lu_env *env, struct mdd_device *m)
                 return rc;
 
         dt_dot_lustre = dt_store_open(env, m->mdd_child, mdd_root_dir_name,
-                                      mdd_dot_lustre_name, fid);
+                                      dot_lustre_name, fid);
         if (IS_ERR(dt_dot_lustre)) {
                 rc = PTR_ERR(dt_dot_lustre);
                 GOTO(out, rc);
