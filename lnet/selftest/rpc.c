@@ -61,9 +61,6 @@ struct smoketest_rpc {
         __u64             rpc_matchbits; /* matchbits counter */
 } srpc_data;
 
-static int srpc_peer_credits = 0;
-CFS_MODULE_PARM(srpc_peer_credits, "i", int, 0444, "obsolete: do NOT use");
-
 /* forward ref's */
 int srpc_handle_rpc (swi_workitem_t *wi);
 
