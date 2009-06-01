@@ -1475,9 +1475,7 @@ lstcon_ndlist_stat(struct list_head *ndlist,
                 return rc;
         }
 
-        timeout = (timeout > LST_TRANS_MIN_TIMEOUT) ? timeout :
-                                                      LST_TRANS_MIN_TIMEOUT;
-        lstcon_rpc_trans_postwait(trans, timeout);
+        lstcon_rpc_trans_postwait(trans, LST_VALIDATE_TIMEOUT(timeout));
 
         rc = lstcon_rpc_trans_interpreter(trans, result_up,
                                           lstcon_statrpc_readent);
@@ -1564,10 +1562,7 @@ lstcon_debug_ndlist(struct list_head *ndlist,
                 return rc;
         }
 
-        timeout = (timeout > LST_TRANS_MIN_TIMEOUT) ? timeout :
-                                                      LST_TRANS_MIN_TIMEOUT;
-
-        lstcon_rpc_trans_postwait(trans, timeout);
+        lstcon_rpc_trans_postwait(trans, LST_VALIDATE_TIMEOUT(timeout));
 
         rc = lstcon_rpc_trans_interpreter(trans, result_up,
                                           lstcon_sesrpc_readent);
@@ -2000,9 +1995,9 @@ lstcon_console_fini(void)
 {
         int     i;
 
-        mutex_down(&console_session.ses_mutex);
-
         libcfs_deregister_ioctl(&lstcon_ioctl_handler);
+
+        mutex_down(&console_session.ses_mutex);
 
         srpc_shutdown_service(&lstcon_acceptor_service);
         srpc_remove_service(&lstcon_acceptor_service);

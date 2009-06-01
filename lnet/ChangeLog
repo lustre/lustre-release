@@ -17,6 +17,10 @@ Bugzilla   :
 Description: 
 Details    : 
 
+Severity   : normal
+Bugzilla   : 18075
+Description: LNet selftest fixes and enhancements
+
 Severity   : enhancement
 Bugzilla   : 19156
 Description: allow a test node to be a member of multiple test groups
