@@ -12,6 +12,10 @@ tbd  Sun Microsystems, Inc.
 	  mxlnd     - MX 1.2.1 or later,
 	  ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
+Severity   : normal
+Bugzilla   : 18075
+Description: LNet selftest fixes and enhancements
+
 Severity   : enhancement
 Bugzilla   : 19156
 Description: allow a test node to be a member of multiple test groups
