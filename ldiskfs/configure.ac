@@ -90,28 +90,29 @@ AM_CONDITIONAL(USE_QUILT, test x$QUILT != xno)
 
 LB_DEFINE_LDISKFS_OPTIONS
 
-AC_MSG_CHECKING([whether to build ldisk based on ext4])
-AC_ARG_ENABLE([ext4],
-	      AC_HELP_STRING([--disable-ext4],
-			     [enable building of ldiskfs based on ext4]),[],
-			     [LC_KERNEL_WITH_EXT4([enable_ext4='yes'],
-			     [enable_ext4='no'])])
+AC_MSG_CHECKING([whether to build ldiskfs based on ext4])
+if test x$RHEL_KERNEL = xyes; then
+	AC_ARG_ENABLE([ext4],
+		AC_HELP_STRING([--enable-ext4],
+			     [enable building of ldiskfs based on ext4]),
+			     [], [enable_ext4='no'])
+else
+	case $LINUXRELEASE in
+	# ext4 was in 2.6.22-2.6.26 but not stable enough to use
+	2.6.2[06]*) enable_ext4='no' ;;
+	*) LC_KERNEL_WITH_EXT4([enable_ext4='yes'],
+			       [enable_ext4='no']) ;;
+	esac
+fi
 AC_MSG_RESULT([$enable_ext4])
 
-# Remove this part when RHEL5 ext4 patches landed.
-case $LINUXRELEASE in
-2.6.18*) if test x$RHEL_KENEL = xyes; then
-	enable_ext4=no
-	fi
-;;
-esac
-
 if test x$enable_ext4 = xyes ; then
-        AC_DEFINE(HAVE_EXT4_LDISKFS, 1, [ldiskfs based on ext4])
-        BACKFS=ext4
+	AC_DEFINE(HAVE_EXT4_LDISKFS, 1, [ldiskfs based on ext4])
+	BACKFS=ext4
 else
-        BACKFS=ext3
+	BACKFS=ext3
 fi
+
 AC_SUBST(BACKFS)
 BACKFSU=${BACKFS/ext/EXT}
 AC_SUBST(BACKFSU) # We need a Upper string
