@@ -126,8 +126,8 @@ struct fsfilt_cb_data {
 #define fsfilt_log_start_commit(journal, tid) log_start_commit(journal, tid)
 #define fsfilt_log_wait_commit(journal, tid) log_wait_commit(journal, tid)
 #define fsfilt_journal_callback_set(handle, func, jcb) journal_callback_set(handle, func, jcb)
-#define ext_pblock(ex) (ex)->ee_start
-#define ext3_ext_store_pblock(ex, pblock)  ((ex)->ee_start = pblock)
+#define ext_pblock(ex) le32_to_cpu((ex)->ee_start)
+#define ext3_ext_store_pblock(ex, pblock)  ((ex)->ee_start = cpu_to_le32(pblock))
 #define ext3_inode_bitmap(sb,desc) le32_to_cpu((desc)->bg_inode_bitmap)
 #endif
 
@@ -867,18 +867,8 @@ static int ext3_ext_find_goal(struct inode *inode, struct ext3_ext_path *path,
                 depth = path->p_depth;
 
                 /* try to predict block placement */
-                if ((ex = path[depth].p_ext)) {
-#if 0
-                        /* This prefers to eat into a contiguous extent
-                         * rather than find an extent that the whole
-                         * request will fit into.  This can fragment data
-                         * block allocation and prevents our lovely 1M I/Os
-                         * from reaching the disk intact. */
-                        if (ex->ee_block + ex->ee_len == block)
-                                *aflags |= 1;
-#endif
-                        return ext_pblock(ex) + (block - ex->ee_block);
-                }
+                if ((ex = path[depth].p_ext))
+                        return ext_pblock(ex) + (block - le32_to_cpu(ex->ee_block));
 
                 /* it looks index is empty
                  * try to find starting from index itself */
@@ -1024,9 +1014,9 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
         EXT_ASSERT(count <= cex->ec_len);
 
         /* insert new extent */
-        nex.ee_block = cex->ec_block;
+        nex.ee_block = cpu_to_le32(cex->ec_block);
         ext3_ext_store_pblock(&nex, pblock);
-        nex.ee_len = count;
+        nex.ee_len = cpu_to_le16(count);
         err = ext3_ext_insert_extent(handle, base, path, &nex);
         if (err) {
                 /* free data blocks we just allocated */
@@ -1035,7 +1025,8 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
 #ifdef EXT3_MB_HINT_GROUP_ALLOC
                 ext3_mb_discard_inode_preallocations(inode);
 #endif
-                ext3_free_blocks(handle, inode, ext_pblock(&nex), nex.ee_len, 0);
+                ext3_free_blocks(handle, inode, ext_pblock(&nex),
+                                 cpu_to_le16(nex.ee_len), 0);
                 goto out;
         }
 
@@ -1044,10 +1035,10 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
          * we are asking ext3_ext_walk_space() to continue
          * scaning after that block
          */
-        cex->ec_len = nex.ee_len;
+        cex->ec_len = le16_to_cpu(nex.ee_len);
         cex->ec_start = ext_pblock(&nex);
-        BUG_ON(nex.ee_len == 0);
-        BUG_ON(nex.ee_block != cex->ec_block);
+        BUG_ON(le16_to_cpu(nex.ee_len) == 0);
+        BUG_ON(le32_to_cpu(nex.ee_block) != cex->ec_block);
 
 out:
         ext3_journal_stop(handle);
