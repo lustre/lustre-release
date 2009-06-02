@@ -44,7 +44,7 @@ loadgen_SOURCES = loadgen.c lustre_cfg.c obd.c
 loadgen_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS)
 loadgen_DEPENDENCIES := $(LIBPTLCTL)
 
-lreplicate_SOURCES = lreplicate.c obd.c lustre_cfg.c
+lreplicate_SOURCES = lreplicate.c obd.c lustre_cfg.c lreplicate.h
 lreplicate_LDADD :=  $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
 lreplicate_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 
