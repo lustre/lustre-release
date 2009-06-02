@@ -940,7 +940,7 @@ build_kernel_ib() {
 	      --define "KVERSION ${LINUXRELEASE}" \
 	      --define "$K_SRC ${LINUXOBJ:-${LINUX}}" \
 	      --define "LIB_MOD_DIR /lib/modules/${LINUXRELEASE}/updates" \
-	      --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --without-srp-target-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" ${TOPDIR}/OFED/SRPMS/ofa_kernel-*.src.rpm
+	      --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-mlx4_en-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --without-srp-target-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" ${TOPDIR}/OFED/SRPMS/ofa_kernel-*.src.rpm
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
         fatal 1 "Error building kernel-ib"
@@ -1105,7 +1105,7 @@ build_kernel_with_srpm() {
     # get an md5sum of the kernel patch + config for reuse check
     # XXX really, there needs to be a signature and a CONFIG_FILE per arch
     #     in BUILD_ARCHS
-    local REUSE_SIGNATURE=$((echo $BUILD_GEN; cat $CONFIG_FILE $TARGET_FILE $FULL_PATCH) | md5sum | cut -d" " -f1)
+    local REUSE_SIGNATURE=$({ echo $BUILD_GEN; cat $CONFIG_FILE $TARGET_FILE $FULL_PATCH; } | md5sum | cut -d" " -f1)
 
     # see if we can link to the reuse pool
     # XXX - hrm.  i'm not convinced this doesn't belong in the reuse "library"
