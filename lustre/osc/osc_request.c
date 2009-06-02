@@ -800,8 +800,8 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
 
 static void osc_update_next_shrink(struct client_obd *cli)
 {
-        int time = GRANT_SHRINK_INTERVAL;
-        cli->cl_next_shrink_grant = cfs_time_shift(time);
+        cli->cl_next_shrink_grant =
+                cfs_time_shift(cli->cl_grant_shrink_interval);
         CDEBUG(D_CACHE, "next time %ld to shrink grant \n",
                cli->cl_next_shrink_grant);
 }
@@ -920,7 +920,7 @@ static void __osc_update_grant(struct client_obd *cli, obd_size grant)
         cli->cl_avail_grant += grant;
         client_obd_list_unlock(&cli->cl_loi_list_lock);
 }
- 
+
 static void osc_update_grant(struct client_obd *cli, struct ost_body *body)
 {
         if (body->oa.o_valid & OBD_MD_FLGRANT) {
@@ -934,13 +934,13 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
                               struct ptlrpc_request_set *set);
 
 static int osc_shrink_grant_interpret(const struct lu_env *env,
-				      struct ptlrpc_request *req,
+                                      struct ptlrpc_request *req,
                                       void *aa, int rc)
 {
         struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
         struct obdo *oa = ((struct osc_grant_args *)aa)->aa_oa;
         struct ost_body *body;
-        
+
         if (rc != 0) {
                 __osc_update_grant(cli, oa->o_grant);
                 GOTO(out, rc);
@@ -951,38 +951,74 @@ static int osc_shrink_grant_interpret(const struct lu_env *env,
         osc_update_grant(cli, body);
 out:
         OBD_FREE_PTR(oa);
-        return rc;        
+        return rc;
 }
 
 static void osc_shrink_grant_local(struct client_obd *cli, struct obdo *oa)
 {
         client_obd_list_lock(&cli->cl_loi_list_lock);
         oa->o_grant = cli->cl_avail_grant / 4;
-        cli->cl_avail_grant -= oa->o_grant; 
+        cli->cl_avail_grant -= oa->o_grant;
         client_obd_list_unlock(&cli->cl_loi_list_lock);
         oa->o_flags |= OBD_FL_SHRINK_GRANT;
         osc_update_next_shrink(cli);
 }
 
+/* Shrink the current grant, either from some large amount to enough for a
+ * full set of in-flight RPCs, or if we have already shrunk to that limit
+ * then to enough for a single RPC.  This avoids keeping more grant than
+ * needed, and avoids shrinking the grant piecemeal. */
 static int osc_shrink_grant(struct client_obd *cli)
+{
+        long target = (cli->cl_max_rpcs_in_flight + 1) *
+                      cli->cl_max_pages_per_rpc;
+
+        client_obd_list_lock(&cli->cl_loi_list_lock);
+        if (cli->cl_avail_grant <= target)
+                target = cli->cl_max_pages_per_rpc;
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
+
+        return osc_shrink_grant_to_target(cli, target);
+}
+
+int osc_shrink_grant_to_target(struct client_obd *cli, long target)
 {
         int    rc = 0;
         struct ost_body     *body;
         ENTRY;
+
+        client_obd_list_lock(&cli->cl_loi_list_lock);
+        /* Don't shrink if we are already above or below the desired limit
+         * We don't want to shrink below a single RPC, as that will negatively
+         * impact block allocation and long-term performance. */
+        if (target < cli->cl_max_pages_per_rpc)
+                target = cli->cl_max_pages_per_rpc;
+
+        if (target >= cli->cl_avail_grant) {
+                client_obd_list_unlock(&cli->cl_loi_list_lock);
+                RETURN(0);
+        }
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         OBD_ALLOC_PTR(body);
         if (!body)
                 RETURN(-ENOMEM);
 
         osc_announce_cached(cli, &body->oa, 0);
-        osc_shrink_grant_local(cli, &body->oa);
+
+        client_obd_list_lock(&cli->cl_loi_list_lock);
+        body->oa.o_grant = cli->cl_avail_grant - target;
+        cli->cl_avail_grant = target;
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
+        body->oa.o_flags |= OBD_FL_SHRINK_GRANT;
+        osc_update_next_shrink(cli);
+
         rc = osc_set_info_async(cli->cl_import->imp_obd->obd_self_export,
                                 sizeof(KEY_GRANT_SHRINK), KEY_GRANT_SHRINK,
                                 sizeof(*body), body, NULL);
         if (rc != 0)
                 __osc_update_grant(cli, body->oa.o_grant);
-        if (body)
-               OBD_FREE_PTR(body);
+        OBD_FREE_PTR(body);
         RETURN(rc);
 }
 
@@ -1016,24 +1052,24 @@ static int osc_add_shrink_grant(struct client_obd *client)
 {
         int rc;
 
-        rc = ptlrpc_add_timeout_client(GRANT_SHRINK_INTERVAL, 
-                                         TIMEOUT_GRANT,
-                                         osc_grant_shrink_grant_cb, NULL,
-                                         &client->cl_grant_shrink_list);
+        rc = ptlrpc_add_timeout_client(client->cl_grant_shrink_interval,
+                                       TIMEOUT_GRANT,
+                                       osc_grant_shrink_grant_cb, NULL,
+                                       &client->cl_grant_shrink_list);
         if (rc) {
-                CERROR("add grant client %s error %d\n", 
+                CERROR("add grant client %s error %d\n",
                         client->cl_import->imp_obd->obd_name, rc);
                 return rc;
         }
-        CDEBUG(D_CACHE, "add grant client %s \n", 
+        CDEBUG(D_CACHE, "add grant client %s \n",
                client->cl_import->imp_obd->obd_name);
         osc_update_next_shrink(client);
-        return 0; 
+        return 0;
 }
 
 static int osc_del_shrink_grant(struct client_obd *client)
 {
-        return ptlrpc_del_timeout_client(&client->cl_grant_shrink_list, 
+        return ptlrpc_del_timeout_client(&client->cl_grant_shrink_list,
                                          TIMEOUT_GRANT);
 }
 
@@ -1302,7 +1338,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
 
         osc_announce_cached(cli, &body->oa, opc == OST_WRITE ? requested_nob:0);
         if (osc_should_shrink_grant(cli))
-                osc_shrink_grant_local(cli, &body->oa); 
+                osc_shrink_grant_local(cli, &body->oa);
 
         /* size[REQ_REC_OFF] still sizeof (*body) */
         if (opc == OST_WRITE) {
@@ -3842,12 +3878,12 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
            Even if something bad goes through, we'd get a -EINVAL from OST
            anyway. */
 
-	if (KEY_IS(KEY_GRANT_SHRINK))  
-       		req = ptlrpc_request_alloc(imp, &RQF_OST_SET_GRANT_INFO); 
-	else 
-		req = ptlrpc_request_alloc(imp, &RQF_OST_SET_INFO);
-        
-	if (req == NULL)
+        if (KEY_IS(KEY_GRANT_SHRINK))
+                req = ptlrpc_request_alloc(imp, &RQF_OST_SET_GRANT_INFO);
+        else
+                req = ptlrpc_request_alloc(imp, &RQF_OST_SET_INFO);
+
+        if (req == NULL)
                 RETURN(-ENOMEM);
 
         req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_KEY,
@@ -3886,18 +3922,18 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
                 }
                 *oa = ((struct ost_body *)val)->oa;
                 aa->aa_oa = oa;
-	        req->rq_interpret_reply = osc_shrink_grant_interpret;
-	}
-       	
-	ptlrpc_request_set_replen(req);
-	if (!KEY_IS(KEY_GRANT_SHRINK)) {
-        	LASSERT(set != NULL);
-		ptlrpc_set_add_req(set, req);
-        	ptlrpc_check_set(NULL, set);
-	} else 
-        	ptlrpcd_add_req(req, PSCOPE_OTHER);
-        
-	RETURN(0);
+                req->rq_interpret_reply = osc_shrink_grant_interpret;
+        }
+
+        ptlrpc_request_set_replen(req);
+        if (!KEY_IS(KEY_GRANT_SHRINK)) {
+                LASSERT(set != NULL);
+                ptlrpc_set_add_req(set, req);
+                ptlrpc_check_set(NULL, set);
+        } else
+                ptlrpcd_add_req(req, PSCOPE_OTHER);
+
+        RETURN(0);
 }
 
 
@@ -4024,17 +4060,17 @@ static int osc_disconnect(struct obd_export *exp)
          * causes the following problem if setup (connect) and cleanup
          * (disconnect) are tangled together.
          *      connect p1                     disconnect p2
-         *   ptlrpc_connect_import 
+         *   ptlrpc_connect_import
          *     ...............               class_manual_cleanup
          *                                     osc_disconnect
          *                                     del_shrink_grant
          *   ptlrpc_connect_interrupt
          *     init_grant_shrink
-         *   add this client to shrink list                 
+         *   add this client to shrink list
          *                                      cleanup_osc
          * Bang! pinger trigger the shrink.
          * So the osc should be disconnected from the shrink list, after we
-         * are sure the import has been destroyed. BUG18662 
+         * are sure the import has been destroyed. BUG18662
          */
         if (obd->u.cli.cl_import == NULL)
                 osc_del_shrink_grant(&obd->u.cli);
@@ -4142,6 +4178,7 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 struct lprocfs_static_vars lvars = { 0 };
                 struct client_obd *cli = &obd->u.cli;
 
+                cli->cl_grant_shrink_interval = GRANT_SHRINK_INTERVAL;
                 lprocfs_osc_init_vars(&lvars);
                 if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0) {
                         lproc_osc_attach_seqstat(obd);
@@ -4159,7 +4196,7 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                         ptlrpc_init_rq_pool(cli->cl_max_rpcs_in_flight + 2,
                                             OST_MAXREQSIZE,
                                             ptlrpc_add_rqs_to_pool);
-		
+
                 CFS_INIT_LIST_HEAD(&cli->cl_grant_shrink_list);
                 sema_init(&cli->cl_grant_sem, 1);
         }
@@ -4206,7 +4243,7 @@ static int osc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                 if (rc != 0)
                         CERROR("failed to cleanup llogging subsystems\n");
                 break;
-        	}
+                }
         }
         RETURN(rc);
 }
@@ -4245,8 +4282,8 @@ int osc_process_config_base(struct obd_device *obd, struct lustre_cfg *lcfg)
         default:
                 rc = class_process_proc_param(PARAM_OSC, lvars.obd_vars,
                                               lcfg, obd);
-        	if (rc > 0)
-        		rc = 0;
+                if (rc > 0)
+                        rc = 0;
                 break;
         }
 

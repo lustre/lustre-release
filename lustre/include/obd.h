@@ -436,6 +436,7 @@ struct client_obd {
         cfs_time_t               cl_next_shrink_grant;   /* jiffies */
         struct list_head         cl_grant_shrink_list;  /* Timeout event list */
         struct semaphore         cl_grant_sem;   /*grant shrink list semaphore*/
+        int                      cl_grant_shrink_interval; /* seconds */
 
         /* keep track of objects that have lois that contain pages which
          * have been queued for async brw.  this lock also protects the
