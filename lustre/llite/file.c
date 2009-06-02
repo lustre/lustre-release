@@ -2436,7 +2436,7 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
         * need to do it before permission check. */
 
         if (inode == inode->i_sb->s_root->d_inode) {
-                struct lookup_intent it = { .it_op = IT_GETATTR };
+                struct lookup_intent it = { .it_op = IT_LOOKUP };
 
                 rc = __ll_inode_revalidate_it(inode->i_sb->s_root, &it,
                                               MDS_INODELOCK_LOOKUP);

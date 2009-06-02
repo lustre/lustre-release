@@ -394,16 +394,17 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         }
 
         /* Never execute intents for mount points.
-         * need to get attributes in case it got changed from other client */
+         * Attributes will be fixed up in ll_inode_revalidate_it */
+        if (d_mountpoint(de))
+                GOTO(out_sa, rc = 1);
+
+        /* need to get attributes in case root got changed from other client */
         if (de == de->d_sb->s_root) {
                 rc = __ll_inode_revalidate_it(de, it, MDS_INODELOCK_LOOKUP);
                 if (rc == 0)
                         rc = 1;
                 GOTO(out_sa, rc);
         }
-
-        if (d_mountpoint(de))
-                GOTO(out_sa, rc = 1);
 
         exp = ll_i2mdexp(de->d_inode);
 
