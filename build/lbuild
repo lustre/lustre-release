@@ -876,43 +876,43 @@ find_linux_devel_paths() {
     local RC=0
 
     pushd $path
-        # RHEL-style and SLES-style rpms
-        # XXX - until bug 19336 cleans this up, we need to extricate the
-        #       ${lnxmin}- from the $lnxrel
-        local paths="kernels/${lnxmaj}${lnxmin}${delimiter}${lnxrel}-${TARGET_ARCH} linux-${lnxmaj}${lnxmin}${delimiter}${lnxrel##${lnxmin#.}-}"
+    # RHEL-style and SLES-style rpms
+    # XXX - until bug 19336 cleans this up, we need to extricate the
+    #       ${lnxmin}- from the $lnxrel
+    local paths="kernels/${lnxmaj}${lnxmin}${delimiter}${lnxrel}-${TARGET_ARCH} linux-${lnxmaj}${lnxmin}${delimiter}${lnxrel##${lnxmin#.}-}"
 
-        local path
-        for path in $paths; do
-            local src='usr/src'
+    local path
+    for path in $paths; do
+        local src='usr/src'
 
-            if [ -d "$src/$path/" ]; then
-                LINUX="$(pwd)/$src/$path"
-            fi
-            # SLES has a separate -obj tree
-            if [ -d "$src/${path}-obj" ]; then
-                local src="$src/${path}-obj"
-                local objects="$TARGET_ARCH/$RPMSMPTYPE"
-
-                # Novell, are you *TRYING* to make life hard for me?
-                if [ -d "$src/powerpc" ]; then
-                    objects="powerpc/$TARGET_ARCH"
-                elif [ $TARGET_ARCH == 'i686' ]; then
-                    objects="i386/$RPMSMPTYPE"
-                fi
-
-                LINUXOBJ="$(pwd)/$src/$objects"
-            fi
-        done
-        if [ -z "$LINUX" ]; then
-            RC=255
-        else
-            # dig out the release version
-            LINUXRELEASE=$(find_linux_release ${LINUXOBJ:-$LINUX})
-            if [ -z "$LINUXRELEASE" ]; then
-                echo "Failed to find linux release in ${LINUXOBJ:-$LINUX}"
-                RC=255
-            fi
+        if [ -d "$src/$path/" ]; then
+            LINUX="$(pwd)/$src/$path"
         fi
+        # SLES has a separate -obj tree
+        if [ -d "$src/${path}-obj" ]; then
+            local src="$src/${path}-obj"
+            local objects="$TARGET_ARCH/$RPMSMPTYPE"
+
+            # Novell, are you *TRYING* to make life hard for me?
+            if [ -d "$src/powerpc" ]; then
+                objects="powerpc/$TARGET_ARCH"
+            elif [ $TARGET_ARCH == 'i686' ]; then
+                objects="i386/$RPMSMPTYPE"
+            fi
+
+            LINUXOBJ="$(pwd)/$src/$objects"
+        fi
+    done
+    if [ -z "$LINUX" ]; then
+        RC=255
+    else
+        # dig out the release version
+        LINUXRELEASE=$(find_linux_release ${LINUXOBJ:-$LINUX})
+        if [ -z "$LINUXRELEASE" ]; then
+            echo "Failed to find linux release in ${LINUXOBJ:-$LINUX}"
+            RC=255
+        fi
+    fi
     popd
     return $RC
 }
@@ -940,7 +940,7 @@ build_kernel_ib() {
 	      --define "KVERSION ${LINUXRELEASE}" \
 	      --define "$K_SRC ${LINUXOBJ:-${LINUX}}" \
 	      --define "LIB_MOD_DIR /lib/modules/${LINUXRELEASE}/updates" \
-	      --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --without-srp-target-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" ${TOPDIR}/OFED/SRPMS/ofa_kernel-*.src.rpm
+	      --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-mlx4_en-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --without-srp-target-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" ${TOPDIR}/OFED/SRPMS/ofa_kernel-*.src.rpm
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
         fatal 1 "Error building kernel-ib"
@@ -1100,7 +1100,7 @@ build_kernel_with_srpm() {
     # get an md5sum of the kernel patch + config for reuse check
     # XXX really, there needs to be a signature and a CONFIG_FILE per arch
     #     in BUILD_ARCHS
-    local REUSE_SIGNATURE=$((echo $BUILD_GEN; cat $CONFIG_FILE $TARGET_FILE $FULL_PATCH) | md5sum | cut -d" " -f1)
+    local REUSE_SIGNATURE=$({ echo $BUILD_GEN; cat $CONFIG_FILE $TARGET_FILE $FULL_PATCH; } | md5sum | cut -d" " -f1)
 
     # see if we can link to the reuse pool
     # XXX - hrm.  i'm not convinced this doesn't belong in the reuse "library"
