@@ -249,15 +249,6 @@ static void vvp_page_completion_common(const struct lu_env *env,
                 cl_sync_io_note(anchor, ioret);
         } else if (clp->cp_type == CPT_CACHEABLE) {
                 /*
-                 * Don't assert the page writeback bit here because the lustre
-                 * file may be as a backend of swap space. in this case, the
-                 * page writeback is set by VM, and obvious we shouldn't clear
-                 * it at all. Fortunately this type of pages are all TRANSIENT
-                 * pages.
-                 */
-                LASSERT(!PageWriteback(vmpage));
-
-                /*
                  * Only mark the page error only when it's a cacheable page
                  * and NOT a sync io.
                  *
@@ -331,10 +322,8 @@ static void vvp_page_completion_write(const struct lu_env *env,
 
         CL_PAGE_HEADER(D_PAGE, env, pg, "completing WRITE with %d\n", ioret);
 
-        end_page_writeback(vmpage);
-        LASSERT(!PageWriteback(vmpage));
-
         vvp_page_completion_write_common(env, slice, ioret);
+        end_page_writeback(vmpage);
         EXIT;
 }
 
