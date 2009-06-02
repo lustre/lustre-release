@@ -121,7 +121,7 @@
 #include <libcfs/libcfsutil.h>
 #include <lustre/liblustreapi.h>
 #include <lustre/lustre_idl.h>
-#include <lreplicate.h>
+#include "lreplicate.h"
 
 #define REPLICATE_STATUS_VER 1
 #define CLEAR_INTERVAL 100
