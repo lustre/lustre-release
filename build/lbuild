@@ -962,6 +962,11 @@ store_for_reuse() {
 
         location="$location"/"$signature"/"$module"
         mkdir -p "$location"
+        # the cleanup script removes any directory that doesn't have a
+        # .lastused, so let's try to prevent that as soon as we can
+        # this solution still slightly racy with the cleanup script
+        # but the race is a lot tighter now
+        touch -t 197001010000 "$location/.lastused"
         ## use eval/echo here to make sure shell expansions are performed
         #if ! cp -a${linkflag} $(eval echo $articles) "$location"; then
         local article
