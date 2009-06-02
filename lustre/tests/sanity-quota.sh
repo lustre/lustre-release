@@ -290,7 +290,12 @@ test_1_sub() {
         chown $TSTUSR.$TSTUSR $TESTFILE
 
         log "    Write ..."
+        stime=`date +%s`
 	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$(($LIMIT/2)) || quota_error u $TSTUSR "(usr) write failure, but expect success"
+        etime=`date +%s`
+        delta=$((etime - stime))
+        rate=$((BLK_SZ * LIMIT / 2 / delta / 1024))
+        [ $rate -gt 1024 ] || error_exit "SLOW IO for $TSTUSR (user): $rate KB/sec"
         log "    Done"
         log "    Write out of block quota ..."
 	# this time maybe cache write,  ignore it's failure
@@ -321,7 +326,12 @@ test_1_sub() {
         chown $TSTUSR.$TSTUSR $TESTFILE
 
         log "    Write ..."
+        stime=`date +%s`
 	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$(($LIMIT/2)) || quota_error g $TSTUSR "(grp) write failure, but expect success"
+        etime=`date +%s`
+        delta=$((etime - stime))
+        rate=$((BLK_SZ * LIMIT / 2 / delta / 1024))
+        [ $rate -gt 1024 ] || error_exit "SLOW IO for $TSTUSR (group): $rate KB/sec"
         log "    Done"
         log "    Write out of block quota ..."
 	# this time maybe cache write, ignore it's failure
