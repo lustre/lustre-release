@@ -151,14 +151,14 @@ static int lov_obd_unregister_page_removal_cb(struct obd_device *obd,
         lov->lov_page_removal_cb = NULL;
         lov->lov_page_pin_cb = NULL;
 
-        lov_getref(obd);
+        obd_getref(obd);
         for (i = 0; i < lov->desc.ld_tgt_count; ++i) {
                 if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_exp)
                         continue;
                 rc |= obd_unregister_page_removal_cb(
                                 lov->lov_tgts[i]->ltd_exp->exp_obd, func);
         }
-        lov_putref(obd);
+        obd_putref(obd);
 
         return rc;
 }
@@ -973,7 +973,7 @@ static int lov_cleanup(struct obd_device *obd)
 
         if (lov->lov_tgts) {
                 int i;
-                lov_getref(obd);
+                obd_getref(obd);
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                         if (lov->lov_tgts[i]) {
                                 /* Inactive targets may never have connected */
@@ -989,7 +989,7 @@ static int lov_cleanup(struct obd_device *obd)
                                 lov_del_target(obd, i, 0, 0);
                         }
                 }
-                lov_putref(obd);
+                obd_putref(obd);
                 OBD_FREE(lov->lov_tgts, sizeof(*lov->lov_tgts) *
                          lov->lov_tgt_size);
                 lov->lov_tgt_size = 0;
@@ -3285,6 +3285,8 @@ struct obd_ops lov_obd_ops = {
         .o_pool_rem            = lov_pool_remove,
         .o_pool_add            = lov_pool_add,
         .o_pool_del            = lov_pool_del,
+        .o_getref              = lov_getref,
+        .o_putref              = lov_putref,
 };
 
 static quota_interface_t *quota_interface;
