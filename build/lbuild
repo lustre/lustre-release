@@ -991,8 +991,10 @@ store_for_reuse()
     if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
         # store kernel-ib RPMs
         local rpmname
+        local ofed_version=$(echo $OFED_VERSION |
+                             sed -re 's/-(20[0-9]{6,6}-[0-9]{4,4}|rc[0-9]*)$//')
         for rpmname in "kernel-ib" "kernel-ib-devel"; do
-            rpmname="${rpmname}-${OFED_VERSION}"
+            rpmname="${rpmname}-${ofed_version}"
             if $PATCHLESS; then
                 rpmname="${rpmname}-${LINUXRELEASE//-/_}"
             else
