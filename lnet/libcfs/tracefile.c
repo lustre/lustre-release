@@ -945,6 +945,7 @@ static int tracefiled(void *arg)
         struct trace_page *tmp;
         struct ptldebug_header *hdr;
         cfs_file_t *filp;
+        int last_loop = 0;
         int rc;
 
         CFS_DECL_MMSPACE;
@@ -962,7 +963,7 @@ static int tracefiled(void *arg)
                 pc.pc_want_daemon_pages = 0;
                 collect_pages(&pc);
                 if (list_empty(&pc.pc_pages))
-                        continue;
+                        goto end_loop;
 
                 filp = NULL;
                 tracefile_read_lock();
@@ -978,7 +979,7 @@ static int tracefiled(void *arg)
                 if (filp == NULL) {
                         put_pages_on_daemon_list(&pc);
                         __LASSERT(list_empty(&pc.pc_pages));
-                        continue;
+                        goto end_loop;
                 }
 
                 CFS_MMSPACE_OPEN;
@@ -1033,16 +1034,21 @@ static int tracefiled(void *arg)
                         printk(KERN_ALERT "There are %d pages unwritten\n", i);
                 }
                 __LASSERT(list_empty(&pc.pc_pages));
-
+end_loop:
+                if (atomic_read(&tctl->tctl_shutdown)) {
+                        if (last_loop == 0) {
+                                last_loop = 1;
+                                continue;
+                        } else {
+                                break;
+                        }
+                }
                 cfs_waitlink_init(&__wait);
                 cfs_waitq_add(&tctl->tctl_waitq, &__wait);
                 set_current_state(TASK_INTERRUPTIBLE);
                 cfs_waitq_timedwait(&__wait, CFS_TASK_INTERRUPTIBLE,
                                     cfs_time_seconds(1));
                 cfs_waitq_del(&tctl->tctl_waitq, &__wait);
-
-                if (atomic_read(&tctl->tctl_shutdown))
-                        break;
         }
         complete(&tctl->tctl_stop);
         return 0;
