@@ -1294,7 +1294,7 @@ build_kernel_ib()
 	      --define "KVERSION ${LINUXRELEASE}" \
 	      --define "$K_SRC ${LINUXOBJ:-${LINUX}}" \
 	      --define "LIB_MOD_DIR /lib/modules/${LINUXRELEASE}/updates" \
-	      --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --without-srp-target-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" ${TOPDIR}/OFED/SRPMS/ofa_kernel-*.src.rpm
+	      --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-mlx4_en-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --without-srp-target-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" ${TOPDIR}/OFED/SRPMS/ofa_kernel-*.src.rpm
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
         fatal 1 "Error building kernel-ib"
