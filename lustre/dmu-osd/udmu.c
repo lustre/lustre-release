@@ -527,13 +527,24 @@ static int udmu_zap_insert_impl(objset_t *os, dmu_buf_t *zap_db, dmu_tx_t *tx,
                     const char *name, void *value, int len)
 {
         uint64_t oid = zap_db->db_object;
+        int num_int = 1, int_size = 8;
+
+        /* fid record is byte stream*/
+        if (len == 17) {
+                int_size = 1;
+                num_int = len;
+        } else if (len == 6) {
+                int_size = 1;
+                num_int = len;
+        }
+
 
         /* Assert that the transaction has been assigned to a
            transaction group. */
         ASSERT(tx->tx_txg != 0);
 
         dmu_buf_will_dirty(zap_db, tx);
-        return (zap_add(os, oid, name, 8, 1, value, tx));
+        return (zap_add(os, oid, name, int_size, num_int, value, tx));
 }
 
 int udmu_zap_insert(udmu_objset_t *uos, dmu_buf_t *zap_db, dmu_tx_t *tx,
@@ -581,16 +592,19 @@ void udmu_zap_cursor_fini(zap_cursor_t *zc)
         kmem_free(zc, sizeof(*zc));
 }
 
-int udmu_zap_cursor_retrieve_key(zap_cursor_t *zc, char *key)
+int udmu_zap_cursor_retrieve_key(zap_cursor_t *zc, char *key, int max)
 {
-        int err;
         zap_attribute_t za;
+        int             err;
 
         if ((err = zap_cursor_retrieve(zc, &za)))
                 return err;
 
-        if (key)
-                strncpy(key, za.za_name, MAXNAMELEN);
+        if (key) {
+                if (strlen(za.za_name) > max)
+                        return EOVERFLOW;
+                strcpy(key, za.za_name);
+        }
 
         return 0;
 }
@@ -643,7 +657,7 @@ uint64_t udmu_zap_cursor_serialize(zap_cursor_t *zc)
 
 int udmu_zap_cursor_move_to_key(zap_cursor_t *zc, const char *name)
 {
-        return zap_cursor_move_to_key(zc, name, MT_EXACT);
+        return zap_cursor_move_to_key(zc, name, MT_BEST);
 }
 
 void udmu_zap_cursor_init_serialized(zap_cursor_t *zc, udmu_objset_t *uos,
@@ -896,6 +910,7 @@ int udmu_object_is_zap(dmu_buf_t *_db)
 void udmu_object_put_dmu_buf(dmu_buf_t *db, void *tag)
 {
         ASSERT(tag);
+        ASSERT(db);
         dmu_buf_rele(db, tag);
 }
 
@@ -1008,11 +1023,10 @@ void udmu_object_links_dec(dmu_buf_t *db, dmu_tx_t *tx)
  *
  * No locking is done here.
  */
-int udmu_xattr_get(dmu_buf_t *db, void *buf, int buflen, const char *name, int *size)
+int udmu_xattr_get(udmu_objset_t *uos, dmu_buf_t *db, void *buf,
+                   int buflen, const char *name, int *size)
 {
-        dnode_t *dn = ((dmu_buf_impl_t *)db)->db_dnode;
         znode_phys_t *zp = db->db_data;
-        objset_t *os = (objset_t *) dn->dn_objset;
         uint64_t xa_data_obj;
         dmu_buf_t *xa_data_db;
         vnattr_t xa_data_va;
@@ -1026,12 +1040,12 @@ int udmu_xattr_get(dmu_buf_t *db, void *buf, int buflen, const char *name, int *
                 return ENOENT;
 
         /* Lookup the object number containing the xattr data */
-        error = zap_lookup(os, zp->zp_xattr, name, sizeof(uint64_t), 1,
+        error = zap_lookup(uos->os, zp->zp_xattr, name, sizeof(uint64_t), 1,
                            &xa_data_obj);
         if (error)
                 return error;
 
-        error = udmu_obj2dbuf(os, xa_data_obj, &xa_data_db, FTAG);
+        error = udmu_obj2dbuf(uos->os, xa_data_obj, &xa_data_db, FTAG);
         if (error)
                 return error;
 
@@ -1053,7 +1067,7 @@ int udmu_xattr_get(dmu_buf_t *db, void *buf, int buflen, const char *name, int *
                 goto out;
         }
 
-        error = dmu_read(os, xa_data_db->db_object, 0, xa_data_va.va_size, buf);
+        error = dmu_read(uos->os, xa_data_db->db_object, 0, xa_data_va.va_size, buf);
 
 out:
         udmu_object_put_dmu_buf(xa_data_db, FTAG);
@@ -1061,11 +1075,10 @@ out:
         return error;
 }
 
-void udmu_xattr_declare_set(dmu_buf_t *db, int vallen, const char *name, dmu_tx_t *tx)
+void udmu_xattr_declare_set(udmu_objset_t *uos, dmu_buf_t *db,
+                            int vallen, const char *name, dmu_tx_t *tx)
 {
-        dnode_t *dn = ((dmu_buf_impl_t *)db)->db_dnode;
         znode_phys_t *zp = db->db_data;
-        objset_t *os = (objset_t *) dn->dn_objset;
         int error;
         uint64_t xa_data_obj;
 
@@ -1076,7 +1089,7 @@ void udmu_xattr_declare_set(dmu_buf_t *db, int vallen, const char *name, dmu_tx_
                 return;
         }
 
-        error = zap_lookup(os, zp->zp_xattr, name, sizeof(uint64_t), 1,
+        error = zap_lookup(uos->os, zp->zp_xattr, name, sizeof(uint64_t), 1,
                            &xa_data_obj);
         if (error == 0) {
                 /*
@@ -1093,7 +1106,7 @@ void udmu_xattr_declare_set(dmu_buf_t *db, int vallen, const char *name, dmu_tx_
                  * object to store the value.
                  */
                 dmu_tx_hold_bonus(tx, zp->zp_xattr);
-                dmu_tx_hold_zap(tx, zp->zp_xattr, TRUE, name);
+                dmu_tx_hold_zap(tx, zp->zp_xattr, TRUE, (char *) name);
                 dmu_tx_hold_bonus(tx, DMU_NEW_OBJECT);
                 dmu_tx_hold_write(tx, DMU_NEW_OBJECT, 0, vallen);
                 return;
@@ -1111,36 +1124,35 @@ void udmu_xattr_declare_set(dmu_buf_t *db, int vallen, const char *name, dmu_tx_
  *
  * No locking is done here.
  */
-int udmu_xattr_set(dmu_buf_t *db, void *val, int vallen, const char *name,
-                   dmu_tx_t *tx)
+int udmu_xattr_set(udmu_objset_t *uos, dmu_buf_t *db, void *val,
+                   int vallen, const char *name, dmu_tx_t *tx)
 {
-        dnode_t *dn = ((dmu_buf_impl_t *)db)->db_dnode;
         znode_phys_t *zp = db->db_data;
-        objset_t *os = (objset_t *) dn->dn_objset;
-        dmu_buf_t *xa_zap_db = NULL;
-        dmu_buf_t *xa_data_db = NULL;
-        int error;
-        uint64_t xa_data_obj;
+        dmu_buf_t    *xa_zap_db = NULL;
+        dmu_buf_t    *xa_data_db = NULL;
+        uint64_t      xa_data_obj;
+        vnattr_t      va;
+        int           error;
 
         if (zp->zp_xattr == 0) {
-                udmu_zap_create_impl(os, &xa_zap_db, tx, FTAG);
+                udmu_zap_create_impl(uos->os, &xa_zap_db, tx, FTAG);
 
                 dmu_buf_will_dirty(db, tx);
                 zp->zp_xattr = xa_zap_db->db_object;
         }
 
-        error = zap_lookup(os, zp->zp_xattr, name, sizeof(uint64_t), 1,
+        error = zap_lookup(uos->os, zp->zp_xattr, name, sizeof(uint64_t), 1,
                            &xa_data_obj);
         if (error == 0) {
                 /*
                  * Entry already exists.
                  * We'll truncate the existing object.
                  */
-                error = udmu_obj2dbuf(os, xa_data_obj, &xa_data_db, FTAG);
+                error = udmu_obj2dbuf(uos->os, xa_data_obj, &xa_data_db, FTAG);
                 if (error)
                         goto out;
 
-                error = udmu_object_punch_impl(os, xa_data_db, tx, vallen, 0);
+                error = udmu_object_punch_impl(uos->os, xa_data_db, tx, vallen, 0);
                 if (error)
                         goto out;
         } else if (error == ENOENT) {
@@ -1148,9 +1160,9 @@ int udmu_xattr_set(dmu_buf_t *db, void *val, int vallen, const char *name,
                  * Entry doesn't exist, we need to create a new one and a new
                  * object to store the value.
                  */
-                udmu_object_create_impl(os, &xa_data_db, tx, FTAG);
+                udmu_object_create_impl(uos->os, &xa_data_db, tx, FTAG);
                 xa_data_obj = xa_data_db->db_object;
-                error = zap_add(os, zp->zp_xattr, name, sizeof(uint64_t), 1,
+                error = zap_add(uos->os, zp->zp_xattr, name, sizeof(uint64_t), 1,
                                 &xa_data_obj, tx);
                 if (error)
                         goto out;
@@ -1160,7 +1172,11 @@ int udmu_xattr_set(dmu_buf_t *db, void *val, int vallen, const char *name,
         }
 
         /* Finally write the xattr value */
-        dmu_write(os, xa_data_obj, 0, vallen, val, tx);
+        dmu_write(uos->os, xa_data_obj, 0, vallen, val, tx);
+
+        va.va_size = vallen;
+        va.va_mask = DMU_AT_SIZE;
+        udmu_object_setattr(xa_data_db, tx, &va);
 
 out:
         if (xa_data_db != NULL)
@@ -1171,18 +1187,17 @@ out:
         return error;
 }
 
-void udmu_xattr_declare_del(dmu_buf_t *db, const char *name, dmu_tx_t *tx)
+void udmu_xattr_declare_del(udmu_objset_t *uos, dmu_buf_t *db,
+                            const char *name, dmu_tx_t *tx)
 {
-        dnode_t *dn = ((dmu_buf_impl_t *)db)->db_dnode;
         znode_phys_t *zp = db->db_data;
-        objset_t *os = (objset_t *) dn->dn_objset;
         int error;
         uint64_t xa_data_obj;
 
         if (zp->zp_xattr == 0)
                 return;
 
-        error = zap_lookup(os, zp->zp_xattr, name, sizeof(uint64_t), 1,
+        error = zap_lookup(uos->os, zp->zp_xattr, name, sizeof(uint64_t), 1,
                            &xa_data_obj);
         if (error == 0) {
                 /*
@@ -1191,7 +1206,7 @@ void udmu_xattr_declare_del(dmu_buf_t *db, const char *name, dmu_tx_t *tx)
                  */
                 dmu_tx_hold_bonus(tx, xa_data_obj);
                 dmu_tx_hold_free(tx, xa_data_obj, 0, DMU_OBJECT_END);
-                dmu_tx_hold_zap(tx, zp->zp_xattr, FALSE, name);
+                dmu_tx_hold_zap(tx, zp->zp_xattr, FALSE, (char *) name);
                 return;
         } else if (error == ENOENT) {
                 /*
@@ -1212,36 +1227,35 @@ void udmu_xattr_declare_del(dmu_buf_t *db, const char *name, dmu_tx_t *tx)
  *
  * No locking is done here.
  */
-int udmu_xattr_del(dmu_buf_t *db, const char *name, dmu_tx_t *tx)
+int udmu_xattr_del(udmu_objset_t *uos, dmu_buf_t *db,
+                   const char *name, dmu_tx_t *tx)
 {
-        dnode_t *dn = ((dmu_buf_impl_t *)db)->db_dnode;
         znode_phys_t *zp = db->db_data;
-        objset_t *os = (objset_t *) dn->dn_objset;
         int error;
         uint64_t xa_data_obj;
 
         if (zp->zp_xattr == 0)
                 return ENOENT;
 
-        error = zap_lookup(os, zp->zp_xattr, name, sizeof(uint64_t), 1,
+        error = zap_lookup(uos->os, zp->zp_xattr, name, sizeof(uint64_t), 1,
                            &xa_data_obj);
         if (error == 0) {
                 /*
                  * Entry exists.
                  * We'll delete the existing object and ZAP entry.
                  */
-                error = dmu_object_free(os, xa_data_obj, tx);
+                error = dmu_object_free(uos->os, xa_data_obj, tx);
                 if (error)
                         goto out;
 
-                error = zap_remove(os, zp->zp_xattr, name, tx);
+                error = zap_remove(uos->os, zp->zp_xattr, name, tx);
         }
 
 out:
         return error;
 }
 
-int udmu_xattr_list(dmu_buf_t *db, void *val, int vallen)
+int udmu_xattr_list(udmu_objset_t *uos, dmu_buf_t *db, void *val, int vallen)
 {
         /* XXX: not implemented yet */
         BUG_ON(1);

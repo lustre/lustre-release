@@ -207,7 +207,7 @@ int udmu_zap_cursor_init(zap_cursor_t **zc, udmu_objset_t *uos, uint64_t zapobj)
 
 void udmu_zap_cursor_fini(zap_cursor_t *zc);
 
-int udmu_zap_cursor_retrieve_key(zap_cursor_t *zc, char *key);
+int udmu_zap_cursor_retrieve_key(zap_cursor_t *zc, char *key, int max);
 
 int udmu_zap_cursor_retrieve_value(zap_cursor_t *zc,  char *buf,
                 int buf_size, int *bytes_read);
@@ -288,15 +288,15 @@ void udmu_object_links_inc(dmu_buf_t *db, dmu_tx_t *tx);
 void udmu_object_links_dec(dmu_buf_t *db, dmu_tx_t *tx);
 
 /* Extended attributes */
-int udmu_xattr_get(dmu_buf_t *db, void *buf, int buflen, const char *name, int *size);
-int udmu_xattr_list(dmu_buf_t *db, void *val, int vallen);
+int udmu_xattr_get(udmu_objset_t *uos, dmu_buf_t *db, void *buf, int buflen, const char *name, int *size);
+int udmu_xattr_list(udmu_objset_t *uos, dmu_buf_t *db, void *val, int vallen);
 
-void udmu_xattr_declare_set(dmu_buf_t *db, int vallen, const char *name, dmu_tx_t *tx);
-int udmu_xattr_set(dmu_buf_t *db, void *val, int vallen,
+void udmu_xattr_declare_set(udmu_objset_t *uos, dmu_buf_t *db, int vallen, const char *name, dmu_tx_t *tx);
+int udmu_xattr_set(udmu_objset_t *uos, dmu_buf_t *db, void *val, int vallen,
                    const char *name, dmu_tx_t *tx);
 
-void udmu_xattr_declare_del(dmu_buf_t *db, const char *name, dmu_tx_t *tx);
-int udmu_xattr_del(dmu_buf_t *db, const char *name, dmu_tx_t *tx);
+void udmu_xattr_declare_del(udmu_objset_t *uos, dmu_buf_t *db, const char *name, dmu_tx_t *tx);
+int udmu_xattr_del(udmu_objset_t *uos, dmu_buf_t *db, const char *name, dmu_tx_t *tx);
 
 #ifdef  __cplusplus
 }
