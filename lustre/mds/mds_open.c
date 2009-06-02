@@ -917,7 +917,7 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
                     (lustre_msg_get_transno(req->rq_reqmsg) >
                      req->rq_export->exp_last_committed) &&
                     (rec->ur_flags & MDS_OPEN_CREAT) &&
-                    pre_versions[0] != 0) {
+                    (pre_versions && pre_versions[0] != 0)) {
                         /* need parent to set version */
                         dparent = mds_fid2dentry(mds, rec->ur_fid1, NULL);
                         if (IS_ERR(dparent)) {
