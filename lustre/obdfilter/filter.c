@@ -88,7 +88,9 @@ static void filter_commit_cb(struct obd_device *obd, __u64 transno,
                              void *cb_data, int error)
 {
         struct obd_export *exp = cb_data;
+        LASSERT(exp->exp_obd == obd);
         obd_transno_commit_cb(obd, transno, exp, error);
+        class_export_put(exp);
 }
 
 int filter_version_get_check(struct obd_export *exp,
@@ -164,6 +166,7 @@ int filter_finish_transno(struct obd_export *exp, struct inode *inode,
                        fed->fed_lr_idx, fed->fed_lr_off);
                 err = -EINVAL;
         } else {
+                class_export_get(exp); /* released when the cb is called */
                 if (!force_sync)
                         force_sync = fsfilt_add_journal_cb(exp->exp_obd,
                                                            last_rcvd,

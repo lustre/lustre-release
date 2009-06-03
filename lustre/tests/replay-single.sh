@@ -1989,6 +1989,17 @@ test_82b() {
 }
 run_test 82b "CMD: mkdir cross-node dir (fail mds with name)"
 
+test_84() {
+#define OBD_FAIL_MDS_OPEN_WAIT_CREATE  0x143
+    do_facet mds "lctl set_param fail_loc=0x80000143"
+    createmany -o $DIR/$tfile- 1 &
+    PID=$!
+    mds_evict_client
+    wait $PID
+    df -P $DIR || df -P $DIR || true    # reconnect
+}
+run_test 84 "stale open during export disconnect"
+
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

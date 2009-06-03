@@ -457,6 +457,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                                 GOTO(out_oti, rc);
                 }
 
+                OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_OPEN_WAIT_CREATE, 10);
                 rc = obd_create(lov_exp, oa, &lsm, oti);
                 if (rc) {
                         if (rc > 0) {

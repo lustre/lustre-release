@@ -913,7 +913,8 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
 
         /* add separate commit callback for transaction handling because we need
          * export as parameter */
-        mdt_trans_add_cb(txn, lut_cb_last_committed, mti->mti_exp);
+        mdt_trans_add_cb(txn, lut_cb_last_committed,
+                         class_export_get(mti->mti_exp));
 
         return mdt_last_rcvd_update(mti, txn);
 }

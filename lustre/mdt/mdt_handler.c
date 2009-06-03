@@ -5106,6 +5106,81 @@ static int mdt_obd_reconnect(const struct lu_env *env,
 
         RETURN(rc);
 }
+static int mdt_mfd_cleanup(struct obd_export *exp)
+{
+        struct mdt_export_data *med = &exp->exp_mdt_data;
+        struct obd_device      *obd = exp->exp_obd;
+        struct mdt_device      *mdt;
+        struct mdt_thread_info *info;
+        struct lu_env           env;
+        CFS_LIST_HEAD(closing_list);
+        struct mdt_file_data *mfd, *n;
+        int rc = 0;
+        ENTRY;
+
+        spin_lock(&med->med_open_lock);
+        while (!list_empty(&med->med_open_head)) {
+                struct list_head *tmp = med->med_open_head.next;
+                mfd = list_entry(tmp, struct mdt_file_data, mfd_list);
+
+                /* Remove mfd handle so it can't be found again.
+                 * We are consuming the mfd_list reference here. */
+                class_handle_unhash(&mfd->mfd_handle);
+                list_move_tail(&mfd->mfd_list, &closing_list);
+        }
+        spin_unlock(&med->med_open_lock);
+        mdt = mdt_dev(obd->obd_lu_dev);
+        LASSERT(mdt != NULL);
+
+        rc = lu_env_init(&env, LCT_MD_THREAD);
+        if (rc)
+                RETURN(rc);
+
+        info = lu_context_key_get(&env.le_ctx, &mdt_thread_key);
+        LASSERT(info != NULL);
+        memset(info, 0, sizeof *info);
+        info->mti_env = &env;
+        info->mti_mdt = mdt;
+        info->mti_exp = exp;
+
+        if (!list_empty(&closing_list)) {
+                struct md_attr *ma = &info->mti_attr;
+                int lmm_size;
+                int cookie_size;
+
+                lmm_size = mdt->mdt_max_mdsize;
+                cookie_size = mdt->mdt_max_cookiesize;
+                OBD_ALLOC(ma->ma_lmm, lmm_size);
+                if (ma->ma_lmm == NULL)
+                        GOTO(out_lmm, rc = -ENOMEM);
+                OBD_ALLOC(ma->ma_cookie, cookie_size);
+                if (ma->ma_cookie == NULL)
+                        GOTO(out_cookie, rc = -ENOMEM);
+
+                /* Close any open files (which may also cause orphan unlinking). */
+                list_for_each_entry_safe(mfd, n, &closing_list, mfd_list) {
+                        list_del_init(&mfd->mfd_list);
+                        /* TODO: if we close the unlinked file,
+                         * we need to remove its objects from OST */
+                        memset(&ma->ma_attr, 0, sizeof(ma->ma_attr));
+                        ma->ma_lmm_size = lmm_size;
+                        ma->ma_cookie_size = cookie_size;
+                        ma->ma_need = MA_LOV | MA_COOKIE;
+                        ma->ma_valid = 0;
+                        mdt_mfd_close(info, mfd);
+                }
+                info->mti_mdt = NULL;
+                OBD_FREE(ma->ma_cookie, cookie_size);
+                ma->ma_cookie = NULL;
+out_cookie:
+                OBD_FREE(ma->ma_lmm, lmm_size);
+                ma->ma_lmm = NULL;
+        }
+out_lmm:
+        lu_env_fini(&env);
+
+        RETURN(rc);
+}
 
 static int mdt_obd_disconnect(struct obd_export *exp)
 {
@@ -5140,7 +5215,7 @@ static int mdt_obd_disconnect(struct obd_export *exp)
                 spin_unlock(&svc->srv_lock);
         }
         spin_unlock(&exp->exp_lock);
-
+        rc = mdt_mfd_cleanup(exp);
         class_export_put(exp);
         RETURN(rc);
 }
@@ -5172,11 +5247,6 @@ static int mdt_destroy_export(struct obd_export *export)
         struct mdt_device      *mdt;
         struct mdt_thread_info *info;
         struct lu_env           env;
-        struct md_attr         *ma;
-        int lmm_size;
-        int cookie_size;
-        CFS_LIST_HEAD(closing_list);
-        struct mdt_file_data *mfd, *n;
         int rc = 0;
         ENTRY;
 
@@ -5187,6 +5257,8 @@ static int mdt_destroy_export(struct obd_export *export)
         target_destroy_export(export);
         ldlm_destroy_export(export);
 
+        LASSERT(list_empty(&export->exp_outstanding_replies));
+        LASSERT(list_empty(&med->med_open_head));
         if (obd_uuid_equals(&export->exp_client_uuid, &obd->obd_uuid))
                 RETURN(0);
 
@@ -5201,62 +5273,12 @@ static int mdt_destroy_export(struct obd_export *export)
         LASSERT(info != NULL);
         memset(info, 0, sizeof *info);
         info->mti_env = &env;
-        info->mti_mdt = mdt;
         info->mti_exp = export;
-
-        ma = &info->mti_attr;
-        lmm_size = ma->ma_lmm_size = mdt->mdt_max_mdsize;
-        cookie_size = ma->ma_cookie_size = mdt->mdt_max_cookiesize;
-        OBD_ALLOC(ma->ma_lmm, lmm_size);
-        OBD_ALLOC(ma->ma_cookie, cookie_size);
-
-        if (ma->ma_lmm == NULL || ma->ma_cookie == NULL)
-                GOTO(out, rc = -ENOMEM);
-        ma->ma_need = MA_LOV | MA_COOKIE;
-        ma->ma_valid = 0;
-        /* Close any open files (which may also cause orphan unlinking). */
-        spin_lock(&med->med_open_lock);
-        while (!list_empty(&med->med_open_head)) {
-                struct list_head *tmp = med->med_open_head.next;
-                mfd = list_entry(tmp, struct mdt_file_data, mfd_list);
-
-                /* Remove mfd handle so it can't be found again.
-                 * We are consuming the mfd_list reference here. */
-                class_handle_unhash(&mfd->mfd_handle);
-                list_move_tail(&mfd->mfd_list, &closing_list);
-        }
-        spin_unlock(&med->med_open_lock);
-
-        list_for_each_entry_safe(mfd, n, &closing_list, mfd_list) {
-                list_del_init(&mfd->mfd_list);
-                mdt_mfd_close(info, mfd);
-                /* TODO: if we close the unlinked file,
-                 * we need to remove its objects from OST */
-                memset(&ma->ma_attr, 0, sizeof(ma->ma_attr));
-                spin_lock(&med->med_open_lock);
-                ma->ma_lmm_size = lmm_size;
-                ma->ma_cookie_size = cookie_size;
-                ma->ma_need = MA_LOV | MA_COOKIE;
-                ma->ma_valid = 0;
-                spin_unlock(&med->med_open_lock);
-        }
-
         info->mti_mdt = NULL;
         mdt_client_del(&env, mdt);
 
-        EXIT;
-out:
-        if (lmm_size) {
-                OBD_FREE(ma->ma_lmm, lmm_size);
-                ma->ma_lmm = NULL;
-        }
-        if (cookie_size) {
-                OBD_FREE(ma->ma_cookie, cookie_size);
-                ma->ma_cookie = NULL;
-        }
         lu_env_fini(&env);
-
-        return rc;
+        RETURN(rc);
 }
 
 static void mdt_allow_cli(struct mdt_device *m, unsigned int flag)

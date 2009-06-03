@@ -205,6 +205,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MDS_ALLOW_COMMON_EA_SETTING   0x13f
 #define OBD_FAIL_MDS_LOV_PREP_CREATE     0x141
 #define OBD_FAIL_MDS_REINT_DELAY         0x142
+#define OBD_FAIL_MDS_OPEN_WAIT_CREATE    0x143
 
 /* CMD */
 #define OBD_FAIL_MDS_IS_SUBDIR_NET       0x180

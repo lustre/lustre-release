@@ -486,11 +486,20 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
                         mfd->mfd_old_handle.cookie =
                                                 info->mti_rr.rr_handle->cookie;
                 }
-                spin_lock(&med->med_open_lock);
-                list_add(&mfd->mfd_list, &med->med_open_head);
-                spin_unlock(&med->med_open_lock);
-
                 repbody->handle.cookie = mfd->mfd_handle.h_cookie;
+
+                if (req->rq_export->exp_disconnected) {
+                        spin_lock(&med->med_open_lock);
+                        class_handle_unhash(&mfd->mfd_handle);
+                        list_del_init(&mfd->mfd_list);
+                        spin_unlock(&med->med_open_lock);
+                        mdt_mfd_close(info, mfd);
+                } else {
+                        spin_lock(&med->med_open_lock);
+                        list_add(&mfd->mfd_list, &med->med_open_head);
+                        spin_unlock(&med->med_open_lock);
+                }
+
                 mdt_empty_transno(info);
         } else
                 rc = -ENOMEM;

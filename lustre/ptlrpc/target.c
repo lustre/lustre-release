@@ -296,20 +296,20 @@ void lut_cb_last_committed(struct lu_target *lut, __u64 transno,
                            void *data, int err)
 {
         struct obd_export *exp = data;
-
+        LASSERT(exp->exp_obd == lut->lut_obd);
         spin_lock(&lut->lut_translock);
         if (transno > lut->lut_obd->obd_last_committed)
                 lut->lut_obd->obd_last_committed = transno;
 
         LASSERT(exp);
-        if (!lut->lut_obd->obd_stopping &&
-            transno > exp->exp_last_committed) {
+        if (transno > exp->exp_last_committed) {
                 exp->exp_last_committed = transno;
                 spin_unlock(&lut->lut_translock);
                 ptlrpc_commit_replies(exp);
         } else {
                 spin_unlock(&lut->lut_translock);
         }
+        class_export_put(exp);
         if (transno)
                 CDEBUG(D_HA, "%s: transno "LPD64" is committed\n",
                        lut->lut_obd->obd_name, transno);
