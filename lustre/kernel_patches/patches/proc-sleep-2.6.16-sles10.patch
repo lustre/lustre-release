@@ -24,10 +24,10 @@ Signed-off-by: Nikita Danilov <nikita@clusterfs.com>
  kernel/sleep_info.c        |  392 +++++++++++++++++++++++++++++++++++++++++++++
  13 files changed, 560 insertions(+), 15 deletions(-)
 
-Index: linux-2.6.16.46-0.14/Makefile
+Index: linux-2.6.16.60-0.37/Makefile
 ===================================================================
---- linux-2.6.16.46-0.14.orig/Makefile	2007-07-18 08:02:30.000000000 +0300
-+++ linux-2.6.16.46-0.14/Makefile	2007-08-30 05:56:23.000000000 +0300
+--- linux-2.6.16.60-0.37.orig/Makefile	2009-03-24 05:46:28.000000000 -0700
++++ linux-2.6.16.60-0.37/Makefile	2009-06-02 23:34:02.000000000 -0600
 @@ -493,6 +493,10 @@
  CFLAGS		+= -fomit-frame-pointer
  endif
@@ -39,10 +39,10 @@ Index: linux-2.6.16.46-0.14/Makefile
  ifdef CONFIG_DEBUG_INFO
  CFLAGS		+= -g
  endif
-Index: linux-2.6.16.46-0.14/arch/i386/Kconfig.debug
+Index: linux-2.6.16.60-0.37/arch/i386/Kconfig.debug
 ===================================================================
---- linux-2.6.16.46-0.14.orig/arch/i386/Kconfig.debug	2007-07-18 08:02:28.000000000 +0300
-+++ linux-2.6.16.46-0.14/arch/i386/Kconfig.debug	2007-08-30 05:56:23.000000000 +0300
+--- linux-2.6.16.60-0.37.orig/arch/i386/Kconfig.debug	2009-03-24 05:46:35.000000000 -0700
++++ linux-2.6.16.60-0.37/arch/i386/Kconfig.debug	2009-06-02 23:34:02.000000000 -0600
 @@ -190,4 +190,13 @@
  	  say N then kdb can only be used from a PC (AT) keyboard or a serial
  	  console.
@@ -57,13 +57,13 @@ Index: linux-2.6.16.46-0.14/arch/i386/Kconfig.debug
 +      N.
 +
  endmenu
-Index: linux-2.6.16.46-0.14/arch/x86_64/Kconfig.debug
+Index: linux-2.6.16.60-0.37/arch/x86_64/Kconfig.debug
 ===================================================================
---- linux-2.6.16.46-0.14.orig/arch/x86_64/Kconfig.debug	2007-07-18 08:02:30.000000000 +0300
-+++ linux-2.6.16.46-0.14/arch/x86_64/Kconfig.debug	2007-08-30 05:56:23.000000000 +0300
-@@ -122,6 +122,21 @@
+--- linux-2.6.16.60-0.37.orig/arch/x86_64/Kconfig.debug	2009-03-24 05:46:35.000000000 -0700
++++ linux-2.6.16.60-0.37/arch/x86_64/Kconfig.debug	2009-06-02 23:34:02.000000000 -0600
+@@ -123,6 +123,21 @@
+ 	  If you are not sure, say 0.  Read Documentation/kdb/dump.txt before
  	  setting to 2.
- 
  
 +config FRAME_POINTER
 +       bool "Compile the kernel with frame pointers"
@@ -83,7 +83,7 @@ Index: linux-2.6.16.46-0.14/arch/x86_64/Kconfig.debug
  config IOMMU_DEBUG
         depends on GART_IOMMU && DEBUG_KERNEL
         bool "Enable IOMMU debugging"
-@@ -148,4 +163,13 @@
+@@ -149,4 +164,13 @@
  #config X86_REMOTE_DEBUG
  #       bool "kgdb debugging stub"
  
@@ -97,10 +97,10 @@ Index: linux-2.6.16.46-0.14/arch/x86_64/Kconfig.debug
 +      N.
 +
  endmenu
-Index: linux-2.6.16.46-0.14/fs/proc/base.c
+Index: linux-2.6.16.60-0.37/fs/proc/base.c
 ===================================================================
---- linux-2.6.16.46-0.14.orig/fs/proc/base.c	2007-07-18 08:02:25.000000000 +0300
-+++ linux-2.6.16.46-0.14/fs/proc/base.c	2007-08-30 06:15:24.000000000 +0300
+--- linux-2.6.16.60-0.37.orig/fs/proc/base.c	2009-03-24 05:46:34.000000000 -0700
++++ linux-2.6.16.60-0.37/fs/proc/base.c	2009-06-02 23:34:02.000000000 -0600
 @@ -167,7 +167,9 @@
  #endif
  	PROC_TID_OOM_SCORE,
@@ -145,10 +145,10 @@ Index: linux-2.6.16.46-0.14/fs/proc/base.c
  		default:
  			printk("procfs: impossible type (%d)",p->type);
  			iput(inode);
-Index: linux-2.6.16.46-0.14/fs/proc/proc_misc.c
+Index: linux-2.6.16.60-0.37/fs/proc/proc_misc.c
 ===================================================================
---- linux-2.6.16.46-0.14.orig/fs/proc/proc_misc.c	2007-07-18 08:02:25.000000000 +0300
-+++ linux-2.6.16.46-0.14/fs/proc/proc_misc.c	2007-08-30 05:56:23.000000000 +0300
+--- linux-2.6.16.60-0.37.orig/fs/proc/proc_misc.c	2009-03-24 05:46:28.000000000 -0700
++++ linux-2.6.16.60-0.37/fs/proc/proc_misc.c	2009-06-02 23:34:02.000000000 -0600
 @@ -414,6 +414,11 @@
  	.release	= seq_release,
  };
@@ -170,19 +170,19 @@ Index: linux-2.6.16.46-0.14/fs/proc/proc_misc.c
 +	create_seq_entry("stacktrace", 0, &proc_global_stack_operations);
 +#endif
  }
-Index: linux-2.6.16.46-0.14/include/linux/sched.h
+Index: linux-2.6.16.60-0.37/include/linux/sched.h
 ===================================================================
---- linux-2.6.16.46-0.14.orig/include/linux/sched.h	2007-07-18 08:02:36.000000000 +0300
-+++ linux-2.6.16.46-0.14/include/linux/sched.h	2007-08-30 06:02:43.000000000 +0300
+--- linux-2.6.16.60-0.37.orig/include/linux/sched.h	2009-03-24 05:46:36.000000000 -0700
++++ linux-2.6.16.60-0.37/include/linux/sched.h	2009-06-02 23:34:02.000000000 -0600
 @@ -35,6 +35,7 @@
  #include <linux/topology.h>
  #include <linux/seccomp.h>
  #include <linux/rcupdate.h>
 +#include <linux/sleep_info.h>
  
- #include <linux/auxvec.h>	/* For AT_VECTOR_SIZE */
  
-@@ -679,6 +680,8 @@
+ struct exec_domain;
+@@ -700,6 +701,8 @@
  	unsigned long ttwu_move_affine;
  	unsigned long ttwu_move_balance;
  #endif
@@ -191,10 +191,10 @@ Index: linux-2.6.16.46-0.14/include/linux/sched.h
  };
  
  extern void partition_sched_domains(cpumask_t *partition1,
-Index: linux-2.6.16.46-0.14/include/linux/sleep_info.h
+Index: linux-2.6.16.60-0.37/include/linux/sleep_info.h
 ===================================================================
---- linux-2.6.16.46-0.14.orig/include/linux/sleep_info.h	2006-06-16 16:07:58.000000000 +0300
-+++ linux-2.6.16.46-0.14/include/linux/sleep_info.h	2007-08-30 05:56:23.000000000 +0300
+--- linux-2.6.16.60-0.37.orig/include/linux/sleep_info.h	2009-05-19 04:30:11.057558880 -0600
++++ linux-2.6.16.60-0.37/include/linux/sleep_info.h	2009-06-02 23:34:02.000000000 -0600
 @@ -0,0 +1,50 @@
 +#ifndef _LINUX_SLEEP_INFO_H
 +#define _LINUX_SLEEP_INFO_H
@@ -246,10 +246,10 @@ Index: linux-2.6.16.46-0.14/include/linux/sleep_info.h
 +
 +/* _LINUX_SLEEP_INFO_H */
 +#endif
-Index: linux-2.6.16.46-0.14/kernel/Makefile
+Index: linux-2.6.16.60-0.37/kernel/Makefile
 ===================================================================
---- linux-2.6.16.46-0.14.orig/kernel/Makefile	2007-07-18 08:02:35.000000000 +0300
-+++ linux-2.6.16.46-0.14/kernel/Makefile	2007-08-30 06:12:26.000000000 +0300
+--- linux-2.6.16.60-0.37.orig/kernel/Makefile	2009-03-24 05:46:32.000000000 -0700
++++ linux-2.6.16.60-0.37/kernel/Makefile	2009-06-02 23:34:02.000000000 -0600
 @@ -38,6 +38,7 @@
  obj-$(CONFIG_TASKSTATS) += taskstats.o tsacct.o
  obj-$(CONFIG_PAGG) += pagg.o
@@ -258,10 +258,10 @@ Index: linux-2.6.16.46-0.14/kernel/Makefile
  
  ifneq ($(CONFIG_SCHED_NO_NO_OMIT_FRAME_POINTER),y)
  # According to Alan Modra <alan@linuxcare.com.au>, the -fno-omit-frame-pointer is
-Index: linux-2.6.16.46-0.14/kernel/exit.c
+Index: linux-2.6.16.60-0.37/kernel/exit.c
 ===================================================================
---- linux-2.6.16.46-0.14.orig/kernel/exit.c	2007-08-30 05:43:46.000000000 +0300
-+++ linux-2.6.16.46-0.14/kernel/exit.c	2007-08-30 06:13:03.000000000 +0300
+--- linux-2.6.16.60-0.37.orig/kernel/exit.c	2009-03-24 05:46:32.000000000 -0700
++++ linux-2.6.16.60-0.37/kernel/exit.c	2009-06-02 23:34:02.000000000 -0600
 @@ -39,6 +39,7 @@
  #include <linux/mutex.h>
  #include <linux/pagg.h>
@@ -270,18 +270,18 @@ Index: linux-2.6.16.46-0.14/kernel/exit.c
  
  #include <asm/uaccess.h>
  #include <asm/unistd.h>
-@@ -114,6 +115,7 @@
+@@ -119,6 +120,7 @@
  	write_unlock_irq(&tasklist_lock);
  	spin_unlock(&p->proc_lock);
  	proc_pid_flush(proc_dentry);
 +	free_sleep_info(&p->sinfo);
  	release_thread(p);
- 	put_task_struct(p);
+ 	call_rcu(&p->rcu, delayed_put_task_struct);
  
-Index: linux-2.6.16.46-0.14/kernel/fork.c
+Index: linux-2.6.16.60-0.37/kernel/fork.c
 ===================================================================
---- linux-2.6.16.46-0.14.orig/kernel/fork.c	2007-07-18 08:02:35.000000000 +0300
-+++ linux-2.6.16.46-0.14/kernel/fork.c	2007-08-30 06:13:36.000000000 +0300
+--- linux-2.6.16.60-0.37.orig/kernel/fork.c	2009-03-24 05:46:35.000000000 -0700
++++ linux-2.6.16.60-0.37/kernel/fork.c	2009-06-02 23:34:02.000000000 -0600
 @@ -48,6 +48,7 @@
  #include <linux/pagg.h>
  #include <linux/delayacct.h>
@@ -290,7 +290,7 @@ Index: linux-2.6.16.46-0.14/kernel/fork.c
  
  #include <asm/pgtable.h>
  #include <asm/pgalloc.h>
-@@ -1222,6 +1223,8 @@
+@@ -1247,6 +1248,8 @@
  	attach_pid(p, PIDTYPE_TGID, p->tgid);
  	attach_pid(p, PIDTYPE_PID, p->pid);
  
@@ -299,11 +299,11 @@ Index: linux-2.6.16.46-0.14/kernel/fork.c
  	nr_threads++;
  	total_forks++;
  	spin_unlock(&current->sighand->siglock);
-Index: linux-2.6.16.46-0.14/kernel/sched.c
+Index: linux-2.6.16.60-0.37/kernel/sched.c
 ===================================================================
---- linux-2.6.16.46-0.14.orig/kernel/sched.c	2007-08-30 05:43:48.000000000 +0300
-+++ linux-2.6.16.46-0.14/kernel/sched.c	2007-08-30 05:56:23.000000000 +0300
-@@ -2934,6 +2934,8 @@
+--- linux-2.6.16.60-0.37.orig/kernel/sched.c	2009-06-02 23:33:13.000000000 -0600
++++ linux-2.6.16.60-0.37/kernel/sched.c	2009-06-02 23:34:02.000000000 -0600
+@@ -2971,6 +2971,8 @@
  	}
  	profile_hit(SCHED_PROFILING, __builtin_return_address(0));
  
@@ -312,7 +312,7 @@ Index: linux-2.6.16.46-0.14/kernel/sched.c
  need_resched:
  	preempt_disable();
  	prev = current;
-@@ -3136,6 +3138,8 @@
+@@ -3173,6 +3175,8 @@
  	barrier();
  	if (unlikely(test_thread_flag(TIF_NEED_RESCHED)))
  		goto need_resched;
@@ -321,10 +321,10 @@ Index: linux-2.6.16.46-0.14/kernel/sched.c
  }
  
  EXPORT_SYMBOL(preempt_schedule);
-Index: linux-2.6.16.46-0.14/kernel/sleep_info.c
+Index: linux-2.6.16.60-0.37/kernel/sleep_info.c
 ===================================================================
---- linux-2.6.16.46-0.14.orig/kernel/sleep_info.c	2006-06-16 16:07:58.000000000 +0300
-+++ linux-2.6.16.46-0.14/kernel/sleep_info.c	2007-08-30 05:56:23.000000000 +0300
+--- linux-2.6.16.60-0.37.orig/kernel/sleep_info.c	2009-05-19 04:30:11.057558880 -0600
++++ linux-2.6.16.60-0.37/kernel/sleep_info.c	2009-06-02 23:34:02.000000000 -0600
 @@ -0,0 +1,431 @@
 +#include <linux/config.h>
 +#include <linux/sleep_info.h>
