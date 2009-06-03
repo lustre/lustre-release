@@ -149,7 +149,7 @@ test_3b() {
     # recovery should fail due to missing client 2
     do_node $CLIENT1 df $DIR && return 1
 
-    do_node $CLIENT1 $CHECKSTAT -p 755 $DIR/$tfile && return 2
+    do_node $CLIENT1 $CHECKSTAT -p 0755 $DIR/$tfile && return 2
     zconf_mount $CLIENT2 $DIR || error "mount $CLIENT2 $DIR fail"
 
     zconf_umount_clients $CLIENTS $DIR
