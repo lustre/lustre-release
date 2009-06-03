@@ -23,16 +23,19 @@ echo $$ >$LOAD_PID_FILE
 
 TESTDIR=$MOUNT/d0.tar-$(hostname)
 
+do_tar() {
+    tar cf - /etc | tar xf - 2>&1 | tee $LOG
+    return ${PIPESTATUS[1]}
+}
+
 CONTINUE=true
 while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
     echoerr "$(date +'%F %H:%M:%S'): tar run starting"
     mkdir -p $TESTDIR
     cd $TESTDIR
-    tar cf - /etc | tar xf - 2>&1 | tee $LOG &
-    load_pid=$!
-ps -e f -o "pid ppid pgrp comm" >$TMP/client-load.ps-list
-    wait $load_pid
-    RC=${PIPESTATUS[0]}
+    do_tar &
+    wait $!
+    RC=$?
     PREV_ERRORS=$(grep "exit delayed from previous errors" $LOG) || true
     if [ $RC -ne 0 -a "$ERRORS_OK" -a "$PREV_ERRORS" ]; then
         echoerr "$(date +'%F %H:%M:%S'): tar errors earlier, ignoring"
