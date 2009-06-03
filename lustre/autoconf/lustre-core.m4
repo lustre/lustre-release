@@ -1542,7 +1542,7 @@ LB_LINUX_TRY_COMPILE([
 	#include <linux/fs.h>
 ],[
 	struct address_space *map = NULL;
-	
+
 	write_lock_irq(&map->tree_lock);
 ],[
         AC_MSG_RESULT(yes)
@@ -2161,6 +2161,7 @@ LB_LINUX_TRY_COMPILE([
 # linux kernel may have 64-bit limits support
 #
 AC_DEFUN([LC_QUOTA64],
+if test x$enable_server = xyes ; then
 [AC_MSG_CHECKING([if kernel has 64-bit quota limits support])
 LB_LINUX_TRY_COMPILE([
         #include <linux/kernel.h>
@@ -2183,17 +2184,18 @@ LB_LINUX_TRY_COMPILE([
                 AC_DEFINE(HAVE_QUOTA64, 1, [have quota64])
                 AC_MSG_RESULT([yes])
         ],[
+                AC_MSG_RESULT([no])
                 AC_MSG_WARN([4 TB (or larger) block quota limits can only be used with OSTs not larger than 4 TB.])
                 AC_MSG_WARN([Continuing with limited quota support.])
                 AC_MSG_WARN([quotacheck is needed for filesystems with recent quota versions.])
-                AC_MSG_RESULT([no])
         ])
         EXTRA_KCFLAGS=$tmp_flags
 ])
+fi
 ])
 
 # LC_SECURITY_PLUG  # for SLES10 SP2
-# check security plug in sles10 sp2 kernel 
+# check security plug in sles10 sp2 kernel
 AC_DEFUN([LC_SECURITY_PLUG],
 [AC_MSG_CHECKING([If kernel has security plug support])
 LB_LINUX_TRY_COMPILE([
