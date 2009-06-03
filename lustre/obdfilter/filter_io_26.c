@@ -126,10 +126,10 @@ static void record_finish_io(struct filter_iobuf *iobuf, int rw, int rc)
 }
 
 #ifdef HAVE_BIO_ENDIO_2ARG
-#define DIO_RETURN(a)   return
+#define DIO_RETURN(a)
 static void dio_complete_routine(struct bio *bio, int error)
 #else
-#define DIO_RETURN(a)   return a
+#define DIO_RETURN(a)   a
 static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
 #endif
 {
@@ -148,11 +148,11 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
 	 * the bio_end_io routine is never called for partial completions,
 	 * so this check is no longer needed. */
 	if (bio->bi_size)		       /* Not complete */
-		DIO_RETURN(1);
+                return DIO_RETURN(1);
 #endif
 
         if (unlikely(iobuf == NULL)) {
-                CERROR("***** bio->bi_private is NULL!  This should never "
+                LCONSOLE_ERROR("bio->bi_private is NULL!  This should never "
                        "happen.  Normally, I would crash here, but instead I "
                        "will dump the bio contents to the console.  Please "
                        "report this to <http://bugzilla.lustre.org/> , along "
@@ -162,11 +162,12 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
                        "IO - you will probably have to reboot this node.\n");
                 CERROR("bi_next: %p, bi_flags: %lx, bi_rw: %lu, bi_vcnt: %d, "
                        "bi_idx: %d, bi->size: %d, bi_end_io: %p, bi_cnt: %d, "
-                       "bi_private: %p\n", bio->bi_next, bio->bi_flags,
+                       "bi_private: %p, error: %d\n",
+                       bio->bi_next, bio->bi_flags,
                        bio->bi_rw, bio->bi_vcnt, bio->bi_idx, bio->bi_size,
                        bio->bi_end_io, atomic_read(&bio->bi_cnt),
-                       bio->bi_private);
-                DIO_RETURN(0);
+                       bio->bi_private, error);
+                return DIO_RETURN(0);
         }
 
         /* the check is outside of the cycle for performance reason -bzzz */
@@ -197,7 +198,7 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
          * deadlocking the OST.  The bios are now released as soon as complete
          * so the pool cannot be exhausted while IOs are competing. bug 10076 */
         bio_put(bio);
-        DIO_RETURN(0);
+        return DIO_RETURN(0);
 }
 
 static int can_be_merged(struct bio *bio, sector_t sector)
