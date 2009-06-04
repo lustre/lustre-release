@@ -1721,6 +1721,9 @@ static inline struct inode *ext3_iget_inuse(struct super_block *sb,
 #else
                 inode = ext3_iget(sb, ino);
 #endif
+        if (IS_ERR(inode))
+	        /* Newer kernels return an error instead of a NULL pointer */
+                inode = NULL;
         return inode;
 }
 
