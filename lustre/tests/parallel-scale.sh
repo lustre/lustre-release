@@ -2,8 +2,6 @@
 #
 #set -vx
 
-set -e
-
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
@@ -12,8 +10,7 @@ init_test_env $@
 #
 # compilbench
 #
-# Boulder cluster compilebench default location
-cbench_DIR=${cbench_DIR:-/testsuite/tests/$(arch)/compilebench}
+cbench_DIR=${cbench_DIR:-""}
 cbench_IDIRS=${cbench_IDIRS:-10}
 cbench_RUNS=${cbench_RUNS:-10}	# FIXME: wiki page requirements is 30, do we really need 30 ?
 
@@ -25,8 +22,7 @@ fi
 #
 # metabench
 #
-# Boulder cluster metabench default location
-METABENCH=${METABENCH:-/testsuite/tests/$(arch)/METABENCH/src/metabench}
+METABENCH=${METABENCH:-$(which metabench 2> /dev/null || true)}
 mbench_NFILES=${mbench_NFILES:-30400}
 [ "$SLOW" = "no" ] && mbench_NFILES=10000
 MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
@@ -36,8 +32,7 @@ mbench_THREADS=${mbench_THREADS:-4}
 #
 # simul
 #
-# Boulder cluster default location
-SIMUL=${SIMUL:-/testsuite/tests/$(arch)/simul/simul}
+SIMUL=${SIMUL:=$(which simul 2> /dev/null || true)}
 # threads per client
 simul_THREADS=${simul_THREADS:-2}
 simul_REP=${simul_REP:-20}
@@ -46,16 +41,14 @@ simul_REP=${simul_REP:-20}
 #
 # connectathon
 #
-# Boulder cluster default location
-cnt_DIR=${cnt_DIR:-/testsuite/tests/$(arch)/connectathon}
+cnt_DIR=${cnt_DIR:-""}
 cnt_NRUN=${cnt_NRUN:-10}
 [ "$SLOW" = "no" ] && cnt_NRUN=2
 
 #
 # cascading rw
 #
-# Boulder cluster default location
-CASC_RW=${CASC_RW:-/testsuite/tests/$(arch)/parallel/cascading_rw}
+CASC_RW=${CASC_RW:-$(which cascading_rw 2> /dev/null || true)}
 # threads per client
 casc_THREADS=${casc_THREADS:-2}
 casc_REP=${casc_REP:-300}
@@ -64,8 +57,7 @@ casc_REP=${casc_REP:-300}
 #
 # IOR
 #
-# Boulder cluster default location
-IOR=${IOR:-/testsuite/tests/$(arch)/IOR/src/C/IOR}
+IOR=${IOR:-$(which IOR 2> /dev/null || true)}
 # threads per client
 ior_THREADS=${ior_THREADS:-2}
 ior_blockSize=${ior_blockSize:-6}	# Gb
@@ -83,8 +75,7 @@ write_REP=${write_REP:-10000}
 #
 # write_disjoint
 #
-# Boulder cluster default location
-WRITE_DISJOINT=${WRITE_DISJOINT:-/testsuite/tests/x86_64/lustre/lustre/tests/write_disjoint}
+WRITE_DISJOINT=${WRITE_DISJOINT:-$(which write_disjoint 2> /dev/null || true)}
 # threads per client
 wdisjoint_THREADS=${wdisjoint_THREADS:-4}
 wdisjoint_REP=${wdisjoint_REP:-10000}
@@ -116,8 +107,8 @@ print_opts () {
 test_compilebench() {
     print_opts cbench_DIR cbench_IDIRS cbench_RUNS
 
-    [ -d $cbench_DIR ] || \
-        { skip "No compilebench found" && return; }
+    [ x$cbench_DIR = x ] &&
+        { skip "compilebench not found" && return; }
 
     [ -e $cbench_DIR/compilebench ] || \
         { skip "No compilebench build" && return; }
@@ -154,7 +145,7 @@ test_compilebench() {
 run_test compilebench "compilebench"
 
 test_metabench() {
-    [ -e $METABENCH ] || \
+    [ x$METABENCH = x ] &&
         { skip "metabench not found" && return; }
 
     local clients=$CLIENTS
@@ -191,7 +182,7 @@ test_metabench() {
 run_test metabench "metabench"
 
 test_simul() {
-    [ -e $SIMUL ] || \
+    [ x$SIMUL = x ] &&
         { skip "simul not found" && return; }
 
     local clients=$CLIENTS
@@ -231,8 +222,8 @@ run_test simul "simul"
 test_connectathon() {
     print_opts cnt_DIR cnt_NRUN
 
-    [ -d $cnt_DIR ] || \
-        { skip "No connectathon dir found" && return; }
+    [ x$cnt_DIR = x ] &&
+        { skip "connectathon dir not found" && return; }
 
     [ -e $cnt_DIR/runtests ] || \
         { skip "No connectathon runtests found" && return; }
@@ -264,7 +255,7 @@ test_connectathon() {
 run_test connectathon "connectathon"
 
 test_ior() {
-    [ -e $IOR ] || \
+    [ x$IOR = x ] &&
         { skip "IOR not found" && return; }
 
     local clients=$CLIENTS
@@ -315,7 +306,7 @@ test_ior() {
 run_test ior "ior"
  
 test_cascading_rw() {
-    [ -e $CASC_RW ] || \
+    [ x$CASC_RW = x ] &&
         { skip "cascading_rw not found" && return; }
 
     local clients=$CLIENTS
@@ -394,7 +385,7 @@ test_write_append_truncate() {
 run_test write_append_truncate "write_append_truncate"
 
 test_write_disjoint() {
-    [ -e $WRITE_DISJOINT ] || \
+    [ x$WRITE_DISJOINT = x ] &&
         { skip "write_disjoint not found" && return; }
 
     local clients=$CLIENTS
