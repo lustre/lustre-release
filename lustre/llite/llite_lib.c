@@ -244,6 +244,7 @@ static struct dentry_operations ll_d_root_ops = {
 #ifdef DCACHE_LUSTRE_INVALID
         .d_compare = ll_dcompare,
 #endif
+        .d_revalidate = ll_revalidate_nd,
 };
 
 static int client_common_fill_super(struct super_block *sb,

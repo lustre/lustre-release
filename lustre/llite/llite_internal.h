@@ -766,6 +766,8 @@ int ll_extent_lock(struct ll_file_data *, struct inode *,
                    struct lustre_handle *, int ast_flags);
 int ll_extent_unlock(struct ll_file_data *, struct inode *,
                      struct lov_stripe_md *, int mode, struct lustre_handle *);
+int __ll_inode_revalidate_it(struct dentry *, struct lookup_intent *,  __u64 bits);
+int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd);
 int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
