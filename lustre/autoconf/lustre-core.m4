@@ -1936,6 +1936,31 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+#
+# LC_QUOTA64
+# linux kernel have 64-bit limits support
+#
+AC_DEFUN([LC_QUOTA64],
+[if test x$enable_quota_module = xyes -a x$enable_server = xyes ; then
+        AC_MSG_CHECKING([if kernel has 64-bit quota limits support])
+        LB_LINUX_TRY_COMPILE([
+                #include <linux/kernel.h>
+                #include <linux/fs.h>
+                #include <linux/quotaio_v2.h>
+                int versions[] = V2_INITQVERSIONS_R1;
+                struct v2_disk_dqblk_r1 dqblk_r1;
+        ],[],[
+                AC_DEFINE(HAVE_QUOTA64, 1, [have quota64])
+                AC_MSG_RESULT([yes])
+        ],[
+                LB_CHECK_FILE([$LINUX/include/linux/lustre_version.h],[
+                        AC_MSG_ERROR([You have got no 64-bit kernel quota support.])
+                ],[])
+                AC_MSG_RESULT([no])
+        ])
+fi
+])
+
 # LC_SECURITY_PLUG  # for SLES10 SP2
 # check security plug in sles10 sp2 kernel
 AC_DEFUN([LC_SECURITY_PLUG],
@@ -1981,33 +2006,6 @@ LB_LINUX_TRY_COMPILE([
 ],[
         AC_MSG_RESULT([no])
 ])
-])
-
-#
-# LC_QUOTA64
-# linux kernel have 64-bit limits support
-#
-AC_DEFUN([LC_QUOTA64],
-[if test x$enable_quota_module = xyes; then
-        AC_MSG_CHECKING([if kernel has 64-bit quota limits support])
-        LB_LINUX_TRY_COMPILE([
-                #include <linux/kernel.h>
-                #include <linux/fs.h>
-                #include <linux/quotaio_v2.h>
-                int versions[] = V2_INITQVERSIONS_R1;
-                struct v2_disk_dqblk_r1 dqblk_r1;
-        ],[],[
-                AC_DEFINE(HAVE_QUOTA64, 1, [have quota64])
-                AC_MSG_RESULT([yes])
-        ],[
-                LB_CHECK_FILE([$LINUX/include/linux/lustre_version.h],[
-                        if test x$enable_server = xyes ; then
-                                AC_MSG_ERROR([You have got no 64-bit kernel quota support.])
-                        fi
-                ],[])
-                AC_MSG_RESULT([no])
-        ])
-fi
 ])
 
 #
