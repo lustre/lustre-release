@@ -335,7 +335,7 @@ int set_tunables(char *source, int src_len)
         glob_t glob_info;
         struct stat stat_buf;
         char *chk_major, *chk_minor;
-        char *savept, *dev;
+        char *savept = NULL, *dev;
         char *ret_path;
         char buf[PATH_MAX] = {'\0'}, path[PATH_MAX] = {'\0'};
         char real_path[PATH_MAX] = {'\0'};
