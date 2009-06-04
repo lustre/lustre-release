@@ -857,6 +857,7 @@ int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
                 RETURN(-EBUSY);
         }
 
+        LASSERT(!obt->obt_qctxt.lqc_immutable);
         down(&mds->mds_qonoff_sem);
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         rc = mds_admin_quota_on(obd, oqctl);
@@ -883,8 +884,11 @@ int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
         struct mds_obd *mds = &obd->u.mds;
         struct obd_device_target *obt = &obd->u.obt;
         struct lvfs_run_ctxt saved;
-        int rc, rc2;
+        int rc, rc2, imm;
         ENTRY;
+
+        imm = oqctl->qc_type & IMMQUOTA;
+        oqctl->qc_type &= ~IMMQUOTA;
 
         if (oqctl->qc_type != USRQUOTA &&
             oqctl->qc_type != GRPQUOTA &&
@@ -904,9 +908,11 @@ int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
 
         rc = obd_quotactl(mds->mds_osc_exp, oqctl);
         rc2 = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
-        if (!rc2)
+        if (!rc2) {
+                if (imm)
+                        obt->obt_qctxt.lqc_immutable = 1;
                 obt->obt_qctxt.lqc_flags &= ~UGQUOTA2LQC(oqctl->qc_type);
-
+        }
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         up(&mds->mds_qonoff_sem);
         atomic_inc(&obt->obt_quotachecking);

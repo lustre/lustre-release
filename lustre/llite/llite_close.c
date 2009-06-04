@@ -84,12 +84,13 @@ void vvp_write_complete(struct ccc_object *club, struct ccc_page *page)
 void ll_queue_done_writing(struct inode *inode, unsigned long flags)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
-
+        struct ccc_object *club = cl2ccc(ll_i2info(inode)->lli_clob);
         spin_lock(&lli->lli_lock);
         lli->lli_flags |= flags;
+        ENTRY;
 
         if ((lli->lli_flags & LLIF_DONE_WRITING) &&
-            list_empty(&lli->lli_pending_write_llaps)) {
+            list_empty(&club->cob_pending_list)) {
                 struct ll_close_queue *lcq = ll_i2sbi(inode)->ll_lcq;
 
                 if (lli->lli_flags & LLIF_MDS_SIZE_LOCK)
@@ -117,6 +118,7 @@ void ll_queue_done_writing(struct inode *inode, unsigned long flags)
                 spin_unlock(&lcq->lcq_lock);
         }
         spin_unlock(&lli->lli_lock);
+        EXIT;
 }
 
 /** Closes epoch and sends Size-on-MDS attribute update if possible.  Call
@@ -125,10 +127,11 @@ void ll_epoch_close(struct inode *inode, struct md_op_data *op_data,
                     struct obd_client_handle **och, unsigned long flags)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
+        struct ccc_object *club = cl2ccc(ll_i2info(inode)->lli_clob);
         ENTRY;
 
         spin_lock(&lli->lli_lock);
-        if (!(list_empty(&lli->lli_pending_write_llaps))) {
+        if (!(list_empty(&club->cob_pending_list))) {
                 if (!(lli->lli_flags & LLIF_EPOCH_PENDING)) {
                         LASSERT(*och != NULL);
                         LASSERT(lli->lli_pending_och == NULL);
@@ -180,7 +183,7 @@ void ll_epoch_close(struct inode *inode, struct md_op_data *op_data,
                 }
         }
 
-        LASSERT(list_empty(&lli->lli_pending_write_llaps));
+        LASSERT(list_empty(&club->cob_pending_list));
         lli->lli_flags &= ~LLIF_SOM_DIRTY;
         spin_unlock(&lli->lli_lock);
         op_data->op_flags |= MF_SOM_CHANGE;

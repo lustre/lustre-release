@@ -542,6 +542,7 @@ struct cl_lock *cl_lock_peek(const struct lu_env *env, const struct cl_io *io,
                 if (ok) {
                         cl_lock_hold_add(env, lock, scope, source);
                         cl_lock_user_add(env, lock);
+                        cl_lock_put(env, lock);
                 }
                 cl_lock_mutex_put(env, lock);
                 if (!ok) {

@@ -65,6 +65,12 @@ DIR2=${DIR2:-$MOUNT2}
 
 check_and_setup_lustre
 
+if [ x"$(som_check)" = x"enabled" ]; then
+        echo "Som is enabled, Quota is temporary conflicts with it"
+        check_and_cleanup_lustre
+        exit 0
+fi
+
 LOVNAME=`lctl get_param -n llite.*.lov.common_name | tail -n 1`
 OSTCOUNT=`lctl get_param -n lov.$LOVNAME.numobd`
 

@@ -1296,14 +1296,14 @@ static int osd_inode_setattr(const struct lu_env *env,
                 LDISKFS_I(inode)->i_disksize = attr->la_size;
                 i_size_write(inode, attr->la_size);
         }
-# if 0
-        /*
-         * OSD should not change "i_blocks" which is used by quota.
+
+        /* OSD should not change "i_blocks" which is used by quota.
          * "i_blocks" should be changed by ldiskfs only.
-         * Disable this assignment until SOM to fix some EA field. */
+         * Enable this assignment for SOM purpose now, until it is
+         * stored in SOM EA. */
         if (bits & LA_BLOCKS)
                 inode->i_blocks = attr->la_blocks;
-#endif
+
         if (bits & LA_MODE)
                 inode->i_mode   = (inode->i_mode & S_IFMT) |
                         (attr->la_mode & ~S_IFMT);

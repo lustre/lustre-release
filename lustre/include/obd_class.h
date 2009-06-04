@@ -540,6 +540,7 @@ obd_process_config(struct obd_device *obd, int datalen, void *data)
 
         OBD_CHECK_DEV(obd);
 
+        obd->obd_process_conf = 1;
         ldt = obd->obd_type->typ_lu;
         d = obd->obd_lu_dev;
         if (ldt != NULL && d != NULL) {
@@ -555,6 +556,7 @@ obd_process_config(struct obd_device *obd, int datalen, void *data)
                 rc = OBP(obd, process_config)(obd, datalen, data);
         }
         OBD_COUNTER_INCREMENT(obd, process_config);
+        obd->obd_process_conf = 0;
 
         RETURN(rc);
 }

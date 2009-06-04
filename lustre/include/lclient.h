@@ -136,6 +136,13 @@ static inline struct ccc_thread_info *ccc_env_info(const struct lu_env *env)
         return info;
 }
 
+static inline struct cl_attr *ccc_env_thread_attr(const struct lu_env *env)
+{
+        struct cl_attr *attr = &ccc_env_info(env)->cti_attr;
+        memset(attr, 0, sizeof(*attr));
+        return attr;
+}
+
 struct ccc_session {
         struct ccc_io cs_ios;
 };

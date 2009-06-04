@@ -739,7 +739,7 @@ static const char *obd_connect_names[] = {
         "mds_capability",
         "oss_capability",
         "early_lock_cancel",
-        "size_on_mds",
+        "som",
         "adaptive_timeouts",
         "lru_resize",
         "mds_mds_connection",

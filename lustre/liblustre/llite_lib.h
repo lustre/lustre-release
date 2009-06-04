@@ -255,6 +255,7 @@ _SYSIO_OFF_T llu_iop_pos(struct inode *ino, _SYSIO_OFF_T off);
 int llu_vmtruncate(struct inode * inode, loff_t offset, obd_flag obd_flags);
 void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir);
+void llu_ioepoch_open(struct llu_inode_info *lli, __u64 ioepoch);
 
 /* rw.c */
 int llu_iop_read(struct inode *ino, struct ioctx *ioctxp);

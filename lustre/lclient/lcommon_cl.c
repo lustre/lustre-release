@@ -665,7 +665,7 @@ void ccc_lock_state(const struct lu_env *env,
 
                 obj   = slice->cls_obj;
                 inode = ccc_object_inode(obj);
-                attr  = &ccc_env_info(env)->cti_attr;
+                attr  = ccc_env_thread_attr(env);
 
                 /* vmtruncate()->ll_truncate() first sets the i_size and then
                  * the kms under both a DLM lock and the
@@ -849,7 +849,7 @@ int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
                   struct cl_io *io, loff_t start, size_t count, int vfslock,
                   int *exceed)
 {
-        struct cl_attr *attr  = &ccc_env_info(env)->cti_attr;
+        struct cl_attr *attr  = ccc_env_thread_attr(env);
         struct inode   *inode = ccc_object_inode(obj);
         loff_t          pos   = start + count - 1;
         loff_t kms;

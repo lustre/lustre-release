@@ -238,6 +238,8 @@ static inline char *obd_uuid2str(struct obd_uuid *uuid)
 #define LUSTRE_Q_FINVALIDATE 0x80000c     /* invalidate filter quota data */
 
 #define UGQUOTA 2       /* set both USRQUOTA and GRPQUOTA */
+#define IMMQUOTA 0x4    /* set immutable quota flag, cannot be turned on/off
+                         * on-fly. temporary used by SOM */
 
 struct if_quotacheck {
         char                    obd_type[16];

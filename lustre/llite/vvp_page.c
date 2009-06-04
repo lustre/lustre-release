@@ -209,6 +209,7 @@ static int vvp_page_prep_write(const struct lu_env *env,
 
         if (clear_page_dirty_for_io(vmpage)) {
                 set_page_writeback(vmpage);
+                vvp_write_pending(cl2ccc(slice->cpl_obj), cl2ccc_page(slice));
                 result = 0;
         } else
                 result = -EALREADY;
@@ -361,7 +362,8 @@ static int vvp_page_make_ready(const struct lu_env *env,
                          * tree.
                          */
                         set_page_writeback(vmpage);
-
+                        vvp_write_pending(cl2ccc(slice->cpl_obj),
+                                          cl2ccc_page(slice));
                         CL_PAGE_HEADER(D_PAGE, env, pg, "readied\n");
                         result = 0;
                 } else

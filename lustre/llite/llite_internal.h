@@ -125,7 +125,6 @@ struct ll_inode_info {
 
         /* this lock protects posix_acl, pending_write_llaps, mmap_cnt */
         spinlock_t              lli_lock;
-        struct list_head        lli_pending_write_llaps;
         struct list_head        lli_close_list;
         /* handle is to be sent to MDS later on done_writing and setattr.
          * Open handle data are needed for the recovery to reconstruct
@@ -640,6 +639,7 @@ int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_glimpse_ioctl(struct ll_sb_info *sbi,
                      struct lov_stripe_md *lsm, lstat_t *st);
+void ll_ioepoch_open(struct ll_inode_info *lli, __u64 ioepoch);
 int ll_local_open(struct file *file,
                   struct lookup_intent *it, struct ll_file_data *fd,
                   struct obd_client_handle *och);

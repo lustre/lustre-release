@@ -245,6 +245,12 @@ static inline int exp_connect_vbr(struct obd_export *exp)
         return !!(exp->exp_connect_flags & OBD_CONNECT_VBR);
 }
 
+static inline int exp_connect_som(struct obd_export *exp)
+{
+        LASSERT(exp != NULL);
+        return !!(exp->exp_connect_flags & OBD_CONNECT_SOM);
+}
+
 static inline int imp_connect_lru_resize(struct obd_import *imp)
 {
         struct obd_connect_data *ocd;

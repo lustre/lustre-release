@@ -199,7 +199,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                                   OBD_CONNECT_OSS_CAPA | OBD_CONNECT_CANCELSET|
                                   OBD_CONNECT_FID      | OBD_CONNECT_AT |
                                   OBD_CONNECT_LOV_V3 | OBD_CONNECT_RMT_CLIENT |
-                                  OBD_CONNECT_VBR;
+                                  OBD_CONNECT_VBR      | OBD_CONNECT_SOM;
 
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         if (sbi->ll_flags & LL_SBI_LRU_RESIZE)
@@ -343,7 +343,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                                   OBD_CONNECT_SRVLOCK   | OBD_CONNECT_TRUNCLOCK|
                                   OBD_CONNECT_AT | OBD_CONNECT_RMT_CLIENT |
                                   OBD_CONNECT_OSS_CAPA | OBD_CONNECT_VBR|
-                                  OBD_CONNECT_GRANT_SHRINK;
+                                  OBD_CONNECT_GRANT_SHRINK | OBD_CONNECT_SOM;
 
         if (!OBD_FAIL_CHECK(OBD_FAIL_OSC_CONNECT_CKSUM)) {
                 /* OBD_CONNECT_CKSUM should always be set, even if checksums are
@@ -685,6 +685,8 @@ void client_common_put_super(struct super_block *sb)
 
         ll_close_thread_shutdown(sbi->ll_lcq);
 
+        cl_sb_fini(sb);
+
         /* destroy inodes in deathrow */
         prune_deathrow(sbi, 0);
 
@@ -868,7 +870,6 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_flags = 0;
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
         spin_lock_init(&lli->lli_lock);
-        INIT_LIST_HEAD(&lli->lli_pending_write_llaps);
         INIT_LIST_HEAD(&lli->lli_close_list);
         lli->lli_inode_magic = LLI_INODE_MAGIC;
         sema_init(&lli->lli_och_sem, 1);
@@ -1000,12 +1001,11 @@ void ll_put_super(struct super_block *sb)
                 }
         }
 
-        cl_sb_fini(sb);
-
         if (sbi->ll_lcq) {
                 /* Only if client_common_fill_super succeeded */
                 client_common_put_super(sb);
         }
+
         next = 0;
         while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) !=NULL) {
                 class_manual_cleanup(obd);
@@ -1340,10 +1340,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         if (rc)
                 GOTO(out, rc);
 
-        if (op_data->op_ioepoch)
-                CDEBUG(D_INODE, "Epoch "LPU64" opened on "DFID" for "
-                       "truncate\n", op_data->op_ioepoch, PFID(&lli->lli_fid));
-
+        ll_ioepoch_open(lli, op_data->op_ioepoch);
         if (!lsm || !S_ISREG(inode->i_mode)) {
                 CDEBUG(D_INODE, "no lsm: not setting attrs on OST\n");
                 GOTO(out, rc = 0);
@@ -1651,7 +1648,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         LASSERT(fid_seq(&lli->lli_fid) != 0);
 
         if (body->valid & OBD_MD_FLSIZE) {
-                if ((ll_i2mdexp(inode)->exp_connect_flags & OBD_CONNECT_SOM) &&
+                if (exp_connect_som(ll_i2mdexp(inode)) &&
                     S_ISREG(inode->i_mode) && lli->lli_smd) {
                         struct lustre_handle lockh;
                         ldlm_mode_t mode;

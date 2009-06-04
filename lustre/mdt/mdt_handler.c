@@ -1765,6 +1765,13 @@ static int mdt_quotactl_handle(struct mdt_thread_info *info)
 
         switch (oqctl->qc_cmd) {
         case Q_QUOTAON:
+                if (info->mti_mdt->mdt_som_conf) {
+                        /* Quota cannot be used together with SOM while
+                         * SOM stored blocks in i_blocks but not in SOM EA. */
+                        LCONSOLE_ERROR("Fail to turn Quota on: SOM is enabled "
+                                       "and temporary conflicts with quota.\n");
+                        RETURN(-ENOTSUPP);
+                }
                 rc = mqo->mqo_on(info->mti_env, next, oqctl->qc_type);
                 break;
         case Q_QUOTAOFF:
@@ -4522,6 +4529,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 
         m->mdt_max_mdsize = MAX_MD_SIZE;
         m->mdt_max_cookiesize = sizeof(struct llog_cookie);
+        m->mdt_som_conf = 0;
 
         m->mdt_opts.mo_user_xattr = 0;
         m->mdt_opts.mo_acl = 0;
@@ -4942,6 +4950,9 @@ static int mdt_connect_internal(struct obd_export *exp,
                 if (!mdt->mdt_opts.mo_user_xattr)
                         data->ocd_connect_flags &= ~OBD_CONNECT_XATTR;
 
+                if (!mdt->mdt_som_conf)
+                        data->ocd_connect_flags &= ~OBD_CONNECT_SOM;
+                
                 spin_lock(&exp->exp_lock);
                 exp->exp_connect_flags = data->ocd_connect_flags;
                 spin_unlock(&exp->exp_lock);
@@ -4961,6 +4972,14 @@ static int mdt_connect_internal(struct obd_export *exp,
         if ((exp->exp_connect_flags & OBD_CONNECT_FID) == 0) {
                 CWARN("%s: MDS requires FID support, but client not\n",
                       mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name);
+                return -EBADE;
+        }
+
+        if (mdt->mdt_som_conf &&
+            !(exp->exp_connect_flags & OBD_CONNECT_MDS_MDS) &&
+            !(exp->exp_connect_flags & OBD_CONNECT_SOM)) {
+                CWARN("%s: MDS has SOM enabled, but client does not support "
+                      "it\n", mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name);
                 return -EBADE;
         }
 

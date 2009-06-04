@@ -803,11 +803,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 if (rc)
                         RETURN(rc);
 
-                if (op_data.op_ioepoch)
-                        CDEBUG(D_INODE, "Epoch "LPU64" opened on "DFID" for "
-                               "truncate\n", op_data.op_ioepoch,
-                               PFID(&llu_i2info(inode)->lli_fid));
-
+                llu_ioepoch_open(llu_i2info(inode), op_data.op_ioepoch);
                 if (!lsm || !S_ISREG(st->st_mode)) {
                         CDEBUG(D_INODE, "no lsm: not setting attrs on OST\n");
                         GOTO(out, rc);
@@ -1993,7 +1989,7 @@ llu_fsswop_mount(const char *source,
 
         ocd.ocd_connect_flags = OBD_CONNECT_IBITS | OBD_CONNECT_VERSION |
                                 OBD_CONNECT_FID | OBD_CONNECT_AT |
-                                OBD_CONNECT_VBR;
+                                OBD_CONNECT_VBR | OBD_CONNECT_SOM;
 #ifdef LIBLUSTRE_POSIX_ACL
         ocd.ocd_connect_flags |= OBD_CONNECT_ACL;
 #endif
@@ -2029,7 +2025,9 @@ llu_fsswop_mount(const char *source,
 
         ocd.ocd_connect_flags = OBD_CONNECT_SRVLOCK | OBD_CONNECT_REQPORTAL |
                                 OBD_CONNECT_VERSION | OBD_CONNECT_TRUNCLOCK |
-                                OBD_CONNECT_FID | OBD_CONNECT_AT;
+                                OBD_CONNECT_FID | OBD_CONNECT_AT |
+                                OBD_CONNECT_SOM;
+
         ocd.ocd_version = LUSTRE_VERSION_CODE;
         err = obd_connect(NULL, &sbi->ll_dt_exp, obd, &sbi->ll_sb_uuid, &ocd, NULL);
         if (err) {

@@ -1033,8 +1033,9 @@ struct obd_device {
                       obd_fail:1,          /* cleanup with failover */
                       obd_async_recov:1,   /* allow asyncronous orphan cleanup */
                       obd_no_conn:1,       /* deny new connections */
-                      obd_inactive:1;      /* device active/inactive
+                      obd_inactive:1,      /* device active/inactive
                                            * (for /proc/status only!!) */
+                      obd_process_conf:1;  /* device is processing mgs config */
         /* uuid-export hash body */
         struct lustre_hash     *obd_uuid_hash;
         /* nid-export hash body */

@@ -230,10 +230,6 @@ static int cmm_quota_off(const struct lu_env *env, struct md_device *m,
         int rc;
         ENTRY;
 
-        /* disable quota for CMD case temporary. */
-        if (cmm_dev->cmm_tgt_count)
-                RETURN(-EOPNOTSUPP);
-
         rc = cmm_child_ops(cmm_dev)->mdo_quota.mqo_off(env,
                                                        cmm_dev->cmm_child,
                                                        type);

@@ -707,7 +707,7 @@ int ll_readahead(const struct lu_env *env, struct cl_io *io,
 {
         struct vvp_io *vio = vvp_env_io(env);
         struct vvp_thread_info *vti = vvp_env_info(env);
-        struct ccc_thread_info *cti = ccc_env_info(env);
+        struct cl_attr *attr = ccc_env_thread_attr(env);
         unsigned long start = 0, end = 0, reserved;
         unsigned long ra_end, len;
         struct inode *inode;
@@ -715,7 +715,6 @@ int ll_readahead(const struct lu_env *env, struct cl_io *io,
         struct ra_io_arg *ria = &vti->vti_ria;
         struct ll_inode_info *lli;
         struct cl_object *clob;
-        struct cl_attr   *attr = &cti->cti_attr;
         int ret = 0;
         __u64 kms;
         ENTRY;

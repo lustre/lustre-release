@@ -44,7 +44,7 @@ SETUP=${SETUP:-:}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="12 16 33a"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="12 16 23 33a"
 
 SANITYLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=false
@@ -436,19 +436,21 @@ test_23() { # Bug 5972
 	cancel_lru_locks osc
 	
 	time1=`date +%s`	
-	sleep 2
+	#MAX_ATIME_DIFF 60, we update atime only if older than 60 seconds
+	sleep 61
 	
 	multiop_bg_pause $DIR1/f23 or20_c || return 1
-	MULTIPID=$!
+        # with SOM and opencache enabled, we need to close a file and cancel
+        # open lock to get atime propogated to MDS
+        kill -USR1 $!
+        cancel_lru_locks mdc
 
 	time2=`stat -c "%X" $DIR2/f23`
 
 	if (( $time2 <= $time1 )); then
-		kill -USR1 $MULTIPID
 		error "atime doesn't update among nodes"
 	fi
 
-	kill -USR1 $MULTIPID || return 1
 	rm -f $DIR1/f23 || error "rm -f $DIR1/f23 failed"
 	true
 }

@@ -286,7 +286,7 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo, int flags)
         /* attr shouldn't be set on remote object */
         LASSERT(mdt_object_exists(mo) >= 0);
 
-        if (info->mti_epoch)
+        if (exp_connect_som(info->mti_exp) && info->mti_epoch)
                 som_update = (info->mti_epoch->flags & MF_SOM_CHANGE);
 
         /* Try to avoid object_lock if another epoch has been started

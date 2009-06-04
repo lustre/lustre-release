@@ -5899,6 +5899,64 @@ test_131e() {
 }
 run_test 131e "test read hitting hole"
 
+get_ost_param() {
+        local token=$1
+        local gl_sum=0
+        for node in $(osts_nodes); do
+                gl=$(do_node $node "$LCTL get_param -n ost.OSS.ost.stats" | awk '/'$token'/ {print $2}' | head -n 1)
+                [ x$gl = x"" ] && gl=0
+                gl_sum=$((gl_sum + gl))
+        done
+        echo $gl
+}
+
+som_mode_switch() {
+        local som=$1
+        local gl1=$2
+        local gl2=$3
+
+        if [ x$som = x"enabled" ]; then
+                [ $((gl2 - gl1)) -gt 0 ] && error "no glimpse RPC is expected"
+                do_facet mgs "$LCTL conf_param $FSNAME.mdt.som=disabled"
+        else
+                [ $((gl2 - gl1)) -gt 0 ] || error "some glimpse RPC is expected"
+                do_facet mgs "$LCTL conf_param $FSNAME.mdt.som=enabled"
+        fi
+
+        # do remount to make new mount-conf parameters actual
+        echo remounting...
+        sync
+        stopall 1&>2 2>/dev/null
+        setupall 1&>2 2>/dev/null
+}
+
+test_132() { #1028, SOM
+	local num=$(get_mds_dir $DIR)
+	local mymds=mds${num}
+
+        dd if=/dev/zero of=$DIR/$tfile count=1 2>/dev/null
+        cancel_lru_locks osc
+
+        som1=$(do_facet $mymds "$LCTL get_param mdt.*.som" |  awk -F= ' {print $2}' | head -n 1)
+
+        gl1=$(get_ost_param "ldlm_glimpse_enqueue")
+        stat $DIR/$tfile >/dev/null
+        gl2=$(get_ost_param "ldlm_glimpse_enqueue")
+        echo "SOM is "$som1", "$((gl2 - gl1))" glimpse RPC occured"
+        cancel_lru_locks osc
+        som_mode_switch $som1 $gl1 $gl2
+
+        som2=$(do_facet $mymds "$LCTL get_param mdt.*.som" |  awk -F= ' {print $2}' | head -n 1)
+        [ $som1 != $som2 ] || error "som is still "$som2
+
+        gl1=$(get_ost_param "ldlm_glimpse_enqueue")
+        stat $DIR/$tfile >/dev/null
+        gl2=$(get_ost_param "ldlm_glimpse_enqueue")
+        echo "SOM is "$som2", "$((gl2 - gl1))" glimpse RPC occured"
+        som_mode_switch $som2 $gl1 $gl2
+}
+run_test 132 "som avoids glimpse rpc"
+
 test_140() { #bug-17379
         mkdir -p $DIR/$tdir || error "Creating dir $DIR/$tdir"
         cd $DIR/$tdir || error "Changing to $DIR/$tdir"

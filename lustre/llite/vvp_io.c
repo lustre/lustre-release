@@ -661,10 +661,7 @@ static int vvp_page_sync_io(const struct lu_env *env, struct cl_io *io,
                             int to, enum cl_req_type crt)
 {
         struct cl_2queue  *queue;
-        struct ccc_object *cobo   = cl2ccc(page->cp_obj);
         struct cl_sync_io *anchor = &ccc_env_info(env)->cti_sync_io;
-
-        int writing = io->ci_type == CIT_WRITE;
         int result;
 
         LASSERT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE);
@@ -672,10 +669,6 @@ static int vvp_page_sync_io(const struct lu_env *env, struct cl_io *io,
         queue = &io->ci_queue;
 
         cl_2queue_init_page(queue, page);
-
-        if (writing)
-                /* Do not pass llap here as it is sync write. */
-                vvp_write_pending(cobo, cp);
 
         cl_sync_io_init(anchor, 1);
         cp->cpg_sync_io = anchor;
@@ -707,7 +700,7 @@ static int vvp_io_prepare_partial(const struct lu_env *env, struct cl_io *io,
                                   struct ccc_page *cp,
                                   unsigned from, unsigned to)
 {
-        struct cl_attr *attr   = &ccc_env_info(env)->cti_attr;
+        struct cl_attr *attr   = ccc_env_thread_attr(env);
         loff_t          offset = cl_offset(obj, pg->cp_index);
         int             result;
 
@@ -829,6 +822,9 @@ static int vvp_io_commit_write(const struct lu_env *env,
                 tallyop = LPROC_LL_DIRTY_MISSES;
                 vvp_write_pending(cl2ccc(obj), cp);
                 set_page_dirty(vmpage);
+                /* ll_set_page_dirty() does the same for now, but
+                 * it will not soon. */
+                vvp_write_pending(cl2ccc(obj), cp);
                 result = cl_page_cache_add(env, io, pg, CRT_WRITE);
                 if (result == -EDQUOT)
                         /*

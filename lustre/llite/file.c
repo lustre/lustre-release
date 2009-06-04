@@ -92,8 +92,7 @@ static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
         if (!(och->och_flags & FMODE_WRITE))
                 goto out;
 
-        if (!(ll_i2mdexp(inode)->exp_connect_flags & OBD_CONNECT_SOM) ||
-            !S_ISREG(inode->i_mode))
+        if (!(exp_connect_som(ll_i2mdexp(inode))) || !S_ISREG(inode->i_mode))
                 op_data->op_attr.ia_valid |= ATTR_SIZE | ATTR_BLOCKS;
         else
                 ll_epoch_close(inode, op_data, &och, 0);
@@ -142,7 +141,6 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
         rc = md_close(md_exp, op_data, och->och_mod, &req);
         if (rc == -EAGAIN) {
                 /* This close must have the epoch closed. */
-                LASSERT(exp->exp_connect_flags & OBD_CONNECT_SOM);
                 LASSERT(epoch_close);
                 /* MDS has instructed us to obtain Size-on-MDS attribute from
                  * OSTs and send setattr to back to MDS. */
@@ -403,6 +401,15 @@ out:
         RETURN(rc);
 }
 
+void ll_ioepoch_open(struct ll_inode_info *lli, __u64 ioepoch)
+{
+        if (ioepoch && lli->lli_ioepoch != ioepoch) {
+                lli->lli_ioepoch = ioepoch;
+                CDEBUG(D_INODE, "Epoch "LPU64" opened on "DFID"\n",
+                       ioepoch, PFID(&lli->lli_fid));
+        }
+}
+
 static int ll_och_fill(struct obd_export *md_exp, struct ll_inode_info *lli,
                        struct lookup_intent *it, struct obd_client_handle *och)
 {
@@ -418,7 +425,7 @@ static int ll_och_fill(struct obd_export *md_exp, struct ll_inode_info *lli,
         och->och_magic = OBD_CLIENT_HANDLE_MAGIC;
         och->och_fid = lli->lli_fid;
         och->och_flags = it->it_flags;
-        lli->lli_ioepoch = body->ioepoch;
+        ll_ioepoch_open(lli, body->ioepoch);
 
         return md_set_open_replay_data(md_exp, och, req);
 }
