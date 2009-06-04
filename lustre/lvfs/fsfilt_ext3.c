@@ -1705,8 +1705,9 @@ get_group_desc(struct super_block *sb, int group)
         return gdp + desc;
 }
 
+#ifndef HAVE_EXT4_LDISKFS
 static inline struct buffer_head *
-read_inode_bitmap(struct super_block *sb, unsigned long group)
+ext3_read_inode_bitmap(struct super_block *sb, unsigned long group)
 {
         struct ext3_group_desc *desc;
         struct buffer_head *bh;
@@ -1715,6 +1716,7 @@ read_inode_bitmap(struct super_block *sb, unsigned long group)
         bh = sb_bread(sb, ext3_inode_bitmap(sb, desc));
         return bh;
 }
+#endif
 
 static inline struct inode *ext3_iget_inuse(struct super_block *sb,
                                      struct buffer_head *bitmap_bh,
@@ -2018,9 +2020,9 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
         /* check quota and update in hash */
         for (group = 0; group < sbi->s_groups_count; group++) {
                 ino = group * sbi->s_inodes_per_group + 1;
-                bitmap_bh = read_inode_bitmap(sb, group);
+                bitmap_bh = ext3_read_inode_bitmap(sb, group);
                 if (!bitmap_bh) {
-                        CERROR("read_inode_bitmap group %d failed", group);
+                        CERROR("ext3_read_inode_bitmap group %d failed", group);
                         GOTO(out, -EIO);
                 }
 
