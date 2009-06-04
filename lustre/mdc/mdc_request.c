@@ -676,9 +676,6 @@ void mdc_commit_open(struct ptlrpc_request *req)
         if (mod == NULL)
                 return;
 
-        if (mod->mod_close_req != NULL)
-                mod->mod_close_req->rq_cb_data = NULL;
-
         if (mod->mod_och != NULL)
                 mod->mod_och->och_mod = NULL;
 
@@ -833,6 +830,9 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
                 if (body == NULL)
                         rc = -EPROTO;
         }
+
+        if (rc != 0 && mod)
+                 mod->mod_close_req = NULL;
 
         *request = req;
         RETURN(rc);
