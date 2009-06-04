@@ -1,7 +1,7 @@
 Index: linux-2.6.27.21-0.1/fs/ext4/ext4_jbd2.h
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_jbd2.h
-+++ linux-2.6.27.21-0.1/fs/ext4/ext4_jbd2.h
+--- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_jbd2.h	2009-06-02 18:39:19.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/ext4_jbd2.h	2009-06-04 17:01:43.000000000 +0530
 @@ -35,6 +35,9 @@
  	(EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_EXTENTS)	\
  		|| test_opt(sb, EXTENTS) ? 27U : 8U)
@@ -14,8 +14,8 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4_jbd2.h
   * and the superblock, which are already accounted for. */
 Index: linux-2.6.27.21-0.1/fs/ext4/extents.c
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/extents.c
-+++ linux-2.6.27.21-0.1/fs/ext4/extents.c
+--- linux-2.6.27.21-0.1.orig/fs/ext4/extents.c	2009-06-04 17:01:43.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/extents.c	2009-06-04 17:01:48.000000000 +0530
 @@ -48,7 +48,7 @@
   * ext_pblock:
   * combine low and high parts of physical block number into ext4_fsblk_t
@@ -25,7 +25,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/extents.c
  {
  	ext4_fsblk_t block;
  
-@@ -58,6 +58,17 @@ static ext4_fsblk_t ext_pblock(struct ex
+@@ -58,6 +58,17 @@
  }
  
  /*
@@ -43,7 +43,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/extents.c
   * idx_pblock:
   * combine low and high parts of a leaf physical block number into ext4_fsblk_t
   */
-@@ -71,17 +82,6 @@ ext4_fsblk_t idx_pblock(struct ext4_exte
+@@ -71,17 +82,6 @@
  }
  
  /*
@@ -61,7 +61,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/extents.c
   * ext4_idx_store_pblock:
   * stores a large physical block number into an index struct,
   * breaking it into parts
-@@ -1851,6 +1851,56 @@ static int ext4_ext_rm_idx(handle_t *han
+@@ -1851,6 +1851,56 @@
  }
  
  /*
@@ -118,7 +118,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/extents.c
   * ext4_ext_calc_credits_for_single_extent:
   * This routine returns max. credits that needed to insert an extent
   * to the extent tree.
-@@ -3170,3 +3220,14 @@ int ext4_fiemap(struct inode *inode, str
+@@ -3170,3 +3220,14 @@
  
  	return error;
  }
@@ -135,8 +135,8 @@ Index: linux-2.6.27.21-0.1/fs/ext4/extents.c
 +
 Index: linux-2.6.27.21-0.1/fs/ext4/ext4_extents.h
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_extents.h
-+++ linux-2.6.27.21-0.1/fs/ext4/ext4_extents.h
+--- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_extents.h	2009-06-04 17:01:43.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/ext4_extents.h	2009-06-04 17:01:48.000000000 +0530
 @@ -59,6 +59,11 @@
   */
  #define EXT_STATS_
@@ -149,7 +149,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4_extents.h
  
  /*
   * ext4_inode has i_block array (60 bytes total).
-@@ -124,6 +129,7 @@ struct ext4_ext_path {
+@@ -124,6 +129,7 @@
  #define EXT4_EXT_CACHE_GAP	1
  #define EXT4_EXT_CACHE_EXTENT	2
  
@@ -157,7 +157,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4_extents.h
  
  #define EXT_MAX_BLOCK	0xffffffff
  
-@@ -223,10 +229,14 @@ static inline int ext4_ext_get_actual_le
+@@ -223,10 +229,14 @@
  		(le16_to_cpu(ext->ee_len) - EXT_INIT_MAX_LEN));
  }
  
@@ -174,9 +174,9 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4_extents.h
  						   struct ext4_ext_path *path);
 Index: linux-2.6.27.21-0.1/fs/ext4/mballoc.c
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/mballoc.c
-+++ linux-2.6.27.21-0.1/fs/ext4/mballoc.c
-@@ -4348,6 +4348,13 @@ repeat:
+--- linux-2.6.27.21-0.1.orig/fs/ext4/mballoc.c	2009-06-04 17:01:43.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/mballoc.c	2009-06-04 17:01:43.000000000 +0530
+@@ -4354,6 +4354,13 @@
  		kmem_cache_free(ext4_ac_cachep, ac);
  }
  
@@ -190,7 +190,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/mballoc.c
  /*
   * finds all preallocated spaces and return blocks being freed to them
   * if preallocated space becomes full (no block is used from the space)
-@@ -5170,3 +5177,6 @@ error_return:
+@@ -5176,3 +5183,6 @@
  		kmem_cache_free(ext4_ac_cachep, ac);
  	return;
  }
@@ -199,9 +199,9 @@ Index: linux-2.6.27.21-0.1/fs/ext4/mballoc.c
 +
 Index: linux-2.6.27.21-0.1/fs/ext4/super.c
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/super.c
-+++ linux-2.6.27.21-0.1/fs/ext4/super.c
-@@ -91,6 +91,7 @@ ext4_fsblk_t ext4_inode_bitmap(struct su
+--- linux-2.6.27.21-0.1.orig/fs/ext4/super.c	2009-06-04 17:01:43.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/super.c	2009-06-04 17:01:46.000000000 +0530
+@@ -91,6 +91,7 @@
  		(EXT4_DESC_SIZE(sb) >= EXT4_MIN_DESC_SIZE_64BIT ?
  		(ext4_fsblk_t)le32_to_cpu(bg->bg_inode_bitmap_hi) << 32 : 0);
  }
@@ -209,7 +209,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  
  ext4_fsblk_t ext4_inode_table(struct super_block *sb,
  			      struct ext4_group_desc *bg)
-@@ -1295,6 +1296,7 @@ enum {
+@@ -1295,6 +1296,7 @@
  	Opt_stripe, Opt_delalloc, Opt_nodelalloc,
  	Opt_inode_readahead_blks, Opt_bigendian_extents,
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
@@ -217,7 +217,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  };
  
  static const match_table_t tokens = {
-@@ -1356,6 +1358,7 @@ static const match_table_t tokens = {
+@@ -1356,6 +1358,7 @@
  	{Opt_nodelalloc, "nodelalloc"},
  	{Opt_inode_readahead_blks, "inode_readahead_blks=%u"},
  	{Opt_bigendian_extents, "bigendian_extents"},
@@ -225,7 +225,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  	{Opt_err, NULL},
  };
  
-@@ -1774,6 +1777,8 @@ set_qf_format:
+@@ -1774,6 +1777,8 @@
  		case Opt_bigendian_extents:
  			bigendian_extents = 1;
  			break;
@@ -234,7 +234,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  		default:
  			printk(KERN_ERR
  			       "EXT4-fs: Unrecognized mount option \"%s\" "
-@@ -4095,7 +4100,7 @@ static struct file_system_type ext4dev_f
+@@ -4094,7 +4099,7 @@
  	.kill_sb	= kill_block_super,
  	.fs_flags	= FS_REQUIRES_DEV,
  };
@@ -245,9 +245,9 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  {
 Index: linux-2.6.27.21-0.1/fs/ext4/ext4_jbd2.c
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_jbd2.c
-+++ linux-2.6.27.21-0.1/fs/ext4/ext4_jbd2.c
-@@ -21,6 +21,7 @@ int __ext4_journal_get_write_access(cons
+--- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_jbd2.c	2009-06-02 18:39:19.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/ext4_jbd2.c	2009-06-04 17:01:43.000000000 +0530
+@@ -21,6 +21,7 @@
  		ext4_journal_abort_handle(where, __func__, bh, handle, err);
  	return err;
  }
@@ -255,15 +255,15 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4_jbd2.c
  
  int __ext4_journal_forget(const char *where, handle_t *handle,
  				struct buffer_head *bh)
-@@ -57,3 +58,4 @@ int __ext4_journal_dirty_metadata(const 
+@@ -57,3 +58,4 @@
  		ext4_journal_abort_handle(where, __func__, bh, handle, err);
  	return err;
  }
 +EXPORT_SYMBOL(__ext4_journal_dirty_metadata);
 Index: linux-2.6.27.21-0.1/fs/ext4/ext4.h
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/ext4.h
-+++ linux-2.6.27.21-0.1/fs/ext4/ext4.h
+--- linux-2.6.27.21-0.1.orig/fs/ext4/ext4.h	2009-06-04 17:01:43.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/ext4.h	2009-06-04 17:02:07.000000000 +0530
 @@ -26,6 +26,9 @@
   * The fourth extended filesystem constants/structures
   */
@@ -274,7 +274,16 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4.h
  /*
   * Define EXT4FS_DEBUG to produce debug messages
   */
-@@ -1116,6 +1119,8 @@ extern void ext4_mb_update_group_info(st
+@@ -400,6 +403,8 @@
+ 	__le32  i_version_hi;	/* high 32 bits for 64-bit version */
+ };
+ 
++/* SLES11 kernel already has 64-bit inode->i_version field */
++#define HAVE_DISK_INODE_VERSION
+ 
+ #define EXT4_EPOCH_BITS 2
+ #define EXT4_EPOCH_MASK ((1 << EXT4_EPOCH_BITS) - 1)
+@@ -1115,6 +1120,8 @@
  extern int ext4_mb_get_buddy_cache_lock(struct super_block *, ext4_group_t);
  extern void ext4_mb_put_buddy_cache_lock(struct super_block *,
  						ext4_group_t, int);
@@ -285,9 +294,9 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4.h
  		struct buffer_head *bh, ext4_fsblk_t blocknr);
 Index: linux-2.6.27.21-0.1/fs/ext4/inode.c
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/inode.c
-+++ linux-2.6.27.21-0.1/fs/ext4/inode.c
-@@ -4240,6 +4240,7 @@ bad_inode:
+--- linux-2.6.27.21-0.1.orig/fs/ext4/inode.c	2009-06-04 17:01:43.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/inode.c	2009-06-04 17:01:43.000000000 +0530
+@@ -4240,6 +4240,7 @@
  	iget_failed(inode);
  	return ERR_PTR(ret);
  }
