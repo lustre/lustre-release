@@ -597,11 +597,10 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
         RETURN(rc);
 }
 
-static int fsfilt_ext3_iocontrol(struct inode * inode, struct file *file,
+static int fsfilt_ext3_iocontrol(struct inode *inode, struct file *file,
                                  unsigned int cmd, unsigned long arg)
 {
         int rc = 0;
-        struct file dummy_file;
         ENTRY;
 
         /* FIXME: Can't do this because of nested transaction deadlock */
@@ -611,20 +610,9 @@ static int fsfilt_ext3_iocontrol(struct inode * inode, struct file *file,
         }
 
 #ifdef HAVE_EXT4_LDISKFS
-        /* ext4_ioctl does not have a inode argument, so create a dummy file */
-        if (file == NULL) {
-                OBD_ALLOC_PTR(dummy_file.f_dentry);
-                if (dummy_file.f_dentry == NULL) {
-                        RETURN(-ENOMEM);
-                }
-
-                dummy_file.f_dentry->d_inode = inode;
-        }
+        /* ext4_ioctl does not have a inode argument */
         if (inode->i_fop->unlocked_ioctl)
-                rc = inode->i_fop->unlocked_ioctl(file ?: &dummy_file, cmd,arg);
-
-        if (file == NULL)
-                OBD_FREE_PTR(dummy_file.f_dentry);
+                rc = inode->i_fop->unlocked_ioctl(file, cmd, arg);
 #else
         if (inode->i_fop->ioctl)
                 rc = inode->i_fop->ioctl(inode, file, cmd, arg);
