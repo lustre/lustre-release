@@ -505,7 +505,7 @@ static int mds_lov_set_one_nextid(struct obd_device *obd, __u32 idx, obd_id *id)
 
 /* Update the lov desc for a new size lov. */
 static int mds_lov_update_desc(struct obd_device *obd, int idx,
-                               struct obd_uuid *uuid)
+                               struct obd_uuid *uuid, enum obd_notify_event ev)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_desc *ld;
@@ -544,7 +544,7 @@ static int mds_lov_update_desc(struct obd_device *obd, int idx,
         /*XXX this notifies the MDD until lov handling use old mds code */
         if (obd->obd_upcall.onu_owner) {
                  LASSERT(obd->obd_upcall.onu_upcall != NULL);
-                 rc = obd->obd_upcall.onu_upcall(obd, NULL, OBD_NOTIFY_ACTIVE,
+                 rc = obd->obd_upcall.onu_upcall(obd, NULL, ev,
                                                  obd->obd_upcall.onu_owner);
         }
 out:
@@ -555,7 +555,7 @@ out:
 /* Inform MDS about new/updated target */
 static int mds_lov_update_mds(struct obd_device *obd,
                               struct obd_device *watched,
-                              __u32 idx)
+                              __u32 idx, enum obd_notify_event ev)
 {
         struct mds_obd *mds = &obd->u.mds;
         int rc = 0;
@@ -566,7 +566,7 @@ static int mds_lov_update_mds(struct obd_device *obd,
         ENTRY;
 
         /* Don't let anyone else mess with mds_lov_objids now */
-        rc = mds_lov_update_desc(obd, idx, &watched->u.cli.cl_target_uuid);
+        rc = mds_lov_update_desc(obd, idx, &watched->u.cli.cl_target_uuid, ev);
         if (rc)
                 GOTO(out, rc);
 
@@ -711,9 +711,10 @@ int mds_lov_disconnect(struct obd_device *obd)
 }
 
 struct mds_lov_sync_info {
-        struct obd_device *mlsi_obd;     /* the lov device to sync */
-        struct obd_device *mlsi_watched; /* target osc */
-        __u32              mlsi_index;   /* index of target */
+        struct obd_device    *mlsi_obd;     /* the lov device to sync */
+        struct obd_device    *mlsi_watched; /* target osc */
+        __u32                 mlsi_index;   /* index of target */
+        enum obd_notify_event mlsi_ev;      /* event type */
 };
 
 static int mds_propagate_capa_keys(struct mds_obd *mds, struct obd_uuid *uuid)
@@ -757,6 +758,7 @@ static int __mds_lov_synchronize(void *data)
         struct mds_obd *mds = &obd->u.mds;
         struct obd_uuid *uuid;
         __u32  idx = mlsi->mlsi_index;
+        enum obd_notify_event ev = mlsi->mlsi_ev;
         struct mds_group_info mgi;
         struct llog_ctxt *ctxt;
         int rc = 0;
@@ -774,7 +776,7 @@ static int __mds_lov_synchronize(void *data)
                 GOTO(out, rc = -ENODEV);
 
         OBD_RACE(OBD_FAIL_MDS_LOV_SYNC_RACE);
-        rc = mds_lov_update_mds(obd, watched, idx);
+        rc = mds_lov_update_mds(obd, watched, idx, ev);
         if (rc != 0) {
                 CERROR("%s failed at update_mds: %d\n", obd_uuid2str(uuid), rc);
                 GOTO(out, rc);
@@ -814,14 +816,14 @@ static int __mds_lov_synchronize(void *data)
         }
 
 #ifdef HAVE_QUOTA_SUPPORT
-        if (obd->obd_upcall.onu_owner) {
+        if (obd->obd_upcall.onu_owner) { 
                 /*
                  * This is a hack for mds_notify->mdd_notify. When the mds obd
                  * in mdd is removed, This hack should be removed.
                  */
-                 LASSERT(obd->obd_upcall.onu_upcall != NULL);
-                 rc = obd->obd_upcall.onu_upcall(obd, NULL, OBD_NOTIFY_QUOTA,
-                                                 obd->obd_upcall.onu_owner);
+                LASSERT(obd->obd_upcall.onu_upcall != NULL);
+                rc = obd->obd_upcall.onu_upcall(obd, NULL, OBD_NOTIFY_QUOTA,
+                                                obd->obd_upcall.onu_owner);
         }
 #endif
         EXIT;
@@ -854,7 +856,7 @@ int mds_lov_synchronize(void *data)
 
 int mds_lov_start_synchronize(struct obd_device *obd,
                               struct obd_device *watched,
-                              void *data, int nonblock)
+                              void *data, enum obd_notify_event ev)
 {
         struct mds_lov_sync_info *mlsi;
         int rc;
@@ -872,6 +874,7 @@ int mds_lov_start_synchronize(struct obd_device *obd,
         mlsi->mlsi_obd = obd;
         mlsi->mlsi_watched = watched;
         mlsi->mlsi_index = *(__u32 *)data;
+        mlsi->mlsi_ev = ev;
 
         /* Although class_export_get(obd->obd_self_export) would lock
            the MDS in place, since it's only a self-export
@@ -883,7 +886,7 @@ int mds_lov_start_synchronize(struct obd_device *obd,
            finish for as long as the sync is blocking. */
         class_incref(obd, "mds_lov_synchronize", obd);
 
-        if (nonblock) {
+        if (ev != OBD_NOTIFY_SYNC) {
                 /* Synchronize in the background */
                 rc = cfs_kernel_thread(mds_lov_synchronize, mlsi,
                                        CLONE_VM | CLONE_FILES);
@@ -939,12 +942,9 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                    after the mdt in the config log.  They didn't make it into
                    mds_lov_connect. */
                 rc = mds_lov_update_desc(obd, *(__u32 *)data,
-                                        &watched->u.cli.cl_target_uuid);
-                RETURN(rc);
+                                         &watched->u.cli.cl_target_uuid, ev);
+        } else {
+                rc = mds_lov_start_synchronize(obd, watched, data, ev);
         }
-
-        rc = mds_lov_start_synchronize(obd, watched, data,
-                                       !(ev == OBD_NOTIFY_SYNC));
-
         RETURN(rc);
 }

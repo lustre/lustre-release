@@ -1669,6 +1669,24 @@ init_facets_vars () {
     done
 }
 
+mds_sanity_check () {
+    local timeout=$1
+    local period=0
+
+    while [ $period -lt $timeout ]; do
+        count=$(do_facet $SINGLEMDS "lctl dl | grep 'osc.*mdtlov_UUID' | grep ' IN ' 2>/dev/null | wc -l")
+        if [ $count -eq 0 ]; then
+            break
+        fi
+
+        echo "There are $count OST are inactive, wait $period seconds, and try again"
+        sleep 3
+        period=$((period+3))
+    done
+
+    [ $period -lt $timeout ] || log "$count OST are inactive after $timeout seconds, give up"
+}
+
 init_param_vars () {
     if ! remote_ost_nodsh && ! remote_mds_nodsh; then
         export MDSVER=$(do_facet $SINGLEMDS "lctl get_param version" | cut -d. -f1,2)
@@ -1680,6 +1698,8 @@ init_param_vars () {
         TIMEOUT=$(do_facet $SINGLEMDS "lctl get_param -n timeout")
 
     log "Using TIMEOUT=$TIMEOUT"
+
+    mds_sanity_check $TIMEOUT
 
     if [ "$ENABLE_QUOTA" ]; then
         setup_quota $MOUNT  || return 2

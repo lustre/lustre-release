@@ -1407,7 +1407,7 @@ static int mds_get_space(struct obd_device *obd, struct obd_quotactl *oqctl)
         /* get block usage from OSS */
         soqc->qc_dqblk.dqb_curspace = 0;
         rc = obd_quotactl(obd->u.mds.mds_osc_exp, soqc);
-        if (!rc) {
+        if (!rc || rc == -EREMOTEIO) {
                 oqctl->qc_dqblk.dqb_curspace = soqc->qc_dqblk.dqb_curspace;
                 oqctl->qc_dqblk.dqb_valid |= QIF_SPACE;
         }

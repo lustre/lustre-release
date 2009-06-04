@@ -1949,7 +1949,7 @@ static void print_quota_title(char *name, struct if_quotactl *qctl)
                "files", "quota", "limit", "grace");
 }
 
-static void print_quota(char *mnt, struct if_quotactl *qctl, int type)
+static void print_quota(char *mnt, struct if_quotactl *qctl, int type, int rc)
 {
         time_t now;
 
@@ -1997,8 +1997,14 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type)
 
                         if (bover)
                                 diff2str(dqb->dqb_btime, timebuf, now);
-                        sprintf(numbuf[0], (dqb->dqb_valid & QIF_SPACE) ?
-                                LPU64 : "["LPU64"]", toqb(dqb->dqb_curspace));
+                        if (rc == -1 && errno == EREMOTEIO)
+                                sprintf(numbuf[0], LPU64"*",
+                                        toqb(dqb->dqb_curspace));
+                        else
+                                sprintf(numbuf[0],
+                                        (dqb->dqb_valid & QIF_SPACE) ?
+                                        LPU64 : "["LPU64"]",
+                                        toqb(dqb->dqb_curspace));
                         if (type == QC_GENERAL)
                                 sprintf(numbuf[1], (dqb->dqb_valid & QIF_BLIMITS)
                                         ? LPU64 : "["LPU64"]",
@@ -2071,7 +2077,7 @@ static int print_obd_quota(char *mnt, struct if_quotactl *qctl, int is_mdt)
                         continue;
                 }
 
-                print_quota(obd_uuid2str(&qctl->obd_uuid), qctl, qctl->qc_valid);
+                print_quota(obd_uuid2str(&qctl->obd_uuid), qctl, qctl->qc_valid, 0);
         }
 
 out:
@@ -2189,7 +2195,7 @@ ug_output:
         if (qctl.qc_valid != QC_GENERAL)
                 mnt = "";
 
-        print_quota(mnt, &qctl, QC_GENERAL);
+        print_quota(mnt, &qctl, QC_GENERAL, rc1);
 
         if (qctl.qc_valid == QC_GENERAL && qctl.qc_cmd != LUSTRE_Q_GETINFO && verbose) {
                 rc2 = print_obd_quota(mnt, &qctl, 1);

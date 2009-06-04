@@ -361,8 +361,8 @@ int lov_quota_ctl(struct obd_device *unused, struct obd_export *exp,
                 tgt = lov->lov_tgts[i];
                 if (!tgt || !tgt->ltd_active || tgt->ltd_reap) {
                         if (oqctl->qc_cmd == Q_GETOQUOTA) {
+                                rc = -EREMOTEIO;
                                 CERROR("ost %d is inactive\n", i);
-                                rc = -EIO;
                         } else {
                                 CDEBUG(D_HA, "ost %d is inactive\n", i);
                         }
