@@ -1232,7 +1232,7 @@ static int filter_prep(struct obd_device *obd)
                        HEALTH_CHECK, rc);
                 GOTO(err_filp, rc);
         }
-        filter->fo_health_check_filp = file;
+        filter->fo_obt.obt_health_check_filp = file;
         if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
                 CERROR("%s is not a regular file!: mode = %o\n", HEALTH_CHECK,
                        file->f_dentry->d_inode->i_mode);
@@ -1254,9 +1254,9 @@ static int filter_prep(struct obd_device *obd)
         //class_disconnect_exports(obd, 0);
         filter_free_server_data(filter);
  err_health_check:
-        if (filp_close(filter->fo_health_check_filp, 0))
+        if (filp_close(filter->fo_obt.obt_health_check_filp, 0))
                 CERROR("can't close %s after error\n", HEALTH_CHECK);
-        filter->fo_health_check_filp = NULL;
+        filter->fo_obt.obt_health_check_filp = NULL;
  err_filp:
         if (filp_close(filter->fo_rcvd_filp, 0))
                 CERROR("can't close %s after error\n", LAST_RCVD);
@@ -1293,8 +1293,8 @@ static void filter_post(struct obd_device *obd)
         if (rc)
                 CERROR("error closing %s: rc = %d\n", LAST_RCVD, rc);
 
-        rc = filp_close(filter->fo_health_check_filp, 0);
-        filter->fo_health_check_filp = NULL;
+        rc = filp_close(filter->fo_obt.obt_health_check_filp, 0);
+        filter->fo_obt.obt_health_check_filp = NULL;
         if (rc)
                 CERROR("error closing %s: rc = %d\n", HEALTH_CHECK, rc);
 
@@ -2821,7 +2821,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         }
 
         if (oa->o_valid & OBD_MD_FLFLAGS) {
-                rc = fsfilt_iocontrol(exp->exp_obd, inode, NULL,
+                rc = fsfilt_iocontrol(exp->exp_obd, dentry,
                                       FSFILT_IOC_SETFLAGS, (long)&oa->o_flags);
         } else {
                 rc = fsfilt_setattr(exp->exp_obd, dentry, handle, &iattr, 1);
@@ -3810,8 +3810,8 @@ static int filter_get_info(struct obd_export *exp, __u32 keylen,
                 memcpy(fiemap, &fm_key->fiemap, sizeof(*fiemap));
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-                rc = fsfilt_iocontrol(obd, dentry->d_inode, NULL,
-                                      FSFILT_IOC_FIEMAP, (long)fiemap);
+                rc = fsfilt_iocontrol(obd, dentry, FSFILT_IOC_FIEMAP,
+                                      (long)fiemap);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
                 f_dput(dentry);
@@ -3947,8 +3947,8 @@ static int filter_health_check(struct obd_device *obd)
                 rc = 1;
 
 #ifdef USE_HEALTH_CHECK_WRITE
-        LASSERT(filter->fo_health_check_filp != NULL);
-        rc |= !!lvfs_check_io_health(obd, filter->fo_health_check_filp);
+        LASSERT(filter->fo_obt.obt_health_check_filp != NULL);
+        rc |= !!lvfs_check_io_health(obd, filter->fo_obt.obt_health_check_filp);
 #endif
 
         return rc;

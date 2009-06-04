@@ -297,6 +297,8 @@ struct obd_device_target {
         lustre_quota_version_t    obt_qfmt;
         __u32                     obt_stale_export_age;
         spinlock_t                obt_trans_table_lock;
+        struct vfsmount          *obt_vfsmnt;
+        struct file              *obt_health_check_filp;
 };
 
 typedef void (*obd_pin_extent_cb)(void *data);
@@ -316,12 +318,10 @@ struct filter_obd {
         /* NB this field MUST be first */
         struct obd_device_target fo_obt;
         const char          *fo_fstype;
-        struct vfsmount     *fo_vfsmnt;
         cfs_dentry_t        *fo_dentry_O;
         cfs_dentry_t       **fo_dentry_O_groups;
         cfs_dentry_t       **fo_dentry_O_sub;
         spinlock_t           fo_objidlock;      /* protect fo_lastobjid */
-        struct file         *fo_health_check_filp;
 
         int                  fo_destroy_in_progress;
         struct semaphore     fo_create_lock;
@@ -381,6 +381,7 @@ struct filter_obd {
 #define fo_fsd                  fo_obt.obt_lsd
 #define fo_last_rcvd_slots      fo_obt.obt_client_bitmap
 #define fo_mount_count          fo_obt.obt_mount_count
+#define fo_vfsmnt               fo_obt.obt_vfsmnt
 
 #define OSC_MAX_RIF_DEFAULT       8
 #define OSC_MAX_RIF_MAX         256
@@ -525,7 +526,6 @@ struct mds_obd {
         struct ptlrpc_service           *mds_service;
         struct ptlrpc_service           *mds_setattr_service;
         struct ptlrpc_service           *mds_readpage_service;
-        struct vfsmount                 *mds_vfsmnt;
         cfs_dentry_t                    *mds_fid_de;
         int                              mds_max_mdsize;
         int                              mds_max_cookiesize;
@@ -555,7 +555,6 @@ struct mds_obd {
         __u32                            mds_lov_objid_lastpage;
         __u32                            mds_lov_objid_lastidx;
 
-        struct file                     *mds_health_check_filp;
         struct upcall_cache             *mds_group_hash;
 
         struct lustre_quota_info         mds_quota_info;
@@ -582,6 +581,7 @@ struct mds_obd {
 #define mds_client_bitmap        mds_obt.obt_client_bitmap
 #define mds_mount_count          mds_obt.obt_mount_count
 #define mds_last_transno         mds_obt.obt_last_transno
+#define mds_vfsmnt               mds_obt.obt_vfsmnt
 
 /* lov objid */
 #define mds_max_ost_index  (0xFFFF)

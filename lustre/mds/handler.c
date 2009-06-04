@@ -785,7 +785,7 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
 
                 /* We only return the full set of flags on ioctl, otherwise we
                  * get enough flags from the inode in mds_pack_inode2body(). */
-                rc = fsfilt_iocontrol(obd, inode, NULL, FSFILT_IOC_GETFLAGS,
+                rc = fsfilt_iocontrol(obd, dentry, FSFILT_IOC_GETFLAGS,
                                       (long)&flags);
                 if (rc == 0)
                         body->flags = flags | MDS_BFLAG_EXT_FLAGS;
@@ -2763,8 +2763,8 @@ static int mds_health_check(struct obd_device *obd)
                 rc = 1;
 
 #ifdef USE_HEALTH_CHECK_WRITE
-        LASSERT(mds->mds_health_check_filp != NULL);
-        rc |= !!lvfs_check_io_health(obd, mds->mds_health_check_filp);
+        LASSERT(mds->mds_obt.obt_health_check_filp != NULL);
+        rc |= !!lvfs_check_io_health(obd, mds->mds_obt.obt_health_check_filp);
 #endif
 
         return rc;
