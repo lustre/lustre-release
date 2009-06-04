@@ -179,10 +179,10 @@ check_mount() {
 }
 
 check_mount2() {
-	do_facet client "touch $DIR/a" || return 71	
-	do_facet client "rm $DIR/a" || return 72	
-	do_facet client "touch $DIR2/a" || return 73	
-	do_facet client "rm $DIR2/a" || return 74	
+	do_facet client "touch $DIR/a" || return 71
+	do_facet client "rm $DIR/a" || return 72
+	do_facet client "touch $DIR2/a" || return 73
+	do_facet client "rm $DIR2/a" || return 74
 	echo "setup double mount lustre success"
 }
 
@@ -220,7 +220,7 @@ run_test 1 "start up ost twice (should return errors)"
 
 test_2() {
 	start_ost
-	start_mds	
+	start_mds
 	echo "start mds second time.."
 	start_mds
 	mount_client $MOUNT
@@ -307,7 +307,7 @@ test_5b() {
 	grep " $MOUNT " /etc/mtab && echo "test 5b: mtab before mount" && return 10
 	mount_client $MOUNT && return 1
 	grep " $MOUNT " /etc/mtab && echo "test 5b: mtab after failed mount" && return 11
-	umount_client $MOUNT	
+	umount_client $MOUNT
 	# stop_mds is a no-op here, and should not fail
 	cleanup_nocli || return $?
 	return 0
@@ -1154,7 +1154,7 @@ test_34b() {
 	fi
 
 	cleanup
-	return 0	
+	return 0
 }
 run_test 34b "force umount with failed mds should be normal"
 
@@ -1170,7 +1170,7 @@ test_34c() {
 	fi
 
 	cleanup
-	return 0	
+	return 0
 }
 run_test 34c "force umount with failed ost should be normal"
 
@@ -1349,12 +1349,12 @@ test_38() { # bug 14222
 	do_facet mds "$DEBUGFS -c -R \\\"dump lov_objid $TMP/lov_objid.new\\\"  $MDSDEV"
 	do_facet mds "od -Ax -td8 $TMP/lov_objid.new"
 	[ "$ERROR" = "y" ] && error "old and new files are different after connect" || true
-	
-	
+
+
 	# check it's updates in sync
 	umount_client $MOUNT
 	stop_mds
-	
+
 	do_facet mds dd if=/dev/zero of=$TMP/lov_objid.clear bs=4096 count=1
 	do_facet mds "$DEBUGFS -w -R \\\"rm lov_objid\\\" $MDSDEV"
 	do_facet mds "$DEBUGFS -w -R \\\"write $TMP/lov_objid.clear lov_objid\\\" $MDSDEV "
@@ -1370,7 +1370,7 @@ test_38() { # bug 14222
 	umount_client $MOUNT
 	stop_mds
 	[ "$ERROR" = "y" ] && error "old and new files are different after sync" || true
-	
+
 	log "files compared the same"
 	cleanup
 }
@@ -1398,7 +1398,7 @@ test_41() { #bug 14134
         local rc
         start mds $MDSDEV $MDS_MOUNT_OPTS -o nosvc -n
         start ost1 `ostdevname 1` $OST_MOUNT_OPTS
-        start mds $MDSDEV $MDS_MOUNT_OPTS -o nomgs
+        start mds $MDSDEV $MDS_MOUNT_OPTS -o nomgs,force
         mkdir -p $MOUNT
         mount_client $MOUNT || return 1
         sleep 5
@@ -1511,7 +1511,7 @@ test_46a() {
 	wait_osc_import_state mds ost FULL
 	#start_client
 	mount_client $MOUNT || return 3
-	
+
 	start_ost2 || return 4
 	start ost3 `ostdevname 3` $OST_MOUNT_OPTS || return 5
 	start ost4 `ostdevname 4` $OST_MOUNT_OPTS || return 6
@@ -1607,7 +1607,7 @@ test_48() { # bug 17636
 	done
 
 	stat $MOUNT/widestripe || return 12
-	
+
 	cleanup_48
 	return 0
 }
@@ -1645,7 +1645,7 @@ test_49() { # bug 17710
 	stop_mds || return 3
 
 	OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID --param sys.timeout=$LOCAL_TIMEOUT --param sys.ldlm_timeout=$((LOCAL_TIMEOUT - 1)) $MKFSOPT $OSTOPT"
-	
+
 	reformat
 	start_mds || return 4
 	start_ost || return 5
@@ -1659,11 +1659,11 @@ test_49() { # bug 17710
 	if [ $LDLM_MDS -ne $LDLM_OST1 ] || [ $LDLM_MDS -ne $LDLM_CLIENT ]; then
 		error "Different LDLM_TIMEOUT:$LDLM_MDS $LDLM_OST1 $LDLM_CLIENT"
 	fi
-	
+
 	if [ $LDLM_MDS -ne $((LOCAL_TIMEOUT - 1)) ]; then
 		error "LDLM_TIMEOUT($LDLM_MDS) is not correct"
 	fi
-		
+
 	cleanup || return $?
 
 	MDS_MKFS_OPTS=$OLD_MDS_MKFS_OPTS
@@ -1764,7 +1764,7 @@ run_test 50d "lazystatfs client/server conn race =========================="
 test_50e() {
 	local RC1
 	local pid
-	
+
 	reformat_and_config
 	start_mds || return 1
 	#first client should see only one ost
@@ -1774,10 +1774,10 @@ test_50e() {
 	# Wait for client to detect down OST
 	stop_ost || error "Unable to stop OST1"
 	wait_osc_import_state mds ost DISCONN
-	
+
 	mount_client $MOUNT || error "Unable to mount client"
 	lctl set_param llite.$FSNAME-*.lazystatfs=0
-	
+
 	multiop_bg_pause $MOUNT _f
 	RC1=$?
 	pid=$!
@@ -1794,7 +1794,7 @@ test_50e() {
 	fi
 
 	umount_client $MOUNT || error "Unable to unmount client"
-	stop_ost || error "Unable to stop OST1"	
+	stop_ost || error "Unable to stop OST1"
 	stop_mds || error "Unable to stop MDS"
 }
 run_test 50e "normal statfs all servers down =========================="
@@ -1803,7 +1803,7 @@ test_50f() {
 	local RC1
 	local pid
 	CONN_PROC="osc.$FSNAME-OST0001-osc.ost_server_uuid"
-	
+
 	start_mds || error "Unable to start mds"
 	#first client should see only one ost
 	start_ost || error "Unable to start OST1"
@@ -1815,10 +1815,10 @@ test_50f() {
 	# Wait for client to detect down OST
 	stop_ost2 || error "Unable to stop OST2"
 	wait_osc_import_state mds ost2 DISCONN
-	
+
 	mount_client $MOUNT || error "Unable to mount client"
 	lctl set_param llite.$FSNAME-*.lazystatfs=0
-	
+
 	multiop_bg_pause $MOUNT _f
 	RC1=$?
 	pid=$!
@@ -1835,7 +1835,7 @@ test_50f() {
 	fi
 
 	umount_client $MOUNT || error "Unable to unmount client"
-	stop_ost || error "Unable to stop OST1"	
+	stop_ost || error "Unable to stop OST1"
 	stop_mds || error "Unable to stop MDS"
 }
 run_test 50f "normal statfs one server in down =========================="

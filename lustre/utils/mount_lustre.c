@@ -83,7 +83,7 @@ void usage(FILE *out)
                 "\t<filesystem>: name of the Lustre filesystem (e.g. lustre1)\n"
                 "\t<mountpt>: filesystem mountpoint (e.g. /mnt/lustre)\n"
                 "\t-f|--fake: fake mount (updates /etc/mtab)\n"
-                "\t--force: force mount even if already in /etc/mtab\n"
+                "\t-o force|--force: force mount even if already in /etc/mtab\n"
                 "\t-h|--help: print this usage message\n"
                 "\t-n|--nomtab: do not update /etc/mtab after mount\n"
                 "\t-v|--verbose: print verbose config settings\n"
@@ -284,8 +284,11 @@ int parse_options(char *orig_options, int *flagp)
                                 retry = MAX_RETRIES;
                         else if (retry < 0)
                                 retry = 0;
-                }
-                else if (parse_one_option(opt, flagp) == 0) {
+                } else if (strncmp(opt, "force", 5) == 0) {
+                        //XXX special check for 'force' option
+                        ++force;
+                        printf("force: %d\n", force);
+                } else if (parse_one_option(opt, flagp) == 0) {
                         /* pass this on as an option */
                         if (*options)
                                 strcat(options, ",");
