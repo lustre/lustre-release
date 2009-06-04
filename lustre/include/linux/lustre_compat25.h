@@ -607,6 +607,10 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
 #define ll_crypto_tfm_alg_max_keysize	crypto_tfm_alg_max_keysize
 #endif /* HAVE_ASYNC_BLOCK_CIPHER */
 
+#ifndef HAVE_SYNCHRONIZE_RCU
+#define synchronize_rcu() synchronize_kernel()
+#endif
+
 #ifdef HAVE_SECURITY_PLUG
 #define ll_remove_suid(inode,mnt)               remove_suid(inode,mnt)
 #define ll_vfs_rmdir(dir,entry,mnt)             vfs_rmdir(dir,entry,mnt)
