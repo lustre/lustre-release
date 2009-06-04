@@ -282,7 +282,7 @@ static int oscc_wait_for_objects(struct osc_creator *oscc, int count)
         have_objs = oscc_has_objects_nolock(oscc, count);
         osc_invalid |= oscc->oscc_flags & OSCC_FLAG_EXITING;
 
-        if (!ost_full || !osc_invalid)
+        if (!ost_full && !osc_invalid)
                 /* they release lock himself */
                 oscc_internal_create(oscc);
         else
