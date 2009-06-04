@@ -2066,6 +2066,16 @@ test_83() { #bug 19224
 }
 run_test 83 "open replay with barrier between transactions"
 
+test_84() {
+#define OBD_FAIL_OBD_FAIL_MDS_SPLIT_OPEN 0x142
+    do_facet mds "lctl set_param fail_loc=0x80000142"
+    createmany -o $DIR/$tfile- 1 &
+    PID=$!
+    mds_evict_client
+    wait $PID
+}
+run_test 84 "stale open during export disconnect"
+
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

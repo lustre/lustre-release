@@ -9,21 +9,9 @@ tbd Sun Microsystems, Inc.
 	  2.6.16 - 2.6.27 vanilla (kernel.org)
 	* Recommended e2fsprogs version: 1.41.5-sun2
 	* File join has been disabled in this release, refer to Bugzilla 16929.
-	* A new Lustre ADIO driver is available for MPICH2-1.0.7.
 	* NFS export disabled when stack size < 8192. Since the NFSv4 export
 	  of Lustre filesystem with 4K stack may cause a stack overflow. For
 	  more information, please refer to bugzilla 17630.
-
-Severity   : normal
-Bugzilla   : 19528
-Description: resolve race between obd_disconnect and class_disconnect_exports
-Details    : if obd_disconnect will be called to already disconnected export he
-             forget release one reference and osc module can't unloaded.
-
-Severity   : enhancement
-Bugzilla   : 19293
-Description: move AT tunable parameters for more consistent usage
-Details    : add AT tunables under /proc/sys/lustre, add to conf_param parsing
 
 Severity   : enhancement
 Bugzilla   : 19625, 16893, 18668
@@ -40,6 +28,21 @@ Description: Update client support to vanila kernels up to 2.6.27.
 Severity   : enhancement
 Bugzilla   : 19212
 Description: Update kernel to SLES10 SP2 2.6.16.60-0.37.
+
+Severity   : enhancement
+Bugzilla   : 15981
+Description: Compile with -Werror by default for i686 and x86_64.
+
+Severity   : normal
+Bugzilla   : 19528
+Description: resolve race between obd_disconnect and class_disconnect_exports
+Details    : if obd_disconnect will be called to already disconnected export he
+	     forget release one reference and osc module can't unloaded.
+
+Severity   : enhancement
+Bugzilla   : 19293
+Description: move AT tunable parameters for more consistent usage
+Details    : add AT tunables under /proc/sys/lustre, add to conf_param parsing
 
 Severity   : normal
 Bugzilla   : 19223
@@ -88,8 +91,8 @@ Severity   : normal
 Frequency  : rare, connect and disconnect target at same time
 Bugzilla   : 17310
 Descriptoin: ASSERTION(atomic_read(&imp->imp_inflight) == 0
-Details    :  don't call obd_disconnect under lov_lock. this long time
-	      operation and can block ptlrpcd which answer to connect request.
+Details    : don't call obd_disconnect under lov_lock. this long time
+	     operation and can block ptlrpcd which answer to connect request.
 
 Severity   : normal
 Frequency  : start MDS on uncleanly shutdowned MDS device
@@ -159,7 +162,7 @@ Severity   : Low
 Bugzilla   : 15010
 Description: Rare Client crash on resend if the file was deleted.
 Details    : When file is opened, but open reply is lost and file is
-             subsequently deleted before resend, resend processing logic
+	     subsequently deleted before resend, resend processing logic
 	     breaks trying to open the file again, should not try to open.
 
 -------------------------------------------------------------------------------
