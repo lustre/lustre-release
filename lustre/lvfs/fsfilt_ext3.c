@@ -171,14 +171,33 @@ static char *fsfilt_ext3_uuid(struct super_block *sb)
 }
 
 #ifdef HAVE_DISK_INODE_VERSION
+
+static __u64 get_i_version(struct inode *inode)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)) && defined(HAVE_EXT4_LDISKFS)
+        return inode->i_version;
+#else
+        return EXT3_I(inode)->i_fs_version;
+#endif
+}
+
+static void set_i_version(struct inode *inode, __u64 new_version)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)) && defined(HAVE_EXT4_LDISKFS)
+        inode->i_version = new_version;
+#else
+        (EXT3_I(inode))->i_fs_version = new_version;
+#endif
+}
+
 /*
  * Get the 64-bit version for an inode.
  */
 static __u64 fsfilt_ext3_get_version(struct inode *inode)
 {
         CDEBUG(D_INFO, "Get version "LPX64" for inode %lu\n",
-               EXT3_I(inode)->i_fs_version, inode->i_ino);
-        return EXT3_I(inode)->i_fs_version;
+               get_i_version(inode), inode->i_ino);
+        return get_i_version(inode);
 }
 
 /*
@@ -186,11 +205,11 @@ static __u64 fsfilt_ext3_get_version(struct inode *inode)
  */
 static __u64 fsfilt_ext3_set_version(struct inode *inode, __u64 new_version)
 {
-        __u64 old_version = EXT3_I(inode)->i_fs_version;
+        __u64 old_version = get_i_version(inode);
 
         CDEBUG(D_INFO, "Set version "LPX64" (old "LPX64") for inode %lu\n",
                new_version, old_version, inode->i_ino);
-        (EXT3_I(inode))->i_fs_version = new_version;
+        set_i_version(inode, new_version);
         /* version is set after all inode operations are finished, so we should
          * mark it dirty here */
         inode->i_sb->s_op->dirty_inode(inode);
