@@ -216,6 +216,11 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         mgs_init_fsdb_list(obd);
         sema_init(&mgs->mgs_sem, 1);
 
+        /* Setup proc */
+        lprocfs_mgs_init_vars(&lvars);
+        if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0)
+                lproc_mgs_setup(obd);
+
         /* Start the service threads */
         mgs->mgs_service =
                 ptlrpc_init_svc(MGS_NBUFS, MGS_BUFSIZE, MGS_MAXREQSIZE,
@@ -235,12 +240,6 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 GOTO(err_thread, rc);
 
-        /* Setup proc */
-        lprocfs_mgs_init_vars(&lvars);
-        if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0) {
-                lproc_mgs_setup(obd);
-        }
-
         ping_evictor_start();
 
         LCONSOLE_INFO("MGS %s started\n", obd->obd_name);
@@ -250,6 +249,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
 err_thread:
         ptlrpc_unregister_service(mgs->mgs_service);
 err_llog:
+        lproc_mgs_cleanup(obd);
         ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
         if (ctxt)
                 llog_cleanup(ctxt);
