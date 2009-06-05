@@ -1795,7 +1795,8 @@ int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
                 struct lu_buf *buf, const char *name,
                 struct lustre_capa *capa)
 {
-        struct osd_object  *obj  = osd_dt_obj(dt);
+        struct osd_object *obj = osd_dt_obj(dt);
+        struct osd_device *osd = osd_obj2dev(obj);
         int rc, size;
 
         ENTRY;
@@ -1804,7 +1805,8 @@ int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
         LASSERT(dt_object_exists(dt));
 
         down(&obj->oo_guard);
-        rc = -udmu_xattr_get(obj->oo_db, buf->lb_buf, buf->lb_len, name, &size);
+        rc = -udmu_xattr_get(&osd->od_objset, obj->oo_db, buf->lb_buf,
+                             buf->lb_len, name, &size);
         up(&obj->oo_guard);
 
         if(rc == -ENOENT)
@@ -1818,7 +1820,8 @@ int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
                           const int buflen, const char *name, int fl,
                           struct thandle *handle)
 {
-        struct osd_object *obj = osd_dt_obj(dt);
+        struct osd_object  *obj = osd_dt_obj(dt);
+        struct osd_device  *osd = osd_obj2dev(obj);
         struct osd_thandle *oh;
         ENTRY;
 
@@ -1831,7 +1834,8 @@ int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
         LASSERT(oh->ot_tx != NULL);
 
         down(&obj->oo_guard);
-        udmu_xattr_declare_set(obj->oo_db, buflen, name, oh->ot_tx);
+        udmu_xattr_declare_set(&osd->od_objset, obj->oo_db, buflen, name,
+                               oh->ot_tx);
         up(&obj->oo_guard);
 
         RETURN(0);
@@ -1842,7 +1846,8 @@ int osd_xattr_set(const struct lu_env *env,
                 const char *name, int fl, struct thandle *handle,
                 struct lustre_capa *capa)
 {
-        struct osd_object  *obj  = osd_dt_obj(dt);
+        struct osd_object  *obj = osd_dt_obj(dt);
+        struct osd_device  *osd = osd_obj2dev(obj);
         struct osd_thandle *oh;
         int rc;
 
@@ -1855,7 +1860,8 @@ int osd_xattr_set(const struct lu_env *env,
         LASSERT(oh->ot_tx != NULL);
 
         down(&obj->oo_guard);
-        rc = -udmu_xattr_set(obj->oo_db, buf->lb_buf, buf->lb_len, name, oh->ot_tx);
+        rc = -udmu_xattr_set(&osd->od_objset, obj->oo_db, buf->lb_buf,
+                             buf->lb_len, name, oh->ot_tx);
         up(&obj->oo_guard);
 
         RETURN(rc);
@@ -1866,6 +1872,7 @@ int osd_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
                           const char *name, struct thandle *handle)
 {
         struct osd_object *obj = osd_dt_obj(dt);
+        struct osd_device *osd = osd_obj2dev(obj);
         struct osd_thandle *oh;
         ENTRY;
 
@@ -1878,7 +1885,7 @@ int osd_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
         LASSERT(oh->ot_tx != NULL);
 
         down(&obj->oo_guard);
-        udmu_xattr_declare_del(obj->oo_db, name, oh->ot_tx);
+        udmu_xattr_declare_del(&osd->od_objset, obj->oo_db, name, oh->ot_tx);
         up(&obj->oo_guard);
 
         RETURN(0);
@@ -1888,7 +1895,8 @@ int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
                   const char *name, struct thandle *handle,
                   struct lustre_capa *capa)
 {
-        struct osd_object  *obj  = osd_dt_obj(dt);
+        struct osd_object  *obj = osd_dt_obj(dt);
+        struct osd_device  *osd = osd_obj2dev(obj);
         struct osd_thandle *oh;
         int rc;
 
@@ -1901,7 +1909,7 @@ int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
         LASSERT(oh->ot_tx != NULL);
 
         down(&obj->oo_guard);
-        rc = -udmu_xattr_del(obj->oo_db, name, oh->ot_tx);
+        rc = -udmu_xattr_del(&osd->od_objset, obj->oo_db, name, oh->ot_tx);
         up(&obj->oo_guard);
 
         RETURN(rc);
@@ -1911,7 +1919,8 @@ int osd_xattr_list(const struct lu_env *env,
                 struct dt_object *dt, struct lu_buf *buf,
                 struct lustre_capa *capa)
 {
-        struct osd_object  *obj  = osd_dt_obj(dt);
+        struct osd_object *obj = osd_dt_obj(dt);
+        struct osd_device *osd = osd_obj2dev(obj);
         int rc;
 
         ENTRY;
@@ -1920,7 +1929,8 @@ int osd_xattr_list(const struct lu_env *env,
         LASSERT(dt_object_exists(dt));
 
         down(&obj->oo_guard);
-        rc = -udmu_xattr_list(obj->oo_db, buf->lb_buf, buf->lb_len);
+        rc = -udmu_xattr_list(&osd->od_objset, obj->oo_db, buf->lb_buf,
+                              buf->lb_len);
         up(&obj->oo_guard);
 
         RETURN(rc);
