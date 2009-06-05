@@ -185,6 +185,7 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         struct lvfs_run_ctxt saved;
         struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
         struct lustre_qunit_size *lqs;
+        void *handle = NULL;
         struct timeval work_start;
         struct timeval work_end;
         long timediff;
@@ -217,13 +218,14 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                  * on master enter recovery mode. We must wait for this 
                  * dqacq/dqrel done then return the correct limits to master */
                 if (oqctl->qc_stat == QUOTA_RECOVERING)
-                        qctxt_wait_pending_dqacq(&obd->u.obt.obt_qctxt,
-                                                 oqctl->qc_id, oqctl->qc_type, 
-                                                 1);
+                        handle = quota_barrier(&obd->u.obt.obt_qctxt, oqctl, 1);
 
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_quotactl(obd, obt->obt_sb, oqctl);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+                if (oqctl->qc_stat == QUOTA_RECOVERING)
+                        quota_unbarrier(handle);
 
                 if (oqctl->qc_cmd == Q_QUOTAON || oqctl->qc_cmd == Q_QUOTAOFF ||
                     oqctl->qc_cmd == Q_FINVALIDATE) {
@@ -240,8 +242,7 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                 break;
         case Q_SETQUOTA:
                 /* currently, it is only used for nullifying the quota */
-                qctxt_wait_pending_dqacq(&obd->u.obt.obt_qctxt,
-                                         oqctl->qc_id, oqctl->qc_type, 1);
+                handle = quota_barrier(&obd->u.obt.obt_qctxt, oqctl, 1);
 
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
@@ -252,6 +253,7 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                         oqctl->qc_cmd = Q_SETQUOTA;
                 }
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                quota_unbarrier(handle);
 
                 lqs = quota_search_lqs(LQS_KEY(oqctl->qc_type, oqctl->qc_id),
                                        qctxt, 0);
@@ -271,15 +273,13 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                 LASSERT(oqctl->qc_dqblk.dqb_valid == QIF_BLIMITS);
                 LASSERT(oqctl->qc_dqblk.dqb_bsoftlimit == 0);
 
-                /* There might be a pending dqacq/dqrel (which is going to
-                 * clear stale limits on slave). we should wait for it's
-                 * completion then initialize limits */
-                qctxt_wait_pending_dqacq(&obd->u.obt.obt_qctxt,
-                                         oqctl->qc_id, oqctl->qc_type, 1);
-
                 if (!oqctl->qc_dqblk.dqb_bhardlimit)
                         goto adjust;
 
+               /* There might be a pending dqacq/dqrel (which is going to
+                 * clear stale limits on slave). we should wait for it's
+                 * completion then initialize limits */
+                handle = quota_barrier(&obd->u.obt.obt_qctxt, oqctl, 1);
                 LASSERT(oqctl->qc_dqblk.dqb_bhardlimit == MIN_QLIMIT);
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
@@ -292,6 +292,7 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                         oqctl->qc_cmd = Q_INITQUOTA;
                 }
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                quota_unbarrier(handle);
 
                 if (rc)
                         RETURN(rc);
