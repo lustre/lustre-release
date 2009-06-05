@@ -3,23 +3,16 @@ default: all
 MODULES := ldiskfs
 
 # copy makefile over to not break patches
-backfs_extra := $(wildcard @LINUX@/fs/@BACKFS@/Makefile)
+ext3_extra := $(wildcard @LINUX@/fs/ext3/Makefile)
 
-backfs_headers := $(wildcard @LINUX@/fs/@BACKFS@/*.h)
-linux_headers := $(wildcard @LINUX@/include/linux/@BACKFS@*.h)
+ext3_headers := $(wildcard @LINUX@/fs/ext3/*.h)
+linux_headers := $(wildcard @LINUX@/include/linux/ext3*.h)
 
-backfs_sources := $(filter-out %.mod.c,$(wildcard @LINUX@/fs/@BACKFS@/*.c))
-
-ext3_new_sources := iopen.c iopen.h extents.c mballoc.c group.h fiemap.h
-ext3_new_headers := ext3_extents.h 
-
-ext4_new_sources := iopen.c iopen.h fiemap.h
-ext4_new_headers :=
-
-new_sources := $(@BACKFS@_new_sources)
-new_headers := $(@BACKFS@_new_headers)
-
-ldiskfs_patched_sources := $(notdir $(backfs_sources) $(backfs_headers)) $(new_sources) $(new_headers)
+ext3_sources := $(filter-out %.mod.c,$(wildcard @LINUX@/fs/ext3/*.c))
+new_sources := iopen.c iopen.h extents.c mballoc.c group.h dynlocks.c \
+               iam.c iam_lfix.c iam_lvar.c iam_htree.c iam-uapi.c fiemap.h
+new_headers := ext3_extents.h
+ldiskfs_patched_sources := $(notdir $(ext3_sources) $(ext3_headers)) $(new_sources) $(new_headers)
 ldiskfs_sources := $(ldiskfs_patched_sources)
 
 ldiskfs-objs := $(filter %.o,$(ldiskfs_sources:.c=.o))
