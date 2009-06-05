@@ -165,7 +165,7 @@ static struct mdt_opc_slice mdt_fld_handlers[];
 static struct mdt_device *mdt_dev(struct lu_device *d);
 static int mdt_regular_handle(struct ptlrpc_request *req);
 static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags);
-static int mdt_fid2path(struct lu_env *env, struct mdt_device *mdt,
+static int mdt_fid2path(const struct lu_env *env, struct mdt_device *mdt,
                         struct getinfo_fid2path *fp);
 
 static const struct lu_object_operations mdt_obj_ops;
@@ -5385,7 +5385,6 @@ static int mdt_obd_notify(struct obd_device *host,
 static int mdt_rpc_fid2path(struct mdt_thread_info *info, void *key,
                             void *val, int vallen)
 {
-        struct lu_env      env;
         struct mdt_device *mdt = mdt_dev(info->mti_exp->exp_obd->obd_lu_dev);
         struct getinfo_fid2path *fpout, *fpin;
         int rc = 0;
@@ -5400,19 +5399,13 @@ static int mdt_rpc_fid2path(struct mdt_thread_info *info, void *key,
         if (fpout->gf_pathlen != vallen - sizeof(*fpin))
                 RETURN(-EINVAL);
 
-        rc = lu_env_init(&env, LCT_MD_THREAD);
-        if (rc)
-                RETURN(rc);
-        rc = mdt_fid2path(&env, mdt, fpout);
-        lu_env_fini(&env);
-
+        rc = mdt_fid2path(info->mti_env, mdt, fpout);
         RETURN(rc);
 }
 
-static int mdt_fid2path(struct lu_env *env, struct mdt_device *mdt,
+static int mdt_fid2path(const struct lu_env *env, struct mdt_device *mdt,
                         struct getinfo_fid2path *fp)
 {
-        struct lu_context  ioctl_session;
         struct mdt_object *obj;
         int    rc;
         ENTRY;
@@ -5423,18 +5416,11 @@ static int mdt_fid2path(struct lu_env *env, struct mdt_device *mdt,
         if (!fid_is_sane(&fp->gf_fid))
                 RETURN(-EINVAL);
 
-        rc = lu_context_init(&ioctl_session, LCT_SESSION);
-        if (rc)
-                RETURN(rc);
-        ioctl_session.lc_thread = (struct ptlrpc_thread *)cfs_current();
-        lu_context_enter(&ioctl_session);
-        env->le_ses = &ioctl_session;
-
         obj = mdt_object_find(env, mdt, &fp->gf_fid);
         if (obj == NULL || IS_ERR(obj)) {
                 CDEBUG(D_IOCTL, "no object "DFID": %ld\n",PFID(&fp->gf_fid),
                        PTR_ERR(obj));
-                GOTO(out, rc = -EINVAL);
+                RETURN(-EINVAL);
         }
 
         rc = lu_object_exists(&obj->mot_obj.mo_lu);
@@ -5446,19 +5432,14 @@ static int mdt_fid2path(struct lu_env *env, struct mdt_device *mdt,
                 mdt_object_put(env, obj);
                 CDEBUG(D_IOCTL, "nonlocal object "DFID": %d\n",
                        PFID(&fp->gf_fid), rc);
-                GOTO(out, rc);
+                RETURN(rc);
         }
 
         rc = mo_path(env, md_object_next(&obj->mot_obj), fp->gf_path,
                      fp->gf_pathlen, &fp->gf_recno, &fp->gf_linkno);
         mdt_object_put(env, obj);
 
-        EXIT;
-
-out:
-        lu_context_exit(&ioctl_session);
-        lu_context_fini(&ioctl_session);
-        return rc;
+        RETURN(rc);
 }
 
 static int mdt_get_info(struct mdt_thread_info *info)
