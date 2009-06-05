@@ -1982,12 +1982,7 @@ clear_failloc() {
 }
 
 set_nodes_failloc () {
-    local nodes=$1
-    local node
-
-    for node in $nodes ; do
-        do_node $node lctl set_param fail_loc=$2
-    done
+    do_nodes $(comma_list $1)  lctl set_param fail_loc=$2
 }
 
 cancel_lru_locks() {
@@ -2049,10 +2044,7 @@ error_noexit() {
     ERRLOG=$TMP/lustre_${TESTSUITE}_${TESTNAME}.$(date +%s)
     echo "Dumping lctl log to $ERRLOG"
     # We need to dump the logs on all nodes
-    local NODES=${NODES:-$(nodes_list)}
-    for NODE in $NODES; do
-        do_node $NODE $LCTL dk $ERRLOG
-    done
+    do_nodes $(comma_list $(nodes_list)) $NODE $LCTL dk $ERRLOG
     debugrestore
     [ "$TESTSUITELOG" ] && echo "$0: ${TYPE}: $TESTNAME $@" >> $TESTSUITELOG
     TEST_FAILED=true
@@ -2189,10 +2181,7 @@ log() {
     MSG=${MSG//\>/\\\>}
     MSG=${MSG//\</\\\<}
     MSG=${MSG//\//\\\/}
-    local NODES=$(nodes_list)
-    for NODE in $NODES; do
-        do_node $NODE $LCTL mark "$MSG" 2> /dev/null || true
-    done
+    do_nodes $(comma_list $(nodes_list)) $LCTL mark "$MSG" 2> /dev/null || true
 }
 
 trace() {
@@ -2215,13 +2204,8 @@ check_mds() {
 }
 
 reset_fail_loc () {
-    local myNODES=$(nodes_list)
-    local NODE
-
     echo -n "Resetting fail_loc on all nodes..."
-    for NODE in $myNODES; do
-        do_node $NODE "lctl set_param -n fail_loc=0 2>/dev/null || true"
-    done
+    do_nodes $(comma_list $(nodes_list)) "lctl set_param -n fail_loc=0 2>/dev/null || true"
     echo done.
 }
 
