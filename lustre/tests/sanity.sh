@@ -72,7 +72,7 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/${NAME}.sh}
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 36f 36g 51b 51c 60c 63 64b 68 71 73 77f 78 101 103 115 120g 124b"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 24v 27m 36f 36g 51b 51c 60c 63 64b 68 71 73 77f 78 101 103 115 120g 124b"
 
 SANITYLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=false
@@ -767,6 +767,21 @@ test_24u() { # bug12192
         $CHECKSTAT -s $((2048 * 1024)) $DIR/$tfile || error "wrong file size"
 }
 run_test 24u "create stripe file"
+
+test_24v() {
+	local NRFILES=100000
+	local FREE_INODES=`lfs df -i|grep "filesystem summary" | awk '{print $5}'`
+	[ $FREE_INODES -lt $NRFILES ] && \
+		skip "not enough free inodes $FREE_INODES required $NRFILES" && \
+		return
+
+	mkdir -p $DIR/d24v
+	createmany -m $DIR/d24v/$tfile $NRFILES
+	ls $DIR/d24v >/dev/null || error "error in listing large dir"
+
+	rm $DIR/d24v -rf
+}
+run_test 24v "list directory with large files (handle hash collision, bug: 17560)"
 
 test_25a() {
 	echo '== symlink sanity ============================================='
