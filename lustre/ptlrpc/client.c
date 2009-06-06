@@ -617,7 +617,8 @@ ptlrpc_prep_req(struct obd_import *imp, __u32 version, int opcode, int count,
                                     NULL);
 }
 
-struct ptlrpc_request *ptlrpc_prep_fakereq(unsigned int timeout,
+struct ptlrpc_request *ptlrpc_prep_fakereq(struct obd_import *imp,
+                                           unsigned int timeout,
                                            int (*interpreter)(struct ptlrpc_request *,
                                                               void *, int))
 {
@@ -632,7 +633,7 @@ struct ptlrpc_request *ptlrpc_prep_fakereq(unsigned int timeout,
 
         request->rq_send_state = LUSTRE_IMP_FULL;
         request->rq_type = PTL_RPC_MSG_REQUEST;
-        request->rq_import = NULL;
+        request->rq_import = class_import_get(imp);
         request->rq_export = NULL;
 
         request->rq_sent = cfs_time_current_sec();

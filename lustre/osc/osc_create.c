@@ -459,7 +459,9 @@ int osc_create_async(struct obd_export *exp, struct obd_info *oinfo,
 
         LASSERT((*ea) != NULL);
 
-        fake_req = ptlrpc_prep_fakereq(osc_create_timeout, async_create_interpret);
+        fake_req = ptlrpc_prep_fakereq(oscc->oscc_obd->u.cli.cl_import,
+                                       osc_create_timeout,
+                                       async_create_interpret);
         if (fake_req == NULL) {
                 rc = oinfo->oi_cb_up(oinfo, -ENOMEM);
                 RETURN(-ENOMEM);

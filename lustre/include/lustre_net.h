@@ -852,7 +852,8 @@ ptlrpc_init_rq_pool(int, int,
                     void (*populate_pool)(struct ptlrpc_request_pool *, int));
 
 void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req);
-struct ptlrpc_request *ptlrpc_prep_fakereq(unsigned int timeout,
+struct ptlrpc_request *ptlrpc_prep_fakereq(struct obd_import *imp,
+                                           unsigned int timeout,
                                            int (*interpreter)(struct ptlrpc_request *,
                                                               void *, int));
 void ptlrpc_fakereq_finished(struct ptlrpc_request *req);
