@@ -2640,12 +2640,12 @@ get_mds_dir () {
     rm -f $file
     sleep 1
     local iused=$(lfs df -i $dir | grep MDT | awk '{print $3}')
-    local oldused=($iused)
+    local -a oldused=($iused)
 
     touch $file
     sleep 1
     iused=$(lfs df -i $dir | grep MDT | awk '{print $3}')
-    local newused=($iused)
+    local -a newused=($iused)
 
     local num=0
     for ((i=0; i<${#newused[@]}; i++)); do
