@@ -216,7 +216,7 @@ static int lprocfs_init_rw_stats(struct obd_device *obd,
 
         num_stats = (sizeof(*obd->obd_type->typ_ops) / sizeof(void *)) +
                                                         LPROC_FILTER_LAST - 1;
-        *stats = lprocfs_alloc_stats(num_stats, 0);
+        *stats = lprocfs_alloc_stats(num_stats, LPROCFS_STATS_FLAG_NOPERCPU);
         if (*stats == NULL)
                 return -ENOMEM;
 
@@ -280,8 +280,9 @@ static int filter_export_stats_init(struct obd_device *obd,
                         RETURN(rc);
 
                 /* Always add in ldlm_stats */
-                tmp->nid_ldlm_stats = lprocfs_alloc_stats(LDLM_LAST_OPC -
-                                                          LDLM_FIRST_OPC, 0);
+                tmp->nid_ldlm_stats =
+                        lprocfs_alloc_stats(LDLM_LAST_OPC - LDLM_FIRST_OPC,
+                                            LPROCFS_STATS_FLAG_NOPERCPU);
                 if (tmp->nid_ldlm_stats == NULL)
                         return -ENOMEM;
 

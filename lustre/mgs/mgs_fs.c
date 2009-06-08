@@ -79,22 +79,25 @@ static int mgs_export_stats_init(struct obd_device *obd,
                 num_stats = (sizeof(*obd->obd_type->typ_ops) / sizeof(void *)) +
                              LPROC_MGS_LAST - 1;
                 exp->exp_ops_stats = lprocfs_alloc_stats(num_stats,
-                                                         LPROCFS_STATS_FLAG_NOPERCPU);
+                                                LPROCFS_STATS_FLAG_NOPERCPU);
                 if (exp->exp_ops_stats == NULL)
                         return -ENOMEM;
                 lprocfs_init_ops_stats(LPROC_MGS_LAST, exp->exp_ops_stats);
                 mgs_stats_counter_init(exp->exp_ops_stats);
-                lprocfs_register_stats(exp->exp_nid_stats->nid_proc, "stats", exp->exp_ops_stats);
+                lprocfs_register_stats(exp->exp_nid_stats->nid_proc, "stats",
+                                       exp->exp_ops_stats);
 
                 /* Always add in ldlm_stats */
-                exp->exp_nid_stats->nid_ldlm_stats = lprocfs_alloc_stats(LDLM_LAST_OPC -
-                                                                         LDLM_FIRST_OPC, 0);
+                exp->exp_nid_stats->nid_ldlm_stats =
+                        lprocfs_alloc_stats(LDLM_LAST_OPC - LDLM_FIRST_OPC,
+                                            LPROCFS_STATS_FLAG_NOPERCPU);
                 if (exp->exp_nid_stats->nid_ldlm_stats == NULL)
                         return -ENOMEM;
 
                 lprocfs_init_ldlm_stats(exp->exp_nid_stats->nid_ldlm_stats);
 
-                rc = lprocfs_register_stats(exp->exp_nid_stats->nid_proc, "ldlm_stats",
+                rc = lprocfs_register_stats(exp->exp_nid_stats->nid_proc,
+                                            "ldlm_stats",
                                             exp->exp_nid_stats->nid_ldlm_stats);
         }
 
