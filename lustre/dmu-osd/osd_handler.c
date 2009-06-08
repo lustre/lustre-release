@@ -845,6 +845,14 @@ static int osd_trans_stop(const struct lu_env *env, struct thandle *th)
                 CERROR("Failure in transaction hook: %d\n", result);
 
         udmu_tx_commit(oh->ot_tx);
+
+        /* XXX FIXME XXX - the 'if' statement below seems to be disabled for
+         * performance purposes, but this is not correct. We need to implement
+         * a way to efficiently write synchronously, possibly using the ZIL.
+         *
+         * XXX: also note: oh->ot_sync appears not to be properly set at the
+         * moment.
+         */
         if (0 && oh->ot_sync)
                 udmu_wait_synced(&osd->od_objset, oh->ot_tx);
 
