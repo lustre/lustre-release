@@ -396,11 +396,21 @@ static int print_pool_members(char *fs, char *pool_dir, char *pool_file)
 }
 
 /*
- * search lustre fsname from pathname
+ * search lustre mounts
  *
+ * Calling this function will return to the user the mount point, mntdir, and
+ * the file system name, fsname, if the user passed a buffer to this routine.
+ *
+ * The user inputs are pathname and index. If the pathname is supplied then
+ * the value of the index will be ignored. The pathname will return data if
+ * the pathname is located on a lustre mount. Index is used to pick which
+ * mount point you want in the case of multiple mounted lustre file systems. 
+ * See function lfs_osts in lfs.c for a example of the index use.
  */
-static int search_fsname(char *pathname, char *fsname)
+int llapi_search_mounts(const char *pathname, int index, char *mntdir, 
+                        char *fsname)
 {
+        int len = 0, idx = 0, rc = -ENOENT;
         char *ptr;
         FILE *fp;
         struct mntent *mnt = NULL;
@@ -416,21 +426,37 @@ static int search_fsname(char *pathname, char *fsname)
         mnt = getmntent(fp);
         while ((feof(fp) == 0) && ferror(fp) == 0) {
                 if (llapi_is_lustre_mnt(mnt)) {
-                        /* search by pathname */
-                        if (strncmp(mnt->mnt_dir, pathname,
-                                    strlen(mnt->mnt_dir)) == 0) {
-                                ptr = strchr(mnt->mnt_fsname, '/');
-                                if (ptr == NULL)
-                                        return -EINVAL;
-                                ptr++;
-                                strcpy(fsname, ptr);
-                                return 0;
+                        int mntlen = strlen(mnt->mnt_dir);
+
+                        ptr = strchr(mnt->mnt_fsname, '/');
+                        if (ptr == NULL && !len) {
+                                rc = -EINVAL;
+                                continue;
                         }
+
+                        /* search by pathname */
+                        if (pathname) {
+                                if ((mntlen >= len) && (strncmp(mnt->mnt_dir,
+                                     pathname, mntlen) == 0)) {
+                                        strcpy(mntdir, mnt->mnt_dir);
+                                        if (fsname)
+                                                strcpy(fsname, ++ptr);
+                                        len = mntlen;
+                                        rc = 0;
+                                }
+                        } else if (idx == index) {
+                                strcpy(mntdir, mnt->mnt_dir);
+                                if (fsname)
+                                        strcpy(fsname, ++ptr);
+                                rc = 0;
+                                break;
+                        }
+                        idx++;
                 }
                 mnt = getmntent(fp);
         }
         endmntent(fp);
-        return -ENOENT;
+        return rc;
 
 }
 
@@ -446,7 +472,7 @@ static int poolpath(char *fsname, char *pathname, char *pool_pathname)
         char buffer[MAXPATHLEN];
 
         if (fsname == NULL) {
-                rc = search_fsname(pathname, buffer);
+                rc = llapi_search_mounts(pathname, 0, pattern, buffer);
                 if (rc != 0)
                         return rc;
                 fsname = buffer;

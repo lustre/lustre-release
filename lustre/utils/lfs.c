@@ -839,33 +839,21 @@ static int lfs_getstripe(int argc, char **argv)
 
 static int lfs_osts(int argc, char **argv)
 {
-        FILE *fp;
-        struct mntent *mnt = NULL;
+        char mntdir[PATH_MAX] = {'\0'};
         struct find_param param;
-        int rc=0;
+        int index = 0, rc = 0;
 
         if (argc != 1)
                 return CMD_HELP;
 
-        fp = setmntent(MOUNTED, "r");
-
-        if (fp == NULL) {
-                 fprintf(stderr, "%s: setmntent(%s): %s:", argv[0], MOUNTED,
-                        strerror (errno));
-        } else {
-                mnt = getmntent(fp);
-                while (feof(fp) == 0 && ferror(fp) ==0) {
-                        memset(&param, 0, sizeof(param));
-                        if (llapi_is_lustre_mnt(mnt)) {
-                                rc = llapi_getstripe(mnt->mnt_dir, &param);
-                                if (rc)
-                                        fprintf(stderr,
-                                               "error: %s: failed on %s\n",
-                                               argv[0], mnt->mnt_dir);
-                        }
-                        mnt = getmntent(fp);
+        while (llapi_search_mounts(NULL, index++, mntdir, NULL) == 0) {
+                memset(&param, 0, sizeof(param));
+                rc = llapi_getstripe(mntdir, &param);
+                if (rc) {
+                        fprintf(stderr, "error: %s: failed on %s\n",
+                                argv[0], mntdir);
                 }
-                endmntent(fp);
+                memset(mntdir, 0, PATH_MAX);
         }
 
         return rc;
@@ -887,41 +875,6 @@ static int lfs_osts(int argc, char **argv)
 #define HDF     "%6.1f"
 #define RSF     "%5s"
 #define RDF     "%4d%%"
-
-static int path2mnt(char *path, FILE *fp, char *mntdir, int dir_len)
-{
-        char rpath[PATH_MAX] = {'\0'};
-        struct mntent *mnt;
-        int rc, len, out_len = 0;
-
-        if (!realpath(path, rpath)) {
-                rc = -errno;
-                fprintf(stderr, "error: lfs df: invalid path '%s': %s\n",
-                        path, strerror(-rc));
-                return rc;
-        }
-
-        len = 0;
-        mnt = getmntent(fp);
-        while (feof(fp) == 0 && ferror(fp) == 0) {
-                if (llapi_is_lustre_mnt(mnt)) {
-                        len = strlen(mnt->mnt_dir);
-                        if (len > out_len &&
-                            !strncmp(rpath, mnt->mnt_dir, len)) {
-                                out_len = len;
-                                memset(mntdir, 0, dir_len);
-                                strncpy(mntdir, mnt->mnt_dir, dir_len);
-                        }
-                }
-                mnt = getmntent(fp);
-        }
-
-        if (out_len > 0)
-                return 0;
-
-        fprintf(stderr, "error: lfs df: %s isn't mounted on lustre\n", path);
-        return -EINVAL;
-}
 
 static int showdf(char *mntdir, struct obd_statfs *stat,
                   char *uuid, int ishow, int cooked,
@@ -1083,9 +1036,7 @@ static int mntdf(char *mntdir, int ishow, int cooked)
 
 static int lfs_df(int argc, char **argv)
 {
-        FILE *fp;
         char *path = NULL;
-        struct mntent *mnt = NULL;
         char *mntdir = NULL;
         int ishow = 0, cooked = 0;
         int c, rc = 0;
@@ -1106,14 +1057,6 @@ static int lfs_df(int argc, char **argv)
         if (optind < argc )
                 path = argv[optind];
 
-        fp = setmntent(MOUNTED, "r");
-        if (fp == NULL) {
-                rc = -errno;
-                fprintf(stderr, "error: %s: open %s failed( %s )\n",
-                        argv[0], MOUNTED, strerror(errno));
-                return rc;
-        }
-
         if ((mntdir = malloc(PATH_MAX)) == NULL) {
                 fprintf(stderr, "error: cannot allocate %d bytes\n",
                         PATH_MAX);
@@ -1122,28 +1065,29 @@ static int lfs_df(int argc, char **argv)
         memset(mntdir, 0, PATH_MAX);
 
         if (path) {
-                rc = path2mnt(path, fp, mntdir, PATH_MAX);
-                if (rc) {
-                        endmntent(fp);
-                        free(mntdir);
+                char rpath[PATH_MAX] = {'\0'};
+
+                if (!realpath(path, rpath)) {
+                        rc = -errno;
+                        fprintf(stderr, "error: invalid path '%s': %s\n",
+                                path, strerror(-rc));
                         return rc;
                 }
 
-                rc = mntdf(mntdir, ishow, cooked);
-                printf("\n");
-                endmntent(fp);
-        } else {
-                mnt = getmntent(fp);
-                while (feof(fp) == 0 && ferror(fp) == 0) {
-                        if (llapi_is_lustre_mnt(mnt)) {
-                                rc = mntdf(mnt->mnt_dir, ishow, cooked);
-                                if (rc)
-                                        break;
-                                printf("\n");
-                        }
-                        mnt = getmntent(fp);
+                rc = llapi_search_mounts(rpath, 0, mntdir, NULL);
+                if (rc == 0 && mntdir[0] != '\0') {
+                        rc = mntdf(mntdir, ishow, cooked);
+                        printf("\n");
                 }
-                endmntent(fp);
+        } else {
+                int index = 0;
+
+                while (llapi_search_mounts(NULL, index++, mntdir, NULL) == 0) {
+                        rc = mntdf(mntdir, ishow, cooked);
+                        if (rc)
+                                break;
+                        printf("\n");
+                }
         }
 
         free(mntdir);
@@ -1153,9 +1097,8 @@ static int lfs_df(int argc, char **argv)
 static int lfs_check(int argc, char **argv)
 {
         int rc;
-        FILE *fp;
-        struct mntent *mnt = NULL;
         int num_types = 1;
+        char mntdir[PATH_MAX] = {'\0'};
         char *obd_types[2];
         char obd_type1[4];
         char obd_type2[4];
@@ -1180,27 +1123,14 @@ static int lfs_check(int argc, char **argv)
                         return CMD_HELP;
         }
 
-        fp = setmntent(MOUNTED, "r");
-        if (fp == NULL) {
-                 fprintf(stderr, "setmntent(%s): %s:", MOUNTED,
-                        strerror (errno));
-        } else {
-                mnt = getmntent(fp);
-                while (feof(fp) == 0 && ferror(fp) ==0) {
-                        if (llapi_is_lustre_mnt(mnt))
-                                break;
-                        mnt = getmntent(fp);
-                }
-                endmntent(fp);
-        }
-
-        if (!mnt) {
+        rc = llapi_search_mounts(NULL, 0, mntdir, NULL);
+        if (rc < 0 || mntdir[0] == '\0') {
                 fprintf(stderr, "No suitable Lustre mount found\n");
-                return -1;
+                return rc;
         }
 
         rc = llapi_target_iterate(num_types, obd_types,
-                                  mnt->mnt_dir, llapi_ping_target);
+                                  mntdir, llapi_ping_target);
 
         if (rc)
                 fprintf(stderr, "error: %s: %s status failed\n",
@@ -1212,8 +1142,7 @@ static int lfs_check(int argc, char **argv)
 
 static int lfs_catinfo(int argc, char **argv)
 {
-        FILE *fp;
-        struct mntent *mnt = NULL;
+        char mntdir[PATH_MAX] = {'\0'};
         int rc;
 
         if (argc < 2 || (!strcmp(argv[1],"config") && argc < 3))
@@ -1222,25 +1151,12 @@ static int lfs_catinfo(int argc, char **argv)
         if (strcmp(argv[1], "config") && strcmp(argv[1], "deletions"))
                 return CMD_HELP;
 
-        fp = setmntent(MOUNTED, "r");
-        if (fp == NULL) {
-                 fprintf(stderr, "setmntent(%s): %s:", MOUNTED,
-                         strerror(errno));
-        } else {
-                mnt = getmntent(fp);
-                while (feof(fp) == 0 && ferror(fp) == 0) {
-                        if (llapi_is_lustre_mnt(mnt))
-                                break;
-                        mnt = getmntent(fp);
-                }
-                endmntent(fp);
-        }
-
-        if (mnt) {
+        rc = llapi_search_mounts(NULL, 0, mntdir, NULL);
+        if (rc == 0 && mntdir[0] != '\0') {
                 if (argc == 3)
-                        rc = llapi_catinfo(mnt->mnt_dir, argv[1], argv[2]);
+                        rc = llapi_catinfo(mntdir, argv[1], argv[2]);
                 else
-                        rc = llapi_catinfo(mnt->mnt_dir, argv[1], NULL);
+                        rc = llapi_catinfo(mntdir, argv[1], NULL);
         } else {
                 fprintf(stderr, "no lustre_lite mounted.\n");
                 rc = -1;
