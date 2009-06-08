@@ -61,6 +61,7 @@
 
 #define MAX_HW_SECTORS_KB_PATH  "queue/max_hw_sectors_kb"
 #define MAX_SECTORS_KB_PATH     "queue/max_sectors_kb"
+#define STRIPE_CACHE_SIZE       "md/stripe_cache_size"
 #define MAX_RETRIES 99
 
 int          verbose = 0;
@@ -68,6 +69,7 @@ int          nomtab = 0;
 int          fake = 0;
 int          force = 0;
 int          retry = 0;
+int          md_stripe_cache_size = 2048;
 char         *progname = NULL;
 
 void usage(FILE *out)
@@ -94,6 +96,8 @@ void usage(FILE *out)
                 "\t\texclude=<ostname>[:<ostname>] : colon-separated list of "
                 "inactive OSTs (e.g. lustre-OST0001)\n"
                 "\t\tretry=<num>: number of times mount is retried by client\n"
+                "\t\tmd_stripe_cache_size=<num>: set the raid stripe cache "
+                "size for the underlying raid if present\n"
                 );
         exit((out != stdout) ? EINVAL : 0);
 }
@@ -278,12 +282,16 @@ int parse_options(char *orig_options, int *flagp)
                  * manner */
                 arg = opt;
                 val = strchr(opt, '=');
-                if (val != NULL && strncmp(arg, "retry", 5) == 0) {
-                        retry = atoi(val + 1);
-                        if (retry > MAX_RETRIES)
-                                retry = MAX_RETRIES;
-                        else if (retry < 0)
-                                retry = 0;
+                if (val != NULL) {
+                        if (strncmp(arg, "md_stripe_cache_size", 20) == 0) {
+                                md_stripe_cache_size = atoi(val + 1);
+                        } else if (strncmp(arg, "retry", 5) == 0) {
+                                retry = atoi(val + 1);
+                                if (retry > MAX_RETRIES)
+                                        retry = MAX_RETRIES;
+                                else if (retry < 0)
+                                        retry = 0;
+                        }
                 } else if (strncmp(opt, "force", 5) == 0) {
                         //XXX special check for 'force' option
                         ++force;
@@ -330,7 +338,7 @@ int write_file(char *path, char *buf)
 /* This is to tune the kernel for good SCSI performance.
  * For that we set the value of /sys/block/{dev}/queue/max_sectors_kb
  * to the value of /sys/block/{dev}/queue/max_hw_sectors_kb */
-int set_tunables(char *source, int src_len)
+int set_blockdev_tunables(char *source)
 {
         glob_t glob_info;
         struct stat stat_buf;
@@ -353,52 +361,32 @@ int set_tunables(char *source, int src_len)
                 return -EINVAL;
         }
 
-        src_len = sizeof(real_path);
-
         if (strncmp(real_path, "/dev/loop", 9) == 0)
                 return 0;
 
         if ((real_path[0] != '/') && (strpbrk(real_path, ",:") != NULL))
                 return 0;
 
-        dev = real_path + src_len - 1;
-        while (dev > real_path && (*dev != '/')) {
-                if (isdigit(*dev))
-                        *dev = 0;
-                dev--;
-        }
-        snprintf(path, sizeof(path), "/sys/block%s/%s", dev,
-                 MAX_HW_SECTORS_KB_PATH);
-        rc = read_file(path, buf, sizeof(buf));
-        if (rc == 0 && (strlen(buf) - 1) > 0) {
-                snprintf(path, sizeof(path), "/sys/block%s/%s", dev,
-                         MAX_SECTORS_KB_PATH);
-                rc = write_file(path, buf);
-                if (rc && verbose)
-                        fprintf(stderr, "warning: opening %s: %s\n",
-                                path, strerror(errno));
-                return rc;
-        }
-
-        if (rc != ENOENT)
-                return rc;
+        snprintf(path, sizeof(path), "/sys/block%s", real_path + 4);
+        if (access(path, X_OK) == 0)
+                goto set_params;
 
         /* The name of the device say 'X' specified in /dev/X may not
          * match any entry under /sys/block/. In that case we need to
          * match the major/minor number to find the entry under
          * sys/block corresponding to /dev/X */
-        dev = real_path + src_len - 1;
-        while (dev > real_path) {
-                if (isdigit(*dev))
-                        *dev = 0;
-                dev--;
-        }
+        dev = real_path + strlen(real_path);
+        while (--dev > real_path && isdigit(*dev))
+                *dev = 0;
 
-        rc = stat(dev, &stat_buf);
+        if (strncmp(real_path, "/dev/md_", 8) == 0)
+                *dev = 0;
+
+        rc = stat(real_path, &stat_buf);
         if (rc) {
                 if (verbose)
                         fprintf(stderr, "warning: %s, device %s stat failed\n",
-                                strerror(errno), dev);
+                                strerror(errno), real_path);
                 return rc;
         }
 
@@ -432,31 +420,59 @@ int set_tunables(char *source, int src_len)
                 if (verbose)
                         fprintf(stderr,"warning: device %s does not match any "
                                 "entry under /sys/block\n", real_path);
-                rc = -EINVAL;
-                goto out;
+                globfree(&glob_info);
+                return -EINVAL;
         }
 
-        snprintf(path, sizeof(path), "%s/%s", glob_info.gl_pathv[i],
+        /* Chop off "/dev" from path we found */
+        path[strlen(glob_info.gl_pathv[i])] = '\0';
+        globfree(&glob_info);
+
+set_params:
+        if (strncmp(real_path, "/dev/md", 7) == 0) {
+                snprintf(real_path, sizeof(real_path), "%s/%s", path,
+                         STRIPE_CACHE_SIZE);
+
+                rc = read_file(real_path, buf, sizeof(buf));
+                if (rc) {
+                        if (verbose)
+                                fprintf(stderr, "warning: opening %s: %s\n",
+                                        real_path, strerror(errno));
+                        return rc;
+                }
+
+                if (atoi(buf) >= md_stripe_cache_size)
+                        return 0;
+
+                if (strlen(buf) - 1 > 0) {
+                        snprintf(buf, sizeof(buf), "%d", md_stripe_cache_size);
+                        rc = write_file(real_path, buf);
+                        if (rc && verbose)
+                                fprintf(stderr, "warning: opening %s: %s\n",
+                                        real_path, strerror(errno));
+                }
+                /* Return since raid and disk tunables are different */
+                return rc;
+        }
+
+        snprintf(real_path, sizeof(real_path), "%s/%s", path,
                  MAX_HW_SECTORS_KB_PATH);
-        rc = read_file(path, buf, sizeof(buf));
+        rc = read_file(real_path, buf, sizeof(buf));
         if (rc) {
                 if (verbose)
                         fprintf(stderr, "warning: opening %s: %s\n",
-                                path, strerror(errno));
-                goto out;
+                                real_path, strerror(errno));
+                return rc;
         }
 
         if (strlen(buf) - 1 > 0) {
-                snprintf(path, sizeof(path), "%s/%s",
-                         glob_info.gl_pathv[i], MAX_SECTORS_KB_PATH);
-                rc = write_file(path, buf);
+                snprintf(real_path, sizeof(real_path), "%s/%s", path,
+                         MAX_SECTORS_KB_PATH);
+                rc = write_file(real_path, buf);
                 if (rc && verbose)
                         fprintf(stderr, "warning: writing to %s: %s\n",
-                                path, strerror(errno));
+                                real_path, strerror(errno));
         }
-
-out:
-        globfree(&glob_info);
         return rc;
 }
 
@@ -602,11 +618,12 @@ int main(int argc, char *const argv[])
                 printf("mounting device %s at %s, flags=%#x options=%s\n",
                        source, target, flags, optcopy);
 
-        if (!strstr(usource, ":/") && set_tunables(source, strlen(source)) &&
-            verbose)
-                fprintf(stderr, "%s: unable to set tunables for %s"
+        if (!strstr(usource, ":/") && set_blockdev_tunables(source)) {
+                if (verbose)
+                        fprintf(stderr, "%s: unable to set tunables for %s"
                                 " (may cause reduced IO performance)\n",
                                 argv[0], source);
+        }
 
         register_service_tags(usource, source, target);
 

@@ -103,6 +103,10 @@ Start a client or MDT with a (colon-separated) list of known inactive OSTs.
 .TP
 .BI abort_recov
 Abort client recovery and start the target service immediately.
+.TP
+.BI md_stripe_cache_size
+Sets the stripe cache size for server side disk with a striped raid
+configuration.
 .SH EXAMPLES
 .TP
 .B mount -t lustre cfs21@tcp0:/testfs /mnt/myfilesystem
