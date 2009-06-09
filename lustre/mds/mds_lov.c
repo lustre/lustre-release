@@ -407,10 +407,14 @@ int mds_lov_write_objids(struct obd_device *obd)
                         size = (mds->mds_lov_objid_lastidx+1) * sizeof(obd_id);
 
                 CDEBUG(D_INFO, "write %lld - %u\n", off, size);
-                rc = fsfilt_write_record(obd, mds->mds_lov_objid_filp, data,
+                if (obd->obd_fsops) {
+                        rc = fsfilt_write_record(obd, mds->mds_lov_objid_filp, data,
                                          size, &off, 0);
-                if (rc < 0)
-                        break;
+                        if (rc < 0)
+                                break;
+                } else {
+                        CERROR("not implemented yet\n");
+                }
                 cfs_bitmap_clear(mds->mds_lov_page_dirty, i);
         }
         if (rc >= 0)
@@ -757,7 +761,7 @@ static int __mds_lov_synchronize(void *data)
         __u32  idx = mlsi->mlsi_index;
         struct mds_group_info mgi;
         struct llog_ctxt *ctxt;
-        int rc = 0;
+        int rc = 0, rc2;
         ENTRY;
 
         OBD_FREE_PTR(mlsi);
@@ -790,17 +794,17 @@ static int __mds_lov_synchronize(void *data)
                 GOTO(out, rc);
 
         ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
-        if (!ctxt)
-                GOTO(out, rc = -ENODEV);
-
-        OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT, 60);
-        rc = llog_connect(ctxt, NULL, NULL, uuid);
-        llog_ctxt_put(ctxt);
-        if (rc != 0) {
-                CERROR("%s failed at llog_origin_connect: %d\n",
-                       obd_uuid2str(uuid), rc);
-                GOTO(out, rc);
-        }
+        if (ctxt) {
+                OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT, 60);
+                rc = llog_connect(ctxt, NULL, NULL, uuid);
+                llog_ctxt_put(ctxt);
+                if (rc != 0) {
+                        CERROR("%s failed at llog_origin_connect: %d\n",
+                                        obd_uuid2str(uuid), rc);
+                        GOTO(out, rc);
+                }
+        } else
+                CERROR("can't get llog context\n");
 
         LCONSOLE_INFO("MDS %s: %s now active, resetting orphans\n",
               obd->obd_name, obd_uuid2str(uuid));
@@ -826,6 +830,7 @@ static int __mds_lov_synchronize(void *data)
 out:
         up_read(&mds->mds_notify_lock);
         if (rc) {
+#if 0
                 /* Deactivate it for safety */
                 CERROR("%s sync failed %d, deactivating\n", obd_uuid2str(uuid),
                        rc);
@@ -833,6 +838,7 @@ out:
                     !mds->mds_osc_obd->obd_stopping && !watched->obd_stopping)
                         obd_notify(mds->mds_osc_obd, watched,
                                    OBD_NOTIFY_INACTIVE, NULL);
+#endif
         }
 
         class_decref(obd, "mds_lov_synchronize", obd);

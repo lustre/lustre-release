@@ -450,6 +450,11 @@ int llog_cat_initialize(struct obd_device *obd, struct obd_llog_group *olg,
         int rc;
         ENTRY;
 
+        if (obd->obd_lvfs_ctxt.magic != OBD_RUN_CTXT_MAGIC) {
+                CERROR("llog isn't initialized\n");
+                RETURN(0);
+        }
+
         mutex_down(&olg->olg_cat_processing);
         rc = llog_get_cat_list(obd, obd, name, idx, 1, &idarray);
         if (rc) {

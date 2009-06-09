@@ -1856,7 +1856,7 @@ static int mdt_llog_ctxt_clone(const struct lu_env *env, struct mdt_device *mdt,
         rc = next->md_ops->mdo_llog_ctxt_get(env, next, idx, (void **)&ctxt);
         if (rc || ctxt == NULL) {
                 CERROR("Can't get mdd ctxt %d\n", rc);
-                return rc;
+                return 0;
         }
 
         rc = llog_group_set_ctxt(&mdt2obd_dev(mdt)->obd_olg, ctxt, idx);
@@ -4235,6 +4235,9 @@ static int mdt_stack_init(struct lu_env *env,
         rc = child_lu_dev->ld_ops->ldo_prepare(env,
                                                &m->mdt_md_dev.md_lu_dev,
                                                child_lu_dev);
+
+        /* XXX: to simplify debugging */
+        LASSERT(rc == 0);
 out:
         /* fini from last known good lu_device */
         if (rc)
@@ -4258,6 +4261,10 @@ static int mdt_obd_llog_setup(struct obd_device *obd,
         LASSERT(obd->obd_fsops == NULL);
         lmi->lmi_dt->dd_ops->dt_conf_get(NULL, lmi->lmi_dt, &dt_param);
         mnt = dt_param.ddp_mnt;
+        if (mnt == NULL) {
+                CERROR("no llog support on this device\n");
+                return 0;
+        }
         LASSERT(mnt);
 
         obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));

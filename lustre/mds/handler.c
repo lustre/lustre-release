@@ -356,12 +356,15 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         lmi = server_get_mount_2(dev);
         LASSERT(lmi != NULL);
 
+        init_rwsem(&mds->mds_notify_lock);
+
         lsi = s2lsi(lmi->lmi_sb);
         lmi->lmi_dt->dd_ops->dt_conf_get(NULL, lmi->lmi_dt, &dt_param);
         mnt = dt_param.ddp_mnt;
-        LASSERT(mnt);
-
-        init_rwsem(&mds->mds_notify_lock);
+        if (mnt == NULL) {
+                CERROR("non-ldiskfs underlying filesystem\n");
+                goto new_diskfs;
+        }
 
         obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
         mds_init_ctxt(obd, mnt);
@@ -389,6 +392,8 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 CERROR("__iopen__ directory has no inode? rc = %d\n", rc);
                 GOTO(err_fid, rc);
         }
+
+new_diskfs:
         rc = mds_lov_init_objids(obd);
         if (rc != 0) {
                CERROR("cannot init lov objid rc = %d\n", rc);
@@ -411,7 +416,8 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 GOTO(err_objects, rc);
 
 err_pop:
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        if (mnt)
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         RETURN(rc);
 err_fid:
         dput(mds->mds_fid_de);
@@ -438,21 +444,24 @@ static int mds_cmd_cleanup(struct obd_device *obd)
         if (strncmp(obd->obd_name, MDD_OBD_NAME, strlen(MDD_OBD_NAME)))
                 RETURN(0);
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
         mds_lov_destroy_objids(obd);
 
-        if (mds->mds_objects_dir != NULL) {
-                l_dput(mds->mds_objects_dir);
-                mds->mds_objects_dir = NULL;
+        if (obd->obd_fsops) {
+                /* only if underlying fs supports fsfilt */
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+                if (mds->mds_objects_dir != NULL) {
+                        l_dput(mds->mds_objects_dir);
+                        mds->mds_objects_dir = NULL;
+                }
+
+                shrink_dcache_parent(mds->mds_fid_de);
+                dput(mds->mds_fid_de);
+                LL_DQUOT_OFF(obd->u.obt.obt_sb);
+                fsfilt_put_ops(obd->obd_fsops);
+
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         }
-
-        shrink_dcache_parent(mds->mds_fid_de);
-        dput(mds->mds_fid_de);
-        LL_DQUOT_OFF(obd->u.obt.obt_sb);
-        fsfilt_put_ops(obd->obd_fsops);
-
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         server_put_mount_2(obd->obd_name);
         RETURN(rc);
 }
