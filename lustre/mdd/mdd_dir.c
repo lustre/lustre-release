@@ -246,7 +246,7 @@ static int mdd_dir_is_empty(const struct lu_env *env,
         iops = &obj->do_index_ops->dio_it;
         it = iops->init(env, obj, BYPASS_CAPA);
         if (it != NULL) {
-                result = iops->get(env, it, (const void *)"");
+                result = iops->load(env, it, 0);
                 if (result > 0) {
                         int i;
                         for (result = 0, i = 0; result == 0 && i < 3; ++i)
@@ -1853,6 +1853,7 @@ mdd_start_and_declare_create(const struct lu_env *env,
                              struct lu_attr *attr,
                              struct md_op_spec *spec)
 {
+        struct dt_object_format *dof = &mdd_env_info(env)->mti_dof;
         struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct thandle    *handle;
@@ -1862,7 +1863,9 @@ mdd_start_and_declare_create(const struct lu_env *env,
         if (IS_ERR(handle))
                 RETURN(handle);
 
-        rc = mdo_declare_create_obj(env, son, attr, NULL, NULL, handle);
+        dof->dof_type = dt_mode_to_dft(attr->la_mode);
+
+        rc = mdo_declare_create_obj(env, son, attr, NULL, dof, handle);
         if (rc)
                 GOTO(cleanup, rc);
         rc = __mdd_declare_index_insert(env, mdd_pobj, mdo2fid(son),dot,0,handle);
