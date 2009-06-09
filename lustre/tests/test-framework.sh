@@ -102,6 +102,9 @@ init_test_env() {
     if ! echo $PATH | grep -q $LUSTRE/tests/racer; then
         export PATH=$PATH:$LUSTRE/tests/racer
     fi
+    if ! echo $PATH | grep -q $LUSTRE/../zfs/cmd/zfs; then
+        export PATH=$PATH:$LUSTRE/../zfs/cmd/zfs
+    fi
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     [ ! -f "$LCTL" ] && export LCTL=$(which lctl)
     export LFS=${LFS:-"$LUSTRE/utils/lfs"}
@@ -1419,6 +1422,10 @@ stopall() {
     # The add fn does rm ${facet}active file, this would be enough
     # if we use do_facet <facet> only after the facet added, but
     # currently we use do_facet mds in local.sh
+    if [ ! -z $MGSDEV ]; then
+        stop mgs
+        rm -f ${TMP}/mgsactive
+    fi
     for num in `seq $MDSCOUNT`; do
         stop mds$num -f
         rm -f ${TMP}/mds${num}active
@@ -1469,6 +1476,8 @@ formatall() {
         MDS_MKFS_OPTS="--mgs $MDS_MKFS_OPTS"
     fi
     echo "Formatting mdts, osts"
+
+    [ "$MDSFSTYPE" ] && FSTYPE_OPT="--backfstype $MDSFSTYPE"
     for num in `seq $MDSCOUNT`; do
         echo "Format mds$num: $(mdsdevname $num)"
         if $VERBOSE; then
@@ -1478,8 +1487,8 @@ formatall() {
         fi
     done
 
+    [ "$FSTYPE" ] && FSTYPE_OPT="--backfstype $FSTYPE"
     [ "$OSTFSTYPE" ] && FSTYPE_OPT="--backfstype $OSTFSTYPE"
-
     for num in `seq $OSTCOUNT`; do
         echo "Format ost$num: $(ostdevname $num)"
         if $VERBOSE; then
