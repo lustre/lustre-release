@@ -31,3 +31,5 @@ mkfs_lustre
 mount_lustre
 tunefs_lustre
 loadgen
+lreplicate
+lshowmount
