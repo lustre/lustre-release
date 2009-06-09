@@ -750,6 +750,8 @@ void ll_truncate(struct inode *inode);
 int ll_file_punch(struct inode *, loff_t, int);
 ssize_t ll_file_lockless_io(struct file *, const struct iovec *,
                             unsigned long, loff_t *, int, ssize_t);
+ssize_t ll_direct_IO(int rw, struct file *file,const struct iovec *iov,
+                     loff_t file_offset, unsigned long nr_segs, int locked);
 void ll_clear_file_contended(struct inode*);
 int ll_sync_page_range(struct inode *, struct address_space *, loff_t, size_t);
 

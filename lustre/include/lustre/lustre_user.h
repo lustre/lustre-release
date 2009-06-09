@@ -114,9 +114,11 @@ struct obd_statfs;
 
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
 
-#define LL_FILE_IGNORE_LOCK             0x00000001
-#define LL_FILE_GROUP_LOCKED            0x00000002
-#define LL_FILE_READAHEAD               0x00000004
+#define LL_FILE_IGNORE_LOCK         0x00000001
+#define LL_FILE_GROUP_LOCKED        0x00000002
+#define LL_FILE_READAHEAD           0x00000004
+#define LL_FILE_LOCKED_DIRECTIO     0x00000008 /* client-side locks with dio */
+#define LL_FILE_LOCKLESS_IO         0x00000010 /* server-side locks with cio */
 
 #define LOV_USER_MAGIC_V1 0x0BD10BD0
 #define LOV_USER_MAGIC    LOV_USER_MAGIC_V1

@@ -1871,8 +1871,10 @@ static int osc_brw_async(int cmd, struct obd_export *exp,
                 struct obdo *oa;
                 obd_count pages_per_brw;
 
+                /* one page less under unaligned direct i/o */
                 pages_per_brw = min_t(obd_count, page_count,
-                    class_exp2cliimp(exp)->imp_obd->u.cli.cl_max_pages_per_rpc);
+                    class_exp2cliimp(exp)->imp_obd->u.cli.cl_max_pages_per_rpc -
+                                      !!pshift);
 
                 pages_per_brw = max_unfragmented_pages(ppga, pages_per_brw,
                                                        pshift);

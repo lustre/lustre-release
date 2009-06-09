@@ -1145,8 +1145,20 @@ static int ll_is_file_contended(struct file *file)
                        sbi->ll_lco.lco_flags);
                 RETURN(0);
         }
+
         if (fd && (fd->fd_flags & LL_FILE_IGNORE_LOCK))
                 RETURN(0);
+
+        /* server-side locking for dio unless LL_FILE_LOCKED_DIRECTIO */
+        if ((file->f_flags & O_DIRECT) &&
+            !(fd && (fd->fd_flags & LL_FILE_LOCKED_DIRECTIO)))
+                RETURN(1);
+
+        /* server-side locking for cached I/O with LL_FILE_LOCKLESS_IO */
+        if (!(file->f_flags & O_DIRECT) &&
+            fd && fd->fd_flags & LL_FILE_LOCKLESS_IO)
+                RETURN(1);
+
         if (test_bit(LLI_F_CONTENDED, &lli->lli_flags)) {
                 cfs_time_t cur_time = cfs_time_current();
                 cfs_time_t retry_time;
@@ -1631,13 +1643,13 @@ repeat:
                                  &tree, OBD_BRW_READ);
                 up_read(&lli->lli_truncate_rwsem);
         } else {
-                /* lockless read
-                 *
-                 * current time will get into request as atime
-                 * (lustre/osc/osc_request.c:osc_build_request())
-                 */
-                retval = ll_file_lockless_io(file, iov_copy, nrsegs_copy, ppos,
-                                             READ, chunk);
+                retval = ll_direct_IO(READ, file, iov_copy, *ppos, nr_segs, 0);
+                if (retval > 0) {
+                       lprocfs_counter_add(sbi->ll_stats,
+                                           LPROC_LL_LOCKLESS_READ,
+                                           (long)retval);
+                        *ppos += retval;
+                }
         }
         ll_rw_stats_tally(sbi, current->pid, file, count, 0);
         if (retval > 0) {
@@ -1836,13 +1848,13 @@ repeat:
                                                 *ppos);
 #endif
         } else {
-                /* lockless write
-                 *
-                 * current time will get into request as mtime and
-                 * ctime (lustre/osc/osc_request.c:osc_build_request())
-                 */
-                retval = ll_file_lockless_io(file, iov_copy, nrsegs_copy,
-                                             ppos, WRITE, chunk);
+                retval = ll_direct_IO(WRITE, file, iov_copy, *ppos, nr_segs, 0);
+                if (retval > 0) {
+                       lprocfs_counter_add(sbi->ll_stats,
+                                           LPROC_LL_LOCKLESS_WRITE,
+                                           (long)retval);
+                        *ppos += retval;
+                }
         }
         ll_rw_stats_tally(ll_i2sbi(inode), current->pid, file, chunk, 1);
 
