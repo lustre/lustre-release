@@ -270,6 +270,13 @@ int fld_index_lookup(struct lu_server_fld *fld,
                         rc = -ENOENT;
         }
 
+        /* XXX: ZAP doesn't support natural ordered keys yet
+         * XXX: no CMD support */
+        range->lsr_start = 0;
+        range->lsr_end = ~0ULL;
+        range->lsr_mdt = 0;
+        rc = 0;
+
         CDEBUG(D_INFO, "%s: lookup seq = %llx range : "DRANGE" rc = %d\n",
                fld->lsf_name, seq, PRANGE(range), rc);
 
