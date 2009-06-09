@@ -118,9 +118,9 @@ static void mdd_device_shutdown(const struct lu_env *env,
         dt_txn_callback_del(m->mdd_child, &m->mdd_txn_cb);
         mdd_object_put(env, m->mdd_dot_lustre_objs.mdd_obf);
         mdd_object_put(env, m->mdd_dot_lustre);
+        orph_index_fini(env, m);
         if (m->mdd_obd_dev)
                 mdd_fini_obd(env, m, cfg);
-        orph_index_fini(env, m);
         /* remove upcall device*/
         md_upcall_fini(&m->mdd_md_dev);
         EXIT;
