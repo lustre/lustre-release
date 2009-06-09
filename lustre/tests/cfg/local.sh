@@ -89,7 +89,7 @@ OST_MOUNT_OPTS=${OST_MOUNT_OPTS:-"-o loop"}
 
 MGSSIZE=${MGSSIZE:-30000}
 MGS_MKFS_OPTS="--mgs --fsname=$FSNAME --device-size=$MGSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT"
-MGS_MOUNT_OPTS=${MDS_MOUNT_OPTS:-"-o loop,user_xattr,acl"}
+MGS_MOUNT_OPTS=${MGS_MOUNT_OPTS:-"-o loop,user_xattr,acl"}
 
 #client
 MOUNTOPT=""
