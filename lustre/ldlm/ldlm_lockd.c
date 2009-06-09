@@ -802,11 +802,6 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         total_enqueue_wait = cfs_time_sub(cfs_time_current_sec(),
                                           lock->l_last_activity);
 
-        if (total_enqueue_wait > obd_timeout)
-                /* non-fatal with AT - change to LDLM_DEBUG? */
-                LDLM_WARN(lock, "enqueue wait took %lus from %lu",
-                          total_enqueue_wait, lock->l_last_activity);
-
         lock_res_and_lock(lock);
         if (lock->l_resource->lr_lvb_len) {
                 size[DLM_REQ_REC_OFF] = lock->l_resource->lr_lvb_len;
@@ -846,8 +841,18 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 
         /* Server-side enqueue wait time estimate, used in
             __ldlm_add_waiting_lock to set future enqueue timers */
-        at_add(&lock->l_resource->lr_namespace->ns_at_estimate,
-               total_enqueue_wait);
+        if (total_enqueue_wait < ldlm_get_enq_timeout(lock))
+                at_add(&lock->l_resource->lr_namespace->ns_at_estimate,
+                       total_enqueue_wait);
+        else
+                /* bz18618. Don't add lock enqueue time we spend waiting for a
+                   previous callback to fail. Locks waiting legitimately will
+                   get extended by ldlm_refresh_waiting_lock regardless of the
+                   estimate, so it's okay to underestimate here. */
+                LDLM_DEBUG(lock, "lock completed after %lus; estimate was %ds. "
+                       "It is likely that a previous callback timed out.",
+                       total_enqueue_wait,
+                       at_get(&lock->l_resource->lr_namespace->ns_at_estimate));
 
         ptlrpc_req_set_repsize(req, 1, NULL);
 
