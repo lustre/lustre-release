@@ -1,8 +1,8 @@
-Index: linux-2.6.27.21-0.1/fs/ext4/ialloc.c
+Index: linux-stage/fs/ext4/ialloc.c
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/ialloc.c	2009-06-02 18:39:22.000000000 +0530
-+++ linux-2.6.27.21-0.1/fs/ext4/ialloc.c	2009-06-04 17:01:26.000000000 +0530
-@@ -675,7 +675,8 @@
+--- linux-stage.orig/fs/ext4/ialloc.c
++++ linux-stage/fs/ext4/ialloc.c
+@@ -675,7 +675,8 @@ err_ret:
   * For other inodes, search forward from the parent directory's block
   * group to find a free inode.
   */
@@ -12,7 +12,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ialloc.c
  {
  	struct super_block *sb;
  	struct buffer_head *inode_bitmap_bh = NULL;
-@@ -706,6 +707,48 @@
+@@ -706,6 +707,51 @@ struct inode *ext4_new_inode(handle_t *h
  	sbi = EXT4_SB(sb);
  	es = sbi->s_es;
  
@@ -34,26 +34,29 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ialloc.c
 +		if (err)
 +			goto fail;
 +
-+		if (ext4_set_bit_atomic(sb_bgl_lock(sbi, group),
-+					ino, inode_bitmap_bh->b_data)) {
-+			printk(KERN_ERR "goal inode %lu unavailable\n", goal);
-+			/* Oh well, we tried. */
-+			goto continue_allocation;
-+		}
-+
-+		BUFFER_TRACE(bh, "call ext4_journal_dirty_metadata");
-+		err = ext4_journal_dirty_metadata(handle, inode_bitmap_bh);
-+		if (err)
-+			goto fail;
-+
-+		/* We've shortcircuited the allocation system successfully,
-+		 * now finish filling in the inode.
-+		 */
 +		BUFFER_TRACE(group_desc_bh, "get_write_access");
 +		err = ext4_journal_get_write_access(handle, group_desc_bh);
 +		if (err)
 +			goto fail;
 +
++		err = ext4_claim_inode(sb, inode_bitmap_bh, ino, group, mode);
++		if (err) {
++			printk(KERN_ERR "goal inode %lu unavailable\n", goal);
++			/* Oh well, we tried. */
++			jbd2_journal_release_buffer(handle, inode_bitmap_bh);
++			jbd2_journal_release_buffer(handle, group_desc_bh);
++			goto continue_allocation;
++		}
++
++		/* we won it */
++		BUFFER_TRACE(inode_bitmap_bh,
++			     "call ext4_journal_dirty_metadata");
++		err = ext4_journal_dirty_metadata(handle, inode_bitmap_bh);
++		if (err)
++			goto fail;
++
++		/* zero bit is inode number 1*/
++		ino++;
 +		goto got;
 +	}
 +
@@ -61,11 +64,11 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ialloc.c
  	if (sbi->s_log_groups_per_flex) {
  		ret2 = find_group_flex(sb, dir, &group);
  		goto got_group;
-Index: linux-2.6.27.21-0.1/fs/ext4/namei.c
+Index: linux-stage/fs/ext4/namei.c
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/namei.c	2009-06-02 18:39:22.000000000 +0530
-+++ linux-2.6.27.21-0.1/fs/ext4/namei.c	2009-06-04 17:00:38.000000000 +0530
-@@ -104,6 +104,7 @@
+--- linux-stage.orig/fs/ext4/namei.c
++++ linux-stage/fs/ext4/namei.c
+@@ -104,6 +104,7 @@ struct dx_entry
  	__le32 block;
  };
  
@@ -73,7 +76,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/namei.c
  /*
   * dx_root_info is laid out so that if it should somehow get overlaid by a
   * dirent the two low bits of the hash version will be zero.  Therefore, the
-@@ -149,6 +150,14 @@
+@@ -149,6 +150,14 @@ struct dx_map_entry
  	u16 size;
  };
  
@@ -88,7 +91,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/namei.c
  static inline ext4_lblk_t dx_get_block(struct dx_entry *entry);
  static void dx_set_block(struct dx_entry *entry, ext4_lblk_t value);
  static inline unsigned dx_get_hash(struct dx_entry *entry);
-@@ -1716,6 +1725,20 @@
+@@ -1716,6 +1725,20 @@ static int ext4_add_nondir(handle_t *han
  	return err;
  }
  
@@ -109,7 +112,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/namei.c
  /*
   * By the time this is called, we already have created
   * the directory cache entry for the new file, but it
-@@ -1741,7 +1764,7 @@
+@@ -1741,7 +1764,7 @@ retry:
  	if (IS_DIRSYNC(dir))
  		handle->h_sync = 1;
  
@@ -118,7 +121,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/namei.c
  	err = PTR_ERR(inode);
  	if (!IS_ERR(inode)) {
  		inode->i_op = &ext4_file_inode_operations;
-@@ -1775,7 +1798,7 @@
+@@ -1775,7 +1798,7 @@ retry:
  	if (IS_DIRSYNC(dir))
  		handle->h_sync = 1;
  
@@ -127,7 +130,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/namei.c
  	err = PTR_ERR(inode);
  	if (!IS_ERR(inode)) {
  		init_special_inode(inode, inode->i_mode, rdev);
-@@ -1811,7 +1834,7 @@
+@@ -1811,7 +1834,7 @@ retry:
  	if (IS_DIRSYNC(dir))
  		handle->h_sync = 1;
  
@@ -136,7 +139,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/namei.c
  	err = PTR_ERR(inode);
  	if (IS_ERR(inode))
  		goto out_stop;
-@@ -2211,7 +2234,7 @@
+@@ -2211,7 +2234,7 @@ retry:
  	if (IS_DIRSYNC(dir))
  		handle->h_sync = 1;
  
@@ -145,11 +148,11 @@ Index: linux-2.6.27.21-0.1/fs/ext4/namei.c
  	err = PTR_ERR(inode);
  	if (IS_ERR(inode))
  		goto out_stop;
-Index: linux-2.6.27.21-0.1/fs/ext4/ext4.h
+Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/ext4.h	2009-06-02 18:39:22.000000000 +0530
-+++ linux-2.6.27.21-0.1/fs/ext4/ext4.h	2009-06-04 17:00:38.000000000 +0530
-@@ -1032,7 +1032,8 @@
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -1032,7 +1032,8 @@ extern int ext4fs_dirhash(const char *na
  			  dx_hash_info *hinfo);
  
  /* ialloc.c */
@@ -159,11 +162,11 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4.h
  extern void ext4_free_inode(handle_t *, struct inode *);
  extern struct inode * ext4_orphan_get(struct super_block *, unsigned long);
  extern unsigned long ext4_count_free_inodes(struct super_block *);
-Index: linux-2.6.27.21-0.1/fs/ext4/migrate.c
+Index: linux-stage/fs/ext4/migrate.c
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/migrate.c	2009-06-02 18:39:22.000000000 +0530
-+++ linux-2.6.27.21-0.1/fs/ext4/migrate.c	2009-06-04 17:00:38.000000000 +0530
-@@ -484,7 +484,7 @@
+--- linux-stage.orig/fs/ext4/migrate.c
++++ linux-stage/fs/ext4/migrate.c
+@@ -484,7 +484,7 @@ int ext4_ext_migrate(struct inode *inode
  	}
  	tmp_inode = ext4_new_inode(handle,
  				inode->i_sb->s_root->d_inode,
