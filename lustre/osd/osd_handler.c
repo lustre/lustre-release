@@ -955,12 +955,17 @@ static void osd_init_quota_ctxt(const struct lu_env *env, struct dt_device *d,
 {
         struct obd_device *obd = (void *)ctxt;
         struct vfsmount *mnt = (struct vfsmount *)data;
+        struct osd_device *osd;
         ENTRY;
 
-        obd->u.obt.obt_sb = mnt->mnt_root->d_inode->i_sb;
+        osd = osd_dt_dev(d);
+        LASSERT(osd_sb(osd));
+
+        obd->u.obt.obt_sb = osd_sb(osd);
+
         OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
-        obd->obd_lvfs_ctxt.pwdmnt = mnt;
-        obd->obd_lvfs_ctxt.pwd = mnt->mnt_root;
+        obd->obd_lvfs_ctxt.pwdmnt = osd->od_mnt;
+        obd->obd_lvfs_ctxt.pwd = osd->od_mnt->mnt_root;
         obd->obd_lvfs_ctxt.fs = get_ds();
 
         EXIT;
