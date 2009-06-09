@@ -214,6 +214,7 @@ struct lustre_mount_info *server_get_mount_2(const char *name)
         RETURN(lmi);
 }
 
+#if 0
 static void unlock_mntput(struct vfsmount *mnt)
 {
         if (kernel_locked()) {
@@ -224,6 +225,7 @@ static void unlock_mntput(struct vfsmount *mnt)
                 mntput(mnt);
         }
 }
+#endif
 
 static int lustre_put_lsi(struct super_block *sb);
 
@@ -1494,6 +1496,53 @@ static struct lu_device *start_osd(struct lustre_mount_data *lmd,
         RETURN(d);
 }
 
+/* XXX: to stop OSD used by standalone MGS */
+static void stop_osd(struct dt_device *dt)
+{
+        struct lustre_cfg_bufs   bufs;
+        struct lustre_cfg       *lcfg;
+        struct lu_device        *d;
+        struct lu_device_type   *ldt;
+        struct obd_type         *type;
+        struct lu_env            env;
+        char                     flags[3]="";
+        int                      rc;
+
+        LASSERT(dt);
+        d = &dt->dd_lu_dev;
+
+        ldt = d->ld_type;
+        LASSERT(ldt);
+
+        type = ldt->ldt_obd_type;
+        LASSERT(type != NULL);
+
+        rc = lu_env_init(&env, ldt->ldt_ctx_tags);
+        LASSERT(rc == 0);
+
+        /* process cleanup, pass mdt obd name to get obd umount flags */
+        lustre_cfg_bufs_reset(&bufs, NULL);
+        lustre_cfg_bufs_set_string(&bufs, 1, flags);
+        lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
+        if (!lcfg) {
+                CERROR("Cannot alloc lcfg!\n");
+                return;
+        }
+
+        d->ld_ops->ldo_process_config(&env, d, lcfg);
+        lustre_cfg_free(lcfg);
+
+        lu_ref_del(&d->ld_reference, "lu-stack", &lu_site_init);
+        lu_device_put(d);
+
+        type->typ_refcnt--;
+        ldt->ldt_ops->ldto_device_fini(&env, d);
+        ldt->ldt_ops->ldto_device_free(&env, d);
+        lu_env_fini(&env);
+
+        class_put_type(type);
+}
+
 static int ldd_parse(struct mconf_device *mdev, struct lustre_disk_data *ldd)
 {
         struct dt_device      *dev = lu2dt_dev(mdev->mcf_bottom);
@@ -1681,8 +1730,16 @@ static void server_put_super(struct super_block *sb)
            should have put it on a different device. */
         if (IS_MGS(lsi->lsi_ldd)) {
                 /* if MDS start with --nomgs, don't stop MGS then */
-                if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOMGS))
+                if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOMGS)) {
                         server_stop_mgs(sb);
+                        if (!(lddflags & LDD_F_SV_TYPE_MDT) &&
+                                        (!(lddflags & LDD_F_SV_TYPE_OST))) {
+                                /* XXX: OSD isn't part of MSG stack yet
+                                 *      shutdown OSD manually */
+                                stop_osd(lsi->lsi_dt_dev);
+                        }
+                        
+                }
         }
 
         /* Clean the mgc and sb */
@@ -1691,9 +1748,6 @@ static void server_put_super(struct super_block *sb)
         /* Wait for the targets to really clean up - can't exit (and let the
            sb get destroyed) while the mount is still in use */
         server_wait_finished(mnt);
-
-        /* drop the One True Mount */
-        unlock_mntput(mnt);
 
         /* Stop the servers (MDS, OSS) if no longer needed.  We must wait
            until the target is really gone so that our type refcount check
@@ -1891,6 +1945,9 @@ static int server_fill_super(struct super_block *sb)
            Client will not finish until all servers are connected.
            Note - MGS-only server does NOT get a client, since there is no
            lustre fs associated - the MGS is for all lustre fs's */
+        } else {
+                /* destroy temporary site */
+                stop_temp_site(sb);
         }
 
         rc = server_fill_super_common(sb);
