@@ -74,7 +74,11 @@ dist-hook:
 	find $(distdir) -name .deps -o \
 			-name CVS -o \
 			-name .svn -o \
+			-name .git -o \
 			-name .#* | xargs rm -rf
+	$(MAKE) $(AM_MAKEFLAGS) \
+	  top_distdir="$(top_distdir)" distdir="$(distdir)" \
+	  module-dist-hook
 
 EXTRA_DIST = @PACKAGE_TARNAME@.spec					\
 	build/Makefile build/autoMakefile.am.toplevel build/lbuild	\
