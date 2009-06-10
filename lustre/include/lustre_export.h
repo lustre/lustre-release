@@ -37,9 +37,9 @@
 #ifndef __EXPORT_H
 #define __EXPORT_H
 
+#include <lprocfs_status.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_dlm.h>
-#include <lprocfs_status.h>
 #include <class_hash.h>
 
 struct mds_client_data;

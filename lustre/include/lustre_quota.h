@@ -47,8 +47,8 @@
 #error Unsupported operating system.
 #endif
 
-#include <lustre/lustre_idl.h>
 #include <lustre_net.h>
+#include <lustre/lustre_idl.h>
 #include <lvfs.h>
 #include <obd_support.h>
 #include <class_hash.h>

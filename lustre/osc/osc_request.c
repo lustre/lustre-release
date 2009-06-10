@@ -185,7 +185,7 @@ static inline void osc_pack_req_body(struct ptlrpc_request *req,
         body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
         LASSERT(body);
 
-        body->oa = *oinfo->oi_oa;
+        lustre_set_wire_obdo(&body->oa, oinfo->oi_oa);
         osc_pack_capa(req, body, oinfo->oi_capa);
 }
 
@@ -214,7 +214,7 @@ static int osc_getattr_interpret(const struct lu_env *env,
                                   lustre_swab_ost_body);
         if (body) {
                 CDEBUG(D_INODE, "mode: %o\n", body->oa.o_mode);
-                memcpy(aa->aa_oi->oi_oa, &body->oa, sizeof(*aa->aa_oi->oi_oa));
+                lustre_get_wire_obdo(aa->aa_oi->oi_oa, &body->oa);
 
                 /* This should really be sent by the OST */
                 aa->aa_oi->oi_oa->o_blksize = PTLRPC_MAX_BRW_SIZE;
@@ -292,7 +292,7 @@ static int osc_getattr(struct obd_export *exp, struct obd_info *oinfo)
                 GOTO(out, rc = -EPROTO);
 
         CDEBUG(D_INODE, "mode: %o\n", body->oa.o_mode);
-        *oinfo->oi_oa = body->oa;
+        lustre_get_wire_obdo(oinfo->oi_oa, &body->oa);
 
         /* This should really be sent by the OST */
         oinfo->oi_oa->o_blksize = PTLRPC_MAX_BRW_SIZE;
@@ -340,7 +340,7 @@ static int osc_setattr(struct obd_export *exp, struct obd_info *oinfo,
         if (body == NULL)
                 GOTO(out, rc = -EPROTO);
 
-        *oinfo->oi_oa = body->oa;
+        lustre_get_wire_obdo(oinfo->oi_oa, &body->oa);
 
         EXIT;
 out:
@@ -362,7 +362,7 @@ static int osc_setattr_interpret(const struct lu_env *env,
         if (body == NULL)
                 GOTO(out, rc = -EPROTO);
 
-        *aa->aa_oi->oi_oa = body->oa;
+        lustre_get_wire_obdo(aa->aa_oi->oi_oa, &body->oa);
 out:
         rc = aa->aa_oi->oi_cb_up(aa->aa_oi, rc);
         RETURN(rc);
@@ -446,7 +446,7 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
 
         body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
         LASSERT(body);
-        body->oa = *oa;
+        lustre_set_wire_obdo(&body->oa, oa);
 
         ptlrpc_request_set_replen(req);
 
@@ -466,7 +466,7 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
         if (body == NULL)
                 GOTO(out_req, rc = -EPROTO);
 
-        *oa = body->oa;
+        lustre_get_wire_obdo(oa, &body->oa);
 
         /* This should really be sent by the OST */
         oa->o_blksize = PTLRPC_MAX_BRW_SIZE;
@@ -514,7 +514,7 @@ static int osc_punch_interpret(const struct lu_env *env,
         if (body == NULL)
                 GOTO(out, rc = -EPROTO);
 
-        *aa->pa_oa = body->oa;
+        lustre_get_wire_obdo(aa->pa_oa, &body->oa);
 out:
         rc = aa->pa_upcall(aa->pa_cookie, rc);
         RETURN(rc);
@@ -546,7 +546,7 @@ int osc_punch_base(struct obd_export *exp, struct obdo *oa,
 
         body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
         LASSERT(body);
-        body->oa = *oa;
+        lustre_set_wire_obdo(&body->oa, oa);
         osc_pack_capa(req, body, capa);
 
         ptlrpc_request_set_replen(req);
@@ -605,7 +605,7 @@ static int osc_sync(struct obd_export *exp, struct obdo *oa,
         /* overload the size and blocks fields in the oa with start/end */
         body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
         LASSERT(body);
-        body->oa = *oa;
+        lustre_set_wire_obdo(&body->oa, oa);
         body->oa.o_size = start;
         body->oa.o_blocks = end;
         body->oa.o_valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
@@ -621,7 +621,7 @@ static int osc_sync(struct obd_export *exp, struct obdo *oa,
         if (body == NULL)
                 GOTO(out, rc = -EPROTO);
 
-        *oa = body->oa;
+        lustre_get_wire_obdo(oa, &body->oa);
 
         EXIT;
  out:
@@ -734,7 +734,7 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                 oa->o_lcookie = *oti->oti_logcookies;
         body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
         LASSERT(body);
-        body->oa = *oa;
+        lustre_set_wire_obdo(&body->oa, oa);
 
         osc_pack_capa(req, body, (struct obd_capa *)capa);
         ptlrpc_request_set_replen(req);
@@ -1285,7 +1285,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         niobuf = req_capsule_client_get(pill, &RMF_NIOBUF_REMOTE);
         LASSERT(body && ioobj && niobuf);
 
-        body->oa = *oa;
+        lustre_set_wire_obdo(&body->oa, oa);
 
         obdo_to_ioobj(oa, ioobj);
         ioobj->ioo_bufcnt = niocount;
@@ -1348,8 +1348,10 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                          * it can be changed via lprocfs */
                         cksum_type_t cksum_type = cli->cl_cksum_type;
 
-                        if ((body->oa.o_valid & OBD_MD_FLFLAGS) == 0)
-                                oa->o_flags = body->oa.o_flags = 0;
+                        if ((body->oa.o_valid & OBD_MD_FLFLAGS) == 0) {
+                                oa->o_flags &= OBD_FL_LOCAL_MASK;
+                                body->oa.o_flags = 0;
+                        }
                         body->oa.o_flags |= cksum_type_pack(cksum_type);
                         body->oa.o_valid |= OBD_MD_FLCKSUM | OBD_MD_FLFLAGS;
                         body->oa.o_cksum = osc_checksum_bulk(requested_nob,
@@ -1606,7 +1608,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
         }
 out:
         if (rc >= 0)
-                *aa->aa_oa = body->oa;
+                lustre_get_wire_obdo(aa->aa_oa, &body->oa);
 
         RETURN(rc);
 }
@@ -2185,6 +2187,9 @@ static int brw_interpret(const struct lu_env *env,
                 int i;
                 for (i = 0; i < aa->aa_page_count; i++)
                         osc_release_write_grant(aa->aa_cli, aa->aa_ppga[i], 1);
+               
+                if (aa->aa_oa->o_flags & OBD_FL_TEMPORARY)
+                        OBDO_FREE(aa->aa_oa);
         }
         osc_wake_cache_waiters(cli);
         osc_check_rpcs(env, cli);

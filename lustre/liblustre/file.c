@@ -346,7 +346,7 @@ int llu_sizeonmds_update(struct inode *inode, struct lustre_handle *fh,
         struct llu_inode_info *lli = llu_i2info(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         struct md_op_data op_data = {{ 0 }};
-        struct obdo oa;
+        struct obdo oa = { 0 };
         int rc;
         ENTRY;
 

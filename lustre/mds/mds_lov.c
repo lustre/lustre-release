@@ -460,7 +460,7 @@ out:
 int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
 {
         int rc;
-        struct obdo oa;
+        struct obdo oa = { 0 };
         struct obd_trans_info oti = {0};
         struct lov_stripe_md  *empty_ea = NULL;
         ENTRY;

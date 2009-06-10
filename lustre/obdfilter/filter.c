@@ -3558,7 +3558,7 @@ static int filter_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
 static int filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
                                      struct filter_obd *filter)
 {
-        struct obdo doa; /* XXX obdo on stack */
+        struct obdo doa = { 0 }; /* XXX obdo on stack */
         obd_id last, id;
         int rc = 0;
         int skip_orphan;
