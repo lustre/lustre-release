@@ -269,16 +269,25 @@ static int osc_page_print(const struct lu_env *env,
         struct osc_async_page *oap = &opg->ops_oap;
 
         return (*printer)(env, cookie, LUSTRE_OSC_NAME"-page@%p: "
-                          "%#x %d %u %s %s %s %llu %u %#x %p %p %p %p %p\n",
-                          opg, oap->oap_magic, oap->oap_cmd,
+                          "< %#x %d %u %s %s %s >"
+                          "< %llu %u %#x %#x %p %p %p %p %p >"
+                          "< %s %p %d >\n",
+                          opg,
+                          /* 1 */
+                          oap->oap_magic, oap->oap_cmd,
                           oap->oap_interrupted,
                           osc_list(&oap->oap_pending_item),
                           osc_list(&oap->oap_urgent_item),
                           osc_list(&oap->oap_rpc_item),
+                          /* 2 */
                           oap->oap_obj_off, oap->oap_page_off,
-                          oap->oap_async_flags, oap->oap_request,
+                          oap->oap_async_flags, oap->oap_brw_flags,
+                          oap->oap_request,
                           oap->oap_cli, oap->oap_loi, oap->oap_caller_ops,
-                          oap->oap_caller_data);
+                          oap->oap_caller_data,
+                          /* 3 */
+                          osc_list(&opg->ops_inflight),
+                          opg->ops_submitter, opg->ops_transfer_pinned);
 }
 
 static void osc_page_delete(const struct lu_env *env,
@@ -295,7 +304,11 @@ static void osc_page_delete(const struct lu_env *env,
         CDEBUG(D_TRACE, "%p\n", opg);
         osc_page_transfer_put(env, opg);
         rc = osc_teardown_async_page(osc_export(obj), NULL, obj->oo_oinfo, oap);
-        LASSERTF(rc == 0, "%i\n", rc);
+        if (rc) {
+                CL_PAGE_DEBUG(D_ERROR, env, cl_page_top(slice->cpl_page),
+                              "Trying to teardown failed: %d\n", rc);
+                LASSERT(0);
+        }
         spin_lock(&obj->oo_seatbelt);
         list_del_init(&opg->ops_inflight);
         spin_unlock(&obj->oo_seatbelt);

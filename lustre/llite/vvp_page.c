@@ -83,9 +83,32 @@ static void vvp_page_own(const struct lu_env *env,
 {
         struct ccc_page *vpg    = cl2ccc_page(slice);
         cfs_page_t      *vmpage = vpg->cpg_page;
+        int count = 0;
 
         LASSERT(vmpage != NULL);
-        lock_page(vmpage);
+
+        /* DEBUG CODE FOR #18881 */
+        while (TestSetPageLocked(vmpage)) {
+                cfs_schedule_timeout(CFS_TASK_INTERRUPTIBLE,
+                                     cfs_time_seconds(1)/10);
+                if (++count > 100) {
+                        CL_PAGE_DEBUG(D_ERROR, env,
+                                      cl_page_top(slice->cpl_page),
+                                      "XXX page %p blocked on acquiring the"
+                                      " lock. process %s/%p, flags %lx\n",
+                                      vmpage, current->comm, current,
+                                      vmpage->flags);
+                        libcfs_debug_dumpstack(NULL);
+                        LCONSOLE_WARN("Reproduced bug #18881,please contact:"
+                               "jay <jinshan.xiong@sun.com>, thanks\n");
+
+                        lock_page(vmpage);
+                        break;
+                }
+        }
+        /* DEBUG CODE END */
+
+        /* lock_page(vmpage); */
         wait_on_page_writeback(vmpage);
 }
 
