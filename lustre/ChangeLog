@@ -2,8 +2,8 @@ tbd Sun Microsystems, Inc.
 	* version 1.8.2
 	* Support for kernels:
 	  2.6.16.60-0.37 (SLES 10),
-	  2.6.18-128.1.6.el5 (RHEL 5),
-	  2.6.22.14 vanilla (kernel.org)
+	  2.6.27.21-0.1 (SLES11),
+	  2.6.18-128.1.6.el5 (RHEL 5)
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
 	  2.6.16 - 2.6.27 vanilla (kernel.org)
@@ -14,17 +14,34 @@ tbd Sun Microsystems, Inc.
 	  of Lustre filesystem with 4K stack may cause a stack overflow. For
 	  more information, please refer to bugzilla 17630.
 
+Severity   : enhancement
+Bugzilla   : 18357
+Description: implement async create (obd_async_create) method for osc, to avoid
+	     too long waiting new ost objects with holding ldlm lock.
+
+Severity   : enhancement
+Bugzilla   : 12069
+Descriptoin: OST grant too much space to client even there are not enough space.
+Details    : Client will shrink its grant cache to OST if there are no write
+	     activity over 6 mins (GRANT_SHRINK_INTERVAL), and OST will retrieve
+	     this grant cache if there are already not enough avaible space
+	     (left_space < total_clients * 32M).
+
 Severity   : normal
 Frequency  : rare, if clients are evicted due to failure to return a lock
 Bugzilla   : 18618
 Description: don't increase ldlm timeout if previous client was evicted
-Details    : if a client doesn't respond to a BAST within the adaptive ldlm
-	     enqueue timeout, don't adjust the adaptive estimate when the lock
-	     is next granted.
-	
+Details    : if a client doesn't respond to a blocking callback within the
+	     adaptive ldlm enqueue timeout, don't adjust the adaptive estimate
+	     when the lock is next granted.
+
 Severity   : normal
 Bugzilla   : 18674
-Description: abort bulk too early if client is reconnected
+Description: client not allowed to reconnect to OST because of active request
+Details    : abort bulk requests received by the OST once the client has timed
+	     out since the client will resend the request anyway. The client
+	     also now retries to reconnect to the same server if a connect
+	     request failed with EBUSY or -EAGAIN.
 
 Severity   : normal
 Frequency  : rare, if used wide striped file and one ost in down.
@@ -33,11 +50,6 @@ Descriptoin: don't return error if we created a subset of objects for file.
 Details    : lov_update_create_set() uses set->set_success as index for created
 	     objects, so if some requests failed, they will have hole at end of
 	     array and we can use qos_shrink_lsm for allocate correct lsm.
-
-Severity   : enhancement
-Bugzilla   : 18357
-Description: implement async create (obd_async_create) method for osc, to avoid
-	     too long waiting new ost objects with holding ldlm lock.
 
 Severity   : major
 Frequency  : rare
@@ -54,19 +66,19 @@ Details    : This patch fixes:
 	        -        if (!ll_sb_any_quota_active(qctxt->lqc_sb))
 	        -                RETURN(0);
 
-Severity   : Low
+Severity   : low
 Bugzilla   : 15010
 Description: Rare Client crash on resend if the file was deleted.
 Details    : When file is opened, but open reply is lost and file is
-             subsequently deleted before resend, resend processing logic 
+	     subsequently deleted before resend, resend processing logic 
 	     breaks trying to open the file again, should not try to open.
 
-Severity   : Low
+Severity   : low
 Bugzilla   : 19756
 Description: Rare dentry leakage on MDS on forceful shutdown and
-             replay-resends.
+	     replay-resends.
 Details    : Sometimes on transaction errors mds_mfd_close did not release
-             mfd and dentry pointed to it. reconstruct_open did not release
+	     mfd and dentry pointed to it. reconstruct_open did not release
 	     parent dentry if no matching mfd was found and child lookup was
 	     used.
 
@@ -74,9 +86,9 @@ Details    : Sometimes on transaction errors mds_mfd_close did not release
 tbd Sun Microsystems, Inc.
 	* version 1.8.1
 	* Support for kernels:
-	 2.6.16.60-0.37 (SLES 10),
-	 2.6.18-128.1.6.el5 (RHEL 5),
-	 2.6.22.14 vanilla (kernel.org)
+	  2.6.16.60-0.37 (SLES 10),
+	  2.6.27.21-0.1 (SLES11),
+	  2.6.18-128.1.6.el5 (RHEL 5)
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
 	  2.6.16 - 2.6.27 vanilla (kernel.org)
@@ -172,15 +184,6 @@ Description: Make read-ahead stripe size aligned.
 Severity   : enhancement
 Bugzilla   : 17536
 Description: MDS create should not wait for statfs RPC while holding DLM lock.
-
-Severity   : normal
-Frequency  : normal
-Bugzilla   : 12069
-Descriptoin: OST grant too much space to client even there are not enough space.
-Details    : Client will shrink its grant cache to OST if there are no write
-	     activity over 6 mins (GRANT_SHRINK_INTERVAL), and OST will retrieve
-	     this grant cache if there are already not enough avaible space
-	     (left_space < total_clients * 32M).
 
 Severity   : enhancement
 Bugzilla   : 14250
