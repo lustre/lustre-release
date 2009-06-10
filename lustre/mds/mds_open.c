@@ -528,6 +528,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         struct dentry *parent, *dchild;
         struct ldlm_reply *rep;
         struct mds_body *body;
+        struct list_head *t;
         int rc;
         int put_child = 1;
         ENTRY;
@@ -558,7 +559,8 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
          * No need to lookup child as it could be already deleted by another
          * thread (bug 15010) */
         spin_lock(&med->med_open_lock);
-        list_for_each_entry(mfd, &med->med_open_head, mfd_list) {
+        list_for_each(t, &med->med_open_head) {
+                mfd = list_entry(t, struct mds_file_data, mfd_list);
                 if (mfd->mfd_xid == req->rq_xid) {
                        mds_mfd_addref(mfd);
                        break;
