@@ -61,6 +61,15 @@ Details    : When file is opened, but open reply is lost and file is
              subsequently deleted before resend, resend processing logic 
 	     breaks trying to open the file again, should not try to open.
 
+Severity   : Low
+Bugzilla   : 19756
+Description: Rare dentry leakage on MDS on forceful shutdown and
+             replay-resends.
+Details    : Sometimes on transaction errors mds_mfd_close did not release
+             mfd and dentry pointed to it. reconstruct_open did not release
+	     parent dentry if no matching mfd was found and child lookup was
+	     used.
+
 ------------------------------------------------------------------------------
 tbd Sun Microsystems, Inc.
 	* version 1.8.1

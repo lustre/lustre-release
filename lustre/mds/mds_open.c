@@ -579,6 +579,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 }
 
                 dchild = mds_lookup(obd, rec->ur_name, parent, rec->ur_namelen - 1);
+                l_dput(parent);
                 if (IS_ERR(dchild)) {
                         rc = PTR_ERR(dchild);
                         LCONSOLE_WARN("Child "LPU64"/%u lookup error %d."
@@ -587,7 +588,6 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                                       rc, obd_uuid2str(&exp->exp_client_uuid),
                                       obd_export_nid2str(exp));
                         mds_export_evict(exp);
-                        l_dput(parent);
                         EXIT;
                         return;
                 }
@@ -1433,9 +1433,7 @@ found_child:
  * If we are being called from mds_disconnect() because the client has
  * disappeared, then req == NULL and we do not update last_rcvd because
  * there is nothing that could be recovered by the client at this stage
- * (it will not even _have_ an entry in last_rcvd anymore).
- *
- * Returns EAGAIN if the client needs to get more data and re-close. */
+ * (it will not even _have_ an entry in last_rcvd anymore). */
 int mds_mfd_close(struct ptlrpc_request *req, int offset,
                   struct obd_device *obd, struct mds_file_data *mfd,
                   int unlink_orphan, struct lov_mds_md *lmm, int lmm_size,
@@ -1584,10 +1582,10 @@ out:
         /* If other clients have this file open for write, rc will be > 0 */
         if (rc > 0)
                 rc = 0;
-        l_dput(mfd->mfd_dentry);
-        mds_mfd_put(mfd);
 
  cleanup:
+        l_dput(mfd->mfd_dentry);
+        mds_mfd_put(mfd);
         if (req != NULL && reply_body != NULL) {
                 rc = mds_finish_transno(mds, NULL, handle, req, rc, 0, 0);
         } else if (handle) {
