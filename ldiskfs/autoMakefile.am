@@ -5,3 +5,5 @@ DIST_SUBDIRS := ldiskfs
 include build/autoMakefile.am.toplevel
 
 EXTRA_DIST += kernel_patches
+
+module-dist-hook:
