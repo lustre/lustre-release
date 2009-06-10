@@ -6,7 +6,9 @@ ldiskfs.ko
 ldiskfs.mod.c
 linux-stage
 linux
+modules.order
 *.c
 *.h
 .*.o.d
+.*.swp
 sources
