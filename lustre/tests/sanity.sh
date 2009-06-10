@@ -5941,8 +5941,8 @@ som_mode_switch() {
         # do remount to make new mount-conf parameters actual
         echo remounting...
         sync
-        stopall 1&>2 2>/dev/null
-        setupall 1&>2 2>/dev/null
+        stopall
+        setupall
 }
 
 test_132() { #1028, SOM
@@ -5957,7 +5957,7 @@ test_132() { #1028, SOM
         gl1=$(get_ost_param "ldlm_glimpse_enqueue")
         stat $DIR/$tfile >/dev/null
         gl2=$(get_ost_param "ldlm_glimpse_enqueue")
-        echo "SOM is "$som1", "$((gl2 - gl1))" glimpse RPC occured"
+        echo "====> SOM is "$som1", "$((gl2 - gl1))" glimpse RPC occured"
         cancel_lru_locks osc
         som_mode_switch $som1 $gl1 $gl2
 
