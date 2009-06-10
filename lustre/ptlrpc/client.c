@@ -645,6 +645,7 @@ struct ptlrpc_request *ptlrpc_prep_fakereq(struct obd_import *imp,
         request->rq_receiving_reply = 0;
         request->rq_must_unlink = 0;
         request->rq_no_delay = request->rq_no_resend = 1;
+        request->rq_fake = 1;
 
         spin_lock_init(&request->rq_lock);
         CFS_INIT_LIST_HEAD(&request->rq_list);
@@ -1387,9 +1388,10 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                 CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:nid:"
                        "opc %s:%s:%d:x"LPU64":%s:%d\n", cfs_curproc_comm(),
                        imp->imp_obd->obd_uuid.uuid,
-                       lustre_msg_get_status(req->rq_reqmsg), req->rq_xid,
+                       req->rq_reqmsg ? lustre_msg_get_status(req->rq_reqmsg):-1,
+                       req->rq_xid,
                        libcfs_nid2str(imp->imp_connection->c_peer.nid),
-                       lustre_msg_get_opc(req->rq_reqmsg));
+                       req->rq_reqmsg ? lustre_msg_get_opc(req->rq_reqmsg) : -1);
 
                 spin_lock(&imp->imp_lock);
                 /* Request already may be not on sending or delaying list. This
@@ -1442,6 +1444,9 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
                 DEBUG_REQ(D_HA, req, "NULL import: already cleaned up?");
                 RETURN(1);
         }
+
+        if (req->rq_fake)
+                RETURN(1);
 
         atomic_inc(&imp->imp_timeouts);
 
