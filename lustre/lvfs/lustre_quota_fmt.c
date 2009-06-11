@@ -581,9 +581,9 @@ static int lustre_write_dquot(struct lustre_dquot *dquot,
         loff_t offset;
         ssize_t ret;
         int dqblk_sz = lustre_disk_dqblk_sz[version];
-        char ddquot[dqblk_sz];
+        struct lustre_disk_dqblk_v2 ddquot;
 
-        ret = mem2diskdqb(ddquot, &dquot->dq_dqb, dquot->dq_id, version);
+        ret = mem2diskdqb(&ddquot, &dquot->dq_dqb, dquot->dq_id, version);
         if (ret < 0)
                 return ret;
 
@@ -600,12 +600,11 @@ static int lustre_write_dquot(struct lustre_dquot *dquot,
          * be treated as an empty place by the rest of the code. Format change
          * would be definitely cleaner but the problems probably are not worth
          * it */
-        if (!memcmp((char *)&emptydquot[version], ddquot, dqblk_sz))
-                ((struct lustre_disk_dqblk_v2 *)ddquot)->dqb_itime =
-                                                                cpu_to_le64(1);
+        if (!memcmp((char *)&emptydquot[version], (char *)&ddquot, dqblk_sz))
+                ddquot.dqb_itime = cpu_to_le64(1);
         fs = get_fs();
         set_fs(KERNEL_DS);
-        ret = filp->f_op->write(filp, ddquot,
+        ret = filp->f_op->write(filp, (char *)&ddquot,
                                 dqblk_sz, &offset);
         set_fs(fs);
         if (ret != dqblk_sz) {
@@ -856,29 +855,28 @@ int lustre_read_dquot(struct lustre_dquot *dquot)
                 memset(&dquot->dq_dqb, 0, sizeof(struct lustre_mem_dqblk));
                 ret = offset;
         } else {
-                char ddquot[dqblk_sz];
+                struct lustre_disk_dqblk_v2 ddquot;
 
                 dquot->dq_off = offset;
                 fs = get_fs();
                 set_fs(KERNEL_DS);
-                if ((ret = filp->f_op->read(filp, ddquot, dqblk_sz, &offset)) !=
-                    dqblk_sz) {
+                if ((ret = filp->f_op->read(filp, (char *)&ddquot,
+                                            dqblk_sz, &offset)) != dqblk_sz) {
                         if (ret >= 0)
                                 ret = -EIO;
                         CDEBUG(D_ERROR,
                                "VFS: Error while reading quota structure for id "
                                "%u.\n", dquot->dq_id);
-                        memset(ddquot, 0, dqblk_sz);
+                        memset((char *)&ddquot, 0, dqblk_sz);
                 } else {
                         ret = 0;
                         /* We need to escape back all-zero structure */
                         if (!memcmp((char *)&fakedquot[version],
-                                    ddquot, dqblk_sz))
-                           ((struct lustre_disk_dqblk_v2 *)ddquot)->dqb_itime =
-                                                                cpu_to_le64(0);
+                                    (char *)&ddquot, dqblk_sz))
+                                ddquot.dqb_itime = cpu_to_le64(0);
                 }
                 set_fs(fs);
-                disk2memdqb(&dquot->dq_dqb, ddquot, version);
+                disk2memdqb(&dquot->dq_dqb, &ddquot, version);
         }
 
         return ret;
