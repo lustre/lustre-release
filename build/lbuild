@@ -1130,7 +1130,7 @@ build_kernel_with_srpm() {
     else
         # nothing cached, build from scratch
         if [ ! -r "$KERNELDIR/$KERNEL_SRPM" ]; then
-            download_srpm "$CANONICAL_TARGET" "$KERNEL_SRPM"
+            download_srpm "$CANONICAL_TARGET" "$KERNEL_SRPM" >&2
         fi
 
         rpm -ivh $KERNELDIR/$KERNEL_SRPM --define "_topdir $TOPDIR" >&2 || {
@@ -1141,7 +1141,7 @@ build_kernel_with_srpm() {
 
         # put the Lustre kernel patch into the RPM build tree
         cp $FULL_PATCH $TOPDIR/SOURCES/linux-${lnxmaj}-lustre.patch
-        prepare_and_build_srpm
+        prepare_and_build_srpm >&2
 
         # store the resulting kernel RPM build tree for future use
         if ! store_for_reuse "$TOPDIR/{SPECS,SOURCES,BUILD,SRPMS,RPMS}" \
