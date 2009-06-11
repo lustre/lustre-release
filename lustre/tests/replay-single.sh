@@ -1723,7 +1723,7 @@ test_67a() #bug 3055
     do_facet ost1 "sysctl -w lustre.fail_loc=0"
     CONN2=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     ATTEMPTS=$(($CONN2 - $CONN1))
-    echo "$ATTEMPTS osc reconnect attemps on gradual slow"
+    echo "$ATTEMPTS osc reconnect attempts on gradual slow"
     [ $ATTEMPTS -gt 0 ] && error_ignore 13721 "AT should have prevented reconnect"
     return 0
 }
@@ -1744,7 +1744,7 @@ test_67b() #bug 3055
     log "phase 2"
     CONN2=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     ATTEMPTS=$(($CONN2 - $CONN1))
-    echo "$ATTEMPTS osc reconnect attemps on instant slow"
+    echo "$ATTEMPTS osc reconnect attempts on instant slow"
     # do it again; should not timeout
     do_facet ost1 "sysctl -w lustre.fail_loc=0x80000223"
     cp /etc/profile $DIR/$tfile || error "cp failed"
@@ -1753,7 +1753,7 @@ test_67b() #bug 3055
     do_facet ost1 "lctl get_param -n ost.OSS.ost_create.timeouts"
     CONN3=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     ATTEMPTS=$(($CONN3 - $CONN2))
-    echo "$ATTEMPTS osc reconnect attemps on 2nd slow"
+    echo "$ATTEMPTS osc reconnect attempts on 2nd slow"
     [ $ATTEMPTS -gt 0 ] && error "AT should have prevented reconnect"
     return 0
 }
