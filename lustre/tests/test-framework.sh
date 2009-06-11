@@ -872,12 +872,36 @@ check_client_load () {
     local TESTLOAD=run_${!var}.sh
 
     ps auxww | grep -v grep | grep $client | grep -q "$TESTLOAD" || return 1
-
-    check_catastrophe $client || return 2
-
-    # see if the load is still on the client
+    
+    # bug 18914: try to connect several times not only when
+    # check ps, but  while check_catastrophe also
     local tries=3
     local RC=254
+    while [ $RC = 254 -a $tries -gt 0 ]; do
+        let tries=$tries-1
+        # assume success
+        RC=0
+        if ! check_catastrophe $client; then
+            RC=${PIPESTATUS[0]}
+            if [ $RC -eq 254 ]; then
+                # FIXME: not sure how long we shuold sleep here
+                sleep 10
+                continue
+            fi
+            echo "check catastrophe failed: RC=$RC "
+            return $RC
+        fi
+    done
+
+    # We can continue try to connect if RC=254
+    # Just print the warning about this
+    if [ $RC = 254 ]; then
+        echo "got a return status of $RC from do_node while checking catastrophe on $client"
+    fi
+
+    # see if the load is still on the client
+    tries=3
+    RC=254
     while [ $RC = 254 -a $tries -gt 0 ]; do
         let tries=$tries-1
         # assume success
@@ -888,7 +912,7 @@ check_client_load () {
         fi
     done
     if [ $RC = 254 ]; then
-        echo "got a return status of $RC from do_node while checking (i.e. with 'ps') the client load on the remote system"
+        echo "got a return status of $RC from do_node while checking (catastrophe and 'ps') the client load on $client"
         # see if we can diagnose a bit why this is
     fi
 
