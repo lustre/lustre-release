@@ -409,7 +409,7 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
         struct lov_stripe_md *lsm = lov_r0(cl2lov(ios->cis_obj))->lo_lsm;
         loff_t start = io->u.ci_rw.crw_pos;
         loff_t next;
-        int ssize = lsm->lsm_stripe_size;
+        unsigned long ssize = lsm->lsm_stripe_size;
 
         LASSERT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE);
         ENTRY;

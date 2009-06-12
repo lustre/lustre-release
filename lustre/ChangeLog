@@ -2074,6 +2074,12 @@ Description: MMP check in ext3_remount() fails without displaying any error
 Details    : When multiple mount protection fails during remount, proper error
 	     should be returned
 
+Severity   : enhancement
+Bugzilla   : 16823
+Description: Allow stripe size to be up to 4G-64k
+Details    : Fix math logic to allow large stripe sizes.
+
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
