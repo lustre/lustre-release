@@ -1918,8 +1918,9 @@ test_50f() {
 	    sleep $(( $TIMEOUT+1 ))
 	    kill -0 $pid
 	    [ $? -ne 0 ] && error "process isn't sleep"
-	    start_ost2 || error "Unable to start OST1"
+	    start_ost2 || error "Unable to start OST2"
 	    wait $pid || error "statfs failed"
+	    stop_ost2 || error "Unable to stop OST2"
 	fi
 
 	umount_client $MOUNT || error "Unable to unmount client"
