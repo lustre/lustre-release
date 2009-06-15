@@ -11,8 +11,8 @@ init_test_env $@
 # compilbench
 #
 cbench_DIR=${cbench_DIR:-""}
-cbench_IDIRS=${cbench_IDIRS:-10}
-cbench_RUNS=${cbench_RUNS:-10}	# FIXME: wiki page requirements is 30, do we really need 30 ?
+cbench_IDIRS=${cbench_IDIRS:-4}
+cbench_RUNS=${cbench_RUNS:-4}	# FIXME: wiki page requirements is 30, do we really need 30 ?
 
 if [ "$SLOW" = "no" ]; then
     cbench_IDIRS=2
