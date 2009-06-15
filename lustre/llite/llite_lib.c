@@ -2429,9 +2429,14 @@ int ll_obd_statfs(struct inode *inode, void *arg)
                 GOTO(out_statfs, rc = -EFAULT);
 
 out_uuid:
-        if (copy_to_user(data->ioc_pbuf2, obd2cli_tgt(client_obd),
-                         data->ioc_plen2))
-                rc = -EFAULT;
+        if (client_obd) {
+                if (copy_to_user(data->ioc_pbuf2, obd2cli_tgt(client_obd),
+                                 data->ioc_plen2))
+                        rc = -EFAULT;
+        } else {
+                if (copy_to_user(data->ioc_pbuf2, "Unknown UUID", 13))
+                        rc = -EFAULT;
+        }
 
 out_statfs:
         if (buf)
