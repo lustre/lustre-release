@@ -2287,6 +2287,7 @@ int ptlrpc_hr_init(void)
         int n_cpus = num_online_cpus();
         struct ptlrpc_hr_service *hr;
         int size;
+        int rc;
         ENTRY;
 
         LASSERT(ptlrpc_hr == NULL);
@@ -2307,7 +2308,12 @@ int ptlrpc_hr_init(void)
         hr->hr_size = size;
         ptlrpc_hr = hr;
 
-        RETURN(ptlrpc_start_hr_threads(hr));
+        rc = ptlrpc_start_hr_threads(hr);
+        if (rc) {
+                OBD_FREE(hr, hr->hr_size);
+                ptlrpc_hr = NULL;
+        }
+        RETURN(rc);
 }
 
 void ptlrpc_hr_fini(void)
