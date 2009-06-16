@@ -892,7 +892,6 @@ check_client_load () {
             return $RC
         fi
     done
-
     # We can continue try to connect if RC=254
     # Just print the warning about this
     if [ $RC = 254 ]; then

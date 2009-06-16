@@ -391,7 +391,13 @@ int mdd_may_delete(const struct lu_env *env, struct mdd_object *pobj,
         if (!mdd_object_exists(cobj))
                 RETURN(-ENOENT);
 
+        if (mdd_is_dead_obj(cobj))
+                RETURN(-ESTALE);
+
         if (pobj) {
+                if (!mdd_object_exists(pobj))
+                        RETURN(-ENOENT);
+
                 if (mdd_is_dead_obj(pobj))
                         RETURN(-ENOENT);
 
@@ -447,6 +453,9 @@ int mdd_link_sanity_check(const struct lu_env *env,
         struct mdd_device *m = mdd_obj2mdd_dev(src_obj);
         int rc = 0;
         ENTRY;
+
+        if (!mdd_object_exists(src_obj))
+                RETURN(-ENOENT);
 
         if (mdd_is_dead_obj(src_obj))
                 RETURN(-ESTALE);
@@ -795,9 +804,6 @@ int mdd_unlink_sanity_check(const struct lu_env *env, struct mdd_object *pobj,
 {
         int rc;
         ENTRY;
-
-        if (mdd_is_dead_obj(cobj))
-                RETURN(-ESTALE);
 
         rc = mdd_may_delete(env, pobj, cobj, ma, 1, 1);
 
@@ -1918,9 +1924,6 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
          * before mdd_rename and enable MDS_PERM_BYPASS. */
         LASSERT(sobj);
 
-        if (mdd_is_dead_obj(sobj))
-                RETURN(-ESTALE);
-
         rc = mdd_may_delete(env, src_pobj, sobj, ma, 1, 0);
         if (rc)
                 RETURN(rc);
@@ -2054,12 +2057,12 @@ static int mdd_rename(const struct lu_env *env,
         /* "mv dir1 dir2" needs "dir1/.." link update */
         if (is_dir && mdd_sobj) {
                 rc = __mdd_index_delete_only(env, mdd_sobj, dotdot, handle,
-                                        mdd_object_capa(env, mdd_spobj));
+                                        mdd_object_capa(env, mdd_sobj));
                 if (rc)
                         GOTO(fixup_spobj2, rc);
 
                 rc = __mdd_index_insert_only(env, mdd_sobj, tpobj_fid, dotdot,
-                                      handle, mdd_object_capa(env, mdd_tpobj));
+                                      handle, mdd_object_capa(env, mdd_sobj));
                 if (rc) {
                         GOTO(fixup_spobj, rc);
                 }
@@ -2072,7 +2075,7 @@ static int mdd_rename(const struct lu_env *env,
         rc = __mdd_index_delete(env, mdd_tpobj, tname, is_dir, handle,
                                 mdd_object_capa(env, mdd_tpobj));
         if (rc != 0) {
-                if (mdd_tobj && mdd_object_exists(mdd_tobj)) {
+                if (mdd_tobj) {
                         /* tname might been renamed to something else */
                         GOTO(fixup_spobj, rc);
                 }
@@ -2084,7 +2087,7 @@ static int mdd_rename(const struct lu_env *env,
         rc = __mdd_index_insert(env, mdd_tpobj, lf, tname, is_dir, handle,
                                 mdd_object_capa(env, mdd_tpobj));
         if (rc)
-                GOTO(fixup_spobj, rc);
+                GOTO(fixup_tpobj, rc);
 
         LASSERT(ma->ma_attr.la_valid & LA_CTIME);
         la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
@@ -2167,23 +2170,33 @@ static int mdd_rename(const struct lu_env *env,
 fixup_tpobj:
         if (rc) {
                 rc2 = __mdd_index_delete(env, mdd_tpobj, tname, is_dir, handle,
-                                         mdd_object_capa(env, mdd_tpobj));
+                                         BYPASS_CAPA);
                 if (rc2)
                         CWARN("tp obj fix error %d\n",rc2);
 
+                if (mdd_tobj && mdd_object_exists(mdd_tobj) &&
+                    !mdd_is_dead_obj(mdd_tobj)) {
+                        rc2 = __mdd_index_insert(env, mdd_tpobj,
+                                         mdo2fid(mdd_tobj), tname,
+                                         is_dir, handle,
+                                         BYPASS_CAPA);
+
+                        if (rc2)
+                                CWARN("tp obj fix error %d\n",rc2);
+                }
         }
+
 fixup_spobj:
         if (rc && is_dir && mdd_sobj) {
                 rc2 = __mdd_index_delete_only(env, mdd_sobj, dotdot, handle,
-                                mdd_object_capa(env, mdd_spobj));
+                                              BYPASS_CAPA);
 
                 if (rc2)
                         CWARN("sp obj dotdot delete error %d\n",rc2);
 
 
                 rc2 = __mdd_index_insert_only(env, mdd_sobj, spobj_fid,
-                                dotdot, handle,
-                                mdd_object_capa(env, mdd_spobj));
+                                              dotdot, handle, BYPASS_CAPA);
                 if (rc2)
                         CWARN("sp obj dotdot insert error %d\n",rc2);
         }
@@ -2191,8 +2204,7 @@ fixup_spobj:
 fixup_spobj2:
         if (rc) {
                 rc2 = __mdd_index_insert(env, mdd_spobj,
-                                         lf, sname, is_dir, handle,
-                                         mdd_object_capa(env, mdd_tpobj));
+                                         lf, sname, is_dir, handle, BYPASS_CAPA);
                 if (rc2)
                         CWARN("sp obj fix error %d\n",rc2);
         }
