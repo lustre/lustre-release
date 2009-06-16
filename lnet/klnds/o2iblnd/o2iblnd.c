@@ -1656,7 +1656,8 @@ kiblnd_dev_get_attr(kib_dev_t *ibdev)
         struct ib_device_attr *attr;
         int                    rc;
 
-        /* XXX here should be HCA's page shift/size/mask in the future? */
+        /* It's safe to assume a HCA can handle a page size
+         * matching that of the native system */
         ibdev->ibd_page_shift = PAGE_SHIFT;
         ibdev->ibd_page_size  = 1 << PAGE_SHIFT;
         ibdev->ibd_page_mask  = ~((__u64)ibdev->ibd_page_size - 1);
