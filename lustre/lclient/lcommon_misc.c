@@ -88,7 +88,7 @@ int cl_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp)
  */
 int cl_ocd_update(struct obd_device *host,
                   struct obd_device *watched,
-                  enum obd_notify_event ev, void *owner)
+                  enum obd_notify_event ev, void *owner, void *data)
 {
         struct lustre_client_ocd *lco;
         struct client_obd        *cli;

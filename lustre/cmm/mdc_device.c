@@ -64,7 +64,7 @@ static const struct md_device_operations mdc_md_ops = { 0 };
 
 static int mdc_obd_update(struct obd_device *host,
                           struct obd_device *watched,
-                          enum obd_notify_event ev, void *owner)
+                          enum obd_notify_event ev, void *owner, void *data)
 {
         struct mdc_device *mc = owner;
         int rc = 0;

@@ -1495,7 +1495,8 @@ static inline int obd_notify_observer(struct obd_device *observer,
          */
         onu = &observer->obd_upcall;
         if (onu->onu_upcall != NULL)
-                rc2 = onu->onu_upcall(observer, observed, ev, onu->onu_owner);
+                rc2 = onu->onu_upcall(observer, observed, ev,
+                                      onu->onu_owner, NULL);
         else
                 rc2 = 0;
 

@@ -945,7 +945,7 @@ enum config_flags {
  */
 struct obd_notify_upcall {
         int (*onu_upcall)(struct obd_device *host, struct obd_device *watched,
-                          enum obd_notify_event ev, void *owner);
+                          enum obd_notify_event ev, void *owner, void *data);
         /* Opaque datum supplied by upper layer listener */
         void *onu_owner;
 };

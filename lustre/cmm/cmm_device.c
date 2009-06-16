@@ -662,7 +662,7 @@ static const struct lu_device_operations cmm_lu_ops = {
 
 /* --- lu_device_type operations --- */
 int cmm_upcall(const struct lu_env *env, struct md_device *md,
-               enum md_upcall_event ev)
+               enum md_upcall_event ev, void *data)
 {
         int rc;
         ENTRY;
@@ -674,7 +674,7 @@ int cmm_upcall(const struct lu_env *env, struct md_device *md,
                                 CERROR("can not init md size %d\n", rc);
                         /* fall through */
                 default:
-                        rc = md_do_upcall(env, md, ev);
+                        rc = md_do_upcall(env, md, ev, data);
         }
         RETURN(rc);
 }

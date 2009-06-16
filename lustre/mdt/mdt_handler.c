@@ -5315,7 +5315,7 @@ static void mdt_allow_cli(struct mdt_device *m, unsigned int flag)
 }
 
 static int mdt_upcall(const struct lu_env *env, struct md_device *md,
-                      enum md_upcall_event ev)
+                      enum md_upcall_event ev, void *data)
 {
         struct mdt_device *m = mdt_dev(&md->md_lu_dev);
         struct md_device  *next  = m->mdt_child;
@@ -5331,6 +5331,8 @@ static int mdt_upcall(const struct lu_env *env, struct md_device *md,
                         CDEBUG(D_INFO, "get max mdsize %d max cookiesize %d\n",
                                      m->mdt_max_mdsize, m->mdt_max_cookiesize);
                         mdt_allow_cli(m, CONFIG_SYNC);
+                        if (data)
+                                (*(__u64 *)data) = m->mdt_mount_count;
                         break;
                 case MD_NO_TRANS:
                         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);

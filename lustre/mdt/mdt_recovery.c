@@ -482,7 +482,7 @@ static int mdt_server_data_init(const struct lu_env *env,
         obd->obd_last_committed = mdt->mdt_last_transno;
         spin_unlock(&mdt->mdt_transno_lock);
 
-        mdt->mdt_mount_count++;
+        mdt->mdt_mount_count = mount_count + 1;
         lsd->lsd_mount_count = mdt->mdt_mount_count;
 
         /* save it, so mount count and last_transno is current */

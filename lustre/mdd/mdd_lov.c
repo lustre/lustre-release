@@ -60,7 +60,7 @@
 #include "mdd_internal.h"
 
 static int mdd_notify(struct obd_device *host, struct obd_device *watched,
-                      enum obd_notify_event ev, void *owner)
+                      enum obd_notify_event ev, void *owner, void *data)
 {
         struct mdd_device *mdd = owner;
         int rc = 0;
@@ -72,14 +72,17 @@ static int mdd_notify(struct obd_device *host, struct obd_device *watched,
                 case OBD_NOTIFY_ACTIVE:
                 case OBD_NOTIFY_SYNC:
                 case OBD_NOTIFY_SYNC_NONBLOCK:
-                        rc = md_do_upcall(NULL, &mdd->mdd_md_dev, MD_LOV_SYNC);
+                        rc = md_do_upcall(NULL, &mdd->mdd_md_dev,
+                                          MD_LOV_SYNC, data);
                         break;
                 case OBD_NOTIFY_CONFIG:
-                        rc = md_do_upcall(NULL, &mdd->mdd_md_dev, MD_LOV_CONFIG);
+                        rc = md_do_upcall(NULL, &mdd->mdd_md_dev,
+                                          MD_LOV_CONFIG, data);
                         break;
 #ifdef HAVE_QUOTA_SUPPORT
                 case OBD_NOTIFY_QUOTA:
-                        rc = md_do_upcall(NULL, &mdd->mdd_md_dev, MD_LOV_QUOTA);
+                        rc = md_do_upcall(NULL, &mdd->mdd_md_dev,
+                                          MD_LOV_QUOTA, data);
                         break;
 #endif
                 default:

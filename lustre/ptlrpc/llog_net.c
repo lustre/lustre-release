@@ -82,7 +82,7 @@ int llog_origin_connect(struct llog_ctxt *ctxt,
         }
 
         /* FIXME what value for gen->conn_cnt */
-        LLOG_GEN_INC(ctxt->loc_gen);
+        llog_gen_init(ctxt);
 
         /* first add llog_gen_rec */
         OBD_ALLOC_PTR(lgr);
@@ -115,6 +115,10 @@ int llog_origin_connect(struct llog_ctxt *ctxt,
                                         LLOG_ORIGIN_CONNECT);
         if (req == NULL)
                 RETURN(-ENOMEM);
+
+        CDEBUG(D_OTHER, "%s mount_count %llu, connection count %llu\n",
+               ctxt->loc_exp->exp_obd->obd_type->typ_name,
+               ctxt->loc_gen.mnt_cnt, ctxt->loc_gen.conn_cnt);
 
         req_body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_CONN_BODY);
         req_body->lgdc_gen = ctxt->loc_gen;

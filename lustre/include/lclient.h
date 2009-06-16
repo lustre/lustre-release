@@ -390,7 +390,7 @@ __u16 ll_dirent_type_get(struct lu_dirent *ent);
 int cl_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp);
 int cl_ocd_update(struct obd_device *host,
                   struct obd_device *watched,
-                  enum obd_notify_event ev, void *owner);
+                  enum obd_notify_event ev, void *owner, void *data);
 
 struct ccc_grouplock {
         struct lu_env   *cg_env;
