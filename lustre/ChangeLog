@@ -23,8 +23,32 @@ Bugzilla   : 19024
 Description: Update to RHEL5.3 kernel-2.6.18-128.1.6.el5.
 
 Severity   : enhancement
+Bugzilla   : 19212
+Description: Update kernel to SLES10 SP2 2.6.16.60-0.37.
+
+Severity   : enhancement
 Bugzilla   : 17671
-Description: Update OFED release to 1.4.1 RC4
+Description: Add support for OFED 1.4.1.
+
+Severity   : enhancement
+Bugzilla   : 19731
+Description: build ofed 1.4.1 with mlx4_en (Mellanox ConnectX drivers in 10GbE
+	     mode) enabled
+
+Severity   : major (SLES10/OFED 1.4.1 only)
+Bugzilla   : 19553
+Description: client node hang while running dbench
+Details    : Work around bogus definition of cancel_dirty_page() in OFED 1.4.1
+	     Only the SLES10 backport is impacted. This causes processes to be
+	     stuck infinitely in blk_congestion_wait(). OFED bugzilla ticket:
+	     https://bugs.openfabrics.org/show_bug.cgi?id=1650
+
+Severity   : normal
+Bugzilla   : 19580
+Description: BUG: soft lockup - CPU#7 stuck for 10s! [ll_imp_inval:18451]
+Details    : ll_imp_inval can sleep on waiting for a semaphore while holding
+	     a spinlock. Convert lco_lock to a semaphore to address the
+	     problem.
 
 Severity   : major, only with big OST
 Bugzilla   : 18518
@@ -52,6 +76,12 @@ Details    : This patch fixes:
                 That is why it comes:
                 -        if (!ll_sb_any_quota_active(qctxt->lqc_sb))
                 -                RETURN(0);
+
+Severity   : enhancement
+Bugzilla   : 18775
+Description: improve lctl set/get_param
+Details    : handle the bad options, support more than one arguments,
+	     add '-F' option to append the indicator to the parameters.
 
 -------------------------------------------------------------------------------
 
