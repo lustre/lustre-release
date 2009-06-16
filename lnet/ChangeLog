@@ -18,6 +18,11 @@ Description:
 Details    : 
 
 Severity   : normal
+Bugzilla   : 17546
+Description: kptllnd HELLO protocol deadlock
+Details    : kptllnd HELLO protocol doesn't run to completion in finite time
+
+Severity   : normal
 Bugzilla   : 18075
 Description: LNet selftest fixes and enhancements
 

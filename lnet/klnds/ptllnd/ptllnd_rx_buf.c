@@ -544,13 +544,16 @@ void
 kptllnd_rx_parse(kptl_rx_t *rx)
 {
         kptl_msg_t             *msg = rx->rx_msg;
+        int                     rc = 0;
         int                     post_credit = PTLLND_POSTRX_PEER_CREDIT;
         kptl_peer_t            *peer;
-        int                     rc;
+        struct list_head        txs;
         unsigned long           flags;
         lnet_process_id_t       srcid;
 
         LASSERT (rx->rx_peer == NULL);
+
+        INIT_LIST_HEAD(&txs);
 
         if ((rx->rx_nob >= 4 &&
              (msg->ptlm_magic == LNET_PROTO_MAGIC ||
@@ -599,9 +602,18 @@ kptllnd_rx_parse(kptl_rx_t *rx)
                 if (peer == NULL)
                         goto rx_done;
                 
-                CWARN("NAK from %s (%s)\n",
-                      libcfs_id2str(srcid),
+                CWARN("NAK from %s (%d:%s)\n",
+                      libcfs_id2str(srcid), peer->peer_state,
                       kptllnd_ptlid2str(rx->rx_initiator));
+
+                /* NB can't nuke new peer - bug 17546 comment 31 */
+                if (peer->peer_state == PEER_STATE_WAITING_HELLO) {
+                        CDEBUG(D_NET, "Stale NAK from %s(%s): WAITING_HELLO\n",
+                               libcfs_id2str(srcid),
+                               kptllnd_ptlid2str(rx->rx_initiator));
+                        kptllnd_peer_decref(peer);
+                        goto rx_done;
+                }
 
                 rc = -EPROTO;
                 goto failed;
@@ -627,29 +639,18 @@ kptllnd_rx_parse(kptl_rx_t *rx)
         } else {
                 peer = kptllnd_id2peer(srcid);
                 if (peer == NULL) {
-                        CWARN("NAK %s: no connection; peer must reconnect\n",
+                        CWARN("NAK %s: no connection, %s must reconnect\n",
+                              kptllnd_msgtype2str(msg->ptlm_type),
                               libcfs_id2str(srcid));
                         /* NAK to make the peer reconnect */
                         kptllnd_nak(rx);
                         goto rx_done;
                 }
 
-                /* Ignore anything apart from HELLO while I'm waiting for it and
-                 * any messages for a previous incarnation of the connection */
-                if (peer->peer_state == PEER_STATE_WAITING_HELLO ||
-                    msg->ptlm_dststamp < peer->peer_myincarnation) {
+                /* Ignore any messages for a previous incarnation of me */
+                if (msg->ptlm_dststamp < peer->peer_myincarnation) {
                         kptllnd_peer_decref(peer);
                         goto rx_done;
-                }
-
-                if (msg->ptlm_srcstamp != peer->peer_incarnation) {
-                        CERROR("%s: Unexpected srcstamp "LPX64" "
-                               "("LPX64" expected)\n",
-                               libcfs_id2str(peer->peer_id),
-                               msg->ptlm_srcstamp,
-                               peer->peer_incarnation);
-                        rc = -EPROTO;
-                        goto failed;
                 }
 
                 if (msg->ptlm_dststamp != peer->peer_myincarnation) {
@@ -657,6 +658,30 @@ kptllnd_rx_parse(kptl_rx_t *rx)
                                "("LPX64" expected)\n",
                                libcfs_id2str(peer->peer_id), msg->ptlm_dststamp,
                                peer->peer_myincarnation);
+                        rc = -EPROTO;
+                        goto failed;
+                }
+
+                if (peer->peer_state == PEER_STATE_WAITING_HELLO) {
+                        /* recoverable error - restart txs */
+                        spin_lock_irqsave(&peer->peer_lock, flags);
+                        kptllnd_cancel_txlist(&peer->peer_sendq, &txs);
+                        spin_unlock_irqrestore(&peer->peer_lock, flags);
+
+                        CWARN("NAK %s: Unexpected %s message\n",
+                              libcfs_id2str(srcid),
+                              kptllnd_msgtype2str(msg->ptlm_type));
+                        kptllnd_nak(rx);
+                        rc = -EPROTO;
+                        goto failed;
+                }
+
+                if (msg->ptlm_srcstamp != peer->peer_incarnation) {
+                        CERROR("%s: Unexpected srcstamp "LPX64" "
+                               "("LPX64" expected)\n",
+                               libcfs_id2str(srcid),
+                               msg->ptlm_srcstamp,
+                               peer->peer_incarnation);
                         rc = -EPROTO;
                         goto failed;
                 }
@@ -677,6 +702,7 @@ kptllnd_rx_parse(kptl_rx_t *rx)
 
                 CERROR("%s: buffer overrun [%d/%d+%d]\n",
                        libcfs_id2str(peer->peer_id), c, sc, oc);
+                rc = -EPROTO;
                 goto failed;
         }
         peer->peer_sent_credits--;
@@ -752,12 +778,15 @@ kptllnd_rx_parse(kptl_rx_t *rx)
                 if (rc >= 0)                    /* kptllnd_recv owns 'rx' now */
                         return;
                 goto failed;
-         }
+        }
 
  failed:
+        LASSERT (rc != 0);
         kptllnd_peer_close(peer, rc);
         if (rx->rx_peer == NULL)                /* drop ref on peer */
                 kptllnd_peer_decref(peer);      /* unless rx_done will */
+        if (!list_empty(&txs))
+                kptllnd_restart_txs(srcid, &txs);
  rx_done:
         kptllnd_rx_done(rx, post_credit);
 }

@@ -488,13 +488,32 @@ again:
 }
 
 void
+kptllnd_queue_tx(kptl_peer_t *peer, kptl_tx_t *tx)
+{
+        /* CAVEAT EMPTOR: I take over caller's ref on 'tx' */
+        unsigned long flags;
+
+        spin_lock_irqsave(&peer->peer_lock, flags);
+
+        /* Ensure HELLO is sent first */
+        if (tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_NOOP)
+                list_add(&tx->tx_list, &peer->peer_noops);
+        else if (tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_HELLO)
+                list_add(&tx->tx_list, &peer->peer_sendq);
+        else
+                list_add_tail(&tx->tx_list, &peer->peer_sendq);
+
+        spin_unlock_irqrestore(&peer->peer_lock, flags);
+}
+
+
+void
 kptllnd_post_tx(kptl_peer_t *peer, kptl_tx_t *tx, int nfrag)
 {
         /* CAVEAT EMPTOR: I take over caller's ref on 'tx' */
         ptl_handle_md_t  msg_mdh;
         ptl_md_t         md;
         ptl_err_t        prc;
-        unsigned long    flags;
 
         LASSERT (!tx->tx_idle);
         LASSERT (!tx->tx_active);
@@ -537,21 +556,54 @@ kptllnd_post_tx(kptl_peer_t *peer, kptl_tx_t *tx, int nfrag)
                 return;
         }
 
-        spin_lock_irqsave(&peer->peer_lock, flags);
 
         tx->tx_deadline = jiffies + (*kptllnd_tunables.kptl_timeout * HZ);
         tx->tx_active = 1;
         tx->tx_msg_mdh = msg_mdh;
+        kptllnd_queue_tx(peer, tx);
+}
 
-	/* Ensure HELLO is sent first */
-        if (tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_NOOP)
-		list_add(&tx->tx_list, &peer->peer_noops);
-	else if (tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_HELLO)
-		list_add(&tx->tx_list, &peer->peer_sendq);
-	else
-		list_add_tail(&tx->tx_list, &peer->peer_sendq);
+/* NB "restarts" comes from peer_sendq of a single peer */
+void
+kptllnd_restart_txs (lnet_process_id_t target, struct list_head *restarts)
+{
+        kptl_tx_t   *tx;
+        kptl_tx_t   *tmp;
+        kptl_peer_t *peer;
 
-        spin_unlock_irqrestore(&peer->peer_lock, flags);
+        LASSERT (!list_empty(restarts));
+
+        if (kptllnd_find_target(&peer, target) != 0)
+                peer = NULL;
+
+        list_for_each_entry_safe (tx, tmp, restarts, tx_list) {
+                LASSERT (tx->tx_peer != NULL);
+                LASSERT (tx->tx_type == TX_TYPE_GET_REQUEST ||
+                         tx->tx_type == TX_TYPE_PUT_REQUEST ||
+                         tx->tx_type == TX_TYPE_SMALL_MESSAGE);
+
+                list_del_init(&tx->tx_list);
+
+                if (peer == NULL ||
+                    tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_HELLO) {
+                        kptllnd_tx_decref(tx);
+                        continue;
+                }
+
+                LASSERT (tx->tx_msg->ptlm_type != PTLLND_MSG_TYPE_NOOP);
+                tx->tx_status = 0;
+                tx->tx_active = 1;
+                kptllnd_peer_decref(tx->tx_peer);
+                tx->tx_peer = NULL;
+                kptllnd_set_tx_peer(tx, peer);
+                kptllnd_queue_tx(peer, tx); /* takes over my ref on tx */
+        }
+
+        if (peer == NULL)
+                return;
+
+        kptllnd_peer_check_sends(peer);
+        kptllnd_peer_decref(peer);
 }
 
 static inline int
@@ -1276,6 +1328,7 @@ kptllnd_find_target(kptl_peer_t **peerp, lnet_process_id_t target)
                 return -ENOMEM;
         }
 
+        hello_tx->tx_acked = 1;
         kptllnd_init_msg(hello_tx->tx_msg, PTLLND_MSG_TYPE_HELLO,
                          sizeof(kptl_hello_msg_t));
 
