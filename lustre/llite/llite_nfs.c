@@ -57,6 +57,8 @@ __u32 get_uuid2int(const char *name, int len)
         return (key0 << 1);
 }
 
+#if THREAD_SIZE >= 8192 /* see bug 17630 */
+
 static int ll_nfs_test_inode(struct inode *inode, void *opaque)
 {
         struct ll_fid *iid = opaque;
@@ -278,8 +280,6 @@ struct dentry *ll_get_parent(struct dentry *dchild)
         RETURN(result);
 }
 
-
-#if THREAD_SIZE >= 8192
 struct export_operations lustre_export_operations = {
         .encode_fh  = ll_encode_fh,
 #ifdef HAVE_FH_TO_DENTRY
@@ -290,4 +290,4 @@ struct export_operations lustre_export_operations = {
         .decode_fh  = ll_decode_fh,
 #endif
 };
-#endif
+#endif /* THREAD_SIZE >= 8192 */
