@@ -521,16 +521,21 @@ stop() {
 # add an additional parameter if mountpoint is ever different from $MOUNT
 quota_save_version() {
     local fsname=${2:-$FSNAME}
+    local spec=$1
+    local ver=$(tr -c -d "123" <<< $spec)
+    local type=$(tr -c -d "ug" <<< $spec)
+
+    [ -n "$ver" -a "$ver" != "3" ] && error "wrong quota version specifier"
 
     $LFS quotaoff -ug $MOUNT # just in case
-    [ -n "$1" ] && { $LFS quotacheck -$1 $MOUNT || error "quotacheck has failed"; }
+    [ -n "$type" ] && { $LFS quotacheck -$type $MOUNT || error "quotacheck has failed"; }
 
-    do_facet mgs "lctl conf_param ${fsname}-MDT*.mdd.quota_type=$1"
+    do_facet mgs "lctl conf_param ${fsname}-MDT*.mdd.quota_type=$spec"
     local varsvc
     local osts=$(get_facets OST)
     for ost in ${osts//,/ }; do
         varsvc=${ost}_svc
-        do_facet mgs "lctl conf_param ${!varsvc}.ost.quota_type=$1"
+        do_facet mgs "lctl conf_param ${!varsvc}.ost.quota_type=$spec"
     done
 }
 

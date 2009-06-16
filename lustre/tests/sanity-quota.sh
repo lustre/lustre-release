@@ -1804,7 +1804,7 @@ test_21() {
 run_test_with_stat 21 "run for fixing bug16053 ==========="
 
 test_22() {
-        quota_save_version "ug"
+        quota_save_version "ug3"
 
         stopall
         mount
@@ -1812,8 +1812,8 @@ test_22() {
 
         echo "checking parameters"
 
-        do_facet $SINGLEMDS "lctl get_param mdd.${FSNAME}-MDT*.quota_type" | grep "ug" || error "admin failure"
-        do_facet ost1 "lctl get_param obdfilter.*.quota_type" | grep "ug" || error "op failure"
+        do_facet $SINGLEMDS "lctl get_param mdd.${FSNAME}-MDT*.quota_type" | grep "ug3" || error "admin failure"
+        do_facet ost1 "lctl get_param obdfilter.*.quota_type" | grep "ug3" || error "op failure"
 
         run_test 0 "reboot lustre"
 }
