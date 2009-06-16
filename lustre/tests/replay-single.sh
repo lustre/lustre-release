@@ -477,9 +477,21 @@ test_20b() { # bug 10480
     df -P $DIR || df -P $DIR || true    # reconnect
     wait_recovery_complete $SINGLEMDS || error "MDS recovery not done"
 
-    # FIXME just because recovery is done doesn't mean we've finished
-    # orphan cleanup.  Fake it with a sleep for now...
-    sleep 10
+    # just because recovery is done doesn't mean we've finished
+    # orphan cleanup. Wait for llogs to get synchronized.
+    echo waiting for orphan cleanup...
+    while [ true ]; do
+            local -a sync=($(do_facet ost "$LCTL get_param obdfilter.*.mds_sync" | awk -F= ' {print $2}'))
+            local con=1
+            for ((i=0; i<${#sync[@]}; i++)); do
+                    [ ${sync[$i]} -eq 0 ] && continue
+                    # there is a not finished MDS-OST synchronization
+                    con=0
+                    break;
+            done
+            [ ${con} -eq 1 ] && break
+            sleep 1
+    done
     AFTERUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
     log "before $BEFOREUSED, after $AFTERUSED"
     [ $AFTERUSED -gt $((BEFOREUSED + 20)) ] && \

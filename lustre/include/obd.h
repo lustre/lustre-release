@@ -329,8 +329,9 @@ struct filter_obd {
         int                  fo_tot_granted_clients;
 
         obd_size             fo_readcache_max_filesize;
-        int                  fo_read_cache;
-        int                  fo_writethrough_cache;
+        int                  fo_read_cache:1,   /**< enable read-only cache */
+                             fo_writethrough_cache:1,/**< read cache writes */
+                             fo_mds_ost_sync:1; /**< MDS-OST orphan recovery*/
 
         struct obd_import   *fo_mdc_imp;
         struct obd_uuid      fo_mdc_uuid;

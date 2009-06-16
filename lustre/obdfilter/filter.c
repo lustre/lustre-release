@@ -2577,6 +2577,9 @@ static int filter_llog_connect(struct obd_export *exp,
               obd->obd_name, body->lgdc_logid.lgl_oid,
               body->lgdc_logid.lgl_ogr, body->lgdc_logid.lgl_ogen);
 
+        spin_lock_bh(&obd->obd_processing_task_lock);
+        obd->u.filter.fo_mds_ost_sync = 1;
+        spin_unlock_bh(&obd->obd_processing_task_lock);
         rc = llog_connect(ctxt, &body->lgdc_logid,
                           &body->lgdc_gen, NULL);
         llog_ctxt_put(ctxt);
