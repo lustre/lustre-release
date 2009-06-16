@@ -2434,7 +2434,8 @@ out_uuid:
                                  data->ioc_plen2))
                         rc = -EFAULT;
         } else {
-                if (copy_to_user(data->ioc_pbuf2, "Unknown UUID", 13))
+                if (copy_to_user(data->ioc_pbuf2, "Unknown UUID",
+                                 sizeof("Unknown UUID") + 1))
                         rc = -EFAULT;
         }
 
