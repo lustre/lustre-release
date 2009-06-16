@@ -1093,6 +1093,10 @@ LB_LINUX_TRY_COMPILE([
         #include <linux/mm.h>
         #include <linux/page-flags.h>
 ],[
+        /* tmp workaround for broken OFED 1.4.1 at SLES10 */
+        #if defined(SUSE_KERNEL) && defined  _BACKPORT_LINUX_MM_H_
+        #error badly implementation of cancel_dirty_pages
+        #endif
         cancel_dirty_page(NULL, 0);
 ],[
         AC_MSG_RESULT(yes)
