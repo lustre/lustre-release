@@ -1376,6 +1376,24 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# 2.6.23 add code to wait other users to complete before removing procfs entry
+AC_DEFUN([LC_PROCFS_USERS],
+[AC_MSG_CHECKING([if kernel has pde_users member in procfs entry struct])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/proc_fs.h>
+],[
+        struct proc_dir_entry pde;
+
+        pde.pde_users   = 0;
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_PROCFS_USERS, 1, 
+                [kernel has pde_users member in procfs entry struct])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
 # 2.6.24 has bio_endio with 2 args
 AC_DEFUN([LC_BIO_ENDIO_2ARG],
 [AC_MSG_CHECKING([if kernel has bio_endio with 2 args])
@@ -1872,6 +1890,7 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_HAVE_EXPORTFS_H
           LC_VM_OP_FAULT
           LC_REGISTER_SHRINKER
+          LC_PROCFS_USERS
 
           # 2.6.25
           LC_MAPPING_CAP_WRITEBACK_DIRTY
