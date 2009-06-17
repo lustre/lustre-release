@@ -1064,8 +1064,10 @@ int class_disconnect(struct obd_export *export)
         /* class_cleanup(), abort_recovery(), and class_fail_export()
          * all end up in here, and if any of them race we shouldn't
          * call extra class_export_puts(). */
-        if (already_disconnected)
+        if (already_disconnected) {
+                LASSERT(hlist_unhashed(&export->exp_nid_hash));
                 GOTO(no_disconn, already_disconnected);
+        }
 
         CDEBUG(D_IOCTL, "disconnect: cookie "LPX64"\n",
                export->exp_handle.h_cookie);
