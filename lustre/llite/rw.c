@@ -1242,7 +1242,6 @@ static void __ll_put_llap(struct page *page)
  * here. */
 void ll_removepage(struct page *page)
 {
-        struct ll_async_page *llap = llap_cast_private(page);
         ENTRY;
 
         LASSERT(!in_interrupt());
