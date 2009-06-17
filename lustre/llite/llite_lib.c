@@ -2350,8 +2350,7 @@ char *llap_origins[] = {
         [LLAP_ORIGIN_READPAGE] = "rp",
         [LLAP_ORIGIN_READAHEAD] = "ra",
         [LLAP_ORIGIN_COMMIT_WRITE] = "cw",
-        [LLAP_ORIGIN_WRITEPAGE] = "wp",
-        [LLAP_ORIGIN_LOCKLESS_IO] = "ls"
+        [LLAP_ORIGIN_WRITEPAGE] = "wp"
 };
 
 struct ll_async_page *llite_pglist_next_llap(struct list_head *head,

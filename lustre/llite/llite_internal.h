@@ -599,8 +599,6 @@ struct ll_async_page {
                          llap_origin:3,
                          llap_ra_used:1,
                          llap_ignore_quota:1,
-                         llap_nocache:1,
-                         llap_lockless_io_page:1,
                          llap_reserved:7;
         unsigned int     llap_pglist_cpu:16;
         void            *llap_cookie;
@@ -622,7 +620,6 @@ enum {
         LLAP_ORIGIN_COMMIT_WRITE,
         LLAP_ORIGIN_WRITEPAGE,
         LLAP_ORIGIN_REMOVEPAGE,
-        LLAP_ORIGIN_LOCKLESS_IO,
         LLAP__ORIGIN_MAX,
 };
 extern char *llap_origins[];
