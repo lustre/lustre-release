@@ -1083,8 +1083,10 @@ void udmu_xattr_declare_set(udmu_objset_t *uos, dmu_buf_t *db,
         uint64_t xa_data_obj;
 
         if (zp->zp_xattr == 0) {
-                dmu_tx_hold_bonus(tx, DMU_NEW_OBJECT); /* xattr zap */
-                dmu_tx_hold_bonus(tx, DMU_NEW_OBJECT); /* xattr value obj */
+                /* xattr zap + entry */
+                dmu_tx_hold_zap(tx, DMU_NEW_OBJECT, TRUE, (char *) name);
+                /* xattr value obj */
+                dmu_tx_hold_bonus(tx, DMU_NEW_OBJECT);
                 dmu_tx_hold_write(tx, DMU_NEW_OBJECT, 0, vallen);
                 return;
         }
@@ -1118,7 +1120,7 @@ void udmu_xattr_declare_set(udmu_objset_t *uos, dmu_buf_t *db,
 
 /*
  * Set an extended attribute.
- * This transaction must have called udmu_tx_declare_xattr_set() first.
+ * This transaction must have called udmu_xattr_declare_set() first.
  *
  * Returns 0 on success or a positive error number on failure.
  *
@@ -1221,7 +1223,7 @@ void udmu_xattr_declare_del(udmu_objset_t *uos, dmu_buf_t *db,
 
 /*
  * Delete an extended attribute.
- * This transaction must have called udmu_tx_declare_xattr_del() first.
+ * This transaction must have called udmu_xattr_declare_del() first.
  *
  * Returns 0 on success or a positive error number on failure.
  *
