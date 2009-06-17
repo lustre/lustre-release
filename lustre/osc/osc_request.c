@@ -680,7 +680,8 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
         if (!(cli->cl_import->imp_connect_flags_orig & OBD_CONNECT_MDS)) {
                 req->rq_interpret_reply = osc_destroy_interpret;
                 if (!osc_can_send_destroy(cli)) {
-                        struct l_wait_info lwi = { 0 };
+                        struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP,
+                                                          NULL);
 
                         /*
                          * Wait until the number of on-going destroy RPCs drops
