@@ -20,3 +20,4 @@ ext4-ext_generation-sles11.patch
 ext4-remove-ioctl-filp-sles11.patch
 ext4-super-warning.patch
 ext4-alloc-policy-2.6-sles11.patch
+ext4-disable-delalloc-sles11.patch

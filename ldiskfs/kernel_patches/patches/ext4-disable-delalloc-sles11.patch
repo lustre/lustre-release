@@ -1,0 +1,21 @@
+Disable the DELALLOC feature because it is not robust in ext4 versions < 2.6.31.
+
+--
+Index: linux-2.6.27.21-0.1/fs/ext4/super.c
+===================================================================
+--- linux-2.6.27.21-0.1.orig/fs/ext4/super.c	2009-06-15 05:36:44.000000000 -0400
++++ linux-2.6.27.21-0.1/fs/ext4/super.c	2009-06-15 05:40:38.000000000 -0400
+@@ -2462,13 +2462,6 @@ static int ext4_fill_super(struct super_
+ 			"extents feature not enabled on this filesystem, "
+ 			"use tune2fs.\n");
+ 
+-	/*
+-	 * enable delayed allocation by default
+-	 * Use -o nodelalloc to turn it off
+-	 */
+-	set_opt(sbi->s_mount_opt, DELALLOC);
+-
+-
+ 	if (!parse_options((char *) data, sb, &journal_inum, &journal_devnum,
+ 			   NULL, 0))
+ 		goto failed_mount;
