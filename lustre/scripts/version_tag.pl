@@ -144,7 +144,7 @@ sub get_latest_mtime()
 sub get_linuxdir()
 {
     my $config = new IO::File;
-    my ($line, $dir);
+    my ($line, $dir, $objdir);
     if (!$config->open("autoMakefile")) {
         die "Run ./configure first\n";
     }
@@ -152,16 +152,20 @@ sub get_linuxdir()
         chomp($line);
         if ($line =~ /LINUX :?= (.*)/) {
             $dir = $1;
+        } elsif ($line =~ /LINUX_OBJ :?= (.*)/) {
+            $objdir = $1;
             last;
         }
     }
     $config->close();
     my $ver = new IO::File;
-    if (!$ver->open("$dir/include/linux/utsrelease.h")) {
-        if (!$ver->open("$dir/include/linux/version.h")) {
+    if (!$ver->open("$objdir/include/linux/utsrelease.h") &&
+        !$ver->open("$objdir/include/linux/version.h") &&
+        !$ver->open("$dir/include/linux/utsrelease.h") &&
+        !$ver->open("$dir/include/linux/version.h")) {
             die "Run make dep on $dir\n";
         }
-    }
+
     while(defined($line = <$ver>)) {
         $line =~ /\#define UTS_RELEASE "(.*)"/;
         if ($1) {
