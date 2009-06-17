@@ -2546,22 +2546,21 @@ static int lfs_fid2path(int argc, char **argv)
 static int lfs_path2fid(int argc, char **argv)
 {
         char *path;
-        unsigned long long seq;
-        unsigned long oid, ver;
+        lustre_fid fid;
         int rc;
 
         if (argc != 2)
                 return CMD_HELP;
 
         path = argv[1];
-        rc = llapi_path2fid(path, &seq, &oid, &ver);
+        rc = llapi_path2fid(path, &fid);
         if (rc) {
                 fprintf(stderr, "can't get fid for %s: %s\n", path,
                         strerror(errno = -rc));
                 return rc;
         }
 
-        printf(DFID"\n", seq, (unsigned int)oid, (unsigned int)ver);
+        printf(DFID"\n", PFID(&fid));
 
         return 0;
 }

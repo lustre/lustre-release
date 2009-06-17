@@ -683,8 +683,7 @@ static int obf_lookup(const struct lu_env *env, struct md_object *p,
         while (*name == '[')
                 name++;
 
-        sscanf(name, SFID, &(f->f_seq), &(f->f_oid),
-               &(f->f_ver));
+        sscanf(name, SFID, RFID(f));
         if (!fid_is_sane(f)) {
                 CWARN("bad FID format [%s], should be "DFID"\n", lname->ln_name,
                       (__u64)1, 2, 0);

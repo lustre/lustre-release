@@ -155,8 +155,7 @@ extern int llapi_is_lustre_mnttype(const char *type);
 extern int llapi_get_obd_count(char *mnt, int *count, int is_mdt);
 extern int parse_size(char *optarg, unsigned long long *size,
                       unsigned long long *size_units, int bytes_spec);
-extern int llapi_path2fid(const char *path, unsigned long long *seq,
-                          unsigned long *oid, unsigned long *ver);
+extern int llapi_path2fid(const char *path, lustre_fid *fid);
 extern int llapi_search_fsname(const char *pathname, char *fsname);
 extern void llapi_ping_target(char *obd_type, char *obd_name,
                               char *obd_uuid, void *args);
@@ -180,7 +179,7 @@ extern int llapi_changelog_clear(const char *mdtname, const char *idstr,
                                  long long endrec);
 extern int llapi_changelog_register(const char *mdtname);
 extern int llapi_changelog_unregister(const char *mdtname, int id);
-extern int llapi_fid2path(char *device, char *fid, char *path, int pathlen,
-                          long long *recno, int *linkno);
+extern int llapi_fid2path(const char *device, const char *fidstr, char *path,
+                          int pathlen, long long *recno, int *linkno);
 #endif
 

@@ -2521,8 +2521,8 @@ int llapi_changelog_clear(const char *mdtname, const char *idstr,
         return rc;
 }
 
-int llapi_fid2path(char *device, char *fidstr, char *buf, int buflen,
-                   long long *recno, int *linkno)
+int llapi_fid2path(const char *device, const char *fidstr, char *buf,
+                   int buflen, long long *recno, int *linkno)
 {
         char path[PATH_MAX];
         struct lu_fid fid;
@@ -2532,8 +2532,7 @@ int llapi_fid2path(char *device, char *fidstr, char *buf, int buflen,
         while (*fidstr == '[')
                 fidstr++;
 
-        sscanf(fidstr, "0x%llx:0x%x:0x%x", &(fid.f_seq), &(fid.f_oid),
-               &(fid.f_ver));
+        sscanf(fidstr, SFID, RFID(&fid));
         if (!fid_is_sane(&fid)) {
                 llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
                           "bad FID format [%s], should be "DFID"\n",
@@ -2545,7 +2544,7 @@ int llapi_fid2path(char *device, char *fidstr, char *buf, int buflen,
         if (device[0] == '/') {
                 strcpy(path, device);
         } else {
-                rc = get_root_path(WANT_PATH, device, NULL, path);
+                rc = get_root_path(WANT_PATH, (char *)device, NULL, path);
                 if (rc < 0)
                         return rc;
         }
@@ -2573,20 +2572,15 @@ int llapi_fid2path(char *device, char *fidstr, char *buf, int buflen,
         return rc;
 }
 
-int llapi_path2fid(const char *path, unsigned long long *seq,
-                   unsigned long *oid, unsigned long *ver)
+int llapi_path2fid(const char *path, lustre_fid *fid)
 {
-        struct lu_fid fid;
         int fd, rc;
 
         fd = open(path, O_RDONLY);
         if (fd < 0)
                 return -errno;
 
-        rc = ioctl(fd, LL_IOC_PATH2FID, &fid);
-        *seq = fid_seq(&fid);
-        *oid = fid_oid(&fid);
-        *ver = fid_ver(&fid);
+        rc = ioctl(fd, LL_IOC_PATH2FID, fid);
 
         close(fd);
         return rc;

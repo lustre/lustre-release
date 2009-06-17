@@ -253,34 +253,6 @@ static inline int range_is_exhausted(const struct lu_seq_range *range)
  * @{ */
 
 /**
- * File identifier.
- *
- * Fid is a cluster-wide unique identifier of a file or an object
- * (stripe). Fids are never reused. Fids are transmitted across network (in
- * the sender byte-ordering), and stored on disk in a packed form (struct
- * lu_fid_pack) in a big-endian order.
- */
-struct lu_fid {
-        /**
-         * fid sequence. Sequence is a unit of migration: all files (objects)
-         * with fids from a given sequence are stored on the same
-         * server.
-         *
-         * Lustre should support 2 ^ 64 objects, thus even if one
-         * sequence has one object we will never reach this value.
-         */
-        __u64 f_seq;
-        /** fid number within sequence. */
-        __u32 f_oid;
-        /**
-         * fid version, used to distinguish different versions (in the sense
-         * of snapshots, etc.) of the same file system object. Not currently
-         * used.
-         */
-        __u32 f_ver;
-};
-
-/**
  * Following struct for MDT attributes, that will be kept inode's EA.
  * Introduced in 2.0 release (please see b15993, for details)
  */
@@ -292,7 +264,6 @@ struct lustre_mdt_attrs {
         /** total sectors in objects */
         __u64   lma_som_sectors;
 };
-
 
 /**
  * fid constants
@@ -371,14 +342,10 @@ static inline __u32 lu_igif_gen(const struct lu_fid *fid)
         return fid_oid(fid);
 }
 
-#define DFID "["LPX64":0x%x:0x%x]"
-#define SFID "0x%llx:0x%x:0x%x"
-
-#define PFID(fid)     \
-        fid_seq(fid), \
-        fid_oid(fid), \
-        fid_ver(fid)
-
+/*
+ * Fids are transmitted across network (in the sender byte-ordering),
+ * and stored on disk in big-endian order.
+ */
 static inline void fid_cpu_to_le(struct lu_fid *dst, const struct lu_fid *src)
 {
         /* check that all fields are converted */
