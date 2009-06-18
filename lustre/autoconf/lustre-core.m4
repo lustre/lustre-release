@@ -588,6 +588,18 @@ AC_DEFUN([LC_LUSTRE_VERSION_H],
         	enable_server='no'
 	fi
 ])
+	if test x$enable_server = xyes ; then
+		if test x$RHEL_KERNEL = xyes -a x$LINUXRELEASE != x${LINUXRELEASE##2.6.9} ; then
+        		AC_MSG_WARN([Lustre server has been disabled with rhel4 kernel;])
+        		AC_MSG_WARN([disabling server build])
+        		enable_server='no'
+		fi
+		if test x$SUSE_KERNEL = xyes -a x$LINUXRELEASE != x${LINUXRELEASE##2.6.5} ; then
+        		AC_MSG_WARN([Lustre server has been disabled with sles9 kernel;])
+        		AC_MSG_WARN([disabling server build])
+			enable_server='no'
+		fi
+	fi
 ])
 
 #
