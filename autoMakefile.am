@@ -40,3 +40,8 @@ checkstack-update:
 
 checkstack-clean:
 	rm -f ${CSTK} ${CSTKO}
+
+module-dist-hook:
+	if [ -d CVS -o -d .git ]; then \
+	    perl lustre/scripts/tree_status.pl > $(distdir)/tree_status; \
+	fi

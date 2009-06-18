@@ -2426,7 +2426,6 @@ lustre/ptlrpc/autoMakefile
 lustre/quota/Makefile
 lustre/quota/autoMakefile
 lustre/scripts/Makefile
-lustre/scripts/version_tag.pl
 lustre/tests/Makefile
 lustre/tests/mpi/Makefile
 lustre/utils/Makefile
