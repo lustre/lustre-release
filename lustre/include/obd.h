@@ -960,7 +960,6 @@ struct obd_device {
         struct lvfs_run_ctxt    obd_lvfs_ctxt;
 
         struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
-        struct semaphore        obd_llog_alloc;
         struct semaphore        obd_llog_cat_process;
         cfs_waitq_t             obd_llog_waitq;
 
@@ -1229,8 +1228,7 @@ struct obd_ops {
 
         /* llog related obd_methods */
         int (*o_llog_init)(struct obd_device *obd, struct obd_device *disk_obd,
-                           int count, struct llog_catid *logid,
-                           struct obd_uuid *uuid);
+                           int *idx);
         int (*o_llog_finish)(struct obd_device *obd, int count);
 
         /* metadata-only methods */

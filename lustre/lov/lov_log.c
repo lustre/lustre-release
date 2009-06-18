@@ -213,49 +213,53 @@ static struct llog_operations lov_size_repl_logops = {
         lop_cancel: lov_llog_repl_cancel
 };
 
-int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                  int count, struct llog_catid *logid, struct obd_uuid *uuid)
+int lov_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
+                  int *index)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct obd_device *child;
-        int i, rc = 0, err = 0;
+        int i, rc = 0;
         ENTRY;
 
-        LASSERT(uuid);
-
-        rc = llog_setup(obd, LLOG_MDS_OST_ORIG_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, LLOG_MDS_OST_ORIG_CTXT, disk_obd, 0, NULL,
                         &lov_mds_ost_orig_logops);
         if (rc)
                 RETURN(rc);
 
-        rc = llog_setup(obd, LLOG_SIZE_REPL_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, LLOG_SIZE_REPL_CTXT, disk_obd, 0, NULL,
                         &lov_size_repl_logops);
         if (rc)
                 GOTO(err_cleanup, rc);
 
         obd_getref(obd);
         for (i = 0; i < lov->desc.ld_tgt_count ; i++) {
-                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active)
+                if (!lov->lov_tgts[i])
                         continue;
-                if (!obd_uuid_equals(uuid, &lov->lov_tgts[i]->ltd_uuid))
+
+                if (index && i != *index)
                         continue;
-                CDEBUG(D_CONFIG, "init %d/%d\n", i, count);
-                LASSERT(lov->lov_tgts[i]->ltd_exp);
-                child = lov->lov_tgts[i]->ltd_exp->exp_obd;
-                rc = obd_llog_init(child, tgt, 1, logid, uuid);
+
+                CDEBUG(D_CONFIG, "init %s\n", lov->lov_tgts[i]->ltd_uuid.uuid);
+                child = class_find_client_obd(&lov->lov_tgts[i]->ltd_uuid,
+                                              LUSTRE_OSC_NAME, &obd->obd_uuid);
+                if (!child) {
+                        CERROR("Can't find osc\n");
+                        continue;
+                }
+
+                rc = obd_llog_init(child, disk_obd, &i);
                 if (rc) {
                         CERROR("error osc_llog_init idx %d osc '%s' tgt '%s' "
-                               "(rc=%d)\n", i, child->obd_name, tgt->obd_name,
+                               "(rc=%d)\n", i, child->obd_name, disk_obd->obd_name,
                                rc);
-                        if (!err) 
-                                err = rc;
+                        rc = 0;
                 }
         }
         obd_putref(obd);
-        GOTO(err_cleanup, err);
+        GOTO(err_cleanup, rc);
 err_cleanup:
-        if (err) {
-                struct llog_ctxt *ctxt = 
+        if (rc) {
+                struct llog_ctxt *ctxt =
                         llog_get_context(obd, LLOG_SIZE_REPL_CTXT);
                 if (ctxt)
                         llog_cleanup(ctxt);
@@ -263,7 +267,7 @@ err_cleanup:
                 if (ctxt)
                         llog_cleanup(ctxt);
         }
-        return err;
+        return rc;
 }
 
 int lov_llog_finish(struct obd_device *obd, int count)

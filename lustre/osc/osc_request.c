@@ -4036,31 +4036,37 @@ static struct llog_operations osc_size_repl_logops = {
 };
 
 static struct llog_operations osc_mds_ost_orig_logops;
-static int osc_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                         int count, struct llog_catid *catid,
-                         struct obd_uuid *uuid)
+static int osc_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
+                         int *index)
 {
+        struct llog_catid catid;
+        static char name[32] = CATLIST;
         int rc;
         ENTRY;
 
-        spin_lock(&obd->obd_dev_lock);
-        if (osc_mds_ost_orig_logops.lop_setup != llog_obd_origin_setup) {
-                osc_mds_ost_orig_logops = llog_lvfs_ops;
-                osc_mds_ost_orig_logops.lop_setup = llog_obd_origin_setup;
-                osc_mds_ost_orig_logops.lop_cleanup = llog_obd_origin_cleanup;
-                osc_mds_ost_orig_logops.lop_add = llog_obd_origin_add;
-                osc_mds_ost_orig_logops.lop_connect = llog_origin_connect;
-        }
-        spin_unlock(&obd->obd_dev_lock);
+        LASSERT(index);
 
-        rc = llog_setup(obd, LLOG_MDS_OST_ORIG_CTXT, tgt, count,
-                        &catid->lci_logid, &osc_mds_ost_orig_logops);
+        mutex_down(&disk_obd->obd_llog_cat_process);
+
+        rc = llog_get_cat_list(disk_obd, disk_obd, name, *index, 1, &catid);
+        if (rc) {
+                CERROR("rc: %d\n", rc);
+                GOTO(out_unlock, rc);
+        }
+#if 0
+        CDEBUG(D_INFO, "%s: Init llog for %s/%d - catid "LPX64"/"LPX64":%x\n",
+               obd->obd_name, uuid->uuid, idx, catid.lci_logid.lgl_oid,
+               catid.lci_logid.lgl_ogr, catid.lci_logid.lgl_ogen);
+#endif
+
+        rc = llog_setup(obd, LLOG_MDS_OST_ORIG_CTXT, disk_obd, 1,
+                        &catid.lci_logid, &osc_mds_ost_orig_logops);
         if (rc) {
                 CERROR("failed LLOG_MDS_OST_ORIG_CTXT\n");
                 GOTO (out, rc);
         }
 
-        rc = llog_setup(obd, LLOG_SIZE_REPL_CTXT, tgt, count, NULL,
+        rc = llog_setup(obd, LLOG_SIZE_REPL_CTXT, disk_obd, 1, NULL,
                         &osc_size_repl_logops);
         if (rc) {
                 struct llog_ctxt *ctxt =
@@ -4071,11 +4077,19 @@ static int osc_llog_init(struct obd_device *obd, struct obd_device *tgt,
         }
 out:
         if (rc) {
-                CERROR("osc '%s' tgt '%s' cnt %d catid %p rc=%d\n",
-                       obd->obd_name, tgt->obd_name, count, catid, rc);
+                CERROR("osc '%s' tgt '%s' rc=%d\n",
+                       obd->obd_name, disk_obd->obd_name, rc);
                 CERROR("logid "LPX64":0x%x\n",
-                       catid->lci_logid.lgl_oid, catid->lci_logid.lgl_ogen);
+                       catid.lci_logid.lgl_oid, catid.lci_logid.lgl_ogen);
+        } else {
+                rc = llog_put_cat_list(disk_obd, disk_obd, name, *index, 1,
+                                       &catid);
+                if (rc)
+                        CERROR("rc: %d\n", rc);
         }
+out_unlock:
+        mutex_up(&disk_obd->obd_llog_cat_process);
+
         RETURN(rc);
 }
 
@@ -4494,6 +4508,12 @@ int __init osc_init(void)
                         PORTAL_SYMBOL_PUT(osc_quota_interface);
                 RETURN(rc);
         }
+
+        osc_mds_ost_orig_logops = llog_lvfs_ops;
+        osc_mds_ost_orig_logops.lop_setup = llog_obd_origin_setup;
+        osc_mds_ost_orig_logops.lop_cleanup = llog_obd_origin_cleanup;
+        osc_mds_ost_orig_logops.lop_add = llog_obd_origin_add;
+        osc_mds_ost_orig_logops.lop_connect = llog_origin_connect;
 
         RETURN(rc);
 }

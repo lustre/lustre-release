@@ -575,7 +575,7 @@ static int mds_lov_update_desc(struct obd_device *obd, __u32 index,
         /* If we added a target we have to reconnect the llogs */
         /* We only _need_ to do this at first add (idx), or the first time
            after recovery.  However, it should now be safe to call anytime. */
-        rc = llog_cat_initialize(obd, index, uuid);
+        rc = obd_llog_init(obd, obd, (void *)&index); 
 
 out:
         OBD_FREE(ld, sizeof(*ld));
@@ -674,6 +674,13 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         obd->obd_no_conn = 1;
 
         rc = obd_register_observer(mds->mds_osc_obd, obd);
+        if (rc) {
+                CERROR("MDS cannot register as observer of LOV %s (%d)\n",
+                       lov_name, rc);
+                GOTO(error_exit, rc);
+        }
+
+        rc = obd_llog_init(obd, obd, NULL); 
         if (rc) {
                 CERROR("MDS cannot register as observer of LOV %s (%d)\n",
                        lov_name, rc);
@@ -900,7 +907,8 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
                 rc = llog_ioctl(ctxt, cmd, data);
                 pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
-                llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count, NULL);
+
+                rc = obd_llog_init(obd, obd, NULL);
                 llog_ctxt_put(ctxt);
                 rc2 = obd_set_info_async(mds->mds_osc_exp,
                                          sizeof(KEY_MDS_CONN), KEY_MDS_CONN,

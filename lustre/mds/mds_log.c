@@ -224,25 +224,25 @@ static struct llog_operations mds_size_repl_logops = {
         lop_cancel:     mds_llog_repl_cancel,
 };
 
-int mds_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                  int count, struct llog_catid *logid, struct obd_uuid *uuid)
+int mds_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
+                  int *index)
 {
         struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
         struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
 
-        rc = llog_setup(obd, LLOG_MDS_OST_ORIG_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, LLOG_MDS_OST_ORIG_CTXT, disk_obd, 0, NULL,
                         &mds_ost_orig_logops);
         if (rc)
                 RETURN(rc);
 
-        rc = llog_setup(obd, LLOG_SIZE_REPL_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, LLOG_SIZE_REPL_CTXT, disk_obd, 0, NULL,
                         &mds_size_repl_logops);
         if (rc)
                 GOTO(err_llog, rc);
 
-        rc = obd_llog_init(lov_obd, tgt, count, logid, uuid);
+        rc = obd_llog_init(lov_obd, disk_obd, index);
         if (rc) {
                 CERROR("lov_llog_init err %d\n", rc);
                 GOTO(err_cleanup, rc);

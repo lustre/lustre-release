@@ -268,7 +268,7 @@ int lov_get_stripecnt(struct lov_obd *lov, __u32 stripe_count);
 
 /* lov_log.c */
 int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                  int count, struct llog_catid *logid, struct obd_uuid *uuid);
+                  int *index);
 int lov_llog_finish(struct obd_device *obd, int count);
 
 /* lov_pack.c */

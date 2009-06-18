@@ -1385,7 +1385,7 @@ static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
         if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0)
                 ptlrpc_lprocfs_register_obd(obd);
 
-        rc = obd_llog_init(obd, obd, 0, NULL, NULL);
+        rc = obd_llog_init(obd, obd, NULL);
         if (rc) {
                 mdc_cleanup(obd);
                 CERROR("failed to setup llogging subsystems\n");
@@ -1495,15 +1495,14 @@ static int mdc_cleanup(struct obd_device *obd)
 }
 
 
-static int mdc_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                         int count, struct llog_catid *logid,
-                         struct obd_uuid *uuid)
+static int mdc_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
+                         int *index)
 {
         struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
 
-        rc = llog_setup(obd, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, LLOG_CONFIG_REPL_CTXT, disk_obd, 0, NULL,
                         &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
@@ -1511,7 +1510,7 @@ static int mdc_llog_init(struct obd_device *obd, struct obd_device *tgt,
                 llog_ctxt_put(ctxt);
         }
 
-        rc = llog_setup(obd, LLOG_LOVEA_REPL_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, LLOG_LOVEA_REPL_CTXT, disk_obd, 0, NULL,
                        &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_LOVEA_REPL_CTXT);

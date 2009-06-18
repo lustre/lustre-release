@@ -1958,7 +1958,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
                            "filter_ldlm_cb_client", &obd->obd_ldlm_client);
 
-        rc = obd_llog_init(obd, obd, 1, NULL, NULL);
+        rc = obd_llog_init(obd, obd, NULL);
         if (rc) {
                 CERROR("failed to setup llogging subsystems\n");
                 GOTO(err_post, rc);
@@ -2102,9 +2102,8 @@ static struct llog_operations filter_size_orig_logops = {
         lop_add: llog_obd_origin_add
 };
 
-static int filter_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                            int count, struct llog_catid *catid,
-                            struct obd_uuid *uuid)
+static int filter_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
+                            int *index)
 {
         struct filter_obd *filter = &obd->u.filter;
         struct llog_ctxt *ctxt;
@@ -2120,7 +2119,7 @@ static int filter_llog_init(struct obd_device *obd, struct obd_device *tgt,
         filter_mds_ost_repl_logops.lop_connect = llog_obd_repl_connect;
         filter_mds_ost_repl_logops.lop_sync = llog_obd_repl_sync;
 
-        rc = llog_setup(obd, LLOG_MDS_OST_REPL_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, LLOG_MDS_OST_REPL_CTXT, disk_obd, 0, NULL,
                         &filter_mds_ost_repl_logops);
         if (rc)
                 GOTO(cleanup_lcm, rc);
@@ -2131,7 +2130,7 @@ static int filter_llog_init(struct obd_device *obd, struct obd_device *tgt,
         ctxt->loc_lcm = filter->fo_lcm;
         llog_ctxt_put(ctxt);
 
-        rc = llog_setup(obd, LLOG_SIZE_ORIG_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, LLOG_SIZE_ORIG_CTXT, disk_obd, 0, NULL,
                         &filter_size_orig_logops);
         if (rc)
                 GOTO(cleanup_ctxt, rc);

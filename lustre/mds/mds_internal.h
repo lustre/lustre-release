@@ -227,8 +227,8 @@ int mds_log_op_orphan(struct obd_device *, struct lov_stripe_md *, obd_count);
 int mds_log_op_setattr(struct obd_device *obd, struct inode *inode,
                       struct lov_mds_md *lmm, int lmm_size,
                       struct llog_cookie *logcookies, int cookies_size);
-int mds_llog_init(struct obd_device *obd, struct obd_device *tgt, int count,
-                  struct llog_catid *logid, struct obd_uuid *uuid);
+int mds_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
+                  int *index);
 int mds_llog_finish(struct obd_device *obd, int count);
 
 /* mds/mds_lov.c */
