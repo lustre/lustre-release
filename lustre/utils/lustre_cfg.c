@@ -611,6 +611,19 @@ static int getparam_cmdline(int argc, char **argv,
         return optind;
 }
 
+static char *globerrstr(int glob_rc)
+{
+        switch(glob_rc) {
+        case GLOB_NOSPACE:
+                return "Out of memory";
+        case GLOB_ABORTED:
+                return "Read error";
+        case GLOB_NOMATCH:
+                return "Found no match";
+        }
+        return "Unknown error";
+}
+
 static int getparam_display(struct param_opts *popt, char *pattern)
 {
         int rc;
@@ -623,8 +636,8 @@ static int getparam_display(struct param_opts *popt, char *pattern)
         rc = glob(pattern, GLOB_BRACE, NULL, &glob_info);
         if (rc) {
                 fprintf(stderr, "error: get_param: %s: %s\n",
-                        pattern, strerror(rc));
-                return rc;
+                        pattern, globerrstr(rc));
+                return -ESRCH;
         }
 
         buf = malloc(CFS_PAGE_SIZE);
@@ -769,8 +782,8 @@ static int setparam_display(struct param_opts *popt, char *pattern, char *value)
         rc = glob(pattern, GLOB_BRACE, NULL, &glob_info);
         if (rc) {
                 fprintf(stderr, "error: set_param: %s: %s\n",
-                        pattern, strerror(rc));
-                return rc;
+                        pattern, globerrstr(rc));
+                return -ESRCH;
         }
         for (i = 0; i  < glob_info.gl_pathc; i++) {
                 char *valuename = NULL;
