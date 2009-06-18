@@ -1813,7 +1813,7 @@ test_22() {
         do_facet $SINGLEMDS "lctl get_param mdd.${FSNAME}-MDT*.quota_type" | grep "ug3" || error "admin failure"
         do_facet ost1 "lctl get_param obdfilter.*.quota_type" | grep "ug3" || error "op failure"
 
-        run_test 0 "reboot lustre"
+        quota_init
 }
 run_test_with_stat 22 "test if quota_type saved as permanent parameter ===="
 
