@@ -243,6 +243,21 @@ do
 	fi
 done
 
+# If the kernel was built to reject unsupported modules (e.g. not a Lustre
+# kernel), and this hasn't been overridden in /etc/modprobe.d yet, then
+# print a warning so that users are aware of this issue.
+if sysctl kernel.unsupported >/dev/null 2>&1 &&
+   [ "$(sysctl -n kernel.unsupported 2>/dev/null)" = "0" ] &&
+    ! modprobe -c | grep -q "^allow_unsupported_modules[ \t]1" ; then
+     echo "
+     warning: the Lustre modules are no supported by Novell. To use Lustre
+              on this system, you should put
+
+     allow_unsupported_modules 1
+
+     into /etc/modprobe.d/unsupported_modules"
+fi
+
 %postun modules
 if [ -f /boot/System.map-%{kversion} ]; then
 	depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
