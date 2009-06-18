@@ -964,7 +964,7 @@ static const int osd_dto_credits_quota[DTO_NR] = {
         [DTO_INDEX_DELETE]  = 20,
         /**
          * Unused now.
-         */ 
+         */
         [DTO_IDNEX_UPDATE]  = 16,
         /*
          * Create a object. Same as create object in EXT3 filesystem.
@@ -980,7 +980,7 @@ static const int osd_dto_credits_quota[DTO_NR] = {
          * INDEX_EXTRA_BLOCKS(8) +
          * 3(inode bits, groups, GDT) +
          * QUOTA(?)
-         */ 
+         */
         [DTO_OBJECT_DELETE] = 27,
         /**
          * Attr set credits.
@@ -1771,6 +1771,15 @@ static int osd_ea_fid_get(const struct lu_env *env, struct dentry *dentry,
 
         rc = inode->i_op->getxattr(dentry, XATTR_NAME_LMA, (void *)mdt_attrs,
                                    sizeof *mdt_attrs);
+
+        /* Check LMA compatibility */
+        if (rc > 0 &&
+            (mdt_attrs->lma_incompat & ~cpu_to_be32(LMA_INCOMPAT_SUPP))) {
+                CWARN("Inode %lx: Unsupported incompat LMA feature(s) %#x\n",
+                      inode->i_ino, be32_to_cpu(mdt_attrs->lma_incompat) &
+                      ~LMA_INCOMPAT_SUPP);
+                return -ENOSYS;
+        }
 
         if (rc > 0) {
                 fid_be_to_cpu(fid, &mdt_attrs->lma_self_fid);

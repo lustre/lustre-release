@@ -253,10 +253,38 @@ static inline int range_is_exhausted(const struct lu_seq_range *range)
  * @{ */
 
 /**
+ * Flags for lustre_mdt_attrs::lma_compat and lustre_mdt_attrs::lma_incompat.
+ */
+enum lma_compat {
+        LMAC_HSM = 0x00000001,
+        LMAC_SOM = 0x00000002,
+};
+
+/**
+ * Masks for all features that should be supported by a Lustre version to
+ * access a specific file.
+ * This information is stored in lustre_mdt_attrs::lma_incompat.
+ *
+ * NOTE: No incompat feature should be added before bug #17670 is landed.
+ */
+#define LMA_INCOMPAT_SUPP 0x0
+
+/**
  * Following struct for MDT attributes, that will be kept inode's EA.
  * Introduced in 2.0 release (please see b15993, for details)
  */
 struct lustre_mdt_attrs {
+        /**
+         * Bitfield for supported data in this structure. From enum lma_compat.
+         * lma_self_fid and lma_flags are always available.
+         */
+        __u32   lma_compat;
+	/**
+         * Per-file incompat feature list. Lustre version should support all
+         * flags set in this field. The supported feature mask is available in
+         * LMA_INCOMPAT_SUPP.
+         */
+        __u32   lma_incompat;
         /** FID of this inode */
         struct lu_fid  lma_self_fid;
         /** SOM state, mdt/ost type, others */
