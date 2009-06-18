@@ -1451,13 +1451,9 @@ int __init gss_init_svc_upcall(void)
 
 void __exit gss_exit_svc_upcall(void)
 {
-        int rc;
-
         cache_purge(&rsi_cache);
-        if ((rc = cache_unregister(&rsi_cache)))
-                CERROR("unregister rsi cache: %d\n", rc);
+        cache_unregister(&rsi_cache);
 
         cache_purge(&rsc_cache);
-        if ((rc = cache_unregister(&rsc_cache)))
-                CERROR("unregister rsc cache: %d\n", rc);
+        cache_unregister(&rsc_cache);
 }
