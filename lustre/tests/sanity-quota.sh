@@ -63,6 +63,11 @@ QUOTALOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 DIR=${DIR:-$MOUNT}
 DIR2=${DIR2:-$MOUNT2}
 
+if [ ! -z "$(mounted_lustre_filesystems)" ]; then
+        log "set debug level as $PTLDEBUG"
+        do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=$PTLDEBUG"
+fi
+
 check_and_setup_lustre
 
 if [ x"$(som_check)" = x"enabled" ]; then
@@ -85,9 +90,6 @@ cycle=30
 [ "$SLOW" = "no" ] && cycle=10
 
 build_test_filter
-
-eval ONLY_0=true
-eval ONLY_99=true
 
 # set_blk_tunables(btune_sz)
 set_blk_tunesz() {
@@ -262,20 +264,16 @@ quota_show_check() {
 }
 
 # set quota
-test_0() {
+quota_init() {
 	$LFS quotaoff -ug $DIR
 	$LFS quotacheck -ug $DIR
 
  	resetquota -u $TSTUSR
  	resetquota -g $TSTUSR
 
-	lctl set_param debug="+quota"
-	do_facet $SINGLEMDS "lctl set_param debug=+quota"
-	for num in `seq $OSTCOUNT`; do
-	    do_facet ost$num "lctl set_param debug=+quota"
-	done
+        do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=+quota"
 }
-run_test_with_stat 0 "Set quota ============================="
+quota_init
 
 # test for specific quota limitation, qunit, qtune $1=block_quota_limit
 test_1_sub() {
@@ -1251,7 +1249,7 @@ test_14a() {	# was test_14 b=12223 -- setting quota on root
         # reboot the lustre
         sync; sleep 5; sync
         cleanup_and_setup_lustre
-        test_0
+        quota_init
 
 	mkdir -p $DIR/$tdir
 
@@ -2053,15 +2051,12 @@ test_27() {
 run_test_with_stat 27 "lfs quota/setquota should handle wrong arguments (19612) ================="
 
 # turn off quota
-test_99()
+quota_fini()
 {
 	$LFS quotaoff $DIR
-	lctl set_param debug="-quota"
-
-	return 0
+        do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=+quota"
 }
-run_test_with_stat 99 "Quota off ==============================="
-
+quota_fini
 
 log "cleanup: ======================================================"
 cd $ORIG_PWD
