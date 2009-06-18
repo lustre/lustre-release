@@ -544,9 +544,9 @@ void
 kptllnd_rx_parse(kptl_rx_t *rx)
 {
         kptl_msg_t             *msg = rx->rx_msg;
+        int                     rc = 0;
         int                     post_credit = PTLLND_POSTRX_PEER_CREDIT;
         kptl_peer_t            *peer;
-        int                     rc;
         unsigned long           flags;
         lnet_process_id_t       srcid;
 
@@ -677,6 +677,7 @@ kptllnd_rx_parse(kptl_rx_t *rx)
 
                 CERROR("%s: buffer overrun [%d/%d+%d]\n",
                        libcfs_id2str(peer->peer_id), c, sc, oc);
+                rc = -EPROTO;
                 goto failed;
         }
         peer->peer_sent_credits--;
@@ -752,9 +753,10 @@ kptllnd_rx_parse(kptl_rx_t *rx)
                 if (rc >= 0)                    /* kptllnd_recv owns 'rx' now */
                         return;
                 goto failed;
-         }
+        }
 
  failed:
+        LASSERT (rc != 0);
         kptllnd_peer_close(peer, rc);
         if (rx->rx_peer == NULL)                /* drop ref on peer */
                 kptllnd_peer_decref(peer);      /* unless rx_done will */
