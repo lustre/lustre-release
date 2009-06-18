@@ -2436,6 +2436,7 @@ cleanup:
                         fed->fed_lcd = NULL;
                 }
                 class_disconnect(exp);
+                lprocfs_exp_cleanup(exp);
         } else {
                 class_export_put(exp);
         }
