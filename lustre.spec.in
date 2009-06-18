@@ -246,7 +246,7 @@ if sysctl kernel.unsupported >/dev/null 2>&1 &&
    [ "$(sysctl -n kernel.unsupported 2>/dev/null)" = "0" ] &&
     ! modprobe -c | grep -q "^allow_unsupported_modules[ \t]1" ; then
      echo "
-     warning: the Lustre modules are no supported by Novell. To use Lustre
+     warning: the Lustre modules are not supported by Novell. To use Lustre
               on this system, you should put
 
      allow_unsupported_modules 1
