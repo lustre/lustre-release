@@ -5764,6 +5764,8 @@ function roc_hit() {
 }
 
 test_151() {
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+
 	local list=$(comma_list $(osts_nodes))
 	if ! do_nodes $list grep -q truncate_inode_pages_range /proc/kallsyms; then  #b=18718
 		skip "old RHEL4/SLES9 kernel" && return
