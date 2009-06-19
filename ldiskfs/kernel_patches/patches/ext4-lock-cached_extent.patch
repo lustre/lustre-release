@@ -1,0 +1,53 @@
+Index: linux-2.6.27.21-0.1/fs/ext4/extents.c
+===================================================================
+--- linux-2.6.27.21-0.1.orig/fs/ext4/extents.c	2009-06-19 15:50:57.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/extents.c	2009-06-19 15:56:32.000000000 +0530
+@@ -1736,11 +1736,13 @@
+ {
+ 	struct ext4_ext_cache *cex;
+ 	BUG_ON(len == 0);
++	spin_lock(&EXT4_I(inode)->i_block_reservation_lock);
+ 	cex = &EXT4_I(inode)->i_cached_extent;
+ 	cex->ec_type = type;
+ 	cex->ec_block = block;
+ 	cex->ec_len = len;
+ 	cex->ec_start = start;
++	spin_unlock(&EXT4_I(inode)->i_block_reservation_lock);
+ }
+ 
+ /*
+@@ -1797,12 +1799,17 @@
+ 			struct ext4_extent *ex)
+ {
+ 	struct ext4_ext_cache *cex;
++	int ret = EXT4_EXT_CACHE_NO;
+ 
++	/*
++	 * We borrow i_block_reservation_lock to protect i_cached_extent
++	 */
++	spin_lock(&EXT4_I(inode)->i_block_reservation_lock);
+ 	cex = &EXT4_I(inode)->i_cached_extent;
+ 
+ 	/* has cache valid data? */
+ 	if (cex->ec_type == EXT4_EXT_CACHE_NO)
+-		return EXT4_EXT_CACHE_NO;
++		goto errout;
+ 
+ 	BUG_ON(cex->ec_type != EXT4_EXT_CACHE_GAP &&
+ 			cex->ec_type != EXT4_EXT_CACHE_EXTENT);
+@@ -1813,11 +1820,12 @@
+ 		ext_debug("%u cached by %u:%u:%llu\n",
+ 				block,
+ 				cex->ec_block, cex->ec_len, cex->ec_start);
+-		return cex->ec_type;
++		ret = cex->ec_type;
+ 	}
+ 
+-	/* not in cache */
+-	return EXT4_EXT_CACHE_NO;
++errout:
++	spin_unlock(&EXT4_I(inode)->i_block_reservation_lock);
++	return ret;
+ }
+ 
+ /*
