@@ -263,6 +263,10 @@ int loop_setup(struct mkfs_opts *mop)
                         snprintf(cmd, cmdsz, "losetup %s %s", l_device,
                                  mop->mo_device);
                         ret = run_command(cmd, cmdsz);
+                        if (ret == 256)
+                                /* someone else picked up this loop device
+                                 * behind our back */
+                                continue;
                         if (ret) {
                                 fprintf(stderr, "%s: error %d on losetup: %s\n",
                                         progname, ret, strerror(ret));
