@@ -272,7 +272,7 @@ static DUMP_TRACE_CONST struct stacktrace_ops print_trace_ops = {
 };
         /* dump_stack() */
         /* show_trace() */
-	printk("Pid: %d, comm: %.20s\n", current->pid, current->comm);
+	printk("Pid: %d, comm: %.20s\n", tsk->pid, tsk->comm);
         /* show_trace_log_lvl() */
 	printk("\nCall Trace:\n");
 	dump_trace(tsk, NULL, NULL,
