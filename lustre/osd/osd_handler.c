@@ -1099,6 +1099,16 @@ static void osd_object_write_unlock(const struct lu_env *env,
         up_write(&obj->oo_sem);
 }
 
+static int osd_object_write_locked(const struct lu_env *env,
+                                   struct dt_object *dt)
+{
+        struct osd_object *obj = osd_dt_obj(dt);
+
+        LINVRNT(osd_invariant(obj));
+
+        return obj->oo_owner == env;
+}
+
 static int capa_is_sane(const struct lu_env *env,
                         struct osd_device *dev,
                         struct lustre_capa *capa,
@@ -2136,6 +2146,7 @@ static const struct dt_object_operations osd_obj_ops = {
         .do_write_lock   = osd_object_write_lock,
         .do_read_unlock  = osd_object_read_unlock,
         .do_write_unlock = osd_object_write_unlock,
+        .do_write_locked = osd_object_write_locked,
         .do_attr_get     = osd_attr_get,
         .do_attr_set     = osd_attr_set,
         .do_ah_init      = osd_ah_init,
@@ -2163,6 +2174,7 @@ static const struct dt_object_operations osd_obj_ea_ops = {
         .do_write_lock   = osd_object_write_lock,
         .do_read_unlock  = osd_object_read_unlock,
         .do_write_unlock = osd_object_write_unlock,
+        .do_write_locked = osd_object_write_locked,
         .do_attr_get     = osd_attr_get,
         .do_attr_set     = osd_attr_set,
         .do_ah_init      = osd_ah_init,

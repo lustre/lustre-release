@@ -257,6 +257,8 @@ struct dt_object_operations {
                                 struct dt_object *dt);
         void  (*do_write_unlock)(const struct lu_env *env,
                                  struct dt_object *dt);
+        int  (*do_write_locked)(const struct lu_env *env,
+                                struct dt_object *dt);
         /**
          * Note: following ->do_{x,}attr_{set,get}() operations are very
          * similar to ->moo_{x,}attr_{set,get}() operations in struct

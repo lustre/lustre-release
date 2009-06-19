@@ -1595,12 +1595,13 @@ extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 #define MAY_RGETFACL    (1 << 14)
 
 enum {
-        MDS_CHECK_SPLIT  = 1 << 0,
-        MDS_CROSS_REF    = 1 << 1,
-        MDS_VTX_BYPASS   = 1 << 2,
-        MDS_PERM_BYPASS  = 1 << 3,
-        MDS_SOM          = 1 << 4,
-        MDS_QUOTA_IGNORE = 1 << 5
+        MDS_CHECK_SPLIT   = 1 << 0,
+        MDS_CROSS_REF     = 1 << 1,
+        MDS_VTX_BYPASS    = 1 << 2,
+        MDS_PERM_BYPASS   = 1 << 3,
+        MDS_SOM           = 1 << 4,
+        MDS_QUOTA_IGNORE  = 1 << 5,
+        MDS_CLOSE_CLEANUP = 1 << 6
 };
 
 struct mds_rec_create {

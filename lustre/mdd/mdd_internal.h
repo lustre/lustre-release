@@ -270,6 +270,7 @@ void mdd_read_lock(const struct lu_env *env, struct mdd_object *obj,
                    enum mdd_object_role role);
 void mdd_write_unlock(const struct lu_env *env, struct mdd_object *obj);
 void mdd_read_unlock(const struct lu_env *env, struct mdd_object *obj);
+int mdd_write_locked(const struct lu_env *env, struct mdd_object *obj);
 
 void mdd_pdlock_init(struct mdd_object *obj);
 unsigned long mdd_name2hash(const char *name);

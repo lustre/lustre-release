@@ -1846,6 +1846,7 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
                      struct md_attr *ma)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
+        struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle    *handle;
         int rc;
         int reset = 1;
@@ -1869,27 +1870,53 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
         /* release open count */
         mdd_obj->mod_count --;
 
-        if (mdd_obj->mod_count == 0) {
+        if (mdd_obj->mod_count == 0 && mdd_obj->mod_flags & ORPHAN_OBJ) {
                 /* remove link to object from orphan index */
-                if (mdd_obj->mod_flags & ORPHAN_OBJ)
-                        __mdd_orphan_del(env, mdd_obj, handle);
-        }
-
-        rc = mdd_iattr_get(env, mdd_obj, ma);
-        if (rc == 0) {
-                if (mdd_obj->mod_count == 0 && ma->ma_attr.la_nlink == 0) {
-                        rc = mdd_object_kill(env, mdd_obj, ma);
-#ifdef HAVE_QUOTA_SUPPORT
-                        if (mds->mds_quota) {
-                                quota_opc = FSFILT_OP_UNLINK_PARTIAL_CHILD;
-                                mdd_quota_wrapper(&ma->ma_attr, qids);
-                        }
-#endif
-                        if (rc == 0)
-                                reset = 0;
+                rc = __mdd_orphan_del(env, mdd_obj, handle);
+                if (rc == 0) {
+                        CDEBUG(D_HA, "Object "DFID" is deleted from orphan "
+                               "list, OSS objects to be destroyed.\n",
+                               PFID(mdd_object_fid(mdd_obj)));
+                } else {
+                        CERROR("Object "DFID" can not be deleted from orphan "
+                                "list, maybe cause OST objects can not be "
+                                "destroyed (err: %d).\n",
+                                PFID(mdd_object_fid(mdd_obj)), rc);
+                        /* If object was not deleted from orphan list, do not
+                         * destroy OSS objects, which will be done when next
+                         * recovery. */
+                        GOTO(out, rc);
                 }
         }
 
+        rc = mdd_iattr_get(env, mdd_obj, ma);
+        /* Object maybe not in orphan list originally, it is rare case for
+         * mdd_finish_unlink() failure. */
+        if (rc == 0 && ma->ma_attr.la_nlink == 0) {
+#ifdef HAVE_QUOTA_SUPPORT
+                if (mds->mds_quota) {
+                        quota_opc = FSFILT_OP_UNLINK_PARTIAL_CHILD;
+                        mdd_quota_wrapper(&ma->ma_attr, qids);
+                }
+#endif
+                /* MDS_CLOSE_CLEANUP means destroy OSS objects by MDS. */
+                if (ma->ma_valid & MA_FLAGS &&
+                    ma->ma_attr_flags & MDS_CLOSE_CLEANUP) {
+                        rc = mdd_lov_destroy(env, mdd, mdd_obj, &ma->ma_attr);
+                } else {
+                        rc = mdd_object_kill(env, mdd_obj, ma);
+                                if (rc == 0)
+                                        reset = 0;
+                }
+
+                if (rc != 0)
+                        CERROR("Error when prepare to delete Object "DFID" , "
+                               "which will cause OST objects can not be "
+                               "destroyed.\n",  PFID(mdd_object_fid(mdd_obj)));
+        }
+        EXIT;
+
+out:
         if (reset)
                 ma->ma_valid &= ~(MA_LOV | MA_COOKIE);
 
@@ -1902,7 +1929,7 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
                 lquota_adjust(mds_quota_interface_ref, obd, qids, 0, rc,
                               quota_opc);
 #endif
-        RETURN(rc);
+        return rc;
 }
 
 /*

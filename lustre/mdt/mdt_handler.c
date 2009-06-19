@@ -5147,10 +5147,11 @@ static int mdt_mfd_cleanup(struct obd_export *exp)
                 int cookie_size;
 
                 lmm_size = mdt->mdt_max_mdsize;
-                cookie_size = mdt->mdt_max_cookiesize;
                 OBD_ALLOC(ma->ma_lmm, lmm_size);
                 if (ma->ma_lmm == NULL)
                         GOTO(out_lmm, rc = -ENOMEM);
+
+                cookie_size = mdt->mdt_max_cookiesize;
                 OBD_ALLOC(ma->ma_cookie, cookie_size);
                 if (ma->ma_cookie == NULL)
                         GOTO(out_cookie, rc = -ENOMEM);
@@ -5158,13 +5159,14 @@ static int mdt_mfd_cleanup(struct obd_export *exp)
                 /* Close any open files (which may also cause orphan unlinking). */
                 list_for_each_entry_safe(mfd, n, &closing_list, mfd_list) {
                         list_del_init(&mfd->mfd_list);
-                        /* TODO: if we close the unlinked file,
-                         * we need to remove its objects from OST */
                         memset(&ma->ma_attr, 0, sizeof(ma->ma_attr));
                         ma->ma_lmm_size = lmm_size;
                         ma->ma_cookie_size = cookie_size;
-                        ma->ma_need = MA_LOV | MA_COOKIE;
-                        ma->ma_valid = 0;
+                        ma->ma_need = 0;
+                        /* It is not for setattr, just tell MDD to send
+                         * DESTROY RPC to OSS if needed */
+                        ma->ma_attr_flags = MDS_CLOSE_CLEANUP;
+                        ma->ma_valid = MA_FLAGS;
                         mdt_mfd_close(info, mfd);
                 }
                 info->mti_mdt = NULL;

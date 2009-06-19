@@ -766,23 +766,27 @@ int mdd_finish_unlink(const struct lu_env *env,
         int reset = 1;
         ENTRY;
 
+        LASSERT(mdd_write_locked(env, obj) != 0);
+
         rc = mdd_iattr_get(env, obj, ma);
         if (rc == 0 && ma->ma_attr.la_nlink == 0) {
+                obj->mod_flags |= DEAD_OBJ;
                 /* add new orphan and the object
                  * will be deleted during mdd_close() */
                 if (obj->mod_count) {
                         rc = __mdd_orphan_add(env, obj, th);
-                        if (rc == 0) {
-                                obj->mod_flags |= ORPHAN_OBJ;
-                                CDEBUG(D_HA, "Object "DFID" is going to be "
-                                        "an orphan, open count = %d\n",
+                        if (rc == 0)
+                                CDEBUG(D_HA, "Object "DFID" is inserted into "
+                                        "orphan list, open count = %d\n",
                                         PFID(mdd_object_fid(obj)),
                                         obj->mod_count);
-                        }
-                }
-
-                obj->mod_flags |= DEAD_OBJ;
-                if (!(obj->mod_flags & ORPHAN_OBJ)) {
+                        else
+                                CERROR("Object "DFID" fail to be an orphan, "
+                                       "open count = %d, maybe cause failed "
+                                       "open replay\n",
+                                        PFID(mdd_object_fid(obj)),
+                                        obj->mod_count);
+                } else {
                         rc = mdd_object_kill(env, obj, ma);
                         if (rc == 0)
                                 reset = 0;
