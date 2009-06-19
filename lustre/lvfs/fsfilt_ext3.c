@@ -174,7 +174,7 @@ static char *fsfilt_ext3_uuid(struct super_block *sb)
 
 static __u64 get_i_version(struct inode *inode)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)) && defined(HAVE_EXT4_LDISKFS)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)) && !defined(USE_I_FS_VERSION)
         return inode->i_version;
 #else
         return EXT3_I(inode)->i_fs_version;
@@ -183,7 +183,7 @@ static __u64 get_i_version(struct inode *inode)
 
 static void set_i_version(struct inode *inode, __u64 new_version)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)) && defined(HAVE_EXT4_LDISKFS)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)) && !defined(USE_I_FS_VERSION)
         inode->i_version = new_version;
 #else
         (EXT3_I(inode))->i_fs_version = new_version;
