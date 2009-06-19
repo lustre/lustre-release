@@ -162,8 +162,8 @@ ptlrpc_grow_req_bufs(struct ptlrpc_service *svc)
 }
 
 void
-ptlrpc_save_lock (struct ptlrpc_request *req,
-                  struct lustre_handle *lock, int mode)
+ptlrpc_save_lock(struct ptlrpc_request *req,
+                 struct lustre_handle *lock, int mode)
 {
         struct ptlrpc_reply_state *rs = req->rq_reply_state;
         int                        idx;
@@ -171,10 +171,14 @@ ptlrpc_save_lock (struct ptlrpc_request *req,
         LASSERT(rs != NULL);
         LASSERT(rs->rs_nlocks < RS_MAX_LOCKS);
 
-        idx = rs->rs_nlocks++;
-        rs->rs_locks[idx] = *lock;
-        rs->rs_modes[idx] = mode;
-        rs->rs_difficult = 1;
+        if (req->rq_export->exp_disconnected) {
+                ldlm_lock_decref(lock, mode);
+        } else {
+                idx = rs->rs_nlocks++;
+                rs->rs_locks[idx] = *lock;
+                rs->rs_modes[idx] = mode;
+                rs->rs_difficult = 1;
+        }
 }
 
 void

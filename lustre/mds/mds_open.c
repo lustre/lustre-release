@@ -297,12 +297,18 @@ static struct mds_file_data *mds_dentry_open(struct dentry *dentry,
         mfd->mfd_mode = flags;
         mfd->mfd_dentry = dentry;
         mfd->mfd_xid = req->rq_xid;
-
-        spin_lock(&med->med_open_lock);
-        list_add(&mfd->mfd_list, &med->med_open_head);
-        spin_unlock(&med->med_open_lock);
-
         body->handle.cookie = mfd->mfd_handle.h_cookie;
+
+        if (req->rq_export->exp_disconnected) {
+                mds_mfd_unlink(mfd, 0);
+                MDS_DOWN_WRITE_ORPHAN_SEM(dentry->d_inode);
+                mds_mfd_close(NULL, REQ_REC_OFF, req->rq_export->exp_obd,
+                              mfd, 0, NULL, 0, NULL, 0, NULL);
+        } else {
+                spin_lock(&med->med_open_lock);
+                list_add(&mfd->mfd_list, &med->med_open_head);
+                spin_unlock(&med->med_open_lock);
+        }
 
         RETURN(mfd);
 
