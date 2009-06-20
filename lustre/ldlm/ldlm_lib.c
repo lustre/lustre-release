@@ -1152,6 +1152,8 @@ static void target_send_delayed_replies(struct obd_device *obd)
 
 static void target_finish_recovery(struct obd_device *obd)
 {
+        OBD_RACE(OBD_FAIL_TGT_REPLAY_DELAY);
+
         ldlm_reprocess_all_ns(obd->obd_namespace);
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (list_empty(&obd->obd_recovery_queue)) {
@@ -1737,8 +1739,6 @@ int target_queue_last_replay_reply(struct ptlrpc_request *req, int rc)
                 obd->obd_abort_recovery = 0;
                 target_cancel_recovery_timer(obd);
                 spin_unlock_bh(&obd->obd_processing_task_lock);
-
-                OBD_RACE(OBD_FAIL_TGT_REPLAY_DELAY);
 
                 if (!delayed_done)
                         target_finish_recovery(obd);
