@@ -675,7 +675,7 @@ static const struct lu_object_operations lov_lu_obj_ops = {
 };
 
 struct lu_object *lov_object_alloc(const struct lu_env *env,
-                                   const struct lu_object_header *_,
+                                   const struct lu_object_header *unused,
                                    struct lu_device *dev)
 {
         struct lov_object *lov;

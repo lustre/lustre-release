@@ -65,7 +65,7 @@ static const struct cl_page_operations lovsub_page_ops = {
 
 struct cl_page *lovsub_page_init(const struct lu_env *env,
                                  struct cl_object *obj,
-                                 struct cl_page *page, cfs_page_t *_)
+                                 struct cl_page *page, cfs_page_t *unused)
 {
         struct lovsub_page *lsb;
         int result;

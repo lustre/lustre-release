@@ -188,7 +188,7 @@ static void osc_page_transfer_add(const struct lu_env *env,
 
 static int osc_page_cache_add(const struct lu_env *env,
                               const struct cl_page_slice *slice,
-                              struct cl_io *_)
+                              struct cl_io *unused)
 {
         struct osc_page   *opg = cl2osc_page(slice);
         struct osc_object *obj = cl2osc(opg->ops_cl.cpl_obj);
@@ -229,7 +229,7 @@ void osc_index2policy(ldlm_policy_data_t *policy, const struct cl_object *obj,
 
 static int osc_page_is_under_lock(const struct lu_env *env,
                                   const struct cl_page_slice *slice,
-                                  struct cl_io *_)
+                                  struct cl_io *unused)
 {
         struct cl_lock *lock;
         int             result;
@@ -246,7 +246,8 @@ static int osc_page_is_under_lock(const struct lu_env *env,
 }
 
 static int osc_page_fail(const struct lu_env *env,
-                         const struct cl_page_slice *slice, struct cl_io *_)
+                         const struct cl_page_slice *slice,
+                         struct cl_io *unused)
 {
         /*
          * Cached read?

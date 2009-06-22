@@ -4830,7 +4830,7 @@ static struct lu_object *mdt_object_alloc(const struct lu_env *env,
 }
 
 static int mdt_object_init(const struct lu_env *env, struct lu_object *o,
-                           const struct lu_object_conf *_)
+                           const struct lu_object_conf *unused)
 {
         struct mdt_device *d = mdt_dev(o->lo_dev);
         struct lu_device  *under;

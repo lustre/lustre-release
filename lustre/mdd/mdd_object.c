@@ -265,7 +265,7 @@ struct lu_object *mdd_object_alloc(const struct lu_env *env,
 }
 
 static int mdd_object_init(const struct lu_env *env, struct lu_object *o,
-                           const struct lu_object_conf *_)
+                           const struct lu_object_conf *unused)
 {
         struct mdd_device *d = lu2mdd_dev(o->lo_dev);
         struct mdd_object *mdd_obj = lu2mdd_obj(o);

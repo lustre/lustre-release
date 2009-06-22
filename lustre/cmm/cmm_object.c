@@ -160,7 +160,7 @@ static void cml_object_free(const struct lu_env *env,
 }
 
 static int cml_object_init(const struct lu_env *env, struct lu_object *lo,
-                           const struct lu_object_conf *_)
+                           const struct lu_object_conf *unused)
 {
         struct cmm_device *cd = lu2cmm_dev(lo->lo_dev);
         struct lu_device  *c_dev;
@@ -822,7 +822,7 @@ static void cmr_object_free(const struct lu_env *env,
 }
 
 static int cmr_object_init(const struct lu_env *env, struct lu_object *lo,
-                           const struct lu_object_conf *_)
+                           const struct lu_object_conf *unused)
 {
         struct cmm_device *cd = lu2cmm_dev(lo->lo_dev);
         struct lu_device  *c_dev;

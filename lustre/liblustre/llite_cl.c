@@ -405,7 +405,7 @@ static const struct cl_page_operations slp_transient_page_ops = {
 
 static int slp_lock_enqueue(const struct lu_env *env,
                            const struct cl_lock_slice *slice,
-                           struct cl_io *_, __u32 enqflags)
+                           struct cl_io *unused, __u32 enqflags)
 {
         CLOBINVRNT(env, slice->cls_obj, ccc_object_invariant(slice->cls_obj));
 

@@ -1086,7 +1086,7 @@ out_unlock:
         return;
 }
 
-int ll_writepage(struct page *vmpage, struct writeback_control *_)
+int ll_writepage(struct page *vmpage, struct writeback_control *unused)
 {
         struct inode           *inode = vmpage->mapping->host;
         struct lu_env          *env;

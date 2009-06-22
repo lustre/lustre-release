@@ -337,7 +337,7 @@ void ccc_global_fini(struct lu_device_type *device_type)
  */
 
 struct lu_object *ccc_object_alloc(const struct lu_env *env,
-                                   const struct lu_object_header *_,
+                                   const struct lu_object_header *unused,
                                    struct lu_device *dev,
                                    const struct cl_object_operations *clops,
                                    const struct lu_object_operations *luops)
@@ -405,7 +405,7 @@ void ccc_object_free(const struct lu_env *env, struct lu_object *obj)
 
 int ccc_lock_init(const struct lu_env *env,
                   struct cl_object *obj, struct cl_lock *lock,
-                  const struct cl_io *_,
+                  const struct cl_io *unused,
                   const struct cl_lock_operations *lkops)
 {
         struct ccc_lock *clk;
@@ -505,35 +505,35 @@ void ccc_transient_page_verify(const struct cl_page *page)
 
 void ccc_transient_page_own(const struct lu_env *env,
                                    const struct cl_page_slice *slice,
-                                   struct cl_io *_)
+                                   struct cl_io *unused)
 {
         ccc_transient_page_verify(slice->cpl_page);
 }
 
 void ccc_transient_page_assume(const struct lu_env *env,
                                       const struct cl_page_slice *slice,
-                                      struct cl_io *_)
+                                      struct cl_io *unused)
 {
         ccc_transient_page_verify(slice->cpl_page);
 }
 
 void ccc_transient_page_unassume(const struct lu_env *env,
                                         const struct cl_page_slice *slice,
-                                        struct cl_io *_)
+                                        struct cl_io *unused)
 {
         ccc_transient_page_verify(slice->cpl_page);
 }
 
 void ccc_transient_page_disown(const struct lu_env *env,
                                       const struct cl_page_slice *slice,
-                                      struct cl_io *_)
+                                      struct cl_io *unused)
 {
         ccc_transient_page_verify(slice->cpl_page);
 }
 
 void ccc_transient_page_discard(const struct lu_env *env,
                                        const struct cl_page_slice *slice,
-                                       struct cl_io *_)
+                                       struct cl_io *unused)
 {
         struct cl_page *page = slice->cpl_page;
 
@@ -547,7 +547,7 @@ void ccc_transient_page_discard(const struct lu_env *env,
 
 int ccc_transient_page_prep(const struct lu_env *env,
                                    const struct cl_page_slice *slice,
-                                   struct cl_io *_)
+                                   struct cl_io *unused)
 {
         ENTRY;
         /* transient page should always be sent. */
@@ -574,7 +574,7 @@ void ccc_lock_fini(const struct lu_env *env, struct cl_lock_slice *slice)
 
 int ccc_lock_enqueue(const struct lu_env *env,
                      const struct cl_lock_slice *slice,
-                     struct cl_io *_, __u32 enqflags)
+                     struct cl_io *unused, __u32 enqflags)
 {
         CLOBINVRNT(env, slice->cls_obj, ccc_object_invariant(slice->cls_obj));
         return 0;
