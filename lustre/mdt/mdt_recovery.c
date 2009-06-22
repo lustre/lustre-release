@@ -1013,12 +1013,11 @@ static void mdt_steal_ack_locks(struct ptlrpc_request *req)
                 if (oldrep->rs_xid != req->rq_xid)
                         continue;
 
-                if (lustre_msg_get_opc(oldrep->rs_msg) !=
-                    lustre_msg_get_opc(req->rq_reqmsg))
+                if (oldrep->rs_opc != lustre_msg_get_opc(req->rq_reqmsg))
                         CERROR ("Resent req xid "LPU64" has mismatched opc: "
                                 "new %d old %d\n", req->rq_xid,
                                 lustre_msg_get_opc(req->rq_reqmsg),
-                                lustre_msg_get_opc(oldrep->rs_msg));
+                                oldrep->rs_opc);
 
                 svc = oldrep->rs_service;
                 spin_lock (&svc->srv_lock);
@@ -1028,8 +1027,7 @@ static void mdt_steal_ack_locks(struct ptlrpc_request *req)
                 CWARN("Stealing %d locks from rs %p x"LPD64".t"LPD64
                       " o%d NID %s\n",
                       oldrep->rs_nlocks, oldrep,
-                      oldrep->rs_xid, oldrep->rs_transno,
-                      lustre_msg_get_opc(oldrep->rs_msg),
+                      oldrep->rs_xid, oldrep->rs_transno, oldrep->rs_opc,
                       libcfs_nid2str(exp->exp_connection->c_peer.nid));
 
                 for (i = 0; i < oldrep->rs_nlocks; i++)

@@ -1684,8 +1684,7 @@ ptlrpc_handle_rs (struct ptlrpc_reply_state *rs)
                 CWARN("All locks stolen from rs %p x"LPD64".t"LPD64
                       " o%d NID %s\n",
                       rs,
-                      rs->rs_xid, rs->rs_transno,
-                      lustre_msg_get_opc(rs->rs_msg),
+                      rs->rs_xid, rs->rs_transno, rs->rs_opc,
                       libcfs_nid2str(exp->exp_connection->c_peer.nid));
         }
 

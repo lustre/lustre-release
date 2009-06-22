@@ -272,6 +272,7 @@ struct ptlrpc_reply_state {
         unsigned long          rs_prealloc:1; /* rs from prealloc list */
 
         int                    rs_size;
+        __u32                  rs_opc;
         __u64                  rs_transno;
         __u64                  rs_xid;
         struct obd_export     *rs_export;
