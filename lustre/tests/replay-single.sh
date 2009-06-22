@@ -492,6 +492,10 @@ test_20b() { # bug 10480
             [ ${con} -eq 1 ] && break
             sleep 1
     done
+
+    # let the statfs cache to get old enough.
+    sleep 1
+
     AFTERUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
     log "before $BEFOREUSED, after $AFTERUSED"
     [ $AFTERUSED -gt $((BEFOREUSED + 20)) ] && \
