@@ -2326,7 +2326,7 @@ test_51bb() {
 		echo "mds $i: inodes count OLD ${OLDUSED[$i]} NEW ${NEWUSED[$i]}"
 		[ ${OLDUSED[$i]} -lt ${NEWUSED[$i]} ] || rc=$((rc + 1))
 	done
-	
+
 	lctl set_param -n lmv.*.placement=$savePOLICY
 
 	[ $rc -ne $MDSCOUNT ] || \
@@ -2800,7 +2800,7 @@ test_57b() {
 	mkdir -p $dir || error "creating $dir"
 	local num=$(get_mds_dir $dir)
 	local mymds=mds$num
-	
+
 	echo "mcreating $FILECOUNT files"
 	createmany -m $dir/f 1 $FILECOUNT || \
 		error "creating files in $dir"
@@ -3743,7 +3743,7 @@ test_99a() {
 	chown $RUNAS_ID $DIR/d99cvsroot
 	local oldPWD=$PWD	# bug 13584, use $TMP as working dir
 	cd $TMP
-	
+
 	$RUNAS cvs -d $DIR/d99cvsroot init || error
 	cd $oldPWD
 }
@@ -3966,7 +3966,7 @@ test_101d() {
     local ra_MB=${READAHEAD_MB:-40}
 
     local space=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
-    [ $space -gt $((size / 1024)) ] || 
+    [ $space -gt $((size / 1024)) ] ||
         { skip "Need free space ${size}M, have $space" && return; }
 
     echo Creating ${size}M test file $file
@@ -4100,9 +4100,9 @@ test_102b() {
 	local testfile2=${testfile}2
 	local value=`getfattr -n trusted.lov $testfile 2> /dev/null | \
 		     grep "trusted.lov" |sed -e 's/[^=]\+=//'`
-	
+
 	$MCREATE $testfile2
-	setfattr -n trusted.lov -v $value $testfile2 	
+	setfattr -n trusted.lov -v $value $testfile2
 	local tmp_file=${testfile}3
 	$GETSTRIPE -v $testfile2 > $tmp_file
 	local stripe_size=`grep "size"  $tmp_file| awk '{print $2}'`
@@ -4127,9 +4127,9 @@ test_102c() {
 	local testfile2=${testfile}2
 	local value=`getfattr -n lustre.lov $testfile 2> /dev/null | \
 		     grep "lustre.lov" |sed -e 's/[^=]\+=//'  `
-	
+
 	$RUNAS $MCREATE $testfile2
-	$RUNAS setfattr -n lustre.lov -v $value $testfile2 	
+	$RUNAS setfattr -n lustre.lov -v $value $testfile2
 	local tmp_file=${testfile}3
 	$RUNAS $GETSTRIPE -v $testfile2 > $tmp_file
 	local stripe_size=`grep "size"  $tmp_file| awk '{print $2}'`
@@ -4350,7 +4350,7 @@ test_104() {
 	lfs df -i $DIR || error "lfs df -i $DIR failed"
 	lfs df $DIR/$tfile || error "lfs df $DIR/$tfile failed"
 	lfs df -ih $DIR/$tfile || error "lfs df -ih $DIR/$tfile failed"
-	
+
 	OSC=`lctl get_param -n devices | awk '/-osc-/ {print $4}' | head -n 1`
 	lctl --device %$OSC deactivate
 	lfs df || error "lfs df with deactivated OSC failed"
@@ -4628,7 +4628,7 @@ reset_async() {
 test_118a() #bug 11710
 {
 	reset_async
-	
+
  	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
 	DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
         WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache | grep -c writeback)
@@ -4672,7 +4672,7 @@ test_118b()
 	# until a subsequent RPC completes successfully without error.
 	multiop $DIR/$tfile Ow4096yc
 	rm -f $DIR/$tfile
-	
+
 	return 0
 }
 run_test 118b "Reclaim dirty pages on fatal error =========="
@@ -4714,7 +4714,7 @@ test_118c()
 	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
 	fi
-	
+
 	rm -f $DIR/$tfile
 	echo "Dirty pages flushed via fsync on EROFS"
 	return 0
@@ -4730,7 +4730,7 @@ test_118d()
 	#define OBD_FAIL_OST_BRW_PAUSE_BULK
 	set_nodes_failloc "$(osts_nodes)" 0x214
 	# multiop should block due to fsync until pages are written
-	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &	
+	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &
 	MULTIPID=$!
 	sleep 1
 
@@ -4772,7 +4772,7 @@ test_118f() {
 	if [[ $RC -eq 0 ]]; then
 		error "Must return error due to dropped pages, rc=$RC"
 	fi
-	
+
         lctl set_param fail_loc=0x0
 
         LOCKED=$(lctl get_param -n llite.*.dump_page_cache | grep -c locked)
@@ -4804,7 +4804,7 @@ test_118g() {
 	# simulate local -ENOMEM
 	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
 	RC=$?
-	
+
 	lctl set_param fail_loc=0
 	if [[ $RC -eq 0 ]]; then
 		error "Must return error due to dropped pages, rc=$RC"
@@ -4817,7 +4817,7 @@ test_118g() {
 	if [[ $LOCKED -ne 0 ]]; then
 		error "Locked pages remain in cache, locked=$LOCKED"
 	fi
-	
+
 	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
 	fi
@@ -4840,7 +4840,7 @@ test_118h() {
 	# Should simulate ENOMEM error which is recoverable and should be handled by timeout
         multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
         RC=$?
-	
+
         set_nodes_failloc "$(osts_nodes)" 0
 	if [[ $RC -eq 0 ]]; then
 		error "Must return error due to dropped pages, rc=$RC"
@@ -4853,7 +4853,7 @@ test_118h() {
 	if [[ $LOCKED -ne 0 ]]; then
 		error "Locked pages remain in cache, locked=$LOCKED"
 	fi
-	
+
 	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
 	fi
@@ -4872,13 +4872,13 @@ test_118i() {
 
 	#define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
         set_nodes_failloc "$(osts_nodes)" 0x20e
-	
+
 	# Should simulate ENOMEM error which is recoverable and should be handled by timeout
         multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &
 	PID=$!
 	sleep 5
 	set_nodes_failloc "$(osts_nodes)" 0
-	
+
 	wait $PID
         RC=$?
 	if [[ $RC -ne 0 ]]; then
@@ -4891,7 +4891,7 @@ test_118i() {
 	if [[ $LOCKED -ne 0 ]]; then
 		error "Locked pages remain in cache, locked=$LOCKED"
 	fi
-	
+
 	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
 	fi
@@ -4925,7 +4925,7 @@ test_118j() {
 	if [[ $LOCKED -ne 0 ]]; then
 		error "Locked pages remain in cache, locked=$LOCKED"
 	fi
-	
+
 	# in recoverable error on OST we want resend and stay until it finished
 	if [[ $DIRTY -ne 0 || $WRITEBACK -ne 0 ]]; then
 		error "Dirty pages not flushed to disk, dirty=$DIRTY, writeback=$WRITEBACK"
@@ -5318,7 +5318,7 @@ run_test 123a "verify statahead work"
 test_123b () { # statahead(bug 15027)
 	mkdir -p $DIR/$tdir
 	createmany -o $DIR/$tdir/$tfile-%d 1000
-	
+
         cancel_lru_locks mdc
         cancel_lru_locks osc
 
@@ -5531,7 +5531,7 @@ test_127() { # bug 15521
                 echo "got $COUNT $NAME"
                 [ ! $MIN ] && error "Missing min value for $NAME proc entry"
                 eval $NAME=$COUNT || error "Wrong proc format"
-		
+
                 case $NAME in
                         read_bytes|write_bytes)
                         [ $MIN -lt 4096 ] && error "min is too small: $MIN"
@@ -6033,76 +6033,79 @@ test_150() {
 run_test 150 "truncate/append tests"
 
 function roc_access() {
-	ACCNUM=`$LCTL get_param -n obdfilter.*.stats | \
-		grep 'cache_access'| awk '{print $2}' | \
-		awk '{sum=sum+$3} END{print sum}'`
-	echo $ACCNUM
+        local list=$(comma_list $(osts_nodes))
+        ACCNUM=`do_nodes $list $LCTL get_param -n obdfilter.*.stats | \
+                grep 'cache_access'| awk '{print $2}' | \
+                awk '{sum=sum+$3} END{print sum}'`
+        echo $ACCNUM
 }
 
 function roc_hit() {
-	ACCNUM=`$LCTL get_param -n obdfilter.*.stats | \
-		grep 'cache_hit'|awk '{print $2}' | \
-		awk '{sum=sum+$1} END{print sum}'`
-	echo $ACCNUM
+        local list=$(comma_list $(osts_nodes))
+        ACCNUM=`do_nodes $list $LCTL get_param -n obdfilter.*.stats | \
+                grep 'cache_hit'|awk '{print $2}' | \
+                awk '{sum=sum+$1} END{print sum}'`
+        echo $ACCNUM
 }
 
 test_151() {
-	local CPAGES=3
+        local CPAGES=3
+        local list=$(comma_list $(osts_nodes))
 
-	# check whether obdfilter is cache capable at all
-	if ! $LCTL get_param -n obdfilter.*.read_cache_enable; then
-		echo "not cache-capable obdfilter"
-		return 0
-	fi
+        # check whether obdfilter is cache capable at all
+        if ! do_nodes $list $LCTL get_param -n obdfilter.*.read_cache_enable > /dev/null; then
+                echo "not cache-capable obdfilter"
+                return 0
+        fi
 
-	# check cache is enabled on all obdfilters
-	if $LCTL get_param -n obdfilter.*.read_cache_enable | grep 0 >&/dev/null; then
-		echo "oss cache is disabled"
-		return 0
-	fi
+        # check cache is enabled on all obdfilters
+        if do_nodes $list $LCTL get_param -n obdfilter.*.read_cache_enable | grep 0 >&/dev/null; then
+                echo "oss cache is disabled"
+                return 0
+        fi
 
-	$LCTL set_param -n obdfilter.*.writethrough_cache_enable 1
+        do_nodes $list $LCTL set_param -n obdfilter.*.writethrough_cache_enable 1
 
-	# pages should be in the case right after write
-	dd if=/dev/urandom of=$DIR/$tfile bs=4k count=$CPAGES || error "dd failed"
-	local BEFORE=`roc_hit`
-	cancel_lru_locks osc
-	cat $DIR/$tfile >/dev/null
-	local AFTER=`roc_hit`
-	if ! let "AFTER - BEFORE == CPAGES"; then
-		error "NOT IN CACHE: before: $BEFORE, after: $AFTER"
-	fi
+        # pages should be in the case right after write
+        dd if=/dev/urandom of=$DIR/$tfile bs=4k count=$CPAGES || error "dd failed"
+        local BEFORE=`roc_hit`
+        cancel_lru_locks osc
+        cat $DIR/$tfile >/dev/null
+        local AFTER=`roc_hit`
+        if ! let "AFTER - BEFORE == CPAGES"; then
+                error "NOT IN CACHE: before: $BEFORE, after: $AFTER"
+        fi
 
-	# the following read invalidates the cache
-	cancel_lru_locks osc
-	$LCTL set_param -n obdfilter.*.read_cache_enable 0
-	cat $DIR/$tfile >/dev/null
+        # the following read invalidates the cache
+        cancel_lru_locks osc
+        do_nodes $list $LCTL set_param -n obdfilter.*.read_cache_enable 0
+        cat $DIR/$tfile >/dev/null
 
-	# now data shouldn't be found in the cache
-	BEFORE=`roc_hit`
-	cancel_lru_locks osc
-	cat $DIR/$tfile >/dev/null
-	AFTER=`roc_hit`
-	if let "AFTER - BEFORE != 0"; then
-		error "IN CACHE: before: $BEFORE, after: $AFTER"
-	fi
+        # now data shouldn't be found in the cache
+        BEFORE=`roc_hit`
+        cancel_lru_locks osc
+        cat $DIR/$tfile >/dev/null
+        AFTER=`roc_hit`
+        if let "AFTER - BEFORE != 0"; then
+                error "IN CACHE: before: $BEFORE, after: $AFTER"
+        fi
 
-	$LCTL set_param -n obdfilter.*.read_cache_enable 1
-	rm -f $DIR/$tfile
+        do_nodes $list $LCTL set_param -n obdfilter.*.read_cache_enable 1
+        rm -f $DIR/$tfile
 }
 run_test 151 "test cache on oss and controls ==============================="
 
 test_152() {
         local TF="$TMP/$tfile"
 
-	# simulate ENOMEM during write
-#define OBD_FAIL_OST_NOMEM     	0x226
+        # simulate ENOMEM during write
+#define OBD_FAIL_OST_NOMEM      0x226
         lctl set_param fail_loc=0x80000226
         dd if=/dev/urandom of=$TF bs=6096 count=1 || error "dd failed"
         cp $TF $DIR/$tfile
         sync || error "sync failed"
         lctl set_param fail_loc=0
-	
+
         # discard client's cache
         cancel_lru_locks osc
 
@@ -6111,7 +6114,7 @@ test_152() {
         cmp $TF $DIR/$tfile || error "cmp failed"
         lctl set_param fail_loc=0
 
-	rm -f $TF
+        rm -f $TF
 }
 run_test 152 "test read/write with enomem ============================"
 
