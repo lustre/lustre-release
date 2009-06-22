@@ -6049,6 +6049,8 @@ function roc_hit() {
 }
 
 test_151() {
+        remote_ost_nodsh && skip "remote OST with nodsh" && return
+
         local CPAGES=3
         local list=$(comma_list $(osts_nodes))
 
