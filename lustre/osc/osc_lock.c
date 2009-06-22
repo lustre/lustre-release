@@ -1360,7 +1360,6 @@ static int osc_lock_use(const struct lu_env *env,
                 lock = slice->cls_lock;
                 LASSERT(lock->cll_state == CLS_CACHED);
                 LASSERT(lock->cll_users > 0);
-                LASSERT(olck->ols_lock->l_flags & LDLM_FL_CBPENDING);
                 /* set a flag for osc_dlm_blocking_ast0() to signal the
                  * lock.*/
                 olck->ols_ast_wait = 1;
