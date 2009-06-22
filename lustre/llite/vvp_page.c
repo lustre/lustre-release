@@ -91,13 +91,13 @@ static void vvp_page_own(const struct lu_env *env,
         while (TestSetPageLocked(vmpage)) {
                 cfs_schedule_timeout(CFS_TASK_INTERRUPTIBLE,
                                      cfs_time_seconds(1)/10);
-                if (++count > 100) {
+                if (++count > 600) {
                         CL_PAGE_DEBUG(D_ERROR, env,
                                       cl_page_top(slice->cpl_page),
                                       "XXX page %p blocked on acquiring the"
-                                      " lock. process %s/%p, flags %lx\n",
+                                      " lock. process %s/%p, flags %lx,io %p\n",
                                       vmpage, current->comm, current,
-                                      vmpage->flags);
+                                      vmpage->flags, _);
                         libcfs_debug_dumpstack(NULL);
                         LCONSOLE_WARN("Reproduced bug #18881,please contact:"
                                "jay <jinshan.xiong@sun.com>, thanks\n");

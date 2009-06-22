@@ -62,6 +62,7 @@ static const struct cl_lock_operations osc_lock_ops;
 static const struct cl_lock_operations osc_lock_lockless_ops;
 static void osc_lock_to_lockless(const struct lu_env *env,
                                  struct osc_lock *ols, int force);
+static int osc_lock_has_pages(struct osc_lock *olck);
 
 int osc_lock_is_lockless(const struct osc_lock *olck)
 {
@@ -1381,8 +1382,10 @@ static int osc_lock_flush(struct osc_lock *ols, int discard)
                 cl_env_nested_put(&nest, env);
         } else
                 result = PTR_ERR(env);
-        if (result == 0)
+        if (result == 0) {
                 ols->ols_flush = 1;
+                LINVRNT(!osc_lock_has_pages(ols));
+        }
         return result;
 }
 
@@ -1495,7 +1498,10 @@ static int osc_lock_has_pages(struct osc_lock *olck)
         return result;
 }
 #else
-# define osc_lock_has_pages(olck) (0)
+static int osc_lock_has_pages(struct osc_lock *olck)
+{
+        return 0;
+}
 #endif /* INVARIANT_CHECK */
 
 static void osc_lock_delete(const struct lu_env *env,
@@ -1504,6 +1510,12 @@ static void osc_lock_delete(const struct lu_env *env,
         struct osc_lock *olck;
 
         olck = cl2osc_lock(slice);
+        if (olck->ols_glimpse) {
+                LASSERT(!olck->ols_hold);
+                LASSERT(!olck->ols_lock);
+                return;
+        }
+
         LINVRNT(osc_lock_invariant(olck));
         LINVRNT(!osc_lock_has_pages(olck));
 
