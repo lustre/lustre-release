@@ -154,17 +154,10 @@ int target_quota_check(struct obd_device *obd, struct obd_export *exp,
 
 int quota_adjust_slave_lqs(struct quota_adjust_qunit *oqaq, struct
                           lustre_quota_ctxt *qctxt);
-void qdata_to_oqaq(struct qunit_data *qdata,
-                   struct quota_adjust_qunit *oqaq);
 #ifdef __KERNEL__
-int quota_search_lqs(struct qunit_data *qdata,
-                     struct quota_adjust_qunit *oqaq,
-                     struct lustre_quota_ctxt *qctxt,
-                     struct lustre_qunit_size **lqs_return);
-int quota_create_lqs(struct qunit_data *qdata,
-                     struct quota_adjust_qunit *oqaq,
-                     struct lustre_quota_ctxt *qctxt,
-                     struct lustre_qunit_size **lqs_return);
+struct lustre_qunit_size *quota_search_lqs(unsigned long long lqs_key,
+                                           struct lustre_quota_ctxt *qctxt,
+                                           int create);
 void quota_compute_lqs(struct qunit_data *qdata, struct lustre_qunit_size *lqs,
                        int is_chk, int is_acq);
 

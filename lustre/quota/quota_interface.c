@@ -177,6 +177,7 @@ static int filter_quota_enforce(struct obd_device *obd, unsigned int ignore)
         RETURN(0);
 }
 
+#define GET_OA_ID(flag, oa) (flag == USRQUOTA ? oa->o_uid : oa->o_gid)
 static int filter_quota_getflag(struct obd_device *obd, struct obdo *oa)
 {
         struct obd_device_target *obt = &obd->u.obt;
@@ -199,14 +200,14 @@ static int filter_quota_getflag(struct obd_device *obd, struct obdo *oa)
         oa->o_flags &= ~(OBD_FL_NO_USRQUOTA | OBD_FL_NO_GRPQUOTA);
 
         for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
-                struct quota_adjust_qunit oqaq_tmp;
                 struct lustre_qunit_size *lqs = NULL;
 
-                oqaq_tmp.qaq_flags = cnt;
-                oqaq_tmp.qaq_id = (cnt == USRQUOTA) ? oa->o_uid : oa->o_gid;
-
-                quota_search_lqs(NULL, &oqaq_tmp, qctxt, &lqs);
-                if (lqs) {
+                lqs = quota_search_lqs(LQS_KEY(cnt, GET_OA_ID(cnt, oa)),
+                                       qctxt, 0);
+                if (lqs == NULL || IS_ERR(lqs)) {
+                        rc = PTR_ERR(lqs);
+                        break;
+                } else {
                         spin_lock(&lqs->lqs_lock);
                         if (lqs->lqs_bunit_sz <= qctxt->lqc_sync_blk) {
                                 oa->o_flags |= (cnt == USRQUOTA) ?
@@ -287,8 +288,8 @@ static int quota_check_common(struct obd_device *obd, const unsigned int id[],
                 if (qdata[i].qd_id == 0 && !QDATA_IS_GRP(&qdata[i]))
                         continue;
 
-                quota_search_lqs(&qdata[i], NULL, qctxt, &lqs);
-                if (!lqs)
+                lqs = quota_search_lqs(LQS_KEY(i, id[i]), qctxt, 0);
+                if (lqs == NULL || IS_ERR(lqs))
                         continue;
 
                 if (IS_ERR(lqs)) {
@@ -523,12 +524,12 @@ static int quota_pending_commit(struct obd_device *obd, const unsigned int id[],
                 if (qdata[i].qd_id == 0 && !QDATA_IS_GRP(&qdata[i]))
                         continue;
 
-                quota_search_lqs(&qdata[i], NULL, qctxt, &lqs);
+                lqs = quota_search_lqs(LQS_KEY(i, qdata[i].qd_id), qctxt, 0);
                 if (lqs == NULL || IS_ERR(lqs)) {
                         CERROR("can not find lqs for pending_commit: "
                                "[id %u] [%c] [pending %u] [isblk %d] (rc %ld), "
                                "maybe cause unexpected lqs refcount error!\n",
-                               id[i], i % 2 ? 'g': 'u', pending[i], isblk,
+                               id[i], i ? 'g': 'u', pending[i], isblk,
                                lqs ? PTR_ERR(lqs) : -1);
                         continue;
                 }
@@ -551,10 +552,10 @@ static int quota_pending_commit(struct obd_device *obd, const unsigned int id[],
 
                         lqs->lqs_iwrite_pending -= pending[i];
                 }
-                CDEBUG(D_QUOTA, "id: %u, %c, lqs pending: %lu, pending: %d, "
-                       "isblk: %d.\n", id[i], i % 2 ? 'g' : 'u',
-                       isblk ? lqs->lqs_bwrite_pending: lqs->lqs_iwrite_pending,
-                       pending[i], isblk);
+                CDEBUG(D_QUOTA, "%s: lqs_pending=%lu pending[%d]=%d isblk=%d\n",
+                       obd->obd_name,
+                       isblk ? lqs->lqs_bwrite_pending : lqs->lqs_iwrite_pending,
+                       i, pending[i], isblk);
                 spin_unlock(&lqs->lqs_lock);
 
                 /* for quota_search_lqs in pending_commit */
