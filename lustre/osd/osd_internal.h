@@ -146,10 +146,6 @@ struct osd_it_ea {
         struct osd_object   *oie_obj;
         /** used in ldiskfs iterator, to stored file pointer */
         struct file          oie_file;
-        /** current file position */
-        __u64                oie_curr_pos;
-        /** next file position */
-        __u64                oie_next_pos;
         /** how many entries have been read-cached from storage */
         int                  oie_rd_dirent;
         /** current entry is being iterated by caller */
@@ -256,6 +252,32 @@ void osd_lprocfs_time_end(const struct lu_env *env,
 #endif
 int osd_statfs(const struct lu_env *env, struct dt_device *dev,
                struct kstatfs *sfs);
+
+/*
+ * Invariants, assertions.
+ */
+
+/*
+ * XXX: do not enable this, until invariant checking code is made thread safe
+ * in the face of pdirops locking.
+ */
+#define OSD_INVARIANT_CHECKS (0)
+
+#if OSD_INVARIANT_CHECKS
+static inline int osd_invariant(const struct osd_object *obj)
+{
+        return
+                obj != NULL &&
+                ergo(obj->oo_inode != NULL,
+                     obj->oo_inode->i_sb == osd_sb(osd_obj2dev(obj)) &&
+                     atomic_read(&obj->oo_inode->i_count) > 0) &&
+                ergo(obj->oo_dir != NULL &&
+                     obj->oo_dir->od_conationer.ic_object != NULL,
+                     obj->oo_dir->od_conationer.ic_object == obj->oo_inode);
+}
+#else
+#define osd_invariant(obj) (1)
+#endif
 
 #endif /* __KERNEL__ */
 #endif /* _OSD_INTERNAL_H */
