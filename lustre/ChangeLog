@@ -13,6 +13,13 @@ tbd  Sun Microsystems, Inc.
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
+Severity   : normal 
+Bugzilla   : 18624 
+Description: Unable to run several mkfs.lustre on loop devices at the same
+	     time.
+Details    : mkfs.lustre returns error 256 on the concurrent loop devices
+	     formatting. The solution is to proper handle the error.   
+
 Severity   : enhancement
 Bugzilla   : 19024
 Description: Update kernel to RHEL5.3 2.6.18-128.1.6.el5.
