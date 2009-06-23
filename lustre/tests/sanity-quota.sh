@@ -2050,6 +2050,54 @@ test_27() {
 }
 run_test_with_stat 27 "lfs quota/setquota should handle wrong arguments (19612) ================="
 
+test_28() {
+        BLK_LIMIT=$((100 * 1024 * 1024)) # 100G
+        echo "Step 1: set enough high limit for user [$TSTUSR:$BLK_LIMIT]"
+        $LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I 0 $DIR
+        $SHOW_QUOTA_USER
+
+        echo "Step 2: reset system ..."
+        cleanup_and_setup_lustre
+        test_0
+
+        echo "Step 3: change qunit for user [$TSTUSR:512:1024]"
+        set_blk_tunesz 512
+        set_blk_unitsz 1024
+
+        wait_delete_completed
+
+        #define OBD_FAIL_QUOTA_RET_QDATA | OBD_FAIL_ONCE
+        lustre_fail ost 0x80000A02
+
+        TESTFILE="$DIR/$tdir/$tfile"
+        mkdir -p $DIR/$tdir
+
+        BLK_LIMIT=$((100 * 1024)) # 100M
+        echo "Step 4: set enough high limit for user [$TSTUSR:$BLK_LIMIT]"
+        $LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I 0 $DIR
+        $SHOW_QUOTA_USER
+
+        touch $TESTFILE
+        chown $TSTUSR.$TSTUSR $TESTFILE
+
+        echo "Step 5: write the test file1 [10M] ..."
+        $RUNAS dd if=/dev/zero of=$TESTFILE  bs=$BLK_SZ count=$(( 10 * 1024 )) \
+	    || quota_error a $TSTUSR "write 10M file failure"
+        $SHOW_QUOTA_USER
+
+        rm -f $TESTFILE
+        sync; sleep 3; sync;
+
+        # make qd_count 64 bit
+        lustre_fail ost 0
+
+        set_blk_unitsz $((128 * 1024))
+        set_blk_tunesz $((128 * 1024 / 2))
+
+        resetquota -u $TSTUSR
+}
+run_test_with_stat 28 "test for consistency for qunit when setquota (18574) ==========="
+
 # turn off quota
 quota_fini()
 {

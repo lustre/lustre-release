@@ -1997,7 +1997,7 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
                                 cqget(sb, qctxt->qckt_hash, &qctxt->qckt_list,
                                       dqid->di_id, i,
                                       qctxt->qckt_first_check[i]);
-                        kfree(dqid);
+                        OBD_FREE_PTR(dqid);
                 }
         }
 #endif

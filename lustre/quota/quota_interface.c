@@ -264,10 +264,6 @@ static int quota_check_common(struct obd_device *obd, const unsigned int id[],
         int rc = 0, rc2[2] = { 0, 0 };
         ENTRY;
 
-        CLASSERT(MAXQUOTAS < 4);
-        if (!sb_any_quota_enabled(qctxt->lqc_sb))
-                RETURN(rc);
-
         spin_lock(&qctxt->lqc_lock);
         if (!qctxt->lqc_valid){
                 spin_unlock(&qctxt->lqc_lock);
@@ -379,6 +375,27 @@ static int quota_check_common(struct obd_device *obd, const unsigned int id[],
                 RETURN(rc);
 }
 
+int quota_is_set(struct obd_device *obd, const unsigned int id[], int flag)
+{
+        struct lustre_qunit_size *lqs;
+        int i, q_set = 0;
+
+        if (!sb_any_quota_enabled(obd->u.obt.obt_qctxt.lqc_sb))
+                RETURN(0);
+
+        for (i = 0; i < MAXQUOTAS; i++) {
+                lqs = quota_search_lqs(LQS_KEY(i, id[i]),
+                                       &obd->u.obt.obt_qctxt, 0);
+                if (lqs && !IS_ERR(lqs)) {
+                        if (lqs->lqs_flags & flag)
+                                q_set = 1;
+                        lqs_putref(lqs);
+                }
+        }
+
+        return q_set;
+}
+
 static int quota_chk_acq_common(struct obd_device *obd, const unsigned int id[],
                                 int pending[], int count, quota_acquire acquire,
                                 struct obd_trans_info *oti, int isblk,
@@ -391,6 +408,9 @@ static int quota_chk_acq_common(struct obd_device *obd, const unsigned int id[],
         struct l_wait_info lwi = { 0 };
         int rc = 0, cycle = 0, count_err = 1;
         ENTRY;
+
+        if (!quota_is_set(obd, id, isblk ? QB_SET : QI_SET))
+                RETURN(0);
 
         CDEBUG(D_QUOTA, "check quota for %s\n", obd->obd_name);
         pending[USRQUOTA] = pending[GRPQUOTA] = 0;
