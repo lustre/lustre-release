@@ -4191,20 +4191,20 @@ test_103 () {
     echo "performing cp ..."
     run_acl_subtest cp || error
     echo "performing getfacl-noacl..."
-    run_acl_subtest getfacl-noacl > /dev/null || error
+    run_acl_subtest getfacl-noacl > /dev/null || error "getfacl-noacl test failed"
     echo "performing misc..."
-    run_acl_subtest misc > /dev/null || error
+    run_acl_subtest misc > /dev/null || error "misc test failed"
 #    XXX add back permission test when we support supplementary groups.
 #    echo "performing permissions..."
 #    run_acl_subtest permissions || error
     echo "performing setfacl..."
-    run_acl_subtest setfacl > /dev/null || error
+    run_acl_subtest setfacl > /dev/null || error "setfacl test failed"
 
     # inheritance test got from HP
     echo "performing inheritance..."
-    cp $LUSTRE/tests/acl/make-tree . || error
-    chmod +x make-tree || error
-    run_acl_subtest inheritance > /dev/null || error
+    cp $LUSTRE/tests/acl/make-tree . || error "cannot copy make-tree"
+    chmod +x make-tree || error "chmod +x failed"
+    run_acl_subtest inheritance > /dev/null || error "inheritance test failed"
     rm -f make-tree
 
     cd $SAVE_PWD
