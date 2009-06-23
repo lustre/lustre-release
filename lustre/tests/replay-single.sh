@@ -2072,7 +2072,7 @@ test_84() {
     createmany -o $DIR/$tfile- 1 &
     PID=$!
     mds_evict_client
-    wait $PID
+    wait $PID || true
 }
 run_test 84 "stale open during export disconnect"
 
