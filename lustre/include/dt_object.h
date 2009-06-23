@@ -471,8 +471,10 @@ struct dt_index_operations {
                                       const struct dt_it *di);
                 int       (*key_size)(const struct lu_env *env,
                                       const struct dt_it *di);
-                struct dt_rec *(*rec)(const struct lu_env *env,
-                                      const struct dt_it *di);
+                int            (*rec)(const struct lu_env *env,
+                                      const struct dt_it *di,
+                                      struct lu_dirent *lde,
+                                      __u32 attr);
                 __u64        (*store)(const struct lu_env *env,
                                       const struct dt_it *di);
                 int           (*load)(const struct lu_env *env,

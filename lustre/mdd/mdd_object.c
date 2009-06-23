@@ -1951,71 +1951,6 @@ static int mdd_readpage_sanity_check(const struct lu_env *env,
         RETURN(rc);
 }
 
-static int mdd_append_attrs(const struct lu_env *env,
-                             struct mdd_device *mdd,
-                             __u32 attr,
-                             const struct dt_it_ops *iops,
-                             struct dt_it *it,
-                             struct lu_dirent*ent)
-{
-        struct mdd_thread_info  *info = mdd_env_info(env);
-        struct lu_fid           *fid  = &info->mti_fid2;
-        int                      len = cpu_to_le16(ent->lde_namelen);
-        const unsigned           align = sizeof(struct luda_type) - 1;
-        struct lu_fid_pack      *pack;
-        struct mdd_object       *obj;
-        struct luda_type        *lt;
-        int rc = 0;
-
-        if (attr & LUDA_FID) {
-                pack = (struct lu_fid_pack *)iops->rec(env, it);
-                if (IS_ERR(pack)) {
-                        rc = PTR_ERR(pack);
-                        ent->lde_attrs = 0;
-                        goto out;
-                }
-                rc = fid_unpack(pack, fid);
-                if (rc != 0) {
-                        ent->lde_attrs = 0;
-                        goto out;
-                }
-
-                fid_cpu_to_le(&ent->lde_fid, fid);
-                ent->lde_attrs = LUDA_FID;
-        }
-
-        /* check if file type is required */
-        if (attr & LUDA_TYPE) {
-                if (!(attr & LUDA_FID)) {
-                        CERROR("wrong attr : [%x]\n",attr);
-                        rc = -EINVAL;
-                        goto out;
-                }
-
-                obj = mdd_object_find(env, mdd, fid);
-                if (obj == NULL) /* remote object */
-                        goto out;
-
-                if (IS_ERR(obj)) {
-                        rc = PTR_ERR(obj);
-                        goto out;
-                }
-
-                if (mdd_object_exists(obj) == +1) {
-                        len = (len + align) & ~align;
-
-                        lt = (void *) ent->lde_name + len;
-                        lt->lt_type = cpu_to_le16(mdd_object_type(obj));
-
-                        ent->lde_attrs |= LUDA_TYPE;
-                }
-                mdd_object_put(env, obj);
-        }
-out:
-        ent->lde_attrs = cpu_to_le32(ent->lde_attrs);
-        return rc;
-}
-
 static int mdd_dir_page_build(const struct lu_env *env, struct mdd_device *mdd,
                               int first, void *area, int nob,
                               const struct dt_it_ops *iops, struct dt_it *it,
@@ -2023,8 +1958,8 @@ static int mdd_dir_page_build(const struct lu_env *env, struct mdd_device *mdd,
                               struct lu_dirent **last, __u32 attr)
 {
         int                     result;
+        __u64                   hash = 0;
         struct lu_dirent       *ent;
-        __u64  hash = 0;
 
         if (first) {
                 memset(area, 0, sizeof (struct lu_dirpage));
@@ -2034,7 +1969,6 @@ static int mdd_dir_page_build(const struct lu_env *env, struct mdd_device *mdd,
 
         ent  = area;
         do {
-                char  *name;
                 int    len;
                 int    recsize;
 
@@ -2044,30 +1978,25 @@ static int mdd_dir_page_build(const struct lu_env *env, struct mdd_device *mdd,
                 if (len == 0)
                         goto next;
 
-                name = (char *)iops->key(env, it);
                 hash = iops->store(env, it);
-
                 if (unlikely(first)) {
                         first = 0;
                         *start = hash;
                 }
 
+                /* calculate max space required for lu_dirent */
                 recsize = lu_dirent_calc_size(len, attr);
 
-                CDEBUG(D_INFO, "%p %p %d "LPU64" (%d) \"%*.*s\"\n",
-                                name, ent, nob, hash, len, len, len, name);
-
                 if (nob >= recsize) {
-                        ent->lde_hash    = cpu_to_le64(hash);
-                        ent->lde_namelen = cpu_to_le16(len);
-                        ent->lde_reclen  = cpu_to_le16(recsize);
-                        memcpy(ent->lde_name, name, len);
-
-                        result = mdd_append_attrs(env, mdd, attr, iops, it, ent);
+                        result = iops->rec(env, it, ent, attr);
                         if (result == -ESTALE)
                                 goto next;
                         if (result != 0)
                                 goto out;
+
+                        /* osd might not able to pack all attributes,
+                         * so recheck rec length */
+                        recsize = le16_to_cpu(ent->lde_reclen);
                 } else {
                         /*
                          * record doesn't fit into page, enlarge previous one.
@@ -2128,7 +2057,7 @@ static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
 
         rc = iops->load(env, it, rdpg->rp_hash);
 
-        if (rc == 0)
+        if (rc == 0){
                 /*
                  * Iterator didn't find record with exactly the key requested.
                  *
@@ -2141,7 +2070,7 @@ static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
                  *     state)---position it on the next item.
                  */
                 rc = iops->next(env, it);
-        else if (rc > 0)
+        } else if (rc > 0)
                 rc = 0;
 
         /*

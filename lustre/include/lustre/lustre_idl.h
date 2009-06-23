@@ -1420,7 +1420,7 @@ struct quota_adjust_qunit {
 };
 extern void lustre_swab_quota_adjust_qunit(struct quota_adjust_qunit *q);
 
-/* flags is shared among quota structures */
+/* flags in qunit_data and quota_adjust_qunit will use macroes below */
 #define LQUOTA_FLAGS_GRP       1UL   /* 0 is user, 1 is group */
 #define LQUOTA_FLAGS_BLK       2UL   /* 0 is inode, 1 is block */
 #define LQUOTA_FLAGS_ADJBLK    4UL   /* adjust the block qunit size */
@@ -1428,21 +1428,16 @@ extern void lustre_swab_quota_adjust_qunit(struct quota_adjust_qunit *q);
 #define LQUOTA_FLAGS_CHG_QS   16UL   /* indicate whether it has capability of
                                       * OBD_CONNECT_CHANGE_QS */
 
-/* flags is specific for quota_adjust_qunit */
-#define LQUOTA_QAQ_CEATE_LQS  (1 << 31) /* when it is set, need create lqs */
-
-/* the status of lqs_flags in struct lustre_qunit_size  */
+/* the status of lqsk_flags in struct lustre_qunit_size_key */
 #define LQUOTA_QUNIT_FLAGS (LQUOTA_FLAGS_GRP | LQUOTA_FLAGS_BLK)
 
-#define QAQ_IS_GRP(qaq)         ((qaq)->qaq_flags & LQUOTA_FLAGS_GRP)
-#define QAQ_IS_ADJBLK(qaq)      ((qaq)->qaq_flags & LQUOTA_FLAGS_ADJBLK)
-#define QAQ_IS_ADJINO(qaq)      ((qaq)->qaq_flags & LQUOTA_FLAGS_ADJINO)
-#define QAQ_IS_CREATE_LQS(qaq)  ((qaq)->qaq_flags & LQUOTA_QAQ_CEATE_LQS)
+#define QAQ_IS_GRP(qaq)    ((qaq)->qaq_flags & LQUOTA_FLAGS_GRP)
+#define QAQ_IS_ADJBLK(qaq) ((qaq)->qaq_flags & LQUOTA_FLAGS_ADJBLK)
+#define QAQ_IS_ADJINO(qaq) ((qaq)->qaq_flags & LQUOTA_FLAGS_ADJINO)
 
-#define QAQ_SET_GRP(qaq)        ((qaq)->qaq_flags |= LQUOTA_FLAGS_GRP)
-#define QAQ_SET_ADJBLK(qaq)     ((qaq)->qaq_flags |= LQUOTA_FLAGS_ADJBLK)
-#define QAQ_SET_ADJINO(qaq)     ((qaq)->qaq_flags |= LQUOTA_FLAGS_ADJINO)
-#define QAQ_SET_CREATE_LQS(qaq) ((qaq)->qaq_flags |= LQUOTA_QAQ_CEATE_LQS)
+#define QAQ_SET_GRP(qaq)    ((qaq)->qaq_flags |= LQUOTA_FLAGS_GRP)
+#define QAQ_SET_ADJBLK(qaq) ((qaq)->qaq_flags |= LQUOTA_FLAGS_ADJBLK)
+#define QAQ_SET_ADJINO(qaq) ((qaq)->qaq_flags |= LQUOTA_FLAGS_ADJINO)
 
 /* inode access permission for remote user, the inode info are omitted,
  * for client knows them. */

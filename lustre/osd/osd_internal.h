@@ -132,6 +132,7 @@ struct osd_it_ea_dirent {
         __u64           oied_ino;
         __u64           oied_off;
         unsigned short  oied_namelen;
+        unsigned int    oied_type;
         char            oied_name[0];
 } __attribute__((packed));
 

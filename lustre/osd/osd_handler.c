@@ -247,15 +247,19 @@ static struct dt_it       *osd_it_iam_init  (const struct lu_env *env,
                                              struct lustre_capa *capa);
 static struct dt_key      *osd_it_iam_key   (const struct lu_env *env,
                                              const struct dt_it *di);
-static struct dt_rec      *osd_it_iam_rec   (const struct lu_env *env,
-                                             const struct dt_it *di);
+static int                 osd_it_iam_rec   (const struct lu_env *env,
+                                             const struct dt_it *di,
+                                             struct lu_dirent *lde,
+                                             __u32 attr);
 static struct dt_it       *osd_it_ea_init   (const struct lu_env *env,
                                              struct dt_object *dt,
                                              struct lustre_capa *capa);
 static struct dt_key      *osd_it_ea_key    (const struct lu_env *env,
                                              const struct dt_it *di);
-static struct dt_rec      *osd_it_ea_rec    (const struct lu_env *env,
-                                             const struct dt_it *di);
+static inline int          osd_it_ea_rec    (const struct lu_env *env,
+                                             const struct dt_it *di,
+                                             struct lu_dirent *lde,
+                                             __u32 attr);
 
 static struct timespec    *osd_inode_time   (const struct lu_env *env,
                                              struct inode *inode,
@@ -1755,26 +1759,25 @@ static inline void osd_igif_get(const struct lu_env *env, struct dentry *dentry,
  * Helper function to pack the fid
  */
 static inline void osd_fid_pack(const struct lu_env *env, const struct lu_fid *fid,
-                                struct lu_fid_pack *pack)
+                                struct dt_rec *pack)
 {
-        fid_pack(pack, fid, &osd_oti_get(env)->oti_fid);
+        fid_pack((struct lu_fid_pack *)pack, fid, &osd_oti_get(env)->oti_fid);
 }
 
 /**
  * Try to read the fid from inode ea into dt_rec, if return value
  * i.e. rc is +ve, then we got fid, otherwise we will have to form igif
  *
- * \param rec, the data-structure into which fid/igif is read
+ * \param fid, object fid.
  *
  * \retval 0, on success
  */
 static int osd_ea_fid_get(const struct lu_env *env, struct dentry *dentry,
-                          struct dt_rec *rec)
+                          struct lu_fid *fid)
 {
         struct inode            *inode     = dentry->d_inode;
         struct osd_thread_info  *info      = osd_oti_get(env);
         struct lustre_mdt_attrs *mdt_attrs = &info->oti_mdt_attrs;
-        struct lu_fid           *fid       = &info->oti_fid;
         int rc;
 
         LASSERT(inode->i_op != NULL && inode->i_op->getxattr != NULL);
@@ -1798,9 +1801,6 @@ static int osd_ea_fid_get(const struct lu_env *env, struct dentry *dentry,
                 osd_igif_get(env, dentry, fid);
                 rc = 0;
         }
-
-        if (rc == 0)
-                osd_fid_pack(env, fid, (struct lu_fid_pack*)rec);
 
         return rc;
 }
@@ -2736,6 +2736,7 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
         struct osd_inode_id    *id     = &info->oti_id;
         struct ldiskfs_dir_entry_2 *de;
         struct buffer_head         *bh;
+        struct lu_fid * fid = &info->oti_fid;
         struct inode *inode;
         int ino;
         int rc;
@@ -2757,7 +2758,10 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
                 if (!IS_ERR(inode)) {
                         dentry->d_inode = inode;
 
-                        rc = osd_ea_fid_get(env, dentry, rec);
+                        rc = osd_ea_fid_get(env, dentry, fid);
+                        if (rc == 0)
+                                osd_fid_pack(env, fid, rec);
+
                         iput(inode);
                 } else
                         rc = PTR_ERR(inode);
@@ -3018,15 +3022,89 @@ static int osd_it_iam_key_size(const struct lu_env *env, const struct dt_it *di)
         return iam_it_key_size(&it->oi_it);
 }
 
+static inline void osd_it_append_attrs(struct lu_dirent*ent,
+                                       __u32 attr,
+                                       int len,
+                                       __u16 type)
+{
+        struct luda_type        *lt;
+        const unsigned           align = sizeof(struct luda_type) - 1;
+
+        /* check if file type is required */
+        if (attr & LUDA_TYPE) {
+                        len = (len + align) & ~align;
+
+                        lt = (void *) ent->lde_name + len;
+                        lt->lt_type = cpu_to_le16(CFS_DTTOIF(type));
+                        ent->lde_attrs |= LUDA_TYPE;
+        }
+
+        ent->lde_attrs = cpu_to_le32(ent->lde_attrs);
+}
+
+/**
+ * build lu direct from backend fs dirent.
+ */
+
+static inline void osd_it_pack_dirent(struct lu_dirent *ent,
+                                      struct lu_fid *fid,
+                                      __u64 offset,
+                                      char *name,
+                                      __u16 namelen,
+                                      __u16 type,
+                                      __u32 attr)
+{
+        fid_cpu_to_le(&ent->lde_fid, fid);
+        ent->lde_attrs = LUDA_FID;
+
+        ent->lde_hash = cpu_to_le64(offset);
+        ent->lde_reclen = cpu_to_le16(lu_dirent_calc_size(namelen, attr));
+
+        strncpy(ent->lde_name, name, namelen);
+        ent->lde_namelen = cpu_to_le16(namelen);
+
+        /* append lustre attributes */
+        osd_it_append_attrs(ent, attr, namelen, type);
+}
+
 /**
  * Return pointer to the record under iterator.
  */
-static struct dt_rec *osd_it_iam_rec(const struct lu_env *env,
-                                 const struct dt_it *di)
+static int osd_it_iam_rec(const struct lu_env *env,
+                          const struct dt_it *di,
+                          struct lu_dirent *lde,
+                          __u32 attr)
 {
-        struct osd_it_iam *it = (struct osd_it_iam *)di;
+        struct osd_it_iam *it        = (struct osd_it_iam *)di;
+        struct osd_thread_info *info = osd_oti_get(env);
+        struct lu_fid     *fid       = &info->oti_fid;
+        const struct lu_fid_pack *rec;
+        char *name;
+        int namelen;
+        __u64 hash;
+        int rc;
 
-        return (struct dt_rec *)iam_it_rec_get(&it->oi_it);
+        name = (char *)iam_it_key_get(&it->oi_it);
+        if (IS_ERR(name))
+                RETURN(PTR_ERR(name));
+
+        namelen = iam_it_key_size(&it->oi_it);
+
+        rec = (const struct lu_fid_pack *) iam_it_rec_get(&it->oi_it);
+        if (IS_ERR(rec))
+                RETURN(PTR_ERR(rec));
+
+        rc = fid_unpack(rec, fid);
+        if (rc)
+                RETURN(rc);
+
+        hash = iam_it_store(&it->oi_it);
+
+        /* IAM does not store object type in IAM index (dir) */
+        osd_it_pack_dirent(lde, fid, hash, name, namelen,
+                           0, LUDA_FID);
+
+        return 0;
 }
 
 /**
@@ -3195,6 +3273,8 @@ static int osd_ldiskfs_filldir(char *buf, const char *name, int namelen,
         ent->oied_ino     = ino;
         ent->oied_off     = offset;
         ent->oied_namelen = namelen;
+        ent->oied_type    = d_type;
+
         memcpy(ent->oied_name, name, namelen);
 
         it->oie_rd_dirent++;
@@ -3305,25 +3385,31 @@ static int osd_it_ea_key_size(const struct lu_env *env, const struct dt_it *di)
         RETURN(it->oie_dirent->oied_namelen);
 }
 
+
 /**
  * Returns the value (i.e. fid/igif) at current position from iterator's
  * in memory structure.
  *
  * \param di, struct osd_it_ea, iterator's in memory structure
+ * \param attr, attr requested for dirent.
+ * \param lde, lustre dirent
  *
- * \retval value i.e. struct dt_rec on success
+ * \retval   0, no error and \param lde has correct lustre dirent.
+ * \retval -ve, on error
  */
-static struct dt_rec *osd_it_ea_rec(const struct lu_env *env,
-                                    const struct dt_it *di)
+static inline int osd_it_ea_rec(const struct lu_env *env,
+                                const struct dt_it *di,
+                                struct lu_dirent *lde,
+                                __u32 attr)
 {
         struct osd_it_ea       *it     = (struct osd_it_ea *)di;
         struct osd_object      *obj    = it->oie_obj;
         struct osd_thread_info *info   = osd_oti_get(env);
         struct osd_inode_id    *id     = &info->oti_id;
-        struct lu_fid_pack     *rec    = &info->oti_pack;
         struct lu_device       *ldev   = obj->oo_dt.do_lu.lo_dev;
         struct dentry          *dentry = &info->oti_child_dentry;
         struct osd_device      *dev;
+        struct lu_fid           *fid       = &info->oti_fid;
         struct inode           *inode;
         int                    rc;
 
@@ -3336,16 +3422,19 @@ static struct dt_rec *osd_it_ea_rec(const struct lu_env *env,
                 dentry->d_inode = inode;
                 LASSERT(dentry->d_inode->i_sb == osd_sb(dev));
         } else {
-                RETURN((struct dt_rec *) PTR_ERR(inode));
+                RETURN(PTR_ERR(inode));
         }
 
-        rc = osd_ea_fid_get(env, dentry, (struct dt_rec*) rec);
-        if (rc != 0)
-                rec = ERR_PTR(rc);
+        rc = osd_ea_fid_get(env, dentry, fid);
 
+        if (rc == 0)
+                osd_it_pack_dirent(lde, fid, it->oie_dirent->oied_off,
+                                   it->oie_dirent->oied_name,
+                                   it->oie_dirent->oied_namelen,
+                                   it->oie_dirent->oied_type,
+                                   attr);
         iput(inode);
-        RETURN((struct dt_rec *)rec);
-
+        RETURN(rc);
 }
 
 /**
