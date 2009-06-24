@@ -1901,11 +1901,15 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
         if (zero) {
                 /* check whether it is in stride I/O mode*/
                 if (!index_in_stride_window(index, ras, inode)) {
+                        if (ras->ras_consecutive_stride_requests++ == 0)
+                                ras_update_stride_detector(ras, index);
+                        else
+                                ras_stride_reset(ras);
                         ras_reset(ras, index);
                         ras->ras_consecutive_pages++;
-                        ras_stride_reset(ras);
                         GOTO(out_unlock, 0);
                 } else {
+                        ras->ras_consecutive_pages = 0;
                         ras->ras_consecutive_requests = 0;
                         if (++ras->ras_consecutive_stride_requests > 1)
                                 stride_detect = 1;
