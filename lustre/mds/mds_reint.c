@@ -2518,6 +2518,9 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         old_inode = de_old->d_inode;
         new_inode = de_new->d_inode;
 
+        if (new_inode != NULL)
+                lock_count = 4;
+
         /* version recovery check */
         rc = mds_version_get_check(req, de_srcdir->d_inode, 0);
         if (rc)
@@ -2531,9 +2534,6 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         rc = mds_version_get_check(req, new_inode, 3);
         if (rc)
                 GOTO(cleanup_no_trans, rc);
-
-        if (new_inode != NULL)
-                lock_count = 4;
 
         /* sanity check for src inode */
         if (old_inode->i_ino == de_srcdir->d_inode->i_ino ||
