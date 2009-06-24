@@ -331,7 +331,7 @@ check_cur_qunit(struct obd_device *obd,
                 }
         }
         CDEBUG(D_QUOTA, "type: %c, limit: "LPU64", usage: "LPU64
-               ", pending_write: "LPU64", record: "LPD64
+               ", pending_write: "LPU64", record: %llu"
                ", qunit_sz: %lu, tune_sz: %lu, ret: %d.\n",
                QDATA_IS_BLK(qdata) ? 'b' : 'i', limit, usage, pending_write,
                (__s64)record, qunit_sz, tune_sz, ret);
