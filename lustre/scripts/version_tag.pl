@@ -201,18 +201,21 @@ sub generate_ver($$$)
 
     #print "localtime: " . localtime($mtime) . "\n";
 
-    my $show_last = mtime2date($mtime);
+    my $lustre_vers = $ENV{LUSTRE_VERS};
 
     print "#define BUILD_VERSION \"";
 
-    my $lustre_vers = $ENV{LUSTRE_VERS};
-
     if ($lustre_vers) {
         print "$tag-$lustre_vers\"\n";
+        return 0;
+    }
+
+    my $show_last = mtime2date($mtime);
+
     # if we want to get rid of the PRISTINE/CHANGED thing, get rid of these
     # lines.  maybe we only want to print -CHANGED when something is changed
     # and print nothing when it's pristine
-    } elsif ($pristine) {
+    if ($pristine) {
         print "$tag-$show_last-PRISTINE-$linuxdir-$kernver\"\n";
     } else {
         print "$tag-$show_last-CHANGED-$linuxdir-$kernver\"\n";
@@ -237,7 +240,8 @@ if ($ARGV[0]) {
     chdir($ARGV[0]);
 }
 my $tag = get_tag();
-my $mtime = get_latest_mtime();
+my $mtime = get_latest_mtime()
+    if (!defined($ENV{LUSTRE_VERS}));
 
 if ($progname eq "version_tag.pl") {
     my $linuxdir = get_linuxdir();
