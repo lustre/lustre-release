@@ -2058,7 +2058,7 @@ test_28() {
 
         echo "Step 2: reset system ..."
         cleanup_and_setup_lustre
-        test_0
+        quota_init
 
         echo "Step 3: change qunit for user [$TSTUSR:512:1024]"
         set_blk_tunesz 512
