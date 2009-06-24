@@ -164,20 +164,20 @@ do {                                            \
 do {                                                                      \
         LASSERT(!in_interrupt() ||                                        \
                (size <= LIBCFS_VMALLOC_SIZE && mask == CFS_ALLOC_ATOMIC));\
-        if (unlikely((size) > LIBCFS_VMALLOC_SIZE))                     \
+        if (unlikely((size) > LIBCFS_VMALLOC_SIZE))                       \
                 (ptr) = cfs_alloc_large(size);                            \
         else                                                              \
                 (ptr) = cfs_alloc((size), (mask));                        \
-        if (unlikely((ptr) == NULL)) {                                  \
+        if (unlikely((ptr) == NULL)) {                                    \
                 CERROR("LNET: out of memory at %s:%d (tried to alloc '"   \
                        #ptr "' = %d)\n", __FILE__, __LINE__, (int)(size));\
                 CERROR("LNET: %d total bytes allocated by lnet\n",        \
                        atomic_read(&libcfs_kmemory));                     \
-        } else {                                                          \
-                libcfs_kmem_inc((ptr), (size));                           \
-                if (!((mask) & CFS_ALLOC_ZERO))                           \
-                       memset((ptr), 0, (size));                          \
+                break;                                                    \
         }                                                                 \
+        libcfs_kmem_inc((ptr), (size));                                   \
+        if (!((mask) & CFS_ALLOC_ZERO))                                   \
+                memset((ptr), 0, (size));                                 \
         CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p (tot %d).\n",    \
                (int)(size), (ptr), atomic_read (&libcfs_kmemory));        \
 } while (0)
