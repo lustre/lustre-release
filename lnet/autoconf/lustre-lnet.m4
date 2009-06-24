@@ -1069,9 +1069,32 @@ AC_DEFINE(HAVE_SHOW_TASK, 1, [show_task is exported])
 ])
 ])
 
+# check kernel __u64 type
+AC_DEFUN([LN_KERN__U64_LONG_LONG],
+[AC_MSG_CHECKING([kernel __u64 is long long type])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="$EXTRA_KCFLAGS -Werror"
+LB_LINUX_TRY_COMPILE([
+	#include <linux/types.h>
+	#include <linux/stddef.h>
+],[
+	unsigned long long *data1;
+	__u64 *data2 = NULL;
+		
+	data1 = data2;
+],[
+	AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_KERN__U64_LONG_LONG, 1,
+                  [kernel __u64 is long long type])
+],[
+	AC_MSG_RESULT([no])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+])
+
 # check userland __u64 type
-AC_DEFUN([LN_U64_LONG_LONG],
-[AC_MSG_CHECKING([__u64 is long long type])
+AC_DEFUN([LN_USER__U64_LONG_LONG],
+[AC_MSG_CHECKING([userspace __u64 is long long type])
 tmp_flags="$CFLAGS"
 CFLAGS="$CFLAGS -Werror"
 AC_COMPILE_IFELSE([
@@ -1086,8 +1109,8 @@ AC_COMPILE_IFELSE([
 	}
 ],[
 	AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_U64_LONG_LONG, 1,
-                  [__u64 is long long type])
+        AC_DEFINE(HAVE_USER__U64_LONG_LONG, 1,
+                  [userspace __u64 is long long type])
 ],[
 	AC_MSG_RESULT([no])
 ])
@@ -1418,6 +1441,16 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+#
+# LN_CONFIG_USERSPACE
+#
+#
+AC_DEFUN([LN_CONFIG_USERSPACE],
+[
+LN_USER__U64_LONG_LONG
+])
+
+#
 # LN_PROG_LINUX
 #
 # LNet linux kernel checks
@@ -1444,7 +1477,7 @@ LN_CONFIG_MX
 LN_STRUCT_PAGE_LIST
 LN_STRUCT_SIGHAND
 LN_FUNC_SHOW_TASK
-LN_U64_LONG_LONG
+LN_KERN__U64_LONG_LONG
 LN_SSIZE_T_LONG
 LN_SIZE_T_LONG
 LN_LE_TYPES
