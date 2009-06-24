@@ -1,7 +1,7 @@
-Index: linux-2.6.18.i686/fs/ext4/mballoc.c
+Index: linux-2.6.18-128.1.6/fs/ext4/mballoc.c
 ===================================================================
---- linux-2.6.18.i686.orig/fs/ext4/mballoc.c
-+++ linux-2.6.18.i686/fs/ext4/mballoc.c
+--- linux-2.6.18-128.1.6.orig/fs/ext4/mballoc.c
++++ linux-2.6.18-128.1.6/fs/ext4/mballoc.c
 @@ -660,7 +660,7 @@ static void ext4_mb_mark_free_simple(str
  	}
  }
@@ -145,13 +145,14 @@ Index: linux-2.6.18.i686/fs/ext4/mballoc.c
  	if (ac->ac_op == EXT4_MB_HISTORY_ALLOC) {
  		if (ac->ac_g_ex.fe_start == ac->ac_b_ex.fe_start &&
  				ac->ac_g_ex.fe_group == ac->ac_b_ex.fe_group)
-@@ -3531,22 +3547,66 @@ ext4_mb_use_preallocated(struct ext4_all
+@@ -3539,22 +3555,67 @@ ext4_mb_use_preallocated(struct ext4_all
  }
  
  /*
 + * check free blocks in bitmap match free block in group descriptor
 + * do this before taking preallocated blocks into account to be able
-+ * to detect on-disk corruptions
++ * to detect on-disk corruptions. The group lock should be hold by the
++ * caller.
 + */
 +int ext4_mb_check_ondisk_bitmap(struct super_block *sb, void *bitmap,
 +				struct ext4_group_desc *gdp, int group)
@@ -163,7 +164,7 @@ Index: linux-2.6.18.i686/fs/ext4/mballoc.c
 +
 +	while (i < max) {
 +		first = i;
-+		i = find_next_bit(bitmap, max, i);
++		i = mb_find_next_bit(bitmap, max, i);
 +		if (i > max)
 +			i = max;
 +		free += i - first;
@@ -213,7 +214,7 @@ Index: linux-2.6.18.i686/fs/ext4/mballoc.c
  	/* all form of preallocation discards first load group,
  	 * so the only competing code is preallocation use.
  	 * we don't need any locking here
-@@ -3562,15 +3622,24 @@ static void ext4_mb_generate_from_pa(str
+@@ -3570,15 +3631,24 @@ static void ext4_mb_generate_from_pa(str
  					     &groupnr, &start);
  		len = pa->pa_len;
  		spin_unlock(&pa->pa_lock);
@@ -239,7 +240,7 @@ Index: linux-2.6.18.i686/fs/ext4/mballoc.c
  }
  
  static void ext4_mb_pa_callback(struct rcu_head *head)
-@@ -3621,6 +3690,7 @@ static void ext4_mb_put_pa(struct ext4_a
+@@ -3629,6 +3699,7 @@ static void ext4_mb_put_pa(struct ext4_a
  	 */
  	ext4_lock_group(sb, grp);
  	list_del(&pa->pa_group_list);
@@ -247,7 +248,7 @@ Index: linux-2.6.18.i686/fs/ext4/mballoc.c
  	ext4_unlock_group(sb, grp);
  
  	spin_lock(pa->pa_obj_lock);
-@@ -3709,6 +3779,7 @@ ext4_mb_new_inode_pa(struct ext4_allocat
+@@ -3717,6 +3788,7 @@ ext4_mb_new_inode_pa(struct ext4_allocat
  
  	ext4_lock_group(sb, ac->ac_b_ex.fe_group);
  	list_add(&pa->pa_group_list, &grp->bb_prealloc_list);
@@ -255,7 +256,7 @@ Index: linux-2.6.18.i686/fs/ext4/mballoc.c
  	ext4_unlock_group(sb, ac->ac_b_ex.fe_group);
  
  	spin_lock(pa->pa_obj_lock);
-@@ -3768,6 +3839,7 @@ ext4_mb_new_group_pa(struct ext4_allocat
+@@ -3776,6 +3848,7 @@ ext4_mb_new_group_pa(struct ext4_allocat
  
  	ext4_lock_group(sb, ac->ac_b_ex.fe_group);
  	list_add(&pa->pa_group_list, &grp->bb_prealloc_list);
@@ -263,7 +264,7 @@ Index: linux-2.6.18.i686/fs/ext4/mballoc.c
  	ext4_unlock_group(sb, ac->ac_b_ex.fe_group);
  
  	/*
-@@ -3820,6 +3892,7 @@ ext4_mb_release_inode_pa(struct ext4_bud
+@@ -3828,6 +3901,7 @@ ext4_mb_release_inode_pa(struct ext4_bud
  		ac->ac_sb = sb;
  		ac->ac_inode = pa->pa_inode;
  		ac->ac_op = EXT4_MB_HISTORY_DISCARD;
@@ -271,7 +272,7 @@ Index: linux-2.6.18.i686/fs/ext4/mballoc.c
  	}
  
  	while (bit < end) {
-@@ -3964,6 +4037,8 @@ repeat:
+@@ -3972,6 +4046,8 @@ repeat:
  
  		spin_unlock(&pa->pa_lock);
  
@@ -280,7 +281,7 @@ Index: linux-2.6.18.i686/fs/ext4/mballoc.c
  		list_del(&pa->pa_group_list);
  		list_add(&pa->u.pa_tmp_list, &list);
  	}
-@@ -4099,7 +4174,7 @@ repeat:
+@@ -4107,7 +4183,7 @@ repeat:
  		if (err) {
  			ext4_error(sb, __func__, "Error in loading buddy "
  					"information for %lu\n", group);
@@ -289,7 +290,7 @@ Index: linux-2.6.18.i686/fs/ext4/mballoc.c
  		}
  
  		bitmap_bh = ext4_read_block_bitmap(sb, group);
-@@ -4111,6 +4186,8 @@ repeat:
+@@ -4119,6 +4195,8 @@ repeat:
  		}
  
  		ext4_lock_group(sb, group);
@@ -298,10 +299,10 @@ Index: linux-2.6.18.i686/fs/ext4/mballoc.c
  		list_del(&pa->pa_group_list);
  		ext4_mb_release_inode_pa(&e4b, bitmap_bh, pa, ac);
  		ext4_unlock_group(sb, group);
-Index: linux-2.6.18.i686/fs/ext4/mballoc.h
+Index: linux-2.6.18-128.1.6/fs/ext4/mballoc.h
 ===================================================================
---- linux-2.6.18.i686.orig/fs/ext4/mballoc.h
-+++ linux-2.6.18.i686/fs/ext4/mballoc.h
+--- linux-2.6.18-128.1.6.orig/fs/ext4/mballoc.h
++++ linux-2.6.18-128.1.6/fs/ext4/mballoc.h
 @@ -119,6 +119,7 @@ struct ext4_group_info {
  	unsigned short	bb_free;
  	unsigned short	bb_fragments;
