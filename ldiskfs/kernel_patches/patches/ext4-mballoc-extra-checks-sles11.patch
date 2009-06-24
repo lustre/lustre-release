@@ -150,13 +150,14 @@ Index: linux-2.6.27.21-0.1/fs/ext4/mballoc.c
  	if (ac->ac_op == EXT4_MB_HISTORY_ALLOC) {
  		if (ac->ac_g_ex.fe_start == ac->ac_b_ex.fe_start &&
  				ac->ac_g_ex.fe_group == ac->ac_b_ex.fe_group)
-@@ -3689,22 +3703,66 @@ static void ext4_mb_generate_from_freeli
+@@ -3695,22 +3709,67 @@ static void ext4_mb_generate_from_freeli
  }
  
  /*
 + * check free blocks in bitmap match free block in group descriptor
 + * do this before taking preallocated blocks into account to be able
-+ * to detect on-disk corruptions
++ * to detect on-disk corruptions. The group lock should be hold by the
++ * caller.
 + */
 +int ext4_mb_check_ondisk_bitmap(struct super_block *sb, void *bitmap,
 +				struct ext4_group_desc *gdp, int group)
@@ -168,7 +169,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/mballoc.c
 +
 +	while (i < max) {
 +		first = i;
-+		i = find_next_bit(bitmap, max, i);
++		i = mb_find_next_bit(bitmap, max, i);
 +		if (i > max)
 +			i = max;
 +		free += i - first;
