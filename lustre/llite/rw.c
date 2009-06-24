@@ -392,7 +392,7 @@ static int ll_ap_make_ready(void *data, int cmd)
 
         LASSERTF(!(cmd & OBD_BRW_READ) || !PageWriteback(page),
                 "cmd %x page %p ino %lu index %lu fl %lx\n", cmd, page,
-                 page->mapping->host->i_ino, page->index, page->flags);
+                 page->mapping->host->i_ino, page->index, (long)page->flags);
 
         /* if we left PageDirty we might get another writepage call
          * in the future.  list walkers are bright enough

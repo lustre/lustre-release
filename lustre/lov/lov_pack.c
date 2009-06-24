@@ -60,7 +60,7 @@ void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
         int i;
 
         CDEBUG(level, "objid "LPX64", magic 0x%08x, pattern %#x\n",
-               le64_to_cpu(lmm->lmm_object_id), le32_to_cpu(lmm->lmm_magic),
+               (__u64)le64_to_cpu(lmm->lmm_object_id), le32_to_cpu(lmm->lmm_magic),
                le32_to_cpu(lmm->lmm_pattern));
         CDEBUG(level,"stripe_size %u, stripe_count %u\n",
                le32_to_cpu(lmm->lmm_stripe_size),
@@ -72,8 +72,8 @@ void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
                          CDEBUG(level,
                                 "stripe %u idx %u subobj "LPX64"/"LPX64"\n",
                                 i, le32_to_cpu(lod->l_ost_idx),
-                                le64_to_cpu(lod->l_object_gr),
-                                le64_to_cpu(lod->l_object_id));
+                                (__u64)le64_to_cpu(lod->l_object_gr),
+                                (__u64)le64_to_cpu(lod->l_object_id));
         } else {
                 CDEBUG(level, "bad stripe_count %u > max_stripe_count %u\n",
                        le32_to_cpu(lmm->lmm_stripe_count),
@@ -85,7 +85,7 @@ void lov_dump_lmm_join(int level, struct lov_mds_md_join *lmmj)
 {
 
         CDEBUG(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
-               le64_to_cpu(lmmj->lmmj_md.lmm_object_id),
+               (__u64)le64_to_cpu(lmmj->lmmj_md.lmm_object_id),
                le32_to_cpu(lmmj->lmmj_md.lmm_magic),
                le32_to_cpu(lmmj->lmmj_md.lmm_pattern));
         CDEBUG(level,"stripe_size %u, stripe_count %u extent_count %u \n",
@@ -100,8 +100,8 @@ void lov_dump_lmm_v3(int level, struct lov_mds_md_v3 *lmm)
         int i;
 
         CDEBUG(level, "objid "LPX64", magic 0x%08x, pattern %#x\n",
-               le64_to_cpu(lmm->lmm_object_id), le32_to_cpu(lmm->lmm_magic),
-               le32_to_cpu(lmm->lmm_pattern));
+               (__u64)le64_to_cpu(lmm->lmm_object_id),
+               le32_to_cpu(lmm->lmm_magic), le32_to_cpu(lmm->lmm_pattern));
         CDEBUG(level,"stripe_size %u, stripe_count %u\n",
                le32_to_cpu(lmm->lmm_stripe_size),
                le32_to_cpu(lmm->lmm_stripe_count));
@@ -113,8 +113,8 @@ void lov_dump_lmm_v3(int level, struct lov_mds_md_v3 *lmm)
                          CDEBUG(level,
                                 "stripe %u idx %u subobj "LPX64"/"LPX64"\n",
                                 i, le32_to_cpu(lod->l_ost_idx),
-                                le64_to_cpu(lod->l_object_gr),
-                                le64_to_cpu(lod->l_object_id));
+                                (__u64)le64_to_cpu(lod->l_object_gr),
+                                (__u64)le64_to_cpu(lod->l_object_id));
         } else {
                 CDEBUG(level, "bad stripe_count %u > max_stripe_count %u\n",
                        le32_to_cpu(lmm->lmm_stripe_count),
