@@ -1279,12 +1279,15 @@ build_with_srpm() {
 
 create_rpmbuild_dirs() {
 
-    if [ ! -d RPMS ]; then
-        mkdir -p RPMS
-        for arch in $BUILD_ARCHS; do
-            mkdir RPMS/$arch
-        done
-    fi
+    [ -d RPMS ] || mkdir RPMS
+    for arch in $BUILD_ARCHS; do
+        if [[ $arch = i?86 ]]; then
+            # some stupidity in the sles11 kernel spec requires an RPMS/i386
+            # even if the target arch is i686
+            [ -d RPMS/i386 ] || mkdir RPMS/i386
+        fi
+        [ -d RPMS/$arch ] || mkdir RPMS/$arch
+    done
     [ -d BUILD ] || mkdir BUILD
     [ -d SOURCES ] || mkdir SOURCES
     [ -d SPECS ] || mkdir SPECS
