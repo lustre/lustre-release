@@ -19,3 +19,4 @@ ext4-mballoc-handle-dev-paths-rhel5.patch
 ext4-big-endian-check-2.6-rhel5.patch
 ext4-alloc-policy-2.6-rhel5.patch
 ext4-misc-rhel5.patch
+ext4-convert-group-lock-rhel5.patch
