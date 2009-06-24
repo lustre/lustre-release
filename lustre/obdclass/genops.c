@@ -756,6 +756,7 @@ void class_export_put(struct obd_export *exp)
         LASSERT(atomic_read(&exp->exp_refcount) < 0x5a5a5a);
 
         if (atomic_dec_and_test(&exp->exp_refcount)) {
+                LASSERT(!list_empty(&exp->exp_obd_chain));
                 CDEBUG(D_IOCTL, "final put %p/%s\n",
                        exp, exp->exp_client_uuid.uuid);
                 obd_zombie_export_add(exp);
@@ -780,6 +781,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
         export->exp_lock_hash = NULL;
         atomic_set(&export->exp_refcount, 2);
         atomic_set(&export->exp_rpc_count, 0);
+        atomic_set(&export->exp_cb_count, 0);
         export->exp_obd = obd;
         CFS_INIT_LIST_HEAD(&export->exp_outstanding_replies);
         spin_lock_init(&export->exp_uncommitted_replies_lock);
@@ -835,7 +837,7 @@ void class_unlink_export(struct obd_export *exp)
                                 &exp->exp_client_uuid,
                                 &exp->exp_uuid_hash);
 
-        list_del_init(&exp->exp_obd_chain);
+        list_move(&exp->exp_obd_chain, &exp->exp_obd->obd_unlinked_exports);
         list_del_init(&exp->exp_obd_chain_timed);
         exp->exp_obd->obd_num_exports--;
         spin_unlock(&exp->exp_obd->obd_dev_lock);
@@ -1299,6 +1301,72 @@ int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid)
 }
 EXPORT_SYMBOL(obd_export_evict_by_uuid);
 
+static void print_export_data(struct obd_export *exp, const char *status)
+{
+        struct ptlrpc_reply_state *rs;
+        struct ptlrpc_reply_state *first_reply = NULL;
+        int nreplies = 0;
+
+        spin_lock(&exp->exp_lock);
+        list_for_each_entry (rs, &exp->exp_outstanding_replies, rs_exp_list) {
+                if (nreplies == 0)
+                        first_reply = rs;
+                nreplies++;
+        }
+        spin_unlock(&exp->exp_lock);
+
+        CDEBUG(D_HA, "%s: %s %p %s %s %d %d %d: %p %s %d %d %d %d "LPU64"\n",
+               exp->exp_obd->obd_name, status, exp, exp->exp_client_uuid.uuid,
+               obd_export_nid2str(exp), atomic_read(&exp->exp_refcount),
+               exp->exp_failed, nreplies, first_reply,
+               nreplies > 3 ? "..." : "",
+               atomic_read(&exp->exp_rpc_count),
+               atomic_read(&exp->exp_cb_count),
+               exp->exp_disconnected, exp->exp_delayed,
+               exp->exp_last_committed);
+}
+
+void dump_exports(struct obd_device *obd)
+{
+        struct obd_export *exp;
+
+        spin_lock(&obd->obd_dev_lock);
+        list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain)
+                print_export_data(exp, "ACTIVE");
+        list_for_each_entry(exp, &obd->obd_unlinked_exports, exp_obd_chain)
+                print_export_data(exp, "UNLINKED");
+        list_for_each_entry(exp, &obd->obd_delayed_exports, exp_obd_chain)
+                print_export_data(exp, "DELAYED");
+        spin_unlock(&obd->obd_dev_lock);
+        spin_lock(&obd_zombie_impexp_lock);
+        list_for_each_entry(exp, &obd_zombie_exports, exp_obd_chain)
+                print_export_data(exp, "ZOMBIE");
+        spin_unlock(&obd_zombie_impexp_lock);
+}
+EXPORT_SYMBOL(dump_exports);
+
+void obd_exports_barrier(struct obd_device *obd)
+{
+        int waited = 2;
+        LASSERT(list_empty(&obd->obd_exports));
+        spin_lock(&obd->obd_dev_lock);
+        while (!list_empty(&obd->obd_unlinked_exports)) {
+                spin_unlock(&obd->obd_dev_lock);
+                cfs_schedule_timeout(CFS_TASK_UNINT, cfs_time_seconds(waited));
+                if (waited > 5 && IS_PO2(waited)) {
+                        LCONSOLE_WARN("Waiting for obd_unlinked_exports "
+                                      "more than %d seconds. "
+                                      "The obd refcount = %d. Is it stuck?\n",
+                                      waited, atomic_read(&obd->obd_refcount));
+                        dump_exports(obd);
+                }
+                waited *= 2;
+                spin_lock(&obd->obd_dev_lock);
+        }
+        spin_unlock(&obd->obd_dev_lock);
+}
+EXPORT_SYMBOL(obd_exports_barrier);
+
 /**
  * kill zombie imports and exports
  */
@@ -1369,8 +1437,11 @@ static int obd_zombie_impexp_check(void *arg)
  * Add export to the obd_zombe thread and notify it.
  */
 static void obd_zombie_export_add(struct obd_export *exp) {
+        spin_lock(&exp->exp_obd->obd_dev_lock);
+        LASSERT(!list_empty(&exp->exp_obd_chain));
+        list_del_init(&exp->exp_obd_chain);
+        spin_unlock(&exp->exp_obd->obd_dev_lock);
         spin_lock(&obd_zombie_impexp_lock);
-        LASSERT(list_empty(&exp->exp_obd_chain));
         list_add(&exp->exp_obd_chain, &obd_zombie_exports);
         spin_unlock(&obd_zombie_impexp_lock);
 

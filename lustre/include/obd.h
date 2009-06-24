@@ -1047,6 +1047,7 @@ struct obd_device {
         atomic_t                obd_refcount;
         cfs_waitq_t             obd_refcount_waitq;
         struct list_head        obd_exports;
+        struct list_head        obd_unlinked_exports;
         struct list_head        obd_delayed_exports;
         int                     obd_num_exports;
         spinlock_t              obd_nid_lock;

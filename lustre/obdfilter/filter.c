@@ -90,6 +90,7 @@ static void filter_commit_cb(struct obd_device *obd, __u64 transno,
         struct obd_export *exp = cb_data;
         LASSERT(exp->exp_obd == obd);
         obd_transno_commit_cb(obd, transno, exp, error);
+        atomic_dec(&exp->exp_cb_count);
         class_export_put(exp);
 }
 
@@ -167,6 +168,7 @@ int filter_finish_transno(struct obd_export *exp, struct inode *inode,
                 err = -EINVAL;
         } else {
                 class_export_get(exp); /* released when the cb is called */
+                atomic_inc(&exp->exp_cb_count);
                 if (!force_sync)
                         force_sync = fsfilt_add_journal_cb(exp->exp_obd,
                                                            last_rcvd,
@@ -2637,8 +2639,7 @@ static int filter_precleanup(struct obd_device *obd,
                 break;
         case OBD_CLEANUP_EXPORTS:
                 /* Stop recovery before namespace cleanup. */
-                target_stop_recovery_thread(obd);
-                target_cleanup_recovery(obd);
+                target_recovery_fini(obd);
                 rc = filter_llog_preclean(obd);
                 break;
         }
@@ -2654,14 +2655,8 @@ static int filter_cleanup(struct obd_device *obd)
                 LCONSOLE_WARN("%s: shutting down for failover; client state "
                               "will be preserved.\n", obd->obd_name);
 
-        if (!list_empty(&obd->obd_exports)) {
-                CERROR("%s: still has clients!\n", obd->obd_name);
-                class_disconnect_exports(obd);
-                if (!list_empty(&obd->obd_exports)) {
-                        CERROR("still has exports after forced cleanup?\n");
-                        RETURN(-EBUSY);
-                }
-        }
+        obd_exports_barrier(obd);
+        obd_zombie_barrier();
 
         lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
         lprocfs_free_per_client_stats(obd);

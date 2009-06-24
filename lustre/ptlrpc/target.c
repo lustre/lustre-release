@@ -309,6 +309,8 @@ void lut_cb_last_committed(struct lu_target *lut, __u64 transno,
         } else {
                 spin_unlock(&lut->lut_translock);
         }
+        LASSERT(atomic_read(&exp->exp_cb_count) > 0);
+        atomic_dec(&exp->exp_cb_count);
         class_export_put(exp);
         if (transno)
                 CDEBUG(D_HA, "%s: transno "LPD64" is committed\n",

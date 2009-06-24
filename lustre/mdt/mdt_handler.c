@@ -4337,6 +4337,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         mdt_stop_ptlrpc_service(m);
         mdt_llog_ctxt_unclone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
         mdt_obd_llog_cleanup(obd);
+        obd_exports_barrier(obd);
         obd_zombie_barrier();
 #ifdef HAVE_QUOTA_SUPPORT
         next->md_ops->mdo_quota.mqo_cleanup(env, next);

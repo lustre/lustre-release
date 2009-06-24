@@ -144,6 +144,7 @@ struct obd_export {
         struct portals_handle     exp_handle;
         atomic_t                  exp_refcount;
         atomic_t                  exp_rpc_count;
+        atomic_t                  exp_cb_count;
         struct obd_uuid           exp_client_uuid;
         struct list_head          exp_obd_chain;
         struct hlist_node         exp_uuid_hash; /* uuid-export hash*/
