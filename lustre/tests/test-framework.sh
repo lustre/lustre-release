@@ -535,6 +535,8 @@ fi"
 }
 
 sanity_mount_check_servers () {
+    [ "$CLIENTONLY" ] && 
+        { echo "CLIENTONLY mode, skip mount_check_servers"; return 0; } || true
     echo Checking servers environments
 
     # FIXME: modify get_facets to display all facets wo params
@@ -1416,6 +1418,7 @@ mounted_lustre_filesystems() {
 }
 
 init_facet_vars () {
+    [ "$CLIENTONLY" ] && return 0
     local facet=$1
     shift
     local device=$1
@@ -1476,6 +1479,30 @@ init_param_vars () {
 
 check_config () {
     local mntpt=$1
+
+    local mounted=$(mount | grep " $mntpt ")
+    if [ "$CLIENTONLY" ]; then
+        # bug 18021
+        # CLIENTONLY should not depend on *_HOST settings
+        local mgc=$($LCTL device_list | awk '/MGC/ {print $4}')
+        # in theory someone could create a new,
+        # client-only config file that assumed lustre was already
+        # configured and didn't set the MGSNID. If MGSNID is not set,
+        # then we should use the mgs nid currently being used 
+        # as the default value. bug 18021
+        [[ x$MGSNID = x ]] &&
+            MGSNID=${mgc//MGC/}
+
+        if [[ x$mgc != xMGC$MGSNID ]]; then
+            if [ "$mgs_HOST" ]; then
+                local mgc_ip=$(ping -q -c1 -w1 $mgs_HOST | grep PING | awk '{print $3}' | sed -e "s/(//g" -e "s/)//g")
+                [[ x$mgc = xMGC$mgc_ip@$NETTYPE ]] ||
+                    error_exit "MGSNID=$MGSNID, mounted: $mounted, MGC : $mgc"
+            fi
+        fi
+        return 0
+    fi
+
     local myMGS_host=$mgs_HOST
     if [ "$NETTYPE" = "ptl" ]; then
         myMGS_host=$(h2ptl $mgs_HOST | sed -e s/@ptl//)
@@ -1486,7 +1513,7 @@ check_config () {
     mgshost=$(echo $mgshost | awk -F: '{print $1}')
 
     if [ "$mgshost" != "$myMGS_host" ]; then
-            log "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST, NETTYPE=$NETTYPE
+            error_exit "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST, NETTYPE=$NETTYPE
                    Please use correct config or set mds_HOST correctly!"
     fi
 
@@ -2085,6 +2112,7 @@ remote_mds ()
 
 remote_mds_nodsh()
 {
+    [ "$CLIENTONLY" ] && return 0 || true
     remote_mds && [ "$PDSH" = "no_dsh" -o -z "$PDSH" -o -z "$mds_HOST" ]
 }
 
@@ -2099,6 +2127,7 @@ remote_ost ()
 
 remote_ost_nodsh()
 {
+    [ "$CLIENTONLY" ] && return 0 || true 
     remote_ost && [ "$PDSH" = "no_dsh" -o -z "$PDSH" -o -z "$ost_HOST" ]
 }
 
