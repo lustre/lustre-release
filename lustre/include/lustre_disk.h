@@ -156,6 +156,8 @@ struct lustre_mount_data {
         __u32      lmd_flags;         /* lustre mount flags */
         int        lmd_mgs_failnodes; /* mgs failover node count */
         int        lmd_exclude_count;
+        int        lmd_recovery_time_soft;
+        int        lmd_recovery_time_hard;
         char      *lmd_dev;           /* device name */
         char      *lmd_profile;       /* client only */
         char      *lmd_opts;          /* lustre mount options (as opposed to 

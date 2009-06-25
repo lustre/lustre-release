@@ -463,6 +463,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         struct mds_obd *mds = &obd->u.mds;
         struct lr_server_data *lsd;
         struct lsd_client_data *lcd = NULL;
+        struct lustre_mount_info *lmi;
         loff_t off = 0;
         unsigned long last_rcvd_size = i_size_read(file->f_dentry->d_inode);
         __u64 mount_count;
@@ -676,16 +677,30 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 obd->obd_recovering = 1;
                 obd->obd_recovery_start = 0;
                 obd->obd_recovery_end = 0;
-                obd->obd_recovery_timeout = OBD_RECOVERY_FACTOR * obd_timeout;
-#ifdef CRAY_XT3
-                /* bz13079: this won't be changed for mds */
-                obd->obd_recovery_max_time = OBD_RECOVERY_MAX_TIME;
-#endif
         } else {
                 LASSERT(!obd->obd_recovering);
                 /* VBR: update boot epoch after recovery */
                 mds_update_last_epoch(obd);
         }
+
+        obd->obd_recovery_timeout = OBD_RECOVERY_TIME_SOFT;
+        obd->obd_recovery_time_hard = OBD_RECOVERY_TIME_HARD;
+
+        lmi = server_get_mount(obd->obd_name);
+        if (lmi) {
+                struct lustre_sb_info *lsi = s2lsi(lmi->lmi_sb);
+
+                if (lsi->lsi_lmd && lsi->lsi_lmd->lmd_recovery_time_soft)
+                        obd->obd_recovery_timeout =
+                                lsi->lsi_lmd->lmd_recovery_time_soft;
+
+                if (lsi->lsi_lmd && lsi->lsi_lmd->lmd_recovery_time_hard)
+                        obd->obd_recovery_time_hard =
+                                lsi->lsi_lmd->lmd_recovery_time_hard;
+
+                server_put_mount(obd->obd_name, lmi->lmi_mnt);
+        }
+
         mds->mds_mount_count = mount_count + 1;
         lsd->lsd_mount_count = lsd->lsd_compat14 =
                 cpu_to_le64(mds->mds_mount_count);

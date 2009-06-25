@@ -80,12 +80,11 @@ extern unsigned int obd_alloc_fail_rate;
 #else
 #define STALE_EXPORT_MAXTIME_DEFAULT    (0) /**< zero if no delayed recovery */
 #endif
-#ifdef CRAY_XT3
- #define OBD_RECOVERY_MAX_TIME (obd_timeout * 18) /* b13079 */
-#endif
-/* Time to wait for all clients to reconnect during recovery */
+/* Time to wait for all clients to reconnect during recovery (hard limit) */
+#define OBD_RECOVERY_TIME_HARD          (obd_timeout * 9)
+/* Time to wait for all clients to reconnect during recovery (soft limit) */
 /* Should be very conservative; must catch the first reconnect after reboot */
-#define OBD_RECOVERY_FACTOR (3) /* times obd_timeout */
+#define OBD_RECOVERY_TIME_SOFT          (obd_timeout * 3)
 /* Change recovery-small 26b time if you change this */
 #define PING_INTERVAL max(obd_timeout / 4, 1U)
 /* a bit more than maximal journal commit time in seconds */
