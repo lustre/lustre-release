@@ -458,7 +458,7 @@ test_1() {
     chmod 0777 $DIR || error "chmod $DIR failed"
     # access w/o cred
     $RUNAS kdestroy
-    $RUNAS $LFS flushctx || error "can't flush ctx"
+    $RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
     $RUNAS touch $file && error "unexpected success"
 
     # access w/ cred
@@ -479,7 +479,7 @@ test_2() {
 
     # cleanup all cred/ctx and touch
     $RUNAS kdestroy
-    $RUNAS $LFS flushctx || error "can't flush ctx"
+    $RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
     $RUNAS touch $file2 && error "unexpected success"
 
     # restore and touch
@@ -509,7 +509,7 @@ test_3() {
     # metadata check should fail, but file data check should success
     # because we always use root credential to OSTs
     $RUNAS kdestroy
-    $RUNAS $LFS flushctx
+    $RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
     echo "destroied credentials/contexs for $RUNAS_ID"
     $RUNAS $CHECKSTAT -p 0666 $file && error "checkstat succeed"
     kill -s 10 $OPPID
@@ -545,7 +545,7 @@ test_4() {
     check_gss_daemon_facet client lgssd && error "lgssd still running"
 
     # flush context, and touch
-    $RUNAS $LFS flushctx
+    $RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
     $RUNAS touch $file2 &
     TOUCHPID=$!
     echo "waiting touch pid $TOUCHPID"
@@ -578,7 +578,7 @@ test_5() {
     check_gss_daemon_facet mds lsvcgssd && error "lsvcgssd still running"
 
     # flush context, and touch
-    $RUNAS $LFS flushctx
+    $RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
     $RUNAS touch $file2 &
     TOUCHPID=$!
 
@@ -667,7 +667,7 @@ test_8()
 #define OBD_FAIL_SEC_CTX_HDL_PAUSE       0x1204
     do_facet mds lctl set_param fail_loc=0x1204
 
-    $RUNAS $LFS flushctx || error "can't flush ctx"
+    $RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
 
     $RUNAS touch $DIR/d8/f &
     TOUCHPID=$!
@@ -705,7 +705,7 @@ test_90() {
         sleep 2
         check_dbench
         echo "flush ctx ($n/$total) ..."
-        $LFS flushctx
+        $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
     done
     check_dbench
     #sleep to let ctxs be re-established
