@@ -834,10 +834,14 @@ check_progs_installed () {
     shift
     local progs=$@
 
-    do_nodes $clients "set -x ; PATH=:$PATH status=true; for prog in $progs; do
-        which \\\$prog || { echo \\\$prog missing on \\\$(hostname) && status=false; }
-        done;
-        eval \\\$status"
+    do_nodes $clients "set -x ; PATH=:$PATH; status=true;
+for prog in $progs; do
+    if ! [ \\\"\\\$(which \\\$prog)\\\"  -o  \\\"\\\${!prog}\\\" ]; then
+       echo \\\$prog missing on \\\$(hostname);
+       status=false;
+    fi
+done;
+eval \\\$status"
 }
 
 client_var_name() {
@@ -2714,30 +2718,6 @@ get_mds_dir () {
          fi
     done
     error "mdt-s : inodes count OLD ${oldused[@]} NEW ${newused[@]}"
-}
-
-mpi_run () {
-    local mpirun="$MPIRUN $MPIRUN_OPTIONS"
-    local command="$mpirun $@"
-    local mpilog=$TMP/mpi.log
-    local rc
-
-    if [ "$MPI_USER" != root -a $mpirun ]; then
-        echo "+ chmod 0777 $MOUNT"
-        chmod 0777 $MOUNT
-        command="su $MPI_USER sh -c \"$command \""
-    fi
-
-    ls -ald $MOUNT
-    echo "+ $command"
-    eval $command 2>&1 > $mpilog || true
-
-    rc=${PIPESTATUS[0]}
-    if [ $rc -eq 0 ] && grep -q "p4_error: : [^0]" $mpilog ; then
-       rc=1
-    fi
-    cat $mpilog
-    return $rc
 }
 
 mdsrate_cleanup () {
