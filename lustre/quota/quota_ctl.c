@@ -195,15 +195,11 @@ int filter_quota_ctl(struct obd_device *unused, struct obd_export *exp,
         case Q_FINVALIDATE:
         case Q_QUOTAON:
         case Q_QUOTAOFF:
-                if (!atomic_dec_and_test(&obt->obt_quotachecking)) {
-                        CDEBUG(D_INFO, "other people are doing quotacheck\n");
-                        atomic_inc(&obt->obt_quotachecking);
-                        rc = -EBUSY;
-                        break;
-                }
+                down(&obt->obt_quotachecking);
                 if (oqctl->qc_cmd == Q_FINVALIDATE &&
                     (obt->obt_qctxt.lqc_flags & UGQUOTA2LQC(oqctl->qc_type))) {
-                        atomic_inc(&obt->obt_quotachecking);
+                        CWARN("quota[%u] is on yet\n", oqctl->qc_type);
+                        up(&obt->obt_quotachecking);
                         rc = -EBUSY;
                         break;
                 }
@@ -227,11 +223,21 @@ int filter_quota_ctl(struct obd_device *unused, struct obd_export *exp,
 
                 if (oqctl->qc_cmd == Q_QUOTAON || oqctl->qc_cmd == Q_QUOTAOFF ||
                     oqctl->qc_cmd == Q_FINVALIDATE) {
-                        if (!rc && oqctl->qc_cmd == Q_QUOTAON)
-                                obt->obt_qctxt.lqc_flags |= UGQUOTA2LQC(oqctl->qc_type);
-                        if (!rc && oqctl->qc_cmd == Q_QUOTAOFF)
-                                obt->obt_qctxt.lqc_flags &= ~UGQUOTA2LQC(oqctl->qc_type);
-                        atomic_inc(&obt->obt_quotachecking);
+                        if (oqctl->qc_cmd == Q_QUOTAON) {
+                                if (!rc)
+                                        obt->obt_qctxt.lqc_flags |=
+                                                UGQUOTA2LQC(oqctl->qc_type);
+                                else if (rc == -EBUSY &&
+                                         quota_is_on(qctxt, oqctl))
+                                                rc = -EALREADY;
+                        } else if (oqctl->qc_cmd == Q_QUOTAOFF) {
+                                if (!rc)
+                                        obt->obt_qctxt.lqc_flags &=
+                                                ~UGQUOTA2LQC(oqctl->qc_type);
+                                else if (quota_is_off(qctxt, oqctl))
+                                                rc = -EALREADY;
+                        }
+                        up(&obt->obt_quotachecking);
                 }
 
                 /* when quotaon, create lqs for every quota uid/gid b=18574 */

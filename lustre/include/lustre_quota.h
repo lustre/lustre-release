@@ -449,7 +449,7 @@ struct quotacheck_thread_args {
         struct obd_device   *qta_obd;   /** obd device */
         struct obd_quotactl  qta_oqctl; /** obd_quotactl args */
         struct super_block  *qta_sb;    /** obd super block */
-        atomic_t            *qta_sem;   /** obt_quotachecking */
+        struct semaphore    *qta_sem;   /** obt_quotachecking */
 };
 
 struct obd_trans_info;

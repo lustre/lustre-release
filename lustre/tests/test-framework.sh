@@ -568,6 +568,7 @@ setup_quota(){
     # Suppose that quota type the same on mds and ost
     local quota_type=$(quota_type | grep MDT | cut -d "=" -f2)
     [ ${PIPESTATUS[0]} -eq 0 ] || error "quota_type failed!"
+    echo "[HOST:$HOSTNAME] [old_quota_type:$quota_type] [new_quota_type:$QUOTA_TYPE]"
     if [ "$quota_type" != "$QUOTA_TYPE" ]; then
         export old_QUOTA_TYPE=$quota_type
         quota_save_version $QUOTA_TYPE
@@ -589,7 +590,7 @@ setup_quota(){
 
     local cmd
     for usr in $quota_usrs; do
-        echo "Setting up quota on $client:$mntpt for $usr..."
+        echo "Setting up quota on $HOSTNAME:$mntpt for $usr..."
         for type in u g; do
             cmd="$LFS setquota -$type $usr -b $blk_soft -B $blk_hard -i $i_soft -I $i_hard $mntpt"
             echo "+ $cmd"
@@ -2817,7 +2818,7 @@ wait_osc_import_state() {
     local i=0
 
     CONN_PROC="osc.${FSNAME}-${ost}.ost_server_uuid"
-    CONN_STATE=$(do_facet $node lctl get_param -n $CONN_PROC | cut -f2)
+    CONN_STATE=$(do_facet $node lctl get_param -n $CONN_PROC 2>/dev/null | cut -f2)
     while [ "${CONN_STATE}" != "${expected}" ]; do
         # for disconn we can check after proc entry is removed
         [ "x${CONN_STATE}" == "x" -a "${expected}" == "DISCONN" ] && return 0
@@ -2825,7 +2826,7 @@ wait_osc_import_state() {
         [ $i -ge $(($TIMEOUT * 3 / 2)) ] && \
             error "can't put import for ${ost}(${ost_facet}) into ${expected} state" && return 1
         sleep 1
-        CONN_STATE=$(do_facet $node lctl get_param -n $CONN_PROC | cut -f2)
+        CONN_STATE=$(do_facet $node lctl get_param -n $CONN_PROC 2>/dev/null | cut -f2)
         i=$(($i + 1))
     done
 

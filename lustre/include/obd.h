@@ -261,7 +261,7 @@ struct obd_device_target {
         spinlock_t                obt_translock;
         /** Number of mounts */
         __u64                     obt_mount_count;
-        atomic_t                  obt_quotachecking;
+        struct semaphore          obt_quotachecking;
         struct lustre_quota_ctxt  obt_qctxt;
         lustre_quota_version_t    obt_qfmt;
         struct rw_semaphore       obt_rwsem;

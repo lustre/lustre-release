@@ -1451,6 +1451,31 @@ exit:
         EXIT;
 }
 
+int quota_is_on(struct lustre_quota_ctxt *qctxt, struct obd_quotactl *oqctl)
+{
+        unsigned int type;
+
+        for (type = USRQUOTA; type < MAXQUOTAS; type++) {
+                if (!Q_TYPESET(oqctl, type))
+                        continue;
+                if (!(qctxt->lqc_flags & UGQUOTA2LQC(oqctl->qc_type)))
+                        return 0;
+        }
+        return 1;
+}
+
+int quota_is_off(struct lustre_quota_ctxt *qctxt, struct obd_quotactl *oqctl)
+{
+        unsigned int type;
+
+        for (type = USRQUOTA; type < MAXQUOTAS; type++) {
+                if (!Q_TYPESET(oqctl, type))
+                        continue;
+                if (qctxt->lqc_flags & UGQUOTA2LQC(oqctl->qc_type))
+                        return 0;
+        }
+        return 1;
+}
 
 /**
  * lqs<->qctxt hash operations

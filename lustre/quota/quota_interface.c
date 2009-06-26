@@ -78,7 +78,7 @@ static int filter_quota_setup(struct obd_device *obd)
 
         init_rwsem(&obt->obt_rwsem);
         obt->obt_qfmt = LUSTRE_QUOTA_V2;
-        atomic_set(&obt->obt_quotachecking, 1);
+        sema_init(&obt->obt_quotachecking, 1);
         rc = qctxt_init(obd, NULL);
         if (rc)
                 CERROR("initialize quota context failed! (rc:%d)\n", rc);
@@ -619,7 +619,7 @@ static int mds_quota_setup(struct obd_device *obd)
         init_rwsem(&obt->obt_rwsem);
         obt->obt_qfmt = LUSTRE_QUOTA_V2;
         mds->mds_quota_info.qi_version = LUSTRE_QUOTA_V2;
-        atomic_set(&obt->obt_quotachecking, 1);
+        sema_init(&obt->obt_quotachecking, 1);
         /* initialize quota master and quota context */
         sema_init(&mds->mds_qonoff_sem, 1);
         rc = qctxt_init(obd, dqacq_handler);
