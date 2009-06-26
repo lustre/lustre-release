@@ -782,6 +782,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
         atomic_set(&export->exp_refcount, 2);
         atomic_set(&export->exp_rpc_count, 0);
         atomic_set(&export->exp_cb_count, 0);
+        atomic_set(&export->exp_locks_count, 0);
         export->exp_obd = obd;
         CFS_INIT_LIST_HEAD(&export->exp_outstanding_replies);
         spin_lock_init(&export->exp_uncommitted_replies_lock);
@@ -1315,14 +1316,14 @@ static void print_export_data(struct obd_export *exp, const char *status)
         }
         spin_unlock(&exp->exp_lock);
 
-        CDEBUG(D_HA, "%s: %s %p %s %s %d %d %d: %p %s %d %d %d %d "LPU64"\n",
+        CDEBUG(D_HA, "%s: %s %p %s %s %d (%d %d %d) %d %d %d %d: %p %s "LPU64"\n",
                exp->exp_obd->obd_name, status, exp, exp->exp_client_uuid.uuid,
                obd_export_nid2str(exp), atomic_read(&exp->exp_refcount),
-               exp->exp_failed, nreplies, first_reply,
-               nreplies > 3 ? "..." : "",
                atomic_read(&exp->exp_rpc_count),
                atomic_read(&exp->exp_cb_count),
-               exp->exp_disconnected, exp->exp_delayed,
+               atomic_read(&exp->exp_locks_count),
+               exp->exp_disconnected, exp->exp_delayed, exp->exp_failed,
+               nreplies, first_reply, nreplies > 3 ? "..." : "",
                exp->exp_last_committed);
 }
 

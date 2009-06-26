@@ -1110,7 +1110,7 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
                 GOTO(out, rc = -ENOTCONN);
         }
         lock->l_export = class_export_get(req->rq_export);
-
+        atomic_inc(&lock->l_export->exp_locks_count);
         if (lock->l_export->exp_lock_hash)
                 lustre_hash_add(lock->l_export->exp_lock_hash,
                                 &lock->l_remote_handle,
