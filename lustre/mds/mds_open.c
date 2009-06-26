@@ -587,6 +587,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 }
 
                 dchild = mds_lookup(obd, rec->ur_name, parent, rec->ur_namelen - 1);
+                l_dput(parent);
                 if (IS_ERR(dchild)) {
                         rc = PTR_ERR(dchild);
                         LCONSOLE_WARN("Child "LPU64"/%u lookup error %d."
@@ -595,7 +596,6 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                                       rc, obd_uuid2str(&exp->exp_client_uuid),
                                       obd_export_nid2str(exp));
                         mds_export_evict(exp);
-                        l_dput(parent);
                         EXIT;
                         return;
                 }
@@ -1592,10 +1592,10 @@ out:
         /* If other clients have this file open for write, rc will be > 0 */
         if (rc > 0)
                 rc = 0;
-        l_dput(mfd->mfd_dentry);
-        mds_mfd_put(mfd);
 
  cleanup:
+        l_dput(mfd->mfd_dentry);
+        mds_mfd_put(mfd);
         if (req != NULL && reply_body != NULL) {
                 rc = mds_finish_transno(mds, NULL, handle, req, rc, 0, 0);
         } else if (handle) {
