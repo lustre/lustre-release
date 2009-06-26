@@ -120,8 +120,15 @@ quota_create_lqs(unsigned long long lqs_key, struct lustre_quota_ctxt *qctxt)
                 lqs->lqs_last_ishrink  = 0;
         }
         lqs_initref(lqs);
-        rc = lustre_hash_add_unique(qctxt->lqc_lqs_hash, &lqs->lqs_key,
-                                    &lqs->lqs_hash);
+
+        spin_lock(&qctxt->lqc_lock);
+        if (!qctxt->lqc_valid)
+                rc = -EBUSY;
+        else
+                rc = lustre_hash_add_unique(qctxt->lqc_lqs_hash,
+                                            &lqs->lqs_key, &lqs->lqs_hash);
+        spin_unlock(&qctxt->lqc_lock);
+
         if (!rc)
                 lqs_getref(lqs);
 

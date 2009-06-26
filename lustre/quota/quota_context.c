@@ -352,6 +352,7 @@ check_cur_qunit(struct obd_device *obd,
 
         spin_unlock(&lqs->lqs_lock);
         lqs_putref(lqs);
+
         EXIT;
  out:
         OBD_FREE_PTR(qctl);
@@ -1207,6 +1208,8 @@ qctxt_init(struct obd_device *obd, dqacq_handler_t handler)
                 RETURN(rc);
 
         cfs_waitq_init(&qctxt->lqc_wait_for_qmaster);
+        cfs_waitq_init(&qctxt->lqc_lqs_waitq);
+        atomic_set(&qctxt->lqc_lqs, 0);
         spin_lock_init(&qctxt->lqc_lock);
         spin_lock(&qctxt->lqc_lock);
         qctxt->lqc_handler = handler;
@@ -1249,6 +1252,16 @@ qctxt_init(struct obd_device *obd, dqacq_handler_t handler)
         RETURN(rc);
 }
 
+static int check_lqs(struct lustre_quota_ctxt *qctxt)
+{
+        int rc;
+        ENTRY;
+
+        rc = !atomic_read(&qctxt->lqc_lqs);
+
+        RETURN(rc);
+}
+
 
 void hash_put_lqs(void *obj, void *data)
 {
@@ -1259,6 +1272,7 @@ void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force)
 {
         struct lustre_qunit *qunit, *tmp;
         struct list_head tmp_list;
+        struct l_wait_info lwi = { 0 };
         struct obd_device_target *obt = qctxt->lqc_obt;
         int i;
         ENTRY;
@@ -1290,12 +1304,6 @@ void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force)
                 qunit_put(qunit);
         }
 
-        lustre_hash_for_each_safe(qctxt->lqc_lqs_hash, hash_put_lqs, NULL);
-        down_write(&obt->obt_rwsem);
-        lustre_hash_exit(qctxt->lqc_lqs_hash);
-        qctxt->lqc_lqs_hash = NULL;
-        up_write(&obt->obt_rwsem);
-
         /* after qctxt_cleanup, qctxt might be freed, then check_qm() is
          * unpredicted. So we must wait until lqc_wait_for_qmaster is empty */
         while (cfs_waitq_active(&qctxt->lqc_wait_for_qmaster)) {
@@ -1303,6 +1311,13 @@ void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force)
                 cfs_schedule_timeout(CFS_TASK_INTERRUPTIBLE,
                                      cfs_time_seconds(1));
         }
+
+        lustre_hash_for_each_safe(qctxt->lqc_lqs_hash, hash_put_lqs, NULL);
+        l_wait_event(qctxt->lqc_lqs_waitq, check_lqs(qctxt), &lwi);
+        down_write(&obt->obt_rwsem);
+        lustre_hash_exit(qctxt->lqc_lqs_hash);
+        qctxt->lqc_lqs_hash = NULL;
+        up_write(&obt->obt_rwsem);
 
         ptlrpcd_decref();
 
@@ -1479,12 +1494,10 @@ static void *
 lqs_get(struct hlist_node *hnode)
 {
         struct lustre_qunit_size *q =
-            hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
+                hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
         ENTRY;
 
-        atomic_inc(&q->lqs_refcount);
-        CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
-               q, atomic_read(&q->lqs_refcount));
+        __lqs_getref(q);
 
         RETURN(q);
 }
@@ -1493,13 +1506,10 @@ static void *
 lqs_put(struct hlist_node *hnode)
 {
         struct lustre_qunit_size *q =
-            hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
+                hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
         ENTRY;
 
-        LASSERT(atomic_read(&q->lqs_refcount) > 0);
-        atomic_dec(&q->lqs_refcount);
-        CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
-               q, atomic_read(&q->lqs_refcount));
+        __lqs_putref(q, 0);
 
         RETURN(q);
 }
@@ -1507,10 +1517,10 @@ lqs_put(struct hlist_node *hnode)
 static void
 lqs_exit(struct hlist_node *hnode)
 {
-        struct lustre_qunit_size *q;
+        struct lustre_qunit_size *q =
+                hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
         ENTRY;
 
-        q = hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
         /*
          * Nothing should be left. User of lqs put it and
          * lqs also was deleted from table by this time

@@ -83,7 +83,8 @@ SHOW_QUOTA_USER="$LFS quota -v -u $TSTUSR $DIR"
 SHOW_QUOTA_USER2="$LFS quota -v -u $TSTUSR2 $DIR"
 SHOW_QUOTA_GROUP="$LFS quota -v -g $TSTUSR $DIR"
 SHOW_QUOTA_GROUP2="$LFS quota -v -g $TSTUSR2 $DIR"
-SHOW_QUOTA_INFO="$LFS quota -t -u $DIR; $LFS quota -t -g $DIR"
+SHOW_QUOTA_INFO_USER="$LFS quota -t -u $DIR"
+SHOW_QUOTA_INFO_GROUP="$LFS quota -t -g $DIR"
 
 # control the time of tests
 cycle=30
@@ -298,8 +299,10 @@ test_1_sub() {
 	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$(($LIMIT/2)) || quota_error u $TSTUSR "(usr) write failure, but expect success"
         etime=`date +%s`
         delta=$((etime - stime))
-        rate=$((BLK_SZ * LIMIT / 2 / delta / 1024))
-        [ $rate -gt 1024 ] || error "SLOW IO for $TSTUSR (user): $rate KB/sec"
+        if [ $delta -gt 0 ]; then
+                rate=$((BLK_SZ * LIMIT / 2 / delta / 1024))
+                [ $rate -gt 1024 ] || error "SLOW IO for $TSTUSR (user): $rate KB/sec"
+        fi
         log "    Done"
         log "    Write out of block quota ..."
 	# this time maybe cache write,  ignore it's failure
@@ -362,7 +365,7 @@ test_1() {
 	    blk_qunit=$(( $RANDOM % 3072 + 1024 ))
 	    blk_qtune=$(( $RANDOM % $blk_qunit ))
 	    # other osts and mds will occupy at 1M blk quota
-	    b_limit=$(( ($RANDOM - 16384) / 8 +  $OSTCOUNT * $blk_qunit * 4 ))
+	    b_limit=$(( ($RANDOM - 16384) / 8 +  ($OSTCOUNT + 1) * $blk_qunit * 4 ))
 	    set_blk_tunesz $blk_qtune
 	    set_blk_unitsz $blk_qunit
 	    echo "cycle: $i(total $cycle) bunit:$blk_qunit, btune:$blk_qtune, blimit:$b_limit"
@@ -480,7 +483,8 @@ test_block_soft() {
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
-	$SHOW_QUOTA_INFO
+	$SHOW_QUOTA_INFO_USER
+	$SHOW_QUOTA_INFO_GROUP
 
 	echo "    Write before timer goes off"
 	$RUNDD count=$BUNIT_SZ seek=$OFFSET || \
@@ -494,7 +498,8 @@ test_block_soft() {
 
         $SHOW_QUOTA_USER
         $SHOW_QUOTA_GROUP
-        $SHOW_QUOTA_INFO
+        $SHOW_QUOTA_INFO_USER
+        $SHOW_QUOTA_INFO_GROUP
 
 	echo "    Write after timer goes off"
 	# maybe cache write, ignore.
@@ -506,7 +511,8 @@ test_block_soft() {
 
         $SHOW_QUOTA_USER
         $SHOW_QUOTA_GROUP
-        $SHOW_QUOTA_INFO
+        $SHOW_QUOTA_INFO_USER
+        $SHOW_QUOTA_INFO_GROUP
 
 	echo "    Unlink file to stop timer"
 	rm -f $TESTFILE
@@ -515,7 +521,8 @@ test_block_soft() {
 
         $SHOW_QUOTA_USER
         $SHOW_QUOTA_GROUP
-        $SHOW_QUOTA_INFO
+        $SHOW_QUOTA_INFO_USER
+        $SHOW_QUOTA_INFO_GROUP
 
 	echo "    Write ..."
 	$RUNDD count=$BUNIT_SZ || quota_error a $TSTUSR "write failure, but expect success"
@@ -585,7 +592,8 @@ test_file_soft() {
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
-	$SHOW_QUOTA_INFO
+	$SHOW_QUOTA_INFO_USER
+	$SHOW_QUOTA_INFO_GROUP
 
 	echo "    Create file after timer goes off"
 	# the least of inode qunit is 2, so there are at most 3(qunit:2+qtune:1)
@@ -598,7 +606,8 @@ test_file_soft() {
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
-	$SHOW_QUOTA_INFO
+	$SHOW_QUOTA_INFO_USER
+	$SHOW_QUOTA_INFO_GROUP
 
 	echo "    Unlink files to stop timer"
 	find `dirname $TESTFILE` -name "`basename ${TESTFILE}`*" | xargs rm -f
@@ -2009,7 +2018,7 @@ test_26() {
 	wait_delete_completed
 
 	# every quota slave gets 20MB
-	b_limit=$((OSTCOUNT * 20 * 1024))
+	b_limit=$(((OSTCOUNT + 1) * 20 * 1024))
 	log "limit: ${b_limit}KB"
 	$LFS setquota -u $TSTUSR -b 0 -B $b_limit -i 0 -I 0 $DIR
 	sleep 3
