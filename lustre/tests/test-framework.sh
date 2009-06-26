@@ -1161,9 +1161,6 @@ facet_failover() {
     shutdown_facet $facet
     [ -n "$sleep_time" ] && sleep $sleep_time
     reboot_facet $facet
-    client_df &
-    DFPID=$!
-    echo "df pid is $DFPID"
     change_active $facet
     local TO=`facet_active_host $facet`
     echo "Failover $facet to $TO"
@@ -1219,7 +1216,7 @@ ost_evict_client() {
 
 fail() {
     facet_failover $* || error "failover: $?"
-    df $MOUNT || error "post-failover df: $?"
+    client_df || error "post-failover df: $?"
 }
 
 fail_nodf() {
@@ -1232,9 +1229,9 @@ fail_abort() {
     stop $facet
     change_active $facet
     mount_facet $facet -o abort_recovery
-    df $MOUNT || echo "first df failed: $?"
+    client_df || echo "first df failed: $?"
     sleep 1
-    df $MOUNT || error "post-failover df: $?"
+    client_df || error "post-failover df: $?"
 }
 
 do_lmc() {

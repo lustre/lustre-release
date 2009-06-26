@@ -1857,7 +1857,7 @@ test_70b () {
 		# Increment the number of failovers
 		NUM_FAILOVERS=$((NUM_FAILOVERS+1))
 		log "$TESTNAME fail mds1 $NUM_FAILOVERS times"
-		facet_failover $SINGLEMDS
+		fail $SINGLEMDS
 		CURRENT_TS=$(date +%s)
 		ELAPSED=$((CURRENT_TS - START_TS))
 	done
@@ -1917,13 +1917,13 @@ run_test 73c "open(O_CREAT), unlink, replay, reconnect at last_replay, close"
 # bug 18554
 test_74() {
     stop ost1
-    zconf_umount $(hostname) $MOUNT
-    fail $SINGLEMDS
-    zconf_mount $(hostname) $MOUNT
+    zconf_umount_clients $CLIENTS $MOUNT
+    facet_failover $SINGLEMDS
+    zconf_mount_clients $CLIENTS $MOUNT
     mount_facet ost1
     touch $DIR/$tfile || return 1
     rm $DIR/$tfile || return 2
-    df $MOUNT || error "df failed: $?"
+    client_df || error "df failed: $?"
     return 0
 }
 run_test 74 "Ensure applications don't fail waiting for OST reocvery"
