@@ -990,7 +990,9 @@ struct obd_device {
         struct list_head                 obd_delayed_reply_queue;
         time_t                           obd_recovery_start; /* seconds */
         time_t                           obd_recovery_end; /* seconds, for lprocfs_status */
-        time_t                           obd_recovery_time_hard;
+#ifdef CRAY_XT3
+        time_t                           obd_recovery_max_time; /* seconds, bz13079 */
+#endif
         int                              obd_recovery_timeout;
 
         union {
