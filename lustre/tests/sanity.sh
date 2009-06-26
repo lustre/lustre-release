@@ -4317,19 +4317,19 @@ test_103 () {
     echo "performing cp ..."
     run_acl_subtest cp || error
     echo "performing getfacl-noacl..."
-    run_acl_subtest getfacl-noacl || error
+    run_acl_subtest getfacl-noacl || error "getfacl-noacl test failed"
     echo "performing misc..."
-    run_acl_subtest misc || error
+    run_acl_subtest misc || error  "misc test failed"
     echo "performing permissions..."
-    run_acl_subtest permissions || error
+    run_acl_subtest permissions || error "permissions failed"
     echo "performing setfacl..."
-    run_acl_subtest setfacl || error
+    run_acl_subtest setfacl || error  "setfacl test failed"
 
     # inheritance test got from HP
     echo "performing inheritance..."
-    cp $LUSTRE/tests/acl/make-tree . || error
-    chmod +x make-tree || error
-    run_acl_subtest inheritance || error
+    cp $LUSTRE/tests/acl/make-tree . || error "cannot copy make-tree"
+    chmod +x make-tree || error "chmod +x failed"
+    run_acl_subtest inheritance || error "inheritance test failed"
     rm -f make-tree
 
     cd $SAVE_PWD
