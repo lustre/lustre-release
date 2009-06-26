@@ -79,18 +79,42 @@ static void vvp_page_fini(const struct lu_env *env,
 }
 
 static void vvp_page_own(const struct lu_env *env,
-                         const struct cl_page_slice *slice, struct cl_io *_)
+                         const struct cl_page_slice *slice, struct cl_io *io)
 {
         struct ccc_page *vpg    = cl2ccc_page(slice);
         cfs_page_t      *vmpage = vpg->cpg_page;
+        int count = 0;
 
         LASSERT(vmpage != NULL);
-        lock_page(vmpage);
+
+        /* DEBUG CODE FOR #18881 */
+        while (TestSetPageLocked(vmpage)) {
+                cfs_schedule_timeout(CFS_TASK_INTERRUPTIBLE,
+                                     cfs_time_seconds(1)/10);
+                if (++count > 600) {
+                        CL_PAGE_DEBUG(D_ERROR, env,
+                                      cl_page_top(slice->cpl_page),
+                                      "XXX page %p blocked on acquiring the"
+                                      " lock. process %s/%p, flags %lx,io %p\n",
+                                      vmpage, current->comm, current,
+                                      vmpage->flags, io);
+                        libcfs_debug_dumpstack(NULL);
+                        LCONSOLE_WARN("Reproduced bug #18881,please contact:"
+                               "jay <jinshan.xiong@sun.com>, thanks\n");
+
+                        lock_page(vmpage);
+                        break;
+                }
+        }
+        /* DEBUG CODE END */
+
+        /* lock_page(vmpage); */
         wait_on_page_writeback(vmpage);
 }
 
 static void vvp_page_assume(const struct lu_env *env,
-                            const struct cl_page_slice *slice, struct cl_io *_)
+                            const struct cl_page_slice *slice,
+                            struct cl_io *unused)
 {
         cfs_page_t *vmpage = cl2vm_page(slice);
 
@@ -101,7 +125,7 @@ static void vvp_page_assume(const struct lu_env *env,
 
 static void vvp_page_unassume(const struct lu_env *env,
                               const struct cl_page_slice *slice,
-                              struct cl_io *_)
+                              struct cl_io *unused)
 {
         cfs_page_t *vmpage = cl2vm_page(slice);
 
@@ -121,7 +145,8 @@ static void vvp_page_disown(const struct lu_env *env,
 }
 
 static void vvp_page_discard(const struct lu_env *env,
-                             const struct cl_page_slice *slice, struct cl_io *_)
+                             const struct cl_page_slice *slice,
+                             struct cl_io *unused)
 {
         cfs_page_t           *vmpage  = cl2vm_page(slice);
         struct address_space *mapping = vmpage->mapping;
@@ -141,7 +166,8 @@ static void vvp_page_discard(const struct lu_env *env,
 }
 
 static int vvp_page_unmap(const struct lu_env *env,
-                          const struct cl_page_slice *slice, struct cl_io *_)
+                          const struct cl_page_slice *slice,
+                          struct cl_io *unused)
 {
         cfs_page_t *vmpage = cl2vm_page(slice);
         __u64       offset = vmpage->index << CFS_PAGE_SHIFT;
@@ -193,7 +219,7 @@ static int vvp_page_is_vmlocked(const struct lu_env *env,
 
 static int vvp_page_prep_read(const struct lu_env *env,
                               const struct cl_page_slice *slice,
-                              struct cl_io *_)
+                              struct cl_io *unused)
 {
         ENTRY;
         /* Skip the page already marked as PG_uptodate. */
@@ -202,7 +228,7 @@ static int vvp_page_prep_read(const struct lu_env *env,
 
 static int vvp_page_prep_write(const struct lu_env *env,
                                const struct cl_page_slice *slice,
-                               struct cl_io *_)
+                               struct cl_io *unused)
 {
         cfs_page_t *vmpage = cl2vm_page(slice);
         int result;
@@ -435,35 +461,35 @@ static void vvp_transient_page_verify(const struct cl_page *page)
 
 static void vvp_transient_page_own(const struct lu_env *env,
                                    const struct cl_page_slice *slice,
-                                   struct cl_io *_)
+                                   struct cl_io *unused)
 {
         vvp_transient_page_verify(slice->cpl_page);
 }
 
 static void vvp_transient_page_assume(const struct lu_env *env,
                                       const struct cl_page_slice *slice,
-                                      struct cl_io *_)
+                                      struct cl_io *unused)
 {
         vvp_transient_page_verify(slice->cpl_page);
 }
 
 static void vvp_transient_page_unassume(const struct lu_env *env,
                                         const struct cl_page_slice *slice,
-                                        struct cl_io *_)
+                                        struct cl_io *unused)
 {
         vvp_transient_page_verify(slice->cpl_page);
 }
 
 static void vvp_transient_page_disown(const struct lu_env *env,
                                       const struct cl_page_slice *slice,
-                                      struct cl_io *_)
+                                      struct cl_io *unused)
 {
         vvp_transient_page_verify(slice->cpl_page);
 }
 
 static void vvp_transient_page_discard(const struct lu_env *env,
                                        const struct cl_page_slice *slice,
-                                       struct cl_io *_)
+                                       struct cl_io *unused)
 {
         struct cl_page *page = slice->cpl_page;
 

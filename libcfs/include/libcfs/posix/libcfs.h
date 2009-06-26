@@ -411,5 +411,9 @@ static inline void radix_tree_preload_end(void)
 
 typedef ssize_t (*read_actor_t)();
 
-#define CFS_IFTODT(type)   (((type) & 0170000) >> 12)
+#define CFS_IFSHIFT 12
+
+#define CFS_IFTODT(type)           (((type) & S_IFMT) >> CFS_IFSHIFT)
+#define CFS_DTTOIF(dirtype)        ((dirtype) << CFS_IFSHIFT)
+
 #endif

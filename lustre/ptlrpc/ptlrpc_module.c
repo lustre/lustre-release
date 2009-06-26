@@ -80,7 +80,7 @@ __init int ptlrpc_init(void)
 
         rc = ptlrpc_init_portals();
         if (rc)
-                RETURN(rc);
+                GOTO(cleanup, rc);
         cleanup_phase = 2;
 
         rc = ptlrpc_connection_init();

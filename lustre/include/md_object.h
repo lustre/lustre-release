@@ -428,7 +428,7 @@ struct md_upcall {
         struct md_device       *mu_upcall_dev;
         /** upcall function */
         int (*mu_upcall)(const struct lu_env *env, struct md_device *md,
-                         enum md_upcall_event ev);
+                         enum md_upcall_event ev, void *data);
 };
 
 struct md_device {
@@ -460,14 +460,15 @@ static inline void md_upcall_fini(struct md_device *m)
 }
 
 static inline int md_do_upcall(const struct lu_env *env, struct md_device *m,
-                               enum md_upcall_event ev)
+                               enum md_upcall_event ev, void *data)
 {
         int rc = 0;
         down_read(&m->md_upcall.mu_upcall_sem);
         if (m->md_upcall.mu_upcall_dev != NULL &&
             m->md_upcall.mu_upcall_dev->md_upcall.mu_upcall != NULL) {
                 rc = m->md_upcall.mu_upcall_dev->md_upcall.mu_upcall(env,
-                                              m->md_upcall.mu_upcall_dev, ev);
+                                              m->md_upcall.mu_upcall_dev,
+                                              ev, data);
         }
         up_read(&m->md_upcall.mu_upcall_sem);
         return rc;

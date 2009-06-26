@@ -1692,6 +1692,9 @@ static inline struct inode *ext3_iget_inuse(struct super_block *sb,
         if (ext3_test_bit(index, bitmap_bh->b_data))
                 inode = iget(sb, ino);
 
+        if (IS_ERR(inode))
+	        /* Newer kernels return an error instead of a NULL pointer */
+                inode = NULL;
         return inode;
 }
 
@@ -1994,7 +1997,7 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
                                 cqget(sb, qctxt->qckt_hash, &qctxt->qckt_list,
                                       dqid->di_id, i,
                                       qctxt->qckt_first_check[i]);
-                        kfree(dqid);
+                        OBD_FREE_PTR(dqid);
                 }
         }
 #endif

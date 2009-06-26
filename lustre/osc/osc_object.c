@@ -223,7 +223,7 @@ static const struct lu_object_operations osc_lu_obj_ops = {
 };
 
 struct lu_object *osc_object_alloc(const struct lu_env *env,
-                                   const struct lu_object_header *_,
+                                   const struct lu_object_header *unused,
                                    struct lu_device *dev)
 {
         struct osc_object *osc;

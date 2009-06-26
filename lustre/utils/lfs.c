@@ -1399,7 +1399,7 @@ static int lfs_quotacheck(int argc, char **argv)
         qctl.qc_cmd = LUSTRE_Q_QUOTAOFF;
         qctl.qc_type = check_type;
         rc = llapi_quotactl(mnt, &qctl);
-        if (rc) {
+        if (rc && errno != EALREADY) {
                 fprintf(stderr, "quota off failed: %s\n", strerror(errno));
                 return rc;
         }
@@ -1423,7 +1423,7 @@ static int lfs_quotacheck(int argc, char **argv)
         qctl.qc_cmd = LUSTRE_Q_QUOTAON;
         qctl.qc_type = check_type;
         rc = llapi_quotactl(mnt, &qctl);
-        if (rc) {
+        if (rc && errno != EALREADY) {
                 if (*obd_type)
                         fprintf(stderr, "%s %s ", (char *)qctl.obd_type,
                                 obd_uuid2str(&qctl.obd_uuid));
@@ -1477,14 +1477,21 @@ static int lfs_quotaon(int argc, char **argv)
 
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
-                if (*obd_type)
-                        fprintf(stderr, "%s %s ", obd_type,
-                                obd_uuid2str(&qctl.obd_uuid));
-                fprintf(stderr, "%s failed: %s\n", argv[0], strerror(errno));
-                return rc;
+                if (errno == EALREADY) {
+                        fprintf(stderr, "\n%s quotas are enabled already.\n",
+                                qctl.qc_type == 0x02 ? "user/group" :
+                                (qctl.qc_type == 0x00 ? "user" : "group"));
+                        rc = 0;
+                } else {
+                        if (*obd_type)
+                                fprintf(stderr, "%s %s ", obd_type,
+                                        obd_uuid2str(&qctl.obd_uuid));
+                        fprintf(stderr, "%s failed: %s\n", argv[0],
+                                strerror(errno));
+                }
         }
 
-        return 0;
+        return rc;
 }
 
 static int lfs_quotaoff(int argc, char **argv)
@@ -1525,20 +1532,22 @@ static int lfs_quotaoff(int argc, char **argv)
         mnt = argv[optind];
 
         rc = llapi_quotactl(mnt, &qctl);
-        if (rc == -1 && errno == ESRCH) {
-                fprintf(stderr, "\n%s quotas are not enabled.\n",
-                        qctl.qc_type == 0x00 ? "user" : "group");
-                return 0;
-        }
         if (rc) {
-                if (*obd_type)
-                        fprintf(stderr, "%s %s ", obd_type,
-                                obd_uuid2str(&qctl.obd_uuid));
-                fprintf(stderr, "quotaoff failed: %s\n", strerror(errno));
-                return rc;
+                if (errno == EALREADY) {
+                        fprintf(stderr, "\n%s quotas are disabled already.\n",
+                                qctl.qc_type == 0x02 ? "user/group" :
+                                (qctl.qc_type == 0x00 ? "user" : "group"));
+                        rc = 0;
+                } else {
+                        if (*obd_type)
+                                fprintf(stderr, "%s %s ", obd_type,
+                                        obd_uuid2str(&qctl.obd_uuid));
+                        fprintf(stderr, "quotaoff failed: %s\n",
+                                strerror(errno));
+                }
         }
 
-        return 0;
+        return rc;
 }
 
 static int lfs_quotainv(int argc, char **argv)
@@ -2184,7 +2193,7 @@ ug_output:
         mnt = argv[optind];
 
         rc1 = llapi_quotactl(mnt, &qctl);
-        if (rc1 == -1 && errno == ESRCH) {
+        if (rc1 == -1 && errno == EALREADY) {
                 fprintf(stderr, "\n%s quotas are not enabled.\n",
                         qctl.qc_type == USRQUOTA ? "user" : "group");
                 goto out;
@@ -2546,22 +2555,21 @@ static int lfs_fid2path(int argc, char **argv)
 static int lfs_path2fid(int argc, char **argv)
 {
         char *path;
-        unsigned long long seq;
-        unsigned long oid, ver;
+        lustre_fid fid;
         int rc;
 
         if (argc != 2)
                 return CMD_HELP;
 
         path = argv[1];
-        rc = llapi_path2fid(path, &seq, &oid, &ver);
+        rc = llapi_path2fid(path, &fid);
         if (rc) {
                 fprintf(stderr, "can't get fid for %s: %s\n", path,
                         strerror(errno = -rc));
                 return rc;
         }
 
-        printf(DFID"\n", seq, (unsigned int)oid, (unsigned int)ver);
+        printf(DFID"\n", PFID(&fid));
 
         return 0;
 }

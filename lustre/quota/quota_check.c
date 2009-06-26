@@ -115,9 +115,7 @@ static int target_quotacheck_thread(void *data)
 
         rc = target_quotacheck_callback(exp, oqctl);
         class_export_put(exp);
-
-        atomic_inc(qta->qta_sem);
-
+        up(qta->qta_sem);
         OBD_FREE_PTR(qta);
         return rc;
 }
@@ -130,14 +128,11 @@ int target_quota_check(struct obd_device *obd, struct obd_export *exp,
         int rc = 0;
         ENTRY;
 
-        if (!atomic_dec_and_test(&obt->obt_quotachecking)) {
-                CDEBUG(D_INFO, "other people are doing quotacheck\n");
-                GOTO(out, rc = -EBUSY);
-        }
-
         OBD_ALLOC_PTR(qta);
         if (!qta)
-                GOTO(out, rc = -ENOMEM);
+                RETURN(ENOMEM);
+
+        down(&obt->obt_quotachecking);
 
         qta->qta_exp = exp;
         qta->qta_obd = obd;
@@ -151,7 +146,6 @@ int target_quota_check(struct obd_device *obd, struct obd_export *exp,
                 rc = init_admin_quotafiles(obd, &qta->qta_oqctl);
                 if (rc) {
                         CERROR("init_admin_quotafiles failed: %d\n", rc);
-                        OBD_FREE_PTR(qta);
                         GOTO(out, rc);
                 }
         }
@@ -164,15 +158,17 @@ int target_quota_check(struct obd_device *obd, struct obd_export *exp,
                 CDEBUG(D_INFO, "%s: target_quotacheck_thread: %d\n",
                        obd->obd_name, rc);
                 RETURN(0);
+        } else {
+                CERROR("%s: error starting quotacheck_thread: %d\n",
+                       obd->obd_name, rc);
+                class_export_put(exp);
+                EXIT;
         }
 
-        class_export_put(exp);
-        CERROR("%s: error starting quotacheck_thread: %d\n",
-               obd->obd_name, rc);
-        OBD_FREE_PTR(qta);
 out:
-        atomic_inc(&obt->obt_quotachecking);
-        RETURN(rc);
+        up(&obt->obt_quotachecking);
+        OBD_FREE_PTR(qta);
+        return rc;
 }
 
 #endif /* __KERNEL__ */

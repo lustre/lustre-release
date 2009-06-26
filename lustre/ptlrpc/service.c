@@ -1684,8 +1684,7 @@ ptlrpc_handle_rs (struct ptlrpc_reply_state *rs)
                 CWARN("All locks stolen from rs %p x"LPD64".t"LPD64
                       " o%d NID %s\n",
                       rs,
-                      rs->rs_xid, rs->rs_transno,
-                      lustre_msg_get_opc(rs->rs_msg),
+                      rs->rs_xid, rs->rs_transno, rs->rs_opc,
                       libcfs_nid2str(exp->exp_connection->c_peer.nid));
         }
 
@@ -2287,6 +2286,7 @@ int ptlrpc_hr_init(void)
         int n_cpus = num_online_cpus();
         struct ptlrpc_hr_service *hr;
         int size;
+        int rc;
         ENTRY;
 
         LASSERT(ptlrpc_hr == NULL);
@@ -2307,7 +2307,12 @@ int ptlrpc_hr_init(void)
         hr->hr_size = size;
         ptlrpc_hr = hr;
 
-        RETURN(ptlrpc_start_hr_threads(hr));
+        rc = ptlrpc_start_hr_threads(hr);
+        if (rc) {
+                OBD_FREE(hr, hr->hr_size);
+                ptlrpc_hr = NULL;
+        }
+        RETURN(rc);
 }
 
 void ptlrpc_hr_fini(void)

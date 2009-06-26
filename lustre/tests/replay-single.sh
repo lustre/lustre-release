@@ -460,12 +460,6 @@ test_20a() {	# was test_20
 run_test 20a "|X| open(O_CREAT), unlink, replay, close (test mds_cleanup_orphans)"
 
 test_20b() { # bug 10480
-    # XXX increase the debug level temporary 
-    DEBUG_SAVED=$PTLDEBUG
-    DEBUG_MB_SAVED=$DEBUG_SIZE
-    PTLDEBUG=0x33f1404
-    DEBUG_SIZE=150
-    do_nodes $(comma_list $(nodes_list)) "$LCTL set_param debug=$PTLDEBUG; $LCTL set_param debug_mb=$DEBUG_SIZE"
     BEFOREUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
 
     dd if=/dev/zero of=$DIR/$tfile bs=4k count=10000 &
@@ -483,17 +477,29 @@ test_20b() { # bug 10480
     df -P $DIR || df -P $DIR || true    # reconnect
     wait_recovery_complete $SINGLEMDS || error "MDS recovery not done"
 
-    # FIXME just because recovery is done doesn't mean we've finished
-    # orphan cleanup.  Fake it with a sleep for now...
-    sleep 10
+    # just because recovery is done doesn't mean we've finished
+    # orphan cleanup. Wait for llogs to get synchronized.
+    echo waiting for orphan cleanup...
+    while [ true ]; do
+            local -a sync=($(do_facet ost "$LCTL get_param obdfilter.*.mds_sync" | awk -F= ' {print $2}'))
+            local con=1
+            for ((i=0; i<${#sync[@]}; i++)); do
+                    [ ${sync[$i]} -eq 0 ] && continue
+                    # there is a not finished MDS-OST synchronization
+                    con=0
+                    break;
+            done
+            [ ${con} -eq 1 ] && break
+            sleep 1
+    done
+
+    # let the statfs cache to get old enough.
+    sleep 1
+
     AFTERUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
     log "before $BEFOREUSED, after $AFTERUSED"
     [ $AFTERUSED -gt $((BEFOREUSED + 20)) ] && \
         error "after $AFTERUSED > before $BEFOREUSED"
-    # XXX decrease it back
-    PTLDEBUG=$DEBUG_SAVED
-    DEBUG_SIZE=$DEBUG_MB_SAVED
-    do_nodes $(comma_list $(nodes_list)) "$LCTL set_param debug=$PTLDEBUG; $LCTL set_param debug_mb=$DEBUG_SIZE"
     return 0
 }
 run_test 20b "write, unlink, eviction, replay, (test mds_cleanup_orphans)"
@@ -1723,7 +1729,7 @@ test_67a() #bug 3055
     do_facet ost1 "sysctl -w lustre.fail_loc=0"
     CONN2=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     ATTEMPTS=$(($CONN2 - $CONN1))
-    echo "$ATTEMPTS osc reconnect attemps on gradual slow"
+    echo "$ATTEMPTS osc reconnect attempts on gradual slow"
     [ $ATTEMPTS -gt 0 ] && error_ignore 13721 "AT should have prevented reconnect"
     return 0
 }
@@ -1744,7 +1750,7 @@ test_67b() #bug 3055
     log "phase 2"
     CONN2=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     ATTEMPTS=$(($CONN2 - $CONN1))
-    echo "$ATTEMPTS osc reconnect attemps on instant slow"
+    echo "$ATTEMPTS osc reconnect attempts on instant slow"
     # do it again; should not timeout
     do_facet ost1 "sysctl -w lustre.fail_loc=0x80000223"
     cp /etc/profile $DIR/$tfile || error "cp failed"
@@ -1753,7 +1759,7 @@ test_67b() #bug 3055
     do_facet ost1 "lctl get_param -n ost.OSS.ost_create.timeouts"
     CONN3=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     ATTEMPTS=$(($CONN3 - $CONN2))
-    echo "$ATTEMPTS osc reconnect attemps on 2nd slow"
+    echo "$ATTEMPTS osc reconnect attempts on 2nd slow"
     [ $ATTEMPTS -gt 0 ] && error "AT should have prevented reconnect"
     return 0
 }
@@ -1851,7 +1857,7 @@ test_70b () {
 		# Increment the number of failovers
 		NUM_FAILOVERS=$((NUM_FAILOVERS+1))
 		log "$TESTNAME fail mds1 $NUM_FAILOVERS times"
-		facet_failover $SINGLEMDS
+		fail $SINGLEMDS
 		CURRENT_TS=$(date +%s)
 		ELAPSED=$((CURRENT_TS - START_TS))
 	done
@@ -1911,13 +1917,13 @@ run_test 73c "open(O_CREAT), unlink, replay, reconnect at last_replay, close"
 # bug 18554
 test_74() {
     stop ost1
-    zconf_umount $(hostname) $MOUNT
-    fail $SINGLEMDS
-    zconf_mount $(hostname) $MOUNT
+    zconf_umount_clients $CLIENTS $MOUNT
+    facet_failover $SINGLEMDS
+    zconf_mount_clients $CLIENTS $MOUNT
     mount_facet ost1
     touch $DIR/$tfile || return 1
     rm $DIR/$tfile || return 2
-    df $MOUNT || error "df failed: $?"
+    client_df || error "df failed: $?"
     return 0
 }
 run_test 74 "Ensure applications don't fail waiting for OST reocvery"

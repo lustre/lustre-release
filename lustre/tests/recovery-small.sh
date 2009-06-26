@@ -239,7 +239,7 @@ test_17() {
     # expect cmp to succeed, client resent bulk
     do_facet client "cmp /etc/termcap $DIR/$tfile" || return 3
     do_facet client "rm $DIR/$tfile" || return 4
-    [ $at_max_saved -ne 0 ] && $(at_max_set $at_max_saved ost1)
+    [ $at_max_saved -ne 0 ] && at_max_set $at_max_saved ost1
     return 0
 }
 run_test 17 "timeout bulk get, don't evict client (2732)"

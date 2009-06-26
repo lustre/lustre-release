@@ -1476,7 +1476,7 @@ struct lu_env lu_debugging_env;
  * Debugging printer function using printk().
  */
 int lu_printk_printer(const struct lu_env *env,
-                      void *_, const char *format, ...)
+                      void *unused, const char *format, ...)
 {
         va_list args;
 

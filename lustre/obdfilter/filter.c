@@ -90,6 +90,7 @@ static void filter_commit_cb(struct obd_device *obd, __u64 transno,
         struct obd_export *exp = cb_data;
         LASSERT(exp->exp_obd == obd);
         obd_transno_commit_cb(obd, transno, exp, error);
+        atomic_dec(&exp->exp_cb_count);
         class_export_put(exp);
 }
 
@@ -167,6 +168,7 @@ int filter_finish_transno(struct obd_export *exp, struct inode *inode,
                 err = -EINVAL;
         } else {
                 class_export_get(exp); /* released when the cb is called */
+                atomic_inc(&exp->exp_cb_count);
                 if (!force_sync)
                         force_sync = fsfilt_add_journal_cb(exp->exp_obd,
                                                            last_rcvd,
@@ -216,7 +218,7 @@ static int lprocfs_init_rw_stats(struct obd_device *obd,
 
         num_stats = (sizeof(*obd->obd_type->typ_dt_ops) / sizeof(void *)) +
                                                         LPROC_FILTER_LAST - 1;
-        *stats = lprocfs_alloc_stats(num_stats, 0);
+        *stats = lprocfs_alloc_stats(num_stats, LPROCFS_STATS_FLAG_NOPERCPU);
         if (*stats == NULL)
                 return -ENOMEM;
 
@@ -275,8 +277,9 @@ static int filter_export_stats_init(struct obd_device *obd,
                 if (rc)
                         RETURN(rc);
                 /* Always add in ldlm_stats */
-                tmp->nid_ldlm_stats = lprocfs_alloc_stats(LDLM_LAST_OPC -
-                                                          LDLM_FIRST_OPC, 0);
+                tmp->nid_ldlm_stats = 
+                        lprocfs_alloc_stats(LDLM_LAST_OPC - LDLM_FIRST_OPC,
+                                            LPROCFS_STATS_FLAG_NOPERCPU);
                 if (tmp->nid_ldlm_stats == NULL)
                         return -ENOMEM;
 
@@ -2576,6 +2579,9 @@ static int filter_llog_connect(struct obd_export *exp,
               obd->obd_name, body->lgdc_logid.lgl_oid,
               body->lgdc_logid.lgl_ogr, body->lgdc_logid.lgl_ogen);
 
+        spin_lock_bh(&obd->obd_processing_task_lock);
+        obd->u.filter.fo_mds_ost_sync = 1;
+        spin_unlock_bh(&obd->obd_processing_task_lock);
         rc = llog_connect(ctxt, &body->lgdc_logid,
                           &body->lgdc_gen, NULL);
         llog_ctxt_put(ctxt);
@@ -2633,8 +2639,7 @@ static int filter_precleanup(struct obd_device *obd,
                 break;
         case OBD_CLEANUP_EXPORTS:
                 /* Stop recovery before namespace cleanup. */
-                target_stop_recovery_thread(obd);
-                target_cleanup_recovery(obd);
+                target_recovery_fini(obd);
                 rc = filter_llog_preclean(obd);
                 break;
         }
@@ -2650,14 +2655,8 @@ static int filter_cleanup(struct obd_device *obd)
                 LCONSOLE_WARN("%s: shutting down for failover; client state "
                               "will be preserved.\n", obd->obd_name);
 
-        if (!list_empty(&obd->obd_exports)) {
-                CERROR("%s: still has clients!\n", obd->obd_name);
-                class_disconnect_exports(obd);
-                if (!list_empty(&obd->obd_exports)) {
-                        CERROR("still has exports after forced cleanup?\n");
-                        RETURN(-EBUSY);
-                }
-        }
+        obd_exports_barrier(obd);
+        obd_zombie_barrier();
 
         lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
         lprocfs_free_per_client_stats(obd);
@@ -3557,7 +3556,7 @@ static int filter_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
 static int filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
                                      struct filter_obd *filter)
 {
-        struct obdo doa; /* XXX obdo on stack */
+        struct obdo doa = { 0 }; /* XXX obdo on stack */
         obd_id last, id;
         int rc = 0;
         int skip_orphan;

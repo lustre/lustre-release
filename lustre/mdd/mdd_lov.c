@@ -60,7 +60,7 @@
 #include "mdd_internal.h"
 
 static int mdd_notify(struct obd_device *host, struct obd_device *watched,
-                      enum obd_notify_event ev, void *owner)
+                      enum obd_notify_event ev, void *owner, void *data)
 {
         struct mdd_device *mdd = owner;
         int rc = 0;
@@ -72,14 +72,17 @@ static int mdd_notify(struct obd_device *host, struct obd_device *watched,
                 case OBD_NOTIFY_ACTIVE:
                 case OBD_NOTIFY_SYNC:
                 case OBD_NOTIFY_SYNC_NONBLOCK:
-                        rc = md_do_upcall(NULL, &mdd->mdd_md_dev, MD_LOV_SYNC);
+                        rc = md_do_upcall(NULL, &mdd->mdd_md_dev,
+                                          MD_LOV_SYNC, data);
                         break;
                 case OBD_NOTIFY_CONFIG:
-                        rc = md_do_upcall(NULL, &mdd->mdd_md_dev, MD_LOV_CONFIG);
+                        rc = md_do_upcall(NULL, &mdd->mdd_md_dev,
+                                          MD_LOV_CONFIG, data);
                         break;
 #ifdef HAVE_QUOTA_SUPPORT
                 case OBD_NOTIFY_QUOTA:
-                        rc = md_do_upcall(NULL, &mdd->mdd_md_dev, MD_LOV_QUOTA);
+                        rc = md_do_upcall(NULL, &mdd->mdd_md_dev,
+                                          MD_LOV_QUOTA, data);
                         break;
 #endif
                 default:
@@ -600,15 +603,19 @@ int mdd_lovobj_unlink(const struct lu_env *env, struct mdd_device *mdd,
 }
 
 /*
- * called with obj not locked. 
+ * called with obj locked. 
  */
-
 int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
                     struct mdd_object *obj, struct lu_attr *la)
 {
         struct md_attr    *ma = &mdd_env_info(env)->mti_ma;
         int                rc;
         ENTRY;
+
+        LASSERT(mdd_write_locked(env, obj) != 0);
+
+        if (unlikely(!S_ISREG(mdd_object_type(obj))))
+                RETURN(0);
 
         if (unlikely(la->la_nlink != 0)) {
                 CWARN("Attempt to destroy OSS object when nlink == %d\n",
@@ -625,8 +632,8 @@ int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
 
         /* get lov ea */
 
-        rc = mdd_get_md_locked(env, obj, ma->ma_lmm, &ma->ma_lmm_size,
-                               XATTR_NAME_LOV);
+        rc = mdd_get_md(env, obj, ma->ma_lmm, &ma->ma_lmm_size,
+                        XATTR_NAME_LOV);
 
         if (rc <= 0) {
                 CWARN("Get lov ea failed for "DFID" rc = %d\n",

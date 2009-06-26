@@ -101,6 +101,7 @@ int obd_zombie_impexp_init(void);
 void obd_zombie_impexp_stop(void);
 void obd_zombie_impexp_cull(void);
 void obd_zombie_barrier(void);
+void obd_exports_barrier(struct obd_device *obd);
 
 /* obd_config.c */
 int class_process_config(struct lustre_cfg *lcfg);
@@ -114,6 +115,7 @@ struct obd_device *class_incref(struct obd_device *obd,
                                 const char *scope, const void *source);
 void class_decref(struct obd_device *obd,
                   const char *scope, const void *source);
+void dump_exports(struct obd_device *obd);
 
 /*obdecho*/
 #ifdef LPROCFS
@@ -1495,7 +1497,8 @@ static inline int obd_notify_observer(struct obd_device *observer,
          */
         onu = &observer->obd_upcall;
         if (onu->onu_upcall != NULL)
-                rc2 = onu->onu_upcall(observer, observed, ev, onu->onu_owner);
+                rc2 = onu->onu_upcall(observer, observed, ev,
+                                      onu->onu_owner, NULL);
         else
                 rc2 = 0;
 

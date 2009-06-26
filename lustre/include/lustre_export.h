@@ -37,9 +37,9 @@
 #ifndef __EXPORT_H
 #define __EXPORT_H
 
+#include <lprocfs_status.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_dlm.h>
-#include <lprocfs_status.h>
 #include <class_hash.h>
 
 struct mds_client_data;
@@ -144,6 +144,8 @@ struct obd_export {
         struct portals_handle     exp_handle;
         atomic_t                  exp_refcount;
         atomic_t                  exp_rpc_count;
+        atomic_t                  exp_cb_count;
+        atomic_t                  exp_locks_count;
         struct obd_uuid           exp_client_uuid;
         struct list_head          exp_obd_chain;
         struct hlist_node         exp_uuid_hash; /* uuid-export hash*/

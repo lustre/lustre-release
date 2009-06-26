@@ -255,6 +255,7 @@ int class_attach(struct lustre_cfg *lcfg)
         obd->obd_pool_slv = 0;
 
         CFS_INIT_LIST_HEAD(&obd->obd_exports);
+        CFS_INIT_LIST_HEAD(&obd->obd_unlinked_exports);
         CFS_INIT_LIST_HEAD(&obd->obd_delayed_exports);
         CFS_INIT_LIST_HEAD(&obd->obd_exports_timed);
         CFS_INIT_LIST_HEAD(&obd->obd_nid_stats);
@@ -452,35 +453,6 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
         RETURN(0);
 }
 
-static void dump_exports(struct obd_device *obd)
-{
-        struct obd_export *exp;
-
-        spin_lock(&obd->obd_dev_lock);
-        list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
-                struct ptlrpc_reply_state *rs;
-                struct ptlrpc_reply_state *first_reply = NULL;
-                int                        nreplies = 0;
-
-                spin_lock(&exp->exp_lock);
-                list_for_each_entry (rs, &exp->exp_outstanding_replies,
-                                     rs_exp_list) {
-                        if (nreplies == 0)
-                                first_reply = rs;
-                        nreplies++;
-                }
-                spin_unlock(&exp->exp_lock);
-
-                CDEBUG(D_IOCTL, "%s: %p %s %s %d %d %d: %p %s\n",
-                       obd->obd_name, exp, exp->exp_client_uuid.uuid,
-                       obd_export_nid2str(exp),
-                       atomic_read(&exp->exp_refcount),
-                       exp->exp_failed, nreplies, first_reply,
-                       nreplies > 3 ? "..." : "");
-        }
-        spin_unlock(&obd->obd_dev_lock);
-}
-
 int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         int err = 0;
@@ -576,6 +548,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 struct obd_device *class_incref(struct obd_device *obd,
                                 const char *scope, const void *source)
 {
+        LASSERT(!obd->obd_stopping);
         lu_ref_add_atomic(&obd->obd_reference, scope, source);
         atomic_inc(&obd->obd_refcount);
         CDEBUG(D_INFO, "incref %s (%p) now %d\n", obd->obd_name, obd,

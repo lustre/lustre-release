@@ -78,7 +78,7 @@ static int filter_quota_setup(struct obd_device *obd)
 
         init_rwsem(&obt->obt_rwsem);
         obt->obt_qfmt = LUSTRE_QUOTA_V2;
-        atomic_set(&obt->obt_quotachecking, 1);
+        sema_init(&obt->obt_quotachecking, 1);
         rc = qctxt_init(obd, NULL);
         if (rc)
                 CERROR("initialize quota context failed! (rc:%d)\n", rc);
@@ -177,6 +177,7 @@ static int filter_quota_enforce(struct obd_device *obd, unsigned int ignore)
         RETURN(0);
 }
 
+#define GET_OA_ID(flag, oa) (flag == USRQUOTA ? oa->o_uid : oa->o_gid)
 static int filter_quota_getflag(struct obd_device *obd, struct obdo *oa)
 {
         struct obd_device_target *obt = &obd->u.obt;
@@ -199,14 +200,14 @@ static int filter_quota_getflag(struct obd_device *obd, struct obdo *oa)
         oa->o_flags &= ~(OBD_FL_NO_USRQUOTA | OBD_FL_NO_GRPQUOTA);
 
         for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
-                struct quota_adjust_qunit oqaq_tmp;
                 struct lustre_qunit_size *lqs = NULL;
 
-                oqaq_tmp.qaq_flags = cnt;
-                oqaq_tmp.qaq_id = (cnt == USRQUOTA) ? oa->o_uid : oa->o_gid;
-
-                quota_search_lqs(NULL, &oqaq_tmp, qctxt, &lqs);
-                if (lqs) {
+                lqs = quota_search_lqs(LQS_KEY(cnt, GET_OA_ID(cnt, oa)),
+                                       qctxt, 0);
+                if (lqs == NULL || IS_ERR(lqs)) {
+                        rc = PTR_ERR(lqs);
+                        break;
+                } else {
                         spin_lock(&lqs->lqs_lock);
                         if (lqs->lqs_bunit_sz <= qctxt->lqc_sync_blk) {
                                 oa->o_flags |= (cnt == USRQUOTA) ?
@@ -263,10 +264,6 @@ static int quota_check_common(struct obd_device *obd, const unsigned int id[],
         int rc = 0, rc2[2] = { 0, 0 };
         ENTRY;
 
-        CLASSERT(MAXQUOTAS < 4);
-        if (!sb_any_quota_enabled(qctxt->lqc_sb))
-                RETURN(rc);
-
         spin_lock(&qctxt->lqc_lock);
         if (!qctxt->lqc_valid){
                 spin_unlock(&qctxt->lqc_lock);
@@ -287,8 +284,8 @@ static int quota_check_common(struct obd_device *obd, const unsigned int id[],
                 if (qdata[i].qd_id == 0 && !QDATA_IS_GRP(&qdata[i]))
                         continue;
 
-                quota_search_lqs(&qdata[i], NULL, qctxt, &lqs);
-                if (!lqs)
+                lqs = quota_search_lqs(LQS_KEY(i, id[i]), qctxt, 0);
+                if (lqs == NULL || IS_ERR(lqs))
                         continue;
 
                 if (IS_ERR(lqs)) {
@@ -378,6 +375,27 @@ static int quota_check_common(struct obd_device *obd, const unsigned int id[],
                 RETURN(rc);
 }
 
+int quota_is_set(struct obd_device *obd, const unsigned int id[], int flag)
+{
+        struct lustre_qunit_size *lqs;
+        int i, q_set = 0;
+
+        if (!sb_any_quota_enabled(obd->u.obt.obt_qctxt.lqc_sb))
+                RETURN(0);
+
+        for (i = 0; i < MAXQUOTAS; i++) {
+                lqs = quota_search_lqs(LQS_KEY(i, id[i]),
+                                       &obd->u.obt.obt_qctxt, 0);
+                if (lqs && !IS_ERR(lqs)) {
+                        if (lqs->lqs_flags & flag)
+                                q_set = 1;
+                        lqs_putref(lqs);
+                }
+        }
+
+        return q_set;
+}
+
 static int quota_chk_acq_common(struct obd_device *obd, const unsigned int id[],
                                 int pending[], int count, quota_acquire acquire,
                                 struct obd_trans_info *oti, int isblk,
@@ -390,6 +408,9 @@ static int quota_chk_acq_common(struct obd_device *obd, const unsigned int id[],
         struct l_wait_info lwi = { 0 };
         int rc = 0, cycle = 0, count_err = 1;
         ENTRY;
+
+        if (!quota_is_set(obd, id, isblk ? QB_SET : QI_SET))
+                RETURN(0);
 
         CDEBUG(D_QUOTA, "check quota for %s\n", obd->obd_name);
         pending[USRQUOTA] = pending[GRPQUOTA] = 0;
@@ -523,12 +544,12 @@ static int quota_pending_commit(struct obd_device *obd, const unsigned int id[],
                 if (qdata[i].qd_id == 0 && !QDATA_IS_GRP(&qdata[i]))
                         continue;
 
-                quota_search_lqs(&qdata[i], NULL, qctxt, &lqs);
+                lqs = quota_search_lqs(LQS_KEY(i, qdata[i].qd_id), qctxt, 0);
                 if (lqs == NULL || IS_ERR(lqs)) {
                         CERROR("can not find lqs for pending_commit: "
                                "[id %u] [%c] [pending %u] [isblk %d] (rc %ld), "
                                "maybe cause unexpected lqs refcount error!\n",
-                               id[i], i % 2 ? 'g': 'u', pending[i], isblk,
+                               id[i], i ? 'g': 'u', pending[i], isblk,
                                lqs ? PTR_ERR(lqs) : -1);
                         continue;
                 }
@@ -551,10 +572,10 @@ static int quota_pending_commit(struct obd_device *obd, const unsigned int id[],
 
                         lqs->lqs_iwrite_pending -= pending[i];
                 }
-                CDEBUG(D_QUOTA, "id: %u, %c, lqs pending: %lu, pending: %d, "
-                       "isblk: %d.\n", id[i], i % 2 ? 'g' : 'u',
-                       isblk ? lqs->lqs_bwrite_pending: lqs->lqs_iwrite_pending,
-                       pending[i], isblk);
+                CDEBUG(D_QUOTA, "%s: lqs_pending=%lu pending[%d]=%d isblk=%d\n",
+                       obd->obd_name,
+                       isblk ? lqs->lqs_bwrite_pending : lqs->lqs_iwrite_pending,
+                       i, pending[i], isblk);
                 spin_unlock(&lqs->lqs_lock);
 
                 /* for quota_search_lqs in pending_commit */
@@ -598,7 +619,7 @@ static int mds_quota_setup(struct obd_device *obd)
         init_rwsem(&obt->obt_rwsem);
         obt->obt_qfmt = LUSTRE_QUOTA_V2;
         mds->mds_quota_info.qi_version = LUSTRE_QUOTA_V2;
-        atomic_set(&obt->obt_quotachecking, 1);
+        sema_init(&obt->obt_quotachecking, 1);
         /* initialize quota master and quota context */
         sema_init(&mds->mds_qonoff_sem, 1);
         rc = qctxt_init(obd, dqacq_handler);

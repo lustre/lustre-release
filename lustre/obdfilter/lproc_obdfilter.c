@@ -299,7 +299,9 @@ static int lprocfs_filter_wr_cache(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
+        spin_lock_bh(&obd->obd_processing_task_lock);
         obd->u.filter.fo_read_cache = val;
+        spin_unlock_bh(&obd->obd_processing_task_lock);
         return count;
 }
 
@@ -324,8 +326,19 @@ static int lprocfs_filter_wr_wcache(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
+        spin_lock_bh(&obd->obd_processing_task_lock);
         obd->u.filter.fo_writethrough_cache = val;
+        spin_unlock_bh(&obd->obd_processing_task_lock);
         return count;
+}
+
+static int lprocfs_filter_rd_mds_sync(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        LASSERT(obd != NULL);
+
+        return snprintf(page, count, "%u\n", obd->u.filter.fo_mds_ost_sync);
 }
 
 static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
@@ -369,6 +382,7 @@ static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
         { "read_cache_enable", lprocfs_filter_rd_cache, lprocfs_filter_wr_cache, 0},
         { "writethrough_cache_enable", lprocfs_filter_rd_wcache,
                           lprocfs_filter_wr_wcache, 0},
+        { "mds_sync",     lprocfs_filter_rd_mds_sync, 0, 0},
         { 0 }
 };
 

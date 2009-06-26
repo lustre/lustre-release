@@ -265,7 +265,7 @@ struct lu_object *mdd_object_alloc(const struct lu_env *env,
 }
 
 static int mdd_object_init(const struct lu_env *env, struct lu_object *o,
-                           const struct lu_object_conf *_)
+                           const struct lu_object_conf *unused)
 {
         struct mdd_device *d = lu2mdd_dev(o->lo_dev);
         struct mdd_object *mdd_obj = lu2mdd_obj(o);
@@ -1846,6 +1846,7 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
                      struct md_attr *ma)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
+        struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle    *handle;
         int rc;
         int reset = 1;
@@ -1869,27 +1870,53 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
         /* release open count */
         mdd_obj->mod_count --;
 
-        if (mdd_obj->mod_count == 0) {
+        if (mdd_obj->mod_count == 0 && mdd_obj->mod_flags & ORPHAN_OBJ) {
                 /* remove link to object from orphan index */
-                if (mdd_obj->mod_flags & ORPHAN_OBJ)
-                        __mdd_orphan_del(env, mdd_obj, handle);
-        }
-
-        rc = mdd_iattr_get(env, mdd_obj, ma);
-        if (rc == 0) {
-                if (mdd_obj->mod_count == 0 && ma->ma_attr.la_nlink == 0) {
-                        rc = mdd_object_kill(env, mdd_obj, ma);
-#ifdef HAVE_QUOTA_SUPPORT
-                        if (mds->mds_quota) {
-                                quota_opc = FSFILT_OP_UNLINK_PARTIAL_CHILD;
-                                mdd_quota_wrapper(&ma->ma_attr, qids);
-                        }
-#endif
-                        if (rc == 0)
-                                reset = 0;
+                rc = __mdd_orphan_del(env, mdd_obj, handle);
+                if (rc == 0) {
+                        CDEBUG(D_HA, "Object "DFID" is deleted from orphan "
+                               "list, OSS objects to be destroyed.\n",
+                               PFID(mdd_object_fid(mdd_obj)));
+                } else {
+                        CERROR("Object "DFID" can not be deleted from orphan "
+                                "list, maybe cause OST objects can not be "
+                                "destroyed (err: %d).\n",
+                                PFID(mdd_object_fid(mdd_obj)), rc);
+                        /* If object was not deleted from orphan list, do not
+                         * destroy OSS objects, which will be done when next
+                         * recovery. */
+                        GOTO(out, rc);
                 }
         }
 
+        rc = mdd_iattr_get(env, mdd_obj, ma);
+        /* Object maybe not in orphan list originally, it is rare case for
+         * mdd_finish_unlink() failure. */
+        if (rc == 0 && ma->ma_attr.la_nlink == 0) {
+#ifdef HAVE_QUOTA_SUPPORT
+                if (mds->mds_quota) {
+                        quota_opc = FSFILT_OP_UNLINK_PARTIAL_CHILD;
+                        mdd_quota_wrapper(&ma->ma_attr, qids);
+                }
+#endif
+                /* MDS_CLOSE_CLEANUP means destroy OSS objects by MDS. */
+                if (ma->ma_valid & MA_FLAGS &&
+                    ma->ma_attr_flags & MDS_CLOSE_CLEANUP) {
+                        rc = mdd_lov_destroy(env, mdd, mdd_obj, &ma->ma_attr);
+                } else {
+                        rc = mdd_object_kill(env, mdd_obj, ma);
+                                if (rc == 0)
+                                        reset = 0;
+                }
+
+                if (rc != 0)
+                        CERROR("Error when prepare to delete Object "DFID" , "
+                               "which will cause OST objects can not be "
+                               "destroyed.\n",  PFID(mdd_object_fid(mdd_obj)));
+        }
+        EXIT;
+
+out:
         if (reset)
                 ma->ma_valid &= ~(MA_LOV | MA_COOKIE);
 
@@ -1902,7 +1929,7 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
                 lquota_adjust(mds_quota_interface_ref, obd, qids, 0, rc,
                               quota_opc);
 #endif
-        RETURN(rc);
+        return rc;
 }
 
 /*
@@ -1924,71 +1951,6 @@ static int mdd_readpage_sanity_check(const struct lu_env *env,
         RETURN(rc);
 }
 
-static int mdd_append_attrs(const struct lu_env *env,
-                             struct mdd_device *mdd,
-                             __u32 attr,
-                             const struct dt_it_ops *iops,
-                             struct dt_it *it,
-                             struct lu_dirent*ent)
-{
-        struct mdd_thread_info  *info = mdd_env_info(env);
-        struct lu_fid           *fid  = &info->mti_fid2;
-        int                      len = cpu_to_le16(ent->lde_namelen);
-        const unsigned           align = sizeof(struct luda_type) - 1;
-        struct lu_fid_pack      *pack;
-        struct mdd_object       *obj;
-        struct luda_type        *lt;
-        int rc = 0;
-
-        if (attr & LUDA_FID) {
-                pack = (struct lu_fid_pack *)iops->rec(env, it);
-                if (IS_ERR(pack)) {
-                        rc = PTR_ERR(pack);
-                        ent->lde_attrs = 0;
-                        goto out;
-                }
-                rc = fid_unpack(pack, fid);
-                if (rc != 0) {
-                        ent->lde_attrs = 0;
-                        goto out;
-                }
-
-                fid_cpu_to_le(&ent->lde_fid, fid);
-                ent->lde_attrs = LUDA_FID;
-        }
-
-        /* check if file type is required */
-        if (attr & LUDA_TYPE) {
-                if (!(attr & LUDA_FID)) {
-                        CERROR("wrong attr : [%x]\n",attr);
-                        rc = -EINVAL;
-                        goto out;
-                }
-
-                obj = mdd_object_find(env, mdd, fid);
-                if (obj == NULL) /* remote object */
-                        goto out;
-
-                if (IS_ERR(obj)) {
-                        rc = PTR_ERR(obj);
-                        goto out;
-                }
-
-                if (mdd_object_exists(obj) == +1) {
-                        len = (len + align) & ~align;
-
-                        lt = (void *) ent->lde_name + len;
-                        lt->lt_type = cpu_to_le16(mdd_object_type(obj));
-
-                        ent->lde_attrs |= LUDA_TYPE;
-                }
-                mdd_object_put(env, obj);
-        }
-out:
-        ent->lde_attrs = cpu_to_le32(ent->lde_attrs);
-        return rc;
-}
-
 static int mdd_dir_page_build(const struct lu_env *env, struct mdd_device *mdd,
                               int first, void *area, int nob,
                               const struct dt_it_ops *iops, struct dt_it *it,
@@ -1996,8 +1958,8 @@ static int mdd_dir_page_build(const struct lu_env *env, struct mdd_device *mdd,
                               struct lu_dirent **last, __u32 attr)
 {
         int                     result;
+        __u64                   hash = 0;
         struct lu_dirent       *ent;
-        __u64  hash = 0;
 
         if (first) {
                 memset(area, 0, sizeof (struct lu_dirpage));
@@ -2007,7 +1969,6 @@ static int mdd_dir_page_build(const struct lu_env *env, struct mdd_device *mdd,
 
         ent  = area;
         do {
-                char  *name;
                 int    len;
                 int    recsize;
 
@@ -2017,30 +1978,25 @@ static int mdd_dir_page_build(const struct lu_env *env, struct mdd_device *mdd,
                 if (len == 0)
                         goto next;
 
-                name = (char *)iops->key(env, it);
                 hash = iops->store(env, it);
-
                 if (unlikely(first)) {
                         first = 0;
                         *start = hash;
                 }
 
+                /* calculate max space required for lu_dirent */
                 recsize = lu_dirent_calc_size(len, attr);
 
-                CDEBUG(D_INFO, "%p %p %d "LPU64" (%d) \"%*.*s\"\n",
-                                name, ent, nob, hash, len, len, len, name);
-
                 if (nob >= recsize) {
-                        ent->lde_hash    = cpu_to_le64(hash);
-                        ent->lde_namelen = cpu_to_le16(len);
-                        ent->lde_reclen  = cpu_to_le16(recsize);
-                        memcpy(ent->lde_name, name, len);
-
-                        result = mdd_append_attrs(env, mdd, attr, iops, it, ent);
+                        result = iops->rec(env, it, ent, attr);
                         if (result == -ESTALE)
                                 goto next;
                         if (result != 0)
                                 goto out;
+
+                        /* osd might not able to pack all attributes,
+                         * so recheck rec length */
+                        recsize = le16_to_cpu(ent->lde_reclen);
                 } else {
                         /*
                          * record doesn't fit into page, enlarge previous one.
@@ -2101,7 +2057,7 @@ static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
 
         rc = iops->load(env, it, rdpg->rp_hash);
 
-        if (rc == 0)
+        if (rc == 0){
                 /*
                  * Iterator didn't find record with exactly the key requested.
                  *
@@ -2114,7 +2070,7 @@ static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
                  *     state)---position it on the next item.
                  */
                 rc = iops->next(env, it);
-        else if (rc > 0)
+        } else if (rc > 0)
                 rc = 0;
 
         /*

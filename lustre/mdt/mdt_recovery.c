@@ -432,6 +432,17 @@ static int mdt_server_data_init(const struct lu_env *env,
                                            obd->obd_uuid.uuid, lsd->lsd_uuid);
                         GOTO(out, rc = -EINVAL);
                 }
+
+                /** evict all clients as it is first boot with old last_rcvd */
+                if (!(lsd->lsd_feature_incompat & OBD_INCOMPAT_20)) {
+                        LCONSOLE_WARN("Mounting %s at first time on old FS, "
+                                      "remove all clients for interop needs\n",
+                                      obd->obd_name);
+                        simple_truncate(lsi->lsi_srv_mnt->mnt_sb->s_root,
+                                        lsi->lsi_srv_mnt, LAST_RCVD,
+                                        lsd->lsd_client_start);
+                        last_rcvd_size = lsd->lsd_client_start;
+                }
         }
         mount_count = lsd->lsd_mount_count;
 
@@ -440,8 +451,8 @@ static int mdt_server_data_init(const struct lu_env *env,
         if (ldd->ldd_flags & LDD_F_IAM_DIR)
                 lsd->lsd_feature_incompat |= OBD_INCOMPAT_IAM_DIR;
 
-        lsd->lsd_feature_compat = OBD_COMPAT_MDT;
-        lsd->lsd_feature_incompat |= OBD_INCOMPAT_FID;
+        lsd->lsd_feature_compat = 0;
+        lsd->lsd_feature_incompat |= OBD_INCOMPAT_FID | OBD_INCOMPAT_20;
 
         spin_lock(&mdt->mdt_transno_lock);
         mdt->mdt_last_transno = lsd->lsd_last_transno;
@@ -482,7 +493,7 @@ static int mdt_server_data_init(const struct lu_env *env,
         obd->obd_last_committed = mdt->mdt_last_transno;
         spin_unlock(&mdt->mdt_transno_lock);
 
-        mdt->mdt_mount_count++;
+        mdt->mdt_mount_count = mount_count + 1;
         lsd->lsd_mount_count = mdt->mdt_mount_count;
 
         /* save it, so mount count and last_transno is current */
@@ -915,6 +926,7 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
          * export as parameter */
         mdt_trans_add_cb(txn, lut_cb_last_committed,
                          class_export_get(mti->mti_exp));
+        atomic_inc(&mti->mti_exp->exp_cb_count);
 
         return mdt_last_rcvd_update(mti, txn);
 }
@@ -1013,12 +1025,11 @@ static void mdt_steal_ack_locks(struct ptlrpc_request *req)
                 if (oldrep->rs_xid != req->rq_xid)
                         continue;
 
-                if (lustre_msg_get_opc(oldrep->rs_msg) !=
-                    lustre_msg_get_opc(req->rq_reqmsg))
+                if (oldrep->rs_opc != lustre_msg_get_opc(req->rq_reqmsg))
                         CERROR ("Resent req xid "LPU64" has mismatched opc: "
                                 "new %d old %d\n", req->rq_xid,
                                 lustre_msg_get_opc(req->rq_reqmsg),
-                                lustre_msg_get_opc(oldrep->rs_msg));
+                                oldrep->rs_opc);
 
                 svc = oldrep->rs_service;
                 spin_lock (&svc->srv_lock);
@@ -1028,8 +1039,7 @@ static void mdt_steal_ack_locks(struct ptlrpc_request *req)
                 CWARN("Stealing %d locks from rs %p x"LPD64".t"LPD64
                       " o%d NID %s\n",
                       oldrep->rs_nlocks, oldrep,
-                      oldrep->rs_xid, oldrep->rs_transno,
-                      lustre_msg_get_opc(oldrep->rs_msg),
+                      oldrep->rs_xid, oldrep->rs_transno, oldrep->rs_opc,
                       libcfs_nid2str(exp->exp_connection->c_peer.nid));
 
                 for (i = 0; i < oldrep->rs_nlocks; i++)

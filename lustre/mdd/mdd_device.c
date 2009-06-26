@@ -116,8 +116,10 @@ static void mdd_device_shutdown(const struct lu_env *env,
         ENTRY;
         mdd_changelog_fini(env, m);
         dt_txn_callback_del(m->mdd_child, &m->mdd_txn_cb);
-        mdd_object_put(env, m->mdd_dot_lustre_objs.mdd_obf);
-        mdd_object_put(env, m->mdd_dot_lustre);
+        if (m->mdd_dot_lustre_objs.mdd_obf)
+                mdd_object_put(env, m->mdd_dot_lustre_objs.mdd_obf);
+        if (m->mdd_dot_lustre)
+                mdd_object_put(env, m->mdd_dot_lustre);
         if (m->mdd_obd_dev)
                 mdd_fini_obd(env, m, cfg);
         orph_index_fini(env, m);
@@ -450,6 +452,12 @@ static int dot_lustre_xattr_get(const struct lu_env *env,
         return 0;
 }
 
+static int dot_lustre_xattr_list(const struct lu_env *env,
+                                 struct md_object *obj, struct lu_buf *buf)
+{
+        return -EPERM;
+}
+
 static int dot_lustre_mdd_open(const struct lu_env *env, struct md_object *obj,
                                int flags)
 {
@@ -498,6 +506,7 @@ static struct md_object_operations mdd_dot_lustre_obj_ops = {
         .moo_attr_get   = dot_lustre_attr_get,
         .moo_attr_set   = dot_lustre_attr_set,
         .moo_xattr_get  = dot_lustre_xattr_get,
+        .moo_xattr_list = dot_lustre_xattr_list,
         .moo_open       = dot_lustre_mdd_open,
         .moo_close      = dot_lustre_close,
         .moo_readpage   = mdd_readpage,
@@ -676,8 +685,7 @@ static int obf_lookup(const struct lu_env *env, struct md_object *p,
         while (*name == '[')
                 name++;
 
-        sscanf(name, SFID, &(f->f_seq), &(f->f_oid),
-               &(f->f_ver));
+        sscanf(name, SFID, RFID(f));
         if (!fid_is_sane(f)) {
                 CWARN("bad FID format [%s], should be "DFID"\n", lname->ln_name,
                       (__u64)1, 2, 0);

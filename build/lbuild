@@ -940,7 +940,7 @@ build_kernel_ib() {
 	      --define "KVERSION ${LINUXRELEASE}" \
 	      --define "$K_SRC ${LINUXOBJ:-${LINUX}}" \
 	      --define "LIB_MOD_DIR /lib/modules/${LINUXRELEASE}/updates" \
-	      --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-mlx4_en-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --without-srp-target-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" ${TOPDIR}/OFED/SRPMS/ofa_kernel-*.src.rpm
+	      --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-mlx4_en-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" ${TOPDIR}/OFED/SRPMS/ofa_kernel-*.src.rpm
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
         fatal 1 "Error building kernel-ib"
@@ -1130,7 +1130,7 @@ build_kernel_with_srpm() {
     else
         # nothing cached, build from scratch
         if [ ! -r "$KERNELDIR/$KERNEL_SRPM" ]; then
-            download_srpm "$CANONICAL_TARGET" "$KERNEL_SRPM"
+            download_srpm "$CANONICAL_TARGET" "$KERNEL_SRPM" >&2
         fi
 
         rpm -ivh $KERNELDIR/$KERNEL_SRPM --define "_topdir $TOPDIR" >&2 || {
@@ -1141,7 +1141,7 @@ build_kernel_with_srpm() {
 
         # put the Lustre kernel patch into the RPM build tree
         cp $FULL_PATCH $TOPDIR/SOURCES/linux-${lnxmaj}-lustre.patch
-        prepare_and_build_srpm
+        prepare_and_build_srpm >&2
 
         # store the resulting kernel RPM build tree for future use
         if ! store_for_reuse "$TOPDIR/{SPECS,SOURCES,BUILD,SRPMS,RPMS}" \
@@ -1279,12 +1279,15 @@ build_with_srpm() {
 
 create_rpmbuild_dirs() {
 
-    if [ ! -d RPMS ]; then
-        mkdir -p RPMS
-        for arch in $BUILD_ARCHS; do
-            mkdir RPMS/$arch
-        done
-    fi
+    [ -d RPMS ] || mkdir RPMS
+    for arch in $BUILD_ARCHS; do
+        if [[ $arch = i?86 ]]; then
+            # some stupidity in the sles11 kernel spec requires an RPMS/i386
+            # even if the target arch is i686
+            [ -d RPMS/i386 ] || mkdir RPMS/i386
+        fi
+        [ -d RPMS/$arch ] || mkdir RPMS/$arch
+    done
     [ -d BUILD ] || mkdir BUILD
     [ -d SOURCES ] || mkdir SOURCES
     [ -d SPECS ] || mkdir SPECS

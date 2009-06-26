@@ -226,6 +226,55 @@ static inline char *obd_uuid2str(struct obd_uuid *uuid)
         return (char *)(uuid->uuid);
 }
 
+
+/**
+ * File IDentifier.
+ *
+ * FID is a cluster-wide unique identifier of a file or an object (stripe).
+ * FIDs are never reused.
+ */
+struct lu_fid {
+        /**
+         * FID sequence. Sequence is a unit of migration: all files (objects)
+         * with FIDs from a given sequence are stored on the same server.
+         * Lustre should support 2^64 objects, so even if each sequence
+         * has only a single object we can still enumerate 2^64 objects.
+         */
+        __u64 f_seq;
+        /** FID number within sequence. */
+        __u32 f_oid;
+        /**
+         * FID version, used to distinguish different versions (in the sense
+         * of snapshots, etc.) of the same file system object. Not currently
+         * used.
+         */
+        __u32 f_ver;
+};
+
+/* Userspace should treat lu_fid as opaque, and only use the following methods
+   to print or parse them.  Other functions (e.g. compare, swab) could be moved
+   here from lustre_idl.h if needed. */
+typedef struct lu_fid lustre_fid;
+
+/* printf display format
+   e.g. printf("file FID is "DFID"\n", PFID(fid)); */
+#define DFID "["LPX64":0x%x:0x%x]"
+#define PFID(fid)     \
+        (fid)->f_seq, \
+        (fid)->f_oid, \
+        (fid)->f_ver
+
+/* scanf input parse format -- strip '[' first.
+   e.g. sscanf(fidstr, SFID, RFID(&fid)); */
+#define SFID "0x%llx:0x%x:0x%x"
+#define RFID(fid)     \
+        &((fid)->f_seq), \
+        &((fid)->f_oid), \
+        &((fid)->f_ver)
+
+
+/********* Quotas **********/
+
 /* these must be explicitly translated into linux Q_* in ll_dir_ioctl */
 #define LUSTRE_Q_QUOTAON    0x800002     /* turn quotas on */
 #define LUSTRE_Q_QUOTAOFF   0x800003     /* turn quotas off */

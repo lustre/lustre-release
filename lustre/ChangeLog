@@ -7,11 +7,18 @@ tbd  Sun Microsystems, Inc.
        * Client support for unpatched kernels:
 	 (see http://wiki.lustre.org/index.php?title=Patchless_Client)
 	 2.6.16 - 2.6.21 vanilla (kernel.org)
-       * Recommended e2fsprogs version: 1.41.5.sun2
+       * Recommended e2fsprogs version: 1.41.6.sun1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
+
+Severity   : normal 
+Bugzilla   : 18624 
+Description: Unable to run several mkfs.lustre on loop devices at the same
+	     time.
+Details    : mkfs.lustre returns error 256 on the concurrent loop devices
+	     formatting. The solution is to proper handle the error.   
 
 Severity   : enhancement
 Bugzilla   : 19024
@@ -2073,6 +2080,12 @@ Bugzilla   : 19058
 Description: MMP check in ext3_remount() fails without displaying any error
 Details    : When multiple mount protection fails during remount, proper error
 	     should be returned
+
+Severity   : enhancement
+Bugzilla   : 16823
+Description: Allow stripe size to be up to 4G-64k
+Details    : Fix math logic to allow large stripe sizes.
+
 
 --------------------------------------------------------------------------------
 

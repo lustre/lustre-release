@@ -1129,6 +1129,7 @@ int cl_page_list_own(const struct lu_env *env,
 {
         struct cl_page *page;
         struct cl_page *temp;
+        pgoff_t index = 0;
         int result;
 
         LINVRNT(plist->pl_owner == cfs_current());
@@ -1136,8 +1137,10 @@ int cl_page_list_own(const struct lu_env *env,
         ENTRY;
         result = 0;
         cl_page_list_for_each_safe(page, temp, plist) {
+                LASSERT(index <= page->cp_index);
+                index = page->cp_index;
                 if (cl_page_own(env, io, page) == 0)
-                result = result ?: page->cp_error;
+                        result = result ?: page->cp_error;
                 else
                         cl_page_list_del(env, plist, page);
         }

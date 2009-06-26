@@ -261,7 +261,7 @@ struct obd_device_target {
         spinlock_t                obt_translock;
         /** Number of mounts */
         __u64                     obt_mount_count;
-        atomic_t                  obt_quotachecking;
+        struct semaphore          obt_quotachecking;
         struct lustre_quota_ctxt  obt_qctxt;
         lustre_quota_version_t    obt_qfmt;
         struct rw_semaphore       obt_rwsem;
@@ -329,8 +329,9 @@ struct filter_obd {
         int                  fo_tot_granted_clients;
 
         obd_size             fo_readcache_max_filesize;
-        int                  fo_read_cache;
-        int                  fo_writethrough_cache;
+        int                  fo_read_cache:1,   /**< enable read-only cache */
+                             fo_writethrough_cache:1,/**< read cache writes */
+                             fo_mds_ost_sync:1; /**< MDS-OST orphan recovery*/
 
         struct obd_import   *fo_mdc_imp;
         struct obd_uuid      fo_mdc_uuid;
@@ -945,7 +946,7 @@ enum config_flags {
  */
 struct obd_notify_upcall {
         int (*onu_upcall)(struct obd_device *host, struct obd_device *watched,
-                          enum obd_notify_event ev, void *owner);
+                          enum obd_notify_event ev, void *owner, void *data);
         /* Opaque datum supplied by upper layer listener */
         void *onu_owner;
 };
@@ -1046,6 +1047,7 @@ struct obd_device {
         atomic_t                obd_refcount;
         cfs_waitq_t             obd_refcount_waitq;
         struct list_head        obd_exports;
+        struct list_head        obd_unlinked_exports;
         struct list_head        obd_delayed_exports;
         int                     obd_num_exports;
         spinlock_t              obd_nid_lock;
@@ -1570,9 +1572,9 @@ struct lsm_operations {
         int (*lsm_destroy)(struct lov_stripe_md *, struct obdo *oa,
                            struct obd_export *md_exp);
         void (*lsm_stripe_by_index)(struct lov_stripe_md *, int *, obd_off *,
-                                     unsigned long *);
+                                    obd_off *);
         void (*lsm_stripe_by_offset)(struct lov_stripe_md *, int *, obd_off *,
-                                     unsigned long *);
+                                     obd_off *);
         obd_off (*lsm_stripe_offset_by_index)(struct lov_stripe_md *, int);
         obd_off (*lsm_stripe_offset_by_offset)(struct lov_stripe_md *, obd_off);
         int (*lsm_stripe_index_by_offset)(struct lov_stripe_md *, obd_off);

@@ -1561,6 +1561,23 @@ run_test 43 "check root_squash and nosquash_nids"
 umount_client $MOUNT
 cleanup_nocli
 
+test_44() { # 16317
+        setup
+        check_mount || return 2
+        UUID=$($LCTL get_param llite.${FSNAME}*.uuid | cut -d= -f2)
+        STATS_FOUND=no
+        UUIDS=$(do_facet mds "$LCTL get_param mdt.${FSNAME}*.exports.*.uuid")
+        for VAL in $UUIDS; do
+                NID=$(echo $VAL | cut -d= -f1)
+                CLUUID=$(echo $VAL | cut -d= -f2)
+                [ "$UUID" = "$CLUUID" ] && STATS_FOUND=yes && break
+        done
+        [ "$STATS_FOUND" = "no" ] && error "stats not found for client"
+        cleanup
+        return 0
+}
+run_test 44 "mounted client proc entry exists"
+
 test_45() { #17310
         setup
         check_mount || return 2
@@ -1918,8 +1935,9 @@ test_50f() {
 	    sleep $(( $TIMEOUT+1 ))
 	    kill -0 $pid
 	    [ $? -ne 0 ] && error "process isn't sleep"
-	    start_ost2 || error "Unable to start OST1"
+	    start_ost2 || error "Unable to start OST2"
 	    wait $pid || error "statfs failed"
+	    stop_ost2 || error "Unable to stop OST2"
 	fi
 
 	umount_client $MOUNT || error "Unable to unmount client"

@@ -47,8 +47,8 @@
 #error Unsupported operating system.
 #endif
 
-#include <lustre/lustre_idl.h>
 #include <lustre_net.h>
+#include <lustre/lustre_idl.h>
 #include <lvfs.h>
 #include <obd_support.h>
 #include <class_hash.h>
@@ -179,7 +179,12 @@ struct lustre_dquot {
 struct dquot_id {
         struct list_head        di_link;
         __u32                   di_id;
+        __u32                   di_flag;
 };
+/* set inode quota limitation on a quota uid/gid */
+#define QI_SET                (1 << 30)
+/* set block quota limitation on a quota uid/gid */
+#define QB_SET                (1 << 31)
 
 #define QFILE_CHK               1
 #define QFILE_RD_INFO           2
@@ -307,6 +312,10 @@ struct lustre_quota_ctxt {
         struct proc_dir_entry *lqc_proc_dir;
         /** lquota statistics */
         struct lprocfs_stats  *lqc_stats;
+        /** the number of used hashed lqs */
+        atomic_t      lqc_lqs;
+        /** no lqs are in use */
+        cfs_waitq_t   lqc_lqs_waitq;
 };
 
 #define QUOTA_MASTER_READY(qctxt)   (qctxt)->lqc_setup = 1
@@ -315,7 +324,9 @@ struct lustre_quota_ctxt {
 struct lustre_qunit_size {
         struct hlist_node lqs_hash; /** the hash entry */
         unsigned int lqs_id;        /** id of user/group */
-        unsigned long lqs_flags;    /** is user/group; FULLBUF or LESSBUF */
+        unsigned long lqs_flags;    /** 31st bit is QB_SET, 30th bit is QI_SET
+                                     * other bits are same as LQUOTA_FLAGS_*
+                                     */
         unsigned long lqs_iunit_sz; /** Unit size of file quota currently */
         /**
          * Trigger dqacq when available file quota
@@ -337,7 +348,7 @@ struct lustre_qunit_size {
         cfs_time_t lqs_last_bshrink;   /** time of last block shrink */
         cfs_time_t lqs_last_ishrink;   /** time of last inode shrink */
         spinlock_t lqs_lock;
-        struct quota_adjust_qunit lqs_key; /** hash key */
+        unsigned long long lqs_key;    /** hash key */
         struct lustre_quota_ctxt *lqs_ctxt; /** quota ctxt */
 };
 
@@ -349,28 +360,54 @@ struct lustre_qunit_size {
 #define LQS_SET_ADJBLK(lqs) ((lqs)->lqs_flags |= LQUOTA_FLAGS_ADJBLK)
 #define LQS_SET_ADJINO(lqs) ((lqs)->lqs_flags |= LQUOTA_FLAGS_ADJINO)
 
+/* In the hash for lustre_qunit_size, the key is decided by
+ * grp_or_usr and uid/gid, in here, I combine these two values,
+ * which will make comparing easier and more efficient */
+#define LQS_KEY(is_grp, id)  ((is_grp ? 1ULL << 32: 0) + id)
+#define LQS_KEY_ID(key)      (key & 0xffffffff)
+#define LQS_KEY_GRP(key)     (key >> 32)
+
+static inline void __lqs_getref(struct lustre_qunit_size *lqs)
+{
+        int count = atomic_inc_return(&lqs->lqs_refcount);
+
+        if (count == 2) /* quota_create_lqs */
+                atomic_inc(&lqs->lqs_ctxt->lqc_lqs);
+        CDEBUG(D_QUOTA, "lqs=%p refcount %d\n", lqs, count);
+}
+
 static inline void lqs_getref(struct lustre_qunit_size *lqs)
 {
-        atomic_inc(&lqs->lqs_refcount);
-        CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
-               lqs, atomic_read(&lqs->lqs_refcount));
+        __lqs_getref(lqs);
+}
+
+static inline void __lqs_putref(struct lustre_qunit_size *lqs, int del)
+{
+        int count = atomic_read(&lqs->lqs_refcount);
+
+        LASSERT(count > 0);
+        if (count == 1) {
+                CDEBUG(D_QUOTA, "lqs=%p refcount to be 0\n", lqs);
+                if (del) {
+                        /* killing last ref, let's let hash table kill it */
+                        lustre_hash_del(lqs->lqs_ctxt->lqc_lqs_hash,
+                                        &lqs->lqs_key, &lqs->lqs_hash);
+                        OBD_FREE_PTR(lqs);
+                } else {
+                        atomic_dec(&lqs->lqs_refcount);
+                }
+        } else {
+                count = atomic_dec_return(&lqs->lqs_refcount);
+                if (count == 1)
+                        if (atomic_dec_and_test(&lqs->lqs_ctxt->lqc_lqs))
+                                cfs_waitq_signal(&lqs->lqs_ctxt->lqc_lqs_waitq);
+                CDEBUG(D_QUOTA, "lqs=%p refcount %d\n", lqs, count);
+        }
 }
 
 static inline void lqs_putref(struct lustre_qunit_size *lqs)
 {
-        LASSERT(atomic_read(&lqs->lqs_refcount) > 0);
-
-        /* killing last ref, let's let hash table kill it */
-        if (atomic_read(&lqs->lqs_refcount) == 1) {
-                lustre_hash_del(lqs->lqs_ctxt->lqc_lqs_hash,
-                                &lqs->lqs_key, &lqs->lqs_hash);
-                OBD_FREE_PTR(lqs);
-        } else {
-                atomic_dec(&lqs->lqs_refcount);
-                CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
-                       lqs, atomic_read(&lqs->lqs_refcount));
-
-        }
+        __lqs_putref(lqs, 1);
 }
 
 static inline void lqs_initref(struct lustre_qunit_size *lqs)
@@ -412,7 +449,7 @@ struct quotacheck_thread_args {
         struct obd_device   *qta_obd;   /** obd device */
         struct obd_quotactl  qta_oqctl; /** obd_quotactl args */
         struct super_block  *qta_sb;    /** obd super block */
-        atomic_t            *qta_sem;   /** obt_quotachecking */
+        struct semaphore    *qta_sem;   /** obt_quotachecking */
 };
 
 struct obd_trans_info;

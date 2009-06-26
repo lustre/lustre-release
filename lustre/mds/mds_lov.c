@@ -460,7 +460,7 @@ out:
 int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
 {
         int rc;
-        struct obdo oa;
+        struct obdo oa = { 0 };
         struct obd_trans_info oti = {0};
         struct lov_stripe_md  *empty_ea = NULL;
         ENTRY;
@@ -545,7 +545,8 @@ static int mds_lov_update_desc(struct obd_device *obd, int idx,
         if (obd->obd_upcall.onu_owner) {
                  LASSERT(obd->obd_upcall.onu_upcall != NULL);
                  rc = obd->obd_upcall.onu_upcall(obd, NULL, ev,
-                                                 obd->obd_upcall.onu_owner);
+                                                 obd->obd_upcall.onu_owner,
+                                                 &mds->mds_mount_count);
         }
 out:
         OBD_FREE(ld, sizeof(*ld));
@@ -824,7 +825,7 @@ static int __mds_lov_synchronize(void *data)
                  */
                 LASSERT(obd->obd_upcall.onu_upcall != NULL);
                 rc = obd->obd_upcall.onu_upcall(obd, NULL, OBD_NOTIFY_QUOTA,
-                                                obd->obd_upcall.onu_owner);
+                                                obd->obd_upcall.onu_owner,NULL);
         }
 #endif
         EXIT;

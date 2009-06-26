@@ -148,14 +148,10 @@ check_and_setup_lustre
 echo "Starting Test 17 at `date`"
 
 test_0() {
-    facet_failover $SINGLEMDS
-    echo "Waiting for df pid: $DFPID"
-    wait $DFPID || { echo "df returned $?" && return 1; }
+    fail $SINGLEMDS
 
     for i in $(seq $OSTCOUNT) ; do
-        facet_failover ost$i || return 4
-        echo "Waiting for df pid: $DFPID"
-        wait $DFPID || { echo "df returned $?" && return 3; }
+        fail ost$i
     done
     return 0
 }
@@ -215,8 +211,7 @@ test_3() {
     [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
     
     #MDS Portion
-    facet_failover $SINGLEMDS
-    wait $DFPID || echo df failed: $?
+    fail $SINGLEMDS
     #Check FS
 
     echo "Test Lustre stability after MDS failover"
@@ -419,11 +414,8 @@ test_7() {
     client_rm testfile
 
     #MDS Portion
-    facet_failover $SINGLEMDS
+    fail $SINGLEMDS
 
-    #Check FS
-    echo "Test Lustre stability after MDS failover"
-    wait $DFPID || echo "df on down clients fails " || return 1
     $PDSH $LIVE_CLIENT "ls -l $MOUNT"
     $PDSH $LIVE_CLIENT "rm -f $MOUNT/*_testfile"
 

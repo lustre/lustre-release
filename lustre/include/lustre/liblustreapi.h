@@ -67,19 +67,20 @@ enum llapi_message_level {
 extern void llapi_msg_set_level(int level);
 extern void llapi_err(int level, char *fmt, ...);
 extern void llapi_printf(int level, char *fmt, ...);
-extern int llapi_file_create(const char *name, unsigned long stripe_size,
+extern int llapi_file_create(const char *name, unsigned long long stripe_size,
                              int stripe_offset, int stripe_count,
                              int stripe_pattern);
 extern int llapi_file_open(const char *name, int flags, int mode,
-                           unsigned long stripe_size, int stripe_offset,
+                           unsigned long long stripe_size, int stripe_offset,
                            int stripe_count, int stripe_pattern);
-extern int llapi_file_create_pool(const char *name, unsigned long stripe_size,
+extern int llapi_file_create_pool(const char *name,
+                                  unsigned long long stripe_size,
                                   int stripe_offset, int stripe_count,
                                   int stripe_pattern, char *pool_name);
 extern int llapi_file_open_pool(const char *name, int flags, int mode,
-                                unsigned long stripe_size, int stripe_offset,
-                                int stripe_count, int stripe_pattern,
-                                char *pool_name);
+                                unsigned long long stripe_size,
+                                int stripe_offset, int stripe_count,
+                                int stripe_pattern, char *pool_name);
 extern int llapi_poollist(char *name);
 extern int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);
 #define HAVE_LLAPI_FILE_LOOKUP
@@ -154,8 +155,7 @@ extern int llapi_is_lustre_mnttype(const char *type);
 extern int llapi_get_obd_count(char *mnt, int *count, int is_mdt);
 extern int parse_size(char *optarg, unsigned long long *size,
                       unsigned long long *size_units, int bytes_spec);
-extern int llapi_path2fid(const char *path, unsigned long long *seq,
-                          unsigned long *oid, unsigned long *ver);
+extern int llapi_path2fid(const char *path, lustre_fid *fid);
 extern int llapi_search_fsname(const char *pathname, char *fsname);
 extern void llapi_ping_target(char *obd_type, char *obd_name,
                               char *obd_uuid, void *args);
@@ -179,7 +179,7 @@ extern int llapi_changelog_clear(const char *mdtname, const char *idstr,
                                  long long endrec);
 extern int llapi_changelog_register(const char *mdtname);
 extern int llapi_changelog_unregister(const char *mdtname, int id);
-extern int llapi_fid2path(char *device, char *fid, char *path, int pathlen,
-                          long long *recno, int *linkno);
+extern int llapi_fid2path(const char *device, const char *fidstr, char *path,
+                          int pathlen, long long *recno, int *linkno);
 #endif
 

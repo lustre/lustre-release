@@ -542,6 +542,8 @@ kptllnd_peer_unreserve_buffers(void)
 int  kptllnd_setup_tx_descs(void);
 void kptllnd_cleanup_tx_descs(void);
 void kptllnd_tx_fini(kptl_tx_t *tx);
+void kptllnd_cancel_txlist(struct list_head *peerq, struct list_head *txs);
+void kptllnd_restart_txs(lnet_process_id_t target, struct list_head *restarts);
 kptl_tx_t *kptllnd_get_idle_tx(enum kptl_tx_type purpose);
 void kptllnd_tx_callback(ptl_event_t *ev);
 const char *kptllnd_tx_typestr(int type);

@@ -24,3 +24,4 @@ lc_modprobe
 lc_net
 lustre_config
 lustre_createcsv
+lustre_start

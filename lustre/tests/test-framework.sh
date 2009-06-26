@@ -521,16 +521,21 @@ stop() {
 # add an additional parameter if mountpoint is ever different from $MOUNT
 quota_save_version() {
     local fsname=${2:-$FSNAME}
+    local spec=$1
+    local ver=$(tr -c -d "123" <<< $spec)
+    local type=$(tr -c -d "ug" <<< $spec)
+
+    [ -n "$ver" -a "$ver" != "3" ] && error "wrong quota version specifier"
 
     $LFS quotaoff -ug $MOUNT # just in case
-    [ -n "$1" ] && { $LFS quotacheck -$1 $MOUNT || error "quotacheck has failed"; }
+    [ -n "$type" ] && { $LFS quotacheck -$type $MOUNT || error "quotacheck has failed"; }
 
-    do_facet mgs "lctl conf_param ${fsname}-MDT*.mdd.quota_type=$1"
+    do_facet mgs "lctl conf_param ${fsname}-MDT*.mdd.quota_type=$spec"
     local varsvc
     local osts=$(get_facets OST)
     for ost in ${osts//,/ }; do
         varsvc=${ost}_svc
-        do_facet mgs "lctl conf_param ${!varsvc}.ost.quota_type=$1"
+        do_facet mgs "lctl conf_param ${!varsvc}.ost.quota_type=$spec"
     done
 }
 
@@ -563,6 +568,7 @@ setup_quota(){
     # Suppose that quota type the same on mds and ost
     local quota_type=$(quota_type | grep MDT | cut -d "=" -f2)
     [ ${PIPESTATUS[0]} -eq 0 ] || error "quota_type failed!"
+    echo "[HOST:$HOSTNAME] [old_quota_type:$quota_type] [new_quota_type:$QUOTA_TYPE]"
     if [ "$quota_type" != "$QUOTA_TYPE" ]; then
         export old_QUOTA_TYPE=$quota_type
         quota_save_version $QUOTA_TYPE
@@ -584,7 +590,7 @@ setup_quota(){
 
     local cmd
     for usr in $quota_usrs; do
-        echo "Setting up quota on $client:$mntpt for $usr..."
+        echo "Setting up quota on $HOSTNAME:$mntpt for $usr..."
         for type in u g; do
             cmd="$LFS setquota -$type $usr -b $blk_soft -B $blk_hard -i $i_soft -I $i_hard $mntpt"
             echo "+ $cmd"
@@ -672,6 +678,8 @@ fi"
 }
 
 sanity_mount_check_servers () {
+    [ "$CLIENTONLY" ] && 
+        { echo "CLIENTONLY mode, skip mount_check_servers"; return 0; } || true
     echo Checking servers environments
 
     # FIXME: modify get_facets to display all facets wo params
@@ -826,10 +834,14 @@ check_progs_installed () {
     shift
     local progs=$@
 
-    do_nodes $clients "set -x ; PATH=:$PATH status=true; for prog in $progs; do
-        which \\\$prog || { echo \\\$prog missing on \\\$(hostname) && status=false; }
-        done;
-        eval \\\$status"
+    do_nodes $clients "set -x ; PATH=:$PATH; status=true;
+for prog in $progs; do
+    if ! [ \\\"\\\$(which \\\$prog)\\\"  -o  \\\"\\\${!prog}\\\" ]; then
+       echo \\\$prog missing on \\\$(hostname);
+       status=false;
+    fi
+done;
+eval \\\$status"
 }
 
 client_var_name() {
@@ -872,12 +884,35 @@ check_client_load () {
     local TESTLOAD=run_${!var}.sh
 
     ps auxww | grep -v grep | grep $client | grep -q "$TESTLOAD" || return 1
-
-    check_catastrophe $client || return 2
-
-    # see if the load is still on the client
+    
+    # bug 18914: try to connect several times not only when
+    # check ps, but  while check_catastrophe also
     local tries=3
     local RC=254
+    while [ $RC = 254 -a $tries -gt 0 ]; do
+        let tries=$tries-1
+        # assume success
+        RC=0
+        if ! check_catastrophe $client; then
+            RC=${PIPESTATUS[0]}
+            if [ $RC -eq 254 ]; then
+                # FIXME: not sure how long we shuold sleep here
+                sleep 10
+                continue
+            fi
+            echo "check catastrophe failed: RC=$RC "
+            return $RC
+        fi
+    done
+    # We can continue try to connect if RC=254
+    # Just print the warning about this
+    if [ $RC = 254 ]; then
+        echo "got a return status of $RC from do_node while checking catastrophe on $client"
+    fi
+
+    # see if the load is still on the client
+    tries=3
+    RC=254
     while [ $RC = 254 -a $tries -gt 0 ]; do
         let tries=$tries-1
         # assume success
@@ -888,7 +923,7 @@ check_client_load () {
         fi
     done
     if [ $RC = 254 ]; then
-        echo "got a return status of $RC from do_node while checking (i.e. with 'ps') the client load on the remote system"
+        echo "got a return status of $RC from do_node while checking (catastrophe and 'ps') the client load on $client"
         # see if we can diagnose a bit why this is
     fi
 
@@ -1126,9 +1161,6 @@ facet_failover() {
     shutdown_facet $facet
     [ -n "$sleep_time" ] && sleep $sleep_time
     reboot_facet $facet
-    client_df &
-    DFPID=$!
-    echo "df pid is $DFPID"
     change_active $facet
     local TO=`facet_active_host $facet`
     echo "Failover $facet to $TO"
@@ -1184,7 +1216,7 @@ ost_evict_client() {
 
 fail() {
     facet_failover $* || error "failover: $?"
-    df $MOUNT || error "post-failover df: $?"
+    client_df || error "post-failover df: $?"
 }
 
 fail_nodf() {
@@ -1197,9 +1229,9 @@ fail_abort() {
     stop $facet
     change_active $facet
     mount_facet $facet -o abort_recovery
-    df $MOUNT || echo "first df failed: $?"
+    client_df || echo "first df failed: $?"
     sleep 1
-    df $MOUNT || error "post-failover df: $?"
+    client_df || error "post-failover df: $?"
 }
 
 do_lmc() {
@@ -1622,6 +1654,7 @@ mounted_lustre_filesystems() {
 }
 
 init_facet_vars () {
+    [ "$CLIENTONLY" ] && return 0
     local facet=$1
     shift
     local device=$1
@@ -1716,6 +1749,30 @@ init_param_vars () {
 
 check_config () {
     local mntpt=$1
+
+    local mounted=$(mount | grep " $mntpt ")
+    if [ "$CLIENTONLY" ]; then
+        # bug 18021
+        # CLIENTONLY should not depend on *_HOST settings
+        local mgc=$($LCTL device_list | awk '/MGC/ {print $4}')
+        # in theory someone could create a new,
+        # client-only config file that assumed lustre was already
+        # configured and didn't set the MGSNID. If MGSNID is not set,
+        # then we should use the mgs nid currently being used 
+        # as the default value. bug 18021
+        [[ x$MGSNID = x ]] &&
+            MGSNID=${mgc//MGC/}
+
+        if [[ x$mgc != xMGC$MGSNID ]]; then
+            if [ "$mgs_HOST" ]; then
+                local mgc_ip=$(ping -q -c1 -w1 $mgs_HOST | grep PING | awk '{print $3}' | sed -e "s/(//g" -e "s/)//g")
+                [[ x$mgc = xMGC$mgc_ip@$NETTYPE ]] ||
+                    error_exit "MGSNID=$MGSNID, mounted: $mounted, MGC : $mgc"
+            fi
+        fi
+        return 0
+    fi
+
     local myMGS_host=$mgs_HOST   
     if [ "$NETTYPE" = "ptl" ]; then
         myMGS_host=$(h2ptl $mgs_HOST | sed -e s/@ptl//) 
@@ -1726,7 +1783,7 @@ check_config () {
     mgshost=$(echo $mgshost | awk -F: '{print $1}')
 
     if [ "$mgshost" != "$myMGS_host" ]; then
-            log "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST, NETTYPE=$NETTYPE
+            error_exit "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST, NETTYPE=$NETTYPE
                    Please use correct config or set mds_HOST correctly!"
     fi
 
@@ -1982,12 +2039,7 @@ clear_failloc() {
 }
 
 set_nodes_failloc () {
-    local nodes=$1
-    local node
-
-    for node in $nodes ; do
-        do_node $node lctl set_param fail_loc=$2
-    done
+    do_nodes $(comma_list $1)  lctl set_param fail_loc=$2
 }
 
 cancel_lru_locks() {
@@ -2049,10 +2101,7 @@ error_noexit() {
     ERRLOG=$TMP/lustre_${TESTSUITE}_${TESTNAME}.$(date +%s)
     echo "Dumping lctl log to $ERRLOG"
     # We need to dump the logs on all nodes
-    local NODES=${NODES:-$(nodes_list)}
-    for NODE in $NODES; do
-        do_node $NODE $LCTL dk $ERRLOG
-    done
+    do_nodes $(comma_list $(nodes_list)) $NODE $LCTL dk $ERRLOG
     debugrestore
     [ "$TESTSUITELOG" ] && echo "$0: ${TYPE}: $TESTNAME $@" >> $TESTSUITELOG
     TEST_FAILED=true
@@ -2189,10 +2238,7 @@ log() {
     MSG=${MSG//\>/\\\>}
     MSG=${MSG//\</\\\<}
     MSG=${MSG//\//\\\/}
-    local NODES=$(nodes_list)
-    for NODE in $NODES; do
-        do_node $NODE $LCTL mark "$MSG" 2> /dev/null || true
-    done
+    do_nodes $(comma_list $(nodes_list)) $LCTL mark "$MSG" 2> /dev/null || true
 }
 
 trace() {
@@ -2215,13 +2261,8 @@ check_mds() {
 }
 
 reset_fail_loc () {
-    local myNODES=$(nodes_list)
-    local NODE
-
     echo -n "Resetting fail_loc on all nodes..."
-    for NODE in $myNODES; do
-        do_node $NODE "lctl set_param -n fail_loc=0 2>/dev/null || true"
-    done
+    do_nodes $(comma_list $(nodes_list)) "lctl set_param -n fail_loc=0 2>/dev/null || true"
     echo done.
 }
 
@@ -2336,6 +2377,7 @@ remote_mds ()
 
 remote_mds_nodsh()
 {
+    [ "$CLIENTONLY" ] && return 0 || true
     remote_mds && [ "$PDSH" = "no_dsh" -o -z "$PDSH" -o -z "$mds_HOST" ]
 }
 
@@ -2350,6 +2392,7 @@ remote_ost ()
 
 remote_ost_nodsh()
 {
+    [ "$CLIENTONLY" ] && return 0 || true 
     remote_ost && [ "$PDSH" = "no_dsh" -o -z "$PDSH" -o -z "$ost_HOST" ]
 }
 
@@ -2656,12 +2699,12 @@ get_mds_dir () {
     rm -f $file
     sleep 1
     local iused=$(lfs df -i $dir | grep MDT | awk '{print $3}')
-    local oldused=($iused)
+    local -a oldused=($iused)
 
     touch $file
     sleep 1
     iused=$(lfs df -i $dir | grep MDT | awk '{print $3}')
-    local newused=($iused)
+    local -a newused=($iused)
 
     local num=0
     for ((i=0; i<${#newused[@]}; i++)); do
@@ -2672,30 +2715,6 @@ get_mds_dir () {
          fi
     done
     error "mdt-s : inodes count OLD ${oldused[@]} NEW ${newused[@]}"
-}
-
-mpi_run () {
-    local mpirun="$MPIRUN $MPIRUN_OPTIONS"
-    local command="$mpirun $@"
-    local mpilog=$TMP/mpi.log
-    local rc
-
-    if [ "$MPI_USER" != root -a $mpirun ]; then
-        echo "+ chmod 0777 $MOUNT"
-        chmod 0777 $MOUNT
-        command="su $MPI_USER sh -c \"$command \""
-    fi
-
-    ls -ald $MOUNT
-    echo "+ $command"
-    eval $command 2>&1 > $mpilog || true
-
-    rc=${PIPESTATUS[0]}
-    if [ $rc -eq 0 ] && grep -q "p4_error: : [^0]" $mpilog ; then
-       rc=1
-    fi
-    cat $mpilog
-    return $rc
 }
 
 mdsrate_cleanup () {
@@ -2776,7 +2795,7 @@ wait_osc_import_state() {
     local i=0
 
     CONN_PROC="osc.${FSNAME}-${ost}.ost_server_uuid"
-    CONN_STATE=$(do_facet $node lctl get_param -n $CONN_PROC | cut -f2)
+    CONN_STATE=$(do_facet $node lctl get_param -n $CONN_PROC 2>/dev/null | cut -f2)
     while [ "${CONN_STATE}" != "${expected}" ]; do
         # for disconn we can check after proc entry is removed
         [ "x${CONN_STATE}" == "x" -a "${expected}" == "DISCONN" ] && return 0
@@ -2784,7 +2803,7 @@ wait_osc_import_state() {
         [ $i -ge $(($TIMEOUT * 3 / 2)) ] && \
             error "can't put import for ${ost}(${ost_facet}) into ${expected} state" && return 1
         sleep 1
-        CONN_STATE=$(do_facet $node lctl get_param -n $CONN_PROC | cut -f2)
+        CONN_STATE=$(do_facet $node lctl get_param -n $CONN_PROC 2>/dev/null | cut -f2)
         i=$(($i + 1))
     done
 

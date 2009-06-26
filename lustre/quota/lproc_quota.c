@@ -208,33 +208,25 @@ static int auto_quota_on(struct obd_device *obd, int type,
         struct obd_quotactl *oqctl;
         struct lvfs_run_ctxt saved;
         int rc = 0, id;
-        struct obd_device_target *obt;
+        struct obd_device_target *obt = &obd->u.obt;
         ENTRY;
 
         LASSERT(type == USRQUOTA || type == GRPQUOTA || type == UGQUOTA);
-
-        obt = &obd->u.obt;
 
         OBD_ALLOC_PTR(oqctl);
         if (!oqctl)
                 RETURN(-ENOMEM);
 
-        if (!atomic_dec_and_test(&obt->obt_quotachecking)) {
-                CDEBUG(D_INFO, "other people are doing quotacheck\n");
-                atomic_inc(&obt->obt_quotachecking);
-                RETURN(-EBUSY);
-        }
-
+        down(&obt->obt_quotachecking);
         id = UGQUOTA2LQC(type);
         /* quota already turned on */
-        if ((obt->obt_qctxt.lqc_flags & id) == id) {
-                rc = 0;
-                goto out;
-        }
+        if ((obt->obt_qctxt.lqc_flags & id) == id)
+                GOTO(out, rc);
+
         if (obt->obt_qctxt.lqc_immutable) {
                 LCONSOLE_ERROR("Failed to turn Quota on, immutable mode "
                                "(is SOM enabled?)\n");
-                goto out;
+                GOTO(out, rc);
         }
 
         oqctl->qc_type = type;
@@ -265,12 +257,12 @@ static int auto_quota_on(struct obd_device *obd, int type,
         }
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        EXIT;
 
 out:
-        atomic_inc(&obt->obt_quotachecking);
-
+        up(&obt->obt_quotachecking);
         OBD_FREE_PTR(oqctl);
-        RETURN(rc);
+        return rc;
 }
 
 int lprocfs_quota_wr_type(struct file *file, const char *buffer,
@@ -313,8 +305,10 @@ int lprocfs_quota_wr_type(struct file *file, const char *buffer,
                 }
         }
 
-        if (type != 0)
+        if (type != 0) {
                 auto_quota_on(obd, type - 1, obt->obt_sb, is_mds);
+                build_lqs(obd);
+        }
 
         return count;
 }
