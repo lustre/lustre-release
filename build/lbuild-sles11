@@ -28,6 +28,7 @@ cp  %_sourcedir/linux-2.6.27-lustre.patch %_builddir/%{name}-%{version}/lustre.p
     [ \"\$flavor\" == \"$RPMSMPTYPE\" ] || continue" \
                -e 's/^\([ 	][ 	]*-i %_builddir\/kernel-\)\(source-2.6.27.21\/\$patch; then\)/\1lustre-\2/' \
                -e '/^%build/,/^%changelog/s/\(kernel-\)\(source\.files\)/\1lustre-\2/g' \
+               -e '/--no-backup-if-mismatch/,/fi/s/kernel-source-/kernel-lustre-source-/g' \
                -e "s/^\(%package -n kernel-\)\(.*\)/\1lustre-\2/" \
                -e "s/^\(%description -n kernel-\)\(.*\)/\1lustre-\2/" \
                -e "s/^\(%files -n kernel-\)\(.*\)/\1lustre-\2/" \
