@@ -364,6 +364,7 @@ struct ptlrpc_request {
                 rq_no_resend:1, rq_waiting:1, rq_receiving_reply:1,
                 rq_no_delay:1, rq_net_err:1, rq_wait_ctx:1,
                 rq_early:1, rq_must_unlink:1,
+                rq_fake:1,          /* this fake req */
                 /* server-side flags */
                 rq_packed_final:1,  /* packed final reply */
                 rq_sent_final:1,    /* stop sending early replies */
@@ -495,6 +496,18 @@ struct ptlrpc_request {
         /* request format */
         struct req_capsule          rq_pill;
 };
+
+static inline int ptlrpc_req_interpret(const struct lu_env *env,
+                                       struct ptlrpc_request *req, int rc)
+{
+        if (req->rq_interpret_reply != NULL) {
+                req->rq_status = req->rq_interpret_reply(env, req,
+                                                         &req->rq_async_args,
+                                                         rc);
+                return req->rq_status;
+        }
+        return rc;
+}
 
 static inline void lustre_set_req_swabbed(struct ptlrpc_request *req, int index)
 {
@@ -970,6 +983,11 @@ struct ptlrpc_request *ptlrpc_request_alloc_pack(struct obd_import *imp,
 int ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
                              __u32 version, int opcode, char **bufs,
                              struct ptlrpc_cli_ctx *ctx);
+struct ptlrpc_request *ptlrpc_prep_fakereq(struct obd_import *imp,
+                                           unsigned int timeout,
+                                           ptlrpc_interpterer_t interpreter);
+void ptlrpc_fakereq_finished(struct ptlrpc_request *req);
+
 struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version,
                                        int opcode, int count, __u32 *lengths,
                                        char **bufs);
@@ -1324,7 +1342,7 @@ enum ptlrpcd_scope {
 int ptlrpcd_start(const char *name, struct ptlrpcd_ctl *pc);
 void ptlrpcd_stop(struct ptlrpcd_ctl *pc, int force);
 void ptlrpcd_wake(struct ptlrpc_request *req);
-void ptlrpcd_add_req(struct ptlrpc_request *req, enum ptlrpcd_scope scope);
+int ptlrpcd_add_req(struct ptlrpc_request *req, enum ptlrpcd_scope scope);
 void ptlrpcd_add_rqset(struct ptlrpc_request_set *set);
 int ptlrpcd_addref(void);
 void ptlrpcd_decref(void);

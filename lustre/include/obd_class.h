@@ -676,6 +676,21 @@ static inline int obd_precreate(struct obd_export *exp)
         RETURN(rc);
 }
 
+static inline int obd_create_async(struct obd_export *exp,
+                                   struct obd_info *oinfo,
+                                   struct lov_stripe_md **ea,
+                                   struct obd_trans_info *oti)
+{
+        int rc;
+        ENTRY;
+
+        EXP_CHECK_DT_OP(exp, create_async);
+        EXP_COUNTER_INCREMENT(exp, create_async);
+
+        rc = OBP(exp->exp_obd, create_async)(exp, oinfo, ea, oti);
+        RETURN(rc);
+}
+
 static inline int obd_create(struct obd_export *exp, struct obdo *obdo,
                              struct lov_stripe_md **ea,
                              struct obd_trans_info *oti)

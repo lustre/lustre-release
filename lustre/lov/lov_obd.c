@@ -1101,6 +1101,7 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
         struct obd_info oinfo;
         struct lov_request_set *set = NULL;
         struct lov_request *req;
+        struct l_wait_info  lwi = { 0 };
         int rc = 0;
         ENTRY;
 
@@ -1138,10 +1139,18 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
 
         list_for_each_entry(req, &set->set_list, rq_link) {
                 /* XXX: LOV STACKING: use real "obj_mdp" sub-data */
-                rc = obd_create(lov->lov_tgts[req->rq_idx]->ltd_exp,
-                                req->rq_oi.oi_oa, &req->rq_oi.oi_md, oti);
-                lov_update_create_set(set, req, rc);
+                rc = obd_create_async(lov->lov_tgts[req->rq_idx]->ltd_exp,
+                                      &req->rq_oi, &req->rq_oi.oi_md, oti);
         }
+
+        /* osc_create have timeout equ obd_timeout/2 so waiting don't be
+         * longer then this */
+        l_wait_event(set->set_waitq, lov_finished_set(set), &lwi);
+
+        /* we not have ptlrpc set for assign set->interpret and should
+         * be call interpret function himself. calling from cb_create_update
+         * not permited because lov_fini_create_set can sleep for long time,
+         * but we must avoid sleeping in ptlrpcd interpret function. */
         rc = lov_fini_create_set(set, ea);
 out:
         obd_putref(exp->exp_obd);
