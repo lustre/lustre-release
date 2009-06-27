@@ -2518,8 +2518,13 @@ wait_osc_import_state() {
     CONN_PROC="osc.${FSNAME}-${ost}.ost_server_uuid"
     CONN_STATE=$(do_facet $node lctl get_param -n $CONN_PROC | cut -f2)
     while [ "${CONN_STATE}" != "${expected}" ]; do
-        # for disconn we can check after proc entry is removed
-        [ "x${CONN_STATE}" == "x" -a "${expected}" == "DISCONN" ] && return 0
+        if [ "${expected}" == "DISCONN" ]; then 
+            # for disconn we can check after proc entry is removed
+            [ "x${CONN_STATE}" == "x" ] && return 0
+            #  with AT enabled, we can have connect request timeout near of 
+            # reconnect timeout and test can't see real disconnect
+            [ "${CONN_STATE}" == "CONNECTING" ] && return 0
+        fi
         # disconnect rpc should be wait not more obd_timeout
         [ $i -ge $(($TIMEOUT * 3 / 2)) ] && \
             error "can't put import for ${ost}(${ost_facet}) into ${expected} state" && return 1
