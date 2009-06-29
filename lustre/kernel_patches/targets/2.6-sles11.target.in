@@ -1,9 +1,9 @@
 lnxmaj="2.6.27"
-lnxmin=".21"
+lnxmin=".23"
 # when we fix up this lnxmaj/lnxmin/lnxrel business...
 #lnxrel="0.37_f594963d"
 # and note that this means we get rid of the EXTRA_VERSION_DELIMITER crap!!
-lnxrel="21-0.1"
+lnxrel="23-0.1"
 
 # this is the delimeter that goes between $lnxmaj and $lnxrel
 # defaults to "-"
@@ -13,7 +13,7 @@ EXTRA_VERSION_DELIMITER="."
 # defaults to empty
 TARGET_DELIMITER="-"
 
-KERNEL_SRPM=kernel-source-$lnxmaj.$lnxrel.src.rpm
+KERNEL_SRPM=kernel-source-$lnxmaj.$lnxrel.1.src.rpm
 SERIES=2.6-sles11.series
 VERSION=$lnxmaj
 EXTRA_VERSION="${lnxrel}_lustre.@VERSION@"
