@@ -5922,10 +5922,10 @@ test_180() {
         load_module obdecho/obdecho
 
         local OBD=`$LCTL  dl | awk ' /obdfilter/ { print $4; exit; }'`
-        obdecho_create_test $OBD
+        [ "x$OBD" != "x" ] && obdecho_create_test $OBD
 
         OBD=`$LCTL  dl | awk ' /-osc-/ { print $4; exit; }'`
-        obdecho_create_test $OBD
+        [ "x$OBD" != "x" ] && obdecho_create_test $OBD
         rmmod obdecho
 }
 run_test 180 "test obdecho ============================================"
