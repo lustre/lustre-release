@@ -25,4 +25,5 @@ ext3-xattr-no-update-ctime-2.6.22-vanilla.patch
 ext3-journal-chksum-2.6.18-vanilla.patch
 ext3-get-raid-stripe-from-sb.patch
 ext3-big-endian-check-2.6-rhel5.patch
-alloc-policy-2.6-rhlel5.diff 
+alloc-policy-2.6-rhlel5.diff
+ext3-force_over_8tb-rhel5.patch 
