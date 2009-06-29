@@ -3876,7 +3876,7 @@ test_101d() {
     local ra_MB=${READAHEAD_MB:-40}
 
     local space=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
-    [ $space -gt $((size / 1024)) ] || 
+    [ $space -gt $((size / 1024)) ] ||
         { skip "Need free space ${size}M, have $space" && return; }
 
     echo Creating ${size}M test file $file
@@ -5910,6 +5910,27 @@ test_170() {
         true
 }
 run_test 170 "test lctl df to handle corrupted log ====================="
+
+obdecho_create_test() {
+        local OBD=$1
+        $LCTL attach echo_client ec ec_uuid || return 1
+        $LCTL --device ec setup $OBD || return 2
+        $LCTL --device ec create 1   || return 3
+        $LCTL --device ec cleanup    || return 4
+        $LCTL --device ec detach     || return 5
+}
+
+test_180() {
+        load_module obdecho/obdecho
+
+        local OBD=`$LCTL  dl | awk ' /obdfilter/ { print $4; exit; }'`
+        obdecho_create_test $OBD
+
+        OBD=`$LCTL  dl | awk ' /-osc-/ { print $4; exit; }'`
+        obdecho_create_test $OBD
+        rmmod obdecho
+}
+run_test 180 "test obdecho ============================================"
 
 
 POOL=${POOL:-cea1}

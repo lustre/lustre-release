@@ -1314,25 +1314,48 @@ echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
         CFS_INIT_LIST_HEAD (&ec->ec_objects);
         ec->ec_unique = 0;
 
+        ec->ec_exp = lustre_hash_lookup(tgt->obd_uuid_hash, &echo_uuid);
+        if (ec->ec_exp)
+                RETURN(0);
+
         OBD_ALLOC(ocd, sizeof(*ocd));
         if (ocd == NULL) {
                 CERROR("Can't alloc ocd connecting to %s\n",
                        lustre_cfg_string(lcfg, 1));
                 return -ENOMEM;
         }
-
         ocd->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_REQPORTAL;
         ocd->ocd_version = LUSTRE_VERSION_CODE;
 
-        rc = obd_connect(&conn, tgt, &echo_uuid, ocd, &ec->ec_exp);
+        if ((strncmp(tgt->obd_type->typ_name, LUSTRE_OSC_NAME,
+                     strlen(LUSTRE_OSC_NAME)) == 0) ||
+            (strncmp(tgt->obd_type->typ_name, LUSTRE_LOV_NAME,
+                     strlen(LUSTRE_LOV_NAME)) == 0)) {
+                rc = obd_connect(&conn, tgt, &echo_uuid, ocd, &ec->ec_exp);
+        } else {
+                rc = obd_connect(&conn, tgt, &echo_uuid, ocd, NULL);
+                if (rc == 0)
+                        ec->ec_exp = class_conn2export(&conn);
+        }
 
         OBD_FREE(ocd, sizeof(*ocd));
 
-        if (rc != 0) {
+        if (rc == -EALREADY && (strncmp(tgt->obd_type->typ_name,LUSTRE_OSC_NAME,
+                                        strlen(LUSTRE_OSC_NAME)) == 0)) {
+                /* OSC obd forbid reconnect already connected import,
+                 * so we hack creating another export here */
+                down_write(&tgt->u.cli.cl_sem);
+                rc = class_connect(&conn, tgt, &echo_uuid);
+                if (rc == 0) {
+                        ++tgt->u.cli.cl_conn_count;
+                        ec->ec_exp = class_conn2export(&conn);
+                }
+                up_write(&tgt->u.cli.cl_sem);
+        }
+
+        if (rc != 0)
                 CERROR("fail to connect to device %s\n",
                        lustre_cfg_string(lcfg, 1));
-                return (rc);
-        }
 
         RETURN(rc);
 }
