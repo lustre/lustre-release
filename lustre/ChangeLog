@@ -165,6 +165,13 @@ Details    : When file is opened, but open reply is lost and file is
 	     subsequently deleted before resend, resend processing logic
 	     breaks trying to open the file again, should not try to open.
 
+Severity   : high
+Bugzilla   : 17569
+Description: add check for >8TB ldiskfs filesystems
+Details    : ext3-based ldiskfs does not support greater than 8TB LUNs.
+	     Don't allow >8TB ldiskfs filesystems to be mounted without
+	     force_over_8tb mount option
+
 -------------------------------------------------------------------------------
 
 tbd Sun Microsystems, Inc.

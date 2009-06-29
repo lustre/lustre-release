@@ -24,3 +24,4 @@ ext4-disable-delalloc-sles11.patch
 ext4-lustre-i_version.patch
 ext4-lock-cached_extent.patch
 ext4-convert-group-lock-sles11.patch
+ext4-force_over_8tb-sles11.patch
