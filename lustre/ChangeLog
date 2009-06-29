@@ -89,6 +89,13 @@ Details    : Sometimes on transaction errors mds_mfd_close did not release
 	     parent dentry if no matching mfd was found and child lookup was
 	     used.
 
+Severity   : high
+Bugzilla   : 17569
+Description: add check for >8TB ldiskfs filesystems
+Details    : ext3-based ldiskfs does not support greater than 8TB LUNs.
+	     Don't allow >8TB ldiskfs filesystems to be mounted without
+	     force_over_8tb mount option
+
 ------------------------------------------------------------------------------
 tbd Sun Microsystems, Inc.
 	* version 1.8.1
