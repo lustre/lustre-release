@@ -133,7 +133,7 @@ static inline int ll_get_user_pages(int rw, unsigned long user_addr,
                                         *max_pages, (rw == READ), 0, *pages,
                                         NULL);
                 up_read(&current->mm->mmap_sem);
-                if (unlikely(result < 0))
+                if (unlikely(result <= 0))
                         OBD_FREE(*pages, *max_pages * sizeof(**pages));
         }
 
