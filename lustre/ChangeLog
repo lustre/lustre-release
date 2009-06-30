@@ -176,6 +176,13 @@ Details    : ext3-based ldiskfs does not support greater than 8TB LUNs.
 	     Don't allow >8TB ldiskfs filesystems to be mounted without
 	     force_over_8tb mount option
 
+Severity   : normal
+Bugzilla   : 20011
+Description: Client locked up when running multiple instances of an app. on
+	     multiple mount points
+Details    : ll_shrink_cache() can sleep while holding the ll_sb_lock.
+	     Convert ll_sb_lock to a read/write semaphore to fix the problem.
+
 -------------------------------------------------------------------------------
 
 tbd Sun Microsystems, Inc.

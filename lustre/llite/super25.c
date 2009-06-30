@@ -126,6 +126,7 @@ static int __init init_lustre_lite(void)
         proc_lustre_fs_root = proc_lustre_root ?
                               proc_mkdir("llite", proc_lustre_root) : NULL;
 
+        init_rwsem(&ll_sb_sem);
         ll_register_cache(&ll_cache_definition);
 
         lustre_register_client_fill_super(ll_fill_super);
