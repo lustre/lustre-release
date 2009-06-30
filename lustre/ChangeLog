@@ -14,12 +14,8 @@ tbd Sun Microsystems, Inc.
 	  more information, please refer to bugzilla 17630.
 
 Severity   : enhancement
-Bugzilla   : 19848
-Description: Update kernel to SLES11 2.6.27.23-0.1.
-
-Severity   : enhancement
-Bugzilla   : 19625, 16893, 18668
-Description: Add support for SLES11 2.6.27.21-0.1.
+Bugzilla   : 19625, 16893, 18668, 19848
+Description: Add support for SLES11 2.6.27.23-0.1.
 
 Severity   : enhancement
 Bugzilla   : 18289
