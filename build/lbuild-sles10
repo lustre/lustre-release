@@ -2,7 +2,8 @@
 
 # increment this if you have made a change that should force a new kernel
 # to build built
-BUILD_GEN=1
+#BUILD_GEN=1
+BUILD_GEN=2	# bz19952: remove -lustre tag from kernel RPM names
 
 source ${0%/*}/lbuild-sles
 
@@ -12,20 +13,26 @@ edit_specs() {
     local spec
     for spec in $RPMSMPTYPE source; do
         #cp $TOPDIR/SPECS/kernel-$spec.spec{,.orig}
-        sed -i -e 's/^\(Name:.*kernel-\)\(.*\)/\1lustre-\2/' \
-               -e "s/^Release:.*/&_${buildid}/" \
-               -e "/^Provides:  *kernel = /a\
-Provides:       kernel-$spec = %{version}-%{release}
-" \
+        sed -i -e "s/^Release:.*/&_${buildid}/" \
                -e "s/^ExclusiveArch:.*/& ppc ppc64/" \
                -e '/^# Apply the patches needed for this architecture\./a\
 cp  %_sourcedir/linux-2.6.16-lustre.patch %_builddir/%{name}-%{version}/lustre.patch\
 ! grep -q lustre.patch %_sourcedir/series.conf && echo -e "\\n\\tlustre.patch" >> %_sourcedir/series.conf' \
                -e "/flavor=\${config/a\
     [ \"\$flavor\" == \"$RPMSMPTYPE\" ] || continue" \
-               -e 's/\(.*\)\([^#].*\)fookernel-source/\1\2kernel-lustre-source/g' \
-               -e '/^%build/,/^%changelog/s/kernel-\({*\)source/kernel-\1lustre-source/g' \
           SPECS/kernel-${spec}.spec
+
+        if $KERNEL_LUSTRE_NAMING; then
+            # these are all of the changes needed because we change the package names
+            # to kernel-lustre-*.  these should all go away when we stop this insanity
+            sed -i -e 's/^\(Name:.*kernel-\)\(.*\)/\1lustre-\2/' \
+                   -e "/^Provides:  *kernel = /a\
+Provides:       kernel-$spec = %{version}-%{release}
+" \
+                   -e 's/\(.*\)\([^#].*\)fookernel-source/\1\2kernel-lustre-source/g' \
+                   -e '/^%build/,/^%changelog/s/kernel-\({*\)source/kernel-\1lustre-source/g' \
+              SPECS/kernel-${spec}.spec
+        fi
 
     # XXX - a building-on-Ubuntu hack
     if grep -q "Ubuntu" /etc/issue; then

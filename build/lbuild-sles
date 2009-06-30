@@ -75,5 +75,9 @@ rpm_BUILD_kernel_dirname() {
     local lnxmin="$3"
     local arch="$4"
 
-    echo kernel-lustre-${rpmsmptype}-${lnxmaj}${lnxmin}/linux-${lnxmaj}
+    local lustre=""
+    if $KERNEL_LUSTRE_NAMING; then
+        $lustre="-lustre"
+    fi
+    echo kernel${lustre}-${rpmsmptype}-${lnxmaj}${lnxmin}/linux-${lnxmaj}
 }

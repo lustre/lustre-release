@@ -46,6 +46,8 @@ XEN=false
 LINUXOBJ=
 DISTRO=
 KERNELTREE=
+# default to not adding -lustre- into the kernel RPM package names
+KERNEL_LUSTRE_NAMING=false
 
 # patchless build
 KERNELRPMSBASE=
@@ -1177,7 +1179,7 @@ build_with_srpm() {
         for arch in $BUILD_ARCHS; do
 
             local kernel_devel_rpm
-            if ! kernel_devel_rpm=$(find_rpm "$TOPDIR/RPMS/$arch/" provides "^$(devel_kernel_name true) ="); then
+            if ! kernel_devel_rpm=$(find_rpm "$TOPDIR/RPMS/$arch/" provides "^$(devel_kernel_name $KERNEL_LUSTRE_NAMING) ="); then
                 fatal 1 "Failed to find a kernel development RPM in $TOPDIR/RPMS/$arch/"
             fi
 
