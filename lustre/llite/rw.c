@@ -2378,6 +2378,14 @@ ssize_t ll_file_lockless_io(struct file *file, const struct iovec *iov,
                         GOTO(out, rc);
         }
 
+        if (file->f_flags & O_DIRECT) {
+                /* do not copy data for O_DIRECT */
+                rc = ll_direct_IO(rw, file, iov, *ppos, nr_segs, 0);
+                if (rc > 0)
+                        amount = rc;
+                GOTO(out_check, rc);
+        }
+
         pos = *ppos;
         first = pos >> CFS_PAGE_SHIFT;
         last = (pos + count - 1) >> CFS_PAGE_SHIFT;
@@ -2431,9 +2439,6 @@ put_pages:
                 if (nsegs == 0)
                         break;
         }
-        /* NOTE: don't update i_size and KMS in absence of LDLM locks even
-         * write makes the file large */
-        file_accessed(file);
         if (rw == READ && amount < count && rc == 0) {
                 unsigned long not_cleared;
 
@@ -2452,6 +2457,10 @@ put_pages:
                         nsegs--;
                 }
         }
+out_check:
+        /* NOTE: don't update i_size and KMS in absence of LDLM locks even
+         * write makes the file large */
+        file_accessed(file);
         if (amount > 0) {
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     (rw == WRITE) ?

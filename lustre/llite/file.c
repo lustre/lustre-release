@@ -1147,6 +1147,11 @@ static int ll_is_file_contended(struct file *file)
         }
         if (fd && (fd->fd_flags & LL_FILE_IGNORE_LOCK))
                 RETURN(0);
+
+        /* server-side locking for dio */
+        if (file->f_flags & O_DIRECT)
+                RETURN(1);
+
         if (test_bit(LLI_F_CONTENDED, &lli->lli_flags)) {
                 cfs_time_t cur_time = cfs_time_current();
                 cfs_time_t retry_time;

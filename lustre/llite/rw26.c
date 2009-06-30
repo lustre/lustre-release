@@ -161,7 +161,8 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
                                    struct obd_info *oinfo,
                                    struct ptlrpc_request_set *set,
                                    size_t size, loff_t file_offset,
-                                   struct page **pages, int page_count)
+                                   struct page **pages, int page_count,
+                                   int locked)
 {
         struct brw_page *pga;
         int i, rc = 0;
@@ -183,6 +184,8 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
                 pga[i].count = min_t(int, CFS_PAGE_SIZE -(file_offset & ~CFS_PAGE_MASK),
                                      length);
                 pga[i].flag = OBD_BRW_SYNC;
+                if (!locked)
+                        pga[i].flag |= OBD_BRW_SRVLOCK;
                 if (rw == READ)
                         POISON_PAGE(pages[i], 0x0d);
         }
@@ -203,11 +206,10 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct inode *inode,
  * then truncate this to be a full-sized RPC.  This is 22MB for 4kB pages. */
 #define MAX_DIO_SIZE ((128 * 1024 / sizeof(struct brw_page) * CFS_PAGE_SIZE) & \
                       ~(PTLRPC_MAX_BRW_SIZE - 1))
-static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
-                               const struct iovec *iov, loff_t file_offset,
-                               unsigned long nr_segs)
+ssize_t ll_direct_IO(int rw, struct file *file,
+                     const struct iovec *iov, loff_t file_offset,
+                     unsigned long nr_segs, int locked)
 {
-        struct file *file = iocb->ki_filp;
         struct inode *inode = file->f_mapping->host;
         ssize_t count = iov_length(iov, nr_segs);
         ssize_t tot_bytes = 0, result = 0;
@@ -286,7 +288,7 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                                                              &oinfo, set,
                                                              bytes,
                                                              file_offset, pages,
-                                                             page_count);
+                                                             page_count, locked);
                                 ll_free_user_pages(pages, max_pages, rw==READ);
                         } else if (page_count == 0) {
                                 GOTO(out, result = -EFAULT);
@@ -339,6 +341,13 @@ unlock_mutex:
 
         ptlrpc_set_destroy(set);
         RETURN(tot_bytes);
+}
+
+static ssize_t ll_direct_IO_26(int rw, struct kiocb *kiocb,
+                               const struct iovec *iov, loff_t file_offset,
+                               unsigned long nr_segs)
+{
+        return ll_direct_IO(rw, kiocb->ki_filp, iov, file_offset, nr_segs, 1);
 }
 
 struct address_space_operations ll_aops = {
