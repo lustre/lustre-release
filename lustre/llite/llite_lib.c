@@ -58,7 +58,7 @@
 cfs_mem_cache_t *ll_file_data_slab;
 
 LIST_HEAD(ll_super_blocks);
-spinlock_t ll_sb_lock = SPIN_LOCK_UNLOCKED;
+struct rw_semaphore ll_sb_sem;
 
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
@@ -183,9 +183,9 @@ static struct ll_sb_info *ll_init_sbi(void)
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
         CDEBUG(D_CONFIG, "generated uuid: %s\n", sbi->ll_sb_uuid.uuid);
 
-        spin_lock(&ll_sb_lock);
+        down_write(&ll_sb_sem);
         list_add_tail(&sbi->ll_list, &ll_super_blocks);
-        spin_unlock(&ll_sb_lock);
+        up_write(&ll_sb_sem);
 
 #ifdef ENABLE_CHECKSUM
         sbi->ll_flags |= LL_SBI_DATA_CHECKSUM;
@@ -227,9 +227,9 @@ void ll_free_sbi(struct super_block *sb)
         ENTRY;
 
         if (sbi != NULL) {
-                spin_lock(&ll_sb_lock);
+                down_write(&ll_sb_sem);
                 list_del(&sbi->ll_list);
-                spin_unlock(&ll_sb_lock);
+                up_write(&ll_sb_sem);
                 /* dont allow find cache via sb list first */
                 ll_pglist_fini(sbi);
                 lcounter_destroy(&sbi->ll_async_page_count);
@@ -1310,10 +1310,10 @@ ll_shrink_cache(int priority, unsigned int gfp_mask)
         int count = 0;
 
         /* don't race with umount */
-        spin_lock(&ll_sb_lock);
+        down_read(&ll_sb_sem);
         list_for_each_entry(sbi, &ll_super_blocks, ll_list)
                 count += llap_shrink_cache(sbi, priority);
-        spin_unlock(&ll_sb_lock);
+        up_read(&ll_sb_sem);
 
 #if defined(HAVE_CACHE_RETURN_INT)
         return count;

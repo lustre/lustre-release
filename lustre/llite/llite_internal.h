@@ -559,6 +559,7 @@ struct ll_readahead_state {
 };
 
 extern cfs_mem_cache_t *ll_file_data_slab;
+extern struct rw_semaphore ll_sb_sem;
 struct lustre_handle;
 struct ll_file_data {
         struct ll_readahead_state fd_ras;

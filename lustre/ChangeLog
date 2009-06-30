@@ -292,6 +292,13 @@ Description: MMP check in ext3_remount() fails without displaying any error
 Details    : When multiple mount protection fails during remount, proper error
 	     should be returned
 
+Severity   : normal
+Bugzilla   : 20011
+Description: Client locked up when running multiple instances of an app. on
+	     multiple mount points
+Details    : ll_shrink_cache() can sleep while holding the ll_sb_lock.
+	     Convert ll_sb_lock to a read/write semaphore to fix the problem.
+
 -------------------------------------------------------------------------------
 2008-12-31 Sun Microsystems, Inc.
 	* version 1.8.0
