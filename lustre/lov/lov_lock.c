@@ -197,19 +197,21 @@ static int lov_sublock_lock(const struct lu_env *env,
                             struct cl_lock_closure *closure,
                             struct lov_sublock_env **lsep)
 {
-        struct cl_lock *child;
-        int             result = 0;
+        struct lovsub_lock *sublock;
+        struct cl_lock     *child;
+        int                 result = 0;
         ENTRY;
 
         LASSERT(list_empty(&closure->clc_list));
 
-        child = lls->sub_lock->lss_cl.cls_lock;
+        sublock = lls->sub_lock;
+        child = sublock->lss_cl.cls_lock;
         result = cl_lock_closure_build(env, child, closure);
         if (result == 0) {
                 struct cl_lock *parent = closure->clc_origin;
 
                 LASSERT(cl_lock_is_mutexed(child));
-                lls->sub_lock->lss_active = parent;
+                sublock->lss_active = parent;
 
                 if (unlikely(child->cll_state == CLS_FREEING)) {
                         struct lov_lock_link *link;
@@ -219,16 +221,16 @@ static int lov_sublock_lock(const struct lu_env *env,
                          */
                         LASSERT(!(lls->sub_flags & LSF_HELD));
 
-                        link = lov_lock_link_find(env, lck, lls->sub_lock);
+                        link = lov_lock_link_find(env, lck, sublock);
                         LASSERT(link != NULL);
-                        lov_lock_unlink(env, link, lls->sub_lock);
-                        lov_sublock_unlock(env, lls->sub_lock, closure, NULL);
+                        lov_lock_unlink(env, link, sublock);
+                        lov_sublock_unlock(env, sublock, closure, NULL);
                         result = CLO_REPEAT;
                 } else if (lsep) {
                         struct lov_sublock_env *subenv;
                         subenv = lov_sublock_env_get(env, parent, lls);
                         if (IS_ERR(subenv)) {
-                                lov_sublock_unlock(env, lls->sub_lock,
+                                lov_sublock_unlock(env, sublock,
                                                    closure, NULL);
                                 result = PTR_ERR(subenv);
                         } else {
@@ -377,6 +379,7 @@ static int lov_lock_sub_init(const struct lu_env *env,
                                 lov_sublock_adopt(env, lck, sublock, i, link);
                                 cl_lock_mutex_put(env, parent);
                         } else {
+                                OBD_SLAB_FREE_PTR(link, lov_lock_link_kmem);
                                 cl_lock_mutex_put(env, parent);
                                 cl_lock_unhold(env, sublock,
                                                "lov-parent", parent);
@@ -539,6 +542,7 @@ static int lov_sublock_fill(const struct lu_env *env, struct cl_lock *parent,
                     lck->lls_sub[idx].sub_lock == NULL)
                         lov_sublock_adopt(env, lck, sublock, idx, link);
                 else {
+                        OBD_SLAB_FREE_PTR(link, lov_lock_link_kmem);
                         /* other thread allocated sub-lock, or enqueue is no
                          * longer going on */
                         cl_lock_mutex_put(env, parent);

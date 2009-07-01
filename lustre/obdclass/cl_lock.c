@@ -1681,6 +1681,7 @@ struct cl_lock *cl_lock_at_page(const struct lu_env *env, struct cl_object *obj,
         list_for_each_entry(scan, &head->coh_locks, cll_linkage) {
                 if (scan != except &&
                     cl_lock_ext_match(&scan->cll_descr, need) &&
+                    scan->cll_state >= CLS_HELD &&
                     scan->cll_state < CLS_FREEING &&
                     /*
                      * This check is racy as the lock can be canceled right
