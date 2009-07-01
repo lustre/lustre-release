@@ -1,0 +1,28 @@
+Index: linux-stage/fs/ext4/ialloc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/ialloc.c
++++ linux-stage/fs/ext4/ialloc.c
+@@ -189,7 +189,7 @@ void ext4_free_inode(handle_t *handle, s
+ 	struct ext4_group_desc *gdp;
+ 	struct ext4_super_block *es;
+ 	struct ext4_sb_info *sbi;
+-	int fatal = 0, err, count;
++	int fatal = 0, err, count, cleared;
+ 	ext4_group_t flex_group;
+ 
+ 	if (atomic_read(&inode->i_count) > 1) {
+@@ -243,9 +243,12 @@ void ext4_free_inode(handle_t *handle, s
+ 	if (fatal)
+ 		goto error_return;
+ 
++	ext4_lock_group(sb, block_group);
++	cleared = ext4_clear_bit(bit, bitmap_bh->b_data);
++	ext4_unlock_group(sb, block_group);
++
+ 	/* Ok, now we can actually update the inode bitmaps.. */
+-	if (!ext4_clear_bit_atomic(ext4_group_lock_ptr(sb, block_group),
+-		                   bit, bitmap_bh->b_data))
++	if (!cleared)
+ 		ext4_error(sb, "ext4_free_inode",
+ 			   "bit already cleared for inode %lu", ino);
+ 	else {
