@@ -299,6 +299,12 @@ Description: Client locked up when running multiple instances of an app. on
 Details    : ll_shrink_cache() can sleep while holding the ll_sb_lock.
 	     Convert ll_sb_lock to a read/write semaphore to fix the problem.
 
+Severity   : normal
+Bugzilla   : 19559
+Description: Cannot acces an NFS-mounted Lustre filesystem
+Details    : An NFS client cannot access the Lustre filesystem NFS-mounted
+	     from a Lustre-client exporting the Lustre filesystem via NFS.
+
 -------------------------------------------------------------------------------
 2008-12-31 Sun Microsystems, Inc.
 	* version 1.8.0

@@ -150,7 +150,8 @@ struct lustre_nfs_fid {
         umode_t         mode;
 };
 
-/* The return value is file handle type:
+/* plen is in 32 bit units!
+ * The return value is file handle type:
  * 1 -- contains child file handle;
  * 2 -- contains child file handle and parent file handle;
  * 255 -- error.
@@ -164,17 +165,17 @@ static int ll_encode_fh(struct dentry *de, __u32 *fh, int *plen,
         ENTRY;
 
         CDEBUG(D_INFO, "encoding for (%lu) maxlen=%d minlen=%u\n",
-              inode->i_ino, *plen,
+              inode->i_ino, *plen*4,
               (int)sizeof(struct lustre_nfs_fid));
 
-        if (*plen < sizeof(struct lustre_nfs_fid))
+        if (*plen*4 < sizeof(struct lustre_nfs_fid))
                 RETURN(255);
 
         ll_inode2fid(&nfs_fid->child, inode);
         ll_inode2fid(&nfs_fid->parent, parent);
 
         nfs_fid->mode = (S_IFMT & inode->i_mode);
-        *plen = sizeof(struct lustre_nfs_fid);
+        *plen = sizeof(struct lustre_nfs_fid)/4;
 
         RETURN(LUSTRE_NFS_FID);
 }
@@ -282,6 +283,7 @@ struct dentry *ll_get_parent(struct dentry *dchild)
 
 struct export_operations lustre_export_operations = {
         .encode_fh  = ll_encode_fh,
+        .get_parent = ll_get_parent,
 #ifdef HAVE_FH_TO_DENTRY
         .fh_to_dentry = ll_fh_to_dentry,
         .fh_to_parent = ll_fh_to_parent,
