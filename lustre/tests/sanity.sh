@@ -40,7 +40,6 @@ GETSTRIPE=${GETSTRIPE:-"$LFS getstripe"}
 LSTRIPE=${LSTRIPE:-"$LFS setstripe"}
 LFIND=${LFIND:-"$LFS find"}
 LVERIFY=${LVERIFY:-ll_dirstripe_verify}
-LSTRIPEINFO=${LSTRIPEINFO:-ll_getstripe_info}
 LCTL=${LCTL:-lctl}
 MCREATE=${MCREATE:-mcreate}
 OPENFILE=${OPENFILE:-openfile}
@@ -1180,15 +1179,15 @@ run_test 27v "skip object creation on slow OST ================="
 test_27w() { # bug 10997
         mkdir -p $DIR/d27w || error "mkdir failed"
         $LSTRIPE $DIR/d27w/f0 -s 65536 || error "lstripe failed"
-        size=`$LSTRIPEINFO $DIR/d27w/f0 | awk {'print $1'}`
+        size=`$GETSTRIPE $DIR/d27w/f0 -qs`
         [ $size -ne 65536 ] && error "stripe size $size != 65536" || true
 
         [ "$OSTCOUNT" -lt "2" ] && skip "skipping multiple stripe count/offset test" && return
         for i in `seq 1 $OSTCOUNT`; do
                 offset=$(($i-1))
                 $LSTRIPE $DIR/d27w/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
-                count=`$LSTRIPEINFO $DIR/d27w/f$i | awk {'print $2'}`
-                index=`$LSTRIPEINFO $DIR/d27w/f$i | awk {'print $3'}`
+                count=`$GETSTRIPE -qc $DIR/d27w/f$i`
+                index=`$GETSTRIPE -qo $DIR/d27w/f$i`
                 [ $count -ne $i ] && error "stripe count $count != $i" || true
                 [ $index -ne $offset ] && error "stripe offset $index != $offset" || true
         done
