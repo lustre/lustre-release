@@ -119,6 +119,8 @@ command_t cmdlist[] = {
          "To list the striping info for a given file or files in a\n"
          "directory or recursively for all files in a directory tree.\n"
          "usage: getstripe [--obd|-O <uuid>] [--quiet | -q] [--verbose | -v]\n"
+         "                 [--count | -c ] [--size | -s ] [--index | -i ]\n"
+         "                 [--offset | -o ] [--pool | -p ]\n"
          "                 [--recursive | -r] <dir|file> ..."},
         {"pool_list", lfs_poollist, 0,
          "List pools or pool OSTs\n"
@@ -782,10 +784,15 @@ static int lfs_getstripe(int argc, char **argv)
                 {"obd", 1, 0, 'O'},
                 {"quiet", 0, 0, 'q'},
                 {"recursive", 0, 0, 'r'},
+                {"count", 0, 0, 'c'},
+                {"size", 0, 0, 's'},
+                {"index", 0, 0, 'i'},
+                {"offset", 0, 0, 'o'},
+                {"pool", 0, 0, 'p'},
                 {"verbose", 0, 0, 'v'},
                 {0, 0, 0, 0}
         };
-        char short_opts[] = "hO:qrv";
+        char short_opts[] = "hO:qrvcsiop";
         int c, rc;
         struct find_param param = { 0 };
 
@@ -804,14 +811,26 @@ static int lfs_getstripe(int argc, char **argv)
                         break;
                 case 'q':
                         param.quiet++;
-                        param.verbose = 0;
                         break;
                 case 'r':
                         param.recursive = 1;
                         break;
                 case 'v':
-                        param.verbose++;
+                        param.verbose = VERBOSE_ALL | VERBOSE_DETAIL;
                         param.quiet = 0;
+                        break;
+                case 'c':
+                        param.verbose |= VERBOSE_COUNT;
+                        break;
+                case 's':
+                        param.verbose |= VERBOSE_SIZE;
+                        break;
+                case 'i':
+                case 'o':
+                        param.verbose |= VERBOSE_OFFSET;
+                        break;
+                case 'p':
+                        param.verbose |= VERBOSE_POOL;
                         break;
                 case '?':
                         return CMD_HELP;
