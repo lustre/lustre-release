@@ -2098,11 +2098,6 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
 
         init_mutex(&filter->fo_init_lock);
         filter->fo_committed_group = 0;
-
-        rc = filter_prep(obd);
-        if (rc)
-                GOTO(err_ops, rc);
-
         filter->fo_destroys_in_progress = 0;
         for (i = 0; i < 32; i++)
                 sema_init(&filter->fo_create_locks[i], 1);
@@ -2117,6 +2112,10 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         filter->fo_readcache_max_filesize = FILTER_MAX_CACHE_SIZE;
         filter->fo_fmd_max_num = FILTER_FMD_MAX_NUM_DEFAULT;
         filter->fo_fmd_max_age = FILTER_FMD_MAX_AGE_DEFAULT;
+
+        rc = filter_prep(obd);
+        if (rc)
+                GOTO(err_ops, rc);
 
         CFS_INIT_LIST_HEAD(&filter->fo_llog_list);
         spin_lock_init(&filter->fo_llog_list_lock);

@@ -1874,8 +1874,11 @@ static void target_recovery_expired(unsigned long castmeharder)
 void target_recovery_init(struct lu_target *lut, svc_handler_t handler)
 {
         struct obd_device *obd = lut->lut_obd;
-        if (obd->obd_max_recoverable_clients == 0)
+        if (obd->obd_max_recoverable_clients == 0) {
+                /** Update server last boot epoch */
+                lut_boot_epoch_update(lut);
                 return;
+        }
 
         CWARN("RECOVERY: service %s, %d recoverable clients, "
               "last_transno "LPU64"\n", obd->obd_name,
