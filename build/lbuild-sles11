@@ -56,9 +56,10 @@ unpack_linux_devel_rpm-sles11() {
     local rpmdir="${callers_rpm%/*}"
 
     local kernelrpm
+    local wanted_kernel="${lnxmaj}.${lnxrel}"
     # this is a hack that should go away when the modified lustre kernel
     # Provides kernel-default-base                        vvvvvvvvv
-    if ! kernelrpm=$(find_rpm "$rpmdir" provides "^kernel-(lustre-)?default-base ="); then
+    if ! kernelrpm=$(find_rpm "$rpmdir" provides "^kernel-(lustre-)?default-base = $wanted_kernel"); then
         fatal 1 "Could not find the kernel-default-base in $rpmdir/"
     fi
 
