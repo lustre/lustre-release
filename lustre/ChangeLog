@@ -2086,6 +2086,12 @@ Bugzilla   : 16823
 Description: Allow stripe size to be up to 4G-64k
 Details    : Fix math logic to allow large stripe sizes.
 
+Severity   : high
+Bugzilla   : 17569
+Description: add check for >8TB ldiskfs filesystems
+Details    : ext3-based ldiskfs does not support greater than 8TB LUNs.
+	     Don't allow >8TB ldiskfs filesystems to be mounted without
+	     force_over_8tb mount option
 
 --------------------------------------------------------------------------------
 
