@@ -1,7 +1,7 @@
 dnl Checks for OFED
 AC_DEFUN([LN_CONFIG_OFED_SPEC],
-[AC_MSG_CHECKING([check ofed specifics])
-
+[
+	AC_MSG_CHECKING([if OFED has ib_dma_map_single])
 	LB_LINUX_TRY_COMPILE([
 		#include <linux/version.h>
 		#include <linux/pci.h>
@@ -20,6 +20,7 @@ AC_DEFUN([LN_CONFIG_OFED_SPEC],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if ib_create_cq wants comp_vector])
 	LB_LINUX_TRY_COMPILE([
 		#include <linux/version.h>
 		#include <linux/pci.h>
@@ -38,6 +39,7 @@ AC_DEFUN([LN_CONFIG_OFED_SPEC],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if OFED supports iWarp transport])
 	LB_LINUX_TRY_COMPILE([
 		#include <linux/version.h>
 		#include <linux/pci.h>
@@ -56,6 +58,7 @@ AC_DEFUN([LN_CONFIG_OFED_SPEC],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if OFED has RDMA_CM_EVENT_ADDR_CHANGE])
 	LB_LINUX_TRY_COMPILE([
 		#include <linux/version.h>
 		#include <linux/pci.h>
@@ -73,6 +76,7 @@ AC_DEFUN([LN_CONFIG_OFED_SPEC],
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([if OFED has RDMA_CM_EVENT_TIMEWAIT_EXIT])
 	LB_LINUX_TRY_COMPILE([
 		#include <linux/version.h>
 		#include <linux/pci.h>
