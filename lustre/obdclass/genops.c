@@ -1060,7 +1060,6 @@ void class_disconnect_stale_exports(struct obd_device *obd,
 
         CFS_INIT_LIST_HEAD(&work_list);
         spin_lock(&obd->obd_dev_lock);
-        obd->obd_stale_clients = 0;
         list_for_each_safe(pos, n, &obd->obd_exports) {
                 exp = list_entry(pos, struct obd_export, exp_obd_chain);
                 if (exp->exp_replay_needed) {
@@ -1140,6 +1139,7 @@ void class_handle_stale_exports(struct obd_device *obd)
 {
         struct list_head delay_list, evict_list;
         struct obd_export *exp, *n;
+        int delayed = 0;
         ENTRY;
 
         CFS_INIT_LIST_HEAD(&delay_list);
@@ -1152,16 +1152,20 @@ void class_handle_stale_exports(struct obd_device *obd)
                         continue;
                 /* connected non-vbr clients are evicted */
                 if (exp->exp_in_recovery && !exp_connect_vbr(exp)) {
+                        obd->obd_stale_clients++;
                         list_move_tail(&exp->exp_obd_chain, &evict_list);
                         continue;
                 }
-                if (obd->obd_version_recov || !exp->exp_in_recovery)
+                if (obd->obd_version_recov || !exp->exp_in_recovery) {
                         list_move_tail(&exp->exp_obd_chain, &delay_list);
+                        delayed++;
+                }
         }
 #ifndef HAVE_DELAYED_RECOVERY
         /* delayed recovery is turned off, evict all delayed exports */
         list_splice_init(&delay_list, &evict_list);
         list_splice_init(&obd->obd_delayed_exports, &evict_list);
+        obd->obd_stale_clients += delayed;
 #endif
         spin_unlock(&obd->obd_dev_lock);
 
