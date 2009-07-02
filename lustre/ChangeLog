@@ -3,7 +3,7 @@ tbd Sun Microsystems, Inc.
 	* Support for kernels:
 	 2.6.16.60-0.37 (SLES 10),
 	 2.6.27.23-0.1 (SLES11),
-	 2.6.18-128.1.6.el5 (RHEL 5),
+	 2.6.18-128.1.14.el5 (RHEL 5),
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
 	  2.6.16 - 2.6.27 vanilla (kernel.org)
@@ -12,6 +12,10 @@ tbd Sun Microsystems, Inc.
 	* NFS export disabled when stack size < 8192. Since the NFSv4 export
 	  of Lustre filesystem with 4K stack may cause a stack overflow. For
 	  more information, please refer to bugzilla 17630.
+
+Severity   : enhancement
+Bugzilla   : 19846
+Description: Update kernel to RHEL5 2.6.18-128.1.14.el5.
 
 Severity   : enhancement
 Bugzilla   : 19625, 16893, 18668, 19848

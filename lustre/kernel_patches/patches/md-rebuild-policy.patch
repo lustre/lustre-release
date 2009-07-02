@@ -1,7 +1,8 @@
-diff -pur linux-2.6.18-53.orig/drivers/md/md.c linux-2.6.18-53/drivers/md/md.c
---- linux-2.6.18-53.orig/drivers/md/md.c	2008-02-13 17:34:25.000000000 +0800
-+++ linux-2.6.18-53/drivers/md/md.c	2008-02-13 17:39:28.000000000 +0800
-@@ -90,6 +90,8 @@ static void md_print_devices(void);
+Index: linux-2.6.18-128.1.14/drivers/md/md.c
+===================================================================
+--- linux-2.6.18-128.1.14.orig/drivers/md/md.c	2009-06-19 12:33:11.000000000 -0600
++++ linux-2.6.18-128.1.14/drivers/md/md.c	2009-06-19 12:35:02.000000000 -0600
+@@ -90,6 +90,8 @@
  
  static int sysctl_speed_limit_min = 1000;
  static int sysctl_speed_limit_max = 200000;
@@ -10,7 +11,7 @@ diff -pur linux-2.6.18-53.orig/drivers/md/md.c linux-2.6.18-53/drivers/md/md.c
  static inline int speed_min(mddev_t *mddev)
  {
  	return mddev->sync_speed_min ?
-@@ -121,6 +123,22 @@ static ctl_table raid_table[] = {
+@@ -121,6 +123,22 @@
  		.mode		= S_IRUGO|S_IWUSR,
  		.proc_handler	= &proc_dointvec,
  	},
@@ -33,7 +34,7 @@ diff -pur linux-2.6.18-53.orig/drivers/md/md.c linux-2.6.18-53/drivers/md/md.c
  	{ .ctl_name = 0 }
  };
  
-@@ -4980,15 +4998,16 @@ static int is_mddev_idle(mddev_t *mddev)
+@@ -5009,15 +5027,16 @@
  {
  	mdk_rdev_t * rdev;
  	int idle;
@@ -41,8 +42,8 @@ diff -pur linux-2.6.18-53.orig/drivers/md/md.c linux-2.6.18-53/drivers/md/md.c
 +	unsigned long rw, sync;
  
  	idle = 1;
-	rcu_read_lock();
-	rdev_for_each_rcu(rdev, mddev) {
+ 	rcu_read_lock();
+ 	rdev_for_each_rcu(rdev, mddev) {
  		struct gendisk *disk = rdev->bdev->bd_contains->bd_disk;
 -		curr_events = disk_stat_read(disk, sectors[0]) + 
 -				disk_stat_read(disk, sectors[1]) - 
@@ -54,7 +55,7 @@ diff -pur linux-2.6.18-53.orig/drivers/md/md.c linux-2.6.18-53/drivers/md/md.c
  		/* The difference between curr_events and last_events
  		 * will be affected by any new non-sync IO (making
  		 * curr_events bigger) and any difference in the amount of
-@@ -5001,9 +5020,9 @@ static int is_mddev_idle(mddev_t *mddev)
+@@ -5031,9 +5050,9 @@
  		 *
  		 * Note: the following is an unsigned comparison.
  		 */
@@ -65,8 +66,8 @@ diff -pur linux-2.6.18-53.orig/drivers/md/md.c linux-2.6.18-53/drivers/md/md.c
 +			rdev->last_events = rw - sync;
  		}
  	}
- 	return idle;
-@@ -5069,8 +5088,7 @@ static DECLARE_WAIT_QUEUE_HEAD(resync_wa
+ 	rcu_read_unlock();
+@@ -5100,8 +5119,7 @@
  void md_do_sync(mddev_t *mddev)
  {
  	mddev_t *mddev2;
@@ -76,7 +77,7 @@ diff -pur linux-2.6.18-53.orig/drivers/md/md.c linux-2.6.18-53/drivers/md/md.c
  	sector_t max_sectors,j, io_sectors;
  	unsigned long mark[SYNC_MARKS];
  	sector_t mark_cnt[SYNC_MARKS];
-@@ -5190,9 +5208,8 @@ void md_do_sync(mddev_t *mddev)
+@@ -5221,9 +5239,8 @@
  	/*
  	 * Tune reconstruction:
  	 */
@@ -87,7 +88,7 @@ diff -pur linux-2.6.18-53.orig/drivers/md/md.c linux-2.6.18-53/drivers/md/md.c
  
  	atomic_set(&mddev->recovery_active, 0);
  	init_waitqueue_head(&mddev->recovery_wait);
-@@ -5230,7 +5247,7 @@ void md_do_sync(mddev_t *mddev)
+@@ -5261,7 +5278,7 @@
  			 */
  			md_new_event(mddev);
  
@@ -96,7 +97,7 @@ diff -pur linux-2.6.18-53.orig/drivers/md/md.c linux-2.6.18-53/drivers/md/md.c
  			continue;
  
  		last_check = io_sectors;
-@@ -5251,7 +5268,6 @@ void md_do_sync(mddev_t *mddev)
+@@ -5282,7 +5299,6 @@
  			last_mark = next;
  		}
  
@@ -104,7 +105,7 @@ diff -pur linux-2.6.18-53.orig/drivers/md/md.c linux-2.6.18-53/drivers/md/md.c
  		if (kthread_should_stop()) {
  			/*
  			 * got a signal, exit.
-@@ -5275,10 +5291,16 @@ void md_do_sync(mddev_t *mddev)
+@@ -5306,10 +5322,16 @@
  
  		currspeed = ((unsigned long)(io_sectors-mddev->resync_mark_cnt))/2
  			/((jiffies-mddev->resync_mark)/HZ +1) +1;
@@ -122,10 +123,11 @@ diff -pur linux-2.6.18-53.orig/drivers/md/md.c linux-2.6.18-53/drivers/md/md.c
  				msleep(500);
  				goto repeat;
  			}
-diff -pur linux-2.6.18-53.orig/include/linux/sysctl.h linux-2.6.18-53/include/linux/sysctl.h
---- linux-2.6.18-53.orig/include/linux/sysctl.h	2008-02-13 17:35:25.000000000 +0800
-+++ linux-2.6.18-53/include/linux/sysctl.h	2008-02-13 17:36:22.000000000 +0800
-@@ -903,7 +903,9 @@ enum {
+Index: linux-2.6.18-128.1.14/include/linux/sysctl.h
+===================================================================
+--- linux-2.6.18-128.1.14.orig/include/linux/sysctl.h	2009-06-19 12:33:11.000000000 -0600
++++ linux-2.6.18-128.1.14/include/linux/sysctl.h	2009-06-19 12:35:02.000000000 -0600
+@@ -928,7 +928,9 @@
  /* /proc/sys/dev/raid */
  enum {
  	DEV_RAID_SPEED_LIMIT_MIN=1,
