@@ -1,7 +1,8 @@
-diff -pur linux-2.6.18-92.1.22.orig/drivers/md/raid5.c linux-2.6.18-92.1.22/drivers/md/raid5.c
---- linux-2.6.18-92.1.22.orig/drivers/md/raid5.c	2009-02-10 13:47:54.000000000 +0800
-+++ linux-2.6.18-92.1.22/drivers/md/raid5.c	2009-02-10 14:44:24.000000000 +0800
-@@ -633,6 +633,9 @@ static int raid5_end_read_request(struct
+Index: linux-2.6.18-128.1.14/drivers/md/raid5.c
+===================================================================
+--- linux-2.6.18-128.1.14.orig/drivers/md/raid5.c	2009-06-19 12:34:46.000000000 -0600
++++ linux-2.6.18-128.1.14/drivers/md/raid5.c	2009-06-19 12:34:50.000000000 -0600
+@@ -633,6 +633,9 @@
  		clear_buffer_uptodate(bh);
  	}
  #endif
@@ -11,7 +12,7 @@ diff -pur linux-2.6.18-92.1.22.orig/drivers/md/raid5.c linux-2.6.18-92.1.22/driv
  	clear_bit(R5_LOCKED, &sh->dev[i].flags);
  	set_bit(STRIPE_HANDLE, &sh->state);
  	release_stripe(sh);
-@@ -671,6 +674,10 @@ static int raid5_end_write_request (stru
+@@ -669,6 +672,10 @@
  
  	rdev_dec_pending(conf->disks[i].rdev, conf->mddev);
  	
@@ -21,8 +22,8 @@ diff -pur linux-2.6.18-92.1.22.orig/drivers/md/raid5.c linux-2.6.18-92.1.22/driv
 +	}
  	clear_bit(R5_LOCKED, &sh->dev[i].flags);
  	set_bit(STRIPE_HANDLE, &sh->state);
- 	__release_stripe(conf, sh);
-@@ -911,7 +918,27 @@ static sector_t compute_blocknr(struct s
+ 	release_stripe(sh);
+@@ -910,7 +917,27 @@
  	return r_sector;
  }
  
@@ -50,7 +51,7 @@ diff -pur linux-2.6.18-92.1.22.orig/drivers/md/raid5.c linux-2.6.18-92.1.22/driv
  
  /*
   * Copy data between a page in the stripe cache, and one or more bion
-@@ -1003,8 +1030,9 @@ static void compute_parity5(struct strip
+@@ -1002,8 +1029,9 @@
  {
  	raid5_conf_t *conf = sh->raid_conf;
  	int i, pd_idx = sh->pd_idx, disks = sh->disks, count;
@@ -61,7 +62,7 @@ diff -pur linux-2.6.18-92.1.22.orig/drivers/md/raid5.c linux-2.6.18-92.1.22/driv
  
  	PRINTK("compute_parity5, stripe %llu, method %d\n",
  		(unsigned long long)sh->sector, method);
-@@ -1054,34 +1082,92 @@ static void compute_parity5(struct strip
+@@ -1053,34 +1081,92 @@
  		count = 1;
  	}
  	
@@ -171,7 +172,7 @@ diff -pur linux-2.6.18-92.1.22.orig/drivers/md/raid5.c linux-2.6.18-92.1.22/driv
  	}
  	if (count != 1)
  		xor_block(count, STRIPE_SIZE, ptr);
-@@ -1098,6 +1184,7 @@ static void compute_parity6(struct strip
+@@ -1097,6 +1183,7 @@
  	raid6_conf_t *conf = sh->raid_conf;
  	int i, pd_idx = sh->pd_idx, qd_idx, d0_idx, disks = conf->raid_disks, count;
  	struct bio *chosen;
@@ -179,7 +180,7 @@ diff -pur linux-2.6.18-92.1.22.orig/drivers/md/raid5.c linux-2.6.18-92.1.22/driv
  	/**** FIX THIS: This could be very bad if disks is close to 256 ****/
  	void *ptrs[disks];
  
-@@ -1127,18 +1214,49 @@ static void compute_parity6(struct strip
+@@ -1126,18 +1213,49 @@
  		BUG();		/* Not implemented yet */
  	}
  
@@ -238,7 +239,7 @@ diff -pur linux-2.6.18-92.1.22.orig/drivers/md/raid5.c linux-2.6.18-92.1.22/driv
  
  //	switch(method) {
  //	case RECONSTRUCT_WRITE:
-@@ -1149,8 +1267,12 @@ static void compute_parity6(struct strip
+@@ -1148,8 +1266,12 @@
  		count = 0;
  		i = d0_idx;
  		do {
@@ -253,7 +254,7 @@ diff -pur linux-2.6.18-92.1.22.orig/drivers/md/raid5.c linux-2.6.18-92.1.22/driv
  				printk("block %d/%d not uptodate on parity calc\n", i,count);
  			i = raid6_next_disk(i, disks);
  		} while ( i != d0_idx );
-@@ -1599,7 +1721,8 @@ static void handle_stripe5(struct stripe
+@@ -1596,7 +1718,8 @@
  		if (sh->dev[i].written) {
  		    dev = &sh->dev[i];
  		    if (!test_bit(R5_LOCKED, &dev->flags) &&
@@ -263,7 +264,7 @@ diff -pur linux-2.6.18-92.1.22.orig/drivers/md/raid5.c linux-2.6.18-92.1.22/driv
  			/* We can return any write requests */
  			    struct bio *wbi, *wbi2;
  			    int bitmap_end = 0;
-@@ -1607,6 +1730,7 @@ static void handle_stripe5(struct stripe
+@@ -1604,6 +1727,7 @@
  			    spin_lock_irq(&conf->device_lock);
  			    wbi = dev->written;
  			    dev->written = NULL;
@@ -271,7 +272,7 @@ diff -pur linux-2.6.18-92.1.22.orig/drivers/md/raid5.c linux-2.6.18-92.1.22/driv
  			    while (wbi && wbi->bi_sector < dev->sector + STRIPE_SECTORS) {
  				    wbi2 = r5_next_bio(wbi, dev->sector);
  				    if (--wbi->bi_phys_segments == 0) {
-@@ -1970,6 +2094,15 @@ static void handle_stripe5(struct stripe
+@@ -1967,6 +2091,15 @@
  				set_bit(STRIPE_DEGRADED, &sh->state);
  			PRINTK("skip op %ld on disc %d for sector %llu\n",
  				bi->bi_rw, i, (unsigned long long)sh->sector);
@@ -287,7 +288,7 @@ diff -pur linux-2.6.18-92.1.22.orig/drivers/md/raid5.c linux-2.6.18-92.1.22/driv
  			clear_bit(R5_LOCKED, &sh->dev[i].flags);
  			set_bit(STRIPE_HANDLE, &sh->state);
  		}
-@@ -2175,7 +2308,8 @@ static void handle_stripe6(struct stripe
+@@ -2172,7 +2305,8 @@
  			if (sh->dev[i].written) {
  				dev = &sh->dev[i];
  				if (!test_bit(R5_LOCKED, &dev->flags) &&
@@ -297,7 +298,7 @@ diff -pur linux-2.6.18-92.1.22.orig/drivers/md/raid5.c linux-2.6.18-92.1.22/driv
  					/* We can return any write requests */
  					int bitmap_end = 0;
  					struct bio *wbi, *wbi2;
-@@ -2184,6 +2318,7 @@ static void handle_stripe6(struct stripe
+@@ -2181,6 +2315,7 @@
  					spin_lock_irq(&conf->device_lock);
  					wbi = dev->written;
  					dev->written = NULL;
@@ -305,7 +306,7 @@ diff -pur linux-2.6.18-92.1.22.orig/drivers/md/raid5.c linux-2.6.18-92.1.22/driv
  					while (wbi && wbi->bi_sector < dev->sector + STRIPE_SECTORS) {
  						wbi2 = r5_next_bio(wbi, dev->sector);
  						if (--wbi->bi_phys_segments == 0) {
-@@ -2535,6 +2670,15 @@ static void handle_stripe6(struct stripe
+@@ -2532,6 +2667,15 @@
  				set_bit(STRIPE_DEGRADED, &sh->state);
  			PRINTK("skip op %ld on disc %d for sector %llu\n",
  				bi->bi_rw, i, (unsigned long long)sh->sector);
@@ -321,7 +322,7 @@ diff -pur linux-2.6.18-92.1.22.orig/drivers/md/raid5.c linux-2.6.18-92.1.22/driv
  			clear_bit(R5_LOCKED, &sh->dev[i].flags);
  			set_bit(STRIPE_HANDLE, &sh->state);
  		}
-@@ -3456,6 +3600,9 @@ static int run(mddev_t *mddev)
+@@ -3449,6 +3593,9 @@
  	mddev->queue->max_phys_segments = conf->chunk_size * conf->previous_raid_disks >> PAGE_SHIFT;
  	mddev->queue->max_hw_segments = conf->chunk_size * conf->previous_raid_disks >> PAGE_SHIFT;;
  
@@ -331,7 +332,7 @@ diff -pur linux-2.6.18-92.1.22.orig/drivers/md/raid5.c linux-2.6.18-92.1.22/driv
  	return 0;
  abort:
  	if (conf) {
-@@ -3542,9 +3689,11 @@ static void status (struct seq_file *seq
+@@ -3535,9 +3682,11 @@
  			atomic_read(&conf->handled_in_raid5d),
  			atomic_read(&conf->out_of_stripes),
  			atomic_read(&conf->handle_called));
@@ -345,10 +346,11 @@ diff -pur linux-2.6.18-92.1.22.orig/drivers/md/raid5.c linux-2.6.18-92.1.22/driv
  	seq_printf (seq, "\n\t\t%u delayed, %u bit delayed, %u active, queues: %u in, %u out\n",
  			atomic_read(&conf->delayed), atomic_read(&conf->bit_delayed),
  			atomic_read(&conf->active_stripes),
-diff -pur linux-2.6.18-92.1.22.orig/include/linux/backing-dev.h linux-2.6.18-92.1.22/include/linux/backing-dev.h
---- linux-2.6.18-92.1.22.orig/include/linux/backing-dev.h	2009-02-10 13:47:54.000000000 +0800
-+++ linux-2.6.18-92.1.22/include/linux/backing-dev.h	2009-02-10 14:44:14.000000000 +0800
-@@ -48,6 +48,7 @@ struct backing_dev_info {
+Index: linux-2.6.18-128.1.14/include/linux/backing-dev.h
+===================================================================
+--- linux-2.6.18-128.1.14.orig/include/linux/backing-dev.h	2009-06-19 12:33:11.000000000 -0600
++++ linux-2.6.18-128.1.14/include/linux/backing-dev.h	2009-06-19 12:34:50.000000000 -0600
+@@ -48,6 +48,7 @@
  #define BDI_CAP_READ_MAP	0x00000010	/* Can be mapped for reading */
  #define BDI_CAP_WRITE_MAP	0x00000020	/* Can be mapped for writing */
  #define BDI_CAP_EXEC_MAP	0x00000040	/* Can be mapped for execution */
@@ -356,7 +358,7 @@ diff -pur linux-2.6.18-92.1.22.orig/include/linux/backing-dev.h linux-2.6.18-92.
  #define BDI_CAP_VMFLAGS \
  	(BDI_CAP_READ_MAP | BDI_CAP_WRITE_MAP | BDI_CAP_EXEC_MAP)
  
-@@ -94,11 +95,18 @@ static inline int bdi_rw_congested(struc
+@@ -94,11 +95,18 @@
  #define bdi_cap_account_dirty(bdi) \
  	(!((bdi)->capabilities & BDI_CAP_NO_ACCT_DIRTY))
  
@@ -375,18 +377,19 @@ diff -pur linux-2.6.18-92.1.22.orig/include/linux/backing-dev.h linux-2.6.18-92.
 +
  
  #endif		/* _LINUX_BACKING_DEV_H */
-diff -pur linux-2.6.18-92.1.22.orig/include/linux/page-flags.h linux-2.6.18-92.1.22/include/linux/page-flags.h
---- linux-2.6.18-92.1.22.orig/include/linux/page-flags.h	2009-02-10 13:47:54.000000000 +0800
-+++ linux-2.6.18-92.1.22/include/linux/page-flags.h	2009-02-10 14:44:14.000000000 +0800
-@@ -86,6 +86,7 @@
- #define PG_reclaim		17	/* To be reclaimed asap */
+Index: linux-2.6.18-128.1.14/include/linux/page-flags.h
+===================================================================
+--- linux-2.6.18-128.1.14.orig/include/linux/page-flags.h	2009-06-19 12:33:11.000000000 -0600
++++ linux-2.6.18-128.1.14/include/linux/page-flags.h	2009-06-19 12:34:50.000000000 -0600
+@@ -87,6 +87,7 @@
  #define PG_nosave_free		18	/* Free, should not be written */
  #define PG_buddy		19	/* Page is free, on buddy lists */
-+#define PG_constant		20	/* To mark if the page is constant */
+ #define PG_gup			20	/* Page pin may be because of gup */
++#define PG_constant		21	/* To mark if the page is constant */
  #define PG_xpmem		27	/* Testing for xpmem. */
  
  /* PG_owner_priv_1 users should have descriptive aliases */
-@@ -283,6 +284,14 @@
+@@ -288,6 +289,14 @@
  
  struct page;	/* forward declaration */
  
@@ -401,10 +404,11 @@ diff -pur linux-2.6.18-92.1.22.orig/include/linux/page-flags.h linux-2.6.18-92.1
  int test_clear_page_dirty(struct page *page);
  int test_clear_page_writeback(struct page *page);
  int test_set_page_writeback(struct page *page);
-diff -pur linux-2.6.18-92.1.22.orig/include/linux/raid/raid5.h linux-2.6.18-92.1.22/include/linux/raid/raid5.h
---- linux-2.6.18-92.1.22.orig/include/linux/raid/raid5.h	2009-02-10 13:47:54.000000000 +0800
-+++ linux-2.6.18-92.1.22/include/linux/raid/raid5.h	2009-02-10 14:44:14.000000000 +0800
-@@ -156,8 +156,9 @@ struct stripe_head {
+Index: linux-2.6.18-128.1.14/include/linux/raid/raid5.h
+===================================================================
+--- linux-2.6.18-128.1.14.orig/include/linux/raid/raid5.h	2009-06-19 12:34:42.000000000 -0600
++++ linux-2.6.18-128.1.14/include/linux/raid/raid5.h	2009-06-19 12:34:50.000000000 -0600
+@@ -156,8 +156,9 @@
  #define	R5_Overlap	7	/* There is a pending overlapping request on this block */
  #define	R5_ReadError	8	/* seen a read error here recently */
  #define	R5_ReWrite	9	/* have tried to over-write the readerror */
@@ -415,9 +419,10 @@ diff -pur linux-2.6.18-92.1.22.orig/include/linux/raid/raid5.h linux-2.6.18-92.1
  /*
   * Write method
   */
-diff -pur linux-2.6.18-92.1.22.orig/mm/filemap.c linux-2.6.18-92.1.22/mm/filemap.c
---- linux-2.6.18-92.1.22.orig/mm/filemap.c	2009-02-10 13:47:54.000000000 +0800
-+++ linux-2.6.18-92.1.22/mm/filemap.c	2009-02-10 14:44:14.000000000 +0800
+Index: linux-2.6.18-128.1.14/mm/filemap.c
+===================================================================
+--- linux-2.6.18-128.1.14.orig/mm/filemap.c	2009-06-19 12:33:11.000000000 -0600
++++ linux-2.6.18-128.1.14/mm/filemap.c	2009-06-19 12:34:50.000000000 -0600
 @@ -30,6 +30,7 @@
  #include <linux/security.h>
  #include <linux/syscalls.h>
@@ -426,7 +431,7 @@ diff -pur linux-2.6.18-92.1.22.orig/mm/filemap.c linux-2.6.18-92.1.22/mm/filemap
  #include "filemap.h"
  #include "internal.h"
  
-@@ -566,11 +567,55 @@ void end_page_writeback(struct page *pag
+@@ -567,11 +568,55 @@
  		if (!test_clear_page_writeback(page))
  			BUG();
  	}
