@@ -5912,21 +5912,27 @@ run_test 170 "test lctl df to handle corrupted log ====================="
 
 obdecho_create_test() {
         local OBD=$1
-        $LCTL attach echo_client ec ec_uuid || return 1
-        $LCTL --device ec setup $OBD || return 2
-        $LCTL --device ec create 1   || return 3
-        $LCTL --device ec cleanup    || return 4
-        $LCTL --device ec detach     || return 5
+        local rc=0
+        $LCTL attach echo_client ec ec_uuid || rc=1
+        [ $rc -eq 0 ] && { $LCTL --device ec setup $OBD || rc=2; }
+        [ $rc -eq 0 ] && { $LCTL --device ec create 1 || rc=3; }
+        [ $rc -eq 0 -o $rc -gt 2 ] && { $LCTL --device ec cleanup || rc=4; }
+        [ $rc -eq 0 -o $rc -gt 1 ] && { $LCTL --device ec detach || rc=5; }
+        return $rc
 }
 
 test_180() {
-        load_module obdecho/obdecho
+        load_module obdecho/obdecho || return 1
+        local rc=0
 
         local OBD=`$LCTL  dl | awk ' /obdfilter/ { print $4; exit; }'`
-        [ "x$OBD" != "x" ] && obdecho_create_test $OBD
+        [ "x$OBD" != "x" ] && { obdecho_create_test $OBD || rc=2; }
+        [[ $rc -ne 0 ]] && { rmmod obdecho; return $rc; }
 
         OBD=`$LCTL  dl | awk ' /-osc-/ { print $4; exit; }'`
-        [ "x$OBD" != "x" ] && obdecho_create_test $OBD
+        [ "x$OBD" != "x" ] && { obdecho_create_test $OBD || rc=3; }
+        [[ $rc -ne 0 ]] && { rmmod obdecho; return $rc; }
+
         rmmod obdecho
 }
 run_test 180 "test obdecho ============================================"
