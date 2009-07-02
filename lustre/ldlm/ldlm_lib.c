@@ -1133,7 +1133,7 @@ static void target_send_delayed_replies(struct obd_device *obd)
         LCONSOLE_INFO("%s: Recovery period over after %d:%.02d, of %d clients "
                       "%d recovered and %d %s evicted.\n", obd->obd_name,
                       (int)elapsed_time/60, (int)elapsed_time%60, max_clients,
-                      max_clients - obd->obd_recoverable_clients,
+                      obd->obd_connected_clients,
                       obd->obd_stale_clients,
                       obd->obd_stale_clients == 1 ? "was" : "were");
 
