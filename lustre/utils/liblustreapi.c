@@ -788,61 +788,6 @@ retry_get_uuids:
         return 0;
 }
 
-static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
-                                     int is_dir, int verbose, int quiet,
-                                     char *pool_name)
-{
-        char *prefix = is_dir ? "" : "lmm_";
-        char nl = is_dir ? ' ' : '\n';
-
-        if (verbose && path)
-                llapi_printf(LLAPI_MSG_NORMAL, "%s\n", path);
-
-        if ((verbose & VERBOSE_DETAIL) && !is_dir) {
-                llapi_printf(LLAPI_MSG_NORMAL, "lmm_magic:          0x%08X\n",
-                             lum->lmm_magic);
-                llapi_printf(LLAPI_MSG_NORMAL, "lmm_object_gr:      "LPX64"\n",
-                             lum->lmm_object_gr);
-                llapi_printf(LLAPI_MSG_NORMAL, "lmm_object_id:      "LPX64"\n",
-                             lum->lmm_object_id);
-        }
-
-        if (verbose & VERBOSE_COUNT) {
-                if (!quiet)
-                        llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_count:   ",
-                                     prefix);
-                llapi_printf(LLAPI_MSG_NORMAL, "%u%c",
-                             (int)lum->lmm_stripe_count, nl);
-        }
-
-        if (verbose & VERBOSE_SIZE) {
-                if (!quiet)
-                        llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_size:    ",
-                                     prefix);
-                llapi_printf(LLAPI_MSG_NORMAL, "%u%c", lum->lmm_stripe_size,
-                             nl);
-        }
-
-        if ((verbose & VERBOSE_DETAIL) && !is_dir) {
-                llapi_printf(LLAPI_MSG_NORMAL, "lmm_stripe_pattern: %x%c",
-                             lum->lmm_pattern, nl);
-        }
-
-        if (verbose & VERBOSE_OFFSET) {
-                if (!quiet)
-                        llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_offset:   ",
-                                     prefix);
-                llapi_printf(LLAPI_MSG_NORMAL, "%u%c",
-                             lum->lmm_objects[0].l_ost_idx, nl);
-        }
-
-        if ((verbose & VERBOSE_POOL) && (pool_name != NULL))
-                llapi_printf(LLAPI_MSG_NORMAL, "pool: %s%c", pool_name, nl);
-
-        if (is_dir)
-                llapi_printf(LLAPI_MSG_NORMAL, "\n");
-}
-
 static void lov_dump_user_lmm_join(struct lov_user_md_v1 *lum, char *path,
                                    int is_dir, int obdindex, int quiet,
                                    int header, int body)
@@ -858,20 +803,29 @@ static void lov_dump_user_lmm_join(struct lov_user_md_v1 *lum, char *path,
                                 break;
                         }
                 }
-        } else {
-                if (!quiet)
-                        llapi_printf(LLAPI_MSG_NORMAL, "%s\n", path);
+        } else if (!quiet) {
+                llapi_printf(LLAPI_MSG_NORMAL, "%s\n", path);
                 obdstripe = 1;
         }
 
         if (header && obdstripe == 1) {
-                lov_dump_user_lmm_header(lum, NULL, 0, header, quiet, NULL);
-                
+                llapi_printf(LLAPI_MSG_NORMAL, "lmm_magic:          0x%08X\n",
+                             lumj->lmm_magic);
+                llapi_printf(LLAPI_MSG_NORMAL, "lmm_object_gr:      "LPX64"\n",
+                             lumj->lmm_object_gr);
+                llapi_printf(LLAPI_MSG_NORMAL, "lmm_object_id:      "LPX64"\n",
+                             lumj->lmm_object_id);
+                llapi_printf(LLAPI_MSG_NORMAL, "lmm_stripe_count:   %u\n",
+                             (int)lumj->lmm_stripe_count);
+                llapi_printf(LLAPI_MSG_NORMAL, "lmm_stripe_size:    %u\n",
+                             lumj->lmm_stripe_size);
+                llapi_printf(LLAPI_MSG_NORMAL, "lmm_stripe_pattern: %x\n",
+                             lumj->lmm_pattern);
                 llapi_printf(LLAPI_MSG_NORMAL, "lmm_extent_count:   %x\n",
                              lumj->lmm_extent_count);
         }
 
-        if (body && !(header && VERBOSE_ALL)) {
+        if (body) {
                 unsigned long long start = -1, end = 0;
                 if (!quiet && obdstripe == 1)
                         llapi_printf(LLAPI_MSG_NORMAL,
@@ -922,9 +876,8 @@ static void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
                                 break;
                         }
                 }
-        } else {
-                if (!quiet)
-                        llapi_printf(LLAPI_MSG_NORMAL, "%s\n", path);
+        } else if (!quiet) {
+                llapi_printf(LLAPI_MSG_NORMAL, "%s\n", path);
                 obdstripe = 1;
         }
 
@@ -935,20 +888,39 @@ static void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
                                 llapi_printf(LLAPI_MSG_NORMAL, "(Default) ");
                                 lum->lmm_object_gr = LOV_OBJECT_GROUP_CLEAR;
                         }
-                        /* maintain original behavior */
-                        if (!header)
-                                header |= VERBOSE_ALL;
-                        lov_dump_user_lmm_header(lum, path, is_dir, header,
-                                                 quiet, pool_name);
+                        llapi_printf(LLAPI_MSG_NORMAL,
+                                     "stripe_count: %d stripe_size: %u "
+                                     "stripe_offset: %d%s%s\n",
+                                     lum->lmm_stripe_count == (__u16)-1 ? -1 :
+                                                        lum->lmm_stripe_count,
+                                     lum->lmm_stripe_size,
+                                     lum->lmm_stripe_offset == (__u16)-1 ? -1 :
+                                                        lum->lmm_stripe_offset,
+                                     pool_name != NULL ? " pool: " : "",
+                                     pool_name != NULL ? pool_name : "");
                 }
                 return;
         }
 
-        if (header && (obdstripe == 1))
-                lov_dump_user_lmm_header(lum, NULL, is_dir, header, quiet,
-                                         pool_name);
+        if (header && (obdstripe == 1)) {
+                llapi_printf(LLAPI_MSG_NORMAL, "lmm_magic:          0x%08X\n",
+                             lum->lmm_magic);
+                llapi_printf(LLAPI_MSG_NORMAL, "lmm_object_gr:      "LPX64"\n",
+                             lum->lmm_object_gr);
+                llapi_printf(LLAPI_MSG_NORMAL, "lmm_object_id:      "LPX64"\n",
+                             lum->lmm_object_id);
+                llapi_printf(LLAPI_MSG_NORMAL, "lmm_stripe_count:   %u\n",
+                             lum->lmm_stripe_count);
+                llapi_printf(LLAPI_MSG_NORMAL, "lmm_stripe_size:    %u\n",
+                             lum->lmm_stripe_size);
+                llapi_printf(LLAPI_MSG_NORMAL, "lmm_stripe_pattern: %x\n",
+                             lum->lmm_pattern);
+                if (pool_name != NULL)
+                        llapi_printf(LLAPI_MSG_NORMAL,
+                                     "lmm_pool_name:      %s\n", pool_name);
+        }
 
-        if (body && !(header && VERBOSE_ALL)) {
+        if (body) {
                 if ((!quiet) && (obdstripe == 1))
                         llapi_printf(LLAPI_MSG_NORMAL,
                                      "\tobdidx\t\t objid\t\tobjid\t\t group\n");
