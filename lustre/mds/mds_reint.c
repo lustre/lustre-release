@@ -89,7 +89,7 @@ struct dentry *mds_lookup(struct obd_device *obd, const char *fid_name,
 {
         struct dentry *dchild;
         struct lr_server_data *lsd = obd->u.mds.mds_server_data;
-        EXIT;
+        ENTRY;
 
         dchild = ll_lookup_one_len(fid_name, dparent, fid_namelen);
         if (!IS_ERR(dchild) &&
