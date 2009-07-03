@@ -478,7 +478,7 @@ static int quota_chk_acq_common(struct obd_device *obd, const unsigned int id[],
                         l_wait_event(waitq, 0, &lwi);
                 }
 
-                if (rc < 0 || cycle % 10 == 2) {
+                if (rc < 0 || cycle % 10 == 0) {
                         spin_lock(&last_print_lock);
                         if (last_print == 0 ||
                             cfs_time_before((last_print + cfs_time_seconds(30)),
