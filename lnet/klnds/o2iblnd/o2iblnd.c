@@ -1216,32 +1216,31 @@ kiblnd_map_rx_descs(kib_conn_t *conn)
         conn->ibc_rx_pages->ibp_device = conn->ibc_cmid->device;
 }
 
-void
-kiblnd_unmap_tx_descs(lnet_ni_t *ni)
+static void
+kiblnd_unmap_tx_pool(kib_tx_pool_t *tpo)
 {
-        int             i;
         kib_tx_t       *tx;
-        kib_net_t      *net = ni->ni_data;
+        int             i;
 
-        LASSERT (net->ibn_tx_pages != NULL);
-        LASSERT (net->ibn_tx_pages->ibp_device != NULL);
+        LASSERT (tpo->tpo_pool.po_allocated == 0);
+        LASSERT (tpo->tpo_tx_pages->ibp_device != NULL);
 
-        for (i = 0; i < IBLND_TX_MSGS(); i++) {
-                tx = &net->ibn_tx_descs[i];
-
-                kiblnd_dma_unmap_single(net->ibn_tx_pages->ibp_device,
+        for (i = 0; i < tpo->tpo_pool.po_size; i++) {
+                tx = &tpo->tpo_tx_descs[i];
+                kiblnd_dma_unmap_single(tpo->tpo_tx_pages->ibp_device,
                                         KIBLND_UNMAP_ADDR(tx, tx_msgunmap,
                                                           tx->tx_msgaddr),
                                         IBLND_MSG_SIZE, DMA_TO_DEVICE);
         }
-
-        net->ibn_tx_pages->ibp_device = NULL;
+        tpo->tpo_tx_pages->ibp_device = NULL;
 }
 
-void
-kiblnd_map_tx_descs (lnet_ni_t *ni)
+static void
+kiblnd_map_tx_pool(kib_tx_pool_t *tpo)
 {
-        kib_net_t      *net = ni->ni_data;
+        kib_pages_t    *txpgs = tpo->tpo_tx_pages;
+        kib_pool_t     *pool  = &tpo->tpo_pool;
+        kib_net_t      *net   = pool->po_owner->ps_net;
         struct page    *page;
         kib_tx_t       *tx;
         int             page_offset;
@@ -1249,6 +1248,8 @@ kiblnd_map_tx_descs (lnet_ni_t *ni)
         int             i;
 
         LASSERT (net != NULL);
+        LASSERT (net->ibn_dev->ibd_cmid != NULL &&
+                 net->ibn_dev->ibd_cmid->device != NULL);
 
         /* pre-mapped messages are not bigger than 1 page */
         CLASSERT (IBLND_MSG_SIZE <= PAGE_SIZE);
@@ -1256,22 +1257,23 @@ kiblnd_map_tx_descs (lnet_ni_t *ni)
         /* No fancy arithmetic when we do the buffer calculations */
         CLASSERT (PAGE_SIZE % IBLND_MSG_SIZE == 0);
 
+        txpgs->ibp_device = net->ibn_dev->ibd_cmid->device;
 
-        for (ipage = page_offset = i = 0; i < IBLND_TX_MSGS(); i++) {
-                page = net->ibn_tx_pages->ibp_pages[ipage];
-                tx = &net->ibn_tx_descs[i];
+        for (ipage = page_offset = i = 0; i < pool->po_size; i++) {
+                page = txpgs->ibp_pages[ipage];
+                tx = &tpo->tpo_tx_descs[i];
 
                 tx->tx_msg = (kib_msg_t *)(((char *)page_address(page)) +
                                            page_offset);
 
                 tx->tx_msgaddr = kiblnd_dma_map_single(
-                        net->ibn_dev->ibd_cmid->device,
-                        tx->tx_msg, IBLND_MSG_SIZE, DMA_TO_DEVICE);
-                LASSERT (!kiblnd_dma_mapping_error(net->ibn_dev->ibd_cmid->device,
+                        txpgs->ibp_device, tx->tx_msg,
+                        IBLND_MSG_SIZE, DMA_TO_DEVICE);
+                LASSERT (!kiblnd_dma_mapping_error(txpgs->ibp_device,
                                                    tx->tx_msgaddr));
                 KIBLND_UNMAP_ADDR_SET(tx, tx_msgunmap, tx->tx_msgaddr);
 
-                list_add(&tx->tx_list, &net->ibn_idle_txs);
+                list_add(&tx->tx_list, &pool->po_free_list);
 
                 page_offset += IBLND_MSG_SIZE;
                 LASSERT (page_offset <= PAGE_SIZE);
@@ -1279,135 +1281,9 @@ kiblnd_map_tx_descs (lnet_ni_t *ni)
                 if (page_offset == PAGE_SIZE) {
                         page_offset = 0;
                         ipage++;
-                        LASSERT (ipage <= IBLND_TX_MSG_PAGES());
+                        LASSERT (ipage <= txpgs->ibp_npages);
                 }
         }
-
-        net->ibn_tx_pages->ibp_device = net->ibn_dev->ibd_cmid->device;
-}
-
-void
-kiblnd_free_tx_descs (lnet_ni_t *ni)
-{
-        int        i;
-        kib_net_t *net = ni->ni_data;
-
-        LASSERT (net != NULL);
-
-        if (net->ibn_tx_pages != NULL)
-                kiblnd_free_pages(net->ibn_tx_pages);
-
-        if (net->ibn_tx_descs == NULL)
-                return;
-
-        for (i = 0; i < IBLND_TX_MSGS(); i++) {
-                kib_tx_t *tx = &net->ibn_tx_descs[i];
-
-                if (tx->tx_pages != NULL)
-                        LIBCFS_FREE(tx->tx_pages,
-                                    LNET_MAX_IOV *
-                                    sizeof(*tx->tx_pages));
-
-                if (tx->tx_ipb != NULL)
-                        LIBCFS_FREE(tx->tx_ipb,
-                                    IBLND_MAX_RDMA_FRAGS *
-                                    sizeof(*tx->tx_ipb));
-
-                if (tx->tx_frags != NULL)
-                        LIBCFS_FREE(tx->tx_frags,
-                                    IBLND_MAX_RDMA_FRAGS *
-                                            sizeof(*tx->tx_frags));
-
-                if (tx->tx_wrq != NULL)
-                        LIBCFS_FREE(tx->tx_wrq,
-                                    (1 + IBLND_MAX_RDMA_FRAGS) *
-                                    sizeof(*tx->tx_wrq));
-
-                if (tx->tx_sge != NULL)
-                        LIBCFS_FREE(tx->tx_sge,
-                                    (1 + IBLND_MAX_RDMA_FRAGS) *
-                                    sizeof(*tx->tx_sge));
-
-                if (tx->tx_rd != NULL)
-                        LIBCFS_FREE(tx->tx_rd,
-                                    offsetof(kib_rdma_desc_t,
-                                             rd_frags[IBLND_MAX_RDMA_FRAGS]));
-        }
-
-        LIBCFS_FREE(net->ibn_tx_descs,
-                    IBLND_TX_MSGS() * sizeof(kib_tx_t));
-}
-
-int
-kiblnd_alloc_tx_descs (lnet_ni_t *ni)
-{
-        int        i;
-        int        rc;
-        kib_net_t *net = ni->ni_data;
-
-        LASSERT (net != NULL);
-
-        rc = kiblnd_alloc_pages(&net->ibn_tx_pages, IBLND_TX_MSG_PAGES());
-
-        if (rc != 0) {
-                CERROR("Can't allocate tx pages\n");
-                return rc;
-        }
-
-        LIBCFS_ALLOC (net->ibn_tx_descs,
-                      IBLND_TX_MSGS() * sizeof(kib_tx_t));
-        if (net->ibn_tx_descs == NULL) {
-                CERROR("Can't allocate %d tx descriptors\n", IBLND_TX_MSGS());
-                return -ENOMEM;
-        }
-
-        memset(net->ibn_tx_descs, 0,
-               IBLND_TX_MSGS() * sizeof(kib_tx_t));
-
-        for (i = 0; i < IBLND_TX_MSGS(); i++) {
-                kib_tx_t *tx = &net->ibn_tx_descs[i];
-
-                if (net->ibn_fmrpool != NULL) {
-                        LIBCFS_ALLOC(tx->tx_pages, LNET_MAX_IOV *
-                                     sizeof(*tx->tx_pages));
-                        if (tx->tx_pages == NULL)
-                                return -ENOMEM;
-                }
-
-                if (net->ibn_pmrpool != NULL) {
-                        LIBCFS_ALLOC(tx->tx_ipb,
-                                     IBLND_MAX_RDMA_FRAGS *
-                                     sizeof(*tx->tx_ipb));
-                        if (tx->tx_ipb == NULL)
-                                return -ENOMEM;
-                }
-
-                LIBCFS_ALLOC(tx->tx_frags,
-                             IBLND_MAX_RDMA_FRAGS *
-                             sizeof(*tx->tx_frags));
-                if (tx->tx_frags == NULL)
-                        return -ENOMEM;
-
-                LIBCFS_ALLOC(tx->tx_wrq,
-                             (1 + IBLND_MAX_RDMA_FRAGS) *
-                             sizeof(*tx->tx_wrq));
-                if (tx->tx_wrq == NULL)
-                        return -ENOMEM;
-
-                LIBCFS_ALLOC(tx->tx_sge,
-                             (1 + IBLND_MAX_RDMA_FRAGS) *
-                             sizeof(*tx->tx_sge));
-                if (tx->tx_sge == NULL)
-                        return -ENOMEM;
-
-                LIBCFS_ALLOC(tx->tx_rd,
-                             offsetof(kib_rdma_desc_t,
-                                      rd_frags[IBLND_MAX_RDMA_FRAGS]));
-                if (tx->tx_rd == NULL)
-                        return -ENOMEM;
-        }
-
-        return 0;
 }
 
 struct ib_mr *
@@ -1464,6 +1340,706 @@ kiblnd_find_rd_dma_mr(kib_net_t *net, kib_rdma_desc_t *rd)
 }
 
 void
+kiblnd_destroy_fmr_pool(kib_fmr_pool_t *pool)
+{
+        LASSERT (pool->fpo_map_count == 0);
+
+        if (pool->fpo_fmr_pool != NULL)
+                ib_destroy_fmr_pool(pool->fpo_fmr_pool);
+
+        LIBCFS_FREE(pool, sizeof(kib_fmr_pool_t));
+}
+
+void
+kiblnd_destroy_fmr_pool_list(struct list_head *head)
+{
+        kib_fmr_pool_t *pool;
+
+        while (!list_empty(head)) {
+                pool = list_entry(head->next, kib_fmr_pool_t, fpo_list);
+                list_del(&pool->fpo_list);
+                kiblnd_destroy_fmr_pool(pool);
+        }
+}
+
+int
+kiblnd_create_fmr_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t **pp_fpo)
+{
+        /* FMR pool for RDMA */
+        kib_fmr_pool_t          *fpo;
+        struct ib_fmr_pool_param param = {
+                .max_pages_per_fmr = LNET_MAX_PAYLOAD/PAGE_SIZE,
+                .page_shift        = PAGE_SHIFT,
+                .access            = (IB_ACCESS_LOCAL_WRITE |
+                                      IB_ACCESS_REMOTE_WRITE),
+                .pool_size         = *kiblnd_tunables.kib_fmr_pool_size,
+                .dirty_watermark   = *kiblnd_tunables.kib_fmr_flush_trigger,
+                .flush_function    = NULL,
+                .flush_arg         = NULL,
+                .cache             = !!*kiblnd_tunables.kib_fmr_cache};
+        int rc;
+
+        LASSERT (fps->fps_net->ibn_dev != NULL &&
+                 fps->fps_net->ibn_dev->ibd_pd != NULL);
+
+        LIBCFS_ALLOC(fpo, sizeof(kib_fmr_pool_t));
+        if (fpo == NULL)
+                return -ENOMEM;
+
+        memset(fpo, 0, sizeof(kib_fmr_pool_t));
+        fpo->fpo_fmr_pool = ib_create_fmr_pool(fps->fps_net->ibn_dev->ibd_pd, &param);
+        if (IS_ERR(fpo->fpo_fmr_pool)) {
+                CERROR("Failed to create FMR pool: %ld\n",
+                       PTR_ERR(fpo->fpo_fmr_pool));
+                rc = PTR_ERR(fpo->fpo_fmr_pool);
+                LIBCFS_FREE(fpo, sizeof(kib_fmr_pool_t));
+                return rc;
+        }
+
+        fpo->fpo_deadline = cfs_time_shift(IBLND_POOL_DEADLINE);
+        fpo->fpo_owner    = fps;
+        *pp_fpo = fpo;
+
+        return 0;
+}
+
+static void
+kiblnd_fini_fmr_pool_set(kib_fmr_poolset_t *fps)
+{
+        kiblnd_destroy_fmr_pool_list(&fps->fps_pool_list);
+}
+
+static int
+kiblnd_init_fmr_pool_set(kib_fmr_poolset_t *fps, kib_net_t *net)
+{
+        kib_fmr_pool_t *fpo;
+        int             rc;
+
+        memset(fps, 0, sizeof(kib_fmr_poolset_t));
+
+        fps->fps_net = net;
+        spin_lock_init(&fps->fps_lock);
+        CFS_INIT_LIST_HEAD(&fps->fps_pool_list);
+        rc = kiblnd_create_fmr_pool(fps, &fpo);
+        if (rc == 0)
+                list_add_tail(&fpo->fpo_list, &fps->fps_pool_list);
+
+        return rc;
+}
+
+void
+kiblnd_fmr_pool_unmap(kib_fmr_t *fmr, int status)
+{
+        CFS_LIST_HEAD     (zombies);
+        kib_fmr_pool_t    *fpo = fmr->fmr_pool;
+        kib_fmr_poolset_t *fps = fpo->fpo_owner;
+        kib_fmr_pool_t    *tmp;
+        int                rc;
+
+        rc = ib_fmr_pool_unmap(fmr->fmr_pfmr);
+        LASSERT (rc == 0);
+
+        if (status != 0) {
+                rc = ib_flush_fmr_pool(fpo->fpo_fmr_pool);
+                LASSERT (rc == 0);
+        }
+
+        fmr->fmr_pool = NULL;
+        fmr->fmr_pfmr = NULL;
+
+        spin_lock(&fps->fps_lock);
+        fpo->fpo_map_count --;  /* decref the pool */
+
+        list_for_each_entry_safe(fpo, tmp, &fps->fps_pool_list, fpo_list) {
+                /* the first pool is persistent */
+                if (fps->fps_pool_list.next == &fpo->fpo_list)
+                        continue;
+
+                if (fpo->fpo_map_count == 0 &&  /* no more reference */
+                    cfs_time_aftereq(cfs_time_current(), fpo->fpo_deadline)) {
+                        list_move(&fpo->fpo_list, &zombies);
+                        fps->fps_version ++;
+                }
+        }
+        spin_unlock(&fps->fps_lock);
+
+        if (!list_empty(&zombies))
+                kiblnd_destroy_fmr_pool_list(&zombies);
+}
+
+int
+kiblnd_fmr_pool_map(kib_fmr_poolset_t *fps, __u64 *pages, int npages,
+                    __u64 iov, kib_fmr_t *fmr)
+{
+        struct ib_pool_fmr *pfmr;
+        kib_fmr_pool_t     *fpo;
+        __u64               version;
+        int                 rc;
+
+        LASSERT (fps->fps_net->ibn_with_fmr);
+ again:
+        spin_lock(&fps->fps_lock);
+        version = fps->fps_version;
+        list_for_each_entry(fpo, &fps->fps_pool_list, fpo_list) {
+                fpo->fpo_deadline = cfs_time_shift(IBLND_POOL_DEADLINE);
+                fpo->fpo_map_count ++;
+                spin_unlock(&fps->fps_lock);
+
+                pfmr = ib_fmr_pool_map_phys(fpo->fpo_fmr_pool,
+                                            pages, npages, iov);
+                if (likely(!IS_ERR(pfmr))) {
+                        fmr->fmr_pool = fpo;
+                        fmr->fmr_pfmr = pfmr;
+                        return 0;
+                }
+
+                spin_lock(&fps->fps_lock);
+                fpo->fpo_map_count --;
+                if (PTR_ERR(pfmr) != -EAGAIN) {
+                        spin_unlock(&fps->fps_lock);
+                        return PTR_ERR(pfmr);
+                }
+
+                /* EAGAIN and ... */
+                if (version != fps->fps_version) {
+                        spin_unlock(&fps->fps_lock);
+                        goto again;
+                }
+        }
+
+        if (fps->fps_increasing) {
+                spin_unlock(&fps->fps_lock);
+                CDEBUG(D_NET, "Another thread is allocating new "
+                              "FMR pool, waiting for her to complete\n");
+                schedule();
+                goto again;
+
+        }
+
+        if (cfs_time_before(cfs_time_current(), fps->fps_next_retry)) {
+                /* someone failed recently */
+                spin_unlock(&fps->fps_lock);
+                return -EAGAIN;
+        }
+
+        fps->fps_increasing = 1;
+        spin_unlock(&fps->fps_lock);
+
+        CDEBUG(D_NET, "Allocate new FMR pool\n");
+        rc = kiblnd_create_fmr_pool(fps, &fpo);
+        spin_lock(&fps->fps_lock);
+        fps->fps_increasing = 0;
+        if (rc == 0) {
+                fps->fps_version ++;
+                list_add_tail(&fpo->fpo_list, &fps->fps_pool_list);
+        } else {
+                fps->fps_next_retry = cfs_time_shift(10);
+        }
+        spin_unlock(&fps->fps_lock);
+
+        goto again;
+}
+
+static void
+kiblnd_fini_pool(kib_pool_t *pool)
+{
+        LASSERT (list_empty(&pool->po_free_list));
+        LASSERT (pool->po_allocated == 0);
+
+        CDEBUG(D_NET, "Finalize %s pool\n", pool->po_owner->ps_name);
+}
+
+static void
+kiblnd_init_pool(kib_poolset_t *ps, kib_pool_t *pool, int size)
+{
+        CDEBUG(D_NET, "Initialize %s pool\n", ps->ps_name);
+
+        memset(pool, 0, sizeof(kib_pool_t));
+        CFS_INIT_LIST_HEAD(&pool->po_free_list);
+        pool->po_deadline = cfs_time_shift(IBLND_POOL_DEADLINE);
+        pool->po_owner    = ps;
+        pool->po_size     = size;
+}
+
+void
+kiblnd_destroy_pool_list(kib_poolset_t *ps, struct list_head *head)
+{
+        kib_pool_t *pool;
+
+        while (!list_empty(head)) {
+                pool = list_entry(head->next, kib_pool_t, po_list);
+                list_del(&pool->po_list);
+                ps->ps_pool_destroy(pool);
+        }
+}
+
+static void
+kiblnd_fini_pool_set(kib_poolset_t *ps)
+{
+        kiblnd_destroy_pool_list(ps, &ps->ps_pool_list);
+}
+
+static int
+kiblnd_init_pool_set(kib_poolset_t *ps, kib_net_t *net,
+                     char *name, int size,
+                     kib_ps_pool_create_t po_create,
+                     kib_ps_pool_destroy_t po_destroy,
+                     kib_ps_node_init_t nd_init,
+                     kib_ps_node_fini_t nd_fini)
+{
+        kib_pool_t    *pool;
+        int            rc;
+
+        memset(ps, 0, sizeof(kib_poolset_t));
+
+        ps->ps_net          = net;
+        ps->ps_pool_create  = po_create;
+        ps->ps_pool_destroy = po_destroy;
+        ps->ps_node_init    = nd_init;
+        ps->ps_node_fini    = nd_fini;
+        ps->ps_pool_size    = size;
+        strncpy(ps->ps_name, name, IBLND_POOL_NAME_LEN);
+        spin_lock_init(&ps->ps_lock);
+        CFS_INIT_LIST_HEAD(&ps->ps_pool_list);
+
+        rc = ps->ps_pool_create(ps, size, &pool);
+        if (rc == 0)
+                list_add(&pool->po_list, &ps->ps_pool_list);
+        else
+                CERROR("Failed to create the first pool for %s\n", ps->ps_name);
+
+        return rc;
+}
+
+void
+kiblnd_pool_free_node(kib_pool_t *pool, struct list_head *node)
+{
+        CFS_LIST_HEAD  (zombies);
+        kib_poolset_t  *ps = pool->po_owner;
+        kib_pool_t     *tmp;
+        cfs_time_t      now = cfs_time_current();
+
+        spin_lock(&ps->ps_lock);
+
+        if (ps->ps_node_fini != NULL)
+                ps->ps_node_fini(pool, node);
+
+        LASSERT (pool->po_allocated > 0);
+        list_add(node, &pool->po_free_list);
+        pool->po_allocated --;
+
+        list_for_each_entry_safe(pool, tmp, &ps->ps_pool_list, po_list) {
+                /* the first pool is persistent */
+                if (ps->ps_pool_list.next == &pool->po_list)
+                        continue;
+
+                if (pool->po_allocated == 0 &&
+                    cfs_time_aftereq(now, pool->po_deadline))
+                        list_move(&pool->po_list, &zombies);
+        }
+        spin_unlock(&ps->ps_lock);
+
+        if (!list_empty(&zombies))
+                kiblnd_destroy_pool_list(ps, &zombies);
+}
+
+struct list_head *
+kiblnd_pool_alloc_node(kib_poolset_t *ps)
+{
+        struct list_head  *node;
+        kib_pool_t        *pool;
+        int                rc;
+
+ again:
+        spin_lock(&ps->ps_lock);
+        list_for_each_entry(pool, &ps->ps_pool_list, po_list) {
+                if (list_empty(&pool->po_free_list))
+                        continue;
+
+                pool->po_allocated ++;
+                pool->po_deadline = cfs_time_shift(IBLND_POOL_DEADLINE);
+                node = pool->po_free_list.next;
+                list_del(node);
+
+                if (ps->ps_node_init != NULL) {
+                        /* still hold the lock */
+                        ps->ps_node_init(pool, node);
+                }
+                spin_unlock(&ps->ps_lock);
+                return node;
+        }
+
+        /* no available tx pool and ... */
+        if (ps->ps_increasing) {
+                /* another thread is allocating a new pool */
+                spin_unlock(&ps->ps_lock);
+                CDEBUG(D_NET, "Another thread is allocating new "
+                       "%s pool, waiting for her to complete\n",
+                       ps->ps_name);
+                schedule();
+                goto again;
+        }
+
+        if (cfs_time_before(cfs_time_current(), ps->ps_next_retry)) {
+                /* someone failed recently */
+                spin_unlock(&ps->ps_lock);
+                return NULL;
+        }
+
+        ps->ps_increasing = 1;
+        spin_unlock(&ps->ps_lock);
+
+        CDEBUG(D_NET, "%s pool exhausted, allocate new pool\n", ps->ps_name);
+
+        rc = ps->ps_pool_create(ps, ps->ps_pool_size, &pool);
+
+        spin_lock(&ps->ps_lock);
+        ps->ps_increasing = 0;
+        if (rc == 0) {
+                list_add_tail(&pool->po_list, &ps->ps_pool_list);
+        } else {
+                /* retry 10 seconds later */
+                ps->ps_next_retry = cfs_time_shift(10);
+                CERROR("Can't allocate new %s pool because out of memory\n",
+                       ps->ps_name);
+        }
+        spin_unlock(&ps->ps_lock);
+
+        goto again;
+}
+
+void
+kiblnd_pmr_pool_unmap(kib_phys_mr_t *pmr)
+{
+        kib_pmr_pool_t      *ppo = pmr->pmr_pool;
+        struct ib_mr        *mr  = pmr->pmr_mr;
+
+        pmr->pmr_mr = NULL;
+        kiblnd_pool_free_node(&ppo->ppo_pool, &pmr->pmr_list);
+        if (mr != NULL)
+                ib_dereg_mr(mr);
+}
+
+int
+kiblnd_pmr_pool_map(kib_pmr_poolset_t *pps, kib_rdma_desc_t *rd,
+                    __u64 *iova, kib_phys_mr_t **pp_pmr)
+{
+        kib_phys_mr_t       *pmr;
+        struct list_head    *node;
+        int                  rc;
+        int                  i;
+
+        node = kiblnd_pool_alloc_node(&pps->pps_poolset);
+        if (node == NULL) {
+                CERROR("Failed to allocate PMR descriptor\n");
+                return -ENOMEM;
+        }
+
+        pmr = container_of(node, kib_phys_mr_t, pmr_list);
+        for (i = 0; i < rd->rd_nfrags; i ++) {
+                pmr->pmr_ipb[i].addr = rd->rd_frags[i].rf_addr;
+                pmr->pmr_ipb[i].size = rd->rd_frags[i].rf_nob;
+        }
+
+        pmr->pmr_mr = ib_reg_phys_mr(pps->pps_poolset.ps_net->ibn_dev->ibd_pd,
+                                     pmr->pmr_ipb, rd->rd_nfrags,
+                                     IB_ACCESS_LOCAL_WRITE |
+                                     IB_ACCESS_REMOTE_WRITE,
+                                     iova);
+        if (!IS_ERR(pmr->pmr_mr)) {
+                pmr->pmr_iova = *iova;
+                *pp_pmr = pmr;
+                return 0;
+        }
+
+        rc = PTR_ERR(pmr->pmr_mr);
+        CERROR("Failed ib_reg_phys_mr: %d\n", rc);
+
+        pmr->pmr_mr = NULL;
+        kiblnd_pool_free_node(&pmr->pmr_pool->ppo_pool, node);
+
+        return rc;
+}
+
+static void
+kiblnd_destroy_pmr_pool(kib_pool_t *pool)
+{
+        kib_pmr_pool_t *ppo = container_of(pool, kib_pmr_pool_t, ppo_pool);
+        kib_phys_mr_t  *pmr;
+
+        LASSERT (pool->po_allocated == 0);
+
+        while (!list_empty(&pool->po_free_list)) {
+                pmr = list_entry(pool->po_free_list.next,
+                                 kib_phys_mr_t, pmr_list);
+
+                LASSERT (pmr->pmr_mr == NULL);
+                list_del(&pmr->pmr_list);
+
+                if (pmr->pmr_ipb != NULL) {
+                        LIBCFS_FREE(pmr->pmr_ipb,
+                                    IBLND_MAX_RDMA_FRAGS *
+                                    sizeof(struct ib_phys_buf));
+                }
+
+                LIBCFS_FREE(pmr, sizeof(kib_phys_mr_t));
+        }
+
+        kiblnd_fini_pool(pool);
+        LIBCFS_FREE(ppo, sizeof(kib_pmr_pool_t));
+}
+
+static int
+kiblnd_create_pmr_pool(kib_poolset_t *ps, int size, kib_pool_t **pp_po)
+{
+        kib_pmr_pool_t      *ppo;
+        kib_pool_t          *pool;
+        kib_phys_mr_t       *pmr;
+        int                  i;
+
+        LIBCFS_ALLOC(ppo, sizeof(kib_pmr_pool_t));
+        if (ppo == NULL) {
+                CERROR("Failed to allocate PMR pool\n");
+                return -ENOMEM;
+        }
+
+        pool = &ppo->ppo_pool;
+        kiblnd_init_pool(ps, pool, size);
+
+        for (i = 0; i < size; i++) {
+                LIBCFS_ALLOC(pmr, sizeof(kib_phys_mr_t));
+                if (pmr == NULL)
+                        break;
+
+                memset(pmr, 0, sizeof(kib_phys_mr_t));
+                pmr->pmr_pool = ppo;
+                LIBCFS_ALLOC(pmr->pmr_ipb,
+                             IBLND_MAX_RDMA_FRAGS *
+                             sizeof(struct ib_phys_buf));
+                if (pmr->pmr_ipb == NULL)
+                        break;
+
+                list_add(&pmr->pmr_list, &pool->po_free_list);
+        }
+
+        if (i < size) {
+                ps->ps_pool_destroy(pool);
+                return -ENOMEM;
+        }
+
+        *pp_po = pool;
+        return 0;
+}
+
+static void
+kiblnd_destroy_tx_pool(kib_pool_t *pool)
+{
+        kib_tx_pool_t  *tpo = container_of(pool, kib_tx_pool_t, tpo_pool);
+        int             i;
+
+        LASSERT (pool->po_allocated == 0);
+
+        if (tpo->tpo_tx_pages != NULL) {
+                if (tpo->tpo_tx_pages->ibp_device != NULL)
+                        kiblnd_unmap_tx_pool(tpo);
+                kiblnd_free_pages(tpo->tpo_tx_pages);
+        }
+
+        if (tpo->tpo_tx_descs == NULL)
+                goto out;
+
+        for (i = 0; i < pool->po_size; i++) {
+                kib_tx_t *tx = &tpo->tpo_tx_descs[i];
+
+                list_del(&tx->tx_list);
+                if (tx->tx_pages != NULL)
+                        LIBCFS_FREE(tx->tx_pages,
+                                    LNET_MAX_IOV *
+                                    sizeof(*tx->tx_pages));
+                if (tx->tx_frags != NULL)
+                        LIBCFS_FREE(tx->tx_frags,
+                                    IBLND_MAX_RDMA_FRAGS *
+                                            sizeof(*tx->tx_frags));
+                if (tx->tx_wrq != NULL)
+                        LIBCFS_FREE(tx->tx_wrq,
+                                    (1 + IBLND_MAX_RDMA_FRAGS) *
+                                    sizeof(*tx->tx_wrq));
+                if (tx->tx_sge != NULL)
+                        LIBCFS_FREE(tx->tx_sge,
+                                    (1 + IBLND_MAX_RDMA_FRAGS) *
+                                    sizeof(*tx->tx_sge));
+                if (tx->tx_rd != NULL)
+                        LIBCFS_FREE(tx->tx_rd,
+                                    offsetof(kib_rdma_desc_t,
+                                             rd_frags[IBLND_MAX_RDMA_FRAGS]));
+        }
+
+        LIBCFS_FREE(tpo->tpo_tx_descs,
+                    pool->po_size * sizeof(kib_tx_t));
+out:
+        kiblnd_fini_pool(pool);
+        LIBCFS_FREE(tpo, sizeof(kib_tx_pool_t));
+}
+
+static int
+kiblnd_create_tx_pool(kib_poolset_t *ps, int size, kib_pool_t **pp_po)
+{
+        int            i;
+        int            npg;
+        kib_pool_t    *pool;
+        kib_tx_pool_t *tpo;
+
+        LIBCFS_ALLOC(tpo, sizeof(kib_tx_pool_t));
+        if (tpo == NULL) {
+                CERROR("Failed to allocate TX pool\n");
+                return -ENOMEM;
+        }
+
+        pool = &tpo->tpo_pool;
+        kiblnd_init_pool(ps, pool, size);
+        tpo->tpo_tx_descs = NULL;
+        tpo->tpo_tx_pages = NULL;
+
+        npg = (size * IBLND_MSG_SIZE + PAGE_SIZE - 1) / PAGE_SIZE;
+        if (kiblnd_alloc_pages(&tpo->tpo_tx_pages, npg) != 0) {
+                CERROR("Can't allocate tx pages: %d\n", npg);
+                LIBCFS_FREE(tpo, sizeof(kib_tx_pool_t));
+                return -ENOMEM;
+        }
+
+        LIBCFS_ALLOC (tpo->tpo_tx_descs, size * sizeof(kib_tx_t));
+        if (tpo->tpo_tx_descs == NULL) {
+                CERROR("Can't allocate %d tx descriptors\n", size);
+                ps->ps_pool_destroy(pool);
+                return -ENOMEM;
+        }
+
+        memset(tpo->tpo_tx_descs, 0, size * sizeof(kib_tx_t));
+
+        for (i = 0; i < size; i++) {
+                kib_tx_t *tx = &tpo->tpo_tx_descs[i];
+
+                tx->tx_pool = tpo;
+                if (ps->ps_net->ibn_with_fmr){
+                        LIBCFS_ALLOC(tx->tx_pages, LNET_MAX_IOV *
+                                     sizeof(*tx->tx_pages));
+                        if (tx->tx_pages == NULL)
+                                break;
+                }
+
+                LIBCFS_ALLOC(tx->tx_frags,
+                             IBLND_MAX_RDMA_FRAGS *
+                             sizeof(*tx->tx_frags));
+                if (tx->tx_frags == NULL)
+                        break;
+
+                LIBCFS_ALLOC(tx->tx_wrq,
+                             (1 + IBLND_MAX_RDMA_FRAGS) *
+                             sizeof(*tx->tx_wrq));
+                if (tx->tx_wrq == NULL)
+                        break;
+
+                LIBCFS_ALLOC(tx->tx_sge,
+                             (1 + IBLND_MAX_RDMA_FRAGS) *
+                             sizeof(*tx->tx_sge));
+                if (tx->tx_sge == NULL)
+                        break;
+
+                LIBCFS_ALLOC(tx->tx_rd,
+                             offsetof(kib_rdma_desc_t,
+                                      rd_frags[IBLND_MAX_RDMA_FRAGS]));
+                if (tx->tx_rd == NULL)
+                        break;
+        }
+
+        if (i == size) {
+                kiblnd_map_tx_pool(tpo);
+                *pp_po = pool;
+                return 0;
+        }
+
+        ps->ps_pool_destroy(pool);
+        return -ENOMEM;
+}
+
+static void
+kiblnd_tx_init(kib_pool_t *pool, struct list_head *node)
+{
+        kib_tx_poolset_t *tps = container_of(pool->po_owner, kib_tx_poolset_t, tps_poolset);
+        kib_tx_t         *tx  = list_entry(node, kib_tx_t, tx_list);
+
+        tx->tx_cookie = tps->tps_next_tx_cookie ++;
+}
+
+void
+kiblnd_ni_fini_pools(kib_net_t *net)
+{
+        kiblnd_fini_pool_set(&net->ibn_tx_ps.tps_poolset);
+        if (net->ibn_with_fmr)
+                kiblnd_fini_fmr_pool_set(&net->ibn_fmr_ps);
+        else if (net->ibn_with_pmr)
+                kiblnd_fini_pool_set(&net->ibn_pmr_ps.pps_poolset);
+}
+
+int
+kiblnd_net_init_pools(kib_net_t *net)
+{
+        kib_fmr_poolset_t *fps = &net->ibn_fmr_ps;
+        kib_pmr_poolset_t *pps = &net->ibn_pmr_ps;
+        kib_tx_poolset_t  *tps = &net->ibn_tx_ps;
+        int                rc;
+
+        if (*kiblnd_tunables.kib_fmr_pool_size <
+            *kiblnd_tunables.kib_ntx / 4) {
+                CERROR("Can't set fmr pool size (%d) < ntx / 4(%d)\n",
+                       *kiblnd_tunables.kib_fmr_pool_size,
+                       *kiblnd_tunables.kib_ntx / 4);
+                return -EINVAL;
+        }
+
+        if (*kiblnd_tunables.kib_pmr_pool_size <
+            *kiblnd_tunables.kib_ntx / 4) {
+                CERROR("Can't set pmr pool size (%d) < ntx / 4(%d)\n",
+                       *kiblnd_tunables.kib_pmr_pool_size,
+                       *kiblnd_tunables.kib_ntx / 4);
+                return -EINVAL;
+        }
+
+        if (*kiblnd_tunables.kib_map_on_demand > 0 ||
+            net->ibn_dev->ibd_nmrs > 1) { /* premapping can fail if ibd_nmr > 1,
+                                           * so we always create FMR/PMR pool and
+                                           * map-on-demand if premapping failed */
+                rc = kiblnd_init_fmr_pool_set(fps, net);
+                if (rc == 0) {
+                        net->ibn_with_fmr = 1;
+                } else if (rc == -ENOSYS) {
+                        rc = kiblnd_init_pool_set(&pps->pps_poolset, net, "PMR",
+                                                  *kiblnd_tunables.kib_pmr_pool_size,
+                                                  kiblnd_create_pmr_pool,
+                                                  kiblnd_destroy_pmr_pool,
+                                                  NULL, NULL);
+                        if (rc == 0)
+                                net->ibn_with_pmr = 1;
+                }
+                if (rc != 0)
+                        return rc;
+        }
+
+        rc = kiblnd_init_pool_set(&tps->tps_poolset, net, "TX", IBLND_TX_MSGS(),
+                                  kiblnd_create_tx_pool, kiblnd_destroy_tx_pool,
+                                  kiblnd_tx_init, NULL);
+        if (rc == 0)
+                return 0;
+
+        if (net->ibn_with_fmr)
+                kiblnd_fini_fmr_pool_set(fps);
+        else if (net->ibn_with_pmr)
+                kiblnd_fini_pool_set(&pps->pps_poolset);
+
+        return rc;
+}
+
+void
 kiblnd_dev_cleanup(kib_dev_t *ibdev)
 {
         int     i;
@@ -1480,174 +2056,6 @@ kiblnd_dev_cleanup(kib_dev_t *ibdev)
 
         LIBCFS_FREE(ibdev->ibd_mrs, sizeof(*ibdev->ibd_mrs) * ibdev->ibd_nmrs);
         ibdev->ibd_mrs = NULL;
-}
-
-int
-kiblnd_ib_create_fmr_pool(kib_dev_t *ibdev, struct ib_fmr_pool **fmrpp)
-{
-        /* FMR pool for RDMA */
-        struct ib_fmr_pool      *fmrpool;
-        struct ib_fmr_pool_param param = {
-                .max_pages_per_fmr = LNET_MAX_PAYLOAD/PAGE_SIZE,
-                .page_shift        = PAGE_SHIFT,
-                .access            = (IB_ACCESS_LOCAL_WRITE |
-                                      IB_ACCESS_REMOTE_WRITE),
-                .pool_size         = *kiblnd_tunables.kib_fmr_pool_size,
-                .dirty_watermark   = *kiblnd_tunables.kib_fmr_flush_trigger,
-                .flush_function    = NULL,
-                .flush_arg         = NULL,
-                .cache             = *kiblnd_tunables.kib_fmr_cache};
-
-        if (*kiblnd_tunables.kib_fmr_pool_size <
-            *kiblnd_tunables.kib_ntx) {
-                CERROR("Can't set fmr pool size (%d) < ntx(%d)\n",
-                       *kiblnd_tunables.kib_fmr_pool_size,
-                       *kiblnd_tunables.kib_ntx);
-                return -EINVAL;
-        }
-
-        fmrpool = ib_create_fmr_pool(ibdev->ibd_pd, &param);
-        if (IS_ERR(fmrpool))
-                return PTR_ERR(fmrpool);
-
-        *fmrpp = fmrpool;
-
-        return 0;
-}
-
-void
-kiblnd_phys_mr_unmap(kib_net_t *net, kib_phys_mr_t *pmr)
-{
-        kib_phys_mr_pool_t  *pool = net->ibn_pmrpool;
-        struct ib_mr        *mr;
-
-        spin_lock(&pool->ibmp_lock);
-
-        mr = pmr->ibpm_mr;
-
-        list_add(&pmr->ibpm_link, &pool->ibmp_free_list);
-        pool->ibmp_allocated --;
-
-        spin_unlock(&pool->ibmp_lock);
-
-        if (mr != NULL)
-                ib_dereg_mr(mr);
-}
-
-kib_phys_mr_t *
-kiblnd_phys_mr_map(kib_net_t *net, kib_rdma_desc_t *rd,
-                   struct ib_phys_buf *ipb, __u64 *iova)
-{
-        kib_phys_mr_pool_t  *pool  = net->ibn_pmrpool;
-        kib_phys_mr_t       *pmr;
-        int                  i;
-
-        LASSERT (ipb   != NULL);
-
-        spin_lock(&pool->ibmp_lock);
-        if (list_empty(&pool->ibmp_free_list)) {
-                spin_unlock(&pool->ibmp_lock);
-                CERROR("pre-allocated MRs is not enough\n");
-
-                return NULL;
-        }
-
-        pmr = list_entry(pool->ibmp_free_list.next,
-                           kib_phys_mr_t, ibpm_link);
-        list_del_init(&pmr->ibpm_link);
-        pool->ibmp_allocated ++;
-
-        spin_unlock(&pool->ibmp_lock);
-
-        for (i = 0; i < rd->rd_nfrags; i ++) {
-                ipb[i].addr = rd->rd_frags[i].rf_addr;
-                ipb[i].size = rd->rd_frags[i].rf_nob;
-        }
-
-        pmr->ibpm_mr = ib_reg_phys_mr(net->ibn_dev->ibd_pd, ipb,
-                                      rd->rd_nfrags,
-                                      IB_ACCESS_LOCAL_WRITE |
-                                      IB_ACCESS_REMOTE_WRITE,
-                                      iova);
-        if (!IS_ERR(pmr->ibpm_mr)) {
-                pmr->ibpm_iova = *iova;
-                return pmr;
-        }
-
-        CERROR("Failed ib_reg_phys_mr: %ld\n", PTR_ERR(pmr->ibpm_mr));
-        pmr->ibpm_mr = NULL;
-
-        spin_lock(&pool->ibmp_lock);
-
-        list_add(&pmr->ibpm_link, &pool->ibmp_free_list);
-        pool->ibmp_allocated --;
-
-        spin_unlock(&pool->ibmp_lock);
-
-        return NULL;
-}
-
-void
-kiblnd_destroy_pmr_pool(kib_phys_mr_pool_t *pool)
-{
-        kib_phys_mr_t *pmr;
-
-        LASSERT (pool->ibmp_allocated == 0);
-
-        while (!list_empty(&pool->ibmp_free_list)) {
-                pmr = list_entry(pool->ibmp_free_list.next,
-                                 kib_phys_mr_t, ibpm_link);
-
-                LASSERT (pmr->ibpm_mr == NULL);
-
-                list_del(&pmr->ibpm_link);
-
-                LIBCFS_FREE(pmr, sizeof(kib_phys_mr_t));
-        }
-
-        LIBCFS_FREE(pool, sizeof(kib_phys_mr_pool_t));
-}
-
-int
-kiblnd_create_pmr_pool(kib_dev_t *ibdev, kib_phys_mr_pool_t **poolpp)
-{
-        kib_phys_mr_pool_t  *pool;
-        kib_phys_mr_t       *pmr;
-        int                  i;
-
-        if (*kiblnd_tunables.kib_pmr_pool_size <
-            *kiblnd_tunables.kib_ntx) {
-                CERROR("Can't set pmr pool size (%d) < ntx(%d)\n",
-                       *kiblnd_tunables.kib_pmr_pool_size,
-                       *kiblnd_tunables.kib_ntx);
-                return -EINVAL;
-        }
-
-        LIBCFS_ALLOC(pool, sizeof(kib_phys_mr_pool_t));
-        if (pool == NULL)
-                return -ENOMEM;
-
-        spin_lock_init(&pool->ibmp_lock);
-
-        pool->ibmp_allocated     = 0;
-        CFS_INIT_LIST_HEAD(&pool->ibmp_free_list);
-
-        for (i = 0; i < *kiblnd_tunables.kib_pmr_pool_size; i++) {
-                LIBCFS_ALLOC(pmr, sizeof(kib_phys_mr_t));
-
-                if (pmr == NULL) {
-                        kiblnd_destroy_pmr_pool(pool);
-                        return -ENOMEM;
-                }
-
-                memset(pmr, 0, sizeof(kib_phys_mr_t));
-
-                list_add(&pmr->ibpm_link, &pool->ibmp_free_list);
-        }
-
-        *poolpp = pool;
-
-        return 0;
 }
 
 static int
@@ -1907,7 +2315,7 @@ kiblnd_shutdown (lnet_ni_t *ni)
                         cfs_pause(cfs_time_seconds(1));
                 }
 
-                kiblnd_unmap_tx_descs(ni);
+                kiblnd_ni_fini_pools(net);
 
                 LASSERT (net->ibn_dev->ibd_nnets > 0);
                 net->ibn_dev->ibd_nnets--;
@@ -1917,11 +2325,6 @@ kiblnd_shutdown (lnet_ni_t *ni)
         case IBLND_INIT_NOTHING:
                 LASSERT (atomic_read(&net->ibn_nconns) == 0);
 
-                if (net->ibn_fmrpool != NULL)
-                        ib_destroy_fmr_pool(net->ibn_fmrpool);
-                if (net->ibn_pmrpool != NULL)
-                        kiblnd_destroy_pmr_pool(net->ibn_pmrpool);
-
                 if (net->ibn_dev != NULL &&
                     net->ibn_dev->ibd_nnets == 0)
                         kiblnd_destroy_dev(net->ibn_dev);
@@ -1929,14 +2332,12 @@ kiblnd_shutdown (lnet_ni_t *ni)
                 break;
         }
 
-        kiblnd_free_tx_descs(ni);
-
         CDEBUG(D_MALLOC, "after LND net cleanup: kmem %d\n",
                atomic_read(&libcfs_kmemory));
 
         net->ibn_init = IBLND_INIT_NOTHING;
         ni->ni_data = NULL;
-        
+
         LIBCFS_FREE(net, sizeof(*net));
 
 out:
@@ -2042,9 +2443,6 @@ kiblnd_startup (lnet_ni_t *ni)
         ni->ni_maxtxcredits   = *kiblnd_tunables.kib_credits;
         ni->ni_peertxcredits  = *kiblnd_tunables.kib_peertxcredits;
         ni->ni_peerrtrcredits = *kiblnd_tunables.kib_peerrtrcredits;
-
-        spin_lock_init(&net->ibn_tx_lock);
-        INIT_LIST_HEAD(&net->ibn_idle_txs);
 
         if (ni->ni_interfaces[0] != NULL) {
                 /* Use the IPoIB interface specified in 'networks=' */
@@ -2154,34 +2552,11 @@ kiblnd_startup (lnet_ni_t *ni)
         ni->ni_nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), ibdev->ibd_ifip);
         net->ibn_dev = ibdev;
 
-        if (*kiblnd_tunables.kib_map_on_demand > 0 ||
-            ibdev->ibd_nmrs > 1) { /* premapping can fail if ibd_nmr > 1,
-                                    * so we always create FMR/PMR pool and
-                                    * map-on-demand if premapping failed */
-                /* Map on demand */
-                rc = kiblnd_ib_create_fmr_pool(ibdev, &net->ibn_fmrpool);
-                if (rc == -ENOSYS) {
-                        CDEBUG(D_CONSOLE, "No FMR, creating physical mapping\n");
-
-                        rc = kiblnd_create_pmr_pool(ibdev, &net->ibn_pmrpool);
-                }
-
-                if (rc != 0) {
-                        CERROR("Can't create FMR or physical mapping pool: %d, "
-                               "please disable map_on_demand and retry\n", rc);
-                        goto failed;
-                }
-
-        }
-
-        rc = kiblnd_alloc_tx_descs(ni);
+        rc = kiblnd_net_init_pools(net);
         if (rc != 0) {
-                CERROR("Can't allocate tx descs\n");
+                CERROR("Failed to initialize NI pools: %d\n", rc);
                 goto failed;
         }
-
-        kiblnd_map_tx_descs(ni);
-
         ibdev->ibd_nnets++;
         net->ibn_init = IBLND_INIT_ALL;
 

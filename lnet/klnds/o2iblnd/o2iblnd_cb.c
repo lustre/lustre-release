@@ -53,6 +53,7 @@ kiblnd_tx_done (lnet_ni_t *ni, kib_tx_t *tx)
         LASSERT (!tx->tx_queued);               /* mustn't be queued for sending */
         LASSERT (tx->tx_sending == 0);          /* mustn't be awaiting sent callback */
         LASSERT (!tx->tx_waiting);              /* mustn't be awaiting peer response */
+        LASSERT (tx->tx_pool != NULL);
 
         kiblnd_unmap_tx(ni, tx);
 
@@ -71,11 +72,7 @@ kiblnd_tx_done (lnet_ni_t *ni, kib_tx_t *tx)
         tx->tx_nwrq = 0;
         tx->tx_status = 0;
 
-        spin_lock(&net->ibn_tx_lock);
-
-        list_add(&tx->tx_list, &net->ibn_idle_txs);
-
-        spin_unlock(&net->ibn_tx_lock);
+        kiblnd_pool_free_node(&tx->tx_pool->tpo_pool, &tx->tx_list);
 
         /* delay finalize until my descs have been freed */
         for (i = 0; i < 2; i++) {
@@ -105,27 +102,14 @@ kiblnd_txlist_done (lnet_ni_t *ni, struct list_head *txlist, int status)
 kib_tx_t *
 kiblnd_get_idle_tx (lnet_ni_t *ni)
 {
-        kib_net_t     *net = ni->ni_data;
-        kib_tx_t      *tx;
+        kib_net_t        *net = (kib_net_t *)ni->ni_data;
+        struct list_head *node;
+        kib_tx_t         *tx;
 
-        LASSERT (net != NULL);
-
-        spin_lock(&net->ibn_tx_lock);
-
-        if (list_empty(&net->ibn_idle_txs)) {
-                spin_unlock(&net->ibn_tx_lock);
+        node = kiblnd_pool_alloc_node(&net->ibn_tx_ps.tps_poolset);
+        if (node == NULL)
                 return NULL;
-        }
-
-        tx = list_entry(net->ibn_idle_txs.next, kib_tx_t, tx_list);
-        list_del(&tx->tx_list);
-
-        /* Allocate a new completion cookie.  It might not be needed,
-         * but we've got a lock right now and we're unlikely to
-         * wrap... */
-        tx->tx_cookie = net->ibn_tx_next_cookie++;
-
-        spin_unlock(&net->ibn_tx_lock);
+        tx = container_of(node, kib_tx_t, tx_list);
 
         LASSERT (tx->tx_nwrq == 0);
         LASSERT (!tx->tx_queued);
@@ -135,7 +119,7 @@ kiblnd_get_idle_tx (lnet_ni_t *ni)
         LASSERT (tx->tx_conn == NULL);
         LASSERT (tx->tx_lntmsg[0] == NULL);
         LASSERT (tx->tx_lntmsg[1] == NULL);
-        LASSERT (tx->tx_u.fmr == NULL);
+        LASSERT (tx->tx_u.pmr == NULL);
         LASSERT (tx->tx_nfrags == 0);
 
         return tx;
@@ -548,33 +532,14 @@ kiblnd_kvaddr_to_page (unsigned long vaddr)
         return page;
 }
 
-static void
-kiblnd_fmr_unmap_tx(kib_net_t *net, kib_tx_t *tx)
-{
-        int     rc;
-
-        if (tx->tx_u.fmr == NULL)
-                return;
-
-        rc = ib_fmr_pool_unmap(tx->tx_u.fmr);
-        LASSERT (rc == 0);
-
-        if (tx->tx_status != 0) {
-                rc = ib_flush_fmr_pool(net->ibn_fmrpool);
-                LASSERT (rc == 0);
-        }
-
-        tx->tx_u.fmr = NULL;
-}
-
 static int
 kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, int nob)
 {
-        struct ib_pool_fmr *fmr;
         kib_dev_t          *ibdev  = net->ibn_dev;
         __u64              *pages  = tx->tx_pages;
         int                 npages;
         int                 size;
+        int                 rc;
         int                 i;
 
         for (i = 0, npages = 0; i < rd->rd_nfrags; i++) {
@@ -585,58 +550,44 @@ kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, int nob)
                 }
         }
 
-        fmr = ib_fmr_pool_map_phys(net->ibn_fmrpool, pages, npages, 0);
-
-        if (IS_ERR(fmr)) {
-                CERROR ("Can't map %d pages: %ld\n", npages, PTR_ERR(fmr));
-                return PTR_ERR(fmr);
+        rc = kiblnd_fmr_pool_map(&net->ibn_fmr_ps, pages, npages, 0, &tx->tx_u.fmr);
+        if (rc != 0) {
+                CERROR ("Can't map %d pages: %d\n", npages, rc);
+                return rc;
         }
 
         /* If rd is not tx_rd, it's going to get sent to a peer, who will need
          * the rkey */
-        rd->rd_key = (rd != tx->tx_rd) ? fmr->fmr->rkey :
-                                         fmr->fmr->lkey;
+        rd->rd_key = (rd != tx->tx_rd) ? tx->tx_u.fmr.fmr_pfmr->fmr->rkey :
+                                         tx->tx_u.fmr.fmr_pfmr->fmr->lkey;
         rd->rd_frags[0].rf_addr &= ~ibdev->ibd_page_mask;
         rd->rd_frags[0].rf_nob   = nob;
         rd->rd_nfrags = 1;
 
-        tx->tx_u.fmr = fmr;
-
         return 0;
-}
-
-static void
-kiblnd_pmr_unmap_tx(kib_net_t *net, kib_tx_t *tx)
-{
-        if (tx->tx_u.pmr == NULL)
-                return;
-
-        kiblnd_phys_mr_unmap(net, tx->tx_u.pmr);
-
-        tx->tx_u.pmr = NULL;
 }
 
 static int
 kiblnd_pmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, int nob)
 {
-        kib_phys_mr_t      *pmr;
-        __u64               iova;
+        __u64   iova;
+        int     rc;
 
         iova = rd->rd_frags[0].rf_addr & ~net->ibn_dev->ibd_page_mask;
 
-        pmr = kiblnd_phys_mr_map(net, rd, tx->tx_ipb, &iova);
-        if (pmr == NULL) {
-                CERROR("Failed to create MR by phybuf\n");
-                return -ENOMEM;
+        rc = kiblnd_pmr_pool_map(&net->ibn_pmr_ps, rd, &iova, &tx->tx_u.pmr);
+        if (rc != 0) {
+                CERROR("Failed to create MR by phybuf: %d\n", rc);
+                return rc;
         }
 
-        rd->rd_key = (rd != tx->tx_rd) ? pmr->ibpm_mr->rkey :
-                                         pmr->ibpm_mr->lkey;
+        /* If rd is not tx_rd, it's going to get sent to a peer, who will need
+         * the rkey */
+        rd->rd_key = (rd != tx->tx_rd) ? tx->tx_u.pmr->pmr_mr->rkey :
+                                         tx->tx_u.pmr->pmr_mr->lkey;
         rd->rd_nfrags = 1;
         rd->rd_frags[0].rf_addr = iova;
         rd->rd_frags[0].rf_nob  = nob;
-
-        tx->tx_u.pmr = pmr;
 
         return 0;
 }
@@ -648,10 +599,13 @@ kiblnd_unmap_tx(lnet_ni_t *ni, kib_tx_t *tx)
 
         LASSERT (net != NULL);
 
-        if (net->ibn_fmrpool != NULL)
-                kiblnd_fmr_unmap_tx(net, tx);
-        else if (net->ibn_pmrpool != NULL)
-                kiblnd_pmr_unmap_tx(net, tx);
+        if (net->ibn_with_fmr && tx->tx_u.fmr.fmr_pfmr != NULL) {
+                kiblnd_fmr_pool_unmap(&tx->tx_u.fmr, tx->tx_status);
+                tx->tx_u.fmr.fmr_pfmr = NULL;
+        } else if (net->ibn_with_pmr && tx->tx_u.pmr != NULL) {
+                kiblnd_pmr_pool_unmap(tx->tx_u.pmr);
+                tx->tx_u.pmr = NULL;
+        }
 
         if (tx->tx_nfrags != 0) {
                 kiblnd_dma_unmap_sg(net->ibn_dev->ibd_cmid->device,
@@ -694,10 +648,9 @@ kiblnd_map_tx(lnet_ni_t *ni, kib_tx_t *tx,
                 return 0;
         }
 
-        if (net->ibn_fmrpool != NULL)
+        if (net->ibn_with_fmr)
                 return kiblnd_fmr_map_tx(net, tx, rd, nob);
-
-        if (net->ibn_pmrpool != NULL);
+        else if (net->ibn_with_pmr)
                 return kiblnd_pmr_map_tx(net, tx, rd, nob);
 
         return -EINVAL;

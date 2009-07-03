@@ -106,7 +106,7 @@ CFS_MODULE_PARM(map_on_demand, "i", int, 0444,
 
 static int fmr_pool_size = 512;
 CFS_MODULE_PARM(fmr_pool_size, "i", int, 0444,
-                "size of the fmr pool (>= ntx)");
+                "size of the fmr pool (>= ntx / 4)");
 
 static int fmr_flush_trigger = 384;
 CFS_MODULE_PARM(fmr_flush_trigger, "i", int, 0444,
@@ -417,13 +417,6 @@ kiblnd_sysctl_fini (void)
 int
 kiblnd_tunables_init (void)
 {
-        if (*kiblnd_tunables.kib_credits > *kiblnd_tunables.kib_ntx) {
-                CERROR("Can't set credits(%d) > ntx(%d)\n",
-                       *kiblnd_tunables.kib_credits,
-                       *kiblnd_tunables.kib_ntx);
-                return -EINVAL;
-        }
-
         if (kiblnd_translate_mtu(*kiblnd_tunables.kib_ib_mtu) < 0) {
                 CERROR("Invalid ib_mtu %d, expected 256/512/1024/2048/4096\n",
                        *kiblnd_tunables.kib_ib_mtu);
