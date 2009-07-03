@@ -13,6 +13,12 @@ tbd  Sun Microsystems, Inc.
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
+
+Severity   : normal
+Bugzilla   : 19507
+Description: Temporarily disable grant shrink.
+Details    : Disable the feature for debugging.
+
 Severity   : normal 
 Bugzilla   : 18624 
 Description: Unable to run several mkfs.lustre on loop devices at the same
