@@ -6001,8 +6001,8 @@ run_test 200c "Set pool on a directory ================================="
 
 test_200d() {
         test_pools || return 0
-	res=$($GETSTRIPE $POOL_DIR | grep pool: | cut -f8 -d " ")
-	[ "$res" = $POOL ] || error "Pool on $POOL_DIR is not $POOL"
+	res=$($GETSTRIPE --pool $POOL_DIR | awk '/^pool:/ {print $2}')
+	[ "$res" = $POOL ] || error "Pool on $POOL_DIR is $res, not $POOL"
 }
 run_test 200d "Check pool on a directory ==============================="
 
