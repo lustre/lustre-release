@@ -290,6 +290,7 @@ test_13() {
     wait $pid || return 1
 
     $CHECKSTAT -s 1 -p 0 $DIR/$tfile || return 2
+    rm $DIR/$tfile || return 4
     return 0
 }
 run_test 13 "open chmod 0 |x| write close"
