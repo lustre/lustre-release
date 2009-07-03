@@ -177,8 +177,6 @@ kiblnd_concurrent_sends_v1(void)
 
 /* TX messages (shared by all connections) */
 #define IBLND_TX_MSGS()            (*kiblnd_tunables.kib_ntx)
-#define IBLND_TX_MSG_BYTES()        (IBLND_TX_MSGS() * IBLND_MSG_SIZE)
-#define IBLND_TX_MSG_PAGES()       ((IBLND_TX_MSG_BYTES() + PAGE_SIZE - 1) / PAGE_SIZE)
 
 /* RX messages (per connection) */
 #define IBLND_RX_MSGS(v)            (IBLND_MSG_QUEUE_SIZE(v) * 2 + IBLND_OOB_MSGS(v))
@@ -189,26 +187,6 @@ kiblnd_concurrent_sends_v1(void)
 #define IBLND_RECV_WRS(v)            IBLND_RX_MSGS(v)
 #define IBLND_SEND_WRS(v)          ((IBLND_RDMA_FRAGS(v) + 1) * IBLND_CONCURRENT_SENDS(v))
 #define IBLND_CQ_ENTRIES(v)         (IBLND_RECV_WRS(v) + IBLND_SEND_WRS(v))
-
-typedef struct
-{
-        struct ib_device *ibp_device;           /* device for mapping */
-        int               ibp_npages;           /* # pages */
-        struct page      *ibp_pages[0];
-} kib_pages_t;
-
-typedef struct {
-        spinlock_t              ibmp_lock;      /* serialize */
-        int                     ibmp_allocated; /* MR in use */
-        struct list_head        ibmp_free_list; /* pre-allocated MR */
-} kib_phys_mr_pool_t;
-
-typedef struct {
-        struct list_head        ibpm_link;      /* link node */
-        struct ib_mr           *ibpm_mr;        /* MR */
-        __u64                   ibpm_iova;      /* Virtual I/O address */
-        int                     ibpm_refcount;  /* reference count */
-} kib_phys_mr_t;
 
 typedef struct
 {
@@ -229,23 +207,121 @@ typedef struct
         struct ib_mr       **ibd_mrs;           /* MR for non RDMA I/O */
 } kib_dev_t;
 
+#define IBLND_POOL_DEADLINE     300             /* # of seconds to keep pool alive */
+
 typedef struct
+{
+        struct ib_device       *ibp_device;             /* device for mapping */
+        int                     ibp_npages;             /* # pages */
+        struct page            *ibp_pages[0];           /* page array */
+} kib_pages_t;
+
+struct kib_pmr_pool;
+
+typedef struct {
+        struct list_head        pmr_list;               /* chain node */
+        struct ib_phys_buf     *pmr_ipb;                /* physical buffer */
+        struct ib_mr           *pmr_mr;                 /* IB MR */
+        struct kib_pmr_pool    *pmr_pool;               /* owner of this MR */
+        __u64                   pmr_iova;               /* Virtual I/O address */
+        int                     pmr_refcount;           /* reference count */
+} kib_phys_mr_t;
+
+struct kib_pool;
+struct kib_poolset;
+
+typedef int  (*kib_ps_pool_create_t)(struct kib_poolset *ps, int inc, struct kib_pool **pp_po);
+typedef void (*kib_ps_pool_destroy_t)(struct kib_pool *po);
+typedef void (*kib_ps_node_init_t)(struct kib_pool *po, struct list_head *node);
+typedef void (*kib_ps_node_fini_t)(struct kib_pool *po, struct list_head *node);
+
+struct kib_net;
+
+#define IBLND_POOL_NAME_LEN     32
+
+typedef struct kib_poolset
+{
+        spinlock_t              ps_lock;                /* serialize */
+        struct kib_net         *ps_net;                 /* network it belongs to */
+        char                    ps_name[IBLND_POOL_NAME_LEN]; /* pool set name */
+        struct list_head        ps_pool_list;           /* list of pools */
+        cfs_time_t              ps_next_retry;          /* time stamp for retry if failed to allocate */
+        int                     ps_increasing;          /* is allocating new pool */
+        int                     ps_pool_size;           /* new pool size */
+
+        kib_ps_pool_create_t    ps_pool_create;         /* create a new pool */
+        kib_ps_pool_destroy_t   ps_pool_destroy;        /* destroy a pool */
+        kib_ps_node_init_t      ps_node_init;           /* initialize new allocated node */
+        kib_ps_node_fini_t      ps_node_fini;           /* finalize node */
+} kib_poolset_t;
+
+typedef struct kib_pool
+{
+        struct list_head        po_list;                /* chain on pool list */
+        struct list_head        po_free_list;           /* pre-allocated node */
+        kib_poolset_t          *po_owner;               /* pool_set of this pool */
+        cfs_time_t              po_deadline;            /* deadline of this pool */
+        int                     po_allocated;           /* # of elements in use */
+        int                     po_size;                /* # of pre-allocated elements */
+} kib_pool_t;
+
+typedef struct {
+        kib_poolset_t           tps_poolset;            /* pool-set */
+        __u64                   tps_next_tx_cookie;     /* cookie of TX */
+} kib_tx_poolset_t;
+
+typedef struct {
+        kib_pool_t              tpo_pool;               /* pool */
+        struct kib_tx          *tpo_tx_descs;           /* all the tx descriptors */
+        kib_pages_t            *tpo_tx_pages;           /* premapped tx msg pages */
+} kib_tx_pool_t;
+
+typedef struct {
+        kib_poolset_t           pps_poolset;            /* pool-set */
+} kib_pmr_poolset_t;
+
+typedef struct kib_pmr_pool {
+        kib_pool_t              ppo_pool;               /* pool */
+} kib_pmr_pool_t;
+
+typedef struct
+{
+        spinlock_t              fps_lock;               /* serialize */
+        struct kib_net         *fps_net;                /* IB network */
+        struct list_head        fps_pool_list;          /* FMR pool list */
+        __u64                   fps_version;            /* validity stamp */
+        int                     fps_increasing;         /* is allocating new pool */
+        cfs_time_t              fps_next_retry;         /* time stamp for retry if failed to allocate */
+} kib_fmr_poolset_t;
+
+typedef struct
+{
+        struct list_head        fpo_list;               /* chain on pool list */
+        kib_fmr_poolset_t      *fpo_owner;              /* owner of this pool */
+        struct ib_fmr_pool     *fpo_fmr_pool;           /* IB FMR pool */
+        cfs_time_t              fpo_deadline;           /* deadline of this pool */
+        int                     fpo_map_count;          /* # of mapped FMR */
+} kib_fmr_pool_t;
+
+typedef struct {
+        struct ib_pool_fmr     *fmr_pfmr;               /* IB pool fmr */
+        kib_fmr_pool_t         *fmr_pool;               /* pool of FMR */
+} kib_fmr_t;
+
+typedef struct kib_net
 {
         __u64                ibn_incarnation;   /* my epoch */
         int                  ibn_init;          /* initialisation state */
         int                  ibn_shutdown;      /* shutting down? */
+        unsigned int         ibn_with_fmr:1;    /* FMR? */
+        unsigned int         ibn_with_pmr:1;    /* PMR? */
 
         atomic_t             ibn_npeers;        /* # peers extant */
         atomic_t             ibn_nconns;        /* # connections extant */
 
-        __u64                ibn_tx_next_cookie; /* RDMA completion cookie */
-        struct kib_tx       *ibn_tx_descs;      /* all the tx descriptors */
-        kib_pages_t         *ibn_tx_pages;      /* premapped tx msg pages */
-        struct list_head     ibn_idle_txs;      /* idle tx descriptors */
-        spinlock_t           ibn_tx_lock;       /* serialise */
-
-        struct ib_fmr_pool  *ibn_fmrpool;       /* FMR pool for RDMA I/O */
-        kib_phys_mr_pool_t  *ibn_pmrpool;       /* Physical MR pool for RDMA I/O */
+        kib_tx_poolset_t     ibn_tx_ps;         /* tx pool-set */
+        kib_fmr_poolset_t    ibn_fmr_ps;        /* fmr pool-set */
+        kib_pmr_poolset_t    ibn_pmr_ps;        /* pmr pool-set */
 
         kib_dev_t           *ibn_dev;           /* underlying IB device */
 } kib_net_t;
@@ -420,10 +496,11 @@ typedef struct kib_rx                           /* receive message */
 typedef struct kib_tx                           /* transmit message */
 {
         struct list_head          tx_list;      /* queue on idle_txs ibc_tx_queue etc. */
+        kib_tx_pool_t            *tx_pool;      /* pool I'm from */
         struct kib_conn          *tx_conn;      /* owning conn */
-        int                       tx_sending;   /* # tx callbacks outstanding */
-        int                       tx_queued;    /* queued for sending */
-        int                       tx_waiting;   /* waiting for peer */
+        short                     tx_sending;   /* # tx callbacks outstanding */
+        short                     tx_queued;    /* queued for sending */
+        short                     tx_waiting;   /* waiting for peer */
         int                       tx_status;    /* LNET completion status */
         unsigned long             tx_deadline;  /* completion deadline */
         __u64                     tx_cookie;    /* completion cookie */
@@ -437,11 +514,10 @@ typedef struct kib_tx                           /* transmit message */
         kib_rdma_desc_t          *tx_rd;        /* rdma descriptor */
         int                       tx_nfrags;    /* # entries in... */
         struct scatterlist       *tx_frags;     /* dma_map_sg descriptor */
-        struct ib_phys_buf       *tx_ipb;       /* physical buffer (for iWARP) */
         __u64                    *tx_pages;     /* rdma phys page addrs */
         union {
-                kib_phys_mr_t      *pmr;         /* MR for physical buffer */
-                struct ib_pool_fmr *fmr;         /* rdma mapping (mapped if != NULL) */
+                kib_phys_mr_t      *pmr;        /* MR for physical buffer */
+                kib_fmr_t           fmr;        /* FMR */
         }                         tx_u;
         int                       tx_dmadir;    /* dma direction */
 } kib_tx_t;
@@ -852,14 +928,19 @@ struct ib_mr *kiblnd_find_dma_mr(kib_net_t *net,
                                  __u64 addr, __u64 size);
 void kiblnd_map_rx_descs(kib_conn_t *conn);
 void kiblnd_unmap_rx_descs(kib_conn_t *conn);
-void kiblnd_map_tx_descs (lnet_ni_t *ni);
-void kiblnd_unmap_tx_descs(lnet_ni_t *ni);
 int kiblnd_map_tx(lnet_ni_t *ni, kib_tx_t *tx,
                   kib_rdma_desc_t *rd, int nfrags);
 void kiblnd_unmap_tx(lnet_ni_t *ni, kib_tx_t *tx);
-kib_phys_mr_t *kiblnd_phys_mr_map(kib_net_t *net, kib_rdma_desc_t *rd,
-                                  struct ib_phys_buf *ipb, __u64 *iova);
-void kiblnd_phys_mr_unmap(kib_net_t *net, kib_phys_mr_t *pmr);
+void kiblnd_pool_free_node(kib_pool_t *pool, struct list_head *node);
+struct list_head *kiblnd_pool_alloc_node(kib_poolset_t *ps);
+
+int  kiblnd_fmr_pool_map(kib_fmr_poolset_t *fps, __u64 *pages,
+                         int npages, __u64 iov, kib_fmr_t *fmr);
+void kiblnd_fmr_pool_unmap(kib_fmr_t *fmr, int status);
+
+int  kiblnd_pmr_pool_map(kib_pmr_poolset_t *pps, kib_rdma_desc_t *rd,
+                         __u64 *iova, kib_phys_mr_t **pp_pmr);
+void kiblnd_pmr_pool_unmap(kib_phys_mr_t *pmr);
 
 int  kiblnd_startup (lnet_ni_t *ni);
 void kiblnd_shutdown (lnet_ni_t *ni);
