@@ -263,6 +263,8 @@ void libcfs_debug_dumpstack(struct task_struct *tsk)
 #elif defined(HAVE_DUMP_TRACE)
         /* dump_stack() */
         /* show_trace() */
+        if (tsk == NULL)
+                tsk = current;
 	printk("Pid: %d, comm: %.20s\n", tsk->pid, tsk->comm);
         /* show_trace_log_lvl() */
 	printk("\nCall Trace:\n");
