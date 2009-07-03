@@ -71,7 +71,8 @@ SHOW_QUOTA_USER="$LFS quota -v -u $TSTUSR $DIR"
 SHOW_QUOTA_USER2="$LFS quota -v -u $TSTUSR2 $DIR"
 SHOW_QUOTA_GROUP="$LFS quota -v -g $TSTUSR $DIR"
 SHOW_QUOTA_GROUP2="$LFS quota -v -g $TSTUSR2 $DIR"
-SHOW_QUOTA_INFO="$LFS quota -t -u $DIR; $LFS quota -t -g $DIR"
+SHOW_QUOTA_INFO_USER="$LFS quota -t -u $DIR"
+SHOW_QUOTA_INFO_GROUP="$LFS quota -t -g $DIR"
 
 # control the time of tests
 cycle=30
@@ -465,7 +466,8 @@ test_block_soft() {
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
-	$SHOW_QUOTA_INFO
+	$SHOW_QUOTA_INFO_USER
+	$SHOW_QUOTA_INFO_GROUP
 
 	echo "    Write before timer goes off"
 	$RUNDD count=$BUNIT_SZ seek=$OFFSET || \
@@ -479,7 +481,8 @@ test_block_soft() {
 
         $SHOW_QUOTA_USER
         $SHOW_QUOTA_GROUP
-        $SHOW_QUOTA_INFO
+        $SHOW_QUOTA_INFO_USER
+        $SHOW_QUOTA_INFO_GROUP
 
 	echo "    Write after timer goes off"
 	# maybe cache write, ignore.
@@ -491,7 +494,8 @@ test_block_soft() {
 
         $SHOW_QUOTA_USER
         $SHOW_QUOTA_GROUP
-        $SHOW_QUOTA_INFO
+        $SHOW_QUOTA_INFO_USER
+        $SHOW_QUOTA_INFO_GROUP
 
 	echo "    Unlink file to stop timer"
 	rm -f $TESTFILE
@@ -500,7 +504,8 @@ test_block_soft() {
 
         $SHOW_QUOTA_USER
         $SHOW_QUOTA_GROUP
-        $SHOW_QUOTA_INFO
+        $SHOW_QUOTA_INFO_USER
+        $SHOW_QUOTA_INFO_GROUP
 
 	echo "    Write ..."
 	$RUNDD count=$BUNIT_SZ || quota_error a $TSTUSR "write failure, but expect success"
@@ -570,7 +575,8 @@ test_file_soft() {
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
-	$SHOW_QUOTA_INFO
+	$SHOW_QUOTA_INFO_USER
+	$SHOW_QUOTA_INFO_GROUP
 
 	echo "    Create file after timer goes off"
 	# the least of inode qunit is 2, so there are at most 3(qunit:2+qtune:1)
@@ -583,7 +589,8 @@ test_file_soft() {
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
-	$SHOW_QUOTA_INFO
+	$SHOW_QUOTA_INFO_USER
+	$SHOW_QUOTA_INFO_GROUP
 
 	echo "    Unlink files to stop timer"
 	find `dirname $TESTFILE` -name "`basename ${TESTFILE}`*" | xargs rm -f
