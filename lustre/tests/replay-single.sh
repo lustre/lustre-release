@@ -1916,17 +1916,19 @@ run_test 73c "open(O_CREAT), unlink, replay, reconnect at last_replay, close"
 
 # bug 18554
 test_74() {
+    local clients=${CLIENTS:-$HOSTNAME}
+
     stop ost1
-    zconf_umount_clients $CLIENTS $MOUNT
+    zconf_umount_clients $clients $MOUNT
     facet_failover $SINGLEMDS
-    zconf_mount_clients $CLIENTS $MOUNT
+    zconf_mount_clients $clients $MOUNT
     mount_facet ost1
     touch $DIR/$tfile || return 1
     rm $DIR/$tfile || return 2
     client_df || error "df failed: $?"
     return 0
 }
-run_test 74 "Ensure applications don't fail waiting for OST reocvery"
+run_test 74 "Ensure applications don't fail waiting for OST recovery"
 
 test_80a() {
     [ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
