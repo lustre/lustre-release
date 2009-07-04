@@ -897,7 +897,7 @@ static void lov_dump_user_lmm_join(struct lov_user_md_v1 *lum, char *path,
                              lumj->lmm_extent_count);
         }
 
-        if (body && !(header && VERBOSE_ALL)) {
+        if (body) {
                 unsigned long long start = -1, end = 0;
                 if (!quiet && obdstripe == 1)
                         llapi_printf(LLAPI_MSG_NORMAL,
@@ -974,7 +974,7 @@ static void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
                 lov_dump_user_lmm_header(lum, NULL, is_dir, header, quiet,
                                          pool_name);
 
-        if (body && !(header && VERBOSE_ALL)) {
+        if (body) {
                 if ((!quiet) && (obdstripe == 1))
                         llapi_printf(LLAPI_MSG_NORMAL,
                                      "\tobdidx\t\t objid\t\tobjid\t\t group\n");
