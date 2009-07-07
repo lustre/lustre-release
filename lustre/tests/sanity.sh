@@ -5962,7 +5962,14 @@ test_132() { #1028, SOM
         som_mode_switch $som1 $gl1 $gl2
 
         som2=$(do_facet $mymds "$LCTL get_param mdt.*.som" |  awk -F= ' {print $2}' | head -n 1)
-        [ $som1 != $som2 ] || error "som is still "$som2
+        if [ $som1 == $som2 ]; then
+            error "som is still "$som2
+            if [ x$som2 = x"enabled" ]; then
+                som2="disabled"
+            else
+                som2="enabled"
+            fi
+        fi
 
         gl1=$(get_ost_param "ldlm_glimpse_enqueue")
         stat $DIR/$tfile >/dev/null

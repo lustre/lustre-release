@@ -854,7 +854,13 @@ int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
                 RETURN(-EINVAL);
 
         down(&obt->obt_quotachecking);
-        LASSERT(!obt->obt_qctxt.lqc_immutable);
+        if (obt->obt_qctxt.lqc_immutable) {
+                LCONSOLE_ERROR("Failed to turn Quota on, immutable mode "
+                               "(is SOM enabled?)\n");
+                up(&obt->obt_quotachecking);
+                RETURN(-ECANCELED);
+        }
+
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         down(&mds->mds_qonoff_sem);
         rc2 = mds_admin_quota_on(obd, oqctl);

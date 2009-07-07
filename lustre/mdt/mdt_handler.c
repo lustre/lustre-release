@@ -1765,13 +1765,6 @@ static int mdt_quotactl_handle(struct mdt_thread_info *info)
 
         switch (oqctl->qc_cmd) {
         case Q_QUOTAON:
-                if (info->mti_mdt->mdt_som_conf) {
-                        /* Quota cannot be used together with SOM while
-                         * SOM stored blocks in i_blocks but not in SOM EA. */
-                        LCONSOLE_ERROR("Fail to turn Quota on: SOM is enabled "
-                                       "and temporary conflicts with quota.\n");
-                        RETURN(-ENOTSUPP);
-                }
                 rc = mqo->mqo_on(info->mti_env, next, oqctl->qc_type);
                 break;
         case Q_QUOTAOFF:

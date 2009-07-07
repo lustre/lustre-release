@@ -226,7 +226,7 @@ static int auto_quota_on(struct obd_device *obd, int type,
         if (obt->obt_qctxt.lqc_immutable) {
                 LCONSOLE_ERROR("Failed to turn Quota on, immutable mode "
                                "(is SOM enabled?)\n");
-                GOTO(out, rc);
+                GOTO(out, rc = -ECANCELED);
         }
 
         oqctl->qc_type = type;
@@ -306,8 +306,12 @@ int lprocfs_quota_wr_type(struct file *file, const char *buffer,
         }
 
         if (type != 0) {
-                auto_quota_on(obd, type - 1, obt->obt_sb, is_mds);
-                build_lqs(obd);
+                int rc = auto_quota_on(obd, type - 1, obt->obt_sb, is_mds);
+
+                if (rc == 0)
+                        build_lqs(obd);
+                else if (rc != -EALREADY)
+                        return rc;
         }
 
         return count;

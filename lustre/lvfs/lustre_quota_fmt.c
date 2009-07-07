@@ -1082,6 +1082,8 @@ int lustre_get_qids(struct file *fp, struct inode *inode, int type,
 
         ENTRY;
 
+        LASSERT(ergo(fp == NULL, inode != NULL));
+
         if (check_quota_file(fp, inode, type, LUSTRE_QUOTA_V2) == 0)
                 version = LUSTRE_QUOTA_V2;
         else {

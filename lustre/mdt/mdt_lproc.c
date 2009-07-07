@@ -713,8 +713,12 @@ static int lprocfs_wr_mdt_som(struct file *file, const char *buffer,
                 return count;
         }
 
-        if ((rc = mdt_quota_off(mdt)))
-                return rc;
+        if ((rc = mdt_quota_off(mdt))) {
+                if (rc == -EALREADY)
+                        rc = 0;
+                else
+                        return rc;
+        }
 
         mdt->mdt_som_conf = val;
         LCONSOLE_INFO("Enabling SOM\n");
