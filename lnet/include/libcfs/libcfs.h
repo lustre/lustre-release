@@ -598,6 +598,21 @@ static inline cfs_duration_t cfs_timeout_cap(cfs_duration_t timeout)
         return timeout;
 }
 
+#define LTD_MAGIC       0x0BD0BD0B
+#define JOURNAL_ENTER()  ({                     \
+        int *info = current->journal_info;      \
+        if (info && *info == LTD_MAGIC)         \
+                current->journal_info = NULL;   \
+        else                                    \
+                info = NULL;                    \
+        info;                                   \
+})
+
+#define JOURNAL_EXIT(info) do {                 \
+        if (info != NULL)                       \
+                current->journal_info = info;   \
+} while(0);
+
 /*
  * Universal memory allocator API
  */

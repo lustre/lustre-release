@@ -75,10 +75,14 @@ void *
 cfs_alloc(size_t nr_bytes, u_int32_t flags)
 {
 	void *ptr = NULL;
+        int *ltd = JOURNAL_ENTER();
 
 	ptr = kmalloc(nr_bytes, cfs_alloc_flags_to_gfp(flags));
 	if (ptr != NULL && (flags & CFS_ALLOC_ZERO))
 		memset(ptr, 0, nr_bytes);
+
+        JOURNAL_EXIT(ltd);
+
 	return ptr;
 }
 
@@ -102,11 +106,18 @@ cfs_free_large(void *addr)
 
 cfs_page_t *cfs_alloc_pages(unsigned int flags, unsigned int order)
 {
+        cfs_page_t *pages = NULL;
+        int *ltd = JOURNAL_ENTER();
+
         /*
          * XXX nikita: do NOT call portals_debug_msg() (CDEBUG/ENTRY/EXIT)
          * from here: this will lead to infinite recursion.
          */
-        return alloc_pages(cfs_alloc_flags_to_gfp(flags), order);
+        pages = alloc_pages(cfs_alloc_flags_to_gfp(flags), order);
+
+        JOURNAL_EXIT(ltd);
+
+        return pages;
 }
 
 void __cfs_free_pages(cfs_page_t *page, unsigned int order)
@@ -139,7 +150,14 @@ cfs_mem_cache_destroy (cfs_mem_cache_t * cachep)
 void *
 cfs_mem_cache_alloc(cfs_mem_cache_t *cachep, int flags)
 {
-        return kmem_cache_alloc(cachep, cfs_alloc_flags_to_gfp(flags));
+        void *obj = NULL;
+        int *ltd = JOURNAL_ENTER();
+
+        obj = kmem_cache_alloc(cachep, cfs_alloc_flags_to_gfp(flags));
+
+        JOURNAL_EXIT(ltd);
+
+        return obj;
 }
 
 void
