@@ -276,8 +276,13 @@ static struct page * filter_get_page(struct obd_device *obd,
 {
         struct page *page;
 
+        /* __GFP_NOMEMALLOC = don't use emergency reserves because it
+         * can cause atomic allocations to fail. See bug 19917.
+         * For local (same node) client, we should really be using
+         * GFP_NOFS | __GFP_HIGHMEM instead. This will be addressed
+         * by bug 19529 */
         page = find_or_create_page(inode->i_mapping, offset >> CFS_PAGE_SHIFT,
-                                   GFP_NOFS | __GFP_HIGHMEM);
+                                   GFP_HIGHUSER  | __GFP_NOMEMALLOC);
         if (unlikely(page == NULL))
                 lprocfs_counter_add(obd->obd_stats, LPROC_FILTER_NO_PAGE, 1);
 
