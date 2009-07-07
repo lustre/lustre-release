@@ -23,6 +23,9 @@
 #endif
 
 #define DELTA 0x9E3779B9
+#define DX_HASH_R5      98
+#define DX_HASH_SAME    99
+
 
 static void TEA_transform(__u32 buf[4], __u32 const in[])
 {

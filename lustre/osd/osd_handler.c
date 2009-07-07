@@ -77,7 +77,6 @@
 
 /* fid_is_local() */
 #include <lustre_fid.h>
-#include <linux/lustre_iam.h>
 
 #include "osd_internal.h"
 #include "osd_igif.h"
@@ -1361,25 +1360,6 @@ static int osd_create_post(struct osd_thread_info *info, struct osd_object *obj,
         return 0;
 }
 
-extern struct inode *ldiskfs_create_inode(handle_t *handle,
-                                          struct inode * dir, int mode);
-extern int ldiskfs_add_entry(handle_t *handle, struct dentry *dentry,
-                             struct inode *inode);
-extern int ldiskfs_delete_entry(handle_t *handle,
-                                struct inode * dir,
-                                struct ldiskfs_dir_entry_2 * de_del,
-                                struct buffer_head * bh);
-extern struct buffer_head * ldiskfs_find_entry(struct dentry *dentry,
-                                               struct ldiskfs_dir_entry_2
-                                               ** res_dir);
-extern int ldiskfs_add_dot_dotdot(handle_t *handle, struct inode *dir,
-                                  struct inode *inode);
-
-extern int ldiskfs_xattr_set_handle(handle_t *handle, struct inode *inode,
-                                    int name_index, const char *name,
-                                    const void *value, size_t value_len,
-                                    int flags);
-
 static struct dentry * osd_child_dentry_get(const struct lu_env *env,
                                             struct osd_object *obj,
                                             const char *name,
@@ -1445,13 +1425,6 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
         LINVRNT(osd_invariant(obj));
         return result;
 }
-
-
-extern int iam_lvar_create(struct inode *obj, int keysize, int ptrsize,
-                           int recsize, handle_t *handle);
-
-extern int iam_lfix_create(struct inode *obj, int keysize, int ptrsize,
-                           int recsize, handle_t *handle);
 
 enum {
         OSD_NAME_LEN = 255
@@ -2167,7 +2140,6 @@ static int osd_iam_index_probe(const struct lu_env *env, struct osd_object *o,
                            const struct dt_index_features *feat)
 {
         struct iam_descr *descr;
-        struct dt_object *dt = &o->oo_dt;
 
         if (osd_object_is_root(o))
                 return feat == &dt_directory_features;
@@ -2178,19 +2150,8 @@ static int osd_iam_index_probe(const struct lu_env *env, struct osd_object *o,
         if (feat == &dt_directory_features) {
                 if (descr->id_rec_size == sizeof(struct lu_fid_pack))
                         return 1;
-
-                if (descr == &iam_htree_compat_param) {
-                        /* if it is a HTREE dir then there is good chance that,
-                         * we dealing with ext3 directory here with no FIDs. */
-
-                        if (descr->id_rec_size ==
-                            sizeof ((struct ldiskfs_dir_entry_2 *)NULL)->inode) {
-
-                                dt->do_index_ops = &osd_index_ea_ops;
-                                return 1;
-                        }
-                }
-                return 0;
+                else
+                        return 0;
         } else {
                 return
                         feat->dif_keysize_min <= descr->id_key_size &&
@@ -3718,9 +3679,6 @@ static int osd_process_config(const struct lu_env *env,
 
         RETURN(err);
 }
-
-extern void ldiskfs_orphan_cleanup (struct super_block * sb,
-                                    struct ldiskfs_super_block * es);
 
 static int osd_recovery_complete(const struct lu_env *env,
                                  struct lu_device *d)
