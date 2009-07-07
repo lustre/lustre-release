@@ -1059,6 +1059,7 @@ int cl_setattr_ost(struct inode *inode, struct obd_capa *capa)
 
                 oinfo.oi_oa = oa;
                 oinfo.oi_md = lsm;
+                oinfo.oi_capa = capa;
 
                 /* XXX: this looks unnecessary now. */
                 rc = obd_setattr_rqset(cl_i2sbi(inode)->ll_dt_exp, &oinfo,

@@ -196,9 +196,8 @@ out:
  *
  * returns < 0: if error
  */
-static int mdd_is_subdir(const struct lu_env *env,
-                         struct md_object *mo, const struct lu_fid *fid,
-                         struct lu_fid *sfid)
+int mdd_is_subdir(const struct lu_env *env, struct md_object *mo,
+                  const struct lu_fid *fid, struct lu_fid *sfid)
 {
         struct mdd_device *mdd = mdo2mdd(mo);
         int rc;

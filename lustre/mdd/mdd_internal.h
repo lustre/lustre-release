@@ -287,6 +287,8 @@ void mdd_pdo_write_unlock(const struct lu_env *env, struct mdd_object *obj,
 void mdd_pdo_read_unlock(const struct lu_env *env, struct mdd_object *obj,
                          struct dynlock_handle *dlh);
 /* mdd_dir.c */
+int mdd_is_subdir(const struct lu_env *env, struct md_object *mo,
+                  const struct lu_fid *fid, struct lu_fid *sfid);
 void __mdd_ref_add(const struct lu_env *env, struct mdd_object *obj,
                    struct thandle *handle);
 void __mdd_ref_del(const struct lu_env *env, struct mdd_object *obj,
