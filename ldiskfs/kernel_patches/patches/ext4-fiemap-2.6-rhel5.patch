@@ -1,10 +1,10 @@
 A large part of this code is from the generic VFS code in fs/ioctl.c in the
 upstream kernel.
 
-Index: linux-2.6.18.i386/fs/ext4/ioctl.c
+Index: linux-2.6.18-128.1.6/fs/ext4/ioctl.c
 ===================================================================
---- linux-2.6.18.i386.orig/fs/ext4/ioctl.c
-+++ linux-2.6.18.i386/fs/ext4/ioctl.c
+--- linux-2.6.18-128.1.6.orig/fs/ext4/ioctl.c
++++ linux-2.6.18-128.1.6/fs/ext4/ioctl.c
 @@ -17,6 +17,162 @@
  #include "ext4_jbd2.h"
  #include "ext4.h"
@@ -179,10 +179,10 @@ Index: linux-2.6.18.i386/fs/ext4/ioctl.c
  	default:
  		return -ENOTTY;
  	}
-Index: linux-2.6.18.i386/fs/ext4/ext4.h
+Index: linux-2.6.18-128.1.6/fs/ext4/ext4.h
 ===================================================================
---- linux-2.6.18.i386.orig/fs/ext4/ext4.h
-+++ linux-2.6.18.i386/fs/ext4/ext4.h
+--- linux-2.6.18-128.1.6.orig/fs/ext4/ext4.h
++++ linux-2.6.18-128.1.6/fs/ext4/ext4.h
 @@ -300,6 +300,7 @@ struct ext4_new_group_data {
  #define EXT4_IOC_GETRSVSZ		_IOR('f', 5, long)
  #define EXT4_IOC_SETRSVSZ		_IOW('f', 6, long)
@@ -200,7 +200,7 @@ Index: linux-2.6.18.i386/fs/ext4/ext4.h
  
  /*
   *  Mount options
-@@ -1115,6 +1118,9 @@ extern int ext4_page_mkwrite(struct vm_a
+@@ -1117,6 +1120,9 @@ extern int ext4_page_mkwrite(struct vm_a
  /* ioctl.c */
  extern long ext4_ioctl(struct file *, unsigned int, unsigned long);
  extern long ext4_compat_ioctl (struct file *, unsigned int, unsigned long);
@@ -210,10 +210,10 @@ Index: linux-2.6.18.i386/fs/ext4/ext4.h
  
  /* migrate.c */
  extern int ext4_ext_migrate(struct inode *, struct file *, unsigned int,
-Index: linux-2.6.18.i386/fs/ext4/ext4_extents.h
+Index: linux-2.6.18-128.1.6/fs/ext4/ext4_extents.h
 ===================================================================
---- linux-2.6.18.i386.orig/fs/ext4/ext4_extents.h
-+++ linux-2.6.18.i386/fs/ext4/ext4_extents.h
+--- linux-2.6.18-128.1.6.orig/fs/ext4/ext4_extents.h
++++ linux-2.6.18-128.1.6/fs/ext4/ext4_extents.h
 @@ -128,6 +128,22 @@ struct ext4_ext_path {
  #define EXT_MAX_BLOCK	0xffffffff
  
@@ -246,10 +246,10 @@ Index: linux-2.6.18.i386/fs/ext4/ext4_extents.h
  extern struct ext4_ext_path *ext4_ext_find_extent(struct inode *, ext4_lblk_t,
  							struct ext4_ext_path *);
  extern int ext4_ext_search_left(struct inode *, struct ext4_ext_path *,
-Index: linux-2.6.18.i386/fs/ext4/extents.c
+Index: linux-2.6.18-128.1.6/fs/ext4/extents.c
 ===================================================================
---- linux-2.6.18.i386.orig/fs/ext4/extents.c
-+++ linux-2.6.18.i386/fs/ext4/extents.c
+--- linux-2.6.18-128.1.6.orig/fs/ext4/extents.c
++++ linux-2.6.18-128.1.6/fs/ext4/extents.c
 @@ -44,7 +44,7 @@
  #include <asm/uaccess.h>
  #include "ext4_jbd2.h"
@@ -386,7 +386,7 @@ Index: linux-2.6.18.i386/fs/ext4/extents.c
 +		       void *data)
 +{
 +	struct fiemap_extent_info *fieinfo = data;
-+	unsigned long blksize_bits = inode->i_sb->s_blocksize_bits;
++	unsigned char blksize_bits = inode->i_sb->s_blocksize_bits;
 +	__u64   logical;
 +	__u64   physical;
 +	__u64   length;
@@ -433,8 +433,8 @@ Index: linux-2.6.18.i386/fs/ext4/extents.c
 +	 *
 +	 * XXX this might miss a single-block extent at EXT_MAX_BLOCK
 +	 */
-+	if (logical + length - 1 == EXT_MAX_BLOCK ||
-+	    ext4_ext_next_allocated_block(path) == EXT_MAX_BLOCK)
++	if (ext4_ext_next_allocated_block(path) == EXT_MAX_BLOCK ||
++	    newex->ec_block + newex->ec_len - 1 == EXT_MAX_BLOCK)
 +		flags |= FIEMAP_EXTENT_LAST;
 +
 +	error = fiemap_fill_next_extent(fieinfo, logical, physical,
@@ -474,10 +474,10 @@ Index: linux-2.6.18.i386/fs/ext4/extents.c
 +
 +	return error;
 +}
-Index: linux-2.6.18.i386/fs/ext4/fiemap.h
+Index: linux-2.6.18-128.1.6/fs/ext4/fiemap.h
 ===================================================================
 --- /dev/null
-+++ linux-2.6.18.i386/fs/ext4/fiemap.h
++++ linux-2.6.18-128.1.6/fs/ext4/fiemap.h
 @@ -0,0 +1,85 @@
 +/*
 + * FIEMAP ioctl infrastructure.
