@@ -402,7 +402,7 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                 }
 
                 if (dentry->d_flags & DCACHE_DISCONNECTED) {
-                        LASSERT(last_discon == NULL);
+                        /* LASSERT(last_discon == NULL); see bug 20055 */
                         last_discon = dentry;
                         continue;
                 }
