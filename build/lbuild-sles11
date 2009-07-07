@@ -64,6 +64,10 @@ unpack_linux_devel_rpm-sles11() {
 
     local kernelrpm
     local wanted_kernel="${lnxmaj}${lnxmin}${TARGET_DELIMITER}${lnxrel}"
+    if $PATCHLESS; then
+# this $PATCHLESS block should go away when bug 19336 lands.
+        wanted_kernel="${lnxmaj}${lnxmin}${TARGET_DELIMITER}${real_lnxrel}"
+    fi
     # this is a hack that should go away when the modified lustre kernel
     # Provides kernel-default-base                        vvvvvvvvv
     if ! kernelrpm=$(find_rpm "$rpmdir" provides "^kernel-(lustre-)?default-base = $wanted_kernel"); then
