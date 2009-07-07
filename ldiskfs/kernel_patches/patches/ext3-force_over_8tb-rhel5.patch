@@ -11,33 +11,33 @@ Index: linux-2.6.18-128.1.6/fs/ext3/super.c
  static int ext3_load_journal(struct super_block *, struct ext3_super_block *,
  			     unsigned long journal_devnum);
  static int ext3_create_journal(struct super_block *, struct ext3_super_block *,
-@@ -722,6 +724,7 @@
+@@ -722,6 +724,7 @@ enum {
  	Opt_grpquota,
  	Opt_extents, Opt_noextents, Opt_bigendian_extents, Opt_extdebug,
- 	Opt_mballoc, Opt_nomballoc, Opt_stripe, Opt_hashfunc,
+ 	Opt_mballoc, Opt_nomballoc, Opt_stripe,
 +	Opt_force_over_8tb,
  };
  
  static match_table_t tokens = {
-@@ -785,6 +788,7 @@
+@@ -785,6 +788,7 @@ static match_table_t tokens = {
  	{Opt_mballoc, "mballoc"},
  	{Opt_nomballoc, "nomballoc"},
  	{Opt_stripe, "stripe=%u"},
 +	{Opt_force_over_8tb, "force_over_8tb"},
  	{Opt_err, NULL},
  	{Opt_resize, "resize"},
- 	{Opt_hashfunc,"hash=%s"},
-@@ -1181,6 +1185,9 @@
-                                 return 0;
-                         }
- 		 	break;
+ };
+@@ -1163,6 +1167,9 @@ clear_qf_name:
+ 				return 0;
+ 			sbi->s_stripe = option;
+ 			break;
 +		case Opt_force_over_8tb:
 +			force_over_8tb = 1;
 +			break;
  		default:
  			printk (KERN_ERR
  				"EXT3-fs: Unrecognized mount option \"%s\" "
-@@ -2274,6 +2281,17 @@
+@@ -2256,6 +2263,17 @@ static int ext3_fill_super (struct super
  		goto failed_mount;
  	}
  
@@ -55,3 +55,4 @@ Index: linux-2.6.18-128.1.6/fs/ext3/super.c
  	if (EXT3_BLOCKS_PER_GROUP(sb) == 0)
  		goto cantfind_ext3;
  	sbi->s_groups_count = ((le32_to_cpu(es->s_blocks_count) -
+

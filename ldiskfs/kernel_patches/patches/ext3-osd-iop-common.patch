@@ -1,19 +1,25 @@
 Index: linux-2.6.18-53.1.14/fs/ext3/namei.c
 ===================================================================
---- linux-2.6.18-53.1.14.org/fs/ext3/namei.c	2008-09-02 13:24:58.000000000 +0530
-+++ linux-2.6.18-53.1.14/fs/ext3/namei.c	2008-09-02 15:48:16.000000000 +0530
-@@ -820,8 +820,8 @@ static inline int search_dirblock(struct
+--- linux-2.6.18-53.1.14/fs/ext3/namei.c	2009-02-20 16:25:38.000000000 +0530
++++ linux-2.6.18-53.1.14_new/fs/ext3/namei.c	2009-02-20 16:20:21.000000000 +0530
+@@ -24,6 +24,7 @@
+  * 	Theodore Ts'o, 2002
+  */
+ 
++#include <linux/module.h>
+ #include <linux/fs.h>
+ #include <linux/pagemap.h>
+ #include <linux/jbd.h>
+@@ -821,7 +822,7 @@ static inline int search_dirblock(struct
   * The returned buffer_head has ->b_count elevated.  The caller is expected
   * to brelse() it when appropriate.
   */
 -static struct buffer_head * ext3_find_entry (struct dentry *dentry,
--					struct ext3_dir_entry_2 ** res_dir)
 +struct buffer_head * ext3_find_entry (struct dentry *dentry,
-+					struct ext3_dir_entry_2 ** res_dir)
+ 					struct ext3_dir_entry_2 ** res_dir)
  {
  	struct super_block * sb;
- 	struct buffer_head * bh_use[NAMEI_RA_SIZE];
-@@ -932,6 +932,7 @@ cleanup_and_exit:
+@@ -933,6 +934,7 @@ cleanup_and_exit:
  		brelse (bh_use[ra_ptr]);
  	return ret;
  }
@@ -21,18 +27,16 @@ Index: linux-2.6.18-53.1.14/fs/ext3/namei.c
  
  #ifdef CONFIG_EXT3_INDEX
  static struct buffer_head * ext3_dx_find_entry(struct dentry *dentry,
-@@ -1417,8 +1418,8 @@ static int make_indexed_dir(handle_t *ha
+@@ -1454,7 +1456,7 @@ static int make_indexed_dir(handle_t *ha
   * may not sleep between calling this and putting something into
   * the entry, as someone else might have used it while you slept.
   */
 -static int ext3_add_entry (handle_t *handle, struct dentry *dentry,
--	struct inode *inode)
 +int ext3_add_entry (handle_t *handle, struct dentry *dentry,
-+	struct inode *inode)
+ 	struct inode *inode)
  {
  	struct inode *dir = dentry->d_parent->d_inode;
- 	unsigned long offset;
-@@ -1470,6 +1471,7 @@ static int ext3_add_entry (handle_t *han
+@@ -1507,6 +1509,7 @@ static int ext3_add_entry (handle_t *han
  	de->rec_len = cpu_to_le16(blocksize);
  	return add_dirent_to_buf(handle, dentry, inode, de, bh);
  }
@@ -40,11 +44,11 @@ Index: linux-2.6.18-53.1.14/fs/ext3/namei.c
  
  #ifdef CONFIG_EXT3_INDEX
  /*
-@@ -1612,10 +1614,10 @@ cleanup:
+@@ -1649,10 +1652,10 @@ cleanup:
   * ext3_delete_entry deletes a directory entry by merging it with the
   * previous entry
   */
--static int ext3_delete_entry (handle_t *handle,
+-static int ext3_delete_entry (handle_t *handle, 
 -			      struct inode * dir,
 -			      struct ext3_dir_entry_2 * de_del,
 -			      struct buffer_head * bh)
@@ -55,7 +59,7 @@ Index: linux-2.6.18-53.1.14/fs/ext3/namei.c
  {
  	struct ext3_dir_entry_2 * de, * pde;
  	int i;
-@@ -1647,6 +1649,7 @@ static int ext3_delete_entry (handle_t *
+@@ -1684,6 +1687,7 @@ static int ext3_delete_entry (handle_t *
  	}
  	return -ENOENT;
  }
@@ -63,57 +67,86 @@ Index: linux-2.6.18-53.1.14/fs/ext3/namei.c
  
  /*
   * ext3_mark_inode_dirty is somewhat expensive, so unlike ext2 we
-@@ -1751,12 +1754,64 @@ retry:
+@@ -1747,6 +1751,26 @@ static struct inode * ext3_new_inode_wan
+ 	return ext3_new_inode(handle, dir, mode, inum);
+ }
+ 
++struct inode * ext3_create_inode(handle_t *handle, struct inode * dir, int mode)
++{
++	struct inode *inode;
++
++	inode = ext3_new_inode(handle, dir, mode, 0);
++	if (!IS_ERR(inode)) {
++		if (S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode)) {
++#ifdef CONFIG_LDISKFS_FS_XATTR
++			inode->i_op = &ext3_special_inode_operations;
++#endif
++		} else {
++			inode->i_op = &ext3_file_inode_operations;
++			inode->i_fop = &ext3_file_operations;
++			ext3_set_aops(inode);
++		}
++	}
++	return inode;
++}
++EXPORT_SYMBOL(ext3_create_inode);
++
+ /*
+  * By the time this is called, we already have created
+  * the directory cache entry for the new file, but it
+@@ -1821,32 +1845,23 @@ retry:
  	return err;
  }
  
+-static int ext3_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 +/**
 + * This function will add dot & dotdot entries into ext3 directory.
 + * Add considering interoperability (between 1.8 & 2.0) requirement.
 + */
 +int ext3_add_dot_dotdot(handle_t *handle, struct inode * dir,
 +			 struct inode *inode)
-+{
-+	struct buffer_head * dir_block;
-+	struct ext3_dir_entry_2 * de;
+ {
+-	handle_t *handle;
+-	struct inode * inode;
+ 	struct buffer_head * dir_block;
+ 	struct ext3_dir_entry_2 * de;
+-	int err, retries = 0;
+-
+-	if (EXT3_DIR_LINK_MAX(dir))
+-		return -EMLINK;
 +	int err = 0;
-+
-+	if (IS_ERR(handle))
-+		return PTR_ERR(handle);
-+
-+	if (IS_DIRSYNC(dir))
-+		handle->h_sync = 1;
-+
-+	inode->i_op = &ext3_dir_inode_operations;
-+	inode->i_fop = &ext3_dir_operations;
-+	inode->i_size = EXT3_I(inode)->i_disksize = inode->i_sb->s_blocksize;
-+	dir_block = ext3_bread (handle, inode, 0, 1, &err);
-+	if (!dir_block) {
-+		drop_nlink(inode); /* is this nlink == 0? */
-+		ext3_mark_inode_dirty(handle, inode);
-+		iput (inode);
+ 
+-retry:
+-	handle = ext3_journal_start(dir, EXT3_DATA_TRANS_BLOCKS(dir->i_sb) +
+-					EXT3_INDEX_EXTRA_TRANS_BLOCKS + 3 +
+-					2*EXT3_QUOTA_INIT_BLOCKS(dir->i_sb));
+ 	if (IS_ERR(handle))
+ 		return PTR_ERR(handle);
+ 
+ 	if (IS_DIRSYNC(dir))
+ 		handle->h_sync = 1;
+ 
+-	inode = ext3_new_inode_wantedi (handle, dir, S_IFDIR | mode, dentry);
+-	err = PTR_ERR(inode);
+-	if (IS_ERR(inode))
+-		goto out_stop;
+-
+ 	inode->i_op = &ext3_dir_inode_operations;
+ 	inode->i_fop = &ext3_dir_operations;
+ 	inode->i_size = EXT3_I(inode)->i_disksize = inode->i_sb->s_blocksize;
+@@ -1855,7 +1870,7 @@ retry:
+ 		drop_nlink(inode); /* is this nlink == 0? */
+ 		ext3_mark_inode_dirty(handle, inode);
+ 		iput (inode);
+-		goto out_stop;
 +		goto get_out;
-+	}
-+	BUFFER_TRACE(dir_block, "get_write_access");
-+	ext3_journal_get_write_access(handle, dir_block);
-+	de = (struct ext3_dir_entry_2 *) dir_block->b_data;
-+	de->inode = cpu_to_le32(inode->i_ino);
-+	de->name_len = 1;
-+	de->rec_len = cpu_to_le16(EXT3_DIR_REC_LEN(de->name_len));
-+	strcpy (de->name, ".");
-+	ext3_set_de_type(dir->i_sb, de, S_IFDIR);
-+	de = (struct ext3_dir_entry_2 *)
-+			((char *) de + le16_to_cpu(de->rec_len));
-+	de->inode = cpu_to_le32(dir->i_ino);
-+	de->rec_len = cpu_to_le16(inode->i_sb->s_blocksize-EXT3_DIR_REC_LEN(1));
-+	de->name_len = 2;
-+	strcpy (de->name, "..");
-+	ext3_set_de_type(dir->i_sb, de, S_IFDIR);
-+	inode->i_nlink = 2;
-+	BUFFER_TRACE(dir_block, "call ext3_journal_dirty_metadata");
-+	ext3_journal_dirty_metadata(handle, dir_block);
-+	brelse (dir_block);
-+	ext3_mark_inode_dirty(handle, inode);
+ 	}
+ 	BUFFER_TRACE(dir_block, "get_write_access");
+ 	ext3_journal_get_write_access(handle, dir_block);
+@@ -1877,6 +1892,41 @@ retry:
+ 	ext3_journal_dirty_metadata(handle, dir_block);
+ 	brelse (dir_block);
+ 	ext3_mark_inode_dirty(handle, inode);
 +
 +get_out:
 +	return err;
@@ -121,52 +154,69 @@ Index: linux-2.6.18-53.1.14/fs/ext3/namei.c
 +}
 +EXPORT_SYMBOL(ext3_add_dot_dotdot);
 +
- static int ext3_mkdir(struct inode * dir, struct dentry * dentry, int mode)
- {
- 	handle_t *handle;
- 	struct inode * inode;
--	struct buffer_head * dir_block;
--	struct ext3_dir_entry_2 * de;
- 	int err, retries = 0;
- 
- 	if (dir->i_nlink >= EXT3_LINK_MAX)
-@@ -1777,36 +1832,10 @@ retry:
- 	if (IS_ERR(inode))
- 		goto out_stop;
- 
--	inode->i_op = &ext3_dir_inode_operations;
--	inode->i_fop = &ext3_dir_operations;
--	inode->i_size = EXT3_I(inode)->i_disksize = inode->i_sb->s_blocksize;
--	dir_block = ext3_bread (handle, inode, 0, 1, &err);
--	if (!dir_block) {
--		drop_nlink(inode); /* is this nlink == 0? */
--		ext3_mark_inode_dirty(handle, inode);
--		iput (inode);
++static int ext3_mkdir(struct inode * dir, struct dentry * dentry, int mode)
++{
++	handle_t *handle;
++	struct inode * inode;
++	int err, retries = 0;
++
++	if (EXT3_DIR_LINK_MAX(dir))
++		return -EMLINK;
++
++retry:
++	handle = ext3_journal_start(dir, EXT3_DATA_TRANS_BLOCKS(dir->i_sb) +
++					EXT3_INDEX_EXTRA_TRANS_BLOCKS + 3 +
++					2*EXT3_QUOTA_INIT_BLOCKS(dir->i_sb));
++	if (IS_ERR(handle))
++		return PTR_ERR(handle);
++
++	if (IS_DIRSYNC(dir))
++		handle->h_sync = 1;
++
++	inode = ext3_new_inode_wantedi (handle, dir, S_IFDIR | mode, dentry);
++	err = PTR_ERR(inode);
++	if (IS_ERR(inode))
++		goto out_stop;
++
 +	err = ext3_add_dot_dotdot(handle, dir, inode);
 +	if (err)
- 		goto out_stop;
--	}
--	BUFFER_TRACE(dir_block, "get_write_access");
--	ext3_journal_get_write_access(handle, dir_block);
--	de = (struct ext3_dir_entry_2 *) dir_block->b_data;
--	de->inode = cpu_to_le32(inode->i_ino);
--	de->name_len = 1;
--	de->rec_len = cpu_to_le16(EXT3_DIR_REC_LEN(de->name_len));
--	strcpy (de->name, ".");
--	ext3_set_de_type(dir->i_sb, de, S_IFDIR);
--	de = (struct ext3_dir_entry_2 *)
--			((char *) de + le16_to_cpu(de->rec_len));
--	de->inode = cpu_to_le32(dir->i_ino);
--	de->rec_len = cpu_to_le16(inode->i_sb->s_blocksize-EXT3_DIR_REC_LEN(1));
--	de->name_len = 2;
--	strcpy (de->name, "..");
--	ext3_set_de_type(dir->i_sb, de, S_IFDIR);
--	inode->i_nlink = 2;
--	BUFFER_TRACE(dir_block, "call ext3_journal_dirty_metadata");
--	ext3_journal_dirty_metadata(handle, dir_block);
--	brelse (dir_block);
--	ext3_mark_inode_dirty(handle, inode);
++		goto out_stop;
 +
  	err = ext3_add_entry (handle, dentry, inode);
  	if (err) {
  		inode->i_nlink = 0;
+Index: linux-2.6.18-53.1.14/include/linux/ext3_fs.h
+===================================================================
+--- linux-2.6.18-128.1.1_new/include/linux/ext3_fs.h	2009-07-03 13:37:22.000000000 +0530
++++ linux-2.6.18-128.1.1_new1/include/linux/ext3_fs.h	2009-07-03 15:31:43.000000000 +0530
+@@ -1079,6 +1079,10 @@ extern int ext3_group_extend(struct supe
+ 				ext3_fsblk_t n_blocks_count);
+ 
+ /* super.c */
++extern int ldiskfs_xattr_set_handle(handle_t *handle, struct inode *inode,
++                                int name_index, const char *name,
++				const void *value, size_t value_len,
++                                int flags);
+ extern struct proc_dir_entry *proc_root_ext3;
+ extern int __init init_ext3_proc(void);
+ extern void exit_ext3_proc(void);
+@@ -1112,6 +1116,19 @@ extern struct inode_operations ext3_file
+ extern const struct file_operations ext3_file_operations;
+ 
+ /* namei.c */
++extern struct inode *ldiskfs_create_inode(handle_t *handle,
++					struct inode * dir, int mode);
++extern int ldiskfs_add_entry(handle_t *handle, struct dentry *dentry,
++			struct inode *inode);
++extern int ldiskfs_delete_entry(handle_t *handle,
++				struct inode * dir,
++				struct ldiskfs_dir_entry_2 * de_del,
++				struct buffer_head * bh);
++extern struct buffer_head * ldiskfs_find_entry(struct dentry *dentry,
++					struct ldiskfs_dir_entry_2
++					** res_dir);
++extern int ldiskfs_add_dot_dotdot(handle_t *handle, struct inode *dir,
++				struct inode *inode);
+ extern struct inode_operations ext3_dir_inode_operations;
+ extern struct inode_operations ext3_special_inode_operations;
+ extern struct buffer_head *ext3_append(handle_t *handle, struct inode *inode,

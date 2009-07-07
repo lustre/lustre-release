@@ -11,12 +11,12 @@ Index: linux-2.6.16.60-0.37/fs/ext3/super.c
  static int ext3_load_journal(struct super_block *, struct ext3_super_block *,
  			     unsigned long journal_devnum);
  static int ext3_create_journal(struct super_block *, struct ext3_super_block *,
-@@ -714,7 +716,7 @@
+@@ -716,7 +716,7 @@ enum {
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
  	Opt_extents, Opt_noextents, Opt_bigendian_extents, Opt_extdebug,
  	Opt_mballoc, Opt_nomballoc, Opt_stripe,
--	Opt_grpquota, Opt_hashfunc
-+	Opt_grpquota, Opt_hashfunc, Opt_force_over_8tb
+-	Opt_grpquota
++	Opt_grpquota, Opt_force_over_8tb,
  };
  
  static match_table_t tokens = {
@@ -28,10 +28,10 @@ Index: linux-2.6.16.60-0.37/fs/ext3/super.c
  	{Opt_err, NULL},
  	{Opt_resize, "resize"},
  	{Opt_hashfunc,"hash=%s"},
-@@ -1169,6 +1172,9 @@
-                                 return 0;
-                         }
- 		 	break;
+@@ -1154,6 +1154,9 @@ clear_qf_name:
+ 				return 0;
+ 			sbi->s_stripe = option;
+ 			break;
 +		case Opt_force_over_8tb:
 +			force_over_8tb = 1;
 +			break;
@@ -56,3 +56,4 @@ Index: linux-2.6.16.60-0.37/fs/ext3/super.c
  	if (EXT3_BLOCKS_PER_GROUP(sb) == 0)
  		goto cantfind_ext3;
  	sbi->s_groups_count = (le32_to_cpu(es->s_blocks_count) -
+

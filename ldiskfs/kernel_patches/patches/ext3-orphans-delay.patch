@@ -40,3 +40,16 @@ Index: linux-stage/fs/ext3/super.c
  	if (needs_recovery)
  		printk (KERN_INFO "EXT3-fs: recovery complete.\n");
  	ext3_mark_recovery_complete(sb, es);
+Index: linux-2.6.18-128.1.1_new/include/linux/ext3_fs.h
+===================================================================
+--- linux-2.6.18-128.1.1_new/include/linux/ext3_fs.h	2009-07-03 15:55:16.000000000 +0530
++++ linux-2.6.18-128.1.1_new1/include/linux/ext3_fs.h	2009-07-03 15:57:50.000000000 +0530
+@@ -1064,6 +1064,8 @@ extern struct proc_dir_entry *proc_root_
+ extern int __init init_ext3_proc(void);
+ extern void exit_ext3_proc(void);
+ 
++extern void ext3_orphan_cleanup (struct super_block * sb,
++				 struct ext3_super_block * es);
+ extern void ext3_error (struct super_block *, const char *, const char *, ...)
+ 	__attribute__ ((format (printf, 3, 4)));
+ extern void __ext3_std_error (struct super_block *, const char *, int);

@@ -3,14 +3,14 @@ upstream kernel.
 
 Index: linux-2.6.18-92.1.22/fs/ext3/ioctl.c
 ===================================================================
---- linux-2.6.18-92.1.22.orig/fs/ext3/ioctl.c
-+++ linux-2.6.18-92.1.22/fs/ext3/ioctl.c
-@@ -17,6 +17,161 @@
+--- linux-2.6.18-128.1.1/fs/ext3/ioctl.c	2009-06-25 23:12:54.000000000 +0530
++++ linux-2.6.18-128.1.1_new/fs/ext3/ioctl.c	2009-06-25 23:19:43.000000000 +0530
+@@ -15,7 +15,161 @@
+ #include <linux/time.h>
+ #include <asm/uaccess.h>
  #include <linux/namei.h>
- 
- #include <linux/lustre_iam.h>
 +#include "fiemap.h"
-+  
+ 
 +/* So that the fiemap access checks can't overflow on 32 bit machines. */
 +#define FIEMAP_MAX_EXTENTS     (UINT_MAX / sizeof(struct fiemap_extent))
 +
@@ -167,17 +167,18 @@ Index: linux-2.6.18-92.1.22/fs/ext3/ioctl.c
  
  int ext3_ioctl (struct inode * inode, struct file * filp, unsigned int cmd,
  		unsigned long arg)
-@@ -273,7 +428,9 @@ flags_err:
+@@ -276,8 +430,9 @@ flags_err:
  
  		return err;
  	}
 -
+-
 +	case EXT3_IOC_FIEMAP: {
 +		return ioctl_fiemap(inode, filp, arg);
 +	}
- 
  	default:
- 		return iam_uapi_ioctl(inode, filp, cmd, arg);
+ 		return -ENOTTY;
+ 	}
 Index: linux-2.6.18-92.1.22/include/linux/ext3_fs.h
 ===================================================================
 --- linux-2.6.18-92.1.22.orig/include/linux/ext3_fs.h
