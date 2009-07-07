@@ -950,9 +950,10 @@ void ldlm_lock_allow_match(struct ldlm_lock *lock)
 
 int ldlm_lock_fast_match(struct ldlm_lock *lock, int rw,
                          obd_off start, obd_off end,
-                         void **cookie)
+                         struct lustre_handle *lockh)
 {
         LASSERT(rw == OBD_BRW_READ || rw == OBD_BRW_WRITE);
+        LASSERT(lockh != NULL);
 
         if (!lock)
                 return 0;
@@ -974,24 +975,15 @@ int ldlm_lock_fast_match(struct ldlm_lock *lock, int rw,
             !lock->l_writers && !lock->l_readers)
                 goto no_match;
 
-        ldlm_lock_addref_internal_nolock(lock, rw == OBD_BRW_WRITE ? LCK_PW : LCK_PR);
+        ldlm_lock_addref_internal_nolock(lock,
+                                         rw == OBD_BRW_WRITE ? LCK_PW : LCK_PR);
         unlock_res_and_lock(lock);
-        *cookie = (void *)lock;
+        ldlm_lock2handle(lock, lockh);
         return 1; /* avoid using rc for stack relief */
 
 no_match:
         unlock_res_and_lock(lock);
         return 0;
-}
-
-void ldlm_lock_fast_release(void *cookie, int rw)
-{
-        struct ldlm_lock *lock = (struct ldlm_lock *)cookie;
-
-        LASSERT(lock != NULL);
-        LASSERT(rw == OBD_BRW_READ || rw == OBD_BRW_WRITE);
-        LASSERT(rw == OBD_BRW_READ || (lock->l_granted_mode & (LCK_PW | LCK_GROUP)));
-        ldlm_lock_decref_internal(lock, rw == OBD_BRW_WRITE ? LCK_PW : LCK_PR);
 }
 
 /* Can be called in two ways:

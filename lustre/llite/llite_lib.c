@@ -1502,7 +1502,7 @@ static int ll_setattr_do_truncate(struct inode *inode, loff_t new_size)
                 int err;
 
                 err = (local_lock == 2) ?
-                        obd_cancel(sbi->ll_osc_exp, lsm, LCK_PW, &lockh):
+                        obd_cancel(sbi->ll_osc_exp, lsm, LCK_PW, &lockh, 0, 0):
                         ll_extent_unlock(NULL, inode, lsm, LCK_PW, &lockh);
                 if (unlikely(err != 0)){
                         CERROR("extent unlock failed: err=%d,"

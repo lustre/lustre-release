@@ -1893,10 +1893,10 @@ static struct obd_async_page_ops lov_async_page_ops = {
 };
 
 int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
-                           struct lov_oinfo *loi, cfs_page_t *page,
-                           obd_off offset, struct obd_async_page_ops *ops,
-                           void *data, void **res, int nocache,
-                           struct lustre_handle *lockh)
+                        struct lov_oinfo *loi, cfs_page_t *page,
+                        obd_off offset, struct obd_async_page_ops *ops,
+                        void *data, void **res, int flags,
+                        struct lustre_handle *lockh)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
         struct lov_async_page *lap;
@@ -1939,7 +1939,7 @@ int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         lap->lap_sub_cookie = (void *)lap + size_round(sizeof(*lap));
 
-        if (lockh) {
+        if (lockh && !(flags & OBD_FAST_LOCK)) {
                 lov_lockh = lov_handle2llh(lockh);
                 if (lov_lockh) {
                         lockh = lov_lockh->llh_handles + lap->lap_stripe;
@@ -1949,7 +1949,7 @@ int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
         rc = obd_prep_async_page(lov->lov_tgts[loi->loi_ost_idx]->ltd_exp,
                                  lsm, loi, page, lap->lap_sub_offset,
                                  &lov_async_page_ops, lap,
-                                 &lap->lap_sub_cookie, nocache, lockh);
+                                 &lap->lap_sub_cookie, flags, lockh);
         if (lov_lockh)
                 lov_llh_put(lov_lockh);
         if (rc)
@@ -2223,7 +2223,8 @@ static int lov_change_cbdata(struct obd_export *exp,
 }
 
 static int lov_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
-                      __u32 mode, struct lustre_handle *lockh)
+                      __u32 mode, struct lustre_handle *lockh, int flags,
+                      obd_off end)
 {
         struct lov_request_set *set;
         struct obd_info oinfo;
@@ -2242,6 +2243,13 @@ static int lov_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         LASSERT(lockh);
         lov = &exp->exp_obd->u.lov;
+        if (flags & OBD_FAST_LOCK) {
+                int stripe = lov_stripe_number(lsm, end);
+                RETURN(obd_cancel(lov->lov_tgts[lsm->lsm_oinfo[stripe]->
+                                  loi_ost_idx]->ltd_exp, NULL, mode, lockh,
+                                  flags, end));
+        }
+
         rc = lov_prep_cancel_set(exp, &oinfo, lsm, mode, lockh, &set);
         if (rc)
                 RETURN(rc);
@@ -2260,7 +2268,8 @@ static int lov_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
                         this_mode = mode;
 
                 rc = obd_cancel(lov->lov_tgts[req->rq_idx]->ltd_exp,
-                                req->rq_oi.oi_md, this_mode, lov_lockhp);
+                                req->rq_oi.oi_md, this_mode, lov_lockhp, flags,
+                                end);
                 rc = lov_update_common_set(set, req, rc);
                 if (rc) {
                         CERROR("error: cancel objid "LPX64" subobj "
@@ -3208,45 +3217,44 @@ void lov_stripe_unlock(struct lov_stripe_md *md)
 }
 EXPORT_SYMBOL(lov_stripe_unlock);
 
-static int lov_reget_short_lock(struct obd_export *exp,
-                                struct lov_stripe_md *lsm,
-                                void **res, int rw,
-                                obd_off start, obd_off end,
-                                void **cookie)
+static int lov_get_lock(struct obd_export *exp, struct lov_stripe_md *lsm,
+                        void **res, int rw, obd_off start, obd_off end,
+                        struct lustre_handle *lockh, int flags)
 {
         struct lov_async_page *l = *res;
         obd_off stripe_start, stripe_end = start;
+        struct lov_lock_handles *lov_lockh = NULL;
+        int rc;
 
         ENTRY;
+
+        if (lockh && lustre_handle_is_used(lockh) &&
+            !(flags & OBD_FAST_LOCK)) {
+                lov_lockh = lov_handle2llh(lockh);
+                if (lov_lockh == NULL) {
+                        CERROR("LOV: invalid lov lock handle %p\n", lockh);
+                        RETURN(-EINVAL);
+                }
+                lockh = lov_lockh->llh_handles + l->lap_stripe;
+        }
 
         /* ensure we don't cross stripe boundaries */
         lov_extent_calc(exp, lsm, OBD_CALC_STRIPE_END, &stripe_end);
         if (stripe_end <= end)
-                RETURN(0);
+                GOTO(out, rc = 0);
 
         /* map the region limits to the object limits */
         lov_stripe_offset(lsm, start, l->lap_stripe, &stripe_start);
         lov_stripe_offset(lsm, end, l->lap_stripe, &stripe_end);
 
-        RETURN(obd_reget_short_lock(exp->exp_obd->u.lov.lov_tgts[lsm->
-                                    lsm_oinfo[l->lap_stripe]->loi_ost_idx]->
-                                    ltd_exp, NULL, &l->lap_sub_cookie,
-                                    rw, stripe_start, stripe_end, cookie));
-}
-
-static int lov_release_short_lock(struct obd_export *exp,
-                                  struct lov_stripe_md *lsm, obd_off end,
-                                  void *cookie, int rw)
-{
-        int stripe;
-
-        ENTRY;
-
-        stripe = lov_stripe_number(lsm, end);
-
-        RETURN(obd_release_short_lock(exp->exp_obd->u.lov.lov_tgts[lsm->
-                                      lsm_oinfo[stripe]->loi_ost_idx]->
-                                      ltd_exp, NULL, end, cookie, rw));
+        rc = obd_get_lock(exp->exp_obd->u.lov.lov_tgts[lsm->
+                            lsm_oinfo[l->lap_stripe]->loi_ost_idx]->
+                            ltd_exp, NULL, &l->lap_sub_cookie,
+                            rw, stripe_start, stripe_end, lockh, flags);
+out:
+        if (lov_lockh != NULL)
+                lov_llh_put(lov_lockh);
+        RETURN(rc);
 }
 
 struct obd_ops lov_obd_ops = {
@@ -3271,8 +3279,7 @@ struct obd_ops lov_obd_ops = {
         .o_brw                 = lov_brw,
         .o_brw_async           = lov_brw_async,
         .o_prep_async_page     = lov_prep_async_page,
-        .o_reget_short_lock    = lov_reget_short_lock,
-        .o_release_short_lock  = lov_release_short_lock,
+        .o_get_lock            = lov_get_lock,
         .o_queue_async_io      = lov_queue_async_io,
         .o_set_async_flags     = lov_set_async_flags,
         .o_queue_group_io      = lov_queue_group_io,

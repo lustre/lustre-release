@@ -366,7 +366,7 @@ int llu_extent_unlock(struct ll_file_data *fd, struct inode *inode,
             (sbi->ll_flags & LL_SBI_NOLCK) || mode == LCK_NL)
                 RETURN(0);
 
-        rc = obd_cancel(sbi->ll_osc_exp, lsm, mode, lockh);
+        rc = obd_cancel(sbi->ll_osc_exp, lsm, mode, lockh, 0, 0);
 
         RETURN(rc);
 }
@@ -508,7 +508,8 @@ static int llu_queue_pio(int cmd, struct llu_io_group *group,
                                          (obd_off)page->index << CFS_PAGE_SHIFT,
                                          &llu_async_page_ops,
                                          llap, &llap->llap_cookie,
-                                         1 /* no cache in liblustre at all */,
+                                         /* no cache in liblustre at all */
+                                         OBD_PAGE_NO_CACHE,
                                          NULL);
                 if (rc) {
                         LASSERT(rc < 0);

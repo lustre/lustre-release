@@ -804,7 +804,8 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
 
                 rc = obd_prep_async_page(exp, lsm, NULL, eap->eap_page,
                                          eap->eap_off, &ec_async_page_ops,
-                                         eap, &eap->eap_cookie, 1, NULL);
+                                         eap, &eap->eap_cookie,
+                                         OBD_PAGE_NO_CACHE, NULL);
                 if (rc) {
                         spin_lock(&eas->eas_lock);
                         eas->eas_rc = rc;
@@ -1139,7 +1140,7 @@ echo_client_cancel(struct obd_export *exp, struct obdo *oa)
                 return (-ENOENT);
 
         rc = obd_cancel(ec->ec_exp, ecl->ecl_object->eco_lsm, ecl->ecl_mode,
-                        &ecl->ecl_lock_handle);
+                        &ecl->ecl_lock_handle, 0, 0);
 
         echo_put_object (ecl->ecl_object);
         OBD_FREE (ecl, sizeof (*ecl));
@@ -1436,7 +1437,7 @@ static int echo_client_disconnect(struct obd_export *exp)
                 list_del (&ecl->ecl_exp_chain);
 
                 rc = obd_cancel(ec->ec_exp, ecl->ecl_object->eco_lsm,
-                                 ecl->ecl_mode, &ecl->ecl_lock_handle);
+                                 ecl->ecl_mode, &ecl->ecl_lock_handle, 0, 0);
 
                 CDEBUG (D_INFO, "Cancel lock on object "LPX64" on disconnect "
                         "(%d)\n", ecl->ecl_object->eco_id, rc);

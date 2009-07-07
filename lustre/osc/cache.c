@@ -100,14 +100,16 @@ int cache_add_extent(struct lustre_cache *cache, struct ldlm_res_id *res,
                 if (!lock)
                         RETURN(-ENOLCK);
 
-                LASSERTF(lock->l_policy_data.l_extent.start <=
-                         extent->oap_obj_off &&
-                         extent->oap_obj_off + CFS_PAGE_SIZE - 1 <=
-                         lock->l_policy_data.l_extent.end,
-                         "Got wrong lock [" LPU64 "," LPU64 "] for page with "
-                         "offset " LPU64 "\n",
-                         lock->l_policy_data.l_extent.start,
-                         lock->l_policy_data.l_extent.end, extent->oap_obj_off);
+                if(lock->l_policy_data.l_extent.start > extent->oap_obj_off ||
+                   extent->oap_obj_off + CFS_PAGE_SIZE - 1 >
+                   lock->l_policy_data.l_extent.end) {
+                         CDEBUG(D_CACHE, "Got wrong lock [" LPU64 "," LPU64 "] "
+                                         "for page with offset " LPU64 "\n",
+                                         lock->l_policy_data.l_extent.start,
+                                         lock->l_policy_data.l_extent.end,
+                                         extent->oap_obj_off);
+                         RETURN(-ENOLCK);
+                }
         } else {
                 /* Real extent width calculation here once we have real
                  * extents

@@ -673,7 +673,8 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
 }
 
 static int mgc_cancel(struct obd_export *exp, struct lov_stripe_md *md,
-                      __u32 mode, struct lustre_handle *lockh)
+                      __u32 mode, struct lustre_handle *lockh, int flags,
+                      obd_off end)
 {
         ENTRY;
 
@@ -1187,7 +1188,7 @@ out_pop:
         /* Now drop the lock so MGS can revoke it */
         if (!rcl) {
                 rcl = mgc_cancel(mgc->u.cli.cl_mgc_mgsexp, NULL,
-                                 LCK_CR, &lockh);
+                                 LCK_CR, &lockh, 0, 0);
                 if (rcl)
                         CERROR("Can't drop cfg lock: %d\n", rcl);
         }

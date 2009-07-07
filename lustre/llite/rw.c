@@ -770,7 +770,8 @@ static inline int llap_async_cache_rebalance(struct ll_sb_info *sbi)
 
 static struct ll_async_page *llap_from_page_with_lockh(struct page *page,
                                                        unsigned origin,
-                                                       struct lustre_handle *lockh)
+                                                       struct lustre_handle *lockh,
+                                                       int flags)
 {
         struct ll_async_page *llap;
         struct obd_export *exp;
@@ -795,8 +796,28 @@ static struct ll_async_page *llap_from_page_with_lockh(struct page *page,
         LASSERT(ll_async_page_slab);
         LASSERTF(origin < LLAP__ORIGIN_MAX, "%u\n", origin);
 
+        exp = ll_i2obdexp(page->mapping->host);
+        if (exp == NULL)
+                RETURN(ERR_PTR(-EINVAL));
+
         llap = llap_cast_private(page);
         if (llap != NULL) {
+                if (origin == LLAP_ORIGIN_READAHEAD && lockh) {
+                        /* the page could belong to another lock for which
+                         * we don't hold a reference. We need to check that
+                         * a reference is taken on a lock covering this page.
+                         * For readpage origin, this is fine because
+                         * ll_file_readv() took a reference on lock(s) covering
+                         * the whole read. However, for readhead, we don't have
+                         * this guarantee, so we need to check that the lock
+                         * matched in ll_file_readv() also covers this page */
+                        __u64 offset = ((loff_t)page->index) << CFS_PAGE_SHIFT;
+                        if (!obd_get_lock(exp, ll_i2info(inode)->lli_smd, 
+                                          &llap->llap_cookie, OBD_BRW_READ,
+                                          offset, offset + CFS_PAGE_SIZE - 1,
+                                          lockh, flags))
+                                RETURN(ERR_PTR(-ENOLCK));
+                }
                 /* move to end of LRU list, except when page is just about to
                  * die */
                 if (origin != LLAP_ORIGIN_REMOVEPAGE) {
@@ -827,10 +848,6 @@ static struct ll_async_page *llap_from_page_with_lockh(struct page *page,
                 }
                 GOTO(out, llap);
         }
-
-        exp = ll_i2obdexp(page->mapping->host);
-        if (exp == NULL)
-                RETURN(ERR_PTR(-EINVAL));
 
         /* limit the number of lustre-cached pages */
         cpu = cfs_get_cpu();
@@ -866,7 +883,7 @@ static struct ll_async_page *llap_from_page_with_lockh(struct page *page,
         rc = obd_prep_async_page(exp, ll_i2info(inode)->lli_smd, NULL, page,
                                  (obd_off)page->index << CFS_PAGE_SHIFT,
                                  &ll_async_page_ops, llap, &llap->llap_cookie,
-                                 0, lockh);
+                                 flags, lockh);
         if (rc) {
                 OBD_SLAB_FREE(llap, ll_async_page_slab,
                               ll_async_page_slab_size);
@@ -921,7 +938,7 @@ static struct ll_async_page *llap_from_page_with_lockh(struct page *page,
 static inline struct ll_async_page *llap_from_page(struct page *page,
                                                    unsigned origin)
 {
-        return llap_from_page_with_lockh(page, origin, NULL);
+        return llap_from_page_with_lockh(page, origin, NULL, 0);
 }
 
 static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
@@ -1042,7 +1059,8 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
         if (fd->fd_flags & LL_FILE_GROUP_LOCKED)
                 lockh = &fd->fd_cwlockh;
 
-        llap = llap_from_page_with_lockh(page, LLAP_ORIGIN_COMMIT_WRITE, lockh);
+        llap = llap_from_page_with_lockh(page, LLAP_ORIGIN_COMMIT_WRITE, lockh,
+                                         0);
         if (IS_ERR(llap))
                 RETURN(PTR_ERR(llap));
 
@@ -1324,6 +1342,28 @@ static int index_in_window(unsigned long index, unsigned long point,
         return start <= index && index <= end;
 }
 
+struct ll_thread_data *ll_td_get()
+{
+        struct ll_thread_data *ltd = current->journal_info;
+
+        LASSERT(ltd == NULL || ltd->ltd_magic == LTD_MAGIC);
+        return ltd;
+}
+
+void ll_td_set(struct ll_thread_data *ltd)
+{
+        if (ltd == NULL) {
+                ltd = current->journal_info;
+                LASSERT(ltd == NULL || ltd->ltd_magic == LTD_MAGIC);
+                current->journal_info = NULL;
+                return;
+        }
+
+        LASSERT(current->journal_info == NULL);
+        LASSERT(ltd->ltd_magic == LTD_MAGIC);
+        current->journal_info = ltd;
+}
+
 static struct ll_readahead_state *ll_ras_get(struct file *f)
 {
         struct ll_file_data       *fd;
@@ -1393,7 +1433,9 @@ static int ll_read_ahead_page(struct obd_export *exp, struct obd_io_group *oig,
         struct ll_async_page *llap;
         struct page *page;
         unsigned int gfp_mask = 0;
-        int rc = 0;
+        int rc = 0, flags = 0;
+        struct ll_thread_data *ltd;
+        struct lustre_handle *lockh = NULL;
 
         gfp_mask = GFP_HIGHUSER & ~__GFP_WAIT;
 #ifdef __GFP_NOWARN
@@ -1413,9 +1455,19 @@ static int ll_read_ahead_page(struct obd_export *exp, struct obd_io_group *oig,
                 GOTO(unlock_page, rc = 0);
         }
 
+        ltd = ll_td_get();
+        if (ltd && ltd->lock_style > 0) {
+                __u64 offset = ((loff_t)page->index) << CFS_PAGE_SHIFT;
+                lockh = ltd2lockh(ltd, offset,
+                                  offset + CFS_PAGE_SIZE - 1);
+                if (ltd->lock_style == LL_LOCK_STYLE_FASTLOCK)
+                        flags = OBD_FAST_LOCK;
+        }
+
         /* we do this first so that we can see the page in the /proc
          * accounting */
-        llap = llap_from_page(page, LLAP_ORIGIN_READAHEAD);
+        llap = llap_from_page_with_lockh(page, LLAP_ORIGIN_READAHEAD, lockh,
+                                         flags);
         if (IS_ERR(llap) || llap->llap_defer_uptodate) {
                 if (PTR_ERR(llap) == -ENOLCK) {
                         ll_ra_stats_inc(mapping, RA_STAT_FAILED_MATCH);
@@ -1580,8 +1632,8 @@ static int ll_read_ahead_pages(struct obd_export *exp,
 }
 
 static int ll_readahead(struct ll_readahead_state *ras,
-                         struct obd_export *exp, struct address_space *mapping,
-                         struct obd_io_group *oig, int flags)
+                        struct obd_export *exp, struct address_space *mapping,
+                        struct obd_io_group *oig, int flags)
 {
         unsigned long start = 0, end = 0, reserved;
         unsigned long ra_end, len;
@@ -1981,6 +2033,8 @@ int ll_writepage(struct page *page)
         struct ll_inode_info *lli = ll_i2info(inode);
         struct obd_export *exp;
         struct ll_async_page *llap;
+        struct ll_thread_data *ltd;
+        struct lustre_handle *lockh = NULL;
         int rc = 0;
         ENTRY;
 
@@ -1990,7 +2044,14 @@ int ll_writepage(struct page *page)
         if (exp == NULL)
                 GOTO(out, rc = -EINVAL);
 
-        llap = llap_from_page(page, LLAP_ORIGIN_WRITEPAGE);
+        ltd = ll_td_get();
+        /* currently, no FAST lock in write path */
+        if (ltd && ltd->lock_style == LL_LOCK_STYLE_TREELOCK) {
+                __u64 offset = ((loff_t)page->index) << CFS_PAGE_SHIFT;
+                lockh = ltd2lockh(ltd, offset, offset + CFS_PAGE_SIZE - 1);
+        }
+        
+        llap = llap_from_page_with_lockh(page, LLAP_ORIGIN_WRITEPAGE, lockh, 0);
         if (IS_ERR(llap))
                 GOTO(out, rc = PTR_ERR(llap));
 
@@ -2045,7 +2106,7 @@ int ll_readpage(struct file *filp, struct page *page)
         struct ll_async_page *llap;
         struct obd_io_group *oig = NULL;
         struct lustre_handle *lockh = NULL;
-        int rc;
+        int rc, flags = 0;
         ENTRY;
 
         LASSERT(PageLocked(page));
@@ -2076,10 +2137,22 @@ int ll_readpage(struct file *filp, struct page *page)
         if (exp == NULL)
                 GOTO(out, rc = -EINVAL);
 
-        if (fd->fd_flags & LL_FILE_GROUP_LOCKED)
+        if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
                 lockh = &fd->fd_cwlockh;
+        } else {
+                struct ll_thread_data *ltd;
+                ltd = ll_td_get();
+                if (ltd && ltd->lock_style > 0) {
+                        __u64 offset = ((loff_t)page->index) << CFS_PAGE_SHIFT;
+                        lockh = ltd2lockh(ltd, offset,
+                                          offset + CFS_PAGE_SIZE - 1);
+                        if (ltd->lock_style == LL_LOCK_STYLE_FASTLOCK)
+                                flags = OBD_FAST_LOCK;
+                }
+        }
 
-        llap = llap_from_page_with_lockh(page, LLAP_ORIGIN_READPAGE, lockh);
+        llap = llap_from_page_with_lockh(page, LLAP_ORIGIN_READPAGE, lockh,
+                                         flags);
         if (IS_ERR(llap)) {
                 if (PTR_ERR(llap) == -ENOLCK) {
                         CWARN("ino %lu page %lu (%llu) not covered by "

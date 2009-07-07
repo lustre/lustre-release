@@ -934,6 +934,26 @@ int ll_tree_lock_iov(struct ll_lock_tree *tree,
                      int ast_flags);
 int ll_tree_unlock(struct ll_lock_tree *tree);
 
+enum ll_lock_style {
+        LL_LOCK_STYLE_NOLOCK   = 0,
+        LL_LOCK_STYLE_FASTLOCK = 1,
+        LL_LOCK_STYLE_TREELOCK = 2
+};
+
+struct ll_thread_data {
+        int ltd_magic;
+        int lock_style;
+        struct list_head *tree_list;
+        union {
+                struct ll_lock_tree tree;
+                struct lustre_handle lockh;
+        } u;
+};
+struct ll_thread_data *ll_td_get(void);
+void ll_td_set(struct ll_thread_data *ltd);
+struct lustre_handle *ltd2lockh(struct ll_thread_data *ltd, __u64 start,
+                                __u64 end);
+
 #define    ll_s2sbi(sb)        (s2lsi(sb)->lsi_llsbi)
 
 static inline __u64 ll_ts2u64(struct timespec *time)

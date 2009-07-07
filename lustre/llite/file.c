@@ -1111,7 +1111,7 @@ int ll_extent_unlock(struct ll_file_data *fd, struct inode *inode,
             (sbi->ll_flags & LL_SBI_NOLCK))
                 RETURN(0);
 
-        rc = obd_cancel(sbi->ll_osc_exp, lsm, mode, lockh);
+        rc = obd_cancel(sbi->ll_osc_exp, lsm, mode, lockh, 0, 0);
 
         RETURN(rc);
 }
@@ -1277,9 +1277,8 @@ static int iov_copy_update(unsigned long *nr_segs, const struct iovec **iov_out,
         return 0;
 }
 
-static int ll_reget_short_lock(struct page *page, int rw,
-                               obd_off start, obd_off end,
-                               void **cookie)
+static int ll_get_short_lock(struct page *page, int rw, obd_off start,
+                             obd_off end, struct lustre_handle *lockh)
 {
         struct ll_async_page *llap;
         struct obd_export *exp;
@@ -1295,13 +1294,13 @@ static int ll_reget_short_lock(struct page *page, int rw,
         if (llap == NULL)
                 RETURN(0);
 
-        RETURN(obd_reget_short_lock(exp, ll_i2info(inode)->lli_smd,
-                                    &llap->llap_cookie, rw, start, end,
-                                    cookie));
+        RETURN(obd_get_lock(exp, ll_i2info(inode)->lli_smd,
+                            &llap->llap_cookie, rw, start, end, lockh,
+                            OBD_FAST_LOCK));
 }
 
 static void ll_release_short_lock(struct inode *inode, obd_off end,
-                                  void *cookie, int rw)
+                                  struct lustre_handle *lockh, int rw)
 {
         struct obd_export *exp;
         int rc;
@@ -1310,8 +1309,9 @@ static void ll_release_short_lock(struct inode *inode, obd_off end,
         if (exp == NULL)
                 return;
 
-        rc = obd_release_short_lock(exp, ll_i2info(inode)->lli_smd, end,
-                                    cookie, rw);
+        rc = obd_cancel(exp, ll_i2info(inode)->lli_smd,
+                        rw = OBD_BRW_READ ? LCK_PR : LCK_PW, lockh,
+                        OBD_FAST_LOCK, end);
         if (rc < 0)
                 CERROR("unlock failed (%d)\n", rc);
 }
@@ -1320,7 +1320,8 @@ static inline int ll_file_get_fast_lock(struct file *file,
                                         obd_off ppos, obd_off end,
                                         const struct iovec *iov,
                                         unsigned long nr_segs,
-                                        void **cookie, int rw)
+                                        struct lustre_handle *lockh,
+                                        int rw)
 {
         int rc = 0, seg;
         struct page *page;
@@ -1337,7 +1338,7 @@ static inline int ll_file_get_fast_lock(struct file *file,
         page = find_lock_page(file->f_dentry->d_inode->i_mapping,
                               ppos >> CFS_PAGE_SHIFT);
         if (page) {
-                if (ll_reget_short_lock(page, rw, ppos, end, cookie))
+                if (ll_get_short_lock(page, rw, ppos, end, lockh))
                         rc = 1;
 
                 unlock_page(page);
@@ -1349,27 +1350,22 @@ out:
 }
 
 static inline void ll_file_put_fast_lock(struct inode *inode, obd_off end,
-                                         void *cookie, int rw)
+                                         struct lustre_handle *lockh, int rw)
 {
-        ll_release_short_lock(inode, end, cookie, rw);
+        ll_release_short_lock(inode, end, lockh, rw);
 }
-
-enum ll_lock_style {
-        LL_LOCK_STYLE_NOLOCK   = 0,
-        LL_LOCK_STYLE_FASTLOCK = 1,
-        LL_LOCK_STYLE_TREELOCK = 2
-};
 
 static inline int ll_file_get_lock(struct file *file, obd_off ppos,
                                    obd_off end, const struct iovec *iov,
-                                   unsigned long nr_segs, void **cookie,
+                                   unsigned long nr_segs,
+                                   struct lustre_handle *lockh,
                                    struct ll_lock_tree *tree, int rw)
 {
         int rc;
 
         ENTRY;
 
-        if (ll_file_get_fast_lock(file, ppos, end, iov, nr_segs, cookie, rw))
+        if (ll_file_get_fast_lock(file, ppos, end, iov, nr_segs, lockh, rw))
                 RETURN(LL_LOCK_STYLE_FASTLOCK);
 
         rc = ll_file_get_tree_lock_iov(tree, file, iov, nr_segs,
@@ -1388,8 +1384,8 @@ static inline int ll_file_get_lock(struct file *file, obd_off ppos,
 
 static inline void ll_file_put_lock(struct inode *inode, obd_off end,
                                     enum ll_lock_style lock_style,
-                                    void *cookie, struct ll_lock_tree *tree,
-                                    int rw)
+                                    struct lustre_handle *lockh,
+                                    struct ll_lock_tree *tree, int rw)
 
 {
         switch (lock_style) {
@@ -1397,7 +1393,7 @@ static inline void ll_file_put_lock(struct inode *inode, obd_off end,
                 ll_tree_unlock(tree);
                 break;
         case LL_LOCK_STYLE_FASTLOCK:
-                ll_file_put_fast_lock(inode, end, cookie, rw);
+                ll_file_put_fast_lock(inode, end, lockh, rw);
                 break;
         default:
                 CERROR("invalid locking style (%d)\n", lock_style);
@@ -1419,18 +1415,16 @@ static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct ll_lock_tree tree;
+        struct ll_thread_data ltd = { 0 };
         struct ost_lvb lvb;
         struct ll_ra_read bead;
         int ra = 0;
         obd_off end;
         ssize_t retval, chunk, sum = 0;
-        int lock_style;
         struct iovec *iov_copy = NULL;
         unsigned long nrsegs_copy, nrsegs_orig = 0;
         size_t count, iov_offset = 0;
         __u64 kms;
-        void *cookie;
         ENTRY;
 
         count = ll_file_get_iov_count(iov, &nr_segs);
@@ -1480,7 +1474,11 @@ static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
                 RETURN(sum);
         }
 
+        ltd.ltd_magic = LTD_MAGIC;
+        ll_td_set(&ltd);
 repeat:
+        memset(&ltd, 0, sizeof(ltd));
+        ltd.ltd_magic = LTD_MAGIC;
         if (sbi->ll_max_rw_chunk != 0 && !(file->f_flags & O_DIRECT)) {
                 /* first, let's know the end of the current stripe */
                 end = *ppos;
@@ -1520,13 +1518,14 @@ repeat:
 
         down_read(&lli->lli_truncate_rwsem); /* Bug 18233 */
 
-        lock_style = ll_file_get_lock(file, (obd_off)(*ppos), end,
-                                      iov_copy, nrsegs_copy, &cookie, &tree,
-                                      OBD_BRW_READ);
-        if (lock_style < 0 || lock_style == LL_LOCK_STYLE_NOLOCK)
+        ltd.lock_style = ll_file_get_lock(file, (obd_off)(*ppos), end, 
+                                          iov_copy, nrsegs_copy, 
+                                          &ltd.u.lockh, &ltd.u.tree,
+                                          OBD_BRW_READ);
+        if (ltd.lock_style < 0 || ltd.lock_style == LL_LOCK_STYLE_NOLOCK)
                 up_read(&lli->lli_truncate_rwsem);
-        if (lock_style < 0)
-                GOTO(out, retval = lock_style);
+        if (ltd.lock_style < 0)
+                GOTO(out, retval = ltd.lock_style);
 
         ll_inode_size_lock(inode, 1);
         /*
@@ -1557,9 +1556,10 @@ repeat:
                 ll_inode_size_unlock(inode, 1);
                 retval = ll_glimpse_size(inode, LDLM_FL_BLOCK_GRANTED);
                 if (retval) {
-                        if (lock_style != LL_LOCK_STYLE_NOLOCK) {
-                                ll_file_put_lock(inode, end, lock_style,
-                                                 cookie, &tree, OBD_BRW_READ);
+                        if (ltd.lock_style != LL_LOCK_STYLE_NOLOCK) {
+                                ll_file_put_lock(inode, end, ltd.lock_style,
+                                                 &ltd.u.lockh, &ltd.u.tree,
+                                                 OBD_BRW_READ);
                                 up_read(&lli->lli_truncate_rwsem);
                         }
                         goto out;
@@ -1573,9 +1573,12 @@ repeat:
 
                         if ((size == 0 && cur_index != 0) ||
                             (((size - 1) >> CFS_PAGE_SHIFT) < cur_index)) {
-                                if (lock_style != LL_LOCK_STYLE_NOLOCK) {
-                                        ll_file_put_lock(inode, end, lock_style,
-                                                         cookie, &tree,
+                                if (ltd.lock_style != LL_LOCK_STYLE_NOLOCK) {
+
+                                        ll_file_put_lock(inode, end, 
+                                                         ltd.lock_style,
+                                                         &ltd.u.lockh, 
+                                                         &ltd.u.tree,
                                                          OBD_BRW_READ);
                                         up_read(&lli->lli_truncate_rwsem);
                                 }
@@ -1599,7 +1602,7 @@ repeat:
                inode->i_ino, chunk, *ppos, i_size_read(inode));
 
         /* turn off the kernel's read-ahead */
-        if (lock_style != LL_LOCK_STYLE_NOLOCK) {
+        if (ltd.lock_style != LL_LOCK_STYLE_NOLOCK) {
                 struct ost_lvb *xtimes;
                 /* read under locks
                  *
@@ -1610,8 +1613,9 @@ repeat:
                  * ll_glimpse_size) could get correct values in lsm */
                 OBD_ALLOC_PTR(xtimes);
                 if (NULL == xtimes) {
-                        ll_file_put_lock(inode, end, lock_style, cookie,
-                                         &tree, OBD_BRW_READ);
+                        ll_file_put_lock(inode, end, ltd.lock_style, 
+                                         &ltd.u.lockh, &ltd.u.tree,
+                                         OBD_BRW_READ);
                         up_read(&lli->lli_truncate_rwsem);
                         GOTO(out, retval = -ENOMEM);
                 }
@@ -1639,8 +1643,8 @@ repeat:
                 retval = generic_file_aio_read(iocb, iov_copy, nrsegs_copy,
                                                *ppos);
 #endif
-                ll_file_put_lock(inode, end, lock_style, cookie,
-                                 &tree, OBD_BRW_READ);
+                ll_file_put_lock(inode, end, ltd.lock_style, &ltd.u.lockh,
+                                 &ltd.u.tree, OBD_BRW_READ);
                 up_read(&lli->lli_truncate_rwsem);
         } else {
                 retval = ll_direct_IO(READ, file, iov_copy, *ppos, nr_segs, 0);
@@ -1660,6 +1664,7 @@ repeat:
         }
 
  out:
+        ll_td_set(NULL);
         if (ra != 0)
                 ll_ra_read_ex(file, &bead);
         retval = (sum > 0) ? sum : retval;
@@ -1708,7 +1713,7 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
         struct inode *inode = file->f_dentry->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
-        struct ll_lock_tree tree;
+        struct ll_thread_data ltd = { 0 };
         loff_t maxbytes = ll_file_maxbytes(inode);
         loff_t lock_start, lock_end, end;
         ssize_t retval, chunk, sum = 0;
@@ -1741,7 +1746,12 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
         if (down_interruptible(&ll_i2info(inode)->lli_write_sem))
                 RETURN(-ERESTARTSYS);
 
+        ltd.ltd_magic = LTD_MAGIC;
+        ll_td_set(&ltd);
 repeat:
+        memset(&ltd, 0, sizeof(ltd));
+        ltd.ltd_magic = LTD_MAGIC;
+
         chunk = 0; /* just to fix gcc's warning */
         end = *ppos + count - 1;
 
@@ -1789,7 +1799,7 @@ repeat:
                 nrsegs_copy = nr_segs;
         }
 
-        tree_locked = ll_file_get_tree_lock_iov(&tree, file, iov_copy,
+        tree_locked = ll_file_get_tree_lock_iov(&ltd.u.tree, file, iov_copy,
                                                 nrsegs_copy,
                                                 (obd_off)lock_start,
                                                 (obd_off)lock_end,
@@ -1841,6 +1851,8 @@ repeat:
                 lov_stripe_unlock(lsm);
                 OBD_FREE_PTR(xtimes);
 
+                ltd.lock_style = LL_LOCK_STYLE_TREELOCK;
+
 #ifdef HAVE_FILE_WRITEV
                 retval = generic_file_writev(file, iov_copy, nrsegs_copy, ppos);
 #else
@@ -1860,7 +1872,7 @@ repeat:
 
 out_unlock:
         if (tree_locked)
-                ll_tree_unlock(&tree);
+                ll_tree_unlock(&ltd.u.tree);
 
 out:
         if (retval > 0) {
@@ -1872,6 +1884,7 @@ out:
 
         up(&ll_i2info(inode)->lli_write_sem);
 
+        ll_td_set(NULL);
         if (iov_copy && iov_copy != iov)
                 OBD_FREE(iov_copy, sizeof(*iov) * nrsegs_orig);
 

@@ -1144,16 +1144,11 @@ struct obd_ops {
                                  struct lov_oinfo *loi,
                                  cfs_page_t *page, obd_off offset,
                                  struct obd_async_page_ops *ops, void *data,
-                                 void **res, int nocache,
+                                 void **res, int flags,
                                  struct lustre_handle *lockh);
-        int (*o_reget_short_lock)(struct obd_export *exp,
-                                 struct lov_stripe_md *lsm,
-                                 void **res, int rw,
-                                 obd_off start, obd_off end,
-                                 void **cookie);
-        int (*o_release_short_lock)(struct obd_export *exp,
-                                    struct lov_stripe_md *lsm, obd_off end,
-                                    void *cookie, int rw);
+        int (*o_get_lock)(struct obd_export *exp, struct lov_stripe_md *lsm,
+                          void **res, int rw, obd_off start, obd_off end,
+                          struct lustre_handle *lockh, int flags);
         int (*o_queue_async_io)(struct obd_export *exp,
                                 struct lov_stripe_md *lsm,
                                 struct lov_oinfo *loi, void *cookie,
@@ -1216,7 +1211,8 @@ struct obd_ops {
         int (*o_change_cbdata)(struct obd_export *, struct lov_stripe_md *,
                                ldlm_iterator_t it, void *data);
         int (*o_cancel)(struct obd_export *, struct lov_stripe_md *md,
-                        __u32 mode, struct lustre_handle *);
+                        __u32 mode, struct lustre_handle *, int flags,
+                        obd_off end);
         int (*o_cancel_unused)(struct obd_export *, struct lov_stripe_md *,
                                int flags, void *opaque);
         int (*o_join_lru)(struct obd_export *, struct lov_stripe_md *,

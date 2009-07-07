@@ -2780,39 +2780,43 @@ static int osc_enter_cache(struct client_obd *cli, struct lov_oinfo *loi,
         RETURN(-EDQUOT);
 }
 
-static int osc_reget_short_lock(struct obd_export *exp,
-                                struct lov_stripe_md *lsm,
-                                void **res, int rw,
-                                obd_off start, obd_off end,
-                                void **cookie)
+static int osc_get_lock(struct obd_export *exp, struct lov_stripe_md *lsm,
+                        void **res, int rw, obd_off start, obd_off end,
+                        struct lustre_handle *lockh, int flags)
 {
-        struct osc_async_page *oap = *res;
-        int rc;
+        struct ldlm_lock *lock = NULL;
+        int rc, release = 0;
 
         ENTRY;
 
-        spin_lock(&oap->oap_lock);
-        rc = ldlm_lock_fast_match(oap->oap_ldlm_lock, rw,
-                                  start, end, cookie);
-        spin_unlock(&oap->oap_lock);
+        if (lockh && lustre_handle_is_used(lockh)) {
+                /* if a valid lockh is passed, just check that the corresponding
+                 * lock covers the extent */
+                lock = ldlm_handle2lock(lockh);
+                release = 1;
+        } else {
+                struct osc_async_page *oap = *res;
+                spin_lock(&oap->oap_lock);
+                lock = oap->oap_ldlm_lock;
+                LDLM_LOCK_GET(lock);
+                spin_unlock(&oap->oap_lock);
+        }
 
+        rc = ldlm_lock_fast_match(lock, rw, start, end, lockh);
+        if (release == 1 && rc == 1)
+                /* if a valid lockh was passed, we just need to check
+                 * that the lock covers the page, no reference should be
+                 * taken*/
+                ldlm_lock_decref(lockh,
+                                 rw == OBD_BRW_WRITE ? LCK_PW : LCK_PR);
+        LDLM_LOCK_PUT(lock);
         RETURN(rc);
-}
-
-static int osc_release_short_lock(struct obd_export *exp,
-                                  struct lov_stripe_md *lsm, obd_off end,
-                                  void *cookie, int rw)
-{
-        ENTRY;
-        ldlm_lock_fast_release(cookie, rw);
-        /* no error could have happened at this layer */
-        RETURN(0);
 }
 
 int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
                         struct lov_oinfo *loi, cfs_page_t *page,
                         obd_off offset, struct obd_async_page_ops *ops,
-                        void *data, void **res, int nocache,
+                        void *data, void **res, int flags,
                         struct lustre_handle *lockh)
 {
         struct osc_async_page *oap;
@@ -2845,7 +2849,7 @@ int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
         spin_lock_init(&oap->oap_lock);
 
         /* If the page was marked as notcacheable - don't add to any locks */
-        if (!nocache) {
+        if (!(flags & OBD_PAGE_NO_CACHE)) {
                 osc_build_res_name(loi->loi_id, loi->loi_gr, &oid);
                 /* This is the only place where we can call cache_add_extent
                    without oap_lock, because this page is locked now, and
@@ -3479,7 +3483,8 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
 }
 
 static int osc_cancel(struct obd_export *exp, struct lov_stripe_md *md,
-                      __u32 mode, struct lustre_handle *lockh)
+                      __u32 mode, struct lustre_handle *lockh, int flags,
+                      obd_off end)
 {
         ENTRY;
 
@@ -4461,8 +4466,7 @@ struct obd_ops osc_obd_ops = {
         .o_brw                  = osc_brw,
         .o_brw_async            = osc_brw_async,
         .o_prep_async_page      = osc_prep_async_page,
-        .o_reget_short_lock     = osc_reget_short_lock,
-        .o_release_short_lock   = osc_release_short_lock,
+        .o_get_lock             = osc_get_lock,
         .o_queue_async_io       = osc_queue_async_io,
         .o_set_async_flags      = osc_set_async_flags,
         .o_queue_group_io       = osc_queue_group_io,

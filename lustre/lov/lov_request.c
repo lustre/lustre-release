@@ -249,7 +249,7 @@ static int enqueue_done(struct lov_request_set *set, __u32 mode)
                         continue;
 
                 rc = obd_cancel(lov->lov_tgts[req->rq_idx]->ltd_exp,
-                                req->rq_oi.oi_md, mode, lov_lockhp);
+                                req->rq_oi.oi_md, mode, lov_lockhp, 0, 0);
                 if (rc && lov->lov_tgts[req->rq_idx] &&
                     lov->lov_tgts[req->rq_idx]->ltd_active)
                         CERROR("cancelling obdjid "LPX64" on OST "
