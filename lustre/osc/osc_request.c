@@ -2108,7 +2108,9 @@ static void osc_ap_completion(const struct lu_env *env,
                 oap->oap_request = NULL;
         }
 
+        spin_lock(&oap->oap_lock);
         oap->oap_async_flags = 0;
+        spin_unlock(&oap->oap_lock);
         oap->oap_interrupted = 0;
 
         if (oap->oap_cmd & OBD_BRW_WRITE) {
@@ -2411,11 +2413,15 @@ osc_send_oap_rpc(const struct lu_env *env, struct client_obd *cli,
                         case -EINTR:
                                 /* the io isn't needed.. tell the checks
                                  * below to complete the rpc with EINTR */
+                                spin_lock(&oap->oap_lock);
                                 oap->oap_async_flags |= ASYNC_COUNT_STABLE;
+                                spin_unlock(&oap->oap_lock);
                                 oap->oap_count = -EINTR;
                                 break;
                         case 0:
+                                spin_lock(&oap->oap_lock);
                                 oap->oap_async_flags |= ASYNC_READY;
+                                spin_unlock(&oap->oap_lock);
                                 break;
                         default:
                                 LASSERTF(0, "oap %p page %p returned %d "
@@ -2900,7 +2906,9 @@ int osc_queue_async_io(const struct lu_env *env,
         /* Give a hint to OST that requests are coming from kswapd - bug19529 */
         if (libcfs_memory_pressure_get())
                 oap->oap_brw_flags |= OBD_BRW_MEMALLOC;
+        spin_lock(&oap->oap_lock);
         oap->oap_async_flags = async_flags;
+        spin_unlock(&oap->oap_lock);
 
         if (cmd & OBD_BRW_WRITE) {
                 rc = osc_enter_cache(env, cli, loi, oap);
@@ -2930,6 +2938,7 @@ int osc_set_async_flags_base(struct client_obd *cli,
                              obd_flag async_flags)
 {
         struct loi_oap_pages *lop;
+        int flags = 0;
         ENTRY;
 
         LASSERT(!list_empty(&oap->oap_pending_item));
@@ -2944,7 +2953,7 @@ int osc_set_async_flags_base(struct client_obd *cli,
                 RETURN(0);
 
         if (SETTING(oap->oap_async_flags, async_flags, ASYNC_READY))
-                oap->oap_async_flags |= ASYNC_READY;
+                flags |= ASYNC_READY;
 
         if (SETTING(oap->oap_async_flags, async_flags, ASYNC_URGENT) &&
             list_empty(&oap->oap_rpc_item)) {
@@ -2952,9 +2961,12 @@ int osc_set_async_flags_base(struct client_obd *cli,
                         list_add(&oap->oap_urgent_item, &lop->lop_urgent);
                 else
                         list_add_tail(&oap->oap_urgent_item, &lop->lop_urgent);
-                oap->oap_async_flags |= ASYNC_URGENT;
+                flags |= ASYNC_URGENT;
                 loi_list_maint(cli, loi);
         }
+        spin_lock(&oap->oap_lock);
+        oap->oap_async_flags |= flags;
+        spin_unlock(&oap->oap_lock);
 
         LOI_DEBUG(loi, "oap %p page %p has flags %x\n", oap, oap->oap_page,
                         oap->oap_async_flags);
@@ -2994,7 +3006,9 @@ int osc_teardown_async_page(struct obd_export *exp,
 
         if (!list_empty(&oap->oap_urgent_item)) {
                 list_del_init(&oap->oap_urgent_item);
+                spin_lock(&oap->oap_lock);
                 oap->oap_async_flags &= ~(ASYNC_URGENT | ASYNC_HP);
+                spin_unlock(&oap->oap_lock);
         }
         if (!list_empty(&oap->oap_pending_item)) {
                 list_del_init(&oap->oap_pending_item);

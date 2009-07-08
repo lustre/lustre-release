@@ -149,8 +149,11 @@ static int osc_io_submit(const struct lu_env *env,
                 osc = cl2osc(opg->ops_cl.cpl_obj);
                 exp = osc_export(osc);
 
-                if (priority > CRP_NORMAL)
+                if (priority > CRP_NORMAL) {
+                        spin_lock(&oap->oap_lock);
                         oap->oap_async_flags |= ASYNC_HP;
+                        spin_unlock(&oap->oap_lock);
+                }
                 /*
                  * This can be checked without cli->cl_loi_list_lock, because
                  * ->oap_*_item are always manipulated when the page is owned.

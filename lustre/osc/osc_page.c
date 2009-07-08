@@ -344,7 +344,9 @@ void osc_page_clip(const struct lu_env *env, const struct cl_page_slice *slice,
 
         opg->ops_from = from;
         opg->ops_to   = to;
+        spin_lock(&oap->oap_lock);
         oap->oap_async_flags |= ASYNC_COUNT_STABLE;
+        spin_unlock(&oap->oap_lock);
 }
 
 static int osc_page_cancel(const struct lu_env *env,
@@ -460,7 +462,9 @@ static int osc_completion(const struct lu_env *env,
         LASSERT(page->cp_req == NULL);
 
         /* As the transfer for this page is being done, clear the flags */
+        spin_lock(&oap->oap_lock);
         oap->oap_async_flags = 0;
+        spin_unlock(&oap->oap_lock);
 
         crt = cmd == OBD_BRW_READ ? CRT_READ : CRT_WRITE;
         /* Clear opg->ops_transfer_pinned before VM lock is released. */
@@ -553,6 +557,7 @@ void osc_io_submit_page(const struct lu_env *env,
 {
         struct osc_async_page *oap = &opg->ops_oap;
         struct client_obd     *cli = oap->oap_cli;
+        int flags = 0;
 
         LINVRNT(osc_page_protected(env, opg,
                                    crt == CRT_WRITE ? CLM_WRITE : CLM_READ, 1));
@@ -573,11 +578,14 @@ void osc_io_submit_page(const struct lu_env *env,
                 oap->oap_cmd |= OBD_BRW_NOQUOTA;
         }
 
-        oap->oap_async_flags |= OSC_FLAGS;
         if (oap->oap_cmd & OBD_BRW_READ)
-                oap->oap_async_flags |= ASYNC_COUNT_STABLE;
+                flags = ASYNC_COUNT_STABLE;
         else if (!(oap->oap_brw_page.flag & OBD_BRW_FROM_GRANT))
                 osc_enter_cache_try(env, cli, oap->oap_loi, oap, 1);
+
+        spin_lock(&oap->oap_lock);
+        oap->oap_async_flags |= OSC_FLAGS | flags;
+        spin_unlock(&oap->oap_lock);
 
         osc_oap_to_pending(oap);
         osc_page_transfer_get(opg, "transfer\0imm");
