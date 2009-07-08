@@ -2567,7 +2567,7 @@ static int find_poolpath(char *fsname, char *poolname, char *poolpath)
 /*
  * if pool is NULL, search ostname in target_obd
  * if pool is no NULL
- *  if pool not found returns < 0
+ *  if pool not found returns errno < 0
  *  if ostname is NULL, returns 1 if pool is not empty and 0 if pool empty
  *  if ostname is not NULL, returns 1 if OST is in pool and 0 if not
  */
@@ -2619,11 +2619,19 @@ static int check_pool_cmd(enum lcfg_command_type cmd,
                           char *fsname, char *poolname,
                           char *ostname)
 {
-        int rc = 0;
+        int rc;
+
+        rc = search_ost(fsname, poolname, ostname);
+        if (rc < 0 && (cmd != LCFG_POOL_NEW)) {
+                fprintf(stderr, "Pool %s.%s not found\n",
+                        fsname, poolname);
+                return rc;
+        }
 
         switch (cmd) {
         case LCFG_POOL_NEW: {
-                if (search_ost(fsname, poolname, NULL) >= 0) {
+                LASSERT(ostname == NULL);
+                if (rc >= 0) {
                         fprintf(stderr, "Pool %s.%s already exists\n",
                                 fsname, poolname);
                         return -EEXIST;
@@ -2631,12 +2639,7 @@ static int check_pool_cmd(enum lcfg_command_type cmd,
                 return 0;
         }
         case LCFG_POOL_DEL: {
-                rc = search_ost(fsname, poolname, NULL);
-                if (rc < 0) {
-                        fprintf(stderr, "Pool %s.%s not found\n",
-                                fsname, poolname);
-                        return rc;
-                }
+                LASSERT(ostname == NULL);
                 if (rc == 1) {
                         fprintf(stderr, "Pool %s.%s not empty, "
                                 "please remove all members\n",
@@ -2646,32 +2649,20 @@ static int check_pool_cmd(enum lcfg_command_type cmd,
                 return 0;
         }
         case LCFG_POOL_ADD: {
-                rc = search_ost(fsname, NULL, ostname);
-                if (rc == 0) {
-                        fprintf(stderr, "OST %s not found in lov of %s\n",
-                                ostname, fsname);
-                        return -ENOENT;
-                }
-                rc = search_ost(fsname, poolname, ostname);
-                if (rc < 0) {
-                        fprintf(stderr, "Pool %s.%s not found\n",
-                                fsname, poolname);
-                        return rc;
-                }
                 if (rc == 1) {
-                        fprintf(stderr, "OST %s already in pool %s.%s\n",
+                        fprintf(stderr, "OST %s is already in pool %s.%s\n",
                                 ostname, fsname, poolname);
                         return -EEXIST;
+                }
+                rc = search_ost(fsname, NULL, ostname);
+                if (rc == 0) {
+                        fprintf(stderr, "OST %s is not part of the '%s' fs.\n",
+                                ostname, fsname);
+                        return -ENOENT;
                 }
                 return 0;
         }
         case LCFG_POOL_REM: {
-                rc = search_ost(fsname, poolname, ostname);
-                if (rc < 0) {
-                        fprintf(stderr, "Pool %s.%s not found\n",
-                                fsname, poolname);
-                        return rc;
-                }
                 if (rc == 0) {
                         fprintf(stderr, "OST %s not found in pool %s.%s\n",
                                 ostname, fsname, poolname);
@@ -2679,91 +2670,105 @@ static int check_pool_cmd(enum lcfg_command_type cmd,
                 }
                 return 0;
         }
-        default: {
-        }
-        }
-        return 0;
+        default:
+                break;
+        } /* switch */
+        return -EINVAL;
 }
 
-static void check_pool_cmd_result(enum lcfg_command_type cmd,
-                                  char *fsname, char *poolname,
-                                  char *ostname)
+/* This check only verifies that the changes have been "pushed out" to
+   the client successfully.  This involves waiting for a config update,
+   and so may fail because of problems in that code or post-command
+   network loss. So reporting a warning is appropriate, but not a failure.
+*/
+static int check_pool_cmd_result(enum lcfg_command_type cmd,
+                                 char *fsname, char *poolname,
+                                 char *ostname)
 {
-        int cpt, rc = 0;
+        int cpt = 10;
+        int rc = 0;
 
-        cpt = 10;
         switch (cmd) {
         case LCFG_POOL_NEW: {
                 do {
                         rc = search_ost(fsname, poolname, NULL);
                         if (rc == -ENODEV)
-                                return;
+                                return rc;
                         if (rc < 0)
                                 sleep(2);
                         cpt--;
                 } while ((rc < 0) && (cpt > 0));
-                if (rc >= 0)
+                if (rc >= 0) {
                         fprintf(stderr, "Pool %s.%s created\n",
                                 fsname, poolname);
-                else
+                        return 0;
+                } else {
                         fprintf(stderr, "Warning, pool %s.%s not found\n",
                                 fsname, poolname);
-                return;
+                        return -ENOENT;
+                }
         }
         case LCFG_POOL_DEL: {
                 do {
                         rc = search_ost(fsname, poolname, NULL);
                         if (rc == -ENODEV)
-                                return;
+                                return rc;
                         if (rc >= 0)
                                 sleep(2);
                         cpt--;
                 } while ((rc >= 0) && (cpt > 0));
-                if (rc < 0)
+                if (rc < 0) {
                         fprintf(stderr, "Pool %s.%s destroyed\n",
                                 fsname, poolname);
-                else
+                        return 0;
+                } else {
                         fprintf(stderr, "Warning, pool %s.%s still found\n",
                                 fsname, poolname);
-                return;
+                        return -EEXIST;
+                }
         }
         case LCFG_POOL_ADD: {
                 do {
                         rc = search_ost(fsname, poolname, ostname);
                         if (rc == -ENODEV)
-                                return;
+                                return rc;
                         if (rc != 1)
                                 sleep(2);
                         cpt--;
                 } while ((rc != 1) && (cpt > 0));
-                if (rc == 1)
+                if (rc == 1) {
                         fprintf(stderr, "OST %s added to pool %s.%s\n",
                                 ostname, fsname, poolname);
-                else
+                        return 0;
+                } else {
                         fprintf(stderr, "Warning, OST %s not found in pool %s.%s\n",
                                 ostname, fsname, poolname);
-                return;
+                        return -ENOENT;
+                }
         }
         case LCFG_POOL_REM: {
                 do {
                         rc = search_ost(fsname, poolname, ostname);
                         if (rc == -ENODEV)
-                                return;
+                                return rc;
                         if (rc == 1)
                                 sleep(2);
                         cpt--;
                 } while ((rc == 1) && (cpt > 0));
-                if (rc != 1)
+                if (rc != 1) {
                         fprintf(stderr, "OST %s removed from pool %s.%s\n",
                                 ostname, fsname, poolname);
-                else
+                        return 0;
+                } else {
                         fprintf(stderr, "Warning, OST %s still found in pool %s.%s\n",
                                 ostname, fsname, poolname);
-                return;
+                        return -EEXIST;
+                }
         }
-        default: {
+        default:
+                break;
         }
-        }
+        return -EINVAL;
 }
 
 static int check_and_complete_ostname(char *fsname, char *ostname)
@@ -3087,6 +3092,9 @@ int jt_pool_cmd(int argc, char **argv)
                                 cmds[j].rc = pool_cmd(cmd, argv[0], argv[1],
                                                       fsname, poolname,
                                                       ostname);
+                                /* Return an err if any of the add/dels fail */
+                                if (!rc)
+                                        rc = cmds[j].rc;
                         }
                         for (j = 0; j < array_sz; j++) {
                                 if (!cmds[j].rc) {
@@ -3113,14 +3121,11 @@ int jt_pool_cmd(int argc, char **argv)
                         if (ostnames_buf);
                                 free(ostnames_buf);
                 }
-                return 0;
+                /* fall through */
         }
-        }
-
+        } /* switch */
 
 out:
-        if ((rc == -EINVAL) || (rc == -ENOENT))
-                fprintf(stderr, "Does the fs, pool or ost exist?\n");
         if (rc != 0) {
                 errno = -rc;
                 perror(argv[0]);
