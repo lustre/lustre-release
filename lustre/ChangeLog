@@ -14,9 +14,20 @@ tbd  Sun Microsystems, Inc.
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
 Severity   : normal
+Bugzilla   : 19529
+Description: Avoid deadlock for local client writes
+Details    : Use new OBD_BRW_MEMALLOC flag to notify OST about writes in the
+	     memory freeing context. This allows OST threads to set the
+	     PF_MEMALLOC flag on task structures in order to allocate memory
+	     from reserved pools and complete IO.
+	     Use GFP_HIGHUSER for OST allocations for non-local client writes,
+	     so that the OST threads generate memory pressure and allow
+	     inactive pages to be reclaimed.
+
+Severity   : normal
 Frequency  : rare
 Bugzilla   : 18380
-Descriptoin: lock ordering violation between &cli->cl_sem and _lprocfs_lock
+Description: lock ordering violation between &cli->cl_sem and _lprocfs_lock
 Details    : move ldlm namespace creation in setup phase to avoid grab
 	     _lprocfs_lock with cli_sem held.
 

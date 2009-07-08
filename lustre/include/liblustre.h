@@ -355,6 +355,10 @@ int test_and_clear_bit(int nr, unsigned long *addr)
         return oldbit;
 }
 
+#define libcfs_memory_pressure_get() (0) 
+#define libcfs_memory_pressure_put() do {} while (0) 
+#define libcfs_memory_pressure_clr() do {} while (0)
+
 /* FIXME sys/capability will finally included linux/fs.h thus
  * cause numerous trouble on x86-64. as temporary solution for
  * build broken at Cray, we copy definition we need from capability.h

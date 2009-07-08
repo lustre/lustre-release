@@ -110,6 +110,10 @@ extern void __cfs_free_pages(cfs_page_t *page, unsigned int order);
 #define __cfs_free_page(page)  __cfs_free_pages(page, 0)
 #define cfs_free_page(p)       __free_pages(p, 0)
 
+#define libcfs_memory_pressure_get() (current->flags & PF_MEMALLOC)
+#define libcfs_memory_pressure_set() do { current->flags |= PF_MEMALLOC; } while (0)
+#define libcfs_memory_pressure_clr() do { current->flags &= ~PF_MEMALLOC; } while (0)
+
 /*
  * In Linux there is no way to determine whether current execution context is
  * blockable.

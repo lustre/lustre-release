@@ -2897,6 +2897,9 @@ int osc_queue_async_io(const struct lu_env *env,
         oap->oap_page_off = off;
         oap->oap_count = count;
         oap->oap_brw_flags = brw_flags;
+        /* Give a hint to OST that requests are coming from kswapd - bug19529 */
+        if (libcfs_memory_pressure_get())
+                oap->oap_brw_flags |= OBD_BRW_MEMALLOC;
         oap->oap_async_flags = async_flags;
 
         if (cmd & OBD_BRW_WRITE) {

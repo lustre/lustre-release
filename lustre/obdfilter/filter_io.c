@@ -264,20 +264,26 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
 /*
  * the routine is used to request pages from pagecache
  *
- * use GFP_NOFS not allowing to enter FS as the client can run on this node
- * and we might end waiting on a page he sent in the request we're serving.
- *
+ * use GFP_NOFS for requests from a local client not allowing to enter FS
+ * as we might end up waiting on a page he sent in the request we're serving.
  * use __GFP_HIGHMEM so that the pages can use all of the available memory
  * on 32-bit machines
+ * use more agressive GFP_HIGHUSER flags from non-local clients to be able to
+ * generate more memory pressure, but at the same time use __GFP_NOMEMALLOC
+ * in order not to exhaust emergency reserves.
+ *
+ * See Bug 19529 and Bug 19917 for details. 
  */
 static struct page *filter_get_page(struct obd_device *obd,
                                     struct inode *inode,
-                                    obd_off offset)
+                                    obd_off offset,
+                                    int localreq)
 {
         struct page *page;
 
         page = find_or_create_page(inode->i_mapping, offset >> CFS_PAGE_SHIFT,
-                                   GFP_NOFS | __GFP_HIGHMEM);
+                                   (localreq ? (GFP_NOFS | __GFP_HIGHMEM) 
+                                             : (GFP_HIGHUSER | __GFP_NOMEMALLOC)));
         if (unlikely(page == NULL))
                 lprocfs_counter_add(obd->obd_stats, LPROC_FILTER_NO_PAGE, 1);
 
@@ -459,7 +465,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                          * so it's easy to detect later. */
                         break;
 
-                lnb->page = filter_get_page(obd, inode, lnb->offset);
+                lnb->page = filter_get_page(obd, inode, lnb->offset, 0);
                 if (lnb->page == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
 
@@ -673,7 +679,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         void *iobuf;
         obd_size left;
         unsigned long now = jiffies, timediff;
-        int rc = 0, i, tot_bytes = 0, cleanup_phase = 0;
+        int rc = 0, i, tot_bytes = 0, cleanup_phase = 0, localreq = 0;
         ENTRY;
         LASSERT(objcount == 1);
         LASSERT(obj->ioo_bufcnt > 0);
@@ -682,6 +688,9 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                               CAPA_OPC_OSS_WRITE);
         if (rc)
                 RETURN(rc);
+
+        if (exp->exp_connection->c_peer.nid == exp->exp_connection->c_self) 
+                localreq = 1;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         iobuf = filter_iobuf_get(&obd->u.filter, oti);
@@ -768,7 +777,8 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                  * needs to keep the pages all aligned properly. */
                 lnb->dentry = dentry;
 
-                lnb->page = filter_get_page(obd, dentry->d_inode, lnb->offset);
+                lnb->page = filter_get_page(obd, dentry->d_inode, lnb->offset,
+                                            localreq);
                 if (lnb->page == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
 
