@@ -87,7 +87,7 @@ static void mdc_object_free(const struct lu_env *env, struct lu_object *lo)
 }
 
 static int mdc_object_init(const struct lu_env *env, struct lu_object *lo,
-                           const struct lu_object_conf *_)
+                           const struct lu_object_conf *unused)
 {
         ENTRY;
         lo->lo_header->loh_attr |= LOHA_REMOTE;

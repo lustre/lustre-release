@@ -74,6 +74,11 @@ extern unsigned int obd_dump_on_eviction;
    networking / disk / timings affected by load (use Adaptive Timeouts) */
 extern unsigned int obd_timeout;          /* seconds */
 extern unsigned int ldlm_timeout;         /* seconds */
+extern unsigned int at_min;
+extern unsigned int at_max;
+extern unsigned int at_history;
+extern int at_early_margin;
+extern int at_extra;
 extern unsigned int obd_sync_filter;
 extern unsigned int obd_max_dirty_pages;
 extern atomic_t obd_dirty_pages;
@@ -132,8 +137,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
  * Time interval of shrink, if the client is "idle" more than this interval,
  * then the ll_grant thread will return the requested grant space to filter
  */
-#define GRANT_SHRINK_INTERVAL             360/*6 minutes*/
-
+#define GRANT_SHRINK_INTERVAL            1200/*20 minutes*/
 
 #define OBD_FAIL_MDS                     0x100
 #define OBD_FAIL_MDS_HANDLE_UNPACK       0x101
@@ -200,6 +204,8 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MDS_REMOVE_COMMON_EA    0x13e
 #define OBD_FAIL_MDS_ALLOW_COMMON_EA_SETTING   0x13f
 #define OBD_FAIL_MDS_LOV_PREP_CREATE     0x141
+#define OBD_FAIL_MDS_REINT_DELAY         0x142
+#define OBD_FAIL_MDS_OPEN_WAIT_CREATE    0x143
 
 /* CMD */
 #define OBD_FAIL_MDS_IS_SUBDIR_NET       0x180
@@ -208,6 +214,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MDS_WRITEPAGE_NET       0x183
 #define OBD_FAIL_MDS_WRITEPAGE_PACK      0x184
 #define OBD_FAIL_MDS_RECOVERY_ACCEPTS_GAPS 0x185
+#define OBD_FAIL_MDS_GET_INFO_NET        0x186
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201

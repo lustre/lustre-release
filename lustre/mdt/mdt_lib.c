@@ -70,7 +70,7 @@ void mdt_exit_ucred(struct mdt_thread_info *info)
         if (uc->mu_valid != UCRED_INIT) {
                 uc->mu_suppgids[0] = uc->mu_suppgids[1] = -1;
                 if (uc->mu_ginfo) {
-                        groups_free(uc->mu_ginfo);
+                        put_group_info(uc->mu_ginfo);
                         uc->mu_ginfo = NULL;
                 }
                 if (uc->mu_identity) {
@@ -293,7 +293,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 out:
         if (rc) {
                 if (ucred->mu_ginfo) {
-                        groups_free(ucred->mu_ginfo);
+                        put_group_info(ucred->mu_ginfo);
                         ucred->mu_ginfo = NULL;
                 }
                 if (ucred->mu_identity) {
@@ -753,8 +753,8 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
                 ATTR_ATIME|ATTR_MTIME|ATTR_CTIME|ATTR_FROM_OPEN|
                 ATTR_ATIME_SET|ATTR_CTIME_SET|ATTR_MTIME_SET|
                 ATTR_ATTR_FLAG|ATTR_RAW|MDS_OPEN_OWNEROVERRIDE|
-                ATTR_FORCE|ATTR_KILL_SUID);
-        if (in != 0 && 0)
+                ATTR_FORCE|ATTR_KILL_SUID|ATTR_KILL_SGID);
+        if (in != 0)
                 CERROR("Unknown attr bits: %#llx\n", in);
         return out;
 }

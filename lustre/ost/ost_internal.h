@@ -56,11 +56,9 @@ struct ptlrpc_request;
  */
 struct ost_thread_local_cache {
         /*
-         * pool of pages and nio buffers used by write-path
+         * pool of nio buffers used by write-path
          */
-        struct page          *page  [OST_THREAD_POOL_SIZE];
         struct niobuf_local   local [OST_THREAD_POOL_SIZE];
-        struct niobuf_remote  remote[OST_THREAD_POOL_SIZE];
 };
 
 struct ost_thread_local_cache *ost_tls(struct ptlrpc_request *r);

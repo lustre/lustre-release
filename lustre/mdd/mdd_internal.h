@@ -62,8 +62,8 @@ extern quota_interface_t *mds_quota_interface_ref;
 
 static inline void mdd_quota_wrapper(struct lu_attr *la, unsigned int *qids)
 {
-        qids[0] = la->la_uid;
-        qids[1] = la->la_gid;
+        qids[USRQUOTA] = la->la_uid;
+        qids[GRPQUOTA] = la->la_gid;
 }
 #endif
 
@@ -269,6 +269,7 @@ void mdd_read_lock(const struct lu_env *env, struct mdd_object *obj,
                    enum mdd_object_role role);
 void mdd_write_unlock(const struct lu_env *env, struct mdd_object *obj);
 void mdd_read_unlock(const struct lu_env *env, struct mdd_object *obj);
+int mdd_write_locked(const struct lu_env *env, struct mdd_object *obj);
 
 void mdd_pdlock_init(struct mdd_object *obj);
 unsigned long mdd_name2hash(const char *name);

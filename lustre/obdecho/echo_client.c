@@ -256,7 +256,7 @@ cfs_page_t *echo_page_vmpage(const struct lu_env *env,
 
 static void echo_page_discard(const struct lu_env *env,
                               const struct cl_page_slice *slice,
-                              struct cl_io *_)
+                              struct cl_io *unused)
 {
         cl_page_delete(env, slice->cpl_page);
 }
@@ -297,7 +297,7 @@ static void echo_page_fini(const struct lu_env *env,
 
 static int echo_page_prep(const struct lu_env *env,
                           const struct cl_page_slice *slice,
-                          struct cl_io *_)
+                          struct cl_io *unused)
 {
         return 0;
 }
@@ -358,7 +358,7 @@ static void echo_lock_delete(const struct lu_env *env,
 static int echo_lock_fits_into(const struct lu_env *env,
                                const struct cl_lock_slice *slice,
                                const struct cl_lock_descr *need,
-                               const struct cl_io *_)
+                               const struct cl_io *unused)
 {
         return 1;
 }
@@ -403,7 +403,7 @@ static int echo_io_init(const struct lu_env *env, struct cl_object *obj,
 
 static int echo_lock_init(const struct lu_env *env,
                           struct cl_object *obj, struct cl_lock *lock,
-                          const struct cl_io *_)
+                          const struct cl_io *unused)
 {
         struct echo_lock *el;
         ENTRY;
@@ -694,7 +694,7 @@ static struct lu_device *echo_device_alloc(const struct lu_env *env,
         tgt = class_name2obd(lustre_cfg_string(cfg, 1));
         LASSERT(tgt != NULL);
         next = tgt->obd_lu_dev;
-        if (!lu_device_is_cl(next))
+        if (next != NULL && !lu_device_is_cl(next))
                 next = NULL;
 
         /*
@@ -1049,7 +1049,7 @@ static int cl_echo_cancel(struct echo_device *ed, __u64 cookie)
 }
 
 static int cl_echo_async_brw(const struct lu_env *env, struct cl_io *io,
-                             enum cl_req_type _, struct cl_2queue *queue)
+                             enum cl_req_type unused, struct cl_2queue *queue)
 {
         struct cl_page *clp;
         struct cl_page *temp;

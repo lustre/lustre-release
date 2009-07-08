@@ -80,7 +80,7 @@ __init int ptlrpc_init(void)
 
         rc = ptlrpc_init_portals();
         if (rc)
-                RETURN(rc);
+                GOTO(cleanup, rc);
         cleanup_phase = 2;
 
         rc = ptlrpc_connection_init();
@@ -174,6 +174,8 @@ EXPORT_SYMBOL(ptlrpc_add_rqs_to_pool);
 EXPORT_SYMBOL(ptlrpc_init_rq_pool);
 EXPORT_SYMBOL(ptlrpc_free_rq_pool);
 EXPORT_SYMBOL(ptlrpc_prep_req_pool);
+EXPORT_SYMBOL(ptlrpc_prep_fakereq);
+EXPORT_SYMBOL(ptlrpc_fakereq_finished);
 EXPORT_SYMBOL(ptlrpc_at_set_req_timeout);
 EXPORT_SYMBOL(ptlrpc_request_alloc);
 EXPORT_SYMBOL(ptlrpc_request_alloc_pool);

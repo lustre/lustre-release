@@ -236,6 +236,7 @@ struct osd_it_ea_dirent {
         __u64           oied_ino;
         __u64           oied_off;
         unsigned short  oied_namelen;
+        unsigned int    oied_type;
         char            oied_name[0];
 } __attribute__((packed));
 
@@ -249,10 +250,6 @@ struct osd_it_ea {
         struct osd_object   *oie_obj;
         /** used in ldiskfs iterator, to stored file pointer */
         struct file          oie_file;
-        /** current file position */
-        __u64                oie_curr_pos;
-        /** next file position */
-        __u64                oie_next_pos;
         /** how many entries have been read-cached from storage */
         int                  oie_rd_dirent;
         /** current entry is being iterated by caller */
@@ -363,6 +360,7 @@ struct osd_thread_info {
 
         /** used by compat stuff */
         struct inode           oti_inode;
+        struct lu_env          oti_obj_delete_tx_env;
 };
 
 #ifdef LPROCFS
@@ -377,8 +375,6 @@ void osd_lprocfs_time_end(const struct lu_env *env,
 int osd_statfs(const struct lu_env *env, struct dt_device *dev,
                struct kstatfs *sfs);
 
-struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
-                       const struct osd_inode_id *id);
 extern struct inode *ldiskfs_create_inode(handle_t *handle,
                                           struct inode * dir, int mode);
 extern int iam_lvar_create(struct inode *obj, int keysize, int ptrsize,
@@ -397,7 +393,7 @@ extern struct buffer_head * ldiskfs_find_entry(struct dentry *dentry,
                                                ** res_dir);
 
 int osd_compat_init(struct osd_device *osd);
-void osd_compat_fini(const struct osd_device *dev);
+void osd_compat_fini(struct osd_device *dev);
 int osd_compat_objid_lookup(struct osd_thread_info *info, struct osd_device *osd,
                             const struct lu_fid *fid, struct osd_inode_id *id);
 int osd_compat_objid_insert(struct osd_thread_info *info, struct osd_device *osd,
@@ -410,6 +406,36 @@ int osd_compat_spec_lookup(struct osd_thread_info *info, struct osd_device *osd,
 int osd_compat_spec_insert(struct osd_thread_info *info, struct osd_device *osd,
                            const struct lu_fid *fid, const struct osd_inode_id *id,
                            struct thandle *th);
+int osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
+                  const struct lu_fid *fid, struct osd_inode_id *id);
+struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
+                       const struct osd_inode_id *id);
+
+/*
+ * Invariants, assertions.
+ */
+
+/*
+ * XXX: do not enable this, until invariant checking code is made thread safe
+ * in the face of pdirops locking.
+ */
+#define OSD_INVARIANT_CHECKS (0)
+
+#if OSD_INVARIANT_CHECKS
+static inline int osd_invariant(const struct osd_object *obj)
+{
+        return
+                obj != NULL &&
+                ergo(obj->oo_inode != NULL,
+                     obj->oo_inode->i_sb == osd_sb(osd_obj2dev(obj)) &&
+                     atomic_read(&obj->oo_inode->i_count) > 0) &&
+                ergo(obj->oo_dir != NULL &&
+                     obj->oo_dir->od_conationer.ic_object != NULL,
+                     obj->oo_dir->od_conationer.ic_object == obj->oo_inode);
+}
+#else
+#define osd_invariant(obj) (1)
+#endif
 
 #endif /* __KERNEL__ */
 #endif /* _OSD_INTERNAL_H */

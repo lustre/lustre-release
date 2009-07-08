@@ -165,6 +165,8 @@ static struct mdt_opc_slice mdt_fld_handlers[];
 static struct mdt_device *mdt_dev(struct lu_device *d);
 static int mdt_regular_handle(struct ptlrpc_request *req);
 static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags);
+static int mdt_fid2path(const struct lu_env *env, struct mdt_device *mdt,
+                        struct getinfo_fid2path *fp);
 
 static const struct lu_object_operations mdt_obj_ops;
 
@@ -1113,9 +1115,13 @@ static int mdt_set_info(struct mdt_thread_info *info)
                 spin_unlock(&req->rq_export->exp_lock);
 
         } else if (KEY_IS(KEY_CHANGELOG_CLEAR)) {
+                struct changelog_setinfo *cs =
+                        (struct changelog_setinfo *)val;
+                if (vallen != sizeof(*cs)) {
+                        CERROR("Bad changelog_clear setinfo size %d\n", vallen);
+                        RETURN(-EINVAL);
+                }
                 if (lustre_msg_swabbed(req->rq_reqmsg)) {
-                        struct changelog_setinfo *cs =
-                                (struct changelog_setinfo *)val;
                         __swab64s(&cs->cs_recno);
                         __swab32s(&cs->cs_id);
                 }
@@ -1509,6 +1515,8 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
                 GOTO(out_shrink, rc = err_serious(rc));
         }
 
+        OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_REINT_DELAY, 10);
+
         /* for replay no cookkie / lmm need, because client have this already */
         if (info->mti_spec.no_create == 1)  {
                 if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
@@ -1757,6 +1765,13 @@ static int mdt_quotactl_handle(struct mdt_thread_info *info)
 
         switch (oqctl->qc_cmd) {
         case Q_QUOTAON:
+                if (info->mti_mdt->mdt_som_conf) {
+                        /* Quota cannot be used together with SOM while
+                         * SOM stored blocks in i_blocks but not in SOM EA. */
+                        LCONSOLE_ERROR("Fail to turn Quota on: SOM is enabled "
+                                       "and temporary conflicts with quota.\n");
+                        RETURN(-ENOTSUPP);
+                }
                 rc = mqo->mqo_on(info->mti_env, next, oqctl->qc_type);
                 break;
         case Q_QUOTAOFF:
@@ -1856,7 +1871,7 @@ static int mdt_llog_ctxt_clone(const struct lu_env *env, struct mdt_device *mdt,
         rc = next->md_ops->mdo_llog_ctxt_get(env, next, idx, (void **)&ctxt);
         if (rc || ctxt == NULL) {
                 CERROR("Can't get mdd ctxt %d\n", rc);
-                return 0;
+                return rc;
         }
 
         rc = llog_group_set_ctxt(&mdt2obd_dev(mdt)->obd_olg, ctxt, idx);
@@ -2585,7 +2600,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         }
 
         /* If we're DISCONNECTing, the mdt_export_data is already freed */
-        if (likely(rc == 0 && h->mh_opc != MDS_DISCONNECT))
+        if (likely(rc == 0 && req->rq_export && h->mh_opc != MDS_DISCONNECT))
                 target_committed_to_req(req);
 
         if (unlikely((lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) &&
@@ -2677,6 +2692,11 @@ static void mdt_thread_info_fini(struct mdt_thread_info *info)
 
         req_capsule_fini(info->mti_pill);
         if (info->mti_object != NULL) {
+                /*
+                 * freeing an object may lead to OSD level transaction, do not
+                 * let it mess with MDT. bz19385.
+                 */
+                info->mti_no_need_trans = 1;
                 mdt_object_put(info->mti_env, info->mti_object);
                 info->mti_object = NULL;
         }
@@ -2836,6 +2856,7 @@ static int mdt_msg_check_version(struct lustre_msg *msg)
         case MDS_GETXATTR:
         case MDS_SETXATTR:
         case MDS_SET_INFO:
+        case MDS_GET_INFO:
         case MDS_QUOTACHECK:
         case MDS_QUOTACTL:
         case QUOTA_DQACQ:
@@ -3167,6 +3188,8 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
         }
 
         new_lock->l_export = class_export_get(req->rq_export);
+        atomic_inc(&lock->l_export->exp_locks_count);
+
         new_lock->l_blocking_ast = lock->l_blocking_ast;
         new_lock->l_completion_ast = lock->l_completion_ast;
         new_lock->l_remote_handle = lock->l_remote_handle;
@@ -3358,7 +3381,6 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
         }
         rep->lock_policy_res2 = clear_serious(rc);
 
-        lhc->mlh_reg_lh.cookie = 0ull;
         if (rc == -ENOTCONN || rc == -ENODEV ||
             rc == -EOVERFLOW) { /**< if VBR failure then return error */
                 /*
@@ -3367,6 +3389,7 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                  * will detect this, then disconnect, reconnect the import
                  * immediately, instead of impacting the following the rpc.
                  */
+                lhc->mlh_reg_lh.cookie = 0ull;
                 RETURN(rc);
         } else {
                 /*
@@ -3377,7 +3400,14 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                   * FIXME: when open lock is finished, that should be
                   * checked here.
                   */
-                RETURN(ELDLM_LOCK_ABORTED);
+                if (lustre_handle_is_used(&lhc->mlh_reg_lh)) {
+                        rep->lock_policy_res2 = 0;
+                        rc = mdt_intent_lock_replace(info, lockp, NULL, lhc, flags);
+                        RETURN(rc);
+                } else {
+                        lhc->mlh_reg_lh.cookie = 0ull;
+                        RETURN(ELDLM_LOCK_ABORTED);
+                }
         }
 }
 
@@ -4312,36 +4342,16 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         struct lu_device  *d    = &m->mdt_md_dev.md_lu_dev;
         struct lu_site    *ls   = d->ld_site;
         struct obd_device *obd = mdt2obd_dev(m);
-        int                waited = 0;
         ENTRY;
 
         target_recovery_fini(obd);
-        /* At this point, obd exports might still be on the "obd_zombie_exports"
-         * list, and obd_zombie_impexp_thread() is trying to destroy them.
-         * We wait a little bit until all exports (except the self-export)
-         * have been destroyed, because the whole mdt stack might be accessed
-         * in mdt_destroy_export(). This will not be a long time, maybe one or
-         * two seconds are enough. This is not a problem while umounting.
-         *
-         * The three references that should be remaining are the
-         * obd_self_export and the attach and setup references.
-         */
-        while (atomic_read(&obd->obd_refcount) > 3) {
-                cfs_schedule_timeout(CFS_TASK_UNINT, cfs_time_seconds(1));
-                ++waited;
-                if (waited > 5 && IS_PO2(waited))
-                        LCONSOLE_WARN("Waiting for obd_zombie_impexp_thread "
-                                      "more than %d seconds to destroy all "
-                                      "the exports. The current obd refcount ="
-                                      " %d. Is it stuck there?\n",
-                                      waited, atomic_read(&obd->obd_refcount));
-        }
 
         ping_evictor_stop();
 
         mdt_stop_ptlrpc_service(m);
         mdt_llog_ctxt_unclone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
         mdt_obd_llog_cleanup(obd);
+        obd_exports_barrier(obd);
         obd_zombie_barrier();
 #ifdef HAVE_QUOTA_SUPPORT
         next->md_ops->mdo_quota.mqo_cleanup(env, next);
@@ -4514,6 +4524,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 
         m->mdt_max_mdsize = MAX_MD_SIZE;
         m->mdt_max_cookiesize = sizeof(struct llog_cookie);
+        m->mdt_som_conf = 0;
 
         m->mdt_opts.mo_user_xattr = 0;
         m->mdt_opts.mo_acl = 0;
@@ -4667,9 +4678,11 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         if (rc)
                 GOTO(err_fs_cleanup, rc);
 
-        rc = mdt_llog_ctxt_clone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
-        if (rc)
-                GOTO(err_llog_cleanup, rc);
+        if (obd->obd_fsops) {
+                rc = mdt_llog_ctxt_clone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
+                if (rc)
+                        GOTO(err_llog_cleanup, rc);
+        }
 
         mdt_adapt_sptlrpc_conf(obd, 1);
 
@@ -4832,7 +4845,7 @@ static struct lu_object *mdt_object_alloc(const struct lu_env *env,
 }
 
 static int mdt_object_init(const struct lu_env *env, struct lu_object *o,
-                           const struct lu_object_conf *_)
+                           const struct lu_object_conf *unused)
 {
         struct mdt_device *d = mdt_dev(o->lo_dev);
         struct lu_device  *under;
@@ -4931,6 +4944,9 @@ static int mdt_connect_internal(struct obd_export *exp,
                 if (!mdt->mdt_opts.mo_user_xattr)
                         data->ocd_connect_flags &= ~OBD_CONNECT_XATTR;
 
+                if (!mdt->mdt_som_conf)
+                        data->ocd_connect_flags &= ~OBD_CONNECT_SOM;
+                
                 spin_lock(&exp->exp_lock);
                 exp->exp_connect_flags = data->ocd_connect_flags;
                 spin_unlock(&exp->exp_lock);
@@ -4950,6 +4966,14 @@ static int mdt_connect_internal(struct obd_export *exp,
         if ((exp->exp_connect_flags & OBD_CONNECT_FID) == 0) {
                 CWARN("%s: MDS requires FID support, but client not\n",
                       mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name);
+                return -EBADE;
+        }
+
+        if (mdt->mdt_som_conf &&
+            !(exp->exp_connect_flags & OBD_CONNECT_MDS_MDS) &&
+            !(exp->exp_connect_flags & OBD_CONNECT_SOM)) {
+                CWARN("%s: MDS has SOM enabled, but client does not support "
+                      "it\n", mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name);
                 return -EBADE;
         }
 
@@ -5095,6 +5119,83 @@ static int mdt_obd_reconnect(const struct lu_env *env,
 
         RETURN(rc);
 }
+static int mdt_mfd_cleanup(struct obd_export *exp)
+{
+        struct mdt_export_data *med = &exp->exp_mdt_data;
+        struct obd_device      *obd = exp->exp_obd;
+        struct mdt_device      *mdt;
+        struct mdt_thread_info *info;
+        struct lu_env           env;
+        CFS_LIST_HEAD(closing_list);
+        struct mdt_file_data *mfd, *n;
+        int rc = 0;
+        ENTRY;
+
+        spin_lock(&med->med_open_lock);
+        while (!list_empty(&med->med_open_head)) {
+                struct list_head *tmp = med->med_open_head.next;
+                mfd = list_entry(tmp, struct mdt_file_data, mfd_list);
+
+                /* Remove mfd handle so it can't be found again.
+                 * We are consuming the mfd_list reference here. */
+                class_handle_unhash(&mfd->mfd_handle);
+                list_move_tail(&mfd->mfd_list, &closing_list);
+        }
+        spin_unlock(&med->med_open_lock);
+        mdt = mdt_dev(obd->obd_lu_dev);
+        LASSERT(mdt != NULL);
+
+        rc = lu_env_init(&env, LCT_MD_THREAD);
+        if (rc)
+                RETURN(rc);
+
+        info = lu_context_key_get(&env.le_ctx, &mdt_thread_key);
+        LASSERT(info != NULL);
+        memset(info, 0, sizeof *info);
+        info->mti_env = &env;
+        info->mti_mdt = mdt;
+        info->mti_exp = exp;
+
+        if (!list_empty(&closing_list)) {
+                struct md_attr *ma = &info->mti_attr;
+                int lmm_size;
+                int cookie_size;
+
+                lmm_size = mdt->mdt_max_mdsize;
+                OBD_ALLOC(ma->ma_lmm, lmm_size);
+                if (ma->ma_lmm == NULL)
+                        GOTO(out_lmm, rc = -ENOMEM);
+
+                cookie_size = mdt->mdt_max_cookiesize;
+                OBD_ALLOC(ma->ma_cookie, cookie_size);
+                if (ma->ma_cookie == NULL)
+                        GOTO(out_cookie, rc = -ENOMEM);
+
+                /* Close any open files (which may also cause orphan unlinking). */
+                list_for_each_entry_safe(mfd, n, &closing_list, mfd_list) {
+                        list_del_init(&mfd->mfd_list);
+                        memset(&ma->ma_attr, 0, sizeof(ma->ma_attr));
+                        ma->ma_lmm_size = lmm_size;
+                        ma->ma_cookie_size = cookie_size;
+                        ma->ma_need = 0;
+                        /* It is not for setattr, just tell MDD to send
+                         * DESTROY RPC to OSS if needed */
+                        ma->ma_attr_flags = MDS_CLOSE_CLEANUP;
+                        ma->ma_valid = MA_FLAGS;
+                        mdt_mfd_close(info, mfd);
+                }
+                info->mti_mdt = NULL;
+                OBD_FREE(ma->ma_cookie, cookie_size);
+                ma->ma_cookie = NULL;
+out_cookie:
+                OBD_FREE(ma->ma_lmm, lmm_size);
+                ma->ma_lmm = NULL;
+        }
+out_lmm:
+        lu_env_fini(&env);
+
+        RETURN(rc);
+}
 
 static int mdt_obd_disconnect(struct obd_export *exp)
 {
@@ -5129,7 +5230,7 @@ static int mdt_obd_disconnect(struct obd_export *exp)
                 spin_unlock(&svc->srv_lock);
         }
         spin_unlock(&exp->exp_lock);
-
+        rc = mdt_mfd_cleanup(exp);
         class_export_put(exp);
         RETURN(rc);
 }
@@ -5161,11 +5262,6 @@ static int mdt_destroy_export(struct obd_export *export)
         struct mdt_device      *mdt;
         struct mdt_thread_info *info;
         struct lu_env           env;
-        struct md_attr         *ma;
-        int lmm_size;
-        int cookie_size;
-        CFS_LIST_HEAD(closing_list);
-        struct mdt_file_data *mfd, *n;
         int rc = 0;
         ENTRY;
 
@@ -5176,6 +5272,8 @@ static int mdt_destroy_export(struct obd_export *export)
         target_destroy_export(export);
         ldlm_destroy_export(export);
 
+        LASSERT(list_empty(&export->exp_outstanding_replies));
+        LASSERT(list_empty(&med->med_open_head));
         if (obd_uuid_equals(&export->exp_client_uuid, &obd->obd_uuid))
                 RETURN(0);
 
@@ -5190,62 +5288,12 @@ static int mdt_destroy_export(struct obd_export *export)
         LASSERT(info != NULL);
         memset(info, 0, sizeof *info);
         info->mti_env = &env;
-        info->mti_mdt = mdt;
         info->mti_exp = export;
-
-        ma = &info->mti_attr;
-        lmm_size = ma->ma_lmm_size = mdt->mdt_max_mdsize;
-        cookie_size = ma->ma_cookie_size = mdt->mdt_max_cookiesize;
-        OBD_ALLOC(ma->ma_lmm, lmm_size);
-        OBD_ALLOC(ma->ma_cookie, cookie_size);
-
-        if (ma->ma_lmm == NULL || ma->ma_cookie == NULL)
-                GOTO(out, rc = -ENOMEM);
-        ma->ma_need = MA_LOV | MA_COOKIE;
-        ma->ma_valid = 0;
-        /* Close any open files (which may also cause orphan unlinking). */
-        spin_lock(&med->med_open_lock);
-        while (!list_empty(&med->med_open_head)) {
-                struct list_head *tmp = med->med_open_head.next;
-                mfd = list_entry(tmp, struct mdt_file_data, mfd_list);
-
-                /* Remove mfd handle so it can't be found again.
-                 * We are consuming the mfd_list reference here. */
-                class_handle_unhash(&mfd->mfd_handle);
-                list_move_tail(&mfd->mfd_list, &closing_list);
-        }
-        spin_unlock(&med->med_open_lock);
-
-        list_for_each_entry_safe(mfd, n, &closing_list, mfd_list) {
-                list_del_init(&mfd->mfd_list);
-                mdt_mfd_close(info, mfd);
-                /* TODO: if we close the unlinked file,
-                 * we need to remove its objects from OST */
-                memset(&ma->ma_attr, 0, sizeof(ma->ma_attr));
-                spin_lock(&med->med_open_lock);
-                ma->ma_lmm_size = lmm_size;
-                ma->ma_cookie_size = cookie_size;
-                ma->ma_need = MA_LOV | MA_COOKIE;
-                ma->ma_valid = 0;
-                spin_unlock(&med->med_open_lock);
-        }
-
         info->mti_mdt = NULL;
         mdt_client_del(&env, mdt);
 
-        EXIT;
-out:
-        if (lmm_size) {
-                OBD_FREE(ma->ma_lmm, lmm_size);
-                ma->ma_lmm = NULL;
-        }
-        if (cookie_size) {
-                OBD_FREE(ma->ma_cookie, cookie_size);
-                ma->ma_cookie = NULL;
-        }
         lu_env_fini(&env);
-
-        return rc;
+        RETURN(rc);
 }
 
 static void mdt_allow_cli(struct mdt_device *m, unsigned int flag)
@@ -5263,7 +5311,7 @@ static void mdt_allow_cli(struct mdt_device *m, unsigned int flag)
 }
 
 static int mdt_upcall(const struct lu_env *env, struct md_device *md,
-                      enum md_upcall_event ev)
+                      enum md_upcall_event ev, void *data)
 {
         struct mdt_device *m = mdt_dev(&md->md_lu_dev);
         struct md_device  *next  = m->mdt_child;
@@ -5279,6 +5327,8 @@ static int mdt_upcall(const struct lu_env *env, struct md_device *md,
                         CDEBUG(D_INFO, "get max mdsize %d max cookiesize %d\n",
                                      m->mdt_max_mdsize, m->mdt_max_cookiesize);
                         mdt_allow_cli(m, CONFIG_SYNC);
+                        if (data)
+                                (*(__u64 *)data) = m->mdt_mount_count;
                         break;
                 case MD_NO_TRANS:
                         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
@@ -5291,7 +5341,8 @@ static int mdt_upcall(const struct lu_env *env, struct md_device *md,
                         break;
 #ifdef HAVE_QUOTA_SUPPORT
                 case MD_LOV_QUOTA:
-                        if (md->md_lu_dev.ld_obd->obd_recovering == 0)
+                        if (md->md_lu_dev.ld_obd->obd_recovering == 0 &&
+                            likely(md->md_lu_dev.ld_obd->obd_stopping == 0))
                                 next->md_ops->mdo_quota.mqo_recovery(env, next);
                         break;
 #endif
@@ -5329,48 +5380,45 @@ static int mdt_obd_notify(struct obd_device *host,
         RETURN(0);
 }
 
-static int mdt_ioc_fid2path(struct lu_env *env, struct mdt_device *mdt,
-                            struct obd_ioctl_data *data)
+static int mdt_rpc_fid2path(struct mdt_thread_info *info, void *key,
+                            void *val, int vallen)
 {
-        struct lu_context  ioctl_session;
+        struct mdt_device *mdt = mdt_dev(info->mti_exp->exp_obd->obd_lu_dev);
+        struct getinfo_fid2path *fpout, *fpin;
+        int rc = 0;
+
+        fpin = key + size_round(sizeof(KEY_FID2PATH));
+        fpout = val;
+
+        if (lustre_msg_swabbed(mdt_info_req(info)->rq_reqmsg))
+                lustre_swab_fid2path(fpin);
+
+        memcpy(fpout, fpin, sizeof(*fpin));
+        if (fpout->gf_pathlen != vallen - sizeof(*fpin))
+                RETURN(-EINVAL);
+
+        rc = mdt_fid2path(info->mti_env, mdt, fpout);
+        RETURN(rc);
+}
+
+static int mdt_fid2path(const struct lu_env *env, struct mdt_device *mdt,
+                        struct getinfo_fid2path *fp)
+{
         struct mdt_object *obj;
-        struct lu_fid     *fid;
-        char  *path = NULL;
-        __u64  recno;
-        int    pathlen = data->ioc_plen1;
-        int    linkno;
         int    rc;
         ENTRY;
 
-
-        fid = (struct lu_fid *)data->ioc_inlbuf1;
-        memcpy(&recno, data->ioc_inlbuf2, sizeof(recno));
-        memcpy(&linkno, data->ioc_inlbuf3, sizeof(linkno));
         CDEBUG(D_IOCTL, "path get "DFID" from "LPU64" #%d\n",
-               PFID(fid), recno, linkno);
+               PFID(&fp->gf_fid), fp->gf_recno, fp->gf_linkno);
 
-        if (!fid_is_sane(fid))
+        if (!fid_is_sane(&fp->gf_fid))
                 RETURN(-EINVAL);
 
-        if (pathlen < 3)
-                RETURN(-EOVERFLOW);
-
-        rc = lu_context_init(&ioctl_session, LCT_SESSION);
-        if (rc)
-                RETURN(rc);
-        ioctl_session.lc_thread = (struct ptlrpc_thread *)cfs_current();
-        lu_context_enter(&ioctl_session);
-        env->le_ses = &ioctl_session;
-
-        OBD_ALLOC(path, pathlen);
-        if (path == NULL)
-                GOTO(out_context, rc = -ENOMEM);
-
-        obj = mdt_object_find(env, mdt, fid);
+        obj = mdt_object_find(env, mdt, &fp->gf_fid);
         if (obj == NULL || IS_ERR(obj)) {
-                CDEBUG(D_IOCTL, "no object "DFID": %ld\n", PFID(fid),
+                CDEBUG(D_IOCTL, "no object "DFID": %ld\n",PFID(&fp->gf_fid),
                        PTR_ERR(obj));
-                GOTO(out_free, rc = -EINVAL);
+                RETURN(-EINVAL);
         }
 
         rc = lu_object_exists(&obj->mot_obj.mo_lu);
@@ -5380,30 +5428,59 @@ static int mdt_ioc_fid2path(struct lu_env *env, struct mdt_device *mdt,
                 else
                         rc = -ENOENT;
                 mdt_object_put(env, obj);
-                CDEBUG(D_IOCTL, "nonlocal object "DFID": %d\n", PFID(fid),
-                       rc);
-                GOTO(out_free, rc);
+                CDEBUG(D_IOCTL, "nonlocal object "DFID": %d\n",
+                       PFID(&fp->gf_fid), rc);
+                RETURN(rc);
         }
 
-        rc = mo_path(env, md_object_next(&obj->mot_obj), path, pathlen, &recno,
-                     &linkno);
+        rc = mo_path(env, md_object_next(&obj->mot_obj), fp->gf_path,
+                     fp->gf_pathlen, &fp->gf_recno, &fp->gf_linkno);
         mdt_object_put(env, obj);
-        if (rc)
-               GOTO(out_free, rc);
 
-        if (copy_to_user(data->ioc_pbuf1, path, pathlen))
-                rc = -EFAULT;
+        RETURN(rc);
+}
 
-        memcpy(data->ioc_inlbuf2, &recno, sizeof(recno));
-        memcpy(data->ioc_inlbuf3, &linkno, sizeof(linkno));
+static int mdt_get_info(struct mdt_thread_info *info)
+{
+        struct ptlrpc_request *req = mdt_info_req(info);
+        char *key;
+        int keylen;
+        __u32 *vallen;
+        void *valout;
+        int rc;
+        ENTRY;
 
-        EXIT;
-out_free:
-        OBD_FREE(path, pathlen);
-out_context:
-        lu_context_exit(&ioctl_session);
-        lu_context_fini(&ioctl_session);
-        return rc;
+        key = req_capsule_client_get(info->mti_pill, &RMF_GETINFO_KEY);
+        if (key == NULL) {
+                CDEBUG(D_IOCTL, "No GETINFO key");
+                RETURN(-EFAULT);
+        }
+        keylen = req_capsule_get_size(info->mti_pill, &RMF_GETINFO_KEY,
+                                      RCL_CLIENT);
+
+        vallen = req_capsule_client_get(info->mti_pill, &RMF_GETINFO_VALLEN);
+        if (vallen == NULL) {
+                CDEBUG(D_IOCTL, "Unable to get RMF_GETINFO_VALLEN buffer");
+                RETURN(-EFAULT);
+        }
+
+        req_capsule_set_size(info->mti_pill, &RMF_GETINFO_VAL, RCL_SERVER,
+                             *vallen);
+        rc = req_capsule_server_pack(info->mti_pill);
+        valout = req_capsule_server_get(info->mti_pill, &RMF_GETINFO_VAL);
+        if (valout == NULL) {
+                CDEBUG(D_IOCTL, "Unable to get get-info RPC out buffer");
+                RETURN(-EFAULT);
+        }
+
+        if (KEY_IS(KEY_FID2PATH))
+                rc = mdt_rpc_fid2path(info, key, valout, *vallen);
+        else
+                rc = -EINVAL;
+
+        lustre_msg_set_status(req->rq_repmsg, rc);
+
+        RETURN(rc);
 }
 
 /* Pass the ioc down */
@@ -5458,9 +5535,6 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 target_stop_recovery_thread(obd);
                 rc = 0;
                 break;
-        case OBD_IOC_FID2PATH:
-                rc = mdt_ioc_fid2path(&env, mdt, karg);
-                break;
         case OBD_IOC_CHANGELOG_REG:
         case OBD_IOC_CHANGELOG_DEREG:
         case OBD_IOC_CHANGELOG_CLEAR:
@@ -5492,7 +5566,8 @@ int mdt_postrecov(const struct lu_env *env, struct mdt_device *mdt)
 
         rc = ld->ld_ops->ldo_recovery_complete(env, ld);
 #ifdef HAVE_QUOTA_SUPPORT
-        next->md_ops->mdo_quota.mqo_recovery(env, next);
+        if (likely(obd->obd_stopping == 0))
+                next->md_ops->mdo_quota.mqo_recovery(env, next);
 #endif
         RETURN(rc);
 }
@@ -5714,6 +5789,7 @@ static struct mdt_handler mdt_mds_ops[] = {
 DEF_MDT_HNDL_F(0,                         CONNECT,      mdt_connect),
 DEF_MDT_HNDL_F(0,                         DISCONNECT,   mdt_disconnect),
 DEF_MDT_HNDL_F(0,                         SET_INFO,     mdt_set_info),
+DEF_MDT_HNDL_F(0,                         GET_INFO,     mdt_get_info),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, GETSTATUS,    mdt_getstatus),
 DEF_MDT_HNDL_F(HABEO_CORPUS,              GETATTR,      mdt_getattr),
 DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, GETATTR_NAME, mdt_getattr_name),

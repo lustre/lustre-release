@@ -100,8 +100,9 @@ static struct ll_sb_info *ll_init_sbi(void)
                 sbi->ll_async_page_max = (pages / 4) * 3;
         }
 
-        sbi->ll_ra_info.ra_max_pages = min(pages / 32,
+        sbi->ll_ra_info.ra_max_pages_per_file = min(pages / 32,
                                            SBI_DEFAULT_READAHEAD_MAX);
+        sbi->ll_ra_info.ra_max_pages = sbi->ll_ra_info.ra_max_pages_per_file;
         sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
                                            SBI_DEFAULT_READAHEAD_WHOLE_MAX;
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
@@ -156,6 +157,7 @@ static struct dentry_operations ll_d_root_ops = {
 #ifdef DCACHE_LUSTRE_INVALID
         .d_compare = ll_dcompare,
 #endif
+        .d_revalidate = ll_revalidate_nd,
 };
 
 static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
@@ -197,7 +199,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                                   OBD_CONNECT_OSS_CAPA | OBD_CONNECT_CANCELSET|
                                   OBD_CONNECT_FID      | OBD_CONNECT_AT |
                                   OBD_CONNECT_LOV_V3 | OBD_CONNECT_RMT_CLIENT |
-                                  OBD_CONNECT_VBR;
+                                  OBD_CONNECT_VBR      | OBD_CONNECT_SOM;
 
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         if (sbi->ll_flags & LL_SBI_LRU_RESIZE)
@@ -341,7 +343,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                                   OBD_CONNECT_SRVLOCK   | OBD_CONNECT_TRUNCLOCK|
                                   OBD_CONNECT_AT | OBD_CONNECT_RMT_CLIENT |
                                   OBD_CONNECT_OSS_CAPA | OBD_CONNECT_VBR|
-                                  OBD_CONNECT_GRANT_SHRINK;
+                                  OBD_CONNECT_SOM;
 
         if (!OBD_FAIL_CHECK(OBD_FAIL_OSC_CONNECT_CKSUM)) {
                 /* OBD_CONNECT_CKSUM should always be set, even if checksums are
@@ -683,6 +685,8 @@ void client_common_put_super(struct super_block *sb)
 
         ll_close_thread_shutdown(sbi->ll_lcq);
 
+        cl_sb_fini(sb);
+
         /* destroy inodes in deathrow */
         prune_deathrow(sbi, 0);
 
@@ -833,6 +837,16 @@ static int ll_options(char *options, int *flags)
                         *flags &= ~tmp;
                         goto next;
                 }
+                tmp = ll_set_opt("lazystatfs", s1, LL_SBI_LAZYSTATFS);
+                if (tmp) {
+                        *flags |= tmp;
+                        goto next;
+                }
+                tmp = ll_set_opt("nolazystatfs", s1, LL_SBI_LAZYSTATFS);
+                if (tmp) {
+                        *flags &= ~tmp;
+                        goto next;
+                }
 
                 LCONSOLE_ERROR_MSG(0x152, "Unknown option '%s', won't mount.\n",
                                    s1);
@@ -856,7 +870,6 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_flags = 0;
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
         spin_lock_init(&lli->lli_lock);
-        INIT_LIST_HEAD(&lli->lli_pending_write_llaps);
         INIT_LIST_HEAD(&lli->lli_close_list);
         lli->lli_inode_magic = LLI_INODE_MAGIC;
         sema_init(&lli->lli_och_sem, 1);
@@ -988,12 +1001,11 @@ void ll_put_super(struct super_block *sb)
                 }
         }
 
-        cl_sb_fini(sb);
-
         if (sbi->ll_lcq) {
                 /* Only if client_common_fill_super succeeded */
                 client_common_put_super(sb);
         }
+
         next = 0;
         while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) !=NULL) {
                 class_manual_cleanup(obd);
@@ -1328,10 +1340,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         if (rc)
                 GOTO(out, rc);
 
-        if (op_data->op_ioepoch)
-                CDEBUG(D_INODE, "Epoch "LPU64" opened on "DFID" for "
-                       "truncate\n", op_data->op_ioepoch, PFID(&lli->lli_fid));
-
+        ll_ioepoch_open(lli, op_data->op_ioepoch);
         if (!lsm || !S_ISREG(inode->i_mode)) {
                 CDEBUG(D_INODE, "no lsm: not setting attrs on OST\n");
                 GOTO(out, rc = 0);
@@ -1391,6 +1400,9 @@ int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
 
         CDEBUG(D_SUPER, "MDC blocks "LPU64"/"LPU64" objects "LPU64"/"LPU64"\n",
                osfs->os_bavail, osfs->os_blocks, osfs->os_ffree,osfs->os_files);
+
+        if (sbi->ll_flags & LL_SBI_LAZYSTATFS)
+                flags |= OBD_STATFS_NODELAY;
 
         rc = obd_statfs_rqset(class_exp2obd(sbi->ll_dt_exp),
                               &obd_osfs, max_age, flags);
@@ -1636,7 +1648,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         LASSERT(fid_seq(&lli->lli_fid) != 0);
 
         if (body->valid & OBD_MD_FLSIZE) {
-                if ((ll_i2mdexp(inode)->exp_connect_flags & OBD_CONNECT_SOM) &&
+                if (exp_connect_som(ll_i2mdexp(inode)) &&
                     S_ISREG(inode->i_mode) && lli->lli_smd) {
                         struct lustre_handle lockh;
                         ldlm_mode_t mode;
@@ -2076,7 +2088,7 @@ int ll_process_config(struct lustre_cfg *lcfg)
         rc = class_process_proc_param(PARAM_LLITE, lvars.obd_vars,
                                       lcfg, sb);
         if (rc > 0)
-        	rc = 0;
+                rc = 0;
         return(rc);
 }
 
@@ -2152,6 +2164,9 @@ int ll_show_options(struct seq_file *seq, struct vfsmount *vfs)
 
         if (sbi->ll_flags & LL_SBI_ACL)
                 seq_puts(seq, ",acl");
+
+        if (sbi->ll_flags & LL_SBI_LAZYSTATFS)
+                seq_puts(seq, ",lazystatfs");
 
         RETURN(0);
 }

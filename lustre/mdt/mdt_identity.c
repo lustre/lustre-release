@@ -87,7 +87,7 @@ static void mdt_identity_entry_free(struct upcall_cache *cache,
         struct md_identity *identity = &entry->u.identity;
 
         if (identity->mi_ginfo) {
-                groups_free(identity->mi_ginfo);
+                put_group_info(identity->mi_ginfo);
                 identity->mi_ginfo = NULL;
         }
 
@@ -187,7 +187,7 @@ static int mdt_identity_parse_downcall(struct upcall_cache *cache,
                 if (!perms) {
                         CERROR("failed to alloc %d permissions\n",
                                data->idd_nperms);
-                        groups_free(ginfo);
+                        put_group_info(ginfo);
                         RETURN(-ENOMEM);
                 }
 

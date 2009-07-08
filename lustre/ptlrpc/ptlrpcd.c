@@ -128,7 +128,7 @@ EXPORT_SYMBOL(ptlrpcd_add_rqset);
  * Requests that are added to the ptlrpcd queue are sent via
  * ptlrpcd_check->ptlrpc_check_set().
  */
-void ptlrpcd_add_req(struct ptlrpc_request *req, enum ptlrpcd_scope scope)
+int ptlrpcd_add_req(struct ptlrpc_request *req, enum ptlrpcd_scope scope)
 {
         struct ptlrpcd_ctl *pc;
         enum pscope_thread  pt;
@@ -153,12 +153,12 @@ void ptlrpcd_add_req(struct ptlrpc_request *req, enum ptlrpcd_scope scope)
                  * so that higher levels might free assosiated
                  * resources.
                  */
-                req->rq_status = -EBADR;
-                interpreter(NULL, req, &req->rq_async_args,
-                            req->rq_status);
+                ptlrpc_req_interpret(NULL, req, -EBADR);
                 req->rq_set = NULL;
                 ptlrpc_req_finished(req);
         }
+
+        return rc;
 }
 
 static int ptlrpcd_check(const struct lu_env *env, struct ptlrpcd_ctl *pc)

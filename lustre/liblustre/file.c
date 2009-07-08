@@ -157,6 +157,15 @@ void obdo_refresh_inode(struct inode *dst,
                 st->st_blocks = src->o_blocks;
 }
 
+void llu_ioepoch_open(struct llu_inode_info *lli, __u64 ioepoch)
+{
+        if (ioepoch && lli->lli_ioepoch != ioepoch) {
+                lli->lli_ioepoch = ioepoch;
+                CDEBUG(D_INODE, "Epoch "LPU64" opened on "DFID" for truncate\n",
+                       ioepoch, PFID(&lli->lli_fid));
+        }
+}
+
 int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it)
 {
         struct ptlrpc_request *req = it->d.lustre.it_data;
@@ -182,7 +191,7 @@ int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it)
         fd->fd_mds_och.och_magic = OBD_CLIENT_HANDLE_MAGIC;
         fd->fd_mds_och.och_fid   = lli->lli_fid;
         lli->lli_file_data = fd;
-
+        llu_ioepoch_open(lli, body->ioepoch);
         md_set_open_replay_data(lli->lli_sbi->ll_md_exp,
                                 &fd->fd_mds_och, it->d.lustre.it_data);
 
@@ -337,7 +346,7 @@ int llu_sizeonmds_update(struct inode *inode, struct lustre_handle *fh,
         struct llu_inode_info *lli = llu_i2info(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         struct md_op_data op_data = {{ 0 }};
-        struct obdo oa;
+        struct obdo oa = { 0 };
         int rc;
         ENTRY;
 

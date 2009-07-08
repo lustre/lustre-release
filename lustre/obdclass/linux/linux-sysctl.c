@@ -73,6 +73,11 @@ enum {
         OBD_DEBUG_PEER_ON_TIMEOUT, /* dump peer debug when RPC times out */
         OBD_ALLOC_FAIL_RATE,    /* memory allocation random failure rate */
         OBD_MAX_DIRTY_PAGES,    /* maximum dirty pages */
+        OBD_AT_MIN,             /* Adaptive timeouts params */
+        OBD_AT_MAX,
+        OBD_AT_EXTRA,
+        OBD_AT_EARLY_MARGIN,
+        OBD_AT_HISTORY,
 };
 
 int LL_PROC_PROTO(proc_fail_loc)
@@ -266,6 +271,27 @@ int LL_PROC_PROTO(proc_alloc_fail_rate)
 }
 #endif
 
+int LL_PROC_PROTO(proc_at_min)
+{
+        return ll_proc_dointvec(table, write, filp, buffer, lenp, ppos);
+}
+int LL_PROC_PROTO(proc_at_max)
+{
+        return ll_proc_dointvec(table, write, filp, buffer, lenp, ppos);
+}
+int LL_PROC_PROTO(proc_at_extra)
+{
+        return ll_proc_dointvec(table, write, filp, buffer, lenp, ppos);
+}
+int LL_PROC_PROTO(proc_at_early_margin)
+{
+        return ll_proc_dointvec(table, write, filp, buffer, lenp, ppos);
+}
+int LL_PROC_PROTO(proc_at_history)
+{
+        return ll_proc_dointvec(table, write, filp, buffer, lenp, ppos);
+}
+
 static cfs_sysctl_table_t obd_table[] = {
         {
                 .ctl_name = OBD_FAIL_LOC,
@@ -372,6 +398,46 @@ static cfs_sysctl_table_t obd_table[] = {
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_max_dirty_pages_in_mb
+        },
+        {
+                .ctl_name = OBD_AT_MIN,
+                .procname = "at_min",
+                .data     = &at_min,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_at_min
+        },
+        {
+                .ctl_name = OBD_AT_MAX,
+                .procname = "at_max",
+                .data     = &at_max,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_at_max
+        },
+        {
+                .ctl_name = OBD_AT_EXTRA,
+                .procname = "at_extra",
+                .data     = &at_extra,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_at_extra
+        },
+        {
+                .ctl_name = OBD_AT_EARLY_MARGIN,
+                .procname = "at_early_margin",
+                .data     = &at_early_margin,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_at_early_margin
+        },
+        {
+                .ctl_name = OBD_AT_HISTORY,
+                .procname = "at_history",
+                .data     = &at_history,
+                .maxlen   = sizeof(int),
+                .mode     = 0644,
+                .proc_handler = &proc_at_history
         },
         { 0 }
 };

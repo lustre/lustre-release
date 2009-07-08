@@ -101,7 +101,7 @@
 void qunit_cache_cleanup(void);
 int qunit_cache_init(void);
 int qctxt_adjust_qunit(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
-                       uid_t uid, gid_t gid, __u32 isblk, int wait,
+                       const unsigned int id[], __u32 isblk, int wait,
                        struct obd_trans_info *oti);
 int qctxt_wait_pending_dqacq(struct lustre_quota_ctxt *qctxt, unsigned int id,
                              unsigned short type, int isblk);
@@ -114,14 +114,19 @@ int compute_remquota(struct obd_device *obd,
                      int isblk);
 int check_qm(struct lustre_quota_ctxt *qctxt);
 void dqacq_interrupt(struct lustre_quota_ctxt *qctxt);
+int quota_is_on(struct lustre_quota_ctxt *qctxt, struct obd_quotactl *oqctl);
+int quota_is_off(struct lustre_quota_ctxt *qctxt, struct obd_quotactl *oqctl);
+void* quota_barrier(struct lustre_quota_ctxt *qctxt,
+                    struct obd_quotactl *oqctl, int isblk);
+void quota_unbarrier(void *handle);
 /* quota_master.c */
 int lustre_dquot_init(void);
 void lustre_dquot_exit(void);
 int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc);
-int mds_quota_adjust(struct obd_device *obd, unsigned int qcids[],
-                     unsigned int qpids[], int rc, int opc);
-int filter_quota_adjust(struct obd_device *obd, unsigned int qcids[],
-                        unsigned int qpids[], int rc, int opc);
+int mds_quota_adjust(struct obd_device *obd, const unsigned int qcids[],
+                     const unsigned int qpids[], int rc, int opc);
+int filter_quota_adjust(struct obd_device *obd, const unsigned int qcids[],
+                        const unsigned int qpids[], int rc, int opc);
 int init_admin_quotafiles(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_quota_get_version(struct obd_device *obd, lustre_quota_version_t *ver);
 int mds_quota_invalidate(struct obd_device *obd, struct obd_quotactl *oqctl);
@@ -154,17 +159,11 @@ int target_quota_check(struct obd_device *obd, struct obd_export *exp,
 
 int quota_adjust_slave_lqs(struct quota_adjust_qunit *oqaq, struct
                           lustre_quota_ctxt *qctxt);
-void qdata_to_oqaq(struct qunit_data *qdata,
-                   struct quota_adjust_qunit *oqaq);
 #ifdef __KERNEL__
-int quota_search_lqs(struct qunit_data *qdata,
-                     struct quota_adjust_qunit *oqaq,
-                     struct lustre_quota_ctxt *qctxt,
-                     struct lustre_qunit_size **lqs_return);
-int quota_create_lqs(struct qunit_data *qdata,
-                     struct quota_adjust_qunit *oqaq,
-                     struct lustre_quota_ctxt *qctxt,
-                     struct lustre_qunit_size **lqs_return);
+int quota_is_set(struct obd_device *obd, const unsigned int id[], int flag);
+struct lustre_qunit_size *quota_search_lqs(unsigned long long lqs_key,
+                                           struct lustre_quota_ctxt *qctxt,
+                                           int create);
 void quota_compute_lqs(struct qunit_data *qdata, struct lustre_qunit_size *lqs,
                        int is_chk, int is_acq);
 
@@ -178,6 +177,7 @@ int filter_quota_adjust_qunit(struct obd_export *exp,
                               struct lustre_quota_ctxt *qctxt);
 int lquota_proc_setup(struct obd_device *obd, int is_master);
 int lquota_proc_cleanup(struct lustre_quota_ctxt *qctxt);
+void build_lqs(struct obd_device *obd);
 
 extern cfs_proc_dir_entry_t *lquota_type_proc_dir;
 #endif

@@ -51,7 +51,7 @@
 #include <errno.h>
 #include <liblustre.h>
 #include <lustre/lustre_user.h>
-#include <lustre/tests/lp_utils.h>
+#include <lustre/tests/mpi/lp_utils.h>
 
 #define LPGL_FILEN 700000
 #define LPGL_TEST_ITEMS 7

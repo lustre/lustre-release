@@ -599,6 +599,67 @@ out:
         return rc;
 }
 
+static int mmap_tst7_func(char *mnt, int rw)
+{
+        char  fname[256];
+        char *buf = MAP_FAILED;
+        ssize_t bytes;
+        int fd = -1;
+        int rc = 0;
+
+        if (snprintf(fname, 256, "%s/mmap_tst7.%s",
+                     mnt, (rw == 0) ? "read":"write") >= 256) {
+                fprintf(stderr, "dir name too long\n");
+                rc = ENAMETOOLONG;
+                goto out;
+        }
+        fd = open(fname, O_RDWR | O_DIRECT | O_CREAT, 0644);
+        if (fd == -1) {
+                perror("open");
+                rc = errno;
+                goto out;
+        }
+        if (ftruncate(fd, 2 * page_size) == -1) {
+                perror("truncate");
+                rc = errno;
+                goto out;
+        }
+        buf = mmap(NULL, page_size,
+                   PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (buf == MAP_FAILED) {
+                perror("mmap");
+                rc = errno;
+                goto out;
+        }
+        /* ensure the second page isn't mapped */
+        munmap(buf + page_size, page_size);
+        bytes = (rw == 0) ? read(fd, buf, 2 * page_size) :
+                write(fd, buf, 2 * page_size);
+        /* Expected behavior */
+        if (bytes == page_size)
+                goto out;
+        fprintf(stderr, "%s returned %zd, errno = %d\n",
+                (rw == 0)?"read":"write", bytes, errno);
+        rc = EIO;
+out:
+        if (buf != MAP_FAILED)
+                munmap(buf, page_size);
+        if (fd != -1)
+                close(fd);
+        return rc;
+}
+
+static int mmap_tst7(char *mnt)
+{
+        int rc;
+
+        rc = mmap_tst7_func(mnt, 0);
+        if (rc != 0)
+                return rc;
+        rc = mmap_tst7_func(mnt, 1);
+        return rc;
+}
+
 static int remote_tst(int tc, char *mnt)
 {
         int rc = 0;
@@ -634,6 +695,7 @@ struct test_case tests[] = {
              "which mmapped to just this file", mmap_tst5, 1 },
         { 6, "mmap test6: check mmap write/read content on two nodes", 
                 mmap_tst6, 2 },
+        { 7, "mmap test7: file i/o with an unmapped buffer", mmap_tst7, 1},
         { 0, NULL, 0, 0 }
 };
 

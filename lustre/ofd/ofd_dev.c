@@ -718,10 +718,6 @@ static int filter_init0(const struct lu_env *env, struct filter_device *m,
         if (rc)
                 GOTO(err_free_ns, rc);
 
-        rc = lut_init(env, &m->ofd_lut, obd, NULL);
-        if (rc)
-                GOTO(err_fs_cleanup, rc);
-
         rc = obd_llog_init(obd, &obd->obd_olg, obd, 1, NULL, NULL);
         if (rc) {
                 CERROR("failed to setup llogging subsystems\n");

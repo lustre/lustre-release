@@ -48,11 +48,6 @@ if [ $IFree -lt $NUM_FILES ]; then
     NUM_FILES=$IFree
 fi
 
-IFree=$(inodes_available)
-if [ $IFree -lt $NUM_FILES ]; then
-    NUM_FILES=$IFree
-fi
-
 generate_machine_file $NODES_TO_USE $MACHINEFILE || error "can not generate machinefile"
 
 $LFS setstripe $TESTDIR -i 0 -c 1
@@ -64,7 +59,6 @@ else
     mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES $TESTDIR 'f%%d' --ignore
 
     log "===== $0 Test preparation: creating ${NUM_FILES} files."
-    echo "Test preparation: creating ${NUM_FILES} files."
 
     COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --mknod --dir ${TESTDIR}
                         --nfiles ${NUM_FILES} --filefmt 'f%%d'"
@@ -77,7 +71,7 @@ else
     fi
 
     mpi_run -np ${NUM_THREADS} -machinefile ${MACHINEFILE} ${COMMAND} 2>&1
-    [ ${PIPESTATUS[0]} != 0 ] && error "Error running mdsrate, aborting..."
+    [ ${PIPESTATUS[0]} != 0 ] && error "mdsrate file creation failed, aborting"
 
 fi
 
@@ -90,30 +84,29 @@ if [ -n "$NOSINGLE" ]; then
     echo "NO Test for stats on a single client."
 else
     log "===== $0 ### 1 NODE STAT ###"
-    echo "Running stats on 1 node(s)."
     echo "+" ${COMMAND}
 
     mpi_run -np 1 -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
     
     if [ ${PIPESTATUS[0]} != 0 ]; then
-        [ -f $LOG ] && cat $LOG
-        error "mpirun ... mdsrate ... failed, aborting"
+        [ -f $LOG ] && sed -e "s/^/log: /" $LOG
+        error "mdsrate on a single client failed, aborting"
     fi
 fi
 
 # 2
+[ $NUM_CLIENTS -eq 1 ] && NOMULTI=yes
 if [ -n "$NOMULTI" ]; then
     echo "NO test for stats on multiple nodes."
 else
     log "===== $0 ### ${NUM_CLIENTS} NODES STAT ###"
-    echo "Running stats on ${NUM_CLIENTS} node(s)."
     echo "+" ${COMMAND}
 
     mpi_run -np ${NUM_CLIENTS} -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
-        [ -f $LOG ] && cat $LOG
-        error "mpirun ... mdsrate ... failed, aborting"
+        [ -f $LOG ] && sed -e "s/^/log: /" $LOG
+        error "mdsrate stats on multiple nodes failed, aborting"
     fi
 fi
 

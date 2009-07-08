@@ -116,7 +116,7 @@ int ldlm_get_enq_timeout(struct ldlm_lock *lock)
         /* Since these are non-updating timeouts, we should be conservative.
            It would be nice to have some kind of "early reply" mechanism for
            lock callbacks too... */
-        timeout = timeout + (timeout >> 1); /* 150% */
+        timeout = min_t(int, at_max, timeout + (timeout >> 1)); /* 150% */
         return max(timeout, ldlm_enqueue_min);
 }
 EXPORT_SYMBOL(ldlm_get_enq_timeout);
@@ -1950,9 +1950,15 @@ static int ldlm_chain_lock_for_replay(struct ldlm_lock *lock, void *closure)
         /* we use l_pending_chain here, because it's unused on clients. */
         LASSERTF(list_empty(&lock->l_pending_chain),"lock %p next %p prev %p\n",
                  lock, &lock->l_pending_chain.next,&lock->l_pending_chain.prev);
-        /* bug 9573: don't replay locks left after eviction */
-        if (!(lock->l_flags & LDLM_FL_FAILED))
+        /* bug 9573: don't replay locks left after eviction, or
+         * bug 17614: locks being actively cancelled. Get a reference
+         * on a lock so that it does not disapear under us (e.g. due to cancel)
+         */
+        if (!(lock->l_flags & (LDLM_FL_FAILED|LDLM_FL_CANCELING))) {
                 list_add(&lock->l_pending_chain, list);
+                LDLM_LOCK_GET(lock);
+        }
+
         return LDLM_ITER_CONTINUE;
 }
 
@@ -2106,9 +2112,12 @@ int ldlm_replay_locks(struct obd_import *imp)
 
         list_for_each_entry_safe(lock, next, &list, l_pending_chain) {
                 list_del_init(&lock->l_pending_chain);
-                if (rc)
+                if (rc) {
+                        LDLM_LOCK_PUT(lock);
                         continue; /* or try to do the rest? */
+                }
                 rc = replay_one_lock(imp, lock);
+                LDLM_LOCK_PUT(lock);
         }
 
         atomic_dec(&imp->imp_replay_inflight);

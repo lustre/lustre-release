@@ -297,7 +297,7 @@ int capa_encrypt_id(__u32 *d, __u32 *s, __u8 *key, int keylen)
                 RETURN(-EFAULT);
         }
 
-        min = crypto_tfm_alg_min_keysize(tfm);
+        min = ll_crypto_tfm_alg_min_keysize(tfm);
         if (keylen < min) {
                 CERROR("keylen at least %d bits for aes\n", min * 8);
                 GOTO(out, rc = -EINVAL);
@@ -349,7 +349,7 @@ int capa_decrypt_id(__u32 *d, __u32 *s, __u8 *key, int keylen)
                 RETURN(-EFAULT);
         }
 
-        min = crypto_tfm_alg_min_keysize(tfm);
+        min = ll_crypto_tfm_alg_min_keysize(tfm);
         if (keylen < min) {
                 CERROR("keylen at least %d bits for aes\n", min * 8);
                 GOTO(out, rc = -EINVAL);

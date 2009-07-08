@@ -221,7 +221,7 @@ test_5() {
     done
     fail $SINGLEMDS
     for i in `seq 220`; do
-      grep -q "tag-$i" $DIR/$tfile-$i || error "f1c-$i"
+      grep -q "tag-$i" $DIR/$tfile-$i || error "$tfile-$i"
     done
     rm -rf $DIR/$tfile-*
     sleep 3
@@ -477,9 +477,25 @@ test_20b() { # bug 10480
     df -P $DIR || df -P $DIR || true    # reconnect
     wait_recovery_complete $SINGLEMDS || error "MDS recovery not done"
 
-    # FIXME just because recovery is done doesn't mean we've finished
-    # orphan cleanup.  Fake it with a sleep for now...
-    sleep 10
+    # just because recovery is done doesn't mean we've finished
+    # orphan cleanup. Wait for llogs to get synchronized.
+    echo waiting for orphan cleanup...
+    while [ true ]; do
+            local -a sync=($(do_facet ost "$LCTL get_param obdfilter.*.mds_sync" | awk -F= ' {print $2}'))
+            local con=1
+            for ((i=0; i<${#sync[@]}; i++)); do
+                    [ ${sync[$i]} -eq 0 ] && continue
+                    # there is a not finished MDS-OST synchronization
+                    con=0
+                    break;
+            done
+            [ ${con} -eq 1 ] && break
+            sleep 1
+    done
+
+    # let the statfs cache to get old enough.
+    sleep 1
+
     AFTERUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
     log "before $BEFOREUSED, after $AFTERUSED"
     [ $AFTERUSED -gt $((BEFOREUSED + 20)) ] && \
@@ -943,7 +959,7 @@ test_44a() {	# was test_44
     [ "$mdcdev" ] || exit 2
 
     # adaptive timeouts slow this way down
-    if at_is_valid && at_is_enabled; then
+    if at_is_enabled; then
         at_max_saved=$(at_max_get mds)
         at_max_set 40 mds
     fi
@@ -1503,8 +1519,8 @@ test_61c() {
 run_test 61c "test race mds llog sync vs llog cleanup"
 
 test_61d() { # bug 16002 # bug 17466
-#define OBD_FAIL_OBD_LLOG_SETUP        0x605
     shutdown_facet $SINGLEMDS
+#define OBD_FAIL_OBD_LLOG_SETUP        0x605
     do_facet $SINGLEMDS "lctl set_param fail_loc=0x605"
     start $SINGLEMDS `mdsdevname 1` $MDS_MOUNT_OPTS && error "mds start should have failed"
     do_facet $SINGLEMDS "lctl set_param fail_loc=0"
@@ -1516,7 +1532,7 @@ test_62() { # Bug 15756 - don't mis-drop resent replay
     mkdir -p $DIR/$tdir
     replay_barrier $SINGLEMDS
     createmany -o $DIR/$tdir/$tfile- 25
-#define OBD_FAIL_TGT_REPLAY_DROP         0x706
+#define OBD_FAIL_TGT_REPLAY_DROP         0x707
     do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000707"
     facet_failover $SINGLEMDS
     df $MOUNT || return 1
@@ -1536,9 +1552,9 @@ at_cleanup () {
 
     echo "Cleaning up AT ..."
     if [ -n "$ATOLDBASE" ]; then
-        local at_history=$(do_facet mds "find /sys/ -name at_history")
-        do_facet mds "echo $ATOLDBASE >> $at_history" || true
-        do_facet ost1 "echo $ATOLDBASE >> $at_history" || true
+        local at_history=$($LCTL get_param -n at_history)
+        do_facet mds "lctl set_param at_history=$at_history" || true
+        do_facet ost1 "lctl set_param at_history=$at_history" || true
     fi
 
     if [ $AT_MAX_SET -ne 0 ]; then
@@ -1557,10 +1573,6 @@ at_cleanup () {
 at_start()
 {
     local at_max_new=600
-    if ! at_is_valid; then
-        skip "AT env is invalid"
-        return 1
-    fi
 
     # Save at_max original values
     local facet
@@ -1581,12 +1593,10 @@ at_start()
     done
 
     if [ -z "$ATOLDBASE" ]; then
-	local at_history=$(do_facet mds "find /sys/ -name at_history")
-	[ -z "$at_history" ] && skip "missing /sys/.../at_history " && return 1
-	ATOLDBASE=$(do_facet mds "cat $at_history")
+	ATOLDBASE=$(do_facet mds "lctl get_param -n at_history")
         # speed up the timebase so we can check decreasing AT
-	do_facet mds "echo 8 >> $at_history"
-	do_facet ost1 "echo 8 >> $at_history"
+        do_facet mds "lctl set_param at_history=8" || true
+        do_facet ost1 "lctl set_param at_history=8" || true
 
 	# sleep for a while to cool down, should be > 8s and also allow
 	# at least one ping to be sent. simply use TIMEOUT to be safe.
@@ -1719,7 +1729,7 @@ test_67a() #bug 3055
     do_facet ost1 "sysctl -w lustre.fail_loc=0"
     CONN2=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     ATTEMPTS=$(($CONN2 - $CONN1))
-    echo "$ATTEMPTS osc reconnect attemps on gradual slow"
+    echo "$ATTEMPTS osc reconnect attempts on gradual slow"
     [ $ATTEMPTS -gt 0 ] && error_ignore 13721 "AT should have prevented reconnect"
     return 0
 }
@@ -1740,7 +1750,7 @@ test_67b() #bug 3055
     log "phase 2"
     CONN2=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     ATTEMPTS=$(($CONN2 - $CONN1))
-    echo "$ATTEMPTS osc reconnect attemps on instant slow"
+    echo "$ATTEMPTS osc reconnect attempts on instant slow"
     # do it again; should not timeout
     do_facet ost1 "sysctl -w lustre.fail_loc=0x80000223"
     cp /etc/profile $DIR/$tfile || error "cp failed"
@@ -1749,7 +1759,7 @@ test_67b() #bug 3055
     do_facet ost1 "lctl get_param -n ost.OSS.ost_create.timeouts"
     CONN3=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
     ATTEMPTS=$(($CONN3 - $CONN2))
-    echo "$ATTEMPTS osc reconnect attemps on 2nd slow"
+    echo "$ATTEMPTS osc reconnect attempts on 2nd slow"
     [ $ATTEMPTS -gt 0 ] && error "AT should have prevented reconnect"
     return 0
 }
@@ -1810,7 +1820,7 @@ test_70a () {
 				error "dd failed on $CLIENT"
 	done
 
-	local prev_client=$(echo $clients | sed 's/^.* \(.\+\)$/\1/') 
+	local prev_client=$(echo $clients | sed 's/^.* \(.\+\)$/\1/')
 	for C in ${CLIENTS//,/ }; do
 		do_node $prev_client dd if=$DIR/${tfile}_${C} of=/dev/null 2>/dev/null || \
 			error "dd if=$DIR/${tfile}_${C} failed on $prev_client"
@@ -1826,7 +1836,7 @@ test_70b () {
 
 	zconf_mount_clients $clients $DIR
 	
-	local duration=120
+	local duration=300
 	[ "$SLOW" = "no" ] && duration=60
 	local cmd="rundbench 1 -t $duration"
 	local PID=""
@@ -1836,19 +1846,89 @@ test_70b () {
 		LCTL=$LCTL $cmd" &
 	PID=$!
 	log "Started rundbench load PID=$PID ..."
-
-	sleep $((duration / 4))
-	replay_barrier $SINGLEMDS 
-	sleep 3 # give clients a time to do operations
-
-	log "$TESTNAME fail mds 1"
-	fail $SINGLEMDS
-
+	ELAPSED=0
+	NUM_FAILOVERS=0
+	START_TS=$(date +%s)
+	CURRENT_TS=$START_TS
+	while [ $ELAPSED -lt $duration ]; do
+		sleep 1
+		replay_barrier $SINGLEMDS
+		sleep 1 # give clients a time to do operations
+		# Increment the number of failovers
+		NUM_FAILOVERS=$((NUM_FAILOVERS+1))
+		log "$TESTNAME fail mds1 $NUM_FAILOVERS times"
+		fail $SINGLEMDS
+		CURRENT_TS=$(date +%s)
+		ELAPSED=$((CURRENT_TS - START_TS))
+	done
 	wait $PID || error "rundbench load on $CLIENTS failed!"
-
 }
 run_test 70b "mds recovery; $CLIENTCOUNT clients"
 # end multi-client tests
+
+test_73a() {
+    multiop_bg_pause $DIR/$tfile O_tSc || return 3
+    pid=$!
+    rm -f $DIR/$tfile
+
+    replay_barrier $SINGLEMDS
+#define OBD_FAIL_LDLM_ENQUEUE       0x302
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000302"
+    fail $SINGLEMDS
+    kill -USR1 $pid
+    wait $pid || return 1
+    [ -e $DIR/$tfile ] && return 2
+    return 0
+}
+run_test 73a "open(O_CREAT), unlink, replay, reconnect before open replay , close"
+
+test_73b() {
+    multiop_bg_pause $DIR/$tfile O_tSc || return 3
+    pid=$!
+    rm -f $DIR/$tfile
+
+    replay_barrier $SINGLEMDS
+#define OBD_FAIL_LDLM_REPLY       0x30c
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000030c"
+    fail $SINGLEMDS
+    kill -USR1 $pid
+    wait $pid || return 1
+    [ -e $DIR/$tfile ] && return 2
+    return 0
+}
+run_test 73b "open(O_CREAT), unlink, replay, reconnect at open_replay reply, close"
+
+test_73c() {
+    multiop_bg_pause $DIR/$tfile O_tSc || return 3
+    pid=$!
+    rm -f $DIR/$tfile
+
+    replay_barrier $SINGLEMDS
+#define OBD_FAIL_TGT_LAST_REPLAY       0x710
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000710"
+    fail $SINGLEMDS
+    kill -USR1 $pid
+    wait $pid || return 1
+    [ -e $DIR/$tfile ] && return 2
+    return 0
+}
+run_test 73c "open(O_CREAT), unlink, replay, reconnect at last_replay, close"
+
+# bug 18554
+test_74() {
+    local clients=${CLIENTS:-$HOSTNAME}
+
+    stop ost1
+    zconf_umount_clients $clients $MOUNT
+    facet_failover $SINGLEMDS
+    zconf_mount_clients $clients $MOUNT
+    mount_facet ost1
+    touch $DIR/$tfile || return 1
+    rm $DIR/$tfile || return 2
+    client_df || error "df failed: $?"
+    return 0
+}
+run_test 74 "Ensure applications don't fail waiting for OST recovery"
 
 test_73a() {
     multiop_bg_pause $DIR/$tfile O_tSc || return 3
@@ -1977,6 +2057,17 @@ test_82b() {
     $CHECKSTAT -t dir $dir || error "$CHECKSTAT -t dir $dir failed"
 }
 run_test 82b "CMD: mkdir cross-node dir (fail mds with name)"
+
+test_84() {
+#define OBD_FAIL_MDS_OPEN_WAIT_CREATE  0x143
+    do_facet mds "lctl set_param fail_loc=0x80000143"
+    createmany -o $DIR/$tfile- 1 &
+    PID=$!
+    mds_evict_client
+    wait $PID
+    df -P $DIR || df -P $DIR || true    # reconnect
+}
+run_test 84 "stale open during export disconnect"
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre

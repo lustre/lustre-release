@@ -229,14 +229,12 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                 CDEBUG(D_INFO, "%s: Input seq range: "
                        DRANGE"\n", seq->lss_name, PRANGE(in));
 
-                if (range_is_exhausted(space)) {
+                if (in->lsr_end <= space->lsr_start) {
                         /*
-                         * Server cannot send empty range to client, this is why
-                         * we check here that range from client is "newer" than
-                         * exhausted super.
+                         * Client is replaying a fairly old range, server
+                         * don't need to do any allocation.
                          */
-                        LASSERT(in->lsr_end > space->lsr_start);
-
+                } else if (range_is_exhausted(space)) {
                         /*
                          * Start is set to end of last allocated, because it
                          * *is* already allocated so we take that into account
@@ -274,8 +272,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                          * Update super start by end from client's range. Super
                          * end should not be changed if range was not exhausted.
                          */
-                        if (in->lsr_end > space->lsr_start)
-                                space->lsr_start = in->lsr_end;
+                        space->lsr_start = in->lsr_end;
                 }
 
                 /* sending replay_super to update fld as only super sequence
@@ -432,7 +429,12 @@ static int seq_req_handle(struct ptlrpc_request *req,
 
                 if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                         in = tmp;
-                        LASSERT(!range_is_zero(in) && range_is_sane(in));
+
+                        if (range_is_zero(in) || !range_is_sane(in)) {
+                                CERROR("Replayed seq range is invalid: "
+                                       DRANGE"\n", PRANGE(in));
+                                RETURN(err_serious(-EINVAL));
+                        }
                 }
                 /* seq client passed mdt id, we need to pass that using out
                  * range parameter */

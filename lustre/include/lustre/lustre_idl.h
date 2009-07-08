@@ -253,38 +253,38 @@ static inline int range_is_exhausted(const struct lu_seq_range *range)
  * @{ */
 
 /**
- * File identifier.
- *
- * Fid is a cluster-wide unique identifier of a file or an object
- * (stripe). Fids are never reused. Fids are transmitted across network (in
- * the sender byte-ordering), and stored on disk in a packed form (struct
- * lu_fid_pack) in a big-endian order.
+ * Flags for lustre_mdt_attrs::lma_compat and lustre_mdt_attrs::lma_incompat.
  */
-struct lu_fid {
-        /**
-         * fid sequence. Sequence is a unit of migration: all files (objects)
-         * with fids from a given sequence are stored on the same
-         * server.
-         *
-         * Lustre should support 2 ^ 64 objects, thus even if one
-         * sequence has one object we will never reach this value.
-         */
-        __u64 f_seq;
-        /** fid number within sequence. */
-        __u32 f_oid;
-        /**
-         * fid version, used to distinguish different versions (in the sense
-         * of snapshots, etc.) of the same file system object. Not currently
-         * used.
-         */
-        __u32 f_ver;
+enum lma_compat {
+        LMAC_HSM = 0x00000001,
+        LMAC_SOM = 0x00000002,
 };
+
+/**
+ * Masks for all features that should be supported by a Lustre version to
+ * access a specific file.
+ * This information is stored in lustre_mdt_attrs::lma_incompat.
+ *
+ * NOTE: No incompat feature should be added before bug #17670 is landed.
+ */
+#define LMA_INCOMPAT_SUPP 0x0
 
 /**
  * Following struct for MDT attributes, that will be kept inode's EA.
  * Introduced in 2.0 release (please see b15993, for details)
  */
 struct lustre_mdt_attrs {
+        /**
+         * Bitfield for supported data in this structure. From enum lma_compat.
+         * lma_self_fid and lma_flags are always available.
+         */
+        __u32   lma_compat;
+	/**
+         * Per-file incompat feature list. Lustre version should support all
+         * flags set in this field. The supported feature mask is available in
+         * LMA_INCOMPAT_SUPP.
+         */
+        __u32   lma_incompat;
         /** FID of this inode */
         struct lu_fid  lma_self_fid;
         /** SOM state, mdt/ost type, others */
@@ -292,7 +292,6 @@ struct lustre_mdt_attrs {
         /** total sectors in objects */
         __u64   lma_som_sectors;
 };
-
 
 /**
  * fid constants
@@ -371,14 +370,10 @@ static inline __u32 lu_igif_gen(const struct lu_fid *fid)
         return fid_oid(fid);
 }
 
-#define DFID "["LPX64":0x%x:0x%x]"
-#define SFID "0x%llx:0x%x:0x%x"
-
-#define PFID(fid)     \
-        fid_seq(fid), \
-        fid_oid(fid), \
-        fid_ver(fid)
-
+/*
+ * Fids are transmitted across network (in the sender byte-ordering),
+ * and stored on disk in big-endian order.
+ */
 static inline void fid_cpu_to_le(struct lu_fid *dst, const struct lu_fid *src)
 {
         /* check that all fields are converted */
@@ -732,22 +727,22 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define MSG_CONNECT_TRANSNO     0x00000100 /* report transno */
 
 /* Connect flags */
-#define OBD_CONNECT_RDONLY                0x1ULL /*client allowed read-only access*/
-#define OBD_CONNECT_INDEX                 0x2ULL /*connect to specific LOV idx */
+#define OBD_CONNECT_RDONLY                0x1ULL /*client has read-only access*/
+#define OBD_CONNECT_INDEX                 0x2ULL /*connect specific LOV idx */
 #define OBD_CONNECT_MDS                   0x4ULL /*connect from MDT to OST */
-#define OBD_CONNECT_GRANT                 0x8ULL /*OSC acquires grant at connect */
-#define OBD_CONNECT_SRVLOCK              0x10ULL /*server takes locks for client */
+#define OBD_CONNECT_GRANT                 0x8ULL /*OSC gets grant at connect */
+#define OBD_CONNECT_SRVLOCK              0x10ULL /*server takes locks for cli */
 #define OBD_CONNECT_VERSION              0x20ULL /*Lustre versions in ocd */
-#define OBD_CONNECT_REQPORTAL            0x40ULL /*Separate non-IO request portal */
+#define OBD_CONNECT_REQPORTAL            0x40ULL /*Separate non-IO req portal */
 #define OBD_CONNECT_ACL                  0x80ULL /*access control lists */
-#define OBD_CONNECT_XATTR               0x100ULL /*client use extended attributes */
-#define OBD_CONNECT_CROW                0x200ULL /*MDS+OST create objects on write*/
+#define OBD_CONNECT_XATTR               0x100ULL /*client use extended attr */
+#define OBD_CONNECT_CROW                0x200ULL /*MDS+OST create obj on write*/
 #define OBD_CONNECT_TRUNCLOCK           0x400ULL /*locks on server for punch */
-#define OBD_CONNECT_TRANSNO             0x800ULL /*replay sends initial transno */
-#define OBD_CONNECT_IBITS              0x1000ULL /*support for inodebits locks */
+#define OBD_CONNECT_TRANSNO             0x800ULL /*replay sends init transno */
+#define OBD_CONNECT_IBITS              0x1000ULL /*support for inodebits locks*/
 #define OBD_CONNECT_JOIN               0x2000ULL /*files can be concatenated */
-#define OBD_CONNECT_ATTRFID            0x4000ULL /*Server supports GetAttr By Fid */
-#define OBD_CONNECT_NODEVOH            0x8000ULL /*No open handle on special nodes*/
+#define OBD_CONNECT_ATTRFID            0x4000ULL /*Server can GetAttr By Fid*/
+#define OBD_CONNECT_NODEVOH            0x8000ULL /*No open hndl on specl nodes*/
 #define OBD_CONNECT_RMT_CLIENT        0x10000ULL /*Remote client */
 #define OBD_CONNECT_RMT_CLIENT_FORCE  0x20000ULL /*Remote client by force */
 #define OBD_CONNECT_BRW_SIZE          0x40000ULL /*Max bytes per rpc */
@@ -756,12 +751,12 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_OSS_CAPA         0x200000ULL /*OSS capability */
 #define OBD_CONNECT_CANCELSET        0x400000ULL /*Early batched cancels. */
 #define OBD_CONNECT_SOM              0x800000ULL /*Size on MDS */
-#define OBD_CONNECT_AT              0x1000000ULL /*client uses adaptive timeouts */
+#define OBD_CONNECT_AT              0x1000000ULL /*client uses AT */
 #define OBD_CONNECT_LRU_RESIZE      0x2000000ULL /*LRU resize feature. */
 #define OBD_CONNECT_MDS_MDS         0x4000000ULL /*MDS-MDS connection */
 #define OBD_CONNECT_REAL            0x8000000ULL /*real connection */
-#define OBD_CONNECT_CHANGE_QS      0x10000000ULL /*shrink/enlarge qunit b=10600 */
-#define OBD_CONNECT_CKSUM          0x20000000ULL /*support several cksum algos */
+#define OBD_CONNECT_CHANGE_QS      0x10000000ULL /*shrink/enlarge qunit */
+#define OBD_CONNECT_CKSUM          0x20000000ULL /*support several cksum algos*/
 #define OBD_CONNECT_FID            0x40000000ULL /*FID is supported by server */
 #define OBD_CONNECT_VBR            0x80000000ULL /*version based recovery */
 #define OBD_CONNECT_LOV_V3        0x100000000ULL /*client supports LOV v3 EA */
@@ -786,7 +781,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA | \
                                 OBD_CONNECT_MDS_MDS | OBD_CONNECT_FID | \
                                 LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_VBR | \
-                                OBD_CONNECT_LOV_V3)
+                                OBD_CONNECT_LOV_V3 | OBD_CONNECT_SOM)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
@@ -884,26 +879,32 @@ typedef __u32 obd_gid;
 typedef __u32 obd_flag;
 typedef __u32 obd_count;
 
-#define OBD_FL_INLINEDATA    (0x00000001)
-#define OBD_FL_OBDMDEXISTS   (0x00000002)
-#define OBD_FL_DELORPHAN     (0x00000004) /* if set in o_flags delete orphans */
-#define OBD_FL_NORPC         (0x00000008) /* set in o_flags do in OSC not OST */
-#define OBD_FL_IDONLY        (0x00000010) /* set in o_flags only adjust obj id*/
-#define OBD_FL_RECREATE_OBJS (0x00000020) /* recreate missing obj */
-#define OBD_FL_DEBUG_CHECK   (0x00000040) /* echo client/server debug check */
-#define OBD_FL_NO_USRQUOTA   (0x00000100) /* the object's owner is over quota */
-#define OBD_FL_NO_GRPQUOTA   (0x00000200) /* the object's group is over quota */
-#define OBD_FL_CREATE_CROW   (0x00000400) /* object should be create on write */
+enum obdo_flags {
+        OBD_FL_INLINEDATA   = 0x00000001,
+        OBD_FL_OBDMDEXISTS  = 0x00000002,
+        OBD_FL_DELORPHAN    = 0x00000004, /* if set in o_flags delete orphans */
+        OBD_FL_NORPC        = 0x00000008, /* set in o_flags do in OSC not OST */
+        OBD_FL_IDONLY       = 0x00000010, /* set in o_flags only adjust obj id*/
+        OBD_FL_RECREATE_OBJS= 0x00000020, /* recreate missing obj */
+        OBD_FL_DEBUG_CHECK  = 0x00000040, /* echo client/server debug check */
+        OBD_FL_NO_USRQUOTA  = 0x00000100, /* the object's owner is over quota */
+        OBD_FL_NO_GRPQUOTA  = 0x00000200, /* the object's group is over quota */
+        OBD_FL_CREATE_CROW  = 0x00000400, /* object should be create on write */
+        OBD_FL_TRUNCLOCK    = 0x00000800, /* delegate DLM locking during punch*/
+        OBD_FL_CKSUM_CRC32  = 0x00001000, /* CRC32 checksum type */
+        OBD_FL_CKSUM_ADLER  = 0x00002000, /* ADLER checksum type */
+        OBD_FL_CKSUM_RSVD1  = 0x00004000, /* for future cksum types */
+        OBD_FL_CKSUM_RSVD2  = 0x00008000, /* for future cksum types */
+        OBD_FL_CKSUM_RSVD3  = 0x00010000, /* for future cksum types */
+        OBD_FL_SHRINK_GRANT = 0x00020000, /* object shrink the grant */
 
-#define OBD_FL_TRUNCLOCK     (0x00000800) /* delegate DLM locking during punch */
-#define OBD_FL_CKSUM_CRC32   (0x00001000) /* CRC32 checksum type */
-#define OBD_FL_CKSUM_ADLER   (0x00002000) /* ADLER checksum type */
-#define OBD_FL_CKSUM_RESV1   (0x00004000) /* reserved for future checksum type */
-#define OBD_FL_CKSUM_RESV2   (0x00008000) /* reserved for future checksum type */
-#define OBD_FL_CKSUM_RESV3   (0x00010000) /* reserved for future checksum type */
-#define OBD_FL_SHRINK_GRANT  (0x00020000) /* object shrink the grant */
+        OBD_FL_CKSUM_ALL    = OBD_FL_CKSUM_CRC32 | OBD_FL_CKSUM_ADLER,
 
-#define OBD_FL_CKSUM_ALL      (OBD_FL_CKSUM_CRC32 | OBD_FL_CKSUM_ADLER)
+        /* mask for local-only flag, which won't be sent over network */
+        OBD_FL_LOCAL_MASK   = 0xF0000000,
+        /* temporary OBDO used by osc_brw_async (see bug 18364) */
+        OBD_FL_TEMPORARY    = 0x10000000,
+};
 
 #define LOV_MAGIC_V1      0x0BD10BD0
 #define LOV_MAGIC         LOV_MAGIC_V1
@@ -1159,6 +1160,7 @@ typedef enum {
         MDS_SETXATTR     = 50, /* obsolete, now it's MDS_REINT op */
         MDS_WRITEPAGE    = 51,
         MDS_IS_SUBDIR    = 52,
+        MDS_GET_INFO     = 53,
         MDS_LAST_OPC
 } mds_cmd_t;
 
@@ -1418,7 +1420,7 @@ struct quota_adjust_qunit {
 };
 extern void lustre_swab_quota_adjust_qunit(struct quota_adjust_qunit *q);
 
-/* flags in qunit_data and quota_adjust_qunit will use macroes below */
+/* flags is shared among quota structures */
 #define LQUOTA_FLAGS_GRP       1UL   /* 0 is user, 1 is group */
 #define LQUOTA_FLAGS_BLK       2UL   /* 0 is inode, 1 is block */
 #define LQUOTA_FLAGS_ADJBLK    4UL   /* adjust the block qunit size */
@@ -1426,16 +1428,21 @@ extern void lustre_swab_quota_adjust_qunit(struct quota_adjust_qunit *q);
 #define LQUOTA_FLAGS_CHG_QS   16UL   /* indicate whether it has capability of
                                       * OBD_CONNECT_CHANGE_QS */
 
-/* the status of lqsk_flags in struct lustre_qunit_size_key */
+/* flags is specific for quota_adjust_qunit */
+#define LQUOTA_QAQ_CEATE_LQS  (1 << 31) /* when it is set, need create lqs */
+
+/* the status of lqs_flags in struct lustre_qunit_size  */
 #define LQUOTA_QUNIT_FLAGS (LQUOTA_FLAGS_GRP | LQUOTA_FLAGS_BLK)
 
 #define QAQ_IS_GRP(qaq)    ((qaq)->qaq_flags & LQUOTA_FLAGS_GRP)
 #define QAQ_IS_ADJBLK(qaq) ((qaq)->qaq_flags & LQUOTA_FLAGS_ADJBLK)
 #define QAQ_IS_ADJINO(qaq) ((qaq)->qaq_flags & LQUOTA_FLAGS_ADJINO)
+#define QAQ_IS_CREATE_LQS(qaq)  ((qaq)->qaq_flags & LQUOTA_QAQ_CEATE_LQS)
 
 #define QAQ_SET_GRP(qaq)    ((qaq)->qaq_flags |= LQUOTA_FLAGS_GRP)
 #define QAQ_SET_ADJBLK(qaq) ((qaq)->qaq_flags |= LQUOTA_FLAGS_ADJBLK)
 #define QAQ_SET_ADJINO(qaq) ((qaq)->qaq_flags |= LQUOTA_FLAGS_ADJINO)
+#define QAQ_SET_CREATE_LQS(qaq) ((qaq)->qaq_flags |= LQUOTA_QAQ_CEATE_LQS)
 
 /* inode access permission for remote user, the inode info are omitted,
  * for client knows them. */
@@ -1593,12 +1600,13 @@ extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 #define MAY_RGETFACL    (1 << 14)
 
 enum {
-        MDS_CHECK_SPLIT  = 1 << 0,
-        MDS_CROSS_REF    = 1 << 1,
-        MDS_VTX_BYPASS   = 1 << 2,
-        MDS_PERM_BYPASS  = 1 << 3,
-        MDS_SOM          = 1 << 4,
-        MDS_QUOTA_IGNORE = 1 << 5
+        MDS_CHECK_SPLIT   = 1 << 0,
+        MDS_CROSS_REF     = 1 << 1,
+        MDS_VTX_BYPASS    = 1 << 2,
+        MDS_PERM_BYPASS   = 1 << 3,
+        MDS_SOM           = 1 << 4,
+        MDS_QUOTA_IGNORE  = 1 << 5,
+        MDS_CLOSE_CLEANUP = 1 << 6
 };
 
 struct mds_rec_create {
@@ -2372,7 +2380,7 @@ enum changelog_rec_type {
 struct changelog_setinfo {
         __u64 cs_recno;
         __u32 cs_id;
-};
+} __attribute__((packed));
 
 /** changelog record */
 struct llog_changelog_rec {
@@ -2548,6 +2556,23 @@ struct obdo {
 #define o_dropped o_misc
 #define o_cksum   o_nlink
 
+static inline void lustre_set_wire_obdo(struct obdo *wobdo, struct obdo *lobdo)
+{
+        memcpy(wobdo, lobdo, sizeof(*lobdo));
+        wobdo->o_flags &= ~OBD_FL_LOCAL_MASK;
+}
+
+static inline void lustre_get_wire_obdo(struct obdo *lobdo, struct obdo *wobdo)
+{
+        obd_flag local_flags = lobdo->o_flags & OBD_FL_LOCAL_MASK;
+
+        LASSERT(!(wobdo->o_flags & OBD_FL_LOCAL_MASK));
+        
+        memcpy(lobdo, wobdo, sizeof(*lobdo));
+        lobdo->o_flags &= ~OBD_FL_LOCAL_MASK;
+        lobdo->o_flags |= local_flags;
+}
+
 extern void lustre_swab_obdo (struct obdo *o);
 
 /* request structure for OST's */
@@ -2621,8 +2646,7 @@ struct qunit_data {
 #define QDATA_CLR_CHANGE_QS(qdata)  ((qdata)->qd_flags &= ~LQUOTA_FLAGS_CHG_QS)
 
 extern void lustre_swab_qdata(struct qunit_data *d);
-extern int quota_get_qdata(void*req, struct qunit_data *qdata,
-                           int is_req, int is_exp);
+extern struct qunit_data *quota_get_qdata(void*req, int is_req, int is_exp);
 extern int quota_copy_qdata(void *request, struct qunit_data *qdata,
                             int is_req, int is_exp);
 
@@ -2737,7 +2761,7 @@ struct lustre_capa_key {
 extern void lustre_swab_lustre_capa_key(struct lustre_capa_key *k);
 
 /** The link ea holds 1 \a link_ea_entry for each hardlink */
-#define LINK_EA_MAGIC 0x01EA0000
+#define LINK_EA_MAGIC 0x11EAF1DFUL
 struct link_ea_header {
         __u32 leh_magic;
         __u32 leh_reccount;
@@ -2757,6 +2781,18 @@ struct link_ea_entry {
         /** logically after lee_parent_fid; don't use directly */
         char               lee_name[0];
 };
+
+/** fid2path request/reply structure */
+struct getinfo_fid2path {
+        struct lu_fid   gf_fid;
+        __u64           gf_recno;
+        __u32           gf_linkno;
+        __u32           gf_pathlen;
+        char            gf_path[0];
+} __attribute__((packed));
+
+void lustre_swab_fid2path (struct getinfo_fid2path *gf);
+
 
 #endif
 /** @} lustreidl */

@@ -251,6 +251,8 @@ struct dt_object_operations {
                                 struct dt_object *dt);
         void  (*do_write_unlock)(const struct lu_env *env,
                                  struct dt_object *dt);
+        int  (*do_write_locked)(const struct lu_env *env,
+                                struct dt_object *dt);
         /**
          * Note: following ->do_{x,}attr_{set,get}() operations are very
          * similar to ->moo_{x,}attr_{set,get}() operations in struct
@@ -543,8 +545,10 @@ struct dt_index_operations {
                                       const struct dt_it *di);
                 int       (*key_size)(const struct lu_env *env,
                                       const struct dt_it *di);
-                struct dt_rec *(*rec)(const struct lu_env *env,
-                                      const struct dt_it *di);
+                int            (*rec)(const struct lu_env *env,
+                                      const struct dt_it *di,
+                                      struct lu_dirent *lde,
+                                      __u32 attr);
                 __u64        (*store)(const struct lu_env *env,
                                       const struct dt_it *di);
                 int           (*load)(const struct lu_env *env,
@@ -707,6 +711,7 @@ static inline struct thandle *dt_trans_create(const struct lu_env *env,
         LASSERT(d->dd_ops->dt_trans_create);
         return d->dd_ops->dt_trans_create(env, d);
 }
+
 static inline int dt_trans_start(const struct lu_env *env,
                                              struct dt_device *d,
                                              struct thandle *th)

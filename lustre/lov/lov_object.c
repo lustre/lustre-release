@@ -245,8 +245,10 @@ static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
         cfs_waitlink_t          *waiter;
 
         r0  = &lov->u.raid0;
-        sub = lovsub2cl(los);
         LASSERT(r0->lo_sub[idx] == los);
+
+        sub  = lovsub2cl(los);
+        site = sub->co_lu.lo_dev->ld_site;
 
         cl_object_kill(env, sub);
         /* release a reference to the sub-object and ... */
@@ -257,7 +259,6 @@ static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
          * ->lo_sub[] slot in lovsub_object_fini() */
         if (r0->lo_sub[idx] == los) {
                 waiter = &lov_env_info(env)->lti_waiter;
-                site   = sub->co_lu.lo_dev->ld_site;
                 cfs_waitlink_init(waiter);
                 cfs_waitq_add(&site->ls_marche_funebre, waiter);
                 set_current_state(CFS_TASK_UNINT);
@@ -674,7 +675,7 @@ static const struct lu_object_operations lov_lu_obj_ops = {
 };
 
 struct lu_object *lov_object_alloc(const struct lu_env *env,
-                                   const struct lu_object_header *_,
+                                   const struct lu_object_header *unused,
                                    struct lu_device *dev)
 {
         struct lov_object *lov;

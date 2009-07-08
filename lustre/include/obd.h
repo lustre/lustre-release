@@ -261,7 +261,7 @@ struct obd_device_target {
         spinlock_t                obt_translock;
         /** Number of mounts */
         __u64                     obt_mount_count;
-        atomic_t                  obt_quotachecking;
+        struct semaphore          obt_quotachecking;
         struct lustre_quota_ctxt  obt_qctxt;
         lustre_quota_version_t    obt_qfmt;
         struct rw_semaphore       obt_rwsem;
@@ -330,8 +330,9 @@ struct filter_obd {
         int                  fo_tot_granted_clients;
 
         obd_size             fo_readcache_max_filesize;
-        int                  fo_read_cache;
-        int                  fo_writethrough_cache;
+        int                  fo_read_cache:1,   /**< enable read-only cache */
+                             fo_writethrough_cache:1,/**< read cache writes */
+                             fo_mds_ost_sync:1; /**< MDS-OST orphan recovery*/
 
         struct obd_import   *fo_mdc_imp;
         struct obd_uuid      fo_mdc_uuid;
@@ -437,6 +438,7 @@ struct client_obd {
         cfs_time_t               cl_next_shrink_grant;   /* jiffies */
         struct list_head         cl_grant_shrink_list;  /* Timeout event list */
         struct semaphore         cl_grant_sem;   /*grant shrink list semaphore*/
+        int                      cl_grant_shrink_interval; /* seconds */
 
         /* keep track of objects that have lois that contain pages which
          * have been queued for async brw.  this lock also protects the
@@ -950,7 +952,7 @@ enum config_flags {
  */
 struct obd_notify_upcall {
         int (*onu_upcall)(struct obd_device *host, struct obd_device *watched,
-                          enum obd_notify_event ev, void *owner);
+                          enum obd_notify_event ev, void *owner, void *data);
         /* Opaque datum supplied by upper layer listener */
         void *onu_owner;
 };
@@ -1038,8 +1040,9 @@ struct obd_device {
                       obd_fail:1,          /* cleanup with failover */
                       obd_async_recov:1,   /* allow asyncronous orphan cleanup */
                       obd_no_conn:1,       /* deny new connections */
-                      obd_inactive:1;      /* device active/inactive
+                      obd_inactive:1,      /* device active/inactive
                                            * (for /proc/status only!!) */
+                      obd_process_conf:1;  /* device is processing mgs config */
         /* uuid-export hash body */
         struct lustre_hash     *obd_uuid_hash;
         /* nid-export hash body */
@@ -1050,6 +1053,7 @@ struct obd_device {
         atomic_t                obd_refcount;
         cfs_waitq_t             obd_refcount_waitq;
         struct list_head        obd_exports;
+        struct list_head        obd_unlinked_exports;
         struct list_head        obd_delayed_exports;
         int                     obd_num_exports;
         spinlock_t              obd_nid_lock;
@@ -1079,6 +1083,7 @@ struct obd_device {
         int                              obd_max_recoverable_clients;
         int                              obd_connected_clients;
         int                              obd_recoverable_clients;
+        int                              obd_stale_clients;
         int                              obd_delayed_clients;
         spinlock_t                       obd_processing_task_lock; /* BH lock (timer) */
         __u64                            obd_next_recovery_transno;
@@ -1155,6 +1160,7 @@ enum obd_cleanup_stage {
 #define KEY_BLOCKSIZE           "blocksize"
 #define KEY_CAPA_KEY            "capa_key"
 #define KEY_CHANGELOG_CLEAR     "changelog_clear"
+#define KEY_FID2PATH            "fid2path"
 #define KEY_CHECKSUM            "checksum"
 #define KEY_CLEAR_FS            "clear_fs"
 #define KEY_CONN_DATA           "conn_data"
@@ -1321,6 +1327,9 @@ struct obd_ops {
         int (*o_precreate)(struct obd_export *exp);
         int (*o_create)(struct obd_export *exp,  struct obdo *oa,
                         struct lov_stripe_md **ea, struct obd_trans_info *oti);
+        int (*o_create_async)(struct obd_export *exp,  struct obd_info *oinfo,
+                              struct lov_stripe_md **ea,
+                              struct obd_trans_info *oti);
         int (*o_destroy)(struct obd_export *exp, struct obdo *oa,
                          struct lov_stripe_md *ea, struct obd_trans_info *oti,
                          struct obd_export *md_exp, void *capa);
@@ -1419,6 +1428,8 @@ struct obd_ops {
                           char *ostname);
         int (*o_pool_rem)(struct obd_device *obd, char *poolname,
                           char *ostname);
+        void (*o_getref)(struct obd_device *obd);
+        void (*o_putref)(struct obd_device *obd);
         /*
          * NOTE: If adding ops, add another LPROCFS_OBD_OP_INIT() line
          * to lprocfs_alloc_obd_stats() in obdclass/lprocfs_status.c.
@@ -1570,9 +1581,9 @@ struct lsm_operations {
         int (*lsm_destroy)(struct lov_stripe_md *, struct obdo *oa,
                            struct obd_export *md_exp);
         void (*lsm_stripe_by_index)(struct lov_stripe_md *, int *, obd_off *,
-                                     unsigned long *);
+                                    obd_off *);
         void (*lsm_stripe_by_offset)(struct lov_stripe_md *, int *, obd_off *,
-                                     unsigned long *);
+                                     obd_off *);
         obd_off (*lsm_stripe_offset_by_index)(struct lov_stripe_md *, int);
         obd_off (*lsm_stripe_offset_by_offset)(struct lov_stripe_md *, obd_off);
         int (*lsm_stripe_index_by_offset)(struct lov_stripe_md *, obd_off);

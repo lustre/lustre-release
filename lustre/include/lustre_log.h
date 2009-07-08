@@ -64,6 +64,7 @@
 #include <obd_class.h>
 #include <obd_ost.h>
 #include <lustre/lustre_idl.h>
+#include <dt_object.h>
 
 #define LOG_NAME_LIMIT(logname, name)                   \
         snprintf(logname, sizeof(logname), "LOGS/%s", name)
@@ -86,7 +87,10 @@ struct llog_handle {
         struct rw_semaphore     lgh_lock;
         struct llog_logid       lgh_id;              /* id of this log */
         struct llog_log_hdr    *lgh_hdr;
-        struct file            *lgh_file;
+        union {
+                struct file             *lgh_file;
+                struct dt_object        *lgh_obj;
+        } lgh_store;
         int                     lgh_last_idx;
         int                     lgh_cur_idx;    /* used during llog_process */
         __u64                   lgh_cur_offset; /* used during llog_process */
@@ -96,6 +100,9 @@ struct llog_handle {
                 struct cat_handle_data   chd;
         } u;
 };
+
+#define lgh_file        lgh_store.lgh_file
+#define lgh_obj         lgh_store.lgh_obj
 
 /* llog.c  -  general API */
 typedef int (*llog_cb_t)(struct llog_handle *, struct llog_rec_hdr *, void *);
@@ -382,6 +389,7 @@ static inline void llog_gen_init(struct llog_ctxt *ctxt)
                 ctxt->loc_gen.mnt_cnt = obd->u.filter.fo_mount_count;
         else
                 ctxt->loc_gen.mnt_cnt = 0;
+        ctxt->loc_gen.conn_cnt++;
 }
 
 static inline int llog_gen_lt(struct llog_gen a, struct llog_gen b)
@@ -393,7 +401,6 @@ static inline int llog_gen_lt(struct llog_gen a, struct llog_gen b)
         return(a.conn_cnt < b.conn_cnt ? 1 : 0);
 }
 
-#define LLOG_GEN_INC(gen)  ((gen).conn_cnt ++)
 #define LLOG_PROC_BREAK 0x0001
 #define LLOG_DEL_RECORD 0x0002
 

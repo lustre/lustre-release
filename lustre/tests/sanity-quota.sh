@@ -63,7 +63,18 @@ QUOTALOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 DIR=${DIR:-$MOUNT}
 DIR2=${DIR2:-$MOUNT2}
 
+if [ ! -z "$(mounted_lustre_filesystems)" ]; then
+        log "set debug level as $PTLDEBUG"
+        do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=$PTLDEBUG"
+fi
+
 check_and_setup_lustre
+
+if [ x"$(som_check)" = x"enabled" ]; then
+        echo "Som is enabled, Quota is temporary conflicts with it"
+        check_and_cleanup_lustre
+        exit 0
+fi
 
 LOVNAME=`lctl get_param -n llite.*.lov.common_name | tail -n 1`
 OSTCOUNT=`lctl get_param -n lov.$LOVNAME.numobd`
@@ -72,16 +83,14 @@ SHOW_QUOTA_USER="$LFS quota -v -u $TSTUSR $DIR"
 SHOW_QUOTA_USER2="$LFS quota -v -u $TSTUSR2 $DIR"
 SHOW_QUOTA_GROUP="$LFS quota -v -g $TSTUSR $DIR"
 SHOW_QUOTA_GROUP2="$LFS quota -v -g $TSTUSR2 $DIR"
-SHOW_QUOTA_INFO="$LFS quota -t $DIR"
+SHOW_QUOTA_INFO_USER="$LFS quota -t -u $DIR"
+SHOW_QUOTA_INFO_GROUP="$LFS quota -t -g $DIR"
 
 # control the time of tests
 cycle=30
 [ "$SLOW" = "no" ] && cycle=10
 
 build_test_filter
-
-eval ONLY_0=true
-eval ONLY_99=true
 
 # set_blk_tunables(btune_sz)
 set_blk_tunesz() {
@@ -177,7 +186,7 @@ resetquota() {
         [ "$1" != "-u" -a "$1" != "-g" ] && error "resetquota: wrong specifier $1 passed"
 
         count=0
-        if at_is_valid && at_is_enabled; then
+        if at_is_enabled; then
 	    timeout=$(at_max_get mds)
         else
 	    timeout=$(lctl get_param -n timeout)
@@ -255,67 +264,17 @@ quota_show_check() {
         fi
 }
 
-quota_scan() {
-        LOCAL_UG=$1
-        LOCAL_ID=$2
-
-        if [ "$LOCAL_UG" == "a" -o "$LOCAL_UG" == "u" ]; then
-                log "Files for user ($LOCAL_ID):"
-                ($LFS find -user $LOCAL_ID $DIR | xargs stat 2>/dev/null)
-        fi
-
-        if [ "$LOCAL_UG" == "a" -o "$LOCAL_UG" == "g" ]; then
-                log "Files for group ($LOCAL_ID):"
-                ($LFS find -group $LOCAL_ID $DIR | xargs stat 2>/dev/null)
-        fi
-}
-
-quota_error() {
-        quota_scan $1 $2
-        shift 2
-        error "$*"
-}
-
-quota_log() {
-        quota_scan $1 $2
-        shift 2
-        log "$*"
-}
-
-quota_show_check() {
-        LOCAL_BF=$1
-        LOCAL_UG=$2
-        LOCAL_ID=$3
-	PATTERN="`echo $DIR | sed 's/\//\\\\\//g'`"
-
-        $LFS quota -v -$LOCAL_UG $LOCAL_ID $DIR
-
-        if [ "$LOCAL_BF" == "a" -o "$LOCAL_BF" == "b" ]; then
-	        USAGE="`$LFS quota -$LOCAL_UG $LOCAL_ID $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $2 }'`"
-                [ $USAGE -ne 0 ] && quota_log $LOCAL_UG $LOCAL_ID "System is not clean for block ($LOCAL_UG:$LOCAL_ID:$USAGE)."
-        fi
-
-        if [ "$LOCAL_BF" == "a" -o "$LOCAL_BF" == "f" ]; then
-	        USAGE="`$LFS quota -$LOCAL_UG $LOCAL_ID $DIR | awk '/^.*'$PATTERN'.*[[:digit:]+][[:space:]+]/ { print $5 }'`"
-                [ $USAGE -ne 0 ] && quota_log $LOCAL_UG $LOCAL_ID "System is not clean for file ($LOCAL_UG:$LOCAL_ID:$USAGE)."
-        fi
-}
-
 # set quota
-test_0() {
+quota_init() {
 	$LFS quotaoff -ug $DIR
 	$LFS quotacheck -ug $DIR
 
  	resetquota -u $TSTUSR
  	resetquota -g $TSTUSR
 
-	lctl set_param debug="+quota"
-	do_facet $SINGLEMDS "lctl set_param debug=+quota"
-	for num in `seq $OSTCOUNT`; do
-	    do_facet ost$num "lctl set_param debug=+quota"
-	done
+        do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=+quota"
 }
-run_test_with_stat 0 "Set quota ============================="
+quota_init
 
 # test for specific quota limitation, qunit, qtune $1=block_quota_limit
 test_1_sub() {
@@ -336,7 +295,14 @@ test_1_sub() {
         chown $TSTUSR.$TSTUSR $TESTFILE
 
         log "    Write ..."
+        stime=`date +%s`
 	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$(($LIMIT/2)) || quota_error u $TSTUSR "(usr) write failure, but expect success"
+        etime=`date +%s`
+        delta=$((etime - stime))
+        if [ $delta -gt 0 ]; then
+                rate=$((BLK_SZ * LIMIT / 2 / delta / 1024))
+                [ $rate -gt 1024 ] || error "SLOW IO for $TSTUSR (user): $rate KB/sec"
+        fi
         log "    Done"
         log "    Write out of block quota ..."
 	# this time maybe cache write,  ignore it's failure
@@ -367,7 +333,12 @@ test_1_sub() {
         chown $TSTUSR.$TSTUSR $TESTFILE
 
         log "    Write ..."
+        stime=`date +%s`
 	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$(($LIMIT/2)) || quota_error g $TSTUSR "(grp) write failure, but expect success"
+        etime=`date +%s`
+        delta=$((etime - stime))
+        rate=$((BLK_SZ * LIMIT / 2 / delta / 1024))
+        [ $rate -gt 1024 ] || error "SLOW IO for $TSTUSR (group): $rate KB/sec"
         log "    Done"
         log "    Write out of block quota ..."
 	# this time maybe cache write, ignore it's failure
@@ -394,7 +365,7 @@ test_1() {
 	    blk_qunit=$(( $RANDOM % 3072 + 1024 ))
 	    blk_qtune=$(( $RANDOM % $blk_qunit ))
 	    # other osts and mds will occupy at 1M blk quota
-	    b_limit=$(( ($RANDOM - 16384) / 8 +  $OSTCOUNT * $blk_qunit * 4 ))
+	    b_limit=$(( ($RANDOM - 16384) / 8 +  ($OSTCOUNT + 1) * $blk_qunit * 4 ))
 	    set_blk_tunesz $blk_qtune
 	    set_blk_unitsz $blk_qunit
 	    echo "cycle: $i(total $cycle) bunit:$blk_qunit, btune:$blk_qtune, blimit:$b_limit"
@@ -512,7 +483,8 @@ test_block_soft() {
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
-	$SHOW_QUOTA_INFO
+	$SHOW_QUOTA_INFO_USER
+	$SHOW_QUOTA_INFO_GROUP
 
 	echo "    Write before timer goes off"
 	$RUNDD count=$BUNIT_SZ seek=$OFFSET || \
@@ -526,7 +498,8 @@ test_block_soft() {
 
         $SHOW_QUOTA_USER
         $SHOW_QUOTA_GROUP
-        $SHOW_QUOTA_INFO
+        $SHOW_QUOTA_INFO_USER
+        $SHOW_QUOTA_INFO_GROUP
 
 	echo "    Write after timer goes off"
 	# maybe cache write, ignore.
@@ -538,7 +511,8 @@ test_block_soft() {
 
         $SHOW_QUOTA_USER
         $SHOW_QUOTA_GROUP
-        $SHOW_QUOTA_INFO
+        $SHOW_QUOTA_INFO_USER
+        $SHOW_QUOTA_INFO_GROUP
 
 	echo "    Unlink file to stop timer"
 	rm -f $TESTFILE
@@ -547,7 +521,8 @@ test_block_soft() {
 
         $SHOW_QUOTA_USER
         $SHOW_QUOTA_GROUP
-        $SHOW_QUOTA_INFO
+        $SHOW_QUOTA_INFO_USER
+        $SHOW_QUOTA_INFO_GROUP
 
 	echo "    Write ..."
 	$RUNDD count=$BUNIT_SZ || quota_error a $TSTUSR "write failure, but expect success"
@@ -617,7 +592,8 @@ test_file_soft() {
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
-	$SHOW_QUOTA_INFO
+	$SHOW_QUOTA_INFO_USER
+	$SHOW_QUOTA_INFO_GROUP
 
 	echo "    Create file after timer goes off"
 	# the least of inode qunit is 2, so there are at most 3(qunit:2+qtune:1)
@@ -630,7 +606,8 @@ test_file_soft() {
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
-	$SHOW_QUOTA_INFO
+	$SHOW_QUOTA_INFO_USER
+	$SHOW_QUOTA_INFO_GROUP
 
 	echo "    Unlink files to stop timer"
 	find `dirname $TESTFILE` -name "`basename ${TESTFILE}`*" | xargs rm -f
@@ -770,37 +747,76 @@ test_6() {
 	chown $TSTUSR.$TSTUSR $FILEB
 
 	echo "  Exceed quota limit ..."
-        RUNDD="$RUNAS dd if=/dev/zero of=$FILEB bs=$BLK_SZ"
+        RUNDD="$RUNAS dd if=/dev/zero of=$FILEA bs=$BLK_SZ"
         $RUNDD count=$((LIMIT - BUNIT_SZ * OSTCOUNT)) || \
-		quota_error a $TSTUSR "write fileb failure, but expect success"
+		quota_error a $TSTUSR "write filea failure, but expect success"
 
         cancel_lru_locks osc
         $SHOW_QUOTA_USER
         $SHOW_QUOTA_GROUP
         $RUNDD seek=$LIMIT count=$((BUNIT_SZ * OSTCOUNT)) && \
-		quota_error a $TSTUSR "write fileb success, but expect EDQUOT"
+		quota_error a $TSTUSR "write filea success, but expect EDQUOT"
         cancel_lru_locks osc
-	echo "  Write to OST0 return EDQUOT"
+	echo "  Write to OST1 return EDQUOT"
 	# this write maybe cache write, ignore it's failure
-        RUNDD="$RUNAS dd if=/dev/zero of=$FILEA bs=$BLK_SZ"
+        RUNDD="$RUNAS dd if=/dev/zero of=$FILEB bs=$BLK_SZ"
         $RUNDD count=$(($BUNIT_SZ * 2)) || true
         cancel_lru_locks osc
         $SHOW_QUOTA_USER
         $SHOW_QUOTA_GROUP
         $RUNDD count=$((BUNIT_SZ * 2)) seek=$((BUNIT_SZ *2)) && \
-		quota_error a $TSTUSR "write filea success, but expect EDQUOT"
+		quota_error a $TSTUSR "write fileb success, but expect EDQUOT"
 
-	echo "  Remove fileb to let OST1 release quota"
-	rm -f $FILEB
-        sync; sleep 10; sync; # need to allow journal commit for small fs
+	echo "  Remove filea to let OST0 release quota"
+	rm -f $FILEA
 
-	echo "  Write to OST0"
+        if at_is_enabled; then
+	    timeout=$(at_max_get mds)
+        else
+	    timeout=$(lctl get_param -n timeout)
+        fi
+        count=$((timeout / 5))
+        OST0_UUID=`do_facet ost1 $LCTL dl | grep -m1 obdfilter | awk '{print $((NF-1))}'`
+
+        while [ $((count--)) -gt 0 ]; do
+                sync && sleep 5
+
+	        OST0_QUOTA_HOLD=`$LFS quota -o $OST0_UUID -u $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $3 }'`
+                if [ -z $OST0_QUOTA_HOLD ]; then
+                        error "System is error when query quota for block (U:$TSTUSR)."
+                else
+                        [ $OST0_QUOTA_HOLD -gt $BUNIT_SZ ] && continue
+                fi
+
+                break
+        done
+
+        [ ! $count -gt 0 ] && error "Release quota for block timeout (U:$TSTUSR)."
+        $SHOW_QUOTA_USER
+
+        while [ $((count--)) -gt 0 ]; do
+                sync && sleep 5
+
+	        OST0_QUOTA_HOLD=`$LFS quota -o $OST0_UUID -g $TSTUSR $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $3 }'`
+                if [ -z $OST0_QUOTA_HOLD ]; then
+                        error "System is error when query quota for block (G:$TSTUSR)."
+                else
+                        [ $OST0_QUOTA_HOLD -gt $BUNIT_SZ ] && continue
+                fi
+
+                break
+        done
+
+        [ ! $count -gt 0 ] && error "Release quota for block timeout (G:$TSTUSR)."
+        $SHOW_QUOTA_GROUP
+
+	echo "  Write to OST1"
 	$RUNDD count=$((LIMIT - BUNIT_SZ * OSTCOUNT)) || \
-		quota_error a $TSTUSR "write filea failure, expect success"
+		quota_error a $TSTUSR "write fileb failure, expect success"
 	echo "  Done"
 
 	# cleanup
-	rm -f $FILEA
+	rm -f $FILEB
 	sync; sleep 3; sync;
 
 	resetquota -u $TSTUSR
@@ -1242,7 +1258,7 @@ test_14a() {	# was test_14 b=12223 -- setting quota on root
         # reboot the lustre
         sync; sleep 5; sync
         cleanup_and_setup_lustre
-        test_0
+        quota_init
 
 	mkdir -p $DIR/$tdir
 
@@ -1460,7 +1476,7 @@ test_18() {
 
 	echo  "   step2: testing ......"
 	count=0
-	if at_is_valid && at_is_enabled; then
+	if at_is_enabled; then
 	    timeout=$(at_max_get mds)
 	else
 	    timeout=$(lctl get_param -n timeout)
@@ -1518,7 +1534,7 @@ test_18a() {
 
 	echo  "   step2: testing ......"
 	count=0
-	if at_is_valid && at_is_enabled; then
+	if at_is_enabled; then
 	    timeout=$(at_max_get mds)
 	else
 	    timeout=$(lctl get_param -n timeout)
@@ -1590,7 +1606,7 @@ test_18bc_sub() {
         fi
 
         count=0
-        if at_is_valid && at_is_enabled; then
+	if at_is_enabled; then
 	    timeout=$(at_max_get mds)
         else
 	    timeout=$(lctl get_param -n timeout)
@@ -1795,9 +1811,7 @@ test_21() {
 run_test_with_stat 21 "run for fixing bug16053 ==========="
 
 test_22() {
-        $LFS quotaoff -ug $DIR || error "could not turn quotas off"
-
-        quota_save_version "ug"
+        quota_save_version "ug3"
 
         stopall
         mount
@@ -1805,26 +1819,10 @@ test_22() {
 
         echo "checking parameters"
 
-        do_facet $SINGLEMDS "lctl get_param mdd.${FSNAME}-MDT*.quota_type" | grep "ug" || error "admin failure"
-        do_facet ost1 "lctl get_param obdfilter.*.quota_type" | grep "ug" || error "op failure"
+        do_facet $SINGLEMDS "lctl get_param mdd.${FSNAME}-MDT*.quota_type" | grep "ug3" || error "admin failure"
+        do_facet ost1 "lctl get_param obdfilter.*.quota_type" | grep "ug3" || error "op failure"
 
-        run_test 0 "reboot lustre"
-}
-run_test_with_stat 22 "test if quota_type saved as permanent parameter ===="
-
-# It is triggered when test_23 failed, diagnostic for bug 18293
-test_23_dumppage()
-{
-        NUM=$1
-        DUMPPAGE=`find /proc/fs/${FSNAME}/llite/ -name dump_page_cache`
-        qtime=`date +%s`
-        cat $DUMPPAGE > $TMP/sanity-quota_test_23_${qtime}_${NUM}.log
-        fsize=`stat -c%s $TMP/sanity-quota_test_23_${qtime}_${NUM}.log`
-        if [ $fsize -eq 0 ]; then
-                rm -f $TMP/sanity-quota_test_23_${qtime}_${NUM}.log
-        else
-                error "some IO error was found during directIO"
-        fi
+        quota_init
 }
 
 test_23_sub() {
@@ -2019,7 +2017,7 @@ test_26() {
 	wait_delete_completed
 
 	# every quota slave gets 20MB
-	b_limit=$((OSTCOUNT * 20 * 1024))
+	b_limit=$(((OSTCOUNT + 1) * 20 * 1024))
 	log "limit: ${b_limit}KB"
 	$LFS setquota -u $TSTUSR -b 0 -B $b_limit -i 0 -I 0 $DIR
 	sleep 3
@@ -2053,16 +2051,68 @@ test_26() {
 }
 run_test_with_stat 26 "test for false quota error(bz18491) ======================================"
 
+test_27() {
+        $LFS quota $TSTUSR $DIR && error "lfs succeeded with no type, but should have failed"
+        $LFS setquota $TSTUSR $DIR && error "lfs succeeded with no type, but should have failed"
+        return 0
+}
+run_test_with_stat 27 "lfs quota/setquota should handle wrong arguments (19612) ================="
+
+test_28() {
+        BLK_LIMIT=$((100 * 1024 * 1024)) # 100G
+        echo "Step 1: set enough high limit for user [$TSTUSR:$BLK_LIMIT]"
+        $LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I 0 $DIR
+        $SHOW_QUOTA_USER
+
+        echo "Step 2: reset system ..."
+        cleanup_and_setup_lustre
+        quota_init
+
+        echo "Step 3: change qunit for user [$TSTUSR:512:1024]"
+        set_blk_tunesz 512
+        set_blk_unitsz 1024
+
+        wait_delete_completed
+
+        #define OBD_FAIL_QUOTA_RET_QDATA | OBD_FAIL_ONCE
+        lustre_fail ost 0x80000A02
+
+        TESTFILE="$DIR/$tdir/$tfile"
+        mkdir -p $DIR/$tdir
+
+        BLK_LIMIT=$((100 * 1024)) # 100M
+        echo "Step 4: set enough high limit for user [$TSTUSR:$BLK_LIMIT]"
+        $LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I 0 $DIR
+        $SHOW_QUOTA_USER
+
+        touch $TESTFILE
+        chown $TSTUSR.$TSTUSR $TESTFILE
+
+        echo "Step 5: write the test file1 [10M] ..."
+        $RUNAS dd if=/dev/zero of=$TESTFILE  bs=$BLK_SZ count=$(( 10 * 1024 )) \
+	    || quota_error a $TSTUSR "write 10M file failure"
+        $SHOW_QUOTA_USER
+
+        rm -f $TESTFILE
+        sync; sleep 3; sync;
+
+        # make qd_count 64 bit
+        lustre_fail ost 0
+
+        set_blk_unitsz $((128 * 1024))
+        set_blk_tunesz $((128 * 1024 / 2))
+
+        resetquota -u $TSTUSR
+}
+run_test_with_stat 28 "test for consistency for qunit when setquota (18574) ==========="
+
 # turn off quota
-test_99()
+quota_fini()
 {
 	$LFS quotaoff $DIR
-	lctl set_param debug="-quota"
-
-	return 0
+        do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=+quota"
 }
-run_test_with_stat 99 "Quota off ==============================="
-
+quota_fini
 
 log "cleanup: ======================================================"
 cd $ORIG_PWD

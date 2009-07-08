@@ -125,7 +125,6 @@ struct ll_inode_info {
 
         /* this lock protects posix_acl, pending_write_llaps, mmap_cnt */
         spinlock_t              lli_lock;
-        struct list_head        lli_pending_write_llaps;
         struct list_head        lli_close_list;
         /* handle is to be sent to MDS later on done_writing and setattr.
          * Open handle data are needed for the recovery to reconstruct
@@ -227,6 +226,7 @@ enum ra_stat {
 struct ll_ra_info {
         atomic_t                  ra_cur_pages;
         unsigned long             ra_max_pages;
+        unsigned long             ra_max_pages_per_file;
         unsigned long             ra_max_read_ahead_whole_pages;
 };
 
@@ -297,6 +297,7 @@ enum stats_track_type {
 #define LL_SBI_OSS_CAPA         0x100 /* support oss capa */
 #define LL_SBI_LOCALFLOCK       0x200 /* Local flocks support by kernel */
 #define LL_SBI_LRU_RESIZE       0x400 /* lru resize support */
+#define LL_SBI_LAZYSTATFS       0x800 /* lazystatfs mount option */
 
 /* default value for ll_sb_info->contention_time */
 #define SBI_DEFAULT_CONTENTION_SECONDS     60
@@ -475,7 +476,7 @@ struct ll_readahead_state {
         /*
          * The following 3 items are used for detecting the stride I/O
          * mode.
- 	 * In stride I/O mode,
+         * In stride I/O mode,
          * ...............|-----data-----|****gap*****|--------|******|....
          *    offset      |-stride_pages-|-stride_gap-|
          * ras_stride_offset = offset;
@@ -503,8 +504,7 @@ struct lustre_handle;
 struct ll_file_data {
         struct ll_readahead_state fd_ras;
         int fd_omode;
-        struct lustre_handle fd_cwlockh;
-        unsigned long fd_gid;
+        struct ccc_grouplock fd_grouplock;
         struct ll_file_dir fd_dir;
         __u32 fd_flags;
         struct file *fd_file;
@@ -633,10 +633,13 @@ extern int ll_inode_revalidate_it(struct dentry *, struct lookup_intent *);
 extern int ll_have_md_lock(struct inode *inode, __u64 bits);
 extern ldlm_mode_t ll_take_md_lock(struct inode *inode, __u64 bits,
                                    struct lustre_handle *lockh);
+int __ll_inode_revalidate_it(struct dentry *, struct lookup_intent *,  __u64 bits);
+int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd);
 int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_glimpse_ioctl(struct ll_sb_info *sbi,
                      struct lov_stripe_md *lsm, lstat_t *st);
+void ll_ioepoch_open(struct ll_inode_info *lli, __u64 ioepoch);
 int ll_local_open(struct file *file,
                   struct lookup_intent *it, struct ll_file_data *fd,
                   struct obd_client_handle *och);
@@ -675,6 +678,9 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data);
 int ll_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
               int num_bytes);
 int ll_merge_lvb(struct inode *inode);
+int ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg);
+int ll_put_grouplock(struct inode *inode, struct file *file, unsigned long arg);
+int ll_fid2path(struct obd_export *exp, void *arg);
 
 /* llite/dcache.c */
 /* llite/namei.c */

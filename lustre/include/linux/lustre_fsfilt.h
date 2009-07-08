@@ -212,9 +212,6 @@ static inline void *fsfilt_start_log(struct obd_device *obd,
         void *parent_handle = oti ? oti->oti_handle : NULL;
         void *handle;
 
-        if (obd->obd_fail)
-                return ERR_PTR(-EROFS);
-
         handle = obd->obd_fsops->fs_start(inode, op, parent_handle, logs);
         CDEBUG(D_INFO, "started handle %p (%p)\n", handle, parent_handle);
 
@@ -245,9 +242,6 @@ static inline void *fsfilt_brw_start_log(struct obd_device *obd, int objcount,
         unsigned long now = jiffies;
         void *parent_handle = oti ? oti->oti_handle : NULL;
         void *handle;
-
-        if (obd->obd_fail)
-                return ERR_PTR(-EROFS);
 
         handle = obd->obd_fsops->fs_brw_start(objcount, fso, niocount, nb,
                                               parent_handle, logs);
@@ -429,7 +423,7 @@ static inline int fsfilt_quotainfo(struct obd_device *obd,
 }
 
 static inline int fsfilt_qids(struct obd_device *obd, struct file *file,
-                              struct inode *inode, int type, 
+                              struct inode *inode, int type,
                               struct list_head *list)
 {
         if (obd->obd_fsops->fs_qids)

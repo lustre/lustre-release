@@ -1353,12 +1353,13 @@ int sptlrpc_import_sec_adapt(struct obd_import *imp,
         struct ptlrpc_sec          *sec, *newsec;
         enum lustre_sec_part        sp;
         char                        str[24];
-        int                         rc;
+        int                         rc = 0;
+        ENTRY;
 
         might_sleep();
 
         if (imp == NULL)
-                return 0;
+                RETURN(0);
 
         conn = imp->imp_connection;
 
@@ -1393,12 +1394,10 @@ int sptlrpc_import_sec_adapt(struct obd_import *imp,
                 char    str2[24];
 
                 if (flavor_equal(&sf, &sec->ps_flvr))
-                        goto out;
+                        GOTO(out, rc);
 
-                CWARN("%simport %p (%s%s%s): changing flavor "
-                      "%s -> %s\n", svc_ctx ? "reverse " : "",
-                      imp, imp->imp_obd->obd_name,
-                      svc_ctx == NULL ? "->" : "<-",
+                CWARN("import %s->%s: changing flavor %s -> %s\n",
+                      imp->imp_obd->obd_name,
                       obd_uuid2str(&conn->c_remote_uuid),
                       sptlrpc_flavor2name(&sec->ps_flvr, str, sizeof(str)),
                       sptlrpc_flavor2name(&sf, str2, sizeof(str2)));
@@ -1408,13 +1407,11 @@ int sptlrpc_import_sec_adapt(struct obd_import *imp,
                     SPTLRPC_FLVR_MECH(sf.sf_rpc) ==
                     SPTLRPC_FLVR_MECH(sec->ps_flvr.sf_rpc)) {
                         sptlrpc_import_sec_adapt_inplace(imp, sec, &sf);
-                        goto out;
+                        GOTO(out, rc);
                 }
         } else {
-                CWARN("%simport %p (%s%s%s) netid %x: select flavor %s\n",
-                      svc_ctx == NULL ? "" : "reverse ",
-                      imp, imp->imp_obd->obd_name,
-                      svc_ctx == NULL ? "->" : "<-",
+                CWARN("import %s->%s netid %x: select flavor %s\n",
+                      imp->imp_obd->obd_name,
                       obd_uuid2str(&conn->c_remote_uuid),
                       LNET_NIDNET(conn->c_self),
                       sptlrpc_flavor2name(&sf, str, sizeof(str)));
@@ -1425,19 +1422,17 @@ int sptlrpc_import_sec_adapt(struct obd_import *imp,
         newsec = sptlrpc_sec_create(imp, svc_ctx, &sf, sp);
         if (newsec) {
                 sptlrpc_import_sec_install(imp, newsec);
-                rc = 0;
         } else {
-                CERROR("%simport %p (%s): failed to create new sec\n",
-                       svc_ctx == NULL ? "" : "reverse ",
-                       imp, obd_uuid2str(&conn->c_remote_uuid));
+                CERROR("import %s->%s: failed to create new sec\n",
+                       imp->imp_obd->obd_name,
+                       obd_uuid2str(&conn->c_remote_uuid));
                 rc = -EPERM;
         }
 
         mutex_up(&imp->imp_sec_mutex);
-
 out:
         sptlrpc_sec_put(sec);
-        return 0;
+        RETURN(rc);
 }
 
 void sptlrpc_import_sec_put(struct obd_import *imp)

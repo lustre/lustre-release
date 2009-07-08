@@ -218,6 +218,7 @@ static int ost_create(struct obd_export *exp, struct ptlrpc_request *req,
                                  sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
         oti->oti_logcookies = &repbody->oa.o_lcookie;
+        
         req->rq_status = obd_create(exp, &repbody->oa, NULL, oti);
         //obd_log_cancel(conn, NULL, 1, oti->oti_logcookies, 0);
         RETURN(0);
@@ -772,7 +773,9 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                                            desc);
                                 rc = l_wait_event(desc->bd_waitq,
                                                   !ptlrpc_server_bulk_active(desc) ||
-                                                  exp->exp_failed, &lwi);
+                                                  exp->exp_failed ||
+                                                  exp->exp_abort_active_req,
+                                                  &lwi);
                                 LASSERT(rc == 0 || rc == -ETIMEDOUT);
                                 /* Wait again if we changed deadline */
                         } while ((rc == -ETIMEDOUT) &&
@@ -788,6 +791,11 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         } else if (exp->exp_failed) {
                                 DEBUG_REQ(D_ERROR, req, "Eviction on bulk PUT");
                                 rc = -ENOTCONN;
+                                ptlrpc_abort_bulk(desc);
+                        } else if (exp->exp_abort_active_req) {
+                                DEBUG_REQ(D_ERROR, req, "Reconnect on bulk PUT");
+                                /* we don't reply anyway */
+                                rc = -ETIMEDOUT;
                                 ptlrpc_abort_bulk(desc);
                         } else if (!desc->bd_success ||
                                    desc->bd_nob_transferred != desc->bd_nob) {
@@ -1000,6 +1008,10 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc != 0)
                 GOTO(out_lock, rc);
 
+        rc = sptlrpc_svc_prep_bulk(req, desc);
+        if (rc != 0)
+                GOTO(out_lock, rc);
+
         /* Check if client was evicted while we were doing i/o before touching
            network */
         if (desc->bd_export->exp_failed)
@@ -1017,7 +1029,9 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                                    ost_bulk_timeout, desc);
                         rc = l_wait_event(desc->bd_waitq,
                                           !ptlrpc_server_bulk_active(desc) ||
-                                          desc->bd_export->exp_failed, &lwi);
+                                          desc->bd_export->exp_failed ||
+                                          desc->bd_export->exp_abort_active_req,
+                                          &lwi);
                         LASSERT(rc == 0 || rc == -ETIMEDOUT);
                         /* Wait again if we changed deadline */
                 } while ((rc == -ETIMEDOUT) &&
@@ -1033,6 +1047,11 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 } else if (desc->bd_export->exp_failed) {
                         DEBUG_REQ(D_ERROR, req, "Eviction on bulk GET");
                         rc = -ENOTCONN;
+                        ptlrpc_abort_bulk(desc);
+                } else if (desc->bd_export->exp_abort_active_req) {
+                        DEBUG_REQ(D_ERROR, req, "Reconnect on bulk GET");
+                        /* we don't reply anyway */
+                        rc = -ETIMEDOUT;
                         ptlrpc_abort_bulk(desc);
                 } else if (!desc->bd_success) {
                         DEBUG_REQ(D_ERROR, req, "network error on bulk GET");
@@ -1214,8 +1233,10 @@ static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
         if (KEY_IS(KEY_EVICT_BY_NID)) {
                 if (val && vallen)
                         obd_export_evict_by_nid(exp->exp_obd, val);
-
                 GOTO(out, rc = 0);
+        } else if (KEY_IS(KEY_MDS_CONN) && lustre_msg_swabbed(req->rq_reqmsg)) {
+                /* Val's are not swabbed automatically */
+                __swab32s((__u32 *)val);
         }
 
         rc = obd_set_info_async(exp, keylen, key, vallen, val, NULL);
@@ -1472,6 +1493,12 @@ static int ost_connect_check_sptlrpc(struct ptlrpc_request *req)
         struct filter_obd     *filter = &exp->exp_obd->u.filter;
         struct sptlrpc_flavor  flvr;
         int                    rc = 0;
+
+        if (unlikely(strcmp(exp->exp_obd->obd_type->typ_name,
+                            LUSTRE_ECHO_NAME) == 0)) {
+                exp->exp_flvr.sf_rpc = SPTLRPC_FLVR_ANY;
+                return 0;
+        }
 
         if (exp->exp_flvr.sf_rpc == SPTLRPC_FLVR_INVALID) {
                 read_lock(&filter->fo_sptlrpc_lock);

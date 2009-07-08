@@ -40,6 +40,8 @@
 #include <obd_class.h>
 #include <obd_support.h>
 #include <obd.h>
+#include <cl_object.h>
+#include <lclient.h>
 
 #include <lustre_lite.h>
 
@@ -86,7 +88,7 @@ int cl_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp)
  */
 int cl_ocd_update(struct obd_device *host,
                   struct obd_device *watched,
-                  enum obd_notify_event ev, void *owner)
+                  enum obd_notify_event ev, void *owner, void *data)
 {
         struct lustre_client_ocd *lco;
         struct client_obd        *cli;
@@ -116,3 +118,74 @@ int cl_ocd_update(struct obd_device *host,
         }
         RETURN(result);
 }
+
+#define GROUPLOCK_SCOPE "grouplock"
+
+int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
+                     struct ccc_grouplock *cg)
+{
+        struct lu_env          *env;
+        struct cl_io           *io;
+        struct cl_lock         *lock;
+        struct cl_lock_descr   *descr;
+        __u32                   enqflags;
+        int                     refcheck;
+        int                     rc;
+
+        env = cl_env_get(&refcheck);
+        if (IS_ERR(env))
+                return PTR_ERR(env);
+
+        io = &ccc_env_info(env)->cti_io;
+        io->ci_obj = obj;
+
+        rc = cl_io_init(env, io, CIT_MISC, io->ci_obj);
+        if (rc) {
+                LASSERT(rc < 0);
+                cl_env_put(env, &refcheck);
+                return rc;
+        }
+
+        descr = &ccc_env_info(env)->cti_descr;
+        descr->cld_obj = obj;
+        descr->cld_start = 0;
+        descr->cld_end = CL_PAGE_EOF;
+        descr->cld_gid = gid;
+        descr->cld_mode = CLM_GROUP;
+
+        enqflags = CEF_MUST | (nonblock ? CEF_NONBLOCK : 0);
+        lock = cl_lock_request(env, io, descr, enqflags,
+                               GROUPLOCK_SCOPE, cfs_current());
+        if (IS_ERR(lock)) {
+                cl_io_fini(env, io);
+                cl_env_put(env, &refcheck);
+                return PTR_ERR(lock);
+        }
+
+        cg->cg_env = cl_env_get(&refcheck);
+        cg->cg_lock = lock;
+        cg->cg_gid = gid;
+        LASSERT(cg->cg_env == env);
+
+        cl_env_unplant(env, &refcheck);
+        return 0;
+}
+
+void cl_put_grouplock(struct ccc_grouplock *cg)
+{
+        struct lu_env          *env = cg->cg_env;
+        struct cl_lock         *lock = cg->cg_lock;
+        int                     refcheck;
+
+        LASSERT(cg->cg_env);
+        LASSERT(cg->cg_gid);
+
+        cl_env_implant(env, &refcheck);
+        cl_env_put(env, &refcheck);
+
+        cl_unuse(env, lock);
+        cl_lock_release(env, lock, GROUPLOCK_SCOPE, cfs_current());
+        cl_io_fini(env, &ccc_env_info(env)->cti_io);
+        cl_env_put(env, NULL);
+}
+

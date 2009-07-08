@@ -44,7 +44,7 @@ SETUP=${SETUP:-:}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="12 16 33a"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="12 16 23 33a"
 
 SANITYLOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 FAIL_ON_ERROR=false
@@ -348,7 +348,7 @@ test_17() { # bug 3513, 3667
 run_test 17 "resource creation/LVB creation race ==============="
 
 test_18() {
-	./mmap_sanity -d $MOUNT1 -m $MOUNT2
+	$LUSTRE/tests/mmap_sanity -d $MOUNT1 -m $MOUNT2
 	sync; sleep 1; sync
 }
 run_test 18 "mmap sanity check ================================="
@@ -436,19 +436,21 @@ test_23() { # Bug 5972
 	cancel_lru_locks osc
 	
 	time1=`date +%s`	
-	sleep 2
+	#MAX_ATIME_DIFF 60, we update atime only if older than 60 seconds
+	sleep 61
 	
 	multiop_bg_pause $DIR1/f23 or20_c || return 1
-	MULTIPID=$!
+        # with SOM and opencache enabled, we need to close a file and cancel
+        # open lock to get atime propogated to MDS
+        kill -USR1 $!
+        cancel_lru_locks mdc
 
 	time2=`stat -c "%X" $DIR2/f23`
 
 	if (( $time2 <= $time1 )); then
-		kill -USR1 $MULTIPID
 		error "atime doesn't update among nodes"
 	fi
 
-	kill -USR1 $MULTIPID || return 1
 	rm -f $DIR1/f23 || error "rm -f $DIR1/f23 failed"
 	true
 }
@@ -713,17 +715,6 @@ print_jbd_stat () {
     do_facet $SINGLEMDS cat /proc/fs/jbd/$dev/info | head -1
 }
 
-do_and_time () {
-   local cmd=$1
-
-   local start_ts=`date +%s`
-
-   $cmd
-
-   current_ts=`date +%s`
-   ELAPSED=`expr $current_ts - $start_ts`
-}
-
 # commit on sharing tests
 test_33a() {
     remote_mds_nodsh && skip "remote MDS with nodsh" && return
@@ -750,17 +741,16 @@ test_33a() {
         avgjbd=0
         avgtime=0
         for i in 1 2 3; do
-
             do_nodes $CLIENT1,$CLIENT2 "mkdir -p $DIR1/$tdir-\\\$(hostname)-$i"
 
             jbdold=$(print_jbd_stat)
             echo "=== START createmany $jbdold"
-            do_and_time "do_nodes $CLIENT1,$CLIENT2 createmany -o $DIR1/$tdir-\\\$(hostname)-$i/f- -r $DIR2/$tdir-\\\$(hostname)-$i/f- $nfiles"
+            local elapsed=$(do_and_time "do_nodes $CLIENT1,$CLIENT2 createmany -o $DIR1/$tdir-\\\$(hostname)-$i/f- -r $DIR2/$tdir-\\\$(hostname)-$i/f- $nfiles > /dev/null 2>&1")
             jbdnew=$(print_jbd_stat)
             jbd=$((`echo $jbdnew | cut -d" " -f1` - `echo $jbdold | cut -d" " -f1`))
-            echo "=== END   createmany $jbdnew :  $jbd transactions  nfiles $nfiles time $ELAPSED COS=$COS"
+            echo "=== END   createmany $jbdnew :  $jbd transactions  nfiles $nfiles time $elapsed COS=$COS"
             avgjbd=$(( avgjbd + jbd ))
-            avgtime=$(( avgtime + ELAPSED ))
+            avgtime=$(( avgtime + elapsed ))
         done
         eval cos${COS}_jbd=$((avgjbd / 3))
         eval cos${COS}_time=$((avgtime / 3))
@@ -896,6 +886,7 @@ test_36() { #bug 16417
         local before=$($LFS df | awk '{if ($1 ~/^filesystem/) {print $5; exit} }')
         dd if=/dev/zero of=$DIR1/$tdir/file000 bs=1M count=$SIZE
         sync
+        sleep 1
         local after_dd=$($LFS df | awk '{if ($1 ~/^filesystem/) {print $5; exit} }')
         multiop_bg_pause $DIR2/$tdir/file000 O_r${SIZE_B}c || return 3
         read_pid=$!

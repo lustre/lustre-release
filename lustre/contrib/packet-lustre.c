@@ -129,6 +129,9 @@ typedef enum {
   MDS_QUOTACTL     = 48,
   MDS_GETXATTR     = 49,
   MDS_SETXATTR     = 50,
+  MDS_WRITEPAGE    = 51,
+  MDS_IS_SUBDIR    = 52,
+  MDS_GET_INFO     = 53,
   MDS_LAST_OPC
 } mds_cmd_t;
 

@@ -252,6 +252,13 @@ int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
         if (ctxt->loc_obd->obd_stopping)
                 RETURN(LLOG_PROC_BREAK);
 
+        if (rec == NULL) {
+                spin_lock_bh(&ctxt->loc_obd->obd_processing_task_lock);
+                ctxt->loc_obd->u.filter.fo_mds_ost_sync = 0;
+                spin_unlock_bh(&ctxt->loc_obd->obd_processing_task_lock);
+                RETURN(0);
+        }
+
         if (!(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN)) {
                 CERROR("log is not plain\n");
                 RETURN(-EINVAL);

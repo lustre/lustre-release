@@ -1,58 +1,92 @@
 tbd  Sun Microsystems, Inc.
        * version 2.0.0
        * Support for kernels:
-        2.6.16.60-0.33 (SLES 10),
-        2.6.18-128.1.1.el5 (RHEL 5),
+        2.6.16.60-0.37 (SLES 10),
+        2.6.18-128.1.6.el5 (RHEL 5),
         2.6.22.14 vanilla (kernel.org).
        * Client support for unpatched kernels:
 	 (see http://wiki.lustre.org/index.php?title=Patchless_Client)
 	 2.6.16 - 2.6.21 vanilla (kernel.org)
-       * Recommended e2fsprogs version: 1.40.11-sun1
+       * Recommended e2fsprogs version: 1.41.6.sun1
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
+
+Severity   : normal
+Bugzilla   : 19507
+Description: Temporarily disable grant shrink.
+Details    : Disable the feature for debugging.
+
+Severity   : normal 
+Bugzilla   : 18624 
+Description: Unable to run several mkfs.lustre on loop devices at the same
+	     time.
+Details    : mkfs.lustre returns error 256 on the concurrent loop devices
+	     formatting. The solution is to proper handle the error.   
+
 Severity   : enhancement
-Bugzilla   : 17536
-Description: MDS create should not wait for statfs RPC while holding DLM lock.
+Bugzilla   : 19024
+Description: Update kernel to RHEL5.3 2.6.18-128.1.6.el5.
 
 Severity   : enhancement
-Bugzilla   : 18289
-Description: Update to RHEL5U3 kernel-2.6.18-128.1.1.el5.
+Bugzilla   : 19212
+Description: Update kernel to SLES10 SP2 2.6.16.60-0.37.
 
 Severity   : normal
-Frequency  : normal
-Bugzilla   : 12069
-Descriptoin: OST grant too much space to client even there are not enough space.
-Details    : Client will shrink its grant cache to OST if there are no write
-	     activity over 6 mins (GRANT_SHRINK_INTERVAL), and OST will retrieve
-	     this grant cache if there are already not enough avaible space
-	     (left_space < total_clients * 32M).
+Bugzilla   : 19528
+Description: resolve race between obd_disconnect and class_disconnect_exports
+Details    : if obd_disconnect will be called to already disconnected export he
+             forget release one reference and osc module can't unloaded.
+
+Severity   : enhancement
+Bugzilla   : 18688
+Description: Allow tuning service thread via /proc
+Details    : For each service a new
+	     /proc/fs/lustre/{service}/*/thread_{min,max,started} entry is
+	     created that can be used to set min/max thread counts, and get the
+	     current number of running threads.
 
 Severity   : normal
-Frequency  : start MDS on uncleanly shutdowned MDS device
-Bugzilla   : 16839
-Descriptoin: ll_sync thread stay in waiting mds<>ost recovery finished
-Details    : stay in waiting mds<>ost recovery finished produce random bugs
-             due race between two ll_sync thread for one lov target. send
-             ACTIVATE event only if connect realy finished and import have
-             FULL state.
+Bugzilla   : 18382
+Descriptoin: don't return error if have particaly created objects for file.
+Details    : lov_update_create_set uses set->set_success as index for created objects,
+             so if some requests will be failed, they will have hole at end of
+             array and we can use qos_shrink_lsm for allocate correct lsm.
+
+Severity   : enhancement
+Bugzilla   : 17671
+Description: Update OFED support to 1.4.1
 
 Severity   : normal
-Frequency  : rare, connect and disconnect target at same time
-Bugzilla   : 17310
-Descriptoin: ASSERTION(atomic_read(&imp->imp_inflight) == 0
-Details    : don't call obd_disconnect under lov_lock. this long time
-	      operation and can block ptlrpcd which answer to connect request.
+Bugzilla   : 18645
+Description: Reduce small size read RPC
+Details    : Set read-ahead limite for every file and only do read-ahead when
+	     available read-ahead pages are bigger than 1M to avoid small size
+	     read RPC.
 
-Severity   : normal
+Severity   : enhancement
+Bugzilla   : 19293
+Description: move AT tunable parameters for more consistent usage
+Details    : add AT tunables under /proc/sys/lustre, add to conf_param parsing
+
+Severity   : enhancement
+Bugzilla   : 17974
+Description: add lazystatfs mount option to allow statfs(2) to skip down OSTs
+Details    : allow skip disconnected ost for send statfs request and hide error
+             in this case.
+
+Severity   : major
 Frequency  : rare
-Bugzilla   : 18154
-Descriptoin: don't lose wakeup for imp_recovery_waitq
-Details    : recover_import_no_retry or invalidate_import and import_close can
-             both sleep on imp_recovery_waitq, but we was send only one wakeup
-             to sleep queue.
+Bugzilla   : 18810
+Description: fix racy locking of mballoc block bitmaps causing BUG
+Details    : The locking of the mballoc buddy bitmap and the in-memory
+	     block bitmap was using two different spin locks in some
+	     cases.  This made it possible to incorrectly access the
+	     mballoc bitmap while another process was modifying it,
+	     causing a sanity assertion to fail.  While no on-disk corruption
+	     was reported, there was some risk of this happening.
 
 Severity   : normal
 Frequency  : rare, on llog test 6
@@ -72,7 +106,7 @@ Bugzilla   : 18798
 Description: Add state history info file, enhance import info file
 Details    : Track import connection state changes in a new osc/mdc proc file;
              add overview-type data to the osc/mdc import proc file.
-	
+
 Severity   : enhancement
 Bugzilla   : 17536
 Description: MDS create should not wait for statfs RPC while holding DLM lock.
@@ -335,7 +369,7 @@ Details    : When connection is reused this not moved from CONN_UNUSED_HASH
 Severity   : enhancement
 Bugzilla   : 15899
 Description: File striping can now be set to use an arbitrary pool of OSTs.
-	
+
 Severity   : enhancement
 Bugzilla   : 16573
 Description: Export bytes_read/bytes_write count on OSC/OST.
@@ -1821,7 +1855,7 @@ Bugzilla   : 16450
 Description: Add lockdep annotations to llog code.
 Details    : Use appropriately tagged _nested() locking calls in the places
 	     where llog takes more than one ->lgh_lock lock.
-	
+
 Severity   : minor
 Bugzilla   : 16450
 Description: Add loi_kms_set().
@@ -2039,6 +2073,31 @@ Bugzilla   : 17187
 Description: open file using fid
 Details    : A file can be opened using just its fid, like
 	     <mntpt>/.lustre/fid/SEQ:OID:VER - this is needed for HSM and replication
+
+Severity   : normal
+Frequency  : Only in RHEL5 when mounting multiple ext3 filesystems
+	     simultaneously
+Bugzilla   : 19184
+Description: "kmem_cache_create: duplicate cache jbd_4k" error message
+Details    : add proper locking for creation of jbd_4k slab cache
+
+Severity   : normal
+Bugzilla   : 19058
+Description: MMP check in ext3_remount() fails without displaying any error
+Details    : When multiple mount protection fails during remount, proper error
+	     should be returned
+
+Severity   : enhancement
+Bugzilla   : 16823
+Description: Allow stripe size to be up to 4G-64k
+Details    : Fix math logic to allow large stripe sizes.
+
+Severity   : high
+Bugzilla   : 17569
+Description: add check for >8TB ldiskfs filesystems
+Details    : ext3-based ldiskfs does not support greater than 8TB LUNs.
+	     Don't allow >8TB ldiskfs filesystems to be mounted without
+	     force_over_8tb mount option
 
 --------------------------------------------------------------------------------
 
@@ -2425,7 +2484,7 @@ Details    : The __iget() symbol export is missing.  To avoid the need for
 	     this on patchless clients the deathrow inode reaper is turned
 	     off, and we depend on the VM to clean up old inodes.  This
 	     dependency was during via the fix for bug 12181.
-	
+
 --------------------------------------------------------------------------------
 
 2007-04-19  Cluster File Systems, Inc. <info@clusterfs.com>
@@ -2460,7 +2519,7 @@ Bugzilla   : 9851
 Description: startup order invariance
 Details    : MDTs and OSTs can be started in any order.  Clients only
 	     require the MDT to complete startup.
-	
+
 Severity   : enhancement
 Bugzilla   : 4899
 Description: parallel, asynchronous orphan cleanup
@@ -2473,13 +2532,13 @@ Description: optimized stripe assignment
 Details    : stripe assignments are now made based on ost space available,
 	     ost previous usage, and OSS previous usage, in order to try
 	     to optimize storage space and networking resources.
-	
+
 Severity   : enhancement
 Bugzilla   : 4226
 Description: Permanently set tunables
 Details    : All writable /proc/fs/lustre tunables can now be permanently
 	     set on a per-server basis, at mkfs time or on a live system.
-	
+
 Severity   : enhancement
 Bugzilla   : 10547
 Description: Lustre message v2
@@ -2496,7 +2555,7 @@ Bugzilla   : 6062
 Description: SPEC SFS validation failure on NFS v2 over lustre.
 Details    : Changes the blocksize for regular files to be 2x RPC size,
 	     and not depend on stripe size.
-	
+
 Severity   : enhancement
 Bugzilla   : 9293
 Description: Multiple MD RPCs in flight.
@@ -3765,7 +3824,7 @@ Description: Configuration change for the XT3
 	     Rather --with-portals=<path-to-portals-includes> is used to
 	     enable building on the XT3.  In addition to enable XT3 specific
 	     features the option --enable-cray-xt3 must be used.
-	
+
 Severity   : major
 Frequency  : rare
 Bugzilla   : 7407
@@ -5703,7 +5762,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	* add hard link support
 	* change obdfile creation method
 	* kernel patch changed
-	
+
 2002-09-19  Peter Braam  <braam@clusterfs.com>
 	* version 0_5_9
 	* bug fix

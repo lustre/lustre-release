@@ -23,7 +23,7 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval lctl set_param debug=\"$DEBUG_LVL\""
 [ "$DEBUG_ON" ] || DEBUG_ON="eval lctl set_param debug=0x33f0484"
 
-export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL REPLAY_VBR INSANITY SANITY_QUOTA SANITY_SEC SANITY_GSS PERFORMANCE_SANITY LARGE_SCALE RECOVERY_MDS_SCALE RECOVERY_DOUBLE_SCALE RECOVERY_RANDOM_SCALE"
+export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL REPLAY_VBR INSANITY SANITY_QUOTA SANITY_SEC SANITY_GSS PERFORMANCE_SANITY LARGE_SCALE RECOVERY_MDS_SCALE RECOVERY_DOUBLE_SCALE RECOVERY_RANDOM_SCALE PARALLEL_SCALE LREPLICATE_TEST"
 
 if [ "$ACC_SM_ONLY" ]; then
     for O in $TESTSUITE_LIST; do
@@ -334,8 +334,12 @@ for NAME in $CONFIGS; do
 		#export LIBLUSTRE_DEBUG_MASK=`lctl get_param -n debug`
 		if [ -x $LIBLUSTRETESTS/sanity ]; then
 			mkdir -p $MOUNT2
-			echo $LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET
-			$LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET
+			if [ "$LIBLUSTRE_EXCEPT" ]; then
+				LIBLUSTRE_OPT="$LIBLUSTRE_OPT \
+					$(echo ' '$LIBLUSTRE_EXCEPT  | sed -re 's/\s+/ -e /g')"
+			fi
+			echo $LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET $LIBLUSTRE_OPT
+			$LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET $LIBLUSTRE_OPT
 		fi
 		$CLEANUP
 		#$SETUP
@@ -432,6 +436,17 @@ if [ "$SANITY_GSS" != "no" ]; then
         SANITY_GSS="done"
 fi
 
+
+echo replication sanity: $LREPLICATE_TEST
+[ "$LREPLICATE_TEST" != "no" ] && skip_remmds lreplicate-test && LREPLICATE_TEST=no && MSKIPPED=1
+[ "$LREPLICATE_TEST" != "no" ] && skip_remost lreplicate-test && LREPLICATE_TEST=no && OSKIPPED=1
+if [ "$LREPLICATE_TEST" != "no" ]; then
+        title lreplicate-test
+        bash lreplicate-test.sh
+        LREPLICATE_TEST="done"
+fi
+
+
 [ "$SLOW" = no ] && PERFORMANCE_SANITY="no"
 [ -x "$MDSRATE" ] || PERFORMANCE_SANITY="no"
 which mpirun > /dev/null 2>&1 || PERFORMANCE_SANITY="no"
@@ -464,11 +479,18 @@ if [ "$RECOVERY_DOUBLE_SCALE" != "no" ]; then
         RECOVERY_DOUBLE_SCALE="done"
 fi
 
-[ "$RECOVERY_RANDOM_SCALE" != "no" ] && skip_remmds recovery-double-scale && RECOVERY_RANDOM_SCALE=no && MSKIPPED=1
+[ "$RECOVERY_RANDOM_SCALE" != "no" ] && skip_remmds recovery-random-scale && RECOVERY_RANDOM_SCALE=no && MSKIPPED=1
 if [ "$RECOVERY_RANDOM_SCALE" != "no" ]; then
         title recovery-random-scale
         bash recovery-random-scale.sh
         RECOVERY_RANDOM_SCALE="done"
+fi
+
+which mpirun > /dev/null 2>&1 || PARALLEL_SCALE="no"
+if [ "$PARALLEL_SCALE" != "no" ]; then
+        title parallel-scale
+        bash parallel-scale.sh
+        PARALLEL_SCALE="done"
 fi
 
 RC=$?

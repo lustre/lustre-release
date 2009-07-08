@@ -167,7 +167,7 @@ int osd_compat_init(struct osd_device *dev)
         RETURN(rc);
 }
 
-void osd_compat_fini(const struct osd_device *dev)
+void osd_compat_fini(struct osd_device *dev)
 {
         struct osd_compat_objid_group *grp;
         struct osd_compat_objid       *map = dev->od_ost_map;

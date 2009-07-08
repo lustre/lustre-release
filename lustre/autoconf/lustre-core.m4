@@ -809,6 +809,17 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# LC_EXPORT_SYNCHRONIZE_RCU
+# after 2.6.12 synchronize_rcu is preferred over synchronize_kernel
+AC_DEFUN([LC_EXPORT_SYNCHRONIZE_RCU],
+[LB_CHECK_SYMBOL_EXPORT([synchronize_rcu],
+[kernel/rcupdate.c],[
+        AC_DEFINE(HAVE_SYNCHRONIZE_RCU, 1,
+                [in 2.6.12 synchronize_rcu preferred over synchronize_kernel])
+],[
+])
+])
+
 # LC_INODE_I_MUTEX
 # after 2.6.15 inode have i_mutex intead of i_sem
 AC_DEFUN([LC_INODE_I_MUTEX],
@@ -1085,6 +1096,10 @@ LB_LINUX_TRY_COMPILE([
         #include <linux/mm.h>
         #include <linux/page-flags.h>
 ],[
+        /* tmp workaround for broken OFED 1.4.1 at SLES10 */
+        #if defined(CONFIG_SLE_VERSION) && CONFIG_SLE_VERSION == 10 && defined(_BACKPORT_LINUX_MM_H_)
+        #error badly implementation of cancel_dirty_pages
+        #endif
         cancel_dirty_page(NULL, 0);
 ],[
         AC_MSG_RESULT(yes)
@@ -1455,12 +1470,50 @@ CFLAGS="$tmp_flags"
 AC_DEFUN([LC_ASYNC_BLOCK_CIPHER],
 [AC_MSG_CHECKING([if kernel has block cipher support])
 LB_LINUX_TRY_COMPILE([
+        #include <linux/err.h>
         #include <linux/crypto.h>
 ],[
-        int v = CRYPTO_ALG_TYPE_BLKCIPHER;
+        struct crypto_blkcipher *tfm;
+        tfm = crypto_alloc_blkcipher("aes", 0, 0 );
 ],[
         AC_MSG_RESULT([yes])
         AC_DEFINE(HAVE_ASYNC_BLOCK_CIPHER, 1, [kernel has block cipher support])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#
+# check for struct hash_desc
+#
+AC_DEFUN([LC_STRUCT_HASH_DESC],
+[AC_MSG_CHECKING([if kernel has struct hash_desc])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/err.h>
+        #include <linux/crypto.h>
+],[
+        struct hash_desc foo;
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_STRUCT_HASH_DESC, 1, [kernel has struct hash_desc])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#
+# check for struct blkcipher_desc
+#
+AC_DEFUN([LC_STRUCT_BLKCIPHER_DESC],
+[AC_MSG_CHECKING([if kernel has struct blkcipher_desc])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/err.h>
+        #include <linux/crypto.h>
+],[
+        struct blkcipher_desc foo;
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_STRUCT_BLKCIPHER_DESC, 1, [kernel has struct blkcipher_desc])
 ],[
         AC_MSG_RESULT([no])
 ])
@@ -1483,6 +1536,45 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# vfs_symlink seems to have started out with 3 args until 2.6.7 where a
+# "mode" argument was added, but then again, in some later version it was
+# removed
+AC_DEFUN([LC_4ARGS_VFS_SYMLINK],
+[AC_MSG_CHECKING([if vfs_symlink wants 4 args])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+],[
+	struct inode *dir;
+	struct dentry *dentry;
+	const char *oldname = NULL;
+	int mode = 0;
+
+	vfs_symlink(dir, dentry, oldname, mode);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_4ARGS_VFS_SYMLINK, 1,
+                  [vfs_symlink wants 4 args])
+],[
+        AC_MSG_RESULT(no)
+])
+])
+
+# Ensure stack size big than 8k in Lustre server
+AC_DEFUN([LC_STACK_SIZE],
+[AC_MSG_CHECKING([stack size big than 8k])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/thread_info.h>
+],[
+        #if THREAD_SIZE < 8192
+        #error "stack size < 8192"
+        #endif
+],[
+        AC_MSG_RESULT(yes)
+],[
+        AC_MSG_ERROR([Lustre requires that Linux is configured with at least a 8KB stack.])
+])
+])
+
 #
 # LC_PROG_LINUX
 #
@@ -1492,6 +1584,7 @@ AC_DEFUN([LC_PROG_LINUX],
          [LC_LUSTRE_VERSION_H
          if test x$enable_server = xyes ; then
              AC_DEFINE(HAVE_SERVER_SUPPORT, 1, [support server])
+             LC_STACK_SIZE
              LC_CONFIG_BACKINGFS
          fi
          LC_CONFIG_PINGER
@@ -1542,6 +1635,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_FUNC_RCU
          LC_PERCPU_COUNTER
          LC_QUOTA64
+         LC_4ARGS_VFS_SYMLINK
 
          # does the kernel have VFS intent patches?
          LC_VFS_INTENT_PATCHES
@@ -1552,6 +1646,7 @@ AC_DEFUN([LC_PROG_LINUX],
 
          # 2.6.12
          LC_RW_TREE_LOCK
+         LC_EXPORT_SYNCHRONIZE_RCU
 
          # 2.6.15
          LC_INODE_I_MUTEX
@@ -1594,6 +1689,8 @@ AC_DEFUN([LC_PROG_LINUX],
 	 # 2.6.22
          LC_INVALIDATE_BDEV_2ARG
          LC_ASYNC_BLOCK_CIPHER
+         LC_STRUCT_HASH_DESC
+         LC_STRUCT_BLKCIPHER_DESC
          LC_FS_RENAME_DOES_D_MOVE
          # 2.6.23
          LC_UNREGISTER_BLKDEV_RETURN_INT
@@ -1660,46 +1757,48 @@ fi
 # --enable-mpitest
 #
 AC_ARG_ENABLE(mpitests,
-	AC_HELP_STRING([--enable-mpitest=yes|no|mpich directory],
+	AC_HELP_STRING([--enable-mpitests=yes|no|mpicc wrapper],
                            [include mpi tests]),
 	[
 	 enable_mpitests=yes
          case $enableval in
          yes)
-		MPI_ROOT=/opt/mpich
-		LDFLAGS="$LDFLAGS -L$MPI_ROOT/ch-p4/lib -L$MPI_ROOT/ch-p4/lib64"
-		CFLAGS="$CFLAGS -I$MPI_ROOT/include"
+		MPICC_WRAPPER=mpicc
 		;;
          no)
 		enable_mpitests=no
 		;;
-	 [[\\/$]]* | ?:[[\\/]]* )
-		MPI_ROOT=$enableval
-		LDFLAGS="$LDFLAGS -L$with_mpi/lib"
-		CFLAGS="$CFLAGS -I$MPI_ROOT/include"
-                ;;
          *)
-                 AC_MSG_ERROR([expected absolute directory name for --enable-mpitests or yes or no])
+		MPICC_WRAPPER=$enableval
                  ;;
 	 esac
 	],
 	[
-	MPI_ROOT=/opt/mpich
-        LDFLAGS="$LDFLAGS -L$MPI_ROOT/ch-p4/lib -L$MPI_ROOT/ch-p4/lib64"
-        CFLAGS="$CFLAGS -I$MPI_ROOT/include"
+	MPICC_WRAPPER=mpicc
 	enable_mpitests=yes
 	]
 )
-AC_SUBST(MPI_ROOT)
 
 if test x$enable_mpitests != xno; then
-	AC_MSG_CHECKING([whether to mpitests can be built])
-        AC_CHECK_FILE([$MPI_ROOT/include/mpi.h],
-                      [AC_CHECK_LIB([mpich],[MPI_Start],[enable_mpitests=yes],[enable_mpitests=no])],
-                      [enable_mpitests=no])
+	AC_MSG_CHECKING([whether mpitests can be built])
+	oldcc=$CC
+	CC=$MPICC_WRAPPER
+	AC_LINK_IFELSE(
+	    [AC_LANG_PROGRAM([[
+		    #include <mpi.h>
+	        ]],[[
+		    int flag;
+		    MPI_Initialized(&flag);
+		]])],
+	    [
+		    AC_MSG_RESULT([yes])
+	    ],[
+		    AC_MSG_RESULT([no])
+		    enable_mpitests=no
+	])
+	CC=$oldcc
 fi
-AC_MSG_RESULT([$enable_mpitests])
-
+AC_SUBST(MPICC_WRAPPER)
 
 AC_MSG_NOTICE([Enabling Lustre configure options for libsysio])
 ac_configure_args="$ac_configure_args --with-lustre-hack --with-sockets"
@@ -1841,6 +1940,31 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+#
+# LC_QUOTA64
+# linux kernel have 64-bit limits support
+#
+AC_DEFUN([LC_QUOTA64],
+[if test x$enable_quota_module = xyes -a x$enable_server = xyes ; then
+        AC_MSG_CHECKING([if kernel has 64-bit quota limits support])
+        LB_LINUX_TRY_COMPILE([
+                #include <linux/kernel.h>
+                #include <linux/fs.h>
+                #include <linux/quotaio_v2.h>
+                int versions[] = V2_INITQVERSIONS_R1;
+                struct v2_disk_dqblk_r1 dqblk_r1;
+        ],[],[
+                AC_DEFINE(HAVE_QUOTA64, 1, [have quota64])
+                AC_MSG_RESULT([yes])
+        ],[
+                LB_CHECK_FILE([$LINUX/include/linux/lustre_version.h],[
+                        AC_MSG_ERROR([You have got no 64-bit kernel quota support.])
+                ],[])
+                AC_MSG_RESULT([no])
+        ])
+fi
+])
+
 # LC_SECURITY_PLUG  # for SLES10 SP2
 # check security plug in sles10 sp2 kernel
 AC_DEFUN([LC_SECURITY_PLUG],
@@ -1886,33 +2010,6 @@ LB_LINUX_TRY_COMPILE([
 ],[
         AC_MSG_RESULT([no])
 ])
-])
-
-#
-# LC_QUOTA64
-# linux kernel have 64-bit limits support
-#
-AC_DEFUN([LC_QUOTA64],
-[if test x$enable_quota_module = xyes; then
-        AC_MSG_CHECKING([if kernel has 64-bit quota limits support])
-        LB_LINUX_TRY_COMPILE([
-                #include <linux/kernel.h>
-                #include <linux/fs.h>
-                #include <linux/quotaio_v2.h>
-                int versions[] = V2_INITQVERSIONS_R1;
-                struct v2_disk_dqblk_r1 dqblk_r1;
-        ],[],[
-                AC_DEFINE(HAVE_QUOTA64, 1, [have quota64])
-                AC_MSG_RESULT([yes])
-        ],[
-                LB_CHECK_FILE([$LINUX/include/linux/lustre_version.h],[
-                        if test x$enable_server = xyes ; then
-                                AC_MSG_ERROR([You have got no 64-bit kernel quota support.])
-                        fi
-                ],[])
-                AC_MSG_RESULT([no])
-        ])
-fi
 ])
 
 #
@@ -2058,6 +2155,7 @@ lustre/fid/Makefile
 lustre/fid/autoMakefile
 lustre/liblustre/Makefile
 lustre/liblustre/tests/Makefile
+lustre/liblustre/tests/mpi/Makefile
 lustre/llite/Makefile
 lustre/llite/autoMakefile
 lustre/lclient/Makefile
@@ -2105,8 +2203,8 @@ lustre/ptlrpc/gss/autoMakefile
 lustre/quota/Makefile
 lustre/quota/autoMakefile
 lustre/scripts/Makefile
-lustre/scripts/version_tag.pl
 lustre/tests/Makefile
+lustre/tests/mpi/Makefile
 lustre/utils/Makefile
 lustre/utils/gss/Makefile
 ])

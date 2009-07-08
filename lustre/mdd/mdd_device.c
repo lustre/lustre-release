@@ -116,9 +116,10 @@ static void mdd_device_shutdown(const struct lu_env *env,
         ENTRY;
         mdd_changelog_fini(env, m);
         dt_txn_callback_del(m->mdd_child, &m->mdd_txn_cb);
-        mdd_object_put(env, m->mdd_dot_lustre_objs.mdd_obf);
-        mdd_object_put(env, m->mdd_dot_lustre);
-        orph_index_fini(env, m);
+        if (m->mdd_dot_lustre_objs.mdd_obf)
+                mdd_object_put(env, m->mdd_dot_lustre_objs.mdd_obf);
+        if (m->mdd_dot_lustre)
+                mdd_object_put(env, m->mdd_dot_lustre);
         if (m->mdd_obd_dev)
                 mdd_fini_obd(env, m, cfg);
         /* remove upcall device*/
@@ -413,13 +414,13 @@ static int create_dot_lustre_dir(const struct lu_env *env, struct mdd_device *m)
 
         memcpy(fid, &LU_DOT_LUSTRE_FID, sizeof(struct lu_fid));
         mdo = llo_store_create_index(env, &m->mdd_md_dev, m->mdd_child,
-                                     mdd_root_dir_name, mdd_dot_lustre_name,
+                                     mdd_root_dir_name, dot_lustre_name,
                                      fid, &dt_directory_features);
         /* .lustre dir may be already present */
         if (IS_ERR(mdo) && PTR_ERR(mdo) != -EEXIST) {
                 rc = PTR_ERR(mdo);
                 CERROR("creating obj [%s] fid = "DFID" rc = %d\n",
-                        mdd_dot_lustre_name, PFID(fid), rc);
+                        dot_lustre_name, PFID(fid), rc);
                 RETURN(rc);
         }
 
@@ -448,6 +449,12 @@ static int dot_lustre_xattr_get(const struct lu_env *env,
                                 const char *name)
 {
         return 0;
+}
+
+static int dot_lustre_xattr_list(const struct lu_env *env,
+                                 struct md_object *obj, struct lu_buf *buf)
+{
+        return -EPERM;
 }
 
 static int dot_lustre_mdd_open(const struct lu_env *env, struct md_object *obj,
@@ -498,6 +505,7 @@ static struct md_object_operations mdd_dot_lustre_obj_ops = {
         .moo_attr_get   = dot_lustre_attr_get,
         .moo_attr_set   = dot_lustre_attr_set,
         .moo_xattr_get  = dot_lustre_xattr_get,
+        .moo_xattr_list = dot_lustre_xattr_list,
         .moo_open       = dot_lustre_mdd_open,
         .moo_close      = dot_lustre_close,
         .moo_readpage   = mdd_readpage,
@@ -676,8 +684,7 @@ static int obf_lookup(const struct lu_env *env, struct md_object *p,
         while (*name == '[')
                 name++;
 
-        sscanf(name, SFID, &(f->f_seq), &(f->f_oid),
-               &(f->f_ver));
+        sscanf(name, SFID, RFID(f));
         if (!fid_is_sane(f)) {
                 CWARN("bad FID format [%s], should be "DFID"\n", lname->ln_name,
                       (__u64)1, 2, 0);
@@ -778,7 +785,7 @@ static int mdd_dot_lustre_setup(const struct lu_env *env, struct mdd_device *m)
                 return rc;
 
         dt_dot_lustre = dt_store_open(env, m->mdd_child, mdd_root_dir_name,
-                                      mdd_dot_lustre_name, fid);
+                                      dot_lustre_name, fid);
         if (IS_ERR(dt_dot_lustre)) {
                 rc = PTR_ERR(dt_dot_lustre);
                 GOTO(out, rc);
@@ -1017,13 +1024,14 @@ static int mdd_update_capa_key(const struct lu_env *env,
                                struct md_device *m,
                                struct lustre_capa_key *key)
 {
+        struct mds_capa_info info = { .uuid = NULL, .capa = key };
         struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
         struct obd_export *lov_exp = mdd2obd_dev(mdd)->u.mds.mds_osc_exp;
         int rc;
         ENTRY;
 
         rc = obd_set_info_async(lov_exp, sizeof(KEY_CAPA_KEY), KEY_CAPA_KEY,
-                                sizeof(*key), key, NULL);
+                                sizeof(info), &info, NULL);
         RETURN(rc);
 }
 
@@ -1282,8 +1290,8 @@ static int mdd_changelog_user_purge(struct mdd_device *mdd, int id,
 
 /** mdd_iocontrol
  * May be called remotely from mdt_iocontrol_handle or locally from
- * mdt_iocontrol. Data may be freeform - remote handling doesn't enforce or
- * swab an obd_ioctl_data format (but local ioctl handler does).
+ * mdt_iocontrol. Data may be freeform - remote handling doesn't enforce
+ * an obd_ioctl_data format (but local ioctl handler does).
  * \param cmd - ioc
  * \param len - data len
  * \param karg - ioctl data, in kernel space
@@ -1301,10 +1309,6 @@ static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
         /* Doesn't use obd_ioctl_data */
         if (cmd == OBD_IOC_CHANGELOG_CLEAR) {
                 struct changelog_setinfo *cs = karg;
-                if (len != sizeof(*cs)) {
-                        CERROR("Bad changelog_clear ioctl size %d\n", len);
-                        RETURN(-EINVAL);
-                }
                 rc = mdd_changelog_user_purge(mdd, cs->cs_id, cs->cs_recno);
                 RETURN(rc);
         }

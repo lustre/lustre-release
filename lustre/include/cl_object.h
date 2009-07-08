@@ -782,7 +782,8 @@ enum cl_lock_mode {
          */
         CLM_PHANTOM,
         CLM_READ,
-        CLM_WRITE
+        CLM_WRITE,
+        CLM_GROUP
 };
 
 /**
@@ -1291,6 +1292,8 @@ struct cl_lock_descr {
         pgoff_t           cld_start;
         /** Index of the last page (inclusive) protected by this lock. */
         pgoff_t           cld_end;
+        /** Group ID, for group lock */
+        __u64             cld_gid;
         /** Lock mode. */
         enum cl_lock_mode cld_mode;
 };
@@ -1884,6 +1887,8 @@ enum cl_io_type {
          *
          *     - glimpse. An io context to acquire glimpse lock.
          *
+         *     - grouplock. An io context to acquire group lock.
+         *
          * CIT_MISC io is used simply as a context in which locks and pages
          * are manipulated. Such io has no internal "process", that is,
          * cl_io_loop() is never called for it.
@@ -2233,6 +2238,11 @@ struct cl_io {
         struct cl_lockset              ci_lockset;
         /** lock requirements, this is just a help info for sublayers. */
         enum cl_io_lock_dmd            ci_lockreq;
+        /**
+         * This io has held grouplock, to inform sublayers that
+         * don't do lockless i/o.
+         */
+        int                            ci_no_srvlock;
         union {
                 struct cl_rd_io {
                         struct cl_io_rw_common rd;

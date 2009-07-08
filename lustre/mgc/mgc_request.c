@@ -1361,9 +1361,10 @@ int mgc_process_log(struct obd_device *mgc,
             !IS_MGS(lsi->lsi_ldd)) {
                 push_ctxt(&saved, &mgc->obd_lvfs_ctxt, NULL);
                 must_pop++;
-                if (rcl == 0)
+                if (rcl == 0) {
                         /* Only try to copy log if we have the lock. */
                         rc = mgc_copy_llog(mgc, ctxt, lctxt, cld->cld_logname);
+                }
                 if (rcl || rc) {
                         if (mgc_llog_is_empty(mgc, lctxt, cld->cld_logname)) {
                                 LCONSOLE_ERROR_MSG(0x13a, "Failed to get MGS "

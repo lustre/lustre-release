@@ -674,7 +674,7 @@ int cmm_split_dir(const struct lu_env *env, struct md_object *mo)
          * Disable transacrions for split, since there will be so many trans in
          * this one ops, conflict with current recovery design.
          */
-        rc = cmm_upcall(env, &cmm->cmm_md_dev, MD_NO_TRANS);
+        rc = cmm_upcall(env, &cmm->cmm_md_dev, MD_NO_TRANS, NULL);
         if (rc) {
                 CERROR("Can't disable trans for split, rc %d\n", rc);
                 GOTO(out, rc);

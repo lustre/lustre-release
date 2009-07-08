@@ -337,9 +337,6 @@ int jt_lcfg_del_uuid(int argc, char **argv)
         return 0;
 }
 
-
-
-
 int jt_lcfg_del_mount_option(int argc, char **argv)
 {
         int rc;
@@ -393,8 +390,6 @@ int jt_lcfg_set_timeout(int argc, char **argv)
         }
         return rc;
 }
-
-
 
 int jt_lcfg_add_conn(int argc, char **argv)
 {
@@ -561,12 +556,52 @@ static char *strnchr(const char *p, char c, size_t n)
        return (0);
 }
 
+static char *globerrstr(int glob_rc)
+{
+        switch(glob_rc) {
+        case GLOB_NOSPACE:
+                return "Out of memory";
+        case GLOB_ABORTED:
+                return "Read error";
+        case GLOB_NOMATCH:
+                return "Found no match";
+        }
+        return "Unknow error";
+}
+
+static void clean_path(char *path)
+{
+        char *tmp;
+
+        /* If the input is in form Eg. obdfilter.*.stats */
+        if (strchr(path, '.')) {
+                tmp = path;
+                while (*tmp != '\0') {
+                        if ((*tmp == '.') &&
+                            (tmp != path) && (*(tmp - 1) != '\\'))
+                                *tmp = '/';
+                        tmp ++;
+                }
+        }
+        /* get rid of '\', glob doesn't like it */
+        if ((tmp = strrchr(path, '\\')) != NULL) {
+                char *tail = path + strlen(path);
+                while (tmp != path) {
+                        if (*tmp == '\\') {
+                                memmove(tmp, tmp + 1, tail - tmp);
+                                --tail;
+                        }
+                        --tmp;
+                }
+        }
+}
+
 int jt_lcfg_getparam(int argc, char **argv)
 {
         int fp;
         int rc = 0, i, show_path = 0, only_path = 0;
         char pattern[PATH_MAX];
-        char *path, *tmp, *buf;
+        char *path, *buf;
         glob_t glob_info;
 
         if (argc == 3 && (strcmp(argv[1], "-n") == 0 || strcmp(argv[1], "-N") == 0)) {
@@ -582,15 +617,7 @@ int jt_lcfg_getparam(int argc, char **argv)
                 return CMD_HELP;
         }
 
-        /* If the input is in form Eg. obdfilter.*.stats */
-        if (strchr(path, '.')) {
-                tmp = path;
-                while (*tmp != '\0') {
-                        if (*tmp == '.')
-                                *tmp = '/';
-                        tmp ++;
-                }
-        }
+        clean_path(path);
 
         /* If the entire path is specified as input */
         fp = open(path, O_RDONLY);
@@ -604,7 +631,8 @@ int jt_lcfg_getparam(int argc, char **argv)
 
         rc = glob(pattern, GLOB_BRACE, NULL, &glob_info);
         if (rc) {
-                fprintf(stderr, "error : glob %s: %s \n", pattern,strerror(rc));
+                fprintf(stderr, "error : glob %s: %s \n", pattern,
+                        globerrstr(rc));
                 return rc;
         }
 
@@ -670,13 +698,12 @@ int jt_lcfg_getparam(int argc, char **argv)
         return rc;
 }
 
-
 int jt_lcfg_setparam(int argc, char **argv)
 {
         int rc = 0, i;
         int fp, show_path = 0;
         char pattern[PATH_MAX];
-        char *path, *value, *tmp;
+        char *path, *value;
         glob_t glob_info;
 
         path = argv[1];
@@ -711,15 +738,7 @@ int jt_lcfg_setparam(int argc, char **argv)
                 return CMD_HELP;
         }
 
-        /* If the input is in form Eg. obdfilter.*.stats */
-        if (strchr(path, '.')) {
-                tmp = path;
-                while (*tmp != '\0') {
-                        if (*tmp == '.')
-                                *tmp = '/';
-                        tmp ++;
-                }
-        }
+        clean_path(path);
 
         fp = open(path, O_RDONLY);
         if (fp < 0)
@@ -732,7 +751,8 @@ int jt_lcfg_setparam(int argc, char **argv)
 
         rc = glob(pattern, GLOB_BRACE, NULL, &glob_info);
         if (rc) {
-                fprintf(stderr, "error : glob %s: %s \n", pattern,strerror(rc));
+                fprintf(stderr, "error : glob %s: %s \n", pattern,
+                        globerrstr(rc));
                 return rc;
         }
         for (i = 0; i  < glob_info.gl_pathc; i++) {

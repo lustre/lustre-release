@@ -68,17 +68,13 @@ else
 	echo "without GSS support"
 fi
 
-MDT="`do_facet $SINGLEMDS "lctl get_param -N mdt.\*MDT\*/stats 2>/dev/null | cut -d"." -f2" || true`"
-if [ ! -z "$MDT" ]; then
-	do_facet $SINGLEMDS "mkdir -p $CONFDIR"
-	IDENTITY_FLUSH=mdt.$MDT.identity_flush
-	MDSCAPA=mdt.$MDT.capa
-	CAPA_TIMEOUT=mdt.$MDT.capa_timeout
-	MDSSECLEVEL=mdt.$MDT.sec_level
-	LOCALMDT=$MDT
-else
-	LOCALMDT=""
-fi
+MDT="`do_facet $SINGLEMDS "lctl get_param -N mdt.\*MDT\*.stats 2>/dev/null | cut -d"." -f2" || true`"
+[ -z "$MDT" ] && error "fail to get MDT device" && exit 1
+do_facet $SINGLEMDS "mkdir -p $CONFDIR"
+IDENTITY_FLUSH=mdt.$MDT.identity_flush
+MDSCAPA=mdt.$MDT.capa
+CAPA_TIMEOUT=mdt.$MDT.capa_timeout
+MDSSECLEVEL=mdt.$MDT.sec_level
 
 # for CLIENT_TYPE
 if [ -z "$(lctl get_param -n llite.*.client_type | grep remote 2>/dev/null)" ]; then
@@ -138,7 +134,6 @@ test_0() {
 	mkdir -p $DIR/$tdir || error "mkdir (1)"
 
 	if [ "$CLIENT_TYPE" = "remote" ]; then
-		[ -z "$MDT" ] && skip "do not support do_facet operations." && return
 		do_facet $SINGLEMDS "echo '* 0 normtown' > $PERM_CONF"
 	        do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 		chown $USER0 $DIR/$tdir && error "chown (1)"
@@ -172,7 +167,6 @@ run_test 0 "uid permission ============================="
 # setuid/gid
 test_1() {
 	[ $GSS_SUP = 0 ] && skip "without GSS support." && return
-	[ -z "$MDT" ] && skip "do not support do_facet operations." && return
 
 	if [ "$CLIENT_TYPE" = "remote" ]; then
 		do_facet $SINGLEMDS "echo '* 0 rmtown' > $PERM_CONF"
@@ -222,7 +216,6 @@ test_2 () {
     	[ -z "$(which setfacl 2>/dev/null)" ] && \
 		skip "could not find setfacl" && return
 	[ "$UID" != 0 ] && skip "must run as root" && return
-	[ -z "$MDT" ] && skip "do not support do_facet operations." && return
 
 	do_facet $SINGLEMDS "echo '* 0 rmtacl,rmtown' > $PERM_CONF"
 	do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
@@ -275,7 +268,6 @@ run_test 3 "rootsquash ============================="
 # will be obtained by upcall /sbin/l_getidentity and used.
 test_4() {
 	if [ "$CLIENT_TYPE" = "remote" ]; then
-		[ -z "$MDT" ] && skip "do not support do_facet operations." && return
 		do_facet $SINGLEMDS "echo '* 0 rmtown' > $PERM_CONF"
 	        do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 	fi
@@ -286,19 +278,15 @@ test_4() {
         chgrp $ID0 $DIR/$tdir
 	$RUNAS -u $ID0 ls $DIR/$tdir || error "setgroups (1)"
 	if [ "$CLIENT_TYPE" = "local" ]; then
-		if [ ! -z "$MDT" ]; then
-			do_facet $SINGLEMDS "echo '* $ID1 setgrp' > $PERM_CONF"
-			do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
-			$RUNAS -u $ID1 -G1,2,$ID0 ls $DIR/$tdir || error "setgroups (2)"
-		fi
+		do_facet $SINGLEMDS "echo '* $ID1 setgrp' > $PERM_CONF"
+		do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
+		$RUNAS -u $ID1 -G1,2,$ID0 ls $DIR/$tdir || error "setgroups (2)"
 	fi
 	$RUNAS -u $ID1 -G1,2 ls $DIR/$tdir && error "setgroups (3)"
 	rm -rf $DIR/$tdir
 
-	if [ ! -z "$MDT" ]; then
-		do_facet $SINGLEMDS "rm -f $PERM_CONF"
-	        do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
-	fi
+	do_facet $SINGLEMDS "rm -f $PERM_CONF"
+	do_facet $SINGLEMDS "lctl set_param -n $IDENTITY_FLUSH=-1"
 }
 run_test 4 "set supplementary group ==============="
 
@@ -431,8 +419,11 @@ test_5() {
         local file=$DIR/f5
 
 	[ $GSS_SUP = 0 ] && skip "without GSS support." && return
-	[ -z "$MDT" ] && skip "do not support do_facet operations." && return
-	[ ! -z "$LOCALMDT" ] && skip "client should be separated from server." && return
+	if ! remote_mds; then
+                skip "client should be separated from server."
+                return
+        fi
+
 	rm -f $file
 
 	turn_capability_off
@@ -499,8 +490,10 @@ test_6() {
         local file=$DIR/f6
 
 	[ $GSS_SUP = 0 ] && skip "without GSS support." && return
-	[ -z "$MDT" ] && skip "do not support do_facet operations." && return
-	[ ! -z "$LOCALMDT" ] && skip "client should be separated from server." && return
+	if ! remote_mds; then
+                skip "client should be separated from server."
+                return
+        fi
 
 	turn_capability_off
 	if [ $? != 0 ]; then

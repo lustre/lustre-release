@@ -44,9 +44,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <sys/vfs.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <semaphore.h>
 #include <libcfs/libcfs.h>
 #include <lustre/liblustreapi.h>
 
@@ -55,6 +57,7 @@
 char msg[] = "yabba dabba doo, I'm coming for you, I live in a shoe, I don't know what to do.\n'Bigger, bigger,and bigger yet!' cried the Creator.  'You are not yet substantial enough for my boundless intents!'  And ever greater and greater the object became, until all was lost 'neath its momentus bulk.\n";
 char *buf, *buf_align;
 int bufsize = 0;
+sem_t sem;
 #define ALIGN 65535
 
 char usage[] =
@@ -64,6 +67,7 @@ char usage[] =
 "        C[num] create with optional stripes\n"
 "        d  mkdir\n"
 "        D  open(O_DIRECTORY)\n"
+"        f  statfs\n"
 "        L  link\n"
 "        l  symlink\n"
 "        m  mknod\n"
@@ -87,10 +91,19 @@ char usage[] =
 "        z[num] seek [optional position, default 0]\n"
 "        _  wait for signal\n";
 
-static int usr1_received;
 void usr1_handler(int unused)
 {
-        usr1_received = 1;
+        int saved_errno = errno;
+
+        /*
+         * signal(7): POSIX.1-2004 ...requires an implementation to guarantee
+         * that the following functions can be safely called inside a signal
+         * handler:
+         *            sem_post()
+         */
+        sem_post(&sem);
+
+        errno = saved_errno;
 }
 
 static const char *
@@ -175,6 +188,7 @@ int main(int argc, char **argv)
         char *fname, *commands;
         const char *newfile;
         struct stat st;
+        struct statfs stfs;
         size_t mmap_len = 0, i;
         unsigned char *mmap_ptr = NULL, junk = 0;
         int rc, len, fd = -1;
@@ -188,22 +202,21 @@ int main(int argc, char **argv)
         }
 
         memset(&st, 0, sizeof(st));
-        signal(SIGUSR1, usr1_handler);
+        sem_init(&sem, 0, 0);
+        /* use sigaction instead of signal to avoid SA_ONESHOT semantics */
+        sigaction(SIGUSR1, &(const struct sigaction){.sa_handler = &usr1_handler},
+                  NULL);
 
         fname = argv[1];
 
         for (commands = argv[2]; *commands; commands++) {
                 switch (*commands) {
                 case '_':
-                        if (usr1_received == 0) {
-                                if (verbose) {
-                                        printf("PAUSING\n");
-                                        fflush(stdout);
-                                }
-                                pause();
+                        if (verbose) {
+                                printf("PAUSING\n");
+                                fflush(stdout);
                         }
-                        usr1_received = 0;
-                        signal(SIGUSR1, usr1_handler);
+                        while (sem_wait(&sem) == -1 && errno == EINTR);
                         break;
                 case 'c':
                         if (close(fd) == -1) {
@@ -235,6 +248,13 @@ int main(int argc, char **argv)
                         if (fd == -1) {
                                 save_errno = errno;
                                 perror("open(O_DIRECTORY)");
+                                exit(save_errno);
+                        }
+                        break;
+                case 'f':
+                        if (statfs(fname, &stfs) == -1) {
+                                save_errno = errno;
+                                perror("statfs()");
                                 exit(save_errno);
                         }
                         break;
@@ -301,7 +321,10 @@ int main(int argc, char **argv)
                 case 'o':
                         len = get_flags(commands+1, &flags);
                         commands += len;
-                        fd = open(fname, flags);
+                        if (flags & O_CREAT)
+                                fd = open(fname, flags, 0666);
+                        else
+                                fd = open(fname, flags);
                         if (fd == -1) {
                                 save_errno = errno;
                                 perror("open");

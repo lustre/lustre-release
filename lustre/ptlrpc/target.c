@@ -47,23 +47,25 @@
 static int lut_last_rcvd_write(const struct lu_env *env, struct lu_target *lut,
                                const struct lu_buf *buf, loff_t *off, int sync)
 {
-        LBUG();
-        RETURN(0);
-#if 0
         struct thandle *th;
-        struct txn_param p;
-        int rc, credits;
+        int rc;
         ENTRY;
 
-        credits = lut->lut_bottom->dd_ops->dt_credit_get(env, lut->lut_bottom,
-                                                         DTO_WRITE_BLOCK);
-        txn_param_init(&p, credits);
-
-        th = dt_trans_start(env, lut->lut_bottom, &p);
+        th = dt_trans_create(env, lut->lut_bottom);
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
 
+        rc = dt_declare_record_write(env, lut->lut_last_rcvd, buf->lb_len, *off, th);
+        if (rc)
+                GOTO(out, rc);
+
+        rc = dt_trans_start(env, lut->lut_bottom, th);
+        if (rc)
+                GOTO(out, rc);
+
         rc = dt_record_write(env, lut->lut_last_rcvd, buf, off, th);
+
+out:
         dt_trans_stop(env, lut->lut_bottom, th);
 
         CDEBUG(D_INFO, "write last_rcvd header rc = %d:\n"
@@ -71,7 +73,6 @@ static int lut_last_rcvd_write(const struct lu_env *env, struct lu_target *lut,
                rc, lut->lut_lsd.lsd_uuid, lut->lut_lsd.lsd_last_transno);
 
         RETURN(rc);
-#endif
 }
 
 /**
@@ -262,6 +263,41 @@ int lut_init(const struct lu_env *env, struct lu_target *lut,
         RETURN(rc);
 }
 EXPORT_SYMBOL(lut_init);
+
+int lut_init2(const struct lu_env *env, struct lu_target *lut,
+              struct obd_device *obd, struct dt_device *dt,
+              struct lu_fid *fid)
+{
+        struct dt_object *o;
+        int rc = 0;
+        ENTRY;
+
+        LASSERT(fid);
+
+        lut->lut_obd = obd;
+
+        spin_lock_init(&lut->lut_translock);
+        spin_lock_init(&lut->lut_client_bitmap_lock);
+        spin_lock_init(&lut->lut_trans_table_lock);
+
+        /** obdfilter has no lu_device stack yet */
+        if (dt == NULL)
+                RETURN(rc);
+
+        lut->lut_bottom = dt;
+        lut->lut_last_rcvd = NULL;
+
+        o = dt_locate(env, lut->lut_bottom, fid);
+        if (!IS_ERR(o)) {
+                lut->lut_last_rcvd = o;
+        } else {
+                rc = PTR_ERR(o);
+                CERROR("cannot open %s: rc = %d\n", LAST_RCVD, rc);
+        }
+
+        RETURN(rc);
+}
+EXPORT_SYMBOL(lut_init2);
 
 void lut_fini(const struct lu_env *env, struct lu_target *lut)
 {

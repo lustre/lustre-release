@@ -185,6 +185,7 @@ static int lov_io_sub_init(const struct lu_env *env, struct lov_io *lio,
                 sub_io->ci_parent  = io;
                 sub_io->ci_lockreq = io->ci_lockreq;
                 sub_io->ci_type    = io->ci_type;
+                sub_io->ci_no_srvlock = io->ci_no_srvlock;
 
                 lov_sub_enter(sub);
                 result = cl_io_sub_init(sub->sub_env, sub_io,
@@ -408,7 +409,7 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
         struct lov_stripe_md *lsm = lov_r0(cl2lov(ios->cis_obj))->lo_lsm;
         loff_t start = io->u.ci_rw.crw_pos;
         loff_t next;
-        int ssize = lsm->lsm_stripe_size;
+        unsigned long ssize = lsm->lsm_stripe_size;
 
         LASSERT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE);
         ENTRY;

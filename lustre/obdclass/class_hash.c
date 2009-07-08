@@ -147,10 +147,10 @@ lustre_hash_exit(lustre_hash_t *lh)
                 write_unlock(&lhb->lhb_rwlock);
         }
 
-        OBD_VFREE(lh->lh_buckets, sizeof(*lh->lh_buckets) << lh->lh_cur_bits);
         LASSERT(atomic_read(&lh->lh_count) == 0);
         write_unlock(&lh->lh_rwlock);
 
+        OBD_VFREE(lh->lh_buckets, sizeof(*lh->lh_buckets) << lh->lh_cur_bits);
         OBD_FREE_PTR(lh);
         EXIT;
 }

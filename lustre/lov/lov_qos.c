@@ -509,12 +509,13 @@ int qos_remedy_create(struct lov_request_set *set, struct lov_request *req)
                         continue;
                 /* check if objects has been created on this ost */
                 for (stripe = 0; stripe < lsm->lsm_stripe_count; stripe++) {
+                        /* we try send create to this ost but he is failed */
                         if (stripe == req->rq_stripe)
                                 continue;
+                        /* already have object at this stripe */
                         if (ost_idx == lsm->lsm_oinfo[stripe]->loi_ost_idx)
                                 break;
                 }
-
                 if (stripe >= lsm->lsm_stripe_count) {
                         req->rq_idx = ost_idx;
                         rc = obd_create(lov->lov_tgts[ost_idx]->ltd_exp,
@@ -764,7 +765,12 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
                 lqr = &(pool->pool_rr);
         }
 
-        lov_getref(exp->exp_obd);
+        obd_getref(exp->exp_obd);
+
+        /* wait for fresh statfs info if needed, the rpcs are sent in
+         * lov_create() */
+        qos_statfs_update(exp->exp_obd,
+                          cfs_time_shift_64(-2 * lov->desc.ld_qos_maxage), 1);
 
         /* wait for fresh statfs info if needed, the rpcs are sent in
          * lov_create() */
@@ -933,7 +939,7 @@ out_nolock:
         if (rc == -EAGAIN)
                 rc = alloc_rr(lov, idx_arr, stripe_cnt, poolname, flags);
 
-        lov_putref(exp->exp_obd);
+        obd_putref(exp->exp_obd);
         RETURN(rc);
 }
 
@@ -1071,6 +1077,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                 req->rq_stripe = i;
                 /* create data objects with "parent" OA */
                 memcpy(req->rq_oi.oi_oa, src_oa, sizeof(*req->rq_oi.oi_oa));
+                req->rq_oi.oi_cb_up = cb_create_update;
 
                 /* XXX When we start creating objects on demand, we need to
                  *     make sure that we always create the object on the

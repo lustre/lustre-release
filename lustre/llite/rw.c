@@ -374,8 +374,13 @@ static unsigned long ll_ra_count_get(struct ll_sb_info *sbi, unsigned long len)
         unsigned long ret;
         ENTRY;
 
+        /**
+         * If read-ahead pages left are less than 1M, do not do read-ahead,
+         * otherwise it will form small read RPC(< 1M), which hurt server
+         * performance a lot.
+         */
         ret = min(ra->ra_max_pages - atomic_read(&ra->ra_cur_pages), len);
-        if ((int)ret < 0)
+        if ((int)ret < 0 || ret < min((unsigned long)PTLRPC_MAX_BRW_PAGES, len))
                 GOTO(out, ret = 0);
 
         if (atomic_add_return(ret, &ra->ra_cur_pages) > ra->ra_max_pages) {
@@ -407,11 +412,11 @@ void ll_ra_stats_inc(struct address_space *mapping, enum ra_stat which)
 #define RAS_CDEBUG(ras) \
         CDEBUG(D_READA,                                                      \
                "lrp %lu cr %lu cp %lu ws %lu wl %lu nra %lu r %lu ri %lu"    \
-               "csr %lu sf %lu sp %lu sl %lu \n", 		     	     \
+               "csr %lu sf %lu sp %lu sl %lu \n",                            \
                ras->ras_last_readpage, ras->ras_consecutive_requests,        \
                ras->ras_consecutive_pages, ras->ras_window_start,            \
                ras->ras_window_len, ras->ras_next_readahead,                 \
-               ras->ras_requests, ras->ras_request_index,		     \
+               ras->ras_requests, ras->ras_request_index,                    \
                ras->ras_consecutive_stride_requests, ras->ras_stride_offset, \
                ras->ras_stride_pages, ras->ras_stride_length)
 
@@ -702,7 +707,7 @@ int ll_readahead(const struct lu_env *env, struct cl_io *io,
 {
         struct vvp_io *vio = vvp_env_io(env);
         struct vvp_thread_info *vti = vvp_env_info(env);
-        struct ccc_thread_info *cti = ccc_env_info(env);
+        struct cl_attr *attr = ccc_env_thread_attr(env);
         unsigned long start = 0, end = 0, reserved;
         unsigned long ra_end, len;
         struct inode *inode;
@@ -710,7 +715,6 @@ int ll_readahead(const struct lu_env *env, struct cl_io *io,
         struct ra_io_arg *ria = &vti->vti_ria;
         struct ll_inode_info *lli;
         struct cl_object *clob;
-        struct cl_attr   *attr = &cti->cti_attr;
         int ret = 0;
         __u64 kms;
         ENTRY;
@@ -901,7 +905,7 @@ static void ras_stride_increase_window(struct ll_readahead_state *ras,
         unsigned long stride_len;
 
         LASSERT(ras->ras_stride_length > 0);
-        LASSERTF(ras->ras_window_start + ras->ras_window_len 
+        LASSERTF(ras->ras_window_start + ras->ras_window_len
                  >= ras->ras_stride_offset, "window_start %lu, window_len %lu"
                  " stride_offset %lu\n", ras->ras_window_start,
                  ras->ras_window_len, ras->ras_stride_offset);
@@ -924,7 +928,7 @@ static void ras_stride_increase_window(struct ll_readahead_state *ras,
 
         window_len += step * ras->ras_stride_length + left;
 
-        if (stride_page_count(ras, window_len) <= ra->ra_max_pages)
+        if (stride_page_count(ras, window_len) <= ra->ra_max_pages_per_file)
                 ras->ras_window_len = window_len;
 
         RAS_CDEBUG(ras);
@@ -971,14 +975,14 @@ void ras_update(struct ll_sb_info *sbi, struct inode *inode,
                    index < ras->ras_next_readahead &&
                    index_in_window(index, ras->ras_window_start, 0,
                                    ras->ras_window_len)) {
-		ra_miss = 1;
+                ra_miss = 1;
                 ll_ra_stats_inc_sbi(sbi, RA_STAT_MISS_IN_WINDOW);
         }
 
         /* On the second access to a file smaller than the tunable
          * ra_max_read_ahead_whole_pages trigger RA on all pages in the
-         * file up to ra_max_pages.  This is simply a best effort and
-         * only occurs once per open file.  Normal RA behavior is reverted
+         * file up to ra_max_pages_per_file.  This is simply a best effort
+         * and only occurs once per open file.  Normal RA behavior is reverted
          * to for subsequent IO.  The mmap case does not increment
          * ras_requests and thus can never trigger this behavior. */
         if (ras->ras_requests == 2 && !ras->ras_request_index) {
@@ -988,27 +992,27 @@ void ras_update(struct ll_sb_info *sbi, struct inode *inode,
                             CFS_PAGE_SHIFT;
 
                 CDEBUG(D_READA, "kmsp "LPU64" mwp %lu mp %lu\n", kms_pages,
-                       ra->ra_max_read_ahead_whole_pages, ra->ra_max_pages);
+                       ra->ra_max_read_ahead_whole_pages, ra->ra_max_pages_per_file);
 
                 if (kms_pages &&
                     kms_pages <= ra->ra_max_read_ahead_whole_pages) {
                         ras->ras_window_start = 0;
                         ras->ras_last_readpage = 0;
                         ras->ras_next_readahead = 0;
-                        ras->ras_window_len = min(ra->ra_max_pages,
+                        ras->ras_window_len = min(ra->ra_max_pages_per_file,
                                 ra->ra_max_read_ahead_whole_pages);
                         GOTO(out_unlock, 0);
                 }
         }
         if (zero) {
-		/* check whether it is in stride I/O mode*/
+                /* check whether it is in stride I/O mode*/
                 if (!index_in_stride_window(index, ras, inode)) {
                         ras_reset(ras, index);
                         ras->ras_consecutive_pages++;
                         ras_stride_reset(ras);
                         GOTO(out_unlock, 0);
                 } else {
-        	        ras->ras_consecutive_requests = 0;
+                        ras->ras_consecutive_requests = 0;
                         if (++ras->ras_consecutive_stride_requests > 1)
                                 stride_detect = 1;
                         RAS_CDEBUG(ras);
@@ -1033,7 +1037,7 @@ void ras_update(struct ll_sb_info *sbi, struct inode *inode,
                 } else if (stride_io_mode(ras)) {
                         /* If this is contiguous read but in stride I/O mode
                          * currently, check whether stride step still is valid,
-                         * if invalid, it will reset the stride ra window*/ 	
+                         * if invalid, it will reset the stride ra window*/
                         if (!index_in_stride_window(index, ras, inode)) {
                                 /* Shrink stride read-ahead window to be zero */
                                 ras_stride_reset(ras);
@@ -1071,7 +1075,7 @@ void ras_update(struct ll_sb_info *sbi, struct inode *inode,
                 else
                         ras->ras_window_len = min(ras->ras_window_len +
                                                   RAS_INCREASE_STEP,
-                                                  ra->ra_max_pages);
+                                                  ra->ra_max_pages_per_file);
         }
         EXIT;
 out_unlock:
@@ -1082,7 +1086,7 @@ out_unlock:
         return;
 }
 
-int ll_writepage(struct page *vmpage, struct writeback_control *_)
+int ll_writepage(struct page *vmpage, struct writeback_control *unused)
 {
         struct inode           *inode = vmpage->mapping->host;
         struct lu_env          *env;

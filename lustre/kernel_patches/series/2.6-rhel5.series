@@ -5,7 +5,6 @@ jbd-jcberr-2.6.18-vanilla.patch
 export_symbols-2.6.18-vanilla.patch
 dev_read_only-2.6.18-vanilla.patch
 export-2.6.18-vanilla.patch
-8kstack-2.6.12.patch
 export-show_task-2.6.18-vanilla.patch
 sd_iostats-2.6-rhel5.patch
 export_symbol_numa-2.6-fc5.patch
@@ -22,3 +21,6 @@ jbd-journal-chksum-2.6.18-vanilla.patch
 quota-large-limits-rhel5.patch
 raid5-mmp-unplug-dev.patch
 small-fixes-about-jbd.patch
+jbd-slab-race-2.6-rhel5.patch
+mpt-fusion-max-sge.patch
+prune-icache-use-trylock-rhel5.patch

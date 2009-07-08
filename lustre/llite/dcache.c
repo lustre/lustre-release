@@ -393,17 +393,20 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 GOTO(out_sa, rc);
         }
 
-        exp = ll_i2mdexp(de->d_inode);
-
         /* Never execute intents for mount points.
          * Attributes will be fixed up in ll_inode_revalidate_it */
         if (d_mountpoint(de))
                 GOTO(out_sa, rc = 1);
 
-        /* Root of the lustre tree. Always valid.
-         * Attributes will be fixed up in ll_inode_revalidate_it */
-        if (de == de->d_sb->s_root)
-                GOTO(out_sa, rc = 1);
+        /* need to get attributes in case root got changed from other client */
+        if (de == de->d_sb->s_root) {
+                rc = __ll_inode_revalidate_it(de, it, MDS_INODELOCK_LOOKUP);
+                if (rc == 0)
+                        rc = 1;
+                GOTO(out_sa, rc);
+        }
+
+        exp = ll_i2mdexp(de->d_inode);
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDC_REVALIDATE_PAUSE, 5);
         ll_frob_intent(&it, &lookup_it);
@@ -718,7 +721,7 @@ out_sa:
 }
 
 #ifdef HAVE_VFS_INTENT_PATCHES
-static int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
+int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
 {
         int rc;
         ENTRY;

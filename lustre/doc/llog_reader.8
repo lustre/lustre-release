@@ -1,0 +1,40 @@
+.TH llog_reader 8 "2009 Apr 02" Lustre "System management commands"
+.SH NAME
+llog_reader \- lustre on-disk log parsing utility
+.SH SYNOPSIS
+.B "llog_reader filename"
+.br
+.SH DESCRIPTION
+.B llog_reader
+parses the binary format of Lustre's on-disk configuration logs.
+It can only read the logs.  Use
+.B tunefs.lustre
+to write to them.
+.LP
+To examine a log file on a stopped Lustre server, first mount its
+backing file system as ldiskfs, then use
+.B llog_reader
+to dump the log file's contents, e.g.
+.IP
+.nf
+mount -t ldiskfs /dev/sda /mnt/mgs
+llog_reader /mnt/mgs/CONFIGS/tfs-client
+.fi
+.LP
+To examine the same log file on a running Lustre server, use the
+ldiskfs-enabled debugfs utility (called
+.B debug.ldiskfs
+on some distros) to extract the file, e.g.
+.IP
+.nf
+debugfs -c -R 'dump CONFIGS/tfs-client /tmp/tfs-client' /dev/sda
+llog_reader /tmp/tfs-client
+.fi
+.SH CAVEATS
+Although they are stored in the CONFIGS directory, \fImountdata\fR
+files do not use the config log format and will confuse \fBllog_reader\fR.
+.SH SEE ALSO
+Lustre Operations Manual, Section 21.1, \fITroubleshooting Lustre\fR.
+.br
+.BR lustre (7),
+.BR tunefs.lustre (8)

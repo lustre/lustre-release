@@ -1693,6 +1693,8 @@ static void server_put_super(struct super_block *sb)
         OBD_ALLOC(tmpname, tmpname_sz);
         memcpy(tmpname, lsi->lsi_ldd->ldd_svname, tmpname_sz);
         CDEBUG(D_MOUNT, "server put_super %s\n", tmpname);
+        if (IS_MDT(lsi->lsi_ldd) && (lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC))
+                snprintf(tmpname, tmpname_sz, "MGS");
 
         /* Stop the target */
         if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC) &&
@@ -1955,7 +1957,9 @@ static int server_fill_super(struct super_block *sb)
                 GOTO(out_mnt, rc);
 
         LCONSOLE_WARN("Server %s on device %s has started\n",
-                      lsi->lsi_ldd->ldd_svname, lsi->lsi_lmd->lmd_dev);
+                      ((lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC) &&
+                       (IS_MDT(lsi->lsi_ldd))) ? "MGS" : lsi->lsi_ldd->ldd_svname,
+                      lsi->lsi_lmd->lmd_dev);
 
         RETURN(0);
 out_mnt:

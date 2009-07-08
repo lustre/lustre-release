@@ -645,6 +645,87 @@ static int lprocfs_wr_nosquash_nids(struct file *file, const char *buffer,
         RETURN(rc);
 }
 
+static int lprocfs_rd_mdt_som(char *page, char **start, off_t off,
+                              int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+        return snprintf(page, count, "%sabled\n",
+                        mdt->mdt_som_conf ? "en" : "dis");
+}
+
+static int mdt_quota_off(struct mdt_device *mdt)
+{
+#ifdef HAVE_QUOTA_SUPPORT
+        struct md_device *next = mdt->mdt_child;
+        const struct md_quota_operations *mqo = &next->md_ops->mdo_quota;
+        struct lu_env env;
+        int rc;
+
+        lu_env_init(&env, LCT_MD_THREAD);
+        rc = mqo->mqo_off(&env, next, UGQUOTA | IMMQUOTA);
+        lu_env_fini(&env);
+        return rc;
+#else
+        return 0;
+#endif
+}
+
+static int lprocfs_wr_mdt_som(struct file *file, const char *buffer,
+                              unsigned long count, void *data)
+{
+        struct obd_export *exp;
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        char kernbuf[16];
+        unsigned long val = 0;
+        int rc;
+
+        if (count > (sizeof(kernbuf) - 1))
+                return -EINVAL;
+
+        if (copy_from_user(kernbuf, buffer, count))
+                return -EFAULT;
+
+        kernbuf[count] = '\0';
+
+        if (!strcmp(kernbuf, "enabled"))
+                val = 1;
+        else if (strcmp(kernbuf, "disabled"))
+                return -EINVAL;
+
+        if (mdt->mdt_som_conf == val)
+                return count;
+
+        if (!obd->obd_process_conf) {
+                CERROR("Temporary SOM change is not supported, use lctl "
+                       "conf_param for permanent setting\n");
+                return count;
+        }
+
+        /* 1 stands for self export. */
+        list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
+                if (exp == obd->obd_self_export)
+                        continue;
+                if (exp->exp_connect_flags & OBD_CONNECT_MDS_MDS)
+                        continue;
+                /* Some clients are already connected, skip the change */
+                LCONSOLE_INFO("%s is already connected, SOM will be %s on "
+                              "the next mount\n", exp->exp_client_uuid.uuid,
+                              val ? "enabled" : "disabled");
+                return count;
+        }
+
+        if ((rc = mdt_quota_off(mdt)))
+                return rc;
+
+        mdt->mdt_som_conf = val;
+        LCONSOLE_INFO("Enabling SOM\n");
+
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
         { "uuid",                       lprocfs_rd_uuid,                 0, 0 },
         { "recovery_status",            lprocfs_obd_rd_recovery_status,  0, 0 },
@@ -674,6 +755,8 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
                                         lprocfs_wr_root_squash,             0 },
         { "nosquash_nids",              lprocfs_rd_nosquash_nids,
                                         lprocfs_wr_nosquash_nids,          0 },
+        { "som",                        lprocfs_rd_mdt_som,
+                                        lprocfs_wr_mdt_som, 0 },
         { 0 }
 };
 

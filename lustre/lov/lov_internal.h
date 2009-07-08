@@ -37,6 +37,7 @@
 #ifndef LOV_INTERNAL_H
 #define LOV_INTERNAL_H
 
+#include <obd_class.h>
 #include <lustre/lustre_user.h>
 
 struct lov_lock_handles {
@@ -80,6 +81,7 @@ struct lov_request_set {
         struct brw_page         *set_pga;
         struct lov_lock_handles *set_lockh;
         struct list_head         set_list;
+        cfs_waitq_t              set_waitq;
 };
 
 extern cfs_mem_cache_t *lov_oinfo_slab;
@@ -172,6 +174,7 @@ int qos_remedy_create(struct lov_request_set *set, struct lov_request *req);
 
 /* lov_request.c */
 void lov_set_add_req(struct lov_request *req, struct lov_request_set *set);
+int lov_finished_set(struct lov_request_set *set);
 void lov_update_set(struct lov_request_set *set,
                     struct lov_request *req, int rc);
 int lov_update_common_set(struct lov_request_set *set,
@@ -180,6 +183,7 @@ int lov_prep_create_set(struct obd_export *exp, struct obd_info *oifo,
                         struct lov_stripe_md **ea, struct obdo *src_oa,
                         struct obd_trans_info *oti,
                         struct lov_request_set **reqset);
+int cb_create_update(void *cookie, int rc);
 int lov_update_create_set(struct lov_request_set *set,
                           struct lov_request *req, int rc);
 int lov_fini_create_set(struct lov_request_set *set, struct lov_stripe_md **ea);
@@ -247,8 +251,6 @@ void lov_fix_desc_stripe_count(__u32 *val);
 void lov_fix_desc_pattern(__u32 *val);
 void lov_fix_desc_qos_maxage(__u32 *val);
 int lov_get_stripecnt(struct lov_obd *lov, __u32 stripe_count);
-void lov_getref(struct obd_device *obd);
-void lov_putref(struct obd_device *obd);
 int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
                     struct obd_connect_data *data);
 int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
@@ -267,7 +269,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmm,
                struct lov_stripe_md *lsm);
 int lov_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
                  struct lov_mds_md *lmm, int lmm_bytes);
-int lov_setstripe(struct obd_export *exp,
+int lov_setstripe(struct obd_export *exp, int max_lmm_size,
                   struct lov_stripe_md **lsmp, struct lov_user_md *lump);
 int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
               struct lov_user_md *lump);
@@ -324,5 +326,35 @@ void lov_dump_pool(int level, struct pool_desc *pool);
 struct pool_desc *lov_find_pool(struct lov_obd *lov, char *poolname);
 int lov_check_index_in_pool(__u32 idx, struct pool_desc *pool);
 void lov_pool_putref(struct pool_desc *pool);
+
+#if BITS_PER_LONG == 64
+# define ll_do_div64(n,base) ({                                 \
+        uint64_t __base = (base);                               \
+        uint64_t __rem;                                         \
+        __rem = ((uint64_t)(n)) % __base;                       \
+        (n) = ((uint64_t)(n)) / __base;                         \
+        __rem;                                                  \
+  })
+#elif BITS_PER_LONG == 32
+# define ll_do_div64(n,base) ({                                 \
+        uint64_t __rem;                                         \
+        if ((sizeof(base) > 4) && (((base)&0xffffffff00000000ULL) != 0)) { \
+                int __remainder;                                \
+                LASSERTF(!((base) & (LOV_MIN_STRIPE_SIZE - 1)), "64 bit lov "\
+                          "division %llu / %llu\n", (n), (base)); \
+                __remainder = (n) & (LOV_MIN_STRIPE_SIZE - 1);  \
+                (n) >>= LOV_MIN_STRIPE_BITS;                    \
+                (base) >>= LOV_MIN_STRIPE_BITS;                 \
+                __rem = do_div(n, base);                        \
+                __rem <<= LOV_MIN_STRIPE_BITS;                  \
+                __rem += __remainder;                           \
+        } else {                                                \
+                __rem = do_div(n, base);                        \
+        }                                                       \
+        __rem;                                                  \
+  })
+#else
+#error Unsupported architecture.
+#endif
 
 #endif

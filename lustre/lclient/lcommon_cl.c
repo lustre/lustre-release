@@ -337,7 +337,7 @@ void ccc_global_fini(struct lu_device_type *device_type)
  */
 
 struct lu_object *ccc_object_alloc(const struct lu_env *env,
-                                   const struct lu_object_header *_,
+                                   const struct lu_object_header *unused,
                                    struct lu_device *dev,
                                    const struct cl_object_operations *clops,
                                    const struct lu_object_operations *luops)
@@ -405,7 +405,7 @@ void ccc_object_free(const struct lu_env *env, struct lu_object *obj)
 
 int ccc_lock_init(const struct lu_env *env,
                   struct cl_object *obj, struct cl_lock *lock,
-                  const struct cl_io *_,
+                  const struct cl_io *unused,
                   const struct cl_lock_operations *lkops)
 {
         struct ccc_lock *clk;
@@ -465,7 +465,7 @@ int ccc_page_is_under_lock(const struct lu_env *env,
                            const struct cl_page_slice *slice,
                            struct cl_io *io)
 {
-        struct ccc_io        *vio  = ccc_env_io(env);
+        struct ccc_io        *cio  = ccc_env_io(env);
         struct cl_lock_descr *desc = &ccc_env_info(env)->cti_descr;
         struct cl_page       *page = slice->cpl_page;
 
@@ -475,7 +475,7 @@ int ccc_page_is_under_lock(const struct lu_env *env,
 
         if (io->ci_type == CIT_READ || io->ci_type == CIT_WRITE ||
             io->ci_type == CIT_FAULT) {
-                if (vio->cui_fd->fd_flags & LL_FILE_GROUP_LOCKED)
+                if (cio->cui_fd->fd_flags & LL_FILE_GROUP_LOCKED)
                         result = -EBUSY;
                 else {
                         desc->cld_start = page->cp_index;
@@ -505,35 +505,35 @@ void ccc_transient_page_verify(const struct cl_page *page)
 
 void ccc_transient_page_own(const struct lu_env *env,
                                    const struct cl_page_slice *slice,
-                                   struct cl_io *_)
+                                   struct cl_io *unused)
 {
         ccc_transient_page_verify(slice->cpl_page);
 }
 
 void ccc_transient_page_assume(const struct lu_env *env,
                                       const struct cl_page_slice *slice,
-                                      struct cl_io *_)
+                                      struct cl_io *unused)
 {
         ccc_transient_page_verify(slice->cpl_page);
 }
 
 void ccc_transient_page_unassume(const struct lu_env *env,
                                         const struct cl_page_slice *slice,
-                                        struct cl_io *_)
+                                        struct cl_io *unused)
 {
         ccc_transient_page_verify(slice->cpl_page);
 }
 
 void ccc_transient_page_disown(const struct lu_env *env,
                                       const struct cl_page_slice *slice,
-                                      struct cl_io *_)
+                                      struct cl_io *unused)
 {
         ccc_transient_page_verify(slice->cpl_page);
 }
 
 void ccc_transient_page_discard(const struct lu_env *env,
                                        const struct cl_page_slice *slice,
-                                       struct cl_io *_)
+                                       struct cl_io *unused)
 {
         struct cl_page *page = slice->cpl_page;
 
@@ -547,7 +547,7 @@ void ccc_transient_page_discard(const struct lu_env *env,
 
 int ccc_transient_page_prep(const struct lu_env *env,
                                    const struct cl_page_slice *slice,
-                                   struct cl_io *_)
+                                   struct cl_io *unused)
 {
         ENTRY;
         /* transient page should always be sent. */
@@ -574,7 +574,7 @@ void ccc_lock_fini(const struct lu_env *env, struct cl_lock_slice *slice)
 
 int ccc_lock_enqueue(const struct lu_env *env,
                      const struct cl_lock_slice *slice,
-                     struct cl_io *_, __u32 enqflags)
+                     struct cl_io *unused, __u32 enqflags)
 {
         CLOBINVRNT(env, slice->cls_obj, ccc_object_invariant(slice->cls_obj));
         return 0;
@@ -665,7 +665,7 @@ void ccc_lock_state(const struct lu_env *env,
 
                 obj   = slice->cls_obj;
                 inode = ccc_object_inode(obj);
-                attr  = &ccc_env_info(env)->cti_attr;
+                attr  = ccc_env_thread_attr(env);
 
                 /* vmtruncate()->ll_truncate() first sets the i_size and then
                  * the kms under both a DLM lock and the
@@ -716,8 +716,8 @@ int ccc_io_one_lock_index(const struct lu_env *env, struct cl_io *io,
                           __u32 enqflags, enum cl_lock_mode mode,
                           pgoff_t start, pgoff_t end)
 {
-        struct ccc_io          *vio   = ccc_env_io(env);
-        struct cl_lock_descr   *descr = &vio->cui_link.cill_descr;
+        struct ccc_io          *cio   = ccc_env_io(env);
+        struct cl_lock_descr   *descr = &cio->cui_link.cill_descr;
         struct cl_object       *obj   = io->ci_obj;
 
         CLOBINVRNT(env, obj, ccc_object_invariant(obj));
@@ -725,15 +725,45 @@ int ccc_io_one_lock_index(const struct lu_env *env, struct cl_io *io,
 
         CDEBUG(D_VFSTRACE, "lock: %i [%lu, %lu]\n", mode, start, end);
 
-        memset(&vio->cui_link, 0, sizeof vio->cui_link);
+        memset(&cio->cui_link, 0, sizeof cio->cui_link);
         descr->cld_mode  = mode;
         descr->cld_obj   = obj;
         descr->cld_start = start;
         descr->cld_end   = end;
 
-        vio->cui_link.cill_enq_flags = enqflags;
-        cl_io_lock_add(env, io, &vio->cui_link);
+        cio->cui_link.cill_enq_flags = enqflags;
+        cl_io_lock_add(env, io, &cio->cui_link);
         RETURN(0);
+}
+
+void ccc_io_update_iov(const struct lu_env *env,
+                       struct ccc_io *cio, struct cl_io *io)
+{
+        int i;
+        size_t size = io->u.ci_rw.crw_count;
+
+        cio->cui_iov_olen = 0;
+        if (cl_io_is_sendfile(io) || size == cio->cui_tot_count)
+                return;
+
+        if (cio->cui_tot_nrsegs == 0)
+                cio->cui_tot_nrsegs =  cio->cui_nrsegs;
+
+        for (i = 0; i < cio->cui_tot_nrsegs; i++) {
+                struct iovec *iv = &cio->cui_iov[i];
+
+                if (iv->iov_len < size)
+                        size -= iv->iov_len;
+                else {
+                        if (iv->iov_len > size) {
+                                cio->cui_iov_olen = iv->iov_len;
+                                iv->iov_len = size;
+                        }
+                        break;
+                }
+        }
+
+        cio->cui_nrsegs = i + 1;
 }
 
 int ccc_io_one_lock(const struct lu_env *env, struct cl_io *io,
@@ -741,7 +771,6 @@ int ccc_io_one_lock(const struct lu_env *env, struct cl_io *io,
                     loff_t start, loff_t end)
 {
         struct cl_object *obj = io->ci_obj;
-
         return ccc_io_one_lock_index(env, io, enqflags, mode,
                                      cl_index(obj, start), cl_index(obj, end));
 }
@@ -750,6 +779,38 @@ void ccc_io_end(const struct lu_env *env, const struct cl_io_slice *ios)
 {
         CLOBINVRNT(env, ios->cis_io->ci_obj,
                    ccc_object_invariant(ios->cis_io->ci_obj));
+}
+
+void ccc_io_advance(const struct lu_env *env,
+                    const struct cl_io_slice *ios,
+                    size_t nob)
+{
+        struct ccc_io    *cio = cl2ccc_io(env, ios);
+        struct cl_io     *io  = ios->cis_io;
+        struct cl_object *obj = ios->cis_io->ci_obj;
+
+        CLOBINVRNT(env, obj, ccc_object_invariant(obj));
+
+        if (!cl_io_is_sendfile(io) && io->ci_continue) {
+                /* update the iov */
+                LASSERT(cio->cui_tot_nrsegs >= cio->cui_nrsegs);
+                LASSERT(cio->cui_tot_count  >= nob);
+
+                cio->cui_iov        += cio->cui_nrsegs;
+                cio->cui_tot_nrsegs -= cio->cui_nrsegs;
+                cio->cui_tot_count  -= nob;
+
+                if (cio->cui_iov_olen) {
+                        struct iovec *iv;
+
+                        cio->cui_iov--;
+                        cio->cui_tot_nrsegs++;
+                        iv = &cio->cui_iov[0];
+                        iv->iov_base += iv->iov_len;
+                        LASSERT(cio->cui_iov_olen > iv->iov_len);
+                        iv->iov_len = cio->cui_iov_olen - iv->iov_len;
+                }
+        }
 }
 
 static void ccc_object_size_lock(struct cl_object *obj, int vfslock)
@@ -788,7 +849,7 @@ int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
                   struct cl_io *io, loff_t start, size_t count, int vfslock,
                   int *exceed)
 {
-        struct cl_attr *attr  = &ccc_env_info(env)->cti_attr;
+        struct cl_attr *attr  = ccc_env_thread_attr(env);
         struct inode   *inode = ccc_object_inode(obj);
         loff_t          pos   = start + count - 1;
         loff_t kms;
@@ -831,7 +892,7 @@ int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
                                  * kernel will check such case correctly.
                                  * linux-2.6.18-128.1.1 miss to do that.
                                  * --bug 17336 */
-                                size_t size = cl_isize_read(inode);
+                                loff_t size = cl_isize_read(inode);
                                 unsigned long cur_index = start >> CFS_PAGE_SHIFT;
 
                                 if ((size == 0 && cur_index != 0) ||

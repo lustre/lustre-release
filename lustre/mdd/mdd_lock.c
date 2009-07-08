@@ -113,6 +113,12 @@ void mdd_read_unlock(const struct lu_env *env, struct mdd_object *obj)
         next->do_ops->do_read_unlock(env, next);
 }
 
+int mdd_write_locked(const struct lu_env *env, struct mdd_object *obj)
+{
+        struct dt_object  *next = mdd_object_child(obj);
+
+        return next->do_ops->do_write_locked(env, next);
+}
 
 /* Methods for parallel directory locking */
 

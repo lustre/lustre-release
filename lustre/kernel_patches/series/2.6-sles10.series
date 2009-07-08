@@ -15,3 +15,4 @@ proc-sleep-2.6.16-sles10.patch
 export-nr_free_buffer_pages.patch 
 quota-large-limits-sles10.patch
 raid5-mmp-unplug-dev-sles10.patch
+prune-icache-use-trylock-sles10.patch

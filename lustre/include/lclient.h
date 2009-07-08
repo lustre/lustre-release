@@ -136,6 +136,13 @@ static inline struct ccc_thread_info *ccc_env_info(const struct lu_env *env)
         return info;
 }
 
+static inline struct cl_attr *ccc_env_thread_attr(const struct lu_env *env)
+{
+        struct cl_attr *attr = &ccc_env_info(env)->cti_attr;
+        memset(attr, 0, sizeof(*attr));
+        return attr;
+}
+
 struct ccc_session {
         struct ccc_io cs_ios;
 };
@@ -328,6 +335,10 @@ int ccc_io_one_lock(const struct lu_env *env, struct cl_io *io,
                     __u32 enqflags, enum cl_lock_mode mode,
                     loff_t start, loff_t end);
 void ccc_io_end(const struct lu_env *env, const struct cl_io_slice *ios);
+void ccc_io_advance(const struct lu_env *env, const struct cl_io_slice *ios,
+                    size_t nob);
+void ccc_io_update_iov(const struct lu_env *env, struct ccc_io *cio,
+                       struct cl_io *io);
 int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
                   struct cl_io *io, loff_t start, size_t count, int vfslock,
                   int *exceed);
@@ -379,6 +390,16 @@ __u16 ll_dirent_type_get(struct lu_dirent *ent);
 int cl_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp);
 int cl_ocd_update(struct obd_device *host,
                   struct obd_device *watched,
-                  enum obd_notify_event ev, void *owner);
+                  enum obd_notify_event ev, void *owner, void *data);
+
+struct ccc_grouplock {
+        struct lu_env   *cg_env;
+        struct cl_lock  *cg_lock;
+        unsigned long    cg_gid;
+};
+
+int  cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
+                      struct ccc_grouplock *cg);
+void cl_put_grouplock(struct ccc_grouplock *cg);
 
 #endif /*LCLIENT_H */

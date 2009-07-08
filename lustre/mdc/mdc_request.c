@@ -56,6 +56,7 @@
 #include <lprocfs_status.h>
 #include <lustre_param.h>
 #include "mdc_internal.h"
+#include <lustre/lustre_idl.h>
 
 #define REQUEST_MINOR 244
 
@@ -675,9 +676,6 @@ void mdc_commit_open(struct ptlrpc_request *req)
         if (mod == NULL)
                 return;
 
-        if (mod->mod_close_req != NULL)
-                mod->mod_close_req->rq_cb_data = NULL;
-
         if (mod->mod_och != NULL)
                 mod->mod_och->och_mod = NULL;
 
@@ -827,18 +825,14 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
                                   "= %d", rc);
                         if (rc > 0)
                                 rc = -rc;
-                } else if (mod == NULL) {
-                        if (req->rq_import->imp_replayable)
-                                CERROR("Unexpected: can't find md_open_data,"
-                                       "but close succeeded with replayable imp"
-                                       "Please tell "
-                                       "http://bugzilla.lustre.org/\n");
                 }
-
                 body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
                 if (body == NULL)
                         rc = -EPROTO;
         }
+
+        if (rc != 0 && mod)
+                 mod->mod_close_req = NULL;
 
         *request = req;
         RETURN(rc);
@@ -994,6 +988,51 @@ int mdc_readpage(struct obd_export *exp, const struct lu_fid *fid,
         RETURN(0);
 }
 
+static int mdc_ioc_fid2path(struct obd_export *exp, struct getinfo_fid2path *gf)
+{
+        __u32 keylen, vallen;
+        void *key;
+        int rc;
+
+        if (gf->gf_pathlen > PATH_MAX)
+                RETURN(-ENAMETOOLONG);
+        if (gf->gf_pathlen < 2)
+                RETURN(-EOVERFLOW);
+
+        /* Key is KEY_FID2PATH + getinfo_fid2path description */
+        keylen = size_round(sizeof(KEY_FID2PATH)) + sizeof(*gf);
+        OBD_ALLOC(key, keylen);
+        if (key == NULL)
+                RETURN(-ENOMEM);
+        memcpy(key, KEY_FID2PATH, sizeof(KEY_FID2PATH));
+        memcpy(key + size_round(sizeof(KEY_FID2PATH)), gf, sizeof(*gf));
+
+        CDEBUG(D_IOCTL, "path get "DFID" from "LPU64" #%d\n",
+               PFID(&gf->gf_fid), gf->gf_recno, gf->gf_linkno);
+
+        if (!fid_is_sane(&gf->gf_fid))
+                GOTO(out, rc = -EINVAL);
+
+        /* Val is struct getinfo_fid2path result plus path */
+        vallen = sizeof(*gf) + gf->gf_pathlen;
+
+        rc = obd_get_info(exp, keylen, key, &vallen, gf, NULL);
+        if (rc)
+                GOTO(out, rc);
+
+        if (vallen <= sizeof(*gf))
+                GOTO(out, rc = -EPROTO);
+        else if (vallen > sizeof(*gf) + gf->gf_pathlen)
+                GOTO(out, rc = -EOVERFLOW);
+
+        CDEBUG(D_IOCTL, "path get "DFID" from "LPU64" #%d\n%s\n",
+               PFID(&gf->gf_fid), gf->gf_recno, gf->gf_linkno, gf->gf_path);
+
+out:
+        OBD_FREE(key, keylen);
+        return rc;
+}
+
 static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                          void *karg, void *uarg)
 {
@@ -1010,11 +1049,16 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         }
         switch (cmd) {
         case OBD_IOC_CHANGELOG_CLEAR: {
+                struct ioc_changelog_clear *icc = karg;
                 struct changelog_setinfo cs =
-                        {data->ioc_u64_1, data->ioc_u32_1};
+                        {icc->icc_recno, icc->icc_id};
                 rc = obd_set_info_async(exp, strlen(KEY_CHANGELOG_CLEAR),
                                         KEY_CHANGELOG_CLEAR, sizeof(cs), &cs,
                                         NULL);
+                GOTO(out, rc);
+        }
+        case OBD_IOC_FID2PATH: {
+                rc = mdc_ioc_fid2path(exp, karg);
                 GOTO(out, rc);
         }
         case OBD_IOC_CLIENT_RECOVER:
@@ -1096,6 +1140,55 @@ static int do_set_info_async(struct obd_export *exp,
                 rc = ptlrpc_queue_wait(req);
                 ptlrpc_req_finished(req);
         }
+
+        RETURN(rc);
+}
+
+int mdc_get_info_rpc(struct obd_export *exp,
+                     obd_count keylen, void *key,
+                     int vallen, void *val)
+{
+        struct obd_import      *imp = class_exp2cliimp(exp);
+        struct ptlrpc_request  *req;
+        char                   *tmp;
+        int                     rc = -EINVAL;
+        ENTRY;
+
+        req = ptlrpc_request_alloc(imp, &RQF_MDS_GET_INFO);
+        if (req == NULL)
+                RETURN(-ENOMEM);
+
+        req_capsule_set_size(&req->rq_pill, &RMF_GETINFO_KEY,
+                             RCL_CLIENT, keylen);
+        req_capsule_set_size(&req->rq_pill, &RMF_GETINFO_VALLEN,
+                             RCL_CLIENT, sizeof(__u32));
+
+        rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_GET_INFO);
+        if (rc) {
+                ptlrpc_request_free(req);
+                RETURN(rc);
+        }
+
+        tmp = req_capsule_client_get(&req->rq_pill, &RMF_GETINFO_KEY);
+        memcpy(tmp, key, keylen);
+        tmp = req_capsule_client_get(&req->rq_pill, &RMF_GETINFO_VALLEN);
+        memcpy(tmp, &vallen, sizeof(__u32));
+
+        req_capsule_set_size(&req->rq_pill, &RMF_GETINFO_VAL,
+                             RCL_SERVER, vallen);
+        ptlrpc_request_set_replen(req);
+
+        rc = ptlrpc_queue_wait(req);
+        if (rc == 0) {
+                tmp = req_capsule_server_get(&req->rq_pill, &RMF_GETINFO_VAL);
+                memcpy(val, tmp, vallen);
+                if (lustre_msg_swabbed(req->rq_repmsg)) {
+                        if (KEY_IS(KEY_FID2PATH)) {
+                                lustre_swab_fid2path(val);
+                        }
+                }
+        }
+        ptlrpc_req_finished(req);
 
         RETURN(rc);
 }
@@ -1203,6 +1296,8 @@ int mdc_get_info(struct obd_export *exp, __u32 keylen, void *key,
                 *data = imp->imp_connect_data;
                 RETURN(0);
         }
+
+        rc = mdc_get_info_rpc(exp, keylen, key, *vallen, val);
 
         RETURN(rc);
 }

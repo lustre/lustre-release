@@ -258,6 +258,7 @@ int lov_sublock_modify(const struct lu_env *env, struct lov_lock *lov,
 
         pd->cld_obj  = parent_descr->cld_obj;
         pd->cld_mode = parent_descr->cld_mode;
+        pd->cld_gid  = parent_descr->cld_gid;
         lovsub_lock_descr_map(d, subobj->lso_super, subobj->lso_index, pd);
         lov->lls_sub[idx].sub_got = *d;
         /*

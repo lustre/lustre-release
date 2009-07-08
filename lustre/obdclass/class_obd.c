@@ -72,9 +72,16 @@ __u64 obd_pages;
 unsigned int obd_debug_peer_on_timeout;
 unsigned int obd_dump_on_timeout;
 unsigned int obd_dump_on_eviction;
+unsigned int obd_max_dirty_pages = 256;
 unsigned int obd_timeout = OBD_TIMEOUT_DEFAULT;   /* seconds */
 unsigned int ldlm_timeout = LDLM_TIMEOUT_DEFAULT; /* seconds */
-unsigned int obd_max_dirty_pages = 256;
+/* Adaptive timeout defs here instead of ptlrpc module for /proc/sys/ access */
+unsigned int at_min = 0;
+unsigned int at_max = 600;
+unsigned int at_history = 600;
+int at_early_margin = 5;
+int at_extra = 30;
+
 atomic_t obd_dirty_pages;
 atomic_t obd_dirty_transit_pages;
 
@@ -399,6 +406,11 @@ EXPORT_SYMBOL(ldlm_timeout);
 EXPORT_SYMBOL(obd_max_dirty_pages);
 EXPORT_SYMBOL(obd_dirty_pages);
 EXPORT_SYMBOL(obd_dirty_transit_pages);
+EXPORT_SYMBOL(at_min);
+EXPORT_SYMBOL(at_max);
+EXPORT_SYMBOL(at_extra);
+EXPORT_SYMBOL(at_early_margin);
+EXPORT_SYMBOL(at_history);
 EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
 
 EXPORT_SYMBOL(proc_lustre_root);
@@ -598,13 +610,17 @@ int init_obdclass(void)
         err = obd_init_caches();
         if (err)
                 return err;
-        err = lu_global_init();
-        if (err)
-                return err;
 #ifdef __KERNEL__
         err = class_procfs_init();
         if (err)
                 return err;
+#endif
+
+        err = lu_global_init();
+        if (err)
+                return err;
+
+#ifdef __KERNEL__
         err = lustre_register_fs();
 #endif
 

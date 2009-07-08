@@ -49,21 +49,15 @@
 int test_req_buffer_pressure = 0;
 CFS_MODULE_PARM(test_req_buffer_pressure, "i", int, 0444,
                 "set non-zero to put pressure on request buffer pools");
-unsigned int at_min = 0;
 CFS_MODULE_PARM(at_min, "i", int, 0644,
                 "Adaptive timeout minimum (sec)");
-unsigned int at_max = 600;
-EXPORT_SYMBOL(at_max);
 CFS_MODULE_PARM(at_max, "i", int, 0644,
                 "Adaptive timeout maximum (sec)");
-unsigned int at_history = 600;
 CFS_MODULE_PARM(at_history, "i", int, 0644,
                 "Adaptive timeouts remember the slowest event that took place "
                 "within this period (sec)");
-static int at_early_margin = 5;
 CFS_MODULE_PARM(at_early_margin, "i", int, 0644,
                 "How soon before an RPC deadline to send an early reply");
-static int at_extra = 30;
 CFS_MODULE_PARM(at_extra, "i", int, 0644,
                 "How much extra time to give with each early reply");
 
@@ -168,8 +162,8 @@ ptlrpc_grow_req_bufs(struct ptlrpc_service *svc)
 }
 
 void
-ptlrpc_save_lock (struct ptlrpc_request *req,
-                  struct lustre_handle *lock, int mode, int no_ack)
+ptlrpc_save_lock(struct ptlrpc_request *req,
+                 struct lustre_handle *lock, int mode, int no_ack)
 {
         struct ptlrpc_reply_state *rs = req->rq_reply_state;
         int                        idx;
@@ -177,11 +171,15 @@ ptlrpc_save_lock (struct ptlrpc_request *req,
         LASSERT(rs != NULL);
         LASSERT(rs->rs_nlocks < RS_MAX_LOCKS);
 
-        idx = rs->rs_nlocks++;
-        rs->rs_locks[idx] = *lock;
-        rs->rs_modes[idx] = mode;
-        rs->rs_difficult = 1;
-        rs->rs_no_ack = !!no_ack;
+        if (req->rq_export->exp_disconnected) {
+                ldlm_lock_decref(lock, mode);
+        } else {
+                idx = rs->rs_nlocks++;
+                rs->rs_locks[idx] = *lock;
+                rs->rs_modes[idx] = mode;
+                rs->rs_difficult = 1;
+                rs->rs_no_ack = !!no_ack;
+        }
 }
 
 #ifdef __KERNEL__
@@ -873,22 +871,16 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
         if (array->paa_reqs_count[index] > 0) {
                 /* latest rpcs will have the latest deadlines in the list,
                  * so search backward. */
-                list_for_each_entry_reverse(rq, &array->paa_reqs_array[index], 
+                list_for_each_entry_reverse(rq, &array->paa_reqs_array[index],
                                             rq_timed_list) {
                         if (req->rq_deadline >= rq->rq_deadline) {
-                                list_add(&req->rq_timed_list, 
+                                list_add(&req->rq_timed_list,
                                          &rq->rq_timed_list);
                                 break;
                         }
                 }
-
-                /* AT array is corrupted? */
-                LASSERT(!list_empty(&req->rq_timed_list));
-        } else {
-                /* Add the request at the head of the list */
-                list_add(&req->rq_timed_list, &array->paa_reqs_array[index]);
         }
-        
+
         /* Add the request at the head of the list */
         if (list_empty(&req->rq_timed_list))
                 list_add(&req->rq_timed_list, &array->paa_reqs_array[index]);
@@ -1082,7 +1074,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
         count = array->paa_count;
         while (count > 0) {
                 count -= array->paa_reqs_count[index];
-                list_for_each_entry_safe(rq, n, &array->paa_reqs_array[index], 
+                list_for_each_entry_safe(rq, n, &array->paa_reqs_array[index],
                                          rq_timed_list) {
                         if (rq->rq_deadline <= now + at_early_margin) {
                                 list_move(&rq->rq_timed_list, &work_list);
@@ -1383,7 +1375,7 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
                 break;
         }
 
-        CDEBUG(D_NET, "got req "LPD64"\n", req->rq_xid);
+        CDEBUG(D_NET, "got req "LPU64"\n", req->rq_xid);
 
         req->rq_export = class_conn2export(
                 lustre_msg_get_handle(req->rq_reqmsg));
@@ -1692,8 +1684,7 @@ ptlrpc_handle_rs (struct ptlrpc_reply_state *rs)
                 CWARN("All locks stolen from rs %p x"LPD64".t"LPD64
                       " o%d NID %s\n",
                       rs,
-                      rs->rs_xid, rs->rs_transno,
-                      lustre_msg_get_opc(rs->rs_msg),
+                      rs->rs_xid, rs->rs_transno, rs->rs_opc,
                       libcfs_nid2str(exp->exp_connection->c_peer.nid));
         }
 
@@ -2295,6 +2286,7 @@ int ptlrpc_hr_init(void)
         int n_cpus = num_online_cpus();
         struct ptlrpc_hr_service *hr;
         int size;
+        int rc;
         ENTRY;
 
         LASSERT(ptlrpc_hr == NULL);
@@ -2315,7 +2307,12 @@ int ptlrpc_hr_init(void)
         hr->hr_size = size;
         ptlrpc_hr = hr;
 
-        RETURN(ptlrpc_start_hr_threads(hr));
+        rc = ptlrpc_start_hr_threads(hr);
+        if (rc) {
+                OBD_FREE(hr, hr->hr_size);
+                ptlrpc_hr = NULL;
+        }
+        RETURN(rc);
 }
 
 void ptlrpc_hr_fini(void)

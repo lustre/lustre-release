@@ -278,6 +278,10 @@ int loop_setup(struct mkfs_opts *mop)
                         snprintf(cmd, cmdsz, "losetup %s %s", l_device,
                                  mop->mo_device);
                         ret = run_command(cmd, cmdsz);
+                        if (ret == 256)
+                                /* someone else picked up this loop device
+                                 * behind our back */
+                                continue;
                         if (ret) {
                                 fprintf(stderr, "%s: error %d on losetup: %s\n",
                                         progname, ret, strerror(ret));
@@ -1236,7 +1240,7 @@ static char *convert_hostnames(char *s1)
                 sep = *s2;
                 *s2 = '\0';
                 nid = libcfs_str2nid(s1);
-                
+
                 if (nid == LNET_NID_ANY) {
                         fprintf(stderr, "%s: Can't parse NID '%s'\n", progname, s1);
                         free(converted);
@@ -1251,7 +1255,7 @@ static char *convert_hostnames(char *s1)
                         free(converted);
                         return NULL;
                 }
-                                        
+
                 c += snprintf(c, left, "%s%c", libcfs_nid2str(nid), sep);
                 left = converted + MAXNIDSTR - c;
                 s1 = s2 + 1;
@@ -1501,6 +1505,10 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 fprintf(stderr, "Bad argument: %s\n", argv[optind]);
                 return EINVAL;
         }
+
+        /* single argument: <device> */
+        if (argc == 2)
+                ++print_only;
 
         return 0;
 }

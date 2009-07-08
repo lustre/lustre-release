@@ -14,7 +14,6 @@ export NAME=${NAME:-local}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-ERROR=
 RUNTESTS_SRC=${RUNTESTS_SRC:-"/etc /bin"}
 [ "$COUNT" ] || COUNT=1000
 [ "$SLOW" = "no" ] && COUNT=100
@@ -64,31 +63,33 @@ mkdir $DST || error "can't mkdir $DST" 10
 
 # ok, that hopefully worked, so let's do a little more, with files that
 # haven't changed in the last day (hopefully they don't change during test)
-FILES=`find $RUNTESTS_SRC -type f -mtime +1 | head -n $COUNT`
-[ -z "$FILES" ] && error "No unchanged files - is $RUNTESTS_SRC a new dir?"
+FILES=$TMP/runtests.files
+# print0 is to use "NUL" instead of newline as filename terminator, bug 19702 
+find $RUNTESTS_SRC -type f -mtime +1 -print0 | head -n $COUNT > $FILES
+[ -s "$FILES" ] || error "$RUNTESTS_SRC contains only files modifed less than 2 days ago"
 
 log "copying files from $RUNTESTS_SRC to $DST$RUNTESTS_SRC at `date`"
-tar cf - $FILES | tar xvf - -C $DST > /dev/null || error "copying $RUNTESTS_SRC" 11
+tar cf - --null --files-from $FILES | tar xvf - -C $DST > /dev/null || error "copying $RUNTESTS_SRC" 11
 
 log "comparing newly copied files at `date`"
-for f in $FILES; do
-	[ $V ] && log "verifying $DST/$f"
-	diff -q $f $DST/$f || ERROR=11
-done
 
-[ "$ERROR" ] && error "old and new files are different" $ERROR
+cat $FILES | tr "\0" "\n" | ( rc=0; while read f; do
+	[ $V ] && log "verifying $DST/$f"
+	diff -q "$f" "$DST/$f" || rc=11
+done
+[ "$rc" = 0 ] || error_exit "old and new files are different: rc=$rc" ) 
+
 log "finished at `date` ($(($(date +%s) - START)))"
 
 stopall || exit 19
 setupall || exit 20
 
 log "comparing previously copied files"
-for f in $FILES; do
-	[ $V ] && log "verifying $DST/$f"
-	diff -q $f $DST/$f || ERROR=22
+cat $FILES | tr "\0" "\n" | ( rc=0; while read f; do
+        [ $V ] && log "verifying $DST/$f"
+        diff -q "$f" "$DST/$f" || rc=22
 done
-
-[ "$ERROR" ] && error "old and new files are different on second diff" $ERROR
+[ "$rc" = 0 ] || error_exit "old and new files are different: rc=$rc" )
 
 stopall || exit 21
 setupall || exit 22
@@ -122,4 +123,5 @@ if [ `expr $NOWUSED - $USED` -gt 1024 ]; then
 	echo "Space not all freed: now ${NOWUSED}kB, was ${USED}kB." 1>&2
 fi
 
+rm -f $FILES
 check_and_cleanup_lustre

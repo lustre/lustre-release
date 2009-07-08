@@ -60,7 +60,6 @@ else
         mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES $TESTDIR_SINGLE 'f%%d' --ignore
 
         log "===== $0 ### 1 NODE CREATE ###"
-        echo "Running creates on 1 node(s)."
 
         COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --create --time ${TIME_PERIOD}
                     --nfiles $NUM_FILES --dir ${TESTDIR_SINGLE} --filefmt 'f%%d'"
@@ -68,8 +67,8 @@ else
         mpi_run -np 1 -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
         if [ ${PIPESTATUS[0]} != 0 ]; then
-        [ -f $LOG ] && cat $LOG
-            error "mpirun ... mdsrate ... failed, aborting"
+            [ -f $LOG ] && sed -e "s/^/log: /" $LOG
+            error "mdsrate create for a single client failed, aborting"
         fi
     fi
 
@@ -77,16 +76,20 @@ else
         echo "NO Test for unlinks for a single client."
     else
         log "===== $0 ### 1 NODE UNLINK ###"
-        echo "Running unlinks on 1 node(s)."
 
-        COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --unlink --time ${TIME_PERIOD}
+        if [ -f "$LOG" ]; then
+            CREATED=$(awk '/total:/ { print $7 }' $LOG)
+           [ $CREATED -gt 0 ] && NUM_FILES=$CREATED
+        fi
+
+        COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --unlink
                      --nfiles ${NUM_FILES} --dir ${TESTDIR_SINGLE} --filefmt 'f%%d'"
         echo "+ ${COMMAND}"
         mpi_run -np 1 -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
         if [ ${PIPESTATUS[0]} != 0 ]; then
-        [ -f $LOG ] && cat $LOG
-            error "mpirun ... mdsrate ... failed, aborting"
+            [ -f $LOG ] && sed -e "s/^/log: /" $LOG
+            error "mdsrate unlinks for a single client failed, aborting"
         fi
     fi
 fi
@@ -104,8 +107,7 @@ else
     else
         mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES $TESTDIR_MULTI 'f%%d' --ignore
 
-        log "===== $0 ### $NUM_CLIENTS NODES CREATE ###"
-        echo "Running creates on ${NUM_CLIENTS} node(s) with $THREADS_PER_CLIENT threads per client."
+        log "===== $0 ### $NUM_CLIENTS NODES CREATE with $THREADS_PER_CLIENT threads per client ###"
 
         COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --create --time ${TIME_PERIOD}
                     --nfiles $NUM_FILES --dir ${TESTDIR_MULTI} --filefmt 'f%%d'"
@@ -113,25 +115,29 @@ else
         mpi_run -np $((NUM_CLIENTS * THREADS_PER_CLIENT)) -machinefile ${MACHINEFILE} \
             ${COMMAND} | tee ${LOG}
         if [ ${PIPESTATUS[0]} != 0 ]; then
-            [ -f $LOG ] && cat $LOG
-            error "mpirun ... mdsrate ... failed, aborting"
+            [ -f $LOG ] && sed -e "s/^/log: /" $LOG
+            error "mdsrate create on multiple nodes failed, aborting"
         fi
     fi
 
     if [ -n "$NOUNLINK" ]; then
         echo "NO Test for unlinks multiple nodes."
     else
-        log "===== $0 ### $NUM_CLIENTS NODES UNLINK ###"
-        echo "Running unlinks on ${NUM_CLIENTS} node(s) with $THREADS_PER_CLIENT threads per client."
+        log "===== $0 ### $NUM_CLIENTS NODES UNLINK with $THREADS_PER_CLIENT threads per client ###"
 
-        COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --unlink --time ${TIME_PERIOD}
+        if [ -f "$LOG" ]; then
+            CREATED=$(awk '/total:/ { print $7 }' $LOG)
+            [ $CREATED -gt 0 ] && NUM_FILES=$CREATED
+        fi
+
+        COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --unlink
                       --nfiles ${NUM_FILES} --dir ${TESTDIR_MULTI} --filefmt 'f%%d'"
         echo "+ ${COMMAND}"
         mpi_run -np $((NUM_CLIENTS * THREADS_PER_CLIENT)) -machinefile ${MACHINEFILE} \
             ${COMMAND} | tee ${LOG}
         if [ ${PIPESTATUS[0]} != 0 ]; then
-            [ -f $LOG ] && cat $LOG
-            error "mpirun ... mdsrate ... failed, aborting"
+            [ -f $LOG ] && sed -e "s/^/log: /" $LOG
+            error "mdsrate unlinks multiple nodes failed, aborting"
         fi
     fi
 fi

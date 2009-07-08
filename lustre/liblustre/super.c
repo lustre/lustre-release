@@ -803,11 +803,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 if (rc)
                         RETURN(rc);
 
-                if (op_data.op_ioepoch)
-                        CDEBUG(D_INODE, "Epoch "LPU64" opened on "DFID" for "
-                               "truncate\n", op_data.op_ioepoch,
-                               PFID(&llu_i2info(inode)->lli_fid));
-
+                llu_ioepoch_open(llu_i2info(inode), op_data.op_ioepoch);
                 if (!lsm || !S_ISREG(st->st_mode)) {
                         CDEBUG(D_INODE, "no lsm: not setting attrs on OST\n");
                         GOTO(out, rc);
@@ -1713,12 +1709,9 @@ static int llu_lov_setstripe_ea_info(struct inode *ino, int flags,
 {
         struct llu_sb_info *sbi = llu_i2sbi(ino);
         struct llu_inode_info *lli = llu_i2info(ino);
-        struct llu_inode_info *lli2 = NULL;
-        struct lov_stripe_md *lsm;
         struct lookup_intent oit = {.it_op = IT_OPEN, .it_flags = flags};
         struct ldlm_enqueue_info einfo = { LDLM_IBITS, LCK_CR,
                 llu_md_blocking_ast, ldlm_completion_ast, NULL, NULL, NULL };
-
         struct ptlrpc_request *req = NULL;
         struct lustre_md md;
         struct md_op_data data = {{ 0 }};
@@ -1726,28 +1719,14 @@ static int llu_lov_setstripe_ea_info(struct inode *ino, int flags,
         int rc = 0;
         ENTRY;
 
-        lsm = lli->lli_smd;
-        if (lsm) {
+        if (lli->lli_smd) {
                 CDEBUG(D_IOCTL, "stripe already exists for ino "DFID"\n",
                        PFID(&lli->lli_fid));
                 return -EEXIST;
         }
 
-        OBD_ALLOC(lli2, sizeof(struct llu_inode_info));
-        if (!lli2)
-                return -ENOMEM;
-
-        memcpy(lli2, lli, sizeof(struct llu_inode_info));
-        lli2->lli_open_count = 0;
-        lli2->lli_it = NULL;
-        lli2->lli_file_data = NULL;
-        lli2->lli_smd = NULL;
-        lli2->lli_symlink_name = NULL;
-        ino->i_private = lli2;
-
         llu_prep_md_op_data(&data, NULL, ino, NULL, 0, O_RDWR,
                             LUSTRE_OPC_ANY);
-
         rc = md_enqueue(sbi->ll_md_exp, &einfo, &oit, &data,
                         &lockh, lum, lum_size, NULL, LDLM_FL_INTENT_ONLY);
         if (rc)
@@ -1771,28 +1750,20 @@ static int llu_lov_setstripe_ea_info(struct inode *ino, int flags,
         if (rc)
                 GOTO(out, rc);
 
-        lli->lli_smd = lli2->lli_smd;
-        lli2->lli_smd = NULL;
-
-        llu_local_open(lli2, &oit);
-
+        llu_update_inode(ino, &md);
+        llu_local_open(lli, &oit);
         /* release intent */
         if (lustre_handle_is_used(&lockh))
                 ldlm_lock_decref(&lockh, LCK_CR);
-
         ptlrpc_req_finished(req);
         req = NULL;
-
         rc = llu_file_release(ino);
- out:
-        ino->i_private = lli;
-        if (!rc)
-                llu_update_inode(ino, &md);
-        if (lli2)
-                OBD_FREE(lli2, sizeof(struct llu_inode_info));
+        EXIT;
+
+out:
         if (req != NULL)
                 ptlrpc_req_finished(req);
-        RETURN(rc);
+        return rc;
 }
 
 static int llu_lov_file_setstripe(struct inode *ino, unsigned long arg)
@@ -2018,7 +1989,7 @@ llu_fsswop_mount(const char *source,
 
         ocd.ocd_connect_flags = OBD_CONNECT_IBITS | OBD_CONNECT_VERSION |
                                 OBD_CONNECT_FID | OBD_CONNECT_AT |
-                                OBD_CONNECT_VBR;
+                                OBD_CONNECT_VBR | OBD_CONNECT_SOM;
 #ifdef LIBLUSTRE_POSIX_ACL
         ocd.ocd_connect_flags |= OBD_CONNECT_ACL;
 #endif
@@ -2054,7 +2025,9 @@ llu_fsswop_mount(const char *source,
 
         ocd.ocd_connect_flags = OBD_CONNECT_SRVLOCK | OBD_CONNECT_REQPORTAL |
                                 OBD_CONNECT_VERSION | OBD_CONNECT_TRUNCLOCK |
-                                OBD_CONNECT_FID | OBD_CONNECT_AT;
+                                OBD_CONNECT_FID | OBD_CONNECT_AT |
+                                OBD_CONNECT_SOM;
+
         ocd.ocd_version = LUSTRE_VERSION_CODE;
         err = obd_connect(NULL, &sbi->ll_dt_exp, obd, &sbi->ll_sb_uuid, &ocd, NULL);
         if (err) {

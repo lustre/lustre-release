@@ -70,7 +70,7 @@
 
 struct obd_statfs;
 
-/* 
+/*
  * The ioctl naming rules:
  * LL_*     - works on the currently opened filehandle instead of parent dir
  * *_OBD_*  - gets data for both OSC or MDC (LOV, LMV indirectly)
@@ -218,7 +218,7 @@ static inline void obd_str2uuid(struct obd_uuid *uuid, const char *tmp)
 }
 
 /* For printf's only, make sure uuid is terminated */
-static inline char *obd_uuid2str(struct obd_uuid *uuid) 
+static inline char *obd_uuid2str(struct obd_uuid *uuid)
 {
         if (uuid->uuid[sizeof(*uuid) - 1] != '\0') {
                 /* Obviously not safe, but for printfs, no real harm done...
@@ -230,6 +230,55 @@ static inline char *obd_uuid2str(struct obd_uuid *uuid)
         }
         return (char *)(uuid->uuid);
 }
+
+
+/**
+ * File IDentifier.
+ *
+ * FID is a cluster-wide unique identifier of a file or an object (stripe).
+ * FIDs are never reused.
+ */
+struct lu_fid {
+        /**
+         * FID sequence. Sequence is a unit of migration: all files (objects)
+         * with FIDs from a given sequence are stored on the same server.
+         * Lustre should support 2^64 objects, so even if each sequence
+         * has only a single object we can still enumerate 2^64 objects.
+         */
+        __u64 f_seq;
+        /** FID number within sequence. */
+        __u32 f_oid;
+        /**
+         * FID version, used to distinguish different versions (in the sense
+         * of snapshots, etc.) of the same file system object. Not currently
+         * used.
+         */
+        __u32 f_ver;
+};
+
+/* Userspace should treat lu_fid as opaque, and only use the following methods
+   to print or parse them.  Other functions (e.g. compare, swab) could be moved
+   here from lustre_idl.h if needed. */
+typedef struct lu_fid lustre_fid;
+
+/* printf display format
+   e.g. printf("file FID is "DFID"\n", PFID(fid)); */
+#define DFID "["LPX64":0x%x:0x%x]"
+#define PFID(fid)     \
+        (fid)->f_seq, \
+        (fid)->f_oid, \
+        (fid)->f_ver
+
+/* scanf input parse format -- strip '[' first.
+   e.g. sscanf(fidstr, SFID, RFID(&fid)); */
+#define SFID "0x%llx:0x%x:0x%x"
+#define RFID(fid)     \
+        &((fid)->f_seq), \
+        &((fid)->f_oid), \
+        &((fid)->f_ver)
+
+
+/********* Quotas **********/
 
 /* these must be explicitly translated into linux Q_* in ll_dir_ioctl */
 #define LUSTRE_Q_QUOTAON    0x800002     /* turn quotas on */
@@ -243,6 +292,8 @@ static inline char *obd_uuid2str(struct obd_uuid *uuid)
 #define LUSTRE_Q_FINVALIDATE 0x80000c     /* invalidate filter quota data */
 
 #define UGQUOTA 2       /* set both USRQUOTA and GRPQUOTA */
+#define IMMQUOTA 0x4    /* set immutable quota flag, cannot be turned on/off
+                         * on-fly. temporary used by SOM */
 
 struct if_quotacheck {
         char                    obd_type[16];
@@ -357,10 +408,16 @@ struct if_quotactl {
         struct obd_uuid         obd_uuid;
 };
 
+struct ioc_changelog_clear {
+        __u32 icc_mdtindex;
+        __u32 icc_id;
+        __u64 icc_recno;
+};
+
 #ifndef offsetof
 # define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
 #endif
 
-#define mdd_dot_lustre_name ".lustre"
+#define dot_lustre_name ".lustre"
 
 #endif /* _LUSTRE_USER_H */

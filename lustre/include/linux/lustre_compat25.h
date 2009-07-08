@@ -253,22 +253,27 @@ static inline int mapping_has_pages(struct address_space *mapping)
 #define KIOBUF_GET_BLOCKS(k) ((k)->blocks)
 #endif
 
+#ifdef HAVE_SECURITY_PLUG
+#define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
+                vfs_symlink(dir, dentry, mnt, path, mode)
+#else
+#ifdef HAVE_4ARGS_VFS_SYMLINK
+#define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
+                vfs_symlink(dir, dentry, path, mode)
+#else
+#define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
+                       vfs_symlink(dir, dentry, path)
+#endif
+#endif
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7))
 #define ll_set_dflags(dentry, flags) do { dentry->d_vfs_flags |= flags; } while(0)
-#define ll_vfs_symlink(dir, dentry, path, mode) vfs_symlink(dir, dentry, path)
 #else
 #define ll_set_dflags(dentry, flags) do { \
                 spin_lock(&dentry->d_lock); \
                 dentry->d_flags |= flags; \
                 spin_unlock(&dentry->d_lock); \
         } while(0)
-#ifdef HAVE_SECURITY_PLUG
-#define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
-                vfs_symlink(dir, dentry, mnt, path, mode)
-#else
-#define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
-                vfs_symlink(dir, dentry, path, mode)
-#endif
 #endif
 
 #ifndef container_of
@@ -461,12 +466,12 @@ static inline int ll_crypto_hmac(struct ll_crypto_hash *tfm,
         return crypto_hash_digest(&desc, sg, size, result);
 }
 static inline
-unsigned int crypto_tfm_alg_max_keysize(struct crypto_blkcipher *tfm)
+unsigned int ll_crypto_tfm_alg_max_keysize(struct crypto_blkcipher *tfm)
 {
         return crypto_blkcipher_tfm(tfm)->__crt_alg->cra_blkcipher.max_keysize;
 }
 static inline
-unsigned int crypto_tfm_alg_min_keysize(struct crypto_blkcipher *tfm)
+unsigned int ll_crypto_tfm_alg_min_keysize(struct crypto_blkcipher *tfm)
 {
         return crypto_blkcipher_tfm(tfm)->__crt_alg->cra_blkcipher.min_keysize;
 }
@@ -481,15 +486,19 @@ unsigned int crypto_tfm_alg_min_keysize(struct crypto_blkcipher *tfm)
 #include <linux/scatterlist.h>
 #define ll_crypto_hash          crypto_tfm
 #define ll_crypto_cipher        crypto_tfm
+#ifndef HAVE_STRUCT_HASH_DESC
 struct hash_desc {
         struct ll_crypto_hash *tfm;
         u32                    flags;
 };
+#endif
+#ifndef HAVE_STRUCT_BLKCIPHER_DESC
 struct blkcipher_desc {
         struct ll_crypto_cipher *tfm;
         void                    *info;
         u32                      flags;
 };
+#endif
 #define ll_crypto_blkcipher_setkey(tfm, key, keylen) \
         crypto_cipher_setkey(tfm, key, keylen)
 #define ll_crypto_blkcipher_set_iv(tfm, src, len) \
@@ -594,7 +603,13 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
 #define ll_crypto_hash_blocksize(tfm)   crypto_tfm_alg_blocksize(tfm)
 #define ll_crypto_free_hash(tfm)        crypto_free_tfm(tfm)
 #define ll_crypto_free_blkcipher(tfm)   crypto_free_tfm(tfm)
+#define ll_crypto_tfm_alg_min_keysize	crypto_tfm_alg_min_keysize
+#define ll_crypto_tfm_alg_max_keysize	crypto_tfm_alg_max_keysize
 #endif /* HAVE_ASYNC_BLOCK_CIPHER */
+
+#ifndef HAVE_SYNCHRONIZE_RCU
+#define synchronize_rcu() synchronize_kernel()
+#endif
 
 #ifdef HAVE_SECURITY_PLUG
 #define ll_remove_suid(inode,mnt)               remove_suid(inode,mnt)

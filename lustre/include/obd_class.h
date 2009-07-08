@@ -101,6 +101,7 @@ int obd_zombie_impexp_init(void);
 void obd_zombie_impexp_stop(void);
 void obd_zombie_impexp_cull(void);
 void obd_zombie_barrier(void);
+void obd_exports_barrier(struct obd_device *obd);
 
 /* obd_config.c */
 int class_process_config(struct lustre_cfg *lcfg);
@@ -114,6 +115,7 @@ struct obd_device *class_incref(struct obd_device *obd,
                                 const char *scope, const void *source);
 void class_decref(struct obd_device *obd,
                   const char *scope, const void *source);
+void dump_exports(struct obd_device *obd);
 
 /*obdecho*/
 #ifdef LPROCFS
@@ -208,9 +210,9 @@ int class_disconnect(struct obd_export *exp);
 void class_fail_export(struct obd_export *exp);
 void class_disconnect_exports(struct obd_device *obddev);
 int class_manual_cleanup(struct obd_device *obd);
-int class_disconnect_stale_exports(struct obd_device *,
-                                   int (*test_export)(struct obd_export *),
-                                   enum obd_option flags);
+void class_disconnect_stale_exports(struct obd_device *,
+                                    int (*test_export)(struct obd_export *),
+                                    enum obd_option flags);
   
 static inline enum obd_option exp_flags_from_obd(struct obd_device *obd)
 {
@@ -541,6 +543,7 @@ obd_process_config(struct obd_device *obd, int datalen, void *data)
 
         OBD_CHECK_DEV(obd);
 
+        obd->obd_process_conf = 1;
         ldt = obd->obd_type->typ_lu;
         d = obd->obd_lu_dev;
         if (ldt != NULL && d != NULL) {
@@ -556,6 +559,7 @@ obd_process_config(struct obd_device *obd, int datalen, void *data)
                 rc = OBP(obd, process_config)(obd, datalen, data);
         }
         OBD_COUNTER_INCREMENT(obd, process_config);
+        obd->obd_process_conf = 0;
 
         RETURN(rc);
 }
@@ -670,6 +674,21 @@ static inline int obd_precreate(struct obd_export *exp)
         OBD_COUNTER_INCREMENT(exp->exp_obd, precreate);
 
         rc = OBP(exp->exp_obd, precreate)(exp);
+        RETURN(rc);
+}
+
+static inline int obd_create_async(struct obd_export *exp,
+                                   struct obd_info *oinfo,
+                                   struct lov_stripe_md **ea,
+                                   struct obd_trans_info *oti)
+{
+        int rc;
+        ENTRY;
+
+        EXP_CHECK_DT_OP(exp, create_async);
+        EXP_COUNTER_INCREMENT(exp, create_async);
+
+        rc = OBP(exp->exp_obd, create_async)(exp, oinfo, ea, oti);
         RETURN(rc);
 }
 
@@ -989,6 +1008,26 @@ static inline int obd_pool_rem(struct obd_device *obd, char *poolname, char *ost
 
         rc = OBP(obd, pool_rem)(obd, poolname, ostname);
         RETURN(rc);
+}
+
+static inline void obd_getref(struct obd_device *obd)
+{
+        ENTRY;
+        if (OBT(obd) && OBP(obd, getref)) {
+                OBD_COUNTER_INCREMENT(obd, getref);
+                OBP(obd, getref)(obd);
+        }
+        EXIT;
+}
+
+static inline void obd_putref(struct obd_device *obd)
+{
+        ENTRY;
+        if (OBT(obd) && OBP(obd, putref)) {
+                OBD_COUNTER_INCREMENT(obd, putref);
+                OBP(obd, putref)(obd);
+        }
+        EXIT;
 }
 
 static inline int obd_init_export(struct obd_export *exp)
@@ -1474,7 +1513,8 @@ static inline int obd_notify_observer(struct obd_device *observer,
          */
         onu = &observer->obd_upcall;
         if (onu->onu_upcall != NULL)
-                rc2 = onu->onu_upcall(observer, observed, ev, onu->onu_owner);
+                rc2 = onu->onu_upcall(observer, observed, ev,
+                                      onu->onu_owner, NULL);
         else
                 rc2 = 0;
 

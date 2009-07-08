@@ -739,7 +739,7 @@ static const char *obd_connect_names[] = {
         "mds_capability",
         "oss_capability",
         "early_lock_cancel",
-        "size_on_mds",
+        "som",
         "adaptive_timeouts",
         "lru_resize",
         "mds_mds_connection",
@@ -1055,8 +1055,8 @@ static void lprocfs_free_client_stats(struct nid_stat *client_stat)
                client_stat->nid_proc, client_stat->nid_stats,
                client_stat->nid_brw_stats);
 
-        LASSERTF(client_stat->nid_exp_ref_count == 0, "count %d\n",
-                 client_stat->nid_exp_ref_count);
+        LASSERTF(atomic_read(&client_stat->nid_exp_ref_count) == 0,
+                 "count %d\n", atomic_read(&client_stat->nid_exp_ref_count));
 
         hlist_del_init(&client_stat->nid_hash);
 
@@ -1378,6 +1378,7 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, preallocate);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, precreate);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, create);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, create_async);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, destroy);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, setattr);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, setattr_async);
@@ -1417,6 +1418,8 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_rem);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_add);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_del);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, getref);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, putref);
 }
 
 int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
@@ -1674,10 +1677,10 @@ void lprocfs_nid_stats_clear_write_cb(void *obj, void *data)
         ENTRY;
         /* object has only hash + iterate_all references.
          * add/delete blocked by hash bucket lock */
-        CDEBUG(D_INFO,"refcnt %d\n", stat->nid_exp_ref_count);
-        if (stat->nid_exp_ref_count == 2) {
+        CDEBUG(D_INFO,"refcnt %d\n", atomic_read(&stat->nid_exp_ref_count));
+        if (atomic_read(&stat->nid_exp_ref_count) == 2) {
                 hlist_del_init(&stat->nid_hash);
-                stat->nid_exp_ref_count--;
+                nidstat_putref(stat);
                 spin_lock(&stat->nid_obd->obd_nid_lock);
                 list_move(&stat->nid_list, data);
                 spin_unlock(&stat->nid_obd->obd_nid_lock);
@@ -1720,7 +1723,6 @@ EXPORT_SYMBOL(lprocfs_nid_stats_clear_write);
 int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
 {
         struct nid_stat *new_stat, *old_stat;
-        struct nid_stat_uuid *new_ns_uuid;
         struct obd_device *obd = NULL;
         cfs_proc_dir_entry_t *entry;
         int rc = 0;
@@ -1746,50 +1748,29 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
         if (new_stat == NULL)
                 RETURN(-ENOMEM);
 
-        OBD_ALLOC_PTR(new_ns_uuid);
-        if (new_ns_uuid == NULL) {
-                OBD_FREE_PTR(new_stat);
-                RETURN(-ENOMEM);
-        }
-        CFS_INIT_LIST_HEAD(&new_ns_uuid->ns_uuid_list);
-        strncpy(new_ns_uuid->ns_uuid.uuid, exp->exp_client_uuid.uuid,
-                sizeof(struct obd_uuid));
-
-        CFS_INIT_LIST_HEAD(&new_stat->nid_uuid_list);
         new_stat->nid               = *nid;
         new_stat->nid_obd           = exp->exp_obd;
-        new_stat->nid_exp_ref_count = 1; /* live in hash after destroy export */
+        atomic_set(&new_stat->nid_exp_ref_count, 0);
 
         old_stat = lustre_hash_findadd_unique(obd->obd_nid_stats_hash,
                                               nid, &new_stat->nid_hash);
         CDEBUG(D_INFO, "Found stats %p for nid %s - ref %d\n",
-               old_stat, libcfs_nid2str(*nid), new_stat->nid_exp_ref_count);
+               old_stat, libcfs_nid2str(*nid),
+               atomic_read(&new_stat->nid_exp_ref_count));
 
         /* Return -EALREADY here so that we know that the /proc
          * entry already has been created */
         if (old_stat != new_stat) {
-                struct nid_stat_uuid *tmp_uuid;
-                int found = 0;
-
-                exp->exp_nid_stats = old_stat;
-                /* We need to decrement the refcount if the uuid was
-                 * already in our list */
                 spin_lock(&obd->obd_nid_lock);
-                list_for_each_entry(tmp_uuid, &old_stat->nid_uuid_list,
-                                    ns_uuid_list) {
-                        if (tmp_uuid && obd_uuid_equals(&tmp_uuid->ns_uuid,
-                                                        &exp->exp_client_uuid)){
-                                found = 1;
-                                --old_stat->nid_exp_ref_count;
-                                break;
-                        }
+                if (exp->exp_nid_stats != old_stat) {
+                        if (exp->exp_nid_stats)
+                                nidstat_putref(exp->exp_nid_stats);
+                        exp->exp_nid_stats = old_stat;
+                } else {
+                        /* lustre_hash_findadd_unique() has added
+                         * old_stat's refcount */
+                        nidstat_putref(old_stat);
                 }
-
-                if (!found)
-                        list_add(&new_ns_uuid->ns_uuid_list,
-                                 &old_stat->nid_uuid_list);
-                else
-                        OBD_FREE_PTR(new_ns_uuid);
 
                 spin_unlock(&obd->obd_nid_lock);
 
@@ -1804,11 +1785,6 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
                        libcfs_nid2str(*nid));
                 GOTO(destroy_new_ns, rc = -ENOMEM);
         }
-
-        /* Add in uuid to our nid_stats list */
-        spin_lock(&obd->obd_nid_lock);
-        list_add(&new_ns_uuid->ns_uuid_list, &new_stat->nid_uuid_list);
-        spin_unlock(&obd->obd_nid_lock);
 
         entry = lprocfs_add_simple(new_stat->nid_proc, "uuid",
                                    lprocfs_exp_rd_uuid, NULL, new_stat, NULL);
@@ -1826,6 +1802,9 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
                 GOTO(destroy_new_ns, rc);
         }
 
+        if (exp->exp_nid_stats)
+                nidstat_putref(exp->exp_nid_stats);
+        nidstat_getref(new_stat);
         exp->exp_nid_stats = new_stat;
         *newnid = 1;
         /* protect competitive add to list, not need locking on destroy */
@@ -1839,7 +1818,6 @@ destroy_new_ns:
         if (new_stat->nid_proc != NULL)
                 lprocfs_remove(&new_stat->nid_proc);
         lustre_hash_del(obd->obd_nid_stats_hash, nid, &new_stat->nid_hash);
-        OBD_FREE_PTR(new_ns_uuid);
 
 destroy_new:
         OBD_FREE_PTR(new_stat);
@@ -1849,32 +1827,11 @@ destroy_new:
 int lprocfs_exp_cleanup(struct obd_export *exp)
 {
         struct nid_stat *stat = exp->exp_nid_stats;
-        struct nid_stat_uuid *cursor, *tmp;
-        int found = 0;
 
         if(!stat || !exp->exp_obd)
                 RETURN(0);
 
-        spin_lock(&exp->exp_obd->obd_nid_lock);
-        list_for_each_entry_safe(cursor, tmp,
-                                 &stat->nid_uuid_list,
-                                 ns_uuid_list) {
-                if (cursor && obd_uuid_equals(&cursor->ns_uuid,
-                                              &exp->exp_client_uuid)) {
-                        found = 1;
-                        list_del(&cursor->ns_uuid_list);
-                        OBD_FREE_PTR(cursor);
-                        --stat->nid_exp_ref_count;
-                        CDEBUG(D_INFO, "Put stat %p - %d\n", stat,
-                               stat->nid_exp_ref_count);
-                        break;
-                }
-        }
-        spin_unlock(&exp->exp_obd->obd_nid_lock);
-        if (!found)
-                CERROR("obd_export's client uuid %s are not found in its "
-                       "nid_stats list\n", exp->exp_client_uuid.uuid);
-
+        nidstat_putref(exp->exp_nid_stats);
         exp->exp_nid_stats = NULL;
         lprocfs_free_md_stats(exp->exp_obd);
 

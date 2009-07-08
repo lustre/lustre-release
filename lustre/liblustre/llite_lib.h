@@ -255,6 +255,7 @@ _SYSIO_OFF_T llu_iop_pos(struct inode *ino, _SYSIO_OFF_T off);
 int llu_vmtruncate(struct inode * inode, loff_t offset, obd_flag obd_flags);
 void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir);
+void llu_ioepoch_open(struct llu_inode_info *lli, __u64 ioepoch);
 
 /* rw.c */
 int llu_iop_read(struct inode *ino, struct ioctx *ioctxp);
@@ -327,15 +328,13 @@ static inline void inode_init_lvb(struct inode *inode, struct ost_lvb *lvb)
           sizeof(cfs_page_t) + \
           llap_cookie_size) * (x))
 
-#define LLU_IO_SESSION_SIZE(x)  \
-        (sizeof(struct llu_io_session) + (x) * 2 * sizeof(void *))
-
 struct llu_io_session {
         struct inode           *lis_inode;
         int                     lis_cmd;
         int                     lis_max_groups;
         int                     lis_ngroups;
-        struct llu_io_group    *lis_groups[0];
+        int                     lis_rc;
+        __u64                   lis_rwcount;
 };
 
 struct llu_io_group

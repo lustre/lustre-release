@@ -192,7 +192,7 @@ static inline struct obd_capa *alloc_capa(int site)
         if (unlikely(site != CAPA_SITE_CLIENT && site != CAPA_SITE_SERVER))
                 return ERR_PTR(-EINVAL);
 
-        OBD_SLAB_ALLOC(ocapa, capa_cachep, GFP_KERNEL, sizeof(*ocapa));
+        OBD_SLAB_ALLOC_PTR(ocapa, capa_cachep);
         if (unlikely(!ocapa))
                 return ERR_PTR(-ENOMEM);
 

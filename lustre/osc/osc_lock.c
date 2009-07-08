@@ -62,6 +62,7 @@ static const struct cl_lock_operations osc_lock_ops;
 static const struct cl_lock_operations osc_lock_lockless_ops;
 static void osc_lock_to_lockless(const struct lu_env *env,
                                  struct osc_lock *ols, int force);
+static int osc_lock_has_pages(struct osc_lock *olck);
 
 int osc_lock_is_lockless(const struct osc_lock *olck)
 {
@@ -242,6 +243,7 @@ static void osc_lock_build_policy(const struct lu_env *env,
         const struct cl_lock_descr *d = &lock->cll_descr;
 
         osc_index2policy(policy, d->cld_obj, d->cld_start, d->cld_end);
+        policy->l_extent.gid = d->cld_gid;
 }
 
 static int osc_enq2ldlm_flags(__u32 enqflags)
@@ -405,6 +407,7 @@ static void osc_lock_granted(const struct lu_env *env, struct osc_lock *olck,
                 descr->cld_mode  = osc_ldlm2cl_lock(dlmlock->l_granted_mode);
                 descr->cld_start = cl_index(descr->cld_obj, ext->start);
                 descr->cld_end   = cl_index(descr->cld_obj, ext->end);
+                descr->cld_gid   = ext->gid;
                 /*
                  * tell upper layers the extent of the lock that was actually
                  * granted
@@ -471,18 +474,14 @@ static void osc_lock_upcall0(const struct lu_env *env, struct osc_lock *olck)
  */
 static int osc_lock_upcall(void *cookie, int errcode)
 {
-        struct osc_lock      *olck  = cookie;
-        struct cl_lock_slice *slice = &olck->ols_cl;
-        struct cl_lock       *lock  = slice->cls_lock;
-        struct lu_env        *env;
-
-        int refcheck;
+        struct osc_lock         *olck  = cookie;
+        struct cl_lock_slice    *slice = &olck->ols_cl;
+        struct cl_lock          *lock  = slice->cls_lock;
+        struct lu_env           *env;
+        struct cl_env_nest       nest;
 
         ENTRY;
-        /*
-         * XXX environment should be created in ptlrpcd.
-         */
-        env = cl_env_get(&refcheck);
+        env = cl_env_nested_get(&nest);
         if (!IS_ERR(env)) {
                 int rc;
 
@@ -548,7 +547,7 @@ static int osc_lock_upcall(void *cookie, int errcode)
                 /* release cookie reference, acquired by osc_lock_enqueue() */
                 lu_ref_del(&lock->cll_reference, "upcall", lock);
                 cl_lock_put(env, lock);
-                cl_env_put(env, &refcheck);
+                cl_env_nested_put(&nest, env);
         } else
                 /* should never happen, similar to osc_ldlm_blocking_ast(). */
                 LBUG();
@@ -723,9 +722,10 @@ static int osc_ldlm_blocking_ast(struct ldlm_lock *dlmlock,
          * new environment has to be created to not corrupt outer context.
          */
         env = cl_env_nested_get(&nest);
-        if (!IS_ERR(env))
+        if (!IS_ERR(env)) {
                 result = osc_dlm_blocking_ast0(env, dlmlock, data, flag);
-        else {
+                cl_env_nested_put(&nest, env);
+        } else {
                 result = PTR_ERR(env);
                 /*
                  * XXX This should never happen, as cl_lock is
@@ -740,26 +740,23 @@ static int osc_ldlm_blocking_ast(struct ldlm_lock *dlmlock,
                 else
                         CERROR("BAST failed: %d\n", result);
         }
-        cl_env_nested_put(&nest, env);
         return result;
 }
 
 static int osc_ldlm_completion_ast(struct ldlm_lock *dlmlock,
                                    int flags, void *data)
 {
-        struct lu_env   *env;
-        void            *env_cookie;
-        struct osc_lock *olck;
-        struct cl_lock  *lock;
-        int refcheck;
+        struct cl_env_nest nest;
+        struct lu_env     *env;
+        struct osc_lock   *olck;
+        struct cl_lock    *lock;
         int result;
         int dlmrc;
 
         /* first, do dlm part of the work */
         dlmrc = ldlm_completion_ast_async(dlmlock, flags, data);
         /* then, notify cl_lock */
-        env_cookie = cl_env_reenter();
-        env = cl_env_get(&refcheck);
+        env = cl_env_nested_get(&nest);
         if (!IS_ERR(env)) {
                 olck = osc_ast_data_get(dlmlock);
                 if (olck != NULL) {
@@ -793,10 +790,9 @@ static int osc_ldlm_completion_ast(struct ldlm_lock *dlmlock,
                         result = 0;
                 } else
                         result = -ELDLM_NO_LOCK_DATA;
-                cl_env_put(env, &refcheck);
+                cl_env_nested_put(&nest, env);
         } else
                 result = PTR_ERR(env);
-        cl_env_reexit(env_cookie);
         return dlmrc ?: result;
 }
 
@@ -806,15 +802,15 @@ static int osc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data)
         struct osc_lock        *olck;
         struct cl_lock         *lock;
         struct cl_object       *obj;
+        struct cl_env_nest      nest;
         struct lu_env          *env;
         struct ost_lvb         *lvb;
         struct req_capsule     *cap;
         int                     result;
-        int                     refcheck;
 
         LASSERT(lustre_msg_get_opc(req->rq_reqmsg) == LDLM_GL_CALLBACK);
 
-        env = cl_env_get(&refcheck);
+        env = cl_env_nested_get(&nest);
         if (!IS_ERR(env)) {
                 /*
                  * osc_ast_data_get() has to go after environment is
@@ -847,7 +843,7 @@ static int osc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data)
                         lustre_pack_reply(req, 1, NULL, NULL);
                         result = -ELDLM_NO_LOCK_DATA;
                 }
-                cl_env_put(env, &refcheck);
+                cl_env_nested_put(&nest, env);
         } else
                 result = PTR_ERR(env);
         req->rq_status = result;
@@ -871,16 +867,14 @@ static unsigned long osc_lock_weigh(const struct lu_env *env,
  */
 static unsigned long osc_ldlm_weigh_ast(struct ldlm_lock *dlmlock)
 {
+        struct cl_env_nest       nest;
         struct lu_env           *env;
-        int                      refcheck;
-        void                    *cookie;
         struct osc_lock         *lock;
         struct cl_lock          *cll;
         unsigned long            weight;
         ENTRY;
 
         might_sleep();
-        cookie = cl_env_reenter();
         /*
          * osc_ldlm_weigh_ast has a complex context since it might be called
          * because of lock canceling, or from user's input. We have to make
@@ -888,12 +882,10 @@ static unsigned long osc_ldlm_weigh_ast(struct ldlm_lock *dlmlock)
          * the upper context because cl_lock_put don't modify environment
          * variables. But in case of ..
          */
-        env = cl_env_get(&refcheck);
-        if (IS_ERR(env)) {
+        env = cl_env_nested_get(&nest);
+        if (IS_ERR(env))
                 /* Mostly because lack of memory, tend to eliminate this lock*/
-                cl_env_reexit(cookie);
                 RETURN(0);
-        }
 
         LASSERT(dlmlock->l_resource->lr_type == LDLM_EXTENT);
         lock = osc_ast_data_get(dlmlock);
@@ -913,8 +905,7 @@ static unsigned long osc_ldlm_weigh_ast(struct ldlm_lock *dlmlock)
         EXIT;
 
 out:
-        cl_env_put(env, &refcheck);
-        cl_env_reexit(cookie);
+        cl_env_nested_put(&nest, env);
         return weight;
 }
 
@@ -1128,6 +1119,14 @@ static int osc_lock_enqueue_wait(const struct lu_env *env,
                         continue;
 
                 /* overlapped and living locks. */
+
+                /* We're not supposed to give up group lock. */
+                if (scan->cll_descr.cld_mode == CLM_GROUP) {
+                        LASSERT(descr->cld_mode != CLM_GROUP ||
+                                descr->cld_gid != scan->cll_descr.cld_gid);
+                        continue;
+                }
+
                 /* A tricky case for lockless pages:
                  * We need to cancel the compatible locks if we're enqueuing
                  * a lockless lock, for example:
@@ -1252,7 +1251,7 @@ static int osc_deadlock_is_possible(const struct lu_env *env,
  */
 static int osc_lock_enqueue(const struct lu_env *env,
                             const struct cl_lock_slice *slice,
-                            struct cl_io *_, __u32 enqflags)
+                            struct cl_io *unused, __u32 enqflags)
 {
         struct osc_lock          *ols     = cl2osc_lock(slice);
         struct cl_lock           *lock    = ols->ols_cl.cls_lock;
@@ -1362,7 +1361,6 @@ static int osc_lock_use(const struct lu_env *env,
                 lock = slice->cls_lock;
                 LASSERT(lock->cll_state == CLS_CACHED);
                 LASSERT(lock->cll_users > 0);
-                LASSERT(olck->ols_lock->l_flags & LDLM_FL_CBPENDING);
                 /* set a flag for osc_dlm_blocking_ast0() to signal the
                  * lock.*/
                 olck->ols_ast_wait = 1;
@@ -1384,8 +1382,10 @@ static int osc_lock_flush(struct osc_lock *ols, int discard)
                 cl_env_nested_put(&nest, env);
         } else
                 result = PTR_ERR(env);
-        if (result == 0)
+        if (result == 0) {
                 ols->ols_flush = 1;
+                LINVRNT(!osc_lock_has_pages(ols));
+        }
         return result;
 }
 
@@ -1498,7 +1498,10 @@ static int osc_lock_has_pages(struct osc_lock *olck)
         return result;
 }
 #else
-# define osc_lock_has_pages(olck) (0)
+static int osc_lock_has_pages(struct osc_lock *olck)
+{
+        return 0;
+}
 #endif /* INVARIANT_CHECK */
 
 static void osc_lock_delete(const struct lu_env *env,
@@ -1507,6 +1510,12 @@ static void osc_lock_delete(const struct lu_env *env,
         struct osc_lock *olck;
 
         olck = cl2osc_lock(slice);
+        if (olck->ols_glimpse) {
+                LASSERT(!olck->ols_hold);
+                LASSERT(!olck->ols_lock);
+                return;
+        }
+
         LINVRNT(osc_lock_invariant(olck));
         LINVRNT(!osc_lock_has_pages(olck));
 
@@ -1573,7 +1582,7 @@ static const struct cl_lock_operations osc_lock_ops = {
 
 static int osc_lock_lockless_enqueue(const struct lu_env *env,
                                      const struct cl_lock_slice *slice,
-                                     struct cl_io *_, __u32 enqflags)
+                                     struct cl_io *unused, __u32 enqflags)
 {
         LBUG();
         return 0;
@@ -1659,7 +1668,7 @@ static const struct cl_lock_operations osc_lock_lockless_ops = {
 
 int osc_lock_init(const struct lu_env *env,
                   struct cl_object *obj, struct cl_lock *lock,
-                  const struct cl_io *_)
+                  const struct cl_io *unused)
 {
         struct osc_lock *clk;
         int result;

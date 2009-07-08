@@ -180,8 +180,16 @@ static int osc_io_submit(const struct lu_env *env,
                                                                   osc->oo_oinfo,
                                                                   oap,
                                                                   OSC_FLAGS);
-                                if (result != 0)
-                                        break;
+                                /*
+                                 * bug 18881: we can't just break out here when
+                                 * error occurrs after cl_page_prep has been
+                                 * called against the page. The correct
+                                 * way is to call page's completion routine,
+                                 * as in osc_oap_interrupted.  For simplicity,
+                                 * we just force osc_set_async_flags_base() to
+                                 * not return error.
+                                 */
+                                LASSERT(result == 0);
                         }
                 } else {
                         LASSERT(result < 0);

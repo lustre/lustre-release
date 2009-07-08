@@ -164,6 +164,8 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 ldlm_resource_putref(res);
                 lock->l_resource = NULL;
                 if (lock->l_export) {
+                        LASSERT(atomic_read(&lock->l_export->exp_locks_count) > 0);
+                        atomic_dec(&lock->l_export->exp_locks_count);
                         class_export_put(lock->l_export);
                         lock->l_export = NULL;
                 }
@@ -1139,7 +1141,7 @@ ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                                   type, mode, res_id->name[0], res_id->name[1],
                                   (type == LDLM_PLAIN || type == LDLM_IBITS) ?
                                         res_id->name[2] :policy->l_extent.start,
-                                (type == LDLM_PLAIN || type == LDLM_IBITS) ?
+                                  (type == LDLM_PLAIN || type == LDLM_IBITS) ?
                                         res_id->name[3] : policy->l_extent.end);
         }
         if (old_lock)
@@ -1462,6 +1464,8 @@ int ldlm_run_ast_work(struct list_head *rpc_list, ldlm_desc_ast_t ast_type)
         ENTRY;
 
         arg.set = ptlrpc_prep_set();
+        if (NULL == arg.set)
+                RETURN(-ERESTART);
         atomic_set(&arg.restart, 0);
         switch (ast_type) {
         case LDLM_WORK_BL_AST:
@@ -1765,8 +1769,8 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                         node = NULL;
                 }
         }
-        
-        /* 
+
+        /*
          * Remove old lock from the pool before adding the lock with new
          * mode below in ->policy()
          */
@@ -1888,7 +1892,7 @@ void ldlm_lock_dump_handle(int level, struct lustre_handle *lockh)
 }
 
 void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
-		      struct libcfs_debug_msg_data *data, const char *fmt,
+                      struct libcfs_debug_msg_data *data, const char *fmt,
                       ...)
 {
         va_list args;
@@ -1900,7 +1904,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                 libcfs_debug_vmsg2(cdls, data->msg_subsys, level,data->msg_file,
                                    data->msg_fn, data->msg_line, fmt, args,
                        " ns: \?\? lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
-                                   "res: \?\? rrc=\?\? type: \?\?\? flags: "LPX64" remote: "
+                       "res: \?\? rrc=\?\? type: \?\?\? flags: "LPX64" remote: "
                        LPX64" expref: %d pid: %u timeout: %lu\n", lock,
                        lock->l_handle.h_cookie, atomic_read(&lock->l_refc),
                        lock->l_readers, lock->l_writers,
@@ -1920,7 +1924,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                                    data->msg_fn, data->msg_line, fmt, args,
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                        "res: "LPU64"/"LPU64" rrc: %d type: %s ["LPU64"->"LPU64
-                                   "] (req "LPU64"->"LPU64") flags: "LPX64" remote: "LPX64
+                       "] (req "LPU64"->"LPU64") flags: "LPX64" remote: "LPX64
                        " expref: %d pid: %u timeout %lu\n",
                        lock->l_resource->lr_namespace->ns_name, lock,
                        lock->l_handle.h_cookie, atomic_read(&lock->l_refc),
@@ -1945,7 +1949,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                                    data->msg_fn, data->msg_line, fmt, args,
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                        "res: "LPU64"/"LPU64" rrc: %d type: %s pid: %d "
-                                   "["LPU64"->"LPU64"] flags: "LPX64" remote: "LPX64
+                       "["LPU64"->"LPU64"] flags: "LPX64" remote: "LPX64
                        " expref: %d pid: %u timeout: %lu\n",
                        lock->l_resource->lr_namespace->ns_name, lock,
                        lock->l_handle.h_cookie, atomic_read(&lock->l_refc),
@@ -1970,7 +1974,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                                    data->msg_fn, data->msg_line, fmt, args,
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                        "res: "LPU64"/"LPU64" bits "LPX64" rrc: %d type: %s "
-                                   "flags: "LPX64" remote: "LPX64" expref: %d "
+                       "flags: "LPX64" remote: "LPX64" expref: %d "
                        "pid: %u timeout: %lu\n",
                        lock->l_resource->lr_namespace->ns_name,
                        lock, lock->l_handle.h_cookie,
@@ -1993,7 +1997,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 level,
                 libcfs_debug_vmsg2(cdls, data->msg_subsys, level,data->msg_file,
                                    data->msg_fn, data->msg_line, fmt, args,
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
-                                   "res: "LPU64"/"LPU64" rrc: %d type: %s flags: "LPX64" "
+                       "res: "LPU64"/"LPU64" rrc: %d type: %s flags: "LPX64" "
                        "remote: "LPX64" expref: %d pid: %u timeout %lu\n",
                        lock->l_resource->lr_namespace->ns_name,
                        lock, lock->l_handle.h_cookie,

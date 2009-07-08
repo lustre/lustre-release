@@ -278,6 +278,9 @@ int filter_fs_setup(const struct lu_env *env, struct filter_device *ofd,
         attr.la_valid = LA_MODE;
         attr.la_mode = S_IFREG | 0666;
 
+        rc = lut_init2(env, &ofd->ofd_lut, obd, ofd->ofd_osd, &fid);
+        LASSERT(rc == 0);
+
         fo = filter_object_find_or_create(env, ofd, &fid, &attr);
         LASSERT(!IS_ERR(fo));
         ofd->ofd_last_rcvd = filter_object_child(fo);

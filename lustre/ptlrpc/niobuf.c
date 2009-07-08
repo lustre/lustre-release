@@ -265,7 +265,7 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
                 RETURN (-ENOMEM);
         }
 
-        CDEBUG(D_NET, "Setup bulk %s buffers: %u pages %u bytes, xid "LPX64", "
+        CDEBUG(D_NET, "Setup bulk %s buffers: %u pages %u bytes, xid "LPU64", "
                "portal %u\n",
                desc->bd_type == BULK_GET_SOURCE ? "get-source" : "put-sink",
                desc->bd_iov_count, desc->bd_nob,

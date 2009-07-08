@@ -59,6 +59,7 @@ static void lov_init_set(struct lov_request_set *set)
         set->set_cookies = 0;
         CFS_INIT_LIST_HEAD(&set->set_list);
         atomic_set(&set->set_refcount, 1);
+        cfs_waitq_init(&set->set_waitq);
 }
 
 static void lov_finish_set(struct lov_request_set *set)
@@ -93,6 +94,14 @@ static void lov_finish_set(struct lov_request_set *set)
         EXIT;
 }
 
+int lov_finished_set(struct lov_request_set *set)
+{
+        CDEBUG(D_INFO, "check set %d/%d\n", set->set_completes,
+               set->set_count);
+        return set->set_completes == set->set_count;
+}
+
+
 void lov_update_set(struct lov_request_set *set,
                     struct lov_request *req, int rc)
 {
@@ -102,6 +111,8 @@ void lov_update_set(struct lov_request_set *set,
         set->set_completes++;
         if (rc == 0)
                 set->set_success++;
+
+        cfs_waitq_signal(&set->set_waitq);
 }
 
 int lov_update_common_set(struct lov_request_set *set,
@@ -125,6 +136,7 @@ void lov_set_add_req(struct lov_request *req, struct lov_request_set *set)
 {
         list_add_tail(&req->rq_link, &set->set_list);
         set->set_count++;
+        req->rq_rqset = set;
 }
 
 extern void osc_update_enqueue(struct lustre_handle *lov_lockhp,
@@ -313,8 +325,6 @@ int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
                         ((void *)req->rq_oi.oi_md) + sizeof(*req->rq_oi.oi_md) +
                         sizeof(struct lov_oinfo *);
 
-
-                req->rq_rqset = set;
                 /* Set lov request specific parameters. */
                 req->rq_oi.oi_lockh = set->set_lockh->llh_handles + i;
                 req->rq_oi.oi_cb_up = cb_update_enqueue;
@@ -566,9 +576,6 @@ static int create_done(struct obd_export *exp, struct lov_request_set *set,
 
                         rc = qos_remedy_create(set, req);
                         lov_update_create_set(set, req, rc);
-
-                        if (rc)
-                                break;
                 }
         }
 
@@ -576,11 +583,7 @@ static int create_done(struct obd_export *exp, struct lov_request_set *set,
         if (set->set_success == 0)
                 GOTO(cleanup, rc);
 
-        /* If there was an explicit stripe set, fail.  Otherwise, we
-         * got some objects and that's not bad. */
         if (set->set_count != set->set_success) {
-                if (*lsmp)
-                        GOTO(cleanup, rc);
                 set->set_count = set->set_success;
                 qos_shrink_lsm(set);
         }
@@ -701,6 +704,16 @@ int lov_update_create_set(struct lov_request_set *set,
 
         RETURN(0);
 }
+
+int cb_create_update(void *cookie, int rc)
+{
+        struct obd_info *oinfo = cookie;
+        struct lov_request *lovreq;
+
+        lovreq = container_of(oinfo, struct lov_request, rq_oi);
+        return lov_update_create_set(lovreq->rq_rqset, lovreq, rc);
+}
+
 
 int lov_prep_create_set(struct obd_export *exp, struct obd_info *oinfo,
                         struct lov_stripe_md **lsmp, struct obdo *src_oa,
@@ -1010,7 +1023,6 @@ int lov_prep_getattr_set(struct obd_export *exp, struct obd_info *oinfo,
                 req->rq_oi.oi_oa->o_id = loi->loi_id;
                 req->rq_oi.oi_cb_up = cb_getattr_update;
                 req->rq_oi.oi_capa = oinfo->oi_capa;
-                req->rq_rqset = set;
 
                 lov_set_add_req(req, set);
         }
@@ -1208,7 +1220,6 @@ int lov_prep_setattr_set(struct obd_export *exp, struct obd_info *oinfo,
                 req->rq_oi.oi_oa->o_stripe_idx = i;
                 req->rq_oi.oi_cb_up = cb_setattr_update;
                 req->rq_oi.oi_capa = oinfo->oi_capa;
-                req->rq_rqset = set;
 
                 if (oinfo->oi_oa->o_valid & OBD_MD_FLSIZE) {
                         int off = lov_stripe_offset(oinfo->oi_md,
@@ -1345,7 +1356,6 @@ int lov_prep_punch_set(struct obd_export *exp, struct obd_info *oinfo,
 
                 req->rq_oi.oi_oa->o_stripe_idx = i;
                 req->rq_oi.oi_cb_up = cb_update_punch;
-                req->rq_rqset = set;
 
                 req->rq_oi.oi_policy.l_extent.start = rs;
                 req->rq_oi.oi_policy.l_extent.end = re;
@@ -1436,7 +1446,6 @@ int lov_prep_sync_set(struct obd_export *exp, struct obd_info *oinfo,
                 req->rq_oi.oi_policy.l_extent.start = rs;
                 req->rq_oi.oi_policy.l_extent.end = re;
                 req->rq_oi.oi_policy.l_extent.gid = -1;
-                req->rq_rqset = set;
 
                 lov_set_add_req(req, set);
         }
@@ -1587,11 +1596,11 @@ static int cb_statfs_update(void *cookie, int rc)
         lov_sfs = oinfo->oi_osfs;
 
         success = lovreq->rq_rqset->set_success;
-
         /* XXX: the same is done in lov_update_common_set, however
            lovset->set_exp is not initialized. */
         lov_update_set(lovreq->rq_rqset, lovreq, rc);
         if (rc) {
+                /* XXX ignore error for disconnected ost ? */
                 if (rc && !(lov->lov_tgts[lovreq->rq_idx] &&
                             lov->lov_tgts[lovreq->rq_idx]->ltd_active))
                         rc = 0;
@@ -1608,7 +1617,7 @@ static int cb_statfs_update(void *cookie, int rc)
         qos_update(lov);
 out:
         if (lovreq->rq_rqset->set_oi->oi_flags & OBD_STATFS_PTLRPCD &&
-            lovreq->rq_rqset->set_count == lovreq->rq_rqset->set_completes) {
+            lov_finished_set(lovreq->rq_rqset)) {
                lov_statfs_interpret(NULL, lovreq->rq_rqset,
                                     lovreq->rq_rqset->set_success !=
                                                   lovreq->rq_rqset->set_count);
@@ -1638,7 +1647,8 @@ int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 struct lov_request *req;
 
-                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active) {
+                if (!lov->lov_tgts[i] || (!lov->lov_tgts[i]->ltd_active
+                                          && (oinfo->oi_flags & OBD_STATFS_NODELAY))) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", i);
                         continue;
                 }
@@ -1656,7 +1666,6 @@ int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
                 req->rq_idx = i;
                 req->rq_oi.oi_cb_up = cb_statfs_update;
                 req->rq_oi.oi_flags = oinfo->oi_flags;
-                req->rq_rqset = set;
 
                 lov_set_add_req(req, set);
         }

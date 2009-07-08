@@ -224,6 +224,70 @@ static int osc_rd_cur_grant_bytes(char *page, char **start, off_t off,
         return rc;
 }
 
+static int osc_wr_cur_grant_bytes(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct client_obd *cli = &obd->u.cli;
+        int                rc;
+        __u64              val;
+
+        if (obd == NULL)
+                return 0;
+
+        rc = lprocfs_write_u64_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        /* this is only for shrinking grant */
+        client_obd_list_lock(&cli->cl_loi_list_lock);
+        if (val >= cli->cl_avail_grant) {
+                client_obd_list_unlock(&cli->cl_loi_list_lock);
+                return 0;
+        }
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
+
+        LPROCFS_CLIMP_CHECK(obd);
+        if (cli->cl_import->imp_state == LUSTRE_IMP_FULL)
+                rc = osc_shrink_grant_to_target(cli, val);
+        LPROCFS_CLIMP_EXIT(obd);
+        if (rc)
+                return rc;
+        return count;
+}
+
+static int osc_rd_grant_shrink_interval(char *page, char **start, off_t off,
+                                        int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+
+        if (obd == NULL)
+                return 0;
+        return snprintf(page, count, "%d\n",
+                        obd->u.cli.cl_grant_shrink_interval);
+}
+
+static int osc_wr_grant_shrink_interval(struct file *file, const char *buffer,
+                                        unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val, rc;
+
+        if (obd == NULL)
+                return 0;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val <= 0)
+                return -ERANGE;
+
+        obd->u.cli.cl_grant_shrink_interval = val;
+
+        return count;
+}
+
 static int osc_rd_create_count(char *page, char **start, off_t off, int count,
                                int *eof, void *data)
 {
@@ -538,7 +602,10 @@ static struct lprocfs_vars lprocfs_osc_obd_vars[] = {
                                 osc_wr_max_rpcs_in_flight, 0 },
         { "max_dirty_mb",    osc_rd_max_dirty_mb, osc_wr_max_dirty_mb, 0 },
         { "cur_dirty_bytes", osc_rd_cur_dirty_bytes, 0, 0 },
-        { "cur_grant_bytes", osc_rd_cur_grant_bytes, 0, 0 },
+        { "cur_grant_bytes", osc_rd_cur_grant_bytes,
+                             osc_wr_cur_grant_bytes, 0 },
+        { "grant_shrink_interval", osc_rd_grant_shrink_interval,
+                                   osc_wr_grant_shrink_interval, 0 },
         { "create_count",    osc_rd_create_count, osc_wr_create_count, 0 },
         { "max_create_count", osc_rd_max_create_count,
                               osc_wr_max_create_count, 0},

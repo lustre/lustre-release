@@ -353,7 +353,6 @@ int llog_obd_origin_setup(struct obd_device *obd, struct obd_llog_group *olg,
         ctxt = llog_group_get_ctxt(olg, index);
         if (!ctxt)
                 RETURN(-ENODEV);
-        llog_gen_init(ctxt);
 
         if (logid && logid->lgl_oid) {
                 rc = llog_create(ctxt, &handle, logid, NULL);

@@ -10,15 +10,15 @@ if LIBLUSTRE
 noinst_LIBRARIES = libtestcommon.a
 
 if LIBLUSTRE_TESTS
+if MPITESTS
+SUBDIRS = mpi
+endif # MPITESTS
+
 noinst_PROGRAMS = sanity
 
 if !CRAY_XT3
 noinst_PROGRAMS += recovery_small replay_single replay_ost_single
 endif # !CRAY_XT3
-
-if MPITESTS
-noinst_PROGRAMS += test_lock_cancel
-endif # MPITESTS
 
 liblustre_testdir=$(libdir)/lustre/liblustre/tests
 liblustre_test_PROGRAMS = $(noinst_PROGRAMS)
@@ -26,6 +26,8 @@ liblustre_test_LIBRARIES = $(noinst_LIBRARIES)
 
 endif # LIBLUSTRE_TESTS
 endif # LIBLUSTRE
+
+DIST_SUBDIRS := mpi
 
 libtestcommon_a_SOURCES = test_common.c test_common.h
 
@@ -48,12 +50,3 @@ replay_ost_single_SOURCES = replay_ost_single.c
 replay_ost_single_CFLAGS = $(LL_CFLAGS)
 replay_ost_single_LDADD := libtestcommon.a $(LLIB_EXEC)
 replay_ost_single_DEPENDENCIES = $(top_builddir)/lustre/liblustre/liblustre.a libtestcommon.a
-
-if MPITESTS
-test_lock_cancel_SOURCES = test_lock_cancel.c
-test_lock_cancel_CFLAGS = $(LL_CFLAGS) -I/opt/lam/include
-#test_lock_cancel_LDADD :=  $(LLIB_EXEC)  -L/opt/lam/lib -lmpi -llam
-test_lock_cancel_LDADD :=  $(LLIB_EXEC)  -lmpich
-endif
-
-

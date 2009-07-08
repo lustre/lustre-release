@@ -286,6 +286,17 @@ static const struct req_msg_field *mds_set_info_client[] = {
         &RMF_SETINFO_VAL
 };
 
+static const struct req_msg_field *mds_getinfo_client[] = {
+        &RMF_PTLRPC_BODY,
+        &RMF_GETINFO_KEY,
+        &RMF_GETINFO_VALLEN
+};
+
+static const struct req_msg_field *mds_getinfo_server[] = {
+        &RMF_PTLRPC_BODY,
+        &RMF_GETINFO_VAL,
+};
+
 static const struct req_msg_field *ldlm_enqueue_client[] = {
         &RMF_PTLRPC_BODY,
         &RMF_DLM_REQ
@@ -532,6 +543,7 @@ static const struct req_format *req_formats[] = {
         &RQF_MDS_CONNECT,
         &RQF_MDS_DISCONNECT,
         &RQF_MDS_SET_INFO,
+        &RQF_MDS_GET_INFO,
         &RQF_MDS_GETSTATUS,
         &RQF_MDS_STATFS,
         &RQF_MDS_GETATTR,
@@ -613,7 +625,8 @@ struct req_msg_field {
 };
 
 enum rmf_flags {
-        RMF_F_STRING = 1 << 0
+        RMF_F_STRING = 1 << 0,
+        RMF_F_NO_SIZE_CHECK = 1 << 1
 };
 
 struct req_capsule;
@@ -646,9 +659,21 @@ const struct req_msg_field RMF_MGS_SEND_PARAM =
 EXPORT_SYMBOL(RMF_MGS_SEND_PARAM);
 
 const struct req_msg_field RMF_SETINFO_VAL =
-        DEFINE_MSGF("setinfo_val", 0,
-                    sizeof(__u32), lustre_swab_generic_32s);
+        DEFINE_MSGF("setinfo_val", 0, -1, NULL);
 EXPORT_SYMBOL(RMF_SETINFO_VAL);
+
+const struct req_msg_field RMF_GETINFO_KEY =
+        DEFINE_MSGF("getinfo_key", 0, -1, NULL);
+EXPORT_SYMBOL(RMF_GETINFO_KEY);
+
+const struct req_msg_field RMF_GETINFO_VALLEN =
+        DEFINE_MSGF("getinfo_vallen", 0,
+                    sizeof(__u32), lustre_swab_generic_32s);
+EXPORT_SYMBOL(RMF_GETINFO_VALLEN);
+
+const struct req_msg_field RMF_GETINFO_VAL =
+        DEFINE_MSGF("getinfo_val", 0, -1, NULL);
+EXPORT_SYMBOL(RMF_GETINFO_VAL);
 
 const struct req_msg_field RMF_SEQ_OPC =
         DEFINE_MSGF("seq_query_opc", 0,
@@ -756,12 +781,13 @@ const struct req_msg_field RMF_CONN =
 EXPORT_SYMBOL(RMF_CONN);
 
 const struct req_msg_field RMF_CONNECT_DATA =
-        DEFINE_MSGF("cdata", 0,
+        DEFINE_MSGF("cdata",
+                    RMF_F_NO_SIZE_CHECK /* we allow extra space for interop */,
                     sizeof(struct obd_connect_data), lustre_swab_connect);
 EXPORT_SYMBOL(RMF_CONNECT_DATA);
 
 const struct req_msg_field RMF_DLM_REQ =
-        DEFINE_MSGF("dlm_req", 0,
+        DEFINE_MSGF("dlm_req", RMF_F_NO_SIZE_CHECK /* ldlm_request_bufsize */,
                     sizeof(struct ldlm_request), lustre_swab_ldlm_request);
 EXPORT_SYMBOL(RMF_DLM_REQ);
 
@@ -780,7 +806,7 @@ const struct req_msg_field RMF_DLM_LVB =
 EXPORT_SYMBOL(RMF_DLM_LVB);
 
 const struct req_msg_field RMF_MDT_MD =
-        DEFINE_MSGF("mdt_md", 0, MIN_MD_SIZE, NULL);
+        DEFINE_MSGF("mdt_md", RMF_F_NO_SIZE_CHECK, MIN_MD_SIZE, NULL);
 EXPORT_SYMBOL(RMF_MDT_MD);
 
 const struct req_msg_field RMF_REC_REINT =
@@ -798,11 +824,13 @@ const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, -1, NULL);
 EXPORT_SYMBOL(RMF_EADATA);
 
 const struct req_msg_field RMF_ACL =
-        DEFINE_MSGF("acl", 0, LUSTRE_POSIX_ACL_MAX_SIZE, NULL);
+        DEFINE_MSGF("acl", RMF_F_NO_SIZE_CHECK,
+                    LUSTRE_POSIX_ACL_MAX_SIZE, NULL);
 EXPORT_SYMBOL(RMF_ACL);
 
 const struct req_msg_field RMF_LOGCOOKIES =
-        DEFINE_MSGF("logcookies", 0, sizeof(struct llog_cookie), NULL);
+        DEFINE_MSGF("logcookies", RMF_F_NO_SIZE_CHECK /* multiple cookies */,
+                    sizeof(struct llog_cookie), NULL);
 EXPORT_SYMBOL(RMF_LOGCOOKIES);
 
 const struct req_msg_field RMF_CAPA1 =
@@ -1028,6 +1056,11 @@ const struct req_format RQF_MDS_SET_INFO =
         DEFINE_REQ_FMT0("MDS_SET_INFO", mds_set_info_client, empty);
 EXPORT_SYMBOL(RQF_MDS_SET_INFO);
 
+const struct req_format RQF_MDS_GET_INFO =
+        DEFINE_REQ_FMT0("MDS_GET_INFO", mds_getinfo_client,
+                        mds_getinfo_server);
+EXPORT_SYMBOL(RQF_MDS_GET_INFO);
+
 const struct req_format RQF_LDLM_ENQUEUE =
         DEFINE_REQ_FMT0("LDLM_ENQUEUE",
                         ldlm_enqueue_client, ldlm_enqueue_lvb_server);
@@ -1204,8 +1237,8 @@ const struct req_format RQF_OST_SET_INFO =
 EXPORT_SYMBOL(RQF_OST_SET_INFO);
 
 const struct req_format RQF_OST_SET_GRANT_INFO =
-        DEFINE_REQ_FMT0("OST_SET_GRANT_INFO", ost_set_info_client, 
-			 ost_body_only);
+        DEFINE_REQ_FMT0("OST_SET_GRANT_INFO", ost_set_info_client,
+                         ost_body_only);
 EXPORT_SYMBOL(RQF_OST_SET_GRANT_INFO);
 
 const struct req_format RQF_OST_GET_INFO_GENERIC =
@@ -1500,6 +1533,15 @@ void req_capsule_set_size(struct req_capsule *pill,
                           enum req_location loc, int size)
 {
         LASSERT(loc == RCL_SERVER || loc == RCL_CLIENT);
+
+        if ((size != field->rmf_size) &&
+            (field->rmf_size != -1) &&
+            !(field->rmf_flags & RMF_F_NO_SIZE_CHECK) &&
+            (size > 0)) {
+                CERROR("%s: field size mismatch %d != %d (%d)\n",
+                       field->rmf_name, size, field->rmf_size, loc);
+                LBUG();
+        }
 
         pill->rc_area[loc][__req_capsule_offset(pill, field, loc)] = size;
 }
