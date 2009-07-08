@@ -48,7 +48,6 @@ lnd_t               the_ptllnd = {
         .lnd_send       = ptllnd_send,
         .lnd_recv       = ptllnd_recv,
         .lnd_eager_recv = ptllnd_eager_recv,
-        .lnd_notify     = ptllnd_notify,
         .lnd_wait       = ptllnd_wait,
         .lnd_setasync   = ptllnd_setasync,
 };

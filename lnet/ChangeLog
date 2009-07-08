@@ -17,6 +17,10 @@ Bugzilla   :
 Description: 
 Details    : 
 
+Severity   : enhancement
+Bugzilla   : 13065
+Description: port router pinger to userspace
+
 Severity   : normal
 Bugzilla   : 17546
 Description: kptllnd HELLO protocol deadlock

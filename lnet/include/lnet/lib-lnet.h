@@ -658,6 +658,8 @@ void lnet_connect_console_error(int rc, lnet_nid_t peer_nid,
 int lnet_count_acceptor_nis(void);
 int lnet_acceptor_timeout(void);
 int lnet_acceptor_port(void);
+#else
+void lnet_router_checker(void);
 #endif
 
 #ifdef HAVE_LIBPTHREAD
@@ -668,6 +670,7 @@ int lnet_acceptor_port(void);
 int lnet_acceptor_start(void);
 void lnet_acceptor_stop(void);
 
+void lnet_get_tunables(void);
 int lnet_peers_start_down(void);
 int lnet_peer_buffer_credits(lnet_ni_t *ni);
 int lnet_router_checker_start(void);

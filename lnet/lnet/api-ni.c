@@ -1172,6 +1172,8 @@ LNetNIInit(lnet_pid_t requested_pid)
                 goto out;
         }
 
+        lnet_get_tunables();
+
         if (requested_pid == LNET_PID_ANY) {
                 /* Don't instantiate LNET just for me */
                 rc = -ENETDOWN;

@@ -1361,6 +1361,19 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
                 }
                 LASSERT (lp->lp_ni == src_ni);
         } else {
+#ifndef __KERNEL__
+                LNET_UNLOCK();
+
+                /* NB
+                 * - once application finishes computation, check here to update
+                 *   router states before it waits for pending IO in LNetEQPoll
+                 * - recursion breaker: router checker sends no message
+                 *   to remote networks */
+                if (the_lnet.ln_rc_state == LNET_RC_STATE_RUNNING)
+                        lnet_router_checker();
+
+                LNET_LOCK();
+#endif
                 /* sending to a remote network */
                 rnet = lnet_find_net_locked(LNET_NIDNET(dst_nid));
                 if (rnet == NULL) {
