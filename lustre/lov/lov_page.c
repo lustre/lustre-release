@@ -216,7 +216,7 @@ struct cl_page *lov_page_init_empty(const struct lu_env *env,
                 addr = cfs_kmap(vmpage);
                 memset(addr, 0, cl_page_size(obj));
                 cfs_kunmap(vmpage);
-                cl_page_export(env, page);
+                cl_page_export(env, page, 1);
                 result = 0;
         }
         RETURN(ERR_PTR(result));

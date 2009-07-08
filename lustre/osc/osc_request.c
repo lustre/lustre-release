@@ -811,7 +811,7 @@ static void osc_update_next_shrink(struct client_obd *cli)
 static void osc_consume_write_grant(struct client_obd *cli,
                                     struct brw_page *pga)
 {
-        LASSERT_SPIN_LOCKED(&cli->cl_loi_list_lock);
+        LASSERT(client_obd_list_is_locked(&cli->cl_loi_list_lock));
         LASSERT(!(pga->flag & OBD_BRW_FROM_GRANT));
         atomic_inc(&obd_dirty_pages);
         cli->cl_dirty += CFS_PAGE_SIZE;
@@ -831,7 +831,7 @@ static void osc_release_write_grant(struct client_obd *cli,
         int blocksize = cli->cl_import->imp_obd->obd_osfs.os_bsize ? : 4096;
         ENTRY;
 
-        LASSERT_SPIN_LOCKED(&cli->cl_loi_list_lock);
+        LASSERT(client_obd_list_is_locked(&cli->cl_loi_list_lock));
         if (!(pga->flag & OBD_BRW_FROM_GRANT)) {
                 EXIT;
                 return;
@@ -2517,7 +2517,7 @@ osc_send_oap_rpc(const struct lu_env *env, struct client_obd *cli,
         req = osc_build_req(env, cli, &rpc_list, page_count, cmd);
         if (IS_ERR(req)) {
                 LASSERT(list_empty(&rpc_list));
-                loi_list_maint(cli, loi);
+                /* loi_list_maint(cli, loi); */
                 RETURN(PTR_ERR(req));
         }
 
@@ -3354,7 +3354,7 @@ int osc_match_base(struct obd_export *exp, struct ldlm_res_id *res_id,
         rc = mode;
         if (mode == LCK_PR)
                 rc |= LCK_PW;
-        rc = ldlm_lock_match(obd->obd_namespace, lflags | LDLM_FL_LVB_READY,
+        rc = ldlm_lock_match(obd->obd_namespace, lflags,
                              res_id, type, policy, rc, lockh, unref);
         if (rc) {
                 if (data != NULL)

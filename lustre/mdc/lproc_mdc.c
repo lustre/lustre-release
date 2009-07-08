@@ -50,9 +50,9 @@ static int mdc_rd_max_rpcs_in_flight(char *page, char **start, off_t off,
         struct client_obd *cli = &dev->u.cli;
         int rc;
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
         rc = snprintf(page, count, "%u\n", cli->cl_max_rpcs_in_flight);
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
         return rc;
 }
 
@@ -70,9 +70,9 @@ static int mdc_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
         if (val < 1 || val > MDC_MAX_RIF_MAX)
                 return -ERANGE;
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
         cli->cl_max_rpcs_in_flight = val;
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         return count;
 }

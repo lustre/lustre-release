@@ -837,6 +837,7 @@ static void cl_page_owner_clear(struct cl_page *page)
                         LASSERT(page->cp_owner->ci_owned_nr > 0);
                         page->cp_owner->ci_owned_nr--;
                         page->cp_owner = NULL;
+                        page->cp_task = NULL;
                 }
         }
         EXIT;
@@ -915,17 +916,22 @@ int cl_page_own(const struct lu_env *env, struct cl_io *io, struct cl_page *pg)
         pg = cl_page_top(pg);
         io = cl_io_top(io);
 
-        cl_page_invoid(env, io, pg, CL_PAGE_OP(cpo_own));
-        PASSERT(env, pg, pg->cp_owner == NULL);
-        PASSERT(env, pg, pg->cp_req == NULL);
-        pg->cp_owner = io;
-        cl_page_owner_set(pg);
-        if (pg->cp_state != CPS_FREEING) {
-                cl_page_state_set(env, pg, CPS_OWNED);
-                result = 0;
-        } else {
-                cl_page_disown0(env, io, pg);
+        if (pg->cp_state == CPS_FREEING) {
                 result = -EAGAIN;
+        } else {
+                cl_page_invoid(env, io, pg, CL_PAGE_OP(cpo_own));
+                PASSERT(env, pg, pg->cp_owner == NULL);
+                PASSERT(env, pg, pg->cp_req == NULL);
+                pg->cp_owner = io;
+                pg->cp_task  = current;
+                cl_page_owner_set(pg);
+                if (pg->cp_state != CPS_FREEING) {
+                        cl_page_state_set(env, pg, CPS_OWNED);
+                        result = 0;
+                } else {
+                        cl_page_disown0(env, io, pg);
+                        result = -EAGAIN;
+                }
         }
         PINVRNT(env, pg, ergo(result == 0, cl_page_invariant(pg)));
         RETURN(result);
@@ -956,6 +962,7 @@ void cl_page_assume(const struct lu_env *env,
 
         cl_page_invoid(env, io, pg, CL_PAGE_OP(cpo_assume));
         pg->cp_owner = io;
+        pg->cp_task = current;
         cl_page_owner_set(pg);
         cl_page_state_set(env, pg, CPS_OWNED);
         EXIT;
@@ -1044,35 +1051,49 @@ EXPORT_SYMBOL(cl_page_discard);
 static void cl_page_delete0(const struct lu_env *env, struct cl_page *pg,
                             int radix)
 {
+        struct cl_page *tmp = pg;
+        ENTRY;
+
         PASSERT(env, pg, pg == cl_page_top(pg));
         PASSERT(env, pg, pg->cp_state != CPS_FREEING);
 
-        ENTRY;
         /*
          * Severe all ways to obtain new pointers to @pg.
          */
         cl_page_owner_clear(pg);
+
+        /* 
+         * unexport the page firstly before freeing it so that
+         * the page content is considered to be invalid.
+         * We have to do this because a CPS_FREEING cl_page may
+         * be NOT under the protection of a cl_lock.
+         * Afterwards, if this page is found by other threads, then this
+         * page will be forced to reread.
+         */
+        cl_page_export(env, pg, 0);
         cl_page_state_set0(env, pg, CPS_FREEING);
-        CL_PAGE_INVOID(env, pg, CL_PAGE_OP(cpo_delete),
-                       (const struct lu_env *, const struct cl_page_slice *));
+
         if (!radix)
                 /*
                  * !radix means that @pg is not yet in the radix tree, skip
                  * removing it.
                  */
-                pg = pg->cp_child;
-        for (; pg != NULL; pg = pg->cp_child) {
+                tmp = pg->cp_child;
+        for (; tmp != NULL; tmp = tmp->cp_child) {
                 void                    *value;
                 struct cl_object_header *hdr;
 
-                hdr = cl_object_header(pg->cp_obj);
+                hdr = cl_object_header(tmp->cp_obj);
                 spin_lock(&hdr->coh_page_guard);
-                value = radix_tree_delete(&hdr->coh_tree, pg->cp_index);
-                PASSERT(env, pg, value == pg);
-                PASSERT(env, pg, hdr->coh_pages > 0);
+                value = radix_tree_delete(&hdr->coh_tree, tmp->cp_index);
+                PASSERT(env, tmp, value == tmp);
+                PASSERT(env, tmp, hdr->coh_pages > 0);
                 hdr->coh_pages--;
                 spin_unlock(&hdr->coh_page_guard);
         }
+
+        CL_PAGE_INVOID(env, pg, CL_PAGE_OP(cpo_delete),
+                       (const struct lu_env *, const struct cl_page_slice *));
         EXIT;
 }
 
@@ -1133,17 +1154,17 @@ EXPORT_SYMBOL(cl_page_unmap);
  * Marks page up-to-date.
  *
  * Call cl_page_operations::cpo_export() through all layers top-to-bottom. The
- * layer responsible for VM interaction has to mark page as up-to-date. From
- * this moment on, page can be shown to the user space without Lustre being
- * notified, hence the name.
+ * layer responsible for VM interaction has to mark/clear page as up-to-date
+ * by the @uptodate argument.
  *
  * \see cl_page_operations::cpo_export()
  */
-void cl_page_export(const struct lu_env *env, struct cl_page *pg)
+void cl_page_export(const struct lu_env *env, struct cl_page *pg, int uptodate)
 {
         PINVRNT(env, pg, cl_page_invariant(pg));
         CL_PAGE_INVOID(env, pg, CL_PAGE_OP(cpo_export),
-                       (const struct lu_env *, const struct cl_page_slice *));
+                       (const struct lu_env *,
+                        const struct cl_page_slice *, int), uptodate);
 }
 EXPORT_SYMBOL(cl_page_export);
 

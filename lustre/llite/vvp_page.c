@@ -99,6 +99,12 @@ static void vvp_page_own(const struct lu_env *env,
                                       vmpage, current->comm, current,
                                       vmpage->flags, io);
                         libcfs_debug_dumpstack(NULL);
+                        if (slice->cpl_page->cp_task) {
+                                cfs_task_t *tsk = slice->cpl_page->cp_task;
+                                LCONSOLE_WARN("The page was owned by %s\n",
+                                              tsk->comm);
+                                libcfs_debug_dumpstack(tsk);
+                        }
                         LCONSOLE_WARN("Reproduced bug #18881,please contact:"
                                "jay <jinshan.xiong@sun.com>, thanks\n");
 
@@ -202,13 +208,17 @@ static void vvp_page_delete(const struct lu_env *env,
 }
 
 static void vvp_page_export(const struct lu_env *env,
-                            const struct cl_page_slice *slice)
+                            const struct cl_page_slice *slice,
+                            int uptodate)
 {
         cfs_page_t *vmpage = cl2vm_page(slice);
 
         LASSERT(vmpage != NULL);
         LASSERT(PageLocked(vmpage));
-        SetPageUptodate(vmpage);
+        if (uptodate)
+                SetPageUptodate(vmpage);
+        else
+                ClearPageUptodate(vmpage);
 }
 
 static int vvp_page_is_vmlocked(const struct lu_env *env,
@@ -305,7 +315,7 @@ static void vvp_page_completion_read(const struct lu_env *env,
         if (ioret == 0)  {
                 /* XXX: do we need this for transient pages? */
                 if (!cp->cpg_defer_uptodate)
-                        cl_page_export(env, page);
+                        cl_page_export(env, page, 1);
         } else
                 cp->cpg_defer_uptodate = 0;
         vvp_page_completion_common(env, cp, ioret);

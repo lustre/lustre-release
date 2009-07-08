@@ -642,7 +642,7 @@ static int vvp_io_read_page(const struct lu_env *env,
 
         if (cp->cpg_defer_uptodate) {
                 cp->cpg_ra_used = 1;
-                cl_page_export(env, page);
+                cl_page_export(env, page, 1);
         }
         /*
          * Add page into the queue even when it is marked uptodate above.
@@ -732,7 +732,7 @@ static int vvp_io_prepare_partial(const struct lu_env *env, struct cl_io *io,
                  * details. -jay
                  */
                 if (result == 0)
-                        cl_page_export(env, pg);
+                        cl_page_export(env, pg, 1);
         }
         return result;
 }
@@ -857,7 +857,7 @@ static int vvp_io_commit_write(const struct lu_env *env,
         if (result == 0) {
                 if (size > i_size_read(inode))
                         i_size_write(inode, size);
-                cl_page_export(env, pg);
+                cl_page_export(env, pg, 1);
         } else if (size > i_size_read(inode))
                 cl_page_discard(env, io, pg);
         RETURN(result);

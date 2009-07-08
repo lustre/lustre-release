@@ -44,6 +44,14 @@
 
 #include "osc_cl_internal.h"
 
+/* 
+ * Comment out osc_page_protected because it may sleep inside the
+ * the client_obd_list_lock.
+ * client_obd_list_lock -> osc_ap_completion -> osc_completion ->
+ *   -> osc_page_protected -> osc_page_is_dlocked -> osc_match_base
+ *   -> ldlm_lock_match -> sptlrpc_import_check_ctx -> sleep.
+ */
+#if 0
 static int osc_page_is_dlocked(const struct lu_env *env,
                                const struct osc_page *opg,
                                enum cl_lock_mode mode, int pending, int unref)
@@ -56,6 +64,8 @@ static int osc_page_is_dlocked(const struct lu_env *env,
         ldlm_policy_data_t     *policy;
         ldlm_mode_t             dlmmode;
         int                     flags;
+
+        might_sleep();
 
         info = osc_env_info(env);
         resname = &info->oti_resname;
@@ -131,6 +141,14 @@ static int osc_page_protected(const struct lu_env *env,
         }
         return result;
 }
+#else
+static int osc_page_protected(const struct lu_env *env,
+                              const struct osc_page *opg,
+                              enum cl_lock_mode mode, int unref)
+{
+        return 1;
+}
+#endif
 
 /*****************************************************************************
  *

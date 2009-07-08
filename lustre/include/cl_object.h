@@ -736,6 +736,10 @@ struct cl_page {
          */
         struct cl_io            *cp_owner;
         /**
+         * Debug information, the task is owning the page.
+         */
+        cfs_task_t              *cp_task;
+        /**
          * Owning IO request in cl_page_state::CPS_PAGEOUT and
          * cl_page_state::CPS_PAGEIN states. This field is maintained only in
          * the top-level pages. Protected by a VM lock.
@@ -855,15 +859,13 @@ struct cl_page_operations {
                              const struct cl_page_slice *slice,
                              struct cl_io *io);
         /**
-         * Announces that page contains valid data and user space can look and
-         * them without client's involvement from now on. Effectively marks
-         * the page up-to-date. Optional.
+         * Announces whether the page contains valid data or not by @uptodate.
          *
          * \see cl_page_export()
          * \see vvp_page_export()
          */
         void  (*cpo_export)(const struct lu_env *env,
-                            const struct cl_page_slice *slice);
+                            const struct cl_page_slice *slice, int uptodate);
         /**
          * Unmaps page from the user space (if it is mapped).
          *
@@ -2718,7 +2720,8 @@ int     cl_page_unmap        (const struct lu_env *env, struct cl_io *io,
                               struct cl_page *pg);
 int     cl_page_is_vmlocked  (const struct lu_env *env,
                               const struct cl_page *pg);
-void    cl_page_export       (const struct lu_env *env, struct cl_page *pg);
+void    cl_page_export       (const struct lu_env *env,
+                              struct cl_page *pg, int uptodate);
 int     cl_page_is_under_lock(const struct lu_env *env, struct cl_io *io,
                               struct cl_page *page);
 loff_t  cl_offset            (const struct cl_object *obj, pgoff_t idx);

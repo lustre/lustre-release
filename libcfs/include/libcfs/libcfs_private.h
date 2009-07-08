@@ -270,6 +270,8 @@ void libcfs_debug_dumplog(void);
 int libcfs_debug_init(unsigned long bufsize);
 int libcfs_debug_cleanup(void);
 
+#define libcfs_debug_dumpstack(tsk)     ((void)0)
+
 /*
  * Generic compiler-dependent macros required for kernel
  * build go below this comment. Actual compiler/compiler version
