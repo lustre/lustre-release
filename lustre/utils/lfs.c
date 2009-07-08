@@ -2215,5 +2215,5 @@ int main(int argc, char **argv)
         }
 
         obd_finalize(argc, argv);
-        return rc;
+        return rc < 0 ? -rc : rc;
 }

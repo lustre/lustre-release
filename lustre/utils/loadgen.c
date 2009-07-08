@@ -78,7 +78,7 @@ static int jt_quit(int argc, char **argv) {
 static int loadgen_usage(int argc, char **argv)
 {
         if (argc == 1) {
-                fprintf(stderr, 
+                fprintf(stderr,
         "This is a test program used to simulate large numbers of\n"
         "clients.  The echo obds are used, so the obdecho module must\n"
         "be loaded.\n"
@@ -867,7 +867,7 @@ static int loadgen_write(int argc, char **argv)
                         threads, live_threads);
                 return -EOVERFLOW;
         }
-        trigger(C_WRITE, threads, atoi(argv[2]), 
+        trigger(C_WRITE, threads, atoi(argv[2]),
                 (argc == 4) ? atoi(argv[3]) : 0);
         return 0;
 }
@@ -916,7 +916,7 @@ static int loadgen_start_echosrv(int argc, char **argv)
                         cmdname, rc);
                 goto clean;
         }
-  
+
         /* Create an OSS to handle the communications */
         /* attach ost OSS OSS_UUID */
         args[1] = "ost";
@@ -955,7 +955,7 @@ clean:
 
 static int loadgen_wait(int argc, char **argv)
 {
-        /* Give scripts a chance to start some threads */   
+        /* Give scripts a chance to start some threads */
         sleep(1);
         while (!all_done) {
                 sleep(1);
@@ -995,7 +995,7 @@ static int loadgen_init(int argc, char **argv)
 static int loadgen_exit()
 {
         int rc;
-        
+
         printf("stopping %d children\n", live_threads);
         kill_kids();
         rc = wait_for_threads();
@@ -1037,7 +1037,7 @@ static int loadgen_main(int argc, char **argv)
 
 out:
         obd_finalize(argc, argv);
-        return rc;
+        return rc < 0 ? -rc : rc;
 }
 
 #ifndef LIBLUSTRE_TEST

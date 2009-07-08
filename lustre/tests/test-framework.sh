@@ -523,7 +523,7 @@ sanity_mount_check_nodes () {
 
     local rc=0
     for mnt in $mnts ; do
-        do_nodes $nodes "set -x; running=\\\$(grep -c $mnt' ' /proc/mounts);
+        do_nodes $nodes "running=\\\$(grep -c $mnt' ' /proc/mounts);
 mpts=\\\$(mount | grep -w -c $mnt);
 if [ \\\$running -ne \\\$mpts ]; then
     echo \\\$(hostname) env are INSANE!;
@@ -587,7 +587,7 @@ zconf_mount_clients() {
 
     echo "Starting client $clients: $OPTIONS $device $mnt"
 
-    do_nodes $clients "set -x;
+    do_nodes $clients "
 running=\\\$(mount | grep -c $mnt' ');
 rc=0;
 if [ \\\$running -eq 0 ] ; then
@@ -615,7 +615,7 @@ zconf_umount_clients() {
     [ "$3" ] && force=-f
 
     echo "Stopping clients: $clients $mnt (opts:$force)"
-    do_nodes $clients "set -x; running=\\\$(grep -c $mnt' ' /proc/mounts);
+    do_nodes $clients "running=\\\$(grep -c $mnt' ' /proc/mounts);
 if [ \\\$running -ne 0 ] ; then
 echo Stopping client \\\$(hostname) client $mnt opts:$force;
 lsof -t $mnt || need_kill=no;
@@ -690,7 +690,7 @@ check_progs_installed () {
     shift
     local progs=$@
 
-    do_nodes $clients "set -x ; PATH=:$PATH; status=true;
+    do_nodes $clients "PATH=:$PATH; status=true;
 for prog in $progs; do
     if ! [ \\\"\\\$(which \\\$prog)\\\"  -o  \\\"\\\${!prog}\\\" ]; then
        echo \\\$prog missing on \\\$(hostname);
