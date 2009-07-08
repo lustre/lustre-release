@@ -588,10 +588,6 @@ void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
                 return;
         }
 
-        /*
-         * Make sure that nobody can find this ns in its list.
-         */
-        ldlm_namespace_unregister(ns, ns->ns_client);
 
         /*
          * Can fail with -EINTR when force == 0 in which case try harder.
@@ -626,6 +622,11 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns)
                 return;
         }
 
+
+        /*
+         * Make sure that nobody can find this ns in its list.
+         */
+        ldlm_namespace_unregister(ns, ns->ns_client);
         /*
          * Fini pool _before_ parent proc dir is removed. This is important as
          * ldlm_pool_fini() removes own proc dir which is child to @dir. Removing

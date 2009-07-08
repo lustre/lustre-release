@@ -359,9 +359,18 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
                                name, obddev->obd_name,
                                cli->cl_target_uuid.uuid);
                         spin_lock(&imp->imp_lock);
-                        imp->imp_invalid = 1;
+                        imp->imp_deactive = 1;
                         spin_unlock(&imp->imp_lock);
                 }
+        }
+
+        obddev->obd_namespace = ldlm_namespace_new(obddev, obddev->obd_name,
+                                                   LDLM_NAMESPACE_CLIENT,
+                                                   LDLM_NAMESPACE_GREEDY);
+        if (obddev->obd_namespace == NULL) {
+                CERROR("Unable to create client namespace - %s\n",
+                       obddev->obd_name);
+                GOTO(err_import, rc = -ENOMEM);
         }
 
         cli->cl_qchk_stat = CL_NOT_QUOTACHECKED;
@@ -380,6 +389,10 @@ err:
 int client_obd_cleanup(struct obd_device *obddev)
 {
         ENTRY;
+
+        ldlm_namespace_free_post(obddev->obd_namespace);
+        obddev->obd_namespace = NULL;
+
         ldlm_put_ref();
         RETURN(0);
 }
@@ -393,7 +406,6 @@ int client_connect_import(const struct lu_env *env,
         struct client_obd *cli = &obd->u.cli;
         struct obd_import *imp = cli->cl_import;
         struct obd_connect_data *ocd;
-        struct ldlm_namespace *to_be_freed = NULL;
         struct lustre_handle conn = { 0 };
         int rc;
         ENTRY;
@@ -406,23 +418,11 @@ int client_connect_import(const struct lu_env *env,
         rc = class_connect(&conn, obd, cluuid);
         if (rc)
                 GOTO(out_sem, rc);
-                
+
         cli->cl_conn_count++;
         *exp = class_conn2export(&conn);
 
-        if (obd->obd_namespace != NULL)
-                CERROR("already have namespace!\n");
-
-        /*
-         * Deadlock case - bug 18380
-         */
-        up_write(&cli->cl_sem);
-        obd->obd_namespace = ldlm_namespace_new(obd, obd->obd_name,
-                                                LDLM_NAMESPACE_CLIENT,
-                                                LDLM_NAMESPACE_GREEDY);
-        down_write(&cli->cl_sem);
-        if (obd->obd_namespace == NULL)
-                GOTO(out_disco, rc = -ENOMEM);
+        LASSERT(obd->obd_namespace);
 
         imp->imp_dlm_handle = conn;
         rc = ptlrpc_init_import(imp);
@@ -455,18 +455,12 @@ int client_connect_import(const struct lu_env *env,
 
         if (rc) {
 out_ldlm:
-                ldlm_namespace_free_prior(obd->obd_namespace, imp, 0);
-                to_be_freed = obd->obd_namespace;
-                obd->obd_namespace = NULL;
-out_disco:
                 cli->cl_conn_count--;
                 class_disconnect(*exp);
                 *exp = NULL;
         }
 out_sem:
         up_write(&cli->cl_sem);
-        if (to_be_freed)
-                ldlm_namespace_free_post(to_be_freed);
 
         return rc;
 }
@@ -477,7 +471,6 @@ int client_disconnect_export(struct obd_export *exp)
         struct client_obd *cli;
         struct obd_import *imp;
         int rc = 0, err;
-        struct ldlm_namespace *to_be_freed = NULL;
         ENTRY;
 
         if (!obd) {
@@ -490,6 +483,9 @@ int client_disconnect_export(struct obd_export *exp)
         imp = cli->cl_import;
 
         down_write(&cli->cl_sem);
+        CDEBUG(D_INFO, "disconnect %s - %d\n", obd->obd_name,
+               cli->cl_conn_count);
+
         if (!cli->cl_conn_count) {
                 CERROR("disconnecting disconnected device (%s)\n",
                        obd->obd_name);
@@ -518,7 +514,6 @@ int client_disconnect_export(struct obd_export *exp)
                                        obd->obd_force ? LDLM_FL_LOCAL_ONLY:0,
                                        NULL);
                 ldlm_namespace_free_prior(obd->obd_namespace, imp, obd->obd_force);
-                to_be_freed = obd->obd_namespace;
         }
 
         /*
@@ -530,10 +525,6 @@ int client_disconnect_export(struct obd_export *exp)
         down_write(&cli->cl_sem);
 
         ptlrpc_invalidate_import(imp);
-        /* set obd_namespace to NULL only after invalidate, because we can have
-         * some connect requests in flight, and his need store a connect flags
-         * in obd_namespace. bug 14260 */
-        obd->obd_namespace = NULL;
 
         if (imp->imp_rq_pool) {
                 ptlrpc_free_rq_pool(imp->imp_rq_pool);
@@ -552,8 +543,6 @@ int client_disconnect_export(struct obd_export *exp)
                 rc = err;
 
         up_write(&cli->cl_sem);
-        if (to_be_freed)
-                ldlm_namespace_free_post(to_be_freed);
 
         RETURN(rc);
 }
