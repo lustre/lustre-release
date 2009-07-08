@@ -468,13 +468,13 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
                 }
         }
 
-        if (obd->obd_no_recov) {
+        if (obd->obd_force) {
                 /* Pass it on to our clients.
                  * XXX This should be an argument to disconnect,
                  * XXX not a back-door flag on the OBD.  Ah well.
                  */
                 if (osc_obd)
-                        osc_obd->obd_no_recov = 1;
+                        osc_obd->obd_force = 1;
         }
 
         obd_register_observer(osc_obd, NULL);
