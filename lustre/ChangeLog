@@ -16,6 +16,9 @@
 Severity   : normal
 Bugzilla   : 19917
 Description: Repeated atomic allocation failures.
+Details    : Use GFP_HIGHUSER for OST allocations unless the client is
+	     writing locally, so that the OST threads generate memory
+	     pressure and allow inactive pages to be reclaimed.
 
 Severity   : enhancement
 Bugzilla   : 19846
