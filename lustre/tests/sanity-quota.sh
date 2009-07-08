@@ -63,11 +63,6 @@ QUOTALOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 DIR=${DIR:-$MOUNT}
 DIR2=${DIR2:-$MOUNT2}
 
-if [ ! -z "$(mounted_lustre_filesystems)" ]; then
-        log "set debug level as $PTLDEBUG"
-        do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=$PTLDEBUG"
-fi
-
 check_and_setup_lustre
 
 if [ x"$(som_check)" = x"enabled" ]; then
@@ -2111,7 +2106,7 @@ run_test_with_stat 28 "test for consistency for qunit when setquota (18574) ====
 quota_fini()
 {
 	$LFS quotaoff $DIR
-        do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=+quota"
+    do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"
 }
 quota_fini
 
