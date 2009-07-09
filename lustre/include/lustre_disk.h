@@ -222,6 +222,8 @@ struct lustre_mount_data {
 #define OBD_COMPAT_OST          0x00000002
 /** COMPAT_146: this is an MDT (temporary) */
 #define OBD_COMPAT_MDT          0x00000004
+/** 2.0 server, interop flag to show server version is changed */
+#define OBD_COMPAT_20           0x00000008
 
 /** MDS handles LOV_OBJID file */
 #define OBD_ROCOMPAT_LOVOBJID   0x00000001
@@ -236,10 +238,12 @@ struct lustre_mount_data {
 #define OBD_INCOMPAT_COMMON_LR  0x00000008
 /** FID is enabled */
 #define OBD_INCOMPAT_FID        0x00000010
-/** lustre disk using iam format to store directory entries */
-#define OBD_INCOMPAT_IAM_DIR    0x00000020
-/** 2.0 server, interop flag to show server is changed */
-#define OBD_INCOMPAT_20         0x00000040
+/** Size-on-MDS is enabled */
+#define OBD_INCOMPAT_SOM        0x00000020
+/** filesystem using iam format to store directory entries */
+#define OBD_INCOMPAT_IAM_DIR    0x00000040
+/** LMA attribute contains per-inode incompatible flags */
+#define OBD_INCOMPAT_LMA        0x00000080
 
 
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.

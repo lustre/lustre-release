@@ -415,9 +415,10 @@ static int mdt_server_data_init(const struct lu_env *env,
                 lsd->lsd_server_size = LR_SERVER_SIZE;
                 lsd->lsd_client_start = LR_CLIENT_START;
                 lsd->lsd_client_size = LR_CLIENT_SIZE;
+                lsd->lsd_feature_compat = OBD_COMPAT_MDT;
                 lsd->lsd_feature_rocompat = OBD_ROCOMPAT_LOVOBJID;
                 lsd->lsd_feature_incompat = OBD_INCOMPAT_MDT |
-                                                       OBD_INCOMPAT_COMMON_LR;
+                                            OBD_INCOMPAT_COMMON_LR;
         } else {
                 LCONSOLE_WARN("%s: used disk, loading\n", obd->obd_name);
                 rc = mdt_last_rcvd_header_read(env, mdt);
@@ -432,27 +433,43 @@ static int mdt_server_data_init(const struct lu_env *env,
                                            obd->obd_uuid.uuid, lsd->lsd_uuid);
                         GOTO(out, rc = -EINVAL);
                 }
-
-                /** evict all clients as it is first boot with old last_rcvd */
-                if (!(lsd->lsd_feature_incompat & OBD_INCOMPAT_20)) {
-                        LCONSOLE_WARN("Mounting %s at first time on old FS, "
-                                      "remove all clients for interop needs\n",
-                                      obd->obd_name);
-                        simple_truncate(lsi->lsi_srv_mnt->mnt_sb->s_root,
-                                        lsi->lsi_srv_mnt, LAST_RCVD,
-                                        lsd->lsd_client_start);
-                        last_rcvd_size = lsd->lsd_client_start;
-                }
+                lsd->lsd_feature_compat |= OBD_COMPAT_MDT;
+                lsd->lsd_feature_incompat |= OBD_INCOMPAT_MDT |
+                                             OBD_INCOMPAT_COMMON_LR;
         }
         mount_count = lsd->lsd_mount_count;
 
         ldd = lsi->lsi_ldd;
 
+        if (lsd->lsd_feature_incompat & ~MDT_INCOMPAT_SUPP) {
+                CERROR("%s: unsupported incompat filesystem feature(s) %x\n",
+                       obd->obd_name,
+                       lsd->lsd_feature_incompat & ~MDT_INCOMPAT_SUPP);
+                GOTO(out, rc = -EINVAL);
+        }
+        if (lsd->lsd_feature_rocompat & ~MDT_ROCOMPAT_SUPP) {
+                CERROR("%s: unsupported read-only filesystem feature(s) %x\n",
+                       obd->obd_name,
+                       lsd->lsd_feature_rocompat & ~MDT_ROCOMPAT_SUPP);
+                /* XXX: Do something like remount filesystem read-only */
+                GOTO(out, rc = -EINVAL);
+        }
+        /** Interop: evict all clients at first boot with 1.8 last_rcvd */
+        if (!(lsd->lsd_feature_compat & OBD_COMPAT_20)) {
+                LCONSOLE_WARN("Mounting %s at first time on 1.8 FS, remove all"
+                              " clients for interop needs\n", obd->obd_name);
+                simple_truncate(lsi->lsi_srv_mnt->mnt_sb->s_root,
+                                lsi->lsi_srv_mnt, LAST_RCVD,
+                                lsd->lsd_client_start);
+                last_rcvd_size = lsd->lsd_client_start;
+                /** set 2.0 flag to upgrade/downgrade between 1.8 and 2.0 */
+                lsd->lsd_feature_compat |= OBD_COMPAT_20;
+        }
+
         if (ldd->ldd_flags & LDD_F_IAM_DIR)
                 lsd->lsd_feature_incompat |= OBD_INCOMPAT_IAM_DIR;
 
-        lsd->lsd_feature_compat = 0;
-        lsd->lsd_feature_incompat |= OBD_INCOMPAT_FID | OBD_INCOMPAT_20;
+        lsd->lsd_feature_incompat |= OBD_INCOMPAT_FID;
 
         spin_lock(&mdt->mdt_transno_lock);
         mdt->mdt_last_transno = lsd->lsd_last_transno;

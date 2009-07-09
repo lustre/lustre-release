@@ -754,7 +754,10 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 fsd->lsd_client_size = cpu_to_le16(LR_CLIENT_SIZE);
                 fsd->lsd_subdir_count = cpu_to_le16(FILTER_SUBDIR_COUNT);
                 filter->fo_subdir_count = FILTER_SUBDIR_COUNT;
-                fsd->lsd_feature_incompat = cpu_to_le32(OBD_INCOMPAT_OST);
+                /* OBD_COMPAT_OST is set in filter_connect_internal when the
+                 * MDS first connects and assigns the OST index number. */
+                fsd->lsd_feature_incompat = cpu_to_le32(OBD_INCOMPAT_COMMON_LR|
+                                                        OBD_INCOMPAT_OST);
         } else {
                 rc = fsfilt_read_record(obd, filp, fsd, sizeof(*fsd), &off);
                 if (rc) {
@@ -777,6 +780,10 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                       cpu_to_le32(OBD_INCOMPAT_COMMON_LR)))
                         fsd->lsd_last_transno = fsd->lsd_compat14;
                 /* end COMPAT_146 */
+                /* OBD_COMPAT_OST is set in filter_connect_internal when the
+                 * MDS first connects and assigns the OST index number. */
+                fsd->lsd_feature_incompat |= cpu_to_le32(OBD_INCOMPAT_COMMON_LR|
+                                                         OBD_INCOMPAT_OST);
         }
 
         if (fsd->lsd_feature_incompat & ~cpu_to_le32(FILTER_INCOMPAT_SUPP)) {
