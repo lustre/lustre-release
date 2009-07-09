@@ -1121,25 +1121,19 @@ build_kernel_with_srpm() {
     # the extra version string to use for the kernel (which might be a reused
     # kernel, remember)
     local kernel_extra_version=""
-    if $REUSERPM && reuse kernel "$TOPDIR" "$CAN_LINK_FOR_REUSE" \
-                                 "$REUSE_SIGNATURE"; then
-        # figure out the EXTRA_VERSION of the kernel we are re-using
-        local KERNEL_RPM
-        if ! KERNEL_RPM=$(find_rpm "$TOPDIR/RPMS/$TARGET_ARCH/" provides "^kernel ="); then
-            fatal 1 "Failed to find a kernel RPM in $TOPDIR/RPMS/$TARGET_ARCH/"
-        fi
-        kernel_extra_version=$(rpm -q --queryformat "%{RELEASE}" -p $TOPDIR/RPMS/$TARGET_ARCH/$KERNEL_RPM)
-    else
+    if $REUSERPM && ! reuse kernel "$TOPDIR" "$CAN_LINK_FOR_REUSE" \
+                                   "$REUSE_SIGNATURE"; then
         # nothing cached, build from scratch
         if [ ! -r "$KERNELDIR/$KERNEL_SRPM" ]; then
             download_srpm "$CANONICAL_TARGET" "$KERNEL_SRPM" >&2
         fi
 
-        rpm -ivh $KERNELDIR/$KERNEL_SRPM --define "_topdir $TOPDIR" >&2 || {
-    	# should we clean this up or leave it for analysis?
+        if ! rpm -ivh $KERNELDIR/$KERNEL_SRPM \
+                  --define "_topdir $TOPDIR" >&2; then
+            # should we clean this up or leave it for analysis?
             #rm -rf $RPMTOPDIR
             fatal 1 "Error installing kernel SRPM."
-        }
+        fi
 
         # put the Lustre kernel patch into the RPM build tree
         cp $FULL_PATCH $TOPDIR/SOURCES/linux-${lnxmaj}-lustre.patch
@@ -1153,8 +1147,14 @@ build_kernel_with_srpm() {
             echo "unknown"
             return 1
         fi
-        kernel_extra_version=$EXTRA_VERSION
     fi	# build reuse
+
+    # figure out the EXTRA_VERSION of the kernel we built or are re-using
+    local KERNEL_RPM
+    if ! KERNEL_RPM=$(find_rpm "$TOPDIR/RPMS/$TARGET_ARCH/" provides "^kernel ="); then
+        fatal 1 "Failed to find a kernel RPM in $TOPDIR/RPMS/$TARGET_ARCH/"
+    fi
+    kernel_extra_version=$(rpm -q --queryformat "%{RELEASE}" -p $TOPDIR/RPMS/$TARGET_ARCH/$KERNEL_RPM)
 
     # should now have the following RPMs
     # $TOPDIR/RPMS/$arch/kernel-lustre-2.6.18-53.1.21.el5_lustre.1.6.5.1.$arch.rpm
