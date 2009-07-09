@@ -1347,7 +1347,14 @@ change_active() {
 }
 
 do_node() {
-    HOST=$1
+    local verbose=false
+    # do not stripe off hostname if verbose, bug 19215
+    if [ x$1 = x--verbose ]; then
+        shift
+        verbose=true
+    fi
+
+    local HOST=$1
     shift
     local myPDSH=$PDSH
     if [ "$HOST" = "$HOSTNAME" ]; then
@@ -1371,7 +1378,12 @@ do_node() {
 	[ -n "$($myPDSH $HOST cat $command_status)" ] && return 1 || true
         return 0
     fi
-    $myPDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")" | sed "s/^${HOST}: //"
+
+    if $verbose ; then
+        $myPDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")"
+    else
+        $myPDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")" | sed "s/^${HOST}: //"
+    fi
     return ${PIPESTATUS[0]}
 }
 
@@ -1380,10 +1392,18 @@ single_local_node () {
 }
 
 do_nodes() {
+    local verbose=false
+    # do not stripe off hostname if verbose, bug 19215
+    if [ x$1 = x--verbose ]; then
+        shift
+        verbose=true
+    fi
+
     local rnodes=$1
     shift
 
     if $(single_local_node $rnodes); then
+        $verbose && echo -n $rnodes:' ' || true 
         do_node $rnodes $@
         return $?
     fi
@@ -1399,7 +1419,11 @@ do_nodes() {
         $myPDSH $rnodes $LCTL mark "$@" > /dev/null 2>&1 || :
     fi
 
-    $myPDSH $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")" | sed -re "s/\w+:\s//g"
+    if $verbose ; then
+        $myPDSH $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")"
+    else
+        $myPDSH $rnodes "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")" | sed -re "s/\w+:\s//g"
+    fi
     return ${PIPESTATUS[0]}
 }
 
@@ -2675,7 +2699,7 @@ calc_osc_kbytes () {
 # generate a stream of formatted strings (<node> <param name>=<param value>)
 save_lustre_params() {
         local s
-        do_node $1 "lctl get_param $2" | while read s; do echo "$1 $s"; done
+        do_nodes --verbose $1 "lctl get_param $2 | while read s; do echo \\\$s; done"
 }
 
 # restore lustre parameters from input stream, produces by save_lustre_params
@@ -2684,7 +2708,7 @@ restore_lustre_params() {
         local name
         local val
         while IFS=" =" read node name val; do
-                do_node $node "lctl set_param -n $name $val"
+                do_node ${node//:/} "lctl set_param -n $name $val"
         done
 }
 

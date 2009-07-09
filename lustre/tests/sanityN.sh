@@ -711,8 +711,19 @@ test_32b() { # bug 11270
 run_test 32b "lockless i/o"
 
 print_jbd_stat () {
-    local dev=$(basename $(do_facet $SINGLEMDS lctl get_param -n osd.*MDT*.mntdev))
-    do_facet $SINGLEMDS cat /proc/fs/jbd/$dev/info | head -1
+    local dev
+    local mdts=$(get_facets MDS)
+    local varcvs
+    local mds
+
+    local stat=0
+    for mds in ${mdts//,/ }; do
+        varsvc=${mds}_svc
+        dev=$(basename $(do_facet $mds lctl get_param -n osd.${!varsvc}.mntdev))
+        val=$(do_facet $mds cat /proc/fs/jbd/$dev/info | head -1 | cut -d" " -f1)
+        stat=$(( stat + val))
+    done
+    echo $stat
 }
 
 # commit on sharing tests
@@ -729,7 +740,7 @@ test_33a() {
     local nfiles=${TEST33_NFILES:-10000}
     local param_file=$TMP/$tfile-params
 
-    save_lustre_params $(facet_active_host $SINGLEMDS) "mdt.*.commit_on_sharing" > $param_file
+    save_lustre_params $(comma_list $(mdts_nodes)) "mdt.*.commit_on_sharing" > $param_file
 
     local COS
     local jbdold
@@ -744,11 +755,11 @@ test_33a() {
             do_nodes $CLIENT1,$CLIENT2 "mkdir -p $DIR1/$tdir-\\\$(hostname)-$i"
 
             jbdold=$(print_jbd_stat)
-            echo "=== START createmany $jbdold"
+            echo "=== START createmany old: $jbdold transaction"
             local elapsed=$(do_and_time "do_nodes $CLIENT1,$CLIENT2 createmany -o $DIR1/$tdir-\\\$(hostname)-$i/f- -r $DIR2/$tdir-\\\$(hostname)-$i/f- $nfiles > /dev/null 2>&1")
             jbdnew=$(print_jbd_stat)
-            jbd=$((`echo $jbdnew | cut -d" " -f1` - `echo $jbdold | cut -d" " -f1`))
-            echo "=== END   createmany $jbdnew :  $jbd transactions  nfiles $nfiles time $elapsed COS=$COS"
+            jbd=$(( jbdnew - jbdold ))
+            echo "=== END   createmany new: $jbdnew transaction :  $jbd transactions  nfiles $nfiles time $ELAPSED COS=$COS"
             avgjbd=$(( avgjbd + jbd ))
             avgtime=$(( avgtime + elapsed ))
         done
