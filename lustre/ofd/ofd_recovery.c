@@ -278,13 +278,16 @@ int filter_fs_setup(const struct lu_env *env, struct filter_device *ofd,
         attr.la_valid = LA_MODE;
         attr.la_mode = S_IFREG | 0666;
 
-        rc = lut_init2(env, &ofd->ofd_lut, obd, ofd->ofd_osd, &fid);
-        LASSERT(rc == 0);
-
         fo = filter_object_find_or_create(env, ofd, &fid, &attr);
         LASSERT(!IS_ERR(fo));
         ofd->ofd_last_rcvd = filter_object_child(fo);
         rc = filter_server_data_init(env, ofd);
+        LASSERT(rc == 0);
+        lu_object_put(env, &ofd->ofd_last_rcvd->do_lu);
+        ofd->ofd_last_rcvd = NULL;
+
+        LASSERT(ofd->ofd_osd);
+        rc = lut_init2(env, &ofd->ofd_lut, obd, ofd->ofd_osd, &fid);
         LASSERT(rc == 0);
 
         lu_local_obj_fid(&fid, OFD_LAST_GROUP);
@@ -330,6 +333,7 @@ void filter_fs_cleanup(const struct lu_env *env, struct filter_device *ofd)
 
         if (ofd->ofd_last_group_file)
                 lu_object_put(env, &ofd->ofd_last_group_file->do_lu);
+
         ofd->ofd_last_group_file = NULL;
 
         OBD_FREE(ofd->ofd_last_rcvd_slots, LR_MAX_CLIENTS / 8);
