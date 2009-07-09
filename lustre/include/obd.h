@@ -806,12 +806,12 @@ struct niobuf_local {
 
 #define LUSTRE_CMM_NAME         "cmm"
 #define LUSTRE_MDD_NAME         "mdd"
-#define LUSTRE_OSD_NAME         "osd"
+#define LUSTRE_OSD_NAME         "osd-ldiskfs"
 #define LUSTRE_VVP_NAME         "vvp"
 #define LUSTRE_LMV_NAME         "lmv"
 #define LUSTRE_CMM_MDC_NAME     "cmm-mdc"
 #define LUSTRE_SLP_NAME         "slp"
-#define LUSTRE_ZFS_NAME         "zfs"
+#define LUSTRE_ZFS_NAME         "osd-zfs"
 
 /* obd device type names */
  /* FIXME all the references to LUSTRE_MDS_NAME should be swapped with LUSTRE_MDT_NAME */

@@ -1,5 +1,5 @@
-MODULES := dosd
-dosd-objs := osd_handler.o udmu.o udmu_util.o
+MODULES := osd-zfs
+osd-zfs-objs := osd_handler.o udmu.o udmu_util.o
 
 EXTRA_PRE_CFLAGS := -I@ZFS_DIR@/module/zcommon/include -I@ZFS_DIR@/module/avl/include -I@ZFS_DIR@/module/nvpair/include -I@ZFS_DIR@/module/zfs/include -I@SPL_DIR@/include -I@SPL_DIR@
 

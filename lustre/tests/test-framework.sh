@@ -252,14 +252,14 @@ load_modules() {
         grep -q crc16 /proc/kallsyms || { modprobe crc16 2>/dev/null || true; }
         grep -q jbd /proc/kallsyms || { modprobe jbd 2>/dev/null || true; }
         [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
-        [ "$OSTFSTYPE" = "zfs" ] && load_module "dmu-osd/dosd"
+        [ "$OSTFSTYPE" = "zfs" ] && load_module "dmu-osd/osd-zfs"
         load_module mgs/mgs
         load_module mds/mds
         load_module mdd/mdd
         load_module mdt/mdt
         load_module lvfs/fsfilt_$FSTYPE
         load_module cmm/cmm
-        load_module osd/osd
+        load_module osd/osd-ldiskfs
         load_module ost/ost
         load_module ofd/ofd
     fi
