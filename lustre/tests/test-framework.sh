@@ -1471,6 +1471,8 @@ stopall() {
 }
 
 cleanupall() {
+    nfs_client_mode && return
+
     stopall $*
     unload_modules
     cleanup_gss
@@ -1585,6 +1587,8 @@ writeconf_all () {
 }
 
 setupall() {
+    nfs_client_mode && return
+
     sanity_mount_check ||
         error "environments are insane!"
 
@@ -1747,7 +1751,24 @@ init_param_vars () {
     fi
 }
 
+nfs_client_mode () {
+    if [ "$NFSCLIENT" ]; then
+        echo "NFSCLIENT mode: setup, cleanup, check config skipped"
+        local clients=$CLIENTS
+        [ -z $clients ] && clients=$(hostname)
+
+        # FIXME: remove hostname when 19215 fixed
+        do_nodes $clients "echo \\\$(hostname); grep ' '$MOUNT' ' /proc/mounts"
+        declare -a nfsexport=(`grep ' '$MOUNT' ' /proc/mounts | awk '{print $1}' | awk -F: '{print $1 " "  $2}'`)
+        do_nodes ${nfsexport[0]} "echo \\\$(hostname); df -T  ${nfsexport[1]}"
+        return
+    fi
+    return 1
+}
+
 check_config () {
+    nfs_client_mode && return
+
     local mntpt=$1
 
     local mounted=$(mount | grep " $mntpt ")
@@ -1801,6 +1822,8 @@ check_timeout () {
 }
 
 check_and_setup_lustre() {
+    nfs_client_mode && return
+
     local MOUNTED=$(mounted_lustre_filesystems)
     if [ -z "$MOUNTED" ] || ! $(echo $MOUNTED | grep -w -q $MOUNT); then
         [ "$REFORMAT" ] && formatall
