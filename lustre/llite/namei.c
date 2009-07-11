@@ -41,6 +41,8 @@
 #include <linux/quotaops.h>
 #include <linux/highmem.h>
 #include <linux/pagemap.h>
+#include <linux/dcache.h>
+#include <linux/buffer_head.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
@@ -708,6 +710,42 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 }
 #endif
 
+/**
+ * check new allocated inode, new inode shld not have any valid alias
+ */
+static void ll_validate_new_inode(struct inode *new)
+{
+        struct list_head *lp;
+        struct dentry * dentry;
+        int need_inval = 0;
+        int in_recheck = 0;
+
+        if (list_empty(&new->i_dentry))
+                return;
+recheck:
+        spin_lock(&dcache_lock);
+        list_for_each(lp, &new->i_dentry) {
+                dentry = list_entry(lp, struct dentry, d_alias);
+                if (!d_unhashed(dentry) && !(dentry->d_flags & DCACHE_LUSTRE_INVALID)){
+                        ll_dump_inode(new);
+                        if (in_recheck)
+                                LBUG();
+                }
+                need_inval = 1;
+        }
+        spin_unlock(&dcache_lock);
+
+        if (need_inval && !in_recheck) {
+                /* kill all old inode's data pages */
+                truncate_inode_pages(new->i_mapping, 0);
+
+                /* invalidate all dirent and recheck inode */
+                ll_unhash_aliases(new);
+                in_recheck = 1;
+                goto recheck;
+        }
+}
+
 /* We depend on "mode" being set with the proper file type/umask by now */
 static struct inode *ll_create_node(struct inode *dir, const char *name,
                                     int namelen, const void *data, int datalen,
@@ -729,7 +767,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         if (rc)
                 GOTO(out, inode = ERR_PTR(rc));
 
-        LASSERT(list_empty(&inode->i_dentry));
+        ll_validate_new_inode(inode);
 
         /* We asked for a lock on the directory, but were granted a
          * lock on the inode.  Since we finally have an inode pointer,
@@ -779,6 +817,8 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
                 RETURN(PTR_ERR(inode));
         }
 
+        /* it might been set during parent dir revalidation */
+        dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
         d_instantiate(dentry, inode);
         /* Negative dentry may be unhashed if parent does not have UPDATE lock,
          * but some callers, e.g. do_coredump, expect dentry to be hashed after
