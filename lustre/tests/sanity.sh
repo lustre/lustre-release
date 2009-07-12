@@ -5826,16 +5826,16 @@ test_130e() {
 	trap cleanup_130 EXIT RETURN
 
 	local fm_file=$DIR/$tfile
-	lfs setstripe -s 65536 -c 2 $fm_file || error "setstripe failed on $fm_file"
+	lfs setstripe -s 131072 -c 2 $fm_file || error "setstripe failed on $fm_file"
 	NUM_BLKS=512
-	EXPECTED_LEN=$(( (NUM_BLKS / 2) * 4 ))
+	EXPECTED_LEN=$(( (NUM_BLKS / 2) * 64 ))
 	for ((i = 0; i < $NUM_BLKS; i++))
 	do
-		dd if=/dev/zero of=$fm_file count=1 bs=4096 seek=$((2*$i)) conv=notrunc > /dev/null 2>&1
+		dd if=/dev/zero of=$fm_file count=1 bs=64k seek=$((2*$i)) conv=notrunc > /dev/null 2>&1
 	done
 
 	filefrag -ves $fm_file || error "filefrag $fm_file failed"
-	filefrag_op=`filefrag -ve $fm_file | grep -A 750 "ext:" | grep -v "ext:" | grep -v "found"`
+	filefrag_op=`filefrag -ve $fm_file | grep -A 12000 "ext:" | grep -v "ext:" | grep -v "found"`
 
 	last_lun=`echo $filefrag_op | cut -d: -f5`
 
