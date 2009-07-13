@@ -31,6 +31,10 @@ build_test_filter
 check_and_setup_lustre
 rm -rf $DIR/[df][0-9]*
 
+get_mpiuser_id $MPI_USER
+MPI_RUNAS=${MPI_RUNAS:-"runas -u $MPI_USER_UID -g $MPI_USER_GID"}
+$GSS_KRB5 && refresh_krb5_tgt $MPI_USER_UID $MPI_USER_GID $MPI_RUNAS
+
 [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
 
 test_3a() {

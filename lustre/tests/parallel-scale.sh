@@ -84,6 +84,10 @@ wdisjoint_REP=${wdisjoint_REP:-10000}
 build_test_filter
 check_and_setup_lustre
 
+get_mpiuser_id $MPI_USER
+MPI_RUNAS=${MPI_RUNAS:-"runas -u $MPI_USER_UID -g $MPI_USER_GID"}
+$GSS_KRB5 && refresh_krb5_tgt $MPI_USER_UID $MPI_USER_GID $MPI_RUNAS
+
 print_opts () {
     local var
 
