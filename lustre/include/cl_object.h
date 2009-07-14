@@ -753,6 +753,8 @@ struct cl_page {
         struct lu_ref_link      *cp_queue_ref;
         /** Per-page flags from enum cl_page_flags. Protected by a VM lock. */
         unsigned                 cp_flags;
+        /** Assigned if doing a sync_io */
+        struct cl_sync_io       *cp_sync_io;
 };
 
 /**
@@ -2889,6 +2891,9 @@ int   cl_io_commit_write (const struct lu_env *env, struct cl_io *io,
 int   cl_io_submit_rw    (const struct lu_env *env, struct cl_io *io,
                           enum cl_req_type iot, struct cl_2queue *queue,
                           enum cl_req_priority priority);
+int   cl_io_submit_sync  (const struct lu_env *env, struct cl_io *io,
+                          enum cl_req_type iot, struct cl_2queue *queue,
+                          enum cl_req_priority priority, long timeout);
 void  cl_io_rw_advance   (const struct lu_env *env, struct cl_io *io,
                           size_t nob);
 int   cl_io_cancel       (const struct lu_env *env, struct cl_io *io,
@@ -2995,14 +3000,15 @@ struct cl_sync_io {
         /** number of pages yet to be transferred. */
         atomic_t             csi_sync_nr;
         /** completion to be signaled when transfer is complete. */
-        struct completion    csi_sync_completion;
+        cfs_waitq_t          csi_waitq;
         /** error code. */
         int                  csi_sync_rc;
 };
 
 void cl_sync_io_init(struct cl_sync_io *anchor, int nrpages);
 int  cl_sync_io_wait(const struct lu_env *env, struct cl_io *io,
-                     struct cl_page_list *queue, struct cl_sync_io *anchor);
+                     struct cl_page_list *queue, struct cl_sync_io *anchor,
+                     long timeout);
 void cl_sync_io_note(struct cl_sync_io *anchor, int ioret);
 
 /** @} cl_sync_io */

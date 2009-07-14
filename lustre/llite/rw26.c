@@ -223,10 +223,8 @@ ssize_t ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io,
                            struct ll_dio_pages *pv)
 {
         struct cl_page    *clp;
-        struct ccc_page   *clup;
         struct cl_2queue  *queue;
         struct cl_object  *obj = io->ci_obj;
-        struct cl_sync_io *anchor = &ccc_env_info(env)->cti_sync_io;
         int i;
         ssize_t rc = 0;
         loff_t file_offset  = pv->ldp_start_offset;
@@ -235,8 +233,6 @@ ssize_t ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io,
         struct page **pages = pv->ldp_pages;
         size_t page_size    = cl_page_size(obj);
         ENTRY;
-
-        cl_sync_io_init(anchor, page_count);
 
         queue = &io->ci_queue;
         cl_2queue_init(queue);
@@ -295,8 +291,6 @@ ssize_t ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io,
                         break;
                 }
 
-                clup = cl2ccc_page(cl_page_at(clp, &vvp_device_type));
-                clup->cpg_sync_io = anchor;
                 cl_2queue_add(queue, clp);
 
                 /* drop the reference count for cl_page_find, so that the page
@@ -312,21 +306,11 @@ ssize_t ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io,
         }
 
         if (rc == 0) {
-                rc = cl_io_submit_rw(env, io, rw == READ ? CRT_READ : CRT_WRITE,
-                                     queue, CRP_NORMAL);
-                if (rc == 0) {
-                        /*
-                         * If some pages weren't sent for any reason (e.g.,
-                         * direct-io read found up-to-date pages in the
-                         * cache), count them as completed to avoid infinite
-                         * wait.
-                         */
-                        cl_page_list_for_each(clp, &queue->c2_qin)
-                                cl_sync_io_note(anchor, +1);
-                        /* wait for the IO to be finished. */
-                        rc = cl_sync_io_wait(env, io, &queue->c2_qout,
-                                             anchor) ?: pv->ldp_size;
-                }
+                rc = cl_io_submit_sync(env, io,
+                                       rw == READ ? CRT_READ : CRT_WRITE,
+                                       queue, CRP_NORMAL, 0);
+                if (rc == 0)
+                        rc = pv->ldp_size;
         }
 
         cl_2queue_discard(env, io, queue);

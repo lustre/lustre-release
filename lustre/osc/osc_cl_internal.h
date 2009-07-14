@@ -290,6 +290,10 @@ struct osc_page {
          * Thread that submitted this page for transfer. For debugging.
          */
         cfs_task_t           *ops_submitter;
+        /**
+         * Submit time - the time when the page is starting RPC. For debugging.
+         */
+        cfs_time_t            ops_submit_time;
 };
 
 extern cfs_mem_cache_t *osc_page_kmem;

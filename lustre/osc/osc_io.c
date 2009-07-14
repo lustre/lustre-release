@@ -194,6 +194,7 @@ static int osc_io_submit(const struct lu_env *env,
                                  */
                                 LASSERT(result == 0);
                         }
+                        opg->ops_submit_time = cfs_time_current();
                 } else {
                         LASSERT(result < 0);
                         if (result != -EALREADY)

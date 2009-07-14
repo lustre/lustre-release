@@ -280,6 +280,14 @@ static const char *osc_list(struct list_head *head)
         return list_empty(head) ? "-" : "+";
 }
 
+static inline cfs_time_t osc_submit_duration(struct osc_page *opg)
+{
+        if (opg->ops_submit_time == 0)
+                return 0;
+
+        return (cfs_time_current() - opg->ops_submit_time);
+}
+
 static int osc_page_print(const struct lu_env *env,
                           const struct cl_page_slice *slice,
                           void *cookie, lu_printer_t printer)
@@ -290,7 +298,7 @@ static int osc_page_print(const struct lu_env *env,
         return (*printer)(env, cookie, LUSTRE_OSC_NAME"-page@%p: "
                           "< %#x %d %u %s %s %s >"
                           "< %llu %u %#x %#x %p %p %p %p %p >"
-                          "< %s %p %d >\n",
+                          "< %s %p %d %lu >\n",
                           opg,
                           /* 1 */
                           oap->oap_magic, oap->oap_cmd,
@@ -306,7 +314,8 @@ static int osc_page_print(const struct lu_env *env,
                           oap->oap_caller_data,
                           /* 3 */
                           osc_list(&opg->ops_inflight),
-                          opg->ops_submitter, opg->ops_transfer_pinned);
+                          opg->ops_submitter, opg->ops_transfer_pinned,
+                          osc_submit_duration(opg));
 }
 
 static void osc_page_delete(const struct lu_env *env,
@@ -397,6 +406,8 @@ static int osc_make_ready(const struct lu_env *env, void *data, int cmd)
 
         ENTRY;
         result = cl_page_make_ready(env, page, CRT_WRITE);
+        if (result == 0)
+                opg->ops_submit_time = cfs_time_current();
         RETURN(result);
 }
 
@@ -475,6 +486,8 @@ static int osc_completion(const struct lu_env *env,
         LASSERT(!list_empty(&opg->ops_inflight));
         list_del_init(&opg->ops_inflight);
         spin_unlock(&obj->oo_seatbelt);
+
+        opg->ops_submit_time = 0;
 
         cl_page_completion(env, page, crt, rc);
 

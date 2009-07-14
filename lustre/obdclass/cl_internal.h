@@ -105,6 +105,10 @@ struct cl_thread_info {
          * Pointer to the topmost ongoing IO in this thread.
          */
         struct cl_io        *clt_current_io;
+        /**
+         * Used for submitting a sync io.
+         */
+        struct cl_sync_io    clt_anchor;
 };
 
 struct cl_thread_info *cl_env_info(const struct lu_env *env);

@@ -123,7 +123,6 @@ extern struct lu_context_key ccc_session_key;
 struct ccc_thread_info {
         struct cl_lock_descr cti_descr;
         struct cl_io         cti_io;
-        struct cl_sync_io    cti_sync_io;
         struct cl_attr       cti_attr;
 };
 
@@ -209,7 +208,6 @@ struct ccc_page {
         struct list_head     cpg_pending_linkage;
         /** VM page */
         cfs_page_t          *cpg_page;
-        struct cl_sync_io   *cpg_sync_io;
         /**
          * checksum for paranoid I/O debugging enabled by
          * ENABLE_LLITE_CHECKSUM configuration option.

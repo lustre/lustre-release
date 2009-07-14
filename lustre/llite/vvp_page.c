@@ -277,14 +277,10 @@ static void vvp_page_completion_common(const struct lu_env *env,
         struct cl_page    *clp    = cp->cpg_cl.cpl_page;
         cfs_page_t        *vmpage = cp->cpg_page;
         struct inode      *inode  = ccc_object_inode(clp->cp_obj);
-        struct cl_sync_io *anchor = cp->cpg_sync_io;
 
         LINVRNT(cl_page_is_vmlocked(env, clp));
 
-        if (anchor != NULL) {
-                cp->cpg_sync_io  = NULL;
-                cl_sync_io_note(anchor, ioret);
-        } else if (clp->cp_type == CPT_CACHEABLE) {
+        if (!clp->cp_sync_io && clp->cp_type == CPT_CACHEABLE) {
                 /*
                  * Only mark the page error only when it's a cacheable page
                  * and NOT a sync io.

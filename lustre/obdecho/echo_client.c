@@ -78,7 +78,6 @@ struct echo_object_conf {
 
 struct echo_page {
         struct cl_page_slice   ep_cl;
-        struct cl_sync_io     *ep_sync_io;
         cfs_page_t            *ep_vmpage;
 };
 
@@ -187,7 +186,6 @@ struct echo_thread_info {
 
         struct cl_2queue        eti_queue;
         struct cl_io            eti_io;
-        struct cl_sync_io       eti_anchor;
         struct cl_lock_descr    eti_descr;
         struct lu_fid           eti_fid;
 };
@@ -271,14 +269,7 @@ static void echo_page_completion(const struct lu_env *env,
                                  const struct cl_page_slice *slice,
                                  int ioret)
 {
-        struct echo_page *ecp     = cl2echo_page(slice);
-        struct cl_sync_io *anchor = ecp->ep_sync_io;
-        ENTRY;
-
-        LASSERT(anchor != NULL);
-        ecp->ep_sync_io = NULL;
-        cl_sync_io_note(anchor, ioret);
-        EXIT;
+        LASSERT(slice->cpl_page->cp_sync_io != NULL);
 }
 
 static void echo_page_fini(const struct lu_env *env,
@@ -1056,16 +1047,14 @@ static int cl_echo_async_brw(const struct lu_env *env, struct cl_io *io,
         int result = 0;
         ENTRY;
 
-        cl_page_list_splice(&queue->c2_qin, &queue->c2_qout);
-        cl_page_list_for_each_safe(clp, temp, &queue->c2_qout) {
+        cl_page_list_for_each_safe(clp, temp, &queue->c2_qin) {
                 int rc;
                 rc = cl_page_cache_add(env, io, clp, CRT_WRITE);
                 if (rc == 0)
                         continue;
-                cl_page_list_move(&queue->c2_qin, &queue->c2_qout, clp);
                 result = result ?: rc;
         }
-        RETURN(list_empty(&queue->c2_qout.pl_pages) ? result : 0);
+        RETURN(result);
 }
 
 static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
@@ -1075,11 +1064,9 @@ static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
         struct echo_thread_info *info;
         struct cl_object        *obj = echo_obj2cl(eco);
         struct echo_device      *ed  = eco->eo_dev;
-        struct cl_sync_io       *anchor;
         struct cl_2queue        *queue;
         struct cl_io            *io;
         struct cl_page          *clp;
-        struct echo_page        *ep;
 
         int page_size = cl_page_size(obj);
         int refcheck;
@@ -1094,10 +1081,8 @@ static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
 
         info    = echo_env_info(env);
         io      = &info->eti_io;
-        anchor  = &info->eti_anchor;
         queue   = &info->eti_queue;
 
-        cl_sync_io_init(anchor, npages);
         cl_2queue_init(queue);
         rc = cl_io_init(env, io, CIT_MISC, obj);
         if (rc < 0)
@@ -1121,8 +1106,6 @@ static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
                         break;
                 }
 
-                ep = cl2echo_page(cl_page_at(clp, &echo_device_type));
-                ep->ep_sync_io = anchor;
                 cl_2queue_add(queue, clp);
 
                 /* drop the reference count for cl_page_find, so that the page
@@ -1138,21 +1121,10 @@ static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
                 if (async)
                         rc = cl_echo_async_brw(env, io, typ, queue);
                 else
-                        rc = cl_io_submit_rw(env, io,typ, queue, CRP_NORMAL);
+                        rc = cl_io_submit_sync(env, io, typ, queue,
+                                               CRP_NORMAL, 0);
                 CDEBUG(D_INFO, "echo_client %s write returns %d\n",
                        async ? "async" : "sync", rc);
-                if (rc == 0) {
-                        /*
-                         * If some pages weren't sent for any reason (e.g.,
-                         * direct-io read found up-to-date pages in the
-                         * cache), count them as completed to avoid infinite
-                         * wait.
-                         */
-                        cl_page_list_for_each(clp, &queue->c2_qin)
-                                cl_sync_io_note(anchor, +1);
-                        /* wait for the IO to be finished. */
-                        rc = cl_sync_io_wait(env, io, &queue->c2_qout, anchor);
-                }
         }
 
         cl_2queue_discard(env, io, queue);

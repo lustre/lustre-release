@@ -1279,6 +1279,10 @@ void cl_page_completion(const struct lu_env *env,
         CL_PAGE_INVOID_REVERSE(env, pg, CL_PAGE_OP(io[crt].cpo_completion),
                                (const struct lu_env *,
                                 const struct cl_page_slice *, int), ioret);
+        if (pg->cp_sync_io) {
+                cl_sync_io_note(pg->cp_sync_io, ioret);
+                pg->cp_sync_io = NULL;
+        }
 
         /* Don't assert the page writeback bit here because the lustre file
          * may be as a backend of swap space. in this case, the page writeback
