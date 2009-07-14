@@ -112,7 +112,8 @@ typedef struct {
 # define LP_POISON ((void *)(long)0x5a5a5a5a)
 #endif
 
-#if defined(HAVE_U64_LONG_LONG) 
+#if (defined(__KERNEL__) && defined(HAVE_KERN__U64_LONG_LONG)) || \
+    (!defined(__KERNEL__) && defined(HAVE_USER__U64_LONG_LONG))
 /* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"

@@ -169,7 +169,7 @@ AC_DEFINE(HAVE_SHOW_TASK, 1, [show_task is exported])
 ])
 ])
 
-# check userland __u64 type
+# check userland & kernel __u64 type
 AC_DEFUN([LIBCFS_U64_LONG_LONG],
 [AC_MSG_CHECKING([u64 is long long type])
 tmp_flags="$CFLAGS"
@@ -185,12 +185,31 @@ AC_COMPILE_IFELSE([
 	}
 ],[
 	AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_U64_LONG_LONG, 1,
+        AC_DEFINE(HAVE_USER__U64_LONG_LONG, 1,
                   [__u64 is long long type])
 ],[
 	AC_MSG_RESULT([no])
 ])
 CFLAGS="$tmp_flags"
+AC_MSG_CHECKING([kernel __u64 is long long type])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="$EXTRA_KCFLAGS -Werror"
+LB_LINUX_TRY_COMPILE([
+	#include <linux/types.h>
+	#include <linux/stddef.h>
+],[
+	unsigned long long *data1;
+	__u64 *data2 = NULL;
+		
+	data1 = data2;
+],[
+	AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_KERN__U64_LONG_LONG, 1,
+                  [kernel __u64 is long long type])
+],[
+	AC_MSG_RESULT([no])
+])
+EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 # check userland size_t type
