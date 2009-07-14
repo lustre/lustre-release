@@ -438,7 +438,6 @@ if [ "$SANITY_GSS" != "no" ]; then
 fi
 
 
-echo replication sanity: $LREPLICATE_TEST
 [ "$LREPLICATE_TEST" != "no" ] && skip_remmds lreplicate-test && LREPLICATE_TEST=no && MSKIPPED=1
 [ "$LREPLICATE_TEST" != "no" ] && skip_remost lreplicate-test && LREPLICATE_TEST=no && OSKIPPED=1
 if [ "$LREPLICATE_TEST" != "no" ]; then

@@ -392,7 +392,20 @@ test_4() {
 
     $KILL -SIGCONT $child_pid
     sleep 60
-    $KILL -SIGKILL $child_pid
+    $KILL -SIGKILL $(pgrep run_iozone.sh)
+    $KILL -SIGKILL $(pgrep iozone)
+
+    # After killing 'run_iozone.sh', process 'iozone' becomes the
+    # child of PID 1. Hence 'wait' does not wait for it. Killing
+    # iozone first, means more iozone processes are spawned off which
+    # is not desirable. So, after sending a sigkill, the test goes
+    # into a wait loop for iozone to cleanup and exit.
+    wait
+    while [ "$(pgrep "iozone")" != "" ];
+    do
+      ps -ef | grep iozone | grep -v grep
+      sleep 1;
+    done
 
     $LREPLICATE -l $LREPL_LOG
     check_diff $DIR/$tdir $TGT/$tdir
@@ -563,5 +576,5 @@ log "cleanup: ======================================================"
 cd $ORIG_PWD
 check_and_cleanup_lustre
 echo '=========================== finished ==============================='
-[ -f "$REPLOG" ] && cat $REPLLOG && grep -q FAIL $REPLLOG && exit 1 || true
+[ -f "$REPLLOG" ] && cat $REPLLOG && grep -q FAIL $REPLLOG && exit 1 || true
 echo "$0: completed"

@@ -1352,6 +1352,16 @@ void lr_print_status(struct lr_info *info)
                 printf("Using rsync: %s (%s)\n", rsync, rsync_ver);
 }
 
+DECLARE_CHANGELOG_NAMES;
+
+void lr_print_failure(struct lr_info *info, int rc)
+{
+        fprintf(stderr, "Replication of operation failed(%d):"
+                " %lld %s (%d) %s %s %s\n", rc, info->recno, 
+                changelog_str[info->type], info->type, info->tfid,
+                info->pfid, info->name);
+}
+
 /* Replicate filesystem operations from src_path to target_path */
 int lr_replicate()
 {
@@ -1466,9 +1476,7 @@ int lr_replicate()
                         break;
                 }
                 if (rc && rc != -ENOENT) {
-                        fprintf(stderr, "Replication of operation %d, "
-                                "index %lld failed: %d\n",
-                                info->type, info->recno, rc);
+                        lr_print_failure(info, rc);
                         errors++;
                         if (abort_on_err)
                                 break;
