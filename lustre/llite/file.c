@@ -333,7 +333,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
 
         if (itp->d.lustre.it_lock_mode)
                 mdc_set_lock_data(&itp->d.lustre.it_lock_handle,
-                                  inode);
+                                  inode, NULL);
 
         rc = ll_prep_inode(sbi->ll_osc_exp, &file->f_dentry->d_inode,
                            req, DLM_REPLY_REC_OFF, NULL);
@@ -535,7 +535,7 @@ restart:
                         }
 
                         mdc_set_lock_data(&it->d.lustre.it_lock_handle,
-                                          file->f_dentry->d_inode);
+                                          file->f_dentry->d_inode, NULL);
                         goto restart;
                 }
 

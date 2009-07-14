@@ -75,7 +75,6 @@ static void ll_release(struct dentry *de)
         EXIT;
 }
 
-#ifdef DCACHE_LUSTRE_INVALID
 /* Compare if two dentries are the same.  Don't match if the existing dentry
  * is marked DCACHE_LUSTRE_INVALID.  Returns 1 if different, 0 if the same.
  *
@@ -88,41 +87,41 @@ int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name)
         struct dentry *dchild;
         ENTRY;
 
+        /* XXX: d_name must be in-dentry structure */
+        dchild = container_of(d_name, struct dentry, d_name); /* ugh */
+
         if (d_name->len != name->len)
                 RETURN(1);
 
         if (memcmp(d_name->name, name->name, name->len))
                 RETURN(1);
 
-        /* XXX: d_name must be in-dentry structure */
-        dchild = container_of(d_name, struct dentry, d_name); /* ugh */
-        if (dchild->d_flags & DCACHE_LUSTRE_INVALID) {
-                CDEBUG(D_DENTRY,"INVALID dentry %p not matched, was bug 3784\n",
-                       dchild);
+        CDEBUG(D_DENTRY,"found name %.*s(%p) - flags %d/%x - refc %d\n",
+               name->len, name->name, dchild,
+               d_mountpoint(dchild), dchild->d_flags & DCACHE_LUSTRE_INVALID,
+               atomic_read(&dchild->d_count));
+
+         /* mountpoint is always valid */
+        if (d_mountpoint(dchild))
+                RETURN(0);
+
+        if (dchild->d_flags & DCACHE_LUSTRE_INVALID)
                 RETURN(1);
-        }
 
         RETURN(0);
 }
-#endif
 
 /* should NOT be called with the dcache lock, see fs/dcache.c */
 static int ll_ddelete(struct dentry *de)
 {
         ENTRY;
         LASSERT(de);
-#ifndef DCACHE_LUSTRE_INVALID
-#define DCACHE_LUSTRE_INVALID 0
-#endif
 
         CDEBUG(D_DENTRY, "%s dentry %.*s (%p, parent %p, inode %p) %s%s\n",
-               (de->d_flags & DCACHE_LUSTRE_INVALID ? "deleting" : "keeping"),
+               (de->d_flags & DCACHE_LUSTRE_INVALID ? "hiden" : "keeping"),
                de->d_name.len, de->d_name.name, de, de->d_parent, de->d_inode,
                d_unhashed(de) ? "" : "hashed,",
                list_empty(&de->d_subdirs) ? "" : "subdirs");
-#if DCACHE_LUSTRE_INVALID == 0
-#undef DCACHE_LUSTRE_INVALID
-#endif
 
         RETURN(0);
 }
@@ -270,17 +269,6 @@ restart:
                                "ino=%lu\n", dentry, inode, inode->i_ino);
                         lustre_dump_dentry(dentry, 1);
                         libcfs_debug_dumpstack(NULL);
-                } else if (d_mountpoint(dentry)) {
-                        /* For mountpoints we skip removal of the dentry
-                           which happens solely because we have a lock on it
-                           obtained when this dentry was not a mountpoint yet */
-                        CDEBUG(D_DENTRY, "Skippind mountpoint dentry removal "
-                                         "%.*s (%p) parent %p\n",
-                                          dentry->d_name.len,
-                                          dentry->d_name.name,
-                                          dentry, dentry->d_parent);
-
-                        continue;
                 }
 
                 if (ll_drop_dentry(dentry))
@@ -319,7 +307,7 @@ void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
                 struct inode *inode = dentry->d_inode;
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%u)\n",
                        inode, inode->i_ino, inode->i_generation);
-                mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode);
+                mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode, NULL);
         }
 
         /* drop lookup or getattr locks immediately */
@@ -476,13 +464,6 @@ do_lock:
                 if (rc != -ESTALE) {
                         CDEBUG(D_INFO, "ll_intent_lock: rc %d : it->it_status "
                                "%d\n", rc, it->d.lustre.it_status);
-                } else {
-#ifndef HAVE_VFS_INTENT_PATCHES
-                        if (it_disposition(it, DISP_OPEN_OPEN) &&
-                            !it_open_error(DISP_OPEN_OPEN, it))
-                                /* server have valid open - close file first*/
-                                ll_release_openhandle(de, it);
-#endif
                 }
                 GOTO(out, rc = 0);
         }

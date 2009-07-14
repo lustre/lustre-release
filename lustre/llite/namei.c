@@ -423,9 +423,6 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                 dget_locked(dentry);
                 lock_dentry(dentry);
                 __d_drop(dentry);
-#ifdef DCACHE_LUSTRE_INVALID
-                dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
-#endif
                 unlock_dentry(dentry);
                 ll_dops_init(dentry, 0);
                 d_rehash_cond(dentry, 0); /* avoid taking dcache_lock inside */
@@ -443,6 +440,7 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                         "refc %d\n", last_discon, last_discon->d_inode,
                         atomic_read(&last_discon->d_count));
                 dget_locked(last_discon);
+                last_discon->d_flags |= DCACHE_LUSTRE_INVALID;
                 spin_unlock(&dcache_lock);
                 spin_unlock(&ll_lookup_lock);
                 ll_dops_init(last_discon, 1);
@@ -452,6 +450,7 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                 return last_discon;
         }
 
+        de->d_flags |= DCACHE_LUSTRE_INVALID;
         ll_d_add(de, inode);
 
         spin_unlock(&dcache_lock);
@@ -475,6 +474,7 @@ int lookup_it_finish(struct ptlrpc_request *request, int offset,
          * when I return */
         if (!it_disposition(it, DISP_LOOKUP_NEG)) {
                 struct dentry *save = *de;
+                __u32 bits;
 
                 rc = ll_prep_inode(sbi->ll_osc_exp, &inode, request, offset,
                                    (*de)->d_sb);
@@ -483,7 +483,7 @@ int lookup_it_finish(struct ptlrpc_request *request, int offset,
 
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%u)\n",
                        inode, inode->i_ino, inode->i_generation);
-                mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode);
+                mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode, &bits);
 
                 /* We used to query real size from OSTs here, but actually
                    this is not needed. For stat() calls size would be updated
@@ -507,6 +507,12 @@ int lookup_it_finish(struct ptlrpc_request *request, int offset,
                                         lld->lld_sa_generation = 0;
                         }
                 }
+                /* we have lookup look - unhide dentry */
+                if (bits & MDS_INODELOCK_LOOKUP) {
+                        lock_dentry(*de);
+                        (*de)->d_flags &= ~(DCACHE_LUSTRE_INVALID);
+                        unlock_dentry(*de);
+                }
         } else {
                 ll_dops_init(*de, 1);
                 /* Check that parent has UPDATE lock. If there is none, we
@@ -517,6 +523,12 @@ int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         ll_d_add(*de, inode);
                         spin_unlock(&dcache_lock);
                 } else {
+                        /* negative lookup - and don't have update lock to
+                         * parent */
+                        lock_dentry(*de);
+                        (*de)->d_flags |= DCACHE_LUSTRE_INVALID;
+                        unlock_dentry(*de);
+
                         (*de)->d_inode = NULL;
                         /* We do not want to hash the dentry if don`t have a
                          * lock, but if this dentry is later used in d_move,
@@ -773,7 +785,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
          * stuff it in the lock. */
         CDEBUG(D_DLMTRACE, "setting l_ast_data to inode %p (%lu/%u)\n",
                inode, inode->i_ino, inode->i_generation);
-        mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode);
+        mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode, NULL);
         EXIT;
  out:
         ptlrpc_req_finished(request);

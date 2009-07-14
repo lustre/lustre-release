@@ -130,7 +130,7 @@ void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%llu/%lu)\n",
                        inode, (long long)llu_i2stat(inode)->st_ino,
                        llu_i2info(inode)->lli_st_generation);
-                mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode);
+                mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode, NULL);
         }
 
         /* drop lookup/getattr locks */

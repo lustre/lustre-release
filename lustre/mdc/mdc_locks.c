@@ -90,11 +90,14 @@ int it_open_error(int phase, struct lookup_intent *it)
 EXPORT_SYMBOL(it_open_error);
 
 /* this must be called on a lockh that is known to have a referenced lock */
-void mdc_set_lock_data(__u64 *l, void *data)
+void mdc_set_lock_data(__u64 *l, void *data, __u32 *bits)
 {
         struct ldlm_lock *lock;
         struct lustre_handle *lockh = (struct lustre_handle *)l;
         ENTRY;
+
+        if(bits)
+                *bits = 0;
 
         if (!*l) {
                 EXIT;
@@ -118,6 +121,8 @@ void mdc_set_lock_data(__u64 *l, void *data)
         }
 #endif
         lock->l_ast_data = data;
+        if (bits)
+                *bits = lock->l_policy_data.l_inodebits.bits;
         unlock_res_and_lock(lock);
         LDLM_LOCK_PUT(lock);
 
