@@ -3420,6 +3420,7 @@ static int osc_statfs_interpret(const struct lu_env *env,
                                 struct ptlrpc_request *req,
                                 struct osc_async_args *aa, int rc)
 {
+        struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
         struct obd_statfs *msfs;
         ENTRY;
 
@@ -3435,6 +3436,17 @@ static int osc_statfs_interpret(const struct lu_env *env,
                 GOTO(out, rc = -EPROTO);
         }
 
+        /* Reinitialize the RDONLY and DEGRADED flags at the client
+         * on each statfs, so they don't stay set permanently. */
+        spin_lock(&cli->cl_oscc.oscc_lock);
+        cli->cl_oscc.oscc_flags &= ~(OSCC_FLAG_RDONLY | OSCC_FLAG_DEGRADED);
+        if (msfs->os_state & OS_STATE_DEGRADED)
+                cli->cl_oscc.oscc_flags |= OSCC_FLAG_DEGRADED;
+ 
+        if (msfs->os_state & OS_STATE_READONLY)
+                cli->cl_oscc.oscc_flags |= OSCC_FLAG_RDONLY;
+        spin_unlock(&cli->cl_oscc.oscc_lock);
+ 
         *aa->aa_oi->oi_osfs = *msfs;
 out:
         rc = aa->aa_oi->oi_cb_up(aa->aa_oi, rc);
