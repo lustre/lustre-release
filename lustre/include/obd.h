@@ -1536,7 +1536,7 @@ struct md_ops {
                                       struct ptlrpc_request *);
         int (*m_clear_open_replay_data)(struct obd_export *,
                                         struct obd_client_handle *);
-        int (*m_set_lock_data)(struct obd_export *, __u64 *, void *);
+        int (*m_set_lock_data)(struct obd_export *, __u64 *, void *, __u32 *);
 
         ldlm_mode_t (*m_lock_match)(struct obd_export *, int,
                                     const struct lu_fid *, ldlm_type_t,

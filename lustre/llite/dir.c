@@ -307,7 +307,8 @@ struct page *ll_get_dir_page(struct inode *dir, __u64 hash, int exact,
         } else {
                 /* for cross-ref object, l_ast_data of the lock may not be set,
                  * we reset it here */
-                md_set_lock_data(ll_i2sbi(dir)->ll_md_exp, &lockh.cookie, dir);
+                md_set_lock_data(ll_i2sbi(dir)->ll_md_exp, &lockh.cookie,
+                                 dir, NULL);
         }
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 

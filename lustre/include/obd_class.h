@@ -1953,12 +1953,12 @@ static inline int md_clear_open_replay_data(struct obd_export *exp,
 }
 
 static inline int md_set_lock_data(struct obd_export *exp,
-                                   __u64 *lockh, void *data)
+                                   __u64 *lockh, void *data, __u32 *bits)
 {
         ENTRY;
         EXP_CHECK_MD_OP(exp, set_lock_data);
         EXP_MD_COUNTER_INCREMENT(exp, set_lock_data);
-        RETURN(MDP(exp->exp_obd, set_lock_data)(exp, lockh, data));
+        RETURN(MDP(exp->exp_obd, set_lock_data)(exp, lockh, data, bits));
 }
 
 static inline int md_cancel_unused(struct obd_export *exp,

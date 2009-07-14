@@ -390,7 +390,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
         if (itp->d.lustre.it_lock_mode)
                 md_set_lock_data(sbi->ll_md_exp,
                                  &itp->d.lustre.it_lock_handle,
-                                 file->f_dentry->d_inode);
+                                 file->f_dentry->d_inode, NULL);
 
         rc = ll_prep_inode(&file->f_dentry->d_inode, req, NULL);
 out:
@@ -623,7 +623,7 @@ restart:
                         }
                         md_set_lock_data(ll_i2sbi(inode)->ll_md_exp,
                                          &it->d.lustre.it_lock_handle,
-                                         file->f_dentry->d_inode);
+                                         file->f_dentry->d_inode, NULL);
                         goto restart;
                 }
                 OBD_ALLOC(*och_p, sizeof (struct obd_client_handle));

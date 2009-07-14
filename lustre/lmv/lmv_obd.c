@@ -2745,13 +2745,15 @@ static int lmv_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,
         RETURN(rc);
 }
 
-int lmv_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data)
+int lmv_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data,
+                      __u32 *bits)
 {
         struct obd_device       *obd = exp->exp_obd;
         struct lmv_obd          *lmv = &obd->u.lmv;
         int                      rc;
         ENTRY;
-        rc =  md_set_lock_data(lmv->tgts[0].ltd_exp, lockh, data);
+
+        rc =  md_set_lock_data(lmv->tgts[0].ltd_exp, lockh, data, bits);
         RETURN(rc);
 }
 

@@ -111,10 +111,14 @@ int it_open_error(int phase, struct lookup_intent *it)
 EXPORT_SYMBOL(it_open_error);
 
 /* this must be called on a lockh that is known to have a referenced lock */
-int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data)
+int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data,
+                      __u32 *bits)
 {
         struct ldlm_lock *lock;
         ENTRY;
+
+        if(bits)
+                *bits = 0;
 
         if (!*lockh) {
                 EXIT;
@@ -138,6 +142,9 @@ int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data)
         }
 #endif
         lock->l_ast_data = data;
+        if (bits)
+                *bits = lock->l_policy_data.l_inodebits.bits;
+
         unlock_res_and_lock(lock);
         LDLM_LOCK_PUT(lock);
 

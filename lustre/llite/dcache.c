@@ -77,7 +77,6 @@ static void ll_release(struct dentry *de)
         EXIT;
 }
 
-#ifdef DCACHE_LUSTRE_INVALID
 /* Compare if two dentries are the same.  Don't match if the existing dentry
  * is marked DCACHE_LUSTRE_INVALID.  Returns 1 if different, 0 if the same.
  *
@@ -98,15 +97,22 @@ int ll_dcompare(struct dentry *parent, struct qstr *d_name, struct qstr *name)
 
         /* XXX: d_name must be in-dentry structure */
         dchild = container_of(d_name, struct dentry, d_name); /* ugh */
-        if (dchild->d_flags & DCACHE_LUSTRE_INVALID) {
-                CDEBUG(D_DENTRY,"INVALID dentry %p not matched, was bug 3784\n",
-                       dchild);
+
+        CDEBUG(D_DENTRY,"found name %.*s(%p) - flags %d/%x - refc %d\n",
+               name->len, name->name, dchild,
+               d_mountpoint(dchild), dchild->d_flags & DCACHE_LUSTRE_INVALID,
+               atomic_read(&dchild->d_count));
+
+         /* mountpoint is always valid */
+        if (d_mountpoint(dchild))
+                RETURN(0);
+
+        if (dchild->d_flags & DCACHE_LUSTRE_INVALID)
                 RETURN(1);
-        }
+
 
         RETURN(0);
 }
-#endif
 
 /* should NOT be called with the dcache lock, see fs/dcache.c */
 static int ll_ddelete(struct dentry *de)
@@ -277,17 +283,6 @@ restart:
                                "ino=%lu\n", dentry, inode, inode->i_ino);
                         lustre_dump_dentry(dentry, 1);
                         libcfs_debug_dumpstack(NULL);
-                } else if (d_mountpoint(dentry)) {
-                        /* For mountpoints we skip removal of the dentry
-                           which happens solely because we have a lock on it
-                           obtained when this dentry was not a mountpoint yet */
-                        CDEBUG(D_DENTRY, "Skippind mountpoint dentry removal "
-                                         "%.*s (%p) parent %p\n",
-                                          dentry->d_name.len,
-                                          dentry->d_name.name,
-                                          dentry, dentry->d_parent);
-
-                        continue;
                 }
 
                 if (ll_drop_dentry(dentry))
@@ -329,7 +324,7 @@ void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%u)\n",
                        inode, inode->i_ino, inode->i_generation);
                 md_set_lock_data(sbi->ll_md_exp, &it->d.lustre.it_lock_handle,
-                                 inode);
+                                 inode, NULL);
         }
 
         /* drop lookup or getattr locks immediately */
@@ -499,13 +494,6 @@ do_lock:
                 if (rc != -ESTALE) {
                         CDEBUG(D_INFO, "ll_intent_lock: rc %d : it->it_status "
                                "%d\n", rc, it->d.lustre.it_status);
-                } else {
-#ifndef HAVE_VFS_INTENT_PATCHES
-                        if (it_disposition(it, DISP_OPEN_OPEN) &&
-                            !it_open_error(DISP_OPEN_OPEN, it))
-                                /* server have valid open - close file first*/
-                                ll_release_openhandle(de, it);
-#endif
                 }
                 GOTO(out, rc = 0);
         }
@@ -812,9 +800,7 @@ struct dentry_operations ll_d_ops = {
         .d_revalidate = ll_revalidate_nd,
         .d_release = ll_release,
         .d_delete = ll_ddelete,
-#ifdef DCACHE_LUSTRE_INVALID
         .d_compare = ll_dcompare,
-#endif
 #if 0
         .d_pin = ll_pin,
         .d_unpin = ll_unpin,
