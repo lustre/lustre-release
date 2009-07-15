@@ -1793,15 +1793,21 @@ void mds_shrink_reply(struct obd_device *obd, struct ptlrpc_request *req,
 {
         int cookie_size = 0, md_size = 0;
 
-        if (body && body->valid & OBD_MD_FLEASIZE) {
-                md_size = body->eadatasize;
-        }
-        if (body && body->valid & OBD_MD_FLCOOKIE) {
-                LASSERT(body->valid & OBD_MD_FLEASIZE);
-                cookie_size = mds_get_cookie_size(obd, lustre_msg_buf(
-                                                  req->rq_repmsg, md_off, 0));
-        }
+       if (body) {
+                if (body->valid & (OBD_MD_FLEASIZE | OBD_MD_FLDIREA)) {
+                        md_size = body->eadatasize;
+                } else if (body->valid & OBD_MD_LINKNAME)
+                        md_size = body->eadatasize;
 
+                if (body->valid & OBD_MD_FLCOOKIE) {
+                        LASSERT(body->valid & OBD_MD_FLEASIZE);
+                        cookie_size = mds_get_cookie_size(obd, lustre_msg_buf(
+                                                          req->rq_repmsg,
+                                                          md_off, 0));
+                } else if (body->valid & OBD_MD_FLACL) {
+                        cookie_size = body->aclsize;
+                }
+        }
         CDEBUG(D_INFO, "Shrink to md_size %d cookie_size %d \n", md_size,
                cookie_size);
 

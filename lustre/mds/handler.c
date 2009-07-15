@@ -1084,6 +1084,10 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                         req->rq_status = rc;
                 }
         }
+
+        if (rc)
+                lustre_shrink_reply(req, offset + 1, 0 , 1);
+
         return rc;
 }
 
@@ -1119,13 +1123,12 @@ static int mds_getattr(struct ptlrpc_request *req, int offset)
         rc = mds_getattr_pack_msg(req, de->d_inode, offset);
         if (rc != 0) {
                 CERROR("mds_getattr_pack_msg: %d\n", rc);
-                GOTO(out_pop, rc);
+                GOTO(out_dput, rc);
         }
 
         req->rq_status = mds_getattr_internal(obd, de, req, body,REPLY_REC_OFF);
-
+out_dput:
         l_dput(de);
-        GOTO(out_pop, rc);
 out_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
 out_ucred:
@@ -1136,6 +1139,10 @@ out_ucred:
                 req->rq_status = rc;
         }
         mds_exit_ucred(&uc, mds);
+
+        if (rc)
+                lustre_shrink_reply(req, REPLY_REC_OFF + 1, 0, 1);
+
         return rc;
 }
 

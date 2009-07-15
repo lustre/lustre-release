@@ -14,6 +14,13 @@
 	  more information, please refer to bugzilla 17630.
 
 Severity   : normal
+Frequency  : with 1.8 server and 1.6 clients
+Bugzilla   : 20020
+Descriptoin: correctly shrink reply for avoid send too big message to client.
+Details    : 1.8 mds is allocate to big buffer to LOV EA data and this produce
+             some problems with sending this reply to 1.6 client.
+
+Severity   : normal
 Bugzilla   : 19917
 Description: Repeated atomic allocation failures.
 Details    : Use GFP_HIGHUSER | __GFP_NOMEMALLOC flags for memory allocations 

@@ -822,6 +822,8 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                         if (rc) {
                                 CERROR("mds_create_objects: rc = %d\n", rc);
                                 UNLOCK_INODE_MUTEX(dchild->d_inode);
+                                lustre_shrink_reply(req, DLM_REPLY_REC_OFF + 1,
+                                                    0, 1);
                                 RETURN(rc);
                         }
                 }
@@ -1024,6 +1026,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         int quota_pending[2] = {0, 0};
         int use_parent, need_open_lock;
         unsigned int gid = current->fsgid;
+        int finish = 0;
         ENTRY;
 
         mds_counter_incr(req->rq_export, LPROC_MDS_OPEN);
@@ -1376,7 +1379,7 @@ found_child:
                  * special device nodes */
                 GOTO(cleanup_no_trans, rc = 0);
         }
-
+        finish = 1;
         /* Step 5: mds_open it */
         rc = mds_finish_open(req, dchild, body, rec->ur_flags, &handle, rec,
                              rep, &parent_lockh);
@@ -1428,6 +1431,9 @@ found_child:
                 else
                         ptlrpc_save_lock(req, &parent_lockh, parent_mode);
         }
+        if (!finish)
+                mds_shrink_reply(obd, req, body, DLM_REPLY_REC_OFF + 1);
+
         /* trigger dqacq on the owner of child and parent */
         lquota_adjust(mds_quota_interface_ref, obd, qcids, qpids, rc,
                       FSFILT_OP_CREATE);
