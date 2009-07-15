@@ -12,6 +12,10 @@
 	 mxlnd     - MX 1.2.1 or later,
 	 ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
+Severity   : normal
+Bugzilla   : 18075
+Description: LNet selftest fixes and enhancements
+
 Severity   : enhancement
 Bugzilla   : 18654
 Description: MXLND: eliminate hosts file, use arp for peer nic_id resolution

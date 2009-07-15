@@ -51,7 +51,7 @@ static int session_timeout = 100;
 CFS_MODULE_PARM(session_timeout, "i", int, 0444,
                 "test session timeout in seconds (100 by default, 0 == never)");
 
-#define SFW_TEST_CONCURRENCY     128
+#define SFW_TEST_CONCURRENCY     1792
 #define SFW_TEST_RPC_TIMEOUT     64
 #define SFW_CLIENT_RPC_TIMEOUT   64  /* in seconds */
 #define SFW_EXTRA_TEST_BUFFERS   8 /* tolerate buggy peers with extra buffers */
@@ -211,6 +211,7 @@ sfw_deactivate_session (void)
         sfw_session_t *sn = sfw_data.fw_session;
         int            nactive = 0;
         sfw_batch_t   *tsb;
+        sfw_test_case_t *tsc;
 
         if (sn == NULL) return;
 
@@ -219,6 +220,14 @@ sfw_deactivate_session (void)
         sfw_data.fw_session = NULL;
         atomic_inc(&sfw_data.fw_nzombies);
         list_add(&sn->sn_list, &sfw_data.fw_zombie_sessions);
+
+        spin_unlock(&sfw_data.fw_lock);
+
+        list_for_each_entry (tsc, &sfw_data.fw_tests, tsc_list) {
+                srpc_abort_service(tsc->tsc_srv_service);
+        }
+
+        spin_lock(&sfw_data.fw_lock);
 
         list_for_each_entry (tsb, &sn->sn_batches, bat_list) {
                 if (sfw_batch_active(tsb)) {
