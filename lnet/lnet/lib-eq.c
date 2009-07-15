@@ -219,6 +219,16 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
         LNET_LOCK();
 
         for (;;) {
+#ifndef __KERNEL__
+                LNET_UNLOCK();
+
+                /* Recursion breaker */
+                if (the_lnet.ln_rc_state == LNET_RC_STATE_RUNNING &&
+                    !LNetHandleIsEqual(eventqs[0], the_lnet.ln_rc_eqh))
+                        lnet_router_checker();
+
+                LNET_LOCK();
+#endif
                 for (i = 0; i < neq; i++) {
                         lnet_eq_t *eq = lnet_handle2eq(&eventqs[i]);
 

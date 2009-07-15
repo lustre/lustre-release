@@ -486,8 +486,7 @@ typedef struct {
         unsigned int     ptl_options;
 } lnet_portal_t;
 
-/* Router Checker */
-/*                               < 0 == startup error */
+/* Router Checker states */
 #define LNET_RC_STATE_SHUTDOWN     0            /* not started */
 #define LNET_RC_STATE_RUNNING      1            /* started up OK */
 #define LNET_RC_STATE_STOPTHREAD   2            /* telling thread to stop */
@@ -574,10 +573,11 @@ typedef struct
         lnet_ping_info_t  *ln_ping_info;
 
 #ifdef __KERNEL__
-	int                ln_rc_state;         /* router checker startup/shutdown state */
 	struct semaphore   ln_rc_signal;        /* serialise startup/shutdown */
-        lnet_handle_eq_t   ln_rc_eqh;           /* router checker's event queue */
 #endif
+        int                ln_rc_state;         /* router checker startup/shutdown state */
+        lnet_handle_eq_t   ln_rc_eqh;           /* router checker's event queue */
+        lnet_handle_md_t   ln_rc_mdh;
         
 #ifdef LNET_USE_LIB_FREELIST
         lnet_freelist_t    ln_free_mes;

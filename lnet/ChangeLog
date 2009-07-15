@@ -12,6 +12,10 @@ tbd  Sun Microsystems, Inc.
 	  mxlnd     - MX 1.2.1 or later,
 	  ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
+Severity   : enhancement
+Bugzilla   : 13065
+Description: port router pinger to userspace
+
 Severity   : normal
 Bugzilla   : 17546
 Description: kptllnd HELLO protocol deadlock
