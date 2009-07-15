@@ -1461,12 +1461,6 @@ static void import_flush_ctx_common(struct obd_import *imp,
         sptlrpc_sec_put(sec);
 }
 
-void sptlrpc_import_inval_all_ctx(struct obd_import *imp)
-{
-        /* use grace == 0 */
-        import_flush_ctx_common(imp, -1, 0, 1);
-}
-
 void sptlrpc_import_flush_root_ctx(struct obd_import *imp)
 {
         /* it's important to use grace mode, see explain in

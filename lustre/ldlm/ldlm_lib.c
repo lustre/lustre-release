@@ -971,19 +971,6 @@ dont_check_exports:
                 obd_set_info_async(export, sizeof(KEY_REVIMP_UPD),
                                    KEY_REVIMP_UPD, 0, NULL, NULL);
 
-                /* in some recovery senarios, previous ctx init rpc handled
-                 * in sptlrpc_target_export_check() might be used to install
-                 * a reverse ctx in this reverse import, and later OBD_CONNECT
-                 * using the same gss ctx could reach here and following new
-                 * reverse import. note all reverse ctx in new/old import are
-                 * actually based on the same gss ctx. so we invalidate ctx
-                 * here before destroy import, otherwise flush old import will
-                 * lead to remote reverse ctx be destroied, thus the reverse
-                 * ctx of new import will lost its peer.
-                 * there might be a better way to deal with this???
-                 */
-                sptlrpc_import_inval_all_ctx(export->exp_imp_reverse);
-
                 client_destroy_import(export->exp_imp_reverse);
         }
 

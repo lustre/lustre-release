@@ -721,7 +721,6 @@ struct ptlrpc_sec *sptlrpc_import_sec_ref(struct obd_import *imp);
 void sptlrpc_import_sec_put(struct obd_import *imp);
 
 int  sptlrpc_import_check_ctx(struct obd_import *imp);
-void sptlrpc_import_inval_all_ctx(struct obd_import *imp);
 void sptlrpc_import_flush_root_ctx(struct obd_import *imp);
 void sptlrpc_import_flush_my_ctx(struct obd_import *imp);
 void sptlrpc_import_flush_all_ctx(struct obd_import *imp);

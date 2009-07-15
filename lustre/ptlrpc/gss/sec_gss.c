@@ -1211,6 +1211,15 @@ int gss_cli_ctx_fini_common(struct ptlrpc_sec *sec,
         LASSERT(atomic_read(&ctx->cc_refcount) == 0);
         LASSERT(ctx->cc_sec == sec);
 
+        /*
+         * remove UPTODATE flag of reverse ctx thus we won't send fini rpc,
+         * this is to avoid potential problems of client side reverse svc ctx
+         * be mis-destroyed in various recovery senarios. anyway client can
+         * manage its reverse ctx well by associating it with its buddy ctx.
+         */
+        if (sec_is_reverse(sec))
+                ctx->cc_flags &= ~PTLRPC_CTX_UPTODATE;
+
         if (gctx->gc_mechctx) {
                 /* the final context fini rpc will use this ctx too, and it's
                  * asynchronous which finished by request_out_callback(). so
