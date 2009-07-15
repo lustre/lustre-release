@@ -105,7 +105,7 @@ command_t cmdlist[] = {
          "set the default striping pattern on an existing directory or\n"
          "delete the default striping pattern from an existing directory\n"
          "usage: setstripe [--size|-s stripe_size] [--offset|-o start_ost]\n"
-         "                 [--count|-c stripe_count] [--pool|-p pool_name]\n"
+         "                 [--count|-c stripe_count] [--pool|-p <pool>]\n"
          "                 <dir|filename>\n"
          "       or \n"
          "       setstripe -d <dir>   (to delete default striping)\n"
@@ -114,7 +114,7 @@ command_t cmdlist[] = {
          "\t              respectively)\n"
          "\tstart_ost:    OST index of first stripe (-1 filesystem default)\n"
          "\tstripe_count: Number of OSTs to stripe over (0 default, -1 all)\n"
-         "\tpool_name:    Name of OST pool"},
+         "\tpool:         Name of OST pool"},
         {"getstripe", lfs_getstripe, 0,
          "To list the striping info for a given file or files in a\n"
          "directory or recursively for all files in a directory tree.\n"
@@ -124,7 +124,7 @@ command_t cmdlist[] = {
          "                 [--recursive | -r] <dir|file> ..."},
         {"pool_list", lfs_poollist, 0,
          "List pools or pool OSTs\n"
-         "usage: pool_list <fsname>[.<poolname>] | <pathname>\n"},
+         "usage: pool_list <fsname>[.<pool>] | <pathname>\n"},
         {"find", lfs_find, 0,
          "To find files that match given parameters recursively in a directory tree.\n"
          "usage: find <dir|file> ... \n"
@@ -133,7 +133,7 @@ command_t cmdlist[] = {
          "     [--print|-p] [--obd|-O <uuid[s]>] [[!] --size|-s [+-]N[bkMGTP]]\n"
          "     [[!] --type|-t <filetype>] [[!] --gid|-g N] [[!] --group|-G <name>]\n"
          "     [[!] --uid|-u N] [[!] --user|-U <name>]\n"
-         "     [[!] --pool <name>]\n"
+         "     [[!] --pool <pool>]\n"
          "\t !: used before an option indicates 'NOT' the requested attribute\n"
          "\t -: used before an value indicates 'AT MOST' the requested value\n"
          "\t +: used before an option indicates 'AT LEAST' the requested value\n"},
@@ -152,8 +152,8 @@ command_t cmdlist[] = {
         {"osts", lfs_osts, 0, "osts"},
         {"df", lfs_df, 0,
          "report filesystem disk space usage or inodes usage"
-         "of each MDS/OSD.\n"
-         "Usage: df [-i] [-h] [path]"},
+         "of each MDS and all OSDs or a batch belonging to a specific pool .\n"
+         "Usage: df [-i] [-h] [--pool|-p <fsname>[.<pool>] [path]"},
 #ifdef HAVE_SYS_QUOTA_H
         {"quotachown",lfs_quotachown, 0,
          "Change files' owner or group on the specified filesystem.\n"
@@ -976,12 +976,25 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
         return 0;
 }
 
-static int mntdf(char *mntdir, int ishow, int cooked)
+static int mntdf(char *mntdir, char *fsname, char *pool, int ishow, int cooked)
 {
         struct obd_statfs stat_buf, sum = { .os_bsize = 1 };
         struct obd_uuid uuid_buf;
+        char *poolname = NULL;
         __u32 index;
         int rc;
+
+        if (pool) {
+                poolname = strchr(pool, '.');
+                if (poolname != NULL) {
+                        if (strncmp(fsname, pool, strlen(fsname))) {
+                                fprintf(stderr, "filesystem name incorrect\n");
+                                return -ENODEV;
+                        }
+                        poolname++;
+                } else
+                        poolname = pool;
+        }
 
         if (ishow)
                 printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s\n",
@@ -1030,6 +1043,10 @@ static int mntdf(char *mntdir, int ishow, int cooked)
                 if (rc == -EAGAIN)
                         continue;
 
+                if (llapi_search_ost(fsname, poolname,
+                                     obd_uuid2str(&uuid_buf)) != 1)
+                        continue;
+
                 if (rc == -ENOTCONN || rc == -ETIMEDOUT || rc == -EIO ||
                     rc == -ENODATA || rc == 0) {
                         showdf(mntdir, &stat_buf, obd_uuid2str(&uuid_buf),
@@ -1059,15 +1076,23 @@ static int lfs_df(int argc, char **argv)
         char *mntdir = NULL;
         int ishow = 0, cooked = 0;
         int c, rc = 0;
+        char fsname[PATH_MAX], *pool_name = NULL;
+        struct option long_opts[] = {
+                {"pool", required_argument, 0, 'p'},
+                {0, 0, 0, 0}
+        };
 
         optind = 0;
-        while ((c = getopt(argc, argv, "ih")) != -1) {
+        while ((c = getopt_long(argc, argv, "ihp:", long_opts, NULL)) != -1) {
                 switch (c) {
                 case 'i':
                         ishow = 1;
                         break;
                 case 'h':
                         cooked = 1;
+                        break;
+                case 'p':
+                        pool_name = optarg;
                         break;
                 default:
                         return CMD_HELP;
@@ -1093,16 +1118,16 @@ static int lfs_df(int argc, char **argv)
                         return rc;
                 }
 
-                rc = llapi_search_mounts(rpath, 0, mntdir, NULL);
+                rc = llapi_search_mounts(rpath, 0, mntdir, fsname);
                 if (rc == 0 && mntdir[0] != '\0') {
-                        rc = mntdf(mntdir, ishow, cooked);
+                        rc = mntdf(mntdir, fsname, pool_name, ishow, cooked);
                         printf("\n");
                 }
         } else {
                 int index = 0;
 
-                while (llapi_search_mounts(NULL, index++, mntdir, NULL) == 0) {
-                        rc = mntdf(mntdir, ishow, cooked);
+                while (!llapi_search_mounts(NULL, index++, mntdir, fsname)) {
+                        rc = mntdf(mntdir, fsname, pool_name, ishow, cooked);
                         if (rc)
                                 break;
                         printf("\n");

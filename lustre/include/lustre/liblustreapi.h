@@ -161,6 +161,7 @@ extern int llapi_file_get_lov_uuid(const char *path, struct obd_uuid *lov_uuid);
 extern int llapi_file_fget_lov_uuid(int fd, struct obd_uuid *lov_uuid);
 extern int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count);
 extern int llapi_is_lustre_mnttype(const char *type);
+extern int llapi_search_ost(char *fsname, char *poolname, char *ostname);
 extern int llapi_search_mounts(const char *pathname, int index, 
                                char *mntdir, char *fsname);
 extern int parse_size(char *optarg, unsigned long long *size,
