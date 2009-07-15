@@ -755,6 +755,11 @@ skeep_ldiskfs_rpm() {
                 [[ $tag == $skiptag ]] && skip=true && break
             done
         fi
+
+        pushd $TOPDIR/BUILD/lustre-[1-9]* >/dev/null
+        grep -q '^SERVER_TRUE[ \t]=[ \t]#$' autoMakefile && skip=true
+        popd >/dev/null
+
         echo $skip
 
 }
