@@ -585,7 +585,7 @@ static int lustre_write_dquot(struct lustre_dquot *dquot,
         loff_t offset;
         ssize_t ret;
         int dqblk_sz = lustre_disk_dqblk_sz[version];
-        char ddquot[dqblk_sz];
+        char ddquot[sizeof(union lustre_disk_dqblk_un)];
 
         ret = mem2diskdqb(ddquot, &dquot->dq_dqb, dquot->dq_id, version);
         if (ret < 0)
@@ -836,7 +836,7 @@ int lustre_read_dquot(struct lustre_dquot *dquot)
                 memset(&dquot->dq_dqb, 0, sizeof(struct lustre_mem_dqblk));
                 ret = offset;
         } else {
-                char ddquot[dqblk_sz];
+                char ddquot[sizeof(union lustre_disk_dqblk_un)];
 
                 dquot->dq_off = offset;
                 fs = get_fs();

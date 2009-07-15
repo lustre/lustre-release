@@ -123,6 +123,11 @@ struct lustre_disk_dqblk_v2 {
 #define GETENTRIES(buf,version) ((version == LUSTRE_QUOTA_V1) ? \
                                 GETENTRIES_V1(buf) : GETENTRIES_V2(buf))
 
+union lustre_disk_dqblk_un {
+        struct lustre_disk_dqblk    v1;
+        struct lustre_disk_dqblk_v2 v2;
+};
+
 /*
  * Here are header structures as written on disk and their in-memory copies
  */
