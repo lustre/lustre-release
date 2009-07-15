@@ -2037,7 +2037,8 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
                                          "completed_clients: %d/%d\n",
                                          obd->obd_max_recoverable_clients -
                                          obd->obd_recoverable_clients -
-                                         obd->obd_delayed_clients,
+                                         obd->obd_delayed_clients -
+                                         obd->obd_stale_clients,
                                          obd->obd_max_recoverable_clients) <= 0)
                         goto out;
                 if (lprocfs_obd_snprintf(&page, size, &len,
