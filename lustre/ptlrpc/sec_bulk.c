@@ -206,7 +206,7 @@ static void enc_pools_release_free_pages(long npages)
         page_pools.epp_total_pages -= npages;
 
         /* max pool index after the release */
-        p_idx_max1 = page_pools.epp_total_pages == 0 ? 0 :
+        p_idx_max1 = page_pools.epp_total_pages == 0 ? -1 :
                      ((page_pools.epp_total_pages - 1) / PAGES_PER_POOL);
 
         p_idx = page_pools.epp_free_pages / PAGES_PER_POOL;

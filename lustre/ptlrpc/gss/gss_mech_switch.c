@@ -312,7 +312,8 @@ __u32 lgss_wrap_bulk(struct gss_ctx *context_handle,
 
 __u32 lgss_unwrap_bulk(struct gss_ctx *context_handle,
                        struct ptlrpc_bulk_desc *desc,
-                       rawobj_t *token)
+                       rawobj_t *token,
+                       int adj_nob)
 {
         LASSERT(context_handle);
         LASSERT(context_handle->mech_type);
@@ -320,7 +321,7 @@ __u32 lgss_unwrap_bulk(struct gss_ctx *context_handle,
         LASSERT(context_handle->mech_type->gm_ops->gss_unwrap_bulk);
 
         return context_handle->mech_type->gm_ops
-                ->gss_unwrap_bulk(context_handle, desc, token);
+                ->gss_unwrap_bulk(context_handle, desc, token, adj_nob);
 }
 
 /* gss_delete_sec_context: free all resources associated with context_handle.

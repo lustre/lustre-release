@@ -339,6 +339,7 @@ int cli_ctx_expire(struct ptlrpc_cli_ctx *ctx)
                       ctx->cc_expire == 0 ? 0 :
                       cfs_time_sub(ctx->cc_expire, cfs_time_current_sec()));
 
+                sptlrpc_cli_ctx_wakeup(ctx);
                 return 1;
         }
 
@@ -403,6 +404,8 @@ void gss_cli_ctx_uptodate(struct gss_cli_ctx *gctx)
                         gss_sec_install_rctx(ctx->cc_sec->ps_import,
                                              ctx->cc_sec, ctx);
         }
+
+        sptlrpc_cli_ctx_wakeup(ctx);
 }
 
 static void gss_cli_ctx_finalize(struct gss_cli_ctx *gctx)
@@ -1447,13 +1450,12 @@ void gss_free_reqbuf(struct ptlrpc_sec *sec,
         LASSERT(privacy);
         LASSERT(req->rq_clrbuf_len);
 
-        if (req->rq_pool &&
-            req->rq_clrbuf >= req->rq_reqbuf &&
-            (char *) req->rq_clrbuf <
+        if (req->rq_pool == NULL ||
+            req->rq_clrbuf < req->rq_reqbuf ||
+            (char *) req->rq_clrbuf >=
             (char *) req->rq_reqbuf + req->rq_reqbuf_len)
-                goto release_reqbuf;
+                OBD_FREE(req->rq_clrbuf, req->rq_clrbuf_len);
 
-        OBD_FREE(req->rq_clrbuf, req->rq_clrbuf_len);
         req->rq_clrbuf = NULL;
         req->rq_clrbuf_len = 0;
 

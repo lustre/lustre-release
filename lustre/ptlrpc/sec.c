@@ -2221,9 +2221,14 @@ int sptlrpc_svc_unwrap_bulk(struct ptlrpc_request *req,
 
         LASSERT(req->rq_bulk_write);
 
-        if (desc->bd_nob_transferred != desc->bd_nob &&
-            SPTLRPC_FLVR_BULK_SVC(req->rq_flvr.sf_rpc) !=
-            SPTLRPC_BULK_SVC_PRIV) {
+        /*
+         * if it's in privacy mode, transferred should >= expected; otherwise
+         * transferred should == expected.
+         */
+        if (desc->bd_nob_transferred < desc->bd_nob ||
+            (desc->bd_nob_transferred > desc->bd_nob &&
+             SPTLRPC_FLVR_BULK_SVC(req->rq_flvr.sf_rpc) !=
+             SPTLRPC_BULK_SVC_PRIV)) {
                 DEBUG_REQ(D_ERROR, req, "truncated bulk GET %d(%d)",
                           desc->bd_nob_transferred, desc->bd_nob);
                 return -ETIMEDOUT;
