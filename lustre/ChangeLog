@@ -16,9 +16,10 @@
 Severity   : normal
 Bugzilla   : 19917
 Description: Repeated atomic allocation failures.
-Details    : Use GFP_HIGHUSER for OST allocations unless the client is
-	     writing locally, so that the OST threads generate memory
-	     pressure and allow inactive pages to be reclaimed.
+Details    : Use GFP_HIGHUSER | __GFP_NOMEMALLOC flags for memory allocations 
+	     to generate memory pressure and allow reclaiming of inactive pages.
+	     At the same time, do not allow to exhaust emergency pools.
+	     For local clients the use of GFP_NOFS will be introduced in 1.8.2
 
 Severity   : enhancement
 Bugzilla   : 19846
