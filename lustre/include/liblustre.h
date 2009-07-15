@@ -742,6 +742,10 @@ typedef struct { volatile int counter; } atomic_t;
 #define unlikely(exp) (exp)
 #endif
 
+#define libcfs_memory_pressure_get() (0) 
+#define libcfs_memory_pressure_set() do {} while (0) 
+#define libcfs_memory_pressure_clr() do {} while (0)
+
 /* FIXME sys/capability will finally included linux/fs.h thus
  * cause numerous trouble on x86-64. as temporary solution for
  * build broken at cary, we copy definition we need from capability.h

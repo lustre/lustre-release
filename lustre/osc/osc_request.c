@@ -2923,6 +2923,9 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
         oap->oap_page_off = off;
         oap->oap_count = count;
         oap->oap_brw_flags = brw_flags;
+        /* Give a hint to OST that requests are coming from kswapd - bug19529 */
+        if (libcfs_memory_pressure_get())
+                oap->oap_brw_flags |= OBD_BRW_MEMALLOC;
         spin_lock(&oap->oap_lock);
         oap->oap_async_flags = async_flags;
         spin_unlock(&oap->oap_lock);
@@ -3052,6 +3055,9 @@ static int osc_queue_group_io(struct obd_export *exp, struct lov_stripe_md *lsm,
         oap->oap_page_off = off;
         oap->oap_count = count;
         oap->oap_brw_flags = brw_flags;
+        /* Give a hint to OST that requests are coming from kswapd - bug19529 */
+        if (libcfs_memory_pressure_get())
+                oap->oap_brw_flags |= OBD_BRW_MEMALLOC;
         spin_lock(&oap->oap_lock);
         oap->oap_async_flags = async_flags;
         spin_unlock(&oap->oap_lock);
