@@ -146,6 +146,7 @@ struct obd_export {
         atomic_t                  exp_rpc_count;
         atomic_t                  exp_cb_count;
         atomic_t                  exp_locks_count;
+        atomic_t                  exp_replay_count;
         struct obd_uuid           exp_client_uuid;
         struct list_head          exp_obd_chain;
         struct hlist_node         exp_uuid_hash; /* uuid-export hash*/

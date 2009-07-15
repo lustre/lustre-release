@@ -2141,7 +2141,7 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
                 if (lprocfs_obd_snprintf(&page, size, &len,
                                          "completed_clients: %d/%d\n",
                                          obd->obd_max_recoverable_clients -
-                                         obd->obd_recoverable_clients,
+                                         obd->obd_stale_clients,
                                          obd->obd_max_recoverable_clients) <= 0)
                         goto out;
                 if (lprocfs_obd_snprintf(&page, size, &len,
@@ -2151,6 +2151,9 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
                 if (lprocfs_obd_snprintf(&page, size, &len,
                                          "last_transno: "LPD64"\n",
                                          obd->obd_next_recovery_transno - 1)<=0)
+                        goto out;
+                if (lprocfs_obd_snprintf(&page, size, &len, "VBR: %s\n",
+                                         obd->obd_version_recov ? "ON" : "OFF")<=0)
                         goto out;
                 goto fclose;
         }
@@ -2169,12 +2172,20 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
                                  obd->obd_max_recoverable_clients) <= 0)
                 goto out;
         /* Number of clients that have completed recovery */
-        if (lprocfs_obd_snprintf(&page, size, &len,"completed_clients: %d/%d\n",
-                                 obd->obd_max_recoverable_clients -
-                                 obd->obd_recoverable_clients,
-                                 obd->obd_max_recoverable_clients) <= 0)
+        if (lprocfs_obd_snprintf(&page, size, &len,"req_replay_clients: %d\n",
+                                 atomic_read(&obd->obd_req_replay_clients))<= 0)
                 goto out;
-        if (lprocfs_obd_snprintf(&page, size, &len,"replayed_requests: %d/??\n",
+        if (lprocfs_obd_snprintf(&page, size, &len,"lock_repay_clients: %d\n",
+                                 atomic_read(&obd->obd_lock_replay_clients))<=0)
+                goto out;
+        if (lprocfs_obd_snprintf(&page, size, &len,"completed_clients: %d\n",
+                                 obd->obd_connected_clients -
+                                 atomic_read(&obd->obd_lock_replay_clients))<=0)
+                goto out;
+        if (lprocfs_obd_snprintf(&page, size, &len,"evicted_clients: %d\n",
+                                 obd->obd_stale_clients) <= 0)
+                goto out;
+        if (lprocfs_obd_snprintf(&page, size, &len,"replayed_requests: %d\n",
                                  obd->obd_replayed_requests) <= 0)
                 goto out;
         if (lprocfs_obd_snprintf(&page, size, &len, "queued_requests: %d\n",

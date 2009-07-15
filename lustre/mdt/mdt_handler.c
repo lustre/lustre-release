@@ -4343,7 +4343,8 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         m->mdt_identity_cache = NULL;
 
         if (m->mdt_namespace != NULL) {
-                ldlm_namespace_free(m->mdt_namespace, NULL, d->ld_obd->obd_force);
+                ldlm_namespace_free(m->mdt_namespace, NULL,
+                                    d->ld_obd->obd_force);
                 d->ld_obd->obd_namespace = m->mdt_namespace = NULL;
         }
 

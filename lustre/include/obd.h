@@ -1025,6 +1025,7 @@ struct obd_device {
                       obd_recovering:1,    /* there are recoverable clients */
                       obd_abort_recovery:1,/* recovery expired */
                       obd_version_recov:1, /* obd uses version checking */
+                      obd_recovery_expired:1,
                       obd_replayable:1,    /* recovery is enabled; inform clients */
                       obd_no_transno:1,    /* no committed-transno notification */
                       obd_no_recov:1,      /* fail instead of retry messages */
@@ -1077,7 +1078,6 @@ struct obd_device {
 
         int                              obd_max_recoverable_clients;
         int                              obd_connected_clients;
-        int                              obd_recoverable_clients;
         int                              obd_stale_clients;
         int                              obd_delayed_clients;
         spinlock_t                       obd_processing_task_lock; /* BH lock (timer) */

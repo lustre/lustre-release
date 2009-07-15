@@ -909,9 +909,6 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 OBD_FREE_PTR(lcd);
 
         obd->obd_last_committed = le64_to_cpu(fsd->lsd_last_transno);
-
-        target_recovery_init(&filter->fo_lut, ost_handle);
-
 out:
         filter->fo_mount_count = mount_count + 1;
         fsd->lsd_mount_count = cpu_to_le64(filter->fo_mount_count);
@@ -924,7 +921,7 @@ out:
         RETURN(0);
 
 err_client:
-        target_recovery_fini(obd);
+        class_disconnect_exports(obd);
 err_fsd:
         filter_free_server_data(filter);
         RETURN(rc);
@@ -1370,6 +1367,9 @@ static int filter_prep(struct obd_device *obd)
                 CERROR("cannot read %s: rc = %d\n", LAST_RCVD, rc);
                 GOTO(err_filp, rc);
         }
+
+        target_recovery_init(&filter->fo_lut, ost_handle);
+
         /* open and create health check io file*/
         file = filp_open(HEALTH_CHECK, O_RDWR | O_CREAT, 0644);
         if (IS_ERR(file)) {
