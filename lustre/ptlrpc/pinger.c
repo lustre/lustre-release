@@ -50,7 +50,7 @@
 
 struct semaphore pinger_sem;
 static struct list_head pinger_imports = CFS_LIST_HEAD_INIT(pinger_imports);
-static struct list_head timeout_list = CFS_LIST_HEAD_INIT(timeout_list); 
+static struct list_head timeout_list = CFS_LIST_HEAD_INIT(timeout_list);
 
 struct ptlrpc_request *
 ptlrpc_prep_ping(struct obd_import *imp)
@@ -147,7 +147,7 @@ static void ptlrpc_update_next_ping(struct obd_import *imp, int soon)
         /* May harmlessly race with ptlrpc_update_next_ping() */
         imp->imp_next_ping = cfs_time_add(ctime, dtime);
 
-        CDEBUG(D_HA, "Setting %s next ping to "CFS_TIME_T" ("CFS_TIME_T")\n",
+        CDEBUG(D_INFO, "Setting %s next ping to "CFS_TIME_T" ("CFS_TIME_T")\n",
                obd2cli_tgt(imp->imp_obd), imp->imp_next_ping, dtime);
 
 #endif /* ENABLE_PINGER */
@@ -169,17 +169,17 @@ cfs_duration_t pinger_check_timeout(cfs_time_t time)
         struct timeout_item *item;
         cfs_time_t timeout = PING_INTERVAL;
 
-	/* The timeout list is a increase order sorted list */
+        /* The timeout list is a increase order sorted list */
         mutex_down(&pinger_sem);
         list_for_each_entry(item, &timeout_list, ti_chain) {
-		int ti_timeout = item->ti_timeout;
-		if (timeout > ti_timeout)
-			 timeout = ti_timeout;
-        	break;
-	}
+                int ti_timeout = item->ti_timeout;
+                if (timeout > ti_timeout)
+                         timeout = ti_timeout;
+                break;
+        }
         mutex_up(&pinger_sem);
-        
-	return cfs_time_sub(cfs_time_add(time, cfs_time_seconds(timeout)),
+
+        return cfs_time_sub(cfs_time_add(time, cfs_time_seconds(timeout)),
                                          cfs_time_current());
 }
 
@@ -431,7 +431,7 @@ struct timeout_item* ptlrpc_new_timeout(int time, enum timeout_event event,
                                         timeout_cb_t cb, void *data)
 {
         struct timeout_item *ti;
-        
+
         OBD_ALLOC_PTR(ti);
         if (!ti)
                 return(NULL);
@@ -442,7 +442,7 @@ struct timeout_item* ptlrpc_new_timeout(int time, enum timeout_event event,
         ti->ti_event = event;
         ti->ti_cb = cb;
         ti->ti_cb_data = data;
-        
+
         return ti;
 }
 
@@ -476,7 +476,7 @@ out:
         return item;
 }
 
-/* Add a client_obd to the timeout event list, when timeout(@time) 
+/* Add a client_obd to the timeout event list, when timeout(@time)
  * happens, the callback(@cb) will be called.
  */
 int ptlrpc_add_timeout_client(int time, enum timeout_event event,
@@ -494,15 +494,15 @@ int ptlrpc_add_timeout_client(int time, enum timeout_event event,
         list_add(obd_list, &ti->ti_obd_list);
         mutex_up(&pinger_sem);
         return 0;
-}           
+}
 
-int ptlrpc_del_timeout_client(struct list_head *obd_list, 
+int ptlrpc_del_timeout_client(struct list_head *obd_list,
                               enum timeout_event event)
 {
         struct timeout_item *ti = NULL, *item;
 
         if (list_empty(obd_list))
-                return 0;  
+                return 0;
         mutex_down(&pinger_sem);
         list_del_init(obd_list);
         /**
@@ -522,7 +522,7 @@ int ptlrpc_del_timeout_client(struct list_head *obd_list,
         }
         mutex_up(&pinger_sem);
         return 0;
-}  
+}
 
 int ptlrpc_pinger_remove_timeouts(void)
 {
@@ -880,13 +880,13 @@ int ptlrpc_add_timeout_client(int time, enum timeout_event event,
                               struct list_head *obd_list)
 {
         return 0;
-}           
+}
 
 int ptlrpc_del_timeout_client(struct list_head *obd_list,
                               enum timeout_event event)
 {
         return 0;
-}  
+}
 
 int ptlrpc_pinger_add_import(struct obd_import *imp)
 {

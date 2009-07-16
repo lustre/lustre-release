@@ -477,7 +477,6 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
                  * from a list */
                 LDLM_LOCK_PUT(lock);
 
-        LDLM_DEBUG(lock, "%s", ret == 0 ? "wasn't waiting" : "removed");
         return ret;
 }
 
@@ -1339,8 +1338,6 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
                 RETURN(0);
 
-        LDLM_DEBUG_NOLOCK("server-side cancel handler START: %d locks",
-                          count - first);
         for (i = first; i < count; i++) {
                 lock = ldlm_handle2lock(&dlm_req->lock_handle[i]);
                 if (!lock) {
@@ -1370,7 +1367,6 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
                 ldlm_reprocess_all(pres);
                 ldlm_resource_putref(pres);
         }
-        LDLM_DEBUG_NOLOCK("server-side cancel handler END");
         RETURN(done);
 }
 

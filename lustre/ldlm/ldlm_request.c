@@ -533,7 +533,6 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                 memcpy(lvb, lock->l_lvb_data, lvb_len);
         }
 
-        LDLM_DEBUG(lock, "client-side enqueue END");
         EXIT;
 cleanup:
         if (cleanup_phase == 1 && rc)
@@ -674,7 +673,6 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
         if (is_replay) {
                 lock = ldlm_handle2lock(lockh);
                 LASSERT(lock != NULL);
-                LDLM_DEBUG(lock, "client-side enqueue START");
                 LASSERT(exp == lock->l_conn_export);
         } else {
                 lock = ldlm_lock_create(ns, res_id, einfo->ei_type,
@@ -757,7 +755,6 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                 RETURN(0);
         }
 
-        LDLM_DEBUG(lock, "sending request");
         rc = ptlrpc_queue_wait(req);
         err = ldlm_cli_enqueue_fini(exp, req, einfo->ei_type, policy ? 1 : 0,
                                     einfo->ei_mode, flags, lvb, lvb_len,
