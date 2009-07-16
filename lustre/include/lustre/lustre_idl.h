@@ -1244,7 +1244,7 @@ extern void lustre_swab_quota_adjust_qunit(struct quota_adjust_qunit *q);
                                       * OBD_CONNECT_CHANGE_QS */
 
 /* flags is specific for quota_adjust_qunit */
-#define LQUOTA_QAQ_CEATE_LQS  (1 << 31) /* when it is set, need create lqs */
+#define LQUOTA_QAQ_CREATE_LQS  (1 << 31) /* when it is set, need create lqs */
 
 /* the status of lqs_flags in struct lustre_qunit_size  */
 #define LQUOTA_QUNIT_FLAGS (LQUOTA_FLAGS_GRP | LQUOTA_FLAGS_BLK)
@@ -1252,12 +1252,12 @@ extern void lustre_swab_quota_adjust_qunit(struct quota_adjust_qunit *q);
 #define QAQ_IS_GRP(qaq)         ((qaq)->qaq_flags & LQUOTA_FLAGS_GRP)
 #define QAQ_IS_ADJBLK(qaq)      ((qaq)->qaq_flags & LQUOTA_FLAGS_ADJBLK)
 #define QAQ_IS_ADJINO(qaq)      ((qaq)->qaq_flags & LQUOTA_FLAGS_ADJINO)
-#define QAQ_IS_CREATE_LQS(qaq)  ((qaq)->qaq_flags & LQUOTA_QAQ_CEATE_LQS)
+#define QAQ_IS_CREATE_LQS(qaq)  ((qaq)->qaq_flags & LQUOTA_QAQ_CREATE_LQS)
 
 #define QAQ_SET_GRP(qaq)        ((qaq)->qaq_flags |= LQUOTA_FLAGS_GRP)
 #define QAQ_SET_ADJBLK(qaq)     ((qaq)->qaq_flags |= LQUOTA_FLAGS_ADJBLK)
 #define QAQ_SET_ADJINO(qaq)     ((qaq)->qaq_flags |= LQUOTA_FLAGS_ADJINO)
-#define QAQ_SET_CREATE_LQS(qaq) ((qaq)->qaq_flags |= LQUOTA_QAQ_CEATE_LQS)
+#define QAQ_SET_CREATE_LQS(qaq) ((qaq)->qaq_flags |= LQUOTA_QAQ_CREATE_LQS)
 
 struct mds_rec_setattr {
         __u32           sa_opcode;
