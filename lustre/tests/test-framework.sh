@@ -1380,7 +1380,12 @@ do_node() {
     fi
 
     if $verbose ; then
-        $myPDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")"
+        # print HOSTNAME for myPDSH="no_dsh"
+        if [[ $myPDSH = no_dsh ]]; then
+            $myPDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")" | sed -e "s/^/${HOSTNAME}: /"
+        else
+            $myPDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")"
+        fi
     else
         $myPDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")" | sed "s/^${HOST}: //"
     fi
@@ -1403,8 +1408,7 @@ do_nodes() {
     shift
 
     if $(single_local_node $rnodes); then
-        $verbose && echo -n $rnodes:' ' || true 
-        do_node $rnodes $@
+        do_node --verbose $rnodes $@
         return $?
     fi
 
