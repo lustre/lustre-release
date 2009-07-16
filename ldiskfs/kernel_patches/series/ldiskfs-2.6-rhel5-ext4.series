@@ -22,3 +22,4 @@ ext4-misc-rhel5.patch
 ext4-convert-group-lock-rhel5.patch
 ext4-force_over_8tb-rhel5.patch
 ext4_ext_search_right-fix.patch
+ext4-pa_lock-typo.patch
