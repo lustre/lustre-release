@@ -324,7 +324,11 @@ struct ptlrpc_request {
                 rq_sent_final:1,    /* stop sending early replies */
                 rq_hp:1,            /* high priority RPC */
                 rq_at_linked:1,     /* link into service's srv_at_array */
-                rq_fake:1;          /* fake request - just for timeout only */
+                rq_fake:1,          /* fake request - just for timeout only */
+                /* a copy of the request is queued to replay during recovery */
+                rq_copy_queued:1,
+                /* whether the rquest is a copy of another replay request */
+                rq_copy:1;
         enum rq_phase rq_phase;     /* one of RQ_PHASE_* */
         enum rq_phase rq_next_phase; /* one of RQ_PHASE_* to be used next */
         atomic_t rq_refcount;   /* client-side refcount for SENT race,
