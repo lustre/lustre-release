@@ -1,0 +1,13 @@
+Index: linux-2.6.18-128.1.6/fs/ext4/mballoc.c
+===================================================================
+--- linux-2.6.18-128.1.6.orig/fs/ext4/mballoc.c
++++ linux-2.6.18-128.1.6/fs/ext4/mballoc.c
+@@ -4507,7 +4507,7 @@ static void ext4_mb_add_n_trim(struct ex
+ 						pa_inode_list) {
+ 		spin_lock(&tmp_pa->pa_lock);
+ 		if (tmp_pa->pa_deleted) {
+-			spin_unlock(&pa->pa_lock);
++			spin_unlock(&tmp_pa->pa_lock);
+ 			continue;
+ 		}
+ 		if (!added && pa->pa_free < tmp_pa->pa_free) {
