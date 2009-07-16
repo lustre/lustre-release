@@ -615,5 +615,11 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 #define bio_hw_segments(q, bio) 0
 #endif
 
+#ifdef HAVE_FILE_UPDATE_TIME
+#define ll_update_time(file) file_update_time(file)
+#else
+#define ll_update_time(file) inode_update_time(file->f_mapping->host, 1)
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */

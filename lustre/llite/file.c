@@ -1649,9 +1649,10 @@ repeat:
         } else {
                 retval = ll_direct_IO(READ, file, iov_copy, *ppos, nr_segs, 0);
                 if (retval > 0) {
-                       lprocfs_counter_add(sbi->ll_stats,
-                                           LPROC_LL_LOCKLESS_READ,
-                                           (long)retval);
+                        file_accessed(file);
+                        lprocfs_counter_add(sbi->ll_stats,
+                                            LPROC_LL_LOCKLESS_READ,
+                                            (long)retval);
                         *ppos += retval;
                 }
         }
@@ -1694,6 +1695,56 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
         *ppos = kiocb.ki_pos;
         return ret;
 #endif
+}
+
+/* iov_shorten from linux kernel */
+static unsigned long ll_iov_shorten(struct iovec *iov,
+                                    unsigned long nr_segs,
+                                    size_t to)
+{
+        unsigned long seg = 0;
+        size_t len = 0;
+
+        while (seg < nr_segs) {
+                seg++;
+                if (len + iov->iov_len >= to) {
+                        iov->iov_len = to - len;
+                        break;
+                }
+                len += iov->iov_len;
+                iov++;
+        }
+        return seg;
+}
+
+/* 2.6.22 and 2.6.27 export this as generic_segment_checks */
+static int ll_generic_segment_checks(const struct iovec *iov,
+                                     unsigned long *nr_segs,
+                                     size_t *count,
+                                     int access_flags)
+{
+        unsigned long   seg;
+        size_t cnt = 0;
+        for (seg = 0; seg < *nr_segs; seg++) {
+                const struct iovec *iv = &iov[seg];
+
+                /*
+                 * If any segment has a negative length, or the cumulative
+                 * length ever wraps negative then return -EINVAL.
+                 */
+                cnt += iv->iov_len;
+                if (unlikely((ssize_t)(cnt|iv->iov_len) < 0))
+                        return -EINVAL;
+                if (access_ok(access_flags, iv->iov_base, iv->iov_len))
+                        continue;
+                if (seg == 0)
+                        return -EFAULT;
+                *nr_segs = seg;
+                cnt -= iv->iov_len;  /* This segment is no good */
+                break;
+        }
+        *count = cnt;
+        return 0;
 }
 
 /*
@@ -1860,11 +1911,34 @@ repeat:
                                                 *ppos);
 #endif
         } else {
+                size_t ocount, ncount;
+
+                retval = ll_generic_segment_checks(iov_copy, &nrsegs_copy,
+                                                   &ocount, VERIFY_READ);
+                if (retval)
+                        GOTO(out, retval);
+
+                retval = generic_write_checks(file, ppos, &ncount, 0);
+                if (retval)
+                        GOTO(out, retval);
+
+                if (unlikely(ocount != ncount)) {
+                        /* we are allowed to modify the original iov too */
+                        nrsegs_copy = ll_iov_shorten(iov_copy, nrsegs_copy,
+                                                     ncount);
+                        chunk = 0; /* no repetition after the short write */
+                }
+
+                retval = ll_remove_suid(file, file->f_vfsmnt);
+                if (retval)
+                        GOTO(out, retval);
+
+                ll_update_time(file);
                 retval = ll_direct_IO(WRITE, file, iov_copy, *ppos, nr_segs, 0);
                 if (retval > 0) {
-                       lprocfs_counter_add(sbi->ll_stats,
-                                           LPROC_LL_LOCKLESS_WRITE,
-                                           (long)retval);
+                        lprocfs_counter_add(sbi->ll_stats,
+                                            LPROC_LL_LOCKLESS_WRITE,
+                                            (long)retval);
                         *ppos += retval;
                 }
         }

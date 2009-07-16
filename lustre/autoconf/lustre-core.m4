@@ -964,6 +964,23 @@ LB_LINUX_TRY_COMPILE([
 EXTRA_KCFLAGS="$tmp_flags"
 ])
 
+# LC_FILE_UPDATE_TIME
+# 2.6.9 has inode_update_time instead of file_update_time
+AC_DEFUN([LC_FILE_UPDATE_TIME],
+[AC_MSG_CHECKING([if file_update_time is exported])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        file_update_time(NULL);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_FILE_UPDATE_TIME, 1,
+                [use file_update_time])
+],[
+	AC_MSG_RESULT(no)
+])
+])
+
 # LC_FILE_WRITEV
 # 2.6.19 replaced writev with aio_write
 AC_DEFUN([LC_FILE_WRITEV],
@@ -981,6 +998,7 @@ LB_LINUX_TRY_COMPILE([
 	AC_MSG_RESULT(no)
 ])
 ])
+
 
 # LC_GENERIC_FILE_READ
 # 2.6.19 replaced readv with aio_read
@@ -1875,6 +1893,7 @@ AC_DEFUN([LC_PROG_LINUX],
           # 2.6.19
           LC_INODE_BLKSIZE
           LC_VFS_READDIR_U64_INO
+          LC_FILE_UPDATE_TIME
           LC_FILE_WRITEV
           LC_FILE_READV
 
