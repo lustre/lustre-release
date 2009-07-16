@@ -1565,6 +1565,11 @@ check_and_setup_lustre() {
         check_config $MOUNT
         init_facets_vars
         init_param_vars
+
+        do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=\\\"$PTLDEBUG\\\";
+            lctl set_param subsystem_debug=\\\"${SUBSYSTEM# }\\\";
+            lctl set_param debug_mb=${DEBUG_SIZE};
+            sync"
     fi
     if [ "$ONLY" == "setup" ]; then
         exit 0
