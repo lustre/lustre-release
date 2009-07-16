@@ -880,23 +880,6 @@ test_38() { # bug 18801, based on the code of test_32b
 }
 run_test 38 "lockless i/o with O_DIRECT and unaligned writes"
 
-test_39() {
-        local originaltime
-        local updatedtime
-        local delay=3
-
-        touch $DIR1/$tfile
-        originaltime=$(stat -c %Y $DIR1/$tfile)
-        log "original modification time is $originaltime"
-        sleep $delay
-        multiop $DIR1/$tfile oO_DIRECT:O_WRONLY:w$((10*1048576))c || error "multiop has failed"
-        updatedtime=$(stat -c %Y $DIR2/$tfile)
-        log "updated modification time is $updatedtime"
-        [ $((updatedtime - originaltime)) -ge $delay ] || error "invalid modification time"
-        rm -rf $DIR/$tfile
-}
-run_test 39 "direct I/O writes should update mtime ========="
-
 log "cleanup: ======================================================"
 
 check_and_cleanup_lustre

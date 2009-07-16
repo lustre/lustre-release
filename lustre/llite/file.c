@@ -1649,10 +1649,9 @@ repeat:
         } else {
                 retval = ll_direct_IO(READ, file, iov_copy, *ppos, nr_segs, 0);
                 if (retval > 0) {
-                        file_accessed(file);
-                        lprocfs_counter_add(sbi->ll_stats,
-                                            LPROC_LL_LOCKLESS_READ,
-                                            (long)retval);
+                       lprocfs_counter_add(sbi->ll_stats,
+                                           LPROC_LL_LOCKLESS_READ,
+                                           (long)retval);
                         *ppos += retval;
                 }
         }
@@ -1695,26 +1694,6 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
         *ppos = kiocb.ki_pos;
         return ret;
 #endif
-}
-
-/* iov_shorten from linux kernel */
-static unsigned long ll_iov_shorten(struct iovec *iov,
-                                    unsigned long nr_segs,
-                                    size_t to)
-{
-        unsigned long seg = 0;
-        size_t len = 0;
-
-        while (seg < nr_segs) {
-                seg++;
-                if (len + iov->iov_len >= to) {
-                        iov->iov_len = to - len;
-                        break;
-                }
-                len += iov->iov_len;
-                iov++;
-        }
-        return seg;
 }
 
 /*
@@ -1881,34 +1860,11 @@ repeat:
                                                 *ppos);
 #endif
         } else {
-                size_t ocount, ncount;
-
-                retval = generic_segment_checks(iov_copy, &nrsegs_copy,
-                                                &ocount, VERIFY_READ);
-                if (retval)
-                        GOTO(out, retval);
-
-                retval = generic_write_checks(file, ppos, &ncount, 0);
-                if (retval)
-                        GOTO(out, retval);
-
-                if (unlikely(ocount != ncount)) {
-                        /* we are allowed to modify the original iov too */
-                        nrsegs_copy = ll_iov_shorten(iov_copy, nrsegs_copy,
-                                                     ncount);
-                        chunk = 0; /* no repetition after the short write */
-                }
-
-                retval = ll_remove_suid(file, file->f_vfsmnt);
-                if (retval)
-                        GOTO(out, retval);
-
-                file_update_time(file);
                 retval = ll_direct_IO(WRITE, file, iov_copy, *ppos, nr_segs, 0);
                 if (retval > 0) {
-                        lprocfs_counter_add(sbi->ll_stats,
-                                            LPROC_LL_LOCKLESS_WRITE,
-                                            (long)retval);
+                       lprocfs_counter_add(sbi->ll_stats,
+                                           LPROC_LL_LOCKLESS_WRITE,
+                                           (long)retval);
                         *ppos += retval;
                 }
         }
