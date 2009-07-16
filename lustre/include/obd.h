@@ -335,8 +335,10 @@ struct filter_obd {
         int                  fo_tot_granted_clients;
 
         obd_size             fo_readcache_max_filesize;
-        int                  fo_read_cache;
-        int                  fo_writethrough_cache;
+        unsigned long        fo_read_cache:1,         /* read-only cache */
+                             fo_writethrough_cache:1, /* writetrhough cache */
+                             fo_syncjournal:1,      /* sync journal on writes */
+                             fo_raid_degraded:1;    /* RAID device degraded */
 
         struct obd_import   *fo_mdc_imp;
         struct obd_uuid      fo_mdc_uuid;
@@ -372,7 +374,6 @@ struct filter_obd {
 
         int                      fo_fmd_max_num; /* per exp filter_mod_data */
         int                      fo_fmd_max_age; /* jiffies to fmd expiry */
-        int                      fo_syncjournal; /* sync journal on writes */
         struct llog_commit_master *fo_lcm;
 };
 

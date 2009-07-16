@@ -1148,6 +1148,65 @@ test_27w() { # bug 10997
 }
 run_test 27w "check lfs setstripe -c -s -i options ============="
 
+test_27x() {
+	[ "$OSTCOUNT" -lt "2" ] && skip "$OSTCOUNT < 2 OSTs" && return
+	DELAY=$(do_facet mds lctl get_param -n lov.*.qos_maxage | awk '{print $1 + 2}')
+	OFFSET=$(($OSTCOUNTi - 1))
+	OSTIDX=0
+	local OST=$(lfs osts | awk '/'${OSTIDX}': / { print $2 }' | sed -e 's/_UUID$//')
+	
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE $DIR/$tdir -c 1	# 1 stripe per file
+	do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 1
+	sleep $DELAY
+	createmany -o $DIR/$tdir/$tfile $OSTCOUNT
+	for i in `seq 0 $OFFSET`; do
+		[ `$GETSTRIPE $DIR/$tdir/$tfile$i | grep -A 10 obdidx | awk '{print $1}' | grep -w "$OSTIDX"` ] && 
+		error "OST0 was degraded but new created file still use it"
+	done
+	do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 0
+}
+run_test 27x "create files while OST0 is degraded"
+
+test_27y() {
+        [ "$OSTCOUNT" -lt "2" ] && skip "$OSTCOUNT < 2 OSTs -- skipping" && return
+        remote_mds_nodsh && skip "remote MDS with nodsh" && return
+
+        MDS_OSCS=`do_facet mds lctl dl | awk '/[oO][sS][cC].*md[ts]/ { print $4 }'`
+        DELAY=$(do_facet mds lctl get_param -n lov.*.qos_maxage | awk '{print $1 + 2}')
+        OFFSET=$(($OSTCOUNT-1))
+        OST=-1
+        for OSC in $MDS_OSCS; do
+                if [ $OST == -1 ]; then {
+                        OST=`osc_to_ost $OSC`
+                } else {
+                        echo $OSC "is Deactivate:"
+                        do_facet mds lctl --device  %$OSC deactivate
+                } fi
+        done
+
+        OSTIDX=$(lfs osts | grep ${OST} | awk '{print $1}' | sed -e 's/://')
+        mkdir -p $DIR/$tdir
+        $SETSTRIPE $DIR/$tdir -c 1      # 1 stripe / file
+
+        do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 1 
+        sleep $DELAY 
+        createmany -o $DIR/$tdir/$tfile $OSTCOUNT
+        do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 0 
+
+        for i in `seq 0 $OFFSET`; do
+                [ `$GETSTRIPE $DIR/$tdir/$tfile$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "$OSTIDX"` ] || \
+                      error "files created on deactivated OSTs instead of degraded OST"
+        done
+        for OSC in $MDS_OSCS; do
+                [ `osc_to_ost $OSC` != $OST  ] && {
+                        echo $OSC "is activate"
+                        do_facet mds lctl --device %$OSC activate
+                }
+        done
+}
+run_test 27y "create files while OST0 is degraded and the rest inactive"
+
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091

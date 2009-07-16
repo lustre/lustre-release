@@ -3535,6 +3535,7 @@ static int osc_join_lru(struct obd_export *exp,
 static int osc_statfs_interpret(struct ptlrpc_request *req,
                                 struct osc_async_args *aa, int rc)
 {
+        struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
         struct obd_statfs *msfs;
         ENTRY;
 
@@ -3551,6 +3552,17 @@ static int osc_statfs_interpret(struct ptlrpc_request *req,
                 CERROR("Can't unpack obd_statfs\n");
                 GOTO(out, rc = -EPROTO);
         }
+
+        /* Reinitialize the RDONLY and DEGRADED flags at the client
+         * on each statfs, so they don't stay set permanently. */
+        spin_lock(&cli->cl_oscc.oscc_lock);
+        cli->cl_oscc.oscc_flags &= ~(OSCC_FLAG_RDONLY | OSCC_FLAG_DEGRADED);
+        if (msfs->os_state & OS_STATE_DEGRADED)
+                cli->cl_oscc.oscc_flags |= OSCC_FLAG_DEGRADED;
+
+        if (msfs->os_state & OS_STATE_READONLY)
+                cli->cl_oscc.oscc_flags |= OSCC_FLAG_RDONLY;
+        spin_unlock(&cli->cl_oscc.oscc_lock);
 
         memcpy(aa->aa_oi->oi_osfs, msfs, sizeof(*msfs));
 out:

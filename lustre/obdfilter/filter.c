@@ -3168,8 +3168,13 @@ static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         /* set EROFS to state field if FS is mounted as RDONLY. The goal is to
          * stop creating files on MDS if OST is not good shape to create
          * objects.*/
-        osfs->os_state = (filter->fo_obt.obt_sb->s_flags & MS_RDONLY) ?
-                OS_STATE_READONLY : 0;
+        osfs->os_state = 0;
+
+        if (filter->fo_obt.obt_sb->s_flags & MS_RDONLY)
+                osfs->os_state = OS_STATE_READONLY;
+
+        if (filter->fo_raid_degraded)
+                osfs->os_state |= OS_STATE_DEGRADED;
         RETURN(rc);
 }
 
