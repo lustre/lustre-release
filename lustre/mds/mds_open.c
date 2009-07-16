@@ -1017,6 +1017,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         struct lvfs_dentry_params dp = LVFS_DENTRY_PARAMS_INIT;
         unsigned int qcids[MAXQUOTAS] = { current->fsuid, current->fsgid };
         unsigned int qpids[MAXQUOTAS] = { 0, 0 };
+        unsigned int ids[MAXQUOTAS] = { 0, 0 };
         int child_mode = LCK_CR;
         /* Always returning LOOKUP lock if open succesful to guard
            dentry on client. */
@@ -1208,8 +1209,10 @@ int mds_open(struct mds_update_record *rec, int offset,
                  * decide if it is out of quota or not b=14783
                  * FIXME: after CMD is used, pointer to obd_trans_info* couldn't
                  * be NULL, b=14840 */
+                ids[0] = current->fsuid;
+                ids[1] = gid;
                 lquota_chkquota(mds_quota_interface_ref, obd,
-                                current->fsuid, gid, 1, quota_pending,
+                                ids[0], ids[1], 1, quota_pending,
                                 NULL, NULL, 0);
 
                 ldlm_reply_set_disposition(rep, DISP_OPEN_CREATE);
@@ -1391,7 +1394,7 @@ found_child:
  cleanup_no_trans:
         if (quota_pending[0] || quota_pending[1])
                 lquota_pending_commit(mds_quota_interface_ref, obd,
-                                      current->fsuid, gid, quota_pending);
+                                      ids[0], ids[1], quota_pending);
         switch (cleanup_phase) {
         case 2:
                 if (rc && created) {
