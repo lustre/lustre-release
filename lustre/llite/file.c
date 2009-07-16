@@ -1918,6 +1918,8 @@ repeat:
                 if (retval)
                         GOTO(out, retval);
 
+                ncount = ocount;
+
                 retval = generic_write_checks(file, ppos, &ncount, 0);
                 if (retval)
                         GOTO(out, retval);
