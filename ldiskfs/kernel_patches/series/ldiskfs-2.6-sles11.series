@@ -17,7 +17,6 @@ ext4-mballoc-extra-checks-sles11.patch
 ext4-big-endian-check-2.6-sles11.patch
 ext4-misc-sles11.patch
 ext4-ext_generation-sles11.patch
-ext4-remove-ioctl-filp-sles11.patch
 ext4-super-warning.patch
 ext4-alloc-policy-2.6-sles11.patch
 ext4-disable-delalloc-sles11.patch

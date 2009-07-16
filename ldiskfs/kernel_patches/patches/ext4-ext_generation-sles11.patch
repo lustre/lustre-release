@@ -1,14 +1,14 @@
 Index: linux-2.6.27.21-0.1/fs/ext4/ext4_extents.h
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_extents.h
-+++ linux-2.6.27.21-0.1/fs/ext4/ext4_extents.h
-@@ -203,6 +203,11 @@ static inline unsigned short ext_depth(s
+--- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_extents.h	2009-07-07 14:47:22.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/ext4_extents.h	2009-07-07 14:49:31.000000000 +0530
+@@ -203,6 +203,11 @@
  	return le16_to_cpu(ext_inode_hdr(inode)->eh_depth);
  }
  
 +static inline void ext4_ext_tree_changed(struct inode *inode)
 +{
-+        EXT4_I(inode)->i_ext_generation++;
++	EXT4_I(inode)->i_ext_generation++;
 +}
 +
  static inline void
@@ -16,21 +16,21 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4_extents.h
  {
 Index: linux-2.6.27.21-0.1/fs/ext4/ext4_i.h
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_i.h
-+++ linux-2.6.27.21-0.1/fs/ext4/ext4_i.h
-@@ -114,6 +114,7 @@ struct ext4_inode_info {
+--- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_i.h	2009-07-07 14:47:13.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/ext4_i.h	2009-07-07 14:50:07.000000000 +0530
+@@ -114,6 +114,7 @@
  	struct inode vfs_inode;
  	struct jbd2_inode jinode;
  
-+        unsigned long i_ext_generation;
++	unsigned long i_ext_generation;
  	struct ext4_ext_cache i_cached_extent;
  	/*
  	 * File creation time. Its function is same as that of
 Index: linux-2.6.27.21-0.1/fs/ext4/extents.c
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/extents.c
-+++ linux-2.6.27.21-0.1/fs/ext4/extents.c
-@@ -1618,6 +1618,7 @@ cleanup:
+--- linux-2.6.27.21-0.1.orig/fs/ext4/extents.c	2009-07-07 14:48:03.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/extents.c	2009-07-07 14:48:58.000000000 +0530
+@@ -1618,6 +1618,7 @@
  		ext4_ext_drop_refs(npath);
  		kfree(npath);
  	}
@@ -38,7 +38,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/extents.c
  	ext4_ext_invalidate_cache(inode);
  	return err;
  }
-@@ -2278,6 +2279,7 @@ static int ext4_ext_remove_space(struct 
+@@ -2279,6 +2280,7 @@
  		}
  	}
  out:

@@ -1,8 +1,8 @@
-Index: linux-stage/fs/ext4/ialloc.c
+Index: linux-2.6.27.21-0.1/fs/ext4/ialloc.c
 ===================================================================
---- linux-stage.orig/fs/ext4/ialloc.c
-+++ linux-stage/fs/ext4/ialloc.c
-@@ -700,12 +700,15 @@ struct inode *ext4_new_inode(handle_t *h
+--- linux-2.6.27.21-0.1.orig/fs/ext4/ialloc.c	2009-07-07 14:35:55.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/ialloc.c	2009-07-07 14:38:17.000000000 +0530
+@@ -700,12 +700,15 @@
  		return ERR_PTR(-EPERM);
  
  	sb = dir->i_sb;
@@ -18,11 +18,11 @@ Index: linux-stage/fs/ext4/ialloc.c
 -	sbi = EXT4_SB(sb);
  	es = sbi->s_es;
  
- 	if (goal) {
-Index: linux-stage/fs/ext4/super.c
+ 	if (goal && goal < le32_to_cpu(es->s_inodes_count)) {
+Index: linux-2.6.27.21-0.1/fs/ext4/super.c
 ===================================================================
---- linux-stage.orig/fs/ext4/super.c
-+++ linux-stage/fs/ext4/super.c
+--- linux-2.6.27.21-0.1.orig/fs/ext4/super.c	2009-07-07 14:38:06.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/super.c	2009-07-07 14:38:41.000000000 +0530
 @@ -41,6 +41,7 @@
  #include <asm/uaccess.h>
  #include <linux/kthread.h>
@@ -31,7 +31,7 @@ Index: linux-stage/fs/ext4/super.c
  
  #include "ext4.h"
  #include "ext4_jbd2.h"
-@@ -71,6 +72,8 @@ static void ext4_write_super(struct supe
+@@ -71,6 +72,8 @@
  static void ext4_write_super_lockfs(struct super_block *sb);
  
  
@@ -40,15 +40,7 @@ Index: linux-stage/fs/ext4/super.c
  ext4_fsblk_t ext4_block_bitmap(struct super_block *sb,
  			       struct ext4_group_desc *bg)
  {
-@@ -564,6 +567,7 @@ static void ext4_put_super(struct super_
- 	}
- 	if (sbi->s_proc) {
- 		remove_proc_entry("inode_readahead_blks", sbi->s_proc);
-+		remove_proc_entry(EXT4_MAX_DIR_SIZE_NAME, sbi->s_proc);
- 		remove_proc_entry(sb->s_id, ext4_proc_root);
- 	}
- 
-@@ -602,6 +606,7 @@ static void ext4_put_super(struct super_
+@@ -603,6 +606,7 @@
  	}
  	if (sbi->s_mmp_tsk)
  		kthread_stop(sbi->s_mmp_tsk);
@@ -56,7 +48,7 @@ Index: linux-stage/fs/ext4/super.c
  	sb->s_fs_info = NULL;
  	kfree(sbi);
  	return;
-@@ -2287,6 +2292,46 @@ static unsigned long ext4_get_stripe_siz
+@@ -2283,6 +2287,46 @@
  	return 0;
  }
  
@@ -103,7 +95,7 @@ Index: linux-stage/fs/ext4/super.c
  static int ext4_fill_super(struct super_block *sb, void *data, int silent)
  				__releases(kernel_lock)
  				__acquires(kernel_lock)
-@@ -2311,6 +2356,7 @@ static int ext4_fill_super(struct super_
+@@ -2307,6 +2351,7 @@
  	int needs_recovery, has_huge_files;
  	int features;
  	__u64 blocks_count;
@@ -111,7 +103,7 @@ Index: linux-stage/fs/ext4/super.c
  	int err;
  
  	sbi = kzalloc(sizeof(*sbi), GFP_KERNEL);
-@@ -2880,6 +2926,22 @@ static int ext4_fill_super(struct super_
+@@ -2880,6 +2925,22 @@
  	       test_opt(sb, DATA_FLAGS) == EXT4_MOUNT_ORDERED_DATA ? "ordered":
  	       "writeback");
  
@@ -134,7 +126,15 @@ Index: linux-stage/fs/ext4/super.c
  	lock_kernel();
  	return 0;
  
-@@ -3253,7 +3315,6 @@ static void ext4_commit_super(struct sup
+@@ -2906,6 +2967,7 @@
+ failed_mount:
+ 	if (sbi->s_proc) {
+ 		remove_proc_entry("inode_readahead_blks", sbi->s_proc);
++		remove_proc_entry(EXT4_MAX_DIR_SIZE_NAME, sbi->s_proc);
+ 		remove_proc_entry("inode_goal", sbi->s_proc);
+ 		remove_proc_entry(sb->s_id, ext4_proc_root);
+ 	}
+@@ -3254,7 +3316,6 @@
  	}
  }
  
@@ -142,11 +142,11 @@ Index: linux-stage/fs/ext4/super.c
  /*
   * Have we just finished recovery?  If so, and if we are mounting (or
   * remounting) the filesystem readonly, then we will end up with a
-Index: linux-stage/fs/ext4/ext4_sb.h
+Index: linux-2.6.27.21-0.1/fs/ext4/ext4_sb.h
 ===================================================================
---- linux-stage.orig/fs/ext4/ext4_sb.h
-+++ linux-stage/fs/ext4/ext4_sb.h
-@@ -118,6 +118,7 @@ struct ext4_sb_info {
+--- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_sb.h	2009-07-07 14:36:58.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/ext4_sb.h	2009-07-07 14:38:17.000000000 +0530
+@@ -119,6 +119,7 @@
  	/* where last allocation was done - for stream allocation */
  	unsigned long s_mb_last_group;
  	unsigned long s_mb_last_start;
@@ -154,11 +154,11 @@ Index: linux-stage/fs/ext4/ext4_sb.h
  
  	/* history to debug policy */
  	struct ext4_mb_history *s_mb_history;
-Index: linux-stage/fs/ext4/ext4.h
+Index: linux-2.6.27.21-0.1/fs/ext4/ext4.h
 ===================================================================
---- linux-stage.orig/fs/ext4/ext4.h
-+++ linux-stage/fs/ext4/ext4.h
-@@ -1017,6 +1017,14 @@ struct mmp_struct {
+--- linux-2.6.27.21-0.1.orig/fs/ext4/ext4.h	2009-07-07 14:38:12.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/ext4.h	2009-07-07 14:38:17.000000000 +0530
+@@ -1017,6 +1017,14 @@
   */
  #define EXT4_MMP_MIN_CHECK_INTERVAL	5
  
@@ -173,11 +173,11 @@ Index: linux-stage/fs/ext4/ext4.h
  /*
   * Function prototypes
   */
-Index: linux-stage/fs/ext4/mballoc.c
+Index: linux-2.6.27.21-0.1/fs/ext4/mballoc.c
 ===================================================================
---- linux-stage.orig/fs/ext4/mballoc.c
-+++ linux-stage/fs/ext4/mballoc.c
-@@ -2943,6 +2943,7 @@ err_out:
+--- linux-2.6.27.21-0.1.orig/fs/ext4/mballoc.c	2009-07-07 14:08:21.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/mballoc.c	2009-07-07 14:38:17.000000000 +0530
+@@ -2943,6 +2943,7 @@
  	remove_proc_entry(EXT4_MB_MIN_TO_SCAN_NAME, sbi->s_proc);
  	remove_proc_entry(EXT4_MB_MAX_TO_SCAN_NAME, sbi->s_proc);
  	remove_proc_entry(EXT4_MB_STATS_NAME, sbi->s_proc);
@@ -185,7 +185,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  	return -ENOMEM;
  #else
  	return 0;
-@@ -2963,6 +2964,7 @@ static int ext4_mb_destroy_per_dev_proc(
+@@ -2963,6 +2964,7 @@
  	remove_proc_entry(EXT4_MB_MIN_TO_SCAN_NAME, sbi->s_proc);
  	remove_proc_entry(EXT4_MB_MAX_TO_SCAN_NAME, sbi->s_proc);
  	remove_proc_entry(EXT4_MB_STATS_NAME, sbi->s_proc);

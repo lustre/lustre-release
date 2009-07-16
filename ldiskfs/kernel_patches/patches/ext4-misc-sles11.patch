@@ -1,7 +1,7 @@
 Index: linux-2.6.27.21-0.1/fs/ext4/ext4_jbd2.h
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_jbd2.h	2009-06-02 18:39:19.000000000 +0530
-+++ linux-2.6.27.21-0.1/fs/ext4/ext4_jbd2.h	2009-06-04 17:01:43.000000000 +0530
+--- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_jbd2.h	2009-07-07 14:47:19.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/ext4_jbd2.h	2009-07-07 14:47:22.000000000 +0530
 @@ -35,6 +35,9 @@
  	(EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_EXTENTS)	\
  		|| test_opt(sb, EXTENTS) ? 27U : 8U)
@@ -14,8 +14,8 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4_jbd2.h
   * and the superblock, which are already accounted for. */
 Index: linux-2.6.27.21-0.1/fs/ext4/extents.c
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/extents.c	2009-06-04 17:01:43.000000000 +0530
-+++ linux-2.6.27.21-0.1/fs/ext4/extents.c	2009-06-04 17:01:48.000000000 +0530
+--- linux-2.6.27.21-0.1.orig/fs/ext4/extents.c	2009-07-07 14:47:19.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/extents.c	2009-07-07 14:48:03.000000000 +0530
 @@ -48,7 +48,7 @@
   * ext_pblock:
   * combine low and high parts of physical block number into ext4_fsblk_t
@@ -61,7 +61,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/extents.c
   * ext4_idx_store_pblock:
   * stores a large physical block number into an index struct,
   * breaking it into parts
-@@ -1851,6 +1851,56 @@
+@@ -1852,6 +1852,56 @@
  }
  
  /*
@@ -118,7 +118,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/extents.c
   * ext4_ext_calc_credits_for_single_extent:
   * This routine returns max. credits that needed to insert an extent
   * to the extent tree.
-@@ -3170,3 +3220,14 @@
+@@ -3171,3 +3221,13 @@
  
  	return error;
  }
@@ -129,14 +129,13 @@ Index: linux-2.6.27.21-0.1/fs/ext4/extents.c
 +EXPORT_SYMBOL(ext_pblock);
 +EXPORT_SYMBOL(ext4_ext_insert_extent);
 +EXPORT_SYMBOL(ext4_mb_new_blocks);
-+EXPORT_SYMBOL(ext4_ext_walk_space);
 +EXPORT_SYMBOL(ext4_ext_calc_credits_for_insert);
 +EXPORT_SYMBOL(ext4_mark_inode_dirty);
 +
 Index: linux-2.6.27.21-0.1/fs/ext4/ext4_extents.h
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_extents.h	2009-06-04 17:01:43.000000000 +0530
-+++ linux-2.6.27.21-0.1/fs/ext4/ext4_extents.h	2009-06-04 17:01:48.000000000 +0530
+--- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_extents.h	2009-07-07 14:47:19.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/ext4_extents.h	2009-07-07 14:47:22.000000000 +0530
 @@ -59,6 +59,11 @@
   */
  #define EXT_STATS_
@@ -174,9 +173,9 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4_extents.h
  						   struct ext4_ext_path *path);
 Index: linux-2.6.27.21-0.1/fs/ext4/mballoc.c
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/mballoc.c	2009-06-04 17:01:43.000000000 +0530
-+++ linux-2.6.27.21-0.1/fs/ext4/mballoc.c	2009-06-04 17:01:43.000000000 +0530
-@@ -4354,6 +4354,13 @@
+--- linux-2.6.27.21-0.1.orig/fs/ext4/mballoc.c	2009-07-07 14:47:19.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/mballoc.c	2009-07-07 14:47:22.000000000 +0530
+@@ -4355,6 +4355,13 @@
  		kmem_cache_free(ext4_ac_cachep, ac);
  }
  
@@ -190,7 +189,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/mballoc.c
  /*
   * finds all preallocated spaces and return blocks being freed to them
   * if preallocated space becomes full (no block is used from the space)
-@@ -5176,3 +5183,6 @@
+@@ -5177,3 +5184,6 @@
  		kmem_cache_free(ext4_ac_cachep, ac);
  	return;
  }
@@ -199,8 +198,8 @@ Index: linux-2.6.27.21-0.1/fs/ext4/mballoc.c
 +
 Index: linux-2.6.27.21-0.1/fs/ext4/super.c
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/super.c	2009-06-04 17:01:43.000000000 +0530
-+++ linux-2.6.27.21-0.1/fs/ext4/super.c	2009-06-04 17:01:46.000000000 +0530
+--- linux-2.6.27.21-0.1.orig/fs/ext4/super.c	2009-07-07 14:47:19.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/super.c	2009-07-07 14:48:53.000000000 +0530
 @@ -91,6 +91,7 @@
  		(EXT4_DESC_SIZE(sb) >= EXT4_MIN_DESC_SIZE_64BIT ?
  		(ext4_fsblk_t)le32_to_cpu(bg->bg_inode_bitmap_hi) << 32 : 0);
@@ -209,23 +208,23 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  
  ext4_fsblk_t ext4_inode_table(struct super_block *sb,
  			      struct ext4_group_desc *bg)
-@@ -1295,6 +1296,7 @@
+@@ -1286,6 +1287,7 @@
+ 	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0, Opt_quota, Opt_noquota,
+ 	Opt_ignore, Opt_barrier, Opt_err, Opt_resize, Opt_usrquota,
+ 	Opt_grpquota, Opt_extents, Opt_noextents, Opt_i_version,
++	Opt_mballoc,
  	Opt_stripe, Opt_delalloc, Opt_nodelalloc,
  	Opt_inode_readahead_blks, Opt_bigendian_extents,
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
-+	Opt_mballoc
- };
- 
- static const match_table_t tokens = {
-@@ -1356,6 +1358,7 @@
+@@ -1346,6 +1348,7 @@
+ 	{Opt_i_version, "i_version"},
+ 	{Opt_stripe, "stripe=%u"},
+ 	{Opt_resize, "resize"},
++	{Opt_mballoc, "mballoc"},
+ 	{Opt_delalloc, "delalloc"},
  	{Opt_nodelalloc, "nodelalloc"},
  	{Opt_inode_readahead_blks, "inode_readahead_blks=%u"},
- 	{Opt_bigendian_extents, "bigendian_extents"},
-+	{Opt_mballoc, "mballoc"},
- 	{Opt_err, NULL},
- };
- 
-@@ -1774,6 +1777,8 @@
+@@ -1768,6 +1771,8 @@
  		case Opt_bigendian_extents:
  			bigendian_extents = 1;
  			break;
@@ -245,8 +244,8 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  {
 Index: linux-2.6.27.21-0.1/fs/ext4/ext4_jbd2.c
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_jbd2.c	2009-06-02 18:39:19.000000000 +0530
-+++ linux-2.6.27.21-0.1/fs/ext4/ext4_jbd2.c	2009-06-04 17:01:43.000000000 +0530
+--- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_jbd2.c	2009-07-07 14:47:19.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/ext4_jbd2.c	2009-07-07 14:47:22.000000000 +0530
 @@ -21,6 +21,7 @@
  		ext4_journal_abort_handle(where, __func__, bh, handle, err);
  	return err;
@@ -262,8 +261,8 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4_jbd2.c
 +EXPORT_SYMBOL(__ext4_journal_dirty_metadata);
 Index: linux-2.6.27.21-0.1/fs/ext4/ext4.h
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/ext4.h	2009-06-04 17:01:43.000000000 +0530
-+++ linux-2.6.27.21-0.1/fs/ext4/ext4.h	2009-06-04 17:02:07.000000000 +0530
+--- linux-2.6.27.21-0.1.orig/fs/ext4/ext4.h	2009-07-07 14:47:19.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/ext4.h	2009-07-07 14:47:22.000000000 +0530
 @@ -26,6 +26,9 @@
   * The fourth extended filesystem constants/structures
   */
@@ -283,7 +282,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4.h
  
  #define EXT4_EPOCH_BITS 2
  #define EXT4_EPOCH_MASK ((1 << EXT4_EPOCH_BITS) - 1)
-@@ -1115,6 +1120,8 @@
+@@ -1123,6 +1128,8 @@
  extern int ext4_mb_get_buddy_cache_lock(struct super_block *, ext4_group_t);
  extern void ext4_mb_put_buddy_cache_lock(struct super_block *,
  						ext4_group_t, int);
@@ -294,8 +293,8 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4.h
  		struct buffer_head *bh, ext4_fsblk_t blocknr);
 Index: linux-2.6.27.21-0.1/fs/ext4/inode.c
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/inode.c	2009-06-04 17:01:43.000000000 +0530
-+++ linux-2.6.27.21-0.1/fs/ext4/inode.c	2009-06-04 17:01:43.000000000 +0530
+--- linux-2.6.27.21-0.1.orig/fs/ext4/inode.c	2009-07-07 14:47:19.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/inode.c	2009-07-07 14:47:22.000000000 +0530
 @@ -4240,6 +4240,7 @@
  	iget_failed(inode);
  	return ERR_PTR(ret);

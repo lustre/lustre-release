@@ -1,7 +1,7 @@
 Index: linux-2.6.27.21-0.1/fs/ext4/super.c
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/super.c
-+++ linux-2.6.27.21-0.1/fs/ext4/super.c
+--- linux-2.6.27.21-0.1.orig/fs/ext4/super.c	2009-07-07 14:36:58.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/super.c	2009-07-07 14:38:06.000000000 +0530
 @@ -39,6 +39,8 @@
  #include <linux/log2.h>
  #include <linux/crc16.h>
@@ -11,7 +11,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  
  #include "ext4.h"
  #include "ext4_jbd2.h"
-@@ -598,6 +600,8 @@ static void ext4_put_super(struct super_
+@@ -599,6 +601,8 @@
  		invalidate_bdev(sbi->journal_bdev);
  		ext4_blkdev_remove(sbi);
  	}
@@ -20,7 +20,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  	sb->s_fs_info = NULL;
  	kfree(sbi);
  	return;
-@@ -806,7 +810,6 @@ static int ext4_show_options(struct seq_
+@@ -807,7 +811,6 @@
  	if (!test_opt(sb, DELALLOC))
  		seq_puts(seq, ",nodelalloc");
  
@@ -28,7 +28,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  	if (sbi->s_stripe)
  		seq_printf(seq, ",stripe=%lu", sbi->s_stripe);
  	/*
-@@ -829,6 +832,330 @@ static int ext4_show_options(struct seq_
+@@ -830,6 +833,325 @@
  }
  
  
@@ -63,11 +63,9 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
 +	if (*bh)
 +		clear_buffer_uptodate(*bh);
 +
-+#if 0
-+	brelse(*bh);
-+
-+	*bh = sb_bread(sb, mmp_block);
-+#else
++	/* This would be sb_bread(sb, mmp_block), except we need to be sure
++	 * that the MD RAID device cache has been bypassed, and that the read
++	 * is not blocked in the elevator. */
 +	if (!*bh)
 +		*bh = sb_getblk(sb, mmp_block);
 +	if (*bh) {
@@ -81,7 +79,6 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
 +			*bh = NULL;
 +		}
 +	}
-+#endif
 +	if (!*bh) {
 +		ext4_warning(sb, __FUNCTION__,
 +			     "Error while reading MMP block %lu", mmp_block);
@@ -142,10 +139,8 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
 +	mmp->mmp_check_interval = cpu_to_le16(mmp_check_interval);
 +	bdevname(bh->b_bdev, mmp->mmp_bdevname);
 +
-+	down_read(&uts_sem);
 +	memcpy(mmp->mmp_nodename, init_utsname()->sysname,
 +	       sizeof(mmp->mmp_nodename));
-+	up_read(&uts_sem);
 +
 +	while (!kthread_should_stop()) {
 +		if (++seq > EXT4_MMP_SEQ_MAX)
@@ -359,7 +354,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  static struct inode *ext4_nfs_get_inode(struct super_block *sb,
  		u64 ino, u32 generation)
  {
-@@ -2366,6 +2693,11 @@ static int ext4_fill_super(struct super_
+@@ -2370,6 +2692,11 @@
  			  EXT4_HAS_INCOMPAT_FEATURE(sb,
  				    EXT4_FEATURE_INCOMPAT_RECOVER));
  
@@ -371,7 +366,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  	/*
  	 * The first inode we look at is the journal inode.  Don't try
  	 * root first: it may be modified in the journal!
-@@ -2566,6 +2898,8 @@ failed_mount3:
+@@ -2570,6 +2897,8 @@
  	percpu_counter_destroy(&sbi->s_freeinodes_counter);
  	percpu_counter_destroy(&sbi->s_dirs_counter);
  	percpu_counter_destroy(&sbi->s_dirtyblocks_counter);
@@ -380,7 +375,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  failed_mount2:
  	for (i = 0; i < db_count; i++)
  		brelse(sbi->s_group_desc[i]);
-@@ -3080,7 +3414,7 @@ static int ext4_remount(struct super_blo
+@@ -3085,7 +3414,7 @@
  	unsigned long old_sb_flags;
  	struct ext4_mount_options old_opts;
  	ext4_group_t g;
@@ -389,7 +384,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  #ifdef CONFIG_QUOTA
  	int i;
  #endif
-@@ -3205,6 +3539,13 @@ static int ext4_remount(struct super_blo
+@@ -3210,6 +3539,13 @@
  				goto restore_opts;
  			if (!ext4_setup_super(sb, es, 0))
  				sb->s_flags &= ~MS_RDONLY;
@@ -405,9 +400,9 @@ Index: linux-2.6.27.21-0.1/fs/ext4/super.c
  #ifdef CONFIG_QUOTA
 Index: linux-2.6.27.21-0.1/fs/ext4/ext4.h
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/ext4.h
-+++ linux-2.6.27.21-0.1/fs/ext4/ext4.h
-@@ -660,7 +660,7 @@ struct ext4_super_block {
+--- linux-2.6.27.21-0.1.orig/fs/ext4/ext4.h	2009-07-07 14:36:00.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/ext4.h	2009-07-07 14:36:58.000000000 +0530
+@@ -660,7 +660,7 @@
  	__le16	s_want_extra_isize; 	/* New inodes should reserve # bytes */
  	__le32	s_flags;		/* Miscellaneous flags */
  	__le16  s_raid_stride;		/* RAID stride */
@@ -416,7 +411,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4.h
  	__le64  s_mmp_block;            /* Block for multi-mount protection */
  	__le32  s_raid_stripe_width;    /* blocks on all data disks (N*stride)*/
  	__u8	s_log_groups_per_flex;  /* FLEX_BG group size */
-@@ -777,7 +777,8 @@ static inline int ext4_valid_inum(struct
+@@ -777,7 +777,8 @@
  					 EXT4_FEATURE_INCOMPAT_META_BG| \
  					 EXT4_FEATURE_INCOMPAT_EXTENTS| \
  					 EXT4_FEATURE_INCOMPAT_64BIT| \
@@ -426,7 +421,7 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4.h
  #define EXT4_FEATURE_RO_COMPAT_SUPP	(EXT4_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT4_FEATURE_RO_COMPAT_LARGE_FILE| \
  					 EXT4_FEATURE_RO_COMPAT_GDT_CSUM| \
-@@ -981,6 +982,39 @@ do {									\
+@@ -981,6 +982,39 @@
  #endif
  
  /*
@@ -468,9 +463,9 @@ Index: linux-2.6.27.21-0.1/fs/ext4/ext4.h
  
 Index: linux-2.6.27.21-0.1/fs/ext4/ext4_sb.h
 ===================================================================
---- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_sb.h
-+++ linux-2.6.27.21-0.1/fs/ext4/ext4_sb.h
-@@ -150,6 +150,8 @@ struct ext4_sb_info {
+--- linux-2.6.27.21-0.1.orig/fs/ext4/ext4_sb.h	2009-07-07 14:36:00.000000000 +0530
++++ linux-2.6.27.21-0.1/fs/ext4/ext4_sb.h	2009-07-07 14:36:58.000000000 +0530
+@@ -149,6 +149,8 @@
  
  	unsigned int s_log_groups_per_flex;
  	struct flex_groups *s_flex_groups;
