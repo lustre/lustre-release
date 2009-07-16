@@ -26,3 +26,4 @@ ext4-lock-cached_extent.patch
 ext4-convert-group-lock-sles11.patch
 ext4-force_over_8tb-sles11.patch
 ext4-claim_inode-free_inode-race.patch
+ext4_ext_search_right-fix.patch
