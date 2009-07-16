@@ -1080,7 +1080,7 @@ find_rpm() {
         fatal 1 "Unable to chdir to directory \"$dir\" in find_rpm()"
 
     local file
-    for file in $(ls); do
+    for file in $(ls *.rpm); do
         if [ ! -f "$file" ]; then
             continue
         fi
