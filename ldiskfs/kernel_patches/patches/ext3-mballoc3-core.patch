@@ -42,7 +42,7 @@ Index: linux-2.6.22.19/include/linux/ext3_fs.h
 +#ifdef __LITTLE_ENDIAN
 +#define ext2_find_next_le_bit(addr, size, off) find_next_bit((addr), (size), (off))
 +#else
-+#error "mballoc needs a patch for big-endian systems - CFS bug 10634"
++#error "mballoc needs a patch for big-endian systems - Lustre bug 10634"
 +#endif	/* __LITTLE_ENDIAN */
 +#endif	/* !ext2_find_next_le_bit */
 +
@@ -288,10 +288,10 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 ===================================================================
 --- /dev/null
 +++ linux-2.6.22.19/fs/ext3/mballoc.c
-@@ -0,0 +1,4483 @@
+@@ -0,0 +1,4480 @@
 +/*
-+ * Copyright 2009 Sun Microsystems, Inc.
-+ * Written by Alex Zhuravlev <alex.zhuravlev@sun.com>
++ * Copyright 2008 Sun Microsystems, Inc.
++ * Written by Alex Tomas <alex@clusterfs.com>
 + *
 + * This program is free software; you can redistribute it and/or modify
 + * it under the terms of the GNU General Public License version 2 as
@@ -1634,7 +1634,6 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +	BUG_ON(start + len > (e3b->bd_sb->s_blocksize << 3));
 +	BUG_ON(e3b->bd_group != ex->fe_group);
 +	BUG_ON(!ext3_is_group_locked(e3b->bd_sb, e3b->bd_group));
-+	spin_lock(sb_bgl_lock(EXT3_SB(e3b->bd_sb), ex->fe_group));
 +	mb_check_buddy(e3b);
 +	mb_mark_used_double(e3b, start, len);
 +
@@ -1653,6 +1652,7 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +		e3b->bd_info->bb_fragments--;
 +
 +	/* let's maintain buddy itself */
++	spin_lock(sb_bgl_lock(EXT3_SB(e3b->bd_sb), ex->fe_group));
 +	while (len) {
 +		ord = mb_find_order_for_block(e3b, start);
 +
@@ -3251,8 +3251,6 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +		ext3_error(sb, __FUNCTION__,
 +			   "Allocating block in system zone - block = %lu",
 +			   (unsigned long) block);
-+	ext3_lock_group(sb, ac->ac_b_ex.fe_group);
-+	spin_lock(sb_bgl_lock(sbi, ac->ac_b_ex.fe_group));
 +#ifdef AGGRESSIVE_CHECK
 +	{
 +		int i;
@@ -3262,6 +3260,8 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +		}
 +	}
 +#endif
++	ext3_lock_group(sb, ac->ac_b_ex.fe_group);
++	spin_lock(sb_bgl_lock(sbi, ac->ac_b_ex.fe_group));
 +	mb_set_bits(NULL, bitmap_bh->b_data,
 +		    ac->ac_b_ex.fe_start, ac->ac_b_ex.fe_len);
 +
@@ -3622,7 +3622,6 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +	unsigned short max = EXT3_BLOCKS_PER_GROUP(sb);
 +	unsigned short i, first, free = 0;
 +
-+	spin_lock(sb_bgl_lock(EXT3_SB(sb), group));
 +	i = mb_find_next_zero_bit(bitmap, max, 0);
 +
 +	while (i < max) {
@@ -3636,13 +3635,11 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +	}
 +
 +	if (free != le16_to_cpu(gdp->bg_free_blocks_count)) {
-+		spin_unlock(sb_bgl_lock(EXT3_SB(sb), group));
 +		ext3_error(sb, __FUNCTION__, "on-disk bitmap for group %d"
 +			"corrupted: %u blocks free in bitmap, %u - in gd\n",
 +			group, free, le16_to_cpu(gdp->bg_free_blocks_count));
 +		return -EIO;
 +	}
-+	spin_unlock(sb_bgl_lock(EXT3_SB(sb), group));
 +	return 0;
 +}
 +
@@ -4714,8 +4711,6 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +	if (err)
 +		goto error_return;
 +
-+	ext3_lock_group(sb, block_group);
-+	spin_lock(sb_bgl_lock(sbi, block_group));
 +#ifdef AGGRESSIVE_CHECK
 +	{
 +		int i;
@@ -4723,6 +4718,8 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +			BUG_ON(!mb_test_bit(bit + i, bitmap_bh->b_data));
 +	}
 +#endif
++	ext3_lock_group(sb, block_group);
++	spin_lock(sb_bgl_lock(sbi, block_group));
 +	mb_clear_bits(NULL, bitmap_bh->b_data, bit, count);
 +	gdp->bg_free_blocks_count =
 +		cpu_to_le16(le16_to_cpu(gdp->bg_free_blocks_count) + count);
