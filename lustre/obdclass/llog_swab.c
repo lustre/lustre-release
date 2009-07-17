@@ -138,7 +138,8 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
                 struct llog_unlink_rec *lur = (struct llog_unlink_rec *)rec;
 
                 __swab64s(&lur->lur_oid);
-                __swab32s(&lur->lur_ogen);
+                __swab32s(&lur->lur_ogr);
+                __swab32s(&lur->lur_count);
                 break;
         }
 
@@ -146,7 +147,7 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
                 struct llog_setattr_rec *lsr = (struct llog_setattr_rec *)rec;
 
                 __swab64s(&lsr->lsr_oid);
-                __swab32s(&lsr->lsr_ogen);
+                __swab32s(&lsr->lsr_ogr);
                 __swab32s(&lsr->lsr_uid);
                 __swab32s(&lsr->lsr_gid);
                 break;
@@ -179,7 +180,7 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
                 struct llog_setattr64_rec *lsr = (struct llog_setattr64_rec *)rec;
 
                 __swab64s(&lsr->lsr_oid);
-                __swab32s(&lsr->lsr_ogen);
+                __swab32s(&lsr->lsr_ogr);
                 __swab32s(&lsr->lsr_uid);
                 __swab32s(&lsr->lsr_gid);
 

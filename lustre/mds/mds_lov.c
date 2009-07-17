@@ -256,11 +256,44 @@ int mds_lov_prepare_objids(struct obd_device *obd, struct lov_mds_md *lmm)
 }
 EXPORT_SYMBOL(mds_lov_prepare_objids);
 
+/*
+ * write llog orphan record about lost ost object,
+ * Special lsm is allocated with single stripe, caller should deallocated it
+ * after use
+ */
+static int mds_log_lost_precreated(struct obd_device *obd,
+                                   struct lov_stripe_md **lsmp, int *stripes,
+                                   obd_id id, obd_count count, int idx)
+{
+        struct lov_stripe_md *lsm = *lsmp;
+        int rc;
+        ENTRY;
+
+        if (*lsmp == NULL) {
+                rc = obd_alloc_memmd(obd->u.mds.mds_osc_exp, &lsm);
+                if (rc < 0)
+                        RETURN(rc);
+                /* need only one stripe, save old value */
+                *stripes = lsm->lsm_stripe_count;
+                lsm->lsm_stripe_count = 1;
+                *lsmp = lsm;
+        }
+
+        lsm->lsm_oinfo[0]->loi_id = id;
+        lsm->lsm_oinfo[0]->loi_gr = mdt_to_obd_objgrp(obd->u.mds.mds_id);
+        lsm->lsm_oinfo[0]->loi_ost_idx = idx;
+
+        rc = mds_log_op_orphan(obd, lsm, count);
+        RETURN(rc);
+}
+
 void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm)
 {
         struct mds_obd *mds = &obd->u.mds;
         int j;
         struct lov_ost_data_v1 *obj;
+        struct lov_stripe_md *lsm = NULL;
+        int stripes = 0;
         int count;
         ENTRY;
 
@@ -271,14 +304,15 @@ void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm)
         switch (le32_to_cpu(lmm->lmm_magic)) {
                 case LOV_MAGIC_V1:
                         count = le32_to_cpu(((struct lov_mds_md_v1*)lmm)->lmm_stripe_count);
-                        obj = &(((struct lov_mds_md_v1*)lmm)->lmm_objects[0]);
+                        obj = ((struct lov_mds_md_v1*)lmm)->lmm_objects;
                         break;
                 case LOV_MAGIC_V3:
                         count = le32_to_cpu(((struct lov_mds_md_v3*)lmm)->lmm_stripe_count);
-                        obj = &(((struct lov_mds_md_v3*)lmm)->lmm_objects[0]);
+                        obj = ((struct lov_mds_md_v3*)lmm)->lmm_objects;
                         break;
                 default:
-                        CERROR("Unknow lmm type %X !\n", le32_to_cpu(lmm->lmm_magic));
+                        CERROR("Unknow lmm type %X !\n",
+                               le32_to_cpu(lmm->lmm_magic));
                         return;
         }
 
@@ -294,9 +328,24 @@ void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm)
                 CDEBUG(D_INODE,"update last object for ost %u"
                        " - new "LPU64" old "LPU64"\n", i, id, data[idx]);
                 if (id > data[idx]) {
+                        int lost = id - data[idx] - 1;
+                        /* we might have lost precreated objects due to VBR */
+                        if (lost > 0 && obd->obd_recovering) {
+                                CDEBUG(D_HA, "Gap in objids is %u\n", lost);
+                                if (!obd->obd_version_recov)
+                                        CERROR("Unexpected gap in objids\n");
+                                /* lsm is allocated if NULL */
+                                mds_log_lost_precreated(obd, &lsm, &stripes,
+                                                        data[idx]+1, lost, i);
+                        }
                         data[idx] = id;
                         cfs_bitmap_set(mds->mds_lov_page_dirty, page);
                 }
+        }
+        if (lsm) {
+                /* restore stripes number */
+                lsm->lsm_stripe_count = stripes;
+                obd_free_memmd(mds->mds_osc_exp, &lsm);
         }
         EXIT;
         return;
@@ -309,7 +358,7 @@ static int mds_lov_update_from_read(struct mds_obd *mds, obd_id *data,
         __u32 i;
         __u32 stripes;
 
-        for(i = 0; i < count; i++) {
+        for (i = 0; i < count; i++) {
                 if (data[i] == 0)
                         continue;
 
@@ -323,7 +372,8 @@ static int mds_lov_update_from_read(struct mds_obd *mds, obd_id *data,
         mds->mds_max_cookiesize = stripes * sizeof(struct llog_cookie);
 
         CDEBUG(D_CONFIG, "updated max_mdsize/max_cookiesize for %d stripes: "
-               "%d/%d\n", stripes, mds->mds_max_mdsize, mds->mds_max_cookiesize);
+               "%d/%d\n", stripes, mds->mds_max_mdsize,
+               mds->mds_max_cookiesize);
 
         EXIT;
         return 0;

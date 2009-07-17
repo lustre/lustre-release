@@ -262,3 +262,71 @@ int mds_llog_finish(struct obd_device *obd, int count)
 
         RETURN(rc);
 }
+
+static int mds_llog_add_unlink(struct obd_device *obd,
+                               struct lov_stripe_md *lsm, obd_count count,
+                               struct llog_cookie *logcookie, int cookies)
+{
+        struct llog_unlink_rec *lur;
+        struct llog_ctxt *ctxt;
+        int rc;
+
+        rc = obd_checkmd(obd->u.mds.mds_osc_exp, obd->obd_self_export, lsm);
+        if (rc)
+                RETURN(rc);
+        /* first prepare unlink log record */
+        OBD_ALLOC_PTR(lur);
+        if (!lur)
+                RETURN(rc = -ENOMEM);
+        lur->lur_hdr.lrh_len = lur->lur_tail.lrt_len = sizeof(*lur);
+        lur->lur_hdr.lrh_type = MDS_UNLINK_REC;
+        lur->lur_count = count;
+
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
+        rc = llog_add(ctxt, &lur->lur_hdr, lsm, logcookie, cookies);
+        llog_ctxt_put(ctxt);
+
+        OBD_FREE_PTR(lur);
+        RETURN(rc);
+}
+
+int mds_log_op_unlink(struct obd_device *obd,
+                      struct lov_mds_md *lmm, int lmm_size,
+                      struct llog_cookie *logcookies, int cookies_size)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct lov_stripe_md *lsm = NULL;
+        int rc;
+        ENTRY;
+
+        if (IS_ERR(mds->mds_osc_obd))
+                RETURN(PTR_ERR(mds->mds_osc_obd));
+
+        rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
+        if (rc < 0)
+                RETURN(rc);
+        rc = mds_llog_add_unlink(obd, lsm, 0, logcookies,
+                                 cookies_size / sizeof(struct llog_cookie));
+        obd_free_memmd(mds->mds_osc_exp, &lsm);
+        RETURN(rc);
+}
+EXPORT_SYMBOL(mds_log_op_unlink);
+
+int mds_log_op_orphan(struct obd_device *obd, struct lov_stripe_md *lsm,
+                      obd_count count)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct llog_cookie logcookie;
+        int rc;
+        ENTRY;
+
+        if (IS_ERR(mds->mds_osc_obd))
+                RETURN(PTR_ERR(mds->mds_osc_obd));
+
+        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, lsm);
+        if (rc)
+                RETURN(rc);
+        rc = mds_llog_add_unlink(obd, lsm, count - 1, &logcookie, 1);
+        RETURN(rc);
+}
+

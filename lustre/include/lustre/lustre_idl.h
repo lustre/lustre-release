@@ -2281,7 +2281,7 @@ struct llog_create_rec {
         struct llog_rec_hdr     lcr_hdr;
         struct ll_fid           lcr_fid;
         obd_id                  lcr_oid;
-        obd_count               lcr_ogen;
+        obd_count               lcr_ogr;
         __u32                   padding;
         struct llog_rec_tail    lcr_tail;
 } __attribute__((packed));
@@ -2297,15 +2297,15 @@ struct llog_orphan_rec {
 struct llog_unlink_rec {
         struct llog_rec_hdr     lur_hdr;
         obd_id                  lur_oid;
-        obd_count               lur_ogen;
-        __u32                   padding;
+        obd_count               lur_ogr;
+        obd_count               lur_count;
         struct llog_rec_tail    lur_tail;
 } __attribute__((packed));
 
 struct llog_setattr_rec {
         struct llog_rec_hdr     lsr_hdr;
         obd_id                  lsr_oid;
-        obd_count               lsr_ogen;
+        obd_count               lsr_ogr;
         __u32                   lsr_uid;
         __u32                   lsr_gid;
         __u32                   padding;
@@ -2315,7 +2315,7 @@ struct llog_setattr_rec {
 struct llog_setattr64_rec {
         struct llog_rec_hdr     lsr_hdr;
         obd_id                  lsr_oid;
-        obd_count               lsr_ogen;
+        obd_count               lsr_ogr;
         __u32                   padding;
         __u32                   lsr_uid;
         __u32                   lsr_uid_h;
