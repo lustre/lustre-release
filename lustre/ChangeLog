@@ -2,7 +2,7 @@
 	* version 1.8.1
 	* Support for kernels:
 	 2.6.16.60-0.37 (SLES 10),
-	 2.6.27.23-0.1 (SLES11),
+	 2.6.27.23-0.1 (SLES11, i686 & x84_64 only),
 	 2.6.18-128.1.14.el5 (RHEL 5),
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
@@ -12,13 +12,15 @@
 	* NFS export disabled when stack size < 8192. Since the NFSv4 export
 	  of Lustre filesystem with 4K stack may cause a stack overflow. For
 	  more information, please refer to bugzilla 17630.
+	* ext4 support for RHEL5 is experimental and thus should not be
+	  used in production.
 
 Severity   : normal
 Frequency  : with 1.8 server and 1.6 clients
 Bugzilla   : 20020
-Descriptoin: correctly shrink reply for avoid send too big message to client.
+Description: correctly shrink reply for avoid send too big message to client.
 Details    : 1.8 mds is allocate to big buffer to LOV EA data and this produce
-             some problems with sending this reply to 1.6 client.
+	     some problems with sending this reply to 1.6 client.
 
 Severity   : normal
 Bugzilla   : 19917
@@ -29,16 +31,12 @@ Details    : Use GFP_HIGHUSER | __GFP_NOMEMALLOC flags for memory allocations
 	     For local clients the use of GFP_NOFS will be introduced in 1.8.2
 
 Severity   : enhancement
-Bugzilla   : 19846
+Bugzilla   : 19846, 18289
 Description: Update kernel to RHEL5 2.6.18-128.1.14.el5.
 
 Severity   : enhancement
 Bugzilla   : 19625, 16893, 18668, 19848
 Description: Add support for SLES11 2.6.27.23-0.1.
-
-Severity   : enhancement
-Bugzilla   : 18289
-Description: Update to RHEL5U3 kernel-2.6.18-128.1.1.el5.
 
 Severity   : enhancement
 Bugzilla   : 14250
@@ -203,6 +201,11 @@ Bugzilla   : 19559
 Description: Cannot acces an NFS-mounted Lustre filesystem
 Details    : An NFS client cannot access the Lustre filesystem NFS-mounted
 	     from a Lustre-client exporting the Lustre filesystem via NFS.
+
+Severity   : normal
+Bugzilla   : 20139
+Description: panic in ll_statahead_thread
+Details    : grab dentry reference in parent process.
 
 -------------------------------------------------------------------------------
 

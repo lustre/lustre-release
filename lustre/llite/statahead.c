@@ -699,15 +699,9 @@ out:
         return rc;
 }
 
-struct ll_sa_thread_args {
-        struct dentry   *sta_parent;
-        pid_t            sta_pid;
-};
-
 static int ll_statahead_thread(void *arg)
 {
-        struct ll_sa_thread_args *sta = arg;
-        struct dentry            *parent = dget(sta->sta_parent);
+        struct dentry            *parent = (struct dentry *)arg;
         struct inode             *dir = parent->d_inode;
         struct ll_inode_info     *lli = ll_i2info(dir);
         struct ll_sb_info        *sbi = ll_i2sbi(dir);
@@ -721,6 +715,15 @@ static int ll_statahead_thread(void *arg)
         spin_lock(&lli->lli_lock);
         if (unlikely(lli->lli_sai == NULL)) {
                 spin_unlock(&lli->lli_lock);
+                CERROR("ll_statahead_info is NULL, parent maybe exit abnormally, "
+                       "dentry@%p %.*s, inode = %lu, pid = %u\n",
+                       parent, parent->d_name.len, parent->d_name.name,
+                       dir->i_ino, lli->lli_opendir_pid);
+                /* At this point, ll_statahead_info is NULL, and parent maybe
+                 * exit abnormally, I can not notify parent even it is alive
+                 * yet. Just put the reference count on parent dentry. */
+                lli->lli_opendir_key = NULL;
+                lli->lli_opendir_pid = 0;
                 dput(parent);
                 RETURN(-EAGAIN);
         } else {
@@ -730,7 +733,7 @@ static int ll_statahead_thread(void *arg)
 
         {
                 char pname[16];
-                snprintf(pname, 15, "ll_sa_%u", sta->sta_pid);
+                snprintf(pname, 15, "ll_sa_%u", lli->lli_opendir_pid);
                 cfs_daemonize(pname);
         }
 
@@ -1018,7 +1021,6 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
         struct ll_sb_info        *sbi = ll_i2sbi(dir);
         struct ll_inode_info     *lli = ll_i2info(dir);
         struct ll_statahead_info *sai = lli->lli_sai;
-        struct ll_sa_thread_args  sta;
         struct l_wait_info        lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
         int                       rc = 0;
         ENTRY;
@@ -1121,17 +1123,16 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
 
         LASSERT(sai->sai_inode == (*dentryp)->d_parent->d_inode);
 
-        sta.sta_parent = (*dentryp)->d_parent;
-        sta.sta_pid    = cfs_curproc_pid();
-
         lli->lli_sai = sai;
-        rc = cfs_kernel_thread(ll_statahead_thread, &sta, 0);
+        /* get parent reference count here, and put it in ll_statahead_thread */
+        rc = cfs_kernel_thread(ll_statahead_thread, dget((*dentryp)->d_parent), 0);
         if (rc < 0) {
                 CERROR("can't start ll_sa thread, rc: %d\n", rc);
                 lli->lli_opendir_key = NULL;
                 sai->sai_thread.t_flags = SVC_STOPPED;
                 ll_sai_put(sai);
                 LASSERT(lli->lli_sai == NULL);
+                dput((*dentryp)->d_parent);
                 RETURN(-EAGAIN);
         }
 
