@@ -5,9 +5,10 @@ DEVEL_KERNEL_TYPE="source"
 prepare_and_build_srpm() {
 
     pushd $TOPDIR >/dev/null
-    # seems there is a bug (on Ubuntu at least) where all of the .specs
-    # are not put into SPECS
-    mv SOURCES/*.spec SPECS/
+    # all of the specs but one are put into SOURCES, so let's just move
+    # the one lone one in SPECS into SOURCES and just reference them from
+    # there
+    mv SPECS/*.spec SOURCES/
 
     # generate our buildid
     local buildid="lustre${EXTRA_VERSION##*_lustre}"
@@ -44,7 +45,7 @@ prepare_and_build_srpm() {
     # now build it
     if ! $RPMBUILD $rpmbuildopt $targets \
                    --define "_topdir $TOPDIR" \
-                   $TOPDIR/SPECS/kernel-$RPMSMPTYPE.spec >&2; then
+                   $TOPDIR/SOURCES/kernel-$RPMSMPTYPE.spec >&2; then
         fatal 1 "Failed to build kernel RPM"
     fi
 #fi
@@ -52,7 +53,7 @@ prepare_and_build_srpm() {
     # for SLES, we also need to build the kernel-source rpm
     if ! $RPMBUILD $rpmbuildopt $targets \
                    --define "_topdir $TOPDIR" \
-                   $TOPDIR/SPECS/kernel-source.spec >&2; then
+                   $TOPDIR/SOURCES/kernel-source.spec >&2; then
         fatal 1 "Failed to build kernel source RPM"
     fi
 

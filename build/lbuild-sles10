@@ -3,7 +3,8 @@
 # increment this if you have made a change that should force a new kernel
 # to build built
 #BUILD_GEN=1
-BUILD_GEN=2	# bz19952: remove -lustre tag from kernel RPM names
+#BUILD_GEN=2	# bz19952: remove -lustre tag from kernel RPM names
+BUILD_GEN=3	# bz19975 enable the building of src.rpms by default
 
 source ${0%/*}/lbuild-sles
 
@@ -12,7 +13,7 @@ edit_specs() {
     # edit the SPECs with our changes
     local spec
     for spec in $RPMSMPTYPE source; do
-        #cp $TOPDIR/SPECS/kernel-$spec.spec{,.orig}
+        #cp $TOPDIR/SOURCES/kernel-$spec.spec{,.orig}
         sed -i -e "s/^Release:.*/&_${buildid}/" \
                -e "s/^ExclusiveArch:.*/& ppc ppc64/" \
                -e '/^# Apply the patches needed for this architecture\./a\
@@ -20,7 +21,7 @@ cp  %_sourcedir/linux-2.6.16-lustre.patch %_builddir/%{name}-%{version}/lustre.p
 ! grep -q lustre.patch %_sourcedir/series.conf && echo -e "\\n\\tlustre.patch" >> %_sourcedir/series.conf' \
                -e "/flavor=\${config/a\
     [ \"\$flavor\" == \"$RPMSMPTYPE\" ] || continue" \
-          SPECS/kernel-${spec}.spec
+          SOURCES/kernel-${spec}.spec
 
         if $KERNEL_LUSTRE_NAMING; then
             # these are all of the changes needed because we change the package names
@@ -31,7 +32,7 @@ Provides:       kernel-$spec = %{version}-%{release}
 " \
                    -e 's/\(.*\)\([^#].*\)fookernel-source/\1\2kernel-lustre-source/g' \
                    -e '/^%build/,/^%changelog/s/kernel-\({*\)source/kernel-\1lustre-source/g' \
-              SPECS/kernel-${spec}.spec
+              SOURCES/kernel-${spec}.spec
         fi
 
     # XXX - a building-on-Ubuntu hack
@@ -41,7 +42,7 @@ curl ftp://ftp.kernel.org/pub/linux/kernel/people/akpm/patches/2.6/2.6.17/2.6.17
                -e 's/^\(BuildRequires: .*\)$/#NOU \1/g' \
                -e 's/%(\(chmod .*\))$/%(bash -c "\1")/' \
                -e 's/ -a 109//' \
-          SPECS/kernel-${spec}.spec
+          SOURCES/kernel-${spec}.spec
      fi
     done
 }
