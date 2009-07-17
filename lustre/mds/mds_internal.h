@@ -45,8 +45,7 @@ int mds_cleanup_pending(struct obd_device *obd);
 
 /* mds/mds_log.c */
 int mds_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                  struct obd_device *tgt, int count,
-                  struct llog_catid *logid, struct obd_uuid *uuid);
+                  struct obd_device *tgt, int *index);
 int mds_llog_finish(struct obd_device *obd, int count);
 int mds_changelog_llog_init(struct obd_device *obd, struct obd_device *tgt);
 

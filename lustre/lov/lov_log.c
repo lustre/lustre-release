@@ -204,24 +204,20 @@ static struct llog_operations lov_size_repl_logops = {
 };
 
 int lov_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                  struct obd_device *tgt, int count, struct llog_catid *logid,
-                  struct obd_uuid *uuid)
+                  struct obd_device *disk_obd, int *index)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct obd_device *child;
         int i, rc = 0;
         ENTRY;
 
-        /* allow init only one target at one time */
-        LASSERT(uuid);
-
         LASSERT(olg == &obd->obd_olg);
-        rc = llog_setup(obd, olg, LLOG_MDS_OST_ORIG_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, olg, LLOG_MDS_OST_ORIG_CTXT, disk_obd, 0, NULL,
                         &lov_mds_ost_orig_logops);
         if (rc)
                 RETURN(rc);
 
-        rc = llog_setup(obd, olg, LLOG_SIZE_REPL_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, olg, LLOG_SIZE_REPL_CTXT, disk_obd, 0, NULL,
                         &lov_size_repl_logops);
         if (rc)
                 GOTO(err_cleanup, rc);
@@ -229,19 +225,19 @@ int lov_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
         obd_getref(obd);
         /* count may not match lov->desc.ld_tgt_count during dynamic ost add */
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active)
-                        continue;
-                if (!obd_uuid_equals(uuid, &lov->lov_tgts[i]->ltd_uuid))
+                if (!lov->lov_tgts[i])
                         continue;
 
-                LASSERT(lov->lov_tgts[i]->ltd_exp);
-                child = lov->lov_tgts[i]->ltd_exp->exp_obd;
-                rc = obd_llog_init(child, &child->obd_olg, tgt, 1, logid, uuid);
+                if (index && i != *index)
+                        continue;
+
+                child = lov->lov_tgts[i]->ltd_obd;
+                rc = obd_llog_init(child, &child->obd_olg, disk_obd, &i);
                 if (rc)
                         CERROR("error osc_llog_init idx %d osc '%s' tgt '%s' "
-                               "(rc=%d)\n", i, child->obd_name, tgt->obd_name,
-                               rc);
-                break;
+                               "(rc=%d)\n", i, child->obd_name,
+                               disk_obd->obd_name, rc);
+                rc = 0;
         }
         obd_putref(obd);
         GOTO(err_cleanup, rc);

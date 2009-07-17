@@ -196,8 +196,7 @@ int mds_changelog_llog_init(struct obd_device *obd, struct obd_device *tgt)
 EXPORT_SYMBOL(mds_changelog_llog_init);
 
 int mds_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                  struct obd_device *tgt, int count, struct llog_catid *logid,
-                  struct obd_uuid *uuid)
+                  struct obd_device *disk_obd, int *index)
 {
         struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
         struct llog_ctxt *ctxt;
@@ -205,17 +204,17 @@ int mds_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
         ENTRY;
 
         LASSERT(olg == &obd->obd_olg);
-        rc = llog_setup(obd, &obd->obd_olg, LLOG_MDS_OST_ORIG_CTXT, tgt,
+        rc = llog_setup(obd, &obd->obd_olg, LLOG_MDS_OST_ORIG_CTXT, disk_obd,
                         0, NULL, &mds_ost_orig_logops);
         if (rc)
                 RETURN(rc);
 
-        rc = llog_setup(obd, &obd->obd_olg, LLOG_SIZE_REPL_CTXT, tgt,
+        rc = llog_setup(obd, &obd->obd_olg, LLOG_SIZE_REPL_CTXT, disk_obd,
                         0, NULL, &mds_size_repl_logops);
         if (rc)
                 GOTO(err_llog, rc);
 
-        rc = obd_llog_init(lov_obd, &lov_obd->obd_olg, tgt, count, logid, uuid);
+        rc = obd_llog_init(lov_obd, &lov_obd->obd_olg, disk_obd, index);
         if (rc) {
                 CERROR("lov_llog_init err %d\n", rc);
                 GOTO(err_cleanup, rc);

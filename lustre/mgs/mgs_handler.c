@@ -163,8 +163,7 @@ static int mgs_cleanup(struct obd_device *obd);
 static int mgs_handle(struct ptlrpc_request *req);
 
 static int mgs_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                         struct obd_device *tgt, int count,
-                         struct llog_catid *logid, struct obd_uuid *uuid)
+                         struct obd_device *tgt, int *index)
 {
         int rc;
         ENTRY;
@@ -235,7 +234,7 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 GOTO(err_ns, rc);
         }
 
-        rc = obd_llog_init(obd, &obd->obd_olg, obd, 0, NULL, NULL);
+        rc = obd_llog_init(obd, &obd->obd_olg, obd, NULL);
         if (rc)
                 GOTO(err_fs, rc);
 

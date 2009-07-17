@@ -2146,7 +2146,7 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
                            "filter_ldlm_cb_client", &obd->obd_ldlm_client);
 
-        rc = obd_llog_init(obd, &obd->obd_olg, obd, 1, NULL, NULL);
+        rc = obd_llog_init(obd, &obd->obd_olg, obd, NULL);
         if (rc) {
                 CERROR("failed to setup llogging subsystems\n");
                 GOTO(err_post, rc);
@@ -2399,8 +2399,7 @@ cleanup_lcm:
 
 static int
 filter_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                 struct obd_device *tgt, int count, struct llog_catid *catid,
-                 struct obd_uuid *uuid)
+                 struct obd_device *tgt, int *index)
 {
         struct filter_obd *filter = &obd->u.filter;
         struct llog_ctxt *ctxt;
@@ -2535,7 +2534,7 @@ struct obd_llog_group *filter_find_create_olg(struct obd_device *obd, int group)
         olg->olg_initializing = 1;
         spin_unlock(&filter->fo_llog_list_lock);
 
-        rc = llog_cat_initialize(obd, olg, 1, NULL);
+        rc = obd_llog_init(obd, olg, obd, NULL);
         if (rc) {
                spin_lock(&filter->fo_llog_list_lock);
                list_del(&olg->olg_list);

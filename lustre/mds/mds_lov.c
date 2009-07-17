@@ -537,7 +537,7 @@ static int mds_lov_update_desc(struct obd_device *obd, int idx,
         /* If we added a target we have to reconnect the llogs */
         /* We only _need_ to do this at first add (idx), or the first time
            after recovery.  However, it should now be safe to call anytime. */
-        rc = llog_cat_initialize(obd, &obd->obd_olg, idx, uuid);
+        rc = obd_llog_init(obd, &obd->obd_olg, obd, &idx);
         if (rc)
                 GOTO(out, rc);
 
@@ -644,11 +644,17 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                 GOTO(err_exit, rc);
         }
 
+        /* try init too early */
+        rc = obd_llog_init(obd, &obd->obd_olg, obd, NULL);
+        if (rc)
+                GOTO(err_exit, rc);
+
         mds->mds_osc_obd->u.lov.lov_sp_me = LUSTRE_SP_MDT;
 
         OBD_ALLOC(data, sizeof(*data));
         if (data == NULL)
-                RETURN(-ENOMEM);
+                GOTO(err_exit, rc = -ENOMEM);
+
         data->ocd_connect_flags = OBD_CONNECT_VERSION   | OBD_CONNECT_INDEX   |
                                   OBD_CONNECT_REQPORTAL | OBD_CONNECT_QUOTA64 |
                                   OBD_CONNECT_OSS_CAPA  | OBD_CONNECT_FID     |

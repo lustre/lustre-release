@@ -754,7 +754,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
 }
 
 /* reads the catalog list */
-int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
+int llog_get_cat_list(struct obd_device *disk_obd,
                       char *name, int idx, int count, struct llog_catid *idarray)
 {
         struct lvfs_run_ctxt saved;
@@ -767,7 +767,7 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         if (!count)
                 RETURN(0);
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
         if (!file || IS_ERR(file)) {
                 rc = PTR_ERR(file);
@@ -798,7 +798,7 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
 
         EXIT;
  out:
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
         if (file && !IS_ERR(file))
                 rc1 = filp_close(file, 0);
         if (rc == 0)
@@ -808,7 +808,7 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
 EXPORT_SYMBOL(llog_get_cat_list);
 
 /* writes the cat list */
-int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
+int llog_put_cat_list(struct obd_device *disk_obd,
                       char *name, int idx, int count, struct llog_catid *idarray)
 {
         struct lvfs_run_ctxt saved;
@@ -820,7 +820,7 @@ int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         if (!count)
                 GOTO(out1, rc = 0);
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
         if (!file || IS_ERR(file)) {
                 rc = PTR_ERR(file);
@@ -843,7 +843,7 @@ int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         }
 
 out:
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
         if (file && !IS_ERR(file))
                 rc1 = filp_close(file, 0);
 
@@ -918,14 +918,14 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         return 0;
 }
 
-int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
+int llog_get_cat_list(struct obd_device *disk_obd,
                       char *name, int idx, int count, struct llog_catid *idarray)
 {
         LBUG();
         return 0;
 }
 
-int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
+int llog_put_cat_list(struct obd_device *disk_obd,
                       char *name, int idx, int count, struct llog_catid *idarray)
 {
         LBUG();

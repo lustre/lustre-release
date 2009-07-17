@@ -451,7 +451,8 @@ int osc_create_async(struct obd_export *exp, struct obd_info *oinfo,
         struct obdo *oa = oinfo->oi_oa;
         ENTRY;
 
-        if ((oa->o_valid & OBD_MD_FLGROUP) && (oa->o_gr != 0)){
+        if ((oa->o_valid & OBD_MD_FLGROUP) &&
+            (oa->o_gr == FILTER_GROUP_ECHO || oa->o_gr == FILTER_GROUP_LLOG)){
                 rc = osc_real_create(exp, oinfo->oi_oa, ea, oti);
                 rc = oinfo->oi_cb_up(oinfo, rc);
                 RETURN(rc);

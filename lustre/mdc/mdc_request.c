@@ -1629,7 +1629,7 @@ static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
         sptlrpc_lprocfs_cliobd_attach(obd);
         ptlrpc_lprocfs_register_obd(obd);
 
-        rc = obd_llog_init(obd, &obd->obd_olg, obd, 0, NULL, NULL);
+        rc = obd_llog_init(obd, &obd->obd_olg, obd, NULL);
         if (rc) {
                 mdc_cleanup(obd);
                 CERROR("failed to setup llogging subsystems\n");
@@ -1715,8 +1715,7 @@ static int mdc_cleanup(struct obd_device *obd)
 
 
 static int mdc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                         struct obd_device *tgt, int count,
-                         struct llog_catid *logid, struct obd_uuid *uuid)
+                         struct obd_device *tgt, int *index)
 {
         struct llog_ctxt *ctxt;
         int rc;
@@ -1728,6 +1727,7 @@ static int mdc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                         &llog_client_ops);
         if (rc)
                 RETURN(rc);
+
         ctxt = llog_get_context(obd, LLOG_LOVEA_REPL_CTXT);
         llog_initiator_connect(ctxt);
         llog_ctxt_put(ctxt);

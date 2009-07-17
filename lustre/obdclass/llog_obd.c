@@ -178,6 +178,7 @@ int llog_setup_named(struct obd_device *obd,  struct obd_llog_group *olg,
         ctxt->loc_logops = op;
         sema_init(&ctxt->loc_sem, 1);
         ctxt->loc_exp = class_export_get(disk_obd->obd_self_export);
+        ctxt->loc_flags = LLOG_CTXT_FLAG_UNINITIALIZED;
 
         rc = llog_group_set_ctxt(olg, ctxt, index);
         if (rc) {
@@ -185,7 +186,7 @@ int llog_setup_named(struct obd_device *obd,  struct obd_llog_group *olg,
                 if (rc == -EEXIST) {
                         ctxt = llog_group_get_ctxt(olg, index);
                         if (ctxt) {
-                                /* 
+                                /*
                                  * mds_lov_update_desc() might call here multiple
                                  * times. So if the llog is already set up then
                                  * don't to do it again. 
@@ -215,6 +216,10 @@ int llog_setup_named(struct obd_device *obd,  struct obd_llog_group *olg,
                 CERROR("obd %s ctxt %d lop_setup=%p failed %d\n",
                        obd->obd_name, index, op->lop_setup, rc);
                 llog_ctxt_put(ctxt);
+        } else {
+                CDEBUG(D_CONFIG, "obd %s ctxt %d is initialized\n",
+                       obd->obd_name, index);
+                ctxt->loc_flags &= ~LLOG_CTXT_FLAG_UNINITIALIZED;
         }
 
         RETURN(rc);
@@ -255,6 +260,10 @@ int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                 CERROR("No ctxt\n");
                 RETURN(-ENODEV);
         }
+
+        if (ctxt->loc_flags & LLOG_CTXT_FLAG_UNINITIALIZED)
+                RETURN(-ENXIO);
+
 
         CTXT_CHECK_OP(ctxt, add, -EOPNOTSUPP);
         raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
@@ -441,54 +450,15 @@ int llog_obd_origin_add(struct llog_ctxt *ctxt,
 }
 EXPORT_SYMBOL(llog_obd_origin_add);
 
-int llog_cat_initialize(struct obd_device *obd, struct obd_llog_group *olg,
-                        int idx, struct obd_uuid *uuid)
-{
-        char name[32] = CATLIST;
-        struct llog_catid idarray;
-        int rc;
-        ENTRY;
-
-        mutex_down(&olg->olg_cat_processing);
-        rc = llog_get_cat_list(obd, obd, name, idx, 1, &idarray);
-        if (rc) {
-                CERROR("rc: %d\n", rc);
-                GOTO(out, rc);
-        }
-
-        CDEBUG(D_INFO, "%s: Init llog for %s/%d - catid "LPX64"/"LPX64":%x\n",
-               obd->obd_name, uuid->uuid, idx, idarray.lci_logid.lgl_oid,
-               idarray.lci_logid.lgl_ogr, idarray.lci_logid.lgl_ogen);
-
-        rc = obd_llog_init(obd, olg, obd, 1, &idarray, uuid);
-        if (rc) {
-                CERROR("rc: %d\n", rc);
-                GOTO(out, rc);
-        }
-
-        rc = llog_put_cat_list(obd, obd, name, idx, 1, &idarray);
-        if (rc) {
-                CERROR("rc: %d\n", rc);
-                GOTO(out, rc);
-        }
-
- out:
-        mutex_up(&olg->olg_cat_processing);
-
-        RETURN(rc);
-}
-EXPORT_SYMBOL(llog_cat_initialize);
-
 int obd_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                  struct obd_device *disk_obd, int count,
-                  struct llog_catid *logid, struct obd_uuid *uuid)
+                  struct obd_device *disk_obd, int *index)
 {
         int rc;
         ENTRY;
         OBD_CHECK_DT_OP(obd, llog_init, 0);
         OBD_COUNTER_INCREMENT(obd, llog_init);
 
-        rc = OBP(obd, llog_init)(obd, olg, disk_obd, count, logid, uuid);
+        rc = OBP(obd, llog_init)(obd, olg, disk_obd, index);
         RETURN(rc);
 }
 EXPORT_SYMBOL(obd_llog_init);

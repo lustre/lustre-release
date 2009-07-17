@@ -1385,8 +1385,7 @@ struct obd_ops {
 
         /* llog related obd_methods */
         int (*o_llog_init)(struct obd_device *obd, struct obd_llog_group *grp,
-                           struct obd_device *disk_obd, int count,
-                           struct llog_catid *logid, struct obd_uuid *uuid);
+                           struct obd_device *disk_obd, int *idx);
         int (*o_llog_finish)(struct obd_device *obd, int count);
         int (*o_llog_connect)(struct obd_export *, struct llogd_conn_body *);
 

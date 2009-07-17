@@ -658,8 +658,7 @@ static int llog_run_tests(struct obd_device *obd)
 
 static int llog_test_llog_init(struct obd_device *obd,
                                struct obd_llog_group *olg,
-                               struct obd_device *tgt, int count,
-                               struct llog_catid *logid, struct obd_uuid *uuid)
+                               struct obd_device *tgt, int *index)
 {
         int rc;
         ENTRY;
@@ -715,6 +714,7 @@ static int llog_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-EINVAL);
         }
 
+        /* disk obd */
         tgt = class_name2obd(lustre_cfg_string(lcfg, 1));
         if (!tgt || !tgt->obd_attached || !tgt->obd_set_up) {
                 CERROR("target device not attached or not set up (%s)\n",
@@ -722,7 +722,7 @@ static int llog_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-EINVAL);
         }
 
-        rc = obd_llog_init(obd, NULL, tgt, 0, NULL, NULL);
+        rc = obd_llog_init(obd, NULL, tgt, NULL);
         if (rc)
                 RETURN(rc);
 

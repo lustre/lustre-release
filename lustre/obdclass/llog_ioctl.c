@@ -437,7 +437,7 @@ int llog_catalog_list(struct obd_device *obd, int count,
                 RETURN(-ENOMEM);
 
         mutex_down(&obd->obd_olg.olg_cat_processing);
-        rc = llog_get_cat_list(obd, obd, name, 0, count, idarray);
+        rc = llog_get_cat_list(obd, name, 0, count, idarray);
         if (rc)
                 GOTO(out, rc);
 

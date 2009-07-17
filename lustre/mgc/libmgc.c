@@ -70,7 +70,7 @@ static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         /* liblustre only support null flavor to MGS */
         obd->u.cli.cl_flvr_mgc.sf_rpc = SPTLRPC_FLVR_NULL;
 
-        rc = obd_llog_init(obd, &obd->obd_olg, obd, 0, NULL, NULL);
+        rc = obd_llog_init(obd, &obd->obd_olg, obd, NULL);
         if (rc) {
                 CERROR("failed to setup llogging subsystems\n");
                 GOTO(err_cleanup, rc);
@@ -116,8 +116,7 @@ static int mgc_cleanup(struct obd_device *obd)
 }
 
 static int mgc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                         struct obd_device *tgt, int count,
-                         struct llog_catid *logid, struct obd_uuid *uuid)
+                         struct obd_device *tgt, int *index)
 {
         struct llog_ctxt *ctxt;
         int rc;
