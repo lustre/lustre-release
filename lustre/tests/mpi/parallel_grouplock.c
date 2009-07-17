@@ -43,6 +43,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <asm/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -50,259 +51,417 @@
 #include <time.h>
 #include <errno.h>
 #include <lustre/lustre_user.h>
-#include <lustre/tests/mpi/lp_utils.h>
+#include "lp_utils.h"
 
-#define LPGL_FILEN 700000
-#define LPGL_TEST_ITEMS 7
+#define LPGL_BUF_LEN 8192
+#define LPGL_TEST_ITEMS 12
 
-#define MAX_GLHOST 4
+#define MIN_GLHOST 5
 
-/* waiting time in 0.1 s */
-#define MAX_WAITING_TIME 20
+#define MAX_WAIT_TRIES            10
+#define WAIT_TIME                  1  /* secs */
+#define ONE_MB               1048576  /*   1 MB */
+#define MIN_LGBUF_SIZE     536870912  /* 512 MB */
+#define MAX_LGBUF_SIZE     536870912  /* 512 MB */
+// #define MAX_LGBUF_SIZE    1073741824  /*   1 GB */
+
+#define READ    1
+#define WRITE   2
+#define IOCTL   3
+#define CLOSE   4
+
 int rank = 0;
 int size = 0;
 
 char *testdir = NULL;
+int   only_test;
+
+char  buf[LPGL_BUF_LEN];
+char *lgbuf;
+int   lgbuf_size;
+char  filename[MAX_FILENAME_LEN];
+char  errmsg[MAX_FILENAME_LEN+20];
+
+static void
+alloc_lgbuf()
+{
+
+        if (lgbuf)
+                return;
+
+        lgbuf_size = MAX_LGBUF_SIZE;
+        for (; lgbuf_size >= MIN_LGBUF_SIZE; lgbuf_size -= ONE_MB)
+                if ((lgbuf = (char *)malloc(lgbuf_size)) != NULL)
+                        return;
+
+        FAIL("malloc of large buffer failed.\n");
+}
+
+static inline void
+read_buf(int fd)
+{
+        int pos, rc;
+
+        rc = read(fd, buf, sizeof(buf));
+        if (rc == -1) {
+                pos = lseek(fd, 0, SEEK_CUR);
+                sprintf(errmsg, "read of file %s at pos %d for %lu bytes "
+                        "returned %d: (%d) %s.\n",
+                        filename, pos, sizeof(buf), rc, errno, strerror(errno));
+                FAIL(errmsg);
+        } else if (rc != sizeof(buf)) {
+                pos = lseek(fd, 0, SEEK_CUR);
+                sprintf(errmsg, "read of file %s at pos %d for %lu bytes "
+                        "returned %d.\n",
+                        filename, pos, sizeof(buf), rc);
+                FAIL(errmsg);
+        }
+}
+
+static inline void
+write_buf(int fd, int index)
+{
+        int pos = index * sizeof(buf);
+        int rc;
+
+        memset(buf, index, sizeof(buf));
+        lseek(fd, pos, SEEK_SET);
+        rc = write(fd, buf, sizeof(buf));
+        if (rc == -1) {
+                sprintf(errmsg, "write of file %s at pos %d for %lu bytes "
+                        "returned %d: (%d) %s.\n",
+                        filename, pos, sizeof(buf), rc, errno, strerror(errno));
+                FAIL(errmsg);
+        } else if (rc != sizeof(buf)) {
+                sprintf(errmsg, "write of file %s at pos %d for %lu bytes "
+                        "returned %d.\n",
+                        filename, pos, sizeof(buf), rc);
+                FAIL(errmsg);
+        }
+}
 
 /*
- * process1 attempts CW(gid=1) -- granted immediately
- * process2 attempts PR -- blocked, goes on waiting list
- * process3 attempts CW(gid=1) -> should be granted, but may go on
- *                                the waiting list
+ * task0 attempts GR(gid=1) -- granted immediately
+ * task1 attempts PR|PW -- blocked, goes on waiting list
+ * task2 attempts GR(gid=1) -> should be granted
+ * task2 writes to file and releases GR(gid=1)
+ * task0 waits for task2 to complete its processing
+ * task0 writes to file and releases GR(gid=1)
+ * task1 PR|PW should be granted and reads the file
  */
-void grouplock_test1(char *filename, int fd, char *errmsg)
+void grouplock_test1(char *filename, int fd, int blocking_op, int unlock_op)
 {
-        int rc, count, gid = 1;
-        char buf[LPGL_FILEN];
-        char zeros[LPGL_FILEN];
         MPI_Request req1, req2;
-        int temp1, temp2;
+        int iter, flag1, flag2, temp1, temp2;
+        int i, rc, gid = 1;
 
         if (rank == 0) {
                 if ((rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid)) == -1) {
-                        sprintf(errmsg, "ioctl GROUP_LOCK of file %s return %d",
-                                filename, rc);
+                        sprintf(errmsg,
+                                "ioctl GROUP_LOCK of file %s: (%d) %s.\n",
+                                filename, errno, strerror(errno));
                         FAIL(errmsg);
                 }
         }
 
         MPI_Barrier(MPI_COMM_WORLD);
 
-        if (rank == 1) {
-                memset(zeros, 0x0, sizeof(zeros));
-                lseek(fd, 0, SEEK_SET);
-
-                MPI_Send(&gid, 1, MPI_INT, 2, 1, MPI_COMM_WORLD);
-                count = read(fd, buf, sizeof(buf));
-                if (count != sizeof(buf)) {
-                        if (count > 0)
-                                dump_diff(zeros, buf, count, 0);
-                        sprintf(errmsg, "read of file %s return %d",
-                                filename, count);
-                        FAIL(errmsg);
+        switch (rank) {
+        case 1:
+                if (blocking_op == WRITE) {
+                        write_buf(fd, rank);
+                        lseek(fd, 0, SEEK_SET);
                 }
+
+                for (i = 0; i <= 2; i++)
+                        read_buf(fd);
+
                 MPI_Send(&gid, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
-        }
+                break;
+        case 2:
+                /* Wait for task1 to progress. This could be racey. */
+                sleep(WAIT_TIME);
 
-        if (rank == 2) {
-                int temp;
-
-                /* Wait for reading task to progress, this is probably somewhat
-                   racey, though, may be adding usleep here would make things
-                   better here. */
-                usleep(100);
-                MPI_Recv(&temp, 1, MPI_INT, 1, 1, MPI_COMM_WORLD,
-                         MPI_STATUS_IGNORE);
                 if ((rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid)) == -1) {
-                        sprintf(errmsg, "ioctl GROUP_LOCK of file %s return %d",
-                                filename, rc);
+                        sprintf(errmsg,
+                                "ioctl GROUP_LOCK of file %s: (%d) %s.\n",
+                                filename, errno, strerror(errno));
+                        FAIL(errmsg);
+                }
+
+                write_buf(fd, rank);
+
+                if (unlock_op == CLOSE)
+                        rc = close(fd);
+                else
+                        rc = ioctl(fd, LL_IOC_GROUP_UNLOCK, gid);
+
+                if (rc == -1) {
+                        sprintf(errmsg,
+                                "%s release GROUP_LOCK of file %s: (%d) %s.\n",
+                                (unlock_op == CLOSE) ? "close" : "ioctl",
+                                filename, errno, strerror(errno));
                         FAIL(errmsg);
                 }
                 MPI_Send(&gid, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
-        }
-
-        if (rank == 0) {
-                int iter = MAX_WAITING_TIME;
-                int flag1, flag2;
-
-                /* reading task will tell us when it completes */
+                break;
+        case 0:
+                /* PR|PW task will tell us when it completes */
                 MPI_Irecv(&temp1, 1, MPI_INT, 1, 1, MPI_COMM_WORLD, &req1);
                 /* 2nd locking task will tell us when it completes */
                 MPI_Irecv(&temp2, 1, MPI_INT, 2, 1, MPI_COMM_WORLD, &req2);
 
+                /* Wait for task2 to complete. */
+                iter = MAX_WAIT_TRIES;
                 do {
                         iter--;
                         if (!iter) {
                                 FAIL("2nd locking task is not progressing\n");
                         }
-                        usleep(100);
-                        MPI_Test(&req2, &flag2, MPI_STATUS_IGNORE);
+
+                        sleep(WAIT_TIME);
+
                         MPI_Test(&req1, &flag1, MPI_STATUS_IGNORE);
                         if (flag1) {
-                                FAIL("PR task progressed even though GROUP lock"
-                                     " is held\n");
+                                FAIL("PR|PW task progressed even though GROUP "
+                                     "lock is held\n");
                         }
+
+                        MPI_Test(&req2, &flag2, MPI_STATUS_IGNORE);
                 } while (!flag2);
-        }
 
-        /* Now we need to release the lock */
+                /* Make sure task1 is still waiting. */
+                iter = MAX_WAIT_TRIES;
+                do {
+                        iter--;
+                        sleep(WAIT_TIME);
+                        MPI_Test(&req1, &flag1, MPI_STATUS_IGNORE);
+                        if (flag1) {
+                                FAIL("PR|PW task progressed even though "
+                                     "GROUP lock is held\n");
+                        }
+                } while (iter);
 
-        if (rank == 0 || rank == 2) {
+                write_buf(fd, rank);
+
+                /* Now we need to release the lock */
                 if ((rc = ioctl(fd, LL_IOC_GROUP_UNLOCK, gid)) == -1) {
-                        sprintf(errmsg, "ioctl GROUP_UNLOCK of file %s return %d",
-                                filename, rc);
+                        sprintf(errmsg,
+                                "ioctl GROUP_UNLOCK of file %s: (%d) %s.\n",
+                                filename, errno, strerror(errno));
                         FAIL(errmsg);
                 }
-        }
-
-        if (rank == 0) {
-                int iter = MAX_WAITING_TIME;
-                int flag1;
-
+                
+                /* Wait for task1 to complete. */
+                iter = MAX_WAIT_TRIES;
                 do {
                         iter--;
                         if (!iter) {
-                                FAIL("reading task is not progressing even "
+                                FAIL("PR|PW task is not progressing even "
                                      "though GROUP lock was released\n");
                                 break;
                         }
-                        usleep(100);
+                        sleep(WAIT_TIME);
                         MPI_Test(&req1, &flag1, MPI_STATUS_IGNORE);
                 } while (!flag1);
+
+                break;
         }
-
-        MPI_Barrier(MPI_COMM_WORLD);
-
 }
 
 /*
- * process1 attempts CW(gid=1) -- granted immediately
- * process2 attempts CW(gid=2) -- blocked
- * process3 attempts PR -- blocked
- * process4 attempts CW(gid=2) -- blocked
- * process1 releases CW(gid=1) -- this allows process2's CW lock to be granted
-                                  process3 remains blocked
+ * task0 attempts GR(gid=1) -- granted immediately
+ * task1 attempts GR(gid=2) -- blocked
+ * task2 attempts PR|PW -- blocked
+ * task3 attempts GR(gid=2) -- blocked
+ * task4 attempts GR(gid=1) -- should be granted
+ * task0,4 writes to file and releases GR(gid=1) --
+ *       this allows task2 & 3's GR locks to be granted; task4 remains blocked.
+ * task1 & 3 write to file and release GR(gid=2)
+ * task2 PR|PW should be granted and reads the file.
  */
-void grouplock_test2(char *filename, int fd, char *errmsg)
+void grouplock_test2(char *filename, int fd, int blocking_op, int unlock_op)
 {
-        int rc, count, gid = 1;
-        char buf[LPGL_FILEN];
-        char zeros[LPGL_FILEN];
-        MPI_Request req1, req2, req3;
-        int temp1, temp2, temp3;
+        int i, iter, rc, gid = 1;
+        int flag1, flag2, flag3, flag4;
+        int temp1, temp2, temp3, temp4;
+        MPI_Request req1, req2, req3, req4;
 
         if (rank == 0) {
                 if ((rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid)) == -1) {
-                        sprintf(errmsg, "ioctl GROUP_LOCK of file %s return %d",
-                                filename, rc);
+                        sprintf(errmsg,
+                                "ioctl GROUP_LOCK of file %s: (%d) %s.\n",
+                                filename, errno, strerror(errno));
                         FAIL(errmsg);
                 }
         }
 
         MPI_Barrier(MPI_COMM_WORLD);
 
-        if (rank == 1 || rank == 3) {
+        switch (rank) {
+        case 3:
+                /* Wait for task2 to issue its read request. */
+                sleep(2*WAIT_TIME);
+        case 1:
                 gid = 2;
-                if (rank == 3) {
-                        MPI_Recv(&temp1, 1, MPI_INT, 2, 1, MPI_COMM_WORLD,
-                                 MPI_STATUS_IGNORE);
-                        usleep(100);
-                }
                 if ((rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid)) == -1) {
-                        sprintf(errmsg, "ioctl GROUP_LOCK of file %s return %d",
-                                filename, rc);
+                        sprintf(errmsg,
+                                "ioctl GROUP_LOCK of file %s: (%d) %s.\n",
+                                filename, errno, strerror(errno));
                         FAIL(errmsg);
                 }
+
+                write_buf(fd, rank);
+
                 MPI_Send(&gid, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
-        }
 
-        if (rank == 2) {
-                memset(zeros, 0x0, sizeof(zeros));
-                lseek(fd, 0, SEEK_SET);
-
-                MPI_Send(&gid, 1, MPI_INT, 3, 1, MPI_COMM_WORLD);
-                count = read(fd, buf, sizeof(buf));
-                if (count != sizeof(buf)) {
-                        if (count > 0)
-                                dump_diff(zeros, buf, count, 0);
-                        sprintf(errmsg, "read of file %s return %d",
-                                filename, count);
-                        FAIL(errmsg);
-                }
-                MPI_Send(&gid, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
-        }
-
-        if (rank == 0) {
-                int iter = MAX_WAITING_TIME;
-                int flag1, flag2, flag3;
-
-                /* 2nd locking task will tell us when it completes */
-                MPI_Irecv(&temp1, 1, MPI_INT, 1, 1, MPI_COMM_WORLD, &req1);
-                /* 3nd locking task will tell us when it completes */
-                MPI_Irecv(&temp2, 1, MPI_INT, 3, 1, MPI_COMM_WORLD, &req2);
-                /* reading task will tell us when it completes */
-                MPI_Irecv(&temp3, 1, MPI_INT, 2, 1, MPI_COMM_WORLD, &req3);
-
-                do {
-                        iter--;
-                        usleep(100);
-                        MPI_Test(&req2, &flag2, MPI_STATUS_IGNORE);
-                        MPI_Test(&req1, &flag1, MPI_STATUS_IGNORE);
-                        MPI_Test(&req3, &flag3, MPI_STATUS_IGNORE);
-                        if (flag3) {
-                                FAIL("PR task progressed even though GROUP lock"
-                                     " is held\n");
-                        }
-                        if (flag1 || flag2) {
-                                FAIL("GROUP (gid=2) task progressed even though"
-                                     " GROUP (gid=1) lock is held\n");
-                        }
-
-                } while (iter);
-
-                /* Now let's release first lock */
-                if ((rc = ioctl(fd, LL_IOC_GROUP_UNLOCK, gid)) == -1) {
-                        sprintf(errmsg, "ioctl GROUP_UNLOCK of file %s return %d",
-                                filename, rc);
-                        FAIL(errmsg);
-                }
-                iter = MAX_WAITING_TIME;
-                do {
-                        iter--;
-                        if (!iter) {
-                                FAIL("GROUP(gid=2) tasks are not progressing\n");
-                        }
-                        usleep(100);
-                        MPI_Test(&req2, &flag2, MPI_STATUS_IGNORE);
-                        MPI_Test(&req1, &flag1, MPI_STATUS_IGNORE);
-                        MPI_Test(&req3, &flag3, MPI_STATUS_IGNORE);
-                        if (flag3) {
-                                fprintf(stderr, "task1 %d, task3 %d\n", flag1,
-                                        flag2);
-                                FAIL("PR task progressed even though GROUP lock"
-                                     " was on the queue task\n");
-                        }
-                } while (!(flag1 && flag2));
-                MPI_Send(&gid, 1, MPI_INT, 1, 1, MPI_COMM_WORLD);
-                MPI_Send(&gid, 1, MPI_INT, 3, 1, MPI_COMM_WORLD);
-        }
-
-        if (rank == 1 || rank == 3) {
                 /* Do not release the locks until task 0 is ready to watch
                    for reading task only */
                 MPI_Recv(&temp1, 1, MPI_INT, 0, 1, MPI_COMM_WORLD,
                          MPI_STATUS_IGNORE);
-                if ((rc = ioctl(fd, LL_IOC_GROUP_UNLOCK, gid)) == -1) {
-                        sprintf(errmsg, "ioctl GROUP_UNLOCK of file %s return %d",
-                                filename, rc);
+
+                if (unlock_op == CLOSE)
+                        rc = close(fd);
+                else
+                        rc = ioctl(fd, LL_IOC_GROUP_UNLOCK, gid);
+                if (rc == -1) {
+                        sprintf(errmsg,
+                                "%s release GROUP_LOCK of file %s: (%d) %s.\n",
+                                (unlock_op == CLOSE) ? "close" : "ioctl",
+                                filename, errno, strerror(errno));
                         FAIL(errmsg);
                 }
-        }
+                break;
+        case 2:
+                /* Give task1 a chance to request its GR lock. */
+                sleep(WAIT_TIME);
 
-        if (rank == 0) {
-                int iter = MAX_WAITING_TIME;
-                int flag3;
+                if (blocking_op == WRITE) {
+                        write_buf(fd, rank);
+                        lseek(fd, 0, SEEK_SET);
+                }
 
+                for (i = 0; i <= 3; i++)
+                        read_buf(fd);
+
+                MPI_Send(&gid, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
+                break;
+        case 4:
+                /* Give task1 & 3 a chance to queue their GR locks. */
+                sleep(3*WAIT_TIME);
+
+                if ((rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid)) == -1) {
+                        sprintf(errmsg,
+                                "ioctl GROUP_LOCK of file %s: (%d) %s.\n",
+                                filename, errno, strerror(errno));
+                        FAIL(errmsg);
+                }
+
+                write_buf(fd, rank);
+
+                rc = ioctl(fd, LL_IOC_GROUP_UNLOCK, gid);
+                if (rc == -1) {
+                        sprintf(errmsg,
+                                "%s release GROUP_LOCK of file %s: (%d) %s.\n",
+                                (unlock_op == CLOSE) ? "close" : "ioctl",
+                                filename, errno, strerror(errno));
+                        FAIL(errmsg);
+                }
+
+                MPI_Send(&gid, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
+                break;
+        case 0:
+                /* locking tasks will tell us when they complete */
+                MPI_Irecv(&temp1, 1, MPI_INT, 1, 1, MPI_COMM_WORLD, &req1);
+                MPI_Irecv(&temp2, 1, MPI_INT, 2, 1, MPI_COMM_WORLD, &req2);
+                MPI_Irecv(&temp3, 1, MPI_INT, 3, 1, MPI_COMM_WORLD, &req3);
+                MPI_Irecv(&temp4, 1, MPI_INT, 4, 1, MPI_COMM_WORLD, &req4);
+
+                /* Make sure all tasks that should be blocked are waiting. */
+                iter = MAX_WAIT_TRIES;
+                do {
+                        iter--;
+                        sleep(WAIT_TIME);
+                        MPI_Test(&req1, &flag1, MPI_STATUS_IGNORE);
+                        MPI_Test(&req2, &flag2, MPI_STATUS_IGNORE);
+                        MPI_Test(&req3, &flag3, MPI_STATUS_IGNORE);
+                        if (flag1 || flag3) {
+                                FAIL("GROUP (gid=2) task progressed even though"
+                                     " GROUP (gid=1) lock is held.\n");
+                        }
+                        if (flag2) {
+                                FAIL("PR|PW task progressed even though "
+                                     "GROUP (gid=1) lock is still held\n");
+                        }
+                } while (iter);
+
+                /* Wait for task4 to signal it has completed. */
+                iter = MAX_WAIT_TRIES;
+                do {
+                        iter--;
+                        if (!iter) {
+                                FAIL("2nd task GROUP(gid=1) not progressing\n");
+                        }
+                        sleep(WAIT_TIME);
+                        MPI_Test(&req1, &flag1, MPI_STATUS_IGNORE);
+                        MPI_Test(&req2, &flag2, MPI_STATUS_IGNORE);
+                        MPI_Test(&req3, &flag3, MPI_STATUS_IGNORE);
+                        MPI_Test(&req4, &flag4, MPI_STATUS_IGNORE);
+                        if (flag1 || flag3) {
+                                FAIL("GROUP (gid=2) task progressed even though"
+                                     " GROUP (gid=1) lock is held.\n");
+                        }
+                        if (flag2) {
+                                FAIL("PR|PW task progressed even though "
+                                     "GROUP (gid=1) lock is still held\n");
+                        }
+                } while (!flag4);
+
+                write_buf(fd, rank);
+
+                /* Now let's release first lock */
+                if ((rc = ioctl(fd, LL_IOC_GROUP_UNLOCK, gid)) == -1) {
+                        sprintf(errmsg, "ioctl GROUP_UNLOCK of file %s "
+                                "returned %d", filename, rc);
+                        FAIL(errmsg);
+                }
+
+                /* Wait for task1 & 3 to signal they have their lock. */
+                iter = MAX_WAIT_TRIES;
+                do {
+                        iter--;
+                        if (!iter) {
+                                FAIL("GROUP(gid=2) tasks not progressing\n");
+                        }
+                        sleep(WAIT_TIME);
+                        MPI_Test(&req1, &flag1, MPI_STATUS_IGNORE);
+                        MPI_Test(&req2, &flag2, MPI_STATUS_IGNORE);
+                        MPI_Test(&req3, &flag3, MPI_STATUS_IGNORE);
+                        if (flag2) {
+                                fprintf(stderr, "task2 %d\n", flag2);
+                                FAIL("PR task progressed even though GROUP lock"
+                                     " was on the queue task\n");
+                        }
+                } while (!(flag1 && flag3));
+
+                /* Make sure task2 is still waiting. */
+                iter = MAX_WAIT_TRIES;
+                do {
+                        iter--;
+                        sleep(WAIT_TIME);
+                        MPI_Test(&req2, &flag2, MPI_STATUS_IGNORE);
+                        if (flag2) {
+                                FAIL("PR task progressed even though GR(gid=2) "
+                                     "lock was active.\n");
+                        }
+                } while (iter);
+
+                /* Tell task1 & 3 to release their GR(gid=2) lock. */
+                MPI_Send(&gid, 1, MPI_INT, 1, 1, MPI_COMM_WORLD);
+                MPI_Send(&gid, 1, MPI_INT, 3, 1, MPI_COMM_WORLD);
+
+                /* Wait for task2 (PR) to complete. */
+                iter = MAX_WAIT_TRIES;
                 do {
                         iter--;
                         if (!iter) {
@@ -310,504 +469,470 @@ void grouplock_test2(char *filename, int fd, char *errmsg)
                                      "though GROUP locks are released\n");
                                 break;
                         }
-                        usleep(100);
-                        MPI_Test(&req3, &flag3, MPI_STATUS_IGNORE);
+                        sleep(WAIT_TIME);
+                        MPI_Test(&req2, &flag2, MPI_STATUS_IGNORE);
                 } while (!flag3);
+                break;
         }
-
-        MPI_Barrier(MPI_COMM_WORLD);
-
 }
 
 /*
- * process1 attempts CW(gid=1) -- granted
- * process2 attempts PR -- blocked
- * process3 attempts CW(gid=1) -> should be granted
- * process3 releases CW(gid=1)
- *   process2 should remain blocked
- * process1 releases CW(gid=1)
- *   process2's PR should be granted
+ * Tests a bug that once existed in the group lock code;
+ * i.e. that a GR lock request on a O_NONBLOCK fd could fail even though
+ * there is no blocking GROUP lock ahead of it on the waitq.
  *
- * This is a lot like test1.
+ * task0 starts a large write (PW). this test could be racey if this
+ *       write finishes too quickly.
+ * task1 attempts GR(gid=1) -- blocked
+ * task2 attempts GR(gid=2) with a O_NONBLOCK fs. should not fail.
  */
-void grouplock_test3(char *filename, int fd, char *errmsg)
+void grouplock_test3(char *filename, int fd)
 {
-        int rc, count, gid = 1;
-        char buf[LPGL_FILEN];
-        char zeros[LPGL_FILEN];
         MPI_Request req1, req2;
-        int temp1, temp2;
+        int iter, flag1, flag2, temp1, temp2;
+        int rc, gid = 1;
 
         if (rank == 0) {
-                if ((rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid)) == -1) {
-                        sprintf(errmsg, "ioctl GROUP_LOCK of file %s return %d",
-                                filename, rc);
+                alloc_lgbuf();
+        } else if (rank == 2) {
+                rc = fcntl(fd, F_SETFL, O_NONBLOCK);
+                if (rc == -1) {
+                        sprintf(errmsg, "fcntl(O_NONBLOCK) failed: (%d) %s.\n",
+                                errno, strerror(errno));
                         FAIL(errmsg);
                 }
         }
 
         MPI_Barrier(MPI_COMM_WORLD);
 
-        if (rank == 1) {
-                memset(zeros, 0x0, sizeof(zeros));
-                lseek(fd, 0, SEEK_SET);
+        switch (rank) {
+        case 2:
+                gid = 2;
+                usleep(10000);
+                usleep(10000);
+        case 1:
+                /* Racey, we have to sleep just long enough for
+                 * task0's write to start. */
+                usleep(10000);
 
-                MPI_Send(&gid, 1, MPI_INT, 2, 1, MPI_COMM_WORLD);
-                count = read(fd, buf, sizeof(buf));
-                if (count != sizeof(buf)) {
-                        if (count > 0)
-                                dump_diff(zeros, buf, count, 0);
-                        sprintf(errmsg, "read of file %s return %d",
-                                filename, count);
-                        FAIL(errmsg);
-                }
-                MPI_Send(&gid, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
-        }
-
-        if (rank == 2) {
-                int temp;
-
-                /* Wait for reading task to progress, this is probably somewhat
-                   racey, though, may be adding usleep here would make things
-                   better here. */
-                usleep(100);
-                MPI_Recv(&temp, 1, MPI_INT, 1, 1, MPI_COMM_WORLD,
-                         MPI_STATUS_IGNORE);
                 if ((rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid)) == -1) {
-                        sprintf(errmsg, "ioctl GROUP_LOCK of file %s return %d",
-                                filename, rc);
+                        sprintf(errmsg,
+                                "ioctl GROUP_LOCK of file %s: (%d) %s.\n",
+                                filename, errno, strerror(errno));
                         FAIL(errmsg);
                 }
+
+                /* tell task0 we have the lock. */
                 MPI_Send(&gid, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
-        }
 
-        if (rank == 0) {
-                int iter = MAX_WAITING_TIME;
-                int flag1, flag2;
+                /* the close of fd will release the lock. */
+                break;
+        case 0:
+                rc = write(fd, lgbuf, lgbuf_size);
+                if (rc == -1) {
+                        sprintf(errmsg, "write of file %s for %d bytes "
+                                "returned %d: (%d) %s.\n",
+                                filename, lgbuf_size,
+                                rc, errno, strerror(errno));
+                        FAIL(errmsg);
+                } else if (rc != lgbuf_size) {
+                        sprintf(errmsg, "write of file %s for %d bytes "
+                                "returned %d.\n",
+                                filename, lgbuf_size, rc);
+                        FAIL(errmsg);
+                }
 
-                /* reading task will tell us when it completes */
+                /* GR tasks will tell us when they complete */
                 MPI_Irecv(&temp1, 1, MPI_INT, 1, 1, MPI_COMM_WORLD, &req1);
-                /* 2nd locking task will tell us when it completes */
                 MPI_Irecv(&temp2, 1, MPI_INT, 2, 1, MPI_COMM_WORLD, &req2);
 
+                /* Wait for task1 & 2 to complete. */
+                iter = MAX_WAIT_TRIES;
                 do {
                         iter--;
                         if (!iter) {
-                                FAIL("2nd locking task is not progressing\n");
-                        }
-                        usleep(100);
-                        MPI_Test(&req2, &flag2, MPI_STATUS_IGNORE);
-                        MPI_Test(&req1, &flag1, MPI_STATUS_IGNORE);
-                        if (flag1) {
-                                FAIL("PR task progressed even though GROUP lock"
-                                     " is held\n");
-                        }
-                } while (!flag2);
-        }
-
-        /* Now we need to release the lock */
-
-        if (rank == 2) {
-                if ((rc = ioctl(fd, LL_IOC_GROUP_UNLOCK, gid)) == -1) {
-                        sprintf(errmsg, "ioctl GROUP_UNLOCK of file %s return %d",
-                                filename, rc);
-                        FAIL(errmsg);
-                }
-        }
-
-        if (rank == 0) {
-                int iter = MAX_WAITING_TIME;
-                int flag1;
-
-                do {
-                        iter--;
-                        usleep(100);
-                        MPI_Test(&req1, &flag1, MPI_STATUS_IGNORE);
-                } while (!flag1 && iter);
-                if (iter) {
-                        FAIL("reading task is progressing even "
-                             "though GROUP lock was not fully released\n");
-                }
-
-                iter = MAX_WAITING_TIME;
-
-                if ((rc = ioctl(fd, LL_IOC_GROUP_UNLOCK, gid)) == -1) {
-                        sprintf(errmsg, "ioctl GROUP_UNLOCK of file %s return %d",
-                                filename, rc);
-                        FAIL(errmsg);
-                }
-
-                do {
-                        iter--;
-                        if (!iter) {
-                                FAIL("reading task is not progressing even "
-                                     "though GROUP lock was released\n");
+                                FAIL("GR(gid=1) tasks are not progressing even "
+                                     "no conflicting locks exist.\n");
                                 break;
                         }
-                        usleep(100);
+                        sleep(WAIT_TIME);
                         MPI_Test(&req1, &flag1, MPI_STATUS_IGNORE);
-                } while (!flag1);
+                        MPI_Test(&req2, &flag2, MPI_STATUS_IGNORE);
+                } while (!(flag1 && flag2));
+                break;
         }
-
-        MPI_Barrier(MPI_COMM_WORLD);
-
 }
 
 /*
- * process1 attempts CW(gid=1) -- granted
- * process2 attempts PR on non-blocking fd -> should return -EWOULDBLOCK
- * process3 attempts CW(gid=2) on non-blocking fd -> should return -EWOULDBLOCK
+ * Tests a bug that once existed in the group lock code;
+ * i.e. extent locks without O_NONBLOCK that go on the waitq before a group
+ * lock request came in and was granted. The extent lock would timed out and
+ * produce an error.
+ *
+ * task0 starts a large write (PW). this test could be racey if this
+ *       write finishes too quickly.
+ * task1 attempts PR -- blocked
+ * task2 attempts GR(gid=1) -- blocked
+ * task0 completes write
+ * task1 should wakeup and complete its read
+ * task2 should wakeup and after task1 complete.
  */
-void grouplock_test4(char *filename, int fd, char *errmsg)
+void grouplock_test4(char *filename, int fd)
 {
-        int rc, count, gid = 1;
-        char buf[LPGL_FILEN];
-        char zeros[LPGL_FILEN];
+        MPI_Request req1;
+        int iter, flag1, temp1;
+        int rc, gid = 1;
+
+        if (rank == 0)
+                alloc_lgbuf();
+
+        MPI_Barrier(MPI_COMM_WORLD);
+
+        switch (rank) {
+        case 1:
+                /* Racey, we have to sleep just long enough for
+                 * task0's write to start. */
+                MPI_Recv(&temp1, 1, MPI_INT, 0, 1, MPI_COMM_WORLD,
+                         MPI_STATUS_IGNORE);
+                usleep(10000);
+                usleep(10000);
+
+                /* tell task2 to go. */
+                MPI_Send(&gid, 1, MPI_INT, 2, 1, MPI_COMM_WORLD);
+
+
+                read_buf(fd);
+                MPI_Send(&gid, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
+                break;
+        case 2:
+                /* Give task0 & 1 a chance to start. */
+                MPI_Recv(&temp1, 1, MPI_INT, 1, 1, MPI_COMM_WORLD,
+                         MPI_STATUS_IGNORE);
+                usleep(25000);
+                usleep(25000);
+
+                if ((rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid)) == -1) {
+                        sprintf(errmsg,
+                                "ioctl GROUP_LOCK of file %s: (%d) %s.\n",
+                                filename, errno, strerror(errno));
+                        FAIL(errmsg);
+                }
+
+                /* tell task0 we have the lock. */
+                MPI_Send(&gid, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
+
+                /* Do not release the locks until task 0 tells us too.
+                   for reading task only */
+                MPI_Recv(&temp1, 1, MPI_INT, 0, 1, MPI_COMM_WORLD,
+                         MPI_STATUS_IGNORE);
+
+                rc = ioctl(fd, LL_IOC_GROUP_UNLOCK, gid);
+                if (rc == -1) {
+                        sprintf(errmsg,
+                                "ioctl GROUP_UNLOCK of file %s: (%d) %s.\n",
+                                filename, errno, strerror(errno));
+                        FAIL(errmsg);
+                }
+                break;
+        case 0:
+                /* tell task1 to go to avoid race */
+                MPI_Send(&gid, 1, MPI_INT, 1, 1, MPI_COMM_WORLD);
+                rc = write(fd, lgbuf, lgbuf_size);
+                if (rc == -1) {
+                        sprintf(errmsg, "write of file %s for %d bytes "
+                                "returned %d: (%d) %s.\n",
+                                filename, lgbuf_size,
+                                rc, errno, strerror(errno));
+                        FAIL(errmsg);
+                } else if (rc != lgbuf_size) {
+                        sprintf(errmsg, "write of file %s for %d bytes "
+                                "returned %d.\n",
+                                filename, lgbuf_size, rc);
+                        FAIL(errmsg);
+                }
+
+                /* wait for task2 to get its lock. */
+                MPI_Recv(&temp1, 1, MPI_INT, 2, 1, MPI_COMM_WORLD,
+                         MPI_STATUS_IGNORE);
+
+                /* Tell task2 it's ok to release its GR(gid=1) lock. */
+                MPI_Send(&gid, 1, MPI_INT, 2, 1, MPI_COMM_WORLD);
+
+                /* wait a really long time. */
+                sleep(180 * WAIT_TIME);
+
+                /* PR task will tell us when it completes */
+                MPI_Irecv(&temp1, 1, MPI_INT, 1, 1, MPI_COMM_WORLD, &req1);
+
+                /* Make sure the PR task is successful and doesn't hang.
+                 *
+                 * XXX - To test properly we need to make sure the read
+                 *       gets queued before task2's group lock request.
+                 *       You may need to increase lgbuf_size.
+                 */
+                iter = MAX_WAIT_TRIES;
+                do {
+                        iter--;
+                        if (!iter) {
+                                FAIL("PR task is hung !\n");
+                                break;
+                        }
+                        sleep(WAIT_TIME);
+                        MPI_Test(&req1, &flag1, MPI_STATUS_IGNORE);
+                } while (!flag1);
+
+                break;
+        }
+}
+
+/* 
+ * task0 attempts GR(gid=1) -- granted
+ * task1 attempts PR on non-blocking fd -> should return -EWOULDBLOCK
+ * task2 attempts PW on non-blocking fd -> should return -EWOULDBLOCK
+ * task3 attempts GR(gid=2) on non-blocking fd -> should return -EWOULDBLOCK
+ */
+void grouplock_nonblock_test(char *filename, int fd)
+{
+        MPI_Request req1, req2, req3;
+        int iter, flag1, flag2, flag3, temp1, temp2, temp3;
+        int rc, gid = 1;
 
         if (rank == 0) {
                 if ((rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid)) == -1) {
-                        sprintf(errmsg, "ioctl GROUP_LOCK of file %s return %d",
-                                filename, rc);
+                        sprintf(errmsg,
+                                "ioctl GROUP_LOCK of file %s: (%d) %s.\n",
+                                filename, errno, strerror(errno));
                         FAIL(errmsg);
                 }
+        }
+
+        rc = fcntl(fd, F_SETFL, O_NONBLOCK);
+        if (rc == -1) {
+                sprintf(errmsg, "fcntl(O_NONBLOCK) failed: (%d) %s.\n",
+                        errno, strerror(errno));
+                FAIL(errmsg);
         }
 
         MPI_Barrier(MPI_COMM_WORLD);
 
-        if (rank == 1) {
-                memset(zeros, 0x0, sizeof(zeros));
-                lseek(fd, 0, SEEK_SET);
-
-                count = read(fd, buf, sizeof(buf));
-                if (count != sizeof(buf)) {
-                        if (count == -1 && errno == EWOULDBLOCK) {
-                                MPI_Send(&gid, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
-                                return;
-                        }
-
-                        if (count > 0)
-                                dump_diff(zeros, buf, count, 0);
-                        sprintf(errmsg, "read of file %s return %d",
-                                filename, count);
-                        FAIL(errmsg);
-                } else {
-                        FAIL("PR lock succeed while incompatible "
+        switch (rank) {
+        case 1:
+                rc = read(fd, buf, sizeof(buf));
+                if ((rc != -1) || (errno != EWOULDBLOCK)) {
+                        FAIL("PR lock succeeded while incompatible "
                              "GROUP LOCK (gid=1) is still held\n");
                 }
-        }
 
-        if (rank == 2) {
+                MPI_Send(&gid, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
+                break;
+        case 2:
+                rc = write(fd, buf, sizeof(buf));
+                if ((rc != -1) || (errno != EWOULDBLOCK)) {
+                        FAIL("PW lock succeeded while incompatible "
+                             "GROUP LOCK (gid=1) is still held\n");
+                }
+
+                MPI_Send(&gid, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
+                break;
+        case 3:
                 gid = 2;
-                if ((rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid)) == -1) {
-                        if (errno == EWOULDBLOCK) {
-                                MPI_Send(&gid, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
-                                return;
-                        }
-
-                        sprintf(errmsg, "ioctl GROUP_LOCK of file %s return %d",
-                                filename, rc);
-                        FAIL(errmsg);
-                } else {
-                        FAIL("GROUP_LOCK (gid=2) succeed while incompatible "
-                             "GROUP LOCK (gid=1) is still held\n");
+                rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid);
+                if ((rc != -1) || (errno != EWOULDBLOCK)) {
+                        FAIL("GROUP_LOCK (gid=2) succeeded while incompatible "
+                             "GROUP LOCK (gid=1) is still held.\n");
                 }
-        }
 
-
-        if ( rank == 0) {
-                int iter = MAX_WAITING_TIME;
-                int flag1, flag2;
-                MPI_Request req1, req2;
-                int temp1, temp2;
-
+                MPI_Send(&gid, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
+                break;
+        case 0:
                 /* reading task will tell us when it completes */
                 MPI_Irecv(&temp1, 1, MPI_INT, 1, 1, MPI_COMM_WORLD, &req1);
-                /* 2nd locking task will tell us when it completes */
+                /* writing task will tell us when it completes */
                 MPI_Irecv(&temp2, 1, MPI_INT, 2, 1, MPI_COMM_WORLD, &req2);
+                /* 2nd locking task will tell us when it completes */
+                MPI_Irecv(&temp3, 1, MPI_INT, 3, 1, MPI_COMM_WORLD, &req3);
 
+                iter = MAX_WAIT_TRIES;
                 do {
                         iter--;
                         if (!iter) {
                                 FAIL("non-blocking tasks are not progressing\n");
                         }
-                        usleep(100);
-                        MPI_Test(&req2, &flag2, MPI_STATUS_IGNORE);
-                        MPI_Test(&req1, &flag1, MPI_STATUS_IGNORE);
-                } while (!(flag2 && flag1));
-
-                if ((rc = ioctl(fd, LL_IOC_GROUP_UNLOCK, gid)) == -1) {
-                        sprintf(errmsg, "ioctl GROUP_UNLOCK of file %s", filename);
-                        FAIL(errmsg);
-                }
-        }
-}
-
-/*
- * process1 attempts CW(gid=1) -- granted
- * process2 attempts CW(gid=2) -- blocked
- * process3 attempts CW(gid=2) -- blocked
- * process1 releases CW(gid=1)
- *   process2's CW(gid=2) should be granted
- *   process3's CW(gid=2) should be granted
- *
- * This is pretty much like test 3
- */
-void grouplock_test5(char *filename, int fd, char *errmsg)
-{
-        int rc, gid = 1;
-        MPI_Request req1, req2;
-        int temp1, temp2;
-
-        if (rank == 0) {
-                if ((rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid)) == -1) {
-                        sprintf(errmsg, "ioctl GROUP_LOCK of file %s return %d",
-                                filename, rc);
-                        FAIL(errmsg);
-                }
-        }
-
-        MPI_Barrier(MPI_COMM_WORLD);
-
-        if (rank == 2 || rank == 1) {
-                gid = 2;
-                if ((rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid)) == -1) {
-                        sprintf(errmsg, "ioctl GROUP_LOCK of file %s return %d",
-                                filename, rc);
-                        FAIL(errmsg);
-                }
-                MPI_Send(&gid, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
-        }
-
-        if (rank == 0) {
-                int iter = MAX_WAITING_TIME;
-                int flag1, flag2;
-
-                /* 3rd locking task will tell us when it completes */
-                MPI_Irecv(&temp1, 1, MPI_INT, 1, 1, MPI_COMM_WORLD, &req1);
-                /* 2nd locking task will tell us when it completes */
-                MPI_Irecv(&temp2, 1, MPI_INT, 2, 1, MPI_COMM_WORLD, &req2);
-
-                do {
-                        iter--;
-                        usleep(100);
-                        MPI_Test(&req2, &flag2, MPI_STATUS_IGNORE);
-                        MPI_Test(&req1, &flag1, MPI_STATUS_IGNORE);
-                } while (!flag2 && !flag1 && iter);
-                if (iter) {
-                        FAIL("incomptible locking tasks are progressing\n");
-                }
-        }
-
-        /* Now we need to release the lock */
-
-        if (rank == 0) {
-                int iter = MAX_WAITING_TIME;
-                int flag1, flag2;
-                if ((rc = ioctl(fd, LL_IOC_GROUP_UNLOCK, gid)) == -1) {
-                        sprintf(errmsg, "ioctl GROUP_UNLOCK of file %s return %d",
-                                filename, rc);
-                        FAIL(errmsg);
-                }
-
-                do {
-                        iter--;
-                        if (!iter) {
-                                FAIL("locking tasks are not progressing even "
-                                     "though incompatible lock released\n");
-                        }
-                        usleep(100);
+                        sleep(WAIT_TIME);
                         MPI_Test(&req1, &flag1, MPI_STATUS_IGNORE);
                         MPI_Test(&req2, &flag2, MPI_STATUS_IGNORE);
-                } while (!(flag1 && flag2));
+                        MPI_Test(&req3, &flag3, MPI_STATUS_IGNORE);
+                } while (!(flag1 && flag2 && flag3));
 
-        }
-
-        if ( rank == 1 || rank == 2) {
                 if ((rc = ioctl(fd, LL_IOC_GROUP_UNLOCK, gid)) == -1) {
-                        sprintf(errmsg, "ioctl GROUP_UNLOCK of file %s return %d",
-                                filename, rc);
+                        sprintf(errmsg, "ioctl GROUP_UNLOCK of file %s",
+                                filename);
                         FAIL(errmsg);
                 }
+                break;
         }
-
-        MPI_Barrier(MPI_COMM_WORLD);
-}
-
-/*
- * process1 attempts CW(gid=1) -- granted
- * process2 attempts PW -- blocked
- * process2 attempts CW(gid=2) -- blocked
- * process3 attempts CW(gid=2) -- blocked
- * process1 releases CW(gid=1)
- *   process2's CW(gid=2) should be granted
- *   process3's CW(gid=2) should be granted
- *
- * after process1 release CW(gid=1), there are two pathes:
- *   path 1. process2 get PW
- *   path 2. process3 get CW(gid=2)
- *
- * green: Also about test6 - by definition if P* and CW lock are waiting,
- *        CW lock have bigger priority and should be granted first when it becomes
- *        possible. So after process1 releases its CW lock, process3 should always
- *        get CW lock, and when it will release it, process 2 will proceed with read
- *        and then with getting CW lock
- *
- * XXX This test does not make any sence at all the way it is described right
- * now, hence disabled.
- */
-void grouplock_test6(char *filename, int fd, char *errmsg)
-{
 }
 
 /* Just test some error paths with invalid requests */
-void grouplock_errorstest(char *filename, int fd, char *errmsg)
+void grouplock_errorstest(char *filename, int fd)
 {
-        int gid = 1;
-        int rc;
+        int rc, gid = 1;
 
-        /* To not do lots of separate tests with lots of fd opening/closing,
-           different parts of this test are performed in different processes */
+        MPI_Barrier(MPI_COMM_WORLD);
 
-        if (rank == 0 || rank == 1 ) {
+        switch (rank) {
+        case 0:
                 if ((rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid)) == -1) {
-                        sprintf(errmsg, "ioctl GROUP_LOCK of file %s return %d",
-                                filename, rc);
+                        sprintf(errmsg,
+                                "ioctl GROUP_LOCK of file %s: (%d) %s.\n",
+                                filename, errno, strerror(errno));
                         FAIL(errmsg);
                 }
-        }
 
-        /* second group lock on same fd, same gid */
-        if (rank == 0) {
+                /* second group lock on same fd, same gid */
                 if ((rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid)) == -1) {
                         if (errno != EINVAL) {
-                                sprintf(errmsg, "Double GROUP lock failed with errno %d instead of EINVAL\n", errno);
+                                sprintf(errmsg, "Double GROUP lock failed "
+                                        "with errno %d instead of EINVAL\n",
+                                        errno);
                                 FAIL(errmsg);
-                        }
+                        } 
                 } else {
                         FAIL("Taking second GROUP lock on same fd succeed\n");
                 }
-        }
 
-        /* second group lock on same fd, different gid */
-        if (rank == 1) {
+                /* second group lock on same fd, different gid */
                 if ((rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid + 1)) == -1) {
                         if (errno != EINVAL) {
-                                sprintf(errmsg, "Double GROUP lock different gid failed with errno %d instead of EINVAL\n", errno);
+                                sprintf(errmsg, "Double GROUP lock with "
+                                        "different gid failed with errno %d "
+                                        "instead of EINVAL\n", errno);
                                 FAIL(errmsg);
-                        }
+                        } 
                 } else {
-                        FAIL("Taking second GROUP lock on same fd, different gid, succeed\n");
+                        FAIL("Taking second GROUP lock on same fd, with "
+                             "different gid, succeeded.\n");
                 }
-        }
 
-        /* GROUP unlock with wrong gid */
-        if (rank == 0 || rank == 1) {
+                /* GROUP unlock with wrong gid */
                 if ((rc = ioctl(fd, LL_IOC_GROUP_UNLOCK, gid + 1)) == -1) {
                         if (errno != EINVAL) {
-                                sprintf(errmsg, "GROUP unlock with wrong gid failed with errno %d instead of EINVAL\n",
-                                        errno);
+                                sprintf(errmsg, "GROUP_UNLOCK with wrong gid "
+                                        "failed with errno %d instead of "
+                                        "EINVAL\n", errno);
                                 FAIL(errmsg);
-                        }
+                        } 
                 } else {
                         FAIL("GROUP unlock with wrong gid succeed\n");
                 }
-        }
 
-        if (rank == 0 || rank == 1) {
                 if ((rc = ioctl(fd, LL_IOC_GROUP_UNLOCK, gid)) == -1) {
-                        sprintf(errmsg, "ioctl GROUP_UNLOCK of file %s return %d",
-                                filename, rc);
+                        sprintf(errmsg, "ioctl GROUP_UNLOCK of file %s "
+                                "returned %d.", filename, rc);
                         FAIL(errmsg);
                 }
-        }
+                break;
 
-        /* unlock of never locked fd */
-        if (rank == 2) {
+        case 1:
+                /* unlock of never locked fd */
                 if ((rc = ioctl(fd, LL_IOC_GROUP_UNLOCK, gid)) == -1) {
                         if (errno != EINVAL) {
-                                sprintf(errmsg, "GROUP unlock on never locked fd failed with errno %d instead of EINVAL\n",
-                                        errno);
+                                sprintf(errmsg, "GROUP_UNLOCK on never locked "
+                                        "fd failed with errno %d instead of "
+                                        "EINVAL.\n", errno);
                                 FAIL(errmsg);
-                        }
+                        } 
                 } else {
                         FAIL("GROUP unlock on never locked fd succeed\n");
                 }
+                break;
         }
 }
 
-void grouplock_file(char *name, int items)
+void grouplock_file(char *name, int subtest)
 {
         int fd;
-        char filename[MAX_FILENAME_LEN];
-        char errmsg[MAX_FILENAME_LEN+20];
+        int flags = O_CREAT|O_RDWR|O_SYNC|O_TRUNC;
+        int mode = 0666;
 
         sprintf(filename, "%s/%s", testdir, name);
 
-        if (items == 4) {
-                if ((fd = open(filename, O_RDWR | O_NONBLOCK)) == -1) {
-                        sprintf(errmsg, "open of file %s", filename);
-                        FAIL(errmsg);
-                }
-        } else if ((fd = open(filename, O_RDWR)) == -1) {
-                sprintf(errmsg, "open of file %s", filename);
+        if ((fd = open(filename, flags, mode)) == -1) {
+                sprintf(errmsg, "open of file %s: (%d) %s.\n",
+                        filename, errno, strerror(errno));
                 FAIL(errmsg);
         }
 
         MPI_Barrier(MPI_COMM_WORLD);
 
-        switch (items) {
+        switch (subtest) {
         case 1:
-                grouplock_test1(filename, fd, errmsg);
+                grouplock_test1(filename, fd, READ, IOCTL);
                 break;
         case 2:
-                grouplock_test2(filename, fd, errmsg);
+                grouplock_test1(filename, fd, READ, CLOSE);
                 break;
         case 3:
-                grouplock_test3(filename, fd, errmsg);
+                grouplock_test1(filename, fd, WRITE, IOCTL);
                 break;
         case 4:
-                grouplock_test4(filename, fd, errmsg);
+                grouplock_test1(filename, fd, WRITE, CLOSE);
                 break;
         case 5:
-                grouplock_test5(filename, fd, errmsg);
+                grouplock_test2(filename, fd, READ, IOCTL);
                 break;
         case 6:
-                grouplock_test6(filename, fd, errmsg);
+                grouplock_test2(filename, fd, READ, CLOSE);
                 break;
         case 7:
-                grouplock_errorstest(filename, fd, errmsg);
+                grouplock_test2(filename, fd, WRITE, IOCTL);
+                break;
+        case 8:
+                grouplock_test2(filename, fd, WRITE, CLOSE);
+                break;
+        case 9:
+                grouplock_nonblock_test(filename, fd);
+                break;
+        case 10:
+                grouplock_errorstest(filename, fd);
+                break;
+        case 11:
+                grouplock_test3(filename, fd);
+                break;
+        case 12:
+                grouplock_test4(filename, fd);
                 break;
         default:
-                sprintf(errmsg, "wrong test case number %d (should be <= %d)",
-                        items, LPGL_TEST_ITEMS);
+                sprintf(errmsg, "wrong subtest number %d (should be <= %d)",
+                        subtest, LPGL_TEST_ITEMS);
                 FAIL(errmsg);
         }
+
+        close(fd);
+
+        if (rank == 0)
+                unlink(filename);
 
         MPI_Barrier(MPI_COMM_WORLD);
-
-        if (close(fd) == -1) {
-                sprintf(errmsg, "close of file %s", filename);
-                FAIL(errmsg);
-        }
-
 }
 
 void parallel_grouplock(void)
 {
+        char teststr[16];
         int i;
 
-        for (i = 1;i <= LPGL_TEST_ITEMS;++i) {
-                begin("setup");
-                create_file("parallel_grouplock", LPGL_FILEN, 0);
-                end("setup");
-
-                begin("test");
-                grouplock_file("parallel_grouplock", i);
-                end("test");
-
-                begin("cleanup");
-                remove_file("parallel_grouplock");
-                end("cleanup");
+        if (only_test) {
+                sprintf(teststr, "subtest %d", only_test);
+                begin(teststr);
+                grouplock_file("parallel_grouplock", only_test);
+                end(teststr);
+        } else {
+                for (i = 1; i <= LPGL_TEST_ITEMS; i++) {
+                        sprintf(teststr, "subtest %d", i);
+                        begin(teststr);
+                        grouplock_file("parallel_grouplock", i);
+                        end(teststr);
+                }
         }
 }
 
@@ -816,11 +941,12 @@ void usage(char *proc)
         int i;
 
         if (rank == 0) {
-                printf("Usage: %s [-h] -d <testdir>\n", proc);
-                printf("           [-n \"13\"] [-v] [-V #] [-g]\n");
+                printf("Usage: %s [-h] -d <testdir> [-n <num>]\n", proc);
+                printf("           [-t <num>] [-v] [-V #] [-g]\n");
                 printf("\t-h: prints this help message\n");
                 printf("\t-d: the directory in which the tests will run\n");
                 printf("\t-n: repeat test # times\n");
+                printf("\t-t: run a particular test #\n");
                 printf("\t-v: increase the verbositly level by 1\n");
                 printf("\t-V: select a specific verbosity level\n");
                 printf("\t-g: debug mode\n");
@@ -836,6 +962,9 @@ int main(int argc, char *argv[])
         char c;
         int i, iterations = 1;
 
+        setbuf(stdout, 0);
+        setbuf(stderr, 0);
+
         /* Check for -h parameter before MPI_Init so the binary can be
            called directly, without, for instance, mpirun */
         for (i = 1; i < argc; ++i) {
@@ -847,11 +976,9 @@ int main(int argc, char *argv[])
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-//        MPI_Comm_set_attr(MPI_COMM_WORLD, MPI_WTIME_IS_GLOBAL, &tr);
-
         /* Parse command line options */
         while (1) {
-                c = getopt(argc, argv, "d:ghn:vV:");
+                c = getopt(argc, argv, "d:ghn:t:vV:");
                 if (c == -1)
                         break;
 
@@ -868,6 +995,9 @@ int main(int argc, char *argv[])
                 case 'n':
                         iterations = atoi(optarg);
                         break;
+                case 't':
+                        only_test = atoi(optarg);
+                        break;
                 case 'v':
                         verbose += 1;
                         break;
@@ -878,18 +1008,19 @@ int main(int argc, char *argv[])
         }
 
         if (rank == 0)
-                printf("%s is running with %d process(es) %s\n",
+                printf("%s is running with %d task(es) %s\n",
                        argv[0], size, debug ? "in DEBUG mode" : "\b\b");
 
-        if (size < MAX_GLHOST) {
+        if (size < MIN_GLHOST) {
                 fprintf(stderr, "Error: "
-                        "should be at least four processes to run the test!\n");
+                        "should be at least four tasks to run the test!\n");
                 MPI_Abort(MPI_COMM_WORLD, 2);
         }
 
         if (testdir == NULL && rank == 0) {
                 fprintf(stderr, "Please specify a test directory! "
-                        "(\"%s -h\" for help)\n", argv[0]);
+                        "(\"%s -h\" for help)\n",
+                       argv[0]);
                 MPI_Abort(MPI_COMM_WORLD, 2);
         }
 
