@@ -16,7 +16,7 @@ RELEASE=false
 #       search through this file (and lbuild.old_school -- but that will
 #       be going away soon) for "-bb" and see how many places
 #       simply don't account for this option
-DO_SRC=false
+DO_SRC=true
 DOWNLOAD=true
 TAG=
 CANONICAL_TARGET=

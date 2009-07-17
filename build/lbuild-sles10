@@ -2,7 +2,8 @@
 
 # increment this if you have made a change that should force a new kernel
 # to build built
-BUILD_GEN=1
+#BUILD_GEN=1
+BUILD_GEN=3	# bz19975 enable the building of src.rpms by default
 
 source ${0%/*}/lbuild-sles
 
@@ -11,7 +12,7 @@ edit_specs() {
     # edit the SPECs with our changes
     local spec
     for spec in $RPMSMPTYPE source; do
-        #cp $TOPDIR/SPECS/kernel-$spec.spec{,.orig}
+        #cp $TOPDIR/SOURCES/kernel-$spec.spec{,.orig}
         sed -i -e 's/^\(Name:.*kernel-\)\(.*\)/\1lustre-\2/' \
                -e "s/^Release:.*/&_${buildid}/" \
                -e "/^Provides:  *kernel = /a\
@@ -25,7 +26,7 @@ cp  %_sourcedir/linux-2.6.16-lustre.patch %_builddir/%{name}-%{version}/lustre.p
     [ \"\$flavor\" == \"$RPMSMPTYPE\" ] || continue" \
                -e 's/\(.*\)\([^#].*\)fookernel-source/\1\2kernel-lustre-source/g' \
                -e '/^%build/,/^%changelog/s/kernel-\({*\)source/kernel-\1lustre-source/g' \
-          SPECS/kernel-${spec}.spec
+          SOURCES/kernel-${spec}.spec
 
     # XXX - a building-on-Ubuntu hack
     if grep -q "Ubuntu" /etc/issue; then
@@ -34,7 +35,7 @@ curl ftp://ftp.kernel.org/pub/linux/kernel/people/akpm/patches/2.6/2.6.17/2.6.17
                -e 's/^\(BuildRequires: .*\)$/#NOU \1/g' \
                -e 's/%(\(chmod .*\))$/%(bash -c "\1")/' \
                -e 's/ -a 109//' \
-          SPECS/kernel-${spec}.spec
+          SOURCES/kernel-${spec}.spec
      fi
     done
 }
