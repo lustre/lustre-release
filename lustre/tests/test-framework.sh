@@ -527,7 +527,6 @@ quota_save_version() {
 
     [ -n "$ver" -a "$ver" != "3" ] && error "wrong quota version specifier"
 
-    $LFS quotaoff -ug $MOUNT # just in case
     [ -n "$type" ] && { $LFS quotacheck -$type $MOUNT || error "quotacheck has failed"; }
 
     do_facet mgs "lctl conf_param ${fsname}-MDT*.mdd.quota_type=$spec"
@@ -1734,12 +1733,14 @@ init_facets_vars () {
     done
 }
 
-mds_sanity_check () {
-    local timeout=$1
+osc_ensure_active () {
+    local facet=$1
+    local type=$2
+    local timeout=$3
     local period=0
 
     while [ $period -lt $timeout ]; do
-        count=$(do_facet $SINGLEMDS "lctl dl | grep 'osc.*mdtlov_UUID' | grep ' IN ' 2>/dev/null | wc -l")
+        count=$(do_facet $facet "lctl dl | grep '${FSNAME}-OST.*-osc-${type}' | grep ' IN ' 2>/dev/null | wc -l")
         if [ $count -eq 0 ]; then
             break
         fi
@@ -1769,7 +1770,8 @@ init_param_vars () {
 
     log "Using TIMEOUT=$TIMEOUT"
 
-    mds_sanity_check $TIMEOUT
+    osc_ensure_active $SINGLEMDS M $TIMEOUT
+    osc_ensure_active client c $TIMEOUT
 
     if [ x"$(som_check)" = x"enabled" ]; then
         ENABLE_QUOTA=""

@@ -872,6 +872,8 @@ int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
         rc1 = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
         if (!rc1) {
                 qctxt->lqc_flags |= UGQUOTA2LQC(oqctl->qc_type);
+                /* when quotaon, create lqs for every quota uid/gid b=18574 */
+                build_lqs(obd);
         } else if (rc1 == -EBUSY && quota_is_on(qctxt, oqctl)) {
                 CWARN("mds local quota[%d] is on already\n", oqctl->qc_type);
                 rc1 = -EALREADY;
@@ -899,6 +901,7 @@ int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
                 }
                 oqctl->qc_cmd = Q_QUOTAON;
         }
+
         EXIT;
 
 out:
@@ -908,7 +911,8 @@ out:
         return rc ? : (rc1 ? : rc2);
 }
 
-int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
+/* with obt->obt_quotachecking held */
+int do_mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct obd_device_target *obt = &obd->u.obt;
@@ -916,6 +920,8 @@ int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
         struct lvfs_run_ctxt saved;
         int rc = 0, rc1 = 0, rc2 = 0, imm;
         ENTRY;
+
+        LASSERT_SEM_LOCKED(&obt->obt_quotachecking);
 
         imm = oqctl->qc_type & IMMQUOTA;
         oqctl->qc_type &= ~IMMQUOTA;
@@ -925,7 +931,6 @@ int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
             oqctl->qc_type != UGQUOTA)
                 RETURN(-EINVAL);
 
-        down(&obt->obt_quotachecking);
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         down(&mds->mds_qonoff_sem);
         /* close admin quota files */
@@ -974,8 +979,19 @@ int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
 out:
         up(&mds->mds_qonoff_sem);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        up(&obt->obt_quotachecking);
         return rc ? : (rc1 ? : rc2);
+}
+
+int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
+{
+        struct obd_device_target *obt = &obd->u.obt;
+        int rc;
+        ENTRY;
+
+        down(&obt->obt_quotachecking);
+        rc = do_mds_quota_off(obd, oqctl);
+        up(&obt->obt_quotachecking);
+        RETURN(rc);
 }
 
 int mds_set_dqinfo(struct obd_device *obd, struct obd_quotactl *oqctl)

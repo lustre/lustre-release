@@ -135,6 +135,7 @@ int mds_quota_finvalidate(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_admin_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl);
+int do_mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_admin_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_set_dqinfo(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_get_dqinfo(struct obd_device *obd, struct obd_quotactl *oqctl);

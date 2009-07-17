@@ -1414,15 +1414,6 @@ static int lfs_quotacheck(int argc, char **argv)
 
         mnt = argv[optind];
 
-        memset(&qctl, 0, sizeof(qctl));
-        qctl.qc_cmd = LUSTRE_Q_QUOTAOFF;
-        qctl.qc_type = check_type;
-        rc = llapi_quotactl(mnt, &qctl);
-        if (rc && errno != EALREADY) {
-                fprintf(stderr, "quota off failed: %s\n", strerror(errno));
-                return rc;
-        }
-
         rc = llapi_quotacheck(mnt, check_type);
         if (rc) {
                 fprintf(stderr, "quotacheck failed: %s\n", strerror(errno));

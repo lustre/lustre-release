@@ -1478,6 +1478,59 @@ int quota_is_off(struct lustre_quota_ctxt *qctxt, struct obd_quotactl *oqctl)
 }
 
 /**
+ * When quotaon, build a lqs for every uid/gid who has been set limitation
+ * for quota. After quota_search_lqs, it will hold one ref for the lqs.
+ * It will be released when qctxt_cleanup() is executed b=18574
+ *
+ * Should be called with obt->obt_quotachecking held. b=20152 
+ */
+void build_lqs(struct obd_device *obd)
+{
+        struct obd_device_target *obt = &obd->u.obt;
+        struct lustre_quota_ctxt *qctxt = &obt->obt_qctxt;
+        struct list_head id_list;
+        int i, rc;
+
+        LASSERT_SEM_LOCKED(&obt->obt_quotachecking);
+        INIT_LIST_HEAD(&id_list);
+        for (i = 0; i < MAXQUOTAS; i++) {
+                struct dquot_id *dqid, *tmp;
+
+#ifndef KERNEL_SUPPORTS_QUOTA_READ
+                rc = fsfilt_qids(obd, sb_dqopt(qctxt->lqc_sb)->files[i], NULL,
+                                 i, &id_list);
+#else
+                rc = fsfilt_qids(obd, NULL, sb_dqopt(qctxt->lqc_sb)->files[i],
+                                 i, &id_list);
+#endif
+                if (rc) {
+                        CDEBUG(D_ERROR, "fail to get %s qids!\n",
+                               i ? "group" : "user");
+                        continue;
+                }
+
+                list_for_each_entry_safe(dqid, tmp, &id_list,
+                                         di_link) {
+                        struct lustre_qunit_size *lqs;
+
+                        list_del_init(&dqid->di_link);
+                        lqs = quota_search_lqs(LQS_KEY(i, dqid->di_id),
+                                               qctxt, 1);
+                        if (lqs && !IS_ERR(lqs)) {
+                                lqs->lqs_flags |= dqid->di_flag;
+                                lqs_putref(lqs);
+                        } else {
+                                CDEBUG(D_ERROR, "fail to create a lqs"
+                                       "(%s id: %u)!\n", i ? "group" : "user",
+                                       dqid->di_id);
+                        }
+
+                        OBD_FREE_PTR(dqid);
+                }
+        }
+}
+
+/**
  * lqs<->qctxt hash operations
  */
 

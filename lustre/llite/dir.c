@@ -1149,7 +1149,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         QCTL_COPY(oqctl, qctl);
                         rc = obd_quotactl(sbi->ll_md_exp, oqctl);
                         if (rc) {
-                                if (rc != -EBUSY && cmd == Q_QUOTAON) {
+                                if (rc != -EALREADY && cmd == Q_QUOTAON) {
                                         oqctl->qc_cmd = Q_QUOTAOFF;
                                         obd_quotactl(sbi->ll_md_exp, oqctl);
                                 }

@@ -261,7 +261,6 @@ quota_show_check() {
 
 # set quota
 quota_init() {
-	$LFS quotaoff -ug $DIR
 	$LFS quotacheck -ug $DIR
 
  	resetquota -u $TSTUSR
@@ -2106,7 +2105,7 @@ run_test_with_stat 28 "test for consistency for qunit when setquota (18574) ====
 quota_fini()
 {
 	$LFS quotaoff $DIR
-    do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"
+        do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"
 }
 quota_fini
 
