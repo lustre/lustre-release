@@ -104,7 +104,7 @@ AC_MSG_CHECKING([that RedHat kernel])
 LB_LINUX_TRY_COMPILE([
 		#include <linux/version.h>
 	],[
-		#ifndef RHEL_MAJOR
+		#ifndef RHEL_RELEASE_CODE
 		#error "not redhat kernel"
 		#endif
 	],[
@@ -115,19 +115,7 @@ LB_LINUX_TRY_COMPILE([
 	        AC_MSG_RESULT([no])
 ])
 
-AC_MSG_CHECKING([that SuSe kernel])
-LB_LINUX_TRY_COMPILE([
-		#include <linux/version.h>
-	],[
-		#ifndef SLE_VERSION_CODE
-		#error "not sles kernel"
-		#endif
-	],[
-		SUSE_KERNEL="yes"
-		AC_MSG_RESULT([yes])
-	],[
-	        AC_MSG_RESULT([no])
-])
+LB_LINUX_CONFIG([SUSE_KERNEL],[SUSE_KERNEL="yes"],[])
 
 ])
 
