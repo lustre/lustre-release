@@ -2379,6 +2379,8 @@ ssize_t ll_file_lockless_io(struct file *file, const struct iovec *iov,
         }
 
         if (file->f_flags & O_DIRECT) {
+                if (rw == WRITE)
+                        ll_update_time(file);
                 /* do not copy data for O_DIRECT */
                 rc = ll_direct_IO(rw, file, iov, *ppos, nr_segs, 0);
                 if (rc > 0)

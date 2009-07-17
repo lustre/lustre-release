@@ -841,6 +841,23 @@ test_37() { # bug 18695
 }
 run_test 37 "check i_size is not updated for directory on close (bug 18695) =============="
 
+test_39() {
+        local originaltime
+        local updatedtime
+        local delay=3
+
+        touch $DIR1/$tfile
+        originaltime=$(stat -c %Y $DIR1/$tfile)
+        log "original modification time is $originaltime"
+        sleep $delay
+        multiop $DIR1/$tfile oO_DIRECT:O_WRONLY:w$((10*1048576))c || error "multiop has failed"
+        updatedtime=$(stat -c %Y $DIR2/$tfile)
+        log "updated modification time is $updatedtime"
+        [ $((updatedtime - originaltime)) -ge $delay ] || error "invalid modification time"
+        rm -rf $DIR/$tfile
+}
+run_test 39 "direct I/O writes should update mtime ========="
+
 log "cleanup: ======================================================"
 
 check_and_cleanup_lustre
