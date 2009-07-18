@@ -907,7 +907,7 @@ int mds_lov_synchronize(void *data)
         char name[20];
 
         snprintf(name, sizeof(name), "ll_sync_%02u", mlsi->mlsi_index);
-        ptlrpc_daemonize(name);
+        cfs_daemonize_ctxt(name);
 
         RETURN(__mds_lov_synchronize(data));
 }

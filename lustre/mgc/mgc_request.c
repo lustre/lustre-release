@@ -395,7 +395,7 @@ static int mgc_requeue_thread(void *data)
         int rc = 0;
         ENTRY;
 
-        ptlrpc_daemonize(name);
+        cfs_daemonize(name);
 
         CDEBUG(D_MGC, "Starting requeue thread\n");
 

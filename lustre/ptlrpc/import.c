@@ -1215,7 +1215,7 @@ static int ptlrpc_invalidate_import_thread(void *data)
 
         ENTRY;
 
-        ptlrpc_daemonize("ll_imp_inval");
+        cfs_daemonize_ctxt("ll_imp_inval");
 
         CDEBUG(D_HA, "thread invalidate import %s to %s@%s\n",
                imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),

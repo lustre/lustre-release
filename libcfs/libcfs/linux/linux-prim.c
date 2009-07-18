@@ -224,14 +224,7 @@ void cfs_daemonize(char *str) {
         unsigned long flags;
 
         lock_kernel();
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,63))
         daemonize(str);
-#else
-        daemonize();
-        exit_files(current);
-        reparent_to_init();
-        snprintf (current->comm, sizeof (current->comm), "%s", str);
-#endif
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
         RECALC_SIGPENDING;

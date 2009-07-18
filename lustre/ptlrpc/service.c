@@ -1797,18 +1797,6 @@ liblustre_check_services (void *arg)
 
 #else /* __KERNEL__ */
 
-/* Don't use daemonize, it removes fs struct from new thread (bug 418) */
-void ptlrpc_daemonize(char *name)
-{
-        struct fs_struct *fs = current->fs;
-
-        atomic_inc(&fs->count);
-        cfs_daemonize(name);
-        exit_fs(cfs_current());
-        current->fs = fs;
-        ll_set_fs_pwd(current->fs, init_task.fs->pwdmnt, init_task.fs->pwd);
-}
-
 static void
 ptlrpc_check_rqbd_pool(struct ptlrpc_service *svc)
 {
@@ -1854,7 +1842,7 @@ static int ptlrpc_main(void *arg)
         int counter = 0, rc = 0;
         ENTRY;
 
-        ptlrpc_daemonize(data->name);
+        cfs_daemonize_ctxt(data->name);
 
 #if defined(HAVE_NODE_TO_CPUMASK) && defined(CONFIG_NUMA)
         /* we need to do this before any per-thread allocation is done so that
@@ -2043,7 +2031,7 @@ static int ptlrpc_hr_main(void *arg)
         snprintf(threadname, sizeof(threadname),
                  "ptlrpc_hr_%d", hr_args->thread_index);
 
-        ptlrpc_daemonize(threadname);
+        cfs_daemonize_ctxt(threadname);
 #if defined(HAVE_NODE_TO_CPUMASK)
         set_cpus_allowed(cfs_current(),
                          node_to_cpumask(cpu_to_node(hr_args->cpu_index)));
@@ -2257,8 +2245,8 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc)
 
         CDEBUG(D_RPCTRACE, "starting thread '%s'\n", name);
 
-          /* CLONE_VM and CLONE_FILES just avoid a needless copy, because we
-         * just drop the VM and FILES in ptlrpc_daemonize() right away.
+        /* CLONE_VM and CLONE_FILES just avoid a needless copy, because we
+         * just drop the VM and FILES in cfs_daemonize_ctxt() right away.
          */
         rc = cfs_kernel_thread(ptlrpc_main, &d, CLONE_VM | CLONE_FILES);
         if (rc < 0) {

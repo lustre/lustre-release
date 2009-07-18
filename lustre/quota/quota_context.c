@@ -1345,7 +1345,7 @@ static int qslave_recovery_main(void *arg)
         int rc = 0;
         ENTRY;
 
-        ptlrpc_daemonize("qslave_recovd");
+        cfs_daemonize_ctxt("qslave_recovd");
 
         /* for obdfilter */
         class_incref(obd, "qslave_recovd_filter", obd);
