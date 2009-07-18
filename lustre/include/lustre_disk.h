@@ -198,6 +198,8 @@ struct lustre_mount_data {
 #define OBD_COMPAT_OST          0x00000002 /* this is an OST (temporary) */
 #define OBD_COMPAT_MDT          0x00000004 /* this is an MDT (temporary) */
 /* end COMPAT_146 */
+/* interop flag to show server 20 was used */
+#define OBD_COMPAT_20           0x00000008
 
 #define OBD_ROCOMPAT_LOVOBJID   0x00000001 /* MDS handles LOV_OBJID file */
 #define OBD_ROCOMPAT_CROW       0x00000002 /* OST will CROW create objects */

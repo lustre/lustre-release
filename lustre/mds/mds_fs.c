@@ -497,6 +497,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 lsd->lsd_server_size = cpu_to_le32(LR_SERVER_SIZE);
                 lsd->lsd_client_start = cpu_to_le32(LR_CLIENT_START);
                 lsd->lsd_client_size = cpu_to_le16(LR_CLIENT_SIZE);
+                lsd->lsd_feature_compat = cpu_to_le32(OBD_COMPAT_MDT);
                 lsd->lsd_feature_rocompat = cpu_to_le32(OBD_ROCOMPAT_LOVOBJID);
                 lsd->lsd_feature_incompat = cpu_to_le32(OBD_INCOMPAT_MDT);
         } else {
@@ -512,6 +513,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                                            obd->obd_uuid.uuid, lsd->lsd_uuid);
                         GOTO(err_msd, rc = -EINVAL);
                 }
+                lsd->lsd_feature_compat |= cpu_to_le32(OBD_COMPAT_MDT);
                 /* COMPAT_146 */
                 /* Assume old last_rcvd format unless I_C_LR is set */
                 if (!(lsd->lsd_feature_incompat &
@@ -534,8 +536,16 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 /* Do something like remount filesystem read-only */
                 GOTO(err_msd, rc = -EINVAL);
         }
-
-        lsd->lsd_feature_compat = cpu_to_le32(OBD_COMPAT_MDT);
+        /* evict all clients as it is first boot with 2.0 last_rcvd */
+        if (lsd->lsd_feature_compat & cpu_to_le32(OBD_COMPAT_20)) {
+                LCONSOLE_WARN("Mounting %s at first time on 2.0 FS, remove all"
+                              " clients for interop needs\n", obd->obd_name);
+                simple_truncate(mds->mds_vfsmnt->mnt_sb->s_root,
+                                mds->mds_vfsmnt, LAST_RCVD,
+                                lsd->lsd_client_start);
+                last_rcvd_size = lsd->lsd_client_start;
+                lsd->lsd_feature_compat &= ~cpu_to_le32(OBD_COMPAT_20);
+        }
 
         target_trans_table_init(obd);
         mds->mds_last_transno = le64_to_cpu(lsd->lsd_last_transno);
