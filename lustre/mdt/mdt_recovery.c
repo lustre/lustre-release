@@ -195,6 +195,7 @@ static inline int mdt_last_rcvd_header_write(const struct lu_env *env,
         mti->mti_off = 0;
         lsd_cpu_to_le(&mdt->mdt_lsd, &mti->mti_lsd);
 
+        th->th_sync = need_sync;
         if (need_sync && mti->mti_exp)
                 mdt_trans_add_cb(th, lut_cb_client, mti->mti_exp);
 

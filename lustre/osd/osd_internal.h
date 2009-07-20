@@ -53,7 +53,7 @@
 #include <linux/ldiskfs_fs.h>
 /* struct dentry */
 #include <linux/dcache.h>
-#include <linux/lustre_iam.h>
+#include "osd_iam.h"
 /* struct dirent64 */
 #include <linux/dirent.h>
 

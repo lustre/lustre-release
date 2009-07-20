@@ -984,6 +984,21 @@ static void osd_object_write_unlock(const struct lu_env *env,
         up_write(&obj->oo_sem);
 }
 
+static int osd_object_write_locked(const struct lu_env *env,
+                                   struct dt_object *dt)
+{
+        struct osd_object *obj = osd_dt_obj(dt);
+        int rc = 1;
+
+        LASSERT(osd_invariant(obj));
+        
+        if (down_write_trylock(&obj->oo_sem)) {
+                rc = 0;
+                up_write(&obj->oo_sem);
+        }
+        return rc;
+}
+
 static int osd_attr_get(const struct lu_env *env,
                         struct dt_object *dt,
                         struct lu_attr *attr,
@@ -1694,9 +1709,8 @@ static int osd_index_delete(const struct lu_env *env, struct dt_object *dt,
         /* Remove key from the ZAP */
         rc = udmu_zap_delete(&osd->od_objset, zap_db, oh->ot_tx, (char *) key);
 
-        if (rc) {
-                CERROR("udmu_zap_delete() failed with error %d", rc);
-        }
+        if (rc)
+                CERROR("udmu_zap_delete() failed with error %d\n", rc);
 
         RETURN(-rc);
 }
@@ -1726,13 +1740,14 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 {
         struct osd_object *obj  = osd_dt_obj(dt);
         LASSERT(obj->oo_db != NULL);
+        ENTRY;
         /*
          * XXX: implement support for fixed-size keys sorted with natural
          *      numerical way (not using internal hash value)
          */
         if (udmu_object_is_zap(obj->oo_db))
                 dt->do_index_ops = &osd_index_ops;
-        return 0;
+        RETURN(0);
 }
 
 static int osd_declare_object_ref_add(const struct lu_env *env,
@@ -2137,6 +2152,7 @@ static struct dt_object_operations osd_obj_ops = {
         .do_write_lock        = osd_object_write_lock,
         .do_read_unlock       = osd_object_read_unlock,
         .do_write_unlock      = osd_object_write_unlock,
+        .do_write_locked      = osd_object_write_locked,
         .do_attr_get          = osd_attr_get,
         .do_declare_attr_set  = osd_declare_attr_set,
         .do_attr_set          = osd_attr_set,

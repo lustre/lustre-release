@@ -568,15 +568,14 @@ static int __mdd_declare_index_insert(const struct lu_env *env,
                                       struct thandle *handle)
 {
         struct dt_object *next = mdd_object_child(pobj);
-        int               rc = -ENOTDIR;
+        int               rc = 0;
 
-        if (!dt_try_as_dir(env, next))
-                return rc;
-        rc = next->do_index_ops->dio_declare_insert(env, next,
+        if (dt_try_as_dir(env, next))
+                next->do_index_ops->dio_declare_insert(env, next,
                                                     __mdd_fid_rec(env, lf),
                                                     (const struct dt_key *)name,
                                                     handle);
-        if (rc == 0 && is_dir)
+        if (is_dir)
                 rc = mdo_declare_ref_add(env, pobj, handle);
         return rc;
 }
@@ -2321,14 +2320,16 @@ mdd_declare_and_start_rename(const struct lu_env *env, struct md_object *src_pob
         rc = __mdd_declare_index_delete(env, mdd_spobj, sname, handle);
         if (rc)
                 GOTO(out, rc);
-        if (is_dir)
+        if (is_dir) {
                 rc = __mdd_declare_index_delete(env, mdd_sobj, dotdot, handle);
-        if (rc)
-                GOTO(out, rc);
-        rc = __mdd_declare_index_insert(env, mdd_sobj, mdo2fid(mdd_tpobj), dotdot,
-                                        is_dir, handle);
-        if (rc)
-                GOTO(out, rc);
+                if (rc)
+                        GOTO(out, rc);
+                rc = __mdd_declare_index_insert(env, mdd_sobj,
+                                                mdo2fid(mdd_tpobj), dotdot,
+                                                is_dir, handle);
+                if (rc)
+                        GOTO(out, rc);
+        }
         rc = __mdd_declare_index_delete(env, mdd_tpobj, tname, handle);
         if (rc)
                 GOTO(out, rc);
