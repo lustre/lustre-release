@@ -70,7 +70,6 @@
 
 /* fid_is_local() */
 #include <lustre_fid.h>
-#include <linux/lustre_iam.h>
 
 #include "osd_internal.h"
 
