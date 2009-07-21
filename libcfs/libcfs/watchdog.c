@@ -160,7 +160,7 @@ static void lcw_cb(ulong_ptr_t data)
         if (delta_time < libcfs_watchdog_ratelimit &&
             lcw_recent_watchdog_count > 3) {
                 CWARN("Refusing to fire watchdog for pid %d: it was inactive "
-                      "for %lu.%.02lus. Rate limiting 1 per %d seconds.\n",
+                      "for %lu.%.02lus. Rate limiting 3 per %d seconds.\n",
                       (int)lcw->lcw_pid, timediff.tv_sec,
                       timediff.tv_usec / 10000, libcfs_watchdog_ratelimit);
         } else {
