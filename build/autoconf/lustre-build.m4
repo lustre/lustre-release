@@ -676,7 +676,7 @@ AC_SUBST(ENABLE_INIT_SCRIPTS)
 #
 AC_DEFUN([LB_CONFIG_HEADERS],
 [AC_CONFIG_HEADERS([config.h])
-CPPFLAGS="-include \$(top_builddir)/config.h $CPPFLAGS"
+CPPFLAGS="-include $PWD/config.h $CPPFLAGS"
 EXTRA_KCFLAGS="-include $PWD/config.h $EXTRA_KCFLAGS"
 AC_SUBST(EXTRA_KCFLAGS)
 ])
@@ -764,7 +764,7 @@ if test $target_cpu == "powerpc64"; then
 	CC="$CC -m64"
 fi
 
-CPPFLAGS="-I\$(top_builddir)/$LIBCFS_INCLUDE_DIR -I\$(top_srcdir)/$LIBCFS_INCLUDE_DIR-I\$(top_builddir)/lnet/include -I\$(top_srcdir)/lnet/include -I\$(top_builddir)/lustre/include -I\$(top_srcdir)/lustre/include $CPPFLAGS"
+CPPFLAGS="-I$PWD/$LIBCFS_INCLUDE_DIR -I$PWD/lnet/include -I$PWD/lustre/include $CPPFLAGS"
 
 LLCPPFLAGS="-D__arch_lib__ -D_LARGEFILE64_SOURCE=1"
 AC_SUBST(LLCPPFLAGS)
