@@ -1709,7 +1709,7 @@ static int osd_index_delete(const struct lu_env *env, struct dt_object *dt,
         /* Remove key from the ZAP */
         rc = udmu_zap_delete(&osd->od_objset, zap_db, oh->ot_tx, (char *) key);
 
-        if (rc)
+        if (rc && rc != ENOENT)
                 CERROR("udmu_zap_delete() failed with error %d\n", rc);
 
         RETURN(-rc);
