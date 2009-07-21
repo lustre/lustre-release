@@ -2467,7 +2467,6 @@ static int osd_iam_index_probe(const struct lu_env *env, struct osd_object *o,
                            const struct dt_index_features *feat)
 {
         struct iam_descr *descr;
-        struct dt_object *dt = &o->oo_dt;
 
         if (osd_object_is_root(o))
                 return feat == &dt_directory_features;
@@ -2478,19 +2477,8 @@ static int osd_iam_index_probe(const struct lu_env *env, struct osd_object *o,
         if (feat == &dt_directory_features) {
                 if (descr->id_rec_size == sizeof(struct lu_fid_pack))
                         return 1;
-
-                if (descr == &iam_htree_compat_param) {
-                        /* if it is a HTREE dir then there is good chance that,
-                         * we dealing with ext3 directory here with no FIDs. */
-
-                        if (descr->id_rec_size ==
-                            sizeof ((struct ldiskfs_dir_entry_2 *)NULL)->inode) {
-
-                                dt->do_index_ops = &osd_index_ea_ops;
-                                return 1;
-                        }
-                }
-                return 0;
+                else
+                        return 0;
         } else {
                 return
                         feat->dif_keysize_min <= descr->id_key_size &&
