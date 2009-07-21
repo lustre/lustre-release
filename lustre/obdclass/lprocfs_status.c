@@ -2111,20 +2111,19 @@ int lprocfs_obd_rd_hash(char *page, char **start, off_t off,
 }
 EXPORT_SYMBOL(lprocfs_obd_rd_hash);
 
-#ifdef CRAY_XT3
-int lprocfs_obd_rd_recovery_maxtime(char *page, char **start, off_t off,
-                                    int count, int *eof, void *data)
+int lprocfs_obd_rd_recovery_time_soft(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data)
 {
         struct obd_device *obd = (struct obd_device *)data;
         LASSERT(obd != NULL);
 
-        return snprintf(page, count, "%lu\n",
-                        obd->obd_recovery_max_time);
+        return snprintf(page, count, "%d\n",
+                        obd->obd_recovery_timeout);
 }
-EXPORT_SYMBOL(lprocfs_obd_rd_recovery_maxtime);
+EXPORT_SYMBOL(lprocfs_obd_rd_recovery_time_soft);
 
-int lprocfs_obd_wr_recovery_maxtime(struct file *file, const char *buffer,
-                                    unsigned long count, void *data)
+int lprocfs_obd_wr_recovery_time_soft(struct file *file, const char *buffer,
+                                      unsigned long count, void *data)
 {
         struct obd_device *obd = (struct obd_device *)data;
         int val, rc;
@@ -2134,11 +2133,37 @@ int lprocfs_obd_wr_recovery_maxtime(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
-        obd->obd_recovery_max_time = val;
+        obd->obd_recovery_timeout = val;
         return count;
 }
-EXPORT_SYMBOL(lprocfs_obd_wr_recovery_maxtime);
-#endif /* CRAY_XT3 */
+EXPORT_SYMBOL(lprocfs_obd_wr_recovery_time_soft);
+
+int lprocfs_obd_rd_recovery_time_hard(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        LASSERT(obd != NULL);
+
+        return snprintf(page, count, "%lu\n",
+                        obd->obd_recovery_time_hard);
+}
+EXPORT_SYMBOL(lprocfs_obd_rd_recovery_time_hard);
+
+int lprocfs_obd_wr_recovery_time_hard(struct file *file, const char *buffer,
+                                      unsigned long count, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        int val, rc;
+        LASSERT(obd != NULL);
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        obd->obd_recovery_time_hard = val;
+        return count;
+}
+EXPORT_SYMBOL(lprocfs_obd_wr_recovery_time_hard);
 
 #ifdef HAVE_DELAYED_RECOVERY
 int lprocfs_obd_rd_stale_export_age(char *page, char **start, off_t off,

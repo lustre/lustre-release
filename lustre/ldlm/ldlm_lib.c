@@ -612,7 +612,7 @@ int target_recovery_check_and_stop(struct obd_device *obd)
         obd->obd_version_recov = 1;
         spin_unlock_bh(&obd->obd_processing_task_lock);
         /* reset timer, recovery will proceed with versions now */
-        reset_recovery_timer(obd, OBD_RECOVERY_FACTOR * obd_timeout, 1);
+        reset_recovery_timer(obd, OBD_RECOVERY_TIME_SOFT, 1);
         return 0;
 }
 EXPORT_SYMBOL(target_recovery_check_and_stop);
@@ -1339,15 +1339,11 @@ static void reset_recovery_timer(struct obd_device *obd, int duration,
         else if (!extend && (duration > obd->obd_recovery_timeout))
                 /* Track the client's largest expected replay time */
                 obd->obd_recovery_timeout = duration;
-#ifdef CRAY_XT3
-        /*
-         * If total recovery time already exceed the
-         * obd_recovery_max_time, then CRAY XT3 will
-         * abort the recovery
-         */
-        if(obd->obd_recovery_timeout > obd->obd_recovery_max_time)
-                obd->obd_recovery_timeout = obd->obd_recovery_max_time;
-#endif
+
+        /* Hard limit of obd_recovery_time_hard which should not happen */
+        if(obd->obd_recovery_timeout > obd->obd_recovery_time_hard)
+                obd->obd_recovery_timeout = obd->obd_recovery_time_hard;
+
         obd->obd_recovery_end = obd->obd_recovery_start +
                                 obd->obd_recovery_timeout;
         if (cfs_time_before(now, obd->obd_recovery_end)) {
@@ -1369,8 +1365,6 @@ static void check_and_start_recovery_timer(struct obd_device *obd,
         }
         CDEBUG(D_HA, "%s: starting recovery timer\n", obd->obd_name);
         obd->obd_recovery_start = cfs_time_current_sec();
-        /* minimum */
-        obd->obd_recovery_timeout = OBD_RECOVERY_FACTOR * obd_timeout;
         obd->obd_recovery_handler = handler;
         cfs_timer_init(&obd->obd_recovery_timer, target_recovery_expired, obd);
         spin_unlock_bh(&obd->obd_processing_task_lock);

@@ -156,6 +156,8 @@ struct lustre_mount_data {
         __u32      lmd_flags;         /* lustre mount flags */
         int        lmd_mgs_failnodes; /* mgs failover node count */
         int        lmd_exclude_count;
+        int        lmd_recovery_time_soft;
+        int        lmd_recovery_time_hard;
         char      *lmd_dev;           /* device name */
         char      *lmd_profile;       /* client only */
         char      *lmd_opts;          /* lustre mount options (as opposed to 
@@ -316,6 +318,7 @@ int lustre_process_log(struct super_block *sb, char *logname,
                      struct config_llog_instance *cfg);
 int lustre_end_log(struct super_block *sb, char *logname, 
                        struct config_llog_instance *cfg);
+struct lustre_mount_info *server_find_mount_locked(char *name);
 struct lustre_mount_info *server_get_mount(char *name);
 int server_put_mount(char *name, struct vfsmount *mnt);
 int server_register_target(struct super_block *sb);
