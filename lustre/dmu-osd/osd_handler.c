@@ -870,6 +870,12 @@ static int osd_sync(const struct lu_env *env, struct dt_device *d)
         return 0;
 }
 
+static int osd_commit_async(const struct lu_env *env, struct dt_device *dev)
+{
+        CERROR("not implemented yet!\n");
+        return 0;
+}
+
 /*
  * Concurrency: shouldn't matter.
  */
@@ -940,6 +946,7 @@ static struct dt_device_operations osd_dt_ops = {
         .dt_trans_stop     = osd_trans_stop,
         .dt_conf_get       = osd_conf_get,
         .dt_sync           = osd_sync,
+        .dt_commit_async   = osd_commit_async,
         .dt_ro             = osd_ro,
         .dt_init_capa_ctxt = osd_init_capa_ctxt,
         .dt_label_get      = osd_label_get,
@@ -1504,21 +1511,36 @@ static int osd_zap_it_key_size(const struct lu_env *env, const struct dt_it *di)
                 RETURN(-rc);
 }
 
-
-static struct dt_rec *osd_zap_it_rec(const struct lu_env *env,
-                const struct dt_it *di)
+static int osd_zap_it_rec(const struct lu_env *env, const struct dt_it *di,
+                          struct lu_dirent *lde, __u32 attr)
 {
         struct osd_zap_it *it = (struct osd_zap_it *)di;
-        int bytes_read;
-        int rc;
-
+        int bytes_read, rc, namelen;
+        struct lu_fid_pack pack;
         ENTRY;
-        rc = udmu_zap_cursor_retrieve_value(it->ozi_zc, (char *)it->ozi_rec,
-                                   IT_REC_SIZE, &bytes_read);
-        if (rc == 0)
-                RETURN((struct dt_rec *) it->ozi_rec);
 
-        RETURN(ERR_PTR(-rc));
+        LASSERT(lde);
+
+        lde->lde_attrs = LUDA_FID;
+        lde->lde_hash = cpu_to_le64(udmu_zap_cursor_serialize(it->ozi_zc));
+
+        rc = udmu_zap_cursor_retrieve_value(it->ozi_zc, (char *) &pack,
+                                            IT_REC_SIZE, &bytes_read);
+        if (rc)
+                GOTO(out, rc);
+        rc = fid_unpack(&pack, &lde->lde_fid);
+        LASSERT(rc == 0);
+        
+        rc = udmu_zap_cursor_retrieve_key(it->ozi_zc, lde->lde_name, NAME_MAX + 1);
+        if (rc)
+                GOTO(out, rc);
+
+        namelen = strlen(lde->lde_name);
+        lde->lde_namelen = cpu_to_le16(namelen);
+        lde->lde_reclen = cpu_to_le16(lu_dirent_calc_size(namelen, attr));
+
+out:
+        RETURN(-rc);
 }
 
 static __u64 osd_zap_it_store(const struct lu_env *env, const struct dt_it *di)
