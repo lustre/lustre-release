@@ -411,6 +411,7 @@ int osd_get_bufs(const struct lu_env *env, struct dt_object *d, loff_t pos,
 #endif
                 BUG_ON(PageWriteback(lb->page));
 
+                lu_object_get(&d->do_lu);
         }
         rc = i;
 
@@ -440,6 +441,7 @@ static int osd_put_bufs(const struct lu_env *env, struct dt_object *dt,
                 LASSERT(PageLocked(lb[i].page));
                 unlock_page(lb[i].page);
                 page_cache_release(lb[i].page);
+                lu_object_put(env, &dt->do_lu);
                 lb[i].page = NULL;
         }
         RETURN(0);

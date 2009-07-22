@@ -2294,6 +2294,7 @@ static int osd_get_bufs(const struct lu_env *env, struct dt_object *dt,
                 lb->page = alloc_page(GFP_NOFS | __GFP_HIGHMEM);
                 if (lb->page == NULL)
                         goto out_err;
+                lu_object_get(&dt->do_lu);
         }
 
 
@@ -2311,7 +2312,6 @@ static int osd_get_bufs(const struct lu_env *env, struct dt_object *dt,
         lb->bytes += tmp;
 #endif
 
-        lu_object_get(&dt->do_lu);
         lb->obj = dt;
 
         return npages;
@@ -2319,6 +2319,7 @@ out_err:
         lb = _lb;
         while (--i >= 0) {
                 LASSERT(lb->page);
+                lu_object_put(env, &dt->do_lu);
                 __free_page(lb->page);
                 lb->page = NULL;
         }
@@ -2334,10 +2335,10 @@ static int osd_put_bufs(const struct lu_env *env, struct dt_object *dt,
                 LASSERT(lb->obj == dt);
                 if (lb->page == NULL)
                         continue;
+                lu_object_put(env, &dt->do_lu);
                 __free_page(lb->page);
                 lb->page = NULL;
         }
-        lu_object_put(env, &dt->do_lu);
 
         return 0;
 }
