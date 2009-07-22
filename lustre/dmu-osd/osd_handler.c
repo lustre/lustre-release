@@ -227,6 +227,7 @@ static struct lu_device_operations      osd_lu_ops;
 static struct lu_context_key            osd_key;
 static struct dt_object_operations      osd_obj_ops;
 static struct dt_body_operations        osd_body_ops;
+const static struct dt_body_operations  osd_body_ops_new;
 
 static char *osd_object_tag = "osd_object";
 static char *root_tag = "osd_mount, rootdb";
@@ -1196,6 +1197,7 @@ static int osd_declare_object_create(const struct lu_env *env,
                 case DFT_NODE:
                         /* first, we'll create new object */
                         udmu_tx_hold_bonus(oh->ot_tx, DMU_NEW_OBJECT);
+                        obj->oo_dt.do_body_ops = &osd_body_ops_new;
                         break;
 
                 default:
@@ -2238,17 +2240,22 @@ static int osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 {
         struct osd_object *obj  = osd_dt_obj(dt);
         struct osd_thandle *oh;
+        uint64_t oid;
         vnattr_t va;
         ENTRY;
 
         oh = container_of0(th, struct osd_thandle, ot_super);
 
-        udmu_object_getattr(obj->oo_db, &va);
-        if (va.va_size < pos + size)
-                udmu_tx_hold_bonus(oh->ot_tx, udmu_object_get_id(obj->oo_db));
+        if (obj->oo_db) {
+                oid = udmu_object_get_id(obj->oo_db);
+                udmu_object_getattr(obj->oo_db, &va);
+                if (va.va_size < pos + size)
+                        udmu_tx_hold_bonus(oh->ot_tx, oid);
+        } else {
+                oid = DMU_NEW_OBJECT;
+        }
 
-        udmu_tx_hold_write(oh->ot_tx, udmu_object_get_id(obj->oo_db),
-                           pos, size);
+        udmu_tx_hold_write(oh->ot_tx, oid, pos, size);
 
         RETURN(0);
 }
@@ -2459,6 +2466,10 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 
         return 0;
 }
+
+const static struct dt_body_operations osd_body_ops_new = {
+        .dbo_declare_write = osd_declare_write,
+};
 
 static struct dt_body_operations osd_body_ops = {
         .dbo_read                 = osd_read,
