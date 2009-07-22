@@ -82,6 +82,7 @@ init_test_env() {
     export DEBUGFS=${DEBUGFS:-debugfs}
     export TUNE2FS=${TUNE2FS:-tune2fs}
     export E2LABEL=${E2LABEL:-e2label}
+    export ZFSLABEL=${ZFSLABEL:-"zfs get -H -o value  com.sun.lustre:label"}
     export DUMPE2FS=${DUMPE2FS:-dumpe2fs}
     export E2FSCK=${E2FSCK:-e2fsck}
 
@@ -441,6 +442,29 @@ cleanup_gss() {
     fi
 }
 
+devicelabel() {
+    local facet=$1
+    local dev=$2
+    local label
+
+    set +e
+    label=$(do_facet ${facet} "$E2LABEL ${dev}")
+    if [ $? == 0 ]; then
+        set -e
+        echo $label
+        return 0
+    fi
+    set -e
+
+    label=$(do_facet ${facet} "$ZFSLABEL ${dev}")
+    if [ $? == 0 ]; then
+        echo $label
+        return 0
+    fi
+
+    echo ""
+}
+
 mdsdevlabel() {
     local num=$1
     local device=`mdsdevname $num`
@@ -473,13 +497,8 @@ mount_facet() {
             lctl set_param debug_mb=${DEBUG_SIZE}; \
             sync"
 
-        if [ -d ${!dev} ]; then
-        label=$(do_facet ${facet} "$E2LABEL ${!dev}")
-            [ -z "$label" ] && echo no label for ${!dev} && exit 1
-        else
-            echo "storage doesn't support labeling"
-            label=lustre-OST0000
-        fi
+        label=$(devicelabel ${facet} ${!dev})
+        [ -z "$label" ] && echo no label for ${!dev} && exit 1
         eval export ${facet}_svc=${label}
         echo Started ${label}
     fi
@@ -1700,7 +1719,7 @@ init_facet_vars () {
     eval export ${facet}_opt=\"$@\"
 
     local dev=${facet}_dev
-    local label=$(do_facet ${facet} "$E2LABEL ${!dev}")
+    local label=$(devicelabel ${facet} ${!dev})
     [ -z "$label" ] && echo no label for ${!dev} && exit 1
 
     eval export ${facet}_svc=${label}
