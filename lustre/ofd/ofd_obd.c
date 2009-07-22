@@ -112,12 +112,12 @@ static int filter_parse_connect_data(const struct lu_env *env,
         if (exp->exp_connect_flags & OBD_CONNECT_GRANT) {
                 obd_size left, want;
 
-                spin_lock(&exp->exp_obd->obd_osfs_lock);
+                mutex_down(&ofd->ofd_grant_sem);
                 left = filter_grant_space_left(env, exp);
                 want = data->ocd_grant;
                 filter_grant(env, exp, fed->fed_grant, want, left);
                 data->ocd_grant = fed->fed_grant;
-                spin_unlock(&exp->exp_obd->obd_osfs_lock);
+                mutex_up(&ofd->ofd_grant_sem);
 
                 CDEBUG(D_CACHE, "%s: cli %s/%p ocd_grant: %d want: "
                        LPU64" left: "LPU64"\n", exp->exp_obd->obd_name,
@@ -474,9 +474,9 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
         if (KEY_IS(KEY_GRANT_SHRINK)) {
                 struct ost_body *body = (struct ost_body *)val;
                 /* handle shrink grant */
-                spin_lock(&exp->exp_obd->obd_osfs_lock);
+                mutex_down(&ofd->ofd_grant_sem);
                 filter_grant_incoming(&env, exp, &body->oa);
-                spin_unlock(&exp->exp_obd->obd_osfs_lock);
+                mutex_up(&ofd->ofd_grant_sem);
                 GOTO(out, rc = 0);
         }
 

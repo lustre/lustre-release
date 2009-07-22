@@ -161,6 +161,7 @@ struct filter_device {
         obd_size                 ofd_tot_granted;
         obd_size                 ofd_tot_pending;
         int                      ofd_tot_granted_clients;
+        struct semaphore         ofd_grant_sem;
 
         /* filter mod data: filter_device wide values */
         int                      ofd_fmd_max_num; /* per ofd filter_mod_data */

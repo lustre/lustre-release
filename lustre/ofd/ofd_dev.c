@@ -622,6 +622,7 @@ static int filter_init0(const struct lu_env *env, struct filter_device *m,
 
         /* grant data */
         spin_lock_init(&m->ofd_grant_lock);
+        sema_init(&m->ofd_grant_sem, 1);
         m->ofd_tot_dirty = 0;
         m->ofd_tot_granted = 0;
         m->ofd_tot_pending = 0;

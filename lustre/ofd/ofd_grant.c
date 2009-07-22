@@ -67,7 +67,7 @@ void filter_grant_sanity_check(struct obd_device *obd, const char *func)
         if (obd->obd_num_exports > 100)
                 return;
 
-        spin_lock(&obd->obd_osfs_lock);
+        mutex_down(&ofd->ofd_grant_sem);
         spin_lock(&obd->obd_dev_lock);
         list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
                 int error = 0;
@@ -101,7 +101,7 @@ void filter_grant_sanity_check(struct obd_device *obd, const char *func)
         fo_tot_pending = ofd->ofd_tot_pending;
         fo_tot_dirty = ofd->ofd_tot_dirty;
         spin_unlock(&obd->obd_dev_lock);
-        spin_unlock(&obd->obd_osfs_lock);
+        mutex_up(&ofd->ofd_grant_sem);
 
         /* Do these assertions outside the spinlocks so we don't kill system */
         if (tot_granted != fo_tot_granted)
@@ -135,7 +135,7 @@ void filter_grant_discard(struct obd_export *exp)
         struct filter_device *ofd = filter_exp(exp);
         struct filter_export_data *fed = &exp->exp_filter_data;
 
-        spin_lock(&obd->obd_osfs_lock);
+        mutex_down(&ofd->ofd_grant_sem);
         spin_lock(&obd->obd_dev_lock);
         list_del_init(&exp->exp_obd_chain);
         spin_unlock(&obd->obd_dev_lock);
@@ -157,7 +157,7 @@ void filter_grant_discard(struct obd_export *exp)
         ofd->ofd_tot_dirty -= fed->fed_dirty;
         fed->fed_dirty = 0;
         fed->fed_grant = 0;
-        spin_unlock(&obd->obd_osfs_lock);
+        mutex_up(&ofd->ofd_grant_sem);
 }
 
 /* 
@@ -173,7 +173,7 @@ void filter_grant_incoming(const struct lu_env *env, struct obd_export *exp,
         struct obd_device *obd = exp->exp_obd;
         ENTRY;
 
-        LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
+        //LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
 
         if ((oa->o_valid & (OBD_MD_FLBLOCKS|OBD_MD_FLGRANT)) !=
                                         (OBD_MD_FLBLOCKS|OBD_MD_FLGRANT)) {
@@ -239,7 +239,7 @@ void filter_grant_incoming(const struct lu_env *env, struct obd_export *exp,
                 CERROR("%s: cli %s/%p dirty %ld pend %ld grant %ld\n",
                        obd->obd_name, exp->exp_client_uuid.uuid, exp,
                        fed->fed_dirty, fed->fed_pending, fed->fed_grant);
-                spin_unlock(&obd->obd_osfs_lock);
+                mutex_up(&ofd->ofd_grant_sem);
                 LBUG();
         }
         EXIT;
@@ -260,7 +260,7 @@ obd_size filter_grant_space_left(const struct lu_env *env,
         int statfs_done = 0;
         long frsize;
 
-        LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
+        //LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
 
         if (cfs_time_before_64(obd->obd_osfs_age,
                                cfs_time_current_64() - HZ)) {
@@ -327,7 +327,7 @@ int filter_grant_client_calc(struct obd_export *exp, obd_size *left,
         unsigned long using = 0;
         int rc = 0;
 
-        LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
+        //LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
 
         *left -= *ungranted;
         LASSERT(fed->fed_grant >= *used);
@@ -363,7 +363,7 @@ int filter_grant_client_calc(struct obd_export *exp, obd_size *left,
                 CERROR("%s: cli %s/%p dirty %ld pend %ld grant %ld\n",
                        obd->obd_name, exp->exp_client_uuid.uuid, exp,
                        fed->fed_dirty, fed->fed_pending, fed->fed_grant);
-                spin_unlock(&obd->obd_osfs_lock);
+                mutex_up(&ofd->ofd_grant_sem);
                 LBUG();
         }
         return rc;
@@ -385,7 +385,7 @@ int filter_grant_check(const struct lu_env *env, struct obd_export *exp,
         struct filter_export_data *fed = &exp->exp_filter_data;
         int i, rc = -ENOSPC, obj, n = 0;
 
-        LASSERT_SPIN_LOCKED(&exp->exp_obd->obd_osfs_lock);
+        //LASSERT_SPIN_LOCKED(&exp->exp_obd->obd_osfs_lock);
 
         for (obj = 0; obj < objcount; obj++) {
                 for (i = 0; i < objs[obj].ioo_bufcnt; i++, n++) {
@@ -451,7 +451,7 @@ long _filter_grant(const struct lu_env *env, struct obd_export *exp,
         long                        frsize = obd->obd_osfs.os_bsize;
         __u64                       grant = 0;
 
-        LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
+        //LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
         LASSERT(frsize);
 
         /* Grant some fraction of the client's requested grant space so that
@@ -487,7 +487,7 @@ long _filter_grant(const struct lu_env *env, struct obd_export *exp,
                                "current"LPU64"\n", obd->obd_name,
                                 exp->exp_client_uuid.uuid, exp,
                                 fed->fed_grant, want, curgrant);
-                        spin_unlock(&obd->obd_osfs_lock);
+                        mutex_up(&ofd->ofd_grant_sem);
                         LBUG();
                 }
         }
@@ -530,7 +530,7 @@ void filter_grant_commit(struct obd_export *exp, int niocount,
         unsigned long pending = 0;
         int i;
 
-        spin_lock(&exp->exp_obd->obd_osfs_lock);
+        mutex_down(&ofd->ofd_grant_sem);
         for (i = 0, lnb = res; i < niocount; i++, lnb++)
                 pending += lnb->lnb_grant_used;
 
@@ -550,6 +550,6 @@ void filter_grant_commit(struct obd_export *exp, int niocount,
                  ofd->ofd_tot_pending, pending);
         ofd->ofd_tot_pending -= pending;
 
-        spin_unlock(&exp->exp_obd->obd_osfs_lock);
+        mutex_up(&ofd->ofd_grant_sem);
 }
 
