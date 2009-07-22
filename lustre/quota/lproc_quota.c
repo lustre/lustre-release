@@ -416,7 +416,13 @@ int lprocfs_quota_wr_type(struct file *file, const char *buffer,
 
                 if (rc == 0)
                         build_lqs(obd);
-                else if (rc != -EALREADY)
+                else if (rc == -ENOENT)
+                        CWARN("%s: quotaon failed because quota files don't "
+                              "exist, please run quotacheck firstly\n",
+                              obd->obd_name);
+                else if (rc == -EALREADY)
+                        CWARN("%s: quota is on already!\n", obd->obd_name);
+                else
                         return rc;
         }
 
