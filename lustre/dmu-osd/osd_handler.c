@@ -2232,6 +2232,11 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
         if (rc > 0)
                 *pos += rc;//buf->lb_len;
 
+        /* XXX: workaround for bug in HEAD: fsfilt_ldiskfs_read() returns
+         * requested number of bytes, not actually read ones */
+        if (rc > 0 && S_ISLNK(obj->oo_dt.do_lu.lo_header->loh_attr))
+                rc = buf->lb_len;
+
         return rc;
 }
 
