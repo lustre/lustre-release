@@ -1264,7 +1264,7 @@ static dmu_buf_t* osd_mknod(struct osd_thread_info *info, struct osd_device  *os
         if (db && (S_ISCHR(mode)||S_ISBLK(mode))) {
                 vap.va_mask = DMU_AT_RDEV;
                 vap.va_rdev = attr->la_rdev;
-                udmu_object_setattr(db, NULL, &vap);
+                udmu_object_setattr(db, oh->ot_tx, &vap);
         }
         return db;
 }
