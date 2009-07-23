@@ -325,6 +325,15 @@ case "$lustretag" in
         spltag="pre-alpha"
         zfstag="patched"
         ;;
+    b_kdmu_params)
+        # Identical to HEAD + spl and zfs
+        lnettag="b_hd_params_tree"
+        ldiskfstag="$ldiskfstag_head"
+        libcfstag="b_hd_params_tree"
+        lustretag="b_kdmu_params"
+        spltag="pre-alpha"
+        zfstag="patched"
+        ;;
 
     b_head_libcfs)
         lnettag="b_head_libcfs"
