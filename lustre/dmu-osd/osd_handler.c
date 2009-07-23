@@ -1377,6 +1377,7 @@ struct osd_zap_it {
         zap_cursor_t            *ozi_zc;
         struct osd_object       *ozi_obj;
         struct lustre_capa      *ozi_capa;
+        int                      ozi_reset;     /* 1 -- no need to advance */
         char                     ozi_name[NAME_MAX + 1];
         char                     ozi_rec[IT_REC_SIZE];
 };
@@ -1405,6 +1406,7 @@ static struct dt_it *osd_zap_it_init(const struct lu_env *env,
 
                 it->ozi_obj = obj;
                 it->ozi_capa = capa;
+                it->ozi_reset = 1;
                 lu_object_get(lo);
                 RETURN((struct dt_it *)it);
         }
@@ -1444,18 +1446,20 @@ static int osd_zap_it_get(const struct lu_env *env,
                           struct dt_it *di, const struct dt_key *key)
 {
         struct osd_zap_it *it = (struct osd_zap_it *)di;
-        int                rc;
+        struct osd_object *obj = it->ozi_obj;
         ENTRY;
 
         LASSERT(it);
         LASSERT(it->ozi_zc);
 
-        rc = udmu_zap_cursor_move_to_key(it->ozi_zc, (const char *) key);
-        if (rc == 0)   /* if record exist return +1 */
-                RETURN(1);
+        /* XXX: API is broken at the moment */
+        LASSERT(((const char *)key)[0] == '\0');
 
-        /* upper layer can handler other error codes */
-        RETURN((-rc));
+        udmu_zap_cursor_init_serialized(it->ozi_zc, &osd_obj2dev(obj)->od_objset,
+                                        udmu_object_get_id(obj->oo_db), 0ULL);
+        it->ozi_reset = 1;
+
+        RETURN(+1);
 }
 
 static void osd_zap_it_put(const struct lu_env *env, struct dt_it *di)
@@ -1465,13 +1469,25 @@ static void osd_zap_it_put(const struct lu_env *env, struct dt_it *di)
 }
 
 
+/**
+ * to load a directory entry at a time and stored it in
+ * iterator's in-memory data structure.
+ *
+ * \param di, struct osd_it_ea, iterator's in memory structure
+ *
+ * \retval +ve, iterator reached to end
+ * \retval   0, iterator not reached to end
+ * \retval -ve, on error
+ */
 static int osd_zap_it_next(const struct lu_env *env, struct dt_it *di)
 {
         struct osd_zap_it *it = (struct osd_zap_it *)di;
         int                rc;
         ENTRY;
 
-        udmu_zap_cursor_advance(it->ozi_zc);
+        if (it->ozi_reset == 0)
+                udmu_zap_cursor_advance(it->ozi_zc);
+        it->ozi_reset = 0;
 
         /* According to current API we need to return error if its last entry.
          * zap_cursor_advance() does return any value. So we need to call retrieve to
@@ -1493,6 +1509,7 @@ static struct dt_key *osd_zap_it_key(const struct lu_env *env,
         int                rc = 0;
         ENTRY;
 
+        it->ozi_reset = 0;
         rc = udmu_zap_cursor_retrieve_key(it->ozi_zc, it->ozi_name, NAME_MAX + 1);
         if (!rc)
                 RETURN((struct dt_key *)it->ozi_name);
@@ -1506,6 +1523,7 @@ static int osd_zap_it_key_size(const struct lu_env *env, const struct dt_it *di)
         int                rc;
         ENTRY;
 
+        it->ozi_reset = 0;
         rc = udmu_zap_cursor_retrieve_key(it->ozi_zc, it->ozi_name, NAME_MAX+1);
         if (!rc)
                 RETURN(strlen(it->ozi_name));
@@ -1521,6 +1539,7 @@ static int osd_zap_it_rec(const struct lu_env *env, const struct dt_it *di,
         struct lu_fid_pack pack;
         ENTRY;
 
+        it->ozi_reset = 0;
         LASSERT(lde);
 
         lde->lde_attrs = LUDA_FID;
@@ -1549,6 +1568,7 @@ static __u64 osd_zap_it_store(const struct lu_env *env, const struct dt_it *di)
 {
         struct osd_zap_it *it = (struct osd_zap_it *)di;
 
+        it->ozi_reset = 0;
         RETURN(udmu_zap_cursor_serialize(it->ozi_zc));
 }
 /*
@@ -1566,7 +1586,8 @@ static int osd_zap_it_load(const struct lu_env *env,
         int                rc;
         ENTRY;
 
-        udmu_zap_cursor_init_serialized(it->ozi_zc,  &osd_obj2dev(obj)->od_objset,
+        it->ozi_reset = 0;
+        udmu_zap_cursor_init_serialized(it->ozi_zc, &osd_obj2dev(obj)->od_objset,
                                         udmu_object_get_id(obj->oo_db), hash);
 
         /* same as osd_zap_it_next()*/
