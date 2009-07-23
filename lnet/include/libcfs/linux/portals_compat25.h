@@ -155,4 +155,11 @@ typedef unsigned long cpumask_t;
 #define DECLARE_LL_PROC_PPOS_DECL
 #endif
 
+/* helper for sysctl handlers */
+int proc_call_handler(void *data, int write,
+                      loff_t *ppos, void *buffer, size_t *lenp,
+                      int (*handler)(void *data, int write,
+                                     loff_t pos, void *buffer, int len));
+
+
 #endif /* _PORTALS_COMPAT_H */

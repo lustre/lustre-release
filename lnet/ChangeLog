@@ -50,6 +50,11 @@ tbd  Sun Microsystems, Inc.
 	 mxlnd     - MX 1.2.1 or later,
 	 ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
+Severity   : normal
+Bugzilla   : 18102
+Description: router_proc.c is rewritten to use sysctl-interface for parameters
+             residing in /proc/sys/lnet
+
 Severity   : enhancement
 Bugzilla   : 15332
 Description: add a new LND optiion to control peer buffer credits on routers
