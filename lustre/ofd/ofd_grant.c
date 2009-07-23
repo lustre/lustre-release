@@ -173,7 +173,7 @@ void filter_grant_incoming(const struct lu_env *env, struct obd_export *exp,
         struct obd_device *obd = exp->exp_obd;
         ENTRY;
 
-        //LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
+        LASSERT_SEM_LOCKED(&ofd->ofd_grant_sem);
 
         if ((oa->o_valid & (OBD_MD_FLBLOCKS|OBD_MD_FLGRANT)) !=
                                         (OBD_MD_FLBLOCKS|OBD_MD_FLGRANT)) {
@@ -248,7 +248,7 @@ void filter_grant_incoming(const struct lu_env *env, struct obd_export *exp,
 /* Figure out how much space is available between what we've granted
  * and what remains in the filesystem.  Compensate for ext3 indirect
  * block overhead when computing how much free space is left ungranted.
- * Caller must hold obd_osfs_lock. 
+ * Caller must hold ofd_grant_sem.
  */
 obd_size filter_grant_space_left(const struct lu_env *env,
                                  struct obd_export *exp)
@@ -260,7 +260,7 @@ obd_size filter_grant_space_left(const struct lu_env *env,
         int statfs_done = 0;
         long frsize;
 
-        //LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
+        LASSERT_SEM_LOCKED(&ofd->ofd_grant_sem);
 
         if (cfs_time_before_64(obd->obd_osfs_age,
                                cfs_time_current_64() - HZ)) {
@@ -327,7 +327,7 @@ int filter_grant_client_calc(struct obd_export *exp, obd_size *left,
         unsigned long using = 0;
         int rc = 0;
 
-        //LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
+        LASSERT_SEM_LOCKED(&ofd->ofd_grant_sem);
 
         *left -= *ungranted;
         LASSERT(fed->fed_grant >= *used);
@@ -375,7 +375,7 @@ int filter_grant_client_calc(struct obd_export *exp, obd_size *left,
  * filesystem for them after grants are taken into account.  However,
  * writeback of the dirty data that was already granted space can write
  * right on through.
- * Caller must hold obd_osfs_lock. 
+ * Caller must hold ofd_grant_sem. 
  */
 int filter_grant_check(const struct lu_env *env, struct obd_export *exp, 
                        struct obdo *oa, int objcount, struct obd_ioobj *objs,
@@ -383,9 +383,10 @@ int filter_grant_check(const struct lu_env *env, struct obd_export *exp,
                        obd_size *left, unsigned long *used, unsigned long *ungranted)
 {
         struct filter_export_data *fed = &exp->exp_filter_data;
+        struct filter_device *ofd = filter_exp(exp);
         int i, rc = -ENOSPC, obj, n = 0;
 
-        //LASSERT_SPIN_LOCKED(&exp->exp_obd->obd_osfs_lock);
+        LASSERT_SEM_LOCKED(&ofd->ofd_grant_sem);
 
         for (obj = 0; obj < objcount; obj++) {
                 for (i = 0; i < objs[obj].ioo_bufcnt; i++, n++) {
@@ -440,7 +441,7 @@ int filter_grant_check(const struct lu_env *env, struct obd_export *exp,
 
 /* Calculate how much grant space to allocate to this client, based on how
  * much space is currently free and how much of that is already granted.
- * Caller must hold obd_osfs_lock.
+ * Caller must hold ofd_grant_sem.
  */
 long _filter_grant(const struct lu_env *env, struct obd_export *exp,
                    obd_size curgrant, obd_size want, obd_size fs_space_left)
@@ -451,7 +452,7 @@ long _filter_grant(const struct lu_env *env, struct obd_export *exp,
         long                        frsize = obd->obd_osfs.os_bsize;
         __u64                       grant = 0;
 
-        //LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
+        LASSERT_SEM_LOCKED(&ofd->ofd_grant_sem);
         LASSERT(frsize);
 
         /* Grant some fraction of the client's requested grant space so that
