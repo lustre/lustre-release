@@ -117,7 +117,7 @@ typedef struct vnattr {
         dev_t           va_fsid;        /* file system id (dev for now) */
         unsigned long long va_nodeid;   /* node id */
         nlink_t         va_nlink;       /* number of references to file */
-        off_t           va_size;        /* file size in bytes */
+        uint64_t        va_size;        /* file size in bytes */
         timestruc_t     va_atime;       /* time of last access */
         timestruc_t     va_mtime;       /* time of last modification */
         timestruc_t     va_ctime;       /* time of last status change */

@@ -721,8 +721,10 @@ void udmu_object_getattr(dmu_buf_t *db, vnattr_t *vap)
         dnode_t *dn = ((dmu_buf_impl_t *)db)->db_dnode;
         znode_phys_t *zp = db->db_data;
 
-        vap->va_mask = DMU_AT_ATIME | DMU_AT_MTIME | DMU_AT_CTIME | DMU_AT_MODE | DMU_AT_SIZE |
-                       DMU_AT_UID | DMU_AT_GID | DMU_AT_TYPE | DMU_AT_NLINK | DMU_AT_RDEV;
+        vap->va_mask = DMU_AT_ATIME | DMU_AT_MTIME | DMU_AT_CTIME | DMU_AT_MODE
+                       | DMU_AT_SIZE | DMU_AT_UID | DMU_AT_GID | DMU_AT_TYPE
+                       | DMU_AT_NLINK | DMU_AT_RDEV;
+
         vap->va_atime.tv_sec    = zp->zp_atime[0];
         vap->va_atime.tv_nsec   = 0;
         vap->va_mtime.tv_sec    = zp->zp_mtime[0];

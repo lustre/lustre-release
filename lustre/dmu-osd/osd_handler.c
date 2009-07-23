@@ -301,7 +301,7 @@ static void lu_attr2vnattr(struct lu_attr *la, vnattr_t *vap)
         }
 
         if (la->la_valid & LA_RDEV) {
-                vap->va_rdev   = la->la_rdev;
+                vap->va_rdev = la->la_rdev;
                 vap->va_mask |= DMU_AT_RDEV;
         }
 
@@ -1018,13 +1018,12 @@ static int osd_attr_get(const struct lu_env *env,
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
 
-
         down(&obj->oo_guard);
         udmu_object_getattr(obj->oo_db, &vap);
         up(&obj->oo_guard);
         vnattr2lu_attr(&vap, attr);
 
-        CDEBUG(D_OTHER, "size = %lu\n", (unsigned long) attr->la_size);
+        CDEBUG(D_OTHER, "size = %Lu\n", attr->la_size);
         return 0;
 }
 
