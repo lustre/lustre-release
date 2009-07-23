@@ -392,7 +392,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
         ENTRY;
 
         down_write(&cli->cl_sem);
-        CDEBUG(D_INFO, "connect %s - %d\n", obd->obd_name, 
+        CDEBUG(D_INFO, "connect %s - %d\n", obd->obd_name,
                cli->cl_conn_count);
 
         if (cli->cl_conn_count > 0)
@@ -782,7 +782,9 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 export = NULL;
                 rc = 0;
         } else if (export->exp_connection &&
-                   req->rq_peer.nid != export->exp_connection->c_peer.nid) {
+                   req->rq_peer.nid != export->exp_connection->c_peer.nid &&
+                   (lustre_msg_get_op_flags(req->rq_reqmsg) &
+                    MSG_CONNECT_INITIAL)) {
                 CWARN("%s: cookie %s seen on new NID %s when "
                       "existing NID %s is already connected\n",
                       target->obd_name, cluuid.uuid,
@@ -1246,7 +1248,7 @@ void target_cleanup_recovery(struct obd_device *obd)
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 target_exp_dequeue_req_replay(req);
                 list_del_init(&req->rq_list);
-                
+
                 LASSERT(req->rq_copy);
                 class_export_rpc_put(req->rq_export);
                 target_release_saved_req(req);
