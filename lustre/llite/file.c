@@ -1148,9 +1148,12 @@ static int ll_is_file_contended(struct file *file)
         if (fd && (fd->fd_flags & LL_FILE_IGNORE_LOCK))
                 RETURN(0);
 
+#if 0
+        /* disabled for now, see bug 20219 */
         /* server-side locking for dio */
         if (file->f_flags & O_DIRECT)
                 RETURN(1);
+#endif
 
         if (test_bit(LLI_F_CONTENDED, &lli->lli_flags)) {
                 cfs_time_t cur_time = cfs_time_current();
@@ -1735,7 +1738,7 @@ repeat:
                 lock_end = OBD_OBJECT_EOF;
                 iov_copy = (struct iovec *)iov;
                 nrsegs_copy = nr_segs;
-        } else if (sbi->ll_max_rw_chunk != 0 && !(file->f_flags & O_DIRECT)) {
+        } else if (sbi->ll_max_rw_chunk != 0) {
                 /* first, let's know the end of the current stripe */
                 end = *ppos;
                 obd_extent_calc(sbi->ll_osc_exp, lsm, OBD_CALC_STRIPE_END,
