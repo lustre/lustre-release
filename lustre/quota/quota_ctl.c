@@ -346,7 +346,7 @@ int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         struct ptlrpc_request *req;
         struct obd_quotactl *oqc;
         __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*oqctl) };
-        int ver, opc, rc;
+        int ver, opc, rc, resends = 0;
         ENTRY;
 
         if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME)) {
@@ -359,6 +359,8 @@ int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                 RETURN(-EINVAL);
         }
 
+restart_request:
+
         req = ptlrpc_prep_req(class_exp2cliimp(exp), ver, opc, 2, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
@@ -367,6 +369,8 @@ int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         *oqc = *oqctl;
 
         ptlrpc_req_set_repsize(req, 2, size);
+        ptlrpc_at_set_req_timeout(req);
+        req->rq_no_resend = 1;
 
         rc = ptlrpc_queue_wait(req);
         if (rc) {
@@ -387,6 +391,19 @@ int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         EXIT;
 out:
         ptlrpc_req_finished(req);
+
+        if (client_quota_recoverable_error(rc)) {
+                resends++;
+                if (!client_quota_should_resend(resends, &exp->exp_obd->u.cli)) {
+                        CERROR("too many resend retries, returning error "
+                               "(cmd = %d, id = %u, type = %d)\n",
+                               oqctl->qc_cmd, oqctl->qc_id, oqctl->qc_type);
+                        RETURN(-EIO);
+                }
+
+                goto restart_request;
+        }
+
         return rc;
 }
 
