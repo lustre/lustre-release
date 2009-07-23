@@ -811,8 +811,9 @@ restart_client_loads () {
         check_client_load $client
         rc=${PIPESTATUS[0]}
         if [ "$rc" != 0 -a "$expectedfail" ]; then
-            start_client_load $client
-            echo "Restarted client load: on $client. Checking ..."
+            local var=$(client_var_name $client)_load
+            start_client_load $client ${!var}
+            echo "Restarted client load ${!var}: on $client. Checking ..."
             check_client_load $client
             rc=${PIPESTATUS[0]}
             if [ "$rc" != 0 ]; then
