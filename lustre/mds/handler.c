@@ -755,9 +755,7 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
                         body->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                         OBD_MD_FLATIME | OBD_MD_FLMTIME);
 
-                lustre_shrink_reply(req, reply_off, body->eadatasize, 0);
-                if (body->eadatasize)
-                        reply_off++;
+                reply_off++;
         } else if (S_ISLNK(inode->i_mode) &&
                    (reqbody->valid & OBD_MD_LINKNAME) != 0) {
                 char *symname = lustre_msg_buf(req->rq_repmsg, reply_off, 0);
@@ -861,7 +859,7 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
                 }
                 bufcount++;
         } else if (S_ISLNK(inode->i_mode) && (body->valid & OBD_MD_LINKNAME)) {
-                if (i_size_read(inode) + 1 != body->eadatasize)
+                if (i_size_read(inode) > body->eadatasize)
                         CERROR("symlink size: %Lu, reply space: %d\n",
                                i_size_read(inode) + 1, body->eadatasize);
                 size[bufcount] = min_t(int, i_size_read(inode) + 1,
@@ -920,35 +918,11 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
         struct lustre_handle parent_lockh;
         int namesize;
         int rc = 0, cleanup_phase = 0, resent_req = 0;
+        int rq_offset = offset;
         char *name;
         ENTRY;
 
         LASSERT(!strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME));
-
-        /* Swab now, before anyone looks inside the request */
-        body = lustre_swab_reqbuf(req, offset, sizeof(*body),
-                                  lustre_swab_mds_body);
-        if (body == NULL) {
-                CERROR("Can't swab mds_body\n");
-                RETURN(-EFAULT);
-        }
-
-        lustre_set_req_swabbed(req, offset + 1);
-        name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
-        if (name == NULL) {
-                CERROR("Can't unpack name\n");
-                RETURN(-EFAULT);
-        }
-        namesize = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
-        /* namesize less than 2 means we have empty name, probably came from
-           revalidate by cfid, so no point in having name to be set */
-        if (namesize <= 1)
-                name = NULL;
-
-        rc = mds_init_ucred(&uc, req, offset);
-        if (rc)
-                GOTO(cleanup, rc);
-
         LASSERT(offset == REQ_REC_OFF || offset == DLM_INTENT_REC_OFF);
         /* if requests were at offset 2, the getattr reply goes back at 1 */
         if (offset == DLM_INTENT_REC_OFF) {
@@ -956,6 +930,31 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                                      sizeof(*rep));
                 offset = DLM_REPLY_REC_OFF;
         }
+
+        /* Swab now, before anyone looks inside the request */
+        body = lustre_swab_reqbuf(req, rq_offset, sizeof(*body),
+                                  lustre_swab_mds_body);
+        if (body == NULL) {
+                CERROR("Can't swab mds_body\n");
+                GOTO(cleanup_exit, rc = -EFAULT);
+        }
+
+        lustre_set_req_swabbed(req, rq_offset + 1);
+        name = lustre_msg_string(req->rq_reqmsg, rq_offset + 1, 0);
+        if (name == NULL) {
+                CERROR("Can't unpack name\n");
+                GOTO(cleanup_exit, rc = -EFAULT);
+        }
+        namesize = lustre_msg_buflen(req->rq_reqmsg, rq_offset + 1);
+        /* namesize less than 2 means we have empty name, probably came from
+           revalidate by cfid, so no point in having name to be set */
+        if (namesize <= 1)
+                name = NULL;
+
+        rc = mds_init_ucred(&uc, req, rq_offset);
+        if (rc)
+                GOTO(cleanup, rc);
+
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         cleanup_phase = 1; /* kernel context */
@@ -1084,6 +1083,7 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                         req->rq_status = rc;
                 }
         }
+cleanup_exit:
         return rc;
 }
 
@@ -1103,7 +1103,7 @@ static int mds_getattr(struct ptlrpc_request *req, int offset)
         body = lustre_swab_reqbuf(req, offset, sizeof(*body),
                                   lustre_swab_mds_body);
         if (body == NULL)
-                RETURN(-EFAULT);
+                GOTO(cleanup_exit, rc = -EFAULT);
 
         rc = mds_init_ucred(&uc, req, offset);
         if (rc)
@@ -1119,11 +1119,11 @@ static int mds_getattr(struct ptlrpc_request *req, int offset)
         rc = mds_getattr_pack_msg(req, de->d_inode, offset);
         if (rc != 0) {
                 CERROR("mds_getattr_pack_msg: %d\n", rc);
-                GOTO(out_pop, rc);
+                GOTO(out_dput, rc);
         }
 
         req->rq_status = mds_getattr_internal(obd, de, req, body,REPLY_REC_OFF);
-
+out_dput:
         l_dput(de);
         GOTO(out_pop, rc);
 out_pop:
@@ -1136,6 +1136,9 @@ out_ucred:
                 req->rq_status = rc;
         }
         mds_exit_ucred(&uc, mds);
+
+cleanup_exit:
+        mds_body_shrink_reply(req, offset, REPLY_REC_OFF);
         return rc;
 }
 
@@ -1647,6 +1650,7 @@ int mds_handle(struct ptlrpc_request *req)
                  */
                 rc = mds_getattr_lock(req, REQ_REC_OFF, MDS_INODELOCK_UPDATE,
                                       &lockh);
+                mds_body_shrink_reply(req, REQ_REC_OFF, REPLY_REC_OFF);
                 /* this non-intent call (from an ioctl) is special */
                 req->rq_status = rc;
                 if (rc == 0 && lustre_handle_is_used(&lockh))
@@ -1744,6 +1748,7 @@ int mds_handle(struct ptlrpc_request *req)
                         break;
 
                 rc = mds_reint(req, REQ_REC_OFF, NULL);
+                mds_intent_shrink_reply(req, opc, REPLY_REC_OFF);
                 fail = OBD_FAIL_MDS_REINT_NET_REP;
                 break;
         }
@@ -1752,6 +1757,7 @@ int mds_handle(struct ptlrpc_request *req)
                 DEBUG_REQ(D_INODE, req, "close");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_CLOSE_NET, 0);
                 rc = mds_close(req, REQ_REC_OFF);
+                mds_body_shrink_reply(req, REQ_REC_OFF, REPLY_REC_OFF);
                 fail = OBD_FAIL_MDS_CLOSE_NET_REP;
                 break;
 
@@ -2473,6 +2479,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
                  * packet is following */
                 rep->lock_policy_res2 = mds_reint(req, DLM_INTENT_REC_OFF,
                                                   &lockh);
+                mds_intent_shrink_reply(req, REINT_OPEN, DLM_REPLY_REC_OFF);
 #if 0
                 /* We abort the lock if the lookup was negative and
                  * we did not make it to the OPEN portion */
@@ -2519,6 +2526,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
 
                 rep->lock_policy_res2 = mds_getattr_lock(req,DLM_INTENT_REC_OFF,
                                                          getattr_part, &lockh);
+                mds_body_shrink_reply(req, DLM_INTENT_REC_OFF, DLM_REPLY_REC_OFF);
                 /* FIXME: LDLM can set req->rq_status. MDS sets
                    policy_res{1,2} with disposition and status.
                    - replay: returns 0 & req->status is old status

@@ -613,7 +613,7 @@ void lustre_shrink_reply_v1(struct ptlrpc_request *req, int segment,
         LASSERT(req->rq_reply_state);
         LASSERT(msg);
         LASSERT(segment >= 0);
-        LASSERT(msg->lm_bufcount > segment);
+        LASSERT(msg->lm_bufcount >= segment);
         LASSERT(msg->lm_buflens[segment] >= newlen);
 
         if (msg->lm_buflens[segment] == newlen)
@@ -652,7 +652,8 @@ void lustre_shrink_reply_v2(struct ptlrpc_request *req, int segment,
 
         LASSERT(req->rq_reply_state);
         LASSERT(msg);
-        LASSERT(msg->lm_bufcount > segment);
+        LASSERTF(msg->lm_bufcount >= segment, "message have %d - requested %d\n",
+                 msg->lm_bufcount,segment);
         LASSERT(msg->lm_buflens[segment] >= newlen);
 
         if (msg->lm_buflens[segment] == newlen)

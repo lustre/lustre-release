@@ -1636,6 +1636,16 @@ int mds_close(struct ptlrpc_request *req, int offset)
         int cookies_size;
         ENTRY;
 
+        body = lustre_swab_reqbuf(req, offset, sizeof(*body),
+                                  lustre_swab_mds_body);
+        if (body == NULL) {
+                CERROR("Can't unpack body\n");
+                req->rq_status = -EFAULT;
+                GOTO(cleanup, rc = -EFAULT);
+        }
+        /*XXX need indicase - close is need to return LOV EA */
+        body->valid |= OBD_MD_FLEASIZE;
+
         rc = lustre_pack_reply(req, 4, repsize, NULL);
         if (rc)
                 req->rq_status = rc;
@@ -1648,14 +1658,6 @@ int mds_close(struct ptlrpc_request *req, int offset)
                obd->u.mds.mds_max_mdsize, obd->u.mds.mds_max_cookiesize);
         mds_counter_incr(req->rq_export, LPROC_MDS_CLOSE);
 
-        body = lustre_swab_reqbuf(req, offset, sizeof(*body),
-                                  lustre_swab_mds_body);
-        if (body == NULL) {
-                CERROR("Can't unpack body\n");
-                req->rq_status = -EFAULT;
-                RETURN(-EFAULT);
-        }
-
         if (body->flags & MDS_BFLAG_UNCOMMITTED_WRITES)
                 /* do some stuff */ ;
 
@@ -1666,7 +1668,7 @@ int mds_close(struct ptlrpc_request *req, int offset)
                 DEBUG_REQ(D_ERROR, req, "no handle for file close ino "LPD64
                           ": cookie "LPX64, body->fid1.id, body->handle.cookie);
                 req->rq_status = -ESTALE;
-                RETURN(-ESTALE);
+                GOTO(cleanup, rc = -ESTALE);
         }
         /* Remove mfd handle so it can't be found again.  We consume mfd_list
          * reference here, but still have mds_handle2mfd ref until mfd_close. */
@@ -1699,7 +1701,7 @@ int mds_close(struct ptlrpc_request *req, int offset)
                                        &reply_body->valid);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-        mds_shrink_reply(obd, req, body, REPLY_REC_OFF + 1);
+cleanup:
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK)) {
                 CERROR("test case OBD_FAIL_MDS_CLOSE_PACK\n");
                 req->rq_status = -ENOMEM;
