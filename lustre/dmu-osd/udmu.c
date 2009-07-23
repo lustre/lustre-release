@@ -799,6 +799,9 @@ void udmu_object_setattr(dmu_buf_t *db, dmu_tx_t *tx, vnattr_t *vap)
 
         if (mask & DMU_AT_NLINK)
                 zp->zp_links = vap->va_nlink;
+
+        if (mask & DMU_AT_RDEV)
+                zp->zp_rdev = vap->va_rdev;
 }
 
 /*

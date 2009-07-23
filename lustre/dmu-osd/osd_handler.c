@@ -312,7 +312,8 @@ static void lu_attr2vnattr(struct lu_attr *la, vnattr_t *vap)
 
 #if 0
         if (la->la_valid & LA_FLAGS) {
-                vap->va_flags = (la->la_flags & FS_FL_USER_MODIFIABLE);
+                vap->va_flags = (la->la_flags & 
+                                 (LUSTRE_APPEND_FL | LUSTRE_IMMUTABLE_FL));
                 vap->va_mask |= DMU_AT_FLAGS;
         }
 #endif
@@ -1247,30 +1248,40 @@ static dmu_buf_t* osd_mksym(struct osd_thread_info *info, struct osd_device  *os
         return db;
 }
 
-static dmu_buf_t* osd_mknod(struct osd_thread_info *info, struct osd_device  *osd,
-                     struct lu_attr *attr,
-                     struct osd_thandle *oh)
+static dmu_buf_t* osd_mknod(struct osd_thread_info *info, struct osd_device *osd,
+                            struct lu_attr *attr, struct osd_thandle *oh)
 {
-        dmu_buf_t * db;
-        vnattr_t vap;
-        umode_t mode = attr->la_mode & (S_IFMT | S_IRWXUGO | S_ISVTX);
+        umode_t    mode = attr->la_mode & (S_IFMT | S_IRWXUGO | S_ISVTX);
+        dmu_buf_t *db;
+        vnattr_t   vap;
 
-        LASSERT(S_ISCHR(mode) || S_ISBLK(mode) ||
-                S_ISFIFO(mode) || S_ISSOCK(mode));
+        vap.va_mask = DMU_AT_MODE;
+        if (S_ISCHR(mode)) {
+                vap.va_type = VCHR;
+                vap.va_mask |= DMU_AT_RDEV;
+                vap.va_rdev = attr->la_rdev;
+        } else if (S_ISBLK(mode)) {
+                vap.va_type = VBLK;
+                vap.va_mask |= DMU_AT_RDEV;
+                vap.va_rdev = attr->la_rdev;
+        } else if (S_ISFIFO(mode))
+                vap.va_type = VFIFO;
+        else if (S_ISSOCK(mode))
+                vap.va_type = VSOCK;
+        else
+                LBUG();
 
         udmu_object_create(&osd->od_objset, &db, oh->ot_tx, osd_object_tag);
 
-        if (db && (S_ISCHR(mode)||S_ISBLK(mode))) {
-                vap.va_mask = DMU_AT_RDEV;
-                vap.va_rdev = attr->la_rdev;
-                udmu_object_setattr(db, oh->ot_tx, &vap);
-        }
+        udmu_object_setattr(db, oh->ot_tx, &vap);
+
         return db;
 }
 
-typedef dmu_buf_t* (*osd_obj_type_f)(struct osd_thread_info *info, struct osd_device  *osd,
-                     struct lu_attr *attr,
-                     struct osd_thandle *oh);
+typedef dmu_buf_t* (*osd_obj_type_f)(struct osd_thread_info *info,
+                                     struct osd_device  *osd,
+                                     struct lu_attr *attr,
+                                     struct osd_thandle *oh);
 
 static osd_obj_type_f osd_create_type_f(enum dt_format_type type)
 {
