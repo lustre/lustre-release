@@ -1308,7 +1308,7 @@ static int ldlm_pools_thread_start(void)
 
         /*
          * CLONE_VM and CLONE_FILES just avoid a needless copy, because we
-         * just drop the VM and FILES in ptlrpc_daemonize() right away.
+         * just drop the VM and FILES in cfs_daemonize() right away.
          */
         rc = cfs_kernel_thread(ldlm_pools_thread_main, ldlm_pools_thread,
                                CLONE_VM | CLONE_FILES);

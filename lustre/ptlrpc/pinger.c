@@ -331,7 +331,7 @@ int ptlrpc_start_pinger(void)
         d.thread = pinger_thread;
 
         /* CLONE_VM and CLONE_FILES just avoid a needless copy, because we
-         * just drop the VM and FILES in ptlrpc_daemonize() right away. */
+         * just drop the VM and FILES in cfs_daemonize_ctxt() right away. */
         rc = cfs_kernel_thread(ptlrpc_pinger_main, &d, CLONE_VM | CLONE_FILES);
         if (rc < 0) {
                 CERROR("cannot start thread: %d\n", rc);
@@ -584,7 +584,7 @@ static int ping_evictor_main(void *arg)
         time_t expire_time;
         ENTRY;
 
-        ptlrpc_daemonize("ll_evictor");
+        cfs_daemonize_ctxt("ll_evictor");
 
         CDEBUG(D_HA, "Starting Ping Evictor\n");
         pet_exp = NULL;

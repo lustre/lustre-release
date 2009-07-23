@@ -200,7 +200,6 @@ EXPORT_SYMBOL(ptlrpc_stop_all_threads);
 EXPORT_SYMBOL(ptlrpc_start_threads);
 EXPORT_SYMBOL(ptlrpc_start_thread);
 EXPORT_SYMBOL(ptlrpc_unregister_service);
-EXPORT_SYMBOL(ptlrpc_daemonize);
 EXPORT_SYMBOL(ptlrpc_service_health_check);
 EXPORT_SYMBOL(ptlrpc_hpreq_reorder);
 

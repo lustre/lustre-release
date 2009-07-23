@@ -96,7 +96,7 @@ static int target_quotacheck_thread(void *data)
         struct lvfs_run_ctxt saved;
         int rc;
 
-        ptlrpc_daemonize("quotacheck");
+        cfs_daemonize_ctxt("quotacheck");
 
         exp = qta->qta_exp;
         obd = exp->exp_obd;

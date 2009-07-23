@@ -1655,7 +1655,7 @@ static int qmaster_recovery_main(void *arg)
         unsigned short type;
         ENTRY;
 
-        ptlrpc_daemonize("qmaster_recovd");
+        cfs_daemonize_ctxt("qmaster_recovd");
 
         class_incref(obd);
         complete(&data->comp);
