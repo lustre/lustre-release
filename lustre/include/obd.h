@@ -968,15 +968,21 @@ enum filter_groups {
 
 static inline __u64 obdo_mdsno(struct obdo *oa)
 {
-        if (oa->o_gr)
-                return oa->o_gr - FILTER_GROUP_MDS1_N_BASE;
+        if (oa->o_gr) {
+                LASSERT(oa->o_gr >= FILTER_GROUP_MDS1_N_BASE);
+                return oa->o_gr - FILTER_GROUP_MDS1_N_BASE + 1;
+        }
         return 0;
 }
 
 static inline int mdt_to_obd_objgrp(int mdtid)
 {
+        /**
+         * MDS0 uses group 0 always, other MDSes will use groups from
+         * FILTER_GROUP_MDS1_N_BASE
+         */
         if (mdtid)
-                return FILTER_GROUP_MDS1_N_BASE + mdtid;
+                return FILTER_GROUP_MDS1_N_BASE + mdtid - 1;
         return 0;
 }
 

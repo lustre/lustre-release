@@ -79,8 +79,6 @@
 
 #include "filter_internal.h"
 
-/* Group 0 is no longer a legal group, to catch uninitialized IDs */
-#define FILTER_MIN_GROUPS FILTER_GROUP_MDS1_N_BASE
 static struct lvfs_callback_ops filter_lvfs_ops;
 cfs_mem_cache_t *ll_fmd_cachep;
 
@@ -1082,7 +1080,8 @@ static int filter_read_group_internal(struct obd_device *obd, int group,
                 GOTO(cleanup, rc);
         }
 
-        if (filter->fo_subdir_count) {
+        if (filter->fo_subdir_count &&
+            !(group == FILTER_GROUP_LLOG || group == FILTER_GROUP_ECHO)) {
                 OBD_ALLOC(tmp_subdirs, sizeof(*tmp_subdirs));
                 if (tmp_subdirs == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
@@ -1212,7 +1211,7 @@ static int filter_read_groups(struct obd_device *obd, int last_group,
 static int filter_prep_groups(struct obd_device *obd)
 {
         struct filter_obd *filter = &obd->u.filter;
-        struct dentry *dentry, *O_dentry;
+        struct dentry *O_dentry;
         struct file *filp;
         int    last_group, rc = 0, cleanup_phase = 0;
         loff_t off = 0;
@@ -1229,57 +1228,6 @@ static int filter_prep_groups(struct obd_device *obd)
         filter->fo_dentry_O = O_dentry;
         cleanup_phase = 1; /* O_dentry */
 
-        /* Lookup "R" to tell if we're on an old OST FS and need to convert
-         * from O/R/<dir>/<objid> to O/0/<dir>/<objid>.  This can be removed
-         * some time post 1.0 when all old-style OSTs have converted along
-         * with the init_objid hack. */
-        dentry = ll_lookup_one_len("R", O_dentry, 1);
-        if (IS_ERR(dentry))
-                GOTO(cleanup, rc = PTR_ERR(dentry));
-        if (dentry->d_inode && S_ISDIR(dentry->d_inode->i_mode)) {
-                struct dentry *O0_dentry = lookup_one_len("0", O_dentry, 1);
-                ENTRY;
-
-                CWARN("converting OST to new object layout\n");
-                if (IS_ERR(O0_dentry)) {
-                        rc = PTR_ERR(O0_dentry);
-                        CERROR("error looking up O/0: rc %d\n", rc);
-                        GOTO(cleanup_R, rc);
-                }
-
-                if (O0_dentry->d_inode) {
-                        CERROR("Both O/R and O/0 exist. Fix manually.\n");
-                        GOTO(cleanup_O0, rc = -EEXIST);
-                }
-
-                LOCK_INODE_MUTEX(O_dentry->d_inode);
-                rc = ll_vfs_rename(O_dentry->d_inode, dentry, filter->fo_vfsmnt,
-                                   O_dentry->d_inode, O0_dentry,
-                                   filter->fo_vfsmnt);
-                UNLOCK_INODE_MUTEX(O_dentry->d_inode);
-
-                if (rc) {
-                        CERROR("error renaming O/R to O/0: rc %d\n", rc);
-                        GOTO(cleanup_O0, rc);
-                }
-                filter->fo_fsd->lsd_feature_incompat |=
-                        cpu_to_le32(OBD_INCOMPAT_GROUPS);
-                rc = filter_update_server_data(obd, filter->fo_rcvd_filp,
-                                               filter->fo_fsd, 1);
-                GOTO(cleanup_O0, rc);
-
-        cleanup_O0:
-                f_dput(O0_dentry);
-        cleanup_R:
-                f_dput(dentry);
-                if (rc)
-                        GOTO(cleanup, rc);
-        } else {
-                f_dput(dentry);
-        }
-
-        cleanup_phase = 2; /* groups */
-
         /* we have to initialize all groups before first connections from
          * clients because they may send create/destroy for any group -bzzz */
         filp = filp_open("LAST_GROUP", O_CREAT | O_RDWR, 0700);
@@ -1287,7 +1235,7 @@ static int filter_prep_groups(struct obd_device *obd)
                 CERROR("cannot create LAST_GROUP: rc = %ld\n", PTR_ERR(filp));
                 GOTO(cleanup, rc = PTR_ERR(filp));
         }
-        cleanup_phase = 3; /* filp */
+        cleanup_phase = 2; /* filp */
 
         rc = fsfilt_read_record(obd, filp, &last_group, sizeof(__u32), &off);
         if (rc) {
@@ -1295,13 +1243,13 @@ static int filter_prep_groups(struct obd_device *obd)
                 GOTO(cleanup, rc);
         }
         if (off == 0) {
-                last_group = FILTER_MIN_GROUPS;
+                last_group = FILTER_GROUP_MDS0;
         } else {
                 LASSERT_MDS_GROUP(last_group);
         }
 
         CWARN("%s: initialize groups [%d,%d]\n", obd->obd_name,
-              FILTER_MIN_GROUPS, last_group);
+              FILTER_GROUP_MDS0, last_group);
         filter->fo_committed_group = last_group;
         rc = filter_read_groups(obd, last_group, 1);
         if (rc)
@@ -1312,11 +1260,10 @@ static int filter_prep_groups(struct obd_device *obd)
 
  cleanup:
         switch (cleanup_phase) {
-        case 3:
-                filp_close(filp, 0);
         case 2:
-                filter_cleanup_groups(obd);
+                filp_close(filp, 0);
         case 1:
+                filter_cleanup_groups(obd);
                 f_dput(filter->fo_dentry_O);
                 filter->fo_dentry_O = NULL;
         default:
@@ -3681,7 +3628,8 @@ static int filter_handle_precreate(struct obd_export *exp, struct obdo *oa,
                         GOTO(out, rc = 0);
                 }
                 /* only precreate if group == 0 and o_id is specfied */
-                if (group == FILTER_GROUP_LLOG || oa->o_id == 0)
+                if (group == FILTER_GROUP_LLOG ||
+                    group == FILTER_GROUP_ECHO || oa->o_id == 0)
                         diff = 1;
                 else
                         diff = oa->o_id - filter_last_id(filter, group);
@@ -4095,7 +4043,7 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
                 if (oa->o_valid & OBD_MD_FLCOOKIE) {
                         struct llog_ctxt *ctxt;
                         struct obd_llog_group *olg;
-                        fcc = &oa->o_lcookie;
+
                         olg = filter_find_olg(obd, oa->o_gr);
                         if (!olg) {
                                CERROR(" %s: can not find olg of group %d\n",
@@ -4103,7 +4051,7 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
                                GOTO(cleanup, rc = PTR_ERR(olg));
                         }
                         llog_group_set_export(olg, exp);
-
+                        fcc = &oa->o_lcookie;
                         ctxt = llog_group_get_ctxt(olg, fcc->lgc_subsys + 1);
                         llog_cancel(ctxt, NULL, 1, fcc, 0);
                         llog_ctxt_put(ctxt);
@@ -4662,7 +4610,18 @@ extern quota_interface_t filter_quota_interface;
 static int __init obdfilter_init(void)
 {
         struct lprocfs_static_vars lvars;
-        int rc;
+        int rc, i;
+        struct obdo *oa;
+
+        /** sanity check for group<->mdsno conversion */
+        OBD_ALLOC_PTR(oa);
+        if (oa == NULL)
+                return -ENOMEM;
+        for (i = 0; i < 32; i++) {
+                 oa->o_gr = mdt_to_obd_objgrp(i);
+                 LASSERT(obdo_mdsno(oa) == i);
+        }
+        OBD_FREE_PTR(oa);
 
         lprocfs_filter_init_vars(&lvars);
 
