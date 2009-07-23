@@ -182,9 +182,44 @@ void class_del_profiles(void);
 
 #define class_export_rpc_put(exp)                                       \
 ({                                                                      \
+        LASSERT(atomic_read(&exp->exp_rpc_count) > 0);                  \
         atomic_dec(&(exp)->exp_rpc_count);                              \
         CDEBUG(D_INFO, "RPC PUTting export %p : new rpc_count %d\n",    \
                (exp), atomic_read(&(exp)->exp_rpc_count));              \
+        class_export_put(exp);                                          \
+})
+
+#define class_export_lock_get(exp)                                      \
+({                                                                      \
+        atomic_inc(&(exp)->exp_locks_count);                            \
+        CDEBUG(D_INFO, "lock GETting export %p : new locks_count %d\n", \
+               (exp), atomic_read(&(exp)->exp_locks_count));            \
+        class_export_get(exp);                                          \
+})
+
+#define class_export_lock_put(exp)                                      \
+({                                                                      \
+        LASSERT(atomic_read(&exp->exp_locks_count) > 0);                \
+        atomic_dec(&(exp)->exp_locks_count);                            \
+        CDEBUG(D_INFO, "lock PUTting export %p : new locks_count %d\n", \
+               (exp), atomic_read(&(exp)->exp_locks_count));            \
+        class_export_put(exp);                                          \
+})
+
+#define class_export_cb_get(exp)                                        \
+({                                                                      \
+        atomic_inc(&(exp)->exp_cb_count);                               \
+        CDEBUG(D_INFO, "callback GETting export %p : new cb_count %d\n",\
+               (exp), atomic_read(&(exp)->exp_cb_count));               \
+        class_export_get(exp);                                          \
+})
+
+#define class_export_cb_put(exp)                                        \
+({                                                                      \
+        LASSERT(atomic_read(&exp->exp_cb_count) > 0);                   \
+        atomic_dec(&(exp)->exp_cb_count);                               \
+        CDEBUG(D_INFO, "callback PUTting export %p : new cb_count %d\n",\
+               (exp), atomic_read(&(exp)->exp_cb_count));               \
         class_export_put(exp);                                          \
 })
 

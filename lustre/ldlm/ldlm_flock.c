@@ -400,7 +400,7 @@ reprocess:
                         new->l_policy_data.l_flock.end + 1;
                 new2->l_conn_export = lock->l_conn_export;
                 if (lock->l_export != NULL) {
-                        new2->l_export = class_export_get(lock->l_export);
+                        new2->l_export = class_export_lock_get(lock->l_export);
                         if (new2->l_export->exp_lock_hash &&
                             hlist_unhashed(&new2->l_exp_hash))
                                 lustre_hash_add(new2->l_export->exp_lock_hash,

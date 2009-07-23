@@ -3180,9 +3180,7 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
                 new_lock->l_writers--;
         }
 
-        new_lock->l_export = class_export_get(req->rq_export);
-        atomic_inc(&lock->l_export->exp_locks_count);
-
+        new_lock->l_export = class_export_lock_get(req->rq_export);
         new_lock->l_blocking_ast = lock->l_blocking_ast;
         new_lock->l_completion_ast = lock->l_completion_ast;
         new_lock->l_remote_handle = lock->l_remote_handle;

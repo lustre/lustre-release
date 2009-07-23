@@ -143,9 +143,16 @@ enum obd_option {
 struct obd_export {
         struct portals_handle     exp_handle;
         atomic_t                  exp_refcount;
-        atomic_t                  exp_rpc_count;
-        atomic_t                  exp_cb_count;
-        atomic_t                  exp_locks_count;
+        /**
+         * Set of counters below is to track where export references are
+         * kept. The exp_rpc_count is used for reconnect handling also,
+         * the cb_count and locks_count are for debug purposes only for now.
+         * The sum of them should be less than exp_refcount by 3
+         */
+        atomic_t                  exp_rpc_count; /** RPC references */
+        atomic_t                  exp_cb_count; /** Commit callback references */
+        atomic_t                  exp_locks_count; /** Lock references */
+
         atomic_t                  exp_replay_count;
         struct obd_uuid           exp_client_uuid;
         struct list_head          exp_obd_chain;
