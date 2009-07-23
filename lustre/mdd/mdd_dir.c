@@ -1464,20 +1464,12 @@ int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
                 __mdd_ref_add(env, child, handle);
                 rc = __mdd_index_insert_only(env, child, mdo2fid(child),
                                              dot, handle, BYPASS_CAPA);
-                if (rc == 0) {
+                if (rc == 0)
                         rc = __mdd_index_insert_only(env, child, pfid,
                                                      dotdot, handle,
                                                      BYPASS_CAPA);
-                        if (rc != 0) {
-                                int rc2;
-
-                                rc2 = __mdd_index_delete(env, child, dot, 1,
-                                                         handle, BYPASS_CAPA);
-                                if (rc2 != 0)
-                                        CERROR("Failure to cleanup after dotdot"
-                                               " creation: %d (%d)\n", rc2, rc);
-                        }
-                }
+                if (rc != 0)
+                        __mdd_ref_del(env, child, handle, 1);
         }
         if (rc == 0)
                 mdd_links_add(env, child, pfid, lname, handle);
