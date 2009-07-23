@@ -651,7 +651,7 @@ void lustre_hash_rehash_key(lustre_hash_t *lh, void *old_key, void *new_key,
         lustre_hash_bucket_t  *old_lhb;
         lustre_hash_bucket_t  *new_lhb;
         unsigned               i;
-        int                    j;
+        unsigned               j;
         ENTRY;
   
         __lustre_hash_key_validate(lh, new_key, hnode);
@@ -667,8 +667,17 @@ void lustre_hash_rehash_key(lustre_hash_t *lh, void *old_key, void *new_key,
         new_lhb = &lh->lh_buckets[j];
         LASSERT(j <= lh->lh_cur_mask);
 
-        write_lock(&old_lhb->lhb_rwlock);
-        write_lock(&new_lhb->lhb_rwlock);
+        if (i < j) { /* write_lock ordering */
+                write_lock(&old_lhb->lhb_rwlock);
+                write_lock(&new_lhb->lhb_rwlock);
+        } else if (i > j) {
+                write_lock(&new_lhb->lhb_rwlock);
+                write_lock(&old_lhb->lhb_rwlock);
+        } else { /* do nothing */
+                read_unlock(&lh->lh_rwlock);
+                EXIT;
+                return;
+        }
 
         /* 
          * Migrate item between hash buckets without calling
