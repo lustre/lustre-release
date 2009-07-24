@@ -270,6 +270,8 @@ static DUMP_TRACE_CONST struct stacktrace_ops print_trace_ops = {
 	.stack = print_trace_stack,
 	.address = print_trace_address,
 };
+        if (tsk == NULL)
+                tsk = current;
         /* dump_stack() */
         /* show_trace() */
 	printk("Pid: %d, comm: %.20s\n", tsk->pid, tsk->comm);
