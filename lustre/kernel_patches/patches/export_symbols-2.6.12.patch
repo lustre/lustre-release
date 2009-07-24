@@ -1,3 +1,6 @@
+This patch is not needed for 2.x, but is kept to allow the same kernel
+to be used between 1.8.x and 2.0.x for ease of upgrade.
+
 Index: linux-2.6.12-rc6/fs/dcache.c
 ===================================================================
 --- linux-2.6.12-rc6.orig/fs/dcache.c	2005-06-14 15:53:19.812195198 +0200
