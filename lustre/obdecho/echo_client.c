@@ -577,15 +577,22 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
         oinfo.oi_oa = oa;
         oinfo.oi_md = lsm;
 
-        rc = obd_brw_async(rw, ec->ec_exp, &oinfo, npages, pga, oti, set);
-        if (rc == 0) {
-                rc = ptlrpc_set_wait(set);
-                if (rc)
-                        CERROR("error from callback: rc = %d\n", rc);
+        /* OST/filter device don't support o_brw_async ops, turn to o_brw ops */
+        if (ec->ec_exp && ec->ec_exp->exp_obd &&
+            OBT(ec->ec_exp->exp_obd) && OBP(ec->ec_exp->exp_obd, brw_async)) {
+                rc = obd_brw_async(rw, ec->ec_exp, &oinfo, npages, pga, oti,
+                                   set);
+                if (rc == 0) {
+                        rc = ptlrpc_set_wait(set);
+                        if (rc)
+                                CERROR("error from callback: rc = %d\n", rc);
+                }
         } else {
-                CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
-                       "error from obd_brw_async: rc = %d\n", rc);
+                rc = obd_brw(rw, ec->ec_exp, &oinfo, npages, pga, oti);
         }
+        if (rc)
+                CDEBUG_LIMIT(rc == -ENOSPC ? D_INODE : D_ERROR,
+                             "error from obd_brw_async: rc = %d\n", rc);
         ptlrpc_set_destroy(set);
  out:
         if (rc != 0 || rw != OBD_BRW_READ)

@@ -5913,28 +5913,39 @@ run_test 170 "test lctl df to handle corrupted log ====================="
 
 obdecho_create_test() {
         local OBD=$1
+        local node=$2
         local rc=0
-        $LCTL attach echo_client ec ec_uuid || rc=1
-        [ $rc -eq 0 ] && { $LCTL --device ec setup $OBD || rc=2; }
-        [ $rc -eq 0 ] && { $LCTL --device ec create 1 || rc=3; }
-        [ $rc -eq 0 -o $rc -gt 2 ] && { $LCTL --device ec cleanup || rc=4; }
-        [ $rc -eq 0 -o $rc -gt 1 ] && { $LCTL --device ec detach || rc=5; }
+        do_facet $node "$LCTL attach echo_client ec ec_uuid" || rc=1
+        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec setup $OBD" || rc=2; }
+        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec create 1" || rc=3; }
+        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec test_brw 0 w 1" || rc=4; }
+        [ $rc -eq 0 -o $rc -gt 2 ] && { do_facet $node "$LCTL --device ec cleanup" || rc=5; }
+        [ $rc -eq 0 -o $rc -gt 1 ] && { do_facet $node "$LCTL --device ec detach" || rc=6; }
         return $rc
 }
 
 test_180() {
-        load_module obdecho/obdecho || return 1
         local rc=0
+        local rmmod_local=0
+        local rmmod_remote=0
 
-        local OBD=`$LCTL  dl | awk ' /obdfilter/ { print $4; exit; }'`
-        [ "x$OBD" != "x" ] && { obdecho_create_test $OBD || rc=2; }
-        [[ $rc -ne 0 ]] && { rmmod obdecho; return $rc; }
+        lsmod | grep -q obdecho || { load_module obdecho/obdecho && rmmod_local=1; }
 
         OBD=`$LCTL  dl | awk ' /-osc-/ { print $4; exit; }'`
-        [ "x$OBD" != "x" ] && { obdecho_create_test $OBD || rc=3; }
-        [[ $rc -ne 0 ]] && { rmmod obdecho; return $rc; }
+        [ "x$OBD" != "x" ] && { obdecho_create_test $OBD client || rc=2; }
+        [ $rmmod_local -eq 1 ] && rmmod obdecho
+        [ $rc -ne 0 ] && return $rc
 
-        rmmod obdecho
+        do_facet ost "lsmod | grep -q obdecho || { insmod ${LUSTRE}/obdecho/obdecho.ko || modprobe obdecho; }" && rmmod_remote=1
+
+        OBD=$(do_facet ost "$LCTL  dl | awk '/obdfilter/ { print; exit; }'" | awk '{print $4;}')
+        [ "x$OBD" != "x" ] && { obdecho_create_test $OBD ost || rc=3; }
+        [ $rmmod_remote -eq 1 ] && do_facet ost "rmmod obdecho"
+        if [ $rc -ne 0 ]; then
+                 error "obdecho test rc=$rc"
+                 return $rc
+        fi
+        true
 }
 run_test 180 "test obdecho ============================================"
 
