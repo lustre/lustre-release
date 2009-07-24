@@ -2629,7 +2629,7 @@ kiblnd_active_connect (struct rdma_cm_id *cmid)
         struct rdma_conn_param   cp;
         int                      version;
         __u64                    incarnation;
-        long                     flags;
+        unsigned long            flags;
         int                      rc;
 
         read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
