@@ -334,10 +334,13 @@ int LL_PROC_PROTO(proc_lnet_peers)
         const int  tmpsiz      = 256;
         int        len;
         int       *ver_p       = (unsigned int *)(&filp->private_data);
-        int        idx         = LNET_PHASH_IDX_GET(*ppos);
-        int        num         = LNET_PHASH_NUM_GET(*ppos);
+        int        idx;
+        int        num;
 
         DECLARE_LL_PROC_PPOS_DECL;
+
+        idx = LNET_PHASH_IDX_GET(*ppos);
+        num = LNET_PHASH_NUM_GET(*ppos);
 
         CLASSERT ((1 << LNET_PHASH_BITS) > LNET_PEER_HASHSIZE);
 
