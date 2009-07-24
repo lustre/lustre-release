@@ -1082,11 +1082,10 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                         if (rc == 0)
                                 rc = rc2;
                         req->rq_status = rc;
+                } else if (rc) {
+                        lustre_shrink_reply(req, offset + 1, 0 , 1);
                 }
         }
-
-        if (rc)
-                lustre_shrink_reply(req, offset + 1, 0 , 1);
 
         return rc;
 }
@@ -1137,11 +1136,10 @@ out_ucred:
                 if (rc == 0)
                         rc = rc2;
                 req->rq_status = rc;
+        } else if (rc) {
+                lustre_shrink_reply(req, REPLY_REC_OFF + 1, 0, 1);
         }
         mds_exit_ucred(&uc, mds);
-
-        if (rc)
-                lustre_shrink_reply(req, REPLY_REC_OFF + 1, 0, 1);
 
         return rc;
 }
