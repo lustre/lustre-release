@@ -736,9 +736,9 @@ rc=0;
 if [ \\\$running -eq 0 ] ; then
     mkdir -p $mnt;
     mount -t lustre $OPTIONS $device $mnt;
-    rc=$?;
+    rc=\\\$?;
 fi;
-exit $rc"
+exit \\\$rc" || return ${PIPESTATUS[0]}
 
     echo "Started clients $clients: "
     do_nodes $clients "mount | grep -w $mnt"

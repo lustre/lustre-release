@@ -986,6 +986,10 @@ run_test 102 "survive from insanely fast flavor switch"
 
 test_150() {
     local save_opts
+    local count
+    local clients=$CLIENTS
+
+    [ -z $clients ] && clients=$HOSTNAME
 
     # started from default flavors
     restore_to_default_flavor
@@ -995,26 +999,26 @@ test_150() {
     count=`flvr_cnt_mgc2mgs null`
     [ $count -eq 1 ] || error "$count mgc connection use null flavor"
 
-    # umount both clients
-    zconf_umount $HOSTNAME $MOUNT || return 1
-    zconf_umount $HOSTNAME $MOUNT2 || return 2
-
-    # mount client with default flavor - should succeed
-    zconf_mount $HOSTNAME $MOUNT || error "mount with default flavor should have succeeded"
-    zconf_umount $HOSTNAME $MOUNT || return 5
+    zconf_umount_clients $clients $MOUNT || return 1
 
     # mount client with conflict flavor - should fail
     save_opts=$MOUNTOPT
     MOUNTOPT="$MOUNTOPT,mgssec=krb5p"
-    zconf_mount $HOSTNAME $MOUNT && error "mount with conflict flavor should have failed"
+    zconf_mount_clients $clients $MOUNT && \
+        error "mount with conflict flavor should have failed"
     MOUNTOPT=$save_opts
 
     # mount client with same flavor - should succeed
     save_opts=$MOUNTOPT
     MOUNTOPT="$MOUNTOPT,mgssec=null"
-    zconf_mount $HOSTNAME $MOUNT || error "mount with same flavor should have succeeded"
-    zconf_umount $HOSTNAME $MOUNT || return 6
+    zconf_mount_clients $clients $MOUNT || \
+        error "mount with same flavor should have succeeded"
     MOUNTOPT=$save_opts
+    zconf_umount_clients $clients $MOUNT || return 2
+
+    # mount client with default flavor - should succeed
+    zconf_mount_clients $clients $MOUNT || \
+        error "mount with default flavor should have succeeded"
 }
 run_test 150 "secure mgs connection: client flavor setting"
 

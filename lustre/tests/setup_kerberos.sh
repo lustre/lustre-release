@@ -13,20 +13,21 @@
 # usage
 my_usage() {
     cat <<EOF
-Usage: $(basename $0) <KDC_distro> <KDC_node> <MDS_node>[:MDS_node:...]
+Usage: $(basename $0) <KDC_distro> <KDC_node> <MGS_node> <MDS_node>[:MDS_node:...]
                       <OSS_node>[:OSS_node:...] <CLIENT_node>[:CLIENT_node:...]
 
     This script is used to setup the Kerberos environment on Lustre cluster.
 
     KDC_distro      distribution on the KDC node (rhel5 or sles10)
     KDC_node        KDC node name
+    MGS_node        Lustre MGS node name
     MDS_node        Lustre MDS node name
     OSS_node        Lustre OSS node name
     CLIENT_node     Lustre client node name
 
-    e.g.: $(basename $0) rhel5 scsi2 sata2 sata3 client5
-    e.g.: $(basename $0) sles10 scsi2 scsi2 sata3:sata5 client2:client3
-    e.g.: $(basename $0) rhel5 scsi2 scsi2 scsi2 scsi2
+    e.g.: $(basename $0) rhel5 scsi2 scsi2 sata2 sata3 client5
+    e.g.: $(basename $0) sles10 scsi2 scsi2 scsi2 sata3:sata5 client2:client3
+    e.g.: $(basename $0) rhel5 scsi2 scsi2 scsi2 scsi2 scsi2
 
     Notes:
     1) The script will destroy all the old Kerberos settings by default. If you
@@ -48,15 +49,16 @@ EOF
 # ************************ Parameters and Variables ************************ #
 MY_KDC_DISTRO=$1
 MY_KDCNODE=$2
-MY_MDSNODES=$3
-MY_OSSNODES=$4
-MY_CLIENTNODES=$5
+MY_MGSNODE=$3
+MY_MDSNODES=$4
+MY_OSSNODES=$5
+MY_CLIENTNODES=$6
 
 # translate to lower case letters
 MY_KDC_DISTRO=$(echo $MY_KDC_DISTRO | tr '[A-Z]' '[a-z]')
 
 if [ -z "$MY_KDC_DISTRO" -o -z "$MY_KDCNODE" -o -z "$MY_MDSNODES" -o \
-    -z "$MY_OSSNODES" -o -z "$MY_CLIENTNODES" ]; then
+    -z "$MY_OSSNODES" -o -z "$MY_CLIENTNODES" -o -z "$MY_MGSNODE" ]; then
     my_usage
     exit 1
 fi
@@ -82,9 +84,10 @@ RESET_KDC=${RESET_KDC:-true}
 SPLIT_KEYTAB=${SPLIT_KEYTAB:-true}
 
 # encryption types for generating keytab
-MDS_ENCTYPE=${MDS_ENCTYPE:-"des3-hmac-sha1"}
-OSS_ENCTYPE=${OSS_ENCTYPE:-"des3-hmac-sha1"}
-CLIENT_ENCTYPE=${CLIENT_ENCTYPE:-"des3-hmac-sha1"}
+MDS_ENCTYPE=${MDS_ENCTYPE:-"aes128-cts"}
+MGS_ENCTYPE=${MGS_ENCTYPE:-"$MDS_ENCTYPE"}
+OSS_ENCTYPE=${OSS_ENCTYPE:-"aes128-cts"}
+CLIENT_ENCTYPE=${CLIENT_ENCTYPE:-"aes128-cts"}
 
 # configuration file for Kerberos
 KRB5_CONF=${KRB5_CONF:-"/etc/krb5.conf"}
@@ -217,6 +220,14 @@ normalize_names() {
         return $rc
     fi
 
+    # MGS node
+    MY_MGSNODE=$(get_fqdn $MY_MGSNODE)
+    rc=${PIPESTATUS[0]}
+    if [ $rc -ne 0 ]; then
+        echo $MY_MGSNODE
+        return $rc
+    fi
+
     # MDS nodes
     MY_MDSNODES=$(get_fqdn $MY_MDSNODES)
     rc=${PIPESTATUS[0]}
@@ -253,7 +264,8 @@ check_rsh() {
 
     echo "+++ Checking remote shell"
 
-    for node in $MY_KDCNODE $MY_OSSNODES $MY_MDSNODES $MY_CLIENTNODES; do
+    for node in $MY_KDCNODE $MY_MGSNODE $MY_OSSNODES $MY_MDSNODES $MY_CLIENTNODES
+    do
         is_part_of $node $checked && continue
 
         echo -n "Checking remote shell on $node..."
@@ -304,7 +316,7 @@ check_users() {
 
     echo "+++ Checking users and groups"
 
-    for node in $MY_KDCNODE $MY_MDSNODES $MY_CLIENTNODES; do
+    for node in $MY_KDCNODE $MY_MGSNODE $MY_MDSNODES $MY_CLIENTNODES; do
         is_part_of $node $checked && continue
 
         for id in $LOCAL_UIDS; do
@@ -354,7 +366,7 @@ cfg_nfs_mount() {
 
     echo "+++ Configuring nfsd mount"
 
-    for node in $MY_OSSNODES $MY_MDSNODES; do
+    for node in $MY_MGSNODE $MY_OSSNODES $MY_MDSNODES; do
         is_part_of $node $checked && continue
         cfg_mount $node nfsd /proc/fs/nfsd || return ${PIPESTATUS[0]}
         checked="$checked $node"
@@ -411,7 +423,7 @@ check_krb5() {
     local krb5pkg_cli
 
     echo "+++ Checking Kerberos 5 installation"
-    for node in $MY_OSSNODES $MY_MDSNODES $MY_CLIENTNODES; do
+    for node in $MY_MGSNODE $MY_OSSNODES $MY_MDSNODES $MY_CLIENTNODES; do
         is_part_of $node $checked && continue
 
         echo -n "Checking $node..."
@@ -443,7 +455,7 @@ check_libgssapi() {
         return $rc
     fi
 
-    for node in $MY_OSSNODES $MY_MDSNODES $MY_CLIENTNODES; do
+    for node in $MY_MGSNODE $MY_OSSNODES $MY_MDSNODES $MY_CLIENTNODES; do
         is_part_of $node $checked && continue
 
         echo -n "Checking $node..."
@@ -472,7 +484,8 @@ cfg_libgssapi() {
 
     echo "+++ Updating $GSSAPI_MECH_CONF"
 
-    for node in $MY_KDCNODE $MY_OSSNODES $MY_MDSNODES $MY_CLIENTNODES; do
+    for node in $MY_KDCNODE $MY_MGSNODE $MY_OSSNODES $MY_MDSNODES $MY_CLIENTNODES
+    do
         is_part_of $node $checked && continue
 
         krb5pkg_lib=$(get_krb5pkgname $node lib)
@@ -506,7 +519,7 @@ cfg_keyutils() {
 
     echo "+++ Updating $REQUEST_KEY_CONF"
 
-    for node in $MY_MDSNODES $MY_CLIENTNODES; do
+    for node in $MY_MGSNODE $MY_MDSNODES $MY_CLIENTNODES; do
         is_part_of $node $checked && continue
         lgss_keyring=$(my_do_node $node "which lgss_keyring") || \
             return ${PIPESTATUS[0]}
@@ -580,6 +593,8 @@ add_test_princ_id() {
 cfg_kdc_princs() {
     local node
 
+    add_svc_princ $MY_MGSNODE mgs || return ${PIPESTATUS[0]}
+
     for node in $MY_MDSNODES; do
         add_svc_princ $node mds || return ${PIPESTATUS[0]}
     done
@@ -647,7 +662,7 @@ cfg_kdc() {
 
 [realms]
  $KRB5_REALM = {
-  master_key_type = des3-hmac-sha1
+  master_key_type = aes128-cts
   supported_enctypes = des3-hmac-sha1:normal aes128-cts:normal aes256-cts:normal des-cbc-md5:normal
  }
 EOF
@@ -727,7 +742,8 @@ cfg_krb5_conf() {
 EOF
 
     # install krb5.conf remotely
-    for node in $MY_KDCNODE $MY_OSSNODES $MY_MDSNODES $MY_CLIENTNODES; do
+    for node in $MY_KDCNODE $MY_MGSNODE $MY_OSSNODES $MY_MDSNODES $MY_CLIENTNODES
+    do
         is_part_of $node $checked && continue
 
         echo -n "Installing krb5.conf on $node..."
@@ -774,7 +790,6 @@ merge_keytab() {
 rkt $tab
 wkt $KRB5_KEYTAB
 EOF" || return ${PIPESTATUS[0]}
-    do_node_mute $node "rm -f $tab" || true
 }
 
 #
@@ -788,7 +803,7 @@ cfg_keytab() {
 
     # remove old keytabs
     echo -n "Deleting old keytabs on all nodes..."
-    for node in $MY_OSSNODES $MY_MDSNODES $MY_CLIENTNODES; do
+    for node in $MY_MGSNODE $MY_OSSNODES $MY_MDSNODES $MY_CLIENTNODES; do
         do_node_mute $node "rm -f $KRB5_KEYTAB $TMP/krb5cc*"
     done
     echo "OK!"
@@ -798,6 +813,13 @@ cfg_keytab() {
         echo -n "Preparing for MDS $node..."
         do_kdc_mute "rm -f $tmptab"
         add_keytab_svc $tmptab $node mds $MDS_ENCTYPE || return ${PIPESTATUS[0]}
+
+        if is_part_of $node $MY_MGSNODE; then
+            echo -n "also be an MGS..."
+            add_keytab_svc $tmptab $node mgs $MGS_ENCTYPE || \
+                return ${PIPESTATUS[0]}
+        fi
+
         if is_part_of $node $MY_OSSNODES; then
             echo -n "also be an OSS..."
             add_keytab_svc $tmptab $node oss $OSS_ENCTYPE || \
@@ -812,10 +834,37 @@ cfg_keytab() {
         rm -f $tmptab
     done
 
+    # install for MGS node
+    echo -n "Preparing for MGS $MY_MGSNODE..."
+    if ! is_part_of $MY_MGSNODE $MY_MDSNODES; then
+        do_kdc_mute "rm -f $tmptab"
+        add_keytab_svc $tmptab $MY_MGSNODE mgs $MGS_ENCTYPE || \
+            return ${PIPESTATUS[0]}
+
+        if is_part_of $MY_MGSNODE $MY_OSSNODES; then
+            echo -n "also be an OSS..."
+            add_keytab_svc $tmptab $MY_MGSNODE oss $OSS_ENCTYPE || \
+                return ${PIPESTATUS[0]}
+        fi
+        echo "OK!"
+
+        echo -n "Installing krb5.keytab on $MY_MGSNODE..."
+        $SCP root@$MY_KDCNODE:$tmptab $tmptab || return ${PIPESTATUS[0]}
+        $SCP $tmptab root@$MY_MGSNODE:$KRB5_KEYTAB || return ${PIPESTATUS[0]}
+        echo "OK!"
+        rm -f $tmptab
+    else
+        echo "also be an MDS, already done, skip"
+    fi
+
     # install for OSS nodes
     for node in $MY_OSSNODES; do
         echo -n "Preparing for OSS $node..."
-        if ! is_part_of $node $MY_MDSNODES; then
+        if is_part_of $node $MY_MDSNODES; then
+            echo "also be an MDS, already done, skip"
+        elif is_part_of $node $MY_MGSNODE; then
+            echo "also be an MGS, already done, skip"
+        else
             do_kdc_mute "rm -f $tmptab"
             add_keytab_svc $tmptab $node oss $OSS_ENCTYPE || \
                 return ${PIPESTATUS[0]}
@@ -826,8 +875,6 @@ cfg_keytab() {
             $SCP $tmptab root@$node:$KRB5_KEYTAB || return ${PIPESTATUS[0]}
             echo "OK!"
             rm -f $tmptab
-        else
-            echo "also be an MDS, already done, skip"
         fi
     done
 
@@ -837,6 +884,7 @@ cfg_keytab() {
         echo -n "Preparing for client..."
         add_keytab_root $tmptab $CLIENT_ENCTYPE || return ${PIPESTATUS[0]}
         $SCP root@$MY_KDCNODE:$tmptab $tmptab || return ${PIPESTATUS[0]}
+        echo "OK!"
     else
         for node in $MY_CLIENTNODES; do
             echo -n "Preparing for client $node..."
@@ -849,9 +897,9 @@ cfg_keytab() {
             add_keytab_svc $tmptab $node root $CLIENT_ENCTYPE || \
                 return ${PIPESTATUS[0]}
             $SCP root@$MY_KDCNODE:$tmptab $tmptab || return ${PIPESTATUS[0]}
+            echo "OK!"
         done
     fi
-    echo "OK!"
     for node in $MY_CLIENTNODES; do
         echo -n "Installing krb5.keytab on client $node..."
 
@@ -859,6 +907,14 @@ cfg_keytab() {
         if is_part_of $node $MY_MDSNODES; then
             echo "also be an MDS, already done, skip"
             continue
+        fi
+
+        # merge keytab if it's also an MGS
+        if is_part_of $node $MY_MGSNODE; then
+            echo -n "also be an MGS, merging keytab..."
+            merge_keytab $tmptab $node || return ${PIPESTATUS[0]}
+            echo "OK!"
+            continue 
         fi
 
         # merge keytab if it's also an OSS
@@ -1045,6 +1101,8 @@ echo " Configure Kerberos testing environment for Lustre"
 echo " KDC: $MY_KDCNODE"
 echo " realm: $KRB5_REALM, domain: $KRB5_DOMAIN"
 echo " Using gssapi package: $LIBGSSAPI"
+echo " MGS node:"
+echo "     $MY_MGSNODE"
 echo " OSS nodes:"
 for i in $MY_OSSNODES; do echo "     $i"; done
 echo " MDS nodes:"
