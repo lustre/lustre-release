@@ -1,0 +1,154 @@
+.TH LLAPI_FILE_OPEN 3 "2009 Jul 10" Lustre API
+.SH NAME
+llapi_file_open, llapi_file_create \- open and possibly create a file or a device on a Lustre filesystem
+.SH SYNOPSIS
+.nf
+.B #include <sys/types.h>
+.B #include <sys/stat.h>
+.B #include <fcntl.h>
+.B #include <liblustre.h>
+.B #include <lustre/lustre_idl.h>
+.B #include <lustre/liblustreapi.h>
+.B #include <lustre/lustre_user.h>
+.sp
+.BI "int llapi_file_open(const char *"name ", int " flags ", int " mode "," 
+.BI "                    unsigned long long " stripe_size ", int " stripe_offset "," 
+.BI "                    int " stripe_count ", int " stripe_pattern );
+
+.BI "int llapi_file_create(const char *" name ", unsigned long long " stripe_size ","
+.BI "                      int " stripe_offset ", int " stripe_count ","
+.BI "                      int " stripe_pattern );
+.sp
+.fi
+.SH DESCRIPTION
+.LP
+.B llapi_file_create(\|)
+call is equivalent to 
+.B llapi_file_open
+call with 
+.I flags 
+equal to
+.B O_CREAT|O_WRONLY
+and
+.I mode
+equal to
+.BR 0644 ,
+followed by file close.
+.PP
+.B llapi_file_open(\|)
+opens a file with a given 
+.I name
+on a Lustre filesystem.
+.TP 15
+.I flags
+can be a combination of 
+.BR O_RDONLY ,
+.BR O_WRONLY ,
+.BR O_RDWR ,
+.BR O_CREAT ,
+.BR O_EXCL ,
+.BR O_NOCTTY ,
+.BR O_TRUNC ,
+.BR O_APPEND ,
+.BR O_NONBLOCK ,
+.BR O_SYNC ,
+.BR FASYNC ,
+.BR O_DIRECT ,
+.BR O_LARGEFILE ,
+.BR O_DIRECTORY ,
+.BR O_NOFOLLOW ,
+.BR O_NOATIME .
+
+Refer to
+.BR open(2)
+man page for a detailed description.
+.TP 15
+.I mode
+specifies the permission bits to be used for a new file when
+.BR O_CREAT
+is used.
+
+Refer to
+.BR open(2)
+man page for a detailed description.
+.TP 15
+.I stripe_size
+specifies stripe size in bytes and should be multiple of 64 KiB not exceeding 4 GiB.
+.TP 15
+.I stripe_offset
+specifies an OST index from which the file should start, -1 to use the default setting.
+.TP 15
+.I stripe_count
+specifies number of OSTs to stripe the file across, -1 to use the default setting.
+.TP 15
+.I stripe_pattern
+specifies striping pattern, only LOV_PATTERN_RAID0 is available in this Lustre version, 0 to use the default setting.
+.SH RETURN VALUES
+.LP
+.B llapi_file_open(\|) 
+and 
+.B llapi_file_create(\|) 
+return:
+.TP
+>=0
+on success, for
+.B llapi_file_open
+the return value is a file descriptor.
+.TP
+<0
+on failure, the absolute value is an error code.
+.SH ERRORS
+.TP 15
+.SM EINVAL
+.I stripe_size
+or
+.I stripe_offset
+or
+.I stripe_count
+or
+.I stripe_pattern
+is invalid.
+.TP
+.SM EEXIST
+Striping information has already been set and cannot be altered.
+.IP
+.I name
+already exists.
+.TP
+.SM EALREADY
+Striping information has already been set and cannot be altered.
+.TP
+.SM ENOTTY
+.I name
+may not point to a Lustre filesystem.
+.SH "EXAMPLE"
+.nf
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <stdio.h>
+#include <liblustre.h>
+#include <lustre/lustre_idl.h>
+#include <lustre/liblustreapi.h>
+#include <lustre/lustre_user.h>
+int main(int argc, char *argv[])
+{
+        int rc;
+
+        if (argc != 2)
+                return -1;
+
+        rc = llapi_file_create(argv[1], 1048576, 0, 2, LOV_PATTERN_RAID0);
+        if (rc < 0) {
+                fprintf(stderr, "file creation has failed, %s\\n", strerror(-rc));
+                return -1;
+        }
+        printf("%s with stripe size 1048576, striped across 2 OSTs,"
+               " has been created!\\n", argv[1]);
+        return 0;
+}
+.fi
+.SH "SEE ALSO"
+.BR open (2),
+.BR lustre (7)
