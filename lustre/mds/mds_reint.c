@@ -1791,87 +1791,73 @@ int mds_get_cookie_size(struct obd_device *obd, struct lov_mds_md *lmm)
         return real_csize;
 }
 
-void mds_body_shrink_reply(struct ptlrpc_request *req,
-                      int req_mdoff, int reply_mdoff)
+static void mds_shrink_reply(struct ptlrpc_request *req,
+                           int reply_mdoff, int have_md, int have_acl)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
-        struct mds_body *rq_body;
         struct mds_body *reply_body;
-        int cookie_size = 0, md_size = -1;
-
-        rq_body =  lustre_msg_buf(req->rq_reqmsg, req_mdoff,
-                                  sizeof(*rq_body));
-
-        LASSERT(rq_body);
+        int cookie_size = 0, md_size = 0;
+        ENTRY;
 
         /* LSM and cookie is always placed after mds_body */
         reply_body =  lustre_msg_buf(req->rq_repmsg, reply_mdoff,
                                      sizeof(*reply_body));
         reply_mdoff++;
 
-        if (rq_body->valid & (OBD_MD_FLEASIZE | OBD_MD_FLDIREA)) {
-                md_size = 0;
-                if (reply_body &&
-                    reply_body->valid & (OBD_MD_FLEASIZE | OBD_MD_FLDIREA))
+        if (reply_body && (have_md || have_acl)) {
+                if (reply_body->valid & (OBD_MD_FLEASIZE | OBD_MD_FLDIREA)) {
                         md_size = reply_body->eadatasize;
-                lustre_shrink_reply(req, reply_mdoff, md_size, 1);
-        }
-
-        if (rq_body->valid & OBD_MD_LINKNAME) {
-                md_size = rq_body->eadatasize;
-                lustre_shrink_reply(req, reply_mdoff, md_size, 1);
-        }
-
-
-        if (reply_body != NULL) { 
-           if (reply_body->valid & OBD_MD_FLCOOKIE) {
-                LASSERT(reply_body->valid & OBD_MD_FLEASIZE);
-                cookie_size = mds_get_cookie_size(obd, lustre_msg_buf(
-                                                  req->rq_repmsg, reply_mdoff, 0));
-           } else if (reply_body->valid & OBD_MD_FLACL) {
-                cookie_size = reply_body->aclsize;
-           }
-        }
-        lustre_shrink_reply(req, reply_mdoff + (md_size > 0), cookie_size, 1);
-
-        CDEBUG(D_INFO, "Shrink to md_size %d cookie_size %d \n", md_size,
-               cookie_size);
-}
-
-void mds_intent_shrink_reply(struct ptlrpc_request *req,
-                      int opc, int reply_mdoff)
-{
-        struct obd_device *obd = req->rq_export->exp_obd;
-        struct mds_body *reply_body;
-        int cookie_size = 0, md_size = 0;
-
-        if (opc == REINT_UNLINK || opc == REINT_RENAME ||
-            opc == REINT_OPEN) {
-
-                /* LSM and cookie is always placed after mds_body */
-                reply_body =  lustre_msg_buf(req->rq_repmsg, reply_mdoff,
-                                             sizeof(*reply_body));
-                reply_mdoff++;
-
-                if (reply_body &&
-                    reply_body->valid & (OBD_MD_FLEASIZE | OBD_MD_FLDIREA))
+                } else if (reply_body->valid & OBD_MD_LINKNAME)
                         md_size = reply_body->eadatasize;
 
-                lustre_shrink_reply(req, reply_mdoff, md_size, 1);
-
-                if (reply_body && reply_body->valid & OBD_MD_FLCOOKIE) {
+                if (reply_body->valid & OBD_MD_FLCOOKIE) {
                         LASSERT(reply_body->valid & OBD_MD_FLEASIZE);
                         cookie_size = mds_get_cookie_size(obd, lustre_msg_buf(
                                                           req->rq_repmsg,
                                                           reply_mdoff, 0));
+                } else if (reply_body->valid & OBD_MD_FLACL) {
+                        cookie_size = reply_body->aclsize;
                 }
+        }
+        CDEBUG(D_INFO, "Shrink %d/%d to md_size %d cookie_size %d \n",
+               have_md, have_acl, md_size, cookie_size);
 
+        if (likely(have_md))
+                lustre_shrink_reply(req, reply_mdoff, md_size, 1);
+
+        if (likely(have_acl))
                 lustre_shrink_reply(req, reply_mdoff + (md_size > 0),
                                     cookie_size, 1);
+}
 
-                CDEBUG(D_INFO, "Shrink to md_size %d cookie_size %d \n", md_size,
-                       cookie_size);
-        }
+void mds_shrink_body_reply(struct ptlrpc_request *req,
+                           int req_mdoff,
+                           int reply_mdoff)
+{
+        struct mds_body *rq_body;
+        const long have_acl = OBD_MD_FLCOOKIE | OBD_MD_FLACL;
+        const long have_md = OBD_MD_FLEASIZE | OBD_MD_FLDIREA;
+        ENTRY;
+
+        /* LSM and cookie is always placed after mds_body */
+        rq_body =  lustre_msg_buf(req->rq_reqmsg, req_mdoff,
+                                  sizeof(*rq_body));
+        LASSERT(rq_body);
+
+        /* this check is need for avoid hit asset in case
+         * OBD_MDS_FLFLAGS */
+        mds_shrink_reply(req, reply_mdoff,
+                         rq_body->valid & have_md,
+                         rq_body->valid & have_acl);
+}
+
+void mds_shrink_intent_reply(struct ptlrpc_request *req,
+                             int opc, int reply_mdoff)
+{
+        if (opc == REINT_UNLINK || opc == REINT_RENAME ||
+            opc == REINT_OPEN)
+                mds_shrink_reply(req, reply_mdoff, 1, 1);
+
 }
 
 static int mds_reint_unlink(struct mds_update_record *rec, int offset,

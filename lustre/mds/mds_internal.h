@@ -198,10 +198,10 @@ struct dentry *mds_lookup(struct obd_device *obd,
                           struct dentry *dparent,
                           int fid_namelen);
 
-void mds_body_shrink_reply(struct ptlrpc_request *req,
-                      int req_mdoff, int reply_mdoff);
-void mds_intent_shrink_reply(struct ptlrpc_request *req,
-                      int opc, int reply_mdoff);
+void mds_shrink_body_reply(struct ptlrpc_request *req, int req_mdoff,
+                           int reply_mdoff);
+void mds_shrink_intent_reply(struct ptlrpc_request *req,
+                             int opc, int reply_mdoff);
 int mds_get_cookie_size(struct obd_device *obd, struct lov_mds_md *lmm);
 int mds_version_get_check(struct ptlrpc_request *, struct inode *, int);
 /* mds/mds_lib.c */

@@ -834,10 +834,6 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         }
         UNLOCK_INODE_MUTEX(dchild->d_inode);
 
-        if (rec && !(rec->ur_flags & MDS_OPEN_JOIN_FILE))
-                lustre_shrink_reply(req, DLM_REPLY_REC_OFF + 1,
-                                    body->eadatasize, 0);
-
         if (req->rq_export->exp_connect_flags & OBD_CONNECT_ACL &&
             rec && !(rec->ur_flags & MDS_OPEN_JOIN_FILE)) {
                 int acl_off = DLM_REPLY_REC_OFF + (body->eadatasize ? 2 : 1);
@@ -845,7 +841,6 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                 rc = mds_pack_acl(&req->rq_export->exp_mds_data,
                                   dchild->d_inode, req->rq_repmsg,
                                   body, acl_off);
-                lustre_shrink_reply(req, acl_off, body->aclsize, 0);
                 if (rc)
                         RETURN(rc);
         }
