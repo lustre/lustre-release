@@ -789,9 +789,6 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
                 RETURN(ERR_PTR(-ENOMEM));
         }
 
-#if 0
-        oh->ot_sync = p->tp_sync;
-#endif
         oh->ot_tx = tx;
         th = &oh->ot_super;
         th->th_dev = dt;
@@ -855,7 +852,7 @@ static int osd_trans_stop(const struct lu_env *env, struct thandle *th)
          * XXX: also note: oh->ot_sync appears not to be properly set at the
          * moment.
          */
-        if (0 && oh->ot_sync)
+        if (1 && oh->ot_sync)
                 udmu_wait_synced(&osd->od_objset, oh->ot_tx);
 
         RETURN(result);
@@ -2422,14 +2419,38 @@ static int osd_declare_write_commit(const struct lu_env *env,
 {
         struct osd_object  *obj = osd_dt_obj(dt);
         struct osd_thandle *oh;
+        uint64_t            offset;
+        uint32_t            size;
+        uint64_t            oid;
         int                 i;
         ENTRY;
 
-        oh = container_of0(th, struct osd_thandle, ot_super);
+        LASSERT(lb);
+        LASSERT(nr > 0);
+        LASSERT(lb->obj == dt);
 
-        for (i = 0; i < nr; i++, lb++)
-                udmu_tx_hold_write(oh->ot_tx, udmu_object_get_id(obj->oo_db),
-                                   lb->file_offset, lb->len);
+        oh = container_of0(th, struct osd_thandle, ot_super);
+        oid = udmu_object_get_id(obj->oo_db);
+
+        offset = lb->file_offset;
+        size = lb->len;
+        lb++;
+        nr--;
+
+        for (i = 0; i < nr; i++, lb++) {
+                if (offset + size == lb->file_offset) {
+                        size += lb->len;
+                        continue;
+                }
+
+                udmu_tx_hold_write(oh->ot_tx, oid, offset, size);
+
+                offset = lb->file_offset;
+                size = lb->len;
+        }
+
+        if (size)
+                udmu_tx_hold_write(oh->ot_tx, oid, offset, size);
 
         udmu_tx_hold_bonus(oh->ot_tx, udmu_object_get_id(obj->oo_db));
 
