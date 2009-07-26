@@ -68,7 +68,7 @@ static int filter_preprw_read(const struct lu_env *env,
                                          nb + i, res + j, 0,
                                          filter_object_capa(env, fo));
                         LASSERT(rc > 0);
-                        LASSERT(rc < PTLRPC_MAX_BRW_PAGES);
+                        LASSERT(rc <= PTLRPC_MAX_BRW_PAGES);
                         /* correct index for local buffers to continue with */
                         j += rc;
                         LASSERT(j <= PTLRPC_MAX_BRW_PAGES);
