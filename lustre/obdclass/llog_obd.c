@@ -252,7 +252,7 @@ int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
         ENTRY;
 
         if (!ctxt) {
-                CERROR("No ctxt\n");
+                //CERROR("No ctxt\n");
                 RETURN(-ENODEV);
         }
 
