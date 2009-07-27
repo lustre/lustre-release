@@ -91,15 +91,10 @@ static struct dt_index_features oi_feat = {
 };
 
 static const struct oi_descr oi_descr[OSD_OI_FID_NR] = {
-        [OSD_OI_FID_SMALL] = {
-                .fid_size = 5,
-                .name     = "oi.5",
-                .oid      = OSD_OI_FID_SMALL_OID
-        },
-        [OSD_OI_FID_OTHER] = {
+        [OSD_OI_FID_16] = {
                 .fid_size = sizeof(struct lu_fid),
                 .name     = "oi.16",
-                .oid      = OSD_OI_FID_OTHER_OID
+                .oid      = OSD_OI_FID_16_OID
         }
 };
 
@@ -143,8 +138,6 @@ int osd_oi_init(struct osd_thread_info *info,
         int rc;
         int i;
 
-        CLASSERT(ARRAY_SIZE(oi->oi_dir) == ARRAY_SIZE(oi_descr));
-
         env = info->oti_env;
         mutex_lock(&oi_init_lock);
         memset(oi, 0, sizeof *oi);
@@ -162,7 +155,7 @@ retry:
                         rc = obj->do_ops->do_index_try(env, obj, &oi_feat);
                         if (rc == 0) {
                                 LASSERT(obj->do_index_ops != NULL);
-                                oi->oi_dir[i] = obj;
+                                oi->oi_dir = obj;
                         } else {
                                 CERROR("Wrong index \"%s\": %d\n", name, rc);
                                 lu_object_put(env, &obj->do_lu);
@@ -186,36 +179,10 @@ retry:
 
 void osd_oi_fini(struct osd_thread_info *info, struct osd_oi *oi)
 {
-        int i;
-
-        for (i = 0; i < ARRAY_SIZE(oi->oi_dir); ++i) {
-                if (oi->oi_dir[i] != NULL) {
-                        lu_object_put(info->oti_env, &oi->oi_dir[i]->do_lu);
-                        oi->oi_dir[i] = NULL;
-                }
+        if (oi->oi_dir != NULL) {
+                lu_object_put(info->oti_env, &oi->oi_dir->do_lu);
+                oi->oi_dir = NULL;
         }
-}
-
-static const struct dt_key *oi_fid_key(struct osd_thread_info *info,
-                                       struct osd_oi *oi,
-                                       const struct lu_fid *fid,
-                                       struct dt_object **idx)
-{
-        int i;
-        struct lu_fid_pack *pack;
-
-        pack = &info->oti_pack;
-        fid_pack(pack, fid, &info->oti_fid);
-        for (i = 0; i < ARRAY_SIZE(oi->oi_dir); ++i) {
-                if (pack->fp_len == oi_descr[i].fid_size + sizeof pack->fp_len){
-                        *idx = oi->oi_dir[i];
-                        return (const struct dt_key *)&pack->fp_area;
-                }
-        }
-        CERROR("Unsupported packed fid size: %d ("DFID")\n",
-               pack->fp_len, PFID(fid));
-        LBUG();
-        return NULL;
 }
 
 static inline int fid_is_oi_fid(const struct lu_fid *fid)
@@ -224,13 +191,13 @@ static inline int fid_is_oi_fid(const struct lu_fid *fid)
          * oi-index create operation.
          */
         return (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE &&
-               (fid_oid(fid) == OSD_OI_FID_SMALL_OID ||
-                fid_oid(fid) == OSD_OI_FID_OTHER_OID)));
+                fid_oid(fid) == OSD_OI_FID_16_OID));
 }
 
 int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
                   const struct lu_fid *fid, struct osd_inode_id *id)
 {
+        struct lu_fid *oi_fid = &info->oti_fid;
         int rc;
 
         if (fid_is_igif(fid)) {
@@ -243,7 +210,9 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
                 if (fid_is_oi_fid(fid))
                         return -ENOENT;
 
-                key = oi_fid_key(info, oi, fid, &idx);
+                idx = oi->oi_dir;
+                fid_cpu_to_be(oi_fid, fid);
+                key = (struct dt_key *) oi_fid;
                 rc = idx->do_index_ops->dio_lookup(info->oti_env, idx,
                                                    (struct dt_rec *)id, key,
                                                    BYPASS_CAPA);
@@ -261,6 +230,7 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
                   const struct lu_fid *fid, const struct osd_inode_id *id0,
                   struct thandle *th, int ignore_quota)
 {
+        struct lu_fid *oi_fid = &info->oti_fid;
         struct dt_object    *idx;
         struct osd_inode_id *id;
         const struct dt_key *key;
@@ -271,12 +241,15 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
         if (fid_is_oi_fid(fid))
                 return 0;
 
-        key = oi_fid_key(info, oi, fid, &idx);
+        idx = oi->oi_dir;
+        fid_cpu_to_be(oi_fid, fid);
+        key = (struct dt_key *) oi_fid;
+
         id  = &info->oti_id;
         id->oii_ino = cpu_to_be32(id0->oii_ino);
         id->oii_gen = cpu_to_be32(id0->oii_gen);
         return idx->do_index_ops->dio_insert(info->oti_env, idx,
-                                             (const struct dt_rec *)id,
+                                             (struct dt_rec *)id,
                                              key, th, BYPASS_CAPA,
                                              ignore_quota);
 }
@@ -285,13 +258,16 @@ int osd_oi_delete(struct osd_thread_info *info,
                   struct osd_oi *oi, const struct lu_fid *fid,
                   struct thandle *th)
 {
+        struct lu_fid *oi_fid = &info->oti_fid;
         struct dt_object    *idx;
         const struct dt_key *key;
 
         if (fid_is_igif(fid))
                 return 0;
 
-        key = oi_fid_key(info, oi, fid, &idx);
+        idx = oi->oi_dir;
+        fid_cpu_to_be(oi_fid, fid);
+        key = (struct dt_key *) oi_fid;
         return idx->do_index_ops->dio_delete(info->oti_env, idx,
                                              key, th, BYPASS_CAPA);
 }

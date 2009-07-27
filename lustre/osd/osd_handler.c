@@ -1453,7 +1453,7 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
                  */
 
                 result = iam_lvar_create(obj->oo_inode, OSD_NAME_LEN, 4,
-                                         sizeof (struct lu_fid_pack),
+                                         sizeof (struct osd_fid_pack),
                                          oth->ot_handle);
         }
         return result;
@@ -1732,10 +1732,29 @@ static inline void osd_igif_get(const struct lu_env *env, struct inode  *inode,
 /**
  * Helper function to pack the fid
  */
-static inline void osd_fid_pack(const struct lu_env *env, const struct lu_fid *fid,
-                                struct dt_rec *pack)
+void osd_fid_pack(struct osd_fid_pack *pack, const struct dt_rec *fid,
+                  struct lu_fid *befider)
 {
-        fid_pack((struct lu_fid_pack *)pack, fid, &osd_oti_get(env)->oti_fid);
+        fid_cpu_to_be(befider, (struct lu_fid *)fid);
+        memcpy(pack->fp_area, befider, sizeof(*befider));
+        pack->fp_len =  sizeof(*befider) + 1;
+}
+
+int osd_fid_unpack(struct lu_fid *fid, const struct osd_fid_pack *pack)
+{
+        int result;
+
+        result = 0;
+        switch (pack->fp_len) {
+        case sizeof *fid + 1:
+                memcpy(fid, pack->fp_area, sizeof *fid);
+                fid_be_to_cpu(fid, fid);
+                break;
+        default:
+                CERROR("Unexpected packed fid size: %d\n", pack->fp_len);
+                result = -EIO;
+        }
+        return result;
 }
 
 /**
@@ -2148,7 +2167,7 @@ static int osd_iam_index_probe(const struct lu_env *env, struct osd_object *o,
 
         descr = o->oo_dir->od_container.ic_descr;
         if (feat == &dt_directory_features) {
-                if (descr->id_rec_size == sizeof(struct lu_fid_pack))
+                if (descr->id_rec_size == sizeof(struct osd_fid_pack))
                         return 1;
                 else
                         return 0;
@@ -2507,6 +2526,7 @@ static int osd_index_iam_lookup(const struct lu_env *env, struct dt_object *dt,
         struct iam_container  *bag = &obj->oo_dir->od_container;
         struct osd_thread_info *oti = osd_oti_get(env);
         struct iam_iterator    *it = &oti->oti_idx_it;
+        struct iam_rec *iam_rec;
         int rc;
         ENTRY;
 
@@ -2525,9 +2545,17 @@ static int osd_index_iam_lookup(const struct lu_env *env, struct dt_object *dt,
         iam_it_init(it, bag, 0, ipd);
 
         rc = iam_it_get(it, (struct iam_key *)key);
-        if (rc >= 0)
-                iam_reccpy(&it->ii_path.ip_leaf, (struct iam_rec *)rec);
+        if (rc >= 0) {
+                if (S_ISDIR(obj->oo_inode->i_mode))
+                        iam_rec = (struct iam_rec *)oti->oti_fid_packed;
+                else
+                        iam_rec = (struct iam_rec *) rec;
 
+                iam_reccpy(&it->ii_path.ip_leaf, (struct iam_rec *)iam_rec);
+                if (S_ISDIR(obj->oo_inode->i_mode))
+                        osd_fid_unpack((struct lu_fid *) rec,
+                                       (struct osd_fid_pack *)iam_rec);
+        }
         iam_it_put(it);
         iam_it_fini(it);
         osd_ipd_put(env, bag, ipd);
@@ -2560,6 +2588,8 @@ static int osd_index_iam_insert(const struct lu_env *env, struct dt_object *dt,
 #ifdef HAVE_QUOTA_SUPPORT
         cfs_cap_t              save = current->cap_effective;
 #endif
+        struct osd_thread_info *oti = osd_oti_get(env);
+        struct iam_rec *iam_rec = (struct iam_rec *)oti->oti_fid_packed;
         int rc;
 
         ENTRY;
@@ -2585,8 +2615,12 @@ static int osd_index_iam_insert(const struct lu_env *env, struct dt_object *dt,
         else
                 current->cap_effective &= ~CFS_CAP_SYS_RESOURCE_MASK;
 #endif
+        if (S_ISDIR(obj->oo_inode->i_mode))
+                osd_fid_pack((struct osd_fid_pack *)iam_rec, rec, &oti->oti_fid);
+        else
+                iam_rec = (struct iam_rec *) rec;
         rc = iam_insert(oh->ot_handle, bag, (const struct iam_key *)key,
-                        (struct iam_rec *)rec, ipd);
+                        iam_rec, ipd);
 #ifdef HAVE_QUOTA_SUPPORT
         current->cap_effective = save;
 #endif
@@ -2707,11 +2741,10 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
                              struct dt_rec *rec, const struct dt_key *key)
 {
         struct inode               *dir    = obj->oo_inode;
-        struct osd_thread_info     *info   = osd_oti_get(env);
         struct dentry              *dentry;
         struct ldiskfs_dir_entry_2 *de;
         struct buffer_head         *bh;
-        struct lu_fid              *fid = &info->oti_fid;
+        struct lu_fid              *fid = (struct lu_fid *) rec;
         int ino;
         int rc;
 
@@ -2726,8 +2759,6 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
                 ino = le32_to_cpu(de->inode);
                 brelse(bh);
                 rc = osd_ea_fid_get(env, obj, ino, fid);
-                if (rc == 0)
-                        osd_fid_pack(env, fid, rec);
         } else
                 rc = -ENOENT;
 
@@ -2808,8 +2839,7 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
                                struct lustre_capa *capa, int ignore_quota)
 {
         struct osd_object        *obj   = osd_dt_obj(dt);
-        struct lu_fid            *fid   = &osd_oti_get(env)->oti_fid;
-        const struct lu_fid_pack *pack  = (const struct lu_fid_pack *)rec;
+        struct lu_fid            *fid   = (struct lu_fid *) rec;
         const char               *name  = (const char *)key;
         struct osd_object        *child;
 #ifdef HAVE_QUOTA_SUPPORT
@@ -2826,9 +2856,6 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
         if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_INSERT))
                 RETURN(-EACCES);
 
-        rc = fid_unpack(pack, fid);
-        if (rc != 0)
-                RETURN(rc);
         child = osd_object_find(env, dt, fid);
         if (!IS_ERR(child)) {
                 struct inode *inode = obj->oo_inode;
@@ -3041,7 +3068,7 @@ static int osd_it_iam_rec(const struct lu_env *env,
         struct osd_it_iam *it        = (struct osd_it_iam *)di;
         struct osd_thread_info *info = osd_oti_get(env);
         struct lu_fid     *fid       = &info->oti_fid;
-        const struct lu_fid_pack *rec;
+        const struct osd_fid_pack *rec;
         char *name;
         int namelen;
         __u64 hash;
@@ -3053,11 +3080,11 @@ static int osd_it_iam_rec(const struct lu_env *env,
 
         namelen = iam_it_key_size(&it->oi_it);
 
-        rec = (const struct lu_fid_pack *) iam_it_rec_get(&it->oi_it);
+        rec = (const struct osd_fid_pack *) iam_it_rec_get(&it->oi_it);
         if (IS_ERR(rec))
                 RETURN(PTR_ERR(rec));
 
-        rc = fid_unpack(rec, fid);
+        rc = osd_fid_unpack(fid, rec);
         if (rc)
                 RETURN(rc);
 
@@ -3150,7 +3177,7 @@ static struct dt_it *osd_it_ea_init(const struct lu_env *env,
         it->oie_file.f_op         = obj->oo_inode->i_fop;
         it->oie_file.private_data = NULL;
         lu_object_get(lo);
-        RETURN((struct dt_it*) it);
+        RETURN((struct dt_it *) it);
 }
 
 /**

@@ -550,7 +550,7 @@ static int __mdd_index_insert_only(const struct lu_env *env,
                 struct md_ucred  *uc = md_ucred(env);
 
                 rc = next->do_index_ops->dio_insert(env, next,
-                                                    __mdd_fid_rec(env, lf),
+                                                    (struct dt_rec*)lf,
                                                     (const struct dt_key *)name,
                                                     handle, capa, uc->mu_cap &
                                                     CFS_CAP_SYS_RESOURCE_MASK);
@@ -1398,7 +1398,6 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
         struct mdd_object   *mdd_obj = md2mdd_obj(pobj);
         struct mdd_device   *m = mdo2mdd(pobj);
         struct dt_object    *dir = mdd_object_child(mdd_obj);
-        struct lu_fid_pack  *pack = &mdd_env_info(env)->mti_pack;
         int rc;
         ENTRY;
 
@@ -1427,10 +1426,10 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
                    dt_try_as_dir(env, dir))) {
 
                 rc = dir->do_index_ops->dio_lookup(env, dir,
-                                                 (struct dt_rec *)pack, key,
+                                                 (struct dt_rec *)fid, key,
                                                  mdd_object_capa(env, mdd_obj));
                 if (rc > 0)
-                        rc = fid_unpack(pack, fid);
+                        rc = 0;
                 else if (rc == 0)
                         rc = -ENOENT;
         } else
@@ -2302,20 +2301,17 @@ struct lu_buf *mdd_links_get(const struct lu_env *env,
 /** Pack a link_ea_entry.
  * All elements are stored as chars to avoid alignment issues.
  * Numbers are always big-endian
- * \param packbuf is a temp fid buffer
  * \retval record length
  */
 static int mdd_lee_pack(struct link_ea_entry *lee, const struct lu_name *lname,
-                         const struct lu_fid *pfid, struct lu_fid* packbuf)
+                        const struct lu_fid *pfid)
 {
-        char *ptr;
         int reclen;
 
-        fid_pack(&lee->lee_parent_fid, pfid, packbuf);
-        ptr = (char *)&lee->lee_parent_fid + lee->lee_parent_fid.fp_len;
-        strncpy(ptr, lname->ln_name, lname->ln_namelen);
-        reclen = lee->lee_parent_fid.fp_len + lname->ln_namelen +
-                sizeof(lee->lee_reclen);
+        fid_cpu_to_be(&lee->lee_parent_fid, pfid);
+        strncpy(lee->lee_name, lname->ln_name, lname->ln_namelen);
+        reclen = sizeof(struct link_ea_entry) + lname->ln_namelen;
+
         lee->lee_reclen[0] = (reclen >> 8) & 0xff;
         lee->lee_reclen[1] = reclen & 0xff;
         return reclen;
@@ -2325,11 +2321,9 @@ void mdd_lee_unpack(const struct link_ea_entry *lee, int *reclen,
                     struct lu_name *lname, struct lu_fid *pfid)
 {
         *reclen = (lee->lee_reclen[0] << 8) | lee->lee_reclen[1];
-        fid_unpack(&lee->lee_parent_fid, pfid);
-        lname->ln_name = (char *)&lee->lee_parent_fid +
-                lee->lee_parent_fid.fp_len;
-        lname->ln_namelen = *reclen - lee->lee_parent_fid.fp_len -
-                sizeof(lee->lee_reclen);
+        fid_be_to_cpu(pfid, &lee->lee_parent_fid);
+        lname->ln_name = lee->lee_name;
+        lname->ln_namelen = *reclen - sizeof(struct link_ea_entry);
 }
 
 /** Add a record to the end of link ea buf */
@@ -2354,7 +2348,7 @@ static int __mdd_links_add(const struct lu_env *env, struct lu_buf *buf,
 
         leh = buf->lb_buf;
         lee = buf->lb_buf + leh->leh_len;
-        reclen = mdd_lee_pack(lee, lname, pfid, &mdd_env_info(env)->mti_fid2);
+        reclen = mdd_lee_pack(lee, lname, pfid);
         leh->leh_len += reclen;
         leh->leh_reccount++;
         return 0;

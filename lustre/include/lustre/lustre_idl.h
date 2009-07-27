@@ -422,20 +422,6 @@ static inline void fid_be_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
         LASSERTF(fid_is_igif(dst) || fid_ver(dst) == 0, DFID"\n", PFID(dst));
 }
 
-/**
- * Storage representation for fids.
- *
- * Variable size, first byte contains the length of the whole record.
- */
-struct lu_fid_pack {
-        char fp_len;
-        char fp_area[sizeof(struct lu_fid)];
-};
-
-void fid_pack(struct lu_fid_pack *pack, const struct lu_fid *fid,
-              struct lu_fid *befider);
-int  fid_unpack(const struct lu_fid_pack *pack, struct lu_fid *fid);
-
 static inline int fid_is_sane(const struct lu_fid *fid)
 {
         return
@@ -2776,12 +2762,12 @@ struct link_ea_header {
  * Stored in this crazy struct for maximum packing and endian-neutrality
  */
 struct link_ea_entry {
+        struct lu_fid      lee_parent_fid;
         /** __u16 stored big-endian, unaligned */
         char               lee_reclen[2];
-        struct lu_fid_pack lee_parent_fid; /**< variable length */
-        /** logically after lee_parent_fid; don't use directly */
+        __u16              lee_padding;
         char               lee_name[0];
-};
+}__attribute__((packed));
 
 /** fid2path request/reply structure */
 struct getinfo_fid2path {

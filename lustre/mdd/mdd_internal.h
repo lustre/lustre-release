@@ -184,7 +184,6 @@ struct mdd_thread_info {
         struct lu_name            mti_name;
         struct obdo               mti_oa;
         char                      mti_xattr_buf[LUSTRE_POSIX_ACL_MAX_SIZE];
-        struct lu_fid_pack        mti_pack;
         struct dt_allocation_hint mti_hint;
         struct lov_mds_md        *mti_max_lmm;
         int                       mti_max_lmm_size;
@@ -544,15 +543,6 @@ static inline struct mdd_device *mdd_obj2mdd_dev(struct mdd_object *obj)
 static inline const struct lu_fid *mdo2fid(const struct mdd_object *obj)
 {
         return lu_object_fid(&obj->mod_obj.mo_lu);
-}
-
-static inline const struct dt_rec *__mdd_fid_rec(const struct lu_env *env,
-                                                 const struct lu_fid *fid)
-{
-        struct lu_fid_pack *pack = &mdd_env_info(env)->mti_pack;
-
-        fid_pack(pack, fid, &mdd_env_info(env)->mti_fid2);
-        return (const struct dt_rec *)pack;
 }
 
 static inline umode_t mdd_object_type(const struct mdd_object *obj)

@@ -64,8 +64,7 @@ struct thandle;
 struct dt_device;
 
 enum {
-        OSD_OI_FID_SMALL,
-        OSD_OI_FID_OTHER,
+        OSD_OI_FID_16,
         OSD_OI_FID_NR
 };
 
@@ -76,7 +75,7 @@ struct osd_oi {
         /*
          * underlying index object, where fid->id mapping in stored.
          */
-        struct dt_object *oi_dir[OSD_OI_FID_NR];
+        struct dt_object *oi_dir;
 };
 
 /*

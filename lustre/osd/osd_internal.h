@@ -128,6 +128,16 @@ struct osd_device {
         __u32                     od_iop_mode;
 };
 
+/**
+ * Storage representation for fids.
+ *
+ * Variable size, first byte contains the length of the whole record.
+ */
+struct osd_fid_pack {
+        unsigned char fp_len;
+        char fp_area[sizeof(struct lu_fid)];
+};
+
 struct osd_it_ea_dirent {
         __u64           oied_ino;
         __u64           oied_off;
@@ -194,8 +204,6 @@ struct osd_thread_info {
         struct lustre_capa_key oti_capa_key;
         struct lustre_capa     oti_capa;
 
-        struct lu_fid_pack     oti_pack;
-
         /**
          * following ipd and it structures are used for osd_index_iam_lookup()
          * these are defined separately as we might do index operation
@@ -239,6 +247,8 @@ struct osd_thread_info {
         struct osd_ctxt        oti_ctxt;
 #endif
         struct lu_env          oti_obj_delete_tx_env;
+#define OSD_FID_REC_SZ 32
+        char                   oti_fid_packed[OSD_FID_REC_SZ];
 };
 
 #ifdef LPROCFS

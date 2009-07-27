@@ -143,7 +143,7 @@ static inline int mdd_orphan_insert_obj(const struct lu_env *env,
         ENTRY;
 
         return  dor->do_index_ops->dio_insert(env, dor,
-                                              __mdd_fid_rec(env, lf),
+                                              (struct dt_rec *)lf,
                                               key, th,
                                               BYPASS_CAPA, 1);
 }
@@ -215,7 +215,7 @@ static int orph_index_insert(const struct lu_env *env,
                                        dotdot, th, BYPASS_CAPA);
 
         next->do_index_ops->dio_insert(env, next,
-                                       __mdd_fid_rec(env, lf_dor),
+                                       (struct dt_rec *) lf_dor,
                                        dotdot, th, BYPASS_CAPA, 1);
 
 out:
