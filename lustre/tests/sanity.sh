@@ -1154,14 +1154,14 @@ test_27x() {
 	OFFSET=$(($OSTCOUNTi - 1))
 	OSTIDX=0
 	local OST=$(lfs osts | awk '/'${OSTIDX}': / { print $2 }' | sed -e 's/_UUID$//')
-	
+
 	mkdir -p $DIR/$tdir
 	$SETSTRIPE $DIR/$tdir -c 1	# 1 stripe per file
 	do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 1
 	sleep $DELAY
 	createmany -o $DIR/$tdir/$tfile $OSTCOUNT
 	for i in `seq 0 $OFFSET`; do
-		[ `$GETSTRIPE $DIR/$tdir/$tfile$i | grep -A 10 obdidx | awk '{print $1}' | grep -w "$OSTIDX"` ] && 
+		[ `$GETSTRIPE $DIR/$tdir/$tfile$i | grep -A 10 obdidx | awk '{print $1}' | grep -w "$OSTIDX"` ] &&
 		error "OST0 was degraded but new created file still use it"
 	done
 	do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 0
@@ -1189,10 +1189,10 @@ test_27y() {
         mkdir -p $DIR/$tdir
         $SETSTRIPE $DIR/$tdir -c 1      # 1 stripe / file
 
-        do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 1 
-        sleep $DELAY 
+        do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 1
+        sleep $DELAY
         createmany -o $DIR/$tdir/$tfile $OSTCOUNT
-        do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 0 
+        do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 0
 
         for i in `seq 0 $OFFSET`; do
                 [ `$GETSTRIPE $DIR/$tdir/$tfile$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "$OSTIDX"` ] || \
@@ -5969,28 +5969,37 @@ run_test 170 "test lctl df to handle corrupted log ====================="
 
 obdecho_create_test() {
         local OBD=$1
+        local node=$2
         local rc=0
-        $LCTL attach echo_client ec ec_uuid || rc=1
-        [ $rc -eq 0 ] && { $LCTL --device ec setup $OBD || rc=2; }
-        [ $rc -eq 0 ] && { $LCTL --device ec create 1 || rc=3; }
-        [ $rc -eq 0 -o $rc -gt 2 ] && { $LCTL --device ec cleanup || rc=4; }
-        [ $rc -eq 0 -o $rc -gt 1 ] && { $LCTL --device ec detach || rc=5; }
+        do_facet $node "$LCTL attach echo_client ec ec_uuid" || rc=1
+        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec setup $OBD" || rc=2; }
+        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec create 1" || rc=3; }
+        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec test_brw 0 w 1" || rc=4; }
+        [ $rc -eq 0 -o $rc -gt 2 ] && { do_facet $node "$LCTL --device ec cleanup" || rc=5; }
+        [ $rc -eq 0 -o $rc -gt 1 ] && { do_facet $node "$LCTL --device ec detach" || rc=6; }
         return $rc
 }
 
 test_180() {
-        load_module obdecho/obdecho || return 1
         local rc=0
+        local rmmod_local=0
+        local rmmod_remote=0
 
-        local OBD=`$LCTL  dl | awk ' /obdfilter/ { print $4; exit; }'`
-        [ "x$OBD" != "x" ] && { obdecho_create_test $OBD || rc=2; }
-        [[ $rc -ne 0 ]] && { rmmod obdecho; return $rc; }
+        lsmod | grep -q obdecho || { load_module obdecho/obdecho && rmmod_local=1; }
 
         OBD=`$LCTL  dl | awk ' /-osc-/ { print $4; exit; }'`
-        [ "x$OBD" != "x" ] && { obdecho_create_test $OBD || rc=3; }
-        [[ $rc -ne 0 ]] && { rmmod obdecho; return $rc; }
+        [ "x$OBD" != "x" ] && { obdecho_create_test $OBD client || rc=2; }
+        [ $rmmod_local -eq 1 ] && rmmod obdecho
+        [ $rc -ne 0 ] && return $rc
 
-        rmmod obdecho
+        do_facet ost "lsmod | grep -q obdecho || { insmod ${LUSTRE}/obdecho/obdecho.ko || modprobe obdecho; }" && rmmod_remote=1
+
+        OBD=$(do_facet ost "$LCTL  dl | awk '/obdfilter/ { print; exit; }'" | awk '{print $4;}')
+        [ "x$OBD" != "x" ] && { obdecho_create_test $OBD ost || rc=3; }
+        [ $rmmod_remote -eq 1 ] && do_facet ost "rmmod obdecho"
+        [ $rc -ne 0 ] && return $rc
+
+        true
 }
 run_test 180 "test obdecho ============================================"
 
