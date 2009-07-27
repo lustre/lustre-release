@@ -448,15 +448,14 @@ int sptlrpc_req_ctx_switch(struct ptlrpc_request *req,
         int                     reqmsg_size;
         int                     rc;
 
-        if (likely(oldctx->cc_sec == newctx->cc_sec))
-                return 0;
-
         LASSERT(req->rq_reqmsg);
         LASSERT(req->rq_reqlen);
         LASSERT(req->rq_replen);
 
-        CWARN("req %p: switch ctx %p -> %p, switch sec %p(%s) -> %p(%s)\n",
-              req, oldctx, newctx,
+        CWARN("req %p: switch ctx %p(%u->%s) -> %p(%u->%s), "
+              "switch sec %p(%s) -> %p(%s)\n", req,
+              oldctx, oldctx->cc_vcred.vc_uid, sec2target_str(oldctx->cc_sec),
+              newctx, newctx->cc_vcred.vc_uid, sec2target_str(newctx->cc_sec),
               oldctx->cc_sec, oldctx->cc_sec->ps_policy->sp_name,
               newctx->cc_sec, newctx->cc_sec->ps_policy->sp_name);
 
@@ -528,18 +527,20 @@ int sptlrpc_req_replace_dead_ctx(struct ptlrpc_request *req)
         newctx = req->rq_cli_ctx;
         LASSERT(newctx);
 
-        if (unlikely(newctx == oldctx)) {
-                if (test_bit(PTLRPC_CTX_DEAD_BIT, &oldctx->cc_flags)) {
-                        /*
-                         * still get the old ctx, usually means system busy
-                         */
-                        CWARN("ctx (%p, fl %lx) doesn't switch, "
-                              "relax a little bit\n",
-                              newctx, newctx->cc_flags);
+        if (unlikely(newctx == oldctx && 
+                     test_bit(PTLRPC_CTX_DEAD_BIT, &oldctx->cc_flags))) {
+                /*
+                 * still get the old dead ctx, usually means system too busy
+                 */
+                CWARN("ctx (%p, fl %lx) doesn't switch, relax a little bit\n",
+                      newctx, newctx->cc_flags);
 
-                        cfs_schedule_timeout(CFS_TASK_INTERRUPTIBLE, HZ);
-                }
+                cfs_schedule_timeout(CFS_TASK_INTERRUPTIBLE, HZ);
         } else {
+                /*
+                 * it's possible newctx == oldctx if we're switching
+                 * subflavor with the same sec.
+                 */
                 rc = sptlrpc_req_ctx_switch(req, oldctx, newctx);
                 if (rc) {
                         /* restore old ctx */
@@ -639,9 +640,13 @@ again:
         if (rc)
                 RETURN(rc);
 
-        if (sec->ps_flvr.sf_rpc != req->rq_flvr.sf_rpc)
+        if (sec->ps_flvr.sf_rpc != req->rq_flvr.sf_rpc) {
+                CDEBUG(D_SEC, "req %p: flavor has changed %x -> %x\n",
+                      req, req->rq_flvr.sf_rpc, sec->ps_flvr.sf_rpc);
+                req_off_ctx_list(req, ctx);
                 sptlrpc_req_replace_dead_ctx(req);
-
+                ctx = req->rq_cli_ctx;
+        }
         sptlrpc_sec_put(sec);
 
         if (cli_ctx_is_eternal(ctx))
@@ -697,11 +702,11 @@ again:
         }
 
         if (unlikely(test_bit(PTLRPC_CTX_DEAD_BIT, &ctx->cc_flags))) {
+                req_off_ctx_list(req, ctx);
                 /*
                  * don't switch ctx if import was deactivated
                  */
                 if (req->rq_import->imp_deactive) {
-                        req_off_ctx_list(req, ctx);
                         req->rq_err = 1;
                         RETURN(-EINTR);
                 }
@@ -712,18 +717,10 @@ again:
                         CERROR("req %p: failed to replace dead ctx %p: %d\n",
                                 req, ctx, rc);
                         req->rq_err = 1;
-                        LASSERT(list_empty(&req->rq_ctx_chain));
                         RETURN(rc);
                 }
 
-                CWARN("req %p: replace dead ctx %p => ctx %p (%u->%s)\n",
-                      req, ctx, req->rq_cli_ctx,
-                      req->rq_cli_ctx->cc_vcred.vc_uid,
-                      sec2target_str(req->rq_cli_ctx->cc_sec));
-
                 ctx = req->rq_cli_ctx;
-                LASSERT(list_empty(&req->rq_ctx_chain));
-
                 goto again;
         }
 

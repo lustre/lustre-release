@@ -1356,6 +1356,13 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
                 goto err_req;
         }
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DROP_REQ_OPC) &&
+            lustre_msg_get_opc(req->rq_reqmsg) == obd_fail_val) {
+                CERROR("drop incoming rpc opc %u, x"LPU64"\n",
+                       obd_fail_val, req->rq_xid);
+                goto err_req;
+        }
+
         rc = -EINVAL;
         if (lustre_msg_get_type(req->rq_reqmsg) != PTL_RPC_MSG_REQUEST) {
                 CERROR("wrong packet type received (type=%u) from %s\n",

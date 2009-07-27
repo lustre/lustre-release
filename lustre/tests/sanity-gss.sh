@@ -867,51 +867,44 @@ run_test 100 "change security flavor on the fly under load"
 
 switch_sec_test()
 {
-    local count=$1
-    local flavor0=$2
-    local flavor1=$3
-    local flavor2=$4
-    local df_pid=0
-    local wait_time=$((TIMEOUT + TIMEOUT / 4))
+    local flavor0=$1
+    local flavor1=$2
+    local filename=$DIR/$tfile
+    local multiop_pid
     local num
 
     #
-    # stop gss daemon, then switch to flavor1 (which should be a gss flavor),
-    # and run a 'df' which should hanging, wait the request timeout and
-    # resend, then switch the flavor to another one. To exercise the code of
-    # switching ctx/sec for a resend request.
+    # after set to flavor0, start multop which use flavor0 rpc, and let
+    # server drop the reply; then switch to flavor1, the resend should be
+    # completed using flavor1. To exercise the code of switching ctx/sec
+    # for a resend request.
     #
-    echo ">>>>>>>>>>>>>>> Testing $flavor0 -> $flavor1 -> $flavor2..."
+    log ">>>>>>>>>>>>>>> Testing $flavor0 -> $flavor1 <<<<<<<<<<<<<<<<<<<"
 
-    echo "(0) set base flavor $flavor0"
     set_rule $FSNAME any cli2mdt $flavor0
-    wait_flavor cli2mdt $flavor0 $count
-    df $MOUNT
-    if [ $? -ne 0 ]; then
-        error "initial df failed"
-    fi
+    wait_flavor cli2mdt $flavor0 $cnt_cli2mdt
+    rm -f $filename || error "remove old $filename failed"
 
-    stop_gss_daemons
+#MDS_REINT = 36
+#define OBD_FAIL_PTLRPC_DROP_REQ_OPC     0x513
+    do_facet $SINGLEMDS lctl set_param fail_val=36
+    do_facet $SINGLEMDS lctl set_param fail_loc=0x513
+    log "starting multiop"
+    multiop $filename m &
+    multiop_pid=$!
+    echo "multiop pid=$multiop_pid"
     sleep 1
 
-    echo "(1) $flavor0 -> $flavor1"
     set_rule $FSNAME any cli2mdt $flavor1
-    wait_flavor cli2mdt $flavor1 $count
-    df $MOUNT &
-    df_pid=$!
-    sleep 1
+    wait_flavor cli2mdt $flavor1 $cnt_cli2mdt
 
-    echo "waiting $wait_time seconds for df ($df_pid)"
-    sleep $wait_time
-    num=`ps --no-headers -p $df_pid 2>/dev/null | wc -l`
-    [ $num -eq 1 ] || error "df already ended ($num)"
-    echo "process $df_pid is still hanging there... OK"
+    num=`ps --no-headers -p $multiop_pid 2>/dev/null | wc -l`
+    [ $num -eq 1 ] || error "multiop($multiop_pid) already ended ($num)"
+    echo "process $multiop_pid is still hanging there... OK"
 
-    echo "(2) set end flavor $flavor2"
-    set_rule $FSNAME any cli2mdt $flavor2
-    wait_flavor cli2mdt $flavor2 $count
-    start_gss_daemons
-    wait $df_pid || error "df returned error"
+    do_facet $SINGLEMDS lctl set_param fail_loc=0
+    log "waiting for multiop ($multiop_pid) to finish"
+    wait $multiop_pid || error "multiop returned error"
 }
 
 test_101()
@@ -919,18 +912,18 @@ test_101()
     # started from default flavors
     restore_to_default_flavor
 
-    switch_sec_test $cnt_cli2mdt null krb5n null
-    switch_sec_test $cnt_cli2mdt null krb5a null
-    switch_sec_test $cnt_cli2mdt null krb5i null
-    switch_sec_test $cnt_cli2mdt null krb5p null
-    switch_sec_test $cnt_cli2mdt null krb5i plain
-    switch_sec_test $cnt_cli2mdt plain krb5p plain
-    switch_sec_test $cnt_cli2mdt plain krb5n krb5a
-    switch_sec_test $cnt_cli2mdt krb5a krb5i krb5p
-    switch_sec_test $cnt_cli2mdt krb5p krb5a krb5n
-    switch_sec_test $cnt_cli2mdt krb5n krb5p krb5i
+    switch_sec_test null  plain
+    switch_sec_test plain krb5n
+    switch_sec_test krb5n krb5a
+    switch_sec_test krb5a krb5i
+    switch_sec_test krb5i krb5p
+    switch_sec_test krb5p null
+    switch_sec_test null  krb5p
+    switch_sec_test krb5p krb5i
+    switch_sec_test krb5i plain
+    switch_sec_test plain krb5p
 }
-run_test 101 "switch ctx as well as sec for resending request"
+run_test 101 "switch ctx/sec for resending request"
 
 error_102()
 {
