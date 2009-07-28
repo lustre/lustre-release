@@ -255,7 +255,8 @@ static int auto_quota_on(struct obd_device *obd, int type,
                 obt->obt_qctxt.lqc_flags |= UGQUOTA2LQC(type);
                 build_lqs(obd);
         } else if (rc == -EBUSY && quota_is_on(qctxt, oqctl)) {
-                CWARN("mds local quota[%d] is on already\n", oqctl->qc_type);
+                CWARN("%s: mds local quota[%d] is on already\n",
+                      obd->obd_name, oqctl->qc_type);
                 rc = -EALREADY;
         } else {
                 CDEBUG(rc == -ENOENT ? D_QUOTA : D_ERROR,
@@ -264,6 +265,11 @@ static int auto_quota_on(struct obd_device *obd, int type,
                         oqctl->qc_cmd = Q_QUOTAOFF;
                         mds_admin_quota_off(obd, oqctl);
                 }
+                if (rc == -ENOENT)
+                        CWARN("%s: quotaon failed because quota files don't "
+                              "exist, please run quotacheck firstly\n",
+                              obd->obd_name);
+
                 GOTO(out_ctxt, rc);
         }
 
@@ -323,7 +329,7 @@ int lprocfs_quota_wr_type(struct file *file, const char *buffer,
         if (type != 0) {
                 int rc = auto_quota_on(obd, type - 1, obt->obt_sb, is_mds);
 
-                if (rc && rc != -EALREADY)
+                if (rc && rc != -EALREADY && rc != -ENOENT)
                         return rc;
         }
 
