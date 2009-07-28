@@ -583,6 +583,26 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+#
+# LC_D_OBTAIN_ALIAS
+# starting from 2.6.18 kernel don't export do_kern_mount
+# and want to use vfs_kern_mount instead.
+#
+AC_DEFUN([LC_D_OBTAIN_ALIAS],
+[AC_MSG_CHECKING([d_obtain_alias exist in kernel])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/dcache.h>
+],[
+        d_obtain_alias(NULL);
+],[
+        AC_DEFINE(HAVE_D_OBTAIN_ALIAS, 1,
+                [d_obtain_alias exist in kernel])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
 # 
 # LC_INVALIDATEPAGE_RETURN_INT
 # 2.6.17 changes return type for invalidatepage to 'void' from 'int'
@@ -1546,6 +1566,57 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# 2.6.29 change prepare/commit_write to write_begin/end
+AC_DEFUN([LC_WRITE_BEGIN_END],
+[AC_MSG_CHECKING([if kernel has .write_begin/end])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        struct address_space_operations aops;
+
+        aops.write_begin = NULL;
+        aops.write_end = NULL;
+], [
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_KERNEL_WRITE_BEGIN_END, 1,
+                [kernel has .write_begin/end])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.29 blkdev_put has 2 arguments
+AC_DEFUN([LC_BLKDEV_PUT_2ARGS],
+[AC_MSG_CHECKING([blkdev_put needs 2 parameters])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        blkdev_put(NULL, 0);
+],[
+        AC_DEFINE(HAVE_BLKDEV_PUT_2ARGS, 1,
+                [blkdev_put needs 2 paramters])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+# 2.6.29 dentry_open has 4 arguments
+AC_DEFUN([LC_DENTRY_OPEN_4ARGS],
+[AC_MSG_CHECKING([dentry_open needs 4 parameters])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        dentry_open(NULL, NULL, 0, NULL);
+],[
+        AC_DEFINE(HAVE_DENTRY_OPEN_4ARGS, 1,
+                [dentry_open needs 4 paramters])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
 #
 # LC_PROG_LINUX
 #
@@ -1686,6 +1757,12 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_VFS_SYMLINK_5ARGS
           LC_SB_ANY_QUOTA_ACTIVE
           LC_SB_HAS_QUOTA_ACTIVE
+
+          #2.6.29
+          LC_WRITE_BEGIN_END
+          LC_D_OBTAIN_ALIAS
+          LC_BLKDEV_PUT_2ARGS
+          LC_DENTRY_OPEN_4ARGS
 ])
 
 #

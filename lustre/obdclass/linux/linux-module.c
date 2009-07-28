@@ -204,7 +204,7 @@ static int obd_class_ioctl(struct inode *inode, struct file *filp,
         int err = 0;
         ENTRY;
 
-        if (current->fsuid != 0)
+        if (cfs_curproc_fsuid() != 0)
                 RETURN(err = -EACCES);
         if ((cmd & 0xffffff00) == ((int)'T') << 8) /* ignore all tty ioctls */
                 RETURN(err = -ENOTTY);

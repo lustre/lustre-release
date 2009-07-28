@@ -880,7 +880,7 @@ static int ll_new_node(struct inode *dir, struct qstr *name,
                 GOTO(err_exit, err);
 
         err = mdc_create(sbi->ll_mdc_exp, &op_data, tgt, tgt_len,
-                         mode, current->fsuid, current->fsgid,
+                         mode, cfs_curproc_fsuid(), cfs_curproc_fsgid(),
                          cfs_curproc_cap_pack(), rdev, &request);
         if (err)
                 GOTO(err_exit, err);

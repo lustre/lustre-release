@@ -303,8 +303,8 @@ int mdc_xattr_common(struct obd_export *exp, struct ll_fid *fid,
                 rec = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF,
                                      sizeof(struct mdt_rec_setxattr));
                 rec->sx_opcode = REINT_SETXATTR;
-                rec->sx_fsuid  = current->fsuid;
-                rec->sx_fsgid  = current->fsgid;
+                rec->sx_fsuid  = cfs_curproc_fsuid();
+                rec->sx_fsgid  = cfs_curproc_fsgid();
                 rec->sx_cap    = cfs_curproc_cap_pack();
                 rec->sx_suppgid1 = -1;
                 rec->sx_suppgid2 = -1;

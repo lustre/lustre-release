@@ -79,10 +79,6 @@ struct ll_user_fiemap {
 #define FIEMAP_FLAG_XATTR        0x00000002 /* map extended attribute tree */
 #define FIEMAP_FLAG_DEVICE_ORDER 0x40000000 /* return device ordered mapping */
 
-#define FIEMAP_FLAGS_COMPAT    (FIEMAP_FLAG_SYNC | FIEMAP_FLAG_XATTR | \
-                                FIEMAP_FLAG_DEVICE_ORDER)
-
-
 #define FIEMAP_EXTENT_LAST              0x00000001 /* Last extent in file. */
 #define FIEMAP_EXTENT_UNKNOWN           0x00000002 /* Data location unknown. */
 #define FIEMAP_EXTENT_DELALLOC          0x00000004 /* Location still pending.

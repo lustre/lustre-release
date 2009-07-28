@@ -43,6 +43,7 @@
 #error sorry, lustre requires at least 2.6.5
 #endif
 
+#include <linux/fs_struct.h>
 #include <libcfs/linux/portals_compat25.h>
 
 #include <linux/lustre_patchless_compat.h>
@@ -137,8 +138,8 @@ struct group_info *groups_alloc(int gidsetsize);
 void groups_free(struct group_info *ginfo);
 #else /* >= 2.6.4 */
 
-#define current_ngroups current->group_info->ngroups
-#define current_groups current->group_info->small_block
+#define current_ngroups current_cred()->group_info->ngroups
+#define current_groups current_cred()->group_info->small_block
 
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4) */
 
@@ -202,7 +203,19 @@ void groups_free(struct group_info *ginfo);
 #define to_kdev_t(dev)                  (dev)
 #define kdev_t_to_nr(dev)               (dev)
 #define val_to_kdev(dev)                (dev)
-#define ILOOKUP(sb, ino, test, data)    ilookup5(sb, ino, test, data);
+#define ILOOKUP(sb, ino, test, data)    ilookup5(sb, ino, test, (void *)(data));
+
+#ifdef HAVE_BLKDEV_PUT_2ARGS
+#define ll_blkdev_put(a, b) blkdev_put(a, b)
+#else
+#define ll_blkdev_put(a, b) blkdev_put(a)
+#endif
+
+#ifdef HAVE_DENTRY_OPEN_4ARGS
+#define ll_dentry_open(a, b, c, d) dentry_open(a, b, c, d)
+#else
+#define ll_dentry_open(a, b, c, d) dentry_open(a, b, c)
+#endif
 
 #include <linux/writeback.h>
 
@@ -393,6 +406,10 @@ ll_kern_mount(const char *fstype, int flags, const char *name, void *data)
 #define ll_do_statfs(sb, sfs) (sb)->s_op->statfs((sb)->s_root, (sfs))
 #else
 #define ll_do_statfs(sb, sfs) (sb)->s_op->statfs((sb), (sfs))
+#endif
+
+#ifndef HAVE_D_OBTAIN_ALIAS
+#define d_obtain_alias(inode) d_alloc_anon(inode)
 #endif
 
 #ifdef HAVE_UNREGISTER_BLKDEV_RETURN_INT
