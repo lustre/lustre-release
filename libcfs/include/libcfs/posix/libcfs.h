@@ -104,6 +104,7 @@
 #include <libcfs/user-tcpip.h>
 #include <libcfs/posix/posix-wordsize.h>
 #include <libcfs/user-bitops.h>
+#include <libcfs/posix/posix-kernelcomm.h>
 
 # define do_gettimeofday(tv) gettimeofday(tv, NULL);
 typedef unsigned long long cycles_t;
@@ -308,17 +309,17 @@ struct radix_tree_node {
         void *item;
 };
 
-#define RADIX_TREE_INIT(mask)	{               \
+#define RADIX_TREE_INIT(mask)   {               \
                 NOT_IMPLEMENTED                 \
 }
 
 #define RADIX_TREE(name, mask) \
-	struct radix_tree_root name = RADIX_TREE_INIT(mask)
+        struct radix_tree_root name = RADIX_TREE_INIT(mask)
 
 
-#define INIT_RADIX_TREE(root, mask)					\
-do {									\
-	CFS_INIT_LIST_HEAD(&((struct radix_tree_root *)root)->list);    \
+#define INIT_RADIX_TREE(root, mask)                                     \
+do {                                                                    \
+        CFS_INIT_LIST_HEAD(&((struct radix_tree_root *)root)->list);    \
         ((struct radix_tree_root *)root)->rnode = NULL;                 \
 } while (0)
 

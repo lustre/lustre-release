@@ -887,7 +887,7 @@ struct obd_import *class_import_get(struct obd_import *import)
         LASSERT(atomic_read(&import->imp_refcount) < 0x5a5a5a);
         atomic_inc(&import->imp_refcount);
         CDEBUG(D_INFO, "import %p refcount=%d obd=%s\n", import,
-               atomic_read(&import->imp_refcount), 
+               atomic_read(&import->imp_refcount),
                import->imp_obd->obd_name);
         return import;
 }
@@ -902,7 +902,7 @@ void class_import_put(struct obd_import *imp)
         LASSERT(list_empty(&imp->imp_zombie_chain));
 
         CDEBUG(D_INFO, "import %p refcount=%d obd=%s\n", imp,
-               atomic_read(&imp->imp_refcount) - 1, 
+               atomic_read(&imp->imp_refcount) - 1,
                imp->imp_obd->obd_name);
 
         if (atomic_dec_and_test(&imp->imp_refcount)) {
@@ -1514,11 +1514,11 @@ static int obd_zombie_impexp_thread(void *unused)
         while(!test_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags)) {
                 struct l_wait_info lwi = { 0 };
 
-                l_wait_event(obd_zombie_waitq, 
+                l_wait_event(obd_zombie_waitq,
                              !obd_zombie_impexp_check(NULL), &lwi);
                 obd_zombie_impexp_cull();
 
-                /* 
+                /*
                  * Notify obd_zombie_barrier callers that queues
                  * may be empty.
                  */
@@ -1540,7 +1540,7 @@ int obd_zombie_impexp_kill(void *arg)
 {
         int rc = 0;
 
-	if (atomic_inc_return(&zombie_recur) == 1) {
+        if (atomic_inc_return(&zombie_recur) == 1) {
                 obd_zombie_impexp_cull();
                 rc = 1;
         }
@@ -1597,3 +1597,4 @@ void obd_zombie_impexp_stop(void)
         liblustre_deregister_idle_callback(obd_zombie_impexp_idle_cb);
 #endif
 }
+

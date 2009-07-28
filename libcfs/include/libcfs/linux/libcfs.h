@@ -43,7 +43,7 @@
 
 #ifndef __KERNEL__
 #error This include is only for kernel use.
-#endif 
+#endif
 
 #ifdef HAVE_ASM_TYPES_H
 #include <asm/types.h>

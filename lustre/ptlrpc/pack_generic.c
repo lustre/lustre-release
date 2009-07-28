@@ -2275,11 +2275,19 @@ void lustre_swab_lustre_capa(struct lustre_capa *c)
         __swab32s (&c->lc_expiry);
 }
 
-void lustre_swab_lustre_capa_key (struct lustre_capa_key *k)
+void lustre_swab_lustre_capa_key(struct lustre_capa_key *k)
 {
         __swab64s (&k->lk_mdsid);
         __swab32s (&k->lk_keyid);
         __swab32s (&k->lk_padding);
 }
 
+void lustre_swab_lnlh(struct lnl_hdr *l)
+{
+        __swab16s(&l->lnl_magic);
+        /* __u8 l->lnl_transport */
+        __swab16s(&l->lnl_msgtype);
+        __swab16s(&l->lnl_msglen);
+}
+EXPORT_SYMBOL(lustre_swab_lnlh);
 

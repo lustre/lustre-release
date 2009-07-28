@@ -143,26 +143,26 @@ typedef unsigned long long cycles_t;
  * "continously".
  */
 enum {
-	CDD_MAGIC1 = 0x02128506,
-	CDD_MAGIC2 = 0x42424242
+        CDD_MAGIC1 = 0x02128506,
+        CDD_MAGIC2 = 0x42424242
 };
 
 struct cfs_debug_data {
-	unsigned int           magic1;
-	struct cfs_debug_data *parent;
-	int                    nesting_level;
-	unsigned int           magic2;
+        unsigned int           magic1;
+        struct cfs_debug_data *parent;
+        int                    nesting_level;
+        unsigned int           magic2;
 };
 
 void __entry_nesting(struct cfs_debug_data *child);
 void __exit_nesting(struct cfs_debug_data *child);
 unsigned int __current_nesting_level(void);
 
-#define ENTRY_NESTING						\
-struct cfs_debug_data __cdd = { .magic1        = CDD_MAGIC1,	\
-				.parent        = NULL,		\
-                                .nesting_level = 0,		\
-                                .magic2        = CDD_MAGIC2 };	\
+#define ENTRY_NESTING                                           \
+struct cfs_debug_data __cdd = { .magic1        = CDD_MAGIC1,    \
+                                .parent        = NULL,          \
+                                .nesting_level = 0,             \
+                                .magic2        = CDD_MAGIC2 };  \
 __entry_nesting(&__cdd);
 
 #define EXIT_NESTING __exit_nesting(&__cdd)

@@ -126,7 +126,6 @@ void l_lock(struct lustre_lock *);
 void l_unlock(struct lustre_lock *);
 int l_has_lock(struct lustre_lock *);
 
-
 /*
  *   OBD IOCTLS
  */

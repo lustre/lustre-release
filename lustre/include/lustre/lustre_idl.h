@@ -279,7 +279,7 @@ struct lustre_mdt_attrs {
          * lma_self_fid and lma_flags are always available.
          */
         __u32   lma_compat;
-	/**
+        /**
          * Per-file incompat feature list. Lustre version should support all
          * flags set in this field. The supported feature mask is available in
          * LMA_INCOMPAT_SUPP.
@@ -2554,7 +2554,7 @@ static inline void lustre_get_wire_obdo(struct obdo *lobdo, struct obdo *wobdo)
         obd_flag local_flags = lobdo->o_flags & OBD_FL_LOCAL_MASK;
 
         LASSERT(!(wobdo->o_flags & OBD_FL_LOCAL_MASK));
-        
+
         memcpy(lobdo, wobdo, sizeof(*lobdo));
         lobdo->o_flags &= ~OBD_FL_LOCAL_MASK;
         lobdo->o_flags |= local_flags;
@@ -2779,6 +2779,8 @@ struct getinfo_fid2path {
 } __attribute__((packed));
 
 void lustre_swab_fid2path (struct getinfo_fid2path *gf);
+
+extern void lustre_swab_lnlh(struct lnl_hdr *);
 
 
 #endif

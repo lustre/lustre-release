@@ -226,6 +226,19 @@ static inline char *obd_uuid2str(struct obd_uuid *uuid)
         return (char *)(uuid->uuid);
 }
 
+/* Extract fsname from uuid (or target name) of a target
+   e.g. (myfs-OST0007_UUID -> myfs)
+   see also deuuidify. */
+static inline void obd_uuid2fsname(char *buf, char *uuid, int buflen)
+{
+        char *p;
+
+        strncpy(buf, uuid, buflen - 1);
+        buf[buflen - 1] = '\0';
+        p = strrchr(buf, '-');
+        if (p)
+           *p = '\0';
+}
 
 /**
  * File IDentifier.
@@ -403,6 +416,9 @@ struct if_quotactl {
         struct obd_uuid         obd_uuid;
 };
 
+
+/********* Misc **********/
+
 struct ioc_changelog_clear {
         __u32 icc_mdtindex;
         __u32 icc_id;
@@ -414,5 +430,65 @@ struct ioc_changelog_clear {
 #endif
 
 #define dot_lustre_name ".lustre"
+
+
+/********* HSM **********/
+enum hsm_message_type {
+        HMT_ACTION_LIST = 100, /* message is a hsm_action_list */
+};
+
+/* User-generated (ioctl) request types */
+enum hsm_request {
+        HSMR_ARCHIVE = 10, /* copy to hsm */
+        HSMR_RESTORE = 11, /* prestage */
+        HSMR_RELEASE = 12, /* drop ost objects */
+        HSMR_REMOVE  = 13, /* remove from archive */
+        HSMR_CANCEL  = 14
+};
+
+/* Copytool commands */
+enum hsm_action {
+        HSMA_ARCHIVE = 20, /* arbitrary offset */
+        HSMA_RESTORE = 21,
+        HSMA_REMOVE  = 22,
+        HSMA_CANCEL  = 23
+};
+
+/* Copytool item action description */
+struct hsm_action_item {
+        __u32      hai_len;     /* valid size of this struct */
+        __u32      hai_action;  /* enum actually, but use known size */
+        lustre_fid hai_fid;     /* Lustre FID to operated on */
+        __u64      hai_cookie;  /* action cookie from coordinator */
+        __u64      hai_extent_start;  /* byte range to operate on */
+        __u64      hai_extent_end;
+        __u64      hai_gid;     /* grouplock id */
+        char       hai_data[0]; /* variable length */
+} __attribute__((packed));
+
+/* Copytool action list */
+#define HAL_VERSION 1
+#define HAL_MAXSIZE 4096 /* bytes, used in userspace only */
+struct hsm_action_list {
+        __u32 hal_version;
+        __u32 hal_count;       /* number of hai's to follow */
+        __u32 hal_archive_num; /* which archive backend */
+        __u32 padding1;
+        char  hal_fsname[0];   /* null-terminated */
+        /* struct hsm_action_item[hal_count] follows, aligned on 8-byte
+           boundaries. See hai_zero */
+} __attribute__((packed));
+
+/* Return pointer to first hai in action list */
+static inline struct hsm_action_item * hai_zero(struct hsm_action_list *hal) {
+        return (struct hsm_action_item *)(hal->hal_fsname +
+                                          size_round(strlen(hal->hal_fsname)));
+}
+/* Return pointer to next hai */
+static inline struct hsm_action_item * hai_next(struct hsm_action_item *hai) {
+        return (struct hsm_action_item *)((char *)hai +
+                                          size_round(hai->hai_len));
+}
+
 
 #endif /* _LUSTRE_USER_H */

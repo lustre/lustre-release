@@ -189,5 +189,16 @@ extern int llapi_changelog_register(const char *mdtname);
 extern int llapi_changelog_unregister(const char *mdtname, int id);
 extern int llapi_fid2path(const char *device, const char *fidstr, char *path,
                           int pathlen, long long *recno, int *linkno);
+/* HSM copytool interface.  priv is private copytool state, managed internally
+   by these functions */
+extern int llapi_copytool_start(void **priv, int flags, int archive_num_count,
+                                int *archive_nums);
+extern int llapi_copytool_fini(void **priv);
+extern int llapi_copytool_recv(void *priv, struct hsm_action_list **hal,
+                               int *msgsize);
+extern int llapi_copytool_free(struct hsm_action_list **hal);
+
 #endif
+
+
 

@@ -2614,3 +2614,148 @@ int llapi_path2fid(const char *path, lustre_fid *fid)
         return rc;
 }
 
+/****** HSM Copytool API ********/
+#define CT_PRIV_MAGIC 0xC0BE2001
+struct copytool_private {
+        int magic;
+        lustre_netlink lnl;
+        int archive_num_count;
+        int archive_nums[0];
+};
+
+#include <libcfs/libcfs.h>
+
+/** Register a copytool
+ * @param priv Opaque private control structure
+ * @param flags Open flags, currently unused (e.g. O_NONBLOCK)
+ * @param archive_nums Which archive numbers this copytool is responsible for
+ */
+int llapi_copytool_start(void **priv, int flags, int archive_num_count,
+                         int *archive_nums)
+{
+        struct copytool_private *ct;
+        int rc;
+
+        if (archive_num_count > 0 && archive_nums == NULL) {
+                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                          "NULL archive numbers");
+                return -EINVAL;
+        }
+
+        ct = malloc(sizeof(*ct) +
+                    archive_num_count * sizeof(ct->archive_nums[0]));
+        if (ct == NULL)
+                return -ENOMEM;
+
+        ct->magic = CT_PRIV_MAGIC;
+        ct->archive_num_count = archive_num_count;
+        if (ct->archive_num_count > 0)
+                memcpy(ct->archive_nums, archive_nums, archive_num_count *
+                       sizeof(ct->archive_nums[0]));
+
+        rc = libcfs_ulnl_start(&ct->lnl, LNL_GRP_HSM);
+        if (rc < 0)
+                goto out_err;
+
+        *priv = ct;
+        return 0;
+
+out_err:
+        free(ct);
+        return rc;
+}
+
+/** Deregister a copytool */
+int llapi_copytool_fini(void **priv)
+{
+        struct copytool_private *ct = (struct copytool_private *)*priv;
+
+        if (!ct || (ct->magic != CT_PRIV_MAGIC))
+                return -EINVAL;
+
+        libcfs_ulnl_stop(&ct->lnl);
+        free(ct);
+        *priv = NULL;
+        return 0;
+}
+
+/** Wait for the next hsm_action_list
+ * @param priv Opaque private control structure
+ * @param halh Action list handle, will be allocated here
+ * @param msgsize Number of bytes in the message, will be set here
+ * @return 0 valid message received; halh and msgsize are set
+ *         <0 error code
+ */
+int llapi_copytool_recv(void *priv, struct hsm_action_list **halh, int *msgsize)
+{
+        struct copytool_private *ct = (struct copytool_private *)priv;
+        struct lnl_hdr *lnlh;
+        struct hsm_action_list *hal;
+        int rc = 0;
+
+        if (!ct || (ct->magic != CT_PRIV_MAGIC))
+                return -EINVAL;
+        if (halh == NULL || msgsize == NULL)
+                return -EINVAL;
+
+        rc = libcfs_ulnl_msg_get(&ct->lnl, HAL_MAXSIZE,
+                                 LNL_TRANSPORT_HSM, &lnlh);
+        if (rc < 0)
+                return rc;
+
+        /* Handle generic messages */
+        if (lnlh->lnl_transport == LNL_TRANSPORT_GENERIC &&
+            lnlh->lnl_msgtype == LNL_MSG_SHUTDOWN) {
+                rc = -ESHUTDOWN;
+                goto out_free;
+        }
+
+        if (lnlh->lnl_transport != LNL_TRANSPORT_HSM ||
+            lnlh->lnl_msgtype != HMT_ACTION_LIST) {
+                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                          "Unknown HSM message type %d:%d\n",
+                          lnlh->lnl_transport, lnlh->lnl_msgtype);
+                rc = -EPROTO;
+                goto out_free;
+        }
+
+        /* Our message is an hsm_action_list */
+
+        hal = (struct hsm_action_list *)(lnlh + 1);
+
+        /* Check that we have registered for this archive # */
+        for (rc = 0; rc < ct->archive_num_count; rc++) {
+                if (hal->hal_archive_num == ct->archive_nums[rc])
+                        break;
+        }
+        if (rc >= ct->archive_num_count) {
+                CDEBUG(D_INFO, "This copytool does not service archive #%d, "
+                       "ignoring this request.\n", hal->hal_archive_num);
+                rc = 0;
+                goto out_free;
+        }
+
+        *halh = hal;
+        *msgsize = lnlh->lnl_msglen - sizeof(*lnlh);
+        return 0;
+
+out_free:
+        libcfs_ulnl_msg_free(&lnlh);
+        *halh = NULL;
+        *msgsize = 0;
+        return rc;
+}
+
+/** Release the action list when done with it. */
+int llapi_copytool_free(struct hsm_action_list **hal)
+{
+        if (*hal) {
+                struct lnl_hdr *lnlh = (struct lnl_hdr *)*hal - 1;
+                libcfs_ulnl_msg_free(&lnlh);
+        }
+        *hal = NULL;
+        return 0;
+}
+
+
+

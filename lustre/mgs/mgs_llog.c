@@ -507,11 +507,18 @@ static __inline__ int next_index(void *index_map, int map_len)
         0  newly marked as in use
         <0 err
         +EALREADY for update of an old index */
-static int mgs_set_index(struct fs_db *fsdb, struct mgs_target_info *mti)
+int mgs_set_index(struct obd_device *obd, struct mgs_target_info *mti)
 {
+        struct fs_db *fsdb;
         void *imap;
         int rc = 0;
         ENTRY;
+
+        rc = mgs_find_or_make_fsdb(obd, mti->mti_fsname, &fsdb);
+        if (rc) {
+                CERROR("Can't get db for %s\n", mti->mti_fsname);
+                RETURN(rc);
+        }
 
         if (mti->mti_flags & LDD_F_SV_TYPE_OST)
                 imap = fsdb->fsdb_ost_index_map;
@@ -2547,23 +2554,15 @@ int mgs_write_log_target(struct obd_device *obd,
                          struct mgs_target_info *mti)
 {
         struct fs_db *fsdb;
+        int rc = -EINVAL;
         char *buf, *params;
-        int rc;
         ENTRY;
 
-        rc = mgs_find_or_make_fsdb(obd, mti->mti_fsname, &fsdb);
-        if (rc) {
-                CERROR("Can't get db for %s\n", mti->mti_fsname);
-                RETURN(rc);
-        }
-
-        down(&fsdb->fsdb_sem);
-
         /* set/check the new target index */
-        rc = mgs_set_index(fsdb, mti);
+        rc = mgs_set_index(obd, mti);
         if (rc < 0) {
                 CERROR("Can't get index (%d)\n", rc);
-                GOTO(out_up, rc);
+                RETURN(rc);
         }
 
         /* COMPAT_146 */
@@ -2598,6 +2597,14 @@ int mgs_write_log_target(struct obd_device *obd,
                         mti->mti_flags &= ~LDD_F_UPDATE;
                 }
         }
+
+        rc = mgs_find_or_make_fsdb(obd, mti->mti_fsname, &fsdb);
+        if (rc) {
+                CERROR("Can't get db for %s\n", mti->mti_fsname);
+                RETURN(rc);
+        }
+
+        down(&fsdb->fsdb_sem);
 
         if (mti->mti_flags &
             (LDD_F_VIRGIN | LDD_F_UPGRADE14 | LDD_F_WRITECONF)) {

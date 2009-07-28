@@ -6375,6 +6375,15 @@ test_162() {
 }
 run_test 162 "path lookup sanity"
 
+test_163() {
+        copytool &
+	sleep 1
+	# this proc file is temporary and linux-only
+	$LCTL set_param mdc.lustre-MDT0000-mdc-*.netlink=0 || error "lnl send failed"
+	kill $!
+}
+run_test 163 "LustreNetLink kernelcomms"
+
 test_169() {
 	# do directio so as not to populate the page cache
 	log "creating a 10 Mb file"
@@ -6390,7 +6399,7 @@ test_169() {
 	log "removing the temporary file"
 	rm -rf $DIR/$tfile || error "tmp file removal failed"
 }
-run_test 169 "parallel read and truncate should not deadlock ==="
+run_test 169 "parallel read and truncate should not deadlock"
 
 test_170() {
         $LCTL clear	# bug 18514
@@ -6588,6 +6597,7 @@ test_213() {
 	cat /etc/hosts >> $DIR/$tfile
 }
 run_test 213 "OSC lock completion and cancel race don't crash - bug 18829"
+
 
 #
 # tests that do cleanup/setup should be run at the end

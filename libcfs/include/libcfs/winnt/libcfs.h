@@ -60,12 +60,12 @@
 #ifdef __KERNEL__
 
 enum {
-	/* if you change this, update darwin-util.c:cfs_stack_trace_fill() */
-	CFS_STACK_TRACE_DEPTH = 16
+        /* if you change this, update darwin-util.c:cfs_stack_trace_fill() */
+        CFS_STACK_TRACE_DEPTH = 16
 };
 
 struct cfs_stack_trace {
-	void *frame[CFS_STACK_TRACE_DEPTH];
+        void *frame[CFS_STACK_TRACE_DEPTH];
 };
 
 static inline __u32 query_stack_size()

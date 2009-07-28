@@ -131,6 +131,60 @@ static struct file_operations mdc_changelog_fops = {
         .release = mdc_changelog_seq_release,
 };
 
+/* temporary for testing */
+static int mdc_wr_netlink(struct file *file, const char *buffer,
+                          unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct lnl_hdr *lh;
+        struct hsm_action_list *hal;
+        struct hsm_action_item *hai;
+        int len;
+        int pid, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &pid);
+        if (rc)
+                return rc;
+
+        if (pid < 0)
+                return -ERANGE;
+        CWARN("message to pid %d\n", pid);
+
+        len = sizeof(*lh) + sizeof(*hal) + MTI_NAME_MAXLEN +
+                /* for mockup below */ 2 * size_round(sizeof(*hai));
+
+        OBD_ALLOC(lh, len);
+
+        lh->lnl_magic = LNL_MAGIC;
+        lh->lnl_transport = LNL_TRANSPORT_HSM;
+        lh->lnl_msgtype = HMT_ACTION_LIST;
+        lh->lnl_msglen = len;
+
+        hal = (struct hsm_action_list *)(lh + 1);
+        hal->hal_version = HAL_VERSION;
+        hal->hal_archive_num = 1;
+        obd_uuid2fsname(hal->hal_fsname, obd->obd_name, MTI_NAME_MAXLEN);
+
+        /* mock up an action list */
+        hal->hal_count = 2;
+        hai = hai_zero(hal);
+        hai->hai_action = HSMA_ARCHIVE;
+        hai->hai_fid.f_oid = 5;
+        hai->hai_len = sizeof(*hai);
+        hai = hai_next(hai);
+        hai->hai_action = HSMA_RESTORE;
+        hai->hai_fid.f_oid = 10;
+        hai->hai_len = sizeof(*hai);
+
+        /* This works for either broadcast or unicast to a single pid */
+        rc = libcfs_klnl_msg_put(pid, pid == 0 ? LNL_GRP_HSM : 0, lh);
+
+        OBD_FREE(lh, len);
+        if (rc < 0)
+                return rc;
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "ping",            0, lprocfs_wr_ping,     0, 0, 0222 },
@@ -150,6 +204,7 @@ static struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
         { "import",          lprocfs_rd_import,      0, 0 },
         { "state",           lprocfs_rd_state,       0, 0 },
         { "changelog",       0, 0, 0, &mdc_changelog_fops, 0400 },
+        { "netlink",         0, mdc_wr_netlink,      0, 0, 0222 },
         { 0 }
 };
 

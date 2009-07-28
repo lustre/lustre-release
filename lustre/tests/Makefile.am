@@ -52,7 +52,7 @@ noinst_PROGRAMS += small_write multiop ll_sparseness_verify
 noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify mkdirmany
 noinst_PROGRAMS += openfilleddirunlink rename_many memhog iopentest1 iopentest2
 noinst_PROGRAMS += mmap_sanity flock_test writemany reads flocks_test
-noinst_PROGRAMS += write_time_limit rwv
+noinst_PROGRAMS += write_time_limit rwv copytool
 # noinst_PROGRAMS += copy_attr mkdirdeep 
 bin_PROGRAMS = mcreate munlink
 testdir = $(libdir)/lustre/tests
@@ -67,9 +67,11 @@ mmap_sanity_SOURCES= mmap_sanity.c
 
 LIBLUSTREAPI := $(top_builddir)/lustre/utils/liblustreapi.a
 multiop_LDADD=$(LIBLUSTREAPI) -lrt
+copytool_LDADD=$(LIBLUSTREAPI)
 
 ll_dirstripe_verify_SOURCES= ll_dirstripe_verify.c
 ll_dirstripe_verify_LDADD= -L$(top_builddir)/lustre/utils -llustreapi
 
 flocks_test_SOURCES=flocks_test.c
 flocks_test_LDADD=-lpthread
+

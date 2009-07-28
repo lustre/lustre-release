@@ -121,7 +121,8 @@ struct lustre_disk_data {
         __u32      ldd_svindex;         /* server index (0001), must match
                                            svname */
         __u32      ldd_mount_type;      /* target fs type LDD_MT_* */
-        char       ldd_fsname[64];      /* filesystem this server is part of */
+        char       ldd_fsname[64];      /* filesystem this server is part of,
+                                           MTI_NAME_MAXLEN */
         char       ldd_svname[64];      /* this server's name (lustre-mdt0001)*/
         __u8       ldd_uuid[40];        /* server UUID (COMPAT_146) */
 

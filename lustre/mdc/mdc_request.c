@@ -1635,6 +1635,9 @@ static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
                 CERROR("failed to setup llogging subsystems\n");
         }
 
+        /* ignore errors */
+        libcfs_klnl_start(LNL_TRANSPORT_HSM);
+
         RETURN(rc);
 
 err_close_lock:
@@ -1701,6 +1704,8 @@ static int mdc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 static int mdc_cleanup(struct obd_device *obd)
 {
         struct client_obd *cli = &obd->u.cli;
+
+        libcfs_klnl_stop(LNL_TRANSPORT_HSM, LNL_GRP_HSM);
 
         OBD_FREE(cli->cl_rpc_lock, sizeof (*cli->cl_rpc_lock));
         OBD_FREE(cli->cl_setattr_lock, sizeof (*cli->cl_setattr_lock));
