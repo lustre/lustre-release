@@ -836,7 +836,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
 
         if (req->rq_export->exp_connect_flags & OBD_CONNECT_ACL &&
             rec && !(rec->ur_flags & MDS_OPEN_JOIN_FILE)) {
-                int acl_off = DLM_REPLY_REC_OFF + (body->eadatasize ? 2 : 1);
+                int acl_off = DLM_REPLY_REC_OFF + 2;
 
                 rc = mds_pack_acl(&req->rq_export->exp_mds_data,
                                   dchild->d_inode, req->rq_repmsg,
