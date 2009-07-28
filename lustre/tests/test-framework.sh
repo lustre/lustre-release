@@ -824,6 +824,7 @@ boot_node() {
     local node=$1
     if [ "$FAILURE_MODE" = HARD ]; then
        $POWER_UP $node
+       wait_for_host $node
     fi
 }
 
@@ -1907,8 +1908,7 @@ check_network() {
     local WAIT=0
     local MAX=$2
     while [ $NETWORK -eq 0 ]; do
-        ping -c 1 -w 3 $1 > /dev/null
-        if [ $? -eq 0 ]; then
+        if ping -c 1 -w 3 $1 > /dev/null; then
             NETWORK=1
         else
             WAIT=$((WAIT + 5))
