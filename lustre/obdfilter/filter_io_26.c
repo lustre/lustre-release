@@ -756,12 +756,20 @@ cleanup:
         }
 
         /* trigger quota pre-acquire */
-        qcids[USRQUOTA] = oa->o_uid;
-        qcids[GRPQUOTA] = oa->o_gid;
         err = lquota_adjust(filter_quota_interface_ref, obd, qcids, NULL, rc,
                             FSFILT_OP_CREATE);
-        CDEBUG(err ? D_ERROR : D_QUOTA,
-               "filter adjust qunit! (rc:%d)\n", err);
+        CDEBUG(err ? D_ERROR : D_QUOTA, "filter adjust qunit! "
+               "(rc:%d, uid:%u, gid:%u)\n",
+               err, qcids[USRQUOTA], qcids[GRPQUOTA]);
+        if (qcids[USRQUOTA] != oa->o_uid || qcids[GRPQUOTA] != oa->o_gid) {
+                qcids[USRQUOTA] = oa->o_uid;
+                qcids[GRPQUOTA] = oa->o_gid;
+                err = lquota_adjust(filter_quota_interface_ref, obd, qcids,
+                                    NULL, rc, FSFILT_OP_CREATE);
+                CDEBUG(err ? D_ERROR : D_QUOTA, "filter adjust qunit! "
+                       "(rc:%d, uid:%u, gid:%u)\n",
+                       err, qcids[USRQUOTA], qcids[GRPQUOTA]);
+        }
 
         for (i = 0, lnb = res; i < niocount; i++, lnb++) {
                 if (lnb->page == NULL)
