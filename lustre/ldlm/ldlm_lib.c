@@ -975,8 +975,17 @@ no_export:
                 spin_unlock(&export->exp_lock);
         }
 
-        if (export->exp_connection != NULL)
+        if (export->exp_connection != NULL) {
+                /* Check to see if connection came from another NID */
+                if ((export->exp_connection->c_peer.nid != req->rq_peer.nid) &&
+                    !hlist_unhashed(&export->exp_nid_hash))
+                        lustre_hash_del(export->exp_obd->obd_nid_hash,
+                                        &export->exp_connection->c_peer.nid,
+                                        &export->exp_nid_hash);
+
                 ptlrpc_connection_put(export->exp_connection);
+        }
+
         export->exp_connection = ptlrpc_connection_get(req->rq_peer,
                                                        req->rq_self,
                                                        &remote_uuid);
@@ -989,6 +998,8 @@ no_export:
 
         if (lustre_msg_get_op_flags(req->rq_repmsg) & MSG_CONNECT_RECONNECT) {
                 revimp = class_import_get(export->exp_imp_reverse);
+                ptlrpc_connection_put(revimp->imp_connection);
+                revimp->imp_connection = NULL;
                 GOTO(set_flags, rc = 0);
         }
 
@@ -1005,13 +1016,13 @@ no_export:
         if (export->exp_imp_reverse != NULL)
                 class_destroy_import(export->exp_imp_reverse);
         revimp = export->exp_imp_reverse = class_new_import(target);
-        revimp->imp_connection = ptlrpc_connection_addref(export->exp_connection);
         revimp->imp_client = &export->exp_obd->obd_ldlm_client;
         revimp->imp_remote_handle = conn;
         revimp->imp_dlm_fake = 1;
         revimp->imp_state = LUSTRE_IMP_FULL;
 
 set_flags:
+        revimp->imp_connection = ptlrpc_connection_addref(export->exp_connection);
         if (req->rq_reqmsg->lm_magic == LUSTRE_MSG_MAGIC_V1 &&
             lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_NEXT_VER) {
                 revimp->imp_msg_magic = LUSTRE_MSG_MAGIC_V2;
