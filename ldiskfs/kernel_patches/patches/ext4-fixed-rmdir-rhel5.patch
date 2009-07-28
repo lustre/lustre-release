@@ -1,0 +1,31 @@
+diff -rupN linux-2.6.18-128.1.6_1/fs/ext4/mballoc.c linux-2.6.18-128.1.6_2/fs/ext4/mballoc.c
+--- linux-2.6.18-128.1.6_1/fs/ext4/mballoc.c	2009-07-21 17:05:18.000000000 +0530
++++ linux-2.6.18-128.1.6_2/fs/ext4/mballoc.c	2009-07-21 17:06:54.000000000 +0530
+@@ -4743,7 +4743,6 @@ ext4_mb_free_metadata(handle_t *handle, 
+ 	BUG_ON(e4b->bd_bitmap_page == NULL);
+ 	BUG_ON(e4b->bd_buddy_page == NULL);
+ 
+-	ext4_lock_group(sb, group);
+ 	for (i = 0; i < count; i++) {
+ 		md = db->bb_md_cur;
+ 		if (md && db->bb_tid != handle->h_transaction->t_tid) {
+@@ -4754,8 +4753,10 @@ ext4_mb_free_metadata(handle_t *handle, 
+ 		if (md == NULL) {
+ 			ext4_unlock_group(sb, group);
+ 			md = kmalloc(sizeof(*md), GFP_NOFS);
+-			if (md == NULL)
++			if (md == NULL) {
++				ext4_lock_group(sb, group);
+ 				return -ENOMEM;
++			}
+ 			md->num = 0;
+ 			md->group = group;
+ 
+@@ -4788,7 +4789,6 @@ ext4_mb_free_metadata(handle_t *handle, 
+ 			db->bb_md_cur = NULL;
+ 		}
+ 	}
+-	ext4_unlock_group(sb, group);
+ 	return 0;
+ }
+ 

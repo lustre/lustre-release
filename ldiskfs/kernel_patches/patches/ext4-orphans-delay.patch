@@ -1,0 +1,53 @@
+diff -rupN slesll_org/fs/ext4/ext4.h slesll_new/fs/ext4/ext4.h
+--- slesll_org/fs/ext4/ext4.h	2009-07-15 19:53:11.000000000 +0530
++++ slesll_new/fs/ext4/ext4.h	2009-07-15 19:57:12.000000000 +0530
+@@ -1195,6 +1195,8 @@ extern int ext4_update_rocompat_feature(
+ 					struct super_block *sb,	__u32 rocompat);
+ extern int ext4_update_incompat_feature(handle_t *handle,
+ 					struct super_block *sb,	__u32 incompat);
++extern void ext4_orphan_cleanup(struct super_block *sb,
++			        struct ext4_super_block *es);
+ extern ext4_fsblk_t ext4_block_bitmap(struct super_block *sb,
+ 				      struct ext4_group_desc *bg);
+ extern ext4_fsblk_t ext4_inode_bitmap(struct super_block *sb,
+diff -rupN slesll_org/fs/ext4/super.c slesll_new/fs/ext4/super.c
+--- slesll_org/fs/ext4/super.c	2009-07-15 19:53:11.000000000 +0530
++++ slesll_new/fs/ext4/super.c	2009-07-15 20:01:39.000000000 +0530
+@@ -287,6 +287,8 @@ static void ext4_handle_error(struct sup
+ 	EXT4_SB(sb)->s_mount_state |= EXT4_ERROR_FS;
+ 	es->s_state |= cpu_to_le16(EXT4_ERROR_FS);
+ 
++	dump_stack();
++
+ 	if (sb->s_flags & MS_RDONLY)
+ 		return;
+ 
+@@ -2064,7 +2066,7 @@ static int ext4_check_descriptors(struct
+  * e2fsck was run on this filesystem, and it must have already done the orphan
+  * inode cleanup for us, so we can safely abort without any further action.
+  */
+-static void ext4_orphan_cleanup(struct super_block *sb,
++void ext4_orphan_cleanup(struct super_block *sb,
+ 				struct ext4_super_block *es)
+ {
+ 	unsigned int s_flags = sb->s_flags;
+@@ -2158,7 +2160,9 @@ static void ext4_orphan_cleanup(struct s
+ 	}
+ #endif
+ 	sb->s_flags = s_flags; /* Restore MS_RDONLY status */
++	EXT4_SB(sb)->s_mount_state &= ~EXT4_ORPHAN_FS;
+ }
++EXPORT_SYMBOL(ext4_orphan_cleanup);
+ /*
+  * Maximal extent format file size.
+  * Resulting logical blkno at s_maxbytes must fit in our on-disk
+@@ -2946,8 +2950,7 @@ static int ext4_fill_super(struct super_
+ 	 * superblock lock.
+ 	 */
+ 	EXT4_SB(sb)->s_mount_state |= EXT4_ORPHAN_FS;
+-	ext4_orphan_cleanup(sb, es);
+-	EXT4_SB(sb)->s_mount_state &= ~EXT4_ORPHAN_FS;
++
+ 	if (needs_recovery)
+ 		printk(KERN_INFO "EXT4-fs: recovery complete.\n");
+ 	ext4_mark_recovery_complete(sb, es);
