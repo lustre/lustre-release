@@ -55,15 +55,6 @@
 #include <linux/fs.h>
 /* XATTR_{REPLACE,CREATE} */
 #include <linux/xattr.h>
-/*
- * XXX temporary stuff: direct access to ldiskfs/jdb. Interface between osd
- * and file system is not yet specified.
- */
-/* handle_t, journal_start(), journal_stop() */
-#include <linux/jbd.h>
-/* LDISKFS_SB() */
-#include <linux/ldiskfs_fs.h>
-#include <linux/ldiskfs_jbd.h>
 /* simple_mkdir() */
 #include <lvfs.h>
 
@@ -310,9 +301,16 @@ static struct inode *osd_iget(struct osd_thread_info *info,
                               struct osd_device *dev,
                               const struct osd_inode_id *id)
 {
-        struct inode *inode;
+        struct inode *inode = NULL;
 
+#ifdef HAVE_EXT4_LDISKFS
+        inode = ldiskfs_iget(osd_sb(dev), id->oii_ino);
+        if (IS_ERR(inode))
+        /* Newer kernels return an error instead of a NULL pointer */
+                inode = NULL;
+#else
         inode = iget(osd_sb(dev), id->oii_ino);
+#endif
         if (inode == NULL) {
                 CERROR("no inode\n");
                 inode = ERR_PTR(-EACCES);
@@ -574,7 +572,7 @@ static struct thandle *osd_trans_start(const struct lu_env *env,
                          * be used.
                          */
 
-                        jh = journal_start(osd_journal(dev), p->tp_credits);
+                        jh = ldiskfs_journal_start_sb(osd_sb(dev), p->tp_credits);
                         if (!IS_ERR(jh)) {
                                 oh->ot_handle = jh;
                                 th = &oh->ot_super;
@@ -588,8 +586,8 @@ static struct thandle *osd_trans_start(const struct lu_env *env,
                                 /* add commit callback */
                                 lu_context_init(&th->th_ctx, LCT_TX_HANDLE);
                                 lu_context_enter(&th->th_ctx);
-                                journal_callback_set(jh, osd_trans_commit_cb,
-                                                     (struct journal_callback *)&oh->ot_jcb);
+                                osd_journal_callback_set(jh, osd_trans_commit_cb,
+                                                         (struct journal_callback *)&oh->ot_jcb);
                                         LASSERT(oti->oti_txns == 0);
                                         LASSERT(oti->oti_r_locks == 0);
                                         LASSERT(oti->oti_w_locks == 0);
@@ -631,7 +629,7 @@ static void osd_trans_stop(const struct lu_env *env, struct thandle *th)
                 if (result != 0)
                         CERROR("Failure in transaction hook: %d\n", result);
                 oh->ot_handle = NULL;
-                result = journal_stop(hdl);
+                result = ldiskfs_journal_stop(hdl);
                 if (result != 0)
                         CERROR("Failure to stop transaction: %d\n", result);
         }
@@ -3587,7 +3585,6 @@ static int osd_mount(const struct lu_env *env,
         struct lustre_sb_info    *lsi;
 
         ENTRY;
-
         if (o->od_mount != NULL) {
                 CERROR("Already mounted (%s)\n", dev);
                 RETURN(-EEXIST);

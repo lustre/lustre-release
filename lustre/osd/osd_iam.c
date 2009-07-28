@@ -106,10 +106,7 @@
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/pagemap.h>
-#include <linux/jbd.h>
 #include <linux/time.h>
-#include <linux/ldiskfs_fs.h>
-#include <linux/ldiskfs_jbd.h>
 #include <linux/fcntl.h>
 #include <linux/stat.h>
 #include <linux/string.h>

@@ -265,6 +265,8 @@ struct obd_device_target {
         struct lustre_quota_ctxt  obt_qctxt;
         lustre_quota_version_t    obt_qfmt;
         struct rw_semaphore       obt_rwsem;
+        struct vfsmount          *obt_vfsmnt;
+        struct file              *obt_health_check_filp;
 };
 
 /* llog contexts */
@@ -304,7 +306,6 @@ struct filter_obd {
         struct obd_device_target fo_obt;
         struct lu_target     fo_lut;
         const char          *fo_fstype;
-        struct vfsmount     *fo_vfsmnt;
 
         int                  fo_group_count;
         cfs_dentry_t        *fo_dentry_O;
@@ -315,7 +316,6 @@ struct filter_obd {
 
 
         spinlock_t           fo_objidlock;      /* protect fo_lastobjid */
-        struct file         *fo_health_check_filp;
 
         unsigned long        fo_destroys_in_progress;
         struct semaphore     fo_create_locks[FILTER_SUBDIR_COUNT];
@@ -389,6 +389,7 @@ struct filter_obd {
 #define fo_fsd                  fo_obt.obt_lsd
 #define fo_last_rcvd_slots      fo_obt.obt_client_bitmap
 #define fo_mount_count          fo_obt.obt_mount_count
+#define fo_vfsmnt               fo_obt.obt_vfsmnt
 
 struct timeout_item {
         enum timeout_event ti_event;
@@ -532,7 +533,6 @@ struct mds_obd {
         struct ptlrpc_service           *mds_service;
         struct ptlrpc_service           *mds_setattr_service;
         struct ptlrpc_service           *mds_readpage_service;
-        struct vfsmount                 *mds_vfsmnt;
         cfs_dentry_t                    *mds_fid_de;
         int                              mds_max_mdsize;
         int                              mds_max_cookiesize;
@@ -562,7 +562,6 @@ struct mds_obd {
         __u32                            mds_lov_objid_lastpage;
         __u32                            mds_lov_objid_lastidx;
 
-        struct file                     *mds_health_check_filp;
 
         struct lustre_quota_info         mds_quota_info;
         struct semaphore                 mds_qonoff_sem;
@@ -589,6 +588,7 @@ struct mds_obd {
 #define mds_client_bitmap        mds_obt.obt_client_bitmap
 #define mds_mount_count          mds_obt.obt_mount_count
 #define mds_last_transno         mds_obt.obt_last_transno
+#define mds_vfsmnt               mds_obt.obt_vfsmnt
 
 /* lov objid */
 extern __u32 mds_max_ost_index;

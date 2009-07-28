@@ -52,7 +52,8 @@ Patch99995: linux-%{kversion}-lustre.patch' \
 ' \
            -e '/^%prep$/,/^# END OF PATCH APPLICATIONS$/s/kernel-%{kversion}/%{name}-%{kversion}/g' \
            -e '/find $RPM_BUILD_ROOT\/lib\/modules\/$KernelVer/a\
-    cp -a fs/ext3/* $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext3' \
+    cp -a fs/ext3/* $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext3 \
+    cp -a fs/ext4/* $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext4' \
           SPECS/kernel-2.6.spec
 
     if $KERNEL_LUSTRE_NAMING; then

@@ -46,7 +46,6 @@
 #include <linux/module.h>
 #include <asm/unaligned.h>
 #include <linux/dynlocks.h>
-
 /*
  *  linux/include/linux/osd_iam.h
  */
@@ -93,8 +92,6 @@ enum {
 };
 
 #ifdef __KERNEL__
-/* handle_t, journal_start(), journal_stop() */
-#include <linux/jbd.h>
 
 /*
  * Debugging.
@@ -907,6 +904,7 @@ static inline struct iam_ikey *iam_path_ikey(const struct iam_path *path,
         return path->ip_data->ipd_key_scratch[nr];
 }
 
+
 static inline struct dynlock *path_dynlock(struct iam_path *path)
 {
         return &LDISKFS_I(iam_path_obj(path))->i_htree_lock;
@@ -981,10 +979,8 @@ int iam_read_leaf(struct iam_path *p);
 
 int iam_node_read(struct iam_container *c, iam_ptr_t ptr,
                   handle_t *handle, struct buffer_head **bh);
-int iam_lvar_create(struct inode *obj, int keysize, int ptrsize,
-                           int recsize, handle_t *handle);
-int iam_lfix_create(struct inode *obj, int keysize, int ptrsize,
-                           int recsize, handle_t *handle);
+int iam_lvar_create(struct inode *obj,
+                    int keysize, int ptrsize, int recsize, handle_t *handle);
 
 #ifndef swap
 #define swap(x, y) do { typeof(x) z = x; x = y; y = z; } while (0)
@@ -1079,6 +1075,8 @@ void iam_lfix_format_init(void);
 void iam_lvar_format_init(void);
 void iam_htree_format_init(void);
 
+int iam_lfix_create(struct inode *obj,
+                    int keysize, int ptrsize, int recsize, handle_t *handle);
 struct iam_private_info;
 
 void ldiskfs_iam_release(struct file *filp, struct inode *inode);

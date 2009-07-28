@@ -23,3 +23,5 @@ small-fixes-about-jbd.patch
 jbd-slab-race-2.6-rhel5.patch
 mpt-fusion-max-sge.patch
 prune-icache-use-trylock-rhel5.patch
+jbd2-jcberr-2.6-rhel5.patch
+jbd2-commit-timer-no-jiffies-rounding.diff

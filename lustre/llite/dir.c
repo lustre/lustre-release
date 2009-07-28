@@ -711,17 +711,17 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_IOCTL, 1);
         switch(cmd) {
-        case EXT3_IOC_GETFLAGS:
-        case EXT3_IOC_SETFLAGS:
+        case FSFILT_IOC_GETFLAGS:
+        case FSFILT_IOC_SETFLAGS:
                 RETURN(ll_iocontrol(inode, file, cmd, arg));
-        case EXT3_IOC_GETVERSION_OLD:
-        case EXT3_IOC_GETVERSION:
+        case FSFILT_IOC_GETVERSION_OLD:
+        case FSFILT_IOC_GETVERSION:
                 RETURN(put_user(inode->i_generation, (int *)arg));
         /* We need to special case any other ioctls we want to handle,
          * to send them to the MDS/OST as appropriate and to properly
          * network encode the arg field.
-        case EXT3_IOC_SETVERSION_OLD:
-        case EXT3_IOC_SETVERSION:
+        case FSFILT_IOC_SETVERSION_OLD:
+        case FSFILT_IOC_SETVERSION:
         */
         case IOC_MDC_LOOKUP: {
                 struct ptlrpc_request *request = NULL;

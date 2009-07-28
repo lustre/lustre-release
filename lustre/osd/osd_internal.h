@@ -47,14 +47,22 @@
 
 /* struct rw_semaphore */
 #include <linux/rwsem.h>
-/* handle_t, journal_start(), journal_stop() */
-#include <linux/jbd.h>
-/* struct dx_hash_info */
-#include <linux/ldiskfs_fs.h>
 /* struct dentry */
 #include <linux/dcache.h>
 /* struct dirent64 */
 #include <linux/dirent.h>
+
+#ifdef HAVE_EXT4_LDISKFS
+#include <ldiskfs/ldiskfs.h>
+#include <ldiskfs/ldiskfs_jbd2.h>
+#define osd_journal_callback_set(handle, func, jcb) jbd2_journal_callback_set(handle, func, jcb)
+#else
+#include <linux/jbd.h>
+#include <linux/ldiskfs_fs.h>
+#include <linux/ldiskfs_jbd.h>
+#define osd_journal_callback_set(handle, func, jcb) journal_callback_set(handle, func, jcb)
+#endif
+
 
 /* LUSTRE_OSD_NAME */
 #include <obd.h>

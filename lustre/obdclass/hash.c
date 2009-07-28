@@ -14,17 +14,27 @@
  */
 
 #include <linux/fs.h>
+
+#ifdef HAVE_EXT4_LDISKFS
+#include <ldiskfs/ldiskfs_jbd2.h>
+#else
 #include <linux/jbd.h>
+#endif
+
 #include <linux/sched.h>
 #ifdef HAVE_SERVER_SUPPORT
-# include <linux/ldiskfs_fs.h>
+
+#ifdef HAVE_EXT4_LDISKFS
+#include <ldiskfs/ldiskfs.h>
+#else
+#include <linux/ldiskfs_fs.h>
+#endif
+
 #else
 # include <obd_class.h>
 #endif
 
 #define DELTA 0x9E3779B9
-#define DX_HASH_R5      98
-#define DX_HASH_SAME    99
 
 
 static void TEA_transform(__u32 buf[4], __u32 const in[])
@@ -126,23 +136,6 @@ static __u32 dx_hack_hash (const char *name, int len)
 	return (hash0 << 1);
 }
 
-static __u32 dx_r5_hash(const signed char *msg, int len)
-{
-	__u32 a = 0;
-	while (len--) {
-		a += *msg << 4;
-		a += *msg >> 4;
-		a *= 11;
-		msg++;
-	}
-	return a;
-}
-
-static __u32 dx_same_hash(const signed char *msg, int len)
-{
-	return 0xcafebabeUL;
-}
-
 static void str2hashbuf(const char *msg, int len, __u32 *buf, int num)
 {
 	__u32	pad, val;
@@ -232,12 +225,6 @@ int ldiskfsfs_dirhash(const char *name, int len, struct ldiskfs_dx_hash_info *hi
 		}
 		hash = buf[0];
 		minor_hash = buf[1];
-		break;
-	case LDISKFS_DX_HASH_R5:
-		hash = dx_r5_hash(name, len);
-		break;
-	case LDISKFS_DX_HASH_SAME:
-		hash = dx_same_hash(name, len);
 		break;
 	default:
 		hinfo->hash = 0;

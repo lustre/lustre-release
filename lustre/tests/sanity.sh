@@ -2434,16 +2434,16 @@ test_52a() {
 	[ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
 	mkdir -p $DIR/d52a
 	touch $DIR/d52a/foo
-	chattr =a $DIR/d52a/foo || error "chattr =a failed"
+	chattr +a $DIR/d52a/foo || error "chattr +a failed"
 	echo bar >> $DIR/d52a/foo || error "append bar failed"
 	cp /etc/hosts $DIR/d52a/foo && error "cp worked"
 	rm -f $DIR/d52a/foo 2>/dev/null && error "rm worked"
 	link $DIR/d52a/foo $DIR/d52a/foo_link 2>/dev/null && error "link worked"
 	echo foo >> $DIR/d52a/foo || error "append foo failed"
 	mrename $DIR/d52a/foo $DIR/d52a/foo_ren && error "rename worked"
-	lsattr $DIR/d52a/foo | egrep -q "^-+a-+ $DIR/d52a/foo" || error "lsattr"
+	lsattr $DIR/d52a/foo | egrep -q "^-+[ae]-+ $DIR/d52a/foo" || error "lsattr"
 	chattr -a $DIR/d52a/foo || error "chattr -a failed"
-
+        cp -r $DIR/d52a /tmp/
 	rm -fr $DIR/d52a || error "cleanup rm failed"
 }
 run_test 52a "append-only flag test (should return errors) ====="
@@ -2452,17 +2452,17 @@ test_52b() {
 	[ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
 	mkdir -p $DIR/d52b
 	touch $DIR/d52b/foo
-	chattr =i $DIR/d52b/foo || error
-	cat test > $DIR/d52b/foo && error
-	cp /etc/hosts $DIR/d52b/foo && error
-	rm -f $DIR/d52b/foo 2>/dev/null && error
-	link $DIR/d52b/foo $DIR/d52b/foo_link 2>/dev/null && error
-	echo foo >> $DIR/d52b/foo && error
-	mrename $DIR/d52b/foo $DIR/d52b/foo_ren && error
+	chattr +i $DIR/d52b/foo || error "chattr +i failed"
+	cat test > $DIR/d52b/foo && error "cat test worked"
+	cp /etc/hosts $DIR/d52b/foo && error "cp worked"
+	rm -f $DIR/d52b/foo 2>/dev/null && error "rm worked"
+	link $DIR/d52b/foo $DIR/d52b/foo_link 2>/dev/null && error  "link worked"
+	echo foo >> $DIR/d52b/foo && error "echo worked"
+	mrename $DIR/d52b/foo $DIR/d52b/foo_ren && error "rename worked"
 	[ -f $DIR/d52b/foo ] || error
 	[ -f $DIR/d52b/foo_ren ] && error
-	lsattr $DIR/d52b/foo | egrep -q "^-+i-+ $DIR/d52b/foo" || error
-	chattr -i $DIR/d52b/foo || error
+	lsattr $DIR/d52b/foo | egrep -q "^-+[ie]-+ $DIR/d52b/foo" || error "lsattr"
+	chattr -i $DIR/d52b/foo || error "chattr failed"
 
 	rm -fr $DIR/d52b || error
 }
