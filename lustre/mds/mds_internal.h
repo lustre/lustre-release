@@ -71,7 +71,6 @@ static inline void mds_export_evict(struct obd_export *exp)
 /* Open counts for files.  No longer atomic, must hold inode->i_sem */
 # define mds_inode_oatomic(inode)    ((inode)->i_cindex)
 
-#ifdef HAVE_I_ALLOC_SEM
 #define MDS_UP_READ_ORPHAN_SEM(i)          UP_READ_I_ALLOC_SEM(i)
 #define MDS_DOWN_READ_ORPHAN_SEM(i)        DOWN_READ_I_ALLOC_SEM(i)
 #define LASSERT_MDS_ORPHAN_READ_LOCKED(i)  LASSERT_I_ALLOC_SEM_READ_LOCKED(i)
@@ -80,16 +79,6 @@ static inline void mds_export_evict(struct obd_export *exp)
 #define MDS_DOWN_WRITE_ORPHAN_SEM(i)       DOWN_WRITE_I_ALLOC_SEM(i)
 #define LASSERT_MDS_ORPHAN_WRITE_LOCKED(i) LASSERT_I_ALLOC_SEM_WRITE_LOCKED(i)
 #define MDS_PACK_MD_LOCK 1
-#else
-#define MDS_UP_READ_ORPHAN_SEM(i)          do { up(&(i)->i_sem); } while (0)
-#define MDS_DOWN_READ_ORPHAN_SEM(i)        do { down(&(i)->i_sem); } while (0)
-#define LASSERT_MDS_ORPHAN_READ_LOCKED(i)  LASSERT(down_trylock(&(i)->i_sem)!=0)
-
-#define MDS_UP_WRITE_ORPHAN_SEM(i)         do { up(&(i)->i_sem); } while (0)
-#define MDS_DOWN_WRITE_ORPHAN_SEM(i)       do { down(&(i)->i_sem); } while (0)
-#define LASSERT_MDS_ORPHAN_WRITE_LOCKED(i) LASSERT(down_trylock(&(i)->i_sem)!=0)
-#define MDS_PACK_MD_LOCK 0
-#endif
 
 static inline int mds_orphan_open_count(struct inode *inode)
 {

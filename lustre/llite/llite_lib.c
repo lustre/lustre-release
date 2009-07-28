@@ -1295,34 +1295,22 @@ void ll_put_super(struct super_block *sb)
         EXIT;
 } /* client_put_super */
 
-#if defined(HAVE_REGISTER_CACHE) || defined(HAVE_SHRINKER_CACHE)
-
-#if defined(HAVE_CACHE_RETURN_INT)
-static int
-#else
-static void
-#endif
-ll_shrink_cache(int priority, unsigned int gfp_mask)
+int ll_shrink_cache(int nr_to_scan, gfp_t gfp_mask)
 {
         struct ll_sb_info *sbi;
         int count = 0;
 
+        if (gfp_mask & __GFP_FS)
+                return -1;
+
         /* don't race with umount */
         down_read(&ll_sb_sem);
         list_for_each_entry(sbi, &ll_super_blocks, ll_list)
-                count += llap_shrink_cache(sbi, priority);
+                count += llap_shrink_cache(sbi, nr_to_scan);
         up_read(&ll_sb_sem);
 
-#if defined(HAVE_CACHE_RETURN_INT)
         return count;
-#endif
 }
-
-struct cache_definition ll_cache_definition = {
-        .name = "llap_cache",
-        .shrink = ll_shrink_cache
-};
-#endif /* HAVE_REGISTER_CACHE || HAVE_SHRINKER_CACHE */
 
 struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
 {

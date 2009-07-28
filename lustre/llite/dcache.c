@@ -666,7 +666,7 @@ out_sa:
 }
 
 #ifdef HAVE_VFS_INTENT_PATCHES
-static int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
+int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
 {
         int rc;
         ENTRY;

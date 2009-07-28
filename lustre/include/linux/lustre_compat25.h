@@ -304,7 +304,7 @@ static inline int mapping_has_pages(struct address_space *mapping)
 #define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
                        vfs_symlink(dir, dentry, path)
 #endif
-#endif
+#endif /* HAVE_SECURITY_PLUG */
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7))
 #define ll_set_dflags(dentry, flags) do { dentry->d_vfs_flags |= flags; } while(0)
@@ -322,30 +322,16 @@ static inline int mapping_has_pages(struct address_space *mapping)
                 (type *)( (char *)__mptr - offsetof(type,member) );})
 #endif
 
-#ifdef HAVE_I_ALLOC_SEM
-#define UP_WRITE_I_ALLOC_SEM(i)   do { up_write(&(i)->i_alloc_sem); } while (0)
-#define DOWN_WRITE_I_ALLOC_SEM(i) do { down_write(&(i)->i_alloc_sem); } while(0)
+#define UP_WRITE_I_ALLOC_SEM(i)   up_write(&(i)->i_alloc_sem)
+#define DOWN_WRITE_I_ALLOC_SEM(i) down_write(&(i)->i_alloc_sem)
 #define LASSERT_I_ALLOC_SEM_WRITE_LOCKED(i) LASSERT(down_read_trylock(&(i)->i_alloc_sem) == 0)
 
-#define UP_READ_I_ALLOC_SEM(i)    do { up_read(&(i)->i_alloc_sem); } while (0)
-#define DOWN_READ_I_ALLOC_SEM(i)  do { down_read(&(i)->i_alloc_sem); } while (0)
+#define UP_READ_I_ALLOC_SEM(i)    up_read(&(i)->i_alloc_sem)
+#define DOWN_READ_I_ALLOC_SEM(i)  down_read(&(i)->i_alloc_sem)
 #define LASSERT_I_ALLOC_SEM_READ_LOCKED(i) LASSERT(down_write_trylock(&(i)->i_alloc_sem) == 0)
-#else
-#define UP_READ_I_ALLOC_SEM(i)              do { } while (0)
-#define DOWN_READ_I_ALLOC_SEM(i)            do { } while (0)
-#define LASSERT_I_ALLOC_SEM_READ_LOCKED(i)  do { } while (0)
-
-#define UP_WRITE_I_ALLOC_SEM(i)             do { } while (0)
-#define DOWN_WRITE_I_ALLOC_SEM(i)           do { } while (0)
-#define LASSERT_I_ALLOC_SEM_WRITE_LOCKED(i) do { } while (0)
-#endif
 
 #ifndef HAVE_GRAB_CACHE_PAGE_NOWAIT_GFP
 #define grab_cache_page_nowait_gfp(x, y, z) grab_cache_page_nowait((x), (y))
-#endif
-
-#ifndef HAVE_FILEMAP_FDATAWRITE
-#define filemap_fdatawrite(mapping)      filemap_fdatasync(mapping)
 #endif
 
 #include <linux/mpage.h>        /* for generic_writepages */
@@ -385,11 +371,10 @@ static inline int filemap_fdatawrite_range(struct address_space *mapping,
 #else
 int filemap_fdatawrite_range(struct address_space *mapping,
                              loff_t start, loff_t end);
-#endif
+#endif /* HAVE_FILEMAP_FDATAWRITE_RANGE */
 
 #ifdef HAVE_VFS_KERN_MOUNT
-static inline 
-struct vfsmount *
+static inline struct vfsmount *
 ll_kern_mount(const char *fstype, int flags, const char *name, void *data)
 {
         struct file_system_type *type = get_fs_type(fstype);
@@ -408,11 +393,6 @@ ll_kern_mount(const char *fstype, int flags, const char *name, void *data)
 #define ll_do_statfs(sb, sfs) (sb)->s_op->statfs((sb)->s_root, (sfs))
 #else
 #define ll_do_statfs(sb, sfs) (sb)->s_op->statfs((sb), (sfs))
-#endif
-
-/* task_struct */
-#ifndef HAVE_TASK_PPTR
-#define p_pptr parent
 #endif
 
 #ifdef HAVE_UNREGISTER_BLKDEV_RETURN_INT
@@ -460,7 +440,7 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #define ll_vfs_mknod(dir,entry,mnt,mode,dev)            \
                 vfs_mknod(dir,entry,mnt,mode,dev)
 #define ll_security_inode_unlink(dir,entry,mnt)         \
-                security_inode_unlink(dir,entry,mnt)     
+                security_inode_unlink(dir,entry,mnt)
 #define ll_vfs_rename(old,old_dir,mnt,new,new_dir,mnt1) \
                 vfs_rename(old,old_dir,mnt,new,new_dir,mnt1)
 #else
@@ -469,10 +449,10 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #define ll_vfs_link(old,mnt,dir,new,mnt1)       vfs_link(old,dir,new)
 #define ll_vfs_unlink(inode,entry,mnt)          vfs_unlink(inode,entry)
 #define ll_vfs_mknod(dir,entry,mnt,mode,dev)    vfs_mknod(dir,entry,mode,dev)
-#define ll_security_inode_unlink(dir,entry,mnt) security_inode_unlink(dir,entry)     
+#define ll_security_inode_unlink(dir,entry,mnt) security_inode_unlink(dir,entry)
 #define ll_vfs_rename(old,old_dir,mnt,new,new_dir,mnt1) \
                 vfs_rename(old,old_dir,new,new_dir)
-#endif
+#endif /* HAVE_SECURITY_PLUG */
 
 #ifndef for_each_possible_cpu
 #define for_each_possible_cpu(i) for_each_cpu(i)
@@ -511,7 +491,7 @@ void remove_shrinker(struct shrinker *shrinker)
         unregister_shrinker(shrinker);
         kfree(shrinker);
 }
-#endif
+#endif /* HAVE_REGISTER_SHRINKER */
 
 #ifdef HAVE_BIO_ENDIO_2ARG
 #define cfs_bio_io_error(a,b)   bio_io_error((a))

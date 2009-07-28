@@ -640,35 +640,24 @@ static inline int llap_shrink_cache_internal(struct ll_sb_info *sbi,
  * it deduces how many pages should be reaped from each cpu in proportion as
  * their own # of page count(llpd_count).
  */
-int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
+int llap_shrink_cache(struct ll_sb_info *sbi, int nr_to_scan)
 {
         unsigned long total, want, percpu_want, count = 0;
         int cpu, nr_cpus;
 
         total = lcounter_read_positive(&sbi->ll_async_page_count);
-        if (total == 0)
-                return 0;
-
-#ifdef HAVE_SHRINKER_CACHE
-        want = shrink_fraction;
-        if (want == 0)
+        if (total == 0 || nr_to_scan == 0)
                 return total;
-#else
-        /* There can be a large number of llaps (600k or more in a large
-         * memory machine) so the VM 1/6 shrink ratio is likely too much.
-         * Since we are freeing pages also, we don't necessarily want to
-         * shrink so much.  Limit to 40MB of pages + llaps per call. */
-        if (shrink_fraction <= 0)
-                want = total - sbi->ll_async_page_max + 32*num_online_cpus();
-        else
-                want = (total + shrink_fraction - 1) / shrink_fraction;
-#endif
 
+        want = nr_to_scan;
+
+        /* Since we are freeing pages also, we don't necessarily want to
+         * shrink so much.  Limit to 40MB of pages + llaps per call. */
         if (want > 40 << (20 - CFS_PAGE_SHIFT))
                 want = 40 << (20 - CFS_PAGE_SHIFT);
 
-        CDEBUG(D_CACHE, "shrinking %lu of %lu pages (1/%d)\n",
-               want, total, shrink_fraction);
+        CDEBUG(D_CACHE, "shrinking %lu of %lu pages (asked for %u)\n",
+               want, total, nr_to_scan);
 
         nr_cpus = num_possible_cpus();
         cpu = sbi->ll_async_page_clock_hand;
@@ -693,11 +682,7 @@ int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
         CDEBUG(D_CACHE, "shrank %lu/%lu and left %lu unscanned\n",
                count, want, total);
 
-#ifdef HAVE_SHRINKER_CACHE
         return lcounter_read_positive(&sbi->ll_async_page_count);
-#else
-        return count;
-#endif
 }
 
 /* Rebalance the async page queue len for each cpu. We hope that the cpu
