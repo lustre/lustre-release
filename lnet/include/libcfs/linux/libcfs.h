@@ -201,6 +201,35 @@ struct cfs_stack_trace {
 #define WITH_WATCHDOG
 #endif
 
+
+#ifndef HAVE_STRUCT_CRED
+
+#define current_cred() (current)
+
+#define current_cred_xxx(xxx)                   \
+({                                              \
+        current->xxx;                     \
+})
+
+#define current_uid()           (current_cred_xxx(uid))
+#define current_gid()           (current_cred_xxx(gid))
+#define current_euid()          (current_cred_xxx(euid))
+#define current_egid()          (current_cred_xxx(egid))
+#define current_suid()          (current_cred_xxx(suid))
+#define current_sgid()          (current_cred_xxx(sgid))
+#define current_fsuid()         (current_cred_xxx(fsuid))
+#define current_fsgid()         (current_cred_xxx(fsgid))
+#define current_cap()           (current_cred_xxx(cap_effective))
+#define current_user()          (current_cred_xxx(user))
+#define current_user_ns()       (current_cred_xxx(user)->user_ns)
+#define current_security()      (current_cred_xxx(security))
+
+#define cred task_struct
+
+#define prepare_creds() (current)
+#define commit_creds(a)
+#endif
+
 #endif
 
 #endif /* _LINUX_LIBCFS_H */

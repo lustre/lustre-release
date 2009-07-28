@@ -41,6 +41,7 @@
  */
 
 #include <linux/sched.h>
+#include <linux/fs_struct.h>
 
 #define DEBUG_SUBSYSTEM S_LNET
 
@@ -54,22 +55,32 @@
 
 uid_t  cfs_curproc_uid(void)
 {
-        return current->uid;
+        return current_uid();
 }
 
 gid_t  cfs_curproc_gid(void)
 {
-        return current->gid;
+        return current_gid();
 }
 
 uid_t  cfs_curproc_fsuid(void)
 {
-        return current->fsuid;
+        return current_fsuid();
+}
+
+uid_t  cfs_curproc_euid(void)
+{
+        return current_egid();
+}
+
+uid_t  cfs_curproc_egid(void)
+{
+        return current_egid();
 }
 
 gid_t  cfs_curproc_fsgid(void)
 {
-        return current->fsgid;
+        return current_fsgid();
 }
 
 pid_t  cfs_curproc_pid(void)
@@ -83,7 +94,7 @@ int    cfs_curproc_groups_nr(void)
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
         task_lock(current);
-        nr = current->group_info->ngroups;
+        nr = current_cred()->group_info->ngroups;
         task_unlock(current);
 #else
         nr = current->ngroups;
@@ -95,8 +106,8 @@ void   cfs_curproc_groups_dump(gid_t *array, int size)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
         task_lock(current);
-        size = min_t(int, size, current->group_info->ngroups);
-        memcpy(array, current->group_info->blocks[0], size * sizeof(__u32));
+        size = min_t(int, size, current_cred()->group_info->ngroups);
+        memcpy(array, current_cred()->group_info->blocks[0], size * sizeof(__u32));
         task_unlock(current);
 #else
         LASSERT(size <= NGROUPS);
@@ -127,17 +138,25 @@ char  *cfs_curproc_comm(void)
 
 void cfs_cap_raise(cfs_cap_t cap)
 {
-        cap_raise(cfs_current()->cap_effective, cfs_cap_unpack(cap));
+        struct cred *cred;
+        if ((cred = prepare_creds())) {
+                cap_raise(cred->cap_effective, cfs_cap_unpack(cap));
+                commit_creds(cred);
+        }
 }
 
 void cfs_cap_lower(cfs_cap_t cap)
 {
-        cap_lower(cfs_current()->cap_effective, cfs_cap_unpack(cap));
+        struct cred *cred;
+        if ((cred = prepare_creds())) {
+                cap_lower(cred->cap_effective, cfs_cap_unpack(cap));
+                commit_creds(cred);
+        }
 }
 
 int cfs_cap_raised(cfs_cap_t cap)
 {
-        return cap_raised(cfs_current()->cap_effective, cfs_cap_unpack(cap));
+        return cap_raised(current_cap(), cfs_cap_unpack(cap));
 }
 
 void cfs_kernel_cap_pack(cfs_kernel_cap_t kcap, cfs_cap_t *cap)
@@ -170,13 +189,17 @@ void cfs_kernel_cap_unpack(cfs_kernel_cap_t *kcap, cfs_cap_t cap)
 cfs_cap_t cfs_curproc_cap_pack(void)
 {
         cfs_cap_t cap;
-        cfs_kernel_cap_pack(current->cap_effective, &cap);
+        cfs_kernel_cap_pack(current_cap(), &cap);
         return cap;
 }
 
 void cfs_curproc_cap_unpack(cfs_cap_t cap)
 {
-        cfs_kernel_cap_unpack(&current->cap_effective, cap);
+        struct cred *cred;
+        if ((cred = prepare_creds())) {
+                cfs_kernel_cap_unpack(&cred->cap_effective, cap);
+                commit_creds(cred);
+        }
 }
 
 int cfs_capable(cfs_cap_t cap)
@@ -186,7 +209,9 @@ int cfs_capable(cfs_cap_t cap)
 
 EXPORT_SYMBOL(cfs_curproc_uid);
 EXPORT_SYMBOL(cfs_curproc_pid);
+EXPORT_SYMBOL(cfs_curproc_euid);
 EXPORT_SYMBOL(cfs_curproc_gid);
+EXPORT_SYMBOL(cfs_curproc_egid);
 EXPORT_SYMBOL(cfs_curproc_fsuid);
 EXPORT_SYMBOL(cfs_curproc_fsgid);
 EXPORT_SYMBOL(cfs_curproc_umask);

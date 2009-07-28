@@ -51,6 +51,8 @@
  */
 uid_t  cfs_curproc_uid(void);
 gid_t  cfs_curproc_gid(void);
+uid_t  cfs_curproc_euid(void);
+gid_t  cfs_curproc_egid(void);
 uid_t  cfs_curproc_fsuid(void);
 gid_t  cfs_curproc_fsgid(void);
 pid_t  cfs_curproc_pid(void);
