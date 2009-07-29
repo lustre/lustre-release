@@ -162,13 +162,17 @@ int libcfs_ulnl_msg_free(struct lnl_hdr **lnlhh)
 }
 
 #else /* HAVE_NETLINK */
+
+#include <errno.h>
+
+typedef int lustre_netlink;
 int libcfs_ulnl_start(lustre_netlink *link, int groups) {
         return -ENOSYS;
 }
 int libcfs_ulnl_stop(lustre_netlink *link) {
         return 0;
 }
-
+struct lnl_hdr;
 int libcfs_ulnl_msg_get(lustre_netlink *link, int maxsize, int transport,
                         struct lnl_hdr **lnlhh) {
         return -ENOSYS;
