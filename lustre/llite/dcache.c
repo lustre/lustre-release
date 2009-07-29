@@ -734,7 +734,7 @@ int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
                                 nd->intent.open.file->private_data = it;
                                 filp = lookup_instantiate_filp(nd, dentry,NULL);
                                 if (IS_ERR(filp)) {
-                                        rc = 0;
+                                        rc = PTR_ERR(filp);
                                 }
 #else
                                 nd->intent.open.file->private_data = it;
