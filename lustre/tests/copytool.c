@@ -47,14 +47,33 @@
  */
 
 #include <stdio.h>
+#include <getopt.h>
 #include <libcfs/libcfs.h>
 #include <lustre/lustre_user.h>
 #include <lustre/liblustreapi.h>
 
-int main() {
+int main(int argc, char **argv) {
+        int c, test = 0;
+        struct option long_opts[] = {
+                {"test", no_argument, 0, 't'},
+                {0, 0, 0, 0}
+        };
         void *ctdata;
         int archive_nums[] = {1}; /* which archive numbers we care about */
         int rc;
+
+        optind = 0;
+        while ((c = getopt_long(argc, argv, "t", long_opts, NULL)) != -1) {
+                switch (c) {
+                case 't':
+                        test++;
+                        break;
+                default:
+                        fprintf(stderr, "error: %s: option '%s' unrecognized\n",
+                                argv[0], argv[optind - 1]);
+                        return -EINVAL;
+                }
+        }
 
         rc = llapi_copytool_start(&ctdata, 0, ARRAY_SIZE(archive_nums),
                                   archive_nums);
@@ -63,6 +82,9 @@ int main() {
                         strerror(-rc));
                 return rc;
         }
+
+        if (test)
+                return llapi_copytool_fini(&ctdata);
 
         printf("Waiting for message from kernel (pid=%d)\n", getpid());
 

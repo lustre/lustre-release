@@ -50,6 +50,7 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <libcfs/libcfs.h>
 #include "lustre/lustre_user.h"
 #include "lp_utils.h"
 
@@ -94,7 +95,7 @@ inline void end(char *str) {
                                timestamp(), str, elapsed / 60);
                 } else {
                         printf("%s:\tFinished %-15s(%.3f sec)\n",
-		               timestamp(), str, elapsed);
+                               timestamp(), str, elapsed);
 
                 }
                 fflush(stdout);

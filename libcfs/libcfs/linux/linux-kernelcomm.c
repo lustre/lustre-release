@@ -57,6 +57,14 @@
 
 #include <libcfs/libcfs.h>
 
+/* OFED backport #defines netlink_kernel_create with 6 args.
+   I haven't a clue why that header file gets included here,
+   but we must undo its mischief. */
+#ifdef BACKPORT_LINUX_NETLINK_H
+#undef netlink_kernel_create
+#endif
+
+
 /* Single Netlink Message type to send all Lustre messages */
 #define LNL_MSG 26
 

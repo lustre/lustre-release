@@ -6376,7 +6376,8 @@ test_162() {
 run_test 162 "path lookup sanity"
 
 test_163() {
-        copytool &
+	copytool --test || { skip "copytool test: $? 38=enosys" && return; }
+	copytool &
 	sleep 1
 	# this proc file is temporary and linux-only
 	$LCTL set_param mdc.lustre-MDT0000-mdc-*.netlink=0 || error "lnl send failed"
