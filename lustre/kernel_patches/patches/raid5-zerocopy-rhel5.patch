@@ -385,7 +385,8 @@ Index: linux-2.6.18-128.1.6/include/linux/page-flags.h
  #define PG_reclaim		17	/* To be reclaimed asap */
  #define PG_nosave_free		18	/* Free, should not be written */
  #define PG_buddy		19	/* Page is free, on buddy lists */
-+#define PG_constant		20	/* To mark if the page is constant */
+ #define PG_gup			20	/* Page pin may be because of gup */
++#define PG_constant		21	/* To mark if the page is constant */
  #define PG_xpmem		27	/* Testing for xpmem. */
  
  /* PG_owner_priv_1 users should have descriptive aliases */
