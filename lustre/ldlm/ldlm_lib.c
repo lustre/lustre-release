@@ -760,9 +760,7 @@ int target_handle_connect(struct ptlrpc_request *req)
                 export = NULL;
                 rc = 0;
         } else if (export->exp_connection != NULL &&
-                   req->rq_peer.nid != export->exp_connection->c_peer.nid &&
-                   (lustre_msg_get_op_flags(req->rq_reqmsg) &
-                    MSG_CONNECT_INITIAL)) {
+                   req->rq_peer.nid != export->exp_connection->c_peer.nid) {
                 /* in mds failover we have static uuid but nid can be
                  * changed*/
                 CWARN("%s: cookie %s seen on new NID %s when "
