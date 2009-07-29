@@ -734,7 +734,7 @@ int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
  * nd->intent.open.file for error, so we need to return it as lookup's result
  * instead */
                                 if (IS_ERR(filp))
-                                        rc = 0;
+                                        rc = PTR_ERR(filp);
 #endif
                         }
 #else
