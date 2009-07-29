@@ -1492,6 +1492,9 @@ static int lfs_quotaon(int argc, char **argv)
                                 qctl.qc_type == 0x02 ? "user/group" :
                                 (qctl.qc_type == 0x00 ? "user" : "group"));
                         rc = 0;
+                } else if (errno == ENOENT) {
+                        fprintf(stderr, "error: cannot find quota database, "
+                                        "make sure you have run quotacheck\n");
                 } else {
                         if (*obd_type)
                                 fprintf(stderr, "%s %s ", obd_type,
@@ -1853,7 +1856,7 @@ int lfs_setquota(int argc, char **argv)
         }
 
         if (qctl.qc_type == UGQUOTA) {
-                fprintf(stderr, "error: neither -u nor -g are specified\n");
+                fprintf(stderr, "error: neither -u nor -g was specified\n");
                 return CMD_HELP;
         }
 
@@ -1878,8 +1881,10 @@ int lfs_setquota(int argc, char **argv)
 
                 rc = llapi_quotactl(mnt, &tmp_qctl);
                 if (rc < 0) {
-                        fprintf(stderr, "error: getquota failed\n");
-                        return CMD_HELP;
+                        fprintf(stderr, "error: setquota failed while retrieving"
+                                        " current quota settings (%s)\n",
+                                        strerror(errno));
+                        return rc;
                 }
 
                 if (!(limit_mask & BHLIMIT))
