@@ -15,6 +15,14 @@ tbd Sun Microsystems, Inc.
 	  more information, please refer to bugzilla 17630.
 
 Severity   : normal
+Bugzilla   : 17545
+Description: open sometimes returns ENOENT instead of EACCES
+Details    : checking permission should be part of open part of mds_open, not
+             lookup part. so server should be set DISP_OPEN_OPEN disposition
+             before starting permission check.
+             Also not need revalidate dentry if client already have LOOKUP lock.
+
+Severity   : normal
 Bugzilla   : 19854
 Description: enable client interface failover
 Details    : When a child reconnects from another NID, properly update export

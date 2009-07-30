@@ -848,7 +848,6 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         if ((rc = mds_lov_prepare_objids(obd,lmm)) != 0)
                 RETURN(rc);
 
-        ldlm_reply_set_disposition(rep, DISP_OPEN_OPEN);
         mfd = mds_dentry_open(dchild, mds->mds_vfsmnt, flags, req);
         if (IS_ERR(mfd))
                 RETURN(PTR_ERR(mfd));
@@ -878,6 +877,7 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
         struct inode *inodes[PTLRPC_NUM_VERSIONS] = { NULL };
         ENTRY;
 
+        ldlm_reply_set_disposition(rep, DISP_LOOKUP_EXECD);
         fidlen = ll_fid2str(fidname, fid->id, fid->generation);
         dchild = mds_lookup(obd, fidname, mds->mds_pending_dir, fidlen);
         if (IS_ERR(dchild)) {
@@ -929,8 +929,8 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
         }
 
         mds_pack_inode2body(body, dchild->d_inode);
-        ldlm_reply_set_disposition(rep, DISP_LOOKUP_EXECD);
         ldlm_reply_set_disposition(rep, DISP_LOOKUP_POS);
+        ldlm_reply_set_disposition(rep, DISP_OPEN_OPEN);
 
         rc = mds_finish_open(req, dchild, body, flags, &handle, rec, rep, NULL);
         rc = mds_finish_transno(mds, inodes, handle,
@@ -1293,7 +1293,19 @@ int mds_open(struct mds_update_record *rec, int offset,
 
 found_child:
         mds_pack_inode2body(body, dchild->d_inode);
+        if (!created && (rec->ur_flags & MDS_OPEN_CREAT) &&
+            (rec->ur_flags & MDS_OPEN_EXCL)) {
+                /* File already exists, we didn't just create it, and we
+                 * were passed O_EXCL; err-or. */
+                GOTO(cleanup, rc = -EEXIST); // returns a lock to the client
+        }
 
+        /* if we are following special file, don't open */
+        if (!S_ISREG(dchild->d_inode->i_mode) &&
+            !S_ISDIR(dchild->d_inode->i_mode))
+                GOTO(cleanup_no_trans, rc = 0);
+
+        ldlm_reply_set_disposition(rep, DISP_OPEN_OPEN);
         if (S_ISREG(dchild->d_inode->i_mode)) {
                 /* Check permissions etc */
                 rc = ll_permission(dchild->d_inode, acc_mode, NULL);
@@ -1310,36 +1322,23 @@ found_child:
                     ((rec->ur_flags & MDS_OPEN_APPEND) == 0 ||
                      (rec->ur_flags & MDS_OPEN_TRUNC) != 0))
                         GOTO(cleanup, rc = -EPERM);
-        }
-
-        if (!created && (rec->ur_flags & MDS_OPEN_CREAT) &&
-            (rec->ur_flags & MDS_OPEN_EXCL)) {
-                /* File already exists, we didn't just create it, and we
-                 * were passed O_EXCL; err-or. */
-                GOTO(cleanup, rc = -EEXIST); // returns a lock to the client
-        }
-
-        /* if we are following a symlink, don't open */
-        if (S_ISLNK(dchild->d_inode->i_mode))
-                GOTO(cleanup_no_trans, rc = 0);
-
-        if (S_ISDIR(dchild->d_inode->i_mode)) {
-                if (rec->ur_flags & MDS_OPEN_CREAT ||
-                    rec->ur_flags & FMODE_WRITE) {
-                        /* we are trying to create or write a exist dir */
-                        GOTO(cleanup, rc = -EISDIR);
+        } else {
+                if (S_ISDIR(dchild->d_inode->i_mode)) {
+                        if (rec->ur_flags & MDS_OPEN_CREAT ||
+                            rec->ur_flags & FMODE_WRITE) {
+                                /* we are trying to create or write a exist dir*/
+                                GOTO(cleanup, rc = -EISDIR);
+                        }
+                        if (rec->ur_flags & MDS_FMODE_EXEC) {
+                                /* we are trying to exec a directory */
+                                GOTO(cleanup, rc = -EACCES);
+                        }
+                        if (ll_permission(dchild->d_inode, acc_mode, NULL))
+                                GOTO(cleanup, rc = -EACCES);
+                } else if (rec->ur_flags & MDS_OPEN_DIRECTORY) {
+                        GOTO(cleanup, rc = -ENOTDIR);
                 }
-                if (rec->ur_flags & MDS_FMODE_EXEC) {
-                        /* we are trying to exec a directory */
-                        GOTO(cleanup, rc = -EACCES);
-                }
-                if (ll_permission(dchild->d_inode, acc_mode, NULL)) {
-                        ldlm_reply_set_disposition(rep, DISP_OPEN_OPEN);
-                        GOTO(cleanup, rc = -EACCES);
-                }
-        } else if (rec->ur_flags & MDS_OPEN_DIRECTORY) {
-                GOTO(cleanup, rc = -ENOTDIR);
-        }
+	}
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_CREATE)) {
                 obd_fail_loc = OBD_FAIL_LDLM_REPLY | OBD_FAIL_ONCE;

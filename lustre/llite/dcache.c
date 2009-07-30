@@ -369,6 +369,9 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 GOTO(out_sa, rc);
         }
 
+        if ((de->d_flags & DCACHE_LUSTRE_INVALID) == 0)
+                GOTO(out_sa, rc = 1);
+
         exp = ll_i2mdcexp(de->d_inode);
 
         /* Never execute intents for mount points.
