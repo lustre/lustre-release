@@ -127,7 +127,7 @@ static int llog_changelog_cancel_cb(struct llog_handle *llh,
         /* This is always a (sub)log, not the catalog */
         LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
 
-        if (rec->cr_index > endrec)
+        if (rec->cr.cr_index > endrec)
                 /* records are in order, so we're done */
                 RETURN(LLOG_PROC_BREAK);
 

@@ -956,19 +956,27 @@ check_llog_size_change_rec(void)
 }
 
 static void
+check_changelog_rec(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(changelog_rec);
+        CHECK_MEMBER(changelog_rec, cr_namelen);
+        CHECK_MEMBER(changelog_rec, cr_flags);
+        CHECK_MEMBER(changelog_rec, cr_type);
+        CHECK_MEMBER(changelog_rec, cr_index);
+        CHECK_MEMBER(changelog_rec, cr_prev);
+        CHECK_MEMBER(changelog_rec, cr_time);
+        CHECK_MEMBER(changelog_rec, cr_tfid);
+        CHECK_MEMBER(changelog_rec, cr_pfid);
+}
+
+static void
 check_llog_changelog_rec(void)
 {
         BLANK_LINE();
         CHECK_STRUCT(llog_changelog_rec);
         CHECK_MEMBER(llog_changelog_rec, cr_hdr);
-        CHECK_MEMBER(llog_changelog_rec, cr_flags);
-        CHECK_MEMBER(llog_changelog_rec, cr_namelen);
-        CHECK_MEMBER(llog_changelog_rec, cr_type);
-        CHECK_MEMBER(llog_changelog_rec, cr_index);
-        CHECK_MEMBER(llog_changelog_rec, cr_prev);
-        CHECK_MEMBER(llog_changelog_rec, cr_time);
-        CHECK_MEMBER(llog_changelog_rec, cr_tfid);
-        CHECK_MEMBER(llog_changelog_rec, cr_pfid);
+        CHECK_MEMBER(llog_changelog_rec, cr);
         CHECK_MEMBER(llog_changelog_rec, cr_tail);
 }
 
@@ -1465,6 +1473,7 @@ main(int argc, char **argv)
         check_llog_setattr_rec();
         check_llog_setattr64_rec();
         check_llog_size_change_rec();
+        check_changelog_rec();
         check_llog_changelog_rec();
         check_llog_gen();
         check_llog_gen_rec();

@@ -417,13 +417,67 @@ struct if_quotactl {
 };
 
 
-/********* Misc **********/
+/********* Changelogs **********/
+/** Changelog record types */
+enum changelog_rec_type {
+        CL_MARK     = 0,
+        CL_CREATE   = 1,  /* namespace */
+        CL_MKDIR    = 2,  /* namespace */
+        CL_HARDLINK = 3,  /* namespace */
+        CL_SOFTLINK = 4,  /* namespace */
+        CL_MKNOD    = 5,  /* namespace */
+        CL_UNLINK   = 6,  /* namespace */
+        CL_RMDIR    = 7,  /* namespace */
+        CL_RENAME   = 8,  /* namespace */
+        CL_EXT      = 9,  /* namespace extended record (2nd half of rename) */
+        CL_OPEN     = 10, /* not currently used */
+        CL_CLOSE    = 11, /* may be written to log only with mtime change */
+        CL_IOCTL    = 12,
+        CL_TRUNC    = 13,
+        CL_SETATTR  = 14,
+        CL_XATTR    = 15,
+        CL_HSM      = 16, /* HSM specific events, see flags */
+        CL_LAST
+};
+
+static inline const char *changelog_type2str(int type) {
+        static const char *changelog_str[] = {
+                "MARK",  "CREAT", "MKDIR", "HLINK", "SLINK", "MKNOD", "UNLNK",
+                "RMDIR", "RNMFM", "RNMTO", "OPEN",  "CLOSE", "IOCTL", "TRUNC",
+                "SATTR", "XATTR", "HSM"   };
+        if (type >= 0 && type < CL_LAST)
+                return changelog_str[type];
+        return NULL;
+}
+
+/* per-record flags */
+#define CLF_VERSION  0x1000
+#define CLF_FLAGMASK 0x0FFF
+/* Anything under the flagmask may be per-type (if desired) */
+
+struct changelog_rec {
+        __u16                 cr_namelen;
+        __u16                 cr_flags; /**< (flags&CLF_FLAGMASK)|CLF_VERSION */
+        __u32                 cr_type;  /**< \a changelog_rec_type */
+        __u64                 cr_index; /**< changelog record number */
+        __u64                 cr_prev;  /**< last index for this target fid */
+        __u64                 cr_time;
+        union {
+                lustre_fid    cr_tfid;        /**< target fid */
+                __u32         cr_markerflags; /**< CL_MARK flags */
+        };
+        lustre_fid            cr_pfid;        /**< parent fid */
+        char                  cr_name[0];     /**< last element */
+} __attribute__((packed));
 
 struct ioc_changelog_clear {
         __u32 icc_mdtindex;
         __u32 icc_id;
         __u64 icc_recno;
 };
+
+
+/********* Misc **********/
 
 #ifndef offsetof
 # define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))

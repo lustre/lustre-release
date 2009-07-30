@@ -65,6 +65,7 @@
 #else
 #include <unistd.h>
 #endif
+#include <poll.h>
 
 #include <liblustre.h>
 #include <lnet/lnetctl.h>
@@ -2441,18 +2442,23 @@ int llapi_ls(int argc, char *argv[])
 /* Print mdtname 'name' into 'buf' using 'format'.  Add -MDT0000 if needed.
  * format must have %s%s, buf must be > 16
  */
-static int get_mdtname(const char *name, char *format, char *buf)
+static int get_mdtname(char *name, char *format, char *buf)
 {
         char suffix[]="-MDT0000";
         int len = strlen(name);
+
+        if ((len > 5) && (strncmp(name + len - 5, "_UUID", 5) == 0)) {
+                name[len - 5] = '\0';
+                len -= 5;
+        }
 
         if (len > 8) {
                 if ((len <= 16) && strncmp(name + len - 8, "-MDT", 4) == 0) {
                         suffix[0] = '\0';
                 } else {
                         /* Not enough room to add suffix */
-                        llapi_err(LLAPI_MSG_ERROR, "MDT name too long |%s|\n",
-                                  name);
+                        llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                                  "MDT name too long |%s|", name);
                         return -EINVAL;
                 }
         }
@@ -2460,12 +2466,26 @@ static int get_mdtname(const char *name, char *format, char *buf)
         return sprintf(buf, format, name, suffix);
 }
 
+/****** Changelog API ********/
+#define CHANGELOG_PRIV_MAGIC 0xCA8E1080
+struct changelog_private {
+        int magic;
+        int fd;
+        int flags;
+};
 
-/* Return a file descriptor to a readable changelog */
-int llapi_changelog_open(const char *device, long long startrec)
+/** Start reading from a changelog
+ * @param priv Opaque private control structure
+ * @param flags Start flags (e.g. follow)
+ * @param device Report changes recorded on this MDT
+ * @param startrec Report changes beginning with this record number
+ */
+int llapi_changelog_start(void **priv, int flags, const char *device,
+                          long long startrec)
 {
+        struct changelog_private *cp;
         char path[256];
-        char mdtname[17];
+        char mdtname[20];
         int rc, fd;
 
         if (device[0] == '/')
@@ -2493,7 +2513,99 @@ int llapi_changelog_open(const char *device, long long startrec)
                 return -errno;
         }
 
-        return fd;
+        cp = malloc(sizeof(*cp));
+        if (cp == NULL) {
+                close(fd);
+                return -ENOMEM;
+        }
+
+        cp->magic = CHANGELOG_PRIV_MAGIC;
+        cp->fd = fd;
+        cp->flags = flags;
+        *priv = cp;
+
+        return 0;
+}
+
+/** Finish reading from a changelog */
+int llapi_changelog_fini(void **priv)
+{
+        struct changelog_private *cp = (struct changelog_private *)*priv;
+
+        if (!cp || (cp->magic != CHANGELOG_PRIV_MAGIC))
+                return -EINVAL;
+
+        close(cp->fd);
+        free(cp);
+        *priv = NULL;
+        return 0;
+}
+
+static int pollwait(int fd) {
+        struct pollfd pfds[1];
+        int rc;
+
+        pfds[0].fd = fd;
+        pfds[0].events = POLLIN;
+        rc = poll(pfds, 1, -1);
+        return rc < 0 ? -errno : rc;
+}
+
+/** Read the next changelog entry
+ * @param priv Opaque private control structure
+ * @param rech Changelog record handle; record will be allocated here
+ * @return 0 valid message received; rec is set
+ *         <0 error code
+ *         1 EOF
+ */
+int llapi_changelog_recv(void *priv, struct changelog_rec **rech)
+{
+        struct changelog_private *cp = (struct changelog_private *)priv;
+        struct changelog_rec rec, *recp;
+        int rc = 0;
+
+        if (!cp || (cp->magic != CHANGELOG_PRIV_MAGIC))
+                return -EINVAL;
+        if (rech == NULL)
+                return -EINVAL;
+
+readrec:
+        /* Read in the rec to get the namelen */
+        rc = read(cp->fd, &rec, sizeof(rec));
+        if (rc < 0)
+                return -errno;
+        if (rc == 0) {
+                if (cp->flags && CHANGELOG_FLAG_FOLLOW) {
+                        rc = pollwait(cp->fd);
+                        if (rc < 0)
+                                return rc;
+                        goto readrec;
+                }
+                return 1;
+        }
+
+        recp = malloc(sizeof(rec) + rec.cr_namelen);
+        if (recp == NULL)
+                return -ENOMEM;
+        memcpy(recp, &rec, sizeof(rec));
+        rc = read(cp->fd, recp->cr_name, rec.cr_namelen);
+        if (rc < 0) {
+                free(recp);
+                llapi_err(LLAPI_MSG_ERROR, "Can't read entire filename");
+                return -errno;
+        }
+
+        *rech = recp;
+        return 0;
+}
+
+/** Release the changelog record when done with it. */
+int llapi_changelog_free(struct changelog_rec **rech)
+{
+        if (*rech)
+                free(*rech);
+        *rech = NULL;
+        return 0;
 }
 
 int llapi_changelog_clear(const char *mdtname, const char *idstr,
@@ -2525,7 +2637,7 @@ int llapi_changelog_clear(const char *mdtname, const char *idstr,
                 fd = open(mdtname, O_RDONLY | O_DIRECTORY | O_NONBLOCK);
                 rc = fd < 0 ? -errno : 0;
         } else {
-                if (get_mdtname(mdtname, "%s%s", fsname) < 0)
+                if (get_mdtname((char *)mdtname, "%s%s", fsname) < 0)
                         return -EINVAL;
                 ptr = fsname + strlen(fsname) - 8;
                 *ptr = '\0';

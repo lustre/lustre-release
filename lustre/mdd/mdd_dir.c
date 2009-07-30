@@ -647,13 +647,13 @@ static int mdd_changelog_ns_store(const struct lu_env  *env,
                 RETURN(-ENOMEM);
         rec = (struct llog_changelog_rec *)buf->lb_buf;
 
-        rec->cr_flags = CLF_VERSION;
-        rec->cr_type = (__u32)type;
+        rec->cr.cr_flags = CLF_VERSION;
+        rec->cr.cr_type = (__u32)type;
         tfid = tf ? tf : mdo2fid(target);
-        rec->cr_tfid = *tfid;
-        rec->cr_pfid = *tpfid;
-        rec->cr_namelen = tname->ln_namelen;
-        memcpy(rec->cr_name, tname->ln_name, rec->cr_namelen);
+        rec->cr.cr_tfid = *tfid;
+        rec->cr.cr_pfid = *tpfid;
+        rec->cr.cr_namelen = tname->ln_namelen;
+        memcpy(rec->cr.cr_name, tname->ln_name, rec->cr.cr_namelen);
         if (likely(target))
                 target->mod_cltime = cfs_time_current_64();
 

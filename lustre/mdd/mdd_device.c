@@ -148,11 +148,11 @@ static int changelog_init_cb(struct llog_handle *llh, struct llog_rec_hdr *hdr,
 
         CDEBUG(D_INFO,
                "seeing record at index %d/%d/"LPU64" t=%x %.*s in log "LPX64"\n",
-               hdr->lrh_index, rec->cr_hdr.lrh_index, rec->cr_index,
-               rec->cr_type, rec->cr_namelen, rec->cr_name,
+               hdr->lrh_index, rec->cr_hdr.lrh_index, rec->cr.cr_index,
+               rec->cr.cr_type, rec->cr.cr_namelen, rec->cr.cr_name,
                llh->lgh_id.lgl_oid);
 
-        mdd->mdd_cl.mc_index = rec->cr_index;
+        mdd->mdd_cl.mc_index = rec->cr.cr_index;
         RETURN(LLOG_PROC_BREAK);
 }
 
@@ -303,18 +303,18 @@ int mdd_changelog_llog_write(struct mdd_device         *mdd,
         struct llog_ctxt *ctxt;
         int rc;
 
-        if ((mdd->mdd_cl.mc_mask & (1 << rec->cr_type)) == 0)
+        if ((mdd->mdd_cl.mc_mask & (1 << rec->cr.cr_type)) == 0)
                 return 0;
 
-        rec->cr_hdr.lrh_len = llog_data_len(sizeof(*rec) + rec->cr_namelen);
+        rec->cr_hdr.lrh_len = llog_data_len(sizeof(*rec) + rec->cr.cr_namelen);
         /* llog_lvfs_write_rec sets the llog tail len */
         rec->cr_hdr.lrh_type = CHANGELOG_REC;
-        rec->cr_time = cfs_time_current_64();
+        rec->cr.cr_time = cfs_time_current_64();
         spin_lock(&mdd->mdd_cl.mc_lock);
         /* NB: I suppose it's possible llog_add adds out of order wrt cr_index,
            but as long as the MDD transactions are ordered correctly for e.g.
            rename conflicts, I don't think this should matter. */
-        rec->cr_index = ++mdd->mdd_cl.mc_index;
+        rec->cr.cr_index = ++mdd->mdd_cl.mc_index;
         spin_unlock(&mdd->mdd_cl.mc_lock);
         ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
         if (ctxt == NULL)
@@ -396,17 +396,17 @@ int mdd_changelog_write_header(struct mdd_device *mdd, int markerflags)
         if (rec == NULL)
                 RETURN(-ENOMEM);
 
-        rec->cr_flags = CLF_VERSION;
-        rec->cr_type = CL_MARK;
-        rec->cr_namelen = len;
-        memcpy(rec->cr_name, obd->obd_name, rec->cr_namelen);
+        rec->cr.cr_flags = CLF_VERSION;
+        rec->cr.cr_type = CL_MARK;
+        rec->cr.cr_namelen = len;
+        memcpy(rec->cr.cr_name, obd->obd_name, rec->cr.cr_namelen);
         /* Status and action flags */
-        rec->cr_markerflags = mdd->mdd_cl.mc_flags | markerflags;
+        rec->cr.cr_markerflags = mdd->mdd_cl.mc_flags | markerflags;
 
         rc = mdd_changelog_llog_write(mdd, rec, NULL);
 
         /* assume on or off event; reset repeat-access time */
-        mdd->mdd_cl.mc_starttime = rec->cr_time;
+        mdd->mdd_cl.mc_starttime = rec->cr.cr_time;
 
         OBD_FREE(rec, reclen);
         RETURN(rc);

@@ -65,7 +65,6 @@
 
 /* For dirname() */
 #include <libgen.h>
-#include <poll.h>
 
 #include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
@@ -2359,58 +2358,18 @@ static int lfs_ls(int argc, char **argv)
         return(llapi_ls(argc, argv));
 }
 
-/* A helper function to return single, whole lines delimited by newline.
-   Returns length of line.  Not reentrant! */
-static int get_next_full_line(int fd, char **ptr)
-{
-        static char buf[8192]; /* bigger than MAX_PATH_LENGTH */
-        static char *sptr = buf, *eptr = buf;
-        static int len, rem;
-
-        if ((*ptr == NULL) /* first time */
-            || (eptr >= buf + len) /* buffer empty */) {
-                sptr = eptr = buf;
-                len = read(fd, buf, sizeof(buf));
-                if (len <= 0)
-                        return len;
-        } else {
-                sptr = eptr + 1;
-        }
-
-full_line:
-        while (eptr < buf + len) {
-                eptr++;
-                /* parse full lines */
-                if (*eptr == '\n') {
-                        *eptr = '\0';
-                        *ptr = sptr;
-                        return (eptr - sptr);
-                }
-        }
-
-        /* partial line; move to front of buf */
-        rem = buf + len - sptr;
-        memcpy(buf, sptr, rem);
-        sptr = buf;
-        eptr = buf + rem;
-        len = read(fd, eptr, sizeof(buf) - rem);
-        if (len <= 0)
-                return len;
-        len += rem;
-        goto full_line;
-}
-
 static int lfs_changelog(int argc, char **argv)
 {
-        long long startrec = 0, endrec = 0, recnum;
-        int fd, len;
-        char c, *mdd, *ptr = NULL;
+        void *changelog_priv;
+        struct changelog_rec *rec;
+        long long startrec = 0, endrec = 0;
+        char c, *mdd;
         struct option long_opts[] = {
                 {"follow", no_argument, 0, 'f'},
                 {0, 0, 0, 0}
         };
         char short_opts[] = "f";
-        int follow = 0;
+        int rc, follow = 0;
 
         optind = 0;
         while ((c = getopt_long(argc, argv, short_opts,
@@ -2436,44 +2395,37 @@ static int lfs_changelog(int argc, char **argv)
         if (argc > optind)
                 endrec = strtoll(argv[optind++], NULL, 10);
 
-        fd = llapi_changelog_open(mdd, startrec);
-        if (fd < 0) {
-                fprintf(stderr, "%s Can't open changelog: %s\n", argv[0],
-                        strerror(errno = -fd));
-                return fd;
+        rc = llapi_changelog_start(&changelog_priv,
+                                   follow ? CHANGELOG_FLAG_FOLLOW : 0,
+                                   mdd, startrec);
+        if (rc < 0) {
+                fprintf(stderr, "Can't start changelog: %s\n",
+                        strerror(errno = -rc));
+                return rc;
         }
 
-        while ((len = get_next_full_line(fd, &ptr)) >= 0) {
-                if (len == 0) {
-                        struct pollfd pfds[1];
-                        int rc;
-
-                        if (!follow)
-                                break;
-                        pfds[0].fd = fd;
-                        pfds[0].events = POLLIN;
-                        rc = poll(pfds, 1, -1);
-                        if (rc < 0)
-                                break;
-                        continue;
-                }
-     /* eg. 2 02MKDIR 4405821890 t=[0x100000400/0x5] p=[0x100000400/0x4] pics */
-                sscanf(ptr, "%lld *", &recnum);
-                if (endrec && recnum > endrec)
+        while ((rc = llapi_changelog_recv(changelog_priv, &rec)) == 0) {
+                if (endrec && rec->cr_index > endrec)
                         break;
-                if (recnum < startrec)
+                if (rec->cr_index < startrec)
                         continue;
-                printf("%.*s\n", len, ptr);
+
+                printf(LPU64" %02d%-5s "LPU64" 0x%x t="DFID,
+                       rec->cr_index, rec->cr_type,
+                       changelog_type2str(rec->cr_type), rec->cr_time,
+                       rec->cr_flags & CLF_FLAGMASK, PFID(&rec->cr_tfid));
+                if (rec->cr_namelen)
+                        /* namespace rec includes parent and filename */
+                        printf(" p="DFID" %.*s\n", PFID(&rec->cr_pfid),
+                               rec->cr_namelen, rec->cr_name);
+                else
+                        printf("\n");
+                llapi_changelog_free(&rec);
         }
 
-        close(fd);
+        llapi_changelog_fini(&changelog_priv);
 
-        if (len < 0) {
-                fprintf(stderr, "read err %d\n", errno);
-                return -errno;
-        }
-
-        return 0;
+        return (rc == 1 ? 0 : rc);
 }
 
 static int lfs_changelog_clear(int argc, char **argv)

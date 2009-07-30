@@ -155,15 +155,6 @@ static int lprocfs_rd_atime_diff(char *page, char **start, off_t off,
 
 
 /**** changelogs ****/
-DECLARE_CHANGELOG_NAMES;
-
-const char *changelog_bit2str(int bit)
-{
-        if (bit < CL_LAST)
-                return changelog_str[bit];
-        return NULL;
-}
-
 static int lprocfs_rd_changelog_mask(char *page, char **start, off_t off,
                                      int count, int *eof, void *data)
 {
@@ -174,7 +165,7 @@ static int lprocfs_rd_changelog_mask(char *page, char **start, off_t off,
         while (i < CL_LAST) {
                 if (mdd->mdd_cl.mc_mask & (1 << i))
                         rc += snprintf(page + rc, count - rc, "%s ",
-                                       changelog_str[i]);
+                                       changelog_type2str(i));
                 i++;
         }
         return rc;
@@ -197,7 +188,7 @@ static int lprocfs_wr_changelog_mask(struct file *file, const char *buffer,
                 GOTO(out, rc = -EFAULT);
         kernbuf[count] = 0;
 
-        rc = libcfs_str2mask(kernbuf, changelog_bit2str, &mdd->mdd_cl.mc_mask,
+        rc = libcfs_str2mask(kernbuf, changelog_type2str, &mdd->mdd_cl.mc_mask,
                              CHANGELOG_MINMASK, CHANGELOG_ALLMASK);
         if (rc == 0)
                 rc = count;

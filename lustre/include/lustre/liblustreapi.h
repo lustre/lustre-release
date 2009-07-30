@@ -182,14 +182,23 @@ extern int llapi_rsetfacl(int argc, char *argv[]);
 extern int llapi_rgetfacl(int argc, char *argv[]);
 extern int llapi_cp(int argc, char *argv[]);
 extern int llapi_ls(int argc, char *argv[]);
-extern int llapi_changelog_open(const char *mdtname, long long startrec);
-extern int llapi_changelog_clear(const char *mdtname, const char *idstr,
-                                 long long endrec);
-extern int llapi_changelog_register(const char *mdtname);
-extern int llapi_changelog_unregister(const char *mdtname, int id);
 extern int llapi_fid2path(const char *device, const char *fidstr, char *path,
                           int pathlen, long long *recno, int *linkno);
-/* HSM copytool interface.  priv is private copytool state, managed internally
+extern int llapi_path2fid(const char *path, lustre_fid *fid);
+
+/* Changelog interface.  priv is private state, managed internally
+   by these functions */
+#define CHANGELOG_FLAG_FOLLOW 0x01
+extern int llapi_changelog_start(void **priv, int flags, const char *mdtname,
+                                 long long startrec);
+extern int llapi_changelog_fini(void **priv);
+extern int llapi_changelog_recv(void *priv, struct changelog_rec **rech);
+extern int llapi_changelog_free(struct changelog_rec **rech);
+/* Allow records up to endrec to be destroyed; requires registered id. */
+extern int llapi_changelog_clear(const char *mdtname, const char *idstr,
+                                 long long endrec);
+
+/* HSM copytool interface.  priv is private state, managed internally
    by these functions */
 extern int llapi_copytool_start(void **priv, int flags, int archive_num_count,
                                 int *archive_nums);

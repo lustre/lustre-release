@@ -2319,47 +2319,13 @@ struct llog_size_change_rec {
 } __attribute__((packed));
 
 #define CHANGELOG_MAGIC 0xca103000
-/** Changelog record types
- * When adding record types, update mdd_lproc.c's changelog_str
- */
-enum changelog_rec_type {
-        CL_MARK     = 0,
-        CL_CREATE   = 1,  /* namespace */
-        CL_MKDIR    = 2,  /* namespace */
-        CL_HARDLINK = 3,  /* namespace */
-        CL_SOFTLINK = 4,  /* namespace */
-        CL_MKNOD    = 5,  /* namespace */
-        CL_UNLINK   = 6,  /* namespace */
-        CL_RMDIR    = 7,  /* namespace */
-        CL_RENAME   = 8,  /* namespace */
-        CL_EXT      = 9,  /* namespace extended record (2nd half of rename) */
-        CL_OPEN     = 10, /* not currently used */
-        CL_CLOSE    = 11, /* may be written to log only with mtime change */
-        CL_IOCTL    = 12,
-        CL_TRUNC    = 13,
-        CL_SETATTR  = 14,
-        CL_XATTR    = 15,
-        CL_LAST
-};
-
-/** Changelog entry type names. Must be defined in the same order as the
- * \a changelog_rec_type enum.
- */
-#define DECLARE_CHANGELOG_NAMES static const char *changelog_str[] =         \
-       {"MARK","CREAT","MKDIR","HLINK","SLINK","MKNOD","UNLNK","RMDIR",      \
-        "RNMFM","RNMTO","OPEN","CLOSE","IOCTL","TRUNC","SATTR","XATTR"}
 
 /** \a changelog_rec_type's that can't be masked */
 #define CHANGELOG_MINMASK (1 << CL_MARK)
 /** bits covering all \a changelog_rec_type's */
-#define CHANGELOG_ALLMASK 0XFFFF
+#define CHANGELOG_ALLMASK 0XFFFFFFFF
 /** default \a changelog_rec_type mask */
 #define CHANGELOG_DEFMASK CHANGELOG_ALLMASK
-
-/* per-record flags */
-#define CLF_VERSION  0x1000
-#define CLF_FLAGMASK 0x0FFF
-#define CLF_HSM      0x0001
 
 /* changelog llog name, needed by client replicators */
 #define CHANGELOG_CATALOG "changelog_catalog"
@@ -2371,22 +2337,9 @@ struct changelog_setinfo {
 
 /** changelog record */
 struct llog_changelog_rec {
-        struct llog_rec_hdr   cr_hdr;
-        __u16                 cr_flags; /**< (flags&CLF_FLAGMASK)|CLF_VERSION */
-        __u16                 cr_namelen;
-        __u32                 cr_type;  /**< \a changelog_rec_type */
-        __u64                 cr_index;
-        __u64                 cr_prev;  /**< last index for this target fid */
-        __u64                 cr_time;
-        union {
-                struct lu_fid cr_tfid;        /**< target fid */
-                __u32         cr_markerflags; /**< CL_MARK flags */
-        };
-        struct lu_fid         cr_pfid;        /**< parent fid */
-        union {
-                char          cr_name[0];     /**< last element */
-                struct llog_rec_tail cr_tail; /**< for_sizezof_only */
-        };
+        struct llog_rec_hdr  cr_hdr;
+        struct changelog_rec cr;
+        struct llog_rec_tail cr_tail; /**< for_sizezof_only */
 } __attribute__((packed));
 
 #define CHANGELOG_USER_PREFIX "cl"

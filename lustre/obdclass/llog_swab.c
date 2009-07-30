@@ -156,14 +156,14 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
         case CHANGELOG_REC: {
                 struct llog_changelog_rec *cr = (struct llog_changelog_rec*)rec;
 
-                __swab16s(&cr->cr_flags);
-                __swab16s(&cr->cr_namelen);
-                __swab32s(&cr->cr_type);
-                __swab64s(&cr->cr_index);
-                __swab64s(&cr->cr_prev);
-                __swab64s(&cr->cr_time);
-                lustre_swab_lu_fid(&cr->cr_tfid);
-                lustre_swab_lu_fid(&cr->cr_pfid);
+                __swab16s(&cr->cr.cr_namelen);
+                __swab16s(&cr->cr.cr_flags);
+                __swab32s(&cr->cr.cr_type);
+                __swab64s(&cr->cr.cr_index);
+                __swab64s(&cr->cr.cr_prev);
+                __swab64s(&cr->cr.cr_time);
+                lustre_swab_lu_fid(&cr->cr.cr_tfid);
+                lustre_swab_lu_fid(&cr->cr.cr_pfid);
                 break;
         }
 

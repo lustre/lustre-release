@@ -1200,10 +1200,10 @@ static int mdd_changelog_data_store(const struct lu_env     *env,
                 RETURN(-ENOMEM);
         rec = (struct llog_changelog_rec *)buf->lb_buf;
 
-        rec->cr_flags = CLF_VERSION;
-        rec->cr_type = (__u32)type;
-        rec->cr_tfid = *tfid;
-        rec->cr_namelen = 0;
+        rec->cr.cr_flags = CLF_VERSION;
+        rec->cr.cr_type = (__u32)type;
+        rec->cr.cr_tfid = *tfid;
+        rec->cr.cr_namelen = 0;
         mdd_obj->mod_cltime = cfs_time_current_64();
 
         rc = mdd_changelog_llog_write(mdd, rec, handle);

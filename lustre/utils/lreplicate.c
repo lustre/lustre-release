@@ -518,7 +518,7 @@ void lr_get_FID_PATH(char *mntpt, char *fidstr, char *buf, int bufsize)
 {
         /* Open-by-FID path is <mntpt>/.lustre/fid/[SEQ:OID:VER] */
         snprintf(buf, bufsize, "%s/%s/fid/%s", mntpt, dot_lustre_name,
-                 fidstr + 2);
+                 fidstr);
         return;
 }
 
@@ -610,8 +610,8 @@ int lr_add_pc(const char *pfid, const char *tfid, const char *name)
         p = calloc(1, sizeof(*p));
         if (!p)
                 return -ENOMEM;
-        strcpy(p->pc_log.pcl_pfid, pfid + 2);
-        strcpy(p->pc_log.pcl_tfid, tfid + 2);
+        strcpy(p->pc_log.pcl_pfid, pfid);
+        strcpy(p->pc_log.pcl_tfid, tfid);
         strcpy(p->pc_log.pcl_name, name);
 
         p->pc_next = parents;
@@ -664,8 +664,8 @@ int lr_remove_pc(const char *pfid, const char *tfid)
         struct lr_parent_child_list *curr, *prev;
 
         for (prev = curr = parents; curr; prev = curr, curr = curr->pc_next) {
-                if (strcmp(curr->pc_log.pcl_pfid, pfid + 2) == 0 &&
-                    strcmp(curr->pc_log.pcl_tfid, tfid + 2) == 0) {
+                if (strcmp(curr->pc_log.pcl_pfid, pfid) == 0 &&
+                    strcmp(curr->pc_log.pcl_tfid, tfid) == 0) {
                         if (curr == parents)
                                 parents = curr->pc_next;
                         else
@@ -684,7 +684,7 @@ int lr_mk_special(struct lr_info *info)
 
         snprintf(info->dest, PATH_MAX, "%s/%s/%s",
                 status->ls_targets[info->target_no], SPECIAL_DIR,
-                info->tfid + 2);
+                info->tfid);
 
         rc = lr_mkfile(info);
         if (rc)
@@ -715,7 +715,7 @@ int lr_rm_special(struct lr_info *info)
 
         snprintf(info->dest, PATH_MAX, "%s/%s/%s",
                  status->ls_targets[info->target_no], SPECIAL_DIR,
-                 info->tfid + 2);
+                 info->tfid);
         rc = lr_rmfile(info);
 
         if (rc)
@@ -733,7 +733,7 @@ int lr_create(struct lr_info *info)
         int mkspecial = 0;
 
         /* Is target FID present on the source? */
-        rc = lr_get_path(info, info->tfid + 3);
+        rc = lr_get_path(info, info->tfid);
         if (rc == -ENOENT) {
                 /* Source file has disappeared. Not an error. */
                 lr_debug(DINFO, "create: tfid %s not found on"
@@ -745,7 +745,7 @@ int lr_create(struct lr_info *info)
         strcpy(info->savedpath, info->path);
 
         /* Is parent FID present on the source */
-        rc = lr_get_path(info, info->pfid + 3);
+        rc = lr_get_path(info, info->pfid);
         if (rc == -ENOENT) {
                 lr_debug(DINFO, "create: pfid %s not found on source-fs\n",
                          info->tfid);
@@ -808,7 +808,7 @@ int lr_remove(struct lr_info *info)
                 if (!rc1)
                         continue;
 
-                rc1 = lr_get_path(info, info->pfid + 3);
+                rc1 = lr_get_path(info, info->pfid);
                 if (rc1 == -ENOENT) {
                         lr_debug(DINFO, "remove: pfid %s not found\n",
                                  info->pfid);
@@ -843,11 +843,11 @@ int lr_move(struct lr_info *info, struct lr_info *ext)
         int special_src = 0;
         int special_dest = 0;
 
-        rc_dest = lr_get_path(ext, ext->pfid + 3);
+        rc_dest = lr_get_path(ext, ext->pfid);
         if (rc_dest < 0 && rc_dest != -ENOENT)
                 return rc_dest;
 
-        rc_src = lr_get_path(info, info->pfid + 3);
+        rc_src = lr_get_path(info, info->pfid);
         if (rc_src < 0 && rc_src != -ENOENT)
                 return rc_src;
 
@@ -869,7 +869,7 @@ int lr_move(struct lr_info *info, struct lr_info *ext)
                 if (rc_dest == -ENOENT) {
                         snprintf(info->dest, PATH_MAX, "%s/%s/%s",
                                 status->ls_targets[info->target_no],
-                                SPECIAL_DIR, info->tfid + 2);
+                                SPECIAL_DIR, info->tfid);
                         special_dest = 1;
                 }
 
@@ -881,7 +881,7 @@ int lr_move(struct lr_info *info, struct lr_info *ext)
                                           errno == ENOENT)) {
                         snprintf(info->src, PATH_MAX, "%s/%s/%s",
                                 status->ls_targets[info->target_no],
-                                SPECIAL_DIR, info->tfid + 2);
+                                SPECIAL_DIR, info->tfid);
                         special_src = 1;
                 }
 
@@ -895,7 +895,7 @@ int lr_move(struct lr_info *info, struct lr_info *ext)
                 if (special_src) {
                         lr_remove_pc(info->pfid, info->tfid);
                         if (!special_dest)
-                                lr_cascade_move(info->tfid + 2, info->dest, info);
+                                lr_cascade_move(info->tfid, info->dest, info);
                 }
                 if (special_dest)
                         lr_add_pc(ext->pfid, info->tfid, ext->name);
@@ -932,7 +932,7 @@ int lr_link(struct lr_info *info)
                 /* Search through the hardlinks to get the src and dest */
                 for (i = 0; i < st.st_nlink && (info->src[0] == 0 ||
                                                 info->dest[0] == 0); i++) {
-                        rc1 = lr_get_path_ln(info, info->tfid + 3, i);
+                        rc1 = lr_get_path_ln(info, info->tfid, i);
                         lr_debug(rc1 ? 0:DTRACE, "\tfid2path %s, %s, %d rc=%d\n",
                                  info->path, info->name, i, rc1);
                         if (rc1)
@@ -964,11 +964,11 @@ int lr_link(struct lr_info *info)
                 if (info->src[0] == 0)
                         snprintf(info->src, PATH_MAX, "%s/%s/%s",
                                 status->ls_targets[info->target_no],
-                                SPECIAL_DIR, info->tfid + 2);
+                                SPECIAL_DIR, info->tfid);
                 else if (info->dest[0] == 0)
                         snprintf(info->dest, PATH_MAX, "%s/%s/%s",
                                 status->ls_targets[info->target_no],
-                                SPECIAL_DIR, info->tfid + 2);
+                                SPECIAL_DIR, info->tfid);
 
                 rc1 = link(info->src, info->dest);
                 lr_debug(rc1?0:DINFO, "link: %s [to] %s; rc1=%d %s\n",
@@ -988,7 +988,7 @@ int lr_setattr(struct lr_info *info)
 
         lr_get_FID_PATH(status->ls_source, info->tfid, info->src, PATH_MAX);
 
-        rc = lr_get_path(info, info->tfid + 3);
+        rc = lr_get_path(info, info->tfid);
         if (rc == -ENOENT)
                 lr_debug(DINFO, "setattr: %s not present on source-fs\n",
                          info->src);
@@ -1019,7 +1019,7 @@ int lr_setxattr(struct lr_info *info)
 
         lr_get_FID_PATH(status->ls_source, info->tfid, info->src, PATH_MAX);
 
-        rc = lr_get_path(info, info->tfid + 3);
+        rc = lr_get_path(info, info->tfid);
         if (rc == -ENOENT)
                 lr_debug(DINFO, "setxattr: %s not present on source-fs\n",
                          info->src);
@@ -1043,51 +1043,23 @@ int lr_setxattr(struct lr_info *info)
 }
 
 /* Parse a line of changelog entry */
-int lr_parse_line(struct lr_info *info, FILE *fp)
+int lr_parse_line(void *priv, struct lr_info *info)
 {
-        unsigned long long time;
-        unsigned int flags;
-        char typestr[TYPE_STR_LEN];
-        char line[PATH_MAX];
-        char *str;
-        int i;
+        struct changelog_rec *rec;
 
-        if (fgets(line, sizeof(line), fp) != NULL) {
-                if (sscanf(line, "%llu %s %llu %x %s %s",
-                           &info->recno, typestr, &time,
-                           &flags, info->tfid, info->pfid) < 4) {
-                        fprintf(stderr, "error: unexpected changelog record "
-                                "format - %s\n", line);
-                        return -1;
-                }
-                typestr[2] = '\0';
-                info->type = atoi(typestr);
-
-                /* The filename could have spaces in it. scanf would
-                   have ignored it. Parse for the complete
-                   filename. */
-                if (info->type != CL_SETATTR &&
-                    info->type != CL_XATTR &&
-                    info->type != CL_MARK) {
-                        for (i = 0, str = line; str != NULL && i <= 5;
-                             i++, str++){
-                                str = strchr(str, ' ');
-                        }
-                        if (str) {
-                                strncpy(info->name, str, PATH_MAX);
-                                str = strchr(info->name, '\n');
-                                if (str)
-                                        str[0] = '\0';
-                        } else {
-                                fprintf(stderr, "error: unexpected changelog "
-                                        "record format - %s\n", line);
-                                return -1;
-                        }
-                }
-                rec_count++;
-        } else {
+        if (llapi_changelog_recv(priv, &rec) != 0)
                 return -1;
-        }
+
+        info->recno = rec->cr_index;
+        info->type = rec->cr_type;
+        sprintf(info->tfid, DFID, PFID(&rec->cr_tfid));
+        sprintf(info->pfid, DFID, PFID(&rec->cr_pfid));
+        strncpy(info->name, rec->cr_name, rec->cr_namelen);
+        info->name[rec->cr_namelen] = '\0';
+
+        llapi_changelog_free(&rec);
+
+        rec_count++;
         return 0;
 }
 
@@ -1352,22 +1324,18 @@ void lr_print_status(struct lr_info *info)
                 printf("Using rsync: %s (%s)\n", rsync, rsync_ver);
 }
 
-DECLARE_CHANGELOG_NAMES;
-
 void lr_print_failure(struct lr_info *info, int rc)
 {
         fprintf(stderr, "Replication of operation failed(%d):"
-                " %lld %s (%d) %s %s %s\n", rc, info->recno, 
-                changelog_str[info->type], info->type, info->tfid,
+                " %lld %s (%d) %s %s %s\n", rc, info->recno,
+                changelog_type2str(info->type), info->type, info->tfid,
                 info->pfid, info->name);
 }
 
 /* Replicate filesystem operations from src_path to target_path */
 int lr_replicate()
 {
-        int fd;
-        FILE *fp;
-        long long startrec;
+        void *changelog_priv;
         struct lr_info *info;
         struct lr_info *ext;
         time_t start;
@@ -1419,25 +1387,20 @@ int lr_replicate()
         lr_print_status(info);
 
         /* Open changelogs for consumption*/
-        startrec = status->ls_last_recno;
-        fd = llapi_changelog_open(status->ls_source_fs, startrec);
-        if (fd < 0) {
+        rc = llapi_changelog_start(&changelog_priv, 0, status->ls_source_fs,
+                                   status->ls_last_recno);
+        if (rc < 0) {
                 fprintf(stderr, "Error opening changelog file for fs %s.\n",
                         status->ls_source_fs);
-                return fd;
-        }
-        if ((fp = fdopen(fd, "r")) == NULL) {
-                fprintf(stderr, "Error: fdopen failed.");
-                close(fd);
-                return -errno;
+                return rc;
         }
 
-        while (!quit && lr_parse_line(info, fp) == 0) {
+        while (!quit && lr_parse_line(changelog_priv, info) == 0) {
                 rc = 0;
                 if (info->type == CL_RENAME)
                         /* Rename operations have an additional changelog
                            record of information. */
-                        lr_parse_line(ext, fp);
+                        lr_parse_line(changelog_priv, ext);
 
                 if (dryrun)
                         continue;
@@ -1488,6 +1451,8 @@ int lr_replicate()
                 }
         }
 
+        llapi_changelog_fini(&changelog_priv);
+
         if (errors || verbose)
                 printf("Errors: %d\n", errors);
 
@@ -1498,9 +1463,6 @@ int lr_replicate()
                 printf("lreplicate took %ld seconds\n", time(NULL) - start);
                 printf("Changelog records consumed: %lld\n", rec_count);
         }
-
-        close(fd);
-        fclose(fp);
 
         return 0;
 }
