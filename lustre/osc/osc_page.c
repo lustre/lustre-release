@@ -294,11 +294,16 @@ static int osc_page_print(const struct lu_env *env,
 {
         struct osc_page       *opg = cl2osc_page(slice);
         struct osc_async_page *oap = &opg->ops_oap;
+        struct osc_object     *obj = cl2osc(slice->cpl_obj);
+        struct client_obd     *cli = &osc_export(obj)->exp_obd->u.cli;
+        struct lov_oinfo      *loi = obj->oo_oinfo;
 
         return (*printer)(env, cookie, LUSTRE_OSC_NAME"-page@%p: "
-                          "< %#x %d %u %s %s %s >"
-                          "< %llu %u %#x %#x %p %p %p %p %p >"
-                          "< %s %p %d %lu >\n",
+                          "1< %#x %d %u %s %s %s > "
+                          "2< %llu %u %#x %#x | %p %p %p %p %p > "
+                          "3< %s %p %d %lu > "
+                          "4< %d %d %d %lu %s | %s %s %s %s > "
+                          "5< %s %s %s %s | %d %s %s | %d %s %s>\n",
                           opg,
                           /* 1 */
                           oap->oap_magic, oap->oap_cmd,
@@ -315,7 +320,27 @@ static int osc_page_print(const struct lu_env *env,
                           /* 3 */
                           osc_list(&opg->ops_inflight),
                           opg->ops_submitter, opg->ops_transfer_pinned,
-                          osc_submit_duration(opg));
+                          osc_submit_duration(opg),
+                          /* 4 */
+                          cli->cl_r_in_flight, cli->cl_w_in_flight,
+                          cli->cl_max_rpcs_in_flight,
+                          cli->cl_avail_grant,
+                          osc_list(&cli->cl_cache_waiters),
+                          osc_list(&cli->cl_loi_ready_list),
+                          osc_list(&cli->cl_loi_hp_ready_list),
+                          osc_list(&cli->cl_loi_write_list),
+                          osc_list(&cli->cl_loi_read_list),
+                          /* 5 */
+                          osc_list(&loi->loi_ready_item),
+                          osc_list(&loi->loi_hp_ready_item),
+                          osc_list(&loi->loi_write_item),
+                          osc_list(&loi->loi_read_item),
+                          loi->loi_read_lop.lop_num_pending,
+                          osc_list(&loi->loi_read_lop.lop_pending),
+                          osc_list(&loi->loi_read_lop.lop_urgent),
+                          loi->loi_write_lop.lop_num_pending,
+                          osc_list(&loi->loi_write_lop.lop_pending),
+                          osc_list(&loi->loi_write_lop.lop_urgent));
 }
 
 static void osc_page_delete(const struct lu_env *env,
