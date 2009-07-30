@@ -1077,7 +1077,7 @@ static int osc_del_shrink_grant(struct client_obd *client)
 static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
 {
         client_obd_list_lock(&cli->cl_loi_list_lock);
-        cli->cl_avail_grant = ocd->ocd_grant - cli->cl_dirty;
+        cli->cl_avail_grant = ocd->ocd_grant;
         client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         if (ocd->ocd_connect_flags & OBD_CONNECT_GRANT_SHRINK &&
