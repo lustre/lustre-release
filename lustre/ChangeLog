@@ -2135,6 +2135,18 @@ Details    : ext3-based ldiskfs does not support greater than 8TB LUNs.
 	     Don't allow >8TB ldiskfs filesystems to be mounted without
 	     force_over_8tb mount option
 
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 18793
+Descriptoin: OSS complains "too many blocks" and crashes
+Details    : In filter_commitrw_write():
+	     1. lquota_chkquota();
+	     2. obdo_from_inode();
+	     3. lquota_pending_commit();
+	     "2." has changed uid and gid in this case, then caused
+	     lquota_chkquota() and lquota_pending_commit() to use
+	     different uid and gid. That is the root of the bug.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>
