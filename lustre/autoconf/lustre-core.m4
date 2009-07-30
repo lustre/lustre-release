@@ -1636,6 +1636,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_PERCPU_COUNTER
          LC_QUOTA64
          LC_4ARGS_VFS_SYMLINK
+         LC_NETLINK
 
          # does the kernel have VFS intent patches?
          LC_VFS_INTENT_PATCHES
@@ -2004,6 +2005,35 @@ LB_LINUX_TRY_COMPILE([
                 AC_DEFINE(HAVE_PERCPU_2ND_ARG, 1, [percpu_counter_init has two
                                                    arguments])
                 AC_MSG_RESULT([yes])
+        ],[
+                AC_MSG_RESULT([no])
+        ])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#
+# LC_NETLINK
+#
+# If we have netlink.h, and nlmsg_new takes 2 args
+#
+AC_DEFUN([LC_NETLINK],
+[AC_MSG_CHECKING([if netlink.h can be compiled])
+LB_LINUX_TRY_COMPILE([
+        #include <net/netlink.h>
+],[],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_NETLINK, 1, [net/netlink.h found])
+
+        AC_MSG_CHECKING([if nlmsg_new takes a 2nd argument])
+        LB_LINUX_TRY_COMPILE([
+                #include <net/netlink.h>
+        ],[
+                nlmsg_new(100, GFP_KERNEL);
+        ],[
+                AC_MSG_RESULT([yes])
+                AC_DEFINE(HAVE_NETLINK_NL2, 1, [nlmsg_new takes 2 args])
         ],[
                 AC_MSG_RESULT([no])
         ])

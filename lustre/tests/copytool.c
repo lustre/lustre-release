@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
                 default:
                         fprintf(stderr, "error: %s: option '%s' unrecognized\n",
                                 argv[0], argv[optind - 1]);
-                        return -EINVAL;
+                        return EINVAL;
                 }
         }
 
@@ -80,11 +80,11 @@ int main(int argc, char **argv) {
         if (rc < 0) {
                 fprintf(stderr, "Can't start copytool interface: %s\n",
                         strerror(-rc));
-                return rc;
+                return -rc;
         }
 
         if (test)
-                return llapi_copytool_fini(&ctdata);
+                return -llapi_copytool_fini(&ctdata);
 
         printf("Waiting for message from kernel (pid=%d)\n", getpid());
 
@@ -123,7 +123,7 @@ int main(int argc, char **argv) {
 
         llapi_copytool_fini(&ctdata);
 
-        return 0;
+        return -rc;
 }
 
 

@@ -144,7 +144,12 @@ static struct sk_buff *netlink_make_msg(int pid, int seq, void *payload,
         int             len = NLMSG_SPACE(size);
         void            *data;
 
+#ifdef HAVE_NETLINK_NL2
         skb = nlmsg_new(len, GFP_KERNEL);
+#else   /* old */
+        skb = nlmsg_new(len);
+#endif
+
         if (!skb)
                 return NULL;
 
