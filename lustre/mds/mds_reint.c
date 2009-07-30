@@ -1709,9 +1709,6 @@ void mds_reconstruct_generic(struct ptlrpc_request *req)
  * part thereof, because we don't have the inode to check for link
  * count/open status until after it is locked.
  *
- * For lock ordering, caller must get child->i_mutex first, then
- * pending->i_mutex before starting journal transaction.
- *
  * returns 1 on success
  * returns 0 if we lost a race and didn't make a new link
  * returns negative on error
@@ -1729,9 +1726,6 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
 
         LASSERT(inode != NULL);
         LASSERT(!mds_inode_is_orphan(inode));
-#ifndef HAVE_I_ALLOC_SEM
-        LASSERT(TRYLOCK_INODE_MUTEX(inode) == 0);
-#endif
         LASSERT(TRYLOCK_INODE_MUTEX(pending_dir) == 0);
 
         fidlen = ll_fid2str(fidname, inode->i_ino, inode->i_generation);
