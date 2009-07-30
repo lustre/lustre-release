@@ -34,7 +34,7 @@ fi
 [ ! -x ${MDSRATE} ] && error "${MDSRATE} not built."
 
 # Make sure we start with a clean slate
-rm -f ${LOG} PI*
+rm -f ${LOG}
 
 log "===== $0 ====== " 
 
