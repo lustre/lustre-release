@@ -686,9 +686,8 @@ int lov_update_create_set(struct lov_request_set *set,
                         rc = -EIO;
                 }
         }
-        lov_update_set(set, req, rc);
         if (rc)
-                RETURN(rc);
+                GOTO(out, rc);
 
         loi->loi_id = req->rq_oi.oi_oa->o_id;
         loi->loi_gr = req->rq_oi.oi_oa->o_gr;
@@ -702,7 +701,9 @@ int lov_update_create_set(struct lov_request_set *set,
         if (req->rq_oi.oi_oa->o_valid & OBD_MD_FLCOOKIE)
                 set->set_cookie_sent++;
 
-        RETURN(0);
+out:
+        lov_update_set(set, req, rc);
+        RETURN(rc);
 }
 
 int cb_create_update(void *cookie, int rc)
