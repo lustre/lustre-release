@@ -481,6 +481,11 @@ again:
                 it = &oit;
         }
 
+        if (ll_i2sbi(inode)->ll_direct_io_default &&
+            !S_ISDIR(inode->i_mode) &&
+            !(it->it_flags & FMODE_EXEC))
+                file->f_flags |= O_DIRECT;
+
 restart:
         /* Let's see if we have file open on MDS already. */
         if (it->it_flags & FMODE_WRITE) {

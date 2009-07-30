@@ -576,6 +576,27 @@ static int ll_wr_lockless_truncate(struct file *file, const char *buffer,
                 ?: count;
 }
 
+static int ll_rd_direct_io_default(char *page, char **start, off_t off,
+                                     int count, int *eof, void *data)
+{
+        struct super_block *sb = data;
+
+        *eof = 1;
+        return snprintf(page, count, "%u\n",
+                        ll_s2sbi(sb)->ll_direct_io_default);
+}
+
+static int ll_wr_direct_io_default(struct file *file, const char *buffer,
+                                     unsigned long count, void *data)
+{
+        struct super_block *sb = data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+        return lprocfs_write_helper(buffer, count,
+                                    &sbi->ll_direct_io_default)
+                ?: count;
+}
+
 static int ll_rd_statahead_max(char *page, char **start, off_t off,
                                int count, int *eof, void *data)
 {
@@ -683,6 +704,8 @@ static struct lprocfs_vars lprocfs_llite_obd_vars[] = {
                                 ll_wr_contention_time, 0},
         { "lockless_truncate", ll_rd_lockless_truncate,
                                ll_wr_lockless_truncate, 0},
+        { "direct_io_default", ll_rd_direct_io_default,
+                               ll_wr_direct_io_default, 0},
         { "statahead_max",      ll_rd_statahead_max, ll_wr_statahead_max, 0 },
         { "statahead_stats",    ll_rd_statahead_stats, 0, 0 },
         { "lazystatfs",         ll_rd_lazystatfs, ll_wr_lazystatfs, 0 },
