@@ -14,6 +14,12 @@ tbd Sun Microsystems, Inc.
 	  of Lustre filesystem with 4K stack may cause a stack overflow. For
 	  more information, please refer to bugzilla 17630.
 
+Severity   : normal
+Bugzilla   : 19854
+Description: enable client interface failover
+Details    : When a child reconnects from another NID, properly update export
+             nid hash position and ldlm reverse import.
+
 Severity   : enhancement
 Bugzilla   : 18801
 Description: implemented direct I/O with arbitrary (nonaligned) memory
