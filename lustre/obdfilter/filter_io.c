@@ -410,6 +410,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         int rc = 0, i, tot_bytes = 0;
         unsigned long now = jiffies;
         long timediff;
+        loff_t isize;
         ENTRY;
 
         /* We are currently not supporting multi-obj BRW_READ RPCS at all.
@@ -445,6 +446,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         }
 
         inode = dentry->d_inode;
+        isize = i_size_read(inode);
 
         obdo_to_inode(inode, oa, OBD_MD_FLATIME);
 
@@ -460,7 +462,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
                 lnb->dentry = dentry;
 
-                if (i_size_read(inode) <= lnb->offset)
+                if (isize <= lnb->offset)
                         /* If there's no more data, abort early.  lnb->rc == 0,
                          * so it's easy to detect later. */
                         break;
@@ -471,8 +473,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
                 lprocfs_counter_add(obd->obd_stats, LPROC_FILTER_CACHE_ACCESS, 1);
 
-                if (i_size_read(inode) < lnb->offset + lnb->len - 1)
-                        lnb->rc = i_size_read(inode) - lnb->offset;
+                if (isize < lnb->offset + lnb->len - 1)
+                        lnb->rc = isize - lnb->offset;
                 else
                         lnb->rc = lnb->len;
 
