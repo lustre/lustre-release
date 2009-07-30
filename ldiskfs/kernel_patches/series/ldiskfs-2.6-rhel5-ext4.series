@@ -1,3 +1,4 @@
+ext4-version-2.6-rhel5.patch
 ext4-wantedi-2.6-rhel5.patch
 iopen-2.6.18-rhel5-ext4.patch
 ext4-map_inode_page-2.6.18-rhel5.patch
