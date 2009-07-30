@@ -95,7 +95,7 @@
          else {                                                         \
                  libcfs_debug_msg(NULL, DEBUG_SUBSYSTEM, D_EMERG,       \
                                   __FILE__, __FUNCTION__,__LINE__,      \
-                                  "ASSERTION(" #cond ") failed:" fmt,   \
+                                  "ASSERTION(" #cond ") failed: " fmt,  \
                                   ## a);                                \
                  LBUG();                                                \
          }                                                              \
@@ -116,7 +116,7 @@
         if (unlikely(!(cond))) {                                        \
                 libcfs_debug_msg(NULL, DEBUG_SUBSYSTEM, D_EMERG,        \
                                  __FILE__, __FUNCTION__,__LINE__,       \
-                                 "ASSERTION(" #cond ") failed:" fmt,    \
+                                 "ASSERTION(" #cond ") failed: " fmt,   \
                                  ## a);                                 \
                 LBUG();                                                 \
         }                                                               \
