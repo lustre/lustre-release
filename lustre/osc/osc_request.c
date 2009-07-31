@@ -1655,20 +1655,21 @@ static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
                                   page_count, pga, &request, pshift);
 
         CLASSERT(sizeof(*aa) <= sizeof(request->rq_async_args));
-        aa = ptlrpc_req_async_args(request);
-        if (cmd == OBD_BRW_READ) {
-                lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
-                lprocfs_oh_tally(&cli->cl_read_rpc_hist, cli->cl_r_in_flight);
-        } else {
-                lprocfs_oh_tally_log2(&cli->cl_write_page_hist, page_count);
-                lprocfs_oh_tally(&cli->cl_write_rpc_hist,
-                                 cli->cl_w_in_flight);
-        }
-        ptlrpc_lprocfs_brw(request, aa->aa_requested_nob);
-
-        LASSERT(list_empty(&aa->aa_oaps));
 
         if (rc == 0) {
+                aa = ptlrpc_req_async_args(request);
+                if (cmd == OBD_BRW_READ) {
+                        lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
+                        lprocfs_oh_tally(&cli->cl_read_rpc_hist, cli->cl_r_in_flight);
+                } else {
+                        lprocfs_oh_tally_log2(&cli->cl_write_page_hist, page_count);
+                        lprocfs_oh_tally(&cli->cl_write_rpc_hist,
+                                         cli->cl_w_in_flight);
+                }
+                ptlrpc_lprocfs_brw(request, aa->aa_requested_nob);
+
+                LASSERT(list_empty(&aa->aa_oaps));
+
                 request->rq_interpret_reply = brw_interpret;
                 ptlrpc_set_add_req(set, request);
                 client_obd_list_lock(&cli->cl_loi_list_lock);
