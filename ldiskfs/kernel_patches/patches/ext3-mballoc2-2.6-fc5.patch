@@ -33,7 +33,7 @@ Index: linux-2.6.16.i686/include/linux/ext3_fs.h
 +#ifdef __LITTLE_ENDIAN
 +#define ext2_find_next_le_bit(addr, size, off) find_next_bit((addr), (size), (off))
 +#else
-+#error "mballoc needs a patch for big-endian systems - CFS bug 10634"
++#error "mballoc needs a patch for big-endian systems - Lustre bug 10634"
 +#endif	/* __LITTLE_ENDIAN */
 +#endif	/* !ext2_find_next_le_bit */
 +
@@ -364,7 +364,7 @@ Index: linux-2.6.16.i686/fs/ext3/mballoc.c
 +++ linux-2.6.16.i686/fs/ext3/mballoc.c	2006-05-30 23:03:38.000000000 +0800
 @@ -0,0 +1,2726 @@
 +/*
-+ * Copyright 2008 Sun Microsystems, Inc.
++ * Copyright 2008, Sun Microsystems, Inc.
 + * Written by Alex Tomas <alex@clusterfs.com>
 + *
 + * This program is free software; you can redistribute it and/or modify
@@ -2243,8 +2243,8 @@ Index: linux-2.6.16.i686/fs/ext3/mballoc.c
 +	spin_lock_init(&sbi->s_mb_history_lock);
 +	i = sbi->s_mb_history_max * sizeof(struct ext3_mb_history);
 +	sbi->s_mb_history = kmalloc(i, GFP_KERNEL);
-+       if (likely(sbi->s_mb_history != NULL))
-+               memset(sbi->s_mb_history, 0, i);
++	if (likely(sbi->s_mb_history != NULL))
++		memset(sbi->s_mb_history, 0, i);
 +	/* if we can't allocate history, then we simple won't use it */
 +}
 +
