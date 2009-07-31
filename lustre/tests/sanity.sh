@@ -482,6 +482,17 @@ test_17h() { #bug 17378
 }
 run_test 17h "create objects: lov_free_memmd() doesn't lbug"
 
+test_17i() { #bug 20018
+        mkdir -p $DIR/$tdir
+	local foo=$DIR/$tdir/$tfile
+	ln -s $foo $foo || error "create symlink failed"
+#define OBD_FAIL_MDS_READLINK_EPROTO     0x143
+	do_facet mds lctl set_param fail_loc=0x80000144
+	ls -l $foo && error "error not detected"
+	return 0
+}
+run_test 17i "don't panic on short symlink"
+
 test_18() {
 	touch $DIR/f
 	ls $DIR || error

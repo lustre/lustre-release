@@ -523,6 +523,8 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                         CERROR("readlink failed: %d\n", rc);
                         rc = -EFAULT;
                 } else {
+                        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_READLINK_EPROTO))
+                                 rc -= 2;
                         repbody->valid |= OBD_MD_LINKNAME;
                         repbody->eadatasize = rc;
                         /* NULL terminate */

@@ -206,6 +206,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MDS_LOV_PREP_CREATE     0x141
 #define OBD_FAIL_MDS_REINT_DELAY         0x142
 #define OBD_FAIL_MDS_OPEN_WAIT_CREATE    0x143
+#define OBD_FAIL_MDS_READLINK_EPROTO     0x144
 
 /* CMD */
 #define OBD_FAIL_MDS_IS_SUBDIR_NET       0x180
@@ -314,7 +315,6 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
 #define OBD_FAIL_PTLRPC_PAUSE_REP        0x50c
 #define OBD_FAIL_PTLRPC_IMP_DEACTIVE     0x50d
-
 #define OBD_FAIL_PTLRPC_DUMP_LOG         0x50e
 #define OBD_FAIL_PTLRPC_LONG_REPL_UNLINK 0x50f
 #define OBD_FAIL_PTLRPC_LONG_BULK_UNLINK 0x510

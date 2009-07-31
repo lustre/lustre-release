@@ -13,6 +13,11 @@ tbd  Sun Microsystems, Inc.
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
+Severity   : normal
+Bugzilla   : 20122
+Description: don't panic if EPROTO was hit when reading symlink 
+Details    : correctly handling request reference in error cases.
+
 Severity   : enhancement
 Bugzilla   : 19856
 Description: Add LustreNetLink, a kernel-userspace communcation path.
