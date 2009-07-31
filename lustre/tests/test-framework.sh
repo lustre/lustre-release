@@ -1046,7 +1046,7 @@ wait_delete_completed () {
 wait_for_host() {
     local host=$1
     check_network "$host" 900
-    while ! do_node $host "ls -d $LUSTRE " > /dev/null; do sleep 5; done
+    while ! do_node $host hostname  > /dev/null; do sleep 5; done
 }
 
 wait_for() {
