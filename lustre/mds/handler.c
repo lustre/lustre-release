@@ -772,6 +772,9 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
                                 rc, len - 1);
                         rc = -EINVAL;
                 } else {
+                        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_READLINK_EPROTO))
+                                rc -= 2;
+
                         CDEBUG(D_INODE, "read symlink dest %s\n", symname);
                         body->valid |= OBD_MD_LINKNAME;
                         body->eadatasize = rc + 1;

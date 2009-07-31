@@ -191,6 +191,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_MDS_FAIL_LOV_LOG_ADD    0x140
 #define OBD_FAIL_MDS_LOV_PREP_CREATE     0x141
 #define OBD_FAIL_MDS_SPLIT_OPEN          0x142
+#define OBD_FAIL_MDS_READLINK_EPROTO     0x143
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -290,7 +291,6 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
 #define OBD_FAIL_PTLRPC_PAUSE_REP        0x50c
 #define OBD_FAIL_PTLRPC_IMP_DEACTIVE     0x50d
-
 #define OBD_FAIL_PTLRPC_DUMP_LOG         0x50e
 #define OBD_FAIL_PTLRPC_LONG_REPL_UNLINK 0x50f
 #define OBD_FAIL_PTLRPC_LONG_BULK_UNLINK 0x510

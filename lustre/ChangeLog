@@ -14,6 +14,12 @@ tbd Sun Microsystems, Inc.
 	  of Lustre filesystem with 4K stack may cause a stack overflow. For
 	  more information, please refer to bugzilla 17630.
 
+
+Severity   : normal
+Bugzilla   : 20122
+Description: don't panic if EPROTO was hit when reading symlink 
+Details    : correctly handling request reference in error cases.
+
 Severity   : normal
 Bugzilla   : 17545
 Description: open sometimes returns ENOENT instead of EACCES
