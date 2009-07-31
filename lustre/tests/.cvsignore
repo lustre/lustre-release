@@ -81,4 +81,5 @@ it_test
 write_time_limit
 sendfile
 rwv
+copytool
 

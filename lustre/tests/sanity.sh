@@ -1,4 +1,6 @@
 #!/bin/bash
+# -*- mode: Bash; tab-width: 4; indent-tabs-mode: t; -*-
+# vim:autoindent:shiftwidth=4:tabstop=4:
 #
 # Run select tests by setting ONLY, or as arguments to the script.
 # Skip specific tests by setting EXCEPT.
@@ -6498,6 +6500,7 @@ test_200a() {
 	do_facet mgs $LCTL pool_new $FSNAME.$POOL
         # get param should return err until pool is created
         wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "" || error "Pool creation of $POOL failed"
+	[ $($LFS pool_list $FSNAME | grep -c $POOL) -eq 1 ] || error "$POOL not in lfs pool_list"
 }
 run_test 200a "Create new pool =========================================="
 
@@ -6507,6 +6510,9 @@ test_200b() {
 	do_facet mgs $LCTL pool_add $FSNAME.$POOL \
 		$FSNAME-OST[$TGTPOOL_FIRST-$TGTPOOL_MAX/$TGTPOOL_STEP]
 	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | sort -u | tr '\n' ' ' " "$TGT" || error "Add to pool failed"
+	local lfscount=$($LFS pool_list $FSNAME.$POOL | grep -c "\-OST")
+	local addcount=$((($TGTPOOL_MAX - $TGTPOOL_FIRST) / $TGTPOOL_STEP + 1))
+	[ $lfscount -eq $addcount ] || error "lfs pool_list bad ost count $lfscount != $addcount"
 }
 run_test 200b "Add targets to a pool ===================================="
 

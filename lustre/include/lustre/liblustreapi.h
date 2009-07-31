@@ -81,7 +81,11 @@ extern int llapi_file_open_pool(const char *name, int flags, int mode,
                                 unsigned long long stripe_size,
                                 int stripe_offset, int stripe_count,
                                 int stripe_pattern, char *pool_name);
-extern int llapi_poollist(char *name);
+extern int llapi_poollist(const char *name);
+extern int llapi_get_poollist(const char *name, char **poollist, int list_size,
+                              char *buffer, int buffer_size);
+extern int llapi_get_poolmembers(const char *poolname, char **members,
+                                 int list_size, char *buffer, int buffer_size);
 extern int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);
 #define HAVE_LLAPI_FILE_LOOKUP
 extern int llapi_file_lookup(int dirfd, const char *name);

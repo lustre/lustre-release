@@ -373,25 +373,6 @@ int llapi_file_create_pool(const char *name, unsigned long long stripe_size,
         return 0;
 }
 
-static int print_pool_members(char *fs, char *pool_dir, char *pool_file)
-{
-        char path[PATH_MAX + 1];
-        char buf[1024];
-        FILE *fd;
-
-        llapi_printf(LLAPI_MSG_NORMAL, "Pool: %s.%s\n", fs, pool_file);
-        sprintf(path, "%s/%s", pool_dir, pool_file);
-        if ((fd = fopen(path, "r")) == NULL) {
-                llapi_err(LLAPI_MSG_ERROR, "Cannot open %s\n", path);
-                return -EINVAL;
-        }
-        while (fgets(buf, sizeof(buf), fd) != NULL)
-               llapi_printf(LLAPI_MSG_NORMAL, buf);
-
-        fclose(fd);
-        return 0;
-}
-
 /*
  * Find the fsname, the full path, and/or an open fd.
  * Either the fsname or path must not be NULL
@@ -515,13 +496,108 @@ static int poolpath(char *fsname, char *pathname, char *pool_pathname)
         return 0;
 }
 
-int llapi_poollist(char *name)
+/**
+ * Get the list of pool members.
+ * \param poolname    string of format <fsname>.<poolname>
+ * \param members     caller-allocated array of char*
+ * \param list_size   size of the members array
+ * \param buffer      caller-allocated buffer for storing OST names
+ * \param buffer_size size of the buffer
+ *
+ * \return number of members retrieved for this pool
+ * \retval -error failure
+ */
+int llapi_get_poolmembers(const char *poolname, char **members,
+                          int list_size, char *buffer, int buffer_size)
 {
-        char *poolname;
-        char *fsname;
-        char rname[PATH_MAX + 1], pathname[PATH_MAX + 1];
-        char *ptr;
+        char fsname[PATH_MAX + 1];
+        char *pool, *tmp;
+        char pathname[PATH_MAX + 1];
+        char path[PATH_MAX + 1];
+        char buf[1024];
+        FILE *fd;
         int rc = 0;
+        int nb_entries = 0;
+        int used = 0;
+
+        /* name is FSNAME.POOLNAME */
+        if (strlen(poolname) > PATH_MAX)
+                return -EOVERFLOW;
+        strcpy(fsname, poolname);
+        pool = strchr(fsname, '.');
+        if (pool == NULL)
+                return -EINVAL;
+
+        *pool = '\0';
+        pool++;
+
+        rc = poolpath(fsname, NULL, pathname);
+        if (rc != 0) {
+                errno = -rc;
+                llapi_err(LLAPI_MSG_ERROR, "Lustre filesystem '%s' not found",
+                          fsname);
+                return rc;
+        }
+
+        llapi_printf(LLAPI_MSG_NORMAL, "Pool: %s.%s\n", fsname, pool);
+        sprintf(path, "%s/%s", pathname, pool);
+        if ((fd = fopen(path, "r")) == NULL) {
+                llapi_err(LLAPI_MSG_ERROR, "Cannot open %s", path);
+                return -EINVAL;
+        }
+
+        rc = 0;
+        while (fgets(buf, sizeof(buf), fd) != NULL) {
+                if (nb_entries >= list_size) {
+                        rc = -EOVERFLOW;
+                        break;
+                }
+                /* remove '\n' */
+                if ((tmp = strchr(buf, '\n')) != NULL)
+                        *tmp='\0';
+                if (used + strlen(buf) + 1 > buffer_size) {
+                        rc = -EOVERFLOW;
+                        break;
+                }
+
+                strcpy(buffer + used, buf);
+                members[nb_entries] = buffer + used;
+                used += strlen(buf) + 1;
+                nb_entries++;
+                rc = nb_entries;
+        }
+
+        fclose(fd);
+        return rc;
+}
+
+/**
+ * Get the list of pools in a filesystem.
+ * \param name        filesystem name or path
+ * \param poollist    caller-allocated array of char*
+ * \param list_size   size of the poollist array
+ * \param buffer      caller-allocated buffer for storing pool names
+ * \param buffer_size size of the buffer
+ *
+ * \return number of pools retrieved for this filesystem
+ * \retval -error failure
+ */
+int llapi_get_poollist(const char *name, char **poollist, int list_size,
+                       char *buffer, int buffer_size)
+{
+        char fsname[PATH_MAX + 1], rname[PATH_MAX + 1], pathname[PATH_MAX + 1];
+        char *ptr;
+        DIR *dir;
+        struct dirent pool;
+        struct dirent *cookie = NULL;
+        int rc = 0;
+        unsigned int nb_entries = 0;
+        unsigned int used = 0;
+        unsigned int i;
+
+        /* initilize output array */
+        for (i = 0; i < list_size; i++)
+                poollist[i] = NULL;
 
         /* is name a pathname ? */
         ptr = strchr(name, '/');
@@ -542,16 +618,10 @@ int llapi_poollist(char *name)
                                   " a Lustre filesystem", name);
                         return rc;
                 }
-                fsname = rname;
-                poolname = NULL;
+                strcpy(fsname, rname);
         } else {
-                /* name is FSNAME[.POOLNAME] */
-                fsname = name;
-                poolname = strchr(name, '.');
-                if (poolname != NULL) {
-                        *poolname = '\0';
-                        poolname++;
-                }
+                /* name is FSNAME */
+                strcpy(fsname, name);
                 rc = poolpath(fsname, NULL, pathname);
         }
         if (rc != 0) {
@@ -561,31 +631,78 @@ int llapi_poollist(char *name)
                 return rc;
         }
 
-        if (poolname != NULL) {
-                rc = print_pool_members(fsname, pathname, poolname);
-                poolname--;
-                *poolname = '.';
-        } else {
-                DIR *dir;
-                struct dirent *pool;
-
-                llapi_printf(LLAPI_MSG_NORMAL, "Pools from %s:\n", fsname);
-                if ((dir = opendir(pathname)) == NULL) {
-                        return -EINVAL;
-                }
-                while ((pool = readdir(dir)) != NULL) {
-                        if (!((pool->d_name[0] == '.') &&
-                              (pool->d_name[1] == '\0')) &&
-                            !((pool->d_name[0] == '.') &&
-                              (pool->d_name[1] == '.') &&
-                              (pool->d_name[2] == '\0')))
-                        llapi_printf(LLAPI_MSG_NORMAL, " %s.%s\n",
-                                     fsname, pool->d_name);
-                }
-                closedir(dir);
+        llapi_printf(LLAPI_MSG_NORMAL, "Pools from %s:\n", fsname);
+        if ((dir = opendir(pathname)) == NULL) {
+                llapi_err(LLAPI_MSG_ERROR, "Could not open pool list for '%s'",
+                          name);
+                return -errno;
         }
-        return rc;
+
+        while(1) {
+                rc = readdir_r(dir, &pool, &cookie);
+
+                if (rc != 0) {
+                        llapi_err(LLAPI_MSG_ERROR,
+                                  "Error reading pool list for '%s'", name);
+                        return -errno;
+                } else if ((rc == 0) && (cookie == NULL))
+                        /* end of directory */
+                        break;
+
+                /* ignore . and .. */
+                if (!strcmp(pool.d_name, ".") || !strcmp(pool.d_name, ".."))
+                        continue;
+
+                /* check output bounds */
+                if (nb_entries >= list_size)
+                        return -EOVERFLOW;
+
+                /* +2 for '.' and final '\0' */
+                if (used + strlen(pool.d_name) + strlen(fsname) + 2
+                    > buffer_size)
+                        return -EOVERFLOW;
+
+                sprintf(buffer + used, "%s.%s", fsname, pool.d_name);
+                poollist[nb_entries] = buffer + used;
+                used += strlen(pool.d_name) + strlen(fsname) + 2;
+                nb_entries++;
+        }
+
+        closedir(dir);
+        return nb_entries;
 }
+
+/* wrapper for lfs.c and obd.c */
+int llapi_poollist(const char *name)
+{
+        /* list of pool names (assume that pool count is smaller
+           than OST count) */
+        char *list[FIND_MAX_OSTS];
+        char *buffer;
+        /* fsname-OST0000_UUID < 32 char, 1 per OST */
+        int bufsize = FIND_MAX_OSTS * 32;
+        int i, nb;
+
+        buffer = malloc(bufsize);
+        if (buffer == NULL)
+                return -ENOMEM;
+
+        if ((name[0] == '/') || (strchr(name, '.') == NULL))
+                /* name is a path or fsname */
+                nb = llapi_get_poollist(name, list, FIND_MAX_OSTS, buffer,
+                                        bufsize);
+        else
+                /* name is a pool name (<fsname>.<poolname>) */
+                nb = llapi_get_poolmembers(name, list, FIND_MAX_OSTS, buffer,
+                                           bufsize);
+
+        for (i = 0; i < nb; i++)
+                llapi_printf(LLAPI_MSG_NORMAL, "%s\n", list[i]);
+
+        free(buffer);
+        return (nb < 0 ? nb : 0);
+}
+
 
 typedef int (semantic_func_t)(char *path, DIR *parent, DIR *d,
                               void *data, cfs_dirent_t *de);
