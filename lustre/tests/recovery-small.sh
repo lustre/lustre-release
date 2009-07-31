@@ -720,16 +720,19 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 	#force umount a client; exports should get evicted
 	zconf_umount `hostname` $MOUNT2 -f
 
+	# PING_INTERVAL max(obd_timeout / 4, 1U)
+	# PING_EVICT_TIMEOUT (PING_INTERVAL * 6)
+
 	# evictor takes PING_EVICT_TIMEOUT + 3 * PING_INTERVAL to evict.  
 	# But if there's a race to start the evictor from various obds, 
 	# the loser might have to wait for the next ping.
-	# PING_INTERVAL max(obd_timeout / 4, 1U)
-	# sleep (2*PING_INTERVAL) 
-
+	# = 9 * PING_INTERVAL + PING_INTERVAL
+	# = 10 PING_INTERVAL = 10 obd_timeout / 4 = 2.5 obd_timeout
+	# let's wait $((TIMEOUT * 3)) # bug 19887
         local rc=0
-        wait_client_evicted ost1 $OST_NEXP $((TIMEOUT * 2 + TIMEOUT * 3 / 4)) || \
+        wait_client_evicted ost1 $OST_NEXP $((TIMEOUT * 3)) || \
 		error "Client was not evicted by ost" rc=1
-	wait_client_evicted mds $MDS_NEXP $((TIMEOUT * 2 + TIMEOUT * 3 / 4)) || \
+	wait_client_evicted mds $MDS_NEXP $((TIMEOUT * 3)) || \
 		error "Client was not evicted by mds"
 }
 run_test 26b "evict dead exports"
