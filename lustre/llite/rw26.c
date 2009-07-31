@@ -329,7 +329,7 @@ out:
                 rc = ptlrpc_set_wait(set);
                 if (unlikely(rc != 0))
                         GOTO(unlock_mutex, tot_bytes = rc);
-                if (rw == WRITE) {
+                if (rw == WRITE && locked) {
                         lov_stripe_lock(lsm);
                         obd_adjust_kms(ll_i2obdexp(inode),
                                        lsm, file_offset, 0);
