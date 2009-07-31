@@ -423,7 +423,43 @@ Index: linux-2.6.18-128.1.6/fs/ext4/mballoc.c
  		preallocated += len;
  		count++;
  	}
-@@ -4901,6 +4889,13 @@ do_more:
+@@ -4742,6 +4730,7 @@ static void ext4_mb_poll_new_transaction
+ 	ext4_mb_free_committed_blocks(sb);
+ }
+ 
++/* need to be called with ldiskfs group lock held */
+ static noinline_for_stack int
+ ext4_mb_free_metadata(handle_t *handle, struct ext4_buddy *e4b,
+ 			  ext4_group_t group, ext4_grpblk_t block, int count)
+@@ -4755,7 +4744,6 @@ ext4_mb_free_metadata(handle_t *handle, 
+ 	BUG_ON(e4b->bd_bitmap_page == NULL);
+ 	BUG_ON(e4b->bd_buddy_page == NULL);
+ 
+-	ext4_lock_group(sb, group);
+ 	for (i = 0; i < count; i++) {
+ 		md = db->bb_md_cur;
+ 		if (md && db->bb_tid != handle->h_transaction->t_tid) {
+@@ -4766,8 +4754,10 @@ ext4_mb_free_metadata(handle_t *handle, 
+ 		if (md == NULL) {
+ 			ext4_unlock_group(sb, group);
+ 			md = kmalloc(sizeof(*md), GFP_NOFS);
+-			if (md == NULL)
++			if (md == NULL) {
++				ext4_lock_group(sb, group);
+ 				return -ENOMEM;
++			}
+ 			md->num = 0;
+ 			md->group = group;
+ 
+@@ -4800,7 +4790,6 @@ ext4_mb_free_metadata(handle_t *handle, 
+ 			db->bb_md_cur = NULL;
+ 		}
+ 	}
+-	ext4_unlock_group(sb, group);
+ 	return 0;
+ }
+ 
+@@ -4901,6 +4890,13 @@ do_more:
  	if (err)
  		goto error_return;
  
@@ -437,7 +473,7 @@ Index: linux-2.6.18-128.1.6/fs/ext4/mballoc.c
  	err = ext4_mb_load_buddy(sb, block_group, &e4b);
  	if (err)
  		goto error_return;
-@@ -4912,42 +4907,31 @@ do_more:
+@@ -4912,42 +4908,31 @@ do_more:
  			BUG_ON(!mb_test_bit(bit + i, bitmap_bh->b_data));
  	}
  #endif
@@ -553,7 +589,7 @@ Index: linux-2.6.18-128.1.6/fs/ext4/mballoc.h
 ===================================================================
 --- linux-2.6.18-128.1.6.orig/fs/ext4/mballoc.h
 +++ linux-2.6.18-128.1.6/fs/ext4/mballoc.h
-@@ -126,7 +126,6 @@ struct ext4_group_info {
+@@ -127,7 +127,6 @@ struct ext4_group_info {
  };
  
  #define EXT4_GROUP_INFO_NEED_INIT_BIT	0
