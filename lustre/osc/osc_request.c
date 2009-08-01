@@ -1641,7 +1641,7 @@ static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
 
         /* Consume write credits even if doing a sync write -
          * otherwise we may run out of space on OST due to grant. */
-        /* Badly aligned writes are not subject to write granting */
+        /* FIXME: unaligned writes must use write grants too */
         if (cmd == OBD_BRW_WRITE && pshift == 0) {
                 client_obd_list_lock(&cli->cl_loi_list_lock);
                 for (i = 0; i < page_count; i++) {
