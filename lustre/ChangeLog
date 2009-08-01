@@ -15,27 +15,37 @@ tbd Sun Microsystems, Inc.
 	  more information, please refer to bugzilla 17630.
 
 Severity   : enhancement
+Bugzilla   : 18539
+Description: Communicate OST degraded/readonly state via statfs to MDS
+Details    : Flags in the statfs returned from OSTs indicate whether the
+	     OST is in a degraded RAID state, or if the filesystem has
+	     turned read-only after a filesystem error is detected.
+
+Severity   : enhancement
 Bugzilla   : 19808
 Description: Vanilla kernel 2.6.30 patchless support.
 
 Severity   : normal
 Bugzilla   : 20122
+Frequency  : rare
 Description: don't panic if EPROTO was hit when reading symlink 
 Details    : correctly handling request reference in error cases.
 
 Severity   : normal
 Bugzilla   : 17545
+Frequency  : common
 Description: open sometimes returns ENOENT instead of EACCES
 Details    : checking permission should be part of open part of mds_open, not
-             lookup part. so server should be set DISP_OPEN_OPEN disposition
-             before starting permission check.
-             Also not need revalidate dentry if client already have LOOKUP lock.
+	     lookup part. so server should be set DISP_OPEN_OPEN disposition
+	     before starting permission check.
+	     Also not need revalidate dentry if client already have LOOKUP lock.
 
 Severity   : normal
 Bugzilla   : 19854
 Description: enable client interface failover
+Frequency  : on servers with multiple network interfaces
 Details    : When a child reconnects from another NID, properly update export
-             nid hash position and ldlm reverse import.
+	     nid hash position and ldlm reverse import.
 
 Severity   : enhancement
 Bugzilla   : 18801
@@ -54,6 +64,7 @@ Description: added llapi_file_open, llapi_file_create, llapi_file_get_stripe
 Severity   : normal
 Bugzilla   : 19529
 Description: Avoid deadlock for local client writes
+Frequency  : only on systems with clients writing to an OST on the same node
 Details    : Use new OBD_BRW_MEMALLOC flag to notify OST about writes in the
 	     memory freeing context. This allows OST threads to set the
 	     PF_MEMALLOC flag on task structures in order to allocate memory
@@ -71,8 +82,8 @@ Details    : move ldlm namespace creation in setup phase to avoid grab
 
 Severity   : normal
 Bugzilla   : 18624
-Description: Unable to run several mkfs.lustre on loop devices at the same
-	     time.
+Frequency  : only during format of test systems
+Description: Unable to run several mkfs.lustre on loop devices at the same time
 Details    : mkfs.lustre returns error 256 on the concurrent loop devices
 	     formatting. The solution is to proper handle the error.
 
@@ -99,6 +110,7 @@ Details    : if a client doesn't respond to a blocking callback within the
 
 Severity   : normal
 Bugzilla   : 18674
+Frequency  : occasionally during network problems
 Description: client not allowed to reconnect to OST because of active request
 Details    : abort bulk requests received by the OST once the client has timed
 	     out since the client will resend the request anyway. The client
@@ -114,7 +126,7 @@ Details    : lov_update_create_set() uses set->set_success as index for created
 	     array and we can use qos_shrink_lsm for allocate correct lsm.
 
 Severity   : normal
-Frequency  : rare
+Frequency  : rare, only when quota is enabled
 Bugzilla   : 18793
 Descriptoin: OSS complains "too many blocks" and crashes
 Details    : In filter_commitrw_write():
