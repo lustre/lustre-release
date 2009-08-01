@@ -104,6 +104,15 @@ static int ll_test_inode(struct inode *inode, void *opaque)
 
 static int ll_set_inode(struct inode *inode, void *opaque)
 {
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct mdt_body *body = ((struct lustre_md *)opaque)->body;
+
+        if (unlikely(!(body->valid & OBD_MD_FLID))) {
+                CERROR("MDS body missing FID\n");
+                return -EINVAL;
+        }
+
+        lli->lli_fid = body->fid1;
         return 0;
 }
 
@@ -115,7 +124,6 @@ static int ll_set_inode(struct inode *inode, void *opaque)
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct lustre_md *md)
 {
-        struct ll_inode_info *lli;
         struct inode         *inode;
         ENTRY;
 
@@ -123,7 +131,6 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
         inode = iget5_locked(sb, hash, ll_test_inode, ll_set_inode, md);
 
         if (inode) {
-                lli = ll_i2info(inode);
                 if (inode->i_state & I_NEW) {
                         int rc;
 
@@ -416,7 +423,7 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
 }
 
 int ll_lookup_it_finish(struct ptlrpc_request *request,
-                     struct lookup_intent *it, void *data)
+                        struct lookup_intent *it, void *data)
 {
         struct it_cb_data *icbd = data;
         struct dentry **de = icbd->icbd_childp;
@@ -535,7 +542,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         if (it->it_op == IT_GETATTR) {
                 first = ll_statahead_enter(parent, &dentry, 1);
                 if (first >= 0) {
-                        ll_statahead_exit(dentry, first);
+                        ll_statahead_exit(parent, dentry, first);
                         if (first == 1)
                                 RETURN(retval = dentry);
                 }
@@ -571,7 +578,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         }
 
         if (first == -EEXIST)
-                ll_statahead_mark(dentry);
+                ll_statahead_mark(parent, dentry);
 
         if ((it->it_op & IT_OPEN) && dentry->d_inode &&
             !S_ISREG(dentry->d_inode->i_mode) &&

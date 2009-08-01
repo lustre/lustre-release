@@ -1078,15 +1078,20 @@ struct ll_statahead_info {
 };
 
 int do_statahead_enter(struct inode *dir, struct dentry **dentry, int lookup);
-void ll_statahead_exit(struct dentry *dentry, int result);
+void ll_statahead_exit(struct inode *dir, struct dentry *dentry, int result);
 void ll_stop_statahead(struct inode *inode, void *key);
 
 static inline
-void ll_statahead_mark(struct dentry *dentry)
+void ll_statahead_mark(struct inode *dir, struct dentry *dentry)
 {
-        struct ll_inode_info *lli = ll_i2info(dentry->d_parent->d_inode);
+        struct ll_inode_info  *lli;
         struct ll_dentry_data *ldd = ll_d2d(dentry);
 
+        /* dentry has been move to other directory, no need mark */
+        if (unlikely(dir != dentry->d_parent->d_inode))
+                return;
+
+        lli = ll_i2info(dir);
         /* not the same process, don't mark */
         if (lli->lli_opendir_pid != cfs_curproc_pid())
                 return;
@@ -1100,16 +1105,19 @@ void ll_statahead_mark(struct dentry *dentry)
 static inline
 int ll_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
 {
-        struct ll_sb_info        *sbi = ll_i2sbi(dir);
-        struct ll_inode_info     *lli = ll_i2info(dir);
-        struct ll_dentry_data    *ldd = ll_d2d(*dentryp);
+        struct ll_inode_info  *lli;
+        struct ll_dentry_data *ldd = ll_d2d(*dentryp);
 
-        if (sbi->ll_sa_max == 0)
+        if (unlikely(dir == NULL))
+                return -EAGAIN;
+
+        if (ll_i2sbi(dir)->ll_sa_max == 0)
                 return -ENOTSUPP;
 
+        lli = ll_i2info(dir);
         /* not the same process, don't statahead */
         if (lli->lli_opendir_pid != cfs_curproc_pid())
-                return -EBADF;
+                return -EAGAIN;
 
         /*
          * When "ls" a dentry, the system trigger more than once "revalidate" or

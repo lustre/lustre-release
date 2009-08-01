@@ -507,29 +507,12 @@ int ll_file_open(struct inode *inode, struct file *file)
 
         fd->fd_file = file;
         if (S_ISDIR(inode->i_mode)) {
-again:
                 spin_lock(&lli->lli_lock);
                 if (lli->lli_opendir_key == NULL && lli->lli_opendir_pid == 0) {
                         LASSERT(lli->lli_sai == NULL);
                         lli->lli_opendir_key = fd;
                         lli->lli_opendir_pid = cfs_curproc_pid();
                         opendir_set = 1;
-                } else if (unlikely(lli->lli_opendir_pid == cfs_curproc_pid() &&
-                                    lli->lli_opendir_key != NULL)) {
-                        /* Two cases for this:
-                         * (1) The same process open such directory many times.
-                         * (2) The old process opened the directory, and exited
-                         *     before its children processes. Then new process
-                         *     with the same pid opens such directory before the
-                         *     old process's children processes exit.
-                         * reset stat ahead for such cases. */
-                        spin_unlock(&lli->lli_lock);
-                        CDEBUG(D_INFO, "Conflict statahead for %.*s "DFID
-                               " reset it.\n", file->f_dentry->d_name.len,
-                               file->f_dentry->d_name.name,
-                               PFID(&lli->lli_fid));
-                        ll_stop_statahead(inode, lli->lli_opendir_key);
-                        goto again;
                 }
                 spin_unlock(&lli->lli_lock);
         }
