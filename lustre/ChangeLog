@@ -13,8 +13,16 @@ tbd  Sun Microsystems, Inc.
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
+Severity   : enhancement
+Bugzilla   : 18539
+Description: Communicate OST degraded/readonly state via statfs to MDS
+Details    : Flags in the statfs returned from OSTs indicate whether the
+	     OST is in a degraded RAID state, or if the filesystem has
+	     turned read-only after a filesystem error is detected.
+
 Severity   : normal
 Bugzilla   : 20122
+Frequency  : rare
 Description: don't panic if EPROTO was hit when reading symlink 
 Details    : correctly handling request reference in error cases.
 
@@ -31,9 +39,10 @@ Frequency  : rare
 Bugzilla   : 18800
 Description: access to llog context before init.
 Details    : move handling CATALOGS file at osc layer and forbid access to llog
-             context before init.
+	     context before init.
 
 Severity   : normal
+Frequency  : rare, only when client is writing to OST on local node
 Bugzilla   : 19529
 Description: Avoid deadlock for local client writes
 Details    : Use new OBD_BRW_MEMALLOC flag to notify OST about writes in the
@@ -61,9 +70,9 @@ Description: Temporarily disable grant shrink.
 Details    : Disable the feature for debugging.
 
 Severity   : normal 
+Frequency  : only when formatting test filesystems
 Bugzilla   : 18624 
-Description: Unable to run several mkfs.lustre on loop devices at the same
-	     time.
+Description: Unable to run several mkfs.lustre on loop devices at the same time
 Details    : mkfs.lustre returns error 256 on the concurrent loop devices
 	     formatting. The solution is to proper handle the error.   
 
@@ -76,10 +85,11 @@ Bugzilla   : 19212
 Description: Update kernel to SLES10 SP2 2.6.16.60-0.37.
 
 Severity   : normal
+Frequency  : rare
 Bugzilla   : 19528
 Description: resolve race between obd_disconnect and class_disconnect_exports
 Details    : if obd_disconnect will be called to already disconnected export he
-             forget release one reference and osc module can't unloaded.
+	     forget release one reference and osc module can't unloaded.
 
 Severity   : enhancement
 Bugzilla   : 18688
@@ -90,20 +100,22 @@ Details    : For each service a new
 	     current number of running threads.
 
 Severity   : normal
+Frequency  : rare
 Bugzilla   : 18382
-Descriptoin: don't return error if have particaly created objects for file.
-Details    : lov_update_create_set uses set->set_success as index for created objects,
-             so if some requests will be failed, they will have hole at end of
-             array and we can use qos_shrink_lsm for allocate correct lsm.
+Descriptoin: don't return error if have partially created objects for file.
+Details    : lov_update_create_set uses set->set_success as index for created
+	     objects, so if some requests will be failed, they will have hole
+	     at end of array and qos_shrink_lsm for allocate correct lsm.
 
 Severity   : enhancement
 Bugzilla   : 17671
 Description: Update OFED support to 1.4.1
 
 Severity   : normal
+Frequency  : common
 Bugzilla   : 18645
 Description: Reduce small size read RPC
-Details    : Set read-ahead limite for every file and only do read-ahead when
+Details    : Set read-ahead limit for every file and only do read-ahead when
 	     available read-ahead pages are bigger than 1M to avoid small size
 	     read RPC.
 
@@ -116,7 +128,7 @@ Severity   : enhancement
 Bugzilla   : 17974
 Description: add lazystatfs mount option to allow statfs(2) to skip down OSTs
 Details    : allow skip disconnected ost for send statfs request and hide error
-             in this case.
+	     in this case.
 
 Severity   : major
 Frequency  : rare
@@ -140,13 +152,13 @@ Frequency  : rare
 Bugzilla   : 18902
 Descriptoin: allow kill process which wait statahead result
 Details    : for some reasons 'ls' can stick in waiting result from statahead,
-             in this case need way for kill this process.
+	     in this case need way for kill this process.
 
 Severity   : enhancement
 Bugzilla   : 18798
 Description: Add state history info file, enhance import info file
 Details    : Track import connection state changes in a new osc/mdc proc file;
-             add overview-type data to the osc/mdc import proc file.
+	     add overview-type data to the osc/mdc import proc file.
 
 Severity   : enhancement
 Bugzilla   : 17536
@@ -170,31 +182,31 @@ Frequency  : start MDS on uncleanly shutdowned MDS device
 Bugzilla   : 16839
 Descriptoin: ll_sync thread stay in waiting mds<>ost recovery finished
 Details    : stay in waiting mds<>ost recovery finished produce random bugs
-             due race between two ll_sync thread for one lov target. send
-             ACTIVATE event only if connect realy finished and import have
-             FULL state.
+	     due race between two ll_sync thread for one lov target. send
+	     ACTIVATE event only if connect realy finished and import have
+	     FULL state.
 
 Severity   : normal
 Frequency  : rare, connect and disconnect target at same time
 Bugzilla   : 17310
 Descriptoin: ASSERTION(atomic_read(&imp->imp_inflight) == 0
 Details    : don't call obd_disconnect under lov_lock. this long time
-	      operation and can block ptlrpcd which answer to connect request.
+	     operation and can block ptlrpcd which answer to connect request.
 
 Severity   : normal
 Frequency  : rare
 Bugzilla   : 18154
 Descriptoin: don't lose wakeup for imp_recovery_waitq
 Details    : recover_import_no_retry or invalidate_import and import_close can
-             both sleep on imp_recovery_waitq, but we was send only one wakeup
-             to sleep queue.
+	     both sleep on imp_recovery_waitq, but we was send only one wakeup
+	     to sleep queue.
 
 Severity   : normal
 Frequency  : always with long access acl
 Bugzilla   : 17636
 Descriptoin: mds can't pack reply with long acl.
 Details    : mds don't control size of acl but they limited by reint/getattr
-             reply buffer.
+	     reply buffer.
 
 Severity   : enhancement
 Bugzilla   : 18061
@@ -215,7 +227,7 @@ Frequency  : on remount
 Bugzilla   : 18018
 Description: external journal device not working after the remount
 Details    : clear dev_rdonly flag for external journal devices in
-             blkdev_put()
+	     blkdev_put()
 
 Severity   : minor
 Frequency  : rare
@@ -223,49 +235,49 @@ Bugzilla   : 17802
 Description: shutdown vs evict race
 Details    : client_disconnect_export vs connect request race.
 	     if client will evicted at this time - we start invalidate
-             thread without referece to import and import can be freed
-             at same time.
+	     thread without referece to import and import can be freed
+	     at same time.
 
 Severity   : normal
 Frequency  : rare, need acl's on inode.
 Bugzilla   : 16492
 Description: client can't handle ost additional correctly
 Details    : if ost was added after client connected to mds client can have
-             hit lnet_try_match_md ... to big messages to wide striped files.
-             in this case need teach client to handle config events about add
-             lov target and update client max ea size at that event.
+	     hit lnet_try_match_md ... to big messages to wide striped files.
+	     in this case need teach client to handle config events about add
+	     lov target and update client max ea size at that event.
 
 Severity   : enhancement
 Bugzilla   : 15699
 Description: Changelogs
 Details    : Changelogs are a lightweight mechanism to track filesystem
-             metadata and namespace changes.  The changelog is recorded
-             permanently on the MDTs, and is periodically "consumed" / purged
-             when records are no longer needed.
+	     metadata and namespace changes.  The changelog is recorded
+	     permanently on the MDTs, and is periodically "consumed" / purged
+	     when records are no longer needed.
 
 Severity   : enhancement
 Bugzilla   : 15957
 Description: compact fld format with extents
 Details    : Store range of seq rather than every seq in FLD. Seq
-             controller update FLD rather than clients. In Case of CMD, mdt0
-             has FLD, all other metadata server act as non persistent proxy
-             for FLD queries and cache fld entries in fld cache.
+	     controller update FLD rather than clients. In Case of CMD, mdt0
+	     has FLD, all other metadata server act as non persistent proxy
+	     for FLD queries and cache fld entries in fld cache.
 
 Severity   : normal
 Frequency  : rare
 Bugzilla   : 16081
 Description: don't skip ost target if they assigned to file
 Details    : Drop slow OSCs if we can, but not for requested start idx.
-             This means "if OSC is slow and it is not the requested
-             start OST, then it can be skipped, otherwise skip it only
-             if it is inactive/recovering/out-of-space.
+	     This means "if OSC is slow and it is not the requested
+	     start OST, then it can be skipped, otherwise skip it only
+	     if it is inactive/recovering/out-of-space.
 
 Severity   : normal
 Bugzilla   : 16080
 Description: more cleanup in mds_lov
 Details    : not send LOV EA under replay, we can't know about they size at this
-             time. Don't allow client connect to mds before any ost connected,
-             for avoid problems with LOV EA size and returning EIO to client.
+	     time. Don't allow client connect to mds before any ost connected,
+	     for avoid problems with LOV EA size and returning EIO to client.
 
 Severity   : enhancement
 Bugzilla   : 11826
