@@ -15,6 +15,13 @@
 	* ext4 support for RHEL5 is experimental and thus should not be
 	  used in production.
 
+Severity   : normal
+Bugzilla   : 20321
+Description: Deadlock between filter_destroy() and filter_commitrw_write().
+Details    : filter_destroy() does not hold the DLM lock over the whole
+	     operation. If the DLM lock is dropped, filter_commitrw() can go
+	     through, causing the deadlock between page lock and i_mutex.
+
 Severity   : enhancement
 Bugzilla   : 19847
 Description: Update kernel to SLES10 SP2 2.6.16.60-0.39.3.
