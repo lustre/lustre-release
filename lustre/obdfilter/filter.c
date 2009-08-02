@@ -1448,9 +1448,9 @@ struct dentry *filter_fid2dentry(struct obd_device *obd,
         RETURN(dchild);
 }
 
-static int filter_prepare_destroy(struct obd_device *obd, obd_id objid)
+static int filter_prepare_destroy(struct obd_device *obd, obd_id objid,
+                                  struct lustre_handle *lockh)
 {
-        struct lustre_handle lockh;
         int flags = LDLM_AST_DISCARD_DATA, rc;
         struct ldlm_res_id res_id = { .name = { objid } };
         ldlm_policy_data_t policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
@@ -1461,13 +1461,21 @@ static int filter_prepare_destroy(struct obd_device *obd, obd_id objid)
         rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, LDLM_EXTENT,
                                     &policy, LCK_PW, &flags, ldlm_blocking_ast,
                                     ldlm_completion_ast, NULL, NULL, 0, NULL,
-                                    &lockh);
+                                    lockh);
 
-        /* We only care about the side-effects, just drop the lock. */
-        if (rc == ELDLM_OK)
-                ldlm_lock_decref(&lockh, LCK_PW);
-
+        if (rc != ELDLM_OK) {
+                lockh->cookie = 0;
+                CERROR("%s: failed to get lock to destroy objid "LPU64" (%d)\n",
+                       obd->obd_name, objid, rc);
+        }
         RETURN(rc);
+}
+
+static void filter_fini_destroy(struct obd_device *obd,
+                                struct lustre_handle *lockh)
+{
+        if (lustre_handle_is_used(lockh))
+                ldlm_lock_decref(lockh, LCK_PW);
 }
 
 /* This is vfs_unlink() without down(i_sem).  If we call regular vfs_unlink()
@@ -3521,6 +3529,7 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
         struct obd_device *obd;
         struct filter_obd *filter;
         struct dentry *dchild = NULL, *dparent = NULL;
+        struct lustre_handle lockh = { 0 };
         struct lvfs_run_ctxt saved;
         void *handle = NULL;
         struct llog_cookie *fcc = NULL;
@@ -3560,7 +3569,9 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
                 GOTO(cleanup, rc = -ENOENT);
         }
 
-        filter_prepare_destroy(obd, oa->o_id);
+        rc = filter_prepare_destroy(obd, oa->o_id, &lockh);
+        if (rc)
+                GOTO(cleanup, rc);
 
         /* Our MDC connection is established by the MDS to us */
         if (oa->o_valid & OBD_MD_FLCOOKIE) {
@@ -3656,6 +3667,8 @@ cleanup:
         case 3:
                 filter_parent_unlock(dparent);
         case 2:
+                filter_fini_destroy(obd, &lockh);
+
                 f_dput(dchild);
                 if (fcc != NULL)
                         OBD_FREE(fcc, sizeof(*fcc));
