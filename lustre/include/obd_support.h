@@ -203,6 +203,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MDS_DROP_QUOTA_REQ      0x13d
 #define OBD_FAIL_MDS_REMOVE_COMMON_EA    0x13e
 #define OBD_FAIL_MDS_ALLOW_COMMON_EA_SETTING   0x13f
+#define OBD_FAIL_MDS_FAIL_LOV_LOG_ADD    0x140
 #define OBD_FAIL_MDS_LOV_PREP_CREATE     0x141
 #define OBD_FAIL_MDS_REINT_DELAY         0x142
 #define OBD_FAIL_MDS_OPEN_WAIT_CREATE    0x143

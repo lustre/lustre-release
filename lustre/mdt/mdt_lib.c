@@ -1131,6 +1131,9 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
         else
                 ma->ma_attr_flags &= ~MDS_VTX_BYPASS;
 
+        if (lustre_msg_get_flags(mdt_info_req(info)->rq_reqmsg) & MSG_REPLAY)
+                info->mti_spec.no_create = 1;
+
         rc = mdt_dlmreq_unpack(info);
         RETURN(rc);
 }

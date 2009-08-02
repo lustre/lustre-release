@@ -74,7 +74,7 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct lov_obd *lov = &obd->u.lov;
-        int i, rc = 0, rc1;
+        int i, rc = 0, cookies = 0;
         ENTRY;
 
         LASSERTF(logcookies && numcookies >= lsm->lsm_stripe_count,
@@ -111,15 +111,25 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                         break;
                 }
                 LASSERT(lsm->lsm_object_gr == loi->loi_gr);
-                rc1 = llog_add(cctxt, rec, NULL, logcookies + rc,
-                               numcookies - rc);
+                /* inject error in llog_add() below */
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_FAIL_LOV_LOG_ADD)) {
+                        llog_ctxt_put(cctxt);
+                        cctxt = NULL;
+                }
+                rc = llog_add(cctxt, rec, NULL, logcookies + cookies,
+                               numcookies - cookies);
                 llog_ctxt_put(cctxt);
-                if (rc1 < 0)
-                        RETURN(rc1);
-                rc += rc1;
+                if (rc < 0) {
+                        CERROR("Can't add llog (rc = %d) for stripe %i\n",
+                               rc, cookies);
+                        memset(logcookies + cookies, 0,
+                               sizeof(struct llog_cookie));
+                        rc = 1; /* skip this cookie */
+                }
+                /* Note that rc is always 1 if llog_add was successful */
+                cookies += rc;
         }
-
-        RETURN(rc);
+        RETURN(cookies);
 }
 
 static int lov_llog_origin_connect(struct llog_ctxt *ctxt,

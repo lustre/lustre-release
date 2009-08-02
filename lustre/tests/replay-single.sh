@@ -1998,16 +1998,36 @@ test_82b() {
 }
 run_test 82b "CMD: mkdir cross-node dir (fail mds with name)"
 
-test_84() {
+test_83a() {
+    mkdir -p $DIR/$tdir
+    createmany -o $DIR/$tdir/$tfile- 10 || return 1
+#define OBD_FAIL_MDS_FAIL_LOV_LOG_ADD       0x140
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000140"
+    unlinkmany $DIR/$tdir/$tfile- 10 || return 2
+}
+run_test 83a "fail log_add during unlink recovery"
+
+test_83b() {
+    mkdir -p $DIR/$tdir
+    createmany -o $DIR/$tdir/$tfile- 10 || return 1
+    replay_barrier $SINGLEMDS
+    unlinkmany $DIR/$tdir/$tfile- 10 || return 2
+#define OBD_FAIL_MDS_FAIL_LOV_LOG_ADD       0x140
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000140"
+    fail $SINGLEMDS
+}
+run_test 83b "fail log_add during unlink recovery"
+
+test_84a() {
 #define OBD_FAIL_MDS_OPEN_WAIT_CREATE  0x143
-    do_facet mds "lctl set_param fail_loc=0x80000143"
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000143"
     createmany -o $DIR/$tfile- 1 &
     PID=$!
     mds_evict_client
     wait $PID
     df -P $DIR || df -P $DIR || true    # reconnect
 }
-run_test 84 "stale open during export disconnect"
+run_test 84a "stale open during export disconnect"
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
