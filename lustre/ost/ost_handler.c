@@ -697,8 +697,8 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         desc = ptlrpc_prep_bulk_exp(req, npages,
                                      BULK_PUT_SOURCE, OST_BULK_PORTAL);
-        if (desc == NULL) /* XXX: check all cleanup stuff */
-                GOTO(out, rc = -ENOMEM);
+        if (desc == NULL)
+                GOTO(out_lock, rc = -ENOMEM);
 
         ost_rw_prolong_locks(req, ioo, remote_nb, &body->oa, LCK_PW | LCK_PR);
 
@@ -963,7 +963,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         desc = ptlrpc_prep_bulk_exp(req, npages,
                                      BULK_GET_SINK, OST_BULK_PORTAL);
         if (desc == NULL)
-                GOTO(out, rc = -ENOMEM);
+                GOTO(out_lock, rc = -ENOMEM);
 
         /* NB Having prepped, we must commit... */
 
