@@ -1,4 +1,3 @@
-ext4-version-2.6-rhel5.patch
 ext4-wantedi-2.6-rhel5.patch
 iopen-2.6.18-rhel5-ext4.patch
 ext4-map_inode_page-2.6.18-rhel5.patch
@@ -24,3 +23,10 @@ ext4-convert-group-lock-rhel5.patch
 ext4-force_over_8tb-rhel5.patch
 ext4_ext_search_right-fix.patch
 ext4-pa_lock-typo.patch
+ext4-fixed-rmdir-rhel5.patch
+ext4-orphans-delay.patch
+ext4-pdir-fix.patch
+ext4-osd-iop-common.patch
+ext4-osd-iam-exports.patch
+ext4-dynlocks-common.patch
+ext4-dynlocks-2.6-rhel5.patch
