@@ -49,10 +49,9 @@
 
 #ifdef HAVE_NETLINK
 
+#include <libcfs/libcfs.h>
 #include <sys/socket.h>
 #include <linux/netlink.h>
-
-#include <libcfs/libcfs.h>
 
 /** Start the userspace side of a LNL pipe.
  * @param link Private descriptor for pipe/socket.
