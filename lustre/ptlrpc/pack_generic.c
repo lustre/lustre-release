@@ -390,8 +390,8 @@ void *lustre_msg_buf_v2(struct lustre_msg_v2 *m, int n, int min_size)
         buflen = m->lm_buflens[n];
         if (unlikely(buflen < min_size)) {
                 CERROR("msg %p buffer[%d] size %d too small "
-                       "(required %d, opc=%d)\n",
-                       m, n, buflen, min_size, lustre_msg_get_opc(m));
+                       "(required %d, opc=%d)\n", m, n, buflen, min_size,
+                       n == MSG_PTLRPC_BODY_OFF ? -1 : lustre_msg_get_opc(m));
                 return NULL;
         }
 
