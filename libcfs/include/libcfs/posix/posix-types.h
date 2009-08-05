@@ -42,6 +42,7 @@
 #ifndef _LUSTRE_POSIX_TYPES_H
 #define _LUSTRE_POSIX_TYPES_H
 
+#include <asm/types.h>
 #ifndef HAVE_UMODE_T
 typedef unsigned short umode_t;
 #endif

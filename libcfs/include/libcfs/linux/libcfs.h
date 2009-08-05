@@ -45,9 +45,6 @@
 #error This include is only for kernel use.
 #endif
 
-#ifdef HAVE_ASM_TYPES_H
-#include <asm/types.h>
-#endif
 
 #include <stdarg.h>
 #include <libcfs/linux/linux-time.h>
@@ -58,6 +55,7 @@
 #include <libcfs/linux/linux-tcpip.h>
 #include <libcfs/linux/kp30.h>
 
+#include <asm/types.h>
 #include <linux/types.h>
 #include <asm/timex.h>
 #include <linux/sched.h> /* THREAD_SIZE */

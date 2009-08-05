@@ -531,17 +531,17 @@ AC_CHECK_FUNCS([strnlen])
 AC_CHECK_TYPE([umode_t],
 	[AC_DEFINE(HAVE_UMODE_T, 1, [umode_t is defined])],
 	[],
-	[#include <signal.h>])
+	[#include <asm/types.h>])
 
 AC_CHECK_TYPE([__u64],
 	[AC_DEFINE(HAVE___U64, 1, [__u64 is defined])],
 	[],
-	[#include <signal.h>])
+	[#include <asm/types.h>])
 
 AC_CHECK_TYPE([__s64],
 	[AC_DEFINE(HAVE___S64, 1, [__s64 is defined])],
 	[],
-	[#include <signal.h>])
+	[#include <asm/types.h>])
 
 # --------  Check for required packages  --------------
 
