@@ -2458,7 +2458,7 @@ static int mdd_links_rename(const struct lu_env *env,
         lee = (struct link_ea_entry *)(leh + 1); /* link #0 */
 
         /* Find the old record */
-        for(count = 0; count <= leh->leh_reccount; count++) {
+        for(count = 0; count < leh->leh_reccount; count++) {
                 mdd_lee_unpack(lee, &reclen, tmpname, tmpfid);
                 if (tmpname->ln_namelen == oldlname->ln_namelen &&
                     lu_fid_eq(tmpfid, oldpfid) &&
@@ -2467,7 +2467,7 @@ static int mdd_links_rename(const struct lu_env *env,
                         break;
                 lee = (struct link_ea_entry *)((char *)lee + reclen);
         }
-        if (count > leh->leh_reccount) {
+        if ((count + 1) > leh->leh_reccount) {
                 CDEBUG(D_INODE, "Old link_ea name '%.*s' not found\n",
                        oldlname->ln_namelen, oldlname->ln_name);
                 GOTO(out, rc = -ENOENT);
