@@ -178,7 +178,7 @@ AC_COMPILE_IFELSE([
 	#include <linux/types.h>
 	int main(void) {
 		unsigned long long *data1;
-		__u64 *data2;
+		__u64 *data2 = NULL;
 		
 		data1 = data2;
 		return 0;
@@ -221,7 +221,7 @@ AC_COMPILE_IFELSE([
 	#include <linux/types.h>
 	int main(void) {
 		unsigned long *data1;
-		size_t *data2;
+		size_t *data2 = NULL;
 		
 		data1 = data2;
 		return 0;
@@ -244,7 +244,7 @@ AC_COMPILE_IFELSE([
 	#include <linux/types.h>
 	int main(void) {
 		long *data1;
-		ssize_t *data2;
+		ssize_t *data2 = NULL;
 		
 		data1 = data2;
 		return 0;
