@@ -380,13 +380,16 @@ int llapi_file_create_pool(const char *name, unsigned long long stripe_size,
 #define WANT_PATH   0x1
 #define WANT_FSNAME 0x2
 #define WANT_FD     0x4
-static int get_root_path(int want, char *fsname, int *outfd, char *path)
+#define WANT_INDEX  0x8
+#define WANT_ERROR  0x10
+static int get_root_path(int want, char *fsname, int *outfd, char *path,
+                         int index)
 {
         struct mntent mnt;
-        char buf[PATH_MAX];
-        char *ptr;
+        char buf[PATH_MAX], mntdir[PATH_MAX];
+        char *name = NULL, *ptr;
         FILE *fp;
-        int fd;
+        int idx = 0, len = 0, mntlen, fd;
         int rc = -ENODEV;
 
         /* get the mount point */
@@ -404,27 +407,47 @@ static int get_root_path(int want, char *fsname, int *outfd, char *path)
                 if (!llapi_is_lustre_mnt(&mnt))
                         continue;
 
+                mntlen = strlen(mnt.mnt_dir);
                 ptr = strrchr(mnt.mnt_fsname, '/');
-                if (!ptr) {
+                if (!ptr && !len) {
                         rc = -EINVAL;
                         break;
                 }
                 ptr++;
 
-                /* If path was specified and matches, store the fsname */
-                if ((want & WANT_FSNAME) && (strcmp(mnt.mnt_dir, path) == 0))
-                        strcpy(fsname, ptr);
-                /* Else check the fsname for a match */
-                else if (strcmp(ptr, fsname) != 0)
+                if ((want & WANT_INDEX) && (idx++ != index))
+                        continue; 
+
+                /* Check the fsname for a match */
+                if (!(want & WANT_FSNAME) && fsname != NULL &&
+                    (strlen(fsname) > 0) && (strcmp(ptr, fsname) != 0))
                         continue;
 
-                /* Found it */
-                rc = 0;
-                if (want & WANT_PATH)
-                        strcpy(path, mnt.mnt_dir);
+                /* If the path isn't set return the first one we find */
+                if (path == NULL || strlen(path) == 0) {
+                        strcpy(mntdir, mnt.mnt_dir);
+                        name = ptr;
+                        rc = 0;
+                        break;
+                /* Otherwise find the longest matching path */
+                } else if ((strlen(path) >= mntlen) && (mntlen >= len) &&
+                           (strncmp(mnt.mnt_dir, path, mntlen) == 0)) { 
+                        strcpy(mntdir, mnt.mnt_dir);
+                        mntlen = len;
+                        name = ptr;
+                        rc = 0;
+                }
+        }
+        endmntent(fp);
+
+        /* Found it */
+        if (rc == 0) {
+                if ((want & WANT_FSNAME) && fsname != NULL)
+                        strcpy(fsname, name);
+                if ((want & WANT_PATH) && path != NULL)
+                        strcpy(path, mntdir);
                 if (want & WANT_FD) {
-                        fd = open(mnt.mnt_dir,
-                                  O_RDONLY | O_DIRECTORY | O_NONBLOCK);
+                        fd = open(mntdir, O_RDONLY | O_DIRECTORY | O_NONBLOCK);
                         if (fd < 0) {
                                 perror("open");
                                 rc = -errno;
@@ -432,19 +455,45 @@ static int get_root_path(int want, char *fsname, int *outfd, char *path)
                                 *outfd = fd;
                         }
                 }
-                break;
-        }
-        endmntent(fp);
-        if (rc)
+        } else if (want & WANT_ERROR)
                 llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
                           "can't find fs root for '%s': %d",
                           (want & WANT_PATH) ? fsname : path, rc);
         return rc;
 }
 
+/*
+ * search lustre mounts
+ *
+ * Calling this function will return to the user the mount point, mntdir, and
+ * the file system name, fsname, if the user passed a buffer to this routine.
+ *
+ * The user inputs are pathname and index. If the pathname is supplied then
+ * the value of the index will be ignored. The pathname will return data if
+ * the pathname is located on a lustre mount. Index is used to pick which
+ * mount point you want in the case of multiple mounted lustre file systems.
+ * See function lfs_osts in lfs.c for a example of the index use.
+ */
+int llapi_search_mounts(const char *pathname, int index, char *mntdir,
+                        char *fsname)
+{
+        int want = WANT_PATH, idx = -1;
+
+        if (!pathname) {
+                want |= WANT_INDEX;
+                idx = index;
+        } else
+                strcpy(mntdir, pathname);
+
+        if (fsname)
+                want |= WANT_FSNAME;
+        return get_root_path(want, fsname, NULL, mntdir, idx);
+}
+
 int llapi_search_fsname(const char *pathname, char *fsname)
 {
-        return get_root_path(WANT_FSNAME, fsname, NULL, (char *)pathname);
+        return get_root_path(WANT_FSNAME | WANT_ERROR, fsname, NULL,
+                             (char *)pathname, -1);
 }
 
 /* return the first file matching this pattern */
@@ -477,7 +526,7 @@ static int poolpath(char *fsname, char *pathname, char *pool_pathname)
         char buffer[PATH_MAX];
 
         if (fsname == NULL) {
-                rc = get_root_path(WANT_FSNAME, buffer, NULL, pathname);
+                rc = llapi_search_fsname(pathname, buffer);
                 if (rc != 0)
                         return rc;
                 fsname = buffer;
@@ -2606,7 +2655,7 @@ int llapi_changelog_start(void **priv, int flags, const char *device,
         int rc, fd;
 
         if (device[0] == '/')
-                rc = get_root_path(WANT_FSNAME, mdtname, NULL, (char *)device);
+                rc = llapi_search_fsname(device, mdtname);
         else
                 strncpy(mdtname, device, sizeof(mdtname));
 
@@ -2759,7 +2808,7 @@ int llapi_changelog_clear(const char *mdtname, const char *idstr,
                 ptr = fsname + strlen(fsname) - 8;
                 *ptr = '\0';
                 index = strtol(ptr + 4, NULL, 10);
-                rc = get_root_path(WANT_FD, fsname, &fd, NULL);
+                rc = get_root_path(WANT_FD | WANT_ERROR, fsname, &fd, NULL, -1);
         }
         if (rc < 0) {
                 llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
@@ -2801,7 +2850,8 @@ int llapi_fid2path(const char *device, const char *fidstr, char *buf,
         if (device[0] == '/') {
                 strcpy(path, device);
         } else {
-                rc = get_root_path(WANT_PATH, (char *)device, NULL, path);
+                rc = get_root_path(WANT_PATH | WANT_ERROR, (char *)device,
+                                   NULL, path, -1);
                 if (rc < 0)
                         return rc;
         }

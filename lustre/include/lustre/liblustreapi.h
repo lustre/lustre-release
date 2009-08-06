@@ -168,6 +168,8 @@ extern int llapi_get_obd_count(char *mnt, int *count, int is_mdt);
 extern int parse_size(char *optarg, unsigned long long *size,
                       unsigned long long *size_units, int bytes_spec);
 extern int llapi_path2fid(const char *path, lustre_fid *fid);
+extern int llapi_search_mounts(const char *pathname, int index,
+                               char *mntdir, char *fsname);
 extern int llapi_search_fsname(const char *pathname, char *fsname);
 extern void llapi_ping_target(char *obd_type, char *obd_name,
                               char *obd_uuid, void *args);
