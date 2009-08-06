@@ -13,6 +13,12 @@ tbd  Sun Microsystems, Inc.
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
+Severity   : normal
+Bugzilla   : 19854
+Description: enable client interface failover
+Details    : When a child reconnects from another NID, properly update export
+             nid hash position and ldlm reverse import.
+
 Severity   : enhancement
 Bugzilla   : 18539
 Description: Communicate OST degraded/readonly state via statfs to MDS
@@ -23,13 +29,13 @@ Details    : Flags in the statfs returned from OSTs indicate whether the
 Severity   : normal
 Bugzilla   : 20122
 Frequency  : rare
-Description: don't panic if EPROTO was hit when reading symlink 
+Description: don't panic if EPROTO was hit when reading symlink
 Details    : correctly handling request reference in error cases.
 
 Severity   : enhancement
 Bugzilla   : 19856
 Description: Add LustreNetLink, a kernel-userspace communcation path.
-	
+
 Severity   : enhancement
 Bugzilla   : 19847
 Description: Update kernel to SLES10 SP2 2.6.16.60-0.39.3.
@@ -69,12 +75,12 @@ Bugzilla   : 19507
 Description: Temporarily disable grant shrink.
 Details    : Disable the feature for debugging.
 
-Severity   : normal 
+Severity   : normal
 Frequency  : only when formatting test filesystems
-Bugzilla   : 18624 
+Bugzilla   : 18624
 Description: Unable to run several mkfs.lustre on loop devices at the same time
 Details    : mkfs.lustre returns error 256 on the concurrent loop devices
-	     formatting. The solution is to proper handle the error.   
+	     formatting. The solution is to proper handle the error.
 
 Severity   : enhancement
 Bugzilla   : 19024

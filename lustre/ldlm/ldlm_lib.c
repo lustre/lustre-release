@@ -760,7 +760,9 @@ int target_handle_connect(struct ptlrpc_request *req)
                 export = NULL;
                 rc = 0;
         } else if (export->exp_connection != NULL &&
-                   req->rq_peer.nid != export->exp_connection->c_peer.nid) {
+                   req->rq_peer.nid != export->exp_connection->c_peer.nid &&
+                   (lustre_msg_get_op_flags(req->rq_reqmsg) &
+                    MSG_CONNECT_INITIAL)) {
                 /* in mds failover we have static uuid but nid can be
                  * changed*/
                 CWARN("%s: cookie %s seen on new NID %s when "
@@ -930,8 +932,17 @@ dont_check_exports:
                 spin_unlock(&export->exp_lock);
         }
 
-        if (export->exp_connection != NULL)
+        if (export->exp_connection != NULL) {
+                /* Check to see if connection came from another NID */
+                if ((export->exp_connection->c_peer.nid != req->rq_peer.nid) &&
+                    !hlist_unhashed(&export->exp_nid_hash))
+                        lustre_hash_del(export->exp_obd->obd_nid_hash,
+                                        &export->exp_connection->c_peer.nid,
+                                        &export->exp_nid_hash);
+
                 ptlrpc_connection_put(export->exp_connection);
+        }
+
         export->exp_connection = ptlrpc_connection_get(req->rq_peer,
                                                        req->rq_self,
                                                        &remote_uuid);
