@@ -344,6 +344,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct obd_export *exp;
+        struct inode *parent = de->d_parent->d_inode;
         int first = 0, rc;
 
         ENTRY;
@@ -364,8 +365,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                         RETURN(0);
 #endif
 
-                rc = ll_have_md_lock(de->d_parent->d_inode,
-                                     MDS_INODELOCK_UPDATE);
+                rc = ll_have_md_lock(parent, MDS_INODELOCK_UPDATE);
                 GOTO(out_sa, rc);
         }
 
@@ -391,7 +391,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         ll_frob_intent(&it, &lookup_it);
         LASSERT(it);
 
-        ll_prepare_mdc_op_data(&op_data, de->d_parent->d_inode, de->d_inode,
+        ll_prepare_mdc_op_data(&op_data, parent, de->d_inode,
                                de->d_name.name, de->d_name.len, 0, NULL);
 
         if ((it->it_op == IT_OPEN) && de->d_inode) {
@@ -439,7 +439,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         }
 
         if (it->it_op == IT_GETATTR)
-                first = ll_statahead_enter(de->d_parent->d_inode, &de, 0);
+                first = ll_statahead_enter(parent, &de, 0);
 
 do_lock:
         it->it_create_mode &= ~current->fs->umask;
@@ -451,9 +451,9 @@ do_lock:
                 /* If there are too many locks on client-side, then some
                  * locks taken by statahead maybe dropped automatically
                  * before the real "revalidate" using them. */
-                ll_statahead_exit(de, req == NULL ? rc : 0);
+                ll_statahead_exit(parent, de, req == NULL ? rc : 0);
         else if (first == -EEXIST)
-                ll_statahead_mark(de);
+                ll_statahead_mark(parent, de);
 
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
@@ -545,7 +545,7 @@ do_lookup:
                 it = &lookup_it;
         }
         /*do real lookup here */
-        ll_prepare_mdc_op_data(&op_data, de->d_parent->d_inode, NULL,
+        ll_prepare_mdc_op_data(&op_data, parent, NULL,
                                de->d_name.name, de->d_name.len, 0, NULL);
         rc = mdc_intent_lock(exp, &op_data, NULL, 0,  it, 0, &req,
                              ll_mdc_blocking_ast, 0);
@@ -574,11 +574,11 @@ out_sa:
          * statahead windows; for rc == 0 case, the "lookup" will be done later.
          */
         if (it && it->it_op == IT_GETATTR && rc == 1) {
-                first = ll_statahead_enter(de->d_parent->d_inode, &de, 0);
+                first = ll_statahead_enter(parent, &de, 0);
                 if (!first)
-                        ll_statahead_exit(de, 1);
+                        ll_statahead_exit(parent, de, 1);
                 else if (first == -EEXIST)
-                        ll_statahead_mark(de);
+                        ll_statahead_mark(parent, de);
         }
 
         return rc;

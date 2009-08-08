@@ -132,7 +132,6 @@ static int fid_set_inode(struct inode *inode, void *opaque)
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
                           struct lustre_md *md)
 {
-        struct ll_inode_info *lli;
         struct inode         *inode;
         ENTRY;
 
@@ -140,7 +139,6 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
         inode = iget5_locked(sb, hash, fid_test_inode, fid_set_inode, md);
 
         if (inode) {
-                lli = ll_i2info(inode);
                 if (inode->i_state & I_NEW) {
                         ll_read_inode2(inode, md);
                         unlock_new_inode(inode);
@@ -575,7 +573,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         if (it->it_op == IT_GETATTR) {
                 first = ll_statahead_enter(parent, &dentry, 1);
                 if (first >= 0) {
-                        ll_statahead_exit(dentry, first);
+                        ll_statahead_exit(parent, dentry, first);
                         if (first == 1)
                                 RETURN(retval = dentry);
                 }
@@ -604,7 +602,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         }
 
         if (first == -EEXIST)
-                ll_statahead_mark(dentry);
+                ll_statahead_mark(parent, dentry);
 
         if ((it->it_op & IT_OPEN) && dentry->d_inode &&
             !S_ISREG(dentry->d_inode->i_mode) &&

@@ -303,6 +303,7 @@ struct md_enqueue_info {
         struct lookup_intent    mi_it;
         struct lustre_handle    mi_lockh;
         struct dentry          *mi_dentry;
+        struct inode           *mi_dir;
         md_enqueue_cb_t         mi_cb;
         unsigned int            mi_generation;
         void                   *mi_cbdata;
