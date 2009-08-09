@@ -13,8 +13,8 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
         \fB[[!] --ctime|-C [-+]N] [--maxdepth|-D N] [--name|-n pattern]
         \fB[--print|-p] \fB[--print0|-P] [--obd|-O <uuid[s]>]
         \fB[[!] --size|-S [-+]N[kMGTPE]] [--type |-t {bcdflpsD}]
-        \fB[[!] --gid|-g N] [[!] --group|-G <name>]
-        \fB[[!] --uid|-u N] [[!] --user|-U <name>]
+        \fB[[!] --gid|-g|--group|-G <gname>|<gid>]
+        \fB[[!] --uid|-u|--user|-U <uname>|<uid>]
         \fB<dirname|filename>\fR
 .br
 .B lfs osts
@@ -30,7 +30,7 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs poollist <filesystem>[.<pool>] | <pathname>
 .br
-.B lfs quota [-v] [-o obd_uuid] [-u <username>|-g <groupname>] <filesystem>
+.B lfs quota [-v] [-o obd_uuid] [<-u|-g> <uname>|<uid>|<gname><gid>] <filesystem>
 .br
 .B lfs quota -t <-u|-g> <filesystem>
 .br
@@ -44,14 +44,14 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs quotainv [-ug] [-f] <filesystem>
 .br
-.B lfs setquota <-u|--user|-g|--group> <username|groupname>
+.B lfs setquota <-u|--user|-g|--group> <uname|uid|gname|gid>
              \fB[--block-softlimit <block-softlimit>]
              \fB[--block-hardlimit <block-hardlimit>]
              \fB[--inode-softlimit <inode-softlimit>]
              \fB[--inode-hardlimit <inode-hardlimit>]
              \fB<filesystem>\fR
 .br
-.B lfs setquota <-u|--user|-g|--group> <username|groupname>
+.B lfs setquota <-u|--user|-g|--group> <uname|uid|gname|gid>
              \fB[-b <block-softlimit>] [-B <block-hardlimit>]
              \fB[-i <inode-softlimit>] [-I <inode-hardlimit>]
              \fB<filesystem>\fR
@@ -61,7 +61,7 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
              \fB[--inode-grace <inode-grace>]
              \fB<filesystem>\fR
 .br
-.B lfs setquota -t [-u|-g]
+.B lfs setquota -t <-u|-g>
              \fB[-b <block-grace>] [-i <inode-grace>]
              \fB<filesystem>\fR
 .br
@@ -136,16 +136,16 @@ To turn filesystem quotas off.  Options specify quota for users (-u) groups (-g)
 .B quotainv [-ug] [-f] <filesystem>
 Clear quota files (administrative quota files if used without -f, operational quota files otherwise), all of their quota entries, for (-u) users or (-g) groups; after quotainv one must use quotacheck before using quotas. DO NOT USE THIS COMMAND UNLESS YOU REALLY KNOW WHAT IT DOES. IT IS MAINLY FOR INTERNAL PURPOSES.
 .TP
-.B setquota  [-u|-g] <name> [--block-softlimit <block-softlimit>] [--block-hardlimit <block-hardlimit>] [--inode-softlimit <inode-softlimit>] [--inode-hardlimit <inode-hardlimit>] <filesystem>
+.B setquota  <-u|-g> <uname>|<uid>|<gname>|<gid> [--block-softlimit <block-softlimit>] [--block-hardlimit <block-hardlimit>] [--inode-softlimit <inode-softlimit>] [--inode-hardlimit <inode-hardlimit>] <filesystem>
 To set filesystem quotas for users or groups. Limits can be specified with -b, -k, -m, -g, -t, -p suffixes which specify units of 1, 2^10, 2^20, 2^30, 2^40 and 2^50 accordingly. Block limits unit is kilobyte (1024) by default and block limits are always kilobyte-grained (even if specified in bytes), see EXAMPLES
 .TP
-.B setquota -t [-u|-g] [--block-grace <block-grace>] [--inode-grace <inode-grace>] <filesystem>
+.B setquota -t <-u|-g> [--block-grace <block-grace>] [--inode-grace <inode-grace>] <filesystem>
 To set filesystem quota grace times for users or groups. Grace time is specified in "XXwXXdXXhXXmXXs" format or as an integer seconds value, see EXAMPLES
 .TP
-.B quota [-v] [-o obd_uuid] [-u|-g] <username|groupname> <filesystem>
-To display disk usage and limits, either for the full filesystem, or for objects on a specific obd. A user or group name can be specified. If both user and group are omitted quotas for current uid/gid are shown. -v provides more verbose (with per-obd statistics) output.
+.B quota [-v] [-o obd_uuid] [ -u|-g <uname|uid|gname|gid> ] <filesystem>
+To display disk usage and limits, either for the full filesystem, or for objects on a specific obd. A user or group name or an ID can be specified. If both user and group are omitted quotas for current uid/gid are shown. -v provides more verbose (with per-obd statistics) output.
 .TP
-.B quota -t [-u|-g] <filesystem>
+.B quota -t <-u|-g> <filesystem>
 To display block and inode grace times for user (-u) or group (-g) quotas
 .TP
 .B help 

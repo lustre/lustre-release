@@ -131,8 +131,8 @@ command_t cmdlist[] = {
          "     [[!] --atime|-A [+-]N] [[!] --mtime|-M [+-]N] [[!] --ctime|-C [+-]N]\n"
          "     [--maxdepth|-D N] [[!] --name|-n <pattern>] [--print0|-P]\n"
          "     [--print|-p] [--obd|-O <uuid[s]>] [[!] --size|-s [+-]N[bkMGTP]]\n"
-         "     [[!] --type|-t <filetype>] [[!] --gid|-g N] [[!] --group|-G <name>]\n"
-         "     [[!] --uid|-u N] [[!] --user|-U <name>]\n"
+         "     [[!] --type|-t <filetype>] [[!] --gid|-g|--group|-G <gid>|<gname>]\n"
+         "     [[!] --uid|-u|--user|-U <uid>|<uname>]\n"
          "     [[!] --pool <pool>]\n"
          "\t !: used before an option indicates 'NOT' the requested attribute\n"
          "\t -: used before an value indicates 'AT MOST' the requested value\n"
@@ -168,14 +168,17 @@ command_t cmdlist[] = {
         {"quotaoff", lfs_quotaoff, 0, "Turn filesystem quotas off.\n"
          "usage: quotaoff [ -ug ] <filesystem>"},
         {"setquota", lfs_setquota, 0, "Set filesystem quotas.\n"
-         "usage: setquota [ -u | -g ] <name> <block-softlimit> <block-hardlimit> <inode-softlimit> <inode-hardlimit> <filesystem>\n"
-         "       setquota -t [ -u | -g ] <block-grace> <inode-grace> <filesystem>\n"
-         "       setquota [ -u | --user | -g | --group ] <name>\n"
+         "usage: setquota <-u|-g> <uname>|<uid>|<gname>|<gid>\n"
+         "                <block-softlimit> <block-hardlimit>\n"
+         "                <inode-softlimit> <inode-hardlimit>\n"
+         "                <filesystem>\n"
+         "       setquota <-u|--user|-g|--group> <uname>|<uid>|<gname>|<gid>\n"
          "                [--block-softlimit <block-softlimit>]\n"
          "                [--block-hardlimit <block-hardlimit>]\n"
          "                [--inode-softlimit <inode-softlimit>]\n"
          "                [--inode-hardlimit <inode-hardlimit>] <filesystem>\n"
-         "       setquota [-t] [ -u | --user | -g | --group ]\n"
+         "       setquota -t <-u|-g> <block-grace> <inode-grace> <filesystem>\n"
+         "       setquota -t <-u|--user|-g|--group>\n"
          "                [--block-grace <block-grace>]\n"
          "                [--inode-grace <inode-grace>] <filesystem>\n"
          "       -b can be used instead of --block-softlimit/--block-grace\n"
@@ -183,7 +186,9 @@ command_t cmdlist[] = {
          "       -i can be used instead of --inode-softlimit/--inode-grace\n"
          "       -I can be used instead of --inode-hardlimit"},
         {"quota", lfs_quota, 0, "Display disk usage and limits.\n"
-         "usage: quota [ -o obd_uuid ] [{-u|-g  <name>}|-t] <filesystem>"},
+         "usage: quota [-v] [ -o obd_uuid ] [<-u|-g> <uname>|<uid>|<gname>|<gid>]\n"
+         "                <filesystem>\n"
+         "       quota [ -o obd_uuid ] -t <-u|-g> <filesystem>"},
         {"quotainv", lfs_quotainv, 0, "Invalidate quota data.\n"
          "usage: quotainv [-u|-g] <filesystem>"},
 #endif
@@ -562,45 +567,27 @@ static int lfs_find(int argc, char **argv)
                         param.maxdepth = strtol(optarg, 0, 0);
                         break;
                 case 'g':
-                        new_fashion = 1;
-                        param.gid = strtol(optarg, &endptr, 10);
-                        if (optarg == endptr) {
-                                fprintf(stderr, "Bad gid: %s\n", optarg);
-                                return CMD_HELP;
-                        }
-                        param.exclude_gid = !!neg_opt;
-                        param.check_gid = 1;
-                        break;
                 case 'G':
                         new_fashion = 1;
-                        param.gid = strtol(optarg, &endptr, 10);
-                        if (optarg == endptr) {
-                                ret = name2id(&param.gid, optarg, GROUP);
-                                if (ret != 0) {
+                        ret = name2id(&param.gid, optarg, GROUP);
+                        if (ret) {
+                                param.gid = strtoul(optarg, &endptr, 10);
+                                if (*endptr != '\0') {
                                         fprintf(stderr, "Group/GID: %s cannot "
                                                 "be found.\n", optarg);
                                         return -1;
                                 }
-                        }
+                        }           
                         param.exclude_gid = !!neg_opt;
                         param.check_gid = 1;
                         break;
                 case 'u':
-                        new_fashion = 1;
-                        param.uid = strtol(optarg, &endptr, 10);
-                        if (optarg == endptr) {
-                                fprintf(stderr, "Bad uid: %s\n", optarg);
-                                return CMD_HELP;
-                        }
-                        param.exclude_uid = !!neg_opt;
-                        param.check_uid = 1;
-                        break;
                 case 'U':
                         new_fashion = 1;
-                        param.uid = strtol(optarg, &endptr, 10);
-                        if (optarg == endptr) {
-                                ret = name2id(&param.uid, optarg, USER);
-                                if (ret != 0) {
+                        ret = name2id(&param.uid, optarg, USER);
+                        if (ret) {
+                                param.uid = strtoul(optarg, &endptr, 10);
+                                if (*endptr != '\0') {
                                         fprintf(stderr, "User/UID: %s cannot "
                                                 "be found.\n", optarg);
                                         return -1;
@@ -1731,6 +1718,7 @@ int lfs_setquota(int argc, char **argv)
                 {0, 0, 0, 0}
         };
         unsigned limit_mask = 0;
+        char *endptr;
 
         if (has_times_option(argc, argv))
                 return lfs_setquota_times(argc, argv);
@@ -1785,9 +1773,12 @@ int lfs_setquota(int argc, char **argv)
                         rc = name2id(&qctl.qc_id, optarg,
                                      (qctl.qc_type == USRQUOTA) ? USER : GROUP);
                         if (rc) {
-                                fprintf(stderr, "error: unknown id %s\n",
-                                        optarg);
-                                return CMD_HELP;
+                                qctl.qc_id = strtoul(optarg, &endptr, 10);
+                                if (*endptr != '\0') {
+                                        fprintf(stderr, "error: can't find id "
+                                                "for name %s\n", optarg); 
+                                        return CMD_HELP;
+                                }
                         }
                         break;
                 case 'b':
@@ -2117,6 +2108,7 @@ static int lfs_quota(int argc, char **argv)
         char *obd_uuid = (char *)qctl.obd_uuid.uuid;
         int rc, rc1 = 0, rc2 = 0, rc3 = 0, verbose = 0;
         int pass = 0;
+        char *endptr;
 
         optind = 0;
         while ((c = getopt(argc, argv, "ugto:v")) != -1) {
@@ -2180,9 +2172,12 @@ ug_output:
                 rc = name2id(&qctl.qc_id, name,
                              (qctl.qc_type == USRQUOTA) ? USER : GROUP);
                 if (rc) {
-                        fprintf(stderr,"error: can't find id for name %s: %s\n",
-                                name, strerror(errno));
-                        return CMD_HELP;
+                        qctl.qc_id = strtoul(name, &endptr, 10);
+                        if (*endptr != '\0') {
+                                fprintf(stderr, "error: can't find id for name "
+                                        "%s\n", name);
+                                return CMD_HELP;
+                        }
                 }
         } else if (optind + 1 != argc || qctl.qc_type == UGQUOTA) {
                 fprintf(stderr, "error: missing quota info argument(s)\n");
