@@ -387,9 +387,6 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 GOTO(out_sa, rc);
         }
 
-        if ((de->d_flags & DCACHE_LUSTRE_INVALID) == 0)
-                GOTO(out_sa, rc = 1);
-
         /* Never execute intents for mount points.
          * Attributes will be fixed up in ll_inode_revalidate_it */
         if (d_mountpoint(de))
