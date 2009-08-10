@@ -1752,6 +1752,8 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
          * for linking and return real mode back then -bzzz */
         mode = inode->i_mode;
         inode->i_mode = S_IFREG;
+        /* avoid vfs_link upon 0 nlink inode */
+        ++inode->i_nlink;
         rc = ll_vfs_link(dentry, mds->mds_vfsmnt, pending_dir, pending_child,
                          mds->mds_vfsmnt);
         if (rc)
@@ -1762,14 +1764,17 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
 
         /* return mode and correct i_nlink if inode is directory */
         inode->i_mode = mode;
-        LASSERTF(inode->i_nlink == 1, "%s nlink == %d\n",
+        LASSERTF(inode->i_nlink == 2, "%s nlink == %d\n",
                  S_ISDIR(mode) ? "dir" : S_ISREG(mode) ? "file" : "other",
                  inode->i_nlink);
         if (S_ISDIR(mode)) {
-                inode->i_nlink++;
                 pending_dir->i_nlink++;
-                mark_inode_dirty(inode);
-                mark_inode_dirty(pending_dir);
+                if (pending_dir->i_sb->s_op->dirty_inode)
+                        pending_dir->i_sb->s_op->dirty_inode(pending_dir);
+        } else {
+                --inode->i_nlink;
+                if (inode->i_sb->s_op->dirty_inode)
+                        inode->i_sb->s_op->dirty_inode(inode);
         }
 
         GOTO(out_dput, rc = 1);
