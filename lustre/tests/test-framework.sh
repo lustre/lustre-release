@@ -2212,12 +2212,8 @@ build_test_filter() {
    	done
 }
 
-_basetest() {
-    echo $*
-}
-
 basetest() {
-    IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
+    echo ${1%%[a-z]*}
 }
 
 # print a newline if the last test was skipped
