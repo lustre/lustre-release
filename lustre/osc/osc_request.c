@@ -2799,9 +2799,14 @@ static int osc_get_lock(struct obd_export *exp, struct lov_stripe_md *lsm,
                 struct osc_async_page *oap = *res;
                 spin_lock(&oap->oap_lock);
                 lock = oap->oap_ldlm_lock;
-                LDLM_LOCK_GET(lock);
+                if (likely(lock))
+                        LDLM_LOCK_GET(lock);
                 spin_unlock(&oap->oap_lock);
         }
+        /* lock can be NULL in case race obd_get_lock vs lock cancel
+         * so we should be don't try match this */
+        if (unlikely(!lock))
+                return 0;
 
         rc = ldlm_lock_fast_match(lock, rw, start, end, lockh);
         if (release == 1 && rc == 1)
