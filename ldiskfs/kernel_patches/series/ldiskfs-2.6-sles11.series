@@ -6,7 +6,6 @@ ext4-include-fixes-2.6-sles11.patch
 ext4-remove-cond_resched-calls-sles11.patch
 ext4-filterdata-sles11.patch
 ext4-mmp-sles11.patch
-ext4-unlink-race-sles11.patch
 ext4-fiemap-2.6-sles11.patch
 ext4-lookup-dotdot-sles11.patch
 ext4-max-dir-size-sles11.patch

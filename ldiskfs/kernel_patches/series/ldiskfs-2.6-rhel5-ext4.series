@@ -8,7 +8,6 @@ ext4-remove-cond_resched-calls-rhel5.patch
 ext4-filterdata-rhel5.patch
 ext4-inode-version-rhel5.patch
 ext4-mmp-rhel5.patch
-ext4-unlink-race-rhel5.patch
 ext4-fiemap-2.6-rhel5.patch
 ext4-lookup-dotdot-rhel5.patch
 ext4-max-dir-size-rhel5.patch
