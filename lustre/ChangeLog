@@ -36,6 +36,12 @@
 	  Lustre filesystem with 4K stack may cause a stack overflow. For more
 	  information, please refer to bugzilla 17630.
 
+Severity   : normal 
+Bugzilla   : 19907
+Description: ASSERTION(open_req->rq_import == imp) failed in mdc_commit_close().
+Details    : Set mod_close_req to NULL in case the request is aborted or 
+	     invalidated.
+
 Severity   : enhancement
 Bugzilla   : 19601
 Description: Update kernel to RHEL5.2 2.6.18-92.1.26.
