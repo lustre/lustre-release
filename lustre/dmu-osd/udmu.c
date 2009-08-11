@@ -685,7 +685,7 @@ static int udmu_object_read_impl(objset_t *os, dmu_buf_t *db, uint64_t offset,
                         size = va.va_size - offset;
         }
 
-        rc = dmu_read(os, oid, offset, size, buf);
+        rc = dmu_read(os, oid, offset, size, buf, DMU_READ_PREFETCH);
         if (rc == 0)
                 return size;
         else
@@ -1072,7 +1072,7 @@ int udmu_xattr_get(udmu_objset_t *uos, dmu_buf_t *db, void *buf,
                 goto out;
         }
 
-        error = dmu_read(uos->os, xa_data_db->db_object, 0, xa_data_va.va_size, buf);
+        error = dmu_read(uos->os, xa_data_db->db_object, 0, xa_data_va.va_size, buf, DMU_READ_PREFETCH);
 
 out:
         udmu_object_put_dmu_buf(xa_data_db, FTAG);
