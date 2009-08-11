@@ -180,7 +180,6 @@ init_test_env() {
 
     [ "$TESTSUITELOG" ] && rm -f $TESTSUITELOG || true
     rm -f $TMP/*active
-
 }
 
 case `uname -r` in
@@ -682,7 +681,7 @@ sanity_mount_check_servers () {
     echo Checking servers environments
 
     # FIXME: modify get_facets to display all facets wo params
-    local facets="$(get_facets OST),$(get_facets MDS)"
+    local facets="$(get_facets OST),$(get_facets MDS),mgs"
     local node
     local mnt
     local facet
@@ -1531,7 +1530,11 @@ formatall() {
     # We need ldiskfs here, may as well load them all
     load_modules
     [ "$CLIENTONLY" ] && return
-    echo "Formatting mdts, osts"
+    echo Formatting mgs, mds, osts
+    if [[ $MDSDEV1 != $MGSDEV ]] || [[ $mds1_HOST != $mgs_HOST ]]; then
+        add mgs $mgs_MKFS_OPTS $FSTYPE_OPT --reformat $MGSDEV || exit 10
+    fi
+
     for num in `seq $MDSCOUNT`; do
         echo "Format mds$num: $(mdsdevname $num)"
         if $VERBOSE; then
@@ -1624,9 +1627,13 @@ setupall() {
     load_modules
     init_gss
     if [ -z "$CLIENTONLY" ]; then
-        echo "Setup mdts, osts"
+        echo Setup mgs, mdt, osts
         echo $WRITECONF | grep -q "writeconf" && \
             writeconf_all
+        if [[ $mds1_HOST != $mgs_HOST ]] || [[ $MDSDEV1 != $MGSDEV ]]; then
+            start mgs $MGSDEV $mgs_MOUNT_OPTS
+        fi
+
         for num in `seq $MDSCOUNT`; do
             DEVNAME=$(mdsdevname $num)
             start mds$num $DEVNAME $MDS_MOUNT_OPTS
@@ -2136,6 +2143,10 @@ pgcache_empty() {
             return 1
         fi
     done
+    if [[ $MDSDEV1 != $MGSDEV ]]; then
+        stop mgs 
+    fi
+
     return 0
 }
 

@@ -24,6 +24,9 @@ MDSDEVBASE=${MDSDEVBASE:-$TMP/${FSNAME}-mdt}
 MDSSIZE=${MDSSIZE:-100000}
 MDSOPT=${MDSOPT:-"--mountfsoptions=acl"}
 
+MGSDEV=${MGSDEV:-$MDSDEV1}
+MGSSIZE=${MGSSIZE:-$MDSSIZE}
+
 OSTCOUNT=${OSTCOUNT:-2}
 OSTDEVBASE=${OSTDEVBASE:-$TMP/${FSNAME}-ost}
 OSTSIZE=${OSTSIZE:-200000}
@@ -67,8 +70,15 @@ MKFSOPT=""
     MDSOPT=$MDSOPT" --param lov.stripecount=$STRIPES_PER_OBJ"
 [ "x$L_GETIDENTITY" != "x" ] &&
     MDSOPT=$MDSOPT" --param mdt.identity_upcall=$L_GETIDENTITY"
+
 MDSn_MKFS_OPTS=$MDS_MKFS_OPTS
-MDS_MKFS_OPTS="--mgs --mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MDSOPT $MDS_MKFS_OPTS"
+MDS_MKFS_OPTS="--mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MDSOPT $MDS_MKFS_OPTS"
+if [[ $mds1_HOST == $mgs_HOST ]] && [[ $MDSDEV1 == $MGSDEV ]]; then
+    MDS_MKFS_OPTS="--mgs $MDS_MKFS_OPTS"
+else
+    MDS_MKFS_OPTS="--mgsnode=$MGSNID $MDS_MKFS_OPTS"
+    mgs_MKFS_OPTS="--mgs "
+fi
 MDSn_MKFS_OPTS="--mgsnode=$MGSNID --mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MDSOPT $MDSn_MKFS_OPTS"
 
 MKFSOPT=""
