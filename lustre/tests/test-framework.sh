@@ -1408,7 +1408,11 @@ do_nodes() {
     shift
 
     if $(single_local_node $rnodes); then
-        do_node --verbose $rnodes $@
+        if $verbose; then
+           do_node --verbose $rnodes $@
+        else
+           do_node $rnodes $@
+        fi
         return $?
     fi
 
