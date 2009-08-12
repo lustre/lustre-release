@@ -1599,7 +1599,7 @@ test_45() { #17310
 run_test 45 "long unlink handling in ptlrpcd"
 
 test_46a() {
-	OSTCOUNT=6
+	[ $OSTCOUNT -lt 6 ] && skip "skipping test for too few OSTs" && return
 	reformat
 	start_mds || return 1
 	#first client should see only one ost
