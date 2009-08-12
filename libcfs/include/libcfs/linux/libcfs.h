@@ -55,7 +55,9 @@
 #include <libcfs/linux/linux-tcpip.h>
 #include <libcfs/linux/kp30.h>
 
+#ifdef HAVE_ASM_TYPES_H
 #include <asm/types.h>
+#endif
 #include <linux/types.h>
 #include <asm/timex.h>
 #include <linux/sched.h> /* THREAD_SIZE */
