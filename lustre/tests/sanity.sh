@@ -6610,6 +6610,18 @@ test_213() {
 }
 run_test 213 "OSC lock completion and cancel race don't crash - bug 18829"
 
+test_214() { # for bug 20133
+	mkdir -p $DIR/d214p/d214c
+	for (( i=0; i < 340; i++ )) ; do
+		touch $DIR/d214p/d214c/a$i
+	done
+
+	ls -l $DIR/d214p || error "ls -l $DIR/d214p failed"
+	mv $DIR/d214p/d214c $DIR/ || error "mv $DIR/d214p/d214c $DIR/ failed"
+	ls $DIR/d214c || error "ls $DIR/d214c failed"
+	rm -rf $DIR/d214* || error "rm -rf $DIR/d214* failed"
+}
+run_test 214 "hash-indexed directory test - bug 20133"
 
 #
 # tests that do cleanup/setup should be run at the end

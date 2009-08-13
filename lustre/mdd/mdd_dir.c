@@ -2056,7 +2056,7 @@ static int mdd_rename(const struct lu_env *env,
                 GOTO(cleanup, rc);
 
         /* "mv dir1 dir2" needs "dir1/.." link update */
-        if (is_dir && mdd_sobj) {
+        if (is_dir && mdd_sobj && !lu_fid_eq(spobj_fid, tpobj_fid)) {
                 rc = __mdd_index_delete_only(env, mdd_sobj, dotdot, handle,
                                         mdd_object_capa(env, mdd_sobj));
                 if (rc)
@@ -2064,9 +2064,8 @@ static int mdd_rename(const struct lu_env *env,
 
                 rc = __mdd_index_insert_only(env, mdd_sobj, tpobj_fid, dotdot,
                                       handle, mdd_object_capa(env, mdd_sobj));
-                if (rc) {
+                if (rc)
                         GOTO(fixup_spobj, rc);
-                }
         }
 
         /* Remove target name from target directory
