@@ -309,6 +309,14 @@ case "$lustretag" in
         libcfstag="HEAD"
         ;;
 
+    # libcfs name normalization changes
+    b_hd_nn)
+        libcfstag="b_hd_libcfs_nn"
+        lnettag="b_hd_lnet_nn"
+        ldiskfstag="$ldiskfstag_head"
+        lustretag="b_hd_lustre_nn"
+        ;; 
+
     # Branches that have been updated to include
     # the libcfs split should be added here
     HEAD|b_head_capa|b_hd_cfld|b_hd_changelog|b_hd_sptlrpc|HD_SPTLRPC_BASE|b_som|b_hd_recov|b_hd_transapi)
