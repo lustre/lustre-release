@@ -1,0 +1,88 @@
+Index: iam-src/fs/ext3/hash.c
+===================================================================
+--- iam-src.orig/fs/ext3/hash.c	2006-02-11 01:08:59.000000000 +0300
++++ iam-src/fs/ext3/hash.c	2006-02-11 20:46:22.000000000 +0300
+@@ -4,7 +4,7 @@
+  * Copyright (C) 2002 by Theodore Ts'o
+  *
+  * This file is released under the GPL v2.
+- * 
++ *
+  * This file may be redistributed under the terms of the GNU Public
+  * License.
+  */
+@@ -115,6 +115,18 @@ static __u32 dx_hack_hash (const char *n
+ 	return (hash0 << 1);
+ }
+ 
++static __u32 dx_r5_hash(const signed char *msg, int len)
++{
++	__u32 a = 0;
++	while (len--) {
++		a += *msg << 4;
++		a += *msg >> 4;
++		a *= 11;
++		msg++;
++	}
++	return a;
++}
++
+ static void str2hashbuf(const char *msg, int len, __u32 *buf, int num)
+ {
+ 	__u32	pad, val;
+@@ -146,11 +158,11 @@ static void str2hashbuf(const char *msg,
+  * Returns the hash of a filename.  If len is 0 and name is NULL, then
+  * this function can be used to test whether or not a hash version is
+  * supported.
+- * 
++ *
+  * The seed is an 4 longword (32 bits) "secret" which can be used to
+  * uniquify a hash.  If the seed is all zero's, then some default seed
+  * may be used.
+- * 
++ *
+  * A particular hash version specifies whether or not the seed is
+  * represented, and whether or not the returned hash is 32 bits or 64
+  * bits.  32 bit hashes will return 0 for the minor hash.
+@@ -205,6 +217,9 @@ int ext3fs_dirhash(const char *name, int
+ 		hash = buf[0];
+ 		minor_hash = buf[1];
+ 		break;
++	case DX_HASH_R5:
++		hash = dx_r5_hash(name, len);
++		break;
+ 	default:
+ 		hinfo->hash = 0;
+ 		return -1;
+Index: iam-src/fs/ext3/namei.c
+===================================================================
+--- iam-src.orig/fs/ext3/namei.c	2006-02-11 01:09:12.000000000 +0300
++++ iam-src/fs/ext3/namei.c	2006-02-11 20:45:58.000000000 +0300
+@@ -370,6 +370,7 @@ dx_probe(struct dentry *dentry, struct i
+ 	root = (struct dx_root *) bh->b_data;
+ 	if (root->info.hash_version != DX_HASH_TEA &&
+ 	    root->info.hash_version != DX_HASH_HALF_MD4 &&
++	    root->info.hash_version != DX_HASH_R5 &&
+ 	    root->info.hash_version != DX_HASH_LEGACY) {
+ 		ext3_warning(dir->i_sb, __FUNCTION__,
+ 			     "Unrecognised inode hash code %d", root->info.hash_version);
+@@ -1363,6 +1364,7 @@ static int make_indexed_dir(handle_t *ha
+ 	memset (&root->info, 0, sizeof(root->info));
+ 	root->info.info_length = sizeof(root->info);
+ 	root->info.hash_version = EXT3_SB(dir->i_sb)->s_def_hash_version;
++	root->info.hash_version = DX_HASH_R5;
+ 	entries = root->entries;
+ 	dx_set_block (entries, 1);
+ 	dx_set_count (entries, 1);
+Index: iam-src/include/linux/ext3_fs.h
+===================================================================
+--- iam-src.orig/include/linux/ext3_fs.h	2006-02-11 01:08:59.000000000 +0300
++++ iam-src/include/linux/ext3_fs.h	2006-02-11 20:45:58.000000000 +0300
+@@ -665,6 +665,7 @@ struct ext3_dir_entry_2 {
+ #define DX_HASH_LEGACY		0
+ #define DX_HASH_HALF_MD4	1
+ #define DX_HASH_TEA		2
++#define DX_HASH_R5		3
+ 
+ /* hash info structure used by the directory hash */
+ struct dx_hash_info

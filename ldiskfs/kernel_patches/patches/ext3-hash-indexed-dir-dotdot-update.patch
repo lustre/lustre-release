@@ -1,0 +1,87 @@
+Index: linux-stage/fs/ext3/namei.c
+===================================================================
+--- linux-stage.orig/fs/ext3/namei.c	2009-08-10 22:31:03.000000000 +0800
++++ linux-stage/fs/ext3/namei.c	2009-08-10 22:33:38.000000000 +0800
+@@ -1471,6 +1471,72 @@
+ }
+ #endif
+ 
++/* update ".." for hash-indexed directory, split the item "." if necessary */
++static int ext3_update_dotdot(handle_t *handle, struct dentry *dentry,
++				 struct inode *inode)
++{
++	struct inode * dir = dentry->d_parent->d_inode;
++	struct buffer_head * dir_block;
++	struct ext3_dir_entry_2 * de;
++	int len, journal = 0, err = 0;
++
++	if (IS_ERR(handle))
++		return PTR_ERR(handle);
++
++	if (IS_DIRSYNC(dir))
++		handle->h_sync = 1;
++
++	dir_block = ext3_bread(handle, dir, 0, 0, &err);
++	if (!dir_block)
++		goto out;
++
++	de = (struct ext3_dir_entry_2 *)dir_block->b_data;
++	/* the first item must be "." */
++	assert(de->name_len == 1 && de->name[0] == '.');
++	len = le16_to_cpu(de->rec_len);
++	assert(len >= EXT3_DIR_REC_LEN(1));
++	if (len > EXT3_DIR_REC_LEN(1)) {
++		BUFFER_TRACE(dir_block, "get_write_access");
++		err = ext3_journal_get_write_access(handle, dir_block);
++		if (err)
++			goto out_journal;
++
++		journal = 1;
++		de->rec_len = cpu_to_le16(EXT3_DIR_REC_LEN(1));
++	}
++
++	len -= EXT3_DIR_REC_LEN(1);
++	assert(len == 0 || len >= EXT3_DIR_REC_LEN(2));
++	de = (struct ext3_dir_entry_2 *)
++			((char *) de + le16_to_cpu(de->rec_len));
++	if (!journal) {
++		BUFFER_TRACE(dir_block, "get_write_access");
++		err = ext3_journal_get_write_access(handle, dir_block);
++		if (err)
++			goto out_journal;
++	}
++
++	de->inode = cpu_to_le32(inode->i_ino);
++	if (len > 0)
++		de->rec_len = cpu_to_le16(len);
++	else
++		assert(le16_to_cpu(de->rec_len) >= EXT3_DIR_REC_LEN(2));
++	de->name_len = 2;
++	strcpy (de->name, "..");
++	ext3_set_de_type(dir->i_sb, de, S_IFDIR);
++
++out_journal:
++	if (journal) {
++		BUFFER_TRACE(dir_block, "call ext3_journal_dirty_metadata");
++		err = ext3_journal_dirty_metadata(handle, dir_block);
++		ext3_mark_inode_dirty(handle, dir);
++	}
++	brelse (dir_block);
++
++out:
++	return err;
++}
++
+ /*
+  *	ext3_add_entry()
+  *
+@@ -1502,6 +1568,9 @@
+ 		return -EINVAL;
+ #ifdef CONFIG_EXT3_INDEX
+ 	if (is_dx(dir)) {
++		if (dentry->d_name.len == 2 &&
++		    memcmp(dentry->d_name.name, "..", 2) == 0)
++			return ext3_update_dotdot(handle, dentry, inode);
+ 		retval = ext3_dx_add_entry(handle, dentry, inode);
+ 		if (!retval || (retval != ERR_BAD_DX_DIR))
+ 			return retval;
