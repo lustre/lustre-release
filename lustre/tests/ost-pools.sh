@@ -1063,23 +1063,18 @@ test_20() {
     touch $dir3/file3
     $SETSTRIPE -c 1 $dir2/file4 # No pool assignment
 
-    echo start checks
     check_file_in_pool $dir1/file1 $POOL2
     check_file_in_pool $dir2/file2 $POOL2
 
-    echo check \#2
     check_dir_not_in_pool $dir3 $POOL
     check_dir_not_in_pool $dir3 $POOL2
 
-    echo check \#3
     check_file_not_in_pool $dir3/file3 $POOL
     check_file_not_in_pool $dir3/file3 $POOL2
 
-    echo check \#4
     check_file_not_in_pool $dir2/file4 $POOL
     check_file_not_in_pool $dir2/file4 $POOL2
 
-    echo check \#5
     rm -rf $dir1
     destroy_pool $POOL
     destroy_pool $POOL2
