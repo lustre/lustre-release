@@ -180,12 +180,12 @@ case "$lustretag" in
         lustretag="b_hd_lustre_smp"
         ;;
 
-    b_hd_o2ib_new_proto)
+    b_hd_md_perf)
         # LNet branch for new o2iblnd protocol (15983, 13621, 14425, 14358)
-        lnettag="b_hd_o2ib_new_proto"
+        lnettag="HD_LNET_SMP_BASE"
         ldiskfstag="$ldiskfstag_head"
-        lustretag="HEAD"
-        libcfstag="HEAD"
+        lustretag="HD_LUSTRE_SMP_BASE"
+        libcfstag="HD_LIBCFS_SMP_BASE"
         ;;
 
     b_ula)
