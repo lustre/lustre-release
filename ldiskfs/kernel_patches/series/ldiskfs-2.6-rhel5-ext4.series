@@ -30,3 +30,4 @@ ext4-osd-iop-common.patch
 ext4-osd-iam-exports.patch
 ext4-dynlocks-common.patch
 ext4-dynlocks-2.6-rhel5.patch
+ext4-hash-indexed-dir-dotdot-update.patch
