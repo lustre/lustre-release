@@ -1134,7 +1134,7 @@ test_53b() {
 
         mkdir -p $DIR/${tdir}-1
         mkdir -p $DIR/${tdir}-2
-        multiop $DIR/${tdir}-1/f O_c &
+        multiop_bg_pause $DIR/${tdir}-1/f O_c || return 6
         close_pid=$!
 
         #define OBD_FAIL_MDS_REINT_NET 0x107
