@@ -444,7 +444,7 @@ int llog_obd_origin_add(struct llog_ctxt *ctxt,
         cathandle = ctxt->loc_handle;
         LASSERT(cathandle != NULL);
         rc = llog_cat_add_rec(cathandle, rec, logcookies, NULL);
-        if ((rc < 0) || (!logcookies && rc))
+        if (rc != 1)
                 CERROR("write one catalog record failed: %d\n", rc);
         RETURN(rc);
 }
