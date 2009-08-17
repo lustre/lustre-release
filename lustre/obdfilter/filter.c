@@ -2761,6 +2761,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         loff_t old_size = 0;
         unsigned int ia_valid;
         struct inode *inode;
+        struct page *page = NULL;
         struct iattr iattr;
         void *handle;
         ENTRY;
@@ -2795,6 +2796,17 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         rc = filter_version_get_check(exp, oti, inode);
         if (rc)
                 GOTO(out_unlock, rc);
+
+        /* Let's pin the last page so that ldiskfs_truncate
+         * should not start GFP_FS allocation (20008). */
+        if (ia_valid & ATTR_SIZE) {
+                page = grab_cache_page(inode->i_mapping,
+                                       iattr.ia_size >> PAGE_CACHE_SHIFT);
+                if (page == NULL)
+                        GOTO(out_unlock, rc = -ENOMEM);
+
+                unlock_page(page);
+        }
 
         /* If the inode still has SUID+SGID bits set (see filter_precreate())
          * then we will accept the UID+GID sent by the client during write for
@@ -2886,7 +2898,11 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         }
 
         EXIT;
+
 out_unlock:
+        if (page)
+                page_cache_release(page);
+
         if (ia_valid & (ATTR_SIZE | ATTR_UID | ATTR_GID))
                 UNLOCK_INODE_MUTEX(inode);
         if (ia_valid & ATTR_SIZE)
