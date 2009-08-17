@@ -36,6 +36,13 @@ TBD Sun Microsystems, Inc.
 	  used in production.
 
 Severity   : normal
+Bugzilla   : 20008
+Description: truncate starts GFP_FS allocation under transaction causing deadlock
+Details    : ldiskfs_truncate calls grab_cache_page which may start page
+             allocation under an open transaction. This may lead to
+             calling prune_icache with consequent lustre reentrance.
+
+Severity   : normal
 Bugzilla   : 20321
 Description: Deadlock between filter_destroy() and filter_commitrw_write().
 Details    : filter_destroy() does not hold the DLM lock over the whole
