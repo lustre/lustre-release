@@ -538,6 +538,17 @@ static inline void txn_param_init(struct txn_param *p, unsigned int credits)
         p->tp_credits = credits;
 }
 
+static inline void txn_param_credit_add(struct txn_param *p,
+                                        unsigned int credits)
+{
+        p->tp_credits += credits;
+}
+
+static inline void txn_param_sync(struct txn_param *p)
+{
+        p->tp_sync = 1;
+}
+
 /**
  * This is the general purpose transaction handle.
  * 1. Transaction Life Cycle

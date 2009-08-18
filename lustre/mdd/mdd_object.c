@@ -1410,6 +1410,11 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
                 RETURN(rc);
 
         mdd_txn_param_build(env, mdd, MDD_TXN_XATTR_SET_OP);
+        /* security-replated changes may require sync */
+        if (!strcmp(name, XATTR_NAME_ACL_ACCESS) &&
+            mdd->mdd_sync_permission == 1)
+                txn_param_sync(&mdd_env_info(env)->mti_param);
+
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));

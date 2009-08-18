@@ -139,7 +139,7 @@ int mdd_log_txn_param_build(const struct lu_env *env, struct md_object *obj,
                 stripe = le32_to_cpu(ma->ma_lmm->lmm_stripe_count);
 
         log_credits = stripe * dto_txn_credits[DTO_LOG_REC];
-        mdd_env_info(env)->mti_param.tp_credits += log_credits;
+        txn_param_credit_add(&mdd_env_info(env)->mti_param, log_credits);
         RETURN(rc);
 }
 
@@ -151,8 +151,13 @@ int mdd_setattr_txn_param_build(const struct lu_env *env, struct md_object *obj,
 
         mdd_txn_param_build(env, mdd, op);
         if (ma->ma_attr.la_valid & (LA_UID | LA_GID))
-                mdd_env_info(env)->mti_param.tp_credits =
-                                        dto_txn_credits[DTO_ATTR_SET_CHOWN];
+                txn_param_credit_add(&mdd_env_info(env)->mti_param,
+                                     dto_txn_credits[DTO_ATTR_SET_CHOWN]);
+
+        /* permission changes may require sync operation */
+        if (ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID) &&
+            mdd->mdd_sync_permission == 1)
+                txn_param_sync(&mdd_env_info(env)->mti_param);
 
         RETURN(0);
 }
@@ -258,7 +263,7 @@ struct thandle* mdd_trans_start(const struct lu_env *env,
 {
         struct txn_param *p = &mdd_env_info(env)->mti_param;
         struct thandle *th;
-        
+
         th = mdd_child_ops(mdd)->dt_trans_start(env, mdd->mdd_child, p);
         return th;
 }

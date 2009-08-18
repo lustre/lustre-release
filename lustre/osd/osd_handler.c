@@ -907,8 +907,8 @@ static const int osd_dto_credits_noquota[DTO_NR] = {
         /**
          * Xattr set. The same as xattr of EXT3.
          * DATA_TRANS_BLOCKS(14)
-         * XXX Note: in original MDS implmentation INDEX_EXTRA_TRANS_BLOCKS are
-         *           also counted in. Do not know why?
+         * XXX Note: in original MDS implmentation INDEX_EXTRA_TRANS_BLOCKS
+         * are also counted in. Do not know why?
          */
         [DTO_XATTR_SET]     = 14,
         [DTO_LOG_REC]       = 14,
@@ -922,9 +922,9 @@ static const int osd_dto_credits_noquota[DTO_NR] = {
         [DTO_WRITE_BLOCK]   = 14,
         /**
          * Attr set credits for chown.
-         * 3 (inode bit, group, GDT)
+         * This is extra credits for setattr, and it is null without quota
          */
-        [DTO_ATTR_SET_CHOWN]= 3
+        [DTO_ATTR_SET_CHOWN]= 0
 };
 
 /**
@@ -987,11 +987,11 @@ static const int osd_dto_credits_quota[DTO_NR] = {
         [DTO_WRITE_BLOCK]   = 16,
         /**
          * Attr set credits for chown.
-         * 3 (inode bit, group, GDT) +
+         * It is added to already set setattr credits
          * 2 * QUOTA_INIT_BLOCKS(25) +
          * 2 * QUOTA_DEL_BLOCKS(9)
          */
-        [DTO_ATTR_SET_CHOWN]= 71
+        [DTO_ATTR_SET_CHOWN]= 68,
 };
 
 static int osd_credit_get(const struct lu_env *env, struct dt_device *d,

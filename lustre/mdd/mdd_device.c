@@ -95,6 +95,8 @@ static int mdd_device_init(const struct lu_env *env, struct lu_device *d,
         mdd->mdd_txn_cb.dtc_tag = LCT_MD_THREAD;
         CFS_INIT_LIST_HEAD(&mdd->mdd_txn_cb.dtc_linkage);
         mdd->mdd_atime_diff = MAX_ATIME_DIFF;
+        /* sync permission changes */
+        mdd->mdd_sync_permission = 1;
 
         rc = mdd_procfs_init(mdd, name);
         RETURN(rc);

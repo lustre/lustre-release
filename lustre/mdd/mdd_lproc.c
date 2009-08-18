@@ -422,6 +422,30 @@ static int mdd_lprocfs_quota_wr_type(struct file *file, const char *buffer,
 }
 #endif
 
+static int lprocfs_rd_sync_perm(char *page, char **start, off_t off,
+                                int count, int *eof, void *data)
+{
+        struct mdd_device *mdd = data;
+
+        LASSERT(mdd != NULL);
+        return snprintf(page, count, "%d\n", mdd->mdd_sync_permission);
+}
+
+static int lprocfs_wr_sync_perm(struct file *file, const char *buffer,
+                                unsigned long count, void *data)
+{
+        struct mdd_device *mdd = data;
+        int val, rc;
+
+        LASSERT(mdd != NULL);
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        mdd->mdd_sync_permission = !!val;
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
         { "atime_diff",      lprocfs_rd_atime_diff, lprocfs_wr_atime_diff, 0 },
         { "changelog_mask",  lprocfs_rd_changelog_mask,
@@ -432,6 +456,7 @@ static struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
         { "quota_type",      mdd_lprocfs_quota_rd_type,
                              mdd_lprocfs_quota_wr_type, 0 },
 #endif
+        { "sync_permission", lprocfs_rd_sync_perm, lprocfs_wr_sync_perm, 0 },
         { 0 }
 };
 
