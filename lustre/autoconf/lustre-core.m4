@@ -1588,11 +1588,16 @@ AC_DEFUN([LC_WRITE_BEGIN_END],
 [AC_MSG_CHECKING([if kernel has .write_begin/end])
 LB_LINUX_TRY_COMPILE([
         #include <linux/fs.h>
+#ifdef HAVE_LINUX_MMTYPES_H
+        #include <linux/mm_types.h>
+#endif
 ],[
         struct address_space_operations aops;
+        struct page *page;
 
         aops.write_begin = NULL;
         aops.write_end = NULL;
+        page = grab_cache_page_write_begin(NULL, 0, 0);
 ], [
         AC_MSG_RESULT([yes])
         AC_DEFINE(HAVE_KERNEL_WRITE_BEGIN_END, 1,
