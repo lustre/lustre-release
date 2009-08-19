@@ -154,6 +154,10 @@ sub get_linuxdir()
             $dir = $1;
         } elsif ($line =~ /LINUX_OBJ :?= (.*)/) {
             $objdir = $1;
+        } elsif ($line =~ /MODULES_TRUE :?= (.*)/) {
+            # nothing to do if modules are not being built
+            return ""
+                if ($1 eq "#");
             last;
         }
     }
@@ -199,6 +203,13 @@ sub generate_ver($$$)
     my $mtime = shift;
     my $linuxdir = shift;
 
+    # assume building without modules
+    my $postfix = "";
+
+    if ($linuxdir ne "") {
+        $postfix = "-$kernver";
+    }
+
     #print "localtime: " . localtime($mtime) . "\n";
 
     my $lustre_vers = $ENV{LUSTRE_VERS};
@@ -216,9 +227,9 @@ sub generate_ver($$$)
     # lines.  maybe we only want to print -CHANGED when something is changed
     # and print nothing when it's pristine
     if ($pristine) {
-        print "$tag-$show_last-PRISTINE-$linuxdir-$kernver\"\n";
+        print "$tag-$show_last-PRISTINE$postfix\"\n";
     } else {
-        print "$tag-$show_last-CHANGED-$linuxdir-$kernver\"\n";
+        print "$tag-$show_last-CHANGED$postfix\"\n";
     }
 }
 
