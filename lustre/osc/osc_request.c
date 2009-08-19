@@ -2190,7 +2190,7 @@ static int brw_interpret(const struct lu_env *env,
                 int i;
                 for (i = 0; i < aa->aa_page_count; i++)
                         osc_release_write_grant(aa->aa_cli, aa->aa_ppga[i], 1);
-               
+
                 if (aa->aa_oa->o_flags & OBD_FL_TEMPORARY)
                         OBDO_FREE(aa->aa_oa);
         }
@@ -3442,11 +3442,11 @@ static int osc_statfs_interpret(const struct lu_env *env,
         cli->cl_oscc.oscc_flags &= ~(OSCC_FLAG_RDONLY | OSCC_FLAG_DEGRADED);
         if (msfs->os_state & OS_STATE_DEGRADED)
                 cli->cl_oscc.oscc_flags |= OSCC_FLAG_DEGRADED;
- 
+
         if (msfs->os_state & OS_STATE_READONLY)
                 cli->cl_oscc.oscc_flags |= OSCC_FLAG_RDONLY;
         spin_unlock(&cli->cl_oscc.oscc_lock);
- 
+
         *aa->aa_oi->oi_osfs = *msfs;
 out:
         rc = aa->aa_oi->oi_cb_up(aa->aa_oi, rc);
@@ -3916,7 +3916,7 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
         if (KEY_IS(KEY_GRANT_SHRINK))
                 req = ptlrpc_request_alloc(imp, &RQF_OST_SET_GRANT_INFO);
         else
-                req = ptlrpc_request_alloc(imp, &RQF_OST_SET_INFO);
+                req = ptlrpc_request_alloc(imp, &RQF_OBD_SET_INFO);
 
         if (req == NULL)
                 RETURN(-ENOMEM);

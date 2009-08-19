@@ -1157,6 +1157,7 @@ enum obd_cleanup_stage {
 };
 
 /* get/set_info keys */
+#define KEY_ASYNC               "async"
 #define KEY_BLOCKSIZE_BITS      "blocksize_bits"
 #define KEY_BLOCKSIZE           "blocksize"
 #define KEY_CAPA_KEY            "capa_key"
@@ -1168,8 +1169,11 @@ enum obd_cleanup_stage {
 #define KEY_EVICT_BY_NID        "evict_by_nid"
 #define KEY_FIEMAP              "fiemap"
 #define KEY_FLUSH_CTX           "flush_ctx"
+#define KEY_GRANT_SHRINK        "grant_shrink"
+#define KEY_HSM_COPYTOOL_SEND   "hsm_send"
 #define KEY_INIT_RECOV_BACKUP   "init_recov_bk"
 #define KEY_INIT_RECOV          "initial_recov"
+#define KEY_INTERMDS            "inter_mds"
 #define KEY_LAST_ID             "last_id"
 #define KEY_LOCK_TO_STRIPE      "lock_to_stripe"
 #define KEY_LOVDESC             "lovdesc"
@@ -1182,12 +1186,10 @@ enum obd_cleanup_stage {
 #define KEY_REGISTER_TARGET     "register_target"
 #define KEY_REVIMP_UPD          "revimp_update"
 #define KEY_SET_FS              "set_fs"
+/*      KEY_SET_INFO in lustre_idl.h */
 #define KEY_SPTLRPC_CONF        "sptlrpc_conf"
 #define KEY_UNLINKED            "unlinked"
-/* XXX unused ?*/
-#define KEY_INTERMDS            "inter_mds"
-#define KEY_ASYNC               "async"
-#define KEY_GRANT_SHRINK        "grant_shrink"
+
 
 struct lu_context;
 

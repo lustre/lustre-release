@@ -1954,6 +1954,7 @@ typedef enum {
         LDLM_BL_CALLBACK = 104,
         LDLM_CP_CALLBACK = 105,
         LDLM_GL_CALLBACK = 106,
+        LDLM_SET_INFO    = 107,
         LDLM_LAST_OPC
 } ldlm_cmd_t;
 #define LDLM_FIRST_OPC LDLM_ENQUEUE

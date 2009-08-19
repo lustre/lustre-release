@@ -599,7 +599,7 @@ static int lprocfs_wr_nosquash_nids(struct file *file, const char *buffer,
                 GOTO(failed, rc = -EFAULT);
         }
         kernbuf[count] = '\0';
- 
+
         if (!strcmp(kernbuf, "NONE") || !strcmp(kernbuf, "clear")) {
                 /* empty string is special case */
                 down_write(&mdt->mdt_squash_sem);
@@ -726,6 +726,30 @@ static int lprocfs_wr_mdt_som(struct file *file, const char *buffer,
         return count;
 }
 
+/* Temporary; for testing purposes only */
+static int lprocfs_mdt_wr_mdc(struct file *file, const char *buffer,
+                              unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct obd_export *exp = NULL;
+        struct obd_uuid uuid;
+        char tmpbuf[sizeof(struct obd_uuid)];
+
+        sscanf(buffer, "%40s", tmpbuf);
+
+        obd_str2uuid(&uuid, tmpbuf);
+        exp = lustre_hash_lookup(obd->obd_uuid_hash, &uuid);
+        if (exp == NULL) {
+                CERROR("%s: no export %s found\n",
+                       obd->obd_name, obd_uuid2str(&uuid));
+        } else {
+                mdt_hsm_copytool_send(exp);
+                class_export_put(exp);
+        }
+
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
         { "uuid",                       lprocfs_rd_uuid,                 0, 0 },
         { "recovery_status",            lprocfs_obd_rd_recovery_status,  0, 0 },
@@ -754,9 +778,10 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
         { "root_squash",                lprocfs_rd_root_squash,
                                         lprocfs_wr_root_squash,             0 },
         { "nosquash_nids",              lprocfs_rd_nosquash_nids,
-                                        lprocfs_wr_nosquash_nids,          0 },
+                                        lprocfs_wr_nosquash_nids,           0 },
         { "som",                        lprocfs_rd_mdt_som,
                                         lprocfs_wr_mdt_som, 0 },
+        { "mdccomm",                    0, lprocfs_mdt_wr_mdc,              0 },
         { 0 }
 };
 

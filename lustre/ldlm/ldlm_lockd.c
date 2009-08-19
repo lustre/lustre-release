@@ -1676,6 +1676,49 @@ int ldlm_bl_to_thread_list(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
 #endif
 }
 
+/* Setinfo coming from Server (eg MDT) to Client (eg MDC)! */
+static int ldlm_handle_setinfo(struct ptlrpc_request *req)
+{
+        struct obd_device *obd = req->rq_export->exp_obd;
+        char *key;
+        void *val;
+        int keylen, vallen;
+        int rc = -ENOSYS;
+        ENTRY;
+
+        DEBUG_REQ(D_ERROR, req, "%s: handle setinfo\n", obd->obd_name);
+
+        req_capsule_set(&req->rq_pill, &RQF_OBD_SET_INFO);
+
+        key = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_KEY);
+        if (key == NULL) {
+                DEBUG_REQ(D_IOCTL, req, "no set_info key");
+                RETURN(-EFAULT);
+        }
+        keylen = req_capsule_get_size(&req->rq_pill, &RMF_SETINFO_KEY,
+                                      RCL_CLIENT);
+        val = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_VAL);
+        if (val == NULL) {
+                DEBUG_REQ(D_IOCTL, req, "no set_info val");
+                RETURN(-EFAULT);
+        }
+        vallen = req_capsule_get_size(&req->rq_pill, &RMF_SETINFO_VAL,
+                                      RCL_CLIENT);
+
+        /* We are responsible for swabbing contents of val */
+
+        if (KEY_IS(KEY_HSM_COPYTOOL_SEND))
+                /* Pass it on to mdc (the "export" in this case) */
+                rc = obd_set_info_async(req->rq_export,
+                                        sizeof(KEY_HSM_COPYTOOL_SEND),
+                                        KEY_HSM_COPYTOOL_SEND,
+                                        vallen, val, NULL);
+        else
+                DEBUG_REQ(D_WARNING, req, "ignoring unknown key %s", key);
+
+        return rc;
+}
+
 /* TODO: handle requests in a similar way as MDT: see mdt_handle_common() */
 static int ldlm_callback_handler(struct ptlrpc_request *req)
 {
@@ -1717,6 +1760,10 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_GL_CALLBACK))
                         RETURN(0);
                 break;
+        case LDLM_SET_INFO:
+                rc = ldlm_handle_setinfo(req);
+                ldlm_callback_reply(req, rc);
+                RETURN(0);
         case OBD_LOG_CANCEL: /* remove this eventually - for 1.4.0 compat */
                 CERROR("shouldn't be handling OBD_LOG_CANCEL on DLM thread\n");
                 req_capsule_set(&req->rq_pill, &RQF_LOG_CANCEL);

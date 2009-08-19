@@ -294,19 +294,19 @@ check_obdo(void)
         CHECK_CDEFINE(OBD_MD_FLXATTRRM);
         CHECK_CDEFINE(OBD_MD_FLACL);
 
-        CHECK_CDEFINE(OBD_FL_INLINEDATA);
-        CHECK_CDEFINE(OBD_FL_OBDMDEXISTS);
-        CHECK_CDEFINE(OBD_FL_DELORPHAN);
-        CHECK_CDEFINE(OBD_FL_NORPC);
-        CHECK_CDEFINE(OBD_FL_IDONLY);
-        CHECK_CDEFINE(OBD_FL_RECREATE_OBJS);
-        CHECK_CDEFINE(OBD_FL_DEBUG_CHECK);
-        CHECK_CDEFINE(OBD_FL_NO_USRQUOTA);
-        CHECK_CDEFINE(OBD_FL_NO_GRPQUOTA);
-        CHECK_CDEFINE(OBD_FL_TRUNCLOCK);
-        CHECK_CDEFINE(OBD_FL_CKSUM_CRC32);
-        CHECK_CDEFINE(OBD_FL_CKSUM_ADLER);
-        CHECK_CDEFINE(OBD_FL_SHRINK_GRANT);
+        CHECK_CVALUE(OBD_FL_INLINEDATA);
+        CHECK_CVALUE(OBD_FL_OBDMDEXISTS);
+        CHECK_CVALUE(OBD_FL_DELORPHAN);
+        CHECK_CVALUE(OBD_FL_NORPC);
+        CHECK_CVALUE(OBD_FL_IDONLY);
+        CHECK_CVALUE(OBD_FL_RECREATE_OBJS);
+        CHECK_CVALUE(OBD_FL_DEBUG_CHECK);
+        CHECK_CVALUE(OBD_FL_NO_USRQUOTA);
+        CHECK_CVALUE(OBD_FL_NO_GRPQUOTA);
+        CHECK_CVALUE(OBD_FL_TRUNCLOCK);
+        CHECK_CVALUE(OBD_FL_CKSUM_CRC32);
+        CHECK_CVALUE(OBD_FL_CKSUM_ADLER);
+        CHECK_CVALUE(OBD_FL_SHRINK_GRANT);
         CHECK_CVALUE(OBD_CKSUM_CRC32);
         CHECK_CVALUE(OBD_CKSUM_ADLER);
 }
@@ -481,15 +481,6 @@ check_ll_fid(void)
         CHECK_MEMBER(ll_fid, id);
         CHECK_MEMBER(ll_fid, generation);
         CHECK_MEMBER(ll_fid, f_type);
-}
-
-static void
-check_lu_fid_pack(void)
-{
-        BLANK_LINE();
-        CHECK_STRUCT(lu_fid_pack);
-        CHECK_MEMBER(lu_fid_pack, fp_len);
-        CHECK_MEMBER(lu_fid_pack, fp_area);
 }
 
 static void
@@ -1392,6 +1383,7 @@ main(int argc, char **argv)
         CHECK_VALUE(LDLM_BL_CALLBACK);
         CHECK_VALUE(LDLM_CP_CALLBACK);
         CHECK_VALUE(LDLM_GL_CALLBACK);
+        CHECK_VALUE(LDLM_SET_INFO);
         CHECK_VALUE(LDLM_LAST_OPC);
 
         CHECK_VALUE(LCK_EX);
@@ -1441,7 +1433,6 @@ main(int argc, char **argv)
         check_niobuf_remote();
         check_ost_body();
         check_ll_fid();
-        check_lu_fid_pack();
         check_mds_status_req();
         check_mds_body();
         check_mds_rec_setattr();

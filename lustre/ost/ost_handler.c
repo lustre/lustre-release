@@ -218,7 +218,7 @@ static int ost_create(struct obd_export *exp, struct ptlrpc_request *req,
                                  sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
         oti->oti_logcookies = &repbody->oa.o_lcookie;
-        
+
         req->rq_status = obd_create(exp, &repbody->oa, NULL, oti);
         //obd_log_cancel(conn, NULL, 1, oti->oti_logcookies, 0);
         RETURN(0);
@@ -2045,7 +2045,7 @@ int ost_handle(struct ptlrpc_request *req)
                 break;
         case OST_SET_INFO:
                 DEBUG_REQ(D_INODE, req, "set_info");
-                req_capsule_set(&req->rq_pill, &RQF_OST_SET_INFO);
+                req_capsule_set(&req->rq_pill, &RQF_OBD_SET_INFO);
                 rc = ost_set_info(req->rq_export, req);
                 break;
         case OST_GET_INFO:

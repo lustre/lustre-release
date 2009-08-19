@@ -6383,11 +6383,13 @@ test_162() {
 run_test 162 "path lookup sanity"
 
 test_163() {
-	copytool --test || { skip "copytool test: $? 38=enosys" && return; }
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	copytool --test || { skip "copytool not runnable: $?" && return; }
 	copytool &
 	sleep 1
+	local uuid=$($LCTL get_param -n mdc.lustre-MDT0000-mdc-*.uuid)
 	# this proc file is temporary and linux-only
-	$LCTL set_param mdc.lustre-MDT0000-mdc-*.netlink=0 || error "lnl send failed"
+	do_facet mds lctl set_param mdt.lustre-MDT0000.mdccomm=$uuid || error "lnl send failed"
 	kill $!
 }
 run_test 163 "LustreNetLink kernelcomms"

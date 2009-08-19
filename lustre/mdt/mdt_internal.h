@@ -768,6 +768,7 @@ static inline struct lu_name *mdt_name_copy(struct lu_name *tlname,
 
 void mdt_enable_cos(struct mdt_device *, int);
 int mdt_cos_is_enabled(struct mdt_device *);
+int mdt_hsm_copytool_send(struct obd_export *exp);
 
 /* lprocfs stuff */
 void lprocfs_mdt_init_vars(struct lprocfs_static_vars *lvars);

@@ -1101,49 +1101,6 @@ out:
         return rc;
 }
 
-static int do_set_info_async(struct obd_export *exp,
-                             obd_count keylen, void *key,
-                             obd_count vallen, void *val,
-                             struct ptlrpc_request_set *set)
-{
-        struct obd_import     *imp = class_exp2cliimp(exp);
-        struct ptlrpc_request *req;
-        char                  *tmp;
-        int                    rc;
-        ENTRY;
-
-        req = ptlrpc_request_alloc(imp, &RQF_MDS_SET_INFO);
-        if (req == NULL)
-                RETURN(-ENOMEM);
-
-        req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_KEY,
-                             RCL_CLIENT, keylen);
-        req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_VAL,
-                             RCL_CLIENT, vallen);
-        rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_SET_INFO);
-        if (rc) {
-                ptlrpc_request_free(req);
-                RETURN(rc);
-        }
-
-        tmp = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_KEY);
-        memcpy(tmp, key, keylen);
-        tmp = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_VAL);
-        memcpy(tmp, val, vallen);
-
-        ptlrpc_request_set_replen(req);
-
-        if (set) {
-                ptlrpc_set_add_req(set, req);
-                ptlrpc_check_set(NULL, set);
-        } else {
-                rc = ptlrpc_queue_wait(req);
-                ptlrpc_req_finished(req);
-        }
-
-        RETURN(rc);
-}
-
 int mdc_get_info_rpc(struct obd_export *exp,
                      obd_count keylen, void *key,
                      int vallen, void *val)
@@ -1189,6 +1146,67 @@ int mdc_get_info_rpc(struct obd_export *exp,
                 }
         }
         ptlrpc_req_finished(req);
+
+        RETURN(rc);
+}
+
+static void lustre_swab_hai(struct hsm_action_item *h)
+{
+        __swab32s(&h->hai_len);
+        __swab32s(&h->hai_action);
+        lustre_swab_lu_fid(&h->hai_fid);
+        __swab64s(&h->hai_cookie);
+        __swab64s(&h->hai_extent_start);
+        __swab64s(&h->hai_extent_end);
+        __swab64s(&h->hai_gid);
+}
+
+static void lustre_swab_hal(struct hsm_action_list *h)
+{
+        struct hsm_action_item *hai;
+        int i;
+
+        __swab32s(&h->hal_version);
+        __swab32s(&h->hal_count);
+        __swab32s(&h->hal_archive_num);
+        hai = hai_zero(h);
+        for (i = 0; i < h->hal_count; i++) {
+                lustre_swab_hai(hai);
+                hai = hai_next(hai);
+        }
+}
+
+/**
+ * Send a message to any listening copytools, nonblocking
+ * @param val LNL message (lnl_hdr + hsm_action_list)
+ * @param len total length of message
+ */
+static int mdc_hsm_copytool_send(int len, void *val)
+{
+        struct lnl_hdr *lh = (struct lnl_hdr *)val;
+        struct hsm_action_list *hal = (struct hsm_action_list *)(lh + 1);
+        int rc;
+        ENTRY;
+
+        if (len < sizeof(*lh) + sizeof(*hal)) {
+                CERROR("Short HSM message %d < %d\n", len,
+                       sizeof(*lh) + sizeof(*hal));
+                RETURN(-EPROTO);
+        }
+        if (lh->lnl_magic == __swab16(LNL_MAGIC)) {
+                lustre_swab_lnlh(lh);
+                lustre_swab_hal(hal);
+        } else if (lh->lnl_magic != LNL_MAGIC) {
+                CERROR("Bad magic %x!=%x\n", lh->lnl_magic, LNL_MAGIC);
+                RETURN(-EPROTO);
+        }
+
+        CDEBUG(D_IOCTL, " Received message mg=%x t=%d m=%d l=%d actions=%d\n",
+               lh->lnl_magic, lh->lnl_transport, lh->lnl_msgtype,
+               lh->lnl_msglen, hal->hal_count);
+
+        /* Broadcast to HSM listeners */
+        rc = libcfs_klnl_msg_put(0, LNL_GRP_HSM, lh);
 
         RETURN(rc);
 }
@@ -1239,7 +1257,8 @@ int mdc_set_info_async(struct obd_export *exp,
                 }
                 spin_unlock(&imp->imp_lock);
 
-                rc = do_set_info_async(exp, keylen, key, vallen, val, set);
+                rc = target_set_info_rpc(imp, MDS_SET_INFO,
+                                         keylen, key, vallen, val, set);
                 RETURN(rc);
         }
         if (KEY_IS(KEY_SPTLRPC_CONF)) {
@@ -1251,8 +1270,6 @@ int mdc_set_info_async(struct obd_export *exp,
                 RETURN(0);
         }
         if (KEY_IS(KEY_MDS_CONN)) {
-                struct obd_import *imp = class_exp2cliimp(exp);
-
                 /* mds-mds import */
                 spin_lock(&imp->imp_lock);
                 imp->imp_server_timeout = 1;
@@ -1262,7 +1279,12 @@ int mdc_set_info_async(struct obd_export *exp,
                 RETURN(0);
         }
         if (KEY_IS(KEY_CHANGELOG_CLEAR)) {
-                rc = do_set_info_async(exp, keylen, key, vallen, val, set);
+                rc = target_set_info_rpc(imp, MDS_SET_INFO,
+                                         keylen, key, vallen, val, set);
+                RETURN(rc);
+        }
+        if (KEY_IS(KEY_HSM_COPYTOOL_SEND)) {
+                rc = mdc_hsm_copytool_send(vallen, val);
                 RETURN(rc);
         }
 

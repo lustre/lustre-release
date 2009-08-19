@@ -1105,6 +1105,7 @@ static int mdt_set_info(struct mdt_thread_info *info)
         vallen = req_capsule_get_size(info->mti_pill, &RMF_SETINFO_VAL,
                                       RCL_CLIENT);
 
+        /* Swab any part of val you need to here */
         if (KEY_IS(KEY_READ_ONLY)) {
                 req->rq_status = 0;
                 lustre_msg_set_status(req->rq_repmsg, 0);
@@ -2825,6 +2826,7 @@ static int mdt_msg_check_version(struct lustre_msg *msg)
         switch (lustre_msg_get_opc(msg)) {
         case MDS_CONNECT:
         case MDS_DISCONNECT:
+        case MDS_SET_INFO:
         case OBD_PING:
         case SEC_CTX_INIT:
         case SEC_CTX_INIT_CONT:
@@ -2850,7 +2852,6 @@ static int mdt_msg_check_version(struct lustre_msg *msg)
         case MDS_SYNC:
         case MDS_GETXATTR:
         case MDS_SETXATTR:
-        case MDS_SET_INFO:
         case MDS_GET_INFO:
         case MDS_QUOTACHECK:
         case MDS_QUOTACTL:
@@ -4928,7 +4929,7 @@ static int mdt_connect_internal(struct obd_export *exp,
 
                 if (!mdt->mdt_som_conf)
                         data->ocd_connect_flags &= ~OBD_CONNECT_SOM;
-                
+
                 spin_lock(&exp->exp_lock);
                 exp->exp_connect_flags = data->ocd_connect_flags;
                 spin_unlock(&exp->exp_lock);
@@ -5567,6 +5568,62 @@ int mdt_obd_postrecov(struct obd_device *obd)
         return rc;
 }
 
+/**
+ * Send a copytool req to a client
+ * Note this sends a request RPC from a server (MDT) to a client (MDC),
+ * backwards of normal comms.
+ */
+int mdt_hsm_copytool_send(struct obd_export *exp)
+{
+        struct lnl_hdr *lh;
+        struct hsm_action_list *hal;
+        struct hsm_action_item *hai;
+        int rc, len;
+        ENTRY;
+
+        CWARN("%s: writing to mdc at %s\n", exp->exp_obd->obd_name,
+              libcfs_nid2str(exp->exp_connection->c_peer.nid));
+
+        len = sizeof(*lh) + sizeof(*hal) + MTI_NAME_MAXLEN +
+                /* for mockup below */ 2 * size_round(sizeof(*hai));
+        OBD_ALLOC(lh, len);
+        if (lh == NULL)
+                RETURN(-ENOMEM);
+
+        lh->lnl_magic = LNL_MAGIC;
+        lh->lnl_transport = LNL_TRANSPORT_HSM;
+        lh->lnl_msgtype = HMT_ACTION_LIST;
+        lh->lnl_msglen = len;
+
+        hal = (struct hsm_action_list *)(lh + 1);
+        hal->hal_version = HAL_VERSION;
+        hal->hal_archive_num = 1;
+        obd_uuid2fsname(hal->hal_fsname, exp->exp_obd->obd_name,
+                        MTI_NAME_MAXLEN);
+
+        /* mock up an action list */
+        hal->hal_count = 2;
+        hai = hai_zero(hal);
+        hai->hai_action = HSMA_ARCHIVE;
+        hai->hai_fid.f_oid = 0xA00A;
+        hai->hai_len = sizeof(*hai);
+        hai = hai_next(hai);
+        hai->hai_action = HSMA_RESTORE;
+        hai->hai_fid.f_oid = 0xB00B;
+        hai->hai_len = sizeof(*hai);
+
+        /* Uses the ldlm reverse import; this rpc will be seen by
+          the ldlm_callback_handler */
+        rc = target_set_info_rpc(exp->exp_imp_reverse, LDLM_SET_INFO,
+                                 sizeof(KEY_HSM_COPYTOOL_SEND),
+                                 KEY_HSM_COPYTOOL_SEND,
+                                 len, lh, NULL);
+
+        OBD_FREE(lh, len);
+
+        RETURN(rc);
+}
+
 static struct obd_ops mdt_obd_device_ops = {
         .o_owner          = THIS_MODULE,
         .o_set_info_async = mdt_obd_set_info_async,
@@ -5770,7 +5827,8 @@ static void __exit mdt_mod_exit(void)
 static struct mdt_handler mdt_mds_ops[] = {
 DEF_MDT_HNDL_F(0,                         CONNECT,      mdt_connect),
 DEF_MDT_HNDL_F(0,                         DISCONNECT,   mdt_disconnect),
-DEF_MDT_HNDL_F(0,                         SET_INFO,     mdt_set_info),
+DEF_MDT_HNDL  (0,                         SET_INFO,     mdt_set_info,
+                                                             &RQF_OBD_SET_INFO),
 DEF_MDT_HNDL_F(0,                         GET_INFO,     mdt_get_info),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, GETSTATUS,    mdt_getstatus),
 DEF_MDT_HNDL_F(HABEO_CORPUS,              GETATTR,      mdt_getattr),

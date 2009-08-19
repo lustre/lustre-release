@@ -128,6 +128,7 @@ void req_layout_fini(void);
 #endif
 
 extern const struct req_format RQF_OBD_PING;
+extern const struct req_format RQF_OBD_SET_INFO;
 extern const struct req_format RQF_SEC_CTX;
 /* MGS req_format */
 extern const struct req_format RQF_MGS_TARGET_REG;
@@ -152,7 +153,6 @@ extern const struct req_format RQF_MDS_PIN;
 extern const struct req_format RQF_MDS_UNPIN;
 extern const struct req_format RQF_MDS_CONNECT;
 extern const struct req_format RQF_MDS_DISCONNECT;
-extern const struct req_format RQF_MDS_SET_INFO;
 extern const struct req_format RQF_MDS_GET_INFO;
 extern const struct req_format RQF_MDS_READPAGE;
 extern const struct req_format RQF_MDS_WRITEPAGE;
@@ -187,7 +187,6 @@ extern const struct req_format RQF_OST_SYNC;
 extern const struct req_format RQF_OST_DESTROY;
 extern const struct req_format RQF_OST_BRW;
 extern const struct req_format RQF_OST_STATFS;
-extern const struct req_format RQF_OST_SET_INFO;
 extern const struct req_format RQF_OST_SET_GRANT_INFO;
 extern const struct req_format RQF_OST_GET_INFO_GENERIC;
 extern const struct req_format RQF_OST_GET_INFO_LAST_ID;
