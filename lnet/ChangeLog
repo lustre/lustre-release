@@ -36,7 +36,7 @@ Details    : an update from the upstream developer Scott Atchley.
 
 
 ------------------------------------------------------------------------------- 
-tbd  Sun Microsystems, Inc.
+2009-07-31  Sun Microsystems, Inc.
 	* version 1.8.1
 	* Support for networks:
 	 socklnd   - any kernel supported by Lustre,
