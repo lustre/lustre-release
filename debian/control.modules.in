@@ -1,0 +1,20 @@
+Source: lustre
+Section: admin
+Priority: optional
+Maintainer: Brian J. Murrell <brian@interlinx.bc.ca>
+Uploaders: Brian J. Murrell <brian@interlinx.bc.ca>
+Standards-Version: 3.7.2
+Build-Depends: debhelper (>= 5.0.0), bzip2
+
+Package: lustre-client-modules-_KVERS_
+Architecture: any
+Recommends: linux-image, lustre-utils
+Provides: lustre-client-modules
+Description: Lustre Linux kernel module (kernel _KVERS_)
+ This package contains the lustre loadable kernel modules for the
+ patchless client for the Lustre cluster filesystem.
+ .
+ These modules are compiled for the _KVERS_ linux kernel.
+
+ 
+

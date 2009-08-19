@@ -1,0 +1,13 @@
+Patch-name: Lustre Filesystem patch for the Linux kernel
+Patch-id: lustre
+Architecture: amd64, ia64, i386, powerpc
+Path-strip-level: 1
+
+Patch-file: debian/kpatches/patch-vanilla-2.6.18
+Kernel-version: 2.6.18
+
+Patch-file: debian/kpatches/patch-vanilla-2.6.20
+Kernel-version: 2.6.20
+
+Patch-file: debian/kpatches/patch-vanilla-2.6.21
+Kernel-version: 2.6.21
