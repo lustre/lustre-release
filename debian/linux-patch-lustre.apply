@@ -1,0 +1,118 @@
+#! /bin/bash
+set -x
+
+if ! [ -d kernel -a -d Documentation ]
+then
+    echo >&2 "Not in kernel top level directory. Exiting"
+    exit 1
+fi
+TOPPATCHDIR=/usr/src/kernel-patches/lustre
+ARCHITECTURE=`dpkg --print-installation-architecture`
+
+QUILT="quilt --quiltrc /dev/null"
+export QUILT_PATCHES="$TOPPATCHDIR/patches"
+
+[ -f debian/APPLIED_all_lustre ] && exit 0
+VERSION=$(grep ^VERSION Makefile 2>/dev/null | \
+        sed -e 's/[^0-9]*\([0-9]*\)/\1/')
+PATCHLEVEL=$( grep ^PATCHLEVEL Makefile 2>/dev/null | \
+        sed -e 's/[^0-9]*\([0-9]*\)/\1/')
+SUBLEVEL=$(grep ^SUBLEVEL Makefile 2>/dev/null | \
+        sed -e 's/[^0-9]*\([0-9]*\)/\1/')
+#EXTRAVERSION=$(grep ^EXTRAVERSION Makefile | head -1 2>/dev/null | \
+#        sed -e 's/EXTRAVERSION =[       ]*\([^  ]*\)$/\1/')
+#KERNELBRANCHLET=${VERSION}.${PATCHLEVEL}.${SUBLEVEL}
+#KERNELRELEASE=${KERNELBRANCHLET}${EXTRAVERSION}
+KERNELRELEASE=${VERSION}.${PATCHLEVEL}.${SUBLEVEL}
+
+cleanup() {
+  echo >&2 Cleaning up
+  if [ -e series ]; then
+    echo >&2 Removing series file
+    rm series
+  fi
+  if [ -e debian/APLLIED_all_lustre_tmp/series.orig ]; then
+    echo >&1 Restoring orig series file
+    mv debian/APLLIED_all_lustre_tmp/series.orig series
+  fi
+  if [ -e .pc ]; then
+    echo >&2 Removing .pc dir
+    rm -r .pc
+  fi
+  if [ -e debian/APPLIED_all_lustre_tmp/.pc.orig ]; then
+    echo >&2 Restoring orig .pc dir
+    mv debian/APPLIED_all_lustre_tmp/.pc.orig .pc
+  fi
+}
+
+mkdir -p debian/APPLIED_all_lustre_tmp
+if [ -e series ]; then
+  echo >&2 Preserving existing series file
+  mv series debian/APPLIED_all_lustre_tmp/series.orig
+fi
+if [ -e .pc ]; then
+  echo >&2 Preserving existing .pc dir
+  mv .pc debian/APPLIED_all_lustre_tmp/.pc.orig
+fi
+
+trap cleanup EXIT
+
+echo >&2 Setting up quilt
+$QUILT setup $TOPPATCHDIR/series/$KERNELRELEASE-vanilla.series 2>/dev/null
+ERR=$?
+if ! [ $ERR = 0 ]; then
+  echo >&2 Quilt failed to initialize
+  cleanup
+  exit $ERR
+fi
+
+echo >&2 Applying lustre patches
+$QUILT push -a
+ERR=$?
+if ! [ $ERR = 0 ]; then
+  echo >&2 Lustre patched failed to apply
+  echo >&2 Reverting partialy applied patch
+  $QUILT pop -a
+  cleanup
+  exit $ERR
+fi
+
+echo >&2 Finalizing lustre patch
+mv series debian/APPLIED_all_lustre_tmp/series.lustre
+mv .pc debian/APPLIED_all_lustre_tmp/.pc.lustre
+cleanup
+
+
+echo >&2 "\"Lustre Filesystem patch for the Linux kernel\" patch for $KVERSION succeeded"
+
+echo >&2 "Removing empty files:"
+# make an exception for ./debian, or else the stamp files will go too.
+find . -path ./debian -prune -o \
+       -type f -size 0 ! -name 'APPLIED*' -exec rm {} \; -print
+echo >&2 "Done."
+
+mkdir -p debian
+cat > 'debian/APPLIED_all_lustre' <<EOF
+SERIES=$KERNELRELEASE-vanilla.series
+EOF
+mkdir -p debian/image.d
+PKGNAME=`dpkg -S $TOPPATCHDIR/series/$KERNELRELEASE-vanilla.series | cut -d: -f1`
+PKGVERS=`grep-dctrl -n -P $PKGNAME -s Version -X /var/lib/dpkg/status`
+cat > 'debian/image.d/register-lustre' <<EOF
+#!/bin/sh
+
+# This scripts documents the "Lustre Filesystem patch for the Linux kernel" kernel patch into the
+# kernel-image package, as being applied to the kernel.
+
+docdir=\${IMAGE_TOP}/usr/share/doc/kernel-image-\${version}
+
+mkdir -p \${docdir}
+
+(
+    printf 'Lustre Filesystem patch for the Linux kernel (lustre)${KPATCH_lustre:+ for kernel ${KPATCH_lustre}},'
+    echo ' from package $PKGNAME, version $PKGVERS'
+) >> \${docdir}/applied-patches
+EOF
+chmod +x 'debian/image.d/register-lustre'
+
+echo >&2 "END applying lustre patch"
