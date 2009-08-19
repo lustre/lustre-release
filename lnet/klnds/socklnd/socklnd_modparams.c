@@ -37,7 +37,7 @@ static int peer_buffer_credits = 0;
 CFS_MODULE_PARM(peer_buffer_credits, "i", int, 0444,
                 "# per-peer router buffer credits");
 
-static int peer_timeout = 0;
+static int peer_timeout = 180;
 CFS_MODULE_PARM(peer_timeout, "i", int, 0444,
                 "Seconds without aliveness news to declare peer dead (<=0 to disable)");
 
