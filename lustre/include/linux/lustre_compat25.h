@@ -439,7 +439,11 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #define ll_remove_suid(file, mnt)       file_remove_suid(file)
 #else
  #ifdef HAVE_SECURITY_PLUG
-  #define ll_remove_suid(file,mnt)      remove_suid(file->f_dentry,mnt)
+  #ifdef HAVE_PATH_REMOVE_SUID
+   #define ll_remove_suid(file,mnt)      remove_suid(&file->f_path)
+  #else
+   #define ll_remove_suid(file,mnt)      remove_suid(file->f_dentry,mnt)
+  #endif
  #else
   #define ll_remove_suid(file,mnt)      remove_suid(file->f_dentry)
  #endif

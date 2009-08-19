@@ -1342,6 +1342,23 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# (Ubuntu) 2.6.24's remove_suid() takes a struct path *
+AC_DEFUN([LC_PATH_REMOVE_SUID],
+[AC_MSG_CHECKING([kernel has a remove_suid that takes a struct path])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        struct path *a_path = NULL;
+        remove_suid(a_path);
+],[
+        AC_DEFINE(HAVE_PATH_REMOVE_SUID, 1,
+                  [kernel has a remove suid that takes a struct path])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
 # 2.6.27 have new page locking API
 AC_DEFUN([LC_TRYLOCKPAGE],
 [AC_MSG_CHECKING([kernel use trylock_page for page lock])
@@ -1735,6 +1752,9 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_BIO_ENDIO_2ARG
           LC_FH_TO_DENTRY
           LC_PROCFS_DELETED
+
+          # 2.6.24-19-generic Ubuntu
+          LC_PATH_REMOVE_SUID
 
           # 2.6.26
           LC_FS_STRUCT_USE_PATH
