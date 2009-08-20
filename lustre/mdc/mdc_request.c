@@ -1190,7 +1190,7 @@ static int mdc_hsm_copytool_send(int len, void *val)
 
         if (len < sizeof(*lh) + sizeof(*hal)) {
                 CERROR("Short HSM message %d < %d\n", len,
-                       sizeof(*lh) + sizeof(*hal));
+                      (int) (sizeof(*lh) + sizeof(*hal)));
                 RETURN(-EPROTO);
         }
         if (lh->lnl_magic == __swab16(LNL_MAGIC)) {
