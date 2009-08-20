@@ -16,6 +16,12 @@ TBD Sun Microsystems, Inc.
 	  used in production.
 
 Severity   : normal
+Bugzilla   : 19934
+Description: correctly send lsm on open replay
+Details    : MDS is trust to LSM size on replay open, but client can set wrong size
+             of lsm buffer.
+
+Severity   : normal
 Bugzilla   : 20321
 Description: Deadlock between filter_destroy() and filter_commitrw_write().
 Details    : filter_destroy() does not hold the DLM lock over the whole
