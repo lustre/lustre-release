@@ -1217,7 +1217,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 RETURN(0);
         }
         case LL_IOC_PATH2FID:
-                if (copy_to_user((void *)arg, &ll_i2info(inode)->lli_fid,
+                if (copy_to_user((void *)arg, ll_inode2fid(inode),
                                  sizeof(struct lu_fid)))
                         RETURN(-EFAULT);
                 RETURN(0);

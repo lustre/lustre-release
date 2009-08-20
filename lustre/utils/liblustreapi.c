@@ -58,6 +58,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
+#include <sys/xattr.h>
 #include <fnmatch.h>
 #include <glob.h>
 #ifdef HAVE_LINUX_UNISTD_H
@@ -2879,15 +2880,35 @@ int llapi_fid2path(const char *device, const char *fidstr, char *buf,
         return rc;
 }
 
+static int path2fid_from_lma(const char *path, lustre_fid *fid)
+{
+        char buf[512];
+        struct lustre_mdt_attrs *lma;
+        int rc;
+
+        rc = lgetxattr(path, XATTR_NAME_LMA, buf, sizeof(buf));
+        if (rc < 0)
+                return -errno;
+        lma = (struct lustre_mdt_attrs *)buf;
+        fid_be_to_cpu(fid, &lma->lma_self_fid);
+        return 0;
+}
+
 int llapi_path2fid(const char *path, lustre_fid *fid)
 {
         int fd, rc;
 
-        fd = open(path, O_RDONLY);
-        if (fd < 0)
+        memset(fid, 0, sizeof(*fid));
+        fd = open(path, O_RDONLY | O_NONBLOCK | O_NOFOLLOW);
+        if (fd < 0) {
+                if (errno == ELOOP) /* symbolic link */
+                        return path2fid_from_lma(path, fid);
                 return -errno;
+        }
 
-        rc = ioctl(fd, LL_IOC_PATH2FID, fid);
+        rc = ioctl(fd, LL_IOC_PATH2FID, fid) < 0 ? -errno : 0;
+        if (rc == -EINVAL) /* char special device */
+                rc = path2fid_from_lma(path, fid);
 
         close(fd);
         return rc;

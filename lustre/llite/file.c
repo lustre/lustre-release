@@ -1932,7 +1932,7 @@ error:
         case LL_IOC_FLUSHCTX:
                 RETURN(ll_flush_ctx(inode));
         case LL_IOC_PATH2FID: {
-                if (copy_to_user((void *)arg, &ll_i2info(inode)->lli_fid,
+                if (copy_to_user((void *)arg, ll_inode2fid(inode),
                                  sizeof(struct lu_fid)))
                         RETURN(-EFAULT);
 
