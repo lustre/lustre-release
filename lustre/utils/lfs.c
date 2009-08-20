@@ -1844,6 +1844,17 @@ int lfs_setquota(int argc, char **argv)
                         dqb->dqb_ihardlimit = tmp_qctl.qc_dqblk.dqb_ihardlimit;
                 if (!(limit_mask & ISLIMIT))
                         dqb->dqb_isoftlimit = tmp_qctl.qc_dqblk.dqb_isoftlimit;
+
+                /* Keep grace times if we have got no softlimit arguments */
+                if ((limit_mask & BHLIMIT) && !(limit_mask & BSLIMIT)) {
+                        dqb->dqb_valid |= QIF_BTIME;
+                        dqb->dqb_btime = tmp_qctl.qc_dqblk.dqb_btime;
+                }
+
+                if ((limit_mask & IHLIMIT) && !(limit_mask & ISLIMIT)) {
+                        dqb->dqb_valid |= QIF_ITIME;
+                        dqb->dqb_itime = tmp_qctl.qc_dqblk.dqb_itime;
+                }
         }
 
         dqb->dqb_valid |= (limit_mask & (BHLIMIT | BSLIMIT)) ? QIF_BLIMITS : 0;
