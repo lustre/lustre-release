@@ -279,7 +279,7 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo, int flags)
         struct md_attr          *ma = &info->mti_attr;
         struct mdt_lock_handle  *lh;
         int som_update = 0;
-        int do_vbr = ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID);
+        int do_vbr = ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID|LA_FLAGS);
         int rc;
         ENTRY;
 

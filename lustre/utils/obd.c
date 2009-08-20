@@ -3134,6 +3134,54 @@ out:
         return rc;
 }
 
+int jt_get_obj_version(int argc, char **argv)
+{
+        struct lu_fid fid;
+        struct obd_ioctl_data data;
+        __u64 version;
+        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf, *fidstr;
+        int rc;
+
+        if (argc != 2)
+                return CMD_HELP;
+
+        fidstr = argv[1];
+        while (*fidstr == '[')
+                fidstr++;
+        sscanf(fidstr, SFID, RFID(&fid));
+        if (!fid_is_sane(&fid)) {
+                fprintf(stderr, "bad FID format [%s], should be "DFID"\n",
+                        fidstr, (__u64)1, 2, 0);
+                return -EINVAL;
+        }
+
+        memset(&data, 0, sizeof data);
+        data.ioc_dev = cur_device;
+        data.ioc_inlbuf1 = (char *) &fid;
+        data.ioc_inllen1 = sizeof fid;
+        data.ioc_inlbuf2 = (char *) &version;
+        data.ioc_inllen2 = sizeof version;
+
+        memset(buf, 0, sizeof *buf);
+        rc = obd_ioctl_pack(&data, &buf, sizeof rawbuf);
+        if (rc) {
+                fprintf(stderr, "error: %s: packing ioctl arguments: %s\n",
+                        jt_cmdname(argv[0]), strerror(-rc));
+                return rc;
+        }
+
+        rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_GET_OBJ_VERSION, buf);
+        if (rc == -1) {
+                fprintf(stderr, "error: %s: ioctl: %s\n",
+                        jt_cmdname(argv[0]), strerror(errno));
+                return -errno;
+        }
+
+        obd_ioctl_unpack(&data, buf, sizeof rawbuf);
+        printf("0x%llx\n", version);
+        return 0;
+}
+
 void  llapi_ping_target(char *obd_type, char *obd_name,
                         char *obd_uuid, void *args)
 {

@@ -5490,6 +5490,50 @@ static int mdt_ioc_child(struct lu_env *env, struct mdt_device *mdt,
         RETURN(rc);
 }
 
+static int mdt_ioc_version_get(struct mdt_thread_info *mti, void *karg)
+{
+        struct obd_ioctl_data *data = karg;
+        struct lu_fid *fid = (struct lu_fid *)data->ioc_inlbuf1;
+        __u64 version;
+        struct mdt_object *obj;
+        struct mdt_lock_handle  *lh;
+        int rc;
+        ENTRY;
+        CDEBUG(D_IOCTL, "getting version for "DFID"\n", PFID(fid));
+        if (!fid_is_sane(fid))
+                RETURN(-EINVAL);
+
+        lh = &mti->mti_lh[MDT_LH_PARENT];
+        mdt_lock_reg_init(lh, LCK_CR);
+
+        obj = mdt_object_find_lock(mti, fid, lh, MDS_INODELOCK_UPDATE);
+        if (IS_ERR(obj))
+                RETURN(PTR_ERR(obj));
+
+        rc = mdt_object_exists(obj);
+        if (rc < 0) {
+                rc = -EREMOTE;
+                /**
+                 * before calling version get the correct MDS should be
+                 * fid, this is error to find remote object here
+                 */
+                CERROR("nonlocal object "DFID"\n", PFID(fid));
+        } else if (rc == 0) {
+                rc = -ENOENT;
+                CDEBUG(D_IOCTL, "no such object: "DFID"\n", PFID(fid));
+        } else {
+                version = mo_version_get(mti->mti_env, mdt_object_child(obj));
+                if (version < 0) {
+                        rc = (int)version;
+                } else {
+                        *(__u64 *)data->ioc_inlbuf2 = version;
+                        rc = 0;
+                }
+        }
+        mdt_object_unlock_put(mti, obj, lh, 1);
+        RETURN(rc);
+}
+
 /* ioctls on obd dev */
 static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                          void *karg, void *uarg)
@@ -5523,6 +5567,17 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_CHANGELOG_CLEAR:
                 rc = mdt_ioc_child(&env, mdt, cmd, len, karg);
                 break;
+        case OBD_IOC_GET_OBJ_VERSION: {
+                struct mdt_thread_info *mti;
+                mti = lu_context_key_get(&env.le_ctx, &mdt_thread_key);
+                memset(mti, 0, sizeof *mti);
+                mti->mti_env = &env;
+                mti->mti_mdt = mdt;
+                mti->mti_exp = exp;
+
+                rc = mdt_ioc_version_get(mti, karg);
+                break;
+        }
         default:
                 CERROR("Not supported cmd = %d for device %s\n",
                        cmd, obd->obd_name);

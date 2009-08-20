@@ -296,6 +296,9 @@ command_t cmdlist[] = {
         {"memhog", jt_ptl_memhog, 0,
          "memory pressure testing\n"
          "usage: memhog <page count> [<gfp flags>]"},
+        {"getobjversion", jt_get_obj_version, 0,
+         "get the version of an object on servers\n"
+         "usage: getobjversion <fid>"},
 
         {"==== obsolete (DANGEROUS) ====", jt_noop, 0, "obsolete (DANGEROUS)"},
         /* some test scripts still use these */

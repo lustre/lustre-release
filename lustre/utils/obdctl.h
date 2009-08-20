@@ -81,6 +81,7 @@ int jt_obd_recover(int argc, char **argv);
 int jt_obd_mdc_lookup(int argc, char **argv);
 int jt_get_version(int argc, char **argv);
 int jt_cfg_dump_log(int argc, char **argv);
+int jt_get_obj_version(int argc, char **argv);
 
 int jt_llog_catlist(int argc, char **argv);
 int jt_llog_info(int argc, char **argv);
