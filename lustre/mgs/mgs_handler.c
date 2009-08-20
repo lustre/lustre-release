@@ -87,8 +87,7 @@ static int mgs_connect(struct lustre_handle *conn, struct obd_device *obd,
                 data->ocd_version = LUSTRE_VERSION_CODE;
         }
 
-        rc = mgs_client_add(obd, exp, localdata);
-
+        rc =  mgs_export_stats_init(obd, exp, 0, localdata);
         if (rc) {
                 class_disconnect(exp);
                 lprocfs_exp_cleanup(exp);
@@ -116,7 +115,7 @@ static int mgs_reconnect(struct obd_export *exp, struct obd_device *obd,
                 data->ocd_version = LUSTRE_VERSION_CODE;
         }
 
-        RETURN(0);
+        RETURN(mgs_export_stats_init(obd, exp, 1, localdata));
 }
 
 static int mgs_disconnect(struct obd_export *exp)

@@ -233,6 +233,7 @@ static int lprocfs_init_rw_stats(struct obd_device *obd,
    plus the procfs overhead :( */
 static int filter_export_stats_init(struct obd_device *obd,
                                     struct obd_export *exp,
+                                    int reconnect,
                                     void *client_nid)
 {
         struct proc_dir_entry *brw_entry;
@@ -242,7 +243,8 @@ static int filter_export_stats_init(struct obd_device *obd,
         if (obd_uuid_equals(&exp->exp_client_uuid, &obd->obd_uuid))
                 /* Self-export gets no proc entry */
                 RETURN(0);
-        rc = lprocfs_exp_setup(exp, (lnet_nid_t *)client_nid, &newnid);
+        rc = lprocfs_exp_setup(exp, (lnet_nid_t *)client_nid,
+                               reconnect, &newnid);
         if (rc) {
                 /* Mask error for already created
                  * /proc entries */
@@ -947,7 +949,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 } else {
                         fed = &exp->exp_filter_data;
                         fed->fed_lcd = lcd;
-                        filter_export_stats_init(obd, exp, NULL);
+                        filter_export_stats_init(obd, exp, 0, NULL);
                         rc = filter_client_add(obd, exp, cl_idx);
                         /* can't fail for existing client */
                         LASSERTF(rc == 0, "rc = %d\n", rc);
@@ -2399,7 +2401,7 @@ static int filter_reconnect(struct obd_export *exp, struct obd_device *obd,
 
         rc = filter_connect_internal(exp, data);
         if (rc == 0)
-                filter_export_stats_init(obd, exp, localdata);
+                filter_export_stats_init(obd, exp, 1, localdata);
 
         RETURN(rc);
 }
@@ -2431,7 +2433,7 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (rc)
                 GOTO(cleanup, rc);
 
-        filter_export_stats_init(obd, exp, localdata);
+        filter_export_stats_init(obd, exp, 0, localdata);
 
         if (!obd->obd_replayable)
                 GOTO(cleanup, rc = 0);

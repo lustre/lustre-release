@@ -1656,7 +1656,8 @@ int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
 }
 EXPORT_SYMBOL(lprocfs_nid_stats_clear_write);
 
-int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
+int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int reconnect,
+                      int *newnid)
 {
         int rc = 0;
         struct nid_stat *new_stat, *old_stat;
@@ -1686,7 +1687,8 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
 
         new_stat->nid = *nid;
         new_stat->nid_obd = exp->exp_obd;
-        atomic_set(&new_stat->nid_exp_ref_count, 0);
+        /* we need set default refcount to 1 to balance obd_disconnect() */
+        atomic_set(&new_stat->nid_exp_ref_count, 1);
 
         old_stat = lustre_hash_findadd_unique(obd->obd_nid_stats_hash,
                                               nid, &new_stat->nid_hash);
@@ -1697,21 +1699,16 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
         /* Return -EALREADY here so that we know that the /proc
          * entry already has been created */
         if (old_stat != new_stat) {
-                spin_lock(&obd->obd_nid_lock);
-                if (exp->exp_nid_stats != old_stat) {
-                        if (exp->exp_nid_stats)
-                                nidstat_putref(exp->exp_nid_stats);
-                        exp->exp_nid_stats = old_stat;
-                } else {
-                        /* lustre_hash_findadd_unique() has added
-                         * old_stat's refcount */
-                        nidstat_putref(old_stat);
-                }
+                /* if this reconnect to live export from diffrent nid, we need
+                 * to release old stats because disconnect will be never called.
+                 * */
+                if (reconnect && exp->exp_nid_stats)
+                        nidstat_putref(exp->exp_nid_stats);
 
-                spin_unlock(&obd->obd_nid_lock);
-
+                exp->exp_nid_stats = old_stat;
                 GOTO(destroy_new, rc = -EALREADY);
         }
+
         /* not found - create */
         new_stat->nid_proc = proc_mkdir(libcfs_nid2str(*nid),
                                    obd->obd_proc_exports_entry);
@@ -1737,9 +1734,6 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
                 GOTO(destroy_new_ns, rc);
         }
 
-        if (exp->exp_nid_stats)
-                nidstat_putref(exp->exp_nid_stats);
-        nidstat_getref(new_stat);
         exp->exp_nid_stats = new_stat;
         *newnid = 1;
         /* protect competitive add to list, not need locking on destroy */
@@ -1755,6 +1749,7 @@ destroy_new_ns:
         lustre_hash_del(obd->obd_nid_stats_hash, nid, &new_stat->nid_hash);
 
 destroy_new:
+        nidstat_putref(new_stat);
         OBD_FREE_PTR(new_stat);
         RETURN(rc);
 }

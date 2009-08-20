@@ -86,9 +86,8 @@ int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
                  char *poolname, char *fsname, char *ostname);
 
 /* mgs_fs.c */
-int mgs_client_add(struct obd_device *obd,
-                   struct obd_export *exp,
-                   void *localdata);
+int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp,
+                          int reconnect, void *localdata);
 int mgs_client_free(struct obd_export *exp);
 int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt);
 int mgs_fs_cleanup(struct obd_device *obddev);
