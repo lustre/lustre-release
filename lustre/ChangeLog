@@ -26,6 +26,12 @@ Details    : ldiskfs_truncate calls grab_cache_page which may start page
              calling prune_icache with consequent lustre reentrance.
 
 Severity   : normal
+Bugzilla   : 19934
+Description: send correctly lsm on open replay
+Details    : MDS is trust to LSM size on replay open, but client can set wrong size
+             to lsm buffer.
+
+Severity   : normal
 Bugzilla   : 19854
 Description: enable client interface failover
 Details    : When a child reconnects from another NID, properly update export

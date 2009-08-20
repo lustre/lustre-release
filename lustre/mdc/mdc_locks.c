@@ -552,12 +552,17 @@ static int mdc_finish_enqueue(struct obd_export *exp,
                                 void *lmm;
                                 if (req_capsule_get_size(pill, &RMF_EADATA,
                                                          RCL_CLIENT) <
-                                    body->eadatasize) {
+                                    body->eadatasize)
                                         mdc_realloc_openmsg(req, body);
-                                        req_capsule_set_size(pill, &RMF_EADATA,
-                                                             RCL_CLIENT,
-                                                             body->eadatasize);
-                                }
+                                else
+                                        req_capsule_shrink(pill, &RMF_EADATA,
+                                                           body->eadatasize,
+                                                           RCL_CLIENT);
+
+                                req_capsule_set_size(pill, &RMF_EADATA,
+                                                     RCL_CLIENT,
+                                                     body->eadatasize);
+
                                 lmm = req_capsule_client_get(pill, &RMF_EADATA);
                                 if (lmm)
                                         memcpy(lmm, eadata, body->eadatasize);
