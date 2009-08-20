@@ -196,6 +196,10 @@ static void mdc_realloc_openmsg(struct ptlrpc_request *req,
         old_size = lustre_packed_msg_size(old_msg);
         lustre_msg_set_buflen(old_msg, DLM_INTENT_REC_OFF + offset,
                               body->eadatasize);
+        /* old buffer is more then need */
+        if (old_len > body->eadatasize)
+                return;
+
         new_size = lustre_packed_msg_size(old_msg);
 
         OBD_ALLOC(new_msg, new_size);
@@ -543,7 +547,7 @@ static int mdc_finish_enqueue(struct obd_export *exp,
                                 else
                                         offset += 2;
 
-                                if (lustre_msg_buflen(req->rq_reqmsg, offset) <
+                                if (lustre_msg_buflen(req->rq_reqmsg, offset) !=
                                     body->eadatasize)
                                         mdc_realloc_openmsg(req, body);
 
