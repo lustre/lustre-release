@@ -454,7 +454,7 @@ static inline int ns_connect_lru_resize(struct ldlm_namespace *ns)
  *
  */
 
-#define RES_HASH_BITS 10
+#define RES_HASH_BITS 12
 #define RES_HASH_SIZE (1UL << RES_HASH_BITS)
 #define RES_HASH_MASK (RES_HASH_SIZE - 1)
 
