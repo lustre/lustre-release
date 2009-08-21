@@ -179,6 +179,8 @@ int udmu_objset_statfs(udmu_objset_t *uos, struct statfs64 *statp);
 int udmu_objset_root(udmu_objset_t *uos, dmu_buf_t **dbp, void *tag);
 
 void udmu_wait_synced(udmu_objset_t *uos, dmu_tx_t *tx);
+void udmu_wait_txg_synced(udmu_objset_t *uos, uint64_t txg);
+uint64_t udmu_get_txg(udmu_objset_t *uos, dmu_tx_t *tx);
 
 /* buf must have at least MAXNAMELEN bytes */
 void udmu_objset_name_get(udmu_objset_t *uos, char *buf);

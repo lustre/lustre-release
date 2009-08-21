@@ -168,6 +168,18 @@ out:
         return (error);
 }
 
+uint64_t udmu_get_txg(udmu_objset_t *uos, dmu_tx_t *tx)
+{
+        ASSERT(tx != NULL);
+        return tx->tx_txg;
+}
+
+void udmu_wait_txg_synced(udmu_objset_t *uos, uint64_t txg)
+{
+        /* Wait for the pool to be synced */
+        txg_wait_synced(dmu_objset_pool(uos->os), txg);
+}
+
 void udmu_wait_synced(udmu_objset_t *uos, dmu_tx_t *tx)
 {
         /* Wait for the pool to be synced */
