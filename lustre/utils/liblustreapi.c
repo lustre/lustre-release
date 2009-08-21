@@ -2095,3 +2095,17 @@ out:
         free(buf);
         return ret;
 }
+
+int llapi_path2fid(const char *path, lustre_fid *fid)
+{
+        int fd, rc;
+
+        fd = open(path, O_RDONLY);
+        if (fd < 0)
+                return -errno;
+
+        rc = ioctl(fd, LL_IOC_PATH2FID, fid);
+
+        close(fd);
+        return rc;
+}

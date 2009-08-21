@@ -97,6 +97,7 @@ static int lfs_quotainv(int argc, char **argv);
 #endif
 static int lfs_join(int argc, char **argv);
 static int lfs_poollist(int argc, char **argv);
+static int lfs_path2fid(int argc, char **argv);
 
 /* all avaialable commands */
 command_t cmdlist[] = {
@@ -192,6 +193,8 @@ command_t cmdlist[] = {
         {"quotainv", lfs_quotainv, 0, "Invalidate quota data.\n"
          "usage: quotainv [-u|-g] <filesystem>"},
 #endif
+        {"path2fid", lfs_path2fid, 0, "Display the fid for a given path.\n"
+         "usage: path2fid <path>"},
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
         {"quit", Parser_quit, 0, "quit"},
@@ -863,6 +866,28 @@ static int lfs_osts(int argc, char **argv)
         }
 
         return rc;
+}
+
+static int lfs_path2fid(int argc, char **argv)
+{
+        char *path;
+        lustre_fid fid;
+        int rc;
+
+        if (argc != 2)
+                return CMD_HELP;
+
+        path = argv[1];
+        rc = llapi_path2fid(path, &fid);
+        if (rc) {
+                fprintf(stderr, "can't get fid for %s: %s\n", path,
+                        strerror(errno = -rc));
+                return rc;
+        }
+
+        printf(DFID"\n", PFID(&fid));
+
+        return 0;
 }
 
 #define COOK(value)                                                     \

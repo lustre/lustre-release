@@ -937,6 +937,29 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 mds_allow_cli(obd, 0);
                 RETURN(0);
 
+        case OBD_IOC_GET_OBJ_VERSION: {
+                struct ll_fid *fid = (struct ll_fid *) data->ioc_inlbuf1;
+                struct dentry *dentry;
+                struct lustre_handle lockh;
+                int lockm = LCK_CR;
+                __u64 version;
+
+                dentry = mds_fid2locked_dentry(obd, fid, NULL, lockm, &lockh,
+                                               NULL, 0, MDS_INODELOCK_UPDATE);
+                if (IS_ERR(dentry)) {
+                        rc = PTR_ERR(dentry);
+                        RETURN(rc);
+                }
+                version = fsfilt_get_version(obd, dentry->d_inode);
+                ldlm_lock_decref(&lockh, lockm);
+                l_dput(dentry);
+                if (version < 0)
+                        rc = (int) version;
+                else
+                        *(__u64 *) data->ioc_inlbuf2 = version;
+                RETURN(rc);
+        }
+
         default:
                 CDEBUG(D_INFO, "unknown command %x\n", cmd);
                 RETURN(-EINVAL);

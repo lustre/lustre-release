@@ -3144,6 +3144,57 @@ out:
         return rc;
 }
 
+int jt_get_obj_version(int argc, char **argv)
+{
+        struct ll_fid fid;
+        struct obd_ioctl_data data;
+        __u64 version;
+        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf, *fidstr;
+        struct lu_fid f;
+        int rc;
+
+        if (argc != 2)
+                return CMD_HELP;
+
+        fidstr = argv[1];
+        while (*fidstr == '[')
+                fidstr++;
+        sscanf(fidstr, SFID, RFID(&f));
+        /*
+         * fid_is_sane is not suitable here.  We rely on
+         * mds_fid2locked_dentry to report on insane FIDs.
+         */
+        fid.id = f.f_seq;
+        fid.generation = f.f_oid;
+        fid.f_type = f.f_ver;
+
+        memset(&data, 0, sizeof data);
+        data.ioc_dev = cur_device;
+        data.ioc_inlbuf1 = (char *) &fid;
+        data.ioc_inllen1 = sizeof fid;
+        data.ioc_inlbuf2 = (char *) &version;
+        data.ioc_inllen2 = sizeof version;
+
+        memset(buf, 0, sizeof *buf);
+        rc = obd_ioctl_pack(&data, &buf, sizeof rawbuf);
+        if (rc) {
+                fprintf(stderr, "error: %s: packing ioctl arguments: %s\n",
+                        jt_cmdname(argv[0]), strerror(-rc));
+                return rc;
+        }
+
+        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_GET_OBJ_VERSION, buf);
+        if (rc == -1) {
+                fprintf(stderr, "error: %s: ioctl: %s\n",
+                        jt_cmdname(argv[0]), strerror(errno));
+                return -errno;
+        }
+
+        obd_ioctl_unpack(&data, buf, sizeof rawbuf);
+        printf("0x%llx\n", version);
+        return 0;
+}
+
 void  llapi_ping_target(char *obd_type, char *obd_name,
                         char *obd_uuid, void *args)
 {

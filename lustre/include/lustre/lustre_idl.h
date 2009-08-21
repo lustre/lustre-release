@@ -799,21 +799,6 @@ enum lu_dirent_attrs {
 
 extern void lustre_swab_ll_fid (struct ll_fid *fid);
 
-struct lu_fid {
-        __u64 f_seq;  /* holds fid sequence. Lustre should support 2^64
-                       * objects, thus even if one sequence has one object we
-                       * reach this value. */
-        __u32 f_oid;  /* fid number within its sequence. */
-        __u32 f_ver;  /* holds fid version. */
-};
-
-#define DFID "[0x%16.16"LPF64"x/0x%8.8x:0x%8.8x]"
-
-#define PFID(fid)     \
-        fid_seq(fid), \
-        fid_oid(fid), \
-        fid_ver(fid)
-
 enum {
         /** put FID sequence at this offset in ldlm_res_id. */
         LUSTRE_RES_ID_SEQ_OFF = 0,

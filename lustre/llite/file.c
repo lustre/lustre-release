@@ -2944,6 +2944,13 @@ error:
                         RETURN (-EFAULT);
                 RETURN(0);
         }
+        case LL_IOC_PATH2FID: {
+                if (copy_to_user((void *)arg, ll_inode_lu_fid(inode),
+                                 sizeof(struct lu_fid)))
+                        RETURN(-EFAULT);
+
+                RETURN(0);
+        }
 
         /* We need to special case any other ioctls we want to handle,
          * to send them to the MDS/OST as appropriate and to properly
