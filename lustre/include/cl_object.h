@@ -3039,12 +3039,15 @@ void cl_sync_io_note(struct cl_sync_io *anchor, int ioret);
  *     longer used environments instead of destroying them;
  *
  *     - there is a notion of "current" environment, attached to the kernel
- *     data structure representing current thread (current->journal_info in
- *     Linux kernel). Top-level lustre code allocates an environment and makes
- *     it current, then calls into non-lustre code, that in turn calls lustre
- *     back. Low-level lustre code thus called can fetch environment created
- *     by the top-level code and reuse it, avoiding additional environment
- *     allocation.
+ *     data structure representing current thread Top-level lustre code
+ *     allocates an environment and makes it current, then calls into
+ *     non-lustre code, that in turn calls lustre back. Low-level lustre
+ *     code thus called can fetch environment created by the top-level code
+ *     and reuse it, avoiding additional environment allocation.
+ *       Right now, three interfaces can attach the cl_env to running thread:
+ *       - cl_env_get
+ *       - cl_env_implant
+ *       - cl_env_reexit(cl_env_reenter had to be called priorly)
  *
  * \see lu_env, lu_context, lu_context_key
  * @{ */

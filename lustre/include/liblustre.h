@@ -264,7 +264,6 @@ struct task_struct {
         int ngroups;
         gid_t *groups;
         __u32 cap_effective;
-        void *journal_info;
 };
 
 
