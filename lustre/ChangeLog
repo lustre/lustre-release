@@ -23,14 +23,14 @@ Severity   : normal
 Bugzilla   : 19934
 Description: correctly send lsm on open replay
 Details    : MDS is trust to LSM size on replay open, but client can set wrong size
-             to lsm buffer.
+	     to lsm buffer.
 
 Severity   : normal
 Bugzilla   : 20008
 Description: truncate starts GFP_FS allocation under transaction causing deadlock
 Details    : ldiskfs_truncate calls grab_cache_page which may start page
-             allocation under an open transaction. This may lead to
-             calling prune_icache with consequent lustre reentrance.
+	     allocation under an open transaction. This may lead to
+	     calling prune_icache with consequent lustre reentrance.
 
 Severity   : enhancement 
 Bugzilla   : 20200
@@ -49,7 +49,8 @@ Description: Deadlock between filter_destroy() and filter_commitrw_write().
 Details    : filter_destroy() does not hold the DLM lock over the whole
 	     operation. If the DLM lock is dropped, filter_commitrw() can go
 	     through, causing the deadlock between page lock and i_mutex.
-
+	     The i_alloc_sem should also be hold in filter_destroy() while
+	     truncating the file.
 
 Severity   : enhancement
 Bugzilla   : 18539
