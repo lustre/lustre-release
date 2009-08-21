@@ -97,6 +97,12 @@ int check_quota_file(struct file *f, struct inode *inode, int type,
         static const uint quota_magics[] = LUSTRE_INITQMAGICS;
         const uint *quota_versions = lustre_initqversions[version];
 
+        if (!inode && !f) {
+                CERROR("check_quota_file failed!\n");
+                libcfs_debug_dumpstack(NULL);
+                return -EINVAL;
+        }
+
         if (f) {
                 fs = get_fs();
                 set_fs(KERNEL_DS);

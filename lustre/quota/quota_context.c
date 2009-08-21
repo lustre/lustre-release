@@ -1496,6 +1496,9 @@ void build_lqs(struct obd_device *obd)
         for (i = 0; i < MAXQUOTAS; i++) {
                 struct dquot_id *dqid, *tmp;
 
+                if (sb_dqopt(qctxt->lqc_sb)->files[i] == NULL)
+                        continue;
+
 #ifndef KERNEL_SUPPORTS_QUOTA_READ
                 rc = fsfilt_qids(obd, sb_dqopt(qctxt->lqc_sb)->files[i], NULL,
                                  i, &id_list);
