@@ -777,7 +777,7 @@ cleanup:
                  * lnb->page automatically returns back into per-thread page
                  * pool (bug 5137)
                  */
-                f_dput(res->dentry);
+                 break;
         }
 
         /* trigger quota pre-acquire */
@@ -805,6 +805,7 @@ cleanup:
                         filter_release_cache(obd, obj, nb, inode);
                 up_read(&inode->i_alloc_sem);
         }
+        f_dput(res->dentry);
 
         RETURN(rc);
 }
