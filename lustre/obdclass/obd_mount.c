@@ -1350,26 +1350,38 @@ out_free:
         RETURN(ERR_PTR(rc));
 }
 
+/* Wait here forever until the mount refcount is 0 before completing umount,
+ * else we risk dereferencing a null pointer.
+ * LNET may take e.g. 165s before killing zombies. 
+*/
 static void server_wait_finished(struct vfsmount *mnt)
 {
-        wait_queue_head_t   waitq;
-        struct l_wait_info  lwi;
-        int                 retries = 330;
+        cfs_waitq_t             waitq;
+        int                     rc, waited = 0;
+        cfs_sigset_t            blocked;
 
-        init_waitqueue_head(&waitq);
+        cfs_waitq_init(&waitq);
 
-        while ((atomic_read(&mnt->mnt_count) > 1) && (retries > 0)) {
-                LCONSOLE_WARN("Mount still busy with %d refs, waiting for "
-                              "%d secs...\n",
-                              atomic_read(&mnt->mnt_count), retries);
-                /* Wait for a bit */
-                retries -= 5;
-                lwi = LWI_TIMEOUT(cfs_time_seconds(5), NULL, NULL);
-                l_wait_event(waitq, 0, &lwi);
-        }
-        if (atomic_read(&mnt->mnt_count) > 1) {
-                CERROR("Mount %p is still busy (%d refs), giving up.\n",
-                       mnt, atomic_read(&mnt->mnt_count));
+        while (cfs_atomic_read(&mnt->mnt_count) > 1) {
+                if (waited && (waited % 30 == 0))
+                        LCONSOLE_WARN("Mount still busy with %d refs after "
+                                       "%d secs.\n",
+                                       atomic_read(&mnt->mnt_count),
+                                       waited);
+                /* Cannot use l_event_wait() for an interruptible sleep. */
+                waited += 3;
+                blocked = l_w_e_set_sigs(sigmask(SIGKILL)); 
+                rc = cfs_waitq_wait_event_interruptible_timeout(
+                        waitq, 
+                        (cfs_atomic_read(&mnt->mnt_count) == 1),
+                        cfs_time_seconds(3));
+                cfs_block_sigs(blocked);
+                if (rc < 0) {
+                        LCONSOLE_EMERG("Danger: interrupted umount %p with "
+                                       "%d refs!\n",
+                                       mnt, atomic_read(&mnt->mnt_count)); 
+                        break;
+                }
         }
 }
 
