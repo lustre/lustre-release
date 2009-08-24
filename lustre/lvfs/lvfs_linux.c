@@ -432,6 +432,7 @@ int lustre_fsync(struct file *file)
 }
 EXPORT_SYMBOL(lustre_fsync);
 
+/* Note:  dput(dchild) will be called if there is an error */
 struct l_file *l_dentry_open(struct lvfs_run_ctxt *ctxt, struct l_dentry *de,
                              int flags)
 {

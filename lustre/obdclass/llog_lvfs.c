@@ -589,7 +589,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         struct obd_device *obd;
         struct l_dentry *dchild = NULL;
         struct obdo *oa = NULL;
-        int rc = 0, cleanup_phase = 1;
+        int rc = 0;
         int open_flags = O_RDWR | O_CREAT | O_LARGEFILE;
         ENTRY;
 
@@ -610,24 +610,25 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                         rc = PTR_ERR(dchild);
                         CERROR("error looking up logfile "LPX64":0x%x: rc %d\n",
                                logid->lgl_oid, logid->lgl_ogen, rc);
-                        GOTO(cleanup, rc);
+                        GOTO(out, rc);
                 }
 
-                cleanup_phase = 2;
                 if (dchild->d_inode == NULL) {
+                        l_dput(dchild);
                         rc = -ENOENT;
                         CERROR("nonexistent log file "LPX64":"LPX64": rc %d\n",
                                logid->lgl_oid, logid->lgl_ogr, rc);
-                        GOTO(cleanup, rc);
+                        GOTO(out, rc);
                 }
 
+                /* l_dentry_open will call dput(dchild) if there is an error */
                 handle->lgh_file = l_dentry_open(&obd->obd_lvfs_ctxt, dchild,
                                                     O_RDWR | O_LARGEFILE);
                 if (IS_ERR(handle->lgh_file)) {
                         rc = PTR_ERR(handle->lgh_file);
                         CERROR("error opening logfile "LPX64"0x%x: rc %d\n",
                                logid->lgl_oid, logid->lgl_ogen, rc);
-                        GOTO(cleanup, rc);
+                        GOTO(out, rc);
                 }
 
                 /* assign the value of lgh_id for handle directly */
@@ -645,7 +646,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                                                           0644);
                 }
                 if (IS_ERR(handle->lgh_file))
-                        GOTO(cleanup, rc = PTR_ERR(handle->lgh_file));
+                        GOTO(out, rc = PTR_ERR(handle->lgh_file));
 
                 handle->lgh_id.lgl_ogr = 1;
                 handle->lgh_id.lgl_oid =
@@ -655,25 +656,25 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         } else {
                 OBDO_ALLOC(oa);
                 if (oa == NULL)
-                        GOTO(cleanup, rc = -ENOMEM);
+                        GOTO(out, rc = -ENOMEM);
 
                 oa->o_gr = FILTER_GROUP_LLOG;
                 oa->o_valid = OBD_MD_FLGENER | OBD_MD_FLGROUP;
 
                 rc = obd_create(ctxt->loc_exp, oa, NULL, NULL);
                 if (rc)
-                        GOTO(cleanup, rc);
+                        GOTO(out, rc);
 
                 dchild = obd_lvfs_fid2dentry(ctxt->loc_exp, oa->o_id,
                                              oa->o_generation, oa->o_gr);
 
                 if (IS_ERR(dchild))
-                        GOTO(cleanup, rc = PTR_ERR(dchild));
-                cleanup_phase = 2;
+                        GOTO(out, rc = PTR_ERR(dchild));
+                
                 handle->lgh_file = l_dentry_open(&obd->obd_lvfs_ctxt, dchild,
                                                  open_flags);
                 if (IS_ERR(handle->lgh_file))
-                        GOTO(cleanup, rc = PTR_ERR(handle->lgh_file));
+                        GOTO(out, rc = PTR_ERR(handle->lgh_file));
 
                 handle->lgh_id.lgl_ogr = oa->o_gr;
                 handle->lgh_id.lgl_oid = oa->o_id;
@@ -681,18 +682,13 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         }
 
         handle->lgh_ctxt = ctxt;
- finish:
+ out:
+        if (rc)
+                llog_free_handle(handle);
+
         if (oa)
                 OBDO_FREE(oa);
         RETURN(rc);
-cleanup:
-        switch (cleanup_phase) {
-        case 2:
-                l_dput(dchild);
-        case 1:
-                llog_free_handle(handle);
-        }
-        goto finish;
 }
 
 static int llog_lvfs_close(struct llog_handle *handle)
