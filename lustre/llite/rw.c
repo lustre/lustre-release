@@ -1245,6 +1245,7 @@ static void __ll_put_llap(struct page *page)
  * here. */
 void ll_removepage(struct page *page)
 {
+        struct ll_async_page *llap = llap_cast_private(page);
         ENTRY;
 
         LASSERT(!in_interrupt());
@@ -1256,6 +1257,7 @@ void ll_removepage(struct page *page)
                 return;
         }
 
+        ll_ra_accounting(llap, page->mapping);
         LL_CDEBUG_PAGE(D_PAGE, page, "being evicted\n");
         __ll_put_llap(page);
 
@@ -1516,30 +1518,55 @@ static inline int stride_io_mode(struct ll_readahead_state *ras)
 }
 
 /* The function calculates how much pages will be read in
- * [off, off + length], which will be read by stride I/O mode,
+ * [off, off + length], in such stride IO area,
  * stride_offset = st_off, stride_lengh = st_len,
  * stride_pages = st_pgs
+ *
+ *   |------------------|*****|------------------|*****|------------|*****|....
+ * st_off
+ *   |--- st_pgs     ---|
+ *   |-----     st_len   -----|
+ *
+ *              How many pages it should read in such pattern
+ *              |-------------------------------------------------------------|
+ *              off
+ *              |<------                  length                      ------->|
+ *
+ *          =   |<----->|  +  |-------------------------------------| +   |---|
+ *             start_left                 st_pgs * i                    end_left
  */
 static unsigned long
 stride_pg_count(pgoff_t st_off, unsigned long st_len, unsigned long st_pgs,
-                unsigned long off, unsigned length)
+                unsigned long off, unsigned long length)
 {
-        unsigned long cont_len = st_off > off ?  st_off - off : 0;
-        __u64 stride_len = length + off > st_off ?
-                           length + off + 1 - st_off : 0;
-        unsigned long left, pg_count;
+        unsigned long start = off > st_off ? off - st_off : 0;
+        unsigned long end = off + length > st_off ? off + length - st_off : 0;
+        unsigned long start_left = 0;
+        unsigned long end_left = 0;
+        unsigned long pg_count;
 
-        if (st_len == 0 || length == 0)
+        if (st_len == 0 || length == 0 || end == 0)
                 return length;
 
-        left = do_div(stride_len, st_len);
-        left = min(left, st_pgs);
+        start_left = do_div(start, st_len);
+        if (start_left < st_pgs)
+                start_left = st_pgs - start_left;
+        else
+                start_left = 0;
 
-        pg_count = left + stride_len * st_pgs + cont_len;
+        end_left = do_div(end, st_len);
+        if (end_left > st_pgs)
+                end_left = st_pgs;
 
-        LASSERT(pg_count >= left);
+        CDEBUG(D_READA, "start %lu, end %lu start_left %lu end_left %lu \n",
+               start, end, start_left, end_left);
 
-        CDEBUG(D_READA, "st_off %lu, st_len %lu st_pgs %lu off %lu length %u"
+        if (start == end)
+                pg_count = end_left - (st_pgs - start_left);
+        else
+                pg_count = start_left + st_pgs * (end - start - 1) + end_left;
+
+        CDEBUG(D_READA, "st_off %lu, st_len %lu st_pgs %lu off %lu length %lu"
                "pgcount %lu\n", st_off, st_len, st_pgs, off, length, pg_count);
 
         return pg_count;
@@ -1615,6 +1642,63 @@ static int ll_read_ahead_pages(struct obd_export *exp,
         *ra_end = page_idx;
         return count;
 }
+
+
+/**
+ * Current readahead process 
+ *          read_syscall
+ *              |
+ *       ll_file_readv (init ll_readahead_state for the open file)
+ *              |
+ *              |
+ *   |---> ll_readpage (read page)
+ *   |          |
+ *   |          |
+ *   |     ras_update  (update read-ahead window according to read pattern) 
+ *   |          | 
+ *   |          |
+ *   |--- ll_readahead  (read_ahead pages)
+ *
+ *
+ *  During this process, ras_update controls how many ahead pages it should
+ *  read by adjusting read-ahead window(RA window).The window is represented 
+ *  by following three varibles (all these values are counted by pages)
+ *        
+ *      1. ras_window_start: start offset of the read-ahead window. It is 
+ *                           initialized as the read offset, then as pages
+ *                           are being read, it will be set as the last 
+ *                           page(Note: it is 1M aligned, so it actually
+ *                           is last_page_index & ~index & (~(256 - 1)); 
+ *      
+ *      2. ras_window_len: length of the read-ahead window. The read-ahead window
+ *                         length is decided by two factors
+ *                         
+ *                         a. It is at least >= current read syscall length.
+ *                         b. If continguous read is detected, (Note: it is syscall
+ *                            continguous, intead of page-read contingous) the
+ *                            read-ahead window len will be increased by 1M each
+ *                            time.
+ *                         c. If stride read pattern is detected, the read-ahead
+ *                            window will also be increased 1M but by stride pattern.
+ *                            stride pattern is defined by ras_stride_length, 
+ *                            ras_stride_pages and ras_stride_gap. (see 
+ *                            ll_readahead_states comments)
+ *
+ *      3. ras_next_readahead: current offset in the read-ahead window, i.e. where
+ *                             ll_readahead will start in next next-ahead.
+ * 
+ *   
+ *  Cache miss: If memory load is very high, it begins to evicted the page from cache,
+ *  also includes read-ahead pages, once we found read-ahead page is being evicted before
+ *  it is "really" accessed, it will reset the read-ahead window to the current read extent 
+ *  i.e. from current page to the end of this read.
+ *
+ *  In flight read-ahead amount is controlled by 2 varible (read-ahead rate)
+ *       ra_max_pages: how much max in-flight read-ahead pages on the client.
+ *       ra_max_pages_per_file: how much max in-flight read-ahead pages per file.
+ **/
+
+
 
 static int ll_readahead(struct ll_readahead_state *ras,
                         struct obd_export *exp, struct address_space *mapping,
@@ -1768,7 +1852,8 @@ static int index_in_stride_window(unsigned long index,
 {
         unsigned long stride_gap = index - ras->ras_last_readpage - 1;
 
-        if (ras->ras_stride_length == 0 || ras->ras_stride_pages == 0)
+        if (ras->ras_stride_length == 0 || ras->ras_stride_pages == 0 ||
+            ras->ras_stride_pages == ras->ras_stride_length)
                 return 0;
 
         /* If it is contiguous read */
@@ -1790,7 +1875,20 @@ static void ras_update_stride_detector(struct ll_readahead_state *ras,
                 ras->ras_stride_pages = ras->ras_consecutive_pages;
                 ras->ras_stride_length = stride_gap +ras->ras_consecutive_pages;
         }
+        LASSERT(ras->ras_request_index == 0);
+        LASSERT(ras->ras_consecutive_stride_requests == 0);
+
+        if (index <= ras->ras_last_readpage) {
+                /*Reset stride window for forward read*/
+                ras_stride_reset(ras);
+                return;
+        }
+
+        ras->ras_stride_pages = ras->ras_consecutive_pages;
+        ras->ras_stride_length = stride_gap +ras->ras_consecutive_pages;
+
         RAS_CDEBUG(ras);
+        return;
 }
 
 static unsigned long
@@ -1836,22 +1934,6 @@ static void ras_stride_increase_window(struct ll_readahead_state *ras,
 
         if (stride_page_count(ras, window_len) <= ra->ra_max_pages_per_file)
                 ras->ras_window_len = window_len;
-
-        RAS_CDEBUG(ras);
-}
-
-/* Set stride I/O read-ahead window start offset */
-static void ras_set_stride_offset(struct ll_readahead_state *ras)
-{
-        unsigned long window_len = ras->ras_next_readahead -
-                                   ras->ras_window_start;
-        unsigned long left;
-
-        LASSERT(ras->ras_stride_length != 0);
-
-        left = window_len % ras->ras_stride_length;
-
-        ras->ras_stride_offset = ras->ras_next_readahead - left;
 
         RAS_CDEBUG(ras);
 }
@@ -1938,9 +2020,15 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
         if (zero) {
                 /* check whether it is in stride I/O mode*/
                 if (!index_in_stride_window(index, ras, inode)) {
+                        if (ras->ras_consecutive_stride_requests == 0 &&
+                            ras->ras_request_index == 0) {
+                                ras_update_stride_detector(ras, index);
+                                ras->ras_consecutive_stride_requests ++;
+                        } else {
+                                ras_stride_reset(ras);
+                        }
                         ras_reset(ras, index);
                         ras->ras_consecutive_pages++;
-                        ras_stride_reset(ras);
                         GOTO(out_unlock, 0);
                 } else {
                         ras->ras_consecutive_pages = 0;
@@ -1958,6 +2046,7 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
                                  *redetecting read-ahead mode */
                                 if (index != ras->ras_last_readpage + 1)
                                        ras->ras_consecutive_pages = 0;
+                                ras_reset(ras, index);
                                 RAS_CDEBUG(ras);
                         } else {
                                 /* Reset both stride window and normal RA
@@ -1980,7 +2069,6 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
                 }
         }
         ras->ras_consecutive_pages++;
-        ras_update_stride_detector(ras, index);
         ras->ras_last_readpage = index;
         ras_set_start(ras, index);
         ras->ras_next_readahead = max(ras->ras_window_start,
@@ -1995,14 +2083,21 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
         }
 
         /* Initially reset the stride window offset to next_readahead*/
-        if (ras->ras_consecutive_stride_requests == 2 && stride_detect)
-                ras_set_stride_offset(ras);
+        if (ras->ras_consecutive_stride_requests == 2 && stride_detect) {
+                /**
+                 * Once stride IO mode is detected, next_readahead should be
+                 * reset to make sure next_readahead > stride offset
+                 */
+                ras->ras_next_readahead = max(index, ras->ras_next_readahead);
+                ras->ras_stride_offset = index;
+                ras->ras_window_len = INIT_RAS_WINDOW_PAGES;
+        }
 
         /* The initial ras_window_len is set to the request size.  To avoid
          * uselessly reading and discarding pages for random IO the window is
          * only increased once per consecutive request received. */
-        if ((ras->ras_consecutive_requests > 1 &&
-            !ras->ras_request_index) || stride_detect)
+        if ((ras->ras_consecutive_requests > 1 || stride_detect) &&
+            !ras->ras_request_index)
                 ras_increase_window(ras, ra, inode);
         EXIT;
 out_unlock:
