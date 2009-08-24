@@ -1357,7 +1357,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                lustre_msg_get_opc(request->rq_reqmsg));
 
 put_rpc_export:
-        if (export != NULL)
+        if (export != NULL && !request->rq_copy_queued)
                 class_export_rpc_put(export);
 
 put_conn:

@@ -1192,6 +1192,9 @@ static void abort_recovery_queue(struct obd_device *obd)
                 else
                         DEBUG_REQ(D_ERROR, req,
                                   "packing failed for abort-reply; skipping");
+
+                LASSERT(req->rq_copy);
+                class_export_rpc_put(req->rq_export);
                 target_release_saved_req(req);
         }
 }
@@ -1238,6 +1241,9 @@ void target_cleanup_recovery(struct obd_device *obd)
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 target_exp_dequeue_req_replay(req);
                 list_del_init(&req->rq_list);
+                
+                LASSERT(req->rq_copy);
+                class_export_rpc_put(req->rq_export);
                 target_release_saved_req(req);
         }
         EXIT;
@@ -1496,6 +1502,10 @@ static void process_recovery_queue(struct obd_device *obd)
                 obd->obd_next_recovery_transno++;
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 target_exp_dequeue_req_replay(req);
+
+                LASSERT(req->rq_copy);
+                class_export_rpc_put(req->rq_export);
+
                 class_export_put(req->rq_export);
                 ptlrpc_req_drop_rs(req);
                 OBD_FREE(req->rq_reqmsg, req->rq_reqlen);
@@ -1519,7 +1529,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
         struct list_head *tmp;
         int inserted = 0;
         __u64 transno = lustre_msg_get_transno(req->rq_reqmsg);
-        struct ptlrpc_request *saved_req;
+        struct ptlrpc_request *saved_req, *orig_req;
         struct lustre_msg *reqmsg;
         int rc = 0;
 
@@ -1569,6 +1579,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
 
         memcpy(saved_req, req, sizeof *req);
         memcpy(reqmsg, req->rq_reqmsg, req->rq_reqlen);
+        orig_req = req;
         req = saved_req;
         req->rq_reqmsg = reqmsg;
         class_export_get(req->rq_export);
@@ -1607,6 +1618,8 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
         }
 
         obd->obd_requests_queued_for_recovery++;
+        orig_req->rq_copy_queued = 1;
+        req->rq_copy = 1;
 
         if (obd->obd_processing_task != 0) {
                 /* Someone else is processing this queue, we'll leave it to
