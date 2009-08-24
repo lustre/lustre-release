@@ -5816,19 +5816,13 @@ test_150() {
 }
 run_test 150 "truncate/append tests"
 
-function roc_access() {
-	local list=$(comma_list $(osts_nodes))
-	ACCNUM=`do_nodes $list $LCTL get_param -n obdfilter.*.stats | \
-		grep 'cache_access' | awk '{print $2}' | \
-		awk '{sum=sum+$3} END{print sum}'`
-	echo $ACCNUM
-}
-
 function roc_hit() {
 	local list=$(comma_list $(osts_nodes))
-	ACCNUM=`do_nodes $list $LCTL get_param -n obdfilter.*.stats | \
-		grep 'cache_hit' | awk '{print $2}' | \
-		awk '{sum=sum+$1} END{print sum}'`
+	local log=$TMP/${TESTSUITE}-$TESTNAME.param
+	do_nodes $list "$LCTL get_param -n obdfilter.*.stats" >$log
+
+	local ACCNUM=`awk '/^cache_hit/ {sum=sum+$2} END{print sum}' $log`
+	rm -f $log 
 	echo $ACCNUM
 }
 
