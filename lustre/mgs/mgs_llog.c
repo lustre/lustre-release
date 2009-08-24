@@ -123,19 +123,27 @@ static inline void name_destroy(char **name)
         *name = NULL;
 }
 
+struct mgs_fsdb_handler_data
+{
+        struct fs_db   *fsdb;
+        __u32           ver;
+};
+
 /* from the (client) config log, figure out:
         1. which ost's/mdt's are configured (by index)
         2. what the last config step is
         3. COMPAT_146 lov name
         4. COMPAT_146 mdt lov name
         5. COMPAT_146 mdc name
+        6. COMPAT_18 osc name
 */
 /* It might be better to have a separate db file, instead of parsing the info
    out of the client log.  This is slow and potentially error-prone. */
 static int mgs_fsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
                             void *data)
 {
-        struct fs_db *fsdb = (struct fs_db *)data;
+        struct mgs_fsdb_handler_data *d = (struct mgs_fsdb_handler_data *) data;
+        struct fs_db *fsdb = d->fsdb;
         int cfg_len = rec->lrh_len;
         char *cfg_buf = (char*) (rec + 1);
         struct lustre_cfg *lcfg;
@@ -227,10 +235,26 @@ static int mgs_fsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
         }
         /* end COMPAT_146 */
 
-        /* Keep track of the latest marker step */
+        /*
+         * compat to 1.8, check osc name used by MDT0 to OSTs, bz18548.
+         */
+        if (fsdb->fsdb_fl_oscname_18 == 0 &&
+            lcfg->lcfg_command == LCFG_ATTACH &&
+            strcmp(lustre_cfg_string(lcfg, 1), LUSTRE_OSC_NAME) == 0) {
+                if (OBD_OCD_VERSION_MAJOR(d->ver) == 1 &&
+                    OBD_OCD_VERSION_MINOR(d->ver) <= 8) {
+                        CWARN("MDT using 1.8 OSC name scheme\n");
+                        fsdb->fsdb_fl_oscname_18 = 1;
+                }
+        }
+
         if (lcfg->lcfg_command == LCFG_MARKER) {
                 struct cfg_marker *marker;
                 marker = lustre_cfg_buf(lcfg, 1);
+
+                d->ver = marker->cm_vers;
+
+                /* Keep track of the latest marker step */
                 fsdb->fsdb_gen = max(fsdb->fsdb_gen, marker->cm_step);
         }
 
@@ -244,6 +268,7 @@ static int mgs_get_fsdb_from_llog(struct obd_device *obd, struct fs_db *fsdb)
         struct llog_handle *loghandle;
         struct lvfs_run_ctxt saved;
         struct llog_ctxt *ctxt;
+        struct mgs_fsdb_handler_data d = { fsdb, 0 };
         int rc, rc2;
         ENTRY;
 
@@ -263,7 +288,7 @@ static int mgs_get_fsdb_from_llog(struct obd_device *obd, struct fs_db *fsdb)
         if (llog_get_size(loghandle) <= 1)
                 fsdb->fsdb_flags |= FSDB_LOG_EMPTY;
 
-        rc = llog_process(loghandle, mgs_fsdb_handler, (void *)fsdb, NULL);
+        rc = llog_process(loghandle, mgs_fsdb_handler, (void *) &d, NULL);
         CDEBUG(D_INFO, "get_db = %d\n", rc);
 out_close:
         rc2 = llog_close(loghandle);
@@ -2434,10 +2459,14 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
                         for (i = 0; i < INDEX_MAP_SIZE * 8; i++){
                                 if (!test_bit(i, fsdb->fsdb_mdt_index_map))
                                         continue;
+
                                 name_destroy(&cname);
-                                sprintf(mdt_index, "-osc-MDT%04x", i);
-                                name_create(&cname, mti->mti_svname,
-                                            mdt_index);
+                                if (i == 0 && fsdb->fsdb_fl_oscname_18)
+                                        sprintf(mdt_index, "-osc");
+                                else
+                                        sprintf(mdt_index, "-osc-MDT%04x", i);
+                                name_create(&cname, mti->mti_svname, mdt_index);
+
                                 name_destroy(&logname);
                                 sprintf(mdt_index, "-MDT%04x", i);
                                 name_create(&logname, mti->mti_fsname,
