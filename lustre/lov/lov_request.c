@@ -60,6 +60,7 @@ static void lov_init_set(struct lov_request_set *set)
         CFS_INIT_LIST_HEAD(&set->set_list);
         atomic_set(&set->set_refcount, 1);
         cfs_waitq_init(&set->set_waitq);
+        spin_lock_init(&set->set_lock);
 }
 
 static void lov_finish_set(struct lov_request_set *set)
@@ -686,9 +687,6 @@ int lov_update_create_set(struct lov_request_set *set,
         struct lov_obd *lov = &set->set_exp->exp_obd->u.lov;
         ENTRY;
 
-        req->rq_stripe = set->set_success;
-        loi = lsm->lsm_oinfo[req->rq_stripe];
-
         if (rc && lov->lov_tgts[req->rq_idx] &&
             lov->lov_tgts[req->rq_idx]->ltd_active) {
                 CERROR("error creating fid "LPX64" sub-object"
@@ -700,20 +698,30 @@ int lov_update_create_set(struct lov_request_set *set,
                         rc = -EIO;
                 }
         }
-        lov_update_set(set, req, rc);
-        if (rc)
+
+        spin_lock(&set->set_lock);
+        req->rq_stripe = set->set_success;
+        loi = lsm->lsm_oinfo[req->rq_stripe];
+        if (rc) {
+                lov_update_set(set, req, rc);
+                spin_unlock(&set->set_lock);
                 RETURN(rc);
+        }
 
         loi->loi_id = req->rq_oi.oi_oa->o_id;
         loi->loi_ost_idx = req->rq_idx;
-        CDEBUG(D_INODE, "objid "LPX64" has subobj "LPX64"/"LPU64" at idx %d\n",
-               lsm->lsm_object_id, loi->loi_id, loi->loi_id, req->rq_idx);
         loi_init(loi);
 
         if (oti && set->set_cookies)
                 ++oti->oti_logcookies;
         if (req->rq_oi.oi_oa->o_valid & OBD_MD_FLCOOKIE)
                 set->set_cookie_sent++;
+
+        lov_update_set(set, req, rc);
+        spin_unlock(&set->set_lock);
+
+        CDEBUG(D_INODE, "objid "LPX64" has subobj "LPX64"/"LPU64" at idx %d\n",
+               lsm->lsm_object_id, loi->loi_id, loi->loi_id, req->rq_idx);
 
         RETURN(0);
 }
