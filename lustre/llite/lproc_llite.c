@@ -1184,8 +1184,8 @@ static int ll_rw_offset_stats_seq_show(struct seq_file *seq, void *v)
                                    offset[i].rw_pid,
                                    offset[i].rw_range_start,
                                    offset[i].rw_range_end,
-                                   offset[i].rw_smallest_extent,
-                                   offset[i].rw_largest_extent,
+                                   (unsigned long)offset[i].rw_smallest_extent,
+                                   (unsigned long)offset[i].rw_largest_extent,
                                    offset[i].rw_offset);
         }
         /* Then print the current offsets for each process */
@@ -1196,8 +1196,8 @@ static int ll_rw_offset_stats_seq_show(struct seq_file *seq, void *v)
                                    process[i].rw_pid,
                                    process[i].rw_range_start,
                                    process[i].rw_last_file_pos,
-                                   process[i].rw_smallest_extent,
-                                   process[i].rw_largest_extent,
+                                   (unsigned long)process[i].rw_smallest_extent,
+                                   (unsigned long)process[i].rw_largest_extent,
                                    process[i].rw_offset);
         }
         spin_unlock(&sbi->ll_process_lock);
