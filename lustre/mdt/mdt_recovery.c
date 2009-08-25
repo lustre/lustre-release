@@ -335,8 +335,9 @@ static int mdt_clients_data_init(const struct lu_env *env,
                         if (PTR_ERR(exp) == -EALREADY) {
                                 /* export already exists, zero out this one */
                                 lcd->lcd_uuid[0] = '\0';
-                        } else
+                        } else {
                                 GOTO(err_client, rc = PTR_ERR(exp));
+                        }
                 } else {
                         struct mdt_thread_info *mti;
                         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
@@ -619,8 +620,8 @@ int mdt_client_new(const struct lu_env *env, struct mdt_device *mdt)
         spin_unlock(&mti->mti_exp->exp_lock);
 
         rc = mdt_last_rcvd_write(env, mdt, lcd, &off, th);
-        CDEBUG(D_INFO, "wrote client lcd at idx %u off %llu (len "LPSZ")\n",
-               cl_idx, med->med_lr_off, sizeof(*lcd));
+        CDEBUG(D_INFO, "wrote client lcd at idx %u off %llu (len %u)\n",
+               cl_idx, med->med_lr_off, (int)sizeof(*lcd));
         mdt_trans_stop(env, mdt, th);
 
         RETURN(rc);

@@ -1153,15 +1153,12 @@ void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid,
         spin_unlock(&sbi->ll_process_lock);
 }
 
-char lpszt[] = LPSZ;
-
 static int ll_rw_offset_stats_seq_show(struct seq_file *seq, void *v)
 {
         struct timeval now;
         struct ll_sb_info *sbi = seq->private;
         struct ll_rw_process_info *offset = sbi->ll_rw_offset_info;
         struct ll_rw_process_info *process = sbi->ll_rw_process_info;
-        char format[50];
         int i;
 
         do_gettimeofday(&now);
@@ -1179,13 +1176,10 @@ static int ll_rw_offset_stats_seq_show(struct seq_file *seq, void *v)
         seq_printf(seq, "%3s %10s %14s %14s %17s %17s %14s\n",
                    "R/W", "PID", "RANGE START", "RANGE END",
                    "SMALLEST EXTENT", "LARGEST EXTENT", "OFFSET");
-        sprintf(format, "%s%s%s%s%s\n",
-                "%3c %10d %14Lu %14Lu %17", lpszt+1, " %17", lpszt+1, " %14Ld");
         /* We stored the discontiguous offsets here; print them first */
         for(i = 0; i < LL_OFFSET_HIST_MAX; i++) {
                 if (offset[i].rw_pid != 0)
-                        /* Is there a way to snip the '%' off of LPSZ? */
-                        seq_printf(seq, format,
+                        seq_printf(seq,"%3c %10d %14Lu %14Lu %17lu %17lu %14Lu",
                                    offset[i].rw_op ? 'W' : 'R',
                                    offset[i].rw_pid,
                                    offset[i].rw_range_start,
@@ -1197,7 +1191,7 @@ static int ll_rw_offset_stats_seq_show(struct seq_file *seq, void *v)
         /* Then print the current offsets for each process */
         for(i = 0; i < LL_PROCESS_HIST_MAX; i++) {
                 if (process[i].rw_pid != 0)
-                        seq_printf(seq, format,
+                        seq_printf(seq,"%3c %10d %14Lu %14Lu %17lu %17lu %14Lu",
                                    process[i].rw_op ? 'W' : 'R',
                                    process[i].rw_pid,
                                    process[i].rw_range_start,

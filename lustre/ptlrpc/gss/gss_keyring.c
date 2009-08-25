@@ -1210,7 +1210,7 @@ int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
         ENTRY;
 
         if (data != NULL || datalen != 0) {
-                CERROR("invalid: data %p, len "LPSZ"\n", data, datalen);
+                CERROR("invalid: data %p, len %lu\n", data, (long)datalen);
                 RETURN(-EINVAL);
         }
 
@@ -1260,7 +1260,7 @@ int gss_kt_update(struct key *key, const void *data, size_t datalen)
         ENTRY;
 
         if (data == NULL || datalen == 0) {
-                CWARN("invalid: data %p, len "LPSZ"\n", data, datalen);
+                CWARN("invalid: data %p, len %lu\n", data, (long)datalen);
                 RETURN(-EINVAL);
         }
 

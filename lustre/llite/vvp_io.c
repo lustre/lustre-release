@@ -424,14 +424,14 @@ static int vvp_io_read_start(const struct lu_env *env,
 
         int     result;
         loff_t  pos = io->u.ci_rd.rd.crw_pos;
-        size_t  cnt = io->u.ci_rd.rd.crw_count;
-        size_t  tot = cio->cui_tot_count;
+        long    cnt = io->u.ci_rd.rd.crw_count;
+        long    tot = cio->cui_tot_count;
         int     exceed = 0;
 
         CLOBINVRNT(env, obj, ccc_object_invariant(obj));
         LASSERT(vio->cui_oneshot == 0);
 
-        CDEBUG(D_VFSTRACE, "read: -> [%lli, %lli)\n", pos, pos + (long long)cnt);
+        CDEBUG(D_VFSTRACE, "read: -> [%lli, %lli)\n", pos, pos + cnt);
 
         result = ccc_prep_size(env, obj, io, pos, tot, 1, &exceed);
         if (result != 0)
@@ -440,7 +440,7 @@ static int vvp_io_read_start(const struct lu_env *env,
                 goto out;
 
         LU_OBJECT_HEADER(D_INODE, env, &obj->co_lu,
-                        "Read ino %lu, "LPSZ" bytes, offset %lld, size %llu\n",
+                        "Read ino %lu, %lu bytes, offset %lld, size %llu\n",
                         inode->i_ino, cnt, pos, i_size_read(inode));
 
         /* turn off the kernel's read-ahead */

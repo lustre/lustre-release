@@ -228,10 +228,10 @@ ssize_t ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io,
         int i;
         ssize_t rc = 0;
         loff_t file_offset  = pv->ldp_start_offset;
-        size_t size         = pv->ldp_size;
+        long size           = pv->ldp_size;
         int page_count      = pv->ldp_nr;
         struct page **pages = pv->ldp_pages;
-        size_t page_size    = cl_page_size(obj);
+        long page_size      = cl_page_size(obj);
         ENTRY;
 
         queue = &io->ci_queue;
@@ -267,7 +267,7 @@ ssize_t ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io,
 
                         src = kmap_atomic(src_page, KM_USER0);
                         dst = kmap_atomic(dst_page, KM_USER1);
-                        memcpy(dst, (const void *)src, min(page_size, size));
+                        memcpy(dst, src, min(page_size, size));
                         kunmap_atomic(dst, KM_USER1);
                         kunmap_atomic(src, KM_USER0);
 
@@ -351,12 +351,12 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         struct file *file = iocb->ki_filp;
         struct inode *inode = file->f_mapping->host;
         struct ccc_object *obj = cl_inode2ccc(inode);
-        ssize_t count = iov_length(iov, nr_segs);
-        ssize_t tot_bytes = 0, result = 0;
+        long count = iov_length(iov, nr_segs);
+        long tot_bytes = 0, result = 0;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         unsigned long seg = 0;
-        size_t size = MAX_DIO_SIZE;
+        long size = MAX_DIO_SIZE;
         int refcheck;
         ENTRY;
 
@@ -367,8 +367,8 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         if ((file_offset & ~CFS_PAGE_MASK) || (count & ~CFS_PAGE_MASK))
                 RETURN(-EINVAL);
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), size="LPSZ" (max %lu), "
-               "offset=%lld=%llx, pages "LPSZ" (max %lu)\n",
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), size=%lu (max %lu), "
+               "offset=%lld=%llx, pages %lu (max %lu)\n",
                inode->i_ino, inode->i_generation, inode, count, MAX_DIO_SIZE,
                file_offset, file_offset, count >> CFS_PAGE_SHIFT,
                MAX_DIO_SIZE >> CFS_PAGE_SHIFT);
@@ -393,7 +393,7 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
 
         LASSERT(obj->cob_transient_pages == 0);
         for (seg = 0; seg < nr_segs; seg++) {
-                size_t iov_left = iov[seg].iov_len;
+                long iov_left = iov[seg].iov_len;
                 unsigned long user_addr = (unsigned long)iov[seg].iov_base;
 
                 if (rw == READ) {
@@ -406,11 +406,10 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                 while (iov_left > 0) {
                         struct page **pages;
                         int page_count, max_pages = 0;
-                        size_t bytes;
+                        long bytes;
 
                         bytes = min(size,iov_left);
-                        page_count = ll_get_user_pages(rw, user_addr,
-                                                       bytes,
+                        page_count = ll_get_user_pages(rw, user_addr, bytes,
                                                        &pages, &max_pages);
                         if (likely(page_count > 0)) {
                                 if (unlikely(page_count <  max_pages))
@@ -438,8 +437,8 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                                         size = ((((size / 2) - 1) |
                                                  ~CFS_PAGE_MASK) + 1) &
                                                 CFS_PAGE_MASK;
-                                        CDEBUG(D_VFSTRACE, "DIO size now %u\n",
-                                               (int)size);
+                                        CDEBUG(D_VFSTRACE,"DIO size now %lu\n",
+                                               size);
                                         continue;
                                 }
 

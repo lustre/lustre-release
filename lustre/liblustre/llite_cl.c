@@ -615,9 +615,9 @@ static int slp_io_start(const struct lu_env *env, const struct cl_io_slice *ios)
         struct cl_io      *io    = ios->cis_io;
         struct cl_object  *obj   = io->ci_obj;
         struct inode      *inode = ccc_object_inode(obj);
-        int     err, ret;
-        loff_t  pos;
-        size_t  cnt;
+        int    err, ret;
+        loff_t pos;
+        long   cnt;
         struct llu_io_group *iogroup;
         struct lustre_rw_params p = {0};
         int iovidx;
@@ -652,8 +652,8 @@ static int slp_io_start(const struct lu_env *env, const struct cl_io_slice *ios)
                 GOTO(out, err);
 
         CDEBUG(D_INODE,
-               "%s ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
-               write?"Write":"Read", (unsigned long)st->st_ino,
+               "%s ino %lu, %lu bytes, offset %lld, i_size %llu\n",
+               write ? "Write" : "Read", (unsigned long)st->st_ino,
                cnt, (__u64)pos, (__u64)st->st_size);
 
         if (write && io->u.ci_wr.wr_append)
@@ -662,7 +662,7 @@ static int slp_io_start(const struct lu_env *env, const struct cl_io_slice *ios)
 
         for (iovidx = 0; iovidx < cio->cui_nrsegs; iovidx++) {
                 char *buf = (char *) cio->cui_iov[iovidx].iov_base;
-                size_t count = cio->cui_iov[iovidx].iov_len;
+                long count = cio->cui_iov[iovidx].iov_len;
 
                 if (!count)
                         continue;
