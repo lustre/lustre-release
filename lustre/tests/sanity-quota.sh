@@ -19,7 +19,7 @@ export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 ONLY=${ONLY:-"$*"}
 # test_11 has been used to protect a kernel bug(bz10912), now it isn't
 # useful any more. Then add it to ALWAYS_EXCEPT. b=19835
-ALWAYS_EXCEPT="10 11 $SANITY_QUOTA_EXCEPT"
+ALWAYS_EXCEPT="10 $SANITY_QUOTA_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 case `uname -r` in
@@ -1028,76 +1028,6 @@ test_10() {
 	return $RC
 }
 #run_test_with_stat 10 "run for fixing bug10707(32bit) ==========="
-
-test_11() {
-       wait_delete_completed
-
-       #prepare the test
-       block_limit=`(echo 0; df -t lustre -P | awk '{print $(NF - 4)}') | tail -n 1`
-       echo $block_limit
-       orig_dbr=`sysctl -n vm.dirty_background_ratio`
-       orig_dec=`sysctl -n vm.dirty_expire_centisecs`
-       orig_dr=`sysctl -n vm.dirty_ratio`
-       orig_dwc=`sysctl -n vm.dirty_writeback_centisecs`
-       sysctl -w vm.dirty_background_ratio=1
-       sysctl -w vm.dirty_expire_centisecs=30
-       sysctl -w vm.dirty_ratio=1
-       sysctl -w vm.dirty_writeback_centisecs=50
-       TESTDIR="$DIR/$tdir"
-       local RV=0
-
-       #do the test
-       local SECS=0
-       local REPS=3
-       [ "$SLOW" = no ] && REPS=1
-       local sleep=20
-       local i=1
-       while [ $i -le $REPS ]; do
-	   echo "test: cycle($i of $REPS) start at $(date)"
-	   mkdir -p $TESTDIR && chmod 777 $TESTDIR
-	   echo -n "    create a file for uid "
-	   for j in `seq 1 30`; do
-	       echo -n "$j "
-               # 30MB per dd for a total of 900MB (if space even permits)
-	       runas -u $j dd if=/dev/zero of=$TESTDIR/$tfile  bs=$blksize count=15 > /dev/null 2>&1 &
-	   done
-	   echo ""
-	   PROCS=$(ps -ef | grep -v grep | grep "dd if /dev/zero of $TESTDIR" | wc -l)
-           LAST_USED=0
-	   while [ $PROCS -gt 0 ]; do 
-	     sleep 20
-	     SECS=$((SECS + sleep))
-	     PROCS=$(ps -ef | grep -v grep | grep "dd if /dev/zero of $TESTDIR" | wc -l)
-	     USED=$(du -s $TESTDIR | awk '{print $1}')
-	     PCT=$(($USED * 100 / $block_limit))
-	     echo "${i}/${REPS} ${PCT}% p${PROCS} t${SECS}  "
-	     if [ $USED -le $LAST_USED ]; then
-		 kill -9 $(ps -ef | grep "dd if /dev/zero of $TESTDIR" | grep -v grep | awk '{ print $2 }')
-		 i=$REPS
-		 RV=2
-		 break
-	     fi
-             LAST_USED=$USED
-	   done
-	   echo "    removing the test files..."
-	   rm -f $TESTDIR/$tfile
-	   echo "cycle $i done at $(date)"
-	   i=$[$i+1]
-       done
-       echo "Test took $SECS sec"
-
-       #clean
-       sysctl -w vm.dirty_background_ratio=$orig_dbr
-       sysctl -w vm.dirty_expire_centisecs=$orig_dec
-       sysctl -w vm.dirty_ratio=$orig_dr
-       sysctl -w vm.dirty_writeback_centisecs=$orig_dwc
-       if [ $RV -ne 0 ]; then
-           error "Nothing was written for $SECS sec ... aborting"
-       fi
-       return $RV
-}
-run_test_with_stat 11 "run for fixing bug10912 ==========="
-
 
 # test a deadlock between quota and journal b=11693
 test_12() {
