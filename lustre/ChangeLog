@@ -13,6 +13,12 @@ tbd  Sun Microsystems, Inc.
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
+Severity   : normal
+Bugzilla   : 19566
+Description: Prevent inconsistences between linux and lustre mount structures.
+Details    : Wait indefinitely in server_wait_finished() until mnt_count drops.
+	     Make the sleep interruptible.
+
 Severity   : enhancement
 Bugzilla   : 19955
 Description: provide server to client comms path
