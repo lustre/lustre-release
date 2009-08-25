@@ -126,7 +126,9 @@ test_0c() {
     touch $DIR/$tfile || return 3
     rm $DIR/$tfile || return 4
 }
+start_full_debug_logging
 run_test 0c "fld create"
+stop_full_debug_logging
 
 test_1() {
     replay_barrier $SINGLEMDS

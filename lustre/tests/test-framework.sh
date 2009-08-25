@@ -2159,8 +2159,35 @@ debugsave() {
 }
 
 debugrestore() {
-    [ -n "$DEBUGSAVE" ] && lctl set_param debug="${DEBUGSAVE}"
+    [ -n "$DEBUGSAVE" ] && \
+        do_nodes $(comma_list $(nodes_list)) "$LCTL set_param debug=\\\"${DEBUGSAVE}\\\";"
     DEBUGSAVE=""
+}
+
+debug_size_save() {
+    DEBUG_SIZE_SAVED="$(lctl get_param -n debug_mb)"
+}
+
+debug_size_restore() {
+    [ -n "$DEBUG_SIZE_SAVED" ] && \
+        do_nodes $(comma_list $(nodes_list)) "$LCTL set_param debug_mb=$DEBUG_SIZE_SAVED"
+    DEBUG_SIZE_SAVED=""
+}
+
+start_full_debug_logging() {
+    debugsave
+    debug_size_save
+
+    local FULLDEBUG=-1
+    local DEBUG_SIZE=150
+
+    do_nodes $(comma_list $(nodes_list)) "$LCTL set_param debug_mb=$DEBUG_SIZE"
+    do_nodes $(comma_list $(nodes_list)) "$LCTL set_param debug=$FULLDEBUG;"
+}
+
+stop_full_debug_logging() {
+    debug_size_restore
+    debugrestore
 }
 
 ##################################
