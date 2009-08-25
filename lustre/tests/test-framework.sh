@@ -139,7 +139,6 @@ init_test_env() {
 
     [ "$TESTSUITELOG" ] && rm -f $TESTSUITELOG || true
     rm -f $TMP/*active
-
 }
 
 case `uname -r` in
@@ -540,7 +539,7 @@ sanity_mount_check_servers () {
     echo Checking servers environments
 
     # FIXME: modify get_facets to display all facets wo params
-    local facets="$(get_facets OST),$(get_facets MDS)"
+    local facets="$(get_facets OST),$(get_facets MDS),mgs"
     local node
     local mnt
     local facet
@@ -1347,6 +1346,10 @@ stopall() {
         stop ost$num -f
         rm -f $TMP/ost${num}active
     done
+    if [[ $MDSDEV != $MGSDEV ]]; then
+        stop mgs 
+    fi
+
     return 0
 }
 
@@ -1364,7 +1367,11 @@ formatall() {
     # We need ldiskfs here, may as well load them all
     load_modules
     [ "$CLIENTONLY" ] && return
-    echo Formatting mds, osts
+    echo Formatting mgs, mds, osts
+    if [[ $MDSDEV != $MGSDEV ]] || [[ $mds_HOST != $mgs_HOST ]]; then
+        add mgs $mgs_MKFS_OPTS $FSTYPE_OPT --reformat $MGSDEV || exit 10
+    fi
+
     if $VERBOSE; then
         add mds $MDS_MKFS_OPTS $FSTYPE_OPT --reformat $MDSDEV || exit 10
     else
@@ -1414,10 +1421,14 @@ setupall() {
 
     load_modules
     if [ -z "$CLIENTONLY" ]; then
-        echo Setup mdt, osts
+        echo Setup mgs, mdt, osts
 
         echo $WRITECONF | grep -q "writeconf" && \
             writeconf_all
+
+        if [[ $mds_HOST != $mgs_HOST ]] || [[ $MDSDEV != $MGSDEV ]]; then
+            start mgs $MGSDEV $mgs_MOUNT_OPTS
+        fi
 
         start mds $MDSDEV $MDS_MOUNT_OPTS
         # We started mds, now we should set failover variable properly.

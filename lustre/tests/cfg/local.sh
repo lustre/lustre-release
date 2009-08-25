@@ -17,6 +17,9 @@ MDSOPT=${MDSOPT:-"--mountfsoptions=acl"}
 
 mdsfailover_dev=${mdsfailover_dev:-$MDSDEV}
 
+MGSDEV=${MGSDEV:-$MDSDEV}
+MGSSIZE=${MGSSIZE:-$MDSSIZE}
+
 OSTCOUNT=${OSTCOUNT:-2}
 OSTDEVBASE=${OSTDEVBASE:-$TMP/${FSNAME}-ost}
 OSTSIZE=${OSTSIZE:-300000}
@@ -57,7 +60,13 @@ MKFSOPT=""
     MDSOPT=$MDSOPT" --param lov.stripecount=$STRIPES_PER_OBJ"
 [ "x$L_GETGROUPS" != "x" ] &&
     MDSOPT=$MDSOPT" --param mdt.group_upcall=$L_GETGROUPS"
-MDS_MKFS_OPTS="--mgs --mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MDSOPT $MDS_MKFS_OPTS"
+MDS_MKFS_OPTS="--mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MDSOPT $MDS_MKFS_OPTS"
+if [[ $mds_HOST == $mgs_HOST ]] && [[ $MDSDEV == $MGSDEV ]]; then
+    MDS_MKFS_OPTS="--mgs $MDS_MKFS_OPTS"
+else
+    MDS_MKFS_OPTS="--mgsnode=$MGSNID $MDS_MKFS_OPTS"
+    mgs_MKFS_OPTS="--mgs "
+fi
 
 MKFSOPT=""
 [ "x$OSTJOURNALSIZE" != "x" ] &&
