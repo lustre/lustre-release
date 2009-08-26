@@ -15,6 +15,10 @@ tbd Sun Microsystems, Inc.
 	  more information, please refer to bugzilla 17630.
 
 Severity   : normal
+Bugzilla   : 14951
+Description: Improved cleanup procedure for conf-sanity test_46a.
+
+Severity   : normal
 Bugzilla   : 19566
 Description: Prevent inconsistences between linux and lustre mount structures.
 Details    : Wait indefinitely in server_wait_finished() until mnt_count drops.
