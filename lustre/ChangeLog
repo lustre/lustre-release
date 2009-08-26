@@ -13,6 +13,13 @@ tbd  Sun Microsystems, Inc.
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
+Severity   : normal 
+Bugzilla   : 18674
+Description: Do not start bulk transfer, if client tried to reconnect.
+Details    : Do not start bulk transfer, if client tried to reconnect,
+	     but failed due to active rpcs. Check for exp_abort_active_req
+	     has been implemented.
+
 Severity   : normal
 Bugzilla   : 19566
 Description: Prevent inconsistences between linux and lustre mount structures.

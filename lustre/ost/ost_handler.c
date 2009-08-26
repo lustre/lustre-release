@@ -753,7 +753,8 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                                         obd_evict_inprogress),
                                           &lwi);
                 }
-                if (exp->exp_failed)
+                /* Check if client was evicted or tried to reconnect already */
+                if (exp->exp_failed || exp->exp_abort_active_req)
                         rc = -ENOTCONN;
                 else {
                         rc = sptlrpc_svc_wrap_bulk(req, desc);
@@ -998,9 +999,10 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc != 0)
                 GOTO(out_lock, rc);
 
-        /* Check if client was evicted while we were doing i/o before touching
-           network */
-        if (desc->bd_export->exp_failed)
+        /* Check if client was evicted or tried to reconnect while we
+         * were doing i/o before touching network */
+        if (desc->bd_export->exp_failed ||
+            desc->bd_export->exp_abort_active_req)
                 rc = -ENOTCONN;
         else
                 rc = ptlrpc_start_bulk_transfer(desc);
