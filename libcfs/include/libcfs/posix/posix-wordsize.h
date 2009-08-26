@@ -131,6 +131,18 @@ typedef struct {
 # define LPF64 "l"
 #endif
 
+#ifdef HAVE_SIZE_T_LONG
+# define LPSZ  "%lu"
+#else
+# define LPSZ  "%u"
+#endif
+
+#ifdef HAVE_SSIZE_T_LONG
+# define LPSSZ "%ld"
+#else
+# define LPSSZ "%d"
+#endif
+
 #ifndef LPU64
 # error "No word size defined"
 #endif
