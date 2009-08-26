@@ -759,7 +759,7 @@ test_33a() {
             local elapsed=$(do_and_time "do_nodes $CLIENT1,$CLIENT2 createmany -o $DIR1/$tdir-\\\$(hostname)-$i/f- -r $DIR2/$tdir-\\\$(hostname)-$i/f- $nfiles > /dev/null 2>&1")
             jbdnew=$(print_jbd_stat)
             jbd=$(( jbdnew - jbdold ))
-            echo "=== END   createmany new: $jbdnew transaction :  $jbd transactions  nfiles $nfiles time $ELAPSED COS=$COS"
+            echo "=== END   createmany new: $jbdnew transaction :  $jbd transactions  nfiles $nfiles time $elapsed COS=$COS"
             avgjbd=$(( avgjbd + jbd ))
             avgtime=$(( avgtime + elapsed ))
         done
