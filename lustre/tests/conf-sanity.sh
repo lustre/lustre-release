@@ -1598,8 +1598,27 @@ test_45() { #17310
 }
 run_test 45 "long unlink handling in ptlrpcd"
 
+cleanup_46a() {
+	trap 0
+	local rc=0
+	local count=5
+
+	umount_client $MOUNT2 || rc=$?
+	umount_client $MOUNT || rc=$?
+	while [ $count -gt 0 ]; do
+		stop ost${count} -f || rc=$?
+		let count=count-1
+	done	
+	stop_mds || rc=$? 
+	# writeconf is needed after the test, otherwise,
+	# we might end up with extra OSTs
+	writeconf || rc=$?
+	cleanup_nocli || rc=$?
+	return $rc
+}
+
 test_46a() {
-	[ $OSTCOUNT -lt 6 ] && skip "skipping test for too few OSTs" && return
+	[ $OSTCOUNT -lt 5 ] && skip "skipping test for too few OSTs" && return
 	reformat
 	start_mds || return 1
 	#first client should see only one ost
@@ -1607,6 +1626,7 @@ test_46a() {
         wait_osc_import_state mds ost FULL
 	#start_client
 	mount_client $MOUNT || return 3
+	trap cleanup_46a EXIT ERR
 
 	start_ost2 || return 4
 	start ost3 `ostdevname 3` $OST_MOUNT_OPTS || return 5
@@ -1634,14 +1654,8 @@ test_46a() {
 	# will be deadlock
 	stat $MOUNT/widestripe || return 12
 
-	umount_client $MOUNT2 || return 13
-	umount_client $MOUNT || return 14
-	stop ost5 -f || return 20
-	stop ost4 -f || return 21
-	stop ost3 -f || return 22
-	stop_ost2 || return 23
-	stop_ost || return 24
-	stop_mds || return 25
+	cleanup_46a || { echo "cleanup_46a failed!" && return 13; }
+	return 0
 }
 run_test 46a "handle ost additional - wide striped file"
 
