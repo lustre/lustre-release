@@ -26,3 +26,9 @@ ext4-force_over_8tb-sles11.patch
 ext4-claim_inode-free_inode-race.patch
 ext4_ext_search_right-fix.patch
 ext4-pa_lock-typo.patch
+ext4-pdir-fix.patch
+ext4-osd-iop-common-sles11.patch
+ext4-osd-iam-exports.patch
+ext4-dynlocks-common-sles11.patch
+ext4-dynlocks-2.6-rhel5.patch
+ext4-hash-indexed-dir-dotdot-update.patch

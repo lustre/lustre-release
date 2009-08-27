@@ -62,6 +62,11 @@ endif
 			linux-stage/include/linux/@BACKFS@$$i \
 			> linux/ldiskfs$$i ; \
 	done
+	sed $(strip $(ldiskfs_sed_flags)) \
+        linux-stage/include/linux/dynlocks.h \
+        > linux/dynlocks.h
+
+
 	@echo
 	touch sources
 

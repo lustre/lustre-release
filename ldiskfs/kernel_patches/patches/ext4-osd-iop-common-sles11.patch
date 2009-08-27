@@ -1,0 +1,237 @@
+diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/ext4.h linux-2.6.27.21-0.1_2//fs/ext4/ext4.h
+--- linux-2.6.27.21-0.1_1//fs/ext4/ext4.h	2009-08-24 15:32:00.000000000 +0530
++++ linux-2.6.27.21-0.1_2//fs/ext4/ext4.h	2009-08-24 15:32:55.000000000 +0530
+@@ -1171,6 +1171,18 @@ extern int ext4_fiemap(struct inode *, s
+ /* migrate.c */
+ extern int ext4_ext_migrate(struct inode *);
+ /* namei.c */
++extern struct inode *ext4_create_inode(handle_t *handle,
++					  struct inode * dir, int mode);
++extern int ext4_add_entry(handle_t *handle, struct dentry *dentry,
++			     struct inode *inode);
++extern int ext4_delete_entry(handle_t *handle, struct inode * dir,
++				struct ext4_dir_entry_2 * de_del,
++				struct buffer_head * bh);
++extern struct buffer_head * ext4_find_entry (struct inode *dir,
++					    const struct qstr *d_name,
++					    struct ext4_dir_entry_2 ** res_dir);
++extern int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
++				  struct inode *inode);
+ extern int ext4_orphan_add(handle_t *, struct inode *);
+ extern int ext4_orphan_del(handle_t *, struct inode *);
+ extern int ext4_htree_fill_tree(struct file *dir_file, __u32 start_hash,
+diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/namei.c linux-2.6.27.21-0.1_2//fs/ext4/namei.c
+--- linux-2.6.27.21-0.1_1//fs/ext4/namei.c	2009-08-24 15:32:00.000000000 +0530
++++ linux-2.6.27.21-0.1_2//fs/ext4/namei.c	2009-08-24 15:43:56.000000000 +0530
+@@ -24,6 +24,7 @@
+  *	Theodore Ts'o, 2002
+  */
+ 
++#include <linux/module.h>
+ #include <linux/fs.h>
+ #include <linux/pagemap.h>
+ #include <linux/jbd2.h>
+@@ -882,9 +883,9 @@ static inline int search_dirblock(struct
+  * The returned buffer_head has ->b_count elevated.  The caller is expected
+  * to brelse() it when appropriate.
+  */
+-static struct buffer_head * ext4_find_entry (struct inode *dir,
+-					const struct qstr *d_name,
+-					struct ext4_dir_entry_2 ** res_dir)
++struct buffer_head * ext4_find_entry (struct inode *dir,
++				      const struct qstr *d_name,
++				      struct ext4_dir_entry_2 ** res_dir)
+ {
+ 	struct super_block *sb;
+ 	struct buffer_head *bh_use[NAMEI_RA_SIZE];
+@@ -991,6 +992,7 @@ cleanup_and_exit:
+ 		brelse(bh_use[ra_ptr]);
+ 	return ret;
+ }
++EXPORT_SYMBOL(ext4_find_entry);
+ 
+ static struct buffer_head * ext4_dx_find_entry(struct inode *dir, const struct qstr *d_name,
+ 		       struct ext4_dir_entry_2 **res_dir, int *err)
+@@ -1511,8 +1513,8 @@ static int make_indexed_dir(handle_t *ha
+  * may not sleep between calling this and putting something into
+  * the entry, as someone else might have used it while you slept.
+  */
+-static int ext4_add_entry(handle_t *handle, struct dentry *dentry,
+-			  struct inode *inode)
++int ext4_add_entry(handle_t *handle, struct dentry *dentry,
++		   struct inode *inode)
+ {
+ 	struct inode *dir = dentry->d_parent->d_inode;
+ 	struct buffer_head *bh;
+@@ -1557,6 +1559,7 @@ static int ext4_add_entry(handle_t *hand
+ 	de->rec_len = ext4_rec_len_to_disk(blocksize);
+ 	return add_dirent_to_buf(handle, dentry, inode, de, bh);
+ }
++EXPORT_SYMBOL(ext4_add_entry);
+ 
+ /*
+  * Returns 0 for success, or a negative error value
+@@ -1699,10 +1702,10 @@ cleanup:
+  * ext4_delete_entry deletes a directory entry by merging it with the
+  * previous entry
+  */
+-static int ext4_delete_entry(handle_t *handle,
+-			     struct inode *dir,
+-			     struct ext4_dir_entry_2 *de_del,
+-			     struct buffer_head *bh)
++int ext4_delete_entry(handle_t *handle,
++		      struct inode *dir,
++		      struct ext4_dir_entry_2 *de_del,
++		      struct buffer_head *bh)
+ {
+ 	struct ext4_dir_entry_2 *de, *pde;
+ 	int i;
+@@ -1733,7 +1736,7 @@ static int ext4_delete_entry(handle_t *h
+ 	}
+ 	return -ENOENT;
+ }
+-
++EXPORT_SYMBOL(ext4_delete_entry);
+ /*
+  * DIR_NLINK feature is set if 1) nlinks > EXT4_LINK_MAX or 2) nlinks == 2,
+  * since this indicates that nlinks count was previously 1.
+@@ -1796,6 +1799,26 @@ static unsigned ext4_dentry_goal(struct
+ 	return inum;
+ }
+ 
++struct inode * ext4_create_inode(handle_t *handle, struct inode * dir, int mode)
++{
++	struct inode *inode;
++
++	inode = ext4_new_inode(handle, dir, mode);
++	if (!IS_ERR(inode)) {
++		if (S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode)) {
++#ifdef CONFIG_LDISKFS_FS_XATTR
++			inode->i_op = &ext4_special_inode_operations;
++#endif
++		} else {
++			inode->i_op = &ext4_file_inode_operations;
++			inode->i_fop = &ext4_file_operations;
++			ext4_set_aops(inode);
++		}
++	}
++	return inode;
++}
++EXPORT_SYMBOL(ext4_create_inode);
++
+ /*
+  * By the time this is called, we already have created
+  * the directory cache entry for the new file, but it
+@@ -1872,51 +1895,43 @@ retry:
+ 	return err;
+ }
+ 
+-static int ext4_mkdir(struct inode *dir, struct dentry *dentry, int mode)
++/* Initialize @inode as a subdirectory of @dir, and add the
++ * "." and ".." entries into the first directory block. */
++int ext4_add_dot_dotdot(handle_t *handle, struct inode * dir,
++			struct inode *inode)
+ {
+-	handle_t *handle;
+-	struct inode *inode;
+-	struct buffer_head *dir_block;
+-	struct ext4_dir_entry_2 *de;
+-	int err, retries = 0;
+-
+-	if (EXT4_DIR_LINK_MAX(dir))
+-		return -EMLINK;
++	struct buffer_head * dir_block;
++	struct ext4_dir_entry_2 * de;
++	int err = 0;
+ 
+-retry:
+-	handle = ext4_journal_start(dir, EXT4_DATA_TRANS_BLOCKS(dir->i_sb) +
+-					EXT4_INDEX_EXTRA_TRANS_BLOCKS + 3 +
+-					2*EXT4_QUOTA_INIT_BLOCKS(dir->i_sb));
+ 	if (IS_ERR(handle))
+ 		return PTR_ERR(handle);
+ 
+ 	if (IS_DIRSYNC(dir))
+ 		handle->h_sync = 1;
+ 
+-	inode = ext4_new_inode_goal(handle, dir, S_IFDIR | mode,
+-				    ext4_dentry_goal(dir->i_sb, dentry));
+-	err = PTR_ERR(inode);
+-	if (IS_ERR(inode))
+-		goto out_stop;
+-
+ 	inode->i_op = &ext4_dir_inode_operations;
+ 	inode->i_fop = &ext4_dir_operations;
+ 	inode->i_size = EXT4_I(inode)->i_disksize = inode->i_sb->s_blocksize;
+-	dir_block = ext4_bread(handle, inode, 0, 1, &err);
+-	if (!dir_block)
+-		goto out_clear_inode;
++	dir_block = ext4_bread (handle, inode, 0, 1, &err);
++	if (!dir_block) {
++		clear_nlink(inode);
++		ext4_mark_inode_dirty(handle, inode);
++		iput (inode);
++		goto get_out;
++	}
+ 	BUFFER_TRACE(dir_block, "get_write_access");
+ 	ext4_journal_get_write_access(handle, dir_block);
+ 	de = (struct ext4_dir_entry_2 *) dir_block->b_data;
+ 	de->inode = cpu_to_le32(inode->i_ino);
+ 	de->name_len = 1;
+ 	de->rec_len = ext4_rec_len_to_disk(EXT4_DIR_REC_LEN(de->name_len));
+-	strcpy(de->name, ".");
++	strcpy (de->name, ".");
+ 	ext4_set_de_type(dir->i_sb, de, S_IFDIR);
+ 	de = ext4_next_entry(de);
+ 	de->inode = cpu_to_le32(dir->i_ino);
+ 	de->rec_len = ext4_rec_len_to_disk(inode->i_sb->s_blocksize -
+-						EXT4_DIR_REC_LEN(1));
++					      EXT4_DIR_REC_LEN(1));
+ 	de->name_len = 2;
+ 	strcpy(de->name, "..");
+ 	ext4_set_de_type(dir->i_sb, de, S_IFDIR);
+@@ -1925,9 +1940,43 @@ retry:
+ 	ext4_journal_dirty_metadata(handle, dir_block);
+ 	brelse(dir_block);
+ 	ext4_mark_inode_dirty(handle, inode);
++get_out:
++	return err;
++}
++EXPORT_SYMBOL(ext4_add_dot_dotdot);
++
++
++static int ext4_mkdir(struct inode *dir, struct dentry *dentry, int mode)
++{
++	handle_t *handle;
++	struct inode *inode;
++	int err, retries = 0;
++
++	if (EXT4_DIR_LINK_MAX(dir))
++		return -EMLINK;
++
++retry:
++	handle = ext4_journal_start(dir, EXT4_DATA_TRANS_BLOCKS(dir->i_sb) +
++					EXT4_INDEX_EXTRA_TRANS_BLOCKS + 3 +
++					2*EXT4_QUOTA_INIT_BLOCKS(dir->i_sb));
++	if (IS_ERR(handle))
++		return PTR_ERR(handle);
++
++	if (IS_DIRSYNC(dir))
++		handle->h_sync = 1;
++
++	inode = ext4_new_inode_goal(handle, dir, S_IFDIR | mode,
++				    ext4_dentry_goal(dir->i_sb, dentry));
++	err = PTR_ERR(inode);
++	if (IS_ERR(inode))
++		goto out_stop;
++
++	err = ext4_add_dot_dotdot(handle, dir, inode);
++	if (err)
++		goto out_stop;
++
+ 	err = ext4_add_entry(handle, dentry, inode);
+ 	if (err) {
+-out_clear_inode:
+ 		clear_nlink(inode);
+ 		ext4_mark_inode_dirty(handle, inode);
+ 		iput(inode);
