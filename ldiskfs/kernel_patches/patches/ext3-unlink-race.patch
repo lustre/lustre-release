@@ -2,7 +2,7 @@ Index: lustre+chaos/lustre/ldiskfs/namei.c
 ===================================================================
 --- linux-2.6.5-7.283-full.orig/fs/ext3/namei.c
 +++ linux-2.6.5-7.283-full/fs/ext3/namei.c
-@@ -2184,8 +2184,8 @@
+@@ -2184,8 +2184,8 @@ static int ext3_link (struct dentry *
  	 * Return -ENOENT if we've raced with unlink and i_nlink is 0.  Doing
  	 * otherwise has the potential to corrupt the orphan inode list.
  	 */

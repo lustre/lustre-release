@@ -1,0 +1,57 @@
+Index: linux-1.6.18-128.1.1/include/linux/ext3_fs.h
+===================================================================
+--- linux-2.6.18-128.1.1/include/linux/ext3_fs.h	2009-06-12 15:42:53.000000000 +0530
++++ linux-2.6.18-128.1.1_new/include/linux/ext3_fs.h	2009-06-12 15:50:27.000000000 +0530
+@@ -813,6 +813,10 @@ struct ext3_dir_entry_2 {
+ #define DX_HASH_LEGACY		0
+ #define DX_HASH_HALF_MD4	1
+ #define DX_HASH_TEA		2
++#define DX_HASH_R5		98
++#define DX_HASH_SAME		99
++#define DX_HASH_MAX		100
++
+ 
+ #ifdef __KERNEL__
+ 
+Index: linux-2.6.18-128.1.1/fs/ext3/hash.c
+===================================================================
+--- linux-2.6.18-128.1.1/fs/ext3/hash.c	2009-06-12 15:43:05.000000000 +0530
++++ linux-2.6.18-128.1.1_new/fs/ext3/hash.c	2009-06-12 15:52:39.000000000 +0530
+@@ -49,6 +49,23 @@ static __u32 dx_hack_hash (const char *n
+ 	return (hash0 << 1);
+ }
+ 
++static __u32 dx_r5_hash(const signed char *msg, int len)
++{
++	__u32 a = 0;
++	while (len--) {
++		a += *msg << 4;
++		a += *msg >> 4;
++		a *= 11;
++		msg++;
++	}
++	return a;
++}
++
++static __u32 dx_same_hash(const signed char *msg, int len)
++{
++	return 0xcafebabeUL;
++}
++
+ static void str2hashbuf(const char *msg, int len, __u32 *buf, int num)
+ {
+ 	__u32	pad, val;
+@@ -139,6 +156,12 @@ int ext3fs_dirhash(const char *name, int
+ 		hash = buf[0];
+ 		minor_hash = buf[1];
+ 		break;
++	case DX_HASH_R5:
++		hash = dx_r5_hash(name, len);
++		break;
++	case DX_HASH_SAME:
++		hash = dx_same_hash(name, len);
++		break;
+ 	default:
+ 		hinfo->hash = 0;
+ 		return -1;
+
