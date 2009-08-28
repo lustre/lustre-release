@@ -2571,7 +2571,7 @@ static int find_poolpath(char *fsname, char *poolname, char *poolpath)
  *  if ostname is NULL, returns 1 if pool is not empty and 0 if pool empty
  *  if ostname is not NULL, returns 1 if OST is in pool and 0 if not
  */
-static int search_ost(char *fsname, char *poolname, char *ostname)
+int llapi_search_ost(char *fsname, char *poolname, char *ostname)
 {
         FILE *fd;
         char buffer[PATH_MAX + 1];
@@ -2621,7 +2621,7 @@ static int check_pool_cmd(enum lcfg_command_type cmd,
 {
         int rc;
 
-        rc = search_ost(fsname, poolname, ostname);
+        rc = llapi_search_ost(fsname, poolname, ostname);
         if (rc < 0 && (cmd != LCFG_POOL_NEW)) {
                 fprintf(stderr, "Pool %s.%s not found\n",
                         fsname, poolname);
@@ -2654,7 +2654,7 @@ static int check_pool_cmd(enum lcfg_command_type cmd,
                                 ostname, fsname, poolname);
                         return -EEXIST;
                 }
-                rc = search_ost(fsname, NULL, ostname);
+                rc = llapi_search_ost(fsname, NULL, ostname);
                 if (rc == 0) {
                         fprintf(stderr, "OST %s is not part of the '%s' fs.\n",
                                 ostname, fsname);
@@ -2691,7 +2691,7 @@ static int check_pool_cmd_result(enum lcfg_command_type cmd,
         switch (cmd) {
         case LCFG_POOL_NEW: {
                 do {
-                        rc = search_ost(fsname, poolname, NULL);
+                        rc = llapi_search_ost(fsname, poolname, NULL);
                         if (rc == -ENODEV)
                                 return rc;
                         if (rc < 0)
@@ -2710,7 +2710,7 @@ static int check_pool_cmd_result(enum lcfg_command_type cmd,
         }
         case LCFG_POOL_DEL: {
                 do {
-                        rc = search_ost(fsname, poolname, NULL);
+                        rc = llapi_search_ost(fsname, poolname, NULL);
                         if (rc == -ENODEV)
                                 return rc;
                         if (rc >= 0)
@@ -2729,7 +2729,7 @@ static int check_pool_cmd_result(enum lcfg_command_type cmd,
         }
         case LCFG_POOL_ADD: {
                 do {
-                        rc = search_ost(fsname, poolname, ostname);
+                        rc = llapi_search_ost(fsname, poolname, ostname);
                         if (rc == -ENODEV)
                                 return rc;
                         if (rc != 1)
@@ -2748,7 +2748,7 @@ static int check_pool_cmd_result(enum lcfg_command_type cmd,
         }
         case LCFG_POOL_REM: {
                 do {
-                        rc = search_ost(fsname, poolname, ostname);
+                        rc = llapi_search_ost(fsname, poolname, ostname);
                         if (rc == -ENODEV)
                                 return rc;
                         if (rc == 1)

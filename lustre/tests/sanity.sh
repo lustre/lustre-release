@@ -6574,14 +6574,22 @@ test_200f() {
 run_test 200f "Create files in a pool ==================================="
 
 test_200g() {
+        remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+        TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
+        res=$($LFS df --pool $FSNAME.$POOL | awk '{print $1}' | grep "$FSNAME-OST ")
+        [ "$res" = "$TGT" ] || echo "Pools OSTS $TGT is not $res that lfs df reports"
+}
+run_test 200g "lfs df a pool ============================================"
+
+test_201a() {  # was 200g
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 	TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
 	do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
 	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | grep $TGT" "" || error "$TGT not removed from $FSNAME.$POOL"
 }
-run_test 200g "Remove a target from a pool ============================="
+run_test 201a "Remove a target from a pool ============================="
 
-test_200h() {
+test_201b() {  # was 200h
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 	for TGT in $($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | sort -u)
 	do
@@ -6592,16 +6600,16 @@ test_200h() {
 	# striping on an empty pool should fall back to "pool of everything"
 	$SETSTRIPE -p $POOL ${POOL_FILE}/$tfile || error "failed to create file with empty pool"
 }
-run_test 200h "Remove all targets from a pool =========================="
+run_test 201b "Remove all targets from a pool =========================="
 
-test_200i() {
+test_201c() {  # was 200i
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 	do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
 	# get param should return err once pool is gone
 	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "foo" && return 0
 	error "Pool $FSNAME.$POOL is not destroyed"
 }
-run_test 200i "Remove a pool ============================================"
+run_test 201c "Remove a pool ============================================"
 
 test_212() {
 	size=`date +%s`
