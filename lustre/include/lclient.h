@@ -292,9 +292,9 @@ int ccc_page_is_under_lock(const struct lu_env *env,
                            const struct cl_page_slice *slice, struct cl_io *io);
 int ccc_fail(const struct lu_env *env, const struct cl_page_slice *slice);
 void ccc_transient_page_verify(const struct cl_page *page);
-void ccc_transient_page_own(const struct lu_env *env,
+int  ccc_transient_page_own(const struct lu_env *env,
                             const struct cl_page_slice *slice,
-                            struct cl_io *io);
+                            struct cl_io *io, int nonblock);
 void ccc_transient_page_assume(const struct lu_env *env,
                                const struct cl_page_slice *slice,
                                struct cl_io *io);

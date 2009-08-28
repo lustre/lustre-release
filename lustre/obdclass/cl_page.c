@@ -186,7 +186,7 @@ EXPORT_SYMBOL(cl_page_lookup);
  */
 void cl_page_gang_lookup(const struct lu_env *env, struct cl_object *obj,
                          struct cl_io *io, pgoff_t start, pgoff_t end,
-                         struct cl_page_list *queue)
+                         struct cl_page_list *queue, int nonblock)
 {
         struct cl_object_header *hdr;
         struct cl_page          *page;
@@ -197,7 +197,12 @@ void cl_page_gang_lookup(const struct lu_env *env, struct cl_object *obj,
         unsigned int             nr;
         unsigned int             i;
         unsigned int             j;
+        int                    (*page_own)(const struct lu_env *env,
+                                           struct cl_io *io,
+                                           struct cl_page *pg);
         ENTRY;
+
+        page_own = nonblock ? cl_page_own_try : cl_page_own;
 
         idx = start;
         hdr = cl_object_header(obj);
@@ -251,7 +256,7 @@ void cl_page_gang_lookup(const struct lu_env *env, struct cl_object *obj,
                 spin_unlock(&hdr->coh_page_guard);
                 for (i = 0; i < j; ++i) {
                         page = pvec[i];
-                        if (cl_page_own(env, io, page) == 0)
+                        if (page_own(env, io, page) == 0)
                                 cl_page_list_add(queue, page);
                         lu_ref_del(&page->cp_reference,
                                    "page_list", cfs_current());
@@ -890,7 +895,7 @@ int cl_page_is_owned(const struct cl_page *pg, const struct cl_io *io)
 EXPORT_SYMBOL(cl_page_is_owned);
 
 /**
- * Owns a page by IO.
+ * Try to own a page by IO.
  *
  * Waits until page is in cl_page_state::CPS_CACHED state, and then switch it
  * into cl_page_state::CPS_OWNED state.
@@ -902,11 +907,15 @@ EXPORT_SYMBOL(cl_page_is_owned);
  *
  * \retval -ve failure, e.g., page was destroyed (and landed in
  *             cl_page_state::CPS_FREEING instead of cl_page_state::CPS_CACHED).
+ *             or, page was owned by another thread, or in IO.
  *
  * \see cl_page_disown()
  * \see cl_page_operations::cpo_own()
+ * \see cl_page_own_try()
+ * \see cl_page_own
  */
-int cl_page_own(const struct lu_env *env, struct cl_io *io, struct cl_page *pg)
+static int cl_page_own0(const struct lu_env *env, struct cl_io *io,
+                        struct cl_page *pg, int nonblock)
 {
         int result;
 
@@ -919,24 +928,52 @@ int cl_page_own(const struct lu_env *env, struct cl_io *io, struct cl_page *pg)
         if (pg->cp_state == CPS_FREEING) {
                 result = -EAGAIN;
         } else {
-                cl_page_invoid(env, io, pg, CL_PAGE_OP(cpo_own));
-                PASSERT(env, pg, pg->cp_owner == NULL);
-                PASSERT(env, pg, pg->cp_req == NULL);
-                pg->cp_owner = io;
-                pg->cp_task  = current;
-                cl_page_owner_set(pg);
-                if (pg->cp_state != CPS_FREEING) {
-                        cl_page_state_set(env, pg, CPS_OWNED);
-                        result = 0;
-                } else {
-                        cl_page_disown0(env, io, pg);
-                        result = -EAGAIN;
+                result = CL_PAGE_INVOKE(env, pg, CL_PAGE_OP(cpo_own),
+                                        (const struct lu_env *,
+                                         const struct cl_page_slice *,
+                                         struct cl_io *, int),
+                                        io, nonblock);
+                if (result == 0) {
+                        PASSERT(env, pg, pg->cp_owner == NULL);
+                        PASSERT(env, pg, pg->cp_req == NULL);
+                        pg->cp_owner = io;
+                        pg->cp_task  = current;
+                        cl_page_owner_set(pg);
+                        if (pg->cp_state != CPS_FREEING) {
+                                cl_page_state_set(env, pg, CPS_OWNED);
+                        } else {
+                                cl_page_disown0(env, io, pg);
+                                result = -EAGAIN;
+                        }
                 }
         }
         PINVRNT(env, pg, ergo(result == 0, cl_page_invariant(pg)));
         RETURN(result);
 }
+
+/**
+ * Own a page, might be blocked.
+ *
+ * \see cl_page_own0()
+ */
+int cl_page_own(const struct lu_env *env, struct cl_io *io, struct cl_page *pg)
+{
+        return cl_page_own0(env, io, pg, 0);
+}
 EXPORT_SYMBOL(cl_page_own);
+
+/**
+ * Nonblock version of cl_page_own().
+ *
+ * \see cl_page_own0()
+ */
+int cl_page_own_try(const struct lu_env *env, struct cl_io *io,
+                    struct cl_page *pg)
+{
+        return cl_page_own0(env, io, pg, 1);
+}
+EXPORT_SYMBOL(cl_page_own_try);
+
 
 /**
  * Assume page ownership.
@@ -1408,7 +1445,7 @@ int cl_pages_prune(const struct lu_env *env, struct cl_object *clobj)
         }
 
         cl_page_list_init(plist);
-        cl_page_gang_lookup(env, obj, io, 0, CL_PAGE_EOF, plist);
+        cl_page_gang_lookup(env, obj, io, 0, CL_PAGE_EOF, plist, 0);
         /*
          * Since we're purging the pages of an object, we don't care
          * the possible outcomes of the following functions.

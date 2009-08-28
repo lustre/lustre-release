@@ -832,8 +832,9 @@ struct cl_page_operations {
          * \see cl_page_own()
          * \see vvp_page_own(), lov_page_own()
          */
-        void (*cpo_own)(const struct lu_env *env,
-                        const struct cl_page_slice *slice, struct cl_io *io);
+        int  (*cpo_own)(const struct lu_env *env,
+                        const struct cl_page_slice *slice,
+                        struct cl_io *io, int nonblock);
         /** Called when ownership it yielded. Optional.
          *
          * \see cl_page_disown()
@@ -2646,7 +2647,8 @@ void                  cl_page_gang_lookup(const struct lu_env *env,
                                           struct cl_object *obj,
                                           struct cl_io *io,
                                           pgoff_t start, pgoff_t end,
-                                          struct cl_page_list *plist);
+                                          struct cl_page_list *plist,
+                                          int nonblock);
 struct cl_page *cl_page_find        (const struct lu_env *env,
                                      struct cl_object *obj,
                                      pgoff_t idx, struct page *vmpage,
@@ -2677,6 +2679,8 @@ const struct cl_page_slice *cl_page_at(const struct cl_page *page,
 /** @{ */
 
 int  cl_page_own        (const struct lu_env *env,
+                         struct cl_io *io, struct cl_page *page);
+int  cl_page_own_try    (const struct lu_env *env,
                          struct cl_io *io, struct cl_page *page);
 void cl_page_assume     (const struct lu_env *env,
                          struct cl_io *io, struct cl_page *page);

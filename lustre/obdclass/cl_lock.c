@@ -1813,9 +1813,12 @@ int cl_lock_page_out(const struct lu_env *env, struct cl_lock *lock,
         io->ci_obj = cl_object_top(descr->cld_obj);
         result = cl_io_init(env, io, CIT_MISC, io->ci_obj);
         if (result == 0) {
+                int nonblock = 1;
+
+restart:
                 cl_2queue_init(queue);
                 cl_page_gang_lookup(env, descr->cld_obj, io, descr->cld_start,
-                                    descr->cld_end, &queue->c2_qin);
+                                    descr->cld_end, &queue->c2_qin, nonblock);
                 page_count = queue->c2_qin.pl_nr;
                 if (page_count > 0) {
                         result = cl_page_list_unmap(env, io, &queue->c2_qin);
@@ -1837,6 +1840,11 @@ int cl_lock_page_out(const struct lu_env *env, struct cl_lock *lock,
                         cl_2queue_disown(env, io, queue);
                 }
                 cl_2queue_fini(env, queue);
+
+                if (nonblock) {
+                        nonblock = 0;
+                        goto restart;
+                }
         }
         cl_io_fini(env, io);
         RETURN(result);

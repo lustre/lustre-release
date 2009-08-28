@@ -2347,20 +2347,27 @@ osc_send_oap_rpc(const struct lu_env *env, struct client_obd *cli,
         struct osc_brw_async_args *aa;
         const struct obd_async_page_ops *ops;
         CFS_LIST_HEAD(rpc_list);
+        CFS_LIST_HEAD(tmp_list);
         unsigned int ending_offset;
         unsigned  starting_offset = 0;
         int srvlock = 0;
         struct cl_object *clob = NULL;
         ENTRY;
 
-        /* If there are HP OAPs we need to handle at least 1 of them,
-         * move it the beginning of the pending list for that. */
-        if (!list_empty(&lop->lop_urgent)) {
-                oap = list_entry(lop->lop_urgent.next,
-                                 struct osc_async_page, oap_urgent_item);
-                if (oap->oap_async_flags & ASYNC_HP)
-                        list_move(&oap->oap_pending_item, &lop->lop_pending);
+        /* ASYNC_HP pages first. At present, when the lock the pages is
+         * to be canceled, the pages covered by the lock will be sent out
+         * with ASYNC_HP. We have to send out them as soon as possible. */
+        list_for_each_entry_safe(oap, tmp, &lop->lop_urgent, oap_urgent_item) {
+                if (oap->oap_async_flags & ASYNC_HP) 
+                        list_move(&oap->oap_pending_item, &tmp_list);
+                else
+                        list_move_tail(&oap->oap_pending_item, &tmp_list);
+                if (++page_count >= cli->cl_max_pages_per_rpc)
+                        break;
         }
+
+        list_splice(&tmp_list, &lop->lop_pending);
+        page_count = 0;
 
         /* first we find the pages we're allowed to work with */
         list_for_each_entry_safe(oap, tmp, &lop->lop_pending,
@@ -2384,6 +2391,13 @@ osc_send_oap_rpc(const struct lu_env *env, struct client_obd *cli,
                                oap, oap->oap_brw_page.pg, (unsigned)!srvlock);
                         break;
                 }
+
+                /* If there is a gap at the start of this page, it can't merge
+                 * with any previous page, so we'll hand the network a
+                 * "fragmented" page array that it can't transfer in 1 RDMA */
+                if (page_count != 0 && oap->oap_page_off != 0)
+                        break;
+
                 /* in llite being 'ready' equates to the page being locked
                  * until completion unlocks it.  commit_write submits a page
                  * as not ready because its unlock will happen unconditionally
@@ -2453,11 +2467,6 @@ osc_send_oap_rpc(const struct lu_env *env, struct client_obd *cli,
                         }
                 }
 #endif
-                /* If there is a gap at the start of this page, it can't merge
-                 * with any previous page, so we'll hand the network a
-                 * "fragmented" page array that it can't transfer in 1 RDMA */
-                if (page_count != 0 && oap->oap_page_off != 0)
-                        break;
 
                 /* take the page out of our book-keeping */
                 list_del_init(&oap->oap_pending_item);
@@ -2523,7 +2532,7 @@ osc_send_oap_rpc(const struct lu_env *env, struct client_obd *cli,
         req = osc_build_req(env, cli, &rpc_list, page_count, cmd);
         if (IS_ERR(req)) {
                 LASSERT(list_empty(&rpc_list));
-                /* loi_list_maint(cli, loi); */
+                loi_list_maint(cli, loi);
                 RETURN(PTR_ERR(req));
         }
 
@@ -2664,8 +2673,28 @@ void osc_check_rpcs(const struct lu_env *env, struct client_obd *cli)
                 if (lop_makes_rpc(cli, &loi->loi_write_lop, OBD_BRW_WRITE)) {
                         rc = osc_send_oap_rpc(env, cli, loi, OBD_BRW_WRITE,
                                               &loi->loi_write_lop);
-                        if (rc < 0)
-                                break;
+                        if (rc < 0) {
+                                CERROR("Write request failed with %d\n", rc);
+
+                                /* osc_send_oap_rpc failed, mostly because of
+                                 * memory pressure.
+                                 *
+                                 * It can't break here, because if:
+                                 *  - a page was submitted by osc_io_submit, so
+                                 *    page locked;
+                                 *  - no request in flight
+                                 *  - no subsequent request
+                                 * The system will be in live-lock state,
+                                 * because there is no chance to call
+                                 * osc_io_unplug() and osc_check_rpcs() any
+                                 * more. pdflush can't help in this case,
+                                 * because it might be blocked at grabbing
+                                 * the page lock as we mentioned.
+                                 *
+                                 * Anyway, continue to drain pages. */
+                                /* break; */
+                        }
+
                         if (rc > 0)
                                 race_counter = 0;
                         else
@@ -2675,7 +2704,8 @@ void osc_check_rpcs(const struct lu_env *env, struct client_obd *cli)
                         rc = osc_send_oap_rpc(env, cli, loi, OBD_BRW_READ,
                                               &loi->loi_read_lop);
                         if (rc < 0)
-                                break;
+                                CERROR("Read request failed with %d\n", rc);
+
                         if (rc > 0)
                                 race_counter = 0;
                         else

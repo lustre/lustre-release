@@ -81,8 +81,9 @@ static void lov_page_fini(const struct lu_env *env,
         EXIT;
 }
 
-static void lov_page_own(const struct lu_env *env,
-                         const struct cl_page_slice *slice, struct cl_io *io)
+static int lov_page_own(const struct lu_env *env,
+                        const struct cl_page_slice *slice, struct cl_io *io,
+                        int nonblock)
 {
         struct lov_io     *lio = lov_env_io(env);
         struct lov_io_sub *sub;
@@ -97,13 +98,13 @@ static void lov_page_own(const struct lu_env *env,
                 lov_sub_put(sub);
         } else
                 LBUG(); /* Arrgh */
-        EXIT;
+        RETURN(0);
 }
 
 static void lov_page_assume(const struct lu_env *env,
                             const struct cl_page_slice *slice, struct cl_io *io)
 {
-        return lov_page_own(env, slice, io);
+        lov_page_own(env, slice, io, 0);
 }
 
 static int lov_page_print(const struct lu_env *env,
