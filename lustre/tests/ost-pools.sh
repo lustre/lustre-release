@@ -542,17 +542,17 @@ sub_test_5() {
 	$LCMD pool_list $DIR
 	[[ $? -eq 0 ]] || \
 	    error "pool_list failed for $DIR"
+
+	mkdir -p ${DIR}/d1
+	$LCMD pool_list ${DIR}/d1
+	[[ $? -eq 0 ]] || \
+	    error "pool_list failed for ${DIR}/d1"
     fi
 
     rm -rf ${DIR}nonexistant
     $LCMD pool_list ${DIR}nonexistant
     [[ $? -ne 0 ]] || \
 	error "pool_list did not fail for invalid mountpoint ${DIR}nonexistant"
-
-    mkdir -p ${DIR}/d1
-    $LCMD pool_list ${DIR}/d1
-    [[ $? -ne 0 ]] || \
-	error "pool_list did not fail for invalid mountpoint ${DIR}/d1"
 
     destroy_pool $POOL
     destroy_pool $POOL2
