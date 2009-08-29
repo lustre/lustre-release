@@ -1908,6 +1908,8 @@ test_25_sub() {
         [ $MDS_QUOTA_USED2_NEW -ne $((MDS_QUOTA_USED2_OLD + 1)) ] && \
                 quota_error a $TSTUSR2 "$TSTUSR2 inode quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$MDS_QUOTA_USED2_OLD|$MDS_QUOTA_USED2_NEW]"
 	OST0_QUOTA_USED2_NEW=`$LFS quota -o $OST0_UUID $1 $TSTUSR2 $DIR | awk '/^.*[[:digit:]+][[:space:]+]/ { print $1 }'`
+	# when chown, the quota on ost could be displayed out of quota temporarily. Delete the '*' in this situation. b=20433
+	OST0_QUOTA_USED2_NEW=${OST0_QUOTA_USED2_NEW%\*}
         OST0_QUOTA_USED2_DELTA=$((OST0_QUOTA_USED2_NEW - OST0_QUOTA_USED2_OLD))
         [ $OST0_QUOTA_USED2_DELTA -ne $OST0_QUOTA_USED_DELTA ] && \
                 quota_error a $TSTUSR2 "$TSTUSR2 block quota usage transfer from $TSTUSR to $TSTUSR2 failed: [$OST0_QUOTA_USED2_OLD|$OST0_QUOTA_USED2_NEW]"
