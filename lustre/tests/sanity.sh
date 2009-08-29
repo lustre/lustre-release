@@ -6119,15 +6119,15 @@ test_200g() {
 }
 run_test 200g "lfs df a pool ============================================"
 
-test_200za() { # was 200g
+test_201a() { # was 200g
         test_pools || return 0
         TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
         do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
         wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | grep $TGT" "" || error "$TGT not removed from $FSNAME.$POOL"
 }
-run_test 200za "Remove a target from a pool ============================="
+run_test 201a "Remove a target from a pool ============================="
 
-test_200zb() {	# was 200h
+test_201b() {	# was 200h
         test_pools || return 0
         for TGT in $($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | sort -u)
         do
@@ -6139,16 +6139,16 @@ test_200zb() {	# was 200h
         $SETSTRIPE -p $POOL ${POOL_FILE}/$tfile || \
 	    error "failed to create file with empty pool"
 }
-run_test 200zb "Remove all targets from a pool =========================="
+run_test 201b "Remove all targets from a pool =========================="
 
-test_200zc() {	# was 200i
+test_201c() {	# was 200i
         test_pools || return 0
         do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
         # get param should return err once pool is gone
         wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "foo" && return 0
         error "Pool $FSNAME.$POOL is not destroyed"
 }
-run_test 200zc "Remove a pool ============================================"
+run_test 201c "Remove a pool ============================================"
 
 #
 # tests that do cleanup/setup should be run at the end
