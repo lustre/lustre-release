@@ -66,7 +66,6 @@ endif
         linux-stage/include/linux/dynlocks.h \
         > linux/dynlocks.h
 
-
 	@echo
 	touch sources
 

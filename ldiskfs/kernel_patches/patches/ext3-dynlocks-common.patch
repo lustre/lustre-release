@@ -1,7 +1,50 @@
-diff -rupN linux-2.6.18-128.1.6_1/fs/ext3/dynlocks.c linux-2.6.18-128.1.6_2/fs/ext3/dynlocks.c
---- linux-2.6.18-128.1.6_1/fs/ext3/dynlocks.c	1970-01-01 05:30:00.000000000 +0530
-+++ linux-2.6.18-128.1.6_2/fs/ext3/dynlocks.c	2009-08-13 20:42:59.000000000 +0530
-@@ -0,0 +1,236 @@
+Index: linux-stage/include/linux/dynlocks.h
+===================================================================
+--- linux-stage.orig/include/linux/dynlocks.h	2006-06-16 16:07:58.000000000 +0300
++++ linux-stage/include/linux/dynlocks.h	2007-08-30 05:45:51.000000000 +0300
+@@ -0,0 +1,37 @@
++#ifndef _LINUX_DYNLOCKS_H
++#define _LINUX_DYNLOCKS_H
++
++#include <linux/list.h>
++#include <linux/wait.h>
++
++#define DYNLOCK_MAGIC		0xd19a10c
++#define DYNLOCK_MAGIC2		0xd1956ee
++
++struct dynlock;
++struct dynlock_handle;
++
++/*
++ * lock's namespace:
++ *   - list of locks
++ *   - lock to protect this list
++ */
++
++struct dynlock {
++	unsigned dl_magic;
++	struct list_head dl_list;
++	spinlock_t dl_list_lock;
++};
++
++enum dynlock_type {
++	DLT_WRITE,
++	DLT_READ
++};
++
++void dynlock_init(struct dynlock *dl);
++struct dynlock_handle *dynlock_lock(struct dynlock *dl, unsigned long value,
++				    enum dynlock_type lt, int gfp);
++void dynlock_unlock(struct dynlock *dl, struct dynlock_handle *lock);
++
++int dynlock_is_locked(struct dynlock *dl, unsigned long value);
++#endif
++
+Index: linux-stage/fs/ext3/dynlocks.c
+===================================================================
+--- linux-stage.orig/fs/ext3/dynlocks.c	2006-06-16 16:07:58.000000000 +0300
++++ linux-stage/fs/ext3/dynlocks.c	2007-08-30 05:45:51.000000000 +0300
+@@ -0,0 +1,232 @@
 +/*
 + * Dynamic Locks
 + *
@@ -16,38 +59,31 @@ diff -rupN linux-2.6.18-128.1.6_1/fs/ext3/dynlocks.c linux-2.6.18-128.1.6_2/fs/e
 +#include <linux/slab.h>
 +#include <linux/sched.h>
 +
-+#define DYNLOCK_HANDLE_MAGIC	0xd19a10c
-+#define DYNLOCK_HANDLE_DEAD	0xd1956ee
-+#define DYNLOCK_LIST_MAGIC	0x11ee91e6
-+
 +static kmem_cache_t * dynlock_cachep = NULL;
 +
 +struct dynlock_handle {
-+	unsigned 		dh_magic;
-+	struct list_head	dh_list;
-+	unsigned long		dh_value;	/* lock value */
-+	int			dh_refcount;	/* number of users */
-+	int			dh_readers;
-+	int			dh_writers;
-+	int			dh_pid;		/* holder of the lock */
-+	wait_queue_head_t	dh_wait;
++	unsigned 		dl_magic;
++	struct list_head	dl_list;
++	unsigned long		dl_value;	/* lock value */
++	int			dl_refcount;	/* number of users */
++	int			dl_readers;
++	int			dl_writers;
++	int			dl_pid;		/* holder of the lock */
++	wait_queue_head_t	dl_wait;
 +};
 +
-+int __init dynlock_cache_init(void)
-+{
-+	int rc = 0;
++#define DYNLOCK_LIST_MAGIC	0x11ee91e6
 +
++void __init dynlock_cache_init(void)
++{
 +	printk(KERN_INFO "init dynlocks cache\n");
 +	dynlock_cachep = kmem_cache_create("dynlock_cache",
 +					 sizeof(struct dynlock_handle),
 +					 0,
 +					 SLAB_HWCACHE_ALIGN,
 +					 NULL, NULL);
-+	if (dynlock_cachep == NULL) {
-+		printk(KERN_ERR "Not able to create dynlock cache");
-+		rc = -ENOMEM;
-+	}
-+	return rc;
++	if (dynlock_cachep == NULL)
++		panic("Can't create dynlock cache");
 +}
 +
 +void __exit dynlock_cache_exit(void)
@@ -68,7 +104,6 @@ diff -rupN linux-2.6.18-128.1.6_1/fs/ext3/dynlocks.c linux-2.6.18-128.1.6_2/fs/e
 +	INIT_LIST_HEAD(&dl->dl_list);
 +	dl->dl_magic = DYNLOCK_LIST_MAGIC;
 +}
-+EXPORT_SYMBOL(dynlock_init);
 +
 +/*
 + * dynlock_lock
@@ -81,7 +116,7 @@ diff -rupN linux-2.6.18-128.1.6_1/fs/ext3/dynlocks.c linux-2.6.18-128.1.6_2/fs/e
 + *
 + */
 +struct dynlock_handle *dynlock_lock(struct dynlock *dl, unsigned long value,
-+				    enum dynlock_type lt, gfp_t gfp)
++				    enum dynlock_type lt, int gfp)
 +{
 +	struct dynlock_handle *nhl = NULL;
 +	struct dynlock_handle *hl;
@@ -94,11 +129,11 @@ diff -rupN linux-2.6.18-128.1.6_1/fs/ext3/dynlocks.c linux-2.6.18-128.1.6_2/fs/e
 +	spin_lock(&dl->dl_list_lock);
 +	BUG_ON(dl->dl_list.next == NULL);
 +	BUG_ON(dl->dl_list.prev == NULL);
-+	list_for_each_entry(hl, &dl->dl_list, dh_list) {
-+		BUG_ON(hl->dh_list.next == NULL);
-+		BUG_ON(hl->dh_list.prev == NULL);
-+		BUG_ON(hl->dh_magic != DYNLOCK_HANDLE_MAGIC);
-+		if (hl->dh_value == value) {
++	list_for_each_entry(hl, &dl->dl_list, dl_list) {
++		BUG_ON(hl->dl_list.next == NULL);
++		BUG_ON(hl->dl_list.prev == NULL);
++		BUG_ON(hl->dl_magic != DYNLOCK_MAGIC);
++		if (hl->dl_value == value) {
 +			/* lock is found */
 +			if (nhl) {
 +				/* someone else just allocated
@@ -108,7 +143,7 @@ diff -rupN linux-2.6.18-128.1.6_1/fs/ext3/dynlocks.c linux-2.6.18-128.1.6_2/fs/e
 +				kmem_cache_free(dynlock_cachep, nhl);
 +				nhl = NULL;
 +			}
-+			hl->dh_refcount++;
++			hl->dl_refcount++;
 +			goto found;
 +		}
 +	}
@@ -117,7 +152,7 @@ diff -rupN linux-2.6.18-128.1.6_1/fs/ext3/dynlocks.c linux-2.6.18-128.1.6_2/fs/e
 +		/* we already have allocated lock. use it */
 +		hl = nhl;
 +		nhl = NULL;
-+		list_add(&hl->dh_list, &dl->dl_list);
++		list_add(&hl->dl_list, &dl->dl_list);
 +		goto found;
 +	}
 +	spin_unlock(&dl->dl_list_lock);
@@ -126,12 +161,12 @@ diff -rupN linux-2.6.18-128.1.6_1/fs/ext3/dynlocks.c linux-2.6.18-128.1.6_2/fs/e
 +	nhl = kmem_cache_alloc(dynlock_cachep, gfp);
 +	if (nhl == NULL)
 +		return NULL;
-+	nhl->dh_refcount = 1;
-+	nhl->dh_value = value;
-+	nhl->dh_readers = 0;
-+	nhl->dh_writers = 0;
-+	nhl->dh_magic = DYNLOCK_HANDLE_MAGIC;
-+	init_waitqueue_head(&nhl->dh_wait);
++	nhl->dl_refcount = 1;
++	nhl->dl_value = value;
++	nhl->dl_readers = 0;
++	nhl->dl_writers = 0;
++	nhl->dl_magic = DYNLOCK_MAGIC;
++	init_waitqueue_head(&nhl->dl_wait);
 +
 +	/* while lock is being allocated, someone else may allocate it
 +	 * and put onto to list. check this situation
@@ -143,29 +178,28 @@ diff -rupN linux-2.6.18-128.1.6_1/fs/ext3/dynlocks.c linux-2.6.18-128.1.6_2/fs/e
 +		/* exclusive lock: user don't want to share lock at all
 +		 * NOTE: one process may take the same lock several times
 +		 * this functionaly is useful for rename operations */
-+		while ((hl->dh_writers && hl->dh_pid != current->pid) ||
-+				hl->dh_readers) {
++		while ((hl->dl_writers && hl->dl_pid != current->pid) ||
++				hl->dl_readers) {
 +			spin_unlock(&dl->dl_list_lock);
-+			wait_event(hl->dh_wait,
-+				hl->dh_writers == 0 && hl->dh_readers == 0);
++			wait_event(hl->dl_wait,
++				hl->dl_writers == 0 && hl->dl_readers == 0);
 +			spin_lock(&dl->dl_list_lock);
 +		}
-+		hl->dh_writers++;
++		hl->dl_writers++;
 +	} else {
 +		/* shared lock: user do not want to share lock with writer */
-+		while (hl->dh_writers) {
++		while (hl->dl_writers) {
 +			spin_unlock(&dl->dl_list_lock);
-+			wait_event(hl->dh_wait, hl->dh_writers == 0);
++			wait_event(hl->dl_wait, hl->dl_writers == 0);
 +			spin_lock(&dl->dl_list_lock);
 +		}
-+		hl->dh_readers++;
++		hl->dl_readers++;
 +	}
-+	hl->dh_pid = current->pid;
++	hl->dl_pid = current->pid;
 +	spin_unlock(&dl->dl_list_lock);
 +
 +	return hl;
 +}
-+EXPORT_SYMBOL(dynlock_lock);
 +
 +
 +/*
@@ -183,52 +217,52 @@ diff -rupN linux-2.6.18-128.1.6_1/fs/ext3/dynlocks.c linux-2.6.18-128.1.6_2/fs/e
 +	BUG_ON(hl == NULL);
 +	BUG_ON(dl->dl_magic != DYNLOCK_LIST_MAGIC);
 +
-+	if (hl->dh_magic != DYNLOCK_HANDLE_MAGIC)
-+		printk(KERN_EMERG "wrong lock magic: %#x\n", hl->dh_magic);
++	if (hl->dl_magic != DYNLOCK_MAGIC)
++		printk(KERN_EMERG "wrong lock magic: %#x\n", hl->dl_magic);
 +
-+	BUG_ON(hl->dh_magic != DYNLOCK_HANDLE_MAGIC);
-+	BUG_ON(hl->dh_writers != 0 && current->pid != hl->dh_pid);
++	BUG_ON(hl->dl_magic != DYNLOCK_MAGIC);
++	BUG_ON(hl->dl_writers != 0 && current->pid != hl->dl_pid);
 +
 +	spin_lock(&dl->dl_list_lock);
-+	if (hl->dh_writers) {
-+		BUG_ON(hl->dh_readers != 0);
-+		hl->dh_writers--;
-+		if (hl->dh_writers == 0)
++	if (hl->dl_writers) {
++		BUG_ON(hl->dl_readers != 0);
++		hl->dl_writers--;
++		if (hl->dl_writers == 0)
 +			wakeup = 1;
-+	} else if (hl->dh_readers) {
-+		hl->dh_readers--;
-+		if (hl->dh_readers == 0)
++	} else if (hl->dl_readers) {
++		hl->dl_readers--;
++		if (hl->dl_readers == 0)
 +			wakeup = 1;
 +	} else {
 +		BUG();
 +	}
 +	if (wakeup) {
-+		hl->dh_pid = 0;
-+		wake_up(&hl->dh_wait);
++		hl->dl_pid = 0;
++		wake_up(&hl->dl_wait);
 +	}
-+	if (--(hl->dh_refcount) == 0) {
-+		hl->dh_magic = DYNLOCK_HANDLE_DEAD;
-+		list_del(&hl->dh_list);
++	if (--(hl->dl_refcount) == 0) {
++		hl->dl_magic = DYNLOCK_MAGIC2;
++		list_del(&hl->dl_list);
 +		kmem_cache_free(dynlock_cachep, hl);
 +	}
 +	spin_unlock(&dl->dl_list_lock);
 +}
-+EXPORT_SYMBOL(dynlock_unlock);
 +
 +int dynlock_is_locked(struct dynlock *dl, unsigned long value)
 +{
 +	struct dynlock_handle *hl;
-+	int result = 0;
++	int result;
 +
++	result = 0;
 +	/* find requested lock in lockspace */
 +	spin_lock(&dl->dl_list_lock);
 +	BUG_ON(dl->dl_list.next == NULL);
 +	BUG_ON(dl->dl_list.prev == NULL);
-+	list_for_each_entry(hl, &dl->dl_list, dh_list) {
-+		BUG_ON(hl->dh_list.next == NULL);
-+		BUG_ON(hl->dh_list.prev == NULL);
-+		BUG_ON(hl->dh_magic != DYNLOCK_HANDLE_MAGIC);
-+		if (hl->dh_value == value && hl->dh_pid == current->pid) {
++	list_for_each_entry(hl, &dl->dl_list, dl_list) {
++		BUG_ON(hl->dl_list.next == NULL);
++		BUG_ON(hl->dl_list.prev == NULL);
++		BUG_ON(hl->dl_magic != DYNLOCK_MAGIC);
++		if (hl->dl_value == value && hl->dl_pid == current->pid) {
 +			/* lock is found */
 +			result = 1;
 +			break;
@@ -237,42 +271,9 @@ diff -rupN linux-2.6.18-128.1.6_1/fs/ext3/dynlocks.c linux-2.6.18-128.1.6_2/fs/e
 +	spin_unlock(&dl->dl_list_lock);
 +	return result;
 +}
++
++EXPORT_SYMBOL(dynlock_init);
++EXPORT_SYMBOL(dynlock_lock);
++EXPORT_SYMBOL(dynlock_unlock);
 +EXPORT_SYMBOL(dynlock_is_locked);
-diff -rupN linux-2.6.18-128.1.6_1/include/linux/dynlocks.h linux-2.6.18-128.1.6_2/include/linux/dynlocks.h
---- linux-2.6.18-128.1.6_1/include/linux/dynlocks.h	1970-01-01 05:30:00.000000000 +0530
-+++ linux-2.6.18-128.1.6_2/include/linux/dynlocks.h	2009-08-13 20:43:18.000000000 +0530
-@@ -0,0 +1,34 @@
-+#ifndef _LINUX_DYNLOCKS_H
-+#define _LINUX_DYNLOCKS_H
-+
-+#include <linux/list.h>
-+#include <linux/wait.h>
-+
-+struct dynlock_handle;
-+
-+/*
-+ * lock's namespace:
-+ *   - list of locks
-+ *   - lock to protect this list
-+ */
-+struct dynlock {
-+	unsigned		dl_magic;
-+	struct list_head	dl_list;
-+	spinlock_t		dl_list_lock;
-+};
-+
-+enum dynlock_type {
-+	DLT_WRITE,
-+	DLT_READ
-+};
-+
-+int dynlock_cache_init(void);
-+void dynlock_cache_exit(void);
-+void dynlock_init(struct dynlock *dl);
-+struct dynlock_handle *dynlock_lock(struct dynlock *dl, unsigned long value,
-+				    enum dynlock_type lt, gfp_t gfp);
-+void dynlock_unlock(struct dynlock *dl, struct dynlock_handle *lock);
-+int dynlock_is_locked(struct dynlock *dl, unsigned long value);
-+
-+#endif
 +
