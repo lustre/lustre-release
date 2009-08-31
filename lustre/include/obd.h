@@ -1078,10 +1078,6 @@ struct obd_device {
         struct list_head        obd_exports_timed;
         time_t                  obd_eviction_timer; /* for ping evictor */
 
-        /* XXX encapsulate all this recovery data into one struct */
-        svc_handler_t                    obd_recovery_handler;
-        pid_t                            obd_processing_task;
-
         int                              obd_max_recoverable_clients;
         int                              obd_connected_clients;
         int                              obd_stale_clients;

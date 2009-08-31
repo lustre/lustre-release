@@ -1183,11 +1183,9 @@ static void target_finish_recovery(struct obd_device *obd)
 
         ldlm_reprocess_all_ns(obd->obd_namespace);
         spin_lock_bh(&obd->obd_processing_task_lock);
-        if (list_empty(&obd->obd_req_replay_queue) &&
-            list_empty(&obd->obd_lock_replay_queue) &&
-            list_empty(&obd->obd_final_req_queue)) {
-                obd->obd_processing_task = 0;
-        } else {
+        if (!list_empty(&obd->obd_req_replay_queue) ||
+            !list_empty(&obd->obd_lock_replay_queue) ||
+            !list_empty(&obd->obd_final_req_queue)) {
                 CERROR("%s: Recovery queues ( %s%s%s) are not empty\n",
                        obd->obd_name,
                        list_empty(&obd->obd_req_replay_queue) ? "" : "req ",
@@ -1198,6 +1196,8 @@ static void target_finish_recovery(struct obd_device *obd)
         }
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
+        obd->obd_recovery_end = cfs_time_current_sec();
+
         /* when recovery finished, cleanup orphans on mds and ost */
         if (OBT(obd) && OBP(obd, postrecov)) {
                 int rc = OBP(obd, postrecov)(obd);
@@ -1205,8 +1205,6 @@ static void target_finish_recovery(struct obd_device *obd)
                         LCONSOLE_WARN("%s: Post recovery failed, rc %d\n",
                                       obd->obd_name, rc);
         }
-
-        obd->obd_recovery_end = cfs_time_current_sec();
         EXIT;
 }
 
@@ -1573,7 +1571,7 @@ static int target_recovery_overseer(struct obd_device *obd,
                          * reset timer, recovery will proceed with versions now,
                          * timeout is set just to handle reconnection delays
                          */
-                        reset_recovery_timer(obd, RECONNECT_DELAY_MAX * 2, 1);
+                        reset_recovery_timer(obd, RECONNECT_DELAY_MAX, 1);
                         /** Wait for recovery events again, after evicting bad clients */
                 }
         } while (!abort && expired);
@@ -1688,11 +1686,16 @@ static int handle_recovery_req(struct ptlrpc_thread *thread,
         lu_context_exit(&req->rq_session);
         lu_context_fini(&req->rq_session);
         /* don't reset timer for final stage */
-        if (!exp_finished(req->rq_export))
-                reset_recovery_timer(class_exp2obd(req->rq_export),
-                                     AT_OFF ? obd_timeout :
-                       at_get(&req->rq_rqbd->rqbd_service->srv_at_estimate), 1);
-
+        if (!exp_finished(req->rq_export)) {
+                /**
+                 * XXX: until bug 18948 is fixed (enable AT for request copy)
+                 * the client may reconnect during recovery so we may need to
+                 * wait RECONNECT_DELAY_MAX after each replay instead of
+                 * at_get(&req->rq_rqbd->rqbd_service->srv_at_estimate);
+                 */
+                 reset_recovery_timer(class_exp2obd(req->rq_export), AT_OFF ?
+                                      obd_timeout : RECONNECT_DELAY_MAX, 1);
+        }
         /**
          * bz18031: increase next_recovery_transno before ptlrpc_free_clone()
          * will drop exp_rpc reference
@@ -1842,9 +1845,12 @@ void target_stop_recovery_thread(struct obd_device *obd)
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (obd->obd_recovery_data.trd_processing_task > 0) {
                 struct target_recovery_data *trd = &obd->obd_recovery_data;
-                CERROR("%s: Aborting recovery\n", obd->obd_name);
-                obd->obd_abort_recovery = 1;
-                cfs_waitq_signal(&obd->obd_next_transno_waitq);
+                /** recovery can be done but postrecovery is not yet */
+                if (obd->obd_recovering) {
+                        CERROR("%s: Aborting recovery\n", obd->obd_name);
+                        obd->obd_abort_recovery = 1;
+                        cfs_waitq_signal(&obd->obd_next_transno_waitq);
+                }
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 wait_for_completion(&trd->trd_finishing);
         } else {

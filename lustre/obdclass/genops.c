@@ -1353,10 +1353,11 @@ void obd_exports_barrier(struct obd_device *obd)
                 spin_unlock(&obd->obd_dev_lock);
                 cfs_schedule_timeout(CFS_TASK_UNINT, cfs_time_seconds(waited));
                 if (waited > 5 && IS_PO2(waited)) {
-                        LCONSOLE_WARN("Waiting for obd_unlinked_exports "
+                        LCONSOLE_WARN("%s is waiting for obd_unlinked_exports "
                                       "more than %d seconds. "
                                       "The obd refcount = %d. Is it stuck?\n",
-                                      waited, atomic_read(&obd->obd_refcount));
+                                      obd->obd_name, waited,
+                                      atomic_read(&obd->obd_refcount));
                         dump_exports(obd);
                 }
                 waited *= 2;
