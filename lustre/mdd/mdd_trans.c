@@ -169,7 +169,7 @@ static void mdd_txn_init_dto_credits(const struct lu_env *env,
         for (op = 0; op < DTO_NR; op++) {
                 credits = mdd_child_ops(mdd)->dt_credit_get(env, mdd->mdd_child,
                                                             op);
-                LASSERT(credits > 0);
+                LASSERT(credits >= 0);
                 dto_txn_credits[op] = credits;
         }
 }
