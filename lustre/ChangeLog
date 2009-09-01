@@ -2205,6 +2205,11 @@ Details    : In filter_commitrw_write():
 	     lquota_chkquota() and lquota_pending_commit() to use
 	     different uid and gid. That is the root of the bug.
 
+Severity   : normal
+Bugzilla   : 20463
+Descriptoin: getstripe doesn't report stripe count = -1 sanely
+Details    : Detect and print out the 'stripe count = -1' case properly.
+
 --------------------------------------------------------------------------------
 
 2007-08-10         Cluster File Systems, Inc. <info@clusterfs.com>

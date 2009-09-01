@@ -1027,8 +1027,8 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
                 if (!quiet)
                         llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_count:   ",
                                      prefix);
-                llapi_printf(LLAPI_MSG_NORMAL, "%u%c",
-                             (int)lum->lmm_stripe_count, nl);
+                llapi_printf(LLAPI_MSG_NORMAL, "%hd%c",
+                             (__s16)lum->lmm_stripe_count, nl);
         }
 
         if (verbose & VERBOSE_SIZE) {
