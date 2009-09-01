@@ -3707,10 +3707,6 @@ static int osd_process_config(const struct lu_env *env,
 static int osd_recovery_complete(const struct lu_env *env,
                                  struct lu_device *d)
 {
-        struct osd_device *o = osd_dev(d);
-        ENTRY;
-        /* TODO: orphans handling */
-        ldiskfs_orphan_cleanup(osd_sb(o), LDISKFS_SB(osd_sb(o))->s_es);
         RETURN(0);
 }
 
