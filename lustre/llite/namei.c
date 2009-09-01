@@ -687,6 +687,12 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
                         it = ll_d2d(dentry)->lld_it;
                         ll_d2d(dentry)->lld_it = NULL;
                 } else {
+                        if ((nd->flags & LOOKUP_CREATE ) && !(nd->flags & LOOKUP_OPEN)) {
+                                /* We are sure this is new dentry, so we need to create
+                                   our private data and set the dentry ops */ 
+                                ll_dops_init(dentry, 1);
+                                RETURN(NULL);
+                        }
                         it = ll_convert_intent(&nd->intent.open, nd->flags);
                         if (IS_ERR(it))
                                 RETURN((struct dentry *)it);
