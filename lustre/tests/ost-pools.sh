@@ -73,12 +73,12 @@ create_dir() {
 
     mkdir -p $dir
     if [[ -n $4 ]]; then
-	$SETSTRIPE -c $count -p $pool $dir -o $idx
+        $SETSTRIPE -c $count -p $pool $dir -o $idx
     else
-	$SETSTRIPE -c $count -p $pool $dir
+        $SETSTRIPE -c $count -p $pool $dir
     fi
     [[ $? -eq 0 ]] || \
-	error "$SETSTRIPE -p $pool $dir failed."
+        error "$SETSTRIPE -p $pool $dir failed."
 }
 
 create_file() {
@@ -89,14 +89,14 @@ create_file() {
     rm -f $file
     $SETSTRIPE -o $index -c $count -p $pool $file
     [[ $? -eq 0 ]] || \
-	error "$SETSTRIPE -p $pool $file failed."
+        error "$SETSTRIPE -p $pool $file failed."
 }
 
 osts_in_pool() {
     local pool=$1
     local res
     for i in $(do_facet mds lctl pool_list $FSNAME.$pool | grep -v "^Pool:" \
-	| sed -e 's/_UUID$//;s/^.*-OST//'); do
+        | sed -e 's/_UUID$//;s/^.*-OST//'); do
       res="$res $(printf "%d" 0x$i)"
     done
     echo $res
@@ -106,12 +106,12 @@ check_dir_in_pool() {
     local dir=$1
     local pool=$2
     local res=$($GETSTRIPE $dir | grep "^stripe_count:" \
-	| cut -d ':' -f 5 | tr -d "[:blank:]")
+        | cut -d ':' -f 5 | tr -d "[:blank:]")
     if [[ "$res" == "$pool" ]]; then
-	return 0
+        return 0
     else
-	error found $res instead of $pool
-	return 1
+        error found $res instead of $pool
+        return 1
     fi
 }
 
@@ -121,28 +121,28 @@ check_file_in_pool() {
 }
 
 check_file_in_osts() {
-	local file=$1
-	local pool_list=${2:-$TGT_LIST}
-	local count=$3
-	local res=$($GETSTRIPE $file | grep 0x | cut -f2)
-	local i
-	for i in $res
-	do
-		found=$(echo :$pool_list: | tr " " ":"  | grep :$i:)
-		if [[ "$found" == "" ]]; then
-			echo "pool list: $pool_list"
-			echo "striping: $res"
-			$GETSTRIPE $file
-			error "$file not allocated from OSTs $pool_list."
-			return 1
-		fi
-	done
+        local file=$1
+        local pool_list=${2:-$TGT_LIST}
+        local count=$3
+        local res=$($GETSTRIPE $file | grep 0x | cut -f2)
+        local i
+        for i in $res
+        do
+                found=$(echo :$pool_list: | tr " " ":"  | grep :$i:)
+                if [[ "$found" == "" ]]; then
+                        echo "pool list: $pool_list"
+                        echo "striping: $res"
+                        $GETSTRIPE $file
+                        error "$file not allocated from OSTs $pool_list."
+                        return 1
+                fi
+        done
 
-	local ost_count=$($GETSTRIPE $file | grep 0x | wc -l)
-	[[ -n "$count" ]] && [[ $ost_count -ne $count ]] && \
-	    error "Stripe count $count expected; got $ost_count"
-		
-	return 0
+        local ost_count=$($GETSTRIPE $file | grep 0x | wc -l)
+        [[ -n "$count" ]] && [[ $ost_count -ne $count ]] && \
+            error "Stripe count $count expected; got $ost_count"
+                
+        return 0
 }
 
 check_file_not_in_pool() {
@@ -150,10 +150,10 @@ check_file_not_in_pool() {
     local pool=$2
     local res=$($GETSTRIPE -v $file | grep "^pool:" | tr -d "[:blank:]" | cut -f 2 -d ':')
     if [[ "$res" == "$pool" ]]; then
-	error "File $file is in pool: $res"
-	return 1
+        error "File $file is in pool: $res"
+        return 1
     else
-	return 0
+        return 0
     fi
 }
 
@@ -162,10 +162,10 @@ check_dir_not_in_pool() {
     local pool=$2
     local res=$($GETSTRIPE -v $dir | grep "^stripe_count" | head -1 | cut -f 8 -d ' ')
     if [[ "$res" == "$pool" ]]; then
-	error "File $dir is in pool: $res"
-	return 1
+        error "File $dir is in pool: $res"
+        return 1
     else
-	return 0
+        return 0
     fi
 }
 
@@ -176,16 +176,22 @@ create_pool() {
     [[ $RC -ne 0 ]] && return $RC
 
     wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$1 \
-	2>/dev/null || echo foo" "" || RC=1
+        2>/dev/null || echo foo" "" || RC=1
     [[ $RC -ne 0 ]] && error "pool_new failed"
     return $RC
+}
+
+drain_pool() {
+    pool=$1
+    wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$pool" ""\
+        ||error "Failed to remove targets from pool: $pool"
 }
 
 destroy_pool_int() {
       OSTS=$(do_facet mds lctl pool_list $1 | awk '$1 !~ /^Pool:/ {print $1}')
       for ost in $OSTS
       do
-	do_facet mds lctl pool_remove $1 $ost
+        do_facet mds lctl pool_remove $1 $ost
       done
       do_facet mds lctl pool_destroy $1
 }
@@ -223,7 +229,7 @@ create_pool_nofail() {
     create_pool $1
     if [[ $? != 0 ]]
     then
-	error "Pool creation of $1 failed"
+        error "Pool creation of $1 failed"
     fi
 }
 
@@ -231,14 +237,14 @@ create_pool_fail() {
     create_pool $1
     if [[ $? == 0 ]]
     then
-	error "Pool creation of $1 succeeded; should have failed"
+        error "Pool creation of $1 succeeded; should have failed"
     fi
 }
 
 cleanup_tests() {
     # Destroy pools from previous test runs
     for p in $(do_facet mds lctl pool_list $FSNAME | grep $FSNAME.pool[0-$OSTCOUNT]); do
-	destroy_pool_int $p;
+        destroy_pool_int $p;
     done
     rm -rf $DIR/d0.${TESTSUITE}
 }
@@ -278,27 +284,27 @@ test_1() {
     echo "pool_new should fail if fs-name or poolname are missing."
     do_facet mds lctl pool_new .pool1
     [[ $? -ne 0 ]] || \
-	error "pool_new did not fail even though fs-name was missing."
+        error "pool_new did not fail even though fs-name was missing."
     do_facet mds lctl pool_new pool1
     [[ $? -ne 0 ]] || \
-	error "pool_new did not fail even though fs-name was missing."
+        error "pool_new did not fail even though fs-name was missing."
     do_facet mds lctl pool_new ${FSNAME}.
     [[ $? -ne 0 ]] || \
-	error "pool_new did not fail even though pool name was missing."
+        error "pool_new did not fail even though pool name was missing."
     do_facet mds lctl pool_new .
     [[ $? -ne 0 ]] || \
-	error "pool_new did not fail even though pool name and fs-name " \
-	    "were missing."
+        error "pool_new did not fail even though pool name and fs-name " \
+            "were missing."
     do_facet mds lctl pool_new ${FSNAME},pool1
     [[ $? -ne 0 ]] || \
-	error "pool_new did not fail even though pool name format was wrong"
+        error "pool_new did not fail even though pool name format was wrong"
     do_facet mds lctl pool_new ${FSNAME}/pool1
     [[ $? -ne 0 ]] || \
-	error "pool_new did not fail even though pool name format was wrong"
+        error "pool_new did not fail even though pool name format was wrong"
 
     do_facet mds lctl pool_new ${FSNAME}.p
     [[ $? -ne 0 ]] || \
-	error "pool_new did not fail even though pool1 existed"
+        error "pool_new did not fail even though pool1 existed"
     destroy_pool p
 
 }
@@ -309,15 +315,15 @@ test_2a() {
 
     do_facet mds lctl pool_add $FSNAME.$POOL $FSNAME-OST0000
     [[ $? -ne 0 ]] || \
-	error " pool_add did not fail even though pool did " \
-	" not exist."
+        error " pool_add did not fail even though pool did " \
+        " not exist."
 }
 run_test 2a "pool_add: non-existant pool"
 
 test_2b() {
     do_facet mds lctl pool_add $FSNAME.p1234567891234567890 $FSNAME-OST0000
     [[ $? -ne 0 ]] || \
-	error "pool_add did not fail even though pool name was invalid."
+        error "pool_add did not fail even though pool name was invalid."
 }
 run_test 2b "pool_add: Invalid pool name"
 
@@ -328,44 +334,49 @@ test_2c() {
 
     lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null
     [[ $? -ne 0 ]] || \
-	destroy_pool $POOL
+        destroy_pool $POOL
 
     create_pool_nofail $POOL
 
     # 1. OST0000
     do_facet mds lctl pool_add $FSNAME.$POOL OST0000
     RC=$?; [[ $RC -eq 0 ]] || \
-	error "pool_add failed. $FSNAME $POOL OST0000: $RC"
+        error "pool_add failed. $FSNAME $POOL OST0000: $RC"
     do_facet mds lctl pool_remove $FSNAME.$POOL OST0000
+    drain_pool $POOL
 
-    # 2. lustre­OST0000
+    # 2. lustre-OST0000
     do_facet mds lctl pool_add $FSNAME.$POOL $FSNAME-OST0000
     RC=$?; [[ $RC -eq 0 ]] || \
-	error "pool_add failed. $FSNAME $POOL $FSNAME-OST0000: $RC"
+        error "pool_add failed. $FSNAME $POOL $FSNAME-OST0000: $RC"
     do_facet mds lctl pool_remove $FSNAME.$POOL $FSNAME-OST0000
+    drain_pool $POOL
 
-    # 3. lustre­OST0000_UUID
+    # 3. lustre-OST0000_UUID
     do_facet mds lctl pool_add $FSNAME.$POOL $FSNAME-OST0000_UUID
     RC=$?; [[ $RC -eq 0 ]] || \
-	error "pool_add failed. $FSNAME $POOL $FSNAME-OST0000_UUID: $RC"
+        error "pool_add failed. $FSNAME $POOL $FSNAME-OST0000_UUID: $RC"
     do_facet mds lctl pool_remove $FSNAME.$POOL $FSNAME-OST0000_UUID
+    drain_pool $POOL
 
-    # 4. lustre­OST[0,1,2,3,]
+    # 4. lustre-OST[0,1,2,3,]
     TGT="$FSNAME-OST["
     for i in $TGT_LIST; do TGT=${TGT}$(printf "$i," $i); done
     TGT="${TGT}]"
     do_facet mds lctl pool_add $FSNAME.$POOL $TGT
     [[ $? -eq 0 ]] || \
-	error "pool_add failed. $FSNAME.$POOL $TGT. $RC"
+        error "pool_add failed. $FSNAME.$POOL $TGT. $RC"
     do_facet mds lctl pool_remove $FSNAME.$POOL $TGT
+    drain_pool $POOL
 
-    # 5. lustre­OST[0-5/1]
+    # 5. lustre-OST[0-5/1]
     do_facet mds lctl pool_add $FSNAME.$POOL $TGT_ALL
     RC=$?; [[ $RC -eq 0 ]] || \
-	error "pool_add failed. $FSNAME $POOL" "$TGT_ALL $RC"
+        error "pool_add failed. $FSNAME $POOL" "$TGT_ALL $RC"
     wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | \
       sort -u | tr '\n' ' ' " "$TGT_UUID" || error "Add to pool failed"
     do_facet mds lctl pool_remove $FSNAME.$POOL $TGT_ALL
+    drain_pool $POOL
 
     destroy_pool $POOL
 }
@@ -377,14 +388,14 @@ test_2d() {
 
     lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null
     [[ $? -ne 0 ]] || \
-	destroy_pool $POOL
+        destroy_pool $POOL
 
     create_pool_nofail $POOL
 
     TGT=$(printf "$FSNAME-OST%04x_UUID " $OSTCOUNT)
     do_facet mds lctl pool_add $FSNAME.$POOL $TGT
     RC=$?; [[ $RC -ne 0 ]] || \
-	error "pool_add succeeded for an OST ($TGT) that does not exist."
+        error "pool_add succeeded for an OST ($TGT) that does not exist."
 
     destroy_pool $POOL
 }
@@ -397,7 +408,7 @@ test_2e() {
 
     $LCTL get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null
     [[ $? -ne 0 ]] || \
-	destroy_pool $POOL
+        destroy_pool $POOL
 
     create_pool_nofail $POOL
 
@@ -410,10 +421,10 @@ test_2e() {
     echo $RESULT
 
     [[ $RC -ne 0 ]] || \
-	error "pool_add succeeded for an OST that was already in the pool."
+        error "pool_add succeeded for an OST that was already in the pool."
 
     [[ $(grep "already in pool" <<< $RESULT) ]] || \
- 	error "pool_add failed as expected but error message not as expected."
+        error "pool_add failed as expected but error message not as expected."
 
     destroy_pool $POOL
 }
@@ -422,26 +433,26 @@ run_test 2e "pool_add: OST already in a pool should be rejected ========"
 test_3a() {
     lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null
     [[ $? -ne 0 ]] || \
-	destroy_pool $POOL
+        destroy_pool $POOL
 
     do_facet mds lctl pool_remove $FSNAME.$POOL $FSNAME-OST0000
     [[ $? -ne 0 ]] || \
-	error "pool_remove did not fail even though" \
-	"pool did not exist."
+        error "pool_remove did not fail even though" \
+        "pool did not exist."
 }
 run_test 3a "pool_remove: non-existant pool"
 
 test_3b() {
     do_facet mds lctl pool_remove ${NON_EXISTANT_FS}.$POOL OST0000
     [[ $? -ne 0 ]] || \
-	error "pool_remove did not fail even though fsname did not exist."
+        error "pool_remove did not fail even though fsname did not exist."
 }
 run_test 3b "pool_remove: non-existant fsname"
 
 test_3c() {
     do_facet mds lctl pool_remove $FSNAME.p1234567891234567890 $FSNAME-OST0000
     [[ $? -ne 0 ]] || \
-	error "pool_remove did not fail even though pool name was invalid."
+        error "pool_remove did not fail even though pool name was invalid."
 }
 run_test 3c "pool_remove: Invalid pool name"
 
@@ -450,29 +461,32 @@ run_test 3c "pool_remove: Invalid pool name"
 test_3d() {
     lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null
     [[ $? -ne 0 ]] || \
-	destroy_pool $POOL
+        destroy_pool $POOL
 
     create_pool_nofail $POOL
     do_facet mds lctl pool_add $FSNAME.$POOL OST0000
     do_facet mds lctl pool_remove $FSNAME.$POOL OST0000
     [[ $? -eq 0 ]] || \
-	error "pool_remove failed. $FSNAME $POOL OST0000"
+        error "pool_remove failed. $FSNAME $POOL OST0000"
+    drain_pool $POOL
 
     do_facet mds lctl pool_add $FSNAME.$POOL $FSNAME-OST0000
     do_facet mds lctl pool_remove $FSNAME.$POOL $FSNAME-OST0000
     [[ $? -eq 0 ]] || \
-	error "pool_remove failed. $FSNAME $POOL $FSNAME-OST0000"
+        error "pool_remove failed. $FSNAME $POOL $FSNAME-OST0000"
+    drain_pool $POOL
 
     do_facet mds lctl pool_add $FSNAME.$POOL $FSNAME-OST0000_UUID
     do_facet mds lctl pool_remove $FSNAME.$POOL $FSNAME-OST0000_UUID
     [[ $? -eq 0 ]] || \
-	error "pool_remove failed. $FSNAME $POOL $FSNAME-OST0000_UUID"
+        error "pool_remove failed. $FSNAME $POOL $FSNAME-OST0000_UUID"
+    drain_pool $POOL
 
     add_pool $POOL $TGT_ALL "$TGT_UUID"
-
     do_facet mds lctl pool_remove $FSNAME.$POOL $TGT_ALL
     [[ $? -eq 0 ]] || \
-	error "pool_remove failed. $FSNAME $POOL" $TGT_ALL
+        error "pool_remove failed. $FSNAME $POOL" $TGT_ALL
+    drain_pool $POOL
 
     destroy_pool $POOL
 }
@@ -481,18 +495,18 @@ run_test 3d "pool_remove: OST index combinations ==========================="
 test_4a() {
     lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null
     [[ $? -ne 0 ]] || \
-	destroy_pool $POOL
+        destroy_pool $POOL
 
     do_facet mds lctl pool_destroy $FSNAME.$POOL
     [[ $? -ne 0 ]] || \
-	error "pool_destroy did not fail even though pool did not exist."
+        error "pool_destroy did not fail even though pool did not exist."
 }
 run_test 4a "pool_destroy: non-existant pool"
 
 test_4b() {
     do_facet mds lctl pool_destroy ${NON_EXISTANT_FS}.$POOL
     [[ $? -ne 0 ]] || \
-	error "pool_destroy did not fail even though the filesystem did not exist."
+        error "pool_destroy did not fail even though the filesystem did not exist."
 }
 run_test 4b "pool_destroy: non-existant fs-name"
 
@@ -502,7 +516,7 @@ test_4c() {
 
     do_facet mds lctl pool_destroy ${FSNAME}.$POOL
     [[ $? -ne 0 ]] || \
-	error "pool_destroy succeeded with a non-empty pool name."
+        error "pool_destroy succeeded with a non-empty pool name."
     destroy_pool $POOL
 }
 run_test 4c "pool_destroy: non-empty pool ==============================="
@@ -512,7 +526,7 @@ sub_test_5() {
 
     $LCMD pool_list
     [[ $? -ne 0 ]] || \
-	error "pool_list did not fail even though fsname was not mentioned."
+        error "pool_list did not fail even though fsname was not mentioned."
 
     destroy_pool $POOL
     destroy_pool $POOL2
@@ -521,38 +535,38 @@ sub_test_5() {
     create_pool_nofail $POOL2
     $LCMD pool_list $FSNAME
     [[ $? -eq 0 ]] || \
-	error "pool_list $FSNAME failed."
+        error "pool_list $FSNAME failed."
 
     do_facet mds lctl pool_add $FSNAME.$POOL $TGT_ALL
 
     $LCMD pool_list $FSNAME.$POOL
     [[ $? -eq 0 ]] || \
-	error "pool_list $FSNAME.$POOL failed."
+        error "pool_list $FSNAME.$POOL failed."
 
     $LCMD pool_list ${NON_EXISTANT_FS}
     [[ $? -ne 0 ]] || \
-	error "pool_list did not fail for a non-existant fsname $NON_EXISTANT_FS"
+        error "pool_list did not fail for a non-existant fsname $NON_EXISTANT_FS"
 
     $LCMD pool_list ${FSNAME}.$NON_EXISTANT_POOL
     [[ $? -ne 0 ]] || \
-	error "pool_list did not fail for a non-existant pool $NON_EXISTANT_POOL"
+        error "pool_list did not fail for a non-existant pool $NON_EXISTANT_POOL"
 
     if [[ ! $(grep mds <<< $LCMD) ]]; then
-	echo $LCMD pool_list $DIR
-	$LCMD pool_list $DIR
-	[[ $? -eq 0 ]] || \
-	    error "pool_list failed for $DIR"
+        echo $LCMD pool_list $DIR
+        $LCMD pool_list $DIR
+        [[ $? -eq 0 ]] || \
+            error "pool_list failed for $DIR"
 
-	mkdir -p ${DIR}/d1
-	$LCMD pool_list ${DIR}/d1
-	[[ $? -eq 0 ]] || \
-	    error "pool_list failed for ${DIR}/d1"
+        mkdir -p ${DIR}/d1
+        $LCMD pool_list ${DIR}/d1
+        [[ $? -eq 0 ]] || \
+            error "pool_list failed for ${DIR}/d1"
     fi
 
     rm -rf ${DIR}nonexistant
     $LCMD pool_list ${DIR}nonexistant
     [[ $? -ne 0 ]] || \
-	error "pool_list did not fail for invalid mountpoint ${DIR}nonexistant"
+        error "pool_list did not fail for invalid mountpoint ${DIR}nonexistant"
 
     destroy_pool $POOL
     destroy_pool $POOL2
@@ -579,33 +593,33 @@ test_6() {
 
     do_facet mds lctl pool_list $FSNAME
     [[ $? -eq 0 ]] || \
-	error "pool_list $FSNAME failed."
+        error "pool_list $FSNAME failed."
 
     do_facet mds lctl pool_add $FSNAME.$POOL $TGT_ALL
 
     mkdir -p $POOL_DIR
     $SETSTRIPE -c -1 -p $POOL $POOL_DIR
     [[ $? -eq 0 ]] || \
-	error "$SETSTRIPE -p $POOL failed."
+        error "$SETSTRIPE -p $POOL failed."
     check_dir_in_pool $POOL_DIR $POOL
 
     # If an invalid pool name is specified, the command should fail
     $SETSTRIPE -c 2 -p $INVALID_POOL $POOL_DIR
     [[ $? -ne 0 ]] || \
-	error_ignore 19919 "setstripe to invalid pool did not fail."
+        error_ignore 19919 "setstripe to invalid pool did not fail."
 
     # If the pool name does not exist, the command should fail
     $SETSTRIPE -c 2 -p $NON_EXISTANT_POOL $POOL_DIR
     [[ $? -ne 0 ]] || \
-	error_ignore 19919 "setstripe to non-existant pool did not fail."
+        error_ignore 19919 "setstripe to non-existant pool did not fail."
 
     # lfs setstripe should work as before if a pool name is not specified.
     $SETSTRIPE -c -1 $POOL_DIR
     [[ $? -eq 0 ]] || \
-	error "$SETSTRIPE -p $POOL_DIR failed."
+        error "$SETSTRIPE -p $POOL_DIR failed."
     $SETSTRIPE -c -1 $POOL_FILE
     [[ $? -eq 0 ]] || \
-	error "$SETSTRIPE -p $POOL_FILE failed."
+        error "$SETSTRIPE -p $POOL_FILE failed."
 
     # lfs setstripe should fail if a start index that is outside the
     # pool is specified.
@@ -613,7 +627,7 @@ test_6() {
     add_pool $POOL2 "OST0000" "$FSNAME-OST0000_UUID "
     $SETSTRIPE -o 1 -p $POOL2 $ROOT_POOL/$tfile
     [[ $? -ne 0 ]] || \
-	error "$SETSTRIPE with start index outside the pool did not fail."
+        error "$SETSTRIPE with start index outside the pool did not fail."
 
     destroy_pool $POOL
     destroy_pool $POOL2
@@ -629,10 +643,10 @@ test_11() {
     create_pool_nofail $POOL2
 
     do_facet mds lctl pool_add $FSNAME.$POOL \
-	$FSNAME-OST[$TGT_FIRST-$TGT_MAX/2]
+        $FSNAME-OST[$TGT_FIRST-$TGT_MAX/2]
     local start=$((TGT_FIRST+1))
     do_facet mds lctl pool_add $FSNAME.$POOL2 \
-	$FSNAME-OST[$start-$TGT_MAX/2]
+        $FSNAME-OST[$start-$TGT_MAX/2]
 
     create_dir $POOL_ROOT/dir1  $POOL
     create_dir $POOL_ROOT/dir2  $POOL2
@@ -641,16 +655,16 @@ test_11() {
 
     local numfiles=100
     createmany -o $POOL_ROOT/dir1/$tfile $numfiles || \
-	error "createmany $POOL_ROOT/dir1/$tfile failed!"
+        error "createmany $POOL_ROOT/dir1/$tfile failed!"
 
     for file in $POOL_ROOT/dir1/*; do
-	check_file_in_pool $file $POOL
+        check_file_in_pool $file $POOL
     done
 
     createmany -o $POOL_ROOT/dir2/$tfile $numfiles || \
-	error "createmany $POOL_ROOT/dir2/$tfile failed!"
+        error "createmany $POOL_ROOT/dir2/$tfile failed!"
     for file in $POOL_ROOT/dir2/*; do
-	check_file_in_pool $file $POOL2
+        check_file_in_pool $file $POOL2
     done
 
     rm -rf $POOL_ROOT/dir?
@@ -671,10 +685,10 @@ test_12() {
     create_pool_nofail $POOL2
 
     do_facet mds lctl pool_add $FSNAME.$POOL \
-	$FSNAME-OST[$TGT_FIRST-$TGT_MAX/2]
+        $FSNAME-OST[$TGT_FIRST-$TGT_MAX/2]
     local start=$((TGT_FIRST+1))
     do_facet mds lctl pool_add $FSNAME.$POOL2 \
-	$FSNAME-OST[$start-$TGT_MAX/2]
+        $FSNAME-OST[$start-$TGT_MAX/2]
 
     echo creating some files in $POOL and $POOL2
 
@@ -730,9 +744,9 @@ test_13() {
 
     create_dir $POOL_ROOT/dir1 $POOL -1
     createmany -o $POOL_ROOT/dir1/$tfile $numfiles || \
-	error "createmany $POOL_ROOT/dir1/$tfile failed!"
+        error "createmany $POOL_ROOT/dir1/$tfile failed!"
     for file in $POOL_ROOT/dir1/*; do
-	check_file_in_pool $file $POOL $OSTCOUNT
+        check_file_in_pool $file $POOL $OSTCOUNT
     done
 
     create_file $POOL_ROOT/dir1/file1 $POOL 1 $TGT_FIRST
@@ -747,31 +761,31 @@ test_13() {
 
     create_dir $POOL_ROOT/dir2 $POOL $count
     createmany -o $POOL_ROOT/dir2/$tfile $numfiles || \
-	error "createmany $POOL_ROOT/dir2/$tfile failed!"
+        error "createmany $POOL_ROOT/dir2/$tfile failed!"
     for file in $POOL_ROOT/dir2/*; do
-	check_file_in_pool $file $POOL $count
+        check_file_in_pool $file $POOL $count
     done
 
     create_dir $POOL_ROOT/dir3 $POOL $count $((TGT_FIRST+1))
     createmany -o $POOL_ROOT/dir3/$tfile_ $numfiles || \
-	error "createmany $POOL_ROOT/dir3/$tfile_ failed!"
+        error "createmany $POOL_ROOT/dir3/$tfile_ failed!"
     for file in $POOL_ROOT/dir3/*; do
-	check_file_in_pool $file $POOL $count
+        check_file_in_pool $file $POOL $count
     done
 
     create_dir $POOL_ROOT/dir4 $POOL 1
     createmany -o $POOL_ROOT/dir4/$tfile_ $numfiles || \
-	error "createmany $POOL_ROOT/dir4/$tfile_ failed!"
+        error "createmany $POOL_ROOT/dir4/$tfile_ failed!"
     for file in $POOL_ROOT/dir4/*; do
-	check_file_in_pool $file $POOL 1
+        check_file_in_pool $file $POOL 1
     done
 
     create_dir $POOL_ROOT/dir5 $POOL 1 $((TGT_FIRST+2))
     createmany -o $POOL_ROOT/dir5/$tfile_ $numfiles || \
-	error "createmany $POOL_ROOT/dir5/$tfile_ failed!"
+        error "createmany $POOL_ROOT/dir5/$tfile_ failed!"
     for file in $POOL_ROOT/dir5/*; do
-	check_file_in_pool $file $POOL 1
-	check_file_in_osts  $file "$((TGT_FIRST+2))"
+        check_file_in_pool $file $POOL 1
+        check_file_in_osts  $file "$((TGT_FIRST+2))"
     done
 
     rm -rf create_dir $POOL_ROOT/dir?
@@ -804,13 +818,13 @@ test_14() {
     i=0
     while [[ $i -lt $numfiles ]];
     do
-	OST=$((OST+2))
-	[[ $OST -gt $TGT_MAX ]] && OST=$TGT_FIRST
+        OST=$((OST+2))
+        [[ $OST -gt $TGT_MAX ]] && OST=$TGT_FIRST
 
-	# echo "Iteration: $i OST: $OST"
-	create_file $POOL_ROOT/dir1/file${i} $POOL 1
-	check_file_in_osts $POOL_ROOT/dir1/file${i} $OST
-	i=$((i+1))
+        # echo "Iteration: $i OST: $OST"
+        create_file $POOL_ROOT/dir1/file${i} $POOL 1
+        check_file_in_osts $POOL_ROOT/dir1/file${i} $OST
+        i=$((i+1))
     done
 
     # Fill OST $TGT_FIRST with 10M files
@@ -832,9 +846,9 @@ test_14() {
     create_dir $POOL_ROOT/dir3 $POOL 1
     create_file $POOL_ROOT/dir3/file $POOL 1
     createmany -o $POOL_ROOT/dir3/$tfile_ $numfiles || \
-	error "createmany $POOL_ROOT/dir3/$tfile_ failed!"
+        error "createmany $POOL_ROOT/dir3/$tfile_ failed!"
     for file in $POOL_ROOT/dir3/*; do
-	check_file_in_pool $file $POOL
+        check_file_in_pool $file $POOL
     done
 
     rm -rf $POOL_ROOT
@@ -857,10 +871,10 @@ test_15() {
       add_pool pool${i} "$FSNAME-OST[$i]" "$tgt"
       create_dir $POOL_ROOT/dir${i} pool${i}
       createmany -o $POOL_ROOT/dir$i/$tfile $numfiles || \
-	  error "createmany $POOL_ROOT/dir$i/$tfile failed!"
+          error "createmany $POOL_ROOT/dir$i/$tfile failed!"
 
       for file in $POOL_ROOT/dir$i/*; do
-	  check_file_in_osts $file $i
+          check_file_in_osts $file $i
       done
 
       i=$((i+1))
@@ -890,15 +904,15 @@ test_16() {
     create_dir $dir $POOL
 
     for i in $(seq 1 10); do
-	dir=${dir}/dir${i}
+        dir=${dir}/dir${i}
     done
     mkdir -p $dir
 
     createmany -o $dir/$tfile $numfiles || \
-	  error "createmany $dir/$tfile failed!"
+          error "createmany $dir/$tfile failed!"
 
     for file in $dir/*; do
-	check_file_in_pool $file $POOL
+        check_file_in_pool $file $POOL
     done
 
     rm -rf $POOL_ROOT/$tdir
@@ -922,16 +936,16 @@ test_17() {
     create_dir $dir $POOL
 
     createmany -o $dir/${tfile}1_ $numfiles || \
-	  error "createmany $dir/${tfile}1_ failed!"
+          error "createmany $dir/${tfile}1_ failed!"
 
     for file in $dir/*; do
-	check_file_in_pool $file $POOL
+        check_file_in_pool $file $POOL
     done
 
     destroy_pool $POOL
 
     createmany -o $dir/${tfile}2_ $numfiles || \
-	  error "createmany $dir/${tfile}2_ failed!"
+          error "createmany $dir/${tfile}2_ failed!"
 
     rm -rf $dir
     return 0
@@ -994,9 +1008,9 @@ test_18() {
     diff=$(echo "scale=2; ($time2 - $time3) * 100 / $time3" | bc)
 
     if [[ "$deg" == "1" ]]; then
-	error "Performance degradation with pools is $diff %."
+        error "Performance degradation with pools is $diff %."
     else
-	echo  "Performance degradation with pools is $diff %."
+        echo  "Performance degradation with pools is $diff %."
     fi
     return 0
 }
@@ -1016,16 +1030,16 @@ test_19() {
 
     create_dir $dir1 $POOL
     createmany -o $dir1/${tfile} $numfiles || \
-	  error "createmany $dir1/${tfile} failed!"
+          error "createmany $dir1/${tfile} failed!"
     for file in $dir1/*; do
-	check_file_in_pool $file $POOL
+        check_file_in_pool $file $POOL
     done
 
     mkdir -p $dir2
     createmany -o $dir2/${tfile} $numfiles || \
-	  error "createmany $dir2/${tfile} failed!"
+          error "createmany $dir2/${tfile} failed!"
     for file in $dir2/*; do
-	check_file_not_in_pool $file $POOL
+        check_file_not_in_pool $file $POOL
     done
 
     rm -rf $dir1 $dir2
@@ -1051,7 +1065,7 @@ test_20() {
 
     local start=$((TGT_FIRST+1))
     TGT=$(for i in `seq $start 2 $TGT_MAX`; \
-	do printf "$FSNAME-OST%04x_UUID " $i; done)
+        do printf "$FSNAME-OST%04x_UUID " $i; done)
     add_pool $POOL2 "$FSNAME-OST[$start-$TGT_MAX/2]" "$TGT"
 
     create_dir $dir1 $POOL
@@ -1115,13 +1129,13 @@ add_loop() {
 
     for c in $(seq 1 10);
     do
-	echo "Pool $pool, iteration $c"
-	create_pool_nofail $pool
-	local TGT=$(for i in `seq $TGT_FIRST $step $TGT_MAX`; \
-	    do printf "$FSNAME-OST%04x_UUID " $i; done)
-	add_pool $pool "$FSNAME-OST[$TGT_FIRST-$TGT_MAX/$step]" "$TGT"
-	destroy_pool $pool
-	do_facet mds lctl pool_list $FSNAME
+        echo "Pool $pool, iteration $c"
+        create_pool_nofail $pool
+        local TGT=$(for i in `seq $TGT_FIRST $step $TGT_MAX`; \
+            do printf "$FSNAME-OST%04x_UUID " $i; done)
+        add_pool $pool "$FSNAME-OST[$TGT_FIRST-$TGT_MAX/$step]" "$TGT"
+        destroy_pool $pool
+        do_facet mds lctl pool_list $FSNAME
     done
     echo loop for $pool complete
 }
@@ -1137,7 +1151,7 @@ test_22() {
     sleep 5
     create_dir $POOL_ROOT $POOL
     createmany -o $POOL_ROOT/${tfile} $numfiles || \
-	  error "createmany $POOL_ROOT/${tfile} failed!"
+          error "createmany $POOL_ROOT/${tfile} failed!"
     wait
 
     return 0
@@ -1150,8 +1164,8 @@ test_23() {
 
     mkdir -p $POOL_ROOT
     check_runas_id $TSTID $TSTID $RUNAS  || {
-	skip "User $RUNAS_ID does not exist - skipping"
-	return 0
+        skip "User $RUNAS_ID does not exist - skipping"
+        return 0
     }
 
     local numfiles=12
@@ -1165,7 +1179,7 @@ test_23() {
     create_pool_nofail $POOL
 
     local TGT=$(for i in `seq $TGT_FIRST 3 $TGT_MAX`; \
-	do printf "$FSNAME-OST%04x_UUID " $i; done)
+        do printf "$FSNAME-OST%04x_UUID " $i; done)
     add_pool $POOL "$FSNAME-OST[$TGT_FIRST-$TGT_MAX/3]" "$TGT"
     create_dir $dir $POOL
 
@@ -1195,16 +1209,16 @@ test_23() {
     do
       i=$((i+1))
       stat=$(LOCALE=C $RUNAS2 dd if=/dev/zero of=${file2}$i bs=1024 \
-	  count=$((LIMIT*LIMIT)) 2>&1)
+          count=$((LIMIT*LIMIT)) 2>&1)
       RC=$?
       if [ $RC -eq 1 ]; then
-	  echo $stat
-	  echo $stat | grep "Disk quota exceeded"
-	  [[ $? -eq 0 ]] && error "dd failed with EDQUOT"
+          echo $stat
+          echo $stat | grep "Disk quota exceeded"
+          [[ $? -eq 0 ]] && error "dd failed with EDQUOT"
 
-	  echo $stat | grep "No space left on device"
-	  [[ $? -ne 0 ]] && error "dd did not fail with ENOSPC; " \
-	      "failed with $stat"
+          echo $stat | grep "No space left on device"
+          [[ $? -ne 0 ]] && error "dd did not fail with ENOSPC; " \
+              "failed with $stat"
       fi
     done
 
@@ -1236,11 +1250,11 @@ test_24() {
 
     mkdir $POOL_ROOT/dir2
     $SETSTRIPE $POOL_ROOT/dir2 -p $POOL -s 65536 -i 0 -c 1 || \
-	error "$SETSTRIPE $POOL_ROOT/dir2 failed"
+        error "$SETSTRIPE $POOL_ROOT/dir2 failed"
 
     mkdir $POOL_ROOT/dir3
     $SETSTRIPE $POOL_ROOT/dir3 -s 65536 -i 0 -c 1 || \
-	error "$SETSTRIPE $POOL_ROOT/dir3 failed"
+        error "$SETSTRIPE $POOL_ROOT/dir3 failed"
 
     mkdir $POOL_ROOT/dir4
 
@@ -1256,37 +1270,37 @@ test_24() {
       local size1
 
       createmany -o $dir/${tfile} $numfiles || \
-	  error "createmany $dir/${tfile} failed!"
+          error "createmany $dir/${tfile} failed!"
       res=$($GETSTRIPE -v $dir | grep "^stripe_count:")
       if [ $? -ne 0 ]; then
-	  res=$($GETSTRIPE -v $dir | grep "^(Default) ")
-	  pool=$(cut -f 9 -d ' ' <<< $res)
-	  index=$(cut -f 7 -d ' ' <<< $res)
-	  size=$(cut -f 5 -d ' ' <<< $res)
-	  count=$(cut -f 3 -d ' ' <<< $res)
+          res=$($GETSTRIPE -v $dir | grep "^(Default) ")
+          pool=$(cut -f 9 -d ' ' <<< $res)
+          index=$(cut -f 7 -d ' ' <<< $res)
+          size=$(cut -f 5 -d ' ' <<< $res)
+          count=$(cut -f 3 -d ' ' <<< $res)
       else
-	  pool=$(cut -f 8 -d ' ' <<< $res)
-	  index=$(cut -f 6 -d ' ' <<< $res)
-	  size=$(cut -f 4 -d ' ' <<< $res)
-	  count=$(cut -f 2 -d ' ' <<< $res)
+          pool=$(cut -f 8 -d ' ' <<< $res)
+          index=$(cut -f 6 -d ' ' <<< $res)
+          size=$(cut -f 4 -d ' ' <<< $res)
+          count=$(cut -f 2 -d ' ' <<< $res)
       fi
 
       for file in $dir/*; do
-	  if [ "$pool" != "" ]; then
-	      check_file_in_pool $file $pool
-	  fi
-	  pool1=$($GETSTRIPE -v $file | grep "^pool:" |\
-	      tr -d '[:blank:]' | cut -f 2 -d ':')
-	  count1=$($GETSTRIPE -v $file | grep "^lmm_stripe_count:" |\
-	      tr -d '[:blank:]' | cut -f 2 -d ':')
-	  size1=$($GETSTRIPE -v $file | grep "^lmm_stripe_size:" |\
-	      tr -d '[:blank:]' | cut -f 2 -d ':')
-	  [[ "$pool" != "$pool1" ]] && \
-	      error "Pool name ($pool) not inherited in $file($pool1)"
-	  [[ "$count" != "$count1" ]] && \
-	      error "Stripe count ($count) not inherited in $file ($count1)"
-	  [[ "$size" != "$size1" ]] && [[ "$size" != "0" ]] && \
-	      error "Stripe size ($size) not inherited in $file ($size1)"
+          if [ "$pool" != "" ]; then
+              check_file_in_pool $file $pool
+          fi
+          pool1=$($GETSTRIPE -v $file | grep "^pool:" |\
+              tr -d '[:blank:]' | cut -f 2 -d ':')
+          count1=$($GETSTRIPE -v $file | grep "^lmm_stripe_count:" |\
+              tr -d '[:blank:]' | cut -f 2 -d ':')
+          size1=$($GETSTRIPE -v $file | grep "^lmm_stripe_size:" |\
+              tr -d '[:blank:]' | cut -f 2 -d ':')
+          [[ "$pool" != "$pool1" ]] && \
+              error "Pool name ($pool) not inherited in $file($pool1)"
+          [[ "$count" != "$count1" ]] && \
+              error "Stripe count ($count) not inherited in $file ($count1)"
+          [[ "$size" != "$size1" ]] && [[ "$size" != "0" ]] && \
+              error "Stripe size ($size) not inherited in $file ($size1)"
       done 
     done
 
