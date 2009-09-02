@@ -2019,14 +2019,17 @@ cleanup:
                 struct iattr iattr;
                 int err;
 
-                /* update ctime of unlinked file, even if last link is
-                   removed because open-unlinked file can be statted */
-                iattr.ia_valid = ATTR_CTIME;
-                LTIME_S(iattr.ia_ctime) = rec->ur_time;
-                err = fsfilt_setattr(obd, dchild, handle, &iattr, 0);
-                if (err)
-                        CERROR("error on unlinked inode time update: "
-                               "rc = %d\n", err);
+                if (child_inode->i_nlink > 0 ||
+                    mds_orphan_open_count(child_inode) > 0) {
+                        /* update ctime of unlinked file only if it is still
+                         * opened or a link still exists */
+                        iattr.ia_valid = ATTR_CTIME;
+                        LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                        err = fsfilt_setattr(obd, dchild, handle, &iattr, 0);
+                        if (err)
+                                CERROR("error on unlinked inode time update: "
+                                       "rc = %d\n", err);
+                }
 
                 /* update mtime and ctime of parent directory*/
                 iattr.ia_valid = ATTR_MTIME | ATTR_CTIME;

@@ -17,6 +17,11 @@ TBD Sun Microsystems, Inc.
 
 Severity   : normal
 Bugzilla   : 20146
+Description: Do not update ctime for the deleted inode.
+Details    : Check in mds_reint_unlink() before calling fsfilt_setattr().
+
+Severity   : normal
+Bugzilla   : 20146
 Description: Increase of the size of the LDLM resource hash.
 Details    : Bump up RES_HASH_BITS=12.
 
