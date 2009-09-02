@@ -15,6 +15,11 @@ tbd Sun Microsystems, Inc.
 	  more information, please refer to bugzilla 17630.
 
 Severity   : normal
+Bugzilla   : 20146
+Description: Do not update ctime for the deleted inode.
+Details    : Check in mds_reint_unlink() before calling fsfilt_setattr().
+
+Severity   : normal
 Bugzilla   : 14951
 Description: Improved cleanup procedure for conf-sanity test_46a.
 
