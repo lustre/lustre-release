@@ -752,7 +752,7 @@ cleanup:
                  * lnb->page automatically returns back into per-thread page
                  * pool (bug 5137)
                  */
-                f_dput(res->dentry);
+                 break;
         }
 
         /* trigger quota pre-acquire */
@@ -781,6 +781,7 @@ cleanup:
                 page_cache_release(lnb->page);
                 lnb->page = NULL;
         }
+        f_dput(res->dentry);
 
         if (inode && (fo->fo_writethrough_cache == 0 ||
                         i_size_read(inode) > fo->fo_readcache_max_filesize))

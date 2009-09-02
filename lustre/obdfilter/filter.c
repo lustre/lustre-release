@@ -4090,18 +4090,28 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
          * down(i_zombie)       down(i_zombie)
          *                      restart transaction
          * (see BUG 4180) -bzzz
+         *
+         * take i_alloc_sem too to prevent other threads from writing to the
+         * file while we are truncating it. This can cause lock ordering issue
+         * between page lock, i_mutex & starting new journal handle.
+         * (see bug 20321) -johann
          */
+        down_write(&dchild->d_inode->i_alloc_sem);
         LOCK_INODE_MUTEX(dchild->d_inode);
 
         /* VBR: version recovery check */
         rc = filter_version_get_check(exp, oti, dchild->d_inode);
-        if (rc)
+        if (rc) {
+                UNLOCK_INODE_MUTEX(dchild->d_inode);
+                up_write(&dchild->d_inode->i_alloc_sem);
                 GOTO(cleanup, rc);
+        }
 
         handle = fsfilt_start_log(obd, dchild->d_inode, FSFILT_OP_SETATTR,
                                   NULL, 1);
         if (IS_ERR(handle)) {
                 UNLOCK_INODE_MUTEX(dchild->d_inode);
+                up_write(&dchild->d_inode->i_alloc_sem);
                 GOTO(cleanup, rc = PTR_ERR(handle));
         }
 
@@ -4110,6 +4120,7 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
         rc = fsfilt_setattr(obd, dchild, handle, &iattr, 1);
         rc2 = fsfilt_commit(obd, dchild->d_inode, handle, 0);
         UNLOCK_INODE_MUTEX(dchild->d_inode);
+        up_write(&dchild->d_inode->i_alloc_sem);
         if (rc)
                 GOTO(cleanup, rc);
         if (rc2)
