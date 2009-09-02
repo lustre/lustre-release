@@ -105,13 +105,13 @@ read_buf(int fd)
         rc = read(fd, buf, sizeof(buf));
         if (rc == -1) {
                 pos = lseek(fd, 0, SEEK_CUR);
-                sprintf(errmsg, "read of file %s at pos %d for %lu bytes "
+                sprintf(errmsg, "read of file %s at pos %d for %zu bytes "
                         "returned %d: (%d) %s.\n",
                         filename, pos, sizeof(buf), rc, errno, strerror(errno));
                 FAIL(errmsg);
         } else if (rc != sizeof(buf)) {
                 pos = lseek(fd, 0, SEEK_CUR);
-                sprintf(errmsg, "read of file %s at pos %d for %lu bytes "
+                sprintf(errmsg, "read of file %s at pos %d for %zu bytes "
                         "returned %d.\n",
                         filename, pos, sizeof(buf), rc);
                 FAIL(errmsg);
@@ -128,12 +128,12 @@ write_buf(int fd, int index)
         lseek(fd, pos, SEEK_SET);
         rc = write(fd, buf, sizeof(buf));
         if (rc == -1) {
-                sprintf(errmsg, "write of file %s at pos %d for %lu bytes "
+                sprintf(errmsg, "write of file %s at pos %d for %zu bytes "
                         "returned %d: (%d) %s.\n",
                         filename, pos, sizeof(buf), rc, errno, strerror(errno));
                 FAIL(errmsg);
         } else if (rc != sizeof(buf)) {
-                sprintf(errmsg, "write of file %s at pos %d for %lu bytes "
+                sprintf(errmsg, "write of file %s at pos %d for %zu bytes "
                         "returned %d.\n",
                         filename, pos, sizeof(buf), rc);
                 FAIL(errmsg);
