@@ -2155,9 +2155,14 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 rc = mdc_setattr(sbi->ll_mdc_exp, &op_data,
                                  (struct iattr *)&attr, NULL, 0, NULL, 0, &req);
                 ptlrpc_req_finished(req);
-                if (rc || lsm == NULL) {
+                if (rc) {
                         OBDO_FREE(oinfo.oi_oa);
                         RETURN(rc);
+                }
+
+                if (lsm == NULL) {
+                        OBDO_FREE(oinfo.oi_oa);
+                        GOTO(update_cache, rc);
                 }
 
                 oinfo.oi_oa->o_id = lsm->lsm_object_id;
@@ -2172,13 +2177,15 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 OBDO_FREE(oinfo.oi_oa);
                 if (rc) {
                         if (rc != -EPERM && rc != -EACCES)
-                                CERROR("mdc_setattr_async fails: rc = %d\n", rc);
+                                CERROR("osc_setattr_async fails: rc = %d\n",rc);
                         RETURN(rc);
                 }
 
+                EXIT;
+update_cache:
                 inode->i_flags = ll_ext_to_inode_flags(flags |
                                                        MDS_BFLAG_EXT_FLAGS);
-                RETURN(0);
+                return 0;
         }
         default:
                 RETURN(-ENOSYS);
