@@ -691,7 +691,7 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
 
         LASSERT(list_empty(&req->rq_timed_list));
 
-        index = req->rq_deadline % array->paa_size;
+        index = (unsigned long)req->rq_deadline % array->paa_size;
         if (array->paa_reqs_count[index] > 0) {
                 /* latest rpcs will have the latest deadlines in the list,
                  * so search backward. */
@@ -888,7 +888,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
            server will take. Send early replies to everyone expiring soon. */
         CFS_INIT_LIST_HEAD(&work_list);
         deadline = -1;
-        index = array->paa_deadline % array->paa_size;
+        index = (unsigned long)array->paa_deadline % array->paa_size;
         count = array->paa_count;
         while (count > 0) {
                 count -= array->paa_reqs_count[index];
