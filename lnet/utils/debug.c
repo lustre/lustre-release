@@ -352,7 +352,7 @@ static int cmp_rec(const void *p1, const void *p2)
                 return 0;
         return 1;
 }
-  
+
 static void print_rec(struct dbg_line ***linevp, int used, int fdout)
 {
         struct dbg_line **linev = *linevp;
@@ -561,7 +561,7 @@ print:
 
         printf("Debug log: %lu lines, %lu kept, %lu dropped, %lu bad.\n",
                 dropped + kept + bad, kept, dropped, bad);
-  
+
         return 0;
 }
 
@@ -598,7 +598,7 @@ int jt_dbg_debug_kernel(int argc, char **argv)
 
         if (stat(filename, &st) == 0 && S_ISREG(st.st_mode))
                 unlink(filename);
-  
+
         fdin = dbg_open_ctlhandle(DUMP_KERNEL_CTL_NAME);
         if (fdin < 0) {
                 fprintf(stderr, "open(dump_kernel) failed: %s\n",
@@ -617,7 +617,7 @@ int jt_dbg_debug_kernel(int argc, char **argv)
 
         if (raw)
                 return 0;
-  
+
         fdin = open(filename, O_RDONLY);
         if (fdin < 0) {
                 if (errno == ENOENT) /* no dump file created */
