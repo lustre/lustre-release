@@ -11,11 +11,8 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 
-# bug number for skipped test: 13739
-HEAD_EXCEPT="                  32a"
-
 # bug number for skipped test:
-ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $HEAD_EXCEPT"
+ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=`dirname $0`
@@ -950,7 +947,7 @@ start32 () {
 
 	echo "Starting local ${facet}: $@ $device ${MOUNT%/*}/${facet}"
 	mount -t lustre $@ ${device} ${MOUNT%/*}/${facet}
-	RC=$?
+	local RC=$?
 	if [ $RC -ne 0 ]; then
 		echo "mount -t lustre $@ ${device} ${MOUNT%/*}/${facet}"
 		echo "Start of ${device} of local ${facet} failed ${RC}"
@@ -979,62 +976,51 @@ test_32a() {
 	[ -n "$CLIENTONLY" -o -n "$CLIENTMODSONLY" ] && skip "client only testing" && return 0
 	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
 	[ -z "$TUNEFS" ] && skip "No tunefs" && return 0
-	local DISK1_8=$LUSTRE/tests/disk1_8.tgz
-	[ ! -r $DISK1_8 ] && skip "Cannot find $DISK1_8" && return 0
 
-	mkdir -p $TMP/$tdir
-	tar xjvf $DISK1_8 -C $TMP/$tdir || \
+	local DISK1_8=$LUSTRE/tests/disk1_8.tar.bz2
+	[ ! -r $DISK1_8 ] && skip "Cannot find $DISK1_8" && return 0
+	local tmpdir=$TMP/conf32a
+	mkdir -p $tmpdir
+	tar xjvf $DISK1_8 -C $tmpdir || \
 		{ skip "Cannot untar $DISK1_8" && return 0; }
 
 	load_modules
-	lctl set_param debug=$PTLDEBUG
+	$LCTL set_param debug=$PTLDEBUG
 
 	$TUNEFS $tmpdir/mds || error "tunefs failed"
 
 	# nids are wrong, so client wont work, but server should start
-	start32 mds $tmpdir/mds "-o loop,exclude=lustre-OST0000" && \
+	start32 mds1 $tmpdir/mds "-o loop,exclude=lustre-OST0000" && \
 		trap cleanup_32 EXIT INT || return 3
 
-	local UUID=$(lctl get_param -n mds.lustre-MDT0000.uuid)
+	local UUID=$($LCTL get_param -n mdt.lustre-MDT0000.uuid)
 	echo MDS uuid $UUID
-	[ "$UUID" == "mdsA_UUID" ] || error "UUID is wrong: $UUID"
+	[ "$UUID" == "lustre-MDT0000_UUID" ] || error "UUID is wrong: $UUID"
 
-	$TUNEFS --mgsnode=`hostname` $tmpdir/ost1 || error "tunefs failed"
+	$TUNEFS --mgsnode=$HOSTNAME $tmpdir/ost1 || error "tunefs failed"
 	start32 ost1 $tmpdir/ost1 "-o loop" || return 5
-	UUID=$(lctl get_param -n obdfilter.lustre-OST0000.uuid)
+	UUID=$($LCTL get_param -n obdfilter.lustre-OST0000.uuid)
 	echo OST uuid $UUID
-	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID"
+	[ "$UUID" == "lustre-OST0000_UUID" ] || error "UUID is wrong: $UUID"
 
 	local NID=$($LCTL list_nids | head -1)
 
 	echo "OSC changes should return err:"
-	$LCTL conf_param lustre-OST0000.osc.max_dirty_mb=15 && return 7
-	$LCTL conf_param lustre-OST0000.failover.node=$NID && return 8
+	$LCTL conf_param lustre-OST0000.osc.max_dirty_mb=15 || return 7
+	$LCTL conf_param lustre-OST0000.failover.node=$NID || return 8
+
 	echo "ok."
 	echo "MDC changes should succeed:"
 	$LCTL conf_param lustre-MDT0000.mdc.max_rpcs_in_flight=9 || return 9
 	$LCTL conf_param lustre-MDT0000.failover.node=$NID || return 10
 	echo "ok."
 
-	# With a new good MDT failover nid, we should be able to mount a client
-	# (but it cant talk to OST)
-	local mountopt="-o exclude=lustre-OST0000"
-
-	local device=`h2$NETTYPE $HOSTNAME`:/lustre
-	echo "Starting local client: $HOSTNAME: $mountopt $device $MOUNT"
-	mount -t lustre $mountopt $device $MOUNT || return 1
-
-	local old=$(lctl get_param -n mdc.*.max_rpcs_in_flight)
-	local new=$((old + 5))
-	lctl conf_param lustre-MDT0000.mdc.max_rpcs_in_flight=$new
-	wait_update $HOSTNAME "lctl get_param -n mdc.*.max_rpcs_in_flight" $new || return 11
-
 	cleanup_32
 
 	# mount a second time to make sure we didnt leave upgrade flag on
 	load_modules
 	$TUNEFS --dryrun $tmpdir/mds || error "tunefs failed"
-	start32 mds $tmpdir/mds "-o loop,exclude=lustre-OST0000" && \
+	start32 mds1 $tmpdir/mds "-o loop,exclude=lustre-OST0000" && \
 		trap cleanup_32 EXIT INT || return 12
 
 	cleanup_32
@@ -1051,13 +1037,13 @@ test_32b() {
 
 	local DISK1_8=$LUSTRE/tests/disk1_8.tar.bz2
 	[ ! -r $DISK1_8 ] && skip "Cannot find $DISK1_8" && return 0
-	local tmpdir=$TMP/$tdir
+	local tmpdir=$TMP/conf32b
 	mkdir -p $tmpdir
 	tar xjvf $DISK1_8 -C $tmpdir || \
 		{ skip "Cannot untar $DISK1_8" && return ; }
 
 	load_modules
-	lctl set_param debug=$PTLDEBUG
+	$LCTL set_param debug=$PTLDEBUG
 	local NEWNAME=lustre
 
 	# writeconf will cause servers to register with their current nids
@@ -1065,19 +1051,23 @@ test_32b() {
 	start32 mds1 $tmpdir/mds "-o loop" && \
 		trap cleanup_32 EXIT INT || return 3
 
-	local UUID=$(lctl get_param -n mdt.${NEWNAME}-MDT0000.uuid)
+	local UUID=$($LCTL get_param -n mdt.${NEWNAME}-MDT0000.uuid)
 	echo MDS uuid $UUID
 	[ "$UUID" == "${NEWNAME}-MDT0000_UUID" ] || error "UUID is wrong: $UUID"
 
-	$TUNEFS --mgsnode=`hostname` --writeconf --fsname=$NEWNAME $tmpdir/ost1 || error "tunefs failed"
+	$TUNEFS --mgsnode=$HOSTNAME --writeconf --fsname=$NEWNAME $tmpdir/ost1 || error "tunefs failed"
 	start32 ost1 $tmpdir/ost1 "-o loop" || return 5
-	UUID=$(lctl get_param -n obdfilter.${NEWNAME}-OST0000.uuid)
+	UUID=$($LCTL get_param -n obdfilter.${NEWNAME}-OST0000.uuid)
 	echo OST uuid $UUID
 	[ "$UUID" == "${NEWNAME}-OST0000_UUID" ] || error "UUID is wrong: $UUID"
 
+	local NID=$($LCTL list_nids | head -1)
+
 	echo "OSC changes should succeed:"
+
 	$LCTL conf_param ${NEWNAME}-OST0000.osc.max_dirty_mb=15 || return 7
 	$LCTL conf_param ${NEWNAME}-OST0000.failover.node=$NID || return 8
+
 	echo "ok."
 	echo "MDC changes should succeed:"
 	$LCTL conf_param ${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight=9 || return 9
@@ -1091,10 +1081,10 @@ test_32b() {
 	echo "Starting local client: $HOSTNAME: $device $MOUNT"
 	mount -t lustre $device $MOUNT || return 1
 
-	local old=$(lctl get_param -n mdc.*.max_rpcs_in_flight)
+	local old=$($LCTL get_param -n mdc.*.max_rpcs_in_flight)
 	local new=$((old + 5))
-	lctl conf_param ${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight=$new
-	wait_update $HOSTNAME "lctl get_param -n mdc.*.max_rpcs_in_flight" $new || return 11
+	$LCTL conf_param ${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight=$new
+	wait_update $HOSTNAME "$LCTL get_param -n mdc.*.max_rpcs_in_flight" $new || return 11
 
 	[ "$(cksum $MOUNT/passwd | cut -d' ' -f 1,2)" == "94306271 1478" ] || return 12
 	echo "ok."
