@@ -108,6 +108,8 @@ init_test_env() {
     export TUNEFS=${TUNEFS:-"$LUSTRE/utils/tunefs.lustre"}
     [ ! -f "$TUNEFS" ] && export TUNEFS=$(which tunefs.lustre)
     export CHECKSTAT="${CHECKSTAT:-"checkstat -v"} "
+    export LUSTRE_RMMOD=${LUSTRE_RMMOD:-$LUSTRE/scripts/lustre_rmmod}
+    [ ! -f "$LUSTRE_RMMOD" ] && export LUSTRE_RMMOD=$(which lustre_rmmod 2> /dev/null)
     export FSTYPE=${FSTYPE:-"ldiskfs"}
     export NAME=${NAME:-local}
     export DIR2
@@ -220,46 +222,6 @@ load_modules() {
     [ -f $LUSTRE/utils/mount.lustre ] && cp $LUSTRE/utils/mount.lustre /sbin/. || true
 }
 
-RMMOD=rmmod
-if [ `uname -r | cut -c 3` -eq 4 ]; then
-    RMMOD="modprobe -r"
-fi
-
-wait_for_lnet() {
-    local UNLOADED=0
-    local WAIT=0
-    local MAX=60
-    MODULES=$($LCTL modules | awk '{ print $2 }')
-    while [ -n "$MODULES" ]; do
-    sleep 5
-    $RMMOD $MODULES >/dev/null 2>&1 || true
-    MODULES=$($LCTL modules | awk '{ print $2 }')
-        if [ -z "$MODULES" ]; then
-        return 0
-        else
-            WAIT=$((WAIT + 5))
-            echo "waiting, $((MAX - WAIT)) secs left"
-        fi
-        if [ $WAIT -eq $MAX ]; then
-            echo "LNET modules $MODULES will not unload"
-        lsmod
-            return 3
-        fi
-    done
-}
-
-unload_dep_module() {
-    #lsmod output
-    #libcfs                107852  17 llite_lloop,lustre,obdfilter,ost,...
-    local MODULE=$1
-    local DEPS=$(lsmod | awk '($1 == "'$MODULE'") { print $4 }' | tr ',' ' ')
-    for SUBMOD in $DEPS; do
-        unload_dep_module $SUBMOD
-    done
-    [ "$MODULE" = "libcfs" ] && $LCTL dk $TMP/debug || true
-    $RMMOD $MODULE || true
-}
-
 check_mem_leak () {
     LEAK_LUSTRE=$(dmesg | tail -n 30 | grep "obd_memory.*leaked" || true)
     LEAK_PORTALS=$(dmesg | tail -n 20 | grep "Portals memory leaked" || true)
@@ -276,24 +238,8 @@ check_mem_leak () {
 unload_modules() {
     wait_exit_ST client # bug 12845
 
-    lsmod | grep libcfs > /dev/null && $LCTL dl
-    [ -z "$CLIENTONLY" ] && unload_dep_module $FSTYPE
-    unload_dep_module libcfs
+    $LUSTRE_RMMOD $FSTYPE || return 2
 
-    local MODULES=$($LCTL modules | awk '{ print $2 }')
-    if [ -n "$MODULES" ]; then
-        echo "Modules still loaded: "
-        echo $MODULES
-        if [ "$(lctl dl)" ]; then
-            echo "Lustre still loaded"
-            lctl dl || true
-            lsmod
-            return 2
-        else
-            echo "Lustre stopped but LNET is still loaded, waiting..."
-            wait_for_lnet || return 3
-        fi
-    fi
     HAVE_MODULES=false
 
     check_mem_leak || return 254
