@@ -1974,6 +1974,139 @@ test_51() {
 }
 run_test 51 "Verify that mdt_reint handles RMF_MDT_MD correctly when an OST is added"
 
+copy_files_xattrs()
+{
+	local node=$1
+	local dest=$2
+	local xattrs=$3
+	shift 3
+
+	do_node $node mkdir -p $dest
+	[ $? -eq 0 ] || { error "Unable to create directory"; return 1; }
+
+	do_node $node  'tar cf - '$@' | tar xf - -C '$dest';
+			[ \"\${PIPESTATUS[*]}\" = \"0 0\" ] || exit 1'
+	[ $? -eq 0 ] || { error "Unable to tar files"; return 2; }
+
+	do_node $node 'getfattr -d -m "[a-z]*\\." '$@' > '$xattrs
+	[ $? -eq 0 ] || { error "Unable to read xattrs"; return 3; }
+}
+
+diff_files_xattrs()
+{
+	local node=$1
+	local backup=$2
+	local xattrs=$3
+	shift 3
+
+	local backup2=${TMP}/backup2
+
+	do_node $node mkdir -p $backup2
+	[ $? -eq 0 ] || { error "Unable to create directory"; return 1; }
+
+	do_node $node  'tar cf - '$@' | tar xf - -C '$backup2';
+			[ \"\${PIPESTATUS[*]}\" = \"0 0\" ] || exit 1'
+	[ $? -eq 0 ] || { error "Unable to tar files to diff"; return 2; }
+
+	do_node $node "diff -rq $backup $backup2"
+	[ $? -eq 0 ] || { error "contents differ"; return 3; }
+
+	local xattrs2=${TMP}/xattrs2
+	do_node $node 'getfattr -d -m "[a-z]*\\." '$@' > '$xattrs2
+	[ $? -eq 0 ] || { error "Unable to read xattrs to diff"; return 4; }
+
+	do_node $node "diff $xattrs $xattrs2"
+	[ $? -eq 0 ] || { error "xattrs differ"; return 5; }
+
+	do_node $node "rm -rf $backup2 $xattrs2"
+	[ $? -eq 0 ] || { error "Unable to delete temporary files"; return 6; }
+}
+
+test_52() {
+	start_mds
+	[ $? -eq 0 ] || { error "Unable to start MDS"; return 1; }
+	start_ost
+	[ $? -eq 0 ] || { error "Unable to start OST1"; return 2; }
+	mount_client $MOUNT
+	[ $? -eq 0 ] || { error "Unable to mount client"; return 3; }
+
+	local nrfiles=8
+	local ost1mnt=${MOUNT%/*}/ost1
+	local ost1node=$(facet_active_host ost1)
+	local ost1tmp=$TMP/conf52
+
+	mkdir -p $DIR/$tdir
+	[ $? -eq 0 ] || { error "Unable to create tdir"; return 4; }
+	touch $TMP/modified_first
+	[ $? -eq 0 ] || { error "Unable to create temporary file"; return 5; }
+	do_node $ost1node "mkdir -p $ost1tmp && touch $ost1tmp/modified_first"
+	[ $? -eq 0 ] || { error "Unable to create temporary file"; return 6; }
+	sleep 1
+
+	$LFS setstripe $DIR/$tdir -c -1 -s 1M
+	[ $? -eq 0 ] || { error "lfs setstripe failed"; return 7; }
+
+	for (( i=0; i < nrfiles; i++ )); do
+		multiop $DIR/$tdir/$tfile-$i Ow1048576w1048576w524288c
+		[ $? -eq 0 ] || { error "multiop failed"; return 8; }
+		echo -n .
+	done
+	echo
+
+	# backup files
+	echo backup files to $TMP/files
+	local files=$(find $DIR/$tdir -type f -newer $TMP/modified_first)
+	copy_files_xattrs `hostname` $TMP/files $TMP/file_xattrs $files
+	[ $? -eq 0 ] || { error "Unable to copy files"; return 9; }
+
+	umount_client $MOUNT
+	[ $? -eq 0 ] || { error "Unable to umount client"; return 10; }
+	stop_ost
+	[ $? -eq 0 ] || { error "Unable to stop ost1"; return 11; }
+
+	echo mount ost1 as ldiskfs
+	do_node $ost1node mount -t $FSTYPE $ost1_dev $ost1mnt $OST_MOUNT_OPTS
+	[ $? -eq 0 ] || { error "Unable to mount ost1 as ldiskfs"; return 12; }
+
+	# backup objects
+	echo backup objects to $ost1tmp/objects
+	local objects=$(do_node $ost1node 'find '$ost1mnt'/O/0 -type f -size +0'\
+			'-newer '$ost1tmp'/modified_first -regex ".*\/[0-9]+"')
+	copy_files_xattrs $ost1node $ost1tmp/objects $ost1tmp/object_xattrs $objects
+	[ $? -eq 0 ] || { error "Unable to copy objects"; return 13; }
+
+	# move objects to lost+found
+	do_node $ost1node 'mv '$objects' '${ost1mnt}'/lost+found'
+	[ $? -eq 0 ] || { error "Unable to move objects"; return 14; }
+
+	# recover objects
+	do_node $ost1node "ll_recover_lost_found_objs -d $ost1mnt/lost+found"
+	[ $? -eq 0 ] || { error "ll_recover_lost_found_objs failed"; return 15; }
+
+	# compare restored objects against saved ones
+	diff_files_xattrs $ost1node $ost1tmp/objects $ost1tmp/object_xattrs $objects
+	[ $? -eq 0 ] || { error "Unable to diff objects"; return 16; }
+
+	do_node $ost1node "umount $ost1_dev"
+	[ $? -eq 0 ] || { error "Unable to umount ost1 as ldiskfs"; return 17; }
+
+	start_ost
+	[ $? -eq 0 ] || { error "Unable to start ost1"; return 18; }
+	mount_client $MOUNT
+	[ $? -eq 0 ] || { error "Unable to mount client"; return 19; }
+
+	# compare files
+	diff_files_xattrs `hostname` $TMP/files $TMP/file_xattrs $files
+	[ $? -eq 0 ] || { error "Unable to diff files"; return 20; }
+
+	rm -rf $TMP/files $TMP/file_xattrs
+	[ $? -eq 0 ] || { error "Unable to delete temporary files"; return 21; }
+	do_node $ost1node "rm -rf $ost1tmp"
+	[ $? -eq 0 ] || { error "Unable to delete temporary files"; return 22; }
+	cleanup
+}
+run_test 52 "check recovering objects from lost+found"
+
 cleanup_gss
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
