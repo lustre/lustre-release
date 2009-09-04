@@ -1293,7 +1293,7 @@ test_14b(){
         done
 
         if [ -n "$MISSING_USERS" ]; then
-                skip "following users are missing: $MISSING_USERS"
+                skip_env "following users are missing: $MISSING_USERS"
                 return 0
         fi
 
