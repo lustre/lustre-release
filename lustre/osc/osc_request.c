@@ -3517,6 +3517,14 @@ static int osc_statfs_interpret(struct ptlrpc_request *req,
         struct obd_statfs *msfs;
         ENTRY;
 
+        if (rc == -EBADR)
+                /* The request has in fact never been sent
+                 * due to issues at a higher level (LOV).
+                 * Exit immediately since the caller is
+                 * aware of the problem and takes care
+                 * of the clean up */
+                 RETURN(rc);
+
         if ((rc == -ENOTCONN || rc == -EAGAIN) &&
             (aa->aa_oi->oi_flags & OBD_STATFS_NODELAY))
                 GOTO(out, rc = 0);
