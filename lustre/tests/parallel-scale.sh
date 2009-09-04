@@ -7,6 +7,9 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
+#              bug 20670 
+ALWAYS_EXCEPT="parallel_grouplock  $PARALLEL_SCALE_EXCEPT"
+
 #
 # compilbench
 #
@@ -80,6 +83,13 @@ WRITE_DISJOINT=${WRITE_DISJOINT:-$(which write_disjoint 2> /dev/null || true)}
 wdisjoint_THREADS=${wdisjoint_THREADS:-4}
 wdisjoint_REP=${wdisjoint_REP:-10000}
 [ "$SLOW" = "no" ] && wdisjoint_REP=100
+
+#
+# parallel_grouplock
+#
+#
+PARALLEL_GROUPLOCK=${PARALLEL_GROUPLOCK:-$(which parallel_grouplock 2> /dev/null || true)}
+parallel_grouplock_MINTASKS=${parallel_grouplock_MINTASKS:-5}
 
 build_test_filter
 check_and_setup_lustre
@@ -421,6 +431,52 @@ test_write_disjoint() {
     rm -rf $testdir
 }
 run_test write_disjoint "write_disjoint"
+
+test_parallel_grouplock() {
+    [ x$PARALLEL_GROUPLOCK = x ] &&
+        { skip "PARALLEL_GROUPLOCK not found" && return; }
+
+    local clients=$CLIENTS
+    [ -z $clients ] && clients=$(hostname)
+
+    local num_clients=$(get_node_count ${clients//,/ })
+
+    generate_machine_file $clients $MACHINEFILE || \
+        error "can not generate machinefile $MACHINEFILE"
+
+    print_opts clients parallel_grouplock_MINTASKS MACHINEFILE
+
+    local testdir=$DIR/d0.parallel_grouplock
+    mkdir -p $testdir
+    # mpi_run uses mpiuser
+    chmod 0777 $testdir
+
+    do_nodes $clients "lctl set_param llite.*.max_rw_chunk=0" ||
+        error "set_param max_rw_chunk=0 failed "
+
+    local cmd
+    local status=0
+    local subtest
+    for i in $(seq 12); do
+        subtest="-t $i"
+        local cmd="$PARALLEL_GROUPLOCK -g -v -d $testdir $subtest"
+        echo "+ $cmd"
+
+        mpi_run -np $parallel_grouplock_MINTASKS -machinefile ${MACHINEFILE} $cmd
+        local rc=$?
+        if [ $rc != 0 ] ; then
+            error_noexit "parallel_grouplock subtests $subtest failed! $rc"
+        else
+            echo "parallel_grouplock subtests $subtest PASS"
+        fi
+        let status=$((status + rc))
+        # clear debug to collect one log per one test
+        do_nodes $(comma_list $(nodes_list)) lctl clear
+     done
+    [ $status -eq 0 ] || error "parallel_grouplock status: $status"
+    rm -rf $testdir
+}
+run_test parallel_grouplock "parallel_grouplock"
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
