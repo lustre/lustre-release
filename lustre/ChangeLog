@@ -15,6 +15,16 @@ tbd Sun Microsystems, Inc.
 	  more information, please refer to bugzilla 17630.
 
 Severity   : normal
+Bugzilla   : 20482
+Description: Error handling in osc_statfs_interpret() has been improved.
+Details    : Check in osc_statfs_interpret() for EBADR.
+
+Severity   : normal
+Bugzilla   : 20482
+Description: Do not send statfs() requests to OSTs disabled by administrator.
+Details    : Check in lov_prep_statfs_set() for non-NULL ltd_exp.
+
+Severity   : normal
 Bugzilla   : 20146
 Description: Do not update ctime for the deleted inode.
 Details    : Check in mds_reint_unlink() before calling fsfilt_setattr().
