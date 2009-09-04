@@ -112,16 +112,16 @@ test_compilebench() {
     print_opts cbench_DIR cbench_IDIRS cbench_RUNS
 
     [ x$cbench_DIR = x ] &&
-        { skip "compilebench not found" && return; }
+        { skip_env "compilebench not found" && return; }
 
     [ -e $cbench_DIR/compilebench ] || \
-        { skip "No compilebench build" && return; }
+        { skip_env "No compilebench build" && return; }
 
     local space=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
     if [ $space -le $((680 * 1024 * cbench_IDIRS)) ]; then
         cbench_IDIRS=$(( space / 680 / 1024))
         [ $cbench_IDIRS = 0 ] && \
-            skip "Need free space atleast 680 Mb, have $space" && return
+            skip_env "Need free space atleast 680 Mb, have $space" && return
 
         log free space=$space, reducing initial dirs to $cbench_IDIRS
     fi
@@ -150,7 +150,7 @@ run_test compilebench "compilebench"
 
 test_metabench() {
     [ x$METABENCH = x ] &&
-        { skip "metabench not found" && return; }
+        { skip_env "metabench not found" && return; }
 
     local clients=$CLIENTS
     [ -z $clients ] && clients=$(hostname)
@@ -187,7 +187,7 @@ run_test metabench "metabench"
 
 test_simul() {
     [ x$SIMUL = x ] &&
-        { skip "simul not found" && return; }
+        { skip_env "simul not found" && return; }
 
     local clients=$CLIENTS
     [ -z $clients ] && clients=$(hostname)
@@ -227,10 +227,10 @@ test_connectathon() {
     print_opts cnt_DIR cnt_NRUN
 
     [ x$cnt_DIR = x ] &&
-        { skip "connectathon dir not found" && return; }
+        { skip_env "connectathon dir not found" && return; }
 
     [ -e $cnt_DIR/runtests ] || \
-        { skip "No connectathon runtests found" && return; }
+        { skip_env "No connectathon runtests found" && return; }
 
     local testdir=$DIR/d0.connectathon
     mkdir -p $testdir
@@ -260,7 +260,7 @@ run_test connectathon "connectathon"
 
 test_ior() {
     [ x$IOR = x ] &&
-        { skip "IOR not found" && return; }
+        { skip_env "IOR not found" && return; }
 
     local clients=$CLIENTS
     [ -z $clients ] && clients=$(hostname)
@@ -273,7 +273,7 @@ test_ior() {
         echo "+ $space * 9/10 / 1024 / 1024 / $num_clients / $ior_THREADS"
         ior_blockSize=$(( space /2 /1024 /1024 / num_clients / ior_THREADS ))
         [ $ior_blockSize = 0 ] && \
-            skip "Need free space more than ($num_clients * $ior_THREADS )Gb: $((num_clients*ior_THREADS *1024 *1024*2)), have $space" && return
+            skip_env "Need free space more than ($num_clients * $ior_THREADS )Gb: $((num_clients*ior_THREADS *1024 *1024*2)), have $space" && return
 
         echo "free space=$space, Need: $num_clients x $ior_THREADS x $ior_blockSize Gb (blockSize reduced to $ior_blockSize Gb)"
     fi
@@ -311,7 +311,7 @@ run_test ior "ior"
  
 test_cascading_rw() {
     [ x$CASC_RW = x ] &&
-        { skip "cascading_rw not found" && return; }
+        { skip_env "cascading_rw not found" && return; }
 
     local clients=$CLIENTS
     [ -z $clients ] && clients=$(hostname)
@@ -350,7 +350,7 @@ run_test cascading_rw "cascading_rw"
 test_write_append_truncate() {
     # location is lustre/tests dir 
     if ! which write_append_truncate > /dev/null 2>&1 ; then
-        skip "write_append_truncate not found"
+        skip_env "write_append_truncate not found"
         return
     fi
 
@@ -390,7 +390,7 @@ run_test write_append_truncate "write_append_truncate"
 
 test_write_disjoint() {
     [ x$WRITE_DISJOINT = x ] &&
-        { skip "write_disjoint not found" && return; }
+        { skip_env "write_disjoint not found" && return; }
 
     local clients=$CLIENTS
     [ -z $clients ] && clients=$(hostname)

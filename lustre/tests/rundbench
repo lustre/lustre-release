@@ -29,7 +29,7 @@ CLIENT_PREFIX="${DBENCH_LIB} /usr/share/dbench /usr/local/share /usr/lib/dbench"
 CLIENT_FILE="client.txt client_plain.txt dbench_client"
 if ! which dbench > /dev/null 2>&1 ; then
     [ "$MISSING_DBENCH_OK" ] || { error "$0 : $(hostname) dbench is not installed !" && exit 3; }
-    skip "$0 : $(hostname) dbench is not installed"
+    skip_env "$0 : $(hostname) dbench is not installed"
     exit 0
 fi
 CLIENT=""
@@ -49,7 +49,7 @@ if [ -n "$SRC" -a -s "$SRC" ]; then
 fi
 
 [ ! -s "$CLIENT" ] && \
-    skip "$0 : $(hostname) no client file found for dbench DBENCH_LIB=$DBENCH_LIB SRC=$SRC" && \
+    skip_env "$0 : $(hostname) no client file found for dbench DBENCH_LIB=$DBENCH_LIB SRC=$SRC" && \
         exit 0 
 
 [ ! -s "$TGT" ] && echo "copying $CLIENT to $TGT" && cp $CLIENT $TGT

@@ -42,6 +42,7 @@ usage() {
 }
 
 print_summary () {
+    trap 0
     [ "$TESTSUITE" == "lfscktest" ] && return 0
     [ -n "$ONLY" ] && echo "WARNING: ONLY is set to ${ONLY}."
     local form="%-13s %-17s %s\n"
@@ -63,8 +64,16 @@ print_summary () {
     done
 
     for O in $TESTSUITE_LIST; do
-        [ "${!O}" = "no" ] && \
-            printf "$form" "Skipped" "$O" ""
+        if [ "${!O}" = "no" ]; then
+            # FIXME.
+            # only for those tests suits which are run directly from acc-sm script:
+            # bonnie, iozone, etc.
+            if [ -f "$TESTSUITELOG" ] && grep FAIL $TESTSUITELOG | grep -q ' '$O  ; then
+               printf "$form" "UNFINISHED" "$O" ""  
+            else
+               printf "$form" "Skipped" "$O" ""
+            fi
+        fi
     done
 
     for O in $TESTSUITE_LIST; do
@@ -77,6 +86,7 @@ init_test_env() {
     export LUSTRE=`absolute_path $LUSTRE`
     export TESTSUITE=`basename $0 .sh`
     export TEST_FAILED=false
+    export FAIL_ON_SKIP_ENV=${FAIL_ON_SKIP_ENV:-false}
 
     export MKE2FS=${MKE2FS:-mke2fs}
     export DEBUGFS=${DEBUGFS:-debugfs}
@@ -2198,11 +2208,22 @@ error_noexit() {
     local TYPE=${TYPE:-"FAIL"}
     local ERRLOG
     lctl set_param fail_loc=0 2>/dev/null || true
+
+    local dump=true
+    # do not dump logs if $1=false
+    if [ "x$1" = "xfalse" ]; then
+        shift
+        dump=false
+    fi
+
     log " ${TESTSUITE} ${TESTNAME}: @@@@@@ ${TYPE}: $@ "
-    ERRLOG=$TMP/lustre_${TESTSUITE}_${TESTNAME}.$(date +%s)
-    echo "Dumping lctl log to $ERRLOG"
-    # We need to dump the logs on all nodes
-    do_nodes $(comma_list $(nodes_list)) $NODE $LCTL dk $ERRLOG
+
+    if $dump; then
+        ERRLOG=$TMP/lustre_${TESTSUITE}_${TESTNAME}.$(date +%s)
+        echo "Dumping lctl log to $ERRLOG"
+        # We need to dump the logs on all nodes
+        do_nodes $(comma_list $(nodes_list)) $NODE $LCTL dk $ERRLOG
+    fi
     debugrestore
     [ "$TESTSUITELOG" ] && echo "$0: ${TYPE}: $TESTNAME $@" >> $TESTSUITELOG
     TEST_FAILED=true
@@ -2225,6 +2246,10 @@ error_ignore() {
     local TYPE="IGNORE (bz$1)"
     shift
     error_noexit "$@"
+}
+
+skip_env () {
+    $FAIL_ON_SKIP_ENV && error false $@ || skip $@
 }
 
 skip () {
