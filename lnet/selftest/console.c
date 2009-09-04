@@ -1711,7 +1711,7 @@ lstcon_session_new(char *name, int key,
 
         rc = lstcon_rpc_pinger_start();
         if (rc != 0) {
-                lstcon_batch_t *bat;
+                lstcon_batch_t *bat = NULL;
 
                 lstcon_batch_find(LST_DEFAULT_BATCH, &bat);
                 lstcon_batch_destroy(bat);
