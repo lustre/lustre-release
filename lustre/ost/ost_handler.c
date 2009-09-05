@@ -481,8 +481,12 @@ static void ost_brw_lock_put(int mode,
         LASSERT(mode == LCK_PR || mode == LCK_PW);
         LASSERT((obj->ioo_bufcnt > 0 && (niob[0].flags & OBD_BRW_SRVLOCK)) ==
                 lustre_handle_is_used(lh));
-        if (lustre_handle_is_used(lh))
+        if (lustre_handle_is_used(lh)) {
+                struct ldlm_lock *lock = ldlm_handle2lock(lh);
+                ldlm_res_lvbo_update(lock->l_resource, NULL, 0, 1);
+                LDLM_LOCK_PUT(lock);
                 ldlm_lock_decref(lh, mode);
+        }
         EXIT;
 }
 
