@@ -7,6 +7,7 @@ dev_read_only-2.6.27-vanilla.patch
 export-2.6.27-vanilla.patch 
 export-show_task-2.6.27-vanilla.patch 
 sd_iostats-2.6.27-vanilla.patch
+blkdev_tunables-2.6-sles11.patch
 md-mmp-unplug-dev-sles11.patch
 quota-support-64-bit-quota-format.patch
 jbd2-jcberr-2.6-sles11.patch
