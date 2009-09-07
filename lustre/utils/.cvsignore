@@ -33,3 +33,4 @@ tunefs_lustre
 loadgen
 lreplicate
 lshowmount
+ll_recover_lost_found_objs
