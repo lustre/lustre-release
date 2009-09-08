@@ -70,13 +70,19 @@ void cfs_bitmap_set(bitmap_t *bitmap, int nbit)
 static inline
 void cfs_bitmap_clear(bitmap_t *bitmap, int nbit)
 {
-        clear_bit(nbit, bitmap->data);
+        test_and_clear_bit(nbit, bitmap->data);
 }
 
 static inline
 int cfs_bitmap_check(bitmap_t *bitmap, int nbit)
 {
 	return test_bit(nbit, bitmap->data);
+}
+
+static inline
+int cfs_bitmap_test_and_clear(bitmap_t *bitmap, int nbit)
+{
+	return test_and_clear_bit(nbit, bitmap->data);
 }
 
 /* return 0 is bitmap has none set bits */
