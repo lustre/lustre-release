@@ -42,7 +42,7 @@
 #define __LIBCFS_USER_BITOPS_H__
 
 /* test if bit nr is set in bitmap addr; returns previous value of bit nr */
-static __inline__ int set_bit(int nr, unsigned long *addr)
+static __inline__ int test_and_set_bit(int nr, unsigned long *addr)
 {
         unsigned long mask;
 
@@ -53,8 +53,10 @@ static __inline__ int set_bit(int nr, unsigned long *addr)
         return nr;
 }
 
+#define set_bit(n, a) test_and_set_bit(n, a)
+
 /* clear bit nr in bitmap addr; returns previous value of bit nr*/
-static __inline__ int clear_bit(int nr, unsigned long *addr)
+static __inline__ int test_and_clear_bit(int nr, unsigned long *addr)
 {
         unsigned long mask;
 
@@ -64,6 +66,8 @@ static __inline__ int clear_bit(int nr, unsigned long *addr)
         *addr &= ~mask;
         return nr;
 }
+
+#define clear_bit(n, a) test_and_clear_bit(n, a)
 
 static __inline__ int test_bit(int nr, const unsigned long *addr)
 {

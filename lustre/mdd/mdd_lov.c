@@ -410,6 +410,8 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
         if (spec->no_create != 0) {
                 *lmm = (struct lov_mds_md *)spec->u.sp_ea.eadata;
                 *lmm_size = spec->u.sp_ea.eadatalen;
+                LASSERT(*lmm_size == lov_mds_md_size((*lmm)->lmm_stripe_count,
+                                                     (*lmm)->lmm_magic));
                 RETURN(0);
         }
 
