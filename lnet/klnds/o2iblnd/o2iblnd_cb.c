@@ -92,6 +92,7 @@ kiblnd_tx_done (lnet_ni_t *ni, kib_tx_t *tx)
         LASSERT (!tx->tx_queued);               /* mustn't be queued for sending */
         LASSERT (tx->tx_sending == 0);          /* mustn't be awaiting sent callback */
         LASSERT (!tx->tx_waiting);              /* mustn't be awaiting peer response */
+        LASSERT (tx->tx_pool != NULL);
 
 #if IBLND_MAP_ON_DEMAND
         if (tx->tx_fmr != NULL) {
@@ -129,7 +130,9 @@ kiblnd_tx_done (lnet_ni_t *ni, kib_tx_t *tx)
 
         spin_lock(&net->ibn_tx_lock);
 
-        list_add(&tx->tx_list, &net->ibn_idle_txs);
+        LASSERT (tx->tx_pool->tp_allocated > 0);
+        list_add(&tx->tx_list, &tx->tx_pool->tp_idle_txs);
+        tx->tx_pool->tp_allocated --;
 
         spin_unlock(&net->ibn_tx_lock);
 
@@ -161,25 +164,90 @@ kiblnd_txlist_done (lnet_ni_t *ni, struct list_head *txlist, int status)
 kib_tx_t *
 kiblnd_get_idle_tx (lnet_ni_t *ni)
 {
-        kib_net_t     *net = ni->ni_data;
-        kib_tx_t      *tx;
+        CFS_LIST_HEAD    (zombie);
+        kib_net_t        *net = ni->ni_data;
+        kib_tx_pool_t    *tp  = NULL;
+        kib_tx_pool_t    *pacer;
+        kib_tx_pool_t    *next;
+        kib_tx_t         *tx;
+        cfs_time_t        now;
 
         LASSERT (net != NULL);
 
+again:
+        now = cfs_time_current();
         spin_lock(&net->ibn_tx_lock);
 
-        if (list_empty(&net->ibn_idle_txs)) {
+        /* the first txpool is persistent */
+        LASSERT (!list_empty(&net->ibn_tx_pool));
+
+        list_for_each_entry_safe(pacer, next, &net->ibn_tx_pool, tp_list) {
+                if (tp == NULL && !list_empty(&pacer->tp_idle_txs)) {
+                        tp = pacer;
+                        continue;
+                }
+
+                if (pacer->tp_allocated != 0) /* still in use */
+                        continue;
+
+                if (cfs_time_before(now, pacer->tp_deadline))
+                        continue;
+
+                list_del(&pacer->tp_list);
+                list_add(&pacer->tp_list, &zombie);
+        }
+
+        if (likely(tp != NULL))
+                goto found;
+
+        /* no available tx pool and ... */
+        LASSERT (list_empty(&zombie));
+        if (net->ibn_allocating) {
+                /* another thread is allocating a new pool */
+                spin_unlock(&net->ibn_tx_lock);
+                CDEBUG(D_NET, "Another thread is allocating new "
+                              "TX pool, waiting for her to complete\n");
+                our_cond_resched();
+                goto again;
+        }
+
+        if (cfs_time_before(now, net->ibn_next_allocate)) {
+                /* someone failed recently */
                 spin_unlock(&net->ibn_tx_lock);
                 return NULL;
         }
 
-        tx = list_entry(net->ibn_idle_txs.next, kib_tx_t, tx_list);
+        net->ibn_allocating = 1;
+        spin_unlock(&net->ibn_tx_lock);
+
+        CDEBUG(D_NET, "TX exhausted, allocate new TX pool\n");
+        tp = kiblnd_alloc_tx_pool(IBLND_TX_MSGS_MIN);
+        if (tp != NULL)
+                kiblnd_map_tx_pool(ni, tp);
+
+        spin_lock(&net->ibn_tx_lock);
+
+        net->ibn_allocating = 0;
+        if (tp == NULL) {
+                /* retry 10 seconds later */
+                net->ibn_next_allocate = cfs_time_shift(10);
+                spin_unlock(&net->ibn_tx_lock);
+                CERROR("Can't allocate new TX pool because out of memory\n");
+                goto again; /* try again to see if somebody freed TX */
+        }
+
+        list_add_tail(&tp->tp_list, &net->ibn_tx_pool);
+found:
+        tp->tp_allocated ++;
+        tp->tp_deadline = cfs_time_shift(IBLND_TX_POOL_ALIVE);
+
+        tx = list_entry(tp->tp_idle_txs.next, kib_tx_t, tx_list);
         list_del(&tx->tx_list);
 
         /* Allocate a new completion cookie.  It might not be needed,
          * but we've got a lock right now and we're unlikely to
          * wrap... */
-        tx->tx_cookie = kiblnd_data.kib_next_tx_cookie++;
+        tx->tx_cookie = net->ibn_next_tx_cookie++;
 
         spin_unlock(&net->ibn_tx_lock);
 
@@ -196,6 +264,13 @@ kiblnd_get_idle_tx (lnet_ni_t *ni)
 #else
         LASSERT (tx->tx_nfrags == 0);
 #endif
+
+        while (!list_empty(&zombie)) {
+                pacer = list_entry(zombie.next, kib_tx_pool_t, tp_list);
+                list_del_init(&pacer->tp_list);
+                kiblnd_unmap_tx_pool(ni, pacer);
+                kiblnd_free_tx_pool(pacer);
+        }
 
         return tx;
 }

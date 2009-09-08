@@ -115,8 +115,7 @@ typedef int gfp_t;
 
 /* TX messages (shared by all connections) */
 #define IBLND_TX_MSGS()       (*kiblnd_tunables.kib_ntx)
-#define IBLND_TX_MSG_BYTES()  (IBLND_TX_MSGS() * IBLND_MSG_SIZE)
-#define IBLND_TX_MSG_PAGES()  ((IBLND_TX_MSG_BYTES() + PAGE_SIZE - 1)/PAGE_SIZE)
+#define IBLND_TX_MSGS_MIN      128
 
 /* RX messages (per connection) */
 #define IBLND_RX_MSGS         (IBLND_MSG_QUEUE_SIZE * 2)
@@ -173,19 +172,33 @@ typedef struct
         struct ib_mr        *ibd_mr;            /* MR for non RDMA I/O */
 } kib_dev_t;
 
+#define IBLND_TX_POOL_ALIVE     300             /* # of seconds to keep tx pool alive */
+
+typedef struct
+{
+        struct list_head     tp_list;           /* chain on net */
+        cfs_time_t           tp_deadline;       /* deadline to keep this pool alive */
+        int                  tp_ntx_descs;      /* # of descriptors */
+        int                  tp_allocated;      /* # of allocated descriptors */
+        struct kib_tx       *tp_tx_descs;       /* all the tx descriptors */
+        kib_pages_t         *tp_tx_pages;       /* premapped tx msg pages */
+        struct list_head     tp_idle_txs;       /* idle tx descriptors */
+} kib_tx_pool_t;
+
 typedef struct
 {
         __u64                ibn_incarnation;   /* my epoch */
+        __u64                ibn_next_tx_cookie; /* RDMA completion cookie */
         int                  ibn_init;          /* initialisation state */
         int                  ibn_shutdown;      /* shutting down? */
 
         atomic_t             ibn_npeers;        /* # peers extant */
         atomic_t             ibn_nconns;        /* # connections extant */
 
-        struct kib_tx       *ibn_tx_descs;      /* all the tx descriptors */
-        kib_pages_t         *ibn_tx_pages;      /* premapped tx msg pages */
-        struct list_head     ibn_idle_txs;      /* idle tx descriptors */
         spinlock_t           ibn_tx_lock;       /* serialise */
+        struct list_head     ibn_tx_pool;       /* head of tx pool, the first one is persistent */
+        cfs_time_t           ibn_next_allocate; /* stamp for next try of allocating new pool */
+        int                  ibn_allocating;    /* allocating new pool */
 
 #if IBLND_MAP_ON_DEMAND
         struct ib_fmr_pool  *ibn_fmrpool;       /* FMR pool for RDMA I/O */
@@ -215,7 +228,6 @@ typedef struct
         struct list_head     kib_sched_conns;   /* conns to check for rx completions */
         spinlock_t           kib_sched_lock;    /* serialise */
 
-        __u64                kib_next_tx_cookie; /* RDMA completion cookie */
         struct ib_qp_attr    kib_error_qpa;      /* QP->ERROR */
 } kib_data_t;
 
@@ -364,11 +376,12 @@ typedef struct kib_rx                           /* receive message */
 typedef struct kib_tx                           /* transmit message */
 {
         struct list_head          tx_list;      /* queue on idle_txs ibc_tx_queue etc. */
+        kib_tx_pool_t            *tx_pool;      /* pool I'm from */
         struct kib_conn          *tx_conn;      /* owning conn */
-        int                       tx_sending;   /* # tx callbacks outstanding */
-        int                       tx_queued;    /* queued for sending */
-        int                       tx_waiting;   /* waiting for peer */
-        int                       tx_status;    /* LNET completion status */
+        short                     tx_sending;   /* # tx callbacks outstanding */
+        short                     tx_queued;    /* queued for sending */
+        short                     tx_waiting;   /* waiting for peer */
+        short                     tx_status;    /* LNET completion status */
         unsigned long             tx_deadline;  /* completion deadline */
         __u64                     tx_cookie;    /* completion cookie */
         lnet_msg_t               *tx_lntmsg[2]; /* lnet msgs to finalize on completion */
@@ -731,6 +744,12 @@ void kiblnd_tunables_fini(void);
 int  kiblnd_connd (void *arg);
 int  kiblnd_scheduler(void *arg);
 int  kiblnd_thread_start (int (*fn)(void *arg), void *arg);
+
+kib_tx_pool_t *kiblnd_alloc_tx_pool(int ntxs);
+void kiblnd_free_tx_pool(kib_tx_pool_t *tp);
+
+void kiblnd_map_tx_pool (lnet_ni_t *ni, kib_tx_pool_t *tp);
+void kiblnd_unmap_tx_pool (lnet_ni_t *ni, kib_tx_pool_t *tp);
 
 int  kiblnd_alloc_pages (kib_pages_t **pp, int npages);
 void kiblnd_free_pages (kib_pages_t *p);

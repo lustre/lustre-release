@@ -1118,16 +1118,16 @@ kiblnd_alloc_pages (kib_pages_t **pp, int npages)
 }
 
 void
-kiblnd_free_tx_descs (lnet_ni_t *ni)
+kiblnd_free_tx_pool(kib_tx_pool_t *tp)
 {
         int        i;
-        kib_net_t *net = ni->ni_data;
 
-        LASSERT (net != NULL);
+        LASSERT (list_empty(&tp->tp_list));
+        LASSERT (tp->tp_allocated == 0);
 
-        if (net->ibn_tx_descs != NULL) {
-                for (i = 0; i < IBLND_TX_MSGS(); i++) {
-                        kib_tx_t *tx = &net->ibn_tx_descs[i];
+        if (tp->tp_tx_descs != NULL) {
+                for (i = 0; i < tp->tp_ntx_descs; i++) {
+                        kib_tx_t *tx = &tp->tp_tx_descs[i];
 
 #if IBLND_MAP_ON_DEMAND
                         if (tx->tx_pages != NULL)
@@ -1156,92 +1156,112 @@ kiblnd_free_tx_descs (lnet_ni_t *ni)
 #endif
                 }
 
-                LIBCFS_FREE(net->ibn_tx_descs,
-                            IBLND_TX_MSGS() * sizeof(kib_tx_t));
+                LIBCFS_FREE(tp->tp_tx_descs,
+                            tp->tp_ntx_descs * sizeof(kib_tx_t));
         }
 
-        if (net->ibn_tx_pages != NULL)
-                kiblnd_free_pages(net->ibn_tx_pages);
+        if (tp->tp_tx_pages != NULL)
+                kiblnd_free_pages(tp->tp_tx_pages);
+
+        LIBCFS_FREE(tp, sizeof(kib_tx_pool_t));
 }
 
-int
-kiblnd_alloc_tx_descs (lnet_ni_t *ni)
+kib_tx_pool_t *
+kiblnd_alloc_tx_pool(int ntxs)
 {
-        int        i;
-        int        rc;
-        kib_net_t *net = ni->ni_data;
+        int            i;
+        int            npg;
+        kib_tx_pool_t *tp;
 
-        LASSERT (net != NULL);
+        LASSERT (ntxs > 0);
 
-        rc = kiblnd_alloc_pages(&net->ibn_tx_pages, IBLND_TX_MSG_PAGES());
-
-        if (rc != 0) {
-                CERROR("Can't allocate tx pages\n");
-                return rc;
+        LIBCFS_ALLOC(tp, sizeof(kib_tx_pool_t));
+        if (tp == NULL) {
+                CERROR("Can't allocate tx pool\n");
+                return NULL;
         }
 
-        LIBCFS_ALLOC (net->ibn_tx_descs,
-                      IBLND_TX_MSGS() * sizeof(kib_tx_t));
-        if (net->ibn_tx_descs == NULL) {
-                CERROR("Can't allocate %d tx descriptors\n", IBLND_TX_MSGS());
-                return -ENOMEM;
+        memset(tp, 0, sizeof(kib_tx_pool_t));
+
+        CFS_INIT_LIST_HEAD(&tp->tp_list);
+        CFS_INIT_LIST_HEAD(&tp->tp_idle_txs);
+        tp->tp_ntx_descs = ntxs;
+
+        npg = (ntxs * IBLND_MSG_SIZE + PAGE_SIZE - 1) / PAGE_SIZE;
+
+        if (kiblnd_alloc_pages(&tp->tp_tx_pages, npg) != 0) {
+                CERROR("Can't allocate %d pages for txpool\n", npg);
+                kiblnd_free_tx_pool(tp);
+                return NULL;
         }
 
-        memset(net->ibn_tx_descs, 0,
-               IBLND_TX_MSGS() * sizeof(kib_tx_t));
+        LIBCFS_ALLOC (tp->tp_tx_descs, ntxs * sizeof(kib_tx_t));
+        if (tp->tp_tx_descs == NULL) {
+                CERROR("Can't allocate %d tx descriptors\n", ntxs);
+                kiblnd_free_tx_pool(tp);
+                return NULL;
+        }
 
-        for (i = 0; i < IBLND_TX_MSGS(); i++) {
-                kib_tx_t *tx = &net->ibn_tx_descs[i];
+        memset(tp->tp_tx_descs, 0, ntxs * sizeof(kib_tx_t));
 
+        for (i = 0; i < ntxs; i++) {
+                kib_tx_t *tx = &tp->tp_tx_descs[i];
+
+                tx->tx_pool = tp;
 #if IBLND_MAP_ON_DEMAND
                 LIBCFS_ALLOC(tx->tx_pages, LNET_MAX_IOV *
                              sizeof(*tx->tx_pages));
                 if (tx->tx_pages == NULL) {
                         CERROR("Can't allocate phys page vector[%d]\n",
                                LNET_MAX_IOV);
-                        return -ENOMEM;
+                        break;
                 }
 #else
                 LIBCFS_ALLOC(tx->tx_wrq,
                              (1 + IBLND_MAX_RDMA_FRAGS) *
                              sizeof(*tx->tx_wrq));
                 if (tx->tx_wrq == NULL)
-                        return -ENOMEM;
+                        break;
 
                 LIBCFS_ALLOC(tx->tx_sge,
                              (1 + IBLND_MAX_RDMA_FRAGS) *
                              sizeof(*tx->tx_sge));
                 if (tx->tx_sge == NULL)
-                        return -ENOMEM;
+                        break;
 
                 LIBCFS_ALLOC(tx->tx_rd,
                              offsetof(kib_rdma_desc_t,
                                       rd_frags[IBLND_MAX_RDMA_FRAGS]));
                 if (tx->tx_rd == NULL)
-                        return -ENOMEM;
+                        break;
 
                 LIBCFS_ALLOC(tx->tx_frags,
                              IBLND_MAX_RDMA_FRAGS * 
                              sizeof(*tx->tx_frags));
                 if (tx->tx_frags == NULL)
-                        return -ENOMEM;
+                        break;
 #endif
         }
 
-        return 0;
+        if (i == ntxs)
+                return tp;
+
+        kiblnd_free_tx_pool(tp);
+        return NULL;
 }
 
 void
-kiblnd_unmap_tx_descs (lnet_ni_t *ni)
+kiblnd_unmap_tx_pool (lnet_ni_t *ni, kib_tx_pool_t *tp)
 {
         int             i;
         kib_tx_t       *tx;
         kib_net_t      *net = ni->ni_data;
 
         LASSERT (net != NULL);
+        LASSERT (tp->tp_allocated == 0);
 
-        for (i = 0; i < IBLND_TX_MSGS(); i++) {
-                tx = &net->ibn_tx_descs[i];
+        for (i = 0; i < tp->tp_ntx_descs; i++) {
+                tx = &tp->tp_tx_descs[i];
 
                 kiblnd_dma_unmap_single(net->ibn_dev->ibd_cmid->device,
                                         KIBLND_UNMAP_ADDR(tx, tx_msgunmap,
@@ -1251,7 +1271,7 @@ kiblnd_unmap_tx_descs (lnet_ni_t *ni)
 }
 
 void
-kiblnd_map_tx_descs (lnet_ni_t *ni)
+kiblnd_map_tx_pool (lnet_ni_t *ni, kib_tx_pool_t *tp)
 {
         int             ipage = 0;
         int             page_offset = 0;
@@ -1268,9 +1288,9 @@ kiblnd_map_tx_descs (lnet_ni_t *ni)
         /* No fancy arithmetic when we do the buffer calculations */
         CLASSERT (PAGE_SIZE % IBLND_MSG_SIZE == 0);
 
-        for (i = 0; i < IBLND_TX_MSGS(); i++) {
-                page = net->ibn_tx_pages->ibp_pages[ipage];
-                tx = &net->ibn_tx_descs[i];
+        for (i = 0; i < tp->tp_ntx_descs; i++) {
+                page = tp->tp_tx_pages->ibp_pages[ipage];
+                tx = &tp->tp_tx_descs[i];
 
                 tx->tx_msg = (kib_msg_t *)(((char *)page_address(page)) +
                                            page_offset);
@@ -1280,7 +1300,7 @@ kiblnd_map_tx_descs (lnet_ni_t *ni)
                         tx->tx_msg, IBLND_MSG_SIZE, DMA_TO_DEVICE);
                 KIBLND_UNMAP_ADDR_SET(tx, tx_msgunmap, tx->tx_msgaddr);
 
-                list_add(&tx->tx_list, &net->ibn_idle_txs);
+                list_add(&tx->tx_list, &tp->tp_idle_txs);
 
                 page_offset += IBLND_MSG_SIZE;
                 LASSERT (page_offset <= PAGE_SIZE);
@@ -1288,7 +1308,7 @@ kiblnd_map_tx_descs (lnet_ni_t *ni)
                 if (page_offset == PAGE_SIZE) {
                         page_offset = 0;
                         ipage++;
-                        LASSERT (ipage <= IBLND_TX_MSG_PAGES());
+                        LASSERT (ipage <= tp->tp_tx_pages->ibp_npages);
                 }
         }
 }
@@ -1353,6 +1373,7 @@ kiblnd_shutdown (lnet_ni_t *ni)
 {
         kib_net_t        *net = ni->ni_data;
         rwlock_t         *g_lock = &kiblnd_data.kib_global_lock;
+        kib_tx_pool_t    *tp;
         int               i;
         unsigned long     flags;
 
@@ -1387,7 +1408,8 @@ kiblnd_shutdown (lnet_ni_t *ni)
                         cfs_pause(cfs_time_seconds(1));
                 }
 
-                kiblnd_unmap_tx_descs(ni);
+                list_for_each_entry(tp, &net->ibn_tx_pool, tp_list)
+                        kiblnd_unmap_tx_pool(ni, tp);
 
                 LASSERT (net->ibn_dev->ibd_nnets > 0);
                 net->ibn_dev->ibd_nnets--;
@@ -1408,14 +1430,19 @@ kiblnd_shutdown (lnet_ni_t *ni)
                 break;
         }
 
-        kiblnd_free_tx_descs(ni);
+        while (!list_empty(&net->ibn_tx_pool)) {
+                tp = list_entry(net->ibn_tx_pool.next,
+                                kib_tx_pool_t, tp_list);
+                list_del_init(&tp->tp_list);
+                kiblnd_free_tx_pool(tp);
+        }
 
         CDEBUG(D_MALLOC, "after LND net cleanup: kmem %d\n",
                atomic_read(&libcfs_kmemory));
 
         net->ibn_init = IBLND_INIT_NOTHING;
         ni->ni_data = NULL;
-        
+
         LIBCFS_FREE(net, sizeof(*net));
 
 out:
@@ -1502,6 +1529,7 @@ kiblnd_startup (lnet_ni_t *ni)
         char                     *ifname;
         kib_net_t                *net;
         kib_dev_t                *ibdev;
+        kib_tx_pool_t            *tp;
         struct list_head         *tmp;
         struct timeval            tv;
         int                       rc;
@@ -1528,13 +1556,16 @@ kiblnd_startup (lnet_ni_t *ni)
         ni->ni_peertxcredits = *kiblnd_tunables.kib_peercredits;
 
         spin_lock_init(&net->ibn_tx_lock);
-        INIT_LIST_HEAD(&net->ibn_idle_txs);
+        CFS_INIT_LIST_HEAD(&net->ibn_tx_pool);
 
-        rc = kiblnd_alloc_tx_descs(ni);
-        if (rc != 0) {
+        tp = kiblnd_alloc_tx_pool(IBLND_TX_MSGS());
+        if (tp == NULL) {
                 CERROR("Can't allocate tx descs\n");
                 goto failed;
         }
+
+        /* the persistent tx_pool on list */
+        list_add(&tp->tp_list, &net->ibn_tx_pool);
 
         if (ni->ni_interfaces[0] != NULL) {
                 /* Use the IPoIB interface specified in 'networks=' */
@@ -1689,8 +1720,7 @@ kiblnd_startup (lnet_ni_t *ni)
         }
 #endif
 
-        kiblnd_map_tx_descs(ni);
-
+        kiblnd_map_tx_pool(ni, tp);
         ibdev->ibd_nnets++;
         net->ibn_init = IBLND_INIT_ALL;
 
