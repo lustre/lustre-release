@@ -436,6 +436,9 @@ int mds_lov_write_objids(struct obd_device *obd)
 
                 LASSERT(data != NULL);
 
+                if (!cfs_bitmap_test_and_clear(mds->mds_lov_page_dirty, i))
+                        continue;
+
                 /* check for particaly filled last page */
                 if (i == mds->mds_lov_objid_lastpage)
                         size = (mds->mds_lov_objid_lastidx + 1) * sizeof(obd_id);
@@ -443,9 +446,10 @@ int mds_lov_write_objids(struct obd_device *obd)
                 CDEBUG(D_INFO,"write %lld - %u\n", off, size);
                 rc = fsfilt_write_record(obd, mds->mds_lov_objid_filp, data,
                                          size, &off, 0);
-                if (rc < 0)
+                if (rc < 0) {
+                        cfs_bitmap_set(mds->mds_lov_page_dirty, i);
                         break;
-                cfs_bitmap_clear(mds->mds_lov_page_dirty, i);
+                }
         }
         if (rc >= 0)
                 rc = 0;
