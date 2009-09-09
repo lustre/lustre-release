@@ -121,7 +121,7 @@ struct obd_type *class_get_type(const char *name)
                 const char *modname = name;
                 if (strcmp(modname, LUSTRE_MDT_NAME) == 0)
                         modname = LUSTRE_MDS_NAME;
-                if (!request_module(modname)) {
+                if (!request_module("%s", modname)) {
                         CDEBUG(D_INFO, "Loaded module '%s'\n", modname);
                         type = class_search_type(name);
                 } else {

@@ -265,7 +265,7 @@ static inline int misc_deregister(void *foo)
         return 0;
 }
 
-static inline int request_module(char *name)
+static inline int request_module(const char *name, ...)
 {
         return (-EINVAL);
 }

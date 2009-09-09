@@ -207,11 +207,16 @@ pid_t fork_llstat_command(char* llstat_file,char* stats_path)
         pid_t pid_llstat_command;
         FILE *fp_popen, *fp_out;
         char buffer[MAX];
+        int ret;
         
         /* Truncating llstat output file as it will be opened in while
          * loop to append output */
         sprintf(truncate_command,"> %s",llstat_file);
-        system(truncate_command); 
+        if ((ret = system(truncate_command)) != 0) {
+                ret = WEXITSTATUS(ret);
+                printf("error excuting truncate command: %d\n", ret);
+                exit(ret);
+        }
 
         strcat(stats_path, "/stats");
 
@@ -343,7 +348,12 @@ char* get_path_stats(int with_llstat, char* stats_path)
                         /* If flow is here again it means there was an error
                          * and notifying that to user */
                         if (error) {
-                                system("clear");
+                                int ret;
+                                if ((ret = system("clear")) != 0) {
+                                        ret = WEXITSTATUS(ret);
+                                        printf("error excuting clear command: %d\n", ret);
+                                        exit(ret);
+                                }
                                 fprintf(stderr, "Error: Please give correct "
                                         "choice.\n");
                         }
@@ -356,8 +366,11 @@ char* get_path_stats(int with_llstat, char* stats_path)
 
                         printf("\nEnter the lustre client number you want to "
                                "use:");
-                        scanf(" %d", &choice);
-                        error ++;
+                        if (scanf(" %d", &choice) == EOF && ferror(stdin)) {
+                                perror("reading from stdin");
+                                exit(-1);
+                        }
+                        error++;
                 } while (choice > stats_glob_buffer.gl_pathc || choice < 1);
                 strcpy(stats_path, stats_glob_buffer.gl_pathv[choice - 1]);
         } else {
