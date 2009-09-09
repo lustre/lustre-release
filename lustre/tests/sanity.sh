@@ -1213,14 +1213,14 @@ test_27x() {
 	OFFSET=$(($OSTCOUNTi - 1))
 	OSTIDX=0
 	local OST=$(lfs osts | awk '/'${OSTIDX}': / { print $2 }' | sed -e 's/_UUID$//')
-	
+
 	mkdir -p $DIR/$tdir
 	$SETSTRIPE $DIR/$tdir -c 1	# 1 stripe per file
 	do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 1
 	sleep $DELAY
 	createmany -o $DIR/$tdir/$tfile $OSTCOUNT
 	for i in `seq 0 $OFFSET`; do
-		[ `$GETSTRIPE $DIR/$tdir/$tfile$i | grep -A 10 obdidx | awk '{print $1}' | grep -w "$OSTIDX"` ] && 
+		[ `$GETSTRIPE $DIR/$tdir/$tfile$i | grep -A 10 obdidx | awk '{print $1}' | grep -w "$OSTIDX"` ] &&
 		error "OST0 was degraded but new created file still use it"
 	done
 	do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 0
@@ -1248,10 +1248,10 @@ test_27y() {
         mkdir -p $DIR/$tdir
         $SETSTRIPE $DIR/$tdir -c 1      # 1 stripe / file
 
-        do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 1 
-        sleep $DELAY 
+        do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 1
+        sleep $DELAY
         createmany -o $DIR/$tdir/$tfile $OSTCOUNT
-        do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 0 
+        do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 0
 
         for i in `seq 0 $OFFSET`; do
                 [ `$GETSTRIPE $DIR/$tdir/$tfile$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "$OSTIDX"` ] || \
@@ -6056,7 +6056,7 @@ test_140() { #bug-17379
         cd $DIR/$tdir || error "Changing to $DIR/$tdir"
         cp /usr/bin/stat . || error "Copying stat to $DIR/$tdir"
 
-        # VFS limits max symlink depth to 5(4KSTACK) or 8
+        # VFS limits max symlink depth to 5(4KSTACK) or 7(8KSTACK) or 8
         local i=0
         while i=`expr $i + 1`; do
                 mkdir -p $i || error "Creating dir $i"
@@ -6077,7 +6077,7 @@ test_140() { #bug-17379
         done
         i=`expr $i - 1`
         echo "The symlink depth = $i"
-        [ $i -eq 4 -o $i -eq 8 ] || error "Invalid symlink depth"
+        [ $i -eq 5 -o $i -eq 7 -o $i -eq 8 ] || error "Invalid symlink depth"
 }
 run_test 140 "Check reasonable stack depth (shouldn't LBUG) ===="
 
@@ -6117,7 +6117,7 @@ function roc_hit() {
         do_nodes $list "$LCTL get_param -n obdfilter.*.stats" >$log
 
         local ACCNUM=`awk '/^cache_hit/ {sum=sum+$2} END{print sum}' $log`
-        rm -f $log 
+        rm -f $log
         echo $ACCNUM
 }
 
