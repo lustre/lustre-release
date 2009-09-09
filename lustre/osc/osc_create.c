@@ -451,8 +451,7 @@ int osc_create_async(struct obd_export *exp, struct obd_info *oinfo,
         struct obdo *oa = oinfo->oi_oa;
         ENTRY;
 
-        if ((oa->o_valid & OBD_MD_FLGROUP) &&
-            (oa->o_gr == FILTER_GROUP_ECHO || oa->o_gr == FILTER_GROUP_LLOG)){
+        if ((oa->o_valid & OBD_MD_FLGROUP) && !filter_group_is_mds(oa->o_gr)) {
                 rc = osc_real_create(exp, oinfo->oi_oa, ea, oti);
                 rc = oinfo->oi_cb_up(oinfo, rc);
                 RETURN(rc);
@@ -519,7 +518,6 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
 
         LASSERT(oa);
         LASSERT(ea);
-        LASSERT_MDS_GROUP(oa->o_gr);
         LASSERT(oa->o_valid & OBD_MD_FLGROUP);
 
         if ((oa->o_valid & OBD_MD_FLFLAGS) &&
@@ -527,7 +525,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 RETURN(osc_real_create(exp, oa, ea, oti));
         }
 
-        if (oa->o_gr == FILTER_GROUP_LLOG || oa->o_gr == FILTER_GROUP_ECHO)
+        if (!filter_group_is_mds(oa->o_gr))
                 RETURN(osc_real_create(exp, oa, ea, oti));
 
         /* this is the special case where create removes orphans */

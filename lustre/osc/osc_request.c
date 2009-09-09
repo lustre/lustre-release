@@ -312,10 +312,7 @@ static int osc_setattr(struct obd_export *exp, struct obd_info *oinfo,
         int                    rc;
         ENTRY;
 
-        LASSERTF(!(oinfo->oi_oa->o_valid & OBD_MD_FLGROUP) ||
-                 CHECK_MDS_GROUP(oinfo->oi_oa->o_gr),
-                 "oinfo->oi_oa->o_valid="LPU64" oinfo->oi_oa->o_gr="LPU64"\n",
-                 oinfo->oi_oa->o_valid, oinfo->oi_oa->o_gr);
+        LASSERT(oinfo->oi_oa->o_valid & OBD_MD_FLGROUP);
 
         req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_OST_SETATTR);
         if (req == NULL)

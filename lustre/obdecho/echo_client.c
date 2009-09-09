@@ -764,9 +764,10 @@ static struct lu_device *echo_device_free(const struct lu_env *env,
 {
         struct echo_device     *ed   = cl2echo_dev(lu2cl_dev(d));
         struct echo_client_obd *ec   = ed->ed_ec;
+        struct echo_object     *eco;
         struct lu_device       *next = ed->ed_next;
 
-        printk("ed = %p, ec = %p, next = %p\n", ed, ec, next);
+        CDEBUG(D_INFO, "echo device:%p is going to be freed, next = %p\n", ed, next);
 
         /* destroy locks */
         spin_lock(&ec->ec_lock);
@@ -797,20 +798,33 @@ static struct lu_device *echo_device_free(const struct lu_env *env,
         LASSERT(ed->ed_site);
         lu_site_purge(env, &ed->ed_site->cs_lu, -1);
 
-        /* check if there are objects still alive, assume only one reference */
+        /* check if there are objects still alive.
+         * It shouldn't have any object because lu_site_purge would cleanup
+         * all of cached objects. Anyway, probably the echo device is being
+         * parallelly accessed.
+         */
+        spin_lock(&ec->ec_lock);
+        list_for_each_entry(eco, &ec->ec_objects, eo_obj_chain)
+                eco->eo_deleted = 1;
+        spin_unlock(&ec->ec_lock);
+
+        /* purge again */
+        lu_site_purge(env, &ed->ed_site->cs_lu, -1);
+
+        CDEBUG(D_INFO, "Waiting for the reference of echo object to be dropped\n");
+
+        /* Wait for the last reference to be dropped. */
         spin_lock(&ec->ec_lock);
         while (!list_empty(&ec->ec_objects)) {
-                struct echo_object *eco;
-                eco = list_entry(ec->ec_objects.next, struct echo_object,
-                                 eo_obj_chain);
                 spin_unlock(&ec->ec_lock);
-
-                eco->eo_deleted = 1;
-                cl_echo_object_put(eco);
-
+                CERROR("echo_client still has objects at cleanup time, "
+                       "wait for 1 second\n");
+                cfs_schedule_timeout(CFS_TASK_UNINT, cfs_time_seconds(1));
                 spin_lock(&ec->ec_lock);
         }
         spin_unlock(&ec->ec_lock);
+
+        CDEBUG(D_INFO, "No object exists, exiting...\n");
 
         echo_client_cleanup(d->ld_obd);
 
@@ -871,6 +885,10 @@ static struct echo_object *cl_echo_object_find(struct echo_device *d,
         lsm = *lsmp;
         LASSERT(lsm);
         LASSERT(lsm->lsm_object_id);
+
+        /* Never return an object if the obd is to be freed. */
+        if (echo_dev2cl(d)->cd_lu_dev.ld_obd->obd_stopping)
+                RETURN(ERR_PTR(-ENODEV));
 
         env = cl_env_get(&refcheck);
         if (IS_ERR(env))
@@ -1250,9 +1268,9 @@ static int echo_create_object(struct echo_device *ed, int on_target,
 
         rc = 0;
         if (on_target) {
-                oa->o_gr = FILTER_GROUP_ECHO;
-                oa->o_valid |= OBD_MD_FLGROUP;
-
+                /* Only echo objects are allowed to be created */
+                LASSERT((oa->o_valid & OBD_MD_FLGROUP) &&
+                        (oa->o_gr == FILTER_GROUP_ECHO));
                 rc = obd_create(ec->ec_exp, oa, &lsm, oti);
                 if (rc != 0) {
                         CERROR("Cannot create objects, rc = %d\n", rc);
@@ -1595,6 +1613,9 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
                 ret = obd_commitrw(rw, exp, oa, 1,&ioo,rnb,npages,lnb,oti,ret);
                 if (ret != 0)
                         GOTO(out, ret);
+
+                /* Reset oti otherwise it would confuse ldiskfs. */
+                memset(oti, 0, sizeof(*oti));
         }
 
 out:
@@ -1612,30 +1633,31 @@ static int echo_client_brw_ioctl(int rw, struct obd_export *exp,
         struct echo_device *ed = obd2echo_dev(obd);
         struct echo_client_obd *ec = ed->ed_ec;
         struct obd_trans_info dummy_oti = { .oti_thread = NULL };
+        struct obdo *oa = &data->ioc_obdo1;
         struct echo_object *eco;
         int rc;
         int async = 1;
         ENTRY;
 
-        rc = echo_get_object(&eco, ed, &data->ioc_obdo1);
+        LASSERT(oa->o_valid & OBD_MD_FLGROUP);
+
+        rc = echo_get_object(&eco, ed, oa);
         if (rc)
                 RETURN(rc);
 
-        data->ioc_obdo1.o_valid &= ~OBD_MD_FLHANDLE;
-        data->ioc_obdo1.o_valid |= OBD_MD_FLGROUP;
-        data->ioc_obdo1.o_gr = FILTER_GROUP_ECHO;
+        oa->o_valid &= ~OBD_MD_FLHANDLE;
 
         switch((long)data->ioc_pbuf1) {
         case 1:
                 async = 0;
                 /* fall through */
         case 2:
-                rc = echo_client_kbrw(ed, rw, &data->ioc_obdo1,
+                rc = echo_client_kbrw(ed, rw, oa,
                                       eco, data->ioc_offset,
                                       data->ioc_count, async, &dummy_oti);
                 break;
         case 3:
-                rc = echo_client_prep_commit(ec->ec_exp, rw, &data->ioc_obdo1,
+                rc = echo_client_prep_commit(ec->ec_exp, rw, oa,
                                             eco, data->ioc_offset,
                                             data->ioc_count, data->ioc_plen1,
                                             &dummy_oti);
@@ -1716,12 +1738,20 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
 
         memset(&dummy_oti, 0, sizeof(dummy_oti));
 
+        oa = &data->ioc_obdo1;
+        if (!(oa->o_valid & OBD_MD_FLGROUP)) {
+                oa->o_valid |= OBD_MD_FLGROUP;
+                oa->o_gr = FILTER_GROUP_ECHO;
+        }
+        /* assume we can touch filter native objects with echo device. */
+        /* LASSERT(oa->o_gr == FILTER_GROUP_ECHO); */
+
         switch (cmd) {
         case OBD_IOC_CREATE:                    /* may create echo object */
                 if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
-                rc = echo_create_object (ed, 1, &data->ioc_obdo1,
+                rc = echo_create_object (ed, 1, oa,
                                          data->ioc_pbuf1, data->ioc_plen1,
                                          &dummy_oti);
                 GOTO(out, rc);
@@ -1730,11 +1760,8 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
-                rc = echo_get_object (&eco, ed, &data->ioc_obdo1);
+                rc = echo_get_object (&eco, ed, oa);
                 if (rc == 0) {
-                        oa = &data->ioc_obdo1;
-                        oa->o_gr = FILTER_GROUP_ECHO;
-                        oa->o_valid |= OBD_MD_FLGROUP;
                         rc = obd_destroy(ec->ec_exp, oa, eco->eo_lsm,
                                          &dummy_oti, NULL, NULL);
                         if (rc == 0)
@@ -1744,11 +1771,11 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 GOTO(out, rc);
 
         case OBD_IOC_GETATTR:
-                rc = echo_get_object (&eco, ed, &data->ioc_obdo1);
+                rc = echo_get_object (&eco, ed, oa);
                 if (rc == 0) {
                         struct obd_info oinfo = { { { 0 } } };
                         oinfo.oi_md = eco->eo_lsm;
-                        oinfo.oi_oa = &data->ioc_obdo1;
+                        oinfo.oi_oa = oa;
                         rc = obd_getattr(ec->ec_exp, &oinfo);
                         echo_put_object(eco);
                 }
@@ -1758,10 +1785,10 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
-                rc = echo_get_object (&eco, ed, &data->ioc_obdo1);
+                rc = echo_get_object (&eco, ed, oa);
                 if (rc == 0) {
                         struct obd_info oinfo = { { { 0 } } };
-                        oinfo.oi_oa = &data->ioc_obdo1;
+                        oinfo.oi_oa = oa;
                         oinfo.oi_md = eco->eo_lsm;
 
                         rc = obd_setattr(ec->ec_exp, &oinfo, NULL);
@@ -1780,7 +1807,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 GOTO(out, rc);
 
         case ECHO_IOC_GET_STRIPE:
-                rc = echo_get_object(&eco, ed, &data->ioc_obdo1);
+                rc = echo_get_object(&eco, ed, oa);
                 if (rc == 0) {
                         rc = echo_copyout_lsm(eco->eo_lsm, data->ioc_pbuf1,
                                               data->ioc_plen1);
@@ -1793,13 +1820,13 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                         GOTO (out, rc = -EPERM);
 
                 if (data->ioc_pbuf1 == NULL) {  /* unset */
-                        rc = echo_get_object(&eco, ed, &data->ioc_obdo1);
+                        rc = echo_get_object(&eco, ed, oa);
                         if (rc == 0) {
                                 eco->eo_deleted = 1;
                                 echo_put_object(eco);
                         }
                 } else {
-                        rc = echo_create_object(ed, 0, &data->ioc_obdo1,
+                        rc = echo_create_object(ed, 0, oa,
                                                 data->ioc_pbuf1,
                                                 data->ioc_plen1, &dummy_oti);
                 }
@@ -1809,14 +1836,14 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
-                rc = echo_client_enqueue(exp, &data->ioc_obdo1,
+                rc = echo_client_enqueue(exp, oa,
                                          data->ioc_conn1, /* lock mode */
                                          data->ioc_offset,
                                          data->ioc_count);/*extent*/
                 GOTO (out, rc);
 
         case ECHO_IOC_CANCEL:
-                rc = echo_client_cancel(exp, &data->ioc_obdo1);
+                rc = echo_client_cancel(exp, oa);
                 GOTO (out, rc);
 
         default:
@@ -1880,6 +1907,12 @@ static int echo_client_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
         ocd->ocd_group = FILTER_GROUP_ECHO;
 
         rc = obd_connect(NULL, &ec->ec_exp, tgt, &echo_uuid, ocd, NULL);
+        if (rc == 0) {
+                /* Turn off pinger because it connects to tgt obd directly. */
+                spin_lock(&tgt->obd_dev_lock);
+                list_del_init(&ec->ec_exp->exp_obd_chain_timed);
+                spin_unlock(&tgt->obd_dev_lock);
+        }
 
         OBD_FREE(ocd, sizeof(*ocd));
 
@@ -1903,6 +1936,7 @@ static int echo_client_cleanup(struct obd_device *obddev)
                 RETURN(-EBUSY);
         }
 
+        LASSERT(atomic_read(&ec->ec_exp->exp_refcount) > 0);
         rc = obd_disconnect(ec->ec_exp);
         if (rc != 0)
                 CERROR("fail to disconnect device: %d\n", rc);

@@ -419,7 +419,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         LASSERTF(objcount == 1, "%d\n", objcount);
         LASSERTF(obj->ioo_bufcnt > 0, "%d\n", obj->ioo_bufcnt);
 
-        rc = filter_auth_capa(exp, NULL, obdo_mdsno(oa), capa,
+        LASSERT(oa->o_valid & OBD_MD_FLGROUP);
+        rc = filter_auth_capa(exp, NULL, oa->o_gr, capa,
                               CAPA_OPC_OSS_READ);
         if (rc)
                 RETURN(rc);
@@ -686,12 +687,14 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         LASSERT(objcount == 1);
         LASSERT(obj->ioo_bufcnt > 0);
 
-        rc = filter_auth_capa(exp, NULL, obdo_mdsno(oa), capa,
+        LASSERT(oa->o_valid & OBD_MD_FLGROUP);
+        rc = filter_auth_capa(exp, NULL, oa->o_gr, capa,
                               CAPA_OPC_OSS_WRITE);
         if (rc)
                 RETURN(rc);
 
-        if (exp->exp_connection->c_peer.nid == exp->exp_connection->c_self) 
+        if (exp->exp_connection &&
+            exp->exp_connection->c_peer.nid == exp->exp_connection->c_self) 
                 localreq = 1;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
@@ -714,7 +717,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
         if (oa->o_valid & (OBD_MD_FLUID | OBD_MD_FLGID) &&
             dentry->d_inode->i_mode & (S_ISUID | S_ISGID)) {
-                rc = filter_capa_fixoa(exp, oa, obdo_mdsno(oa), capa);
+                rc = filter_capa_fixoa(exp, oa, oa->o_gr, capa);
                 if (rc)
                         GOTO(cleanup, rc);
         }

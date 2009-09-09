@@ -1003,8 +1003,6 @@ static int filter_update_last_group(struct obd_device *obd, int group)
                 CDEBUG(D_INODE, "error reading LAST_GROUP: rc %d\n",rc);
                 GOTO(cleanup, rc);
         }
-        LASSERTF(off == 0 || CHECK_MDS_GROUP(last_group),
-                 "off = %llu and last_group = %d\n", off, last_group);
 
         CDEBUG(D_INODE, "%s: previous %d, new %d\n",
                obd->obd_name, last_group, group);
@@ -1078,8 +1076,7 @@ static int filter_read_group_internal(struct obd_device *obd, int group,
                 GOTO(cleanup, rc);
         }
 
-        if (filter->fo_subdir_count &&
-            !(group == FILTER_GROUP_LLOG || group == FILTER_GROUP_ECHO)) {
+        if (filter->fo_subdir_count && filter_group_is_mds(group)) {
                 OBD_ALLOC(tmp_subdirs, sizeof(*tmp_subdirs));
                 if (tmp_subdirs == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
@@ -1143,7 +1140,7 @@ static int filter_read_group_internal(struct obd_device *obd, int group,
 
         filter->fo_dentry_O_groups[group] = dentry;
         filter->fo_last_objid_files[group] = filp;
-        if (filter->fo_subdir_count) {
+        if (filter->fo_subdir_count && filter_group_is_mds(group)) {
                 filter->fo_dentry_O_sub[group] = *tmp_subdirs;
                 OBD_FREE(tmp_subdirs, sizeof(*tmp_subdirs));
         }
@@ -1172,7 +1169,7 @@ static int filter_read_group_internal(struct obd_device *obd, int group,
                 if (new_files != NULL)
                         OBD_FREE(new_files, len * sizeof(*new_files));
         case 3:
-                if (filter->fo_subdir_count) {
+                if (filter->fo_subdir_count && filter_group_is_mds(group)) {
                         for (i = 0; i < filter->fo_subdir_count; i++) {
                                 if (tmp_subdirs->dentry[i] != NULL)
                                         dput(tmp_subdirs->dentry[i]);
@@ -1196,7 +1193,6 @@ static int filter_read_groups(struct obd_device *obd, int last_group,
         down(&filter->fo_init_lock);
         old_count = filter->fo_group_count;
         for (group = old_count; group <= last_group; group++) {
-
                 rc = filter_read_group_internal(obd, group, create);
                 if (rc != 0)
                         break;
@@ -1240,11 +1236,9 @@ static int filter_prep_groups(struct obd_device *obd)
                 CDEBUG(D_INODE, "error reading LAST_GROUP: rc %d\n", rc);
                 GOTO(cleanup, rc);
         }
-        if (off == 0) {
+
+        if (off == 0)
                 last_group = FILTER_GROUP_MDS0;
-        } else {
-                LASSERT_MDS_GROUP(last_group);
-        }
 
         CWARN("%s: initialize groups [%d,%d]\n", obd->obd_name,
               FILTER_GROUP_MDS0, last_group);
@@ -1435,8 +1429,7 @@ struct dentry *filter_parent(struct obd_device *obd, obd_gr group, obd_id objid)
         struct filter_subdirs *subdirs;
         LASSERT(group < filter->fo_group_count); /* FIXME: object groups */
 
-        if ((group > FILTER_GROUP_MDS0 && group < FILTER_GROUP_MDS1_N_BASE) ||
-             filter->fo_subdir_count == 0)
+        if (!filter_group_is_mds(group) || filter->fo_subdir_count == 0)
                 return filter->fo_dentry_O_groups[group];
 
         subdirs = &filter->fo_dentry_O_sub[group];
@@ -2934,10 +2927,6 @@ static void filter_grant_discard(struct obd_export *exp)
         struct filter_export_data *fed = &exp->exp_filter_data;
 
         spin_lock(&obd->obd_osfs_lock);
-        spin_lock(&obd->obd_dev_lock);
-        list_del_init(&exp->exp_obd_chain);
-        spin_unlock(&obd->obd_dev_lock);
-
         LASSERTF(filter->fo_tot_granted >= fed->fed_grant,
                  "%s: tot_granted "LPU64" cli %s/%p fed_grant %ld\n",
                  obd->obd_name, filter->fo_tot_granted,
@@ -3138,7 +3127,8 @@ static int filter_getattr(struct obd_export *exp, struct obd_info *oinfo)
         int rc = 0;
         ENTRY;
 
-        rc = filter_auth_capa(exp, NULL, oinfo_mdsno(oinfo),
+        LASSERT(oinfo->oi_oa->o_valid & OBD_MD_FLGROUP);
+        rc = filter_auth_capa(exp, NULL, oinfo->oi_oa->o_gr,
                               oinfo_capa(oinfo), CAPA_OPC_META_READ);
         if (rc)
                 RETURN(rc);
@@ -3386,12 +3376,14 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
 
         if (oa->o_valid & OBD_FL_TRUNC)
                 opc |= CAPA_OPC_OSS_TRUNC;
-        rc = filter_auth_capa(exp, NULL, obdo_mdsno(oa), capa, opc);
+
+        LASSERT(oa->o_valid & OBD_MD_FLGROUP);
+        rc = filter_auth_capa(exp, NULL, oa->o_gr, capa, opc);
         if (rc)
                 RETURN(rc);
 
         if (oa->o_valid & (OBD_MD_FLUID | OBD_MD_FLGID)) {
-                rc = filter_capa_fixoa(exp, oa, obdo_mdsno(oa), capa);
+                rc = filter_capa_fixoa(exp, oa, oa->o_gr, capa);
                 if (rc)
                         RETURN(rc);
         }
@@ -3642,8 +3634,7 @@ static int filter_handle_precreate(struct obd_export *exp, struct obdo *oa,
                         GOTO(out, rc = 0);
                 }
                 /* only precreate if group == 0 and o_id is specfied */
-                if (group == FILTER_GROUP_LLOG ||
-                    group == FILTER_GROUP_ECHO || oa->o_id == 0)
+                if (!filter_group_is_mds(group) || oa->o_id == 0)
                         diff = 1;
                 else
                         diff = oa->o_id - filter_last_id(filter, group);
@@ -4030,8 +4021,7 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
         ENTRY;
 
         LASSERT(oa->o_valid & OBD_MD_FLGROUP);
-
-        rc = filter_auth_capa(exp, NULL, obdo_mdsno(oa),
+        rc = filter_auth_capa(exp, NULL, oa->o_gr,
                               (struct lustre_capa *)capa, CAPA_OPC_OSS_DESTROY);
         if (rc)
                 RETURN(rc);
@@ -4239,7 +4229,8 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
         int rc, rc2;
         ENTRY;
 
-        rc = filter_auth_capa(exp, NULL, obdo_mdsno(oa),
+        LASSERT(oa->o_valid & OBD_MD_FLGROUP);
+        rc = filter_auth_capa(exp, NULL, oa->o_gr,
                               (struct lustre_capa *)capa, CAPA_OPC_OSS_WRITE);
         if (rc)
                 RETURN(rc);
@@ -4636,17 +4627,10 @@ static int __init obdfilter_init(void)
 {
         struct lprocfs_static_vars lvars;
         int rc, i;
-        struct obdo *oa;
 
         /** sanity check for group<->mdsno conversion */
-        OBD_ALLOC_PTR(oa);
-        if (oa == NULL)
-                return -ENOMEM;
-        for (i = 0; i < 32; i++) {
-                 oa->o_gr = mdt_to_obd_objgrp(i);
-                 LASSERT(obdo_mdsno(oa) == i);
-        }
-        OBD_FREE_PTR(oa);
+        for (i = 0; i < 32; i++)
+                 LASSERT(objgrp_to_mdsno(mdt_to_obd_objgrp(i)) == i);
 
         lprocfs_filter_init_vars(&lvars);
 

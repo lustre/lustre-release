@@ -231,9 +231,9 @@ static void lprocfs_filter_init_vars(struct lprocfs_static_vars *lvars)
 extern quota_interface_t *filter_quota_interface_ref;
 
 int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key);
-int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
+int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, obd_gr group,
                      struct lustre_capa *capa, __u64 opc);
-int filter_capa_fixoa(struct obd_export *exp, struct obdo *oa, __u64 mdsid,
+int filter_capa_fixoa(struct obd_export *exp, struct obdo *oa, obd_gr group,
                       struct lustre_capa *capa);
 void filter_free_capa_keys(struct filter_obd *filter);
 

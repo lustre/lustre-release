@@ -966,13 +966,30 @@ enum filter_groups {
         FILTER_GROUP_MDS1_N_BASE = 3
 };
 
-static inline __u64 obdo_mdsno(struct obdo *oa)
+/**
+  * In HEAD for CMD, the object is created in group number which is 3>=
+  * or indexing starts from 3. To test this assertions are added to disallow
+  * group 0. But to run 2.0 mds server on 1.8.x disk format (i.e. interop_mode)
+  * object in group 0 needs to be allowed.
+  * So for interop mode following changes needs to be done:
+  * 1. No need to assert on group 0 or allow group 0
+  * 2. The group number indexing starts from 0 instead of 3
+  */
+
+static inline int filter_group_is_mds(obd_gr group)
 {
-        if (oa->o_gr) {
-                LASSERT(oa->o_gr >= FILTER_GROUP_MDS1_N_BASE);
-                return oa->o_gr - FILTER_GROUP_MDS1_N_BASE + 1;
-        }
-        return 0;
+        return (group == FILTER_GROUP_MDS0 ||
+                group >= FILTER_GROUP_MDS1_N_BASE);
+}
+
+#define LASSERT_MDS_GROUP(group) LASSERT(filter_group_is_mds(group))
+
+static inline __u64 objgrp_to_mdsno(obd_gr group)
+{
+        LASSERT(filter_group_is_mds(group));
+        if (group == FILTER_GROUP_MDS0)
+                return 0;
+        return group - FILTER_GROUP_MDS1_N_BASE + 1;
 }
 
 static inline int mdt_to_obd_objgrp(int mdtid)
@@ -986,19 +1003,17 @@ static inline int mdt_to_obd_objgrp(int mdtid)
         return 0;
 }
 
-/**
-  * In HEAD for CMD, the object is created in group number which is 3>=
-  * or indexing starts from 3. To test this assertions are added to disallow
-  * group 0. But to run 2.0 mds server on 1.8.x disk format (i.e. interop_mode)
-  * object in group 0 needs to be allowed.
-  * So for interop mode following changes needs to be done:
-  * 1. No need to assert on group 0 or allow group 0
-  * 2. The group number indexing starts from 0 instead of 3
-  */
+static inline __u64 obdo_mdsno(struct obdo *oa)
+{
+        LASSERT((oa->o_valid & OBD_MD_FLGROUP));
+        return objgrp_to_mdsno(oa->o_gr);
+}
 
-#define CHECK_MDS_GROUP(group)          (group == FILTER_GROUP_MDS0 || \
-                                         group > FILTER_GROUP_MDS1_N_BASE)
-#define LASSERT_MDS_GROUP(group)        LASSERT(CHECK_MDS_GROUP(group))
+static inline int obdo_is_mds(struct obdo *oa)
+{
+        LASSERT(oa->o_valid & OBD_MD_FLGROUP);
+        return filter_group_is_mds(oa->o_gr);
+}
 
 struct obd_llog_group {
         struct list_head   olg_list;
@@ -1648,11 +1663,6 @@ static inline void init_obd_quota_ops(quota_interface_t *interface,
         obd_ops->o_quotacheck = QUOTA_OP(interface, check);
         obd_ops->o_quotactl = QUOTA_OP(interface, ctl);
         obd_ops->o_quota_adjust_qunit = QUOTA_OP(interface, adjust_qunit);
-}
-
-static inline __u64 oinfo_mdsno(struct obd_info *oinfo)
-{
-        return obdo_mdsno(oinfo->oi_oa);
 }
 
 static inline struct lustre_capa *oinfo_capa(struct obd_info *oinfo)
