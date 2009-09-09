@@ -186,13 +186,13 @@ main(int argc, char **argv)
                         server_mode_flag = 1;
                         break;
                 default:
-                        fprintf(stderr, usage_string);
+                        fprintf(stderr, "%s", usage_string);
                         return -1;
                 }
         }
 
         if (optind != argc || grp == NULL || ses == NULL) {
-                fprintf(stderr, usage_string);
+                fprintf(stderr, "%s", usage_string);
                 return -1;
         }
 

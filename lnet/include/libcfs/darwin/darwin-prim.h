@@ -473,7 +473,7 @@ struct __dummy_ ## name ## _struct {}
 #define inter_module_get(n)			cfs_symbol_get(n)
 #define inter_module_put(n)			cfs_symbol_put(n)
 
-static inline int request_module(char *name)
+static inline int request_module(const char *name, ...)
 {
 	return (-EINVAL);
 }

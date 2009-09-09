@@ -555,7 +555,7 @@ void sleep_on(cfs_waitq_t *waitq);
 #define __init
 #endif
 
-#define request_module(x) (0)
+#define request_module(x, y) (0)
 
 #define EXPORT_SYMBOL(s)
 #define MODULE_AUTHOR(s)
