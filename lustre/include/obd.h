@@ -199,11 +199,17 @@ struct obd_info {
 static inline int lov_stripe_md_cmp(struct lov_stripe_md *m1,
                                     struct lov_stripe_md *m2)
 {
+        int len = sizeof(m1->lsm_wire);
+
         /*
          * ->lsm_wire contains padding, but it should be zeroed out during
-         * allocation.
+         * allocation. If either lsm is LOV_MAGIC_V1 do not check that
+         * the pool is the same, due to downgrade/upgrade (b=20318).  This
+         * assumes that lw_pool_name is the last member in lsm_wire.
          */
-        return memcmp(&m1->lsm_wire, &m2->lsm_wire, sizeof m1->lsm_wire);
+        if (m1->lsm_magic == LOV_MAGIC_V1 || m2->lsm_magic == LOV_MAGIC_V1)
+                 len -= LOV_MAXPOOLNAME;
+        return memcmp(&m1->lsm_wire, &m2->lsm_wire, len);
 }
 
 void lov_stripe_lock(struct lov_stripe_md *md);

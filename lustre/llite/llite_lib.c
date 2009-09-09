@@ -1949,9 +1949,20 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                         if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
                                 lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
                 } else {
-                        if (lli->lli_smd->lsm_magic == lsm->lsm_magic &&
-                             lli->lli_smd->lsm_stripe_count ==
+                        if ((lli->lli_smd->lsm_magic == lsm->lsm_magic ||
+                             (lli->lli_smd->lsm_magic == LOV_MAGIC_V3 &&
+                              lsm->lsm_magic == LOV_MAGIC_V1) ||
+                             (lli->lli_smd->lsm_magic == LOV_MAGIC_V1 &&
+                              lsm->lsm_magic == LOV_MAGIC_V3)) &&
+                            lli->lli_smd->lsm_stripe_count ==
                                         lsm->lsm_stripe_count) {
+                                /* The MDS can suddenly change the magic to
+                                 * v1/v3 if it has been upgraded/downgraded to a
+                                 * version that does/doesn't support OST pools.
+                                 * In this case, we consider that the cached lsm
+                                 * is equivalent to the new one and keep it in
+                                 * place until the inode is evicted from the
+                                 * cache */
                                 if (lov_stripe_md_cmp(lli->lli_smd, lsm)) {
                                         CERROR("lsm mismatch for inode %ld\n",
                                                 inode->i_ino);
