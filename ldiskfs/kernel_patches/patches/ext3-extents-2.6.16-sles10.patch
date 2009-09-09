@@ -2592,7 +2592,7 @@ Index: linux-2.6.16.54-0.2.5/include/linux/ext3_extents.h
 +do {							\
 +	if (test_opt((tree)->inode->i_sb, EXTDEBUG))	\
 +		printk(fmt, ##a);			\
-+} while (0);
++} while (0)
 +#else
 +#define ext_debug(tree,fmt,a...)
 +#endif

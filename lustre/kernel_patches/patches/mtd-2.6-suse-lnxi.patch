@@ -18337,7 +18337,7 @@ Index: linux-2.6.5/drivers/mtd/maps/wr_sbc82xx_flash.c
 +	case 0x00001000:	(map).bankwidth = 2;	break;	\
 +	case 0x00001800:	(map).bankwidth = 4;	break;	\
 +	}							\
-+} while (0);
++} while (0)
 +
 +int __init init_sbc82xx_flash(void)
 +{

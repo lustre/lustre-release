@@ -340,7 +340,7 @@ extern int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls,
         if (cdebug_show(mask, DEBUG_SUBSYSTEM))                               \
                 libcfs_debug_vmsg(cdls, DEBUG_SUBSYSTEM, (mask),              \
                                   (file), (func), (line), fmt, args);         \
-} while(0);
+} while(0)
 
 #define cdebug(cdls, mask, file, func, line, fmt, ...) do {                   \
         CHECK_STACK();                                                        \
@@ -348,7 +348,7 @@ extern int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls,
         if (cdebug_show(mask, DEBUG_SUBSYSTEM))                               \
                 libcfs_debug_msg(cdls, DEBUG_SUBSYSTEM, (mask),               \
                                  (file), (func), (line), fmt, ## __VA_ARGS__);\
-} while(0);
+} while(0)
 
 extern void libcfs_assertion_failed(const char *expr, const char *file,
                                     const char *fn, const int line);

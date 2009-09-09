@@ -103,7 +103,7 @@ do {                                            \
 	(dest)->st_blocks  = (src)->st_blocks;  \
 	(dest)->st_flags   = (src)->st_flags;   \
 	(dest)->st_gen     = (src)->st_gen;     \
-} while (0);
+} while (0)
 #else
 #define COPY_STAT(src, dest)                    \
 do {                                            \
@@ -121,7 +121,7 @@ do {                                            \
 	(dest)->st_ctime   = (src)->st_ctime;   \
 	(dest)->st_blksize = (src)->st_blksize; \
 	(dest)->st_blocks  = (src)->st_blocks;  \
-} while (0);
+} while (0)
 #endif
 
 /*
