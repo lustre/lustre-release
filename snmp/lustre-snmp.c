@@ -574,7 +574,7 @@ write_sysStatus(int      action,
 {
   static long *long_ret;
   int size;
-  int pid, new_value;
+  int new_value;
 
 
 
