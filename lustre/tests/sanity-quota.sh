@@ -77,8 +77,10 @@ LOVNAME=`lctl get_param -n llite.*.lov.common_name | tail -n 1`
 OSTCOUNT=`lctl get_param -n lov.$LOVNAME.numobd`
 
 SHOW_QUOTA_USER="$LFS quota -v -u $TSTUSR $DIR"
+SHOW_QUOTA_USERID="$LFS quota -v -u $TSTID $DIR"
 SHOW_QUOTA_USER2="$LFS quota -v -u $TSTUSR2 $DIR"
 SHOW_QUOTA_GROUP="$LFS quota -v -g $TSTUSR $DIR"
+SHOW_QUOTA_GROUPID="$LFS quota -v -g $TSTID $DIR"
 SHOW_QUOTA_GROUP2="$LFS quota -v -g $TSTUSR2 $DIR"
 SHOW_QUOTA_INFO_USER="$LFS quota -t -u $DIR"
 SHOW_QUOTA_INFO_GROUP="$LFS quota -t -g $DIR"
@@ -1980,12 +1982,25 @@ test_26() {
 }
 run_test_with_stat 26 "test for false quota error(bz18491) ======================================"
 
-test_27() {
+test_27a() {
         $LFS quota $TSTUSR $DIR && error "lfs succeeded with no type, but should have failed"
         $LFS setquota $TSTUSR $DIR && error "lfs succeeded with no type, but should have failed"
         return 0
 }
-run_test_with_stat 27 "lfs quota/setquota should handle wrong arguments (19612) ================="
+run_test_with_stat 27a "lfs quota/setquota should handle wrong arguments (19612) ================="
+
+test_27b() {
+        $LFS setquota -u $TSTID -b 1000 -B 1000 -i 1000 -I 1000 $DIR || \
+                error "lfs setquota failed with uid argument"
+        $LFS setquota -g $TSTID -b 1000 -B 1000 -i 1000 -I 1000 $DIR || \
+                error "lfs stequota failed with gid argument"
+        $SHOW_QUOTA_USERID || error "lfs quota failed with uid argument"
+        $SHOW_QUOTA_GROUPID || error "lfs quota failed with gid argument"
+        resetquota -u $TSTUSR
+        resetquota -g $TSTUSR
+        return 0
+}
+run_test 27b "lfs quota/setquota should handle user/group ID (20200) ================="
 
 test_28() {
         BLK_LIMIT=$((100 * 1024 * 1024)) # 100G

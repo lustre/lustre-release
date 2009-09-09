@@ -15,6 +15,10 @@ tbd  Sun Microsystems, Inc.
 
 Severity   : enhancement
 Bugzilla   : 20200
+Description: Added sanity-quota test to for lfs(1) to work with numeric uid/gid.
+
+Severity   : enhancement
+Bugzilla   : 20200
 Description: Enhancement for lfs(1) command to use numeric uid/gid.
 
 Severity   : normal
