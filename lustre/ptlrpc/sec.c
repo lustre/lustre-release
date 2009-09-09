@@ -686,9 +686,9 @@ again:
          * Commonly the original context should be uptodate because we
          * have a expiry nice time; And server will keep their half part
          * context because we at least hold a ref of old context which
-         * prevent the context detroy RPC be sent. So server still can
+         * prevent the context destroy RPC be sent. So server still can
          * accept the request and finish RPC. Two cases:
-         *  1. If server side context has been trimed, a NO_CONTEXT will
+         *  1. If server side context has been trimmed, a NO_CONTEXT will
          *     be returned, gss_cli_ctx_verify/unseal will switch to new
          *     context by force.
          *  2. Current context never be refreshed, then we are fine: we

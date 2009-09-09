@@ -634,7 +634,7 @@ static int ldlm_cb_interpret(const struct lu_env *env,
         LASSERT(lock != NULL);
         if (rc != 0) {
                 /* If client canceled the lock but the cancel has not
-                 * been recieved yet, we need to update lvbo to have the
+                 * been received yet, we need to update lvbo to have the
                  * proper attributes cached. */
                 if (rc == -EINVAL && arg->type == LDLM_BL_CALLBACK)
                         ldlm_res_lvbo_update(lock->l_resource, NULL,
@@ -779,7 +779,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         }
 
         req->rq_send_state = LUSTRE_IMP_FULL;
-        /* ptlrpc_prep_req already set timeout */
+        /* ptlrpc_request_alloc_pack already set timeout */
         if (AT_OFF)
                 req->rq_timeout = ldlm_get_rq_timeout();
 
@@ -865,7 +865,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         ptlrpc_request_set_replen(req);
 
         req->rq_send_state = LUSTRE_IMP_FULL;
-        /* ptlrpc_prep_req already set timeout */
+        /* ptlrpc_request_pack already set timeout */
         if (AT_OFF)
                 req->rq_timeout = ldlm_get_rq_timeout();
 
@@ -934,7 +934,7 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
 
 
         req->rq_send_state = LUSTRE_IMP_FULL;
-        /* ptlrpc_prep_req already set timeout */
+        /* ptlrpc_request_alloc_pack already set timeout */
         if (AT_OFF)
                 req->rq_timeout = ldlm_get_rq_timeout();
 
@@ -1173,9 +1173,9 @@ existing_lock:
                 if (lock->l_granted_mode == lock->l_req_mode) {
                         /*
                          * Only cancel lock if it was granted, because it would
-                         * be destroyed immediatelly and would never be granted
+                         * be destroyed immediately and would never be granted
                          * in the future, causing timeouts on client.  Not
-                         * granted lock will be cancelled immediatelly after
+                         * granted lock will be cancelled immediately after
                          * sending completion AST.
                          */
                         if (dlm_rep->lock_flags & LDLM_FL_CANCEL_ON_BLOCK) {
@@ -1859,7 +1859,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
         lock_res_and_lock(lock);
         lock->l_flags |= (dlm_req->lock_flags & LDLM_AST_FLAGS);
         if (lustre_msg_get_opc(req->rq_reqmsg) == LDLM_BL_CALLBACK) {
-                /* If somebody cancels lock and cache is already droped,
+                /* If somebody cancels lock and cache is already dropped,
                  * or lock is failed before cp_ast received on client,
                  * we can tell the server we have no lock. Otherwise, we
                  * should send cancel after dropping the cache. */

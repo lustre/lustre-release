@@ -231,7 +231,7 @@ static void rs_batch_init(struct rs_batch *b)
 
 /**
  * Dispatch all replies accumulated in the batch to one from
- * dedicated reply handing threads.
+ * dedicated reply handling threads.
  *
  * \param b batch
  */
@@ -1740,7 +1740,7 @@ ptlrpc_handle_rs (struct ptlrpc_reply_state *rs)
  * and process it.
  *
  * \param svc a ptlrpc service
- * \retval 0 no replies processes
+ * \retval 0 no replies processed
  * \retval 1 one reply processed
  */
 static int

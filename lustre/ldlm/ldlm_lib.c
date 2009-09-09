@@ -2176,7 +2176,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         exp = class_export_get (req->rq_export);
         obd = exp->exp_obd;
 
-        /* disable reply scheduling onto srv_reply_queue while I'm setting up */
+        /* disable reply scheduling while I'm setting up */
         rs->rs_scheduled = 1;
         rs->rs_on_net    = 1;
         rs->rs_xid       = req->rq_xid;
@@ -2206,7 +2206,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 
         if (netrc != 0) {
                 /* error sending: reply is off the net.  Also we need +1
-                 * reply ref until ptlrpc_server_handle_reply() is done
+                 * reply ref until ptlrpc_handle_rs() is done
                  * with the reply state (if the send was successful, there
                  * would have been +1 ref for the net, which
                  * reply_out_callback leaves alone) */

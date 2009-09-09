@@ -478,7 +478,7 @@ static int import_select_connection(struct obd_import *imp)
                         continue;
                 }
 
-                /* If we have not tried this connection since the
+                /* If we have not tried this connection since
                    the last successful attempt, go with this one */
                 if ((conn->oic_last_attempt == 0) ||
                     cfs_time_beforeq_64(conn->oic_last_attempt,
@@ -766,7 +766,7 @@ static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
                 wake_pinger = 1;
         }
 #else
-        /* liblustre has no pinger thead, so we wakup pinger anyway */
+        /* liblustre has no pinger thread, so we wakeup pinger anyway */
         wake_pinger = 1;
 #endif
 
@@ -1070,7 +1070,7 @@ finish:
 
                 /* Reset ns_connect_flags only for initial connect. It might be
                  * changed in while using FS and if we reset it in reconnect
-                 * this leads to lossing user settings done before such as
+                 * this leads to losing user settings done before such as
                  * disable lru_resize, etc. */
                 if (old_connect_flags != exp->exp_connect_flags ||
                     aa->pcaa_initial_connect) {
@@ -1277,7 +1277,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 #ifdef __KERNEL__
                 /* bug 17802:  XXX client_disconnect_export vs connect request
                  * race. if client will evicted at this time, we start
-                 * invalidate thread without referece to import and import can
+                 * invalidate thread without reference to import and import can
                  * be freed at same time. */
                 class_import_get(imp);
                 rc = cfs_kernel_thread(ptlrpc_invalidate_import_thread, imp,

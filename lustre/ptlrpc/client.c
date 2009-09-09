@@ -2389,7 +2389,7 @@ after_send:
                         /* success so far.  Note that anything going wrong
                          * with bulk now, is EXTREMELY strange, since the
                          * server must have believed that the bulk
-                         * tranferred OK before she replied with success to
+                         * transferred OK before she replied with success to
                          * me. */
                         lwi = LWI_TIMEOUT(timeout, NULL, NULL);
                         brc = l_wait_event(req->rq_reply_waitq,

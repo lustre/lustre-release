@@ -5758,7 +5758,7 @@ struct md_ucred *mdt_ucred(const struct mdt_thread_info *info)
 }
 
 /**
- * Enable/disable COS.
+ * Enable/disable COS (Commit On Sharing).
  *
  * Set/Clear the COS flag in mdt options.
  *
@@ -5782,9 +5782,9 @@ void mdt_enable_cos(struct mdt_device *mdt, int val)
 }
 
 /**
- * Check COS status.
+ * Check COS (Commit On Sharing) status.
  *
- * Return COS flag status/
+ * Return COS flag status.
  *
  * \param mdt mdt device
  */
