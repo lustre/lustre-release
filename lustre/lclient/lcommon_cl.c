@@ -601,7 +601,6 @@ int ccc_lock_wait(const struct lu_env *env, const struct cl_lock_slice *slice)
  * cached lock "fits" into io.
  *
  * \param slice lock to be checked
- *
  * \param io    IO that wants a lock.
  *
  * \see lov_lock_fits_into().

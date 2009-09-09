@@ -862,7 +862,7 @@ struct cl_page_operations {
                              const struct cl_page_slice *slice,
                              struct cl_io *io);
         /**
-         * Announces whether the page contains valid data or not by @uptodate.
+         * Announces whether the page contains valid data or not by \a uptodate.
          *
          * \see cl_page_export()
          * \see vvp_page_export()
@@ -1804,7 +1804,7 @@ struct cl_page_list {
         cfs_task_t      *pl_owner;
 };
 
-/** \addtogroup cl_page_list cl_page_list
+/** 
  * A 2-queue of pages. A convenience data-type for common use case, 2-queue
  * contains an incoming page list and an outgoing page list.
  */

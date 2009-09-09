@@ -54,7 +54,7 @@ struct lmv_stripe {
          */
         struct lu_fid           ls_fid;
         /**
-         * Cached home mds number for @li_fid.
+         * Cached home mds number for \a li_fid.
          */
         mdsno_t                 ls_mds;
         /**

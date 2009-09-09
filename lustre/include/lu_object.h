@@ -847,11 +847,10 @@ void lu_object_header_print(const struct lu_env *env, void *cookie,
  */
 int lu_object_invariant(const struct lu_object *o);
 
-void lu_stack_fini(const struct lu_env *env, struct lu_device *top);
 
 /**
- * Returns 1 iff object @o exists on the stable storage,
- * returns -1 iff object @o is on remote server.
+ * \retval  1 iff object \a o exists on stable storage,
+ * \retval -1 iff object \a o is on remote server.
  */
 static inline int lu_object_exists(const struct lu_object *o)
 {

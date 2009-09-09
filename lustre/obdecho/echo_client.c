@@ -50,6 +50,10 @@
 
 #include "echo_internal.h"
 
+/** \defgroup echo_client Echo Client
+ * @{
+ */
+
 struct echo_device {
         struct cl_device        ed_cl;
         struct echo_client_obd *ed_ec;
@@ -103,7 +107,7 @@ static int echo_client_setup(struct obd_device *obddev,
 static int echo_client_cleanup(struct obd_device *obddev);
 
 
-/** \defgroup echo_helpers
+/** \defgroup echo_helpers Helper functions
  * @{
  */
 static inline struct echo_device *cl2echo_dev(const struct cl_device *dev)
@@ -240,7 +244,7 @@ static struct lu_kmem_descr echo_caches[] = {
         }
 };
 
-/** defgroup echo_page echo_page
+/** \defgroup echo_page Page operations
  *
  * Echo page operations.
  *
@@ -323,7 +327,7 @@ static const struct cl_page_operations echo_page_ops = {
 };
 /** @} echo_page */
 
-/** \defgroup echo_lock echo_lock
+/** \defgroup echo_lock Locking
  *
  * echo lock operations
  *
@@ -362,7 +366,7 @@ static struct cl_lock_operations echo_lock_ops = {
 
 /** @} echo_lock */
 
-/** \defgroup echo_cl_ops echo_cl_ops
+/** \defgroup echo_cl_ops cl_object operations
  *
  * operations for cl_object
  *
@@ -422,7 +426,7 @@ static const struct cl_object_operations echo_cl_obj_ops = {
 };
 /** @} echo_cl_ops */
 
-/** \defgroup echo_lu_ops echo_lu_ops
+/** \defgroup echo_lu_ops lu_object operations
  *
  * operations for echo lu object.
  *
@@ -506,15 +510,15 @@ static const struct lu_object_operations echo_lu_obj_ops = {
 };
 /** @} echo_lu_ops */
 
-/** \defgroup echo_lu_dev_ops
+/** \defgroup echo_lu_dev_ops  lu_device operations
  *
  * Operations for echo lu device.
  *
  * @{
  */
 static struct lu_object *echo_object_alloc(const struct lu_env *env,
-                                         const struct lu_object_header *hdr,
-                                         struct lu_device *dev)
+                                           const struct lu_object_header *hdr,
+                                           struct lu_device *dev)
 {
         struct echo_object *eco;
         struct lu_object *obj = NULL;
@@ -545,7 +549,7 @@ static struct lu_device_operations echo_device_lu_ops = {
 static struct cl_device_operations echo_device_cl_ops = {
 };
 
-/** \defgroup echo_init echo_init
+/** \defgroup echo_init Setup and teardown
  *
  * Init and fini functions for echo client.
  *
@@ -860,7 +864,7 @@ static struct lu_device_type echo_device_type = {
 };
 /** @} echo_init */
 
-/** \defgroup echo_exports
+/** \defgroup echo_exports Exported operations
  *
  * exporting functions to echo client
  *
@@ -2033,3 +2037,4 @@ void echo_client_exit(void)
         lu_kmem_fini(echo_caches);
 }
 
+/** @} echo_client */

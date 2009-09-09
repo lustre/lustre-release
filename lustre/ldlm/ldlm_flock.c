@@ -71,10 +71,10 @@ int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 /**
  * list_for_remaining_safe - iterate over the remaining entries in a list
  *              and safeguard against removal of a list entry.
- * @pos:        the &struct list_head to use as a loop counter. pos MUST
+ * \param pos   the &struct list_head to use as a loop counter. pos MUST
  *              have been initialized prior to using it in this macro.
- * @n:          another &struct list_head to use as temporary storage
- * @head:       the head for your list.
+ * \param n     another &struct list_head to use as temporary storage
+ * \param head  the head for your list.
  */
 #define list_for_remaining_safe(pos, n, head) \
         for (n = pos->next; pos != (head); pos = n, n = pos->next)

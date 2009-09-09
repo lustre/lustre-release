@@ -2325,10 +2325,8 @@ out:
 /**
  * prepare pages for ASYNC io and put pages in send queue.
  *
- * \param cli -
- * \param loi -
- * \param cmd - OBD_BRW_* macroses
- * \param lop - pending pages
+ * \param cmd OBD_BRW_* macroses
+ * \param lop pending pages
  *
  * \return zero if pages successfully add to send queue.
  * \return not zere if error occurring.

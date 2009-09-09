@@ -38,11 +38,13 @@
  *   Author: Nikita Danilov <nikita.danilov@sun.com>
  */
 
-/** \addtogroup osc osc @{ */
-
 #define DEBUG_SUBSYSTEM S_OSC
 
 #include "osc_cl_internal.h"
+
+/** \addtogroup osc 
+ *  @{ 
+ */
 
 /* 
  * Comment out osc_page_protected because it may sleep inside the

@@ -457,13 +457,13 @@ struct ldlm_namespace {
         ldlm_appetite_t        ns_appetite;
 
         /**
-         * If more than @ns_contented_locks found, the resource considered
-         * as contended.
+         * If more than \a ns_contended_locks found, the resource is considered
+         * to be contended.
          */
         unsigned               ns_contended_locks;
 
         /**
-         * The resource remembers contended state during @ns_contention_time,
+         * The resource remembers contended state during \a ns_contention_time,
          * in seconds.
          */
         unsigned               ns_contention_time;

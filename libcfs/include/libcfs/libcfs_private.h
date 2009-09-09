@@ -287,14 +287,14 @@ int libcfs_debug_cleanup(void);
 /* !__KERNEL__ */
 #endif
 
-/*
- * compile-time assertions. @cond has to be constant expression.
- * ISO C Standard:
+/** Compile-time assertion. 
+
+ * Check an invariant described by a constant expression at compile time by
+ * forcing a compiler error if it does not hold.  \a cond must be a constant
+ * expression as defined by the ISO C Standard:
  *
- *        6.8.4.2  The switch statement
- *
+ *       6.8.4.2  The switch statement
  *       ....
- *
  *       [#3] The expression of each case label shall be  an  integer
  *       constant   expression  and  no  two  of  the  case  constant
  *       expressions in the same switch statement shall have the same

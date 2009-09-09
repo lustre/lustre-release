@@ -1759,9 +1759,9 @@ int osd_fid_unpack(struct lu_fid *fid, const struct osd_fid_pack *pack)
  * Try to read the fid from inode ea into dt_rec, if return value
  * i.e. rc is +ve, then we got fid, otherwise we will have to form igif
  *
- * \param fid, object fid.
+ * \param fid object fid.
  *
- * \retval 0, on success
+ * \retval 0 on success
  */
 static int osd_ea_fid_get(const struct lu_env *env, struct osd_object *obj,
                           __u32 ino, struct lu_fid *fid)
@@ -2396,7 +2396,7 @@ static const struct dt_body_operations osd_body_ops = {
 /**
  *      delete a (key, value) pair from index \a dt specified by \a key
  *
- *      \param  dt_object      osd index object
+ *      \param  dt      osd index object
  *      \param  key     key for index
  *      \param  rec     record reference
  *      \param  handle  transaction handler
@@ -2507,7 +2507,7 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 /**
  *      Lookup index for \a key and copy record to \a rec.
  *
- *      \param  dt_object      osd index object
+ *      \param  dt      osd index object
  *      \param  key     key for index
  *      \param  rec     record reference
  *
@@ -2767,10 +2767,10 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 /**
  * Find the osd object for given fid.
  *
- * \param fid, need to find the osd object having this fid
+ * \param fid need to find the osd object having this fid
  *
- * \retval osd_object, on success
- * \retval        -ve, on error
+ * \retval osd_object on success
+ * \retval        -ve on error
  */
 struct osd_object *osd_object_find(const struct lu_env *env,
                                    struct dt_object *dt,
@@ -2812,7 +2812,7 @@ struct osd_object *osd_object_find(const struct lu_env *env,
 /**
  * Put the osd object once done with it.
  *
- * \param obj, osd object that needs to be put
+ * \param obj osd object that needs to be put
  */
 static inline void osd_object_put(const struct lu_env *env,
                                   struct osd_object *obj)
@@ -2825,8 +2825,8 @@ static inline void osd_object_put(const struct lu_env *env,
  * It will add the directory entry.This entry is needed to
  * maintain name->fid mapping.
  *
- * \param key, it is key i.e. file entry to be inserted
- * \param rec, it is value of given key i.e. fid
+ * \param key it is key i.e. file entry to be inserted
+ * \param rec it is value of given key i.e. fid
  *
  * \retval   0, on success
  * \retval -ve, on error
@@ -3181,7 +3181,7 @@ static struct dt_it *osd_it_ea_init(const struct lu_env *env,
 /**
  * Destroy or finishes iterator context.
  *
- * \param di, struct osd_it_ea, iterator structure to be destroyed
+ * \param di iterator structure to be destroyed
  */
 static void osd_it_ea_fini(const struct lu_env *env, struct dt_it *di)
 {
@@ -3232,11 +3232,11 @@ static void osd_it_ea_put(const struct lu_env *env, struct dt_it *di)
  * iterator's in-memory data structure with required
  * information i.e. name, namelen, rec_size etc.
  *
- * \param buf, in which information to be filled in.
- * \param name, name of the file in given dir
+ * \param buf in which information to be filled in.
+ * \param name name of the file in given dir
  *
- * \retval 0, on success
- * \retval 1, on buffer full
+ * \retval 0 on success
+ * \retval 1 on buffer full
  */
 static int osd_ldiskfs_filldir(char *buf, const char *name, int namelen,
                                loff_t offset, __u64 ino,
@@ -3272,10 +3272,10 @@ static int osd_ldiskfs_filldir(char *buf, const char *name, int namelen,
  * Calls ->readdir() to load a directory entry at a time
  * and stored it in iterator's in-memory data structure.
  *
- * \param di, struct osd_it_ea, iterator's in memory structure
+ * \param di iterator's in memory structure
  *
- * \retval   0, on success
- * \retval -ve, on error
+ * \retval   0 on success
+ * \retval -ve on error
  */
 static int osd_ldiskfs_it_fill(const struct dt_it *di)
 {
@@ -3309,11 +3309,11 @@ static int osd_ldiskfs_it_fill(const struct dt_it *di)
  * to load a directory entry at a time and stored it in
  * iterator's in-memory data structure.
  *
- * \param di, struct osd_it_ea, iterator's in memory structure
+ * \param di iterator's in memory structure
  *
- * \retval +ve, iterator reached to end
- * \retval   0, iterator not reached to end
- * \retval -ve, on error
+ * \retval +ve iterator reached to end
+ * \retval   0 iterator not reached to end
+ * \retval -ve on error
  */
 static int osd_it_ea_next(const struct lu_env *env, struct dt_it *di)
 {
@@ -3341,7 +3341,7 @@ static int osd_it_ea_next(const struct lu_env *env, struct dt_it *di)
 /**
  * Returns the key at current position from iterator's in memory structure.
  *
- * \param di, struct osd_it_ea, iterator's in memory structure
+ * \param di iterator's in memory structure
  *
  * \retval key i.e. struct dt_key on success
  */
@@ -3356,7 +3356,7 @@ static struct dt_key *osd_it_ea_key(const struct lu_env *env,
 /**
  * Returns the key's size at current position from iterator's in memory structure.
  *
- * \param di, struct osd_it_ea, iterator's in memory structure
+ * \param di iterator's in memory structure
  *
  * \retval key_size i.e. struct dt_key on success
  */
@@ -3372,12 +3372,12 @@ static int osd_it_ea_key_size(const struct lu_env *env, const struct dt_it *di)
  * Returns the value (i.e. fid/igif) at current position from iterator's
  * in memory structure.
  *
- * \param di, struct osd_it_ea, iterator's in memory structure
- * \param attr, attr requested for dirent.
- * \param lde, lustre dirent
+ * \param di struct osd_it_ea, iterator's in memory structure
+ * \param attr attr requested for dirent.
+ * \param lde lustre dirent
  *
- * \retval   0, no error and \param lde has correct lustre dirent.
- * \retval -ve, on error
+ * \retval   0 no error and \param lde has correct lustre dirent.
+ * \retval -ve on error
  */
 static inline int osd_it_ea_rec(const struct lu_env *env,
                                 const struct dt_it *di,
@@ -3407,7 +3407,7 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
  * Returns a cookie for current position of the iterator head, so that
  * user can use this cookie to load/start the iterator next time.
  *
- * \param di, struct osd_it_ea, iterator's in memory structure
+ * \param di iterator's in memory structure
  *
  * \retval cookie for current position, on success
  */
@@ -3423,10 +3423,10 @@ static __u64 osd_it_ea_store(const struct lu_env *env, const struct dt_it *di)
  * to load a directory entry at a time and stored it i inn,
  * in iterator's in-memory data structure.
  *
- * \param di, struct osd_it_ea, iterator's in memory structure
+ * \param di struct osd_it_ea, iterator's in memory structure
  *
- * \retval +ve, on success
- * \retval -ve, on error
+ * \retval +ve on success
+ * \retval -ve on error
  */
 static int osd_it_ea_load(const struct lu_env *env,
                           const struct dt_it *di, __u64 hash)

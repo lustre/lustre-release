@@ -501,7 +501,7 @@ int __mdd_orphan_cleanup(const struct lu_env *env, struct mdd_device *d)
  *  \pre obj nlink == 0 && obj->mod_count != 0
  *
  *  \retval 0  success
- *  \retva  -ve index operation error.
+ *  \retval  -ve index operation error.
  */
 
 int __mdd_orphan_add(const struct lu_env *env,
@@ -518,7 +518,7 @@ int __mdd_orphan_add(const struct lu_env *env,
  *  \pre obj->mod_count == 0 && ORPHAN_OBJ is set for obj.
  *
  *  \retval 0  success
- *  \retva  -ve index operation error.
+ *  \retval  -ve index operation error.
  */
 
 int __mdd_orphan_del(const struct lu_env *env,

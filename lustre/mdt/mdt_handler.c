@@ -2302,7 +2302,7 @@ void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
  *
  * \param info thread info object
  * \param o mdt object
- * \param h mdt lock handle referencing regular and PDO locks
+ * \param lh mdt lock handle referencing regular and PDO locks
  * \param decref force immediate lock releasing
  */
 void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,

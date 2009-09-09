@@ -1,0 +1,79 @@
+#! /bin/bash
+
+label=''
+user=$USER
+port=922
+branch=''
+
+# update for git!!! 
+if [ -d lustre/CVS ] ;then
+    if [ -r lustre/CVS/Tag ] ;then
+        branch=$(cut -c2- lustre/CVS/Tag)
+    else
+        branch=HEAD
+    fi
+fi
+
+eval set -- $(getopt -o -b:l:du:p: -n 'publish_doxygen' -- "$@")
+
+while true ;do
+    case "$1" in
+	-b) branch="$2"
+	    shift 2
+	    ;;
+	-l) label="$label$2"
+	    shift 2
+	    ;;
+	-u) user="$2"
+	    shift 2
+	    ;;
+	-d) label="$label$(date '+%Y.%m.%d')"
+	    shift
+	    ;;
+	-p) port="$2"
+	    shift 2
+	    ;;
+	--) 
+	    shift 
+	    break 
+	    ;;
+	*) 
+	    echo "Internal error!" 
+	    exit 1 
+	    ;;
+    esac
+done
+
+if [ -z "$branch" ] ;then
+    echo "No branch specified"
+    exit 1
+fi
+
+if [ -z "$user" ] ; then
+    echo "No user specified"
+    exit 1
+fi
+
+dsthost="shell.lustre.sun.com"
+dstdir="/home/www/doxygen/$branch$label"
+
+echo "Publishing documentation to $dsthost:$dstdir"
+
+sshcmd="ssh -p $port -l $user"
+
+eval $sshcmd $dsthost <<EOF
+    if [ ! -d $dstdir ]; then
+        echo "Creating $dstdir"
+        mkdir $dstdir
+    fi
+EOF
+
+for doctype in api ref; do
+    srcdir=doxygen.$doctype/html
+    if [ -d $srcdir ]; then
+	chmod -R a+rx $srcdir
+	rsync -rltvzp --delete --rsh="$sshcmd" $srcdir $dsthost:$dstdir/$doctype
+    fi
+done
+
+

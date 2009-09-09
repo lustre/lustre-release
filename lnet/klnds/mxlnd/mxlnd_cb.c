@@ -349,8 +349,8 @@ mxlnd_put_idle_tx(struct kmx_ctx *tx)
 }
 
 /**
- * mxlnd_conn_free - free the conn
- * @conn - a kmx_conn pointer
+ * Free the conn
+ * \param conn a kmx_conn pointer
  *
  * The calling function should remove the conn from the conns list first
  * then destroy it.
@@ -423,10 +423,10 @@ mxlnd_conn_cancel_pending_rxs(struct kmx_conn *conn)
 }
 
 /**
- * mxlnd_conn_disconnect - shutdown a connection
- * @conn - a kmx_conn pointer
- * @mx_dis - call mx_disconnect()
- * @send_bye - send peer a BYE msg
+ * Shutdown a connection
+ * \param conn a kmx_conn pointer
+ * \param mx_dis call mx_disconnect()
+ * \param send_bye send peer a BYE msg
  *
  * This function sets the status to DISCONNECT, completes queued
  * txs with failure, calls mx_disconnect, which will complete
@@ -506,9 +506,9 @@ mxlnd_conn_disconnect(struct kmx_conn *conn, int mx_dis, int send_bye)
 }
 
 /**
- * mxlnd_conn_alloc - allocate and initialize a new conn struct
- * @connp - address of a kmx_conn pointer
- * @peer - owning kmx_peer
+ * Allocate and initialize a new conn struct
+ * \param connp address of a kmx_conn pointer
+ * \param peer owning kmx_peer
  *
  * Returns 0 on success and -ENOMEM on failure
  */
@@ -620,8 +620,8 @@ mxlnd_deq_pending_ctx(struct kmx_ctx *ctx)
 }
 
 /**
- * mxlnd_peer_free - free the peer
- * @peer - a kmx_peer pointer
+ * Free the peer
+ * \param peer a kmx_peer pointer
  *
  * The calling function should decrement the rxs, drain the tx queues and
  * remove the peer from the peers list first then destroy it.
@@ -704,10 +704,9 @@ mxlnd_ip2nic_id(u32 ip, u64 *nic_id)
 }
 
 /**
- * mxlnd_peer_alloc - allocate and initialize a new peer struct
- * @peerp - address of a kmx_peer pointer
- * @nid - LNET node id
- *
+ * Allocate and initialize a new peer struct
+ * \param peerp  address of a kmx_peer pointer
+ * \param nid  LNET node id
  * Returns 0 on success and -ENOMEM on failure
  */
 int
@@ -818,10 +817,10 @@ mxlnd_tx_requires_credit(struct kmx_ctx *tx)
 }
 
 /**
- * mxlnd_init_msg - set type and number of bytes
- * @msg - msg pointer
- * @type - of message
- * @body_nob - bytes in msg body
+ * Set type and number of bytes
+ * \param msg  msg pointer
+ * \param type  of message
+ * \param body_nob  bytes in msg body
  */
 static inline void
 mxlnd_init_msg(kmx_msg_t *msg, u8 type, int body_nob)
@@ -869,8 +868,8 @@ mxlnd_cksum (void *ptr, int nob)
 }
 
 /**
- * mxlnd_pack_msg - complete msg info
- * @tx - msg to send
+ * Complete msg info
+ * \param tx  msg to send
  */
 static inline void
 mxlnd_pack_msg(struct kmx_ctx *tx)
@@ -1040,13 +1039,9 @@ mxlnd_unpack_msg(kmx_msg_t *msg, int nob)
 }
 
 /**
- * mxlnd_recv_msg
- * @lntmsg - the LNET msg that this is continuing. If EAGER, then NULL.
- * @rx
- * @msg_type
- * @cookie
- * @length - length of incoming message
- * @pending - add to kmx_pending (0 is NO and 1 is YES)
+ * Receive a message
+ * \param lntmsg  the LNET msg that this is continuing. If EAGER, then NULL.
+ * \param length  length of incoming message
  *
  * The caller gets the rx and sets nid, peer and conn if known.
  *
@@ -1084,13 +1079,12 @@ mxlnd_recv_msg(lnet_msg_t *lntmsg, struct kmx_ctx *rx, u8 msg_type, u64 cookie, 
 
 
 /**
- * mxlnd_unexpected_recv - this is the callback function that will handle 
- *                         unexpected receives
- * @context - NULL, ignore
- * @source - the peer's mx_endpoint_addr_t
- * @match_value - the msg's bit, should be MXLND_MSG_EAGER
- * @length - length of incoming message
- * @data_if_available - ignore
+ * This is the callback function that will handle unexpected receives
+ * \param context  NULL, ignore
+ * \param source  the peer's mx_endpoint_addr_t
+ * \param match_value  the msg's bit, should be MXLND_MSG_EAGER
+ * \param length  length of incoming message
+ * \param data_if_available  ignore
  *
  * If it is an eager-sized msg, we will call recv_msg() with the actual
  * length. If it is a large message, we will call recv_msg() with a
@@ -1326,10 +1320,10 @@ mxlnd_close_matching_conns(lnet_nid_t nid)
 }
 
 /**
- * mxlnd_ctl - modify MXLND parameters
- * @ni - LNET interface handle
- * @cmd - command to change
- * @arg - the ioctl data
+ * Modify MXLND parameters
+ * \param ni  LNET interface handle
+ * \param cmd command to change
+ * \param arg the ioctl data
  *
  * Not implemented yet.
  */
@@ -1381,8 +1375,7 @@ mxlnd_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 }
 
 /**
- * mxlnd_peer_queue_tx_locked - add the tx to the global tx queue
- * @tx
+ * Add the tx to the global tx queue
  *
  * Add the tx to the peer's msg or data queue. The caller has locked the peer.
  */
@@ -1425,8 +1418,7 @@ mxlnd_peer_queue_tx_locked(struct kmx_ctx *tx)
 }
 
 /**
- * mxlnd_peer_queue_tx - add the tx to the global tx queue
- * @tx
+ * Add the tx to the global tx queue
  *
  * Add the tx to the peer's msg or data queue
  */
@@ -1443,8 +1435,7 @@ mxlnd_peer_queue_tx(struct kmx_ctx *tx)
 }
 
 /**
- * mxlnd_queue_tx - add the tx to the global tx queue
- * @tx
+ * Add the tx to the global tx queue
  *
  * Add the tx to the global queue and up the tx_queue_sem
  */
@@ -1643,12 +1634,7 @@ mxlnd_send_nak(struct kmx_ctx *tx, lnet_nid_t nid, int type, int status, __u64 c
 
 
 /**
- * mxlnd_send_data - get tx, map [k]iov, queue tx
- * @ni
- * @lntmsg
- * @peer
- * @msg_type
- * @cookie
+ * Get tx, map [k]iov, queue tx
  *
  * This setups the DATA send for PUT or GET.
  *
@@ -1722,12 +1708,7 @@ failed_0:
 }
 
 /**
- * mxlnd_recv_data - map [k]iov, post rx
- * @ni
- * @lntmsg
- * @rx
- * @msg_type
- * @cookie
+ * Map [k]iov, post rx
  *
  * This setups the DATA receive for PUT or GET.
  *
@@ -1814,10 +1795,7 @@ mxlnd_recv_data(lnet_ni_t *ni, lnet_msg_t *lntmsg, struct kmx_ctx *rx, u8 msg_ty
 }
 
 /**
- * mxlnd_send - the LND required send function
- * @ni
- * @private
- * @lntmsg
+ * The LND required send function
  *
  * This must not block. Since we may not have a peer struct for the receiver,
  * it will append send messages on a global tx list. We will then up the
@@ -2052,16 +2030,7 @@ mxlnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 }
 
 /**
- * mxlnd_recv - the LND required recv function
- * @ni
- * @private
- * @lntmsg
- * @delayed
- * @niov
- * @kiov
- * @offset
- * @mlen
- * @rlen
+ * The LND required recv function
  *
  * This must not block.
  */
@@ -2249,8 +2218,8 @@ mxlnd_sleep(unsigned long timeout)
 }
 
 /**
- * mxlnd_tx_queued - the generic send queue thread
- * @arg - thread id (as a void *)
+ * The generic send queue thread
+ * \param arg  thread id (as a void *)
  *
  * This thread moves send messages from the global tx_queue to the owning
  * peer's tx_[msg|data]_queue. If the peer does not exist, it creates one and adds
@@ -2753,9 +2722,9 @@ done:
 
 
 /**
- * mxlnd_handle_tx_completion - a tx completed, progress or complete the msg
- * @ctx - the tx descriptor
- *
+ * A tx completed, progress or complete the msg
+ * \param tx  the tx descriptor
+ * 
  * Determine which type of send request it was and start the next step, if needed,
  * or, if done, signal completion to LNET. After we are done, put back on the
  * idle tx list.
@@ -3443,8 +3412,8 @@ mxlnd_handle_conn_ack(struct kmx_peer *peer, mx_status_t status)
 }
 
 /**
- * mxlnd_request_waitd - the MX request completion thread(s)
- * @arg - thread id (as a void *)
+ * The MX request completion thread(s)
+ * \param arg  thread id (as a void *)
  *
  * This thread waits for a MX completion and then completes the request.
  * We will create one thread per CPU.
@@ -3634,8 +3603,8 @@ mxlnd_check_timeouts(unsigned long now)
 }
 
 /**
- * mxlnd_timeoutd - enforces timeouts on messages
- * @arg - thread id (as a void *)
+ * Enforces timeouts on messages
+ * \param arg  thread id (as a void *)
  *
  * This thread queries each peer for its earliest timeout. If a peer has timed out,
  * it calls mxlnd_conn_disconnect().

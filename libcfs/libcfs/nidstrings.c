@@ -562,6 +562,7 @@ libcfs_str2anynid(lnet_nid_t *nidp, const char *str)
 
 /**
  * Nid range list syntax.
+ * \verbatim
  *
  * <nidlist>         :== <nidrange> [ ' ' <nidrange> ]
  * <nidrange>        :== <addrrange> '@' <net>
@@ -579,6 +580,7 @@ libcfs_str2anynid(lnet_nid_t *nidp, const char *str)
  * <net>             :== <netname> | <netname><number>
  * <netname>         :== "lo" | "tcp" | "o2ib" | "cib" | "openib" | "iib" |
  *                       "vib" | "ra" | "elan" | "gm" | "mx" | "ptl"
+ * \endverbatim
  */
 
 /**
@@ -590,9 +592,9 @@ struct lstr {
 };
 
 /**
- * Structure to represent <nidrange> token of the syntax.
+ * Structure to represent \<nidrange\> token of the syntax.
  *
- * One of this is created for each <net> parsed.
+ * One of this is created for each \<net\> parsed.
  */
 struct nidrange {
         /**
@@ -613,13 +615,13 @@ struct nidrange {
          */
         struct netstrfns *nr_netstrfns;
         /**
-         * Number of network. E.g. 5 if <net> is "elan5".
+         * Number of network. E.g. 5 if \<net\> is "elan5".
          */
         int nr_netnum;
 };
 
 /**
- * Structure to represent <addrrange> token of the syntax.
+ * Structure to represent \<addrrange\> token of the syntax.
  */
 struct addrrange {
         /**
@@ -633,7 +635,7 @@ struct addrrange {
 };
 
 /**
- * Structure to represent <numaddr_range> token of the syntax.
+ * Structure to represent \<numaddr_range\> token of the syntax.
  */
 struct numaddr_range {
         /**
@@ -647,7 +649,7 @@ struct numaddr_range {
 };
 
 /**
- * Structure to represent <range_expr> token of the syntax.
+ * Structure to represent \<range_expr\> token of the syntax.
  */
 struct range_expr {
         /**
@@ -763,14 +765,14 @@ libcfs_str2num_check(const char *str, int nob, unsigned *num,
 }
 
 /**
- * Parses <range_expr> token of the syntax.
+ * Parses \<range_expr\> token of the syntax.
  *
  * \retval pointer to allocated range_expr and initialized
  * range_expr::re_lo, range_expr::re_hi and range_expr:re_stride if \a
- * src parses to
- * <number> |
- * <number> '-' <number> |
- * <number> '-' <number> '/' <number>
+ `* src parses to
+ * \<number\> |
+ * \<number\> '-' \<number\> |
+ * \<number\> '-' \<number\> '/' \<number\>
  * \retval NULL othersize
  */
 static struct range_expr *
@@ -822,10 +824,10 @@ failed:
 }
 
 /**
- * Parsed <expr_list> token of the syntax.
+ * Parses \<expr_list\> token of the syntax.
  *
- * \retval 1 if \a str parses to '[' <range_expr> [ ',' <range_expr>] ']'
- * \return 0 otherwise
+ * \retval 1 if \a str parses to '[' \<range_expr\> [ ',' \<range_expr\>] ']'
+ * \retval 0 otherwise
  */
 static int
 parse_expr_list(struct lstr *str, struct list_head *list,
@@ -851,9 +853,9 @@ parse_expr_list(struct lstr *str, struct list_head *list,
 }
 
 /**
- * Parses <numaddr_range> token of the syntax.
+ * Parses \<numaddr_range\> token of the syntax.
  *
- * \retval 1 if \a str parses to <number> | <expr_list>
+ * \retval 1 if \a str parses to \<number\> | \<expr_list\>
  * \retval 0 otherwise
  */
 static int
@@ -934,12 +936,12 @@ libcfs_ip_parse(char *str, int len,
 }
 
 /**
- * Parses <addrrange> token on the syntax.
+ * Parses \<addrrange\> token on the syntax.
  *
  * Allocates struct addrrange and links to \a nidrange via
  * (nidrange::nr_addrranges)
  *
- * \retval 1 if \a src parses to '*' | <ipaddr_range> | <numaddr_range>
+ * \retval 1 if \a src parses to '*' | \<ipaddr_range\> | \<numaddr_range\>
  * \retval 0 otherwise
  */
 static int
@@ -1023,9 +1025,9 @@ add_nidrange(const struct lstr *src,
 }
 
 /**
- * Parses <nidrange> token of the syntax.
+ * Parses \<nidrange\> token of the syntax.
  *
- * \retval 1 if \a src parses to <addrrange> '@' <net>
+ * \retval 1 if \a src parses to \<addrrange\> '@' \<net\>
  * \retval 0 otherwise
  */
 static int
@@ -1141,7 +1143,7 @@ cfs_free_nidlist(struct list_head *list)
  * Parses nid range list.
  *
  * Parses with rigorous syntax and overflow checking \a str into
- * <nidrange> [ ' ' <nidrange> ], compiles \a str into set of
+ * \<nidrange\> [ ' ' \<nidrange\> ], compiles \a str into set of
  * structures and links that structure to \a nidlist. The resulting
  * list can be used to match a NID againts set of NIDS defined by \a
  * str.

@@ -470,8 +470,8 @@ extern int  mxlnd_timeoutd(void *arg);
 extern int  mxlnd_connd(void *arg);
 
 /**
- * mxlnd_nid_to_hash - hash the nid
- * @nid - LNET ID
+ * Hash the nid
+ * \param nid LNET ID
  *
  * Takes the u64 nid and XORs the lowest N bits by the next lowest N bits.
  */

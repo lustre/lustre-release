@@ -862,7 +862,7 @@ EXPORT_SYMBOL(cl_io_submit_rw);
 
 /**
  * Submit a sync_io and wait for the IO to be finished, or error happens.
- * If @timeout is zero, it means to wait for the IO unconditionally.
+ * If \a timeout is zero, it means to wait for the IO unconditionally.
  */
 int cl_io_submit_sync(const struct lu_env *env, struct cl_io *io,
                       enum cl_req_type iot, struct cl_2queue *queue,

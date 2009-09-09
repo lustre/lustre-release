@@ -166,14 +166,14 @@ Again:
 
 /**
  *	radix_tree_gang_lookup - perform multiple lookup on a radix tree
- *	@root:		radix tree root
- *	@results:	where the results of the lookup are placed
- *	@first_index:	start the lookup from this key
- *	@max_items:	place up to this many items at *results
+ *	\param root radix tree root
+ *	\param results where the results of the lookup are placed
+ *	\param first_index start the lookup from this key
+ *	\param max_items place up to this many items at *results
  *
  *	Performs an index-ascending scan of the tree for present items.  Places
- *	them at *@results and returns the number of items which were placed at
- *	*@results.
+ *	them at * \a results and returns the number of items which were placed at
+ *	*\a results.
  *
  */
 unsigned int
@@ -197,10 +197,10 @@ radix_tree_gang_lookup(struct radix_tree_root *root, void **results,
 
 /**
  *	radix_tree_lookup    -    perform lookup operation on a radix tree
- *	@root:		radix tree root
- *	@index:		index key
+ *	\param root radix tree root
+ *	\param index index key
  *
- *	Lookup the item at the position @index in the radix tree @root.
+ *	Lookup the item at the position \a index in the radix tree \a root.
  *
  */
 void *radix_tree_lookup(struct radix_tree_root *root, unsigned long index)
@@ -218,11 +218,11 @@ void *radix_tree_lookup(struct radix_tree_root *root, unsigned long index)
 
 /**
  *	radix_tree_insert    -    insert into a radix tree
- *	@root:		radix tree root
- *	@index:		index key
- *	@item:		item to insert
+ *	\param root radix tree root
+ *	\param index index key
+ *	\param item item to insert
  *
- *	Insert an item into the radix tree at position @index.
+ *	Insert an item into the radix tree at position \a index.
  */
 int radix_tree_insert(struct radix_tree_root *root,
 			unsigned long index, void *item)
@@ -236,10 +236,10 @@ int radix_tree_insert(struct radix_tree_root *root,
 
 /**
  *	radix_tree_delete    -    delete an item from a radix tree
- *	@root:		radix tree root
- *	@index:		index key
+ *	\param root radix tree root
+ *	\param index index key
  *
- *	Remove the item at @index from the radix tree rooted at @root.
+ *	Remove the item at \a index from the radix tree rooted at \a root.
  *
  *	Returns the address of the deleted item, or NULL if it was not present.
  */

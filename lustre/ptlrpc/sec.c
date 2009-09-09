@@ -1036,9 +1036,9 @@ int sptlrpc_cli_unwrap_reply(struct ptlrpc_request *req)
  * expect the rq_reply_off be 0, rq_nob_received is the early reply size.
  *
  * we allocate separate ptlrpc_request and reply buffer for early reply
- * processing, return 0 and @req_ret is a duplicated ptlrpc_request. caller
+ * processing, return 0 and \a req_ret is a duplicated ptlrpc_request. caller
  * must call sptlrpc_cli_finish_early_reply() on the returned request to
- * release it. if anything goes wrong @req_ret will not be set.
+ * release it. if anything goes wrong \a req_ret will not be set.
  */
 int sptlrpc_cli_unwrap_early_reply(struct ptlrpc_request *req,
                                    struct ptlrpc_request **req_ret)

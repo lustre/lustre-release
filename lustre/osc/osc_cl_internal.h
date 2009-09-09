@@ -57,7 +57,9 @@
 #include <cl_object.h>
 #include "osc_internal.h"
 
-/** \addtogroup osc osc @{ */
+/** \defgroup osc osc
+ *  @{
+ */
 
 /**
  * State maintained by osc layer for each IO context.

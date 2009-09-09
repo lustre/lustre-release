@@ -548,7 +548,7 @@ static int poolpath(char *fsname, char *pathname, char *pool_pathname)
 
 /**
  * Get the list of pool members.
- * \param poolname    string of format <fsname>.<poolname>
+ * \param poolname    string of format \<fsname\>.\<poolname\>
  * \param members     caller-allocated array of char*
  * \param list_size   size of the members array
  * \param buffer      caller-allocated buffer for storing OST names
@@ -2928,6 +2928,7 @@ struct copytool_private {
 /** Register a copytool
  * @param priv Opaque private control structure
  * @param flags Open flags, currently unused (e.g. O_NONBLOCK)
+ * @param archive_num_count
  * @param archive_nums Which archive numbers this copytool is responsible for
  */
 int llapi_copytool_start(void **priv, int flags, int archive_num_count,

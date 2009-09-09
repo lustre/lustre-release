@@ -121,7 +121,7 @@ int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
  * current atime, mtime, ctime to avoid regressing a more uptodate time on
  * the local client.
  *
- * If @kms_only is set then we do not consider the recently seen size (rss)
+ * If \a kms_only is set then we do not consider the recently seen size (rss)
  * when updating the known minimum size (kms).  Even when merging RSS, we will
  * take the KMS value if it's larger.  This prevents getattr from stomping on
  * dirty cached pages which extend the file size. */

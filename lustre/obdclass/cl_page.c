@@ -179,7 +179,7 @@ struct cl_page *cl_page_lookup(struct cl_object_header *hdr, pgoff_t index)
 EXPORT_SYMBOL(cl_page_lookup);
 
 /**
- * Returns a list of pages by a given [start, end] of @obj.
+ * Returns a list of pages by a given [start, end] of \a obj.
  *
  * Gang tree lookup (radix_tree_gang_lookup()) optimization is absolutely
  * crucial in the face of [offset, EOF] locks.
@@ -1192,7 +1192,7 @@ EXPORT_SYMBOL(cl_page_unmap);
  *
  * Call cl_page_operations::cpo_export() through all layers top-to-bottom. The
  * layer responsible for VM interaction has to mark/clear page as up-to-date
- * by the @uptodate argument.
+ * by the \a uptodate argument.
  *
  * \see cl_page_operations::cpo_export()
  */

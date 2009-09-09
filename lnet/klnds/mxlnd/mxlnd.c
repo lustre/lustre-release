@@ -55,8 +55,8 @@ lnd_t the_kmxlnd = {
 kmx_data_t               kmxlnd_data;
 
 /**
- * mxlnd_ctx_free - free ctx struct
- * @ctx - a kmx_peer pointer
+ * Free ctx struct
+ * \param ctx  a kmx_peer pointer
  *
  * The calling function should remove the ctx from the ctx list first
  * then free it.
@@ -83,8 +83,8 @@ mxlnd_ctx_free(struct kmx_ctx *ctx)
 }
 
 /**
- * mxlnd_ctx_alloc - allocate and initialize a new ctx struct
- * @ctxp - address of a kmx_ctx pointer
+ * Allocate and initialize a new ctx struct
+ * \param ctxp  address of a kmx_ctx pointer
  *
  * Returns 0 on success and -EINVAL, -ENOMEM on failure
  */
@@ -127,8 +127,8 @@ failed:
 }
 
 /**
- * mxlnd_ctx_init - reset ctx struct to the default values
- * @ctx - a kmx_ctx pointer
+ * Reset ctx struct to the default values
+ * \param ctx  a kmx_ctx pointer
  */
 void
 mxlnd_ctx_init(struct kmx_ctx *ctx)
@@ -180,7 +180,7 @@ mxlnd_ctx_init(struct kmx_ctx *ctx)
 }
 
 /**
- * mxlnd_free_txs - free kmx_txs and associated pages
+ * Free kmx_txs and associated pages
  *
  * Called from mxlnd_shutdown()
  */
@@ -198,7 +198,7 @@ mxlnd_free_txs(void)
 }
 
 /**
- * mxlnd_init_txs - allocate tx descriptors then stash on txs and idle tx lists
+ * Allocate tx descriptors then stash on txs and idle tx lists
  *
  * Called from mxlnd_startup()
  * returns 0 on success, else -ENOMEM
@@ -225,7 +225,7 @@ mxlnd_init_txs(void)
 }
 
 /**
- * mxlnd_free_rxs - free initial kmx_rx descriptors and associated pages
+ * Free initial kmx_rx descriptors and associated pages
  *
  * Called from mxlnd_shutdown()
  */
@@ -243,7 +243,7 @@ mxlnd_free_rxs(void)
 }
 
 /**
- * mxlnd_init_rxs - allocate initial rx descriptors 
+ * Allocate initial rx descriptors 
  *
  * Called from startup(). We create MXLND_MAX_PEERS plus MXLND_NTX
  * rx descriptors. We create one for each potential peer to handle 
@@ -274,7 +274,7 @@ mxlnd_init_rxs(void)
 }
 
 /**
- * mxlnd_free_peers - free peers
+ * Free peers
  *
  * Called from mxlnd_shutdown()
  */
@@ -295,8 +295,8 @@ mxlnd_free_peers(void)
 }
 
 /**
- * mxlnd_init_mx - open the endpoint, set our ID, register the EAGER callback
- * @ni - the network interface
+ * Open the endpoint, set our ID, register the EAGER callback
+ * \param ni  the network interface
  *
  * Returns 0 on success, -1 on failure
  */
@@ -417,9 +417,9 @@ failed_with_init:
 
 
 /**
- * mxlnd_thread_start - spawn a kernel thread with this function
- * @fn - function pointer
- * @arg - pointer to the parameter data
+ * Spawn a kernel thread with this function
+ * \param fn  function pointer
+ * \param arg pointer to the parameter data
  *
  * Returns 0 on success and a negative value on failure
  */
@@ -441,7 +441,7 @@ mxlnd_thread_start(int (*fn)(void *arg), void *arg)
 }
 
 /**
- * mxlnd_thread_stop - decrement thread counter
+ * Decrement thread counter
  *
  * The thread returns 0 when it detects shutdown.
  * We are simply decrementing the thread counter.
@@ -455,8 +455,8 @@ mxlnd_thread_stop(long id)
 }
 
 /**
- * mxlnd_shutdown - stop IO, clean up state
- * @ni - LNET interface handle
+ * Stop IO, clean up state
+ * \param ni LNET interface handle
  *
  * No calls to the LND should be made after calling this function.
  */
@@ -563,8 +563,8 @@ mxlnd_shutdown (lnet_ni_t *ni)
 }
 
 /**
- * mxlnd_startup - initialize state, open an endpoint, start IO
- * @ni - LNET interface handle
+ * Initialize state, open an endpoint, start IO
+ * \param ni LNET interface handle
  *
  * Initialize state, open an endpoint, start monitoring threads.
  * Should only be called once.

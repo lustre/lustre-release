@@ -953,7 +953,7 @@ enum {
          */
         LS_FIRST_DE,
         /**
-         * the first hidden dirent, that is ".xxx
+         * the first hidden dirent, that is "." 
          */
         LS_FIRST_DOT_DE
 };

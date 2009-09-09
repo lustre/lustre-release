@@ -1165,7 +1165,7 @@ EXPORT_SYMBOL(cl_enqueue);
  * This function is called repeatedly by cl_unuse() until either lock is
  * unlocked, or error occurs.
  *
- * \ppre lock->cll_state <= CLS_HELD || lock->cll_state == CLS_UNLOCKING
+ * \pre  lock->cll_state <= CLS_HELD || lock->cll_state == CLS_UNLOCKING
  *
  * \post ergo(result == 0, lock->cll_state == CLS_CACHED)
  *

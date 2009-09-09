@@ -34,6 +34,11 @@ cscope:
 	find $(top_srcdir) -name '*.[hc]' | grep -v "\.pc" > cscope.files
 	cscope -bRq
 
+doxygen:  doxygen-api doxygen-ref
+
+doxygen-%: build/doxyfile.%
+	   doxygen $<
+
 if MODULES
 sources: all-sources
 

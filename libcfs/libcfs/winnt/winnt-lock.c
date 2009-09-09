@@ -253,10 +253,10 @@ atomic_dec_and_test(
 
 /**
  * atomic_add_return - add integer and return
- * @v: pointer of type atomic_t
- * @i: integer value to add
+ * \param v pointer of type atomic_t
+ * \param i integer value to add
  *
- * Atomically adds @i to @v and returns @i + @v
+ * Atomically adds \a i to \a v and returns \a i + \a v
  */
 int FASTCALL atomic_add_return(int i, atomic_t *v)
 {
@@ -278,10 +278,10 @@ int FASTCALL atomic_add_return(int i, atomic_t *v)
 
 /**
  * atomic_sub_return - subtract integer and return
- * @v: pointer of type atomic_t
- * @i: integer value to subtract
+ * \param v pointer of type atomic_t
+ * \param i integer value to subtract
  *
- * Atomically subtracts @i from @v and returns @v - @i
+ * Atomically subtracts \a i from \a v and returns \a v - \a i
  */
 int FASTCALL atomic_sub_return(int i, atomic_t *v)
 {

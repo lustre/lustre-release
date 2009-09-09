@@ -262,8 +262,8 @@ int class_unregister_type(const char *name)
  *
  * Find an empty slot in ::obd_devs[], create a new obd device in it.
  *
- * \param typename [in] obd device type string.
- * \param name     [in] obd device name.
+ * \param[in] type_name obd device type string.
+ * \param[in] name      obd device name.
  *
  * \retval NULL if create fails, otherwise return the obd device
  *         pointer created.
@@ -542,7 +542,7 @@ struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
 }
 
 /**
- * to notify sptlrpc log for @fsname has changed, let every relevant OBD
+ * to notify sptlrpc log for \a fsname has changed, let every relevant OBD
  * adjust sptlrpc settings accordingly.
  */
 int class_notify_sptlrpc_conf(const char *fsname, int namelen)

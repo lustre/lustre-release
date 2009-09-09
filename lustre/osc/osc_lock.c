@@ -38,8 +38,6 @@
  *   Author: Nikita Danilov <nikita.danilov@sun.com>
  */
 
-/** \addtogroup osc osc @{ */
-
 #define DEBUG_SUBSYSTEM S_OSC
 
 #ifdef __KERNEL__
@@ -51,6 +49,10 @@
 #include <lustre_fid.h>
 
 #include "osc_cl_internal.h"
+
+/** \addtogroup osc 
+ *  @{ 
+ */
 
 /*****************************************************************************
  *

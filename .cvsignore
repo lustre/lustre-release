@@ -42,3 +42,4 @@ series
 lustre.spec
 acl.size
 .git
+doxygen.*
