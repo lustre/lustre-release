@@ -490,7 +490,7 @@ test_18() {
                 [ $SPACE -gt $((MIN / 20)) ] && OK=1 && myMDSSIZE=$MIN && \
                         log "use file $MDSDEV with MIN=$MIN"
 
-        [ -z "$OK" ] && skip "$MDSDEV too small for ${MIN}kB MDS" && return
+        [ -z "$OK" ] && skip_env "$MDSDEV too small for ${MIN}kB MDS" && return
 
 
         echo "mount mds with large journal..."
@@ -695,7 +695,7 @@ test_24a() {
 	[ -n "$ost1_HOST" ] && fs2ost_HOST=$ost1_HOST
 	if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" ]; then
 		do_facet $SINGLEMDS [ -b "$MDSDEV" ] && \
-		skip "mixed loopback and real device not working" && return
+		skip_env "mixed loopback and real device not working" && return
 	fi
 
 	local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
@@ -741,7 +741,7 @@ run_test 24a "Multiple MDTs on a single node"
 test_24b() {
 	if [ -z "$fs2mds_DEV" ]; then
 		do_facet $SINGLEMDS [ -b "$MDSDEV" ] && \
-		skip "mixed loopback and real device not working" && return
+		skip_env "mixed loopback and real device not working" && return
 	fi
 
 	local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
@@ -840,7 +840,7 @@ test_28() {
 run_test 28 "permanent parameter setting"
 
 test_29() {
-	[ "$OSTCOUNT" -lt "2" ] && skip "$OSTCOUNT < 2, skipping" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2, skipping" && return
         setup > /dev/null 2>&1
 	start_ost2
 	sleep 10
@@ -975,14 +975,14 @@ test_32a() {
 	# this test is totally useless on a client-only system
 	[ -n "$CLIENTONLY" -o -n "$CLIENTMODSONLY" ] && skip "client only testing" && return 0
 	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
-	[ -z "$TUNEFS" ] && skip "No tunefs" && return 0
+	[ -z "$TUNEFS" ] && skip_env "No tunefs" && return 0
 
 	local DISK1_8=$LUSTRE/tests/disk1_8.tar.bz2
-	[ ! -r $DISK1_8 ] && skip "Cannot find $DISK1_8" && return 0
+	[ ! -r $DISK1_8 ] && skip_env "Cannot find $DISK1_8" && return 0
 	local tmpdir=$TMP/conf32a
 	mkdir -p $tmpdir
 	tar xjvf $DISK1_8 -C $tmpdir || \
-		{ skip "Cannot untar $DISK1_8" && return 0; }
+		{ skip_env "Cannot untar $DISK1_8" && return 0; }
 
 	load_modules
 	$LCTL set_param debug=$PTLDEBUG
@@ -1033,14 +1033,14 @@ test_32b() {
 	# this test is totally useless on a client-only system
 	[ -n "$CLIENTONLY" -o -n "$CLIENTMODSONLY" ] && skip "client only testing" && return 0
 	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
-	[ -z "$TUNEFS" ] && skip "No tunefs" && return
+	[ -z "$TUNEFS" ] && skip_env "No tunefs" && return
 
 	local DISK1_8=$LUSTRE/tests/disk1_8.tar.bz2
-	[ ! -r $DISK1_8 ] && skip "Cannot find $DISK1_8" && return 0
+	[ ! -r $DISK1_8 ] && skip_env "Cannot find $DISK1_8" && return 0
 	local tmpdir=$TMP/conf32b
 	mkdir -p $tmpdir
 	tar xjvf $DISK1_8 -C $tmpdir || \
-		{ skip "Cannot untar $DISK1_8" && return ; }
+		{ skip_env "Cannot untar $DISK1_8" && return ; }
 
 	load_modules
 	$LCTL set_param debug=$PTLDEBUG
@@ -1102,7 +1102,7 @@ test_33a() { # bug 12333, was test_33
 
         if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" ]; then
                 do_facet $SINGLEMDS [ -b "$MDSDEV" ] && \
-                skip "mixed loopback and real device not working" && return
+                skip_env "mixed loopback and real device not working" && return
         fi
 
         local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
@@ -1246,9 +1246,9 @@ test_36() { # 12743
 
         if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" -o -z "$fs3ost_DEV" ]; then
 		do_facet $SINGLEMDS [ -b "$MDSDEV" ] && \
-		skip "mixed loopback and real device not working" && return
+		skip_env "mixed loopback and real device not working" && return
         fi
-        [ $OSTCOUNT -lt 2 ] && skip "skipping test for single OST" && return
+        [ $OSTCOUNT -lt 2 ] && skip_env "skipping test for single OST" && return
 
 	[ "$ost_HOST" = "`hostname`" -o "$ost1_HOST" = "`hostname`" ] || \
 		{ skip "remote OST" && return 0; }
@@ -1448,7 +1448,7 @@ test_42() { #bug 14693
 run_test 42 "invalid config param should not prevent client from mounting"
 
 test_43() {
-    [ $UID -ne 0 -o $RUNAS_ID -eq 0 ] && skip "run as root"
+    [ $UID -ne 0 -o $RUNAS_ID -eq 0 ] && skip_env "run as root"
     setup
     chmod ugo+x $DIR || error "chmod 0 failed"
     set_and_check mds                                        \
@@ -1608,7 +1608,7 @@ cleanup_46a() {
 }
 
 test_46a() {
-	[ $OSTCOUNT -lt 5 ] && skip "skipping test for too few OSTs" && return
+	[ $OSTCOUNT -lt 5 ] && skip_env "too few OSTs" && return
 	reformat
 	start_mds || return 1
 	#first client should see only one ost
