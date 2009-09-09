@@ -207,6 +207,19 @@ while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
         exit 4
     fi
 
+    log "Wait $SERVERFACET recovery complete before doing next failover ...."
+    if [[ $NUM_FAILOVERS != 0 ]]; then
+        if ! wait_recovery_complete $SERVERFACET ; then
+            echo "$SERVERFACET recovery is not completed!"
+            exit 7
+        fi
+    fi
+
+    log "Checking clients are in FULL state before doing next failover"
+    if ! wait_clients_import_state $NODES_TO_USE $SERVERFACET FULL; then
+        echo "Clients import not FULL, please consider to increase SERVER_FAILOVER_PERIOD=$SERVER_FAILOVER_PERIOD !"
+        
+    fi
     log "Starting failover on $SERVERFACET"
 
     facet_failover "$SERVERFACET" || exit 1
