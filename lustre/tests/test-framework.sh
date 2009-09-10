@@ -1927,6 +1927,26 @@ expand_list () {
     echo $(comma_list $expanded)
 }
 
+testslist_filter () {
+    local script=$LUSTRE/tests/${TESTSUITE}.sh
+
+    [ -f $script ] || return 0
+
+    local start_at=$START_AT
+    local stop_at=$STOP_AT
+
+    local var=${TESTSUITE}_START_AT
+    [ x"${!var}" != x ] && start_at=${!var}
+    var=${TESTSUITE}_STOP_AT
+    [ x"${!var}" != x ] && stop_at=${!var}
+
+    sed -n 's/^test_\([^ (]*\).*/\1/p' $script | \
+        awk ' BEGIN { if ("'${start_at:-0}'" != 0) flag = 1 }
+            /^'${start_at}'$/ {flag = 0}
+            {if (flag == 1) print $0}
+            /^'${stop_at}'$/ { flag = 1 }'
+}
+
 absolute_path() {
     (cd `dirname $1`; echo $PWD/`basename $1`)
 }
@@ -2205,6 +2225,8 @@ skip () {
 }
 
 build_test_filter() {
+    EXCEPT="$EXCEPT $(testslist_filter)"
+
     [ "$ONLY" ] && log "only running test `echo $ONLY`"
     for O in $ONLY; do
         eval ONLY_${O}=true
