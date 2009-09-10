@@ -5,6 +5,7 @@ set -e
 
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
+. ${CONFIG:=$LUSTRE/tests/cfg/${NAME}.sh}
 
 export PATH=`dirname $0`/../utils:$PATH
 LFS=${LFS:-lfs}
@@ -41,12 +42,7 @@ export LANG=C LC_LANG=C # for "No space left on device" message
 [ -f $LOG ] && error "log file wasn't removed?"
 
 echo BEFORE dd started
-for OSC in `$LCTL get_param -N osc.*-osc-*.kbytesavail | cut -d"." -f1-2`; do
-	AVAIL=`$LCTL get_param -n $OSC.kbytesavail`
-	GRANT=$((`$LCTL get_param -n $OSC.cur_grant_bytes` / 1024))
-	echo -n "$(echo $OSC | cut -d"." -f2) avl=$AVAIL grnt=$GRANT diff=$(($AVAIL - $GRANT))"
-	echo " "
-done
+oos_full || true
 
 # make sure we stripe over all OSTs to avoid OOS on only a subset of OSTs
 $LFS setstripe $OOS -c $STRIPECOUNT
@@ -67,18 +63,8 @@ fi
 sync; sleep 1 ; sync
 
 echo AFTER dd
-for OSC in `$LCTL get_param -N osc.*-osc-*.kbytesavail | cut -d"." -f1-2`; do
-	AVAIL=`$LCTL get_param -n $OSC.kbytesavail`
-	GRANT=$((`$LCTL get_param -n $OSC.cur_grant_bytes` / 1024))
-	echo -n "$(echo $OSC | cut -d"." -f2) avl=$AVAIL grnt=$GRANT diff=$(($AVAIL - $GRANT))"
-	[ $(($AVAIL - $GRANT)) -lt 400 ] && OSCFULL=full && echo -n " FULL"
-	echo " "
-done
-
-if [ -z "$OSCFULL" ]; then
+if ! oos_full; then
 	echo "no OSTs are close to full"
-	$LCTL get_param "osc.*-osc-*.kbytesavail"
-	$LCTL get_param "osc.*-osc-*.cur*"
 	SUCCESS=0
 fi
 
