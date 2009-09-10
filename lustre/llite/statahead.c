@@ -176,7 +176,7 @@ static struct ll_statahead_info *ll_sai_alloc(void)
         return sai;
 }
 
-static inline 
+static inline
 struct ll_statahead_info *ll_sai_get(struct ll_statahead_info *sai)
 {
         LASSERT(sai);
@@ -275,7 +275,7 @@ static void ll_sai_entry_fini(struct ll_statahead_info *sai)
         struct ll_inode_info *lli = ll_i2info(sai->sai_inode);
         struct ll_sai_entry  *entry;
         ENTRY;
-        
+
         spin_lock(&lli->lli_lock);
         sai->sai_index_next++;
         if (likely(!list_empty(&sai->sai_entries_stated))) {
@@ -462,9 +462,7 @@ static int do_statahead_interpret(struct ll_statahead_info *sai)
                 spin_lock(&dcache_lock);
                 lock_dentry(dentry);
                 __d_drop(dentry);
-#ifdef DCACHE_LUSTRE_INVALID
                 dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
-#endif
                 unlock_dentry(dentry);
                 d_rehash_cond(dentry, 0);
                 spin_unlock(&dcache_lock);
@@ -690,11 +688,7 @@ static int ll_statahead_one(struct dentry *parent, const char* entry_name,
         int                       rc;
         ENTRY;
 
-#ifdef DCACHE_LUSTRE_INVALID
         if (parent->d_flags & DCACHE_LUSTRE_INVALID) {
-#else
-        if (d_unhashed(parent)) {
-#endif
                 CDEBUG(D_READA, "parent dentry@%p %.*s is "
                        "invalid, skip statahead\n",
                        parent, parent->d_name.len, parent->d_name.name);
@@ -1018,11 +1012,14 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
                                 continue;
                         }
 
-                        if (target->len == namelen &&
-                            memcmp(target->name, name, namelen) == 0)
-                                rc = LS_FIRST_DE + dot_de;
-                        else
+                        if (target->len != namelen ||
+                            memcmp(target->name, name, namelen) != 0)
                                 rc = LS_NONE_FIRST_DE;
+                        else if (!dot_de)
+                                rc = LS_FIRST_DE;
+                        else
+                                rc = LS_FIRST_DOT_DE;
+
                         ll_put_page(page);
                         GOTO(out, rc);
                 }
@@ -1035,7 +1032,7 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
                         break;
                 } else if (1) {
                         /*
-                         * chain is exhausted 
+                         * chain is exhausted
                          * Normal case: continue to the next page.
                          */
                         page = ll_get_dir_page(dir, pos, 1, &chain);
@@ -1143,7 +1140,7 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
                 RETURN(rc);
         }
 
-        /* I am the "lli_opendir_pid" owner, only me can set "lli_sai". */ 
+        /* I am the "lli_opendir_pid" owner, only me can set "lli_sai". */
         rc = is_first_dirent(dir, *dentryp);
         if (rc == LS_NONE_FIRST_DE)
                 /* It is not "ls -{a}l" operation, no need statahead for it. */
@@ -1189,7 +1186,7 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
                 RETURN(-EAGAIN);
         }
 
-        l_wait_event(sai->sai_thread.t_ctl_waitq, 
+        l_wait_event(sai->sai_thread.t_ctl_waitq,
                      sa_is_running(sai) || sa_is_stopped(sai),
                      &lwi);
 
