@@ -1265,8 +1265,6 @@ void target_cleanup_recovery(struct obd_device *obd)
         struct list_head clean_list;
         ENTRY;
 
-        LASSERT(obd->obd_stopping);
-
         CFS_INIT_LIST_HEAD(&clean_list);
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (!obd->obd_recovering) {
