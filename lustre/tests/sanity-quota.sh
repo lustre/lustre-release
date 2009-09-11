@@ -43,14 +43,14 @@ IUNIT_SZ=${IUNIT_SZ:-10}	# min inode quota unit
 MAX_DQ_TIME=604800
 MAX_IQ_TIME=604800
 
-unset ENABLE_QUOTA
-
 TRACE=${TRACE:-""}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 DIRECTIO=${DIRECTIO:-$LUSTRE/tests/directio}
+
+unset ENABLE_QUOTA
 
 remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
