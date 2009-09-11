@@ -628,10 +628,23 @@ void cl_page_put(const struct lu_env *env, struct cl_page *page)
 
         ENTRY;
         CL_PAGE_HEADER(D_TRACE, env, page, "%i\n", atomic_read(&page->cp_ref));
-        hdr = cl_object_header(page->cp_obj);
+
+        hdr = cl_object_header(cl_object_top(page->cp_obj));
+        spin_lock(&hdr->coh_page_guard);
         if (atomic_dec_and_test(&page->cp_ref)) {
                 atomic_dec(&site->cs_pages.cs_busy);
+                /* We're going to access the page w/o a reference, but it's
+                 * ok because we have grabbed the lock coh_page_guard, which
+                 * means nobody is able to free this page behind us.
+                 */
                 if (page->cp_state == CPS_FREEING) {
+                        /* We drop the page reference and check the page state
+                         * inside the coh_page_guard. So that if it gets here,
+                         * it is the REALLY last reference to this page.
+                         */
+                        spin_unlock(&hdr->coh_page_guard);
+
+                        LASSERT(atomic_read(&page->cp_ref) == 0);
                         PASSERT(env, page, page->cp_owner == NULL);
                         PASSERT(env, page, list_empty(&page->cp_batch));
                         /*
@@ -639,8 +652,13 @@ void cl_page_put(const struct lu_env *env, struct cl_page *page)
                          * it down.
                          */
                         cl_page_free(env, page);
+
+                        EXIT;
+                        return;
                 }
         }
+        spin_unlock(&hdr->coh_page_guard);
+
         EXIT;
 }
 EXPORT_SYMBOL(cl_page_put);
@@ -674,6 +692,7 @@ EXPORT_SYMBOL(cl_page_vmpage);
 struct cl_page *cl_vmpage_page(cfs_page_t *vmpage, struct cl_object *obj)
 {
         struct cl_page *page;
+        struct cl_object_header *hdr;
 
         ENTRY;
         KLASSERT(PageLocked(vmpage));
@@ -688,6 +707,8 @@ struct cl_page *cl_vmpage_page(cfs_page_t *vmpage, struct cl_object *obj)
          * This loop assumes that ->private points to the top-most page. This
          * can be rectified easily.
          */
+        hdr = cl_object_header(cl_object_top(obj));
+        spin_lock(&hdr->coh_page_guard);
         for (page = (void *)vmpage->private;
              page != NULL; page = page->cp_child) {
                 if (cl_object_same(page->cp_obj, obj)) {
@@ -695,6 +716,7 @@ struct cl_page *cl_vmpage_page(cfs_page_t *vmpage, struct cl_object *obj)
                         break;
                 }
         }
+        spin_unlock(&hdr->coh_page_guard);
         LASSERT(ergo(page, cl_is_page(page) && page->cp_type == CPT_CACHEABLE));
         RETURN(page);
 }
