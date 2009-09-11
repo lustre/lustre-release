@@ -453,9 +453,7 @@ static int do_statahead_interpret(struct ll_statahead_info *sai)
                 spin_lock(&dcache_lock);
                 lock_dentry(dentry);
                 __d_drop(dentry);
-#ifdef DCACHE_LUSTRE_INVALID
                 dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
-#endif
                 unlock_dentry(dentry);
                 d_rehash_cond(dentry, 0);
                 spin_unlock(&dcache_lock);
@@ -660,11 +658,7 @@ static int ll_statahead_one(struct dentry *parent, struct ll_dir_entry *de)
         int                       rc;
         ENTRY;
 
-#ifdef DCACHE_LUSTRE_INVALID
         if (parent->d_flags & DCACHE_LUSTRE_INVALID) {
-#else
-        if (d_unhashed(parent)) {
-#endif
                 CDEBUG(D_READA, "parent dentry@%p %.*s is "
                        "invalid, skip statahead\n",
                        parent, parent->d_name.len, parent->d_name.name);
@@ -982,11 +976,14 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
                                 continue;
                         }
 
-                        if (d_name->len == de->lde_name_len &&
-                            !strncmp(d_name->name, de->lde_name, d_name->len))
-                                rc = LS_FIRST_DE + dot_de;
-                        else
+                        if (d_name->len != de->lde_name_len ||
+                            strncmp(d_name->name, de->lde_name, d_name->len) != 0)
                                 rc = LS_NONE_FIRST_DE;
+                        else if (!dot_de)
+                                rc = LS_FIRST_DE;
+                        else
+                                rc = LS_FIRST_DOT_DE;
+
                         ll_put_page(page);
                         RETURN(rc);
                 }
@@ -1109,12 +1106,11 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp, int lookup)
         /* get parent reference count here, and put it in ll_statahead_thread */
         parent = dget((*dentryp)->d_parent);
         if (unlikely(sai->sai_inode != parent->d_inode)) {
-                struct ll_inode_info *nlli = ll_i2info(parent->d_inode);
-
                 CWARN("Race condition, someone changed %.*s just now: "
                       "old parent "DFID", new parent "DFID" .\n",
                       (*dentryp)->d_name.len, (*dentryp)->d_name.name,
-                      PFID(&lli->lli_fid), PFID(&nlli->lli_fid));
+                      PFID(ll_inode_lu_fid(dir)),
+                      PFID(ll_inode_lu_fid(parent->d_inode)));
                 dput(parent);
                 iput(sai->sai_inode);
                 OBD_FREE_PTR(sai);
@@ -1183,7 +1179,7 @@ void ll_statahead_exit(struct inode *dir, struct dentry *dentry, int result)
                         CDEBUG(D_READA, "Statahead for dir "DFID" hit ratio "
                                "too low: hit/miss %u/%u, sent/replied %u/%u, "
                                "stopping statahead thread: pid %d\n",
-                               PFID(&lli->lli_fid), sai->sai_hit,
+                               PFID(ll_inode_lu_fid(dir)), sai->sai_hit,
                                sai->sai_miss, sai->sai_sent,
                                sai->sai_replied, cfs_curproc_pid());
                         spin_lock(&lli->lli_lock);

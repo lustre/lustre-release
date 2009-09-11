@@ -510,7 +510,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
 {
         struct lov_stripe_md *lsm;
         struct osc_creator *oscc = &exp->exp_obd->u.cli.cl_oscc;
-        int rc = 0;
+        int del_orphan = 0, rc = 0;
 
         ENTRY;
         LASSERT(oa);
@@ -525,7 +525,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         }
 
         /* this is the special case where create removes orphans */
-        if ((oa->o_valid & OBD_MD_FLFLAGS) &&
+        if (oa->o_valid & OBD_MD_FLFLAGS &&
             oa->o_flags == OBD_FL_DELORPHAN) {
                 spin_lock(&oscc->oscc_lock);
                 if (oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS) {
@@ -544,6 +544,8 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 spin_unlock(&oscc->oscc_lock);
                 CDEBUG(D_HA, "%s: oscc recovery started - delete to "LPU64"\n",
                        oscc->oscc_obd->obd_name, oscc->oscc_next_id - 1);
+
+                del_orphan = 1;
 
                 /* delete from next_id on up */
                 oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
@@ -640,11 +642,16 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 spin_unlock(&oscc->oscc_lock);
         }
 
-        if (rc == 0)
+        if (rc == 0) {
                 CDEBUG(D_INFO, "%s: returning objid "LPU64"\n",
                        obd2cli_tgt(oscc->oscc_obd), lsm->lsm_object_id);
-        else if (*ea == NULL)
-                obd_free_memmd(exp, &lsm);
+        } else {
+                if (*ea == NULL)
+                        obd_free_memmd(exp, &lsm);
+                if (del_orphan != 0 && rc != -EIO)
+                        /* Ignore non-IO precreate error for clear orphan */
+                        rc = 0;
+        }
         RETURN(rc);
 }
 
