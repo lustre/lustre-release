@@ -2998,8 +2998,6 @@ wait_clients_import_state () {
     fi
 }
 
-. ${CONFIG:=$LUSTRE/tests/cfg/${NAME}.sh}
-
 oos_full() {
         local -a AVAILA
         local -a GRANTA
