@@ -1934,7 +1934,7 @@ test_74() {
 run_test 74 "Ensure applications don't fail waiting for OST recovery"
 
 test_80a() {
-    [ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs" && return 0
+    [ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
 
     mkdir -p $DIR/$tdir
     replay_barrier mds2
