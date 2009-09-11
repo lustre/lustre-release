@@ -14,6 +14,11 @@ tbd Sun Microsystems, Inc.
 	  of Lustre filesystem with 4K stack may cause a stack overflow. For
 	  more information, please refer to bugzilla 17630.
 
+Severity   : major
+Bugzilla   : 20560
+Description: File checksum failures with OST read cache on
+Details    : Clear page cache's uptodate bit when its contents are cleared.
+
 Severity   : normal
 Bugzilla   : 20533
 Description: Changes in raid5-large-io-rhel5.patch to calculate sectors properly
@@ -65,19 +70,19 @@ Details    : ldiskfs_truncate calls grab_cache_page which may start page
 	     allocation under an open transaction. This may lead to
 	     calling prune_icache with consequent lustre reentrance.
 
-Severity   : enhancement 
+Severity   : enhancement
 Bugzilla   : 20200
 Description: Enhancement for lfs(1) command to use numeric uid/gid.
 
-Severity   : normal 
+Severity   : normal
 Bugzilla   : 18674
 Description: Do not start bulk transfer, if client tried to reconnect.
 Details    : Do not start bulk transfer, if client tried to reconnect,
 	     but failed due to active rpcs. Check for exp_abort_active_req
 	     has been implemented.
 
-Severity   : normal 
-Bugzilla   : 20321 
+Severity   : normal
+Bugzilla   : 20321
 Description: Deadlock between filter_destroy() and filter_commitrw_write().
 Details    : filter_destroy() does not hold the DLM lock over the whole
 	     operation. If the DLM lock is dropped, filter_commitrw() can go
@@ -99,7 +104,7 @@ Description: Vanilla kernel 2.6.30 patchless support.
 Severity   : normal
 Bugzilla   : 20122
 Frequency  : rare
-Description: don't panic if EPROTO was hit when reading symlink 
+Description: don't panic if EPROTO was hit when reading symlink
 Details    : correctly handling request reference in error cases.
 
 Severity   : normal
@@ -206,7 +211,7 @@ Details    : In filter_commitrw_write():
 	     3. lquota_pending_commit();
 	     "2." has changed uid and gid in this case, then caused
 	     lquota_chkquota() and lquota_pending_commit() to use
-	     different uid and gid. That is the root of the bug. 
+	     different uid and gid. That is the root of the bug.
 
 ------------------------------------------------------------------------------
 2009-07-31 Sun Microsystems, Inc.
@@ -240,7 +245,7 @@ Details    : 1.8 mds is allocate to big buffer to LOV EA data and this produce
 Severity   : normal
 Bugzilla   : 19917
 Description: Repeated atomic allocation failures.
-Details    : Use GFP_HIGHUSER | __GFP_NOMEMALLOC flags for memory allocations 
+Details    : Use GFP_HIGHUSER | __GFP_NOMEMALLOC flags for memory allocations
 	     to generate memory pressure and allow reclaiming of inactive pages.
 	     At the same time, do not allow to exhaust emergency pools.
 	     For local clients the use of GFP_NOFS will be introduced in 1.8.2
@@ -2734,7 +2739,7 @@ Bugzilla   : 13129
 Description: server LBUG when shutting down
 Details    : Block umount forever until the mount refcount is zero rather
 	     than giving up after an arbitrary timeout.
-	
+
 Severity   : enhancement
 Bugzilla   : 12194
 Description: add optional extra BUILD_VERSION info
@@ -3163,7 +3168,7 @@ Details    : quota slave depends qctxt->lqc_import to send its quota request.
 	     This pointer will be invalid if mds did failover or broke its
 	     connect to osts, which leads to LBUG.
 
-Severity   : normal	
+Severity   : normal
 Frequency  : when qunit size is too small(less than 20M)
 Bugzilla   : 12588
 Description: write is stopped by improper -EDQUOT
@@ -3257,7 +3262,7 @@ Details    : If a client tried to create a new file before the MDT had
 	     connected to any OSTs, the create would return EIO.  Now
 	     the client will simply block until the MDT connects to the
 	     first OST and the create can succeed.
-	
+
 Severity   : normal
 Frequency  : only for SLES9
 Bugzilla   : 12543
@@ -3312,7 +3317,7 @@ Frequency  : rare
 Description: Sometimes precreate code can triger create object on wrong ost
 Details    : Wrong protected or not not restored variables aftre precreate loop
 	     can produce creation object on wrong ost.
-	
+
 Severity   : normal
 Frequency  : oss recovery
 Bugzilla   : 10800
