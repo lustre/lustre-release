@@ -15,6 +15,11 @@ TBD Sun Microsystems, Inc.
 	* ext4 support for RHEL5 is experimental and thus should not be
 	  used in production.
 
+Severity   : major
+Bugzilla   : 20560
+Description: File checksum failures with OST read cache on
+Details    : Clear page cache's uptodate bit when its contents are cleared.
+
 Severity   : normal
 Bugzilla   : 20533
 Description: Changes in raid5-large-io-rhel5.patch to calculate sectors properly
@@ -98,7 +103,7 @@ Details    : 1.8 mds is allocate to big buffer to LOV EA data and this produce
 Severity   : normal
 Bugzilla   : 19917
 Description: Repeated atomic allocation failures.
-Details    : Use GFP_HIGHUSER | __GFP_NOMEMALLOC flags for memory allocations 
+Details    : Use GFP_HIGHUSER | __GFP_NOMEMALLOC flags for memory allocations
 	     to generate memory pressure and allow reclaiming of inactive pages.
 	     At the same time, do not allow to exhaust emergency pools.
 	     For local clients the use of GFP_NOFS will be introduced in 1.8.2
@@ -2592,7 +2597,7 @@ Bugzilla   : 13129
 Description: server LBUG when shutting down
 Details    : Block umount forever until the mount refcount is zero rather
 	     than giving up after an arbitrary timeout.
-	
+
 Severity   : enhancement
 Bugzilla   : 12194
 Description: add optional extra BUILD_VERSION info
@@ -3021,7 +3026,7 @@ Details    : quota slave depends qctxt->lqc_import to send its quota request.
 	     This pointer will be invalid if mds did failover or broke its
 	     connect to osts, which leads to LBUG.
 
-Severity   : normal	
+Severity   : normal
 Frequency  : when qunit size is too small(less than 20M)
 Bugzilla   : 12588
 Description: write is stopped by improper -EDQUOT
@@ -3115,7 +3120,7 @@ Details    : If a client tried to create a new file before the MDT had
 	     connected to any OSTs, the create would return EIO.  Now
 	     the client will simply block until the MDT connects to the
 	     first OST and the create can succeed.
-	
+
 Severity   : normal
 Frequency  : only for SLES9
 Bugzilla   : 12543
@@ -3170,7 +3175,7 @@ Frequency  : rare
 Description: Sometimes precreate code can triger create object on wrong ost
 Details    : Wrong protected or not not restored variables aftre precreate loop
 	     can produce creation object on wrong ost.
-	
+
 Severity   : normal
 Frequency  : oss recovery
 Bugzilla   : 10800
