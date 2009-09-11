@@ -84,16 +84,13 @@ static int vvp_page_own(const struct lu_env *env,
 {
         struct ccc_page *vpg    = cl2ccc_page(slice);
         cfs_page_t      *vmpage = vpg->cpg_page;
-        int count = 0;
 
         LASSERT(vmpage != NULL);
-
         if (nonblock) {
                 if (TestSetPageLocked(vmpage))
                         return -EAGAIN;
 
                 if (unlikely(PageWriteback(vmpage))) {
-                        /* Something gets wrong? */
                         unlock_page(vmpage);
                         return -EAGAIN;
                 }
@@ -101,34 +98,7 @@ static int vvp_page_own(const struct lu_env *env,
                 return 0;
         }
 
-        /* DEBUG CODE FOR #18881 */
-        while (TestSetPageLocked(vmpage)) {
-                cfs_schedule_timeout(CFS_TASK_INTERRUPTIBLE,
-                                     cfs_time_seconds(1)/10);
-                if (++count > 1200) {
-                        CL_PAGE_DEBUG(D_ERROR, env,
-                                      cl_page_top(slice->cpl_page),
-                                      "XXX page %p blocked on acquiring the"
-                                      " lock. process %s/%p, flags %lx,io %p\n",
-                                      vmpage, current->comm, current,
-                                      vmpage->flags, io);
-                        libcfs_debug_dumpstack(NULL);
-                        if (slice->cpl_page->cp_task) {
-                                cfs_task_t *tsk = slice->cpl_page->cp_task;
-                                LCONSOLE_WARN("The page was owned by %s\n",
-                                              tsk->comm);
-                                libcfs_debug_dumpstack(tsk);
-                        }
-                        LCONSOLE_WARN("Reproduced bug #18881,please contact:"
-                               "jay <jinshan.xiong@sun.com>, thanks\n");
-
-                        lock_page(vmpage);
-                        break;
-                }
-        }
-        /* DEBUG CODE END */
-
-        /* lock_page(vmpage); */
+        lock_page(vmpage);
         wait_on_page_writeback(vmpage);
         return 0;
 }

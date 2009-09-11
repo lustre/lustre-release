@@ -58,20 +58,17 @@
 
 typedef struct {
         spinlock_t          lock;
+
+#ifdef CLIENT_OBD_LIST_LOCK_DEBUG
         unsigned long       time;
         struct task_struct *task;
         const char         *func;
         int                 line;
+#endif
+
 } client_obd_lock_t;
 
-static inline void client_obd_list_lock_init(client_obd_lock_t *lock)
-{
-        spin_lock_init(&lock->lock);
-}
-
-static inline void client_obd_list_lock_done(client_obd_lock_t *lock)
-{}
-
+#ifdef CLIENT_OBD_LIST_LOCK_DEBUG
 static inline void __client_obd_list_lock(client_obd_lock_t *lock,
                                           const char *func,
                                           int line)
@@ -116,6 +113,28 @@ static inline void client_obd_list_unlock(client_obd_lock_t *lock)
         lock->time = jiffies;
         spin_unlock(&lock->lock);
 }
+
+#else /* ifdef CLIEBT_OBD_LIST_LOCK_DEBUG */
+static inline void client_obd_list_lock(client_obd_lock_t *lock)
+{
+	spin_lock(&lock->lock);
+}
+
+static inline void client_obd_list_unlock(client_obd_lock_t *lock)
+{
+        spin_unlock(&lock->lock);
+}
+
+#endif /* ifdef CLIEBT_OBD_LIST_LOCK_DEBUG */
+
+static inline void client_obd_list_lock_init(client_obd_lock_t *lock)
+{
+        spin_lock_init(&lock->lock);
+}
+
+static inline void client_obd_list_lock_done(client_obd_lock_t *lock)
+{}
+
 
 static inline int client_obd_list_is_locked(client_obd_lock_t *lock)
 {
