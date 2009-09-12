@@ -14,6 +14,14 @@ tbd  Sun Microsystems, Inc.
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
 Severity   : normal
+Bugzilla   : 20533
+Description: Changes in raid5-large-io-rhel5.patch to calculate sectors properly
+
+Severity   : normal
+Bugzilla   : 20533
+Description: Increase the default BLK_DEF_MAX_SECTORS value for RHEL5 and SLES11
+
+Severity   : normal
 Bugzilla   : 20482
 Description: Error handling in osc_statfs_interpret() has been improved.
 Details    : Check in osc_statfs_interpret() for EBADR.
