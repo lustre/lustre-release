@@ -13,6 +13,16 @@ tbd  Sun Microsystems, Inc.
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
+Severity   : normal
+Bugzilla   : 20482
+Description: Error handling in osc_statfs_interpret() has been improved.
+Details    : Check in osc_statfs_interpret() for EBADR.
+
+Severity   : normal
+Bugzilla   : 20482
+Description: Do not send statfs() requests to OSTs disabled by administrator.
+Details    : Check in lov_prep_statfs_set() for non-NULL ltd_exp.
+
 Severity   : enhancement
 Bugzilla   : 20200
 Description: Added sanity-quota test to for lfs(1) to work with numeric uid/gid.

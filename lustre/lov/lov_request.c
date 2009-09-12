@@ -1655,6 +1655,13 @@ int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
                         continue;
                 }
 
+                /* skip targets that have been explicitely disabled by the
+                 * administrator */
+                if (!lov->lov_tgts[i]->ltd_exp) {
+                        CDEBUG(D_HA, "lov idx %d administratively disabled\n", i);
+                        continue;
+                }
+
                 OBD_ALLOC(req, sizeof(*req));
                 if (req == NULL)
                         GOTO(out_set, rc = -ENOMEM);
