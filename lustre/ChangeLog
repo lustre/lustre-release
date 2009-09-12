@@ -14,6 +14,10 @@ tbd Sun Microsystems, Inc.
 	  of Lustre filesystem with 4K stack may cause a stack overflow. For
 	  more information, please refer to bugzilla 17630.
 
+Severity   : enhancement
+Bugzilla   : 20200
+Description: Added sanity-quota test to for lfs(1) to work with numeric uid/gid.
+
 Severity   : major
 Bugzilla   : 20560
 Description: File checksum failures with OST read cache on
