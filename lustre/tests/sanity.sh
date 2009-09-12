@@ -234,7 +234,7 @@ test_6a() {
 run_test 6a "touch .../f6a; chmod .../f6a ======================"
 
 test_6b() {
-	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
 	if [ ! -f $DIR/f6a ]; then
 		touch $DIR/f6a
 		chmod 0666 $DIR/f6a
@@ -245,7 +245,7 @@ test_6b() {
 run_test 6b "$RUNAS chmod .../f6a (should return error) =="
 
 test_6c() {
-	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
 	touch $DIR/f6c
 	chown $RUNAS_ID $DIR/f6c || error
 	$CHECKSTAT -t file -u \#$RUNAS_ID $DIR/f6c || error
@@ -253,7 +253,7 @@ test_6c() {
 run_test 6c "touch .../f6c; chown .../f6c ======================"
 
 test_6d() {
-	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
 	if [ ! -f $DIR/f6c ]; then
 		touch $DIR/f6c
 		chown $RUNAS_ID $DIR/f6c
@@ -264,7 +264,7 @@ test_6d() {
 run_test 6d "$RUNAS chown .../f6c (should return error) =="
 
 test_6e() {
-	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
 	touch $DIR/f6e
 	chgrp $RUNAS_ID $DIR/f6e || error
 	$CHECKSTAT -t file -u \#$UID -g \#$RUNAS_ID $DIR/f6e || error
@@ -272,7 +272,7 @@ test_6e() {
 run_test 6e "touch .../f6e; chgrp .../f6e ======================"
 
 test_6f() {
-	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
 	if [ ! -f $DIR/f6e ]; then
 		touch $DIR/f6e
 		chgrp $RUNAS_ID $DIR/f6e
@@ -283,7 +283,7 @@ test_6f() {
 run_test 6f "$RUNAS chgrp .../f6e (should return error) =="
 
 test_6g() {
-	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
         mkdir $DIR/d6g || error
         chmod 777 $DIR/d6g || error
         $RUNAS mkdir $DIR/d6g/d || error
@@ -294,7 +294,7 @@ test_6g() {
 run_test 6g "Is new dir in sgid dir inheriting group?"
 
 test_6h() { # bug 7331
-	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
 	touch $DIR/f6h || error "touch failed"
 	chown $RUNAS_ID:$RUNAS_ID $DIR/f6h || error "initial chown failed"
 	$RUNAS -G$RUNAS_ID chown $RUNAS_ID:0 $DIR/f6h && error "chown worked"
@@ -489,7 +489,7 @@ test_19b() {
 run_test 19b "ls -l .../f19 (should return error) =============="
 
 test_19c() {
-	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
 	$RUNAS touch $DIR/f19 && error || true
 }
 run_test 19c "$RUNAS touch .../f19 (should return error) =="
@@ -838,7 +838,7 @@ test_27a() {
 run_test 27a "one stripe file =================================="
 
 test_27c() {
-	[ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping 2-stripe test" && return
 	mkdir -p $DIR/d27
 	$SETSTRIPE $DIR/d27/f01 -c 2 || error "lstripe failed"
 	[ `$GETSTRIPE $DIR/d27/f01 | grep -A 10 obdidx | wc -l` -eq 4 ] ||
@@ -915,7 +915,7 @@ test_27l() {
 run_test 27l "check setstripe permissions (should return error)"
 
 test_27m() {
-	[ "$OSTCOUNT" -lt "2" ] && skip "$OSTCOUNT < 2 OSTs -- skipping" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs -- skipping" && return
 	if [ $ORIGFREE -gt $MAXFREE ]; then
 		skip "$ORIGFREE > $MAXFREE skipping out-of-space test on OST0"
 		return
@@ -984,7 +984,7 @@ exhaust_all_precreations() {
 }
 
 test_27n() {
-	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
@@ -999,7 +999,7 @@ test_27n() {
 run_test 27n "create file with some full OSTs =================="
 
 test_27o() {
-	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
@@ -1015,7 +1015,7 @@ test_27o() {
 run_test 27o "create file with all full OSTs (should error) ===="
 
 test_27p() {
-	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
@@ -1035,7 +1035,7 @@ test_27p() {
 run_test 27p "append to a truncated file with some full OSTs ==="
 
 test_27q() {
-	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
@@ -1056,7 +1056,7 @@ test_27q() {
 run_test 27q "append to truncated file with all OSTs full (should error) ==="
 
 test_27r() {
-	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
@@ -1091,7 +1091,7 @@ test_27t() { # bug 10864
 run_test 27t "check that utils parse path correctly"
 
 test_27u() { # bug 4900
-        [ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
+        [ "$OSTCOUNT" -lt "2" ] && skip_env "too few OSTs" && return
         remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
         #define OBD_FAIL_MDS_OSC_PRECREATE      0x139
@@ -1111,7 +1111,7 @@ test_27u() { # bug 4900
 run_test 27u "skip object creation on OSC w/o objects =========="
 
 test_27v() { # bug 4900
-	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "too few OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
@@ -1146,7 +1146,7 @@ test_27w() { # bug 10997
         size=`$GETSTRIPE $DIR/d27w/f0 -qs`
         [ $size -ne 65536 ] && error "stripe size $size != 65536" || true
 
-        [ "$OSTCOUNT" -lt "2" ] && skip "skipping multiple stripe count/offset test" && return
+        [ "$OSTCOUNT" -lt "2" ] && skip_env "skipping multiple stripe count/offset test" && return
         for i in `seq 1 $OSTCOUNT`; do
                 offset=$(($i-1))
                 log setstripe $DIR/d27w/f$i -c $i -i $offset
@@ -1160,7 +1160,7 @@ test_27w() { # bug 10997
 run_test 27w "check lfs setstripe -c -s -i options ============="
 
 test_27x() {
-	[ "$OSTCOUNT" -lt "2" ] && skip "$OSTCOUNT < 2 OSTs" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs" && return
 	DELAY=$(do_facet mds lctl get_param -n lov.*.qos_maxage | awk '{print $1 + 2}')
 	OFFSET=$(($OSTCOUNTi - 1))
 	OSTIDX=0
@@ -1180,7 +1180,7 @@ test_27x() {
 run_test 27x "create files while OST0 is degraded"
 
 test_27y() {
-        [ "$OSTCOUNT" -lt "2" ] && skip "$OSTCOUNT < 2 OSTs -- skipping" && return
+        [ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs -- skipping" && return
         remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
         MDS_OSCS=`do_facet mds lctl dl | awk '/[oO][sS][cC].*md[ts]/ { print $4 }'`
@@ -1662,7 +1662,7 @@ test_36d() {
 run_test 36d "non-root OST utime check (open, utime) ==========="
 
 test_36e() {
-	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
 	mkdir -p $DIR/$tdir
 	touch $DIR/$tdir/$tfile
 	$RUNAS utime $DIR/$tdir/$tfile && \
@@ -2027,7 +2027,7 @@ test_43c() {
 run_test 43c "md5sum of copy into lustre========================"
 
 test_44() {
-	[  "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
+	[  "$OSTCOUNT" -lt "2" ] && skip_env "skipping 2-stripe test" && return
 	dd if=/dev/zero of=$DIR/f1 bs=4k count=1 seek=1023
 	dd if=$DIR/f1 of=/dev/null bs=4k count=1
 }
@@ -2284,7 +2284,7 @@ test_51c() {
 run_test 51c "rmdir .../t-0 --- .../t-$NUMTEST ===================="
 
 test_51d() {
-        [  "$OSTCOUNT" -lt "3" ] && skip "skipping test with few OSTs" && return
+        [  "$OSTCOUNT" -lt "3" ] && skip_env "skipping test with few OSTs" && return
         mkdir -p $DIR/d51d
         createmany -o $DIR/d51d/t- 1000
         $LFS getstripe $DIR/d51d > $TMP/files
@@ -2391,8 +2391,8 @@ test_53() {
 run_test 53 "verify that MDS and OSTs agree on pre-creation ===="
 
 test_54a() {
-        [ ! -f "$SOCKETSERVER" ] && skip "no socketserver, skipping" && return
-        [ ! -f "$SOCKETCLIENT" ] && skip "no socketclient, skipping" && return
+        [ ! -f "$SOCKETSERVER" ] && skip_env "no socketserver, skipping" && return
+        [ ! -f "$SOCKETCLIENT" ] && skip_env "no socketclient, skipping" && return
      	$SOCKETSERVER $DIR/socket
      	$SOCKETCLIENT $DIR/socket || error
       	$MUNLINK $DIR/socket
@@ -2474,7 +2474,7 @@ check_fstype() {
 test_55() {
         rm -rf $DIR/d55
         mkdir $DIR/d55
-        check_fstype && skip "can't find fs $FSTYPE" && return
+        check_fstype && skip_env "can't find fs $FSTYPE" && return
         mount -t $FSTYPE -o loop,iopen $EXT2_DEV $DIR/d55 || error "mounting"
         touch $DIR/d55/foo
         $IOPENTEST1 $DIR/d55/foo $DIR/d55 || error "running $IOPENTEST1"
@@ -2524,7 +2524,7 @@ test_56a() {	# was test_56
                 error "lfs getstripe --obd wrong_uuid should return error message"
 
         [  "$OSTCOUNT" -lt 2 ] && \
-                skip "skipping other lfs getstripe --obd test" && return
+                skip_env "skipping other lfs getstripe --obd test" && return
         FILENUM=`$GETSTRIPE --recursive $DIR/d56 | sed -n '/^[	 ]*1[	 ]/p' | wc -l`
         OBDUUID=`$GETSTRIPE --recursive $DIR/d56 | sed -n '/^[	 ]*1:/p' | awk '{print $2}'`
         FOUND=`$GETSTRIPE -r --obd $OBDUUID $DIR/d56 | wc -l`
@@ -2684,7 +2684,7 @@ test_56o() {
 run_test 56o "check lfs find -mtime for old files =========================="
 
 test_56p() {
-	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
 
 	TDIR=$DIR/${tdir}g
 	rm -rf $TDIR
@@ -2707,7 +2707,7 @@ test_56p() {
 run_test 56p "check lfs find -uid and ! -uid ==============================="
 
 test_56q() {
-	[ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
 
 	TDIR=$DIR/${tdir}g
         rm -rf $TDIR
@@ -2791,7 +2791,7 @@ test_57b() {
 run_test 57b "default LOV EAs are stored inside large inodes ==="
 
 test_58() {
-    [ -z "$(which wiretest 2>/dev/null)" ] && skip "could not find wiretest" && return
+    [ -z "$(which wiretest 2>/dev/null)" ] && skip_env "could not find wiretest" && return
     wiretest
 }
 run_test 58 "verify cross-platform wire constants =============="
@@ -2809,7 +2809,7 @@ run_test 59 "verify cancellation of llog records async ========="
 
 TEST60_HEAD="test_60 run $RANDOM"
 test_60a() {	# was test_60
-        [ ! -f run-llog.sh ] && skip "missing subtest run-llog.sh" && return
+        [ ! -f run-llog.sh ] && skip_env "missing subtest run-llog.sh" && return
 	log "$TEST60_HEAD - from kernel mode"
 	sh run-llog.sh
 }
@@ -2928,7 +2928,7 @@ test_64a () {
 run_test 64a "verify filter grant calculations (in kernel) ====="
 
 test_64b () {
-        [ ! -f oos.sh ] && skip "missing subtest oos.sh" && return
+        [ ! -f oos.sh ] && skip_env "missing subtest oos.sh" && return
 	sh oos.sh $MOUNT
 }
 run_test 64b "check out-of-space detection on client ==========="
@@ -3020,7 +3020,7 @@ test_65j() { # bug6367
 run_test 65j "set default striping on root directory (bug 6367)="
 
 test_65k() { # bug11679
-        [ "$OSTCOUNT" -lt 2 ] && skip "too few OSTs" && return
+        [ "$OSTCOUNT" -lt 2 ] && skip_env "too few OSTs" && return
         remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
         echo "Check OST status: "
@@ -3144,12 +3144,12 @@ swap_used() {
 # excercise swapping to lustre by adding a high priority swapfile entry
 # and then consuming memory until it is used.
 test_68() {
-	[ "$UID" != 0 ] && skip "must run as root" && return
+	[ "$UID" != 0 ] && skip_env "must run as root" && return
 	lctl get_param -n devices | grep -q obdfilter && \
 		skip "local OST" && return
 
 	grep -q llite_lloop /proc/modules
-	[ $? -ne 0 ] && skip "can't find module llite_lloop" && return
+	[ $? -ne 0 ] && skip_env "can't find module llite_lloop" && return
 
 	[ -z "`$LCTL list_nids | grep -v tcp`" ] && \
 		skip "can't reliably test swap with TCP" && return
@@ -3217,11 +3217,11 @@ run_test 71 "Running dbench on lustre (don't segment fault) ===="
 
 test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	check_kernel_version 43 || return 0
-	[ "$RUNAS_ID" = "$UID" ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
+	[ "$RUNAS_ID" = "$UID" ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
 
         # Check that testing environment is properly set up. Skip if not
         FAIL_ON_ERROR=false check_runas_id_ret $RUNAS_ID $RUNAS_ID $RUNAS || {
-                skip "User $RUNAS_ID does not exist - skipping"
+                skip_env "User $RUNAS_ID does not exist - skipping"
                 return 0
         }
 	touch $DIR/f72
@@ -3667,7 +3667,7 @@ test_80() { # bug 10718
 run_test 80 "Page eviction is equally fast at high offsets too  ===="
 
 test_99a() {
-	[ -z "$(which cvs 2>/dev/null)" ] && skip "could not find cvs" && return
+	[ -z "$(which cvs 2>/dev/null)" ] && skip_env "could not find cvs" && return
 	mkdir -p $DIR/d99cvsroot || error "mkdir $DIR/d99cvsroot failed"
 	chown $RUNAS_ID $DIR/d99cvsroot || error "chown $DIR/d99cvsroot failed"
 	local oldPWD=$PWD	# bug 13584, use $TMP as working dir
@@ -3679,7 +3679,7 @@ test_99a() {
 run_test 99a "cvs init ========================================="
 
 test_99b() {
-        [ -z "$(which cvs 2>/dev/null)" ] && skip "could not find cvs" && return
+        [ -z "$(which cvs 2>/dev/null)" ] && skip_env "could not find cvs" && return
 	[ ! -d $DIR/d99cvsroot ] && test_99a
 	$RUNAS [ ! -w /tmp ] && skip "/tmp has wrong w permission -- skipping" && return
 	cd /etc/init.d || error "cd /etc/init.d failed"
@@ -3693,7 +3693,7 @@ test_99b() {
 run_test 99b "cvs import ======================================="
 
 test_99c() {
-        [ -z "$(which cvs 2>/dev/null)" ] && skip "could not find cvs" && return
+        [ -z "$(which cvs 2>/dev/null)" ] && skip_env "could not find cvs" && return
 	[ ! -d $DIR/d99cvsroot ] && test_99b
 	cd $DIR || error "cd $DIR failed"
 	mkdir -p $DIR/d99reposname || error "mkdir $DIR/d99reposname failed"
@@ -3705,7 +3705,7 @@ test_99c() {
 run_test 99c "cvs checkout ====================================="
 
 test_99d() {
-        [ -z "$(which cvs 2>/dev/null)" ] && skip "could not find cvs" && return
+        [ -z "$(which cvs 2>/dev/null)" ] && skip_env "could not find cvs" && return
 	[ ! -d $DIR/d99cvsroot ] && test_99c
 	cd $DIR/d99reposname
 	$RUNAS touch foo99
@@ -3714,7 +3714,7 @@ test_99d() {
 run_test 99d "cvs add =========================================="
 
 test_99e() {
-        [ -z "$(which cvs 2>/dev/null)" ] && skip "could not find cvs" && return
+        [ -z "$(which cvs 2>/dev/null)" ] && skip_env "could not find cvs" && return
 	[ ! -d $DIR/d99cvsroot ] && test_99c
 	cd $DIR/d99reposname
 	$RUNAS cvs update
@@ -3722,7 +3722,7 @@ test_99e() {
 run_test 99e "cvs update ======================================="
 
 test_99f() {
-        [ -z "$(which cvs 2>/dev/null)" ] && skip "could not find cvs" && return
+        [ -z "$(which cvs 2>/dev/null)" ] && skip_env "could not find cvs" && return
 	[ ! -d $DIR/d99cvsroot ] && test_99d
 	cd $DIR/d99reposname
 	$RUNAS cvs commit -m 'nomsg' foo99
@@ -3860,7 +3860,7 @@ ra_check_101b() {
 }
 
 test_101b() {
-	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs for stride-read" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "too few OSTs for stride-read" && return
 	local STRIPE_SIZE=1048576
 	local STRIDE_SIZE=$((STRIPE_SIZE*OSTCOUNT))
 	local FILE_LENGTH=$((STRIPE_SIZE*100))
@@ -4022,10 +4022,10 @@ test_102a() {
 	rm -f $testfile
         touch $testfile
 
-	[ "$UID" != 0 ] && skip "must run as root" && return
+	[ "$UID" != 0 ] && skip_env "must run as root" && return
 	[ -z "`lctl get_param -n mdc.*.connect_flags | grep xattr`" ] &&
-	skip "must have user_xattr" && return
-	[ -z "$(which setfattr 2>/dev/null)" ] && skip "could not find setfattr" && return
+		skip_env "must have user_xattr" && return
+	[ -z "$(which setfattr 2>/dev/null)" ] && skip_env "could not find setfattr" && return
 
 	echo "set/get xattr..."
         setfattr -n trusted.name1 -v value1 $testfile || error
@@ -4068,7 +4068,7 @@ run_test 102a "user xattr test =================================="
 test_102b() {
 	# b10930: get/set/list trusted.lov xattr
 	echo "get/set/list trusted.lov xattr ..."
-	[ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping 2-stripe test" && return
 	local testfile=$DIR/$tfile
 	$SETSTRIPE -s 65536 -i 1 -c 2 $testfile || error "setstripe failed"
 	getfattr -d -m "^trusted" $testfile 2> /dev/null | \
@@ -4092,7 +4092,7 @@ run_test 102b "getfattr/setfattr for trusted.lov EAs ============"
 test_102c() {
 	# b10930: get/set/list lustre.lov xattr
 	echo "get/set/list lustre.lov xattr ..."
-	[ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping 2-stripe test" && return
 	mkdir -p $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
 	local testfile=$DIR/$tdir/$tfile
@@ -4150,8 +4150,8 @@ find_lustre_tar() {
 test_102d() {
 	# b10930: tar test for trusted.lov xattr
 	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip "lustre-aware tar is not installed" && return
-	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
+	[ -z "$TAR" ] && skip_env "lustre-aware tar is not installed" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping N-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102d
 	$TAR xf $TMP/f102.tar -C $DIR/d102d --xattrs
@@ -4163,8 +4163,8 @@ run_test 102d "tar restore stripe info from tarfile,not keep osts ==========="
 test_102f() {
 	# b10930: tar test for trusted.lov xattr
 	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip "lustre-aware tar is not installed" && return
-	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
+	[ -z "$TAR" ] && skip_env "lustre-aware tar is not installed" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping N-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102f
 	cd $DIR
@@ -4178,7 +4178,7 @@ test_102h() { # bug 15777
 	[ -z $(lctl get_param -n mdc.*.connect_flags | grep xattr) ] &&
 		skip "must have user_xattr" && return
 	[ -z "$(which setfattr 2>/dev/null)" ] &&
-		skip "could not find setfattr" && return
+		skip_env "could not find setfattr" && return
 
 	XBIG=trusted.big
 	XSIZE=1024
@@ -4229,8 +4229,8 @@ run_test 102i "lgetxattr test on symbolic link ============"
 
 test_102j() {
 	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip "lustre-aware tar is not installed" && return
-	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
+	[ -z "$TAR" ] && skip_env "lustre-aware tar is not installed" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping N-stripe test" && return
 	setup_test102 "$RUNAS"
 	mkdir -p $DIR/d102j
 	chown $RUNAS_ID $DIR/d102j
@@ -4249,9 +4249,9 @@ run_acl_subtest()
 }
 
 test_103 () {
-    [ "$UID" != 0 ] && skip "must run as root" && return
+    [ "$UID" != 0 ] && skip_env "must run as root" && return
     [ -z "$(lctl get_param mdc.*.connect_flags | grep acl)" ] && skip "must have acl enabled" && return
-    [ -z "$(which setfacl 2>/dev/null)" ] && skip "could not find setfacl" && return
+    [ -z "$(which setfacl 2>/dev/null)" ] && skip_env "could not find setfacl" && return
 
     SAVE_UMASK=`umask`
     umask 0022
@@ -4430,7 +4430,7 @@ free_min_max () {
 }
 
 test_116() {
-	[ "$OSTCOUNT" -lt "2" ] && skip "too few OSTs" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "too few OSTs" && return
 
 	echo -n "Free space priority "
 	lctl get_param -n lov.*.qos_prio_free
@@ -4889,7 +4889,7 @@ run_test 119a "Short directIO read must return actual read amount"
 
 test_119b() # bug 11737
 {
-        [ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
+        [ "$OSTCOUNT" -lt "2" ] && skip_env "skipping 2-stripe test" && return
 
         $SETSTRIPE -c 2 $DIR/$tfile || error "setstripe failed"
         dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1 || error "dd failed"
@@ -5398,7 +5398,7 @@ test_125() { # 13358
 run_test 125 "don't return EPROTO when a dir has a non-default striping and ACLs"
 
 test_126() { # bug 12829/13455
-	[ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
+	[ "$UID" != 0 ] && skip_env "skipping $TESTNAME (must run as root)" && return
 	$RUNAS -u 0 -g 1 touch $DIR/$tfile || error "touch failed"
 	gid=`ls -n $DIR/$tfile | awk '{print $4}'`
 	rm -f $DIR/$tfile
@@ -5545,7 +5545,7 @@ test_130a() {
 run_test 130a "FIEMAP (1-stripe file)"
 
 test_130b() {
-	[ "$OSTCOUNT" -lt "2" ] && skip "FIEMAP on 2-stripe file test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "FIEMAP on 2-stripe file test" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag has no FIEMAP support" && return
@@ -5595,7 +5595,7 @@ test_130b() {
 run_test 130b "FIEMAP (2-stripe file)"
 
 test_130c() {
-	[ "$OSTCOUNT" -lt "2" ] && skip "FIEMAP on 2-stripe hole test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "FIEMAP on 2-stripe hole test" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag has no FIEMAP support" && return
@@ -5652,7 +5652,7 @@ test_130c() {
 run_test 130c "FIEMAP (2-stripe file with hole)"
 
 test_130d() {
-	[ "$OSTCOUNT" -lt "3" ] && skip "FIEMAP on N-stripe file test" && return
+	[ "$OSTCOUNT" -lt "3" ] && skip_env "FIEMAP on N-stripe file test" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag has no FIEMAP support" && return

@@ -809,7 +809,7 @@ run_test 40 "cause recovery in ptlrpc, ensure IO continues"
 # assert on trying to unlock the unlocked page.
 test_41() {
     [ $OSTCOUNT -lt 2 ] && \
-	skip "skipping test 41: we don't have a second OST to test with" && \
+	skip_env "skipping test 41: we don't have a second OST to test with" && \
 	return
 
     local f=$MOUNT/$tfile
@@ -970,7 +970,7 @@ run_test 47 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_48() {
     remote_ost_nodsh && skip "remote OST with nodsh" && return 0
-    [ "$OSTCOUNT" -lt "2" ] && skip "$OSTCOUNT < 2 OSTs -- skipping" && return
+    [ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs -- skipping" && return
 
     replay_barrier mds
     createmany -o $DIR/$tfile 20  || return 1
