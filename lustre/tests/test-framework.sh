@@ -2546,16 +2546,21 @@ get_mds_mdt_device_proc_path() {
 }
 
 ########################
-convert_facet2name() {
-    case "$1" in
-        "ost" ) echo "OST0000" ;;
-        "ost1") echo "OST0000" ;;
-        "ost2") echo "OST0001" ;;
-        "ost3") echo "OST0002" ;;
-        "ost4") echo "OST0003" ;;
-        "ost5") echo "OST0004" ;;
-        *) error "unknown facet!" ;;
-    esac
+
+convert_facet2label() { 
+    local facet=$1
+
+    if [ x$facet = xost ]; then
+       facet=ost1
+    fi
+
+    local varsvc=${facet}_svc
+
+    if [ -n ${!varsvc} ]; then
+        echo ${!varsvc}
+    else  
+        error "No lablel for $facet!"
+    fi
 }
 
 get_clientosc_proc_path() {
@@ -2565,30 +2570,57 @@ get_clientosc_proc_path() {
 }
 
 get_osc_import_name() {
-    local node=$1
+    local facet=$1
     local ost=$2
-    local name=$(convert_facet2name $ost)
+    local label=$(convert_facet2label $ost)
 
-    if [ "$node" == "mds" ]; then
-        get_mdtosc_proc_path $name
+    if [ "$facet" == "mds" ]; then
+        get_mdtosc_proc_path $label
         return 0
     fi
 
-    get_clientosc_proc_path $name
+    get_clientosc_proc_path $label
+    return 0
+}
+
+wait_import_state () {
+    local expected=$1
+    local CONN_PROC=$2
+    local CONN_STATE
+    local i=0
+
+    CONN_STATE=$($LCTL get_param -n $CONN_PROC 2>/dev/null | cut -f2)
+    while [ "${CONN_STATE}" != "${expected}" ]; do
+        if [ "${expected}" == "DISCONN" ]; then
+            # for disconn we can check after proc entry is removed
+            [ "x${CONN_STATE}" == "x" ] && return 0
+            #  with AT we can have connect request timeout ~ reconnect timeout
+            # and test can't see real disconnect
+            [ "${CONN_STATE}" == "CONNECTING" ] && return 0
+        fi
+        # disconnect rpc should be wait not more obd_timeout
+        [ $i -ge $(($TIMEOUT * 3 / 2)) ] && \
+            error "can't put import for $CONN_PROC into ${expected} state" && return 1
+        sleep 1
+        CONN_STATE=$($LCTL get_param -n $CONN_PROC 2>/dev/null | cut -f2)
+        i=$(($i + 1))
+    done
+
+    log "$CONN_PROC now in ${CONN_STATE} state"
     return 0
 }
 
 wait_osc_import_state() {
-    local node=$1
+    local facet=$1
     local ost_facet=$2
     local expected=$3
-    local ost=$(get_osc_import_name $node $ost_facet)
+    local ost=$(get_osc_import_name $facet $ost_facet)
     local CONN_PROC
     local CONN_STATE
     local i=0
 
-    CONN_PROC="osc.${FSNAME}-${ost}.ost_server_uuid"
-    CONN_STATE=$(do_facet $node lctl get_param -n $CONN_PROC | cut -f2)
+    CONN_PROC="osc.${ost}.ost_server_uuid"
+    CONN_STATE=$(do_facet $facet lctl get_param -n $CONN_PROC 2>/dev/null | cut -f2)
     while [ "${CONN_STATE}" != "${expected}" ]; do
         if [ "${expected}" == "DISCONN" ]; then 
             # for disconn we can check after proc entry is removed
@@ -2601,10 +2633,43 @@ wait_osc_import_state() {
         [ $i -ge $(($TIMEOUT * 3 / 2)) ] && \
             error "can't put import for ${ost}(${ost_facet}) into ${expected} state" && return 1
         sleep 1
-        CONN_STATE=$(do_facet $node lctl get_param -n $CONN_PROC | cut -f2)
+        CONN_STATE=$(do_facet $facet lctl get_param -n $CONN_PROC | cut -f2)
         i=$(($i + 1))
     done
 
     log "${ost_facet} now in ${CONN_STATE} state"
     return 0
 }
+
+get_clientmdc_proc_path() {
+    echo "${1}-mdc-*"
+}
+
+do_rpc_nodes () {
+    local list=$1
+    shift
+
+    do_nodes --verbose $list "PATH=$LUSTRE/tests/:$PATH sh rpc.sh $@ " 
+}
+
+wait_clients_import_state () {
+    local list=$1
+    local facet=$2
+    local expected=$3
+    shift
+
+    local label=$(convert_facet2label $facet)
+    local proc_path
+    case $facet in
+        ost* ) proc_path="osc.$(get_clientosc_proc_path $label).ost_server_uuid" ;;
+        mds* ) proc_path="mdc.$(get_clientmdc_proc_path $label).mds_server_uuid" ;;
+        *) error "unknown facet!" ;;
+    esac
+
+
+    if ! do_rpc_nodes $list wait_import_state $expected $proc_path; then
+        error "import is not in ${expected} state"
+        return 1
+    fi
+}
+
