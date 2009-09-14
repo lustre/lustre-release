@@ -1576,13 +1576,14 @@ int mds_get_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
         up(&dquot->dq_sem);
 
         lustre_dqput(dquot);
+        up(&mds->mds_qonoff_sem);
 
         /* the usages in admin quota file is inaccurate */
         dqblk->dqb_curinodes = 0;
         dqblk->dqb_curspace = 0;
         rc = mds_get_space(obd, oqctl);
         EXIT;
-
+        return rc;
 out:
         up(&mds->mds_qonoff_sem);
         return rc;

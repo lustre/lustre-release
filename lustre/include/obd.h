@@ -314,6 +314,7 @@ struct filter_obd {
         struct semaphore     fo_init_lock;      /* group initialization lock */
         int                  fo_committed_group;
 
+#define CLIENT_QUOTA_DEFAULT_RESENDS 10
 
         spinlock_t           fo_objidlock;      /* protect fo_lastobjid */
 
@@ -511,6 +512,7 @@ struct client_obd {
         struct lu_client_seq    *cl_seq;
 
         atomic_t                 cl_resends; /* resend count */
+        atomic_t                 cl_quota_resends; /* quota related resend count */
 };
 #define obd2cli_tgt(obd) ((char *)(obd)->u.cli.cl_target_uuid.uuid)
 

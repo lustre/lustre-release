@@ -57,7 +57,7 @@ unset ENABLE_QUOTA
 remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="9 10 11 18b 21"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="9 10 11 18b 21 29"
 
 QUOTALOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 
@@ -2074,6 +2074,45 @@ test_30()
         $LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace $MAX_IQ_TIME $DIR
 }
 run_test_with_stat 30 "hard limit updates should not reset grace times ================"
+
+test_29()
+{
+        local BLK_LIMIT=$((100 * 1024 * 1024)) # 100G
+        local timeout
+        local pid
+        local resends
+
+        if at_is_enabled; then
+                timeout=$(at_max_get client)
+                at_max_set 10 client
+        else
+                timeout=$(lctl get_param -n timeout)
+                lctl set_param timeout=10
+        fi
+
+        resends=$(lctl get_param -n mdc.${FSNAME}-*.quota_resend_count | head -1)
+
+        #define OBD_FAIL_MDS_QUOTACTL_NET 0x12e
+        lustre_fail mds 0x12e
+
+        $LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I 0 $DIR & pid=$!
+
+        echo "sleeping for $((10 * resends + 5)) seconds"
+        sleep $((10 * resends + 5))
+        ps -p $pid && error "lfs hadn't finished by timeout"
+        wait $pid && error "succeeded, but should have failed"
+
+        lustre_fail mds 0
+
+        if at_is_enabled; then
+                at_max_set $timeout client
+        else
+                lctl set_param timeout=$timeout
+        fi
+
+        resetquota -u $TSTUSR
+}
+run_test_with_stat 29 "unhandled quotactls must not hang lustre client (19778) ========"
 
 # turn off quota
 quota_fini()

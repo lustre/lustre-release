@@ -298,7 +298,7 @@ int client_quota_ctl(struct obd_device *unused, struct obd_export *exp,
         struct ptlrpc_request   *req;
         struct obd_quotactl     *oqc;
         const struct req_format *rf;
-        int                      ver, opc, rc;
+        int                      ver, opc, rc, resends = 0;
         ENTRY;
 
         if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME)) {
@@ -313,6 +313,8 @@ int client_quota_ctl(struct obd_device *unused, struct obd_export *exp,
                 RETURN(-EINVAL);
         }
 
+restart_request:
+
         req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp), rf, ver, opc);
         if (req == NULL)
                 RETURN(-ENOMEM);
@@ -321,6 +323,8 @@ int client_quota_ctl(struct obd_device *unused, struct obd_export *exp,
         *oqc = *oqctl;
 
         ptlrpc_request_set_replen(req);
+        ptlrpc_at_set_req_timeout(req);
+        req->rq_no_resend = 1;
 
         rc = ptlrpc_queue_wait(req);
         if (rc) {
@@ -341,6 +345,17 @@ int client_quota_ctl(struct obd_device *unused, struct obd_export *exp,
         EXIT;
 out:
         ptlrpc_req_finished(req);
+
+        if (client_quota_recoverable_error(rc)) {
+                resends++;
+                if (!client_quota_should_resend(resends, &exp->exp_obd->u.cli)) {
+                        CERROR("too many resend retries, returning error\n");
+                        RETURN(-EIO);
+                }
+
+                goto restart_request;
+        }
+
         return rc;
 }
 
