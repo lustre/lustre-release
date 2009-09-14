@@ -112,10 +112,10 @@ void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
                 obd_size left_space = filter_grant_space_left(exp);
                 struct filter_obd *filter = &exp->exp_obd->u.filter;
 
-                /*Only if left_space < fo_tot_clients * 32M, 
+                /*Only if left_space < fo_tot_clients * 32M,
                  *then the grant space could be shrinked */
-                if (left_space < filter->fo_tot_granted_clients * 
-                                 FILTER_GRANT_SHRINK_LIMIT) { 
+                if (left_space < filter->fo_tot_granted_clients *
+                                 FILTER_GRANT_SHRINK_LIMIT) {
                         fed->fed_grant -= oa->o_grant;
                         filter->fo_tot_granted -= oa->o_grant;
                         CDEBUG(D_CACHE, "%s: cli %s/%p shrink "LPU64
@@ -248,7 +248,7 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
         }
 
         CDEBUG(D_CACHE,
-               "%s: cli %s/%p wants: "LPU64" current grant "LPU64 
+               "%s: cli %s/%p wants: "LPU64" current grant "LPU64
                " granting: "LPU64"\n", obd->obd_name, exp->exp_client_uuid.uuid,
                exp, want, current_grant, grant);
         CDEBUG(D_CACHE,
@@ -518,8 +518,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
  * right on through.
  *
  * Caller must hold obd_osfs_lock. */
-static int filter_grant_check(struct obd_export *exp, struct obdo *oa, 
-                              int objcount, struct fsfilt_objinfo *fso, 
+static int filter_grant_check(struct obd_export *exp, struct obdo *oa,
+                              int objcount, struct fsfilt_objinfo *fso,
                               int niocount, struct niobuf_local *lnb,
                               obd_size *left, struct inode *inode)
 {
@@ -656,7 +656,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         LASSERT(objcount == 1);
         LASSERT(obj->ioo_bufcnt > 0);
 
-        if (exp->exp_connection->c_peer.nid == exp->exp_connection->c_self) 
+        if (exp->exp_connection->c_peer.nid == exp->exp_connection->c_self)
                 localreq = 1;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
@@ -777,8 +777,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                  * be able to proceed in filter_commitrw_write(). thus let's
                  * just wait for writeout completion, should be rare enough.
                  * -bzzz */
-                if (obd->u.filter.fo_writethrough_cache)
-                        wait_on_page_writeback(lnb->page);
+                wait_on_page_writeback(lnb->page);
                 BUG_ON(PageWriteback(lnb->page));
 
                 /* If the filter writes a partial page, then has the file
