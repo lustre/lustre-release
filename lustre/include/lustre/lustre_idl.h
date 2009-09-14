@@ -611,36 +611,6 @@ struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
 /* don't forget obdo_fid which is way down at the bottom so it can
  * come after the definition of llog_cookie */
 
-enum obd_statfs_state {
-        OS_STATE_DEGRADED       = 0x00000001, /**< RAID degraded/rebuilding */
-        OS_STATE_READONLY       = 0x00000002, /**< filesystem is read-only */
-        OS_STATE_RDONLY_1       = 0x00000004, /**< obsolete 1.6, was EROFS=30 */
-        OS_STATE_RDONLY_2       = 0x00000008, /**< obsolete 1.6, was EROFS=30 */
-        OS_STATE_RDONLY_3       = 0x00000010, /**< obsolete 1.6, was EROFS=30 */
-};
-
-struct obd_statfs {
-        __u64           os_type;
-        __u64           os_blocks;
-        __u64           os_bfree;
-        __u64           os_bavail;
-        __u64           os_files;
-        __u64           os_ffree;
-        __u8            os_fsid[40];
-        __u32           os_bsize;
-        __u32           os_namelen;
-        __u64           os_maxbytes;
-        __u32           os_state;       /**< obd_statfs_state OS_STATE_* flag */
-        __u32           os_spare1;
-        __u32           os_spare2;
-        __u32           os_spare3;
-        __u32           os_spare4;
-        __u32           os_spare5;
-        __u32           os_spare6;
-        __u32           os_spare7;
-        __u32           os_spare8;
-        __u32           os_spare9;
-};
 
 extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_STATFS_NODELAY      0x0001  /* requests should be send without delay
@@ -2143,7 +2113,7 @@ static inline void lustre_get_wire_obdo(struct obdo *lobdo, struct obdo *wobdo)
         obd_flag local_flags = lobdo->o_flags & OBD_FL_LOCAL_MASK;
 
         LASSERT(!(wobdo->o_flags & OBD_FL_LOCAL_MASK));
-        
+
         memcpy(lobdo, wobdo, sizeof(*lobdo));
         lobdo->o_flags &= ~OBD_FL_LOCAL_MASK;
         lobdo->o_flags |= local_flags;
