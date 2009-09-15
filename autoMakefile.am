@@ -36,4 +36,8 @@ checkstack-clean:
 module-dist-hook:
 	if [ -d CVS -o -d .git ]; then \
 	    perl lustre/scripts/tree_status.pl > $(distdir)/tree_status; \
+	elif [ -f tree_status ]; then \
+	    cp tree_status $(distdir)/tree_status; \
+	else \
+	    echo -e "I have no idea how to create a tree_status file in $(distdir).\nPlease file a bug at http://bugzilla.lustre.org/"; \
 	fi
