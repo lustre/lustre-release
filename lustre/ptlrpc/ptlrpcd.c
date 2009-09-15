@@ -146,7 +146,7 @@ int ptlrpcd_add_req(struct ptlrpc_request *req, enum ptlrpcd_scope scope)
                  * Thread is probably in stop now so we need to
                  * kill this rpc as it was not added. Let's call
                  * interpret for it to let know we're killing it
-                 * so that higher levels might free assosiated
+                 * so that higher levels might free associated
                  * resources.
                  */
                 ptlrpc_req_interpret(NULL, req, -EBADR);

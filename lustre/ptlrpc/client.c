@@ -855,10 +855,6 @@ int ptlrpc_set_add_new_req(struct ptlrpcd_ctl *pc,
         req->rq_set = set;
         spin_unlock(&set->set_new_req_lock);
 
-        /*
-         * Let thead know that we added something and better it to wake up
-         * and process.
-         */
         cfs_waitq_signal(&set->set_waitq);
         return 0;
 }
@@ -1493,7 +1489,7 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 
                 if (!req->rq_bulk->bd_success) {
                         /* The RPC reply arrived OK, but the bulk screwed
-                         * up!  Dead wierd since the server told us the RPC
+                         * up!  Dead weird since the server told us the RPC
                          * was good after getting the REPLY for her GET or
                          * the ACK for her PUT. */
                         DEBUG_REQ(D_ERROR, req, "bulk transfer failed");
@@ -1531,7 +1527,7 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 
                 spin_lock(&imp->imp_lock);
                 /* Request already may be not on sending or delaying list. This
-                 * may happen in the case of marking it errorneous for the case
+                 * may happen in the case of marking it erroneous for the case
                  * ptlrpc_import_delay_req(req, status) find it impossible to
                  * allow sending this rpc and returns *status != 0. */
                 if (!list_empty(&req->rq_list)) {
@@ -1653,7 +1649,7 @@ int ptlrpc_expired_set(void *data)
         }
 
         /*
-         * When waiting for a whole set, we always to break out of the
+         * When waiting for a whole set, we always break out of the
          * sleep so we can recalculate the timeout, or enable interrupts
          * if everyone's timed out.
          */
@@ -1771,7 +1767,7 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
 
                 /* -EINTR => all requests have been flagged rq_intr so next
                  * check completes.
-                 * -ETIMEOUTD => someone timed out.  When all reqs have
+                 * -ETIMEDOUT => someone timed out.  When all reqs have
                  * timed out, signals are enabled allowing completion with
                  * EINTR.
                  * I don't really care if we go once more round the loop in
