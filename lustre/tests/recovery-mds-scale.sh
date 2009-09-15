@@ -15,8 +15,11 @@ init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-TESTSUITELOG=${TESTSUITELOG:-$TMP/recovery-mds-scale}
+TESTSUITELOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh)}
 DEBUGLOG=$TESTSUITELOG.debug
+
+cleanup_logs
+
 exec 2>$DEBUGLOG
 echo "--- env ---" >&2
 env >&2
@@ -28,7 +31,7 @@ set -x
 
 [ -n "$CLIENTS" ] || { skip "$0 Need two or more remote clients" && exit 0; }
 [ $CLIENTCOUNT -ge 3 ] || \
-    { skip "$0 Need two or more clients, have $CLIENTCOUNT" && exit 0; }
+    { skip "$0 Need two or more remote clients, have $CLIENTCOUNT" && exit 0; }
 
 END_RUN_FILE=${END_RUN_FILE:-$SHARED_DIRECTORY/end_run_file}
 LOAD_PID_FILE=${LOAD_PID_FILE:-$TMP/client-load.pid}
@@ -145,6 +148,15 @@ Status: $result: rc=$rc"
         sleep 5
         kill -9 $CLIENT_LOAD_PIDS || true
     fi
+    if [ $rc -ne 0 ]; then
+        # we are interested in only on failed clients and servers
+        local failedclients=$(cat $END_RUN_FILE | grep -v $0)
+        # FIXME: need ostfailover-s nodes also for FLAVOR=OST
+        local product=$(gather_logs $(comma_list $(osts_nodes) \
+                               $(mdts_nodes) $mdsfailover_HOST $failedclients))
+        echo logs files $product
+    fi
+
     [ $rc -eq 0 ] && zconf_mount $(hostname) $MOUNT
 
     exit $rc
