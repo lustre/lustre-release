@@ -285,17 +285,17 @@ static inline int capa_opc_supported(struct lustre_capa *capa, __u64 opc)
 }
 
 static inline struct lustre_capa *
-lustre_unpack_capa(struct lustre_msg *msg, unsigned int offset)
+lustre_unpack_incoming_capa(struct ptlrpc_request *req, unsigned int offset)
 {
         struct lustre_capa *capa;
 
-        capa = lustre_swab_buf(msg, offset, sizeof(*capa),
-                               lustre_swab_lustre_capa);
+        capa = lustre_swab_reqbuf(req, offset, sizeof(*capa),
+                                  lustre_swab_lustre_capa);
         if (capa == NULL)
                 CERROR("bufcount %u, bufsize %u\n",
-                       lustre_msg_bufcount(msg),
-                       (lustre_msg_bufcount(msg) <= offset) ?
-                                -1 : lustre_msg_buflen(msg, offset));
+                       lustre_msg_bufcount(req->rq_reqmsg),
+                       (lustre_msg_bufcount(req->rq_reqmsg) <= offset) ?
+                                -1 : lustre_msg_buflen(req->rq_reqmsg, offset));
 
         return capa;
 }

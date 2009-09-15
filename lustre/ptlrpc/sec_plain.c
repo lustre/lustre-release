@@ -102,11 +102,11 @@ struct plain_bulk_token {
  * bulk checksum helpers                *
  ****************************************/
 
-static int plain_unpack_bsd(struct lustre_msg *msg)
+static int plain_unpack_bsd(struct lustre_msg *msg, int swabbed)
 {
         struct ptlrpc_bulk_sec_desc *bsd;
 
-        if (bulk_sec_desc_unpack(msg, PLAIN_PACK_BULK_OFF))
+        if (bulk_sec_desc_unpack(msg, PLAIN_PACK_BULK_OFF, swabbed))
                 return -EPROTO;
 
         bsd = lustre_msg_buf(msg, PLAIN_PACK_BULK_OFF, PLAIN_BSD_SIZE);
@@ -239,12 +239,15 @@ int plain_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
         struct lustre_msg   *msg = req->rq_repdata;
         struct plain_header *phdr;
         __u32                cksum;
+        int                  swabbed;
         ENTRY;
 
         if (msg->lm_bufcount != PLAIN_PACK_SEGMENTS) {
                 CERROR("unexpected reply buf count %u\n", msg->lm_bufcount);
                 RETURN(-EPROTO);
         }
+
+        swabbed = ptlrpc_rep_need_swab(req);
 
         phdr = lustre_msg_buf(msg, PLAIN_PACK_HDR_OFF, sizeof(*phdr));
         if (phdr == NULL) {
@@ -290,7 +293,7 @@ int plain_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
                 }
 
                 if (phdr->ph_flags & PLAIN_FL_BULK) {
-                        if (plain_unpack_bsd(msg))
+                        if (plain_unpack_bsd(msg, swabbed))
                                 RETURN(-EPROTO);
                 }
         }
@@ -738,6 +741,7 @@ int plain_accept(struct ptlrpc_request *req)
 {
         struct lustre_msg   *msg = req->rq_reqbuf;
         struct plain_header *phdr;
+        int                  swabbed;
         ENTRY;
 
         LASSERT(SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) ==
@@ -755,6 +759,8 @@ int plain_accept(struct ptlrpc_request *req)
                 CERROR("unexpected request buf count %u\n", msg->lm_bufcount);
                 RETURN(SECSVC_DROP);
         }
+
+        swabbed = ptlrpc_req_need_swab(req);
 
         phdr = lustre_msg_buf(msg, PLAIN_PACK_HDR_OFF, sizeof(*phdr));
         if (phdr == NULL) {
@@ -776,7 +782,8 @@ int plain_accept(struct ptlrpc_request *req)
         req->rq_flvr.u_bulk.hash.hash_alg = phdr->ph_bulk_hash_alg;
 
         if (phdr->ph_flags & PLAIN_FL_USER) {
-                if (sptlrpc_unpack_user_desc(msg, PLAIN_PACK_USER_OFF)) {
+                if (sptlrpc_unpack_user_desc(msg, PLAIN_PACK_USER_OFF,
+                                             swabbed)) {
                         CERROR("Mal-formed user descriptor\n");
                         RETURN(SECSVC_DROP);
                 }
@@ -786,7 +793,7 @@ int plain_accept(struct ptlrpc_request *req)
         }
 
         if (phdr->ph_flags & PLAIN_FL_BULK) {
-                if (plain_unpack_bsd(msg))
+                if (plain_unpack_bsd(msg, swabbed))
                         RETURN(SECSVC_DROP);
 
                 req->rq_pack_bulk = 1;

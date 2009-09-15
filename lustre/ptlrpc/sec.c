@@ -947,7 +947,6 @@ static int do_cli_unwrap_reply(struct ptlrpc_request *req)
 {
         struct ptlrpc_cli_ctx *ctx = req->rq_cli_ctx;
         int                    rc;
-        __u32                  flvr;
         ENTRY;
 
         LASSERT(ctx);
@@ -956,31 +955,32 @@ static int do_cli_unwrap_reply(struct ptlrpc_request *req)
         LASSERT(req->rq_repdata);
         LASSERT(req->rq_repmsg == NULL);
 
+        req->rq_rep_swab_mask = 0;
+
+        rc = __lustre_unpack_msg(req->rq_repdata, req->rq_repdata_len);
+        switch (rc) {
+        case 1:
+                lustre_set_rep_swabbed(req, MSG_PTLRPC_HEADER_OFF);
+        case 0:
+                break;
+        default:
+                CERROR("failed unpack reply: x"LPU64"\n", req->rq_xid);
+                RETURN(-EPROTO);
+        }
+
         if (req->rq_repdata_len < sizeof(struct lustre_msg)) {
                 CERROR("replied data length %d too small\n",
                        req->rq_repdata_len);
                 RETURN(-EPROTO);
         }
 
-        /* v2 message, check request/reply policy match */
-        flvr = WIRE_FLVR(req->rq_repdata->lm_secflvr);
-
-        if (req->rq_repdata->lm_magic == LUSTRE_MSG_MAGIC_V2_SWABBED)
-                __swab32s(&flvr);
-
-        if (SPTLRPC_FLVR_POLICY(flvr) !=
+        if (SPTLRPC_FLVR_POLICY(req->rq_repdata->lm_secflvr) !=
             SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc)) {
-                CERROR("request policy was %u while reply with %u\n",
-                       SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc),
-                       SPTLRPC_FLVR_POLICY(flvr));
+                CERROR("reply policy %u doesn't match request policy %u\n",
+                       SPTLRPC_FLVR_POLICY(req->rq_repdata->lm_secflvr),
+                       SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc));
                 RETURN(-EPROTO);
         }
-
-        /* do nothing if it's null policy; otherwise unpack the
-         * wrapper message */
-        if (SPTLRPC_FLVR_POLICY(flvr) != SPTLRPC_POLICY_NULL &&
-            lustre_unpack_msg(req->rq_repdata, req->rq_repdata_len))
-                RETURN(-EPROTO);
 
         switch (SPTLRPC_FLVR_SVC(req->rq_flvr.sf_rpc)) {
         case SPTLRPC_SVC_NULL:
@@ -996,8 +996,11 @@ static int do_cli_unwrap_reply(struct ptlrpc_request *req)
         default:
                 LBUG();
         }
-
         LASSERT(rc || req->rq_repmsg || req->rq_resend);
+
+        if (SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) != SPTLRPC_POLICY_NULL &&
+            !req->rq_ctx_init)
+                req->rq_rep_swab_mask = 0;
         RETURN(rc);
 }
 
@@ -1095,6 +1098,7 @@ int sptlrpc_cli_unwrap_early_reply(struct ptlrpc_request *req,
         memcpy(early_buf, req->rq_repbuf, early_size);
         spin_unlock(&req->rq_lock);
 
+        spin_lock_init(&early_req->rq_lock);
         early_req->rq_cli_ctx = sptlrpc_cli_ctx_get(req->rq_cli_ctx);
         early_req->rq_flvr = req->rq_flvr;
         early_req->rq_repbuf = early_buf;
@@ -1950,36 +1954,24 @@ int sptlrpc_svc_unwrap_request(struct ptlrpc_request *req)
         LASSERT(req->rq_repmsg == NULL);
         LASSERT(req->rq_svc_ctx == NULL);
 
+        req->rq_req_swab_mask = 0;
+
+        rc = __lustre_unpack_msg(msg, req->rq_reqdata_len);
+        switch (rc) {
+        case 1:
+                lustre_set_req_swabbed(req, MSG_PTLRPC_HEADER_OFF);
+        case 0:
+                break;
+        default:
+                CERROR("error unpacking request from %s x"LPU64"\n",
+                       libcfs_id2str(req->rq_peer), req->rq_xid);
+                RETURN(SECSVC_DROP);
+        }
+
+        req->rq_flvr.sf_rpc = WIRE_FLVR(msg->lm_secflvr);
         req->rq_sp_from = LUSTRE_SP_ANY;
         req->rq_auth_uid = INVALID_UID;
         req->rq_auth_mapped_uid = INVALID_UID;
-
-        if (req->rq_reqdata_len < sizeof(struct lustre_msg)) {
-                CERROR("request size %d too small\n", req->rq_reqdata_len);
-                RETURN(SECSVC_DROP);
-        }
-
-        /*
-         * only expect v2 message.
-         */
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2:
-                req->rq_flvr.sf_rpc = WIRE_FLVR(msg->lm_secflvr);
-                break;
-        case LUSTRE_MSG_MAGIC_V2_SWABBED:
-                req->rq_flvr.sf_rpc = WIRE_FLVR(__swab32(msg->lm_secflvr));
-                break;
-        default:
-                CERROR("invalid magic %x\n", msg->lm_magic);
-                RETURN(SECSVC_DROP);
-        }
-
-        /* unpack the wrapper message if the policy is not null */
-        if (SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) != SPTLRPC_POLICY_NULL &&
-            lustre_unpack_msg(msg, req->rq_reqdata_len)) {
-                CERROR("invalid wrapper msg format\n");
-                RETURN(SECSVC_DROP);
-        }
 
         policy = sptlrpc_wireflavor2policy(req->rq_flvr.sf_rpc);
         if (!policy) {
@@ -1989,10 +1981,16 @@ int sptlrpc_svc_unwrap_request(struct ptlrpc_request *req)
 
         LASSERT(policy->sp_sops->accept);
         rc = policy->sp_sops->accept(req);
-
+        sptlrpc_policy_put(policy);
         LASSERT(req->rq_reqmsg || rc != SECSVC_OK);
         LASSERT(req->rq_svc_ctx || rc == SECSVC_DROP);
-        sptlrpc_policy_put(policy);
+
+        /*
+         * if it's not null flavor (which means embedded packing msg),
+         * reset the swab mask for the comming inner msg unpacking.
+         */
+        if (SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) != SPTLRPC_POLICY_NULL)
+                req->rq_req_swab_mask = 0;
 
         /* sanity check for the request source */
         rc = sptlrpc_svc_check_from(req, rc);
@@ -2310,7 +2308,7 @@ int sptlrpc_pack_user_desc(struct lustre_msg *msg, int offset)
 }
 EXPORT_SYMBOL(sptlrpc_pack_user_desc);
 
-int sptlrpc_unpack_user_desc(struct lustre_msg *msg, int offset)
+int sptlrpc_unpack_user_desc(struct lustre_msg *msg, int offset, int swabbed)
 {
         struct ptlrpc_user_desc *pud;
         int                      i;
@@ -2319,7 +2317,7 @@ int sptlrpc_unpack_user_desc(struct lustre_msg *msg, int offset)
         if (!pud)
                 return -EINVAL;
 
-        if (lustre_msg_swabbed(msg)) {
+        if (swabbed) {
                 __swab32s(&pud->pud_uid);
                 __swab32s(&pud->pud_gid);
                 __swab32s(&pud->pud_fsuid);
@@ -2340,7 +2338,7 @@ int sptlrpc_unpack_user_desc(struct lustre_msg *msg, int offset)
                 return -EINVAL;
         }
 
-        if (lustre_msg_swabbed(msg)) {
+        if (swabbed) {
                 for (i = 0; i < pud->pud_ngroups; i++)
                         __swab32s(&pud->pud_groups[i]);
         }

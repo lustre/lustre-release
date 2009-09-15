@@ -1337,15 +1337,18 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
                 LBUG();
         }
 
-        /* Clear request swab mask; this is a new request */
-        req->rq_req_swab_mask = 0;
-
-        rc = lustre_unpack_msg(req->rq_reqmsg, req->rq_reqlen);
-        if (rc != 0) {
-                CERROR("error unpacking request: ptl %d from %s x"LPU64"\n",
-                       svc->srv_req_portal, libcfs_id2str(req->rq_peer),
-                       req->rq_xid);
-                goto err_req;
+        /*
+         * for null-flavored rpc, msg has been unpacked by sptlrpc, although
+         * redo it wouldn't be harmful.
+         */
+        if (SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) != SPTLRPC_POLICY_NULL) {
+                rc = ptlrpc_unpack_req_msg(req, req->rq_reqlen);
+                if (rc != 0) {
+                        CERROR("error unpacking request: ptl %d from %s "
+                               "x"LPU64"\n", svc->srv_req_portal,
+                               libcfs_id2str(req->rq_peer), req->rq_xid);
+                        goto err_req;
+                }
         }
 
         rc = lustre_unpack_req_ptlrpc_body(req, MSG_PTLRPC_BODY_OFF);

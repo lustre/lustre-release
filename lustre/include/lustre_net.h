@@ -509,6 +509,28 @@ static inline int ptlrpc_req_interpret(const struct lu_env *env,
         return rc;
 }
 
+static inline int lustre_req_swabbed(struct ptlrpc_request *req, int index)
+{
+        LASSERT(index < sizeof(req->rq_req_swab_mask) * 8);
+        return req->rq_req_swab_mask & (1 << index);
+}
+
+static inline int lustre_rep_swabbed(struct ptlrpc_request *req, int index)
+{
+        LASSERT(index < sizeof(req->rq_rep_swab_mask) * 8);
+        return req->rq_rep_swab_mask & (1 << index);
+}
+
+static inline int ptlrpc_req_need_swab(struct ptlrpc_request *req)
+{
+        return lustre_req_swabbed(req, MSG_PTLRPC_HEADER_OFF);
+}
+
+static inline int ptlrpc_rep_need_swab(struct ptlrpc_request *req)
+{
+        return lustre_rep_swabbed(req, MSG_PTLRPC_HEADER_OFF);
+}
+
 static inline void lustre_set_req_swabbed(struct ptlrpc_request *req, int index)
 {
         LASSERT(index < sizeof(req->rq_req_swab_mask) * 8);
@@ -521,18 +543,6 @@ static inline void lustre_set_rep_swabbed(struct ptlrpc_request *req, int index)
         LASSERT(index < sizeof(req->rq_rep_swab_mask) * 8);
         LASSERT((req->rq_rep_swab_mask & (1 << index)) == 0);
         req->rq_rep_swab_mask |= 1 << index;
-}
-
-static inline int lustre_req_swabbed(struct ptlrpc_request *req, int index)
-{
-        LASSERT(index < sizeof(req->rq_req_swab_mask) * 8);
-        return req->rq_req_swab_mask & (1 << index);
-}
-
-static inline int lustre_rep_swabbed(struct ptlrpc_request *req, int index)
-{
-        LASSERT(index < sizeof(req->rq_rep_swab_mask) * 8);
-        return req->rq_rep_swab_mask & (1 << index);
 }
 
 static inline const char *
@@ -1079,7 +1089,15 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp);
 
 /* ptlrpc/pack_generic.c */
 int ptlrpc_reconnect_import(struct obd_import *imp);
-int lustre_msg_swabbed(struct lustre_msg *msg);
+
+/** ptlrpc mgs buffer swab interface */
+int ptlrpc_buf_need_swab(struct ptlrpc_request *req, const int inout,
+                         int index);
+void ptlrpc_buf_set_swabbed(struct ptlrpc_request *req, const int inout,
+                                int index);
+int ptlrpc_unpack_rep_msg(struct ptlrpc_request *req, int len);
+int ptlrpc_unpack_req_msg(struct ptlrpc_request *req, int len);
+
 int lustre_msg_check_version(struct lustre_msg *msg, __u32 version);
 void lustre_init_msg_v2(struct lustre_msg_v2 *msg, int count, __u32 *lens,
                         char **bufs);
@@ -1095,19 +1113,18 @@ int lustre_pack_reply_flags(struct ptlrpc_request *, int count, __u32 *lens,
 int lustre_shrink_msg(struct lustre_msg *msg, int segment,
                       unsigned int newlen, int move_data);
 void lustre_free_reply_state(struct ptlrpc_reply_state *rs);
+int __lustre_unpack_msg(struct lustre_msg *m, int len);
 int lustre_msg_hdr_size(__u32 magic, int count);
 int lustre_msg_size(__u32 magic, int count, __u32 *lengths);
 int lustre_msg_size_v2(int count, __u32 *lengths);
 int lustre_packed_msg_size(struct lustre_msg *msg);
 int lustre_msg_early_size(void);
-int lustre_unpack_msg(struct lustre_msg *m, int len);
 void *lustre_msg_buf_v2(struct lustre_msg_v2 *m, int n, int min_size);
 void *lustre_msg_buf(struct lustre_msg *m, int n, int minlen);
 int lustre_msg_buflen(struct lustre_msg *m, int n);
 void lustre_msg_set_buflen(struct lustre_msg *m, int n, int len);
 int lustre_msg_bufcount(struct lustre_msg *m);
 char *lustre_msg_string (struct lustre_msg *m, int n, int max_len);
-void *lustre_swab_buf(struct lustre_msg *, int n, int minlen, void *swabber);
 void *lustre_swab_reqbuf(struct ptlrpc_request *req, int n, int minlen,
                          void *swabber);
 void *lustre_swab_repbuf(struct ptlrpc_request *req, int n, int minlen,

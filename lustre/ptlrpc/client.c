@@ -281,13 +281,12 @@ static int unpack_reply(struct ptlrpc_request *req)
 {
         int rc;
 
-        /* Clear reply swab mask; we may have already swabbed an early reply */
-        req->rq_rep_swab_mask = 0;
-
-        rc = lustre_unpack_msg(req->rq_repmsg, req->rq_replen);
-        if (rc) {
-                DEBUG_REQ(D_ERROR, req, "unpack_rep failed: %d", rc);
-                return(-EPROTO);
+        if (SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) != SPTLRPC_POLICY_NULL) {
+                rc = ptlrpc_unpack_rep_msg(req, req->rq_replen);
+                if (rc) {
+                        DEBUG_REQ(D_ERROR, req, "unpack_rep failed: %d", rc);
+                        return(-EPROTO);
+                }
         }
 
         rc = lustre_unpack_rep_ptlrpc_body(req, MSG_PTLRPC_BODY_OFF);

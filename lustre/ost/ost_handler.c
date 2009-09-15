@@ -129,7 +129,7 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
         }
 
         if (body->oa.o_valid & OBD_MD_FLOSSCAPA)
-                capa = lustre_unpack_capa(req->rq_reqmsg, REQ_REC_OFF + 2);
+                capa = lustre_unpack_incoming_capa(req, REQ_REC_OFF + 2);
 
         rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
@@ -167,7 +167,7 @@ static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
 
         oinfo.oi_oa = &repbody->oa;
         if (oinfo.oi_oa->o_valid & OBD_MD_FLOSSCAPA)
-                oinfo.oi_capa = lustre_unpack_capa(req->rq_reqmsg,
+                oinfo.oi_capa = lustre_unpack_incoming_capa(req,
                                                    REQ_REC_OFF + 1);
         req->rq_status = obd_getattr(exp, &oinfo);
         ost_drop_id(exp, &repbody->oa);
@@ -331,7 +331,7 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
                         oinfo.oi_oa->o_valid &= ~OBD_MD_FLFLAGS;
 
                 if (oinfo.oi_oa->o_valid & OBD_MD_FLOSSCAPA)
-                        oinfo.oi_capa = lustre_unpack_capa(req->rq_reqmsg,
+                        oinfo.oi_capa = lustre_unpack_incoming_capa(req,
                                                            REQ_REC_OFF + 1);
                 req->rq_status = obd_punch(exp, &oinfo, oti, NULL);
                 ost_punch_lock_put(exp, oinfo.oi_oa, &lh);
@@ -355,7 +355,7 @@ static int ost_sync(struct obd_export *exp, struct ptlrpc_request *req)
                 RETURN(-EFAULT);
 
         if (body->oa.o_valid & OBD_MD_FLOSSCAPA)
-                capa = lustre_unpack_capa(req->rq_reqmsg, REQ_REC_OFF + 1);
+                capa = lustre_unpack_incoming_capa(req, REQ_REC_OFF + 1);
 
         rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
@@ -394,7 +394,7 @@ static int ost_setattr(struct obd_export *exp, struct ptlrpc_request *req,
 
         oinfo.oi_oa = &repbody->oa;
         if (oinfo.oi_oa->o_valid & OBD_MD_FLOSSCAPA)
-                oinfo.oi_capa = lustre_unpack_capa(req->rq_reqmsg,
+                oinfo.oi_capa = lustre_unpack_incoming_capa(req,
                                                    REQ_REC_OFF + 1);
         req->rq_status = obd_setattr(exp, &oinfo, oti);
         ost_drop_id(exp, &repbody->oa);
@@ -656,7 +656,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         LASSERT(remote_nb != NULL);
 
         if (body->oa.o_valid & OBD_MD_FLOSSCAPA)
-                capa = lustre_unpack_capa(req->rq_reqmsg, REQ_REC_OFF + 3);
+                capa = lustre_unpack_incoming_capa(req, REQ_REC_OFF + 3);
 
         rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
@@ -921,7 +921,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         LASSERT(remote_nb != NULL);
 
         if (body->oa.o_valid & OBD_MD_FLOSSCAPA)
-                capa = lustre_unpack_capa(req->rq_reqmsg, REQ_REC_OFF + 3);
+                capa = lustre_unpack_incoming_capa(req, REQ_REC_OFF + 3);
 
         size[REPLY_REC_OFF + 1] = niocount * sizeof(*rcs);
         rc = lustre_pack_reply(req, 3, size, NULL);
@@ -1223,7 +1223,7 @@ static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
                 if (val && vallen)
                         obd_export_evict_by_nid(exp->exp_obd, val);
                 GOTO(out, rc = 0);
-        } else if (KEY_IS(KEY_MDS_CONN) && lustre_msg_swabbed(req->rq_reqmsg)) {
+        } else if (KEY_IS(KEY_MDS_CONN) && ptlrpc_req_need_swab(req)) {
                 /* Val's are not swabbed automatically */
                 __swab32s((__u32 *)val);
         }
@@ -1819,8 +1819,6 @@ static int ost_hpreq_handler(struct ptlrpc_request *req)
                                 RETURN(-EFAULT);
                         }
 
-                        swab = !lustre_req_swabbed(req, REQ_REC_OFF + 1) &&
-                                lustre_msg_swabbed(req->rq_reqmsg);
                         ioo = lustre_swab_reqbuf(req, REQ_REC_OFF + 1,
                                                  objcount * sizeof(*ioo),
                                                  lustre_swab_obd_ioobj);
@@ -1828,6 +1826,8 @@ static int ost_hpreq_handler(struct ptlrpc_request *req)
                                 CERROR("Missing/short ioobj\n");
                                 RETURN(-EFAULT);
                         }
+
+                        swab = ptlrpc_req_need_swab(req);
                         for (niocount = i = 0; i < objcount; i++) {
                                 if (i > 0 && swab)
                                         lustre_swab_obd_ioobj(&ioo[i]);
@@ -1843,8 +1843,6 @@ static int ost_hpreq_handler(struct ptlrpc_request *req)
                                 RETURN(-EFAULT);
                         }
 
-                        swab = !lustre_req_swabbed(req, REQ_REC_OFF + 2) &&
-                                lustre_msg_swabbed(req->rq_reqmsg);
                         nb = lustre_swab_reqbuf(req, REQ_REC_OFF + 2,
                                                 niocount * sizeof(*nb),
                                                 lustre_swab_niobuf_remote);
@@ -1853,6 +1851,7 @@ static int ost_hpreq_handler(struct ptlrpc_request *req)
                                 RETURN(-EFAULT);
                         }
 
+                        swab = ptlrpc_req_need_swab(req);
                         if (swab) {
                                 /* swab remaining niobufs */
                                 for (i = 1; i < niocount; i++)

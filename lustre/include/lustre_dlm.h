@@ -367,7 +367,8 @@ typedef int (*ldlm_res_policy)(struct ldlm_namespace *, struct ldlm_lock **,
 
 struct ldlm_valblock_ops {
         int (*lvbo_init)(struct ldlm_resource *res);
-        int (*lvbo_update)(struct ldlm_resource *res, struct lustre_msg *m,
+        int (*lvbo_update)(struct ldlm_resource *res,
+                           struct ptlrpc_request *r,
                            int buf_idx, int increase);
 };
 
@@ -899,12 +900,12 @@ ldlm_handle2lock_long(const struct lustre_handle *h, int flags)
 }
 
 static inline int ldlm_res_lvbo_update(struct ldlm_resource *res,
-                                       struct lustre_msg *m, int buf_idx,
+                                       struct ptlrpc_request *r, int buf_idx,
                                        int increase)
 {
         if (res->lr_namespace->ns_lvbo &&
             res->lr_namespace->ns_lvbo->lvbo_update) {
-                return res->lr_namespace->ns_lvbo->lvbo_update(res, m, buf_idx,
+                return res->lr_namespace->ns_lvbo->lvbo_update(res, r, buf_idx,
                                                                increase);
         }
         return 0;

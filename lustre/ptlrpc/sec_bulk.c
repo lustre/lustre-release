@@ -855,7 +855,7 @@ __u8 sptlrpc_get_hash_alg(const char *algname)
 }
 EXPORT_SYMBOL(sptlrpc_get_hash_alg);
 
-int bulk_sec_desc_unpack(struct lustre_msg *msg, int offset)
+int bulk_sec_desc_unpack(struct lustre_msg *msg, int offset, int swabbed)
 {
         struct ptlrpc_bulk_sec_desc *bsd;
         int                          size = msg->lm_buflens[offset];
@@ -866,7 +866,7 @@ int bulk_sec_desc_unpack(struct lustre_msg *msg, int offset)
                 return -EINVAL;
         }
 
-        if (lustre_msg_swabbed(msg)) {
+        if (swabbed) {
                 __swab32s(&bsd->bsd_nob);
         }
 

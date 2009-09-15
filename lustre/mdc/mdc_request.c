@@ -1139,7 +1139,7 @@ int mdc_get_info_rpc(struct obd_export *exp,
         if (rc == 0) {
                 tmp = req_capsule_server_get(&req->rq_pill, &RMF_GETINFO_VAL);
                 memcpy(val, tmp, vallen);
-                if (lustre_msg_swabbed(req->rq_repmsg)) {
+                if (ptlrpc_rep_need_swab(req)) {
                         if (KEY_IS(KEY_FID2PATH)) {
                                 lustre_swab_fid2path(val);
                         }

@@ -111,17 +111,21 @@ void gss_header_swabber(struct gss_header *ghdr)
         __swab32s(&ghdr->gh_handle.len);
 }
 
-struct gss_header *gss_swab_header(struct lustre_msg *msg, int segment)
+struct gss_header *gss_swab_header(struct lustre_msg *msg, int segment,
+                                   int swabbed)
 {
         struct gss_header *ghdr;
 
-        ghdr = lustre_swab_buf(msg, segment, sizeof(*ghdr),
-                               gss_header_swabber);
+        ghdr = lustre_msg_buf(msg, segment, sizeof(*ghdr));
+        if (ghdr == NULL)
+                return NULL;
 
-        if (ghdr &&
-            sizeof(*ghdr) + ghdr->gh_handle.len > msg->lm_buflens[segment]) {
-                CERROR("gss header require length %u, now %u received\n",
-                       (unsigned int) sizeof(*ghdr) + ghdr->gh_handle.len,
+        if (swabbed)
+                gss_header_swabber(ghdr);
+
+        if (sizeof(*ghdr) + ghdr->gh_handle.len > msg->lm_buflens[segment]) {
+                CERROR("gss header has length %d, now %u received\n",
+                       (int) sizeof(*ghdr) + ghdr->gh_handle.len,
                        msg->lm_buflens[segment]);
                 return NULL;
         }
@@ -129,6 +133,7 @@ struct gss_header *gss_swab_header(struct lustre_msg *msg, int segment)
         return ghdr;
 }
 
+#if 0
 static
 void gss_netobj_swabber(netobj_t *obj)
 {
@@ -149,6 +154,7 @@ netobj_t *gss_swab_netobj(struct lustre_msg *msg, int segment)
 
         return obj;
 }
+#endif
 
 /*
  * payload should be obtained from mechanism. but currently since we
@@ -765,7 +771,7 @@ int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
         struct gss_header      *ghdr, *reqhdr;
         struct lustre_msg      *msg = req->rq_repdata;
         __u32                   major;
-        int                     pack_bulk, rc = 0;
+        int                     pack_bulk, swabbed, rc = 0;
         ENTRY;
 
         LASSERT(req->rq_cli_ctx == ctx);
@@ -786,7 +792,9 @@ int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
                 RETURN(-EPROTO);
         }
 
-        ghdr = gss_swab_header(msg, 0);
+        swabbed = ptlrpc_rep_need_swab(req);
+
+        ghdr = gss_swab_header(msg, 0, swabbed);
         if (ghdr == NULL) {
                 CERROR("can't decode gss header\n");
                 RETURN(-EPROTO);
@@ -824,7 +832,7 @@ int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
                         RETURN(-EPROTO);
                 }
 
-                if (lustre_msg_swabbed(msg))
+                if (swabbed)
                         gss_header_swabber(ghdr);
 
                 major = gss_verify_msg(msg, gctx->gc_mechctx, reqhdr->gh_svc);
@@ -854,7 +862,7 @@ int gss_cli_ctx_verify(struct ptlrpc_cli_ctx *ctx,
                                 RETURN(-EPROTO);
                         }
 
-                        rc = bulk_sec_desc_unpack(msg, 2);
+                        rc = bulk_sec_desc_unpack(msg, 2, swabbed);
                         if (rc) {
                                 CERROR("unpack bulk desc: %d\n", rc);
                                 RETURN(rc);
@@ -985,7 +993,7 @@ int gss_cli_ctx_unseal(struct ptlrpc_cli_ctx *ctx,
         struct gss_cli_ctx      *gctx;
         struct gss_header       *ghdr;
         struct lustre_msg       *msg = req->rq_repdata;
-        int                      msglen, pack_bulk, rc;
+        int                      msglen, pack_bulk, swabbed, rc;
         __u32                    major;
         ENTRY;
 
@@ -994,8 +1002,9 @@ int gss_cli_ctx_unseal(struct ptlrpc_cli_ctx *ctx,
         LASSERT(msg);
 
         gctx = container_of(ctx, struct gss_cli_ctx, gc_base);
+        swabbed = ptlrpc_rep_need_swab(req);
 
-        ghdr = gss_swab_header(msg, 0);
+        ghdr = gss_swab_header(msg, 0, swabbed);
         if (ghdr == NULL) {
                 CERROR("can't decode gss header\n");
                 RETURN(-EPROTO);
@@ -1018,7 +1027,7 @@ int gss_cli_ctx_unseal(struct ptlrpc_cli_ctx *ctx,
                         RETURN(-EPROTO);
                 }
 
-                if (lustre_msg_swabbed(msg))
+                if (swabbed)
                         gss_header_swabber(ghdr);
 
                 /* use rq_repdata_len as buffer size, which assume unseal
@@ -1033,7 +1042,8 @@ int gss_cli_ctx_unseal(struct ptlrpc_cli_ctx *ctx,
                         break;
                 }
 
-                if (lustre_unpack_msg(msg, msglen)) {
+                swabbed = __lustre_unpack_msg(msg, msglen);
+                if (swabbed < 0) {
                         CERROR("Failed to unpack after decryption\n");
                         RETURN(-EPROTO);
                 }
@@ -1051,7 +1061,8 @@ int gss_cli_ctx_unseal(struct ptlrpc_cli_ctx *ctx,
                         }
 
                         /* bulk checksum is the last segment */
-                        if (bulk_sec_desc_unpack(msg, msg->lm_bufcount - 1))
+                        if (bulk_sec_desc_unpack(msg, msg->lm_bufcount - 1,
+                                                 swabbed))
                                 RETURN(-EPROTO);
                 }
 
@@ -1975,7 +1986,7 @@ int gss_svc_handle_init(struct ptlrpc_request *req,
         rawobj_t                   uuid_obj, rvs_hdl, in_token;
         __u32                      lustre_svc;
         __u32                     *secdata, seclen;
-        int                        rc;
+        int                        swabbed, rc;
         ENTRY;
 
         CDEBUG(D_SEC, "processing gss init(%d) request from %s\n", gw->gw_proc,
@@ -1998,6 +2009,8 @@ int gss_svc_handle_init(struct ptlrpc_request *req,
                 CERROR("Invalid bufcount %d\n", reqbuf->lm_bufcount);
                 RETURN(SECSVC_DROP);
         }
+
+        swabbed = ptlrpc_req_need_swab(req);
 
         /* ctx initiate payload is in last segment */
         secdata = lustre_msg_buf(reqbuf, reqbuf->lm_bufcount - 1, 0);
@@ -2060,7 +2073,7 @@ int gss_svc_handle_init(struct ptlrpc_request *req,
                         CERROR("missing user descriptor\n");
                         RETURN(SECSVC_DROP);
                 }
-                if (sptlrpc_unpack_user_desc(reqbuf, 2)) {
+                if (sptlrpc_unpack_user_desc(reqbuf, 2, swabbed)) {
                         CERROR("Mal-formed user descriptor\n");
                         RETURN(SECSVC_DROP);
                 }
@@ -2087,6 +2100,7 @@ int gss_svc_verify_request(struct ptlrpc_request *req,
         struct gss_svc_ctx *gctx = grctx->src_ctx;
         struct lustre_msg  *msg = req->rq_reqbuf;
         int                 offset = 2;
+        int                 swabbed;
         ENTRY;
 
         *major = GSS_S_COMPLETE;
@@ -2119,6 +2133,8 @@ int gss_svc_verify_request(struct ptlrpc_request *req,
         }
 
 verified:
+        swabbed = ptlrpc_req_need_swab(req);
+
         /* user descriptor */
         if (gw->gw_flags & LUSTRE_GSS_PACK_USER) {
                 if (msg->lm_bufcount < (offset + 1)) {
@@ -2126,7 +2142,7 @@ verified:
                         RETURN(-EINVAL);
                 }
 
-                if (sptlrpc_unpack_user_desc(msg, offset)) {
+                if (sptlrpc_unpack_user_desc(msg, offset, swabbed)) {
                         CERROR("Mal-formed user descriptor\n");
                         RETURN(-EINVAL);
                 }
@@ -2143,7 +2159,7 @@ verified:
                         RETURN(-EINVAL);
                 }
 
-                if (bulk_sec_desc_unpack(msg, offset))
+                if (bulk_sec_desc_unpack(msg, offset, swabbed))
                         RETURN(-EINVAL);
 
                 req->rq_pack_bulk = 1;
@@ -2164,7 +2180,7 @@ int gss_svc_unseal_request(struct ptlrpc_request *req,
 {
         struct gss_svc_ctx *gctx = grctx->src_ctx;
         struct lustre_msg  *msg = req->rq_reqbuf;
-        int                 msglen, offset = 1;
+        int                 swabbed, msglen, offset = 1;
         ENTRY;
 
         if (gss_check_seq_num(&gctx->gsc_seqdata, gw->gw_seq, 0)) {
@@ -2186,7 +2202,8 @@ int gss_svc_unseal_request(struct ptlrpc_request *req,
                 RETURN(-EACCES);
         }
 
-        if (lustre_unpack_msg(msg, msglen)) {
+        swabbed = __lustre_unpack_msg(msg, msglen);
+        if (swabbed < 0) {
                 CERROR("Failed to unpack after decryption\n");
                 RETURN(-EINVAL);
         }
@@ -2203,7 +2220,7 @@ int gss_svc_unseal_request(struct ptlrpc_request *req,
                         RETURN(-EINVAL);
                 }
 
-                if (sptlrpc_unpack_user_desc(msg, offset)) {
+                if (sptlrpc_unpack_user_desc(msg, offset, swabbed)) {
                         CERROR("Mal-formed user descriptor\n");
                         RETURN(-EINVAL);
                 }
@@ -2219,7 +2236,7 @@ int gss_svc_unseal_request(struct ptlrpc_request *req,
                         RETURN(-EINVAL);
                 }
 
-                if (bulk_sec_desc_unpack(msg, offset))
+                if (bulk_sec_desc_unpack(msg, offset, swabbed))
                         RETURN(-EINVAL);
 
                 req->rq_pack_bulk = 1;
@@ -2314,7 +2331,8 @@ int gss_svc_handle_destroy(struct ptlrpc_request *req,
                         CERROR("missing user descriptor, ignore it\n");
                         RETURN(SECSVC_OK);
                 }
-                if (sptlrpc_unpack_user_desc(req->rq_reqbuf, 2)) {
+                if (sptlrpc_unpack_user_desc(req->rq_reqbuf, 2,
+                                             ptlrpc_req_need_swab(req))) {
                         CERROR("Mal-formed user descriptor, ignore it\n");
                         RETURN(SECSVC_OK);
                 }
@@ -2331,7 +2349,7 @@ int gss_svc_accept(struct ptlrpc_sec_policy *policy, struct ptlrpc_request *req)
         struct gss_header      *ghdr;
         struct gss_svc_reqctx  *grctx;
         struct gss_wire_ctx    *gw;
-        int                     rc;
+        int                     swabbed, rc;
         ENTRY;
 
         LASSERT(req->rq_reqbuf);
@@ -2342,7 +2360,9 @@ int gss_svc_accept(struct ptlrpc_sec_policy *policy, struct ptlrpc_request *req)
                 RETURN(SECSVC_DROP);
         }
 
-        ghdr = gss_swab_header(req->rq_reqbuf, 0);
+        swabbed = ptlrpc_req_need_swab(req);
+
+        ghdr = gss_swab_header(req->rq_reqbuf, 0, swabbed);
         if (ghdr == NULL) {
                 CERROR("can't decode gss header\n");
                 RETURN(SECSVC_DROP);
@@ -2375,7 +2395,7 @@ int gss_svc_accept(struct ptlrpc_sec_policy *policy, struct ptlrpc_request *req)
         rawobj_from_netobj(&gw->gw_handle, &ghdr->gh_handle);
 
         /* keep original wire header which subject to checksum verification */
-        if (lustre_msg_swabbed(req->rq_reqbuf))
+        if (swabbed)
                 gss_header_swabber(ghdr);
 
         switch(ghdr->gh_proc) {

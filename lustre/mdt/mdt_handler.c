@@ -1124,7 +1124,7 @@ static int mdt_set_info(struct mdt_thread_info *info)
                         CERROR("Bad changelog_clear setinfo size %d\n", vallen);
                         RETURN(-EINVAL);
                 }
-                if (lustre_msg_swabbed(req->rq_reqmsg)) {
+                if (ptlrpc_req_need_swab(req)) {
                         __swab64s(&cs->cs_recno);
                         __swab32s(&cs->cs_id);
                 }
@@ -2919,15 +2919,6 @@ static int mdt_handle0(struct ptlrpc_request *req,
         if (likely(rc == 0)) {
                 rc = mdt_recovery(info);
                 if (likely(rc == +1)) {
-                        switch (lustre_msg_get_opc(msg)) {
-                        case MDS_READPAGE:
-                                req->rq_bulk_read = 1;
-                                break;
-                        case MDS_WRITEPAGE:
-                                req->rq_bulk_write = 1;
-                                break;
-                        }
-
                         h = mdt_handler_find(lustre_msg_get_opc(msg),
                                              supported);
                         if (likely(h != NULL)) {
@@ -5373,7 +5364,7 @@ static int mdt_rpc_fid2path(struct mdt_thread_info *info, void *key,
         fpin = key + size_round(sizeof(KEY_FID2PATH));
         fpout = val;
 
-        if (lustre_msg_swabbed(mdt_info_req(info)->rq_reqmsg))
+        if (ptlrpc_req_need_swab(info->mti_pill->rc_req))
                 lustre_swab_fid2path(fpin);
 
         memcpy(fpout, fpin, sizeof(*fpin));

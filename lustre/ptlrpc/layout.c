@@ -1399,7 +1399,8 @@ static int __req_capsule_offset(const struct req_capsule *pill,
                             pill->rc_fmt->rf_name,
                             field->rmf_name, offset, loc);
         offset --;
-        LASSERT(0 <= offset && offset < (sizeof(pill->rc_swabbed) << 3));
+
+        LASSERT(0 <= offset && offset < REQ_MAX_FIELD_NR);
         return offset;
 }
 
@@ -1413,6 +1414,7 @@ static void *__req_capsule_get(struct req_capsule *pill,
         void                    *value;
         int                      len;
         int                      offset;
+        int                      inout = loc == RCL_CLIENT;
 
         void *(*getter)(struct lustre_msg *m, int n, int minlen);
 
@@ -1443,11 +1445,10 @@ static void *__req_capsule_get(struct req_capsule *pill,
         value = getter(msg, offset, len);
 
         swabber = swabber ?: field->rmf_swabber;
-        if (!(pill->rc_swabbed & (1 << offset)) && loc != pill->rc_loc &&
-            swabber != NULL && value != NULL &&
-            lustre_msg_swabbed(msg)) {
+        if (ptlrpc_buf_need_swab(pill->rc_req, inout, offset) &&
+            swabber != NULL && value != NULL) {
                 swabber(value);
-                pill->rc_swabbed |= (1 << offset);
+                ptlrpc_buf_set_swabbed(pill->rc_req, inout, offset);
         }
         if (value == NULL) {
                 DEBUG_REQ(D_ERROR, pill->rc_req,
@@ -1600,8 +1601,7 @@ void req_capsule_extend(struct req_capsule *pill, const struct req_format *fmt)
                 LASSERT(FMT_FIELD(fmt, i, j)->rmf_size >=
                         FMT_FIELD(old, i, j)->rmf_size);
         }
-        /* last field should be returned to the unswabbed state */
-        pill->rc_swabbed &= ~(__u32)(1 << j);
+
         pill->rc_fmt = fmt;
 }
 EXPORT_SYMBOL(req_capsule_extend);

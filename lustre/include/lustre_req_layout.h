@@ -61,7 +61,6 @@ enum req_location {
 struct req_capsule {
         struct ptlrpc_request   *rc_req;
         const struct req_format *rc_fmt;
-        __u32                    rc_swabbed;
         enum req_location        rc_loc;
         __u32                    rc_area[RCL_NR][REQ_MAX_FIELD_NR];
 };
