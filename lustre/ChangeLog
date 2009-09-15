@@ -70,6 +70,16 @@ Details    : ldiskfs_truncate calls grab_cache_page which may start page
 	     allocation under an open transaction. This may lead to
 	     calling prune_icache with consequent lustre reentrance.
 
+Severity   : normal
+Frequency  : only when down/upgrading the MDS to 1.6/1.8 while 1.8 clients are
+	     still up and when the OST pool feature is used
+Bugzilla   : 20318
+Description: interop testing got LBUG when run dd with OST pool
+	     :LustreError: 30032:0:(llite_lib.c:1913:ll_replace_lsm()) LBUG
+Details    : down/upgrading the MDS to a version that doesn't/does support OST
+	     pool can cause clients to crash because the lsm has changed
+	     behind their back.
+
 -------------------------------------------------------------------------------
 
 2009-07-31 Sun Microsystems, Inc.
