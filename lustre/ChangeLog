@@ -227,6 +227,11 @@ Details    : down/upgrading the MDS to a version that doesn't/does support OST
 	     pool can cause clients to crash because the lsm has changed
 	     behind their back.
 
+Severity   : normal
+Bugzilla   : 20550
+Description: missing tree_status on 1.8.1 RPM build
+Details    : make rpms failed due because the tree_status file is missing.
+
 ------------------------------------------------------------------------------
 2009-07-31 Sun Microsystems, Inc.
 	* version 1.8.1
@@ -440,6 +445,7 @@ Severity   : normal
 Bugzilla   : 20139
 Description: panic in ll_statahead_thread
 Details    : grab dentry reference in parent process.
+
 
 -------------------------------------------------------------------------------
 

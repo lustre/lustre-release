@@ -57,4 +57,4 @@ $(genscripts): %: %.in
 	chmod +x $@
 
 tree_status.pl: version_tag.pl
-	ln version_tag.pl tree_status.pl
+	ln -f version_tag.pl tree_status.pl
