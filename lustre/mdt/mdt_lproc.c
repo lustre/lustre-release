@@ -655,6 +655,7 @@ static int lprocfs_rd_mdt_som(char *page, char **start, off_t off,
                         mdt->mdt_som_conf ? "en" : "dis");
 }
 
+#ifdef HAVE_QUOTA_SUPPORT
 static int mdt_quota_off(struct mdt_device *mdt)
 {
         struct md_device *next = mdt->mdt_child;
@@ -667,6 +668,12 @@ static int mdt_quota_off(struct mdt_device *mdt)
         lu_env_fini(&env);
         return rc;
 }
+#else
+static int mdt_quota_off(struct mdt_device *mdt)
+{
+        return 0;
+}
+#endif
 
 static int lprocfs_wr_mdt_som(struct file *file, const char *buffer,
                               unsigned long count, void *data)
