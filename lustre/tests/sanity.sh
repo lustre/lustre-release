@@ -6112,13 +6112,23 @@ test_150() {
 run_test 150 "truncate/append tests"
 
 function roc_hit() {
-        local list=$(comma_list $(osts_nodes))
-        local log=$TMP/${TESTSUITE}-$TESTNAME.param
-        do_nodes $list "$LCTL get_param -n obdfilter.*.stats" >$log
+    local list=$(comma_list $(osts_nodes))
 
-        local ACCNUM=`awk '/^cache_hit/ {sum=sum+$2} END{print sum}' $log`
-        rm -f $log
-        echo $ACCNUM
+    ACCNUM=$(do_nodes $list $LCTL get_param -n obdfilter.*.stats | \
+        awk '/'cache_hit'/ {sum+=$2} END {print sum}')
+    echo $ACCNUM
+}
+
+function set_cache() {
+    local on=1
+
+    if [ "$2" == "off" ]; then
+        on=0;
+    fi
+    local list=$(comma_list $(osts_nodes))
+    do_nodes $list lctl set_param obdfilter.*.${1}_cache_enable $on
+
+    cancel_lru_locks osc
 }
 
 test_151() {
@@ -6211,6 +6221,210 @@ test_154() {
 	echo "Opening a file by FID succeeded"
 }
 run_test 154 "Opening a file by FID"
+
+test_155_load() {
+    local temp=$TMP/$tfile
+    local file=$DIR/$tfile
+    local list=$(comma_list $(osts_nodes))
+    local big=$(do_nodes $list grep "cache" /proc/cpuinfo | \
+        awk '{sum+=$4} END{print sum}')
+
+    log big is $big K
+
+    dd if=/dev/urandom of=$temp bs=6096 count=1 || \
+        error "dd of=$temp bs=6096 count=1 failed"
+    cp $temp $file
+    cancel_lru_locks osc
+    cmp $temp $file || error "$temp $file differ"
+
+    $TRUNCATE $temp 6000
+    $TRUNCATE $file 6000
+    cmp $temp $file || error "$temp $file differ (truncate1)"
+
+    echo "12345" >>$temp
+    echo "12345" >>$file
+    cmp $temp $file || error "$temp $file differ (append1)"
+
+    echo "12345" >>$temp
+    echo "12345" >>$file
+    cmp $temp $file || error "$temp $file differ (append2)"
+
+    dd if=/dev/urandom of=$temp bs=$((big*2)) count=1k || \
+        error "dd of=$temp bs=$((big*2)) count=1k failed"
+    cp $temp $file
+    ls -lh $temp $file
+    cancel_lru_locks osc
+    cmp $temp $file || error "$temp $file differ"
+
+    rm -f $temp
+    true
+}
+
+test_155a() {
+    set_cache read on
+    set_cache writethrough on
+    test_155_load
+}
+run_test 155a "Verification of correctness: read cache:on write_cache:on"
+
+test_155b() {
+    set_cache read on
+    set_cache writethrough off
+    test_155_load
+}
+run_test 155b "Verification of correctness: read cache:on write_cache:off"
+
+test_155c() {
+    set_cache read off
+    set_cache writethrough on
+    test_155_load
+}
+run_test 155c "Verification of correctness: read cache:off write_cache:on"
+
+test_155d() {
+    set_cache read off
+    set_cache writethrough off
+    test_155_load
+}
+run_test 155d "Verification of correctness: read cache:off write_cache:off "
+
+test_156() {
+    local CPAGES=3
+    local BEFORE
+    local AFTER
+    local file="$DIR/$tfile"
+
+    log "Turn on read and write cache"
+    set_cache read on
+    set_cache writethrough on
+
+    log "Write data and read it back."
+    log "Read should be satisfied from the cache."
+    dd if=/dev/urandom of=$file bs=4k count=$CPAGES || error "dd failed"
+    BEFORE=`roc_hit`
+    cancel_lru_locks osc
+    cat $file >/dev/null
+    AFTER=`roc_hit`
+    if ! let "AFTER - BEFORE == CPAGES"; then
+        error "NOT IN CACHE: before: $BEFORE, after: $AFTER"
+    else
+        log "cache hits:: before: $BEFORE, after: $AFTER"
+    fi
+
+    log "Read again; it should be satisfied from the cache."
+    BEFORE=$AFTER
+    cancel_lru_locks osc
+    cat $file >/dev/null
+    AFTER=`roc_hit`
+    if ! let "AFTER - BEFORE == CPAGES"; then
+        error "NOT IN CACHE: before: $BEFORE, after: $AFTER"
+    else
+        log "cache hits:: before: $BEFORE, after: $AFTER"
+    fi
+
+
+    log "Turn off the read cache and turn on the write cache"
+    set_cache read off
+    set_cache writethrough on
+
+    log "Read again; it should be satisfied from the cache."
+    BEFORE=`roc_hit`
+    cancel_lru_locks osc
+    cat $file >/dev/null
+    AFTER=`roc_hit`
+    if ! let "AFTER - BEFORE == CPAGES"; then
+        error "NOT IN CACHE: before: $BEFORE, after: $AFTER"
+    else
+        log "cache hits:: before: $BEFORE, after: $AFTER"
+    fi
+
+    log "Read again; it should not be satisfied from the cache."
+    BEFORE=$AFTER
+    cancel_lru_locks osc
+    cat $file >/dev/null
+    AFTER=`roc_hit`
+    if ! let "AFTER - BEFORE == 0"; then
+        error "IN CACHE: before: $BEFORE, after: $AFTER"
+    else
+        log "cache hits:: before: $BEFORE, after: $AFTER"
+    fi
+
+    log "Write data and read it back."
+    log "Read should be satisfied from the cache."
+    dd if=/dev/urandom of=$file bs=4k count=$CPAGES || error "dd failed"
+    BEFORE=`roc_hit`
+    cancel_lru_locks osc
+    cat $file >/dev/null
+    AFTER=`roc_hit`
+    if ! let "AFTER - BEFORE == CPAGES"; then
+        error "NOT IN CACHE: before: $BEFORE, after: $AFTER"
+    else
+        log "cache hits:: before: $BEFORE, after: $AFTER"
+    fi
+
+    log "Read again; it should not be satisfied from the cache."
+    BEFORE=$AFTER
+    cancel_lru_locks osc
+    cat $file >/dev/null
+    AFTER=`roc_hit`
+    if ! let "AFTER - BEFORE == 0"; then
+        error "IN CACHE: before: $BEFORE, after: $AFTER"
+    else
+        log "cache hits:: before: $BEFORE, after: $AFTER"
+    fi
+
+
+    log "Turn off read and write cache"
+    set_cache read off
+    set_cache writethrough off
+
+    log "Write data and read it back"
+    log "It should not be satisfied from the cache."
+    rm -f $file
+    dd if=/dev/urandom of=$file bs=4k count=$CPAGES || error "dd failed"
+    cancel_lru_locks osc
+    BEFORE=`roc_hit`
+    cat $file >/dev/null
+    AFTER=`roc_hit`
+    if ! let "AFTER - BEFORE == 0"; then
+        error_ignore 20762 "IN CACHE: before: $BEFORE, after: $AFTER"
+    else
+        log "cache hits:: before: $BEFORE, after: $AFTER"
+    fi
+
+
+    log "Turn on the read cache and turn off the write cache"
+    set_cache read on
+    set_cache writethrough off
+
+    log "Write data and read it back"
+    log "It should not be satisfied from the cache."
+    rm -f $file
+    dd if=/dev/urandom of=$file bs=4k count=$CPAGES || error "dd failed"
+    BEFORE=`roc_hit`
+    cancel_lru_locks osc
+    cat $file >/dev/null
+    AFTER=`roc_hit`
+    if ! let "AFTER - BEFORE == 0"; then
+        error_ignore 20762 "IN CACHE: before: $BEFORE, after: $AFTER"
+    else
+        log "cache hits:: before: $BEFORE, after: $AFTER"
+    fi
+
+    log "Read again; it should be satisfied from the cache."
+    BEFORE=`roc_hit`
+    cancel_lru_locks osc
+    cat $file >/dev/null
+    AFTER=`roc_hit`
+    if ! let "AFTER - BEFORE == CPAGES"; then
+        error "NOT IN CACHE: before: $BEFORE, after: $AFTER"
+    else
+        log "cache hits:: before: $BEFORE, after: $AFTER"
+    fi
+
+    rm -f $file
+}
+run_test 156 "Verification of tunables ============================"
 
 #Changelogs
 err17935 () {
