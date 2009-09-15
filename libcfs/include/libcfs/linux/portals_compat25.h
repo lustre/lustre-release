@@ -140,24 +140,16 @@ typedef unsigned long cpumask_t;
 #define __user
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,8)
-#define ll_proc_dointvec(table, write, filp, buffer, lenp, ppos)        \
-        proc_dointvec(table, write, filp, buffer, lenp)
-#define ll_proc_dostring(table, write, filp, buffer, lenp, ppos)        \
-        proc_dostring(table, write, filp, buffer, lenp)
-#define LL_PROC_PROTO(name)                                             \
-        name(cfs_sysctl_table_t *table, int write, struct file *filp,   \
-             void __user *buffer, size_t *lenp)
-#define DECLARE_LL_PROC_PPOS_DECL  loff_t *ppos = &filp->f_pos
-#else
 #define ll_proc_dointvec(table, write, filp, buffer, lenp, ppos)        \
         proc_dointvec(table, write, filp, buffer, lenp, ppos);
+
+#define ll_proc_dolongvec(table, write, filp, buffer, lenp, ppos)        \
+        proc_doulongvec_minmax(table, write, filp, buffer, lenp, ppos);
 #define ll_proc_dostring(table, write, filp, buffer, lenp, ppos)        \
         proc_dostring(table, write, filp, buffer, lenp, ppos);
 #define LL_PROC_PROTO(name)                                             \
         name(cfs_sysctl_table_t *table, int write, struct file *filp,   \
              void __user *buffer, size_t *lenp, loff_t *ppos)
 #define DECLARE_LL_PROC_PPOS_DECL
-#endif
 
 #endif /* _PORTALS_COMPAT_H */
