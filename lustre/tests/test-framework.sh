@@ -2673,3 +2673,44 @@ wait_clients_import_state () {
     fi
 }
 
+gather_logs () {
+    local list=$1
+
+    local ts=$(date +%s)
+
+    # bug 20237, comment 11
+    # It would also be useful to provide the option
+    # of writing the file to an NFS directory so it doesn't need to be copied.
+    local tmp=$TMP
+    local docp=true
+    [ -d "$SHARED_DIR_LOGS" ] && tmp=$SHARED_DIR_LOGS && docp=false
+
+    # dump lustre logs, dmesg
+    do_nodes $list "log=$tmp/\\\$(hostname)-debug-$ts.log ;
+lctl dk \\\$log >/dev/null;
+log=$tmp/\\\$(hostname)-dmesg-$ts.log;
+dmesg > \\\$log; "
+
+    # FIXME: does it make sense to collect the logs for $ts only, but all
+    # TESTSUITE logs?
+    # rsync $TMP/*${TESTSUITE}* to gather the logs dumped by error fn
+    local logs=$TMP/'*'${TESTSUITE}'*'
+    if $docp; then
+        logs=$logs' '$tmp/'*'$ts'*'
+    fi
+    for node in ${list//,/ }; do
+        rsync -az $node:"$logs" $TMP 
+    done
+
+    local archive=$TMP/${TESTSUITE}-$ts.tar.bz2
+    tar -jcf $archive $tmp/*$ts* $TMP/*${TESTSUITE}*
+
+    echo $archive
+}
+
+cleanup_logs () {
+    local list=${1:-$(comma_list $(nodes_list))}
+
+    [ -n ${TESTSUITE} ] && do_nodes $list "rm -f $TMP/*${TESTSUITE}*" || true
+}
+
