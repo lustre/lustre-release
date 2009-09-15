@@ -1296,6 +1296,27 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+#
+# LC_FUNC_F_OP_FLOCK
+#
+# rhel4.2 kernel has f_op->flock field
+#
+AC_DEFUN([LC_FUNC_F_OP_FLOCK],
+[AC_MSG_CHECKING([if struct file_operations has flock field])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        struct file_operations ll_file_operations_flock;
+        ll_file_operations_flock.flock = NULL;
+],[
+        AC_DEFINE(HAVE_F_OP_FLOCK, 1,
+                [struct file_operations has flock field])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
 # vfs_symlink seems to have started out with 3 args until 2.6.7 where a
 # "mode" argument was added, but then again, in some later version it was
 # removed
@@ -1396,6 +1417,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_CONFIG_GSS
          LC_FUNC_MS_FLOCK_LOCK
          LC_FUNC_HAVE_CAN_SLEEP_ARG
+         LC_FUNC_F_OP_FLOCK
          LC_QUOTA_READ
          LC_COOKIE_FOLLOW_LINK
          LC_FUNC_RCU
