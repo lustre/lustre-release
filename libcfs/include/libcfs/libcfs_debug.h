@@ -353,6 +353,10 @@ extern int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls,
 extern void libcfs_assertion_failed(const char *expr, const char *file,
                                     const char *fn, const int line);
 
+/* one more external symbol that tracefile provides: */
+extern int trace_copyout_string(char *usr_buffer, int usr_buffer_nob,
+                                const char *knl_buffer, char *append);
+
 
 #if defined(HAVE_BGL_SUPPORT)
 #define DEBUG_FILE_PATH_DEFAULT "/bgl/ion/tmp/lustre-log"

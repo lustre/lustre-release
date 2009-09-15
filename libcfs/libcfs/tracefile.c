@@ -785,6 +785,7 @@ int trace_copyout_string(char *usr_buffer, int usr_buffer_nob,
 
         return nob;
 }
+EXPORT_SYMBOL(trace_copyout_string);
 
 int trace_allocate_string_buffer(char **str, int nob)
 {

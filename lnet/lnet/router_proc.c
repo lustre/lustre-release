@@ -27,1094 +27,657 @@
 
 #if defined(__KERNEL__) && defined(LNET_ROUTER)
 
-#if defined(__linux__)
-#include <linux/seq_file.h>
-#endif
-
 /* this is really lnet_proc.c */
 
-#define LNET_PROC_ROOT    "sys/lnet"
-#define LNET_PROC_STATS   LNET_PROC_ROOT"/stats"
-#define LNET_PROC_ROUTES  LNET_PROC_ROOT"/routes"
-#define LNET_PROC_ROUTERS LNET_PROC_ROOT"/routers"
-#define LNET_PROC_PEERS   LNET_PROC_ROOT"/peers"
-#define LNET_PROC_BUFFERS LNET_PROC_ROOT"/buffers"
-#define LNET_PROC_NIS     LNET_PROC_ROOT"/nis"
+static cfs_sysctl_table_header_t *lnet_table_header = NULL;
 
-static int
-lnet_router_proc_stats_read (char *page, char **start, off_t off,
-                             int count, int *eof, void *data)
+#ifndef HAVE_SYSCTL_UNNUMBERED
+#define CTL_LNET         (0x100)
+enum {
+        PSDEV_LNET_STATS = 100,
+        PSDEV_LNET_ROUTES,
+        PSDEV_LNET_ROUTERS,
+        PSDEV_LNET_PEERS,
+        PSDEV_LNET_BUFFERS,
+        PSDEV_LNET_NIS,
+};
+#else
+#define CTL_LNET           CTL_UNNUMBERED
+#define PSDEV_LNET_STATS   CTL_UNNUMBERED
+#define PSDEV_LNET_ROUTES  CTL_UNNUMBERED
+#define PSDEV_LNET_ROUTERS CTL_UNNUMBERED
+#define PSDEV_LNET_PEERS   CTL_UNNUMBERED
+#define PSDEV_LNET_BUFFERS CTL_UNNUMBERED
+#define PSDEV_LNET_NIS     CTL_UNNUMBERED
+#endif
+
+static int __proc_lnet_stats(void *data, int write,
+                             loff_t pos, void *buffer, int nob)
 {
-        lnet_counters_t *ctrs;
         int              rc;
+        lnet_counters_t *ctrs;
+        int              len;
+        char            *tmpstr;
+        const int        tmpsiz = 256; /* 7 %u and 4 LPU64 */
 
-        *start = page;
-        *eof = 1;
-        if (off != 0)
+        if (write) {
+                LNET_LOCK();
+                memset(&the_lnet.ln_counters, 0, sizeof(the_lnet.ln_counters));
+                LNET_UNLOCK();
                 return 0;
+        }
+
+        /* read */
 
         LIBCFS_ALLOC(ctrs, sizeof(*ctrs));
         if (ctrs == NULL)
                 return -ENOMEM;
 
+        LIBCFS_ALLOC(tmpstr, tmpsiz);
+        if (tmpstr == NULL) {
+                LIBCFS_FREE(ctrs, sizeof(*ctrs));
+                return -ENOMEM;
+        }
+
         LNET_LOCK();
         *ctrs = the_lnet.ln_counters;
         LNET_UNLOCK();
 
-        rc = sprintf(page,
-                     "%u %u %u %u %u %u %u "LPU64" "LPU64" "LPU64" "LPU64"\n",
-                     ctrs->msgs_alloc, ctrs->msgs_max,
-                     ctrs->errors,
-                     ctrs->send_count, ctrs->recv_count,
-                     ctrs->route_count, ctrs->drop_count,
-                     ctrs->send_length, ctrs->recv_length,
-                     ctrs->route_length, ctrs->drop_length);
+        len = snprintf(tmpstr, tmpsiz,
+                       "%u %u %u %u %u %u %u "LPU64" "LPU64" "
+                       LPU64" "LPU64,
+                       ctrs->msgs_alloc, ctrs->msgs_max,
+                       ctrs->errors,
+                       ctrs->send_count, ctrs->recv_count,
+                       ctrs->route_count, ctrs->drop_count,
+                       ctrs->send_length, ctrs->recv_length,
+                       ctrs->route_length, ctrs->drop_length);
 
+        if (pos >= min_t(int, len, strlen(tmpstr)))
+                rc = 0;
+        else
+                rc = trace_copyout_string(buffer, nob,
+                                          tmpstr + pos, "\n");
+
+        LIBCFS_FREE(tmpstr, tmpsiz);
         LIBCFS_FREE(ctrs, sizeof(*ctrs));
         return rc;
 }
 
-static int
-lnet_router_proc_stats_write(struct file *file, const char *ubuffer,
-                     unsigned long count, void *data)
+DECLARE_PROC_HANDLER(proc_lnet_stats);
+
+int LL_PROC_PROTO(proc_lnet_routes)
 {
-        LNET_LOCK();
-        memset(&the_lnet.ln_counters, 0, sizeof(the_lnet.ln_counters));
-        LNET_UNLOCK();
+        int        rc     = 0;
+        char      *tmpstr;
+        char      *s;
+        const int  tmpsiz = 256;
+        int        len;
+        int       *ver_p  = (unsigned int *)(&filp->private_data);
 
-        return (count);
-}
+        DECLARE_LL_PROC_PPOS_DECL;
 
-typedef struct {
-        __u64                lrsi_version;
-        lnet_remotenet_t    *lrsi_net;
-        lnet_route_t        *lrsi_route;
-        loff_t               lrsi_off;
-} lnet_route_seq_iterator_t;
+        LASSERT (!write);
 
-int
-lnet_route_seq_seek (lnet_route_seq_iterator_t *lrsi, loff_t off)
-{
-        struct list_head  *n;
-        struct list_head  *r;
-        int                rc;
-        loff_t             here;
-
-        if (off == 0) {
-                lrsi->lrsi_net = NULL;
-                lrsi->lrsi_route = NULL;
-                lrsi->lrsi_off = 0;
+        if (*lenp == 0)
                 return 0;
-        }
 
-        LNET_LOCK();
+        LIBCFS_ALLOC(tmpstr, tmpsiz);
+        if (tmpstr == NULL)
+                return -ENOMEM;
 
-        if (lrsi->lrsi_net != NULL &&
-            lrsi->lrsi_version != the_lnet.ln_remote_nets_version) {
-                /* tables have changed */
-                rc = -ESTALE;
-                goto out;
-        }
+        s = tmpstr; /* points to current position in tmpstr[] */
 
-        if (lrsi->lrsi_net == NULL || lrsi->lrsi_off > off) {
-                /* search from start */
-                n = the_lnet.ln_remote_nets.next;
-                r = NULL;
-                here = 1;
+        if (*ppos == 0) {
+                s += snprintf(s, tmpstr + tmpsiz - s, "Routing %s\n",
+                              the_lnet.ln_routing ? "enabled" : "disabled");
+                LASSERT (tmpstr + tmpsiz - s > 0);
+
+                s += snprintf(s, tmpstr + tmpsiz - s, "%-8s %4s %7s %s\n",
+                              "net", "hops", "state", "router");
+                LASSERT (tmpstr + tmpsiz - s > 0);
+
+                LNET_LOCK();
+                *ver_p = (unsigned int)the_lnet.ln_remote_nets_version;
+                LNET_UNLOCK();
         } else {
-                /* continue search */
-                n = &lrsi->lrsi_net->lrn_list;
-                r = &lrsi->lrsi_route->lr_list;
-                here = lrsi->lrsi_off;
-        }
+                struct list_head  *n;
+                struct list_head  *r;
+                lnet_route_t      *route = NULL;
+                lnet_remotenet_t  *rnet  = NULL;
+                int                skip  = *ppos - 1;
 
-        lrsi->lrsi_version = the_lnet.ln_remote_nets_version;
-        lrsi->lrsi_off        = off;
+                LNET_LOCK();
 
-        while (n != &the_lnet.ln_remote_nets) {
-                lnet_remotenet_t *rnet =
-                        list_entry(n, lnet_remotenet_t, lrn_list);
+                if (*ver_p != (unsigned int)the_lnet.ln_remote_nets_version) {
+                        LNET_UNLOCK();
+                        LIBCFS_FREE(tmpstr, tmpsiz);
+                        return -ESTALE;
+                }
 
-                if (r == NULL)
+                n = the_lnet.ln_remote_nets.next;
+
+                while (n != &the_lnet.ln_remote_nets && route == NULL) {
+                        rnet = list_entry(n, lnet_remotenet_t, lrn_list);
+
                         r = rnet->lrn_routes.next;
 
-                while (r != &rnet->lrn_routes) {
-                        lnet_route_t *re =
-                                list_entry(r, lnet_route_t,
-                                           lr_list);
+                        while (r != &rnet->lrn_routes) {
+                                lnet_route_t *re = list_entry(r, lnet_route_t,
+                                                              lr_list);
+                                if (skip == 0) {
+                                        route = re;
+                                        break;
+                                } else
+                                        skip--;
 
-                        if (here == off) {
-                                lrsi->lrsi_net = rnet;
-                                lrsi->lrsi_route = re;
-                                rc = 0;
-                                goto out;
+                                r = r->next;
                         }
+
+                        n = n->next;
+                }
+
+                if (route != NULL) {
+                        __u32        net   = rnet->lrn_net;
+                        unsigned int hops  = rnet->lrn_hops;
+                        lnet_nid_t   nid   = route->lr_gateway->lp_nid;
+                        int          alive = route->lr_gateway->lp_alive;
+
+                        s += snprintf(s, tmpstr + tmpsiz - s, "%-8s %4u %7s %s\n",
+                                      libcfs_net2str(net), hops,
+                                      alive ? "up" : "down", libcfs_nid2str(nid));
+                        LASSERT (tmpstr + tmpsiz - s > 0);
+                }
+
+                LNET_UNLOCK();
+        }
+
+        len = s - tmpstr;     /* how many bytes was written */
+
+        if (len > *lenp) {    /* linux-supplied buffer is too small */
+                rc = -EINVAL;
+        } else if (len > 0) { /* wrote something */
+                if (copy_to_user(buffer, tmpstr, len))
+                        rc = -EFAULT;
+                else
+                        *ppos += 1;
+        }
+
+        LIBCFS_FREE(tmpstr, tmpsiz);
+
+        if (rc == 0)
+                *lenp = len;
+
+        return rc;
+}
+
+int LL_PROC_PROTO(proc_lnet_routers)
+{
+        int        rc = 0;
+        char      *tmpstr;
+        char      *s;
+        const int  tmpsiz = 256;
+        int        len;
+        int       *ver_p = (unsigned int *)(&filp->private_data);
+
+        DECLARE_LL_PROC_PPOS_DECL;
+
+        LASSERT (!write);
+
+        if (*lenp == 0)
+                return 0;
+
+        LIBCFS_ALLOC(tmpstr, tmpsiz);
+        if (tmpstr == NULL)
+                return -ENOMEM;
+
+        s = tmpstr; /* points to current position in tmpstr[] */
+
+        if (*ppos == 0) {
+                s += snprintf(s, tmpstr + tmpsiz - s,
+                              "%-4s %7s %9s %6s %12s %s\n",
+                              "ref", "rtr_ref", "alive_cnt", "state",
+                              "last_ping", "router");
+                LASSERT (tmpstr + tmpsiz - s > 0);
+
+                LNET_LOCK();
+                *ver_p = (unsigned int)the_lnet.ln_routers_version;
+                LNET_UNLOCK();
+        } else {
+                struct list_head  *r;
+                lnet_peer_t       *peer = NULL;
+                int                skip = *ppos - 1;
+
+                LNET_LOCK();
+
+                if (*ver_p != (unsigned int)the_lnet.ln_routers_version) {
+                        LNET_UNLOCK();
+                        LIBCFS_FREE(tmpstr, tmpsiz);
+                        return -ESTALE;
+                }
+
+                r = the_lnet.ln_routers.next;
+
+                while (r != &the_lnet.ln_routers) {
+                        lnet_peer_t *lp = list_entry(r, lnet_peer_t,
+                                                     lp_rtr_list);
+
+                        if (skip == 0) {
+                                peer = lp;
+                                        break;
+                                } else
+                                        skip--;
 
                         r = r->next;
-                        here++;
                 }
 
-                r = NULL;
-                n = n->next;
-        }
+                if (peer != NULL) {
+                        int        nrefs     = peer->lp_refcount;
+                        int        nrtrrefs  = peer->lp_rtr_refcount;
+                        int        alive_cnt = peer->lp_alive_count;
+                        int        alive     = peer->lp_alive;
+                        time_t     last_ping = peer->lp_ping_timestamp;
+                        lnet_nid_t nid       = peer->lp_nid;
 
-        lrsi->lrsi_net   = NULL;
-        lrsi->lrsi_route = NULL;
-        rc             = -ENOENT;
- out:
-        LNET_UNLOCK();
-        return rc;
-}
-
-static void *
-lnet_route_seq_start (struct seq_file *s, loff_t *pos)
-{
-        lnet_route_seq_iterator_t *lrsi;
-        int                        rc;
-
-        LIBCFS_ALLOC(lrsi, sizeof(*lrsi));
-        if (lrsi == NULL)
-                return NULL;
-
-        lrsi->lrsi_net = NULL;
-        rc = lnet_route_seq_seek(lrsi, *pos);
-        if (rc == 0)
-                return lrsi;
-
-        LIBCFS_FREE(lrsi, sizeof(*lrsi));
-        return NULL;
-}
-
-static void
-lnet_route_seq_stop (struct seq_file *s, void *iter)
-{
-        lnet_route_seq_iterator_t  *lrsi = iter;
-
-        if (lrsi != NULL)
-                LIBCFS_FREE(lrsi, sizeof(*lrsi));
-}
-
-static void *
-lnet_route_seq_next (struct seq_file *s, void *iter, loff_t *pos)
-{
-        lnet_route_seq_iterator_t *lrsi = iter;
-        int                        rc;
-        loff_t                     next = *pos + 1;
-
-        rc = lnet_route_seq_seek(lrsi, next);
-        if (rc != 0) {
-                LIBCFS_FREE(lrsi, sizeof(*lrsi));
-                return NULL;
-        }
-
-        *pos = next;
-        return lrsi;
-}
-
-static int
-lnet_route_seq_show (struct seq_file *s, void *iter)
-{
-        lnet_route_seq_iterator_t *lrsi = iter;
-        __u32                      net;
-        unsigned int               hops;
-        lnet_nid_t                 nid;
-        int                        alive;
-
-        if (lrsi->lrsi_off == 0) {
-                seq_printf(s, "Routing %s\n",
-                           the_lnet.ln_routing ? "enabled" : "disabled");
-                seq_printf(s, "%-8s %4s %7s %s\n",
-                           "net", "hops", "state", "router");
-                return 0;
-        }
-
-        LASSERT (lrsi->lrsi_net != NULL);
-        LASSERT (lrsi->lrsi_route != NULL);
-
-        LNET_LOCK();
-
-        if (lrsi->lrsi_version != the_lnet.ln_remote_nets_version) {
-                LNET_UNLOCK();
-                return -ESTALE;
-        }
-
-        net   = lrsi->lrsi_net->lrn_net;
-        hops  = lrsi->lrsi_net->lrn_hops;
-        nid   = lrsi->lrsi_route->lr_gateway->lp_nid;
-        alive = lrsi->lrsi_route->lr_gateway->lp_alive;
-
-        LNET_UNLOCK();
-
-        seq_printf(s, "%-8s %4u %7s %s\n", libcfs_net2str(net), hops,
-                   alive ? "up" : "down", libcfs_nid2str(nid));
-        return 0;
-}
-
-static struct seq_operations lnet_routes_sops = {
-        /* start */ lnet_route_seq_start,
-        /* stop */  lnet_route_seq_stop,
-        /* next */  lnet_route_seq_next,
-        /* show */  lnet_route_seq_show,
-};
-
-static int
-lnet_route_seq_open(struct inode *inode, struct file *file)
-{
-        struct proc_dir_entry *dp = PDE(inode);
-        struct seq_file       *sf;
-        int                    rc;
-
-        rc = seq_open(file, &lnet_routes_sops);
-        if (rc == 0) {
-                sf = file->private_data;
-                sf->private = dp->data;
-        }
-
-        return rc;
-}
-
-static struct file_operations lnet_routes_fops;
-
-static void
-lnet_init_routes_fops(void)
-{
-        lnet_routes_fops.owner   =  THIS_MODULE;
-        lnet_routes_fops.llseek  =  seq_lseek;
-        lnet_routes_fops.read    =  seq_read;
-        lnet_routes_fops.open    =  lnet_route_seq_open;
-        lnet_routes_fops.release =  seq_release;
-}
-
-typedef struct {
-        __u64                lrtrsi_version;
-        lnet_peer_t         *lrtrsi_router;
-        loff_t               lrtrsi_off;
-} lnet_router_seq_iterator_t;
-
-int
-lnet_router_seq_seek (lnet_router_seq_iterator_t *lrtrsi, loff_t off)
-{
-        struct list_head  *r;
-        lnet_peer_t       *lp;
-        int                rc;
-        loff_t             here;
-
-        if (off == 0) {
-                lrtrsi->lrtrsi_router = NULL;
-                lrtrsi->lrtrsi_off = 0;
-                return 0;
-        }
-
-        LNET_LOCK();
-
-        lp = lrtrsi->lrtrsi_router;
-
-        if (lp != NULL &&
-            lrtrsi->lrtrsi_version != the_lnet.ln_routers_version) {
-                /* tables have changed */
-                rc = -ESTALE;
-                goto out;
-        }
-
-        if (lp == NULL || lrtrsi->lrtrsi_off > off) {
-                /* search from start */
-                r = the_lnet.ln_routers.next;
-                here = 1;
-        } else {
-                /* continue search */
-                r = &lp->lp_rtr_list;
-                here = lrtrsi->lrtrsi_off;
-        }
-
-        lrtrsi->lrtrsi_version = the_lnet.ln_routers_version;
-        lrtrsi->lrtrsi_off     = off;
-
-        while (r != &the_lnet.ln_routers) {
-                lnet_peer_t *rtr = list_entry(r, 
-                                              lnet_peer_t,
-                                              lp_rtr_list);
-
-                if (here == off) {
-                        lrtrsi->lrtrsi_router = rtr;
-                        rc = 0;
-                        goto out;
+                        s += snprintf(s, tmpstr + tmpsiz - s,
+                                      "%-4d %7d %9d %6s %12lu %s\n",
+                                      nrefs, nrtrrefs,
+                                      alive_cnt, alive ? "up" : "down",
+                                      last_ping, libcfs_nid2str(nid));
+                        LASSERT (tmpstr + tmpsiz - s > 0);
                 }
 
-                r = r->next;
-                here++;
-        }
-
-        lrtrsi->lrtrsi_router = NULL;
-        rc = -ENOENT;
- out:
-        LNET_UNLOCK();
-        return rc;
-}
-
-static void *
-lnet_router_seq_start (struct seq_file *s, loff_t *pos)
-{
-        lnet_router_seq_iterator_t *lrtrsi;
-        int                        rc;
-
-        LIBCFS_ALLOC(lrtrsi, sizeof(*lrtrsi));
-        if (lrtrsi == NULL)
-                return NULL;
-
-        lrtrsi->lrtrsi_router = NULL;
-        rc = lnet_router_seq_seek(lrtrsi, *pos);
-        if (rc == 0)
-                return lrtrsi;
-
-        LIBCFS_FREE(lrtrsi, sizeof(*lrtrsi));
-        return NULL;
-}
-
-static void
-lnet_router_seq_stop (struct seq_file *s, void *iter)
-{
-        lnet_router_seq_iterator_t  *lrtrsi = iter;
-
-        if (lrtrsi != NULL)
-                LIBCFS_FREE(lrtrsi, sizeof(*lrtrsi));
-}
-
-static void *
-lnet_router_seq_next (struct seq_file *s, void *iter, loff_t *pos)
-{
-        lnet_router_seq_iterator_t *lrtrsi = iter;
-        int                        rc;
-        loff_t                     next = *pos + 1;
-
-        rc = lnet_router_seq_seek(lrtrsi, next);
-        if (rc != 0) {
-                LIBCFS_FREE(lrtrsi, sizeof(*lrtrsi));
-                return NULL;
-        }
-
-        *pos = next;
-        return lrtrsi;
-}
-
-static int
-lnet_router_seq_show (struct seq_file *s, void *iter)
-{
-        lnet_router_seq_iterator_t *lrtrsi = iter;
-        lnet_peer_t *lp;
-        lnet_nid_t   nid;
-        int          alive;
-        int          alive_cnt;
-        int          nrefs;
-        int          nrtrrefs;
-        time_t       last_ping;
-
-        if (lrtrsi->lrtrsi_off == 0) {
-                seq_printf(s, "%-4s %7s %9s %6s %12s %s\n",
-                           "ref", "rtr_ref", "alive_cnt", "state", "last_ping", "router");
-                return 0;
-        }
-
-        lp = lrtrsi->lrtrsi_router;
-        LASSERT (lp != NULL);
-
-        LNET_LOCK();
-
-        if (lrtrsi->lrtrsi_version != the_lnet.ln_routers_version) {
                 LNET_UNLOCK();
-                return -ESTALE;
         }
 
-        nid       = lp->lp_nid;
-        alive     = lp->lp_alive;
-        alive_cnt = lp->lp_alive_count;
-        nrefs     = lp->lp_refcount;
-        nrtrrefs  = lp->lp_rtr_refcount;
-        last_ping = lp->lp_ping_timestamp;
+        len = s - tmpstr;     /* how many bytes was written */
 
-        LNET_UNLOCK();
-
-        seq_printf(s,
-                   "%-4d %7d %9d %6s %12lu %s\n", nrefs, nrtrrefs,
-                   alive_cnt, alive ? "up" : "down",
-                   last_ping, libcfs_nid2str(nid));
-        return 0;
-}
-
-static struct seq_operations lnet_routers_sops = {
-        /* start */ lnet_router_seq_start,
-        /* stop */  lnet_router_seq_stop,
-        /* next */  lnet_router_seq_next,
-        /* show */  lnet_router_seq_show,
-};
-
-static int
-lnet_router_seq_open(struct inode *inode, struct file *file)
-{
-        struct proc_dir_entry *dp = PDE(inode);
-        struct seq_file       *sf;
-        int                    rc;
-
-        rc = seq_open(file, &lnet_routers_sops);
-        if (rc == 0) {
-                sf = file->private_data;
-                sf->private = dp->data;
+        if (len > *lenp) {    /* linux-supplied buffer is too small */
+                rc = -EINVAL;
+        } else if (len > 0) { /* wrote something */
+                if (copy_to_user(buffer, tmpstr, len))
+                        rc = -EFAULT;
+                else
+                        *ppos += 1;
         }
+
+        LIBCFS_FREE(tmpstr, tmpsiz);
+
+        if (rc == 0)
+                *lenp = len;
 
         return rc;
 }
 
-static struct file_operations lnet_routers_fops;
+/*
+ * NB: we don't use the highest bit of *ppos because it's signed;
+ *     next 9 bits is used to stash idx (assuming that
+ *     LNET_PEER_HASHSIZE < 512)
+ */
+#define LNET_LOFFT_BITS (sizeof(loff_t) * 8)
+#define LNET_PHASH_BITS 9
+#define LNET_PHASH_IDX_MASK (((1ULL << LNET_PHASH_BITS) - 1) <<               \
+                             (LNET_LOFFT_BITS - LNET_PHASH_BITS - 1))
+#define LNET_PHASH_NUM_MASK ((1ULL <<                                         \
+                              (LNET_LOFFT_BITS - LNET_PHASH_BITS -1)) - 1)
+#define LNET_PHASH_IDX_GET(pos) (int)(((pos) & LNET_PHASH_IDX_MASK) >>  \
+                                      (LNET_LOFFT_BITS - LNET_PHASH_BITS -1))
+#define LNET_PHASH_NUM_GET(pos) (int)((pos) & LNET_PHASH_NUM_MASK)
+#define LNET_PHASH_POS_MAKE(idx, num) ((((loff_t)idx) << (LNET_LOFFT_BITS -   \
+                                                  LNET_PHASH_BITS -1)) | (num))
 
-static void
-lnet_init_routers_fops(void)
+int LL_PROC_PROTO(proc_lnet_peers)
 {
-        lnet_routers_fops.owner   =  THIS_MODULE;
-        lnet_routers_fops.llseek  =  seq_lseek;
-        lnet_routers_fops.read    =  seq_read;
-        lnet_routers_fops.open    =  lnet_router_seq_open;
-        lnet_routers_fops.release =  seq_release;
-}
+        int        rc = 0;
+        char      *tmpstr;
+        char      *s;
+        const int  tmpsiz      = 256;
+        int        len;
+        int       *ver_p       = (unsigned int *)(&filp->private_data);
+        int        idx;
+        int        num;
 
-typedef struct {
-        unsigned long long   lpsi_version;
-        int                  lpsi_idx;
-        lnet_peer_t         *lpsi_peer;
-        loff_t               lpsi_off;
-} lnet_peer_seq_iterator_t;
+        DECLARE_LL_PROC_PPOS_DECL;
 
-int
-lnet_peer_seq_seek (lnet_peer_seq_iterator_t *lpsi, loff_t off)
-{
-        int                idx;
-        struct list_head  *p;
-        loff_t             here;
-        int                rc;
+        idx = LNET_PHASH_IDX_GET(*ppos);
+        num = LNET_PHASH_NUM_GET(*ppos);
 
-        if (off == 0) {
-                lpsi->lpsi_idx = 0;
-                lpsi->lpsi_peer = NULL;
-                lpsi->lpsi_off = 0;
+        CLASSERT ((1 << LNET_PHASH_BITS) > LNET_PEER_HASHSIZE);
+
+        LASSERT (!write);
+
+        if (*lenp == 0)
                 return 0;
-        }
 
-        LNET_LOCK();
+        LIBCFS_ALLOC(tmpstr, tmpsiz);
+        if (tmpstr == NULL)
+                return -ENOMEM;
 
-        if (lpsi->lpsi_peer != NULL &&
-            lpsi->lpsi_version != the_lnet.ln_peertable_version) {
-                /* tables have changed */
-                rc = -ESTALE;
-                goto out;
-        }
+        s = tmpstr; /* points to current position in tmpstr[] */
 
-        if (lpsi->lpsi_peer == NULL ||
-            lpsi->lpsi_off > off) {
-                /* search from start */
-                idx = 0;
-                p = NULL;
-                here = 1;
+        if (*ppos == 0) {
+                s += snprintf(s, tmpstr + tmpsiz - s,
+                              "%-24s %4s %5s %5s %5s %5s %5s %5s %s\n",
+                              "nid", "refs", "state", "max",
+                              "rtr", "min", "tx", "min", "queue");
+                LASSERT (tmpstr + tmpsiz - s > 0);
+
+                LNET_LOCK();
+                *ver_p  = (unsigned int)the_lnet.ln_peertable_version;
+                LNET_UNLOCK();
+
+                num++;
         } else {
-                /* continue search */
-                idx = lpsi->lpsi_idx;
-                p = &lpsi->lpsi_peer->lp_hashlist;
-                here = lpsi->lpsi_off;
-        }
+                struct list_head  *p    = NULL;
+                lnet_peer_t       *peer = NULL;
+                int                skip = num - 1;
 
-        lpsi->lpsi_version = the_lnet.ln_peertable_version;
-        lpsi->lpsi_off     = off;
+                LNET_LOCK();
 
-        while (idx < LNET_PEER_HASHSIZE) {
-                if (p == NULL)
-                        p = the_lnet.ln_peer_hash[idx].next;
+                if (*ver_p != (unsigned int)the_lnet.ln_peertable_version) {
+                        LNET_UNLOCK();
+                        LIBCFS_FREE(tmpstr, tmpsiz);
+                        return -ESTALE;
+                }
 
-                while (p != &the_lnet.ln_peer_hash[idx]) {
-                        lnet_peer_t *lp = list_entry(p, lnet_peer_t,
-                                                     lp_hashlist);
+                while (idx < LNET_PEER_HASHSIZE) {
+                        if (p == NULL)
+                                p = the_lnet.ln_peer_hash[idx].next;
 
-                        if (here == off) {
-                                lpsi->lpsi_idx = idx;
-                                lpsi->lpsi_peer = lp;
-                                rc = 0;
-                                goto out;
+                        while (p != &the_lnet.ln_peer_hash[idx]) {
+                                lnet_peer_t *lp = list_entry(p, lnet_peer_t,
+                                                             lp_hashlist);
+                                if (skip == 0) {
+                                        peer = lp;
+
+                                        /* minor optimiztion: start from idx+1
+                                         * on next iteration if we've just
+                                         * drained lp_hashlist */
+                                        if (lp->lp_hashlist.next ==
+                                            &the_lnet.ln_peer_hash[idx]) {
+                                                num = 1;
+                                                idx++;
+                                        } else
+                                                num++;
+
+                                        break;
+                                } else
+                                        skip--;
+
+                                p = lp->lp_hashlist.next;
                         }
 
-                        here++;
-                        p = lp->lp_hashlist.next;
+                        if (peer != NULL)
+                                break;
+
+                        p = NULL;
+                        num = 1;
+                        idx++;
                 }
 
-                p = NULL;
-                idx++;
-        }
+                if (peer != NULL) {
+                        lnet_nid_t nid       = peer->lp_nid;
+                        int        nrefs     = peer->lp_refcount;
+                        char      *aliveness = "NA";
+                        int        maxcr     = peer->lp_ni->ni_peertxcredits;
+                        int        txcr      = peer->lp_txcredits;
+                        int        mintxcr   = peer->lp_mintxcredits;
+                        int        rtrcr     = peer->lp_rtrcredits;
+                        int        minrtrcr  = peer->lp_minrtrcredits;
+                        int        txqnob    = peer->lp_txqnob;
 
-        lpsi->lpsi_idx  = 0;
-        lpsi->lpsi_peer = NULL;
-        rc              = -ENOENT;
- out:
-        LNET_UNLOCK();
-        return rc;
-}
+                        if (lnet_isrouter(peer) ||
+                            peer->lp_ni->ni_peertimeout > 0)
+                                aliveness = peer->lp_alive ? "up" : "down";
 
-static void *
-lnet_peer_seq_start (struct seq_file *s, loff_t *pos)
-{
-        lnet_peer_seq_iterator_t *lpsi;
-        int                        rc;
+                        s += snprintf(s, tmpstr + tmpsiz - s,
+                                      "%-24s %4d %5s %5d %5d %5d %5d %5d %d\n",
+                                      libcfs_nid2str(nid), nrefs, aliveness,
+                                      maxcr, rtrcr, minrtrcr, txcr,
+                                      mintxcr, txqnob);
+                        LASSERT (tmpstr + tmpsiz - s > 0);
+                }
 
-        LIBCFS_ALLOC(lpsi, sizeof(*lpsi));
-        if (lpsi == NULL)
-                return NULL;
-
-        lpsi->lpsi_idx = 0;
-        lpsi->lpsi_peer = NULL;
-        rc = lnet_peer_seq_seek(lpsi, *pos);
-        if (rc == 0)
-                return lpsi;
-
-        LIBCFS_FREE(lpsi, sizeof(*lpsi));
-        return NULL;
-}
-
-static void
-lnet_peer_seq_stop (struct seq_file *s, void *iter)
-{
-        lnet_peer_seq_iterator_t  *lpsi = iter;
-
-        if (lpsi != NULL)
-                LIBCFS_FREE(lpsi, sizeof(*lpsi));
-}
-
-static void *
-lnet_peer_seq_next (struct seq_file *s, void *iter, loff_t *pos)
-{
-        lnet_peer_seq_iterator_t *lpsi = iter;
-        int                       rc;
-        loff_t                    next = *pos + 1;
-
-        rc = lnet_peer_seq_seek(lpsi, next);
-        if (rc != 0) {
-                LIBCFS_FREE(lpsi, sizeof(*lpsi));
-                return NULL;
-        }
-
-        *pos = next;
-        return lpsi;
-}
-
-static int
-lnet_peer_seq_show (struct seq_file *s, void *iter)
-{
-        lnet_peer_seq_iterator_t *lpsi = iter;
-        char                     *aliveness = "NA";
-        lnet_peer_t              *lp;
-        lnet_nid_t                nid;
-        int                       maxcr;
-        int                       mintxcr;
-        int                       txcr;
-        int                       minrtrcr;
-        int                       rtrcr;
-        int                       txqnob;
-        int                       nrefs;
-
-        if (lpsi->lpsi_off == 0) {
-                seq_printf(s, "%-24s %4s %5s %5s %5s %5s %5s %5s %s\n",
-                           "nid", "refs", "state", "max",
-                           "rtr", "min", "tx", "min", "queue");
-                return 0;
-        }
-
-        LASSERT (lpsi->lpsi_peer != NULL);
-
-        LNET_LOCK();
-
-        if (lpsi->lpsi_version != the_lnet.ln_peertable_version) {
                 LNET_UNLOCK();
-                return -ESTALE;
         }
 
-        lp = lpsi->lpsi_peer;
+        len = s - tmpstr;     /* how many bytes was written */
 
-        nid      = lp->lp_nid;
-        maxcr    = lp->lp_ni->ni_peertxcredits;
-        txcr     = lp->lp_txcredits;
-        mintxcr  = lp->lp_mintxcredits;
-        rtrcr    = lp->lp_rtrcredits;
-        minrtrcr = lp->lp_minrtrcredits;
-        txqnob   = lp->lp_txqnob;
-        nrefs    = lp->lp_refcount;
-
-        if (lnet_isrouter(lp) || lp->lp_ni->ni_peertimeout > 0)
-                aliveness = lp->lp_alive ? "up" : "down";
-
-        LNET_UNLOCK();
-
-        seq_printf(s, "%-24s %4d %5s %5d %5d %5d %5d %5d %d\n",
-                   libcfs_nid2str(nid), nrefs, aliveness,
-                   maxcr, rtrcr, minrtrcr, txcr, mintxcr, txqnob);
-        return 0;
-}
-
-static struct seq_operations lnet_peer_sops = {
-        /* start */ lnet_peer_seq_start,
-        /* stop */  lnet_peer_seq_stop,
-        /* next */  lnet_peer_seq_next,
-        /* show */  lnet_peer_seq_show,
-};
-
-static int
-lnet_peer_seq_open(struct inode *inode, struct file *file)
-{
-        struct proc_dir_entry *dp = PDE(inode);
-        struct seq_file       *sf;
-        int                    rc;
-
-        rc = seq_open(file, &lnet_peer_sops);
-        if (rc == 0) {
-                sf = file->private_data;
-                sf->private = dp->data;
+        if (len > *lenp) {    /* linux-supplied buffer is too small */
+                rc = -EINVAL;
+        } else if (len > 0) { /* wrote something */
+                if (copy_to_user(buffer, tmpstr, len))
+                        rc = -EFAULT;
+                else
+                        *ppos = LNET_PHASH_POS_MAKE(idx, num);
         }
 
-        return rc;
-}
+        LIBCFS_FREE(tmpstr, tmpsiz);
 
-static struct file_operations lnet_peer_fops;
-
-static void
-lnet_init_peer_fops(void)
-{
-        lnet_peer_fops.owner   =  THIS_MODULE;
-        lnet_peer_fops.llseek  =  seq_lseek;
-        lnet_peer_fops.read    =  seq_read;
-        lnet_peer_fops.open    =  lnet_peer_seq_open;
-        lnet_peer_fops.release =  seq_release;
-}
-
-typedef struct {
-        int                  lbsi_idx;
-        loff_t               lbsi_off;
-} lnet_buffer_seq_iterator_t;
-
-int
-lnet_buffer_seq_seek (lnet_buffer_seq_iterator_t *lbsi, loff_t off)
-{
-        int                idx;
-        loff_t             here;
-        int                rc;
-
-        if (off == 0) {
-                lbsi->lbsi_idx = -1;
-                lbsi->lbsi_off = 0;
-                return 0;
-        }
-
-        LNET_LOCK();
-
-        if (lbsi->lbsi_idx < 0 ||
-            lbsi->lbsi_off > off) {
-                /* search from start */
-                idx = 0;
-                here = 1;
-        } else {
-                /* continue search */
-                idx = lbsi->lbsi_idx;
-                here = lbsi->lbsi_off;
-        }
-
-        lbsi->lbsi_off     = off;
-
-        while (idx < LNET_NRBPOOLS) {
-                if (here == off) {
-                        lbsi->lbsi_idx = idx;
-                        rc = 0;
-                        goto out;
-                }
-                here++;
-                idx++;
-        }
-
-        lbsi->lbsi_idx  = -1;
-        rc              = -ENOENT;
- out:
-        LNET_UNLOCK();
-        return rc;
-}
-
-static void *
-lnet_buffer_seq_start (struct seq_file *s, loff_t *pos)
-{
-        lnet_buffer_seq_iterator_t *lbsi;
-        int                        rc;
-
-        LIBCFS_ALLOC(lbsi, sizeof(*lbsi));
-        if (lbsi == NULL)
-                return NULL;
-
-        lbsi->lbsi_idx = -1;
-        rc = lnet_buffer_seq_seek(lbsi, *pos);
         if (rc == 0)
-                return lbsi;
-
-        LIBCFS_FREE(lbsi, sizeof(*lbsi));
-        return NULL;
-}
-
-static void
-lnet_buffer_seq_stop (struct seq_file *s, void *iter)
-{
-        lnet_buffer_seq_iterator_t  *lbsi = iter;
-
-        if (lbsi != NULL)
-                LIBCFS_FREE(lbsi, sizeof(*lbsi));
-}
-
-static void *
-lnet_buffer_seq_next (struct seq_file *s, void *iter, loff_t *pos)
-{
-        lnet_buffer_seq_iterator_t *lbsi = iter;
-        int                         rc;
-        loff_t                      next = *pos + 1;
-
-        rc = lnet_buffer_seq_seek(lbsi, next);
-        if (rc != 0) {
-                LIBCFS_FREE(lbsi, sizeof(*lbsi));
-                return NULL;
-        }
-
-        *pos = next;
-        return lbsi;
-}
-
-static int
-lnet_buffer_seq_show (struct seq_file *s, void *iter)
-{
-        lnet_buffer_seq_iterator_t *lbsi = iter;
-        lnet_rtrbufpool_t          *rbp;
-        int                         npages;
-        int                         nbuf;
-        int                         cr;
-        int                         mincr;
-
-        if (lbsi->lbsi_off == 0) {
-                seq_printf(s, "%5s %5s %7s %7s\n",
-                           "pages", "count", "credits", "min");
-                return 0;
-        }
-
-        LASSERT (lbsi->lbsi_idx >= 0 && lbsi->lbsi_idx < LNET_NRBPOOLS);
-
-        LNET_LOCK();
-
-        rbp = &the_lnet.ln_rtrpools[lbsi->lbsi_idx];
-
-        npages = rbp->rbp_npages;
-        nbuf   = rbp->rbp_nbuffers;
-        cr     = rbp->rbp_credits;
-        mincr  = rbp->rbp_mincredits;
-
-        LNET_UNLOCK();
-
-        seq_printf(s, "%5d %5d %7d %7d\n",
-                   npages, nbuf, cr, mincr);
-        return 0;
-}
-
-static struct seq_operations lnet_buffer_sops = {
-        /* start */ lnet_buffer_seq_start,
-        /* stop */  lnet_buffer_seq_stop,
-        /* next */  lnet_buffer_seq_next,
-        /* show */  lnet_buffer_seq_show,
-};
-
-static int
-lnet_buffer_seq_open(struct inode *inode, struct file *file)
-{
-        struct proc_dir_entry *dp = PDE(inode);
-        struct seq_file       *sf;
-        int                    rc;
-
-        rc = seq_open(file, &lnet_buffer_sops);
-        if (rc == 0) {
-                sf = file->private_data;
-                sf->private = dp->data;
-        }
+                *lenp = len;
 
         return rc;
 }
 
-static struct file_operations lnet_buffers_fops;
-
-static void
-lnet_init_buffers_fops(void)
+static int __proc_lnet_buffers(void *data, int write,
+                               loff_t pos, void *buffer, int nob)
 {
-        lnet_buffers_fops.owner   =  THIS_MODULE;
-        lnet_buffers_fops.llseek  =  seq_lseek;
-        lnet_buffers_fops.read    =  seq_read;
-        lnet_buffers_fops.open    =  lnet_buffer_seq_open;
-        lnet_buffers_fops.release =  seq_release;
-}
 
-typedef struct {
-        lnet_ni_t           *lnsi_ni;
-        loff_t               lnsi_off;
-} lnet_ni_seq_iterator_t;
+        int              rc;
+        int              len;
+        char            *s;
+        char            *tmpstr;
+        const int        tmpsiz = 64 * (LNET_NRBPOOLS + 1); /* (4 %d) * 4 */
+        int              idx;
 
-int
-lnet_ni_seq_seek (lnet_ni_seq_iterator_t *lnsi, loff_t off)
-{
-        struct list_head  *n;
-        loff_t             here;
-        int                rc;
+        LASSERT (!write);
 
-        if (off == 0) {
-                lnsi->lnsi_ni = NULL;
-                lnsi->lnsi_off = 0;
-                return 0;
-        }
+        LIBCFS_ALLOC(tmpstr, tmpsiz);
+        if (tmpstr == NULL)
+                return -ENOMEM;
+
+        s = tmpstr; /* points to current position in tmpstr[] */
+
+        s += snprintf(s, tmpstr + tmpsiz - s,
+                      "%5s %5s %7s %7s\n",
+                      "pages", "count", "credits", "min");
+        LASSERT (tmpstr + tmpsiz - s > 0);
 
         LNET_LOCK();
 
-        if (lnsi->lnsi_ni == NULL ||
-            lnsi->lnsi_off > off) {
-                /* search from start */
-                n = NULL;
-                here = 1;
-        } else {
-                /* continue search */
-                n = &lnsi->lnsi_ni->ni_list;
-                here = lnsi->lnsi_off;
+        for (idx = 0; idx < LNET_NRBPOOLS; idx++) {
+                lnet_rtrbufpool_t *rbp = &the_lnet.ln_rtrpools[idx];
+
+                int npages = rbp->rbp_npages;
+                int nbuf   = rbp->rbp_nbuffers;
+                int cr     = rbp->rbp_credits;
+                int mincr  = rbp->rbp_mincredits;
+
+                s += snprintf(s, tmpstr + tmpsiz - s,
+                              "%5d %5d %7d %7d\n",
+                              npages, nbuf, cr, mincr);
+                LASSERT (tmpstr + tmpsiz - s > 0);
         }
 
-        lnsi->lnsi_off = off;
+        LNET_UNLOCK();
 
-        if (n == NULL)
+        len = s - tmpstr;
+
+        if (pos >= min_t(int, len, strlen(tmpstr)))
+                rc = 0;
+        else
+                rc = trace_copyout_string(buffer, nob,
+                                          tmpstr + pos, NULL);
+
+        LIBCFS_FREE(tmpstr, tmpsiz);
+        return rc;
+}
+
+DECLARE_PROC_HANDLER(proc_lnet_buffers);
+
+int LL_PROC_PROTO(proc_lnet_nis)
+{
+        int        rc = 0;
+        char      *tmpstr;
+        char      *s;
+        const int  tmpsiz = 256;
+        int        len;
+
+        DECLARE_LL_PROC_PPOS_DECL;
+
+        LASSERT (!write);
+
+        if (*lenp == 0)
+                return 0;
+
+        LIBCFS_ALLOC(tmpstr, tmpsiz);
+        if (tmpstr == NULL)
+                return -ENOMEM;
+
+        s = tmpstr; /* points to current position in tmpstr[] */
+
+        if (*ppos == 0) {
+                s += snprintf(s, tmpstr + tmpsiz - s,
+                              "%-24s %4s %4s %4s %5s %5s %5s\n",
+                              "nid", "refs", "peer", "rtr", "max",
+                              "tx", "min");
+                LASSERT (tmpstr + tmpsiz - s > 0);
+        } else {
+                struct list_head  *n;
+                lnet_ni_t         *ni   = NULL;
+                int                skip = *ppos - 1;
+
+                LNET_LOCK();
+
                 n = the_lnet.ln_nis.next;
 
-        while (n != &the_lnet.ln_nis) {
-                if (here == off) {
-                        lnsi->lnsi_ni = list_entry(n, lnet_ni_t, ni_list);
-                        rc = 0;
-                        goto out;
+                while (n != &the_lnet.ln_nis) {
+                        lnet_ni_t *a_ni = list_entry(n, lnet_ni_t, ni_list);
+
+                        if (skip == 0) {
+                                ni = a_ni;
+                                break;
+                        } else
+                                skip--;
+
+                        n = n->next;
                 }
-                here++;
-                n = n->next;
+
+                if (ni != NULL) {
+                        int        maxtxcr = ni->ni_maxtxcredits;
+                        int        txcr = ni->ni_txcredits;
+                        int        mintxcr = ni->ni_mintxcredits;
+                        int        npeertxcr = ni->ni_peertxcredits;
+                        int        npeerrtrcr = ni->ni_peerrtrcredits;
+                        lnet_nid_t nid = ni->ni_nid;
+                        int        nref = ni->ni_refcount;
+
+                        s += snprintf(s, tmpstr + tmpsiz - s,
+                                      "%-24s %4d %4d %4d %5d %5d %5d\n",
+                                      libcfs_nid2str(nid), nref,
+                                      npeertxcr, npeerrtrcr, maxtxcr,
+                                      txcr, mintxcr);
+                        LASSERT (tmpstr + tmpsiz - s > 0);
+                }
+
+                LNET_UNLOCK();
         }
 
-        lnsi->lnsi_ni  = NULL;
-        rc             = -ENOENT;
- out:
-        LNET_UNLOCK();
+        len = s - tmpstr;     /* how many bytes was written */
+
+        if (len > *lenp) {    /* linux-supplied buffer is too small */
+                rc = -EINVAL;
+        } else if (len > 0) { /* wrote something */
+                if (copy_to_user(buffer, tmpstr, len))
+                        rc = -EFAULT;
+                else
+                        *ppos += 1;
+        }
+
+        LIBCFS_FREE(tmpstr, tmpsiz);
+
+        if (rc == 0)
+                *lenp = len;
+
         return rc;
 }
 
-static void *
-lnet_ni_seq_start (struct seq_file *s, loff_t *pos)
-{
-        lnet_ni_seq_iterator_t *lnsi;
-        int                     rc;
-
-        LIBCFS_ALLOC(lnsi, sizeof(*lnsi));
-        if (lnsi == NULL)
-                return NULL;
-
-        lnsi->lnsi_ni = NULL;
-        rc = lnet_ni_seq_seek(lnsi, *pos);
-        if (rc == 0)
-                return lnsi;
-
-        LIBCFS_FREE(lnsi, sizeof(*lnsi));
-        return NULL;
-}
-
-static void
-lnet_ni_seq_stop (struct seq_file *s, void *iter)
-{
-        lnet_ni_seq_iterator_t  *lnsi = iter;
-
-        if (lnsi != NULL)
-                LIBCFS_FREE(lnsi, sizeof(*lnsi));
-}
-
-static void *
-lnet_ni_seq_next (struct seq_file *s, void *iter, loff_t *pos)
-{
-        lnet_ni_seq_iterator_t *lnsi = iter;
-        int                     rc;
-        loff_t                  next = *pos + 1;
-
-        rc = lnet_ni_seq_seek(lnsi, next);
-        if (rc != 0) {
-                LIBCFS_FREE(lnsi, sizeof(*lnsi));
-                return NULL;
-        }
-
-        *pos = next;
-        return lnsi;
-}
-
-static int
-lnet_ni_seq_show (struct seq_file *s, void *iter)
-{
-        lnet_ni_seq_iterator_t *lnsi = iter;
-        lnet_ni_t              *ni;
-        int                     maxtxcr;
-        int                     txcr;
-        int                     mintxcr;
-        int                     npeertxcr;
-        int                     npeerrtrcr;
-        lnet_nid_t              nid;
-        int                     nref;
-
-        if (lnsi->lnsi_off == 0) {
-                seq_printf(s, "%-24s %4s %4s %4s %5s %5s %5s\n",
-                           "nid", "refs", "peer", "rtr", "max", "tx", "min");
-                return 0;
-        }
-
-        LASSERT (lnsi->lnsi_ni != NULL);
-
-        LNET_LOCK();
-
-        ni = lnsi->lnsi_ni;
-
-        maxtxcr    = ni->ni_maxtxcredits;
-        txcr       = ni->ni_txcredits;
-        mintxcr    = ni->ni_mintxcredits;
-        npeertxcr  = ni->ni_peertxcredits;
-        npeerrtrcr = ni->ni_peerrtrcredits;
-        nid        = ni->ni_nid;
-        nref       = ni->ni_refcount;
-
-        LNET_UNLOCK();
-
-        seq_printf(s, "%-24s %4d %4d %4d %5d %5d %5d\n",
-                   libcfs_nid2str(nid), nref,
-                   npeertxcr, npeerrtrcr, maxtxcr, txcr, mintxcr);
-        return 0;
-}
-
-static struct seq_operations lnet_ni_sops = {
-        /* start */ lnet_ni_seq_start,
-        /* stop */  lnet_ni_seq_stop,
-        /* next */  lnet_ni_seq_next,
-        /* show */  lnet_ni_seq_show,
+static cfs_sysctl_table_t lnet_table[] = {
+        /*
+         * NB No .strategy entries have been provided since sysctl(8) prefers
+         * to go via /proc for portability.
+         */
+        {
+                .ctl_name = PSDEV_LNET_STATS,
+                .procname = "stats",
+                .mode     = 0644,
+                .proc_handler = &proc_lnet_stats,
+        },
+        {
+                .ctl_name = PSDEV_LNET_ROUTES,
+                .procname = "routes",
+                .mode     = 0444,
+                .proc_handler = &proc_lnet_routes,
+        },
+        {
+                .ctl_name = PSDEV_LNET_ROUTERS,
+                .procname = "routers",
+                .mode     = 0444,
+                .proc_handler = &proc_lnet_routers,
+        },
+        {
+                .ctl_name = PSDEV_LNET_PEERS,
+                .procname = "peers",
+                .mode     = 0444,
+                .proc_handler = &proc_lnet_peers,
+        },
+        {
+                .ctl_name = PSDEV_LNET_PEERS,
+                .procname = "buffers",
+                .mode     = 0444,
+                .proc_handler = &proc_lnet_buffers,
+        },
+        {
+                .ctl_name = PSDEV_LNET_NIS,
+                .procname = "nis",
+                .mode     = 0444,
+                .proc_handler = &proc_lnet_nis,
+        },
+        {0}
 };
 
-static int
-lnet_ni_seq_open(struct inode *inode, struct file *file)
-{
-        struct proc_dir_entry *dp = PDE(inode);
-        struct seq_file       *sf;
-        int                    rc;
-
-        rc = seq_open(file, &lnet_ni_sops);
-        if (rc == 0) {
-                sf = file->private_data;
-                sf->private = dp->data;
+static cfs_sysctl_table_t top_table[] = {
+        {
+                .ctl_name = CTL_LNET,
+                .procname = "lnet",
+                .mode     = 0555,
+                .data     = NULL,
+                .maxlen   = 0,
+                .child    = lnet_table,
+        },
+        {
+                .ctl_name = 0
         }
-
-        return rc;
-}
-
-static struct file_operations lnet_ni_fops;
-
-static void
-lnet_init_ni_fops(void)
-{
-        lnet_ni_fops.owner   =  THIS_MODULE;
-        lnet_ni_fops.llseek  =  seq_lseek;
-        lnet_ni_fops.read    =  seq_read;
-        lnet_ni_fops.open    =  lnet_ni_seq_open;
-        lnet_ni_fops.release =  seq_release;
-}
+};
 
 void
 lnet_proc_init(void)
 {
-        struct proc_dir_entry *pde;
-
-#if 0
-        pde = proc_mkdir(LNET_PROC_ROOT, NULL);
-        if (pde == NULL) {
-                CERROR("couldn't create "LNET_PROC_ROOT"\n");
-                return; 
-        }
+#ifdef CONFIG_SYSCTL
+        if (lnet_table_header == NULL)
+                lnet_table_header = cfs_register_sysctl_table(top_table, 0);
 #endif
-        /* Initialize LNET_PROC_STATS */
-        pde = create_proc_entry (LNET_PROC_STATS, 0644, NULL);
-        if (pde == NULL) {
-                CERROR("couldn't create proc entry %s\n", LNET_PROC_STATS);
-                return;
-        }
-
-        pde->data = NULL;
-        pde->read_proc = lnet_router_proc_stats_read;
-        pde->write_proc = lnet_router_proc_stats_write;
-
-        /* Initialize LNET_PROC_ROUTES */
-        pde = create_proc_entry (LNET_PROC_ROUTES, 0444, NULL);
-        if (pde == NULL) {
-                CERROR("couldn't create proc entry %s\n", LNET_PROC_ROUTES);
-                return;
-        }
-
-        lnet_init_routes_fops();
-        pde->proc_fops = &lnet_routes_fops;
-        pde->data = NULL;
-
-        /* Initialize LNET_PROC_ROUTERS */
-        pde = create_proc_entry (LNET_PROC_ROUTERS, 0444, NULL);
-        if (pde == NULL) {
-                CERROR("couldn't create proc entry %s\n", LNET_PROC_ROUTERS);
-                return;
-        }
-
-        lnet_init_routers_fops();
-        pde->proc_fops = &lnet_routers_fops;
-        pde->data = NULL;
-
-        /* Initialize LNET_PROC_PEERS */
-        pde = create_proc_entry (LNET_PROC_PEERS, 0444, NULL);
-        if (pde == NULL) {
-                CERROR("couldn't create proc entry %s\n", LNET_PROC_PEERS);
-                return;
-        }
-
-        lnet_init_peer_fops();
-        pde->proc_fops = &lnet_peer_fops;
-        pde->data = NULL;
-
-        /* Initialize LNET_PROC_BUFFERS */
-        pde = create_proc_entry (LNET_PROC_BUFFERS, 0444, NULL);
-        if (pde == NULL) {
-                CERROR("couldn't create proc entry %s\n", LNET_PROC_BUFFERS);
-                return;
-        }
-
-        lnet_init_buffers_fops();
-        pde->proc_fops = &lnet_buffers_fops;
-        pde->data = NULL;
-
-        /* Initialize LNET_PROC_NIS */
-        pde = create_proc_entry (LNET_PROC_NIS, 0444, NULL);
-        if (pde == NULL) {
-                CERROR("couldn't create proc entry %s\n", LNET_PROC_NIS);
-                return;
-        }
-
-        lnet_init_ni_fops();
-        pde->proc_fops = &lnet_ni_fops;
-        pde->data = NULL;
 }
 
 void
 lnet_proc_fini(void)
 {
-        remove_proc_entry(LNET_PROC_STATS, 0);
-        remove_proc_entry(LNET_PROC_ROUTES, 0);
-        remove_proc_entry(LNET_PROC_ROUTERS, 0);
-        remove_proc_entry(LNET_PROC_PEERS, 0);
-        remove_proc_entry(LNET_PROC_BUFFERS, 0);
-        remove_proc_entry(LNET_PROC_NIS, 0);
-#if 0   
-        remove_proc_entry(LNET_PROC_ROOT, 0);
+#ifdef CONFIG_SYSCTL
+        if (lnet_table_header != NULL)
+                cfs_unregister_sysctl_table(lnet_table_header);
+
+        lnet_table_header = NULL;
 #endif
 }
 

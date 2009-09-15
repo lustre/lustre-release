@@ -17,6 +17,11 @@ Bugzilla   :
 Description: 
 Details    : 
 
+Severity   : normal
+Bugzilla   : 18102
+Description: router_proc.c is rewritten to use sysctl-interface for parameters
+             residing in /proc/sys/lnet
+
 Severity   : enhancement
 Bugzilla   : 13065
 Description: port router pinger to userspace

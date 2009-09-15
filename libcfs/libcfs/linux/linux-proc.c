@@ -128,7 +128,7 @@ enum {
 #endif
 
 
-static int
+int
 proc_call_handler(void *data, int write,
                   loff_t *ppos, void *buffer, size_t *lenp,
                   int (*handler)(void *data, int write,

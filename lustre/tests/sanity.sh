@@ -6858,6 +6858,101 @@ test_214() { # for bug 20133
 }
 run_test 214 "hash-indexed directory test - bug 20133"
 
+test_215() { # for bug 18102
+	# /proc/sys/lnet/stats should look as 11 space-separated numbers
+	cat /proc/sys/lnet/stats >$TMP/lnet_stats.out
+	sysctl lnet.stats |sed 's/^lnet.stats\ =\ //g' >$TMP/lnet_stats.sys
+	STATS_LINES_OUT=$(cat $TMP/lnet_stats.out|wc -l)
+	[ "$STATS_LINES_OUT" = 1 ] || error "/proc/sys/lnet/stats has more than 1 line: $STATS"
+	STATS_LINES_SYS=$(cat $TMP/lnet_stats.sys|wc -l)
+	[ "$STATS_LINES_SYS" = 1 ] || error "lnet.stats has more than 1 line: $STATS"
+	STATS_REG='^[0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+$'
+	grep "$STATS_REG" $TMP/lnet_stats.out || (cat $TMP/lnet_stats.out && 
+						  error "/proc/sys/lnet/stats misformatted")
+	grep "$STATS_REG" $TMP/lnet_stats.sys || (cat $TMP/lnet_stats.sys && 
+						  error "lnet.stats misformatted")
+	rm -f $TMP/lnet_stats.out $TMP/lnet_stats.sys
+
+	# /proc/sys/lnet/routes should look exactly as expected
+	cat /proc/sys/lnet/routes >$TMP/lnet_routes.out
+	sysctl lnet.routes |sed 's/^lnet.routes\ =\ //g' >$TMP/lnet_routes.sys
+	echo "Routing disabled" >$TMP/lnet_routes.expected
+	echo "net      hops   state router" >>$TMP/lnet_routes.expected
+	diff $TMP/lnet_routes.expected $TMP/lnet_routes.out ||
+		error "/proc/sys/lnet/routes does not look as expected"
+	diff $TMP/lnet_routes.expected $TMP/lnet_routes.sys ||
+		error "lnet.routes does not look as expected"
+	rm -f $TMP/lnet_routes.expected $TMP/lnet_routes.out $TMP/lnet_routes.sys
+
+	# /proc/sys/lnet/routers should look exactly as expected
+	cat /proc/sys/lnet/routers >$TMP/lnet_routers.out
+	sysctl lnet.routers |sed 's/^lnet.routers\ =\ //g' >$TMP/lnet_routers.sys
+	echo "ref  rtr_ref alive_cnt  state    last_ping router" >$TMP/lnet_routers.expected
+	diff $TMP/lnet_routers.expected $TMP/lnet_routers.out ||
+		error "/proc/sys/lnet/routers does not look as expected"
+	diff $TMP/lnet_routers.expected $TMP/lnet_routers.sys ||
+		error "lnet.routers does not look as expected"
+	rm -f $TMP/lnet_routers.expected $TMP/lnet_routers.out $TMP/lnet_routers.sys
+
+	# fisrt line of /proc/sys/lnet/peers should look exactly as expected
+	cat /proc/sys/lnet/peers >$TMP/lnet_peers.out
+	sysctl lnet.peers |sed 's/^lnet.peers\ =\ //g' >$TMP/lnet_peers.sys
+	head -1 $TMP/lnet_peers.out > $TMP/lnet_peers1.out
+	echo "nid                      refs state   max   rtr   min    tx   min queue" >$TMP/lnet_peers1.expected
+	diff $TMP/lnet_peers1.expected $TMP/lnet_peers1.out ||
+		error "first line of /proc/sys/lnet/peers does not look as expected"
+	rm -f $TMP/lnet_peers1.expected $TMP/lnet_peers1.out
+	# other lines should look as a nid followed by 1 number, a word, 6 numbers, e.g.:
+	# 0@lo                        1    NA     0     0     0     0     0 0
+	TOTAL_LINES=$(cat $TMP/lnet_peers.out |wc -l)
+	OTHER_LINES=$(($TOTAL_LINES - 1))
+	MATCHED_LINES=$(cat $TMP/lnet_peers.out |tail -$TOTAL_LINES |
+			grep -c "^[0-9.]\+@[a-z0-9]\+ *[0-9]\+ *[a-Z]\+ *[0-9]\+ *[0-9]\+ *[0-9]\+ *[0-9]\+ *[0-9]\+ *[0-9]\+$")
+	[ "$MATCHED_LINES" = "$OTHER_LINES" ] || (cat $TMP/lnet_peers.out && 
+						  error "/proc/sys/lnet/peers misformatted")
+	diff $TMP/lnet_peers.out $TMP/lnet_peers.sys ||
+		error "lnet.peers does not look as expected"
+	rm -f $TMP/lnet_peers.out $TMP/lnet_peers.sys
+
+	# /proc/sys/lnet/buffers should look exactly as expected
+	cat /proc/sys/lnet/buffers >$TMP/lnet_buffers.out
+	sysctl lnet.buffers |sed 's/^lnet.buffers\ =\ //g' >$TMP/lnet_buffers.sys
+	echo "pages count credits     min" >$TMP/lnet_buffers.expected
+	echo "    0     0       0       0" >>$TMP/lnet_buffers.expected
+	echo "    1     0       0       0" >>$TMP/lnet_buffers.expected
+	echo "  256     0       0       0" >>$TMP/lnet_buffers.expected
+	diff $TMP/lnet_buffers.expected $TMP/lnet_buffers.out ||
+		error "/proc/sys/lnet/buffers does not look as expected"
+	diff $TMP/lnet_buffers.expected $TMP/lnet_buffers.sys ||
+		error "lnet.buffers does not look as expected"
+	rm -f $TMP/lnet_buffers.expected $TMP/lnet_buffers.out $TMP/lnet_buffers.sys
+
+	# fisrt line of /proc/sys/lnet/nis should look exactly as expected
+	cat /proc/sys/lnet/nis >$TMP/lnet_nis.out
+	sysctl lnet.nis |sed 's/^lnet.nis\ =\ //g' >$TMP/lnet_nis.sys
+	head -1 $TMP/lnet_nis.out > $TMP/lnet_nis1.out
+	echo "nid                      refs peer  rtr   max    tx   min" >$TMP/lnet_nis1.expected
+	diff $TMP/lnet_nis1.expected $TMP/lnet_nis1.out ||
+		error "first line of /proc/sys/lnet/nis does not look as expected"
+	rm -f $TMP/lnet_nis1.expected $TMP/lnet_nis1.out
+	# other lines should look as a nid followed by 6 numbers, e.g.:
+	# 0@lo                        3    0    0     0     0     0
+	TOTAL_LINES=$(cat $TMP/lnet_nis.out |wc -l)
+	OTHER_LINES=$(($TOTAL_LINES - 1))
+	MATCHED_LINES=$(cat $TMP/lnet_nis.out |tail -$TOTAL_LINES |
+		grep -c "^[0-9.]\+@[a-z0-9]\+ *[0-9]\+ *[0-9]\+ *[0-9]\+ *[0-9]\+ *[0-9]\+ *[0-9]\+$")
+	[ "$MATCHED_LINES" = "$OTHER_LINES" ] || (cat $TMP/lnet_nis.out && 
+						  error "/proc/sys/lnet/nis misformatted")
+	diff $TMP/lnet_nis.out $TMP/lnet_nis.sys ||
+		error "lnet.nis does not look as expected"
+	rm -f $TMP/lnet_nis.out $TMP/lnet_nis.sys
+
+	# can we successfully write to /proc/sys/lnet/stats?
+	echo "0" >/proc/sys/lnet/stats || error "cannot write to /proc/sys/lnet/stats"
+	sysctl -w lnet.stats=0 || error "cannot write to lnet.stats"
+}
+run_test 215 "/proc/sys/lnet exists and has proper content - bug 18102"
+
 #
 # tests that do cleanup/setup should be run at the end
 #
