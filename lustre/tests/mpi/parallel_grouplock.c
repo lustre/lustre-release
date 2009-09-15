@@ -960,8 +960,7 @@ void usage(char *proc)
 
 int main(int argc, char *argv[])
 {
-        char c;
-        int i, iterations = 1;
+        int i, iterations = 1, c;
 
         setbuf(stdout, 0);
         setbuf(stderr, 0);

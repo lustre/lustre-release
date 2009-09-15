@@ -2310,7 +2310,7 @@ static int lfs_changelog(int argc, char **argv)
         void *changelog_priv;
         struct changelog_rec *rec;
         long long startrec = 0, endrec = 0;
-        char c, *mdd;
+        char *mdd;
         struct option long_opts[] = {
                 {"follow", no_argument, 0, 'f'},
                 {0, 0, 0, 0}
@@ -2319,9 +2319,9 @@ static int lfs_changelog(int argc, char **argv)
         int rc, follow = 0;
 
         optind = 0;
-        while ((c = getopt_long(argc, argv, short_opts,
+        while ((rc = getopt_long(argc, argv, short_opts,
                                 long_opts, NULL)) != -1) {
-                switch (c) {
+                switch (rc) {
                 case 'f':
                         follow++;
                         break;
@@ -2400,7 +2400,7 @@ static int lfs_fid2path(int argc, char **argv)
                 {"rec", required_argument, 0, 'r'},
                 {0, 0, 0, 0}
         };
-        char c, short_opts[] = "cl:r:";
+        char  short_opts[] = "cl:r:";
         char *device, *fid, *path;
         long long recno = -1;
         int linkno = -1;
@@ -2409,9 +2409,10 @@ static int lfs_fid2path(int argc, char **argv)
         int rc;
 
         optind = 0;
-        while ((c = getopt_long(argc, argv, short_opts,
+
+        while ((rc = getopt_long(argc, argv, short_opts,
                                 long_opts, NULL)) != -1) {
-                switch (c) {
+                switch (rc) {
                 case 'c':
                         printcur++;
                         break;
@@ -2429,7 +2430,6 @@ static int lfs_fid2path(int argc, char **argv)
                         return CMD_HELP;
                 }
         }
-
         device = argv[optind++];
         fid = argv[optind++];
         if (optind != argc)

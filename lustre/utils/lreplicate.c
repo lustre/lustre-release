@@ -1477,7 +1477,6 @@ termination_handler (int signum)
 
 int main(int argc, char *argv[])
 {
-        char c;
         int newsize;
         int numtargets = 0;
         int rc = 0;
@@ -1485,9 +1484,9 @@ int main(int argc, char *argv[])
         if ((rc = lr_init_status()) != 0)
                 return rc;
 
-        while ((c = getopt_long(argc, argv, "as:t:m:u:l:vx:zc:ry:n:d:",
+        while ((rc = getopt_long(argc, argv, "as:t:m:u:l:vx:zc:ry:n:d:",
                                 long_opts, NULL)) >= 0) {
-                switch (c) {
+                switch (rc) {
                 case 'a':
                         /* Assume absolute paths */
                         abort_on_err++;

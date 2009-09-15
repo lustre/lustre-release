@@ -244,7 +244,7 @@ int llapi_file_lookup(int dirfd, const char *name)
 static void
 process_args(int argc, char *argv[])
 {
-        char   c, *cp, *endptr;
+        char   *cp, *endptr;
         int    i, index, offset, tmpend, rc;
         char   tmp[16];
         FILE * seed_file;
@@ -263,8 +263,8 @@ process_args(int argc, char *argv[])
                         *++cp = ':';
         }
 
-        while ((c = getopt_long(argc,argv, shortOpts, longOpts,&index)) != -1) {
-                switch (c) {
+        while ((rc = getopt_long(argc,argv, shortOpts, longOpts,&index)) != -1) {
+                switch (rc) {
                 case OPEN:
                         openflags &= ~(O_CREAT|O_EXCL);
                 case CREATE:
@@ -279,7 +279,7 @@ process_args(int argc, char *argv[])
                                            "specified: --%s\n",
                                         longOpts[index].name);
                         }
-                        mode = c;
+                        mode = rc;
                         cmd = (char *)longOpts[index].name;
                         break;
                 case NOEXCL:
@@ -404,7 +404,7 @@ process_args(int argc, char *argv[])
                                          "--lookup, --open, or --stat.\n",
                                       (char *)longOpts[index].name);
                         }
-                        order = c;
+                        order = rc;
                         break;
                 case IGNORE:
                         ++ignore;
