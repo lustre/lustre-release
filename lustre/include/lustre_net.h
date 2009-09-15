@@ -367,7 +367,6 @@ struct ptlrpc_request {
                 rq_fake:1,          /* this fake req */
                 /* server-side flags */
                 rq_packed_final:1,  /* packed final reply */
-                rq_sent_final:1,    /* stop sending early replies */
                 rq_hp:1,            /* high priority RPC */
                 rq_at_linked:1;     /* link into service's srv_at_array */
 
@@ -492,6 +491,7 @@ struct ptlrpc_request {
         struct ptlrpc_request_pool *rq_pool;    /* Pool if request from
                                                    preallocated list */
         struct lu_context           rq_session;
+        struct lu_context           rq_recov_session;
 
         /* request format */
         struct req_capsule          rq_pill;
@@ -1065,6 +1065,7 @@ int liblustre_check_services (void *arg);
 void ptlrpc_daemonize(char *name);
 int ptlrpc_service_health_check(struct ptlrpc_service *);
 void ptlrpc_hpreq_reorder(struct ptlrpc_request *req);
+void ptlrpc_server_drop_request(struct ptlrpc_request *req);
 
 #ifdef __KERNEL__
 int ptlrpc_hr_init(void);
