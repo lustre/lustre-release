@@ -172,7 +172,7 @@ case "$lustretag" in
         lustretag="HEAD"
         ;;
 
-    b_hd_lnet_smp)
+    b_hd_smp)
         # LNet grained locking and SMP improvement branch
         libcfstag="b_hd_libcfs_smp"
         lnettag="b_hd_lnet_smp"
