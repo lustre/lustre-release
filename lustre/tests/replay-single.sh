@@ -484,7 +484,8 @@ test_20b() { # bug 10480
     # orphan cleanup. Wait for llogs to get synchronized.
     echo waiting for orphan cleanup...
     while [ true ]; do
-            local -a sync=($(do_facet ost "$LCTL get_param obdfilter.*.mds_sync" | awk -F= ' {print $2}'))
+            local -a sync=($(do_nodes $(comma_list $(osts_nodes)) \
+                "$LCTL get_param obdfilter.*.mds_sync" | awk -F= ' {print $2}'))
             local con=1
             for ((i=0; i<${#sync[@]}; i++)); do
                     [ ${sync[$i]} -eq 0 ] && continue
