@@ -15,44 +15,8 @@ tbd Sun Microsystems, Inc.
 	  more information, please refer to bugzilla 17630.
 
 Severity   : enhancement
-Bugzilla   : 20400
-Description: Update kernel to RHEL5 2.6.18-128.7.1.el5.
-
-Severity   : enhancement
-Bugzilla   : 20758
-Description: Update kernel to SLES10 SP2 2.6.16.60-0.42.4.
-
-Severity   : enhancement
 Bugzilla   : 20200
 Description: Added sanity-quota test to for lfs(1) to work with numeric uid/gid.
-
-Severity   : major
-Bugzilla   : 20560
-Description: File checksum failures with OST read cache on
-Details    : Clear page cache's uptodate bit when its contents are cleared.
-
-Severity   : normal
-Bugzilla   : 20533
-Description: Changes in raid5-large-io-rhel5.patch to calculate sectors properly
-
-Severity   : normal
-Bugzilla   : 20533
-Description: Increase the default BLK_DEF_MAX_SECTORS value for RHEL5 and SLES11
-
-Severity   : normal
-Bugzilla   : 20482
-Description: Error handling in osc_statfs_interpret() has been improved.
-Details    : Check in osc_statfs_interpret() for EBADR.
-
-Severity   : normal
-Bugzilla   : 20482
-Description: Do not send statfs() requests to OSTs disabled by administrator.
-Details    : Check in lov_prep_statfs_set() for non-NULL ltd_exp.
-
-Severity   : normal
-Bugzilla   : 20146
-Description: Do not update ctime for the deleted inode.
-Details    : Check in mds_reint_unlink() before calling fsfilt_setattr().
 
 Severity   : normal
 Bugzilla   : 14951
@@ -64,24 +28,6 @@ Description: Prevent inconsistences between linux and lustre mount structures.
 Details    : Wait indefinitely in server_wait_finished() until mnt_count drops.
 	     Make the sleep interruptible.
 
-Severity   : normal
-Bugzilla   : 20146
-Description: Increase of the size of the LDLM resource hash.
-Details    : Bump up RES_HASH_BITS=12.
-
-Severity   : normal
-Bugzilla   : 19934
-Description: correctly send lsm on open replay
-Details    : MDS is trust to LSM size on replay open, but client can set wrong size
-	     to lsm buffer.
-
-Severity   : normal
-Bugzilla   : 20008
-Description: truncate starts GFP_FS allocation under transaction causing deadlock
-Details    : ldiskfs_truncate calls grab_cache_page which may start page
-	     allocation under an open transaction. This may lead to
-	     calling prune_icache with consequent lustre reentrance.
-
 Severity   : enhancement
 Bugzilla   : 20200
 Description: Enhancement for lfs(1) command to use numeric uid/gid.
@@ -92,15 +38,6 @@ Description: Do not start bulk transfer, if client tried to reconnect.
 Details    : Do not start bulk transfer, if client tried to reconnect,
 	     but failed due to active rpcs. Check for exp_abort_active_req
 	     has been implemented.
-
-Severity   : normal
-Bugzilla   : 20321
-Description: Deadlock between filter_destroy() and filter_commitrw_write().
-Details    : filter_destroy() does not hold the DLM lock over the whole
-	     operation. If the DLM lock is dropped, filter_commitrw() can go
-	     through, causing the deadlock between page lock and i_mutex.
-	     The i_alloc_sem should also be hold in filter_destroy() while
-	     truncating the file.
 
 Severity   : enhancement
 Bugzilla   : 18539
@@ -225,6 +162,88 @@ Details    : In filter_commitrw_write():
 	     lquota_chkquota() and lquota_pending_commit() to use
 	     different uid and gid. That is the root of the bug.
 
+
+------------------------------------------------------------------------------
+TBD Sun Microsystems, Inc.
+	* version 1.8.1.1
+	* Support for kernels:
+	 2.6.16.60-0.42.4 (SLES 10),
+	 2.6.27.23-0.1 (SLES11, i686 & x84_64 only),
+	 2.6.18-128.7.1.el5 (RHEL 5),
+	* Client support for unpatched kernels:
+	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
+	  2.6.16 - 2.6.27 vanilla (kernel.org)
+	* Recommended e2fsprogs version: 1.41.6.sun1
+	* File join has been disabled in this release, refer to Bugzilla 16929.
+	* NFS export disabled when stack size < 8192. Since the NFSv4 export
+	  of Lustre filesystem with 4K stack may cause a stack overflow. For
+	  more information, please refer to bugzilla 17630.
+	* ext4 support for RHEL5 is experimental and thus should not be
+	  used in production.
+
+Severity   : enhancement
+Bugzilla   : 20400
+Description: Update kernel to RHEL5 2.6.18-128.7.1.el5.
+
+Severity   : enhancement
+Bugzilla   : 20758
+Description: Update kernel to SLES10 SP2 2.6.16.60-0.42.4.
+
+Severity   : major
+Bugzilla   : 20560
+Description: File checksum failures with OST read cache on
+Details    : Clear page cache's uptodate bit when its contents are cleared.
+
+Severity   : normal
+Bugzilla   : 20533
+Description: Changes in raid5-large-io-rhel5.patch to calculate sectors properly
+
+Severity   : normal
+Bugzilla   : 20533
+Description: Increase the default BLK_DEF_MAX_SECTORS value for RHEL5 and SLES11
+
+Severity   : normal
+Bugzilla   : 20482
+Description: Error handling in osc_statfs_interpret() has been improved.
+Details    : Check in osc_statfs_interpret() for EBADR.
+
+Severity   : normal
+Bugzilla   : 20482
+Description: Do not send statfs() requests to OSTs disabled by administrator.
+Details    : Check in lov_prep_statfs_set() for non-NULL ltd_exp.
+
+Severity   : normal
+Bugzilla   : 20146
+Description: Do not update ctime for the deleted inode.
+Details    : Check in mds_reint_unlink() before calling fsfilt_setattr().
+
+Severity   : normal
+Bugzilla   : 20146
+Description: Increase of the size of the LDLM resource hash.
+Details    : Bump up RES_HASH_BITS=12.
+
+Severity   : normal
+Bugzilla   : 19934
+Description: correctly send lsm on open replay
+Details    : MDS is trust to LSM size on replay open, but client can set wrong size
+	     of lsm buffer.
+
+Severity   : normal
+Bugzilla   : 20321
+Description: Deadlock between filter_destroy() and filter_commitrw_write().
+Details    : filter_destroy() does not hold the DLM lock over the whole
+	     operation. If the DLM lock is dropped, filter_commitrw() can go
+	     through, causing the deadlock between page lock and i_mutex.
+	     The i_alloc_sem should also be hold in filter_destroy() while
+	     truncating the file.
+
+Severity   : normal
+Bugzilla   : 20008
+Description: truncate starts GFP_FS allocation under transaction causing deadlock
+Details    : ldiskfs_truncate calls grab_cache_page which may start page
+	     allocation under an open transaction. This may lead to
+	     calling prune_icache with consequent lustre reentrance.
+
 Severity   : normal
 Frequency  : only when down/upgrading the MDS to 1.6/1.8 while 1.8 clients are
 	     still up and when the OST pool feature is used
@@ -239,6 +258,12 @@ Severity   : normal
 Bugzilla   : 20550
 Description: missing tree_status on 1.8.1 RPM build
 Details    : make rpms failed due because the tree_status file is missing.
+
+Severity   : normal
+Bugzilla   : 19551
+Description: continuing LustreError "mds adjust qunit failed!"
+Details    : don't print message on the console when ->adjust_qunit fails.
+
 
 ------------------------------------------------------------------------------
 2009-07-31 Sun Microsystems, Inc.
