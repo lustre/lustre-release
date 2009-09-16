@@ -95,8 +95,8 @@ create_file() {
 osts_in_pool() {
     local pool=$1
     local res
-    for i in $(do_facet mds lctl pool_list $FSNAME.$pool | grep -v "^Pool:" \
-        | sed -e 's/_UUID$//;s/^.*-OST//'); do
+    for i in $(do_facet $SINGLEMDS lctl pool_list $FSNAME.$pool | \
+        grep -v "^Pool:" | sed -e 's/_UUID$//;s/^.*-OST//'); do
       res="$res $(printf "%d" 0x$i)"
     done
     echo $res
@@ -160,7 +160,8 @@ check_file_not_in_pool() {
 check_dir_not_in_pool() {
     local dir=$1
     local pool=$2
-    local res=$($GETSTRIPE -v $dir | grep "^stripe_count" | head -1 | cut -f 8 -d ' ')
+    local res=$($GETSTRIPE -v $dir | grep "^stripe_count" | head -1 | \
+        cut -f 8 -d ' ')
     if [[ "$res" == "$pool" ]]; then
         error "File $dir is in pool: $res"
         return 1
@@ -170,7 +171,7 @@ check_dir_not_in_pool() {
 }
 
 create_pool() {
-    do_facet mds lctl pool_new $FSNAME.$1
+    do_facet $SINGLEMDS lctl pool_new $FSNAME.$1
     local RC=$?
     # get param should return err until pool is created
     [[ $RC -ne 0 ]] && return $RC
@@ -188,18 +189,19 @@ drain_pool() {
 }
 
 destroy_pool_int() {
-      OSTS=$(do_facet mds lctl pool_list $1 | awk '$1 !~ /^Pool:/ {print $1}')
+      OSTS=$(do_facet $SINGLEMDS lctl pool_list $1 | \
+          awk '$1 !~ /^Pool:/ {print $1}')
       for ost in $OSTS
       do
-        do_facet mds lctl pool_remove $1 $ost
+        do_facet $SINGLEMDS lctl pool_remove $1 $ost
       done
-      do_facet mds lctl pool_destroy $1
+      do_facet $SINGLEMDS lctl pool_destroy $1
 }
 
 destroy_pool() {
     local RC
 
-    do_facet mds lctl pool_list $FSNAME.$1
+    do_facet $SINGLEMDS lctl pool_list $FSNAME.$1
     RC=$?
     [[ $RC -ne 0 ]] && return $RC
 
@@ -214,13 +216,15 @@ destroy_pool() {
 add_pool() {
     local pool=$1
     local osts=$2
-    local tgt="${3}$(lctl get_param -n lov.$FSNAME-*.pools.$pool | sort -u | tr '\n' ' ')"
+    local tgt="${3}$(lctl get_param -n lov.$FSNAME-*.pools.$pool | \
+        sort -u | tr '\n' ' ')"
 
-    do_facet mds lctl pool_add $FSNAME.$pool $osts
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.$pool $osts
     local RC=$?
     [[ $RC -ne 0 ]] && return $RC
 
-    wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$pool | sort -u | tr '\n' ' ' " "$tgt" || RC=1
+    wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$pool | \
+        sort -u | tr '\n' ' ' " "$tgt" || RC=1
     [[ $RC -ne 0 ]] && error "pool_add failed: $1; $2"
     return $RC
 }
@@ -243,7 +247,8 @@ create_pool_fail() {
 
 cleanup_tests() {
     # Destroy pools from previous test runs
-    for p in $(do_facet mds lctl pool_list $FSNAME | grep $FSNAME.pool[0-$OSTCOUNT]); do
+    for p in $(do_facet $SINGLEMDS lctl pool_list $FSNAME | \
+      grep $FSNAME.pool[0-$OSTCOUNT]); do
         destroy_pool_int $p;
     done
     rm -rf $DIR/d0.${TESTSUITE}
@@ -282,27 +287,27 @@ test_1() {
     create_pool_fail $NAME
 
     echo "pool_new should fail if fs-name or poolname are missing."
-    do_facet mds lctl pool_new .pool1
+    do_facet $SINGLEMDS lctl pool_new .pool1
     [[ $? -ne 0 ]] || \
         error "pool_new did not fail even though fs-name was missing."
-    do_facet mds lctl pool_new pool1
+    do_facet $SINGLEMDS lctl pool_new pool1
     [[ $? -ne 0 ]] || \
         error "pool_new did not fail even though fs-name was missing."
-    do_facet mds lctl pool_new ${FSNAME}.
+    do_facet $SINGLEMDS lctl pool_new ${FSNAME}.
     [[ $? -ne 0 ]] || \
         error "pool_new did not fail even though pool name was missing."
-    do_facet mds lctl pool_new .
+    do_facet $SINGLEMDS lctl pool_new .
     [[ $? -ne 0 ]] || \
         error "pool_new did not fail even though pool name and fs-name " \
             "were missing."
-    do_facet mds lctl pool_new ${FSNAME},pool1
+    do_facet $SINGLEMDS lctl pool_new ${FSNAME},pool1
     [[ $? -ne 0 ]] || \
         error "pool_new did not fail even though pool name format was wrong"
-    do_facet mds lctl pool_new ${FSNAME}/pool1
+    do_facet $SINGLEMDS lctl pool_new ${FSNAME}/pool1
     [[ $? -ne 0 ]] || \
         error "pool_new did not fail even though pool name format was wrong"
 
-    do_facet mds lctl pool_new ${FSNAME}.p
+    do_facet $SINGLEMDS lctl pool_new ${FSNAME}.p
     [[ $? -ne 0 ]] || \
         error "pool_new did not fail even though pool1 existed"
     destroy_pool p
@@ -313,7 +318,7 @@ run_test 1 "Test lctl pool_new  ========================================="
 test_2a() {
     destroy_pool $POOL
 
-    do_facet mds lctl pool_add $FSNAME.$POOL $FSNAME-OST0000
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL $FSNAME-OST0000
     [[ $? -ne 0 ]] || \
         error " pool_add did not fail even though pool did " \
         " not exist."
@@ -321,7 +326,8 @@ test_2a() {
 run_test 2a "pool_add: non-existant pool"
 
 test_2b() {
-    do_facet mds lctl pool_add $FSNAME.p1234567891234567890 $FSNAME-OST0000
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.p1234567891234567890 \
+        $FSNAME-OST0000
     [[ $? -ne 0 ]] || \
         error "pool_add did not fail even though pool name was invalid."
 }
@@ -339,43 +345,43 @@ test_2c() {
     create_pool_nofail $POOL
 
     # 1. OST0000
-    do_facet mds lctl pool_add $FSNAME.$POOL OST0000
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL OST0000
     RC=$?; [[ $RC -eq 0 ]] || \
         error "pool_add failed. $FSNAME $POOL OST0000: $RC"
-    do_facet mds lctl pool_remove $FSNAME.$POOL OST0000
+    do_facet $SINGLEMDS lctl pool_remove $FSNAME.$POOL OST0000
     drain_pool $POOL
 
     # 2. lustre-OST0000
-    do_facet mds lctl pool_add $FSNAME.$POOL $FSNAME-OST0000
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL $FSNAME-OST0000
     RC=$?; [[ $RC -eq 0 ]] || \
         error "pool_add failed. $FSNAME $POOL $FSNAME-OST0000: $RC"
-    do_facet mds lctl pool_remove $FSNAME.$POOL $FSNAME-OST0000
+    do_facet $SINGLEMDS lctl pool_remove $FSNAME.$POOL $FSNAME-OST0000
     drain_pool $POOL
 
     # 3. lustre-OST0000_UUID
-    do_facet mds lctl pool_add $FSNAME.$POOL $FSNAME-OST0000_UUID
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL $FSNAME-OST0000_UUID
     RC=$?; [[ $RC -eq 0 ]] || \
         error "pool_add failed. $FSNAME $POOL $FSNAME-OST0000_UUID: $RC"
-    do_facet mds lctl pool_remove $FSNAME.$POOL $FSNAME-OST0000_UUID
+    do_facet $SINGLEMDS lctl pool_remove $FSNAME.$POOL $FSNAME-OST0000_UUID
     drain_pool $POOL
 
     # 4. lustre-OST[0,1,2,3,]
     TGT="$FSNAME-OST["
     for i in $TGT_LIST; do TGT=${TGT}$(printf "$i," $i); done
     TGT="${TGT}]"
-    do_facet mds lctl pool_add $FSNAME.$POOL $TGT
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL $TGT
     [[ $? -eq 0 ]] || \
         error "pool_add failed. $FSNAME.$POOL $TGT. $RC"
-    do_facet mds lctl pool_remove $FSNAME.$POOL $TGT
+    do_facet $SINGLEMDS lctl pool_remove $FSNAME.$POOL $TGT
     drain_pool $POOL
 
     # 5. lustre-OST[0-5/1]
-    do_facet mds lctl pool_add $FSNAME.$POOL $TGT_ALL
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL $TGT_ALL
     RC=$?; [[ $RC -eq 0 ]] || \
         error "pool_add failed. $FSNAME $POOL" "$TGT_ALL $RC"
     wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | \
       sort -u | tr '\n' ' ' " "$TGT_UUID" || error "Add to pool failed"
-    do_facet mds lctl pool_remove $FSNAME.$POOL $TGT_ALL
+    do_facet $SINGLEMDS lctl pool_remove $FSNAME.$POOL $TGT_ALL
     drain_pool $POOL
 
     destroy_pool $POOL
@@ -393,7 +399,7 @@ test_2d() {
     create_pool_nofail $POOL
 
     TGT=$(printf "$FSNAME-OST%04x_UUID " $OSTCOUNT)
-    do_facet mds lctl pool_add $FSNAME.$POOL $TGT
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL $TGT
     RC=$?; [[ $RC -ne 0 ]] || \
         error "pool_add succeeded for an OST ($TGT) that does not exist."
 
@@ -413,10 +419,11 @@ test_2e() {
     create_pool_nofail $POOL
 
     TGT="$FSNAME-OST0000_UUID "
-    do_facet mds lctl pool_add $FSNAME.$POOL $TGT
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL $TGT
     wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | \
       sort -u | tr '\n' ' ' " "$TGT" || error "Add to pool failed"
-    RESULT=$(do_facet mds "LOCALE=C $LCTL pool_add $FSNAME.$POOL $TGT 2>&1")
+    RESULT=$(do_facet $SINGLEMDS \
+        "LOCALE=C $LCTL pool_add $FSNAME.$POOL $TGT 2>&1")
     RC=$?
     echo $RESULT
 
@@ -435,7 +442,7 @@ test_3a() {
     [[ $? -ne 0 ]] || \
         destroy_pool $POOL
 
-    do_facet mds lctl pool_remove $FSNAME.$POOL $FSNAME-OST0000
+    do_facet $SINGLEMDS lctl pool_remove $FSNAME.$POOL $FSNAME-OST0000
     [[ $? -ne 0 ]] || \
         error "pool_remove did not fail even though" \
         "pool did not exist."
@@ -443,14 +450,15 @@ test_3a() {
 run_test 3a "pool_remove: non-existant pool"
 
 test_3b() {
-    do_facet mds lctl pool_remove ${NON_EXISTANT_FS}.$POOL OST0000
+    do_facet $SINGLEMDS lctl pool_remove ${NON_EXISTANT_FS}.$POOL OST0000
     [[ $? -ne 0 ]] || \
         error "pool_remove did not fail even though fsname did not exist."
 }
 run_test 3b "pool_remove: non-existant fsname"
 
 test_3c() {
-    do_facet mds lctl pool_remove $FSNAME.p1234567891234567890 $FSNAME-OST0000
+    do_facet $SINGLEMDS lctl pool_remove $FSNAME.p1234567891234567890 \
+        $FSNAME-OST0000
     [[ $? -ne 0 ]] || \
         error "pool_remove did not fail even though pool name was invalid."
 }
@@ -464,26 +472,26 @@ test_3d() {
         destroy_pool $POOL
 
     create_pool_nofail $POOL
-    do_facet mds lctl pool_add $FSNAME.$POOL OST0000
-    do_facet mds lctl pool_remove $FSNAME.$POOL OST0000
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL OST0000
+    do_facet $SINGLEMDS lctl pool_remove $FSNAME.$POOL OST0000
     [[ $? -eq 0 ]] || \
         error "pool_remove failed. $FSNAME $POOL OST0000"
     drain_pool $POOL
 
-    do_facet mds lctl pool_add $FSNAME.$POOL $FSNAME-OST0000
-    do_facet mds lctl pool_remove $FSNAME.$POOL $FSNAME-OST0000
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL $FSNAME-OST0000
+    do_facet $SINGLEMDS lctl pool_remove $FSNAME.$POOL $FSNAME-OST0000
     [[ $? -eq 0 ]] || \
         error "pool_remove failed. $FSNAME $POOL $FSNAME-OST0000"
     drain_pool $POOL
 
-    do_facet mds lctl pool_add $FSNAME.$POOL $FSNAME-OST0000_UUID
-    do_facet mds lctl pool_remove $FSNAME.$POOL $FSNAME-OST0000_UUID
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL $FSNAME-OST0000_UUID
+    do_facet $SINGLEMDS lctl pool_remove $FSNAME.$POOL $FSNAME-OST0000_UUID
     [[ $? -eq 0 ]] || \
         error "pool_remove failed. $FSNAME $POOL $FSNAME-OST0000_UUID"
     drain_pool $POOL
 
     add_pool $POOL $TGT_ALL "$TGT_UUID"
-    do_facet mds lctl pool_remove $FSNAME.$POOL $TGT_ALL
+    do_facet $SINGLEMDS lctl pool_remove $FSNAME.$POOL $TGT_ALL
     [[ $? -eq 0 ]] || \
         error "pool_remove failed. $FSNAME $POOL" $TGT_ALL
     drain_pool $POOL
@@ -497,14 +505,14 @@ test_4a() {
     [[ $? -ne 0 ]] || \
         destroy_pool $POOL
 
-    do_facet mds lctl pool_destroy $FSNAME.$POOL
+    do_facet $SINGLEMDS lctl pool_destroy $FSNAME.$POOL
     [[ $? -ne 0 ]] || \
         error "pool_destroy did not fail even though pool did not exist."
 }
 run_test 4a "pool_destroy: non-existant pool"
 
 test_4b() {
-    do_facet mds lctl pool_destroy ${NON_EXISTANT_FS}.$POOL
+    do_facet $SINGLEMDS lctl pool_destroy ${NON_EXISTANT_FS}.$POOL
     [[ $? -ne 0 ]] || \
         error "pool_destroy did not fail even though the filesystem did not exist."
 }
@@ -514,7 +522,7 @@ test_4c() {
     create_pool_nofail $POOL
     add_pool $POOL "OST0000" "$FSNAME-OST0000_UUID "
 
-    do_facet mds lctl pool_destroy ${FSNAME}.$POOL
+    do_facet $SINGLEMDS lctl pool_destroy ${FSNAME}.$POOL
     [[ $? -ne 0 ]] || \
         error "pool_destroy succeeded with a non-empty pool name."
     destroy_pool $POOL
@@ -537,7 +545,7 @@ sub_test_5() {
     [[ $? -eq 0 ]] || \
         error "pool_list $FSNAME failed."
 
-    do_facet mds lctl pool_add $FSNAME.$POOL $TGT_ALL
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL $TGT_ALL
 
     $LCMD pool_list $FSNAME.$POOL
     [[ $? -eq 0 ]] || \
@@ -551,7 +559,7 @@ sub_test_5() {
     [[ $? -ne 0 ]] || \
         error "pool_list did not fail for a non-existant pool $NON_EXISTANT_POOL"
 
-    if [[ ! $(grep mds <<< $LCMD) ]]; then
+    if [[ ! $(grep $SINGLEMDS <<< $LCMD) ]]; then
         echo $LCMD pool_list $DIR
         $LCMD pool_list $DIR
         [[ $? -eq 0 ]] || \
@@ -578,8 +586,8 @@ test_5() {
     sub_test_5 $LFS
 
     # Issue commands from MDS
-    sub_test_5 "do_facet mds lctl"
-    sub_test_5 "do_facet mds lfs"
+    sub_test_5 "do_facet $SINGLEMDS lctl"
+    sub_test_5 "do_facet $SINGLEMDS lfs"
 
 }
 run_test 5 "lfs/lctl pool_list"
@@ -591,11 +599,11 @@ test_6() {
 
     create_pool_nofail $POOL
 
-    do_facet mds lctl pool_list $FSNAME
+    do_facet $SINGLEMDS lctl pool_list $FSNAME
     [[ $? -eq 0 ]] || \
         error "pool_list $FSNAME failed."
 
-    do_facet mds lctl pool_add $FSNAME.$POOL $TGT_ALL
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL $TGT_ALL
 
     mkdir -p $POOL_DIR
     $SETSTRIPE -c -1 -p $POOL $POOL_DIR
@@ -642,10 +650,10 @@ test_11() {
     create_pool_nofail $POOL
     create_pool_nofail $POOL2
 
-    do_facet mds lctl pool_add $FSNAME.$POOL \
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL \
         $FSNAME-OST[$TGT_FIRST-$TGT_MAX/2]
     local start=$((TGT_FIRST+1))
-    do_facet mds lctl pool_add $FSNAME.$POOL2 \
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL2 \
         $FSNAME-OST[$start-$TGT_MAX/2]
 
     create_dir $POOL_ROOT/dir1  $POOL
@@ -684,10 +692,10 @@ test_12() {
     create_pool_nofail $POOL
     create_pool_nofail $POOL2
 
-    do_facet mds lctl pool_add $FSNAME.$POOL \
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL \
         $FSNAME-OST[$TGT_FIRST-$TGT_MAX/2]
     local start=$((TGT_FIRST+1))
-    do_facet mds lctl pool_add $FSNAME.$POOL2 \
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL2 \
         $FSNAME-OST[$start-$TGT_MAX/2]
 
     echo creating some files in $POOL and $POOL2
@@ -704,10 +712,10 @@ test_12() {
     check_file_in_pool $POOL_ROOT/file2 $POOL2
 
     echo Changing the pool membership
-    do_facet mds lctl pool_remove $FSNAME.$POOL $FSNAME-OST[$TGT_FIRST]
-    do_facet mds lctl pool_list $FSNAME.$POOL
-    do_facet mds lctl pool_add $FSNAME.$POOL2 $FSNAME-OST[$TGT_FIRST]
-    do_facet mds lctl pool_list $FSNAME.$POOL2
+    do_facet $SINGLEMDS lctl pool_remove $FSNAME.$POOL $FSNAME-OST[$TGT_FIRST]
+    do_facet $SINGLEMDS lctl pool_list $FSNAME.$POOL
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL2 $FSNAME-OST[$TGT_FIRST]
+    do_facet $SINGLEMDS lctl pool_list $FSNAME.$POOL2
 
     echo Checking the files again    
     check_dir_in_pool $POOL_ROOT/dir1 $POOL
@@ -740,7 +748,7 @@ test_13() {
     local count=3
 
     create_pool_nofail $POOL
-    do_facet mds lctl pool_add $FSNAME.$POOL $TGT_ALL
+    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL $TGT_ALL
 
     create_dir $POOL_ROOT/dir1 $POOL -1
     createmany -o $POOL_ROOT/dir1/$tfile $numfiles || \
@@ -1135,7 +1143,7 @@ add_loop() {
             do printf "$FSNAME-OST%04x_UUID " $i; done)
         add_pool $pool "$FSNAME-OST[$TGT_FIRST-$TGT_MAX/$step]" "$TGT"
         destroy_pool $pool
-        do_facet mds lctl pool_list $FSNAME
+        do_facet $SINGLEMDS lctl pool_list $FSNAME
     done
     echo loop for $pool complete
 }
