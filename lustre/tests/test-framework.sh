@@ -129,6 +129,8 @@ init_test_env() {
         export PORT_OPT="--port $ACCEPTOR_PORT"
     fi
 
+    export LOAD_MODULES_REMOTE=${LOAD_MODULES_REMOTE:-false}
+
     # Paths on remote nodes, if different
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
     export RPWD=${RPWD:-$PWD}
@@ -170,7 +172,7 @@ load_module() {
     fi
 }
 
-load_modules() {
+load_modules_local() {
     if [ -n "$MODPROBE" ]; then
         # use modprobe
     return 0
@@ -232,6 +234,18 @@ load_modules() {
     [ -f $LUSTRE/utils/mount.lustre ] && cp $LUSTRE/utils/mount.lustre /sbin/. || true
 }
 
+load_modules () {
+    load_modules_local
+    # bug 19124
+    # load modules on remote nodes optionally
+    # lustre-tests have to be installed on these nodes
+    if $LOAD_MODULES_REMOTE ; then
+        local list=$(comma_list $(remote_nodes_list))
+        echo loading modules on $list
+        do_rpc_nodes $list load_modules 
+    fi
+}
+
 check_mem_leak () {
     LEAK_LUSTRE=$(dmesg | tail -n 30 | grep "obd_memory.*leaked" || true)
     LEAK_PORTALS=$(dmesg | tail -n 20 | grep "Portals memory leaked" || true)
@@ -247,6 +261,13 @@ check_mem_leak () {
 
 unload_modules() {
     wait_exit_ST client # bug 12845
+
+    if $LOAD_MODULES_REMOTE ; then
+        local list=$(comma_list $(remote_nodes_list))
+        echo unloading modules on $list
+        do_rpc_nodes $list $LUSTRE_RMMOD $FSTYPE
+        do_rpc_nodes $list check_mem_leak
+    fi
 
     $LUSTRE_RMMOD $FSTYPE || return 2
 
@@ -2665,7 +2686,6 @@ wait_clients_import_state () {
         mds* ) proc_path="mdc.$(get_clientmdc_proc_path $label).mds_server_uuid" ;;
         *) error "unknown facet!" ;;
     esac
-
 
     if ! do_rpc_nodes $list wait_import_state $expected $proc_path; then
         error "import is not in ${expected} state"
