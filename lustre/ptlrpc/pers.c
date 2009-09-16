@@ -73,19 +73,6 @@ void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page,
         desc->bd_iov_count++;
 }
 
-void ptl_rpc_wipe_bulk_pages(struct ptlrpc_bulk_desc *desc)
-{
-        int i;
-
-        for (i = 0; i < desc->bd_iov_count ; i++) {
-                lnet_kiov_t *kiov = &desc->bd_iov[i];
-                ClearPageUptodate(kiov->kiov_page);
-                memset(cfs_kmap(kiov->kiov_page)+kiov->kiov_offset, 0xab,
-                       kiov->kiov_len);
-                cfs_kunmap(kiov->kiov_page);
-        }
-}
-
 #else /* !__KERNEL__ */
 
 void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc)
@@ -130,14 +117,4 @@ void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page,
         }
 }
 
-void ptl_rpc_wipe_bulk_pages(struct ptlrpc_bulk_desc *desc)
-{
-        int i;
-
-        for(i = 0; i < desc->bd_iov_count; i++) {
-                lnet_md_iovec_t *iov = &desc->bd_iov[i];
-
-                memset(iov->iov_base, 0xab, iov->iov_len);
-        }
-}
 #endif /* !__KERNEL__ */
