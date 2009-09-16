@@ -93,6 +93,11 @@ Bugzilla   : 20550
 Description: missing tree_status on 1.8.1 RPM build
 Details    : make rpms failed due because the tree_status file is missing.
 
+Severity   : normal
+Bugzilla   : 19551
+Description: continuing LustreError "mds adjust qunit failed!"
+Details    : don't print message on the console when ->adjust_qunit fails.
+
 
 -------------------------------------------------------------------------------
 
