@@ -624,7 +624,8 @@ int ccc_lock_fits_into(const struct lu_env *env,
          * doesn't enqueue CLM_WRITE sub-locks.
          */
         if (cio->cui_glimpse)
-                result = descr->cld_mode != CLM_WRITE;
+                result = descr->cld_mode == CLM_PHANTOM;
+
         /*
          * Also, don't match incomplete write locks for read, otherwise read
          * would enqueue missing sub-locks in the write mode.

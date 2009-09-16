@@ -1569,6 +1569,18 @@ static int osc_lock_print(const struct lu_env *env, void *cookie,
         return 0;
 }
 
+static int osc_lock_fits_into(const struct lu_env *env,
+                              const struct cl_lock_slice *slice,
+                              const struct cl_lock_descr *need,
+                              const struct cl_io *io)
+{
+
+        if (need->cld_mode == CLM_PHANTOM)
+                return need->cld_mode == slice->cls_lock->cll_descr.cld_mode;
+
+        return 1;
+}
+
 static const struct cl_lock_operations osc_lock_ops = {
         .clo_fini    = osc_lock_fini,
         .clo_enqueue = osc_lock_enqueue,
@@ -1579,7 +1591,8 @@ static const struct cl_lock_operations osc_lock_ops = {
         .clo_state   = osc_lock_state,
         .clo_cancel  = osc_lock_cancel,
         .clo_weigh   = osc_lock_weigh,
-        .clo_print   = osc_lock_print
+        .clo_print   = osc_lock_print,
+        .clo_fits_into = osc_lock_fits_into,
 };
 
 static int osc_lock_lockless_enqueue(const struct lu_env *env,
