@@ -1635,9 +1635,9 @@ repeat:
                                  &ltd.u.tree, OBD_BRW_READ);
                 up_read(&lli->lli_truncate_rwsem);
         } else {
+                file_accessed(file);
                 retval = ll_direct_IO(READ, file, iov_copy, *ppos, nr_segs, 0);
                 if (retval > 0) {
-                        file_accessed(file);
                         lprocfs_counter_add(sbi->ll_stats,
                                             LPROC_LL_LOCKLESS_READ,
                                             (long)retval);
