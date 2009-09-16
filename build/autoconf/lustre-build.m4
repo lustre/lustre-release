@@ -202,6 +202,10 @@ AC_DEFUN([LB_PATH_LDISKFS],
 			with_ldiskfs=no
 		fi
 	])
+AC_ARG_WITH([ldiskfs-inkernel],
+	AC_HELP_STRING([--with-ldiskfs-inkernel],
+			[use ldiskfs built in to the kernel]),
+	[with_ldiskfs=inkernel], [])
 AC_MSG_CHECKING([location of ldiskfs])
 case x$with_ldiskfs in
 	xyes)
@@ -215,6 +219,12 @@ case x$with_ldiskfs in
 	xno)
 		AC_MSG_RESULT([disabled])
 		;;
+	xinkernel)
+		AC_MSG_RESULT([inkernel])
+		LB_CHECK_FILE([$LINUX/include/linux/ldiskfs_fs.h],[],[
+			AC_MSG_ERROR([ldiskfs was not found in $LINUX/include/linux/ldiskfs_fs.h])
+		])
+		;;
 	*)
 		AC_MSG_RESULT([$with_ldiskfs])
 		LB_CHECK_FILE([$with_ldiskfs/ldiskfs/linux/ldiskfs_fs.h],[],[
@@ -226,6 +236,7 @@ esac
 AC_SUBST(LDISKFS_DIR)
 AC_SUBST(LDISKFS_SUBDIR)
 AM_CONDITIONAL(LDISKFS_ENABLED, test x$with_ldiskfs != xno)
+AM_CONDITIONAL(LDISKFS_IN_KERNEL, test x$with_ldiskfs = xinkernel)
 
 if test x$enable_ext4 = xyes ; then
 	AC_DEFINE(HAVE_EXT4_LDISKFS, 1, [build ext4 based ldiskfs])
