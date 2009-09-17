@@ -533,7 +533,7 @@ int mds_quota_adjust(struct obd_device *obd, const unsigned int qcids[],
         }
 
         if (rc2)
-                CDEBUG(rc2 == QUOTA_REQ_RETURNED ? D_QUOTA: D_ERROR,
+                CDEBUG(D_QUOTA,
                        "mds adjust qunit %ssuccessfully! (opc:%d rc:%d)\n",
                        rc2 == QUOTA_REQ_RETURNED ? "" : "un", opc, rc2);
         RETURN(0);
@@ -569,9 +569,9 @@ int filter_quota_adjust(struct obd_device *obd, const unsigned int qcids[],
         if (rc || rc2) {
                 if (!rc)
                         rc = rc2;
-                CDEBUG(rc == QUOTA_REQ_RETURNED ? D_QUOTA: D_ERROR,
+                CDEBUG(D_QUOTA,
                        "filter adjust qunit %ssuccessfully! (opc:%d rc%d)\n",
-                       QUOTA_REQ_RETURNED ? "" : "un", opc, rc);
+                       rc == QUOTA_REQ_RETURNED ? "" : "un", opc, rc);
         }
 
         RETURN(0);
