@@ -970,12 +970,6 @@ Bugzilla   : 16037
 Description: Client runs out of low memory
 Details    : Consider only lowmem when counting initial number of llap pages
 
-Bugzilla   : 15825
-Description: Kernel BUG tries to release flock
-Details    : Lustre does not destroy flock lock before last reference goes
-	     away. So always drop flock locks when client is evicted and
-	     perform unlock regardless of successfulness of speaking to MDS.
-
 Severity   : normal
 Frequency  : occasional
 Bugzilla   : 15210
