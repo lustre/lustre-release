@@ -775,6 +775,13 @@ cleanup:
                 if (lnb->page == NULL)
                         continue;
 
+                if (rc)
+                        /* If the write has failed, the page cache may
+                         * not be consitent with what is on disk, so
+                         * force pages to be reread next time it is
+                         * accessed */
+                        ClearPageUptodate(lnb->page);
+
                 LASSERT(PageLocked(lnb->page));
                 unlock_page(lnb->page);
 

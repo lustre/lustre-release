@@ -174,9 +174,10 @@ void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
         if (!ptlrpc_server_bulk_active(desc))   /* completed or */
                 return;                         /* never started */
 
-        /* Do not send any meaningful data over the wire for evicted clients */
-        if (desc->bd_export && desc->bd_export->exp_failed)
-                ptl_rpc_wipe_bulk_pages(desc);
+        /* We used to poison the pages with 0xab here because we did not want to
+         * send any meaningful data over the wire for evicted clients (bug 9297)
+         * However, this is no longer safe now that we use the page cache on the
+         * OSS (bug 20560) */
 
         /* The unlink ensures the callback happens ASAP and is the last
          * one.  If it fails, it must be because completion just happened,

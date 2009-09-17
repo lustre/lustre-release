@@ -113,10 +113,10 @@ void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
                 obd_size left_space = filter_grant_space_left(exp);
                 struct filter_obd *filter = &exp->exp_obd->u.filter;
 
-                /*Only if left_space < fo_tot_clients * 32M, 
+                /*Only if left_space < fo_tot_clients * 32M,
                  *then the grant space could be shrinked */
-                if (left_space < filter->fo_tot_granted_clients * 
-                                 FILTER_GRANT_SHRINK_LIMIT) { 
+                if (left_space < filter->fo_tot_granted_clients *
+                                 FILTER_GRANT_SHRINK_LIMIT) {
                         fed->fed_grant -= oa->o_grant;
                         filter->fo_tot_granted -= oa->o_grant;
                         CDEBUG(D_CACHE, "%s: cli %s/%p shrink "LPU64
@@ -272,7 +272,7 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
  * generate more memory pressure, but at the same time use __GFP_NOMEMALLOC
  * in order not to exhaust emergency reserves.
  *
- * See Bug 19529 and Bug 19917 for details. 
+ * See Bug 19529 and Bug 19917 for details.
  */
 static struct page *filter_get_page(struct obd_device *obd,
                                     struct inode *inode,
@@ -282,7 +282,7 @@ static struct page *filter_get_page(struct obd_device *obd,
         struct page *page;
 
         page = find_or_create_page(inode->i_mapping, offset >> CFS_PAGE_SHIFT,
-                                   (localreq ? (GFP_NOFS | __GFP_HIGHMEM) 
+                                   (localreq ? (GFP_NOFS | __GFP_HIGHMEM)
                                              : (GFP_HIGHUSER | __GFP_NOMEMALLOC)));
         if (unlikely(page == NULL))
                 lprocfs_counter_add(obd->obd_stats, LPROC_FILTER_NO_PAGE, 1);
@@ -694,7 +694,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                 RETURN(rc);
 
         if (exp->exp_connection &&
-            exp->exp_connection->c_peer.nid == exp->exp_connection->c_self) 
+            exp->exp_connection->c_peer.nid == exp->exp_connection->c_self)
                 localreq = 1;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
@@ -795,8 +795,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                  * be able to proceed in filter_commitrw_write(). thus let's
                  * just wait for writeout completion, should be rare enough.
                  * -bzzz */
-                if (obd->u.filter.fo_writethrough_cache)
-                        wait_on_page_writeback(lnb->page);
+                wait_on_page_writeback(lnb->page);
                 BUG_ON(PageWriteback(lnb->page));
 
                 /* If the filter writes a partial page, then has the file
