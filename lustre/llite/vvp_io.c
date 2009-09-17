@@ -280,7 +280,7 @@ static int vvp_io_trunc_iter_init(const struct lu_env *env,
 }
 
 /**
- * Implementation of cl_io_operations::vio_lock() method for CIT_TRUNC io.
+ * Implementation of cl_io_operations::cio_lock() method for CIT_TRUNC io.
  *
  * Handles "lockless io" mode when extent locking is done by server.
  */
