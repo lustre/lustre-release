@@ -147,6 +147,30 @@ fi
 ])
 
 #
+# LC_HEADER_LDISKFS_XATTR
+#
+# CHAOS kernel-devel package will not include fs/ldiskfs/xattr.h
+#
+AC_DEFUN([LC_HEADER_LDISKFS_XATTR],
+[AC_MSG_CHECKING([if ldiskfs has xattr.h header])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-I$LINUX/fs -I$LDISKFS_DIR -I$LDISKFS_DIR/ldiskfs"
+LB_LINUX_TRY_COMPILE([
+	#include <ldiskfs/xattr.h>
+],[
+        ldiskfs_xattr_get(NULL, 0, "", NULL, 0);
+        ldiskfs_xattr_set_handle(NULL, NULL, 0, "", NULL, 0, 0);
+
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_LDISKFS_XATTR_H, 1, [ldiskfs/xattr.h found])
+],[
+	AC_MSG_RESULT([no])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+])
+
+#
 # LC_CONFIG_HEALTH_CHECK_WRITE
 #
 # Turn off the actual write to the disk
@@ -1400,6 +1424,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_EXPORT___D_MOVE
          LC_EXPORT_NODE_TO_CPUMASK
 
+         LC_HEADER_LDISKFS_XATTR
          LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP
          LC_STRUCT_STATFS
          LC_FILEMAP_POPULATE

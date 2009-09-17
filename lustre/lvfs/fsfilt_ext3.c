@@ -59,7 +59,13 @@
 #include <linux/quota.h>
 #include <linux/quotaio_v1.h>
 #include <linux/quotaio_v2.h>
+#if defined(HAVE_EXT3_XATTR_H)
 #include <ext3/xattr.h>
+#else
+/* ext3 xattr.h not available in rh style kernel-devel rpm */
+extern int ext3_xattr_get(struct inode *, int, const char *, void *, size_t);
+extern int ext3_xattr_set_handle(handle_t *, struct inode *, int, const char *, const void *, size_t, int);
+#endif
 
 #include <libcfs/libcfs.h>
 #include <lustre_fsfilt.h>
