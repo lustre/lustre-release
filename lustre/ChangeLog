@@ -14,6 +14,12 @@ tbd  Sun Microsystems, Inc.
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
 Severity   : normal
+Bugzilla   : 19557
+Description: Don't allow make backward step on assignin osc next id.
+Details    : race between allocation next id and ll_sync thread can be cause
+             of set wrong osc next id and can be kill valid ost objects.
+
+Severity   : normal
 Bugzilla   : 20533
 Description: Changes in raid5-large-io-rhel5.patch to calculate sectors properly
 
