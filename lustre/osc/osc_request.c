@@ -3945,18 +3945,30 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
         OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_SHUTDOWN, 10);
 
         if (KEY_IS(KEY_NEXT_ID)) {
+                obd_id new_val;
+                struct osc_creator *oscc = &obd->u.cli.cl_oscc;
+
                 if (vallen != sizeof(obd_id))
                         RETURN(-EINVAL);
-                obd->u.cli.cl_oscc.oscc_next_id = *((obd_id*)val) + 1;
+
+                /* avoid race between allocate new object and set next id
+                 * from ll_sync thread */
+                spin_lock(&oscc->oscc_lock);
+                new_val = *((obd_id*)val) + 1;
+                if (new_val >= oscc->oscc_next_id);
+                        oscc->oscc_next_id = new_val;
+                spin_unlock(&oscc->oscc_lock);
+
                 CDEBUG(D_HA, "%s: set oscc_next_id = "LPU64"\n",
                        exp->exp_obd->obd_name,
-                       obd->u.cli.cl_oscc.oscc_next_id);
+                       oscc->oscc_next_id);
 
                 RETURN(0);
         }
 
         if (KEY_IS(KEY_UNLINKED)) {
                 struct osc_creator *oscc = &obd->u.cli.cl_oscc;
+
                 spin_lock(&oscc->oscc_lock);
                 oscc->oscc_flags &= ~OSCC_FLAG_NOSPC;
                 spin_unlock(&oscc->oscc_lock);

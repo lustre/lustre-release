@@ -15,6 +15,12 @@ TBD Sun Microsystems, Inc.
 	* ext4 support for RHEL5 is experimental and thus should not be
 	  used in production.
 
+Severity   : normal
+Bugzilla   : 19557
+Description: Don't allow make backward step on assiging osc next id.
+Details    : race between allocation next id and ll_sync thread can be cause
+             of set wrong osc next id and can be kill valid ost objects.
+
 Severity   : enhancement
 Bugzilla   : 20400
 Description: Update kernel to RHEL5 2.6.18-128.7.1.el5.
