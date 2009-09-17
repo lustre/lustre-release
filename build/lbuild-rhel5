@@ -89,10 +89,13 @@ Obsoletes: kernel-debuginfo
           SPECS/kernel-2.6.spec
     fi
 
-    # finally, work around RH bug 491775
-    # XXX - i wonder if we will need to do this enough to formalize a
-    #       patching system.  let's assume not for the time being.
-    patch -s -p0 <<"EOF"
+    # finally, work around RH bug 491775, if needed
+    if ! grep -q "cp -a asm-x86_64 \$RPM_BUILD_ROOT/lib/modules/\$KernelVer/build/include" \
+              SPECS/kernel-2.6.spec; then
+        # XXX - i wonder if we will need to do this ad-hoc patching enough to
+        #       formalize a patching system.  let's assume not for the time
+        #       being.
+        patch -s -p0 <<"EOF" || fatal 1 "Error while patching SPECS/kernel-2.6.spec"
 --- SPECS/kernel-2.6.spec.dist	2009-03-23 20:30:55.000000000 -0400
 +++ SPECS/kernel-2.6.spec	2009-03-23 20:37:03.000000000 -0400
 @@ -6961,6 +6961,10 @@
@@ -107,6 +110,7 @@ Obsoletes: kernel-debuginfo
        cp -a asm-i386 $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/include
      fi
 EOF
+    fi
 
     popd >/dev/null
 
