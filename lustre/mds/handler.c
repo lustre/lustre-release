@@ -1083,7 +1083,8 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                                 rc = rc2;
                         req->rq_status = rc;
                 } else if (rc) {
-                        lustre_shrink_reply(req, offset + 1, 0 , 1);
+                        if (lustre_msg_buflen(req->rq_repmsg, offset + 1) > 0)
+                                lustre_shrink_reply(req, offset + 1, 0, 1);
                 }
         }
 
@@ -1137,7 +1138,8 @@ out_ucred:
                         rc = rc2;
                 req->rq_status = rc;
         } else if (rc) {
-                lustre_shrink_reply(req, REPLY_REC_OFF + 1, 0, 1);
+                if (lustre_msg_buflen(req->rq_repmsg, REPLY_REC_OFF + 1) > 0)
+                        lustre_shrink_reply(req, REPLY_REC_OFF + 1, 0, 1);
         }
         mds_exit_ucred(&uc, mds);
 
