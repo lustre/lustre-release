@@ -110,7 +110,7 @@ int ldlm_get_enq_timeout(struct ldlm_lock *lock)
         /* Since these are non-updating timeouts, we should be conservative.
            It would be nice to have some kind of "early reply" mechanism for
            lock callbacks too... */
-        timeout = timeout + (timeout >> 1); /* 150% */
+        timeout = min_t(int, at_max, timeout + (timeout >> 1)); /* 150% */
         return max(timeout, ldlm_enqueue_min);
 }
 EXPORT_SYMBOL(ldlm_get_enq_timeout);

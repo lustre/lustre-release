@@ -98,6 +98,13 @@ Bugzilla   : 19551
 Description: continuing LustreError "mds adjust qunit failed!"
 Details    : don't print message on the console when ->adjust_qunit fails.
 
+Severity   : normal
+Bugzilla   : 18618
+Description: don't increase ldlm timeout if previous client was evicted
+Details    : if a client doesn't respond to a blocking callback within the
+	     adaptive ldlm enqueue timeout, don't adjust the adaptive estimate
+	     when the lock is next granted.
+
 
 -------------------------------------------------------------------------------
 
