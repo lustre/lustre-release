@@ -884,6 +884,12 @@ int mds_fs_cleanup(struct obd_device *obd)
                               "will be preserved.\n", obd->obd_name);
 
         class_disconnect_exports(obd); /* cleans up client info too */
+
+       /* some exports may still be in the zombie queue, so we make sure that
+        * all the exports have been processed, otherwise the last_rcvd slot
+        * may not be updated on time */
+        obd_zombie_barrier();
+
         mds_server_free_data(mds);
 
         push_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);

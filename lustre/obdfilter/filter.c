@@ -2239,6 +2239,11 @@ static int filter_cleanup(struct obd_device *obd)
                 }
         }
 
+       /* some exports may still be in the zombie queue, so we make sure that
+        * all the exports have been processed, otherwise the last_rcvd slot
+        * may not be updated on time */
+        obd_zombie_barrier();
+
         remove_proc_entry("clear", obd->obd_proc_exports_entry);
         lprocfs_free_per_client_stats(obd);
         lprocfs_free_obd_stats(obd);
