@@ -1490,6 +1490,31 @@ static void obd_zombie_impexp_notify(void)
         cfs_waitq_signal(&obd_zombie_waitq);
 }
 
+/**
+ * check whether obd_zombie is idle
+ */
+static int obd_zombie_is_idle(void)
+{
+        int rc;
+
+        LASSERT(!test_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags));
+        spin_lock(&obd_zombie_impexp_lock);
+        rc = list_empty(&obd_zombie_imports) &&
+             list_empty(&obd_zombie_exports);
+        spin_unlock(&obd_zombie_impexp_lock);
+        return rc;
+}
+
+/**
+ * wait when obd_zombie import/export queues become empty
+ */
+void obd_zombie_barrier(void)
+{
+        struct l_wait_info lwi = { 0 };
+        l_wait_event(obd_zombie_waitq, obd_zombie_is_idle(), &lwi);
+}
+EXPORT_SYMBOL(obd_zombie_barrier);
+
 #ifdef __KERNEL__
 
 static int obd_zombie_impexp_thread(void *unused)
@@ -1509,6 +1534,12 @@ static int obd_zombie_impexp_thread(void *unused)
                 l_wait_event(obd_zombie_waitq, !obd_zombi_impexp_check(NULL), &lwi);
 
                 obd_zombie_impexp_cull();
+
+                /*
+                 * Notify obd_zombie_barrier callers that queues
+                 * may be empty.
+                 */
+                cfs_waitq_signal(&obd_zombie_waitq);
         }
 
         complete(&obd_zombie_stop);

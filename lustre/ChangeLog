@@ -14,12 +14,6 @@ tbd Sun Microsystems, Inc.
 	  of Lustre filesystem with 4K stack may cause a stack overflow. For
 	  more information, please refer to bugzilla 17630.
 
-Severity   : normal
-Bugzilla   : 19557
-Description: Don't allow make backward step on assign osc next id.
-Details    : race between allocation next id and ll_sync thread can be cause
-             of set wrong osc next id and can be kill valid ost objects.
-
 Severity   : enhancement
 Bugzilla   : 20200
 Description: Added sanity-quota test to for lfs(1) to work with numeric uid/gid.
@@ -187,6 +181,18 @@ TBD Sun Microsystems, Inc.
 	* ext4 support for RHEL5 is experimental and thus should not be
 	  used in production.
 
+Severity   : major
+Bugzilla   : 20560
+Description: File checksum failures with OST read cache on
+Details    : Disable page poisoning when the bulk transfer has to be aborted
+	     because the client got evicted.
+
+Severity   : normal
+Bugzilla   : 19557
+Description: Don't allow make backward step on assign osc next id.
+Details    : race between allocation next id and ll_sync thread can be cause
+	     of set wrong osc next id and can be kill valid ost objects.
+
 Severity   : enhancement
 Bugzilla   : 20400
 Description: Update kernel to RHEL5 2.6.18-128.7.1.el5.
@@ -194,11 +200,6 @@ Description: Update kernel to RHEL5 2.6.18-128.7.1.el5.
 Severity   : enhancement
 Bugzilla   : 20758
 Description: Update kernel to SLES10 SP2 2.6.16.60-0.42.4.
-
-Severity   : major
-Bugzilla   : 20560
-Description: File checksum failures with OST read cache on
-Details    : Clear page cache's uptodate bit when its contents are cleared.
 
 Severity   : normal
 Bugzilla   : 20533
@@ -269,6 +270,13 @@ Severity   : normal
 Bugzilla   : 19551
 Description: continuing LustreError "mds adjust qunit failed!"
 Details    : don't print message on the console when ->adjust_qunit fails.
+
+Severity   : normal
+Bugzilla   : 20518
+Description: OST is being unmounted w/o all writes to last_rcvd landing on disk.
+	     Affects recovery negatively.
+Details    : Make sure all exports have been properly destroyed by the zombie
+	     thread processed before stopping the target.
 
 
 ------------------------------------------------------------------------------

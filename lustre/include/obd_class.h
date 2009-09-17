@@ -102,6 +102,7 @@ int obd_export_evict_by_uuid(struct obd_device *obd, char *uuid);
 int obd_zombie_impexp_init(void);
 void obd_zombie_impexp_stop(void);
 void obd_zombie_impexp_cull(void);
+void obd_zombie_barrier(void);
 
 /* obd_config.c */
 int class_process_config(struct lustre_cfg *lcfg);
