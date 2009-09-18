@@ -2,7 +2,7 @@ tbd  Sun Microsystems, Inc.
        * version 2.0.0
        * Support for kernels:
         2.6.16.60-0.39.3 (SLES 10),
-        2.6.18-128.1.14.el5 (RHEL 5),
+        2.6.18-128.7.1.el5 (RHEL 5),
         2.6.22.14 vanilla (kernel.org).
        * Client support for unpatched kernels:
 	 (see http://wiki.lustre.org/index.php?title=Patchless_Client)
@@ -40,6 +40,10 @@ Details    : Check in lov_prep_statfs_set() for non-NULL ltd_exp.
 Severity   : enhancement
 Bugzilla   : 20200
 Description: Added sanity-quota test to for lfs(1) to work with numeric uid/gid.
+
+Severity   : enhancement
+Bugzilla   : 20400
+Description: Update kernel to RHEL5 2.6.18-128.7.1.el5.
 
 Severity   : enhancement
 Bugzilla   : 20200

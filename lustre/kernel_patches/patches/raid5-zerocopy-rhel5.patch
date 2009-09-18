@@ -382,9 +382,9 @@ Index: linux-2.6.18-128.1.6/include/linux/page-flags.h
 --- linux-2.6.18-128.1.6.orig/include/linux/page-flags.h	2009-04-14 21:05:24.000000000 -0600
 +++ linux-2.6.18-128.1.6/include/linux/page-flags.h	2009-06-02 23:24:55.000000000 -0600
 @@ -86,6 +86,7 @@
+ #define PG_reclaim		17	/* To be reclaimed asap */
  #define PG_nosave_free		18	/* Free, should not be written */
  #define PG_buddy		19	/* Page is free, on buddy lists */
- #define PG_gup			20	/* Page pin may be because of gup */
 +#define PG_constant		21	/* To mark if the page is constant */
  #define PG_xpmem		27	/* Testing for xpmem. */
  
