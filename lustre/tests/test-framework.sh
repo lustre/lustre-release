@@ -175,6 +175,10 @@ init_test_env() {
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
     export RPWD=${RPWD:-$PWD}
     export I_MOUNTED=${I_MOUNTED:-"no"}
+    if [ ! -f /lib/modules/$(uname -r)/kernel/fs/lustre/mds.ko -a \
+        ! -f `dirname $0`/../mds/mds.ko ]; then
+        export CLIENTMODSONLY=yes
+    fi
 
     # command line
 
@@ -257,7 +261,7 @@ load_modules_local() {
     load_module osc/osc
     load_module lov/lov
     load_module mgc/mgc
-    if [ -z "$CLIENTONLY" ] && [ -z "$CLIENTMODSONLY" ]; then
+    if ! client_only; then
         grep -q crc16 /proc/kallsyms || { modprobe crc16 2>/dev/null || true; }
         grep -q jbd /proc/kallsyms || { modprobe jbd 2>/dev/null || true; }
         [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
@@ -2596,6 +2600,10 @@ get_random_entry () {
     local i=$((RANDOM * num * 2 / 65536))
 
     echo ${nodes[i]}
+}
+
+client_only () {
+    [ "$CLIENTONLY" ] || [ "$CLIENTMODSONLY" = yes ]
 }
 
 is_patchless ()

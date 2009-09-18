@@ -110,11 +110,6 @@ for NAME in $CONFIGS; do
 	export NAME MOUNT START CLEAN
 	. $LUSTRE/tests/cfg/$NAME.sh
 
-	if [ ! -f /lib/modules/$(uname -r)/kernel/fs/lustre/mds.ko -a \
-	    ! -f `dirname $0`/../mds/mds.ko ]; then
-	    export CLIENTMODSONLY=true
-	fi
-	
 	assert_env mds_HOST MDS_MKFS_OPTS 
 	assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
 	assert_env FSNAME MOUNT MOUNT2
