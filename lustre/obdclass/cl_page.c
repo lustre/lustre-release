@@ -630,8 +630,7 @@ void cl_page_put(const struct lu_env *env, struct cl_page *page)
         CL_PAGE_HEADER(D_TRACE, env, page, "%i\n", atomic_read(&page->cp_ref));
 
         hdr = cl_object_header(cl_object_top(page->cp_obj));
-        spin_lock(&hdr->coh_page_guard);
-        if (atomic_dec_and_test(&page->cp_ref)) {
+        if (atomic_dec_and_lock(&page->cp_ref, &hdr->coh_page_guard)) {
                 atomic_dec(&site->cs_pages.cs_busy);
                 /* We're going to access the page w/o a reference, but it's
                  * ok because we have grabbed the lock coh_page_guard, which
@@ -656,8 +655,8 @@ void cl_page_put(const struct lu_env *env, struct cl_page *page)
                         EXIT;
                         return;
                 }
+                spin_unlock(&hdr->coh_page_guard);
         }
-        spin_unlock(&hdr->coh_page_guard);
 
         EXIT;
 }
