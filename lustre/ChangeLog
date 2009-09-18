@@ -4,6 +4,7 @@ TBD Sun Microsystems, Inc.
 	 2.6.16.60-0.42.4 (SLES 10),
 	 2.6.27.29-0.1 (SLES11, i686 & x84_64 only),
 	 2.6.18-128.7.1.el5 (RHEL 5),
+	 2.6.18-128.7.1.el5 (OEL 5),
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
 	  2.6.16 - 2.6.27 vanilla (kernel.org)
@@ -14,6 +15,10 @@ TBD Sun Microsystems, Inc.
 	  more information, please refer to bugzilla 17630.
 	* ext4 support for RHEL5 is experimental and thus should not be
 	  used in production.
+
+Severity   : enhancement
+Bugzilla   : 20539
+Description: Add OEL5 support.
 
 Severity   : enhancement
 Bugzilla   : 19848
