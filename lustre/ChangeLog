@@ -122,11 +122,16 @@ Details    : if a client doesn't respond to a blocking callback within the
 	     when the lock is next granted.
 
 Severity   : normal
-Bugzilla   : 20518
-Description: OST is being unmounted w/o all writes to last_rcvd landing on disk.
-	     Affects recovery negatively.
-Details    : Make sure all exports have been properly destroyed by the zombie
+bugzilla   : 20518
+description: ost is being unmounted w/o all writes to last_rcvd landing on disk.
+	     affects recovery negatively.
+details    : make sure all exports have been properly destroyed by the zombie
 	     thread processed before stopping the target.
+
+Severity   : normal
+bugzilla   : 20205
+description: Performance degradation with O_DIRECT between 1.6 & 1.8.1 b190
+details    : disable write barrier for ext4/SLES11.
 
 
 -------------------------------------------------------------------------------
