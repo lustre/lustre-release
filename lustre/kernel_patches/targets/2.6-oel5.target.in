@@ -1,0 +1,25 @@
+lnxmaj="2.6.18"
+lnxrel="128.7.1.0.1.el5"
+
+KERNEL_SRPM=kernel-$lnxmaj-$lnxrel.src.rpm
+SERIES=2.6-rhel5.series
+EXTRA_VERSION=${lnxrel}_lustre.@VERSION@
+LUSTRE_VERSION=@VERSION@
+
+OFED_VERSION=1.4.1
+
+BASE_ARCHS="i686 x86_64 ia64"
+BIGMEM_ARCHS=""
+BOOT_ARCHS=""
+JENSEN_ARCHS=""
+#SMP_ARCHS="i686 x86_64 ia64 ppc64"
+# RHEL5 doesn't use smp specific kernels
+SMP_ARCHS=""
+UP_ARCHS=""
+
+for cc in gcc ; do
+    if which $cc >/dev/null 2>/dev/null ; then
+        export CC=$cc
+        break
+    fi
+done
