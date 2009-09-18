@@ -282,6 +282,9 @@ check_options() {
         2.6-sles11)
             CANONICAL_TARGET="sles11"
             ;;
+        2.6-oel5)
+            CANONICAL_TARGET="oel5"
+            ;;
         hp_pnnl-2.4)
             CANONICAL_TARGET="hp-pnnl-2.4"
             ;;
