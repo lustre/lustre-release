@@ -53,9 +53,11 @@ static int session_timeout = 100;
 CFS_MODULE_PARM(session_timeout, "i", int, 0444,
                 "test session timeout in seconds (100 by default, 0 == never)");
 
+static int rpc_timeout = 64;
+CFS_MODULE_PARM(rpc_timeout, "i", int, 0644,
+                "rpc timeout in seconds (64 by default, 0 == never)");
+
 #define SFW_TEST_CONCURRENCY     1792
-#define SFW_TEST_RPC_TIMEOUT     64
-#define SFW_CLIENT_RPC_TIMEOUT   64  /* in seconds */
 #define SFW_EXTRA_TEST_BUFFERS   8 /* tolerate buggy peers with extra buffers */
 
 #define sfw_test_buffers(tsi)    ((tsi)->tsi_loop + SFW_EXTRA_TEST_BUFFERS)
@@ -949,7 +951,7 @@ sfw_run_test (swi_workitem_t *wi)
         list_add_tail(&rpc->crpc_list, &tsi->tsi_active_rpcs);
         spin_unlock(&tsi->tsi_lock);
 
-        rpc->crpc_timeout = SFW_TEST_RPC_TIMEOUT;
+        rpc->crpc_timeout = rpc_timeout;
 
         spin_lock(&rpc->crpc_lock);
         srpc_post_rpc(rpc);
@@ -1526,7 +1528,7 @@ sfw_post_rpc (srpc_client_rpc_t *rpc)
         LASSERT (list_empty(&rpc->crpc_list));
         LASSERT (!sfw_data.fw_shuttingdown);
 
-        rpc->crpc_timeout = SFW_CLIENT_RPC_TIMEOUT;
+        rpc->crpc_timeout = rpc_timeout;
         srpc_post_rpc(rpc);
 
         spin_unlock(&rpc->crpc_lock);
@@ -1600,6 +1602,9 @@ sfw_startup (void)
 
         s = getenv("BRW_INJECT_ERRORS");
         brw_inject_errors = s != NULL ? atoi(s) : brw_inject_errors;
+
+        s = getenv("RPC_TIMEOUT");
+        rpc_timeout = s != NULL ? atoi(s) : rpc_timeout;
 #endif
 
         if (session_timeout < 0) {
@@ -1608,9 +1613,19 @@ sfw_startup (void)
                 return -EINVAL;
         }
 
+        if (rpc_timeout < 0) {
+                CERROR ("RPC timeout must be non-negative: %d\n",
+                        rpc_timeout);
+                return -EINVAL;
+        }
+
         if (session_timeout == 0)
                 CWARN ("Zero session_timeout specified "
                        "- test sessions never expire.\n");
+
+        if (rpc_timeout == 0)
+                CWARN ("Zero rpc_timeout specified "
+                       "- test RPC never expire.\n");
 
         memset(&sfw_data, 0, sizeof(struct smoketest_framework));
 
