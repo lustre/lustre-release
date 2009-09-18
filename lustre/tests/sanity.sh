@@ -6907,7 +6907,7 @@ test_215() { # for bug 18102
 	TOTAL_LINES=$(cat $TMP/lnet_peers.out |wc -l)
 	OTHER_LINES=$(($TOTAL_LINES - 1))
 	MATCHED_LINES=$(cat $TMP/lnet_peers.out |tail -$TOTAL_LINES |
-			grep -c "^[0-9.]\+@[a-z0-9]\+ *[0-9]\+ *[a-Z]\+ *[0-9]\+ *[0-9]\+ *[0-9]\+ *[0-9]\+ *[0-9]\+ *[0-9]\+$")
+			grep -c "^[0-9.]\+@[a-z0-9]\+ *[0-9]\+ *[a-Z]\+ *[0-9]\+ *[0-9]\+ *-\?[0-9]\+ *[0-9]\+ *-\?[0-9]\+ *[0-9]\+$")
 	[ "$MATCHED_LINES" = "$OTHER_LINES" ] || (cat $TMP/lnet_peers.out && 
 						  error "/proc/sys/lnet/peers misformatted")
 	diff $TMP/lnet_peers.out $TMP/lnet_peers.sys ||
