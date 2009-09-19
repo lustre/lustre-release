@@ -1057,6 +1057,9 @@ int lr_parse_line(void *priv, struct lr_info *info)
         strncpy(info->name, rec->cr_name, rec->cr_namelen);
         info->name[rec->cr_namelen] = '\0';
 
+        if (verbose > 1)
+                printf("Rec %lld: %d %s\n", info->recno, info->type,info->name);
+
         llapi_changelog_free(&rec);
 
         rec_count++;
@@ -1387,8 +1390,8 @@ int lr_replicate()
         lr_print_status(info);
 
         /* Open changelogs for consumption*/
-        rc = llapi_changelog_start(&changelog_priv, 0, status->ls_source_fs,
-                                   status->ls_last_recno);
+        rc = llapi_changelog_start(&changelog_priv, CHANGELOG_FLAG_BLOCK,
+                                   status->ls_source_fs, status->ls_last_recno);
         if (rc < 0) {
                 fprintf(stderr, "Error opening changelog file for fs %s.\n",
                         status->ls_source_fs);

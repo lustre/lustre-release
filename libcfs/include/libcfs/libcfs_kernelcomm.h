@@ -59,17 +59,19 @@ struct lnl_hdr {
         __u16 lnl_magic;
         __u8  lnl_transport;  /* Each new Lustre feature should use a different
                                  transport */
-        __u8  padding1;
+        __u8  lnl_flags;
         __u16 lnl_msgtype;    /* Message type or opcode, transport-specific */
         __u16 lnl_msglen;
 } __attribute__((aligned(sizeof(__u64))));
 
 #define LNL_MAGIC  0x191C /*Lustre9etLinC */
+#define LNL_FL_BLOCK 0x01   /* Wait for send */
 
 /* lnl_msgtype values are defined in each transport */
 enum lnl_transport_type {
-        LNL_TRANSPORT_GENERIC = 1,
-        LNL_TRANSPORT_HSM     = 2,
+        LNL_TRANSPORT_GENERIC   = 1,
+        LNL_TRANSPORT_HSM       = 2,
+        LNL_TRANSPORT_CHANGELOG = 3,
 };
 
 enum lnl_generic_message_type {
@@ -79,8 +81,8 @@ enum lnl_generic_message_type {
 /* LNL Broadcast Groups. This determines which userspace process hears which
  * messages.  Mutliple transports may be used within a group, or multiple
  * groups may use the same transport.  Broadcast
- * groups need not be used if e.g. a PID is specified instead.
- * Leaving group 0 unassigned at the moment.
+ * groups need not be used if e.g. a PID is specified instead;
+ * use group 0 to signify unicast.
  */
 #define LNL_GRP_HSM           0x02
 #define LNL_GRP_CNT              2

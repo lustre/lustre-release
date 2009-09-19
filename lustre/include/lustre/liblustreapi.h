@@ -196,7 +196,11 @@ extern int llapi_path2fid(const char *path, lustre_fid *fid);
 
 /* Changelog interface.  priv is private state, managed internally
    by these functions */
-#define CHANGELOG_FLAG_FOLLOW 0x01
+#define CHANGELOG_FLAG_FOLLOW 0x01   /* Not yet implemented */
+#define CHANGELOG_FLAG_BLOCK  0x02   /* Blocking IO makes sense in case of
+   slow user parsing of the records, but it also prevents us from cleaning
+   up if the records are not consumed. */
+
 extern int llapi_changelog_start(void **priv, int flags, const char *mdtname,
                                  long long startrec);
 extern int llapi_changelog_fini(void **priv);

@@ -87,6 +87,7 @@ int libcfs_ulnl_stop(lustre_netlink *link)
 }
 
 /** Read a message from the netlink layer.
+ * Allocates memory, returns handle
  *
  * @param link Private descriptor for pipe/socket.
  * @param maxsize Maximum message size allowed
@@ -124,7 +125,6 @@ int libcfs_ulnl_msg_get(lustre_netlink *link, int maxsize, int transport,
                 /* Read message from kernel */
                 rc = recvmsg(*link, &msg, 0);
                 if (rc <= 0) {
-                        perror("recv");
                         rc = -errno;
                         break;
                 }

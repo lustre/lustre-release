@@ -199,10 +199,14 @@ int libcfs_klnl_msg_put(int pid, int group, void *payload)
         if (!skb)
                 return -ENOMEM;
 
-        if (pid)
-                rc = nlmsg_unicast(lnl_socket, skb, pid);
-        else
+        if (pid) {
+                rc = netlink_unicast(lnl_socket, skb, pid,
+                             lnlh->lnl_flags & LNL_FL_BLOCK ? 0 : MSG_DONTWAIT);
+                if (rc > 0)
+                        rc = 0;
+        } else {
                 rc = nlmsg_multicast(lnl_socket, skb, 0, group);
+        }
 
         CDEBUG(0, "Sent message pid=%d, group=%d, rc=%d\n", pid, group, rc);
 

@@ -2660,49 +2660,51 @@ static int get_mdtname(char *name, char *format, char *buf)
 #define CHANGELOG_PRIV_MAGIC 0xCA8E1080
 struct changelog_private {
         int magic;
-        int fd;
         int flags;
+        lustre_netlink lnl;
 };
 
 /** Start reading from a changelog
  * @param priv Opaque private control structure
- * @param flags Start flags (e.g. follow)
+ * @param flags Start flags (e.g. CHANGELOG_FLAG_BLOCK)
  * @param device Report changes recorded on this MDT
  * @param startrec Report changes beginning with this record number
+ * (just call llapi_changelog_fini when done; don't need an endrec)
  */
 int llapi_changelog_start(void **priv, int flags, const char *device,
                           long long startrec)
 {
         struct changelog_private *cp;
-        char path[256];
+        struct changelog_show cs = {};
         char mdtname[20];
-        int rc, fd;
+        char pattern[100];
+        char trigger[100];
+        int fd, rc, pid;
 
-        if (device[0] == '/')
-                rc = llapi_search_fsname(device, mdtname);
-        else
-                strncpy(mdtname, device, sizeof(mdtname));
+        /* Find mdtname from path, fsname, mdtname, or mdtname_UUID */
+        if (device[0] == '/') {
+                if ((rc = llapi_search_fsname(device, mdtname)))
+                        return rc;
+                if ((rc = get_mdtname(mdtname, "%s%s", mdtname)) < 0)
+                        return rc;
+        } else {
+                if ((rc = get_mdtname((char *)device, "%s%s", mdtname)) < 0)
+                        return rc;
+        }
 
-        /* Use either the mdd changelog (preferred) or a client mdc changelog */
-        if (get_mdtname(mdtname,
-                        "/proc/fs/lustre/md[cd]/%s%s{,-mdc-*}/changelog",
-                        path) < 0)
-                return -EINVAL;
-        rc = first_match(path, path);
+        /* Find corresponding mdc trigger */
+        snprintf(pattern, PATH_MAX,
+                 "/proc/fs/lustre/mdc/%s-*/changelog_trigger", mdtname);
+        rc = first_match(pattern, trigger);
         if (rc)
                 return rc;
 
-        if ((fd = open(path, O_RDONLY)) < 0) {
-                llapi_err(LLAPI_MSG_ERROR, "error: can't open |%s|\n", path);
+        /* Make sure we can write the trigger */
+        fd = open(trigger, O_WRONLY);
+        if (fd < 0)
                 return -errno;
-        }
 
-        rc = lseek(fd, (off_t)startrec, SEEK_SET);
-        if (rc < 0) {
-                llapi_err(LLAPI_MSG_ERROR, "can't seek rc=%d\n", rc);
-                return -errno;
-        }
-
+        /* Set up the receiver control struct */
         cp = malloc(sizeof(*cp));
         if (cp == NULL) {
                 close(fd);
@@ -2710,11 +2712,39 @@ int llapi_changelog_start(void **priv, int flags, const char *device,
         }
 
         cp->magic = CHANGELOG_PRIV_MAGIC;
-        cp->fd = fd;
         cp->flags = flags;
-        *priv = cp;
+        /* Start the receiver */
+        rc = libcfs_ulnl_start(&cp->lnl, 0 /* unicast */);
+        if (rc < 0)
+                goto out_free;
 
+        /* We need to trigger Lustre to start sending messages now.
+           We could send a lnl message to a kernel listener,
+           or write into proc.  Proc has the advantage of running in this
+           context, avoiding the need for a kernel thread. */
+        cs.cs_pid = getpid();
+        cs.cs_startrec = startrec;
+        cs.cs_flags = flags & CHANGELOG_FLAG_BLOCK ? LNL_FL_BLOCK : 0;
+        if ((pid = fork()) < 0) {
+                goto out_free;
+        } else if (!pid) {
+                /* Write triggers Lustre to start sending, but it
+                   won't return until it is complete, meaning everything
+                   got shipped through lnl (or error).  So we trigger it
+                   from a child process here, allowing the llapi call to
+                   return and wait for the lnl messages. */
+                rc = write(fd, &cs, sizeof(cs));
+                exit(rc);
+        }
+
+        close(fd);
+        *priv = cp;
         return 0;
+
+out_free:
+        free(cp);
+        close(fd);
+        return rc;
 }
 
 /** Finish reading from a changelog */
@@ -2725,20 +2755,10 @@ int llapi_changelog_fini(void **priv)
         if (!cp || (cp->magic != CHANGELOG_PRIV_MAGIC))
                 return -EINVAL;
 
-        close(cp->fd);
+        libcfs_ulnl_stop(&cp->lnl);
         free(cp);
         *priv = NULL;
         return 0;
-}
-
-static int pollwait(int fd) {
-        struct pollfd pfds[1];
-        int rc;
-
-        pfds[0].fd = fd;
-        pfds[0].events = POLLIN;
-        rc = poll(pfds, 1, -1);
-        return rc < 0 ? -errno : rc;
 }
 
 /** Read the next changelog entry
@@ -2751,7 +2771,7 @@ static int pollwait(int fd) {
 int llapi_changelog_recv(void *priv, struct changelog_rec **rech)
 {
         struct changelog_private *cp = (struct changelog_private *)priv;
-        struct changelog_rec rec, *recp;
+        struct lnl_hdr *lnlh;
         int rc = 0;
 
         if (!cp || (cp->magic != CHANGELOG_PRIV_MAGIC))
@@ -2759,41 +2779,50 @@ int llapi_changelog_recv(void *priv, struct changelog_rec **rech)
         if (rech == NULL)
                 return -EINVAL;
 
-readrec:
-        /* Read in the rec to get the namelen */
-        rc = read(cp->fd, &rec, sizeof(rec));
+repeat:
+        rc = libcfs_ulnl_msg_get(&cp->lnl, CR_MAXSIZE, LNL_TRANSPORT_CHANGELOG,
+                                 &lnlh);
         if (rc < 0)
-                return -errno;
-        if (rc == 0) {
-                if (cp->flags && CHANGELOG_FLAG_FOLLOW) {
-                        rc = pollwait(cp->fd);
-                        if (rc < 0)
-                                return rc;
-                        goto readrec;
+                return rc;
+
+        if ((lnlh->lnl_transport != LNL_TRANSPORT_CHANGELOG) ||
+            ((lnlh->lnl_msgtype != CL_RECORD) &&
+             (lnlh->lnl_msgtype != CL_EOF))) {
+                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                          "Unknown changelog message type %d:%d\n",
+                          lnlh->lnl_transport, lnlh->lnl_msgtype);
+                rc = -EPROTO;
+                goto out_free;
+        }
+
+        if (lnlh->lnl_msgtype == CL_EOF) {
+                if (cp->flags & CHANGELOG_FLAG_FOLLOW) {
+                        /* Ignore EOFs */
+                        goto repeat;
+                } else {
+                        rc = 1;
+                        goto out_free;
                 }
-                return 1;
         }
 
-        recp = malloc(sizeof(rec) + rec.cr_namelen);
-        if (recp == NULL)
-                return -ENOMEM;
-        memcpy(recp, &rec, sizeof(rec));
-        rc = read(cp->fd, recp->cr_name, rec.cr_namelen);
-        if (rc < 0) {
-                free(recp);
-                llapi_err(LLAPI_MSG_ERROR, "Can't read entire filename");
-                return -errno;
-        }
+        /* Our message is a changelog_rec */
+        *rech = (struct changelog_rec *)(lnlh + 1);
 
-        *rech = recp;
         return 0;
+
+out_free:
+        libcfs_ulnl_msg_free(&lnlh);
+        *rech = NULL;
+        return rc;
 }
 
 /** Release the changelog record when done with it. */
 int llapi_changelog_free(struct changelog_rec **rech)
 {
-        if (*rech)
-                free(*rech);
+        if (*rech) {
+                struct lnl_hdr *lnlh = (struct lnl_hdr *)*rech - 1;
+                libcfs_ulnl_msg_free(&lnlh);
+        }
         *rech = NULL;
         return 0;
 }

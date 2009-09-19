@@ -1659,6 +1659,7 @@ static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 
         /* ignore errors */
         libcfs_klnl_start(LNL_TRANSPORT_HSM);
+        libcfs_klnl_start(LNL_TRANSPORT_CHANGELOG);
 
         RETURN(rc);
 
@@ -1728,6 +1729,7 @@ static int mdc_cleanup(struct obd_device *obd)
         struct client_obd *cli = &obd->u.cli;
 
         libcfs_klnl_stop(LNL_TRANSPORT_HSM, LNL_GRP_HSM);
+        libcfs_klnl_stop(LNL_TRANSPORT_CHANGELOG, 0);
 
         OBD_FREE(cli->cl_rpc_lock, sizeof (*cli->cl_rpc_lock));
         OBD_FREE(cli->cl_setattr_lock, sizeof (*cli->cl_setattr_lock));

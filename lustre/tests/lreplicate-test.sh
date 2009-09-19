@@ -187,7 +187,6 @@ test_1() {
     fini_changelog
     cleanup_src_tgt
     return $RC
-
 }
 run_test 1 "Simple Replication"
 
@@ -518,9 +517,9 @@ test_7() {
     createmany -o $DIR/$tdir/$tfile $NUMFILES
 
     # To simulate replication to another lustre filesystem, replicate
-    # the changes to $DIR/tgt. Disable changelogs before replication
-    # so that the files created as part of replication are not logged.
-    do_facet $SINGLEMDS lctl set_param -n mdd.$MDT0.changelog off
+    # the changes to $DIR/tgt. We can't turn off the changelogs
+    # while we are registered, so lreplicate better not try to 
+    # replicate the replication steps.  It seems ok :)
     mkdir $DIR/tgt
 
     $LREPLICATE -s $DIR -t $DIR/tgt -m $MDT0 -u $CL_USER -l $LREPL_LOG
