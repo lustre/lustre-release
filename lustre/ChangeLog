@@ -15,6 +15,13 @@ tbd Sun Microsystems, Inc.
 	  of Lustre filesystem with 4K stack may cause a stack overflow. For
 	  more information, please refer to bugzilla 17630.
 
+Severity   : normal
+Bugzilla   : 19526
+Description: can't stat file in some situation.
+Details    : improve initialize osc date when target is added to mds and 
+             ability to resend too big getattr request is client isn't have info
+             about ost.
+
 Severity   : enhancement
 Bugzilla   : 20539
 Description: Add OEL5 support.

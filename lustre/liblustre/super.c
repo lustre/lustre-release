@@ -2075,6 +2075,10 @@ llu_fsswop_mount(const char *source,
         obd->obd_upcall.onu_owner = &sbi->ll_lco;
         obd->obd_upcall.onu_upcall = ll_ocd_update;
 
+        /* ask lov to generate OBD_NOTIFY_CREATE events for already registered
+         * targets */
+        obd_notify(obd, NULL, OBD_NOTIFY_CREATE, NULL);
+
         obd_register_lock_cancel_cb(obd, llu_extent_lock_cancel_cb);
 
         ocd.ocd_connect_flags = OBD_CONNECT_SRVLOCK | OBD_CONNECT_REQPORTAL |

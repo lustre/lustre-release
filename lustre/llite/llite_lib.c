@@ -415,6 +415,10 @@ static int client_common_fill_super(struct super_block *sb,
         obd->obd_upcall.onu_upcall = ll_ocd_update;
         data->ocd_brw_size = PTLRPC_MAX_BRW_PAGES << CFS_PAGE_SHIFT;
 
+        /* ask lov to generate OBD_NOTIFY_CREATE events for already registered
+         * targets */
+        obd_notify(obd, NULL, OBD_NOTIFY_CREATE, NULL);
+
         obd_register_lock_cancel_cb(obd, ll_extent_lock_cancel_cb);
         obd_register_page_removal_cb(obd, ll_page_removal_cb, ll_pin_extent_cb);
 

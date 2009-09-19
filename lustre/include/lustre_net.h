@@ -324,6 +324,7 @@ struct ptlrpc_request {
                 rq_sent_final:1,    /* stop sending early replies */
                 rq_hp:1,            /* high priority RPC */
                 rq_at_linked:1,     /* link into service's srv_at_array */
+                rq_reply_truncate:1, /* reply is truncated */
                 rq_fake:1,          /* fake request - just for timeout only */
                 /* a copy of the request is queued to replay during recovery */
                 rq_copy_queued:1,

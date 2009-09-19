@@ -231,31 +231,29 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
                 /* NULL watched means all osc's in the lov (only for syncs) */
                 /* sync event should be send lov idx as data */
                 struct lov_obd *lov = &obd->u.lov;
-                struct obd_device *tgt_obd;
-                int i;
+                int i, is_sync;
 
-                if ((ev == OBD_NOTIFY_SYNC) ||
-                    (ev == OBD_NOTIFY_SYNC_NONBLOCK))
-                        data = &i;
+                data = &i;
+                is_sync = (ev == OBD_NOTIFY_SYNC) ||
+                          (ev == OBD_NOTIFY_SYNC_NONBLOCK);
 
                 obd_getref(obd);
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
 
+                        if (!lov->lov_tgts[i])
+                                continue;
                         /* don't send sync event if target not
                          * connected/activated */
-                        if (!lov->lov_tgts[i] ||
-                            !lov->lov_tgts[i]->ltd_active)
+                        if (is_sync &&  !lov->lov_tgts[i]->ltd_active)
                                 continue;
 
-                        tgt_obd = class_exp2obd(lov->lov_tgts[i]->ltd_exp);
-
-                        rc = obd_notify_observer(obd, tgt_obd, ev, data);
+                        rc = obd_notify_observer(obd, lov->lov_tgts[i]->ltd_obd,
+                                                 ev, data);
                         if (rc) {
                                 CERROR("%s: notify %s of %s failed %d\n",
                                        obd->obd_name,
                                        obd->obd_observer->obd_name,
-                                       tgt_obd->obd_name, rc);
-                                break;
+                                       lov->lov_tgts[i]->ltd_obd->obd_name, rc);
                         }
                 }
                 obd_putref(obd);
@@ -283,15 +281,7 @@ static int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
         if (!lov->lov_tgts[index])
                 RETURN(-EINVAL);
 
-        tgt_uuid = lov->lov_tgts[index]->ltd_uuid;
-        tgt_obd = class_find_client_obd(&tgt_uuid, LUSTRE_OSC_NAME,
-                                        &obd->obd_uuid);
-
-        if (!tgt_obd) {
-                CERROR("Target %s not attached\n", obd_uuid2str(&tgt_uuid));
-                RETURN(-EINVAL);
-        }
-
+        tgt_obd = lov->lov_tgts[index]->ltd_obd;
         if (!tgt_obd->obd_set_up) {
                 CERROR("Target %s not set up\n", obd_uuid2str(&tgt_uuid));
                 RETURN(-EINVAL);
@@ -597,6 +587,7 @@ static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
 static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
                           __u32 index, int gen, int active)
 {
+        struct obd_device *tgt_obd;
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
         int rc;
@@ -611,14 +602,21 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
                 RETURN(-EINVAL);
         }
 
+
+        tgt_obd = class_find_client_obd(uuidp, LUSTRE_OSC_NAME,
+                                        &obd->obd_uuid);
+        if (!tgt_obd) {
+                CERROR("Target %s not attached\n", obd_uuid2str(uuidp));
+                RETURN(-EINVAL);
+        }
+
         mutex_down(&lov->lov_lock);
 
         if ((index < lov->lov_tgt_size) && (lov->lov_tgts[index] != NULL)) {
                 tgt = lov->lov_tgts[index];
                 CERROR("UUID %s already assigned at LOV target index %d\n",
                        obd_uuid2str(&tgt->ltd_uuid), index);
-                mutex_up(&lov->lov_lock);
-                RETURN(-EEXIST);
+                GOTO(err_unlock, rc = -EEXIST);
         }
 
         if (index >= lov->lov_tgt_size) {
@@ -630,10 +628,8 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
                 while (newsize < index + 1)
                         newsize = newsize << 1;
                 OBD_ALLOC(newtgts, sizeof(*newtgts) * newsize);
-                if (newtgts == NULL) {
-                        mutex_up(&lov->lov_lock);
-                        RETURN(-ENOMEM);
-                }
+                if (newtgts == NULL)
+                        GOTO(err_unlock, rc = -ENOMEM);
 
                 if (lov->lov_tgt_size) {
                         memcpy(newtgts, lov->lov_tgts, sizeof(*newtgts) *
@@ -655,24 +651,21 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
         }
 
         OBD_ALLOC_PTR(tgt);
-        if (!tgt) {
-                mutex_up(&lov->lov_lock);
-                RETURN(-ENOMEM);
-        }
+        if (!tgt)
+                GOTO(err_unlock, rc = -ENOMEM);
 
         rc = lov_ost_pool_add(&lov->lov_packed, index, lov->lov_tgt_size);
-        if (rc) {
-                mutex_up(&lov->lov_lock);
-                OBD_FREE_PTR(tgt);
-                RETURN(rc);
-        }
+        if (rc)
+                GOTO(err_free_tgt, rc = -EEXIST);
 
         memset(tgt, 0, sizeof(*tgt));
+        tgt->ltd_obd = tgt_obd;
         tgt->ltd_uuid = *uuidp;
         /* XXX - add a sanity check on the generation number. */
         tgt->ltd_gen = gen;
         tgt->ltd_index = index;
         tgt->ltd_activate = active;
+
         lov->lov_tgts[index] = tgt;
         if (index >= lov->desc.ld_tgt_count)
                 lov->desc.ld_tgt_count = index + 1;
@@ -681,6 +674,8 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
 
         CDEBUG(D_CONFIG, "idx=%d ltd_gen=%d ld_tgt_count=%d\n",
                 index, tgt->ltd_gen, lov->desc.ld_tgt_count);
+
+        rc = obd_notify(obd, tgt_obd, OBD_NOTIFY_CREATE, &index);
 
         if (lov->lov_connects == 0) {
                 /* lov_connect hasn't been called yet. We'll do the
@@ -710,6 +705,12 @@ out:
                        obd_uuid2str(&tgt->ltd_uuid));
         }
         obd_putref(obd);
+        RETURN(rc);
+
+err_free_tgt:
+        OBD_FREE_PTR(tgt);
+err_unlock:
+        mutex_up(&lov->lov_lock);
         RETURN(rc);
 }
 

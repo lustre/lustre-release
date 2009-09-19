@@ -566,6 +566,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         request->rq_resend = 0;
         request->rq_restart = 0;
         request->rq_rep_swab_mask = 0;
+        request->rq_reply_truncate = 0;
         spin_unlock(&request->rq_lock);
 
         if (!noreply) {
@@ -575,7 +576,8 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                 reply_md.threshold = LNET_MD_THRESH_INF;
                 /* Manage remote for early replies */
                 reply_md.options   = PTLRPC_MD_OPTIONS | LNET_MD_OP_PUT |
-                        LNET_MD_MANAGE_REMOTE;
+                        LNET_MD_MANAGE_REMOTE |
+                        LNET_MD_TRUNCATE; /* allow to make EBIG error */
                 reply_md.user_ptr  = &request->rq_reply_cbid;
                 reply_md.eq_handle = ptlrpc_eq_h;
 

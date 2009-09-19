@@ -240,8 +240,7 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
                         continue;
 
                 CDEBUG(D_CONFIG, "init %s\n", lov->lov_tgts[i]->ltd_uuid.uuid);
-                child = class_find_client_obd(&lov->lov_tgts[i]->ltd_uuid,
-                                              LUSTRE_OSC_NAME, &obd->obd_uuid);
+                child = lov->lov_tgts[i]->ltd_obd;
                 if (!child) {
                         CERROR("Can't find osc\n");
                         continue;

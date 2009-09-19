@@ -1834,7 +1834,7 @@ void mds_shrink_body_reply(struct ptlrpc_request *req,
                            int reply_mdoff)
 {
         struct mds_body *rq_body;
-        const long have_acl = OBD_MD_FLCOOKIE | OBD_MD_FLACL;
+        const long long have_acl = OBD_MD_FLCOOKIE | OBD_MD_FLACL;
         const long have_md = OBD_MD_FLEASIZE | OBD_MD_FLDIREA;
         ENTRY;
 

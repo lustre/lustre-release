@@ -526,6 +526,8 @@ static int mdc_finish_enqueue(struct obd_export *exp,
                 if ((body->valid & OBD_MD_FLEASIZE) != 0) {
                         void *eadata;
 
+                        mdc_update_max_ea_from_body(exp, body);
+
                         /* The eadata is opaque; just check that it is there.
                          * Eventually, obd_unpackmd() will check the contents */
                         eadata = lustre_swab_repbuf(req, DLM_REPLY_REC_OFF + 1,

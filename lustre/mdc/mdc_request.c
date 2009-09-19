@@ -164,6 +164,8 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
         CDEBUG(D_NET, "mode: %o\n", body->mode);
 
         lustre_set_rep_swabbed(req, REPLY_REC_OFF + 1);
+        mdc_update_max_ea_from_body(exp, body);
+
         if (body->eadatasize != 0) {
                 /* reply indicates presence of eadata; check it's there... */
                 eadata = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1,

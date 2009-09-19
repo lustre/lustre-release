@@ -698,6 +698,7 @@ struct lov_qos {
 struct lov_tgt_desc {
         struct list_head    ltd_kill;
         struct obd_uuid     ltd_uuid;
+        struct obd_device  *ltd_obd;
         struct obd_export  *ltd_exp;
         struct ltd_qos      ltd_qos;     /* qos info per target */
         __u32               ltd_gen;
@@ -885,6 +886,8 @@ enum llog_ctxt_id {
  * Events signalled through obd_notify() upcall-chain.
  */
 enum obd_notify_event {
+        /* device target is created */
+        OBD_NOTIFY_CREATE,
         /* DEVICE connect start */
         OBD_NOTIFY_CONNECT,
         /* Device activated */

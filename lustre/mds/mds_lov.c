@@ -220,6 +220,15 @@ static int mds_lov_update_max_ost(struct mds_obd *mds, obd_id index)
         return 0;
 }
 
+static int mds_lov_objinit(struct mds_obd *mds, __u32 index)
+{
+        __u32 page = index / OBJID_PER_PAGE();
+        __u32 off = index % OBJID_PER_PAGE();
+        obd_id *data =  mds->mds_lov_page_array[page];
+
+        return (data[off] > 0);
+}
+
 int mds_lov_prepare_objids(struct obd_device *obd, struct lov_mds_md *lmm)
 {
         int rc = 0;
@@ -475,7 +484,7 @@ static int mds_lov_get_objid(struct obd_device * obd,
         off = idx % OBJID_PER_PAGE();
 
         data = mds->mds_lov_page_array[page];
-        if (data[off] < 2 || 
+        if (data[off] < 2 ||
             !(osc_exp->exp_connect_flags & OBD_CONNECT_SKIP_ORPHAN)) {
                 /* We never read this lastid; ask the osc */
                 struct obd_id_info lastid;
@@ -603,9 +612,7 @@ static int mds_lov_update_mds(struct obd_device *obd,
 
         /* Don't let anyone else mess with mds_lov_objids now */
         old_count = mds->mds_lov_desc.ld_tgt_count;
-        rc = mds_lov_update_desc(obd, idx, &watched->u.cli.cl_target_uuid);
-        if (rc)
-                GOTO(out, rc);
+        LASSERT(mds_lov_objinit(mds, idx));
 
         CDEBUG(D_CONFIG, "idx=%d, recov=%d/%d, cnt=%d/%d\n",
                idx, obd->obd_recovering, obd->obd_async_recov, old_count,
@@ -684,12 +691,9 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                 GOTO(error_exit, rc);
         }
 
-        rc = obd_llog_init(obd, obd, NULL); 
-        if (rc) {
-                CERROR("MDS cannot register as observer of LOV %s (%d)\n",
-                       lov_name, rc);
-                GOTO(error_exit, rc);
-        }
+        /* ask lov to generate OBD_NOTIFY_CREATE events for already registered
+         * targets */
+        obd_notify(obd->u.mds.mds_osc_obd, NULL, OBD_NOTIFY_CREATE, NULL);
 
         OBD_ALLOC(data, sizeof(*data));
         if (data == NULL)
@@ -1150,6 +1154,14 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         CDEBUG(D_CONFIG, "notify %s ev=%d\n", watched->obd_name, ev);
 
         switch (ev) {
+        case OBD_NOTIFY_CREATE:
+                CWARN("MDS %s: add target %s\n",obd->obd_name,
+                      obd_uuid2str(&watched->u.cli.cl_target_uuid));
+                /* We still have to fix the lov descriptor for ost's */
+                LASSERT(data);
+                rc = mds_lov_update_desc(obd, *(__u32 *)data,
+                                          &watched->u.cli.cl_target_uuid);
+                RETURN(rc);
         /* We only handle these: */
         case OBD_NOTIFY_ACTIVE:
                 /* lov want one or more _active_ targets for work */
@@ -1181,15 +1193,8 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                 CWARN("MDS %s: in recovery, not resetting orphans on %s\n",
                       obd->obd_name,
                       obd_uuid2str(&watched->u.cli.cl_target_uuid));
-                /* We still have to fix the lov descriptor for ost's added
-                   after the mdt in the config log.  They didn't make it into
-                   mds_lov_connect. */
-                LASSERT(data);
-                rc = mds_lov_update_desc(obd, *(__u32 *)data,
-                                          &watched->u.cli.cl_target_uuid);
-
                 mds_allow_cli(obd, CONFIG_SYNC);
-                RETURN(rc);
+                RETURN(0);
         }
 
         rc = mds_lov_start_synchronize(obd, watched, data,

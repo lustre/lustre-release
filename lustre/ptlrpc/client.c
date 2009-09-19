@@ -1010,6 +1010,14 @@ static int after_reply(struct ptlrpc_request *req)
         /* NB Until this point, the whole of the incoming message,
          * including buflens, status etc is in the sender's byte order. */
 
+        if (req->rq_reply_truncate && !req->rq_no_resend) {
+                req->rq_resend = 1;
+                OBD_FREE(req->rq_repbuf, req->rq_replen);
+                req->rq_repbuf = NULL;
+                req->rq_replen = req->rq_nob_received;
+                RETURN(0);
+        }
+
         LASSERT (req->rq_nob_received <= req->rq_replen);
         rc = unpack_reply(req);
         if (rc)
@@ -2059,14 +2067,13 @@ restart:
 
                 if (req->rq_err) {
                         /* rq_status was set locally */
-                        rc = -EIO;
+                        rc = req->rq_status ? req->rq_status : -EIO;
                 }
                 else if (req->rq_intr) {
                         rc = -EINTR;
                 }
                 else if (req->rq_no_resend) {
-                        spin_unlock(&imp->imp_lock);
-                        GOTO(out, rc = -ETIMEDOUT);
+                        rc = -ETIMEDOUT;
                 }
                 else {
                         GOTO(restart, rc);
@@ -2145,6 +2152,7 @@ restart:
         if (req->rq_err) {
                 DEBUG_REQ(D_RPCTRACE, req, "err rc=%d status=%d",
                           rc, req->rq_status);
+                rc = rc ? rc : req->rq_status;
                 GOTO(out, rc = rc ? rc : -EIO);
         }
 
