@@ -417,7 +417,7 @@ static int get_root_path(int want, char *fsname, int *outfd, char *path,
                 ptr++;
 
                 if ((want & WANT_INDEX) && (idx++ != index))
-                        continue; 
+                        continue;
 
                 /* Check the fsname for a match */
                 if (!(want & WANT_FSNAME) && fsname != NULL &&
@@ -432,7 +432,7 @@ static int get_root_path(int want, char *fsname, int *outfd, char *path,
                         break;
                 /* Otherwise find the longest matching path */
                 } else if ((strlen(path) >= mntlen) && (mntlen >= len) &&
-                           (strncmp(mnt.mnt_dir, path, mntlen) == 0)) { 
+                           (strncmp(mnt.mnt_dir, path, mntlen) == 0)) {
                         strcpy(mntdir, mnt.mnt_dir);
                         mntlen = len;
                         name = ptr;
@@ -876,6 +876,24 @@ int llapi_get_obd_count(char *mnt, int *count, int is_mdt)
         return rc;
 }
 
+/* Check if user specified value matches a real uuid.  Ignore _UUID,
+ * -osc-4ba41334, other trailing gunk in comparison.
+ * @param real_uuid ends in "_UUID"
+ * @param search_uuid may or may not end in "_UUID"
+ */
+int llapi_uuid_match(char *real_uuid, char *search_uuid)
+{
+        int cmplen = strlen(real_uuid) - 5;
+
+        if ((strlen(search_uuid) > cmplen) && isxdigit(search_uuid[cmplen])) {
+                /* OST00000003 doesn't match OST0000 */
+                llapi_err(LLAPI_MSG_ERROR, "Bad UUID format '%s'", search_uuid);
+                return 0;
+        }
+
+        return (strncmp(search_uuid, real_uuid, cmplen) == 0);
+}
+
 /* Here, param->obduuid points to a single obduuid, the index of which is
  * returned in param->obdindex */
 static int setup_obd_uuid(DIR *dir, char *dname, struct find_param *param)
@@ -919,8 +937,7 @@ static int setup_obd_uuid(DIR *dir, char *dname, struct find_param *param)
                         break;
 
                 if (param->obduuid) {
-                        if (strncmp(param->obduuid->uuid, uuid,
-                                    sizeof(uuid)) == 0) {
+                        if (llapi_uuid_match(uuid, param->obduuid->uuid)) {
                                 param->obdindex = index;
                                 break;
                         }
@@ -938,7 +955,7 @@ static int setup_obd_uuid(DIR *dir, char *dname, struct find_param *param)
                 llapi_err_noerrno(LLAPI_MSG_ERROR,
                                   "error: %s: unknown obduuid: %s",
                                   __FUNCTION__, param->obduuid->uuid);
-                //rc = EINVAL;
+                rc = -EINVAL;
         }
 
         return (rc);
@@ -982,16 +999,22 @@ retry_get_uuids:
                 return -ENOMEM;
 
         for (obdnum = 0; obdnum < param->num_obds; obdnum++) {
-                for (i = 0; i <= obdcount; i++) {
-                        if (strcmp((char *)&param->obduuid[obdnum].uuid,
-                                   (char *)&uuids[i]) == 0) {
+                for (i = 0; i < obdcount; i++) {
+                        if (llapi_uuid_match(uuids[i].uuid,
+                                             param->obduuid[obdnum].uuid)) {
                                 param->obdindexes[obdnum] = i;
                                 obd_valid++;
                                 break;
                         }
                 }
-                if (i == obdcount)
+                if (i >= obdcount) {
                         param->obdindexes[obdnum] = OBD_NOT_FOUND;
+                        llapi_err_noerrno(LLAPI_MSG_ERROR,
+                                          "error: %s: unknown obduuid: %s",
+                                          __FUNCTION__,
+                                          param->obduuid[obdnum].uuid);
+                        ret = -EINVAL;
+                }
         }
 
         if (obd_valid == 0)
@@ -1001,7 +1024,7 @@ retry_get_uuids:
 
         param->got_uuids = 1;
 
-        return 0;
+        return ret;
 }
 
 static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,

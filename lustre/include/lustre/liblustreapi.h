@@ -151,6 +151,7 @@ struct find_param {
         char poolname[LOV_MAXPOOLNAME + 1];
 };
 
+extern int llapi_uuid_match(char *real_uuid, char *search_uuid);
 extern int llapi_getstripe(char *path, struct find_param *param);
 extern int llapi_find(char *path, struct find_param *param);
 
