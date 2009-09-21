@@ -150,7 +150,7 @@ int echo_create(struct obd_export *exp, struct obdo *oa,
 }
 
 int echo_destroy(struct obd_export *exp, struct obdo *oa,
-                 struct lov_stripe_md *ea, struct obd_trans_info *oti, 
+                 struct lov_stripe_md *ea, struct obd_trans_info *oti,
                  struct obd_export *md_exp)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -188,7 +188,7 @@ static int echo_getattr(struct obd_export *exp, struct obd_info *oinfo)
         }
 
         if (!(oinfo->oi_oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: "LPX64"\n", 
+                CERROR("obdo missing FLID valid flag: "LPX64"\n",
                        oinfo->oi_oa->o_valid);
                 RETURN(-EINVAL);
         }
@@ -212,7 +212,7 @@ static int echo_setattr(struct obd_export *exp, struct obd_info *oinfo,
         }
 
         if (!(oinfo->oi_oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: "LPX64"\n", 
+                CERROR("obdo missing FLID valid flag: "LPX64"\n",
                        oinfo->oi_oa->o_valid);
                 RETURN(-EINVAL);
         }
@@ -347,7 +347,7 @@ static int echo_map_nb_to_lb(struct obdo *oa, struct obd_ioobj *obj,
                 (*left)--;
                 (*pages)++;
         }
-        
+
         return 0;
 }
 
@@ -519,12 +519,14 @@ static int echo_setup(struct obd_device *obd, obd_count len, void *buf)
         int                        rc;
         int                        lock_flags = 0;
         struct ldlm_res_id         res_id = {.name = {1}};
+        char                       ns_name[48];
         ENTRY;
 
         spin_lock_init(&obd->u.echo.eo_lock);
         obd->u.echo.eo_lastino = ECHO_INIT_OBJID;
 
-        obd->obd_namespace = ldlm_namespace_new(obd, "echo-tgt",
+        sprintf(ns_name, "echotgt-%s", obd->obd_uuid.uuid);
+        obd->obd_namespace = ldlm_namespace_new(obd, ns_name,
                                                 LDLM_NAMESPACE_SERVER,
                                                 LDLM_NAMESPACE_GREEDY);
         if (obd->obd_namespace == NULL) {
@@ -532,9 +534,9 @@ static int echo_setup(struct obd_device *obd, obd_count len, void *buf)
                 RETURN(-ENOMEM);
         }
 
-        rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, LDLM_PLAIN, 
-                                    NULL, LCK_NL, &lock_flags, NULL, 
-                                    ldlm_completion_ast, NULL, NULL, 
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, LDLM_PLAIN,
+                                    NULL, LCK_NL, &lock_flags, NULL,
+                                    ldlm_completion_ast, NULL, NULL,
                                     0, NULL, &obd->u.echo.eo_nl_lock);
         LASSERT (rc == ELDLM_OK);
 
