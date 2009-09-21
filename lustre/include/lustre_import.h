@@ -176,7 +176,8 @@ struct obd_import {
                                   imp_pingable:1,         /* pingable */
                                   imp_resend_replay:1,    /* resend for replay */
                                   imp_recon_bk:1,         /* turn off reconnect if all failovers fail */
-                                  imp_last_recon:1;       /* internally used by above */
+                                  imp_last_recon:1,       /* internally used by above */
+                                  imp_force_reconnect:1;  /* import must be reconnected instead of chouse new connection */
         __u32                     imp_connect_op;
         struct obd_connect_data   imp_connect_data;
         __u64                     imp_connect_flags_orig;
