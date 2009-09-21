@@ -612,6 +612,8 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                         continue;
                 }
 
+                check_lcd(obd->obd_name, cl_idx, lcd);
+
                 last_transno = lsd_last_transno(lcd);
                 last_epoch = le32_to_cpu(lcd->lcd_last_epoch);
 

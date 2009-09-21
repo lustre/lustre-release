@@ -928,6 +928,8 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                         continue;
                 }
 
+                check_lcd(obd->obd_name, cl_idx, lcd);
+
                 last_rcvd = le64_to_cpu(lcd->lcd_last_transno);
 
                 /* These exports are cleaned up by filter_disconnect(), so they

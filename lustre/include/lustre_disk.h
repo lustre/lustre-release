@@ -262,6 +262,20 @@ struct lsd_client_data {
         __u8  lcd_padding[LR_CLIENT_SIZE - 128];
 };
 
+/* bug20354: the lcd_uuid for export of clients may be wrong */
+static inline void check_lcd(char *obd_name, int index,
+                             struct lsd_client_data *lcd)
+{
+        int length = sizeof(lcd->lcd_uuid);
+        if (strnlen(lcd->lcd_uuid, length) == length) {
+                lcd->lcd_uuid[length - 1] = '\0';
+
+                LCONSOLE_ERROR("the client UUID (%s) on %s for exports"
+                               "stored in last_rcvd(index = %d) is bad!\n", 
+                               lcd->lcd_uuid, obd_name, index);
+        }
+}
+
 static inline __u64 lsd_last_transno(struct lsd_client_data *lcd)
 {
         return le64_to_cpu(lcd->lcd_last_transno) >
