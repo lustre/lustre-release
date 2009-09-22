@@ -2025,6 +2025,19 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
 
         /* check quota and update in hash */
         for (group = 0; group < sbi->s_groups_count; group++) {
+                struct ext3_group_desc *desc;
+                desc = get_group_desc(sb, group);
+                if (!desc)
+                        GOTO(out, -EIO);
+
+                spin_lock(sb_bgl_lock(sbi, group));
+                if (desc->bg_flags & cpu_to_le16(EXT3_BG_INODE_UNINIT)) {
+                        /* no inode in use in this group, just skip it */
+                        spin_unlock(sb_bgl_lock(sbi, group));
+                        continue;
+                }
+                spin_unlock(sb_bgl_lock(sbi, group));
+
                 ino = group * sbi->s_inodes_per_group + 1;
                 bitmap_bh = ext3_read_inode_bitmap(sb, group);
                 if (!bitmap_bh) {

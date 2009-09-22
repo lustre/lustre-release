@@ -16,19 +16,11 @@ tbd Sun Microsystems, Inc.
 	  more information, please refer to bugzilla 17630.
 
 Severity   : normal
-Bugzilla   : 18674
-Frequency  : occasionally during network problems
-Description: client not allowed to reconnect to OST because of active request
-Details    : The client also now retries to reconnect to the same server if a 
-	     connect request failed with EBUSY or -EAGAIN. The patch has not
-	     been landed in the previous commits.
-
-Severity   : normal
 Bugzilla   : 19526
 Description: can't stat file in some situation.
-Details    : improve initialize osc date when target is added to mds and 
-             ability to resend too big getattr request is client isn't have info
-             about ost.
+Details    : improve initialize osc date when target is added to mds and
+	     ability to resend too big getattr request is client isn't have info
+	     about ost.
 
 Severity   : enhancement
 Bugzilla   : 20539
@@ -37,10 +29,6 @@ Description: Add OEL5 support.
 Severity   : enhancement
 Bugzilla   : 19848
 Description: Update kernel to SLES11 2.6.27.29-0.1.1.
-
-Severity   : enhancement
-Bugzilla   : 20200
-Description: Added sanity-quota test to for lfs(1) to work with numeric uid/gid.
 
 Severity   : normal
 Bugzilla   : 14951
@@ -56,13 +44,6 @@ Severity   : enhancement
 Bugzilla   : 20200
 Description: Enhancement for lfs(1) command to use numeric uid/gid.
 
-Severity   : normal
-Bugzilla   : 18674
-Description: Do not start bulk transfer, if client tried to reconnect.
-Details    : Do not start bulk transfer, if client tried to reconnect,
-	     but failed due to active rpcs. Check for exp_abort_active_req
-	     has been implemented.
-
 Severity   : enhancement
 Bugzilla   : 18539
 Description: Communicate OST degraded/readonly state via statfs to MDS
@@ -72,7 +53,7 @@ Details    : Flags in the statfs returned from OSTs indicate whether the
 
 Severity   : enhancement
 Bugzilla   : 19808
-Description: Vanilla kernel 2.6.30 patchless support.
+Description: Vanilla kernel 2.6.30 patchless client support.
 
 Severity   : normal
 Bugzilla   : 20122
@@ -167,6 +148,14 @@ Details    : abort bulk requests received by the OST once the client has timed
 	     request failed with EBUSY or -EAGAIN.
 
 Severity   : normal
+Bugzilla   : 18674
+Frequency  : occasionally during network problems
+Description: client not allowed to reconnect to OST because of active request
+Details    : The client also now retries to reconnect to the same server if a
+	     connect request failed with EBUSY or -EAGAIN. The patch has not
+	     been landed in the previous commits.
+
+Severity   : normal
 Frequency  : rare, if used wide striped file and one ost in down.
 Bugzilla   : 18382
 Descriptoin: don't return error if we created a subset of objects for file.
@@ -177,7 +166,7 @@ Details    : lov_update_create_set() uses set->set_success as index for created
 Severity   : normal
 Frequency  : rare, only when quota is enabled
 Bugzilla   : 18793
-Descriptoin: OSS complains "too many blocks" and crashes
+Description: OSS complains "too many blocks" and crashes
 Details    : In filter_commitrw_write():
 	     1. lquota_chkquota();
 	     2. obdo_from_inode();
@@ -185,6 +174,12 @@ Details    : In filter_commitrw_write():
 	     "2." has changed uid and gid in this case, then caused
 	     lquota_chkquota() and lquota_pending_commit() to use
 	     different uid and gid. That is the root of the bug.
+
+Severity   : normal
+Bugzilla   : 19763
+Description: quotacheck performance/scaling issues
+Details    : reduce quotacheck time on empty filesystem by skipping uninit
+	     group.
 
 
 ------------------------------------------------------------------------------
