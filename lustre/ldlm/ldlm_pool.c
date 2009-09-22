@@ -113,7 +113,7 @@
 /*
  * 50 ldlm locks for 1MB of RAM.
  */
-#define LDLM_POOL_HOST_L ((num_physpages >> (20 - CFS_PAGE_SHIFT)) * 50)
+#define LDLM_POOL_HOST_L ((CFS_NUM_CACHEPAGES >> (20 - CFS_PAGE_SHIFT)) * 50)
 
 /*
  * Maximal possible grant step plan in %.

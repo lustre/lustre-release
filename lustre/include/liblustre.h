@@ -360,7 +360,8 @@ void get_random_bytes(void *ptr, int size);
 /* memory */
 
 /* memory size: used for some client tunables */
-#define num_physpages (256 * 1024) /* 1GB */
+#define num_physpages      (256 * 1024) /* 1GB */
+#define CFS_NUM_CACHEPAGES num_physpages
 
 static inline int copy_from_user(void *a,void *b, int c)
 {
