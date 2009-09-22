@@ -1002,7 +1002,7 @@ relock:
 
                         /* Debugging code. */
                         res_id = &lock->l_resource->lr_name;
-                        LDLM_DEBUG(lock, "Returning lock to client\n");
+                        LDLM_DEBUG(lock, "Returning lock to client");
                         LASSERTF(fid_res_name_eq(mdt_object_fid(child),
                                                  &lock->l_resource->lr_name),
                                  "Lock res_id: %lu/%lu/%lu, Fid: "DFID".\n",
