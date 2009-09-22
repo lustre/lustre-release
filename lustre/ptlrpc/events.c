@@ -270,7 +270,8 @@ void request_in_callback(lnet_event_t *ev)
         CFS_INIT_LIST_HEAD(&req->rq_timed_list);
         atomic_set(&req->rq_refcount, 1);
         if (ev->type == LNET_EVENT_PUT)
-                DEBUG_REQ(D_RPCTRACE, req, "incoming req");
+                CDEBUG(D_RPCTRACE, "incoming req@%p x"LPU64" msgsize %u\n",
+                       req, req->rq_xid, ev->mlength);
 
         CDEBUG(D_RPCTRACE, "peer: %s\n", libcfs_id2str(req->rq_peer));
 
