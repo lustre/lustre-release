@@ -6364,6 +6364,17 @@ test_201c() {	# was 200i
 }
 run_test 201c "Remove a pool ============================================"
 
+test_202() {
+        $LFS setstripe -c 2 -s 1048576 $DIR/$tfile
+        multiop $DIR/$tfile oO_WRONLY:O_APPEND:O_DIRECT:b1048548b130c || \
+                error "direct write failed"
+        multiop $DIR/${tfile}2 oO_WRONLY:O_CREAT:w1048548w130c || \
+                error "cached write failed"
+        cmp $DIR/$tfile $DIR/${tfile}2 || error "cmp failed"
+        rm -f $DIR/${tfile}2
+}
+run_test 202 "O_APPEND+O_DIRECT multistripe write ========================"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

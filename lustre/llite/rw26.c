@@ -227,6 +227,7 @@ ssize_t ll_direct_IO(int rw, struct file *file,
         struct inode *inode = file->f_mapping->host;
         ssize_t count = iov_length(iov, nr_segs);
         ssize_t tot_bytes = 0, result = 0;
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct ptlrpc_request_set *set;
@@ -279,6 +280,20 @@ ssize_t ll_direct_IO(int rw, struct file *file,
                         size_t bytes;
 
                         bytes = min(size,iov_left);
+
+                        /* a dirty hack for non-aligned I/O: avoid filling pgas,
+                         * which cross stripe boundaries (20777)              */
+                        if (user_addr   & ~CFS_PAGE_MASK ||
+                            file_offset & ~CFS_PAGE_MASK) {
+                                obd_off end = file_offset;
+
+                                obd_extent_calc(sbi->ll_osc_exp, lsm,
+                                                OBD_CALC_STRIPE_END, &end);
+
+                                if (file_offset + bytes > end + 1)
+                                        bytes = end - file_offset + 1;
+                        }
+
                         page_count = ll_get_user_pages(rw, user_addr,
                                                        bytes,
                                                        &pages, &max_pages);
