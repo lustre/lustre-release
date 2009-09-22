@@ -172,6 +172,7 @@ static int copy_to_user(void *to, void *from, int c)
 )
 
 #define num_physpages			(64 * 1024)
+#define CFS_NUM_CACHEPAGES		num_physpages
 
 #define snprintf  _snprintf
 #define vsnprintf _vsnprintf
