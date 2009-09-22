@@ -42,6 +42,7 @@
 #define LUSTRE_SNMP_H
 
 #include "lustre-snmp-util.h"
+#include "lustre-snmp-trap.h"
 
 config_require(util_funcs)
 config_add_mib(LUSTRE-MIB)
