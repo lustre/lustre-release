@@ -433,7 +433,7 @@ void llog_recov_thread_stop(struct llog_commit_master *lcm, int force)
                 struct list_head         *tmp;
 
                 CERROR("Busy llcds found (%d) on lcm %p\n",
-                       atomic_read(&lcm->lcm_count) == 0, lcm);
+                       atomic_read(&lcm->lcm_count), lcm);
 
                 spin_lock(&lcm->lcm_lock);
                 list_for_each(tmp, &lcm->lcm_llcds) {

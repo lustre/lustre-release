@@ -4054,7 +4054,6 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
                                       obd->obd_name, (int)oa->o_gr);
                                GOTO(cleanup, rc = PTR_ERR(olg));
                         }
-                        llog_group_set_export(olg, exp);
                         fcc = &oa->o_lcookie;
                         ctxt = llog_group_get_ctxt(olg, fcc->lgc_subsys + 1);
                         llog_cancel(ctxt, NULL, 1, fcc, 0);
