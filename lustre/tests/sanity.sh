@@ -6953,6 +6953,42 @@ test_215() { # for bug 18102
 }
 run_test 215 "/proc/sys/lnet exists and has proper content - bug 18102"
 
+test_216() { # bug 20317
+        local node
+        local p="$TMP/sanityN-$TESTNAME.parameters"
+        save_lustre_params $HOSTNAME "osc.*.contention_seconds" > $p
+        for node in $(osts_nodes); do
+                save_lustre_params $node "ldlm.namespaces.filter-*.max_nolock_bytes" >> $p
+                save_lustre_params $node "ldlm.namespaces.filter-*.contended_locks" >> $p
+                save_lustre_params $node "ldlm.namespaces.filter-*.contention_seconds" >> $p
+        done
+        clear_osc_stats
+
+        # agressive lockless i/o settings
+        for node in $(osts_nodes); do
+                do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 2000000; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 0; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 60'
+        done
+        lctl set_param -n osc.*.contention_seconds 60
+
+        $DIRECTIO write $DIR/$tfile 0 10 4096
+        $CHECKSTAT -s 40960 $DIR/$tfile
+
+        # disable lockless i/o
+        for node in $(osts_nodes); do
+                do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 0; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 32; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 0'
+        done
+        lctl set_param -n osc.*.contention_seconds 0
+        clear_osc_stats
+
+        dd if=/dev/zero of=$DIR/$tfile count=0
+        $CHECKSTAT -s 0 $DIR/$tfile
+
+        restore_lustre_params <$p
+        rm -f $p
+        rm $DIR/$tfile
+}
+run_test 216 "check lockless direct write works and updates file size and kms correctly"
+
 #
 # tests that do cleanup/setup should be run at the end
 #
