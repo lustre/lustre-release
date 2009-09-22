@@ -296,8 +296,6 @@ void lustrefs_ctrl(int command)
 
 int get_sysstatus(void)
 {
-    FILE    *fptr = NULL;
-    int     len = 0;
     int     ret_val = ERROR ;
     char    sys_status[50] = {0};
     
@@ -542,9 +540,9 @@ unsigned char*
         size_t  *var_len)
 {
     static unsigned char string[SPRINT_MAX_LEN];
-    if( SUCCESS != read_string(file_path, string,sizeof(string)))
+    if( SUCCESS != read_string(file_path, (char *)string,sizeof(string)))
         return NULL;
-    *var_len = strlen(string);
+    *var_len = strlen((char *)string);
     return (unsigned char *) string;
 }
 

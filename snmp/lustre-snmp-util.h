@@ -220,4 +220,11 @@ unsigned char *
 int stats_values(char * filepath,char * name_value, unsigned long long * nb_sample, unsigned long long * min, unsigned long long * max, unsigned long long * sum, unsigned long long * sum_square);
 extern int mds_stats_values(char * name_value, unsigned long long * nb_sample, unsigned long long * min, unsigned long long * max, unsigned long long * sum, unsigned long long * sum_square);
 
+ /* export for net-snmp util-funcs */
+int             header_simple_table(struct variable *, oid *, size_t *,
+                                    int, size_t *,
+                                    WriteMethod ** write_method, int);
+int             header_generic(struct variable *, oid *, size_t *, int,
+                               size_t *, WriteMethod **);
+
 #endif /* LUSTRE_SNMP_UTIL_H */
