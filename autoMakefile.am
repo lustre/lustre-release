@@ -28,7 +28,7 @@ checkstack:
 	[ -f ${CSTK} -a ! -s ${CSTKO} ] && mv -f ${CSTK} ${CSTKO} || true
 	{ for MOD in $$(find . -name "*.ko"); do			     \
 		objdump -d $$MOD | perl build/checkstack.pl;                 \
-	  done } | grep -v " bug " | sort -nru > ${CSTK}
+	  done } | grep -v " bug " | sort -nr | uniq > ${CSTK}
 	[ -f ${CSTKO} ] && ! diff -u ${CSTKO} ${CSTK} || head -30 ${CSTK}
 
 checkstack-update:
