@@ -966,7 +966,7 @@ cleanup_32() {
 
 test_32a() {
 	# this test is totally useless on a client-only system
-	[ -n "$CLIENTONLY" -o -n "$CLIENTMODSONLY" ] && skip "client only testing" && return 0
+	client_only && skip "client only testing" && return 0
 	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
 	[ -z "$TUNEFS" ] && skip_env "No tunefs" && return 0
 
@@ -1024,7 +1024,7 @@ run_test 32a "Upgrade from 1.6 (not live)"
 
 test_32b() {
 	# this test is totally useless on a client-only system
-	[ -n "$CLIENTONLY" -o -n "$CLIENTMODSONLY" ] && skip "client only testing" && return 0
+	client_only && skip "client only testing" && return 0
 	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
 	[ -z "$TUNEFS" ] && skip_env "No tunefs" && return
 
@@ -1308,7 +1308,7 @@ test_36() { # 12743
 run_test 36 "df report consistency on OSTs with different block size"
 
 test_37() {
-	[ -n "$CLIENTONLY" -o -n "$CLIENTMODSONLY" ] && skip "client only testing" && return 0
+	client_only && skip "client only testing" && return 0
 	LOCAL_MDSDEV="$TMP/mdt.img"
 	SYM_MDSDEV="$TMP/sym_mdt.img"
 
