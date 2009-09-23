@@ -2950,7 +2950,6 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
 
         filter = &exp->exp_obd->u.filter;
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
-        lock_kernel();
 
         if (oinfo->oi_oa->o_valid &
             (OBD_MD_FLMTIME | OBD_MD_FLATIME | OBD_MD_FLCTIME)) {
@@ -2981,7 +2980,6 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
 
         EXIT;
 out_unlock:
-        unlock_kernel();
         f_dput(dentry);
         pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         return rc;

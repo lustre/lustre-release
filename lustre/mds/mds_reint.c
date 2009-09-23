@@ -2657,13 +2657,14 @@ no_unlink:
         if (IS_ERR(handle))
                 GOTO(cleanup, rc = PTR_ERR(handle));
 
-        lock_kernel();
+        VFS_RENAME_LOCK(de_srcdir->d_inode);
         de_old->d_fsdata = req;
         de_new->d_fsdata = req;
 
         rc = ll_vfs_rename(de_srcdir->d_inode, de_old, mds->mds_vfsmnt, 
                            de_tgtdir->d_inode, de_new, mds->mds_vfsmnt);
-        unlock_kernel();
+
+        VFS_RENAME_UNLOCK(de_srcdir->d_inode);
 
         if (rc == 0) {
                 struct iattr iattr;
