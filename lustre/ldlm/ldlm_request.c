@@ -1811,8 +1811,9 @@ static int ldlm_chain_lock_for_replay(struct ldlm_lock *lock, void *closure)
 }
 
 static int replay_lock_interpret(struct ptlrpc_request *req,
-                                 struct ldlm_async_args *aa, int rc)
+                                 void *data, int rc)
 {
+        struct ldlm_async_args *aa = data;
         struct lustre_handle  old_hash_key;
         struct ldlm_lock     *lock;
         struct ldlm_reply    *reply;

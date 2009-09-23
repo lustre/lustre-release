@@ -164,9 +164,10 @@ static int osc_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
 }
 
 static int osc_getattr_interpret(struct ptlrpc_request *req,
-                                 struct osc_async_args *aa, int rc)
+                                 void *data, int rc)
 {
         struct ost_body *body;
+        struct osc_async_args *aa = data;
         ENTRY;
 
         if (rc != 0)
@@ -300,9 +301,10 @@ out:
 }
 
 static int osc_setattr_interpret(struct ptlrpc_request *req,
-                                 struct osc_async_args *aa, int rc)
+                                 void *data, int rc)
 {
         struct ost_body *body;
+        struct osc_async_args *aa = data;
         ENTRY;
 
         if (rc != 0)
@@ -449,9 +451,10 @@ out:
 }
 
 static int osc_punch_interpret(struct ptlrpc_request *req,
-                               struct osc_async_args *aa, int rc)
+                               void *data, int rc)
 {
         struct ost_body *body;
+        struct osc_async_args *aa = data;
         ENTRY;
 
         if (rc != 0)
@@ -513,9 +516,10 @@ static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
 }
 
 static int osc_sync_interpret(struct ptlrpc_request *req,
-                              struct osc_async_args *aa, int rc)
+                              void *data, int rc)
 {
         struct ost_body *body;
+        struct osc_async_args *aa = data;
         ENTRY;
 
         if (rc)
@@ -856,8 +860,9 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
                               struct ptlrpc_request_set *set);
 
 static int osc_shrink_grant_interpret(struct ptlrpc_request *req,
-                                      struct osc_grant_args *aa, int rc)
+                                      void *data, int rc)
 {
+        struct osc_grant_args *aa = data;
         struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
         struct obdo *oa = aa->aa_oa;
         struct ost_body *body;
@@ -3295,8 +3300,9 @@ static int osc_enqueue_fini(struct obd_device *obd, struct ptlrpc_request *req,
 }
 
 static int osc_enqueue_interpret(struct ptlrpc_request *req,
-                                 struct osc_enqueue_args *aa, int rc)
+                                 void *data, int rc)
 {
+        struct osc_enqueue_args *aa = data;
         int intent = aa->oa_oi->oi_flags & LDLM_FL_HAS_INTENT;
         struct lov_stripe_md *lsm = aa->oa_oi->oi_md;
         struct ldlm_lock *lock;
@@ -3539,8 +3545,9 @@ static int osc_join_lru(struct obd_export *exp,
 }
 
 static int osc_statfs_interpret(struct ptlrpc_request *req,
-                                struct osc_async_args *aa, int rc)
+                                void *data, int rc)
 {
+        struct osc_async_args *aa = data;
         struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
         struct obd_statfs *msfs;
         ENTRY;
