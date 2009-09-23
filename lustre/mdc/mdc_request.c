@@ -829,6 +829,14 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
                 body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
                 if (body == NULL)
                         rc = -EPROTO;
+        } else if (rc == -ESTALE) {
+                /**
+                 * it can be allowed error after 3633 if open was committed and
+                 * server failed before close was sent. Let's check if mod
+                 * exists and return no error in that case
+                 */
+                if (mod && (mod->mod_open_req == NULL))
+                        rc = 0;
         }
 
         if (rc != 0 && mod)
@@ -864,7 +872,7 @@ int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
 
                 mod->mod_close_req = req;
                 DEBUG_REQ(D_HA, mod->mod_open_req, "matched setattr");
-                /* We no longer want to preserve this open for replay even
+                /* We no longer want to preserve this setattr for replay even
                  * though the open was committed. b=3632, b=3633 */
                 spin_lock(&mod->mod_open_req->rq_lock);
                 mod->mod_open_req->rq_replay = 0;
@@ -877,6 +885,16 @@ int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
         mdc_get_rpc_lock(obd->u.cli.cl_close_lock, NULL);
         rc = ptlrpc_queue_wait(req);
         mdc_put_rpc_lock(obd->u.cli.cl_close_lock, NULL);
+
+        if (rc == -ESTALE) {
+                /**
+                 * it can be allowed error after 3633 if open or setattr were
+                 * committed and server failed before close was sent.
+                 * Let's check if mod exists and return no error in that case
+                 */
+                if (mod && (mod->mod_open_req == NULL))
+                        rc = 0;
+        }
 
         ptlrpc_req_finished(req);
         RETURN(rc);

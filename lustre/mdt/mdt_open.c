@@ -1358,7 +1358,8 @@ int mdt_close(struct mdt_thread_info *info)
                 CDEBUG(D_INODE, "no handle for file close: fid = "DFID
                        ": cookie = "LPX64"\n", PFID(info->mti_rr.rr_fid1),
                        info->mti_epoch->handle.cookie);
-                rc = err_serious(-ESTALE);
+                /** not serious error since bug 3633 */
+                rc = -ESTALE;
         } else {
                 class_handle_unhash(&mfd->mfd_handle);
                 list_del_init(&mfd->mfd_list);

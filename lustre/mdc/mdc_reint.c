@@ -165,7 +165,7 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
 
         if (op_data->op_attr.ia_valid & (ATTR_MTIME | ATTR_CTIME))
                 CDEBUG(D_INODE, "setting mtime "CFS_TIME_T
-		       ", ctime "CFS_TIME_T"\n",
+                       ", ctime "CFS_TIME_T"\n",
                        LTIME_S(op_data->op_attr.ia_mtime),
                        LTIME_S(op_data->op_attr.ia_ctime));
         mdc_setattr_pack(req, op_data, ea, ealen, ea2, ea2len);
@@ -202,10 +202,13 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
                 epoch->handle = body->handle;
                 epoch->ioepoch = body->ioepoch;
                 req->rq_replay_cb = mdc_replay_open;
+        /** bug 3633, open may be committed and estale answer is not error */
+        } else if (rc == -ESTALE && (op_data->op_flags & MF_SOM_CHANGE)) {
+                rc = 0;
+        } else if (rc == -ERESTARTSYS) {
+                rc = 0;
         }
         *request = req;
-        if (rc == -ERESTARTSYS)
-                rc = 0;
         if (rc && req->rq_commit_cb)
                 req->rq_commit_cb(req);
         RETURN(rc);
