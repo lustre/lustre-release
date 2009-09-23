@@ -6612,9 +6612,9 @@ test_163() {
 	copytool --test || { skip "copytool not runnable: $?" && return; }
 	copytool &
 	sleep 1
-	local uuid=$($LCTL get_param -n mdc.lustre-MDT0000-mdc-*.uuid)
+	local uuid=$($LCTL get_param -n mdc.${FSNAME}-MDT0000-mdc-*.uuid)
 	# this proc file is temporary and linux-only
-	do_facet mds lctl set_param mdt.lustre-MDT0000.mdccomm=$uuid || error "lnl send failed"
+	do_facet mds lctl set_param mdt.${FSNAME}-MDT0000.mdccomm=$uuid || error "lnl send failed"
 	kill $!
 }
 run_test 163 "LustreNetLink kernelcomms"
