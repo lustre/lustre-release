@@ -24,15 +24,27 @@ DEBUG_LVL=${DEBUG_LVL:-0}
 DEBUG_OFF=${DEBUG_OFF:-"eval lctl set_param debug=\"$DEBUG_LVL\""}
 DEBUG_ON=${DEBUG_ON:-"eval lctl set_param debug=0x33f0484"}
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="iozone"
+PIOSBIN=${PIOSBIN:-$(which pios 2> /dev/null || true)}
 
+pios_THREADCOUNT=${pios_THREADCOUNT:-"1,8,40"}
+[ "$SLOW" = "no" ] && pios_THREADCOUNT=8
+
+pios_REGIONCOUNT=${pios_REGIONCOUNT:-1024}
+pios_CHUNKSIZE=${pios_CHUNKSIZE:-1M}
+pios_REGIONSIZE=${pios_REGIONSIZE:-8M}
+pios_OFFSET=${pios_OFFSET:-16M}
+
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="iozone"
 
 build_test_filter
 check_and_setup_lustre
 
+assert_DIR
+rm -rf $DIR/[df][0-9]*
+
 test_dbench() {
     if ! which dbench > /dev/null 2>&1 ; then
-	skip "No dbench installed"
+	skip_env "No dbench installed"
 	return
     fi
 
@@ -64,7 +76,7 @@ run_test dbench "dbench"
 
 test_bonnie() {
     if ! which bonnie++ > /dev/null 2>&1; then
-	skip "No bonnie++ installed"
+	skip_env "No bonnie++ installed"
 	return 0
     fi
     BONDIR=$MOUNT/d0.bonnie
@@ -87,7 +99,7 @@ run_test bonnie "bonnie++"
 
 test_iozone() {
     if ! which iozone > /dev/null 2>&1; then
-	skip "No iozone installed"
+	skip_env "No iozone installed"
 	return 0
     fi
 
@@ -174,6 +186,119 @@ test_fsx() {
     $DEBUG_ON
 }
 run_test fsx "fsx"
+
+
+############################################################
+# PIOS
+#
+
+iterpr_KMGT () {
+    local str=$1
+    local num=${str:0:${#str}-1}
+    case ${str:${#str}-1} in
+        k|K ) num=$((num << 10));; #
+        m|M ) num=$((num << 20));; # emacs is confsued by the <<  and
+        g|G ) num=$((num << 30));; # these comments help it out.
+        t|T ) num=$((num << 40));; #
+          * ) num=$str;;
+    esac
+    echo $num
+}
+
+space_check () {
+    # space estimation
+    # /* Adding 10% to total test size for filesystem overhead */
+    #  size = size + (double)(size) * (double) (0.1);
+    # 
+    #  total_test_size = runarg->stream[n - 1].max_offset +
+    #                            runarg->regionsize;
+
+    local space=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
+    local size=$(($(iterpr_KMGT $pios_REGIONCOUNT) * \
+                  $(iterpr_KMGT $pios_OFFSET) + \
+                  $(iterpr_KMGT $pios_REGIONSIZE) ))
+    size=$(( size + size / 10 ))
+    if [ $((space * 1024)) -le $size ]; then 
+        echo "Need free space atleast $size, have $((space * 1024))"
+        return 10
+    fi
+}
+
+pios_setup() { 
+    local testdir=$DIR/$tdir
+    mkdir -p $testdir
+
+    stripes=1
+    [ "$1" == "--stripe" ] && stripes=-1
+    $LFS setstripe $testdir -c $stripes
+    echo "Test directory stripe count: $stripes"
+}
+
+pios_cleanup() {
+    local rc=$1
+    local testdir=$DIR/$tdir
+    [ $rc = 0 ] && rm -rf $testdir
+}
+
+run_pios () {
+    local testdir=$DIR/$tdir
+    local cmd="$PIOSBIN  -t $pios_THREADCOUNT -n $pios_REGIONCOUNT \
+                         -c $pios_CHUNKSIZE -s $pios_REGIONSIZE    \
+                         -o $pios_OFFSET  $@ -p $testdir"
+    
+    if [ ! -d $testdir ]; then  
+        error "No test directory created, setup_pios must have failed"
+        return 20
+    fi
+
+    log "$cmd"
+
+    local rc=0
+    eval $cmd
+    rc=$?
+
+    return $rc
+}
+
+test_pios_ssf() {
+    if  [ -z "$PIOSBIN" ]; then
+        skip_env "$0 : pios not found PIOSBIN=$PIOSBIN"
+	return
+    fi
+
+    local rc=0
+    space_check || { skip_env "not enough space" && return 0; }
+    pios_setup --stripe || return
+    # bug 19657
+    local old_PWD=$PWD
+    cd $TMP
+    run_pios || return
+    run_pios  --verify || rc=$? 
+    cd $old_PWD
+    pios_cleanup $rc
+    return $rc
+}
+run_test pios_ssf "pios shared single file"
+
+test_pios_fpp() {
+    if  [ -z "$PIOSBIN" ]; then
+        skip_env "pios not found PIOSBIN=$PIOSBIN"
+        return
+    fi
+
+    local rc=0
+    space_check || { skip_env "not enough space" && return 0; }
+    pios_setup || return
+    # bug 19657
+    local old_PWD=$PWD
+    cd $TMP
+    run_pios -L fpp || return
+    run_pios -L fpp --verify || rc=$?
+    cd $old_PWD
+    pios_cleanup $rc
+    return $rc
+}
+run_test pios_fpp "pios file per process"
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
