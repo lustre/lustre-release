@@ -972,7 +972,6 @@ cleanup_32() {
 }
 
 test_32a() {
-	# this test is totally useless on a client-only system
 	client_only && skip "client only testing" && return 0
 	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
 	[ -z "$TUNEFS" ] && skip_env "No tunefs" && return 0
@@ -1005,14 +1004,19 @@ test_32a() {
 
 	local NID=$($LCTL list_nids | head -1)
 
-	echo "OSC changes should return err:"
+	echo "OSC changes should succeed:"
 	$LCTL conf_param lustre-OST0000.osc.max_dirty_mb=15 || return 7
 	$LCTL conf_param lustre-OST0000.failover.node=$NID || return 8
-
 	echo "ok."
+
 	echo "MDC changes should succeed:"
 	$LCTL conf_param lustre-MDT0000.mdc.max_rpcs_in_flight=9 || return 9
 	$LCTL conf_param lustre-MDT0000.failover.node=$NID || return 10
+	echo "ok."
+
+	echo "LOV changes should succeed:"
+	$LCTL pool_new lustre.interop || return 11
+	$LCTL conf_param lustre-MDT0000.lov.stripesize=4M || return 12
 	echo "ok."
 
 	cleanup_32
@@ -1030,7 +1034,6 @@ test_32a() {
 run_test 32a "Upgrade from 1.8 (not live)"
 
 test_32b() {
-	# this test is totally useless on a client-only system
 	client_only && skip "client only testing" && return 0
 	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
 	[ -z "$TUNEFS" ] && skip_env "No tunefs" && return
@@ -1064,13 +1067,18 @@ test_32b() {
 	local NID=$($LCTL list_nids | head -1)
 
 	echo "OSC changes should succeed:"
-
 	$LCTL conf_param ${NEWNAME}-OST0000.osc.max_dirty_mb=15 || return 7
 	$LCTL conf_param ${NEWNAME}-OST0000.failover.node=$NID || return 8
-
 	echo "ok."
+
 	echo "MDC changes should succeed:"
 	$LCTL conf_param ${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight=9 || return 9
+	$LCTL conf_param lustre-MDT0000.failover.node=$NID || return 10
+	echo "ok."
+
+	echo "LOV changes should succeed:"
+	$LCTL pool_new lustre.interop || return 11
+	$LCTL conf_param lustre-MDT0000.lov.stripesize=4M || return 12
 	echo "ok."
 
 	# MDT and OST should have registered with new nids, so we should have
