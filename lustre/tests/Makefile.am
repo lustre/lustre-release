@@ -17,6 +17,7 @@ noinst_SCRIPTS += large-scale.sh runracer performance-sanity.sh
 noinst_SCRIPTS += mdsrate-create-small.sh mdsrate-create-large.sh
 noinst_SCRIPTS += mdsrate-lookup-1dir.sh mdsrate-lookup-10dirs.sh
 noinst_SCRIPTS += mdsrate-stat-small.sh mdsrate-stat-large.sh replay-vbr.sh
+noinst_SCRIPTS += sanity-benchmark.sh
 noinst_SCRIPTS += lockorder.sh socketclient socketserver runmultiop_bg_pause
 noinst_SCRIPTS += recovery-mds-scale.sh run_dd.sh run_tar.sh run_iozone.sh
 noinst_SCRIPTS += run_dbench.sh run_IOR.sh recovery-double-scale.sh
