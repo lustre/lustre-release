@@ -512,7 +512,8 @@ struct cl_env {
         struct lu_env     ce_lu;
         struct lu_context ce_ses;
         /**
-         * hash entry for lustre_hash_t
+         * This allows cl_env to be entered into cl_env_hash which implements
+         * the current thread -> client environment lookup.
          */
         struct hlist_node ce_node;
         /**
