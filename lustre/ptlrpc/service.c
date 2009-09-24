@@ -1207,7 +1207,7 @@ void ptlrpc_hpreq_reorder(struct ptlrpc_request *req)
         EXIT;
 }
 
-/** Check if the request if a high priority one. */
+/** Check if the request is a high priority one. */
 static int ptlrpc_server_hpreq_check(struct ptlrpc_request *req)
 {
         int opc, rc = 0;

@@ -274,7 +274,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
          *
          * it will check if *ppos is greater than max. However, max equals to
          * s_maxbytes, which is a negative integer in a x86_64 box since loff_t
-         * has been defined as a signed long long ineger in linux kernel. */
+         * has been defined as a signed long long integer in linux kernel. */
 #if BITS_PER_LONG == 64
         sb->s_maxbytes = PAGE_CACHE_MAXBYTES >> 1;
 #else

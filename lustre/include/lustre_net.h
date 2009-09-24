@@ -721,7 +721,7 @@ struct ptlrpc_service {
         int              srv_n_active_reqs;     /* # reqs being served */
         int              srv_n_hpreq;           /* # HPreqs being served */
         cfs_duration_t   srv_rqbd_timeout;      /* timeout before re-posting reqs, in tick */
-        int              srv_watchdog_factor;   /* soft watchdog timeout mutiplier */
+        int              srv_watchdog_factor;   /* soft watchdog timeout multiplier */
         unsigned         srv_cpu_affinity:1;    /* bind threads to CPUs */
         unsigned         srv_at_check:1;        /* check early replies */
         unsigned         srv_is_stopping:1;     /* under unregister_service */

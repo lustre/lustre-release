@@ -518,7 +518,7 @@ int client_disconnect_export(struct obd_export *exp)
         }
 
         /*
-         * there's no necessary to hold sem during diconnecting an import,
+         * there's no need to hold sem during disconnecting an import,
          * and actually it may cause deadlock in gss.
          */
         up_write(&cli->cl_sem);
@@ -1321,7 +1321,7 @@ static void check_and_start_recovery_timer(struct obd_device *obd)
  * attempt timing. So the initial recovery time_out will be set to
  * OBD_RECOVERY_FACTOR * obd_timeout. If the timeout coming
  * from client is bigger than this, then the recovery time_out will
- * be extend to make sure the client could be reconnected, in the
+ * be extended to make sure the client could be reconnected, in the
  * process, the timeout from the new client should be ignored.
  */
 

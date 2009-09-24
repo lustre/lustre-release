@@ -1057,7 +1057,7 @@ struct obd_device {
                       obd_starting:1,      /* started setup */
                       obd_force:1,         /* cleanup with > 0 obd refcount */
                       obd_fail:1,          /* cleanup with failover */
-                      obd_async_recov:1,   /* allow asyncronous orphan cleanup */
+                      obd_async_recov:1,   /* allow asynchronous orphan cleanup */
                       obd_no_conn:1,       /* deny new connections */
                       obd_inactive:1,      /* device active/inactive
                                            * (for /proc/status only!!) */
