@@ -114,6 +114,13 @@ extern void __cfs_free_pages(cfs_page_t *page, unsigned int order);
 #define libcfs_memory_pressure_set() do { current->flags |= PF_MEMALLOC; } while (0)
 #define libcfs_memory_pressure_clr() do { current->flags &= ~PF_MEMALLOC; } while (0)
 
+#if BITS_PER_LONG == 32
+/* limit to lowmem on 32-bit systems */
+#define CFS_NUM_CACHEPAGES min(num_physpages, 1UL << (30-CFS_PAGE_SHIFT) *3/4)
+#else
+#define CFS_NUM_CACHEPAGES num_physpages
+#endif
+
 /*
  * In Linux there is no way to determine whether current execution context is
  * blockable.
