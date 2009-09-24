@@ -135,6 +135,9 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
 
         ENTRY;
 
+        if (ll_file_nolock(file))
+                RETURN(ERR_PTR(-EOPNOTSUPP));
+
         /*
          * vm_operations_struct::nopage() can be called when lustre IO is
          * already active for the current thread, e.g., when doing read/write
@@ -176,19 +179,11 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                         struct vvp_io *vio = vvp_env_io(env);
                         struct ccc_io *cio = ccc_env_io(env);
                         struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
-                        struct ll_sb_info *sbi  = ll_i2sbi(inode);
 
                         LASSERT(cio->cui_cl.cis_io == io);
 
-                        /* mmap lock should be MANDATORY or NEVER. */
-                        if (fd->fd_flags & LL_FILE_IGNORE_LOCK ||
-                            sbi->ll_flags & LL_SBI_NOLCK) {
-                                io->ci_lockreq = CILR_NEVER;
-                                io->ci_no_srvlock = 1;
-                        } else {
-                                io->ci_lockreq = CILR_MANDATORY;
-                        }
-
+                        /* mmap lock must be MANDATORY. */
+                        io->ci_lockreq          = CILR_MANDATORY;
                         vio->u.fault.ft_vma     = vma;
                         vio->u.fault.ft_address = address;
                         vio->u.fault.ft_type    = type;
@@ -292,12 +287,16 @@ static struct vm_operations_struct ll_file_vm_ops = {
         .populate       = ll_populate,
 };
 
-int ll_file_mmap(struct file * file, struct vm_area_struct * vma)
+int ll_file_mmap(struct file *file, struct vm_area_struct * vma)
 {
+        struct inode *inode = file->f_dentry->d_inode;
         int rc;
         ENTRY;
 
-        ll_stats_ops_tally(ll_i2sbi(file->f_dentry->d_inode), LPROC_LL_MAP, 1);
+        if (ll_file_nolock(file))
+                RETURN(-EOPNOTSUPP);
+
+        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_MAP, 1);
         rc = generic_file_mmap(file, vma);
         if (rc == 0) {
 #if !defined(HAVE_FILEMAP_POPULATE)
@@ -307,7 +306,7 @@ int ll_file_mmap(struct file * file, struct vm_area_struct * vma)
                 vma->vm_ops = &ll_file_vm_ops;
                 vma->vm_ops->open(vma);
                 /* update the inode's size and mtime */
-                rc = cl_glimpse_size(file->f_dentry->d_inode);
+                rc = cl_glimpse_size(inode);
         }
 
         RETURN(rc);
