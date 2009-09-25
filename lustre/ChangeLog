@@ -16,6 +16,10 @@ tbd Sun Microsystems, Inc.
 	  more information, please refer to bugzilla 17630.
 
 Severity   : normal
+Bugzilla   : 20482
+Description: Conf-sanity.sh 50g test - deactivated OST should not cause a panic.
+
+Severity   : normal
 Bugzilla   : 18674
 Description: Conf-sanity.sh test to check client reconnection to a busy server.
 

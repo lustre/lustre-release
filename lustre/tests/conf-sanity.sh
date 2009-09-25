@@ -1936,5 +1936,28 @@ test_50f() {
 }
 run_test 50f "normal statfs one server in down =========================="
 
+test_50g() {
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2, skipping" && return
+	setup
+	start_ost2 || error "Unable to start OST2"
+
+	local PARAM="${FSNAME}-OST0001.osc.active"
+
+	$LFS setstripe -c -1 $DIR/$tfile || error "Unable to lfs setstripe"
+	do_facet mgs $LCTL conf_param $PARAM=0 || error "Unable to deactivate OST"
+
+	umount_client $MOUNT || error "Unable to unmount client"
+	mount_client $MOUNT || error "Unable to mount client"
+	# This df should not cause a panic
+	df -k $MOUNT
+
+	do_facet mgs $LCTL conf_param $PARAM=1 || error "Unable to activate OST"
+	rm -f $DIR/$tfile
+	umount_client $MOUNT || error "Unable to unmount client"
+	stop_ost2 || error "Unable to stop OST2"
+	cleanup_nocli
+}
+run_test 50g "deactivated OST should not cause panic====================="
+
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
