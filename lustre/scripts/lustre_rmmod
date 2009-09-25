@@ -4,9 +4,38 @@
 # manually did a 'lctl network up'.
 ###############################################################################
 
-SRCDIR=`dirname $0`
-PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
+FSTYPE=${1:-ldiskfs}
 
-lctl modules | awk '{ print $2 }' | xargs rmmod >/dev/null 2>&1
-# do it again, in case we tried to unload the lnd's too early
-lsmod | grep lnet > /dev/null && lctl modules | awk '{ print $2 }' | xargs rmmod
+TMP=${TMP:-/tmp}
+LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
+[ ! -f "$LCTL" ] && export LCTL=$(which lctl 2> /dev/null)
+
+RMMOD=rmmod
+if [ `uname -r | cut -c 3` -eq 4 ]; then
+    RMMOD="modprobe -r"
+fi
+
+unload_dep_module() {
+    # libcfs                107852  17 llite_lloop,lustre,obdfilter,ost,...
+    local MODULE=$1
+    local DEPS=$(lsmod | awk '($1 == "'$MODULE'") { print $4 }' | tr ',' ' ')
+    for SUBMOD in $DEPS; do
+        unload_dep_module $SUBMOD
+    done
+    [ "$MODULE" = "libcfs" ] && $LCTL dk $TMP/debug || true
+    $RMMOD $MODULE || true
+}
+
+lsmod | grep libcfs > /dev/null && $LCTL dl
+lsmod | grep $FSTYPE && unload_dep_module $FSTYPE
+unload_dep_module libcfs
+
+MODULES=$($LCTL modules | awk '{ print $2 }')
+if [ -n "$MODULES" ]; then
+    echo "Modules still loaded: "
+    echo $MODULES
+    exit 1
+fi
+exit 0
+

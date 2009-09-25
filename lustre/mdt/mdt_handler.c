@@ -523,6 +523,8 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                         CERROR("readlink failed: %d\n", rc);
                         rc = -EFAULT;
                 } else {
+                        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_READLINK_EPROTO))
+                                 rc -= 2;
                         repbody->valid |= OBD_MD_LINKNAME;
                         repbody->eadatasize = rc;
                         /* NULL terminate */
@@ -1103,6 +1105,7 @@ static int mdt_set_info(struct mdt_thread_info *info)
         vallen = req_capsule_get_size(info->mti_pill, &RMF_SETINFO_VAL,
                                       RCL_CLIENT);
 
+        /* Swab any part of val you need to here */
         if (KEY_IS(KEY_READ_ONLY)) {
                 req->rq_status = 0;
                 lustre_msg_set_status(req->rq_repmsg, 0);
@@ -1121,7 +1124,7 @@ static int mdt_set_info(struct mdt_thread_info *info)
                         CERROR("Bad changelog_clear setinfo size %d\n", vallen);
                         RETURN(-EINVAL);
                 }
-                if (lustre_msg_swabbed(req->rq_reqmsg)) {
+                if (ptlrpc_req_need_swab(req)) {
                         __swab64s(&cs->cs_recno);
                         __swab32s(&cs->cs_id);
                 }
@@ -1765,13 +1768,6 @@ static int mdt_quotactl_handle(struct mdt_thread_info *info)
 
         switch (oqctl->qc_cmd) {
         case Q_QUOTAON:
-                if (info->mti_mdt->mdt_som_conf) {
-                        /* Quota cannot be used together with SOM while
-                         * SOM stored blocks in i_blocks but not in SOM EA. */
-                        LCONSOLE_ERROR("Fail to turn Quota on: SOM is enabled "
-                                       "and temporary conflicts with quota.\n");
-                        RETURN(-ENOTSUPP);
-                }
                 rc = mqo->mqo_on(info->mti_env, next, oqctl->qc_type);
                 break;
         case Q_QUOTAOFF:
@@ -2306,7 +2302,7 @@ void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
  *
  * \param info thread info object
  * \param o mdt object
- * \param h mdt lock handle referencing regular and PDO locks
+ * \param lh mdt lock handle referencing regular and PDO locks
  * \param decref force immediate lock releasing
  */
 void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
@@ -2830,6 +2826,7 @@ static int mdt_msg_check_version(struct lustre_msg *msg)
         switch (lustre_msg_get_opc(msg)) {
         case MDS_CONNECT:
         case MDS_DISCONNECT:
+        case MDS_SET_INFO:
         case OBD_PING:
         case SEC_CTX_INIT:
         case SEC_CTX_INIT_CONT:
@@ -2855,7 +2852,6 @@ static int mdt_msg_check_version(struct lustre_msg *msg)
         case MDS_SYNC:
         case MDS_GETXATTR:
         case MDS_SETXATTR:
-        case MDS_SET_INFO:
         case MDS_GET_INFO:
         case MDS_QUOTACHECK:
         case MDS_QUOTACTL:
@@ -2923,15 +2919,6 @@ static int mdt_handle0(struct ptlrpc_request *req,
         if (likely(rc == 0)) {
                 rc = mdt_recovery(info);
                 if (likely(rc == +1)) {
-                        switch (lustre_msg_get_opc(msg)) {
-                        case MDS_READPAGE:
-                                req->rq_bulk_read = 1;
-                                break;
-                        case MDS_WRITEPAGE:
-                                req->rq_bulk_write = 1;
-                                break;
-                        }
-
                         h = mdt_handler_find(lustre_msg_get_opc(msg),
                                              supported);
                         if (likely(h != NULL)) {
@@ -3187,9 +3174,7 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
                 new_lock->l_writers--;
         }
 
-        new_lock->l_export = class_export_get(req->rq_export);
-        atomic_inc(&lock->l_export->exp_locks_count);
-
+        new_lock->l_export = class_export_lock_get(req->rq_export);
         new_lock->l_blocking_ast = lock->l_blocking_ast;
         new_lock->l_completion_ast = lock->l_completion_ast;
         new_lock->l_remote_handle = lock->l_remote_handle;
@@ -4362,7 +4347,8 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         m->mdt_identity_cache = NULL;
 
         if (m->mdt_namespace != NULL) {
-                ldlm_namespace_free(m->mdt_namespace, NULL, d->ld_obd->obd_force);
+                ldlm_namespace_free(m->mdt_namespace, NULL,
+                                    d->ld_obd->obd_force);
                 d->ld_obd->obd_namespace = m->mdt_namespace = NULL;
         }
 
@@ -4946,7 +4932,7 @@ static int mdt_connect_internal(struct obd_export *exp,
 
                 if (!mdt->mdt_som_conf)
                         data->ocd_connect_flags &= ~OBD_CONNECT_SOM;
-                
+
                 spin_lock(&exp->exp_lock);
                 exp->exp_connect_flags = data->ocd_connect_flags;
                 spin_unlock(&exp->exp_lock);
@@ -5390,7 +5376,7 @@ static int mdt_rpc_fid2path(struct mdt_thread_info *info, void *key,
         fpin = key + size_round(sizeof(KEY_FID2PATH));
         fpout = val;
 
-        if (lustre_msg_swabbed(mdt_info_req(info)->rq_reqmsg))
+        if (ptlrpc_req_need_swab(info->mti_pill->rc_req))
                 lustre_swab_fid2path(fpin);
 
         memcpy(fpout, fpin, sizeof(*fpin));
@@ -5507,6 +5493,50 @@ static int mdt_ioc_child(struct lu_env *env, struct mdt_device *mdt,
         RETURN(rc);
 }
 
+static int mdt_ioc_version_get(struct mdt_thread_info *mti, void *karg)
+{
+        struct obd_ioctl_data *data = karg;
+        struct lu_fid *fid = (struct lu_fid *)data->ioc_inlbuf1;
+        __u64 version;
+        struct mdt_object *obj;
+        struct mdt_lock_handle  *lh;
+        int rc;
+        ENTRY;
+        CDEBUG(D_IOCTL, "getting version for "DFID"\n", PFID(fid));
+        if (!fid_is_sane(fid))
+                RETURN(-EINVAL);
+
+        lh = &mti->mti_lh[MDT_LH_PARENT];
+        mdt_lock_reg_init(lh, LCK_CR);
+
+        obj = mdt_object_find_lock(mti, fid, lh, MDS_INODELOCK_UPDATE);
+        if (IS_ERR(obj))
+                RETURN(PTR_ERR(obj));
+
+        rc = mdt_object_exists(obj);
+        if (rc < 0) {
+                rc = -EREMOTE;
+                /**
+                 * before calling version get the correct MDS should be
+                 * fid, this is error to find remote object here
+                 */
+                CERROR("nonlocal object "DFID"\n", PFID(fid));
+        } else if (rc == 0) {
+                rc = -ENOENT;
+                CDEBUG(D_IOCTL, "no such object: "DFID"\n", PFID(fid));
+        } else {
+                version = mo_version_get(mti->mti_env, mdt_object_child(obj));
+                if (version < 0) {
+                        rc = (int)version;
+                } else {
+                        *(__u64 *)data->ioc_inlbuf2 = version;
+                        rc = 0;
+                }
+        }
+        mdt_object_unlock_put(mti, obj, lh, 1);
+        RETURN(rc);
+}
+
 /* ioctls on obd dev */
 static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                          void *karg, void *uarg)
@@ -5540,6 +5570,17 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_CHANGELOG_CLEAR:
                 rc = mdt_ioc_child(&env, mdt, cmd, len, karg);
                 break;
+        case OBD_IOC_GET_OBJ_VERSION: {
+                struct mdt_thread_info *mti;
+                mti = lu_context_key_get(&env.le_ctx, &mdt_thread_key);
+                memset(mti, 0, sizeof *mti);
+                mti->mti_env = &env;
+                mti->mti_mdt = mdt;
+                mti->mti_exp = exp;
+
+                rc = mdt_ioc_version_get(mti, karg);
+                break;
+        }
         default:
                 CERROR("Not supported cmd = %d for device %s\n",
                        cmd, obd->obd_name);
@@ -5583,6 +5624,62 @@ int mdt_obd_postrecov(struct obd_device *obd)
         rc = mdt_postrecov(&env, mdt_dev(obd->obd_lu_dev));
         lu_env_fini(&env);
         return rc;
+}
+
+/**
+ * Send a copytool req to a client
+ * Note this sends a request RPC from a server (MDT) to a client (MDC),
+ * backwards of normal comms.
+ */
+int mdt_hsm_copytool_send(struct obd_export *exp)
+{
+        struct lnl_hdr *lh;
+        struct hsm_action_list *hal;
+        struct hsm_action_item *hai;
+        int rc, len;
+        ENTRY;
+
+        CWARN("%s: writing to mdc at %s\n", exp->exp_obd->obd_name,
+              libcfs_nid2str(exp->exp_connection->c_peer.nid));
+
+        len = sizeof(*lh) + sizeof(*hal) + MTI_NAME_MAXLEN +
+                /* for mockup below */ 2 * size_round(sizeof(*hai));
+        OBD_ALLOC(lh, len);
+        if (lh == NULL)
+                RETURN(-ENOMEM);
+
+        lh->lnl_magic = LNL_MAGIC;
+        lh->lnl_transport = LNL_TRANSPORT_HSM;
+        lh->lnl_msgtype = HMT_ACTION_LIST;
+        lh->lnl_msglen = len;
+
+        hal = (struct hsm_action_list *)(lh + 1);
+        hal->hal_version = HAL_VERSION;
+        hal->hal_archive_num = 1;
+        obd_uuid2fsname(hal->hal_fsname, exp->exp_obd->obd_name,
+                        MTI_NAME_MAXLEN);
+
+        /* mock up an action list */
+        hal->hal_count = 2;
+        hai = hai_zero(hal);
+        hai->hai_action = HSMA_ARCHIVE;
+        hai->hai_fid.f_oid = 0xA00A;
+        hai->hai_len = sizeof(*hai);
+        hai = hai_next(hai);
+        hai->hai_action = HSMA_RESTORE;
+        hai->hai_fid.f_oid = 0xB00B;
+        hai->hai_len = sizeof(*hai);
+
+        /* Uses the ldlm reverse import; this rpc will be seen by
+          the ldlm_callback_handler */
+        rc = target_set_info_rpc(exp->exp_imp_reverse, LDLM_SET_INFO,
+                                 sizeof(KEY_HSM_COPYTOOL_SEND),
+                                 KEY_HSM_COPYTOOL_SEND,
+                                 len, lh, NULL);
+
+        OBD_FREE(lh, len);
+
+        RETURN(rc);
 }
 
 static struct obd_ops mdt_obd_device_ops = {
@@ -5664,7 +5761,7 @@ struct md_ucred *mdt_ucred(const struct mdt_thread_info *info)
 }
 
 /**
- * Enable/disable COS.
+ * Enable/disable COS (Commit On Sharing).
  *
  * Set/Clear the COS flag in mdt options.
  *
@@ -5688,9 +5785,9 @@ void mdt_enable_cos(struct mdt_device *mdt, int val)
 }
 
 /**
- * Check COS status.
+ * Check COS (Commit On Sharing) status.
  *
- * Return COS flag status/
+ * Return COS flag status.
  *
  * \param mdt mdt device
  */
@@ -5788,7 +5885,8 @@ static void __exit mdt_mod_exit(void)
 static struct mdt_handler mdt_mds_ops[] = {
 DEF_MDT_HNDL_F(0,                         CONNECT,      mdt_connect),
 DEF_MDT_HNDL_F(0,                         DISCONNECT,   mdt_disconnect),
-DEF_MDT_HNDL_F(0,                         SET_INFO,     mdt_set_info),
+DEF_MDT_HNDL  (0,                         SET_INFO,     mdt_set_info,
+                                                             &RQF_OBD_SET_INFO),
 DEF_MDT_HNDL_F(0,                         GET_INFO,     mdt_get_info),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, GETSTATUS,    mdt_getstatus),
 DEF_MDT_HNDL_F(HABEO_CORPUS,              GETATTR,      mdt_getattr),

@@ -343,16 +343,13 @@ static struct lov_device_emerg **lov_emerg_alloc(int nr)
                 return ERR_PTR(-ENOMEM);
         for (result = i = 0; i < nr && result == 0; i++) {
                 struct lov_device_emerg *em;
-                void *cookie;
 
                 OBD_ALLOC_PTR(em);
                 if (em != NULL) {
                         emerg[i] = em;
                         cl_page_list_init(&em->emrg_page_list);
-                        cookie = cl_env_reenter();
                         em->emrg_env = cl_env_alloc(&em->emrg_refcheck,
                                                     LCT_REMEMBER|LCT_NOREF);
-                        cl_env_reexit(cookie);
                         if (!IS_ERR(em->emrg_env))
                                 em->emrg_env->le_ctx.lc_cookie = 0x2;
                         else {

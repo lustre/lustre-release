@@ -82,6 +82,7 @@ struct lov_request_set {
         struct lov_lock_handles *set_lockh;
         struct list_head         set_list;
         cfs_waitq_t              set_waitq;
+        spinlock_t               set_lock;
 };
 
 extern cfs_mem_cache_t *lov_oinfo_slab;
@@ -260,8 +261,7 @@ int lov_del_target(struct obd_device *obd, __u32 index,
                    struct obd_uuid *uuidp, int gen);
 /* lov_log.c */
 int lov_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                  struct obd_device *tgt, int count, struct llog_catid *logid,
-                  struct obd_uuid *uuid);
+                  struct obd_device *tgt, int *idx);
 int lov_llog_finish(struct obd_device *obd, int count);
 
 /* lov_pack.c */

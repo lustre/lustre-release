@@ -23,7 +23,7 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval lctl set_param debug=\"$DEBUG_LVL\""
 [ "$DEBUG_ON" ] || DEBUG_ON="eval lctl set_param debug=0x33f0484"
 
-export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL REPLAY_VBR INSANITY SANITY_QUOTA SANITY_SEC SANITY_GSS PERFORMANCE_SANITY LARGE_SCALE RECOVERY_MDS_SCALE RECOVERY_DOUBLE_SCALE RECOVERY_RANDOM_SCALE PARALLEL_SCALE LREPLICATE_TEST"
+export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL REPLAY_VBR INSANITY SANITY_QUOTA SANITY_SEC SANITY_GSS PERFORMANCE_SANITY LARGE_SCALE RECOVERY_MDS_SCALE RECOVERY_DOUBLE_SCALE RECOVERY_RANDOM_SCALE PARALLEL_SCALE LREPLICATE_TEST METADATA_UPDATES OST_POOLS SANITY_BENCHMARK"
 
 if [ "$ACC_SM_ONLY" ]; then
     for O in $TESTSUITE_LIST; do
@@ -59,6 +59,8 @@ FORMAT=${FORMAT:-formatall}
 CLEANUP=${CLEANUP:-stopall}
 
 setup_if_needed() {
+    nfs_client_mode && return
+
     local MOUNTED=$(mounted_lustre_filesystems)
     if $(echo $MOUNTED | grep -w -q $MOUNT); then
         check_config $MOUNT
@@ -362,6 +364,12 @@ for NAME in $CONFIGS; do
 	fi
 done
 
+if [ "$SANITY_BENCHMARK" != "no" ]; then
+        title sanity-benchmark
+	bash sanity-benchmark.sh
+	SANITY_BENCHMARK="done"
+fi
+
 [ "$REPLAY_SINGLE" != "no" ] && skip_remmds replay-single && REPLAY_SINGLE=no && MSKIPPED=1
 if [ "$REPLAY_SINGLE" != "no" ]; then
         title replay-single
@@ -437,13 +445,20 @@ if [ "$SANITY_GSS" != "no" ]; then
 fi
 
 
-echo replication sanity: $LREPLICATE_TEST
 [ "$LREPLICATE_TEST" != "no" ] && skip_remmds lreplicate-test && LREPLICATE_TEST=no && MSKIPPED=1
 [ "$LREPLICATE_TEST" != "no" ] && skip_remost lreplicate-test && LREPLICATE_TEST=no && OSKIPPED=1
 if [ "$LREPLICATE_TEST" != "no" ]; then
         title lreplicate-test
         bash lreplicate-test.sh
         LREPLICATE_TEST="done"
+fi
+
+[ "$OST_POOLS" != "no" ] && skip_remmds ost-pools && OST_POOLS=no && MSKIPPED=1
+[ "$OST_POOLS" != "no" ] && skip_remost ost-pools && OST_POOLS=no && OSKIPPED=1
+if [ "$OST_POOLS" != "no" ]; then
+        title ost-pools
+        bash ost-pools.sh
+        OST_POOLS="done"
 fi
 
 
@@ -491,6 +506,12 @@ if [ "$PARALLEL_SCALE" != "no" ]; then
         title parallel-scale
         bash parallel-scale.sh
         PARALLEL_SCALE="done"
+fi
+
+if [ "$METADATA_UPDATES" != "no" ]; then
+        title metadata-updates
+        bash metadata-updates.sh
+        METADATA_UPDATES="done"
 fi
 
 RC=$?

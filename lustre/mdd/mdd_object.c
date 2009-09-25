@@ -46,7 +46,11 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/module.h>
+#ifdef HAVE_EXT4_LDISKFS
+#include <ldiskfs/ldiskfs_jbd2.h>
+#else
 #include <linux/jbd.h>
+#endif
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_support.h>
@@ -55,7 +59,11 @@
 #include <lustre_fid.h>
 
 #include <lustre_param.h>
+#ifdef HAVE_EXT4_LDISKFS
+#include <ldiskfs/ldiskfs.h>
+#else
 #include <linux/ldiskfs_fs.h>
+#endif
 #include <lustre_mds.h>
 #include <lustre/lustre_idl.h>
 
@@ -1192,10 +1200,10 @@ static int mdd_changelog_data_store(const struct lu_env     *env,
                 RETURN(-ENOMEM);
         rec = (struct llog_changelog_rec *)buf->lb_buf;
 
-        rec->cr_flags = CLF_VERSION;
-        rec->cr_type = (__u32)type;
-        rec->cr_tfid = *tfid;
-        rec->cr_namelen = 0;
+        rec->cr.cr_flags = CLF_VERSION;
+        rec->cr.cr_type = (__u32)type;
+        rec->cr.cr_tfid = *tfid;
+        rec->cr.cr_namelen = 0;
         mdd_obj->mod_cltime = cfs_time_current_64();
 
         rc = mdd_changelog_llog_write(mdd, rec, handle);
@@ -1269,6 +1277,11 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
         handle = mdd_declare_and_start_attr_set(env, obj, ma);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
+
+        /* permission changes may require sync operation */
+        if (ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID) &&
+            mdd->mdd_sync_permission == 1)
+                handle->th_sync = 1;
 
         /*TODO: add lock here*/
         /* start a log jounal handle if needed */
@@ -1439,6 +1452,12 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
         handle = mdd_trans_create(env, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
+
+        /* security-replated changes may require sync */
+        if (!strcmp(name, XATTR_NAME_ACL_ACCESS) &&
+            mdd->mdd_sync_permission == 1)
+                handle->th_sync = 1;
+
         rc = mdo_declare_xattr_set(env, mdd_obj, buf->lb_len, name, fl, handle);
         if (rc)
                 GOTO(cleanup, rc);

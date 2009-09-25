@@ -763,8 +763,17 @@ static void cl_lock_delete0(const struct lu_env *env, struct cl_lock *lock)
                  * and head->coh_nesting == 1 check assumes two level top-sub
                  * hierarchy.
                  */
-                LASSERT(ergo(head->coh_nesting == 1 &&
-                             list_empty(&head->coh_locks), !head->coh_pages));
+                /*
+                 * The count of pages of this object may NOT be zero because
+                 * we don't cleanup the pages if they are in CPS_FREEING state.
+                 * See cl_page_gang_lookup().
+                 *
+                 * It is safe to leave the CPS_FREEING pages in cache w/o
+                 * a lock, because those page must not be uptodate.
+                 * See cl_page_delete0 for details.
+                 */
+                /* LASSERT(!ergo(head->coh_nesting == 1 &&
+                           list_empty(&head->coh_locks), !head->coh_pages)); */
                 spin_unlock(&head->coh_lock_guard);
                 /*
                  * From now on, no new references to this lock can be acquired
@@ -1156,7 +1165,7 @@ EXPORT_SYMBOL(cl_enqueue);
  * This function is called repeatedly by cl_unuse() until either lock is
  * unlocked, or error occurs.
  *
- * \ppre lock->cll_state <= CLS_HELD || lock->cll_state == CLS_UNLOCKING
+ * \pre  lock->cll_state <= CLS_HELD || lock->cll_state == CLS_UNLOCKING
  *
  * \post ergo(result == 0, lock->cll_state == CLS_CACHED)
  *
@@ -1795,9 +1804,8 @@ int cl_lock_page_out(const struct lu_env *env, struct cl_lock *lock,
         struct cl_io          *io    = &info->clt_io;
         struct cl_2queue      *queue = &info->clt_queue;
         struct cl_lock_descr  *descr = &lock->cll_descr;
-        int                      result;
-        int                      rc0;
-        int                      rc1;
+        long page_count;
+        int result;
 
         LINVRNT(cl_lock_invariant(env, lock));
         ENTRY;
@@ -1805,24 +1813,38 @@ int cl_lock_page_out(const struct lu_env *env, struct cl_lock *lock,
         io->ci_obj = cl_object_top(descr->cld_obj);
         result = cl_io_init(env, io, CIT_MISC, io->ci_obj);
         if (result == 0) {
+                int nonblock = 1;
 
+restart:
                 cl_2queue_init(queue);
                 cl_page_gang_lookup(env, descr->cld_obj, io, descr->cld_start,
-                                    descr->cld_end, &queue->c2_qin);
-                if (queue->c2_qin.pl_nr > 0) {
+                                    descr->cld_end, &queue->c2_qin, nonblock);
+                page_count = queue->c2_qin.pl_nr;
+                if (page_count > 0) {
                         result = cl_page_list_unmap(env, io, &queue->c2_qin);
                         if (!discard) {
-                                rc0 = cl_io_submit_rw(env, io, CRT_WRITE,
-                                                      queue, CRP_CANCEL);
-                                rc1 = cl_page_list_own(env, io,
-                                                       &queue->c2_qout);
-                                result = result ?: rc0 ?: rc1;
+                                long timeout = 600; /* 10 minutes. */
+                                /* for debug purpose, if this request can't be
+                                 * finished in 10 minutes, we hope it can
+                                 * notify us.
+                                 */
+                                result = cl_io_submit_sync(env, io, CRT_WRITE,
+                                                           queue, CRP_CANCEL,
+                                                           timeout);
+                                if (result)
+                                        CWARN("Writing %lu pages error: %d\n",
+                                              page_count, result);
                         }
                         cl_lock_page_list_fixup(env, io, lock, &queue->c2_qout);
                         cl_2queue_discard(env, io, queue);
                         cl_2queue_disown(env, io, queue);
                 }
                 cl_2queue_fini(env, queue);
+
+                if (nonblock) {
+                        nonblock = 0;
+                        goto restart;
+                }
         }
         cl_io_fini(env, io);
         RETURN(result);

@@ -197,6 +197,12 @@ static int filter_obd_reconnect(const struct lu_env *env, struct obd_export *exp
         if (exp == NULL || obd == NULL || cluuid == NULL)
                 RETURN(-EINVAL);
 
+        rc = lu_env_refill((struct lu_env *)env);
+        if (rc != 0) {
+                CERROR("Failure to refill session: '%d'\n", rc);
+                RETURN(rc);
+        }
+
         filter_info_init(env, exp);
         rc = filter_parse_connect_data(env, exp, data);
 
@@ -625,13 +631,14 @@ out:
 int filter_setattr(struct obd_export *exp,
                    struct obd_info *oinfo, struct obd_trans_info *oti)
 {
-        struct lu_env env;
-        struct filter_device *ofd = filter_exp(exp);
         struct filter_thread_info *info;
-        struct ldlm_namespace *ns = ofd->ofd_namespace;
-        struct ldlm_resource *res;
-        struct filter_object *fo;
-        int rc = 0;
+        struct filter_device      *ofd = filter_exp(exp);
+        struct ldlm_namespace     *ns = ofd->ofd_namespace;
+        struct ldlm_resource      *res;
+        struct filter_object      *fo;
+        struct obdo               *oa = oinfo->oi_oa;
+        struct lu_env              env;
+        int                        rc = 0;
         ENTRY;
 
         rc = lu_env_init(&env, LCT_DT_THREAD);
@@ -644,7 +651,7 @@ int filter_setattr(struct obd_export *exp,
         lu_idif_build(&info->fti_fid, oinfo->oi_oa->o_id, oinfo->oi_oa->o_gr);
         lu_idif_resid(&info->fti_fid, &info->fti_resid);
 
-        rc = filter_auth_capa(ofd, &info->fti_fid, oinfo_mdsno(oinfo),
+        rc = filter_auth_capa(ofd, &info->fti_fid, oa->o_gr,
                               oinfo_capa(oinfo), CAPA_OPC_META_WRITE);
         if (rc)
                 GOTO(out, rc);
@@ -735,7 +742,7 @@ static int filter_punch(struct obd_export *exp, struct obd_info *oinfo,
                oinfo->oi_oa->o_valid, oinfo->oi_policy.l_extent.start,
                oinfo->oi_policy.l_extent.end);
 
-        rc = filter_auth_capa(ofd, &info->fti_fid, oinfo_mdsno(oinfo),
+        rc = filter_auth_capa(ofd, &info->fti_fid, oinfo->oi_oa->o_gr,
                               oinfo_capa(oinfo), CAPA_OPC_OSS_TRUNC);
         if (rc)
                 GOTO(out_env, rc);
@@ -1060,7 +1067,7 @@ int filter_getattr(struct obd_export *exp, struct obd_info *oinfo)
         info = filter_info_init(&env, exp);
 
         lu_idif_build(&info->fti_fid, oinfo->oi_oa->o_id, oinfo->oi_oa->o_gr);
-        rc = filter_auth_capa(ofd, &info->fti_fid, oinfo_mdsno(oinfo),
+        rc = filter_auth_capa(ofd, &info->fti_fid, oinfo->oi_oa->o_gr,
                               oinfo_capa(oinfo), CAPA_OPC_META_READ);
         if (rc)
                 GOTO(out, rc);

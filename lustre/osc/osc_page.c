@@ -38,12 +38,22 @@
  *   Author: Nikita Danilov <nikita.danilov@sun.com>
  */
 
-/** \addtogroup osc osc @{ */
-
 #define DEBUG_SUBSYSTEM S_OSC
 
 #include "osc_cl_internal.h"
 
+/** \addtogroup osc 
+ *  @{ 
+ */
+
+/* 
+ * Comment out osc_page_protected because it may sleep inside the
+ * the client_obd_list_lock.
+ * client_obd_list_lock -> osc_ap_completion -> osc_completion ->
+ *   -> osc_page_protected -> osc_page_is_dlocked -> osc_match_base
+ *   -> ldlm_lock_match -> sptlrpc_import_check_ctx -> sleep.
+ */
+#if 0
 static int osc_page_is_dlocked(const struct lu_env *env,
                                const struct osc_page *opg,
                                enum cl_lock_mode mode, int pending, int unref)
@@ -56,6 +66,8 @@ static int osc_page_is_dlocked(const struct lu_env *env,
         ldlm_policy_data_t     *policy;
         ldlm_mode_t             dlmmode;
         int                     flags;
+
+        might_sleep();
 
         info = osc_env_info(env);
         resname = &info->oti_resname;
@@ -131,6 +143,14 @@ static int osc_page_protected(const struct lu_env *env,
         }
         return result;
 }
+#else
+static int osc_page_protected(const struct lu_env *env,
+                              const struct osc_page *opg,
+                              enum cl_lock_mode mode, int unref)
+{
+        return 1;
+}
+#endif
 
 /*****************************************************************************
  *
@@ -262,17 +282,30 @@ static const char *osc_list(struct list_head *head)
         return list_empty(head) ? "-" : "+";
 }
 
+static inline cfs_time_t osc_submit_duration(struct osc_page *opg)
+{
+        if (opg->ops_submit_time == 0)
+                return 0;
+
+        return (cfs_time_current() - opg->ops_submit_time);
+}
+
 static int osc_page_print(const struct lu_env *env,
                           const struct cl_page_slice *slice,
                           void *cookie, lu_printer_t printer)
 {
         struct osc_page       *opg = cl2osc_page(slice);
         struct osc_async_page *oap = &opg->ops_oap;
+        struct osc_object     *obj = cl2osc(slice->cpl_obj);
+        struct client_obd     *cli = &osc_export(obj)->exp_obd->u.cli;
+        struct lov_oinfo      *loi = obj->oo_oinfo;
 
         return (*printer)(env, cookie, LUSTRE_OSC_NAME"-page@%p: "
-                          "< %#x %d %u %s %s %s >"
-                          "< %llu %u %#x %#x %p %p %p %p %p >"
-                          "< %s %p %d >\n",
+                          "1< %#x %d %u %s %s %s > "
+                          "2< %llu %u %#x %#x | %p %p %p %p %p > "
+                          "3< %s %p %d %lu > "
+                          "4< %d %d %d %lu %s | %s %s %s %s > "
+                          "5< %s %s %s %s | %d %s %s | %d %s %s>\n",
                           opg,
                           /* 1 */
                           oap->oap_magic, oap->oap_cmd,
@@ -288,7 +321,28 @@ static int osc_page_print(const struct lu_env *env,
                           oap->oap_caller_data,
                           /* 3 */
                           osc_list(&opg->ops_inflight),
-                          opg->ops_submitter, opg->ops_transfer_pinned);
+                          opg->ops_submitter, opg->ops_transfer_pinned,
+                          osc_submit_duration(opg),
+                          /* 4 */
+                          cli->cl_r_in_flight, cli->cl_w_in_flight,
+                          cli->cl_max_rpcs_in_flight,
+                          cli->cl_avail_grant,
+                          osc_list(&cli->cl_cache_waiters),
+                          osc_list(&cli->cl_loi_ready_list),
+                          osc_list(&cli->cl_loi_hp_ready_list),
+                          osc_list(&cli->cl_loi_write_list),
+                          osc_list(&cli->cl_loi_read_list),
+                          /* 5 */
+                          osc_list(&loi->loi_ready_item),
+                          osc_list(&loi->loi_hp_ready_item),
+                          osc_list(&loi->loi_write_item),
+                          osc_list(&loi->loi_read_item),
+                          loi->loi_read_lop.lop_num_pending,
+                          osc_list(&loi->loi_read_lop.lop_pending),
+                          osc_list(&loi->loi_read_lop.lop_urgent),
+                          loi->loi_write_lop.lop_num_pending,
+                          osc_list(&loi->loi_write_lop.lop_pending),
+                          osc_list(&loi->loi_write_lop.lop_urgent));
 }
 
 static void osc_page_delete(const struct lu_env *env,
@@ -326,7 +380,9 @@ void osc_page_clip(const struct lu_env *env, const struct cl_page_slice *slice,
 
         opg->ops_from = from;
         opg->ops_to   = to;
+        spin_lock(&oap->oap_lock);
         oap->oap_async_flags |= ASYNC_COUNT_STABLE;
+        spin_unlock(&oap->oap_lock);
 }
 
 static int osc_page_cancel(const struct lu_env *env,
@@ -377,6 +433,8 @@ static int osc_make_ready(const struct lu_env *env, void *data, int cmd)
 
         ENTRY;
         result = cl_page_make_ready(env, page, CRT_WRITE);
+        if (result == 0)
+                opg->ops_submit_time = cfs_time_current();
         RETURN(result);
 }
 
@@ -442,7 +500,9 @@ static int osc_completion(const struct lu_env *env,
         LASSERT(page->cp_req == NULL);
 
         /* As the transfer for this page is being done, clear the flags */
+        spin_lock(&oap->oap_lock);
         oap->oap_async_flags = 0;
+        spin_unlock(&oap->oap_lock);
 
         crt = cmd == OBD_BRW_READ ? CRT_READ : CRT_WRITE;
         /* Clear opg->ops_transfer_pinned before VM lock is released. */
@@ -453,6 +513,8 @@ static int osc_completion(const struct lu_env *env,
         LASSERT(!list_empty(&opg->ops_inflight));
         list_del_init(&opg->ops_inflight);
         spin_unlock(&obj->oo_seatbelt);
+
+        opg->ops_submit_time = 0;
 
         cl_page_completion(env, page, crt, rc);
 
@@ -535,12 +597,16 @@ void osc_io_submit_page(const struct lu_env *env,
 {
         struct osc_async_page *oap = &opg->ops_oap;
         struct client_obd     *cli = oap->oap_cli;
+        int flags = 0;
 
         LINVRNT(osc_page_protected(env, opg,
                                    crt == CRT_WRITE ? CLM_WRITE : CLM_READ, 1));
 
         oap->oap_page_off   = opg->ops_from;
         oap->oap_count      = opg->ops_to - opg->ops_from;
+        /* Give a hint to OST that requests are coming from kswapd - bug19529 */
+        if (libcfs_memory_pressure_get())
+                oap->oap_brw_flags |= OBD_BRW_MEMALLOC;
         oap->oap_brw_flags |= OBD_BRW_SYNC;
         if (osc_io_srvlock(oio))
                 oap->oap_brw_flags |= OBD_BRW_SRVLOCK;
@@ -552,11 +618,14 @@ void osc_io_submit_page(const struct lu_env *env,
                 oap->oap_cmd |= OBD_BRW_NOQUOTA;
         }
 
-        oap->oap_async_flags |= OSC_FLAGS;
         if (oap->oap_cmd & OBD_BRW_READ)
-                oap->oap_async_flags |= ASYNC_COUNT_STABLE;
+                flags = ASYNC_COUNT_STABLE;
         else if (!(oap->oap_brw_page.flag & OBD_BRW_FROM_GRANT))
                 osc_enter_cache_try(env, cli, oap->oap_loi, oap, 1);
+
+        spin_lock(&oap->oap_lock);
+        oap->oap_async_flags |= OSC_FLAGS | flags;
+        spin_unlock(&oap->oap_lock);
 
         osc_oap_to_pending(oap);
         osc_page_transfer_get(opg, "transfer\0imm");

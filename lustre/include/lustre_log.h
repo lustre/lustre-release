@@ -200,11 +200,8 @@ int llog_obd_origin_add(struct llog_ctxt *ctxt,
                         struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
                         struct llog_cookie *logcookies, int numcookies);
 
-int llog_cat_initialize(struct obd_device *obd, struct obd_llog_group *olg,
-                        int idx, struct obd_uuid *uuid);
 int obd_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                  struct obd_device *disk_obd, int count,
-                  struct llog_catid *logid, struct obd_uuid *uuid);
+                  struct obd_device *disk_obd, int *idx);
 
 int obd_llog_finish(struct obd_device *obd, int count);
 
@@ -263,12 +260,14 @@ struct llog_operations {
 
 /* llog_lvfs.c */
 extern struct llog_operations llog_lvfs_ops;
-int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
+int llog_get_cat_list(struct obd_device *disk_obd,
                       char *name, int idx, int count,
                       struct llog_catid *idarray);
 
-int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
+int llog_put_cat_list(struct obd_device *disk_obd,
                       char *name, int idx, int count, struct llog_catid *idarray);
+
+#define LLOG_CTXT_FLAG_UNINITIALIZED     0x00000001
 
 struct llog_ctxt {
         int                      loc_idx; /* my index the obd array of ctxt's */
@@ -285,6 +284,7 @@ struct llog_ctxt {
         struct semaphore         loc_sem; /* protects loc_llcd and loc_imp */
         atomic_t                 loc_refcount;
         void                    *llog_proc_cb;
+        long                     loc_flags; /* flags, see above defines */
 };
 
 #define LCM_NAME_SIZE 64

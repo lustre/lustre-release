@@ -219,12 +219,10 @@ EXPORT_SYMBOL(ptlrpc_stop_all_threads);
 EXPORT_SYMBOL(ptlrpc_start_threads);
 EXPORT_SYMBOL(ptlrpc_start_thread);
 EXPORT_SYMBOL(ptlrpc_unregister_service);
-EXPORT_SYMBOL(ptlrpc_daemonize);
 EXPORT_SYMBOL(ptlrpc_service_health_check);
 EXPORT_SYMBOL(ptlrpc_hpreq_reorder);
 
 /* pack_generic.c */
-EXPORT_SYMBOL(lustre_msg_swabbed);
 EXPORT_SYMBOL(lustre_msg_check_version);
 EXPORT_SYMBOL(lustre_pack_request);
 EXPORT_SYMBOL(lustre_pack_reply);
@@ -233,11 +231,13 @@ EXPORT_SYMBOL(lustre_shrink_msg);
 EXPORT_SYMBOL(lustre_free_reply_state);
 EXPORT_SYMBOL(lustre_msg_size);
 EXPORT_SYMBOL(lustre_packed_msg_size);
-EXPORT_SYMBOL(lustre_unpack_msg);
+EXPORT_SYMBOL(ptlrpc_unpack_rep_msg);
+EXPORT_SYMBOL(ptlrpc_unpack_req_msg);
 EXPORT_SYMBOL(lustre_msg_buf);
 EXPORT_SYMBOL(lustre_msg_string);
+EXPORT_SYMBOL(ptlrpc_buf_set_swabbed);
+EXPORT_SYMBOL(ptlrpc_buf_need_swab);
 EXPORT_SYMBOL(lustre_swab_ptlrpc_body);
-EXPORT_SYMBOL(lustre_swab_buf);
 EXPORT_SYMBOL(lustre_swab_reqbuf);
 EXPORT_SYMBOL(lustre_swab_repbuf);
 EXPORT_SYMBOL(lustre_swab_obdo);

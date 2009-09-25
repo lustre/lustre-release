@@ -50,6 +50,10 @@
 
 #include "echo_internal.h"
 
+/** \defgroup echo_client Echo Client
+ * @{
+ */
+
 struct echo_device {
         struct cl_device        ed_cl;
         struct echo_client_obd *ed_ec;
@@ -78,7 +82,6 @@ struct echo_object_conf {
 
 struct echo_page {
         struct cl_page_slice   ep_cl;
-        struct cl_sync_io     *ep_sync_io;
         cfs_page_t            *ep_vmpage;
 };
 
@@ -104,7 +107,7 @@ static int echo_client_setup(struct obd_device *obddev,
 static int echo_client_cleanup(struct obd_device *obddev);
 
 
-/** \defgroup echo_helpers
+/** \defgroup echo_helpers Helper functions
  * @{
  */
 static inline struct echo_device *cl2echo_dev(const struct cl_device *dev)
@@ -187,7 +190,6 @@ struct echo_thread_info {
 
         struct cl_2queue        eti_queue;
         struct cl_io            eti_io;
-        struct cl_sync_io       eti_anchor;
         struct cl_lock_descr    eti_descr;
         struct lu_fid           eti_fid;
 };
@@ -242,7 +244,7 @@ static struct lu_kmem_descr echo_caches[] = {
         }
 };
 
-/** defgroup echo_page echo_page
+/** \defgroup echo_page Page operations
  *
  * Echo page operations.
  *
@@ -271,14 +273,7 @@ static void echo_page_completion(const struct lu_env *env,
                                  const struct cl_page_slice *slice,
                                  int ioret)
 {
-        struct echo_page *ecp     = cl2echo_page(slice);
-        struct cl_sync_io *anchor = ecp->ep_sync_io;
-        ENTRY;
-
-        LASSERT(anchor != NULL);
-        ecp->ep_sync_io = NULL;
-        cl_sync_io_note(anchor, ioret);
-        EXIT;
+        LASSERT(slice->cpl_page->cp_sync_io != NULL);
 }
 
 static void echo_page_fini(const struct lu_env *env,
@@ -332,7 +327,7 @@ static const struct cl_page_operations echo_page_ops = {
 };
 /** @} echo_page */
 
-/** \defgroup echo_lock echo_lock
+/** \defgroup echo_lock Locking
  *
  * echo lock operations
  *
@@ -371,7 +366,7 @@ static struct cl_lock_operations echo_lock_ops = {
 
 /** @} echo_lock */
 
-/** \defgroup echo_cl_ops echo_cl_ops
+/** \defgroup echo_cl_ops cl_object operations
  *
  * operations for cl_object
  *
@@ -431,7 +426,7 @@ static const struct cl_object_operations echo_cl_obj_ops = {
 };
 /** @} echo_cl_ops */
 
-/** \defgroup echo_lu_ops echo_lu_ops
+/** \defgroup echo_lu_ops lu_object operations
  *
  * operations for echo lu object.
  *
@@ -515,15 +510,15 @@ static const struct lu_object_operations echo_lu_obj_ops = {
 };
 /** @} echo_lu_ops */
 
-/** \defgroup echo_lu_dev_ops
+/** \defgroup echo_lu_dev_ops  lu_device operations
  *
  * Operations for echo lu device.
  *
  * @{
  */
 static struct lu_object *echo_object_alloc(const struct lu_env *env,
-                                         const struct lu_object_header *hdr,
-                                         struct lu_device *dev)
+                                           const struct lu_object_header *hdr,
+                                           struct lu_device *dev)
 {
         struct echo_object *eco;
         struct lu_object *obj = NULL;
@@ -554,7 +549,7 @@ static struct lu_device_operations echo_device_lu_ops = {
 static struct cl_device_operations echo_device_cl_ops = {
 };
 
-/** \defgroup echo_init echo_init
+/** \defgroup echo_init Setup and teardown
  *
  * Init and fini functions for echo client.
  *
@@ -773,9 +768,10 @@ static struct lu_device *echo_device_free(const struct lu_env *env,
 {
         struct echo_device     *ed   = cl2echo_dev(lu2cl_dev(d));
         struct echo_client_obd *ec   = ed->ed_ec;
+        struct echo_object     *eco;
         struct lu_device       *next = ed->ed_next;
 
-        printk("ed = %p, ec = %p, next = %p\n", ed, ec, next);
+        CDEBUG(D_INFO, "echo device:%p is going to be freed, next = %p\n", ed, next);
 
         /* destroy locks */
         spin_lock(&ec->ec_lock);
@@ -806,20 +802,33 @@ static struct lu_device *echo_device_free(const struct lu_env *env,
         LASSERT(ed->ed_site);
         lu_site_purge(env, &ed->ed_site->cs_lu, -1);
 
-        /* check if there are objects still alive, assume only one reference */
+        /* check if there are objects still alive.
+         * It shouldn't have any object because lu_site_purge would cleanup
+         * all of cached objects. Anyway, probably the echo device is being
+         * parallelly accessed.
+         */
+        spin_lock(&ec->ec_lock);
+        list_for_each_entry(eco, &ec->ec_objects, eo_obj_chain)
+                eco->eo_deleted = 1;
+        spin_unlock(&ec->ec_lock);
+
+        /* purge again */
+        lu_site_purge(env, &ed->ed_site->cs_lu, -1);
+
+        CDEBUG(D_INFO, "Waiting for the reference of echo object to be dropped\n");
+
+        /* Wait for the last reference to be dropped. */
         spin_lock(&ec->ec_lock);
         while (!list_empty(&ec->ec_objects)) {
-                struct echo_object *eco;
-                eco = list_entry(ec->ec_objects.next, struct echo_object,
-                                 eo_obj_chain);
                 spin_unlock(&ec->ec_lock);
-
-                eco->eo_deleted = 1;
-                cl_echo_object_put(eco);
-
+                CERROR("echo_client still has objects at cleanup time, "
+                       "wait for 1 second\n");
+                cfs_schedule_timeout(CFS_TASK_UNINT, cfs_time_seconds(1));
                 spin_lock(&ec->ec_lock);
         }
         spin_unlock(&ec->ec_lock);
+
+        CDEBUG(D_INFO, "No object exists, exiting...\n");
 
         echo_client_cleanup(d->ld_obd);
 
@@ -855,7 +864,7 @@ static struct lu_device_type echo_device_type = {
 };
 /** @} echo_init */
 
-/** \defgroup echo_exports
+/** \defgroup echo_exports Exported operations
  *
  * exporting functions to echo client
  *
@@ -880,6 +889,10 @@ static struct echo_object *cl_echo_object_find(struct echo_device *d,
         lsm = *lsmp;
         LASSERT(lsm);
         LASSERT(lsm->lsm_object_id);
+
+        /* Never return an object if the obd is to be freed. */
+        if (echo_dev2cl(d)->cd_lu_dev.ld_obd->obd_stopping)
+                RETURN(ERR_PTR(-ENODEV));
 
         env = cl_env_get(&refcheck);
         if (IS_ERR(env))
@@ -1056,16 +1069,14 @@ static int cl_echo_async_brw(const struct lu_env *env, struct cl_io *io,
         int result = 0;
         ENTRY;
 
-        cl_page_list_splice(&queue->c2_qin, &queue->c2_qout);
-        cl_page_list_for_each_safe(clp, temp, &queue->c2_qout) {
+        cl_page_list_for_each_safe(clp, temp, &queue->c2_qin) {
                 int rc;
                 rc = cl_page_cache_add(env, io, clp, CRT_WRITE);
                 if (rc == 0)
                         continue;
-                cl_page_list_move(&queue->c2_qin, &queue->c2_qout, clp);
                 result = result ?: rc;
         }
-        RETURN(list_empty(&queue->c2_qout.pl_pages) ? result : 0);
+        RETURN(result);
 }
 
 static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
@@ -1075,11 +1086,9 @@ static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
         struct echo_thread_info *info;
         struct cl_object        *obj = echo_obj2cl(eco);
         struct echo_device      *ed  = eco->eo_dev;
-        struct cl_sync_io       *anchor;
         struct cl_2queue        *queue;
         struct cl_io            *io;
         struct cl_page          *clp;
-        struct echo_page        *ep;
 
         int page_size = cl_page_size(obj);
         int refcheck;
@@ -1094,10 +1103,8 @@ static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
 
         info    = echo_env_info(env);
         io      = &info->eti_io;
-        anchor  = &info->eti_anchor;
         queue   = &info->eti_queue;
 
-        cl_sync_io_init(anchor, npages);
         cl_2queue_init(queue);
         rc = cl_io_init(env, io, CIT_MISC, obj);
         if (rc < 0)
@@ -1121,8 +1128,6 @@ static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
                         break;
                 }
 
-                ep = cl2echo_page(cl_page_at(clp, &echo_device_type));
-                ep->ep_sync_io = anchor;
                 cl_2queue_add(queue, clp);
 
                 /* drop the reference count for cl_page_find, so that the page
@@ -1138,21 +1143,10 @@ static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
                 if (async)
                         rc = cl_echo_async_brw(env, io, typ, queue);
                 else
-                        rc = cl_io_submit_rw(env, io,typ, queue, CRP_NORMAL);
+                        rc = cl_io_submit_sync(env, io, typ, queue,
+                                               CRP_NORMAL, 0);
                 CDEBUG(D_INFO, "echo_client %s write returns %d\n",
                        async ? "async" : "sync", rc);
-                if (rc == 0) {
-                        /*
-                         * If some pages weren't sent for any reason (e.g.,
-                         * direct-io read found up-to-date pages in the
-                         * cache), count them as completed to avoid infinite
-                         * wait.
-                         */
-                        cl_page_list_for_each(clp, &queue->c2_qin)
-                                cl_sync_io_note(anchor, +1);
-                        /* wait for the IO to be finished. */
-                        rc = cl_sync_io_wait(env, io, &queue->c2_qout, anchor);
-                }
         }
 
         cl_2queue_discard(env, io, queue);
@@ -1278,9 +1272,9 @@ static int echo_create_object(struct echo_device *ed, int on_target,
 
         rc = 0;
         if (on_target) {
-                oa->o_gr = FILTER_GROUP_ECHO;
-                oa->o_valid |= OBD_MD_FLGROUP;
-
+                /* Only echo objects are allowed to be created */
+                LASSERT((oa->o_valid & OBD_MD_FLGROUP) &&
+                        (oa->o_gr == FILTER_GROUP_ECHO));
                 rc = obd_create(ec->ec_exp, oa, &lsm, oti);
                 if (rc != 0) {
                         CERROR("Cannot create objects, rc = %d\n", rc);
@@ -1623,6 +1617,9 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
                 ret = obd_commitrw(rw, exp, oa, 1,&ioo,rnb,npages,lnb,oti,ret);
                 if (ret != 0)
                         GOTO(out, ret);
+
+                /* Reset oti otherwise it would confuse ldiskfs. */
+                memset(oti, 0, sizeof(*oti));
         }
 
 out:
@@ -1640,30 +1637,31 @@ static int echo_client_brw_ioctl(int rw, struct obd_export *exp,
         struct echo_device *ed = obd2echo_dev(obd);
         struct echo_client_obd *ec = ed->ed_ec;
         struct obd_trans_info dummy_oti = { .oti_thread = NULL };
+        struct obdo *oa = &data->ioc_obdo1;
         struct echo_object *eco;
         int rc;
         int async = 1;
         ENTRY;
 
-        rc = echo_get_object(&eco, ed, &data->ioc_obdo1);
+        LASSERT(oa->o_valid & OBD_MD_FLGROUP);
+
+        rc = echo_get_object(&eco, ed, oa);
         if (rc)
                 RETURN(rc);
 
-        data->ioc_obdo1.o_valid &= ~OBD_MD_FLHANDLE;
-        data->ioc_obdo1.o_valid |= OBD_MD_FLGROUP;
-        data->ioc_obdo1.o_gr = FILTER_GROUP_ECHO;
+        oa->o_valid &= ~OBD_MD_FLHANDLE;
 
         switch((long)data->ioc_pbuf1) {
         case 1:
                 async = 0;
                 /* fall through */
         case 2:
-                rc = echo_client_kbrw(ed, rw, &data->ioc_obdo1,
+                rc = echo_client_kbrw(ed, rw, oa,
                                       eco, data->ioc_offset,
                                       data->ioc_count, async, &dummy_oti);
                 break;
         case 3:
-                rc = echo_client_prep_commit(ec->ec_exp, rw, &data->ioc_obdo1,
+                rc = echo_client_prep_commit(ec->ec_exp, rw, oa,
                                             eco, data->ioc_offset,
                                             data->ioc_count, data->ioc_plen1,
                                             &dummy_oti);
@@ -1744,12 +1742,20 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
 
         memset(&dummy_oti, 0, sizeof(dummy_oti));
 
+        oa = &data->ioc_obdo1;
+        if (!(oa->o_valid & OBD_MD_FLGROUP)) {
+                oa->o_valid |= OBD_MD_FLGROUP;
+                oa->o_gr = FILTER_GROUP_ECHO;
+        }
+        /* assume we can touch filter native objects with echo device. */
+        /* LASSERT(oa->o_gr == FILTER_GROUP_ECHO); */
+
         switch (cmd) {
         case OBD_IOC_CREATE:                    /* may create echo object */
                 if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
-                rc = echo_create_object (ed, 1, &data->ioc_obdo1,
+                rc = echo_create_object (ed, 1, oa,
                                          data->ioc_pbuf1, data->ioc_plen1,
                                          &dummy_oti);
                 GOTO(out, rc);
@@ -1758,11 +1764,8 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
-                rc = echo_get_object (&eco, ed, &data->ioc_obdo1);
+                rc = echo_get_object (&eco, ed, oa);
                 if (rc == 0) {
-                        oa = &data->ioc_obdo1;
-                        oa->o_gr = FILTER_GROUP_ECHO;
-                        oa->o_valid |= OBD_MD_FLGROUP;
                         rc = obd_destroy(ec->ec_exp, oa, eco->eo_lsm,
                                          &dummy_oti, NULL, NULL);
                         if (rc == 0)
@@ -1772,11 +1775,11 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 GOTO(out, rc);
 
         case OBD_IOC_GETATTR:
-                rc = echo_get_object (&eco, ed, &data->ioc_obdo1);
+                rc = echo_get_object (&eco, ed, oa);
                 if (rc == 0) {
                         struct obd_info oinfo = { { { 0 } } };
                         oinfo.oi_md = eco->eo_lsm;
-                        oinfo.oi_oa = &data->ioc_obdo1;
+                        oinfo.oi_oa = oa;
                         rc = obd_getattr(ec->ec_exp, &oinfo);
                         echo_put_object(eco);
                 }
@@ -1786,10 +1789,10 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
-                rc = echo_get_object (&eco, ed, &data->ioc_obdo1);
+                rc = echo_get_object (&eco, ed, oa);
                 if (rc == 0) {
                         struct obd_info oinfo = { { { 0 } } };
-                        oinfo.oi_oa = &data->ioc_obdo1;
+                        oinfo.oi_oa = oa;
                         oinfo.oi_md = eco->eo_lsm;
 
                         rc = obd_setattr(ec->ec_exp, &oinfo, NULL);
@@ -1808,7 +1811,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 GOTO(out, rc);
 
         case ECHO_IOC_GET_STRIPE:
-                rc = echo_get_object(&eco, ed, &data->ioc_obdo1);
+                rc = echo_get_object(&eco, ed, oa);
                 if (rc == 0) {
                         rc = echo_copyout_lsm(eco->eo_lsm, data->ioc_pbuf1,
                                               data->ioc_plen1);
@@ -1821,13 +1824,13 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                         GOTO (out, rc = -EPERM);
 
                 if (data->ioc_pbuf1 == NULL) {  /* unset */
-                        rc = echo_get_object(&eco, ed, &data->ioc_obdo1);
+                        rc = echo_get_object(&eco, ed, oa);
                         if (rc == 0) {
                                 eco->eo_deleted = 1;
                                 echo_put_object(eco);
                         }
                 } else {
-                        rc = echo_create_object(ed, 0, &data->ioc_obdo1,
+                        rc = echo_create_object(ed, 0, oa,
                                                 data->ioc_pbuf1,
                                                 data->ioc_plen1, &dummy_oti);
                 }
@@ -1837,14 +1840,14 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
-                rc = echo_client_enqueue(exp, &data->ioc_obdo1,
+                rc = echo_client_enqueue(exp, oa,
                                          data->ioc_conn1, /* lock mode */
                                          data->ioc_offset,
                                          data->ioc_count);/*extent*/
                 GOTO (out, rc);
 
         case ECHO_IOC_CANCEL:
-                rc = echo_client_cancel(exp, &data->ioc_obdo1);
+                rc = echo_client_cancel(exp, oa);
                 GOTO (out, rc);
 
         default:
@@ -1908,6 +1911,12 @@ static int echo_client_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
         ocd->ocd_group = FILTER_GROUP_ECHO;
 
         rc = obd_connect(NULL, &ec->ec_exp, tgt, &echo_uuid, ocd, NULL);
+        if (rc == 0) {
+                /* Turn off pinger because it connects to tgt obd directly. */
+                spin_lock(&tgt->obd_dev_lock);
+                list_del_init(&ec->ec_exp->exp_obd_chain_timed);
+                spin_unlock(&tgt->obd_dev_lock);
+        }
 
         OBD_FREE(ocd, sizeof(*ocd));
 
@@ -1931,6 +1940,7 @@ static int echo_client_cleanup(struct obd_device *obddev)
                 RETURN(-EBUSY);
         }
 
+        LASSERT(atomic_read(&ec->ec_exp->exp_refcount) > 0);
         rc = obd_disconnect(ec->ec_exp);
         if (rc != 0)
                 CERROR("fail to disconnect device: %d\n", rc);
@@ -2027,3 +2037,4 @@ void echo_client_exit(void)
         lu_kmem_fini(echo_caches);
 }
 
+/** @} echo_client */

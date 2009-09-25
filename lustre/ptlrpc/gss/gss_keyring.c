@@ -155,7 +155,6 @@ static void ctx_upcall_timeout_kr(unsigned long data)
 
         cli_ctx_expire(ctx);
         key_revoke_locked(key);
-        sptlrpc_cli_ctx_wakeup(ctx);
 }
 
 static
@@ -1211,7 +1210,7 @@ int gss_kt_instantiate(struct key *key, const void *data, size_t datalen)
         ENTRY;
 
         if (data != NULL || datalen != 0) {
-                CERROR("invalid: data %p, len "LPSZ"\n", data, datalen);
+                CERROR("invalid: data %p, len %lu\n", data, (long)datalen);
                 RETURN(-EINVAL);
         }
 
@@ -1261,7 +1260,7 @@ int gss_kt_update(struct key *key, const void *data, size_t datalen)
         ENTRY;
 
         if (data == NULL || datalen == 0) {
-                CWARN("invalid: data %p, len "LPSZ"\n", data, datalen);
+                CWARN("invalid: data %p, len %lu\n", data, (long)datalen);
                 RETURN(-EINVAL);
         }
 
@@ -1289,7 +1288,6 @@ int gss_kt_update(struct key *key, const void *data, size_t datalen)
         /* don't proceed if already refreshed */
         if (cli_ctx_is_refreshed(ctx)) {
                 CWARN("ctx already done refresh\n");
-                sptlrpc_cli_ctx_wakeup(ctx);
                 RETURN(0);
         }
 
@@ -1362,8 +1360,6 @@ out:
                 if (rc != -ERESTART)
                         set_bit(PTLRPC_CTX_ERROR_BIT, &ctx->cc_flags);
         }
-
-        sptlrpc_cli_ctx_wakeup(ctx);
 
         /* let user space think it's a success */
         sptlrpc_cli_ctx_put(ctx, 1);

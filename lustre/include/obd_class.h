@@ -182,9 +182,44 @@ void class_del_profiles(void);
 
 #define class_export_rpc_put(exp)                                       \
 ({                                                                      \
+        LASSERT(atomic_read(&exp->exp_rpc_count) > 0);                  \
         atomic_dec(&(exp)->exp_rpc_count);                              \
         CDEBUG(D_INFO, "RPC PUTting export %p : new rpc_count %d\n",    \
                (exp), atomic_read(&(exp)->exp_rpc_count));              \
+        class_export_put(exp);                                          \
+})
+
+#define class_export_lock_get(exp)                                      \
+({                                                                      \
+        atomic_inc(&(exp)->exp_locks_count);                            \
+        CDEBUG(D_INFO, "lock GETting export %p : new locks_count %d\n", \
+               (exp), atomic_read(&(exp)->exp_locks_count));            \
+        class_export_get(exp);                                          \
+})
+
+#define class_export_lock_put(exp)                                      \
+({                                                                      \
+        LASSERT(atomic_read(&exp->exp_locks_count) > 0);                \
+        atomic_dec(&(exp)->exp_locks_count);                            \
+        CDEBUG(D_INFO, "lock PUTting export %p : new locks_count %d\n", \
+               (exp), atomic_read(&(exp)->exp_locks_count));            \
+        class_export_put(exp);                                          \
+})
+
+#define class_export_cb_get(exp)                                        \
+({                                                                      \
+        atomic_inc(&(exp)->exp_cb_count);                               \
+        CDEBUG(D_INFO, "callback GETting export %p : new cb_count %d\n",\
+               (exp), atomic_read(&(exp)->exp_cb_count));               \
+        class_export_get(exp);                                          \
+})
+
+#define class_export_cb_put(exp)                                        \
+({                                                                      \
+        LASSERT(atomic_read(&exp->exp_cb_count) > 0);                   \
+        atomic_dec(&(exp)->exp_cb_count);                               \
+        CDEBUG(D_INFO, "callback PUTting export %p : new cb_count %d\n",\
+               (exp), atomic_read(&(exp)->exp_cb_count));               \
         class_export_put(exp);                                          \
 })
 
@@ -211,9 +246,7 @@ void class_fail_export(struct obd_export *exp);
 void class_disconnect_exports(struct obd_device *obddev);
 int class_manual_cleanup(struct obd_device *obd);
 void class_disconnect_stale_exports(struct obd_device *,
-                                    int (*test_export)(struct obd_export *),
-                                    enum obd_option flags);
-  
+                                    int (*test_export)(struct obd_export *));
 static inline enum obd_option exp_flags_from_obd(struct obd_device *obd)
 {
         return ((obd->obd_fail ? OBD_OPT_FAILOVER : 0) |
@@ -1954,12 +1987,12 @@ static inline int md_clear_open_replay_data(struct obd_export *exp,
 }
 
 static inline int md_set_lock_data(struct obd_export *exp,
-                                   __u64 *lockh, void *data)
+                                   __u64 *lockh, void *data, __u32 *bits)
 {
         ENTRY;
         EXP_CHECK_MD_OP(exp, set_lock_data);
         EXP_MD_COUNTER_INCREMENT(exp, set_lock_data);
-        RETURN(MDP(exp->exp_obd, set_lock_data)(exp, lockh, data));
+        RETURN(MDP(exp->exp_obd, set_lock_data)(exp, lockh, data, bits));
 }
 
 static inline int md_cancel_unused(struct obd_export *exp,

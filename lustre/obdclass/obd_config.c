@@ -548,7 +548,6 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 struct obd_device *class_incref(struct obd_device *obd,
                                 const char *scope, const void *source)
 {
-        LASSERT(!obd->obd_stopping);
         lu_ref_add_atomic(&obd->obd_reference, scope, source);
         atomic_inc(&obd->obd_refcount);
         CDEBUG(D_INFO, "incref %s (%p) now %d\n", obd->obd_name, obd,

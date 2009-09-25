@@ -410,6 +410,8 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
         if (spec->no_create != 0) {
                 *lmm = (struct lov_mds_md *)spec->u.sp_ea.eadata;
                 *lmm_size = spec->u.sp_ea.eadatalen;
+                LASSERT(*lmm_size == lov_mds_md_size((*lmm)->lmm_stripe_count,
+                                                     (*lmm)->lmm_magic));
                 RETURN(0);
         }
 
@@ -644,7 +646,7 @@ int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
         }
 
         ma->ma_valid = MA_LOV;
-        
+
         rc = mdd_unlink_log(env, mdd, obj, ma);
         if (rc) {
                 CWARN("mds unlink log for "DFID" failed: %d\n",
@@ -659,54 +661,13 @@ int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
         RETURN(rc);
 }
 
-int mdd_log_op_unlink(struct obd_device *obd,
-                      struct lov_mds_md *lmm, int lmm_size,
-                      struct llog_cookie *logcookies, int cookies_size)
-{
-        struct mds_obd *mds = &obd->u.mds;
-        struct lov_stripe_md *lsm = NULL;
-        struct llog_unlink_rec *lur;
-        struct llog_ctxt *ctxt;
-        int rc;
-        ENTRY;
-
-        if (IS_ERR(mds->mds_osc_obd))
-                RETURN(PTR_ERR(mds->mds_osc_obd));
-
-        rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
-        if (rc < 0)
-                RETURN(rc);
-        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, lsm);
-        if (rc)
-                GOTO(out, rc);
-        /* first prepare unlink log record */
-        OBD_ALLOC(lur, sizeof(*lur));
-        if (!lur)
-                GOTO(out, rc = -ENOMEM);
-        lur->lur_hdr.lrh_len = lur->lur_tail.lrt_len = sizeof(*lur);
-        lur->lur_hdr.lrh_type = MDS_UNLINK_REC;
-
-        ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
-        rc = llog_add(ctxt, &lur->lur_hdr, lsm, logcookies,
-                      cookies_size / sizeof(struct llog_cookie));
-        llog_ctxt_put(ctxt);
-
-        OBD_FREE(lur, sizeof(*lur));
-        GOTO(out, rc);
-out:
-        obd_free_memmd(mds->mds_osc_exp, &lsm);
-        return rc;
-}
-
 int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,
                    struct mdd_object *mdd_cobj, struct md_attr *ma)
 {
-        struct obd_device *obd = mdd2obd_dev(mdd);
-
         LASSERT(ma->ma_valid & MA_LOV);
 
         if ((ma->ma_cookie_size > 0) &&
-            (mdd_log_op_unlink(obd, ma->ma_lmm, ma->ma_lmm_size,
+            (mds_log_op_unlink(mdd2obd_dev(mdd), ma->ma_lmm, ma->ma_lmm_size,
                                ma->ma_cookie, ma->ma_cookie_size) > 0)) {
                 CDEBUG(D_HA, "DEBUG: unlink log is added for object "DFID"\n",
                        PFID(mdd_object_fid(mdd_cobj)));
@@ -716,8 +677,8 @@ int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,
 }
 
 int mdd_log_op_setattr(struct obd_device *obd, __u32 uid, __u32 gid,
-                      struct lov_mds_md *lmm, int lmm_size,
-                      struct llog_cookie *logcookies, int cookies_size)
+                       struct lov_mds_md *lmm, int lmm_size,
+                       struct llog_cookie *logcookies, int cookies_size)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_stripe_md *lsm = NULL;

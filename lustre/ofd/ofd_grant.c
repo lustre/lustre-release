@@ -46,6 +46,19 @@
 #include <lustre_fsfilt.h>
 #include "ofd_internal.h"
 
+#define PRINTK_GRANTS(ofd,fed)                                  \
+{/*                                                               \
+        printk("%-20s:\t%-5u dirty, %-5u grant, %-5d pending, " \
+               "cli's %-5u dirty, %-5u grant, %-5u pending\n",  \
+               __FUNCTION__,                                    \
+               (unsigned) ofd->ofd_tot_dirty >> 10,             \
+               (unsigned) ofd->ofd_tot_granted >> 10,           \
+               (unsigned) ofd->ofd_tot_pending >> 10,           \
+               (unsigned) fed->fed_dirty >> 10,                 \
+               (unsigned) fed->fed_grant >> 10,                 \
+               (unsigned) fed->fed_pending >> 10);              \
+*/}
+
 /* Do extra sanity checks for grant accounting.  We do this at connect,
  * disconnect, and statfs RPC time, so it shouldn't be too bad.  We can
  * always get rid of it or turn it off when we know accounting is good. 
@@ -243,6 +256,7 @@ void filter_grant_incoming(const struct lu_env *env, struct obd_export *exp,
                 LBUG();
         }
         EXIT;
+        PRINTK_GRANTS(ofd, fed);
 }
 
 /* Figure out how much space is available between what we've granted
@@ -366,6 +380,7 @@ int filter_grant_client_calc(struct obd_export *exp, obd_size *left,
                 mutex_up(&ofd->ofd_grant_sem);
                 LBUG();
         }
+        PRINTK_GRANTS(ofd, fed);
         return rc;
 }
 
@@ -378,64 +393,62 @@ int filter_grant_client_calc(struct obd_export *exp, obd_size *left,
  * Caller must hold ofd_grant_sem. 
  */
 int filter_grant_check(const struct lu_env *env, struct obd_export *exp, 
-                       struct obdo *oa, int objcount, struct obd_ioobj *objs,
-                       struct niobuf_remote *rnb, struct niobuf_local *lnb,
+                       struct obdo *oa, struct niobuf_local *lnb, int nrpages,
                        obd_size *left, unsigned long *used, unsigned long *ungranted)
 {
         struct filter_export_data *fed = &exp->exp_filter_data;
         struct filter_device *ofd = filter_exp(exp);
-        int i, rc = -ENOSPC, obj, n = 0;
+        int i, rc = -ENOSPC, bytes;
 
         LASSERT_SEM_LOCKED(&ofd->ofd_grant_sem);
 
-        for (obj = 0; obj < objcount; obj++) {
-                for (i = 0; i < objs[obj].ioo_bufcnt; i++, n++) {
-                        int bytes;
+        for (i = 0; i < nrpages; i++) {
 
-                        bytes = lnb[n].bytes;
-                        if ((rnb[n].flags & OBD_BRW_FROM_GRANT) &&
-                            (oa->o_valid & OBD_MD_FLGRANT)) {
-                                if (fed->fed_grant < *used + bytes) {
-                                        CDEBUG(D_CACHE,
-                                               "%s: cli %s/%p claims %ld+%d "
-                                               "GRANT, real grant %lu idx %d\n",
-                                               exp->exp_obd->obd_name,
-                                               exp->exp_client_uuid.uuid, exp,
-                                               *used, bytes, fed->fed_grant, n);
-                                } else {
-                                        *used += bytes;
-                                        rnb[n].flags |= OBD_BRW_GRANTED;
-                                        lnb[n].lnb_grant_used = bytes;
-                                        CDEBUG(0, "idx %d used=%lu\n", n, *used);
-                                        rc = 0;
-                                        continue;
-                                }
-                        }
-                        if (*left > *ungranted + bytes) {
-                                /* if enough space, pretend it was granted */
-                                *ungranted += bytes;
-                                rnb[n].flags |= OBD_BRW_GRANTED;
-                                lnb[n].lnb_grant_used = bytes;
-                                CDEBUG(0, "idx %d ungranted=%lu\n",n,*ungranted);
+                bytes = lnb[i].len;
+
+                if ((lnb[i].flags & OBD_BRW_FROM_GRANT) &&
+                                (oa->o_valid & OBD_MD_FLGRANT)) {
+                        if (fed->fed_grant < *used + bytes) {
+                                CDEBUG(D_CACHE, "%s: cli %s/%p claims %ld+%d "
+                                       "GRANT, real grant %lu idx %d\n",
+                                       exp->exp_obd->obd_name,
+                                       exp->exp_client_uuid.uuid, exp,
+                                       *used, bytes, fed->fed_grant, i);
+                        } else {
+                                *used += bytes;
+                                lnb[i].flags |= OBD_BRW_GRANTED;
+                                lnb[i].lnb_grant_used = bytes;
+                                CDEBUG(0, "idx %d used=%lu\n", i, *used);
+
                                 rc = 0;
                                 continue;
                         }
-
-                        /* We can't check for already-mapped blocks here, as
-                         * it requires dropping the osfs lock to do the bmap.
-                         * Instead, we return ENOSPC and in that case we need
-                         * to go through and verify if all of the blocks not
-                         * marked BRW_GRANTED are already mapped and we can
-                         * ignore this error. 
-                         */
-                        lnb[n].rc = -ENOSPC;
-                        rnb[n].flags &= ~OBD_BRW_GRANTED;
-                        CDEBUG(D_CACHE,"%s: cli %s/%p idx %d no space for %d\n",
-                               exp->exp_obd->obd_name,
-                               exp->exp_client_uuid.uuid, exp, n, bytes);
                 }
+                if (*left > *ungranted + bytes) {
+                        /* if enough space, pretend it was granted */
+                        *ungranted += bytes;
+                        lnb[i].flags |= OBD_BRW_GRANTED;
+                        lnb[i].lnb_grant_used = bytes;
+                        CDEBUG(0, "idx %d ungranted=%lu\n", i, *ungranted);
+                        rc = 0;
+                        continue;
+                }
+
+                /* We can't check for already-mapped blocks here, as
+                 * it requires dropping the osfs lock to do the bmap.
+                 * Instead, we return ENOSPC and in that case we need
+                 * to go through and verify if all of the blocks not
+                 * marked BRW_GRANTED are already mapped and we can
+                 * ignore this error.$
+                 */
+                lnb[i].rc = -ENOSPC;
+                lnb[i].flags &= ~OBD_BRW_GRANTED;
+                CDEBUG(D_CACHE,"%s: cli %s/%p idx %d no space for %d\n",
+                                exp->exp_obd->obd_name,
+                                exp->exp_client_uuid.uuid, exp, i, bytes);
         }
 
+        PRINTK_GRANTS(ofd, fed);
         return rc;
 }
 
@@ -493,6 +506,7 @@ long _filter_grant(const struct lu_env *env, struct obd_export *exp,
                 }
         }
 
+        PRINTK_GRANTS(ofd, fed);
         return grant;
 }
 
@@ -527,6 +541,7 @@ void filter_grant_commit(struct obd_export *exp, int niocount,
                          struct niobuf_local *res)
 {
         struct filter_device *ofd = filter_exp(exp);
+        struct filter_export_data *fed = &exp->exp_filter_data;
         struct niobuf_local *lnb = res;
         unsigned long pending = 0;
         int i;
@@ -552,5 +567,6 @@ void filter_grant_commit(struct obd_export *exp, int niocount,
         ofd->ofd_tot_pending -= pending;
 
         mutex_up(&ofd->ofd_grant_sem);
+        PRINTK_GRANTS(ofd, fed);
 }
 

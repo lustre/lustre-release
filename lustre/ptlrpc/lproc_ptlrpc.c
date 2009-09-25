@@ -100,6 +100,7 @@ struct ll_rpc_opcode {
         { LDLM_BL_CALLBACK, "ldlm_bl_callback" },
         { LDLM_CP_CALLBACK, "ldlm_cp_callback" },
         { LDLM_GL_CALLBACK, "ldlm_gl_callback" },
+        { LDLM_SET_INFO,    "ldlm_set_info" },
         { MGS_CONNECT,      "mgs_connect" },
         { MGS_DISCONNECT,   "mgs_disconnect" },
         { MGS_EXCEPTION,    "mgs_exception" },

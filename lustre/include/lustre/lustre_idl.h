@@ -279,7 +279,7 @@ struct lustre_mdt_attrs {
          * lma_self_fid and lma_flags are always available.
          */
         __u32   lma_compat;
-	/**
+        /**
          * Per-file incompat feature list. Lustre version should support all
          * flags set in this field. The supported feature mask is available in
          * LMA_INCOMPAT_SUPP.
@@ -421,20 +421,6 @@ static inline void fid_be_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
         dst->f_ver = be32_to_cpu(fid_ver(src));
         LASSERTF(fid_is_igif(dst) || fid_ver(dst) == 0, DFID"\n", PFID(dst));
 }
-
-/**
- * Storage representation for fids.
- *
- * Variable size, first byte contains the length of the whole record.
- */
-struct lu_fid_pack {
-        char fp_len;
-        char fp_area[sizeof(struct lu_fid)];
-};
-
-void fid_pack(struct lu_fid_pack *pack, const struct lu_fid *fid,
-              struct lu_fid *befider);
-int  fid_unpack(const struct lu_fid_pack *pack, struct lu_fid *fid);
 
 static inline int fid_is_sane(const struct lu_fid *fid)
 {
@@ -693,6 +679,9 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 /* ldlm reply message body offset */
 #define DLM_LOCKREPLY_OFF               1 /* lockrep offset */
 #define DLM_REPLY_REC_OFF               2 /* reply record offset */
+
+/** only use in req->rq_{req,rep}_swab_mask */
+#define MSG_PTLRPC_HEADER_OFF           31
 
 /* Flags that are operation-specific go in the top 16 bits. */
 #define MSG_OP_FLAG_MASK   0xffff0000
@@ -1031,36 +1020,6 @@ struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
 /* don't forget obdo_fid which is way down at the bottom so it can
  * come after the definition of llog_cookie */
 
-enum obd_statfs_state {
-        OS_STATE_DEGRADED       = 0x00000001, /**< RAID degraded/rebuilding */
-        OS_STATE_READONLY       = 0x00000002, /**< filesystem is read-only */
-        OS_STATE_RDONLY_1       = 0x00000004, /**< obsolete 1.6, was EROFS=30 */
-        OS_STATE_RDONLY_2       = 0x00000008, /**< obsolete 1.6, was EROFS=30 */
-        OS_STATE_RDONLY_3       = 0x00000010, /**< obsolete 1.6, was EROFS=30 */
-};
-
-struct obd_statfs {
-        __u64           os_type;
-        __u64           os_blocks;
-        __u64           os_bfree;
-        __u64           os_bavail;
-        __u64           os_files;
-        __u64           os_ffree;
-        __u8            os_fsid[40];
-        __u32           os_bsize;
-        __u32           os_namelen;
-        __u64           os_maxbytes;
-        __u32           os_state;       /**< obd_statfs_state OS_STATE_* flag */
-        __u32           os_spare1;
-        __u32           os_spare2;
-        __u32           os_spare3;
-        __u32           os_spare4;
-        __u32           os_spare5;
-        __u32           os_spare6;
-        __u32           os_spare7;
-        __u32           os_spare8;
-        __u32           os_spare9;
-};
 
 extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_STATFS_NODELAY      0x0001  /* requests should be send without delay
@@ -1088,6 +1047,7 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_BRW_NOCACHE         0x80 /* this page is a part of non-cached IO */
 #define OBD_BRW_NOQUOTA        0x100
 #define OBD_BRW_SRVLOCK        0x200 /* Client holds no lock over this page */
+#define OBD_BRW_MEMALLOC       0x800 /* Client runs in the "kswapd" context */
 
 #define OBD_OBJECT_EOF 0xffffffffffffffffULL
 
@@ -1206,14 +1166,6 @@ extern void lustre_swab_generic_32s (__u32 *val);
 #define MDS_INODELOCK_MAXSHIFT 2
 /* This FULL lock is useful to take on unlink sort of operations */
 #define MDS_INODELOCK_FULL ((1<<(MDS_INODELOCK_MAXSHIFT+1))-1)
-
-struct ll_fid {
-        __u64 id;         /* holds object id */
-        __u32 generation; /* holds object generation */
-
-        __u32 f_type;     /* holds object type or stripe idx when passing it to
-                           * OST for saving into EA. */
-};
 
 extern void lustre_swab_ll_fid (struct ll_fid *fid);
 
@@ -1429,7 +1381,7 @@ extern void lustre_swab_quota_adjust_qunit(struct quota_adjust_qunit *q);
                                       * OBD_CONNECT_CHANGE_QS */
 
 /* flags is specific for quota_adjust_qunit */
-#define LQUOTA_QAQ_CEATE_LQS  (1 << 31) /* when it is set, need create lqs */
+#define LQUOTA_QAQ_CREATE_LQS  (1 << 31) /* when it is set, need create lqs */
 
 /* the status of lqs_flags in struct lustre_qunit_size  */
 #define LQUOTA_QUNIT_FLAGS (LQUOTA_FLAGS_GRP | LQUOTA_FLAGS_BLK)
@@ -1437,12 +1389,12 @@ extern void lustre_swab_quota_adjust_qunit(struct quota_adjust_qunit *q);
 #define QAQ_IS_GRP(qaq)    ((qaq)->qaq_flags & LQUOTA_FLAGS_GRP)
 #define QAQ_IS_ADJBLK(qaq) ((qaq)->qaq_flags & LQUOTA_FLAGS_ADJBLK)
 #define QAQ_IS_ADJINO(qaq) ((qaq)->qaq_flags & LQUOTA_FLAGS_ADJINO)
-#define QAQ_IS_CREATE_LQS(qaq)  ((qaq)->qaq_flags & LQUOTA_QAQ_CEATE_LQS)
+#define QAQ_IS_CREATE_LQS(qaq)  ((qaq)->qaq_flags & LQUOTA_QAQ_CREATE_LQS)
 
 #define QAQ_SET_GRP(qaq)    ((qaq)->qaq_flags |= LQUOTA_FLAGS_GRP)
 #define QAQ_SET_ADJBLK(qaq) ((qaq)->qaq_flags |= LQUOTA_FLAGS_ADJBLK)
 #define QAQ_SET_ADJINO(qaq) ((qaq)->qaq_flags |= LQUOTA_FLAGS_ADJINO)
-#define QAQ_SET_CREATE_LQS(qaq) ((qaq)->qaq_flags |= LQUOTA_QAQ_CEATE_LQS)
+#define QAQ_SET_CREATE_LQS(qaq) ((qaq)->qaq_flags |= LQUOTA_QAQ_CREATE_LQS)
 
 /* inode access permission for remote user, the inode info are omitted,
  * for client knows them. */
@@ -1967,6 +1919,7 @@ typedef enum {
         LDLM_BL_CALLBACK = 104,
         LDLM_CP_CALLBACK = 105,
         LDLM_GL_CALLBACK = 106,
+        LDLM_SET_INFO    = 107,
         LDLM_LAST_OPC
 } ldlm_cmd_t;
 #define LDLM_FIRST_OPC LDLM_ENQUEUE
@@ -2280,7 +2233,7 @@ struct llog_create_rec {
         struct llog_rec_hdr     lcr_hdr;
         struct ll_fid           lcr_fid;
         obd_id                  lcr_oid;
-        obd_count               lcr_ogen;
+        obd_count               lcr_ogr;
         __u32                   padding;
         struct llog_rec_tail    lcr_tail;
 } __attribute__((packed));
@@ -2296,15 +2249,15 @@ struct llog_orphan_rec {
 struct llog_unlink_rec {
         struct llog_rec_hdr     lur_hdr;
         obd_id                  lur_oid;
-        obd_count               lur_ogen;
-        __u32                   padding;
+        obd_count               lur_ogr;
+        obd_count               lur_count;
         struct llog_rec_tail    lur_tail;
 } __attribute__((packed));
 
 struct llog_setattr_rec {
         struct llog_rec_hdr     lsr_hdr;
         obd_id                  lsr_oid;
-        obd_count               lsr_ogen;
+        obd_count               lsr_ogr;
         __u32                   lsr_uid;
         __u32                   lsr_gid;
         __u32                   padding;
@@ -2314,7 +2267,7 @@ struct llog_setattr_rec {
 struct llog_setattr64_rec {
         struct llog_rec_hdr     lsr_hdr;
         obd_id                  lsr_oid;
-        obd_count               lsr_ogen;
+        obd_count               lsr_ogr;
         __u32                   padding;
         __u32                   lsr_uid;
         __u32                   lsr_uid_h;
@@ -2332,47 +2285,13 @@ struct llog_size_change_rec {
 } __attribute__((packed));
 
 #define CHANGELOG_MAGIC 0xca103000
-/** Changelog record types
- * When adding record types, update mdd_lproc.c's changelog_str
- */
-enum changelog_rec_type {
-        CL_MARK     = 0,
-        CL_CREATE   = 1,  /* namespace */
-        CL_MKDIR    = 2,  /* namespace */
-        CL_HARDLINK = 3,  /* namespace */
-        CL_SOFTLINK = 4,  /* namespace */
-        CL_MKNOD    = 5,  /* namespace */
-        CL_UNLINK   = 6,  /* namespace */
-        CL_RMDIR    = 7,  /* namespace */
-        CL_RENAME   = 8,  /* namespace */
-        CL_EXT      = 9,  /* namespace extended record (2nd half of rename) */
-        CL_OPEN     = 10, /* not currently used */
-        CL_CLOSE    = 11, /* may be written to log only with mtime change */
-        CL_IOCTL    = 12,
-        CL_TRUNC    = 13,
-        CL_SETATTR  = 14,
-        CL_XATTR    = 15,
-        CL_LAST
-};
-
-/** Changelog entry type names. Must be defined in the same order as the
- * \a changelog_rec_type enum.
- */
-#define DECLARE_CHANGELOG_NAMES static const char *changelog_str[] =         \
-       {"MARK","CREAT","MKDIR","HLINK","SLINK","MKNOD","UNLNK","RMDIR",      \
-        "RNMFM","RNMTO","OPEN","CLOSE","IOCTL","TRUNC","SATTR","XATTR"}
 
 /** \a changelog_rec_type's that can't be masked */
 #define CHANGELOG_MINMASK (1 << CL_MARK)
 /** bits covering all \a changelog_rec_type's */
-#define CHANGELOG_ALLMASK 0XFFFF
+#define CHANGELOG_ALLMASK 0XFFFFFFFF
 /** default \a changelog_rec_type mask */
 #define CHANGELOG_DEFMASK CHANGELOG_ALLMASK
-
-/* per-record flags */
-#define CLF_VERSION  0x1000
-#define CLF_FLAGMASK 0x0FFF
-#define CLF_HSM      0x0001
 
 /* changelog llog name, needed by client replicators */
 #define CHANGELOG_CATALOG "changelog_catalog"
@@ -2384,22 +2303,9 @@ struct changelog_setinfo {
 
 /** changelog record */
 struct llog_changelog_rec {
-        struct llog_rec_hdr   cr_hdr;
-        __u16                 cr_flags; /**< (flags&CLF_FLAGMASK)|CLF_VERSION */
-        __u16                 cr_namelen;
-        __u32                 cr_type;  /**< \a changelog_rec_type */
-        __u64                 cr_index;
-        __u64                 cr_prev;  /**< last index for this target fid */
-        __u64                 cr_time;
-        union {
-                struct lu_fid cr_tfid;        /**< target fid */
-                __u32         cr_markerflags; /**< CL_MARK flags */
-        };
-        struct lu_fid         cr_pfid;        /**< parent fid */
-        union {
-                char          cr_name[0];     /**< last element */
-                struct llog_rec_tail cr_tail; /**< for_sizezof_only */
-        };
+        struct llog_rec_hdr  cr_hdr;
+        struct changelog_rec cr;
+        struct llog_rec_tail cr_tail; /**< for_sizezof_only */
 } __attribute__((packed));
 
 #define CHANGELOG_USER_PREFIX "cl"
@@ -2567,7 +2473,7 @@ static inline void lustre_get_wire_obdo(struct obdo *lobdo, struct obdo *wobdo)
         obd_flag local_flags = lobdo->o_flags & OBD_FL_LOCAL_MASK;
 
         LASSERT(!(wobdo->o_flags & OBD_FL_LOCAL_MASK));
-        
+
         memcpy(lobdo, wobdo, sizeof(*lobdo));
         lobdo->o_flags &= ~OBD_FL_LOCAL_MASK;
         lobdo->o_flags |= local_flags;
@@ -2775,12 +2681,12 @@ struct link_ea_header {
  * Stored in this crazy struct for maximum packing and endian-neutrality
  */
 struct link_ea_entry {
+        struct lu_fid      lee_parent_fid;
         /** __u16 stored big-endian, unaligned */
         char               lee_reclen[2];
-        struct lu_fid_pack lee_parent_fid; /**< variable length */
-        /** logically after lee_parent_fid; don't use directly */
+        __u16              lee_padding;
         char               lee_name[0];
-};
+}__attribute__((packed));
 
 /** fid2path request/reply structure */
 struct getinfo_fid2path {
@@ -2792,6 +2698,8 @@ struct getinfo_fid2path {
 } __attribute__((packed));
 
 void lustre_swab_fid2path (struct getinfo_fid2path *gf);
+
+extern void lustre_swab_lnlh(struct lnl_hdr *);
 
 
 #endif

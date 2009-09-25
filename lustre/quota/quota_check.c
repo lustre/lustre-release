@@ -99,7 +99,7 @@ static int target_quotacheck_thread(void *data)
         struct lvfs_run_ctxt saved;
         int rc;
 
-        ptlrpc_daemonize("quotacheck");
+        cfs_daemonize_ctxt("quotacheck");
 
         exp = qta->qta_exp;
         obd = qta->qta_obd;
@@ -141,11 +141,32 @@ int target_quota_check(struct obd_device *obd, struct obd_export *exp,
         qta->qta_sb = obt->obt_sb;
         qta->qta_sem = &obt->obt_quotachecking;
 
+        /* quotaoff firstly */
+        oqctl->qc_cmd = Q_QUOTAOFF;
         if (!strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME)) {
+                rc = do_mds_quota_off(obd, oqctl);
+                if (rc && rc != -EALREADY) {
+                        CERROR("off quota on MDS failed: %d\n", rc);
+                        GOTO(out, rc);
+                }
+
                 /* quota master */
                 rc = init_admin_quotafiles(obd, &qta->qta_oqctl);
                 if (rc) {
                         CERROR("init_admin_quotafiles failed: %d\n", rc);
+                        GOTO(out, rc);
+                }
+        } else {
+                struct lvfs_run_ctxt saved;
+                struct lustre_quota_ctxt *qctxt = &obt->obt_qctxt;
+
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                rc = fsfilt_quotactl(obd, obt->obt_sb, oqctl);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                if (!rc) {
+                        qctxt->lqc_flags &= ~UGQUOTA2LQC(oqctl->qc_type);
+                } else if (!quota_is_off(qctxt, oqctl)) {
+                        CERROR("off quota on OSS failed: %d\n", rc);
                         GOTO(out, rc);
                 }
         }

@@ -90,8 +90,7 @@ enum {
 /** special OID for local objects */
 enum {
         /** \see osd_oi_index_create */
-        OSD_OI_FID_SMALL_OID    = 1UL,
-        OSD_OI_FID_OTHER_OID    = 2UL,
+        OSD_OI_FID_16_OID       = 2UL,
         /** \see fld_mod_init */
         FLD_INDEX_OID           = 3UL,
         /** \see fid_mod_init */

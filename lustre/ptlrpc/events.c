@@ -336,8 +336,8 @@ void reply_out_callback(lnet_event_t *ev)
         LASSERT (rs->rs_on_net);
 
         if (ev->unlinked) {
-                /* Last network callback.  The net's ref on 'rs' stays put
-                 * until ptlrpc_server_handle_reply() is done with it */
+                /* Last network callback. The net's ref on 'rs' stays put
+                 * until ptlrpc_handle_rs() is done with it */
                 spin_lock(&svc->srv_lock);
                 spin_lock(&rs->rs_lock);
                 rs->rs_on_net = 0;
@@ -625,7 +625,7 @@ liblustre_check_events (int timeout)
 
         LASSERT (rc == -EOVERFLOW || rc == 1);
 
-        /* liblustre: no asynch callback so we can't affort to miss any
+        /* liblustre: no asynch callback so we can't afford to miss any
          * events... */
         if (rc == -EOVERFLOW) {
                 CERROR ("Dropped an event!!!\n");

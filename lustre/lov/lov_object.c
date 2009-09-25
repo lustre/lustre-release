@@ -38,11 +38,13 @@
  *   Author: Nikita Danilov <nikita.danilov@sun.com>
  */
 
-/** \addtogroup lov lov @{ */
-
 #define DEBUG_SUBSYSTEM S_LOV
 
 #include "lov_cl_internal.h"
+
+/** \addtogroup lov
+ *  @{
+ */
 
 /*****************************************************************************
  *

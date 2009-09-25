@@ -50,6 +50,16 @@ struct inode;
 #define DMU_RESERVED_MIN (1<<20)
 #define DMU_RESERVED_MAX (64ULL * DMU_RESERVED_MIN)
 
+/**
+ * Storage representation for fids.
+ *
+ * Variable size, first byte contains the length of the whole record.
+ */
+struct osd_fid_pack {
+        unsigned char fp_len;
+        char fp_area[sizeof(struct lu_fid)];
+};
+
 struct osd_thread_info {
         const struct lu_env   *oti_env;
 
@@ -64,7 +74,7 @@ struct osd_thread_info {
         struct lustre_capa_key oti_capa_key;
         struct lustre_capa     oti_capa;
 
-        struct lu_fid_pack     oti_pack;
+        struct osd_fid_pack    oti_fid_pack;
 };
 
 #endif /* _OSD_INTERNAL_H */

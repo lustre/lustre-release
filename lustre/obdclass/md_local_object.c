@@ -318,7 +318,7 @@ static struct md_object *llo_create_obj(const struct lu_env *env,
  * special index defined by \a feat in \a directory.
  *
  *       \param  md       device
- *       \param  dir      parent directory
+ *       \param  dirname  parent directory
  *       \param  objname  file name
  *       \param  fid      object fid
  *       \param  feat     index features required for directory create
@@ -353,7 +353,7 @@ EXPORT_SYMBOL(llo_store_create_index);
  * Create md object for regular file in \a directory.
  *
  *       \param  md       device
- *       \param  dir      parent directory
+ *       \param  dirname  parent directory
  *       \param  objname  file name
  *       \param  fid      object fid.
  */

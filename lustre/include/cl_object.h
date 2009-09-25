@@ -736,6 +736,10 @@ struct cl_page {
          */
         struct cl_io            *cp_owner;
         /**
+         * Debug information, the task is owning the page.
+         */
+        cfs_task_t              *cp_task;
+        /**
          * Owning IO request in cl_page_state::CPS_PAGEOUT and
          * cl_page_state::CPS_PAGEIN states. This field is maintained only in
          * the top-level pages. Protected by a VM lock.
@@ -749,6 +753,8 @@ struct cl_page {
         struct lu_ref_link      *cp_queue_ref;
         /** Per-page flags from enum cl_page_flags. Protected by a VM lock. */
         unsigned                 cp_flags;
+        /** Assigned if doing a sync_io */
+        struct cl_sync_io       *cp_sync_io;
 };
 
 /**
@@ -826,8 +832,9 @@ struct cl_page_operations {
          * \see cl_page_own()
          * \see vvp_page_own(), lov_page_own()
          */
-        void (*cpo_own)(const struct lu_env *env,
-                        const struct cl_page_slice *slice, struct cl_io *io);
+        int  (*cpo_own)(const struct lu_env *env,
+                        const struct cl_page_slice *slice,
+                        struct cl_io *io, int nonblock);
         /** Called when ownership it yielded. Optional.
          *
          * \see cl_page_disown()
@@ -855,15 +862,13 @@ struct cl_page_operations {
                              const struct cl_page_slice *slice,
                              struct cl_io *io);
         /**
-         * Announces that page contains valid data and user space can look and
-         * them without client's involvement from now on. Effectively marks
-         * the page up-to-date. Optional.
+         * Announces whether the page contains valid data or not by \a uptodate.
          *
          * \see cl_page_export()
          * \see vvp_page_export()
          */
         void  (*cpo_export)(const struct lu_env *env,
-                            const struct cl_page_slice *slice);
+                            const struct cl_page_slice *slice, int uptodate);
         /**
          * Unmaps page from the user space (if it is mapped).
          *
@@ -1799,7 +1804,7 @@ struct cl_page_list {
         cfs_task_t      *pl_owner;
 };
 
-/** \addtogroup cl_page_list cl_page_list
+/** 
  * A 2-queue of pages. A convenience data-type for common use case, 2-queue
  * contains an incoming page list and an outgoing page list.
  */
@@ -2642,7 +2647,8 @@ void                  cl_page_gang_lookup(const struct lu_env *env,
                                           struct cl_object *obj,
                                           struct cl_io *io,
                                           pgoff_t start, pgoff_t end,
-                                          struct cl_page_list *plist);
+                                          struct cl_page_list *plist,
+                                          int nonblock);
 struct cl_page *cl_page_find        (const struct lu_env *env,
                                      struct cl_object *obj,
                                      pgoff_t idx, struct page *vmpage,
@@ -2673,6 +2679,8 @@ const struct cl_page_slice *cl_page_at(const struct cl_page *page,
 /** @{ */
 
 int  cl_page_own        (const struct lu_env *env,
+                         struct cl_io *io, struct cl_page *page);
+int  cl_page_own_try    (const struct lu_env *env,
                          struct cl_io *io, struct cl_page *page);
 void cl_page_assume     (const struct lu_env *env,
                          struct cl_io *io, struct cl_page *page);
@@ -2718,7 +2726,8 @@ int     cl_page_unmap        (const struct lu_env *env, struct cl_io *io,
                               struct cl_page *pg);
 int     cl_page_is_vmlocked  (const struct lu_env *env,
                               const struct cl_page *pg);
-void    cl_page_export       (const struct lu_env *env, struct cl_page *pg);
+void    cl_page_export       (const struct lu_env *env,
+                              struct cl_page *pg, int uptodate);
 int     cl_page_is_under_lock(const struct lu_env *env, struct cl_io *io,
                               struct cl_page *page);
 loff_t  cl_offset            (const struct cl_object *obj, pgoff_t idx);
@@ -2886,6 +2895,9 @@ int   cl_io_commit_write (const struct lu_env *env, struct cl_io *io,
 int   cl_io_submit_rw    (const struct lu_env *env, struct cl_io *io,
                           enum cl_req_type iot, struct cl_2queue *queue,
                           enum cl_req_priority priority);
+int   cl_io_submit_sync  (const struct lu_env *env, struct cl_io *io,
+                          enum cl_req_type iot, struct cl_2queue *queue,
+                          enum cl_req_priority priority, long timeout);
 void  cl_io_rw_advance   (const struct lu_env *env, struct cl_io *io,
                           size_t nob);
 int   cl_io_cancel       (const struct lu_env *env, struct cl_io *io,
@@ -2992,14 +3004,15 @@ struct cl_sync_io {
         /** number of pages yet to be transferred. */
         atomic_t             csi_sync_nr;
         /** completion to be signaled when transfer is complete. */
-        struct completion    csi_sync_completion;
+        cfs_waitq_t          csi_waitq;
         /** error code. */
         int                  csi_sync_rc;
 };
 
 void cl_sync_io_init(struct cl_sync_io *anchor, int nrpages);
 int  cl_sync_io_wait(const struct lu_env *env, struct cl_io *io,
-                     struct cl_page_list *queue, struct cl_sync_io *anchor);
+                     struct cl_page_list *queue, struct cl_sync_io *anchor,
+                     long timeout);
 void cl_sync_io_note(struct cl_sync_io *anchor, int ioret);
 
 /** @} cl_sync_io */
@@ -3030,12 +3043,15 @@ void cl_sync_io_note(struct cl_sync_io *anchor, int ioret);
  *     longer used environments instead of destroying them;
  *
  *     - there is a notion of "current" environment, attached to the kernel
- *     data structure representing current thread (current->journal_info in
- *     Linux kernel). Top-level lustre code allocates an environment and makes
- *     it current, then calls into non-lustre code, that in turn calls lustre
- *     back. Low-level lustre code thus called can fetch environment created
- *     by the top-level code and reuse it, avoiding additional environment
- *     allocation.
+ *     data structure representing current thread Top-level lustre code
+ *     allocates an environment and makes it current, then calls into
+ *     non-lustre code, that in turn calls lustre back. Low-level lustre
+ *     code thus called can fetch environment created by the top-level code
+ *     and reuse it, avoiding additional environment allocation.
+ *       Right now, three interfaces can attach the cl_env to running thread:
+ *       - cl_env_get
+ *       - cl_env_implant
+ *       - cl_env_reexit(cl_env_reenter had to be called priorly)
  *
  * \see lu_env, lu_context, lu_context_key
  * @{ */

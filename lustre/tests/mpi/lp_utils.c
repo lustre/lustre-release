@@ -44,14 +44,15 @@
 #include <time.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <asm/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <liblustre.h>
+#include <libcfs/libcfs.h>
 #include "lustre/lustre_user.h"
-#include "lustre/tests/mpi/lp_utils.h"
+#include "lp_utils.h"
 
 #define MAX_PROCESSES 8
 
@@ -94,7 +95,7 @@ inline void end(char *str) {
                                timestamp(), str, elapsed / 60);
                 } else {
                         printf("%s:\tFinished %-15s(%.3f sec)\n",
-		               timestamp(), str, elapsed);
+                               timestamp(), str, elapsed);
 
                 }
                 fflush(stdout);

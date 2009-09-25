@@ -41,6 +41,8 @@
 #error Do not #include this file directly. #include <obd.h> instead
 #endif
 
+#include <obd_support.h>
+
 #ifdef __KERNEL__
 # include <linux/fs.h>
 # include <linux/list.h>
@@ -54,24 +56,89 @@
 # endif
 #endif
 
-typedef spinlock_t client_obd_lock_t;
+typedef struct {
+        spinlock_t          lock;
+
+#ifdef CLIENT_OBD_LIST_LOCK_DEBUG
+        unsigned long       time;
+        struct task_struct *task;
+        const char         *func;
+        int                 line;
+#endif
+
+} client_obd_lock_t;
+
+#ifdef CLIENT_OBD_LIST_LOCK_DEBUG
+static inline void __client_obd_list_lock(client_obd_lock_t *lock,
+                                          const char *func,
+                                          int line)
+{
+        unsigned long cur = jiffies;
+        while (1) {
+                if (spin_trylock(&lock->lock)) {
+                        LASSERT(lock->task == NULL);
+                        lock->task = current;
+                        lock->func = func;
+                        lock->line = line;
+                        lock->time = jiffies;
+                        break;
+                }
+
+                if ((jiffies - cur > 5 * HZ) &&
+                    (jiffies - lock->time > 5 * HZ)) {
+                        LCONSOLE_WARN("LOCK UP! the lock %p was acquired"
+                                      " by <%s:%d:%s:%d> %lu time, I'm %s:%d\n",
+                                      lock, lock->task->comm, lock->task->pid,
+                                      lock->func, lock->line,
+                                      (jiffies - lock->time),
+                                      current->comm, current->pid);
+                        LCONSOLE_WARN("====== for process holding the "
+                                      "lock =====\n");
+                        libcfs_debug_dumpstack(lock->task);
+                        LCONSOLE_WARN("====== for current process =====\n");
+                        libcfs_debug_dumpstack(NULL);
+                        LCONSOLE_WARN("====== end =======\n");
+                        cfs_pause(1000* HZ);
+                }
+        }
+}
+
+#define client_obd_list_lock(lock) \
+        __client_obd_list_lock(lock, __FUNCTION__, __LINE__)
+
+static inline void client_obd_list_unlock(client_obd_lock_t *lock)
+{
+        LASSERT(lock->task != NULL);
+        lock->task = NULL;
+        lock->time = jiffies;
+        spin_unlock(&lock->lock);
+}
+
+#else /* ifdef CLIEBT_OBD_LIST_LOCK_DEBUG */
+static inline void client_obd_list_lock(client_obd_lock_t *lock)
+{
+	spin_lock(&lock->lock);
+}
+
+static inline void client_obd_list_unlock(client_obd_lock_t *lock)
+{
+        spin_unlock(&lock->lock);
+}
+
+#endif /* ifdef CLIEBT_OBD_LIST_LOCK_DEBUG */
 
 static inline void client_obd_list_lock_init(client_obd_lock_t *lock)
 {
-        spin_lock_init(lock);
+        spin_lock_init(&lock->lock);
 }
 
 static inline void client_obd_list_lock_done(client_obd_lock_t *lock)
 {}
 
-static inline void client_obd_list_lock(client_obd_lock_t *lock)
-{
-        spin_lock(lock);
-}
 
-static inline void client_obd_list_unlock(client_obd_lock_t *lock)
+static inline int client_obd_list_is_locked(client_obd_lock_t *lock)
 {
-        spin_unlock(lock);
+        return spin_is_locked(&lock->lock);
 }
 
 #if defined(__KERNEL__) && !defined(HAVE_ADLER)

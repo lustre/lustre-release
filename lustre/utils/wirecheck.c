@@ -294,19 +294,19 @@ check_obdo(void)
         CHECK_CDEFINE(OBD_MD_FLXATTRRM);
         CHECK_CDEFINE(OBD_MD_FLACL);
 
-        CHECK_CDEFINE(OBD_FL_INLINEDATA);
-        CHECK_CDEFINE(OBD_FL_OBDMDEXISTS);
-        CHECK_CDEFINE(OBD_FL_DELORPHAN);
-        CHECK_CDEFINE(OBD_FL_NORPC);
-        CHECK_CDEFINE(OBD_FL_IDONLY);
-        CHECK_CDEFINE(OBD_FL_RECREATE_OBJS);
-        CHECK_CDEFINE(OBD_FL_DEBUG_CHECK);
-        CHECK_CDEFINE(OBD_FL_NO_USRQUOTA);
-        CHECK_CDEFINE(OBD_FL_NO_GRPQUOTA);
-        CHECK_CDEFINE(OBD_FL_TRUNCLOCK);
-        CHECK_CDEFINE(OBD_FL_CKSUM_CRC32);
-        CHECK_CDEFINE(OBD_FL_CKSUM_ADLER);
-        CHECK_CDEFINE(OBD_FL_SHRINK_GRANT);
+        CHECK_CVALUE(OBD_FL_INLINEDATA);
+        CHECK_CVALUE(OBD_FL_OBDMDEXISTS);
+        CHECK_CVALUE(OBD_FL_DELORPHAN);
+        CHECK_CVALUE(OBD_FL_NORPC);
+        CHECK_CVALUE(OBD_FL_IDONLY);
+        CHECK_CVALUE(OBD_FL_RECREATE_OBJS);
+        CHECK_CVALUE(OBD_FL_DEBUG_CHECK);
+        CHECK_CVALUE(OBD_FL_NO_USRQUOTA);
+        CHECK_CVALUE(OBD_FL_NO_GRPQUOTA);
+        CHECK_CVALUE(OBD_FL_TRUNCLOCK);
+        CHECK_CVALUE(OBD_FL_CKSUM_CRC32);
+        CHECK_CVALUE(OBD_FL_CKSUM_ADLER);
+        CHECK_CVALUE(OBD_FL_SHRINK_GRANT);
         CHECK_CVALUE(OBD_CKSUM_CRC32);
         CHECK_CVALUE(OBD_CKSUM_ADLER);
 }
@@ -481,15 +481,6 @@ check_ll_fid(void)
         CHECK_MEMBER(ll_fid, id);
         CHECK_MEMBER(ll_fid, generation);
         CHECK_MEMBER(ll_fid, f_type);
-}
-
-static void
-check_lu_fid_pack(void)
-{
-        BLANK_LINE();
-        CHECK_STRUCT(lu_fid_pack);
-        CHECK_MEMBER(lu_fid_pack, fp_len);
-        CHECK_MEMBER(lu_fid_pack, fp_area);
 }
 
 static void
@@ -885,7 +876,7 @@ check_llog_create_rec(void)
         CHECK_MEMBER(llog_create_rec, lcr_hdr);
         CHECK_MEMBER(llog_create_rec, lcr_fid);
         CHECK_MEMBER(llog_create_rec, lcr_oid);
-        CHECK_MEMBER(llog_create_rec, lcr_ogen);
+        CHECK_MEMBER(llog_create_rec, lcr_ogr);
         CHECK_MEMBER(llog_create_rec, padding);
 }
 
@@ -908,8 +899,8 @@ check_llog_unlink_rec(void)
         CHECK_STRUCT(llog_unlink_rec);
         CHECK_MEMBER(llog_unlink_rec, lur_hdr);
         CHECK_MEMBER(llog_unlink_rec, lur_oid);
-        CHECK_MEMBER(llog_unlink_rec, lur_ogen);
-        CHECK_MEMBER(llog_unlink_rec, padding);
+        CHECK_MEMBER(llog_unlink_rec, lur_ogr);
+        CHECK_MEMBER(llog_unlink_rec, lur_count);
         CHECK_MEMBER(llog_unlink_rec, lur_tail);
 }
 
@@ -920,7 +911,7 @@ check_llog_setattr_rec(void)
         CHECK_STRUCT(llog_setattr_rec);
         CHECK_MEMBER(llog_setattr_rec, lsr_hdr);
         CHECK_MEMBER(llog_setattr_rec, lsr_oid);
-        CHECK_MEMBER(llog_setattr_rec, lsr_ogen);
+        CHECK_MEMBER(llog_setattr_rec, lsr_ogr);
         CHECK_MEMBER(llog_setattr_rec, lsr_uid);
         CHECK_MEMBER(llog_setattr_rec, lsr_gid);
         CHECK_MEMBER(llog_setattr_rec, padding);
@@ -934,7 +925,7 @@ check_llog_setattr64_rec(void)
         CHECK_STRUCT(llog_setattr64_rec);
         CHECK_MEMBER(llog_setattr64_rec, lsr_hdr);
         CHECK_MEMBER(llog_setattr64_rec, lsr_oid);
-        CHECK_MEMBER(llog_setattr64_rec, lsr_ogen);
+        CHECK_MEMBER(llog_setattr64_rec, lsr_ogr);
         CHECK_MEMBER(llog_setattr64_rec, padding);
         CHECK_MEMBER(llog_setattr64_rec, lsr_uid);
         CHECK_MEMBER(llog_setattr64_rec, lsr_uid_h);
@@ -956,19 +947,27 @@ check_llog_size_change_rec(void)
 }
 
 static void
+check_changelog_rec(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(changelog_rec);
+        CHECK_MEMBER(changelog_rec, cr_namelen);
+        CHECK_MEMBER(changelog_rec, cr_flags);
+        CHECK_MEMBER(changelog_rec, cr_type);
+        CHECK_MEMBER(changelog_rec, cr_index);
+        CHECK_MEMBER(changelog_rec, cr_prev);
+        CHECK_MEMBER(changelog_rec, cr_time);
+        CHECK_MEMBER(changelog_rec, cr_tfid);
+        CHECK_MEMBER(changelog_rec, cr_pfid);
+}
+
+static void
 check_llog_changelog_rec(void)
 {
         BLANK_LINE();
         CHECK_STRUCT(llog_changelog_rec);
         CHECK_MEMBER(llog_changelog_rec, cr_hdr);
-        CHECK_MEMBER(llog_changelog_rec, cr_flags);
-        CHECK_MEMBER(llog_changelog_rec, cr_namelen);
-        CHECK_MEMBER(llog_changelog_rec, cr_type);
-        CHECK_MEMBER(llog_changelog_rec, cr_index);
-        CHECK_MEMBER(llog_changelog_rec, cr_prev);
-        CHECK_MEMBER(llog_changelog_rec, cr_time);
-        CHECK_MEMBER(llog_changelog_rec, cr_tfid);
-        CHECK_MEMBER(llog_changelog_rec, cr_pfid);
+        CHECK_MEMBER(llog_changelog_rec, cr);
         CHECK_MEMBER(llog_changelog_rec, cr_tail);
 }
 
@@ -1384,6 +1383,7 @@ main(int argc, char **argv)
         CHECK_VALUE(LDLM_BL_CALLBACK);
         CHECK_VALUE(LDLM_CP_CALLBACK);
         CHECK_VALUE(LDLM_GL_CALLBACK);
+        CHECK_VALUE(LDLM_SET_INFO);
         CHECK_VALUE(LDLM_LAST_OPC);
 
         CHECK_VALUE(LCK_EX);
@@ -1433,7 +1433,6 @@ main(int argc, char **argv)
         check_niobuf_remote();
         check_ost_body();
         check_ll_fid();
-        check_lu_fid_pack();
         check_mds_status_req();
         check_mds_body();
         check_mds_rec_setattr();
@@ -1465,6 +1464,7 @@ main(int argc, char **argv)
         check_llog_setattr_rec();
         check_llog_setattr64_rec();
         check_llog_size_change_rec();
+        check_changelog_rec();
         check_llog_changelog_rec();
         check_llog_gen();
         check_llog_gen_rec();

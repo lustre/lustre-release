@@ -178,7 +178,8 @@ struct mdt_device {
 
 #define MDT_SERVICE_WATCHDOG_FACTOR     (2)
 #define MDT_ROCOMPAT_SUPP       (OBD_ROCOMPAT_LOVOBJID)
-#define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR)
+#define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR | \
+                                 OBD_INCOMPAT_FID | OBD_INCOMPAT_IAM_DIR)
 #define MDT_COS_DEFAULT         (1)
 
 struct mdt_object {
@@ -764,6 +765,7 @@ static inline struct lu_name *mdt_name_copy(struct lu_name *tlname,
 
 void mdt_enable_cos(struct mdt_device *, int);
 int mdt_cos_is_enabled(struct mdt_device *);
+int mdt_hsm_copytool_send(struct obd_export *exp);
 
 /* lprocfs stuff */
 void lprocfs_mdt_init_vars(struct lprocfs_static_vars *lvars);

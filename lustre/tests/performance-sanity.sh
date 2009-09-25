@@ -22,6 +22,10 @@ ALWAYS_EXCEPT="1     2    $PERFORMANCE_SANITY_EXCEPT"
 
 build_test_filter
 
+get_mpiuser_id $MPI_USER
+MPI_RUNAS=${MPI_RUNAS:-"runas -u $MPI_USER_UID -g $MPI_USER_GID"}
+$GSS_KRB5 && refresh_krb5_tgt $MPI_USER_UID $MPI_USER_GID $MPI_RUNAS
+
 # single-IOR-rates
 test_1() {
     echo "Single client I/O performance as a percentage of raw"

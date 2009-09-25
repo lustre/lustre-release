@@ -46,7 +46,11 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/module.h>
+#ifdef HAVE_EXT4_LDISKFS
+#include <ldiskfs/ldiskfs_jbd2.h>
+#else
 #include <linux/jbd.h>
+#endif
 #include <obd.h>
 #include <obd_class.h>
 #include <lustre_ver.h>
@@ -55,7 +59,11 @@
 
 #include <lustre_disk.h>
 #include <lustre_fid.h>
+#ifdef HAVE_EXT4_LDISKFS
+#include <ldiskfs/ldiskfs.h>
+#else
 #include <linux/ldiskfs_fs.h>
+#endif
 #include <lustre_mds.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_disk.h>      /* for changelogs */
@@ -87,6 +95,8 @@ static int mdd_device_init(const struct lu_env *env, struct lu_device *d,
         mdd->mdd_txn_cb.dtc_tag = LCT_MD_THREAD;
         CFS_INIT_LIST_HEAD(&mdd->mdd_txn_cb.dtc_linkage);
         mdd->mdd_atime_diff = MAX_ATIME_DIFF;
+        /* sync permission changes */
+        mdd->mdd_sync_permission = 1;
 
         rc = mdd_procfs_init(mdd, name);
         RETURN(rc);
@@ -140,11 +150,11 @@ static int changelog_init_cb(struct llog_handle *llh, struct llog_rec_hdr *hdr,
 
         CDEBUG(D_INFO,
                "seeing record at index %d/%d/"LPU64" t=%x %.*s in log "LPX64"\n",
-               hdr->lrh_index, rec->cr_hdr.lrh_index, rec->cr_index,
-               rec->cr_type, rec->cr_namelen, rec->cr_name,
+               hdr->lrh_index, rec->cr_hdr.lrh_index, rec->cr.cr_index,
+               rec->cr.cr_type, rec->cr.cr_namelen, rec->cr.cr_name,
                llh->lgh_id.lgl_oid);
 
-        mdd->mdd_cl.mc_index = rec->cr_index;
+        mdd->mdd_cl.mc_index = rec->cr.cr_index;
         RETURN(LLOG_PROC_BREAK);
 }
 
@@ -295,18 +305,18 @@ int mdd_changelog_llog_write(struct mdd_device         *mdd,
         struct llog_ctxt *ctxt;
         int rc;
 
-        if ((mdd->mdd_cl.mc_mask & (1 << rec->cr_type)) == 0)
+        if ((mdd->mdd_cl.mc_mask & (1 << rec->cr.cr_type)) == 0)
                 return 0;
 
-        rec->cr_hdr.lrh_len = llog_data_len(sizeof(*rec) + rec->cr_namelen);
+        rec->cr_hdr.lrh_len = llog_data_len(sizeof(*rec) + rec->cr.cr_namelen);
         /* llog_lvfs_write_rec sets the llog tail len */
         rec->cr_hdr.lrh_type = CHANGELOG_REC;
-        rec->cr_time = cfs_time_current_64();
+        rec->cr.cr_time = cfs_time_current_64();
         spin_lock(&mdd->mdd_cl.mc_lock);
         /* NB: I suppose it's possible llog_add adds out of order wrt cr_index,
            but as long as the MDD transactions are ordered correctly for e.g.
            rename conflicts, I don't think this should matter. */
-        rec->cr_index = ++mdd->mdd_cl.mc_index;
+        rec->cr.cr_index = ++mdd->mdd_cl.mc_index;
         spin_unlock(&mdd->mdd_cl.mc_lock);
         ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
         if (ctxt == NULL)
@@ -388,17 +398,17 @@ int mdd_changelog_write_header(struct mdd_device *mdd, int markerflags)
         if (rec == NULL)
                 RETURN(-ENOMEM);
 
-        rec->cr_flags = CLF_VERSION;
-        rec->cr_type = CL_MARK;
-        rec->cr_namelen = len;
-        memcpy(rec->cr_name, obd->obd_name, rec->cr_namelen);
+        rec->cr.cr_flags = CLF_VERSION;
+        rec->cr.cr_type = CL_MARK;
+        rec->cr.cr_namelen = len;
+        memcpy(rec->cr.cr_name, obd->obd_name, rec->cr.cr_namelen);
         /* Status and action flags */
-        rec->cr_markerflags = mdd->mdd_cl.mc_flags | markerflags;
+        rec->cr.cr_markerflags = mdd->mdd_cl.mc_flags | markerflags;
 
         rc = mdd_changelog_llog_write(mdd, rec, NULL);
 
         /* assume on or off event; reset repeat-access time */
-        mdd->mdd_cl.mc_starttime = rec->cr_time;
+        mdd->mdd_cl.mc_starttime = rec->cr.cr_time;
 
         OBD_FREE(rec, reclen);
         RETURN(rc);
@@ -431,29 +441,85 @@ static int create_dot_lustre_dir(const struct lu_env *env, struct mdd_device *m)
         return 0;
 }
 
-static int dot_lustre_attr_get(const struct lu_env *env, struct md_object *obj,
-                               struct md_attr *ma)
+
+static int dot_lustre_mdd_permission(const struct lu_env *env,
+                                     struct md_object *pobj,
+                                     struct md_object *cobj,
+                                     struct md_attr *attr, int mask)
+{
+        if (mask & ~(MAY_READ | MAY_EXEC))
+                return -EPERM;
+        else
+                return 0;
+}
+
+static int dot_lustre_mdd_attr_get(const struct lu_env *env,
+                                   struct md_object *obj, struct md_attr *ma)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
 
         return mdd_attr_get_internal_locked(env, mdd_obj, ma);
 }
 
-static int dot_lustre_attr_set(const struct lu_env *env, struct md_object *obj,
-                               const struct md_attr *ma)
+static int dot_lustre_mdd_attr_set(const struct lu_env *env,
+                                   struct md_object *obj,
+                                   const struct md_attr *ma)
 {
         return -EPERM;
 }
 
-static int dot_lustre_xattr_get(const struct lu_env *env,
-                                struct md_object *obj, struct lu_buf *buf,
-                                const char *name)
+static int dot_lustre_mdd_xattr_get(const struct lu_env *env,
+                                    struct md_object *obj, struct lu_buf *buf,
+                                    const char *name)
 {
         return 0;
 }
 
-static int dot_lustre_xattr_list(const struct lu_env *env,
-                                 struct md_object *obj, struct lu_buf *buf)
+static int dot_lustre_mdd_xattr_list(const struct lu_env *env,
+                                     struct md_object *obj, struct lu_buf *buf)
+{
+        return 0;
+}
+
+static int dot_lustre_mdd_xattr_set(const struct lu_env *env,
+                                    struct md_object *obj,
+                                    const struct lu_buf *buf, const char *name,
+                                    int fl)
+{
+        return -EPERM;
+}
+
+static int dot_lustre_mdd_xattr_del(const struct lu_env *env,
+                                    struct md_object *obj,
+                                    const char *name)
+{
+        return -EPERM;
+}
+
+static int dot_lustre_mdd_readlink(const struct lu_env *env,
+                                   struct md_object *obj, struct lu_buf *buf)
+{
+        return 0;
+}
+
+static int dot_lustre_mdd_object_create(const struct lu_env *env,
+                                        struct md_object *obj,
+                                        const struct md_op_spec *spec,
+                                        struct md_attr *ma)
+{
+        return -EPERM;
+}
+
+static int dot_lustre_mdd_ref_add(const struct lu_env *env,
+                                  struct md_object *obj,
+                                  const struct md_attr *ma)
+{
+        return -EPERM;
+}
+
+static int dot_lustre_mdd_ref_del(const struct lu_env *env,
+                                  struct md_object *obj,
+                                  struct md_attr *ma)
 {
         return -EPERM;
 }
@@ -470,14 +536,8 @@ static int dot_lustre_mdd_open(const struct lu_env *env, struct md_object *obj,
         return 0;
 }
 
-static int dot_lustre_path(const struct lu_env *env, struct md_object *obj,
-                           char *path, int pathlen, __u64 *recno, int *linkno)
-{
-        return -ENOSYS;
-}
-
-static int dot_lustre_close(const struct lu_env *env, struct md_object *obj,
-                         struct md_attr *ma)
+static int dot_lustre_mdd_close(const struct lu_env *env, struct md_object *obj,
+                                struct md_attr *ma)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
 
@@ -488,36 +548,58 @@ static int dot_lustre_close(const struct lu_env *env, struct md_object *obj,
         return 0;
 }
 
-static dt_obj_version_t dot_lustre_version_get(const struct lu_env *env,
-                                               struct md_object *obj)
+static int dot_lustre_mdd_object_sync(const struct lu_env *env,
+                                      struct md_object *obj)
+{
+        return -ENOSYS;
+}
+
+static dt_obj_version_t dot_lustre_mdd_version_get(const struct lu_env *env,
+                                                   struct md_object *obj)
 {
         return 0;
 }
 
-static void dot_lustre_version_set(const struct lu_env *env,
-                                   struct md_object *obj,
-                                   dt_obj_version_t version)
+static void dot_lustre_mdd_version_set(const struct lu_env *env,
+                                       struct md_object *obj,
+                                       dt_obj_version_t version)
 {
         return;
 }
 
+static int dot_lustre_mdd_path(const struct lu_env *env, struct md_object *obj,
+                           char *path, int pathlen, __u64 *recno, int *linkno)
+{
+        return -ENOSYS;
+}
+
 
 static struct md_object_operations mdd_dot_lustre_obj_ops = {
-        .moo_attr_get   = dot_lustre_attr_get,
-        .moo_attr_set   = dot_lustre_attr_set,
-        .moo_xattr_get  = dot_lustre_xattr_get,
-        .moo_xattr_list = dot_lustre_xattr_list,
-        .moo_open       = dot_lustre_mdd_open,
-        .moo_close      = dot_lustre_close,
-        .moo_readpage   = mdd_readpage,
-        .moo_version_get = dot_lustre_version_get,
-        .moo_version_set = dot_lustre_version_set,
-        .moo_path       = dot_lustre_path
+        .moo_permission    = dot_lustre_mdd_permission,
+        .moo_attr_get      = dot_lustre_mdd_attr_get,
+        .moo_attr_set      = dot_lustre_mdd_attr_set,
+        .moo_xattr_get     = dot_lustre_mdd_xattr_get,
+        .moo_xattr_list    = dot_lustre_mdd_xattr_list,
+        .moo_xattr_set     = dot_lustre_mdd_xattr_set,
+        .moo_xattr_del     = dot_lustre_mdd_xattr_del,
+        .moo_readpage      = mdd_readpage,
+        .moo_readlink      = dot_lustre_mdd_readlink,
+        .moo_object_create = dot_lustre_mdd_object_create,
+        .moo_ref_add       = dot_lustre_mdd_ref_add,
+        .moo_ref_del       = dot_lustre_mdd_ref_del,
+        .moo_open          = dot_lustre_mdd_open,
+        .moo_close         = dot_lustre_mdd_close,
+        .moo_capa_get      = mdd_capa_get,
+        .moo_object_sync   = dot_lustre_mdd_object_sync,
+        .moo_version_get   = dot_lustre_mdd_version_get,
+        .moo_version_set   = dot_lustre_mdd_version_set,
+        .moo_path          = dot_lustre_mdd_path,
 };
 
-static int dot_lustre_lookup(const struct lu_env *env, struct md_object *p,
-                             const struct lu_name *lname, struct lu_fid *f,
-                             struct md_op_spec *spec)
+
+static int dot_lustre_mdd_lookup(const struct lu_env *env, struct md_object *p,
+                                 const struct lu_name *lname, struct lu_fid *f,
+                                 struct md_op_spec *spec)
 {
         if (strcmp(lname->ln_name, mdd_obf_dir_name) == 0)
                 *f = LU_OBF_FID;
@@ -527,45 +609,102 @@ static int dot_lustre_lookup(const struct lu_env *env, struct md_object *p,
         return 0;
 }
 
-static int dot_lustre_create(const struct lu_env *env, struct md_object *pobj,
-                             const struct lu_name *lname,
-                             struct md_object *child, struct md_op_spec *spec,
-                             struct md_attr* ma)
+static mdl_mode_t dot_lustre_mdd_lock_mode(const struct lu_env *env,
+                                           struct md_object *obj,
+                                           mdl_mode_t mode)
+{
+        return MDL_MINMODE;
+}
+
+static int dot_lustre_mdd_create(const struct lu_env *env,
+                                 struct md_object *pobj,
+                                 const struct lu_name *lname,
+                                 struct md_object *child,
+                                 struct md_op_spec *spec,
+                                 struct md_attr* ma)
 {
         return -EPERM;
 }
 
-static int dot_lustre_rename(const struct lu_env *env,
-                             struct md_object *src_pobj,
-                             struct md_object *tgt_pobj,
-                             const struct lu_fid *lf,
-                             const struct lu_name *lsname,
-                             struct md_object *tobj,
-                             const struct lu_name *ltname, struct md_attr *ma)
+static int dot_lustre_mdd_create_data(const struct lu_env *env,
+                                      struct md_object *p,
+                                      struct md_object *o,
+                                      const struct md_op_spec *spec,
+                                      struct md_attr *ma)
 {
         return -EPERM;
 }
 
-static int dot_lustre_link(const struct lu_env *env, struct md_object *tgt_obj,
-                           struct md_object *src_obj,
-                           const struct lu_name *lname, struct md_attr *ma)
+static int dot_lustre_mdd_rename(const struct lu_env *env,
+                                 struct md_object *src_pobj,
+                                 struct md_object *tgt_pobj,
+                                 const struct lu_fid *lf,
+                                 const struct lu_name *lsname,
+                                 struct md_object *tobj,
+                                 const struct lu_name *ltname,
+                                 struct md_attr *ma)
 {
         return -EPERM;
 }
 
-static int dot_lustre_unlink(const struct lu_env *env, struct md_object *pobj,
-                             struct md_object *cobj, const struct lu_name *lname,
-                             struct md_attr *ma)
+static int dot_lustre_mdd_link(const struct lu_env *env,
+                               struct md_object *tgt_obj,
+                               struct md_object *src_obj,
+                               const struct lu_name *lname,
+                               struct md_attr *ma)
 {
         return -EPERM;
 }
+
+static int dot_lustre_mdd_unlink(const struct lu_env *env,
+                                 struct md_object *pobj,
+                                 struct md_object *cobj,
+                                 const struct lu_name *lname,
+                                 struct md_attr *ma)
+{
+        return -EPERM;
+}
+
+static int dot_lustre_mdd_name_insert(const struct lu_env *env,
+                                      struct md_object *obj,
+                                      const struct lu_name *lname,
+                                      const struct lu_fid *fid,
+                                      const struct md_attr *ma)
+{
+        return -EPERM;
+}
+
+static int dot_lustre_mdd_name_remove(const struct lu_env *env,
+                                      struct md_object *obj,
+                                      const struct lu_name *lname,
+                                      const struct md_attr *ma)
+{
+        return -EPERM;
+}
+
+static int dot_lustre_mdd_rename_tgt(const struct lu_env *env,
+                                     struct md_object *pobj,
+                                     struct md_object *tobj,
+                                     const struct lu_fid *fid,
+                                     const struct lu_name *lname,
+                                     struct md_attr *ma)
+{
+        return -EPERM;
+}
+
 
 static struct md_dir_operations mdd_dot_lustre_dir_ops = {
-        .mdo_lookup = dot_lustre_lookup,
-        .mdo_create = dot_lustre_create,
-        .mdo_rename = dot_lustre_rename,
-        .mdo_link   = dot_lustre_link,
-        .mdo_unlink = dot_lustre_unlink,
+        .mdo_is_subdir   = mdd_is_subdir,
+        .mdo_lookup      = dot_lustre_mdd_lookup,
+        .mdo_lock_mode   = dot_lustre_mdd_lock_mode,
+        .mdo_create      = dot_lustre_mdd_create,
+        .mdo_create_data = dot_lustre_mdd_create_data,
+        .mdo_rename      = dot_lustre_mdd_rename,
+        .mdo_link        = dot_lustre_mdd_link,
+        .mdo_unlink      = dot_lustre_mdd_unlink,
+        .mdo_name_insert = dot_lustre_mdd_name_insert,
+        .mdo_name_remove = dot_lustre_mdd_name_remove,
+        .mdo_rename_tgt  = dot_lustre_mdd_rename_tgt,
 };
 
 static int obf_attr_get(const struct lu_env *env, struct md_object *obj,
@@ -579,7 +718,8 @@ static int obf_attr_get(const struct lu_env *env, struct md_object *obj,
                 /* "fid" is a virtual object and hence does not have any "real"
                  * attributes. So we reuse attributes of .lustre for "fid" dir */
                 ma->ma_need |= MA_INODE;
-                rc = dot_lustre_attr_get(env, &mdd->mdd_dot_lustre->mod_obj, ma);
+                rc = dot_lustre_mdd_attr_get(env, &mdd->mdd_dot_lustre->mod_obj,
+                                             ma);
                 if (rc)
                         return rc;
                 ma->ma_valid |= MA_INODE;

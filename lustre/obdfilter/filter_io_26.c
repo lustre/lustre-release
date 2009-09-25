@@ -752,20 +752,35 @@ cleanup:
                  * lnb->page automatically returns back into per-thread page
                  * pool (bug 5137)
                  */
-                f_dput(res->dentry);
+                 break;
         }
 
         /* trigger quota pre-acquire */
-        qcids[USRQUOTA] = oa->o_uid;
-        qcids[GRPQUOTA] = oa->o_gid;
         err = lquota_adjust(filter_quota_interface_ref, obd, qcids, NULL, rc,
                             FSFILT_OP_CREATE);
-        CDEBUG(err ? D_ERROR : D_QUOTA,
-               "filter adjust qunit! (rc:%d)\n", err);
+        CDEBUG(err ? D_ERROR : D_QUOTA, "filter adjust qunit! "
+               "(rc:%d, uid:%u, gid:%u)\n",
+               err, qcids[USRQUOTA], qcids[GRPQUOTA]);
+        if (qcids[USRQUOTA] != oa->o_uid || qcids[GRPQUOTA] != oa->o_gid) {
+                qcids[USRQUOTA] = oa->o_uid;
+                qcids[GRPQUOTA] = oa->o_gid;
+                err = lquota_adjust(filter_quota_interface_ref, obd, qcids,
+                                    NULL, rc, FSFILT_OP_CREATE);
+                CDEBUG(err ? D_ERROR : D_QUOTA, "filter adjust qunit! "
+                       "(rc:%d, uid:%u, gid:%u)\n",
+                       err, qcids[USRQUOTA], qcids[GRPQUOTA]);
+        }
 
         for (i = 0, lnb = res; i < niocount; i++, lnb++) {
                 if (lnb->page == NULL)
                         continue;
+
+                if (rc)
+                        /* If the write has failed, the page cache may
+                         * not be consitent with what is on disk, so
+                         * force pages to be reread next time it is
+                         * accessed */
+                        ClearPageUptodate(lnb->page);
 
                 LASSERT(PageLocked(lnb->page));
                 unlock_page(lnb->page);
@@ -773,6 +788,7 @@ cleanup:
                 page_cache_release(lnb->page);
                 lnb->page = NULL;
         }
+        f_dput(res->dentry);
 
         if (inode && (fo->fo_writethrough_cache == 0 ||
                         i_size_read(inode) > fo->fo_readcache_max_filesize))

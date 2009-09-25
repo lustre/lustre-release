@@ -111,10 +111,14 @@ int it_open_error(int phase, struct lookup_intent *it)
 EXPORT_SYMBOL(it_open_error);
 
 /* this must be called on a lockh that is known to have a referenced lock */
-int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data)
+int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data,
+                      __u32 *bits)
 {
         struct ldlm_lock *lock;
         ENTRY;
+
+        if(bits)
+                *bits = 0;
 
         if (!*lockh) {
                 EXIT;
@@ -138,6 +142,9 @@ int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data)
         }
 #endif
         lock->l_ast_data = data;
+        if (bits)
+                *bits = lock->l_policy_data.l_inodebits.bits;
+
         unlock_res_and_lock(lock);
         LDLM_LOCK_PUT(lock);
 
@@ -545,12 +552,17 @@ static int mdc_finish_enqueue(struct obd_export *exp,
                                 void *lmm;
                                 if (req_capsule_get_size(pill, &RMF_EADATA,
                                                          RCL_CLIENT) <
-                                    body->eadatasize) {
+                                    body->eadatasize)
                                         mdc_realloc_openmsg(req, body);
-                                        req_capsule_set_size(pill, &RMF_EADATA,
-                                                             RCL_CLIENT,
-                                                             body->eadatasize);
-                                }
+                                else
+                                        req_capsule_shrink(pill, &RMF_EADATA,
+                                                           body->eadatasize,
+                                                           RCL_CLIENT);
+
+                                req_capsule_set_size(pill, &RMF_EADATA,
+                                                     RCL_CLIENT,
+                                                     body->eadatasize);
+
                                 lmm = req_capsule_client_get(pill, &RMF_EADATA);
                                 if (lmm)
                                         memcpy(lmm, eadata, body->eadatasize);

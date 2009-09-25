@@ -280,7 +280,7 @@ static int vvp_io_trunc_iter_init(const struct lu_env *env,
 }
 
 /**
- * Implementation of cl_io_operations::vio_lock() method for CIT_TRUNC io.
+ * Implementation of cl_io_operations::cio_lock() method for CIT_TRUNC io.
  *
  * Handles "lockless io" mode when extent locking is done by server.
  */
@@ -424,14 +424,14 @@ static int vvp_io_read_start(const struct lu_env *env,
 
         int     result;
         loff_t  pos = io->u.ci_rd.rd.crw_pos;
-        size_t  cnt = io->u.ci_rd.rd.crw_count;
-        size_t  tot = cio->cui_tot_count;
+        long    cnt = io->u.ci_rd.rd.crw_count;
+        long    tot = cio->cui_tot_count;
         int     exceed = 0;
 
         CLOBINVRNT(env, obj, ccc_object_invariant(obj));
         LASSERT(vio->cui_oneshot == 0);
 
-        CDEBUG(D_VFSTRACE, "read: -> [%lli, %lli)\n", pos, pos + (long long)cnt);
+        CDEBUG(D_VFSTRACE, "read: -> [%lli, %lli)\n", pos, pos + cnt);
 
         result = ccc_prep_size(env, obj, io, pos, tot, 1, &exceed);
         if (result != 0)
@@ -440,7 +440,7 @@ static int vvp_io_read_start(const struct lu_env *env,
                 goto out;
 
         LU_OBJECT_HEADER(D_INODE, env, &obj->co_lu,
-                        "Read ino %lu, "LPSZ" bytes, offset %lld, size %llu\n",
+                        "Read ino %lu, %lu bytes, offset %lld, size %llu\n",
                         inode->i_ino, cnt, pos, i_size_read(inode));
 
         /* turn off the kernel's read-ahead */
@@ -642,7 +642,7 @@ static int vvp_io_read_page(const struct lu_env *env,
 
         if (cp->cpg_defer_uptodate) {
                 cp->cpg_ra_used = 1;
-                cl_page_export(env, page);
+                cl_page_export(env, page, 1);
         }
         /*
          * Add page into the queue even when it is marked uptodate above.
@@ -661,7 +661,6 @@ static int vvp_page_sync_io(const struct lu_env *env, struct cl_io *io,
                             int to, enum cl_req_type crt)
 {
         struct cl_2queue  *queue;
-        struct cl_sync_io *anchor = &ccc_env_info(env)->cti_sync_io;
         int result;
 
         LASSERT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE);
@@ -669,15 +668,9 @@ static int vvp_page_sync_io(const struct lu_env *env, struct cl_io *io,
         queue = &io->ci_queue;
 
         cl_2queue_init_page(queue, page);
-
-        cl_sync_io_init(anchor, 1);
-        cp->cpg_sync_io = anchor;
         cl_page_clip(env, page, 0, to);
-        result = cl_io_submit_rw(env, io, crt, queue, CRP_NORMAL);
-        if (result == 0)
-                result = cl_sync_io_wait(env, io, &queue->c2_qout, anchor);
-        else
-                cp->cpg_sync_io = NULL;
+        
+        result = cl_io_submit_sync(env, io, crt, queue, CRP_NORMAL, 0);
         LASSERT(cl_page_is_owned(page, io));
         cl_page_clip(env, page, 0, CFS_PAGE_SIZE);
 
@@ -732,7 +725,7 @@ static int vvp_io_prepare_partial(const struct lu_env *env, struct cl_io *io,
                  * details. -jay
                  */
                 if (result == 0)
-                        cl_page_export(env, pg);
+                        cl_page_export(env, pg, 1);
         }
         return result;
 }
@@ -857,7 +850,7 @@ static int vvp_io_commit_write(const struct lu_env *env,
         if (result == 0) {
                 if (size > i_size_read(inode))
                         i_size_write(inode, size);
-                cl_page_export(env, pg);
+                cl_page_export(env, pg, 1);
         } else if (size > i_size_read(inode))
                 cl_page_discard(env, io, pg);
         RETURN(result);

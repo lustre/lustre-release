@@ -231,7 +231,7 @@ static void rs_batch_init(struct rs_batch *b)
 
 /**
  * Dispatch all replies accumulated in the batch to one from
- * dedicated reply handing threads.
+ * dedicated reply handling threads.
  *
  * \param b batch
  */
@@ -601,7 +601,7 @@ static void ptlrpc_server_free_request(struct ptlrpc_request *req)
  * drop a reference count of the request. if it reaches 0, we either
  * put it into history list, or free it immediately.
  */
-static void ptlrpc_server_drop_request(struct ptlrpc_request *req)
+void ptlrpc_server_drop_request(struct ptlrpc_request *req)
 {
         struct ptlrpc_request_buffer_desc *rqbd = req->rq_rqbd;
         struct ptlrpc_service             *svc = rqbd->rqbd_service;
@@ -611,6 +611,24 @@ static void ptlrpc_server_drop_request(struct ptlrpc_request *req)
 
         if (!atomic_dec_and_test(&req->rq_refcount))
                 return;
+
+        spin_lock(&svc->srv_at_lock);
+        list_del_init(&req->rq_timed_list);
+        if (req->rq_at_linked) {
+                struct ptlrpc_at_array *array = &svc->srv_at_array;
+                __u32 index = req->rq_at_index;
+
+                req->rq_at_linked = 0;
+                array->paa_reqs_count[index]--;
+                array->paa_count--;
+        }
+        spin_unlock(&svc->srv_at_lock);
+
+        /* finalize request */
+        if (req->rq_export) {
+                class_export_put(req->rq_export);
+                req->rq_export = NULL;
+        }
 
         spin_lock(&svc->srv_lock);
 
@@ -685,29 +703,6 @@ static void ptlrpc_server_drop_request(struct ptlrpc_request *req)
  */
 static void ptlrpc_server_finish_request(struct ptlrpc_request *req)
 {
-        struct ptlrpc_service  *svc = req->rq_rqbd->rqbd_service;
-
-        if (req->rq_export) {
-                class_export_put(req->rq_export);
-                req->rq_export = NULL;
-        }
-
-        if (req->rq_phase != RQ_PHASE_NEW) /* incorrect message magic */
-                DEBUG_REQ(D_INFO, req, "free req");
-
-        spin_lock(&svc->srv_at_lock);
-        req->rq_sent_final = 1;
-        list_del_init(&req->rq_timed_list);
-        if (req->rq_at_linked) {
-                struct ptlrpc_at_array *array = &svc->srv_at_array;
-                __u32 index = req->rq_at_index;
-
-                req->rq_at_linked = 0;
-                array->paa_reqs_count[index]--;
-                array->paa_count--;
-        }
-        spin_unlock(&svc->srv_at_lock);
-
         ptlrpc_server_drop_request(req);
 }
 
@@ -859,15 +854,9 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
                 return(-ENOSYS);
 
         spin_lock(&svc->srv_at_lock);
-
-        if (unlikely(req->rq_sent_final)) {
-                spin_unlock(&svc->srv_at_lock);
-                return 0;
-        }
-
         LASSERT(list_empty(&req->rq_timed_list));
 
-        index = req->rq_deadline % array->paa_size;
+        index = (unsigned long)req->rq_deadline % array->paa_size;
         if (array->paa_reqs_count[index] > 0) {
                 /* latest rpcs will have the latest deadlines in the list,
                  * so search backward. */
@@ -984,10 +973,12 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
         reqcopy->rq_reqmsg = reqmsg;
         memcpy(reqmsg, req->rq_reqmsg, req->rq_reqlen);
 
-        if (req->rq_sent_final) {
+        LASSERT(atomic_read(&req->rq_refcount));
+        /** if it is last refcount then early reply isn't needed */
+        if (atomic_read(&req->rq_refcount) == 1) {
                 DEBUG_REQ(D_ADAPTTO, reqcopy, "Normal reply already sent out, "
                           "abort sending early reply\n");
-                GOTO(out, rc = 0);
+                GOTO(out, rc = -EINVAL);
         }
 
         /* Connection ref */
@@ -1070,14 +1061,21 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
            server will take. Send early replies to everyone expiring soon. */
         CFS_INIT_LIST_HEAD(&work_list);
         deadline = -1;
-        index = array->paa_deadline % array->paa_size;
+        index = (unsigned long)array->paa_deadline % array->paa_size;
         count = array->paa_count;
         while (count > 0) {
                 count -= array->paa_reqs_count[index];
                 list_for_each_entry_safe(rq, n, &array->paa_reqs_array[index],
                                          rq_timed_list) {
                         if (rq->rq_deadline <= now + at_early_margin) {
-                                list_move(&rq->rq_timed_list, &work_list);
+                                list_del(&rq->rq_timed_list);
+                                /**
+                                 * ptlrpc_server_drop_request() may drop
+                                 * refcount to 0 already. Let's check this and
+                                 * don't add entry to work_list
+                                 */
+                                if (likely(atomic_inc_not_zero(&rq->rq_refcount)))
+                                        list_add(&rq->rq_timed_list, &work_list);
                                 counter++;
                                 array->paa_reqs_count[index]--;
                                 array->paa_count--;
@@ -1114,25 +1112,18 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
                       at_get(&svc->srv_at_estimate), delay);
         }
 
-        /* ptlrpc_server_finish_request may delete an entry out of
-         * the work list */
-        spin_lock(&svc->srv_at_lock);
+        /* we took additional refcount so entries can't be deleted from list, no
+         * locking is needed */
         while (!list_empty(&work_list)) {
                 rq = list_entry(work_list.next, struct ptlrpc_request,
                                 rq_timed_list);
                 list_del_init(&rq->rq_timed_list);
-                /* if the entry is still in the worklist, it hasn't been
-                   deleted, and is safe to take a ref to keep the req around */
-                atomic_inc(&rq->rq_refcount);
-                spin_unlock(&svc->srv_at_lock);
 
                 if (ptlrpc_at_send_early_reply(rq, at_extra) == 0)
                         ptlrpc_at_add_timed(rq);
 
                 ptlrpc_server_drop_request(rq);
-                spin_lock(&svc->srv_at_lock);
         }
-        spin_unlock(&svc->srv_at_lock);
 
         RETURN(0);
 }
@@ -1337,15 +1328,18 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
                 LBUG();
         }
 
-        /* Clear request swab mask; this is a new request */
-        req->rq_req_swab_mask = 0;
-
-        rc = lustre_unpack_msg(req->rq_reqmsg, req->rq_reqlen);
-        if (rc != 0) {
-                CERROR("error unpacking request: ptl %d from %s x"LPU64"\n",
-                       svc->srv_req_portal, libcfs_id2str(req->rq_peer),
-                       req->rq_xid);
-                goto err_req;
+        /*
+         * for null-flavored rpc, msg has been unpacked by sptlrpc, although
+         * redo it wouldn't be harmful.
+         */
+        if (SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) != SPTLRPC_POLICY_NULL) {
+                rc = ptlrpc_unpack_req_msg(req, req->rq_reqlen);
+                if (rc != 0) {
+                        CERROR("error unpacking request: ptl %d from %s "
+                               "x"LPU64"\n", svc->srv_req_portal,
+                               libcfs_id2str(req->rq_peer), req->rq_xid);
+                        goto err_req;
+                }
         }
 
         rc = lustre_unpack_req_ptlrpc_body(req, MSG_PTLRPC_BODY_OFF);
@@ -1353,6 +1347,13 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
                 CERROR ("error unpacking ptlrpc body: ptl %d from %s x"
                         LPU64"\n", svc->srv_req_portal,
                         libcfs_id2str(req->rq_peer), req->rq_xid);
+                goto err_req;
+        }
+
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DROP_REQ_OPC) &&
+            lustre_msg_get_opc(req->rq_reqmsg) == obd_fail_val) {
+                CERROR("drop incoming rpc opc %u, x"LPU64"\n",
+                       obd_fail_val, req->rq_xid);
                 goto err_req;
         }
 
@@ -1564,7 +1565,8 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                libcfs_id2str(request->rq_peer),
                lustre_msg_get_opc(request->rq_reqmsg));
 
-        OBD_FAIL_TIMEOUT_MS(OBD_FAIL_PTLRPC_PAUSE_REQ, obd_fail_val);
+        if (lustre_msg_get_opc(request->rq_reqmsg) != OBD_PING)
+                OBD_FAIL_TIMEOUT_MS(OBD_FAIL_PTLRPC_PAUSE_REQ, obd_fail_val);
 
         rc = svc->srv_handler(request);
 
@@ -1732,7 +1734,7 @@ ptlrpc_handle_rs (struct ptlrpc_reply_state *rs)
  * and process it.
  *
  * \param svc a ptlrpc service
- * \retval 0 no replies processes
+ * \retval 0 no replies processed
  * \retval 1 one reply processed
  */
 static int
@@ -1797,18 +1799,6 @@ liblustre_check_services (void *arg)
 
 #else /* __KERNEL__ */
 
-/* Don't use daemonize, it removes fs struct from new thread (bug 418) */
-void ptlrpc_daemonize(char *name)
-{
-        struct fs_struct *fs = current->fs;
-
-        atomic_inc(&fs->count);
-        cfs_daemonize(name);
-        exit_fs(cfs_current());
-        current->fs = fs;
-        ll_set_fs_pwd(current->fs, init_task.fs->pwdmnt, init_task.fs->pwd);
-}
-
 static void
 ptlrpc_check_rqbd_pool(struct ptlrpc_service *svc)
 {
@@ -1854,7 +1844,7 @@ static int ptlrpc_main(void *arg)
         int counter = 0, rc = 0;
         ENTRY;
 
-        ptlrpc_daemonize(data->name);
+        cfs_daemonize_ctxt(data->name);
 
 #if defined(HAVE_NODE_TO_CPUMASK) && defined(CONFIG_NUMA)
         /* we need to do this before any per-thread allocation is done so that
@@ -2043,7 +2033,7 @@ static int ptlrpc_hr_main(void *arg)
         snprintf(threadname, sizeof(threadname),
                  "ptlrpc_hr_%d", hr_args->thread_index);
 
-        ptlrpc_daemonize(threadname);
+        cfs_daemonize_ctxt(threadname);
 #if defined(HAVE_NODE_TO_CPUMASK)
         set_cpus_allowed(cfs_current(),
                          node_to_cpumask(cpu_to_node(hr_args->cpu_index)));
@@ -2257,8 +2247,8 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc)
 
         CDEBUG(D_RPCTRACE, "starting thread '%s'\n", name);
 
-          /* CLONE_VM and CLONE_FILES just avoid a needless copy, because we
-         * just drop the VM and FILES in ptlrpc_daemonize() right away.
+        /* CLONE_VM and CLONE_FILES just avoid a needless copy, because we
+         * just drop the VM and FILES in cfs_daemonize_ctxt() right away.
          */
         rc = cfs_kernel_thread(ptlrpc_main, &d, CLONE_VM | CLONE_FILES);
         if (rc < 0) {

@@ -218,7 +218,7 @@ static int mdt_ck_thread_main(void *args)
         int                     rc;
         ENTRY;
 
-        ptlrpc_daemonize("mdt_ck");
+        cfs_daemonize_ctxt("mdt_ck");
         cfs_block_allsigs();
 
         thread->t_flags = SVC_RUNNING;

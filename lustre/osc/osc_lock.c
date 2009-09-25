@@ -38,8 +38,6 @@
  *   Author: Nikita Danilov <nikita.danilov@sun.com>
  */
 
-/** \addtogroup osc osc @{ */
-
 #define DEBUG_SUBSYSTEM S_OSC
 
 #ifdef __KERNEL__
@@ -51,6 +49,10 @@
 #include <lustre_fid.h>
 
 #include "osc_cl_internal.h"
+
+/** \addtogroup osc 
+ *  @{ 
+ */
 
 /*****************************************************************************
  *
@@ -1480,7 +1482,7 @@ static int osc_lock_has_pages(struct osc_lock *olck)
                 io->ci_obj = cl_object_top(obj);
                 cl_io_init(env, io, CIT_MISC, io->ci_obj);
                 cl_page_gang_lookup(env, obj, io,
-                                    descr->cld_start, descr->cld_end, plist);
+                                    descr->cld_start, descr->cld_end, plist, 0);
                 cl_lock_page_list_fixup(env, io, lock, plist);
                 if (plist->pl_nr > 0) {
                         CL_LOCK_DEBUG(D_ERROR, env, lock, "still has pages\n");
@@ -1567,6 +1569,18 @@ static int osc_lock_print(const struct lu_env *env, void *cookie,
         return 0;
 }
 
+static int osc_lock_fits_into(const struct lu_env *env,
+                              const struct cl_lock_slice *slice,
+                              const struct cl_lock_descr *need,
+                              const struct cl_io *io)
+{
+
+        if (need->cld_mode == CLM_PHANTOM)
+                return need->cld_mode == slice->cls_lock->cll_descr.cld_mode;
+
+        return 1;
+}
+
 static const struct cl_lock_operations osc_lock_ops = {
         .clo_fini    = osc_lock_fini,
         .clo_enqueue = osc_lock_enqueue,
@@ -1577,7 +1591,8 @@ static const struct cl_lock_operations osc_lock_ops = {
         .clo_state   = osc_lock_state,
         .clo_cancel  = osc_lock_cancel,
         .clo_weigh   = osc_lock_weigh,
-        .clo_print   = osc_lock_print
+        .clo_print   = osc_lock_print,
+        .clo_fits_into = osc_lock_fits_into,
 };
 
 static int osc_lock_lockless_enqueue(const struct lu_env *env,

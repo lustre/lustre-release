@@ -85,7 +85,8 @@ struct fs_db {
         struct sptlrpc_rule_set   fsdb_srpc_gen;
         struct mgs_tgt_srpc_conf *fsdb_srpc_tgt;
         unsigned int              fsdb_fl_udesc:1,
-                                  fsdb_fl_mgsself:1;
+                                  fsdb_fl_mgsself:1,
+                                  fsdb_fl_oscname_18:1;
 };
 
 int mgs_init_fsdb_list(struct obd_device *obd);

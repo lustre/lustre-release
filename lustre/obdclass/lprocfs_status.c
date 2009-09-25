@@ -923,6 +923,33 @@ int lprocfs_at_hist_helper(char *page, int count, int rc,
         return rc;
 }
 
+int lprocfs_rd_quota_resend_count(char *page, char **start, off_t off,
+                                  int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+
+        return snprintf(page, count, "%u\n",
+                        atomic_read(&obd->u.cli.cl_quota_resends));
+}
+
+int lprocfs_wr_quota_resend_count(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val < 0)
+               return -EINVAL;
+
+        atomic_set(&obd->u.cli.cl_quota_resends, val);
+
+        return count;
+}
+
 /* See also ptlrpc_lprocfs_rd_timeouts */
 int lprocfs_rd_timeouts(char *page, char **start, off_t off, int count,
                         int *eof, void *data)
@@ -2141,7 +2168,7 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
                 if (lprocfs_obd_snprintf(&page, size, &len,
                                          "completed_clients: %d/%d\n",
                                          obd->obd_max_recoverable_clients -
-                                         obd->obd_recoverable_clients,
+                                         obd->obd_stale_clients,
                                          obd->obd_max_recoverable_clients) <= 0)
                         goto out;
                 if (lprocfs_obd_snprintf(&page, size, &len,
@@ -2151,6 +2178,9 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
                 if (lprocfs_obd_snprintf(&page, size, &len,
                                          "last_transno: "LPD64"\n",
                                          obd->obd_next_recovery_transno - 1)<=0)
+                        goto out;
+                if (lprocfs_obd_snprintf(&page, size, &len, "VBR: %s\n",
+                                         obd->obd_version_recov ? "ON" : "OFF")<=0)
                         goto out;
                 goto fclose;
         }
@@ -2169,12 +2199,20 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
                                  obd->obd_max_recoverable_clients) <= 0)
                 goto out;
         /* Number of clients that have completed recovery */
-        if (lprocfs_obd_snprintf(&page, size, &len,"completed_clients: %d/%d\n",
-                                 obd->obd_max_recoverable_clients -
-                                 obd->obd_recoverable_clients,
-                                 obd->obd_max_recoverable_clients) <= 0)
+        if (lprocfs_obd_snprintf(&page, size, &len,"req_replay_clients: %d\n",
+                                 atomic_read(&obd->obd_req_replay_clients))<= 0)
                 goto out;
-        if (lprocfs_obd_snprintf(&page, size, &len,"replayed_requests: %d/??\n",
+        if (lprocfs_obd_snprintf(&page, size, &len,"lock_repay_clients: %d\n",
+                                 atomic_read(&obd->obd_lock_replay_clients))<=0)
+                goto out;
+        if (lprocfs_obd_snprintf(&page, size, &len,"completed_clients: %d\n",
+                                 obd->obd_connected_clients -
+                                 atomic_read(&obd->obd_lock_replay_clients))<=0)
+                goto out;
+        if (lprocfs_obd_snprintf(&page, size, &len,"evicted_clients: %d\n",
+                                 obd->obd_stale_clients) <= 0)
+                goto out;
+        if (lprocfs_obd_snprintf(&page, size, &len,"replayed_requests: %d\n",
                                  obd->obd_replayed_requests) <= 0)
                 goto out;
         if (lprocfs_obd_snprintf(&page, size, &len, "queued_requests: %d\n",
@@ -2222,8 +2260,6 @@ EXPORT_SYMBOL(lprocfs_obd_wr_recovery_maxtime);
 /**** Changelogs *****/
 #define D_CHANGELOG 0
 
-DECLARE_CHANGELOG_NAMES;
-
 /* How many records per seq_show.  Too small, we spawn llog_process threads
    too often; too large, we run out of buffer space */
 #define CHANGELOG_CHUNK_SIZE 100
@@ -2234,25 +2270,26 @@ static int changelog_show_cb(struct llog_handle *llh, struct llog_rec_hdr *hdr,
         struct seq_file *seq = (struct seq_file *)data;
         struct changelog_seq_iter *csi = seq->private;
         struct llog_changelog_rec *rec = (struct llog_changelog_rec *)hdr;
-        int rc;
+        char *ptr;
+        int cnt, rc;
         ENTRY;
 
         if ((rec->cr_hdr.lrh_type != CHANGELOG_REC) ||
-            (rec->cr_type >= CL_LAST)) {
+            (rec->cr.cr_type >= CL_LAST)) {
                 CERROR("Not a changelog rec %d/%d\n", rec->cr_hdr.lrh_type,
-                       rec->cr_type);
+                       rec->cr.cr_type);
                 RETURN(-EINVAL);
         }
 
         CDEBUG(D_CHANGELOG, "rec="LPU64" start="LPU64" cat=%d:%d start=%d:%d\n",
-               rec->cr_index, csi->csi_startrec,
+               rec->cr.cr_index, csi->csi_startrec,
                llh->lgh_hdr->llh_cat_idx, llh->lgh_cur_idx,
                csi->csi_startcat, csi->csi_startidx);
 
-        if (rec->cr_index < csi->csi_startrec)
+        if (rec->cr.cr_index < csi->csi_startrec)
                 /* Skip entries earlier than what we are interested in */
                 RETURN(0);
-        if (rec->cr_index == csi->csi_startrec) {
+        if (rec->cr.cr_index == csi->csi_startrec) {
                 /* Remember where we started, since seq_read will re-read
                  * the data when it reallocs space.  Sigh, if only there was
                  * a way to tell seq_file how big the buf should be in the
@@ -2265,38 +2302,42 @@ static int changelog_show_cb(struct llog_handle *llh, struct llog_rec_hdr *hdr,
                 /* Stop at some point with a reasonable seq_file buffer size.
                  * Start from here the next time.
                  */
-                csi->csi_endrec = rec->cr_index - 1;
+                csi->csi_endrec = rec->cr.cr_index - 1;
                 csi->csi_startcat = llh->lgh_hdr->llh_cat_idx;
                 csi->csi_startidx = rec->cr_hdr.lrh_index - 1;
                 csi->csi_wrote = 0;
                 RETURN(LLOG_PROC_BREAK);
         }
 
-        rc = seq_printf(seq, LPU64" %02d%-5s "LPU64" 0x%x t="DFID,
-                        rec->cr_index, rec->cr_type,
-                        changelog_str[rec->cr_type], rec->cr_time,
-                        rec->cr_flags & CLF_FLAGMASK, PFID(&rec->cr_tfid));
+        CDEBUG(D_CHANGELOG, LPU64" %02d%-5s "LPU64" 0x%x t="DFID" p="DFID
+               " %.*s\n", rec->cr.cr_index, rec->cr.cr_type,
+               changelog_type2str(rec->cr.cr_type), rec->cr.cr_time,
+               rec->cr.cr_flags & CLF_FLAGMASK,
+               PFID(&rec->cr.cr_tfid), PFID(&rec->cr.cr_pfid),
+               rec->cr.cr_namelen, rec->cr.cr_name);
 
-        if (rec->cr_namelen)
-                /* namespace rec includes parent and filename */
-                rc += seq_printf(seq, " p="DFID" %.*s\n", PFID(&rec->cr_pfid),
-                                 rec->cr_namelen, rec->cr_name);
-        else
-                rc += seq_puts(seq, "\n");
+        cnt = sizeof(rec->cr) + rec->cr.cr_namelen;
+        ptr = (char *)(&rec->cr);
+        CDEBUG(D_CHANGELOG, "packed rec %d starting at %p\n", cnt, ptr);
+        rc = 0;
+        while ((cnt-- > 0) && (rc == 0)) {
+                rc = seq_putc(seq, *ptr);
+                ptr++;
+        }
 
         if (rc < 0) {
                 /* Ran out of room in the seq buffer. seq_read will dump
                  * the whole buffer and re-seq_start with a larger one;
                  * no point in continuing the llog_process */
                 CDEBUG(D_CHANGELOG, "rec="LPU64" overflow "LPU64"<-"LPU64"\n",
-                       rec->cr_index, csi->csi_startrec, csi->csi_endrec);
+                       rec->cr.cr_index, csi->csi_startrec, csi->csi_endrec);
                 csi->csi_endrec = csi->csi_startrec - 1;
                 csi->csi_wrote = 0;
                 RETURN(LLOG_PROC_BREAK);
         }
 
         csi->csi_wrote++;
-        csi->csi_endrec = rec->cr_index;
+        csi->csi_endrec = rec->cr.cr_index;
 
         RETURN(0);
 }
@@ -2519,6 +2560,8 @@ EXPORT_SYMBOL(lprocfs_rd_kbytesfree);
 EXPORT_SYMBOL(lprocfs_rd_kbytesavail);
 EXPORT_SYMBOL(lprocfs_rd_filestotal);
 EXPORT_SYMBOL(lprocfs_rd_filesfree);
+EXPORT_SYMBOL(lprocfs_rd_quota_resend_count);
+EXPORT_SYMBOL(lprocfs_wr_quota_resend_count);
 
 EXPORT_SYMBOL(lprocfs_write_helper);
 EXPORT_SYMBOL(lprocfs_write_frac_helper);

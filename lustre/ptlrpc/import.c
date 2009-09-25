@@ -293,11 +293,16 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                 /* Calculate max timeout for waiting on rpcs to error
                  * out. Use obd_timeout if calculated value is smaller
                  * than it. */
-                timeout = ptlrpc_inflight_timeout(imp);
-                timeout += timeout / 3;
+                if (!OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK)) {
+                        timeout = ptlrpc_inflight_timeout(imp);
+                        timeout += timeout / 3;
 
-                if (timeout == 0)
-                        timeout = obd_timeout;
+                        if (timeout == 0)
+                                timeout = obd_timeout;
+                } else {
+                        /* decrease the interval to increase race condition */
+                        timeout = 1;
+                }
 
                 CDEBUG(D_RPCTRACE,"Sleeping %d sec for inflight to error out\n",
                        timeout);
@@ -307,7 +312,8 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                  * have been locally cancelled by ptlrpc_abort_inflight. */
                 lwi = LWI_TIMEOUT_INTERVAL(
                         cfs_timeout_cap(cfs_time_seconds(timeout)),
-                        cfs_time_seconds(1), NULL, NULL);
+                        (timeout > 1)?cfs_time_seconds(1):cfs_time_seconds(1)/2,
+                        NULL, NULL);
                 rc = l_wait_event(imp->imp_recovery_waitq,
                                 (atomic_read(&imp->imp_inflight) == 0), &lwi);
                 if (rc) {
@@ -317,31 +323,40 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                                cli_tgt, rc, atomic_read(&imp->imp_inflight));
 
                         spin_lock(&imp->imp_lock);
-                        list_for_each_safe(tmp, n, &imp->imp_sending_list) {
-                                req = list_entry(tmp, struct ptlrpc_request,
-                                                 rq_list);
-                                DEBUG_REQ(D_ERROR, req,"still on sending list");
-                        }
-                        list_for_each_safe(tmp, n, &imp->imp_delayed_list) {
-                                req = list_entry(tmp, struct ptlrpc_request,
-                                                 rq_list);
-                                DEBUG_REQ(D_ERROR, req,"still on delayed list");
-                        }
+                        if (atomic_read(&imp->imp_inflight) == 0) {
+                                int count = atomic_read(&imp->imp_unregistering);
 
-                        if (atomic_read(&imp->imp_unregistering) == 0) {
-                                /* We know that only "unregistering" rpcs may
-                                 * still survive in sending or delaying lists
-                                 * (They are waiting for long reply unlink in
+                                /* We know that "unregistering" rpcs only can
+                                 * survive in sending or delaying lists (they
+                                 * maybe waiting for long reply unlink in
                                  * sluggish nets). Let's check this. If there
-                                 * is no unregistering and inflight != 0 this
+                                 * is no inflight and unregistering != 0, this
                                  * is bug. */
-                                LASSERT(atomic_read(&imp->imp_inflight) == 0);
+                                LASSERTF(count == 0, "Some RPCs are still "
+                                         "unregistering: %d\n", count);
 
                                 /* Let's save one loop as soon as inflight have
                                  * dropped to zero. No new inflights possible at
                                  * this point. */
                                 rc = 0;
                         } else {
+                                list_for_each_safe(tmp, n,
+                                                   &imp->imp_sending_list) {
+                                        req = list_entry(tmp,
+                                                         struct ptlrpc_request,
+                                                         rq_list);
+                                        DEBUG_REQ(D_ERROR, req,
+                                                  "still on sending list");
+                                }
+                                list_for_each_safe(tmp, n,
+                                                   &imp->imp_delayed_list) {
+                                        req = list_entry(tmp,
+                                                         struct ptlrpc_request,
+                                                         rq_list);
+                                        DEBUG_REQ(D_ERROR, req,
+                                                  "still on delayed list");
+                                }
+
                                 CERROR("%s: RPCs in \"%s\" phase found (%d). "
                                        "Network is sluggish? Waiting them "
                                        "to error out.\n", cli_tgt,
@@ -463,7 +478,7 @@ static int import_select_connection(struct obd_import *imp)
                         continue;
                 }
 
-                /* If we have not tried this connection since the
+                /* If we have not tried this connection since
                    the last successful attempt, go with this one */
                 if ((conn->oic_last_attempt == 0) ||
                     cfs_time_beforeq_64(conn->oic_last_attempt,
@@ -751,7 +766,7 @@ static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
                 wake_pinger = 1;
         }
 #else
-        /* liblustre has no pinger thead, so we wakup pinger anyway */
+        /* liblustre has no pinger thread, so we wakeup pinger anyway */
         wake_pinger = 1;
 #endif
 
@@ -1055,7 +1070,7 @@ finish:
 
                 /* Reset ns_connect_flags only for initial connect. It might be
                  * changed in while using FS and if we reset it in reconnect
-                 * this leads to lossing user settings done before such as
+                 * this leads to losing user settings done before such as
                  * disable lru_resize, etc. */
                 if (old_connect_flags != exp->exp_connect_flags ||
                     aa->pcaa_initial_connect) {
@@ -1215,7 +1230,7 @@ static int ptlrpc_invalidate_import_thread(void *data)
 
         ENTRY;
 
-        ptlrpc_daemonize("ll_imp_inval");
+        cfs_daemonize_ctxt("ll_imp_inval");
 
         CDEBUG(D_HA, "thread invalidate import %s to %s@%s\n",
                imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),
@@ -1262,7 +1277,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 #ifdef __KERNEL__
                 /* bug 17802:  XXX client_disconnect_export vs connect request
                  * race. if client will evicted at this time, we start
-                 * invalidate thread without referece to import and import can
+                 * invalidate thread without reference to import and import can
                  * be freed at same time. */
                 class_import_get(imp);
                 rc = cfs_kernel_thread(ptlrpc_invalidate_import_thread, imp,

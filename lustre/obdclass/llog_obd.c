@@ -178,6 +178,7 @@ int llog_setup_named(struct obd_device *obd,  struct obd_llog_group *olg,
         ctxt->loc_logops = op;
         sema_init(&ctxt->loc_sem, 1);
         ctxt->loc_exp = class_export_get(disk_obd->obd_self_export);
+        ctxt->loc_flags = LLOG_CTXT_FLAG_UNINITIALIZED;
 
         rc = llog_group_set_ctxt(olg, ctxt, index);
         if (rc) {
@@ -185,7 +186,7 @@ int llog_setup_named(struct obd_device *obd,  struct obd_llog_group *olg,
                 if (rc == -EEXIST) {
                         ctxt = llog_group_get_ctxt(olg, index);
                         if (ctxt) {
-                                /* 
+                                /*
                                  * mds_lov_update_desc() might call here multiple
                                  * times. So if the llog is already set up then
                                  * don't to do it again. 
@@ -215,6 +216,10 @@ int llog_setup_named(struct obd_device *obd,  struct obd_llog_group *olg,
                 CERROR("obd %s ctxt %d lop_setup=%p failed %d\n",
                        obd->obd_name, index, op->lop_setup, rc);
                 llog_ctxt_put(ctxt);
+        } else {
+                CDEBUG(D_CONFIG, "obd %s ctxt %d is initialized\n",
+                       obd->obd_name, index);
+                ctxt->loc_flags &= ~LLOG_CTXT_FLAG_UNINITIALIZED;
         }
 
         RETURN(rc);
@@ -255,6 +260,10 @@ int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                 //CERROR("No ctxt\n");
                 RETURN(-ENODEV);
         }
+
+        if (ctxt->loc_flags & LLOG_CTXT_FLAG_UNINITIALIZED)
+                RETURN(-ENXIO);
+
 
         CTXT_CHECK_OP(ctxt, add, -EOPNOTSUPP);
         raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
@@ -435,12 +444,13 @@ int llog_obd_origin_add(struct llog_ctxt *ctxt,
         cathandle = ctxt->loc_handle;
         LASSERT(cathandle != NULL);
         rc = llog_cat_add_rec(cathandle, rec, logcookies, NULL);
-        if ((rc < 0) || (!logcookies && rc))
+        if (rc != 1)
                 CERROR("write one catalog record failed: %d\n", rc);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_obd_origin_add);
 
+#if 0
 int llog_cat_initialize(struct obd_device *obd, struct obd_llog_group *olg,
                         int idx, struct obd_uuid *uuid)
 {
@@ -483,17 +493,17 @@ int llog_cat_initialize(struct obd_device *obd, struct obd_llog_group *olg,
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_initialize);
+#endif
 
 int obd_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                  struct obd_device *disk_obd, int count,
-                  struct llog_catid *logid, struct obd_uuid *uuid)
+                  struct obd_device *disk_obd, int *index)
 {
         int rc;
         ENTRY;
         OBD_CHECK_DT_OP(obd, llog_init, 0);
         OBD_COUNTER_INCREMENT(obd, llog_init);
 
-        rc = OBP(obd, llog_init)(obd, olg, disk_obd, count, logid, uuid);
+        rc = OBP(obd, llog_init)(obd, olg, disk_obd, index);
         RETURN(rc);
 }
 EXPORT_SYMBOL(obd_llog_init);

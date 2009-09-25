@@ -172,7 +172,7 @@ static int sec_gc_main(void *arg)
         struct ptlrpc_thread *thread = (struct ptlrpc_thread *) arg;
         struct l_wait_info    lwi;
 
-        cfs_daemonize("sptlrpc_gc");
+        cfs_daemonize_ctxt("sptlrpc_gc");
 
         /* Record that the thread is running */
         thread->t_flags = SVC_RUNNING;

@@ -123,7 +123,6 @@ extern struct lu_context_key ccc_session_key;
 struct ccc_thread_info {
         struct cl_lock_descr cti_descr;
         struct cl_io         cti_io;
-        struct cl_sync_io    cti_sync_io;
         struct cl_attr       cti_attr;
 };
 
@@ -209,7 +208,6 @@ struct ccc_page {
         struct list_head     cpg_pending_linkage;
         /** VM page */
         cfs_page_t          *cpg_page;
-        struct cl_sync_io   *cpg_sync_io;
         /**
          * checksum for paranoid I/O debugging enabled by
          * ENABLE_LLITE_CHECKSUM configuration option.
@@ -294,9 +292,9 @@ int ccc_page_is_under_lock(const struct lu_env *env,
                            const struct cl_page_slice *slice, struct cl_io *io);
 int ccc_fail(const struct lu_env *env, const struct cl_page_slice *slice);
 void ccc_transient_page_verify(const struct cl_page *page);
-void ccc_transient_page_own(const struct lu_env *env,
+int  ccc_transient_page_own(const struct lu_env *env,
                             const struct cl_page_slice *slice,
-                            struct cl_io *io);
+                            struct cl_io *io, int nonblock);
 void ccc_transient_page_assume(const struct lu_env *env,
                                const struct cl_page_slice *slice,
                                struct cl_io *io);

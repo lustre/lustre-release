@@ -78,7 +78,7 @@ lst add_test --batch bulk_rw --from writers --to servers \
 # start running
 lst run bulk_rw
 # display server stats for 30 seconds
-lst stat servers & sleep 30; kill $?
+lst stat servers & sleep 30; kill $!
 # tear down
 lst end_session
 .fi

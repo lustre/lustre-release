@@ -150,7 +150,7 @@ int ctx_init_pack_request(struct obd_import *imp,
 }
 
 static
-int ctx_init_parse_reply(struct lustre_msg *msg,
+int ctx_init_parse_reply(struct lustre_msg *msg, int swabbed,
                          char __user *outbuf, long outlen)
 {
         struct gss_rep_header   *ghdr;
@@ -162,7 +162,7 @@ int ctx_init_parse_reply(struct lustre_msg *msg,
                 return -EPROTO;
         }
 
-        ghdr = (struct gss_rep_header *) gss_swab_header(msg, 0);
+        ghdr = (struct gss_rep_header *) gss_swab_header(msg, 0, swabbed);
         if (ghdr == NULL) {
                 CERROR("unable to extract gss reply header\n");
                 return -EPROTO;
@@ -356,6 +356,7 @@ int gss_do_ctx_init_rpc(__user char *buffer, unsigned long count)
 
         LASSERT(req->rq_repdata);
         lsize = ctx_init_parse_reply(req->rq_repdata,
+                                     ptlrpc_rep_need_swab(req),
                                      param.reply_buf, param.reply_buf_size);
         if (lsize < 0) {
                 param.status = (int) lsize;

@@ -96,16 +96,19 @@ static int filter_preprw_write(const struct lu_env *env, struct obd_export *exp,
         unsigned long used = 0, ungranted = 0;
         obd_size left;
         struct filter_object *fo;
-        int i, j, rc = 0;
+        int i, j, k, rc = 0;
 
         ENTRY;
         LASSERT(env != NULL);
+        LASSERT(objcount == 1);
 
         fo = filter_object_find(env, ofd, fid);
         if (IS_ERR(fo))
                 RETURN(PTR_ERR(fo));
         LASSERT(fo != NULL);
-        LASSERT(filter_object_exists(fo));
+
+        if (!filter_object_exists(fo))
+                GOTO(out, rc = -ENOENT);
 
         /* parse remote buffers to local buffers and prepare the latter */
         for (i = 0, j = 0; i < obj->ioo_bufcnt; i++) {
@@ -115,6 +118,8 @@ static int filter_preprw_write(const struct lu_env *env, struct obd_export *exp,
                 LASSERT(rc > 0);
                 LASSERT(rc <= PTLRPC_MAX_BRW_PAGES);
                 /* correct index for local buffers to continue with */
+                for (k = 0; k < rc; k++)
+                        res[j+k].flags = nb[i].flags;
                 j += rc;
                 LASSERT(j <= PTLRPC_MAX_BRW_PAGES);
         }
@@ -125,8 +130,8 @@ static int filter_preprw_write(const struct lu_env *env, struct obd_export *exp,
         filter_grant_incoming(env, exp, oa);
         left = filter_grant_space_left(env, exp);
 
-        rc = filter_grant_check(env, exp, oa, objcount, obj, nb,
-                                res, &left, &used, &ungranted);
+        rc = filter_grant_check(env, exp, oa, res, *nr_local,
+                                &left, &used, &ungranted);
 
         /* XXX: how do we calculate used ? */
 
@@ -142,6 +147,7 @@ static int filter_preprw_write(const struct lu_env *env, struct obd_export *exp,
 
         rc = dt_write_prep(env, filter_object_child(fo), res, *nr_local, &used);
 
+out:
         filter_object_put(env, fo);
         RETURN(rc);
 }

@@ -410,8 +410,7 @@ struct ost_filterdata {
         __u32  ofd_epoch;
 };
 int filter_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                     struct obd_device *tgt, int count,
-                     struct llog_catid *catid, struct obd_uuid *uuid);
+                     struct obd_device *tgt, int *idx);
 int filter_llog_finish(struct obd_device *obd, int count);
 int filter_log_sz_change(struct llog_handle *cathandle,
                          struct ll_fid *mds_fid,
@@ -499,8 +498,7 @@ obd_size filter_grant_space_left(const struct lu_env *env,
 int filter_grant_client_calc(struct obd_export *exp, obd_size *left,
                              unsigned long *used, unsigned long *ungranted);
 int filter_grant_check(const struct lu_env *env, struct obd_export *exp, 
-                       struct obdo *oa, int objcount, struct obd_ioobj *objs,
-                       struct niobuf_remote *rnb, struct niobuf_local *lnb,
+                       struct obdo *oa, struct niobuf_local *lnb, int nrpages,
                        obd_size *left, unsigned long *used, unsigned long *ungranted);
 long filter_grant(const struct lu_env *env, struct obd_export *exp,
                   obd_size current_grant, obd_size want,

@@ -533,7 +533,7 @@ int mds_quota_adjust(struct obd_device *obd, const unsigned int qcids[],
         }
 
         if (rc2)
-                CDEBUG(rc2 == QUOTA_REQ_RETURNED ? D_QUOTA: D_ERROR,
+                CDEBUG(D_QUOTA,
                        "mds adjust qunit %ssuccessfully! (opc:%d rc:%d)\n",
                        rc2 == QUOTA_REQ_RETURNED ? "" : "un", opc, rc2);
         RETURN(0);
@@ -569,9 +569,9 @@ int filter_quota_adjust(struct obd_device *obd, const unsigned int qcids[],
         if (rc || rc2) {
                 if (!rc)
                         rc = rc2;
-                CDEBUG(rc == QUOTA_REQ_RETURNED ? D_QUOTA: D_ERROR,
+                CDEBUG(D_QUOTA,
                        "filter adjust qunit %ssuccessfully! (opc:%d rc%d)\n",
-                       QUOTA_REQ_RETURNED ? "" : "un", opc, rc);
+                       rc == QUOTA_REQ_RETURNED ? "" : "un", opc, rc);
         }
 
         RETURN(0);
@@ -854,7 +854,13 @@ int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
                 RETURN(-EINVAL);
 
         down(&obt->obt_quotachecking);
-        LASSERT(!obt->obt_qctxt.lqc_immutable);
+        if (obt->obt_qctxt.lqc_immutable) {
+                LCONSOLE_ERROR("Failed to turn Quota on, immutable mode "
+                               "(is SOM enabled?)\n");
+                up(&obt->obt_quotachecking);
+                RETURN(-ECANCELED);
+        }
+
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         down(&mds->mds_qonoff_sem);
         rc2 = mds_admin_quota_on(obd, oqctl);
@@ -866,6 +872,8 @@ int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
         rc1 = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
         if (!rc1) {
                 qctxt->lqc_flags |= UGQUOTA2LQC(oqctl->qc_type);
+                /* when quotaon, create lqs for every quota uid/gid b=18574 */
+                build_lqs(obd);
         } else if (rc1 == -EBUSY && quota_is_on(qctxt, oqctl)) {
                 CWARN("mds local quota[%d] is on already\n", oqctl->qc_type);
                 rc1 = -EALREADY;
@@ -893,6 +901,7 @@ int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
                 }
                 oqctl->qc_cmd = Q_QUOTAON;
         }
+
         EXIT;
 
 out:
@@ -902,7 +911,8 @@ out:
         return rc ? : (rc1 ? : rc2);
 }
 
-int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
+/* with obt->obt_quotachecking held */
+int do_mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct obd_device_target *obt = &obd->u.obt;
@@ -910,6 +920,8 @@ int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
         struct lvfs_run_ctxt saved;
         int rc = 0, rc1 = 0, rc2 = 0, imm;
         ENTRY;
+
+        LASSERT_SEM_LOCKED(&obt->obt_quotachecking);
 
         imm = oqctl->qc_type & IMMQUOTA;
         oqctl->qc_type &= ~IMMQUOTA;
@@ -919,7 +931,6 @@ int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
             oqctl->qc_type != UGQUOTA)
                 RETURN(-EINVAL);
 
-        down(&obt->obt_quotachecking);
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         down(&mds->mds_qonoff_sem);
         /* close admin quota files */
@@ -968,8 +979,19 @@ int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
 out:
         up(&mds->mds_qonoff_sem);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        up(&obt->obt_quotachecking);
         return rc ? : (rc1 ? : rc2);
+}
+
+int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
+{
+        struct obd_device_target *obt = &obd->u.obt;
+        int rc;
+        ENTRY;
+
+        down(&obt->obt_quotachecking);
+        rc = do_mds_quota_off(obd, oqctl);
+        up(&obt->obt_quotachecking);
+        RETURN(rc);
 }
 
 int mds_set_dqinfo(struct obd_device *obd, struct obd_quotactl *oqctl)
@@ -1554,13 +1576,14 @@ int mds_get_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
         up(&dquot->dq_sem);
 
         lustre_dqput(dquot);
+        up(&mds->mds_qonoff_sem);
 
         /* the usages in admin quota file is inaccurate */
         dqblk->dqb_curinodes = 0;
         dqblk->dqb_curspace = 0;
         rc = mds_get_space(obd, oqctl);
         EXIT;
-
+        return rc;
 out:
         up(&mds->mds_qonoff_sem);
         return rc;
@@ -1669,7 +1692,7 @@ static int qmaster_recovery_main(void *arg)
         unsigned short type;
         ENTRY;
 
-        ptlrpc_daemonize("qmaster_recovd");
+        cfs_daemonize_ctxt("qmaster_recovd");
 
         /* for mds */
         class_incref(obd, "qmaster_recovd_mds", obd);

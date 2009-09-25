@@ -113,10 +113,10 @@ void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
                 obd_size left_space = filter_grant_space_left(exp);
                 struct filter_obd *filter = &exp->exp_obd->u.filter;
 
-                /*Only if left_space < fo_tot_clients * 32M, 
+                /*Only if left_space < fo_tot_clients * 32M,
                  *then the grant space could be shrinked */
-                if (left_space < filter->fo_tot_granted_clients * 
-                                 FILTER_GRANT_SHRINK_LIMIT) { 
+                if (left_space < filter->fo_tot_granted_clients *
+                                 FILTER_GRANT_SHRINK_LIMIT) {
                         fed->fed_grant -= oa->o_grant;
                         filter->fo_tot_granted -= oa->o_grant;
                         CDEBUG(D_CACHE, "%s: cli %s/%p shrink "LPU64
@@ -264,20 +264,26 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
 /*
  * the routine is used to request pages from pagecache
  *
- * use GFP_NOFS not allowing to enter FS as the client can run on this node
- * and we might end waiting on a page he sent in the request we're serving.
- *
+ * use GFP_NOFS for requests from a local client not allowing to enter FS
+ * as we might end up waiting on a page he sent in the request we're serving.
  * use __GFP_HIGHMEM so that the pages can use all of the available memory
  * on 32-bit machines
+ * use more agressive GFP_HIGHUSER flags from non-local clients to be able to
+ * generate more memory pressure, but at the same time use __GFP_NOMEMALLOC
+ * in order not to exhaust emergency reserves.
+ *
+ * See Bug 19529 and Bug 19917 for details.
  */
 static struct page *filter_get_page(struct obd_device *obd,
                                     struct inode *inode,
-                                    obd_off offset)
+                                    obd_off offset,
+                                    int localreq)
 {
         struct page *page;
 
         page = find_or_create_page(inode->i_mapping, offset >> CFS_PAGE_SHIFT,
-                                   GFP_NOFS | __GFP_HIGHMEM);
+                                   (localreq ? (GFP_NOFS | __GFP_HIGHMEM)
+                                             : (GFP_HIGHUSER | __GFP_NOMEMALLOC)));
         if (unlikely(page == NULL))
                 lprocfs_counter_add(obd->obd_stats, LPROC_FILTER_NO_PAGE, 1);
 
@@ -404,6 +410,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         int rc = 0, i, tot_bytes = 0;
         unsigned long now = jiffies;
         long timediff;
+        loff_t isize;
         ENTRY;
 
         /* We are currently not supporting multi-obj BRW_READ RPCS at all.
@@ -412,7 +419,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         LASSERTF(objcount == 1, "%d\n", objcount);
         LASSERTF(obj->ioo_bufcnt > 0, "%d\n", obj->ioo_bufcnt);
 
-        rc = filter_auth_capa(exp, NULL, obdo_mdsno(oa), capa,
+        LASSERT(oa->o_valid & OBD_MD_FLGROUP);
+        rc = filter_auth_capa(exp, NULL, oa->o_gr, capa,
                               CAPA_OPC_OSS_READ);
         if (rc)
                 RETURN(rc);
@@ -439,6 +447,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         }
 
         inode = dentry->d_inode;
+        isize = i_size_read(inode);
 
         obdo_to_inode(inode, oa, OBD_MD_FLATIME);
 
@@ -454,19 +463,19 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
                 lnb->dentry = dentry;
 
-                if (i_size_read(inode) <= lnb->offset)
+                if (isize <= lnb->offset)
                         /* If there's no more data, abort early.  lnb->rc == 0,
                          * so it's easy to detect later. */
                         break;
 
-                lnb->page = filter_get_page(obd, inode, lnb->offset);
+                lnb->page = filter_get_page(obd, inode, lnb->offset, 0);
                 if (lnb->page == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
 
                 lprocfs_counter_add(obd->obd_stats, LPROC_FILTER_CACHE_ACCESS, 1);
 
-                if (i_size_read(inode) < lnb->offset + lnb->len - 1)
-                        lnb->rc = i_size_read(inode) - lnb->offset;
+                if (isize < lnb->offset + lnb->len - 1)
+                        lnb->rc = isize - lnb->offset;
                 else
                         lnb->rc = lnb->len;
 
@@ -673,15 +682,20 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         void *iobuf;
         obd_size left;
         unsigned long now = jiffies, timediff;
-        int rc = 0, i, tot_bytes = 0, cleanup_phase = 0;
+        int rc = 0, i, tot_bytes = 0, cleanup_phase = 0, localreq = 0;
         ENTRY;
         LASSERT(objcount == 1);
         LASSERT(obj->ioo_bufcnt > 0);
 
-        rc = filter_auth_capa(exp, NULL, obdo_mdsno(oa), capa,
+        LASSERT(oa->o_valid & OBD_MD_FLGROUP);
+        rc = filter_auth_capa(exp, NULL, oa->o_gr, capa,
                               CAPA_OPC_OSS_WRITE);
         if (rc)
                 RETURN(rc);
+
+        if (exp->exp_connection &&
+            exp->exp_connection->c_peer.nid == exp->exp_connection->c_self)
+                localreq = 1;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         iobuf = filter_iobuf_get(&obd->u.filter, oti);
@@ -703,7 +717,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
         if (oa->o_valid & (OBD_MD_FLUID | OBD_MD_FLGID) &&
             dentry->d_inode->i_mode & (S_ISUID | S_ISGID)) {
-                rc = filter_capa_fixoa(exp, oa, obdo_mdsno(oa), capa);
+                rc = filter_capa_fixoa(exp, oa, oa->o_gr, capa);
                 if (rc)
                         GOTO(cleanup, rc);
         }
@@ -768,7 +782,8 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                  * needs to keep the pages all aligned properly. */
                 lnb->dentry = dentry;
 
-                lnb->page = filter_get_page(obd, dentry->d_inode, lnb->offset);
+                lnb->page = filter_get_page(obd, dentry->d_inode, lnb->offset,
+                                            localreq);
                 if (lnb->page == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
 
@@ -780,8 +795,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                  * be able to proceed in filter_commitrw_write(). thus let's
                  * just wait for writeout completion, should be rare enough.
                  * -bzzz */
-                if (obd->u.filter.fo_writethrough_cache)
-                        wait_on_page_writeback(lnb->page);
+                wait_on_page_writeback(lnb->page);
                 BUG_ON(PageWriteback(lnb->page));
 
                 /* If the filter writes a partial page, then has the file

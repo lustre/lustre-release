@@ -38,11 +38,13 @@
  *   Author: Nikita Danilov <nikita.danilov@sun.com>
  */
 
-/** \addtogroup osc osc @{ */
-
 #define DEBUG_SUBSYSTEM S_OSC
 
 #include "osc_cl_internal.h"
+
+/** \addtogroup osc 
+ *  @{ 
+ */
 
 /*****************************************************************************
  *
@@ -149,8 +151,11 @@ static int osc_io_submit(const struct lu_env *env,
                 osc = cl2osc(opg->ops_cl.cpl_obj);
                 exp = osc_export(osc);
 
-                if (priority > CRP_NORMAL)
+                if (priority > CRP_NORMAL) {
+                        spin_lock(&oap->oap_lock);
                         oap->oap_async_flags |= ASYNC_HP;
+                        spin_unlock(&oap->oap_lock);
+                }
                 /*
                  * This can be checked without cli->cl_loi_list_lock, because
                  * ->oap_*_item are always manipulated when the page is owned.
@@ -191,6 +196,7 @@ static int osc_io_submit(const struct lu_env *env,
                                  */
                                 LASSERT(result == 0);
                         }
+                        opg->ops_submit_time = cfs_time_current();
                 } else {
                         LASSERT(result < 0);
                         if (result != -EALREADY)
@@ -405,7 +411,7 @@ static void osc_trunc_check(const struct lu_env *env, struct cl_io *io,
          * XXX this is quite expensive check.
          */
         cl_page_list_init(list);
-        cl_page_gang_lookup(env, clob, io, start + partial, CL_PAGE_EOF, list);
+        cl_page_gang_lookup(env, clob, io, start + partial, CL_PAGE_EOF, list, 0);
 
         cl_page_list_for_each(page, list)
                 CL_PAGE_DEBUG(D_ERROR, env, page, "exists %lu\n", start);

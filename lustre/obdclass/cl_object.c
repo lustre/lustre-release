@@ -60,6 +60,7 @@
 #include <obd_support.h>
 #include <lustre_fid.h>
 #include <libcfs/list.h>
+#include <class_hash.h> /* for lustre_hash stuff */
 /* lu_time_global_{init,fini}() */
 #include <lu_time.h>
 
@@ -500,13 +501,6 @@ EXPORT_SYMBOL(cl_site_stats_print);
  *
  */
 
-/*
- * TBD: Description.
- *
- * XXX: this assumes that re-entrant file system calls (e.g., ->writepage())
- * do not modify already existing current->journal_info.
- */
-
 static CFS_LIST_HEAD(cl_envs);
 static unsigned cl_envs_cached_nr  = 0;
 static unsigned cl_envs_cached_max = 128; /* XXX: prototype: arbitrary limit
@@ -517,6 +511,15 @@ struct cl_env {
         void             *ce_magic;
         struct lu_env     ce_lu;
         struct lu_context ce_ses;
+        /**
+         * hash entry for lustre_hash_t
+         */
+        struct hlist_node ce_node;
+        /**
+         * Owner for the current cl_env, the key for lustre_hash.
+         * Now current thread pointer is stored.
+         */
+        void             *ce_owner;
         /*
          * Linkage into global list of all client environments. Used for
          * garbage collection.
@@ -526,13 +529,11 @@ struct cl_env {
          *
          */
         int               ce_ref;
-        void             *ce_prev;
         /*
          * Debugging field: address of the caller who made original
          * allocation.
          */
         void             *ce_debug;
-        void             *ce_owner;
 };
 
 #define CL_ENV_INC(counter) atomic_inc(&cl_env_stats.counter)
@@ -543,6 +544,83 @@ struct cl_env {
                 atomic_dec(&cl_env_stats.counter);                      \
         } while (0)
 
+/*****************************************************************************
+ * Routins to use lustre_hash functionality to bind the current thread
+ * to cl_env
+ */
+
+/** lustre hash to manage the cl_env for current thread */
+static lustre_hash_t *cl_env_hash;
+static void cl_env_init0(struct cl_env *cle, void *debug);
+
+static unsigned cl_env_hops_hash(lustre_hash_t *lh, void *key, unsigned mask)
+{
+#if BITS_PER_LONG == 64
+        return lh_u64_hash((__u64)key, mask);
+#else
+        return lh_u32_hash((__u32)key, mask);
+#endif
+}
+
+static void *cl_env_hops_obj(struct hlist_node *hn)
+{
+        struct cl_env *cle = hlist_entry(hn, struct cl_env, ce_node);
+        LASSERT(cle->ce_magic == &cl_env_init0);
+        return (void *)cle;
+}
+
+static int cl_env_hops_compare(void *key, struct hlist_node *hn)
+{
+        struct cl_env *cle = cl_env_hops_obj(hn);
+
+        LASSERT(cle->ce_owner != NULL);
+        return (key == cle->ce_owner);
+}
+
+static lustre_hash_ops_t cl_env_hops = {
+        .lh_hash    = cl_env_hops_hash,
+        .lh_compare = cl_env_hops_compare,
+        .lh_key     = cl_env_hops_obj,
+        .lh_get     = cl_env_hops_obj,
+        .lh_put     = cl_env_hops_obj,
+};
+
+static inline struct cl_env *cl_env_fetch(void)
+{
+        struct cl_env *cle;
+        cle = lustre_hash_lookup(cl_env_hash, cfs_current());
+        LASSERT(ergo(cle, cle->ce_magic == &cl_env_init0));
+        return cle;
+}
+
+static inline void cl_env_attach(struct cl_env *cle)
+{
+        if (cle) {
+                int rc;
+                LASSERT(cle->ce_owner == NULL);
+                cle->ce_owner = cfs_current();
+                rc = lustre_hash_add_unique(cl_env_hash, cle->ce_owner,
+                                            &cle->ce_node);
+                LASSERT(rc == 0);
+        }
+}
+
+static inline struct cl_env *cl_env_detach(struct cl_env *cle)
+{
+        if (cle == NULL)
+                cle = cl_env_fetch();
+        if (cle && cle->ce_owner) {
+                void *cookie;
+                LASSERT(cle->ce_owner == cfs_current());
+                cookie = lustre_hash_del(cl_env_hash, cle->ce_owner,
+                                         &cle->ce_node);
+                cle->ce_owner = NULL;
+                LASSERT(cookie == cle);
+        }
+        return cle;
+}
+/* ----------------------- hash routines end ---------------------------- */
+
 static void cl_env_init0(struct cl_env *cle, void *debug)
 {
         LASSERT(cle->ce_ref == 0);
@@ -550,10 +628,7 @@ static void cl_env_init0(struct cl_env *cle, void *debug)
         LASSERT(cle->ce_debug == NULL && cle->ce_owner == NULL);
 
         cle->ce_ref = 1;
-        cle->ce_prev = current->journal_info;
         cle->ce_debug = debug;
-        cle->ce_owner = current;
-        current->journal_info = cle;
         CL_ENV_INC(cs_busy);
 }
 
@@ -648,8 +723,8 @@ struct lu_env *cl_env_peek(int *refcheck)
         CLASSERT(offsetof(struct cl_env, ce_magic) == 0);
 
         env = NULL;
-        cle = current->journal_info;
-        if (cle != NULL && cle->ce_magic == &cl_env_init0) {
+        cle = cl_env_fetch();
+        if (cle != NULL) {
                 CL_ENV_INC(cs_hit);
                 env = &cle->ce_lu;
                 *refcheck = ++cle->ce_ref;
@@ -683,6 +758,7 @@ struct lu_env *cl_env_get(int *refcheck)
                         struct cl_env *cle;
 
                         cle = cl_env_container(env);
+                        cl_env_attach(cle);
                         *refcheck = cle->ce_ref;
                         CDEBUG(D_OTHER, "%i@%p\n", cle->ce_ref, cle);
                 }
@@ -715,6 +791,7 @@ EXPORT_SYMBOL(cl_env_alloc);
 
 static void cl_env_exit(struct cl_env *cle)
 {
+        LASSERT(cle->ce_owner == NULL);
         lu_context_exit(&cle->ce_lu.le_ctx);
         lu_context_exit(&cle->ce_ses);
 }
@@ -765,12 +842,8 @@ void cl_env_put(struct lu_env *env, int *refcheck)
         CDEBUG(D_OTHER, "%i@%p\n", cle->ce_ref, cle);
         if (--cle->ce_ref == 0) {
                 CL_ENV_DEC(cs_busy);
-                current->journal_info = cle->ce_prev;
-                LASSERT(cle->ce_prev == NULL ||
-                        cl_env_container(cle->ce_prev)->ce_magic !=
-                        &cl_env_init0);
+                cl_env_detach(cle);
                 cle->ce_debug = NULL;
-                cle->ce_owner = NULL;
                 cl_env_exit(cle);
                 /*
                  * Don't bother to take a lock here.
@@ -794,36 +867,21 @@ EXPORT_SYMBOL(cl_env_put);
 /**
  * Declares a point of re-entrancy.
  *
- * In Linux kernel environments are attached to the thread through
- * current->journal_info pointer that is used by other sub-systems also. When
- * lustre code is invoked in the situation where current->journal_info is
- * potentially already set, cl_env_reenter() is called to save
- * current->journal_info value, so that current->journal_info field can be
- * used to store pointer to the environment.
- *
  * \see cl_env_reexit()
  */
 void *cl_env_reenter(void)
 {
-        void *cookie;
-
-        cookie = current->journal_info;
-        current->journal_info = NULL;
-        CDEBUG(D_OTHER, "cookie: %p\n", cookie);
-        return cookie;
+        return cl_env_detach(NULL);
 }
 EXPORT_SYMBOL(cl_env_reenter);
 
 /**
  * Exits re-entrancy.
- *
- * This restores old value of current->journal_info that was saved by
- * cl_env_reenter().
  */
 void cl_env_reexit(void *cookie)
 {
-        current->journal_info = cookie;
-        CDEBUG(D_OTHER, "cookie: %p\n", cookie);
+        cl_env_detach(NULL);
+        cl_env_attach(cookie);
 }
 EXPORT_SYMBOL(cl_env_reexit);
 
@@ -838,10 +896,9 @@ void cl_env_implant(struct lu_env *env, int *refcheck)
 {
         struct cl_env *cle = cl_env_container(env);
 
-        LASSERT(current->journal_info == NULL);
         LASSERT(cle->ce_ref > 0);
 
-        current->journal_info = cle;
+        cl_env_attach(cle);
         cl_env_get(refcheck);
         CDEBUG(D_OTHER, "%i@%p\n", cle->ce_ref, cle);
 }
@@ -854,13 +911,12 @@ void cl_env_unplant(struct lu_env *env, int *refcheck)
 {
         struct cl_env *cle = cl_env_container(env);
 
-        LASSERT(cle == current->journal_info);
         LASSERT(cle->ce_ref > 1);
 
         CDEBUG(D_OTHER, "%i@%p\n", cle->ce_ref, cle);
 
+        cl_env_detach(cle);
         cl_env_put(env, refcheck);
-        current->journal_info = NULL;
 }
 EXPORT_SYMBOL(cl_env_unplant);
 
@@ -929,7 +985,6 @@ void cl_lvb2attr(struct cl_attr *attr, const struct ost_lvb *lvb)
         EXIT;
 }
 EXPORT_SYMBOL(cl_lvb2attr);
-
 
 /*****************************************************************************
  *
@@ -1065,6 +1120,10 @@ int cl_global_init(void)
 {
         int result;
 
+        cl_env_hash = lustre_hash_init("cl_env", 8, 10, &cl_env_hops, 0);
+        if (cl_env_hash == NULL)
+                return -ENOMEM;
+
         result = lu_kmem_init(cl_object_caches);
         if (result == 0) {
                 LU_CONTEXT_KEY_INIT(&cl_key);
@@ -1075,6 +1134,8 @@ int cl_global_init(void)
                                 result = cl_page_init();
                 }
         }
+        if (result)
+                lustre_hash_exit(cl_env_hash);
         return result;
 }
 
@@ -1087,4 +1148,5 @@ void cl_global_fini(void)
         cl_page_fini();
         lu_context_key_degister(&cl_key);
         lu_kmem_fini(cl_object_caches);
+        lustre_hash_exit(cl_env_hash);
 }

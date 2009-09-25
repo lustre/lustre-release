@@ -984,6 +984,9 @@ int krb5_encrypt_rawobjs(struct ll_crypto_cipher *tfm,
         RETURN(0);
 }
 
+/*
+ * if adj_nob != 0, we adjust desc->bd_nob to the actual cipher text size.
+ */
 static
 int krb5_encrypt_bulk(struct ll_crypto_cipher *tfm,
                       struct krb5_header *khdr,
@@ -1063,13 +1066,26 @@ int krb5_encrypt_bulk(struct ll_crypto_cipher *tfm,
 /*
  * desc->bd_nob_transferred is the size of cipher text received.
  * desc->bd_nob is the target size of plain text supposed to be.
+ *
+ * if adj_nob != 0, we adjust each page's kiov_len to the actual
+ * plain text size.
+ * - for client read: we don't know data size for each page, so
+ *   bd_iov[]->kiov_len is set to PAGE_SIZE, but actual data received might
+ *   be smaller, so we need to adjust it according to bd_enc_iov[]->kiov_len.
+ *   this means we DO NOT support the situation that server send an odd size
+ *   data in a page which is not the last one.
+ * - for server write: we knows exactly data size for each page being expected,
+ *   thus kiov_len is accurate already, so we should not adjust it at all.
+ *   and bd_enc_iov[]->kiov_len should be round_up(bd_iov[]->kiov_len) which
+ *   should have been done by prep_bulk().
  */
 static
 int krb5_decrypt_bulk(struct ll_crypto_cipher *tfm,
                       struct krb5_header *khdr,
                       struct ptlrpc_bulk_desc *desc,
                       rawobj_t *cipher,
-                      rawobj_t *plain)
+                      rawobj_t *plain,
+                      int adj_nob)
 {
         struct blkcipher_desc   ciph_desc;
         __u8                    local_iv[16] = {0};
@@ -1104,35 +1120,42 @@ int krb5_decrypt_bulk(struct ll_crypto_cipher *tfm,
                 return rc;
         }
 
-        /*
-         * decrypt clear pages. note the enc_iov is prepared by prep_bulk()
-         * which already done some sanity checkings.
-         *
-         * desc->bd_nob is the actual plain text size supposed to be
-         * transferred. desc->bd_nob_transferred is the actual cipher
-         * text received.
-         */
         for (i = 0; i < desc->bd_iov_count && ct_nob < desc->bd_nob_transferred;
              i++) {
+                if (desc->bd_enc_iov[i].kiov_offset % blocksize != 0 ||
+                    desc->bd_enc_iov[i].kiov_len % blocksize != 0) {
+                        CERROR("page %d: odd offset %u len %u, blocksize %d\n",
+                               i, desc->bd_enc_iov[i].kiov_offset,
+                               desc->bd_enc_iov[i].kiov_len, blocksize);
+                        return -EFAULT;
+                }
+
+                if (adj_nob) {
+                        if (ct_nob + desc->bd_enc_iov[i].kiov_len >
+                            desc->bd_nob_transferred)
+                                desc->bd_enc_iov[i].kiov_len =
+                                        desc->bd_nob_transferred - ct_nob;
+
+                        desc->bd_iov[i].kiov_len = desc->bd_enc_iov[i].kiov_len;
+                        if (pt_nob + desc->bd_enc_iov[i].kiov_len >desc->bd_nob)
+                                desc->bd_iov[i].kiov_len = desc->bd_nob -pt_nob;
+                } else {
+                        /* this should be guaranteed by LNET */
+                        LASSERT(ct_nob + desc->bd_enc_iov[i].kiov_len <=
+                                desc->bd_nob_transferred);
+                        LASSERT(desc->bd_iov[i].kiov_len <=
+                                desc->bd_enc_iov[i].kiov_len);
+                }
+
                 if (desc->bd_enc_iov[i].kiov_len == 0)
                         continue;
-
-                if (ct_nob + desc->bd_enc_iov[i].kiov_len >
-                    desc->bd_nob_transferred)
-                        desc->bd_enc_iov[i].kiov_len =
-                                desc->bd_nob_transferred - ct_nob;
-
-                desc->bd_iov[i].kiov_len = desc->bd_enc_iov[i].kiov_len;
-                if (pt_nob + desc->bd_enc_iov[i].kiov_len > desc->bd_nob)
-                        desc->bd_iov[i].kiov_len = desc->bd_nob - pt_nob;
 
                 src.page = desc->bd_enc_iov[i].kiov_page;
                 src.offset = desc->bd_enc_iov[i].kiov_offset;
                 src.length = desc->bd_enc_iov[i].kiov_len;
 
                 dst = src;
-
-                if (desc->bd_iov[i].kiov_offset % blocksize == 0)
+                if (desc->bd_iov[i].kiov_len % blocksize == 0)
                         dst.page = desc->bd_iov[i].kiov_page;
 
                 rc = ll_crypto_blkcipher_decrypt_iv(&ciph_desc, &dst, &src,
@@ -1142,7 +1165,7 @@ int krb5_decrypt_bulk(struct ll_crypto_cipher *tfm,
                         return rc;
                 }
 
-                if (desc->bd_iov[i].kiov_offset % blocksize) {
+                if (desc->bd_iov[i].kiov_len % blocksize != 0) {
                         memcpy(cfs_page_address(desc->bd_iov[i].kiov_page) +
                                desc->bd_iov[i].kiov_offset,
                                cfs_page_address(desc->bd_enc_iov[i].kiov_page) +
@@ -1153,6 +1176,23 @@ int krb5_decrypt_bulk(struct ll_crypto_cipher *tfm,
                 ct_nob += desc->bd_enc_iov[i].kiov_len;
                 pt_nob += desc->bd_iov[i].kiov_len;
         }
+
+        if (unlikely(ct_nob != desc->bd_nob_transferred)) {
+                CERROR("%d cipher text transferred but only %d decrypted\n",
+                       desc->bd_nob_transferred, ct_nob);
+                return -EFAULT;
+        }
+
+        if (unlikely(!adj_nob && pt_nob != desc->bd_nob)) {
+                CERROR("%d plain text expected but only %d received\n",
+                       desc->bd_nob, pt_nob);
+                return -EFAULT;
+        }
+
+        /* if needed, clear up the rest unused iovs */
+        if (adj_nob)
+                while (i < desc->bd_iov_count)
+                        desc->bd_iov[i++].kiov_len = 0;
 
         /* decrypt tail (krb5 header) */
         buf_to_sg(&src, cipher->data + blocksize, sizeof(*khdr));
@@ -1629,7 +1669,7 @@ out_free:
 static
 __u32 gss_unwrap_bulk_kerberos(struct gss_ctx *gctx,
                                struct ptlrpc_bulk_desc *desc,
-                               rawobj_t *token)
+                               rawobj_t *token, int adj_nob)
 {
         struct krb5_ctx     *kctx = gctx->internal_ctx_id;
         struct krb5_enctype *ke = &enctypes[kctx->kc_enctype];
@@ -1685,7 +1725,7 @@ __u32 gss_unwrap_bulk_kerberos(struct gss_ctx *gctx,
         plain.len = cipher.len;
 
         rc = krb5_decrypt_bulk(kctx->kc_keye.kb_tfm, khdr,
-                               desc, &cipher, &plain);
+                               desc, &cipher, &plain, adj_nob);
         if (rc)
                 return GSS_S_DEFECTIVE_TOKEN;
 

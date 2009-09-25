@@ -132,6 +132,7 @@ struct mdd_device {
         unsigned long                    mdd_atime_diff;
         struct mdd_object               *mdd_dot_lustre;
         struct mdd_dot_lustre_objs       mdd_dot_lustre_objs;
+        unsigned int                     mdd_sync_permission;
 };
 
 enum mod_flags {
@@ -183,7 +184,6 @@ struct mdd_thread_info {
         struct lu_name            mti_name;
         struct obdo               mti_oa;
         char                      mti_xattr_buf[LUSTRE_POSIX_ACL_MAX_SIZE];
-        struct lu_fid_pack        mti_pack;
         struct dt_allocation_hint mti_hint;
         struct lov_mds_md        *mti_max_lmm;
         int                       mti_max_lmm_size;
@@ -286,6 +286,8 @@ void mdd_pdo_write_unlock(const struct lu_env *env, struct mdd_object *obj,
 void mdd_pdo_read_unlock(const struct lu_env *env, struct mdd_object *obj,
                          struct dynlock_handle *dlh);
 /* mdd_dir.c */
+int mdd_is_subdir(const struct lu_env *env, struct md_object *mo,
+                  const struct lu_fid *fid, struct lu_fid *sfid);
 void __mdd_ref_add(const struct lu_env *env, struct mdd_object *obj,
                    struct thandle *handle);
 void __mdd_ref_del(const struct lu_env *env, struct mdd_object *obj,
@@ -551,15 +553,6 @@ static inline struct mdd_device *mdd_obj2mdd_dev(struct mdd_object *obj)
 static inline const struct lu_fid *mdo2fid(const struct mdd_object *obj)
 {
         return lu_object_fid(&obj->mod_obj.mo_lu);
-}
-
-static inline const struct dt_rec *__mdd_fid_rec(const struct lu_env *env,
-                                                 const struct lu_fid *fid)
-{
-        struct lu_fid_pack *pack = &mdd_env_info(env)->mti_pack;
-
-        fid_pack(pack, fid, &mdd_env_info(env)->mti_fid2);
-        return (const struct dt_rec *)pack;
 }
 
 static inline umode_t mdd_object_type(const struct mdd_object *obj)

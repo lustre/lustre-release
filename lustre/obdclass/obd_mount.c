@@ -1586,8 +1586,11 @@ static int ldd_parse(struct mconf_device *mdev, struct lustre_disk_data *ldd)
                         GOTO(out, rc = -EINVAL);
                 }
                 rc = 0;
-        } else if (rc >= 0)
+        } else if (rc >= 0) {
+                CERROR("disk data size does not match: see %d expect %Zd\n",
+                       rc, buf.lb_len);
                 rc = -EIO;
+        }
         lu_object_put(&env, &file->do_lu);
 out:
         lu_env_fini(&env);
@@ -1645,35 +1648,51 @@ static struct dt_device *server_kernel_mount(struct super_block *sb)
                 /* no configuration found, use disk label */
                 stop_temp_site(sb);
         } else {
-                LASSERT(rc == 0);
+                if (rc != 0)
+                        CERROR("Error reading disk data: %d\n", rc);
         }
 
         RETURN(lu2dt_dev(dev));
 }
 
+/* Wait here forever until the mount refcount is 0 before completing umount,
+ * else we risk dereferencing a null pointer.
+ * LNET may take e.g. 165s before killing zombies.
+ */
 static void server_wait_finished(struct vfsmount *mnt)
 {
-        wait_queue_head_t   waitq;
-        struct l_wait_info  lwi;
-        int                 retries = 330;
+       cfs_waitq_t             waitq;
+       int                     rc, waited = 0;
+       cfs_sigset_t            blocked;
 
-        return;
-        init_waitqueue_head(&waitq);
+       /* XXX XXX: disabled in b_hd_kdmu */
+       return;
 
-        while ((atomic_read(&mnt->mnt_count) > 1) && (retries > 0)) {
-                LCONSOLE_WARN("%s: Mount still busy with %d refs, waiting for "
-                              "%d secs...\n", mnt->mnt_devname,
-                              atomic_read(&mnt->mnt_count), retries);
+       cfs_waitq_init(&waitq);
 
-                /* Wait for a bit */
-                retries -= 5;
-                lwi = LWI_TIMEOUT(5 * HZ, NULL, NULL);
-                l_wait_event(waitq, 0, &lwi);
-        }
-        if (atomic_read(&mnt->mnt_count) > 1) {
-                CERROR("%s: Mount still busy (%d refs), giving up.\n",
-                       mnt->mnt_devname, atomic_read(&mnt->mnt_count));
-        }
+       while (cfs_atomic_read(&mnt->mnt_count) > 1) {
+               if (waited && (waited % 30 == 0))
+                       LCONSOLE_WARN("Mount still busy with %d refs after "
+                                      "%d secs.\n",
+                                      atomic_read(&mnt->mnt_count),
+                                      waited);
+               /* Cannot use l_event_wait() for an interruptible sleep. */
+               waited += 3;
+               blocked = l_w_e_set_sigs(sigmask(SIGKILL));
+               cfs_waitq_wait_event_interruptible_timeout(
+                       waitq,
+                       (cfs_atomic_read(&mnt->mnt_count) == 1),
+                       cfs_time_seconds(3),
+                       rc);
+               cfs_block_sigs(blocked);
+               if (rc < 0) {
+                       LCONSOLE_EMERG("Danger: interrupted umount %s with "
+                                      "%d refs!\n",
+                                      mnt->mnt_devname,
+                                      atomic_read(&mnt->mnt_count));
+                       break;
+               }
+       }
 }
 
 static void server_put_super(struct super_block *sb)

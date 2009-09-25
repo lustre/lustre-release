@@ -47,15 +47,22 @@
 
 /* struct rw_semaphore */
 #include <linux/rwsem.h>
-/* handle_t, journal_start(), journal_stop() */
-#include <linux/jbd.h>
-/* struct dx_hash_info */
-#include <linux/ldiskfs_fs.h>
 /* struct dentry */
 #include <linux/dcache.h>
-#include "osd_iam.h"
 /* struct dirent64 */
 #include <linux/dirent.h>
+
+#ifdef HAVE_EXT4_LDISKFS
+#include <ldiskfs/ldiskfs.h>
+#include <ldiskfs/ldiskfs_jbd2.h>
+#define osd_journal_callback_set(handle, func, jcb) jbd2_journal_callback_set(handle, func, jcb)
+#else
+#include <linux/jbd.h>
+#include <linux/ldiskfs_fs.h>
+#include <linux/ldiskfs_jbd.h>
+#define osd_journal_callback_set(handle, func, jcb) journal_callback_set(handle, func, jcb)
+#endif
+
 
 /* LUSTRE_OSD_NAME */
 #include <obd.h>
@@ -67,6 +74,7 @@
 
 #include <dt_object.h>
 #include "osd_oi.h"
+#include "osd_iam.h"
 
 struct inode;
 
@@ -232,6 +240,16 @@ struct osd_device {
         struct osd_compat_objid  *od_ost_map;
 };
 
+/**
+ * Storage representation for fids.
+ *
+ * Variable size, first byte contains the length of the whole record.
+ */
+struct osd_fid_pack {
+        unsigned char fp_len;
+        char fp_area[sizeof(struct lu_fid)];
+};
+
 struct osd_it_ea_dirent {
         __u64           oied_ino;
         __u64           oied_off;
@@ -310,8 +328,6 @@ struct osd_thread_info {
         struct lustre_capa_key oti_capa_key;
         struct lustre_capa     oti_capa;
 
-        struct lu_fid_pack     oti_pack;
-
         /**
          * following ipd and it structures are used for osd_index_iam_lookup()
          * these are defined separately as we might do index operation
@@ -361,6 +377,8 @@ struct osd_thread_info {
         /** used by compat stuff */
         struct inode           oti_inode;
         struct lu_env          oti_obj_delete_tx_env;
+#define OSD_FID_REC_SZ 32
+        char                   oti_fid_packed[OSD_FID_REC_SZ];
 };
 
 #ifdef LPROCFS

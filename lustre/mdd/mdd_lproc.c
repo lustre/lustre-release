@@ -155,15 +155,6 @@ static int lprocfs_rd_atime_diff(char *page, char **start, off_t off,
 
 
 /**** changelogs ****/
-DECLARE_CHANGELOG_NAMES;
-
-const char *changelog_bit2str(int bit)
-{
-        if (bit < CL_LAST)
-                return changelog_str[bit];
-        return NULL;
-}
-
 static int lprocfs_rd_changelog_mask(char *page, char **start, off_t off,
                                      int count, int *eof, void *data)
 {
@@ -174,7 +165,7 @@ static int lprocfs_rd_changelog_mask(char *page, char **start, off_t off,
         while (i < CL_LAST) {
                 if (mdd->mdd_cl.mc_mask & (1 << i))
                         rc += snprintf(page + rc, count - rc, "%s ",
-                                       changelog_str[i]);
+                                       changelog_type2str(i));
                 i++;
         }
         return rc;
@@ -197,7 +188,7 @@ static int lprocfs_wr_changelog_mask(struct file *file, const char *buffer,
                 GOTO(out, rc = -EFAULT);
         kernbuf[count] = 0;
 
-        rc = libcfs_str2mask(kernbuf, changelog_bit2str, &mdd->mdd_cl.mc_mask,
+        rc = libcfs_str2mask(kernbuf, changelog_type2str, &mdd->mdd_cl.mc_mask,
                              CHANGELOG_MINMASK, CHANGELOG_ALLMASK);
         if (rc == 0)
                 rc = count;
@@ -431,6 +422,30 @@ static int mdd_lprocfs_quota_wr_type(struct file *file, const char *buffer,
 }
 #endif
 
+static int lprocfs_rd_sync_perm(char *page, char **start, off_t off,
+                                int count, int *eof, void *data)
+{
+        struct mdd_device *mdd = data;
+
+        LASSERT(mdd != NULL);
+        return snprintf(page, count, "%d\n", mdd->mdd_sync_permission);
+}
+
+static int lprocfs_wr_sync_perm(struct file *file, const char *buffer,
+                                unsigned long count, void *data)
+{
+        struct mdd_device *mdd = data;
+        int val, rc;
+
+        LASSERT(mdd != NULL);
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        mdd->mdd_sync_permission = !!val;
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
         { "atime_diff",      lprocfs_rd_atime_diff, lprocfs_wr_atime_diff, 0 },
         { "changelog_mask",  lprocfs_rd_changelog_mask,
@@ -441,6 +456,7 @@ static struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
         { "quota_type",      mdd_lprocfs_quota_rd_type,
                              mdd_lprocfs_quota_wr_type, 0 },
 #endif
+        { "sync_permission", lprocfs_rd_sync_perm, lprocfs_wr_sync_perm, 0 },
         { 0 }
 };
 

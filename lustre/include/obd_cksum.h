@@ -64,10 +64,10 @@
 #define CRCPOLY_LE 0xedb88320
 /**
  * crc32_le() - Calculate bitwise little-endian Ethernet AUTODIN II CRC32
- * @crc - seed value for computation.  ~0 for Ethernet, sometimes 0 for
- *        other uses, or the previous crc32 value if computing incrementally.
- * @p   - pointer to buffer over which CRC is run
- * @len - length of buffer @p
+ * \param crc  seed value for computation.  ~0 for Ethernet, sometimes 0 for
+ *             other uses, or the previous crc32 value if computing incrementally.
+ * \param p  - pointer to buffer over which CRC is run
+ * \param len- length of buffer \a p
  */
 static inline __u32 crc32_le(__u32 crc, unsigned char const *p, size_t len)
 {

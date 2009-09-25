@@ -280,7 +280,7 @@ static const struct req_msg_field *obd_connect_server[] = {
         &RMF_CONNECT_DATA
 };
 
-static const struct req_msg_field *mds_set_info_client[] = {
+static const struct req_msg_field *obd_set_info_client[] = {
         &RMF_PTLRPC_BODY,
         &RMF_SETINFO_KEY,
         &RMF_SETINFO_VAL
@@ -501,12 +501,6 @@ static const struct req_msg_field *ost_brw_server[] = {
         &RMF_NIOBUF_REMOTE
 };
 
-static const struct req_msg_field *ost_set_info_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_SETINFO_KEY,
-        &RMF_SETINFO_VAL
-};
-
 static const struct req_msg_field *ost_get_info_generic_server[] = {
         &RMF_PTLRPC_BODY,
         &RMF_GENERIC_DATA,
@@ -535,6 +529,7 @@ static const struct req_msg_field *ost_get_fiemap_server[] = {
 
 static const struct req_format *req_formats[] = {
         &RQF_OBD_PING,
+        &RQF_OBD_SET_INFO,
         &RQF_SEC_CTX,
         &RQF_MGS_TARGET_REG,
         &RQF_MGS_SET_INFO,
@@ -542,7 +537,6 @@ static const struct req_format *req_formats[] = {
         &RQF_FLD_QUERY,
         &RQF_MDS_CONNECT,
         &RQF_MDS_DISCONNECT,
-        &RQF_MDS_SET_INFO,
         &RQF_MDS_GET_INFO,
         &RQF_MDS_GETSTATUS,
         &RQF_MDS_STATFS,
@@ -585,7 +579,6 @@ static const struct req_format *req_formats[] = {
         &RQF_OST_DESTROY,
         &RQF_OST_BRW,
         &RQF_OST_STATFS,
-        &RQF_OST_SET_INFO,
         &RQF_OST_SET_GRANT_INFO,
         &RQF_OST_GET_INFO_GENERIC,
         &RQF_OST_GET_INFO_LAST_ID,
@@ -908,6 +901,10 @@ const struct req_format RQF_OBD_PING =
         DEFINE_REQ_FMT0("OBD_PING", empty, empty);
 EXPORT_SYMBOL(RQF_OBD_PING);
 
+const struct req_format RQF_OBD_SET_INFO =
+        DEFINE_REQ_FMT0("OBD_SET_INFO", obd_set_info_client, empty);
+EXPORT_SYMBOL(RQF_OBD_SET_INFO);
+
 const struct req_format RQF_SEC_CTX =
         DEFINE_REQ_FMT0("SEC_CTX", empty, empty);
 EXPORT_SYMBOL(RQF_SEC_CTX);
@@ -1051,10 +1048,6 @@ EXPORT_SYMBOL(RQF_MDS_CONNECT);
 const struct req_format RQF_MDS_DISCONNECT =
         DEFINE_REQ_FMT0("MDS_DISCONNECT", empty, empty);
 EXPORT_SYMBOL(RQF_MDS_DISCONNECT);
-
-const struct req_format RQF_MDS_SET_INFO =
-        DEFINE_REQ_FMT0("MDS_SET_INFO", mds_set_info_client, empty);
-EXPORT_SYMBOL(RQF_MDS_SET_INFO);
 
 const struct req_format RQF_MDS_GET_INFO =
         DEFINE_REQ_FMT0("MDS_GET_INFO", mds_getinfo_client,
@@ -1232,12 +1225,8 @@ const struct req_format RQF_OST_STATFS =
         DEFINE_REQ_FMT0("OST_STATFS", empty, obd_statfs_server);
 EXPORT_SYMBOL(RQF_OST_STATFS);
 
-const struct req_format RQF_OST_SET_INFO =
-        DEFINE_REQ_FMT0("OST_SET_INFO", ost_set_info_client, empty);
-EXPORT_SYMBOL(RQF_OST_SET_INFO);
-
 const struct req_format RQF_OST_SET_GRANT_INFO =
-        DEFINE_REQ_FMT0("OST_SET_GRANT_INFO", ost_set_info_client,
+        DEFINE_REQ_FMT0("OST_SET_GRANT_INFO", obd_set_info_client,
                          ost_body_only);
 EXPORT_SYMBOL(RQF_OST_SET_GRANT_INFO);
 
@@ -1410,7 +1399,8 @@ static int __req_capsule_offset(const struct req_capsule *pill,
                             pill->rc_fmt->rf_name,
                             field->rmf_name, offset, loc);
         offset --;
-        LASSERT(0 <= offset && offset < (sizeof(pill->rc_swabbed) << 3));
+
+        LASSERT(0 <= offset && offset < REQ_MAX_FIELD_NR);
         return offset;
 }
 
@@ -1424,6 +1414,7 @@ static void *__req_capsule_get(struct req_capsule *pill,
         void                    *value;
         int                      len;
         int                      offset;
+        int                      inout = loc == RCL_CLIENT;
 
         void *(*getter)(struct lustre_msg *m, int n, int minlen);
 
@@ -1454,11 +1445,10 @@ static void *__req_capsule_get(struct req_capsule *pill,
         value = getter(msg, offset, len);
 
         swabber = swabber ?: field->rmf_swabber;
-        if (!(pill->rc_swabbed & (1 << offset)) && loc != pill->rc_loc &&
-            swabber != NULL && value != NULL &&
-            lustre_msg_swabbed(msg)) {
+        if (ptlrpc_buf_need_swab(pill->rc_req, inout, offset) &&
+            swabber != NULL && value != NULL) {
                 swabber(value);
-                pill->rc_swabbed |= (1 << offset);
+                ptlrpc_buf_set_swabbed(pill->rc_req, inout, offset);
         }
         if (value == NULL) {
                 DEBUG_REQ(D_ERROR, pill->rc_req,
@@ -1611,8 +1601,7 @@ void req_capsule_extend(struct req_capsule *pill, const struct req_format *fmt)
                 LASSERT(FMT_FIELD(fmt, i, j)->rmf_size >=
                         FMT_FIELD(old, i, j)->rmf_size);
         }
-        /* last field should be returned to the unswabbed state */
-        pill->rc_swabbed &= ~(__u32)(1 << j);
+
         pill->rc_fmt = fmt;
 }
 EXPORT_SYMBOL(req_capsule_extend);

@@ -606,7 +606,7 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
                 GOTO(release_ctxt, rc = -ENOMEM);
 
         mutex_down(&obd->obd_olg.olg_cat_processing);
-        rc = llog_get_cat_list(obd, obd, name, 0, count, idarray);
+        rc = llog_get_cat_list(obd, name, 0, count, idarray);
         if (rc)
                 GOTO(out_free, rc);
 

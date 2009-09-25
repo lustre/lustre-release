@@ -7,6 +7,9 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
+#              bug 20670 
+ALWAYS_EXCEPT="parallel_grouplock  $PARALLEL_SCALE_EXCEPT"
+
 #
 # compilbench
 #
@@ -81,8 +84,19 @@ wdisjoint_THREADS=${wdisjoint_THREADS:-4}
 wdisjoint_REP=${wdisjoint_REP:-10000}
 [ "$SLOW" = "no" ] && wdisjoint_REP=100
 
+#
+# parallel_grouplock
+#
+#
+PARALLEL_GROUPLOCK=${PARALLEL_GROUPLOCK:-$(which parallel_grouplock 2> /dev/null || true)}
+parallel_grouplock_MINTASKS=${parallel_grouplock_MINTASKS:-5}
+
 build_test_filter
 check_and_setup_lustre
+
+get_mpiuser_id $MPI_USER
+MPI_RUNAS=${MPI_RUNAS:-"runas -u $MPI_USER_UID -g $MPI_USER_GID"}
+$GSS_KRB5 && refresh_krb5_tgt $MPI_USER_UID $MPI_USER_GID $MPI_RUNAS
 
 print_opts () {
     local var
@@ -108,16 +122,16 @@ test_compilebench() {
     print_opts cbench_DIR cbench_IDIRS cbench_RUNS
 
     [ x$cbench_DIR = x ] &&
-        { skip "compilebench not found" && return; }
+        { skip_env "compilebench not found" && return; }
 
     [ -e $cbench_DIR/compilebench ] || \
-        { skip "No compilebench build" && return; }
+        { skip_env "No compilebench build" && return; }
 
     local space=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
     if [ $space -le $((680 * 1024 * cbench_IDIRS)) ]; then
         cbench_IDIRS=$(( space / 680 / 1024))
         [ $cbench_IDIRS = 0 ] && \
-            skip "Need free space atleast 680 Mb, have $space" && return
+            skip_env "Need free space atleast 680 Mb, have $space" && return
 
         log free space=$space, reducing initial dirs to $cbench_IDIRS
     fi
@@ -146,7 +160,7 @@ run_test compilebench "compilebench"
 
 test_metabench() {
     [ x$METABENCH = x ] &&
-        { skip "metabench not found" && return; }
+        { skip_env "metabench not found" && return; }
 
     local clients=$CLIENTS
     [ -z $clients ] && clients=$(hostname)
@@ -183,7 +197,7 @@ run_test metabench "metabench"
 
 test_simul() {
     [ x$SIMUL = x ] &&
-        { skip "simul not found" && return; }
+        { skip_env "simul not found" && return; }
 
     local clients=$CLIENTS
     [ -z $clients ] && clients=$(hostname)
@@ -223,10 +237,10 @@ test_connectathon() {
     print_opts cnt_DIR cnt_NRUN
 
     [ x$cnt_DIR = x ] &&
-        { skip "connectathon dir not found" && return; }
+        { skip_env "connectathon dir not found" && return; }
 
     [ -e $cnt_DIR/runtests ] || \
-        { skip "No connectathon runtests found" && return; }
+        { skip_env "No connectathon runtests found" && return; }
 
     local testdir=$DIR/d0.connectathon
     mkdir -p $testdir
@@ -256,7 +270,7 @@ run_test connectathon "connectathon"
 
 test_ior() {
     [ x$IOR = x ] &&
-        { skip "IOR not found" && return; }
+        { skip_env "IOR not found" && return; }
 
     local clients=$CLIENTS
     [ -z $clients ] && clients=$(hostname)
@@ -269,7 +283,7 @@ test_ior() {
         echo "+ $space * 9/10 / 1024 / 1024 / $num_clients / $ior_THREADS"
         ior_blockSize=$(( space /2 /1024 /1024 / num_clients / ior_THREADS ))
         [ $ior_blockSize = 0 ] && \
-            skip "Need free space more than ($num_clients * $ior_THREADS )Gb: $((num_clients*ior_THREADS *1024 *1024*2)), have $space" && return
+            skip_env "Need free space more than ($num_clients * $ior_THREADS )Gb: $((num_clients*ior_THREADS *1024 *1024*2)), have $space" && return
 
         echo "free space=$space, Need: $num_clients x $ior_THREADS x $ior_blockSize Gb (blockSize reduced to $ior_blockSize Gb)"
     fi
@@ -283,6 +297,7 @@ test_ior() {
     mkdir -p $testdir
     # mpi_run uses mpiuser
     chmod 0777 $testdir
+    $LFS setstripe $testdir -c -1
 
     # 
     # -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)"
@@ -307,7 +322,7 @@ run_test ior "ior"
  
 test_cascading_rw() {
     [ x$CASC_RW = x ] &&
-        { skip "cascading_rw not found" && return; }
+        { skip_env "cascading_rw not found" && return; }
 
     local clients=$CLIENTS
     [ -z $clients ] && clients=$(hostname)
@@ -346,7 +361,7 @@ run_test cascading_rw "cascading_rw"
 test_write_append_truncate() {
     # location is lustre/tests dir 
     if ! which write_append_truncate > /dev/null 2>&1 ; then
-        skip "write_append_truncate not found"
+        skip_env "write_append_truncate not found"
         return
     fi
 
@@ -386,7 +401,7 @@ run_test write_append_truncate "write_append_truncate"
 
 test_write_disjoint() {
     [ x$WRITE_DISJOINT = x ] &&
-        { skip "write_disjoint not found" && return; }
+        { skip_env "write_disjoint not found" && return; }
 
     local clients=$CLIENTS
     [ -z $clients ] && clients=$(hostname)
@@ -418,6 +433,52 @@ test_write_disjoint() {
 }
 run_test write_disjoint "write_disjoint"
 
+test_parallel_grouplock() {
+    [ x$PARALLEL_GROUPLOCK = x ] &&
+        { skip "PARALLEL_GROUPLOCK not found" && return; }
+
+    local clients=$CLIENTS
+    [ -z $clients ] && clients=$(hostname)
+
+    local num_clients=$(get_node_count ${clients//,/ })
+
+    generate_machine_file $clients $MACHINEFILE || \
+        error "can not generate machinefile $MACHINEFILE"
+
+    print_opts clients parallel_grouplock_MINTASKS MACHINEFILE
+
+    local testdir=$DIR/d0.parallel_grouplock
+    mkdir -p $testdir
+    # mpi_run uses mpiuser
+    chmod 0777 $testdir
+
+    do_nodes $clients "lctl set_param llite.*.max_rw_chunk=0" ||
+        error "set_param max_rw_chunk=0 failed "
+
+    local cmd
+    local status=0
+    local subtest
+    for i in $(seq 12); do
+        subtest="-t $i"
+        local cmd="$PARALLEL_GROUPLOCK -g -v -d $testdir $subtest"
+        echo "+ $cmd"
+
+        mpi_run -np $parallel_grouplock_MINTASKS -machinefile ${MACHINEFILE} $cmd
+        local rc=$?
+        if [ $rc != 0 ] ; then
+            error_noexit "parallel_grouplock subtests $subtest failed! $rc"
+        else
+            echo "parallel_grouplock subtests $subtest PASS"
+        fi
+        let status=$((status + rc))
+        # clear debug to collect one log per one test
+        do_nodes $(comma_list $(nodes_list)) lctl clear
+     done
+    [ $status -eq 0 ] || error "parallel_grouplock status: $status"
+    rm -rf $testdir
+}
+run_test parallel_grouplock "parallel_grouplock"
+
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

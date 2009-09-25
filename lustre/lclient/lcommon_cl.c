@@ -503,11 +503,13 @@ void ccc_transient_page_verify(const struct cl_page *page)
 {
 }
 
-void ccc_transient_page_own(const struct lu_env *env,
+int ccc_transient_page_own(const struct lu_env *env,
                                    const struct cl_page_slice *slice,
-                                   struct cl_io *unused)
+                                   struct cl_io *unused,
+                                   int nonblock)
 {
         ccc_transient_page_verify(slice->cpl_page);
+        return 0;
 }
 
 void ccc_transient_page_assume(const struct lu_env *env,
@@ -599,7 +601,6 @@ int ccc_lock_wait(const struct lu_env *env, const struct cl_lock_slice *slice)
  * cached lock "fits" into io.
  *
  * \param slice lock to be checked
- *
  * \param io    IO that wants a lock.
  *
  * \see lov_lock_fits_into().
@@ -623,7 +624,8 @@ int ccc_lock_fits_into(const struct lu_env *env,
          * doesn't enqueue CLM_WRITE sub-locks.
          */
         if (cio->cui_glimpse)
-                result = descr->cld_mode != CLM_WRITE;
+                result = descr->cld_mode == CLM_PHANTOM;
+
         /*
          * Also, don't match incomplete write locks for read, otherwise read
          * would enqueue missing sub-locks in the write mode.
@@ -1059,6 +1061,7 @@ int cl_setattr_ost(struct inode *inode, struct obd_capa *capa)
 
                 oinfo.oi_oa = oa;
                 oinfo.oi_md = lsm;
+                oinfo.oi_capa = capa;
 
                 /* XXX: this looks unnecessary now. */
                 rc = obd_setattr_rqset(cl_i2sbi(inode)->ll_dt_exp, &oinfo,

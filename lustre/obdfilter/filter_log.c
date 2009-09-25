@@ -117,7 +117,7 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
         struct obd_llog_group *olg;
         struct llog_ctxt *ctxt;
         int rc;
-        
+
         /* we have to find context for right group */
         if (error != 0 || obd->obd_stopping) {
                 CDEBUG(D_INODE, "not cancel logcookie err %d stopping %d \n",
@@ -126,11 +126,11 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
         }
 
         olg = filter_find_olg(obd, cookie->lgc_lgl.lgl_ogr);
-        if (!olg) { 
+        if (!olg) {
                 CDEBUG(D_HA, "unknown group "LPU64"!\n", cookie->lgc_lgl.lgl_ogr);
                 GOTO(out, rc = 0);
         }
-        
+
         ctxt = llog_group_get_ctxt(olg, cookie->lgc_subsys + 1);
         if (!ctxt) {
                 CERROR("no valid context for group "LPU64"\n",
@@ -154,35 +154,41 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
                                       struct llog_rec_hdr *rec,
                                       struct llog_cookie *cookie)
 {
-        struct obd_device *obd = ctxt->loc_obd;
-        struct obd_export *exp = obd->obd_self_export;
+        struct obd_export *exp = ctxt->loc_obd->obd_self_export;
         struct llog_unlink_rec *lur;
         struct obdo *oa;
         obd_id oid;
+        obd_count count;
         int rc = 0;
         ENTRY;
 
         lur = (struct llog_unlink_rec *)rec;
         OBDO_ALLOC(oa);
-        if (oa == NULL) 
+        if (oa == NULL)
                 RETURN(-ENOMEM);
         oa->o_valid |= OBD_MD_FLCOOKIE;
         oa->o_id = lur->lur_oid;
-        oa->o_gr = lur->lur_ogen;
+        oa->o_gr = lur->lur_ogr;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
         oa->o_lcookie = *cookie;
         oid = oa->o_id;
+        /* objid gap may require to destroy several objects in row */
+        count = lur->lur_count + 1;
 
-        rc = filter_destroy(exp, oa, NULL, NULL, NULL, NULL);
-        OBDO_FREE(oa);
-        if (rc == -ENOENT) {
-                CDEBUG(D_RPCTRACE, "object already removed, send cookie\n");
-                llog_cancel(ctxt, NULL, 1, cookie, 0);
-                RETURN(0);
+        while (count > 0) {
+                rc = filter_destroy(exp, oa, NULL, NULL, NULL, NULL);
+                if (rc == 0)
+                        CDEBUG(D_RPCTRACE, "object "LPU64" is destroyed\n",
+                               oid);
+                else if (rc != -ENOENT)
+                        CEMERG("error destroying object "LPU64": %d\n",
+                               oid, rc);
+                else
+                        rc = 0;
+                count--;
+                oid++;
         }
-
-        if (rc == 0)
-                CDEBUG(D_RPCTRACE, "object "LPU64" is destroyed\n", oid);
+        OBDO_FREE(oa);
 
         RETURN(rc);
 }
@@ -208,14 +214,14 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
                 struct llog_setattr_rec *lsr = (struct llog_setattr_rec *)rec;
 
                 oinfo.oi_oa->o_id = lsr->lsr_oid;
-                oinfo.oi_oa->o_gr = lsr->lsr_ogen;
+                oinfo.oi_oa->o_gr = lsr->lsr_ogr;
                 oinfo.oi_oa->o_uid = lsr->lsr_uid;
                 oinfo.oi_oa->o_gid = lsr->lsr_gid;
         } else {
                 struct llog_setattr64_rec *lsr = (struct llog_setattr64_rec *)rec;
 
                 oinfo.oi_oa->o_id = lsr->lsr_oid;
-                oinfo.oi_oa->o_gr = lsr->lsr_ogen;
+                oinfo.oi_oa->o_gr = lsr->lsr_ogr;
                 oinfo.oi_oa->o_uid = lsr->lsr_uid;
                 oinfo.oi_oa->o_gid = lsr->lsr_gid;
         }

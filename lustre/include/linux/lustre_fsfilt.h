@@ -326,11 +326,24 @@ static inline int fsfilt_setattr(struct obd_device *obd, struct dentry *dentry,
         return rc;
 }
 
-static inline int fsfilt_iocontrol(struct obd_device *obd, struct inode *inode,
-                                   struct file *file, unsigned int cmd,
-                                   unsigned long arg)
+static inline int fsfilt_iocontrol(struct obd_device *obd, struct dentry *dentry,
+                                   unsigned int cmd, unsigned long arg)
 {
-        return obd->obd_fsops->fs_iocontrol(inode, file, cmd, arg);
+        struct file *dummy_file = NULL;
+        int ret;
+
+        OBD_ALLOC_PTR(dummy_file);
+        if (!dummy_file)
+                return(-ENOMEM);
+
+        dummy_file->f_dentry = dentry;
+        dummy_file->f_vfsmnt = obd->u.obt.obt_vfsmnt;
+
+        ret = obd->obd_fsops->fs_iocontrol(dentry->d_inode, dummy_file, cmd,
+                                           arg);
+
+        OBD_FREE_PTR(dummy_file);
+        return ret;
 }
 
 static inline int fsfilt_set_md(struct obd_device *obd, struct inode *inode,

@@ -599,7 +599,7 @@ static int lprocfs_wr_nosquash_nids(struct file *file, const char *buffer,
                 GOTO(failed, rc = -EFAULT);
         }
         kernbuf[count] = '\0';
- 
+
         if (!strcmp(kernbuf, "NONE") || !strcmp(kernbuf, "clear")) {
                 /* empty string is special case */
                 down_write(&mdt->mdt_squash_sem);
@@ -655,6 +655,7 @@ static int lprocfs_rd_mdt_som(char *page, char **start, off_t off,
                         mdt->mdt_som_conf ? "en" : "dis");
 }
 
+#ifdef HAVE_QUOTA_SUPPORT
 static int mdt_quota_off(struct mdt_device *mdt)
 {
 #ifdef HAVE_QUOTA_SUPPORT
@@ -671,6 +672,12 @@ static int mdt_quota_off(struct mdt_device *mdt)
         return 0;
 #endif
 }
+#else
+static int mdt_quota_off(struct mdt_device *mdt)
+{
+        return 0;
+}
+#endif
 
 static int lprocfs_wr_mdt_som(struct file *file, const char *buffer,
                               unsigned long count, void *data)
@@ -717,11 +724,39 @@ static int lprocfs_wr_mdt_som(struct file *file, const char *buffer,
                 return count;
         }
 
-        if ((rc = mdt_quota_off(mdt)))
-                return rc;
+        if ((rc = mdt_quota_off(mdt))) {
+                if (rc == -EALREADY)
+                        rc = 0;
+                else
+                        return rc;
+        }
 
         mdt->mdt_som_conf = val;
         LCONSOLE_INFO("Enabling SOM\n");
+
+        return count;
+}
+
+/* Temporary; for testing purposes only */
+static int lprocfs_mdt_wr_mdc(struct file *file, const char *buffer,
+                              unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct obd_export *exp = NULL;
+        struct obd_uuid uuid;
+        char tmpbuf[sizeof(struct obd_uuid)];
+
+        sscanf(buffer, "%40s", tmpbuf);
+
+        obd_str2uuid(&uuid, tmpbuf);
+        exp = lustre_hash_lookup(obd->obd_uuid_hash, &uuid);
+        if (exp == NULL) {
+                CERROR("%s: no export %s found\n",
+                       obd->obd_name, obd_uuid2str(&uuid));
+        } else {
+                mdt_hsm_copytool_send(exp);
+                class_export_put(exp);
+        }
 
         return count;
 }
@@ -754,9 +789,10 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
         { "root_squash",                lprocfs_rd_root_squash,
                                         lprocfs_wr_root_squash,             0 },
         { "nosquash_nids",              lprocfs_rd_nosquash_nids,
-                                        lprocfs_wr_nosquash_nids,          0 },
+                                        lprocfs_wr_nosquash_nids,           0 },
         { "som",                        lprocfs_rd_mdt_som,
                                         lprocfs_wr_mdt_som, 0 },
+        { "mdccomm",                    0, lprocfs_mdt_wr_mdc,              0 },
         { 0 }
 };
 

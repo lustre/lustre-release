@@ -264,7 +264,6 @@ struct task_struct {
         int ngroups;
         gid_t *groups;
         __u32 cap_effective;
-        void *journal_info;
 };
 
 
@@ -325,35 +324,9 @@ int in_group_p(gid_t gid);
 #define might_sleep_if(c)
 #define smp_mb()
 
-static inline
-int test_and_set_bit(int nr, unsigned long *addr)
-{
-        int oldbit;
-
-        while (nr >= sizeof(long)) {
-                nr -= sizeof(long);
-                addr++;
-        }
-
-        oldbit = (*addr) & (1 << nr);
-        *addr |= (1 << nr);
-        return oldbit;
-}
-
-static inline
-int test_and_clear_bit(int nr, unsigned long *addr)
-{
-        int oldbit;
-
-        while (nr >= sizeof(long)) {
-                nr -= sizeof(long);
-                addr++;
-        }
-
-        oldbit = (*addr) & (1 << nr);
-        *addr &= ~(1 << nr);
-        return oldbit;
-}
+#define libcfs_memory_pressure_get() (0) 
+#define libcfs_memory_pressure_put() do {} while (0) 
+#define libcfs_memory_pressure_clr() do {} while (0)
 
 /* FIXME sys/capability will finally included linux/fs.h thus
  * cause numerous trouble on x86-64. as temporary solution for

@@ -60,6 +60,7 @@ static void lov_init_set(struct lov_request_set *set)
         CFS_INIT_LIST_HEAD(&set->set_list);
         atomic_set(&set->set_refcount, 1);
         cfs_waitq_init(&set->set_waitq);
+        spin_lock_init(&set->set_lock);
 }
 
 static void lov_finish_set(struct lov_request_set *set)
@@ -672,9 +673,6 @@ int lov_update_create_set(struct lov_request_set *set,
         struct lov_obd *lov = &set->set_exp->exp_obd->u.lov;
         ENTRY;
 
-        req->rq_stripe = set->set_success;
-        loi = lsm->lsm_oinfo[req->rq_stripe];
-
         if (rc && lov->lov_tgts[req->rq_idx] &&
             lov->lov_tgts[req->rq_idx]->ltd_active) {
                 CERROR("error creating fid "LPX64" sub-object"
@@ -686,15 +684,19 @@ int lov_update_create_set(struct lov_request_set *set,
                         rc = -EIO;
                 }
         }
-        lov_update_set(set, req, rc);
-        if (rc)
+
+        spin_lock(&set->set_lock);
+        req->rq_stripe = set->set_success;
+        loi = lsm->lsm_oinfo[req->rq_stripe];
+        if (rc) {
+                lov_update_set(set, req, rc);
+                spin_unlock(&set->set_lock);
                 RETURN(rc);
+        }
 
         loi->loi_id = req->rq_oi.oi_oa->o_id;
         loi->loi_gr = req->rq_oi.oi_oa->o_gr;
         loi->loi_ost_idx = req->rq_idx;
-        CDEBUG(D_INODE, "objid "LPX64" has subobj "LPX64"/"LPU64" at idx %d\n",
-               lsm->lsm_object_id, loi->loi_id, loi->loi_id, req->rq_idx);
         loi_init(loi);
 
         if (oti && set->set_cookies)
@@ -702,7 +704,12 @@ int lov_update_create_set(struct lov_request_set *set,
         if (req->rq_oi.oi_oa->o_valid & OBD_MD_FLCOOKIE)
                 set->set_cookie_sent++;
 
-        RETURN(0);
+        lov_update_set(set, req, rc);
+        spin_unlock(&set->set_lock);
+
+        CDEBUG(D_INODE, "objid "LPX64" has subobj "LPX64"/"LPU64" at idx %d\n",
+               lsm->lsm_object_id, loi->loi_id, loi->loi_id, req->rq_idx);
+        RETURN(rc);
 }
 
 int cb_create_update(void *cookie, int rc)
@@ -1212,11 +1219,6 @@ int lov_prep_setattr_set(struct obd_export *exp, struct obd_info *oinfo,
                 memcpy(req->rq_oi.oi_oa, oinfo->oi_oa,
                        sizeof(*req->rq_oi.oi_oa));
                 req->rq_oi.oi_oa->o_id = loi->loi_id;
-                LASSERTF(!(req->rq_oi.oi_oa->o_valid & OBD_MD_FLGROUP) ||
-                         CHECK_MDS_GROUP(req->rq_oi.oi_oa->o_gr),
-                         "req->rq_oi.oi_oa->o_valid="LPX64" "
-                         "req->rq_oi.oi_oa->o_gr="LPU64"\n",
-                         req->rq_oi.oi_oa->o_valid, req->rq_oi.oi_oa->o_gr);
                 req->rq_oi.oi_oa->o_stripe_idx = i;
                 req->rq_oi.oi_cb_up = cb_setattr_update;
                 req->rq_oi.oi_capa = oinfo->oi_capa;
@@ -1325,17 +1327,17 @@ int lov_prep_punch_set(struct obd_export *exp, struct obd_info *oinfo,
                 struct lov_request *req;
                 obd_off rs, re;
 
-                if (!lov->lov_tgts[loi->loi_ost_idx] ||
-                    !lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
-                        CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
-                        continue;
-                }
-
                 if (!lov_stripe_intersects(oinfo->oi_md, i,
                                            oinfo->oi_policy.l_extent.start,
                                            oinfo->oi_policy.l_extent.end,
                                            &rs, &re))
                         continue;
+
+                if (!lov->lov_tgts[loi->loi_ost_idx] ||
+                    !lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
+                        CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
+                        GOTO(out_set, rc = -EIO);
+                }
 
                 OBD_ALLOC(req, sizeof(*req));
                 if (req == NULL)
@@ -1650,6 +1652,13 @@ int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
                 if (!lov->lov_tgts[i] || (!lov->lov_tgts[i]->ltd_active
                                           && (oinfo->oi_flags & OBD_STATFS_NODELAY))) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", i);
+                        continue;
+                }
+
+                /* skip targets that have been explicitely disabled by the
+                 * administrator */
+                if (!lov->lov_tgts[i]->ltd_exp) {
+                        CDEBUG(D_HA, "lov idx %d administratively disabled\n", i);
                         continue;
                 }
 

@@ -110,7 +110,7 @@ static int lprocfs_filter_rd_last_id(char *page, char **start, off_t off,
         count -= rc;
         retval += rc;
 
-        for (i = FILTER_GROUP_MDS1_N_BASE + 1; i < filter->fo_group_count; i++) {
+        for (i = FILTER_GROUP_MDS1_N_BASE; i < filter->fo_group_count; i++) {
                 rc = snprintf(page, count, LPU64"\n",filter_last_id(filter, i));
                 if (rc < 0) {
                         retval = rc;
@@ -341,6 +341,30 @@ static int lprocfs_filter_rd_mds_sync(char *page, char **start, off_t off,
         return snprintf(page, count, "%u\n", obd->u.filter.fo_mds_ost_sync);
 }
 
+int lprocfs_filter_rd_degraded(char *page, char **start, off_t off,
+                               int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+
+        return snprintf(page, count, "%u\n", obd->u.filter.fo_raid_degraded);
+}
+
+int lprocfs_filter_wr_degraded(struct file *file, const char *buffer,
+                               unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        spin_lock(&obd->obd_osfs_lock);
+        obd->u.filter.fo_raid_degraded = !!val;
+        spin_unlock(&obd->obd_osfs_lock);
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,          0, 0 },
         { "blocksize",    lprocfs_rd_blksize,       0, 0 },
@@ -383,6 +407,8 @@ static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
         { "writethrough_cache_enable", lprocfs_filter_rd_wcache,
                           lprocfs_filter_wr_wcache, 0},
         { "mds_sync",     lprocfs_filter_rd_mds_sync, 0, 0},
+        { "degraded",     lprocfs_filter_rd_degraded,
+                          lprocfs_filter_wr_degraded, 0 },
         { 0 }
 };
 

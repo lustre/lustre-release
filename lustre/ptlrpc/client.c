@@ -281,13 +281,12 @@ static int unpack_reply(struct ptlrpc_request *req)
 {
         int rc;
 
-        /* Clear reply swab mask; we may have already swabbed an early reply */
-        req->rq_rep_swab_mask = 0;
-
-        rc = lustre_unpack_msg(req->rq_repmsg, req->rq_replen);
-        if (rc) {
-                DEBUG_REQ(D_ERROR, req, "unpack_rep failed: %d", rc);
-                return(-EPROTO);
+        if (SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) != SPTLRPC_POLICY_NULL) {
+                rc = ptlrpc_unpack_rep_msg(req, req->rq_replen);
+                if (rc) {
+                        DEBUG_REQ(D_ERROR, req, "unpack_rep failed: %d", rc);
+                        return(-EPROTO);
+                }
         }
 
         rc = lustre_unpack_rep_ptlrpc_body(req, MSG_PTLRPC_BODY_OFF);
@@ -700,9 +699,12 @@ struct ptlrpc_request *ptlrpc_prep_fakereq(struct obd_import *imp,
         request->rq_type = PTL_RPC_MSG_REQUEST;
         request->rq_import = class_import_get(imp);
         request->rq_export = NULL;
+        request->rq_import_generation = imp->imp_generation;
 
+        request->rq_timeout = timeout;
         request->rq_sent = cfs_time_current_sec();
-        request->rq_reply_deadline = request->rq_sent + timeout;
+        request->rq_deadline = request->rq_sent + timeout;
+        request->rq_reply_deadline = request->rq_deadline;
         request->rq_interpret_reply = interpreter;
         request->rq_phase = RQ_PHASE_RPC;
         request->rq_next_phase = RQ_PHASE_INTERPRET;
@@ -853,10 +855,6 @@ int ptlrpc_set_add_new_req(struct ptlrpcd_ctl *pc,
         req->rq_set = set;
         spin_unlock(&set->set_new_req_lock);
 
-        /*
-         * Let thead know that we added something and better it to wake up
-         * and process.
-         */
         cfs_waitq_signal(&set->set_waitq);
         return 0;
 }
@@ -1491,7 +1489,7 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 
                 if (!req->rq_bulk->bd_success) {
                         /* The RPC reply arrived OK, but the bulk screwed
-                         * up!  Dead wierd since the server told us the RPC
+                         * up!  Dead weird since the server told us the RPC
                          * was good after getting the REPLY for her GET or
                          * the ACK for her PUT. */
                         DEBUG_REQ(D_ERROR, req, "bulk transfer failed");
@@ -1529,7 +1527,7 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 
                 spin_lock(&imp->imp_lock);
                 /* Request already may be not on sending or delaying list. This
-                 * may happen in the case of marking it errorneous for the case
+                 * may happen in the case of marking it erroneous for the case
                  * ptlrpc_import_delay_req(req, status) find it impossible to
                  * allow sending this rpc and returns *status != 0. */
                 if (!list_empty(&req->rq_list)) {
@@ -1651,7 +1649,7 @@ int ptlrpc_expired_set(void *data)
         }
 
         /*
-         * When waiting for a whole set, we always to break out of the
+         * When waiting for a whole set, we always break out of the
          * sleep so we can recalculate the timeout, or enable interrupts
          * if everyone's timed out.
          */
@@ -1769,7 +1767,7 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
 
                 /* -EINTR => all requests have been flagged rq_intr so next
                  * check completes.
-                 * -ETIMEOUTD => someone timed out.  When all reqs have
+                 * -ETIMEDOUT => someone timed out.  When all reqs have
                  * timed out, signals are enabled allowing completion with
                  * EINTR.
                  * I don't really care if we go once more round the loop in
@@ -2386,7 +2384,7 @@ after_send:
                         /* success so far.  Note that anything going wrong
                          * with bulk now, is EXTREMELY strange, since the
                          * server must have believed that the bulk
-                         * tranferred OK before she replied with success to
+                         * transferred OK before she replied with success to
                          * me. */
                         lwi = LWI_TIMEOUT(timeout, NULL, NULL);
                         brc = l_wait_event(req->rq_reply_waitq,

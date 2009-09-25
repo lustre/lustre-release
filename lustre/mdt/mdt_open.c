@@ -343,7 +343,7 @@ static void mdt_empty_transno(struct mdt_thread_info* info)
         struct ptlrpc_request *req = mdt_info_req(info);
 
         ENTRY;
-        /* transaction is occured already */
+        /* transaction has occurred already */
         if (lustre_msg_get_transno(req->rq_repmsg) != 0) {
                 EXIT;
                 return;

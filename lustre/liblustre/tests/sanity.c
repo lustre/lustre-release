@@ -428,12 +428,13 @@ int t14(char *name)
                                 printf("found bad name %s\n", item);
                                 return(-1);
                         }
-                        printf("[%03d]: %s\n",
+                        printf("[%03d]: %s\t",
                                 index++, item + strlen(prefix));
 iter:
                         pos += ent->d_reclen;
                 }
         }
+        printf("\n");
         if (rc < 0) {
                 printf("getdents error %d\n", rc);
                 return(-1);

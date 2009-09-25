@@ -142,15 +142,11 @@ int ptlrpcd_add_req(struct ptlrpc_request *req, enum ptlrpcd_scope scope)
          * XXX disable this for CLIO: environment is needed for interpreter.
          */
         if (rc && 0) {
-                ptlrpc_interpterer_t interpreter;
-
-                interpreter = req->rq_interpret_reply;
-
                 /*
                  * Thread is probably in stop now so we need to
                  * kill this rpc as it was not added. Let's call
                  * interpret for it to let know we're killing it
-                 * so that higher levels might free assosiated
+                 * so that higher levels might free associated
                  * resources.
                  */
                 ptlrpc_req_interpret(NULL, req, -EBADR);

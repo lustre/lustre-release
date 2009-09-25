@@ -307,7 +307,8 @@ struct page *ll_get_dir_page(struct inode *dir, __u64 hash, int exact,
         } else {
                 /* for cross-ref object, l_ast_data of the lock may not be set,
                  * we reset it here */
-                md_set_lock_data(ll_i2sbi(dir)->ll_md_exp, &lockh.cookie, dir);
+                md_set_lock_data(ll_i2sbi(dir)->ll_md_exp, &lockh.cookie,
+                                 dir, NULL);
         }
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 
@@ -710,17 +711,17 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_IOCTL, 1);
         switch(cmd) {
-        case EXT3_IOC_GETFLAGS:
-        case EXT3_IOC_SETFLAGS:
+        case FSFILT_IOC_GETFLAGS:
+        case FSFILT_IOC_SETFLAGS:
                 RETURN(ll_iocontrol(inode, file, cmd, arg));
-        case EXT3_IOC_GETVERSION_OLD:
-        case EXT3_IOC_GETVERSION:
+        case FSFILT_IOC_GETVERSION_OLD:
+        case FSFILT_IOC_GETVERSION:
                 RETURN(put_user(inode->i_generation, (int *)arg));
         /* We need to special case any other ioctls we want to handle,
          * to send them to the MDS/OST as appropriate and to properly
          * network encode the arg field.
-        case EXT3_IOC_SETVERSION_OLD:
-        case EXT3_IOC_SETVERSION:
+        case FSFILT_IOC_SETVERSION_OLD:
+        case FSFILT_IOC_SETVERSION:
         */
         case IOC_MDC_LOOKUP: {
                 struct ptlrpc_request *request = NULL;
@@ -1148,7 +1149,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         QCTL_COPY(oqctl, qctl);
                         rc = obd_quotactl(sbi->ll_md_exp, oqctl);
                         if (rc) {
-                                if (rc != -EBUSY && cmd == Q_QUOTAON) {
+                                if (rc != -EALREADY && cmd == Q_QUOTAON) {
                                         oqctl->qc_cmd = Q_QUOTAOFF;
                                         obd_quotactl(sbi->ll_md_exp, oqctl);
                                 }
@@ -1216,7 +1217,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 RETURN(0);
         }
         case LL_IOC_PATH2FID:
-                if (copy_to_user((void *)arg, &ll_i2info(inode)->lli_fid,
+                if (copy_to_user((void *)arg, ll_inode2fid(inode),
                                  sizeof(struct lu_fid)))
                         RETURN(-EFAULT);
                 RETURN(0);

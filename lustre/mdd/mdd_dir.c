@@ -46,14 +46,21 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/module.h>
+#ifdef HAVE_EXT4_LDISKFS
+#include <ldiskfs/ldiskfs_jbd2.h>
+#else
 #include <linux/jbd.h>
+#endif
 #include <obd.h>
 #include <obd_class.h>
 #include <lustre_ver.h>
 #include <obd_support.h>
 #include <lprocfs_status.h>
-
+#ifdef HAVE_EXT4_LDISKFS
+#include <ldiskfs/ldiskfs.h>
+#else
 #include <linux/ldiskfs_fs.h>
+#endif
 #include <lustre_mds.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_fid.h>
@@ -196,9 +203,8 @@ out:
  *
  * returns < 0: if error
  */
-static int mdd_is_subdir(const struct lu_env *env,
-                         struct md_object *mo, const struct lu_fid *fid,
-                         struct lu_fid *sfid)
+int mdd_is_subdir(const struct lu_env *env, struct md_object *mo,
+                  const struct lu_fid *fid, struct lu_fid *sfid)
 {
         struct mdd_device *mdd = mdo2mdd(mo);
         int rc;
@@ -551,7 +557,7 @@ static int __mdd_index_insert_only(const struct lu_env *env,
                 struct md_ucred  *uc = md_ucred(env);
 
                 rc = next->do_index_ops->dio_insert(env, next,
-                                                    __mdd_fid_rec(env, lf),
+                                                    (struct dt_rec*)lf,
                                                     (const struct dt_key *)name,
                                                     handle, capa, uc->mu_cap &
                                                     CFS_CAP_SYS_RESOURCE_MASK);
@@ -572,7 +578,7 @@ static int __mdd_declare_index_insert(const struct lu_env *env,
 
         if (dt_try_as_dir(env, next))
                 next->do_index_ops->dio_declare_insert(env, next,
-                                                    __mdd_fid_rec(env, lf),
+                                                    (struct dt_rec *)lf,
                                                     (const struct dt_key *)name,
                                                     handle);
         if (is_dir)
@@ -678,13 +684,13 @@ static int mdd_changelog_ns_store(const struct lu_env  *env,
                 RETURN(-ENOMEM);
         rec = (struct llog_changelog_rec *)buf->lb_buf;
 
-        rec->cr_flags = CLF_VERSION;
-        rec->cr_type = (__u32)type;
+        rec->cr.cr_flags = CLF_VERSION;
+        rec->cr.cr_type = (__u32)type;
         tfid = tf ? tf : mdo2fid(target);
-        rec->cr_tfid = *tfid;
-        rec->cr_pfid = *tpfid;
-        rec->cr_namelen = tname->ln_namelen;
-        memcpy(rec->cr_name, tname->ln_name, rec->cr_namelen);
+        rec->cr.cr_tfid = *tfid;
+        rec->cr.cr_pfid = *tpfid;
+        rec->cr.cr_namelen = tname->ln_namelen;
+        memcpy(rec->cr.cr_name, tname->ln_name, rec->cr.cr_namelen);
         if (likely(target))
                 target->mod_cltime = cfs_time_current_64();
 
@@ -1681,7 +1687,6 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
         struct mdd_object   *mdd_obj = md2mdd_obj(pobj);
         struct mdd_device   *m = mdo2mdd(pobj);
         struct dt_object    *dir = mdd_object_child(mdd_obj);
-        struct lu_fid_pack  *pack = &mdd_env_info(env)->mti_pack;
         int rc;
         ENTRY;
 
@@ -1710,10 +1715,10 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
                    dt_try_as_dir(env, dir))) {
 
                 rc = dir->do_index_ops->dio_lookup(env, dir,
-                                                 (struct dt_rec *)pack, key,
+                                                 (struct dt_rec *)fid, key,
                                                  mdd_object_capa(env, mdd_obj));
                 if (rc > 0)
-                        rc = fid_unpack(pack, fid);
+                        rc = 0;
                 else if (rc == 0)
                         rc = -ENOENT;
         } else
@@ -1747,20 +1752,12 @@ int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
                 __mdd_ref_add(env, child, handle);
                 rc = __mdd_index_insert_only(env, child, mdo2fid(child),
                                              dot, handle, BYPASS_CAPA);
-                if (rc == 0) {
+                if (rc == 0)
                         rc = __mdd_index_insert_only(env, child, pfid,
                                                      dotdot, handle,
                                                      BYPASS_CAPA);
-                        if (rc != 0) {
-                                int rc2;
-
-                                rc2 = __mdd_index_delete(env, child, dot, 1,
-                                                         handle, BYPASS_CAPA);
-                                if (rc2 != 0)
-                                        CERROR("Failure to cleanup after dotdot"
-                                               " creation: %d (%d)\n", rc2, rc);
-                        }
-                }
+                if (rc != 0)
+                        __mdd_ref_del(env, child, handle, 1);
         }
         if (rc == 0)
                 mdd_links_add(env, child, pfid, lname, handle);
@@ -2482,7 +2479,7 @@ static int mdd_rename(const struct lu_env *env,
                 GOTO(cleanup, rc);
 
         /* "mv dir1 dir2" needs "dir1/.." link update */
-        if (is_dir && mdd_sobj) {
+        if (is_dir && mdd_sobj && !lu_fid_eq(spobj_fid, tpobj_fid)) {
                 rc = __mdd_index_delete_only(env, mdd_sobj, dotdot, handle,
                                         mdd_object_capa(env, mdd_sobj));
                 if (rc)
@@ -2490,9 +2487,8 @@ static int mdd_rename(const struct lu_env *env,
 
                 rc = __mdd_index_insert_only(env, mdd_sobj, tpobj_fid, dotdot,
                                       handle, mdd_object_capa(env, mdd_sobj));
-                if (rc) {
+                if (rc)
                         GOTO(fixup_spobj, rc);
-                }
         }
 
         /* Remove target name from target directory
@@ -2734,20 +2730,17 @@ struct lu_buf *mdd_links_get(const struct lu_env *env,
 /** Pack a link_ea_entry.
  * All elements are stored as chars to avoid alignment issues.
  * Numbers are always big-endian
- * \param packbuf is a temp fid buffer
  * \retval record length
  */
 static int mdd_lee_pack(struct link_ea_entry *lee, const struct lu_name *lname,
-                         const struct lu_fid *pfid, struct lu_fid* packbuf)
+                        const struct lu_fid *pfid)
 {
-        char *ptr;
         int reclen;
 
-        fid_pack(&lee->lee_parent_fid, pfid, packbuf);
-        ptr = (char *)&lee->lee_parent_fid + lee->lee_parent_fid.fp_len;
-        strncpy(ptr, lname->ln_name, lname->ln_namelen);
-        reclen = lee->lee_parent_fid.fp_len + lname->ln_namelen +
-                sizeof(lee->lee_reclen);
+        fid_cpu_to_be(&lee->lee_parent_fid, pfid);
+        strncpy(lee->lee_name, lname->ln_name, lname->ln_namelen);
+        reclen = sizeof(struct link_ea_entry) + lname->ln_namelen;
+
         lee->lee_reclen[0] = (reclen >> 8) & 0xff;
         lee->lee_reclen[1] = reclen & 0xff;
         return reclen;
@@ -2757,11 +2750,9 @@ void mdd_lee_unpack(const struct link_ea_entry *lee, int *reclen,
                     struct lu_name *lname, struct lu_fid *pfid)
 {
         *reclen = (lee->lee_reclen[0] << 8) | lee->lee_reclen[1];
-        fid_unpack(&lee->lee_parent_fid, pfid);
-        lname->ln_name = (char *)&lee->lee_parent_fid +
-                lee->lee_parent_fid.fp_len;
-        lname->ln_namelen = *reclen - lee->lee_parent_fid.fp_len -
-                sizeof(lee->lee_reclen);
+        fid_be_to_cpu(pfid, &lee->lee_parent_fid);
+        lname->ln_name = lee->lee_name;
+        lname->ln_namelen = *reclen - sizeof(struct link_ea_entry);
 }
 
 /** Add a record to the end of link ea buf */
@@ -2786,7 +2777,7 @@ static int __mdd_links_add(const struct lu_env *env, struct lu_buf *buf,
 
         leh = buf->lb_buf;
         lee = buf->lb_buf + leh->leh_len;
-        reclen = mdd_lee_pack(lee, lname, pfid, &mdd_env_info(env)->mti_fid2);
+        reclen = mdd_lee_pack(lee, lname, pfid);
         leh->leh_len += reclen;
         leh->leh_reccount++;
         return 0;
@@ -2889,7 +2880,7 @@ static int mdd_links_rename(const struct lu_env *env,
         lee = (struct link_ea_entry *)(leh + 1); /* link #0 */
 
         /* Find the old record */
-        for(count = 0; count <= leh->leh_reccount; count++) {
+        for(count = 0; count < leh->leh_reccount; count++) {
                 mdd_lee_unpack(lee, &reclen, tmpname, tmpfid);
                 if (tmpname->ln_namelen == oldlname->ln_namelen &&
                     lu_fid_eq(tmpfid, oldpfid) &&
@@ -2898,7 +2889,7 @@ static int mdd_links_rename(const struct lu_env *env,
                         break;
                 lee = (struct link_ea_entry *)((char *)lee + reclen);
         }
-        if (count > leh->leh_reccount) {
+        if ((count + 1) > leh->leh_reccount) {
                 CDEBUG(D_INODE, "Old link_ea name '%.*s' not found\n",
                        oldlname->ln_namelen, oldlname->ln_name);
                 GOTO(out, rc = -ENOENT);

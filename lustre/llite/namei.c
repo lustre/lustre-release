@@ -41,6 +41,8 @@
 #include <linux/quotaops.h>
 #include <linux/highmem.h>
 #include <linux/pagemap.h>
+#include <linux/dcache.h>
+#include <linux/buffer_head.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
@@ -102,6 +104,15 @@ static int ll_test_inode(struct inode *inode, void *opaque)
 
 static int ll_set_inode(struct inode *inode, void *opaque)
 {
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct mdt_body *body = ((struct lustre_md *)opaque)->body;
+
+        if (unlikely(!(body->valid & OBD_MD_FLID))) {
+                CERROR("MDS body missing FID\n");
+                return -EINVAL;
+        }
+
+        lli->lli_fid = body->fid1;
         return 0;
 }
 
@@ -113,7 +124,6 @@ static int ll_set_inode(struct inode *inode, void *opaque)
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct lustre_md *md)
 {
-        struct ll_inode_info *lli;
         struct inode         *inode;
         ENTRY;
 
@@ -121,7 +131,6 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
         inode = iget5_locked(sb, hash, ll_test_inode, ll_set_inode, md);
 
         if (inode) {
-                lli = ll_i2info(inode);
                 if (inode->i_state & I_NEW) {
                         int rc;
 
@@ -376,9 +385,6 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                 dget_locked(dentry);
                 lock_dentry(dentry);
                 __d_drop(dentry);
-#ifdef DCACHE_LUSTRE_INVALID
-                dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
-#endif
                 unlock_dentry(dentry);
                 ll_dops_init(dentry, 0);
                 d_rehash_cond(dentry, 0); /* avoid taking dcache_lock inside */
@@ -396,6 +402,9 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                         "refc %d\n", last_discon, last_discon->d_inode,
                         atomic_read(&last_discon->d_count));
                 dget_locked(last_discon);
+                lock_dentry(last_discon);
+                last_discon->d_flags |= DCACHE_LUSTRE_INVALID;
+                unlock_dentry(last_discon);
                 spin_unlock(&dcache_lock);
                 spin_unlock(&ll_lookup_lock);
                 ll_dops_init(last_discon, 1);
@@ -404,7 +413,7 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                 iput(inode);
                 return last_discon;
         }
-
+        de->d_flags |= DCACHE_LUSTRE_INVALID;
         ll_d_add(de, inode);
 
         spin_unlock(&dcache_lock);
@@ -414,7 +423,7 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
 }
 
 int ll_lookup_it_finish(struct ptlrpc_request *request,
-                     struct lookup_intent *it, void *data)
+                        struct lookup_intent *it, void *data)
 {
         struct it_cb_data *icbd = data;
         struct dentry **de = icbd->icbd_childp;
@@ -428,6 +437,7 @@ int ll_lookup_it_finish(struct ptlrpc_request *request,
          * when I return */
         if (!it_disposition(it, DISP_LOOKUP_NEG)) {
                 struct dentry *save = *de;
+                __u32 bits;
 
                 rc = ll_prep_inode(&inode, request, (*de)->d_sb);
                 if (rc)
@@ -436,7 +446,7 @@ int ll_lookup_it_finish(struct ptlrpc_request *request,
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%u)\n",
                        inode, inode->i_ino, inode->i_generation);
                 md_set_lock_data(sbi->ll_md_exp,
-                                 &it->d.lustre.it_lock_handle, inode);
+                                 &it->d.lustre.it_lock_handle, inode, &bits);
 
                 /* We used to query real size from OSTs here, but actually
                    this is not needed. For stat() calls size would be updated
@@ -460,6 +470,12 @@ int ll_lookup_it_finish(struct ptlrpc_request *request,
                                         lld->lld_sa_generation = 0;
                         }
                 }
+                /* we have lookup look - unhide dentry */
+                if (bits & MDS_INODELOCK_LOOKUP) {
+                        lock_dentry(*de);
+                        (*de)->d_flags &= ~(DCACHE_LUSTRE_INVALID);
+                        unlock_dentry(*de);
+                }
         } else {
                 ll_dops_init(*de, 1);
                 /* Check that parent has UPDATE lock. If there is none, we
@@ -470,6 +486,12 @@ int ll_lookup_it_finish(struct ptlrpc_request *request,
                         ll_d_add(*de, NULL);
                         spin_unlock(&dcache_lock);
                 } else {
+                        /* negative lookup - and don't have update lock to
+                         * parent */
+                        lock_dentry(*de);
+                        (*de)->d_flags |= DCACHE_LUSTRE_INVALID;
+                        unlock_dentry(*de);
+
                         (*de)->d_inode = NULL;
                         /* We do not want to hash the dentry if don`t have a
                          * lock, but if this dentry is later used in d_move,
@@ -520,7 +542,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         if (it->it_op == IT_GETATTR) {
                 first = ll_statahead_enter(parent, &dentry, 1);
                 if (first >= 0) {
-                        ll_statahead_exit(dentry, first);
+                        ll_statahead_exit(parent, dentry, first);
                         if (first == 1)
                                 RETURN(retval = dentry);
                 }
@@ -556,7 +578,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         }
 
         if (first == -EEXIST)
-                ll_statahead_mark(dentry);
+                ll_statahead_mark(parent, dentry);
 
         if ((it->it_op & IT_OPEN) && dentry->d_inode &&
             !S_ISREG(dentry->d_inode->i_mode) &&
@@ -641,6 +663,12 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
                         it = ll_d2d(dentry)->lld_it;
                         ll_d2d(dentry)->lld_it = NULL;
                 } else {
+                        if ((nd->flags & LOOKUP_CREATE ) && !(nd->flags & LOOKUP_OPEN)) {
+                                /* We are sure this is new dentry, so we need to create
+                                   our private data and set the dentry ops */ 
+                                ll_dops_init(dentry, 1);
+                                RETURN(NULL);
+                        }
                         it = ll_convert_intent(&nd->intent.open, nd->flags);
                         if (IS_ERR(it))
                                 RETURN((struct dentry *)it);
@@ -708,6 +736,42 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 }
 #endif
 
+/**
+ * check new allocated inode, new inode shld not have any valid alias
+ */
+static void ll_validate_new_inode(struct inode *new)
+{
+        struct list_head *lp;
+        struct dentry * dentry;
+        int need_inval = 0;
+        int in_recheck = 0;
+
+        if (list_empty(&new->i_dentry))
+                return;
+recheck:
+        spin_lock(&dcache_lock);
+        list_for_each(lp, &new->i_dentry) {
+                dentry = list_entry(lp, struct dentry, d_alias);
+                if (!d_unhashed(dentry) && !(dentry->d_flags & DCACHE_LUSTRE_INVALID)){
+                        ll_dump_inode(new);
+                        if (in_recheck)
+                                LBUG();
+                }
+                need_inval = 1;
+        }
+        spin_unlock(&dcache_lock);
+
+        if (need_inval && !in_recheck) {
+                /* kill all old inode's data pages */
+                truncate_inode_pages(new->i_mapping, 0);
+
+                /* invalidate all dirent and recheck inode */
+                ll_unhash_aliases(new);
+                in_recheck = 1;
+                goto recheck;
+        }
+}
+
 /* We depend on "mode" being set with the proper file type/umask by now */
 static struct inode *ll_create_node(struct inode *dir, const char *name,
                                     int namelen, const void *data, int datalen,
@@ -729,7 +793,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         if (rc)
                 GOTO(out, inode = ERR_PTR(rc));
 
-        LASSERT(list_empty(&inode->i_dentry));
+        ll_validate_new_inode(inode);
 
         /* We asked for a lock on the directory, but were granted a
          * lock on the inode.  Since we finally have an inode pointer,
@@ -737,7 +801,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         CDEBUG(D_DLMTRACE, "setting l_ast_data to inode %p (%lu/%u)\n",
                inode, inode->i_ino, inode->i_generation);
         md_set_lock_data(sbi->ll_md_exp,
-                         &it->d.lustre.it_lock_handle, inode);
+                         &it->d.lustre.it_lock_handle, inode, NULL);
         EXIT;
  out:
         ptlrpc_req_finished(request);
@@ -779,6 +843,8 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
                 RETURN(PTR_ERR(inode));
         }
 
+        /* it might been set during parent dir revalidation */
+        dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
         d_instantiate(dentry, inode);
         /* Negative dentry may be unhashed if parent does not have UPDATE lock,
          * but some callers, e.g. do_coredump, expect dentry to be hashed after

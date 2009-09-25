@@ -48,7 +48,7 @@ static inline void lprocfs_mdc_init_vars(struct lprocfs_static_vars *lvars)
         memset(lvars, 0, sizeof(*lvars));
 }
 #endif
- 
+
 void mdc_pack_body(struct ptlrpc_request *req, const struct lu_fid *fid,
                    struct obd_capa *oc, __u64 valid, int ea_size,
                    __u32 suppgid, int flags);
@@ -81,7 +81,7 @@ void mdc_exit_request(struct client_obd *cli);
 
 /* mdc/mdc_locks.c */
 int mdc_set_lock_data(struct obd_export *exp,
-                      __u64 *lockh, void *data);
+                      __u64 *lockh, void *data, __u32 *bits);
 
 int mdc_change_cbdata(struct obd_export *exp, const struct lu_fid *fid,
                       ldlm_iterator_t it, void *data);
@@ -166,4 +166,5 @@ ldlm_mode_t mdc_lock_match(struct obd_export *exp, int flags,
                            const struct lu_fid *fid, ldlm_type_t type,
                            ldlm_policy_data_t *policy, ldlm_mode_t mode,
                            struct lustre_handle *lockh);
+
 #endif

@@ -7,7 +7,12 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-[ "$EXCEPT" ] && echo "Skipping tests: `echo $EXCEPT`"
+# bug number for skipped test: 19430 19967 19967
+ALWAYS_EXCEPT="                2     5     6    $SANITY_SEC_EXCEPT"
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+[ "$ALWAYS_EXCEPT$EXCEPT" ] && \
+    echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
 
 SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin

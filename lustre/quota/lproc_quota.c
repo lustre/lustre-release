@@ -207,8 +207,10 @@ static int auto_quota_on(struct obd_device *obd, int type,
 {
         struct obd_quotactl *oqctl;
         struct lvfs_run_ctxt saved;
-        int rc = 0, id;
+        int rc = 0, rc1 = 0, id;
         struct obd_device_target *obt = &obd->u.obt;
+        struct lustre_quota_ctxt *qctxt = &obt->obt_qctxt;
+        struct mds_obd *mds = NULL;
         ENTRY;
 
         LASSERT(type == USRQUOTA || type == GRPQUOTA || type == UGQUOTA);
@@ -226,7 +228,7 @@ static int auto_quota_on(struct obd_device *obd, int type,
         if (obt->obt_qctxt.lqc_immutable) {
                 LCONSOLE_ERROR("Failed to turn Quota on, immutable mode "
                                "(is SOM enabled?)\n");
-                GOTO(out, rc);
+                GOTO(out, rc = -ECANCELED);
         }
 
         oqctl->qc_type = type;
@@ -234,30 +236,49 @@ static int auto_quota_on(struct obd_device *obd, int type,
         oqctl->qc_id = obt->obt_qfmt;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        if (is_master) {
-                struct mds_obd *mds = &obd->u.mds;
 
+        if (is_master) {
+                mds = &obd->u.mds;
                 down(&mds->mds_qonoff_sem);
                 /* turn on cluster wide quota */
-                rc = mds_admin_quota_on(obd, oqctl);
-                if (rc)
-                        CDEBUG(rc == -ENOENT ? D_QUOTA : D_ERROR,
-                               "auto-enable admin quota failed. rc=%d\n", rc);
-                up(&mds->mds_qonoff_sem);
-
+                rc1 = mds_admin_quota_on(obd, oqctl);
+                if (rc1 && rc1 != -EALREADY) {
+                        CDEBUG(rc1 == -ENOENT ? D_QUOTA : D_ERROR,
+                               "auto-enable admin quota failed. rc=%d\n", rc1);
+                        GOTO(out_ctxt, rc1);
+                }
         }
+
+        /* turn on local quota */
+        rc = fsfilt_quotactl(obd, sb, oqctl);
         if (!rc) {
-                /* turn on local quota */
-                rc = fsfilt_quotactl(obd, sb, oqctl);
-                if (rc)
-                        CDEBUG(rc == -ENOENT ? D_QUOTA : D_ERROR,
-                               "auto-enable local quota failed. rc=%d\n", rc);
-                else
-                        obt->obt_qctxt.lqc_flags |= UGQUOTA2LQC(type);
+                obt->obt_qctxt.lqc_flags |= UGQUOTA2LQC(type);
+                build_lqs(obd);
+        } else if (rc == -EBUSY && quota_is_on(qctxt, oqctl)) {
+                CWARN("%s: mds local quota[%d] is on already\n",
+                      obd->obd_name, oqctl->qc_type);
+                rc = -EALREADY;
+        } else {
+                CDEBUG(rc == -ENOENT ? D_QUOTA : D_ERROR,
+                       "auto-enable local quota failed. rc=%d\n", rc);
+                if (rc1 == -EALREADY) {
+                        oqctl->qc_cmd = Q_QUOTAOFF;
+                        mds_admin_quota_off(obd, oqctl);
+                }
+                if (rc == -ENOENT)
+                        CWARN("%s: quotaon failed because quota files don't "
+                              "exist, please run quotacheck firstly\n",
+                              obd->obd_name);
+
+                GOTO(out_ctxt, rc);
         }
 
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         EXIT;
+
+out_ctxt:
+        if (mds != NULL)
+                up(&mds->mds_qonoff_sem);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
 out:
         up(&obt->obt_quotachecking);
@@ -306,8 +327,10 @@ int lprocfs_quota_wr_type(struct file *file, const char *buffer,
         }
 
         if (type != 0) {
-                auto_quota_on(obd, type - 1, obt->obt_sb, is_mds);
-                build_lqs(obd);
+                int rc = auto_quota_on(obd, type - 1, obt->obt_sb, is_mds);
+
+                if (rc && rc != -EALREADY && rc != -ENOENT)
+                        return rc;
         }
 
         return count;

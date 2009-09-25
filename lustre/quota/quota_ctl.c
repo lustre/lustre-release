@@ -65,53 +65,6 @@
 #ifdef HAVE_QUOTA_SUPPORT
 #ifdef __KERNEL__
 
-/* When quotaon, build a lqs for every uid/gid who has been set limitation
- * for quota. After quota_search_lqs, it will hold one ref for the lqs.
- * It will be released when qctxt_cleanup() is executed b=18574 */
-void build_lqs(struct obd_device *obd)
-{
-        struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
-        struct list_head id_list;
-        int i, rc;
-
-        INIT_LIST_HEAD(&id_list);
-        for (i = 0; i < MAXQUOTAS; i++) {
-                struct dquot_id *dqid, *tmp;
-
-#ifndef KERNEL_SUPPORTS_QUOTA_READ
-                rc = fsfilt_qids(obd, sb_dqopt(qctxt->lqc_sb)->files[i], NULL,
-                                 i, &id_list);
-#else
-                rc = fsfilt_qids(obd, NULL, sb_dqopt(qctxt->lqc_sb)->files[i],
-                                 i, &id_list);
-#endif
-                if (rc) {
-                        CDEBUG(D_ERROR, "fail to get %s qids!\n",
-                               i ? "group" : "user");
-                        continue;
-                }
-
-                list_for_each_entry_safe(dqid, tmp, &id_list,
-                                         di_link) {
-                        struct lustre_qunit_size *lqs;
-
-                        list_del_init(&dqid->di_link);
-                        lqs = quota_search_lqs(LQS_KEY(i, dqid->di_id),
-                                               qctxt, 1);
-                        if (lqs && !IS_ERR(lqs)) {
-                                lqs->lqs_flags |= dqid->di_flag;
-                                lqs_putref(lqs);
-                        } else {
-                                CDEBUG(D_ERROR, "fail to create a lqs"
-                                       "(%s id: %u)!\n", i ? "group" : "user",
-                                       dqid->di_id);
-                        }
-
-                        OBD_FREE_PTR(dqid);
-                }
-        }
-}
-
 int mds_quota_ctl(struct obd_device *obd, struct obd_export *unused,
                   struct obd_quotactl *oqctl)
 {
@@ -128,8 +81,6 @@ int mds_quota_ctl(struct obd_device *obd, struct obd_export *unused,
         case Q_QUOTAON:
                 oqctl->qc_id = obt->obt_qfmt; /* override qfmt version */
                 rc = mds_quota_on(obd, oqctl);
-                /* when quotaon, create lqs for every quota uid/gid b=18574 */
-                build_lqs(obd);
                 break;
         case Q_QUOTAOFF:
                 oqctl->qc_id = obt->obt_qfmt; /* override qfmt version */
@@ -181,7 +132,7 @@ int filter_quota_ctl(struct obd_device *unused, struct obd_export *exp,
         struct obd_device *obd = exp->exp_obd;
         struct obd_device_target *obt = &obd->u.obt;
         struct lvfs_run_ctxt saved;
-        struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
+        struct lustre_quota_ctxt *qctxt = &obt->obt_qctxt;
         struct lustre_qunit_size *lqs;
         void *handle = NULL;
         struct timeval work_start;
@@ -224,12 +175,16 @@ int filter_quota_ctl(struct obd_device *unused, struct obd_export *exp,
                 if (oqctl->qc_cmd == Q_QUOTAON || oqctl->qc_cmd == Q_QUOTAOFF ||
                     oqctl->qc_cmd == Q_FINVALIDATE) {
                         if (oqctl->qc_cmd == Q_QUOTAON) {
-                                if (!rc)
+                                if (!rc) {
                                         obt->obt_qctxt.lqc_flags |=
                                                 UGQUOTA2LQC(oqctl->qc_type);
-                                else if (rc == -EBUSY &&
-                                         quota_is_on(qctxt, oqctl))
+                                        /* when quotaon, create lqs for every
+                                         * quota uid/gid b=18574 */
+                                        build_lqs(obd);
+                                } else if (rc == -EBUSY &&
+                                         quota_is_on(qctxt, oqctl)) {
                                                 rc = -EALREADY;
+                                }
                         } else if (oqctl->qc_cmd == Q_QUOTAOFF) {
                                 if (!rc)
                                         obt->obt_qctxt.lqc_flags &=
@@ -240,9 +195,6 @@ int filter_quota_ctl(struct obd_device *unused, struct obd_export *exp,
                         up(&obt->obt_quotachecking);
                 }
 
-                /* when quotaon, create lqs for every quota uid/gid b=18574 */
-                if (oqctl->qc_cmd == Q_QUOTAON)
-                        build_lqs(obd);
                 break;
         case Q_SETQUOTA:
                 /* currently, it is only used for nullifying the quota */
@@ -346,7 +298,7 @@ int client_quota_ctl(struct obd_device *unused, struct obd_export *exp,
         struct ptlrpc_request   *req;
         struct obd_quotactl     *oqc;
         const struct req_format *rf;
-        int                      ver, opc, rc;
+        int                      ver, opc, rc, resends = 0;
         ENTRY;
 
         if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME)) {
@@ -361,6 +313,8 @@ int client_quota_ctl(struct obd_device *unused, struct obd_export *exp,
                 RETURN(-EINVAL);
         }
 
+restart_request:
+
         req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp), rf, ver, opc);
         if (req == NULL)
                 RETURN(-ENOMEM);
@@ -369,6 +323,8 @@ int client_quota_ctl(struct obd_device *unused, struct obd_export *exp,
         *oqc = *oqctl;
 
         ptlrpc_request_set_replen(req);
+        ptlrpc_at_set_req_timeout(req);
+        req->rq_no_resend = 1;
 
         rc = ptlrpc_queue_wait(req);
         if (rc) {
@@ -389,6 +345,17 @@ int client_quota_ctl(struct obd_device *unused, struct obd_export *exp,
         EXIT;
 out:
         ptlrpc_req_finished(req);
+
+        if (client_quota_recoverable_error(rc)) {
+                resends++;
+                if (!client_quota_should_resend(resends, &exp->exp_obd->u.cli)) {
+                        CERROR("too many resend retries, returning error\n");
+                        RETURN(-EIO);
+                }
+
+                goto restart_request;
+        }
+
         return rc;
 }
 

@@ -50,10 +50,22 @@
 #include <lustre/lustre_idl.h>
 
 #ifdef __KERNEL__
+
+#ifdef HAVE_EXT4_LDISKFS
+#include <ldiskfs/ldiskfs_jbd2.h>
+#else
 #include <linux/jbd.h>
+#endif
+
 #ifdef HAVE_SERVER_SUPPORT
 /* LDISKFS_SB() */
+
+#ifdef HAVE_EXT4_LDISKFS
+#include <ldiskfs/ldiskfs.h>
+#else
 #include <linux/ldiskfs_fs.h>
+#endif
+
 #endif
 #endif
 static int mea_last_char_hash(int count, char *name, int namelen)
@@ -81,8 +93,6 @@ static int mea_all_chars_hash(int count, char *name, int namelen)
 /* This hash calculate method must be same as the lvar hash method */
 
 #define LVAR_HASH_SANDWICH  (0)
-#define LVAR_HASH_TEA       (1)
-#define LVAR_HASH_R5        (0)
 #define LVAR_HASH_PREFIX    (0)
 
 static __u32 hash_build0(const char *name, int namelen)
@@ -103,10 +113,7 @@ static __u32 hash_build0(const char *name, int namelen)
         } else {
                 struct ldiskfs_dx_hash_info hinfo;
 
-                if (LVAR_HASH_TEA)
-                        hinfo.hash_version = LDISKFS_DX_HASH_TEA;
-                else
-                        hinfo.hash_version = LDISKFS_DX_HASH_R5;
+                hinfo.hash_version = LDISKFS_DX_HASH_TEA;
                 hinfo.seed = 0;
                 ldiskfsfs_dirhash(name, namelen, &hinfo);
                 result = hinfo.hash;

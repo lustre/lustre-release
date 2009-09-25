@@ -83,7 +83,8 @@ __u32 lgss_wrap_bulk(
 __u32 lgss_unwrap_bulk(
                 struct gss_ctx          *gctx,
                 struct ptlrpc_bulk_desc *desc,
-                rawobj_t                *token);
+                rawobj_t                *token,
+                int                      adj_nob);
 __u32 lgss_delete_sec_context(
                 struct gss_ctx         **ctx);
 int lgss_display(
@@ -157,7 +158,8 @@ struct gss_api_ops {
         __u32 (*gss_unwrap_bulk)(
                         struct gss_ctx         *gctx,
                         struct ptlrpc_bulk_desc *desc,
-                        rawobj_t               *token);
+                        rawobj_t               *token,
+                        int                     adj_nob);
         void (*gss_delete_sec_context)(
                         void                   *ctx);
         int  (*gss_display)(

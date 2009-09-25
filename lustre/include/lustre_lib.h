@@ -76,6 +76,10 @@ void target_destroy_export(struct obd_export *exp);
 int target_pack_pool_reply(struct ptlrpc_request *req);
 int target_handle_ping(struct ptlrpc_request *req);
 void target_committed_to_req(struct ptlrpc_request *req);
+int target_set_info_rpc(struct obd_import *imp, int opcode,
+                        obd_count keylen, void *key,
+                        obd_count vallen, void *val,
+                        struct ptlrpc_request_set *set);
 
 /* quotacheck callback, dqacq/dqrel callback handler */
 int target_handle_qc_callback(struct ptlrpc_request *req);
@@ -125,7 +129,6 @@ void l_lock_init(struct lustre_lock *);
 void l_lock(struct lustre_lock *);
 void l_unlock(struct lustre_lock *);
 int l_has_lock(struct lustre_lock *);
-
 
 /*
  *   OBD IOCTLS
@@ -520,6 +523,8 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define ECHO_IOC_SET_STRIPE            _IOWR('f', 201, OBD_IOC_DATA_TYPE)
 #define ECHO_IOC_ENQUEUE               _IOWR('f', 202, OBD_IOC_DATA_TYPE)
 #define ECHO_IOC_CANCEL                _IOWR('f', 203, OBD_IOC_DATA_TYPE)
+
+#define OBD_IOC_GET_OBJ_VERSION        _IOR('f', 210, OBD_IOC_DATA_TYPE)
 
 /* XXX _IOWR('f', 250, long) has been defined in
  * libcfs/include/libcfs/libcfs_private.h for debug, don't use it

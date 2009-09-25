@@ -85,7 +85,7 @@ int LL_PROC_PROTO(proc_fail_loc)
         int rc;
         long old_fail_loc = obd_fail_loc;
 
-        rc = ll_proc_dointvec(table, write, filp, buffer, lenp, ppos);
+        rc = ll_proc_dolongvec(table, write, filp, buffer, lenp, ppos);
         if (old_fail_loc != obd_fail_loc)
                 wake_up(&obd_race_waitq);
         return rc;
@@ -297,7 +297,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .ctl_name = OBD_FAIL_LOC,
                 .procname = "fail_loc",
                 .data     = &obd_fail_loc,
-                .maxlen   = sizeof(int),
+                .maxlen   = sizeof(obd_fail_loc),
                 .mode     = 0644,
                 .proc_handler = &proc_fail_loc
         },

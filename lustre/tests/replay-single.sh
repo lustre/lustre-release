@@ -20,7 +20,7 @@ remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0
 
 # Skip these tests
 # bug number:  17466 15962
-ALWAYS_EXCEPT="61d   33b $REPLAY_SINGLE_EXCEPT"
+ALWAYS_EXCEPT="61d  $REPLAY_SINGLE_EXCEPT"
 
 if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
     CONFIG_EXCEPTIONS="0b 42 47 61a 61c"
@@ -126,7 +126,9 @@ test_0c() {
     touch $DIR/$tfile || return 3
     rm $DIR/$tfile || return 4
 }
+start_full_debug_logging
 run_test 0c "fld create"
+stop_full_debug_logging
 
 test_1() {
     replay_barrier $SINGLEMDS
@@ -353,6 +355,7 @@ test_13() {
     wait $pid || return 1
 
     $CHECKSTAT -s 1 -p 0 $DIR/$tfile || return 2
+    rm $DIR/$tfile || return 4
     return 0
 }
 run_test 13 "open chmod 0 |x| write close"
@@ -481,7 +484,8 @@ test_20b() { # bug 10480
     # orphan cleanup. Wait for llogs to get synchronized.
     echo waiting for orphan cleanup...
     while [ true ]; do
-            local -a sync=($(do_facet ost "$LCTL get_param obdfilter.*.mds_sync" | awk -F= ' {print $2}'))
+            local -a sync=($(do_nodes $(comma_list $(osts_nodes)) \
+                "$LCTL get_param obdfilter.*.mds_sync" | awk -F= ' {print $2}'))
             local con=1
             for ((i=0; i<${#sync[@]}; i++)); do
                     [ ${sync[$i]} -eq 0 ] && continue
@@ -897,7 +901,7 @@ run_test 40 "cause recovery in ptlrpc, ensure IO continues"
 # assert on trying to unlock the unlocked page.
 test_41() {
     [ $OSTCOUNT -lt 2 ] && \
-	skip "skipping test 41: we don't have a second OST to test with" && \
+	skip_env "skipping test 41: we don't have a second OST to test with" && \
 	return
 
     local f=$MOUNT/$tfile
@@ -1057,7 +1061,7 @@ run_test 47 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_48() {
     remote_ost_nodsh && skip "remote OST with nodsh" && return 0
-    [ "$OSTCOUNT" -lt "2" ] && skip "$OSTCOUNT < 2 OSTs -- skipping" && return
+    [ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs -- skipping" && return
 
     replay_barrier $SINGLEMDS
     createmany -o $DIR/$tfile 20  || return 1
@@ -1133,7 +1137,7 @@ test_53b() {
 
         mkdir -p $DIR/${tdir}-1
         mkdir -p $DIR/${tdir}-2
-        multiop $DIR/${tdir}-1/f O_c &
+        multiop_bg_pause $DIR/${tdir}-1/f O_c || return 6
         close_pid=$!
 
         #define OBD_FAIL_MDS_REINT_NET 0x107
@@ -1840,7 +1844,7 @@ test_70b () {
 	[ "$SLOW" = "no" ] && duration=60
 	local cmd="rundbench 1 -t $duration"
 	local PID=""
-	do_nodes $clients "set -x; MISSING_DBENCH_OK=$MISSING_DBENCH_OK \
+	do_nodes --verbose $clients "set -x; MISSING_DBENCH_OK=$MISSING_DBENCH_OK \
 		PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests/:$DBENCH_LIB \
 		DBENCH_LIB=$DBENCH_LIB TESTSUITE=$TESTSUITE TESTNAME=$TESTNAME \
 		LCTL=$LCTL $cmd" &
@@ -2058,16 +2062,36 @@ test_82b() {
 }
 run_test 82b "CMD: mkdir cross-node dir (fail mds with name)"
 
-test_84() {
+test_83a() {
+    mkdir -p $DIR/$tdir
+    createmany -o $DIR/$tdir/$tfile- 10 || return 1
+#define OBD_FAIL_MDS_FAIL_LOV_LOG_ADD       0x140
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000140"
+    unlinkmany $DIR/$tdir/$tfile- 10 || return 2
+}
+run_test 83a "fail log_add during unlink recovery"
+
+test_83b() {
+    mkdir -p $DIR/$tdir
+    createmany -o $DIR/$tdir/$tfile- 10 || return 1
+    replay_barrier $SINGLEMDS
+    unlinkmany $DIR/$tdir/$tfile- 10 || return 2
+#define OBD_FAIL_MDS_FAIL_LOV_LOG_ADD       0x140
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000140"
+    fail $SINGLEMDS
+}
+run_test 83b "fail log_add during unlink recovery"
+
+test_84a() {
 #define OBD_FAIL_MDS_OPEN_WAIT_CREATE  0x143
-    do_facet mds "lctl set_param fail_loc=0x80000143"
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000143"
     createmany -o $DIR/$tfile- 1 &
     PID=$!
     mds_evict_client
     wait $PID
     df -P $DIR || df -P $DIR || true    # reconnect
 }
-run_test 84 "stale open during export disconnect"
+run_test 84a "stale open during export disconnect"
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre

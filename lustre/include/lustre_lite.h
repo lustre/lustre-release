@@ -125,7 +125,7 @@ struct lustre_client_ocd {
          * under ->lco_lock.
          */
         __u64      lco_flags;
-        spinlock_t lco_lock;
+        struct semaphore   lco_lock;
         struct obd_export *lco_md_exp;
         struct obd_export *lco_dt_exp;
 };

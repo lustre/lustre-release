@@ -24,6 +24,9 @@ MDSDEVBASE=${MDSDEVBASE:-$TMP/${FSNAME}-mdt}
 MDSSIZE=${MDSSIZE:-100000}
 MDSOPT=${MDSOPT:-"--mountfsoptions=acl"}
 
+MGSDEV=${MGSDEV:-$MDSDEV1}
+MGSSIZE=${MGSSIZE:-$MDSSIZE}
+
 OSTCOUNT=${OSTCOUNT:-2}
 OSTDEVBASE=${OSTDEVBASE:-$TMP/${FSNAME}-ost}
 OSTSIZE=${OSTSIZE:-200000}
@@ -67,8 +70,15 @@ MKFSOPT=""
     MDSOPT=$MDSOPT" --param lov.stripecount=$STRIPES_PER_OBJ"
 [ "x$L_GETIDENTITY" != "x" ] &&
     MDSOPT=$MDSOPT" --param mdt.identity_upcall=$L_GETIDENTITY"
+
 MDSn_MKFS_OPTS=$MDS_MKFS_OPTS
 MDS_MKFS_OPTS="--mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MDSOPT $MDS_MKFS_OPTS"
+if [[ $mds1_HOST == $mgs_HOST ]] && [[ $MDSDEV1 == $MGSDEV ]]; then
+    MDS_MKFS_OPTS="--mgs $MDS_MKFS_OPTS"
+else
+    MDS_MKFS_OPTS="--mgsnode=$MGSNID $MDS_MKFS_OPTS"
+    mgs_MKFS_OPTS="--mgs "
+fi
 MDSn_MKFS_OPTS="--mgsnode=$MGSNID --mdt --fsname=$FSNAME --device-size=$MDSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT $MDSOPT $MDSn_MKFS_OPTS"
 
 MKFSOPT=""
@@ -86,10 +96,6 @@ OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID -
 
 MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS:-"-o loop,user_xattr,acl"}
 OST_MOUNT_OPTS=${OST_MOUNT_OPTS:-"-o loop"}
-
-MGSSIZE=${MGSSIZE:-30000}
-MGS_MKFS_OPTS="--mgs --fsname=$FSNAME --device-size=$MGSSIZE --param sys.timeout=$TIMEOUT $MKFSOPT"
-MGS_MOUNT_OPTS=${MGS_MOUNT_OPTS:-"-o loop,user_xattr,acl"}
 
 #client
 MOUNT=${MOUNT:-/mnt/${FSNAME}}
@@ -115,3 +121,8 @@ POWER_DOWN=${POWER_DOWN:-"powerman --off"}
 POWER_UP=${POWER_UP:-"powerman --on"}
 SLOW=${SLOW:-no}
 FAIL_ON_ERROR=${FAIL_ON_ERROR:-true}
+
+MPIRUN=$(which mpirun 2>/dev/null) || true
+MPI_USER=${MPI_USER:-mpiuser}
+SHARED_DIR_LOGS=${SHARED_DIR_LOGS:-""}
+

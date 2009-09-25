@@ -60,7 +60,6 @@ struct dt_find_hint {
 
 struct dt_thread_info {
         char                    dti_buf[DT_MAX_PATH];
-        struct lu_fid_pack      dti_pack;
         struct dt_find_hint     dti_dfh;
 };
 
@@ -217,10 +216,7 @@ EXPORT_SYMBOL(dt_mode_to_dft);
 static int dt_lookup(const struct lu_env *env, struct dt_object *dir,
                      const char *name, struct lu_fid *fid)
 {
-        struct dt_thread_info *info = lu_context_key_get(&env->le_ctx,
-                                                         &dt_key);
-        struct lu_fid_pack *pack = &info->dti_pack;
-        struct dt_rec       *rec = (struct dt_rec *)pack;
+        struct dt_rec       *rec = (struct dt_rec *)fid;
         const struct dt_key *key = (const struct dt_key *)name;
         int result;
 
@@ -228,7 +224,7 @@ static int dt_lookup(const struct lu_env *env, struct dt_object *dir,
                 result = dir->do_index_ops->dio_lookup(env, dir, rec, key,
                                                        BYPASS_CAPA);
                 if (result > 0)
-                        result = fid_unpack(pack, fid);
+                        result = 0;
                 else if (result == 0)
                         result = -ENOENT;
         } else

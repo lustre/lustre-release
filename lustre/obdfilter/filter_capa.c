@@ -112,7 +112,7 @@ int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *new)
         RETURN(0);
 }
 
-int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
+int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, obd_gr group,
                      struct lustre_capa *capa, __u64 opc)
 {
         struct obd_device *obd = exp->exp_obd;
@@ -120,9 +120,14 @@ int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
         struct filter_capa_key *k;
         struct lustre_capa_key key;
         struct obd_capa *oc;
+        __u64 mdsid;
         __u8 *hmac;
         int keys_ready = 0, key_found = 0, rc = 0;
         ENTRY;
+
+        /* skip capa check for llog and obdecho */
+        if (!filter_group_is_mds(group))
+                RETURN(0);
 
         /* capability is disabled */
         if (!filter->fo_fl_oss_capa)
@@ -131,6 +136,7 @@ int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
         if (!(exp->exp_connect_flags & OBD_CONNECT_OSS_CAPA))
                 RETURN(0);
 
+        mdsid = objgrp_to_mdsno(group);
         if (capa == NULL) {
                 if (fid)
                         CERROR("mdsno/fid/opc "LPU64"/"DFID"/"LPX64
@@ -221,11 +227,16 @@ int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
         RETURN(0);
 }
 
-int filter_capa_fixoa(struct obd_export *exp, struct obdo *oa, __u64 mdsid,
+int filter_capa_fixoa(struct obd_export *exp, struct obdo *oa, obd_gr group,
                       struct lustre_capa *capa)
 {
+        __u64 mdsid;
         int rc = 0;
         ENTRY;
+
+        /* skip capa check for llog and obdecho */
+        if (!filter_group_is_mds(group))
+                RETURN(0);
 
         if (!(exp->exp_connect_flags & OBD_CONNECT_OSS_CAPA))
                 RETURN(0);
@@ -233,6 +244,7 @@ int filter_capa_fixoa(struct obd_export *exp, struct obdo *oa, __u64 mdsid,
         if (unlikely(!capa))
                 RETURN(-EACCES);
 
+        mdsid = objgrp_to_mdsno(group);
         if (capa_flags(capa) == LC_ID_CONVERT) {
                 struct obd_device *obd = exp->exp_obd;
                 struct filter_obd *filter = &obd->u.filter;

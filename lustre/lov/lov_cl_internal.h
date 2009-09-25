@@ -55,8 +55,6 @@
 #include <cl_object.h>
 #include "lov_internal.h"
 
-/** \addtogroup lov lov @{ */
-
 /** \defgroup lov lov
  * Logical object volume layer. This layer implements data striping (raid0).
  *

@@ -11,11 +11,8 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 
-# bug number for skipped test: 13739
-HEAD_EXCEPT="                  32a"
-
 # bug number for skipped test:
-ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $HEAD_EXCEPT"
+ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=`dirname $0`
@@ -493,7 +490,7 @@ test_18() {
                 [ $SPACE -gt $((MIN / 20)) ] && OK=1 && myMDSSIZE=$MIN && \
                         log "use file $MDSDEV with MIN=$MIN"
 
-        [ -z "$OK" ] && skip "$MDSDEV too small for ${MIN}kB MDS" && return
+        [ -z "$OK" ] && skip_env "$MDSDEV too small for ${MIN}kB MDS" && return
 
 
         echo "mount mds with large journal..."
@@ -698,7 +695,7 @@ test_24a() {
 	[ -n "$ost1_HOST" ] && fs2ost_HOST=$ost1_HOST
 	if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" ]; then
 		do_facet $SINGLEMDS [ -b "$MDSDEV" ] && \
-		skip "mixed loopback and real device not working" && return
+		skip_env "mixed loopback and real device not working" && return
 	fi
 
 	local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
@@ -744,7 +741,7 @@ run_test 24a "Multiple MDTs on a single node"
 test_24b() {
 	if [ -z "$fs2mds_DEV" ]; then
 		do_facet $SINGLEMDS [ -b "$MDSDEV" ] && \
-		skip "mixed loopback and real device not working" && return
+		skip_env "mixed loopback and real device not working" && return
 	fi
 
 	local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
@@ -843,7 +840,7 @@ test_28() {
 run_test 28 "permanent parameter setting"
 
 test_29() {
-	[ "$OSTCOUNT" -lt "2" ] && skip "$OSTCOUNT < 2, skipping" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2, skipping" && return
         setup > /dev/null 2>&1
 	start_ost2
 	sleep 10
@@ -950,7 +947,7 @@ start32 () {
 
 	echo "Starting local ${facet}: $@ $device ${MOUNT%/*}/${facet}"
 	mount -t lustre $@ ${device} ${MOUNT%/*}/${facet}
-	RC=$?
+	local RC=$?
 	if [ $RC -ne 0 ]; then
 		echo "mount -t lustre $@ ${device} ${MOUNT%/*}/${facet}"
 		echo "Start of ${device} of local ${facet} failed ${RC}"
@@ -978,63 +975,52 @@ test_32a() {
 	# this test is totally useless on a client-only system
 	[ -n "$CLIENTONLY" -o -n "$CLIENTMODSONLY" ] && skip "client only testing" && return 0
 	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
-	[ -z "$TUNEFS" ] && skip "No tunefs" && return 0
-	local DISK1_8=$LUSTRE/tests/disk1_8.tgz
-	[ ! -r $DISK1_8 ] && skip "Cannot find $DISK1_8" && return 0
+	[ -z "$TUNEFS" ] && skip_env "No tunefs" && return 0
 
-	mkdir -p $TMP/$tdir
-	tar xjvf $DISK1_8 -C $TMP/$tdir || \
-		{ skip "Cannot untar $DISK1_8" && return 0; }
+	local DISK1_8=$LUSTRE/tests/disk1_8.tar.bz2
+	[ ! -r $DISK1_8 ] && skip_env "Cannot find $DISK1_8" && return 0
+	local tmpdir=$TMP/conf32a
+	mkdir -p $tmpdir
+	tar xjvf $DISK1_8 -C $tmpdir || \
+		{ skip_env "Cannot untar $DISK1_8" && return 0; }
 
 	load_modules
-	lctl set_param debug=$PTLDEBUG
+	$LCTL set_param debug=$PTLDEBUG
 
 	$TUNEFS $tmpdir/mds || error "tunefs failed"
 
 	# nids are wrong, so client wont work, but server should start
-	start32 mds $tmpdir/mds "-o loop,exclude=lustre-OST0000" && \
+	start32 mds1 $tmpdir/mds "-o loop,exclude=lustre-OST0000" && \
 		trap cleanup_32 EXIT INT || return 3
 
-	local UUID=$(lctl get_param -n mds.lustre-MDT0000.uuid)
+	local UUID=$($LCTL get_param -n mdt.lustre-MDT0000.uuid)
 	echo MDS uuid $UUID
-	[ "$UUID" == "mdsA_UUID" ] || error "UUID is wrong: $UUID"
+	[ "$UUID" == "lustre-MDT0000_UUID" ] || error "UUID is wrong: $UUID"
 
-	$TUNEFS --mgsnode=`hostname` $tmpdir/ost1 || error "tunefs failed"
+	$TUNEFS --mgsnode=$HOSTNAME $tmpdir/ost1 || error "tunefs failed"
 	start32 ost1 $tmpdir/ost1 "-o loop" || return 5
-	UUID=$(lctl get_param -n obdfilter.lustre-OST0000.uuid)
+	UUID=$($LCTL get_param -n obdfilter.lustre-OST0000.uuid)
 	echo OST uuid $UUID
-	[ "$UUID" == "ost1_UUID" ] || error "UUID is wrong: $UUID"
+	[ "$UUID" == "lustre-OST0000_UUID" ] || error "UUID is wrong: $UUID"
 
 	local NID=$($LCTL list_nids | head -1)
 
 	echo "OSC changes should return err:"
-	$LCTL conf_param lustre-OST0000.osc.max_dirty_mb=15 && return 7
-	$LCTL conf_param lustre-OST0000.failover.node=$NID && return 8
+	$LCTL conf_param lustre-OST0000.osc.max_dirty_mb=15 || return 7
+	$LCTL conf_param lustre-OST0000.failover.node=$NID || return 8
+
 	echo "ok."
 	echo "MDC changes should succeed:"
 	$LCTL conf_param lustre-MDT0000.mdc.max_rpcs_in_flight=9 || return 9
 	$LCTL conf_param lustre-MDT0000.failover.node=$NID || return 10
 	echo "ok."
 
-	# With a new good MDT failover nid, we should be able to mount a client
-	# (but it cant talk to OST)
-	local mountopt="-o exclude=lustre-OST0000"
-
-	local device=`h2$NETTYPE $HOSTNAME`:/lustre
-	echo "Starting local client: $HOSTNAME: $mountopt $device $MOUNT"
-	mount -t lustre $mountopt $device $MOUNT || return 1
-
-	local old=$(lctl get_param -n mdc.*.max_rpcs_in_flight)
-	local new=$((old + 5))
-	lctl conf_param lustre-MDT0000.mdc.max_rpcs_in_flight=$new
-	wait_update $HOSTNAME "lctl get_param -n mdc.*.max_rpcs_in_flight" $new || return 11
-
 	cleanup_32
 
 	# mount a second time to make sure we didnt leave upgrade flag on
 	load_modules
 	$TUNEFS --dryrun $tmpdir/mds || error "tunefs failed"
-	start32 mds $tmpdir/mds "-o loop,exclude=lustre-OST0000" && \
+	start32 mds1 $tmpdir/mds "-o loop,exclude=lustre-OST0000" && \
 		trap cleanup_32 EXIT INT || return 12
 
 	cleanup_32
@@ -1047,17 +1033,17 @@ test_32b() {
 	# this test is totally useless on a client-only system
 	[ -n "$CLIENTONLY" -o -n "$CLIENTMODSONLY" ] && skip "client only testing" && return 0
 	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
-	[ -z "$TUNEFS" ] && skip "No tunefs" && return
+	[ -z "$TUNEFS" ] && skip_env "No tunefs" && return
 
 	local DISK1_8=$LUSTRE/tests/disk1_8.tar.bz2
-	[ ! -r $DISK1_8 ] && skip "Cannot find $DISK1_8" && return 0
-	local tmpdir=$TMP/$tdir
+	[ ! -r $DISK1_8 ] && skip_env "Cannot find $DISK1_8" && return 0
+	local tmpdir=$TMP/conf32b
 	mkdir -p $tmpdir
 	tar xjvf $DISK1_8 -C $tmpdir || \
-		{ skip "Cannot untar $DISK1_8" && return ; }
+		{ skip_env "Cannot untar $DISK1_8" && return ; }
 
 	load_modules
-	lctl set_param debug=$PTLDEBUG
+	$LCTL set_param debug=$PTLDEBUG
 	local NEWNAME=lustre
 
 	# writeconf will cause servers to register with their current nids
@@ -1065,19 +1051,23 @@ test_32b() {
 	start32 mds1 $tmpdir/mds "-o loop" && \
 		trap cleanup_32 EXIT INT || return 3
 
-	local UUID=$(lctl get_param -n mdt.${NEWNAME}-MDT0000.uuid)
+	local UUID=$($LCTL get_param -n mdt.${NEWNAME}-MDT0000.uuid)
 	echo MDS uuid $UUID
 	[ "$UUID" == "${NEWNAME}-MDT0000_UUID" ] || error "UUID is wrong: $UUID"
 
-	$TUNEFS --mgsnode=`hostname` --writeconf --fsname=$NEWNAME $tmpdir/ost1 || error "tunefs failed"
+	$TUNEFS --mgsnode=$HOSTNAME --writeconf --fsname=$NEWNAME $tmpdir/ost1 || error "tunefs failed"
 	start32 ost1 $tmpdir/ost1 "-o loop" || return 5
-	UUID=$(lctl get_param -n obdfilter.${NEWNAME}-OST0000.uuid)
+	UUID=$($LCTL get_param -n obdfilter.${NEWNAME}-OST0000.uuid)
 	echo OST uuid $UUID
 	[ "$UUID" == "${NEWNAME}-OST0000_UUID" ] || error "UUID is wrong: $UUID"
 
+	local NID=$($LCTL list_nids | head -1)
+
 	echo "OSC changes should succeed:"
+
 	$LCTL conf_param ${NEWNAME}-OST0000.osc.max_dirty_mb=15 || return 7
 	$LCTL conf_param ${NEWNAME}-OST0000.failover.node=$NID || return 8
+
 	echo "ok."
 	echo "MDC changes should succeed:"
 	$LCTL conf_param ${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight=9 || return 9
@@ -1091,10 +1081,10 @@ test_32b() {
 	echo "Starting local client: $HOSTNAME: $device $MOUNT"
 	mount -t lustre $device $MOUNT || return 1
 
-	local old=$(lctl get_param -n mdc.*.max_rpcs_in_flight)
+	local old=$($LCTL get_param -n mdc.*.max_rpcs_in_flight)
 	local new=$((old + 5))
-	lctl conf_param ${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight=$new
-	wait_update $HOSTNAME "lctl get_param -n mdc.*.max_rpcs_in_flight" $new || return 11
+	$LCTL conf_param ${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight=$new
+	wait_update $HOSTNAME "$LCTL get_param -n mdc.*.max_rpcs_in_flight" $new || return 11
 
 	[ "$(cksum $MOUNT/passwd | cut -d' ' -f 1,2)" == "94306271 1478" ] || return 12
 	echo "ok."
@@ -1112,7 +1102,7 @@ test_33a() { # bug 12333, was test_33
 
         if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" ]; then
                 do_facet $SINGLEMDS [ -b "$MDSDEV" ] && \
-                skip "mixed loopback and real device not working" && return
+                skip_env "mixed loopback and real device not working" && return
         fi
 
         local fs2mdsdev=${fs2mds_DEV:-${MDSDEV}_2}
@@ -1256,9 +1246,9 @@ test_36() { # 12743
 
         if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" -o -z "$fs3ost_DEV" ]; then
 		do_facet $SINGLEMDS [ -b "$MDSDEV" ] && \
-		skip "mixed loopback and real device not working" && return
+		skip_env "mixed loopback and real device not working" && return
         fi
-        [ $OSTCOUNT -lt 2 ] && skip "skipping test for single OST" && return
+        [ $OSTCOUNT -lt 2 ] && skip_env "skipping test for single OST" && return
 
 	[ "$ost_HOST" = "`hostname`" -o "$ost1_HOST" = "`hostname`" ] || \
 		{ skip "remote OST" && return 0; }
@@ -1458,7 +1448,7 @@ test_42() { #bug 14693
 run_test 42 "invalid config param should not prevent client from mounting"
 
 test_43() {
-    [ $UID -ne 0 -o $RUNAS_ID -eq 0 ] && skip "run as root"
+    [ $UID -ne 0 -o $RUNAS_ID -eq 0 ] && skip_env "run as root"
     setup
     chmod ugo+x $DIR || error "chmod 0 failed"
     set_and_check mds                                        \
@@ -1598,8 +1588,27 @@ test_45() { #17310
 }
 run_test 45 "long unlink handling in ptlrpcd"
 
+cleanup_46a() {
+	trap 0
+	local rc=0
+	local count=$1
+
+	umount_client $MOUNT2 || rc=$?
+	umount_client $MOUNT || rc=$?
+	while [ $count -gt 0 ]; do
+		stop ost${count} -f || rc=$?
+		let count=count-1
+	done	
+	stop_mds || rc=$? 
+	# writeconf is needed after the test, otherwise,
+	# we might end up with extra OSTs
+	writeconf || rc=$?
+	cleanup_nocli || rc=$?
+	return $rc
+}
+
 test_46a() {
-	OSTCOUNT=6
+	echo "Testing with $OSTCOUNT OSTs"
 	reformat
 	start_mds || return 1
 	#first client should see only one ost
@@ -1607,17 +1616,19 @@ test_46a() {
         wait_osc_import_state mds ost FULL
 	#start_client
 	mount_client $MOUNT || return 3
+	trap "cleanup_46a $OSTCOUNT" EXIT ERR
 
-	start_ost2 || return 4
-	start ost3 `ostdevname 3` $OST_MOUNT_OPTS || return 5
-	start ost4 `ostdevname 4` $OST_MOUNT_OPTS || return 6
-	start ost5 `ostdevname 5` $OST_MOUNT_OPTS || return 7
-	# wait until ost2-5 is sync
-        # ping_interval + 1
-        wait_osc_import_state mds ost2 FULL
-        wait_osc_import_state mds ost3 FULL
-        wait_osc_import_state mds ost4 FULL
-        wait_osc_import_state mds ost5 FULL
+	local i 
+	for (( i=2; i<=$OSTCOUNT; i++ )); do
+	    start ost$i `ostdevname $i` $OST_MOUNT_OPTS || return $((i+2))
+	done
+
+	# wait until osts in sync
+	for (( i=2; i<=$OSTCOUNT; i++ )); do
+	    wait_osc_import_state mds ost$i FULL
+	done
+
+
 	#second client see all ost's
 
 	mount_client $MOUNT2 || return 8
@@ -1634,14 +1645,8 @@ test_46a() {
 	# will be deadlock
 	stat $MOUNT/widestripe || return 12
 
-	umount_client $MOUNT2 || return 13
-	umount_client $MOUNT || return 14
-	stop ost5 -f || return 20
-	stop ost4 -f || return 21
-	stop ost3 -f || return 22
-	stop_ost2 || return 23
-	stop_ost || return 24
-	stop_mds || return 25
+	cleanup_46a $OSTCOUNT || { echo "cleanup_46a failed!" && return 13; }
+	return 0
 }
 run_test 46a "handle ost additional - wide striped file"
 
@@ -1969,6 +1974,139 @@ test_51() {
 	cleanup
 }
 run_test 51 "Verify that mdt_reint handles RMF_MDT_MD correctly when an OST is added"
+
+copy_files_xattrs()
+{
+	local node=$1
+	local dest=$2
+	local xattrs=$3
+	shift 3
+
+	do_node $node mkdir -p $dest
+	[ $? -eq 0 ] || { error "Unable to create directory"; return 1; }
+
+	do_node $node  'tar cf - '$@' | tar xf - -C '$dest';
+			[ \"\${PIPESTATUS[*]}\" = \"0 0\" ] || exit 1'
+	[ $? -eq 0 ] || { error "Unable to tar files"; return 2; }
+
+	do_node $node 'getfattr -d -m "[a-z]*\\." '$@' > '$xattrs
+	[ $? -eq 0 ] || { error "Unable to read xattrs"; return 3; }
+}
+
+diff_files_xattrs()
+{
+	local node=$1
+	local backup=$2
+	local xattrs=$3
+	shift 3
+
+	local backup2=${TMP}/backup2
+
+	do_node $node mkdir -p $backup2
+	[ $? -eq 0 ] || { error "Unable to create directory"; return 1; }
+
+	do_node $node  'tar cf - '$@' | tar xf - -C '$backup2';
+			[ \"\${PIPESTATUS[*]}\" = \"0 0\" ] || exit 1'
+	[ $? -eq 0 ] || { error "Unable to tar files to diff"; return 2; }
+
+	do_node $node "diff -rq $backup $backup2"
+	[ $? -eq 0 ] || { error "contents differ"; return 3; }
+
+	local xattrs2=${TMP}/xattrs2
+	do_node $node 'getfattr -d -m "[a-z]*\\." '$@' > '$xattrs2
+	[ $? -eq 0 ] || { error "Unable to read xattrs to diff"; return 4; }
+
+	do_node $node "diff $xattrs $xattrs2"
+	[ $? -eq 0 ] || { error "xattrs differ"; return 5; }
+
+	do_node $node "rm -rf $backup2 $xattrs2"
+	[ $? -eq 0 ] || { error "Unable to delete temporary files"; return 6; }
+}
+
+test_52() {
+	start_mds
+	[ $? -eq 0 ] || { error "Unable to start MDS"; return 1; }
+	start_ost
+	[ $? -eq 0 ] || { error "Unable to start OST1"; return 2; }
+	mount_client $MOUNT
+	[ $? -eq 0 ] || { error "Unable to mount client"; return 3; }
+
+	local nrfiles=8
+	local ost1mnt=${MOUNT%/*}/ost1
+	local ost1node=$(facet_active_host ost1)
+	local ost1tmp=$TMP/conf52
+
+	mkdir -p $DIR/$tdir
+	[ $? -eq 0 ] || { error "Unable to create tdir"; return 4; }
+	touch $TMP/modified_first
+	[ $? -eq 0 ] || { error "Unable to create temporary file"; return 5; }
+	do_node $ost1node "mkdir -p $ost1tmp && touch $ost1tmp/modified_first"
+	[ $? -eq 0 ] || { error "Unable to create temporary file"; return 6; }
+	sleep 1
+
+	$LFS setstripe $DIR/$tdir -c -1 -s 1M
+	[ $? -eq 0 ] || { error "lfs setstripe failed"; return 7; }
+
+	for (( i=0; i < nrfiles; i++ )); do
+		multiop $DIR/$tdir/$tfile-$i Ow1048576w1048576w524288c
+		[ $? -eq 0 ] || { error "multiop failed"; return 8; }
+		echo -n .
+	done
+	echo
+
+	# backup files
+	echo backup files to $TMP/files
+	local files=$(find $DIR/$tdir -type f -newer $TMP/modified_first)
+	copy_files_xattrs `hostname` $TMP/files $TMP/file_xattrs $files
+	[ $? -eq 0 ] || { error "Unable to copy files"; return 9; }
+
+	umount_client $MOUNT
+	[ $? -eq 0 ] || { error "Unable to umount client"; return 10; }
+	stop_ost
+	[ $? -eq 0 ] || { error "Unable to stop ost1"; return 11; }
+
+	echo mount ost1 as ldiskfs
+	do_node $ost1node mount -t $FSTYPE $ost1_dev $ost1mnt $OST_MOUNT_OPTS
+	[ $? -eq 0 ] || { error "Unable to mount ost1 as ldiskfs"; return 12; }
+
+	# backup objects
+	echo backup objects to $ost1tmp/objects
+	local objects=$(do_node $ost1node 'find '$ost1mnt'/O/0 -type f -size +0'\
+			'-newer '$ost1tmp'/modified_first -regex ".*\/[0-9]+"')
+	copy_files_xattrs $ost1node $ost1tmp/objects $ost1tmp/object_xattrs $objects
+	[ $? -eq 0 ] || { error "Unable to copy objects"; return 13; }
+
+	# move objects to lost+found
+	do_node $ost1node 'mv '$objects' '${ost1mnt}'/lost+found'
+	[ $? -eq 0 ] || { error "Unable to move objects"; return 14; }
+
+	# recover objects
+	do_node $ost1node "ll_recover_lost_found_objs -d $ost1mnt/lost+found"
+	[ $? -eq 0 ] || { error "ll_recover_lost_found_objs failed"; return 15; }
+
+	# compare restored objects against saved ones
+	diff_files_xattrs $ost1node $ost1tmp/objects $ost1tmp/object_xattrs $objects
+	[ $? -eq 0 ] || { error "Unable to diff objects"; return 16; }
+
+	do_node $ost1node "umount $ost1_dev"
+	[ $? -eq 0 ] || { error "Unable to umount ost1 as ldiskfs"; return 17; }
+
+	start_ost
+	[ $? -eq 0 ] || { error "Unable to start ost1"; return 18; }
+	mount_client $MOUNT
+	[ $? -eq 0 ] || { error "Unable to mount client"; return 19; }
+
+	# compare files
+	diff_files_xattrs `hostname` $TMP/files $TMP/file_xattrs $files
+	[ $? -eq 0 ] || { error "Unable to diff files"; return 20; }
+
+	rm -rf $TMP/files $TMP/file_xattrs
+	[ $? -eq 0 ] || { error "Unable to delete temporary files"; return 21; }
+	do_node $ost1node "rm -rf $ost1tmp"
+	[ $? -eq 0 ] || { error "Unable to delete temporary files"; return 22; }
+	cleanup
+}
+run_test 52 "check recovering objects from lost+found"
 
 cleanup_gss
 equals_msg `basename $0`: test complete

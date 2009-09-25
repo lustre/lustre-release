@@ -74,7 +74,7 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct lov_obd *lov = &obd->u.lov;
-        int i, rc = 0, rc1;
+        int i, rc = 0, cookies = 0;
         ENTRY;
 
         LASSERTF(logcookies && numcookies >= lsm->lsm_stripe_count,
@@ -92,34 +92,44 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                 case MDS_UNLINK_REC: {
                         struct llog_unlink_rec *lur = (struct llog_unlink_rec *)rec;
                         lur->lur_oid = loi->loi_id;
-                        lur->lur_ogen = loi->loi_gr;
+                        lur->lur_ogr = loi->loi_gr;
                         break;
                 }
                 case MDS_SETATTR_REC: {
                         struct llog_setattr_rec *lsr = (struct llog_setattr_rec *)rec;
                         lsr->lsr_oid = loi->loi_id;
-                        lsr->lsr_ogen = loi->loi_gr;
+                        lsr->lsr_ogr = loi->loi_gr;
                         break;
                 }
                 case MDS_SETATTR64_REC: {
                         struct llog_setattr64_rec *lsr = (struct llog_setattr64_rec *)rec;
                         lsr->lsr_oid = loi->loi_id;
-                        lsr->lsr_ogen = loi->loi_gr;
+                        lsr->lsr_ogr = loi->loi_gr;
                         break;
                 }
                 default:
                         break;
                 }
                 LASSERT(lsm->lsm_object_gr == loi->loi_gr);
-                rc1 = llog_add(cctxt, rec, NULL, logcookies + rc,
-                               numcookies - rc);
+                /* inject error in llog_add() below */
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_FAIL_LOV_LOG_ADD)) {
+                        llog_ctxt_put(cctxt);
+                        cctxt = NULL;
+                }
+                rc = llog_add(cctxt, rec, NULL, logcookies + cookies,
+                               numcookies - cookies);
                 llog_ctxt_put(cctxt);
-                if (rc1 < 0)
-                        RETURN(rc1);
-                rc += rc1;
+                if (rc < 0) {
+                        CERROR("Can't add llog (rc = %d) for stripe %i\n",
+                               rc, cookies);
+                        memset(logcookies + cookies, 0,
+                               sizeof(struct llog_cookie));
+                        rc = 1; /* skip this cookie */
+                }
+                /* Note that rc is always 1 if llog_add was successful */
+                cookies += rc;
         }
-
-        RETURN(rc);
+        RETURN(cookies);
 }
 
 static int lov_llog_origin_connect(struct llog_ctxt *ctxt,
@@ -204,24 +214,20 @@ static struct llog_operations lov_size_repl_logops = {
 };
 
 int lov_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                  struct obd_device *tgt, int count, struct llog_catid *logid,
-                  struct obd_uuid *uuid)
+                  struct obd_device *disk_obd, int *index)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct obd_device *child;
         int i, rc = 0;
         ENTRY;
 
-        /* allow init only one target at one time */
-        LASSERT(uuid);
-
         LASSERT(olg == &obd->obd_olg);
-        rc = llog_setup(obd, olg, LLOG_MDS_OST_ORIG_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, olg, LLOG_MDS_OST_ORIG_CTXT, disk_obd, 0, NULL,
                         &lov_mds_ost_orig_logops);
         if (rc)
                 RETURN(rc);
 
-        rc = llog_setup(obd, olg, LLOG_SIZE_REPL_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, olg, LLOG_SIZE_REPL_CTXT, disk_obd, 0, NULL,
                         &lov_size_repl_logops);
         if (rc)
                 GOTO(err_cleanup, rc);
@@ -229,19 +235,19 @@ int lov_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
         obd_getref(obd);
         /* count may not match lov->desc.ld_tgt_count during dynamic ost add */
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active)
-                        continue;
-                if (!obd_uuid_equals(uuid, &lov->lov_tgts[i]->ltd_uuid))
+                if (!lov->lov_tgts[i])
                         continue;
 
-                LASSERT(lov->lov_tgts[i]->ltd_exp);
-                child = lov->lov_tgts[i]->ltd_exp->exp_obd;
-                rc = obd_llog_init(child, &child->obd_olg, tgt, 1, logid, uuid);
+                if (index && i != *index)
+                        continue;
+
+                child = lov->lov_tgts[i]->ltd_obd;
+                rc = obd_llog_init(child, &child->obd_olg, disk_obd, &i);
                 if (rc)
                         CERROR("error osc_llog_init idx %d osc '%s' tgt '%s' "
-                               "(rc=%d)\n", i, child->obd_name, tgt->obd_name,
-                               rc);
-                break;
+                               "(rc=%d)\n", i, child->obd_name,
+                               disk_obd->obd_name, rc);
+                rc = 0;
         }
         obd_putref(obd);
         GOTO(err_cleanup, rc);

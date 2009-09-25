@@ -55,20 +55,50 @@
 /* for statfs() */
 #define LL_SUPER_MAGIC 0x0BD00BD0
 
-#ifndef EXT3_IOC_GETFLAGS
-#define EXT3_IOC_GETFLAGS               _IOR('f', 1, long)
-#define EXT3_IOC_SETFLAGS               _IOW('f', 2, long)
-#define EXT3_IOC_GETVERSION             _IOR('f', 3, long)
-#define EXT3_IOC_SETVERSION             _IOW('f', 4, long)
-#define EXT3_IOC_GETVERSION_OLD         _IOR('v', 1, long)
-#define EXT3_IOC_SETVERSION_OLD         _IOW('v', 2, long)
-#define EXT3_IOC_FIEMAP                 _IOWR('f', 11, struct ll_user_fiemap)
+#ifndef FSFILT_IOC_GETFLAGS
+#define FSFILT_IOC_GETFLAGS               _IOR('f', 1, long)
+#define FSFILT_IOC_SETFLAGS               _IOW('f', 2, long)
+#define FSFILT_IOC_GETVERSION             _IOR('f', 3, long)
+#define FSFILT_IOC_SETVERSION             _IOW('f', 4, long)
+#define FSFILT_IOC_GETVERSION_OLD         _IOR('v', 1, long)
+#define FSFILT_IOC_SETVERSION_OLD         _IOW('v', 2, long)
+#define FSFILT_IOC_FIEMAP                 _IOWR('f', 11, struct ll_user_fiemap)
 #endif
 
 /* FIEMAP flags supported by Lustre */
 #define LUSTRE_FIEMAP_FLAGS_COMPAT (FIEMAP_FLAG_SYNC | FIEMAP_FLAG_DEVICE_ORDER)
 
-struct obd_statfs;
+enum obd_statfs_state {
+        OS_STATE_DEGRADED       = 0x00000001, /**< RAID degraded/rebuilding */
+        OS_STATE_READONLY       = 0x00000002, /**< filesystem is read-only */
+        OS_STATE_RDONLY_1       = 0x00000004, /**< obsolete 1.6, was EROFS=30 */
+        OS_STATE_RDONLY_2       = 0x00000008, /**< obsolete 1.6, was EROFS=30 */
+        OS_STATE_RDONLY_3       = 0x00000010, /**< obsolete 1.6, was EROFS=30 */
+};
+
+struct obd_statfs {
+        __u64           os_type;
+        __u64           os_blocks;
+        __u64           os_bfree;
+        __u64           os_bavail;
+        __u64           os_files;
+        __u64           os_ffree;
+        __u8            os_fsid[40];
+        __u32           os_bsize;
+        __u32           os_namelen;
+        __u64           os_maxbytes;
+        __u32           os_state;       /**< obd_statfs_state OS_STATE_* flag */
+        __u32           os_spare1;
+        __u32           os_spare2;
+        __u32           os_spare3;
+        __u32           os_spare4;
+        __u32           os_spare5;
+        __u32           os_spare6;
+        __u32           os_spare7;
+        __u32           os_spare8;
+        __u32           os_spare9;
+};
+
 
 /*
  * The ioctl naming rules:
@@ -197,6 +227,19 @@ struct ll_recreate_obj {
         __u32 lrc_ost_idx;
 };
 
+struct ll_fid {
+        __u64 id;         /* holds object id */
+        __u32 generation; /* holds object generation */
+        __u32 f_type;     /* holds object type or stripe idx when passing it to
+                           * OST for saving into EA. */
+};
+
+struct filter_fid {
+        struct ll_fid   ff_fid;  /* ff_fid.f_type == file stripe number */
+        __u64           ff_objid;
+        __u64           ff_group;
+};
+
 struct obd_uuid {
         char uuid[40];
 };
@@ -231,6 +274,19 @@ static inline char *obd_uuid2str(struct obd_uuid *uuid)
         return (char *)(uuid->uuid);
 }
 
+/* Extract fsname from uuid (or target name) of a target
+   e.g. (myfs-OST0007_UUID -> myfs)
+   see also deuuidify. */
+static inline void obd_uuid2fsname(char *buf, char *uuid, int buflen)
+{
+        char *p;
+
+        strncpy(buf, uuid, buflen - 1);
+        buf[buflen - 1] = '\0';
+        p = strrchr(buf, '-');
+        if (p)
+           *p = '\0';
+}
 
 /**
  * File IDentifier.
@@ -408,16 +464,135 @@ struct if_quotactl {
         struct obd_uuid         obd_uuid;
 };
 
+
+/********* Changelogs **********/
+/** Changelog record types */
+enum changelog_rec_type {
+        CL_MARK     = 0,
+        CL_CREATE   = 1,  /* namespace */
+        CL_MKDIR    = 2,  /* namespace */
+        CL_HARDLINK = 3,  /* namespace */
+        CL_SOFTLINK = 4,  /* namespace */
+        CL_MKNOD    = 5,  /* namespace */
+        CL_UNLINK   = 6,  /* namespace */
+        CL_RMDIR    = 7,  /* namespace */
+        CL_RENAME   = 8,  /* namespace */
+        CL_EXT      = 9,  /* namespace extended record (2nd half of rename) */
+        CL_OPEN     = 10, /* not currently used */
+        CL_CLOSE    = 11, /* may be written to log only with mtime change */
+        CL_IOCTL    = 12,
+        CL_TRUNC    = 13,
+        CL_SETATTR  = 14,
+        CL_XATTR    = 15,
+        CL_HSM      = 16, /* HSM specific events, see flags */
+        CL_LAST
+};
+
+static inline const char *changelog_type2str(int type) {
+        static const char *changelog_str[] = {
+                "MARK",  "CREAT", "MKDIR", "HLINK", "SLINK", "MKNOD", "UNLNK",
+                "RMDIR", "RNMFM", "RNMTO", "OPEN",  "CLOSE", "IOCTL", "TRUNC",
+                "SATTR", "XATTR", "HSM"   };
+        if (type >= 0 && type < CL_LAST)
+                return changelog_str[type];
+        return NULL;
+}
+
+/* per-record flags */
+#define CLF_VERSION  0x1000
+#define CLF_FLAGMASK 0x0FFF
+/* Anything under the flagmask may be per-type (if desired) */
+
+struct changelog_rec {
+        __u16                 cr_namelen;
+        __u16                 cr_flags; /**< (flags&CLF_FLAGMASK)|CLF_VERSION */
+        __u32                 cr_type;  /**< \a changelog_rec_type */
+        __u64                 cr_index; /**< changelog record number */
+        __u64                 cr_prev;  /**< last index for this target fid */
+        __u64                 cr_time;
+        union {
+                lustre_fid    cr_tfid;        /**< target fid */
+                __u32         cr_markerflags; /**< CL_MARK flags */
+        };
+        lustre_fid            cr_pfid;        /**< parent fid */
+        char                  cr_name[0];     /**< last element */
+} __attribute__((packed));
+
 struct ioc_changelog_clear {
         __u32 icc_mdtindex;
         __u32 icc_id;
         __u64 icc_recno;
 };
 
+
+/********* Misc **********/
+
 #ifndef offsetof
 # define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
 #endif
 
 #define dot_lustre_name ".lustre"
+
+
+/********* HSM **********/
+enum hsm_message_type {
+        HMT_ACTION_LIST = 100, /* message is a hsm_action_list */
+};
+
+/* User-generated (ioctl) request types */
+enum hsm_request {
+        HSMR_ARCHIVE = 10, /* copy to hsm */
+        HSMR_RESTORE = 11, /* prestage */
+        HSMR_RELEASE = 12, /* drop ost objects */
+        HSMR_REMOVE  = 13, /* remove from archive */
+        HSMR_CANCEL  = 14
+};
+
+/* Copytool commands */
+enum hsm_action {
+        HSMA_ARCHIVE = 20, /* arbitrary offset */
+        HSMA_RESTORE = 21,
+        HSMA_REMOVE  = 22,
+        HSMA_CANCEL  = 23
+};
+
+/* Copytool item action description */
+struct hsm_action_item {
+        __u32      hai_len;     /* valid size of this struct */
+        __u32      hai_action;  /* enum actually, but use known size */
+        lustre_fid hai_fid;     /* Lustre FID to operated on */
+        __u64      hai_cookie;  /* action cookie from coordinator */
+        __u64      hai_extent_start;  /* byte range to operate on */
+        __u64      hai_extent_end;
+        __u64      hai_gid;     /* grouplock id */
+        char       hai_data[0]; /* variable length */
+} __attribute__((packed));
+
+/* Copytool action list */
+#define HAL_VERSION 1
+#define HAL_MAXSIZE 4096 /* bytes, used in userspace only */
+struct hsm_action_list {
+        __u32 hal_version;
+        __u32 hal_count;       /* number of hai's to follow */
+        __u32 hal_archive_num; /* which archive backend */
+        __u32 padding1;
+        char  hal_fsname[0];   /* null-terminated */
+        /* struct hsm_action_item[hal_count] follows, aligned on 8-byte
+           boundaries. See hai_zero */
+} __attribute__((packed));
+
+/* Return pointer to first hai in action list */
+static __inline__ struct hsm_action_item * hai_zero(struct hsm_action_list *hal)
+{
+        return (struct hsm_action_item *)(hal->hal_fsname +
+                                          size_round(strlen(hal->hal_fsname)));
+}
+/* Return pointer to next hai */
+static __inline__ struct hsm_action_item * hai_next(struct hsm_action_item *hai)
+{
+        return (struct hsm_action_item *)((char *)hai +
+                                          size_round(hai->hai_len));
+}
+
 
 #endif /* _LUSTRE_USER_H */

@@ -108,7 +108,7 @@ void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
 
                 sbi = llu_i2sbi(inode);
                 md_set_lock_data(sbi->ll_md_exp,
-                                 &it->d.lustre.it_lock_handle, inode);
+                                 &it->d.lustre.it_lock_handle, inode, NULL);
         }
 
         /* drop lookup/getattr locks */

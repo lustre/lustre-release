@@ -137,14 +137,24 @@ command_t cmdlist[] = {
         {"local_param", jt_lcfg_param, 0, "set a temporary, local param\n"
          "usage: local_param <target.keyword=val> ...\n"},
         {"get_param", jt_lcfg_getparam, 0, "get the Lustre or LNET parameter\n"
-         "usage: get_param [-n|-N] name.of.param\n"
-         "Get the value of Lustre or LNET parameter from the specified path\n"
-         "Use '-n' to disable printing of parameter name when printing value\n"
-         "Use '-N' to print only parameter names and not the values."},
+         "usage: get_param [-n|-N|-F] <param_path1 param_path2 ...>\n"
+         "Get the value of Lustre or LNET parameter from the specified path.\n"
+         "The path can contain shell-style filename patterns.\n"
+         "  -n  Print only the value and not parameter name.\n"
+         "  -N  Print only matched parameter names and not the values.\n"
+         "      (Especially useful when using patterns.)\n"
+         "  -F  When -N specified, add '/', '@' or '=' for directories,\n"
+         "      symlinks and writeable files, respectively."},
         {"set_param", jt_lcfg_setparam, 0, "set the Lustre or LNET parameter\n"
-         "usage: set_param [-n] name.of.param=value\n"
+         "usage: set_param [-n] <param_path1=value1 param_path2 value2 ...>\n"
          "Set the value of the Lustre or LNET parameter at the specified path\n"
-         "Use '-n' to disable printing of parameter name when setting value\n"},
+         "  -n  Disable printing of the key name when printing values."},
+        {"list_param", jt_lcfg_listparam, 0,
+         "list the Lustre or LNET parameter name\n"
+         "usage: list_param [-F] <param_path1 param_path2 ...>\n"
+         "List the name of Lustre or LNET parameter from the specified path.\n"
+         "  -F  Add '/', '@' or '=' for dirs, symlinks and writeable files,\n"
+                "respectively."},
 
         /* Debug commands */
         {"==== debugging control ====", jt_noop, 0, "debug"},
@@ -296,6 +306,9 @@ command_t cmdlist[] = {
         {"memhog", jt_ptl_memhog, 0,
          "memory pressure testing\n"
          "usage: memhog <page count> [<gfp flags>]"},
+        {"getobjversion", jt_get_obj_version, 0,
+         "get the version of an object on servers\n"
+         "usage: getobjversion <fid>"},
 
         {"==== obsolete (DANGEROUS) ====", jt_noop, 0, "obsolete (DANGEROUS)"},
         /* some test scripts still use these */
@@ -372,7 +385,7 @@ int lctl_main(int argc, char **argv)
         }
 
         obd_finalize(argc, argv);
-        return rc;
+        return rc < 0 ? -rc : rc;
 }
 
 #ifndef LIBLUSTRE_TEST

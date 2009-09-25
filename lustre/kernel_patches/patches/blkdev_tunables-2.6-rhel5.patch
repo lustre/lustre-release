@@ -1,0 +1,11 @@
+--- linux-2.6.18-128.1.14.orig/include/linux/blkdev.h	2009-06-19 04:03:20.000000000 -0400
++++ linux-2.6.18-128.1.14/include/linux/blkdev.h	2009-09-04 16:31:30.000000000 -0400
+@@ -778,7 +778,7 @@ extern int blkdev_issue_flush(struct blo
+ #define MAX_PHYS_SEGMENTS 128
+ #define MAX_HW_SEGMENTS 128
+ #define SAFE_MAX_SECTORS 255
+-#define BLK_DEF_MAX_SECTORS 1024
++#define BLK_DEF_MAX_SECTORS 2048
+ 
+ #define MAX_SEGMENT_SIZE	65536
+ 

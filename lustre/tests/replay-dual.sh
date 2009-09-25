@@ -250,7 +250,7 @@ test_13() {
 }
 run_test 13 "close resend timeout"
 
-test_14() {
+test_14a() {
     replay_barrier $SINGLEMDS
     createmany -o $MOUNT1/$tfile- 25
     createmany -o $MOUNT2/$tfile-2- 1
@@ -268,7 +268,35 @@ test_14() {
     zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail" 
     return 0
 }
-run_test 14 "timeouts waiting for lost client during replay"
+run_test 14a "timeouts waiting for lost client during replay"
+
+test_14b() {
+    BEFOREUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
+    mkdir -p $MOUNT1/$tdir
+    replay_barrier $SINGLEMDS
+    createmany -o $MOUNT1/$tfile- 5
+    echo "data" > $MOUNT2/$tdir/$tfile-2
+    createmany -o $MOUNT1/$tfile-3- 5
+    umount $MOUNT2
+
+    facet_failover $SINGLEMDS
+    # expect recovery don't fail due to VBR
+    df $MOUNT1 || return 1
+
+    # first 25 files should have been replayed
+    unlinkmany $MOUNT1/$tfile- 5 || return 2
+    unlinkmany $MOUNT1/$tfile-3- 5 || return 3
+
+    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
+    # give ost time to process llogs
+    sleep 3
+    AFTERUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
+    log "before $BEFOREUSED, after $AFTERUSED"
+    [ $AFTERUSED -ne $BEFOREUSED ] && \
+        error "after $AFTERUSED > before $BEFOREUSED" && return 4
+    return 0
+}
+run_test 14b "delete ost orphans if gap occured in objids due to VBR"
 
 test_15a() {	# was test_15
     replay_barrier $SINGLEMDS

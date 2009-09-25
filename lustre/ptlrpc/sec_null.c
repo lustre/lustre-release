@@ -71,14 +71,7 @@ void null_encode_sec_part(struct lustre_msg *msg, enum lustre_sec_part sp)
 static inline
 enum lustre_sec_part null_decode_sec_part(struct lustre_msg *msg)
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2:
-                return (msg->lm_secflvr >> 24) & 0xFF;
-        case LUSTRE_MSG_MAGIC_V2_SWABBED:
-                return (msg->lm_secflvr) & 0xFF;
-        default:
-                return LUSTRE_SP_ANY;
-        }
+        return (msg->lm_secflvr >> 24) & 0xFF;
 }
 
 static int null_ctx_refresh(struct ptlrpc_cli_ctx *ctx)
@@ -109,15 +102,12 @@ int null_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 
         LASSERT(req->rq_repdata);
 
+        req->rq_repmsg = req->rq_repdata;
+        req->rq_replen = req->rq_repdata_len;
+
         if (req->rq_early) {
-                cksums = req->rq_repdata->lm_cksum;
-                req->rq_repdata->lm_cksum = 0;
-
-                if (req->rq_repdata->lm_magic == LUSTRE_MSG_MAGIC_V2_SWABBED)
-                        __swab32s(&cksums);
-
-                cksumc = crc32_le(!(__u32) 0, (unsigned char *)req->rq_repdata,
-                                  req->rq_repdata_len);
+                cksums = lustre_msg_get_cksum(req->rq_repdata);
+                cksumc = lustre_msg_calc_cksum(req->rq_repmsg);
                 if (cksumc != cksums) {
                         CWARN("early reply checksum mismatch: %08x != %08x\n",
                               cksumc, cksums);
@@ -125,8 +115,6 @@ int null_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
                 }
         }
 
-        req->rq_repmsg = req->rq_repdata;
-        req->rq_replen = req->rq_repdata_len;
         return 0;
 }
 
@@ -370,10 +358,8 @@ int null_authorize(struct ptlrpc_request *req)
                 else
                         req->rq_reply_off = 0;
         } else {
-                rs->rs_repbuf->lm_cksum =
-                                crc32_le(!(__u32) 0,
-                                         (unsigned char *)rs->rs_repbuf,
-                                         rs->rs_repdata_len);
+                lustre_msg_set_cksum(rs->rs_repbuf,
+                                     lustre_msg_calc_cksum(rs->rs_repbuf));
                 req->rq_reply_off = 0;
         }
 

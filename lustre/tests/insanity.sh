@@ -42,6 +42,7 @@ remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
 FAIL_CLIENTS=$(echo " $FAIL_CLIENTS " | sed -re "s/\s+$LIVE_CLIENT\s+/ /g")
 
 DIR=${DIR:-$MOUNT}
+TESTDIR=$DIR/d0.$(basename $0 .sh)
 
 #####
 # fail clients round robin
@@ -111,29 +112,28 @@ client_touch() {
     file=$1
     for c in $LIVE_CLIENT $FAIL_CLIENTS;  do
 	if echo $DOWN_CLIENTS | grep -q $c; then continue; fi
-	$PDSH $c touch $MOUNT/${c}_$file || return 1
+	$PDSH $c touch $TESTDIR/${c}_$file || return 1
     done
 }
 
 client_rm() {
     file=$1
     for c in $LIVE_CLIENT $FAIL_CLIENTS;  do
-	$PDSH $c rm $MOUNT/${c}_$file
+	$PDSH $c rm $TESTDIR/${c}_$file
     done
 }
 
 client_mkdirs() {
     for c in $LIVE_CLIENT $FAIL_CLIENTS;  do
-	echo "$c mkdir $MOUNT/$c"
-	$PDSH $c "mkdir $MOUNT/$c"
-	$PDSH $c "ls -l $MOUNT/$c" 
+	echo "$c mkdir $TESTDIR/$c"
+	$PDSH $c "mkdir $TESTDIR/$c && ls -l $TESTDIR/$c"
     done
 }
 
 client_rmdirs() {
     for c in $LIVE_CLIENT $FAIL_CLIENTS;  do
-	echo "rmdir $MOUNT/$c"
-	$PDSH $LIVE_CLIENT "rmdir $MOUNT/$c"
+	echo "rmdir $TESTDIR/$c"
+	$PDSH $LIVE_CLIENT "rmdir $TESTDIR/$c"
     done
 }
 
@@ -143,6 +143,9 @@ clients_recover_osts() {
 }
 
 check_and_setup_lustre
+
+rm -rf $TESTDIR
+mkdir -p $TESTDIR
 
 # 9 Different Failure Modes Combinations
 echo "Starting Test 17 at `date`"
@@ -399,8 +402,8 @@ test_7() {
     #Check FS
     echo "Test Lustre stability after CLIENTs failure"
     client_df
-    $PDSH $LIVE_CLIENT "ls -l $MOUNT"
-    $PDSH $LIVE_CLIENT "rm -f $MOUNT/*_testfile"
+    $PDSH $LIVE_CLIENT "ls -l $TESTDIR"
+    $PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile"
     
     #Sleep
     echo "Wait 1 minutes"
@@ -416,8 +419,8 @@ test_7() {
     #MDS Portion
     fail $SINGLEMDS
 
-    $PDSH $LIVE_CLIENT "ls -l $MOUNT"
-    $PDSH $LIVE_CLIENT "rm -f $MOUNT/*_testfile"
+    $PDSH $LIVE_CLIENT "ls -l $TESTDIR"
+    $PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile"
 
     #Reintegration
     echo "Reintegrating CLIENTs"
@@ -450,8 +453,8 @@ test_8() {
     #Check FS
     echo "Test Lustre stability after CLIENTs failure"
     client_df
-    $PDSH $LIVE_CLIENT "ls -l $MOUNT"
-    $PDSH $LIVE_CLIENT "rm -f $MOUNT/*_testfile"
+    $PDSH $LIVE_CLIENT "ls -l $TESTDIR"
+    $PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile"
 
     #Sleep
     echo "Wait 1 minutes"
@@ -475,8 +478,8 @@ test_8() {
     DFPID=$!
     sleep 5
     #non-failout hangs forever here
-    #$PDSH $LIVE_CLIENT "ls -l $MOUNT"
-    #$PDSH $LIVE_CLIENT "rm -f $MOUNT/*_testfile"
+    #$PDSH $LIVE_CLIENT "ls -l $TESTDIR"
+    #$PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile"
     
     #Reintegration
     echo "Reintegrating CLIENTs/OST"
@@ -513,8 +516,8 @@ test_9() {
     #Check FS
     echo "Test Lustre stability after CLIENTs failure"
     client_df
-    $PDSH $LIVE_CLIENT "ls -l $MOUNT" || return 1
-    $PDSH $LIVE_CLIENT "rm -f $MOUNT/*_testfile" || return 2
+    $PDSH $LIVE_CLIENT "ls -l $TESTDIR" || return 1
+    $PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile" || return 2
 
     #Sleep
     echo "Wait 1 minutes"
@@ -532,8 +535,8 @@ test_9() {
     #Check FS
     echo "Test Lustre stability after CLIENTs failure"
     client_df
-    $PDSH $LIVE_CLIENT "ls -l $MOUNT" || return 5
-    $PDSH $LIVE_CLIENT "rm -f $MOUNT/*_testfile" || return 6
+    $PDSH $LIVE_CLIENT "ls -l $TESTDIR" || return 5
+    $PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile" || return 6
 
     #Reintegration
     echo "Reintegrating  CLIENTs/CLIENTs"

@@ -227,8 +227,8 @@ int cl_io_rw_init(const struct lu_env *env, struct cl_io *io,
         ENTRY;
 
         LU_OBJECT_HEADER(D_VFSTRACE, env, &io->ci_obj->co_lu,
-                         "io range: %i [%llu, %llu) %i %i\n",
-                         iot, (__u64)pos, (__u64)(pos + count),
+                         "io range: %u ["LPU64", "LPU64") %u %u\n",
+                         iot, (__u64)pos, (__u64)pos + count,
                          io->u.ci_rw.crw_nonblock, io->u.ci_wr.wr_append);
         io->u.ci_rw.crw_pos    = pos;
         io->u.ci_rw.crw_count  = count;
@@ -859,6 +859,51 @@ int cl_io_submit_rw(const struct lu_env *env, struct cl_io *io,
         RETURN(result);
 }
 EXPORT_SYMBOL(cl_io_submit_rw);
+
+/**
+ * Submit a sync_io and wait for the IO to be finished, or error happens.
+ * If \a timeout is zero, it means to wait for the IO unconditionally.
+ */
+int cl_io_submit_sync(const struct lu_env *env, struct cl_io *io,
+                      enum cl_req_type iot, struct cl_2queue *queue,
+                      enum cl_req_priority prio, long timeout)
+{
+        struct cl_sync_io *anchor = &cl_env_info(env)->clt_anchor;
+        struct cl_page *pg;
+        int rc;
+
+        LASSERT(prio == CRP_NORMAL || prio == CRP_CANCEL);
+
+        cl_page_list_for_each(pg, &queue->c2_qin) {
+                LASSERT(pg->cp_sync_io == NULL);
+                pg->cp_sync_io = anchor;
+        }
+
+        cl_sync_io_init(anchor, queue->c2_qin.pl_nr);
+        rc = cl_io_submit_rw(env, io, iot, queue, prio);
+        if (rc == 0) {
+                /*
+                 * If some pages weren't sent for any reason (e.g.,
+                 * read found up-to-date pages in the cache, or write found
+                 * clean pages), count them as completed to avoid infinite
+                 * wait.
+                 */
+                 cl_page_list_for_each(pg, &queue->c2_qin) {
+                        pg->cp_sync_io = NULL;
+                        cl_sync_io_note(anchor, +1);
+                 }
+
+                 /* wait for the IO to be finished. */
+                 rc = cl_sync_io_wait(env, io, &queue->c2_qout,
+                                      anchor, timeout);
+        } else {
+                LASSERT(list_empty(&queue->c2_qout.pl_pages));
+                cl_page_list_for_each(pg, &queue->c2_qin)
+                        pg->cp_sync_io = NULL;
+        }
+        return rc;
+}
+EXPORT_SYMBOL(cl_io_submit_sync);
 
 /**
  * Cancel an IO which has been submitted by cl_io_submit_rw.
@@ -1573,7 +1618,7 @@ EXPORT_SYMBOL(cl_req_attr_set);
 void cl_sync_io_init(struct cl_sync_io *anchor, int nrpages)
 {
         ENTRY;
-        init_completion(&anchor->csi_sync_completion);
+        cfs_waitq_init(&anchor->csi_waitq);
         atomic_set(&anchor->csi_sync_nr, nrpages);
         anchor->csi_sync_rc  = 0;
         EXIT;
@@ -1585,24 +1630,40 @@ EXPORT_SYMBOL(cl_sync_io_init);
  * cl_sync_io_note() for every page.
  */
 int cl_sync_io_wait(const struct lu_env *env, struct cl_io *io,
-                    struct cl_page_list *queue, struct cl_sync_io *anchor)
+                    struct cl_page_list *queue, struct cl_sync_io *anchor,
+                    long timeout)
 {
+        struct l_wait_info lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(timeout),
+                                                  NULL, NULL, NULL);
         int rc;
         ENTRY;
 
-        rc = wait_for_completion_interruptible(&anchor->csi_sync_completion);
+        LASSERT(timeout >= 0);
+
+        rc = l_wait_event(anchor->csi_waitq,
+                          atomic_read(&anchor->csi_sync_nr) == 0,
+                          &lwi);
         if (rc < 0) {
                 int rc2;
+
+                CERROR("SYNC IO failed with error: %d, try to cancel "
+                       "the remaining page\n", rc);
+
                 rc2 = cl_io_cancel(env, io, queue);
                 if (rc2 < 0) {
+                        lwi = (struct l_wait_info) { 0 };
                         /* Too bad, some pages are still in IO. */
-                        CDEBUG(D_VFSTRACE, "Failed to cancel transfer (%i). "
-                               "Waiting for %i pages\n",
+                        CERROR("Failed to cancel transfer error: %d, mostly "
+                               "because of they are still being transferred, "
+                               "waiting for %i pages\n",
                                rc2, atomic_read(&anchor->csi_sync_nr));
-                        wait_for_completion(&anchor->csi_sync_completion);
+                        (void)l_wait_event(anchor->csi_waitq,
+                                     atomic_read(&anchor->csi_sync_nr) == 0,
+                                     &lwi);
                 }
-        } else
+        } else {
                 rc = anchor->csi_sync_rc;
+        }
         LASSERT(atomic_read(&anchor->csi_sync_nr) == 0);
         cl_page_list_assume(env, io, queue);
         POISON(anchor, 0x5a, sizeof *anchor);
@@ -1624,7 +1685,7 @@ void cl_sync_io_note(struct cl_sync_io *anchor, int ioret)
          * IO.
          */
         if (atomic_dec_and_test(&anchor->csi_sync_nr))
-                complete(&anchor->csi_sync_completion);
+                cfs_waitq_broadcast(&anchor->csi_waitq);
         EXIT;
 }
 EXPORT_SYMBOL(cl_sync_io_note);

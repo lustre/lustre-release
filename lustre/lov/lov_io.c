@@ -42,7 +42,9 @@
 
 #include "lov_cl_internal.h"
 
-/** \addtogroup lov lov @{ */
+/** \addtogroup lov
+ *  @{
+ */
 
 static void lov_sub_enter(struct lov_io_sub *sub)
 {

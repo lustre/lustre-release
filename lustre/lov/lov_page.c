@@ -42,7 +42,9 @@
 
 #include "lov_cl_internal.h"
 
-/** \addtogroup lov lov @{ */
+/** \addtogroup lov
+ *  @{
+ */
 
 /*****************************************************************************
  *
@@ -81,8 +83,9 @@ static void lov_page_fini(const struct lu_env *env,
         EXIT;
 }
 
-static void lov_page_own(const struct lu_env *env,
-                         const struct cl_page_slice *slice, struct cl_io *io)
+static int lov_page_own(const struct lu_env *env,
+                        const struct cl_page_slice *slice, struct cl_io *io,
+                        int nonblock)
 {
         struct lov_io     *lio = lov_env_io(env);
         struct lov_io_sub *sub;
@@ -97,13 +100,13 @@ static void lov_page_own(const struct lu_env *env,
                 lov_sub_put(sub);
         } else
                 LBUG(); /* Arrgh */
-        EXIT;
+        RETURN(0);
 }
 
 static void lov_page_assume(const struct lu_env *env,
                             const struct cl_page_slice *slice, struct cl_io *io)
 {
-        return lov_page_own(env, slice, io);
+        lov_page_own(env, slice, io, 0);
 }
 
 static int lov_page_print(const struct lu_env *env,
@@ -216,7 +219,7 @@ struct cl_page *lov_page_init_empty(const struct lu_env *env,
                 addr = cfs_kmap(vmpage);
                 memset(addr, 0, cl_page_size(obj));
                 cfs_kunmap(vmpage);
-                cl_page_export(env, page);
+                cl_page_export(env, page, 1);
                 result = 0;
         }
         RETURN(ERR_PTR(result));

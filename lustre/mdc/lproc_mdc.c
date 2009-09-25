@@ -50,9 +50,9 @@ static int mdc_rd_max_rpcs_in_flight(char *page, char **start, off_t off,
         struct client_obd *cli = &dev->u.cli;
         int rc;
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
         rc = snprintf(page, count, "%u\n", cli->cl_max_rpcs_in_flight);
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
         return rc;
 }
 
@@ -70,9 +70,9 @@ static int mdc_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
         if (val < 1 || val > MDC_MAX_RIF_MAX)
                 return -ERANGE;
 
-        spin_lock(&cli->cl_loi_list_lock);
+        client_obd_list_lock(&cli->cl_loi_list_lock);
         cli->cl_max_rpcs_in_flight = val;
-        spin_unlock(&cli->cl_loi_list_lock);
+        client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         return count;
 }
@@ -131,6 +131,7 @@ static struct file_operations mdc_changelog_fops = {
         .release = mdc_changelog_seq_release,
 };
 
+
 static struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "ping",            0, lprocfs_wr_ping,     0, 0, 0222 },
@@ -146,6 +147,8 @@ static struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
         { "mds_conn_uuid",   lprocfs_rd_conn_uuid,   0, 0 },
         { "max_rpcs_in_flight", mdc_rd_max_rpcs_in_flight,
                                 mdc_wr_max_rpcs_in_flight, 0 },
+        { "quota_resend_count",  lprocfs_rd_quota_resend_count,
+                                 lprocfs_wr_quota_resend_count, 0},
         { "timeouts",        lprocfs_rd_timeouts,    0, 0 },
         { "import",          lprocfs_rd_import,      0, 0 },
         { "state",           lprocfs_rd_state,       0, 0 },

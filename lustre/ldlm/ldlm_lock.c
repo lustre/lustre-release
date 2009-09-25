@@ -164,9 +164,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 ldlm_resource_putref(res);
                 lock->l_resource = NULL;
                 if (lock->l_export) {
-                        LASSERT(atomic_read(&lock->l_export->exp_locks_count) > 0);
-                        atomic_dec(&lock->l_export->exp_locks_count);
-                        class_export_put(lock->l_export);
+                        class_export_lock_put(lock->l_export);
                         lock->l_export = NULL;
                 }
 

@@ -162,8 +162,7 @@ static int mgs_cleanup(struct obd_device *obd);
 static int mgs_handle(struct ptlrpc_request *req);
 
 static int mgs_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                         struct obd_device *tgt, int count,
-                         struct llog_catid *logid, struct obd_uuid *uuid)
+                         struct obd_device *tgt, int *index)
 {
         int rc;
         ENTRY;
@@ -238,7 +237,7 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 GOTO(err_ns, rc);
         }
 
-        rc = obd_llog_init(obd, &obd->obd_olg, obd, 0, NULL, NULL);
+        rc = obd_llog_init(obd, &obd->obd_olg, obd, NULL);
         if (rc)
                 GOTO(err_fs, rc);
 
@@ -248,6 +247,11 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         /* Internal mgs setup */
         mgs_init_fsdb_list(obd);
         sema_init(&mgs->mgs_sem, 1);
+
+        /* Setup proc */
+        lprocfs_mgs_init_vars(&lvars);
+        if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0)
+                lproc_mgs_setup(obd);
 
         /* Start the service threads */
         mgs->mgs_service =
@@ -268,12 +272,6 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (rc)
                 GOTO(err_thread, rc);
 
-        /* Setup proc */
-        lprocfs_mgs_init_vars(&lvars);
-        if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0) {
-                lproc_mgs_setup(obd);
-        }
-
         ping_evictor_start();
 
         LCONSOLE_INFO("MGS %s started\n", obd->obd_name);
@@ -283,6 +281,7 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 err_thread:
         ptlrpc_unregister_service(mgs->mgs_service);
 err_llog:
+        lproc_mgs_cleanup(obd);
         obd_llog_finish(obd, 0);
 err_fs:
         /* No extra cleanup needed for llog_init_commit_thread() */

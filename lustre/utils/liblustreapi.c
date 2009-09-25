@@ -58,6 +58,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
+#include <sys/xattr.h>
 #include <fnmatch.h>
 #include <glob.h>
 #ifdef HAVE_LINUX_UNISTD_H
@@ -65,6 +66,7 @@
 #else
 #include <unistd.h>
 #endif
+#include <poll.h>
 
 #include <liblustre.h>
 #include <lnet/lnetctl.h>
@@ -372,25 +374,6 @@ int llapi_file_create_pool(const char *name, unsigned long long stripe_size,
         return 0;
 }
 
-static int print_pool_members(char *fs, char *pool_dir, char *pool_file)
-{
-        char path[PATH_MAX + 1];
-        char buf[1024];
-        FILE *fd;
-
-        llapi_printf(LLAPI_MSG_NORMAL, "Pool: %s.%s\n", fs, pool_file);
-        sprintf(path, "%s/%s", pool_dir, pool_file);
-        if ((fd = fopen(path, "r")) == NULL) {
-                llapi_err(LLAPI_MSG_ERROR, "Cannot open %s\n", path);
-                return -EINVAL;
-        }
-        while (fgets(buf, sizeof(buf), fd) != NULL)
-               llapi_printf(LLAPI_MSG_NORMAL, buf);
-
-        fclose(fd);
-        return 0;
-}
-
 /*
  * Find the fsname, the full path, and/or an open fd.
  * Either the fsname or path must not be NULL
@@ -398,13 +381,16 @@ static int print_pool_members(char *fs, char *pool_dir, char *pool_file)
 #define WANT_PATH   0x1
 #define WANT_FSNAME 0x2
 #define WANT_FD     0x4
-static int get_root_path(int want, char *fsname, int *outfd, char *path)
+#define WANT_INDEX  0x8
+#define WANT_ERROR  0x10
+static int get_root_path(int want, char *fsname, int *outfd, char *path,
+                         int index)
 {
         struct mntent mnt;
-        char buf[PATH_MAX];
-        char *ptr;
+        char buf[PATH_MAX], mntdir[PATH_MAX];
+        char *name = NULL, *ptr;
         FILE *fp;
-        int fd;
+        int idx = 0, len = 0, mntlen, fd;
         int rc = -ENODEV;
 
         /* get the mount point */
@@ -422,27 +408,47 @@ static int get_root_path(int want, char *fsname, int *outfd, char *path)
                 if (!llapi_is_lustre_mnt(&mnt))
                         continue;
 
+                mntlen = strlen(mnt.mnt_dir);
                 ptr = strrchr(mnt.mnt_fsname, '/');
-                if (!ptr) {
+                if (!ptr && !len) {
                         rc = -EINVAL;
                         break;
                 }
                 ptr++;
 
-                /* If path was specified and matches, store the fsname */
-                if ((want & WANT_FSNAME) && (strcmp(mnt.mnt_dir, path) == 0))
-                        strcpy(fsname, ptr);
-                /* Else check the fsname for a match */
-                else if (strcmp(ptr, fsname) != 0)
+                if ((want & WANT_INDEX) && (idx++ != index))
+                        continue; 
+
+                /* Check the fsname for a match */
+                if (!(want & WANT_FSNAME) && fsname != NULL &&
+                    (strlen(fsname) > 0) && (strcmp(ptr, fsname) != 0))
                         continue;
 
-                /* Found it */
-                rc = 0;
-                if (want & WANT_PATH)
-                        strcpy(path, mnt.mnt_dir);
+                /* If the path isn't set return the first one we find */
+                if (path == NULL || strlen(path) == 0) {
+                        strcpy(mntdir, mnt.mnt_dir);
+                        name = ptr;
+                        rc = 0;
+                        break;
+                /* Otherwise find the longest matching path */
+                } else if ((strlen(path) >= mntlen) && (mntlen >= len) &&
+                           (strncmp(mnt.mnt_dir, path, mntlen) == 0)) { 
+                        strcpy(mntdir, mnt.mnt_dir);
+                        mntlen = len;
+                        name = ptr;
+                        rc = 0;
+                }
+        }
+        endmntent(fp);
+
+        /* Found it */
+        if (rc == 0) {
+                if ((want & WANT_FSNAME) && fsname != NULL)
+                        strcpy(fsname, name);
+                if ((want & WANT_PATH) && path != NULL)
+                        strcpy(path, mntdir);
                 if (want & WANT_FD) {
-                        fd = open(mnt.mnt_dir,
-                                  O_RDONLY | O_DIRECTORY | O_NONBLOCK);
+                        fd = open(mntdir, O_RDONLY | O_DIRECTORY | O_NONBLOCK);
                         if (fd < 0) {
                                 perror("open");
                                 rc = -errno;
@@ -450,19 +456,45 @@ static int get_root_path(int want, char *fsname, int *outfd, char *path)
                                 *outfd = fd;
                         }
                 }
-                break;
-        }
-        endmntent(fp);
-        if (rc)
+        } else if (want & WANT_ERROR)
                 llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
                           "can't find fs root for '%s': %d",
                           (want & WANT_PATH) ? fsname : path, rc);
         return rc;
 }
 
+/*
+ * search lustre mounts
+ *
+ * Calling this function will return to the user the mount point, mntdir, and
+ * the file system name, fsname, if the user passed a buffer to this routine.
+ *
+ * The user inputs are pathname and index. If the pathname is supplied then
+ * the value of the index will be ignored. The pathname will return data if
+ * the pathname is located on a lustre mount. Index is used to pick which
+ * mount point you want in the case of multiple mounted lustre file systems.
+ * See function lfs_osts in lfs.c for a example of the index use.
+ */
+int llapi_search_mounts(const char *pathname, int index, char *mntdir,
+                        char *fsname)
+{
+        int want = WANT_PATH, idx = -1;
+
+        if (!pathname) {
+                want |= WANT_INDEX;
+                idx = index;
+        } else
+                strcpy(mntdir, pathname);
+
+        if (fsname)
+                want |= WANT_FSNAME;
+        return get_root_path(want, fsname, NULL, mntdir, idx);
+}
+
 int llapi_search_fsname(const char *pathname, char *fsname)
 {
-        return get_root_path(WANT_FSNAME, fsname, NULL, (char *)pathname);
+        return get_root_path(WANT_FSNAME | WANT_ERROR, fsname, NULL,
+                             (char *)pathname, -1);
 }
 
 /* return the first file matching this pattern */
@@ -495,7 +527,7 @@ static int poolpath(char *fsname, char *pathname, char *pool_pathname)
         char buffer[PATH_MAX];
 
         if (fsname == NULL) {
-                rc = get_root_path(WANT_FSNAME, buffer, NULL, pathname);
+                rc = llapi_search_fsname(pathname, buffer);
                 if (rc != 0)
                         return rc;
                 fsname = buffer;
@@ -514,13 +546,108 @@ static int poolpath(char *fsname, char *pathname, char *pool_pathname)
         return 0;
 }
 
-int llapi_poollist(char *name)
+/**
+ * Get the list of pool members.
+ * \param poolname    string of format \<fsname\>.\<poolname\>
+ * \param members     caller-allocated array of char*
+ * \param list_size   size of the members array
+ * \param buffer      caller-allocated buffer for storing OST names
+ * \param buffer_size size of the buffer
+ *
+ * \return number of members retrieved for this pool
+ * \retval -error failure
+ */
+int llapi_get_poolmembers(const char *poolname, char **members,
+                          int list_size, char *buffer, int buffer_size)
 {
-        char *poolname;
-        char *fsname;
-        char rname[PATH_MAX + 1], pathname[PATH_MAX + 1];
-        char *ptr;
+        char fsname[PATH_MAX + 1];
+        char *pool, *tmp;
+        char pathname[PATH_MAX + 1];
+        char path[PATH_MAX + 1];
+        char buf[1024];
+        FILE *fd;
         int rc = 0;
+        int nb_entries = 0;
+        int used = 0;
+
+        /* name is FSNAME.POOLNAME */
+        if (strlen(poolname) > PATH_MAX)
+                return -EOVERFLOW;
+        strcpy(fsname, poolname);
+        pool = strchr(fsname, '.');
+        if (pool == NULL)
+                return -EINVAL;
+
+        *pool = '\0';
+        pool++;
+
+        rc = poolpath(fsname, NULL, pathname);
+        if (rc != 0) {
+                errno = -rc;
+                llapi_err(LLAPI_MSG_ERROR, "Lustre filesystem '%s' not found",
+                          fsname);
+                return rc;
+        }
+
+        llapi_printf(LLAPI_MSG_NORMAL, "Pool: %s.%s\n", fsname, pool);
+        sprintf(path, "%s/%s", pathname, pool);
+        if ((fd = fopen(path, "r")) == NULL) {
+                llapi_err(LLAPI_MSG_ERROR, "Cannot open %s", path);
+                return -EINVAL;
+        }
+
+        rc = 0;
+        while (fgets(buf, sizeof(buf), fd) != NULL) {
+                if (nb_entries >= list_size) {
+                        rc = -EOVERFLOW;
+                        break;
+                }
+                /* remove '\n' */
+                if ((tmp = strchr(buf, '\n')) != NULL)
+                        *tmp='\0';
+                if (used + strlen(buf) + 1 > buffer_size) {
+                        rc = -EOVERFLOW;
+                        break;
+                }
+
+                strcpy(buffer + used, buf);
+                members[nb_entries] = buffer + used;
+                used += strlen(buf) + 1;
+                nb_entries++;
+                rc = nb_entries;
+        }
+
+        fclose(fd);
+        return rc;
+}
+
+/**
+ * Get the list of pools in a filesystem.
+ * \param name        filesystem name or path
+ * \param poollist    caller-allocated array of char*
+ * \param list_size   size of the poollist array
+ * \param buffer      caller-allocated buffer for storing pool names
+ * \param buffer_size size of the buffer
+ *
+ * \return number of pools retrieved for this filesystem
+ * \retval -error failure
+ */
+int llapi_get_poollist(const char *name, char **poollist, int list_size,
+                       char *buffer, int buffer_size)
+{
+        char fsname[PATH_MAX + 1], rname[PATH_MAX + 1], pathname[PATH_MAX + 1];
+        char *ptr;
+        DIR *dir;
+        struct dirent pool;
+        struct dirent *cookie = NULL;
+        int rc = 0;
+        unsigned int nb_entries = 0;
+        unsigned int used = 0;
+        unsigned int i;
+
+        /* initilize output array */
+        for (i = 0; i < list_size; i++)
+                poollist[i] = NULL;
 
         /* is name a pathname ? */
         ptr = strchr(name, '/');
@@ -541,16 +668,10 @@ int llapi_poollist(char *name)
                                   " a Lustre filesystem", name);
                         return rc;
                 }
-                fsname = rname;
-                poolname = NULL;
+                strcpy(fsname, rname);
         } else {
-                /* name is FSNAME[.POOLNAME] */
-                fsname = name;
-                poolname = strchr(name, '.');
-                if (poolname != NULL) {
-                        *poolname = '\0';
-                        poolname++;
-                }
+                /* name is FSNAME */
+                strcpy(fsname, name);
                 rc = poolpath(fsname, NULL, pathname);
         }
         if (rc != 0) {
@@ -560,31 +681,78 @@ int llapi_poollist(char *name)
                 return rc;
         }
 
-        if (poolname != NULL) {
-                rc = print_pool_members(fsname, pathname, poolname);
-                poolname--;
-                *poolname = '.';
-        } else {
-                DIR *dir;
-                struct dirent *pool;
-
-                llapi_printf(LLAPI_MSG_NORMAL, "Pools from %s:\n", fsname);
-                if ((dir = opendir(pathname)) == NULL) {
-                        return -EINVAL;
-                }
-                while ((pool = readdir(dir)) != NULL) {
-                        if (!((pool->d_name[0] == '.') &&
-                              (pool->d_name[1] == '\0')) &&
-                            !((pool->d_name[0] == '.') &&
-                              (pool->d_name[1] == '.') &&
-                              (pool->d_name[2] == '\0')))
-                        llapi_printf(LLAPI_MSG_NORMAL, " %s.%s\n",
-                                     fsname, pool->d_name);
-                }
-                closedir(dir);
+        llapi_printf(LLAPI_MSG_NORMAL, "Pools from %s:\n", fsname);
+        if ((dir = opendir(pathname)) == NULL) {
+                llapi_err(LLAPI_MSG_ERROR, "Could not open pool list for '%s'",
+                          name);
+                return -errno;
         }
-        return rc;
+
+        while(1) {
+                rc = readdir_r(dir, &pool, &cookie);
+
+                if (rc != 0) {
+                        llapi_err(LLAPI_MSG_ERROR,
+                                  "Error reading pool list for '%s'", name);
+                        return -errno;
+                } else if ((rc == 0) && (cookie == NULL))
+                        /* end of directory */
+                        break;
+
+                /* ignore . and .. */
+                if (!strcmp(pool.d_name, ".") || !strcmp(pool.d_name, ".."))
+                        continue;
+
+                /* check output bounds */
+                if (nb_entries >= list_size)
+                        return -EOVERFLOW;
+
+                /* +2 for '.' and final '\0' */
+                if (used + strlen(pool.d_name) + strlen(fsname) + 2
+                    > buffer_size)
+                        return -EOVERFLOW;
+
+                sprintf(buffer + used, "%s.%s", fsname, pool.d_name);
+                poollist[nb_entries] = buffer + used;
+                used += strlen(pool.d_name) + strlen(fsname) + 2;
+                nb_entries++;
+        }
+
+        closedir(dir);
+        return nb_entries;
 }
+
+/* wrapper for lfs.c and obd.c */
+int llapi_poollist(const char *name)
+{
+        /* list of pool names (assume that pool count is smaller
+           than OST count) */
+        char *list[FIND_MAX_OSTS];
+        char *buffer;
+        /* fsname-OST0000_UUID < 32 char, 1 per OST */
+        int bufsize = FIND_MAX_OSTS * 32;
+        int i, nb;
+
+        buffer = malloc(bufsize);
+        if (buffer == NULL)
+                return -ENOMEM;
+
+        if ((name[0] == '/') || (strchr(name, '.') == NULL))
+                /* name is a path or fsname */
+                nb = llapi_get_poollist(name, list, FIND_MAX_OSTS, buffer,
+                                        bufsize);
+        else
+                /* name is a pool name (<fsname>.<poolname>) */
+                nb = llapi_get_poolmembers(name, list, FIND_MAX_OSTS, buffer,
+                                           bufsize);
+
+        for (i = 0; i < nb; i++)
+                llapi_printf(LLAPI_MSG_NORMAL, "%s\n", list[i]);
+
+        free(buffer);
+        return (nb < 0 ? nb : 0);
+}
+
 
 typedef int (semantic_func_t)(char *path, DIR *parent, DIR *d,
                               void *data, cfs_dirent_t *de);
@@ -859,8 +1027,8 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
                 if (!quiet)
                         llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_count:   ",
                                      prefix);
-                llapi_printf(LLAPI_MSG_NORMAL, "%u%c",
-                             (int)lum->lmm_stripe_count, nl);
+                llapi_printf(LLAPI_MSG_NORMAL, "%hd%c",
+                             (__s16)lum->lmm_stripe_count, nl);
         }
 
         if (verbose & VERBOSE_SIZE) {
@@ -2441,18 +2609,23 @@ int llapi_ls(int argc, char *argv[])
 /* Print mdtname 'name' into 'buf' using 'format'.  Add -MDT0000 if needed.
  * format must have %s%s, buf must be > 16
  */
-static int get_mdtname(const char *name, char *format, char *buf)
+static int get_mdtname(char *name, char *format, char *buf)
 {
         char suffix[]="-MDT0000";
         int len = strlen(name);
+
+        if ((len > 5) && (strncmp(name + len - 5, "_UUID", 5) == 0)) {
+                name[len - 5] = '\0';
+                len -= 5;
+        }
 
         if (len > 8) {
                 if ((len <= 16) && strncmp(name + len - 8, "-MDT", 4) == 0) {
                         suffix[0] = '\0';
                 } else {
                         /* Not enough room to add suffix */
-                        llapi_err(LLAPI_MSG_ERROR, "MDT name too long |%s|\n",
-                                  name);
+                        llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                                  "MDT name too long |%s|", name);
                         return -EINVAL;
                 }
         }
@@ -2460,16 +2633,30 @@ static int get_mdtname(const char *name, char *format, char *buf)
         return sprintf(buf, format, name, suffix);
 }
 
+/****** Changelog API ********/
+#define CHANGELOG_PRIV_MAGIC 0xCA8E1080
+struct changelog_private {
+        int magic;
+        int fd;
+        int flags;
+};
 
-/* Return a file descriptor to a readable changelog */
-int llapi_changelog_open(const char *device, long long startrec)
+/** Start reading from a changelog
+ * @param priv Opaque private control structure
+ * @param flags Start flags (e.g. follow)
+ * @param device Report changes recorded on this MDT
+ * @param startrec Report changes beginning with this record number
+ */
+int llapi_changelog_start(void **priv, int flags, const char *device,
+                          long long startrec)
 {
+        struct changelog_private *cp;
         char path[256];
-        char mdtname[17];
+        char mdtname[20];
         int rc, fd;
 
         if (device[0] == '/')
-                rc = get_root_path(WANT_FSNAME, mdtname, NULL, (char *)device);
+                rc = llapi_search_fsname(device, mdtname);
         else
                 strncpy(mdtname, device, sizeof(mdtname));
 
@@ -2493,7 +2680,99 @@ int llapi_changelog_open(const char *device, long long startrec)
                 return -errno;
         }
 
-        return fd;
+        cp = malloc(sizeof(*cp));
+        if (cp == NULL) {
+                close(fd);
+                return -ENOMEM;
+        }
+
+        cp->magic = CHANGELOG_PRIV_MAGIC;
+        cp->fd = fd;
+        cp->flags = flags;
+        *priv = cp;
+
+        return 0;
+}
+
+/** Finish reading from a changelog */
+int llapi_changelog_fini(void **priv)
+{
+        struct changelog_private *cp = (struct changelog_private *)*priv;
+
+        if (!cp || (cp->magic != CHANGELOG_PRIV_MAGIC))
+                return -EINVAL;
+
+        close(cp->fd);
+        free(cp);
+        *priv = NULL;
+        return 0;
+}
+
+static int pollwait(int fd) {
+        struct pollfd pfds[1];
+        int rc;
+
+        pfds[0].fd = fd;
+        pfds[0].events = POLLIN;
+        rc = poll(pfds, 1, -1);
+        return rc < 0 ? -errno : rc;
+}
+
+/** Read the next changelog entry
+ * @param priv Opaque private control structure
+ * @param rech Changelog record handle; record will be allocated here
+ * @return 0 valid message received; rec is set
+ *         <0 error code
+ *         1 EOF
+ */
+int llapi_changelog_recv(void *priv, struct changelog_rec **rech)
+{
+        struct changelog_private *cp = (struct changelog_private *)priv;
+        struct changelog_rec rec, *recp;
+        int rc = 0;
+
+        if (!cp || (cp->magic != CHANGELOG_PRIV_MAGIC))
+                return -EINVAL;
+        if (rech == NULL)
+                return -EINVAL;
+
+readrec:
+        /* Read in the rec to get the namelen */
+        rc = read(cp->fd, &rec, sizeof(rec));
+        if (rc < 0)
+                return -errno;
+        if (rc == 0) {
+                if (cp->flags && CHANGELOG_FLAG_FOLLOW) {
+                        rc = pollwait(cp->fd);
+                        if (rc < 0)
+                                return rc;
+                        goto readrec;
+                }
+                return 1;
+        }
+
+        recp = malloc(sizeof(rec) + rec.cr_namelen);
+        if (recp == NULL)
+                return -ENOMEM;
+        memcpy(recp, &rec, sizeof(rec));
+        rc = read(cp->fd, recp->cr_name, rec.cr_namelen);
+        if (rc < 0) {
+                free(recp);
+                llapi_err(LLAPI_MSG_ERROR, "Can't read entire filename");
+                return -errno;
+        }
+
+        *rech = recp;
+        return 0;
+}
+
+/** Release the changelog record when done with it. */
+int llapi_changelog_free(struct changelog_rec **rech)
+{
+        if (*rech)
+                free(*rech);
+        *rech = NULL;
+        return 0;
 }
 
 int llapi_changelog_clear(const char *mdtname, const char *idstr,
@@ -2525,12 +2804,12 @@ int llapi_changelog_clear(const char *mdtname, const char *idstr,
                 fd = open(mdtname, O_RDONLY | O_DIRECTORY | O_NONBLOCK);
                 rc = fd < 0 ? -errno : 0;
         } else {
-                if (get_mdtname(mdtname, "%s%s", fsname) < 0)
+                if (get_mdtname((char *)mdtname, "%s%s", fsname) < 0)
                         return -EINVAL;
                 ptr = fsname + strlen(fsname) - 8;
                 *ptr = '\0';
                 index = strtol(ptr + 4, NULL, 10);
-                rc = get_root_path(WANT_FD, fsname, &fd, NULL);
+                rc = get_root_path(WANT_FD | WANT_ERROR, fsname, &fd, NULL, -1);
         }
         if (rc < 0) {
                 llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
@@ -2572,7 +2851,8 @@ int llapi_fid2path(const char *device, const char *fidstr, char *buf,
         if (device[0] == '/') {
                 strcpy(path, device);
         } else {
-                rc = get_root_path(WANT_PATH, (char *)device, NULL, path);
+                rc = get_root_path(WANT_PATH | WANT_ERROR, (char *)device,
+                                   NULL, path, -1);
                 if (rc < 0)
                         return rc;
         }
@@ -2600,18 +2880,181 @@ int llapi_fid2path(const char *device, const char *fidstr, char *buf,
         return rc;
 }
 
+static int path2fid_from_lma(const char *path, lustre_fid *fid)
+{
+        char buf[512];
+        struct lustre_mdt_attrs *lma;
+        int rc;
+
+        rc = lgetxattr(path, XATTR_NAME_LMA, buf, sizeof(buf));
+        if (rc < 0)
+                return -errno;
+        lma = (struct lustre_mdt_attrs *)buf;
+        fid_be_to_cpu(fid, &lma->lma_self_fid);
+        return 0;
+}
+
 int llapi_path2fid(const char *path, lustre_fid *fid)
 {
         int fd, rc;
 
-        fd = open(path, O_RDONLY);
-        if (fd < 0)
+        memset(fid, 0, sizeof(*fid));
+        fd = open(path, O_RDONLY | O_NONBLOCK | O_NOFOLLOW);
+        if (fd < 0) {
+                if (errno == ELOOP) /* symbolic link */
+                        return path2fid_from_lma(path, fid);
                 return -errno;
+        }
 
-        rc = ioctl(fd, LL_IOC_PATH2FID, fid);
+        rc = ioctl(fd, LL_IOC_PATH2FID, fid) < 0 ? -errno : 0;
+        if (rc == -EINVAL) /* char special device */
+                rc = path2fid_from_lma(path, fid);
 
         close(fd);
         return rc;
 }
 
+/****** HSM Copytool API ********/
+#define CT_PRIV_MAGIC 0xC0BE2001
+struct copytool_private {
+        int magic;
+        lustre_netlink lnl;
+        int archive_num_count;
+        int archive_nums[0];
+};
+
+#include <libcfs/libcfs.h>
+
+/** Register a copytool
+ * @param priv Opaque private control structure
+ * @param flags Open flags, currently unused (e.g. O_NONBLOCK)
+ * @param archive_num_count
+ * @param archive_nums Which archive numbers this copytool is responsible for
+ */
+int llapi_copytool_start(void **priv, int flags, int archive_num_count,
+                         int *archive_nums)
+{
+        struct copytool_private *ct;
+        int rc;
+
+        if (archive_num_count > 0 && archive_nums == NULL) {
+                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                          "NULL archive numbers");
+                return -EINVAL;
+        }
+
+        ct = malloc(sizeof(*ct) +
+                    archive_num_count * sizeof(ct->archive_nums[0]));
+        if (ct == NULL)
+                return -ENOMEM;
+
+        ct->magic = CT_PRIV_MAGIC;
+        ct->archive_num_count = archive_num_count;
+        if (ct->archive_num_count > 0)
+                memcpy(ct->archive_nums, archive_nums, archive_num_count *
+                       sizeof(ct->archive_nums[0]));
+
+        rc = libcfs_ulnl_start(&ct->lnl, LNL_GRP_HSM);
+        if (rc < 0)
+                goto out_err;
+
+        *priv = ct;
+        return 0;
+
+out_err:
+        free(ct);
+        return rc;
+}
+
+/** Deregister a copytool */
+int llapi_copytool_fini(void **priv)
+{
+        struct copytool_private *ct = (struct copytool_private *)*priv;
+
+        if (!ct || (ct->magic != CT_PRIV_MAGIC))
+                return -EINVAL;
+
+        libcfs_ulnl_stop(&ct->lnl);
+        free(ct);
+        *priv = NULL;
+        return 0;
+}
+
+/** Wait for the next hsm_action_list
+ * @param priv Opaque private control structure
+ * @param halh Action list handle, will be allocated here
+ * @param msgsize Number of bytes in the message, will be set here
+ * @return 0 valid message received; halh and msgsize are set
+ *         <0 error code
+ */
+int llapi_copytool_recv(void *priv, struct hsm_action_list **halh, int *msgsize)
+{
+        struct copytool_private *ct = (struct copytool_private *)priv;
+        struct lnl_hdr *lnlh;
+        struct hsm_action_list *hal;
+        int rc = 0;
+
+        if (!ct || (ct->magic != CT_PRIV_MAGIC))
+                return -EINVAL;
+        if (halh == NULL || msgsize == NULL)
+                return -EINVAL;
+
+        rc = libcfs_ulnl_msg_get(&ct->lnl, HAL_MAXSIZE,
+                                 LNL_TRANSPORT_HSM, &lnlh);
+        if (rc < 0)
+                return rc;
+
+        /* Handle generic messages */
+        if (lnlh->lnl_transport == LNL_TRANSPORT_GENERIC &&
+            lnlh->lnl_msgtype == LNL_MSG_SHUTDOWN) {
+                rc = -ESHUTDOWN;
+                goto out_free;
+        }
+
+        if (lnlh->lnl_transport != LNL_TRANSPORT_HSM ||
+            lnlh->lnl_msgtype != HMT_ACTION_LIST) {
+                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                          "Unknown HSM message type %d:%d\n",
+                          lnlh->lnl_transport, lnlh->lnl_msgtype);
+                rc = -EPROTO;
+                goto out_free;
+        }
+
+        /* Our message is an hsm_action_list */
+
+        hal = (struct hsm_action_list *)(lnlh + 1);
+
+        /* Check that we have registered for this archive # */
+        for (rc = 0; rc < ct->archive_num_count; rc++) {
+                if (hal->hal_archive_num == ct->archive_nums[rc])
+                        break;
+        }
+        if (rc >= ct->archive_num_count) {
+                CDEBUG(D_INFO, "This copytool does not service archive #%d, "
+                       "ignoring this request.\n", hal->hal_archive_num);
+                rc = 0;
+                goto out_free;
+        }
+
+        *halh = hal;
+        *msgsize = lnlh->lnl_msglen - sizeof(*lnlh);
+        return 0;
+
+out_free:
+        libcfs_ulnl_msg_free(&lnlh);
+        *halh = NULL;
+        *msgsize = 0;
+        return rc;
+}
+
+/** Release the action list when done with it. */
+int llapi_copytool_free(struct hsm_action_list **hal)
+{
+        if (*hal) {
+                struct lnl_hdr *lnlh = (struct lnl_hdr *)*hal - 1;
+                libcfs_ulnl_msg_free(&lnlh);
+        }
+        *hal = NULL;
+        return 0;
+}
 

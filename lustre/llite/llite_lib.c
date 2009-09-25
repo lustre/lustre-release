@@ -83,7 +83,7 @@ static struct ll_sb_info *ll_init_sbi(void)
                 RETURN(NULL);
 
         spin_lock_init(&sbi->ll_lock);
-        spin_lock_init(&sbi->ll_lco.lco_lock);
+        init_mutex(&sbi->ll_lco.lco_lock);
         spin_lock_init(&sbi->ll_pp_extent_lock);
         spin_lock_init(&sbi->ll_process_lock);
         sbi->ll_rw_stats_on = 0;
@@ -154,9 +154,7 @@ void ll_free_sbi(struct super_block *sb)
 }
 
 static struct dentry_operations ll_d_root_ops = {
-#ifdef DCACHE_LUSTRE_INVALID
         .d_compare = ll_dcompare,
-#endif
         .d_revalidate = ll_revalidate_nd,
 };
 
@@ -392,11 +390,11 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                 GOTO(out_dt, err);
         }
 
-        spin_lock(&sbi->ll_lco.lco_lock);
+        mutex_down(&sbi->ll_lco.lco_lock);
         sbi->ll_lco.lco_flags = data->ocd_connect_flags;
         sbi->ll_lco.lco_md_exp = sbi->ll_md_exp;
         sbi->ll_lco.lco_dt_exp = sbi->ll_dt_exp;
-        spin_unlock(&sbi->ll_lco.lco_lock);
+        mutex_up(&sbi->ll_lco.lco_lock);
 
         fid_zero(&sbi->ll_root_fid);
         err = md_getstatus(sbi->ll_md_exp, &sbi->ll_root_fid, &oc);
@@ -532,16 +530,26 @@ int ll_get_max_mdsize(struct ll_sb_info *sbi, int *lmmsize)
 void ll_dump_inode(struct inode *inode)
 {
         struct list_head *tmp;
+        struct dentry *dentry;
         int dentry_count = 0;
 
         LASSERT(inode != NULL);
-
-        list_for_each(tmp, &inode->i_dentry)
-                dentry_count++;
-
-        CERROR("inode %p dump: dev=%s ino=%lu mode=%o count=%u, %d dentries\n",
+        CERROR("inode %p dump: dev=%s ino=%lu mode=%o count=%u state %lx\n",
                inode, ll_i2mdexp(inode)->exp_obd->obd_name, inode->i_ino,
-               inode->i_mode, atomic_read(&inode->i_count), dentry_count);
+               inode->i_mode, atomic_read(&inode->i_count), inode->i_state);
+
+        list_for_each(tmp, &inode->i_dentry) {
+                dentry = list_entry(tmp, struct dentry, d_alias);
+                CERROR("Alias[%d] dentry %p dump: name=%.*s parent=%.*s (%p), inode=%p, count=%u, "
+                       "flags=0x%x, fsdata=%p\n", dentry_count, dentry,
+                       dentry->d_name.len, dentry->d_name.name,
+                       dentry->d_parent->d_name.len, dentry->d_parent->d_name.name,
+                       dentry->d_parent, dentry->d_inode, atomic_read(&dentry->d_count),
+                       dentry->d_flags, dentry->d_fsdata);
+
+                dentry_count++;
+        }
+
 }
 
 void lustre_dump_dentry(struct dentry *dentry, int recur)
@@ -1781,7 +1789,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
         ENTRY;
 
         switch(cmd) {
-        case EXT3_IOC_GETFLAGS: {
+        case FSFILT_IOC_GETFLAGS: {
                 struct mdt_body *body;
                 struct obd_capa *oc;
 
@@ -1802,7 +1810,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 
                 RETURN(put_user(flags, (int *)arg));
         }
-        case EXT3_IOC_SETFLAGS: {
+        case FSFILT_IOC_SETFLAGS: {
                 struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
                 struct obd_info oinfo = { { { 0 } } };
                 struct md_op_data *op_data;
@@ -1826,9 +1834,14 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                                 NULL, 0, NULL, 0, &req, NULL);
                 ll_finish_md_op_data(op_data);
                 ptlrpc_req_finished(req);
-                if (rc || lsm == NULL) {
+                if (rc) {
                         OBDO_FREE(oinfo.oi_oa);
                         RETURN(rc);
+                }
+
+                if (lsm == NULL) {
+                        OBDO_FREE(oinfo.oi_oa);
+                        GOTO(update_cache, rc);
                 }
 
                 oinfo.oi_oa->o_id = lsm->lsm_object_id;
@@ -1845,13 +1858,15 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 OBDO_FREE(oinfo.oi_oa);
                 if (rc) {
                         if (rc != -EPERM && rc != -EACCES)
-                                CERROR("md_setattr_async fails: rc = %d\n", rc);
+                                CERROR("osc_setattr_async fails: rc = %d\n",rc);
                         RETURN(rc);
                 }
 
+                EXIT;
+update_cache:
                 inode->i_flags = ll_ext_to_inode_flags(flags |
                                                        MDS_BFLAG_EXT_FLAGS);
-                RETURN(0);
+                return 0;
         }
         default:
                 RETURN(-ENOSYS);

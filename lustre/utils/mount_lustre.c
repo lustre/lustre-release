@@ -266,6 +266,13 @@ static int parse_one_option(const char *check, int *flagp)
         return 0;
 }
 
+static void append_option(char *options, const char *one)
+{
+        if (*options)
+                strcat(options, ",");
+        strcat(options, one);
+}
+
 /* Replace options with subset of Lustre-specific options, and
    fill in mount flags */
 int parse_options(char *orig_options, int *flagp)
@@ -296,6 +303,8 @@ int parse_options(char *orig_options, int *flagp)
                                         retry = MAX_RETRIES;
                                 else if (retry < 0)
                                         retry = 0;
+                        } else if (strncmp(arg, "mgssec", 6) == 0) {
+                                append_option(options, opt);
                         }
                 } else if (strncmp(opt, "force", 5) == 0) {
                         //XXX special check for 'force' option
@@ -303,9 +312,7 @@ int parse_options(char *orig_options, int *flagp)
                         printf("force: %d\n", force);
                 } else if (parse_one_option(opt, flagp) == 0) {
                         /* pass this on as an option */
-                        if (*options)
-                                strcat(options, ",");
-                        strcat(options, opt);
+                        append_option(options, opt);
                 }
         }
         strcpy(orig_options, options);

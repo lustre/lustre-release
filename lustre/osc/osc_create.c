@@ -123,18 +123,20 @@ static int osc_interpret_create(const struct lu_env *env,
                 spin_unlock(&oscc->oscc_lock);
                 break;
         }
-        case -ENOSPC:
         case -EROFS:
-        case -EFBIG: {
-                oscc->oscc_flags |= OSCC_FLAG_NOSPC;
-                if (body && rc == -ENOSPC) {
-                        oscc->oscc_grow_count = OST_MIN_PRECREATE;
-                        oscc->oscc_last_id = body->oa.o_id;
+                oscc->oscc_flags |= OSCC_FLAG_RDONLY;
+        case -ENOSPC:
+        case -EFBIG: 
+                if (rc != EROFS) {
+                        oscc->oscc_flags |= OSCC_FLAG_NOSPC;
+                        if (body && rc == -ENOSPC) {
+                                oscc->oscc_last_id = body->oa.o_id;
+                                oscc->oscc_grow_count = OST_MIN_PRECREATE;
+                        }
                 }
                 spin_unlock(&oscc->oscc_lock);
                 DEBUG_REQ(D_INODE, req, "OST out of space, flagging");
                 break;
-        }
         case -EIO: {
                 /* filter always set body->oa.o_id as the last_id
                  * of filter (see filter_handle_precreate for detail)*/
@@ -274,23 +276,22 @@ static int oscc_has_objects(struct osc_creator *oscc, int count)
 static int oscc_wait_for_objects(struct osc_creator *oscc, int count)
 {
         int have_objs;
-        int ost_full;
-        int osc_invalid;
+        int ost_unusable;
 
-        osc_invalid = oscc->oscc_obd->u.cli.cl_import->imp_invalid;
+        ost_unusable = oscc->oscc_obd->u.cli.cl_import->imp_invalid;
 
         spin_lock(&oscc->oscc_lock);
-        ost_full = (oscc->oscc_flags & OSCC_FLAG_NOSPC);
+        ost_unusable |= (OSCC_FLAG_NOSPC | OSCC_FLAG_RDONLY |
+                         OSCC_FLAG_EXITING) & oscc->oscc_flags;
         have_objs = oscc_has_objects_nolock(oscc, count);
-        osc_invalid |= oscc->oscc_flags & OSCC_FLAG_EXITING;
 
-        if (!ost_full && !osc_invalid)
+        if (!ost_unusable)
                 /* they release lock himself */
                 oscc_internal_create(oscc);
         else
                 spin_unlock(&oscc->oscc_lock);
 
-        return have_objs || ost_full || osc_invalid;
+        return have_objs || ost_unusable;
 }
 
 static int oscc_precreate(struct osc_creator *oscc)
@@ -312,21 +313,13 @@ static int oscc_precreate(struct osc_creator *oscc)
         if (!oscc_has_objects(oscc, 1) || (oscc->oscc_flags & OSCC_FLAG_NOSPC))
                 rc = -ENOSPC;
 
+        if (oscc->oscc_flags & OSCC_FLAG_RDONLY)
+                rc = -EROFS;
+
         if (oscc->oscc_obd->u.cli.cl_import->imp_invalid)
                 rc = -EIO;
 
         RETURN(rc);
-}
-
-static int oscc_recovering(struct osc_creator *oscc)
-{
-        int recov;
-
-        spin_lock(&oscc->oscc_lock);
-        recov = oscc->oscc_flags & OSCC_FLAG_RECOVERING;
-        spin_unlock(&oscc->oscc_lock);
-
-        return recov;
 }
 
 static int oscc_in_sync(struct osc_creator *oscc)
@@ -358,16 +351,24 @@ int osc_precreate(struct obd_export *exp)
                 RETURN(1000);
 
         /* until oscc in recovery - other flags is wrong */
-        if (oscc_recovering(oscc))
-                RETURN(2);
-
-        if (oscc->oscc_flags & OSCC_FLAG_NOSPC)
-                RETURN(1000);
-
-        if (oscc_has_objects(oscc, oscc->oscc_grow_count / 2))
-                RETURN(0);
-
         spin_lock(&oscc->oscc_lock);
+        if (oscc->oscc_flags & OSCC_FLAG_NOSPC ||
+            oscc->oscc_flags & OSCC_FLAG_RDONLY) {
+                spin_unlock(&oscc->oscc_lock);
+                RETURN(1000);
+        }
+
+        if (oscc->oscc_flags & OSCC_FLAG_RECOVERING ||
+            oscc->oscc_flags & OSCC_FLAG_DEGRADED) {
+                spin_unlock(&oscc->oscc_lock);
+                RETURN(2);
+        }
+
+        if (oscc_has_objects_nolock(oscc, oscc->oscc_grow_count / 2)) {
+                spin_unlock(&oscc->oscc_lock);
+                RETURN(0);
+        }
+
         if ((oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS) ||
             (oscc->oscc_flags & OSCC_FLAG_CREATING)) {
                 spin_unlock(&oscc->oscc_lock);
@@ -412,6 +413,9 @@ static int handle_async_create(struct ptlrpc_request *req, int rc)
         if (oscc->oscc_flags & OSCC_FLAG_NOSPC)
                 GOTO(out_wake, rc = -ENOSPC);
 
+        if (oscc->oscc_flags & OSCC_FLAG_RDONLY)
+                GOTO(out_wake, rc = -EROFS);
+
         /* we not have objects now - continue wait */
         RETURN(-EAGAIN);
 
@@ -447,7 +451,7 @@ int osc_create_async(struct obd_export *exp, struct obd_info *oinfo,
         struct obdo *oa = oinfo->oi_oa;
         ENTRY;
 
-        if ((oa->o_valid & OBD_MD_FLGROUP) && (oa->o_gr != 0)){
+        if ((oa->o_valid & OBD_MD_FLGROUP) && !filter_group_is_mds(oa->o_gr)) {
                 rc = osc_real_create(exp, oinfo->oi_oa, ea, oti);
                 rc = oinfo->oi_cb_up(oinfo, rc);
                 RETURN(rc);
@@ -509,12 +513,11 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         struct osc_creator *oscc = &exp->exp_obd->u.cli.cl_oscc;
         struct obd_import  *imp  = exp->exp_obd->u.cli.cl_import;
         struct lov_stripe_md *lsm;
-        int rc = 0;
+        int del_orphan = 0, rc = 0;
         ENTRY;
 
         LASSERT(oa);
         LASSERT(ea);
-        LASSERT_MDS_GROUP(oa->o_gr);
         LASSERT(oa->o_valid & OBD_MD_FLGROUP);
 
         if ((oa->o_valid & OBD_MD_FLFLAGS) &&
@@ -522,11 +525,11 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 RETURN(osc_real_create(exp, oa, ea, oti));
         }
 
-        if (oa->o_gr == FILTER_GROUP_LLOG || oa->o_gr == FILTER_GROUP_ECHO)
+        if (!filter_group_is_mds(oa->o_gr))
                 RETURN(osc_real_create(exp, oa, ea, oti));
 
         /* this is the special case where create removes orphans */
-        if ((oa->o_valid & OBD_MD_FLFLAGS) &&
+        if (oa->o_valid & OBD_MD_FLFLAGS &&
             oa->o_flags == OBD_FL_DELORPHAN) {
                 spin_lock(&oscc->oscc_lock);
                 if (oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS) {
@@ -545,6 +548,8 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 spin_unlock(&oscc->oscc_lock);
                 CDEBUG(D_HA, "%s: oscc recovery started - delete to "LPU64"\n",
                        oscc->oscc_obd->obd_name, oscc->oscc_next_id - 1);
+
+                del_orphan = 1;
 
                 /* delete from next_id on up */
                 oa->o_valid |= OBD_MD_FLID;
@@ -633,16 +638,25 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         rc = -ENOSPC;
                         spin_unlock(&oscc->oscc_lock);
                         break;
+                } else if (oscc->oscc_flags & OSCC_FLAG_RDONLY) {
+                        rc = -EROFS;
+                        spin_unlock(&oscc->oscc_lock);
+                        break;
                 }
 
                 spin_unlock(&oscc->oscc_lock);
         }
 
-        if (rc == 0)
+        if (rc == 0) {
                 CDEBUG(D_INFO, "%s: returning objid "LPU64"\n",
                        obd2cli_tgt(oscc->oscc_obd), lsm->lsm_object_id);
-        else if (*ea == NULL)
-                obd_free_memmd(exp, &lsm);
+        } else {
+                if (*ea == NULL)
+                        obd_free_memmd(exp, &lsm);
+                if (del_orphan != 0 && rc != -EIO)
+                        /* Ignore non-IO precreate error for clear orphan */
+                        rc = 0;
+        }
         RETURN(rc);
 }
 

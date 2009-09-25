@@ -1506,6 +1506,33 @@ out:
         RETURN(-rc);
 }
 
+/**
+ * Helper function to pack the fid
+ */
+void osd_fid_pack(struct osd_fid_pack *pack, const struct lu_fid *fid)
+{
+        struct lu_fid befider;
+        fid_cpu_to_be(&befider, (struct lu_fid *)fid);
+        memcpy(pack->fp_area, &befider, sizeof(befider));
+        pack->fp_len = sizeof(befider) + 1;
+}
+
+int osd_fid_unpack(struct lu_fid *fid, const struct osd_fid_pack *pack)
+{
+        int result;
+
+        result = 0;
+        switch (pack->fp_len) {
+        case sizeof *fid + 1:
+                memcpy(fid, pack->fp_area, sizeof *fid);
+                fid_be_to_cpu(fid, fid);
+                break;
+        default:
+                CERROR("Unexpected packed fid size: %d\n", pack->fp_len);
+                result = -EIO;
+        }
+        return result;
+}
 
 #define IT_REC_SIZE 256
 
@@ -1670,9 +1697,9 @@ static int osd_zap_it_key_size(const struct lu_env *env, const struct dt_it *di)
 static int osd_zap_it_rec(const struct lu_env *env, const struct dt_it *di,
                           struct lu_dirent *lde, __u32 attr)
 {
-        struct osd_zap_it *it = (struct osd_zap_it *)di;
-        int bytes_read, rc, namelen;
-        struct lu_fid_pack pack;
+        struct osd_zap_it   *it = (struct osd_zap_it *)di;
+        struct osd_fid_pack  pack;
+        int                  bytes_read, rc, namelen;
         ENTRY;
 
         it->ozi_reset = 0;
@@ -1685,7 +1712,7 @@ static int osd_zap_it_rec(const struct lu_env *env, const struct dt_it *di,
                                             IT_REC_SIZE, &bytes_read);
         if (rc)
                 GOTO(out, rc);
-        rc = fid_unpack(&pack, &lde->lde_fid);
+        rc = osd_fid_unpack(&lde->lde_fid, &pack);
         LASSERT(rc == 0);
         
         rc = udmu_zap_cursor_retrieve_key(it->ozi_zc, lde->lde_name, NAME_MAX + 1);
@@ -1741,13 +1768,12 @@ static int osd_index_lookup(const struct lu_env *env, struct dt_object *dt,
                             struct dt_rec *rec, const struct dt_key *key,
                             struct lustre_capa *capa)
 {
-        struct osd_object *obj = osd_dt_obj(dt);
-        struct osd_device *osd = osd_obj2dev(obj);
-        struct lu_fid_pack *pack;
-        struct lu_fid *fid;
-        dmu_buf_t *zapdb = obj->oo_db;
-        uint64_t oid;
-        int rc;
+        struct osd_object  *obj = osd_dt_obj(dt);
+        struct osd_device  *osd = osd_obj2dev(obj);
+        struct lu_fid      *fid;
+        dmu_buf_t          *zapdb = obj->oo_db;
+        uint64_t            oid;
+        int                 rc;
         ENTRY;
 
         LASSERT(udmu_object_is_zap(obj->oo_db));
@@ -1760,10 +1786,7 @@ static int osd_index_lookup(const struct lu_env *env, struct dt_object *dt,
                         RETURN(-rc);
                 }
 
-                pack = (struct lu_fid_pack *) rec;
-                pack->fp_len = sizeof(struct lu_fid) + 1;
-
-                fid = (struct lu_fid *) pack->fp_area;
+                fid = (struct lu_fid *) rec;
                 fid->f_seq = LUSTRE_FID_INIT_OID;
                 fid->f_oid = oid; /* XXX: f_oid is 32bit, oid - 64bit */
         } else {
@@ -1805,12 +1828,12 @@ static int osd_index_insert(const struct lu_env *env, struct dt_object *dt,
                             struct thandle *th, struct lustre_capa *capa,
                             int ignore_quota)
 {
-        struct osd_object *obj = osd_dt_obj(dt);
-        struct osd_device *osd = osd_obj2dev(obj);
-        struct lu_fid_pack *pack;
-        struct osd_thandle *oh;
-        dmu_buf_t *zap_db = obj->oo_db;
-        int rc;
+        struct osd_object   *obj = osd_dt_obj(dt);
+        struct osd_device   *osd = osd_obj2dev(obj);
+        struct osd_thandle  *oh;
+        struct osd_fid_pack  pack;
+        dmu_buf_t           *zap_db = obj->oo_db;
+        int                  rc;
         ENTRY;
 
         LASSERT(obj->oo_db);
@@ -1832,11 +1855,11 @@ static int osd_index_insert(const struct lu_env *env, struct dt_object *dt,
            } dt_data;
          */
 
-        pack = (struct lu_fid_pack *) rec;
+        osd_fid_pack(&pack, (struct lu_fid *) rec);
 
         /* Insert (key,oid) into ZAP */
         rc = udmu_zap_insert(&osd->od_objset, zap_db, oh->ot_tx,
-                             (char *) key, pack, pack->fp_len);
+                             (char *) key, &pack, sizeof(pack));
 
         RETURN(-rc);
 }

@@ -400,7 +400,8 @@ int cli_ctx_check_death(struct ptlrpc_cli_ctx *ctx);
 int gss_copy_rvc_cli_ctx(struct ptlrpc_cli_ctx *cli_ctx,
                          struct ptlrpc_svc_ctx *svc_ctx);
 
-struct gss_header *gss_swab_header(struct lustre_msg *msg, int segment);
+struct gss_header *gss_swab_header(struct lustre_msg *msg, int segment,
+                                   int swabbed);
 netobj_t *gss_swab_netobj(struct lustre_msg *msg, int segment);
 
 void gss_cli_ctx_uptodate(struct gss_cli_ctx *gctx);

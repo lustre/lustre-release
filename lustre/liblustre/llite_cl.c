@@ -321,14 +321,7 @@ static void slp_page_fini_common(struct ccc_page *cp)
 static void slp_page_completion_common(const struct lu_env *env,
                                        struct ccc_page *cp, int ioret)
 {
-        struct cl_sync_io *anchor = cp->cpg_sync_io;
-
-        if (anchor) {
-                cp->cpg_sync_io  = NULL;
-                cl_sync_io_note(anchor, ioret);
-        } else {
-                LBUG();
-        }
+        LASSERT(cp->cpg_cl.cpl_page->cp_sync_io != NULL);
 }
 
 static void slp_page_completion_read(const struct lu_env *env,
@@ -503,12 +496,10 @@ static int llu_queue_pio(const struct lu_env *env, struct cl_io *io,
         struct intnl_stat *st = llu_i2stat(inode);
         struct obd_export *exp = llu_i2obdexp(inode);
         struct page *page;
-        int  rc = 0, npages = 0, ret_bytes = 0;
+        int  rc = 0, ret_bytes = 0;
         int local_lock;
         struct cl_page *clp;
-        struct ccc_page *clup;
         struct cl_2queue *queue;
-        struct cl_sync_io *anchor = &ccc_env_info(env)->cti_sync_io;
         ENTRY;
 
         if (!exp)
@@ -561,8 +552,6 @@ static int llu_queue_pio(const struct lu_env *env, struct cl_io *io,
                         break;
                 }
 
-                clup = cl2ccc_page(cl_page_at(clp, &slp_device_type));
-                clup->cpg_sync_io = anchor;
                 cl_2queue_add(queue, clp);
 
                 /* drop the reference count for cl_page_find, so that the page
@@ -571,7 +560,6 @@ static int llu_queue_pio(const struct lu_env *env, struct cl_io *io,
 
                 cl_page_clip(env, clp, offset, offset+bytes);
 
-                npages++;
                 count -= bytes;
                 pos += bytes;
                 buf += bytes;
@@ -581,25 +569,10 @@ static int llu_queue_pio(const struct lu_env *env, struct cl_io *io,
                 page++;
         } while (count);
 
-        cl_sync_io_init(anchor, npages);
-        /* printk("Inited anchor with %d pages\n", npages); */
-
         if (rc == 0) {
-                enum cl_req_type crt;
-
-                crt = io->ci_type == CIT_READ ? CRT_READ : CRT_WRITE;
-                rc = cl_io_submit_rw(env, io, crt, queue, CRP_NORMAL);
-                if (rc == 0) {
-                        /* If some pages weren't sent for any reason, count
-                         * then as completed, to avoid infinite wait. */
-                        cl_page_list_for_each(clp, &queue->c2_qin) {
-                                CL_PAGE_DEBUG(D_ERROR, env, clp,
-                                              "not completed\n");
-                                cl_sync_io_note(anchor, +1);
-                        }
-                        /* wait for the IO to be finished. */
-                        rc = cl_sync_io_wait(env, io, &queue->c2_qout, anchor);
-                }
+                enum cl_req_type iot;
+                iot = io->ci_type == CIT_READ ? CRT_READ : CRT_WRITE;
+                rc = cl_io_submit_sync(env, io, iot, queue, CRP_NORMAL, 0);
         }
 
         group->lig_rc = rc;
@@ -642,9 +615,9 @@ static int slp_io_start(const struct lu_env *env, const struct cl_io_slice *ios)
         struct cl_io      *io    = ios->cis_io;
         struct cl_object  *obj   = io->ci_obj;
         struct inode      *inode = ccc_object_inode(obj);
-        int     err, ret;
-        loff_t  pos;
-        size_t  cnt;
+        int    err, ret;
+        loff_t pos;
+        long   cnt;
         struct llu_io_group *iogroup;
         struct lustre_rw_params p = {0};
         int iovidx;
@@ -679,8 +652,8 @@ static int slp_io_start(const struct lu_env *env, const struct cl_io_slice *ios)
                 GOTO(out, err);
 
         CDEBUG(D_INODE,
-               "%s ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
-               write?"Write":"Read", (unsigned long)st->st_ino,
+               "%s ino %lu, %lu bytes, offset %lld, i_size %llu\n",
+               write ? "Write" : "Read", (unsigned long)st->st_ino,
                cnt, (__u64)pos, (__u64)st->st_size);
 
         if (write && io->u.ci_wr.wr_append)
@@ -689,7 +662,7 @@ static int slp_io_start(const struct lu_env *env, const struct cl_io_slice *ios)
 
         for (iovidx = 0; iovidx < cio->cui_nrsegs; iovidx++) {
                 char *buf = (char *) cio->cui_iov[iovidx].iov_base;
-                size_t count = cio->cui_iov[iovidx].iov_len;
+                long count = cio->cui_iov[iovidx].iov_len;
 
                 if (!count)
                         continue;

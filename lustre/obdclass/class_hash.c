@@ -57,12 +57,12 @@
 
 /**
  * Initialize new lustre hash, where:
- * @name     - Descriptive hash name
- * @cur_bits - Initial hash table size, in bits
- * @max_bits - Maximum allowed hash table resize, in bits
- * @ops      - Registered hash table operations
- * @flags    - LH_REHASH enable synamic hash resizing
- *           - LH_SORT enable chained hash sort
+ * \param name Descriptive hash name
+ * \param cur_bits Initial hash table size, in bits
+ * \param max_bits Maximum allowed hash table resize, in bits
+ * \param ops Registered hash table operations
+ * \param flags LH_REHASH enables dynamic hash resizing
+ *              LH_SORT enables chained hash sort
  */
 lustre_hash_t *
 lustre_hash_init(char *name, unsigned int cur_bits, unsigned int max_bits,
@@ -119,7 +119,7 @@ lustre_hash_init(char *name, unsigned int cur_bits, unsigned int max_bits,
 EXPORT_SYMBOL(lustre_hash_init);
 
 /**
- * Cleanup lustre hash @lh.
+ * Cleanup lustre hash \a lh.
  */
 void
 lustre_hash_exit(lustre_hash_t *lh)
@@ -175,7 +175,7 @@ static inline unsigned int lustre_hash_rehash_bits(lustre_hash_t *lh)
 }
 
 /**
- * Add item @hnode to lustre hash @lh using @key.  The registered
+ * Add item \a hnode to lustre hash \a lh using \a key.  The registered
  * ops->lh_get function will be called when the item is added.
  */
 void
@@ -243,7 +243,7 @@ lustre_hash_findadd_unique_hnode(lustre_hash_t *lh, void *key,
 }
 
 /**
- * Add item @hnode to lustre hash @lh using @key.  The registered
+ * Add item \a hnode to lustre hash \a lh using \a key.  The registered
  * ops->lh_get function will be called if the item was added.
  * Returns 0 on success or -EALREADY on key collisions.
  */
@@ -263,7 +263,7 @@ lustre_hash_add_unique(lustre_hash_t *lh, void *key, struct hlist_node *hnode)
 EXPORT_SYMBOL(lustre_hash_add_unique);
 
 /**
- * Add item @hnode to lustre hash @lh using @key.  If this @key
+ * Add item \a hnode to lustre hash \a lh using \a key.  If this \a key
  * already exists in the hash then ops->lh_get will be called on the
  * conflicting entry and that entry will be returned to the caller.
  * Otherwise ops->lh_get is called on the item which was added.
@@ -284,7 +284,7 @@ lustre_hash_findadd_unique(lustre_hash_t *lh, void *key,
 EXPORT_SYMBOL(lustre_hash_findadd_unique);
 
 /**
- * Delete item @hnode from the lustre hash @lh using @key.  The @key
+ * Delete item \a hnode from the lustre hash \a lh using \a key.  The \a key
  * is required to ensure the correct hash bucket is locked since there
  * is no direct linkage from the item to the bucket.  The object
  * removed from the hash will be returned and obs->lh_put is called
@@ -316,9 +316,9 @@ lustre_hash_del(lustre_hash_t *lh, void *key, struct hlist_node *hnode)
 EXPORT_SYMBOL(lustre_hash_del);
 
 /**
- * Delete item given @key in lustre hash @lh.  The first @key found in
+ * Delete item given \a key in lustre hash \a lh.  The first \a key found in
  * the hash will be removed, if the key exists multiple times in the hash
- * @lh this function must be called once per key.  The removed object
+ * \a lh this function must be called once per key.  The removed object
  * will be returned and ops->lh_put is called on the removed object.
  */
 void *
@@ -348,12 +348,12 @@ lustre_hash_del_key(lustre_hash_t *lh, void *key)
 EXPORT_SYMBOL(lustre_hash_del_key);
 
 /**
- * Lookup an item using @key in the lustre hash @lh and return it.
- * If the @key is found in the hash lh->lh_get() is called and the
+ * Lookup an item using \a key in the lustre hash \a lh and return it.
+ * If the \a key is found in the hash lh->lh_get() is called and the
  * matching objects is returned.  It is the callers responsibility
  * to call the counterpart ops->lh_put using the lh_put() macro
- * when when finished with the object.  If the @key was not found
- * in the hash @lh NULL is returned.
+ * when when finished with the object.  If the \a key was not found
+ * in the hash \a lh NULL is returned.
  */
 void *
 lustre_hash_lookup(lustre_hash_t *lh, void *key)
@@ -382,8 +382,8 @@ lustre_hash_lookup(lustre_hash_t *lh, void *key)
 EXPORT_SYMBOL(lustre_hash_lookup);
 
 /**
- * For each item in the lustre hash @lh call the passed callback @func
- * and pass to it as an argument each hash item and the private @data.
+ * For each item in the lustre hash \a lh call the passed callback \a func
+ * and pass to it as an argument each hash item and the private \a data.
  * Before each callback ops->lh_get will be called, and after each
  * callback ops->lh_put will be called.  Finally, during the callback
  * the bucket lock is held so the callback must never sleep.
@@ -415,8 +415,8 @@ lustre_hash_for_each(lustre_hash_t *lh, lh_for_each_cb func, void *data)
 EXPORT_SYMBOL(lustre_hash_for_each);
 
 /**
- * For each item in the lustre hash @lh call the passed callback @func
- * and pass to it as an argument each hash item and the private @data.
+ * For each item in the lustre hash \a lh call the passed callback \a func
+ * and pass to it as an argument each hash item and the private \a data.
  * Before each callback ops->lh_get will be called, and after each
  * callback ops->lh_put will be called.  During the callback the
  * bucket lock will not be held will allows for the current item
@@ -453,11 +453,11 @@ lustre_hash_for_each_safe(lustre_hash_t *lh, lh_for_each_cb func, void *data)
 EXPORT_SYMBOL(lustre_hash_for_each_safe);
 
 /**
- * For each hash bucket in the lustre hash @lh call the passed callback
- * @func until all the hash buckets are empty.  The passed callback @func
+ * For each hash bucket in the lustre hash \a lh call the passed callback
+ * \a func until all the hash buckets are empty.  The passed callback \a func
  * or the previously registered callback lh->lh_put must remove the item
  * from the hash.  You may either use the lustre_hash_del() or hlist_del()
- * functions.  No rwlocks will be held during the callback @func it is
+ * functions.  No rwlocks will be held during the callback \a func it is
  * safe to sleep if needed.  This function will not terminate until the
  * hash is empty.  Note it is still possible to concurrently add new
  * items in to the hash.  It is the callers responsibility to ensure
@@ -494,9 +494,9 @@ restart:
 EXPORT_SYMBOL(lustre_hash_for_each_empty);
 
 /*
- * For each item in the lustre hash @lh which matches the @key call
- * the passed callback @func and pass to it as an argument each hash
- * item and the private @data.  Before each callback ops->lh_get will
+ * For each item in the lustre hash \a lh which matches the \a key call
+ * the passed callback \a func and pass to it as an argument each hash
+ * item and the private \a data.  Before each callback ops->lh_get will
  * be called, and after each callback ops->lh_put will be called.
  * Finally, during the callback the bucket lock is held so the
  * callback must never sleep.
@@ -534,15 +534,15 @@ lustre_hash_for_each_key(lustre_hash_t *lh, void *key,
 EXPORT_SYMBOL(lustre_hash_for_each_key);
 
 /**
- * Rehash the lustre hash @lh to the given @bits.  This can be used
+ * Rehash the lustre hash \a lh to the given \a bits.  This can be used
  * to grow the hash size when excessive chaining is detected, or to
  * shrink the hash when it is larger than needed.  When the LH_REHASH
- * flag is set in @lh the lustre hash may be dynamically rehashed
+ * flag is set in \a lh the lustre hash may be dynamically rehashed
  * during addition or removal if the hash's theta value exceeds
  * either the lh->lh_min_theta or lh->max_theta values.  By default
  * these values are tuned to keep the chained hash depth small, and
  * this approach assumes a reasonably uniform hashing function.  The
- * theta thresholds for @lh are tunable via lustre_hash_set_theta().
+ * theta thresholds for \a lh are tunable via lustre_hash_set_theta().
  */
 int
 lustre_hash_rehash(lustre_hash_t *lh, int bits)
@@ -638,9 +638,9 @@ lustre_hash_rehash(lustre_hash_t *lh, int bits)
 EXPORT_SYMBOL(lustre_hash_rehash);
 
 /**
- * Rehash the object referenced by @hnode in the lustre hash @lh.  The
- * @old_key must be provided to locate the objects previous location
- * in the hash, and the @new_key will be used to reinsert the object.
+ * Rehash the object referenced by \a hnode in the lustre hash \a lh.  The
+ * \a old_key must be provided to locate the objects previous location
+ * in the hash, and the \a new_key will be used to reinsert the object.
  * Use this function instead of a lustre_hash_add() + lustre_hash_del()
  * combo when it is critical that there is no window in time where the
  * object is missing from the hash.  When an object is being rehashed
@@ -652,7 +652,7 @@ void lustre_hash_rehash_key(lustre_hash_t *lh, void *old_key, void *new_key,
         lustre_hash_bucket_t  *old_lhb;
         lustre_hash_bucket_t  *new_lhb;
         unsigned               i;
-        int                    j;
+        unsigned               j;
         ENTRY;
 
         __lustre_hash_key_validate(lh, new_key, hnode);
@@ -668,8 +668,17 @@ void lustre_hash_rehash_key(lustre_hash_t *lh, void *old_key, void *new_key,
         new_lhb = &lh->lh_buckets[j];
         LASSERT(j <= lh->lh_cur_mask);
 
-        write_lock(&old_lhb->lhb_rwlock);
-        write_lock(&new_lhb->lhb_rwlock);
+        if (i < j) { /* write_lock ordering */
+                write_lock(&old_lhb->lhb_rwlock);
+                write_lock(&new_lhb->lhb_rwlock);
+        } else if (i > j) {
+                write_lock(&new_lhb->lhb_rwlock);
+                write_lock(&old_lhb->lhb_rwlock);
+        } else { /* do nothing */
+                read_unlock(&lh->lh_rwlock);
+                EXIT;
+                return;
+        }
 
         /*
          * Migrate item between hash buckets without calling

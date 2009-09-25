@@ -206,7 +206,7 @@ static void enc_pools_release_free_pages(long npages)
         page_pools.epp_total_pages -= npages;
 
         /* max pool index after the release */
-        p_idx_max1 = page_pools.epp_total_pages == 0 ? 0 :
+        p_idx_max1 = page_pools.epp_total_pages == 0 ? -1 :
                      ((page_pools.epp_total_pages - 1) / PAGES_PER_POOL);
 
         p_idx = page_pools.epp_free_pages / PAGES_PER_POOL;
@@ -236,50 +236,40 @@ static void enc_pools_release_free_pages(long npages)
 }
 
 /*
- * could be called frequently for query (@nr_to_scan == 0)
+ * could be called frequently for query (@nr_to_scan == 0).
+ * we try to keep at least PTLRPC_MAX_BRW_PAGES pages in the pool.
  */
 static int enc_pools_shrink(int nr_to_scan, unsigned int gfp_mask)
 {
-        unsigned long   ret;
+        if (unlikely(nr_to_scan != 0)) {
+                spin_lock(&page_pools.epp_lock);
+                nr_to_scan = min(nr_to_scan, (int) page_pools.epp_free_pages -
+                                             PTLRPC_MAX_BRW_PAGES);
+                if (nr_to_scan > 0) {
+                        enc_pools_release_free_pages(nr_to_scan);
+                        CDEBUG(D_SEC, "released %d pages, %ld left\n",
+                               nr_to_scan, page_pools.epp_free_pages);
 
-        spin_lock(&page_pools.epp_lock);
-
-        if (nr_to_scan > page_pools.epp_free_pages)
-                nr_to_scan = page_pools.epp_free_pages;
-
-        if (nr_to_scan > 0) {
-                enc_pools_release_free_pages(nr_to_scan);
-                CDEBUG(D_SEC, "released %d pages, %ld left\n",
-                       nr_to_scan, page_pools.epp_free_pages);
-
-                page_pools.epp_st_shrinks++;
-                page_pools.epp_last_shrink = cfs_time_current_sec();
+                        page_pools.epp_st_shrinks++;
+                        page_pools.epp_last_shrink = cfs_time_current_sec();
+                }
+                spin_unlock(&page_pools.epp_lock);
         }
 
         /*
-         * try to keep at least PTLRPC_MAX_BRW_PAGES pages in the pool
+         * if no pool access for a long time, we consider it's fully idle.
+         * a little race here is fine.
          */
-        if (page_pools.epp_free_pages <= PTLRPC_MAX_BRW_PAGES) {
-                ret = 0;
-                goto out_unlock;
-        }
-
-        /*
-         * if no pool access for a long time, we consider it's fully idle
-         */
-        if (cfs_time_current_sec() - page_pools.epp_last_access >
-            CACHE_QUIESCENT_PERIOD)
+        if (unlikely(cfs_time_current_sec() - page_pools.epp_last_access >
+                     CACHE_QUIESCENT_PERIOD)) {
+                spin_lock(&page_pools.epp_lock);
                 page_pools.epp_idle_idx = IDLE_IDX_MAX;
+                spin_unlock(&page_pools.epp_lock);
+        }
 
         LASSERT(page_pools.epp_idle_idx <= IDLE_IDX_MAX);
-        ret = (page_pools.epp_free_pages * page_pools.epp_idle_idx /
-               IDLE_IDX_MAX);
-        if (page_pools.epp_free_pages - ret < PTLRPC_MAX_BRW_PAGES)
-                ret = page_pools.epp_free_pages - PTLRPC_MAX_BRW_PAGES;
-
-out_unlock:
-        spin_unlock(&page_pools.epp_lock);
-        return ret;
+        return max((int) page_pools.epp_free_pages - PTLRPC_MAX_BRW_PAGES, 0) *
+               (IDLE_IDX_MAX - page_pools.epp_idle_idx) / IDLE_IDX_MAX;
 }
 
 static inline
@@ -328,6 +318,7 @@ static void enc_pools_insert(cfs_page_t ***pools, int npools, int npages)
         LASSERT(npages > 0);
         LASSERT(page_pools.epp_total_pages+npages <= page_pools.epp_max_pages);
         LASSERT(npages_to_npools(npages) == npools);
+        LASSERT(page_pools.epp_growing);
 
         spin_lock(&page_pools.epp_lock);
 
@@ -436,6 +427,7 @@ static int enc_pools_add_pages(int npages)
                         alloced++;
                 }
         }
+        LASSERT(alloced == npages);
 
         enc_pools_insert(pools, npools, npages);
         CDEBUG(D_SEC, "added %d pages into pools\n", npages);
@@ -863,7 +855,7 @@ __u8 sptlrpc_get_hash_alg(const char *algname)
 }
 EXPORT_SYMBOL(sptlrpc_get_hash_alg);
 
-int bulk_sec_desc_unpack(struct lustre_msg *msg, int offset)
+int bulk_sec_desc_unpack(struct lustre_msg *msg, int offset, int swabbed)
 {
         struct ptlrpc_bulk_sec_desc *bsd;
         int                          size = msg->lm_buflens[offset];
@@ -874,7 +866,7 @@ int bulk_sec_desc_unpack(struct lustre_msg *msg, int offset)
                 return -EINVAL;
         }
 
-        if (lustre_msg_swabbed(msg)) {
+        if (swabbed) {
                 __swab32s(&bsd->bsd_nob);
         }
 

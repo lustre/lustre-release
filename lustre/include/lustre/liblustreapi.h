@@ -81,7 +81,11 @@ extern int llapi_file_open_pool(const char *name, int flags, int mode,
                                 unsigned long long stripe_size,
                                 int stripe_offset, int stripe_count,
                                 int stripe_pattern, char *pool_name);
-extern int llapi_poollist(char *name);
+extern int llapi_poollist(const char *name);
+extern int llapi_get_poollist(const char *name, char **poollist, int list_size,
+                              char *buffer, int buffer_size);
+extern int llapi_get_poolmembers(const char *poolname, char **members,
+                                 int list_size, char *buffer, int buffer_size);
 extern int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);
 #define HAVE_LLAPI_FILE_LOOKUP
 extern int llapi_file_lookup(int dirfd, const char *name);
@@ -160,10 +164,13 @@ extern int llapi_file_get_lov_uuid(const char *path, struct obd_uuid *lov_uuid);
 extern int llapi_file_fget_lov_uuid(int fd, struct obd_uuid *lov_uuid);
 extern int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count);
 extern int llapi_is_lustre_mnttype(const char *type);
+extern int llapi_search_ost(char *fsname, char *poolname, char *ostname);
 extern int llapi_get_obd_count(char *mnt, int *count, int is_mdt);
 extern int parse_size(char *optarg, unsigned long long *size,
                       unsigned long long *size_units, int bytes_spec);
 extern int llapi_path2fid(const char *path, lustre_fid *fid);
+extern int llapi_search_mounts(const char *pathname, int index,
+                               char *mntdir, char *fsname);
 extern int llapi_search_fsname(const char *pathname, char *fsname);
 extern void llapi_ping_target(char *obd_type, char *obd_name,
                               char *obd_uuid, void *args);
@@ -182,12 +189,32 @@ extern int llapi_rsetfacl(int argc, char *argv[]);
 extern int llapi_rgetfacl(int argc, char *argv[]);
 extern int llapi_cp(int argc, char *argv[]);
 extern int llapi_ls(int argc, char *argv[]);
-extern int llapi_changelog_open(const char *mdtname, long long startrec);
-extern int llapi_changelog_clear(const char *mdtname, const char *idstr,
-                                 long long endrec);
-extern int llapi_changelog_register(const char *mdtname);
-extern int llapi_changelog_unregister(const char *mdtname, int id);
 extern int llapi_fid2path(const char *device, const char *fidstr, char *path,
                           int pathlen, long long *recno, int *linkno);
+extern int llapi_path2fid(const char *path, lustre_fid *fid);
+
+/* Changelog interface.  priv is private state, managed internally
+   by these functions */
+#define CHANGELOG_FLAG_FOLLOW 0x01
+extern int llapi_changelog_start(void **priv, int flags, const char *mdtname,
+                                 long long startrec);
+extern int llapi_changelog_fini(void **priv);
+extern int llapi_changelog_recv(void *priv, struct changelog_rec **rech);
+extern int llapi_changelog_free(struct changelog_rec **rech);
+/* Allow records up to endrec to be destroyed; requires registered id. */
+extern int llapi_changelog_clear(const char *mdtname, const char *idstr,
+                                 long long endrec);
+
+/* HSM copytool interface.  priv is private state, managed internally
+   by these functions */
+extern int llapi_copytool_start(void **priv, int flags, int archive_num_count,
+                                int *archive_nums);
+extern int llapi_copytool_fini(void **priv);
+extern int llapi_copytool_recv(void *priv, struct hsm_action_list **hal,
+                               int *msgsize);
+extern int llapi_copytool_free(struct hsm_action_list **hal);
+
 #endif
+
+
 

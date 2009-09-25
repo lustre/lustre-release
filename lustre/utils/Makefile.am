@@ -21,7 +21,8 @@ EXTRA_PROGRAMS = wirecheck
 rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl wiretest \
 	l_getidentity llverfs llverdev \
-	llog_reader lr_reader lshowmount lreplicate
+	llog_reader lr_reader lshowmount lreplicate \
+	ll_recover_lost_found_objs
 if LIBPTHREAD
 sbin_PROGRAMS += loadgen
 endif
@@ -48,6 +49,10 @@ lreplicate_SOURCES = lreplicate.c obd.c lustre_cfg.c lreplicate.h
 lreplicate_LDADD :=  $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
 lreplicate_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 
+ll_recover_lost_found_objs_SOURCES = ll_recover_lost_found_objs.c
+ll_recover_lost_found_objs_LDADD := $(LIBPTLCTL)
+ll_recover_lost_found_objs_DEPENDENCIES := $(LIBPTLCTL)
+
 lshowmount_SOURCES = lshowmount.c nidlist.c nidlist.h
 
 if EXT2FS_DEVEL
@@ -69,7 +74,8 @@ llverfs_LDADD := $(EXT2FSLIB) $(E2PLIB)
 llverdev_LDADD := $(EXT2FSLIB) $(BLKIDLIB)
 
 L_IOCTL := $(top_builddir)/libcfs/libcfs/util/l_ioctl.c
-liblustreapi_a_SOURCES = liblustreapi.c $(L_IOCTL)
+L_KERNELCOMM := $(top_builddir)/libcfs/libcfs/ulinux/ulinux-kernelcomm.c
+liblustreapi_a_SOURCES = liblustreapi.c $(L_IOCTL) $(L_KERNELCOMM)
 
 libiam_a_SOURCES = libiam.c
 

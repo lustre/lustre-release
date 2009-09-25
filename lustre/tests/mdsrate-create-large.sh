@@ -43,7 +43,7 @@ $LFS setstripe $TESTDIR -c -1
 get_stripe $TESTDIR
 
 # Make sure we start with a clean slate
-rm -f ${LOG} PI*
+rm -f ${LOG}
 
 if [ -n "$NOSINGLE" ]; then
     echo "NO Test for creates for a single client."

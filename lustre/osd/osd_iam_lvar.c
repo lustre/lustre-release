@@ -41,9 +41,6 @@
  */
 
 #include <linux/types.h>
-#include <linux/jbd.h>
-/* ldiskfs_error() */
-#include <linux/ldiskfs_fs.h>
 #include "osd_internal.h"
 
 /*
@@ -202,10 +199,7 @@ static __u32 hash_build0(const char *name, int namelen)
         } else {
                 struct ldiskfs_dx_hash_info hinfo;
 
-                if (LVAR_HASH_TEA)
-                        hinfo.hash_version = LDISKFS_DX_HASH_TEA;
-                else
-                        hinfo.hash_version = LDISKFS_DX_HASH_R5;
+                hinfo.hash_version = LDISKFS_DX_HASH_TEA;
                 hinfo.seed = 0;
                 ldiskfsfs_dirhash(name, namelen, &hinfo);
                 result = hinfo.hash;
@@ -980,10 +974,6 @@ static void lvar_leaf(void *buf,
         memset(e_rec(entry), 0, recsize);
         *(char *)e_rec(entry) = recsize;
 }
-
-#include <linux/jbd.h>
-#include <linux/ldiskfs_fs.h>
-#include <linux/ldiskfs_jbd.h>
 
 int iam_lvar_create(struct inode *obj,
                     int keysize, int ptrsize, int recsize, handle_t *handle)

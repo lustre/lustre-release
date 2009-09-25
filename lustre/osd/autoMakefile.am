@@ -38,5 +38,6 @@ if MODULES
 modulefs_DATA = osd-ldiskfs$(KMODEXT)
 endif
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
-DIST_SOURCES := $(osd-ldiskfs-objs:%.o=%.c) osd_internal.h osd_oi.h osd_igif.h
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
+DIST_SOURCES := $(osd-ldiskfs-objs:%.o=%.c) osd_internal.h osd_oi.h osd_igif.h \
+                osd_iam.h

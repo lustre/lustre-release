@@ -721,7 +721,6 @@ struct ptlrpc_sec *sptlrpc_import_sec_ref(struct obd_import *imp);
 void sptlrpc_import_sec_put(struct obd_import *imp);
 
 int  sptlrpc_import_check_ctx(struct obd_import *imp);
-void sptlrpc_import_inval_all_ctx(struct obd_import *imp);
 void sptlrpc_import_flush_root_ctx(struct obd_import *imp);
 void sptlrpc_import_flush_my_ctx(struct obd_import *imp);
 void sptlrpc_import_flush_all_ctx(struct obd_import *imp);
@@ -796,7 +795,7 @@ int sptlrpc_svc_unwrap_bulk(struct ptlrpc_request *req,
 int sptlrpc_get_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u8 alg,
                               void *buf, int buflen);
 
-int bulk_sec_desc_unpack(struct lustre_msg *msg, int offset);
+int bulk_sec_desc_unpack(struct lustre_msg *msg, int offset, int swabbed);
 
 /* user descriptor helpers */
 static inline int sptlrpc_user_desc_size(int ngroups)
@@ -806,7 +805,7 @@ static inline int sptlrpc_user_desc_size(int ngroups)
 
 int sptlrpc_current_user_desc_size(void);
 int sptlrpc_pack_user_desc(struct lustre_msg *msg, int offset);
-int sptlrpc_unpack_user_desc(struct lustre_msg *msg, int offset);
+int sptlrpc_unpack_user_desc(struct lustre_msg *req, int offset, int swabbed);
 
 
 #define CFS_CAP_CHOWN_MASK (1 << CFS_CAP_CHOWN)

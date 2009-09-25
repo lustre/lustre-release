@@ -2,7 +2,6 @@
 
 set -e
 
-PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 SETUP=${SETUP:-""}
 CLEANUP=${CLEANUP:-""}

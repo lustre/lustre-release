@@ -85,9 +85,10 @@ void ll_queue_done_writing(struct inode *inode, unsigned long flags)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ccc_object *club = cl2ccc(ll_i2info(inode)->lli_clob);
+        ENTRY;
+
         spin_lock(&lli->lli_lock);
         lli->lli_flags |= flags;
-        ENTRY;
 
         if ((lli->lli_flags & LLIF_DONE_WRITING) &&
             list_empty(&club->cob_pending_list)) {

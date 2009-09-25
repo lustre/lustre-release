@@ -38,14 +38,16 @@
  *   Author: Nikita Danilov <nikita.danilov@sun.com>
  */
 
-/** \addtogroup osc osc @{ */
-
 #define DEBUG_SUBSYSTEM S_OSC
 
 /* class_name2obd() */
 #include <obd_class.h>
 
 #include "osc_cl_internal.h"
+
+/** \addtogroup osc 
+ * @{ 
+ */
 
 cfs_mem_cache_t *osc_page_kmem;
 cfs_mem_cache_t *osc_lock_kmem;

@@ -16,14 +16,14 @@ noinst_SCRIPTS += replay-ost-single.sh replay-single.sh run-llog.sh sanityN.sh
 noinst_SCRIPTS += large-scale.sh runracer replay-vbr.sh
 noinst_SCRIPTS += performance-sanity.sh mdsrate-create-small.sh
 noinst_SCRIPTS += mdsrate-create-large.sh mdsrate-lookup-1dir.sh
-noinst_SCRIPTS += mdsrate-lookup-10dirs.sh
+noinst_SCRIPTS += mdsrate-lookup-10dirs.sh sanity-benchmark.sh
 noinst_SCRIPTS += mdsrate-stat-small.sh mdsrate-stat-large.sh
 noinst_SCRIPTS += lockorder.sh socketclient socketserver runmultiop_bg_pause
 noinst_SCRIPTS += sanity-sec.sh sanity-gss.sh krb5_login.sh setup_kerberos.sh
 noinst_SCRIPTS += recovery-mds-scale.sh run_dd.sh run_tar.sh run_iozone.sh
 noinst_SCRIPTS += run_dbench.sh run_IOR.sh recovery-double-scale.sh
-noinst_SCRIPTS += recovery-random-scale.sh parallel-scale.sh
-noinst_SCRIPTS += lreplicate-test.sh
+noinst_SCRIPTS += recovery-random-scale.sh parallel-scale.sh metadata-updates.sh
+noinst_SCRIPTS += lreplicate-test.sh ost-pools.sh rpc.sh
 nobase_noinst_SCRIPTS = cfg/local.sh
 nobase_noinst_SCRIPTS += acl/make-tree acl/run cfg/ncli.sh
 nobase_noinst_SCRIPTS += racer/dir_create.sh racer/file_create.sh racer/file_list.sh
@@ -52,7 +52,7 @@ noinst_PROGRAMS += small_write multiop ll_sparseness_verify
 noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify mkdirmany
 noinst_PROGRAMS += openfilleddirunlink rename_many memhog iopentest1 iopentest2
 noinst_PROGRAMS += mmap_sanity flock_test writemany reads flocks_test
-noinst_PROGRAMS += write_time_limit rwv
+noinst_PROGRAMS += write_time_limit rwv copytool
 # noinst_PROGRAMS += copy_attr mkdirdeep 
 bin_PROGRAMS = mcreate munlink
 testdir = $(libdir)/lustre/tests
@@ -67,9 +67,11 @@ mmap_sanity_SOURCES= mmap_sanity.c
 
 LIBLUSTREAPI := $(top_builddir)/lustre/utils/liblustreapi.a
 multiop_LDADD=$(LIBLUSTREAPI) -lrt
+copytool_LDADD=$(LIBLUSTREAPI)
 
 ll_dirstripe_verify_SOURCES= ll_dirstripe_verify.c
 ll_dirstripe_verify_LDADD= -L$(top_builddir)/lustre/utils -llustreapi
 
 flocks_test_SOURCES=flocks_test.c
 flocks_test_LDADD=-lpthread
+

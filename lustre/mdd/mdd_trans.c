@@ -46,14 +46,22 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/module.h>
+#ifdef HAVE_EXT4_LDISKFS
+#include <ldiskfs/ldiskfs_jbd2.h>
+#else
 #include <linux/jbd.h>
+#endif
 #include <obd.h>
 #include <obd_class.h>
 #include <lustre_ver.h>
 #include <obd_support.h>
 #include <lprocfs_status.h>
 
+#ifdef HAVE_EXT4_LDISKFS
+#include <ldiskfs/ldiskfs.h>
+#else
 #include <linux/ldiskfs_fs.h>
+#endif
 #include <lustre_mds.h>
 #include <lustre/lustre_idl.h>
 
@@ -122,7 +130,7 @@ int mdd_txn_commit_cb(const struct lu_env *env, struct thandle *txn,
                 stripe = le32_to_cpu(ma->ma_lmm->lmm_stripe_count);
 
         log_credits = stripe * dto_txn_credits[DTO_LOG_REC];
-        mdd_env_info(env)->mti_param.tp_credits += log_credits;
+        txn_param_credit_add(&mdd_env_info(env)->mti_param, log_credits);
         RETURN(rc);
 }*/
 

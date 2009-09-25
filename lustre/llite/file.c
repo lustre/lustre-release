@@ -387,12 +387,12 @@ static int ll_intent_file_open(struct file *file, void *lmm,
                 GOTO(out, rc);
         }
 
-        if (itp->d.lustre.it_lock_mode)
+        rc = ll_prep_inode(&file->f_dentry->d_inode, req, NULL);
+        if (!rc && itp->d.lustre.it_lock_mode)
                 md_set_lock_data(sbi->ll_md_exp,
                                  &itp->d.lustre.it_lock_handle,
-                                 file->f_dentry->d_inode);
+                                 file->f_dentry->d_inode, NULL);
 
-        rc = ll_prep_inode(&file->f_dentry->d_inode, req, NULL);
 out:
         ptlrpc_req_finished(itp->d.lustre.it_data);
         it_clear_disposition(itp, DISP_ENQ_COMPLETE);
@@ -507,29 +507,12 @@ int ll_file_open(struct inode *inode, struct file *file)
 
         fd->fd_file = file;
         if (S_ISDIR(inode->i_mode)) {
-again:
                 spin_lock(&lli->lli_lock);
                 if (lli->lli_opendir_key == NULL && lli->lli_opendir_pid == 0) {
                         LASSERT(lli->lli_sai == NULL);
                         lli->lli_opendir_key = fd;
                         lli->lli_opendir_pid = cfs_curproc_pid();
                         opendir_set = 1;
-                } else if (unlikely(lli->lli_opendir_pid == cfs_curproc_pid() &&
-                                    lli->lli_opendir_key != NULL)) {
-                        /* Two cases for this:
-                         * (1) The same process open such directory many times.
-                         * (2) The old process opened the directory, and exited
-                         *     before its children processes. Then new process
-                         *     with the same pid opens such directory before the
-                         *     old process's children processes exit.
-                         * reset stat ahead for such cases. */
-                        spin_unlock(&lli->lli_lock);
-                        CDEBUG(D_INFO, "Conflict statahead for %.*s "DFID
-                               " reset it.\n", file->f_dentry->d_name.len,
-                               file->f_dentry->d_name.name,
-                               PFID(&lli->lli_fid));
-                        ll_stop_statahead(inode, lli->lli_opendir_key);
-                        goto again;
                 }
                 spin_unlock(&lli->lli_lock);
         }
@@ -621,9 +604,6 @@ restart:
                                 req = it->d.lustre.it_data;
                                 ptlrpc_req_finished(req);
                         }
-                        md_set_lock_data(ll_i2sbi(inode)->ll_md_exp,
-                                         &it->d.lustre.it_lock_handle,
-                                         file->f_dentry->d_inode);
                         goto restart;
                 }
                 OBD_ALLOC(*och_p, sizeof (struct obd_client_handle));
@@ -1844,7 +1824,7 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                 RETURN(ll_lov_getstripe(inode, arg));
         case LL_IOC_RECREATE_OBJ:
                 RETURN(ll_lov_recreate_obj(inode, file, arg));
-        case EXT3_IOC_FIEMAP: {
+        case FSFILT_IOC_FIEMAP: {
                 struct ll_user_fiemap *fiemap_s;
                 size_t num_bytes, ret_bytes;
                 unsigned int extent_count;
@@ -1910,11 +1890,11 @@ error:
                 OBD_VFREE(fiemap_s, num_bytes);
                 RETURN(rc);
         }
-        case EXT3_IOC_GETFLAGS:
-        case EXT3_IOC_SETFLAGS:
+        case FSFILT_IOC_GETFLAGS:
+        case FSFILT_IOC_SETFLAGS:
                 RETURN(ll_iocontrol(inode, file, cmd, arg));
-        case EXT3_IOC_GETVERSION_OLD:
-        case EXT3_IOC_GETVERSION:
+        case FSFILT_IOC_GETVERSION_OLD:
+        case FSFILT_IOC_GETVERSION:
                 RETURN(put_user(inode->i_generation, (int *)arg));
         case LL_IOC_JOIN: {
 #if LUSTRE_FIX >= 50
@@ -1943,13 +1923,13 @@ error:
         /* We need to special case any other ioctls we want to handle,
          * to send them to the MDS/OST as appropriate and to properly
          * network encode the arg field.
-        case EXT3_IOC_SETVERSION_OLD:
-        case EXT3_IOC_SETVERSION:
+        case FSFILT_IOC_SETVERSION_OLD:
+        case FSFILT_IOC_SETVERSION:
         */
         case LL_IOC_FLUSHCTX:
                 RETURN(ll_flush_ctx(inode));
         case LL_IOC_PATH2FID: {
-                if (copy_to_user((void *)arg, &ll_i2info(inode)->lli_fid,
+                if (copy_to_user((void *)arg, ll_inode2fid(inode),
                                  sizeof(struct lu_fid)))
                         RETURN(-EFAULT);
 

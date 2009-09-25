@@ -42,7 +42,9 @@
 
 #include "lov_cl_internal.h"
 
-/** \addtogroup lov lov @{ */
+/** \addtogroup lov
+ *  @{
+ */
 
 static struct cl_lock_closure *lov_closure_get(const struct lu_env *env,
                                                struct cl_lock *parent);
@@ -290,10 +292,7 @@ static int lov_lock_sub_init(const struct lu_env *env,
 {
         int result = 0;
         int i;
-        int j;
         int nr;
-        int stripe;
-        int start_stripe;
         obd_off start;
         obd_off end;
         obd_off file_start;
@@ -309,14 +308,12 @@ static int lov_lock_sub_init(const struct lu_env *env,
         file_start = cl_offset(lov2cl(loo), parent->cll_descr.cld_start);
         file_end   = cl_offset(lov2cl(loo), parent->cll_descr.cld_end + 1) - 1;
 
-        start_stripe = lov_stripe_number(r0->lo_lsm, file_start);
         for (i = 0, nr = 0; i < r0->lo_nr; i++) {
                 /*
                  * XXX for wide striping smarter algorithm is desirable,
                  * breaking out of the loop, early.
                  */
-                stripe = (start_stripe + i) % r0->lo_nr;
-                if (lov_stripe_intersects(r0->lo_lsm, stripe,
+                if (lov_stripe_intersects(r0->lo_lsm, i,
                                           file_start, file_end, &start, &end))
                         nr++;
         }
@@ -333,23 +330,22 @@ static int lov_lock_sub_init(const struct lu_env *env,
          * create sub-locks. At this moment, no other thread can access
          * top-lock.
          */
-        for (j = 0, nr = 0; j < i; ++j) {
-                stripe = (start_stripe + j) % r0->lo_nr;
-                if (lov_stripe_intersects(r0->lo_lsm, stripe,
+        for (i = 0, nr = 0; i < r0->lo_nr; ++i) {
+                if (lov_stripe_intersects(r0->lo_lsm, i,
                                           file_start, file_end, &start, &end)) {
                         struct cl_lock_descr *descr;
 
                         descr = &lck->lls_sub[nr].sub_descr;
 
                         LASSERT(descr->cld_obj == NULL);
-                        descr->cld_obj   = lovsub2cl(r0->lo_sub[stripe]);
+                        descr->cld_obj   = lovsub2cl(r0->lo_sub[i]);
                         descr->cld_start = cl_index(descr->cld_obj, start);
                         descr->cld_end   = cl_index(descr->cld_obj, end);
                         descr->cld_mode  = parent->cll_descr.cld_mode;
                         descr->cld_gid   = parent->cll_descr.cld_gid;
                         /* XXX has no effect */
                         lck->lls_sub[nr].sub_got = *descr;
-                        lck->lls_sub[nr].sub_stripe = stripe;
+                        lck->lls_sub[nr].sub_stripe = i;
                         nr++;
                 }
         }
@@ -622,7 +618,7 @@ static int lov_lock_enqueue(const struct lu_env *env,
                         lov_sublock_unlock(env, sub, closure, subenv);
                 }
                 result = lov_subresult(result, rc);
-                if (result < 0)
+                if (result != 0)
                         break;
         }
         cl_lock_closure_fini(closure);

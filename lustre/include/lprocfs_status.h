@@ -190,6 +190,9 @@ struct lprocfs_stats {
         struct lprocfs_percpu *ls_percpu[0];
 };
 
+#define OPC_RANGE(seg) (seg ## _LAST_OPC - seg ## _FIRST_OPC)
+
+/* Pack all opcodes down into a single monotonically increasing index */
 static inline int opcode_offset(__u32 opc) {
         if (opc < OST_LAST_OPC) {
                  /* OST opcode */
@@ -197,75 +200,75 @@ static inline int opcode_offset(__u32 opc) {
         } else if (opc < MDS_LAST_OPC) {
                 /* MDS opcode */
                 return (opc - MDS_FIRST_OPC +
-                        (OST_LAST_OPC - OST_FIRST_OPC));
+                        OPC_RANGE(OST));
         } else if (opc < LDLM_LAST_OPC) {
                 /* LDLM Opcode */
                 return (opc - LDLM_FIRST_OPC +
-                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
-                        (OST_LAST_OPC - OST_FIRST_OPC));
+                        OPC_RANGE(MDS) +
+                        OPC_RANGE(OST));
         } else if (opc < MGS_LAST_OPC) {
                 /* MGS Opcode */
                 return (opc - MGS_FIRST_OPC +
-                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
-                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
-                        (OST_LAST_OPC - OST_FIRST_OPC));
+                        OPC_RANGE(LDLM) +
+                        OPC_RANGE(MDS) +
+                        OPC_RANGE(OST));
         } else if (opc < OBD_LAST_OPC) {
                 /* OBD Ping */
                 return (opc - OBD_FIRST_OPC +
-                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
-                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
-                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
-                        (OST_LAST_OPC - OST_FIRST_OPC));
+                        OPC_RANGE(MGS) +
+                        OPC_RANGE(LDLM) +
+                        OPC_RANGE(MDS) +
+                        OPC_RANGE(OST));
         } else if (opc < LLOG_LAST_OPC) {
                 /* LLOG Opcode */
                 return (opc - LLOG_FIRST_OPC +
-                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
-                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
-                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
-                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
-                        (OST_LAST_OPC - OST_FIRST_OPC));
+                        OPC_RANGE(OBD) +
+                        OPC_RANGE(MGS) +
+                        OPC_RANGE(LDLM) +
+                        OPC_RANGE(MDS) +
+                        OPC_RANGE(OST));
         } else if (opc < QUOTA_LAST_OPC) {
                 /* LQUOTA Opcode */
                 return (opc - QUOTA_FIRST_OPC +
-                        (LLOG_LAST_OPC - LLOG_FIRST_OPC) +
-                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
-                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
-                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
-                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
-                        (OST_LAST_OPC - OST_FIRST_OPC));
+                        OPC_RANGE(LLOG) +
+                        OPC_RANGE(OBD) +
+                        OPC_RANGE(MGS) +
+                        OPC_RANGE(LDLM) +
+                        OPC_RANGE(MDS) +
+                        OPC_RANGE(OST));
         } else if (opc < SEQ_LAST_OPC) {
                 /* SEQ opcode */
                 return (opc - SEQ_FIRST_OPC +
-                        (QUOTA_LAST_OPC- QUOTA_FIRST_OPC) +
-                        (LLOG_LAST_OPC - LLOG_FIRST_OPC) +
-                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
-                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
-                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
-                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
-                        (OST_LAST_OPC - OST_FIRST_OPC));
+                        OPC_RANGE(QUOTA) +
+                        OPC_RANGE(LLOG) +
+                        OPC_RANGE(OBD) +
+                        OPC_RANGE(MGS) +
+                        OPC_RANGE(LDLM) +
+                        OPC_RANGE(MDS) +
+                        OPC_RANGE(OST));
         } else if (opc < SEC_LAST_OPC) {
                 /* SEC opcode */
                 return (opc - SEC_FIRST_OPC +
-                        (SEQ_LAST_OPC - SEQ_FIRST_OPC) +
-                        (QUOTA_LAST_OPC- QUOTA_FIRST_OPC) +
-                        (LLOG_LAST_OPC - LLOG_FIRST_OPC) +
-                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
-                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
-                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
-                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
-                        (OST_LAST_OPC - OST_FIRST_OPC));
+                        OPC_RANGE(SEQ) +
+                        OPC_RANGE(QUOTA) +
+                        OPC_RANGE(LLOG) +
+                        OPC_RANGE(OBD) +
+                        OPC_RANGE(MGS) +
+                        OPC_RANGE(LDLM) +
+                        OPC_RANGE(MDS) +
+                        OPC_RANGE(OST));
         } else if (opc < FLD_LAST_OPC) {
                 /* FLD opcode */
                  return (opc - FLD_FIRST_OPC +
-                        (SEC_LAST_OPC - SEC_FIRST_OPC) +
-                        (SEQ_LAST_OPC - SEQ_FIRST_OPC) +
-                        (QUOTA_LAST_OPC- QUOTA_FIRST_OPC) +
-                        (LLOG_LAST_OPC - LLOG_FIRST_OPC) +
-                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
-                        (MGS_LAST_OPC - MGS_FIRST_OPC) +
-                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
-                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
-                        (OST_LAST_OPC - OST_FIRST_OPC));
+                        OPC_RANGE(SEC) +
+                        OPC_RANGE(SEQ) +
+                        OPC_RANGE(QUOTA) +
+                        OPC_RANGE(LLOG) +
+                        OPC_RANGE(OBD) +
+                        OPC_RANGE(MGS) +
+                        OPC_RANGE(LDLM) +
+                        OPC_RANGE(MDS) +
+                        OPC_RANGE(OST));
         } else {
                 /* Unknown Opcode */
                 return -1;
@@ -273,19 +276,19 @@ static inline int opcode_offset(__u32 opc) {
 }
 
 
-#define LUSTRE_MAX_OPCODES ((OST_LAST_OPC - OST_FIRST_OPC)     + \
-                            (MDS_LAST_OPC - MDS_FIRST_OPC)     + \
-                            (LDLM_LAST_OPC - LDLM_FIRST_OPC)   + \
-                            (MGS_LAST_OPC - MGS_FIRST_OPC)     + \
-                            (OBD_LAST_OPC - OBD_FIRST_OPC)     + \
-                            (LLOG_LAST_OPC - LLOG_FIRST_OPC)   + \
-                            (QUOTA_LAST_OPC - QUOTA_FIRST_OPC) + \
-                            (SEQ_LAST_OPC - SEQ_FIRST_OPC)     + \
-                            (SEC_LAST_OPC - SEC_FIRST_OPC)     + \
-                            (FLD_LAST_OPC - FLD_FIRST_OPC))
+#define LUSTRE_MAX_OPCODES (OPC_RANGE(OST)  + \
+                            OPC_RANGE(MDS)  + \
+                            OPC_RANGE(LDLM) + \
+                            OPC_RANGE(MGS)  + \
+                            OPC_RANGE(OBD)  + \
+                            OPC_RANGE(LLOG) + \
+                            OPC_RANGE(SEC)  + \
+                            OPC_RANGE(SEQ)  + \
+                            OPC_RANGE(SEC)  + \
+                            OPC_RANGE(FLD)  )
 
 #define EXTRA_MAX_OPCODES ((PTLRPC_LAST_CNTR - PTLRPC_FIRST_CNTR)  + \
-                           (EXTRA_LAST_OPC - EXTRA_FIRST_OPC))
+                            OPC_RANGE(EXTRA))
 
 enum {
         PTLRPC_REQWAIT_CNTR = 0,
@@ -357,9 +360,9 @@ static inline int lprocfs_stats_lock(struct lprocfs_stats *stats, int type)
                 if (type & LPROCFS_GET_NUM_CPU)
                         rc = num_possible_cpus();
                 if (type & LPROCFS_GET_SMP_ID) {
-			stats->ls_flags |= LPROCFS_STATS_GET_SMP_ID;
+                        stats->ls_flags |= LPROCFS_STATS_GET_SMP_ID;
                         rc = cfs_get_cpu();
-		}
+                }
         }
         return rc;
 }
@@ -368,8 +371,8 @@ static inline void lprocfs_stats_unlock(struct lprocfs_stats *stats)
 {
         if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU)
                 spin_unlock(&stats->ls_lock);
-	else if (stats->ls_flags & LPROCFS_STATS_GET_SMP_ID)
-		cfs_put_cpu();
+        else if (stats->ls_flags & LPROCFS_STATS_GET_SMP_ID)
+                cfs_put_cpu();
 }
 
 /* Two optimized LPROCFS counter increment functions are provided:
@@ -516,6 +519,11 @@ extern int lprocfs_wr_evict_client(struct file *file, const char *buffer,
                                    unsigned long count, void *data);
 extern int lprocfs_wr_ping(struct file *file, const char *buffer,
                            unsigned long count, void *data);
+
+extern int lprocfs_rd_quota_resend_count(char *page, char **start, off_t off,
+                                         int count, int *eof, void *data);
+extern int lprocfs_wr_quota_resend_count(struct file *file, const char *buffer,
+                                         unsigned long count, void *data);
 
 /* Statfs helpers */
 extern int lprocfs_rd_blksize(char *page, char **start, off_t off,

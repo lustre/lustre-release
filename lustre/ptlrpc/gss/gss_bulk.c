@@ -291,7 +291,8 @@ int gss_cli_ctx_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
                         token.len = lustre_msg_buflen(vmsg, voff) -
                                     sizeof(*bsdr);
 
-                        maj = lgss_unwrap_bulk(gctx->gc_mechctx, desc, &token);
+                        maj = lgss_unwrap_bulk(gctx->gc_mechctx, desc,
+                                               &token, 1);
                         if (maj != GSS_S_COMPLETE) {
                                 CERROR("failed to decrypt bulk read: %x\n",
                                        maj);
@@ -433,7 +434,7 @@ int gss_svc_unwrap_bulk(struct ptlrpc_request *req,
                 token.len = grctx->src_reqbsd_size - sizeof(*bsdr);
 
                 maj = lgss_unwrap_bulk(grctx->src_ctx->gsc_mechctx,
-                                       desc, &token);
+                                       desc, &token, 0);
                 if (maj != GSS_S_COMPLETE) {
                         bsdv->bsd_flags |= BSD_FL_ERR;
                         CERROR("failed decrypt bulk data: %x\n", maj);

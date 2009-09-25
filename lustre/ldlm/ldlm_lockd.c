@@ -208,7 +208,7 @@ static int expired_lock_main(void *arg)
                                 LDLM_LOCK_RELEASE(lock);
                                 continue;
                         }
-                        export = class_export_get(lock->l_export);
+                        export = class_export_lock_get(lock->l_export);
                         spin_unlock_bh(&waiting_locks_spinlock);
 
                         /* release extra ref grabbed by ldlm_add_waiting_lock()
@@ -217,7 +217,7 @@ static int expired_lock_main(void *arg)
 
                         do_dump++;
                         class_fail_export(export);
-                        class_export_put(export);
+                        class_export_lock_put(export);
                         spin_lock_bh(&waiting_locks_spinlock);
                 }
                 spin_unlock_bh(&waiting_locks_spinlock);
@@ -634,7 +634,7 @@ static int ldlm_cb_interpret(const struct lu_env *env,
         LASSERT(lock != NULL);
         if (rc != 0) {
                 /* If client canceled the lock but the cancel has not
-                 * been recieved yet, we need to update lvbo to have the
+                 * been received yet, we need to update lvbo to have the
                  * proper attributes cached. */
                 if (rc == -EINVAL && arg->type == LDLM_BL_CALLBACK)
                         ldlm_res_lvbo_update(lock->l_resource, NULL,
@@ -779,7 +779,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         }
 
         req->rq_send_state = LUSTRE_IMP_FULL;
-        /* ptlrpc_prep_req already set timeout */
+        /* ptlrpc_request_alloc_pack already set timeout */
         if (AT_OFF)
                 req->rq_timeout = ldlm_get_rq_timeout();
 
@@ -865,7 +865,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         ptlrpc_request_set_replen(req);
 
         req->rq_send_state = LUSTRE_IMP_FULL;
-        /* ptlrpc_prep_req already set timeout */
+        /* ptlrpc_request_pack already set timeout */
         if (AT_OFF)
                 req->rq_timeout = ldlm_get_rq_timeout();
 
@@ -934,7 +934,7 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
 
 
         req->rq_send_state = LUSTRE_IMP_FULL;
-        /* ptlrpc_prep_req already set timeout */
+        /* ptlrpc_request_alloc_pack already set timeout */
         if (AT_OFF)
                 req->rq_timeout = ldlm_get_rq_timeout();
 
@@ -949,8 +949,8 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         else if (rc != 0)
                 rc = ldlm_handle_ast_error(lock, req, rc, "glimpse");
         else
-                rc = ldlm_res_lvbo_update(res, req->rq_repmsg,
-                                          REPLY_REC_OFF, 1);
+                rc = ldlm_res_lvbo_update(res, req, REPLY_REC_OFF, 1);
+
         ptlrpc_req_finished(req);
         if (rc == -ERESTART)
                 ldlm_reprocess_all(res);
@@ -1109,8 +1109,7 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
                 LDLM_ERROR(lock, "lock on destroyed export %p", req->rq_export);
                 GOTO(out, rc = -ENOTCONN);
         }
-        lock->l_export = class_export_get(req->rq_export);
-        atomic_inc(&lock->l_export->exp_locks_count);
+        lock->l_export = class_export_lock_get(req->rq_export);
         if (lock->l_export->exp_lock_hash)
                 lustre_hash_add(lock->l_export->exp_lock_hash,
                                 &lock->l_remote_handle,
@@ -1174,9 +1173,9 @@ existing_lock:
                 if (lock->l_granted_mode == lock->l_req_mode) {
                         /*
                          * Only cancel lock if it was granted, because it would
-                         * be destroyed immediatelly and would never be granted
+                         * be destroyed immediately and would never be granted
                          * in the future, causing timeouts on client.  Not
-                         * granted lock will be cancelled immediatelly after
+                         * granted lock will be cancelled immediately after
                          * sending completion AST.
                          */
                         if (dlm_rep->lock_flags & LDLM_FL_CANCEL_ON_BLOCK) {
@@ -1677,6 +1676,49 @@ int ldlm_bl_to_thread_list(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
 #endif
 }
 
+/* Setinfo coming from Server (eg MDT) to Client (eg MDC)! */
+static int ldlm_handle_setinfo(struct ptlrpc_request *req)
+{
+        struct obd_device *obd = req->rq_export->exp_obd;
+        char *key;
+        void *val;
+        int keylen, vallen;
+        int rc = -ENOSYS;
+        ENTRY;
+
+        DEBUG_REQ(D_ERROR, req, "%s: handle setinfo\n", obd->obd_name);
+
+        req_capsule_set(&req->rq_pill, &RQF_OBD_SET_INFO);
+
+        key = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_KEY);
+        if (key == NULL) {
+                DEBUG_REQ(D_IOCTL, req, "no set_info key");
+                RETURN(-EFAULT);
+        }
+        keylen = req_capsule_get_size(&req->rq_pill, &RMF_SETINFO_KEY,
+                                      RCL_CLIENT);
+        val = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_VAL);
+        if (val == NULL) {
+                DEBUG_REQ(D_IOCTL, req, "no set_info val");
+                RETURN(-EFAULT);
+        }
+        vallen = req_capsule_get_size(&req->rq_pill, &RMF_SETINFO_VAL,
+                                      RCL_CLIENT);
+
+        /* We are responsible for swabbing contents of val */
+
+        if (KEY_IS(KEY_HSM_COPYTOOL_SEND))
+                /* Pass it on to mdc (the "export" in this case) */
+                rc = obd_set_info_async(req->rq_export,
+                                        sizeof(KEY_HSM_COPYTOOL_SEND),
+                                        KEY_HSM_COPYTOOL_SEND,
+                                        vallen, val, NULL);
+        else
+                DEBUG_REQ(D_WARNING, req, "ignoring unknown key %s", key);
+
+        return rc;
+}
+
 /* TODO: handle requests in a similar way as MDT: see mdt_handle_common() */
 static int ldlm_callback_handler(struct ptlrpc_request *req)
 {
@@ -1718,6 +1760,10 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_GL_CALLBACK))
                         RETURN(0);
                 break;
+        case LDLM_SET_INFO:
+                rc = ldlm_handle_setinfo(req);
+                ldlm_callback_reply(req, rc);
+                RETURN(0);
         case OBD_LOG_CANCEL: /* remove this eventually - for 1.4.0 compat */
                 CERROR("shouldn't be handling OBD_LOG_CANCEL on DLM thread\n");
                 req_capsule_set(&req->rq_pill, &RQF_LOG_CANCEL);
@@ -1813,7 +1859,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
         lock_res_and_lock(lock);
         lock->l_flags |= (dlm_req->lock_flags & LDLM_AST_FLAGS);
         if (lustre_msg_get_opc(req->rq_reqmsg) == LDLM_BL_CALLBACK) {
-                /* If somebody cancels lock and cache is already droped,
+                /* If somebody cancels lock and cache is already dropped,
                  * or lock is failed before cp_ast received on client,
                  * we can tell the server we have no lock. Otherwise, we
                  * should send cancel after dropping the cache. */

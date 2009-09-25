@@ -395,7 +395,7 @@ static int mgc_requeue_thread(void *data)
         int rc = 0;
         ENTRY;
 
-        ptlrpc_daemonize(name);
+        cfs_daemonize(name);
 
         CDEBUG(D_MGC, "Starting requeue thread\n");
 
@@ -688,7 +688,7 @@ static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (rc)
                 GOTO(err_decref, rc);
 
-        rc = obd_llog_init(obd, &obd->obd_olg, obd, 0, NULL, NULL);
+        rc = obd_llog_init(obd, &obd->obd_olg, obd, NULL);
         if (rc) {
                 CERROR("failed to setup llogging subsystems\n");
                 GOTO(err_cleanup, rc);
@@ -1118,8 +1118,7 @@ static int mgc_import_event(struct obd_device *obd,
 }
 
 static int mgc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                         struct obd_device *tgt, int count,
-                         struct llog_catid *logid, struct obd_uuid *uuid)
+                         struct obd_device *tgt, int *index)
 {
         struct llog_ctxt *ctxt;
         int rc;

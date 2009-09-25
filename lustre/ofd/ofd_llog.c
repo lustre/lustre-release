@@ -59,8 +59,7 @@ static struct llog_operations filter_size_orig_logops = {
 #endif
 
 int filter_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                     struct obd_device *tgt, int count,
-                     struct llog_catid *catid, struct obd_uuid *uuid)
+                     struct obd_device *tgt, int *idx)
 {
         struct filter_device *ofd = filter_dev(obd->obd_lu_dev);
         struct llog_ctxt *ctxt;
@@ -174,7 +173,7 @@ struct obd_llog_group *filter_find_olg(struct obd_device *obd, int group)
         list_add(&olg->olg_list, &ofd->ofd_llog_list);
         spin_unlock(&ofd->ofd_llog_list_lock);
 
-        rc = llog_cat_initialize(obd, olg, 1, NULL);
+        rc = obd_llog_init(obd, olg, obd, NULL);
         if (rc) {
                 spin_lock(&ofd->ofd_llog_list_lock);
                 list_del(&olg->olg_list);
@@ -207,13 +206,25 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
         if (oinfo.oi_oa == NULL)
                 RETURN(-ENOMEM);
 
+        if (rec->lrh_type == MDS_SETATTR_REC) {
+                struct llog_setattr_rec *lsr = (struct llog_setattr_rec *)rec;
+
+                oinfo.oi_oa->o_id = lsr->lsr_oid;
+                oinfo.oi_oa->o_gr = lsr->lsr_ogr;
+                oinfo.oi_oa->o_uid = lsr->lsr_uid;
+                oinfo.oi_oa->o_gid = lsr->lsr_gid;
+        } else {
+                struct llog_setattr64_rec *lsr = (struct llog_setattr64_rec *)rec;
+
+                oinfo.oi_oa->o_id = lsr->lsr_oid;
+                oinfo.oi_oa->o_gr = lsr->lsr_ogr;
+                oinfo.oi_oa->o_uid = lsr->lsr_uid;
+                oinfo.oi_oa->o_gid = lsr->lsr_gid;
+        }
+
         oinfo.oi_oa->o_valid |= (OBD_MD_FLID | OBD_MD_FLUID | OBD_MD_FLGID |
                                  OBD_MD_FLCOOKIE);
-        oinfo.oi_oa->o_id = lsr->lsr_oid;
-        oinfo.oi_oa->o_gr = lsr->lsr_ogen;
         oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
-        oinfo.oi_oa->o_uid = lsr->lsr_uid;
-        oinfo.oi_oa->o_gid = lsr->lsr_gid;
         oinfo.oi_oa->o_lcookie = *cookie;
         oid = oinfo.oi_oa->o_id;
 
@@ -253,7 +264,7 @@ int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
                 RETURN(-ENOMEM);
         oa->o_valid |= OBD_MD_FLCOOKIE;
         oa->o_id = lur->lur_oid;
-        oa->o_gr = lur->lur_ogen;
+        oa->o_gr = lur->lur_ogr;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
         oa->o_lcookie = *cookie;
         oid = oa->o_id;
@@ -369,7 +380,7 @@ struct obd_llog_group *filter_find_create_olg(struct obd_device *obd, int group)
         olg->olg_initializing = 1;
         spin_unlock(&filter->fo_llog_list_lock);
 
-        rc = llog_cat_initialize(obd, olg, 1, NULL);
+        rc = obd_llog_init(obd, olg, obd, NULL);
         if (rc) {
                spin_lock(&filter->fo_llog_list_lock);
                list_del(&olg->olg_list);
