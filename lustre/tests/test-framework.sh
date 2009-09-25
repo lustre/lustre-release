@@ -1904,7 +1904,7 @@ check_and_cleanup_lustre() {
         [ "$ENABLE_QUOTA" ] && restore_quota_type || true
     fi
     if [ "$I_UMOUNTED2" = "yes" ]; then
-        mount_client $MOUNT2 || error "restore MOUNT2 failed"
+        mount_client $MOUNT2 || error "restore $MOUNT2 failed"
     fi
 
     if [ "$I_MOUNTED" = "yes" ]; then
