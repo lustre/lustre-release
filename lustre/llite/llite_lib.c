@@ -530,26 +530,16 @@ int ll_get_max_mdsize(struct ll_sb_info *sbi, int *lmmsize)
 void ll_dump_inode(struct inode *inode)
 {
         struct list_head *tmp;
-        struct dentry *dentry;
         int dentry_count = 0;
 
         LASSERT(inode != NULL);
-        CERROR("inode %p dump: dev=%s ino=%lu mode=%o count=%u state %lx\n",
-               inode, ll_i2mdexp(inode)->exp_obd->obd_name, inode->i_ino,
-               inode->i_mode, atomic_read(&inode->i_count), inode->i_state);
 
-        list_for_each(tmp, &inode->i_dentry) {
-                dentry = list_entry(tmp, struct dentry, d_alias);
-                CERROR("Alias[%d] dentry %p dump: name=%.*s parent=%.*s (%p), inode=%p, count=%u, "
-                       "flags=0x%x, fsdata=%p\n", dentry_count, dentry,
-                       dentry->d_name.len, dentry->d_name.name,
-                       dentry->d_parent->d_name.len, dentry->d_parent->d_name.name,
-                       dentry->d_parent, dentry->d_inode, atomic_read(&dentry->d_count),
-                       dentry->d_flags, dentry->d_fsdata);
-
+        list_for_each(tmp, &inode->i_dentry)
                 dentry_count++;
-        }
 
+        CERROR("inode %p dump: dev=%s ino=%lu mode=%o count=%u, %d dentries\n",
+               inode, ll_i2mdexp(inode)->exp_obd->obd_name, inode->i_ino,
+               inode->i_mode, atomic_read(&inode->i_count), dentry_count);
 }
 
 void lustre_dump_dentry(struct dentry *dentry, int recur)
