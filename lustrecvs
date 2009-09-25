@@ -25,6 +25,8 @@ Usage: $progname <lustretag> <pindate>
 EOF
 }
 
+[ "$1" = "-r" ] && shift
+
 if [ -z "$LUSTRECVS_UPDATED" ] ; then
     echo "$progname: updating lustrecvs"
 
@@ -38,8 +40,6 @@ if [ -z "$LUSTRECVS_UPDATED" ] ; then
     export LUSTRECVS_UPDATED=yes
     exec "$0" "$@"
 fi
-
-[ "$1" = "-r" ] && shift
 
 buildtag="HEAD"
 lustretag="$1"
