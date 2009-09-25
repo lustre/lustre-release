@@ -1,0 +1,13 @@
+Index: linux-stage/fs/ext4/super.c
+===================================================================
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -2457,7 +2457,7 @@ static int ext4_fill_super(struct super_
+ 	sbi->s_resgid = le16_to_cpu(es->s_def_resgid);
+ 
+ 	set_opt(sbi->s_mount_opt, RESERVATION);
+-	set_opt(sbi->s_mount_opt, BARRIER);
++	/* set_opt(sbi->s_mount_opt, BARRIER); */
+ 
+ 	/*
+ 	 * turn on extents feature by default in ext4 filesystem
