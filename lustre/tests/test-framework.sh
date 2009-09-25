@@ -1581,13 +1581,32 @@ check_and_setup_lustre() {
     nfs_client_mode && return
 
     local MOUNTED=$(mounted_lustre_filesystems)
+
+    local do_check=true
+    # MOUNT is not mounted
     if [ -z "$MOUNTED" ] || ! $(echo $MOUNTED | grep -w -q $MOUNT); then
         [ "$REFORMAT" ] && formatall
         setupall
         MOUNTED=$(mounted_lustre_filesystems | head -1)
         [ -z "$MOUNTED" ] && error "NAME=$NAME not mounted"
         export I_MOUNTED=yes
-    else
+        do_check=false
+
+    # MOUNT and MOUNT2 are mounted
+    elif $(echo $MOUNTED | grep -w -q $MOUNT2); then
+
+        # MOUNT2 is mounted,  MOUNT_2 is not set
+        if ! [ "$MOUNT_2" ]; then
+            zconf_umount `hostname` $MOUNT2
+            export I_UMOUNTED2=yes
+
+        # MOUNT2 is mounted, MOUNT_2 is set
+        else
+            check_config $MOUNT2
+        fi 
+    fi
+
+    if $do_check; then
         check_config $MOUNT
         init_facets_vars
         init_param_vars
@@ -1618,6 +1637,10 @@ check_and_cleanup_lustre() {
         [ -n "$DIR" ] && rm -rf $DIR/[Rdfs][0-9]*
         [ "$ENABLE_QUOTA" ] && restore_quota_type || true
     fi
+    if [ "$I_UMOUNTED2" = "yes" ]; then
+        mount_client $MOUNT2 || error "restore $MOUNT2 failed"
+    fi
+
     if [ "$I_MOUNTED" = "yes" ]; then
         cleanupall -f || error "cleanup failed"
     fi
