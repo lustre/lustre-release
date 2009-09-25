@@ -1122,17 +1122,24 @@ test_12() {
 	DDPID=$!
 
 	echo  "   step2: testing ......"
-	count=0
-	while [ true ]; do
-	    if ! ps -p ${DDPID1} > /dev/null 2>&1; then break; fi
-	    count=$[count+1]
-	    if [ $count -gt 64 ]; then
-		lustre_fail ost 0
-		quota_error u $TSTUSR2 "dd should be finished!"
-	    fi
-	    sleep 1
-	done
-	echo "(dd_pid=$DDPID1, time=$count)successful"
+        local last_size=$(stat -c %s $TESTFILE2) 
+        local stall_secs=0
+        local start_secs=$SECONDS
+        while [ -d /proc/${DDPID1} ]; do
+            local size=$(stat -c %s $TESTFILE2) 
+            if [ $size -eq $last_size ]; then
+                stall_secs=$[stall_secs+1]
+            else
+                stall_secs=0
+            fi
+            if [ $stall_secs -gt 30 ]; then
+                lustre_fail ost 0
+                quota_error u $TSTUSR2 "giving up: dd stalled (i.e. made no progress) for 30 seconds!"
+            fi
+            last_size=$size
+            sleep 1
+        done
+        echo "(dd_pid=$DDPID1, time=$((SECONDS-start_secs)))successful"
 
 	#Recover fail_loc and dd will finish soon
 	lustre_fail ost 0
