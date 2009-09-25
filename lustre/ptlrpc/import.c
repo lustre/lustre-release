@@ -499,7 +499,7 @@ static int import_select_connection(struct obd_import *imp)
         }
 
         /* if not found, simply choose the current one */
-        if (!imp_conn) {
+        if (!imp_conn || imp->imp_force_reconnect) {
                 LASSERT(imp->imp_conn_current);
                 imp_conn = imp->imp_conn_current;
                 tried_all = 0;
@@ -779,6 +779,12 @@ static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
         EXIT;
 }
 
+static int ptlrpc_busy_reconnect(int rc)
+{
+        return (rc == -EBUSY) || (rc == -EAGAIN);
+}
+
+
 static int ptlrpc_connect_interpret(const struct lu_env *env,
                                     struct ptlrpc_request *request,
                                     void *data, int rc)
@@ -796,18 +802,23 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
                 spin_unlock(&imp->imp_lock);
                 RETURN(0);
         }
-        spin_unlock(&imp->imp_lock);
 
-        if (rc)
+        if (rc) {
+                /* if this reconnect to busy export - not need select new target
+                 * for connecting*/
+                if (ptlrpc_busy_reconnect(rc))
+                        imp->imp_force_reconnect = 1;
+                spin_unlock(&imp->imp_lock);
                 GOTO(out, rc);
+        }
 
         LASSERT(imp->imp_conn_current);
 
         msg_flags = lustre_msg_get_op_flags(request->rq_repmsg);
 
         /* All imports are pingable */
-        spin_lock(&imp->imp_lock);
         imp->imp_pingable = 1;
+        imp->imp_force_reconnect = 0;
 
         if (aa->pcaa_initial_connect) {
                 if (msg_flags & MSG_CONNECT_REPLAYABLE) {

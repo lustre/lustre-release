@@ -1197,7 +1197,7 @@ test_34c() {
 }
 run_test 34c "force umount with failed ost should be normal"
 
-test_35() { # bug 12459
+test_35a() { # bug 12459
 	setup
 
 	DBG_SAVE="`lctl get_param -n debug`"
@@ -1211,7 +1211,7 @@ test_35() { # bug 12459
 	log "Wait for RECONNECT_INTERVAL seconds (10s)"
 	sleep 10
 
-	MSG="conf-sanity.sh test_35 `date +%F%kh%Mm%Ss`"
+	MSG="conf-sanity.sh test_35a `date +%F%kh%Mm%Ss`"
 	$LCTL clear
 	log "$MSG"
 	log "Stopping the MDT:"
@@ -1242,7 +1242,74 @@ test_35() { # bug 12459
 	[ "$NEXTCONN" != "0" ] && log "The client didn't try to reconnect to the last active server (tried ${NEXTCONN} instead)" && return 7
 	cleanup
 }
-run_test 35 "Reconnect to the last active server first"
+run_test 35a "Reconnect to the last active server first"
+
+test_35b() { # bug 18674
+	remote_mds || { skip "local MDS" && return 0; }
+	setup
+
+	debugsave
+	$LCTL set_param debug="ha"
+	$LCTL clear
+	MSG="conf-sanity.sh test_35b `date +%F%kh%Mm%Ss`"
+	log "$MSG"
+
+	log "Set up a fake failnode for the MDS"
+	FAKENID="127.0.0.2"
+	local device=$(do_facet mds "$LCTL get_param -n devices" | \
+			awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' | head -1)
+	do_facet mds "$LCTL conf_param ${device}.failover.node=$FAKENID" || \
+		return 1
+
+	local at_max_saved=0
+	# adaptive timeouts may prevent seeing the issue 
+	if at_is_enabled; then
+		at_max_saved=$(at_max_get mds)
+		at_max_set 0 mds client
+	fi
+
+	mkdir -p $MOUNT/testdir
+	touch $MOUNT/testdir/test
+
+	log "Injecting EBUSY on MDS"
+	# Setting OBD_FAIL_MDS_RESEND=0x136
+	do_facet mds "$LCTL set_param fail_loc=0x80000136" || return 2
+
+	log "Stat on a test file"
+	stat $MOUNT/testdir/test
+
+	log "Stop injecting EBUSY on MDS"
+	do_facet mds "$LCTL set_param fail_loc=0" || return 3
+	rm -f $MOUNT/testdir/test
+
+	log "done"
+	# restore adaptive timeout
+	[ $at_max_saved -ne 0 ] && at_max_set $at_max_saved mds client
+
+	$LCTL dk $TMP/lustre-log-$TESTNAME.log
+
+	# retrieve from the log if the client has ever tried to
+	# contact the fake server after the loss of connection
+	FAILCONN=`awk "BEGIN {ret = 0;}
+		       /import_select_connection.*${FSNAME}-MDT0000-mdc.* using connection/ {
+				ret = 1;
+				if (\\\$NF ~ /$FAKENID/) {
+					ret = 2;
+					exit;
+				}
+		       }
+		       END {print ret}" $TMP/lustre-log-$TESTNAME.log`
+
+	[ "$FAILCONN" == "0" ] && \
+		log "ERROR: The client reconnection has not been triggered" && \
+		return 4
+	[ "$FAILCONN" == "2" ] && \
+		log "ERROR: The client tried to reconnect to the failover server while the primary was busy" && \
+		return 5
+
+        cleanup
+}
+run_test 35b "Continue reconnection retries, if the active server is busy"
 
 test_36() { # 12743
         local rc
