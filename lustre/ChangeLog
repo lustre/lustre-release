@@ -14,6 +14,10 @@ tbd  Sun Microsystems, Inc.
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
 Severity   : normal
+Bugzilla   : 20482
+Description: Conf-sanity.sh 50g test - deactivated OST should not cause a panic.
+
+Severity   : normal
 Bugzilla   : 18674
 Description: client could not reconnect to OST because of an active request.
 Details    : The client now retries to reconnect to the same server, if a
