@@ -1440,6 +1440,16 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# since 2.6.27 have linux/cred.h defined current_* macro
+AC_DEFUN([LN_HAVE_LINUX_CRED_H],
+[LB_CHECK_FILE([$LINUX/include/linux/cred.h],[
+        AC_DEFINE(HAVE_LINUX_CRED_H, 1,
+                [kernel has include/linux/cred.h])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
 #
 #
 # LN_CONFIG_USERSPACE
@@ -1546,6 +1556,7 @@ LN_SEM_COUNT
 # 2.6.27
 LN_SOCK_MAP_FD_2ARG
 LN_FUNC_DUMP_TRACE
+LN_HAVE_LINUX_CRED_H
 #2.6.29
 LN_STRUCT_CRED_IN_TASK
 # 2.6.30

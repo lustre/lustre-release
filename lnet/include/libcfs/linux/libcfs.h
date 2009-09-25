@@ -211,6 +211,8 @@ struct cfs_stack_trace {
         current->xxx;                     \
 })
 
+#ifndef HAVE_LINUX_CRED_H
+
 #define current_uid()           (current_cred_xxx(uid))
 #define current_gid()           (current_cred_xxx(gid))
 #define current_euid()          (current_cred_xxx(euid))
@@ -220,6 +222,9 @@ struct cfs_stack_trace {
 #define current_fsuid()         (current_cred_xxx(fsuid))
 #define current_fsgid()         (current_cred_xxx(fsgid))
 #define current_cap()           (current_cred_xxx(cap_effective))
+
+#endif /* HAVE_LINUX_CRED_H */
+
 #define current_user()          (current_cred_xxx(user))
 #define current_user_ns()       (current_cred_xxx(user)->user_ns)
 #define current_security()      (current_cred_xxx(security))
@@ -228,7 +233,8 @@ struct cfs_stack_trace {
 
 #define prepare_creds() (current)
 #define commit_creds(a)
-#endif
+
+#endif /* HAVE_STRUCT_CRED */
 
 #endif
 
