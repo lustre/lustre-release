@@ -16,9 +16,9 @@ init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-[ -n "$CLIENTS" ] || { skip "Need two or more clients" && exit 0; }
+[ -n "$CLIENTS" ] || { skip_env "Need two or more clients" && exit 0; }
 [ $CLIENTCOUNT -ge 2 ] || \
-    { skip "Need two or more clients, have $CLIENTCOUNT" && exit 0; }
+    { skip_env "Need two or more remote clients, have $CLIENTCOUNT" && exit 0; }
 remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
@@ -763,7 +763,7 @@ test_3c() {
     [ "$FAILURE_MODE" = HARD ] || \
         { skip "The HARD failure is needed" && return 0; }
 
-    [ $RUNAS_ID -eq $UID ] && skip "RUNAS_ID = UID = $UID -- skipping" && return
+    [ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -827,7 +827,7 @@ test_4a() {
     delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
-        { skip "Client $CLIENT2 is on the server node" && return 0; }
+        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -860,7 +860,7 @@ test_4b() {
     delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
-        { skip "Client $CLIENT2 is on the server node" && return 0; }
+        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -892,7 +892,7 @@ test_4c() {
     delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
-        { skip "Client $CLIENT2 is on the server node" && return 0; }
+        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -924,7 +924,7 @@ test_5a() {
     delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
-        { skip "Client $CLIENT2 is on the server node" && return 0; }
+        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -956,7 +956,7 @@ test_5b() {
     delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
-        { skip "Client $CLIENT2 is on the server node" && return 0; }
+        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -990,7 +990,7 @@ test_6a() {
     delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
-        { skip "Client $CLIENT2 is on the server node" && return 0; }
+        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -1029,7 +1029,7 @@ test_7a() {
     delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
-        { skip "Client $CLIENT2 is on the server node" && return 0; }
+        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -1062,7 +1062,7 @@ test_8a() {
     delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
-        { skip "Client $CLIENT2 is on the server node" && return 0; }
+        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -1089,7 +1089,7 @@ test_8b() {
     delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
-        { skip "Client $CLIENT2 is on the server node" && return 0; }
+        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -1116,7 +1116,7 @@ test_8c() {
     delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
-        { skip "Client $CLIENT2 is on the server node" && return 0; }
+        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -1143,7 +1143,7 @@ test_8d() {
     delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
     remote_server $CLIENT2 || \
-        { skip "Client $CLIENT2 is on the server node" && return 0; }
+        { skip_env "Client $CLIENT2 is on the server node" && return 0; }
 
     zconf_mount_clients $CLIENT1 $DIR
     zconf_mount_clients $CLIENT2 $DIR
@@ -1238,7 +1238,7 @@ run_test 8g "create | unlink, create shouldn't fail"
 test_10 () {
     delayed_recovery_enabled || { skip "No delayed recovery support"; return 0; }
 
-    [ -z "$DBENCH_LIB" ] && skip "DBENCH_LIB is not set" && return 0
+    [ -z "$DBENCH_LIB" ] && skip_env "DBENCH_LIB is not set" && return 0
 
     zconf_mount_clients $CLIENTS $DIR
 

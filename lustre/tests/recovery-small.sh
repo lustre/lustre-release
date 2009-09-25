@@ -248,7 +248,7 @@ test_17() {
 run_test 17 "timeout bulk get, don't evict client (2732)"
 
 test_18a() {
-    [ -z ${ost2_svc} ] && skip "needs 2 osts" && return 0
+    [ -z ${ost2_svc} ] && skip_env "needs 2 osts" && return 0
 
     do_facet client mkdir -p $DIR/$tdir
     f=$DIR/$tdir/$tfile

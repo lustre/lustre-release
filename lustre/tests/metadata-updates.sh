@@ -250,7 +250,7 @@ if [ -f "$WRITE_DISJOINT" ]; then
     mpi_run -np $(get_node_count ${NODES_TO_USE//,/ }) -machinefile $MACHINEFILE \
     $WRITE_DISJOINT -f $WRITE_DISJOINT_FILE -n $NUMLOOPS || STATUS=1
 else
-    skip "$0 : write_disjoint not found "
+    skip_env "$0 : write_disjoint not found "
 fi
 
 equals_msg `basename $0`: test complete, cleaning up
