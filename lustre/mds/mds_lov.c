@@ -592,12 +592,14 @@ static int mds_lov_update_desc(struct obd_device *obd, int idx,
         if (rc != 0)
                 GOTO(out, rc );
 
+        if (obd->obd_lvfs_ctxt.magic == OBD_RUN_CTXT_MAGIC) {
         /* If we added a target we have to reconnect the llogs */
         /* We only _need_ to do this at first add (idx), or the first time
            after recovery.  However, it should now be safe to call anytime. */
         rc = obd_llog_init(obd, &obd->obd_olg, obd, &idx);
         if (rc)
                 GOTO(out, rc);
+        }
 
         /*XXX this notifies the MDD until lov handling use old mds code */
         if (obd->obd_upcall.onu_owner) {
@@ -864,11 +866,15 @@ static int __mds_lov_synchronize(void *data)
                 OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT, 60);
                 rc = llog_connect(ctxt, NULL, NULL, uuid);
                 llog_ctxt_put(ctxt);
+#if 0
                 if (rc != 0) {
                         CERROR("%s failed at llog_origin_connect: %d\n",
                                         obd_uuid2str(uuid), rc);
                         GOTO(out, rc);
                 }
++#else
++#warning "requires proper support with OSD-based llog
+#endif
         } else
                 CERROR("can't get llog context\n");
 
