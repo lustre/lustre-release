@@ -1777,6 +1777,7 @@ static int osd_index_lookup(const struct lu_env *env, struct dt_object *dt,
         ENTRY;
 
         LASSERT(udmu_object_is_zap(obj->oo_db));
+        fid = (struct lu_fid *) rec;
 
         /* XXX: to decide on format of / yet */
         if (0 && osd_object_is_root(obj)) {
@@ -1786,12 +1787,17 @@ static int osd_index_lookup(const struct lu_env *env, struct dt_object *dt,
                         RETURN(-rc);
                 }
 
-                fid = (struct lu_fid *) rec;
                 fid->f_seq = LUSTRE_FID_INIT_OID;
                 fid->f_oid = oid; /* XXX: f_oid is 32bit, oid - 64bit */
         } else {
+                struct osd_fid_pack pack;
+
                 rc = udmu_zap_lookup(&osd->od_objset, zapdb, (char *) key,
-                                     rec, 17, 1);
+                                     (void *) &pack, sizeof(pack), 1);
+
+                if (rc == 0)
+                        osd_fid_unpack(fid, &pack);
+
         }
 
         RETURN(rc == 0 ? 1 : -rc);
