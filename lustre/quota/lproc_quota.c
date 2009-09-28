@@ -203,13 +203,12 @@ int lprocfs_quota_rd_type(char *page, char **start, off_t off, int count,
 
         /* Collect the needed information */
         oq_type = obd->u.obt.obt_qctxt.lqc_flags;
-        oq_version = obt->obt_qfmt;
         if (is_mds) {
-                rc = mds_quota_get_version(obd, &aq_version);
+                rc = mds_quota_get_version(obd, &aq_version, &oq_version);
                 if (rc)
                         return -EPROTO;
-                /* Here we can also assert that aq_type == oq_type
-                 * except for quota startup/shutdown states     */
+        } else {
+                oq_version = obt->obt_qfmt;
         }
 
         /* Transform the collected data into a user-readable string */
@@ -391,19 +390,22 @@ int lprocfs_quota_wr_type(struct file *file, const char *buffer,
                                 return -EINVAL;
 #endif
                         if (is_mds) {
-                                rc = mds_quota_set_version(obd, s2av[idx]);
+                                rc = mds_quota_set_version(obd, s2av[idx],
+                                                           s2ov[idx]);
                                 if (rc) {
                                         CDEBUG(D_QUOTA, "failed to set admin "
                                                "quota to spec %c! %d\n",
                                                stype[i], rc);
                                         return rc;
                                 }
-                        }
-                        rc = filter_quota_set_version(obd, s2ov[idx]);
-                        if (rc) {
-                                CDEBUG(D_QUOTA, "failed to set operational quota"
-                                       " to spec %c! %d\n", stype[i], rc);
-                                return rc;
+                        } else {
+                                rc = filter_quota_set_version(obd, s2ov[idx]);
+                                if (rc) {
+                                        CDEBUG(D_QUOTA, "failed to set op"
+                                               " quota to spec %c! %d\n",
+                                               stype[i], rc);
+                                        return rc;
+                                }
                         }
                         break;
                 default  : /* just skip stray symbols like \n */

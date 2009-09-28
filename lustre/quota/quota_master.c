@@ -555,46 +555,67 @@ int filter_quota_adjust(struct obd_device *obd, unsigned int qcids[],
 static const char prefix[] = "OBJECTS/";
 
 int mds_quota_get_version(struct obd_device *obd,
-                          lustre_quota_version_t *version)
+                          lustre_quota_version_t *aver,
+                          lustre_quota_version_t *over)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_quota_info *qinfo = &mds->mds_quota_info;
 
-        *version = qinfo->qi_version;
+        if (!atomic_dec_and_test(&mds->mds_obt.obt_quotachecking)) {
+                CDEBUG(D_INFO, "other people are doing quotacheck\n");
+                atomic_inc(&mds->mds_obt.obt_quotachecking);
+                RETURN(-EBUSY);
+        }
+        down(&mds->mds_qonoff_sem);
+
+        *aver = qinfo->qi_version;
+        *over = mds->mds_obt.obt_qfmt;
+
+        up(&mds->mds_qonoff_sem);
+        atomic_inc(&mds->mds_obt.obt_quotachecking);
 
         return 0;
 }
 
-int mds_quota_set_version(struct obd_device *obd, lustre_quota_version_t version)
+int mds_quota_set_version(struct obd_device *obd,
+                          lustre_quota_version_t aver,
+                          lustre_quota_version_t over)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_quota_info *qinfo = &mds->mds_quota_info;
         int rc = 0, i;
 
-        if (version != LUSTRE_QUOTA_V1 && version != LUSTRE_QUOTA_V2)
-                return -EINVAL;
+        LASSERT(aver == LUSTRE_QUOTA_V1 || aver == LUSTRE_QUOTA_V2);
+        LASSERT(over == LUSTRE_QUOTA_V1 || over == LUSTRE_QUOTA_V2);
+
+        if (!atomic_dec_and_test(&mds->mds_obt.obt_quotachecking)) {
+                CDEBUG(D_INFO, "other people are doing quotacheck\n");
+                atomic_inc(&mds->mds_obt.obt_quotachecking);
+                RETURN(-EBUSY);
+        }
 
         down(&mds->mds_qonoff_sem);
 
         /* no need to change version? nothing to do then */
-        if (qinfo->qi_version == version)
-                goto out;
-
-        for (i = 0; i < MAXQUOTAS; i++) {
-                /* quota file has been opened ? */
-                if (qinfo->qi_files[i]) {
-                        rc = -EBUSY;
-                        goto out;
+        if (qinfo->qi_version != aver) {
+                for (i = 0; i < MAXQUOTAS; i++) {
+                        /* quota file has been opened ? */
+                        if (qinfo->qi_files[i]) {
+                                rc = -EBUSY;
+                                goto out;
+                        }
                 }
+
+                CDEBUG(D_INFO, "changing quota version %d -> %d\n",
+                       qinfo->qi_version, aver);
+                qinfo->qi_version = aver;
         }
 
-        CDEBUG(D_INFO, "changing quota version %d -> %d\n", qinfo->qi_version,
-               version);
-
-        qinfo->qi_version = version;
+        mds->mds_obt.obt_qfmt = over;
 
 out:
         up(&mds->mds_qonoff_sem);
+        atomic_inc(&mds->mds_obt.obt_quotachecking);
 
         return rc;
 }

@@ -127,8 +127,10 @@ int mds_quota_adjust(struct obd_device *obd, unsigned int qcids[],
 int filter_quota_adjust(struct obd_device *obd, unsigned int qcids[],
                         unsigned int qpids[], int rc, int opc);
 int init_admin_quotafiles(struct obd_device *obd, struct obd_quotactl *oqctl);
-int mds_quota_get_version(struct obd_device *obd, lustre_quota_version_t *ver);
-int mds_quota_set_version(struct obd_device *obd, lustre_quota_version_t ver);
+int mds_quota_get_version(struct obd_device *obd, lustre_quota_version_t *aver,
+                          lustre_quota_version_t *over);
+int mds_quota_set_version(struct obd_device *obd, lustre_quota_version_t aver,
+                          lustre_quota_version_t over);
 int mds_quota_invalidate(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_quota_finvalidate(struct obd_device *obd, struct obd_quotactl *oqctl);
 
