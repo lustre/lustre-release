@@ -375,7 +375,7 @@ int filter_last_rcvd_write(const struct lu_env *env,
         buf.lb_len = sizeof(info->fti_fsd);
         
         rc = filter_record_write(env, ofd, ofd->ofd_last_rcvd,
-                                 &info->fti_fsd, 0, sizeof(info->fti_fsd), th);
+                                 &info->fti_fsd, *off, sizeof(info->fti_fsd), th);
 
         return rc;
 }
