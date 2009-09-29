@@ -807,22 +807,6 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
                 if (rc)
                         GOTO(cleanup, rc);
 
-                if (need_sync) {
-                        /* 
-                         * Until this operations will be committed the sync
-                         * is needed for this export.
-                         */
-                        mdt_trans_add_cb(th, lut_cb_client, exp);
-                }
-
-                if (need_sync) {
-                        /*
-                         * Until this operations will be committed the sync
-                         * is needed for this export.
-                         */
-                        mdt_trans_add_cb(th, lut_cb_client, exp);
-                }
-
                 mutex_down(&med->med_lcd_lock);
                 memset(lcd, 0, sizeof *lcd);
 
@@ -845,7 +829,7 @@ cleanup:
          * after the client is freed so we know all the client's
          * transactions have been committed.
          */
-        mdt_server_data_update_noth(env, mdt, need_sync);
+        mdt_server_data_update_noth(env, mdt, 0);
 
         EXIT;
 free:
