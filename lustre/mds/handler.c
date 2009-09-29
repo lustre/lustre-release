@@ -177,9 +177,42 @@ static int mds_lov_clean(struct obd_device *obd)
         RETURN(0);
 }
 
-static int mds_postsetup(struct obd_device *obd)
+int mds_lov_init(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
+        int rc;
+        ENTRY;
+
+        rc = mds_lov_init_objids(obd);
+        if (rc != 0) {
+               CERROR("cannot init lov objid rc = %d\n", rc);
+               GOTO(out, rc );
+        }
+
+        if (mds->mds_profile) {
+                struct lustre_profile *lprof;
+                /* The profile defines which osc and mdc to connect to, for a
+                   client.  We reuse that here to figure out the name of the
+                   lov to use (and ignore lprof->lp_md).
+                   The profile was set in the config log with
+                   LCFG_MOUNTOPT profilenm oscnm mdcnm */
+                lprof = class_get_profile(mds->mds_profile);
+                if (lprof == NULL) {
+                        CERROR("No profile found: %s\n", mds->mds_profile);
+                        GOTO(out, rc = -ENOENT);
+                }
+                rc = mds_lov_connect(obd, lprof->lp_dt);
+                if (rc)
+                        GOTO(out, rc);
+        }
+
+out:
+        RETURN(rc);
+}
+EXPORT_SYMBOL(mds_lov_init);
+
+static int mds_postsetup(struct obd_device *obd)
+{
         struct llog_ctxt *ctxt;
         int rc = 0;
         ENTRY;
@@ -196,26 +229,8 @@ static int mds_postsetup(struct obd_device *obd)
 
         mds_changelog_llog_init(obd, obd);
 
-        if (mds->mds_profile) {
-                struct lustre_profile *lprof;
-                /* The profile defines which osc and mdc to connect to, for a
-                   client.  We reuse that here to figure out the name of the
-                   lov to use (and ignore lprof->lp_md).
-                   The profile was set in the config log with
-                   LCFG_MOUNTOPT profilenm oscnm mdcnm */
-                lprof = class_get_profile(mds->mds_profile);
-                if (lprof == NULL) {
-                        CERROR("No profile found: %s\n", mds->mds_profile);
-                        GOTO(err_cleanup, rc = -ENOENT);
-                }
-                rc = mds_lov_connect(obd, lprof->lp_dt);
-                if (rc)
-                        GOTO(err_cleanup, rc);
-        }
-
         RETURN(rc);
 
-err_cleanup:
         mds_lov_clean(obd);
         ctxt = llog_get_context(obd, LLOG_LOVEA_ORIG_CTXT);
         if (ctxt)
@@ -362,7 +377,7 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         lmi->lmi_dt->dd_ops->dt_conf_get(NULL, lmi->lmi_dt, &dt_param);
         mnt = dt_param.ddp_mnt;
         if (mnt == NULL) {
-                CERROR("non-ldiskfs underlying filesystem\n");
+                //CERROR("non-ldiskfs underlying filesystem\n");
                 goto new_diskfs;
         }
 
@@ -394,12 +409,6 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         }
 
 new_diskfs:
-        rc = mds_lov_init_objids(obd);
-        if (rc != 0) {
-               CERROR("cannot init lov objid rc = %d\n", rc);
-               GOTO(err_fid, rc );
-        }
-
         rc = mds_lov_presetup(mds, lcfg);
         if (rc < 0)
                 GOTO(err_objects, rc);

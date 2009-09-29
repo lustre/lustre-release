@@ -103,6 +103,7 @@ int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
         struct lustre_cfg_bufs *bufs;
         struct lustre_cfg      *lcfg;
         struct obd_device      *obd;
+        struct mds_obd         *mds;
         ENTRY;
 
         mds_id = lu_site2md(mdd2lu_dev(mdd)->ld_site)->ms_node_id;
@@ -145,6 +146,8 @@ int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
                 LBUG();
         }
 
+        mds = &obd->u.mds;
+        mds->mds_next_dev = mdd->mdd_child;
         obd->obd_recovering = 1;
         obd->u.mds.mds_id = mds_id;
         rc = class_setup(obd, lcfg);

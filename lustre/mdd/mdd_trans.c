@@ -94,7 +94,7 @@ int mdd_txn_stop_cb(const struct lu_env *env, struct thandle *txn,
         struct obd_device *obd = mdd2obd_dev(mdd);
 
         LASSERT(obd);
-        return mds_lov_write_objids(obd);
+        return mds_lov_write_objids(env, obd, txn);
 }
 
 int mdd_txn_commit_cb(const struct lu_env *env, struct thandle *txn,
