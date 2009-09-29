@@ -769,6 +769,32 @@ static inline int dt_create(const struct lu_env *env,
         return dt->do_ops->do_create(env, dt, attr, hint, dof, th);
 }
 
+static inline void dt_read_lock(const struct lu_env *env,
+                                struct dt_object *dt,
+                                unsigned role)
+{
+        dt->do_ops->do_read_lock(env, dt, role);
+}
+
+static inline void dt_write_lock(const struct lu_env *env,
+                                struct dt_object *dt,
+                                unsigned role)
+{
+        dt->do_ops->do_write_lock(env, dt, role);
+}
+
+static inline void dt_read_unlock(const struct lu_env *env,
+                                struct dt_object *dt)
+{
+        dt->do_ops->do_read_unlock(env, dt);
+}
+
+static inline void dt_write_unlock(const struct lu_env *env,
+                                struct dt_object *dt)
+{
+        dt->do_ops->do_write_unlock(env, dt);
+}
+
 static inline int dt_attr_get(const struct lu_env *env, struct dt_object *dt,
                               struct lu_attr *la, void *arg)
 {
