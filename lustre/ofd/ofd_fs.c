@@ -349,14 +349,14 @@ static int filter_last_rcvd_read(const struct lu_env *env,
 {
         struct filter_thread_info *info = filter_info(env);
         struct lu_buf              buf;
-        int rc;
+        int                        rc;
 
-        buf.lb_buf = &info->fti_fsd;
-        buf.lb_len = sizeof(info->fti_fsd);
+        buf.lb_buf = &info->fti_fcd;
+        buf.lb_len = sizeof(*lcd);
 
         rc = dt_record_read(env, ofd->ofd_last_rcvd, &buf, off);
         if (rc == 0)
-                lcd_le_to_cpu((struct lsd_client_data *) &info->fti_fsd, lcd);
+                lcd_le_to_cpu((struct lsd_client_data *) &info->fti_fcd, lcd);
         return rc;
 }
 
@@ -366,16 +366,12 @@ int filter_last_rcvd_write(const struct lu_env *env,
                            loff_t *off, struct thandle *th)
 {
         struct filter_thread_info *info = filter_info(env);
-        struct lu_buf              buf;
-        int rc;
+        int                        rc;
 
-        lcd_cpu_to_le(lcd, (struct lsd_client_data *) &info->fti_fsd);
+        lcd_cpu_to_le(lcd, &info->fti_fcd);
 
-        buf.lb_buf = &info->fti_fsd;
-        buf.lb_len = sizeof(info->fti_fsd);
-        
         rc = filter_record_write(env, ofd, ofd->ofd_last_rcvd,
-                                 &info->fti_fsd, *off, sizeof(info->fti_fsd), th);
+                                 &info->fti_fcd, *off, sizeof(*lcd), th);
 
         return rc;
 }
