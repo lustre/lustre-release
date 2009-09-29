@@ -108,6 +108,7 @@ int cache_add_extent(struct lustre_cache *cache, struct ldlm_res_id *res,
                                          lock->l_policy_data.l_extent.start,
                                          lock->l_policy_data.l_extent.end,
                                          extent->oap_obj_off);
+                         LDLM_LOCK_PUT(lock);
                          RETURN(-ENOLCK);
                 }
         } else {
