@@ -80,7 +80,6 @@ static struct lov_sublock_env *lov_sublock_env_get(const struct lu_env *env,
                 subenv->lse_io  = io;
                 subenv->lse_sub = NULL;
         } else {
-                LASSERT(io != NULL);
                 sub = lov_sub_get(env, lio, lls->sub_stripe);
                 if (!IS_ERR(sub)) {
                         subenv->lse_env = sub->sub_env;
