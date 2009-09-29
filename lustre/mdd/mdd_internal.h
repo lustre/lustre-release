@@ -133,6 +133,7 @@ struct mdd_device {
         struct mdd_object               *mdd_dot_lustre;
         struct mdd_dot_lustre_objs       mdd_dot_lustre_objs;
         unsigned int                     mdd_sync_permission;
+        struct dt_object                *mdd_objid;
 };
 
 enum mod_flags {

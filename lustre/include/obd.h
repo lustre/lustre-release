@@ -530,6 +530,9 @@ struct mgs_obd {
         cfs_proc_dir_entry_t            *mgs_proc_live;
 };
 
+struct dt_object;
+struct dt_device;
+
 struct mds_obd {
         /* NB this field MUST be first */
         struct obd_device_target         mds_obt;
@@ -583,6 +586,9 @@ struct mds_obd {
         /* for capability keys update */
         struct lustre_capa_key          *mds_capa_keys;
         struct rw_semaphore              mds_notify_lock;
+
+        struct dt_object                *mds_lov_objid_dt;
+        struct dt_device                *mds_next_dev;
 };
 
 #define mds_transno_lock         mds_obt.obt_translock

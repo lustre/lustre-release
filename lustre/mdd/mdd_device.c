@@ -190,7 +190,7 @@ static int mdd_changelog_llog_init(struct mdd_device *mdd)
         /* Find last changelog entry number */
         ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
         if (ctxt == NULL) {
-                CERROR("no changelog context\n");
+                //CERROR("no changelog context\n");
                 return -EINVAL;
         }
         if (!ctxt->loc_handle) {
@@ -250,7 +250,7 @@ static int mdd_changelog_init(const struct lu_env *env, struct mdd_device *mdd)
 
         rc = mdd_changelog_llog_init(mdd);
         if (rc) {
-                CERROR("Changelog setup during init failed %d\n", rc);
+                //CERROR("Changelog setup during init failed %d\n", rc);
                 mdd->mdd_cl.mc_flags |= CLM_ERR;
         }
 
@@ -1058,6 +1058,8 @@ static int mdd_recovery_complete(const struct lu_env *env,
         RETURN(rc);
 }
 
+int mds_lov_init(struct obd_device *obd);
+
 static int mdd_prepare(const struct lu_env *env,
                        struct lu_device *pdev,
                        struct lu_device *cdev)
@@ -1091,6 +1093,7 @@ static int mdd_prepare(const struct lu_env *env,
                 GOTO(out, rc);
         }
 
+        rc = mds_lov_init(mdd2obd_dev(mdd));
 out:
         RETURN(rc);
 }
