@@ -86,14 +86,6 @@
 
 #define DMU_PROP_NAME_LABEL     "label"
 
-struct osd_xattr_rec {
-        struct list_head  list;
-        char             *name;
-        char             *value;
-        int               vallen;
-        
-};
-
 struct osd_object {
         struct dt_object       oo_dt;
         /*
@@ -112,9 +104,6 @@ struct osd_object {
         uint64_t                oo_mode;
         uint64_t                oo_type;
         uint64_t                oo_exist;
-
-        struct lu_attr         *oo_attr;        /* allocated with rdonly */
-        struct list_head        oo_xattr_list;  /* allocated with rdonly */
 };
 
 enum {
@@ -166,8 +155,7 @@ struct osd_device {
 struct osd_thandle {
         struct thandle          ot_super;
         dmu_tx_t               *ot_tx;
-        __u32                   ot_sync:1,
-                                ot_rdonly:1;
+        __u32                   ot_sync:1;
 };
 
 static int   osd_root_get      (const struct lu_env *env,
@@ -245,22 +233,6 @@ const static struct dt_body_operations  osd_body_ops_new;
 static char *osd_object_tag = "osd_object";
 static char *root_tag = "osd_mount, rootdb";
 static char *objdir_tag = "osd_mount, objdb";
-
-#define CHECK_FOR_RDONLY(oh)                                    \
-{                                                               \
-        if (unlikely((oh)->ot_rdonly)) {                        \
-                RETURN(0);                                      \
-        }                                                       \
-        LASSERT((oh)->ot_tx);                                   \
-}
-#define CHECK_FOR_RDONLY_VOID(oh)                               \
-{                                                               \
-        if (unlikely((oh)->ot_rdonly)) {                        \
-                return;                                         \
-        }                                                       \
-        LASSERT((oh)->ot_tx);                                   \
-}
-
 
 static inline int lu_mode2vtype(__u32 mode)
 {
@@ -491,7 +463,6 @@ static struct lu_object *osd_object_alloc(const struct lu_env *env,
                 l->lo_ops = &osd_lu_obj_ops;
                 init_rwsem(&mo->oo_sem);
                 sema_init(&mo->oo_guard, 1);
-                INIT_LIST_HEAD(&mo->oo_xattr_list);
                 return l;
         } else
                 return NULL;
@@ -551,20 +522,10 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 static void osd_object_free(const struct lu_env *env, struct lu_object *l)
 {
         struct osd_object *obj = osd_obj(l);
-        struct osd_xattr_rec *rec, *tmp;
 
         LASSERT(osd_invariant(obj));
 
         dt_object_fini(&obj->oo_dt);
-        if (obj->oo_attr)
-                OBD_FREE_PTR(obj->oo_attr);
-        list_for_each_entry_safe(rec, tmp, &obj->oo_xattr_list, list) {
-                if (rec->name)
-                        OBD_FREE(rec->name, strlen(rec->name) + 1);
-                if (rec->value)
-                        OBD_FREE(rec->value, rec->vallen);
-                OBD_FREE_PTR(rec);
-        }
         OBD_FREE_PTR(obj);
 }
 
@@ -589,7 +550,6 @@ static void osd_declare_object_delete(const struct lu_env *env,
         LASSERT(osd_invariant(obj));
 
         oh = container_of0(handle, struct osd_thandle, ot_super);
-        CHECK_FOR_RDONLY_VOID(oh);
         LASSERT(oh->ot_tx != NULL);
 
         oid = udmu_object_get_id(obj->oo_db);
@@ -831,7 +791,6 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
         }
 
         oh->ot_tx = tx;
-        oh->ot_rdonly = osd->od_rdonly;
         th = &oh->ot_super;
         th->th_dev = dt;
         th->th_result = 0;
@@ -868,8 +827,6 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
                 /* dmu will call commit callback with error code during abort */
                 udmu_tx_abort(oh->ot_tx);
         }
-
-        oh->ot_rdonly = osd->od_rdonly;
 
         RETURN(-rc);
 }
@@ -935,6 +892,7 @@ static void osd_ro(const struct lu_env *env, struct dt_device *d)
 
         CERROR("*** setting device %s read-only ***\n", LUSTRE_ZFS_NAME);
         osd->od_rdonly = 1;
+        udmu_freeze(&osd->od_objset);
 
         EXIT;
 }
@@ -1066,15 +1024,7 @@ static int osd_attr_get(const struct lu_env *env,
 
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
-
-        if (obj->oo_db == NULL) {
-                struct osd_device *osd = osd_obj2dev(obj);
-                LASSERT(osd->od_rdonly);
-                if (obj->oo_attr == NULL)
-                        return -ENOMEM;
-                memcpy(attr, obj->oo_attr, sizeof(*attr));
-                return 0;
-        }
+        LASSERT(obj->oo_db);
 
         down(&obj->oo_guard);
         udmu_object_getattr(obj->oo_db, &vap);
@@ -1102,49 +1052,10 @@ static int osd_declare_attr_set(const struct lu_env *env,
         LASSERT(osd_invariant(obj));
 
         oh = container_of0(handle, struct osd_thandle, ot_super);
-        CHECK_FOR_RDONLY(oh);
 
         udmu_tx_hold_bonus(oh->ot_tx, udmu_object_get_id(obj->oo_db));
 
         RETURN(0);
-}
-
-static void osd_attr_merge(struct osd_object *obj,
-                           const struct lu_attr *src)
-{
-        struct lu_attr *dest = obj->oo_attr;
-        __u64 valid = src->la_valid;
-
-        if (valid & LA_ATIME)
-                dest->la_atime = src->la_atime;
-        if (valid & LA_MTIME)
-                dest->la_mtime = src->la_mtime;
-        if (valid & LA_CTIME)
-                dest->la_ctime = src->la_ctime;
-        if (valid & LA_SIZE)
-                dest->la_size = src->la_size;
-        if (valid & LA_MODE)
-                dest->la_mode = src->la_mode;
-        if (valid & LA_UID)
-                dest->la_uid = src->la_uid;
-        if (valid & LA_GID)
-                dest->la_uid = src->la_uid;
-        if (valid & LA_BLOCKS)
-                dest->la_blocks = src->la_blocks;
-#if 0
-        if (valid & LA_TYPE)
-                dest->la_type = src->la_type;
-#endif
-        if (valid & LA_FLAGS)
-                dest->la_flags = src->la_flags;
-        if (valid & LA_NLINK)
-                dest->la_nlink = src->la_nlink;
-        if (valid & LA_RDEV)
-                dest->la_rdev = src->la_rdev;
-        if (valid & LA_BLKSIZE)
-                dest->la_blksize = src->la_blksize;
-
-        dest->la_valid |= valid;
 }
 
 static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
@@ -1159,22 +1070,9 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
         LASSERT(handle != NULL);
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
+        LASSERT(obj->oo_db);
 
         oh = container_of0(handle, struct osd_thandle, ot_super);
-        if (unlikely(oh->ot_rdonly)) {
-                down(&obj->oo_guard);
-                rc = -ENOMEM;
-                if (obj->oo_attr == NULL)
-                        OBD_ALLOC_PTR(obj->oo_attr);
-                if (obj->oo_attr != NULL) {
-                        osd_attr_merge(obj, attr);
-                        rc = 0;
-                }
-                up(&obj->oo_guard);
-                RETURN(rc);
-        }
-
-        CHECK_FOR_RDONLY(oh);
 
         lu_attr2vnattr((struct lu_attr *)attr, &vap);
         down(&obj->oo_guard);
@@ -1192,7 +1090,6 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
         ENTRY;
         
         oh = container_of0(handle, struct osd_thandle, ot_super);
-        CHECK_FOR_RDONLY(oh);
 
         /* declare we'll free some blocks ... */
         udmu_tx_hold_free(oh->ot_tx, udmu_object_get_id(obj->oo_db), start, end);
@@ -1220,7 +1117,6 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 
         LASSERT(th != NULL);
         oh = container_of0(th, struct osd_thandle, ot_super);
-        CHECK_FOR_RDONLY(oh);
 
         udmu_object_getattr(obj->oo_db, &vap);
 
@@ -1302,7 +1198,6 @@ static int osd_declare_object_create(const struct lu_env *env,
 
         LASSERT(handle != NULL);
         oh = container_of0(handle, struct osd_thandle, ot_super);
-        CHECK_FOR_RDONLY(oh);
         LASSERT(oh->ot_tx != NULL);
 
         switch (dof->dof_type) {
@@ -1457,15 +1352,6 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
 
         LASSERT(th != NULL);
         oh = container_of0(th, struct osd_thandle, ot_super);
-        if (unlikely((oh)->ot_rdonly)) {
-                obj->oo_exist = 1;
-                obj->oo_mode = attr->la_mode;
-                obj->oo_dt.do_body_ops = &osd_body_ops;
-                obj->oo_dt.do_lu.lo_header->loh_attr |=
-                        (LOHA_EXISTS | (obj->oo_mode & S_IFMT));
-                osd_attr_set(env, dt, attr, th, BYPASS_CAPA);
-                RETURN(0);
-        }
 
         /*
          * XXX missing: Quote handling.
@@ -1816,7 +1702,6 @@ static int osd_declare_index_insert(const struct lu_env *env,
 
         LASSERT(th != NULL);
         oh = container_of0(th, struct osd_thandle, ot_super);
-        CHECK_FOR_RDONLY(oh);
 
         LASSERT(obj->oo_db);
         LASSERT(udmu_object_is_zap(obj->oo_db));
@@ -1850,7 +1735,6 @@ static int osd_index_insert(const struct lu_env *env, struct dt_object *dt,
 
         LASSERT(th != NULL);
         oh = container_of0(th, struct osd_thandle, ot_super);
-        CHECK_FOR_RDONLY(oh);
 
         /* XXX: Shouldn't rec be any data and not just a FID?
            If so, rec should have the size of the data and
@@ -1885,7 +1769,6 @@ static int osd_declare_index_delete(const struct lu_env *env,
 
         LASSERT(th != NULL);
         oh = container_of0(th, struct osd_thandle, ot_super);
-        CHECK_FOR_RDONLY(oh);
 
         LASSERT(obj->oo_db);
         LASSERT(udmu_object_is_zap(obj->oo_db));
@@ -1914,7 +1797,6 @@ static int osd_index_delete(const struct lu_env *env, struct dt_object *dt,
 
         LASSERT(th != NULL);
         oh = container_of0(th, struct osd_thandle, ot_super);
-        CHECK_FOR_RDONLY(oh);
 
         /* Remove key from the ZAP */
         rc = udmu_zap_delete(&osd->od_objset, zap_db, oh->ot_tx, (char *) key);
@@ -1982,7 +1864,6 @@ static void osd_object_ref_add(const struct lu_env *env,
         LASSERT(dt_object_exists(dt));
 
         oh = container_of0(handle, struct osd_thandle, ot_super);
-        CHECK_FOR_RDONLY_VOID(oh);
 
         LASSERT(obj->oo_db != NULL);
         down(&obj->oo_guard);
@@ -2012,34 +1893,11 @@ static void osd_object_ref_del(const struct lu_env *env,
         LASSERT(dt_object_exists(dt));
 
         oh = container_of0(handle, struct osd_thandle, ot_super);
-        CHECK_FOR_RDONLY_VOID(oh);
 
         LASSERT(obj->oo_db != NULL);
         down(&obj->oo_guard);
         udmu_object_links_dec(obj->oo_db, oh->ot_tx);
         up(&obj->oo_guard);
-}
-
-static int osd_xattr_get_mem(struct osd_object *obj,
-                             const char *name,
-                             struct lu_buf *buf)
-{
-        struct osd_xattr_rec *rec;
-        int                   rc = -ENODATA;
-        ENTRY;
-
-        list_for_each_entry(rec, &obj->oo_xattr_list, list) {
-                if (!strcmp(rec->name, name)) {
-                        rc = -ERANGE;
-                        if (buf->lb_len >= rec->vallen) {
-                                memcpy(buf->lb_buf, rec->value, rec->vallen);
-                                rc = rec->vallen;
-                        }
-                        break;
-                }
-        }
-
-        RETURN(rc);
 }
 
 int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
@@ -2051,17 +1909,9 @@ int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
         int                 rc, size;
         ENTRY;
 
-        LASSERT(obj->oo_db != NULL || osd->od_rdonly);
+        LASSERT(obj->oo_db != NULL);
         LASSERT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
-
-        if (osd->od_rdonly) {
-                down(&obj->oo_guard);
-                rc = osd_xattr_get_mem(obj, name, buf);
-                up(&obj->oo_guard);
-                if (rc > 0 || obj->oo_db == NULL)
-                        GOTO(out, rc);
-        }
 
         down(&obj->oo_guard);
         rc = -udmu_xattr_get(&osd->od_objset, obj->oo_db, buf->lb_buf,
@@ -2087,7 +1937,6 @@ int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
 
         LASSERT(handle != NULL);
         oh = container_of0(handle, struct osd_thandle, ot_super);
-        CHECK_FOR_RDONLY(oh);
 
         if (!dt_object_exists(dt)) {
                 udmu_tx_hold_bonus(oh->ot_tx, DMU_NEW_OBJECT);
@@ -2107,42 +1956,6 @@ int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
         RETURN(0);
 }
 
-int osd_xattr_set_mem(struct osd_object *obj,
-                      const char *name,
-                      const struct lu_buf *val)
-{
-        struct osd_xattr_rec *rec;
-        int                   rc = 0;
-        ENTRY;
-
-        list_for_each_entry(rec, &obj->oo_xattr_list, list) {
-                if (!strcmp(rec->name, name)) {
-                        OBD_FREE(rec->value, rec->vallen);
-                        goto fill;
-                }
-        }
-
-        OBD_ALLOC_PTR(rec);
-        if (rec == NULL)
-                GOTO(out, rc = -ENOMEM);
-        list_add(&rec->list, &obj->oo_xattr_list);
-
-        OBD_ALLOC(rec->name, strlen(name) + 1);
-        if (rec->name == NULL)
-                GOTO(out, rc = -ENOMEM);
-
-        strcpy(rec->name, name);
-
-fill:
-        OBD_ALLOC(rec->value, val->lb_len);
-        if (rec->value != NULL) {
-                memcpy(rec->value, val->lb_buf, val->lb_len);
-                rec->vallen = val->lb_len;
-        }
-out:
-        RETURN(rc);
-}
-
 int osd_xattr_set(const struct lu_env *env,
                 struct dt_object *dt, const struct lu_buf *buf,
                 const char *name, int fl, struct thandle *handle,
@@ -2157,19 +1970,10 @@ int osd_xattr_set(const struct lu_env *env,
         LASSERT(handle != NULL);
         LASSERT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
+        LASSERT(obj->oo_db);
         
         oh = container_of0(handle, struct osd_thandle, ot_super);
-        if (unlikely(oh->ot_rdonly)) {
-                /* store value in memory, so that recovery tests work */
-                down(&obj->oo_guard);
-                rc = osd_xattr_set_mem(obj, name, buf);
-                up(&obj->oo_guard);
 
-                RETURN(rc);
-        }
-        CHECK_FOR_RDONLY(oh);
-
-        LASSERT(obj->oo_db != NULL);
         down(&obj->oo_guard);
         rc = -udmu_xattr_set(&osd->od_objset, obj->oo_db, buf->lb_buf,
                              buf->lb_len, name, oh->ot_tx);
@@ -2192,9 +1996,7 @@ int osd_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
         LASSERT(osd_invariant(obj));
 
         oh = container_of0(handle, struct osd_thandle, ot_super);
-        CHECK_FOR_RDONLY(oh);
         LASSERT(oh->ot_tx != NULL);
-
         LASSERT(obj->oo_db != NULL);
 
         down(&obj->oo_guard);
@@ -2538,9 +2340,6 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
         LASSERT(th != NULL);
         oh = container_of0(th, struct osd_thandle, ot_super);
         
-        if (unlikely(oh->ot_rdonly))
-                GOTO(out, rc = 0);
-
         udmu_object_getattr(obj->oo_db, &va);
 
         udmu_object_write(&osd->od_objset, obj->oo_db, oh->ot_tx, offset,
@@ -2550,7 +2349,6 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
                 va.va_mask = DMU_AT_SIZE;
                 udmu_object_setattr(obj->oo_db, oh->ot_tx, &va);
         }
-out:
         *pos += buf->lb_len;
         rc = buf->lb_len;
 
@@ -2663,7 +2461,6 @@ static int osd_declare_write_commit(const struct lu_env *env,
         LASSERT(lb->obj == dt);
 
         oh = container_of0(th, struct osd_thandle, ot_super);
-        CHECK_FOR_RDONLY(oh);
 
         oid = udmu_object_get_id(obj->oo_db);
 
@@ -2706,8 +2503,6 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
         LASSERT(th != NULL);
         oh = container_of0(th, struct osd_thandle, ot_super);
         
-        CHECK_FOR_RDONLY(oh);
-
         for (i = 0; i < nr; i++, lb++) {
                 CDEBUG(D_OTHER, "write %u bytes at %u\n", (unsigned) lb->len,
                        (unsigned) lb->file_offset);

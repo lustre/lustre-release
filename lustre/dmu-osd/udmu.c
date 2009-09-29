@@ -1281,4 +1281,9 @@ int udmu_xattr_list(udmu_objset_t *uos, dmu_buf_t *db, void *val, int vallen)
         return 0;
 }
 
+void udmu_freeze(udmu_objset_t *uos)
+{
+        spa_freeze(uos->os->os->os_spa);
+}
+
 #endif

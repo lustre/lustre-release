@@ -300,6 +300,7 @@ int udmu_xattr_set(udmu_objset_t *uos, dmu_buf_t *db, void *val, int vallen,
 void udmu_xattr_declare_del(udmu_objset_t *uos, dmu_buf_t *db, const char *name, dmu_tx_t *tx);
 int udmu_xattr_del(udmu_objset_t *uos, dmu_buf_t *db, const char *name, dmu_tx_t *tx);
 
+void udmu_freeze(udmu_objset_t *uos);
 #ifdef  __cplusplus
 }
 #endif
