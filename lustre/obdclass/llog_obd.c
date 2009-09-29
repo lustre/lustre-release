@@ -213,8 +213,8 @@ int llog_setup_named(struct obd_device *obd,  struct obd_llog_group *olg,
         }
 
         if (rc) {
-                CERROR("obd %s ctxt %d lop_setup=%p failed %d\n",
-                       obd->obd_name, index, op->lop_setup, rc);
+                /*CERROR("obd %s ctxt %d lop_setup=%p failed %d\n",
+                       obd->obd_name, index, op->lop_setup, rc);*/
                 llog_ctxt_put(ctxt);
         } else {
                 CDEBUG(D_CONFIG, "obd %s ctxt %d is initialized\n",
@@ -283,7 +283,7 @@ int llog_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *lsm,
         ENTRY;
 
         if (!ctxt) {
-                CERROR("No ctxt\n");
+                //CERROR("No ctxt\n");
                 RETURN(-ENODEV);
         }
 

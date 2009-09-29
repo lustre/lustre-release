@@ -1025,7 +1025,7 @@ int sptlrpc_target_local_copy_conf(struct obd_device *obd,
 
         ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
         if (ctxt == NULL) {
-                CERROR("missing llog context\n");
+                //CERROR("missing llog context\n");
                 RETURN(-EINVAL);
         }
 

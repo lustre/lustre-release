@@ -120,8 +120,8 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                                numcookies - cookies);
                 llog_ctxt_put(cctxt);
                 if (rc < 0) {
-                        CERROR("Can't add llog (rc = %d) for stripe %i\n",
-                               rc, cookies);
+                        /*CERROR("Can't add llog (rc = %d) for stripe %i\n",
+                               rc, cookies);*/
                         memset(logcookies + cookies, 0,
                                sizeof(struct llog_cookie));
                         rc = 1; /* skip this cookie */
@@ -158,7 +158,7 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt,
                 llog_ctxt_put(cctxt);
 
                 if (rc) {
-                        CERROR("error osc_llog_connect tgt %d (%d)\n", i, rc);
+                        //CERROR("error osc_llog_connect tgt %d (%d)\n", i, rc);
                         if (!err)
                                 err = rc;
                 }

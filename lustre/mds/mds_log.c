@@ -179,7 +179,7 @@ int mds_changelog_llog_init(struct obd_device *obd, struct obd_device *tgt)
                               tgt, 1, NULL, CHANGELOG_CATALOG,
                               &changelog_orig_logops);
         if (rc) {
-                CERROR("changelog llog setup failed %d\n", rc);
+                //CERROR("changelog llog setup failed %d\n", rc);
                 RETURN(rc);
         }
 

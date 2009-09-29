@@ -4277,7 +4277,7 @@ static int mdt_obd_llog_setup(struct obd_device *obd,
         lmi->lmi_dt->dd_ops->dt_conf_get(NULL, lmi->lmi_dt, &dt_param);
         mnt = dt_param.ddp_mnt;
         if (mnt == NULL) {
-                CERROR("no llog support on this device\n");
+                //CERROR("no llog support on this device\n");
                 return 0;
         }
         LASSERT(mnt);
