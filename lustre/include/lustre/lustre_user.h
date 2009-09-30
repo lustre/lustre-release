@@ -290,7 +290,7 @@ typedef struct lu_fid lustre_fid;
 
 /* scanf input parse format -- strip '[' first.
    e.g. sscanf(fidstr, SFID, RFID(&fid)); */
-#define SFID "0x%llx:0x%x:0x%x"
+#define SFID "0x%"LPF64"x:0x%x:0x%x"
 #define RFID(fid)     \
         &((fid)->f_seq), \
         &((fid)->f_oid), \

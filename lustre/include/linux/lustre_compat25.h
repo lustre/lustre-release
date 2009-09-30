@@ -253,6 +253,8 @@ static inline int cleanup_group_info(void)
 #if !defined(HAVE_D_REHASH_COND) && defined(HAVE___D_REHASH)
 #define d_rehash_cond(dentry, lock) __d_rehash(dentry, lock)
 extern void __d_rehash(struct dentry *dentry, int lock);
+#else
+extern void d_rehash_cond(struct dentry*, int lock);
 #endif
 
 #if !defined(HAVE_D_MOVE_LOCKED) && defined(HAVE___D_MOVE)
@@ -484,6 +486,9 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #endif
 
 #ifdef HAVE_REGISTER_SHRINKER
+
+#define SHRINKER_MASK_T gfp_t
+
 typedef int (*shrinker_t)(int nr_to_scan, gfp_t gfp_mask);
 
 static inline

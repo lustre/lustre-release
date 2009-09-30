@@ -1182,6 +1182,26 @@ AC_DEFUN([LC_REGISTER_SHRINKER],
         AC_DEFINE(HAVE_REGISTER_SHRINKER, 1,
                   [kernel exports register_shrinker])
 ],[
+        AC_MSG_CHECKING([if kernel using gfp_t for shrinker second paramter])
+        tmp_flags="$EXTRA_KCFLAGS"
+        EXTRA_KCFLAGS="-Werror"
+        LB_LINUX_TRY_COMPILE([
+                #include <linux/mm.h>
+        ],[
+                struct shrinker *scb(int nts, gfp_t mask) {
+                        return 0;
+                }
+                shrinter_t fp = scb;
+        ],[
+                AC_MSG_RESULT([yes])
+                AC_DEFINE(SHRINKER_MASK_T, gfp_t, 
+                        [kernel using gfp_t for shrinker callback])
+        ],[
+                AC_MSG_RESULT([no])
+                AC_DEFINE(SHRINKER_MASK_T, unsigned int,
+                        [kernel using unsigned for shrinker callback])
+        ])
+        EXTRA_KCFLAGS="$tmp_flags"
 ])
 ])
 
