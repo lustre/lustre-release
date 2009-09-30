@@ -120,7 +120,8 @@ struct mdt_device {
                                    mo_compat_resname:1,
                                    mo_mds_capa   :1,
                                    mo_oss_capa   :1,
-                                   mo_cos        :1;
+                                   mo_cos        :1,
+                                   mo_abort_recov:1;
         } mdt_opts;
         /* mdt state flags */
         __u32                      mdt_fl_cfglog:1,

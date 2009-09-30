@@ -386,6 +386,41 @@ err_client:
         RETURN(rc);
 }
 
+static int mdt_truncate_last_rcvd(const struct lu_env *env,
+                                  struct mdt_device *mdt,
+                                  loff_t size)
+{
+        struct dt_object *dt = mdt->mdt_last_rcvd;
+        struct thandle   *th;
+        struct lu_attr    attr;
+        int               rc;
+        ENTRY;
+
+        attr.la_size = size;
+        attr.la_valid = LA_SIZE;
+
+        th = mdt_trans_create(env, mdt);
+        if (IS_ERR(th))
+                RETURN(PTR_ERR(th));
+        rc = dt_declare_punch(env, dt, size, OBD_OBJECT_EOF, th);
+        if (rc)
+                GOTO(cleanup, rc);
+        rc = dt_declare_attr_set(env, dt, &attr, th);
+        LASSERT(rc == 0);
+        rc = mdt_trans_start(env, mdt, th);
+        if (rc)
+                GOTO(cleanup, rc);
+
+        rc = dt_punch(env, dt, size, OBD_OBJECT_EOF, th, BYPASS_CAPA);
+        if (rc == 0)
+                rc = dt_attr_set(env, dt, &attr, th, BYPASS_CAPA);
+
+cleanup:
+        mdt_trans_stop(env, mdt, th);
+
+        RETURN(rc);
+}
+
 static int mdt_server_data_init(const struct lu_env *env,
                                 struct mdt_device *mdt,
                                 struct lustre_sb_info *lsi)
@@ -469,20 +504,24 @@ static int mdt_server_data_init(const struct lu_env *env,
                 GOTO(out, rc = -EINVAL);
         }
         /** Interop: evict all clients at first boot with 1.8 last_rcvd */
-#if 0
         if (!(lsd->lsd_feature_compat & OBD_COMPAT_20)) {
                 LCONSOLE_WARN("Mounting %s at first time on 1.8 FS, remove all"
                               " clients for interop needs\n", obd->obd_name);
-                simple_truncate(lsi->lsi_srv_mnt->mnt_sb->s_root,
-                                lsi->lsi_srv_mnt, LAST_RCVD,
-                                lsd->lsd_client_start);
+                rc = mdt_truncate_last_rcvd(env, mdt, lsd->lsd_client_start);
+                if (rc)
+                        GOTO(out, rc);
                 last_rcvd_size = lsd->lsd_client_start;
                 /** set 2.0 flag to upgrade/downgrade between 1.8 and 2.0 */
                 lsd->lsd_feature_compat |= OBD_COMPAT_20;
         }
-#else
-# warning "recovery abort isn't implemented"
-#endif
+        if (mdt->mdt_opts.mo_abort_recov) {
+                LCONSOLE_WARN("%s: abort recovery: remove all clients\n",
+                              obd->obd_name);
+                rc = mdt_truncate_last_rcvd(env, mdt, lsd->lsd_client_start);
+                if (rc)
+                        GOTO(out, rc);
+                last_rcvd_size = lsd->lsd_client_start;
+        }
 
         if (ldd->ldd_flags & LDD_F_IAM_DIR)
                 lsd->lsd_feature_incompat |= OBD_INCOMPAT_IAM_DIR;

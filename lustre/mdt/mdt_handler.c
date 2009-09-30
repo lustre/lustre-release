@@ -4522,6 +4522,8 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         } else {
                 lsi = s2lsi(lmi->lmi_sb);
                 fsoptions_to_mdt_flags(m, lsi->lsi_lmd->lmd_opts);
+                if (lsi->lsi_lmd->lmd_flags & LMD_FLG_ABORT_RECOV)
+                        m->mdt_opts.mo_abort_recov = 1;
                 /* CMD is supported only in IAM mode */
                 ldd = lsi->lsi_ldd;
                 LASSERT(num);
