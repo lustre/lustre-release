@@ -371,6 +371,8 @@ void cl_inode_fini(struct inode *inode);
 int cl_local_size(struct inode *inode);
 
 __u16 ll_dirent_type_get(struct lu_dirent *ent);
+ino_t cl_fid_build_ino(struct lu_fid *fid);
+__u32 cl_fid_build_gen(struct lu_fid *fid);
 
 #ifdef INVARIANT_CHECK
 # define CLOBINVRNT(env, clob, expr)                                    \

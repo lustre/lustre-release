@@ -437,7 +437,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         }
 
         LASSERT(fid_is_sane(&sbi->ll_root_fid));
-        root = ll_iget(sb, ll_fid_build_ino(sbi, &sbi->ll_root_fid), &lmd);
+        root = ll_iget(sb, cl_fid_build_ino(&sbi->ll_root_fid), &lmd);
         md_free_lustre_md(sbi->ll_md_exp, &lmd);
         ptlrpc_req_finished(request);
 
@@ -1586,8 +1586,8 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                 spin_unlock(&lli->lli_lock);
         }
 #endif
-        inode->i_ino = ll_fid_build_ino(sbi, &body->fid1);
-        inode->i_generation = ll_fid_build_gen(sbi, &body->fid1);
+        inode->i_ino = cl_fid_build_ino(&body->fid1);
+        inode->i_generation = cl_fid_build_gen(&body->fid1);
 
         if (body->valid & OBD_MD_FLATIME &&
             body->atime > LTIME_S(inode->i_atime))
@@ -2006,7 +2006,7 @@ int ll_prep_inode(struct inode **inode,
                  */
                 LASSERT(fid_is_sane(&md.body->fid1));
 
-                *inode = ll_iget(sb, ll_fid_build_ino(sbi, &md.body->fid1),&md);
+                *inode = ll_iget(sb, cl_fid_build_ino(&md.body->fid1), &md);
                 if (*inode == NULL || IS_ERR(*inode)) {
                         if (md.lsm)
                                 obd_free_memmd(sbi->ll_dt_exp, &md.lsm);

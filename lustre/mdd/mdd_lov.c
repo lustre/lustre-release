@@ -357,7 +357,7 @@ int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
 /*
  * XXX: this is for create lsm object id, which should identify the lsm object
  * unique in the whole mds, as I see. But it seems, we still not need it
- * now. Right? So just borrow the ll_fid_build_ino().
+ * now. Right? So just borrow the cl_fid_build_ino().
  */
 static obd_id mdd_lov_create_id(const struct lu_fid *fid)
 {

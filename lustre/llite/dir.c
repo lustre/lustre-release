@@ -388,7 +388,6 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 {
         struct inode         *inode = filp->f_dentry->d_inode;
         struct ll_inode_info *info  = ll_i2info(inode);
-        struct ll_sb_info    *sbi   = ll_i2sbi(inode);
         __u64                 pos   = filp->f_pos;
         struct page          *page;
         struct ll_dir_chain   chain;
@@ -458,7 +457,7 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                                 fid  = ent->lde_fid;
                                 name = ent->lde_name;
                                 fid_le_to_cpu(&fid, &fid);
-                                ino  = ll_fid_build_ino(sbi, &fid);
+                                ino  = cl_fid_build_ino(&fid);
                                 type = ll_dirent_type_get(ent);
                                 done = filldir(cookie, name, namelen,
                                                (loff_t)hash, ino, type);
