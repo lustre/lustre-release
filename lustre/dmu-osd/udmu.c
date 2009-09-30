@@ -550,7 +550,6 @@ static int udmu_zap_insert_impl(objset_t *os, dmu_buf_t *zap_db, dmu_tx_t *tx,
                 num_int = len;
         }
 
-
         /* Assert that the transaction has been assigned to a
            transaction group. */
         ASSERT(tx->tx_txg != 0);
@@ -585,13 +584,14 @@ int udmu_zap_delete(udmu_objset_t *uos, dmu_buf_t *zap_db, dmu_tx_t *tx,
 /*
  * Zap cursor APIs
  */
-int udmu_zap_cursor_init(zap_cursor_t **zc, udmu_objset_t *uos, uint64_t zapobj)
+int udmu_zap_cursor_init(zap_cursor_t **zc, udmu_objset_t *uos,
+                         uint64_t zapobj, uint64_t hash)
 {
         zap_cursor_t * t;
 
         t = kmem_alloc(sizeof(*t), KM_NOSLEEP);
         if (t) {
-                zap_cursor_init(t, uos->os, zapobj);
+                zap_cursor_init_serialized(t, uos->os, zapobj, hash);
                 *zc = t;
                 return 0;
         }
@@ -671,13 +671,6 @@ int udmu_zap_cursor_move_to_key(zap_cursor_t *zc, const char *name)
 {
         return zap_cursor_move_to_key(zc, name, MT_BEST);
 }
-
-void udmu_zap_cursor_init_serialized(zap_cursor_t *zc, udmu_objset_t *uos,
-                            uint64_t zapobj, uint64_t serialized)
-{
-        zap_cursor_init_serialized(zc, uos->os, zapobj, serialized);
-}
-
 
 /*
  * Read data from a DMU object

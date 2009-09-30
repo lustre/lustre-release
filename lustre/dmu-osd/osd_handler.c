@@ -813,7 +813,6 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
                            struct thandle *th)
 {
-        struct osd_device  *osd = osd_dt_dev(th->th_dev);
         struct osd_thandle *oh;
         int rc;
         ENTRY;
@@ -1450,7 +1449,7 @@ static struct dt_it *osd_zap_it_init(const struct lu_env *env,
         OBD_ALLOC_PTR(it);
         if (it != NULL) {
                 if (udmu_zap_cursor_init(&it->ozi_zc, &osd->od_objset,
-                                         udmu_object_get_id(obj->oo_db)))
+                                         udmu_object_get_id(obj->oo_db), 0))
                         RETURN(ERR_PTR(-ENOMEM));
 
                 it->ozi_obj = obj;
@@ -1496,6 +1495,7 @@ static int osd_zap_it_get(const struct lu_env *env,
 {
         struct osd_zap_it *it = (struct osd_zap_it *)di;
         struct osd_object *obj = it->ozi_obj;
+        struct osd_device *osd = osd_obj2dev(obj);
         ENTRY;
 
         LASSERT(it);
@@ -1504,8 +1504,11 @@ static int osd_zap_it_get(const struct lu_env *env,
         /* XXX: API is broken at the moment */
         LASSERT(((const char *)key)[0] == '\0');
 
-        udmu_zap_cursor_init_serialized(it->ozi_zc, &osd_obj2dev(obj)->od_objset,
-                                        udmu_object_get_id(obj->oo_db), 0ULL);
+        udmu_zap_cursor_fini(it->ozi_zc);
+        if (udmu_zap_cursor_init(&it->ozi_zc, &osd->od_objset,
+                                 udmu_object_get_id(obj->oo_db), 0))
+                RETURN(-ENOMEM);
+
         it->ozi_reset = 1;
 
         RETURN(+1);
@@ -1632,12 +1635,15 @@ static int osd_zap_it_load(const struct lu_env *env,
 {
         struct osd_zap_it *it = (struct osd_zap_it *)di;
         struct osd_object *obj = it->ozi_obj;
+        struct osd_device *osd = osd_obj2dev(obj);
         int                rc;
         ENTRY;
 
+        udmu_zap_cursor_fini(it->ozi_zc);
+        if (udmu_zap_cursor_init(&it->ozi_zc, &osd->od_objset,
+                                 udmu_object_get_id(obj->oo_db), hash))
+                RETURN(-ENOMEM);
         it->ozi_reset = 0;
-        udmu_zap_cursor_init_serialized(it->ozi_zc, &osd_obj2dev(obj)->od_objset,
-                                        udmu_object_get_id(obj->oo_db), hash);
 
         /* same as osd_zap_it_next()*/
         rc = udmu_zap_cursor_retrieve_key(it->ozi_zc, NULL, NAME_MAX + 1);
@@ -1922,7 +1928,7 @@ int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
                 rc = -ENODATA;
         if (rc == 0)
                 rc = size;
-out:
+        
         RETURN(rc);
 }
 

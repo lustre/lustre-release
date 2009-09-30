@@ -205,7 +205,8 @@ int udmu_zap_delete(udmu_objset_t *uos, dmu_buf_t *zap_db, dmu_tx_t *tx,
                     const char *name);
 
 /* zap cursor apis */
-int udmu_zap_cursor_init(zap_cursor_t **zc, udmu_objset_t *uos, uint64_t zapobj);
+int udmu_zap_cursor_init(zap_cursor_t **zc, udmu_objset_t *uos,
+                         uint64_t zapobj, uint64_t hash);
 
 void udmu_zap_cursor_fini(zap_cursor_t *zc);
 
@@ -220,8 +221,6 @@ uint64_t udmu_zap_cursor_serialize(zap_cursor_t *zc);
 
 int udmu_zap_cursor_move_to_key(zap_cursor_t *zc, const char *name);
 
-void udmu_zap_cursor_init_serialized(zap_cursor_t *zc, udmu_objset_t *uos,
-                            uint64_t zapobj, uint64_t serialized);
 
 /* udmu object API */
 
