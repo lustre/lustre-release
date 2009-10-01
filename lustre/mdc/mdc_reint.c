@@ -176,7 +176,7 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
         {
                 LASSERT(*mod == NULL);
 
-                OBD_ALLOC_PTR(*mod);
+                *mod = obd_mod_alloc();
                 if (*mod == NULL) {
                         DEBUG_REQ(D_ERROR, req, "Can't allocate "
                                   "md_open_data");
