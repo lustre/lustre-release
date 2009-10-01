@@ -283,7 +283,7 @@ static struct page *filter_get_page(struct obd_device *obd,
 
         page = find_or_create_page(inode->i_mapping, offset >> CFS_PAGE_SHIFT,
                                    (localreq ? (GFP_NOFS | __GFP_HIGHMEM)
-                                             : (GFP_HIGHUSER | __GFP_NOMEMALLOC)));
+                                             : GFP_HIGHUSER));
         if (unlikely(page == NULL))
                 lprocfs_counter_add(obd->obd_stats, LPROC_FILTER_NO_PAGE, 1);
 
