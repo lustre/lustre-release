@@ -720,7 +720,7 @@ run_test_with_stat 5 "Chown & chgrp successfully even out of block/file quota ==
 # block quota acquire & release
 test_6() {
 	if [ $OSTCOUNT -lt 2 ]; then
-		skip "$OSTCOUNT < 2, too few osts"
+		skip_env "$OSTCOUNT < 2, too few osts"
 		return 0;
 	fi
 
@@ -1038,7 +1038,7 @@ test_12() {
 	chmod 0777 $DIR/$tdir
 
 	[ "$(grep $DIR2 /proc/mounts)" ] || mount_client $DIR2 || \
-		{ skip "Need lustre mounted on $MOUNT2 " && retutn 0; }
+		{ skip_env "Need lustre mounted on $MOUNT2 " && retutn 0; }
 
 	LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) * 10)) # 10 bunits each sever
 	TESTFILE="$DIR/$tdir/$tfile-0"

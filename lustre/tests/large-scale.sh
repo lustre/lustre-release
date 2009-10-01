@@ -18,9 +18,9 @@ init_test_env $@
 
 remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0
 
-[ -n "$CLIENTS" ] || { skip "$0: Need two or more clients" && exit 0; }
+[ -n "$CLIENTS" ] || { skip_env "$0: Need two or more clients" && exit 0; }
 [ $CLIENTCOUNT -ge 2 ] || \
-    { skip "$0: Need two or more clients, have $CLIENTCOUNT" && exit 0; }
+    { skip_env "$0: Need two or more remote clients, have $CLIENTCOUNT" && exit 0; }
 
 #
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
