@@ -730,7 +730,11 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (desc == NULL)
                 GOTO(out_lock, rc = -ENOMEM);
 
-        ost_rw_prolong_locks(req, ioo, remote_nb, &body->oa, LCK_PW | LCK_PR);
+        if (!lustre_handle_is_used(&lockh))
+                /* no needs to try to prolong lock if server is asked
+                 * to handle locking (= OBD_BRW_SRVLOCK) */
+                ost_rw_prolong_locks(req, ioo, remote_nb, &body->oa,
+                                     LCK_PW | LCK_PR);
 
         nob = 0;
         for (i = 0; i < npages; i++) {
@@ -979,7 +983,10 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 GOTO(out_lock, rc = -ETIMEDOUT);
         }
 
-        ost_rw_prolong_locks(req, ioo, remote_nb,&body->oa,  LCK_PW);
+        if (!lustre_handle_is_used(&lockh))
+                /* no needs to try to prolong lock if server is asked
+                 * to handle locking (= OBD_BRW_SRVLOCK) */
+                ost_rw_prolong_locks(req, ioo, remote_nb,&body->oa,  LCK_PW);
 
         /* obd_preprw clobbers oa->valid, so save what we need */
         if (body->oa.o_valid & OBD_MD_FLCKSUM) {
