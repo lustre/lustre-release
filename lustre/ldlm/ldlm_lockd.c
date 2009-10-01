@@ -1821,12 +1821,14 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
                        libcfs_id2str(req->rq_peer),
                        lustre_msg_get_handle(req->rq_reqmsg)->cookie);
 
-                dlm_req = lustre_swab_reqbuf(req, DLM_LOCKREQ_OFF,
-                                             sizeof(*dlm_req),
-                                             lustre_swab_ldlm_request);
-                if (dlm_req != NULL)
-                        ldlm_lock_dump_handle(D_ERROR,
-                                              &dlm_req->lock_handle[0]);
+                if (lustre_msg_get_opc(req->rq_reqmsg) == LDLM_CANCEL) {
+                        dlm_req = lustre_swab_reqbuf(req, DLM_LOCKREQ_OFF,
+                                                     sizeof(*dlm_req),
+                                                     lustre_swab_ldlm_request);
+                        if (dlm_req != NULL)
+                                ldlm_lock_dump_handle(D_ERROR,
+                                                      &dlm_req->lock_handle[0]);
+                }
 
                 ldlm_callback_reply(req, -ENOTCONN);
                 RETURN(0);
