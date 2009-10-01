@@ -368,7 +368,8 @@ struct ptlrpc_request {
                 /* server-side flags */
                 rq_packed_final:1,  /* packed final reply */
                 rq_hp:1,            /* high priority RPC */
-                rq_at_linked:1;     /* link into service's srv_at_array */
+                rq_at_linked:1,     /* link into service's srv_at_array */
+                rq_reply_truncate:1;
 
         enum rq_phase rq_phase; /* one of RQ_PHASE_* */
         enum rq_phase rq_next_phase; /* one of RQ_PHASE_* to be used next */
