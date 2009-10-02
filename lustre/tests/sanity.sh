@@ -983,17 +983,22 @@ test_27m() {
 }
 run_test 27m "create file while OST0 was full =================="
 
-# osc's keep a NOSPC stick flag that gets unset with rmdir
+sleep_maxage() {
+        local DELAY=$(do_facet mds lctl get_param -n lov.*.qos_maxage | awk '{print $1 + 2}')
+        sleep $DELAY
+}
+
+# OSCs keep a NOSPC flag that will be reset after ~5s (qos_maxage)
+# if the OST isn't full anymore.
 reset_enospc() {
 	local FAIL_LOC=${1:-0}
 	local OSTIDX=${2:-""}
 
-	mkdir -p $DIR/d27/nospc
-	rmdir $DIR/d27/nospc
 	local list=$(comma_list $(osts_nodes))
 	[ "$OSTIDX" ] && list=$(facet_host ost$((OSTIDX + 1)))
 
 	do_nodes $list lctl set_param fail_loc=$FAIL_LOC
+	sleep_maxage
 }
 
 exhaust_precreations() {
@@ -1054,7 +1059,6 @@ test_27o() {
 	reset_enospc
 	rm -f $DIR/d27/f27o
 	exhaust_all_precreations 0x215
-	sleep 5
 
 	touch $DIR/d27/f27o && error "able to create $DIR/d27/f27o"
 
@@ -1070,6 +1074,7 @@ test_27p() {
 
 	reset_enospc
 	rm -f $DIR/d27/f27p
+	mkdir -p $DIR/d27
 
 	$MCREATE $DIR/d27/f27p || error "mcreate failed"
 	$TRUNCATE $DIR/d27/f27p 80000000 || error "truncate failed"
@@ -1178,8 +1183,6 @@ test_27v() { # bug 4900
         local START=`date +%s`
         createmany -o $DIR/$tdir/$tfile 32
 
-        reset_enospc
-
         local FINISH=`date +%s`
         local TIMEOUT=`lctl get_param -n timeout`
         [ $((FINISH - START)) -ge $((TIMEOUT / 2)) ] && \
@@ -1209,7 +1212,6 @@ run_test 27w "check lfs setstripe -c -s -i options ============="
 
 test_27x() {
 	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs" && return
-	DELAY=$(do_facet mds lctl get_param -n lov.*.qos_maxage | awk '{print $1 + 2}')
 	OFFSET=$(($OSTCOUNTi - 1))
 	OSTIDX=0
 	local OST=$(lfs osts | awk '/'${OSTIDX}': / { print $2 }' | sed -e 's/_UUID$//')
@@ -1217,7 +1219,7 @@ test_27x() {
 	mkdir -p $DIR/$tdir
 	$SETSTRIPE $DIR/$tdir -c 1	# 1 stripe per file
 	do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 1
-	sleep $DELAY
+	sleep_maxage
 	createmany -o $DIR/$tdir/$tfile $OSTCOUNT
 	for i in `seq 0 $OFFSET`; do
 		[ `$GETSTRIPE $DIR/$tdir/$tfile$i | grep -A 10 obdidx | awk '{print $1}' | grep -w "$OSTIDX"` ] &&
@@ -1232,7 +1234,6 @@ test_27y() {
         remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
         MDS_OSCS=`do_facet mds lctl dl | awk '/[oO][sS][cC].*md[ts]/ { print $4 }'`
-        DELAY=$(do_facet mds lctl get_param -n lov.*.qos_maxage | awk '{print $1 + 2}')
         OFFSET=$(($OSTCOUNT-1))
         OST=-1
         for OSC in $MDS_OSCS; do
@@ -1249,7 +1250,7 @@ test_27y() {
         $SETSTRIPE $DIR/$tdir -c 1      # 1 stripe / file
 
         do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 1
-        sleep $DELAY
+        sleep_maxage
         createmany -o $DIR/$tdir/$tfile $OSTCOUNT
         do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 0
 
@@ -4583,7 +4584,6 @@ test_116() {
 
 	echo -n "Free space priority "
 	lctl get_param -n lov.*-clilov-*.qos_prio_free
-       	DELAY=$(lctl get_param -n lov.*-clilov-*.qos_maxage | head -1 | awk '{print $1}')
 	declare -a AVAIL
 	free_min_max
 	[ $MINV -gt 960000 ] && skip "too much free space in OST$MINI, skip" &&\
@@ -4604,7 +4604,7 @@ test_116() {
 	done
 	FILL=$(($MINV / 4))
 	sync
-	sleep $DELAY
+	sleep_maxage
 
 	free_min_max
 	DIFF=$(($MAXV - $MINV))
@@ -4633,7 +4633,7 @@ test_116() {
 	done
 	echo "wrote $i 200k files"
 	sync
-	sleep $DELAY
+	sleep_maxage
 
 	echo "Note: free space may not be updated, so measurements might be off"
 	free_min_max

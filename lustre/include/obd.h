@@ -1201,7 +1201,6 @@ enum obd_cleanup_stage {
 #define KEY_SET_FS              "set_fs"
 /*      KEY_SET_INFO in lustre_idl.h */
 #define KEY_SPTLRPC_CONF        "sptlrpc_conf"
-#define KEY_UNLINKED            "unlinked"
 
 
 struct lu_context;

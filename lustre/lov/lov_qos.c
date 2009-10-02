@@ -55,7 +55,6 @@
 
 #define TGT_BAVAIL(i) (lov->lov_tgts[i]->ltd_exp->exp_obd->obd_osfs.os_bavail *\
                        lov->lov_tgts[i]->ltd_exp->exp_obd->obd_osfs.os_bsize)
-#define TGT_FFREE(i)  (lov->lov_tgts[i]->ltd_exp->exp_obd->obd_osfs.os_ffree)
 
 
 int qos_add_tgt(struct obd_device *obd, __u32 index)
@@ -742,10 +741,8 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
                      char *poolname, int flags)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
-        static time_t last_warn = 0;
-        time_t now = cfs_time_current_sec();
-        __u64 total_bavail, total_weight = 0;
-        int nfound, good_osts, i, warn = 0, rc = 0;
+        __u64 total_weight = 0;
+        int nfound, good_osts, i, rc = 0;
         int stripe_cnt_min = min_stripe_count(*stripe_cnt, flags);
         struct pool_desc *pool;
         struct ost_pool *osts;
@@ -793,35 +790,12 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
         if (rc)
                 GOTO(out, rc);
 
-        total_bavail = 0;
         good_osts = 0;
-        /* Warn users about zero available space/inode every 30 min */
-        if (cfs_time_sub(now, last_warn) > 60 * 30)
-                warn = 1;
         /* Find all the OSTs that are valid stripe candidates */
         for (i = 0; i < osts->op_count; i++) {
-                __u64 bavail;
-
                 if (!lov->lov_tgts[osts->op_array[i]] ||
                     !lov->lov_tgts[osts->op_array[i]]->ltd_active)
                         continue;
-                bavail = TGT_BAVAIL(osts->op_array[i]);
-                if (!bavail) {
-                        if (warn) {
-                                CDEBUG(D_QOS, "no free space on %s\n",
-                                     obd_uuid2str(&lov->lov_tgts[osts->op_array[i]]->ltd_uuid));
-                                last_warn = now;
-                        }
-                        continue;
-                }
-                if (!TGT_FFREE(osts->op_array[i])) {
-                        if (warn) {
-                                CDEBUG(D_QOS, "no free inodes on %s\n",
-                                     obd_uuid2str(&lov->lov_tgts[osts->op_array[i]]->ltd_uuid));
-                                last_warn = now;
-                        }
-                        continue;
-                }
 
                 /* Fail Check before osc_precreate() is called
                    so we can only 'fail' single OSC. */
@@ -833,7 +807,6 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
 
                 lov->lov_tgts[osts->op_array[i]]->ltd_qos.ltq_usable = 1;
                 qos_calc_weight(lov, osts->op_array[i]);
-                total_bavail += bavail;
                 total_weight += lov->lov_tgts[osts->op_array[i]]->ltd_qos.ltq_weight;
 
                 good_osts++;
@@ -845,9 +818,6 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
 
         if (good_osts < stripe_cnt_min)
                 GOTO(out, rc = -EAGAIN);
-
-        if (!total_bavail)
-                GOTO(out, rc = -ENOSPC);
 
         /* We have enough osts */
         if (good_osts < *stripe_cnt)

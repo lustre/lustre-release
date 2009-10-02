@@ -15,6 +15,10 @@ tbd  Sun Microsystems, Inc.
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
 Severity   : enhancement
+Bugzilla   : 19662
+Description: Remove set_info(KEY_UNLINKED) from MDS/OSC
+
+Severity   : enhancement
 Bugzilla   : 19526
 Description: correctly handle big reply message.
 Details    : send LNet event if reply is bigger then buffer and adjust this buffer

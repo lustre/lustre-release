@@ -903,11 +903,6 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
                 }
         }
 #endif
-
-        if (rc == 0)
-                obd_set_info_async(mdd2obd_dev(mdd)->u.mds.mds_osc_exp,
-                                   sizeof(KEY_UNLINKED), KEY_UNLINKED, 0,
-                                   NULL, NULL);
         if (!is_dir)
                 /* old files may not have link ea; ignore errors */
                 mdd_links_rename(env, mdd_cobj, mdo2fid(mdd_pobj),
