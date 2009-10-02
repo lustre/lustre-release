@@ -220,7 +220,6 @@ int filter_groups_init(const struct lu_env *env, struct filter_device *ofd)
         groups_size = (unsigned long)info->fti_attr.la_size;
 
         if (groups_size == 0) {
-                CWARN("%s: no groups yet\n", filter_obd(ofd)->obd_name);
                 ofd->ofd_max_group = 0;
                 goto skip_read;
         }
@@ -252,7 +251,7 @@ skip_read:
         }
 
         CWARN("%s: %u groups initialized\n",
-              filter_obd(ofd)->obd_name, ofd->ofd_max_group);
+              filter_obd(ofd)->obd_name, ofd->ofd_max_group + 1);
 
 cleanup:
         RETURN(rc);
