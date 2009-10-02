@@ -3,6 +3,10 @@
 
 AUTOMAKE_OPTIONS = foreign
 
+FIND_TAG_FILES_CMD = find $(top_srcdir) \
+		     -path $(top_srcdir)/ldiskfs/ldiskfs/linux-stage -prune -false -o\
+		     -type f -name '*.[hc]'
+
 # these empty rules are needed so that automake doesn't add its own
 # recursive rules
 etags-recursive:
@@ -19,20 +23,24 @@ etags:
 	$(RM) $(top_srcdir)/TAGS
 	ETAGSF=`etags --version | grep -iq exuberant && \
 		echo "-I __initdata,__exitdata,EXPORT_SYMBOL"`; \
-	find $(top_srcdir) -name '*.[hc]'|grep -v "\.pc"|xargs etags $$ETAGSF -a
+	$(FIND_TAG_FILES_CMD) | xargs etags $$ETAGSF -a
 
 ctags:
 	$(RM) $(top_srcdir)/tags
 	CTAGSF=`ctags --version | grep -iq exuberant && \
 		echo "-I __initdata,__exitdata,EXPORT_SYMBOL"`; \
-	find $(top_srcdir) -name '*.[hc]'|grep -v "\.pc"|xargs ctags $$CTAGSF -a
+	$(FIND_TAG_FILES_CMD) | xargs ctags $$CTAGSF -a
 
 cscope-recursive:
 
 cscope:
 	$(RM) $(top_srcdir)/cscope*.out $(top_srcdir)/cscope.files
-	find $(top_srcdir) -name '*.[hc]' | grep -v "\.pc" > cscope.files
+	$(FIND_TAG_FILES_CMD) > cscope.files
 	cscope -bRq
+
+mkid:
+	$(FIND_TAG_FILES_CMD) | xargs mkid
+	
 
 doxygen:  doxygen-api doxygen-ref
 
