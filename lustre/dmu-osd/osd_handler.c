@@ -155,7 +155,8 @@ struct osd_device {
 struct osd_thandle {
         struct thandle          ot_super;
         dmu_tx_t               *ot_tx;
-        __u32                   ot_sync:1;
+        __u32                   ot_sync:1,
+                                ot_assigned:1;
 };
 
 static int   osd_root_get      (const struct lu_env *env,
@@ -552,8 +553,7 @@ static void osd_declare_object_delete(const struct lu_env *env,
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_tx != NULL);
 
-        oid = udmu_object_get_id(obj->oo_db);
-        udmu_tx_hold_free(oh->ot_tx, oid, 0, DMU_OBJECT_END);
+        udmu_declare_object_delete(&osd->od_objset, oh->ot_tx, obj->oo_db);
 
         /* declare that we'll remove object from fid-dnode mapping */
         osd_fid2str(buf, lu_object_fid(&obj->oo_dt.do_lu));
@@ -593,12 +593,13 @@ static int osd_object_destroy(const struct lu_env *env, struct osd_object *obj)
         oid = udmu_object_get_id(obj->oo_db);
         osd_fid2str(buf, lu_object_fid(&obj->oo_dt.do_lu));
 
+        udmu_object_getattr(obj->oo_db, &va);
+
         /* create tx */
         th = osd_trans_create(env, &osd->od_dt_dev);
-
-        if (IS_ERR(th)) {
+        if (IS_ERR(th))
                 RETURN (PTR_ERR(th));
-        }
+
         oh = container_of0(th, struct osd_thandle, ot_super);
         LASSERT(oh != NULL);
         LASSERT(oh->ot_tx != NULL);
@@ -607,24 +608,29 @@ static int osd_object_destroy(const struct lu_env *env, struct osd_object *obj)
         osd_declare_object_delete(env, obj, th);
 
         /* start change */
-        osd_trans_start(env, &osd->od_dt_dev, th);
+        rc = osd_trans_start(env, &osd->od_dt_dev, th);
+        if (rc) {
+                CERROR("osd_trans_start() failed with error %d\n", rc);
+                GOTO(out, rc);
+        }
 
         /* remove obj ref from main obj. dir */
         rc = udmu_zap_delete(&osd->od_objset, zapdb, oh->ot_tx, buf);
         if (rc) {
-                CERROR("udmu_zap_delete() failed with error %d", rc);
-                RETURN (rc);
+                CERROR("udmu_zap_delete() failed with error %d\n", rc);
+                GOTO(out, rc);
         }
 
-        udmu_object_getattr(obj->oo_db, &va);
         /* kill object */
         rc = udmu_object_delete(&osd->od_objset, &obj->oo_db,
                                 oh->ot_tx, osd_object_tag);
         if (rc) {
-                CERROR("udmu_object_delete() failed with error %d", rc);
-                RETURN (rc);
+                CERROR("udmu_object_delete() failed with error %d\n", rc);
+                GOTO(out, rc);
         }
         obj->oo_db = NULL;
+
+out:
         /* COMMIT changes */
         osd_trans_stop(env, th);
 
@@ -797,8 +803,6 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
         lu_device_get(&dt->dd_lu_dev);
         lu_context_init(&th->th_ctx, LCT_TX_HANDLE);
         lu_context_enter(&th->th_ctx);
-        /* add commit callback */
-        udmu_tx_cb_register(tx, osd_trans_commit_cb, (void *)oh);
 
         hook_res = dt_txn_hook_start(env, dt, th);
         if (hook_res != 0)
@@ -824,7 +828,12 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
         rc = udmu_tx_assign(oh->ot_tx, TXG_WAIT);
         if (rc != 0) {
                 /* dmu will call commit callback with error code during abort */
+                CERROR("can't assign tx: %d\n", rc);
                 udmu_tx_abort(oh->ot_tx);
+        } else {
+                /* add commit callback */
+                udmu_tx_cb_register(oh->ot_tx, osd_trans_commit_cb, (void *)oh);
+                oh->ot_assigned = 1;
         }
 
         RETURN(-rc);
@@ -842,6 +851,16 @@ static int osd_trans_stop(const struct lu_env *env, struct thandle *th)
         ENTRY;
 
         oh = container_of0(th, struct osd_thandle, ot_super);
+
+        if (oh->ot_assigned == 0) {
+                lu_device_put(&th->th_dev->dd_lu_dev);
+                th->th_dev = NULL;
+                lu_context_exit(&th->th_ctx);
+                lu_context_fini(&th->th_ctx);
+                OBD_FREE_PTR(oh);
+
+                RETURN(0);
+        }
 
         result = dt_txn_hook_stop(env, th);
         if (result != 0)
@@ -2050,7 +2069,7 @@ int osd_xattr_list(const struct lu_env *env,
         LASSERT(dt_object_exists(dt));
 
         down(&obj->oo_guard);
-        rc = -udmu_xattr_list(&osd->od_objset, obj->oo_db,
+        rc = udmu_xattr_list(&osd->od_objset, obj->oo_db,
                               buf->lb_buf, buf->lb_len);
         up(&obj->oo_guard);
 

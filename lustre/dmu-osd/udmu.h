@@ -133,6 +133,8 @@ typedef struct udmu_objset {
         struct zilog *zilog;
         uint64_t root;  /* id of root znode */
         uint64_t unlinkedobj;
+        int creates, deletes;
+        char name[128];
 } udmu_objset_t;
 
 
@@ -246,6 +248,7 @@ void udmu_object_setattr(dmu_buf_t *db, dmu_tx_t *tx, vnattr_t *vap);
 int udmu_object_punch(udmu_objset_t *uos, dmu_buf_t *db, dmu_tx_t *tx,
                       uint64_t offset, uint64_t len);
 
+void udmu_declare_object_delete(udmu_objset_t *uos, dmu_tx_t *tx, dmu_buf_t *db);
 int udmu_object_delete(udmu_objset_t *uos, dmu_buf_t **db, dmu_tx_t *tx, void *tag);
 
 /*udmu transaction API */

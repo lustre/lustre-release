@@ -116,8 +116,8 @@ void udmu_debug(int level)
 
 int udmu_objset_open(char *osname, udmu_objset_t *uos)
 {
-        int error;
         uint64_t version = ZPL_VERSION;
+        int      error, len;
 
         memset(uos, 0, sizeof(udmu_objset_t));
 
@@ -160,12 +160,25 @@ int udmu_objset_open(char *osname, udmu_objset_t *uos)
                 goto out;
         }
         ASSERT(uos->root != 0);
+      
+        strncpy(uos->name, osname, sizeof(uos->name));
 
 out:
         if (error && uos->os != NULL)
                 dmu_objset_close(uos->os);
 
-        return (error);
+#if 0
+        if (error == 0) {
+                uint64_t refdbytes, availbytes, usedobjs, availobjs;
+
+                dmu_objset_space(uos->os, &refdbytes, &availbytes,
+                                 &usedobjs, &availobjs);
+                printk("MOUNT/%s: bytes: %Lu used, %Lu avail, "
+                       "objs: %Lu: used, %Lu avail\n", uos->name,
+                       refdbytes, availbytes, usedobjs, availobjs);
+        }
+#endif
+        return error;
 }
 
 uint64_t udmu_get_txg(udmu_objset_t *uos, dmu_tx_t *tx)
@@ -195,6 +208,19 @@ void udmu_objset_close(udmu_objset_t *uos)
            This should not be needed, neither for correctness nor safety.
            Presumably, we are only doing this to force commit callbacks to be called sooner. */
         udmu_wait_synced(uos, NULL);
+
+#if 0
+        {
+                uint64_t refdbytes, availbytes, usedobjs, availobjs;
+
+                dmu_objset_space(uos->os, &refdbytes, &availbytes,
+                                 &usedobjs, &availobjs);
+                printk("UMOUNT/%s: bytes: %Lu used, %Lu avail, "
+                       "objs: %Lu: used, %Lu avail\n", uos->name,
+                       refdbytes, availbytes, usedobjs, availobjs);
+                printk("%u creates, %u deletes\n", uos->creates, uos->deletes);
+        }
+#endif
 
         /* close the object set */
         dmu_objset_close(uos->os);
@@ -470,6 +496,7 @@ static void udmu_object_create_impl(objset_t *os, dmu_buf_t **dbp, dmu_tx_t *tx,
 void udmu_object_create(udmu_objset_t *uos, dmu_buf_t **dbp, dmu_tx_t *tx,
                         void *tag)
 {
+        uos->creates++;
         udmu_object_create_impl(uos->os, dbp, tx, tag);
 }
 
@@ -867,6 +894,44 @@ int udmu_object_punch(udmu_objset_t *uos, dmu_buf_t *db, dmu_tx_t *tx,
         return udmu_object_punch_impl(uos->os, db, tx, off, len);
 }
 
+void udmu_declare_object_delete(udmu_objset_t *uos, dmu_tx_t *tx, dmu_buf_t *db)
+{
+        znode_phys_t    *zp = db->db_data;
+        uint64_t         oid = db->db_object, xid;
+        zap_attribute_t  za;
+        zap_cursor_t    *zc;
+        int              rc;
+
+        dmu_tx_hold_free(tx, oid, 0, DMU_OBJECT_END);
+
+        /* zap holding xattrs */
+        if ((oid = zp->zp_xattr)) {
+                dmu_tx_hold_free(tx, oid, 0, DMU_OBJECT_END);
+
+                rc = udmu_zap_cursor_init(&zc, uos, oid, 0);
+                if (rc) {
+                        if (tx->tx_err == 0)
+                                tx->tx_err = rc;
+                        return;
+                }
+                while ((rc = zap_cursor_retrieve(zc, &za)) == 0) {
+                        BUG_ON(za.za_integer_length != sizeof(uint64_t));
+                        BUG_ON(za.za_num_integers != 1);
+
+                        rc = zap_lookup(uos->os, zp->zp_xattr, za.za_name,
+                                        sizeof(uint64_t), 1, &xid);
+                        if (rc) {
+                                printk("error during xattr lookup: %d\n", rc);
+                                break;
+                        }
+                        dmu_tx_hold_free(tx, xid, 0, DMU_OBJECT_END);
+
+                        zap_cursor_advance(zc);
+                }
+                udmu_zap_cursor_fini(zc);
+        }
+}
+
 /*
  * Delete a DMU object
  *
@@ -876,25 +941,58 @@ int udmu_object_punch(udmu_objset_t *uos, dmu_buf_t *db, dmu_tx_t *tx,
  *
  * This will release db and set it to NULL to prevent further dbuf releases.
  */
-static int udmu_object_delete_impl(objset_t *os, dmu_buf_t **db, dmu_tx_t *tx,
+static int udmu_object_delete_impl(udmu_objset_t *uos, dmu_buf_t **db, dmu_tx_t *tx,
                        void *tag)
 {
-        uint64_t oid = (*db)->db_object;
+        znode_phys_t    *zp = (*db)->db_data;
+        uint64_t         oid, xid;
+        zap_attribute_t  za;
+        zap_cursor_t    *zc;
+        int              rc;
 
         /* Assert that the transaction has been assigned to a
            transaction group. */
         ASSERT(tx->tx_txg != 0);
 
+        /* zap holding xattrs */
+        if ((oid = zp->zp_xattr)) {
+
+                rc = udmu_zap_cursor_init(&zc, uos, oid, 0);
+                if (rc)
+                        return rc;
+                while ((rc = zap_cursor_retrieve(zc, &za)) == 0) {
+                        BUG_ON(za.za_integer_length != sizeof(uint64_t));
+                        BUG_ON(za.za_num_integers != 1);
+
+                        rc = zap_lookup(uos->os, zp->zp_xattr, za.za_name,
+                                        sizeof(uint64_t), 1, &xid);
+                        if (rc) {
+                                printk("error during xattr lookup: %d\n", rc);
+                                break;
+                        }
+                        uos->deletes++;
+                        dmu_object_free(uos->os, xid, tx);
+
+                        zap_cursor_advance(zc);
+                }
+                udmu_zap_cursor_fini(zc);
+
+                uos->deletes++;
+                dmu_object_free(uos->os, zp->zp_xattr, tx);
+        }
+
+        oid = (*db)->db_object;
         udmu_object_put_dmu_buf(*db, tag);
         *db = NULL;
 
-        return dmu_object_free(os, oid, tx);
+        uos->deletes++;
+        return dmu_object_free(uos->os, oid, tx);
 }
 
 int udmu_object_delete(udmu_objset_t *uos, dmu_buf_t **db, dmu_tx_t *tx,
                        void *tag)
 {
-        return udmu_object_delete_impl(uos->os, db, tx, tag);
+        return udmu_object_delete_impl(uos, db, tx, tag);
 }
 
 /*
@@ -957,7 +1055,19 @@ void udmu_tx_abort(dmu_tx_t *tx)
 
 int udmu_tx_assign(dmu_tx_t *tx, uint64_t txg_how)
 {
-        return (dmu_tx_assign(tx, txg_how));
+        int rc;
+        rc = dmu_tx_assign(tx, txg_how);
+#if 0
+        if (rc == 28) {
+                uint64_t refdbytes, availbytes, usedobjs, availobjs;
+
+                dmu_objset_space(tx->tx_objset, &refdbytes, &availbytes,
+                                 &usedobjs, &availobjs);
+                printk("ref %Lu, avail %Lu, used objs %Lu, avail objs %Lu\n",
+                                refdbytes, availbytes, usedobjs, availobjs);
+        }
+#endif
+        return rc;
 }
 
 void udmu_tx_wait(dmu_tx_t *tx)
@@ -1172,6 +1282,7 @@ int udmu_xattr_set(udmu_objset_t *uos, dmu_buf_t *db, void *val,
                  * Entry doesn't exist, we need to create a new one and a new
                  * object to store the value.
                  */
+                uos->creates++;
                 udmu_object_create_impl(uos->os, &xa_data_db, tx, FTAG);
                 xa_data_obj = xa_data_db->db_object;
                 error = zap_add(uos->os, zp->zp_xattr, name, sizeof(uint64_t), 1,
@@ -1256,6 +1367,7 @@ int udmu_xattr_del(udmu_objset_t *uos, dmu_buf_t *db,
                  * Entry exists.
                  * We'll delete the existing object and ZAP entry.
                  */
+                uos->deletes++;
                 error = dmu_object_free(uos->os, xa_data_obj, tx);
                 if (error)
                         goto out;
@@ -1267,11 +1379,38 @@ out:
         return error;
 }
 
-int udmu_xattr_list(udmu_objset_t *uos, dmu_buf_t *db, void *val, int vallen)
+int udmu_xattr_list(udmu_objset_t *uos, dmu_buf_t *db, void *buf, int buflen)
 {
-        /* XXX: not implemented yet */
-        BUG_ON(1);
-        return 0;
+        znode_phys_t    *zp = db->db_data;
+        char             key[MAXNAMELEN + 1];
+        zap_cursor_t    *zc;
+        int              rc;
+        int              remain = buflen;
+        int              counted = 0;
+
+        if (zp->zp_xattr == 0)
+                return 0;
+
+        rc = udmu_zap_cursor_init(&zc, uos, zp->zp_xattr, 0);
+        if (rc)
+                return -rc;
+
+        while ((rc = udmu_zap_cursor_retrieve_key(zc, key, MAXNAMELEN)) == 0) {
+                rc = strlen(key);
+                if (rc + 1 <= remain) {
+                        memcpy(buf, key, rc);
+                        buf += rc;
+                        *((char *)buf) = '\0';
+                        buf++;
+                        remain -= rc + 1;
+                }
+                counted += rc + 1;
+                udmu_zap_cursor_advance(zc);
+        }
+
+        udmu_zap_cursor_fini(zc);
+
+        return counted;
 }
 
 void udmu_freeze(udmu_objset_t *uos)
