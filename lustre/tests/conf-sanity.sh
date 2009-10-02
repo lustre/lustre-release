@@ -2046,7 +2046,9 @@ test_50g() {
 	rm -f $DIR/$tfile
 	umount_client $MOUNT || error "Unable to unmount client"
 	stop_ost2 || error "Unable to stop OST2"
-	cleanup_nocli
+	stop_ost || error "Unable to stop OST1"
+	stop_mds || error "Unable to stop MDS"
+	writeconf
 }
 run_test 50g "deactivated OST should not cause panic====================="
 
