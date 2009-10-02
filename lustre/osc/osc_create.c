@@ -127,7 +127,7 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
                 oscc->oscc_flags |= OSCC_FLAG_RDONLY;
         case -ENOSPC:
         case -EFBIG: 
-                if (rc != EROFS) {
+                if (rc != -EROFS) {
                         oscc->oscc_flags |= OSCC_FLAG_NOSPC;
                         if (body && rc == -ENOSPC) {
                                 oscc->oscc_last_id = body->oa.o_id;
@@ -193,7 +193,8 @@ static int oscc_internal_create(struct osc_creator *oscc)
 
         LASSERT_SPIN_LOCKED(&oscc->oscc_lock);
 
-        if(oscc->oscc_flags & OSCC_FLAG_RECOVERING) {
+        if ((oscc->oscc_flags & OSCC_FLAG_RECOVERING) ||
+            (oscc->oscc_flags & OSCC_FLAG_DEGRADED)) {
                 spin_unlock(&oscc->oscc_lock);
                 RETURN(0);
         }
@@ -283,9 +284,9 @@ static int oscc_wait_for_objects(struct osc_creator *oscc, int count)
                          OSCC_FLAG_EXITING) & oscc->oscc_flags;
         have_objs = oscc_has_objects_nolock(oscc, count);
 
-        if (!ost_unusable)
+        if (!ost_unusable && !have_objs)
                 /* they release lock himself */
-                oscc_internal_create(oscc);
+                have_objs = oscc_internal_create(oscc);
         else
                 spin_unlock(&oscc->oscc_lock);
 
@@ -307,16 +308,6 @@ static int oscc_precreate(struct osc_creator *oscc)
                           NULL, NULL);
 
         rc = l_wait_event(oscc->oscc_waitq, oscc_wait_for_objects(oscc, 1), &lwi);
-
-        if (!oscc_has_objects(oscc, 1) || (oscc->oscc_flags & OSCC_FLAG_NOSPC))
-                rc = -ENOSPC;
-
-        if (oscc->oscc_flags & OSCC_FLAG_RDONLY)
-                rc = -EROFS;
-
-        if (oscc->oscc_obd->u.cli.cl_import->imp_invalid)
-                rc = -EIO;
-
         RETURN(rc);
 }
 
@@ -348,10 +339,11 @@ int osc_precreate(struct obd_export *exp)
         if (imp != NULL && imp->imp_deactive)
                 RETURN(1000);
 
-        /* until oscc in recovery - other flags is wrong */
+        /* Handle critical states first */
         spin_lock(&oscc->oscc_lock);
         if (oscc->oscc_flags & OSCC_FLAG_NOSPC ||
-            oscc->oscc_flags & OSCC_FLAG_RDONLY) {
+            oscc->oscc_flags & OSCC_FLAG_RDONLY ||
+            oscc->oscc_flags & OSCC_FLAG_EXITING) {
                 spin_unlock(&oscc->oscc_lock);
                 RETURN(1000);
         }
@@ -373,7 +365,8 @@ int osc_precreate(struct obd_export *exp)
                 RETURN(1);
         }
 
-        oscc_internal_create(oscc);
+        if (oscc_internal_create(oscc))
+                RETURN(1000);
         RETURN(1);
 }
 
@@ -390,8 +383,21 @@ static int handle_async_create(struct ptlrpc_request *req, int rc)
         if(rc)
                 GOTO(out_wake, rc);
 
-        if ((oscc->oscc_flags & OSCC_FLAG_EXITING))
+        /* Handle the critical type errors first.
+         * Should we also test cl_import state as well ? */
+        if (oscc->oscc_flags & OSCC_FLAG_EXITING)
                 GOTO(out_wake, rc = -EIO);
+
+        if (oscc->oscc_flags & OSCC_FLAG_NOSPC)
+                GOTO(out_wake, rc = -ENOSPC);
+
+        if (oscc->oscc_flags & OSCC_FLAG_RDONLY)
+                GOTO(out_wake, rc = -EROFS);
+
+        /* should be try wait until recovery finished */
+        if((oscc->oscc_flags & OSCC_FLAG_RECOVERING) ||
+           (oscc->oscc_flags & OSCC_FLAG_DEGRADED))
+                RETURN(-EAGAIN);
 
         if (oscc_has_objects_nolock(oscc, 1)) {
                 memcpy(oa, &oscc->oscc_oa, sizeof(*oa));
@@ -401,20 +407,10 @@ static int handle_async_create(struct ptlrpc_request *req, int rc)
 
                 CDEBUG(D_RPCTRACE, " set oscc_next_id = "LPU64"\n",
                        oscc->oscc_next_id);
-               GOTO(out_wake, rc = 0);
+                GOTO(out_wake, rc = 0);
         }
 
-        /* should be try wait until recovery finished */
-        if(oscc->oscc_flags & OSCC_FLAG_RECOVERING)
-                RETURN(-EAGAIN);
-
-        if (oscc->oscc_flags & OSCC_FLAG_NOSPC)
-                GOTO(out_wake, rc = -ENOSPC);
-
-        if (oscc->oscc_flags & OSCC_FLAG_RDONLY)
-                GOTO(out_wake, rc = -EROFS);
-
-        /* we not have objects now - continue wait */
+        /* we don't have objects now - continue wait */
         RETURN(-EAGAIN);
 
 out_wake:
@@ -600,20 +596,34 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                                oscc->oscc_obd->obd_name);
 
                 rc = oscc_precreate(oscc);
-                if (rc) {
+                if (rc)
                         CDEBUG(D_HA,"%s: error create %d\n",
                                oscc->oscc_obd->obd_name, rc);
-                        break;
-                }
 
                 spin_lock(&oscc->oscc_lock);
-                if (oscc->oscc_flags & OSCC_FLAG_EXITING) {
+
+                /* wakeup but recovery did not finished */
+                if ((oscc->oscc_obd->u.cli.cl_import->imp_invalid) ||
+                    (oscc->oscc_flags & OSCC_FLAG_RECOVERING)) {
+                        rc = -EIO;
                         spin_unlock(&oscc->oscc_lock);
                         break;
                 }
-                /* wakeup but recovery not finished */
-                if (oscc->oscc_flags & OSCC_FLAG_RECOVERING) {
-                        rc = -EIO;
+
+                if (oscc->oscc_flags & OSCC_FLAG_NOSPC) {
+                        rc = -ENOSPC;
+                        spin_unlock(&oscc->oscc_lock);
+                        break;
+                }
+
+                if (oscc->oscc_flags & OSCC_FLAG_RDONLY) {
+                        rc = -EROFS;
+                        spin_unlock(&oscc->oscc_lock);
+                        break;
+                }
+
+                // Should we report -EIO error ?
+                if (oscc->oscc_flags & OSCC_FLAG_EXITING) {
                         spin_unlock(&oscc->oscc_lock);
                         break;
                 }
@@ -628,14 +638,6 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
 
                         CDEBUG(D_RPCTRACE, "%s: set oscc_next_id = "LPU64"\n",
                                exp->exp_obd->obd_name, oscc->oscc_next_id);
-                        break;
-                } else if (oscc->oscc_flags & OSCC_FLAG_NOSPC) {
-                        rc = -ENOSPC;
-                        spin_unlock(&oscc->oscc_lock);
-                        break;
-                } else if (oscc->oscc_flags & OSCC_FLAG_RDONLY) {
-                        rc = -EROFS;
-                        spin_unlock(&oscc->oscc_lock);
                         break;
                 }
 

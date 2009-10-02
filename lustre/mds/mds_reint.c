@@ -2085,9 +2085,7 @@ cleanup:
         inodes[0] = dparent ? dparent->d_inode : NULL;
         inodes[1] = child_inode;
         rc = mds_finish_transno(mds, inodes, handle, req, rc, 0, 0);
-        if (!rc)
-                (void)obd_set_info_async(mds->mds_osc_exp, sizeof(KEY_UNLINKED),
-                                         KEY_UNLINKED, 0, NULL, NULL);
+
 cleanup_no_trans:
         switch(cleanup_phase) {
         case 5: /* pending_dir semaphore */

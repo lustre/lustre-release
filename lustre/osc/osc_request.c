@@ -3550,6 +3550,7 @@ static int osc_statfs_interpret(struct ptlrpc_request *req,
         struct osc_async_args *aa = data;
         struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
         struct obd_statfs *msfs;
+        __u64 used;
         ENTRY;
 
         if (rc == -EBADR)
@@ -3577,12 +3578,39 @@ static int osc_statfs_interpret(struct ptlrpc_request *req,
         /* Reinitialize the RDONLY and DEGRADED flags at the client
          * on each statfs, so they don't stay set permanently. */
         spin_lock(&cli->cl_oscc.oscc_lock);
-        cli->cl_oscc.oscc_flags &= ~(OSCC_FLAG_RDONLY | OSCC_FLAG_DEGRADED);
-        if (msfs->os_state & OS_STATE_DEGRADED)
-                cli->cl_oscc.oscc_flags |= OSCC_FLAG_DEGRADED;
 
-        if (msfs->os_state & OS_STATE_READONLY)
+        if (unlikely(msfs->os_state & OS_STATE_DEGRADED))
+                cli->cl_oscc.oscc_flags |= OSCC_FLAG_DEGRADED;
+        else if (unlikely(cli->cl_oscc.oscc_flags & OSCC_FLAG_DEGRADED))
+                cli->cl_oscc.oscc_flags &= ~OSCC_FLAG_DEGRADED;
+
+        if (unlikely(msfs->os_state & OS_STATE_READONLY))
                 cli->cl_oscc.oscc_flags |= OSCC_FLAG_RDONLY;
+        else if (unlikely(cli->cl_oscc.oscc_flags & OSCC_FLAG_RDONLY))
+                cli->cl_oscc.oscc_flags &= ~OSCC_FLAG_RDONLY;
+
+        /* Add a bit of hysteresis so this flag isn't continually flapping,
+         * and ensure that new files don't get extremely fragmented due to
+         * only a small amount of available space in the filesystem.
+         * We want to set the NOSPC flag when there is less than ~0.1% free
+         * and clear it when there is at least ~0.2% free space, so:
+         *                   avail < ~0.1% max          max = avail + used
+         *            1025 * avail < avail + used       used = blocks - free
+         *            1024 * avail < used
+         *            1024 * avail < blocks - free                      
+         *                   avail < ((blocks - free) >> 10)    
+         *
+         * On very large disk, say 16TB 0.1% will be 16 GB. We don't want to
+         * lose that amount of space so in those cases we report no space left
+         * if their is less than 1 GB left.                             */
+        used = min((msfs->os_blocks - msfs->os_bfree) >> 10, 1 << 30);
+        if (unlikely(((cli->cl_oscc.oscc_flags & OSCC_FLAG_NOSPC) == 0) &&
+                     ((msfs->os_ffree < 32) || (msfs->os_bavail < used))))
+                cli->cl_oscc.oscc_flags |= OSCC_FLAG_NOSPC;
+        else if (unlikely(((cli->cl_oscc.oscc_flags & OSCC_FLAG_NOSPC) != 0) &&
+                (msfs->os_ffree > 64) && (msfs->os_bavail > (used << 1))))
+                        cli->cl_oscc.oscc_flags &= ~OSCC_FLAG_NOSPC;
+
         spin_unlock(&cli->cl_oscc.oscc_lock);
 
         memcpy(aa->aa_oi->oi_osfs, msfs, sizeof(*msfs));
@@ -4009,15 +4037,6 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
                        exp->exp_obd->obd_name,
                        oscc->oscc_next_id);
 
-                RETURN(0);
-        }
-
-        if (KEY_IS(KEY_UNLINKED)) {
-                struct osc_creator *oscc = &obd->u.cli.cl_oscc;
-
-                spin_lock(&oscc->oscc_lock);
-                oscc->oscc_flags &= ~OSCC_FLAG_NOSPC;
-                spin_unlock(&oscc->oscc_lock);
                 RETURN(0);
         }
 

@@ -1060,7 +1060,6 @@ enum obd_cleanup_stage {
 #define KEY_CHECKSUM            "checksum"
 #define KEY_READONLY            "read-only"
 #define KEY_READONLY_166COMPAT  "readonly"
-#define KEY_UNLINKED            "unlinked"
 #define KEY_EVICT_BY_NID        "evict_by_nid"
 #define KEY_REGISTER_TARGET     "register_target"
 #define KEY_SET_FS              "set_fs"
