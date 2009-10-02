@@ -319,12 +319,14 @@ static int filter_quota_set_version(struct obd_device *obd,
                 return -EBUSY;
         }
 
-        if (obt->obt_qctxt.lqc_flags & (LQC_USRQUOTA_FLAG | LQC_GRPQUOTA_FLAG)) {
-                atomic_inc(&obt->obt_quotachecking);
-                return -EBUSY;
+        /* do not complain of being busy if we actually have nothing to do */
+        if (obt->obt_qfmt != version) {
+                if (obt->obt_qctxt.lqc_flags&(LQC_USRQUOTA_FLAG|LQC_GRPQUOTA_FLAG)){
+                        atomic_inc(&obt->obt_quotachecking);
+                        return -EBUSY;
+                }
+                obt->obt_qfmt = version;
         }
-
-        obt->obt_qfmt = version;
 
         atomic_inc(&obt->obt_quotachecking);
 

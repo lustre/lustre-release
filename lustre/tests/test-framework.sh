@@ -353,8 +353,11 @@ stop() {
 # set quota version (both administrative and operational quotas)
 quota_set_version() {
         do_facet mds "lctl set_param lquota.${FSNAME}-MDT*.quota_type=$1"
-        for j in `seq $OSTCOUNT`; do
-                do_facet ost$j "lctl set_param lquota.${FSNAME}-OST*.quota_type=$1"
+        local varsvc
+        local osts=$(get_facets OST)
+        for ost in ${osts//,/ }; do
+                varsvc=${ost}_svc
+                do_facet $ost "lctl set_param lquota.${!varsvc}.quota_type=$1"
         done
 }
 
