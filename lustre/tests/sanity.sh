@@ -9,8 +9,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 13297 2108 9789 3637 9789 3561 12622 12653 12653 5188 10764 16260
-ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   65a   65e   68b   75    119d  $SANITY_EXCEPT"
+# bug number for skipped test: 13297 2108 9789 3637 9789 3561 12622 12653 12653 5188 10764 16260 20784
+ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   65a   65e   68b   75    119d   215 $SANITY_EXCEPT"
 # bug number for skipped test: 2108 9789 3637 9789 3561 5188/5749 1443
 #ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27m 42a 42b 42c 42d 45 68 76"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
@@ -3241,7 +3241,7 @@ test_68a() {
 	[ "$UID" != 0 ] && skip_env "must run as root" && return
 
 	grep -q llite_lloop /proc/modules
-	[ $? -ne 0 ] && skip_env "can't find module llite_lloop" && return
+	[ $? -ne 0 ] && skip "can't find module llite_lloop" && return
 
 	LLOOP=$TMP/lloop.`date +%s`.`date +%N`
 	dd if=/dev/zero of=$DIR/f68a bs=4k count=1024
@@ -3264,7 +3264,7 @@ test_68b() {  # was test_68
 		skip "local OST" && return
 
 	grep -q llite_lloop /proc/modules
-	[ $? -ne 0 ] && skip_env "can't find module llite_lloop" && return
+	[ $? -ne 0 ] && skip "can't find module llite_lloop" && return
 
 	[ -z "`$LCTL list_nids | grep -v tcp`" ] && \
 		skip "can't reliably test swap with TCP" && return
