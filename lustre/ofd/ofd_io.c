@@ -162,6 +162,14 @@ int filter_preprw(int cmd, struct obd_export *exp, struct obdo *oa, int objcount
         struct filter_thread_info *info;
         int rc = 0;
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT) &&
+            ofd->ofd_destroys_in_progress == 0) {
+                /* don't fail lookups for orphan recovery, it causes
+                 * later LBUGs when objects still exist during precreate */
+                CDEBUG(D_INFO, "*** obd_fail_loc=%x ***\n",OBD_FAIL_OST_ENOENT);
+                RETURN(-ENOENT);
+        }
+
         rc = lu_env_init(&env, LCT_DT_THREAD);
         if (rc)
                 RETURN(rc);
