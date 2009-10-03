@@ -439,6 +439,8 @@ int udmu_zap_lookup(udmu_objset_t *uos, dmu_buf_t *zap_db, const char *name,
         uint64_t oid;
         oid = zap_db->db_object;
 
+        if (strlen(name) >= MAXNAMELEN)
+                return EOVERFLOW;
         /*
          * value_size should be a multiple of intsize.
          * intsize is 8 for micro ZAP and 1, 2, 4 or 8 for a fat ZAP.
