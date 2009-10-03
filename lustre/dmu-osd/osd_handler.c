@@ -628,11 +628,13 @@ static int osd_object_destroy(const struct lu_env *env, struct osd_object *obj)
                 CERROR("udmu_object_delete() failed with error %d\n", rc);
                 GOTO(out, rc);
         }
-        obj->oo_db = NULL;
 
 out:
         /* COMMIT changes */
         osd_trans_stop(env, th);
+        
+        udmu_object_put_dmu_buf(obj->oo_db, osd_object_tag);
+        obj->oo_db = NULL;
 
         CDEBUG(D_OTHER, "destroy object %s (objid %llu)\n", buf, va.va_nodeid);
         RETURN (0);

@@ -117,7 +117,7 @@ void udmu_debug(int level)
 int udmu_objset_open(char *osname, udmu_objset_t *uos)
 {
         uint64_t version = ZPL_VERSION;
-        int      error, len;
+        int      error;
 
         memset(uos, 0, sizeof(udmu_objset_t));
 
@@ -982,8 +982,6 @@ static int udmu_object_delete_impl(udmu_objset_t *uos, dmu_buf_t **db, dmu_tx_t 
         }
 
         oid = (*db)->db_object;
-        udmu_object_put_dmu_buf(*db, tag);
-        *db = NULL;
 
         uos->deletes++;
         return dmu_object_free(uos->os, oid, tx);
@@ -1055,19 +1053,7 @@ void udmu_tx_abort(dmu_tx_t *tx)
 
 int udmu_tx_assign(dmu_tx_t *tx, uint64_t txg_how)
 {
-        int rc;
-        rc = dmu_tx_assign(tx, txg_how);
-#if 0
-        if (rc == 28) {
-                uint64_t refdbytes, availbytes, usedobjs, availobjs;
-
-                dmu_objset_space(tx->tx_objset, &refdbytes, &availbytes,
-                                 &usedobjs, &availobjs);
-                printk("ref %Lu, avail %Lu, used objs %Lu, avail objs %Lu\n",
-                                refdbytes, availbytes, usedobjs, availobjs);
-        }
-#endif
-        return rc;
+        return dmu_tx_assign(tx, txg_how);
 }
 
 void udmu_tx_wait(dmu_tx_t *tx)
