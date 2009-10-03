@@ -1310,7 +1310,7 @@ int mgc_process_log(struct obd_device *mgc,
 
         LASSERT(cld);
 
-        /* I don't want mutliple processes running process_log at once --
+        /* I don't want multiple processes running process_log at once --
            sounds like badness.  It actually might be fine, as long as
            we're not trying to update from the same log
            simultaneously (in which case we should use a per-log sem.) */

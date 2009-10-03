@@ -3415,7 +3415,6 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
 
         filter = &exp->exp_obd->u.filter;
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
-        lock_kernel();
 
         if (oa->o_valid &
             (OBD_MD_FLMTIME | OBD_MD_FLATIME | OBD_MD_FLCTIME)) {
@@ -3448,7 +3447,6 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
 
         EXIT;
 out_unlock:
-        unlock_kernel();
         f_dput(dentry);
         pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         return rc;
@@ -4054,7 +4052,6 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
                                       obd->obd_name, (int)oa->o_gr);
                                GOTO(cleanup, rc = PTR_ERR(olg));
                         }
-                        llog_group_set_export(olg, exp);
                         fcc = &oa->o_lcookie;
                         ctxt = llog_group_get_ctxt(olg, fcc->lgc_subsys + 1);
                         llog_cancel(ctxt, NULL, 1, fcc, 0);

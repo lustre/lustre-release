@@ -9,8 +9,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 13297 2108 9789 3637 9789 3561 12622 12653 12653 5188 10764 16260
-ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   65a   65e   68b   75    119d  $SANITY_EXCEPT"
+# bug number for skipped test: 13297 2108 9789 3637 9789 3561 12622 12653 12653 5188 10764 16260 20784
+ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   65a   65e   68b   75    119d   215 $SANITY_EXCEPT"
 # bug number for skipped test: 2108 9789 3637 9789 3561 5188/5749 1443
 #ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27m 42a 42b 42c 42d 45 68 76"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
@@ -983,17 +983,22 @@ test_27m() {
 }
 run_test 27m "create file while OST0 was full =================="
 
-# osc's keep a NOSPC stick flag that gets unset with rmdir
+sleep_maxage() {
+        local DELAY=$(do_facet mds lctl get_param -n lov.*.qos_maxage | awk '{print $1 + 2}')
+        sleep $DELAY
+}
+
+# OSCs keep a NOSPC flag that will be reset after ~5s (qos_maxage)
+# if the OST isn't full anymore.
 reset_enospc() {
 	local FAIL_LOC=${1:-0}
 	local OSTIDX=${2:-""}
 
-	mkdir -p $DIR/d27/nospc
-	rmdir $DIR/d27/nospc
 	local list=$(comma_list $(osts_nodes))
 	[ "$OSTIDX" ] && list=$(facet_host ost$((OSTIDX + 1)))
 
 	do_nodes $list lctl set_param fail_loc=$FAIL_LOC
+	sleep_maxage
 }
 
 exhaust_precreations() {
@@ -1055,7 +1060,6 @@ test_27o() {
 	reset_enospc
 	rm -f $DIR/d27/f27o
 	exhaust_all_precreations 0x215
-	sleep 5
 
 	touch $DIR/d27/f27o && error "able to create $DIR/d27/f27o"
 
@@ -1071,6 +1075,7 @@ test_27p() {
 
 	reset_enospc
 	rm -f $DIR/d27/f27p
+	mkdir -p $DIR/d27
 
 	$MCREATE $DIR/d27/f27p || error "mcreate failed"
 	$TRUNCATE $DIR/d27/f27p 80000000 || error "truncate failed"
@@ -1179,8 +1184,6 @@ test_27v() { # bug 4900
         local START=`date +%s`
         createmany -o $DIR/$tdir/$tfile 32
 
-        reset_enospc
-
         local FINISH=`date +%s`
         local TIMEOUT=`lctl get_param -n timeout`
         [ $((FINISH - START)) -ge $((TIMEOUT / 2)) ] && \
@@ -1210,7 +1213,6 @@ run_test 27w "check lfs setstripe -c -s -i options ============="
 
 test_27x() {
 	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs" && return
-	DELAY=$(do_facet mds lctl get_param -n lov.*.qos_maxage | awk '{print $1 + 2}')
 	OFFSET=$(($OSTCOUNTi - 1))
 	OSTIDX=0
 	local OST=$(lfs osts | awk '/'${OSTIDX}': / { print $2 }' | sed -e 's/_UUID$//')
@@ -1218,7 +1220,7 @@ test_27x() {
 	mkdir -p $DIR/$tdir
 	$SETSTRIPE $DIR/$tdir -c 1	# 1 stripe per file
 	do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 1
-	sleep $DELAY
+	sleep_maxage
 	createmany -o $DIR/$tdir/$tfile $OSTCOUNT
 	for i in `seq 0 $OFFSET`; do
 		[ `$GETSTRIPE $DIR/$tdir/$tfile$i | grep -A 10 obdidx | awk '{print $1}' | grep -w "$OSTIDX"` ] &&
@@ -1233,7 +1235,6 @@ test_27y() {
         remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
         MDS_OSCS=`do_facet mds lctl dl | awk '/[oO][sS][cC].*md[ts]/ { print $4 }'`
-        DELAY=$(do_facet mds lctl get_param -n lov.*.qos_maxage | awk '{print $1 + 2}')
         OFFSET=$(($OSTCOUNT-1))
         OST=-1
         for OSC in $MDS_OSCS; do
@@ -1250,7 +1251,7 @@ test_27y() {
         $SETSTRIPE $DIR/$tdir -c 1      # 1 stripe / file
 
         do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 1
-        sleep $DELAY
+        sleep_maxage
         createmany -o $DIR/$tdir/$tfile $OSTCOUNT
         do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 0
 
@@ -2591,7 +2592,7 @@ check_fstype() {
 test_55() {
         rm -rf $DIR/d55
         mkdir $DIR/d55
-        check_fstype && skip_env "can't find fs $FSTYPE" && return
+        client_only && skip "Not a server" && return
         mount -t $FSTYPE -o loop,iopen $EXT2_DEV $DIR/d55 || error "mounting"
         touch $DIR/d55/foo
         $IOPENTEST1 $DIR/d55/foo $DIR/d55 || error "running $IOPENTEST1"
@@ -3241,7 +3242,7 @@ test_68a() {
 	[ "$UID" != 0 ] && skip_env "must run as root" && return
 
 	grep -q llite_lloop /proc/modules
-	[ $? -ne 0 ] && skip_env "can't find module llite_lloop" && return
+	[ $? -ne 0 ] && skip "can't find module llite_lloop" && return
 
 	LLOOP=$TMP/lloop.`date +%s`.`date +%N`
 	dd if=/dev/zero of=$DIR/f68a bs=4k count=1024
@@ -3264,7 +3265,7 @@ test_68b() {  # was test_68
 		skip "local OST" && return
 
 	grep -q llite_lloop /proc/modules
-	[ $? -ne 0 ] && skip_env "can't find module llite_lloop" && return
+	[ $? -ne 0 ] && skip "can't find module llite_lloop" && return
 
 	[ -z "`$LCTL list_nids | grep -v tcp`" ] && \
 		skip "can't reliably test swap with TCP" && return
@@ -4584,7 +4585,6 @@ test_116() {
 
 	echo -n "Free space priority "
 	lctl get_param -n lov.*-clilov-*.qos_prio_free
-       	DELAY=$(lctl get_param -n lov.*-clilov-*.qos_maxage | head -1 | awk '{print $1}')
 	declare -a AVAIL
 	free_min_max
 	[ $MINV -gt 960000 ] && skip "too much free space in OST$MINI, skip" &&\
@@ -4605,7 +4605,7 @@ test_116() {
 	done
 	FILL=$(($MINV / 4))
 	sync
-	sleep $DELAY
+	sleep_maxage
 
 	free_min_max
 	DIFF=$(($MAXV - $MINV))
@@ -4634,7 +4634,7 @@ test_116() {
 	done
 	echo "wrote $i 200k files"
 	sync
-	sleep $DELAY
+	sleep_maxage
 
 	echo "Note: free space may not be updated, so measurements might be off"
 	free_min_max
@@ -6613,9 +6613,9 @@ test_163() {
 	copytool --test || { skip "copytool not runnable: $?" && return; }
 	copytool &
 	sleep 1
-	local uuid=$($LCTL get_param -n mdc.lustre-MDT0000-mdc-*.uuid)
+	local uuid=$($LCTL get_param -n mdc.${FSNAME}-MDT0000-mdc-*.uuid)
 	# this proc file is temporary and linux-only
-	do_facet mds lctl set_param mdt.lustre-MDT0000.mdccomm=$uuid || error "lnl send failed"
+	do_facet mds lctl set_param mdt.${FSNAME}-MDT0000.mdccomm=$uuid || error "lnl send failed"
 	kill $!
 }
 run_test 163 "LustreNetLink kernelcomms"
@@ -6953,6 +6953,42 @@ test_215() { # for bug 18102
 	sysctl -w lnet.stats=0 || error "cannot write to lnet.stats"
 }
 run_test 215 "/proc/sys/lnet exists and has proper content - bug 18102"
+
+test_216() { # bug 20317
+        local node
+        local p="$TMP/sanityN-$TESTNAME.parameters"
+        save_lustre_params $HOSTNAME "osc.*.contention_seconds" > $p
+        for node in $(osts_nodes); do
+                save_lustre_params $node "ldlm.namespaces.filter-*.max_nolock_bytes" >> $p
+                save_lustre_params $node "ldlm.namespaces.filter-*.contended_locks" >> $p
+                save_lustre_params $node "ldlm.namespaces.filter-*.contention_seconds" >> $p
+        done
+        clear_osc_stats
+
+        # agressive lockless i/o settings
+        for node in $(osts_nodes); do
+                do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 2000000; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 0; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 60'
+        done
+        lctl set_param -n osc.*.contention_seconds 60
+
+        $DIRECTIO write $DIR/$tfile 0 10 4096
+        $CHECKSTAT -s 40960 $DIR/$tfile
+
+        # disable lockless i/o
+        for node in $(osts_nodes); do
+                do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 0; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 32; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 0'
+        done
+        lctl set_param -n osc.*.contention_seconds 0
+        clear_osc_stats
+
+        dd if=/dev/zero of=$DIR/$tfile count=0
+        $CHECKSTAT -s 0 $DIR/$tfile
+
+        restore_lustre_params <$p
+        rm -f $p
+        rm $DIR/$tfile
+}
+run_test 216 "check lockless direct write works and updates file size and kms correctly"
 
 #
 # tests that do cleanup/setup should be run at the end

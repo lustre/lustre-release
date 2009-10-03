@@ -776,19 +776,15 @@ int ll_glimpse_ioctl(struct ll_sb_info *sbi, struct lov_stripe_md *lsm,
 
 void ll_io_init(struct cl_io *io, const struct file *file, int write)
 {
-        struct inode *inode     = file->f_dentry->d_inode;
-        struct ll_sb_info *sbi  = ll_i2sbi(inode);
-        struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+        struct inode *inode = file->f_dentry->d_inode;
 
-        LASSERT(fd != NULL);
         memset(io, 0, sizeof *io);
         io->u.ci_rw.crw_nonblock = file->f_flags & O_NONBLOCK;
         if (write)
                 io->u.ci_wr.wr_append = file->f_flags & O_APPEND;
         io->ci_obj     = ll_i2info(inode)->lli_clob;
         io->ci_lockreq = CILR_MAYBE;
-        if (fd->fd_flags & LL_FILE_IGNORE_LOCK ||
-            sbi->ll_flags & LL_SBI_NOLCK) {
+        if (ll_file_nolock(file)) {
                 io->ci_lockreq = CILR_NEVER;
                 io->ci_no_srvlock = 1;
         } else if (file->f_flags & O_APPEND) {
@@ -1413,6 +1409,9 @@ int ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg)
         int                     rc;
         ENTRY;
 
+        if (ll_file_nolock(file))
+                RETURN(-EOPNOTSUPP);
+
         spin_lock(&lli->lli_lock);
         if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
                 CERROR("group lock already existed with gid %lu\n",
@@ -1436,7 +1435,7 @@ int ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg)
                 RETURN(-EINVAL);
         }
 
-        fd->fd_flags |= (LL_FILE_GROUP_LOCKED | LL_FILE_IGNORE_LOCK);
+        fd->fd_flags |= LL_FILE_GROUP_LOCKED;
         fd->fd_grouplock = grouplock;
         spin_unlock(&lli->lli_lock);
 
@@ -1470,7 +1469,7 @@ int ll_put_grouplock(struct inode *inode, struct file *file, unsigned long arg)
         fd->fd_grouplock.cg_env = NULL;
         fd->fd_grouplock.cg_lock = NULL;
         fd->fd_grouplock.cg_gid = 0;
-        fd->fd_flags &= ~(LL_FILE_GROUP_LOCKED | LL_FILE_IGNORE_LOCK);
+        fd->fd_flags &= ~LL_FILE_GROUP_LOCKED;
         spin_unlock(&lli->lli_lock);
 
         cl_put_grouplock(&grouplock);

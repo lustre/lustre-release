@@ -284,7 +284,7 @@ run_test 4 "Fourth Failure Mode: OST/MDS `date`"
 
 ############### Fifth Failure Mode ###############
 test_5() {
-    [ $OSTCOUNT -lt 2 ] && skip "$OSTCOUNT < 2, not enough OSTs" && return 0
+    [ $OSTCOUNT -lt 2 ] && skip_env "$OSTCOUNT < 2, not enough OSTs" && return 0
 
     echo "Fifth Failure Mode: OST/OST `date`"
 

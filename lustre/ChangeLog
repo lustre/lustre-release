@@ -3,6 +3,7 @@ tbd  Sun Microsystems, Inc.
        * Support for kernels:
         2.6.16.60-0.39.3 (SLES 10),
         2.6.18-128.7.1.el5 (RHEL 5),
+        2.6.18-128.7.1.el5 (OEL 5),
         2.6.22.14 vanilla (kernel.org).
        * Client support for unpatched kernels:
 	 (see http://wiki.lustre.org/index.php?title=Patchless_Client)
@@ -12,6 +13,35 @@ tbd  Sun Microsystems, Inc.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
+
+Severity   : enhancement
+Bugzilla   : 19662
+Description: Remove set_info(KEY_UNLINKED) from MDS/OSC
+
+Severity   : enhancement
+Bugzilla   : 19526
+Description: correctly handle big reply message.
+Details    : send LNet event if reply is bigger then buffer and adjust this buffer
+             correctly.
+
+Severity   : normal
+Bugzilla   : 19917
+Description: Drop unnecessary __GFP_NOMEMALLOC flag from filter_get_page()
+
+Severity   : enhancement
+Bugzilla   : 20539
+Description: Add support for OEL5.
+
+Severity   : normal
+Bugzilla   : 20482
+Description: Conf-sanity.sh 50g test - deactivated OST should not cause a panic.
+
+Severity   : normal
+Bugzilla   : 18674
+Description: client could not reconnect to OST because of an active request.
+Details    : The client now retries to reconnect to the same server, if a
+	     connect request failed with EBUSY or -EAGAIN. Test case 35b
+	     conf-sanity.sh has been created.
 
 Severity   : normal
 Bugzilla   : 19557

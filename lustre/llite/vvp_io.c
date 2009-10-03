@@ -123,7 +123,6 @@ static int vvp_mmap_locks(const struct lu_env *env,
         struct vm_area_struct  *vma;
         struct cl_lock_descr   *descr = &cti->cti_descr;
         ldlm_policy_data_t      policy;
-        struct inode           *inode;
         unsigned long           addr;
         unsigned long           seg;
         ssize_t                 count;
@@ -146,16 +145,16 @@ static int vvp_mmap_locks(const struct lu_env *env,
                 count += addr & (~CFS_PAGE_MASK);
                 addr &= CFS_PAGE_MASK;
                 while((vma = our_vma(addr, count)) != NULL) {
-                        struct file *file = vma->vm_file;
-                        struct ll_file_data *fd;
+                        struct inode *inode = vma->vm_file->f_dentry->d_inode;
+                        int flags = CEF_MUST;
 
-                        LASSERT(file);
-                        fd = LUSTRE_FPRIVATE(file);
-
-                        inode = file->f_dentry->d_inode;
-                        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK ||
-                            ll_i2sbi(inode)->ll_flags & LL_SBI_NOLCK))
-                                goto cont;
+                        if (ll_file_nolock(vma->vm_file)) {
+                                /* 
+                                 * For no lock case, a lockless lock will be
+                                 * generated.
+                                 */
+                                flags = CEF_NEVER;
+                        }
 
                         /*
                          * XXX: Required lock mode can be weakened: CIT_WRITE
@@ -169,13 +168,13 @@ static int vvp_mmap_locks(const struct lu_env *env,
                                                     policy.l_extent.start);
                         descr->cld_end = cl_index(descr->cld_obj,
                                                   policy.l_extent.end);
-                        result = cl_io_lock_alloc_add(env, io, descr, CEF_MUST);
+                        result = cl_io_lock_alloc_add(env, io, descr, flags);
                         if (result < 0)
                                 RETURN(result);
 
-                cont:
                         if (vma->vm_end - addr >= count)
                                 break;
+
                         count -= vma->vm_end - addr;
                         addr = vma->vm_end;
                 }
@@ -615,6 +614,7 @@ static int vvp_io_read_page(const struct lu_env *env,
         struct ll_readahead_state *ras    = &fd->fd_ras;
         cfs_page_t                *vmpage = cp->cpg_page;
         struct cl_2queue          *queue  = &io->ci_queue;
+        int rc;
 
         CLOBINVRNT(env, obj, ccc_object_invariant(obj));
         LASSERT(cl2vvp_io(env, ios)->cui_oneshot == 0);
@@ -627,17 +627,13 @@ static int vvp_io_read_page(const struct lu_env *env,
                            cp->cpg_defer_uptodate);
 
         /* Sanity check whether the page is protected by a lock. */
-        if (likely(!(fd->fd_flags & LL_FILE_IGNORE_LOCK))) {
-                int rc;
-
-                rc = cl_page_is_under_lock(env, io, page);
-                if (rc != -EBUSY) {
-                        CL_PAGE_HEADER(D_WARNING, env, page, "%s: %i\n",
-                                       rc == -ENODATA ? "without a lock" :
-                                       "match failed", rc);
-                        if (rc != -ENODATA)
-                                RETURN(rc);
-                }
+        rc = cl_page_is_under_lock(env, io, page);
+        if (rc != -EBUSY) {
+                CL_PAGE_HEADER(D_WARNING, env, page, "%s: %i\n",
+                               rc == -ENODATA ? "without a lock" :
+                               "match failed", rc);
+                if (rc != -ENODATA)
+                        RETURN(rc);
         }
 
         if (cp->cpg_defer_uptodate) {

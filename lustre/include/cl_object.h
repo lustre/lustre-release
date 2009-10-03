@@ -2628,6 +2628,7 @@ int  cl_conf_set          (const struct lu_env *env, struct cl_object *obj,
                            const struct cl_object_conf *conf);
 void cl_object_prune      (const struct lu_env *env, struct cl_object *obj);
 void cl_object_kill       (const struct lu_env *env, struct cl_object *obj);
+int  cl_object_has_locks  (struct cl_object *obj);
 
 /**
  * Returns true, iff \a o0 and \a o1 are slices of the same object.

@@ -87,6 +87,11 @@ enum {
 /** special fid seq: used for .lustre objects. */
 #define LU_DOT_LUSTRE_SEQ       (FID_SEQ_START + 0x02ULL)
 
+/* Note that reserved SEQ numbers below 12 will conflict with ldiskfs
+ * inodes in the IGIF namespace, so these reserved SEQ numbers must be
+ * used sparingly until ldiskfs-based MDT backends and/or IGIF FIDs 
+ * have been completely removed. */
+
 /** special OID for local objects */
 enum {
         /** \see osd_oi_index_create */

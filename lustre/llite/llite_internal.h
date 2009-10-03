@@ -682,7 +682,7 @@ int ll_revalidate_it_finish(struct ptlrpc_request *request,
 
 /* llite/llite_lib.c */
 extern struct super_operations lustre_super_operations;
-void ll_dump_inode(struct inode *inode);
+
 char *ll_read_opt(const char *opt, char *data);
 void ll_lli_init(struct ll_inode_info *lli);
 int ll_fill_super(struct super_block *sb);
@@ -946,10 +946,6 @@ struct hlist_head *alloc_rmtperm_hash(void);
 void free_rmtperm_hash(struct hlist_head *hash);
 int ll_update_remote_perm(struct inode *inode, struct mdt_remote_perm *perm);
 int lustre_check_remote_perm(struct inode *inode, int mask);
-
-/* llite/llite_fid.c */
-ino_t ll_fid_build_ino(struct ll_sb_info *sbi, struct lu_fid *fid);
-__u32 ll_fid_build_gen(struct ll_sb_info *sbi, struct lu_fid *fid);
 
 /* llite/llite_capa.c */
 extern cfs_timer_t ll_capa_timer;
@@ -1230,4 +1226,13 @@ extern ssize_t ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io,
                                   int rw, struct inode *inode,
                                   struct ll_dio_pages *pv);
 
+static inline int ll_file_nolock(const struct file *file)
+{
+        struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+        struct inode *inode = file->f_dentry->d_inode;
+
+        LASSERT(fd != NULL);
+        return ((fd->fd_flags & LL_FILE_IGNORE_LOCK) ||
+                (ll_i2sbi(inode)->ll_flags & LL_SBI_NOLCK));
+}
 #endif /* LLITE_INTERNAL_H */

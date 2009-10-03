@@ -274,7 +274,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
          *
          * it will check if *ppos is greater than max. However, max equals to
          * s_maxbytes, which is a negative integer in a x86_64 box since loff_t
-         * has been defined as a signed long long ineger in linux kernel. */
+         * has been defined as a signed long long integer in linux kernel. */
 #if BITS_PER_LONG == 64
         sb->s_maxbytes = PAGE_CACHE_MAXBYTES >> 1;
 #else
@@ -437,7 +437,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
         }
 
         LASSERT(fid_is_sane(&sbi->ll_root_fid));
-        root = ll_iget(sb, ll_fid_build_ino(sbi, &sbi->ll_root_fid), &lmd);
+        root = ll_iget(sb, cl_fid_build_ino(&sbi->ll_root_fid), &lmd);
         md_free_lustre_md(sbi->ll_md_exp, &lmd);
         ptlrpc_req_finished(request);
 
@@ -530,26 +530,16 @@ int ll_get_max_mdsize(struct ll_sb_info *sbi, int *lmmsize)
 void ll_dump_inode(struct inode *inode)
 {
         struct list_head *tmp;
-        struct dentry *dentry;
         int dentry_count = 0;
 
         LASSERT(inode != NULL);
-        CERROR("inode %p dump: dev=%s ino=%lu mode=%o count=%u state %lx\n",
-               inode, ll_i2mdexp(inode)->exp_obd->obd_name, inode->i_ino,
-               inode->i_mode, atomic_read(&inode->i_count), inode->i_state);
 
-        list_for_each(tmp, &inode->i_dentry) {
-                dentry = list_entry(tmp, struct dentry, d_alias);
-                CERROR("Alias[%d] dentry %p dump: name=%.*s parent=%.*s (%p), inode=%p, count=%u, "
-                       "flags=0x%x, fsdata=%p\n", dentry_count, dentry,
-                       dentry->d_name.len, dentry->d_name.name,
-                       dentry->d_parent->d_name.len, dentry->d_parent->d_name.name,
-                       dentry->d_parent, dentry->d_inode, atomic_read(&dentry->d_count),
-                       dentry->d_flags, dentry->d_fsdata);
-
+        list_for_each(tmp, &inode->i_dentry)
                 dentry_count++;
-        }
 
+        CERROR("inode %p dump: dev=%s ino=%lu mode=%o count=%u, %d dentries\n",
+               inode, ll_i2mdexp(inode)->exp_obd->obd_name, inode->i_ino,
+               inode->i_mode, atomic_read(&inode->i_count), dentry_count);
 }
 
 void lustre_dump_dentry(struct dentry *dentry, int recur)
@@ -1596,8 +1586,8 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                 spin_unlock(&lli->lli_lock);
         }
 #endif
-        inode->i_ino = ll_fid_build_ino(sbi, &body->fid1);
-        inode->i_generation = ll_fid_build_gen(sbi, &body->fid1);
+        inode->i_ino = cl_fid_build_ino(&body->fid1);
+        inode->i_generation = cl_fid_build_gen(&body->fid1);
 
         if (body->valid & OBD_MD_FLATIME &&
             body->atime > LTIME_S(inode->i_atime))
@@ -2016,7 +2006,7 @@ int ll_prep_inode(struct inode **inode,
                  */
                 LASSERT(fid_is_sane(&md.body->fid1));
 
-                *inode = ll_iget(sb, ll_fid_build_ino(sbi, &md.body->fid1),&md);
+                *inode = ll_iget(sb, cl_fid_build_ino(&md.body->fid1), &md);
                 if (*inode == NULL || IS_ERR(*inode)) {
                         if (md.lsm)
                                 obd_free_memmd(sbi->ll_dt_exp, &md.lsm);

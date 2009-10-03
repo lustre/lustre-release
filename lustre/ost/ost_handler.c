@@ -698,7 +698,11 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (desc == NULL)
                 GOTO(out_lock, rc = -ENOMEM);
 
-        ost_rw_prolong_locks(req, ioo, remote_nb, &body->oa, LCK_PW | LCK_PR);
+        if (!lustre_handle_is_used(&lockh))
+                /* no needs to try to prolong lock if server is asked
+                 * to handle locking (= OBD_BRW_SRVLOCK) */
+                ost_rw_prolong_locks(req, ioo, remote_nb, &body->oa,
+                                     LCK_PW | LCK_PR);
 
         nob = 0;
         for (i = 0; i < npages; i++) {
@@ -955,7 +959,10 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 GOTO(out_lock, rc = -ETIMEDOUT);
         }
 
-        ost_rw_prolong_locks(req, ioo, remote_nb,&body->oa,  LCK_PW);
+        if (!lustre_handle_is_used(&lockh))
+                /* no needs to try to prolong lock if server is asked
+                 * to handle locking (= OBD_BRW_SRVLOCK) */
+                ost_rw_prolong_locks(req, ioo, remote_nb,&body->oa,  LCK_PW);
 
         /* obd_preprw clobbers oa->valid, so save what we need */
         if (body->oa.o_valid & OBD_MD_FLCKSUM) {
@@ -2228,7 +2235,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
                 oss_max_threads = oss_min_threads = oss_num_threads;
         } else {
                 /* Base min threads on memory and cpus */
-                oss_min_threads = num_possible_cpus() * num_physpages >>
+                oss_min_threads = num_possible_cpus() * CFS_NUM_CACHEPAGES >>
                         (27 - CFS_PAGE_SHIFT);
                 if (oss_min_threads < OSS_THREADS_MIN)
                         oss_min_threads = OSS_THREADS_MIN;

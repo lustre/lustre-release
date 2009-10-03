@@ -1068,7 +1068,7 @@ struct obd_device {
                       obd_starting:1,      /* started setup */
                       obd_force:1,         /* cleanup with > 0 obd refcount */
                       obd_fail:1,          /* cleanup with failover */
-                      obd_async_recov:1,   /* allow asyncronous orphan cleanup */
+                      obd_async_recov:1,   /* allow asynchronous orphan cleanup */
                       obd_no_conn:1,       /* deny new connections */
                       obd_inactive:1,      /* device active/inactive
                                            * (for /proc/status only!!) */
@@ -1212,7 +1212,6 @@ enum obd_cleanup_stage {
 #define KEY_SET_FS              "set_fs"
 /*      KEY_SET_INFO in lustre_idl.h */
 #define KEY_SPTLRPC_CONF        "sptlrpc_conf"
-#define KEY_UNLINKED            "unlinked"
 
 
 struct lu_context;
@@ -1496,6 +1495,7 @@ struct md_open_data {
         struct obd_client_handle *mod_och;
         struct ptlrpc_request    *mod_open_req;
         struct ptlrpc_request    *mod_close_req;
+        atomic_t                  mod_refcount;
 };
 
 struct lookup_intent;
@@ -1682,5 +1682,22 @@ static inline struct lustre_capa *oinfo_capa(struct obd_info *oinfo)
 {
         return oinfo->oi_capa;
 }
+
+static inline struct md_open_data *obd_mod_alloc(void)
+{
+        struct md_open_data *mod;
+        OBD_ALLOC_PTR(mod);
+        if (mod == NULL)
+                return NULL;
+        atomic_set(&mod->mod_refcount, 1);
+        return mod;
+}
+
+#define obd_mod_get(mod) atomic_inc(&mod->mod_refcount)
+#define obd_mod_put(mod)                                \
+({                                                      \
+        if (atomic_dec_and_test(&mod->mod_refcount))    \
+                OBD_FREE_PTR(mod);                      \
+})
 
 #endif /* __OBD_H */

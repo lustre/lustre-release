@@ -1207,7 +1207,7 @@ void ptlrpc_hpreq_reorder(struct ptlrpc_request *req)
         EXIT;
 }
 
-/** Check if the request if a high priority one. */
+/** Check if the request is a high priority one. */
 static int ptlrpc_server_hpreq_check(struct ptlrpc_request *req)
 {
         int opc, rc = 0;
@@ -2034,7 +2034,7 @@ static int ptlrpc_hr_main(void *arg)
                  "ptlrpc_hr_%d", hr_args->thread_index);
 
         cfs_daemonize_ctxt(threadname);
-#if defined(HAVE_NODE_TO_CPUMASK)
+#if defined(CONFIG_SMP) && defined(HAVE_NODE_TO_CPUMASK)
         set_cpus_allowed(cfs_current(),
                          node_to_cpumask(cpu_to_node(hr_args->cpu_index)));
 #endif
@@ -2116,7 +2116,7 @@ static int ptlrpc_start_hr_threads(struct ptlrpc_hr_service *hr)
         LASSERT(hr->hr_n_threads > 0);
 
         for (n = 0, cpu = 0; n < hr->hr_n_threads; n++) {
-#if defined(HAVE_NODE_TO_CPUMASK)
+#if defined(CONFIG_SMP) && defined(HAVE_NODE_TO_CPUMASK)
                 while(!cpu_online(cpu)) {
                         cpu++;
                         if (cpu >= num_possible_cpus())

@@ -370,6 +370,22 @@ void cl_object_prune(const struct lu_env *env, struct cl_object *obj)
 }
 EXPORT_SYMBOL(cl_object_prune);
 
+/**
+ * Check if the object has locks.
+ */
+int cl_object_has_locks(struct cl_object *obj)
+{
+        struct cl_object_header *head = cl_object_header(obj);
+        int has;
+
+        spin_lock(&head->coh_lock_guard);
+        has = list_empty(&head->coh_locks);
+        spin_unlock(&head->coh_lock_guard);
+
+        return (has == 0);
+}
+EXPORT_SYMBOL(cl_object_has_locks);
+
 void cache_stats_init(struct cache_stats *cs, const char *name)
 {
         cs->cs_name = name;
@@ -512,7 +528,8 @@ struct cl_env {
         struct lu_env     ce_lu;
         struct lu_context ce_ses;
         /**
-         * hash entry for lustre_hash_t
+         * This allows cl_env to be entered into cl_env_hash which implements
+         * the current thread -> client environment lookup.
          */
         struct hlist_node ce_node;
         /**

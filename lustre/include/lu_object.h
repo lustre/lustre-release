@@ -498,8 +498,8 @@ enum lu_object_header_attr {
         /**
          * UNIX file type is stored in S_IFMT bits.
          */
-        LOHA_FT_START = 1 << 12, /**< S_IFIFO */
-        LOHA_FT_END   = 1 << 15, /**< S_IFREG */
+        LOHA_FT_START = 001 << 12, /**< S_IFIFO */
+        LOHA_FT_END   = 017 << 12, /**< S_IFMT */
 };
 
 /**

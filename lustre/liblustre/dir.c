@@ -272,7 +272,7 @@ ssize_t llu_iop_filldirentries(struct inode *dir, _SYSIO_OFF_T *basep,
                                 fid  = ent->lde_fid;
                                 name = ent->lde_name;
                                 fid_le_to_cpu(&fid, &fid);
-                                ino  = llu_fid_build_ino(llu_i2sbi(dir), &fid);
+                                ino  = cl_fid_build_ino(&fid);
                                 type = ll_dirent_type_get(ent);
                                 done = filldir(buf, nbytes, name, namelen,
                                                (loff_t)hash, ino, type,

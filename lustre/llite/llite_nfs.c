@@ -75,7 +75,7 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
         struct inode          *inode = NULL;
         unsigned long         valid = 0;
         int                   eadatalen = 0;
-        ino_t                 ino = ll_fid_build_ino(sbi, fid);
+        ino_t                 ino = cl_fid_build_ino(fid);
         int                   rc;
         ENTRY;
 

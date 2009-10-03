@@ -361,7 +361,7 @@ static int echo_map_nb_to_lb(struct obdo *oa, struct obd_ioobj *obj,
                 (*left)--;
                 (*pages)++;
         }
-        
+
         return 0;
 }
 
@@ -568,12 +568,14 @@ static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         int                        rc;
         int                        lock_flags = 0;
         struct ldlm_res_id         res_id = {.name = {1}};
+        char                       ns_name[48];
         ENTRY;
 
         spin_lock_init(&obd->u.echo.eo_lock);
         obd->u.echo.eo_lastino = ECHO_INIT_OBJID;
 
-        obd->obd_namespace = ldlm_namespace_new(obd, "echo-tgt",
+        sprintf(ns_name, "echotgt-%s", obd->obd_uuid.uuid);
+        obd->obd_namespace = ldlm_namespace_new(obd, ns_name,
                                                 LDLM_NAMESPACE_SERVER,
                                                 LDLM_NAMESPACE_MODEST);
         if (obd->obd_namespace == NULL) {

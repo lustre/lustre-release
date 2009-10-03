@@ -656,5 +656,13 @@ static inline long labs(long x)
 #define SLAB_DESTROY_BY_RCU 0
 #endif
 
+#ifdef HAVE_VFS_RENAME_MUTEX
+#define VFS_RENAME_LOCK(inode) mutex_lock(&((inode)->i_sb->s_vfs_rename_mutex))
+#define VFS_RENAME_UNLOCK(inode) mutex_unlock(&((inode)->i_sb->s_vfs_rename_mutex))
+#else
+#define VFS_RENAME_LOCK(inode) down(&((inode)->i_sb->s_vfs_rename_sem))
+#define VFS_RENAME_UNLOCK(inode) up(&((inode)->i_sb->s_vfs_rename_sem))
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */

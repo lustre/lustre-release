@@ -114,7 +114,7 @@ static inline void client_obd_list_unlock(client_obd_lock_t *lock)
         spin_unlock(&lock->lock);
 }
 
-#else /* ifdef CLIEBT_OBD_LIST_LOCK_DEBUG */
+#else /* ifdef CLIENT_OBD_LIST_LOCK_DEBUG */
 static inline void client_obd_list_lock(client_obd_lock_t *lock)
 {
 	spin_lock(&lock->lock);
@@ -125,7 +125,7 @@ static inline void client_obd_list_unlock(client_obd_lock_t *lock)
         spin_unlock(&lock->lock);
 }
 
-#endif /* ifdef CLIEBT_OBD_LIST_LOCK_DEBUG */
+#endif /* ifdef CLIENT_OBD_LIST_LOCK_DEBUG */
 
 static inline void client_obd_list_lock_init(client_obd_lock_t *lock)
 {

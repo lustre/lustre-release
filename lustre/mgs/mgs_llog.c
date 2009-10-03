@@ -1467,7 +1467,7 @@ static int mgs_write_log_mdt0(struct obd_device *obd, struct fs_db *fsdb,
         char *log = mti->mti_svname;
         struct llog_handle *llh = NULL;
         char *uuid, *lovname;
-        char mdt_index[5];
+        char mdt_index[6];
         char *ptr = mti->mti_params;
         int rc = 0, failout = 0;
         ENTRY;
@@ -1484,7 +1484,7 @@ static int mgs_write_log_mdt0(struct obd_device *obd, struct fs_db *fsdb,
                 rc = mgs_write_log_lov(obd, fsdb, mti, log, lovname);
 
         sprintf(uuid, "%s_UUID", log);
-        sprintf(mdt_index,"%d",mti->mti_stripe_index);
+        sprintf(mdt_index, "%d", mti->mti_stripe_index);
 
         /* add MDT itself */
         rc = record_start_log(obd, &llh, log);
@@ -1505,6 +1505,25 @@ out:
         RETURN(rc);
 }
 
+static inline void name_create_mdt(char **logname, char *fsname, int i)
+{
+        char mdt_index[9];
+
+        sprintf(mdt_index, "-MDT%04x", i);
+        name_create(logname, fsname, mdt_index);
+}
+
+static void name_create_mdt_and_lov(char **logname, char **lovname,
+                                    struct fs_db *fsdb, int i)
+{
+        name_create_mdt(logname, fsdb->fsdb_name, i);
+        /* COMPAT_180 */
+        if (i == 0 && fsdb->fsdb_fl_oscname_18)
+                name_create(lovname, fsdb->fsdb_name, "-mdtlov");
+        else
+                name_create(lovname, *logname, "-mdtlov");
+}
+
 /* envelope method for all layers log */
 static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
                               struct mgs_target_info *mti)
@@ -1512,7 +1531,6 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
         struct llog_handle *llh = NULL;
         char *cliname;
         struct temp_comp comp = { 0 };
-        char mdt_index[9];
         int rc, i = 0;
         ENTRY;
 
@@ -1618,9 +1636,7 @@ out:
                 char *mdtname;
                 if (i !=  mti->mti_stripe_index &&
                     test_bit(i,  fsdb->fsdb_mdt_index_map)) {
-                        sprintf(mdt_index,"-MDT%04x",i);
-
-                        name_create(&mdtname, mti->mti_fsname, mdt_index);
+                        name_create_mdt(&mdtname, mti->mti_fsname, i);
                         rc = mgs_write_log_mdc_to_mdt(obd, fsdb, mti, mdtname);
                         name_destroy(&mdtname);
                 }
@@ -1700,7 +1716,6 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
 {
         struct llog_handle *llh = NULL;
         char *logname, *lovname;
-        char mdt_index[9];
         char *ptr = mti->mti_params;
         int rc, flags = 0, failout = 0, i;
         ENTRY;
@@ -1761,12 +1776,13 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
                               mti->mti_svname);
         }
 
-        // for_all_existing_mdt
+        /* Add ost to all MDT lov defs */
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++){
-                 if (test_bit(i,  fsdb->fsdb_mdt_index_map)) {
-                        sprintf(mdt_index,"-MDT%04x",i);
-                        name_create(&logname, mti->mti_fsname, mdt_index);
-                        name_create(&lovname, logname, "-mdtlov");
+                if (test_bit(i, fsdb->fsdb_mdt_index_map)) {
+                        char mdt_index[9];
+
+                        name_create_mdt_and_lov(&logname, &lovname, fsdb, i);
+                        sprintf(mdt_index, "-MDT%04x", i);
                         mgs_write_log_osc_to_lov(obd, fsdb, mti, logname,
                                                  mdt_index, lovname,
                                                  LUSTRE_SP_MDT, flags);
@@ -2342,7 +2358,6 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
 
         if (class_match_param(ptr, PARAM_OSC""PARAM_ACTIVE, &tmp) == 0) {
                 /* active=0 means off, anything else means on */
-                char mdt_index[16];
                 int flag = (*tmp == '0') ? CM_EXCLUDE : 0;
                 int i;
 
@@ -2366,8 +2381,7 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
                 for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
                         if (!test_bit(i, fsdb->fsdb_mdt_index_map))
                                 continue;
-                        sprintf(mdt_index,"-MDT%04x", i);
-                        name_create(&logname, mti->mti_fsname, mdt_index);
+                        name_create_mdt(&logname, mti->mti_fsname, i);
                         rc = mgs_modify(obd, fsdb, mti, logname,
                                         mti->mti_svname, "add osc", flag);
                         name_destroy(&logname);
@@ -2397,7 +2411,6 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
 
         /* All lov. in proc */
         if (class_match_param(ptr, PARAM_LOV, NULL) == 0) {
-                char mdt_index[16];
                 char *mdtlovname;
 
                 CDEBUG(D_MGS, "lov param %s\n", ptr);
@@ -2413,9 +2426,8 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
                 if (mgs_log_is_empty(obd, mti->mti_svname))
                         GOTO(end, rc = -ENODEV);
 
-                sprintf(mdt_index,"-MDT%04x", mti->mti_stripe_index);
-                name_create(&logname, mti->mti_fsname, mdt_index);
-                name_create(&mdtlovname, logname, "-mdtlov");
+                name_create_mdt_and_lov(&logname, &mdtlovname, fsdb,
+                                        mti->mti_stripe_index);
                 rc = mgs_wlp_lcfg(obd, fsdb, mti, mti->mti_svname,
                                   &bufs, mdtlovname, ptr);
                 name_destroy(&logname);
@@ -2491,9 +2503,7 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
                                 name_create(&cname, mti->mti_svname, mdt_index);
 
                                 name_destroy(&logname);
-                                sprintf(mdt_index, "-MDT%04x", i);
-                                name_create(&logname, mti->mti_fsname,
-                                            mdt_index);
+                                name_create_mdt(&logname, mti->mti_fsname, i);
                                 if (!mgs_log_is_empty(obd, logname))
                                         rc = mgs_wlp_lcfg(obd, fsdb,
                                                           mti, logname,
@@ -2510,7 +2520,6 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
 
         /* All mdt. params in proc */
         if (class_match_param(ptr, PARAM_MDT, NULL) == 0) {
-                char mdt_index[16];
                 int i;
                 __u32 idx;
 
@@ -2530,9 +2539,7 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
                                 if (!test_bit(i,
                                               fsdb->fsdb_mdt_index_map))
                                         continue;
-                                sprintf(mdt_index,"-MDT%04x", i);
-                                name_create(&logname, mti->mti_fsname,
-                                            mdt_index);
+                                name_create_mdt(&logname, mti->mti_fsname, i);
                                 rc = mgs_wlp_lcfg(obd, fsdb, mti,
                                                   logname, &bufs,
                                                   logname, ptr);
@@ -2985,7 +2992,6 @@ int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
                  char *fsname, char *poolname, char *ostname)
 {
         struct fs_db *fsdb;
-        char mdt_index[16];
         char *lovname;
         char *logname;
         char *label = NULL, *canceled_label = NULL;
@@ -3066,12 +3072,10 @@ int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
                         GOTO(out, rc = -ENOMEM);
         }
 
-        /* loop on all potential MDT */
+        /* write pool def to all MDT logs */
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
                  if (test_bit(i,  fsdb->fsdb_mdt_index_map)) {
-                        sprintf(mdt_index, "-MDT%04x", i);
-                        name_create(&logname, fsname, mdt_index);
-                        name_create(&lovname, logname, "-mdtlov");
+                        name_create_mdt_and_lov(&logname, &lovname, fsdb, i);
 
                         if (canceled_label != NULL) {
                                 strcpy(mti->mti_svname, "lov pool");

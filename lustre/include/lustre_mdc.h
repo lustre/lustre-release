@@ -103,7 +103,22 @@ static inline void mdc_put_rpc_lock(struct mdc_rpc_lock *lck,
         EXIT;
 }
 
-struct mdc_cache_waiter {       
+static inline void mdc_update_max_ea_from_body(struct obd_export *exp,
+                                               struct mdt_body *body)
+{
+        if (body->valid & OBD_MD_FLMODEASIZE) {
+                if (exp->exp_obd->u.cli.cl_max_mds_easize < body->max_mdsize)
+                        exp->exp_obd->u.cli.cl_max_mds_easize =
+                                                body->max_mdsize;
+                if (exp->exp_obd->u.cli.cl_max_mds_cookiesize <
+                                                body->max_cookiesize)
+                        exp->exp_obd->u.cli.cl_max_mds_cookiesize =
+                                                body->max_cookiesize;
+        }
+}
+
+
+struct mdc_cache_waiter {
         struct list_head        mcw_entry;
         cfs_waitq_t             mcw_waitq;
 };

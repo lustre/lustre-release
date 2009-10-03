@@ -115,9 +115,20 @@ void reply_in_callback(lnet_event_t *ev)
 
         if (ev->status)
                 goto out_wake;
+
         if (ev->type == LNET_EVENT_UNLINK) {
                 LASSERT(ev->unlinked);
                 DEBUG_REQ(D_RPCTRACE, req, "unlink");
+                goto out_wake;
+        }
+
+        if (ev->mlength < ev->rlength ) {
+                CDEBUG(D_RPCTRACE, "truncate req %p rpc %d - %d+%d\n", req,
+                       req->rq_replen, ev->rlength, ev->offset);
+                req->rq_reply_truncate = 1;
+                req->rq_replied = 1;
+                req->rq_status = -EOVERFLOW;
+                req->rq_nob_received = ev->rlength + ev->offset;
                 goto out_wake;
         }
 
@@ -270,7 +281,8 @@ void request_in_callback(lnet_event_t *ev)
         CFS_INIT_LIST_HEAD(&req->rq_timed_list);
         atomic_set(&req->rq_refcount, 1);
         if (ev->type == LNET_EVENT_PUT)
-                DEBUG_REQ(D_RPCTRACE, req, "incoming req");
+                CDEBUG(D_RPCTRACE, "incoming req@%p x"LPU64" msgsize %u\n",
+                       req, req->rq_xid, ev->mlength);
 
         CDEBUG(D_RPCTRACE, "peer: %s\n", libcfs_id2str(req->rq_peer));
 

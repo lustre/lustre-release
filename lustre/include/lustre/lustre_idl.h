@@ -2301,6 +2301,12 @@ struct changelog_setinfo {
         __u32 cs_id;
 } __attribute__((packed));
 
+struct changelog_show {
+        __u64 cs_startrec;
+        __u32 cs_pid;
+        __u32 cs_flags;
+} __attribute__((packed));
+
 /** changelog record */
 struct llog_changelog_rec {
         struct llog_rec_hdr  cr_hdr;

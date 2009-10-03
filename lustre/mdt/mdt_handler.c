@@ -957,6 +957,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 relock:
                 ma = &info->mti_attr;
 
+                OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RESEND, obd_timeout*2);
                 mdt_lock_handle_init(lhc);
                 mdt_lock_reg_init(lhc, LCK_PR);
 
@@ -1002,7 +1003,7 @@ relock:
 
                         /* Debugging code. */
                         res_id = &lock->l_resource->lr_name;
-                        LDLM_DEBUG(lock, "Returning lock to client\n");
+                        LDLM_DEBUG(lock, "Returning lock to client");
                         LASSERTF(fid_res_name_eq(mdt_object_fid(child),
                                                  &lock->l_resource->lr_name),
                                  "Lock res_id: %lu/%lu/%lu, Fid: "DFID".\n",

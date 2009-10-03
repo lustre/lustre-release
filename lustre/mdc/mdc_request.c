@@ -175,6 +175,8 @@ static int mdc_getattr_common(struct obd_export *exp,
         CDEBUG(D_NET, "mode: %o\n", body->mode);
 
         if (body->eadatasize != 0) {
+                mdc_update_max_ea_from_body(exp, body);
+
                 eadata = req_capsule_server_sized_get(pill, &RMF_MDT_MD,
                                                       body->eadatasize);
                 if (eadata == NULL)
@@ -676,11 +678,15 @@ void mdc_commit_open(struct ptlrpc_request *req)
         if (mod == NULL)
                 return;
 
-        if (mod->mod_och != NULL)
-                mod->mod_och->och_mod = NULL;
+        /**
+         * No need to touch md_open_data::mod_och, it holds a reference on
+         * \var mod and will zero references to each other, \var mod will be
+         * freed after that when md_open_data::mod_och will put the reference.
+         */
 
-        OBD_FREE(mod, sizeof(*mod));
         req->rq_cb_data = NULL;
+        mod->mod_open_req = NULL;
+        obd_mod_put(mod);
 }
 
 int mdc_set_open_replay_data(struct obd_export *exp,
@@ -705,7 +711,7 @@ int mdc_set_open_replay_data(struct obd_export *exp,
 
         /* Only if the import is replayable, we set replay_open data */
         if (och && imp->imp_replayable) {
-                OBD_ALLOC_PTR(mod);
+                mod = obd_mod_alloc();
                 if (mod == NULL) {
                         DEBUG_REQ(D_ERROR, open_req,
                                   "Can't allocate md_open_data");
@@ -715,6 +721,7 @@ int mdc_set_open_replay_data(struct obd_export *exp,
                 spin_lock(&open_req->rq_lock);
                 och->och_mod = mod;
                 mod->mod_och = och;
+                obd_mod_get(mod);
                 mod->mod_open_req = open_req;
                 open_req->rq_cb_data = mod;
                 open_req->rq_commit_cb = mdc_commit_open;
@@ -741,17 +748,12 @@ int mdc_clear_open_replay_data(struct obd_export *exp,
         struct md_open_data *mod = och->och_mod;
         ENTRY;
 
-        /*
-         * Don't free the structure now (it happens in mdc_commit_open(), after
-         * we're sure we won't need to fix up the close request in the future),
-         * but make sure that replay doesn't poke at the och, which is about to
-         * be freed.
-         */
-        LASSERT(mod != LP_POISON);
-        if (mod != NULL)
-                mod->mod_och = NULL;
+        LASSERT(mod != LP_POISON && mod != NULL);
 
+        mod->mod_och = NULL;
         och->och_mod = NULL;
+        obd_mod_put(mod);
+
         RETURN(0);
 }
 
@@ -788,6 +790,8 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
                          "POISONED open %p!\n", mod->mod_open_req);
 
                 mod->mod_close_req = req;
+                obd_mod_get(mod);
+
                 DEBUG_REQ(D_HA, mod->mod_open_req, "matched open");
                 /* We no longer want to preserve this open for replay even
                  * though the open was committed. b=3632, b=3633 */
@@ -829,11 +833,23 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
                 body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
                 if (body == NULL)
                         rc = -EPROTO;
+        } else if (rc == -ESTALE) {
+                /**
+                 * it can be allowed error after 3633 if open was committed and
+                 * server failed before close was sent. Let's check if mod
+                 * exists and return no error in that case
+                 */
+                if (mod && (mod->mod_open_req == NULL))
+                        rc = 0;
         }
 
-        if (rc != 0 && mod)
-                 mod->mod_close_req = NULL;
-
+        if (mod) {
+                if (rc != 0)
+                        mod->mod_close_req = NULL;
+                /* Since now, mod is accessed through open_req only,
+                 * thus close req does not keep a reference on mod anymore. */
+                obd_mod_put(mod);
+        }
         *request = req;
         RETURN(rc);
 }
@@ -863,8 +879,9 @@ int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
                          "POISONED setattr %p!\n", mod->mod_open_req);
 
                 mod->mod_close_req = req;
+                obd_mod_get(mod);
                 DEBUG_REQ(D_HA, mod->mod_open_req, "matched setattr");
-                /* We no longer want to preserve this open for replay even
+                /* We no longer want to preserve this setattr for replay even
                  * though the open was committed. b=3632, b=3633 */
                 spin_lock(&mod->mod_open_req->rq_lock);
                 mod->mod_open_req->rq_replay = 0;
@@ -878,6 +895,23 @@ int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
         rc = ptlrpc_queue_wait(req);
         mdc_put_rpc_lock(obd->u.cli.cl_close_lock, NULL);
 
+        if (rc == -ESTALE) {
+                /**
+                 * it can be allowed error after 3633 if open or setattr were
+                 * committed and server failed before close was sent.
+                 * Let's check if mod exists and return no error in that case
+                 */
+                if (mod && (mod->mod_open_req == NULL))
+                        rc = 0;
+        }
+
+        if (mod) {
+                if (rc != 0)
+                        mod->mod_close_req = NULL;
+                /* Since now, mod is accessed through setattr req only,
+                 * thus DW req does not keep a reference on mod anymore. */
+                obd_mod_put(mod);
+        }
         ptlrpc_req_finished(req);
         RETURN(rc);
 }
@@ -1417,7 +1451,7 @@ static int mdc_pin(struct obd_export *exp, const struct lu_fid *fid,
         handle->och_fh = body->handle;
         handle->och_magic = OBD_CLIENT_HANDLE_MAGIC;
 
-        OBD_ALLOC_PTR(handle->och_mod);
+        handle->och_mod = obd_mod_alloc();
         if (handle->och_mod == NULL) {
                 DEBUG_REQ(D_ERROR, req, "can't allocate md_open_data");
                 GOTO(err_out, rc = -ENOMEM);
@@ -1460,7 +1494,7 @@ static int mdc_unpin(struct obd_export *exp, struct obd_client_handle *handle,
         ptlrpc_req_finished(req);
         ptlrpc_req_finished(handle->och_mod->mod_open_req);
 
-        OBD_FREE(handle->och_mod, sizeof(*handle->och_mod));
+        obd_mod_put(handle->och_mod);
         RETURN(rc);
 }
 
@@ -1659,6 +1693,7 @@ static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 
         /* ignore errors */
         libcfs_klnl_start(LNL_TRANSPORT_HSM);
+        libcfs_klnl_start(LNL_TRANSPORT_CHANGELOG);
 
         RETURN(rc);
 
@@ -1728,6 +1763,7 @@ static int mdc_cleanup(struct obd_device *obd)
         struct client_obd *cli = &obd->u.cli;
 
         libcfs_klnl_stop(LNL_TRANSPORT_HSM, LNL_GRP_HSM);
+        libcfs_klnl_stop(LNL_TRANSPORT_CHANGELOG, 0);
 
         OBD_FREE(cli->cl_rpc_lock, sizeof (*cli->cl_rpc_lock));
         OBD_FREE(cli->cl_setattr_lock, sizeof (*cli->cl_setattr_lock));

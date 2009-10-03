@@ -1395,6 +1395,23 @@ AC_DEFUN([LC_LINUX_FIEMAP_H],
 [])
 ])
 
+# 2.6.17 super_block use s_vfs_rename_mutex instead of s_vfs_rename_sem
+AC_DEFUN([LC_VFS_RENAME_MUTEX],
+[AC_MSG_CHECKING([super_block has s_vfs_rename_mutex])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        struct super_block sb;
+        mutex_lock(&sb.s_vfs_rename_mutex);
+],[
+        AC_DEFINE(HAVE_VFS_RENAME_MUTEX, 1,
+                [super_block has s_vfs_rename_mutex])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
 #
 # LC_PROG_LINUX
 #
@@ -1471,6 +1488,7 @@ AC_DEFUN([LC_PROG_LINUX],
          # 2.6.17
          LC_INODE_IPRIVATE
          LC_DQUOTOFF_MUTEX
+         LC_VFS_RENAME_MUTEX
 
          # 2.6.18
          LC_NR_PAGECACHE
@@ -1993,6 +2011,7 @@ lustre/kernel_patches/targets/2.6-rhel5.target
 lustre/kernel_patches/targets/2.6-fc5.target
 lustre/kernel_patches/targets/2.6-patchless.target
 lustre/kernel_patches/targets/2.6-sles10.target
+lustre/kernel_patches/targets/2.6-oel5.target
 lustre/ldlm/Makefile
 lustre/fid/Makefile
 lustre/fid/autoMakefile

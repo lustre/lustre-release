@@ -368,7 +368,8 @@ struct ptlrpc_request {
                 /* server-side flags */
                 rq_packed_final:1,  /* packed final reply */
                 rq_hp:1,            /* high priority RPC */
-                rq_at_linked:1;     /* link into service's srv_at_array */
+                rq_at_linked:1,     /* link into service's srv_at_array */
+                rq_reply_truncate:1;
 
         enum rq_phase rq_phase; /* one of RQ_PHASE_* */
         enum rq_phase rq_next_phase; /* one of RQ_PHASE_* to be used next */
@@ -721,7 +722,7 @@ struct ptlrpc_service {
         int              srv_n_active_reqs;     /* # reqs being served */
         int              srv_n_hpreq;           /* # HPreqs being served */
         cfs_duration_t   srv_rqbd_timeout;      /* timeout before re-posting reqs, in tick */
-        int              srv_watchdog_factor;   /* soft watchdog timeout mutiplier */
+        int              srv_watchdog_factor;   /* soft watchdog timeout multiplier */
         unsigned         srv_cpu_affinity:1;    /* bind threads to CPUs */
         unsigned         srv_at_check:1;        /* check early replies */
         unsigned         srv_is_stopping:1;     /* under unregister_service */

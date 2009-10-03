@@ -1289,3 +1289,43 @@ __u16 ll_dirent_type_get(struct lu_dirent *ent)
         }
         return type;
 }
+
+/**
+ * build inode number from passed @fid */
+ino_t cl_fid_build_ino(struct lu_fid *fid)
+{
+        ino_t ino;
+        ENTRY;
+
+        if (fid_is_igif(fid)) {
+                ino = lu_igif_ino(fid);
+                RETURN(ino);
+        }
+
+        /* Very stupid and having many downsides inode allocation algorithm
+         * based on fid. */
+        ino = fid_flatten(fid) & 0xFFFFFFFF;
+
+        if (unlikely(ino == 0))
+                /* the first result ino is 0xFFC001, so this is rarely used */
+                ino = 0xffbcde;
+        ino = ino | 0x80000000;
+        RETURN(ino);
+}
+
+/**
+ * build inode generation from passed @fid.  If our FID overflows the 32-bit
+ * inode number then return a non-zero generation to distinguish them. */
+__u32 cl_fid_build_gen(struct lu_fid *fid)
+{
+        __u32 gen;
+        ENTRY;
+
+        if (fid_is_igif(fid)) {
+                gen = lu_igif_gen(fid);
+                RETURN(gen);
+        }
+
+        gen = (fid_flatten(fid) >> 32);
+        RETURN(gen);
+}

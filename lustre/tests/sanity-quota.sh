@@ -720,7 +720,7 @@ run_test_with_stat 5 "Chown & chgrp successfully even out of block/file quota ==
 # block quota acquire & release
 test_6() {
 	if [ $OSTCOUNT -lt 2 ]; then
-		skip "$OSTCOUNT < 2, too few osts"
+		skip_env "$OSTCOUNT < 2, too few osts"
 		return 0;
 	fi
 
@@ -1038,7 +1038,7 @@ test_12() {
 	chmod 0777 $DIR/$tdir
 
 	[ "$(grep $DIR2 /proc/mounts)" ] || mount_client $DIR2 || \
-		{ skip "Need lustre mounted on $MOUNT2 " && retutn 0; }
+		{ skip_env "Need lustre mounted on $MOUNT2 " && retutn 0; }
 
 	LIMIT=$(( $BUNIT_SZ * $(($OSTCOUNT + 1)) * 10)) # 10 bunits each sever
 	TESTFILE="$DIR/$tdir/$tfile-0"
@@ -1065,17 +1065,24 @@ test_12() {
 	DDPID=$!
 
 	echo  "   step2: testing ......"
-	count=0
-	while [ true ]; do
-	    if ! ps -p ${DDPID1} > /dev/null 2>&1; then break; fi
-	    count=$[count+1]
-	    if [ $count -gt 64 ]; then
+        local last_size=$(stat -c %s $TESTFILE2) 
+        local stall_secs=0
+        local start_secs=$SECONDS
+        while [ -d /proc/${DDPID1} ]; do
+            local size=$(stat -c %s $TESTFILE2) 
+            if [ $size -eq $last_size ]; then
+                stall_secs=$[stall_secs+1]
+            else
+                stall_secs=0
+            fi
+	    if [ $stall_secs -gt 30 ]; then
 		lustre_fail ost 0
-		quota_error u $TSTUSR2 "dd should be finished!"
+		quota_error u $TSTUSR2 "giving up: dd stalled (i.e. made no progress) for 30 seconds!"
 	    fi
+            last_size=$size
 	    sleep 1
 	done
-	echo "(dd_pid=$DDPID1, time=$count)successful"
+	echo "(dd_pid=$DDPID1, time=$((SECONDS-start_secs)))successful"
 
 	#Recover fail_loc and dd will finish soon
 	lustre_fail ost 0

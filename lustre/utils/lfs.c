@@ -225,8 +225,7 @@ command_t cmdlist[] = {
          "usage: ls [OPTION]... [FILE]..."},
         {"changelog", lfs_changelog, 0,
          "Show the metadata changes on an MDT."
-         "\nusage: changelog [--follow] <mdtname> [startrec [endrec]]"
-         "\n(note: --follow is only valid when run on MDT node)"},
+         "\nusage: changelog <mdtname> [startrec [endrec]]"},
         {"changelog_clear", lfs_changelog_clear, 0,
          "Indicate that old changelog records up to <endrec> are no longer of "
          "interest to consumer <id>, allowing the system to free up space.\n"
@@ -2367,10 +2366,14 @@ static int lfs_changelog(int argc, char **argv)
                                rec->cr_namelen, rec->cr_name);
                 else
                         printf("\n");
+
                 llapi_changelog_free(&rec);
         }
 
         llapi_changelog_fini(&changelog_priv);
+
+        if (rc < 0)
+                fprintf(stderr, "Changelog: %s\n", strerror(errno = -rc));
 
         return (rc == 1 ? 0 : rc);
 }

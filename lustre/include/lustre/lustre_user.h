@@ -503,6 +503,7 @@ static inline const char *changelog_type2str(int type) {
 #define CLF_FLAGMASK 0x0FFF
 /* Anything under the flagmask may be per-type (if desired) */
 
+#define CR_MAXSIZE (PATH_MAX + sizeof(struct changelog_rec))
 struct changelog_rec {
         __u16                 cr_namelen;
         __u16                 cr_flags; /**< (flags&CLF_FLAGMASK)|CLF_VERSION */
@@ -524,6 +525,10 @@ struct ioc_changelog_clear {
         __u64 icc_recno;
 };
 
+enum changelog_message_type {
+        CL_RECORD = 10, /* message is a changelog_rec */
+        CL_EOF    = 11, /* at end of current changelog */
+};
 
 /********* Misc **********/
 

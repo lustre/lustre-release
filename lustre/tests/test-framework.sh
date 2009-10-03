@@ -179,6 +179,10 @@ init_test_env() {
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
     export RPWD=${RPWD:-$PWD}
     export I_MOUNTED=${I_MOUNTED:-"no"}
+    if [ ! -f /lib/modules/$(uname -r)/kernel/fs/lustre/mds.ko -a \
+        ! -f `dirname $0`/../mds/mds.ko ]; then
+        export CLIENTMODSONLY=yes
+    fi
 
     # command line
 
@@ -261,7 +265,7 @@ load_modules_local() {
     load_module osc/osc
     load_module lov/lov
     load_module mgc/mgc
-    if [ -z "$CLIENTONLY" ] && [ -z "$CLIENTMODSONLY" ]; then
+    if ! client_only; then
         grep -q crc16 /proc/kallsyms || { modprobe crc16 2>/dev/null || true; }
         grep -q jbd /proc/kallsyms || { modprobe jbd 2>/dev/null || true; }
         [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
@@ -1895,13 +1899,32 @@ check_and_setup_lustre() {
     nfs_client_mode && return
 
     local MOUNTED=$(mounted_lustre_filesystems)
+
+    local do_check=true
+    # MOUNT is not mounted
     if [ -z "$MOUNTED" ] || ! $(echo $MOUNTED | grep -w -q $MOUNT); then
         [ "$REFORMAT" ] && formatall
         setupall
         MOUNTED=$(mounted_lustre_filesystems | head -1)
         [ -z "$MOUNTED" ] && error "NAME=$NAME not mounted"
         export I_MOUNTED=yes
-    else
+        do_check=false
+
+    # MOUNT and MOUNT2 are mounted
+    elif $(echo $MOUNTED | grep -w -q $MOUNT2); then
+
+        # MOUNT2 is mounted,  MOUNT_2 is not set
+        if ! [ "$MOUNT_2" ]; then
+            zconf_umount `hostname` $MOUNT2
+            export I_UMOUNTED2=yes
+
+        # MOUNT2 is mounted, MOUNT_2 is set
+        else
+            check_config $MOUNT2
+        fi 
+    fi
+
+    if $do_check; then
         check_config $MOUNT
         init_facets_vars
         init_param_vars
@@ -1932,6 +1955,10 @@ check_and_cleanup_lustre() {
         [ -n "$DIR" ] && rm -rf $DIR/[Rdfs][0-9]*
         [ "$ENABLE_QUOTA" ] && restore_quota_type || true
     fi
+    if [ "$I_UMOUNTED2" = "yes" ]; then
+        mount_client $MOUNT2 || error "restore $MOUNT2 failed"
+    fi
+
     if [ "$I_MOUNTED" = "yes" ]; then
         cleanupall -f || error "cleanup failed"
     fi
@@ -2319,7 +2346,11 @@ build_test_filter() {
 }
 
 basetest() {
-    echo ${1%%[a-z]*}
+    if [[ $1 = [a-z]* ]]; then
+        echo $1
+    else
+        echo ${1%%[a-z]*}
+    fi
 }
 
 # print a newline if the last test was skipped
@@ -2648,6 +2679,10 @@ get_random_entry () {
     local i=$((RANDOM * num * 2 / 65536))
 
     echo ${nodes[i]}
+}
+
+client_only () {
+    [ "$CLIENTONLY" ] || [ "$CLIENTMODSONLY" = yes ]
 }
 
 is_patchless ()
