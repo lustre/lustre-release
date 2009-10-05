@@ -9,10 +9,6 @@
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
 	  2.6.16 - 2.6.27 vanilla (kernel.org)
 	* Recommended e2fsprogs version: 1.41.6.sun1
-	* File join has been disabled in this release, refer to Bugzilla 16929.
-	* NFS export disabled when stack size < 8192. Since the NFSv4 export
-	  of Lustre filesystem with 4K stack may cause a stack overflow. For
-	  more information, please refer to bugzilla 17630.
 	* ext4 support for RHEL5 is experimental and thus should not be
 	  used in production.
 
@@ -133,6 +129,11 @@ bugzilla   : 20205
 description: Performance degradation with O_DIRECT between 1.6 & 1.8.1 b190
 details    : disable write barrier for ext4/SLES11.
 
+Severity   : normal
+bugzilla   : 18571
+description: Kernel panic - not syncing: Out of memory and no killable
+	     processes... on OSS when iozone
+details    : fix memory leak in the journal checksum patch.
 
 -------------------------------------------------------------------------------
 
