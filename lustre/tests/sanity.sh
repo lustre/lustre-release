@@ -23,6 +23,13 @@ CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
 # test76 is not valid with FIDs because inode numbers are not reused
 ALWAYS_EXCEPT="$ALWAYS_EXCEPT 76"
 
+# zfs still need fixes
+# 52  -- immutable/append flags aren't implemented
+# 129 -- broken /proc/fs/lustre/osd-* naming
+# 132 -- inode counting is different in zfs
+# 160 -- llog isn't ready
+ALWAYS_EXCEPT="$ALWAYS_EXCEPT 52a 52b 57a 129 132 160"
+
 case `uname -r` in
 2.4*) FSTYPE=${FSTYPE:-ext3} ;;
 2.6*) FSTYPE=${FSTYPE:-ldiskfs} ;;
