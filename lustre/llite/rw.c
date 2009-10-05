@@ -1615,8 +1615,8 @@ static int ll_readahead(struct ll_readahead_state *ras,
         /* Enlarge the RA window to encompass the full read */
         if (bead != NULL && ras->ras_window_start + ras->ras_window_len <
             bead->lrr_start + bead->lrr_count) {
-                obd_off read_end = (bead->lrr_start + bead->lrr_count) <<
-                                    CFS_PAGE_SHIFT;
+                obd_off read_end = ((obd_off)(bead->lrr_start +
+                                              bead->lrr_count))<<CFS_PAGE_SHIFT;
                 obd_extent_calc(exp, lsm, OBD_CALC_STRIPE_RPC_END_ALIGN,
                                 &read_end);
                 ras->ras_window_len = ((read_end + 1) >> CFS_PAGE_SHIFT) -
