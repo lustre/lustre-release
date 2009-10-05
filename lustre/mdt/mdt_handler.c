@@ -1696,9 +1696,6 @@ static int mdt_quotacheck_handle(struct mdt_thread_info *info)
         int rc;
         ENTRY;
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_QUOTACHECK_NET))
-                RETURN(0);
-
         oqctl = req_capsule_client_get(pill, &RMF_OBD_QUOTACTL);
         if (oqctl == NULL)
                 RETURN(-EPROTO);
@@ -1725,9 +1722,6 @@ static int mdt_quotactl_handle(struct mdt_thread_info *info)
         const struct md_quota_operations *mqo = &next->md_ops->mdo_quota;
         int id, rc;
         ENTRY;
-
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_QUOTACTL_NET))
-                RETURN(0);
 
         oqctl = req_capsule_client_get(pill, &RMF_OBD_QUOTACTL);
         if (oqctl == NULL)
@@ -2509,7 +2503,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
          * Checking for various OBD_FAIL_$PREF_$OPC_NET codes. _Do_ not try
          * to put same checks into handlers like mdt_close(), mdt_reint(),
          * etc., without talking to mdt authors first. Checking same thing
-         * there again is useless and returning 0 error wihtout packing reply
+         * there again is useless and returning 0 error without packing reply
          * is buggy! Handlers either pack reply or return error.
          *
          * We return 0 here and do not send any reply in order to emulate

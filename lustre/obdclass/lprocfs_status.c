@@ -928,7 +928,7 @@ int lprocfs_rd_quota_resend_count(char *page, char **start, off_t off,
 {
         struct obd_device *obd = data;
 
-        return snprintf(page, count, "%u\n",
+        return snprintf(page, count, "%d\n",
                         atomic_read(&obd->u.cli.cl_quota_resends));
 }
 
@@ -941,9 +941,6 @@ int lprocfs_wr_quota_resend_count(struct file *file, const char *buffer,
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc)
                 return rc;
-
-        if (val < 0)
-               return -EINVAL;
 
         atomic_set(&obd->u.cli.cl_quota_resends, val);
 
