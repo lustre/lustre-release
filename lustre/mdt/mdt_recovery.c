@@ -196,8 +196,10 @@ static inline int mdt_last_rcvd_header_write(const struct lu_env *env,
         lsd_cpu_to_le(&mdt->mdt_lsd, &mti->mti_lsd);
 
         th->th_sync = need_sync;
-        if (need_sync && mti->mti_exp)
+        if (need_sync && mti->mti_exp) {
+                class_export_cb_get(mti->mti_exp);
                 mdt_trans_add_cb(th, lut_cb_client, mti->mti_exp);
+        }
 
         rc = dt_record_write(env, mdt->mdt_last_rcvd,
                              mdt_buf_const(env, &mti->mti_lsd,
@@ -705,6 +707,7 @@ int mdt_client_new(const struct lu_env *env, struct mdt_device *mdt)
          * transaction so that many connecting clients will not bring
          * server down with lots of sync writes.
          */
+        class_export_cb_get(mti->mti_exp);
         mdt_trans_add_cb(th, lut_cb_client, mti->mti_exp);
         spin_lock(&mti->mti_exp->exp_lock);
         mti->mti_exp->exp_need_sync = 1;
@@ -864,11 +867,16 @@ cleanup:
         spin_unlock(&mdt->mdt_client_bitmap_lock);
 
         /*
+         * we don't need commit cb on export being deleted
+         */
+        mti->mti_exp = NULL;
+
+        /*
          * Make sure the server's last_transno is up to date. Do this
          * after the client is freed so we know all the client's
          * transactions have been committed.
          */
-        mdt_server_data_update_noth(env, mdt, 0);
+        mdt_server_data_update_noth(env, mdt, 1);
 
         EXIT;
 free:
