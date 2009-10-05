@@ -82,7 +82,7 @@ static struct ll_sb_info *ll_init_sbi(void)
                 RETURN(NULL);
 
         spin_lock_init(&sbi->ll_lock);
-        spin_lock_init(&sbi->ll_lco.lco_lock);
+        init_mutex(&sbi->ll_lco.lco_lock);
         spin_lock_init(&sbi->ll_pp_extent_lock);
         spin_lock_init(&sbi->ll_process_lock);
         sbi->ll_rw_stats_on = 0;
@@ -339,11 +339,11 @@ static int client_common_fill_super(struct super_block *sb,
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
                 GOTO(out_cb, err);
         }
-        spin_lock(&sbi->ll_lco.lco_lock);
+        mutex_down(&sbi->ll_lco.lco_lock);
         sbi->ll_lco.lco_flags = data->ocd_connect_flags;
         sbi->ll_lco.lco_mdc_exp = sbi->ll_mdc_exp;
         sbi->ll_lco.lco_osc_exp = sbi->ll_osc_exp;
-        spin_unlock(&sbi->ll_lco.lco_lock);
+        mutex_up(&sbi->ll_lco.lco_lock);
 
         err = mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
         if (err) {
