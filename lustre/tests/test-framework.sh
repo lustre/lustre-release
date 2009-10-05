@@ -115,7 +115,7 @@ init_test_env() {
         export PATH=$PATH:$LUSTRE/tests/racer
     fi
     if ! echo $PATH | grep -q $LUSTRE/../zfs/cmd/zfs; then
-        export PATH=$PATH:$LUSTRE/../zfs/cmd/zfs
+        export PATH=$PATH:$LUSTRE/../zfs/cmd/zfs:$LUSTRE/../zfs/cmd/zpool
     fi
     if ! echo $PATH | grep -q $LUSTRE/tests/mpi; then
         export PATH=$PATH:$LUSTRE/tests/mpi
@@ -426,7 +426,7 @@ devicelabel() {
     local label
 
     set +e
-    label=$(do_facet ${facet} "$E2LABEL ${dev}")
+    label=$(do_facet ${facet} "$E2LABEL ${dev} 2>/dev/null")
     if [ $? == 0 ]; then
         set -e
         echo $label
@@ -446,7 +446,7 @@ devicelabel() {
 mdsdevlabel() {
     local num=$1
     local device=`mdsdevname $num`
-    local label=`do_facet mds$num "e2label ${device}" | grep -v "CMD: "`
+    local label=`devicelabel mds$num  ${device} | grep -v "CMD: "`
     echo -n $label
 }
 
@@ -463,6 +463,7 @@ mount_facet() {
     shift
     local dev=$(facet_active $facet)_dev
     local opt=${facet}_opt
+    local fstype
     echo "Starting ${facet}: ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}"
     do_facet ${facet} mount -t lustre ${!opt} $@ ${!dev} ${MOUNT%/*}/${facet}
     RC=${PIPESTATUS[0]}
@@ -478,6 +479,10 @@ mount_facet() {
         label=$(devicelabel ${facet} ${!dev})
         [ -z "$label" ] && echo no label for ${!dev} && exit 1
         eval export ${facet}_svc=${label}
+        set +e
+        fstype=$(do_facet $facet lctl get_param -n osd\*.${label}.fstype)
+        set -e
+        eval export ${facet}_fstype=${fstype}
         echo Started ${label}
     fi
     return $RC
@@ -503,6 +508,25 @@ start() {
     mount_facet ${facet}
     RC=$?
     return $RC
+}
+
+refresh_disk() {
+    local facet=$1
+    local fstype=${facet}_fstype
+    local _dev=$(facet_active $facet)_dev
+    local dev=${!_dev}
+    local poolname="${dev%%/*}"
+    local fstype
+
+    if [ "${!fstype}" == "zfs" ]; then
+        if [ "$poolname" == "" ]; then
+            echo "invalid dataset name: $dev"
+            return
+        fi
+        do_facet $facet "cp /etc/zfs/zpool.cache /tmp/zpool.cache.back"
+        do_facet $facet "zpool export $poolname"
+        do_facet $facet "zpool import -c /tmp/zpool.cache.back ${poolname}"
+    fi
 }
 
 stop() {
@@ -822,6 +846,7 @@ reboot_facet() {
     if [ "$FAILURE_MODE" = HARD ]; then
         $POWER_UP `facet_active_host $facet`
     else
+        refresh_disk ${facet}
         sleep 10
     fi
 }
@@ -1234,6 +1259,7 @@ fail_nodf() {
 fail_abort() {
     local facet=$1
     stop $facet
+    refresh_disk ${facet}
     change_active $facet
     mount_facet $facet -o abort_recovery
     client_df || echo "first df failed: $?"
