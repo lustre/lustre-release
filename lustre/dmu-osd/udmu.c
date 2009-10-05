@@ -279,7 +279,7 @@ int udmu_objset_statfs(udmu_objset_t *uos, struct statfs64 *statp)
 
         statp->f_namelen = 256;
 
-        return (0);
+        return 0;
 }
 
 /* Get the objset name.

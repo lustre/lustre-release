@@ -112,46 +112,6 @@ enum {
         OSD_OI_FID_NR
 };
 
-/*
- * osd device.
- */
-struct osd_device {
-        /* super-class */
-        struct dt_device          od_dt_dev;
-        /* information about underlying file system */
-        udmu_objset_t             od_objset;
-
-        /* Environment for transaction commit callback.
-         * Currently, OSD is based on ext3/JBD. Transaction commit in ext3/JBD
-         * is serialized, that is there is no more than one transaction commit
-         * at a time (JBD journal_commit_transaction() is serialized).
-         * This means that it's enough to have _one_ lu_context.
-         */
-        struct lu_env             od_env_for_commit;
-
-        /*
-         * Fid Capability
-         */
-        unsigned int              od_fl_capa:1;
-        unsigned long             od_capa_timeout;
-        __u32                     od_capa_alg;
-        struct lustre_capa_key   *od_capa_keys;
-        struct hlist_head        *od_capa_hash;
-
-        /*
-         * statfs optimization: we cache a bit.
-         */
-        cfs_time_t                od_osfs_age;
-        struct kstatfs            od_kstatfs;
-        spinlock_t                od_osfs_lock;
-
-        dmu_buf_t                *od_root_db;
-        dmu_buf_t                *od_objdir_db;
-
-        unsigned int              od_rdonly:1;
-        char                      od_label[MAXNAMELEN];
-};
-
 struct osd_thandle {
         struct thandle          ot_super;
         dmu_tx_t               *ot_tx;
@@ -161,8 +121,6 @@ struct osd_thandle {
 
 static int   osd_root_get      (const struct lu_env *env,
                                 struct dt_device *dev, struct lu_fid *f);
-static int   osd_statfs        (const struct lu_env *env,
-                                struct dt_device *dev, struct kstatfs *sfs);
 
 static int   lu_device_is_osd  (const struct lu_device *d);
 static int   osd_type_init     (struct lu_device_type *t);
@@ -542,7 +500,7 @@ static void osd_declare_object_delete(const struct lu_env *env,
         struct osd_device *osd = osd_obj2dev(obj);
         struct dt_object *dt = &obj->oo_dt;
         struct osd_thandle *oh;
-        uint64_t zapid, oid;
+        uint64_t zapid;
         char buf[32];
         ENTRY;
 
@@ -685,8 +643,7 @@ static int osd_object_print(const struct lu_env *env, void *cookie,
 /*
  * Concurrency: shouldn't matter.
  */
-static int osd_statfs(const struct lu_env *env,
-                      struct dt_device *d, struct kstatfs *sfs)
+int osd_statfs(const struct lu_env *env, struct dt_device *d, struct kstatfs *sfs)
 {
         struct osd_device *osd = osd_dt_dev(d);
         struct kstatfs *kfs = &osd->od_kstatfs;
@@ -960,7 +917,11 @@ static int osd_label_set(const struct lu_env *env, const struct dt_device *d,
 
         rc = -udmu_userprop_set_str(&dev->od_objset, DMU_PROP_NAME_LABEL, name);
 
-        if (rc != 0)
+        if (rc == 0) {
+                /* rename procfs entry (it's special on the first setup ) */
+                osd_procfs_fini(dev);
+                osd_procfs_init(dev, name);
+        } else
                 CERROR("error setting ZFS label to '%s': %d\n", name, rc);
 
         RETURN(rc);
@@ -2666,6 +2627,7 @@ static int osd_device_init(const struct lu_env *env, struct lu_device *d,
         return lu_context_init(&osd_dev(d)->od_env_for_commit.le_ctx,
                                LCT_DT_THREAD|LCT_MD_THREAD);
 }
+
 static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 {
         ENTRY;
@@ -2755,6 +2717,8 @@ static int osd_mount(const struct lu_env *env,
         rc = osd_oi_init(env, o);
         LASSERT(rc == 0);
 
+        rc = osd_procfs_init(o, osd_label_get(NULL, &o->od_dt_dev));
+
         RETURN(rc);
 }
 
@@ -2763,6 +2727,8 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 {
         struct osd_device *o = osd_dev(d);
         ENTRY;
+
+        osd_procfs_fini(o);
 
         if (o->od_objset.os)
                 osd_sync(env, lu2dt_dev(d));
@@ -2995,29 +2961,6 @@ static struct lu_device_type osd_device_type = {
         .ldt_ctx_tags = LCT_MD_THREAD|LCT_DT_THREAD
 };
 
-/*
- * lprocfs legacy support.
- */
-#ifdef LPROCFS
-static struct lprocfs_vars lprocfs_osd_obd_vars[] = {
-        { 0 }
-};
-
-static struct lprocfs_vars lprocfs_osd_module_vars[] = {
-        { 0 }
-};
-
-void lprocfs_osd_init_vars(struct lprocfs_static_vars *lvars)
-{
-    lvars->module_vars  = lprocfs_osd_module_vars;
-    lvars->obd_vars     = lprocfs_osd_obd_vars;
-}
-#else
-static inline void lprocfs_osd_init_vars(struct lprocfs_static_vars *lvars)
-{
-        memset(lvars, 0, sizeof(*lvars));
-}
-#endif
 
 static struct obd_ops osd_obd_device_ops = {
         .o_owner = THIS_MODULE

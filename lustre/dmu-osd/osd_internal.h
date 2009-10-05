@@ -77,4 +77,53 @@ struct osd_thread_info {
         struct osd_fid_pack    oti_fid_pack;
 };
 
+/*
+ * osd device.
+ */
+struct osd_device {
+        /* super-class */
+        struct dt_device          od_dt_dev;
+        /* information about underlying file system */
+        udmu_objset_t             od_objset;
+
+        /* Environment for transaction commit callback.
+         * Currently, OSD is based on ext3/JBD. Transaction commit in ext3/JBD
+         * is serialized, that is there is no more than one transaction commit
+         * at a time (JBD journal_commit_transaction() is serialized).
+         * This means that it's enough to have _one_ lu_context.
+         */
+        struct lu_env             od_env_for_commit;
+
+        /*
+         * Fid Capability
+         */
+        unsigned int              od_fl_capa:1;
+        unsigned long             od_capa_timeout;
+        __u32                     od_capa_alg;
+        struct lustre_capa_key   *od_capa_keys;
+        struct hlist_head        *od_capa_hash;
+
+        /*
+         * statfs optimization: we cache a bit.
+         */
+        cfs_time_t                od_osfs_age;
+        struct kstatfs            od_kstatfs;
+        spinlock_t                od_osfs_lock;
+
+        cfs_proc_dir_entry_t     *od_proc_entry;
+        struct lprocfs_stats     *od_stats;
+
+        dmu_buf_t                *od_root_db;
+        dmu_buf_t                *od_objdir_db;
+
+        unsigned int              od_rdonly:1;
+        char                      od_label[MAXNAMELEN];
+};
+
+int osd_statfs(const struct lu_env *env, struct dt_device *d, struct kstatfs *sfs);
+
+void lprocfs_osd_init_vars(struct lprocfs_static_vars *lvars);
+int osd_procfs_fini(struct osd_device *osd);
+int osd_procfs_init(struct osd_device *osd, const char *name);
+
 #endif /* _OSD_INTERNAL_H */
