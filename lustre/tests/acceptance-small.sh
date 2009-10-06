@@ -50,6 +50,8 @@ FORMAT=${FORMAT:-formatall}
 CLEANUP=${CLEANUP:-stopall}
 
 setup_if_needed() {
+    nfs_client_mode && return
+
     local MOUNTED=$(mounted_lustre_filesystems)
     if $(echo $MOUNTED | grep -w -q $MOUNT); then
         check_config $MOUNT
