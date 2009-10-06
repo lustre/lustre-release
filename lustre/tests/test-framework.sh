@@ -2009,7 +2009,11 @@ build_test_filter() {
 }
 
 basetest() {
-    echo ${1%%[a-z]*}
+    if [[ $1 = [a-z]* ]]; then
+        echo $1
+    else
+        echo ${1%%[a-z]*}
+    fi
 }
 
 # print a newline if the last test was skipped
