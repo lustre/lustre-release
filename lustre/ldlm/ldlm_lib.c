@@ -1654,9 +1654,10 @@ static int handle_recovery_req(struct ptlrpc_thread *thread,
                 spin_lock_bh(&req->rq_export->exp_obd->obd_processing_task_lock);
                 req->rq_export->exp_obd->obd_next_recovery_transno++;
                 spin_unlock_bh(&req->rq_export->exp_obd->obd_processing_task_lock);
-                target_exp_dequeue_req_replay(req);
         }
 reqcopy_put:
+        if (req->rq_export->exp_req_replay_needed)
+                target_exp_dequeue_req_replay(req);
         target_request_copy_put(req);
         RETURN(0);
 }
