@@ -2342,7 +2342,8 @@ static int lfs_changelog(int argc, char **argv)
                 endrec = strtoll(argv[optind++], NULL, 10);
 
         rc = llapi_changelog_start(&changelog_priv,
-                                   follow ? CHANGELOG_FLAG_FOLLOW : 0,
+                                   CHANGELOG_FLAG_BLOCK |
+                                   (follow ? CHANGELOG_FLAG_FOLLOW : 0),
                                    mdd, startrec);
         if (rc < 0) {
                 fprintf(stderr, "Can't start changelog: %s\n",
