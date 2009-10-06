@@ -589,7 +589,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         void *wait_handle = NULL;
         int total_size = 0;
         int quota_pending[2] = {0, 0}, quota_pages = 0;
-        unsigned int qcids[MAXQUOTAS] = {0, 0};
+        unsigned int qcids[MAXQUOTAS] = { oa->o_uid, oa->o_gid };
         int sync_journal_commit = obd->u.filter.fo_syncjournal;
         ENTRY;
 
@@ -664,7 +664,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
         /* we try to get enough quota to write here, and let ldiskfs
          * decide if it is out of quota or not b=14783 */
-        lquota_chkquota(filter_quota_interface_ref, obd, oa->o_uid, oa->o_gid,
+        lquota_chkquota(filter_quota_interface_ref, obd, qcids[0], qcids[1],
                         quota_pages, quota_pending, oti, inode,
                         obj->ioo_bufcnt);
 
@@ -762,7 +762,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 cleanup:
         if (quota_pending[0] || quota_pending[1])
                 lquota_pending_commit(filter_quota_interface_ref, obd,
-                                      oa->o_uid, oa->o_gid, quota_pending);
+                                      qcids[0], qcids[1], quota_pending);
 
         filter_grant_commit(exp, niocount, res);
 
@@ -781,12 +781,18 @@ cleanup:
         }
 
         /* trigger quota pre-acquire */
-        qcids[USRQUOTA] = oa->o_uid;
-        qcids[GRPQUOTA] = oa->o_gid;
         err = lquota_adjust(filter_quota_interface_ref, obd, qcids, NULL, rc,
                             FSFILT_OP_CREATE);
-        CDEBUG(err ? D_ERROR : D_QUOTA,
-               "filter adjust qunit! (rc:%d)\n", err);
+        CDEBUG(err ? D_ERROR : D_QUOTA, "filter adjust qunit! "
+               "(rc:%d, uid:%u, gid:%u)\n", err, qcids[0], qcids[1]);
+        if (qcids[USRQUOTA] != oa->o_uid || qcids[GRPQUOTA] != oa->o_gid) {
+                qcids[0] = oa->o_uid;
+                qcids[1] = oa->o_gid;
+                err = lquota_adjust(filter_quota_interface_ref, obd, qcids,
+                                    NULL, rc, FSFILT_OP_CREATE);
+                CDEBUG(err ? D_ERROR : D_QUOTA, "filter adjust qunit! "
+                       "(rc:%d, uid:%u, gid:%u)\n", err, qcids[0], qcids[1]);
+        }
 
         for (i = 0, lnb = res; i < niocount; i++, lnb++) {
                 if (lnb->page == NULL)

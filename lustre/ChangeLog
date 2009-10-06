@@ -118,22 +118,29 @@ Details    : if a client doesn't respond to a blocking callback within the
 	     when the lock is next granted.
 
 Severity   : normal
-bugzilla   : 20518
-description: ost is being unmounted w/o all writes to last_rcvd landing on disk.
+Bugzilla   : 20518
+Description: ost is being unmounted w/o all writes to last_rcvd landing on disk.
 	     affects recovery negatively.
-details    : make sure all exports have been properly destroyed by the zombie
+Details    : make sure all exports have been properly destroyed by the zombie
 	     thread processed before stopping the target.
 
 Severity   : normal
-bugzilla   : 20205
-description: Performance degradation with O_DIRECT between 1.6 & 1.8.1 b190
-details    : disable write barrier for ext4/SLES11.
+Bugzilla   : 20205
+Description: Performance degradation with O_DIRECT between 1.6 & 1.8.1 b190
+Details    : disable write barrier for ext4/SLES11.
 
 Severity   : normal
-bugzilla   : 18571
-description: Kernel panic - not syncing: Out of memory and no killable
+Bugzilla   : 18571
+Description: Kernel panic - not syncing: Out of memory and no killable
 	     processes... on OSS when iozone
-details    : fix memory leak in the journal checksum patch.
+Details    : fix memory leak in the journal checksum patch.
+
+Severity   : normal
+Bugzilla   : 18793
+Description: group quota "too many blocks" OSS crashes
+Details    : we should keep the same uid/gid for lquota_chkquota() and
+	     lquota_pending_commit()
+
 
 -------------------------------------------------------------------------------
 
