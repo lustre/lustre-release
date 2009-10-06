@@ -650,15 +650,18 @@ dqacq_completion(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
                         INC_QLIMIT(*hardlimit, count);
                         break;
                 case QUOTA_DQREL:
-                        LASSERTF(count < *hardlimit,
-                                 "id(%u) flag(%u) type(%c) isblk(%c) "
-                                 "count("LPU64") qd_qunit("LPU64") "
-                                 "hardlimit("LPU64").\n",
-                                 qdata->qd_id, qdata->qd_flags,
-                                 QDATA_IS_GRP(qdata) ? 'g' : 'u',
-                                 QDATA_IS_BLK(qdata) ? 'b': 'i',
-                                 qdata->qd_count, qdata->qd_qunit, *hardlimit);
-                        *hardlimit -= count;
+                        if (count >= *hardlimit)
+                                CERROR("release quota error: id(%u) flag(%u) "
+                                       "type(%c) isblk(%c) count("LPU64") "
+                                       "qd_qunit("LPU64") hardlimit("LPU64") "
+                                       "qdata(%p)\n",
+                                       qdata->qd_id, qdata->qd_flags,
+                                       QDATA_IS_GRP(qdata) ? 'g' : 'u',
+                                       QDATA_IS_BLK(qdata) ? 'b': 'i',
+                                       qdata->qd_count, qdata->qd_qunit, *hardlimit,
+                                       qdata);
+                        else
+                                *hardlimit -= count;
                         break;
                 default:
                         LBUG();

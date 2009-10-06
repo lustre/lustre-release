@@ -141,6 +141,11 @@ Description: group quota "too many blocks" OSS crashes
 Details    : we should keep the same uid/gid for lquota_chkquota() and
 	     lquota_pending_commit()
 
+Severity   : normal
+Bugzilla   : 18630
+Description: LustreError: 9153:0:(quota_context.c:622:dqacq_completion()) LBUG
+Details    : don't LBUG on release quota error. Just a workaround until the
+	     problem is understood.
 
 -------------------------------------------------------------------------------
 
