@@ -1411,6 +1411,7 @@ static struct completion        obd_zombie_start;
 static struct completion        obd_zombie_stop;
 static unsigned long            obd_zombie_flags;
 static cfs_waitq_t              obd_zombie_waitq;
+static pid_t                    obd_zombie_pid;
 
 enum {
         OBD_ZOMBIE_STOP   = 1 << 1
@@ -1492,6 +1493,10 @@ static int obd_zombie_is_idle(void)
 void obd_zombie_barrier(void)
 {
         struct l_wait_info lwi = { 0 };
+
+        if (obd_zombie_pid == cfs_curproc_pid())
+                /* don't wait for myself */
+                return;
         l_wait_event(obd_zombie_waitq, obd_zombie_is_idle(), &lwi);
 }
 EXPORT_SYMBOL(obd_zombie_barrier);
@@ -1511,6 +1516,8 @@ static int obd_zombie_impexp_thread(void *unused)
         }
 
         complete(&obd_zombie_start);
+
+        obd_zombie_pid = cfs_curproc_pid();
 
         while(!test_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags)) {
                 struct l_wait_info lwi = { 0 };
@@ -1564,6 +1571,7 @@ int obd_zombie_impexp_init(void)
         init_completion(&obd_zombie_start);
         init_completion(&obd_zombie_stop);
         cfs_waitq_init(&obd_zombie_waitq);
+        obd_zombie_pid = 0;
 
 #ifdef __KERNEL__
         rc = cfs_kernel_thread(obd_zombie_impexp_thread, NULL, 0);
