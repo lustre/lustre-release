@@ -1630,8 +1630,14 @@ static int ptlrpc_main(void *arg)
                 goto out_srv_init;
         }
 
-        /* Record that the thread is running */
-        thread->t_flags = SVC_RUNNING;
+        spin_lock(&svc->srv_lock);
+        /* SVC_STOPPING may already be set here if someone else is trying
+         * to stop the service while this new thread has been dynamically
+         * forked. We still set SVC_RUNNING to let our creator know that
+         * we are now running, however we will exit as soon as possible */
+        thread->t_flags |= SVC_RUNNING;
+        spin_unlock(&svc->srv_lock);
+
         /*
          * wake up our creator. Note: @data is invalid after this point,
          * because it's allocated on ptlrpc_start_thread() stack.
@@ -1745,7 +1751,8 @@ static void ptlrpc_stop_thread(struct ptlrpc_service *svc,
         struct l_wait_info lwi = { 0 };
 
         spin_lock(&svc->srv_lock);
-        thread->t_flags = SVC_STOPPING;
+        /* let the thread know that we would like it to stop asap */
+        thread->t_flags |= SVC_STOPPING;
         spin_unlock(&svc->srv_lock);
 
         cfs_waitq_broadcast(&svc->srv_waitq);
