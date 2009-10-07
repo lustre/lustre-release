@@ -951,9 +951,9 @@ int mds_fs_cleanup(struct obd_device *obd)
 
         pop_ctxt(saved, &obd->obd_lvfs_ctxt, NULL);
         OBD_SLAB_FREE_PTR(saved, obd_lvfs_ctxt_cache);
-        shrink_dcache_parent(mds->mds_fid_de);
         dput(mds->mds_fid_de);
         LL_DQUOT_OFF(obd->u.obt.obt_sb, 0);
+        shrink_dcache_sb(mds->mds_obt.obt_sb);
 
         return rc;
 }
