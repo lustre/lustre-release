@@ -1,7 +1,6 @@
-Index: linux-2.6.18-128.1.6/fs/ext4/mballoc.c
-===================================================================
---- linux-2.6.18-128.1.6.orig/fs/ext4/mballoc.c
-+++ linux-2.6.18-128.1.6/fs/ext4/mballoc.c
+diff -rupN linux-2.6.18-128.1.6_1//fs/ext4/mballoc.c linux-2.6.18-128.1.6_2//fs/ext4/mballoc.c
+--- linux-2.6.18-128.1.6_1//fs/ext4/mballoc.c	2009-09-28 16:38:04.000000000 +0530
++++ linux-2.6.18-128.1.6_2//fs/ext4/mballoc.c	2009-09-28 16:40:35.000000000 +0530
 @@ -660,7 +660,7 @@ static void ext4_mb_mark_free_simple(str
  	}
  }
@@ -299,10 +298,17 @@ Index: linux-2.6.18-128.1.6/fs/ext4/mballoc.c
  		list_del(&pa->pa_group_list);
  		ext4_mb_release_inode_pa(&e4b, bitmap_bh, pa, ac);
  		ext4_unlock_group(sb, group);
-Index: linux-2.6.18-128.1.6/fs/ext4/mballoc.h
-===================================================================
---- linux-2.6.18-128.1.6.orig/fs/ext4/mballoc.h
-+++ linux-2.6.18-128.1.6/fs/ext4/mballoc.h
+@@ -4394,6 +4472,7 @@ ext4_mb_discard_lg_preallocations(struct
+ 		}
+ 		ext4_lock_group(sb, group);
+ 		list_del(&pa->pa_group_list);
++		ext4_get_group_info(sb, group)->bb_prealloc_nr--;
+ 		ext4_mb_release_group_pa(&e4b, pa, ac);
+ 		ext4_unlock_group(sb, group);
+ 
+diff -rupN linux-2.6.18-128.1.6_1//fs/ext4/mballoc.h linux-2.6.18-128.1.6_2//fs/ext4/mballoc.h
+--- linux-2.6.18-128.1.6_1//fs/ext4/mballoc.h	2009-09-28 16:38:04.000000000 +0530
++++ linux-2.6.18-128.1.6_2//fs/ext4/mballoc.h	2009-09-28 16:38:43.000000000 +0530
 @@ -119,6 +119,7 @@ struct ext4_group_info {
  	unsigned short	bb_free;
  	unsigned short	bb_fragments;
