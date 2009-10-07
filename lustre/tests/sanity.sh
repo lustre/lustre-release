@@ -9,8 +9,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 13297 2108 9789 3637 9789 3561 12622 12653 12653 5188 10764 16260 20784
-ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   65a   65e   68b   75    119d   215 $SANITY_EXCEPT"
+# bug number for skipped test: 13297 2108 9789 3637 9789 3561 12622 12653 12653 5188 10764 16260
+ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   65a   65e   68b   75    119d   $SANITY_EXCEPT"
 # bug number for skipped test: 2108 9789 3637 9789 3561 5188/5749 1443
 #ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27m 42a 42b 42c 42d 45 68 76"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
@@ -1819,6 +1819,8 @@ test_36e() {
 run_test 36e "utime on non-owned file (should return error) ===="
 
 test_36f() {
+	local LANG_SAVE=$LANG
+	local LC_LANG_SAVE=$LC_LANG
 	export LANG=C LC_LANG=C # for date language
 
 	DATESTR="Dec 20  2000"
@@ -1839,6 +1841,8 @@ test_36f() {
 		echo "AFTER : $LS_AFTER" && \
 		echo "WANT  : $DATESTR" && \
 		error "$DIR/$tdir/$tfile timestamps changed" || true
+
+	export LANG=$LANG_SAVE LC_LANG=$LC_LANG_SAVE
 }
 run_test 36f "utime on file racing with OST BRW write =========="
 
@@ -6907,7 +6911,7 @@ test_215() { # for bug 18102
 	TOTAL_LINES=$(cat $TMP/lnet_peers.out |wc -l)
 	OTHER_LINES=$(($TOTAL_LINES - 1))
 	MATCHED_LINES=$(cat $TMP/lnet_peers.out |tail -$TOTAL_LINES |
-			grep -c "^[0-9.]\+@[a-z0-9]\+ *[0-9]\+ *[a-Z]\+ *[0-9]\+ *[0-9]\+ *-\?[0-9]\+ *[0-9]\+ *-\?[0-9]\+ *[0-9]\+$")
+			grep -c "^[0-9.]\+@[a-z0-9]\+ *[0-9]\+ *[a-zA-Z]\+ *[0-9]\+ *[0-9]\+ *-\?[0-9]\+ *[0-9]\+ *-\?[0-9]\+ *[0-9]\+$")
 	[ "$MATCHED_LINES" = "$OTHER_LINES" ] || (cat $TMP/lnet_peers.out && 
 						  error "/proc/sys/lnet/peers misformatted")
 	diff $TMP/lnet_peers.out $TMP/lnet_peers.sys ||
