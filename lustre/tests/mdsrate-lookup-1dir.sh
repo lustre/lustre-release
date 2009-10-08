@@ -17,7 +17,8 @@ assert_env CLIENTS MDSRATE SINGLECLIENT MPIRUN
 
 MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
 # Do not use name [df][0-9]* to avoid cleanup by rm, bug 18045
-TESTDIR=$MOUNT/mdsrate
+BASEDIR=$MOUNT/mdsrate
+TESTDIR=$BASEDIR/lookup
 
 # Requirements
 NUM_FILES=${NUM_FILES:-1000000}
@@ -35,8 +36,11 @@ rm -f $LOG
 log "===== $0 ====== " 
 
 check_and_setup_lustre
-mkdir -p $TESTDIR
-chmod 0777 $TESTDIR
+
+mkdir -p $BASEDIR
+chmod 0777 $BASEDIR
+$LFS setstripe $BASEDIR -c 1
+get_stripe $BASEDIR
 
 IFree=$(inodes_available)
 if [ $IFree -lt $NUM_FILES ]; then
@@ -44,9 +48,6 @@ if [ $IFree -lt $NUM_FILES ]; then
 fi
 
 generate_machine_file $NODES_TO_USE $MACHINEFILE || error "can not generate machinefile"
-
-$LFS setstripe $TESTDIR -c 1
-get_stripe $TESTDIR
 
 if [ -n "$NOCREATE" ]; then
     echo "NOCREATE=$NOCREATE  => no file creation."
@@ -103,6 +104,7 @@ fi
 
 equals_msg `basename $0`: test complete, cleaning up
 mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES $TESTDIR 'f%%d'
+rmdir $BASEDIR || true
 rm -f $MACHINEFILE
 check_and_cleanup_lustre
 #rm -f $LOG

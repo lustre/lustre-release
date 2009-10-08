@@ -10,15 +10,15 @@ init_test_env $@
 assert_env CLIENTS MDSRATE SINGLECLIENT MPIRUN
 
 MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
-TESTDIR=$MOUNT
+BASEDIR=$MOUNT/mdsrate
 
 # Requirements
 NUM_FILES=${NUM_FILES:-1000000}
 TIME_PERIOD=${TIME_PERIOD:-600}                        # seconds
 
 # Local test variables
-TESTDIR_SINGLE="${TESTDIR}/single"
-TESTDIR_MULTI="${TESTDIR}/multi"
+TESTDIR_SINGLE="${BASEDIR}/single"
+TESTDIR_MULTI="${BASEDIR}/multi"
 
 LOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 CLIENT=$SINGLECLIENT
@@ -40,15 +40,17 @@ log "===== $0 ====== "
 
 check_and_setup_lustre
 
+mkdir -p $BASEDIR
+chmod 0777 $BASEDIR
+$LFS setstripe $BASEDIR -i 0 -c 1
+get_stripe $BASEDIR
+
 IFree=$(inodes_available)
 if [ $IFree -lt $NUM_FILES ]; then
     NUM_FILES=$IFree
 fi
   
 generate_machine_file $NODES_TO_USE $MACHINEFILE || error "can not generate machinefile"
-
-$LFS setstripe $TESTDIR -i 0 -c 1
-get_stripe $TESTDIR
 
 if [ -n "$NOSINGLE" ]; then
     echo "NO Tests on single client."
@@ -91,6 +93,8 @@ else
             [ -f $LOG ] && sed -e "s/^/log: /" $LOG
             error "mdsrate unlinks for a single client failed, aborting"
         fi
+
+        rmdir $TESTDIR_SINGLE
     fi
 fi
 
@@ -139,10 +143,13 @@ else
             [ -f $LOG ] && sed -e "s/^/log: /" $LOG
             error "mdsrate unlinks multiple nodes failed, aborting"
         fi
+
+        rmdir $TESTDIR_MULTI
     fi
 fi
 
 equals_msg `basename $0`: test complete, cleaning up
+rmdir $BASEDIR || true
 rm -f $MACHINEFILE 
 check_and_cleanup_lustre
 #rm -f $LOG
