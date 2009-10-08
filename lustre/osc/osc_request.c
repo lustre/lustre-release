@@ -385,14 +385,12 @@ static int osc_setattr_async(struct obd_export *exp, struct obd_info *oinfo,
                 RETURN(rc);
         }
 
+        if (oinfo->oi_oa->o_valid & OBD_MD_FLCOOKIE)
+                oinfo->oi_oa->o_lcookie = *oti->oti_logcookies;
+
         osc_pack_req_body(req, oinfo);
 
         ptlrpc_request_set_replen(req);
-
-        if (oinfo->oi_oa->o_valid & OBD_MD_FLCOOKIE) {
-                LASSERT(oti);
-                oinfo->oi_oa->o_lcookie = *oti->oti_logcookies;
-        }
 
         /* do mds to ost setattr asynchronously */
         if (!rqset) {
