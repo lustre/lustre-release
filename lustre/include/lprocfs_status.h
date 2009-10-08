@@ -150,6 +150,7 @@ struct lprocfs_counter {
         unsigned int           lc_config;
         __s64                  lc_count;
         __s64                  lc_sum;
+        __s64                  lc_sum_irq;
         __s64                  lc_min;
         __s64                  lc_max;
         __s64                  lc_sumsquare;
