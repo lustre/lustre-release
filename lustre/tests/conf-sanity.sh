@@ -592,6 +592,8 @@ test_22() {
 	stop_ost
 	mount_client $MOUNT
 	# check_mount will block trying to contact ost
+	mcreate $DIR/$tfile || return 40
+	rm -f $DIR/$tfile || return 42
 	umount_client $MOUNT
 	pass
 
