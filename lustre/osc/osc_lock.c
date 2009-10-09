@@ -1574,10 +1574,26 @@ static int osc_lock_fits_into(const struct lu_env *env,
                               const struct cl_lock_descr *need,
                               const struct cl_io *io)
 {
+        struct osc_lock *ols = cl2osc_lock(slice);
 
-        if (need->cld_mode == CLM_PHANTOM)
-                return need->cld_mode == slice->cls_lock->cll_descr.cld_mode;
+        /* If the lock hasn't ever enqueued, it can't be matched because
+         * enqueue process brings in many information which can be used to
+         * determine things such as lockless, CEF_MUST, etc.
+         */
+        if (ols->ols_state < OLS_ENQUEUED)
+                return 0;
 
+        /* Don't match this lock if the lock is able to become lockless lock.
+         * This is because the new lock might be covering a mmap region and
+         * so that it must have a cached at the local side. */
+        if (ols->ols_state < OLS_UPCALL_RECEIVED && ols->ols_locklessable)
+                return 0;
+
+        /* If the lock is going to be canceled, no reason to match it as well */
+        if (ols->ols_state > OLS_RELEASED)
+                return 0;
+
+        /* go for it. */
         return 1;
 }
 
