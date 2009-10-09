@@ -758,22 +758,7 @@ static void cl_lock_delete0(const struct lu_env *env, struct cl_lock *lock)
 
                 spin_lock(&head->coh_lock_guard);
                 list_del_init(&lock->cll_linkage);
-                /*
-                 * No locks, no pages. This is only valid for bottom sub-locks
-                 * and head->coh_nesting == 1 check assumes two level top-sub
-                 * hierarchy.
-                 */
-                /*
-                 * The count of pages of this object may NOT be zero because
-                 * we don't cleanup the pages if they are in CPS_FREEING state.
-                 * See cl_page_gang_lookup().
-                 *
-                 * It is safe to leave the CPS_FREEING pages in cache w/o
-                 * a lock, because those page must not be uptodate.
-                 * See cl_page_delete0 for details.
-                 */
-                /* LASSERT(!ergo(head->coh_nesting == 1 &&
-                           list_empty(&head->coh_locks), !head->coh_pages)); */
+
                 spin_unlock(&head->coh_lock_guard);
                 /*
                  * From now on, no new references to this lock can be acquired
