@@ -1732,7 +1732,7 @@ struct cl_lock_operations {
                            const struct cl_lock_slice *slice,
                            struct cl_lock_closure *closure);
         /**
-         * Executed top-to-bottom when lock description changes (e.g., as a
+         * Executed bottom-to-top when lock description changes (e.g., as a
          * result of server granting more generous lock than was requested).
          *
          * \see lovsub_lock_modify()
