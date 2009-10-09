@@ -1,0 +1,117 @@
+#! /bin/bash
+set -x
+
+if ! [ -d kernel -a -d Documentation ]
+then
+    echo >&2 "Not in kernel top level directory. Exiting"
+    exit 1
+fi
+TOPPATCHDIR=/usr/src/kernel-patches/lustre
+ARCHITECTURE=`dpkg --print-installation-architecture`
+
+QUILT="quilt --quiltrc /dev/null"
+export QUILT_PATCHES="$TOPPATCHDIR/patches"
+
+if ! [ -f debian/APPLIED_all_lustre ]; then
+  echo >&2 "Lustre patch not applied."
+  exit 0
+fi
+VERSION=$(grep ^VERSION Makefile 2>/dev/null | \
+        sed -e 's/[^0-9]*\([0-9]*\)/\1/')
+PATCHLEVEL=$( grep ^PATCHLEVEL Makefile 2>/dev/null | \
+        sed -e 's/[^0-9]*\([0-9]*\)/\1/')
+SUBLEVEL=$(grep ^SUBLEVEL Makefile 2>/dev/null | \
+        sed -e 's/[^0-9]*\([0-9]*\)/\1/')
+#EXTRAVERSION=$(grep ^EXTRAVERSION Makefile | head -1 2>/dev/null | \
+#        sed -e 's/EXTRAVERSION =[       ]*\([^  ]*\)$/\1/')
+#KERNELBRANCHLET=${VERSION}.${PATCHLEVEL}.${SUBLEVEL}
+#KERNELRELEASE=${KERNELBRANCHLET}${EXTRAVERSION}
+KERNELRELEASE=${VERSION}.${PATCHLEVEL}.${SUBLEVEL}
+
+# Check for depends on lustre
+if grep -l "^DEPENDS=.*[' ]all/unpatch/lustre[' ]" debian/APPLIED_* >/dev/null 2>/dev/null; then
+    # There are patches depending on this one, to be removed before.
+    # the dep will be removed by the last of those other patches.
+    echo >&2 "NOT unpatching \"Lustre Filesystem patch for the Linux kernel\" since other patches still rely on it"
+    exit 0
+fi
+
+if ! [ -d debian/APPLIED_all_lustre_tmp/.pc.lustre ]; then
+  cat >&2 <<EOF
+ERROR: .pc directory missing for unpatching. I strongly suggest
+you remove this kernel tree and unpack a clean one.
+EOF
+  exit 1
+fi
+
+if ! [ -e debian/APPLIED_all_lustre_tmp/series.lustre ]; then
+  cat >&2 <<EOF
+ERROR: series file missing for unpatching. I strongly suggest
+you remove this kernel tree and unpack a clean one.
+EOF
+  exit 1
+fi
+
+cleanup() {
+  echo >&2 Cleaning up
+  if [ -e series ]; then
+    echo >&2 Removing series file
+    rm series
+  fi
+  if [ -e debian/APPLIED_all_lustre_tmp/series.orig ]; then
+    echo >&1 Restoring orig series file
+    mv debian/APPLIED_all_lustre_tmp/series.orig series
+  fi
+  if [ -e .pc ]; then
+    echo >&2 Removing .pc dir
+    rm -r .pc
+  fi
+  if [ -e debian/APPLIED_all_lustre_tmp/.pc.orig ]; then
+    echo >&2 Restoring orig .pc dir
+    mv debian/APPLIED_all_lustre_tmp/.pc.orig .pc
+  fi
+}
+
+if [ -e series ]; then
+  echo >&2 Preserving existing series file
+  mv series debian/APPLIED_all_lustre_tmp/series.orig
+fi
+if [ -e .pc ]; then
+  echo >&2 Preserving existing .pc dir
+  mv .pc debian/APPLIED_all_lustre_tmp/.pc.orig
+fi
+
+trap cleanup EXIT
+
+echo >&2 Restoring lustre quilt
+mv debian/APPLIED_all_lustre_tmp/series.lustre series
+mv debian/APPLIED_all_lustre_tmp/.pc.lustre .pc
+
+echo >&2 Unpatching lustre patches
+$QUILT pop -a
+ERR=$?
+if ! [ $ERR = 0 ]; then
+  cat >&2 <<EOF
+ERROR: Lustre patches failed to unpatch. I strongly suggest
+you remove this kernel tree and unpack a clean one.
+EOF
+  cleanup
+  exit $ERR
+fi
+
+echo >&2 Removing lustre quilt
+rm -rf .pc series
+cleanup
+rm debian/APPLIED_all_lustre debian/image.d/register-lustre
+
+echo >&2 "\"Lustre Filesystem patch for the Linux kernel\" patch for $KVERSION removed successfully"
+
+echo >&2 "Removing empty files:"
+# make an exception for ./debian, or else the stamp files will go too.
+find . -path ./debian -prune -o \
+       -type f -size 0 ! -name 'APPLIED*' -exec rm {} \; -print
+echo >&2 "Done."
+
+rmdir debian/image.d debian/APPLIED_all_lustre_tmp || true
+
+echo >&2 "END unpatching lustre patch"

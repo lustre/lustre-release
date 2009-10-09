@@ -1,0 +1,128 @@
+lustre (1.8.1.50-1) unstable; urgency=low
+
+  * Update for an on-the-road-to-1.8.2 release
+
+ -- Brian J. Murrell <brian@interlinx.bc.ca>  Mon, 17 Aug 2009 14:54:35 -0400
+
+lustre (1.8.1-1) unstable; urgency=low
+
+  * Final 1.8.1 upstream version
+  * disable building the snmp module
+    - it needs work to build with newer gccs
+
+ -- Brian J. Murrell <brian@interlinx.bc.ca>  Mon, 10 Aug 2009 15:53:04 -0400
+
+lustre (1.8.1-0.01) unstable; urgency=low
+
+  * New upstream version
+
+ -- Brian J. Murrell <brian@interlinx.bc.ca>  Sat, 30 May 2009 19:21:04 -0400
+
+lustre (1.6.6-9) unstable; urgency=low
+
+  * Rebuild for 2.6.27-8-generic
+
+ -- Brian J. Murrell <brian@interlinx.bc.ca>  Thu, 27 Nov 2008 15:25:43 -0500
+
+lustre (1.6.6-8) unstable; urgency=low
+
+  * 1.6.6 final release
+
+ -- Brian J. Murrell <brian@interlinx.bc.ca>  Tue, 28 Oct 2008 10:15:39 -0500
+
+lustre (1.6.6-7) unstable; urgency=low
+
+  * remove bz17302.patch, merged upstream
+  * refresh from the b_release_1_6_6 branch
+
+ -- Brian J. Murrell <brian@interlinx.bc.ca>  Fri, 24 Oct 2008 12:07:18 -0500
+
+lustre (1.6.6-6) unstable; urgency=low
+
+  * remove broken patch
+
+ -- Brian J. Murrell <brian@interlinx.bc.ca>  Wed, 22 Oct 2008 16:35:40 -0500
+
+lustre (1.6.6-5) unstable; urgency=low
+
+  * refresh the bz 14250 patches
+
+ -- Brian J. Murrell <brian@interlinx.bc.ca>  Mon, 20 Oct 2008 17:14:57 -0500
+
+lustre (1.6.6-4) unstable; urgency=low
+
+  * update b_release_1_6_6 branch
+
+ -- Brian J. Murrell <brian@interlinx.bc.ca>  Tue, 14 Oct 2008 15:49:50 -0500
+
+lustre (1.6.6-3) unstable; urgency=low
+
+  * add linux-proc.c patch to bz14250-b_release_1_6_6.patch per comment
+    #55
+
+ -- Brian J. Murrell <brian@interlinx.bc.ca>  Fri,  3 Oct 2008 23:51:00 -0500
+
+lustre (1.6.6-2) unstable; urgency=low
+
+  * Include local test fixes not yet landed
+
+ -- Brian J. Murrell <brian@interlinx.bc.ca>  Fri,  3 Oct 2008 23:51:00 -0500
+
+lustre (1.6.6-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Brian J. Murrell <brian@interlinx.bc.ca>  Thu,  2 Oct 2008 17:24:57 -0500
+
+lustre (1.6.5.1-1) unstable; urgency=low
+
+  * New upstream release.
+  * V2 of the security plugin architecture patch (bz15308).
+
+ -- Brian J. Murrell <brian@interlinx.bc.ca>  Mon,  7 Jul 2008 09:50:50 -0500
+
+lustre (1.6.5-1) unstable; urgency=low
+
+  * New upstream release.
+  * Add the security plugin architecture patch (bz15308).
+
+ -- Brian J. Murrell <brian@interlinx.bc.ca>  Wed, 21 May 2008 15:32:58 -0500
+
+lustre (1.6.5rc3-3) unstable; urgency=low
+
+  * Make service tags update idempotent.
+
+ -- Brian J. Murrell <brian@interlinx.bc.ca>  Wed, 21 May 2008 15:32:58 -0500
+
+lustre (1.6.5rc3-2) unstable; urgency=low
+
+  * Small fix to the servicetags portion of mount.lustre.
+
+ -- Brian J. Murrell <brian@interlinx.bc.ca>  Tue, 20 May 2008 12:15:40 -0500
+
+lustre (1.6.5rc3-1) unstable; urgency=low
+
+  [ Brian J. Murrell ]
+  * New upstream release (1.6.5rc3).
+
+ -- Brian J. Murrell <brian@interlinx.bc.ca>  Sat, 17 May 2008 20:17:40 -0500
+
+lustre (1.6.0.1-1) unstable; urgency=low
+
+  [ Brian J. Murrell ]
+  * New upstream release.
+    - fixes broken patchless client build issue
+    - add https://bugzilla.lustre.org/attachment.cgi?id=9770 (from bug 11710)
+    - package lustre-tests
+
+ -- Brian J. Murrell <brian@interlinx.bc.ca>  Tue, 10 May 2007 12:12:11 -0500
+
+lustre (1.6.0-1) unstable; urgency=low
+
+  [ Brian J. Murrell ]
+  * New upstream release.
+  * lustre-source requires SNMP support, so depend on libsnmp-dev.
+  * Build on latest 2.6.20 Ubuntu kernel (2.6.20-15).
+
+ -- Brian J. Murrell <brian@interlinx.bc.ca>  Tue,  1 May 2007 20:53:08 -0500
+
