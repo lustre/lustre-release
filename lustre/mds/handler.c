@@ -485,7 +485,7 @@ static int __init mds_cmd_init(void)
         struct lprocfs_static_vars lvars;
         int rc;
 
-        request_module("lquota");
+        request_module("%s", "lquota");
         mds_quota_interface_ref = PORTAL_SYMBOL_GET(mds_quota_interface);
         rc = lquota_init(mds_quota_interface_ref);
         if (rc) {

@@ -745,7 +745,7 @@ struct module {
 extern struct module libcfs_global_module;
 #define THIS_MODULE  &libcfs_global_module
 
-#define request_module(x) (0)
+#define request_module(x, y) (0)
 #define EXPORT_SYMBOL(s)
 #define MODULE_AUTHOR(s)
 #define MODULE_DESCRIPTION(s)

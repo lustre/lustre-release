@@ -1110,7 +1110,8 @@ int lr_write_log()
 
         lr_backup_log();
 
-        fd = open(statuslog, O_WRONLY | O_CREAT | O_SYNC);
+        fd = open(statuslog, O_WRONLY | O_CREAT | O_SYNC,
+                             S_IRUSR | S_IWUSR);
         if (fd == -1) {
                 fprintf(stderr, "Error opening log file for writing (%s)\n",
                         statuslog);

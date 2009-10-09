@@ -2224,8 +2224,13 @@ static int lfs_flushctx(int argc, char **argv)
                 }
         }
 
-        if (kdestroy)
-                system("kdestroy > /dev/null");
+        if (kdestroy) {
+            int rc;
+            if ((rc = system("kdestroy > /dev/null")) != 0) {
+                rc = WEXITSTATUS(rc);
+                fprintf(stderr, "error destroying tickets: %d, continuing\n", rc);
+            }
+        }
 
         if (optind >= argc) {
                 /* flush for all mounted lustre fs. */

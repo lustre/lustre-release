@@ -241,7 +241,7 @@ static inline void MODULE_AUTHOR(char *name)
 #define __init
 #define __exit
 
-static inline int request_module(char *name)
+static inline int request_module(const char *name, ...)
 {
         return (-EINVAL);
 }

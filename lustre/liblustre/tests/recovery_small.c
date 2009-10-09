@@ -50,6 +50,7 @@
 #include <fcntl.h>
 #include <sys/queue.h>
 #include <getopt.h>
+#include <sys/wait.h>
 
 #include <sysio.h>
 #include <mount.h>
@@ -149,7 +150,8 @@ void cleanup_dir(const char *path)
             sprintf(cmd,                                                   \
                     "%s %s \"echo %lu > /proc/sys/lustre/fail_loc\"",      \
                     ssh_cmd, mds_server, drop_arr[drop_index].code);       \
-            if ((rc = system(cmd))) {                                      \
+            if ((rc = system(cmd)) != 0) {                                 \
+                rc = WEXITSTATUS(rc);                                      \
                 printf("error excuting remote command: %d\n", rc);         \
                 exit(rc);                                                  \
             }                                                              \
@@ -163,7 +165,7 @@ void cleanup_dir(const char *path)
         if (drop_arr[drop_index].name) {                                   \
             sprintf(cmd, "%s %s \"echo 0 > /proc/sys/lustre/fail_loc\"",   \
                     ssh_cmd, mds_server);                                  \
-            system(cmd);                                                   \
+            if (!system(cmd)) {}                                           \
         }                                                                  \
     } while (0)
 

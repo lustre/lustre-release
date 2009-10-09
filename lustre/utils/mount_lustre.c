@@ -326,7 +326,12 @@ int read_file(char *path, char *buf, int size)
         if (fd == NULL)
                 return errno;
 
-        fgets(buf, size, fd);
+        /* should not ignore fgets(3)'s return value */
+        if (!fgets(buf, size, fd)) {
+                fprintf(stderr, "reading from %s: %s", path, strerror(errno));
+                fclose(fd);
+                return 1;
+        }
         fclose(fd);
         return 0;
 }
@@ -716,8 +721,12 @@ int main(int argc, char *const argv[])
                 /* May as well try to clean up loop devs */
                 if (strncmp(usource, "/dev/loop", 9) == 0) {
                         char cmd[256];
+                        int ret;
                         sprintf(cmd, "/sbin/losetup -d %s", usource);
-                        system(cmd);
+                        if ((ret = system(cmd)) < 0)
+                                rc = errno;
+                        else if (ret > 0)
+                                rc = WEXITSTATUS(ret);
                 }
 
         } else if (!nomtab) {

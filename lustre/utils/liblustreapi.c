@@ -2677,8 +2677,8 @@ int llapi_changelog_start(void **priv, int flags, const char *device,
         struct changelog_private *cp;
         struct changelog_show cs = {};
         char mdtname[20];
-        char pattern[100];
-        char trigger[100];
+        char pattern[PATH_MAX];
+        char trigger[PATH_MAX];
         int fd, rc, pid;
 
         /* Find mdtname from path, fsname, mdtname, or mdtname_UUID */

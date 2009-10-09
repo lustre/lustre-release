@@ -4631,7 +4631,7 @@ static int __init obdfilter_init(void)
 
         lprocfs_filter_init_vars(&lvars);
 
-        request_module("lquota");
+        request_module("%s", "lquota");
         OBD_ALLOC(obdfilter_created_scratchpad,
                   OBDFILTER_CREATED_SCRATCHPAD_ENTRIES *
                   sizeof(*obdfilter_created_scratchpad));

@@ -953,7 +953,12 @@ try_mdc:
                 goto fail;
 
 got_one:
-        fgets(buf, sizeof(buf), fp);
+        /* should not ignore fgets(3)'s return value */
+        if (!fgets(buf, sizeof(buf), fp)) {
+                fprintf(stderr, "reading from %s: %s", buf, strerror(errno));
+                fclose(fp);
+                return;
+        }
         fclose(fp);
 
         /* trim trailing newlines */
