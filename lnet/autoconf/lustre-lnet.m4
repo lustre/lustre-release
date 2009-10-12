@@ -948,8 +948,8 @@ EXTRA_KCFLAGS="$tmp_flags"
 #
 # LN_CONFIG_USERSPACE
 #
-# This is defined but empty because it is called from build/lustre-build.m4
-# which is shared by all branches.
+# This is defined but empty because it is called from 
+# build/autconf/lustre-build.m4 which is shared by all branches.
 #
 AC_DEFUN([LN_CONFIG_USERSPACE],
 [
