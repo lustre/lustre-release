@@ -542,8 +542,8 @@ extern struct rw_semaphore _lprocfs_lock;
 
 /* to begin from 2.6.23, Linux defines self file_operations (proc_reg_file_ops)
  * in procfs, the proc file_operation defined by Lustre (lprocfs_generic_fops)
- * will be wrapped into the new defined proc_reg_file_ops, which instroduces 
- * user count in proc_dir_entrey(pde_users) to protect the proc entry from 
+ * will be wrapped into the new defined proc_reg_file_ops, which instroduces
+ * user count in proc_dir_entrey(pde_users) to protect the proc entry from
  * being deleted. then the protection lock (_lprocfs_lock) defined by Lustre
  * isn't necessary anymore for lprocfs_generic_fops(e.g. lprocfs_fops_read).
  * see bug19706 for detailed information.
@@ -579,7 +579,7 @@ extern struct rw_semaphore _lprocfs_lock;
 } while(0)
 #define LPROCFS_CHECK_DELETED(dp) ((dp)->deleted)
 
-#elif HAVE_PROCFS_USERS
+#elif defined HAVE_PROCFS_USERS
 
 #define LPROCFS_CHECK_DELETED(dp) ({            \
         int deleted = 0;                        \
@@ -589,14 +589,14 @@ extern struct rw_semaphore _lprocfs_lock;
         spin_unlock(&(dp)->pde_unload_lock);    \
         deleted;                                \
 })
-             
+
 #define LPROCFS_ENTRY_AND_CHECK(dp) do {        \
         if (LPROCFS_CHECK_DELETED(dp))          \
                 return -ENODEV;                 \
 } while(0)
 
 #else
-        
+
 #define LPROCFS_ENTRY_AND_CHECK(dp) \
         LPROCFS_ENTRY();
 #define LPROCFS_CHECK_DELETED(dp) (0)

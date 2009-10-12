@@ -3597,13 +3597,13 @@ static int osc_statfs_interpret(struct ptlrpc_request *req,
          *                   avail < ~0.1% max          max = avail + used
          *            1025 * avail < avail + used       used = blocks - free
          *            1024 * avail < used
-         *            1024 * avail < blocks - free                      
-         *                   avail < ((blocks - free) >> 10)    
+         *            1024 * avail < blocks - free
+         *                   avail < ((blocks - free) >> 10)
          *
          * On very large disk, say 16TB 0.1% will be 16 GB. We don't want to
          * lose that amount of space so in those cases we report no space left
          * if their is less than 1 GB left.                             */
-        used = min((msfs->os_blocks - msfs->os_bfree) >> 10, 1 << 30);
+        used = min_t(__u64, (msfs->os_blocks - msfs->os_bfree) >> 10, 1 << 30);
         if (unlikely(((cli->cl_oscc.oscc_flags & OSCC_FLAG_NOSPC) == 0) &&
                      ((msfs->os_ffree < 32) || (msfs->os_bavail < used))))
                 cli->cl_oscc.oscc_flags |= OSCC_FLAG_NOSPC;
