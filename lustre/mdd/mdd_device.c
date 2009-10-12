@@ -290,6 +290,13 @@ int mdd_changelog_on(struct mdd_device *mdd, int on)
         return rc;
 }
 
+static __u64 cl_time(void) {
+        cfs_fs_time_t time;
+
+        cfs_fs_time_current(&time);
+        return (((__u64)time.tv_sec) << 30) + time.tv_nsec;
+}
+
 /** Add a changelog entry \a rec to the changelog llog
  * \param mdd
  * \param rec
@@ -311,7 +318,7 @@ int mdd_changelog_llog_write(struct mdd_device         *mdd,
         rec->cr_hdr.lrh_len = llog_data_len(sizeof(*rec) + rec->cr.cr_namelen);
         /* llog_lvfs_write_rec sets the llog tail len */
         rec->cr_hdr.lrh_type = CHANGELOG_REC;
-        rec->cr.cr_time = cfs_time_current_64();
+        rec->cr.cr_time = cl_time();
         spin_lock(&mdd->mdd_cl.mc_lock);
         /* NB: I suppose it's possible llog_add adds out of order wrt cr_index,
            but as long as the MDD transactions are ordered correctly for e.g.

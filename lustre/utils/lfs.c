@@ -2357,14 +2357,22 @@ static int lfs_changelog(int argc, char **argv)
         }
 
         while ((rc = llapi_changelog_recv(changelog_priv, &rec)) == 0) {
+                time_t secs;
+                struct tm ts;
+
                 if (endrec && rec->cr_index > endrec)
                         break;
                 if (rec->cr_index < startrec)
                         continue;
 
-                printf(LPU64" %02d%-5s "LPU64" 0x%x t="DFID,
-                       rec->cr_index, rec->cr_type,
-                       changelog_type2str(rec->cr_type), rec->cr_time,
+                secs = rec->cr_time >> 30;
+                gmtime_r(&secs, &ts);
+                printf(LPU64" %02d%-5s %02d:%02d:%02d.%06d %04d.%02d.%02d "
+                       "0x%x t="DFID, rec->cr_index, rec->cr_type,
+                       changelog_type2str(rec->cr_type),
+                       ts.tm_hour, ts.tm_min, ts.tm_sec,
+                       (int)(rec->cr_time & ((1<<30) - 1)),
+                       ts.tm_year+1900, ts.tm_mon+1, ts.tm_mday,
                        rec->cr_flags & CLF_FLAGMASK, PFID(&rec->cr_tfid));
                 if (rec->cr_namelen)
                         /* namespace rec includes parent and filename */

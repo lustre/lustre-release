@@ -6466,13 +6466,13 @@ test_160() {
     # verify contents
     echo "verifying target fid"
     fidc=$($LFS changelog $MDT0 | grep timestamp | grep "CREAT" | \
-	tail -1 | awk '{print $5}')
+	tail -1 | awk '{print $6}')
     fidf=$($LFS path2fid $DIR/$tdir/pics/zach/timestamp)
     [ "$fidc" == "t=$fidf" ] || \
 	err17935 "fid in changelog $fidc != file fid $fidf"
     echo "verifying parent fid"
     fidc=$($LFS changelog $MDT0 | grep timestamp | grep "CREAT" | \
-	tail -1 | awk '{print $6}')
+	tail -1 | awk '{print $7}')
     fidf=$($LFS path2fid $DIR/$tdir/pics/zach)
     [ "$fidc" == "p=$fidf" ] || \
 	err17935 "pfid in changelog $fidc != dir fid $fidf"
