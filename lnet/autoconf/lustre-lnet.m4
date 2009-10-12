@@ -945,6 +945,17 @@ EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 #
+#
+# LN_CONFIG_USERSPACE
+#
+# This is defined but empty because it is called from build/lustre-build.m4
+# which is shared by all branches.
+#
+AC_DEFUN([LN_CONFIG_USERSPACE],
+[
+])
+
+#
 # LN_PROG_LINUX
 #
 # LNet linux kernel checks
