@@ -1,6 +1,6 @@
 #!/bin/bash
-# requirement:
-#	add uml1 uml2 uml3 in your /etc/hosts
+# -*- mode: Bash; tab-width: 4; indent-tabs-mode: t; -*-
+# vim:autoindent:shiftwidth=4:tabstop=4:
 
 # FIXME - there is no reason to use all of these different
 #   return codes, espcially when most of them are mapped to something
@@ -1048,7 +1048,7 @@ test_32b() {
 		{ skip_env "Cannot untar $DISK1_8" && return ; }
 
 	load_modules
-	$LCTL set_param debug=$PTLDEBUG
+	$LCTL set_param debug="config"
 	local NEWNAME=lustre
 
 	# writeconf will cause servers to register with their current nids
@@ -1060,7 +1060,8 @@ test_32b() {
 	echo MDS uuid $UUID
 	[ "$UUID" == "${NEWNAME}-MDT0000_UUID" ] || error "UUID is wrong: $UUID"
 
-	$TUNEFS --mgsnode=$HOSTNAME --writeconf --fsname=$NEWNAME $tmpdir/ost1 || error "tunefs failed"
+	$TUNEFS --mgsnode=$HOSTNAME --writeconf --fsname=$NEWNAME $tmpdir/ost1 ||\
+	    error "tunefs failed"
 	start32 ost1 $tmpdir/ost1 "-o loop" || return 5
 	UUID=$($LCTL get_param -n obdfilter.${NEWNAME}-OST0000.uuid)
 	echo OST uuid $UUID
@@ -1075,12 +1076,12 @@ test_32b() {
 
 	echo "MDC changes should succeed:"
 	$LCTL conf_param ${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight=9 || return 9
-	$LCTL conf_param lustre-MDT0000.failover.node=$NID || return 10
+	$LCTL conf_param ${NEWNAME}-MDT0000.failover.node=$NID || return 10
 	echo "ok."
 
 	echo "LOV changes should succeed:"
-	$LCTL pool_new lustre.interop || return 11
-	$LCTL conf_param lustre-MDT0000.lov.stripesize=4M || return 12
+	$LCTL pool_new ${NEWNAME}.interop || return 11
+	$LCTL conf_param ${NEWNAME}-MDT0000.lov.stripesize=4M || return 12
 	echo "ok."
 
 	# MDT and OST should have registered with new nids, so we should have
