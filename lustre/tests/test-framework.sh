@@ -1013,12 +1013,13 @@ wait_delete_completed () {
         sleep 1
         TOTAL=`lctl get_param -n osc.*.kbytesavail | \
                awk 'BEGIN{total=0}; {total+=$1}; END{print total}'`
-        [ "$TOTAL" -eq "$TOTALPREV" ] && break
+        [ "$TOTAL" -eq "$TOTALPREV" ] && return 0
         echo "Waiting delete completed ... prev: $TOTALPREV current: $TOTAL "
         TOTALPREV=$TOTAL
         WAIT=$(( WAIT + 1))
     done
-    echo "Delete completed."
+    echo "Delete is not completed in $MAX_WAIT sec"
+    return 1
 }
 
 wait_for_host() {
@@ -1036,12 +1037,12 @@ wait_for() {
 wait_recovery_complete () {
     local facet=$1
 
-    # Use default policy if $2 is not passed by caller. 
+    # Use default policy if $2 is not passed by caller.
     #define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 / 2)
     # as we are in process of changing obd_timeout in different ways
     # let's set MAX longer than that
     local MAX=${2:-$(( TIMEOUT * 4 ))}
- 
+
     local var_svc=${facet}_svc
     local procfile="*.${!var_svc}.recovery_status"
     local WAIT=0
@@ -1055,6 +1056,57 @@ wait_recovery_complete () {
         echo "Waiting $((MAX - WAIT)) secs for $facet recovery done. $STATUS"
     done
     echo "$facet recovery not done in $MAX sec. $STATUS"
+    return 1
+}
+
+wait_mds_ost_sync () {
+    # just because recovery is done doesn't mean we've finished
+    # orphan cleanup. Wait for llogs to get synchronized.
+    echo "Waiting for orphan cleanup..."
+    # MAX value includes time needed for MDS-OST reconnection
+    local MAX=$(( TIMEOUT * 2 ))
+    local WAIT=0
+    while [ $WAIT -lt $MAX ]; do
+        local -a sync=($(do_nodes $(comma_list $(osts_nodes)) \
+            "$LCTL get_param -n obdfilter.*.mds_sync"))
+        local con=1
+        for ((i=0; i<${#sync[@]}; i++)); do
+            [ ${sync[$i]} -eq 0 ] && continue
+            # there is a not finished MDS-OST synchronization
+            con=0
+            break;
+        done
+        sleep 2 # increase waiting time and cover statfs cache
+        [ ${con} -eq 1 ] && return 0
+        echo "Waiting $WAIT secs for $facet mds-ost sync done."
+        WAIT=$((WAIT + 2))
+    done
+    echo "$facet recovery not done in $MAX sec. $STATUS"
+    return 1
+}
+
+wait_destroy_complete () {
+    echo "Waiting for destroy to be done..."
+    # MAX value shouldn't be big as this mean server responsiveness
+    # never increase this just to make test pass but investigate
+    # why it takes so long time
+    local MAX=5
+    local WAIT=0
+    while [ $WAIT -lt $MAX ]; do
+        local -a RPCs=($($LCTL get_param -n osc.*.destroys_in_flight))
+        local con=1
+        for ((i=0; i<${#RPCs[@]}; i++)); do
+            [ ${RPCs[$i]} -eq 0 ] && continue
+            # there are still some destroy RPCs in flight
+            con=0
+            break;
+        done
+        sleep 1
+        [ ${con} -eq 1 ] && return 0 # done waiting
+        echo "Waiting $WAIT secs for destroys to be done."
+        WAIT=$((WAIT + 1))
+    done
+    echo "Destroys weren't done in $MAX sec."
     return 1
 }
 
