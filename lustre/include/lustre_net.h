@@ -270,7 +270,9 @@ struct ptlrpc_reply_state {
         unsigned long          rs_handled:1;  /* been handled yet? */
         unsigned long          rs_on_net:1;   /* reply_out_callback pending? */
         unsigned long          rs_prealloc:1; /* rs from prealloc list */
-
+        unsigned long          rs_committed:1;/* the transaction was committed
+                                                 and the rs was dispatched
+                                                 by ptlrpc_commit_replies */
         int                    rs_size;
         __u32                  rs_opc;
         __u64                  rs_transno;

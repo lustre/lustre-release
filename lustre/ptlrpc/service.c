@@ -280,6 +280,7 @@ static void rs_batch_add(struct rs_batch *b, struct ptlrpc_reply_state *rs)
                 rs->rs_scheduled = 1;
                 b->rsb_n_replies++;
         }
+        rs->rs_committed = 1;
         spin_unlock(&rs->rs_lock);
 }
 
@@ -1664,9 +1665,29 @@ ptlrpc_handle_rs (struct ptlrpc_reply_state *rs)
         list_del_init (&rs->rs_exp_list);
         spin_unlock (&exp->exp_lock);
 
-        /* Avoid exp_uncommitted_replies_lock contention if we 100% sure that
-         * rs has been removed from the list already */
-        if (!list_empty_careful(&rs->rs_obd_list)) {
+        /* The disk commit callback holds exp_uncommitted_replies_lock while it
+         * iterates over newly committed replies, removing them from
+         * exp_uncommitted_replies.  It then drops this lock and schedules the
+         * replies it found for handling here.
+         *
+         * We can avoid contention for exp_uncommitted_replies_lock between the
+         * HRT threads and further commit callbacks by checking rs_committed
+         * which is set in the commit callback while it holds both
+         * rs_lock and exp_uncommitted_reples.
+         * 
+         * If we see rs_committed clear, the commit callback _may_ not have
+         * handled this reply yet and we race with it to grab
+         * exp_uncommitted_replies_lock before removing the reply from
+         * exp_uncommitted_replies.  Note that if we lose the race and the
+         * reply has already been removed, list_del_init() is a noop.
+         *
+         * If we see rs_committed set, we know the commit callback is handling,
+         * or has handled this reply since store reordering might allow us to
+         * see rs_committed set out of sequence.  But since this is done
+         * holding rs_lock, we can be sure it has all completed once we hold
+         * rs_lock, which we do right next.
+         */
+        if (!rs->rs_committed) {
                 spin_lock(&exp->exp_uncommitted_replies_lock);
                 list_del_init(&rs->rs_obd_list);
                 spin_unlock(&exp->exp_uncommitted_replies_lock);
