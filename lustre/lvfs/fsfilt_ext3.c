@@ -137,6 +137,13 @@ struct fsfilt_cb_data {
 #define ext3_inode_bitmap(sb,desc) le32_to_cpu((desc)->bg_inode_bitmap)
 #endif
 
+#ifndef HAVE_EXT4_LDISKFS
+static __u32 ext3_itable_unused_count(struct super_block *sb,
+                               struct ext3_group_desc *bg) {
+       return le16_to_cpu(bg->bg_itable_unused);
+}
+#endif
+
 static char *fsfilt_ext3_get_label(struct super_block *sb)
 {
         return EXT3_SB(sb)->s_es->s_volume_name;
@@ -1988,7 +1995,7 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
                                   struct obd_quotactl *oqc)
 {
         struct ext3_sb_info *sbi = EXT3_SB(sb);
-        int i, group;
+        int i, group, uninit_feat = 0;
         struct qchk_ctxt *qctxt;
         struct buffer_head *bitmap_bh = NULL;
         unsigned long ino;
@@ -2023,20 +2030,32 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
                 }
         }
 
+        if (EXT3_HAS_RO_COMPAT_FEATURE(sb, EXT3_FEATURE_RO_COMPAT_GDT_CSUM))
+                /* This filesystem supports the uninit group feature */
+                uninit_feat = 1;
+
         /* check quota and update in hash */
         for (group = 0; group < sbi->s_groups_count; group++) {
-                struct ext3_group_desc *desc;
-                desc = get_group_desc(sb, group);
-                if (!desc)
-                        GOTO(out, -EIO);
+                __u32 unused_count = 0;
 
-                spin_lock(sb_bgl_lock(sbi, group));
-                if (desc->bg_flags & cpu_to_le16(EXT3_BG_INODE_UNINIT)) {
-                        /* no inode in use in this group, just skip it */
+                if (uninit_feat) {
+                        struct ext3_group_desc *desc;
+                        desc = get_group_desc(sb, group);
+                        if (!desc)
+                                GOTO(out, -EIO);
+
+                        /* we don't really need to take the group lock here,
+                         * but it may be useful if one day we support online
+                         * quotacheck */
+                        spin_lock(sb_bgl_lock(sbi, group));
+                        if (desc->bg_flags & cpu_to_le16(EXT3_BG_INODE_UNINIT)) {
+                                /* no inode in use in this group, just skip it */
+                                spin_unlock(sb_bgl_lock(sbi, group));
+                                continue;
+                        }
+                        unused_count = ext3_itable_unused_count(sb, desc);
                         spin_unlock(sb_bgl_lock(sbi, group));
-                        continue;
                 }
-                spin_unlock(sb_bgl_lock(sbi, group));
 
                 ino = group * sbi->s_inodes_per_group + 1;
                 bitmap_bh = ext3_read_inode_bitmap(sb, group);
@@ -2045,7 +2064,8 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
                         GOTO(out, -EIO);
                 }
 
-                for (i = 0; i < sbi->s_inodes_per_group; i++, ino++) {
+                for (i = 0; i < sbi->s_inodes_per_group - unused_count;
+                     i++, ino++) {
                         if (ino < sbi->s_first_ino)
                                 continue;
 
