@@ -890,8 +890,7 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
         return 0;
 }
 
-static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
-                                      int extra_time)
+static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 {
         struct ptlrpc_service *svc = req->rq_rqbd->rqbd_service;
         struct ptlrpc_request *reqcopy;
@@ -907,7 +906,7 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
                   "%ssending early reply (deadline %+lds, margin %+lds) for "
                   "%d+%d", AT_OFF ? "AT off - not " : "",
                   olddl, olddl - at_get(&svc->srv_at_estimate),
-                  at_get(&svc->srv_at_estimate), extra_time);
+                  at_get(&svc->srv_at_estimate), at_extra);
 
         if (AT_OFF)
                 RETURN(0);
@@ -927,22 +926,23 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
                 RETURN(-ENOSYS);
         }
 
-        if (req->rq_export && req->rq_export->exp_in_recovery) {
-                /* don't increase server estimates during recovery, and give
-                   clients the full recovery time. */
-                newdl = cfs_time_current_sec() +
-                        req->rq_export->exp_obd->obd_recovery_timeout;
+        if (req->rq_export &&
+            lustre_msg_get_flags(req->rq_reqmsg) &
+            (MSG_REPLAY | MSG_REQ_REPLAY_DONE | MSG_LOCK_REPLAY_DONE)) {
+                /**
+                 * Use at_extra as early reply period for recovery requests but
+                 * make sure it is not bigger than recovery time / 4
+                 */
+                at_add(&svc->srv_at_estimate,
+                       min(at_extra,
+                           req->rq_export->exp_obd->obd_recovery_timeout / 4));
         } else {
-                if (extra_time) {
-                        /* Fake our processing time into the future to ask the
-                           clients for some extra amount of time */
-                        extra_time += cfs_time_current_sec() -
-                                req->rq_arrival_time.tv_sec;
-                        at_add(&svc->srv_at_estimate, extra_time);
-                }
-                newdl = req->rq_arrival_time.tv_sec +
-                        at_get(&svc->srv_at_estimate);
+                /* Fake our processing time into the future to ask the clients
+                 * for some extra amount of time */
+                at_add(&svc->srv_at_estimate, at_extra);
         }
+
+        newdl = cfs_time_current_sec() + at_get(&svc->srv_at_estimate);
         if (req->rq_deadline >= newdl) {
                 /* We're not adding any time, no need to send an early reply
                    (e.g. maybe at adaptive_max) */
@@ -1119,7 +1119,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
                                 rq_timed_list);
                 list_del_init(&rq->rq_timed_list);
 
-                if (ptlrpc_at_send_early_reply(rq, at_extra) == 0)
+                if (ptlrpc_at_send_early_reply(rq) == 0)
                         ptlrpc_at_add_timed(rq);
 
                 ptlrpc_server_drop_request(rq);

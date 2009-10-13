@@ -198,16 +198,14 @@ void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req)
         if (AT_OFF) {
                 /* non-AT settings */
                 req->rq_timeout = req->rq_import->imp_server_timeout ?
-                        obd_timeout / 2 : obd_timeout;
-                lustre_msg_set_timeout(req->rq_reqmsg, req->rq_timeout);
-                return;
+                                  obd_timeout / 2 : obd_timeout;
+        } else {
+                at = &req->rq_import->imp_at;
+                idx = import_at_get_index(req->rq_import,
+                                          req->rq_request_portal);
+                serv_est = at_get(&at->iat_service_estimate[idx]);
+                req->rq_timeout = at_est2timeout(serv_est);
         }
-
-        at = &req->rq_import->imp_at;
-        idx = import_at_get_index(req->rq_import,
-                                  req->rq_request_portal);
-        serv_est = at_get(&at->iat_service_estimate[idx]);
-        req->rq_timeout = at_est2timeout(serv_est);
         /* We could get even fancier here, using history to predict increased
            loading... */
 
@@ -223,11 +221,6 @@ static void ptlrpc_at_adj_service(struct ptlrpc_request *req,
         int idx;
         unsigned int oldse;
         struct imp_at *at;
-
-        /* do estimate only if is not in recovery */
-        if ((req->rq_send_state != LUSTRE_IMP_FULL) &&
-             (req->rq_send_state != LUSTRE_IMP_CONNECTING))
-                return;
 
         LASSERT(req->rq_import);
         at = &req->rq_import->imp_at;

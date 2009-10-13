@@ -1638,13 +1638,12 @@ static int handle_recovery_req(struct ptlrpc_thread *thread,
         /* don't reset timer for final stage */
         if (!exp_finished(req->rq_export)) {
                 /**
-                 * XXX: until bug 18948 is fixed (enable AT for request copy)
-                 * the client may reconnect during recovery so we may need to
-                 * wait RECONNECT_DELAY_MAX after each replay instead of
-                 * at_get(&req->rq_rqbd->rqbd_service->srv_at_estimate);
+                 * Add request timeout to the recovery time so next request from
+                 * this client may come in recovery time
                  */
-                 reset_recovery_timer(class_exp2obd(req->rq_export), AT_OFF ?
-                                      obd_timeout : RECONNECT_DELAY_MAX, 1);
+                 reset_recovery_timer(class_exp2obd(req->rq_export),
+                                      AT_OFF ? obd_timeout :
+                                      lustre_msg_get_timeout(req->rq_reqmsg), 1);
         }
         /**
          * bz18031: increase next_recovery_transno before target_request_copy_put()
