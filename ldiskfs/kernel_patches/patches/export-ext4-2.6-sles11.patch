@@ -1,8 +1,16 @@
-Index: linux-2.6.18.i386/fs/ext4/super.c
+Index: linux-stage/fs/ext4/super.c
 ===================================================================
---- linux-2.6.18.i386.orig/fs/ext4/super.c
-+++ linux-2.6.18.i386/fs/ext4/super.c
-@@ -185,6 +185,8 @@ void ext4_journal_abort_handle(const cha
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -124,6 +124,7 @@ __u32 ext4_itable_unused_count(struct su
+ 		(EXT4_DESC_SIZE(sb) >= EXT4_MIN_DESC_SIZE_64BIT ?
+ 		(__u32)le16_to_cpu(bg->bg_itable_unused_hi) << 16 : 0);
+ }
++EXPORT_SYMBOL(ext4_itable_unused_count);
+ 
+ void ext4_block_bitmap_set(struct super_block *sb,
+ 			   struct ext4_group_desc *bg, ext4_fsblk_t blk)
+@@ -253,6 +254,8 @@ void ext4_journal_abort_handle(const cha
  	jbd2_journal_abort_handle(handle);
  }
  
@@ -11,7 +19,7 @@ Index: linux-2.6.18.i386/fs/ext4/super.c
  /* Deal with the reporting of failure conditions on a filesystem such as
   * inconsistencies detected or read IO failures.
   *
-@@ -2459,6 +2461,8 @@ out_fail:
+@@ -2590,6 +2593,8 @@ out_fail:
  	return ret;
  }
  
@@ -20,7 +28,7 @@ Index: linux-2.6.18.i386/fs/ext4/super.c
  /*
   * Setup any per-fs journal parameters now.  We'll do this both on
   * initial mount, once the journal has been initialised but before we've
-@@ -3502,6 +3506,12 @@ int ext4_map_inode_page(struct inode *in
+@@ -3728,6 +3733,12 @@ int ext4_map_inode_page(struct inode *in
  			unsigned long *blocks, int *created, int create);
  EXPORT_SYMBOL(ext4_map_inode_page);
  
@@ -37,7 +45,7 @@ Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
 --- linux-stage.orig/fs/ext4/ext4.h
 +++ linux-stage/fs/ext4/ext4.h
-@@ -1097,6 +1097,8 @@ extern struct inode * ext4_orphan_get(st
+@@ -1047,6 +1047,8 @@ extern struct inode * ext4_orphan_get(st
  extern unsigned long ext4_count_free_inodes(struct super_block *);
  extern unsigned long ext4_count_dirs(struct super_block *);
  extern void ext4_check_inodes_bitmap(struct super_block *);
