@@ -198,9 +198,13 @@ restat:
 /* Calculate how much grant space to allocate to this client, based on how
  * much space is currently free and how much of that is already granted.
  *
+ * if @conservative != 0, we limit the maximum grant to FILTER_GRANT_CHUNK;
+ * otherwise we'll satisfy the requested amount as possible as we can, this
+ * is usually due to client reconnect.
+ *
  * Caller must hold obd_osfs_lock. */
 long filter_grant(struct obd_export *exp, obd_size current_grant,
-                  obd_size want, obd_size fs_space_left)
+                  obd_size want, obd_size fs_space_left, int conservative)
 {
         struct obd_device *obd = exp->exp_obd;
         struct filter_export_data *fed = &exp->exp_filter_data;
@@ -223,16 +227,11 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
                        obd->obd_name, exp->exp_client_uuid.uuid, exp, want);
         } else if (current_grant < want &&
                    current_grant < fed->fed_grant + FILTER_GRANT_CHUNK) {
-                grant = min((want >> blockbits),
-                            (fs_space_left >> blockbits) / 8);
-                grant <<= blockbits;
+                grant = min(want + (1 << blockbits) - 1, fs_space_left / 8);
+                grant &= ~((1ULL << blockbits) - 1);
 
                 if (grant) {
-                        /* Allow >FILTER_GRANT_CHUNK size when clients
-                         * reconnect due to a server reboot.
-                         */
-                        if ((grant > FILTER_GRANT_CHUNK) &&
-                            (!obd->obd_recovering))
+                        if (grant > FILTER_GRANT_CHUNK && conservative)
                                 grant = FILTER_GRANT_CHUNK;
 
                         obd->u.filter.fo_tot_granted += grant;
@@ -731,7 +730,8 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         /* do not zero out oa->o_valid as it is used in filter_commitrw_write()
          * for setting UID/GID and fid EA in first write time. */
         if (oa->o_valid & OBD_MD_FLGRANT)
-                oa->o_grant = filter_grant(exp,oa->o_grant,oa->o_undirty,left);
+                oa->o_grant = filter_grant(exp, oa->o_grant, oa->o_undirty,
+                                           left, 1);
 
         spin_unlock(&obd->obd_osfs_lock);
         filter_fmd_put(exp, fmd);
