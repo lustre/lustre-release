@@ -137,13 +137,6 @@ struct fsfilt_cb_data {
 #define ext3_inode_bitmap(sb,desc) le32_to_cpu((desc)->bg_inode_bitmap)
 #endif
 
-#ifndef HAVE_EXT4_LDISKFS
-static __u32 ext3_itable_unused_count(struct super_block *sb,
-                               struct ext3_group_desc *bg) {
-       return le16_to_cpu(bg->bg_itable_unused);
-}
-#endif
-
 static char *fsfilt_ext3_get_label(struct super_block *sb)
 {
         return EXT3_SB(sb)->s_es->s_volume_name;
@@ -1728,6 +1721,11 @@ ext3_read_inode_bitmap(struct super_block *sb, unsigned long group)
         desc = get_group_desc(sb, group);
         bh = sb_bread(sb, ext3_inode_bitmap(sb, desc));
         return bh;
+}
+
+static __u32 ext3_itable_unused_count(struct super_block *sb,
+                               struct ext3_group_desc *bg) {
+       return le16_to_cpu(bg->bg_itable_unused);
 }
 #endif
 
