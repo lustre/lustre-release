@@ -9,11 +9,6 @@ tbd Sun Microsystems, Inc.
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
 	  2.6.16 - 2.6.30 vanilla (kernel.org)
 	* Recommended e2fsprogs version: 1.41.6.sun1
-	* File join has been disabled in this release, refer to Bugzilla 16929.
-	* A new Lustre ADIO driver is available for MPICH2-1.0.7.
-	* NFS export disabled when stack size < 8192. Since the NFSv4 export
-	  of Lustre filesystem with 4K stack may cause a stack overflow. For
-	  more information, please refer to bugzilla 17630.
 
 Severity   : enhancement
 Bugzilla   : 19662
@@ -22,10 +17,6 @@ Description: Remove set_info(KEY_UNLINKED) from MDS/OSC
 Severity   : normal
 Bugzilla   : 19917
 Description: Drop unnecessary __GFP_NOMEMALLOC flag from filter_get_page()
-
-Severity   : normal
-Bugzilla   : 20482
-Description: Conf-sanity.sh 50g test - deactivated OST should not cause a panic.
 
 Severity   : normal
 Bugzilla   : 18674
@@ -41,10 +32,6 @@ Description: can't stat file in some situation.
 Details    : improve initialize osc date when target is added to mds and
 	     ability to resend too big getattr request is client isn't have info
 	     about ost.
-
-Severity   : enhancement
-Bugzilla   : 20539
-Description: Add OEL5 support.
 
 Severity   : enhancement
 Bugzilla   : 19848
@@ -151,14 +138,6 @@ Details    : Client will shrink its grant cache to OST if there are no write
 	     (left_space < total_clients * 32M).
 
 Severity   : normal
-Frequency  : rare, if clients are evicted due to failure to return a lock
-Bugzilla   : 18618
-Description: don't increase ldlm timeout if previous client was evicted
-Details    : if a client doesn't respond to a blocking callback within the
-	     adaptive ldlm enqueue timeout, don't adjust the adaptive estimate
-	     when the lock is next granted.
-
-Severity   : normal
 Bugzilla   : 18674
 Frequency  : occasionally during network problems
 Description: client not allowed to reconnect to OST because of active request
@@ -184,41 +163,33 @@ Details    : lov_update_create_set() uses set->set_success as index for created
 	     array and we can use qos_shrink_lsm for allocate correct lsm.
 
 Severity   : normal
-Frequency  : rare, only when quota is enabled
-Bugzilla   : 18793
-Description: OSS complains "too many blocks" and crashes
-Details    : In filter_commitrw_write():
-	     1. lquota_chkquota();
-	     2. obdo_from_inode();
-	     3. lquota_pending_commit();
-	     "2." has changed uid and gid in this case, then caused
-	     lquota_chkquota() and lquota_pending_commit() to use
-	     different uid and gid. That is the root of the bug.
-
-Severity   : normal
 Bugzilla   : 19763
 Description: quotacheck performance/scaling issues
 Details    : reduce quotacheck time on empty filesystem by skipping uninit
 	     group.
 
-
-------------------------------------------------------------------------------
-TBD Sun Microsystems, Inc.
+-------------------------------------------------------------------------------
+2009-10-16 Sun Microsystems, Inc.
 	* version 1.8.1.1
 	* Support for kernels:
 	 2.6.16.60-0.42.4 (SLES 10),
-	 2.6.27.23-0.1 (SLES11, i686 & x84_64 only),
+	 2.6.27.29-0.1 (SLES11, i686 & x84_64 only),
 	 2.6.18-128.7.1.el5 (RHEL 5),
+	 2.6.18-128.7.1.el5 (OEL 5),
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
 	  2.6.16 - 2.6.27 vanilla (kernel.org)
 	* Recommended e2fsprogs version: 1.41.6.sun1
-	* File join has been disabled in this release, refer to Bugzilla 16929.
-	* NFS export disabled when stack size < 8192. Since the NFSv4 export
-	  of Lustre filesystem with 4K stack may cause a stack overflow. For
-	  more information, please refer to bugzilla 17630.
 	* ext4 support for RHEL5 is experimental and thus should not be
 	  used in production.
+
+Severity   : enhancement
+Bugzilla   : 20539
+Description: Add OEL5 support.
+
+Severity   : enhancement
+Bugzilla   : 19848
+Description: Update kernel to SLES11 2.6.27.29-0.1.
 
 Severity   : major
 Bugzilla   : 20560
@@ -228,7 +199,7 @@ Details    : Disable page poisoning when the bulk transfer has to be aborted
 
 Severity   : normal
 Bugzilla   : 19557
-Description: Don't allow make backward step on assign osc next id.
+Description: Don't allow make backward step on assiging osc next id.
 Details    : race between allocation next id and ll_sync thread can be cause
 	     of set wrong osc next id and can be kill valid ost objects.
 
@@ -311,12 +282,41 @@ Description: continuing LustreError "mds adjust qunit failed!"
 Details    : don't print message on the console when ->adjust_qunit fails.
 
 Severity   : normal
+Bugzilla   : 18618
+Description: don't increase ldlm timeout if previous client was evicted
+Details    : if a client doesn't respond to a blocking callback within the
+	     adaptive ldlm enqueue timeout, don't adjust the adaptive estimate
+	     when the lock is next granted.
+
+Severity   : normal
 Bugzilla   : 20518
-Description: OST is being unmounted w/o all writes to last_rcvd landing on disk.
-	     Affects recovery negatively.
-Details    : Make sure all exports have been properly destroyed by the zombie
+Description: ost is being unmounted w/o all writes to last_rcvd landing on disk.
+	     affects recovery negatively.
+Details    : make sure all exports have been properly destroyed by the zombie
 	     thread processed before stopping the target.
 
+Severity   : normal
+Bugzilla   : 20205
+Description: Performance degradation with O_DIRECT between 1.6 & 1.8.1 b190
+Details    : disable write barrier for ext4/SLES11.
+
+Severity   : normal
+Bugzilla   : 18571
+Description: Kernel panic - not syncing: Out of memory and no killable
+	     processes... on OSS when iozone
+Details    : fix memory leak in the journal checksum patch.
+
+Severity   : normal
+Bugzilla   : 18793
+Description: group quota "too many blocks" OSS crashes
+Details    : we should keep the same uid/gid for lquota_chkquota() and
+	     lquota_pending_commit()
+
+Severity   : normal
+Bugzilla   : 18630
+Description: LustreError: 9153:0:(quota_context.c:622:dqacq_completion()) LBUG
+Details    : don't LBUG on release quota error. Just a workaround until the
+	     problem is understood.
 
 ------------------------------------------------------------------------------
 2009-07-31 Sun Microsystems, Inc.
