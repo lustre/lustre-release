@@ -19,8 +19,11 @@ init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-TESTSUITELOG=${TESTSUITELOG:-$TMP/recovery-random-scale}
+TESTSUITELOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh)}
 DEBUGLOG=$TESTSUITELOG.debug
+
+cleanup_logs
+
 exec 2>$DEBUGLOG
 echo "--- env ---" >&2
 env >&2
@@ -155,13 +158,16 @@ Status: $result: rc=$rc"
 
     if [ $rc -ne 0 ]; then
         print_logs $NODES_TO_USE
+        # we are interested in only on failed clients and servers
+        local failedclients=$(cat $END_RUN_FILE | grep -v $0)
+        # FIXME: need ostfailover-s nodes also for FLAVOR=OST
+        local product=$(gather_logs $(comma_list $(osts_nodes) \
+                                 $mds_HOST $mdsfailover_HOST $failedclients))
+        echo logs files $product
     fi
 
-    if [ $rc -eq 0 ]; then
-        zconf_mount $(hostname) $MOUNT
-    else
-        error "exited with rc=$rc"
-    fi
+    [ $rc -eq 0 ] && zconf_mount $(hostname) $MOUNT
+
     exit $rc
 }
 

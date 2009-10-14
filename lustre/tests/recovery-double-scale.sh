@@ -17,8 +17,11 @@ CLEANUP=${CLEANUP:-""}
 init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
-TESTSUITELOG=${TESTSUITELOG:-$TMP/recovery-double-scale}
+TESTSUITELOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh)}
 DEBUGLOG=$TESTSUITELOG.debug
+
+cleanup_logs
+
 exec 2>$DEBUGLOG
 echo "--- env ---" >&2
 env >&2
@@ -77,7 +80,7 @@ reboot_recover_node () {
                       boot_node $c
                       echo "Reintegrating $c"
                       # one client fails; need dk logs from this client only 
-                      zconf_mount $c $MOUNT || NODES="$c $(mdts_nodes) $(osts_nodes)" error_exit "zconf_mount failed"
+                      zconf_mount $c $MOUNT || NODES="$c $(facet_host mds) $(osts_nodes)" error_exit "zconf_mount failed"
                  done
                  start_client_loads $item
                  ;;
@@ -227,6 +230,16 @@ Status: $result: rc=$rc"
         sleep 5
         kill -9 $CLIENT_LOAD_PIDS || true
     fi
+
+    if [ $rc -ne 0 ]; then
+        # we are interested in only on failed clients and servers
+        local failedclients=$(cat $END_RUN_FILE | grep -v $0)
+        # FIXME: need ostfailover-s nodes also for FLAVOR=OST
+        local product=$(gather_logs $(comma_list $(osts_nodes) \
+                                 $mds_HOST $mdsfailover_HOST $failedclients))
+        echo logs files $product
+    fi
+
     [ $rc -eq 0 ] && zconf_mount $(hostname) $MOUNT
     exit $rc
 }
