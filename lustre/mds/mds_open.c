@@ -361,8 +361,10 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 lmm_size = rec->ur_eadatalen;
                 lmm = rec->ur_eadata;
                 LASSERT(lmm);
-                LASSERT(lov_mds_md_size(lmm->lmm_stripe_count,
-                                        lmm->lmm_magic) == lmm_size);
+                if (lov_mds_md_size(lmm->lmm_stripe_count,
+                                    lmm->lmm_magic) != lmm_size)
+                        CWARN("Bad lmm_size during open replay for inode "
+                              "%lu\n", inode->i_ino);
 
                 if (*handle == NULL) {
                         int stripe_count = le32_to_cpu(lmm->lmm_stripe_count);
