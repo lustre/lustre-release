@@ -1080,7 +1080,7 @@ static int mds_getattr(struct ptlrpc_request *req, int offset)
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         de = mds_fid2dentry(mds, &body->fid1, NULL);
         if (IS_ERR(de)) {
-                rc = req->rq_status = PTR_ERR(de);
+                req->rq_status = PTR_ERR(de);
                 GOTO(out_pop, rc);
         }
 
@@ -1101,7 +1101,8 @@ out_ucred:
                 int rc2 = lustre_pack_reply(req, 1, NULL, NULL);
                 if (rc == 0)
                         rc = rc2;
-                req->rq_status = rc;
+                if (rc != 0)
+                        req->rq_status = rc;
         }
         mds_exit_ucred(&uc, mds);
 
