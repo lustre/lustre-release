@@ -15,6 +15,11 @@ tbd  Sun Microsystems, Inc.
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
 Severity   : enhancement
+Bugzilla   : 16312
+Description: Build kernels (RHEL5, OEL5 and SLES10/11) using the vendor's own
+             kernel spec file.
+
+Severity   : enhancement
 Bugzilla   : 19662
 Description: Remove set_info(KEY_UNLINKED) from MDS/OSC
 
