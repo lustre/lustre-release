@@ -196,17 +196,24 @@ trace_put_tcd (struct trace_cpu_data *tcd)
 int trace_lock_tcd(struct trace_cpu_data *tcd)
 {
 	__LASSERT(tcd->tcd_type < TCD_TYPE_MAX);
-
-	spin_lock_irqsave(&tcd->tcd_lock, tcd->tcd_lock_flags);
-
+        if (tcd->tcd_type == TCD_TYPE_IRQ)
+                spin_lock_irqsave(&tcd->tcd_lock, tcd->tcd_lock_flags);
+        else if (tcd->tcd_type == TCD_TYPE_SOFTIRQ)
+                spin_lock_bh(&tcd->tcd_lock);
+        else
+                spin_lock(&tcd->tcd_lock);
 	return 1;
 }
 
 void trace_unlock_tcd(struct trace_cpu_data *tcd)
 {
 	__LASSERT(tcd->tcd_type < TCD_TYPE_MAX);
-
-	spin_unlock_irqrestore(&tcd->tcd_lock, tcd->tcd_lock_flags);
+        if (tcd->tcd_type == TCD_TYPE_IRQ)
+                spin_unlock_irqrestore(&tcd->tcd_lock, tcd->tcd_lock_flags);
+        else if (tcd->tcd_type == TCD_TYPE_SOFTIRQ)
+                spin_unlock_bh(&tcd->tcd_lock);
+        else
+                spin_unlock(&tcd->tcd_lock);
 }
 
 int tcd_owns_tage(struct trace_cpu_data *tcd, struct trace_page *tage)
