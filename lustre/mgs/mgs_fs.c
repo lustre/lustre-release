@@ -245,16 +245,12 @@ int mgs_fs_cleanup(struct obd_device *obd)
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         if (mgs->mgs_configs_dir) {
-                /*CERROR("configs dir dcount=%d\n",
-                       atomic_read(&mgs->mgs_configs_dir->d_count));*/
                 l_dput(mgs->mgs_configs_dir);
                 mgs->mgs_configs_dir = NULL;
         }
 
-        shrink_dcache_parent(mgs->mgs_fid_de);
-        /*CERROR("fid dir dcount=%d\n",
-               atomic_read(&mgs->mgs_fid_de->d_count));*/
         dput(mgs->mgs_fid_de);
+        shrink_dcache_sb(mgs->mgs_sb);
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
