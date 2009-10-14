@@ -204,13 +204,20 @@ case `uname -r` in
     *) EXT=".ko"; USE_QUOTA=yes;;
 esac
 
+
+module_loaded () {
+   /sbin/lsmod | grep -q $1
+}
+
 load_module() {
     EXT=".ko"
     module=$1
     shift
     BASE=`basename $module $EXT`
-    lsmod | grep -q ${BASE} || \
-      if [ -f ${LUSTRE}/${module}${EXT} ]; then
+
+    module_loaded ${BASE} && return
+
+    if [ -f ${LUSTRE}/${module}${EXT} ]; then
         insmod ${LUSTRE}/${module}${EXT} $@
     else
         # must be testing a "make install" or "rpm" installation
@@ -966,7 +973,7 @@ cleanup_check() {
     [ "`lctl dl 2> /dev/null | wc -l`" -gt 0 ] && lctl dl && \
         echo "$0: lustre didn't clean up..." 1>&2 && return 202 || true
 
-    if [ "`/sbin/lsmod 2>&1 | egrep 'lnet|libcfs'`" ]; then
+    if module_loaded lnet || module_loaded libcfs; then
         echo "$0: modules still loaded..." 1>&2
         /sbin/lsmod 1>&2
         return 203
@@ -2418,7 +2425,7 @@ equals_msg() {
 
 log() {
     echo "$*"
-    lsmod | grep lnet > /dev/null || load_modules
+    module_loaded lnet || load_modules
 
     local MSG="$*"
     # Get rid of '

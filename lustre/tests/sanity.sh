@@ -3218,6 +3218,7 @@ test_66() {
 run_test 66 "update inode blocks count on client ==============="
 
 LLOOP=
+LLITELOOPLOAD=
 cleanup_68() {
 	trap 0
 	if [ ! -z "$LLOOP" ]; then
@@ -3229,6 +3230,10 @@ cleanup_68() {
 		rm -f $LLOOP
 		unset LLOOP
 	fi
+	if [ ! -z "$LLITELOOPLOAD" ]; then
+		rmmod llite_lloop
+		unset LLITELOOPLOAD
+	fi 
 	rm -f $DIR/f68*
 }
 
@@ -3244,14 +3249,20 @@ swap_used() {
 test_68a() {
 	[ "$UID" != 0 ] && skip_env "must run as root" && return
 
-	grep -q llite_lloop /proc/modules
-	[ $? -ne 0 ] && skip "can't find module llite_lloop" && return
+	trap cleanup_68 EXIT
+
+	if ! module_loaded llite_lloop; then
+		if load_module llite/llite_lloop; then
+			LLITELOOPLOAD=yes
+		else
+			skip_env "can't find module llite_lloop"
+			return
+		fi
+	fi
 
 	LLOOP=$TMP/lloop.`date +%s`.`date +%N`
 	dd if=/dev/zero of=$DIR/f68a bs=4k count=1024
 	$LCTL blockdev_attach $DIR/f68a $LLOOP || error "attach failed"
-
-	trap cleanup_68 EXIT
 
 	directio rdwr $LLOOP 0 1024 4096 || error "direct write failed"
 	directio rdwr $LLOOP 0 1025 4096 && error "direct write should fail"
