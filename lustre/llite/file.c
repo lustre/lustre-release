@@ -461,6 +461,12 @@ int ll_file_open(struct inode *inode, struct file *file)
                  * already? XXX - NFS implications? */
                 oit.it_flags &= ~O_EXCL;
 
+                /* bug20584, if "it_flags" contains O_CREAT, the file will be
+                 * created if necessary, then "IT_CREAT" should be set to keep
+                 * consistent with it */
+                if (oit.it_flags & O_CREAT)
+                        oit.it_op |= IT_CREAT;
+
                 it = &oit;
         }
 

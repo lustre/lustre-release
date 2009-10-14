@@ -1673,6 +1673,9 @@ retry_locks:
         if (rc)
                 GOTO(cleanup, rc);
 
+        if (IS_DEADDIR((*dparentp)->d_inode))
+                GOTO(cleanup, -ENOENT);
+
         /* Step 4: Re-lookup child to verify it hasn't changed since locking */
         rc = mds_verify_child(obd, &parent_res_id, parent_lockh, *dparentp,
                               parent_mode, &child_res_id, child_lockh, dchildp,
