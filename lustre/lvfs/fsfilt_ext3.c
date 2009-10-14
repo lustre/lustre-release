@@ -2029,12 +2029,12 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
                         GOTO(out, rc);
                 }
         }
-
+/*
 #ifdef HAVE_EXT4_LDISKFS
         if (EXT3_HAS_RO_COMPAT_FEATURE(sb, EXT3_FEATURE_RO_COMPAT_GDT_CSUM))
 #else
         if (EXT3_HAS_RO_COMPAT_FEATURE(sb, EXT4_FEATURE_RO_COMPAT_GDT_CSUM))
-#endif
+#endif */
                 /* This filesystem supports the uninit group feature */
                 uninit_feat = 1;
 
