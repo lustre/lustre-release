@@ -88,7 +88,7 @@ void build_lqs(struct obd_device *obd)
                                  i, &id_list);
 #endif
                 if (rc) {
-                        CDEBUG(D_ERROR, "fail to get %s qids!\n",
+                        CERROR("%s: failed to get %s qids\n", obd->obd_name,
                                i ? "group" : "user");
                         continue;
                 }
@@ -104,8 +104,8 @@ void build_lqs(struct obd_device *obd)
                                 lqs->lqs_flags |= dqid->di_flag;
                                 lqs_putref(lqs);
                         } else {
-                                CDEBUG(D_ERROR, "fail to create a lqs"
-                                       "(%s id: %u)!\n", i ? "group" : "user",
+                                CERROR("%s: failed to create a lqs for %sid %u"
+                                       "\n", obd->obd_name, i ? "g" : "u",
                                        dqid->di_id);
                         }
 
@@ -257,7 +257,9 @@ int filter_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                 lqs = quota_search_lqs(LQS_KEY(oqctl->qc_type, oqctl->qc_id),
                                        qctxt, 0);
                 if (lqs == NULL || IS_ERR(lqs)){
-                        CDEBUG(D_ERROR, "fail to create lqs when setquota\n");
+                        CERROR("fail to create lqs during setquota operation "
+                               "for %sid %u\n", oqctl->qc_type ? "g" : "u",
+                               oqctl->qc_id);
                 } else {
                         lqs->lqs_flags &= ~QB_SET;
                         lqs_putref(lqs);
@@ -299,7 +301,9 @@ adjust:
                 lqs = quota_search_lqs(LQS_KEY(oqctl->qc_type, oqctl->qc_id),
                                        qctxt, 1);
                 if (lqs == NULL || IS_ERR(lqs)){
-                        CDEBUG(D_ERROR, "fail to create lqs when setquota\n");
+                        CERROR("fail to create lqs during setquota operation "
+                               "for %sid %u\n", oqctl->qc_type ? "g" : "u",
+                               oqctl->qc_id);
                         break;
                 } else {
                         lqs->lqs_flags |= QB_SET;
