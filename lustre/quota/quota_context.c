@@ -1471,10 +1471,7 @@ lqs_get(struct hlist_node *hnode)
             hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
         ENTRY;
 
-        if (atomic_inc_return(&q->lqs_refcount) == 2) /* quota_search_lqs */
-                atomic_inc(&q->lqs_ctxt->lqc_lqs);
-        CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
-               q, atomic_read(&q->lqs_refcount));
+        lqs_getref(q);
 
         RETURN(q);
 }
@@ -1486,14 +1483,7 @@ lqs_put(struct hlist_node *hnode)
             hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
         ENTRY;
 
-        LASSERT(atomic_read(&q->lqs_refcount) > 0);
-
-        if (atomic_dec_return(&q->lqs_refcount) == 1)
-                if (atomic_dec_and_test(&q->lqs_ctxt->lqc_lqs))
-                        cfs_waitq_signal(&q->lqs_ctxt->lqc_lqs_waitq);
-
-        CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
-               q, atomic_read(&q->lqs_refcount));
+        lqs_putref(q);
 
         RETURN(q);
 }

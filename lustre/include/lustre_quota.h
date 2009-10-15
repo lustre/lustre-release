@@ -325,19 +325,11 @@ static inline void lqs_putref(struct lustre_qunit_size *lqs)
 {
         LASSERT(atomic_read(&lqs->lqs_refcount) > 0);
 
-        /* killing last ref, let's let hash table kill it */
-        if (atomic_read(&lqs->lqs_refcount) == 1) {
-                lustre_hash_del(lqs->lqs_ctxt->lqc_lqs_hash,
-                                &lqs->lqs_key, &lqs->lqs_hash);
-                OBD_FREE_PTR(lqs);
-        } else {
-                if (atomic_dec_return(&lqs->lqs_refcount) == 1)
-                        if (atomic_dec_and_test(&lqs->lqs_ctxt->lqc_lqs))
-                                cfs_waitq_signal(&lqs->lqs_ctxt->lqc_lqs_waitq);
-                CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
-                       lqs, atomic_read(&lqs->lqs_refcount));
-
-        }
+        if (atomic_dec_return(&lqs->lqs_refcount) == 1)
+                if (atomic_dec_and_test(&lqs->lqs_ctxt->lqc_lqs))
+                        cfs_waitq_signal(&lqs->lqs_ctxt->lqc_lqs_waitq);
+        CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
+               lqs, atomic_read(&lqs->lqs_refcount));
 }
 
 static inline void lqs_initref(struct lustre_qunit_size *lqs)
