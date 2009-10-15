@@ -537,20 +537,6 @@ static int mds_disconnect(struct obd_export *exp)
 
         rc = server_disconnect_export(exp);
 
-        /* complete all outstanding replies */
-        spin_lock(&exp->exp_lock);
-        while (!list_empty(&exp->exp_outstanding_replies)) {
-                struct ptlrpc_reply_state *rs =
-                        list_entry(exp->exp_outstanding_replies.next,
-                                   struct ptlrpc_reply_state, rs_exp_list);
-                struct ptlrpc_service *svc = rs->rs_service;
-
-                spin_lock(&svc->srv_lock);
-                list_del_init(&rs->rs_exp_list);
-                ptlrpc_schedule_difficult_reply(rs);
-                spin_unlock(&svc->srv_lock);
-        }
-        spin_unlock(&exp->exp_lock);
         rc = mds_cleanup_mfd(exp);
 
         class_export_put(exp);
