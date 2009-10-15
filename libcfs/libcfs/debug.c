@@ -386,8 +386,14 @@ int libcfs_debug_init(unsigned long bufsize)
         int    max = libcfs_debug_mb;
 
         cfs_waitq_init(&debug_ctlwq);
-        libcfs_console_max_delay = CDEBUG_DEFAULT_MAX_DELAY;
-        libcfs_console_min_delay = CDEBUG_DEFAULT_MIN_DELAY;
+
+        if (libcfs_console_max_delay <= 0 || /* not set by user or */
+            libcfs_console_min_delay <= 0 || /* set to invalid values */
+            libcfs_console_min_delay >= libcfs_console_max_delay) {
+                libcfs_console_max_delay = CDEBUG_DEFAULT_MAX_DELAY;
+                libcfs_console_min_delay = CDEBUG_DEFAULT_MIN_DELAY;
+        }
+
         /* If libcfs_debug_mb is set to an invalid value or uninitialized
          * then just make the total buffers smp_num_cpus * TCD_MAX_PAGES */
         if (max > trace_max_debug_mb() || max < num_possible_cpus()) {
