@@ -1989,6 +1989,10 @@ static int prune_chkquots(struct super_block *sb,
         return error;
 }
 
+#ifndef EXT3_FEATURE_RO_COMPAT_GDT_CSUM
+#define EXT3_FEATURE_RO_COMPAT_GDT_CSUM 0x0010
+#endif
+
 static int fsfilt_ext3_quotacheck(struct super_block *sb,
                                   struct obd_quotactl *oqc)
 {
@@ -2027,12 +2031,7 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
                         GOTO(out, rc);
                 }
         }
-/*
-#ifdef HAVE_EXT4_LDISKFS
         if (EXT3_HAS_RO_COMPAT_FEATURE(sb, EXT3_FEATURE_RO_COMPAT_GDT_CSUM))
-#else
-        if (EXT3_HAS_RO_COMPAT_FEATURE(sb, EXT4_FEATURE_RO_COMPAT_GDT_CSUM))
-#endif */
                 /* This filesystem supports the uninit group feature */
                 uninit_feat = 1;
 
