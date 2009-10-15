@@ -2397,7 +2397,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         LDLM_DEBUG(lock, "intent policy, opc: %s", ldlm_it2str(it->opc));
 
         if ((req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) &&
-            (it->opc & (IT_OPEN | IT_GETATTR | IT_LOOKUP)))
+            (it->opc & (IT_OPEN | IT_GETATTR | IT_LOOKUP | IT_READDIR)))
                 /* we should never allow OBD_CONNECT_ACL if not configured */
                 repsize[repbufcnt++] = LUSTRE_POSIX_ACL_MAX_SIZE;
         else if (it->opc & IT_UNLINK)

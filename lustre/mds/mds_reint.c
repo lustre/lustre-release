@@ -1856,10 +1856,17 @@ void mds_shrink_body_reply(struct ptlrpc_request *req,
 void mds_shrink_intent_reply(struct ptlrpc_request *req,
                              int opc, int reply_mdoff)
 {
-        if (opc == REINT_UNLINK || opc == REINT_RENAME ||
-            opc == REINT_OPEN)
-                mds_shrink_reply(req, reply_mdoff, 1, 1);
-
+        switch (opc) {
+                case REINT_UNLINK:
+                case REINT_RENAME:
+                        mds_shrink_reply(req, reply_mdoff, 1, 1);
+                        break;
+                case REINT_OPEN:
+                        mds_shrink_reply(req, reply_mdoff, 1, 0);
+                        break;
+                default:
+                        break;
+        }
 }
 
 static int mds_reint_unlink(struct mds_update_record *rec, int offset,
