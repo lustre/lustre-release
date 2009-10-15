@@ -614,15 +614,17 @@ void ptlrpc_server_drop_request(struct ptlrpc_request *req)
                 return;
 
         spin_lock(&svc->srv_at_lock);
-        list_del_init(&req->rq_timed_list);
         if (req->rq_at_linked) {
                 struct ptlrpc_at_array *array = &svc->srv_at_array;
                 __u32 index = req->rq_at_index;
 
+                LASSERT(!list_empty(&req->rq_timed_list));
+                list_del_init(&req->rq_timed_list);
                 req->rq_at_linked = 0;
                 array->paa_reqs_count[index]--;
                 array->paa_count--;
-        }
+        } else
+                LASSERT(list_empty(&req->rq_timed_list));
         spin_unlock(&svc->srv_at_lock);
 
         /* finalize request */
@@ -1069,7 +1071,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
                 list_for_each_entry_safe(rq, n, &array->paa_reqs_array[index],
                                          rq_timed_list) {
                         if (rq->rq_deadline <= now + at_early_margin) {
-                                list_del(&rq->rq_timed_list);
+                                list_del_init(&rq->rq_timed_list);
                                 /**
                                  * ptlrpc_server_drop_request() may drop
                                  * refcount to 0 already. Let's check this and
