@@ -5168,37 +5168,16 @@ out_lmm:
 
 static int mdt_obd_disconnect(struct obd_export *exp)
 {
-        struct mdt_device *mdt = mdt_dev(exp->exp_obd->obd_lu_dev);
         int rc;
         ENTRY;
 
         LASSERT(exp);
         class_export_get(exp);
 
-        /* Disconnect early so that clients can't keep using export */
-        rc = class_disconnect(exp);
-        if (mdt->mdt_namespace != NULL || exp->exp_obd->obd_namespace != NULL)
-                ldlm_cancel_locks_for_export(exp);
+        rc = server_disconnect_export(exp);
+        if (rc != 0)
+                CDEBUG(D_IOCTL, "server disconnect error: %d\n", rc);
 
-        /* release nid stat refererence */
-        lprocfs_exp_cleanup(exp);
-
-        /* complete all outstanding replies */
-        spin_lock(&exp->exp_lock);
-        while (!list_empty(&exp->exp_outstanding_replies)) {
-                struct ptlrpc_reply_state *rs =
-                        list_entry(exp->exp_outstanding_replies.next,
-                                   struct ptlrpc_reply_state, rs_exp_list);
-                struct ptlrpc_service *svc = rs->rs_service;
-
-                spin_lock(&svc->srv_lock);
-                list_del_init(&rs->rs_exp_list);
-                spin_lock(&rs->rs_lock);
-                ptlrpc_schedule_difficult_reply(rs);
-                spin_unlock(&rs->rs_lock);
-                spin_unlock(&svc->srv_lock);
-        }
-        spin_unlock(&exp->exp_lock);
         rc = mdt_mfd_cleanup(exp);
         class_export_put(exp);
         RETURN(rc);

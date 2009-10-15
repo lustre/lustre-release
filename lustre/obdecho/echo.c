@@ -88,26 +88,7 @@ static int echo_disconnect(struct obd_export *exp)
 {
         LASSERT (exp != NULL);
 
-        ldlm_cancel_locks_for_export(exp);
-
-        /* complete all outstanding replies */
-        spin_lock(&exp->exp_lock);
-        while (!list_empty(&exp->exp_outstanding_replies)) {
-                struct ptlrpc_reply_state *rs =
-                        list_entry(exp->exp_outstanding_replies.next,
-                                   struct ptlrpc_reply_state, rs_exp_list);
-                struct ptlrpc_service *svc = rs->rs_service;
-
-                spin_lock(&svc->srv_lock);
-                list_del_init(&rs->rs_exp_list);
-                spin_lock(&rs->rs_lock);
-                ptlrpc_schedule_difficult_reply(rs);
-                spin_unlock(&rs->rs_lock);
-                spin_unlock(&svc->srv_lock);
-        }
-        spin_unlock(&exp->exp_lock);
-
-        return class_disconnect(exp);
+        return server_disconnect_export(exp);
 }
 
 static int echo_init_export(struct obd_export *exp)

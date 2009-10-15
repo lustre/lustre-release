@@ -1319,6 +1319,8 @@ int client_import_del_conn(struct obd_import *imp, struct obd_uuid *uuid);
 int import_set_conn_priority(struct obd_import *imp, struct obd_uuid *uuid);
 void client_destroy_import(struct obd_import *imp);
 
+int server_disconnect_export(struct obd_export *exp);
+
 /* ptlrpc/pinger.c */
 enum timeout_event {
         TIMEOUT_GRANT = 1
