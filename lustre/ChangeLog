@@ -11,6 +11,15 @@ tbd Sun Microsystems, Inc.
 	* Recommended e2fsprogs version: 1.41.6.sun1
 
 Severity   : normal
+Bugzilla   : 19689
+Description: Change tunefs.lustre and mkfs.lustre --mountfsoptions so that
+             exactly the specified mount options are used.  Leaving off
+             any "mandatory" mount options is an error.  Leaving off any
+             default mount options causes a warning, but is allowed.
+             Change errors=remount-ro from mandatory to default.  Sanitize
+             the mount string before storing it.  Update man pages accordingly.
+
+Severity   : normal
 Bugzilla   : 20302
 Description: mds_getattr() should return 0, even if mds_fid2entry() fails with
 	     -ENOENT. Also fix in ptlrpc_expire_one_request() to print signed

@@ -13,7 +13,7 @@ TMP=${TMP:-/tmp}
 
 MDSDEV=${MDSDEV:-$TMP/${FSNAME}-mdt}
 MDSSIZE=${MDSSIZE:-400000}
-MDSOPT=${MDSOPT:-"--mountfsoptions=acl"}
+MDSOPT=${MDSOPT:-"--mountfsoptions=errors=remount-ro,iopen_nopriv,user_xattr,acl"}
 
 mdsfailover_dev=${mdsfailover_dev:-$MDSDEV}
 
