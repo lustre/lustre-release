@@ -146,10 +146,8 @@ int filter_finish_transno(struct obd_export *exp, struct inode *inode,
                                 cpu_to_le64(last_rcvd);
         }
         oti->oti_transno = last_rcvd;
-        if (last_rcvd <= le64_to_cpu(lcd->lcd_last_transno)) {
-                spin_unlock(&filter->fo_translock);
-                LBUG();
-        }
+
+        LASSERT(last_rcvd >= le64_to_cpu(lcd->lcd_last_transno));
         lcd->lcd_last_transno = cpu_to_le64(last_rcvd);
         lcd->lcd_pre_versions[0] = cpu_to_le64(oti->oti_pre_version);
         lcd->lcd_last_xid = cpu_to_le64(oti->oti_xid);
