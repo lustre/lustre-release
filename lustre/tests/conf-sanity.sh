@@ -656,8 +656,8 @@ test_23a() {	# was test_23
 		echo "waiting for mount to finish ... "
 		WAIT=$(( WAIT + sleep))
 	done
-	[ "$WAIT" -eq "$MAX_WAIT" ] && error "MOUNT_PID $MOUNT_PID and \
-		MOUNT__LUSTRE_PID $MOUNT__LUSTRE_PID still not killed in $WAIT secs"
+	[ "$WAIT" -eq "$MAX_WAIT" ] && error "MOUNT_PID $MOUNT_PID and "\
+		"MOUNT_LUSTRE_PID $MOUNT_LUSTRE_PID still not killed in $WAIT secs"
 	ps -ef | grep mount
 	stop_mds || error
 	stop_ost || error
