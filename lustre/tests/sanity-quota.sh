@@ -2184,19 +2184,30 @@ test_28() {
 }
 run_test_with_stat 28 "test for consistency for qunit when setquota (18574) ==========="
 
+at_max_enforce()
+{
+        local timeout="$1"
+        # flush AT history, enforce at_max immediately
+        do_facet mgs "lctl conf_param $FSNAME.sys.at_max=$timeout"
+        cleanupall
+        setupall
+        test_0
+}
+
 test_29()
 {
         local BLK_LIMIT=$((100 * 1024 * 1024)) # 100G
-        local timeout
+        local newtimeo=10 # the default ptlrpc AT value
+        local oldtimeo
         local pid
         local resends
 
         if at_is_enabled; then
-                timeout=$(at_max_get client)
-                at_max_set 10 client
+                oldtimeo=$(at_max_get client)
+                at_max_enforce $newtimeo
         else
-                timeout=$(lctl get_param -n timeout)
-                lctl set_param timeout=10
+                oldtimeo=$(lctl get_param -n timeout)
+                lctl set_param timeout=$newtimeo
         fi
 
         resends=$(lctl get_param -n mdc.${FSNAME}-*.quota_resend_count | head -1)
@@ -2206,17 +2217,18 @@ test_29()
 
         $LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I 0 $DIR & pid=$!
 
-        echo "sleeping for $((10 * resends + 5)) seconds"
-        sleep $((10 * resends + 5))
+        # 1.25 * at_max + 5 + net_latency
+        echo "sleeping for $(((newtimeo * 9 / 4 + 5) * resends)) seconds"
+        sleep $(((newtimeo * 9 / 4 + 5) * resends))
         ps -p $pid && error "lfs hadn't finished by timeout"
         wait $pid && error "succeeded, but should have failed"
 
         lustre_fail mds 0
 
         if at_is_enabled; then
-                at_max_set $timeout client
+                at_max_enforce $oldtimeo
         else
-                lctl set_param timeout=$timeout
+                lctl set_param timeout=$oldtimeo
         fi
 
         resetquota -u $TSTUSR
