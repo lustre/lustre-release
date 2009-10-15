@@ -522,6 +522,44 @@ int client_disconnect_export(struct obd_export *exp)
         RETURN(rc);
 }
 
+int server_disconnect_export(struct obd_export *exp)
+{
+        int rc;
+        ENTRY;
+
+        /* Disconnect early so that clients can't keep using export */
+        rc = class_disconnect(exp);
+
+        /* close import for avoid sending any requests */
+        if (exp->exp_imp_reverse)
+                ptlrpc_cleanup_imp(exp->exp_imp_reverse);
+
+        if (exp->exp_obd->obd_namespace != NULL)
+                ldlm_cancel_locks_for_export(exp);
+
+        /* complete all outstanding replies */
+        spin_lock(&exp->exp_lock);
+        while (!list_empty(&exp->exp_outstanding_replies)) {
+                struct ptlrpc_reply_state *rs =
+                        list_entry(exp->exp_outstanding_replies.next,
+                                   struct ptlrpc_reply_state, rs_exp_list);
+                struct ptlrpc_service *svc = rs->rs_service;
+
+                spin_lock(&svc->srv_lock);
+                list_del_init(&rs->rs_exp_list);
+                ptlrpc_schedule_difficult_reply(rs);
+                spin_unlock(&svc->srv_lock);
+        }
+        spin_unlock(&exp->exp_lock);
+
+
+        /* release nid stat refererence */
+        lprocfs_exp_cleanup(exp);
+
+
+        RETURN(rc);
+}
+
 /* --------------------------------------------------------------------------
  * from old lib/target.c
  * -------------------------------------------------------------------------- */

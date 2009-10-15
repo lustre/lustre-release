@@ -2649,12 +2649,8 @@ static int filter_disconnect(struct obd_export *exp)
 
         lquota_clearinfo(filter_quota_interface_ref, exp, exp->exp_obd);
 
-        /* Disconnect early so that clients can't keep using export */
-        rc = class_disconnect(exp);
-        if (exp->exp_obd->obd_namespace != NULL)
-                ldlm_cancel_locks_for_export(exp);
+        rc = server_disconnect_export(exp);
 
-        lprocfs_exp_cleanup(exp);
         class_export_put(exp);
         RETURN(rc);
 }
