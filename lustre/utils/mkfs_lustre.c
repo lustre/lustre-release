@@ -1410,7 +1410,7 @@ static int in_mntlist(char *opt, char *mntlist)
 static int check_mountfsoptions(char *mountopts, char *wanted_mountopts,
                                 int justwarn)
 {
-        char *ml, *mlp, *item, *ctx;
+        char *ml, *mlp, *item, *ctx = NULL;
         int errors = 0;
 
         if (!(ml = strdup(wanted_mountopts))) {
