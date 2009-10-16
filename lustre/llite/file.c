@@ -1792,7 +1792,7 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
         /* signal(7) specifies that write(2) and writev(2) should be restarted */
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
                 got_write_sem = 1;
-                if ( down_interruptible(&ll_i2info(inode)->lli_write_sem))
+                if (down_interruptible(&ll_i2info(inode)->lli_write_sem))
                         RETURN(-ERESTARTSYS);
         }
 
