@@ -1766,6 +1766,8 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
         struct iovec *iov_copy = NULL;
         unsigned long nrsegs_copy, nrsegs_orig = 0;
         size_t count, iov_offset = 0;
+        int got_write_sem = 0;
+        struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
         ENTRY;
 
         count = ll_file_get_iov_count(iov, &nr_segs);
@@ -1788,8 +1790,11 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
         LASSERT(ll_i2info(inode)->lli_smd != NULL);
 
         /* signal(7) specifies that write(2) and writev(2) should be restarted */
-        if (down_interruptible(&ll_i2info(inode)->lli_write_sem))
-                RETURN(-ERESTARTSYS);
+        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+                got_write_sem = 1;
+                if ( down_interruptible(&ll_i2info(inode)->lli_write_sem))
+                        RETURN(-ERESTARTSYS);
+        }
 
         ltd.ltd_magic = LTD_MAGIC;
         ll_td_set(&ltd);
@@ -1952,7 +1957,8 @@ out:
                         goto repeat;
         }
 
-        up(&ll_i2info(inode)->lli_write_sem);
+        if (got_write_sem)
+                up(&ll_i2info(inode)->lli_write_sem);
 
         ll_td_set(NULL);
         if (iov_copy && iov_copy != iov)
