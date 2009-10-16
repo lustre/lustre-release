@@ -1239,9 +1239,9 @@ static int fsfilt_ext3_read_record(struct file * file, void *buf,
                 size = i_size_read(inode) - *offs;
                 unlock_kernel();
                 if (size < 0) {
-                        CERROR("size %llu is too short for read %u@%llu\n",
-                               i_size_read(inode), size, *offs);
-                        return -EIO;
+                        CDEBUG(D_EXT2, "size %llu is too short for read @%llu\n",
+                               i_size_read(inode), *offs);
+                        return -EBADR;
                 } else if (size == 0) {
                         return 0;
                 }
@@ -2242,6 +2242,66 @@ static int fsfilt_ext3_get_mblk(struct super_block *sb, int *count,
 static lvfs_sbdev_type fsfilt_ext3_journal_sbdev(struct super_block *sb)
 {
         return (EXT3_SB(sb)->journal_bdev);
+}
+
+ssize_t lustre_read_quota(struct file *f, struct inode *inode, int type,
+                          char *buf, int count, loff_t pos)
+{
+        loff_t p = pos;
+        int rc;
+
+        /* Support for both adm and op quota files must be provided */
+        if (f) {
+                rc = fsfilt_ext3_read_record(f, buf, count, &p);
+                rc = rc < 0 ? rc : p - pos;
+        } else {
+                struct super_block *sb = inode->i_sb;
+                rc = sb->s_op->quota_read(sb, type, buf, count, pos);
+        }
+        return rc;
+}
+
+ssize_t lustre_write_quota(struct file *f, char *buf, int count, loff_t pos)
+{
+        loff_t p = pos;
+        int rc;
+
+        /* Only adm quota files are supported, op updates are handled by vfs */
+        rc = fsfilt_ext3_write_record(f, buf, count, &p, 0);
+        rc = rc < 0 ? rc : p - pos;
+
+        return rc;
+}
+
+void *lustre_quota_journal_start(struct inode *inode, int delete)
+{
+        handle_t *handle;
+        unsigned block_count;
+
+        if (delete) {
+                /* each indirect block (+4) may become free, attaching to the
+                 * header list of free blocks (+1); the data block (+1) may
+                 * become a free block (+0) or a block with free dqentries (+0) */
+                block_count = (4 + 1) + 1;
+                handle = ext3_journal_start(inode,
+                            block_count*FSFILT_DATA_TRANS_BLOCKS(inode->i_sb)+2);
+        } else {
+                /* indirect blocks are touched (+4), each causes file expansion (+0) or
+                 * freeblk reusage with a header update (+1); dqentry is either reused
+                 * causing update of the entry block (+1), prev (+1) and next (+1) or
+                 * a new block allocation (+1) with a header update (+1)              */
+                block_count = (4 + 1) + 3;
+                handle = ext3_journal_start(inode,
+                             block_count*FSFILT_DATA_TRANS_BLOCKS(inode->i_sb)+2);
+
+        }
+
+        return handle;
+}
+
+void lustre_quota_journal_stop(void *handle)
+{
+        ext3_journal_stop((handle_t *)handle);
 }
 
 static struct fsfilt_operations fsfilt_ext3_ops = {

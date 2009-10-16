@@ -197,8 +197,6 @@ int lustre_init_quota_info_generic(struct lustre_quota_info *lqi, int type,
 int lustre_read_quota_info(struct lustre_quota_info *lqi, int type);
 int lustre_read_quota_file_info(struct file* f, struct lustre_mem_dqinfo* info);
 int lustre_write_quota_info(struct lustre_quota_info *lqi, int type);
-ssize_t read_blk(struct file *filp, uint blk, dqbuf_t buf);
-ssize_t write_blk(struct file *filp, uint blk, dqbuf_t buf);
 int get_free_dqblk(struct file *filp, struct lustre_mem_dqinfo *info);
 int put_free_dqblk(struct file *filp, struct lustre_mem_dqinfo *info,
                           dqbuf_t buf, uint blk);
@@ -221,6 +219,8 @@ int lustre_init_quota_info(struct lustre_quota_info *lqi, int type);
 int lustre_get_qids(struct file *fp, struct inode *inode, int type,
                     struct list_head *list);
 
+ssize_t lustre_read_quota(struct file *f, struct inode *inode, int type,
+                          char *buf, int count, loff_t pos);
 
 /* comes from lustre_quota_fmt_convert.c */
 int lustre_slave_quota_convert(lustre_quota_version_t qfmt, int type);
