@@ -184,7 +184,7 @@ typedef enum {
 /* Flags sent in AST lock_flags to be mapped into the receiving lock. */
 #define LDLM_AST_FLAGS         (LDLM_FL_DISCARD_DATA)
 
-/* 
+/*
  * --------------------------------------------------------------------------
  * NOTE! Starting from this point, that is, LDLM_FL_* flags with values above
  * 0x80000000 will not be sent over the wire.
@@ -267,13 +267,13 @@ struct ldlm_pool_ops {
         int (*po_setup)(struct ldlm_pool *pl, int limit);
 };
 
-/** 
- * One second for pools thread check interval. Each pool has own period. 
+/**
+ * One second for pools thread check interval. Each pool has own period.
  */
 #define LDLM_POOLS_THREAD_PERIOD (1)
 
-/** 
- * 5% margin for modest pools. See ldlm_pool.c for details. 
+/**
+ * 5% margin for modest pools. See ldlm_pool.c for details.
  */
 #define LDLM_POOLS_MODEST_MARGIN (5)
 
@@ -519,6 +519,10 @@ struct ldlm_lock {
 
         struct lustre_handle  l_remote_handle;
         ldlm_policy_data_t    l_policy_data;
+        /* traffic index indicating how busy the resource will be, if it is
+         * high, the lock's granted region will not be so big lest it conflicts
+         * other locks, causing frequent lock cancellation and re-enqueue */
+        int                   l_traffic;
 
         /* protected by lr_lock */
         __u64                 l_flags;
@@ -531,7 +535,7 @@ struct ldlm_lock {
          * on this waitq to learn when it becomes granted. */
         cfs_waitq_t           l_waitq;
 
-        cfs_time_t            l_last_activity;  /* seconds */ 
+        cfs_time_t            l_last_activity;  /* seconds */
         cfs_time_t            l_last_used;      /* jiffies */
         struct ldlm_extent    l_req_extent;
 
