@@ -1116,6 +1116,12 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         rc = obd_commitrw(OBD_BRW_WRITE, exp, &repbody->oa, objcount, ioo,
                           remote_nb, npages, local_nb, oti, rc);
 
+        if (rc == -ENOTCONN)
+                /* quota acquire process has been given up because
+                 * either the client has been evicted or the client
+                 * has timed out the request already */
+                no_reply = 1;
+
         if (unlikely(client_cksum != server_cksum && rc == 0)) {
                 int  new_cksum = ost_checksum_bulk(desc, OST_WRITE, cksum_type);
                 char *msg;

@@ -1210,7 +1210,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                  * be NULL, b=14840 */
                 ids[0] = current->fsuid;
                 ids[1] = gid;
-                lquota_chkquota(mds_quota_interface_ref, obd,
+                lquota_chkquota(mds_quota_interface_ref, req->rq_export,
                                 ids[0], ids[1], 1, quota_pending,
                                 NULL, NULL, 0);
 

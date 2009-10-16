@@ -411,7 +411,7 @@ typedef struct {
         /* For quota slave, check whether specified uid/gid's remaining quota
          * can finish a block_write or inode_create rpc. It updates the pending
          * record of block and inode, acquires quota if necessary */
-        int (*quota_chkquota) (struct obd_device *, unsigned int, unsigned int,
+        int (*quota_chkquota) (struct obd_export *, unsigned int, unsigned int,
                                int, int [], quota_acquire,
                                struct obd_trans_info *, struct inode *, int);
 
@@ -627,7 +627,7 @@ static inline int lquota_acquire(quota_interface_t *interface,
 }
 
 static inline int lquota_chkquota(quota_interface_t *interface,
-                                  struct obd_device *obd,
+                                  struct obd_export *exp,
                                   unsigned int uid, unsigned int gid, int count,
                                   int pending[2], struct obd_trans_info *oti,
                                   struct inode *inode, int frags)
@@ -637,7 +637,7 @@ static inline int lquota_chkquota(quota_interface_t *interface,
 
         QUOTA_CHECK_OP(interface, chkquota);
         QUOTA_CHECK_OP(interface, acquire);
-        rc = QUOTA_OP(interface, chkquota)(obd, uid, gid, count, pending,
+        rc = QUOTA_OP(interface, chkquota)(exp, uid, gid, count, pending,
                                            QUOTA_OP(interface, acquire), oti,
                                            inode, frags);
         RETURN(rc);

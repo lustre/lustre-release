@@ -356,12 +356,13 @@ static int quota_check_common(struct obd_device *obd, unsigned int uid,
                 RETURN(rc);
 }
 
-static int quota_chk_acq_common(struct obd_device *obd, unsigned int uid,
+static int quota_chk_acq_common(struct obd_export *exp, unsigned int uid,
                                 unsigned int gid, int count, int pending[2],
                                 int isblk, quota_acquire acquire,
                                 struct obd_trans_info *oti, struct inode *inode,
                                 int frags)
 {
+        struct obd_device *obd = exp->exp_obd;
         struct lustre_quota_ctxt *qctxt = &obd->u.obt.obt_qctxt;
         struct timeval work_start;
         struct timeval work_end;
@@ -371,6 +372,12 @@ static int quota_chk_acq_common(struct obd_device *obd, unsigned int uid,
         ENTRY;
 
         CDEBUG(D_QUOTA, "check quota for %s\n", obd->obd_name);
+        if (isblk && (exp->exp_failed || exp->exp_abort_active_req))
+                /* If the client has been evicted or if it
+                 * timed out and tried to reconnect already,
+                 * abort the request immediately */
+                RETURN(-ENOTCONN);
+
         /* Unfortunately, if quota master is too busy to handle the
          * pre-dqacq in time and quota hash on ost is used up, we
          * have to wait for the completion of in flight dqacq/dqrel,
@@ -417,6 +424,11 @@ static int quota_chk_acq_common(struct obd_device *obd, unsigned int uid,
                         break;
                 }
 
+                if (isblk && (exp->exp_failed || exp->exp_abort_active_req))
+                        /* The client has been evicted or tried to
+                         * to reconnect already, abort the request */
+                        RETURN(-ENOTCONN);
+
                 /* -EBUSY and others, wait a second and try again */
                 if (rc < 0) {
                         cfs_waitq_t        waitq;
@@ -459,6 +471,8 @@ static int quota_chk_acq_common(struct obd_device *obd, unsigned int uid,
                                     LQUOTA_WAIT_FOR_CHK_INO,
                             timediff);
 
+        if (rc > 0)
+                rc = 0;
         RETURN(rc);
 }
 
@@ -485,13 +499,13 @@ int quota_is_set(struct obd_device *obd, unsigned int uid,
         return q_set;
 }
 
-static int filter_quota_check(struct obd_device *obd, unsigned int uid,
+static int filter_quota_check(struct obd_export *exp, unsigned int uid,
                               unsigned int gid, int npage, int pending[2],
                               quota_acquire acquire, struct obd_trans_info *oti,
                               struct inode *inode, int frags)
 {
-        return quota_is_set(obd, uid, gid, QB_SET) ?
-                quota_chk_acq_common(obd, uid, gid, npage, pending,
+        return quota_is_set(exp->exp_obd, uid, gid, QB_SET) ?
+                quota_chk_acq_common(exp, uid, gid, npage, pending,
                                      LQUOTA_FLAGS_BLK, acquire, oti, inode,
                                      frags) : 0;
 }
@@ -634,13 +648,13 @@ static int mds_quota_fs_cleanup(struct obd_device *obd)
         RETURN(0);
 }
 
-static int mds_quota_check(struct obd_device *obd, unsigned int uid,
+static int mds_quota_check(struct obd_export *exp, unsigned int uid,
                            unsigned int gid, int inodes, int pending[2],
                            quota_acquire acquire, struct obd_trans_info *oti,
                            struct inode *inode, int frags)
 {
-        return quota_is_set(obd, uid, gid, QI_SET) ?
-                quota_chk_acq_common(obd, uid, gid, inodes, pending, 0,
+        return quota_is_set(exp->exp_obd, uid, gid, QI_SET) ?
+                quota_chk_acq_common(exp, uid, gid, inodes, pending, 0,
                                      acquire, oti, inode, frags) : 0;
 }
 
