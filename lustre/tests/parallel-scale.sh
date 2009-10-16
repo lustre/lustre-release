@@ -471,6 +471,78 @@ test_parallel_grouplock() {
 }
 run_test parallel_grouplock "parallel_grouplock"
 
+
+statahead_NUMMNTPTS=${statahead_NUMMNTPTS:-5}
+statahead_NUMFILES=${statahead_NUMFILES:-500000}
+
+cleanup_statahead () {
+    local mntpt_root=$1
+    local num_mntpts=$2
+        for i in $(seq 0 $num_mntpts);do
+                zconf_umount `hostname` ${mntpt_root}$i ||
+                        error_exit "Failed to umount lustre on ${mntpt_root}$i"
+        done
+}
+
+test_statahead () {
+   
+    # create large dir
+
+    local dir=d0.statahead
+    # FIXME has to use DIR
+    local testdir=$DIR/$dir
+
+    mkdir -p $testdir
+
+    local num_files=$statahead_NUMFILES
+
+    local IFree=$(inodes_available)
+    if [ $IFree -lt $num_files ]; then
+      num_files=$IFree
+    fi
+
+    cancel_lru_locks mdc
+
+    log "createmany -o $testdir/f-%d $num_files"
+    createmany -o $testdir/$f-%d $num_files
+
+    local rc=$?
+    if [ $rc != 0 ] ; then
+        error "createmany failed to create $rc"
+        return $rc
+    fi
+
+    local num_mntpts=$statahead_NUMMNTPTS
+    local mntpt_root=$TMP/mntpt/lustre
+    mntopts=${MNTOPTSTATAHEAD:-$MOUNTOPT}
+
+    echo "Mounting $num_mntpts lustre clients starts"
+    trap "cleanup_statahead $mntpt_root $num_mntpts" EXIT ERR
+    for i in $(seq 0 $num_mntpts);do
+        zconf_mount `hostname` ${mntpt_root}$i $mntopts ||
+            error_exit "Failed to mount lustre on ${mntpt_root}$i"
+    done
+
+    cancel_lru_locks mdc
+
+    for i in $(seq 0 $num_mntpts); do
+        local cmd="ls -laf ${mntpt_root}$i/$dir" 
+        echo "+ $cmd"
+        $cmd > /dev/null &
+        pids="$pids $!"
+    done
+
+    echo pids=$pids
+    for pid in $pids; do
+        echo wait $pid
+        wait $pid || error "$pid"
+    done
+
+    cleanup_statahead $mntpt_root $num_mntpts
+}
+
+run_test statahead "statahead test, multiple clients"
+
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true
