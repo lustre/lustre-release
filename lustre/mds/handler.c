@@ -83,6 +83,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                         loff_t offset, int count)
 {
         struct ptlrpc_bulk_desc *desc;
+        struct obd_export *exp = req->rq_export;
         struct l_wait_info lwi;
         struct page **pages;
         int timeout;
@@ -117,7 +118,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                        tmpsize, offset, file->f_dentry->d_inode->i_ino,
                        i_size_read(file->f_dentry->d_inode));
 
-                rc = fsfilt_readpage(req->rq_export->exp_obd, file,
+                rc = fsfilt_readpage(exp->exp_obd, file,
                                      kmap(pages[i]), tmpsize, &offset);
                 kunmap(pages[i]);
 
@@ -142,16 +143,19 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                 CERROR("Req deadline already passed %lu (now: %lu)\n",
                        req->rq_deadline, cfs_time_current_sec());
         }
-        lwi = LWI_TIMEOUT(cfs_time_seconds(max(timeout, 1)), NULL, NULL);
-        rc = l_wait_event(desc->bd_waitq, !ptlrpc_server_bulk_active(desc), &lwi);
+        lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(max(timeout, 1)),
+                                   cfs_time_seconds(1), NULL, NULL);
+        rc = l_wait_event(desc->bd_waitq, !ptlrpc_server_bulk_active(desc) ||
+                          exp->exp_failed || exp->exp_abort_active_req, &lwi);
         LASSERT (rc == 0 || rc == -ETIMEDOUT);
 
         if (rc == 0) {
                 if (desc->bd_success &&
                     desc->bd_nob_transferred == count)
                         GOTO(cleanup_buf, rc);
-
-                rc = -ETIMEDOUT; /* XXX should this be a different errno? */
+                rc = -ETIMEDOUT;
+                if (exp->exp_abort_active_req || exp->exp_failed)
+                        GOTO(abort_bulk, rc);
         }
 
         DEBUG_REQ(D_ERROR, req, "bulk failed: %s %d(%d), evicting %s@%s\n",
