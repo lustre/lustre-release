@@ -290,7 +290,7 @@ int filter_fs_setup(const struct lu_env *env, struct filter_device *ofd,
         rc = lut_init2(env, &ofd->ofd_lut, obd, ofd->ofd_osd, &fid);
         LASSERT(rc == 0);
 
-        lu_local_obj_fid(&fid, OFD_LAST_GROUP);
+        lu_local_obj_fid(&fid, OFD_LAST_GROUP_OID);
         memset(&attr, 0, sizeof(attr));
         attr.la_valid = LA_MODE;
         attr.la_mode = S_IFREG | 0666;

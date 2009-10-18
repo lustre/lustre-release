@@ -157,7 +157,7 @@ int filter_group_load(const struct lu_env *env,
         if (ofd->ofd_lastid_obj[group])
                 GOTO(cleanup, rc = 0);
 
-        lu_local_obj_fid(&fid, OFD_GROUP0_LAST_ID + group);
+        lu_local_obj_fid(&fid, OFD_GROUP0_LAST_OID + group);
         memset(&attr, 0, sizeof(attr));
         attr.la_valid = LA_MODE;
         attr.la_mode = S_IFREG | 0666;

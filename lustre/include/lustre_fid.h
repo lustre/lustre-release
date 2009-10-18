@@ -92,6 +92,9 @@ enum {
  * used sparingly until ldiskfs-based MDT backends and/or IGIF FIDs 
  * have been completely removed. */
 
+/** special fid seq: used for llog objects. */
+#define LU_LLOG_LUSTRE_SEQ       (FID_SEQ_START + 0x03ULL)
+
 /** special OID for local objects */
 enum {
         /** \see osd_oi_index_create */
@@ -112,10 +115,10 @@ enum {
         /** \see osd_mod_init */
         OSD_REM_OBJ_DIR_OID     = 12UL,
         OFD_LAST_RECV_OID       = 19UL,
-        OFD_GROUP0_LAST_ID      = 20UL,
-        OFD_GROUP4K_LAST_ID     = 20UL+4096,
-        OFD_LAST_GROUP          = 4117UL,
-        OFD_LLOG_CATALOGS       = 4118UL
+        OFD_GROUP0_LAST_OID     = 20UL,
+        OFD_GROUP4K_LAST_OID    = 20UL+4096,
+        OFD_LAST_GROUP_OID      = 4117UL,
+        LLOG_CATALOGS_OID       = 4118UL
 };
 
 static inline void lu_local_obj_fid(struct lu_fid *fid, __u32 oid)
