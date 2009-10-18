@@ -200,7 +200,6 @@ int filter_preprw(int cmd, struct obd_export *exp, struct obdo *oa, int objcount
                                       capa, CAPA_OPC_OSS_READ);
                 if (rc == 0) {
                         if (oa && oa->o_valid & OBD_MD_FLGRANT) {
-                                struct obd_device *obd = filter_obd(ofd);
                                 mutex_down(&ofd->ofd_grant_sem);
                                 filter_grant_incoming(&env, exp, oa);
                                 if (!(oa->o_flags & OBD_FL_SHRINK_GRANT))

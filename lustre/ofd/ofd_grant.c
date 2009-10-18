@@ -541,7 +541,6 @@ void filter_grant_commit(struct obd_export *exp, int niocount,
                          struct niobuf_local *res)
 {
         struct filter_device *ofd = filter_exp(exp);
-        struct filter_export_data *fed = &exp->exp_filter_data;
         struct niobuf_local *lnb = res;
         unsigned long pending = 0;
         int i;

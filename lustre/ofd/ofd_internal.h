@@ -277,7 +277,7 @@ struct filter_thread_info {
 
         /* server and client data buffers */
         struct lr_server_data      fti_fsd;
-        struct filter_client_data  fti_fcd;
+        struct lsd_client_data     fti_fcd;
 
         /* Ops object filename */
         struct lu_name             fti_name;
