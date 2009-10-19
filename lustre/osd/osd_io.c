@@ -670,7 +670,9 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
                 return -EACCES;
 
         LASSERT(handle != NULL);
-        OSD_EXEC_OP(handle, write);
+
+        /* XXX: don't check: one declared chunk can be used many times */
+        /* OSD_EXEC_OP(handle, write); */
 
         oh = container_of(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle->h_transaction != NULL);

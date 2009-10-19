@@ -979,7 +979,7 @@ const int osd_dto_credits_noquota[DTO_NR] = {
          * Attr set credits.
          * 3(inode bits, group, GDT)
          */
-        [DTO_ATTR_SET_BASE] = 1,
+        [DTO_ATTR_SET_BASE] = 2,
         /**
          * Xattr set. The same as xattr of EXT3.
          * DATA_TRANS_BLOCKS(14)
@@ -1841,7 +1841,7 @@ static int osd_declare_object_create(const struct lu_env *env,
         OSD_DECLARE_OP(oh, create);
         oh->ot_credits += osd_dto_credits_noquota[DTO_OBJECT_CREATE];
         oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_INSERT];
-       
+
         /* if this is directory, then we expect . and .. to be inserted as well */
         OSD_DECLARE_OP(oh, insert);
         OSD_DECLARE_OP(oh, insert);
