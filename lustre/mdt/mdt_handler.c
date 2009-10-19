@@ -1176,6 +1176,7 @@ static int mdt_sendpage(struct mdt_thread_info *info,
                         struct lu_rdpg *rdpg)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
+        struct obd_export       *exp = req->rq_export;
         struct ptlrpc_bulk_desc *desc;
         struct l_wait_info      *lwi = &info->mti_u.rdpg.mti_wait_info;
         int                      tmpcount;
@@ -1212,8 +1213,10 @@ static int mdt_sendpage(struct mdt_thread_info *info,
         if (timeout < 0)
                 CERROR("Req deadline already passed %lu (now: %lu)\n",
                        req->rq_deadline, cfs_time_current_sec());
-        *lwi = LWI_TIMEOUT(cfs_time_seconds(max(timeout, 1)), NULL, NULL);
-        rc = l_wait_event(desc->bd_waitq, !ptlrpc_server_bulk_active(desc), lwi);
+        *lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(max(timeout, 1)),
+                                    cfs_time_seconds(1), NULL, NULL);
+        rc = l_wait_event(desc->bd_waitq, !ptlrpc_server_bulk_active(desc) ||
+                          exp->exp_failed || exp->exp_abort_active_req, lwi);
         LASSERT (rc == 0 || rc == -ETIMEDOUT);
 
         if (rc == 0) {
@@ -1221,16 +1224,18 @@ static int mdt_sendpage(struct mdt_thread_info *info,
                     desc->bd_nob_transferred == rdpg->rp_count)
                         GOTO(free_desc, rc);
 
-                rc = -ETIMEDOUT; /* XXX should this be a different errno? */
+                rc = -ETIMEDOUT;
+                if (exp->exp_abort_active_req || exp->exp_failed)
+                        GOTO(abort_bulk, rc);
         }
 
         DEBUG_REQ(D_ERROR, req, "bulk failed: %s %d(%d), evicting %s@%s",
                   (rc == -ETIMEDOUT) ? "timeout" : "network error",
                   desc->bd_nob_transferred, rdpg->rp_count,
-                  req->rq_export->exp_client_uuid.uuid,
-                  req->rq_export->exp_connection->c_remote_uuid.uuid);
+                  exp->exp_client_uuid.uuid,
+                  exp->exp_connection->c_remote_uuid.uuid);
 
-        class_fail_export(req->rq_export);
+        class_fail_export(exp);
 
         EXIT;
 abort_bulk:
