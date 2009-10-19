@@ -1355,7 +1355,10 @@ ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
 
         if (rc != 0) {
                 cfs_write_lock_bh(global_lock);
-                ksocknal_close_conn_locked(conn, rc);
+                if (!conn->ksnc_closing) {
+                        /* could be closed by another thread */
+                        ksocknal_close_conn_locked(conn, rc);
+                }
                 cfs_write_unlock_bh(global_lock);
         } else if (ksocknal_connsock_addref(conn) == 0) {
                 /* Allow I/O to proceed. */
