@@ -178,7 +178,7 @@ int filter_precreate_object(const struct lu_env *env, struct filter_device *ofd,
                 /* underlying filesystem is broken - object must not exist */
                 CERROR("object %u/"LPD64" exists: "DFID"\n",
                        (unsigned) group, id, PFID(&fid));
-                GOTO(trans_stop, rc = -EEXIST);
+                GOTO(out_unlock, rc = -EEXIST);
         }
 
         CDEBUG(D_OTHER, "create new object %lu:%llu\n",
