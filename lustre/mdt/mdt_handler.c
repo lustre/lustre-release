@@ -4274,6 +4274,16 @@ static int mdt_obd_llog_setup(struct obd_device *obd,
         struct vfsmount *mnt;
         int    rc;
 
+        OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
+        obd->obd_lvfs_ctxt.dt = lmi->lmi_dt;
+
+        rc = llog_setup(obd, &obd->obd_olg, LLOG_CONFIG_ORIG_CTXT, obd,
+                        0, NULL, &llog_osd_ops);
+        if (rc) {
+                CERROR("llog_setup() failed: %d\n", rc);
+                return rc;
+        }
+
         LASSERT(obd->obd_fsops == NULL);
         lmi->lmi_dt->dd_ops->dt_conf_get(NULL, lmi->lmi_dt, &dt_param);
         mnt = dt_param.ddp_mnt;
@@ -4288,22 +4298,8 @@ static int mdt_obd_llog_setup(struct obd_device *obd,
                 return PTR_ERR(obd->obd_fsops);
 
         rc = fsfilt_setup(obd, mnt->mnt_sb);
-        if (rc) {
+        if (rc)
                 fsfilt_put_ops(obd->obd_fsops);
-                return rc;
-        }
-
-        OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
-        obd->obd_lvfs_ctxt.pwdmnt = mnt;
-        obd->obd_lvfs_ctxt.pwd = mnt->mnt_root;
-        obd->obd_lvfs_ctxt.fs = get_ds();
-
-        rc = llog_setup(obd, &obd->obd_olg, LLOG_CONFIG_ORIG_CTXT, obd,
-                        0, NULL, &llog_lvfs_ops);
-        if (rc) {
-                CERROR("llog_setup() failed: %d\n", rc);
-                fsfilt_put_ops(obd->obd_fsops);
-        }
 
         return rc;
 }

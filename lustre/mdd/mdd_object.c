@@ -1218,7 +1218,8 @@ static int mdd_changelog_data_store(const struct lu_env     *env,
 
 static struct thandle *
 mdd_declare_and_start_attr_set(const struct lu_env *env, struct md_object *obj,
-                               const struct md_attr *ma)
+                               const struct md_attr *ma, struct lov_mds_md *lmm,
+                               int lmm_size)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
@@ -1241,6 +1242,10 @@ mdd_declare_and_start_attr_set(const struct lu_env *env, struct md_object *obj,
                 if (rc)
                         GOTO(out, rc);
         }
+
+        rc = mdd_declare_setattr_log(env, mdd_obj, ma, lmm, lmm_size, handle);
+        if (rc)
+                GOTO(out, rc);
 
         rc = mdd_trans_start(env, mdd, handle);
 
@@ -1274,15 +1279,6 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 #endif
         ENTRY;
 
-        handle = mdd_declare_and_start_attr_set(env, obj, ma);
-        if (IS_ERR(handle))
-                RETURN(PTR_ERR(handle));
-
-        /* permission changes may require sync operation */
-        if (ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID) &&
-            mdd->mdd_sync_permission == 1)
-                handle->th_sync = 1;
-
         /*TODO: add lock here*/
         /* start a log jounal handle if needed */
         if (S_ISREG(mdd_object_type(mdd_obj)) &&
@@ -1290,14 +1286,23 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
                 lmm_size = mdd_lov_mdsize(env, mdd);
                 lmm = mdd_max_lmm_get(env, mdd);
                 if (lmm == NULL)
-                        GOTO(cleanup, rc = -ENOMEM);
+                        RETURN(rc = -ENOMEM);
 
                 rc = mdd_get_md_locked(env, mdd_obj, lmm, &lmm_size,
                                 XATTR_NAME_LOV);
 
                 if (rc < 0)
-                        GOTO(cleanup, rc);
+                        RETURN(rc);
         }
+
+        handle = mdd_declare_and_start_attr_set(env, obj, ma, lmm, lmm_size);
+        if (IS_ERR(handle))
+                RETURN(PTR_ERR(handle));
+
+        /* permission changes may require sync operation */
+        if (ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID) &&
+            mdd->mdd_sync_permission == 1)
+                handle->th_sync = 1;
 
         if (ma->ma_attr.la_valid & (LA_MTIME | LA_CTIME))
                 CDEBUG(D_INODE, "setting mtime "LPU64", ctime "LPU64"\n",
@@ -1350,7 +1355,7 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
                                 GOTO(cleanup, rc = -ENOMEM);
 
                         if (mdd_setattr_log(env, mdd, ma, lmm, lmm_size,
-                                            logcookies, cookie_size) <= 0)
+                                            logcookies, cookie_size, handle) <= 0)
                                 logcookies = NULL;
                 }
         }
@@ -1913,7 +1918,7 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
 /* return md_attr back,
  * if it is last unlink then return lov ea + llog cookie*/
 int mdd_object_kill(const struct lu_env *env, struct mdd_object *obj,
-                    struct md_attr *ma)
+                    struct md_attr *ma, struct thandle *th)
 {
         int rc = 0;
         ENTRY;
@@ -1925,7 +1930,7 @@ int mdd_object_kill(const struct lu_env *env, struct mdd_object *obj,
                 rc = __mdd_lmm_get(env, obj, ma);
                 if ((ma->ma_valid & MA_LOV))
                         rc = mdd_unlink_log(env, mdo2mdd(&obj->mod_obj),
-                                            obj, ma);
+                                            obj, ma, th);
         }
         RETURN(rc);
 }
@@ -1999,9 +2004,10 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
                 /* MDS_CLOSE_CLEANUP means destroy OSS objects by MDS. */
                 if (ma->ma_valid & MA_FLAGS &&
                     ma->ma_attr_flags & MDS_CLOSE_CLEANUP) {
-                        rc = mdd_lov_destroy(env, mdd, mdd_obj, &ma->ma_attr);
+                        rc = mdd_lov_destroy(env, mdd, mdd_obj,
+                                             &ma->ma_attr, handle);
                 } else {
-                        rc = mdd_object_kill(env, mdd_obj, ma);
+                        rc = mdd_object_kill(env, mdd_obj, ma, handle);
                                 if (rc == 0)
                                         reset = 0;
                 }

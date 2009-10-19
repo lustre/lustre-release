@@ -70,7 +70,8 @@
  * Unset cookies should be all-zero (which will never occur naturally). */
 static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                                struct lov_stripe_md *lsm,
-                               struct llog_cookie *logcookies, int numcookies)
+                               struct llog_cookie *logcookies, int numcookies,
+                               struct thandle *th)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct lov_obd *lov = &obd->u.lov;
@@ -116,8 +117,8 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                         llog_ctxt_put(cctxt);
                         cctxt = NULL;
                 }
-                rc = llog_add(cctxt, rec, NULL, logcookies + cookies,
-                               numcookies - cookies);
+                rc = llog_add_2(cctxt, rec, NULL, logcookies + cookies,
+                                numcookies - cookies, th);
                 llog_ctxt_put(cctxt);
                 if (rc < 0) {
                         /*CERROR("Can't add llog (rc = %d) for stripe %i\n",
@@ -130,6 +131,32 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                 cookies += rc;
         }
         RETURN(cookies);
+}
+
+static int lov_llog_origin_declare_add(struct llog_ctxt *ctxt,
+                                       struct llog_rec_hdr *rec,
+                                       struct lov_stripe_md *lsm,
+                                       struct thandle *th)
+{
+        struct obd_device *obd = ctxt->loc_obd;
+        struct lov_obd *lov = &obd->u.lov;
+        int i, rc = 0;
+        ENTRY;
+
+        LASSERT(th);
+
+        for (i = 0; i < lsm->lsm_stripe_count; i++) {
+                struct lov_oinfo *loi = lsm->lsm_oinfo[i];
+                struct obd_device *child =
+                        lov->lov_tgts[loi->loi_ost_idx]->ltd_exp->exp_obd;
+                struct llog_ctxt *cctxt = llog_get_context(child, ctxt->loc_idx);
+
+                rc = llog_declare_add_2(cctxt, rec, NULL, th);
+                llog_ctxt_put(cctxt);
+                if (rc)
+                        break;
+        }
+        RETURN(rc);
 }
 
 static int lov_llog_origin_connect(struct llog_ctxt *ctxt,
@@ -205,7 +232,8 @@ static int lov_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
 }
 
 static struct llog_operations lov_mds_ost_orig_logops = {
-        lop_add: lov_llog_origin_add,
+        lop_add_2: lov_llog_origin_add,
+        lop_declare_add_2: lov_llog_origin_declare_add,
         lop_connect: lov_llog_origin_connect
 };
 

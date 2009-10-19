@@ -49,6 +49,8 @@
 #include <obd_class.h>
 #include <lustre_log.h>
 
+#define LLOG_TEST_RECNUM        40000
+
 static int llog_test_rand;
 static struct obd_uuid uuid = { .uuid = "test_uuid" };
 static struct llog_logid cat_logid;
@@ -329,7 +331,7 @@ static int llog_test_4(struct obd_device *obd)
                 GOTO(ctxt_release, rc);
 
         CWARN("4d: write 40,000 more log records\n");
-        for (i = 0; i < 40000; i++) {
+        for (i = 0; i < LLOG_TEST_RECNUM; i++) {
                 rc = llog_cat_add_rec(cath, &lmr.lmr_hdr, NULL, NULL);
                 if (rc) {
                         CERROR("4d: write 40000 records failed at #%d: %d\n",
@@ -369,6 +371,8 @@ ctxt_release:
         RETURN(rc);
 }
 
+static cat_counter;
+
 static int cat_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
                         void *data)
 {
@@ -382,8 +386,13 @@ static int cat_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
         CWARN("seeing record at index %d - "LPX64":%x in log "LPX64"\n",
                rec->lrh_index, lir->lid_id.lgl_oid,
                lir->lid_id.lgl_ogen, llh->lgh_id.lgl_oid);
+
+        cat_counter++;
+
         RETURN(0);
 }
+
+static int plain_counter;
 
 static int plain_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
                           void *data)
@@ -395,6 +404,9 @@ static int plain_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
 
         CWARN("seeing record at index %d in log "LPX64"\n",
                rec->lrh_index, llh->lgh_id.lgl_oid);
+
+        plain_counter++;
+
         RETURN(0);
 }
 
@@ -414,7 +426,7 @@ static int llog_cancel_rec_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
 
         llog_cat_cancel_records(llh->u.phd.phd_cat_handle, 1, &cookie);
         i++;
-        if (i == 40000)
+        if (i == LLOG_TEST_RECNUM)
                 RETURN(-4711);
         RETURN(0);
 }
@@ -442,10 +454,15 @@ static int llog_test_5(struct obd_device *obd)
         llog_init_handle(llh, LLOG_F_IS_CAT, &uuid);
 
         CWARN("5b: print the catalog entries.. we expect 2\n");
+        cat_counter = 0;
         rc = llog_process(llh, cat_print_cb, "test 5", NULL);
         if (rc) {
                 CERROR("5b: process with cat_print_cb failed: %d\n", rc);
                 GOTO(out, rc);
+        }
+        if (cat_counter != 2) {
+                CERROR("5b: %d entries in catalog\n", cat_counter);
+                GOTO(out, rc = -EINVAL);
         }
 
         CWARN("5c: Cancel 40000 records, see one log zapped\n");
@@ -464,24 +481,39 @@ static int llog_test_5(struct obd_device *obd)
         }
 
         CWARN("5b: print the catalog entries.. we expect 1\n");
+        cat_counter = 0;
         rc = llog_process(llh, cat_print_cb, "test 5", NULL);
         if (rc) {
                 CERROR("5b: process with cat_print_cb failed: %d\n", rc);
                 GOTO(out, rc);
         }
+        if (cat_counter != 1) {
+                CERROR("5b: %d entries in catalog\n", cat_counter);
+                //GOTO(out, rc = -EINVAL);
+        }
 
         CWARN("5e: print plain log entries.. expect 6\n");
+        plain_counter = 0;
         rc = llog_cat_process(llh, plain_print_cb, "foobar", 0, 0);
         if (rc) {
                 CERROR("5e: process with plain_print_cb failed: %d\n", rc);
                 GOTO(out, rc);
         }
+        if (plain_counter != 6) {
+                CERROR("5e: found %d records\n", plain_counter);
+                GOTO(out, rc = -EINVAL);
+        }
 
         CWARN("5f: print plain log entries reversely.. expect 6\n");
+        plain_counter = 0;
         rc = llog_cat_reverse_process(llh, plain_print_cb, "foobar");
         if (rc) {
                 CERROR("5f: reversely process with plain_print_cb failed: %d\n", rc);
                 GOTO(out, rc);
+        }
+        if (plain_counter != 6) {
+                CERROR("5f: found %d records\n", plain_counter);
+                GOTO(out, rc = -EINVAL);
         }
 
  out:
@@ -508,7 +540,7 @@ static int llog_test_6(struct obd_device *obd, char *name)
         int rc;
 
         CWARN("6a: re-open log %s using client API\n", name);
-        mgc_obd = class_find_client_obd(mgs_uuid, LUSTRE_MGC_NAME, NULL);
+        mgc_obd = class_find_client_obd(mgs_uuid, LUSTRE_MDC_NAME, NULL);
         if (mgc_obd == NULL) {
                 CERROR("6: no MGC devices connected to %s found.\n",
                        mgs_uuid->uuid);
@@ -602,14 +634,12 @@ ctxt_release:
 static int llog_run_tests(struct obd_device *obd)
 {
         struct llog_handle *llh;
-        struct lvfs_run_ctxt saved;
         struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
         int rc, err, cleanup_phase = 0;
         char name[10];
         ENTRY;
 
         sprintf(name, "%x", llog_test_rand);
-        push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
 
         rc = llog_test_1(obd, name);
         if (rc)
@@ -623,7 +653,6 @@ static int llog_run_tests(struct obd_device *obd)
         rc = llog_test_3(obd, llh);
         if (rc)
                 GOTO(cleanup, rc);
-
         rc = llog_test_4(obd);
         if (rc)
                 GOTO(cleanup, rc);
@@ -631,11 +660,12 @@ static int llog_run_tests(struct obd_device *obd)
         rc = llog_test_5(obd);
         if (rc)
                 GOTO(cleanup, rc);
-
+#if  0
+        /* XXX: enable back when MGS uses new llog api */
         rc = llog_test_6(obd, name);
         if (rc)
                 GOTO(cleanup, rc);
-
+#endif
         rc = llog_test_7(obd);
         if (rc)
                 GOTO(cleanup, rc);
@@ -648,8 +678,6 @@ static int llog_run_tests(struct obd_device *obd)
                         CERROR("cleanup: llog_close failed: %d\n", err);
                 if (!rc)
                         rc = err;
-        case 0:
-                pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
         }
         llog_ctxt_put(ctxt);
         return rc;
@@ -664,7 +692,7 @@ static int llog_test_llog_init(struct obd_device *obd,
         ENTRY;
 
         rc = llog_setup(obd, &obd->obd_olg, LLOG_TEST_ORIG_CTXT, tgt, 0, NULL,
-                        &llog_lvfs_ops);
+                        &llog_osd_ops);
         RETURN(rc);
 }
 

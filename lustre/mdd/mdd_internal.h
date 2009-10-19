@@ -223,7 +223,8 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                    struct lov_mds_md **lmm, int *lmm_size,
                    const struct md_op_spec *spec, struct lu_attr *la);
 int mdd_lov_objid_prepare(struct mdd_device *mdd, struct lov_mds_md *lmm);
-void mdd_lov_objid_update(struct mdd_device *mdd, struct lov_mds_md *lmm);
+void mdd_lov_objid_update(struct mdd_device *mdd, struct lov_mds_md *lmm,
+                          struct thandle *th);
 void mdd_lov_create_finish(const struct lu_env *env, struct mdd_device *mdd,
                            struct lov_mds_md *lmm, int lmm_size,
                            const struct md_op_spec *spec);
@@ -245,7 +246,7 @@ int mdd_attr_check_set_internal(const struct lu_env *env,
                                 struct thandle *handle,
                                 int needacl);
 int mdd_object_kill(const struct lu_env *env, struct mdd_object *obj,
-                    struct md_attr *ma);
+                    struct md_attr *ma, struct thandle *th);
 int mdd_iattr_get(const struct lu_env *env, struct mdd_object *mdd_obj,
                   struct md_attr *ma);
 int mdd_attr_get_internal_locked(const struct lu_env *env,
@@ -324,12 +325,17 @@ void mdd_lee_unpack(const struct link_ea_entry *lee, int *reclen,
 
 /* mdd_lov.c */
 int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,
-                   struct mdd_object *mdd_cobj, struct md_attr *ma);
+                   struct mdd_object *mdd_cobj, struct md_attr *ma,
+                   struct thandle *th);
 
+int mdd_declare_setattr_log(const struct lu_env *env, struct mdd_object *obj,
+                            struct md_attr *ma,struct lov_mds_md *lmm,
+                            int lmm_size, struct thandle *th);
 int mdd_setattr_log(const struct lu_env *env, struct mdd_device *mdd,
                     const struct md_attr *ma,
                     struct lov_mds_md *lmm, int lmm_size,
-                    struct llog_cookie *logcookies, int cookies_size);
+                    struct llog_cookie *logcookies, int cookies_size,
+                    struct thandle *th);
 
 int mdd_get_cookie_size(const struct lu_env *env, struct mdd_device *mdd,
                         struct lov_mds_md *lmm);
@@ -426,7 +432,8 @@ int mdd_setattr_txn_param_build(const struct lu_env *env, struct md_object *obj,
                                 struct md_attr *ma, enum mdd_txn_op);
 
 int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
-                    struct mdd_object *obj, struct lu_attr *la);
+                    struct mdd_object *obj, struct lu_attr *la,
+                    struct thandle *th);
 
 static inline void mdd_object_put(const struct lu_env *env,
                                   struct mdd_object *o)

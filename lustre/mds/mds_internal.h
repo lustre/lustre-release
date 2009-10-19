@@ -48,14 +48,16 @@ int mds_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                   struct obd_device *tgt, int *index);
 int mds_llog_finish(struct obd_device *obd, int count);
 int mds_changelog_llog_init(struct obd_device *obd, struct obd_device *tgt);
-int mds_log_op_orphan(struct obd_device *, struct lov_stripe_md *, obd_count);
+int mds_log_op_orphan(struct obd_device *, struct lov_stripe_md *, obd_count,
+                      struct thandle *th);
 
 /* mds/mds_lov.c */
 int mds_lov_connect(struct obd_device *obd, char * lov_name);
 int mds_lov_disconnect(struct obd_device *obd);
 
 int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid);
-void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm);
+void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm,
+                           struct thandle *th);
 int mds_lov_set_nextid(struct obd_device *obd);
 
 int mds_post_mds_lovconf(struct obd_device *obd);

@@ -80,6 +80,7 @@ struct plain_handle_data {
 struct cat_handle_data {
         struct list_head        chd_head;
         struct llog_handle     *chd_current_log; /* currently open log */
+        struct llog_handle     *chd_next_log;    /* log to be used next */
 };
 
 /* In-memory descriptor for a log object or log catalog */
@@ -99,6 +100,7 @@ struct llog_handle {
                 struct plain_handle_data phd;
                 struct cat_handle_data   chd;
         } u;
+        void                   *private_data;
 };
 
 #define lgh_file        lgh_store.lgh_file
@@ -165,8 +167,13 @@ struct llog_process_cat_args {
 };
 
 int llog_cat_put(struct llog_handle *cathandle);
+int llog_cat_declare_add_rec(struct llog_handle *cathandle,
+                             struct llog_rec_hdr *rec,
+                             struct thandle *);
 int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
                      struct llog_cookie *reccookie, void *buf);
+int llog_cat_add_rec_2(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
+                     struct llog_cookie *reccookie, void *buf, struct thandle *);
 int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                             struct llog_cookie *cookies);
 int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data,
@@ -196,9 +203,17 @@ int llog_obd_origin_setup(struct obd_device *obd, struct obd_llog_group *olg,
                           int index, struct obd_device *disk_obd, int count,
                           struct llog_logid *logid, const char *name);
 int llog_obd_origin_cleanup(struct llog_ctxt *ctxt);
+int llog_obd_origin_declare_add(struct llog_ctxt *ctxt,
+                                struct llog_rec_hdr *rec,
+                                struct lov_stripe_md *lsm,
+                                struct thandle *th);
 int llog_obd_origin_add(struct llog_ctxt *ctxt,
                         struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
                         struct llog_cookie *logcookies, int numcookies);
+int llog_obd_origin_add_2(struct llog_ctxt *ctxt,
+                          struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+                          struct llog_cookie *logcookies, int numcookies,
+                          struct thandle *th);
 
 int obd_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                   struct obd_device *disk_obd, int *idx);
@@ -226,6 +241,8 @@ int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp);
 int llog_obd_repl_connect(struct llog_ctxt *ctxt,
                           struct llog_logid *logid, struct llog_gen *gen,
                           struct obd_uuid *uuid);
+
+struct thandle;
 
 struct llog_operations {
         int (*lop_write_rec)(struct llog_handle *loghandle,
@@ -255,11 +272,33 @@ struct llog_operations {
         int (*lop_connect)(struct llog_ctxt *ctxt,
                            struct llog_logid *logid, struct llog_gen *gen,
                            struct obd_uuid *uuid);
+
         /* XXX add 2 more: commit callbacks and llog recovery functions */
+
+        /* new API */
+        int (*lop_open_2)(struct llog_ctxt *ctxt, struct llog_handle **,
+                        struct llog_logid *logid, char *name);
+        int (*lop_exist_2)(struct llog_handle *);
+        int (*lop_declare_create_2)(struct llog_handle *,
+                                    struct thandle *th);
+        int (*lop_create_2)(struct llog_handle *, struct thandle *th);
+        int (*lop_declare_write_rec_2)(struct llog_handle *loghandle,
+                                       struct llog_rec_hdr *rec,
+                                       int idx, struct thandle *th);
+        int (*lop_write_rec_2)(struct llog_handle *loghandle,
+                               struct llog_rec_hdr *rec,
+                               struct llog_cookie *logcookies, int numcookies,
+                               void *, int idx, struct thandle *th);
+        int (*lop_declare_add_2)(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
+                                 struct lov_stripe_md *lsm, struct thandle *th);
+        int (*lop_add_2)(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
+                         struct lov_stripe_md *lsm, struct llog_cookie *logcookies,
+                         int numcookies, struct thandle *th);
 };
 
 /* llog_lvfs.c */
 extern struct llog_operations llog_lvfs_ops;
+extern struct llog_operations llog_osd_ops;
 int llog_get_cat_list(struct obd_device *disk_obd,
                       char *name, int idx, int count,
                       struct llog_catid *idarray);
@@ -681,6 +720,208 @@ static inline int llog_connect(struct llog_ctxt *ctxt,
         rc = lop->lop_connect(ctxt, logid, gen, uuid);
         RETURN(rc);
 }
+
+
+/*
+ * new API
+ */
+static inline int llog_open_2(struct llog_ctxt *ctxt,
+                              struct llog_handle **res,
+                              struct llog_logid *logid,
+                              char *name)
+{
+        struct llog_operations *lop;
+        int raised, rc;
+        ENTRY;
+
+        rc = llog_obd2ops(ctxt, &lop);
+        if (rc)
+                RETURN(rc);
+        if (lop->lop_open_2 == NULL)
+                RETURN(-EOPNOTSUPP);
+
+        raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+        if (!raised)
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+        rc = lop->lop_open_2(ctxt, res, logid, name);
+        if (!raised)
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+        RETURN(rc);
+}
+
+static inline int llog_exist_2(struct llog_handle *loghandle)
+{
+        struct llog_operations *lop;
+        int raised, rc;
+        ENTRY;
+
+        rc = llog_handle2ops(loghandle, &lop);
+        if (rc)
+                RETURN(rc);
+        if (lop->lop_exist_2 == NULL)
+                RETURN(-EOPNOTSUPP);
+
+        raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+        if (!raised)
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+        rc = lop->lop_exist_2(loghandle);
+        if (!raised)
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+        RETURN(rc);
+}
+
+static inline int llog_create_2(struct llog_handle *res,
+                                struct thandle *th)
+{
+        struct llog_operations *lop;
+        int raised, rc;
+        ENTRY;
+
+        rc = llog_handle2ops(res, &lop);
+        if (rc)
+                RETURN(rc);
+        if (lop->lop_create_2 == NULL)
+                RETURN(-EOPNOTSUPP);
+
+        raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+        if (!raised)
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+        rc = lop->lop_create_2(res, th);
+        if (!raised)
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+        RETURN(rc);
+}
+
+static inline int llog_declare_create_2(struct llog_handle *loghandle,
+                                        struct thandle *th)
+{
+        struct llog_operations *lop;
+        int raised, rc;
+        ENTRY;
+
+        rc = llog_handle2ops(loghandle, &lop);
+        if (rc)
+                RETURN(rc);
+        if (lop->lop_declare_create_2 == NULL)
+                RETURN(-EOPNOTSUPP);
+
+        raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+        if (!raised)
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+        rc = lop->lop_declare_create_2(loghandle, th);
+        if (!raised)
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+        RETURN(rc);
+}
+
+static inline int llog_declare_write_rec_2(struct llog_handle *handle,
+                                           struct llog_rec_hdr *rec, int idx,
+                                           struct thandle *th)
+{
+        struct llog_operations *lop;
+        int raised, rc;
+        ENTRY;
+
+        rc = llog_handle2ops(handle, &lop);
+        if (rc)
+                RETURN(rc);
+        LASSERT(lop);
+        if (lop->lop_declare_write_rec_2 == NULL)
+                RETURN(-EOPNOTSUPP);
+
+        raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+        if (!raised)
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+        rc = lop->lop_declare_write_rec_2(handle, rec, idx, th);
+        if (!raised)
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+        RETURN(rc);
+}
+
+static inline int llog_write_rec_2(struct llog_handle *handle,
+                                   struct llog_rec_hdr *rec,
+                                   struct llog_cookie *logcookies,
+                                   int numcookies, void *buf, int idx,
+                                   struct thandle *th)
+{
+        struct llog_operations *lop;
+        int raised, rc, buflen;
+        ENTRY;
+
+        rc = llog_handle2ops(handle, &lop);
+        if (rc)
+                RETURN(rc);
+        LASSERT(lop);
+        if (lop->lop_write_rec_2 == NULL)
+                RETURN(-EOPNOTSUPP);
+
+        /* FIXME:  Why doesn't caller just set the right lrh_len itself? */
+        if (buf)
+                buflen = rec->lrh_len + sizeof(struct llog_rec_hdr)
+                                + sizeof(struct llog_rec_tail);
+        else
+                buflen = rec->lrh_len;
+        LASSERT(size_round(buflen) == buflen);
+
+        raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+        if (!raised)
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+        rc = lop->lop_write_rec_2(handle, rec, logcookies, numcookies, buf, idx, th);
+        if (!raised)
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+        RETURN(rc);
+}
+
+static inline int llog_add_2(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
+                             struct lov_stripe_md *lsm,
+                             struct llog_cookie *logcookies,
+                             int numcookies, struct thandle *th)
+{
+        int raised, rc;
+        ENTRY;
+
+        if (!ctxt) {
+                CERROR("No ctxt\n");
+                RETURN(-ENODEV);
+        }
+
+        if (ctxt->loc_flags & LLOG_CTXT_FLAG_UNINITIALIZED)
+                RETURN(-ENXIO);
+
+        CTXT_CHECK_OP(ctxt, add_2, -EOPNOTSUPP);
+        raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+        if (!raised)
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+        rc = CTXTP(ctxt, add_2)(ctxt, rec, lsm, logcookies, numcookies, th);
+        if (!raised)
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+        RETURN(rc);
+}
+
+static inline int llog_declare_add_2(struct llog_ctxt *ctxt,
+                                     struct llog_rec_hdr *rec,
+                                     struct lov_stripe_md *lsm,
+                                     struct thandle *th)
+{
+        int raised, rc;
+        ENTRY;
+
+        if (!ctxt) {
+                CERROR("No ctxt\n");
+                RETURN(-ENODEV);
+        }
+
+        if (ctxt->loc_logops->lop_declare_add_2 == NULL)
+                dump_stack();
+        raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+        if (!raised)
+                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+        rc = CTXTP(ctxt, declare_add_2)(ctxt, rec, lsm, th);
+        if (!raised)
+                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+        RETURN(rc);
+}
+
 
 int lustre_process_log(struct super_block *sb, char *logname,
                        struct config_llog_instance *cfg);

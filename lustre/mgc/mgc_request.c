@@ -1225,6 +1225,8 @@ static int mgc_copy_llog(struct obd_device *obd, struct llog_ctxt *rctxt,
         int rc, rc2;
         ENTRY;
 
+        LBUG();
+
         /* Write new log to a temp name, then vfs_rename over logname
            upon successful completion. */
 

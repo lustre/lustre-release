@@ -338,7 +338,8 @@ EXPORT_SYMBOL(mds_lov_prepare_objids);
  */
 static int mds_log_lost_precreated(struct obd_device *obd,
                                    struct lov_stripe_md **lsmp, int *stripes,
-                                   obd_id id, obd_count count, int idx)
+                                   obd_id id, obd_count count, int idx,
+                                   struct thandle *th)
 {
         struct lov_stripe_md *lsm = *lsmp;
         int rc;
@@ -358,11 +359,12 @@ static int mds_log_lost_precreated(struct obd_device *obd,
         lsm->lsm_oinfo[0]->loi_gr = mdt_to_obd_objgrp(obd->u.mds.mds_id);
         lsm->lsm_oinfo[0]->loi_ost_idx = idx;
 
-        rc = mds_log_op_orphan(obd, lsm, count);
+        rc = mds_log_op_orphan(obd, lsm, count, th);
         RETURN(rc);
 }
 
-void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm)
+void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm,
+                           struct thandle *th)
 {
         struct mds_obd *mds = &obd->u.mds;
         int j;
@@ -411,7 +413,7 @@ void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm)
                                         CERROR("Unexpected gap in objids\n");
                                 /* lsm is allocated if NULL */
                                 mds_log_lost_precreated(obd, &lsm, &stripes,
-                                                        data[idx]+1, lost, i);
+                                                        data[idx]+1,lost,i,th);
                         }
                         data[idx] = id;
                         cfs_bitmap_set(mds->mds_lov_page_dirty, page);

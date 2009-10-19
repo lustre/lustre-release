@@ -373,10 +373,11 @@ int mdd_lov_objid_prepare(struct mdd_device *mdd, struct lov_mds_md *lmm)
         return mds_lov_prepare_objids(mdd->mdd_obd_dev, lmm);
 }
 
-void mdd_lov_objid_update(struct mdd_device *mdd, struct lov_mds_md *lmm)
+void mdd_lov_objid_update(struct mdd_device *mdd, struct lov_mds_md *lmm,
+                          struct thandle *th)
 {
         /* copy mds_lov code is using wrong layer */
-        mds_lov_update_objids(mdd->mdd_obd_dev, lmm);
+        mds_lov_update_objids(mdd->mdd_obd_dev, lmm, th);
 }
 
 void mdd_lov_create_finish(const struct lu_env *env, struct mdd_device *mdd,
@@ -611,7 +612,8 @@ int mdd_lovobj_unlink(const struct lu_env *env, struct mdd_device *mdd,
  * called with obj locked. 
  */
 int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
-                    struct mdd_object *obj, struct lu_attr *la)
+                    struct mdd_object *obj, struct lu_attr *la,
+                    struct thandle *th)
 {
         struct md_attr    *ma = &mdd_env_info(env)->mti_ma;
         int                rc;
@@ -650,7 +652,7 @@ int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
 
         ma->ma_valid = MA_LOV;
 
-        rc = mdd_unlink_log(env, mdd, obj, ma);
+        rc = mdd_unlink_log(env, mdd, obj, ma, th);
         if (rc) {
                 CWARN("mds unlink log for "DFID" failed: %d\n",
                        PFID(mdo2fid(obj)), rc);
@@ -665,13 +667,14 @@ int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
 }
 
 int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,
-                   struct mdd_object *mdd_cobj, struct md_attr *ma)
+                   struct mdd_object *mdd_cobj, struct md_attr *ma,
+                   struct thandle *th)
 {
         LASSERT(ma->ma_valid & MA_LOV);
 
         if ((ma->ma_cookie_size > 0) &&
             (mds_log_op_unlink(mdd2obd_dev(mdd), ma->ma_lmm, ma->ma_lmm_size,
-                               ma->ma_cookie, ma->ma_cookie_size) > 0)) {
+                               ma->ma_cookie, ma->ma_cookie_size, th) > 0)) {
                 CDEBUG(D_HA, "DEBUG: unlink log is added for object "DFID"\n",
                        PFID(mdd_object_fid(mdd_cobj)));
                 ma->ma_valid |= MA_COOKIE;
@@ -679,9 +682,47 @@ int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,
         return 0;
 }
 
-int mdd_log_op_setattr(struct obd_device *obd, __u32 uid, __u32 gid,
-                       struct lov_mds_md *lmm, int lmm_size,
-                       struct llog_cookie *logcookies, int cookies_size)
+int mdd_declare_setattr_log(const struct lu_env *env, struct mdd_object *obj,
+                            struct md_attr *ma, struct lov_mds_md *lmm,
+                            int lmm_size, struct thandle *th)
+{
+        struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
+        struct obd_device *obd = mdd2obd_dev(mdd);
+        struct mds_obd    *mds = &obd->u.mds;
+        struct lov_stripe_md *lsm = NULL;
+        struct llog_ctxt *ctxt;
+        int rc;
+        ENTRY;
+
+        if (IS_ERR(mds->mds_osc_obd))
+                RETURN(PTR_ERR(mds->mds_osc_obd));
+
+        /* should we llog this change? */
+        if (lmm_size == 0)
+                RETURN(0);
+
+        rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
+        if (rc < 0)
+                RETURN(rc);
+
+        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, lsm);
+        if (rc)
+                GOTO(out, rc);
+
+        /* declare write setattr log */
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
+        rc = llog_declare_add_2(ctxt, NULL, lsm, th);
+        llog_ctxt_put(ctxt);
+
+ out:
+        obd_free_memmd(mds->mds_osc_exp, &lsm);
+        RETURN(rc);
+}
+
+int mdd_log_op_setattr(const struct lu_env *env, struct obd_device *obd,
+                       __u32 uid, __u32 gid, struct lov_mds_md *lmm,
+                       int lmm_size, struct llog_cookie *logcookies,
+                       int cookies_size, struct thandle *th)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_stripe_md *lsm = NULL;
@@ -713,8 +754,8 @@ int mdd_log_op_setattr(struct obd_device *obd, __u32 uid, __u32 gid,
 
         /* write setattr log */
         ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
-        rc = llog_add(ctxt, &lsr->lsr_hdr, lsm, logcookies,
-                      cookies_size / sizeof(struct llog_cookie));
+        rc = llog_add_2(ctxt, &lsr->lsr_hdr, lsm, logcookies,
+                        cookies_size / sizeof(struct llog_cookie), th);
 
         llog_ctxt_put(ctxt);
 
@@ -727,7 +768,8 @@ int mdd_log_op_setattr(struct obd_device *obd, __u32 uid, __u32 gid,
 int mdd_setattr_log(const struct lu_env *env, struct mdd_device *mdd,
                     const struct md_attr *ma,
                     struct lov_mds_md *lmm, int lmm_size,
-                    struct llog_cookie *logcookies, int cookies_size)
+                    struct llog_cookie *logcookies, int cookies_size,
+                    struct thandle *th)
 {
         struct obd_device *obd = mdd2obd_dev(mdd);
 
@@ -736,10 +778,10 @@ int mdd_setattr_log(const struct lu_env *env, struct mdd_device *mdd,
                 CDEBUG(D_INFO, "setattr llog for uid/gid=%lu/%lu\n",
                         (unsigned long)ma->ma_attr.la_uid,
                         (unsigned long)ma->ma_attr.la_gid);
-                return mdd_log_op_setattr(obd, ma->ma_attr.la_uid,
+                return mdd_log_op_setattr(env, obd, ma->ma_attr.la_uid,
                                           ma->ma_attr.la_gid, lmm,
                                           lmm_size, logcookies,
-                                          cookies_size);
+                                          cookies_size, th);
         } else
                 return 0;
 }

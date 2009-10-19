@@ -75,9 +75,10 @@ int mds_lov_write_objids(const struct lu_env *env,
                          struct obd_device *obd,
                          struct thandle *th);
 int mds_lov_prepare_objids(struct obd_device *obd, struct lov_mds_md *lmm);
-void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm);
+void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm,
+                           struct thandle *th);
 int mds_log_op_unlink(struct obd_device *, struct lov_mds_md *, int,
-                      struct llog_cookie *, int);
+                      struct llog_cookie *, int, struct thandle *);
 
 
 #define MDD_OBD_NAME     "mdd_obd"

@@ -323,7 +323,7 @@ int mdd_changelog_llog_write(struct mdd_device         *mdd,
                 return -ENXIO;
 
         /* nested journal transaction */
-        rc = llog_add(ctxt, &rec->cr_hdr, NULL, NULL, 0);
+        rc = llog_add_2(ctxt, &rec->cr_hdr, NULL, NULL, 0, handle);
         llog_ctxt_put(ctxt);
 
         cfs_waitq_signal(&mdd->mdd_cl.mc_waitq);
@@ -1297,7 +1297,7 @@ static int mdd_changelog_user_register(struct mdd_device *mdd, int *id)
         rec->cur_endrec = mdd->mdd_cl.mc_index;
         spin_unlock(&mdd->mdd_cl.mc_user_lock);
 
-        rc = llog_add(ctxt, &rec->cur_hdr, NULL, NULL, 0);
+        rc = llog_add_2(ctxt, &rec->cur_hdr, NULL, NULL, 0, NULL);
 
         CDEBUG(D_IOCTL, "Registered changelog user %d\n", *id);
 out:

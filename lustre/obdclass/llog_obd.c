@@ -374,9 +374,7 @@ int llog_obd_origin_setup(struct obd_device *obd, struct obd_llog_group *olg,
                 GOTO(out, rc);
 
         ctxt->loc_handle = handle;
-        push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
         rc = llog_init_handle(handle, LLOG_F_IS_CAT, NULL);
-        pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
         if (rc)
                 GOTO(out, rc);
 
@@ -406,6 +404,10 @@ int llog_obd_origin_cleanup(struct llog_ctxt *ctxt)
                                          &cathandle->u.chd.chd_head,
                                          u.phd.phd_entry) {
                         llh = loghandle->lgh_hdr;
+                        if (llh == NULL) {
+                                /* open but not created llog (new api) */
+                                continue;
+                        }
                         if ((llh->llh_flags &
                                 LLOG_F_ZAP_WHEN_EMPTY) &&
                             (llh->llh_count == 1)) {
@@ -450,50 +452,38 @@ int llog_obd_origin_add(struct llog_ctxt *ctxt,
 }
 EXPORT_SYMBOL(llog_obd_origin_add);
 
-#if 0
-int llog_cat_initialize(struct obd_device *obd, struct obd_llog_group *olg,
-                        int idx, struct obd_uuid *uuid)
+int llog_obd_origin_add_2(struct llog_ctxt *ctxt,
+                          struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+                          struct llog_cookie *logcookies, int numcookies,
+                          struct thandle *th)
 {
-        char name[32] = CATLIST;
-        struct llog_catid idarray;
+        struct llog_handle *cathandle;
         int rc;
         ENTRY;
 
-        if (obd->obd_lvfs_ctxt.magic != OBD_RUN_CTXT_MAGIC) {
-                CERROR("llog isn't initialized\n");
-                RETURN(0);
-        }
-
-        mutex_down(&olg->olg_cat_processing);
-        rc = llog_get_cat_list(obd, obd, name, idx, 1, &idarray);
-        if (rc) {
-                CERROR("rc: %d\n", rc);
-                GOTO(out, rc);
-        }
-
-        CDEBUG(D_INFO, "%s: Init llog for %s/%d - catid "LPX64"/"LPX64":%x\n",
-               obd->obd_name, uuid->uuid, idx, idarray.lci_logid.lgl_oid,
-               idarray.lci_logid.lgl_ogr, idarray.lci_logid.lgl_ogen);
-
-        rc = obd_llog_init(obd, olg, obd, 1, &idarray, uuid);
-        if (rc) {
-                CERROR("rc: %d\n", rc);
-                GOTO(out, rc);
-        }
-
-        rc = llog_put_cat_list(obd, obd, name, idx, 1, &idarray);
-        if (rc) {
-                CERROR("rc: %d\n", rc);
-                GOTO(out, rc);
-        }
-
- out:
-        mutex_up(&olg->olg_cat_processing);
-
+        cathandle = ctxt->loc_handle;
+        LASSERT(cathandle != NULL);
+        rc = llog_cat_add_rec_2(cathandle, rec, logcookies, NULL, th);
+        if (rc != 1)
+                CERROR("write one catalog record failed: %d\n", rc);
         RETURN(rc);
 }
-EXPORT_SYMBOL(llog_cat_initialize);
-#endif
+EXPORT_SYMBOL(llog_obd_origin_add_2);
+
+int llog_obd_origin_declare_add(struct llog_ctxt *ctxt,
+                                struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+                                struct thandle *th)
+{
+        struct llog_handle *cathandle;
+        int rc;
+        ENTRY;
+
+        cathandle = ctxt->loc_handle;
+        LASSERT(cathandle != NULL);
+        rc = llog_cat_declare_add_rec(cathandle, rec, th);
+        RETURN(rc);
+}
+EXPORT_SYMBOL(llog_obd_origin_declare_add);
 
 int obd_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                   struct obd_device *disk_obd, int *index)

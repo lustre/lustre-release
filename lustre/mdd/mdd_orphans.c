@@ -293,7 +293,7 @@ static int orphan_object_kill(const struct lu_env *env,
                 /* regular file , cleanup linked ost objects */
                 rc = mdd_la_get(env, obj, la, BYPASS_CAPA);
                 if (rc == 0)
-                        rc = mdd_lov_destroy(env, mdd, obj, la);
+                        rc = mdd_lov_destroy(env, mdd, obj, la, th);
         }
         RETURN(rc);
 }

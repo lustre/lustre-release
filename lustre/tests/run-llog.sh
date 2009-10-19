@@ -21,7 +21,7 @@ load_llog_test() {
 PATH=`dirname $0`:$LUSTRE/utils:$PATH
 TMP=${TMP:-/tmp}
 
-MGS=`lctl dl | awk '/mgs/ { print $4 }'`
+MGS=`lctl dl | awk '/mdd/ { print $4 }'`
 [ -z "$MGS" ] && echo "$0: SKIP: no MGS available, skipping llog test" && exit 0
 
 load_llog_test || exit 0

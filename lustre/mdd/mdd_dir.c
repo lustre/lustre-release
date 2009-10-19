@@ -842,14 +842,18 @@ int mdd_declare_finish_unlink(const struct lu_env *env,
                               struct mdd_object *obj, struct md_attr *ma,
                               struct thandle *th)
 {
-        struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
-        int stripe, rc, i;
+        struct lov_stripe_md *lsm = NULL;
+        struct llog_ctxt     *ctxt;
+        struct mdd_device    *mdd = mdo2mdd(&obj->mod_obj);
+        struct obd_device    *obd = mdd2obd_dev(mdd);
+        struct mds_obd       *mds = &obd->u.mds;
+        int                   rc;
+        ENTRY;
 
         rc = __mdd_declare_orphan_add(env, obj, th);
 
-        RETURN(rc);
         if (rc || !S_ISREG(mdd_object_type(obj)))
-                return rc;
+                RETURN(rc);
 
         /* XXX: llog is still uses fsfilt to control transactions
          * thus the best we can do is to calculate credits here
@@ -863,25 +867,22 @@ int mdd_declare_finish_unlink(const struct lu_env *env,
         if (rc || !(ma->ma_valid & MA_LOV))
                 RETURN(rc);
 
-        LASSERTF(le32_to_cpu(ma->ma_lmm->lmm_magic) == LOV_MAGIC_V1 ||
-                 le32_to_cpu(ma->ma_lmm->lmm_magic) == LOV_MAGIC_V3,
-                 "%08x", le32_to_cpu(ma->ma_lmm->lmm_magic));
+        rc = obd_unpackmd(mds->mds_osc_exp, &lsm, ma->ma_lmm, ma->ma_lmm_size);
+        if (rc < 0)
+                RETURN(rc);
+        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, lsm);
+        if (rc)
+                GOTO(out, rc);
 
-        if ((int)le32_to_cpu(ma->ma_lmm->lmm_stripe_count) < 0)
-                stripe = mdd2obd_dev(mdd)->u.mds.mds_lov_desc.ld_tgt_count;
-        else
-                stripe = le32_to_cpu(ma->ma_lmm->lmm_stripe_count);
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
+        rc = llog_declare_add_2(ctxt, NULL, lsm, th);
+        llog_ctxt_put(ctxt);
 
-        for (i = 0; i < stripe; i++) {
-                rc = mdo_declare_create_obj(env, obj, NULL, NULL, NULL, th);
-                if (rc)
-                        break;
-                rc = mdo_declare_write(env, obj, 0, 0, th);
-                if (rc)
-                        break;
-        }
+        GOTO(out, rc);
+out:
+        obd_free_memmd(mds->mds_osc_exp, &lsm);
 
-        return rc;
+        RETURN(rc);
 }
 
 /* caller should take a lock before calling */
@@ -914,7 +915,7 @@ int mdd_finish_unlink(const struct lu_env *env,
                                         PFID(mdd_object_fid(obj)),
                                         obj->mod_count);
                 } else {
-                        rc = mdd_object_kill(env, obj, ma);
+                        rc = mdd_object_kill(env, obj, ma, th);
                         if (rc == 0)
                                 reset = 0;
                 }
@@ -1663,7 +1664,7 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
 
         /* update lov_objid data, must be before transaction stop! */
         if (rc == 0)
-                mdd_lov_objid_update(mdd, lmm);
+                mdd_lov_objid_update(mdd, lmm, handle);
 
         mdd_trans_stop(env, mdd, rc, handle);
 out_free:
@@ -2176,7 +2177,7 @@ cleanup:
 
         /* update lov_objid data, must be before transaction stop! */
         if (rc == 0)
-                mdd_lov_objid_update(mdd, lmm);
+                mdd_lov_objid_update(mdd, lmm, handle);
 
         mdd_pdo_write_unlock(env, mdd_pobj, dlh);
 out_trans:
