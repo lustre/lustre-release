@@ -64,7 +64,7 @@
  * between getting its string and using it.
  */
 
-#define LNET_NIDSTR_COUNT  128     /* # of nidstrings */
+#define LNET_NIDSTR_COUNT  1024    /* # of nidstrings */
 #define LNET_NIDSTR_SIZE   32      /* size of each one (see below for usage) */
 
 static char      libcfs_nidstrings[LNET_NIDSTR_COUNT][LNET_NIDSTR_SIZE];
