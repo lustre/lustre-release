@@ -1520,8 +1520,9 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
         req->rq_timedout = 1;
         spin_unlock(&req->rq_lock);
 
-        DEBUG_REQ(D_WARNING, req, "Request x"LPU64" sent from %s to NID %s "
-                  CFS_DURATION_T"s ago has %s (limit "CFS_DURATION_T"s).\n",
+        DEBUG_REQ(req->rq_fake ? D_INFO : D_WARNING, req, 
+                  "Request x"LPU64" sent from %s to NID %s "CFS_DURATION_T"s "
+                  "ago has %s ("CFS_DURATION_T"s prior to deadline).\n",
                   req->rq_xid, imp ? imp->imp_obd->obd_name : "<?>",
                   imp ? libcfs_nid2str(imp->imp_connection->c_peer.nid) : "<?>",
                   cfs_time_sub(cfs_time_current_sec(), req->rq_sent),
