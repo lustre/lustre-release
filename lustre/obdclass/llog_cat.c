@@ -392,11 +392,14 @@ int llog_cat_declare_add_rec(struct llog_handle *cathandle,
 
         if (!llog_exist_2(cathandle->u.chd.chd_current_log)) {
                 rc = llog_declare_create_2(cathandle->u.chd.chd_current_log, th);
+                llog_declare_write_rec_2(cathandle, NULL, -1, th);
         } else {
                 struct llog_handle *next;
                 next = cathandle->u.chd.chd_next_log;
-                if (next && !llog_exist_2(next))
+                if (next && !llog_exist_2(next)) {
                         rc = llog_declare_create_2(next, th);
+                        llog_declare_write_rec_2(cathandle, NULL, -1, th);
+                }
         }
 
         /* declare records in the llogs */
