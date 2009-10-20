@@ -192,7 +192,7 @@ int mds_changelog_llog_init(struct obd_device *obd, struct obd_device *tgt)
         changelog_orig_logops = llog_lvfs_ops;
         changelog_orig_logops.lop_setup = llog_obd_origin_setup;
         changelog_orig_logops.lop_cleanup = llog_obd_origin_cleanup;
-        changelog_orig_logops.lop_add_2 = llog_obd_origin_add;
+        changelog_orig_logops.lop_add_2 = llog_obd_origin_add_2;
         changelog_orig_logops.lop_cancel = llog_changelog_cancel;
 
         rc = llog_setup_named(obd, &obd->obd_olg, LLOG_CHANGELOG_ORIG_CTXT,
