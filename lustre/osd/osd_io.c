@@ -548,8 +548,8 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 #if 0
                 /* XXX */
                 if (fo->fo_writethrough_cache)
-                        clear_page_dirty_for_io(lb[i].page);
 #endif
+                clear_page_dirty_for_io(lb[i].page);
                 LASSERT(!PageDirty(lb[i].page));
                 SetPageUptodate(lb[i].page);
 
