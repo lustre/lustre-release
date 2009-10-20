@@ -5307,8 +5307,8 @@ run_test 121 "read cancel race ========="
 test_123a() { # was test 123, statahead(bug 11401)
         SLOWOK=0
         if [ -z "$(grep "processor.*: 1" /proc/cpuinfo)" ]; then
-                log "testing on UP system. Performance may be not as good as expected."
-		SLOWOK=1
+            log "testing on UP system. Performance may be not as good as expected."
+			SLOWOK=1
         fi
 
         rm -rf $DIR/$tdir
@@ -5340,49 +5340,32 @@ test_123a() { # was test 123, statahead(bug 11401)
                 etime=`date +%s`
                 delta_sa=$((etime - stime))
                 log "ls $i files with statahead: $delta_sa sec"
-		lctl get_param -n llite.*.statahead_stats
+                lctl get_param -n llite.*.statahead_stats
                 ewrong=`lctl get_param -n llite.*.statahead_stats | grep "statahead wrong:" | awk '{print $3}'`
 
-                if [ $swrong -lt $ewrong ]; then
-                        log "statahead was stopped, maybe too many locks held!"
-                fi
-
+                [ $swrong -lt $ewrong ] && log "statahead was stopped, maybe too many locks held!"
                 [ $delta -eq 0 -o $delta_sa -eq 0 ] && continue
 
                 if [ $((delta_sa * 100)) -gt $((delta * 105)) -a $delta_sa -gt $((delta + 2)) ]; then
+                    max=`lctl get_param -n llite.*.statahead_max | head -n 1`
+                    lctl set_param -n llite.*.statahead_max 0
+                    lctl get_param llite.*.statahead_max
+                    cancel_lru_locks mdc
+                    cancel_lru_locks osc
+                    stime=`date +%s`
+                    time ls -l $DIR/$tdir | wc -l
+                    etime=`date +%s`
+                    delta=$((etime - stime))
+                    log "ls $i files again without statahead: $delta sec"
+                    lctl set_param llite.*.statahead_max=$max
+                    if [ $((delta_sa * 100)) -gt $((delta * 105)) -a $delta_sa -gt $((delta + 2)) ]; then
                         if [  $SLOWOK -eq 0 ]; then
                                 error "ls $i files is slower with statahead!"
-                                debugsave
-
-                                lctl set_param debug=-1
-                                max=`lctl get_param -n llite.*.statahead_max | head -n 1`
-                                lctl set_param -n llite.*.statahead_max 0
-                                lctl get_param llite.*.statahead_max
-                                cancel_lru_locks mdc
-                                cancel_lru_locks osc
-                                $LCTL clear
-                                stime=`date +%s`
-                                time ls -l $DIR/$tdir | wc -l
-                                etime=`date +%s`
-                                error "ls $i files (again) without statahead: $((etime - stime)) sec"
-
-                                lctl set_param debug=-1
-                                lctl set_param llite.*.statahead_max=$max
-                                lctl get_param -n llite.*.statahead_max | grep '[0-9]'
-                                cancel_lru_locks mdc
-                                cancel_lru_locks osc
-                                $LCTL clear
-                                stime=`date +%s`
-                                time ls -l $DIR/$tdir | wc -l
-                                etime=`date +%s`
-                                error "ls $i files (again) with statahead: $((etime - stime)) sec"
-		                lctl get_param -n llite.*.statahead_stats
-
-                                debugrestore
                         else
                                 log "ls $i files is slower with statahead!"
                         fi
                         break
+                    fi
                 fi
 
                 [ $delta -gt 20 ] && break
