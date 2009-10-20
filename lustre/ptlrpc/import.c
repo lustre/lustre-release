@@ -1216,8 +1216,10 @@ static int signal_completed_replay(struct obd_import *imp)
 
         if (imp->imp_delayed_recovery)
                 lustre_msg_add_flags(req->rq_reqmsg, MSG_DELAY_REPLAY);
-        req->rq_timeout *= 3;
         req->rq_interpret_reply = completed_replay_interpret;
+
+        if (AT_OFF)
+                req->rq_timeout *= 3;
 
         ptlrpcd_add_req(req);
         RETURN(0);

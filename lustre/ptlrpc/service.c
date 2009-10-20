@@ -428,7 +428,7 @@ static void ptlrpc_server_free_request(struct ptlrpc_request *req)
  * drop a reference count of the request. if it reaches 0, we either
  * put it into history list, or free it immediately.
  */
-static void ptlrpc_server_drop_request(struct ptlrpc_request *req)
+void ptlrpc_server_drop_request(struct ptlrpc_request *req)
 {
         struct ptlrpc_request_buffer_desc *rqbd = req->rq_rqbd;
         struct ptlrpc_service             *svc = rqbd->rqbd_service;
@@ -438,6 +438,24 @@ static void ptlrpc_server_drop_request(struct ptlrpc_request *req)
 
         if (!atomic_dec_and_test(&req->rq_refcount))
                 return;
+
+        spin_lock(&svc->srv_at_lock);
+        list_del_init(&req->rq_timed_list);
+        if (req->rq_at_linked) {
+                struct ptlrpc_at_array *array = &svc->srv_at_array;
+                __u32 index = req->rq_at_index;
+
+                req->rq_at_linked = 0;
+                array->paa_reqs_count[index]--;
+                array->paa_count--;
+        }
+        spin_unlock(&svc->srv_at_lock);
+
+        /* finalize request */
+        if (req->rq_export) {
+                class_export_put(req->rq_export);
+                req->rq_export = NULL;
+        }
 
         spin_lock(&svc->srv_lock);
 
@@ -512,29 +530,6 @@ static void ptlrpc_server_drop_request(struct ptlrpc_request *req)
  */
 static void ptlrpc_server_finish_request(struct ptlrpc_request *req)
 {
-        struct ptlrpc_service  *svc = req->rq_rqbd->rqbd_service;
-
-        if (req->rq_export) {
-                class_export_put(req->rq_export);
-                req->rq_export = NULL;
-        }
-
-        if (req->rq_phase != RQ_PHASE_NEW) /* incorrect message magic */
-                DEBUG_REQ(D_INFO, req, "free req");
-
-        spin_lock(&svc->srv_at_lock);
-        req->rq_sent_final = 1;
-        list_del_init(&req->rq_timed_list);
-        if (req->rq_at_linked) {
-                struct ptlrpc_at_array *array = &svc->srv_at_array;
-                __u32 index = req->rq_at_index;
-
-                req->rq_at_linked = 0;
-                array->paa_reqs_count[index]--;
-                array->paa_count--;
-        }
-        spin_unlock(&svc->srv_at_lock);
-
         ptlrpc_server_drop_request(req);
 }
 
@@ -681,12 +676,6 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
                 return(-ENOSYS);
 
         spin_lock(&svc->srv_at_lock);
-
-        if (unlikely(req->rq_sent_final)) {
-                spin_unlock(&svc->srv_at_lock);
-                return 0;
-        }
-
         LASSERT(list_empty(&req->rq_timed_list));
 
         index = (unsigned long)req->rq_deadline % array->paa_size;
@@ -702,7 +691,7 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
                         }
                 }
         }
-        
+
         /* Add the request at the head of the list */
         if (list_empty(&req->rq_timed_list))
                 list_add(&req->rq_timed_list, &array->paa_reqs_array[index]);
@@ -723,8 +712,7 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
         return 0;
 }
 
-static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
-                                      int extra_time)
+static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 {
         struct ptlrpc_service *svc = req->rq_rqbd->rqbd_service;
         struct ptlrpc_request *reqcopy;
@@ -740,7 +728,7 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
                   "%ssending early reply (deadline %+lds, margin %+lds) for "
                   "%d+%d", AT_OFF ? "AT off - not " : "",
                   olddl, olddl - at_get(&svc->srv_at_estimate),
-                  at_get(&svc->srv_at_estimate), extra_time);
+                  at_get(&svc->srv_at_estimate), at_extra);
 
         if (AT_OFF)
                 RETURN(0);
@@ -760,22 +748,20 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
                 RETURN(-ENOSYS);
         }
 
-        if (req->rq_export && req->rq_export->exp_in_recovery) {
-                /* don't increase server estimates during recovery, and give
-                   clients the full recovery time. */
-                newdl = cfs_time_current_sec() +
-                        req->rq_export->exp_obd->obd_recovery_timeout;
+        if (req->rq_export &&
+            lustre_msg_get_flags(req->rq_reqmsg) &
+            (MSG_REPLAY | MSG_LAST_REPLAY)) {
+                /* Use at_extra as early reply period for recovery requests
+                 * but keep it not longer than recovery time / 4 */
+                at_add(&svc->srv_at_estimate,
+                       min(at_extra,
+                           req->rq_export->exp_obd->obd_recovery_timeout / 4));
         } else {
-                if (extra_time) {
-                        /* Fake our processing time into the future to ask the
-                           clients for some extra amount of time */
-                        extra_time += cfs_time_current_sec() -
-                                      req->rq_arrival_time.tv_sec;
-                        at_add(&svc->srv_at_estimate, extra_time);
-                }
-                newdl = req->rq_arrival_time.tv_sec +
-                        at_get(&svc->srv_at_estimate);
+                /* Fake our processing time into the future to ask the
+                 * clients for some extra amount of time */
+                at_add(&svc->srv_at_estimate, at_extra);
         }
+        newdl = cfs_time_current_sec() + at_get(&svc->srv_at_estimate);
         if (req->rq_deadline >= newdl) {
                 /* We're not adding any time, no need to send an early reply
                    (e.g. maybe at adaptive_max) */
@@ -801,10 +787,12 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
         reqcopy->rq_reqmsg = reqmsg;
         memcpy(reqmsg, req->rq_reqmsg, req->rq_reqlen);
 
-        if (req->rq_sent_final) {
+        LASSERT(atomic_read(&req->rq_refcount));
+        /** if it is last refcount then early reply isn't needed */
+        if (atomic_read(&req->rq_refcount) == 1) {
                 DEBUG_REQ(D_ADAPTTO, reqcopy, "Normal reply already sent out, "
                           "abort sending early reply\n");
-                GOTO(out, rc = 0);
+                GOTO(out, rc = -EINVAL);
         }
 
         /* Connection ref */
@@ -893,7 +881,14 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
                 list_for_each_entry_safe(rq, n, &array->paa_reqs_array[index],
                                          rq_timed_list) {
                         if (rq->rq_deadline <= now + at_early_margin) {
-                                list_move(&rq->rq_timed_list, &work_list);
+                                list_del(&rq->rq_timed_list);
+                                /**
+                                 * ptlrpc_server_drop_request() may drop
+                                 * refcount to 0 already. Let's check this and
+                                 * don't add entry to work_list
+                                 */
+                                if (likely(atomic_inc_not_zero(&rq->rq_refcount)))
+                                        list_add(&rq->rq_timed_list, &work_list);
                                 counter++;
                                 array->paa_reqs_count[index]--;
                                 array->paa_count--;
@@ -931,25 +926,18 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
                       at_get(&svc->srv_at_estimate), delay);
         }
 
-        /* ptlrpc_server_finish_request may delete an entry out of
-         * the work list */
-        spin_lock(&svc->srv_at_lock);
+        /* we took additional refcount so entries can't be deleted from list, no
+         * locking is needed */
         while (!list_empty(&work_list)) {
                 rq = list_entry(work_list.next, struct ptlrpc_request,
                                 rq_timed_list);
                 list_del_init(&rq->rq_timed_list);
-                /* if the entry is still in the worklist, it hasn't been
-                   deleted, and is safe to take a ref to keep the req around */
-                atomic_inc(&rq->rq_refcount);
-                spin_unlock(&svc->srv_at_lock);
 
-                if (ptlrpc_at_send_early_reply(rq, at_extra) == 0)
+                if (ptlrpc_at_send_early_reply(rq) == 0)
                         ptlrpc_at_add_timed(rq);
 
                 ptlrpc_server_drop_request(rq);
-                spin_lock(&svc->srv_at_lock);
         }
-        spin_unlock(&svc->srv_at_lock);
 
         RETURN(0);
 }

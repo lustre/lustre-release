@@ -602,6 +602,11 @@ static int ping_evictor_main(void *arg)
                 obd = pet_exp->exp_obd;
                 spin_unlock(&pet_lock);
 
+                /* bug 18948: ensure recovery is aborted in a timely fashion */
+                if (target_recovery_check_and_stop(obd) ||
+                    obd->obd_recovering /* no evictor during recovery */)
+                       GOTO(skip, 0);
+
                 expire_time = cfs_time_current_sec() - PING_EVICT_TIMEOUT;
 
                 CDEBUG(D_HA, "evicting all exports of obd %s older than %ld\n",
@@ -637,7 +642,7 @@ static int ping_evictor_main(void *arg)
                         }
                 }
                 spin_unlock(&obd->obd_dev_lock);
-
+skip:
                 class_export_put(pet_exp);
 
                 spin_lock(&pet_lock);

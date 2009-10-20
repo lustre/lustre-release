@@ -199,16 +199,15 @@ void ptlrpc_at_set_req_timeout(struct ptlrpc_request *req)
         if (AT_OFF) {
                 /* non-AT settings */
                 req->rq_timeout = req->rq_import->imp_server_timeout ?
-                        obd_timeout / 2 : obd_timeout;
-                lustre_msg_set_timeout(req->rq_reqmsg, req->rq_timeout);
-                return;
+                                  obd_timeout / 2 : obd_timeout;
+        } else {
+                at = &req->rq_import->imp_at;
+                idx = import_at_get_index(req->rq_import,
+                                          req->rq_request_portal);
+                serv_est = at_get(&at->iat_service_estimate[idx]);
+                req->rq_timeout = at_est2timeout(serv_est);
         }
 
-        at = &req->rq_import->imp_at;
-        idx = import_at_get_index(req->rq_import,
-                                  req->rq_request_portal);
-        serv_est = at_get(&at->iat_service_estimate[idx]);
-        req->rq_timeout = at_est2timeout(serv_est);
         /* We could get even fancier here, using history to predict increased
            loading... */
 
@@ -224,11 +223,6 @@ static void ptlrpc_at_adj_service(struct ptlrpc_request *req,
         int idx;
         unsigned int oldse;
         struct imp_at *at;
-
-        /* do estimate only if is not in recovery */
-        if ((req->rq_send_state != LUSTRE_IMP_FULL) &&
-             (req->rq_send_state != LUSTRE_IMP_CONNECTING))
-                return;
 
         LASSERT(req->rq_import);
         at = &req->rq_import->imp_at;
@@ -401,7 +395,6 @@ static int ptlrpc_at_recv_early_reply(struct ptlrpc_request *req) {
         /* Expecting to increase the service time estimate here */
         ptlrpc_at_adj_service(req, lustre_msg_get_timeout(msg));
         ptlrpc_at_adj_net_latency(req, lustre_msg_get_service_time(msg));
-
         /* Adjust the local timeout for this req */
         ptlrpc_at_set_req_timeout(req);
 
@@ -409,7 +402,7 @@ static int ptlrpc_at_recv_early_reply(struct ptlrpc_request *req) {
         /* Server assumes it now has rq_timeout from when it sent the
            early reply, so client should give it at least that long. */
         req->rq_deadline = cfs_time_current_sec() + req->rq_timeout +
-                    ptlrpc_at_get_net_latency(req);
+                           ptlrpc_at_get_net_latency(req);
 
         DEBUG_REQ(D_ADAPTTO, req,
                   "Early reply #%d, new deadline in %lds (%+lds)",

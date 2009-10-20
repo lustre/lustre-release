@@ -2428,6 +2428,9 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (conn == NULL || obd == NULL || cluuid == NULL)
                 RETURN(-EINVAL);
 
+        /* Check for aborted recovery. */
+        target_recovery_check_and_stop(obd);
+
         rc = class_connect(conn, obd, cluuid);
         if (rc)
                 RETURN(rc);

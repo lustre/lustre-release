@@ -279,7 +279,12 @@ void request_in_callback(lnet_event_t *ev)
         req->rq_uid = ev->uid;
 #endif
         spin_lock_init(&req->rq_lock);
+        CFS_INIT_LIST_HEAD(&req->rq_list);
         CFS_INIT_LIST_HEAD(&req->rq_timed_list);
+        CFS_INIT_LIST_HEAD(&req->rq_replay_list);
+        CFS_INIT_LIST_HEAD(&req->rq_set_chain);
+        CFS_INIT_LIST_HEAD(&req->rq_history_list);
+        CFS_INIT_LIST_HEAD(&req->rq_exp_list);
         atomic_set(&req->rq_refcount, 1);
         if (ev->type == LNET_EVENT_PUT)
                 DEBUG_REQ(D_RPCTRACE, req, "incoming req");
