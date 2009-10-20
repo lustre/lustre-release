@@ -940,7 +940,7 @@ static int __mds_lov_synchronize(void *data)
         enum obd_notify_event ev = mlsi->mlsi_ev;
         struct mds_group_info mgi;
         struct llog_ctxt *ctxt;
-        int rc = 0, rc2;
+        int rc = 0;
         ENTRY;
 
         OBD_FREE_PTR(mlsi);
@@ -977,15 +977,11 @@ static int __mds_lov_synchronize(void *data)
                 OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_LLOG_SYNC_TIMEOUT, 60);
                 rc = llog_connect(ctxt, NULL, NULL, uuid);
                 llog_ctxt_put(ctxt);
-#if 0
                 if (rc != 0) {
                         CERROR("%s failed at llog_origin_connect: %d\n",
                                         obd_uuid2str(uuid), rc);
                         GOTO(out, rc);
                 }
-+#else
-+#warning "requires proper support with OSD-based llog
-#endif
         } else
                 CERROR("can't get llog context\n");
 
@@ -1013,7 +1009,6 @@ static int __mds_lov_synchronize(void *data)
 out:
         up_read(&mds->mds_notify_lock);
         if (rc) {
-#if 0
                 /* Deactivate it for safety */
                 CERROR("%s sync failed %d, deactivating\n", obd_uuid2str(uuid),
                        rc);
@@ -1021,7 +1016,6 @@ out:
                     !mds->mds_osc_obd->obd_stopping && !watched->obd_stopping)
                         obd_notify(mds->mds_osc_obd, watched,
                                    OBD_NOTIFY_INACTIVE, NULL);
-#endif
         }
 
         class_decref(obd, "mds_lov_synchronize", obd);
