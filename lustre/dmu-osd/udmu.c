@@ -1186,11 +1186,17 @@ out:
 void udmu_xattr_declare_set(udmu_objset_t *uos, dmu_buf_t *db,
                             int vallen, const char *name, dmu_tx_t *tx)
 {
-        znode_phys_t *zp = db->db_data;
-        int error;
-        uint64_t xa_data_obj;
+        znode_phys_t *zp = NULL;
+        uint64_t      xa_data_obj;
+        int           error;
+       
+        if (db)
+                zp = db->db_data;
 
-        if (zp->zp_xattr == 0) {
+        if (db == NULL || zp->zp_xattr == 0) {
+                /* we'll be updating zp_xattr */
+                if (db)
+                        dmu_tx_hold_bonus(tx, db->db_object);
                 /* xattr zap + entry */
                 dmu_tx_hold_zap(tx, DMU_NEW_OBJECT, TRUE, (char *) name);
                 /* xattr value obj */
@@ -1247,8 +1253,8 @@ int udmu_xattr_set(udmu_objset_t *uos, dmu_buf_t *db, void *val,
         if (zp->zp_xattr == 0) {
                 udmu_zap_create_impl(uos->os, &xa_zap_db, tx, FTAG);
 
-                dmu_buf_will_dirty(db, tx);
                 zp->zp_xattr = xa_zap_db->db_object;
+                dmu_buf_will_dirty(db, tx);
         }
 
         error = zap_lookup(uos->os, zp->zp_xattr, name, sizeof(uint64_t), 1,

@@ -1926,16 +1926,6 @@ int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
         LASSERT(handle != NULL);
         oh = container_of0(handle, struct osd_thandle, ot_super);
 
-        if (!dt_object_exists(dt)) {
-                udmu_tx_hold_bonus(oh->ot_tx, DMU_NEW_OBJECT);
-                udmu_tx_hold_bonus(oh->ot_tx, DMU_NEW_OBJECT);
-                RETURN(0);
-        }
-
-        LASSERT(obj->oo_db != NULL);
-        LASSERT(dt_object_exists(dt));
-        LASSERT(osd_invariant(obj));
-
         down(&obj->oo_guard);
         udmu_xattr_declare_set(&osd->od_objset, obj->oo_db, buflen,
                                name, oh->ot_tx);
@@ -1959,7 +1949,7 @@ int osd_xattr_set(const struct lu_env *env,
         LASSERT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
         LASSERT(obj->oo_db);
-        
+
         oh = container_of0(handle, struct osd_thandle, ot_super);
 
         down(&obj->oo_guard);
