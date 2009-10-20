@@ -99,9 +99,6 @@ extern int ext3_xattr_set_handle(handle_t *, struct inode *, int, const char *, 
 #define FSFILT_SINGLEDATA_TRANS_BLOCKS(sb) EXT3_SINGLEDATA_TRANS_BLOCKS
 #endif
 
-#define fsfilt_ext3_journal_start(inode, nblocks) ext3_journal_start(inode, nblocks)
-#define fsfilt_ext3_journal_stop(handle)          ext3_journal_stop(handle)
-
 static cfs_mem_cache_t *fcb_cache;
 
 struct fsfilt_cb_data {
@@ -325,7 +322,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
 
  journal_start:
         LASSERTF(nblocks > 0, "can't start %d credit transaction\n", nblocks);
-        handle = fsfilt_ext3_journal_start(inode, nblocks);
+        handle = ext3_journal_start(inode, nblocks);
 
         if (!IS_ERR(handle))
                 LASSERT(current->journal_info == handle);
@@ -462,7 +459,7 @@ static void *fsfilt_ext3_brw_start(int objcount, struct fsfilt_objinfo *fso,
         }
 
         LASSERTF(needed > 0, "can't start %d credit transaction\n", needed);
-        handle = fsfilt_ext3_journal_start(fso->fso_dentry->d_inode, needed);
+        handle = ext3_journal_start(fso->fso_dentry->d_inode, needed);
         if (IS_ERR(handle)) {
                 CERROR("can't get handle for %d credits: rc = %ld\n", needed,
                        PTR_ERR(handle));
@@ -502,7 +499,7 @@ static int fsfilt_ext3_commit(struct inode *inode, void *h, int force_sync)
         if (force_sync)
                 handle->h_sync = 1; /* recovery likes this */
 
-        rc = fsfilt_ext3_journal_stop(handle);
+        rc = ext3_journal_stop(handle);
 
         return rc;
 }
@@ -523,7 +520,7 @@ static int fsfilt_ext3_commit_async(struct inode *inode, void *h,
         tid = transaction->t_tid;
         /* we don't want to be blocked */
         handle->h_sync = 0;
-        rc = fsfilt_ext3_journal_stop(handle);
+        rc = ext3_journal_stop(handle);
         if (rc) {
                 CERROR("error while stopping transaction: %d\n", rc);
                 return rc;
@@ -996,7 +993,7 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
         count = ext3_ext_calc_credits_for_insert(base, path);
         fsfilt_up_truncate_sem(inode);
 
-        handle = fsfilt_ext3_journal_start(inode, count+EXT3_ALLOC_NEEDED+1);
+        handle = ext3_journal_start(inode, count+EXT3_ALLOC_NEEDED+1);
         if (IS_ERR(handle)) {
                 fsfilt_down_truncate_sem(inode);
                 return PTR_ERR(handle);
@@ -1005,7 +1002,7 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
         fsfilt_down_truncate_sem(inode);
         if (tgen != EXT_GENERATION(base)) {
                 /* the tree has changed. so path can be invalid at moment */
-                fsfilt_ext3_journal_stop(handle);
+                ext3_journal_stop(handle);
                 return EXT_REPEAT;
         }
 
@@ -1043,7 +1040,7 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
         BUG_ON(le32_to_cpu(nex.ee_block) != cex->ec_block);
 
 out:
-        fsfilt_ext3_journal_stop(handle);
+        ext3_journal_stop(handle);
 map:
         if (err >= 0) {
                 /* map blocks */
@@ -1340,7 +1337,7 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
         block_count = (*offs & (blocksize - 1)) + bufsize;
         block_count = (block_count + blocksize - 1) >> inode->i_blkbits;
 
-        handle = fsfilt_ext3_journal_start(inode,
+        handle = ext3_journal_start(inode,
                                block_count * FSFILT_DATA_TRANS_BLOCKS(inode->i_sb) + 2);
         if (IS_ERR(handle)) {
                 CERROR("can't start transaction for %d blocks (%d bytes)\n",
@@ -1353,7 +1350,7 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
         if (!err && force_sync)
                 handle->h_sync = 1; /* recovery likes this */
 
-        fsfilt_ext3_journal_stop(handle);
+        ext3_journal_stop(handle);
 
         return err;
 }

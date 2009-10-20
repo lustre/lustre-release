@@ -624,6 +624,8 @@ test_31b() {
         cat $DIR2/$tdir/$tfile > /dev/null 2>&1
         lctl set_param fail_loc=0
         do_facet ost1 lctl set_param fail_loc=0
+        # cleanup: reconnect the client back
+        df $DIR2
 }
 run_test 31b "voluntary OST cancel / blocking ast race=============="
 

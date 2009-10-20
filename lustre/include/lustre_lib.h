@@ -606,6 +606,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 struct l_wait_info {
         cfs_duration_t lwi_timeout;
         cfs_duration_t lwi_interval;
+        int            lwi_allow_intr;
         int  (*lwi_on_timeout)(void *);
         void (*lwi_on_signal)(void *);
         void  *lwi_cb_data;
@@ -617,7 +618,8 @@ struct l_wait_info {
         .lwi_timeout    = time,                 \
         .lwi_on_timeout = cb,                   \
         .lwi_cb_data    = data,                 \
-        .lwi_interval   = 0                     \
+        .lwi_interval   = 0,                    \
+        .lwi_allow_intr = 0                     \
 })
 
 #define LWI_TIMEOUT_INTERVAL(time, interval, cb, data)  \
@@ -625,16 +627,28 @@ struct l_wait_info {
         .lwi_timeout    = time,                         \
         .lwi_on_timeout = cb,                           \
         .lwi_cb_data    = data,                         \
-        .lwi_interval   = interval                      \
+        .lwi_interval   = interval,                     \
+        .lwi_allow_intr = 0                             \
 })
 
 #define LWI_TIMEOUT_INTR(time, time_cb, sig_cb, data)   \
 ((struct l_wait_info) {                                 \
         .lwi_timeout    = time,                         \
         .lwi_on_timeout = time_cb,                      \
-        .lwi_on_signal = sig_cb,                        \
+        .lwi_on_signal  = sig_cb,                       \
         .lwi_cb_data    = data,                         \
-        .lwi_interval    = 0                            \
+        .lwi_interval   = 0,                            \
+        .lwi_allow_intr = 0                             \
+})
+
+#define LWI_TIMEOUT_INTR_ALL(time, time_cb, sig_cb, data)       \
+((struct l_wait_info) {                                         \
+        .lwi_timeout    = time,                                 \
+        .lwi_on_timeout = time_cb,                              \
+        .lwi_on_signal  = sig_cb,                               \
+        .lwi_cb_data    = data,                                 \
+        .lwi_interval   = 0,                                    \
+        .lwi_allow_intr = 1                                     \
 })
 
 #define LWI_INTR(cb, data)  LWI_TIMEOUT_INTR(0, NULL, cb, data)
@@ -650,6 +664,7 @@ do {                                                                           \
         cfs_waitlink_t __wait;                                                 \
         cfs_duration_t __timeout = info->lwi_timeout;                          \
         cfs_sigset_t   __blocked;                                              \
+        int   __allow_intr = info->lwi_allow_intr;                             \
                                                                                \
         ret = 0;                                                               \
         if (condition)                                                         \
@@ -662,7 +677,7 @@ do {                                                                           \
                 cfs_waitq_add(&wq, &__wait);                                   \
                                                                                \
         /* Block all signals (just the non-fatal ones if no timeout). */       \
-        if (info->lwi_on_signal != NULL && __timeout == 0)                     \
+        if (info->lwi_on_signal != NULL && (__timeout == 0 || __allow_intr))   \
                 __blocked = l_w_e_set_sigs(LUSTRE_FATAL_SIGS);                 \
         else                                                                   \
                 __blocked = l_w_e_set_sigs(0);                                 \
@@ -700,7 +715,8 @@ do {                                                                           \
                 if (condition)                                                 \
                         break;                                                 \
                 if (cfs_signal_pending()) {                                    \
-                        if (info->lwi_on_signal != NULL && __timeout == 0) {   \
+                        if (info->lwi_on_signal != NULL &&                     \
+                            (__timeout == 0 || __allow_intr)) {                \
                                 if (info->lwi_on_signal != LWI_ON_SIGNAL_NOOP) \
                                         info->lwi_on_signal(info->lwi_cb_data);\
                                 ret = -EINTR;                                  \

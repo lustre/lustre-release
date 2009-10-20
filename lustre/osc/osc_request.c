@@ -385,14 +385,12 @@ static int osc_setattr_async(struct obd_export *exp, struct obd_info *oinfo,
                 RETURN(rc);
         }
 
+        if (oinfo->oi_oa->o_valid & OBD_MD_FLCOOKIE)
+                oinfo->oi_oa->o_lcookie = *oti->oti_logcookies;
+
         osc_pack_req_body(req, oinfo);
 
         ptlrpc_request_set_replen(req);
-
-        if (oinfo->oi_oa->o_valid & OBD_MD_FLCOOKIE) {
-                LASSERT(oti);
-                oinfo->oi_oa->o_lcookie = *oti->oti_logcookies;
-        }
 
         /* do mds to ost setattr asynchronously */
         if (!rqset) {
@@ -808,7 +806,7 @@ static void osc_update_next_shrink(struct client_obd *cli)
 static void osc_consume_write_grant(struct client_obd *cli,
                                     struct brw_page *pga)
 {
-        LASSERT(client_obd_list_is_locked(&cli->cl_loi_list_lock));
+        LASSERT_SPIN_LOCKED(&cli->cl_loi_list_lock.lock);
         LASSERT(!(pga->flag & OBD_BRW_FROM_GRANT));
         atomic_inc(&obd_dirty_pages);
         cli->cl_dirty += CFS_PAGE_SIZE;
@@ -828,7 +826,7 @@ static void osc_release_write_grant(struct client_obd *cli,
         int blocksize = cli->cl_import->imp_obd->obd_osfs.os_bsize ? : 4096;
         ENTRY;
 
-        LASSERT(client_obd_list_is_locked(&cli->cl_loi_list_lock));
+        LASSERT_SPIN_LOCKED(&cli->cl_loi_list_lock.lock);
         if (!(pga->flag & OBD_BRW_FROM_GRANT)) {
                 EXIT;
                 return;
@@ -1073,17 +1071,28 @@ static int osc_del_shrink_grant(struct client_obd *client)
 
 static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
 {
+        /*
+         * ocd_grant is the total grant amount we're expect to hold: if we've
+         * been evicted, it's the new avail_grant amount, cl_dirty will drop
+         * to 0 as inflight RPCs fail out; otherwise, it's avail_grant + dirty.
+         *
+         * race is tolerable here: if we're evicted, but imp_state already
+         * left EVICTED state, then cl_dirty must be 0 already.
+         */
         client_obd_list_lock(&cli->cl_loi_list_lock);
-        cli->cl_avail_grant = ocd->ocd_grant;
+        if (cli->cl_import->imp_state == LUSTRE_IMP_EVICTED)
+                cli->cl_avail_grant = ocd->ocd_grant;
+        else
+                cli->cl_avail_grant = ocd->ocd_grant - cli->cl_dirty;
         client_obd_list_unlock(&cli->cl_loi_list_lock);
-
-        if (ocd->ocd_connect_flags & OBD_CONNECT_GRANT_SHRINK &&
-            list_empty(&cli->cl_grant_shrink_list))
-                osc_add_shrink_grant(cli);
 
         CDEBUG(D_CACHE, "setting cl_avail_grant: %ld cl_lost_grant: %ld \n",
                cli->cl_avail_grant, cli->cl_lost_grant);
         LASSERT(cli->cl_avail_grant >= 0);
+
+        if (ocd->ocd_connect_flags & OBD_CONNECT_GRANT_SHRINK &&
+            list_empty(&cli->cl_grant_shrink_list))
+                osc_add_shrink_grant(cli);
 }
 
 /* We assume that the reason this OSC got a short read is because it read
@@ -4147,15 +4156,15 @@ static int osc_reconnect(const struct lu_env *env,
                 long lost_grant;
 
                 client_obd_list_lock(&cli->cl_loi_list_lock);
-                data->ocd_grant = cli->cl_avail_grant ?:
+                data->ocd_grant = (cli->cl_avail_grant + cli->cl_dirty) ?:
                                 2 * cli->cl_max_pages_per_rpc << CFS_PAGE_SHIFT;
                 lost_grant = cli->cl_lost_grant;
                 cli->cl_lost_grant = 0;
                 client_obd_list_unlock(&cli->cl_loi_list_lock);
 
                 CDEBUG(D_CACHE, "request ocd_grant: %d cl_avail_grant: %ld "
-                       "cl_lost_grant: %ld\n", data->ocd_grant,
-                       cli->cl_avail_grant, lost_grant);
+                       "cl_dirty: %ld cl_lost_grant: %ld\n", data->ocd_grant,
+                       cli->cl_avail_grant, cli->cl_dirty, lost_grant);
                 CDEBUG(D_RPCTRACE, "ocd_connect_flags: "LPX64" ocd_version: %d"
                        " ocd_grant: %d\n", data->ocd_connect_flags,
                        data->ocd_version, data->ocd_grant);

@@ -146,10 +146,8 @@ int filter_finish_transno(struct obd_export *exp, struct inode *inode,
                                 cpu_to_le64(last_rcvd);
         }
         oti->oti_transno = last_rcvd;
-        if (last_rcvd <= le64_to_cpu(lcd->lcd_last_transno)) {
-                spin_unlock(&filter->fo_translock);
-                LBUG();
-        }
+
+        LASSERT(last_rcvd >= le64_to_cpu(lcd->lcd_last_transno));
         lcd->lcd_last_transno = cpu_to_le64(last_rcvd);
         lcd->lcd_pre_versions[0] = cpu_to_le64(oti->oti_pre_version);
         lcd->lcd_last_xid = cpu_to_le64(oti->oti_xid);
@@ -2633,7 +2631,8 @@ static int filter_cleanup(struct obd_device *obd)
 }
 
 static int filter_connect_internal(struct obd_export *exp,
-                                   struct obd_connect_data *data)
+                                   struct obd_connect_data *data,
+                                   int reconnect)
 {
         struct filter_export_data *fed = &exp->exp_filter_data;
 
@@ -2672,7 +2671,7 @@ static int filter_connect_internal(struct obd_export *exp,
                 spin_lock(&exp->exp_obd->obd_osfs_lock);
                 left = filter_grant_space_left(exp);
                 want = data->ocd_grant;
-                filter_grant(exp, fed->fed_grant, want, left);
+                filter_grant(exp, fed->fed_grant, want, left, (reconnect == 0));
                 data->ocd_grant = fed->fed_grant;
                 spin_unlock(&exp->exp_obd->obd_osfs_lock);
 
@@ -2758,7 +2757,7 @@ static int filter_reconnect(const struct lu_env *env,
         if (exp == NULL || obd == NULL || cluuid == NULL)
                 RETURN(-EINVAL);
 
-        rc = filter_connect_internal(exp, data);
+        rc = filter_connect_internal(exp, data, 1);
         if (rc == 0)
                 filter_export_stats_init(obd, exp, localdata);
 
@@ -2791,7 +2790,7 @@ static int filter_connect(const struct lu_env *env,
 
         fed = &lexp->exp_filter_data;
 
-        rc = filter_connect_internal(lexp, data);
+        rc = filter_connect_internal(lexp, data, 0);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -3059,14 +3058,9 @@ static int filter_disconnect(struct obd_export *exp)
 
         lquota_clearinfo(filter_quota_interface_ref, exp, exp->exp_obd);
 
-        /* Disconnect early so that clients can't keep using export */
-        rc = class_disconnect(exp);
-        if (exp->exp_obd->obd_namespace != NULL)
-                ldlm_cancel_locks_for_export(exp);
+        rc = server_disconnect_export(exp);
 
         fsfilt_sync(obd, obd->u.obt.obt_sb);
-
-        lprocfs_exp_cleanup(exp);
 
         class_export_put(exp);
         RETURN(rc);
@@ -4631,7 +4625,7 @@ static int __init obdfilter_init(void)
 
         lprocfs_filter_init_vars(&lvars);
 
-        request_module("lquota");
+        request_module("%s", "lquota");
         OBD_ALLOC(obdfilter_created_scratchpad,
                   OBDFILTER_CREATED_SCRATCHPAD_ENTRIES *
                   sizeof(*obdfilter_created_scratchpad));

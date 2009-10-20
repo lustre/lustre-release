@@ -208,7 +208,12 @@ int get_os_version()
                         fprintf(stderr, "%s: Warning: Can't resolve kernel "
                                 "version, assuming 2.6\n", progname);
                 else {
-                        read(fd, release, 4);
+                        if (read(fd, release, 4) < 0) {
+                                fprintf(stderr, "reading from /proc/sys/kernel"
+                                                "/osrelease: %s\n", strerror(errno));
+                                close(fd);
+                                exit(-1);
+                        }
                         close(fd);
                 }
                 if (strncmp(release, "2.4.", 4) == 0)
@@ -915,6 +920,7 @@ int write_local_files(struct mkfs_opts *mop)
         char *dev;
         FILE *filep;
         int ret = 0;
+        size_t num;
 
         /* Mount this device temporarily in order to write these files */
         if (!mkdtemp(mntpt)) {
@@ -960,7 +966,12 @@ int write_local_files(struct mkfs_opts *mop)
                         progname, filepnm, strerror(errno));
                 goto out_umnt;
         }
-        fwrite(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
+        num = fwrite(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
+        if (num < 1 && ferror(filep)) {
+                fprintf(stderr, "%s: Unable to write to file (%s): %s\n",
+                        progname, filepnm, strerror(errno));
+                goto out_umnt;
+        }
         fclose(filep);
         /* COMPAT_146 */
 #ifdef TUNEFS
@@ -1065,8 +1076,14 @@ int read_local_files(struct mkfs_opts *mop)
         sprintf(filepnm, "%s/mountdata", tmpdir);
         filep = fopen(filepnm, "r");
         if (filep) {
+                size_t num_read;
                 vprint("Reading %s\n", MOUNT_DATA_FILE);
-                fread(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
+                num_read = fread(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
+                if (num_read < 1 && ferror(filep)) {
+                        fprintf(stderr, "%s: Unable to read from file (%s): %s\n",
+                                progname, filepnm, strerror(errno));
+                        goto out_close;
+                }
         } else {
                 /* COMPAT_146 */
                 /* Try to read pre-1.6 config from last_rcvd */

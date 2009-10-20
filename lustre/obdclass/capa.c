@@ -289,9 +289,12 @@ int capa_encrypt_id(__u32 *d, __u32 *s, __u8 *key, int keylen)
         struct blkcipher_desc desc;
         unsigned int min;
         int rc;
+        char alg[CRYPTO_MAX_ALG_NAME+1] = "aes";
         ENTRY;
 
-        tfm = ll_crypto_alloc_blkcipher("aes", 0, 0 );
+        /* passing "aes" in a variable instead of a constant string keeps gcc
+         * 4.3.2 happy */
+        tfm = ll_crypto_alloc_blkcipher(alg, 0, 0 );
         if (tfm == NULL) {
                 CERROR("failed to load transform for aes\n");
                 RETURN(-EFAULT);
@@ -341,9 +344,12 @@ int capa_decrypt_id(__u32 *d, __u32 *s, __u8 *key, int keylen)
         struct blkcipher_desc desc;
         unsigned int min;
         int rc;
+        char alg[CRYPTO_MAX_ALG_NAME+1] = "aes";
         ENTRY;
 
-        tfm = ll_crypto_alloc_blkcipher("aes", 0, 0 );
+        /* passing "aes" in a variable instead of a constant string keeps gcc
+         * 4.3.2 happy */
+        tfm = ll_crypto_alloc_blkcipher(alg, 0, 0 );
         if (tfm == NULL) {
                 CERROR("failed to load transform for aes\n");
                 RETURN(-EFAULT);

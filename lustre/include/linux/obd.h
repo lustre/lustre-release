@@ -135,12 +135,6 @@ static inline void client_obd_list_lock_init(client_obd_lock_t *lock)
 static inline void client_obd_list_lock_done(client_obd_lock_t *lock)
 {}
 
-
-static inline int client_obd_list_is_locked(client_obd_lock_t *lock)
-{
-        return spin_is_locked(&lock->lock);
-}
-
 #if defined(__KERNEL__) && !defined(HAVE_ADLER)
 /* zlib_adler() is an inline function defined in zutil.h */
 #define HAVE_ADLER

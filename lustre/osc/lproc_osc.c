@@ -581,6 +581,14 @@ static int osc_wr_lockless_truncate(struct file *file, const char *buffer,
                 count;
 }
 
+static int osc_rd_destroys_in_flight(char *page, char **start, off_t off,
+                                     int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        return snprintf(page, count, "%u\n",
+                        atomic_read(&obd->u.cli.cl_destroy_in_flight));
+}
+
 static struct lprocfs_vars lprocfs_osc_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "ping",            0, lprocfs_wr_ping,     0, 0, 0222 },
@@ -600,6 +608,7 @@ static struct lprocfs_vars lprocfs_osc_obd_vars[] = {
                                osc_wr_max_pages_per_rpc, 0 },
         { "max_rpcs_in_flight", osc_rd_max_rpcs_in_flight,
                                 osc_wr_max_rpcs_in_flight, 0 },
+        { "destroys_in_flight", osc_rd_destroys_in_flight, 0, 0 },
         { "max_dirty_mb",    osc_rd_max_dirty_mb, osc_wr_max_dirty_mb, 0 },
         { "cur_dirty_bytes", osc_rd_cur_dirty_bytes, 0, 0 },
         { "cur_grant_bytes", osc_rd_cur_grant_bytes,

@@ -706,7 +706,7 @@ static int lov_lock_wait(const struct lu_env *env,
                         lov_sublock_unlock(env, sub, closure, subenv);
                 }
                 result = lov_subresult(result, rc);
-                if (result < 0)
+                if (result != 0)
                         break;
         }
         cl_lock_closure_fini(closure);
@@ -759,7 +759,7 @@ static int lov_lock_use(const struct lu_env *env,
                         lov_sublock_unlock(env, sub, closure, subenv);
                 }
                 result = lov_subresult(result, rc);
-                if (result < 0)
+                if (result != 0)
                         break;
         }
         cl_lock_closure_fini(closure);

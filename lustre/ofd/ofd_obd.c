@@ -301,13 +301,10 @@ static int filter_obd_disconnect(struct obd_export *exp)
                 filter_grant_sanity_check(filter_obd(ofd), __FUNCTION__);
         filter_grant_discard(exp);
 
-        /* Disconnect early so that clients can't keep using export */
-        rc = class_disconnect(exp);
-        if (ofd->ofd_namespace != NULL)
-                ldlm_cancel_locks_for_export(exp);
+        rc = server_disconnect_export(exp);
 
         /* flush any remaining cancel messages out to the target */
-        //filter_sync_llogs(obd, exp);
+        /* XXX: filter_sync_llogs(obd, exp); */
         class_export_put(exp);
         RETURN(rc);
 }

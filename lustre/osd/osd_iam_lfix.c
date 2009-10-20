@@ -187,7 +187,7 @@ static int iam_lfix_init(struct iam_leaf *l)
 
                 obj = iam_leaf_container(l)->ic_object;
                 CERROR("Wrong magic in node %llu (#%lu): %#x != %#x or "
-                       "wrong count: %i (%i)",
+                       "wrong count: %i (%i)\n",
                        (unsigned long long)l->il_bh->b_blocknr, obj->i_ino,
                        ill->ill_magic, le16_to_cpu(IAM_LEAF_HEADER_MAGIC),
                        count, leaf_count_limit(l));

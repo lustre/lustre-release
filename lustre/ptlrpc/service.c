@@ -280,6 +280,7 @@ static void rs_batch_add(struct rs_batch *b, struct ptlrpc_reply_state *rs)
                 rs->rs_scheduled = 1;
                 b->rsb_n_replies++;
         }
+        rs->rs_committed = 1;
         spin_unlock(&rs->rs_lock);
 }
 
@@ -613,15 +614,17 @@ void ptlrpc_server_drop_request(struct ptlrpc_request *req)
                 return;
 
         spin_lock(&svc->srv_at_lock);
-        list_del_init(&req->rq_timed_list);
         if (req->rq_at_linked) {
                 struct ptlrpc_at_array *array = &svc->srv_at_array;
                 __u32 index = req->rq_at_index;
 
+                LASSERT(!list_empty(&req->rq_timed_list));
+                list_del_init(&req->rq_timed_list);
                 req->rq_at_linked = 0;
                 array->paa_reqs_count[index]--;
                 array->paa_count--;
-        }
+        } else
+                LASSERT(list_empty(&req->rq_timed_list));
         spin_unlock(&svc->srv_at_lock);
 
         /* finalize request */
@@ -890,8 +893,7 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
         return 0;
 }
 
-static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
-                                      int extra_time)
+static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 {
         struct ptlrpc_service *svc = req->rq_rqbd->rqbd_service;
         struct ptlrpc_request *reqcopy;
@@ -907,7 +909,7 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
                   "%ssending early reply (deadline %+lds, margin %+lds) for "
                   "%d+%d", AT_OFF ? "AT off - not " : "",
                   olddl, olddl - at_get(&svc->srv_at_estimate),
-                  at_get(&svc->srv_at_estimate), extra_time);
+                  at_get(&svc->srv_at_estimate), at_extra);
 
         if (AT_OFF)
                 RETURN(0);
@@ -927,22 +929,23 @@ static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req,
                 RETURN(-ENOSYS);
         }
 
-        if (req->rq_export && req->rq_export->exp_in_recovery) {
-                /* don't increase server estimates during recovery, and give
-                   clients the full recovery time. */
-                newdl = cfs_time_current_sec() +
-                        req->rq_export->exp_obd->obd_recovery_timeout;
+        if (req->rq_export &&
+            lustre_msg_get_flags(req->rq_reqmsg) &
+            (MSG_REPLAY | MSG_REQ_REPLAY_DONE | MSG_LOCK_REPLAY_DONE)) {
+                /**
+                 * Use at_extra as early reply period for recovery requests but
+                 * make sure it is not bigger than recovery time / 4
+                 */
+                at_add(&svc->srv_at_estimate,
+                       min(at_extra,
+                           req->rq_export->exp_obd->obd_recovery_timeout / 4));
         } else {
-                if (extra_time) {
-                        /* Fake our processing time into the future to ask the
-                           clients for some extra amount of time */
-                        extra_time += cfs_time_current_sec() -
-                                req->rq_arrival_time.tv_sec;
-                        at_add(&svc->srv_at_estimate, extra_time);
-                }
-                newdl = req->rq_arrival_time.tv_sec +
-                        at_get(&svc->srv_at_estimate);
+                /* Fake our processing time into the future to ask the clients
+                 * for some extra amount of time */
+                at_add(&svc->srv_at_estimate, at_extra);
         }
+
+        newdl = cfs_time_current_sec() + at_get(&svc->srv_at_estimate);
         if (req->rq_deadline >= newdl) {
                 /* We're not adding any time, no need to send an early reply
                    (e.g. maybe at adaptive_max) */
@@ -1068,7 +1071,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
                 list_for_each_entry_safe(rq, n, &array->paa_reqs_array[index],
                                          rq_timed_list) {
                         if (rq->rq_deadline <= now + at_early_margin) {
-                                list_del(&rq->rq_timed_list);
+                                list_del_init(&rq->rq_timed_list);
                                 /**
                                  * ptlrpc_server_drop_request() may drop
                                  * refcount to 0 already. Let's check this and
@@ -1119,7 +1122,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
                                 rq_timed_list);
                 list_del_init(&rq->rq_timed_list);
 
-                if (ptlrpc_at_send_early_reply(rq, at_extra) == 0)
+                if (ptlrpc_at_send_early_reply(rq) == 0)
                         ptlrpc_at_add_timed(rq);
 
                 ptlrpc_server_drop_request(rq);
@@ -1664,9 +1667,29 @@ ptlrpc_handle_rs (struct ptlrpc_reply_state *rs)
         list_del_init (&rs->rs_exp_list);
         spin_unlock (&exp->exp_lock);
 
-        /* Avoid exp_uncommitted_replies_lock contention if we 100% sure that
-         * rs has been removed from the list already */
-        if (!list_empty_careful(&rs->rs_obd_list)) {
+        /* The disk commit callback holds exp_uncommitted_replies_lock while it
+         * iterates over newly committed replies, removing them from
+         * exp_uncommitted_replies.  It then drops this lock and schedules the
+         * replies it found for handling here.
+         *
+         * We can avoid contention for exp_uncommitted_replies_lock between the
+         * HRT threads and further commit callbacks by checking rs_committed
+         * which is set in the commit callback while it holds both
+         * rs_lock and exp_uncommitted_reples.
+         * 
+         * If we see rs_committed clear, the commit callback _may_ not have
+         * handled this reply yet and we race with it to grab
+         * exp_uncommitted_replies_lock before removing the reply from
+         * exp_uncommitted_replies.  Note that if we lose the race and the
+         * reply has already been removed, list_del_init() is a noop.
+         *
+         * If we see rs_committed set, we know the commit callback is handling,
+         * or has handled this reply since store reordering might allow us to
+         * see rs_committed set out of sequence.  But since this is done
+         * holding rs_lock, we can be sure it has all completed once we hold
+         * rs_lock, which we do right next.
+         */
+        if (!rs->rs_committed) {
                 spin_lock(&exp->exp_uncommitted_replies_lock);
                 list_del_init(&rs->rs_obd_list);
                 spin_unlock(&exp->exp_uncommitted_replies_lock);
@@ -1896,8 +1919,14 @@ static int ptlrpc_main(void *arg)
                 goto out_srv_fini;
         }
 
-        /* Record that the thread is running */
-        thread->t_flags = SVC_RUNNING;
+        spin_lock(&svc->srv_lock);
+        /* SVC_STOPPING may already be set here if someone else is trying
+         * to stop the service while this new thread has been dynamically
+         * forked. We still set SVC_RUNNING to let our creator know that
+         * we are now running, however we will exit as soon as possible */
+        thread->t_flags |= SVC_RUNNING;
+        spin_unlock(&svc->srv_lock);
+
         /*
          * wake up our creator. Note: @data is invalid after this point,
          * because it's allocated on ptlrpc_start_thread() stack.
@@ -2149,7 +2178,8 @@ static void ptlrpc_stop_thread(struct ptlrpc_service *svc,
 
         CDEBUG(D_RPCTRACE, "Stopping thread %p\n", thread);
         spin_lock(&svc->srv_lock);
-        thread->t_flags = SVC_STOPPING;
+        /* let the thread know that we would like it to stop asap */
+        thread->t_flags |= SVC_STOPPING;
         spin_unlock(&svc->srv_lock);
 
         cfs_waitq_broadcast(&svc->srv_waitq);

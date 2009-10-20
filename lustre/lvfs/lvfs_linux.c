@@ -581,7 +581,7 @@ __s64 lprocfs_read_helper(struct lprocfs_counter *lc,
                                 ret = lc->lc_config;
                                 break;
                         case LPROCFS_FIELDS_FLAGS_SUM:
-                                ret = lc->lc_sum;
+                                ret = lc->lc_sum + lc->lc_sum_irq;
                                 break;
                         case LPROCFS_FIELDS_FLAGS_MIN:
                                 ret = lc->lc_min;

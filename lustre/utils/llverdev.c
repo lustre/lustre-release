@@ -502,7 +502,10 @@ int main(int argc, char **argv)
 	if (!force && writeoption) {
 		printf("%s: permanently overwrite all data on %s (yes/no)? ",
 		       progname, devname);
-		scanf("%3s", yesno);
+                if (scanf("%3s", yesno) == EOF && ferror(stdin)) {
+                        perror("reading from stdin");
+                        return -1;
+                }
 		if (!(strcasecmp("yes", yesno) || strcasecmp("y", yesno))) {
 			printf("Not continuing due to '%s' response", yesno);
 			return 0;

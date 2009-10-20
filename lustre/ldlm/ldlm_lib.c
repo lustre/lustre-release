@@ -548,6 +548,43 @@ int client_disconnect_export(struct obd_export *exp)
         RETURN(rc);
 }
 
+int server_disconnect_export(struct obd_export *exp)
+{
+        int rc;
+        ENTRY;
+
+        /* Disconnect early so that clients can't keep using export */
+        rc = class_disconnect(exp);
+        /* close import for avoid sending any requests */
+        if (exp->exp_imp_reverse)
+                ptlrpc_cleanup_imp(exp->exp_imp_reverse);
+
+        if (exp->exp_obd->obd_namespace != NULL)
+                ldlm_cancel_locks_for_export(exp);
+
+        /* complete all outstanding replies */
+        spin_lock(&exp->exp_lock);
+        while (!list_empty(&exp->exp_outstanding_replies)) {
+                struct ptlrpc_reply_state *rs =
+                        list_entry(exp->exp_outstanding_replies.next,
+                                   struct ptlrpc_reply_state, rs_exp_list);
+                struct ptlrpc_service *svc = rs->rs_service;
+
+                spin_lock(&svc->srv_lock);
+                list_del_init(&rs->rs_exp_list);
+                spin_lock(&rs->rs_lock);
+                ptlrpc_schedule_difficult_reply(rs);
+                spin_unlock(&rs->rs_lock);
+                spin_unlock(&svc->srv_lock);
+        }
+        spin_unlock(&exp->exp_lock);
+
+        /* release nid stat refererence */
+        lprocfs_exp_cleanup(exp);
+
+        RETURN(rc);
+}
+
 /* --------------------------------------------------------------------------
  * from old lib/target.c
  * -------------------------------------------------------------------------- */
@@ -1640,13 +1677,12 @@ static int handle_recovery_req(struct ptlrpc_thread *thread,
         /* don't reset timer for final stage */
         if (!exp_finished(req->rq_export)) {
                 /**
-                 * XXX: until bug 18948 is fixed (enable AT for request copy)
-                 * the client may reconnect during recovery so we may need to
-                 * wait RECONNECT_DELAY_MAX after each replay instead of
-                 * at_get(&req->rq_rqbd->rqbd_service->srv_at_estimate);
+                 * Add request timeout to the recovery time so next request from
+                 * this client may come in recovery time
                  */
-                 reset_recovery_timer(class_exp2obd(req->rq_export), AT_OFF ?
-                                      obd_timeout : RECONNECT_DELAY_MAX, 1);
+                 reset_recovery_timer(class_exp2obd(req->rq_export),
+                                      AT_OFF ? obd_timeout :
+                                      lustre_msg_get_timeout(req->rq_reqmsg), 1);
         }
         /**
          * bz18031: increase next_recovery_transno before target_request_copy_put()
@@ -1656,9 +1692,10 @@ static int handle_recovery_req(struct ptlrpc_thread *thread,
                 spin_lock_bh(&req->rq_export->exp_obd->obd_processing_task_lock);
                 req->rq_export->exp_obd->obd_next_recovery_transno++;
                 spin_unlock_bh(&req->rq_export->exp_obd->obd_processing_task_lock);
-                target_exp_dequeue_req_replay(req);
         }
 reqcopy_put:
+        if (req->rq_export->exp_req_replay_needed)
+                target_exp_dequeue_req_replay(req);
         target_request_copy_put(req);
         RETURN(0);
 }

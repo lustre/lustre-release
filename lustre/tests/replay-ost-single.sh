@@ -124,7 +124,7 @@ iozone_bg () {
     # need to check iozone output  on "complete"
     local iozonelog=$TMP/${TESTSUITE}.iozone.log
     rm -f $iozonelog
-    cat $tmppipe | while read line ; do 
+    cat $tmppipe | while read line ; do
         echo "$line"
         echo "$line" >>$iozonelog
     done;
@@ -138,7 +138,7 @@ iozone_bg () {
     fi
     rm -f $tmppipe
     rm -f $iozonelog
-    return $rc 
+    return $rc
 }
 
 test_5() {
@@ -158,7 +158,7 @@ test_5() {
     local pid=$!
 
     echo iozone bg pid=$pid
-    
+
     sleep 8
     fail ost1
     local rc=0
@@ -187,7 +187,7 @@ test_6() {
     get_stripe_info client $f
 
     sync
-    sleep 2					# ensure we have a fresh statfs
+    sleep 2 # ensure we have a fresh statfs
     sync
 #define OBD_FAIL_MDS_REINT_NET_REP       0x119
     do_facet mds "lctl set_param fail_loc=0x80000119"
@@ -196,10 +196,12 @@ test_6() {
     (( $before > $after_dd )) || return 1
     rm -f $f
     fail ost$((stripe_index + 1))
+    wait_recovery_complete ost$((stripe_index + 1)) || error "OST recovery not done"
     $CHECKSTAT -t file $f && return 2 || true
     sync
     # let the delete happen
-    sleep 5
+    wait_mds_ost_sync || return 4
+    wait_destroy_complete || return 5
     after=`kbytesfree`
     log "before: $before after: $after"
     (( $before <= $after + 40 )) || return 3	# take OST logs into account
@@ -213,7 +215,7 @@ test_7() {
     before=`kbytesfree`
     dd if=/dev/urandom bs=4096 count=1280 of=$f || return 4
     sync
-    sleep 2					# ensure we have a fresh statfs
+    sleep 2 # ensure we have a fresh statfs
     sync
     after_dd=`kbytesfree`
     log "before: $before after_dd: $after_dd"
@@ -221,10 +223,12 @@ test_7() {
     replay_barrier ost1
     rm -f $f
     fail ost1
+    wait_recovery_complete ost1 || error "OST recovery not done"
     $CHECKSTAT -t file $f && return 2 || true
     sync
     # let the delete happen
-    sleep 5
+    wait_mds_ost_sync || return 4
+    wait_destroy_complete || return 5
     after=`kbytesfree`
     log "before: $before after: $after"
     (( $before <= $after + 40 )) || return 3	# take OST logs into account

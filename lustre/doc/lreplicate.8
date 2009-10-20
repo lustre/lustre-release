@@ -23,47 +23,47 @@ lreplicate \- Utility to replicate a Lustre Filesystem
 .B\t\t\t --target|-t <tgt> --mdt|-m <mdt>
 .SH DESCRIPTION
 .B lreplicate
-can be used to replicate a lustre filesystem (source filesystem) to
-another target filesystem (any filesystem type). It is required that
-changelogs be enabled on the source filesystem (see lctl (8)).
+is designed to replicate a Lustre filesystem (source filesystem) to
+another target filesystem (any filesystem type) efficiently by 
+using Lustre MDT changelogs.  A changelog user must be registered
+(see lctl (8) changelog_register) before using this tool.
 
 The source and the target filesystems must be identical before
-changelogs are enabled. If the source filesystem has been populated
-before turning on changelogs, a utility like rsync may be used to make
-them identical.
+the changelog user is registered. If the filesystems are discrepant,
+a utility like rsync may be used to make them identical.
 
 .SH OPTIONS
 .B --source=<src>
 .br
-The source filesytem which will be replicated. Mandatory if a valid
-statuslog created during an previous replication operation
+The path to the root of the Lustre filesytem which will be replicated. 
+Mandatory if a valid statuslog created during an previous replication operation
 (--statuslog) is not specified.
 
 .B --target=<tgt>
 .br
-The filesystem to which the source filesystem is replicated. Mandatory
+The path to the root where the filesystem we be replicated. Mandatory
 if a valid statuslog created during an previous replication operation
 (--statuslog) is not specified. This option can be repeated if
 multiple replication targets are desired.
 
 .B --mdt=<mdt>
 .br
-The metadata device which is to be replicated. Changelogs must be
-turned on on this device. Mandatory if a valid statuslog created
+The metadata device which is to be replicated. A changelog user must be
+registered for this device. Mandatory if a valid statuslog created
 during an previous replication operation (--statuslog) is not
 specified.
 
 .B --user=<user id>
 .br
-The changelog user id. See lctl(8) changelog_register. Mandatory if a
-valid statuslog created during an previous replication operation
+The changelog user id for the above MDT device. See lctl(8) changelog_register.
+Mandatory if a valid statuslog created during an previous replication operation
 (--statuslog) is not specified.
 
 .B --statuslog=<log>
 .br
-A status log file to which the status of replication is saved. At the
-time of initialization, the state from a previous replication
-operation which was saved, can be read and reused.
+A status log file to which the status of replication is saved. 
+When lreplicate is started, the state from a previous replication
+will be read from here.
 
 If a statuslog from a previous replication operation is specified, the
 otherwise mandatory options like --source, --target and --mdt may be
@@ -78,7 +78,7 @@ ones from the statuslog.
 .br
 Specify whether extended attributes are replicated or not. The default
 is to replicate extended attributes. Disabling xattrs will mean that
-striping information will not be replicated.
+Lustre striping information will not be replicated.
 
 .B --verbose
 .br
@@ -96,15 +96,17 @@ Stop processing upon first error.  Default is to continue processing.
 
 .TP
 Register a changelog consumer for MDT lustre-MDT0000
-$ ssh $MDS lctl changelog_register --device lustre-MDT0000 -n
+$ ssh $MDS lctl changelog_register \\
 .br
-1
+	     --device lustre-MDT0000 -n
+.br
+cl1
 
 .TP
 Replicate the lustre filesystem /mnt/lustre to /mnt/target.
 $ lreplicate --source=/mnt/lustre --target=/mnt/target \\ 
 .br
-             --mdt=lustre-MDT0000 --user=1 \\
+             --mdt=lustre-MDT0000 --user=cl1 \\
 .br
              --statuslog replicate.log  --verbose
 .br

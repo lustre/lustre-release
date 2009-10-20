@@ -219,7 +219,7 @@ static inline int client_quota_recoverable_error(int rc)
 
 static inline int client_quota_should_resend(int resend, struct client_obd *cli)
 {
-        return atomic_read(&cli->cl_quota_resends) ?
+        return (atomic_read(&cli->cl_quota_resends) >= 0) ?
                 atomic_read(&cli->cl_quota_resends) > resend : 1;
 }
 

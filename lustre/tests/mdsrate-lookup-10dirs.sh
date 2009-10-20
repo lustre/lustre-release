@@ -18,7 +18,7 @@ assert_env CLIENTS MDSRATE SINGLECLIENT MPIRUN
 
 MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
 # Do not use name [df][0-9]* to avoid cleanup by rm, bug 18045
-TESTDIR=$MOUNT/mdsrate
+BASEDIR=$MOUNT/mdsrate
 
 # Requirements
 NUM_DIRS=${NUM_DIRS:-10}
@@ -37,8 +37,11 @@ rm -f $LOG
 log "===== $0 ====== " 
 
 check_and_setup_lustre
-mkdir -p $TESTDIR
-chmod 0777 $TESTDIR
+
+mkdir -p $BASEDIR
+chmod 0777 $BASEDIR
+$LFS setstripe $BASEDIR -c 1
+get_stripe $BASEDIR
 
 IFree=$(inodes_available)
 if [ $IFree -lt $((NUM_FILES * NUM_DIRS)) ]; then
@@ -47,17 +50,14 @@ fi
 
 generate_machine_file $NODES_TO_USE $MACHINEFILE || error "can not generate machinefile"
 
-$LFS setstripe $TESTDIR -c 1
-get_stripe $TESTDIR
-
-DIRfmt="${TESTDIR}/t6-%d"
+DIRfmt="${BASEDIR}/lookup-%d"
 
 if [ -n "$NOCREATE" ]; then
     echo "NOCREATE=$NOCREATE  => no file creation."
 else
     # FIXME: does it make sense to add the possibility to unlink dirfmt to mdsrate?
     for i in $(seq 0 $NUM_DIRS); do
-        mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES $TESTDIR/t6-$i 'f%%d' --ignore
+        mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES $BASEDIR/lookup-$i 'f%%d' --ignore
     done
 
     log "===== $0 Test preparation: creating ${NUM_DIRS} dirs with ${NUM_FILES} files."
@@ -112,11 +112,10 @@ fi
 equals_msg `basename $0`: test complete, cleaning up
 # FIXME: does it make sense to add the possibility to unlink dirfmt to mdsrate?
 for i in $(seq 0 $NUM_DIRS); do
-    mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES $TESTDIR/t6-$i 'f%%d' --ignore
-    rmdir $TESTDIR/t6-$i
+    mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES $BASEDIR/lookup-$i 'f%%d' --ignore
 done
 
-rmdir $TESTDIR || true
+rmdir $BASEDIR || true
 rm -f $MACHINEFILE
 check_and_cleanup_lustre
 #rm -f $LOG

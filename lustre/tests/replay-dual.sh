@@ -236,7 +236,7 @@ test_13() {
     kill -USR1 $MULTIPID || return 3
     wait $MULTIPID || return 4
 
-    # drop close 
+    # drop close
     do_facet $SINGLEMDS lctl set_param fail_loc=0x80000115
     facet_failover $SINGLEMDS
     do_facet $SINGLEMDS lctl set_param fail_loc=0
@@ -279,17 +279,18 @@ test_14b() {
     createmany -o $MOUNT1/$tfile-3- 5
     umount $MOUNT2
 
-    facet_failover $SINGLEMDS
-    # expect recovery don't fail due to VBR
-    df $MOUNT1 || return 1
+    fail $SINGLEMDS
+    wait_recovery_complete $SINGLEMDS || error "MDS recovery not done"
 
     # first 25 files should have been replayed
     unlinkmany $MOUNT1/$tfile- 5 || return 2
     unlinkmany $MOUNT1/$tfile-3- 5 || return 3
 
     zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
-    # give ost time to process llogs
-    sleep 3
+
+    wait_mds_ost_sync || return 4
+    wait_destroy_complete || return 5
+
     AFTERUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
     log "before $BEFOREUSED, after $AFTERUSED"
     [ $AFTERUSED -ne $BEFOREUSED ] && \
@@ -298,7 +299,7 @@ test_14b() {
 }
 run_test 14b "delete ost orphans if gap occured in objids due to VBR"
 
-test_15a() {	# was test_15
+test_15a() { # was test_15
     replay_barrier $SINGLEMDS
     createmany -o $MOUNT1/$tfile- 25
     createmany -o $MOUNT2/$tfile-2- 1
@@ -318,14 +319,14 @@ run_test 15a "timeout waiting for lost client during replay, 1 client completes"
 test_15c() {
     replay_barrier $SINGLEMDS
     for ((i = 0; i < 2000; i++)); do
-	echo "data" > "$MOUNT2/${tfile}-$i" || error "create ${tfile}-$i failed"
+        echo "data" > "$MOUNT2/${tfile}-$i" || error "create ${tfile}-$i failed"
     done
-    
+
     umount $MOUNT2
     facet_failover $SINGLEMDS
 
     df $MOUNT || return 1
-    
+
     zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     return 0
 }

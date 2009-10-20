@@ -360,7 +360,7 @@ int ptlrpcd_start(const char *name, struct ptlrpcd_ctl *pc)
         init_completion(&pc->pc_starting);
         init_completion(&pc->pc_finishing);
         spin_lock_init(&pc->pc_lock);
-        snprintf(pc->pc_name, sizeof (pc->pc_name), "%s", name);
+        strncpy(pc->pc_name, name, sizeof(pc->pc_name) - 1);
         pc->pc_set = ptlrpc_prep_set();
         if (pc->pc_set == NULL)
                 GOTO(out, rc = -ENOMEM);

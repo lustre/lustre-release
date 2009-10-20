@@ -467,9 +467,9 @@ static int mds_cmd_cleanup(struct obd_device *obd)
                         mds->mds_objects_dir = NULL;
                 }
 
-                shrink_dcache_parent(mds->mds_fid_de);
                 dput(mds->mds_fid_de);
                 LL_DQUOT_OFF(obd->u.obt.obt_sb);
+                shrink_dcache_sb(mds->mds_obt.obt_sb);
                 fsfilt_put_ops(obd->obd_fsops);
 
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
@@ -506,7 +506,7 @@ static int __init mds_cmd_init(void)
         struct lprocfs_static_vars lvars;
         int rc;
 
-        request_module("lquota");
+        request_module("%s", "lquota");
         mds_quota_interface_ref = PORTAL_SYMBOL_GET(mds_quota_interface);
         rc = lquota_init(mds_quota_interface_ref);
         if (rc) {

@@ -1524,6 +1524,18 @@ static void name_create_mdt_and_lov(char **logname, char **lovname,
                 name_create(lovname, *logname, "-mdtlov");
 }
 
+static inline void name_create_mdt_osc(char **oscname, char *ostname,
+                                       struct fs_db *fsdb, int i)
+{
+        char suffix[16];
+
+        if (i == 0 && fsdb->fsdb_fl_oscname_18)
+                sprintf(suffix, "-osc");
+        else
+                sprintf(suffix, "-osc-MDT%04x", i);
+        name_create(oscname, ostname, suffix);
+}
+
 /* envelope method for all layers log */
 static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
                               struct mgs_target_info *mti)
@@ -1847,23 +1859,35 @@ static int mgs_write_log_add_failnid(struct obd_device *obd, struct fs_db *fsdb,
                 rc = record_end_log(obd, &llh);
         }
         name_destroy(&logname);
+        name_destroy(&cliname);
 
         if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
-                /* Add OST failover nids to the MDT log as well */
-                name_create(&logname, mti->mti_fsname, "-MDT0000");
-                rc = record_start_log(obd, &llh, logname);
-                if (!rc) {
-                        rc = record_marker(obd, llh, fsdb, CM_START,
-                                           mti->mti_svname, "add failnid");
-                        rc = mgs_write_log_failnids(obd, mti, llh, cliname);
-                        rc = record_marker(obd, llh, fsdb, CM_END,
-                                           mti->mti_svname, "add failnid");
-                        rc = record_end_log(obd, &llh);
+                /* Add OST failover nids to the MDT logs as well */
+                int i;
+
+                for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
+                        if (!test_bit(i, fsdb->fsdb_mdt_index_map))
+                                continue;
+                        name_create_mdt(&logname, mti->mti_fsname, i);
+                        name_create_mdt_osc(&cliname, mti->mti_svname, fsdb, i);
+
+                        rc = record_start_log(obd, &llh, logname);
+                        if (!rc) {
+                                rc = record_marker(obd, llh, fsdb, CM_START,
+                                                   mti->mti_svname,
+                                                   "add failnid");
+                                rc = mgs_write_log_failnids(obd, mti, llh,
+                                                            cliname);
+                                rc = record_marker(obd, llh, fsdb, CM_END,
+                                                   mti->mti_svname,
+                                                   "add failnid");
+                                rc = record_end_log(obd, &llh);
+                        }
+                        name_destroy(&cliname);
+                        name_destroy(&logname);
                 }
-                name_destroy(&logname);
         }
 
-        name_destroy(&cliname);
         RETURN(rc);
 }
 
@@ -2377,7 +2401,7 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
                 if (rc)
                         goto active_err;
                 /* Modify mdtlov */
-                /* FIXME add to all MDT logs for CMD */
+                /* Add to all MDT logs for CMD */
                 for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
                         if (!test_bit(i, fsdb->fsdb_mdt_index_map))
                                 continue;
@@ -2488,27 +2512,19 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
 
                 /* osc params affect the MDT as well */
                 if (!rc && (mti->mti_flags & LDD_F_SV_TYPE_OST)) {
-                        char mdt_index[16];
                         int i;
 
                         for (i = 0; i < INDEX_MAP_SIZE * 8; i++){
                                 if (!test_bit(i, fsdb->fsdb_mdt_index_map))
                                         continue;
-
                                 name_destroy(&cname);
-                                if (i == 0 && fsdb->fsdb_fl_oscname_18)
-                                        sprintf(mdt_index, "-osc");
-                                else
-                                        sprintf(mdt_index, "-osc-MDT%04x", i);
-                                name_create(&cname, mti->mti_svname, mdt_index);
-
+                                name_create_mdt_osc(&cname, mti->mti_svname,
+                                                    fsdb, i);
                                 name_destroy(&logname);
                                 name_create_mdt(&logname, mti->mti_fsname, i);
                                 if (!mgs_log_is_empty(obd, logname))
-                                        rc = mgs_wlp_lcfg(obd, fsdb,
-                                                          mti, logname,
-                                                          &bufs, cname,
-                                                          ptr);
+                                        rc = mgs_wlp_lcfg(obd, fsdb,mti,logname,
+                                                          &bufs, cname, ptr);
                                 if (rc)
                                         break;
                         }
