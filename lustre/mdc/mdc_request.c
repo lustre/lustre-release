@@ -684,8 +684,19 @@ void mdc_commit_open(struct ptlrpc_request *req)
          * freed after that when md_open_data::mod_och will put the reference.
          */
 
+        /**
+         * Do not let open request to disappear as it still may be needed
+         * for close rpc to happen (it may happen on evict only, otherwise
+         * ptlrpc_request::rq_replay does not let mdc_commit_open() to be
+         * called), just mark this rpc as committed to distinguish these 2
+         * cases, see mdc_close() for details. The open request reference will
+         * be put along with freeing \var mod.
+         */
+        ptlrpc_request_addref(req);
+        spin_lock(&req->rq_lock);
+        req->rq_committed = 1;
+        spin_unlock(&req->rq_lock);
         req->rq_cb_data = NULL;
-        mod->mod_open_req = NULL;
         obd_mod_put(mod);
 }
 
@@ -718,10 +729,18 @@ int mdc_set_open_replay_data(struct obd_export *exp,
                         RETURN(0);
                 }
 
+                /**
+                 * Take a reference on \var mod, to be freed on mdc_close().
+                 * It protects \var mod from being freed on eviction (commit
+                 * callback is called despite rq_replay flag).
+                 * Another reference for \var och.
+                 */
+                obd_mod_get(mod);
+                obd_mod_get(mod);
+
                 spin_lock(&open_req->rq_lock);
                 och->och_mod = mod;
                 mod->mod_och = och;
-                obd_mod_get(mod);
                 mod->mod_open_req = open_req;
                 open_req->rq_cb_data = mod;
                 open_req->rq_commit_cb = mdc_commit_open;
@@ -786,11 +805,11 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
 
         /* Ensure that this close's handle is fixed up during replay. */
         if (likely(mod != NULL)) {
-                LASSERTF(mod->mod_open_req->rq_type != LI_POISON,
+                LASSERTF(mod->mod_open_req != NULL &&
+                         mod->mod_open_req->rq_type != LI_POISON,
                          "POISONED open %p!\n", mod->mod_open_req);
 
                 mod->mod_close_req = req;
-                obd_mod_get(mod);
 
                 DEBUG_REQ(D_HA, mod->mod_open_req, "matched open");
                 /* We no longer want to preserve this open for replay even
@@ -839,8 +858,11 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
                  * server failed before close was sent. Let's check if mod
                  * exists and return no error in that case
                  */
-                if (mod && (mod->mod_open_req == NULL))
-                        rc = 0;
+                if (mod) {
+                        LASSERT(mod->mod_open_req != NULL);
+                        if (mod->mod_open_req->rq_committed)
+                                rc = 0;
+                }
         }
 
         if (mod) {
@@ -875,11 +897,11 @@ int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
         }
 
         if (mod != NULL) {
-                LASSERTF(mod->mod_open_req->rq_type != LI_POISON,
+                LASSERTF(mod->mod_open_req != NULL &&
+                         mod->mod_open_req->rq_type != LI_POISON,
                          "POISONED setattr %p!\n", mod->mod_open_req);
 
                 mod->mod_close_req = req;
-                obd_mod_get(mod);
                 DEBUG_REQ(D_HA, mod->mod_open_req, "matched setattr");
                 /* We no longer want to preserve this setattr for replay even
                  * though the open was committed. b=3632, b=3633 */
@@ -901,8 +923,11 @@ int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
                  * committed and server failed before close was sent.
                  * Let's check if mod exists and return no error in that case
                  */
-                if (mod && (mod->mod_open_req == NULL))
-                        rc = 0;
+                if (mod) {
+                        LASSERT(mod->mod_open_req != NULL);
+                        if (mod->mod_open_req->rq_committed)
+                                rc = 0;
+                }
         }
 
         if (mod) {

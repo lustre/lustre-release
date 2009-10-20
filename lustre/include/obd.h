@@ -1682,11 +1682,14 @@ static inline struct md_open_data *obd_mod_alloc(void)
         return mod;
 }
 
-#define obd_mod_get(mod) atomic_inc(&mod->mod_refcount)
-#define obd_mod_put(mod)                                \
-({                                                      \
-        if (atomic_dec_and_test(&mod->mod_refcount))    \
-                OBD_FREE_PTR(mod);                      \
+#define obd_mod_get(mod) atomic_inc(&(mod)->mod_refcount)
+#define obd_mod_put(mod)                                        \
+({                                                              \
+        if (atomic_dec_and_test(&(mod)->mod_refcount)) {          \
+                if ((mod)->mod_open_req)                          \
+                        ptlrpc_req_finished((mod)->mod_open_req);   \
+                OBD_FREE_PTR(mod);                              \
+        }                                                       \
 })
 
 #endif /* __OBD_H */
