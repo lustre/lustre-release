@@ -1337,15 +1337,15 @@ const char *cl_lock_mode_name(const enum cl_lock_mode mode);
  *              |  |                 V
  *              |  |                HELD<---------+
  *              |  |                 |            |
- *              |  |                 |            |
+ *              |  |                 |            | cl_use_try()
  *              |  |  cl_unuse_try() |            |
  *              |  |                 |            |
- *              |  |                 V            | cached
- *              |  +------------>UNLOCKING (*)    | lock found
+ *              |  |                 V         ---+ 
+ *              |  +------------>INTRANSIT (D) <--+
  *              |                    |            |
- *              |     cl_unuse_try() |            |
- *              |                    |            |
+ *              |     cl_unuse_try() |            | cached lock found
  *              |                    |            | cl_use_try()
+ *              |                    |            |
  *              |                    V            |
  *              +------------------CACHED---------+
  *                                   |
@@ -1363,6 +1363,8 @@ const char *cl_lock_mode_name(const enum cl_lock_mode mode);
  *         to handle arrival of lock reply.
  *
  *         (C) is the point where Cancellation call-back is invoked.
+ *
+ *         (D) is the transit state which means the lock is changing.
  *
  *         Transition to FREEING state is possible from any other state in the
  *         diagram in case of unrecoverable error.
@@ -1382,9 +1384,6 @@ const char *cl_lock_mode_name(const enum cl_lock_mode mode);
  * handled, and is in ENQUEUED state after enqueue to S2 has been sent (note
  * that in this case, sub-locks move from state to state, and top-lock remains
  * in the same state).
- *
- * Separate UNLOCKING state is needed to maintain an invariant that in HELD
- * state lock is immediately ready for use.
  */
 enum cl_lock_state {
         /**
@@ -1406,10 +1405,16 @@ enum cl_lock_state {
          */
         CLS_HELD,
         /**
-         * Lock is in the transition from CLS_HELD to CLS_CACHED. Lock is in
-         * this state only while cl_unuse() is executing against it.
+         * This state is used to mark the lock is being used, or unused.
+         * We need this state because the lock may have several sublocks,
+         * so it's impossible to have an atomic way to bring all sublocks
+         * into CLS_HELD state at use case, or all sublocks to CLS_CACHED
+         * at unuse case.
+         * If a thread is referring to a lock, and it sees the lock is in this
+         * state, it must wait for the lock.
+         * See state diagram for details.
          */
-        CLS_UNLOCKING,
+         CLS_INTRANSIT,
         /**
          * Lock granted, not used.
          */
@@ -1430,9 +1435,7 @@ enum cl_lock_flags {
         /** cancellation is pending for this lock. */
         CLF_CANCELPEND = 1 << 1,
         /** destruction is pending for this lock. */
-        CLF_DOOMED     = 1 << 2,
-        /** State update is pending. */
-        CLF_STATE      = 1 << 3
+        CLF_DOOMED     = 1 << 2
 };
 
 /**
@@ -1530,6 +1533,10 @@ struct cl_lock {
         cfs_task_t           *cll_guarder;
         int                   cll_depth;
 
+        /**
+         * the owner for INTRANSIT state
+         */
+        cfs_task_t           *cll_intransit_owner;
         int                   cll_error;
         /**
          * Number of holds on a lock. A hold prevents a lock from being
@@ -2779,6 +2786,14 @@ int   cl_lock_user_del  (const struct lu_env *env, struct cl_lock *lock);
 int   cl_lock_compatible(const struct cl_lock *lock1,
                          const struct cl_lock *lock2);
 
+enum cl_lock_state cl_lock_intransit(const struct lu_env *env,
+                                     struct cl_lock *lock);
+
+void cl_lock_extransit(const struct lu_env *env, struct cl_lock *lock,
+                       enum cl_lock_state state);
+
+int cl_lock_is_intransit(struct cl_lock *lock);
+
 /** \name statemachine statemachine
  * Interface to lock state machine consists of 3 parts:
  *
@@ -2819,7 +2834,7 @@ int   cl_enqueue_try(const struct lu_env *env, struct cl_lock *lock,
                      struct cl_io *io, __u32 flags);
 int   cl_unuse_try  (const struct lu_env *env, struct cl_lock *lock);
 int   cl_wait_try   (const struct lu_env *env, struct cl_lock *lock);
-int   cl_use_try    (const struct lu_env *env, struct cl_lock *lock);
+int   cl_use_try    (const struct lu_env *env, struct cl_lock *lock, int atomic);
 /** @} statemachine */
 
 void cl_lock_signal      (const struct lu_env *env, struct cl_lock *lock);

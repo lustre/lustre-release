@@ -283,9 +283,9 @@ struct lov_lock {
         unsigned               lls_nr_filled;
         /**
          * Set when sub-lock was canceled, while top-lock was being
-         * unlocked.
+         * used, or unused.
          */
-        int                    lls_unuse_race;
+        int                    lls_cancel_race:1;
         /**
          * An array of sub-locks
          *

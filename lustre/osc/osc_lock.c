@@ -1361,7 +1361,7 @@ static int osc_lock_use(const struct lu_env *env,
                  * cl_lock mutex.
                  */
                 lock = slice->cls_lock;
-                LASSERT(lock->cll_state == CLS_CACHED);
+                LASSERT(lock->cll_state == CLS_INTRANSIT);
                 LASSERT(lock->cll_users > 0);
                 /* set a flag for osc_dlm_blocking_ast0() to signal the
                  * lock.*/

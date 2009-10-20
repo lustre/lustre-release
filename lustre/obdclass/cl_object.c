@@ -480,7 +480,7 @@ int cl_site_stats_print(const struct cl_site *site, char *page, int count)
                 [CLS_QUEUING]   = "q",
                 [CLS_ENQUEUED]  = "e",
                 [CLS_HELD]      = "h",
-                [CLS_UNLOCKING] = "u",
+                [CLS_INTRANSIT] = "t",
                 [CLS_CACHED]    = "c",
                 [CLS_FREEING]   = "f"
         };

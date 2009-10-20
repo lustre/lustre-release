@@ -399,6 +399,57 @@ static struct cl_lock *cl_lock_alloc(const struct lu_env *env,
 }
 
 /**
+ * Transfer the lock into INTRANSIT state and return the original state.
+ *
+ * \pre  state: CLS_CACHED, CLS_HELD or CLS_ENQUEUED
+ * \post state: CLS_INTRANSIT
+ * \see CLS_INTRANSIT
+ */
+enum cl_lock_state cl_lock_intransit(const struct lu_env *env,
+                                     struct cl_lock *lock)
+{
+        enum cl_lock_state state = lock->cll_state;
+
+        LASSERT(cl_lock_is_mutexed(lock));
+        LASSERT(state != CLS_INTRANSIT);
+        LASSERTF(state >= CLS_ENQUEUED && state <= CLS_CACHED,
+                 "Malformed lock state %d.\n", state);
+
+        cl_lock_state_set(env, lock, CLS_INTRANSIT);
+        lock->cll_intransit_owner = cfs_current();
+        cl_lock_hold_add(env, lock, "intransit", cfs_current());
+        return state;
+}
+EXPORT_SYMBOL(cl_lock_intransit);
+
+/**
+ *  Exit the intransit state and restore the lock state to the original state
+ */
+void cl_lock_extransit(const struct lu_env *env, struct cl_lock *lock,
+                       enum cl_lock_state state)
+{
+        LASSERT(cl_lock_is_mutexed(lock));
+        LASSERT(lock->cll_state == CLS_INTRANSIT);
+        LASSERT(state != CLS_INTRANSIT);
+        LASSERT(lock->cll_intransit_owner == cfs_current());
+
+        lock->cll_intransit_owner = NULL;
+        cl_lock_state_set(env, lock, state);
+        cl_lock_unhold(env, lock, "intransit", cfs_current());
+}
+EXPORT_SYMBOL(cl_lock_extransit);
+
+/**
+ * Checking whether the lock is intransit state
+ */
+int cl_lock_is_intransit(struct cl_lock *lock)
+{
+        LASSERT(cl_lock_is_mutexed(lock));
+        return lock->cll_state == CLS_INTRANSIT &&
+               lock->cll_intransit_owner != cfs_current();
+}
+EXPORT_SYMBOL(cl_lock_is_intransit);
+/**
  * Returns true iff lock is "suitable" for given io. E.g., locks acquired by
  * truncate and O_APPEND cannot be reused for read/non-append-write, as they
  * cover multiple stripes and can trigger cascading timeouts.
@@ -524,6 +575,7 @@ struct cl_lock *cl_lock_peek(const struct lu_env *env, const struct cl_io *io,
         struct cl_object_header *head;
         struct cl_object        *obj;
         struct cl_lock          *lock;
+        int ok;
 
         obj  = need->cld_obj;
         head = cl_object_header(obj);
@@ -532,24 +584,30 @@ struct cl_lock *cl_lock_peek(const struct lu_env *env, const struct cl_io *io,
         lock = cl_lock_lookup(env, obj, io, need);
         spin_unlock(&head->coh_lock_guard);
 
-        if (lock != NULL) {
-                int ok;
+        if (lock == NULL)
+                return NULL;
 
-                cl_lock_mutex_get(env, lock);
-                if (lock->cll_state == CLS_CACHED)
-                        cl_use_try(env, lock);
-                ok = lock->cll_state == CLS_HELD;
-                if (ok) {
-                        cl_lock_hold_add(env, lock, scope, source);
-                        cl_lock_user_add(env, lock);
-                        cl_lock_put(env, lock);
-                }
-                cl_lock_mutex_put(env, lock);
-                if (!ok) {
-                        cl_lock_put(env, lock);
-                        lock = NULL;
-                }
+        cl_lock_mutex_get(env, lock);
+        if (lock->cll_state == CLS_INTRANSIT)
+                cl_lock_state_wait(env, lock); /* Don't care return value. */
+        if (lock->cll_state == CLS_CACHED) {
+                int result;
+                result = cl_use_try(env, lock, 1);
+                if (result < 0)
+                        cl_lock_error(env, lock, result);
         }
+        ok = lock->cll_state == CLS_HELD;
+        if (ok) {
+                cl_lock_hold_add(env, lock, scope, source);
+                cl_lock_user_add(env, lock);
+                cl_lock_put(env, lock);
+        }
+        cl_lock_mutex_put(env, lock);
+        if (!ok) {
+                cl_lock_put(env, lock);
+                lock = NULL;
+        }
+
         return lock;
 }
 EXPORT_SYMBOL(cl_lock_peek);
@@ -666,7 +724,7 @@ int cl_lock_mutex_try(const struct lu_env *env, struct cl_lock *lock)
 EXPORT_SYMBOL(cl_lock_mutex_try);
 
 /**
- * Unlocks cl_lock object.
+ {* Unlocks cl_lock object.
  *
  * \pre cl_lock_is_mutexed(lock)
  *
@@ -885,7 +943,7 @@ int cl_lock_state_wait(const struct lu_env *env, struct cl_lock *lock)
         LASSERT(lock->cll_state != CLS_FREEING); /* too late to wait */
 
         result = lock->cll_error;
-        if (result == 0 && !(lock->cll_flags & CLF_STATE)) {
+        if (result == 0) {
                 cfs_waitlink_init(&waiter);
                 cfs_waitq_add(&lock->cll_wq, &waiter);
                 set_current_state(CFS_TASK_INTERRUPTIBLE);
@@ -899,7 +957,6 @@ int cl_lock_state_wait(const struct lu_env *env, struct cl_lock *lock)
                 cfs_waitq_del(&lock->cll_wq, &waiter);
                 result = cfs_signal_pending() ? -EINTR : 0;
         }
-        lock->cll_flags &= ~CLF_STATE;
         RETURN(result);
 }
 EXPORT_SYMBOL(cl_lock_state_wait);
@@ -916,7 +973,6 @@ static void cl_lock_state_signal(const struct lu_env *env, struct cl_lock *lock,
         list_for_each_entry(slice, &lock->cll_layers, cls_linkage)
                 if (slice->cls_ops->clo_state != NULL)
                         slice->cls_ops->clo_state(env, slice, state);
-        lock->cll_flags |= CLF_STATE;
         cfs_waitq_broadcast(&lock->cll_wq);
         EXIT;
 }
@@ -955,9 +1011,10 @@ void cl_lock_state_set(const struct lu_env *env, struct cl_lock *lock,
         LASSERT(lock->cll_state <= state ||
                 (lock->cll_state == CLS_CACHED &&
                  (state == CLS_HELD || /* lock found in cache */
-                  state == CLS_NEW     /* sub-lock canceled */)) ||
-                /* sub-lock canceled during unlocking */
-                (lock->cll_state == CLS_UNLOCKING && state == CLS_NEW));
+                  state == CLS_NEW  ||   /* sub-lock canceled */
+                  state == CLS_INTRANSIT)) ||
+                /* lock is in transit state */
+                lock->cll_state == CLS_INTRANSIT);
 
         if (lock->cll_state != state) {
                 atomic_dec(&site->cs_locks_state[lock->cll_state]);
@@ -970,17 +1027,54 @@ void cl_lock_state_set(const struct lu_env *env, struct cl_lock *lock,
 }
 EXPORT_SYMBOL(cl_lock_state_set);
 
+static int cl_unuse_try_internal(const struct lu_env *env, struct cl_lock *lock)
+{
+        const struct cl_lock_slice *slice;
+        int result;
+
+        do {
+                result = 0;
+
+                if (lock->cll_error != 0)
+                        break;
+
+                LINVRNT(cl_lock_is_mutexed(lock));
+                LINVRNT(cl_lock_invariant(env, lock));
+                LASSERT(lock->cll_state == CLS_INTRANSIT);
+                LASSERT(lock->cll_users > 0);
+                LASSERT(lock->cll_holds > 0);
+
+                result = -ENOSYS;
+                list_for_each_entry_reverse(slice, &lock->cll_layers,
+                                            cls_linkage) {
+                        if (slice->cls_ops->clo_unuse != NULL) {
+                                result = slice->cls_ops->clo_unuse(env, slice);
+                                if (result != 0)
+                                        break;
+                        }
+                }
+                LASSERT(result != -ENOSYS);
+        } while (result == CLO_REPEAT);
+
+        return result ?: lock->cll_error;
+}
+
 /**
  * Yanks lock from the cache (cl_lock_state::CLS_CACHED state) by calling
  * cl_lock_operations::clo_use() top-to-bottom to notify layers.
+ * @atomic = 1, it must unuse the lock to recovery the lock to keep the
+ *  use process atomic
  */
-int cl_use_try(const struct lu_env *env, struct cl_lock *lock)
+int cl_use_try(const struct lu_env *env, struct cl_lock *lock, int atomic)
 {
-        int result;
         const struct cl_lock_slice *slice;
+        int result;
+        enum cl_lock_state state;
 
         ENTRY;
         result = -ENOSYS;
+
+        state = cl_lock_intransit(env, lock);
         list_for_each_entry(slice, &lock->cll_layers, cls_linkage) {
                 if (slice->cls_ops->clo_use != NULL) {
                         result = slice->cls_ops->clo_use(env, slice);
@@ -989,8 +1083,43 @@ int cl_use_try(const struct lu_env *env, struct cl_lock *lock)
                 }
         }
         LASSERT(result != -ENOSYS);
-        if (result == 0)
-                cl_lock_state_set(env, lock, CLS_HELD);
+
+        LASSERT(lock->cll_state == CLS_INTRANSIT);
+
+        if (result == 0) {
+                state = CLS_HELD;
+        } else {
+                if (result == -ESTALE) {
+                        /*
+                         * ESTALE means sublock being cancelled
+                         * at this time, and set lock state to
+                         * be NEW here and ask the caller to repeat.
+                         */
+                        state = CLS_NEW;
+                        result = CLO_REPEAT;
+                }
+
+                /* @atomic means back-off-on-failure. */
+                if (atomic) {
+                        int rc;
+
+                        do {
+                                rc = cl_unuse_try_internal(env, lock);
+                                if (rc == 0)
+                                        break;
+                                if (rc == CLO_WAIT)
+                                        rc = cl_lock_state_wait(env, lock);
+                                if (rc < 0)
+                                        break;
+                        } while(1);
+
+                        /* Vet the results. */
+                        if (rc < 0 && result > 0)
+                                result = rc;
+                }
+
+        }
+        cl_lock_extransit(env, lock, state);
         RETURN(result);
 }
 EXPORT_SYMBOL(cl_use_try);
@@ -1056,14 +1185,13 @@ int cl_enqueue_try(const struct lu_env *env, struct cl_lock *lock,
                         if (result == 0)
                                 cl_lock_state_set(env, lock, CLS_ENQUEUED);
                         break;
-                case CLS_UNLOCKING:
-                        /* wait until unlocking finishes, and enqueue lock
-                         * afresh. */
+                case CLS_INTRANSIT:
+                        LASSERT(cl_lock_is_intransit(lock));
                         result = CLO_WAIT;
                         break;
                 case CLS_CACHED:
                         /* yank lock from the cache. */
-                        result = cl_use_try(env, lock);
+                        result = cl_use_try(env, lock, 0);
                         break;
                 case CLS_ENQUEUED:
                 case CLS_HELD:
@@ -1150,7 +1278,7 @@ EXPORT_SYMBOL(cl_enqueue);
  * This function is called repeatedly by cl_unuse() until either lock is
  * unlocked, or error occurs.
  *
- * \pre  lock->cll_state <= CLS_HELD || lock->cll_state == CLS_UNLOCKING
+ * \pre  lock->cll_state <= CLS_HELD || cl_lock_is_intransit(lock)
  *
  * \post ergo(result == 0, lock->cll_state == CLS_CACHED)
  *
@@ -1159,11 +1287,11 @@ EXPORT_SYMBOL(cl_enqueue);
  */
 int cl_unuse_try(const struct lu_env *env, struct cl_lock *lock)
 {
-        const struct cl_lock_slice *slice;
         int                         result;
+        enum cl_lock_state          state = CLS_NEW;
 
         ENTRY;
-        if (lock->cll_state != CLS_UNLOCKING) {
+        if (lock->cll_state != CLS_INTRANSIT) {
                 if (lock->cll_users > 1) {
                         cl_lock_user_del(env, lock);
                         RETURN(0);
@@ -1174,31 +1302,11 @@ int cl_unuse_try(const struct lu_env *env, struct cl_lock *lock)
                  * CLS_CACHED, is reinitialized to CLS_NEW or fails into
                  * CLS_FREEING.
                  */
-                cl_lock_state_set(env, lock, CLS_UNLOCKING);
+                state = cl_lock_intransit(env, lock);
         }
-        do {
-                result = 0;
 
-                if (lock->cll_error != 0)
-                        break;
-
-                LINVRNT(cl_lock_is_mutexed(lock));
-                LINVRNT(cl_lock_invariant(env, lock));
-                LASSERT(lock->cll_state == CLS_UNLOCKING);
-                LASSERT(lock->cll_users > 0);
-                LASSERT(lock->cll_holds > 0);
-
-                result = -ENOSYS;
-                list_for_each_entry_reverse(slice, &lock->cll_layers,
-                                            cls_linkage) {
-                        if (slice->cls_ops->clo_unuse != NULL) {
-                                result = slice->cls_ops->clo_unuse(env, slice);
-                                if (result != 0)
-                                        break;
-                        }
-                }
-                LASSERT(result != -ENOSYS);
-        } while (result == CLO_REPEAT);
+        result = cl_unuse_try_internal(env, lock);
+        LASSERT(lock->cll_state == CLS_INTRANSIT);
         if (result != CLO_WAIT)
                 /*
                  * Once there is no more need to iterate ->clo_unuse() calls,
@@ -1208,8 +1316,6 @@ int cl_unuse_try(const struct lu_env *env, struct cl_lock *lock)
                  */
                 cl_lock_user_del(env, lock);
         if (result == 0 || result == -ESTALE) {
-                enum cl_lock_state state;
-
                 /*
                  * Return lock back to the cache. This is the only
                  * place where lock is moved into CLS_CACHED state.
@@ -1220,7 +1326,7 @@ int cl_unuse_try(const struct lu_env *env, struct cl_lock *lock)
                  * canceled while unlocking was in progress.
                  */
                 state = result == 0 ? CLS_CACHED : CLS_NEW;
-                cl_lock_state_set(env, lock, state);
+                cl_lock_extransit(env, lock, state);
 
                 /*
                  * Hide -ESTALE error.
@@ -1232,7 +1338,11 @@ int cl_unuse_try(const struct lu_env *env, struct cl_lock *lock)
                  * pages won't be written to OSTs. -jay
                  */
                 result = 0;
+        } else {
+                CWARN("result = %d, this is unlikely!\n", result);
+                cl_lock_extransit(env, lock, state);
         }
+
         result = result ?: lock->cll_error;
         if (result < 0)
                 cl_lock_error(env, lock, result);
@@ -1292,13 +1402,20 @@ int cl_wait_try(const struct lu_env *env, struct cl_lock *lock)
                 LINVRNT(cl_lock_is_mutexed(lock));
                 LINVRNT(cl_lock_invariant(env, lock));
                 LASSERT(lock->cll_state == CLS_ENQUEUED ||
-                        lock->cll_state == CLS_HELD);
+                        lock->cll_state == CLS_HELD ||
+                        lock->cll_state == CLS_INTRANSIT);
                 LASSERT(lock->cll_users > 0);
                 LASSERT(lock->cll_holds > 0);
 
                 result = 0;
                 if (lock->cll_error != 0)
                         break;
+
+                if (cl_lock_is_intransit(lock)) {
+                        result = CLO_WAIT;
+                        break;
+                }
+
                 if (lock->cll_state == CLS_HELD)
                         /* nothing to do */
                         break;
