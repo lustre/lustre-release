@@ -6714,11 +6714,20 @@ check_file_in_pool()
 	return 0
 }
 
+cleanup_200 () {
+	trap 0
+	destroy_pool $POOL
+}
+
 test_200a() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 	do_facet mgs $LCTL pool_new $FSNAME.$POOL
-        # get param should return err until pool is created
-        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "" || error "Pool creation of $POOL failed"
+
+	trap cleanup_200 EXIT
+	CLEANUP_200=yes
+
+	# get param should return err until pool is created
+	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "" || error "Pool creation of $POOL failed"
 	[ $($LFS pool_list $FSNAME | grep -c $POOL) -eq 1 ] || error "$POOL not in lfs pool_list"
 }
 run_test 200a "Create new pool =========================================="
@@ -6818,10 +6827,13 @@ test_201c() {  # was 200i
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 	do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
 	# get param should return err once pool is gone
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "foo" && return 0
+	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null ||
+		echo foo" "foo" && unset CLEANUP_200 && trap 0 && return 0
 	error "Pool $FSNAME.$POOL is not destroyed"
 }
 run_test 201c "Remove a pool ============================================"
+
+[ "$CLEANUP_200" ] && cleanup_200
 
 test_212() {
 	size=`date +%s`
