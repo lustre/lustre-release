@@ -71,6 +71,9 @@ struct mds_capa_info {
 };
 
 /* mds/mds_lov.c */
+int mds_declare_lov_write_objids(const struct lu_env *env,
+                                 struct obd_device *obd,
+                                 struct thandle *th);
 int mds_lov_write_objids(const struct lu_env *env,
                          struct obd_device *obd,
                          struct thandle *th);
