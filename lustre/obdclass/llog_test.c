@@ -371,7 +371,7 @@ ctxt_release:
         RETURN(rc);
 }
 
-static cat_counter;
+static int cat_counter;
 
 static int cat_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
                         void *data)
