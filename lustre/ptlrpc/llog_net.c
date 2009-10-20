@@ -70,7 +70,7 @@ int llog_origin_connect(struct llog_ctxt *ctxt,
         struct llog_gen_rec    *lgr;
         struct ptlrpc_request  *req;
         struct llogd_conn_body *req_body;
-        int rc, rc1;
+        int rc;
 
         ENTRY;
 
@@ -92,7 +92,7 @@ int llog_origin_connect(struct llog_ctxt *ctxt,
         lgr->lgr_gen = ctxt->loc_gen;
         rc = llog_add(ctxt, &lgr->lgr_hdr, NULL, NULL, 1);
         OBD_FREE_PTR(lgr);
-        if (rc)
+        if (rc != 1)
                 RETURN(rc);
 
         LASSERT(ctxt->loc_imp);
