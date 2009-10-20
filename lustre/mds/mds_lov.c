@@ -537,6 +537,36 @@ out2:
         RETURN(rc);
 }
 
+int mds_declare_lov_write_objids(const struct lu_env *env,
+                                 struct obd_device *obd,
+                                 struct thandle *th)
+{
+        struct mds_obd   *mds = &obd->u.mds;
+        struct dt_object *o;
+        int               len, rc = 0;
+        ENTRY;
+
+        if (mds->mds_next_dev == NULL)
+                RETURN(0);
+
+        o = mds->mds_lov_objid_dt;
+        if (o == NULL)
+                RETURN(0);
+
+        /* we don't know what specific data we'll be writing
+         * so let's declare full file to be updated -- not optimal */
+
+        /* XXX: if new OST gets connected after this declaration
+         * the thread will be able to write out of declared window
+         * if we remove batching the problem disappears */
+
+        len = (mds->mds_lov_objid_lastidx + 1) * sizeof(obd_id);
+        rc = dt_declare_record_write(env, o, len, 0, th);
+
+        RETURN(rc);
+}
+EXPORT_SYMBOL(mds_declare_lov_write_objids);
+
 int mds_lov_write_objids(const struct lu_env *env,
                          struct obd_device *obd,
                          struct thandle *th)

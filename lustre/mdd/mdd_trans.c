@@ -80,9 +80,7 @@ int mdd_txn_start_cb(const struct lu_env *env, struct thandle *txn,
                (1 << shift) - 1) >> shift) + 1;
 
         /* add lov objids credits */
-        /*LBUG();
-                rc = fsfilt_write_record(obd, mds->mds_lov_objid_filp, data,
-                                         size, &off, 0);*/
+        mds_declare_lov_write_objids(env, obd, txn);
 
         return 0;
 }
