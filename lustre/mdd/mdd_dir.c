@@ -1855,6 +1855,7 @@ mdd_start_and_declare_create(const struct lu_env *env,
                              struct md_op_spec *spec)
 {
         struct dt_object_format *dof = &mdd_env_info(env)->mti_dof;
+        const struct dt_index_features *feat = spec->sp_feat;
         struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct thandle    *handle;
@@ -1864,8 +1865,10 @@ mdd_start_and_declare_create(const struct lu_env *env,
         if (IS_ERR(handle))
                 RETURN(handle);
 
-        dof->dof_type = dt_mode_to_dft(attr->la_mode);
-
+        if (feat != &dt_directory_features && feat != NULL)
+                dof->dof_type = DFT_INDEX;
+        else
+                dof->dof_type = dt_mode_to_dft(attr->la_mode);
         rc = mdo_declare_create_obj(env, son, attr, NULL, dof, handle);
         if (rc)
                 GOTO(cleanup, rc);
@@ -2669,7 +2672,8 @@ out_pending:
 }
 
 /** enable/disable storing of hardlink info */
-int mdd_linkea_enable = 1;
+/* XXX: disabled by default due to missed declaration (kDMU) */
+int mdd_linkea_enable = 0;
 CFS_MODULE_PARM(mdd_linkea_enable, "d", int, 0644,
                 "record hardlink info in EAs");
 
