@@ -189,11 +189,15 @@ int fld_index_create(struct lu_server_fld *fld,
         LASSERT(range_is_sane(range));
         dt_dev = lu2dt_dev(fld->lsf_obj->do_lu.lo_dev);
 
+#if 0
+        /* XXX: DMU/DMU OSD don't support binary keys yet */
         rc = dt_obj->do_index_ops->dio_insert(env, dt_obj,
                                               fld_rec(env, range),
                                               fld_key(env, start),
                                               th, BYPASS_CAPA, 1);
-
+#else
+        rc = 0;
+#endif
         CDEBUG(D_INFO, "%s: insert given range : "DRANGE" rc = %d\n",
                fld->lsf_name, PRANGE(range), rc);
         RETURN(rc);
