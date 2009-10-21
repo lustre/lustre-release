@@ -2673,7 +2673,7 @@ out_pending:
 
 /** enable/disable storing of hardlink info */
 /* XXX: disabled by default due to missed declaration (kDMU) */
-int mdd_linkea_enable = 0;
+int mdd_linkea_enable = 1;
 CFS_MODULE_PARM(mdd_linkea_enable, "d", int, 0644,
                 "record hardlink info in EAs");
 
