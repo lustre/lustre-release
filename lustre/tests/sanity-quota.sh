@@ -42,6 +42,11 @@ BUNIT_SZ=${BUNIT_SZ:-1024}      # min block quota unit(kB)
 IUNIT_SZ=${IUNIT_SZ:-10}        # min inode quota unit
 MAX_DQ_TIME=604800
 MAX_IQ_TIME=604800
+SANITY_QUOTA_USERS="quota15_1 quota15_2 quota15_3 quota15_4 quota15_5 quota15_6 \
+                    quota15_7 quota15_8 quota15_9 quota15_10 quota15_11 quota15_12 \
+                    quota15_13 quota15_14 quota15_15 quota15_16 quota15_17 quota15_18 \
+                    quota15_19 quota15_20 quota15_21 quota15_22 quota15_23 quota15_24 \
+                    quota15_25 quota15_26 quota15_27 quota15_28 quota15_29 quota15_30"
 
 TRACE=${TRACE:-""}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
@@ -1282,78 +1287,6 @@ test_14a() {        # was test_14 b=12223 -- setting quota on root
 }
 run_test_with_stat 14a "test setting quota on root ==="
 
-test_14b(){
-        local l
-        local CURSPACE
-
-        # 1. check that required users exist
-        # 2. ensure that switch to new mode will start conversion
-        # 3. start quota in old mode and put some entries
-        # 4. restart quota in new mode forcing conversion and check the entries
-
-        wait_delete_completed
-
-        MISSING_USERS=""
-        for i in `seq 1 30`; do
-                check_runas_id_ret quota15_$i quota_usr "runas -u quota15_$i -g quota_usr" >/dev/null 2>/dev/null
-                if [ "$?" != "0" ]; then
-                       MISSING_USERS="$MISSING_USERS quota15_$i"
-                fi
-        done
-
-        if [ -n "$MISSING_USERS" ]; then
-                skip_env "following users are missing: $MISSING_USERS"
-                return 0
-        fi
-
-        $LFS quotaoff -ug $DIR
-        echo "setting quota version 1"
-        quota_set_version 1
-        echo "running quotacheck"
-        $LFS quotacheck -ug $DIR
-        mkdir -p $DIR/$tdir
-        chmod 0777 $DIR/$tdir
-        for i in `seq 1 30`; do
-                l=$[$i*1024*128] # set limits in 128 Mb units
-                $LFS setquota -u quota15_$i -b $l -B $l -i $l -I $l $DIR || error "lfs setquota failed"
-                runas -u quota15_$i dd if=/dev/zero of="$DIR/$tdir/quota15_$i" \
-                      bs=1048576 count=$[($i+1)/2] || quota_error u quota15_$i "dd failed"
-        done
-
-        cancel_lru_locks osc
-        
-        echo "saving quota data"
-        for i in `seq 1 30`; do
-                CURSPACE[$i]=`$LFS quota -v -u quota15_$i $MOUNT | awk '{if(start) {start=0; sum += $1} if(($1 ~ /OST/) && (NF==1)) {start=1;} 
-                              if(($1 ~ /OST/) && (NF != 1)) {sum += $2}; } END { print sum }'`
-        done
-
-        $LFS quotaoff -ug $DIR
-        echo "setting version 3 or 2 (dependent on the kernel support)"
-        quota_set_version 3 2>&1 | grep "Invalid argument" && quota_set_version 2
-
-        echo "invalidating quota files"
-        $LFS quotainv -ug $DIR
-        $LFS quotainv -ugf $DIR
-        $LFS quotacheck -ug $DIR
-
-        for i in `seq 1 30`; do
-                l=$[$i*1024*128]
-                # the format is "mntpnt   curspace[*]   bsoftlimit   bhardlimit   [time]   curinodes[*]    isoftlimit  ihardlimit"
-                echo "checking administrative quota migration results for user quota15_$i"
-                $LFS quota -v -u quota15_$i $DIR | grep -E '^ *'$MOUNT' *[0-9]+\** *'$l' *'$l' *[0-9]+\** *'$l' *'$l \
-                  || error "lfs quota output is unexpected"
-                echo "checking operational quota migration results for user quota15_$i, curspace should be ${CURSPACE[$i]}"
-                l=`$LFS quota -v -u quota15_$i $MOUNT | awk '{if(start) {start=0; sum += $1} if(($1 ~ /OST/) && (NF==1)) {start=1;} 
-                   if(($1 ~ /OST/) && (NF != 1)) {sum += $2}; } END { print sum }'`
-                echo "...real is $l"
-                [ "$l" -eq "${CURSPACE[$i]}" ] || error "curspace mismatch"
-                rm $DIR/$tdir/quota15_$i || error "could not remove quota15_$i"
-                resetquota -u quota15_$i 
-        done
-}
-run_test_with_stat 14b "setting 30 quota entries in quota v1 file before conversion ==="
-
 test_15(){
         LIMIT=$((24 * 1024 * 1024 * 1024 * 1024)) # 24 TB
         PATTERN="`echo $DIR | sed 's/\//\\\\\//g'`"
@@ -2259,6 +2192,61 @@ test_30()
         $LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace $MAX_IQ_TIME $DIR
 }
 run_test_with_stat 30 "hard limit updates should not reset grace times ================"
+
+#
+# run 98 at the end because of reformatall
+#
+
+test_98()
+{
+        local num
+        local user
+        local missing_users=""
+
+        for user in $SANITY_QUOTA_USERS; do
+                check_runas_id_ret $user quota_usr "runas -u $user -g quota_usr" >/dev/null 2>/dev/null || \
+                       missing_users="$missing_users $user"
+        done
+        [ -n "$missing_users" ] && { skip_env "the following users are missing: $missing_users" ; return 0 ; }
+
+        cleanupall
+        formatall
+        setupall
+        quota_set_version 1 # set version before the first quota check
+        test_0
+
+        set_blk_tunesz 2
+        set_blk_unitsz 4
+
+        num=8
+        for user in $SANITY_QUOTA_USERS; do
+                $LFS setquota -u $user --block-hardlimit $((2 * num + 4 * OSTCOUNT)) $DIR || error "first phase setquota failure"
+                $LFS setstripe -c 1 $DIR/${tfile}${num} || error "single-stripe file creation failed"
+                chown $user $DIR/${tfile}${num} || error "chown has failed"
+                runas -u $user -g quota_usr multiop $DIR/${tfile}${num} oO_WRONLY:O_DIRECT:w$((num * 1024))c || \
+                        error "unexpected error when writing the file for $user"
+                num=$((num + 8))
+        done
+
+        $LFS quotaoff -ug $DIR
+        quota_set_version 3 2>&1 | grep "Invalid argument" && quota_set_version 2
+        $LFS quotaon -ug $DIR
+
+        num=8
+        for user in $SANITY_QUOTA_USERS; do
+                runas -u $user -g quota_usr multiop $DIR/${tfile}${num} oO_WRONLY:O_DIRECT:O_APPEND:w$((num * 1024))c || \
+                        error "unexpected error when appending the file for $user"
+                runas -u $user -g quota_usr multiop $DIR/${tfile}${num} oO_WRONLY:O_DIRECT:O_APPEND:w8192c && \
+                        error "unexpected success when appending the file for $user"
+                $LFS setquota -u $user --block-hardlimit 0 $DIR || error "second phase setquota failure"
+                rm -rf $DIR/${tfile}${num}
+                num=$((num + 8))
+        done
+
+        set_blk_unitsz $((128 * 1024))
+        set_blk_tunesz $((128 * 1024 / 2))
+}
+run_test_with_stat 98 "quotaon autoconversion ==============================="
 
 # turn off quota
 test_99()
