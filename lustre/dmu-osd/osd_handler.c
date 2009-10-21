@@ -686,7 +686,7 @@ static void osd_conf_get(const struct lu_env *env,
          * XXX should be taken from not-yet-existing fs abstraction layer.
          */
         param->ddp_max_name_len  = 256;
-        param->ddp_max_nlink     = 256;
+        param->ddp_max_nlink     = 2048;
         param->ddp_block_shift   = 12; /* XXX */
         /* XXX: remove when new llog/mountconf over osd are ready -bzzz */
         param->ddp_mnt           = NULL;
@@ -1910,7 +1910,6 @@ int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
                 rc = -ENODATA;
         if (rc == 0)
                 rc = size;
-        
         RETURN(rc);
 }
 
