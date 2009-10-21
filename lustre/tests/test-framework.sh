@@ -2739,6 +2739,30 @@ wait_clients_import_state () {
     fi
 }
 
+destroy_pool_int() {
+    local ost
+    local OSTS=$(do_facet mds lctl pool_list $1 | awk '$1 !~ /^Pool:/ {print $1}')
+    for ost in $OSTS; do
+        do_facet mgs lctl pool_remove $1 $ost
+    done
+    do_facet mgs lctl pool_destroy $1
+}
+
+destroy_pool() {
+    local RC
+
+    do_facet mds lctl pool_list $FSNAME.$1
+    RC=$?
+    [[ $RC -ne 0 ]] && return $RC
+
+    destroy_pool_int $FSNAME.$1
+    RC=$?
+    [[ $RC -ne 0 ]] && return $RC
+
+    wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$1 \
+      2>/dev/null || echo foo" "foo" && return 0
+}
+
 gather_logs () {
     local list=$1
 

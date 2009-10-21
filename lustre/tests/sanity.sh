@@ -6261,9 +6261,20 @@ check_file_in_pool()
 
 export mdtlov=
 
+cleanup_200 () {
+        trap 0
+        test_pools || return 0
+        destroy_pool $POOL
+}
+
 test_200a() {
         test_pools || return 0
+
         do_facet mgs $LCTL pool_new $FSNAME.$POOL
+
+        trap cleanup_200 EXIT
+        CLEANUP_200=yes
+
         # get param should return err until pool is created
         wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "" || error "Pool creation of $POOL failed"
 }
@@ -6359,10 +6370,13 @@ test_201c() {	# was 200i
         test_pools || return 0
         do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
         # get param should return err once pool is gone
-        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "foo" && return 0
+        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || 
+                echo foo" "foo" && unset CLEANUP_200 && trap 0 && return 0
         error "Pool $FSNAME.$POOL is not destroyed"
 }
 run_test 201c "Remove a pool ============================================"
+
+[ "$CLEANUP_200" ] && cleanup_200
 
 test_202() {
         $LFS setstripe -c 2 -s 1048576 $DIR/$tfile
