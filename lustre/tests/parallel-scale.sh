@@ -290,6 +290,7 @@ test_ior() {
     mkdir -p $testdir
     # mpi_run uses mpiuser
     chmod 0777 $testdir
+    $LFS setstripe $testdir -c -1
 
     # 
     # -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)"
