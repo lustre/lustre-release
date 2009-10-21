@@ -57,6 +57,7 @@
 #include <linux/timer.h>
 #include <linux/signal.h>
 #include <linux/sched.h>
+#include <linux/kthread.h>
 
 #include <linux/miscdevice.h>
 #include <libcfs/linux/portals_compat25.h>
@@ -152,6 +153,7 @@ typedef long                            cfs_task_state_t;
 #define cfs_waitq_timedwait(l, s, t)    schedule_timeout(t)
 #define cfs_schedule_timeout(s, t)      schedule_timeout(t)
 #define cfs_schedule()                  schedule()
+#define cfs_kthread_run(fn, data, fmt, arg...) kthread_run(fn, data, fmt, ##arg)
 
 /* Kernel thread */
 typedef int (*cfs_thread_t)(void *);
