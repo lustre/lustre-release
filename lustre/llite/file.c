@@ -255,7 +255,6 @@ int ll_file_release(struct inode *inode, struct file *file)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
 
-
         if (inode->i_sb->s_root != file->f_dentry)
                 ll_stats_ops_tally(sbi, LPROC_LL_RELEASE, 1);
         fd = LUSTRE_FPRIVATE(file);
@@ -278,6 +277,10 @@ int ll_file_release(struct inode *inode, struct file *file)
         lli->lli_async_rc = 0;
 
         rc = ll_mdc_close(sbi->ll_mdc_exp, inode, file);
+
+        if (OBD_FAIL_TIMEOUT_MS(OBD_FAIL_PTLRPC_DUMP_LOG, obd_fail_val))
+                libcfs_debug_dumplog();
+
         RETURN(rc);
 }
 
@@ -1512,8 +1515,8 @@ repeat:
 
         down_read(&lli->lli_truncate_rwsem); /* Bug 18233 */
 
-        ltd.lock_style = ll_file_get_lock(file, (obd_off)(*ppos), end, 
-                                          iov_copy, nrsegs_copy, 
+        ltd.lock_style = ll_file_get_lock(file, (obd_off)(*ppos), end,
+                                          iov_copy, nrsegs_copy,
                                           &ltd.u.lockh, &ltd.u.tree,
                                           OBD_BRW_READ);
         if (ltd.lock_style < 0 || ltd.lock_style == LL_LOCK_STYLE_NOLOCK)
@@ -1569,9 +1572,9 @@ repeat:
                             (((size - 1) >> CFS_PAGE_SHIFT) < cur_index)) {
                                 if (ltd.lock_style != LL_LOCK_STYLE_NOLOCK) {
 
-                                        ll_file_put_lock(inode, end, 
+                                        ll_file_put_lock(inode, end,
                                                          ltd.lock_style,
-                                                         &ltd.u.lockh, 
+                                                         &ltd.u.lockh,
                                                          &ltd.u.tree,
                                                          OBD_BRW_READ);
                                         up_read(&lli->lli_truncate_rwsem);
@@ -1607,7 +1610,7 @@ repeat:
                  * ll_glimpse_size) could get correct values in lsm */
                 OBD_ALLOC_PTR(xtimes);
                 if (NULL == xtimes) {
-                        ll_file_put_lock(inode, end, ltd.lock_style, 
+                        ll_file_put_lock(inode, end, ltd.lock_style,
                                          &ltd.u.lockh, &ltd.u.tree,
                                          OBD_BRW_READ);
                         up_read(&lli->lli_truncate_rwsem);
