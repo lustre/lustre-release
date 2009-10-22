@@ -358,6 +358,8 @@ typedef int (*ldlm_res_policy)(struct ldlm_namespace *, struct ldlm_lock **,
                                void *req_cookie, ldlm_mode_t mode, int flags,
                                void *data);
 
+typedef int (*ldlm_cancel_for_recovery)(struct ldlm_lock *lock);
+
 struct ldlm_valblock_ops {
         int (*lvbo_init)(struct ldlm_resource *res);
         int (*lvbo_update)(struct ldlm_resource *res, struct ptlrpc_request *r,
@@ -420,6 +422,9 @@ struct ldlm_namespace {
         struct adaptive_timeout ns_at_estimate;/* estimated lock callback time*/
         /* backward link to obd, required for ldlm pool to store new SLV. */
         struct obd_device     *ns_obd;
+
+        /* callback to cancel locks before replaying it during recovery */
+        ldlm_cancel_for_recovery ns_cancel_for_recovery;
 };
 
 static inline int ns_is_client(struct ldlm_namespace *ns)
@@ -448,6 +453,12 @@ static inline int ns_connect_lru_resize(struct ldlm_namespace *ns)
         return !!(ns->ns_connect_flags & OBD_CONNECT_LRU_RESIZE);
 }
 
+static inline void ns_register_cancel(struct ldlm_namespace *ns,
+                                      ldlm_cancel_for_recovery arg)
+{
+        LASSERT(ns != NULL);
+        ns->ns_cancel_for_recovery = arg;
+}
 /*
  *
  * Resource hash table

@@ -1356,6 +1356,23 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
         RETURN(rc);
 }
 
+/* determine whether the lock can be canceled before replaying it during
+ * recovery, non zero value will be return if the lock can be canceled, 
+ * or zero returned for not */
+static int mdc_cancel_for_recovery(struct ldlm_lock *lock)
+{
+        if (lock->l_resource->lr_type != LDLM_IBITS)
+                RETURN(0);
+
+	/* FIXME: if we ever get into a situation where there are too many
+	 * opened files with open locks on a single node, then we really
+	 * should replay these open locks to reget it */
+        if (lock->l_policy_data.l_inodebits.bits & MDS_INODELOCK_OPEN)
+                RETURN(0);
+
+        RETURN(1);
+}
+
 static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct client_obd *cli = &obd->u.cli;
@@ -1386,6 +1403,8 @@ static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
         lprocfs_mdc_init_vars(&lvars);
         if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0)
                 ptlrpc_lprocfs_register_obd(obd);
+
+        ns_register_cancel(obd->obd_namespace, mdc_cancel_for_recovery);
 
         rc = obd_llog_init(obd, obd, NULL);
         if (rc) {

@@ -4338,6 +4338,28 @@ static int osc_import_event(struct obd_device *obd,
         RETURN(rc);
 }
 
+/* determine whether the lock can be canceled before replaying the lock
+ * during recovery, see bug16774 for detailed information 
+ *
+ * return values:
+ *  zero  - the lock can't be canceled
+ *  other - ok to cancel
+ */
+static int osc_cancel_for_recovery(struct ldlm_lock *lock)
+{
+        check_res_locked(lock->l_resource);
+        if (lock->l_granted_mode == LCK_GROUP || 
+            lock->l_resource->lr_type != LDLM_EXTENT)
+                RETURN(0);
+
+        /* cancel all unused extent locks with granted mode LCK_PR or LCK_CR */
+        if (lock->l_granted_mode == LCK_PR ||
+            lock->l_granted_mode == LCK_CR)
+                RETURN(1);
+
+        RETURN(0);       
+}
+
 int osc_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         int rc;
@@ -4379,6 +4401,8 @@ int osc_setup(struct obd_device *obd, obd_count len, void *buf)
                 }
                 CFS_INIT_LIST_HEAD(&cli->cl_grant_shrink_list);
                 sema_init(&cli->cl_grant_sem, 1);
+
+                ns_register_cancel(obd->obd_namespace, osc_cancel_for_recovery);
         }
 
         RETURN(rc);
