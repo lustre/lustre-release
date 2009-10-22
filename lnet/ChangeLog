@@ -1,4 +1,4 @@
-2009-10-19 Sun Microsystems, Inc.
+TBD Sun Microsystems, Inc.
         * version 1.6.7.3
         * Support for networks:
 	 socklnd   - any kernel supported by Lustre,
@@ -12,12 +12,6 @@
 	 mxlnd     - MX 1.2.1 or later,
 	 ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
-Severity   : normal
-Bugzilla   : 20897
-Description: ksocknal_close_conn_locked connection race
-Details    : A race was possible when ksocknal_create_conn calls
-             ksocknal_close_conn_locked for already closed conn.
-	
 -------------------------------------------------------------------------------
 2009-06-05 Sun Microsystems, Inc.
         * version 1.6.7.2

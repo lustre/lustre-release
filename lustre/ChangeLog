@@ -1,3 +1,43 @@
+TBD Sun Microsystems, Inc.
+        * version 1.6.7.2
+        * Support for kernels:
+	 2.6.5-7.314 (SLES 9),
+	 2.6.9-78.0.22.EL (RHEL 4),
+	 2.6.16.60-0.37 (SLES 10),
+	 2.6.18-92.1.26.el5 (RHEL 5),
+	 2.6.22.14 vanilla (kernel.org)
+	* Client support for unpatched kernels:
+	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
+	  2.6.16 - 2.6.22 vanilla (kernel.org)
+	* Client support for unpatched kernels:
+	  we do not recommend using patchless RHEL4 clients with kernels
+	  prior to 2.6.9-55EL (RHEL4U5).
+	* Recommended e2fsprogs version: 1.40.11-sun1
+	* RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
+	  removed cwd "./" (refer to Bugzilla 14399).
+	* A new quota file format was introduced in 1.6.6 (for 2.6.16+ kernels).
+	  The format conversion from prior releases is handled transparently,
+	  but releases older than 1.6.6/1.8.0 don't understand this new
+	  format. The automatic format conversion can be avoided by running
+	  the following commands on the MDS and OSS servers (for
+	  pre 1.4.12-1.6.5 quota files):
+	  	'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV',
+		'tunefs.lustre --param="ost.quota_type=ug1" $MDTDEV'
+		or (for 1.4.12/1.6.5 quota files)
+		'tunefs.lustre --param="mdt.quota_type=ug2" $MDTDEV',
+		'tunefs.lustre --param="ost.quota_type=ug2" $MDTDEV'
+	  For more information, please refer to bugzilla 13904.
+	* Output of lfs quota has been made less detailed by default,
+	  old (verbose) output can be obtained by using -v option.
+	* File join has been disabled in this release, refer to Bugzilla
+	  16929.
+	* A new Lustre ADIO driver is available for MPICH2-1.0.7.
+	* NFS export disabled when stack size < 8192. Since the NFSv4 export of
+	  Lustre filesystem with 4K stack may cause a stack overflow. For more
+	  information, please refer to bugzilla 17630.
+
+--------------------------------------------------------------------------
+
 2009-06-05 Sun Microsystems, Inc.
         * version 1.6.7.2
         * Support for kernels:
