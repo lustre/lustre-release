@@ -14,6 +14,12 @@ tbd  Sun Microsystems, Inc.
 	 removed cwd "./" (refer to Bugzilla 14399).
        * File join has been disabled in this release, refer to Bugzilla 16929.
 
+Severity   : enhancement
+Bugzilla   : 19325
+Description: Adjust locks' extents on their first enqueue, so that at the time
+             they get granted, there is no need for another pass through the
+             queues since they are already shaped into the proper forms.
+
 Severity   : normal
 Bugzilla   : 20302
 Description: Fix in ptlrpc_expire_one_request() to print the signed time
