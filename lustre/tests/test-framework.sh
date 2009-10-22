@@ -562,13 +562,13 @@ sanity_mount_check () {
 
 # mount clients if not mouted
 zconf_mount_clients() {
-    local OPTIONS
     local clients=$1
     local mnt=$2
+    local OPTIONS=${3:-$MOUNTOPT}
 
     # Only supply -o to mount if we have options
-    if [ -n "$MOUNTOPT" ]; then
-        OPTIONS="-o $MOUNTOPT"
+    if [ "$OPTIONS" ]; then
+        OPTIONS="-o $OPTIONS"
     fi
     local device=$MGSNID:/$FSNAME
     if [ -z "$mnt" -o -z "$FSNAME" ]; then
@@ -608,7 +608,7 @@ zconf_umount_clients() {
     echo "Stopping clients: $clients $mnt (opts:$force)"
     do_nodes $clients "set -x; running=\\\$(grep -c $mnt' ' /proc/mounts);
 if [ \\\$running -ne 0 ] ; then
-echo Stopping client \\\$(hostname) client $mnt opts:$force;
+echo Stopping client \\\$(hostname) $mnt opts:$force;
 lsof -t $mnt || need_kill=no;
 if [ "x$force" != "x" -a "x\\\$need_kill" != "xno" ]; then
     pids=\\\$(lsof -t $mnt | sort -u);
