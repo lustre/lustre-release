@@ -476,17 +476,20 @@ test_parallel_grouplock() {
 }
 run_test parallel_grouplock "parallel_grouplock"
 
-
 statahead_NUMMNTPTS=${statahead_NUMMNTPTS:-5}
 statahead_NUMFILES=${statahead_NUMFILES:-500000}
 
 cleanup_statahead () {
-    local mntpt_root=$1
-    local num_mntpts=$2
-        for i in $(seq 0 $num_mntpts);do
-                zconf_umount `hostname` ${mntpt_root}$i ||
-                        error_exit "Failed to umount lustre on ${mntpt_root}$i"
-        done
+    trap 0
+
+    local clients=$1
+    local mntpt_root=$2
+    local num_mntpts=$3
+
+    for i in $(seq 0 $num_mntpts);do
+        zconf_umount_clients $clients ${mntpt_root}$i ||
+            error_exit "Failed to umount lustre on ${mntpt_root}$i"
+    done
 }
 
 test_statahead () {
@@ -521,29 +524,21 @@ test_statahead () {
     local mntpt_root=$TMP/mntpt/lustre
     mntopts=${MNTOPTSTATAHEAD:-$MOUNTOPT}
 
-    echo "Mounting $num_mntpts lustre clients starts"
-    trap "cleanup_statahead $mntpt_root $num_mntpts" EXIT ERR
+    local clients=$CLIENTS
+    [ -z $clients ] && clients=$(hostname)
+
+    echo "Mounting $num_mntpts lustre clients starts on $clients"
+    trap "cleanup_statahead $clients $mntpt_root $num_mntpts" EXIT ERR
     for i in $(seq 0 $num_mntpts);do
-        zconf_mount `hostname` ${mntpt_root}$i $mntopts ||
-            error_exit "Failed to mount lustre on ${mntpt_root}$i"
+        zconf_mount_clients $clients ${mntpt_root}$i $mntopts ||
+            error_exit "Failed to mount lustre on ${mntpt_root}$i on $clients"
     done
 
-    cancel_lru_locks mdc
+    do_rpc_nodes $clients cancel_lru_locks mdc
 
-    for i in $(seq 0 $num_mntpts); do
-        local cmd="ls -laf ${mntpt_root}$i/$dir" 
-        echo "+ $cmd"
-        $cmd > /dev/null &
-        pids="$pids $!"
-    done
+    do_rpc_nodes $clients do_ls $mntpt_root $num_mntpts $dir
 
-    echo pids=$pids
-    for pid in $pids; do
-        echo wait $pid
-        wait $pid || error "$pid"
-    done
-
-    cleanup_statahead $mntpt_root $num_mntpts
+    cleanup_statahead $clients $mntpt_root $num_mntpts
 }
 
 run_test statahead "statahead test, multiple clients"
