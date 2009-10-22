@@ -18,6 +18,12 @@ Description:
 Details    : 
 
 Severity   : normal
+Bugzilla   : 20897
+Description: ksocknal_close_conn_locked connection race
+Details    : A race was possible when ksocknal_create_conn calls
+             ksocknal_close_conn_locked for already closed conn.
+
+Severity   : normal
 Bugzilla   : 18102
 Description: router_proc.c is rewritten to use sysctl-interface for parameters
              residing in /proc/sys/lnet
