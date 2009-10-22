@@ -428,6 +428,88 @@ test_write_disjoint() {
 }
 run_test write_disjoint "write_disjoint"
 
+statahead_NUMMNTPTS=${statahead_NUMMNTPTS:-5}
+statahead_NUMFILES=${statahead_NUMFILES:-500000}
+
+cleanup_statahead () {
+    trap 0
+
+    local clients=$1
+    local mntpt_root=$2
+    local num_mntpts=$3
+
+    for i in $(seq 0 $num_mntpts);do
+        zconf_umount_clients $clients ${mntpt_root}$i ||
+            error_exit "Failed to umount lustre on ${mntpt_root}$i"
+    done
+}
+
+test_statahead () {
+   
+    # create large dir
+
+    local dir=d0.statahead
+    # FIXME has to use DIR
+    local testdir=$DIR/$dir
+
+    mkdir -p $testdir
+
+    local num_files=$statahead_NUMFILES
+
+    local IFree=$(inodes_available)
+    if [ $IFree -lt $num_files ]; then
+      num_files=$IFree
+    fi
+
+    cancel_lru_locks mdc
+
+    log "createmany -o $testdir/f-%d $num_files"
+    createmany -o $testdir/$f-%d $num_files
+
+    local rc=$?
+    if [ $rc != 0 ] ; then
+        error "createmany failed to create $rc"
+        return $rc
+    fi
+
+    local num_mntpts=$statahead_NUMMNTPTS
+    local mntpt_root=$TMP/mntpt/lustre
+    mntopts=${MNTOPTSTATAHEAD:-$MOUNTOPT}
+
+    local clients=$CLIENTS
+    [ -z $clients ] && clients=$(hostname)
+
+    echo "Mounting $num_mntpts lustre clients starts on $clients"
+    trap "cleanup_statahead $clients $mntpt_root $num_mntpts" EXIT ERR
+    for i in $(seq 0 $num_mntpts);do
+        zconf_mount_clients $clients ${mntpt_root}$i $mntopts ||
+            error_exit "Failed to mount lustre on ${mntpt_root}$i on $clients"
+    done
+
+    # cancel_lru_locks mdc
+    do_nodes $clients "lctl mark \\\"cancel_lru_locks mdc start\\\";
+for d in \\\$(lctl get_param -N ldlm.namespaces.\\\*.lru_size | egrep -i mdc); do
+lctl set_param -n \\\$d=clear;
+done;
+lctl get_param ldlm.namespaces.\\\*.lock_unused_count | egrep -i mdc | grep -v '=0';
+lctl mark \\\"cancel_lru_locks mdc stop\\\"; "
+
+    do_nodes $clients " for i in \\\$(seq 0 $num_mntpts); do
+cmd=\\\"ls -laf ${mntpt_root}\\\$i/$dir\\\";
+echo + \\\$cmd;
+\\\$cmd > /dev/null &
+pids=\\\"\\\$pids \\\$!\\\";
+done;
+echo pids=\\\$pids;
+for pid in \\\$pids; do
+    echo wait \\\$pid;
+    wait \\\$pid || exit \\\$?;
+done"
+
+    cleanup_statahead $clients $mntpt_root $num_mntpts
+}
+run_test statahead "statahead test, multiple clients"
+
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre
-[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG || true
+[ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

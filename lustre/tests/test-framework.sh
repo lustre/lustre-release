@@ -408,13 +408,13 @@ zconf_umount() {
 
 # mount clients if not mouted
 zconf_mount_clients() {
-    local OPTIONS
     local clients=$1
     local mnt=$2
+    local OPTIONS=${3:-$MOUNTOPT}
 
     # Only supply -o to mount if we have options
-    if [ -n "$MOUNTOPT" ]; then
-        OPTIONS="-o $MOUNTOPT"
+    if [ "$OPTIONS" ]; then
+        OPTIONS="-o $OPTIONS"
     fi
     local device=$MGSNID:/$FSNAME
     if [ -z "$mnt" -o -z "$FSNAME" ]; then
@@ -443,14 +443,14 @@ zconf_umount_clients() {
     [ "$3" ] && force=-f
 
     echo "Stopping clients: $clients $mnt (opts:$force)"
-    do_nodes $clients "set -x; running=\\\$(grep -c $mnt' ' /proc/mounts)
+    do_nodes $clients "set -x; running=\\\$(grep -c $mnt' ' /proc/mounts);
 if [ \\\$running -ne 0 ] ; then
-echo Stopping client \\\$(hostname) client $mnt opts:$force
-lsof -t $mnt || need_kill=no
+echo Stopping client \\\$(hostname) $mnt opts:$force;
+lsof -t $mnt || need_kill=no;
 if [ "x$force" != "x" -a "x\\\$need_kill" != "xno" ]; then
     pids=\\\$(lsof -t $mnt | sort -u);
     if [ -n \\\$pids ]; then
-             kill -9 \\\$pids
+             kill -9 \\\$pids;
     fi
 fi
 busy=\\\$(umount $force $mnt 2>&1 | grep -c "busy")
