@@ -374,6 +374,10 @@ static void do_requeue(struct config_llog_data *cld)
 {
         LASSERT(atomic_read(&cld->cld_refcount) > 0);
 
+        /* Do not run mgc_process_log on a disconnected export or an
+           export which is being disconnected. Take the client
+           semaphore to make the check non-racy. */
+        down_read(&cld->cld_mgcexp->exp_obd->u.cli.cl_sem);
         if (cld->cld_mgcexp->exp_obd->u.cli.cl_conn_count != 0) {
                 CDEBUG(D_MGC, "updating log %s\n", cld->cld_logname);
                 mgc_process_log(cld->cld_mgcexp->exp_obd, cld);
@@ -381,6 +385,7 @@ static void do_requeue(struct config_llog_data *cld)
                 CDEBUG(D_MGC, "disconnecting, won't update log %s\n",
                        cld->cld_logname);
         }
+        up_read(&cld->cld_mgcexp->exp_obd->u.cli.cl_sem);
 
         /* Whether we enqueued again or not in mgc_process_log, we're done
          * with the ref from the old enqueue */
