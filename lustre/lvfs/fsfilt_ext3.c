@@ -2096,7 +2096,7 @@ static int fsfilt_ext3_quotainfo(struct lustre_quota_info *lqi, int type,
 
         if (lqi->qi_files[type] == NULL) {
                 CERROR("operate qinfo before it's enabled!\n");
-                RETURN(-EIO);
+                RETURN(-ESRCH);
         }
 
         switch (cmd) {
@@ -2139,7 +2139,7 @@ static int fsfilt_ext3_dquot(struct lustre_dquot *dquot, int cmd)
 
         if (dquot->dq_info->qi_files[dquot->dq_type] == NULL) {
                 CERROR("operate dquot before it's enabled!\n");
-                RETURN(-EIO);
+                RETURN(-ESRCH);
         }
 
         switch (cmd) {

@@ -461,6 +461,13 @@ static int quota_chk_acq_common(struct obd_device *obd, const unsigned int id[],
                         break;
                 }
 
+                /* Related quota has been disabled by master, but enabled by
+                 * slave, do not try again. */
+                if (unlikely(rc == -ESRCH)) {
+                        CERROR("mismatched quota configuration, stop try.\n");
+                        break;
+                }
+
                 /* -EBUSY and others, wait a second and try again */
                 if (rc < 0) {
                         cfs_waitq_t        waitq;

@@ -15,6 +15,7 @@ export GSS=false
 export GSS_KRB5=false
 export GSS_PIPEFS=false
 export IDENTITY_UPCALL=default
+export QUOTA_AUTO=1
 
 #export PDSH="pdsh -S -Rssh -w"
 
@@ -545,9 +546,7 @@ restore_quota_type () {
 setup_quota(){
     local mntpt=$1
 
-    # We need:
-    # 1. run quotacheck only if quota is off
-    # 2. save the original quota_type params, restore them after testing
+    # We need save the original quota_type params, and restore them after testing
 
     # Suppose that quota type the same on mds and ost
     local quota_type=$(quota_type | grep MDT | cut -d "=" -f2)
@@ -556,6 +555,9 @@ setup_quota(){
     if [ "$quota_type" != "$QUOTA_TYPE" ]; then
         export old_QUOTA_TYPE=$quota_type
         quota_save_version $QUOTA_TYPE
+    else
+        qtype=$(tr -c -d "ug" <<< $QUOTA_TYPE)
+        $LFS quotacheck -$qtype $mntpt || error "quotacheck has failed for $type"
     fi
 
     local quota_usrs=$QUOTA_USERS
@@ -1826,9 +1828,16 @@ init_param_vars () {
 
     if [ x"$(som_check)" = x"enabled" ]; then
         ENABLE_QUOTA=""
+        echo "disable quota temporary when SOM enabled"
     fi
-    if [ "$ENABLE_QUOTA" ]; then
-        setup_quota $MOUNT  || return 2
+    if [ $QUOTA_AUTO -ne 0 ]; then
+        if [ "$ENABLE_QUOTA" ]; then
+            echo "enable quota as required"
+            setup_quota $MOUNT || return 2
+        else
+            echo "disable quota as required"
+            $LFS quotaoff -ug $MOUNT > /dev/null 2>&1
+        fi
     fi
 }
 
