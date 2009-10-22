@@ -49,6 +49,7 @@
 # include <linux/mm.h>
 # include <linux/vmalloc.h>
 # include <linux/pagemap.h>
+# include <linux/pagevec.h>
 # include <linux/slab.h>
 # ifdef HAVE_MM_INLINE
 #  include <linux/mm_inline.h>
