@@ -499,9 +499,9 @@ test_20c() { # bug 10480
     df -P $DIR || df -P $DIR || true    # reconnect
 
     kill -USR1 $pid
-    test -s $DIR/$tfile || error "File was truncated"
-
     wait $pid || return 1
+    [ -s $DIR/$tfile ] || error "File was truncated"
+
     return 0
 }
 run_test 20c "check that client eviction does not affect file content"
