@@ -38,7 +38,7 @@ Index: linux-2.6.18.8/fs/jbd/commit.c
  	int barrier_done = 0;
  
  	if (is_journal_aborted(journal))
-@@ -119,21 +124,35 @@ static int journal_write_commit_record(j
+@@ -119,21 +124,34 @@ static int journal_write_commit_record(j
  
  	bh = jh2bh(descriptor);
  
@@ -63,7 +63,6 @@ Index: linux-2.6.18.8/fs/jbd/commit.c
 -	JBUFFER_TRACE(descriptor, "write commit block");
 +	JBUFFER_TRACE(descriptor, "submit commit block");
 +	lock_buffer(bh);
-+	get_bh(bh);
 +
  	set_buffer_dirty(bh);
 -	if (journal->j_flags & JFS_BARRIER) {
