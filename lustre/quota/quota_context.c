@@ -830,6 +830,10 @@ static int dqacq_interpret(const struct lu_env *env,
                 rc = -EPROTO;
         }
 
+        if (unlikely(rc == -ESRCH))
+                CERROR("quota for %s has been enabled by master, but disabled "
+                       "by slave.\n", QDATA_IS_GRP(qdata) ? "group" : "user");
+
         rc = dqacq_completion(obd, qctxt, qdata, rc,
                               lustre_msg_get_opc(req->rq_reqmsg));
 
@@ -1590,7 +1594,7 @@ lqs_put(struct hlist_node *hnode)
                 hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
         ENTRY;
 
-        __lqs_putref(q, 0);
+        __lqs_putref(q);
 
         RETURN(q);
 }

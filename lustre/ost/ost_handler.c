@@ -770,7 +770,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         do {
                                 long timeoutl = req->rq_deadline -
                                         cfs_time_current_sec();
-                                cfs_duration_t timeout = (timeoutl <= 0 || rc) ?
+                                cfs_duration_t timeout = timeoutl <= 0 ?
                                         CFS_TICK : cfs_time_seconds(timeoutl);
                                 lwi = LWI_TIMEOUT_INTERVAL(timeout,
                                                            cfs_time_seconds(1),
@@ -1016,7 +1016,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 do {
                         long timeoutl = req->rq_deadline -
                                 cfs_time_current_sec();
-                        cfs_duration_t timeout = (timeoutl <= 0 || rc) ?
+                        cfs_duration_t timeout = timeoutl <= 0 ?
                                 CFS_TICK : cfs_time_seconds(timeoutl);
                         lwi = LWI_TIMEOUT_INTERVAL(timeout, cfs_time_seconds(1),
                                                    ost_bulk_timeout, desc);

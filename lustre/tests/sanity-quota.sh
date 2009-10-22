@@ -52,8 +52,6 @@ DIRECTIO=${DIRECTIO:-$LUSTRE/tests/directio}
 
 [ $MDSCOUNT -gt 1 ] && skip "CMD case" && exit 0
 
-unset ENABLE_QUOTA
-
 remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
 
@@ -66,11 +64,15 @@ QUOTALOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 DIR=${DIR:-$MOUNT}
 DIR2=${DIR2:-$MOUNT2}
 
+QUOTA_AUTO_OLD=$QUOTA_AUTO
+export QUOTA_AUTO=0
+
 check_and_setup_lustre
 
 if [ x"$(som_check)" = x"enabled" ]; then
         echo "Som is enabled, Quota is temporary conflicts with it"
         check_and_cleanup_lustre
+        export QUOTA_AUTO=$QUOTA_AUTO_OLD
         exit 0
 fi
 
@@ -2134,5 +2136,6 @@ log "cleanup: ======================================================"
 cd $ORIG_PWD
 check_and_cleanup_lustre
 echo '=========================== finished ==============================='
+export QUOTA_AUTO=$QUOTA_AUTO_OLD
 [ -f "$QUOTALOG" ] && cat $QUOTALOG && grep -q FAIL $QUOTALOG && exit 1 || true
 echo "$0: completed"

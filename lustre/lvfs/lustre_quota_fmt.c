@@ -843,7 +843,7 @@ int lustre_read_dquot(struct lustre_dquot *dquot)
         /* Invalidated quota? */
         if (!dquot->dq_info || !(filp = dquot->dq_info->qi_files[type])) {
                 CDEBUG(D_ERROR, "VFS: Quota invalidated while reading!\n");
-                return -EIO;
+                return -ESRCH;
         }
 
         version = dquot->dq_info->qi_version;

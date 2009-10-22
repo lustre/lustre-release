@@ -344,7 +344,7 @@ static int lovsub_lock_delete_one(const struct lu_env *env,
         case CLS_FREEING:
                 cl_lock_signal(env, parent);
                 break;
-        case CLS_UNLOCKING:
+        case CLS_INTRANSIT:
                 /*
                  * Here lies a problem: a sub-lock is canceled while top-lock
                  * is being unlocked. Top-lock cannot be moved into CLS_NEW
@@ -356,13 +356,14 @@ static int lovsub_lock_delete_one(const struct lu_env *env,
                  * to be reused immediately). Nor can we wait for top-lock
                  * state to change, because this can be synchronous to the
                  * current thread.
-                         *
+                 *
                  * We know for sure that lov_lock_unuse() will be called at
                  * least one more time to finish un-using, so leave a mark on
                  * the top-lock, that will be seen by the next call to
                  * lov_lock_unuse().
                  */
-                lov->lls_unuse_race = 1;
+                if (cl_lock_is_intransit(parent))
+                        lov->lls_cancel_race = 1;
                 break;
         case CLS_CACHED:
                 /*
