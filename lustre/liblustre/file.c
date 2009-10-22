@@ -237,14 +237,9 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
         fd = lli->lli_file_data;
 
         lsm = lli->lli_smd;
-        if (lsm == NULL) {
-                if (fd->fd_flags & O_LOV_DELAY_CREATE) {
-                        CDEBUG(D_INODE, "object creation was delayed\n");
-                        GOTO(out_release, rc);
-                }
-        }
-        fd->fd_flags &= ~O_LOV_DELAY_CREATE;
-
+        if (lsm)
+                flags &= ~O_LOV_DELAY_CREATE;
+        /*XXX: open_flags are overwritten and the previous ones are lost */
         lli->lli_open_flags = flags & ~(O_CREAT | O_EXCL | O_TRUNC);
 
  out_release:
@@ -397,7 +392,7 @@ int llu_md_close(struct obd_export *md_exp, struct inode *inode)
         op_data.op_attr.ia_valid = ATTR_MODE | ATTR_ATIME_SET |
                                 ATTR_MTIME_SET | ATTR_CTIME_SET;
 
-        if (fd->fd_flags & FMODE_WRITE) {
+        if (lli->lli_open_flags & FMODE_WRITE) {
                 struct llu_sb_info *sbi = llu_i2sbi(inode);
                 if (!(sbi->ll_lco.lco_flags & OBD_CONNECT_SOM) ||
                     !S_ISREG(llu_i2stat(inode)->st_mode)) {
@@ -431,7 +426,7 @@ int llu_md_close(struct obd_export *md_exp, struct inode *inode)
         if (rc == -EAGAIN) {
                 /* We are the last writer, so the MDS has instructed us to get
                  * the file size and any write cookies, then close again. */
-                LASSERT(fd->fd_flags & FMODE_WRITE);
+                LASSERT(lli->lli_open_flags & FMODE_WRITE);
                 rc = llu_sizeonmds_update(inode, &och->och_fh,
                                           op_data.op_ioepoch);
                 if (rc) {
