@@ -381,33 +381,20 @@ static inline void lqs_getref(struct lustre_qunit_size *lqs)
         __lqs_getref(lqs);
 }
 
-static inline void __lqs_putref(struct lustre_qunit_size *lqs, int del)
+static inline void __lqs_putref(struct lustre_qunit_size *lqs)
 {
-        int count = atomic_read(&lqs->lqs_refcount);
+        LASSERT(atomic_read(&lqs->lqs_refcount) > 0);
 
-        LASSERT(count > 0);
-        if (count == 1) {
-                CDEBUG(D_QUOTA, "lqs=%p refcount to be 0\n", lqs);
-                if (del) {
-                        /* killing last ref, let's let hash table kill it */
-                        lustre_hash_del(lqs->lqs_ctxt->lqc_lqs_hash,
-                                        &lqs->lqs_key, &lqs->lqs_hash);
-                        OBD_FREE_PTR(lqs);
-                } else {
-                        atomic_dec(&lqs->lqs_refcount);
-                }
-        } else {
-                count = atomic_dec_return(&lqs->lqs_refcount);
-                if (count == 1)
-                        if (atomic_dec_and_test(&lqs->lqs_ctxt->lqc_lqs))
-                                cfs_waitq_signal(&lqs->lqs_ctxt->lqc_lqs_waitq);
-                CDEBUG(D_QUOTA, "lqs=%p refcount %d\n", lqs, count);
-        }
+        if (atomic_dec_return(&lqs->lqs_refcount) == 1)
+                if (atomic_dec_and_test(&lqs->lqs_ctxt->lqc_lqs))
+                        cfs_waitq_signal(&lqs->lqs_ctxt->lqc_lqs_waitq);
+        CDEBUG(D_QUOTA, "lqs=%p refcount %d\n",
+               lqs, atomic_read(&lqs->lqs_refcount));
 }
 
 static inline void lqs_putref(struct lustre_qunit_size *lqs)
 {
-        __lqs_putref(lqs, 1);
+        __lqs_putref(lqs);
 }
 
 static inline void lqs_initref(struct lustre_qunit_size *lqs)

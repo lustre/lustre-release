@@ -1594,7 +1594,7 @@ lqs_put(struct hlist_node *hnode)
                 hlist_entry(hnode, struct lustre_qunit_size, lqs_hash);
         ENTRY;
 
-        __lqs_putref(q, 0);
+        __lqs_putref(q);
 
         RETURN(q);
 }
