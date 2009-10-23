@@ -504,7 +504,7 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags)
                         cleanup_resource(res, &res->lr_waiting, flags);
 
                         spin_lock(&ns->ns_hash_lock);
-                        tmp  = tmp->next;
+                        tmp = tmp->next;
 
                         /* XXX: former stuff caused issues in case of race
                          * between ldlm_namespace_cleanup() and lockd() when
@@ -512,11 +512,16 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags)
                          * server. This is 1_4 branch solution, let's see how
                          * will it behave. */
                         LDLM_RESOURCE_DELREF(res);
-                        if (!ldlm_resource_putref_locked(res))
-                                CDEBUG(D_INFO,
-                                       "Namespace %s resource refcount nonzero "
+                        if (!ldlm_resource_putref_locked(res)) {
+                                CERROR("Namespace %s resource refcount nonzero "
                                        "(%d) after lock cleanup; forcing cleanup.\n",
                                        ns->ns_name, atomic_read(&res->lr_refcount));
+                                CERROR("Resource: %p ("LPU64"/"LPU64"/"LPU64"/"
+                                       LPU64") (rc: %d)\n", res,
+                                       res->lr_name.name[0], res->lr_name.name[1],
+                                       res->lr_name.name[2], res->lr_name.name[3],
+                                       atomic_read(&res->lr_refcount));
+                        }
                 }
                 spin_unlock(&ns->ns_hash_lock);
         }
