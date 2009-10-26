@@ -642,7 +642,11 @@ int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);
 int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
 struct ll_file_data *ll_file_data_get(void);
+#ifndef HAVE_INODE_PERMISION_2ARGS
 int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd);
+#else
+int ll_inode_permission(struct inode *inode, int mask);
+#endif
 int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
                              int flags, struct lov_user_md *lum,
                              int lum_size);
@@ -729,9 +733,6 @@ void ll_finish_md_op_data(struct md_op_data *op_data);
 /* llite/llite_nfs.c */
 extern struct export_operations lustre_export_operations;
 __u32 get_uuid2int(const char *name, int len);
-struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,
-                               int fhtype, int parent);
-int ll_dentry_to_fh(struct dentry *, __u32 *datap, int *lenp, int need_parent);
 
 /* llite/special.c */
 extern struct inode_operations ll_special_inode_operations;
@@ -754,36 +755,36 @@ struct ll_close_queue {
         atomic_t                lcq_stop;
 };
 
-struct vvp_thread_info {
-        struct ost_lvb       vti_lvb;
-        struct cl_2queue     vti_queue;
-        struct iovec         vti_local_iov;
-        struct ccc_io_args   vti_args;
-        struct ra_io_arg     vti_ria;
-        struct kiocb         vti_kiocb;
-};
-
 struct ccc_object *cl_inode2ccc(struct inode *inode);
 
-static inline struct vvp_thread_info *vvp_env_info(const struct lu_env *env)
-{
-        extern struct lu_context_key vvp_key;
-        struct vvp_thread_info      *info;
-
-        info = lu_context_key_get(&env->le_ctx, &vvp_key);
-        LASSERT(info != NULL);
-        return info;
-}
 
 void vvp_write_pending (struct ccc_object *club, struct ccc_page *page);
 void vvp_write_complete(struct ccc_object *club, struct ccc_page *page);
 
+/* specific achitecture can implement only part of this list */
+enum vvp_io_subtype {
+        /** normal IO */
+        IO_NORMAL,
+        /** io called from .sendfile */
+        IO_SENDFILE,
+        /** io started from splice_{read|write} */
+        IO_SPLICE
+};
+
+/* IO subtypes */
 struct vvp_io {
+        /** io subtype */
+        enum vvp_io_subtype    cui_io_subtype;
+
         union {
                 struct {
                         read_actor_t      cui_actor;
                         void             *cui_target;
-                } read;
+                } sendfile;
+                struct {
+                        struct pipe_inode_info *cui_pipe;
+                        unsigned int            cui_flags;
+                } splice;
                 struct vvp_fault_io {
                         /**
                          * Inode modification time that is checked across DLM
@@ -792,13 +793,33 @@ struct vvp_io {
                         time_t                 ft_mtime;
                         struct vm_area_struct *ft_vma;
                         /**
-                         * Virtual address at which fault occurred.
+                         *  locked page returned from vvp_io
                          */
-                        unsigned long          ft_address;
-                        /**
-                         * Fault type, as to be supplied to filemap_nopage().
-                         */
-                        int                   *ft_type;
+                        cfs_page_t            *ft_vmpage;
+#ifndef HAVE_VM_OP_FAULT
+                        struct vm_nopage_api {
+                                /**
+                                 * Virtual address at which fault occurred.
+                                 */
+                                unsigned long   ft_address;
+                                /**
+                                 * Fault type, as to be supplied to
+                                 * filemap_nopage().
+                                 */
+                                int             *ft_type;
+                        } nopage;
+#else
+                        struct vm_fault_api {
+                                /**
+                                 * kernel fault info
+                                 */
+                                struct vm_fault *ft_vmf;
+                                /**
+                                 * fault API used bitflags for return code.
+                                 */
+                                unsigned int    ft_flags;
+                        } fault;
+#endif
                 } fault;
         } u;
         /**
@@ -824,6 +845,61 @@ struct vvp_io {
          */
         struct cl_page      *cui_partpage;
 };
+
+/**
+ * IO arguments for various VFS I/O interfaces.
+ */
+struct vvp_io_args {
+        /** normal/sendfile/splice */
+        enum vvp_io_subtype via_io_subtype;
+
+        union {
+                struct {
+#ifndef HAVE_FILE_WRITEV
+                        struct kiocb      *via_iocb;
+#endif
+                        struct iovec      *via_iov;
+                        unsigned long      via_nrsegs;
+                } normal;
+                struct {
+                        read_actor_t       via_actor;
+                        void              *via_target;
+                } sendfile;
+                struct {
+                        struct pipe_inode_info  *via_pipe;
+                        unsigned int       via_flags;
+                } splice;
+        } u;
+};
+
+struct vvp_thread_info {
+        struct ost_lvb       vti_lvb;
+        struct cl_2queue     vti_queue;
+        struct iovec         vti_local_iov;
+        struct vvp_io_args   vti_args;
+        struct ra_io_arg     vti_ria;
+        struct kiocb         vti_kiocb;
+};
+
+static inline struct vvp_thread_info *vvp_env_info(const struct lu_env *env)
+{
+        extern struct lu_context_key vvp_key;
+        struct vvp_thread_info      *info;
+
+        info = lu_context_key_get(&env->le_ctx, &vvp_key);
+        LASSERT(info != NULL);
+        return info;
+}
+
+static inline struct vvp_io_args *vvp_env_args(const struct lu_env *env,
+                                               enum vvp_io_subtype type)
+{
+        struct vvp_io_args *ret = &vvp_env_info(env)->vti_args;
+
+        ret->via_io_subtype = type;
+
+        return ret;
+}
 
 struct vvp_session {
         struct vvp_io vs_ios;

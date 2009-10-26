@@ -898,51 +898,6 @@ AC_SUBST(RALND)
 ])
 
 
-#
-# LN_FUNC_DUMP_TRACE
-#
-# 2.6.23 exports dump_trace() so we can dump_stack() on any task
-# 2.6.24 has stacktrace_ops.address with "reliable" parameter
-#
-AC_DEFUN([LN_FUNC_DUMP_TRACE],
-[LB_CHECK_SYMBOL_EXPORT([dump_trace],
-[kernel/ksyms.c arch/${LINUX_ARCH%_64}/kernel/traps_64.c],[
-	tmp_flags="$EXTRA_KCFLAGS"
-	EXTRA_KCFLAGS="-Werror"
-	AC_MSG_CHECKING([whether we can really use dump_stack])
-	LB_LINUX_TRY_COMPILE([
-		struct task_struct;
-		struct pt_regs;
-		#include <asm/stacktrace.h>
-	],[
-	],[
-		AC_MSG_RESULT(yes)
-		AC_DEFINE(HAVE_DUMP_TRACE, 1, [dump_trace is exported])
-	],[
-		AC_MSG_RESULT(no)
-	],[
-	])
-	AC_MSG_CHECKING([whether print_trace_address has reliable argument])
-	LB_LINUX_TRY_COMPILE([
-		struct task_struct;
-		struct pt_regs;
-		void print_addr(void *data, unsigned long addr, int reliable);
-		#include <asm/stacktrace.h>
-	],[
-		struct stacktrace_ops ops;
-
-		ops.address = print_addr;
-	],[
-		AC_MSG_RESULT(yes)
-		AC_DEFINE(HAVE_TRACE_ADDRESS_RELIABLE, 1,
-			  [print_trace_address has reliable argument])
-	],[
-		AC_MSG_RESULT(no)
-	],[
-	])
-EXTRA_KCFLAGS="$tmp_flags"
-])
-])
 
 #
 #
@@ -974,7 +929,6 @@ LN_CONFIG_O2IB
 LN_CONFIG_RALND
 LN_CONFIG_PTLLND
 LN_CONFIG_MX
-LN_FUNC_DUMP_TRACE
 ])
 
 #

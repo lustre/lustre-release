@@ -57,14 +57,6 @@
 
 #include <libcfs/libcfs.h>
 
-/* OFED backport #defines netlink_kernel_create with 6 args.
-   I haven't a clue why that header file gets included here,
-   but we must undo its mischief. */
-#ifdef BACKPORT_LINUX_NETLINK_H
-#undef netlink_kernel_create
-#endif
-
-
 /* Single Netlink Message type to send all Lustre messages */
 #define LNL_MSG 26
 
@@ -90,8 +82,15 @@ int libcfs_klnl_start(int transport)
         if (atomic_inc_return(&lnl_start_count) > 1)
                 GOTO(out, rc = 0);
 
-        lnl_socket = netlink_kernel_create(LNL_SOCKET, LNL_GRP_CNT,
+        lnl_socket = netlink_kernel_create(
+#ifdef HAVE_NETLINK_NS
+                                           DEFAULT_NET,
+#endif
+                                           LNL_SOCKET, LNL_GRP_CNT,
                                            NULL /* incoming cb */,
+#ifdef HAVE_NETLINK_CBMUTEX
+                                           NULL,
+#endif
                                            THIS_MODULE);
         if (lnl_socket == NULL) {
                 CERROR("Cannot open socket %d\n", LNL_SOCKET);
@@ -205,7 +204,11 @@ int libcfs_klnl_msg_put(int pid, int group, void *payload)
                 if (rc > 0)
                         rc = 0;
         } else {
+#ifdef HAVE_NLMSG_MULTICAST_5ARGS
+                rc = nlmsg_multicast(lnl_socket, skb, 0, group, GFP_KERNEL);
+#else
                 rc = nlmsg_multicast(lnl_socket, skb, 0, group);
+#endif
         }
 
         CDEBUG(0, "Sent message pid=%d, group=%d, rc=%d\n", pid, group, rc);

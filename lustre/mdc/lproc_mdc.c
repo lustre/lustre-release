@@ -151,16 +151,14 @@ static int lproc_mdc_wr_changelog(struct file *file, const char *buffer,
         struct changelog_show cs = {};
         int rc;
 
-        CDEBUG(D_CHANGELOG, "file pid %d\n", file->f_owner.pid);
-
         if (count != sizeof(cs))
                 return -EINVAL;
 
         if (copy_from_user(&cs, buffer, sizeof(cs)))
                 return -EFAULT;
 
-        CDEBUG(D_CHANGELOG, "changelog to pid=%d(%d) start "LPU64"\n",
-               cs.cs_pid, file->f_owner.pid, cs.cs_startrec);
+        CDEBUG(D_CHANGELOG, "changelog to pid=%d start "LPU64"\n",
+               cs.cs_pid, cs.cs_startrec);
 
         /* Set up the remote catalog handle */
         ctxt = llog_get_context(obd, LLOG_CHANGELOG_REPL_CTXT);

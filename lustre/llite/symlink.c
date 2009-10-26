@@ -172,7 +172,7 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry,
                 ll_inode_size_unlock(inode, 0);
         }
         if (rc) {
-                path_release(nd); /* Kernel assumes that ->follow_link()
+                cfs_path_put(nd); /* Kernel assumes that ->follow_link()
                                      releases nameidata on error */
                 GOTO(out, rc);
         }

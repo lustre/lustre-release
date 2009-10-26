@@ -48,20 +48,6 @@ int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
                     struct inode *inode, struct cl_object *clob);
 
 /**
- * Common IO arguments for various VFS I/O interfaces.
- */
-struct ccc_io_args {
-        int           cia_is_sendfile;
-#ifndef HAVE_FILE_WRITEV
-        struct kiocb *cia_iocb;
-#endif
-        struct iovec *cia_iov;
-        unsigned long cia_nrsegs;
-        read_actor_t  cia_actor;
-        void         *cia_target;
-};
-
-/**
  * Locking policy for truncate.
  */
 enum ccc_trunc_lock_type {
@@ -72,6 +58,7 @@ enum ccc_trunc_lock_type {
         /** Existing local extent lock is used */
         TRUNC_MATCH
 };
+
 
 /**
  * IO state private to vvp or slp layers.
@@ -116,6 +103,12 @@ struct ccc_io {
         struct kiocb *cui_iocb;
 #endif
 };
+
+/**
+ * True, if \a io is a normal io, False for other (sendfile, splice*).
+ * must be impementated in arch specific code.
+ */
+int cl_is_normalio(const struct lu_env *env, const struct cl_io *io);
 
 extern struct lu_context_key ccc_key;
 extern struct lu_context_key ccc_session_key;
@@ -371,8 +364,8 @@ void cl_inode_fini(struct inode *inode);
 int cl_local_size(struct inode *inode);
 
 __u16 ll_dirent_type_get(struct lu_dirent *ent);
-ino_t cl_fid_build_ino(struct lu_fid *fid);
-__u32 cl_fid_build_gen(struct lu_fid *fid);
+ino_t cl_fid_build_ino(const struct lu_fid *fid);
+__u32 cl_fid_build_gen(const struct lu_fid *fid);
 
 #ifdef INVARIANT_CHECK
 # define CLOBINVRNT(env, clob, expr)                                    \

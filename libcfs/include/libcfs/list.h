@@ -445,6 +445,11 @@ static inline void hlist_add_after(struct hlist_node *n,
 	     prefetch(pos->member.next))
 #endif /* list_for_each_entry */
 
+#ifndef list_for_each_entry_rcu
+#define list_for_each_entry_rcu(pos, head, member) \
+	list_for_each_entry(pos, head, member)
+#endif
+
 #ifndef list_for_each_entry_reverse
 /**
  * Iterate backwards over a list of given type.

@@ -1031,7 +1031,7 @@ int sptlrpc_target_local_copy_conf(struct obd_device *obd,
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-        dentry = lookup_one_len(MOUNT_CONFIGS_DIR, current->fs->pwd,
+        dentry = lookup_one_len(MOUNT_CONFIGS_DIR, cfs_fs_pwd(current->fs),
                                 strlen(MOUNT_CONFIGS_DIR));
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);

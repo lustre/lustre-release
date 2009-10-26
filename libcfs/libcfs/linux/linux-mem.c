@@ -156,6 +156,7 @@ cfs_mem_cache_free(cfs_mem_cache_t *cachep, void *objp)
  */
 int cfs_mem_is_in_cache(const void *addr, const cfs_mem_cache_t *kmem)
 {
+#ifdef CONFIG_SLAB
         struct page *page;
 
         /*
@@ -166,6 +167,9 @@ int cfs_mem_is_in_cache(const void *addr, const cfs_mem_cache_t *kmem)
         if (unlikely(PageCompound(page)))
                 page = (struct page *)page->private;
         return PageSlab(page) && ((void *)page->lru.next) == kmem;
+#else
+        return 1;
+#endif
 }
 EXPORT_SYMBOL(cfs_mem_is_in_cache);
 

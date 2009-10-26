@@ -487,6 +487,7 @@ static void llu_free_user_page(struct page *page)
         OBD_FREE_PTR(page);
 }
 
+
 static int llu_queue_pio(const struct lu_env *env, struct cl_io *io,
                          struct llu_io_group *group,
                          char *buf, size_t count, loff_t pos)
@@ -607,6 +608,14 @@ static int max_io_pages(ssize_t len, int iovlen)
 void put_io_group(struct llu_io_group *group)
 {
         OBD_FREE_PTR(group);
+}
+
+/**
+ * True, if \a io is a normal io, False for sendfile() / splice_{read|write}
+ */
+int cl_is_normalio(const struct lu_env *env, const struct cl_io *io)
+{
+        return 1;
 }
 
 static int slp_io_start(const struct lu_env *env, const struct cl_io_slice *ios)

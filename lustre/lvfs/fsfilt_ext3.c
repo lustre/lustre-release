@@ -57,8 +57,16 @@
 #include <linux/version.h>
 #include <linux/bitops.h>
 #include <linux/quota.h>
-#include <linux/quotaio_v1.h>
-#include <linux/quotaio_v2.h>
+#ifdef HAVE_QUOTAIO_V1_H
+# include <linux/quotaio_v1.h>
+# include <linux/quotaio_v2.h>
+#else
+# include <quotaio_v1.h>
+# include <quotaio_v2.h>
+# include <quota_tree.h>
+# define V2_DQTREEOFF    QT_TREEOFF
+#endif
+
 #if defined(HAVE_EXT3_XATTR_H)
 #include <ext3/xattr.h>
 #else
@@ -408,7 +416,7 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso,
         /* We assume that there will be 1 bit set in s_dquot.flags for each
          * quota file that is active.  This is at least true for now.
          */
-        needed += hweight32(sb_any_quota_enabled(sb)) *
+        needed += hweight32(ll_sb_any_quota_active(sb)) *
                 FSFILT_SINGLEDATA_TRANS_BLOCKS(sb);
 #endif
 
@@ -1487,15 +1495,10 @@ static int fsfilt_ext3_quotactl(struct super_block *sb,
 
                                 LASSERT(oqc->qc_id == LUSTRE_QUOTA_V2);
 
-                                if (!qcop->quota_on)
-                                        GOTO(out, rc = -ENOSYS);
-
-                                rc = qcop->quota_on(sb, i, QFMT_VFS_V0,
-                                                    name[i]);
+                                rc = ll_quota_on(sb, i, QFMT_VFS_V0,
+                                                 name[i], 0);
                         } else if (oqc->qc_cmd == Q_QUOTAOFF) {
-                                if (!qcop->quota_off)
-                                        GOTO(out, rc = -ENOSYS);
-                                rc = qcop->quota_off(sb, i);
+                                rc = ll_quota_off(sb, i, 0);
                         }
 
                         if (rc == -EBUSY)

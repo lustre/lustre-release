@@ -568,7 +568,7 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
         obd->obd_lvfs_ctxt.fs = get_ds();
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        dentry = lookup_one_len(MOUNT_CONFIGS_DIR, current->fs->pwd,
+        dentry = lookup_one_len(MOUNT_CONFIGS_DIR, cfs_fs_pwd(current->fs),
                                 strlen(MOUNT_CONFIGS_DIR));
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (IS_ERR(dentry)) {

@@ -799,7 +799,7 @@ void ll_io_init(struct cl_io *io, const struct file *file, int write)
 }
 
 static ssize_t ll_file_io_generic(const struct lu_env *env,
-                struct ccc_io_args *args, struct file *file,
+                struct vvp_io_args *args, struct file *file,
                 enum cl_io_type iot, loff_t *ppos, size_t count)
 {
         struct cl_io       *io;
@@ -809,27 +809,39 @@ static ssize_t ll_file_io_generic(const struct lu_env *env,
         io = &ccc_env_info(env)->cti_io;
         ll_io_init(io, file, iot == CIT_WRITE);
 
-        if (iot == CIT_READ)
-                io->u.ci_rd.rd_is_sendfile = args->cia_is_sendfile;
-
         if (cl_io_rw_init(env, io, iot, *ppos, count) == 0) {
                 struct vvp_io *vio = vvp_env_io(env);
                 struct ccc_io *cio = ccc_env_io(env);
-                if (cl_io_is_sendfile(io)) {
-                        vio->u.read.cui_actor = args->cia_actor;
-                        vio->u.read.cui_target = args->cia_target;
-                } else {
-                        cio->cui_iov = args->cia_iov;
-                        cio->cui_nrsegs = args->cia_nrsegs;
+
+                vio->cui_io_subtype = args->via_io_subtype;
+
+                switch (vio->cui_io_subtype) {
+                case IO_NORMAL:
+                        cio->cui_iov = args->u.normal.via_iov;
+                        cio->cui_nrsegs = args->u.normal.via_nrsegs;
 #ifndef HAVE_FILE_WRITEV
-                        cio->cui_iocb = args->cia_iocb;
+                        cio->cui_iocb = args->u.normal.via_iocb;
 #endif
+                        break;
+                case IO_SENDFILE:
+                        vio->u.sendfile.cui_actor = args->u.sendfile.via_actor;
+                        vio->u.sendfile.cui_target = args->u.sendfile.via_target;
+                        break;
+                case IO_SPLICE:
+                        vio->u.splice.cui_pipe = args->u.splice.via_pipe;
+                        vio->u.splice.cui_flags = args->u.splice.via_flags;
+                        break;
+                default:
+                        CERROR("Unknow IO type - %u\n", vio->cui_io_subtype);
+                        LBUG();
                 }
                 cio->cui_fd  = LUSTRE_FPRIVATE(file);
                 result = cl_io_loop(env, io);
-        } else
+        } else {
                 /* cl_io_rw_init() handled IO */
                 result = io->ci_result;
+        }
+
         if (io->ci_nob > 0) {
                 result = io->ci_nob;
                 *ppos = io->u.ci_wr.wr.crw_pos;
@@ -875,7 +887,7 @@ static ssize_t ll_file_readv(struct file *file, const struct iovec *iov,
                               unsigned long nr_segs, loff_t *ppos)
 {
         struct lu_env      *env;
-        struct ccc_io_args *args;
+        struct vvp_io_args *args;
         size_t              count;
         ssize_t             result;
         int                 refcheck;
@@ -889,10 +901,10 @@ static ssize_t ll_file_readv(struct file *file, const struct iovec *iov,
         if (IS_ERR(env))
                 RETURN(PTR_ERR(env));
 
-        args = &vvp_env_info(env)->vti_args;
-        args->cia_is_sendfile = 0;
-        args->cia_iov = (struct iovec *)iov;
-        args->cia_nrsegs = nr_segs;
+        args = vvp_env_args(env, IO_NORMAL);
+        args->u.normal.via_iov = (struct iovec *)iov;
+        args->u.normal.via_nrsegs = nr_segs;
+
         result = ll_file_io_generic(env, args, file, CIT_READ, ppos, count);
         cl_env_put(env, &refcheck);
         RETURN(result);
@@ -924,7 +936,7 @@ static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
                                 unsigned long nr_segs, loff_t pos)
 {
         struct lu_env      *env;
-        struct ccc_io_args *args;
+        struct vvp_io_args *args;
         size_t              count;
         ssize_t             result;
         int                 refcheck;
@@ -938,11 +950,11 @@ static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
         if (IS_ERR(env))
                 RETURN(PTR_ERR(env));
 
-        args = &vvp_env_info(env)->vti_args;
-        args->cia_is_sendfile = 0;
-        args->cia_iov = (struct iovec *)iov;
-        args->cia_nrsegs = nr_segs;
-        args->cia_iocb = iocb;
+        args = vvp_env_args(env, IO_NORMAL);
+        args->u.normal.via_iov = (struct iovec *)iov;
+        args->u.normal.via_nrsegs = nr_segs;
+        args->u.normal.via_iocb = iocb;
+
         result = ll_file_io_generic(env, args, iocb->ki_filp, CIT_READ,
                                     &iocb->ki_pos, count);
         cl_env_put(env, &refcheck);
@@ -987,7 +999,7 @@ static ssize_t ll_file_writev(struct file *file, const struct iovec *iov,
                               unsigned long nr_segs, loff_t *ppos)
 {
         struct lu_env      *env;
-        struct ccc_io_args *args;
+        struct vvp_io_args *args;
         size_t              count;
         ssize_t             result;
         int                 refcheck;
@@ -1001,9 +1013,10 @@ static ssize_t ll_file_writev(struct file *file, const struct iovec *iov,
         if (IS_ERR(env))
                 RETURN(PTR_ERR(env));
 
-        args = &vvp_env_info(env)->vti_args;
-        args->cia_iov = (struct iovec *)iov;
-        args->cia_nrsegs = nr_segs;
+        args = vvp_env_args(env, IO_NORMAL);
+        args->u.normal.via_iov = (struct iovec *)iov;
+        args->u.normal.via_nrsegs = nr_segs;
+
         result = ll_file_io_generic(env, args, file, CIT_WRITE, ppos, count);
         cl_env_put(env, &refcheck);
         RETURN(result);
@@ -1036,7 +1049,7 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
                                  unsigned long nr_segs, loff_t pos)
 {
         struct lu_env      *env;
-        struct ccc_io_args *args;
+        struct vvp_io_args *args;
         size_t              count;
         ssize_t             result;
         int                 refcheck;
@@ -1050,10 +1063,11 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
         if (IS_ERR(env))
                 RETURN(PTR_ERR(env));
 
-        args = &vvp_env_info(env)->vti_args;
-        args->cia_iov = (struct iovec *)iov;
-        args->cia_nrsegs = nr_segs;
-        args->cia_iocb = iocb;
+        args = vvp_env_args(env, IO_NORMAL);
+        args->u.normal.via_iov = (struct iovec *)iov;
+        args->u.normal.via_nrsegs = nr_segs;
+        args->u.normal.via_iocb = iocb;
+
         result = ll_file_io_generic(env, args, iocb->ki_filp, CIT_WRITE,
                                   &iocb->ki_pos, count);
         cl_env_put(env, &refcheck);
@@ -1091,6 +1105,7 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
 #endif
 
 
+#ifdef HAVE_KERNEL_SENDFILE
 /*
  * Send file content (through pagecache) somewhere with helper
  */
@@ -1098,7 +1113,7 @@ static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,size_t count,
                                 read_actor_t actor, void *target)
 {
         struct lu_env      *env;
-        struct ccc_io_args *args;
+        struct vvp_io_args *args;
         ssize_t             result;
         int                 refcheck;
         ENTRY;
@@ -1107,14 +1122,43 @@ static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,size_t count,
         if (IS_ERR(env))
                 RETURN(PTR_ERR(env));
 
-        args = &vvp_env_info(env)->vti_args;
-        args->cia_is_sendfile = 1;
-        args->cia_target = target;
-        args->cia_actor = actor;
+        args = vvp_env_args(env, IO_SENDFILE);
+        args->u.sendfile.via_target = target;
+        args->u.sendfile.via_actor = actor;
+
         result = ll_file_io_generic(env, args, in_file, CIT_READ, ppos, count);
         cl_env_put(env, &refcheck);
         RETURN(result);
 }
+#endif
+
+#ifdef HAVE_KERNEL_SPLICE_READ
+/*
+ * Send file content (through pagecache) somewhere with helper
+ */
+static ssize_t ll_file_splice_read(struct file *in_file, loff_t *ppos,
+                                   struct pipe_inode_info *pipe, size_t count,
+                                   unsigned int flags)
+{
+        struct lu_env      *env;
+        struct vvp_io_args *args;
+        ssize_t             result;
+        int                 refcheck;
+        ENTRY;
+
+        env = cl_env_get(&refcheck);
+        if (IS_ERR(env))
+                RETURN(PTR_ERR(env));
+
+        args = vvp_env_args(env, IO_SPLICE);
+        args->u.splice.via_pipe = pipe;
+        args->u.splice.via_flags = flags;
+
+        result = ll_file_io_generic(env, args, in_file, CIT_READ, ppos, count);
+        cl_env_put(env, &refcheck);
+        RETURN(result);
+}
+#endif
 
 static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
                                unsigned long arg)
@@ -2419,7 +2463,11 @@ int lustre_check_acl(struct inode *inode, int mask)
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10))
+#ifndef HAVE_INODE_PERMISION_2ARGS
 int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
+#else
+int ll_inode_permission(struct inode *inode, int mask)
+#endif
 {
         int rc = 0;
         ENTRY;
@@ -2522,7 +2570,12 @@ struct file_operations ll_file_operations = {
         .release        = ll_file_release,
         .mmap           = ll_file_mmap,
         .llseek         = ll_file_seek,
+#ifdef HAVE_KERNEL_SENDFILE
         .sendfile       = ll_file_sendfile,
+#endif
+#ifdef HAVE_KERNEL_SPLICE_READ
+        .splice_read    = ll_file_splice_read,
+#endif
         .fsync          = ll_fsync,
 };
 
@@ -2536,7 +2589,12 @@ struct file_operations ll_file_operations_flock = {
         .release        = ll_file_release,
         .mmap           = ll_file_mmap,
         .llseek         = ll_file_seek,
+#ifdef HAVE_KERNEL_SENDFILE
         .sendfile       = ll_file_sendfile,
+#endif
+#ifdef HAVE_KERNEL_SPLICE_READ
+        .splice_read    = ll_file_splice_read,
+#endif
         .fsync          = ll_fsync,
 #ifdef HAVE_F_OP_FLOCK
         .flock          = ll_file_flock,
@@ -2555,7 +2613,12 @@ struct file_operations ll_file_operations_noflock = {
         .release        = ll_file_release,
         .mmap           = ll_file_mmap,
         .llseek         = ll_file_seek,
+#ifdef HAVE_KERNEL_SENDFILE
         .sendfile       = ll_file_sendfile,
+#endif
+#ifdef HAVE_KERNEL_SPLICE_READ
+        .splice_read    = ll_file_splice_read,
+#endif
         .fsync          = ll_fsync,
 #ifdef HAVE_F_OP_FLOCK
         .flock          = ll_file_noflock,

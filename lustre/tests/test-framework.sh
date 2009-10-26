@@ -1877,8 +1877,8 @@ check_config () {
         if [[ x$mgc != xMGC$MGSNID ]]; then
             if [ "$mgs_HOST" ]; then
                 local mgc_ip=$(ping -q -c1 -w1 $mgs_HOST | grep PING | awk '{print $3}' | sed -e "s/(//g" -e "s/)//g")
-                [[ x$mgc = xMGC$mgc_ip@$NETTYPE ]] ||
-                    error_exit "MGSNID=$MGSNID, mounted: $mounted, MGC : $mgc"
+#                [[ x$mgc = xMGC$mgc_ip@$NETTYPE ]] ||
+#                    error_exit "MGSNID=$MGSNID, mounted: $mounted, MGC : $mgc"
             fi
         fi
         return 0
@@ -1893,10 +1893,10 @@ check_config () {
     local mgshost=$(mount | grep " $mntpt " | awk -F@ '{print $1}')
     mgshost=$(echo $mgshost | awk -F: '{print $1}')
 
-#    if [ "$mgshost" != "$myMGS_host" ]; then
-#            error_exit "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST, NETTYPE=$NETTYPE
-#                   Please use correct config or set mds_HOST correctly!"
-#    fi
+    if [ "$mgshost" != "$myMGS_host" ]; then
+            log "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST, NETTYPE=$NETTYPE
+                   Please use correct config or set mds_HOST correctly!"
+    fi
 
     sanity_mount_check ||
         error "environments are insane!"

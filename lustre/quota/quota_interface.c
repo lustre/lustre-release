@@ -164,7 +164,7 @@ static int filter_quota_enforce(struct obd_device *obd, unsigned int ignore)
 {
         ENTRY;
 
-        if (!sb_any_quota_enabled(obd->u.obt.obt_sb))
+        if (!ll_sb_any_quota_active(obd->u.obt.obt_sb))
                 RETURN(0);
 
         if (ignore) {
@@ -186,7 +186,7 @@ static int filter_quota_getflag(struct obd_device *obd, struct obdo *oa)
         struct obd_quotactl *oqctl;
         ENTRY;
 
-        if (!sb_any_quota_enabled(obt->obt_sb))
+        if (!ll_sb_any_quota_active(obt->obt_sb))
                 RETURN(0);
 
         OBD_ALLOC_PTR(oqctl);
@@ -380,7 +380,7 @@ int quota_is_set(struct obd_device *obd, const unsigned int id[], int flag)
         struct lustre_qunit_size *lqs;
         int i, q_set = 0;
 
-        if (!sb_any_quota_enabled(obd->u.obt.obt_qctxt.lqc_sb))
+        if (!ll_sb_any_quota_active(obd->u.obt.obt_qctxt.lqc_sb))
                 RETURN(0);
 
         for (i = 0; i < MAXQUOTAS; i++) {
@@ -531,7 +531,7 @@ static int quota_pending_commit(struct obd_device *obd, const unsigned int id[],
 
         CDEBUG(D_QUOTA, "commit pending quota for  %s\n", obd->obd_name);
         CLASSERT(MAXQUOTAS < 4);
-        if (!sb_any_quota_enabled(qctxt->lqc_sb))
+        if (!ll_sb_any_quota_active(qctxt->lqc_sb))
                 RETURN(0);
 
         do_gettimeofday(&work_start);

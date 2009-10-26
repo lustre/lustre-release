@@ -246,11 +246,7 @@ int capa_hmac(__u8 *hmac, struct lustre_capa *capa, __u8 *key)
         struct ll_crypto_hash *tfm;
         struct capa_hmac_alg  *alg;
         int keylen;
-        struct scatterlist sl = {
-                .page   = virt_to_page(capa),
-                .offset = (unsigned long)(capa) % CFS_PAGE_SIZE,
-                .length = offsetof(struct lustre_capa, lc_hmac),
-        };
+        struct scatterlist sl;
 
         if (capa_alg(capa) != CAPA_HMAC_ALG_SHA1) {
                 CERROR("unknown capability hmac algorithm!\n");
@@ -267,6 +263,10 @@ int capa_hmac(__u8 *hmac, struct lustre_capa *capa, __u8 *key)
         }
         keylen = alg->ha_keylen;
 
+        sg_set_page(&sl, virt_to_page(capa),
+                    offsetof(struct lustre_capa, lc_hmac),
+                    (unsigned long)(capa) % CFS_PAGE_SIZE);
+
         ll_crypto_hmac(tfm, key, &keylen, &sl, sl.length, hmac);
         ll_crypto_free_hash(tfm);
 
@@ -276,16 +276,8 @@ int capa_hmac(__u8 *hmac, struct lustre_capa *capa, __u8 *key)
 int capa_encrypt_id(__u32 *d, __u32 *s, __u8 *key, int keylen)
 {
         struct ll_crypto_cipher *tfm;
-        struct scatterlist sd = {
-                .page   = virt_to_page(d),
-                .offset = (unsigned long)(d) % CFS_PAGE_SIZE,
-                .length = 16,
-        };
-        struct scatterlist ss = {
-                .page   = virt_to_page(s),
-                .offset = (unsigned long)(s) % CFS_PAGE_SIZE,
-                .length = 16,
-        };
+        struct scatterlist sd;
+        struct scatterlist ss;
         struct blkcipher_desc desc;
         unsigned int min;
         int rc;
@@ -312,6 +304,11 @@ int capa_encrypt_id(__u32 *d, __u32 *s, __u8 *key, int keylen)
                 GOTO(out, rc);
         }
 
+        sg_set_page(&sd, virt_to_page(d), 16,
+                    (unsigned long)(d) % CFS_PAGE_SIZE);
+
+        sg_set_page(&ss, virt_to_page(s), 16,
+                    (unsigned long)(s) % CFS_PAGE_SIZE);
         desc.tfm   = tfm;
         desc.info  = NULL;
         desc.flags = 0;
@@ -331,16 +328,8 @@ out:
 int capa_decrypt_id(__u32 *d, __u32 *s, __u8 *key, int keylen)
 {
         struct ll_crypto_cipher *tfm;
-        struct scatterlist sd = {
-                .page   = virt_to_page(d),
-                .offset = (unsigned long)(d) % CFS_PAGE_SIZE,
-                .length = 16,
-        };
-        struct scatterlist ss = {
-                .page   = virt_to_page(s),
-                .offset = (unsigned long)(s) % CFS_PAGE_SIZE,
-                .length = 16,
-        };
+        struct scatterlist sd;
+        struct scatterlist ss;
         struct blkcipher_desc desc;
         unsigned int min;
         int rc;
@@ -366,6 +355,12 @@ int capa_decrypt_id(__u32 *d, __u32 *s, __u8 *key, int keylen)
                 CERROR("failed to setting key for aes\n");
                 GOTO(out, rc);
         }
+
+        sg_set_page(&sd, virt_to_page(d), 16,
+                    (unsigned long)(d) % CFS_PAGE_SIZE);
+
+        sg_set_page(&ss, virt_to_page(s), 16,
+                    (unsigned long)(s) % CFS_PAGE_SIZE);
 
         desc.tfm   = tfm;
         desc.info  = NULL;

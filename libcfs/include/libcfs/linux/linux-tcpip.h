@@ -86,4 +86,11 @@ libcfs_sock_wmem_queued(struct socket *sock)
         return sock->sk->sk_wmem_queued;
 }
 
+#ifdef HAVE_INIT_NET
+#define DEFAULT_NET	(&init_net)
+#else
+/* some broken backports */
+#define DEFAULT_NET	(NULL)
+#endif
+
 #endif
