@@ -700,14 +700,13 @@ sanity_mount_check () {
 
 # mount clients if not mouted
 zconf_mount_clients() {
-    local OPTIONS
     local clients=$1
     local mnt=$2
-
+    local OPTIONS=${3:-$MOUNTOPT}
 
     # Only supply -o to mount if we have options
-    if [ -n "$MOUNTOPT" ]; then
-        OPTIONS="-o $MOUNTOPT"
+    if [ "$OPTIONS" ]; then
+        OPTIONS="-o $OPTIONS"
     fi
     local device=$MGSNID:/$FSNAME
     if [ -z "$mnt" -o -z "$FSNAME" ]; then
@@ -747,7 +746,7 @@ zconf_umount_clients() {
     echo "Stopping clients: $clients $mnt (opts:$force)"
     do_nodes $clients "running=\\\$(grep -c $mnt' ' /proc/mounts);
 if [ \\\$running -ne 0 ] ; then
-echo Stopping client \\\$(hostname) client $mnt opts:$force;
+echo Stopping client \\\$(hostname) $mnt opts:$force;
 lsof -t $mnt || need_kill=no;
 if [ "x$force" != "x" -a "x\\\$need_kill" != "xno" ]; then
     pids=\\\$(lsof -t $mnt | sort -u);
@@ -3206,5 +3205,28 @@ cleanup_logs () {
     local list=${1:-$(comma_list $(nodes_list))}
 
     [ -n ${TESTSUITE} ] && do_nodes $list "rm -f $TMP/*${TESTSUITE}*" || true
+}
+
+do_ls () {
+    local mntpt_root=$1
+    local num_mntpts=$2
+    local dir=$3
+    local i
+    local cmd
+    local pids
+    local rc=0
+
+    for i in $(seq 0 $num_mntpts); do
+        cmd="ls -laf ${mntpt_root}$i/$dir"
+        echo + $cmd;
+        $cmd > /dev/null &
+        pids="$pids $!"
+    done
+    echo pids=$pids
+    for pid in $pids; do
+        wait $pid || rc=$?
+    done
+
+    return $rc
 }
 
