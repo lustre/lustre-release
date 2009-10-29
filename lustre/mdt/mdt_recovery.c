@@ -49,8 +49,7 @@
 #include "mdt_internal.h"
 
 static int mdt_server_data_update(const struct lu_env *env,
-                                  struct mdt_device *mdt,
-                                  int need_sync);
+                                  struct mdt_device *mdt);
 
 struct lu_buf *mdt_buf(const struct lu_env *env, void *area, ssize_t len)
 {
@@ -149,51 +148,33 @@ static inline int mdt_last_rcvd_header_read(const struct lu_env *env,
         if (rc == 0)
                 lsd_le_to_cpu(&mti->mti_lsd, &mdt->mdt_lsd);
 
-        CDEBUG(D_INFO, "read last_rcvd header rc = %d:\n"
-                       "uuid = %s\n"
-                       "last_transno = "LPU64"\n",
-                        rc, mdt->mdt_lsd.lsd_uuid,
-                        mdt->mdt_lsd.lsd_last_transno);
+        CDEBUG(D_INFO, "read last_rcvd header rc = %d, uuid = %s, "
+               "last_transno = "LPU64"\n", rc, mdt->mdt_lsd.lsd_uuid,
+               mdt->mdt_lsd.lsd_last_transno);
         return rc;
 }
 
-static inline int mdt_last_rcvd_header_write(const struct lu_env *env,
-                                             struct mdt_device *mdt,
-                                             int need_sync)
+static int mdt_last_rcvd_header_write(const struct lu_env *env,
+                                      struct mdt_device *mdt,
+                                      struct thandle *th)
 {
         struct mdt_thread_info *mti;
-        struct thandle *th;
         int rc;
         ENTRY;
 
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
 
-        if (mti->mti_exp) {
-                spin_lock(&mti->mti_exp->exp_lock);
-                mti->mti_exp->exp_need_sync = need_sync;
-                spin_unlock(&mti->mti_exp->exp_lock);
-        }
-        mdt_trans_credit_init(env, mdt, MDT_TXN_LAST_RCVD_WRITE_OP);
-        th = mdt_trans_start(env, mdt);
-        if (IS_ERR(th))
-                RETURN(PTR_ERR(th));
-
         mti->mti_off = 0;
         lsd_cpu_to_le(&mdt->mdt_lsd, &mti->mti_lsd);
-
-        if (need_sync && mti->mti_exp)
-                mdt_trans_add_cb(th, lut_cb_client, mti->mti_exp);
 
         rc = dt_record_write(env, mdt->mdt_last_rcvd,
                              mdt_buf_const(env, &mti->mti_lsd,
                                            sizeof(mti->mti_lsd)),
                              &mti->mti_off, th);
 
-        mdt_trans_stop(env, mdt, th);
-
-        CDEBUG(D_INFO, "write last_rcvd header rc = %d:\n"
-               "uuid = %s\nlast_transno = "LPU64"\n",
-               rc, mdt->mdt_lsd.lsd_uuid, mdt->mdt_lsd.lsd_last_transno);
+        CDEBUG(D_INFO, "write last_rcvd header rc = %d, uuid = %s, "
+               "last_transno = "LPU64"\n", rc, mdt->mdt_lsd.lsd_uuid,
+               mdt->mdt_lsd.lsd_last_transno);
 
         RETURN(rc);
 }
@@ -213,25 +194,14 @@ static int mdt_last_rcvd_read(const struct lu_env *env,
         if (rc == 0)
                 lcd_le_to_cpu(tmp, lcd);
 
-        CDEBUG(D_INFO, "read lcd @%d rc = %d:\n"
-                       "uuid = %s\n"
-                       "last_transno = "LPU64"\n"
-                       "last_xid = "LPU64"\n"
-                       "last_result = %u\n"
-                       "last_data = %u\n"
-                       "last_close_transno = "LPU64"\n"
-                       "last_close_xid = "LPU64"\n"
-                       "last_close_result = %u\n",
-                        (int)(*off - sizeof(*tmp)),
-                        rc,
-                        lcd->lcd_uuid,
-                        lcd->lcd_last_transno,
-                        lcd->lcd_last_xid,
-                        lcd->lcd_last_result,
-                        lcd->lcd_last_data,
-                        lcd->lcd_last_close_transno,
-                        lcd->lcd_last_close_xid,
-                        lcd->lcd_last_close_result);
+        CDEBUG(D_INFO, "read lcd @%d rc = %d, uuid = %s, last_transno = "LPU64
+               ", last_xid = "LPU64", last_result = %u, last_data = %u, "
+               "last_close_transno = "LPU64", last_close_xid = "LPU64", "
+               "last_close_result = %u\n", (int)(*off - sizeof(*tmp)),
+               rc, lcd->lcd_uuid, lcd->lcd_last_transno, lcd->lcd_last_xid,
+               lcd->lcd_last_result, lcd->lcd_last_data,
+               lcd->lcd_last_close_transno, lcd->lcd_last_close_xid,
+               lcd->lcd_last_close_result);
         return rc;
 }
 
@@ -253,25 +223,14 @@ static int mdt_last_rcvd_write(const struct lu_env *env,
         rc = dt_record_write(env, mdt->mdt_last_rcvd,
                              mdt_buf_const(env, tmp, sizeof(*tmp)), off, th);
 
-        CDEBUG(D_INFO, "write lcd @%d rc = %d:\n"
-                       "uuid = %s\n"
-                       "last_transno = "LPU64"\n"
-                       "last_xid = "LPU64"\n"
-                       "last_result = %u\n"
-                       "last_data = %u\n"
-                       "last_close_transno = "LPU64"\n"
-                       "last_close_xid = "LPU64"\n"
-                       "last_close_result = %u\n",
-                        (int)(*off - sizeof(*tmp)),
-                        rc,
-                        lcd->lcd_uuid,
-                        lcd->lcd_last_transno,
-                        lcd->lcd_last_xid,
-                        lcd->lcd_last_result,
-                        lcd->lcd_last_data,
-                        lcd->lcd_last_close_transno,
-                        lcd->lcd_last_close_xid,
-                        lcd->lcd_last_close_result);
+        CDEBUG(D_INFO, "write lcd @%d rc = %d, uuid = %s, last_transno = "LPU64
+               ", last_xid = "LPU64", last_result = %u, last_data = %u, "
+               "last_close_transno = "LPU64", last_close_xid = "LPU64" ,"
+               "last_close_result = %u\n", (int)(*off - sizeof(*tmp)),
+               rc, lcd->lcd_uuid, lcd->lcd_last_transno, lcd->lcd_last_xid,
+               lcd->lcd_last_result, lcd->lcd_last_data,
+               lcd->lcd_last_close_transno, lcd->lcd_last_close_xid,
+               lcd->lcd_last_close_result);
         return rc;
 }
 
@@ -515,8 +474,7 @@ static int mdt_server_data_init(const struct lu_env *env,
         lsd->lsd_mount_count = mdt->mdt_mount_count;
 
         /* save it, so mount count and last_transno is current */
-        rc = mdt_server_data_update(env, mdt, (mti->mti_exp &&
-                                               mti->mti_exp->exp_need_sync));
+        rc = mdt_server_data_update(env, mdt);
         if (rc)
                 GOTO(err_client, rc);
 
@@ -529,11 +487,18 @@ out:
 }
 
 static int mdt_server_data_update(const struct lu_env *env,
-                                  struct mdt_device *mdt,
-                                  int need_sync)
+                                  struct mdt_device *mdt)
 {
-        int rc = 0;
-        ENTRY;
+        struct mdt_thread_info *mti;
+        struct thandle *th;
+        int rc;
+
+        mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+
+        mdt_trans_credit_init(env, mdt, MDT_TXN_LAST_RCVD_WRITE_OP);
+        th = mdt_trans_start(env, mdt);
+        if (IS_ERR(th))
+                RETURN(PTR_ERR(th));
 
         CDEBUG(D_SUPER, "MDS mount_count is "LPU64", last_transno is "LPU64"\n",
                mdt->mdt_mount_count, mdt->mdt_last_transno);
@@ -542,14 +507,11 @@ static int mdt_server_data_update(const struct lu_env *env,
         mdt->mdt_lsd.lsd_last_transno = mdt->mdt_last_transno;
         spin_unlock(&mdt->mdt_transno_lock);
 
-        /*
-         * This may be called from difficult reply handler and
-         * mdt->mdt_last_rcvd may be NULL that time.
-         */
-        if (mdt->mdt_last_rcvd != NULL)
-                rc = mdt_last_rcvd_header_write(env, mdt, need_sync);
-        RETURN(rc);
+        rc = mdt_last_rcvd_header_write(env, mdt, th);
+        mdt_trans_stop(env, mdt, th);
+        return rc;
 }
+
 
 int mdt_client_new(const struct lu_env *env, struct mdt_device *mdt)
 {
@@ -686,7 +648,6 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
         struct obd_device      *obd = mdt2obd_dev(mdt);
         struct obd_export      *exp;
         struct thandle         *th;
-        int                     need_sync;
         loff_t                  off;
         int                     rc = 0;
         ENTRY;
@@ -729,57 +690,27 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
                 LBUG();
         }
 
-        /* Don't force sync on disconnect if aborting recovery,
-         * or it does num_clients * num_osts.  b=17194 */
-        need_sync = (!exp->exp_libclient || exp->exp_need_sync) &&
-                     !(exp->exp_flags & OBD_OPT_ABORT_RECOV);
+        /* write server data at first so last_transno will be save in it in
+         * any case */
+        mdt_server_data_update(env, mdt);
 
-        /*
-         * This may be called from difficult reply handler path and
-         * mdt->mdt_last_rcvd may be NULL that time.
-         */
-        if (mdt->mdt_last_rcvd != NULL) {
-                mdt_trans_credit_init(env, mdt, MDT_TXN_LAST_RCVD_WRITE_OP);
+        mdt_trans_credit_init(env, mdt, MDT_TXN_LAST_RCVD_WRITE_OP);
+        th = mdt_trans_start(env, mdt);
+        if (IS_ERR(th))
+                GOTO(free, rc = PTR_ERR(th));
 
-                spin_lock(&exp->exp_lock);
-                exp->exp_need_sync = need_sync;
-                spin_unlock(&exp->exp_lock);
-
-                th = mdt_trans_start(env, mdt);
-                if (IS_ERR(th))
-                        GOTO(free, rc = PTR_ERR(th));
-
-                if (need_sync) {
-                        /*
-                         * Until this operations will be committed the sync
-                         * is needed for this export.
-                         */
-                        mdt_trans_add_cb(th, lut_cb_client, exp);
-                }
-
-                mutex_down(&med->med_lcd_lock);
-                memset(lcd, 0, sizeof *lcd);
-
-                rc = mdt_last_rcvd_write(env, mdt, lcd, &off, th);
-                mutex_up(&med->med_lcd_lock);
-                mdt_trans_stop(env, mdt, th);
-        }
-
-        CDEBUG(rc == 0 ? D_INFO : D_ERROR, "Zeroing out client idx %u in "
-               "%s %ssync rc %d\n",  med->med_lr_idx, LAST_RCVD, 
-               need_sync ? "" : "a", rc);
+        mutex_down(&med->med_lcd_lock);
+        memset(lcd, 0, sizeof *lcd);
+        rc = mdt_last_rcvd_write(env, mdt, lcd, &off, th);
+        mutex_up(&med->med_lcd_lock);
+        mdt_trans_stop(env, mdt, th);
 
         spin_lock(&mdt->mdt_client_bitmap_lock);
         clear_bit(med->med_lr_idx, mdt->mdt_client_bitmap);
         spin_unlock(&mdt->mdt_client_bitmap_lock);
 
-        /*
-         * Make sure the server's last_transno is up to date. Do this
-         * after the client is freed so we know all the client's
-         * transactions have been committed.
-         */
-        mdt_server_data_update(env, mdt, need_sync);
-
+        CDEBUG(rc == 0 ? D_INFO : D_ERROR, "Zeroing out client idx %u in "
+               "%s, rc %d\n",  med->med_lr_idx, LAST_RCVD, rc);
         EXIT;
 free:
         OBD_FREE_PTR(lcd);
