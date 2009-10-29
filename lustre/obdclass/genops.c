@@ -773,6 +773,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
 {
         struct obd_export *export;
         int rc = 0;
+        ENTRY;
 
         OBD_ALLOC_PTR(export);
         if (!export)
@@ -804,28 +805,35 @@ struct obd_export *class_new_export(struct obd_device *obd,
         obd_init_export(export);
 
         spin_lock(&obd->obd_dev_lock);
+         /* shouldn't happen, but might race */
+        if (obd->obd_stopping)
+                GOTO(exit_err, rc = -ENODEV);
+
         if (!obd_uuid_equals(cluuid, &obd->obd_uuid)) {
                 rc = lustre_hash_add_unique(obd->obd_uuid_hash, cluuid,
                                             &export->exp_uuid_hash);
                 if (rc != 0) {
                         LCONSOLE_WARN("%s: denying duplicate export for %s, %d\n",
                                       obd->obd_name, cluuid->uuid, rc);
-                        spin_unlock(&obd->obd_dev_lock);
-                        class_handle_unhash(&export->exp_handle);
-                        OBD_FREE_PTR(export);
-                        return ERR_PTR(-EALREADY);
+                        GOTO(exit_err, rc = -EALREADY);
                 }
         }
 
-        LASSERT(!obd->obd_stopping); /* shouldn't happen, but might race */
         class_incref(obd, "export", export);
         list_add(&export->exp_obd_chain, &export->exp_obd->obd_exports);
         list_add_tail(&export->exp_obd_chain_timed,
                       &export->exp_obd->obd_exports_timed);
         export->exp_obd->obd_num_exports++;
         spin_unlock(&obd->obd_dev_lock);
+        RETURN(export);
 
-        return export;
+exit_err:
+        spin_unlock(&obd->obd_dev_lock);
+        class_handle_unhash(&export->exp_handle);
+        LASSERT(hlist_unhashed(&export->exp_uuid_hash));
+        obd_destroy_export(export);
+        OBD_FREE_PTR(export);
+        return ERR_PTR(rc);
 }
 EXPORT_SYMBOL(class_new_export);
 
