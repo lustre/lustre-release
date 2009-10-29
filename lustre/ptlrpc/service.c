@@ -1867,6 +1867,7 @@ static int ptlrpc_main(void *arg)
         int counter = 0, rc = 0;
         ENTRY;
 
+        thread->t_pid = cfs_curproc_pid();
         cfs_daemonize_ctxt(data->name);
 
 #if defined(HAVE_NODE_TO_CPUMASK) && defined(CONFIG_NUMA)
@@ -2019,7 +2020,8 @@ out_srv_fini:
 
         lu_context_fini(&env.le_ctx);
 out:
-        CDEBUG(D_NET, "service thread %d exiting: rc %d\n", thread->t_id, rc);
+        CDEBUG(D_RPCTRACE, "service thread [ %p : %u ] %d exiting: rc %d\n",
+               thread, thread->t_pid, thread->t_id, rc);
 
         spin_lock(&svc->srv_lock);
         svc->srv_threads_running--; /* must know immediately */
@@ -2174,17 +2176,24 @@ static void ptlrpc_stop_thread(struct ptlrpc_service *svc,
                                struct ptlrpc_thread *thread)
 {
         struct l_wait_info lwi = { 0 };
+        int stopped = 0;
         ENTRY;
 
-        CDEBUG(D_RPCTRACE, "Stopping thread %p\n", thread);
         spin_lock(&svc->srv_lock);
-        /* let the thread know that we would like it to stop asap */
-        thread->t_flags |= SVC_STOPPING;
+        if (unlikely(thread->t_flags & SVC_STOPPED))
+                stopped = 1;
+        else
+                /* let the thread know that we would like it to stop asap */
+                thread->t_flags |= SVC_STOPPING;
         spin_unlock(&svc->srv_lock);
 
-        cfs_waitq_broadcast(&svc->srv_waitq);
-        l_wait_event(thread->t_ctl_waitq, (thread->t_flags & SVC_STOPPED),
-                     &lwi);
+        if (likely(!stopped)) {
+                CDEBUG(D_RPCTRACE, "Stopping thread [ %p : %u ]\n",
+                       thread, thread->t_pid);
+                cfs_waitq_broadcast(&svc->srv_waitq);
+                l_wait_event(thread->t_ctl_waitq,
+                             (thread->t_flags & SVC_STOPPED), &lwi);
+        }
 
         spin_lock(&svc->srv_lock);
         list_del(&thread->t_link);

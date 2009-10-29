@@ -681,6 +681,10 @@ struct ptlrpc_thread {
          */
         unsigned int t_id;
         /**
+         * service thread pid
+         */
+        pid_t t_pid; 
+        /**
          * put watchdog in the structure per thread b=14840
          */
         struct lc_watchdog *t_watchdog;
