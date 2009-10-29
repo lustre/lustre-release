@@ -2936,12 +2936,13 @@ get_mds_dir () {
     local dir=$1
     local file=$dir/f0.get_mds_dir_tmpfile
 
+    mkdir -p $dir
     rm -f $file
     sleep 1
     local iused=$(lfs df -i $dir | grep MDT | awk '{print $3}')
     local -a oldused=($iused)
 
-    touch $file
+    openfile -f O_CREAT:O_LOV_DELAY_CREATE -m 0644 $file > /dev/null
     sleep 1
     iused=$(lfs df -i $dir | grep MDT | awk '{print $3}')
     local -a newused=($iused)
