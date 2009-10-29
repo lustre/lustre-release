@@ -56,6 +56,27 @@ struct ll_iattr {
 #define ll_iattr iattr
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14) */
 
+#ifdef HAVE_FS_STRUCT_USE_PATH
+static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
+                                 struct dentry *dentry)
+{
+        struct path path;
+        struct path old_pwd;
+
+        path.mnt = mnt;
+        path.dentry = dentry;
+        write_lock(&fs->lock);
+        old_pwd = fs->pwd;
+        path_get(&path);
+        fs->pwd = path;
+        write_unlock(&fs->lock);
+
+        if (old_pwd.dentry)
+                path_put(&old_pwd);
+}
+
+#else
+
 static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
                 struct dentry *dentry)
 {
@@ -74,6 +95,7 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
                 mntput(old_pwdmnt);
         }
 }
+#endif
 
 /*
  * set ATTR_BLOCKS to a high value to avoid any risk of collision with other
@@ -143,7 +165,10 @@ do {mutex_lock_nested(&(inode)->i_mutex, I_MUTEX_PARENT); } while(0)
 #endif
 
 /* XXX our code should be using the 2.6 calls, not the other way around */
-#define TryLockPage(page)               TestSetPageLocked(page)
+#ifdef HAVE_TRYLOCK_PAGE
+#define TestSetPageLocked(page)         (!trylock_page(page))
+#endif
+
 #define Page_Uptodate(page)             PageUptodate(page)
 #define ll_redirty_page(page)           set_page_dirty(page)
 
@@ -168,7 +193,7 @@ do {mutex_lock_nested(&(inode)->i_mutex, I_MUTEX_PARENT); } while(0)
 #define to_kdev_t(dev)                  (dev)
 #define kdev_t_to_nr(dev)               (dev)
 #define val_to_kdev(dev)                (dev)
-#define ILOOKUP(sb, ino, test, data)    ilookup5(sb, ino, test, data);
+#define ILOOKUP(sb, ino, test, data)    ilookup5(sb, ino, test, (void *)(data));
 
 #include <linux/writeback.h>
 
@@ -314,7 +339,7 @@ static inline int filemap_fdatawrite_range(struct address_space *mapping,
         wbc.end = end;
 #endif
 
-#ifdef mapping_cap_writeback_dirty
+#ifdef HAVE_MAPPING_CAP_WRITEBACK_DIRTY
         if (!mapping_cap_writeback_dirty(mapping))
                 rc = 0;
 #else
@@ -591,8 +616,17 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
 #define synchronize_rcu() synchronize_kernel()
 #endif
 
+#ifdef HAVE_FILE_REMOVE_SUID
+# define ll_remove_suid(file, mnt)       file_remove_suid(file)
+#else
+# ifdef HAVE_SECURITY_PLUG
+#  define ll_remove_suid(file,mnt)      remove_suid(file->f_dentry,mnt)
+# else
+#  define ll_remove_suid(file,mnt)      remove_suid(file->f_dentry)
+# endif
+#endif
+
 #ifdef HAVE_SECURITY_PLUG
-#define ll_remove_suid(inode,mnt)               remove_suid(inode,mnt)
 #define ll_vfs_rmdir(dir,entry,mnt)             vfs_rmdir(dir,entry,mnt)
 #define ll_vfs_mkdir(inode,dir,mnt,mode)        vfs_mkdir(inode,dir,mnt,mode)
 #define ll_vfs_link(old,mnt,dir,new,mnt1)       vfs_link(old,mnt,dir,new,mnt1)
@@ -604,7 +638,6 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
 #define ll_vfs_rename(old,old_dir,mnt,new,new_dir,mnt1) \
                 vfs_rename(old,old_dir,mnt,new,new_dir,mnt1)
 #else
-#define ll_remove_suid(inode,mnt)               remove_suid(inode)
 #define ll_vfs_rmdir(dir,entry,mnt)             vfs_rmdir(dir,entry)
 #define ll_vfs_mkdir(inode,dir,mnt,mode)        vfs_mkdir(inode,dir,mode)
 #define ll_vfs_link(old,mnt,dir,new,mnt1)       vfs_link(old,dir,new)
@@ -621,6 +654,55 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
 
 #ifndef cpu_to_node
 #define cpu_to_node(cpu)         0
+#endif
+
+#ifdef HAVE_REGISTER_SHRINKER
+typedef int (*shrinker_t)(int nr_to_scan, gfp_t gfp_mask);
+
+static inline
+struct shrinker *set_shrinker(int seek, shrinker_t func)
+{
+        struct shrinker *s;
+
+        s = kmalloc(sizeof(*s), GFP_KERNEL);
+        if (s == NULL)
+                return (NULL);
+
+        s->shrink = func;
+        s->seeks = seek;
+
+        register_shrinker(s);
+
+        return s;
+}
+
+static inline
+void remove_shrinker(struct shrinker *shrinker) 
+{
+        if (shrinker == NULL)
+                return;
+
+        unregister_shrinker(shrinker);
+        kfree(shrinker);
+}
+#endif
+
+#ifdef HAVE_BIO_ENDIO_2ARG
+#define cfs_bio_io_error(a,b)   bio_io_error((a))
+#define cfs_bio_endio(a,b,c)    bio_endio((a),(c))
+#else
+#define cfs_bio_io_error(a,b)   bio_io_error((a),(b))
+#define cfs_bio_endio(a,b,c)    bio_endio((a),(b),(c))
+#endif
+
+#ifdef HAVE_FS_STRUCT_USE_PATH
+#define cfs_fs_pwd(fs)       ((fs)->pwd.dentry)
+#define cfs_fs_mnt(fs)       ((fs)->pwd.mnt)
+#define cfs_path_put(nd)     path_put(&(nd)->path)
+#else
+#define cfs_fs_pwd(fs)       ((fs)->pwd)
+#define cfs_fs_mnt(fs)       ((fs)->pwdmnt)
+#define cfs_path_put(nd)     path_release(nd)
 #endif
 
 #ifndef abs
@@ -655,6 +737,46 @@ static inline long labs(long x)
 #ifndef SLAB_DESTROY_BY_RCU
 #define SLAB_DESTROY_BY_RCU 0
 #endif
+
+#ifdef HAVE_SB_HAS_QUOTA_ACTIVE
+#define ll_sb_has_quota_active(sb, type) sb_has_quota_active(sb, type)
+#else
+#define ll_sb_has_quota_active(sb, type) sb_has_quota_enabled(sb, type)
+#endif
+
+#ifdef HAVE_SB_ANY_QUOTA_ACTIVE
+#define ll_sb_any_quota_active(sb) sb_any_quota_active(sb)
+#else
+#define ll_sb_any_quota_active(sb) sb_any_quota_enabled(sb)
+#endif
+
+static inline int
+ll_quota_on(struct super_block *sb, int off, int ver, char *name, int remount)
+{
+        if (sb->s_qcop->quota_on) {
+                return sb->s_qcop->quota_on(sb, off, ver, name
+#ifdef HAVE_QUOTA_ON_5ARGS
+                                            , remount
+#endif
+                                           );
+        }
+        else
+                return -ENOSYS;
+}
+
+static inline int ll_quota_off(struct super_block *sb, int off, int remount)
+{
+        if (sb->s_qcop->quota_off) {
+                return sb->s_qcop->quota_off(sb, off
+#ifdef HAVE_QUOTA_OFF_3ARGS
+                                             , remount
+#endif
+                                            );
+        }
+        else
+                return -ENOSYS;
+}
+
 
 #ifdef HAVE_VFS_RENAME_MUTEX
 #define VFS_RENAME_LOCK(inode) mutex_lock(&((inode)->i_sb->s_vfs_rename_mutex))

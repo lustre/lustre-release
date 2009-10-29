@@ -745,7 +745,7 @@ void ccc_io_update_iov(const struct lu_env *env,
         size_t size = io->u.ci_rw.crw_count;
 
         cio->cui_iov_olen = 0;
-        if (cl_io_is_sendfile(io) || size == cio->cui_tot_count)
+        if (!cl_is_normalio(env, io) || size == cio->cui_tot_count)
                 return;
 
         if (cio->cui_tot_nrsegs == 0)
@@ -793,7 +793,7 @@ void ccc_io_advance(const struct lu_env *env,
 
         CLOBINVRNT(env, obj, ccc_object_invariant(obj));
 
-        if (!cl_io_is_sendfile(io) && io->ci_continue) {
+        if (cl_is_normalio(env, io) && io->ci_continue) {
                 /* update the iov */
                 LASSERT(cio->cui_tot_nrsegs >= cio->cui_nrsegs);
                 LASSERT(cio->cui_tot_count  >= nob);
@@ -1292,7 +1292,7 @@ __u16 ll_dirent_type_get(struct lu_dirent *ent)
 
 /**
  * build inode number from passed @fid */
-ino_t cl_fid_build_ino(struct lu_fid *fid)
+ino_t cl_fid_build_ino(const struct lu_fid *fid)
 {
         ino_t ino;
         ENTRY;
@@ -1316,7 +1316,7 @@ ino_t cl_fid_build_ino(struct lu_fid *fid)
 /**
  * build inode generation from passed @fid.  If our FID overflows the 32-bit
  * inode number then return a non-zero generation to distinguish them. */
-__u32 cl_fid_build_gen(struct lu_fid *fid)
+__u32 cl_fid_build_gen(const struct lu_fid *fid)
 {
         __u32 gen;
         ENTRY;

@@ -349,7 +349,6 @@ int llog_obd_origin_setup(struct obd_device *obd, struct obd_llog_group *olg,
 {
         struct llog_ctxt *ctxt;
         struct llog_handle *handle;
-        struct lvfs_run_ctxt saved;
         int rc;
         ENTRY;
 

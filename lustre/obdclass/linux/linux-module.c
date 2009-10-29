@@ -419,7 +419,7 @@ int class_procfs_init(void)
         ENTRY;
 
         obd_sysctl_init();
-        proc_lustre_root = lprocfs_register("lustre", proc_root_fs,
+        proc_lustre_root = lprocfs_register("fs/lustre", NULL,
                                             lprocfs_base, NULL);
         rc = lprocfs_seq_create(proc_lustre_root, "devices", 0444,
                                 &obd_device_list_fops, NULL);

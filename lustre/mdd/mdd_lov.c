@@ -687,7 +687,7 @@ int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,
 }
 
 int mdd_declare_setattr_log(const struct lu_env *env, struct mdd_object *obj,
-                            struct md_attr *ma, struct lov_mds_md *lmm,
+                            const struct md_attr *ma, struct lov_mds_md *lmm,
                             int lmm_size, struct thandle *th)
 {
         struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);

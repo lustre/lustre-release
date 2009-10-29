@@ -1585,38 +1585,41 @@ static int cb_statfs_update(void *cookie, int rc)
         struct obd_info *oinfo = cookie;
         struct lov_request *lovreq;
         struct obd_statfs *osfs, *lov_sfs;
-        struct obd_device *obd;
         struct lov_obd *lov;
+        struct lov_tgt_desc *tgt;
+        struct obd_device *lovobd, *tgtobd;
         int success;
         ENTRY;
 
         lovreq = container_of(oinfo, struct lov_request, rq_oi);
-        lov = &lovreq->rq_rqset->set_obd->u.lov;
-        obd = class_exp2obd(lov->lov_tgts[lovreq->rq_idx]->ltd_exp);
-
+        lovobd = lovreq->rq_rqset->set_obd;
+        lov = &lovobd->u.lov;
         osfs = lovreq->rq_rqset->set_oi->oi_osfs;
         lov_sfs = oinfo->oi_osfs;
-
         success = lovreq->rq_rqset->set_success;
         /* XXX: the same is done in lov_update_common_set, however
            lovset->set_exp is not initialized. */
         lov_update_set(lovreq->rq_rqset, lovreq, rc);
-        if (rc) {
-                /* XXX ignore error for disconnected ost ? */
-                if (rc && !(lov->lov_tgts[lovreq->rq_idx] &&
-                            lov->lov_tgts[lovreq->rq_idx]->ltd_active))
-                        rc = 0;
+        if (rc)
                 GOTO(out, rc);
-        }
+ 
+        obd_getref(lovobd);
+        tgt = lov->lov_tgts[lovreq->rq_idx];
+        if (!tgt || !tgt->ltd_active)
+                GOTO(out_update, rc);
 
-        spin_lock(&obd->obd_osfs_lock);
-        memcpy(&obd->obd_osfs, lov_sfs, sizeof(*lov_sfs));
+        tgtobd = class_exp2obd(tgt->ltd_exp);
+        spin_lock(&tgtobd->obd_osfs_lock);
+        memcpy(&tgtobd->obd_osfs, lov_sfs, sizeof(*lov_sfs));
         if ((oinfo->oi_flags & OBD_STATFS_FROM_CACHE) == 0)
-                obd->obd_osfs_age = cfs_time_current_64();
-        spin_unlock(&obd->obd_osfs_lock);
+                tgtobd->obd_osfs_age = cfs_time_current_64();
+        spin_unlock(&tgtobd->obd_osfs_lock);
 
+out_update:
         lov_update_statfs(osfs, lov_sfs, success);
         qos_update(lov);
+        obd_putref(lovobd);
+
 out:
         if (lovreq->rq_rqset->set_oi->oi_flags & OBD_STATFS_PTLRPCD &&
             lov_finished_set(lovreq->rq_rqset)) {

@@ -15,7 +15,7 @@ export GSS=false
 export GSS_KRB5=false
 export GSS_PIPEFS=false
 export IDENTITY_UPCALL=default
-export QUOTA_AUTO=1
+export QUOTA_AUTO=0
 
 #export PDSH="pdsh -S -Rssh -w"
 
@@ -755,14 +755,13 @@ sanity_mount_check () {
 
 # mount clients if not mouted
 zconf_mount_clients() {
-    local OPTIONS
     local clients=$1
     local mnt=$2
-
+    local OPTIONS=${3:-$MOUNTOPT}
 
     # Only supply -o to mount if we have options
-    if [ -n "$MOUNTOPT" ]; then
-        OPTIONS="-o $MOUNTOPT"
+    if [ "$OPTIONS" ]; then
+        OPTIONS="-o $OPTIONS"
     fi
     local device=$MGSNID:/$FSNAME
     if [ -z "$mnt" -o -z "$FSNAME" ]; then
@@ -802,7 +801,7 @@ zconf_umount_clients() {
     echo "Stopping clients: $clients $mnt (opts:$force)"
     do_nodes $clients "running=\\\$(grep -c $mnt' ' /proc/mounts);
 if [ \\\$running -ne 0 ] ; then
-echo Stopping client \\\$(hostname) client $mnt opts:$force;
+echo Stopping client \\\$(hostname) $mnt opts:$force;
 lsof -t $mnt || need_kill=no;
 if [ "x$force" != "x" -a "x\\\$need_kill" != "xno" ]; then
     pids=\\\$(lsof -t $mnt | sort -u);
@@ -1958,8 +1957,8 @@ check_config () {
         if [[ x$mgc != xMGC$MGSNID ]]; then
             if [ "$mgs_HOST" ]; then
                 local mgc_ip=$(ping -q -c1 -w1 $mgs_HOST | grep PING | awk '{print $3}' | sed -e "s/(//g" -e "s/)//g")
-                [[ x$mgc = xMGC$mgc_ip@$NETTYPE ]] ||
-                    error_exit "MGSNID=$MGSNID, mounted: $mounted, MGC : $mgc"
+#                [[ x$mgc = xMGC$mgc_ip@$NETTYPE ]] ||
+#                    error_exit "MGSNID=$MGSNID, mounted: $mounted, MGC : $mgc"
             fi
         fi
         return 0
@@ -1974,10 +1973,10 @@ check_config () {
     local mgshost=$(mount | grep " $mntpt " | awk -F@ '{print $1}')
     mgshost=$(echo $mgshost | awk -F: '{print $1}')
 
-#    if [ "$mgshost" != "$myMGS_host" ]; then
-#            error_exit "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST, NETTYPE=$NETTYPE
-#                   Please use correct config or set mds_HOST correctly!"
-#    fi
+    if [ "$mgshost" != "$myMGS_host" ]; then
+            log "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST, NETTYPE=$NETTYPE
+                   Please use correct config or set mds_HOST correctly!"
+    fi
 
     sanity_mount_check ||
         error "environments are insane!"
@@ -3018,12 +3017,13 @@ get_mds_dir () {
     local dir=$1
     local file=$dir/f0.get_mds_dir_tmpfile
 
+    mkdir -p $dir
     rm -f $file
     sleep 1
     local iused=$(lfs df -i $dir | grep MDT | awk '{print $3}')
     local -a oldused=($iused)
 
-    touch $file
+    openfile -f O_CREAT:O_LOV_DELAY_CREATE -m 0644 $file > /dev/null
     sleep 1
     iused=$(lfs df -i $dir | grep MDT | awk '{print $3}')
     local -a newused=($iused)
@@ -3287,5 +3287,28 @@ cleanup_logs () {
     local list=${1:-$(comma_list $(nodes_list))}
 
     [ -n ${TESTSUITE} ] && do_nodes $list "rm -f $TMP/*${TESTSUITE}*" || true
+}
+
+do_ls () {
+    local mntpt_root=$1
+    local num_mntpts=$2
+    local dir=$3
+    local i
+    local cmd
+    local pids
+    local rc=0
+
+    for i in $(seq 0 $num_mntpts); do
+        cmd="ls -laf ${mntpt_root}$i/$dir"
+        echo + $cmd;
+        $cmd > /dev/null &
+        pids="$pids $!"
+    done
+    echo pids=$pids
+    for pid in $pids; do
+        wait $pid || rc=$?
+    done
+
+    return $rc
 }
 

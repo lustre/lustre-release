@@ -75,15 +75,6 @@ static inline int cl_io_is_loopable(const struct cl_io *io)
 }
 
 /**
- * True, iff \a io is a sendfile().
- */
-int cl_io_is_sendfile(const struct cl_io *io)
-{
-        return io->ci_type == CIT_READ && io->u.ci_rd.rd_is_sendfile;
-}
-EXPORT_SYMBOL(cl_io_is_sendfile);
-
-/**
  * Returns true iff there is an IO ongoing in the given environment.
  */
 int cl_io_is_going(const struct lu_env *env)

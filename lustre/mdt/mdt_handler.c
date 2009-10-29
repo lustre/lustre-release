@@ -5103,7 +5103,7 @@ static int mdt_obd_reconnect(const struct lu_env *env,
 
         RETURN(rc);
 }
-static int mdt_mfd_cleanup(struct obd_export *exp)
+static int mdt_export_cleanup(struct obd_export *exp)
 {
         struct mdt_export_data *med = &exp->exp_mdt_data;
         struct obd_device      *obd = exp->exp_obd;
@@ -5168,7 +5168,6 @@ static int mdt_mfd_cleanup(struct obd_export *exp)
                         ma->ma_valid = MA_FLAGS;
                         mdt_mfd_close(info, mfd);
                 }
-                info->mti_mdt = NULL;
                 OBD_FREE(ma->ma_cookie, cookie_size);
                 ma->ma_cookie = NULL;
 out_cookie:
@@ -5176,6 +5175,9 @@ out_cookie:
                 ma->ma_lmm = NULL;
         }
 out_lmm:
+        info->mti_mdt = NULL;
+        /* cleanup client slot early */
+        mdt_client_del(&env, mdt);
         lu_env_fini(&env);
 
         RETURN(rc);
@@ -5193,7 +5195,7 @@ static int mdt_obd_disconnect(struct obd_export *exp)
         if (rc != 0)
                 CDEBUG(D_IOCTL, "server disconnect error: %d\n", rc);
 
-        rc = mdt_mfd_cleanup(exp);
+        rc = mdt_export_cleanup(exp);
         class_export_put(exp);
         RETURN(rc);
 }
@@ -5218,44 +5220,24 @@ static int mdt_init_export(struct obd_export *exp)
         RETURN(rc);
 }
 
-static int mdt_destroy_export(struct obd_export *export)
+static int mdt_destroy_export(struct obd_export *exp)
 {
         struct mdt_export_data *med;
-        struct obd_device      *obd = export->exp_obd;
-        struct mdt_device      *mdt;
-        struct mdt_thread_info *info;
-        struct lu_env           env;
         int rc = 0;
         ENTRY;
 
-        med = &export->exp_mdt_data;
-        if (exp_connect_rmtclient(export))
-                mdt_cleanup_idmap(med);
+        med = &exp->exp_mdt_data;
+        if (exp_connect_rmtclient(exp))
+                mdt_cleanup_idmap(&exp->exp_mdt_data);
 
-        target_destroy_export(export);
-        ldlm_destroy_export(export);
+        target_destroy_export(exp);
+        ldlm_destroy_export(exp);
 
-        LASSERT(list_empty(&export->exp_outstanding_replies));
-        LASSERT(list_empty(&med->med_open_head));
-        if (obd_uuid_equals(&export->exp_client_uuid, &obd->obd_uuid))
+        LASSERT(list_empty(&exp->exp_outstanding_replies));
+        LASSERT(list_empty(&exp->exp_mdt_data.med_open_head));
+        if (obd_uuid_equals(&exp->exp_client_uuid, &exp->exp_obd->obd_uuid))
                 RETURN(0);
 
-        mdt = mdt_dev(obd->obd_lu_dev);
-        LASSERT(mdt != NULL);
-
-        rc = lu_env_init(&env, LCT_MD_THREAD);
-        if (rc)
-                RETURN(rc);
-
-        info = lu_context_key_get(&env.le_ctx, &mdt_thread_key);
-        LASSERT(info != NULL);
-        memset(info, 0, sizeof *info);
-        info->mti_env = &env;
-        info->mti_exp = export;
-        info->mti_mdt = NULL;
-        mdt_client_del(&env, mdt);
-
-        lu_env_fini(&env);
         RETURN(rc);
 }
 

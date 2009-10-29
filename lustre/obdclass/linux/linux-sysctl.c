@@ -56,6 +56,8 @@
 
 cfs_sysctl_table_header_t *obd_table_header = NULL;
 
+#ifndef HAVE_SYSCTL_UNNUMBERED
+
 #define OBD_SYSCTL 300
 
 enum {
@@ -79,6 +81,33 @@ enum {
         OBD_AT_EARLY_MARGIN,
         OBD_AT_HISTORY,
 };
+
+#else
+
+#define OBD_SYSCTL              CTL_UNNUMBERED
+
+#define OBD_FAIL_LOC            CTL_UNNUMBERED
+#define OBD_FAIL_VAL            CTL_UNNUMBERED
+#define OBD_TIMEOUT             CTL_UNNUMBERED
+#define OBD_DUMP_ON_TIMEOUT     CTL_UNNUMBERED
+#define OBD_MEMUSED             CTL_UNNUMBERED
+#define OBD_PAGESUSED           CTL_UNNUMBERED
+#define OBD_MAXMEMUSED          CTL_UNNUMBERED
+#define OBD_MAXPAGESUSED        CTL_UNNUMBERED
+#define OBD_SYNCFILTER          CTL_UNNUMBERED
+#define OBD_LDLM_TIMEOUT        CTL_UNNUMBERED
+#define OBD_DUMP_ON_EVICTION    CTL_UNNUMBERED
+#define OBD_DEBUG_PEER_ON_TIMEOUT CTL_UNNUMBERED
+#define OBD_ALLOC_FAIL_RATE     CTL_UNNUMBERED
+#define OBD_MAX_DIRTY_PAGES     CTL_UNNUMBERED
+#define OBD_AT_MIN              CTL_UNNUMBERED
+#define OBD_AT_MAX              CTL_UNNUMBERED
+#define OBD_AT_EXTRA            CTL_UNNUMBERED
+#define OBD_AT_EARLY_MARGIN     CTL_UNNUMBERED
+#define OBD_AT_HISTORY          CTL_UNNUMBERED
+
+#endif
+
 
 int LL_PROC_PROTO(proc_fail_loc)
 {

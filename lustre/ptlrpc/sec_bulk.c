@@ -981,9 +981,9 @@ int sptlrpc_get_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u8 alg,
         hashsize = ll_crypto_hash_digestsize(hdesc.tfm);
 
         for (i = 0; i < desc->bd_iov_count; i++) {
-                sl.page = desc->bd_iov[i].kiov_page;
-                sl.offset = desc->bd_iov[i].kiov_offset;
-                sl.length = desc->bd_iov[i].kiov_len;
+                sg_set_page(&sl, desc->bd_iov[i].kiov_page,
+                             desc->bd_iov[i].kiov_len,
+                             desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK);
                 ll_crypto_hash_update(&hdesc, &sl, sl.length);
         }
 

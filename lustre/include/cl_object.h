@@ -2223,6 +2223,7 @@ struct cl_io_rw_common {
         int         crw_nonblock;
 };
 
+
 /**
  * State for io.
  *
@@ -2258,7 +2259,6 @@ struct cl_io {
         union {
                 struct cl_rd_io {
                         struct cl_io_rw_common rd;
-                        int                    rd_is_sendfile;
                 } ci_rd;
                 struct cl_wr_io {
                         struct cl_io_rw_common wr;
@@ -2927,8 +2927,6 @@ static inline int cl_io_is_append(const struct cl_io *io)
 {
         return io->ci_type == CIT_WRITE && io->u.ci_wr.wr_append;
 }
-
-int cl_io_is_sendfile(const struct cl_io *io);
 
 struct cl_io *cl_io_top(struct cl_io *io);
 

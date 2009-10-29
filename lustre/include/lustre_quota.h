@@ -60,7 +60,27 @@ struct client_obd;
 #define NR_DQHASH 45
 #endif
 
+#ifndef QUOTABLOCK_BITS
+#define QUOTABLOCK_BITS 10
+#endif
+
+#ifndef QUOTABLOCK_SIZE
+#define QUOTABLOCK_SIZE (1 << QUOTABLOCK_BITS)
+#endif
+
+#ifndef toqb
+#define toqb(x) (((x) + QUOTABLOCK_SIZE - 1) >> QUOTABLOCK_BITS)
+#endif
+
 #ifdef HAVE_QUOTA_SUPPORT
+
+#ifndef MAX_IQ_TIME
+#define MAX_IQ_TIME  604800     /* (7*24*60*60) 1 week */
+#endif
+
+#ifndef MAX_DQ_TIME
+#define MAX_DQ_TIME  604800     /* (7*24*60*60) 1 week */
+#endif
 
 #ifdef __KERNEL__
 
@@ -205,10 +225,19 @@ int lustre_get_qids(struct file *file, struct inode *inode, int type,
                     struct list_head *list);
 int lustre_quota_convert(struct lustre_quota_info *lqi, int type);
 
-#define LL_DQUOT_OFF(sb)    DQUOT_OFF(sb)
-
 typedef int (*dqacq_handler_t) (struct obd_device * obd, struct qunit_data * qd,
                                 int opc);
+
+/*
+#ifdef HAVE_VFS_DQ_OFF
+#define LL_DQUOT_OFF(sb, remount)    vfs_dq_off(sb, remount)
+#else
+#define LL_DQUOT_OFF(sb, remount)    DQUOT_OFF(sb)
+#endif
+*/
+
+#define LL_DQUOT_OFF(sb)    DQUOT_OFF(sb)
+
 
 /* user quota is turned on on filter */
 #define LQC_USRQUOTA_FLAG (1 << 0)

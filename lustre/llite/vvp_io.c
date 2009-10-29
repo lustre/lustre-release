@@ -52,6 +52,18 @@
 static struct vvp_io *cl2vvp_io(const struct lu_env *env,
                                 const struct cl_io_slice *slice);
 
+/**
+ * True, if \a io is a normal io, False for sendfile() / splice_{read|write}
+ */
+int cl_is_normalio(const struct lu_env *env, const struct cl_io *io)
+{
+        struct vvp_io *vio = vvp_env_io(env);
+
+        LASSERT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE);
+
+        return vio->cui_io_subtype == IO_NORMAL;
+}
+
 /*****************************************************************************
  *
  * io operations.
@@ -131,7 +143,7 @@ static int vvp_mmap_locks(const struct lu_env *env,
 
         LASSERT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE);
 
-        if (cl_io_is_sendfile(io))
+        if (!cl_is_normalio(env, io))
                 RETURN(0);
 
         for (seg = 0; seg < vio->cui_nrsegs; seg++) {
@@ -458,11 +470,27 @@ static int vvp_io_read_start(const struct lu_env *env,
 
         /* BUG: 5972 */
         file_accessed(file);
-        if (cl_io_is_sendfile(io)) {
+        switch (vio->cui_io_subtype) {
+        case IO_NORMAL:
+                 result = lustre_generic_file_read(file, cio, &pos);
+                 break;
+#ifdef HAVE_KERNEL_SENDFILE
+        case IO_SENDFILE:
                 result = generic_file_sendfile(file, &pos, cnt,
-                                vio->u.read.cui_actor, vio->u.read.cui_target);
-        } else {
-                result = lustre_generic_file_read(file, cio, &pos);
+                                vio->u.sendfile.cui_actor,
+                                vio->u.sendfile.cui_target);
+                break;
+#endif
+#ifdef HAVE_KERNEL_SPLICE_READ
+        case IO_SPLICE:
+                result = generic_file_splice_read(file, &pos,
+                                vio->u.splice.cui_pipe, cnt,
+                                vio->u.splice.cui_flags);
+                break;
+#endif
+        default:
+                CERROR("Wrong IO type %u\n", vio->cui_io_subtype);
+                LBUG();
         }
 
 out:
@@ -520,6 +548,69 @@ static int vvp_io_write_start(const struct lu_env *env,
         RETURN(result);
 }
 
+#ifndef HAVE_VM_OP_FAULT
+static int vvp_io_kernel_fault(struct vvp_fault_io *cfio)
+{
+        cfs_page_t *vmpage;
+
+        vmpage = filemap_nopage(cfio->ft_vma, cfio->nopage.ft_address,
+                                cfio->nopage.ft_type);
+
+        if (vmpage == NOPAGE_SIGBUS) {
+                CDEBUG(D_PAGE, "got addr %lu type %lx - SIGBUS\n",
+                       cfio->nopage.ft_address,(long)cfio->nopage.ft_type);
+                return -EFAULT;
+        } else if (vmpage == NOPAGE_OOM) {
+                CDEBUG(D_PAGE, "got addr %lu type %lx - OOM\n",
+                       cfio->nopage.ft_address, (long)cfio->nopage.ft_type);
+                return -ENOMEM;
+        }
+
+        LL_CDEBUG_PAGE(D_PAGE, vmpage, "got addr %lu type %lx\n",
+                       cfio->nopage.ft_address, (long)cfio->nopage.ft_type);
+
+        cfio->ft_vmpage = vmpage;
+
+        return 0;
+}
+#else
+static int vvp_io_kernel_fault(struct vvp_fault_io *cfio)
+{
+        cfio->fault.ft_flags = filemap_fault(cfio->ft_vma, cfio->fault.ft_vmf);
+
+        if (cfio->fault.ft_vmf->page) {
+                LL_CDEBUG_PAGE(D_PAGE, cfio->fault.ft_vmf->page,
+                               "got addr %p type NOPAGE\n",
+                               cfio->fault.ft_vmf->virtual_address);
+                /*XXX workaround to bug in CLIO - he deadlocked with
+                 lock cancel if page locked  */
+                if (likely(cfio->fault.ft_flags & VM_FAULT_LOCKED)) {
+                        unlock_page(cfio->fault.ft_vmf->page);
+                        cfio->fault.ft_flags &= ~VM_FAULT_LOCKED;
+                }
+
+                cfio->ft_vmpage = cfio->fault.ft_vmf->page;
+                return 0;
+        }
+
+        if (unlikely (cfio->fault.ft_flags & VM_FAULT_ERROR)) {
+                CDEBUG(D_PAGE, "got addr %p - SIGBUS\n",
+                       cfio->fault.ft_vmf->virtual_address);
+                return -EFAULT;
+        }
+
+        if (unlikely (cfio->fault.ft_flags & VM_FAULT_NOPAGE)) {
+                CDEBUG(D_PAGE, "got addr %p - OOM\n",
+                       cfio->fault.ft_vmf->virtual_address);
+                return -ENOMEM;
+        }
+
+        CERROR("unknow error in page fault!\n");
+        return -EINVAL;
+}
+
+#endif
+
 static int vvp_io_fault_start(const struct lu_env *env,
                               const struct cl_io_slice *ios)
 {
@@ -529,9 +620,12 @@ static int vvp_io_fault_start(const struct lu_env *env,
         struct inode        *inode   = ccc_object_inode(obj);
         struct cl_fault_io  *fio     = &io->u.ci_fault;
         struct vvp_fault_io *cfio    = &vio->u.fault;
-        cfs_page_t          *vmpage;
         loff_t               offset;
+        int                  kernel_result = 0;
         int                  result  = 0;
+        struct cl_page      *page;
+        loff_t               size;
+        pgoff_t              last; /* last page in a file data region */
 
         LASSERT(vio->cui_oneshot == 0);
 
@@ -548,55 +642,44 @@ static int vvp_io_fault_start(const struct lu_env *env,
         if (result != 0)
                 return result;
 
-        vmpage = filemap_nopage(cfio->ft_vma, cfio->ft_address, cfio->ft_type);
-        if (vmpage != NOPAGE_SIGBUS && vmpage != NOPAGE_OOM)
-                LL_CDEBUG_PAGE(D_PAGE, vmpage,
-                               "got addr %lu type %lx\n",
-                               cfio->ft_address, (long)cfio->ft_type);
-        else
-                CDEBUG(D_PAGE, "got addr %lu type %lx - SIGBUS\n",
-                       cfio->ft_address, (long)cfio->ft_type);
-
-        if (vmpage == NOPAGE_SIGBUS)
-                result = -EFAULT;
-        else if (vmpage == NOPAGE_OOM)
-                result = -ENOMEM;
-        else {
-                struct cl_page *page;
-                loff_t          size;
-                pgoff_t         last; /* last page in a file data region */
-
-                /* Temporarily lock vmpage to keep cl_page_find() happy. */
-                lock_page(vmpage);
-                page = cl_page_find(env, obj, fio->ft_index, vmpage,
-                                    CPT_CACHEABLE);
-                unlock_page(vmpage);
-                if (!IS_ERR(page)) {
-                        size = i_size_read(inode);
-                        last = cl_index(obj, size - 1);
-                        if (fio->ft_index == last)
-                                /*
-                                 * Last page is mapped partially.
-                                 */
-                                fio->ft_nob = size - cl_offset(obj,
-                                                               fio->ft_index);
-                        else
-                                fio->ft_nob = cl_page_size(obj);
-                        lu_ref_add(&page->cp_reference, "fault", io);
-                        fio->ft_page = page;
-                        /*
-                         * Certain 2.6 kernels return not-NULL from
-                         * filemap_nopage() when page is beyond the file size,
-                         * on the grounds that "An external ptracer can access
-                         * pages that normally aren't accessible.." Don't
-                         * propagate such page fault to the lower layers to
-                         * avoid side-effects like KMS updates.
-                         */
-                        if (fio->ft_index > last)
-                                result = +1;
-                } else
-                        result = PTR_ERR(page);
+        /* must return locked page */
+        kernel_result = vvp_io_kernel_fault(cfio);
+        if (kernel_result != 0)
+                return kernel_result;
+        /* Temporarily lock vmpage to keep cl_page_find() happy. */
+        lock_page(cfio->ft_vmpage);
+        page = cl_page_find(env, obj, fio->ft_index, cfio->ft_vmpage,
+                            CPT_CACHEABLE);
+        unlock_page(cfio->ft_vmpage);
+        if (IS_ERR(page)) {
+                page_cache_release(cfio->ft_vmpage);
+                cfio->ft_vmpage = NULL;
+                return PTR_ERR(page);
         }
+
+        size = i_size_read(inode);
+        last = cl_index(obj, size - 1);
+        if (fio->ft_index == last)
+                /*
+                 * Last page is mapped partially.
+                 */
+                fio->ft_nob = size - cl_offset(obj, fio->ft_index);
+         else
+                fio->ft_nob = cl_page_size(obj);
+
+         lu_ref_add(&page->cp_reference, "fault", io);
+         fio->ft_page = page;
+         /*
+          * Certain 2.6 kernels return not-NULL from
+          * filemap_nopage() when page is beyond the file size,
+          * on the grounds that "An external ptracer can access
+          * pages that normally aren't accessible.." Don't
+          * propagate such page fault to the lower layers to
+          * avoid side-effects like KMS updates.
+          */
+          if (fio->ft_index > last)
+                result = +1;
+
         return result;
 }
 

@@ -637,10 +637,10 @@ void target_client_add_cb(struct obd_device *obd, __u64 transno, void *cb_data,
         spin_lock(&exp->exp_lock);
         exp->exp_need_sync = 0;
         spin_unlock(&exp->exp_lock);
-       
         class_export_cb_put(exp);
 }
 EXPORT_SYMBOL(target_client_add_cb);
+
 static void
 target_start_and_reset_recovery_timer(struct obd_device *obd,
                                       struct ptlrpc_request *req,

@@ -176,7 +176,7 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
         {
                 LASSERT(*mod == NULL);
 
-                *mod = obd_mod_alloc();
+                OBD_ALLOC_PTR(*mod);
                 if (*mod == NULL) {
                         DEBUG_REQ(D_ERROR, req, "Can't allocate "
                                   "md_open_data");
@@ -185,13 +185,6 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
                         req->rq_cb_data = *mod;
                         (*mod)->mod_open_req = req;
                         req->rq_commit_cb = mdc_commit_open;
-                        /**
-                         * Take an extra reference on \var mod, it protects \var
-                         * mod from being freed on eviction (commit callback is
-                         * called despite rq_replay flag).
-                         * Will be put on mdc_done_writing().
-                         */
-                        obd_mod_get(*mod);
                 }
         }
 
@@ -216,11 +209,8 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
                 rc = 0;
         }
         *request = req;
-        if (rc && req->rq_commit_cb) {
-                /* Put an extra reference on \var mod on error case. */
-                obd_mod_put(*mod);
+        if (rc && req->rq_commit_cb)
                 req->rq_commit_cb(req);
-        }
         RETURN(rc);
 }
 

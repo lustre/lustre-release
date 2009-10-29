@@ -177,7 +177,7 @@ void class_handle_hash_back(struct portals_handle *h)
 void *class_handle2object(__u64 cookie)
 {
         struct handle_bucket *bucket;
-        struct list_head *tmp;
+        struct portals_handle *h;
         void *retval = NULL;
         ENTRY;
 
@@ -188,9 +188,7 @@ void *class_handle2object(__u64 cookie)
         bucket = handle_hash + (cookie & HANDLE_HASH_MASK);
 
         rcu_read_lock();
-        list_for_each_rcu(tmp, &bucket->head) {
-                struct portals_handle *h;
-                h = list_entry(tmp, struct portals_handle, h_link);
+        list_for_each_entry_rcu(h, &bucket->head, h_link) {
                 if (h->h_cookie != cookie)
                         continue;
 
@@ -246,13 +244,10 @@ static void cleanup_all_handles(void)
         int i;
 
         for (i = 0; i < HANDLE_HASH_SIZE; i++) {
-                struct list_head *pos, *n;
-                n = NULL;
-                spin_lock(&handle_hash[i].lock);
-                list_for_each_safe_rcu(pos, n, &(handle_hash[i].head)) {
-                        struct portals_handle *h;
-                        h = list_entry(pos, struct portals_handle, h_link);
+                struct portals_handle *h;
 
+                spin_lock(&handle_hash[i].lock);
+                list_for_each_entry_rcu(h, &(handle_hash[i].head), h_link) {
                         CERROR("force clean handle "LPX64" addr %p addref %p\n",
                                h->h_cookie, h, h->h_addref);
 

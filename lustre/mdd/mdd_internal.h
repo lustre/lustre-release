@@ -329,7 +329,7 @@ int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,
                    struct thandle *th);
 
 int mdd_declare_setattr_log(const struct lu_env *env, struct mdd_object *obj,
-                            struct md_attr *ma,struct lov_mds_md *lmm,
+                            const struct md_attr *ma,struct lov_mds_md *lmm,
                             int lmm_size, struct thandle *th);
 int mdd_setattr_log(const struct lu_env *env, struct mdd_device *mdd,
                     const struct md_attr *ma,

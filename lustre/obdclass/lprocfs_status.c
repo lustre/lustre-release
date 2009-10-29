@@ -173,9 +173,11 @@ static ssize_t lprocfs_fops_read(struct file *f, char __user *buf,
         if (page == NULL)
                 return -ENOMEM;
 
-        LPROCFS_ENTRY();
+        if (LPROCFS_ENTRY_AND_CHECK(dp))
+                return -ENOENT;
+
         OBD_FAIL_TIMEOUT(OBD_FAIL_LPROC_REMOVE, 10);
-        if (!dp->deleted && dp->read_proc)
+        if (dp->read_proc)
                 rc = dp->read_proc(page, &start, *ppos, CFS_PAGE_SIZE,
                                    &eof, dp->data);
         LPROCFS_EXIT();
@@ -214,8 +216,9 @@ static ssize_t lprocfs_fops_write(struct file *f, const char __user *buf,
         struct proc_dir_entry *dp = PDE(f->f_dentry->d_inode);
         int rc = -EIO;
 
-        LPROCFS_ENTRY();
-        if (!dp->deleted && dp->write_proc)
+        if (LPROCFS_ENTRY_AND_CHECK(dp))
+                return -ENOENT;
+        if (dp->write_proc)
                 rc = dp->write_proc(f, buf, size, dp->data);
         LPROCFS_EXIT();
         return rc;
@@ -1306,7 +1309,9 @@ static int lprocfs_stats_seq_open(struct inode *inode, struct file *file)
         struct seq_file *seq;
         int rc;
 
-        LPROCFS_ENTRY_AND_CHECK(dp);
+        if (LPROCFS_ENTRY_AND_CHECK(dp))
+                return -ENOENT;
+
         rc = seq_open(file, &lprocfs_stats_seq_sops);
         if (rc) {
                 LPROCFS_EXIT();

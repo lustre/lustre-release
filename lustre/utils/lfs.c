@@ -73,6 +73,7 @@
 #include <lustre/lustre_idl.h>
 #include <lustre/liblustreapi.h>
 #include <lustre/lustre_user.h>
+#include <lustre_quota.h>
 
 #include <libcfs/libcfsutil.h>
 #include "obdctl.h"

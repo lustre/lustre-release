@@ -72,6 +72,8 @@
 struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                        int *type);
 
+static struct vm_operations_struct ll_file_vm_ops;
+
 void policy_from_vma(ldlm_policy_data_t *policy,
                             struct vm_area_struct *vma, unsigned long addr,
                             size_t count)
@@ -95,7 +97,7 @@ struct vm_area_struct * our_vma(unsigned long addr, size_t count)
         spin_lock(&mm->page_table_lock);
         for(vma = find_vma(mm, addr);
             vma != NULL && vma->vm_start < (addr + count); vma = vma->vm_next) {
-                if (vma->vm_ops && vma->vm_ops->nopage == ll_nopage &&
+                if (vma->vm_ops && vma->vm_ops == &ll_file_vm_ops &&
                     vma->vm_flags & VM_SHARED) {
                         ret = vma;
                         break;
@@ -106,6 +108,85 @@ struct vm_area_struct * our_vma(unsigned long addr, size_t count)
 }
 
 /**
+ * API independent part for page fault initialization.
+ * \param vma - virtual memory area addressed to page fault
+ * \param env - corespondent lu_env to processing
+ * \param nest - nested level
+ * \param index - page index corespondent to fault.
+ * \parm ra_flags - vma readahead flags.
+ *
+ * \return allocated and initialized env for fault operation.
+ * \retval EINVAL if env can't allocated
+ * \return other error codes from cl_io_init.
+ */
+int ll_fault_io_init(struct vm_area_struct *vma, struct lu_env **env_ret,
+                     struct cl_env_nest *nest, pgoff_t index, unsigned long *ra_flags)
+{
+        struct file       *file  = vma->vm_file;
+        struct inode      *inode = file->f_dentry->d_inode;
+        const unsigned long writable = VM_SHARED|VM_WRITE;
+        struct cl_io      *io;
+        struct cl_fault_io *fio;
+        struct lu_env     *env;
+        ENTRY;
+
+        if (ll_file_nolock(file))
+                RETURN(-EOPNOTSUPP);
+
+        /*
+         * page fault can be called when lustre IO is
+         * already active for the current thread, e.g., when doing read/write
+         * against user level buffer mapped from Lustre buffer. To avoid
+         * stomping on existing context, optionally force an allocation of a new
+         * one.
+         */
+        env = cl_env_nested_get(nest);
+        if (IS_ERR(env)) {
+                *env_ret = NULL;
+                 RETURN(-EINVAL);
+        }
+
+        *env_ret = env;
+
+        io = &ccc_env_info(env)->cti_io;
+        io->ci_obj = ll_i2info(inode)->lli_clob;
+        LASSERT(io->ci_obj != NULL);
+
+        fio = &io->u.ci_fault;
+        fio->ft_index      = vma->vm_pgoff + index;
+        fio->ft_writable   = (vma->vm_flags&writable) == writable;
+        fio->ft_executable = vma->vm_flags&VM_EXEC;
+
+        /*
+         * disable VM_SEQ_READ and use VM_RAND_READ to make sure that
+         * the kernel will not read other pages not covered by ldlm in
+         * filemap_nopage. we do our readahead in ll_readpage.
+         */
+        *ra_flags = vma->vm_flags & (VM_RAND_READ|VM_SEQ_READ);
+        vma->vm_flags &= ~VM_SEQ_READ;
+        vma->vm_flags |= VM_RAND_READ;
+
+        CDEBUG(D_INFO, "vm_flags: %lx (%lu %i %i)\n", vma->vm_flags,
+               fio->ft_index, fio->ft_writable, fio->ft_executable);
+
+        if (cl_io_init(env, io, CIT_FAULT, io->ci_obj) == 0) {
+                struct ccc_io *cio = ccc_env_io(env);
+                struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+
+                LASSERT(cio->cui_cl.cis_io == io);
+
+                /* mmap lock must be MANDATORY
+                 * it has to cache pages. */
+                io->ci_lockreq = CILR_MANDATORY;
+
+                cio->cui_fd  = fd;
+        }
+
+        return io->ci_result;
+}
+
+#ifndef HAVE_VM_OP_FAULT
+/**
  * Lustre implementation of a vm_operations_struct::nopage() method, called by
  * VM to server page fault (both in kernel and user space).
  *
@@ -115,100 +196,109 @@ struct vm_area_struct * our_vma(unsigned long addr, size_t count)
  * \param address - address when hit fault
  * \param type - of fault
  *
- * XXX newer 2.6 kernels provide vm_operations_struct::fault() method with
- * slightly different semantics instead.
- *
- * \return allocated and filled page for address
+ * \return allocated and filled _unlocked_ page for address
  * \retval NOPAGE_SIGBUS if page not exist on this address
  * \retval NOPAGE_OOM not have memory for allocate new page
  */
 struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                        int *type)
 {
-        struct file       *file  = vma->vm_file;
-        struct inode      *inode = file->f_dentry->d_inode;
-        struct lu_env     *env;
-        struct cl_io      *io;
-        struct page       *page  = NULL;
-        struct cl_env_nest nest;
-        int result;
-
+        struct lu_env           *env;
+        struct cl_env_nest      nest;
+        struct cl_io            *io;
+        struct page             *page  = NOPAGE_SIGBUS;
+        struct vvp_io           *vio = NULL;
+        unsigned long           ra_flags;
+        pgoff_t                 pg_offset;
+        int                     result;
         ENTRY;
 
-        if (ll_file_nolock(file))
-                RETURN(ERR_PTR(-EOPNOTSUPP));
+        pg_offset = (address - vma->vm_start) >> PAGE_SHIFT;
+        result = ll_fault_io_init(vma, &env,  &nest, pg_offset, &ra_flags);
+        if (env == NULL)
+                return NOPAGE_SIGBUS;
 
-        /*
-         * vm_operations_struct::nopage() can be called when lustre IO is
-         * already active for the current thread, e.g., when doing read/write
-         * against user level buffer mapped from Lustre buffer. To avoid
-         * stomping on existing context, optionally force an allocation of a new
-         * one.
-         */
-        env = cl_env_nested_get(&nest);
-        if (!IS_ERR(env)) {
-                pgoff_t pg_offset;
-                const unsigned long writable = VM_SHARED|VM_WRITE;
-                unsigned long ra_flags;
-                struct cl_fault_io *fio;
+        io = &ccc_env_info(env)->cti_io;
+        if (result < 0)
+                goto out_err;
 
-                io = &ccc_env_info(env)->cti_io;
-                memset(io, 0, sizeof(*io));
-                io->ci_obj = ll_i2info(inode)->lli_clob;
-                LASSERT(io->ci_obj != NULL);
+        vio = vvp_env_io(env);
 
-                fio = &io->u.ci_fault;
-                pg_offset = (address - vma->vm_start) >> PAGE_SHIFT;
-                fio->ft_index      = pg_offset + vma->vm_pgoff;
-                fio->ft_writable   = (vma->vm_flags&writable) == writable;
-                fio->ft_executable = vma->vm_flags&VM_EXEC;
+        vio->u.fault.ft_vma            = vma;
+        vio->u.fault.nopage.ft_address = address;
+        vio->u.fault.nopage.ft_type    = type;
 
-                /*
-                 * disable VM_SEQ_READ and use VM_RAND_READ to make sure that
-                 * the kernel will not read other pages not covered by ldlm in
-                 * filemap_nopage. we do our readahead in ll_readpage.
-                 */
-                ra_flags = vma->vm_flags & (VM_RAND_READ|VM_SEQ_READ);
-                vma->vm_flags &= ~VM_SEQ_READ;
-                vma->vm_flags |= VM_RAND_READ;
+        result = cl_io_loop(env, io);
 
-                CDEBUG(D_INFO, "vm_flags: %lx (%lu %i %i)\n", vma->vm_flags,
-                       fio->ft_index, fio->ft_writable, fio->ft_executable);
-
-                if (cl_io_init(env, io, CIT_FAULT, io->ci_obj) == 0) {
-                        struct vvp_io *vio = vvp_env_io(env);
-                        struct ccc_io *cio = ccc_env_io(env);
-                        struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
-
-                        LASSERT(cio->cui_cl.cis_io == io);
-
-                        /* mmap lock must be MANDATORY. */
-                        io->ci_lockreq          = CILR_MANDATORY;
-                        vio->u.fault.ft_vma     = vma;
-                        vio->u.fault.ft_address = address;
-                        vio->u.fault.ft_type    = type;
-                        cio->cui_fd             = fd;
-
-                        result = cl_io_loop(env, io);
-                        if (result == 0) {
-                                LASSERT(fio->ft_page != NULL);
-                                page = cl_page_vmpage(env, fio->ft_page);
-                        } else if (result == -EFAULT) {
-                                page = NOPAGE_SIGBUS;
-                        } else if (result == -ENOMEM) {
-                                page = NOPAGE_OOM;
-                        }
-                } else
-                        result = io->ci_result;
-
-                vma->vm_flags &= ~VM_RAND_READ;
-                vma->vm_flags |= ra_flags;
-
-                cl_io_fini(env, io);
-                cl_env_nested_put(&nest, env);
+out_err:
+        if (result == 0) {
+                LASSERT(io->u.ci_fault.ft_page != NULL);
+                page = vio->u.fault.ft_vmpage;
+        } else {
+                if (result == -ENOMEM)
+                        page = NOPAGE_OOM;
         }
+
+        vma->vm_flags &= ~VM_RAND_READ;
+        vma->vm_flags |= ra_flags;
+
+        cl_io_fini(env, io);
+        cl_env_nested_put(&nest, env);
+
         RETURN(page);
 }
+#else
+/**
+ * Lustre implementation of a vm_operations_struct::fault() method, called by
+ * VM to server page fault (both in kernel and user space).
+ *
+ * \param vma - is virtiual area struct related to page fault
+ * \param vmf - structure which describe type and address where hit fault
+ *
+ * \return allocated and filled _locked_ page for address
+ * \retval VM_FAULT_ERROR on general error
+ * \retval NOPAGE_OOM not have memory for allocate new page
+ */
+int ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
+{
+        struct lu_env           *env;
+        struct cl_io            *io;
+        struct vvp_io           *vio = NULL;
+        unsigned long            ra_flags;
+        struct cl_env_nest       nest;
+        int                      result;
+        int                      fault_ret = 0;
+        ENTRY;
+
+        result = ll_fault_io_init(vma, &env,  &nest, vmf->pgoff, &ra_flags);
+        if (env == NULL)
+                RETURN(VM_FAULT_ERROR);
+
+        io = &ccc_env_info(env)->cti_io;
+        if (result < 0)
+                goto out_err;
+
+        vio = vvp_env_io(env);
+
+        vio->u.fault.ft_vma       = vma;
+        vio->u.fault.fault.ft_vmf = vmf;
+
+        result = cl_io_loop(env, io);
+        fault_ret = vio->u.fault.fault.ft_flags;
+
+out_err:
+        if (result != 0)
+                fault_ret |= VM_FAULT_ERROR;
+
+        vma->vm_flags |= ra_flags;
+
+        cl_io_fini(env, io);
+        cl_env_nested_put(&nest, env);
+
+        RETURN(fault_ret);
+}
+
+#endif
 
 /**
  *  To avoid cancel the locks covering mmapped region for lock cache pressure,
@@ -241,6 +331,7 @@ static void ll_vm_close(struct vm_area_struct *vma)
         EXIT;
 }
 
+#ifndef HAVE_VM_OP_FAULT
 #ifndef HAVE_FILEMAP_POPULATE
 static int (*filemap_populate)(struct vm_area_struct * area, unsigned long address, unsigned long len, pgprot_t prot, unsigned long pgoff, int nonblock);
 #endif
@@ -255,6 +346,7 @@ static int ll_populate(struct vm_area_struct *area, unsigned long address,
         rc = filemap_populate(area, address, len, prot, pgoff, 1);
         RETURN(rc);
 }
+#endif
 
 /* return the user space pointer that maps to a file offset via a vma */
 static inline unsigned long file_to_user(struct vm_area_struct *vma, __u64 byte)
@@ -281,10 +373,15 @@ int ll_teardown_mmaps(struct address_space *mapping, __u64 first, __u64 last)
 }
 
 static struct vm_operations_struct ll_file_vm_ops = {
+#ifndef HAVE_VM_OP_FAULT
         .nopage         = ll_nopage,
+        .populate       = ll_populate,
+
+#else
+        .fault          = ll_fault,
+#endif
         .open           = ll_vm_open,
         .close          = ll_vm_close,
-        .populate       = ll_populate,
 };
 
 int ll_file_mmap(struct file *file, struct vm_area_struct * vma)
@@ -299,7 +396,7 @@ int ll_file_mmap(struct file *file, struct vm_area_struct * vma)
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_MAP, 1);
         rc = generic_file_mmap(file, vma);
         if (rc == 0) {
-#if !defined(HAVE_FILEMAP_POPULATE)
+#if !defined(HAVE_FILEMAP_POPULATE) && !defined(HAVE_VM_OP_FAULT)
                 if (!filemap_populate)
                         filemap_populate = vma->vm_ops->populate;
 #endif

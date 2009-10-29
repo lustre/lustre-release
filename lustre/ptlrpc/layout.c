@@ -1253,10 +1253,9 @@ int req_layout_init(void)
         int i;
         int j;
         int k;
+        struct req_format *rf = NULL;
 
         for (i = 0; i < ARRAY_SIZE(req_formats); ++i) {
-                struct req_format *rf;
-
                 rf = (struct req_format *)req_formats[i];
                 rf->rf_idx = i;
                 for (j = 0; j < RCL_NR; ++j) {

@@ -391,18 +391,6 @@ enum {
 };
 
 #ifdef NEED_QUOTA_DEFS
-#ifndef QUOTABLOCK_BITS
-#define QUOTABLOCK_BITS 10
-#endif
-
-#ifndef QUOTABLOCK_SIZE
-#define QUOTABLOCK_SIZE (1 << QUOTABLOCK_BITS)
-#endif
-
-#ifndef toqb
-#define toqb(x) (((x) + QUOTABLOCK_SIZE - 1) >> QUOTABLOCK_BITS)
-#endif
-
 #ifndef QIF_BLIMITS
 #define QIF_BLIMITS     1
 #define QIF_SPACE       2
