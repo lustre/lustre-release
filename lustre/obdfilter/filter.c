@@ -122,7 +122,7 @@ int filter_finish_transno(struct obd_export *exp, struct inode *inode,
 {
         struct filter_obd *filter = &exp->exp_obd->u.filter;
         struct filter_export_data *fed = &exp->exp_filter_data;
-        struct lsd_client_data *lcd = fed->fed_lcd;
+        struct lsd_client_data *lcd;
         __u64 last_rcvd;
         loff_t off;
         int err, log_pri = D_RPCTRACE;
@@ -133,6 +133,20 @@ int filter_finish_transno(struct obd_export *exp, struct inode *inode,
 
         if (!exp->exp_obd->obd_replayable || oti == NULL)
                 RETURN(rc);
+
+        mutex_down(&fed->fed_lcd_lock);
+        lcd = fed->fed_lcd;
+        /* if the export has already been disconnected, we have no last_rcvd slot,
+         * update server data with latest transno then */
+        if (lcd == NULL) {
+                mutex_up(&fed->fed_lcd_lock);
+                CWARN("commit transaction for disconnected client %s: rc %d\n",
+                      exp->exp_client_uuid.uuid, rc);
+                err = filter_update_server_data(exp->exp_obd,
+                                                filter->fo_rcvd_filp,
+                                                filter->fo_fsd);
+                RETURN(err);
+        }
 
         /* we don't allocate new transnos for replayed requests */
         spin_lock(&filter->fo_translock);
@@ -184,7 +198,7 @@ int filter_finish_transno(struct obd_export *exp, struct inode *inode,
 
         CDEBUG(log_pri, "wrote trans "LPU64" for client %s at #%d: err = %d\n",
                last_rcvd, lcd->lcd_uuid, fed->fed_lr_idx, err);
-
+        mutex_up(&fed->fed_lcd_lock);
         RETURN(rc);
 }
 
@@ -335,6 +349,7 @@ static int filter_client_add(struct obd_device *obd, struct obd_export *exp,
         fed->fed_lr_idx = cl_idx;
         fed->fed_lr_off = le32_to_cpu(filter->fo_fsd->lsd_client_start) +
                 cl_idx * le16_to_cpu(filter->fo_fsd->lsd_client_size);
+        init_mutex(&fed->fed_lcd_lock);
         LASSERTF(fed->fed_lr_off > 0, "fed_lr_off = %llu\n", fed->fed_lr_off);
 
         CDEBUG(D_INFO, "client at index %d (%llu) with UUID '%s' added\n",
@@ -396,15 +411,16 @@ static int filter_client_free(struct obd_export *exp)
         struct filter_obd *filter = &exp->exp_obd->u.filter;
         struct obd_device *obd = exp->exp_obd;
         struct lvfs_run_ctxt saved;
+        struct lsd_client_data *lcd = fed->fed_lcd;
         int rc;
         loff_t off;
         ENTRY;
 
-        if (fed->fed_lcd == NULL)
+        if (lcd == NULL)
                 RETURN(0);
 
         /* XXX if lcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
-        if (strcmp(fed->fed_lcd->lcd_uuid, obd->obd_uuid.uuid ) == 0)
+        if (strcmp(lcd->lcd_uuid, obd->obd_uuid.uuid ) == 0)
                 GOTO(free, 0);
 
         LASSERT(filter->fo_last_rcvd_slots != NULL);
@@ -412,7 +428,7 @@ static int filter_client_free(struct obd_export *exp)
         off = fed->fed_lr_off;
 
         CDEBUG(D_INFO, "freeing client at idx %u, offset %lld with UUID '%s'\n",
-               fed->fed_lr_idx, fed->fed_lr_off, fed->fed_lcd->lcd_uuid);
+               fed->fed_lr_idx, fed->fed_lr_off, lcd->lcd_uuid);
 
         /* Don't clear fed_lr_idx here as it is likely also unset.  At worst
          * we leak a client slot that will be cleaned on the next recovery. */
@@ -436,13 +452,16 @@ static int filter_client_free(struct obd_export *exp)
          * be in server data or in client data in case of failure */
         filter_update_server_data(obd, filter->fo_rcvd_filp, filter->fo_fsd);
 
+        mutex_down(&fed->fed_lcd_lock);
         rc = fsfilt_write_record(obd, filter->fo_rcvd_filp, &zero_lcd,
                                  sizeof(zero_lcd), &off, 0);
+        fed->fed_lcd = NULL;
+        mutex_up(&fed->fed_lcd_lock);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         CDEBUG(rc == 0 ? D_INFO : D_ERROR,
                "zero out client %s at idx %u/%llu in %s, rc %d\n",
-               fed->fed_lcd->lcd_uuid, fed->fed_lr_idx, fed->fed_lr_off,
+               lcd->lcd_uuid, fed->fed_lr_idx, fed->fed_lr_off,
                LAST_RCVD, rc);
 
         if (!test_and_clear_bit(fed->fed_lr_idx, filter->fo_last_rcvd_slots)) {
@@ -450,11 +469,13 @@ static int filter_client_free(struct obd_export *exp)
                        fed->fed_lr_idx);
                 LBUG();
         }
-
-        EXIT;
+        OBD_FREE_PTR(lcd);
+        RETURN(0);
 free:
-        OBD_FREE_PTR(fed->fed_lcd);
+        mutex_down(&fed->fed_lcd_lock);
         fed->fed_lcd = NULL;
+        mutex_up(&fed->fed_lcd_lock);
+        OBD_FREE_PTR(lcd);
 
         return 0;
 }
@@ -2960,9 +2981,7 @@ static int filter_destroy_export(struct obd_export *exp)
                 RETURN(0);
 
 
-        if (exp->exp_obd->obd_replayable)
-                filter_client_free(exp);
-        else
+        if (!exp->exp_obd->obd_replayable)
                 fsfilt_sync(exp->exp_obd, exp->exp_obd->u.obt.obt_sb);
 
         filter_grant_discard(exp);
@@ -3055,7 +3074,10 @@ static int filter_disconnect(struct obd_export *exp)
 
         rc = server_disconnect_export(exp);
 
-        fsfilt_sync(obd, obd->u.obt.obt_sb);
+        if (exp->exp_obd->obd_replayable)
+                filter_client_free(exp);
+        else
+                fsfilt_sync(obd, obd->u.obt.obt_sb);
 
         class_export_put(exp);
         RETURN(rc);

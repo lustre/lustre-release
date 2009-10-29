@@ -125,10 +125,9 @@ static int send_getstatus(struct obd_import *imp, struct lu_fid *rootfid,
 
         *rootfid = body->fid1;
         CDEBUG(D_NET,
-               "root fid="DFID", last_committed="LPU64", last_xid="LPU64"\n",
+               "root fid="DFID", last_committed="LPU64"\n",
                PFID(rootfid),
-               lustre_msg_get_last_committed(req->rq_repmsg),
-               lustre_msg_get_last_xid(req->rq_repmsg));
+               lustre_msg_get_last_committed(req->rq_repmsg));
         EXIT;
 out:
         ptlrpc_req_finished(req);

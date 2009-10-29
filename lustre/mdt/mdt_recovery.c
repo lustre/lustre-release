@@ -703,6 +703,7 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
         mutex_down(&med->med_lcd_lock);
         memset(lcd, 0, sizeof *lcd);
         rc = mdt_last_rcvd_write(env, mdt, lcd, &off, th);
+        med->med_lcd = NULL;
         mutex_up(&med->med_lcd_lock);
         mdt_trans_stop(env, mdt, th);
 
@@ -712,10 +713,13 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
 
         CDEBUG(rc == 0 ? D_INFO : D_ERROR, "Zeroing out client idx %u in "
                "%s, rc %d\n",  med->med_lr_idx, LAST_RCVD, rc);
-        EXIT;
-free:
         OBD_FREE_PTR(lcd);
+        RETURN(0);
+free:
+        mutex_down(&med->med_lcd_lock);
         med->med_lcd = NULL;
+        mutex_up(&med->med_lcd_lock);
+        OBD_FREE_PTR(lcd);
         return 0;
 }
 
@@ -739,19 +743,21 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
         LASSERT(mdt);
         med = &req->rq_export->exp_mdt_data;
         LASSERT(med);
+
+        mutex_down(&med->med_lcd_lock);
         lcd = med->med_lcd;
-        /* if the export has already been failed, we have no last_rcvd slot */
-        if (req->rq_export->exp_failed) {
+        /* if the export has already been disconnected, we have no last_rcvd slot,
+         * update server data with latest transno then */
+        if (lcd == NULL) {
+                mutex_up(&med->med_lcd_lock);
                 CWARN("commit transaction for disconnected client %s: rc %d\n",
                       req->rq_export->exp_client_uuid.uuid, rc);
-                if (rc == 0)
-                        rc = -ENOTCONN;
-                RETURN(rc);
+                err = mdt_last_rcvd_header_write(mti->mti_env, mdt, th);
+                RETURN(err);
         }
 
         off = med->med_lr_off;
         LASSERT(ergo(mti->mti_transno == 0, rc != 0));
-        mutex_down(&med->med_lcd_lock);
         if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE ||
             lustre_msg_get_opc(req->rq_reqmsg) == MDS_DONE_WRITING) {
                 if (mti->mti_transno != 0)
@@ -867,8 +873,6 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
 
         req->rq_transno = mti->mti_transno;
         lustre_msg_set_transno(req->rq_repmsg, mti->mti_transno);
-        lustre_msg_set_last_xid(req->rq_repmsg,
-                         lcd_last_xid(req->rq_export->exp_mdt_data.med_lcd));
         /* save transno for the commit callback */
         txi->txi_transno = mti->mti_transno;
 

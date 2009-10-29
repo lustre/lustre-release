@@ -365,7 +365,6 @@ static void mdt_empty_transno(struct mdt_thread_info* info)
 
         req->rq_transno = info->mti_transno;
         lustre_msg_set_transno(req->rq_repmsg, info->mti_transno);
-        lustre_msg_set_last_xid(req->rq_repmsg, req->rq_xid);
         EXIT;
 }
 
