@@ -362,7 +362,8 @@ static int filter_client_add(struct obd_device *obd, struct obd_export *exp,
                                               filter->fo_fsd->lsd_start_epoch;
                         exp->exp_last_request_time = cfs_time_current_sec();
                         rc = fsfilt_add_journal_cb(obd, 0, handle,
-                                                   target_client_add_cb, exp);
+                                                   target_client_add_cb,
+                                                   class_export_cb_get(exp));
                         if (rc == 0) {
                                 spin_lock(&exp->exp_lock);
                                 exp->exp_need_sync = 1;

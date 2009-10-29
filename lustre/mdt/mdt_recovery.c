@@ -576,7 +576,7 @@ int mdt_client_new(const struct lu_env *env, struct mdt_device *mdt)
          * transaction so that many connecting clients will not bring
          * server down with lots of sync writes.
          */
-        mdt_trans_add_cb(th, lut_cb_client, mti->mti_exp);
+        mdt_trans_add_cb(th, lut_cb_client, class_export_cb_get(mti->mti_exp));
         spin_lock(&mti->mti_exp->exp_lock);
         mti->mti_exp->exp_need_sync = 1;
         spin_unlock(&mti->mti_exp->exp_lock);
@@ -690,8 +690,9 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
                 LBUG();
         }
 
-        /* write server data at first so last_transno will be save in it in
-         * any case */
+        /* Make sure the server's last_transno is up to date.
+         * This should be done before zeroing client slot so last_transno will
+         * be in server data or in client data in case of failure */
         mdt_server_data_update(env, mdt);
 
         mdt_trans_credit_init(env, mdt, MDT_TXN_LAST_RCVD_WRITE_OP);
