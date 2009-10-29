@@ -286,7 +286,7 @@ void cl_lock_put(const struct lu_env *env, struct cl_lock *lock)
         head = cl_object_header(obj);
         site = cl_object_site(obj);
 
-        CDEBUG(D_DLMTRACE, "releasing reference: %d %p %lu\n",
+        CDEBUG(D_TRACE, "releasing reference: %d %p %lu\n",
                atomic_read(&lock->cll_ref), lock, RETIP);
 
         if (atomic_dec_and_test(&lock->cll_ref)) {
@@ -311,7 +311,7 @@ EXPORT_SYMBOL(cl_lock_put);
 void cl_lock_get(struct cl_lock *lock)
 {
         LINVRNT(cl_lock_invariant(NULL, lock));
-        CDEBUG(D_DLMTRACE|D_TRACE, "acquiring reference: %d %p %lu\n",
+        CDEBUG(D_TRACE, "acquiring reference: %d %p %lu\n",
                atomic_read(&lock->cll_ref), lock, RETIP);
         atomic_inc(&lock->cll_ref);
 }
@@ -331,7 +331,7 @@ void cl_lock_get_trust(struct cl_lock *lock)
         struct cl_site *site = cl_object_site(lock->cll_descr.cld_obj);
 
         LASSERT(cl_is_lock(lock));
-        CDEBUG(D_DLMTRACE|D_TRACE, "acquiring trusted reference: %d %p %lu\n",
+        CDEBUG(D_TRACE, "acquiring trusted reference: %d %p %lu\n",
                atomic_read(&lock->cll_ref), lock, RETIP);
         if (atomic_inc_return(&lock->cll_ref) == 1)
                 atomic_inc(&site->cs_locks.cs_busy);
