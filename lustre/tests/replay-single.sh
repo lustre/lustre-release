@@ -940,7 +940,8 @@ test_44a() {	# was test_44
     local at_max_saved=0
 
     mdcdev=`lctl get_param -n devices | awk '/MDT0000-mdc-/ {print $1}'`
-    [ "$mdcdev" ] || exit 2
+    [ "$mdcdev" ] || return 2
+    [ $(echo $mdcdev | wc -w) -eq 1 ] || { echo $mdcdev=$mdcdev && return 3; }
 
     # adaptive timeouts slow this way down
     if at_is_enabled; then
@@ -953,7 +954,7 @@ test_44a() {	# was test_44
 	do_facet $SINGLEMDS "lctl get_param -n mdt.*.mdt.timeouts | grep service"
 	#define OBD_FAIL_TGT_CONN_RACE     0x701
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000701"
-	$LCTL --device $mdcdev recover
+	$LCTL --device $mdcdev recover || return 4
 	df $MOUNT
     done
     do_facet $SINGLEMDS "lctl set_param fail_loc=0"
@@ -963,14 +964,16 @@ test_44a() {	# was test_44
 run_test 44a "race in target handle connect"
 
 test_44b() {
-    mdcdev=`lctl get_param -n devices | awk '/MDT0000-mdc-/ {print $1}'`
-    [ "$mdcdev" ] || exit 2
+    local mdcdev=`lctl get_param -n devices | awk '/MDT0000-mdc-/ {print $1}'`
+    [ "$mdcdev" ] || return 2
+    [ $(echo $mdcdev | wc -w) -eq 1 ] || { echo $mdcdev=$mdcdev && return 3; }
+
     for i in `seq 1 10`; do
         echo "$i of 10 ($(date +%s))"
 	do_facet $SINGLEMDS "lctl get_param -n mdt.*.mdt.timeouts | grep service"
 	#define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000704"
-	$LCTL --device $mdcdev recover
+	$LCTL --device $mdcdev recover || return 4
 	df $MOUNT
     done
     do_facet $SINGLEMDS "lctl set_param fail_loc=0"
@@ -981,8 +984,10 @@ run_test 44b "race in target handle connect"
 # Handle failed close
 test_45() {
     mdcdev=`lctl get_param -n devices | awk '/MDT0000-mdc-/ {print $1}'`
-    [ "$mdcdev" ] || exit 2
-    $LCTL --device $mdcdev recover
+    [ "$mdcdev" ] || return 2
+    [ $(echo $mdcdev | wc -w) -eq 1 ] || { echo $mdcdev=$mdcdev && return 3; }
+
+    $LCTL --device $mdcdev recover || return 6 
 
     multiop_bg_pause $DIR/$tfile O_c || return 1
     pid=$!
