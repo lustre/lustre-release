@@ -90,6 +90,7 @@ struct echo_lock {
         struct list_head       el_chain;
         struct echo_object    *el_object;
         __u64                  el_cookie;
+        atomic_t               el_refcount;
 };
 
 struct echo_io {
@@ -408,6 +409,7 @@ static int echo_lock_init(const struct lu_env *env,
                 cl_lock_slice_add(lock, &el->el_cl, obj, &echo_lock_ops);
                 el->el_object = cl2echo_obj(obj);
                 CFS_INIT_LIST_HEAD(&el->el_chain);
+                atomic_set(&el->el_refcount, 0);
         }
         RETURN(el == NULL ? -ENOMEM : 0);
 }
@@ -763,6 +765,24 @@ static struct lu_device *echo_device_fini(const struct lu_env *env,
         return NULL;
 }
 
+static void echo_lock_release(const struct lu_env *env,
+                              struct echo_lock *ecl,
+                              int still_used)
+{
+        struct cl_lock *clk = echo_lock2cl(ecl);
+
+        cl_lock_get(clk);
+        cl_unuse(env, clk);
+        cl_lock_release(env, clk, "ec enqueue", ecl->el_object);
+        if (!still_used) {
+                cl_lock_mutex_get(env, clk);
+                cl_lock_cancel(env, clk);
+                cl_lock_delete(env, clk);
+                cl_lock_mutex_put(env, clk);
+        }
+        cl_lock_put(env, clk);
+}
+
 static struct lu_device *echo_device_free(const struct lu_env *env,
                                           struct lu_device *d)
 {
@@ -778,23 +798,18 @@ static struct lu_device *echo_device_free(const struct lu_env *env,
         while (!list_empty(&ec->ec_locks)) {
                 struct echo_lock *ecl = list_entry(ec->ec_locks.next,
                                                    struct echo_lock, el_chain);
-                struct cl_lock *lock  = echo_lock2cl(ecl);
+                int still_used = 0;
 
-                list_del_init(&ecl->el_chain);
+                if (atomic_dec_and_test(&ecl->el_refcount))
+                        list_del_init(&ecl->el_chain);
+                else
+                        still_used = 1;
                 spin_unlock(&ec->ec_lock);
 
-                CERROR("echo client: pending lock %p\n", ecl);
+                CERROR("echo client: pending lock %p refs %d\n",
+                       ecl, atomic_read(&ecl->el_refcount));
 
-                cl_lock_get(lock);
-                cl_unuse(env, lock);
-                cl_lock_release(env, lock, "ec enqueue", ecl->el_object);
-
-                cl_lock_mutex_get(env, lock);
-                cl_lock_cancel(env, lock);
-                cl_lock_delete(env, lock);
-                cl_lock_mutex_put(env, lock);
-                cl_lock_put(env, lock);
-
+                echo_lock_release(env, ecl, still_used);
                 spin_lock(&ec->ec_lock);
         }
         spin_unlock(&ec->ec_lock);
@@ -959,15 +974,58 @@ static int cl_echo_object_put(struct echo_object *eco)
         RETURN(0);
 }
 
+static int cl_echo_enqueue0(struct lu_env *env, struct echo_object *eco,
+                            obd_off start, obd_off end, int mode,
+                            __u64 *cookie , __u32 enqflags)
+{
+        struct cl_io *io;
+        struct cl_lock *lck;
+        struct cl_object *obj;
+        struct cl_lock_descr *descr;
+        struct echo_thread_info *info;
+        int rc = -ENOMEM;
+        ENTRY;
+
+        info = echo_env_info(env);
+        io = &info->eti_io;
+        descr = &info->eti_descr;
+        obj = echo_obj2cl(eco);
+
+        descr->cld_obj   = obj;
+        descr->cld_start = cl_index(obj, start);
+        descr->cld_end   = cl_index(obj, end);
+        descr->cld_mode  = mode == LCK_PW ? CLM_WRITE : CLM_READ;
+        io->ci_obj = obj;
+
+        lck = cl_lock_request(env, io, descr, CEF_ASYNC | enqflags,
+                              "ec enqueue", eco);
+        if (lck) {
+                struct echo_client_obd *ec = eco->eo_dev->ed_ec;
+                struct echo_lock *el;
+
+                rc = cl_wait(env, lck);
+                if (rc == 0) {
+                        el = cl2echo_lock(cl_lock_at(lck, &echo_device_type));
+                        spin_lock(&ec->ec_lock);
+                        if (list_empty(&el->el_chain)) {
+                                list_add(&el->el_chain, &ec->ec_locks);
+                                el->el_cookie = ++ec->ec_unique;
+                        }
+                        atomic_inc(&el->el_refcount);
+                        *cookie = el->el_cookie;
+                        spin_unlock(&ec->ec_lock);
+                } else
+                        cl_lock_release(env, lck, "ec enqueue", cfs_current());
+        }
+        RETURN(rc);
+}
+
 static int cl_echo_enqueue(struct echo_object *eco, obd_off start, obd_off end,
                            int mode, __u64 *cookie)
 {
-        struct lu_env *env;
-        struct cl_lock *lck;
         struct echo_thread_info *info;
+        struct lu_env *env;
         struct cl_io *io;
-        struct cl_lock_descr *descr;
-        struct cl_object *obj = echo_obj2cl(eco);
         int refcheck;
         int result;
         ENTRY;
@@ -977,35 +1035,14 @@ static int cl_echo_enqueue(struct echo_object *eco, obd_off start, obd_off end,
                 RETURN(PTR_ERR(env));
 
         info = echo_env_info(env);
-        descr = &info->eti_descr;
-        descr->cld_obj   = obj;
-        descr->cld_start = cl_index(obj, start);
-        descr->cld_end   = cl_index(obj, end);
-        descr->cld_mode  = mode == LCK_PW ? CLM_WRITE : CLM_READ;
-
         io = &info->eti_io;
-        io->ci_obj = obj;
-        result = cl_io_init(env, io, CIT_MISC, obj);
+
+        result = cl_io_init(env, io, CIT_MISC, echo_obj2cl(eco));
         if (result < 0)
                 GOTO(out, result);
         LASSERT(result == 0);
 
-        result = -ENOMEM;
-        lck = cl_lock_request(env, io, descr, CEF_ASYNC, "ec enqueue", eco);
-        if (lck) {
-                struct echo_client_obd *ec = eco->eo_dev->ed_ec;
-                struct echo_lock *el;
-
-                result = cl_wait(env, lck);
-                if (result == 0) {
-                        el = cl2echo_lock(cl_lock_at(lck, &echo_device_type));
-                        spin_lock(&ec->ec_lock);
-                        list_add(&el->el_chain, &ec->ec_locks);
-                        *cookie = el->el_cookie = ++ec->ec_unique;
-                        spin_unlock(&ec->ec_lock);
-                } else
-                        cl_lock_release(env, lck, "ec enqueue", cfs_current());
-        }
+        result = cl_echo_enqueue0(env, eco, start, end, mode, cookie, 0);
         cl_io_fini(env, io);
 
         EXIT;
@@ -1014,51 +1051,53 @@ out:
         return result;
 }
 
-static int cl_echo_cancel(struct echo_device *ed, __u64 cookie)
+static int cl_echo_cancel0(struct lu_env *env, struct echo_device *ed,
+                           __u64 cookie)
 {
         struct echo_client_obd *ec = ed->ed_ec;
         struct echo_lock       *ecl = NULL;
         struct list_head       *el;
-        int found = 0;
-        int result;
-
-        struct lu_env *env;
-        int refcheck;
+        int found = 0, still_used = 0;
         ENTRY;
 
-        env = cl_env_get(&refcheck);
-        if (IS_ERR(env))
-                RETURN(PTR_ERR(env));
-
+        LASSERT(ec != NULL);
         spin_lock (&ec->ec_lock);
         list_for_each (el, &ec->ec_locks) {
                 ecl = list_entry (el, struct echo_lock, el_chain);
                 CDEBUG(D_INFO, "ecl: %p, cookie: %llx\n", ecl, ecl->el_cookie);
                 found = (ecl->el_cookie == cookie);
                 if (found) {
-                        list_del_init(&ecl->el_chain);
+                        if (atomic_dec_and_test(&ecl->el_refcount))
+                                list_del_init(&ecl->el_chain);
+                        else
+                                still_used = 1;
                         break;
                 }
         }
         spin_unlock (&ec->ec_lock);
 
-        result = -ENOENT;
-        if (found) {
-                struct cl_lock *clk = echo_lock2cl(ecl);
+        if (!found)
+                RETURN(-ENOENT);
 
-                cl_lock_get(clk);
-                cl_unuse(env, clk);
-                cl_lock_release(env, clk, "ec enqueue", ecl->el_object);
+        echo_lock_release(env, ecl, still_used);
+        RETURN(0);
+}
 
-                cl_lock_mutex_get(env, clk);
-                cl_lock_cancel(env, clk);
-                cl_lock_delete(env, clk);
-                cl_lock_mutex_put(env, clk);
-                cl_lock_put(env, clk);
-                result = 0;
-        }
+static int cl_echo_cancel(struct echo_device *ed, __u64 cookie)
+{
+        struct lu_env *env;
+        int refcheck;
+        int rc;
+        ENTRY;
+
+        env = cl_env_get(&refcheck);
+        if (IS_ERR(env))
+                RETURN(PTR_ERR(env));
+
+        rc = cl_echo_cancel0(env, ed, cookie);
+
         cl_env_put(env, &refcheck);
-        RETURN(result);
+        RETURN(rc);
 }
 
 static int cl_echo_async_brw(const struct lu_env *env, struct cl_io *io,
@@ -1089,13 +1128,14 @@ static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
         struct cl_2queue        *queue;
         struct cl_io            *io;
         struct cl_page          *clp;
-
+        struct lustre_handle    lh = { 0 };
         int page_size = cl_page_size(obj);
         int refcheck;
         int rc;
         int i;
         ENTRY;
 
+        LASSERT((offset & ~CFS_PAGE_MASK) == 0);
         LASSERT(ed->ed_next != NULL);
         env = cl_env_get(&refcheck);
         if (IS_ERR(env))
@@ -1110,6 +1150,14 @@ static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
         if (rc < 0)
                 GOTO(out, rc);
         LASSERT(rc == 0);
+
+
+        rc = cl_echo_enqueue0(env, eco, offset,
+                              offset + npages * CFS_PAGE_SIZE - 1,
+                              rw == READ ? LCK_PW : LCK_PW, &lh.cookie,
+                              CILR_NEVER);
+        if (rc < 0)
+                GOTO(error_lock, rc);
 
         for (i = 0; i < npages; i++) {
                 LASSERT(pages[i]);
@@ -1133,6 +1181,8 @@ static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
                 /* drop the reference count for cl_page_find, so that the page
                  * will be freed in cl_2queue_fini. */
                 cl_page_put(env, clp);
+                cl_page_clip(env, clp, 0, page_size);
+
                 offset += page_size;
         }
 
@@ -1149,12 +1199,13 @@ static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
                        async ? "async" : "sync", rc);
         }
 
+        cl_echo_cancel0(env, ed, lh.cookie);
+        EXIT;
+error_lock:
         cl_2queue_discard(env, io, queue);
         cl_2queue_disown(env, io, queue);
         cl_2queue_fini(env, queue);
         cl_io_fini(env, io);
-
-        EXIT;
 out:
         cl_env_put(env, &refcheck);
         return rc;

@@ -6685,6 +6685,71 @@ test_170() {
 }
 run_test 170 "test lctl df to handle corrupted log ====================="
 
+# it would be good to share it with obdfilter-survey/libecho code
+setup_obdecho_osc () {
+        local rc=0
+        local ost_nid=$1
+        local obdfilter_name=$2
+        [ $rc -eq 0 ] && { $LCTL attach osc ${obdfilter_name}_osc     \
+                           ${obdfilter_name}_osc_UUID || rc=2; }
+        [ $rc -eq 0 ] && { $LCTL --device ${obdfilter_name}_osc setup \
+                           ${obdfilter_name}_UUID  $ost_nid || rc=3; }
+        return $rc
+}
+
+cleaup_obdecho_osc () {
+        local obdfilter_name=$1
+        $LCTL --device ${obdfilter_name}_osc cleanup >/dev/null
+        $LCTL --device ${obdfilter_name}_osc detach  >/dev/null
+        return 0
+}
+
+obdecho_create_test() {
+        local OBD=$1
+        local node=ost
+        local rc=0
+        do_facet $node "$LCTL attach echo_client ec ec_uuid" || rc=1
+        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec setup $OBD" ||    \
+                           rc=2; }
+        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec create 1" ||      \
+                           rc=3; }
+        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec test_brw 0 w 1" ||\
+                           rc=4; }
+        [ $rc -eq 0 -o $rc -gt 2 ] && { do_facet $node "$LCTL --device ec "    \
+                                        "cleanup" || rc=5; }
+        [ $rc -eq 0 -o $rc -gt 1 ] && { do_facet $node "$LCTL --device ec "    \
+                                        "detach" || rc=6; }
+        return $rc
+}
+
+test_180() {
+        local rc=0
+        local rmmod_local=0
+        local rmmod_remote=0
+
+        lsmod | grep -q obdecho || \
+                { load_module obdecho/obdecho && rmmod_local=1; }
+        OBD=$($LCTL dl | grep -v mdt | grep osc | awk '{print $4;exit}')
+        HOST=$($LCTL dl -t | grep -v mdt | grep osc | awk '{print $7;exit}')
+        OBD=`echo $OBD | sed 's/-osc-.*$//'`
+        [ "x$OBD" != "x" ] && { setup_obdecho_osc $HOST $OBD || rc=1; } || rc=1
+        [ $rc -eq 0 ] && { obdecho_create_test ${OBD}_osc || rc=2; }
+        [ "x$OBD" != "x" ] && cleaup_obdecho_osc $OBD
+        [ $rmmod_local -eq 1 ] && rmmod obdecho
+        [ $rc -eq 0 ] || return $rc
+
+        do_facet ost "lsmod | grep -q obdecho || "                      \
+                     "{ insmod ${LUSTRE}/obdecho/obdecho.ko || "        \
+                     "modprobe obdecho; }" && rmmod_remote=1
+        OBD=$(do_facet ost $LCTL dl | awk '/obdfilter/ {print $4;exit}')
+        [ "x$OBD" != "x" ] && { obdecho_create_test $OBD || rc=3; }
+        [ $rmmod_remote -eq 1 ] && do_facet ost "rmmod obdecho"
+        [ $rc -eq 0 ] || return $rc
+
+        true
+}
+run_test 180 "test obdecho ============================================"
+
 # OST pools tests
 POOL=${POOL:-cea1}
 TGT_COUNT=$OSTCOUNT

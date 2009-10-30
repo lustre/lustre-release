@@ -634,9 +634,8 @@ int lprocfs_rd_conn_uuid(char *page, char **start, off_t off, int count,
 
         LPROCFS_CLIMP_CHECK(obd);
         conn = obd->u.cli.cl_import->imp_connection;
-        LASSERT(conn != NULL);
         *eof = 1;
-        if (obd->u.cli.cl_import) {
+        if (conn && obd->u.cli.cl_import) {
                 rc = snprintf(page, count, "%s\n",
                               conn->c_remote_uuid.uuid);
         } else {
