@@ -255,9 +255,7 @@ int dqacq_adjust_qunit_sz(struct obd_device *obd, qid_t id, int type,
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_quota_ctxt *qctxt = &mds->mds_obt.obt_qctxt;
-        struct obd_device *lov_mds_obd = class_exp2obd(mds->mds_osc_exp);
-        struct lov_obd *lov = &lov_mds_obd->u.lov;
-        __u32 ost_num = lov->desc.ld_tgt_count, mdt_num = 1;
+        __u32 ost_num = mds->mds_lov_objid_count, mdt_num = 1;
         struct quota_adjust_qunit *oqaq = NULL;
         unsigned int uid = 0, gid = 0;
         struct lustre_quota_info *info = &mds->mds_quota_info;
