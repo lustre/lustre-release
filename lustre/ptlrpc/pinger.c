@@ -46,6 +46,7 @@
 
 #include <obd_support.h>
 #include <obd_class.h>
+#include <lustre_net.h>
 #include "ptlrpc_internal.h"
 
 struct semaphore pinger_sem;
