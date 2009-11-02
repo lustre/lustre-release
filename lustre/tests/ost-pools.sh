@@ -1294,7 +1294,7 @@ test_25() {
 
     for i in $(seq 10); do
         create_pool_nofail pool$i
-        stop mds -f  || return 1
+        stop mds || return 1
         sleep 10
         start mds $MDSDEV $MDS_MOUNT_OPTS || \
             error "Failed to start MDS after stopping" 
