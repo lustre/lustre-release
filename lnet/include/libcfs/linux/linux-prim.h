@@ -151,7 +151,11 @@ typedef long                            cfs_task_state_t;
 #define cfs_waitq_broadcast(w)          wake_up_all(w)
 #define cfs_waitq_wait(l, s)            schedule()
 #define cfs_waitq_timedwait(l, s, t)    schedule_timeout(t)
-#define cfs_schedule_timeout(s, t)      schedule_timeout(t)
+#define cfs_schedule_timeout(s, t)             \
+({                                             \
+        set_current_state(s);                  \
+        schedule_timeout(t);                   \
+})
 #define cfs_schedule()                  schedule()
 #define cfs_kthread_run(fn, data, fmt, arg...) kthread_run(fn, data, fmt, ##arg)
 
