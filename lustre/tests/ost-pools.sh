@@ -1302,7 +1302,7 @@ test_25() {
 
     for i in $(seq 10); do
         create_pool_nofail pool$i
-        stop $SINGLEMDS -f  || return 1
+        stop $SINGLEMDS || return 1
         sleep 10
         start $SINGLEMDS ${dev} $MDS_MOUNT_OPTS  || \
             error "Failed to start $SINGLEMDS after stopping" 
