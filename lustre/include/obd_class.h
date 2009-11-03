@@ -154,6 +154,7 @@ struct config_llog_data {
         struct obd_export  *cld_mgcexp;
         unsigned int        cld_stopping:1; /* we were told to stop watching */
         unsigned int        cld_lostlock:1; /* lock not requeued */
+        struct semaphore    cld_sem; /* for exclusive processing of the log */
 };
 
 struct lustre_profile {

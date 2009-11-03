@@ -13,7 +13,7 @@ tbd Sun Microsystems, Inc.
 Severity   : enhancement
 Bugzilla   : 19325
 Description: Adjust locks' extents on their first enqueue, so that at the time
-             they get granted, there is no need for another pass through the
+	     they get granted, there is no need for another pass through the
 	     queues since they are already shaped into the proper forms.
 
 Severity   : normal
@@ -24,11 +24,11 @@ Description: Fix mds_shrink_intent_reply()/mds_intent_policy() to pass correct
 Severity   : normal
 Bugzilla   : 19689
 Description: Change tunefs.lustre and mkfs.lustre --mountfsoptions so that
-             exactly the specified mount options are used.  Leaving off
-             any "mandatory" mount options is an error.  Leaving off any
-             default mount options causes a warning, but is allowed.
-             Change errors=remount-ro from mandatory to default.  Sanitize
-             the mount string before storing it.  Update man pages accordingly.
+	     exactly the specified mount options are used.  Leaving off
+	     any "mandatory" mount options is an error.  Leaving off any
+	     default mount options causes a warning, but is allowed.
+	     Change errors=remount-ro from mandatory to default.  Sanitize
+	     the mount string before storing it.  Update man pages accordingly.
 
 Severity   : normal
 Bugzilla   : 20302
@@ -51,7 +51,7 @@ Description: Conf-sanity.sh test to check client reconnection to a busy server.
 Severity   : enhancement
 Bugzilla   : 16312
 Description: Build kernels (RHEL5, OEL5 and SLES10/11) using the vendor's own
-             kernel spec file.
+	     kernel spec file.
 
 Severity   : normal
 Bugzilla   : 16774
@@ -198,6 +198,12 @@ Bugzilla   : 19763
 Description: quotacheck performance/scaling issues
 Details    : reduce quotacheck time on empty filesystem by skipping uninit
 	     group.
+
+Severity   : normal
+Bugzilla   : 20978
+Description: Slow stale export processing during normal start up
+Details    : The global mgc lock prevents OST setup to be run in parallel.
+	     Replace the global lock with a per-config_llog_data semaphore.
 
 -------------------------------------------------------------------------------
 2009-10-16 Sun Microsystems, Inc.
