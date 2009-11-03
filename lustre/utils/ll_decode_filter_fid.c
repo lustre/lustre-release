@@ -47,7 +47,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <sys/types.h>
-#include <attr/xattr.h>
+#include <sys/xattr.h>
 #include <lustre/lustre_user.h>
 
 int main(int argc, char *argv[])
