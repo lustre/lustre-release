@@ -419,6 +419,37 @@ struct timeout_item {
         struct list_head   ti_chain;
 };
 
+struct lu_client_seq {
+        /* Sequence-controller export. */
+        struct obd_export      *lcs_exp;
+        struct semaphore        lcs_sem;
+
+        /*
+         * Range of allowed for allocation sequences. When using lu_client_seq
+         * on clients, this contains meta-sequence range. And for servers this
+         * contains super-sequence range.
+         */
+        struct lu_seq_range         lcs_space;
+
+        /* This holds last allocated fid in last obtained seq */
+        struct lu_fid           lcs_fid;
+
+        /* LUSTRE_SEQ_METADATA or LUSTRE_SEQ_DATA */
+        enum lu_cli_type        lcs_type;
+        /*
+         * Service uuid, passed from MDT + seq name to form unique seq name to
+         * use it with procfs.
+         */
+        char                    lcs_name[80];
+
+        /*
+         * Sequence width, that is how many objects may be allocated in one
+         * sequence. Default value for it is LUSTRE_SEQ_MAX_WIDTH.
+         */
+        __u64                   lcs_width;
+
+};
+
 struct client_obd {
         struct rw_semaphore      cl_sem;
         struct obd_uuid          cl_target_uuid;
