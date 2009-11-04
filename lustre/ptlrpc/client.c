@@ -628,9 +628,12 @@ struct ptlrpc_request *ptlrpc_prep_fakereq(struct obd_import *imp,
         request->rq_type = PTL_RPC_MSG_REQUEST;
         request->rq_import = class_import_get(imp);
         request->rq_export = NULL;
+        request->rq_import_generation = imp->imp_generation;
 
+        request->rq_timeout = timeout;
         request->rq_sent = cfs_time_current_sec();
-        request->rq_reply_deadline = request->rq_sent + timeout;
+        request->rq_deadline = request->rq_sent + timeout;
+        request->rq_reply_deadline = request->rq_deadline;
         request->rq_interpret_reply = interpreter;
         request->rq_phase = RQ_PHASE_RPC;
         request->rq_next_phase = RQ_PHASE_INTERPRET;
