@@ -4092,7 +4092,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                                      procfs_entry, target_print_req,"mdt_xmds");
 
         if (m->mdt_xmds_service == NULL) {
-                CERROR("failed to start readpage service\n");
+                CERROR("failed to start xmds service\n");
                 GOTO(err_mdt_svc, rc = -ENOMEM);
         }
 
