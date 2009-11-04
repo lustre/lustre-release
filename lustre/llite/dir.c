@@ -338,8 +338,8 @@ struct page *ll_get_dir_page(struct inode *dir, __u64 hash, int exact,
                          * entries with smaller hash values. Stale page should
                          * be invalidated, and new one fetched.
                          */
-                        CWARN("Stale readpage page %p: "LPX64" != "LPX64"\n",
-                              page, hash, start);
+                        CDEBUG(D_OTHER, "Stale readpage page %p: "LPX64" != "LPX64"\n",
+                               page, hash, start);
                         ll_release_page(page, hash, start, end);
                 } else {
                         GOTO(hash_collision, page);
