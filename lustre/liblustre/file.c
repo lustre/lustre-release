@@ -382,12 +382,8 @@ int llu_md_close(struct obd_export *md_exp, struct inode *inode)
         ENTRY;
 
         /* clear group lock, if present */
-        if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
-                struct lov_stripe_md *lsm = llu_i2info(inode)->lli_smd;
-                fd->fd_flags &= ~(LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK);
-                rc = llu_extent_unlock(fd, inode, lsm, LCK_GROUP,
-                                       &fd->fd_cwlockh);
-        }
+        if (fd->fd_flags & LL_FILE_GROUP_LOCKED)
+                llu_put_grouplock(inode, fd->fd_grouplock.cg_gid);
 
         op_data.op_attr.ia_valid = ATTR_MODE | ATTR_ATIME_SET |
                                 ATTR_MTIME_SET | ATTR_CTIME_SET;

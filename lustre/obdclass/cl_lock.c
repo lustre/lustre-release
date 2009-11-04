@@ -1789,9 +1789,12 @@ struct cl_lock *cl_lock_at_page(const struct lu_env *env, struct cl_object *obj,
         need->cld_start = need->cld_end = page->cp_index;
 
         spin_lock(&head->coh_lock_guard);
+        /* It is fine to match any group lock since there could be only one
+         * with a uniq gid and it conflicts with all other lock modes too */
         list_for_each_entry(scan, &head->coh_locks, cll_linkage) {
                 if (scan != except &&
-                    cl_lock_ext_match(&scan->cll_descr, need) &&
+                    (scan->cll_descr.cld_mode == CLM_GROUP ||
+                    cl_lock_ext_match(&scan->cll_descr, need)) &&
                     scan->cll_state >= CLS_HELD &&
                     scan->cll_state < CLS_FREEING &&
                     /*

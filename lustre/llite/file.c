@@ -812,7 +812,10 @@ static ssize_t ll_file_io_generic(const struct lu_env *env,
         if (cl_io_rw_init(env, io, iot, *ppos, count) == 0) {
                 struct vvp_io *vio = vvp_env_io(env);
                 struct ccc_io *cio = ccc_env_io(env);
+                struct ll_inode_info *lli = ll_i2info(file->f_dentry->d_inode);
+                int write_sem_locked = 0;
 
+                cio->cui_fd  = LUSTRE_FPRIVATE(file);
                 vio->cui_io_subtype = args->via_io_subtype;
 
                 switch (vio->cui_io_subtype) {
@@ -822,6 +825,11 @@ static ssize_t ll_file_io_generic(const struct lu_env *env,
 #ifndef HAVE_FILE_WRITEV
                         cio->cui_iocb = args->u.normal.via_iocb;
 #endif
+                        if ((iot == CIT_WRITE) &&
+                            !(cio->cui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
+                                down(&lli->lli_write_sem);
+                                write_sem_locked = 1;
+                        }
                         break;
                 case IO_SENDFILE:
                         vio->u.sendfile.cui_actor = args->u.sendfile.via_actor;
@@ -835,8 +843,9 @@ static ssize_t ll_file_io_generic(const struct lu_env *env,
                         CERROR("Unknow IO type - %u\n", vio->cui_io_subtype);
                         LBUG();
                 }
-                cio->cui_fd  = LUSTRE_FPRIVATE(file);
                 result = cl_io_loop(env, io);
+                if (write_sem_locked)
+                        up(&lli->lli_write_sem);
         } else {
                 /* cl_io_rw_init() handled IO */
                 result = io->ci_result;
@@ -1410,7 +1419,7 @@ int ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg)
 
         spin_lock(&lli->lli_lock);
         if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
-                CERROR("group lock already existed with gid %lu\n",
+                CWARN("group lock already existed with gid %lu\n",
                        fd->fd_grouplock.cg_gid);
                 spin_unlock(&lli->lli_lock);
                 RETURN(-EINVAL);
@@ -1449,22 +1458,20 @@ int ll_put_grouplock(struct inode *inode, struct file *file, unsigned long arg)
         spin_lock(&lli->lli_lock);
         if (!(fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
                 spin_unlock(&lli->lli_lock);
-                CERROR("no group lock held\n");
+                CWARN("no group lock held\n");
                 RETURN(-EINVAL);
         }
         LASSERT(fd->fd_grouplock.cg_lock != NULL);
 
         if (fd->fd_grouplock.cg_gid != arg) {
-                CERROR("group lock %lu doesn't match current id %lu\n",
+                CWARN("group lock %lu doesn't match current id %lu\n",
                        arg, fd->fd_grouplock.cg_gid);
                 spin_unlock(&lli->lli_lock);
                 RETURN(-EINVAL);
         }
 
         grouplock = fd->fd_grouplock;
-        fd->fd_grouplock.cg_env = NULL;
-        fd->fd_grouplock.cg_lock = NULL;
-        fd->fd_grouplock.cg_gid = 0;
+        memset(&fd->fd_grouplock, 0, sizeof(fd->fd_grouplock));
         fd->fd_flags &= ~LL_FILE_GROUP_LOCKED;
         spin_unlock(&lli->lli_lock);
 

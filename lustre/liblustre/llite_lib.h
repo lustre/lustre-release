@@ -58,8 +58,7 @@
 struct ll_file_data {
         struct obd_client_handle fd_mds_och;
         __u32 fd_flags;
-        struct lustre_handle fd_cwlockh;
-        unsigned long fd_gid;
+        struct ccc_grouplock fd_grouplock;
 };
 
 struct llu_sb_info {
@@ -235,6 +234,7 @@ int llu_inode_getattr(struct inode *inode, struct obdo *obdo);
 int llu_md_setattr(struct inode *inode, struct md_op_data *op_data,
                    struct md_open_data **mod);
 int llu_setattr_raw(struct inode *inode, struct iattr *attr);
+int llu_put_grouplock(struct inode *inode, unsigned long arg);
 
 extern struct fssw_ops llu_fssw_ops;
 

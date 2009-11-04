@@ -728,7 +728,13 @@ int ccc_io_one_lock_index(const struct lu_env *env, struct cl_io *io,
         CDEBUG(D_VFSTRACE, "lock: %i [%lu, %lu]\n", mode, start, end);
 
         memset(&cio->cui_link, 0, sizeof cio->cui_link);
-        descr->cld_mode  = mode;
+
+        if (cio->cui_fd && (cio->cui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
+                descr->cld_mode = CLM_GROUP;
+                descr->cld_gid  = cio->cui_fd->fd_grouplock.cg_gid;
+        } else {
+                descr->cld_mode  = mode;
+        }
         descr->cld_obj   = obj;
         descr->cld_start = start;
         descr->cld_end   = end;

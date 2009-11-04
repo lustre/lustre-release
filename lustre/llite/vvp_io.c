@@ -88,9 +88,7 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
         struct cl_object *obj = io->ci_obj;
 
         CLOBINVRNT(env, obj, ccc_object_invariant(obj));
-        if (io->ci_type == CIT_WRITE)
-                up(&ll_i2info(ccc_object_inode(obj))->lli_write_sem);
-        else {
+        if (io->ci_type == CIT_READ) {
                 struct vvp_io     *vio  = cl2vvp_io(env, ios);
                 struct ccc_io     *cio  = cl2ccc_io(env, ios);
 
@@ -996,8 +994,6 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
                 count = io->u.ci_rw.crw_count;
                 op    = io->ci_type == CIT_READ ?
                         LPROC_LL_READ_BYTES : LPROC_LL_WRITE_BYTES;
-                if (io->ci_type == CIT_WRITE)
-                        down(&ll_i2info(inode)->lli_write_sem);
                 /* "If nbyte is 0, read() will return 0 and have no other
                  *  results."  -- Single Unix Spec */
                 if (count == 0)
