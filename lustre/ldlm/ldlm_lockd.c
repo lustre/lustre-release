@@ -208,7 +208,7 @@ static int expired_lock_main(void *arg)
                                 LDLM_LOCK_RELEASE(lock);
                                 continue;
                         }
-                        export = class_export_lock_get(lock->l_export);
+                        export = class_export_lock_get(lock->l_export, lock);
                         spin_unlock_bh(&waiting_locks_spinlock);
 
                         /* release extra ref grabbed by ldlm_add_waiting_lock()
@@ -217,7 +217,7 @@ static int expired_lock_main(void *arg)
 
                         do_dump++;
                         class_fail_export(export);
-                        class_export_lock_put(export);
+                        class_export_lock_put(export, lock);
                         spin_lock_bh(&waiting_locks_spinlock);
                 }
                 spin_unlock_bh(&waiting_locks_spinlock);
@@ -1109,7 +1109,8 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
                 LDLM_ERROR(lock, "lock on destroyed export %p", req->rq_export);
                 GOTO(out, rc = -ENOTCONN);
         }
-        lock->l_export = class_export_lock_get(req->rq_export);
+
+        lock->l_export = class_export_lock_get(req->rq_export, lock);
         if (lock->l_export->exp_lock_hash)
                 lustre_hash_add(lock->l_export->exp_lock_hash,
                                 &lock->l_remote_handle,
@@ -2492,7 +2493,9 @@ int __init ldlm_init(void)
                 cfs_mem_cache_destroy(ldlm_lock_slab);
                 return -ENOMEM;
         }
-
+#if LUSTRE_TRACKS_LOCK_EXP_REFS
+        class_export_dump_hook = ldlm_dump_export_locks;
+#endif
         return 0;
 }
 

@@ -115,7 +115,7 @@ struct obd_device *class_incref(struct obd_device *obd,
                                 const char *scope, const void *source);
 void class_decref(struct obd_device *obd,
                   const char *scope, const void *source);
-void dump_exports(struct obd_device *obd);
+void dump_exports(struct obd_device *obd, int locks);
 
 /*obdecho*/
 #ifdef LPROCFS
@@ -172,6 +172,19 @@ struct lustre_profile *class_get_profile(const char * prof);
 void class_del_profile(const char *prof);
 void class_del_profiles(void);
 
+#if LUSTRE_TRACKS_LOCK_EXP_REFS
+
+void __class_export_add_lock_ref(struct obd_export *, struct ldlm_lock *);
+void __class_export_del_lock_ref(struct obd_export *, struct ldlm_lock *);
+extern void (*class_export_dump_hook)(struct obd_export *);
+
+#else
+
+#define __class_export_add_lock_ref(exp, lock)             do {} while(0)
+#define __class_export_del_lock_ref(exp, lock)             do {} while(0)
+
+#endif
+
 #define class_export_rpc_get(exp)                                       \
 ({                                                                      \
         atomic_inc(&(exp)->exp_rpc_count);                              \
@@ -189,18 +202,20 @@ void class_del_profiles(void);
         class_export_put(exp);                                          \
 })
 
-#define class_export_lock_get(exp)                                      \
+#define class_export_lock_get(exp, lock)                                \
 ({                                                                      \
         atomic_inc(&(exp)->exp_locks_count);                            \
+        __class_export_add_lock_ref(exp, lock);                         \
         CDEBUG(D_INFO, "lock GETting export %p : new locks_count %d\n", \
                (exp), atomic_read(&(exp)->exp_locks_count));            \
         class_export_get(exp);                                          \
 })
 
-#define class_export_lock_put(exp)                                      \
+#define class_export_lock_put(exp, lock)                                \
 ({                                                                      \
         LASSERT(atomic_read(&exp->exp_locks_count) > 0);                \
         atomic_dec(&(exp)->exp_locks_count);                            \
+        __class_export_del_lock_ref(exp, lock);                         \
         CDEBUG(D_INFO, "lock PUTting export %p : new locks_count %d\n", \
                (exp), atomic_read(&(exp)->exp_locks_count));            \
         class_export_put(exp);                                          \

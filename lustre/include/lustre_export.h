@@ -152,7 +152,10 @@ struct obd_export {
         atomic_t                  exp_rpc_count; /** RPC references */
         atomic_t                  exp_cb_count; /** Commit callback references */
         atomic_t                  exp_locks_count; /** Lock references */
-
+#if LUSTRE_TRACKS_LOCK_EXP_REFS
+        struct list_head          exp_locks_list;
+        spinlock_t                exp_locks_list_guard;
+#endif
         atomic_t                  exp_replay_count;
         struct obd_uuid           exp_client_uuid;
         struct list_head          exp_obd_chain;

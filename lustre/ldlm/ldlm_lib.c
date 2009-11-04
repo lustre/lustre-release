@@ -2476,3 +2476,18 @@ ldlm_error_t ldlm_errno2error(int err_no)
 }
 EXPORT_SYMBOL(ldlm_errno2error);
 
+#if LUSTRE_TRACKS_LOCK_EXP_REFS
+void ldlm_dump_export_locks(struct obd_export *exp)
+{
+        spin_lock(&exp->exp_locks_list_guard);
+        if (!list_empty(&exp->exp_locks_list)) {
+            struct ldlm_lock *lock;
+
+            CERROR("dumping locks for export %p,"
+                   "ignore if the unmount doesn't hang\n", exp);
+            list_for_each_entry(lock, &exp->exp_locks_list, l_exp_refs_link)
+                ldlm_lock_dump(D_ERROR, lock, 0);
+        }
+        spin_unlock(&exp->exp_locks_list_guard);
+}
+#endif

@@ -164,7 +164,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 ldlm_resource_putref(res);
                 lock->l_resource = NULL;
                 if (lock->l_export) {
-                        class_export_lock_put(lock->l_export);
+                        class_export_lock_put(lock->l_export, lock);
                         lock->l_export = NULL;
                 }
 
@@ -370,6 +370,12 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
         lu_ref_init(&lock->l_reference);
         lu_ref_add(&lock->l_reference, "hash", lock);
         lock->l_callback_timeout = 0;
+
+#if LUSTRE_TRACKS_LOCK_EXP_REFS
+        CFS_INIT_LIST_HEAD(&lock->l_exp_refs_link);
+        lock->l_exp_refs_nr = 0;
+        lock->l_exp_refs_target = NULL;
+#endif
 
         RETURN(lock);
 }

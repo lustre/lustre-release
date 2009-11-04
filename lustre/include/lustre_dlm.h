@@ -51,7 +51,6 @@
 #include <lustre_net.h>
 #include <lustre_import.h>
 #include <lustre_handles.h>
-#include <lustre_export.h> /* for obd_export, for LDLM_DEBUG */
 #include <interval_tree.h> /* for interval_node{}, ldlm_extent */
 #include <lu_ref.h>
 
@@ -545,6 +544,8 @@ struct ldlm_interval_tree {
         struct interval_node *lit_root; /* actually ldlm_interval */
 };
 
+#define LUSTRE_TRACKS_LOCK_EXP_REFS (1)
+
 struct ldlm_lock {
         /**
          * Must be first in the structure.
@@ -715,6 +716,16 @@ struct ldlm_lock {
         struct list_head      l_sl_mode;
         struct list_head      l_sl_policy;
         struct lu_ref         l_reference;
+#if LUSTRE_TRACKS_LOCK_EXP_REFS
+        /* Debugging stuff for bug 20498, for tracking export
+           references. */
+        /** number of export references taken */
+        int                   l_exp_refs_nr;
+        /** link all locks referencing one export */
+        struct list_head      l_exp_refs_link;
+        /** referenced export object */
+        struct obd_export    *l_exp_refs_target;
+#endif
 };
 
 struct ldlm_resource {
@@ -918,6 +929,9 @@ static inline int ldlm_res_lvbo_update(struct ldlm_resource *res,
 int ldlm_error2errno(ldlm_error_t error);
 ldlm_error_t ldlm_errno2error(int err_no); /* don't call it `errno': this
                                             * confuses user-space. */
+#if LUSTRE_TRACKS_LOCK_EXP_REFS
+void ldlm_dump_export_locks(struct obd_export *exp);
+#endif
 
 /**
  * Release a temporary lock reference obtained by ldlm_handle2lock() or
