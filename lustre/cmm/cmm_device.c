@@ -190,7 +190,7 @@ static int cmm_quota_recovery(const struct lu_env *env, struct md_device *m)
 }
 
 static int cmm_quota_check(const struct lu_env *env, struct md_device *m,
-                           struct obd_export *exp, __u32 type)
+                           __u32 type)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(m);
         int rc;
@@ -202,7 +202,7 @@ static int cmm_quota_check(const struct lu_env *env, struct md_device *m,
 
         rc = cmm_child_ops(cmm_dev)->mdo_quota.mqo_check(env,
                                                          cmm_dev->cmm_child,
-                                                         exp, type);
+                                                         type);
         RETURN(rc);
 }
 

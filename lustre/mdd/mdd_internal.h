@@ -387,7 +387,7 @@ int mdd_quota_setup(const struct lu_env *env, struct md_device *m,
 int mdd_quota_cleanup(const struct lu_env *env, struct md_device *m);
 int mdd_quota_recovery(const struct lu_env *env, struct md_device *m);
 int mdd_quota_check(const struct lu_env *env, struct md_device *m,
-                    struct obd_export *exp, __u32 type);
+                    __u32 type);
 int mdd_quota_on(const struct lu_env *env, struct md_device *m,
                  __u32 type);
 int mdd_quota_off(const struct lu_env *env, struct md_device *m,

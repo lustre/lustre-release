@@ -680,6 +680,7 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
         struct thandle *handle;
 #ifdef HAVE_QUOTA_SUPPORT
         struct obd_device *obd = mdd->mdd_obd_dev;
+        struct obd_export *exp = md_quota(env)->mq_exp;
         struct mds_obd *mds = &obd->u.mds;
         unsigned int qids[MAXQUOTAS] = { 0, 0 };
         int quota_opc = 0, rec_pending[MAXQUOTAS] = { 0, 0 };
@@ -698,7 +699,7 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
                         quota_opc = FSFILT_OP_LINK;
                         mdd_quota_wrapper(la_tmp, qids);
                         /* get block quota for parent */
-                        lquota_chkquota(mds_quota_interface_ref, obd,
+                        lquota_chkquota(mds_quota_interface_ref, obd, exp,
                                         qids, rec_pending, 1, NULL,
                                         LQUOTA_FLAGS_BLK, data, 1);
                 }
@@ -966,6 +967,7 @@ static int mdd_name_insert(const struct lu_env *env,
 #ifdef HAVE_QUOTA_SUPPORT
         struct md_ucred *uc = md_ucred(env);
         struct obd_device *obd = mdd->mdd_obd_dev;
+        struct obd_export *exp = md_quota(env)->mq_exp;
         struct mds_obd *mds = &obd->u.mds;
         unsigned int qids[MAXQUOTAS] = { 0, 0 };
         int quota_opc = 0, rec_pending[MAXQUOTAS] = { 0, 0 };
@@ -987,7 +989,7 @@ static int mdd_name_insert(const struct lu_env *env,
                                 mdd_quota_wrapper(la_tmp, qids);
                                 /* get block quota for parent */
                                 lquota_chkquota(mds_quota_interface_ref, obd,
-                                                qids, rec_pending, 1, NULL,
+                                                exp, qids, rec_pending, 1, NULL,
                                                 LQUOTA_FLAGS_BLK, data, 1);
                         }
                 } else {
@@ -1189,6 +1191,7 @@ static int mdd_rename_tgt(const struct lu_env *env,
         struct thandle *handle;
 #ifdef HAVE_QUOTA_SUPPORT
         struct obd_device *obd = mdd->mdd_obd_dev;
+        struct obd_export *exp = md_quota(env)->mq_exp;
         struct mds_obd *mds = &obd->u.mds;
         unsigned int qcids[MAXQUOTAS] = { 0, 0 };
         unsigned int qpids[MAXQUOTAS] = { 0, 0 };
@@ -1209,7 +1212,7 @@ static int mdd_rename_tgt(const struct lu_env *env,
                         quota_popc = FSFILT_OP_LINK;
                         mdd_quota_wrapper(la_tmp, qpids);
                         /* get block quota for target parent */
-                        lquota_chkquota(mds_quota_interface_ref, obd,
+                        lquota_chkquota(mds_quota_interface_ref, obd, exp,
                                         qpids, rec_pending, 1, NULL,
                                         LQUOTA_FLAGS_BLK, data, 1);
                 }
@@ -1587,6 +1590,7 @@ static int mdd_create(const struct lu_env *env,
         int got_def_acl = 0;
 #ifdef HAVE_QUOTA_SUPPORT
         struct obd_device *obd = mdd->mdd_obd_dev;
+        struct obd_export *exp = md_quota(env)->mq_exp;
         struct mds_obd *mds = &obd->u.mds;
         unsigned int qcids[MAXQUOTAS] = { 0, 0 };
         unsigned int qpids[MAXQUOTAS] = { 0, 0 };
@@ -1650,8 +1654,9 @@ static int mdd_create(const struct lu_env *env,
                         mdd_quota_wrapper(&ma->ma_attr, qcids);
                         mdd_quota_wrapper(la_tmp, qpids);
                         /* get file quota for child */
-                        lquota_chkquota(mds_quota_interface_ref, obd, qcids,
-                                        inode_pending, 1, NULL, 0, NULL, 0);
+                        lquota_chkquota(mds_quota_interface_ref, obd, exp,
+                                        qcids, inode_pending, 1, NULL, 0, NULL,
+                                        0);
                         switch (ma->ma_attr.la_mode & S_IFMT) {
                         case S_IFLNK:
                         case S_IFDIR:
@@ -1669,13 +1674,14 @@ static int mdd_create(const struct lu_env *env,
                         /* get block quota for child and parent */
                         if (block_count)
                                 lquota_chkquota(mds_quota_interface_ref, obd,
-                                                qcids, block_pending,
+                                                exp, qcids, block_pending,
                                                 block_count, NULL,
                                                 LQUOTA_FLAGS_BLK, NULL, 0);
                         if (!same)
                                 lquota_chkquota(mds_quota_interface_ref, obd,
-                                                qpids, parent_pending, 1, NULL,
-                                                LQUOTA_FLAGS_BLK, NULL, 0);
+                                                exp, qpids, parent_pending, 1,
+                                                NULL, LQUOTA_FLAGS_BLK, NULL,
+                                                0);
                 }
         }
 #endif
@@ -1967,6 +1973,7 @@ static int mdd_rename(const struct lu_env *env,
 
 #ifdef HAVE_QUOTA_SUPPORT
         struct obd_device *obd = mdd->mdd_obd_dev;
+        struct obd_export *exp = md_quota(env)->mq_exp;
         struct mds_obd *mds = &obd->u.mds;
         unsigned int qspids[MAXQUOTAS] = { 0, 0 };
         unsigned int qtcids[MAXQUOTAS] = { 0, 0 };
@@ -1999,7 +2006,7 @@ static int mdd_rename(const struct lu_env *env,
                                         mdd_quota_wrapper(la_tmp, qtpids);
                                         /* get block quota for target parent */
                                         lquota_chkquota(mds_quota_interface_ref,
-                                                        obd, qtpids,
+                                                        obd, exp, qtpids,
                                                         rec_pending, 1, NULL,
                                                         LQUOTA_FLAGS_BLK,
                                                         data, 1);

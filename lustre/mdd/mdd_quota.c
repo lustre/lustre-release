@@ -93,10 +93,11 @@ int mdd_quota_recovery(const struct lu_env *env, struct md_device *m)
 }
 
 int mdd_quota_check(const struct lu_env *env, struct md_device *m,
-                    struct obd_export *exp, __u32 type)
+                    __u32 type)
 {
         struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
         struct obd_device *obd = mdd->mdd_obd_dev;
+        struct obd_export *exp = md_quota(env)->mq_exp;
         struct obd_quotactl *oqctl = &mdd_env_info(env)->mti_oqctl;
         int rc;
         ENTRY;

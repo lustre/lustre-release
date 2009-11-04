@@ -1490,6 +1490,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
 {
         struct req_capsule      *pill = info->mti_pill;
         struct mdt_device       *mdt = info->mti_mdt;
+        struct md_quota         *mq = md_quota(info->mti_env);
         struct mdt_body         *repbody;
         int                      rc = 0;
         ENTRY;
@@ -1548,6 +1549,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
                 rc = lustre_msg_get_status(mdt_info_req(info)->rq_repmsg);
                 GOTO(out_ucred, rc);
         }
+        mq->mq_exp = info->mti_exp;
         rc = mdt_reint_rec(info, lhc);
         EXIT;
 out_ucred:
@@ -1697,6 +1699,7 @@ static int mdt_quotacheck_handle(struct mdt_thread_info *info)
         struct obd_quotactl *oqctl;
         struct req_capsule *pill = info->mti_pill;
         struct obd_export *exp = info->mti_exp;
+        struct md_quota *mq = md_quota(info->mti_env);
         struct md_device *next = info->mti_mdt->mdt_child;
         int rc;
         ENTRY;
@@ -1713,7 +1716,8 @@ static int mdt_quotacheck_handle(struct mdt_thread_info *info)
         if (rc)
                 RETURN(rc);
 
-        rc = next->md_ops->mdo_quota.mqo_check(info->mti_env, next, exp,
+        mq->mq_exp = exp;
+        rc = next->md_ops->mdo_quota.mqo_check(info->mti_env, next,
                                                oqctl->qc_type);
         RETURN(rc);
 }
@@ -1723,6 +1727,7 @@ static int mdt_quotactl_handle(struct mdt_thread_info *info)
         struct obd_quotactl *oqctl, *repoqc;
         struct req_capsule *pill = info->mti_pill;
         struct obd_export *exp = info->mti_exp;
+        struct md_quota *mq = md_quota(info->mti_env);
         struct md_device *next = info->mti_mdt->mdt_child;
         const struct md_quota_operations *mqo = &next->md_ops->mdo_quota;
         int id, rc;
@@ -1766,6 +1771,7 @@ static int mdt_quotactl_handle(struct mdt_thread_info *info)
         repoqc = req_capsule_server_get(pill, &RMF_OBD_QUOTACTL);
         LASSERT(repoqc != NULL);
 
+        mq->mq_exp = exp;
         switch (oqctl->qc_cmd) {
         case Q_QUOTAON:
                 rc = mqo->mqo_on(info->mti_env, next, oqctl->qc_type);

@@ -1086,6 +1086,12 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         /* Must commit after prep above in all cases */
         rc = obd_commitrw(OBD_BRW_WRITE, exp, &repbody->oa, objcount, ioo,
                           remote_nb, npages, local_nb, oti, rc);
+        if (rc == -ENOTCONN)
+                /* quota acquire process has been given up because
+                 * either the client has been evicted or the client
+                 * has timed out the request already */
+                no_reply = 1;
+
         if (exp_connect_rmtclient(exp)) {
                 repbody->oa.o_uid = o_uid;
                 repbody->oa.o_gid = o_gid;

@@ -1229,6 +1229,7 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
         struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
 #ifdef HAVE_QUOTA_SUPPORT
         struct obd_device *obd = mdd->mdd_obd_dev;
+        struct obd_export *exp = md_quota(env)->mq_exp;
         struct mds_obd *mds = &obd->u.mds;
         unsigned int qnids[MAXQUOTAS] = { 0, 0 };
         unsigned int qoids[MAXQUOTAS] = { 0, 0 };
@@ -1278,15 +1279,16 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
                         mdd_quota_wrapper(la_copy, qnids);
                         mdd_quota_wrapper(la_tmp, qoids);
                         /* get file quota for new owner */
-                        lquota_chkquota(mds_quota_interface_ref, obd, qnids,
-                                        inode_pending, 1, NULL, 0, NULL, 0);
+                        lquota_chkquota(mds_quota_interface_ref, obd, exp,
+                                        qnids, inode_pending, 1, NULL, 0,
+                                        NULL, 0);
                         block_count = (la_tmp->la_blocks + 7) >> 3;
                         if (block_count) {
                                 void *data = NULL;
                                 mdd_data_get(env, mdd_obj, &data);
                                 /* get block quota for new owner */
                                 lquota_chkquota(mds_quota_interface_ref, obd,
-                                                qnids, block_pending,
+                                                exp, qnids, block_pending,
                                                 block_count, NULL,
                                                 LQUOTA_FLAGS_BLK, data, 1);
                         }
@@ -1585,6 +1587,7 @@ static int mdd_object_create(const struct lu_env *env,
         struct thandle *handle;
 #ifdef HAVE_QUOTA_SUPPORT
         struct obd_device *obd = mdd->mdd_obd_dev;
+        struct obd_export *exp = md_quota(env)->mq_exp;
         struct mds_obd *mds = &obd->u.mds;
         unsigned int qids[MAXQUOTAS] = { 0, 0 };
         int quota_opc = 0, block_count = 0;
@@ -1599,8 +1602,9 @@ static int mdd_object_create(const struct lu_env *env,
                 quota_opc = FSFILT_OP_CREATE_PARTIAL_CHILD;
                 mdd_quota_wrapper(&ma->ma_attr, qids);
                 /* get file quota for child */
-                lquota_chkquota(mds_quota_interface_ref, obd, qids,
-                                inode_pending, 1, NULL, 0, NULL, 0);
+                lquota_chkquota(mds_quota_interface_ref, obd, exp,
+                                qids, inode_pending, 1, NULL, 0,
+                                NULL, 0);
                 switch (ma->ma_attr.la_mode & S_IFMT) {
                 case S_IFLNK:
                 case S_IFDIR:
@@ -1612,9 +1616,9 @@ static int mdd_object_create(const struct lu_env *env,
                 }
                 /* get block quota for child */
                 if (block_count)
-                        lquota_chkquota(mds_quota_interface_ref, obd, qids,
-                                        block_pending, block_count, NULL,
-                                        LQUOTA_FLAGS_BLK, NULL, 0);
+                        lquota_chkquota(mds_quota_interface_ref, obd, exp,
+                                        qids, block_pending, block_count,
+                                        NULL, LQUOTA_FLAGS_BLK, NULL, 0);
         }
 #endif
 

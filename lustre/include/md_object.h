@@ -101,6 +101,10 @@ struct md_capainfo {
         struct lustre_capa     *mc_capa[MD_CAPAINFO_MAX];
 };
 
+struct md_quota {
+        struct obd_export       *mq_exp;
+};
+
 /**
  * Implemented in mdd/mdd_handler.c.
  *
@@ -109,6 +113,7 @@ struct md_capainfo {
  */
 struct md_ucred *md_ucred(const struct lu_env *env);
 struct md_capainfo *md_capainfo(const struct lu_env *env);
+struct md_quota *md_quota(const struct lu_env *env);
 
 /** metadata attributes */
 enum ma_valid {
@@ -352,7 +357,6 @@ struct md_device_operations {
 
                 int (*mqo_check)(const struct lu_env *env,
                                  struct md_device *m,
-                                 struct obd_export *exp,
                                  __u32 type);
 
                 int (*mqo_on)(const struct lu_env *env,

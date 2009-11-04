@@ -644,10 +644,11 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
         /* we try to get enough quota to write here, and let ldiskfs
          * decide if it is out of quota or not b=14783 */
-        lquota_chkquota(filter_quota_interface_ref, obd, qcids, rec_pending,
-                        quota_pages, oti, LQUOTA_FLAGS_BLK, (void *)inode,
-                        obj->ioo_bufcnt);
-
+        rc = lquota_chkquota(filter_quota_interface_ref, obd, exp, qcids,
+                             rec_pending, quota_pages, oti, LQUOTA_FLAGS_BLK,
+                             (void *)inode, obj->ioo_bufcnt);
+        if (rc == -ENOTCONN)
+                GOTO(cleanup, rc);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 2;

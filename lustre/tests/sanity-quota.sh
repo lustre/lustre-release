@@ -338,8 +338,10 @@ test_1_sub() {
 	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$(($LIMIT/2)) || quota_error g $TSTUSR "(grp) write failure, but expect success"
         etime=`date +%s`
         delta=$((etime - stime))
-        rate=$((BLK_SZ * LIMIT / 2 / delta / 1024))
-        [ $rate -gt 1024 ] || error "SLOW IO for $TSTUSR (group): $rate KB/sec"
+        if [ $delta -gt 0 ]; then
+        	rate=$((BLK_SZ * LIMIT / 2 / delta / 1024))
+        	[ $rate -gt 1024 ] || error "SLOW IO for $TSTUSR (group): $rate KB/sec"
+	fi
         log "    Done"
         log "    Write out of block quota ..."
 	# this time maybe cache write, ignore it's failure
