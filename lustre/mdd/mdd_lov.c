@@ -698,10 +698,6 @@ int mdd_log_op_setattr(struct obd_device *obd, __u32 uid, __u32 gid,
         if (rc < 0)
                 RETURN(rc);
 
-        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, lsm);
-        if (rc)
-                GOTO(out, rc);
-
         OBD_ALLOC(lsr, sizeof(*lsr));
         if (!lsr)
                 GOTO(out, rc = -ENOMEM);
@@ -769,12 +765,6 @@ static int mdd_osc_setattr_async(struct obd_device *obd, __u32 uid, __u32 gid,
         rc = obd_unpackmd(mds->mds_osc_exp, &oinfo.oi_md, lmm, lmm_size);
         if (rc < 0) {
                 CERROR("Error unpack md %p for inode "LPU64"\n", lmm, id);
-                GOTO(out, rc);
-        }
-
-        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, oinfo.oi_md);
-        if (rc) {
-                CERROR("Error revalidate lsm %p \n", oinfo.oi_md);
                 GOTO(out, rc);
         }
 

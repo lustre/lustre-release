@@ -1778,18 +1778,6 @@ void lustre_swab_fid2path(struct getinfo_fid2path *gf)
 }
 EXPORT_SYMBOL(lustre_swab_fid2path);
 
-void lustre_swab_mds_rec_join (struct mds_rec_join *jr)
-{
-        __swab64s(&jr->jr_headsize);
-        lustre_swab_ll_fid(&jr->jr_fid);
-}
-
-void lustre_swab_mdt_rec_join (struct mdt_rec_join *jr)
-{
-        __swab64s(&jr->jr_headsize);
-        lustre_swab_lu_fid(&jr->jr_fid);
-}
-
 void lustre_swab_mds_rec_create (struct mds_rec_create *cr)
 {
         __swab32s (&cr->cr_opcode);
@@ -1975,18 +1963,6 @@ static void lustre_swab_lov_user_md_common(struct lov_user_md_v1 *lum)
         EXIT;
 }
 
-static void print_lumj (struct lov_user_md_join *lumj)
-{
-        CDEBUG(D_OTHER, "lov_user_md %p:\n", lumj);
-        CDEBUG(D_OTHER, "\tlmm_magic: %#x\n", lumj->lmm_magic);
-        CDEBUG(D_OTHER, "\tlmm_pattern: %#x\n", lumj->lmm_pattern);
-        CDEBUG(D_OTHER, "\tlmm_object_id: "LPU64"\n", lumj->lmm_object_id);
-        CDEBUG(D_OTHER, "\tlmm_object_gr: "LPU64"\n", lumj->lmm_object_gr);
-        CDEBUG(D_OTHER, "\tlmm_stripe_size: %#x\n", lumj->lmm_stripe_size);
-        CDEBUG(D_OTHER, "\tlmm_stripe_count: %#x\n", lumj->lmm_stripe_count);
-        CDEBUG(D_OTHER, "\tlmm_extent_count: %#x\n", lumj->lmm_extent_count);
-}
-
 void lustre_swab_lov_user_md_v1(struct lov_user_md_v1 *lum)
 {
         ENTRY;
@@ -2014,21 +1990,6 @@ void lustre_swab_lov_mds_md(struct lov_mds_md *lmm)
         __swab64s(&lmm->lmm_object_gr);
         __swab32s(&lmm->lmm_stripe_size);
         __swab32s(&lmm->lmm_stripe_count);
-        EXIT;
-}
-
-void lustre_swab_lov_user_md_join(struct lov_user_md_join *lumj)
-{
-        ENTRY;
-        CDEBUG(D_IOCTL, "swabbing lov_user_md_join\n");
-        __swab32s(&lumj->lmm_magic);
-        __swab32s(&lumj->lmm_pattern);
-        __swab64s(&lumj->lmm_object_id);
-        __swab64s(&lumj->lmm_object_gr);
-        __swab32s(&lumj->lmm_stripe_size);
-        __swab32s(&lumj->lmm_stripe_count);
-        __swab32s(&lumj->lmm_extent_count);
-        print_lumj(lumj);
         EXIT;
 }
 

@@ -1161,9 +1161,8 @@ out:
 do {                                                                            \
         LASSERT((lsmp) != NULL);                                                \
         LASSERTF(((lsmp)->lsm_magic == LOV_MAGIC_V1 ||                          \
-                 (lsmp)->lsm_magic == LOV_MAGIC_V3 ||                           \
-                 (lsmp)->lsm_magic == LOV_MAGIC_JOIN), "%p->lsm_magic=%x\n",    \
-                 (lsmp), (lsmp)->lsm_magic);                                    \
+                 (lsmp)->lsm_magic == LOV_MAGIC_V3),                            \
+                 "%p->lsm_magic=%x\n", (lsmp), (lsmp)->lsm_magic);              \
 } while (0)
 
 static int lov_destroy(struct obd_export *exp, struct obdo *oa,
@@ -2659,21 +2658,6 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
         RETURN(rc);
 }
 
-static int lov_checkmd(struct obd_export *exp, struct obd_export *md_exp,
-                       struct lov_stripe_md *lsm)
-{
-        int rc;
-        ENTRY;
-
-        if (!lsm)
-                RETURN(0);
-        LASSERT(md_exp);
-        LASSERT(lsm_op_find(lsm->lsm_magic) != NULL);
-        rc = lsm_op_find(lsm->lsm_magic)->lsm_revalidate(lsm, md_exp->exp_obd);
-
-        RETURN(rc);
-}
-
 int lov_test_and_clear_async_rc(struct lov_stripe_md *lsm)
 {
         int i, rc = 0;
@@ -2744,7 +2728,6 @@ struct obd_ops lov_obd_ops = {
         .o_statfs_async        = lov_statfs_async,
         .o_packmd              = lov_packmd,
         .o_unpackmd            = lov_unpackmd,
-        .o_checkmd             = lov_checkmd,
         .o_create              = lov_create,
         .o_destroy             = lov_destroy,
         .o_getattr             = lov_getattr,

@@ -74,7 +74,7 @@
 
 #define LOV_MAGIC_V1      0x0BD10BD0
 #define LOV_MAGIC         LOV_MAGIC_V1
-#define LOV_MAGIC_JOIN    0x0BD20BD0
+#define LOV_MAGIC_JOIN_V1 0x0BD20BD0
 
 typedef enum {
   OST_REPLY      =  0,       /* reply ? */
@@ -270,7 +270,7 @@ typedef enum {
   OBD_CFG_REC      = LLOG_OP_MAGIC | 0x20000,
   PTL_CFG_REC      = LLOG_OP_MAGIC | 0x30000, /* obsolete */
   LLOG_GEN_REC     = LLOG_OP_MAGIC | 0x40000,
-  LLOG_JOIN_REC    = LLOG_OP_MAGIC | 0x50000,
+  LLOG_JOIN_REC    = LLOG_OP_MAGIC | 0x50000, /* obsolete */
   LLOG_HDR_MAGIC   = LLOG_OP_MAGIC | 0x45539,
   LLOG_LOGID_MAGIC = LLOG_OP_MAGIC | 0x4553b,
 } llog_op_type;
@@ -311,7 +311,6 @@ static gint ett_lustre_obd_dqblk = -1;
 static gint ett_lustre_quota_adjust_qunit = -1;
 static gint ett_lustre_mds_rec_setattr = -1;
 static gint ett_lustre_mds_rec_create = -1;
-static gint ett_lustre_mds_rec_join = -1;
 static gint ett_lustre_mds_rec_link = -1;
 static gint ett_lustre_mds_rec_unlink = -1;
 static gint ett_lustre_mds_rec_rename = -1;
@@ -331,14 +330,11 @@ static gint ett_lustre_mgs_send_param = -1;
 static gint ett_lustre_mgs_target_info = -1;
 static gint ett_lustre_cfg_marker = -1;
 static gint ett_lustre_llog_catid = -1;
-static gint ett_lustre_lov_mds_md_join = -1;
 static gint ett_lustre_llog_rec_hdr = -1;
 static gint ett_lustre_llog_logid_rec = -1;
 static gint ett_lustre_llog_logid = -1;
 static gint ett_lustre_llog_rec_tail = -1;
 static gint ett_lustre_lov_mds_md = -1;
-static gint ett_lustre_llog_array_rec = -1;
-static gint ett_lustre_mds_extent_desc = -1;
 static gint ett_lustre_llog_create_rec = -1;
 static gint ett_lustre_llog_orphan_rec = -1;
 static gint ett_lustre_llog_unlink_rec = -1;
@@ -350,8 +346,6 @@ static gint ett_lustre_llog_cookie = -1;
 static gint ett_lustre_llogd_body = -1;
 static gint ett_lustre_llogd_conn_body = -1;
 static gint ett_lustre_llog_gen = -1;
-static gint ett_lustre_lov_user_md_join = -1;
-static gint ett_lustre_lov_user_ost_data_join = -1;
 static gint ett_lustre_obdo = -1;
 static gint ett_lustre_ost_body = -1;
 static gint ett_lustre_qunit_data = -1;
@@ -376,7 +370,6 @@ static int hf_lustre_mds_rec_unlink = -1 ;
 static int hf_lustre_obd_uuid = -1 ;
 static int hf_lustre_obd_connect_data = -1 ;
 static int hf_lustre_ldlm_intent = -1;
-static int hf_lustre_lov_user_md_join = -1 ;
 static int hf_lustre_obd_ioobj = -1 ;
 static int hf_lustre_niobuf_remote = -1 ;
 static int hf_lustre_ost_key = -1 ;
@@ -396,7 +389,6 @@ static int hf_lustre_llog_cookie= -1;
 static int hf_lustre_mds_md_data= -1; 
 static int hf_lustre_mds_reint_opcode= -1; 
 static int hf_lustre_mds_xattr_eadata = -1;
-static int hf_lustre_lov_mds_md_join = -1 ;
 
 static int hf_lustre_reint_name= -1; 
 static int hf_lustre_reint_old_name= -1; 
@@ -575,7 +567,6 @@ static int hf_lustre_ldlm_reply_lock_policy_res1 = -1;
 static int hf_lustre_mds_rec_link_lk_fsuid = -1;
 static int hf_lustre_llogd_body_lgd_len = -1;
 static int hf_lustre_qunit_data_old_qd_id = -1;
-static int hf_lustre_lov_user_md_join_lmm_stripe_count = -1;
 static int hf_lustre_llog_logid_rec_padding1 = -1;
 static int hf_lustre_quota_adjust_qunit_padding1 = -1;
 static int hf_lustre_llog_size_change_rec_lsc_fid = -1;
@@ -601,7 +592,6 @@ static int hf_lustre_llog_logid_lgl_oid = -1;
 static int hf_lustre_ldlm_inodebits_bits = -1;
 static int hf_lustre_llog_log_hdr_llh_count = -1;
 static int hf_lustre_mds_rec_unlink_ul_padding_4 = -1;
-static int hf_lustre_lov_user_md_join_lmm_stripe_size = -1;
 static int hf_lustre_llog_gen_rec_lgr_tail = -1;
 static int hf_lustre_llog_catid_lci_padding3 = -1;
 static int hf_lustre_qunit_data_qd_qunit = -1;
@@ -610,7 +600,6 @@ static int hf_lustre_llog_setattr_rec_padding = -1;
 static int hf_lustre_mds_rec_rename_rn_opcode = -1;
 static int hf_lustre_mds_rec_create_cr_flags = -1;
 static int hf_lustre_mds_rec_rename_rn_fid1 = -1;
-static int hf_lustre_mds_extent_desc_med_start = -1;
 static int hf_lustre_llog_cookie_lgc_lgl = -1;
 static int hf_lustre_obd_quotactl_qc_dqinfo = -1;
 static int hf_lustre_llog_log_hdr_llh_bitmap = -1;
@@ -623,7 +612,6 @@ static int hf_lustre_mds_rec_unlink_ul_mode = -1;
 static int hf_lustre_llog_orphan_rec_lor_tail = -1;
 static int hf_lustre_llog_logid_rec_padding5 = -1;
 static int hf_lustre_mds_rec_create_cr_fsgid = -1;
-static int hf_lustre_mds_rec_join_jr_fid = -1;
 static int hf_lustre_ldlm_intent_opc = -1;
 static int hf_lustre_llog_rec_hdr_lrh_type = -1;
 static int hf_lustre_mds_rec_link_lk_fsgid = -1;
@@ -643,8 +631,6 @@ static int hf_lustre_ldlm_extent_start = -1;
 static int hf_lustre_mds_rec_unlink_ul_opcode = -1;
 static int hf_lustre_llog_size_change_rec_lsc_hdr = -1;
 static int hf_lustre_mds_rec_unlink_ul_time = -1;
-static int hf_lustre_lov_user_ost_data_join_l_extent_start = -1;
-static int hf_lustre_lov_user_md_join_lmm_tree_id = -1;
 static int hf_lustre_llog_create_rec_lcr_tail = -1;
 static int hf_lustre_mds_rec_setattr_sa_mode = -1;
 static int hf_lustre_llog_logid_lgl_ogr = -1;
@@ -657,7 +643,6 @@ static int hf_lustre_mds_rec_setattr_sa_gid = -1;
 static int hf_lustre_lov_desc_ld_pattern = -1;
 static int hf_lustre_qunit_data_qd_id = -1;
 static int hf_lustre_mgs_target_info_mti_fsname = -1;
-static int hf_lustre_lov_user_md_join_lmm_object_gr = -1;
 static int hf_lustre_ldlm_request_lock_flags = -1;
 static int hf_lustre_obdo_o_mode = -1;
 static int hf_lustre_mgs_target_info_mti_svname = -1;
@@ -673,12 +658,9 @@ static int hf_lustre_mds_rec_create_cr_replayfid = -1;
 static int hf_lustre_ldlm_lock_desc_l_policy_data = -1;
 static int hf_lustre_mds_rec_link_lk_suppgid1 = -1;
 static int hf_lustre_obd_quotactl_qc_cmd = -1;
-static int hf_lustre_lov_user_md_join_lmm_object_id = -1;
 static int hf_lustre_mds_rec_rename_rn_padding_3 = -1;
 static int hf_lustre_qunit_data_padding = -1;
-static int hf_lustre_lov_user_md_join_lmm_objects = -1;
 static int hf_lustre_quota_adjust_qunit_qaq_flags = -1;
-static int hf_lustre_lov_user_ost_data_join_l_object_gr = -1;
 static int hf_lustre_ldlm_lock_desc_l_granted_mode = -1;
 static int hf_lustre_obdo_o_gr = -1;
 static int hf_lustre_mds_rec_unlink_ul_padding_2 = -1;
@@ -686,7 +668,6 @@ static int hf_lustre_obdo_o_gid = -1;
 static int hf_lustre_llog_catid_lci_logid = -1;
 static int hf_lustre_llog_rec_tail_lrt_index = -1;
 static int hf_lustre_obdo_o_mds = -1;
-static int hf_lustre_mds_extent_desc_med_lmm = -1;
 static int hf_lustre_lov_desc_ld_default_stripe_count = -1;
 static int hf_lustre_ldlm_resource_desc_lr_padding = -1;
 static int hf_lustre_cfg_marker_cm_vers = -1;
@@ -696,13 +677,10 @@ static int hf_lustre_llogd_body_lgd_index = -1;
 static int hf_lustre_cfg_marker_cm_tgtname = -1;
 static int hf_lustre_mds_rec_unlink_ul_padding_1 = -1;
 static int hf_lustre_mds_rec_unlink_ul_cap = -1;
-static int hf_lustre_llog_array_rec_lmr_med = -1;
 static int hf_lustre_llog_setattr_rec_lsr_ogen = -1;
 static int hf_lustre_mds_rec_create_cr_padding_3 = -1;
 static int hf_lustre_llog_logid_rec_lid_hdr = -1;
-static int hf_lustre_lov_user_ost_data_join_l_ost_idx = -1;
 static int hf_lustre_obdo_o_easize = -1;
-static int hf_lustre_lov_user_md_join_lmm_array_id = -1;
 static int hf_lustre_ost_body_oa = -1;
 static int hf_lustre_llog_logid_rec_padding3 = -1;
 static int hf_lustre_llog_log_hdr_llh_flags = -1;
@@ -712,14 +690,12 @@ static int hf_lustre_llog_size_change_rec_padding = -1;
 static int hf_lustre_mgs_target_info_mti_config_ver = -1;
 static int hf_lustre_cfg_marker_cm_createtime = -1;
 static int hf_lustre_qunit_data_old_qd_count = -1;
-static int hf_lustre_lov_mds_md_join_lmmj_array_id = -1;
 static int hf_lustre_mds_rec_setattr_sa_uid = -1;
 static int hf_lustre_llog_catid_lci_padding1 = -1;
 static int hf_lustre_mds_rec_setattr_sa_atime = -1;
 static int hf_lustre_lov_desc_ld_active_tgt_count = -1;
 static int hf_lustre_obdo_o_lcookie = -1;
 static int hf_lustre_llog_gen_rec_lgr_gen = -1;
-static int hf_lustre_lov_user_ost_data_join_l_object_id = -1;
 static int hf_lustre_obdo_o_id = -1;
 static int hf_lustre_mgs_target_info_mti_uuid = -1;
 static int hf_lustre_mds_rec_link_lk_padding_1 = -1;
@@ -739,15 +715,12 @@ static int hf_lustre_llog_orphan_rec_lor_hdr = -1;
 static int hf_lustre_mds_rec_rename_rn_fsuid = -1;
 static int hf_lustre_cfg_marker_cm_flags = -1;
 static int hf_lustre_obdo_o_padding_3 = -1;
-static int hf_lustre_lov_user_ost_data_join_l_ost_gen = -1;
 static int hf_lustre_mds_rec_create_cr_fsuid = -1;
 static int hf_lustre_mds_rec_unlink_ul_fsgid = -1;
 static int hf_lustre_ldlm_request_lock_desc = -1;
-static int hf_lustre_lov_user_md_join_lmm_pattern = -1;
 static int hf_lustre_mds_rec_unlink_ul_fsuid = -1;
 static int hf_lustre_mds_rec_link_lk_suppgid2 = -1;
 static int hf_lustre_llog_orphan_rec_padding = -1;
-static int hf_lustre_lov_user_md_join_lmm_tree_gen = -1;
 static int hf_lustre_obdo_o_flags = -1;
 static int hf_lustre_mgs_target_info_mti_params = -1;
 static int hf_lustre_llog_logid_lgl_ogen = -1;
@@ -757,7 +730,6 @@ static int hf_lustre_llog_unlink_rec_lur_oid = -1;
 static int hf_lustre_qunit_data_qd_count = -1;
 static int hf_lustre_mds_rec_rename_rn_padding_1 = -1;
 static int hf_lustre_obdo_o_mtime = -1;
-static int hf_lustre_lov_mds_md_join_lmmj_md = -1;
 static int hf_lustre_mds_rec_rename_rn_fsgid = -1;
 static int hf_lustre_mds_rec_rename_rn_cap = -1;
 static int hf_lustre_obdo_o_blksize = -1;
@@ -767,7 +739,6 @@ static int hf_lustre_mds_rec_link_lk_time = -1;
 static int hf_lustre_ldlm_reply_lock_handle = -1;
 static int hf_lustre_mds_rec_unlink_ul_padding_3 = -1;
 static int hf_lustre_llogd_body_lgd_saved_index = -1;
-static int hf_lustre_mds_rec_join_jr_headsize = -1;
 static int hf_lustre_mds_rec_rename_rn_padding_4 = -1;
 static int hf_lustre_qunit_data_old_qd_isblk = -1;
 static int hf_lustre_obdo_o_blocks = -1;
@@ -782,10 +753,7 @@ static int hf_lustre_ldlm_lock_desc_l_req_mode = -1;
 static int hf_lustre_ldlm_extent_end = -1;
 static int hf_lustre_llog_gen_rec_lgr_hdr = -1;
 static int hf_lustre_llog_orphan_rec_lor_ogen = -1;
-static int hf_lustre_lov_user_md_join_lmm_extent_count = -1;
-static int hf_lustre_mds_extent_desc_med_len = -1;
 static int hf_lustre_llogd_body_lgd_llh_flags = -1;
-static int hf_lustre_llog_array_rec_lmr_hdr = -1;
 static int hf_lustre_llog_log_hdr_llh_cat_idx = -1;
 static int hf_lustre_llog_log_hdr_llh_bitmap_offset=-1;
 static int hf_lustre_llog_orphan_rec_lor_oid = -1;
@@ -795,11 +763,9 @@ static int hf_lustre_mds_rec_create_cr_padding_4 = -1;
 static int hf_lustre_llog_logid_rec_padding4 = -1;
 static int hf_lustre_mds_rec_link_lk_padding_2 = -1;
 static int hf_lustre_llog_setattr_rec_lsr_gid = -1;
-static int hf_lustre_lov_user_md_join_lmm_magic = -1;
 static int hf_lustre_obd_quotactl_qc_type = -1;
 static int hf_lustre_cfg_marker_padding = -1;
 static int hf_lustre_mgs_target_info_mti_nids = -1;
-static int hf_lustre_lov_user_ost_data_join_l_extent_end = -1;
 static int hf_lustre_obdo_o_stripe_idx = -1;
 static int hf_lustre_llogd_conn_body_lgdc_logid = -1;
 static int hf_lustre_mds_rec_setattr_sa_fsuid = -1;
@@ -811,7 +777,6 @@ static int hf_lustre_qunit_data_old2_qd_count = -1;
 static int hf_lustre_qunit_data_old2_qd_flags = -1;
 static int hf_lustre_ldlm_flock_start = -1;
 static int hf_lustre_quota_adjust_qunit_qaq_bunit_sz = -1;
-static int hf_lustre_llog_array_rec_lmr_tail = -1;
 static int hf_lustre_ldlm_flock_pid = -1;
 static int hf_lustre_lov_desc_ld_default_stripe_size = -1;
 static int hf_lustre_mds_rec_setattr_sa_opcode = -1;
@@ -856,7 +821,6 @@ static int hf_lustre_llog_cookie_lgc_subsys = -1;
 static int hf_lustre_llog_log_hdr_llh_hdr = -1;
 static int hf_lustre_mds_rec_setattr_sa_fsgid = -1;
 static int hf_lustre_mds_rec_setattr_sa_padding = -1;
-static int hf_lustre_lov_mds_md_join_lmmj_extent_count = -1;
 static int hf_lustre_llog_log_hdr_llh_reserved = -1;
 
 /* Header field declarations for field from lustre_user.h*/
@@ -917,7 +881,6 @@ const value_string lustre_ldlm_opcode[] = {
 
 const value_string lustre_lov_magic[] = {
   { LOV_MAGIC_V1,   "LOV_MAGIC_V1" },
-  { LOV_MAGIC_JOIN, "LOV_MAGIC_JOIN" },
   {0, NULL}
 };
 
@@ -3328,54 +3291,6 @@ lustre_dissect_struct_mds_rec_create(tvbuff_t *tvb _U_, int offset _U_, packet_i
 
 
 /* TODO : find where this structure appear ! */
-/* IDL: struct mds_rec_join { */
-/* IDL: 	struct ll_fid { */
-/* IDL: } jr_fid; */
-/* IDL: 	uint64 jr_headsize; */
-/* IDL: } */
-
-static int
-lustre_dissect_element_mds_rec_join_jr_fid(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  //offset=lustre_dissect_struct_HASH(0x85b17c0)(tvb,offset,pinfo,tree,hf_lustre_mds_rec_join_jr_fid);
-  return offset;
-}
-
-static int
-lustre_dissect_element_mds_rec_join_jr_headsize(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint64(tvb, offset, pinfo, tree,  hf_lustre_mds_rec_join_jr_headsize);
-
-  return offset;
-}
-
-int
-lustre_dissect_struct_mds_rec_join(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *parent_tree _U_, int hf_index _U_)
-{
-  proto_item *item = NULL;
-  proto_tree *tree = NULL;
-  int old_offset;
-
-
-
-  old_offset=offset;
-
-  if (parent_tree) {
-    item = proto_tree_add_item(parent_tree, hf_index, tvb, offset, -1, TRUE);
-    tree = proto_item_add_subtree(item, ett_lustre_mds_rec_join);
-  }
-
-  offset=lustre_dissect_element_mds_rec_join_jr_fid(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_mds_rec_join_jr_headsize(tvb, offset, pinfo, tree);
-
-
-  proto_item_set_len(item, offset-old_offset);
-
-  return offset;
-}
-
-
 /* IDL: struct mds_rec_link { */
 /* IDL: 	uint32 lk_opcode; */
 /* IDL: 	uint32 lk_fsuid; */
@@ -5333,67 +5248,6 @@ lustre_dissect_struct_llog_catid(tvbuff_t *tvb _U_, int offset _U_, packet_info 
   return offset;
 }
 
-
-/* IDL: struct lov_mds_md_join { */
-/* IDL: 	struct lov_mds_md { */
-/* IDL: } lmmj_md; */
-/* IDL: 	struct llog_logid { */
-/* IDL: } lmmj_array_id; */
-/* IDL: 	uint32 lmmj_extent_count; */
-/* IDL: } */
-
-static int
-lustre_dissect_element_lov_mds_md_join_lmmj_md(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=lustre_dissect_struct_lov_mds_md_v1(tvb,offset,pinfo,tree,hf_lustre_lov_mds_md_join_lmmj_md); 
-  return offset;
-}
-
-static int
-lustre_dissect_element_lov_mds_md_join_lmmj_array_id(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=lustre_dissect_struct_llog_logid(tvb,offset,pinfo,tree,hf_lustre_lov_mds_md_join_lmmj_array_id);
-  return offset;
-}
-
-static int
-lustre_dissect_element_lov_mds_md_join_lmmj_extent_count(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint32(tvb, offset, pinfo, tree,  hf_lustre_lov_mds_md_join_lmmj_extent_count);
-
-  return offset;
-}
-
-int
-lustre_dissect_struct_lov_mds_md_join(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *parent_tree _U_, int hf_index _U_)
-{
-  proto_item *item = NULL;
-  proto_tree *tree = NULL;
-  int old_offset;
-
-
-
-  old_offset=offset;
-
-  if (parent_tree) {
-    item = proto_tree_add_item(parent_tree, hf_index, tvb, offset, -1, TRUE);
-    tree = proto_item_add_subtree(item, ett_lustre_lov_mds_md_join);
-  }
-
-  offset=lustre_dissect_element_lov_mds_md_join_lmmj_md(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_lov_mds_md_join_lmmj_array_id(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_lov_mds_md_join_lmmj_extent_count(tvb, offset, pinfo, tree);
-
-
-  proto_item_set_len(item, offset-old_offset);
-
-  return offset;
-}
-
-
-
 /* IDL: struct llog_rec_hdr { */
 /* IDL: 	uint32 lrh_len; */
 /* IDL: 	uint32 lrh_index; */
@@ -5622,132 +5476,6 @@ lustre_dissect_struct_llog_logid_rec(tvbuff_t *tvb _U_, int offset _U_, packet_i
 
   return offset;
 }
-
-
-
-/* IDL: struct mds_extent_desc { */
-/* IDL: 	uint64 med_start; */
-/* IDL: 	uint64 med_len; */
-/* IDL: 	struct lov_mds_md { */
-/* IDL: } med_lmm; */
-/* IDL: } */
-
-static int
-lustre_dissect_element_mds_extent_desc_med_start(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint64(tvb, offset, pinfo, tree,  hf_lustre_mds_extent_desc_med_start);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_mds_extent_desc_med_len(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint64(tvb, offset, pinfo, tree,  hf_lustre_mds_extent_desc_med_len);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_mds_extent_desc_med_lmm(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  //offset=lustre_dissect_struct_HASH(0x85d3578)(tvb,offset,pinfo,tree,hf_lustre_mds_extent_desc_med_lmm);
-  /*g_print("bug\n");*/
-  return offset;
-}
-
-int
-lustre_dissect_struct_mds_extent_desc(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *parent_tree _U_, int hf_index _U_)
-{
-  proto_item *item = NULL;
-  proto_tree *tree = NULL;
-  int old_offset;
-
-
-
-  old_offset=offset;
-
-  if (parent_tree) {
-    item = proto_tree_add_item(parent_tree, hf_index, tvb, offset, -1, TRUE);
-    tree = proto_item_add_subtree(item, ett_lustre_mds_extent_desc);
-  }
-
-  offset=lustre_dissect_element_mds_extent_desc_med_start(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_mds_extent_desc_med_len(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_mds_extent_desc_med_lmm(tvb, offset, pinfo, tree);
-
-
-  proto_item_set_len(item, offset-old_offset);
-
-  return offset;
-}
-
-
-/* IDL: struct llog_array_rec { */
-/* IDL: 	struct llog_rec_hdr { */
-/* IDL: } lmr_hdr; */
-/* IDL: 	struct mds_extent_desc { */
-/* IDL: } lmr_med; */
-/* IDL: 	struct llog_rec_tail { */
-/* IDL: } lmr_tail; */
-/* IDL: } */
-
-static int
-lustre_dissect_element_llog_array_rec_lmr_hdr(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  //offset=lustre_dissect_struct_HASH(0x85d374c)(tvb,offset,pinfo,tree,hf_lustre_llog_array_rec_lmr_hdr);
-  
-  return offset;
-}
-
-static int
-lustre_dissect_element_llog_array_rec_lmr_med(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  //offset=lustre_dissect_struct_HASH(0x85d4328)(tvb,offset,pinfo,tree,hf_lustre_llog_array_rec_lmr_med);
-  
-  return offset;
-}
-
-static int
-lustre_dissect_element_llog_array_rec_lmr_tail(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  //offset=lustre_dissect_struct_HASH(0x85d4478)(tvb,offset,pinfo,tree,hf_lustre_llog_array_rec_lmr_tail);
-  
-  return offset;
-}
-
-int
-lustre_dissect_struct_llog_array_rec(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *parent_tree _U_, int hf_index _U_)
-{
-  proto_item *item = NULL;
-  proto_tree *tree = NULL;
-  int old_offset;
-
-
-
-  old_offset=offset;
-
-  if (parent_tree) {
-    item = proto_tree_add_item(parent_tree, hf_index, tvb, offset, -1, TRUE);
-    tree = proto_item_add_subtree(item, ett_lustre_llog_array_rec);
-  }
-
-  offset=lustre_dissect_element_llog_array_rec_lmr_hdr(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_llog_array_rec_lmr_med(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_llog_array_rec_lmr_tail(tvb, offset, pinfo, tree);
-
-
-  proto_item_set_len(item, offset-old_offset);
-
-  return offset;
-}
-
-
-
 
 /* IDL: struct llog_create_rec { */
 /* IDL: 	struct llog_rec_hdr { */
@@ -6740,259 +6468,6 @@ lustre_dissect_struct_llogd_conn_body(tvbuff_t *tvb _U_, int offset _U_, packet_
 
   return offset;
 }
-
-
-
-/* TODO : find when this Structure appear on the wire */
-/* IDL: struct lov_user_ost_data_join { */
-/* IDL: 	uint64 l_extent_start; */
-/* IDL: 	uint64 l_extent_end; */
-/* IDL: 	uint64 l_object_id; */
-/* IDL: 	uint64 l_object_gr; */
-/* IDL: 	uint32 l_ost_gen; */
-/* IDL: 	uint32 l_ost_idx; */
-/* IDL: } */
-
-static int
-lustre_dissect_element_lov_user_ost_data_join_l_extent_start(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint64(tvb, offset, pinfo, tree,  hf_lustre_lov_user_ost_data_join_l_extent_start);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_lov_user_ost_data_join_l_extent_end(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint64(tvb, offset, pinfo, tree,  hf_lustre_lov_user_ost_data_join_l_extent_end);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_lov_user_ost_data_join_l_object_id(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint64(tvb, offset, pinfo, tree,  hf_lustre_lov_user_ost_data_join_l_object_id);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_lov_user_ost_data_join_l_object_gr(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint64(tvb, offset, pinfo, tree,  hf_lustre_lov_user_ost_data_join_l_object_gr);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_lov_user_ost_data_join_l_ost_gen(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint32(tvb, offset, pinfo, tree,  hf_lustre_lov_user_ost_data_join_l_ost_gen);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_lov_user_ost_data_join_l_ost_idx(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint32(tvb, offset, pinfo, tree,  hf_lustre_lov_user_ost_data_join_l_ost_idx);
-
-  return offset;
-}
-
-int
-lustre_dissect_struct_lov_user_ost_data_join(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *parent_tree _U_, int hf_index _U_)
-{
-  proto_item *item = NULL;
-  proto_tree *tree = NULL;
-  int old_offset;
-
-
-
-  old_offset=offset;
-
-  if (parent_tree) {
-    item = proto_tree_add_item(parent_tree, hf_index, tvb, offset, -1, TRUE);
-    tree = proto_item_add_subtree(item, ett_lustre_lov_user_ost_data_join);
-  }
-
-  offset=lustre_dissect_element_lov_user_ost_data_join_l_extent_start(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_lov_user_ost_data_join_l_extent_end(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_lov_user_ost_data_join_l_object_id(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_lov_user_ost_data_join_l_object_gr(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_lov_user_ost_data_join_l_ost_gen(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_lov_user_ost_data_join_l_ost_idx(tvb, offset, pinfo, tree);
-
-
-  proto_item_set_len(item, offset-old_offset);
-
-  return offset;
-}
-
-/* TODO : find when this Structure appear on the wire */
-/* IDL: struct lov_user_md_join { */
-/* IDL: 	uint32 lmm_magic; */
-/* IDL: 	uint32 lmm_pattern; */
-/* IDL: 	uint64 lmm_object_id; */
-/* IDL: 	uint64 lmm_object_gr; */
-/* IDL: 	uint32 lmm_stripe_size; */
-/* IDL: 	uint32 lmm_stripe_count; */
-/* IDL: 	uint32 lmm_extent_count; */
-/* IDL: 	uint64 lmm_tree_id; */
-/* IDL: 	uint64 lmm_tree_gen; */
-/* IDL: 	struct llog_logid { */
-/* IDL: } lmm_array_id; */
-/* IDL: 	struct lov_user_ost_data_join { */
-/* IDL: } lmm_objects[0]; */
-/* IDL: } */
-
-static int
-lustre_dissect_element_lov_user_md_join_lmm_magic(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint32(tvb, offset, pinfo, tree,  hf_lustre_lov_user_md_join_lmm_magic);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_lov_user_md_join_lmm_pattern(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint32(tvb, offset, pinfo, tree,  hf_lustre_lov_user_md_join_lmm_pattern);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_lov_user_md_join_lmm_object_id(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint64(tvb, offset, pinfo, tree,  hf_lustre_lov_user_md_join_lmm_object_id);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_lov_user_md_join_lmm_object_gr(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint64(tvb, offset, pinfo, tree,  hf_lustre_lov_user_md_join_lmm_object_gr);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_lov_user_md_join_lmm_stripe_size(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint32(tvb, offset, pinfo, tree,  hf_lustre_lov_user_md_join_lmm_stripe_size);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_lov_user_md_join_lmm_stripe_count(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint32(tvb, offset, pinfo, tree,  hf_lustre_lov_user_md_join_lmm_stripe_count);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_lov_user_md_join_lmm_extent_count(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint32(tvb, offset, pinfo, tree,  hf_lustre_lov_user_md_join_lmm_extent_count);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_lov_user_md_join_lmm_tree_id(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint64(tvb, offset, pinfo, tree,  hf_lustre_lov_user_md_join_lmm_tree_id);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_lov_user_md_join_lmm_tree_gen(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint64(tvb, offset, pinfo, tree,  hf_lustre_lov_user_md_join_lmm_tree_gen);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_lov_user_md_join_lmm_array_id(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=lustre_dissect_struct_llog_logid(tvb,offset,pinfo,tree,hf_lustre_lov_user_md_join_lmm_array_id);
-  return offset;
-}
-
-static int
-lustre_dissect_element_lov_user_md_join_lmm_objects(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-
-  offset=dissect_uint64(tvb, offset, pinfo, tree, hf_lustre_lov_user_md_join_lmm_objects);
-  //for (i = 0; i < 0; i++)
-  //	offset=lustre_dissect_element_lov_user_md_join_lmm_objects_(tvb, offset, pinfo, tree);
-
-  return offset;
-}
-
-//static int
-//lustre_dissect_element_lov_user_md_join_lmm_objects_(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-//{
-//    //offset=lustre_dissect_struct_HASH(0x85eb304)(tvb,offset,pinfo,tree,hf_lustre_lov_user_md_join_lmm_objects);
-//    return offset;
-//}
-
-int
-lustre_dissect_struct_lov_user_md_join(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *parent_tree _U_, int hf_index _U_)
-{
-  proto_item *item = NULL;
-  proto_tree *tree = NULL;
-  int old_offset;
-
-
-
-  old_offset=offset;
-
-  if (parent_tree) {
-    item = proto_tree_add_item(parent_tree, hf_index, tvb, offset, -1, TRUE);
-    tree = proto_item_add_subtree(item, ett_lustre_lov_user_md_join);
-  }
-
-  offset=lustre_dissect_element_lov_user_md_join_lmm_magic(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_lov_user_md_join_lmm_pattern(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_lov_user_md_join_lmm_object_id(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_lov_user_md_join_lmm_object_gr(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_lov_user_md_join_lmm_stripe_size(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_lov_user_md_join_lmm_stripe_count(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_lov_user_md_join_lmm_extent_count(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_lov_user_md_join_lmm_tree_id(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_lov_user_md_join_lmm_tree_gen(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_lov_user_md_join_lmm_array_id(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_lov_user_md_join_lmm_objects(tvb, offset, pinfo, tree);
-
-
-  proto_item_set_len(item, offset-old_offset);
-
-  return offset;
-}
-
 
 /* IDL: struct obdo { */
 /* IDL: 	uint64 o_valid; */
@@ -8034,10 +7509,6 @@ lustre_ldlm_opcode_process(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo
               {
                 case LOV_MAGIC_V1:
                   offset=lustre_dissect_struct_lov_mds_md_v1(tvb,offset,pinfo,tree,hf_lustre_lov_mds_md_v1);
-                  break;
-                case LOV_MAGIC_JOIN:
-                  offset=lustre_dissect_struct_lov_mds_md_join(tvb, offset, pinfo, tree, 
-                      hf_lustre_lov_mds_md_join);
                   break;
                 default:
                   offset=lustre_dissect_element_data(tvb, offset, pinfo, tree, 
@@ -9248,8 +8719,6 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_ldlm_intent,
       { "ldlm intent", "lustre.ldlm_intent", FT_NONE, BASE_NONE, NULL , 0 , "", HFILL}},
 
-    { &hf_lustre_lov_user_md_join,
-      { "lov user md join", "lustre.lov_user_md_join", FT_NONE, BASE_NONE, NULL , 0 , "", HFILL}},
     { &hf_lustre_obd_ioobj,
       { "lustre obd ioobj", "lustre.obd_ioobj", FT_NONE, BASE_NONE, NULL , 0 , "", HFILL}},
     { &hf_lustre_niobuf_remote,
@@ -9297,8 +8766,6 @@ void proto_register_dcerpc_lustre(void)
       { "Lgd Len", "lustre.llogd_body.lgd_len", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_qunit_data_old_qd_id, 
       { "Qd Id", "lustre.qunit_data_old.qd_id", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_user_md_join_lmm_stripe_count, 
-      { "Lmm Stripe Count", "lustre.lov_user_md_join.lmm_stripe_count", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_logid_rec_padding1, 
       { "Padding1", "lustre.llog_logid_rec.padding1", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_quota_adjust_qunit_padding1, 
@@ -9337,8 +8804,6 @@ void proto_register_dcerpc_lustre(void)
       { "mds reint opcode", "lustre.mds_reint_opcode", FT_STRING, BASE_NONE, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_xattr_eadata, 
       { "mds xattr eadata", "lustre.mds_xattr_eadata", FT_NONE, BASE_NONE, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_mds_md_join, 
-      { "lov mds md join", "lustre.lov_mds_md_join", FT_NONE, BASE_NONE, NULL, 0, "", HFILL }},
     { &hf_lustre_reint_name, 
       { "mds reint name", "lustre.mds_reint_name", FT_STRING, BASE_NONE, NULL, 0, "", HFILL }},
     { &hf_lustre_reint_old_name, 
@@ -9406,8 +8871,6 @@ void proto_register_dcerpc_lustre(void)
       { "Llh Count", "lustre.llog_log_hdr.llh_count", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_rec_unlink_ul_padding_4, 
       { "Ul Padding 4", "lustre.mds_rec_unlink.ul_padding_4", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_user_md_join_lmm_stripe_size, 
-      { "Lmm Stripe Size", "lustre.lov_user_md_join.lmm_stripe_size", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_gen_rec_lgr_tail, 
       { "Lgr Tail", "lustre.llog_gen_rec.lgr_tail", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_catid_lci_padding3, 
@@ -9424,8 +8887,6 @@ void proto_register_dcerpc_lustre(void)
       { "Cr Flags", "lustre.mds_rec_create.cr_flags", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_rec_rename_rn_fid1, 
       { "Rn Fid1", "lustre.mds_rec_rename.rn_fid1", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
-    { &hf_lustre_mds_extent_desc_med_start, 
-      { "Med Start", "lustre.mds_extent_desc.med_start", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_cookie_lgc_lgl, 
       { "Lgc Lgl", "lustre.llog_cookie.lgc_lgl", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_obd_quotactl_qc_dqinfo, 
@@ -9450,8 +8911,6 @@ void proto_register_dcerpc_lustre(void)
       { "Padding5", "lustre.llog_logid_rec.padding5", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_rec_create_cr_fsgid, 
       { "Cr Fsgid", "lustre.mds_rec_create.cr_fsgid", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_mds_rec_join_jr_fid, 
-      { "Jr Fid", "lustre.mds_rec_join.jr_fid", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
     /*-------------------------------------------------------------------------------------------------------------*/
     /*all this flags are uint64, but I don't find the way to use something like TFS() with a Uint64*/
     { &hf_lustre_ldlm_intent_opc_open, 
@@ -9511,10 +8970,6 @@ void proto_register_dcerpc_lustre(void)
       { "Lsc Hdr", "lustre.llog_size_change_rec.lsc_hdr", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_rec_unlink_ul_time, 
       { "Ul Time", "lustre.mds_rec_unlink.ul_time",FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_user_ost_data_join_l_extent_start, 
-      { "L Extent Start", "lustre.lov_user_ost_data_join.l_extent_start", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_user_md_join_lmm_tree_id, 
-      { "Lmm Tree Id", "lustre.lov_user_md_join.lmm_tree_id", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_create_rec_lcr_tail, 
       { "Lcr Tail", "lustre.llog_create_rec.lcr_tail", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_rec_setattr_sa_mode, 
@@ -9539,8 +8994,6 @@ void proto_register_dcerpc_lustre(void)
       { "Qd Id", "lustre.qunit_data.qd_id", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mgs_target_info_mti_fsname, 
       { "Mti Fsname", "lustre.mgs_target_info.mti_fsname", FT_UINT8, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_user_md_join_lmm_object_gr, 
-      { "Lmm Object Gr", "lustre.lov_user_md_join.lmm_object_gr", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_request_lock_flags, 
       { "Lock Flags", "lustre.ldlm_request.lock_flags", FT_UINT32, BASE_HEX, NULL, 0 , "", HFILL }},
     { &hf_lustre_obdo_o_mode, 
@@ -9571,18 +9024,12 @@ void proto_register_dcerpc_lustre(void)
       { "Lk Suppgid1", "lustre.mds_rec_link.lk_suppgid1", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obd_quotactl_qc_cmd, 
       { "Qc Cmd", "lustre.obd_quotactl.qc_cmd", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_user_md_join_lmm_object_id, 
-      { "Lmm Object Id", "lustre.lov_user_md_join.lmm_object_id", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_rec_rename_rn_padding_3, 
       { "Rn Padding 3", "lustre.mds_rec_rename.rn_padding_3", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_qunit_data_padding, 
       { "Padding", "lustre.qunit_data.padding", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_user_md_join_lmm_objects, 
-      { "Lmm Objects", "lustre.lov_user_md_join.lmm_objects", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_quota_adjust_qunit_qaq_flags, 
       { "Qaq Flags", "lustre.quota_adjust_qunit.qaq_flags", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_user_ost_data_join_l_object_gr, 
-      { "L Object Gr", "lustre.lov_user_ost_data_join.l_object_gr", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_lock_desc_l_granted_mode, 
       { "L Granted Mode", "lustre.ldlm_lock_desc.l_granted_mode", FT_UINT16, BASE_DEC, VALS(lustre_ldlm_mode_t_vals), 0, "", HFILL }},
     { &hf_lustre_obdo_o_gr, 
@@ -9597,8 +9044,6 @@ void proto_register_dcerpc_lustre(void)
       { "Lrt Index", "lustre.llog_rec_tail.lrt_index", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obdo_o_mds, 
       { "O Mds", "lustre.obdo.o_mds", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_mds_extent_desc_med_lmm, 
-      { "Med Lmm", "lustre.mds_extent_desc.med_lmm", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_lov_desc_ld_default_stripe_count, 
       { "Ld Default Stripe Count", "lustre.lov_desc.ld_default_stripe_count", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_resource_desc_lr_padding, 
@@ -9617,20 +9062,14 @@ void proto_register_dcerpc_lustre(void)
       { "Ul Padding 1", "lustre.mds_rec_unlink.ul_padding_1", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_rec_unlink_ul_cap, 
       { "Ul Cap", "lustre.mds_rec_unlink.ul_cap", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_llog_array_rec_lmr_med, 
-      { "Lmr Med", "lustre.llog_array_rec.lmr_med", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_setattr_rec_lsr_ogen, 
       { "Lsr Ogen", "lustre.llog_setattr_rec.lsr_ogen", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_rec_create_cr_padding_3, 
       { "Cr Padding 3", "lustre.mds_rec_create.cr_padding_3", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_logid_rec_lid_hdr, 
       { "Lid Hdr", "lustre.llog_logid_rec.lid_hdr", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_user_ost_data_join_l_ost_idx, 
-      { "L Ost Idx", "lustre.lov_user_ost_data_join.l_ost_idx", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obdo_o_easize, 
       { "O Easize", "lustre.obdo.o_easize", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_user_md_join_lmm_array_id, 
-      { "Lmm Array Id", "lustre.lov_user_md_join.lmm_array_id", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_ost_body_oa, 
       { "Oa", "lustre.ost_body.oa", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_logid_rec_padding3, 
@@ -9656,8 +9095,6 @@ void proto_register_dcerpc_lustre(void)
       { "Cm Createtime", "lustre.cfg_marker.cm_createtime",FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_qunit_data_old_qd_count, 
       { "Qd Count", "lustre.qunit_data_old.qd_count", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_mds_md_join_lmmj_array_id, 
-      { "Lmmj Array Id", "lustre.lov_mds_md_join.lmmj_array_id", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_rec_setattr_sa_uid, 
       { "Sa Uid", "lustre.mds_rec_setattr.sa_uid", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_catid_lci_padding1, 
@@ -9670,8 +9107,6 @@ void proto_register_dcerpc_lustre(void)
       { "O Lcookie", "lustre.obdo.o_lcookie", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_gen_rec_lgr_gen, 
       { "Lgr Gen", "lustre.llog_gen_rec.lgr_gen", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_user_ost_data_join_l_object_id, 
-      { "L Object Id", "lustre.lov_user_ost_data_join.l_object_id", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obdo_o_id, 
       { "O Id", "lustre.obdo.o_id", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mgs_target_info_mti_uuid, 
@@ -9710,24 +9145,18 @@ void proto_register_dcerpc_lustre(void)
       { "Cm Flags", "lustre.cfg_marker.cm_flags", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obdo_o_padding_3, 
       { "O Padding 3", "lustre.obdo.o_padding_3", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_user_ost_data_join_l_ost_gen, 
-      { "L Ost Gen", "lustre.lov_user_ost_data_join.l_ost_gen", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_rec_create_cr_fsuid, 
       { "Cr Fsuid", "lustre.mds_rec_create.cr_fsuid", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_rec_unlink_ul_fsgid, 
       { "Ul Fsgid", "lustre.mds_rec_unlink.ul_fsgid", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_request_lock_desc, 
       { "Lock Desc", "lustre.ldlm_request.lock_desc", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_user_md_join_lmm_pattern, 
-      { "Lmm Pattern", "lustre.lov_user_md_join.lmm_pattern", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_rec_unlink_ul_fsuid, 
       { "Ul Fsuid", "lustre.mds_rec_unlink.ul_fsuid", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_rec_link_lk_suppgid2, 
       { "Lk Suppgid2", "lustre.mds_rec_link.lk_suppgid2", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_orphan_rec_padding, 
       { "Padding", "lustre.llog_orphan_rec.padding", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_user_md_join_lmm_tree_gen, 
-      { "Lmm Tree Gen", "lustre.lov_user_md_join.lmm_tree_gen", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obdo_o_flags, 
       { "O Flags", "lustre.obdo.o_flags", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mgs_target_info_mti_params, 
@@ -9746,8 +9175,6 @@ void proto_register_dcerpc_lustre(void)
       { "Rn Padding 1", "lustre.mds_rec_rename.rn_padding_1", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obdo_o_mtime, 
       { "O Mtime", "lustre.obdo.o_mtime",FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_mds_md_join_lmmj_md, 
-      { "Lmmj Md", "lustre.lov_mds_md_join.lmmj_md", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_rec_rename_rn_fsgid, 
       { "Rn Fsgid", "lustre.mds_rec_rename.rn_fsgid", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_rec_rename_rn_cap, 
@@ -9766,8 +9193,6 @@ void proto_register_dcerpc_lustre(void)
       { "Ul Padding 3", "lustre.mds_rec_unlink.ul_padding_3", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llogd_body_lgd_saved_index, 
       { "Lgd Saved Index", "lustre.llogd_body.lgd_saved_index", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_mds_rec_join_jr_headsize, 
-      { "Jr Headsize", "lustre.mds_rec_join.jr_headsize", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_rec_rename_rn_padding_4, 
       { "Rn Padding 4", "lustre.mds_rec_rename.rn_padding_4", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_qunit_data_old_qd_isblk, 
@@ -9796,14 +9221,8 @@ void proto_register_dcerpc_lustre(void)
       { "Lgr Hdr", "lustre.llog_gen_rec.lgr_hdr", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_orphan_rec_lor_ogen, 
       { "Lor Ogen", "lustre.llog_orphan_rec.lor_ogen", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_user_md_join_lmm_extent_count, 
-      { "Lmm Extent Count", "lustre.lov_user_md_join.lmm_extent_count", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_mds_extent_desc_med_len, 
-      { "Med Len", "lustre.mds_extent_desc.med_len", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llogd_body_lgd_llh_flags, 
       { "Lgd Llh Flags", "lustre.llogd_body.lgd_llh_flags", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_llog_array_rec_lmr_hdr, 
-      { "Lmr Hdr", "lustre.llog_array_rec.lmr_hdr", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_log_hdr_llh_cat_idx, 
       { "Llh Cat Idx", "lustre.llog_log_hdr.llh_cat_idx", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_log_hdr_llh_bitmap_offset, 
@@ -9822,16 +9241,12 @@ void proto_register_dcerpc_lustre(void)
       { "Lk Padding 2", "lustre.mds_rec_link.lk_padding_2", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_setattr_rec_lsr_gid, 
       { "Lsr Gid", "lustre.llog_setattr_rec.lsr_gid", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_user_md_join_lmm_magic, 
-      { "Lmm Magic", "lustre.lov_user_md_join.lmm_magic", FT_UINT32, BASE_HEX, VALS(lustre_lov_magic), 0, "", HFILL }},
     { &hf_lustre_obd_quotactl_qc_type, 
       { "Qc Type", "lustre.obd_quotactl.qc_type", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_cfg_marker_padding, 
       { "Padding", "lustre.cfg_marker.padding", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mgs_target_info_mti_nids, 
       { "Mti Nids", "lustre.mgs_target_info.mti_nids", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_user_ost_data_join_l_extent_end, 
-      { "L Extent End", "lustre.lov_user_ost_data_join.l_extent_end", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obdo_o_stripe_idx, 
       { "O Stripe Idx", "lustre.obdo.o_stripe_idx", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llogd_conn_body_lgdc_logid, 
@@ -9856,8 +9271,6 @@ void proto_register_dcerpc_lustre(void)
       { "Start", "lustre.ldlm_flock.start", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_quota_adjust_qunit_qaq_bunit_sz, 
       { "Qaq Bunit Sz", "lustre.quota_adjust_qunit.qaq_bunit_sz", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_llog_array_rec_lmr_tail, 
-      { "Lmr Tail", "lustre.llog_array_rec.lmr_tail", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_flock_pid, 
       { "Pid", "lustre.ldlm_flock.pid", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_lov_desc_ld_default_stripe_size, 
@@ -9955,8 +9368,6 @@ void proto_register_dcerpc_lustre(void)
       { "Sa Fsgid", "lustre.mds_rec_setattr.sa_fsgid", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mds_rec_setattr_sa_padding, 
       { "Sa Padding", "lustre.mds_rec_setattr.sa_padding", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_lov_mds_md_join_lmmj_extent_count, 
-      { "Lmmj Extent Count", "lustre.lov_mds_md_join.lmmj_extent_count", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_log_hdr_llh_reserved, 
       { "Llh Reserved", "lustre.llog_log_hdr.llh_reserved", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
 
@@ -10024,7 +9435,6 @@ void proto_register_dcerpc_lustre(void)
     &ett_lustre_quota_adjust_qunit,
     &ett_lustre_mds_rec_setattr,
     &ett_lustre_mds_rec_create,
-    &ett_lustre_mds_rec_join,
     &ett_lustre_mds_rec_link,
     &ett_lustre_mds_rec_unlink,
     &ett_lustre_mds_rec_rename,
@@ -10051,7 +9461,6 @@ void proto_register_dcerpc_lustre(void)
     &ett_lustre_llog_logid,
     &ett_lustre_llog_catid,
     &ett_lustre_llog_logid,
-    &ett_lustre_lov_mds_md_join,
     &ett_lustre_lov_mds_md,
     &ett_lustre_llog_logid,
     &ett_lustre_llog_rec_hdr,
@@ -10060,11 +9469,8 @@ void proto_register_dcerpc_lustre(void)
     &ett_lustre_llog_rec_hdr,
     &ett_lustre_llog_logid,
     &ett_lustre_llog_rec_tail,
-    &ett_lustre_mds_extent_desc,
     &ett_lustre_lov_mds_md,
-    &ett_lustre_llog_array_rec,
     &ett_lustre_llog_rec_hdr,
-    &ett_lustre_mds_extent_desc,
     &ett_lustre_llog_rec_tail,
     &ett_lustre_llog_create_rec,
     &ett_lustre_llog_rec_hdr,
@@ -10099,10 +9505,7 @@ void proto_register_dcerpc_lustre(void)
     &ett_lustre_llogd_conn_body,
     &ett_lustre_llog_gen,
     &ett_lustre_llog_logid,
-    &ett_lustre_lov_user_ost_data_join,
-    &ett_lustre_lov_user_md_join,
     &ett_lustre_llog_logid,
-    &ett_lustre_lov_user_ost_data_join,
     &ett_lustre_obdo,
     &ett_lustre_lustre_handle,
     &ett_lustre_llog_cookie,

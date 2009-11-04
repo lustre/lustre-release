@@ -280,18 +280,13 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count,
 void lov_free_memmd(struct lov_stripe_md **lsmp);
 
 void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm);
-void lov_dump_lmm_join(int level, struct lov_mds_md_join *lmmj);
 void lov_dump_lmm_v3(int level, struct lov_mds_md_v3 *lmm);
 void lov_dump_lmm(int level, void *lmm);
 
 /* lov_ea.c */
-int lov_unpackmd_join(struct lov_obd *lov, struct lov_stripe_md *lsm,
-                      struct lov_mds_md *lmm);
 struct lov_stripe_md *lsm_alloc_plain(int stripe_count, int *size);
 void lsm_free_plain(struct lov_stripe_md *lsm);
 
-struct lov_extent *lovea_idx2le(struct lov_stripe_md *lsm, int stripe_no);
-struct lov_extent *lovea_off2le(struct lov_stripe_md *lsm, obd_off lov_off);
 int lovea_destroy_object(struct lov_obd *lov, struct lov_stripe_md *lsm,
                          struct obdo *oa, void *data);
 /* lproc_lov.c */

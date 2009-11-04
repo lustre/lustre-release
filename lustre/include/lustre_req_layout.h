@@ -241,7 +241,6 @@ extern const struct req_msg_field RMF_DLM_LVB;
 extern const struct req_msg_field RMF_LDLM_INTENT;
 extern const struct req_msg_field RMF_MDT_MD;
 extern const struct req_msg_field RMF_REC_REINT;
-extern const struct req_msg_field RMF_REC_JOINFILE;
 extern const struct req_msg_field RMF_EADATA;
 extern const struct req_msg_field RMF_ACL;
 extern const struct req_msg_field RMF_LOGCOOKIES;

@@ -203,9 +203,6 @@ static void lovsub_lock_descr_map(const struct cl_lock_descr *in,
         start = in->cld_start;
         end   = in->cld_end;
 
-        /*
-         * XXX join file support.
-         */
         if (lsm->lsm_stripe_count > 1) {
                 size = cl_index(lov2cl(obj), lsm->lsm_stripe_size);
                 skip = (lsm->lsm_stripe_count - 1) * size;

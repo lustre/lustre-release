@@ -9,8 +9,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 13297 2108 9789 3637 9789 3561 12622 12653 12653 5188 10764 16260
-ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   65a   65e   68b   75    119d   $SANITY_EXCEPT"
+# bug number for skipped test: 13297 2108 9789 3637 9789 3561 12622 12653 12653 5188 16260
+ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   65a   65e   68b  119d   $SANITY_EXCEPT"
 # bug number for skipped test: 2108 9789 3637 9789 3561 5188/5749 1443
 #ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27m 42a 42b 42c 42d 45 68 76"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
@@ -3424,113 +3424,6 @@ test_74b() { # bug 13310
 	rm -f $DIR/f74b
 }
 run_test 74b "ldlm_enqueue freed-export error path, touch (shouldn't LBUG)"
-
-JOIN=${JOIN:-"lfs join"}
-F75=$DIR/f75
-F128k=${F75}_128k
-FHEAD=${F75}_head
-FTAIL=${F75}_tail
-export T75_PREP=no
-test75_prep() {
-        [ $T75_PREP = "yes" ] && return
-        echo "using F75=$F75, F128k=$F128k, FHEAD=$FHEAD, FTAIL=$FTAIL"
-
-        dd if=/dev/urandom of=${F75}_128k bs=128k count=1 || error "dd failed"
-        log "finished dd"
-        chmod 777 ${F128k}
-        T75_PREP=yes
-}
-
-test_75a() {
-        test75_prep
-
-        cp -p ${F128k} ${FHEAD}
-        log "finished cp to $FHEAD"
-        cp -p ${F128k} ${FTAIL}
-        log "finished cp to $FTAIL"
-        cat ${F128k} ${F128k} > ${F75}_sim_sim
-
-        $JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
-        log "finished join $FHEAD to ${F75}_sim_sim"
-        cmp ${FHEAD} ${F75}_sim_sim || error "${FHEAD} ${F75}_sim_sim differ"
-        log "finished cmp $FHEAD to ${F75}_sim_sim"
-        $CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} still exist after join"
-}
-run_test 75a "TEST join file ===================================="
-
-test_75b() {
-        test75_prep
-
-        cp -p ${F128k} ${FTAIL}
-        cat ${F75}_sim_sim >> ${F75}_join_sim
-        cat ${F128k} >> ${F75}_join_sim
-        $JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
-        cmp ${FHEAD} ${F75}_join_sim || \
-                error "${FHEAD} ${F75}_join_sim are different"
-        $CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join"
-}
-run_test 75b "TEST join file 2 =================================="
-
-test_75c() {
-        test75_prep
-
-        cp -p ${F128k} ${FTAIL}
-        cat ${F128k} >> ${F75}_sim_join
-        cat ${F75}_join_sim >> ${F75}_sim_join
-        $JOIN ${FTAIL} ${FHEAD} || error "join error"
-        cmp ${FTAIL} ${F75}_sim_join || \
-                error "${FTAIL} ${F75}_sim_join are different"
-        $CHECKSTAT -a ${FHEAD} || error "tail ${FHEAD} exist after join"
-}
-run_test 75c "TEST join file 3 =================================="
-
-test_75d() {
-        test75_prep
-
-        cp -p ${F128k} ${FHEAD}
-        cp -p ${F128k} ${FHEAD}_tmp
-        cat ${F75}_sim_sim >> ${F75}_join_join
-        cat ${F75}_sim_join >> ${F75}_join_join
-        $JOIN ${FHEAD} ${FHEAD}_tmp || error "join ${FHEAD} ${FHEAD}_tmp error"
-        $JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
-        cmp ${FHEAD} ${F75}_join_join ||error "${FHEAD} ${F75}_join_join differ"        $CHECKSTAT -a ${FHEAD}_tmp || error "${FHEAD}_tmp exist after join"
-        $CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join (2)"
-}
-run_test 75d "TEST join file 4 =================================="
-
-test_75e() {
-        test75_prep
-
-        rm -rf ${FHEAD} || "delete join file error"
-}
-run_test 75e "TEST join file 5 (remove joined file) ============="
-
-test_75f() {
-        test75_prep
-
-        cp -p ${F128k} ${F75}_join_10_compare
-        cp -p ${F128k} ${F75}_join_10
-        for ((i = 0; i < 10; i++)); do
-                cat ${F128k} >> ${F75}_join_10_compare
-                cp -p ${F128k} ${FTAIL}
-                $JOIN ${F75}_join_10 ${FTAIL} || \
-                        error "join ${F75}_join_10 ${FTAIL} error"
-                $CHECKSTAT -a ${FTAIL} || error "tail file exist after join"
-        done
-        cmp ${F75}_join_10 ${F75}_join_10_compare || \
-                error "files ${F75}_join_10 ${F75}_join_10_compare differ"
-}
-run_test 75f "TEST join file 6 (join 10 files) =================="
-
-test_75g() {
-        [ ! -f ${F75}_join_10 ] && echo "${F75}_join_10 missing" && return
-        $LFS getstripe ${F75}_join_10
-
-        $OPENUNLINK ${F75}_join_10 ${F75}_join_10 || error "files unlink open"
-
-        ls -l $F75*
-}
-run_test 75g "TEST join file 7 (open unlink) ===================="
 
 num_inodes() {
 	awk '/lustre_inode_cache/ {print $2; exit}' /proc/slabinfo

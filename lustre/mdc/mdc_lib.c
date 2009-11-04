@@ -181,8 +181,6 @@ static __u32 mds_pack_open_flags(__u32 flags, __u32 mode)
                 cr_flags |= MDS_OPEN_SYNC;
         if (flags & O_DIRECTORY)
                 cr_flags |= MDS_OPEN_DIRECTORY;
-        if (mode  & M_JOIN_FILE)
-                cr_flags |= MDS_OPEN_JOIN_FILE;
 #ifdef FMODE_EXEC
         if (flags & FMODE_EXEC)
                 cr_flags |= MDS_FMODE_EXEC;
@@ -194,18 +192,6 @@ static __u32 mds_pack_open_flags(__u32 flags, __u32 mode)
 }
 
 /* packing of MDS records */
-void mdc_join_pack(struct ptlrpc_request *req,
-                   struct md_op_data *op_data,
-                   __u64 head_size)
-{
-        struct mdt_rec_join *rec;
-
-        rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_JOINFILE);
-        LASSERT(rec != NULL);
-        rec->jr_fid = op_data->op_fid2;
-        rec->jr_headsize = head_size;
-}
-
 void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
                    __u32 mode, __u64 rdev, __u32 flags, const void *lmm,
                    int lmmlen)

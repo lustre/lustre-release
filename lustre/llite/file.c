@@ -1291,8 +1291,7 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
         LASSERT(lmm != NULL);
 
         if ((lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_V1)) &&
-            (lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_V3)) &&
-            (lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_JOIN))) {
+            (lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_V3))) {
                 GOTO(out, rc = -EPROTO);
         }
 
@@ -1316,62 +1315,9 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
                                 lustre_swab_lov_user_md_objects(
                                  ((struct lov_user_md_v3 *)lmm)->lmm_objects,
                                  ((struct lov_user_md_v3 *)lmm)->lmm_stripe_count);
-                } else if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_JOIN)) {
-                        lustre_swab_lov_user_md_join((struct lov_user_md_join *)lmm);
                 }
         }
 
-        if (lmm->lmm_magic == LOV_MAGIC_JOIN) {
-                struct lov_stripe_md *lsm;
-                struct lov_user_md_join *lmj;
-                int lmj_size, i, aindex = 0;
-
-                rc = obd_unpackmd(sbi->ll_dt_exp, &lsm, lmm, lmmsize);
-                if (rc < 0)
-                        GOTO(out, rc = -ENOMEM);
-                rc = obd_checkmd(sbi->ll_dt_exp, sbi->ll_md_exp, lsm);
-                if (rc)
-                        GOTO(out_free_memmd, rc);
-
-                lmj_size = sizeof(struct lov_user_md_join) +
-                           lsm->lsm_stripe_count *
-                           sizeof(struct lov_user_ost_data_join);
-                OBD_ALLOC(lmj, lmj_size);
-                if (!lmj)
-                        GOTO(out_free_memmd, rc = -ENOMEM);
-
-                memcpy(lmj, lmm, sizeof(struct lov_user_md_join));
-                for (i = 0; i < lsm->lsm_stripe_count; i++) {
-                        struct lov_extent *lex =
-                                &lsm->lsm_array->lai_ext_array[aindex];
-
-                        if (lex->le_loi_idx + lex->le_stripe_count <= i)
-                                aindex ++;
-                        CDEBUG(D_INFO, "aindex %d i %d l_extent_start "
-                                        LPU64" len %d\n", aindex, i,
-                                        lex->le_start, (int)lex->le_len);
-                        lmj->lmm_objects[i].l_extent_start =
-                                lex->le_start;
-
-                        if ((int)lex->le_len == -1)
-                                lmj->lmm_objects[i].l_extent_end = -1;
-                        else
-                                lmj->lmm_objects[i].l_extent_end =
-                                        lex->le_start + lex->le_len;
-                        lmj->lmm_objects[i].l_object_id =
-                                lsm->lsm_oinfo[i]->loi_id;
-                        lmj->lmm_objects[i].l_object_gr =
-                                lsm->lsm_oinfo[i]->loi_gr;
-                        lmj->lmm_objects[i].l_ost_gen =
-                                lsm->lsm_oinfo[i]->loi_ost_gen;
-                        lmj->lmm_objects[i].l_ost_idx =
-                                lsm->lsm_oinfo[i]->loi_ost_idx;
-                }
-                lmm = (struct lov_mds_md *)lmj;
-                lmmsize = lmj_size;
-out_free_memmd:
-                obd_free_memmd(sbi->ll_dt_exp, &lsm);
-        }
 out:
         *lmmp = lmm;
         *lmm_size = lmmsize;
@@ -1526,179 +1472,6 @@ int ll_put_grouplock(struct inode *inode, struct file *file, unsigned long arg)
         CDEBUG(D_INFO, "group lock %lu released\n", arg);
         RETURN(0);
 }
-
-#if LUSTRE_FIX >= 50
-static int join_sanity_check(struct inode *head, struct inode *tail)
-{
-        ENTRY;
-        if ((ll_i2sbi(head)->ll_flags & LL_SBI_JOIN) == 0) {
-                CERROR("server do not support join \n");
-                RETURN(-EINVAL);
-        }
-        if (!S_ISREG(tail->i_mode) || !S_ISREG(head->i_mode)) {
-                CERROR("tail ino %lu and ino head %lu must be regular\n",
-                       head->i_ino, tail->i_ino);
-                RETURN(-EINVAL);
-        }
-        if (head->i_ino == tail->i_ino) {
-                CERROR("file %lu can not be joined to itself \n", head->i_ino);
-                RETURN(-EINVAL);
-        }
-        if (i_size_read(head) % JOIN_FILE_ALIGN) {
-                CERROR("hsize %llu must be times of 64K\n", i_size_read(head));
-                RETURN(-EINVAL);
-        }
-        RETURN(0);
-}
-
-static int join_file(struct inode *head_inode, struct file *head_filp,
-                     struct file *tail_filp)
-{
-        struct dentry *tail_dentry = tail_filp->f_dentry;
-        struct lookup_intent oit = {.it_op = IT_OPEN,
-                                    .it_flags = head_filp->f_flags,
-                                    .it_create_mode = M_JOIN_FILE};
-        struct ldlm_enqueue_info einfo = { LDLM_IBITS, LCK_CW,
-                ll_md_blocking_ast, ldlm_completion_ast, NULL, NULL, NULL };
-
-        struct lustre_handle lockh;
-        struct md_op_data *op_data;
-        int    rc;
-        loff_t data;
-        ENTRY;
-
-        tail_dentry = tail_filp->f_dentry;
-
-        data = i_size_read(head_inode);
-        op_data = ll_prep_md_op_data(NULL, head_inode,
-                                     tail_dentry->d_parent->d_inode,
-                                     tail_dentry->d_name.name,
-                                     tail_dentry->d_name.len, 0,
-                                     LUSTRE_OPC_ANY, &data);
-        if (IS_ERR(op_data))
-                RETURN(PTR_ERR(op_data));
-
-        rc = md_enqueue(ll_i2mdexp(head_inode), &einfo, &oit,
-                         op_data, &lockh, NULL, 0, NULL, 0);
-
-        ll_finish_md_op_data(op_data);
-        if (rc < 0)
-                GOTO(out, rc);
-
-        rc = oit.d.lustre.it_status;
-
-        if (rc < 0 || it_open_error(DISP_OPEN_OPEN, &oit)) {
-                rc = rc ? rc : it_open_error(DISP_OPEN_OPEN, &oit);
-                ptlrpc_req_finished((struct ptlrpc_request *)
-                                    oit.d.lustre.it_data);
-                GOTO(out, rc);
-        }
-
-        if (oit.d.lustre.it_lock_mode) { /* If we got lock - release it right
-                                           * away */
-                ldlm_lock_decref(&lockh, oit.d.lustre.it_lock_mode);
-                oit.d.lustre.it_lock_mode = 0;
-        }
-        ptlrpc_req_finished((struct ptlrpc_request *) oit.d.lustre.it_data);
-        it_clear_disposition(&oit, DISP_ENQ_COMPLETE);
-        ll_release_openhandle(head_filp->f_dentry, &oit);
-out:
-        ll_intent_release(&oit);
-        RETURN(rc);
-}
-
-static int ll_file_join(struct inode *head, struct file *filp,
-                        char *filename_tail)
-{
-        struct inode *tail = NULL, *first = NULL, *second = NULL;
-        struct dentry *tail_dentry;
-        struct file *tail_filp, *first_filp, *second_filp;
-        struct ll_lock_tree first_tree, second_tree;
-        struct ll_lock_tree_node *first_node, *second_node;
-        struct ll_inode_info *hlli = ll_i2info(head);
-        int rc = 0, cleanup_phase = 0;
-        ENTRY;
-
-        CDEBUG(D_VFSTRACE, "VFS Op:head=%lu/%u(%p) tail %s\n",
-               head->i_ino, head->i_generation, head, filename_tail);
-
-        tail_filp = filp_open(filename_tail, O_WRONLY, 0644);
-        if (IS_ERR(tail_filp)) {
-                CERROR("Can not open tail file %s", filename_tail);
-                rc = PTR_ERR(tail_filp);
-                GOTO(cleanup, rc);
-        }
-        tail = igrab(tail_filp->f_dentry->d_inode);
-
-        tail_dentry = tail_filp->f_dentry;
-        LASSERT(tail_dentry);
-        cleanup_phase = 1;
-
-        /*reorder the inode for lock sequence*/
-        first = head->i_ino > tail->i_ino ? head : tail;
-        second = head->i_ino > tail->i_ino ? tail : head;
-        first_filp = head->i_ino > tail->i_ino ? filp : tail_filp;
-        second_filp = head->i_ino > tail->i_ino ? tail_filp : filp;
-
-        CDEBUG(D_INFO, "reorder object from %lu:%lu to %lu:%lu \n",
-               head->i_ino, tail->i_ino, first->i_ino, second->i_ino);
-        first_node = ll_node_from_inode(first, 0, OBD_OBJECT_EOF, LCK_EX);
-        if (IS_ERR(first_node)){
-                rc = PTR_ERR(first_node);
-                GOTO(cleanup, rc);
-        }
-        first_tree.lt_fd = first_filp->private_data;
-        rc = ll_tree_lock(&first_tree, first_node, NULL, 0, 0);
-        if (rc != 0)
-                GOTO(cleanup, rc);
-        cleanup_phase = 2;
-
-        second_node = ll_node_from_inode(second, 0, OBD_OBJECT_EOF, LCK_EX);
-        if (IS_ERR(second_node)){
-                rc = PTR_ERR(second_node);
-                GOTO(cleanup, rc);
-        }
-        second_tree.lt_fd = second_filp->private_data;
-        rc = ll_tree_lock(&second_tree, second_node, NULL, 0, 0);
-        if (rc != 0)
-                GOTO(cleanup, rc);
-        cleanup_phase = 3;
-
-        rc = join_sanity_check(head, tail);
-        if (rc)
-                GOTO(cleanup, rc);
-
-        rc = join_file(head, filp, tail_filp);
-        if (rc)
-                GOTO(cleanup, rc);
-cleanup:
-        switch (cleanup_phase) {
-        case 3:
-                ll_tree_unlock(&second_tree);
-                obd_cancel_unused(ll_i2dtexp(second),
-                                  ll_i2info(second)->lli_smd, 0, NULL);
-        case 2:
-                ll_tree_unlock(&first_tree);
-                obd_cancel_unused(ll_i2dtexp(first),
-                                  ll_i2info(first)->lli_smd, 0, NULL);
-        case 1:
-                filp_close(tail_filp, 0);
-                if (tail)
-                        iput(tail);
-                if (head && rc == 0) {
-                        obd_free_memmd(ll_i2sbi(head)->ll_dt_exp,
-                                       &hlli->lli_smd);
-                        hlli->lli_smd = NULL;
-                }
-        case 0:
-                break;
-        default:
-                CERROR("invalid cleanup_phase %d\n", cleanup_phase);
-                LBUG();
-        }
-        RETURN(rc);
-}
-#endif /* LUSTRE_FIX >= 50 */
 
 /**
  * Close inode open handle
@@ -1945,23 +1718,6 @@ error:
         case FSFILT_IOC_GETVERSION_OLD:
         case FSFILT_IOC_GETVERSION:
                 RETURN(put_user(inode->i_generation, (int *)arg));
-        case LL_IOC_JOIN: {
-#if LUSTRE_FIX >= 50
-                /* Allow file join in beta builds to allow debuggging */
-                char *ftail;
-                int rc;
-
-                ftail = getname((const char *)arg);
-                if (IS_ERR(ftail))
-                        RETURN(PTR_ERR(ftail));
-                rc = ll_file_join(inode, file, ftail);
-                putname(ftail);
-                RETURN(rc);
-#else
-                CWARN("file join is not supported in this version of Lustre\n");
-                RETURN(-ENOTTY);
-#endif
-        }
         case LL_IOC_GROUP_LOCK:
                 RETURN(ll_get_grouplock(inode, file, arg));
         case LL_IOC_GROUP_UNLOCK:

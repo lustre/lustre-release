@@ -715,7 +715,7 @@ void lustre_assert_wire_constants(void)
         LASSERTF((int)sizeof(((struct lov_ost_data_v1 *)0)->l_ost_idx) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct lov_ost_data_v1 *)0)->l_ost_idx));
         CLASSERT(LOV_MAGIC_V1 == 0x0BD10BD0);
-        CLASSERT(LOV_MAGIC_JOIN == 0x0BD20BD0);
+        CLASSERT(LOV_MAGIC_JOIN_V1 == 0x0BD20BD0);
         LASSERTF(LOV_PATTERN_RAID0 == 1, " found %lld\n",
                  (long long)LOV_PATTERN_RAID0);
         LASSERTF(LOV_PATTERN_RAID1 == 2, " found %lld\n",
@@ -781,22 +781,6 @@ void lustre_assert_wire_constants(void)
                  (long long)LOV_PATTERN_RAID0);
         LASSERTF(LOV_PATTERN_RAID1 == 2, " found %lld\n",
                  (long long)LOV_PATTERN_RAID1);
-
-        /* Checks for struct lov_mds_md_join */
-        LASSERTF((int)sizeof(struct lov_mds_md_join) == 56, " found %lld\n",
-                 (long long)(int)sizeof(struct lov_mds_md_join));
-        LASSERTF((int)offsetof(struct lov_mds_md_join, lmmj_md) == 0, " found %lld\n",
-                 (long long)(int)offsetof(struct lov_mds_md_join, lmmj_md));
-        LASSERTF((int)sizeof(((struct lov_mds_md_join *)0)->lmmj_md) == 32, " found %lld\n",
-                 (long long)(int)sizeof(((struct lov_mds_md_join *)0)->lmmj_md));
-        LASSERTF((int)offsetof(struct lov_mds_md_join, lmmj_array_id) == 32, " found %lld\n",
-                 (long long)(int)offsetof(struct lov_mds_md_join, lmmj_array_id));
-        LASSERTF((int)sizeof(((struct lov_mds_md_join *)0)->lmmj_array_id) == 20, " found %lld\n",
-                 (long long)(int)sizeof(((struct lov_mds_md_join *)0)->lmmj_array_id));
-        LASSERTF((int)offsetof(struct lov_mds_md_join, lmmj_extent_count) == 52, " found %lld\n",
-                 (long long)(int)offsetof(struct lov_mds_md_join, lmmj_extent_count));
-        LASSERTF((int)sizeof(((struct lov_mds_md_join *)0)->lmmj_extent_count) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct lov_mds_md_join *)0)->lmmj_extent_count));
 
         /* Checks for struct obd_statfs */
         LASSERTF((int)sizeof(struct obd_statfs) == 144, " found %lld\n",
@@ -1441,18 +1425,6 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct mds_rec_rename, rn_time));
         LASSERTF((int)sizeof(((struct mds_rec_rename *)0)->rn_time) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct mds_rec_rename *)0)->rn_time));
-
-        /* Checks for struct mds_rec_join */
-        LASSERTF((int)sizeof(struct mds_rec_join) == 24, " found %lld\n",
-                 (long long)(int)sizeof(struct mds_rec_join));
-        LASSERTF((int)offsetof(struct mds_rec_join, jr_fid) == 0, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_join, jr_fid));
-        LASSERTF((int)sizeof(((struct mds_rec_join *)0)->jr_fid) == 16, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_join *)0)->jr_fid));
-        LASSERTF((int)offsetof(struct mds_rec_join, jr_headsize) == 16, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_rec_join, jr_headsize));
-        LASSERTF((int)sizeof(((struct mds_rec_join *)0)->jr_headsize) == 8, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_rec_join *)0)->jr_headsize));
 
         /* Checks for struct lov_desc */
         LASSERTF((int)sizeof(struct lov_desc) == 88, " found %lld\n",
@@ -2184,38 +2156,6 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct llogd_conn_body, lgdc_ctxt_idx));
         LASSERTF((int)sizeof(((struct llogd_conn_body *)0)->lgdc_ctxt_idx) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct llogd_conn_body *)0)->lgdc_ctxt_idx));
-
-        /* Checks for struct llog_array_rec */
-        LASSERTF((int)sizeof(struct llog_array_rec) == 72, " found %lld\n",
-                 (long long)(int)sizeof(struct llog_array_rec));
-        LASSERTF((int)offsetof(struct llog_array_rec, lmr_hdr) == 0, " found %lld\n",
-                 (long long)(int)offsetof(struct llog_array_rec, lmr_hdr));
-        LASSERTF((int)sizeof(((struct llog_array_rec *)0)->lmr_hdr) == 16, " found %lld\n",
-                 (long long)(int)sizeof(((struct llog_array_rec *)0)->lmr_hdr));
-        LASSERTF((int)offsetof(struct llog_array_rec, lmr_med) == 16, " found %lld\n",
-                 (long long)(int)offsetof(struct llog_array_rec, lmr_med));
-        LASSERTF((int)sizeof(((struct llog_array_rec *)0)->lmr_med) == 48, " found %lld\n",
-                 (long long)(int)sizeof(((struct llog_array_rec *)0)->lmr_med));
-        LASSERTF((int)offsetof(struct llog_array_rec, lmr_tail) == 64, " found %lld\n",
-                 (long long)(int)offsetof(struct llog_array_rec, lmr_tail));
-        LASSERTF((int)sizeof(((struct llog_array_rec *)0)->lmr_tail) == 8, " found %lld\n",
-                 (long long)(int)sizeof(((struct llog_array_rec *)0)->lmr_tail));
-
-        /* Checks for struct mds_extent_desc */
-        LASSERTF((int)sizeof(struct mds_extent_desc) == 48, " found %lld\n",
-                 (long long)(int)sizeof(struct mds_extent_desc));
-        LASSERTF((int)offsetof(struct mds_extent_desc, med_start) == 0, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_extent_desc, med_start));
-        LASSERTF((int)sizeof(((struct mds_extent_desc *)0)->med_start) == 8, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_extent_desc *)0)->med_start));
-        LASSERTF((int)offsetof(struct mds_extent_desc, med_len) == 8, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_extent_desc, med_len));
-        LASSERTF((int)sizeof(((struct mds_extent_desc *)0)->med_len) == 8, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_extent_desc *)0)->med_len));
-        LASSERTF((int)offsetof(struct mds_extent_desc, med_lmm) == 16, " found %lld\n",
-                 (long long)(int)offsetof(struct mds_extent_desc, med_lmm));
-        LASSERTF((int)sizeof(((struct mds_extent_desc *)0)->med_lmm) == 32, " found %lld\n",
-                 (long long)(int)sizeof(((struct mds_extent_desc *)0)->med_lmm));
 
         /* Checks for struct qunit_data */
         LASSERTF((int)sizeof(struct qunit_data) == 32, " found %lld\n",

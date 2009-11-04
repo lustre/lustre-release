@@ -295,7 +295,6 @@ enum stats_track_type {
 #define LL_SBI_FLOCK             0x04
 #define LL_SBI_USER_XATTR        0x08 /* support user xattr */
 #define LL_SBI_ACL               0x10 /* support ACL */
-#define LL_SBI_JOIN              0x20 /* support JOIN */
 #define LL_SBI_RMT_CLIENT        0x40 /* remote client */
 #define LL_SBI_MDS_CAPA          0x80 /* support mds capa */
 #define LL_SBI_OSS_CAPA         0x100 /* support oss capa */

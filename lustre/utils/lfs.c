@@ -160,8 +160,8 @@ command_t cmdlist[] = {
          "\tkeywords are one of followings: config, deletions.\n"
          "\tnode name must be provided when use keyword config."},
         {"join", lfs_join, 0,
-         "join two lustre files into one - join A, B, will be like cat B >> A & del B\n"
-         "usage: join <filename_A> <filename_B>\n"},
+         "join two lustre files into one.\n"
+         "obsolete, HEAD does not support it anymore.\n"},
         {"osts", lfs_osts, 0, "osts"},
         {"df", lfs_df, 0,
          "report filesystem disk space usage or inodes usage"
@@ -1244,37 +1244,11 @@ static int lfs_catinfo(int argc, char **argv)
         return rc;
 }
 
-int lfs_join(int argc, char **argv)
+static int lfs_join(int argc, char **argv)
 {
-        char *name_head, *name_tail;
-        int fd, rc;
-        loff_t size;
-
-        if (argc != 3)
-                return CMD_HELP;
-        name_head = argv[1];
-        fd = open(name_head, O_WRONLY);
-        if (fd < 0) {
-                fprintf(stderr, "Can not open name_head %s rc=%d\n",
-                        name_head, fd);
-                return fd;
-        }
-        size = lseek(fd, 0, SEEK_END);
-        if (size % JOIN_FILE_ALIGN) {
-                fprintf(stderr,"head file %s size %llu must be mutiple of %d\n",
-                        name_head, (long long)size, JOIN_FILE_ALIGN);
-                rc = -EINVAL;
-                goto out;
-        }
-        name_tail = argv[2];
-        rc = ioctl(fd, LL_IOC_JOIN, name_tail);
-out:
-        close(fd);
-        if (rc) {
-                fprintf(stderr, "Lustre joining files: %s, %s, failed\n",
-                        argv[1], argv[2]);
-        }
-        return rc;
+        fprintf(stderr, "join two lustre files into one.\n"
+                        "obsolete, HEAD does not support it anymore.\n");
+        return 0;
 }
 
 #ifdef HAVE_SYS_QUOTA_H

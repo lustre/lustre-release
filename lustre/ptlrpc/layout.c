@@ -385,8 +385,7 @@ static const struct req_msg_field *ldlm_intent_open_client[] = {
         &RMF_CAPA1,
         &RMF_CAPA2,
         &RMF_NAME,
-        &RMF_EADATA,
-        &RMF_REC_JOINFILE
+        &RMF_EADATA
 };
 
 static const struct req_msg_field *ldlm_intent_unlink_client[] = {
@@ -806,11 +805,6 @@ const struct req_msg_field RMF_REC_REINT =
         DEFINE_MSGF("rec_reint", 0, sizeof(struct mdt_rec_reint),
                     lustre_swab_mdt_rec_reint);
 EXPORT_SYMBOL(RMF_REC_REINT);
-
-const struct req_msg_field RMF_REC_JOINFILE =
-        DEFINE_MSGF("rec_joinfile", 0, sizeof(struct mdt_rec_join),
-                    lustre_swab_mdt_rec_join);
-EXPORT_SYMBOL(RMF_REC_JOINFILE);
 
 /* FIXME: this length should be defined as a macro */
 const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, -1, NULL);

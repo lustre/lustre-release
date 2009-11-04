@@ -838,7 +838,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         lump = &lmdp->lmd_lmm;
                 }
                 if (copy_to_user(lump, lmm, lmmsize))
-                        GOTO(out_lmm, rc = -EFAULT);
+                        GOTO(out_req, rc = -EFAULT);
         skip_lmm:
                 if (cmd == IOC_MDC_GETFILEINFO || cmd == LL_IOC_MDC_GETINFO) {
                         struct lov_user_mds_data *lmdp;
@@ -860,13 +860,10 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
                         lmdp = (struct lov_user_mds_data *)arg;
                         if (copy_to_user(&lmdp->lmd_st, &st, sizeof(st)))
-                                GOTO(out_lmm, rc = -EFAULT);
+                                GOTO(out_req, rc = -EFAULT);
                 }
 
                 EXIT;
-        out_lmm:
-                if (lmm && lmm->lmm_magic == LOV_MAGIC_JOIN)
-                        OBD_FREE(lmm, lmmsize);
         out_req:
                 ptlrpc_req_finished(request);
                 if (filename)
@@ -919,10 +916,6 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 rc = obd_unpackmd(sbi->ll_dt_exp, &lsm, lmm, lmmsize);
                 if (rc < 0)
                         GOTO(free_lmm, rc = -ENOMEM);
-
-                rc = obd_checkmd(sbi->ll_dt_exp, sbi->ll_md_exp, lsm);
-                if (rc)
-                        GOTO(free_lsm, rc);
 
                 /* Perform glimpse_size operation. */
                 memset(&st, 0, sizeof(st));

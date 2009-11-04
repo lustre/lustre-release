@@ -64,7 +64,6 @@
 #define lustre_swab_mdt_rec_reint NULL
 #define lustre_swab_lustre_capa NULL
 #define lustre_swab_lustre_capa_key NULL
-#define lustre_swab_mdt_rec_join NULL
 #define lustre_swab_llogd_conn_body NULL
 #define lustre_swab_llog_hdr NULL
 #define lustre_swab_llogd_body NULL

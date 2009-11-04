@@ -683,20 +683,6 @@ static inline int obd_free_memmd(struct obd_export *exp,
         return rc;
 }
 
-static inline int obd_checkmd(struct obd_export *exp,
-                              struct obd_export *md_exp,
-                              struct lov_stripe_md *mem_tgt)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, checkmd);
-        EXP_COUNTER_INCREMENT(exp, checkmd);
-
-        rc = OBP(exp->exp_obd, checkmd)(exp, md_exp, mem_tgt);
-        RETURN(rc);
-}
-
 static inline int obd_precreate(struct obd_export *exp)
 {
         int rc;

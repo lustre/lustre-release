@@ -1142,68 +1142,6 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
         }
 }
 
-void lov_dump_user_lmm_join(struct lov_user_md_v1 *lum, char *path,
-                            int is_dir, int obdindex, int quiet,
-                            int header, int body)
-{
-        struct lov_user_md_join *lumj = (struct lov_user_md_join *)lum;
-        int i, obdstripe = 0;
-
-        if (obdindex != OBD_NOT_FOUND) {
-                for (i = 0; i < lumj->lmm_stripe_count; i++) {
-                        if (obdindex == lumj->lmm_objects[i].l_ost_idx) {
-                                llapi_printf(LLAPI_MSG_NORMAL, "%s\n", path);
-                                obdstripe = 1;
-                                break;
-                        }
-                }
-        } else {
-                if (!quiet)
-                        llapi_printf(LLAPI_MSG_NORMAL, "%s\n", path);
-                obdstripe = 1;
-        }
-
-        if (header && obdstripe == 1) {
-                lov_dump_user_lmm_header(lum, NULL, 0, header, quiet, NULL);
-
-                llapi_printf(LLAPI_MSG_NORMAL, "lmm_extent_count:   %x\n",
-                             lumj->lmm_extent_count);
-        }
-
-        if (body) {
-                unsigned long long start = -1, end = 0;
-                if (!quiet && obdstripe == 1)
-                        llapi_printf(LLAPI_MSG_NORMAL,
-                                     "joined\tobdidx\t\t objid\t\tobjid\t\t "
-                                     "group\t\tstart\t\tend\n");
-                for (i = 0; i < lumj->lmm_stripe_count; i++) {
-                        int idx = lumj->lmm_objects[i].l_ost_idx;
-                        long long oid = lumj->lmm_objects[i].l_object_id;
-                        long long gr = lumj->lmm_objects[i].l_object_gr;
-                        if (obdindex == OBD_NOT_FOUND || obdindex == idx)
-                                llapi_printf(LLAPI_MSG_NORMAL,
-                                             "\t%6u\t%14llu\t%#13llx\t%14llu%s",
-                                             idx, oid, oid, gr,
-                                             obdindex == idx ? " *" : "");
-                        if (start != lumj->lmm_objects[i].l_extent_start ||
-                            end != lumj->lmm_objects[i].l_extent_end) {
-                                start = lumj->lmm_objects[i].l_extent_start;
-                                llapi_printf(LLAPI_MSG_NORMAL,"\t%14llu",start);
-                                end = lumj->lmm_objects[i].l_extent_end;
-                                if (end == (unsigned long long)-1)
-                                        llapi_printf(LLAPI_MSG_NORMAL,
-                                                     "\t\tEOF\n");
-                                else
-                                        llapi_printf(LLAPI_MSG_NORMAL,
-                                                     "\t\t%llu\n", end);
-                        } else {
-                                llapi_printf(LLAPI_MSG_NORMAL, "\t\t\t\t\n");
-                        }
-                }
-                llapi_printf(LLAPI_MSG_NORMAL, "\n");
-        }
-}
-
 void llapi_lov_dump_user_lmm(struct find_param *param,
                              char *path, int is_dir)
 {
@@ -1212,12 +1150,6 @@ void llapi_lov_dump_user_lmm(struct find_param *param,
                 lov_dump_user_lmm_v1v3(&param->lmd->lmd_lmm, NULL,
                                        param->lmd->lmd_lmm.lmm_objects,
                                        path, is_dir,
-                                       param->obdindex, param->quiet,
-                                       param->verbose,
-                                       (param->verbose || !param->obduuid));
-                break;
-        case LOV_USER_MAGIC_JOIN:
-                lov_dump_user_lmm_join(&param->lmd->lmd_lmm, path, is_dir,
                                        param->obdindex, param->quiet,
                                        param->verbose,
                                        (param->verbose || !param->obduuid));
@@ -1241,8 +1173,7 @@ void llapi_lov_dump_user_lmm(struct find_param *param,
                 llapi_printf(LLAPI_MSG_NORMAL, "unknown lmm_magic:  %#x "
                              "(expecting one of %#x %#x %#x)\n",
                              *(__u32 *)&param->lmd->lmd_lmm,
-                             LOV_USER_MAGIC_V1, LOV_USER_MAGIC_JOIN,
-                             LOV_USER_MAGIC_V3);
+                             LOV_USER_MAGIC_V1, LOV_USER_MAGIC_V3);
                 return;
         }
 }

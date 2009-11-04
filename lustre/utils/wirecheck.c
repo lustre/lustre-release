@@ -339,16 +339,6 @@ check_lov_mds_md_v1(void)
 }
 
 static void
-check_lov_mds_md_join(void)
-{
-        BLANK_LINE();
-        CHECK_STRUCT(lov_mds_md_join);
-        CHECK_MEMBER(lov_mds_md_join, lmmj_md);
-        CHECK_MEMBER(lov_mds_md_join, lmmj_array_id);
-        CHECK_MEMBER(lov_mds_md_join, lmmj_extent_count);
-}
-
-static void
 check_lov_mds_md_v3(void)
 {
         BLANK_LINE();
@@ -657,15 +647,6 @@ check_mds_rec_rename(void)
         CHECK_MEMBER(mds_rec_rename, rn_fid1);
         CHECK_MEMBER(mds_rec_rename, rn_fid2);
         CHECK_MEMBER(mds_rec_rename, rn_time);
-}
-
-static void
-check_mds_rec_join(void)
-{
-        BLANK_LINE();
-        CHECK_STRUCT(mds_rec_join);
-        CHECK_MEMBER(mds_rec_join, jr_fid);
-        CHECK_MEMBER(mds_rec_join, jr_headsize);
 }
 
 static void
@@ -1054,16 +1035,6 @@ check_llogd_conn_body(void)
 }
 
 static void
-check_mds_extent_desc(void)
-{
-        BLANK_LINE();
-        CHECK_STRUCT(mds_extent_desc);
-        CHECK_MEMBER(mds_extent_desc, med_start);
-        CHECK_MEMBER(mds_extent_desc, med_len);
-        CHECK_MEMBER(mds_extent_desc, med_lmm);
-}
-
-static void
 check_llog_array_rec(void)
 {
         BLANK_LINE();
@@ -1426,7 +1397,6 @@ main(int argc, char **argv)
         check_obdo();
         check_lov_mds_md_v1();
         check_lov_mds_md_v3();
-        check_lov_mds_md_join();
         check_obd_statfs();
         check_obd_ioobj();
         check_obd_quotactl();
@@ -1440,7 +1410,6 @@ main(int argc, char **argv)
         check_mds_rec_link();
         check_mds_rec_unlink();
         check_mds_rec_rename();
-        check_mds_rec_join();
         check_lov_desc();
         check_ldlm_res_id();
         check_ldlm_extent();
@@ -1473,7 +1442,6 @@ main(int argc, char **argv)
         check_llogd_body();
         check_llogd_conn_body();
         check_llog_array_rec();
-        check_mds_extent_desc();
         check_qunit_data();
         check_quota_adjust_qunit();
         check_mgs_target_info();

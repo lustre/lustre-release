@@ -13,7 +13,6 @@ grep -q 'Enterprise Server 10' /etc/SuSE-release && ALWAYS_EXCEPT="$ALWAYS_EXCEP
 # Tests that fail on uml
 [ "$UML" = "true" ] && EXCEPT="$EXCEPT 7"
 
-# Join file feature is not supported currently.
 # It will be ported soon.
 EXCEPT="$EXCEPT 22"
 
@@ -408,26 +407,6 @@ test_21() { # Bug 5907
 	true
 }
 run_test 21 " Try to remove mountpoint on another dir ===="
-
-JOIN=${JOIN:-"lfs join"}
-
-test_22() { # Bug 9926
-	mkdir $DIR1/d21
-	dd if=/dev/urandom of=$DIR1/d21/128k bs=1024 count=128
-	cp -p $DIR1/d21/128k $DIR1/d21/f_head
-	for ((i=0;i<10;i++)); do
-		cp -p $DIR1/d21/128k $DIR1/d21/f_tail
-		$JOIN $DIR1/d21/f_head $DIR1/d21/f_tail || error "join error"
-		$CHECKSTAT -a $DIR1/d21/f_tail || error "tail file exist after join"
-	done
-	echo aaaaaaaaaaa >> $DIR1/d21/no_joined
-
-	mv $DIR2/d21/f_head $DIR2/
-	munlink $DIR2/f_head || error "unlink joined file error"
-	cat $DIR2/d21/no_joined || error "cat error"
-	rm -rf $DIR2/d21/no_joined || error "unlink normal file error"
-}
-run_test 22 " After joining in one dir,  open/close unlink file in anther dir"
 
 test_23() { # Bug 5972
 	echo "others should see updated atime while another read" > $DIR1/f23

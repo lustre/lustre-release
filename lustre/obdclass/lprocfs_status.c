@@ -731,11 +731,11 @@ static const char *obd_connect_names[] = {
         "truncate_lock",
         "initial_transno",
         "inode_bit_locks",
-        "join_file",
+        "join_file(obsolete)",
         "getattr_by_fid",
         "no_oh_for_devices",
-        "local_client",
         "remote_client",
+        "remote_client_by_force",
         "max_byte_per_rpc",
         "64bit_qdata",
         "mds_capability",
@@ -1402,7 +1402,6 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, statfs_async);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, packmd);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, unpackmd);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, checkmd);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, preallocate);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, precreate);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, create);

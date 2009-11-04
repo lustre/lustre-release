@@ -248,8 +248,6 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
         struct ptlrpc_request *req;
         struct obd_device     *obddev = class_exp2obd(exp);
         struct ldlm_intent    *lit;
-        int           joinfile = !!((it->it_create_mode & M_JOIN_FILE) &&
-                                    op_data->op_data);
         CFS_LIST_HEAD(cancels);
         int                    count = 0;
         int                    mode;
@@ -274,8 +272,8 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
                                                 MDS_INODELOCK_OPEN);
         }
 
-        /* If CREATE or JOIN_FILE, cancel parent's UPDATE lock. */
-        if (it->it_op & IT_CREAT || joinfile)
+        /* If CREATE, cancel parent's UPDATE lock. */
+        if (it->it_op & IT_CREAT)
                 mode = LCK_EX;
         else
                 mode = LCK_CR;
@@ -300,20 +298,11 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
                              op_data->op_namelen + 1);
         req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT,
                              max(lmmsize, obddev->u.cli.cl_default_mds_easize));
-        if (!joinfile) {
-                req_capsule_set_size(&req->rq_pill, &RMF_REC_JOINFILE,
-                                     RCL_CLIENT, 0);
-        }
 
         rc = ldlm_prep_enqueue_req(exp, req, &cancels, count);
         if (rc) {
                 ptlrpc_request_free(req);
                 return NULL;
-        }
-
-        if (joinfile) {
-                __u64 head_size = *(__u64 *)op_data->op_data;
-                mdc_join_pack(req, op_data, head_size);
         }
 
         spin_lock(&req->rq_lock);
@@ -644,17 +633,11 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                 policy = *(ldlm_policy_data_t *)lmm;
                 res_id.name[3] = LDLM_FLOCK;
         } else if (it->it_op & IT_OPEN) {
-                int joinfile = !!((it->it_create_mode & M_JOIN_FILE) &&
-                                              op_data->op_data);
-
                 req = mdc_intent_open_pack(exp, it, op_data, lmm, lmmsize,
                                            einfo->ei_cbdata);
-                if (!joinfile) {
-                        policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
-                        einfo->ei_cbdata = NULL;
-                        lmm = NULL;
-                } else
-                        it->it_create_mode &= ~M_JOIN_FILE;
+                policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
+                einfo->ei_cbdata = NULL;
+                lmm = NULL;
         } else if (it->it_op & IT_UNLINK)
                 req = mdc_intent_unlink_pack(exp, it, op_data);
         else if (it->it_op & (IT_GETATTR | IT_LOOKUP))
