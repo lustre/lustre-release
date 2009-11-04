@@ -2002,7 +2002,7 @@ void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
                 return;
         }
 
-        list_add_tail(&req->rq_replay_list, &imp->imp_replay_list);
+        list_add(&req->rq_replay_list, &imp->imp_replay_list);
 }
 
 int ptlrpc_queue_wait(struct ptlrpc_request *req)

@@ -205,6 +205,13 @@ Description: Slow stale export processing during normal start up
 Details    : The global mgc lock prevents OST setup to be run in parallel.
 	     Replace the global lock with a per-config_llog_data semaphore.
 
+Severity   : normal
+Bugzilla   : 19128
+Description: Out or order replies might be lost on replay
+Details    : In ptlrpc_retain_replayable_request if we cannot find retained
+             request with tid smaller then one currently being added, add it
+	     to the start, not end of the list.
+
 -------------------------------------------------------------------------------
 2009-10-16 Sun Microsystems, Inc.
 	* version 1.8.1.1
