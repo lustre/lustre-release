@@ -334,12 +334,12 @@ static int ll_intent_file_open(struct file *file, void *lmm,
                 GOTO(out, rc);
         }
 
+        rc = ll_prep_inode(sbi->ll_osc_exp, &file->f_dentry->d_inode,
+                           req, DLM_REPLY_REC_OFF, NULL);
         if (itp->d.lustre.it_lock_mode)
                 mdc_set_lock_data(&itp->d.lustre.it_lock_handle,
                                   inode, NULL);
 
-        rc = ll_prep_inode(sbi->ll_osc_exp, &file->f_dentry->d_inode,
-                           req, DLM_REPLY_REC_OFF, NULL);
 out:
         ptlrpc_req_finished(itp->d.lustre.it_data);
         it_clear_disposition(itp, DISP_ENQ_COMPLETE);
@@ -530,9 +530,6 @@ restart:
                                 ll_file_data_put(fd);
                                 GOTO(out_openerr, rc);
                         }
-
-                        mdc_set_lock_data(&it->d.lustre.it_lock_handle,
-                                          file->f_dentry->d_inode, NULL);
                         goto restart;
                 }
 
