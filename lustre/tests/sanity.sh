@@ -5727,6 +5727,7 @@ test_150() {
         cancel_lru_locks osc
         cmp $TF $DIR/$tfile || error "$TMP/$tfile $DIR/$tfile differ"
         remount_client $MOUNT
+        df -P $MOUNT
         cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (remount)"
 
         $TRUNCATE $TF 6000
