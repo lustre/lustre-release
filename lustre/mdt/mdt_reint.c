@@ -837,7 +837,6 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
                 rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS, policy,
                                             LCK_EX, &flags, ldlm_blocking_ast,
                                             ldlm_completion_ast, NULL, NULL, 0,
-                                            NULL,
                                             &info->mti_exp->exp_handle.h_cookie,
                                             lh);
         } else {
@@ -849,9 +848,8 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
                  * This is the case mdt0 is remote node, issue DLM lock like
                  * other clients.
                  */
-                rc = ldlm_cli_enqueue(ms->ms_control_exp,
-                                      NULL, &einfo, res_id,
-                                      policy, &flags, NULL, 0, NULL, lh, 0);
+                rc = ldlm_cli_enqueue(ms->ms_control_exp, NULL, &einfo, res_id,
+                                      policy, &flags, NULL, 0, lh, 0);
         }
 
         RETURN(rc);

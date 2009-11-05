@@ -75,6 +75,8 @@ void req_capsule_init(struct req_capsule *pill, struct ptlrpc_request *req,
 void req_capsule_fini(struct req_capsule *pill);
 
 void req_capsule_set(struct req_capsule *pill, const struct req_format *fmt);
+void req_capsule_client_dump(struct req_capsule *pill);
+void req_capsule_server_dump(struct req_capsule *pill);
 void req_capsule_init_area(struct req_capsule *pill);
 int req_capsule_filled_sizes(struct req_capsule *pill, enum req_location loc);
 int  req_capsule_server_pack(struct req_capsule *pill);
@@ -271,6 +273,7 @@ extern const struct req_msg_field RMF_OST_BODY;
 extern const struct req_msg_field RMF_OBD_IOOBJ;
 extern const struct req_msg_field RMF_OBD_ID;
 extern const struct req_msg_field RMF_NIOBUF_REMOTE;
+extern const struct req_msg_field RMF_RCS;
 extern const struct req_msg_field RMF_FIEMAP_KEY;
 extern const struct req_msg_field RMF_FIEMAP_VAL;
 

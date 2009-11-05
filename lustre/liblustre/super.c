@@ -1410,7 +1410,7 @@ static int llu_file_flock(struct inode *ino,
 
                 if (lmv->tgts[0].ltd_exp != NULL)
                         rc = ldlm_cli_enqueue(lmv->tgts[0].ltd_exp, NULL, &einfo, &res_id,
-                                              &flock, &flags, NULL, 0, NULL, &lockh, 0);
+                                              &flock, &flags, NULL, 0, &lockh, 0);
                 else
                         rc = -ENODEV;
         }

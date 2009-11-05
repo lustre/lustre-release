@@ -368,7 +368,7 @@ struct ldlm_valblock_ops {
         int (*lvbo_init)(struct ldlm_resource *res);
         int (*lvbo_update)(struct ldlm_resource *res,
                            struct ptlrpc_request *r,
-                           int buf_idx, int increase);
+                           int increase);
 };
 
 typedef enum {
@@ -667,7 +667,6 @@ struct ldlm_lock {
          */
         __u32                 l_lvb_len;
         void                 *l_lvb_data;
-        void                 *l_lvb_swabber;
 
         void                 *l_ast_data;
         spinlock_t            l_extents_list_lock;
@@ -915,12 +914,11 @@ ldlm_handle2lock_long(const struct lustre_handle *h, int flags)
 }
 
 static inline int ldlm_res_lvbo_update(struct ldlm_resource *res,
-                                       struct ptlrpc_request *r, int buf_idx,
-                                       int increase)
+                                       struct ptlrpc_request *r, int increase)
 {
         if (res->lr_namespace->ns_lvbo &&
             res->lr_namespace->ns_lvbo->lvbo_update) {
-                return res->lr_namespace->ns_lvbo->lvbo_update(res, r, buf_idx,
+                return res->lr_namespace->ns_lvbo->lvbo_update(res, r,
                                                                increase);
         }
         return 0;
@@ -1064,8 +1062,8 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                      struct ldlm_enqueue_info *einfo,
                      const struct ldlm_res_id *res_id,
                      ldlm_policy_data_t *policy, int *flags,
-                     void *lvb, __u32 lvb_len, void *lvb_swabber,
-                     struct lustre_handle *lockh, int async);
+                     void *lvb, __u32 lvb_len, struct lustre_handle *lockh,
+                     int async);
 int ldlm_prep_enqueue_req(struct obd_export *exp,
                           struct ptlrpc_request *req,
                           struct list_head *cancels,
@@ -1080,8 +1078,7 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns, struct ptlrpc_request *req,
 int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                           ldlm_type_t type, __u8 with_policy, ldlm_mode_t mode,
                           int *flags, void *lvb, __u32 lvb_len,
-                          void *lvb_swabber, struct lustre_handle *lockh,
-                          int rc);
+                          struct lustre_handle *lockh, int rc);
 int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
                            const struct ldlm_res_id *res_id,
                            ldlm_type_t type, ldlm_policy_data_t *policy,
@@ -1089,7 +1086,7 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
                            ldlm_blocking_callback blocking,
                            ldlm_completion_callback completion,
                            ldlm_glimpse_callback glimpse,
-                           void *data, __u32 lvb_len, void *lvb_swabber,
+                           void *data, __u32 lvb_len,
                            const __u64 *client_cookie,
                            struct lustre_handle *lockh);
 int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *new,

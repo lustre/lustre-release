@@ -637,8 +637,7 @@ static int ldlm_cb_interpret(const struct lu_env *env,
                  * been received yet, we need to update lvbo to have the
                  * proper attributes cached. */
                 if (rc == -EINVAL && arg->type == LDLM_BL_CALLBACK)
-                        ldlm_res_lvbo_update(lock->l_resource, NULL,
-                                             0, 1);
+                        ldlm_res_lvbo_update(lock->l_resource, NULL, 1);
                 rc = ldlm_handle_ast_error(lock, req, rc,
                                            arg->type == LDLM_BL_CALLBACK
                                            ? "blocking" : "completion");
@@ -949,7 +948,7 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         else if (rc != 0)
                 rc = ldlm_handle_ast_error(lock, req, rc, "glimpse");
         else
-                rc = ldlm_res_lvbo_update(res, req, REPLY_REC_OFF, 1);
+                rc = ldlm_res_lvbo_update(res, req, 1);
 
         ptlrpc_req_finished(req);
         if (rc == -ERESTART)
@@ -1391,7 +1390,7 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
                         if (res != NULL) {
                                 ldlm_resource_getref(res);
                                 LDLM_RESOURCE_ADDREF(res);
-                                ldlm_res_lvbo_update(res, NULL, 0, 1);
+                                ldlm_res_lvbo_update(res, NULL, 1);
                         }
                         pres = res;
                 }
@@ -1544,9 +1543,8 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
                         LDLM_ERROR(lock, "completion AST did not contain "
                                    "expected LVB!");
                 } else {
-                        void *lvb = req_capsule_client_swab_get(&req->rq_pill,
-                                                                &RMF_DLM_LVB,
-                                                  (void *)lock->l_lvb_swabber);
+                        void *lvb = req_capsule_client_get(&req->rq_pill,
+                                                           &RMF_DLM_LVB);
                         memcpy(lock->l_lvb_data, lvb, lock->l_lvb_len);
                 }
         }

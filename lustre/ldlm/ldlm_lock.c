@@ -1673,7 +1673,7 @@ void ldlm_cancel_locks_for_export_cb(void *obj, void *data)
         LDLM_LOCK_GET(lock);
 
         LDLM_DEBUG(lock, "export %p", exp);
-        ldlm_res_lvbo_update(res, NULL, 0, 1);
+        ldlm_res_lvbo_update(res, NULL, 1);
         ldlm_lock_cancel(lock);
         ldlm_reprocess_all(res);
         ldlm_resource_putref(res);

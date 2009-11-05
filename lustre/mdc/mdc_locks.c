@@ -661,7 +661,7 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                 mdc_enter_request(&obddev->u.cli);
         }
         rc = ldlm_cli_enqueue(exp, &req, einfo, &res_id, &policy, &flags, NULL,
-                              0, NULL, lockh, 0);
+                              0, lockh, 0);
         if (reqp)
                 *reqp = req;
 
@@ -943,7 +943,7 @@ static int mdc_intent_getattr_async_interpret(const struct lu_env *env,
                 rc = -ETIMEDOUT;
 
         rc = ldlm_cli_enqueue_fini(exp, req, einfo->ei_type, 1, einfo->ei_mode,
-                                   &flags, NULL, 0, NULL, lockh, rc);
+                                   &flags, NULL, 0, lockh, rc);
         if (rc < 0) {
                 CERROR("ldlm_cli_enqueue_fini: %d\n", rc);
                 mdc_clear_replay_flag(req, rc);
@@ -990,7 +990,7 @@ int mdc_intent_getattr_async(struct obd_export *exp,
 
         mdc_enter_request(&obddev->u.cli);
         rc = ldlm_cli_enqueue(exp, &req, einfo, &res_id, &policy, &flags, NULL,
-                              0, NULL, &minfo->mi_lockh, 1);
+                              0, &minfo->mi_lockh, 1);
         if (rc < 0) {
                 mdc_exit_request(&obddev->u.cli);
                 RETURN(rc);

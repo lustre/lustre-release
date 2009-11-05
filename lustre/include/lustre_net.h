@@ -415,7 +415,8 @@ struct ptlrpc_request {
                                  rq_pack_udesc:1,
                                  rq_pack_bulk:1,
                                  /* doesn't expect reply FIXME */
-                                 rq_no_reply:1;
+                                 rq_no_reply:1,
+                                 rq_pill_init:1;     /* pill initialized */
 
         uid_t                    rq_auth_uid;        /* authed uid */
         uid_t                    rq_auth_mapped_uid; /* authed uid mapped to */
@@ -1133,10 +1134,6 @@ int lustre_msg_buflen(struct lustre_msg *m, int n);
 void lustre_msg_set_buflen(struct lustre_msg *m, int n, int len);
 int lustre_msg_bufcount(struct lustre_msg *m);
 char *lustre_msg_string (struct lustre_msg *m, int n, int max_len);
-void *lustre_swab_reqbuf(struct ptlrpc_request *req, int n, int minlen,
-                         void *swabber);
-void *lustre_swab_repbuf(struct ptlrpc_request *req, int n, int minlen,
-                         void *swabber);
 __u32 lustre_msghdr_get_flags(struct lustre_msg *msg);
 void lustre_msghdr_set_flags(struct lustre_msg *msg, __u32 flags);
 __u32 lustre_msg_get_flags(struct lustre_msg *msg);

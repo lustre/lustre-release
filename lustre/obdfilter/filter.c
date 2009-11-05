@@ -1551,7 +1551,7 @@ static int filter_prepare_destroy(struct obd_device *obd, obd_id objid,
         rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, LDLM_EXTENT,
                                     &policy, LCK_PW, &flags, ldlm_blocking_ast,
                                     ldlm_completion_ast, NULL, NULL, 0, NULL,
-                                    NULL, lockh);
+                                    lockh);
         if (rc != ELDLM_OK)
                 lockh->cookie = 0;
         RETURN(rc);
@@ -1809,7 +1809,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
                          *
                          * Of course, this will all disappear when we switch to
                          * taking liblustre locks on the OST. */
-                        ldlm_res_lvbo_update(res, NULL, 0, 1);
+                        ldlm_res_lvbo_update(res, NULL, 1);
                 }
                 RETURN(ELDLM_LOCK_ABORTED);
         }
@@ -1836,7 +1836,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
          * sending ast is not handled. This can result in lost client writes.
          */
         if (rc != 0)
-                ldlm_res_lvbo_update(res, NULL, 0, 1);
+                ldlm_res_lvbo_update(res, NULL, 1);
 
         lock_res(res);
         *reply_lvb = *res_lvb;
@@ -3445,7 +3445,7 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
 
         if (res != NULL) {
                 LDLM_RESOURCE_ADDREF(res);
-                rc = ldlm_res_lvbo_update(res, NULL, 0, 0);
+                rc = ldlm_res_lvbo_update(res, NULL, 0);
                 LDLM_RESOURCE_DELREF(res);
                 ldlm_resource_putref(res);
         }

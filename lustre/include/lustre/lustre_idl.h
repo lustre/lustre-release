@@ -2465,6 +2465,13 @@ extern void lustre_swab_llog_rec(struct llog_rec_hdr  *rec,
 struct lustre_cfg;
 extern void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg);
 
+/* Functions for dumping PTLRPC fields */
+void dump_rniobuf(struct niobuf_remote *rnb);
+void dump_ioo(struct obd_ioobj *nb);
+void dump_obdo(struct obdo *oa);
+void dump_ost_body(struct ost_body *ob);
+void dump_rcs(__u32 *rc);
+
 /* this will be used when OBD_CONNECT_CHANGE_QS is set */
 struct qunit_data {
         /**
@@ -2503,7 +2510,7 @@ struct qunit_data {
 #define QDATA_CLR_CHANGE_QS(qdata)  ((qdata)->qd_flags &= ~LQUOTA_FLAGS_CHG_QS)
 
 extern void lustre_swab_qdata(struct qunit_data *d);
-extern struct qunit_data *quota_get_qdata(void*req, int is_req, int is_exp);
+extern struct qunit_data *quota_get_qdata(void *req, int is_req, int is_exp);
 extern int quota_copy_qdata(void *request, struct qunit_data *qdata,
                             int is_req, int is_exp);
 

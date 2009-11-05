@@ -210,8 +210,7 @@ static int osc_getattr_interpret(const struct lu_env *env,
         if (rc != 0)
                 GOTO(out, rc);
 
-        body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
-                                  lustre_swab_ost_body);
+        body = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
         if (body) {
                 CDEBUG(D_INODE, "mode: %o\n", body->oa.o_mode);
                 lustre_get_wire_obdo(aa->aa_oi->oi_oa, &body->oa);
@@ -1138,19 +1137,18 @@ static int check_write_rcs(struct ptlrpc_request *req,
                            int requested_nob, int niocount,
                            obd_count page_count, struct brw_page **pga)
 {
-        int    *remote_rcs, i;
+        int     i;
+        __u32   *remote_rcs;
 
-        /* return error if any niobuf was in error */
-        remote_rcs = lustre_swab_repbuf(req, REQ_REC_OFF + 1,
-                                        sizeof(*remote_rcs) * niocount, NULL);
+        remote_rcs = req_capsule_server_sized_get(&req->rq_pill, &RMF_RCS,
+                                                  sizeof(*remote_rcs) *
+                                                  niocount);
         if (remote_rcs == NULL) {
                 CDEBUG(D_INFO, "Missing/short RC vector on BRW_WRITE reply\n");
                 return(-EPROTO);
         }
-        if (ptlrpc_rep_need_swab(req))
-                for (i = 0; i < niocount; i++)
-                        __swab32s(&remote_rcs[i]);
 
+        /* return error if any niobuf was in error */
         for (i = 0; i < niocount; i++) {
                 if (remote_rcs[i] < 0)
                         return(remote_rcs[i]);
@@ -1264,6 +1262,8 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         }
 
         pill = &req->rq_pill;
+        req_capsule_set_size(pill, &RMF_OBD_IOOBJ, RCL_CLIENT,
+                             sizeof(*ioobj));
         req_capsule_set_size(pill, &RMF_NIOBUF_REMOTE, RCL_CLIENT,
                              niocount * sizeof(*niobuf));
         osc_set_capa_size(req, &RMF_CAPA1, ocapa);
@@ -1290,7 +1290,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         body = req_capsule_client_get(pill, &RMF_OST_BODY);
         ioobj = req_capsule_client_get(pill, &RMF_OBD_IOOBJ);
         niobuf = req_capsule_client_get(pill, &RMF_NIOBUF_REMOTE);
-        LASSERT(body && ioobj && niobuf);
+        LASSERT(body != NULL && ioobj != NULL && niobuf != NULL);
 
         lustre_set_wire_obdo(&body->oa, oa);
 
@@ -1337,11 +1337,9 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         }
 
         LASSERTF((void *)(niobuf - niocount) ==
-                lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 2,
-                               niocount * sizeof(*niobuf)),
-                "want %p - real %p\n", lustre_msg_buf(req->rq_reqmsg,
-                REQ_REC_OFF + 2, niocount * sizeof(*niobuf)),
-                (void *)(niobuf - niocount));
+                req_capsule_client_get(&req->rq_pill, &RMF_NIOBUF_REMOTE),
+                "want %p - real %p\n", req_capsule_client_get(&req->rq_pill,
+                &RMF_NIOBUF_REMOTE), (void *)(niobuf - niocount));
 
         osc_announce_cached(cli, &body->oa, opc == OST_WRITE ? requested_nob:0);
         if (osc_should_shrink_grant(cli))
@@ -1377,7 +1375,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                 }
                 oa->o_cksum = body->oa.o_cksum;
                 /* 1 RC per niobuf */
-                req_capsule_set_size(pill, &RMF_NIOBUF_REMOTE, RCL_SERVER,
+                req_capsule_set_size(pill, &RMF_RCS, RCL_SERVER,
                                      sizeof(__u32) * niocount);
         } else {
                 if (unlikely(cli->cl_checksum) &&
@@ -1387,7 +1385,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                         body->oa.o_flags |= cksum_type_pack(cli->cl_cksum_type);
                         body->oa.o_valid |= OBD_MD_FLCKSUM | OBD_MD_FLFLAGS;
                 }
-                req_capsule_set_size(pill, &RMF_NIOBUF_REMOTE, RCL_SERVER, 0);
+                req_capsule_set_size(pill, &RMF_RCS, RCL_SERVER, 0);
                 /* 1 RC for the whole I/O */
         }
         ptlrpc_request_set_replen(req);
@@ -1479,8 +1477,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
                 RETURN(rc);
 
         LASSERTF(req->rq_repmsg != NULL, "rc = %d\n", rc);
-        body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
-                                  lustre_swab_ost_body);
+        body = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
         if (body == NULL) {
                 CDEBUG(D_INFO, "Can't unpack body\n");
                 RETURN(-EPROTO);
@@ -3157,8 +3154,7 @@ static int osc_enqueue_interpret(const struct lu_env *env,
         /* Complete obtaining the lock procedure. */
         rc = ldlm_cli_enqueue_fini(aa->oa_exp, req, aa->oa_ei->ei_type, 1,
                                    mode, aa->oa_flags, aa->oa_lvb,
-                                   sizeof(*aa->oa_lvb), lustre_swab_ost_lvb,
-                                   &handle, rc);
+                                   sizeof(*aa->oa_lvb), &handle, rc);
         /* Complete osc stuff. */
         rc = osc_enqueue_fini(req, aa->oa_lvb,
                               aa->oa_upcall, aa->oa_cookie, aa->oa_flags, rc);
@@ -3325,7 +3321,7 @@ int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
         *flags &= ~LDLM_FL_BLOCK_GRANTED;
 
         rc = ldlm_cli_enqueue(exp, &req, einfo, res_id, policy, flags, lvb,
-                              sizeof(*lvb), lustre_swab_ost_lvb, lockh, async);
+                              sizeof(*lvb), lockh, async);
         if (rqset) {
                 if (!rc) {
                         struct osc_enqueue_args *aa;

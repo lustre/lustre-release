@@ -284,22 +284,6 @@ static inline int capa_opc_supported(struct lustre_capa *capa, __u64 opc)
         return (capa_opc(capa) & opc) == opc;
 }
 
-static inline struct lustre_capa *
-lustre_unpack_incoming_capa(struct ptlrpc_request *req, unsigned int offset)
-{
-        struct lustre_capa *capa;
-
-        capa = lustre_swab_reqbuf(req, offset, sizeof(*capa),
-                                  lustre_swab_lustre_capa);
-        if (capa == NULL)
-                CERROR("bufcount %u, bufsize %u\n",
-                       lustre_msg_bufcount(req->rq_reqmsg),
-                       (lustre_msg_bufcount(req->rq_reqmsg) <= offset) ?
-                                -1 : lustre_msg_buflen(req->rq_reqmsg, offset));
-
-        return capa;
-}
-
 struct filter_capa_key {
         struct list_head        k_list;
         struct lustre_capa_key  k_key;

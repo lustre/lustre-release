@@ -106,40 +106,51 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
                        struct obd_trans_info *oti)
 {
         struct ost_body *body, *repbody;
-        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         struct lustre_capa *capa = NULL;
         int rc;
         ENTRY;
 
-        body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
-                                  lustre_swab_ost_body);
+        /* Get the request body */
+        body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
         if (body == NULL)
                 RETURN(-EFAULT);
 
         if (body->oa.o_id == 0)
                 RETURN(-EPROTO);
 
-        if (lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF + 1)) {
+        /* If there's a DLM request, cancel the locks mentioned in it*/
+        if (req_capsule_field_present(&req->rq_pill, &RMF_DLM_REQ, RCL_CLIENT)) {
                 struct ldlm_request *dlm;
-                dlm = lustre_swab_reqbuf(req, REQ_REC_OFF + 1, sizeof(*dlm),
-                                         lustre_swab_ldlm_request);
+
+                dlm = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
                 if (dlm == NULL)
                         RETURN (-EFAULT);
                 ldlm_request_cancel(req, dlm, 0);
         }
 
-        if (body->oa.o_valid & OBD_MD_FLOSSCAPA)
-                capa = lustre_unpack_incoming_capa(req, REQ_REC_OFF + 2);
+        /* If there's a capability, get it */
+        if (body->oa.o_valid & OBD_MD_FLOSSCAPA) {
+                capa = req_capsule_client_get(&req->rq_pill, &RMF_CAPA1);
+                if (capa == NULL) {
+                        CERROR("Missing capability for OST DESTROY");
+                        RETURN (-EFAULT);
+                }
+        }
 
-        rc = lustre_pack_reply(req, 2, size, NULL);
+        /* Prepare the reply */
+        rc = req_capsule_server_pack(&req->rq_pill);
         if (rc)
                 RETURN(rc);
 
+        /* Get the log cancellation cookie */
         if (body->oa.o_valid & OBD_MD_FLCOOKIE)
                 oti->oti_logcookies = &body->oa.o_lcookie;
-        repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                                 sizeof(*repbody));
+
+        /* Finish the reply */
+        repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
+
+        /* Do the destroy and set the reply status accordingly  */
         req->rq_status = obd_destroy(exp, &body->oa, NULL, oti, NULL, capa);
         RETURN(0);
 }
@@ -148,27 +159,30 @@ static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
 {
         struct ost_body *body, *repbody;
         struct obd_info oinfo = { { { 0 } } };
-        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int rc;
         ENTRY;
 
-        body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
-                                  lustre_swab_ost_body);
+        body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
         if (body == NULL)
                 RETURN(-EFAULT);
 
-        rc = lustre_pack_reply(req, 2, size, NULL);
+        rc = req_capsule_server_pack(&req->rq_pill);
         if (rc)
                 RETURN(rc);
 
-        repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                                 sizeof(*repbody));
+        repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
         repbody->oa = body->oa;
 
         oinfo.oi_oa = &repbody->oa;
-        if (oinfo.oi_oa->o_valid & OBD_MD_FLOSSCAPA)
-                oinfo.oi_capa = lustre_unpack_incoming_capa(req,
-                                                   REQ_REC_OFF + 1);
+        if (oinfo.oi_oa->o_valid & OBD_MD_FLOSSCAPA) {
+                oinfo.oi_capa = req_capsule_client_get(&req->rq_pill,
+                                                       &RMF_CAPA1);
+                if (oinfo.oi_capa == NULL) {
+                        CERROR("Missing capability for OST GETATTR");
+                        RETURN (-EFAULT);
+                }
+        }
+
         req->rq_status = obd_getattr(exp, &oinfo);
         ost_drop_id(exp, &repbody->oa);
         RETURN(0);
@@ -177,15 +191,14 @@ static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
 static int ost_statfs(struct ptlrpc_request *req)
 {
         struct obd_statfs *osfs;
-        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*osfs) };
         int rc;
         ENTRY;
 
-        rc = lustre_pack_reply(req, 2, size, NULL);
+        rc = req_capsule_server_pack(&req->rq_pill);
         if (rc)
                 RETURN(rc);
 
-        osfs = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*osfs));
+        osfs = req_capsule_server_get(&req->rq_pill, &RMF_OBD_STATFS);
 
         req->rq_status = obd_statfs(req->rq_export->exp_obd, osfs,
                                     cfs_time_current_64() - HZ, 0);
@@ -201,21 +214,18 @@ static int ost_create(struct obd_export *exp, struct ptlrpc_request *req,
                       struct obd_trans_info *oti)
 {
         struct ost_body *body, *repbody;
-        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
         int rc;
         ENTRY;
 
-        body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
-                                  lustre_swab_ost_body);
+        body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
         if (body == NULL)
                 RETURN(-EFAULT);
 
-        rc = lustre_pack_reply(req, 2, size, NULL);
+        rc = req_capsule_server_pack(&req->rq_pill);
         if (rc)
                 RETURN(rc);
 
-        repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                                 sizeof(*repbody));
+        repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
         oti->oti_logcookies = &repbody->oa.o_lcookie;
 
@@ -224,7 +234,7 @@ static int ost_create(struct obd_export *exp, struct ptlrpc_request *req,
         RETURN(0);
 }
 
-/*
+/**
  * Helper function for ost_punch(): if asked by client, acquire [size, EOF]
  * lock on the file being truncated.
  */
@@ -271,11 +281,10 @@ static int ost_punch_lock_get(struct obd_export *exp, struct obdo *oa,
         RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, &res_id,
                                       LDLM_EXTENT, &policy, LCK_PW, &flags,
                                       ldlm_blocking_ast, ldlm_completion_ast,
-                                      ldlm_glimpse_ast, NULL, 0, NULL,
-                                      NULL, lh));
+                                      ldlm_glimpse_ast, NULL, 0, NULL, lh));
 }
 
-/*
+/**
  * Helper function for ost_punch(): release lock acquired by
  * ost_punch_lock_get(), if any.
  */
@@ -293,7 +302,6 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
 {
         struct obd_info oinfo = { { { 0 } } };
         struct ost_body *body, *repbody;
-        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
         int rc;
         struct lustre_handle lh = {0,};
         ENTRY;
@@ -301,9 +309,9 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
         /* check that we do support OBD_CONNECT_TRUNCLOCK. */
         CLASSERT(OST_CONNECT_SUPPORTED & OBD_CONNECT_TRUNCLOCK);
 
-        /* ost_body is varified and swabbed in ost_hpreq_handler() */
-        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        LASSERT(body != NULL);
+        body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
+        if (body == NULL)
+                RETURN(-EFAULT);
 
         oinfo.oi_oa = &body->oa;
         oinfo.oi_policy.l_extent.start = oinfo.oi_oa->o_size;
@@ -313,12 +321,11 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
             (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS))
                 RETURN(-EPROTO);
 
-        rc = lustre_pack_reply(req, 2, size, NULL);
+        rc = req_capsule_server_pack(&req->rq_pill);
         if (rc)
                 RETURN(rc);
 
-        repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                                 sizeof(*repbody));
+        repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
         rc = ost_punch_lock_get(exp, oinfo.oi_oa, &lh);
         if (rc == 0) {
                 if (oinfo.oi_oa->o_valid & OBD_MD_FLFLAGS &&
@@ -330,9 +337,14 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
                          */
                         oinfo.oi_oa->o_valid &= ~OBD_MD_FLFLAGS;
 
-                if (oinfo.oi_oa->o_valid & OBD_MD_FLOSSCAPA)
-                        oinfo.oi_capa = lustre_unpack_incoming_capa(req,
-                                                           REQ_REC_OFF + 1);
+                if (oinfo.oi_oa->o_valid & OBD_MD_FLOSSCAPA) {
+                        oinfo.oi_capa = req_capsule_client_get(&req->rq_pill,
+                                                               &RMF_CAPA1);
+                        if (oinfo.oi_capa == NULL) {
+                                CERROR("Missing capability for OST PUNCH");
+                                RETURN (-EFAULT);
+                        }
+                }
                 req->rq_status = obd_punch(exp, &oinfo, oti, NULL);
                 ost_punch_lock_put(exp, oinfo.oi_oa, &lh);
         }
@@ -345,24 +357,26 @@ static int ost_sync(struct obd_export *exp, struct ptlrpc_request *req)
 {
         struct ost_body *body, *repbody;
         struct lustre_capa *capa = NULL;
-        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
         int rc;
         ENTRY;
 
-        body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
-                                  lustre_swab_ost_body);
+        body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
         if (body == NULL)
                 RETURN(-EFAULT);
 
-        if (body->oa.o_valid & OBD_MD_FLOSSCAPA)
-                capa = lustre_unpack_incoming_capa(req, REQ_REC_OFF + 1);
+        if (body->oa.o_valid & OBD_MD_FLOSSCAPA) {
+                capa = req_capsule_client_get(&req->rq_pill, &RMF_CAPA1);
+                if (capa == NULL) {
+                        CERROR("Missing capability for OST SYNC");
+                        RETURN (-EFAULT);
+                }
+        }
 
-        rc = lustre_pack_reply(req, 2, size, NULL);
+        rc = req_capsule_server_pack(&req->rq_pill);
         if (rc)
                 RETURN(rc);
 
-        repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                                 sizeof(*repbody));
+        repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
         req->rq_status = obd_sync(exp, &repbody->oa, NULL, repbody->oa.o_size,
                                   repbody->oa.o_blocks, capa);
@@ -374,28 +388,30 @@ static int ost_setattr(struct obd_export *exp, struct ptlrpc_request *req,
                        struct obd_trans_info *oti)
 {
         struct ost_body *body, *repbody;
-        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
         int rc;
         struct obd_info oinfo = { { { 0 } } };
         ENTRY;
 
-        body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
-                                  lustre_swab_ost_body);
+        body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
         if (body == NULL)
                 RETURN(-EFAULT);
 
-        rc = lustre_pack_reply(req, 2, size, NULL);
+        rc = req_capsule_server_pack(&req->rq_pill);
         if (rc)
                 RETURN(rc);
 
-        repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                                 sizeof(*repbody));
+        repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
         repbody->oa = body->oa;
 
         oinfo.oi_oa = &repbody->oa;
-        if (oinfo.oi_oa->o_valid & OBD_MD_FLOSSCAPA)
-                oinfo.oi_capa = lustre_unpack_incoming_capa(req,
-                                                   REQ_REC_OFF + 1);
+        if (oinfo.oi_oa->o_valid & OBD_MD_FLOSSCAPA) {
+                oinfo.oi_capa = req_capsule_client_get(&req->rq_pill,
+                                                       &RMF_CAPA1);
+                if (oinfo.oi_capa == NULL) {
+                        CERROR("Missing capability for OST SETATTR");
+                        RETURN (-EFAULT);
+                }
+        }
         req->rq_status = obd_setattr(exp, &oinfo, oti);
         ost_drop_id(exp, &repbody->oa);
         RETURN(0);
@@ -461,10 +477,10 @@ static int ost_brw_lock_get(int mode, struct obd_export *exp,
         if (nrbufs == 0 || !(nb[0].flags & OBD_BRW_SRVLOCK))
                 RETURN(0);
 
-        /* EXPENSIVE ASSERTION */
         for (i = 1; i < nrbufs; i ++)
-                LASSERT((nb[0].flags & OBD_BRW_SRVLOCK) ==
-                        (nb[i].flags & OBD_BRW_SRVLOCK));
+                if ((nb[0].flags & OBD_BRW_SRVLOCK) !=
+                    (nb[i].flags & OBD_BRW_SRVLOCK))
+                        RETURN(-EFAULT);
 
         policy.l_extent.start = nb[0].offset & CFS_PAGE_MASK;
         policy.l_extent.end   = (nb[nrbufs - 1].offset +
@@ -473,8 +489,7 @@ static int ost_brw_lock_get(int mode, struct obd_export *exp,
         RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, &res_id,
                                       LDLM_EXTENT, &policy, mode, &flags,
                                       ldlm_blocking_ast, ldlm_completion_ast,
-                                      ldlm_glimpse_ast, NULL, 0, NULL,
-                                      NULL, lh));
+                                      ldlm_glimpse_ast, NULL, 0, NULL, lh));
 }
 
 static void ost_brw_lock_put(int mode,
@@ -619,7 +634,6 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         struct lustre_capa *capa = NULL;
         struct l_wait_info lwi;
         struct lustre_handle lockh = { 0 };
-        __u32  size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int niocount, npages, nob = 0, rc, i;
         int no_reply = 0;
         ENTRY;
@@ -644,21 +658,34 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         /* ost_body, ioobj & noibuf_remote are verified and swabbed in
          * ost_rw_hpreq_check(). */
-        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        LASSERT(body != NULL);
+        body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
+        if (body == NULL)
+                GOTO(out, rc = -EFAULT);
 
-        ioo = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1, sizeof(*ioo));
-        LASSERT(ioo != NULL);
+        /*
+         * A req_capsule_X_get_array(pill, field, ptr_to_element_count) function
+         * would be useful here and wherever we get &RMF_OBD_IOOBJ and
+         * &RMF_NIOBUF_REMOTE.
+         */
+        ioo = req_capsule_client_get(&req->rq_pill, &RMF_OBD_IOOBJ);
+        if (ioo == NULL)
+                GOTO(out, rc = -EFAULT);
 
         niocount = ioo->ioo_bufcnt;
-        remote_nb = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 2,
-                                   niocount * sizeof(*remote_nb));
-        LASSERT(remote_nb != NULL);
+        remote_nb = req_capsule_client_get(&req->rq_pill, &RMF_NIOBUF_REMOTE);
+        if (remote_nb == NULL)
+                GOTO(out, rc = -EFAULT);
 
-        if (body->oa.o_valid & OBD_MD_FLOSSCAPA)
-                capa = lustre_unpack_incoming_capa(req, REQ_REC_OFF + 3);
+        if (body->oa.o_valid & OBD_MD_FLOSSCAPA) {
+                capa = req_capsule_client_get(&req->rq_pill, &RMF_CAPA1);
+                if (capa == NULL) {
+                        CERROR("Missing capability for OST BRW READ");
+                        GOTO(out, rc = -EFAULT);
+                }
+        }
 
-        rc = lustre_pack_reply(req, 2, size, NULL);
+        req_capsule_set_size(&req->rq_pill, &RMF_RCS, RCL_SERVER, 0);
+        rc = req_capsule_server_pack(&req->rq_pill);
         if (rc)
                 GOTO(out, rc);
 
@@ -824,8 +851,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                           remote_nb, npages, local_nb, oti, rc);
 
         if (rc == 0) {
-                repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                                         sizeof(*repbody));
+                repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
                 memcpy(&repbody->oa, &body->oa, sizeof(repbody->oa));
                 ost_drop_id(exp, &repbody->oa);
         }
@@ -873,7 +899,6 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         struct lustre_handle     lockh = {0};
         struct lustre_capa      *capa = NULL;
         __u32                   *rcs;
-        __u32 size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int objcount, niocount, npages;
         int rc, i, j;
         obd_count                client_cksum = 0, server_cksum = 0;
@@ -905,35 +930,47 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         /* ost_body, ioobj & noibuf_remote are verified and swabbed in
          * ost_rw_hpreq_check(). */
-        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        LASSERT(body != NULL);
+        body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
+        if (body == NULL)
+                GOTO(out, rc = -EFAULT);
 
         if ((body->oa.o_flags & OBD_BRW_MEMALLOC) &&
             (exp->exp_connection->c_peer.nid == exp->exp_connection->c_self))
                 libcfs_memory_pressure_set();
 
-        objcount = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF + 1) /
-                sizeof(*ioo);
-        ioo = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1,
-                             objcount * sizeof(*ioo));
-        LASSERT(ioo != NULL);
+        objcount = req_capsule_get_size(&req->rq_pill, &RMF_OBD_IOOBJ,
+                                        RCL_CLIENT) / sizeof(*ioo);
+        ioo = req_capsule_client_get(&req->rq_pill, &RMF_OBD_IOOBJ);
+        if (ioo == NULL)
+                GOTO(out, rc = -EFAULT);
         for (niocount = i = 0; i < objcount; i++)
                 niocount += ioo[i].ioo_bufcnt;
 
-        remote_nb = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 2,
-                                   niocount * sizeof(*remote_nb));
-        LASSERT(remote_nb != NULL);
+        /*
+         * It'd be nice to have a capsule function to indicate how many elements
+         * there were in a buffer for an RMF that's declared to be an array.
+         * It's easy enough to compute the number of elements here though.
+         */
+        remote_nb = req_capsule_client_get(&req->rq_pill, &RMF_NIOBUF_REMOTE);
+        if (remote_nb == NULL || niocount != (req_capsule_get_size(&req->rq_pill,
+            &RMF_NIOBUF_REMOTE, RCL_CLIENT) / sizeof(*remote_nb)))
+                GOTO(out, rc = -EFAULT);
 
-        if (body->oa.o_valid & OBD_MD_FLOSSCAPA)
-                capa = lustre_unpack_incoming_capa(req, REQ_REC_OFF + 3);
+        if (body->oa.o_valid & OBD_MD_FLOSSCAPA) {
+                capa = req_capsule_client_get(&req->rq_pill, &RMF_CAPA1);
+                if (capa == NULL) {
+                        CERROR("Missing capability for OST BRW WRITE");
+                        GOTO(out, rc = -EFAULT);
+                }
+        }
 
-        size[REPLY_REC_OFF + 1] = niocount * sizeof(*rcs);
-        rc = lustre_pack_reply(req, 3, size, NULL);
+        req_capsule_set_size(&req->rq_pill, &RMF_RCS, RCL_SERVER,
+                             niocount * sizeof(*rcs));
+        rc = req_capsule_server_pack(&req->rq_pill);
         if (rc != 0)
                 GOTO(out, rc);
         OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_PACK, obd_fail_val);
-        rcs = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1,
-                             niocount * sizeof(*rcs));
+        rcs = req_capsule_server_get(&req->rq_pill, &RMF_RCS);
 
         /*
          * Per-thread array of struct niobuf_{local,remote}'s was allocated by
@@ -1060,8 +1097,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         }
         no_reply = rc != 0;
 
-        repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                                 sizeof(*repbody));
+        repbody = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
         memcpy(&repbody->oa, &body->oa, sizeof(repbody->oa));
 
         if (unlikely(client_cksum != 0 && rc == 0)) {
@@ -1189,47 +1225,64 @@ out:
         RETURN(rc);
 }
 
+/**
+ * Implementation of OST_SET_INFO.
+ *
+ * OST_SET_INFO is like ioctl(): heavily overloaded.  Specifically, it takes a
+ * "key" and a value RPC buffers as arguments, with the value's contents
+ * interpreted according to the key.
+ *
+ * Value types that need swabbing have swabbing done explicitly, either here or
+ * in functions called from here.  This should be corrected: all swabbing should
+ * be done in the capsule abstraction, as that will then allow us to move
+ * swabbing exclusively to the client without having to modify server code
+ * outside the capsule abstraction's implementation itself.  To correct this
+ * will require minor changes to the capsule abstraction; see the comments for
+ * req_capsule_extend() in layout.c.
+ */
 static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
 {
         struct ost_body *body = NULL, *repbody;
-        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         char *key, *val = NULL;
         int keylen, vallen, rc = 0;
+        int is_grant_shrink = 0;
         ENTRY;
 
-        key = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, 1);
+        key = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_KEY);
         if (key == NULL) {
                 DEBUG_REQ(D_HA, req, "no set_info key");
                 RETURN(-EFAULT);
         }
-        keylen = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF);
+        keylen = req_capsule_get_size(&req->rq_pill, &RMF_SETINFO_KEY,
+                                      RCL_CLIENT);
 
-        if (KEY_IS(KEY_GRANT_SHRINK)) {
-                rc = lustre_pack_reply(req, 2, size, NULL);
-                if (rc)
-                        RETURN(rc);
-        } else {
-                rc = lustre_pack_reply(req, 1, NULL, NULL);
-                if (rc)
-                        RETURN(rc);
-        }
+        vallen = req_capsule_get_size(&req->rq_pill, &RMF_SETINFO_VAL,
+                                      RCL_CLIENT);
 
-        vallen = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF + 1);
+        if ((is_grant_shrink = KEY_IS(KEY_GRANT_SHRINK)))
+                /* In this case the value is actually an RMF_OST_BODY, so we
+                 * transmutate the type of this PTLRPC */
+                req_capsule_extend(&req->rq_pill, &RQF_OST_SET_GRANT_INFO);
+
+        rc = req_capsule_server_pack(&req->rq_pill);
+        if (rc)
+                RETURN(rc);
+
         if (vallen) {
-                if (KEY_IS(KEY_GRANT_SHRINK)) {
-                        body = lustre_swab_reqbuf(req, REQ_REC_OFF + 1,
-                                                  sizeof(*body),
-                                                  lustre_swab_ost_body);
+                if (is_grant_shrink) {
+                        body = req_capsule_client_get(&req->rq_pill,
+                                                      &RMF_OST_BODY);
                         if (!body)
                                 RETURN(-EFAULT);
 
-                        repbody = lustre_msg_buf(req->rq_repmsg,
-                                                 REPLY_REC_OFF,
-                                                 sizeof(*repbody));
+                        repbody = req_capsule_server_get(&req->rq_pill,
+                                                         &RMF_OST_BODY);
                         memcpy(repbody, body, sizeof(*body));
                         val = (char*)repbody;
-                } else
-                        val = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1,0);
+                } else {
+                        val = req_capsule_client_get(&req->rq_pill,
+                                                     &RMF_SETINFO_VAL);
+                }
         }
 
         if (KEY_IS(KEY_EVICT_BY_NID)) {
@@ -1237,10 +1290,13 @@ static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
                         obd_export_evict_by_nid(exp->exp_obd, val);
                 GOTO(out, rc = 0);
         } else if (KEY_IS(KEY_MDS_CONN) && ptlrpc_req_need_swab(req)) {
-                /* Val's are not swabbed automatically */
+                if (vallen < sizeof(__u32))
+                        RETURN(-EFAULT);
                 __swab32s((__u32 *)val);
         }
 
+        /* OBD will also check if KEY_IS(KEY_GRANT_SHRINK), and will cast val to
+         * a struct ost_body * value */
         rc = obd_set_info_async(exp, keylen, key, vallen, val, NULL);
 out:
         lustre_msg_set_status(req->rq_repmsg, 0);
@@ -1253,8 +1309,6 @@ static int ost_get_info(struct obd_export *exp, struct ptlrpc_request *req)
         int keylen, replylen, rc = 0;
         struct req_capsule *pill = &req->rq_pill;
         ENTRY;
-
-        req_capsule_set(&req->rq_pill, &RQF_OST_GET_INFO_GENERIC);
 
         /* this common part for get_info rpc */
         key = req_capsule_client_get(pill, &RMF_SETINFO_KEY);
@@ -1359,7 +1413,7 @@ static int ost_llog_handle_connect(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        body = lustre_msg_buf(req->rq_reqmsg, 1, sizeof(*body));
+        body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_CONN_BODY);
         rc = obd_llog_connect(exp, body);
         RETURN(rc);
 }
@@ -1636,6 +1690,10 @@ int ost_msg_check_version(struct lustre_msg *msg)
         return rc;
 }
 
+/**
+ * Returns 1 if the given PTLRPC matches the given LDLM locks, or 0 if it does
+ * not.
+ */
 static int ost_rw_hpreq_lock_match(struct ptlrpc_request *req,
                                    struct ldlm_lock *lock)
 {
@@ -1652,19 +1710,24 @@ static int ost_rw_hpreq_lock_match(struct ptlrpc_request *req,
 
         /* As the request may be covered by several locks, do not look at
          * o_handle, look at the RPC IO region. */
-        body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
-                                  lustre_swab_obdo);
-        objcount = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF + 1) /
-                sizeof(*ioo);
-        ioo = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1,
-                             objcount * sizeof(*ioo));
-        LASSERT(ioo != NULL);
+        body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
+        if (body == NULL)
+                RETURN(0);
+
+        objcount = req_capsule_get_size(&req->rq_pill, &RMF_OBD_IOOBJ,
+                                        RCL_CLIENT) / sizeof(*ioo);
+        ioo = req_capsule_client_get(&req->rq_pill, &RMF_OBD_IOOBJ);
+        if (ioo == NULL)
+                RETURN(0);
+
         for (niocount = i = 0; i < objcount; i++)
                 niocount += ioo[i].ioo_bufcnt;
 
-        nb = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 2,
-                            niocount * sizeof(*nb));
-        LASSERT(nb != NULL);
+        nb = req_capsule_client_get(&req->rq_pill, &RMF_NIOBUF_REMOTE);
+        if (nb == NULL ||
+            niocount != (req_capsule_get_size(&req->rq_pill, &RMF_NIOBUF_REMOTE,
+            RCL_CLIENT) / sizeof(*nb)))
+                RETURN(0);
 
         mode = LCK_PW;
         if (opc == OST_READ)
@@ -1690,9 +1753,14 @@ static int ost_rw_hpreq_lock_match(struct ptlrpc_request *req,
 }
 
 /**
- * Swab buffers needed to call ost_rw_prolong_locks() and call it.
- * Return the value from ost_rw_prolong_locks() which is non-zero if
- * there is a cancelled lock which is waiting for this IO request.
+ * High-priority queue request check for whether the given PTLRPC request (\a
+ * req) is blocking an LDLM lock cancel.
+ *
+ * Returns 1 if the given given PTLRPC request (\a req) is blocking an LDLM lock
+ * cancel, 0 if it is not, and -EFAULT if the request is malformed.
+ *
+ * Only OST_READs, OST_WRITEs and OST_PUNCHes go on the h-p RPC queue.  This
+ * function looks only at OST_READs and OST_WRITEs.
  */
 static int ost_rw_hpreq_check(struct ptlrpc_request *req)
 {
@@ -1706,21 +1774,25 @@ static int ost_rw_hpreq_check(struct ptlrpc_request *req)
         opc = lustre_msg_get_opc(req->rq_reqmsg);
         LASSERT(opc == OST_READ || opc == OST_WRITE);
 
-        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        LASSERT(body != NULL);
+        body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
+        if (body == NULL)
+                RETURN(-EFAULT);
 
-        objcount = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF + 1) /
-                sizeof(*ioo);
-        ioo = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1,
-                             objcount * sizeof(*ioo));
-        LASSERT(ioo != NULL);
+        objcount = req_capsule_get_size(&req->rq_pill, &RMF_OBD_IOOBJ,
+                                        RCL_CLIENT) / sizeof(*ioo);
+        ioo = req_capsule_client_get(&req->rq_pill, &RMF_OBD_IOOBJ);
+        if (ioo == NULL)
+                RETURN(-EFAULT);
 
         for (niocount = i = 0; i < objcount; i++)
                 niocount += ioo[i].ioo_bufcnt;
-        nb = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 2,
-                            niocount * sizeof(*nb));
-        LASSERT(nb != NULL);
-        LASSERT(niocount == 0 || !(nb[0].flags & OBD_BRW_SRVLOCK));
+        nb = req_capsule_client_get(&req->rq_pill, &RMF_NIOBUF_REMOTE);
+        if (nb == NULL ||
+            niocount != (req_capsule_get_size(&req->rq_pill, &RMF_NIOBUF_REMOTE,
+            RCL_CLIENT) / sizeof(*nb)))
+                RETURN(-EFAULT);
+        if (niocount != 0 && (nb[0].flags & OBD_BRW_SRVLOCK))
+                RETURN(-EFAULT);
 
         mode = LCK_PW;
         if (opc == OST_READ)
@@ -1762,15 +1834,18 @@ static int ost_punch_prolong_locks(struct ptlrpc_request *req, struct obdo *oa)
         RETURN(opd.opd_lock_match);
 }
 
+/**
+ * Like ost_rw_hpreq_lock_match(), but for OST_PUNCH RPCs.
+ */
 static int ost_punch_hpreq_lock_match(struct ptlrpc_request *req,
                                       struct ldlm_lock *lock)
 {
         struct ost_body *body;
         ENTRY;
 
-        body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
-                                  lustre_swab_obdo);
-        LASSERT(body != NULL);
+        body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
+        if (body == NULL)
+                RETURN(0);  /* can't return -EFAULT here */
 
         if (body->oa.o_valid & OBD_MD_FLHANDLE &&
             body->oa.o_handle.cookie == lock->l_handle.h_cookie)
@@ -1778,11 +1853,17 @@ static int ost_punch_hpreq_lock_match(struct ptlrpc_request *req,
         RETURN(0);
 }
 
+/**
+ * Like ost_rw_hpreq_check(), but for OST_PUNCH RPCs.
+ */
 static int ost_punch_hpreq_check(struct ptlrpc_request *req)
 {
-        struct ost_body *body = lustre_msg_buf(req->rq_reqmsg,
-                                               REQ_REC_OFF, sizeof(*body));
-        LASSERT(body != NULL);
+        struct ost_body *body;
+
+        body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
+        if (body == NULL)
+                RETURN(-EFAULT);
+
         LASSERT(!(body->oa.o_valid & OBD_MD_FLFLAGS) ||
                 !(body->oa.o_flags & OBD_FL_TRUNCLOCK));
 
@@ -1811,18 +1892,27 @@ static int ost_hpreq_handler(struct ptlrpc_request *req)
                         struct niobuf_remote *nb;
                         struct obd_ioobj *ioo;
                         int objcount, niocount;
-                        int swab, i;
+                        int i;
 
-                        body = lustre_swab_reqbuf(req, REQ_REC_OFF,
-                                                  sizeof(*body),
-                                                  lustre_swab_obdo);
-                        if (!body) {
+                        /* RPCs on the H-P queue can be inspected before
+                         * ost_handler() initializes their pills, so we
+                         * initialize that here.  Capsule initialization is
+                         * idempotent, as is setting the pill's format (provided
+                         * it doesn't change).
+                         */
+                        req_capsule_init(&req->rq_pill, req, RCL_SERVER);
+                        req_capsule_set(&req->rq_pill, &RQF_OST_BRW);
+
+                        body = req_capsule_client_get(&req->rq_pill,
+                                                      &RMF_OST_BODY);
+                        if (body == NULL) {
                                 CERROR("Missing/short ost_body\n");
                                 RETURN(-EFAULT);
                         }
-                        objcount = lustre_msg_buflen(req->rq_reqmsg,
-                                                     REQ_REC_OFF + 1) /
-                                sizeof(*ioo);
+                        objcount = req_capsule_get_size(&req->rq_pill,
+                                                        &RMF_OBD_IOOBJ,
+                                                        RCL_CLIENT) /
+                                                        sizeof(*ioo);
                         if (objcount == 0) {
                                 CERROR("Missing/short ioobj\n");
                                 RETURN(-EFAULT);
@@ -1832,18 +1922,14 @@ static int ost_hpreq_handler(struct ptlrpc_request *req)
                                 RETURN(-EFAULT);
                         }
 
-                        ioo = lustre_swab_reqbuf(req, REQ_REC_OFF + 1,
-                                                 objcount * sizeof(*ioo),
-                                                 lustre_swab_obd_ioobj);
-                        if (!ioo) {
+                        ioo = req_capsule_client_get(&req->rq_pill,
+                                                     &RMF_OBD_IOOBJ);
+                        if (ioo == NULL) {
                                 CERROR("Missing/short ioobj\n");
                                 RETURN(-EFAULT);
                         }
 
-                        swab = ptlrpc_req_need_swab(req);
                         for (niocount = i = 0; i < objcount; i++) {
-                                if (i > 0 && swab)
-                                        lustre_swab_obd_ioobj(&ioo[i]);
                                 if (ioo[i].ioo_bufcnt == 0) {
                                         CERROR("ioo[%d] has zero bufcnt\n", i);
                                         RETURN(-EFAULT);
@@ -1851,33 +1937,28 @@ static int ost_hpreq_handler(struct ptlrpc_request *req)
                                 niocount += ioo[i].ioo_bufcnt;
                         }
                         if (niocount > PTLRPC_MAX_BRW_PAGES) {
-                                DEBUG_REQ(D_ERROR, req, "bulk has too many "
-                                          "pages (%d)", niocount);
+                                DEBUG_REQ(D_RPCTRACE, req,
+                                          "bulk has too many pages (%d)",
+                                          niocount);
                                 RETURN(-EFAULT);
                         }
 
-                        nb = lustre_swab_reqbuf(req, REQ_REC_OFF + 2,
-                                                niocount * sizeof(*nb),
-                                                lustre_swab_niobuf_remote);
-                        if (!nb) {
+                        nb = req_capsule_client_get(&req->rq_pill,
+                                                    &RMF_NIOBUF_REMOTE);
+                        if (nb == NULL) {
                                 CERROR("Missing/short niobuf\n");
                                 RETURN(-EFAULT);
-                        }
-
-                        swab = ptlrpc_req_need_swab(req);
-                        if (swab) {
-                                /* swab remaining niobufs */
-                                for (i = 1; i < niocount; i++)
-                                        lustre_swab_niobuf_remote(&nb[i]);
                         }
 
                         if (niocount == 0 || !(nb[0].flags & OBD_BRW_SRVLOCK))
                                 req->rq_ops = &ost_hpreq_rw;
                 } else if (opc == OST_PUNCH) {
-                        body = lustre_swab_reqbuf(req, REQ_REC_OFF,
-                                                  sizeof(*body),
-                                                  lustre_swab_obdo);
-                        if (!body) {
+                        req_capsule_init(&req->rq_pill, req, RCL_SERVER);
+                        req_capsule_set(&req->rq_pill, &RQF_OST_PUNCH);
+
+                        body = req_capsule_client_get(&req->rq_pill,
+                                                      &RMF_OST_BODY);
+                        if (body == NULL) {
                                 CERROR("Missing/short ost_body\n");
                                 RETURN(-EFAULT);
                         }
@@ -1973,6 +2054,7 @@ int ost_handle(struct ptlrpc_request *req)
                 break;
         case OST_CREATE:
                 CDEBUG(D_INODE, "create\n");
+                req_capsule_set(&req->rq_pill, &RQF_OST_CREATE);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_CREATE_NET))
                         RETURN(0);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOSPC))
@@ -1983,6 +2065,7 @@ int ost_handle(struct ptlrpc_request *req)
                 break;
         case OST_DESTROY:
                 CDEBUG(D_INODE, "destroy\n");
+                req_capsule_set(&req->rq_pill, &RQF_OST_DESTROY);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_DESTROY_NET))
                         RETURN(0);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_EROFS))
@@ -1991,17 +2074,20 @@ int ost_handle(struct ptlrpc_request *req)
                 break;
         case OST_GETATTR:
                 CDEBUG(D_INODE, "getattr\n");
+                req_capsule_set(&req->rq_pill, &RQF_OST_GETATTR);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_GETATTR_NET))
                         RETURN(0);
                 rc = ost_getattr(req->rq_export, req);
                 break;
         case OST_SETATTR:
                 CDEBUG(D_INODE, "setattr\n");
+                req_capsule_set(&req->rq_pill, &RQF_OST_SETATTR);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_SETATTR_NET))
                         RETURN(0);
                 rc = ost_setattr(req->rq_export, req, oti);
                 break;
         case OST_WRITE:
+                req_capsule_set(&req->rq_pill, &RQF_OST_BRW);
                 CDEBUG(D_INODE, "write\n");
                 /* req->rq_request_portal would be nice, if it was set */
                 if (req->rq_rqbd->rqbd_service->srv_req_portal !=OST_IO_PORTAL){
@@ -2022,6 +2108,7 @@ int ost_handle(struct ptlrpc_request *req)
                 /* ost_brw_write sends its own replies */
                 RETURN(rc);
         case OST_READ:
+                req_capsule_set(&req->rq_pill, &RQF_OST_BRW);
                 CDEBUG(D_INODE, "read\n");
                 /* req->rq_request_portal would be nice, if it was set */
                 if (req->rq_rqbd->rqbd_service->srv_req_portal !=OST_IO_PORTAL){
@@ -2039,6 +2126,7 @@ int ost_handle(struct ptlrpc_request *req)
                 RETURN(rc);
         case OST_PUNCH:
                 CDEBUG(D_INODE, "punch\n");
+                req_capsule_set(&req->rq_pill, &RQF_OST_PUNCH);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_PUNCH_NET))
                         RETURN(0);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_EROFS))
@@ -2047,12 +2135,14 @@ int ost_handle(struct ptlrpc_request *req)
                 break;
         case OST_STATFS:
                 CDEBUG(D_INODE, "statfs\n");
+                req_capsule_set(&req->rq_pill, &RQF_OST_STATFS);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_STATFS_NET))
                         RETURN(0);
                 rc = ost_statfs(req);
                 break;
         case OST_SYNC:
                 CDEBUG(D_INODE, "sync\n");
+                req_capsule_set(&req->rq_pill, &RQF_OST_SYNC);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_SYNC_NET))
                         RETURN(0);
                 rc = ost_sync(req->rq_export, req);
@@ -2064,6 +2154,7 @@ int ost_handle(struct ptlrpc_request *req)
                 break;
         case OST_GET_INFO:
                 DEBUG_REQ(D_INODE, req, "get_info");
+                req_capsule_set(&req->rq_pill, &RQF_OST_GET_INFO_GENERIC);
                 rc = ost_get_info(req->rq_export, req);
                 break;
 #ifdef HAVE_QUOTA_SUPPORT
