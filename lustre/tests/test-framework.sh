@@ -2049,9 +2049,9 @@ testslist_filter () {
     local start_at=$START_AT
     local stop_at=$STOP_AT
 
-    local var=${TESTSUITE}_START_AT
+    local var=${TESTSUITE//-/_}_START_AT
     [ x"${!var}" != x ] && start_at=${!var}
-    var=${TESTSUITE}_STOP_AT
+    var=${TESTSUITE//-/_}_STOP_AT
     [ x"${!var}" != x ] && stop_at=${!var}
 
     sed -n 's/^test_\([^ (]*\).*/\1/p' $script | \
