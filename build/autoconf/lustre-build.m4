@@ -152,7 +152,7 @@ AC_CONFIG_SUBDIRS(libsysio)
 # Handle internal/external lustre-iokit
 #
 AC_DEFUN([LB_PATH_LUSTREIOKIT],
-[AC_ARG_WITH([],
+[AC_ARG_WITH([lustre-iokit],
 	AC_HELP_STRING([--with-lustre-iokit=path],
 			[set path to lustre-iokit source (default is included lustre-iokit)]),
 	[],[
