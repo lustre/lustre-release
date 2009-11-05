@@ -1,6 +1,17 @@
 tbd  Sun Microsystems, Inc.
-        * version 3.1.0
+        * version 3.1.1
 	
+
+-------------------------------------------------------------------------------
+	
+2009-11-05  Sun Microsystems, Inc.
+	* version 3.1.0
+
+Severity   : normal
+Frequency  : in recovery
+Bugzilla   : 21031
+Description: ext3-corrupted-orphans-2.6.patch added.
+Details    : Backport of ext3 patch to handle corrupted orphans.
 
 -------------------------------------------------------------------------------
 	
