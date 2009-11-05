@@ -60,6 +60,7 @@
 #include <lustre_disk.h>
 #include "mgs_internal.h"
 
+
 /* Establish a connection to the MGS.*/
 static int mgs_connect(const struct lu_env *env,
                        struct obd_export **exp, struct obd_device *obd,
@@ -395,36 +396,6 @@ static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
         RETURN(rc);
 }
 
-static int mgs_parse_label_to_mti(struct mgs_target_info *mti)
-{
-        int rc;
-        ENTRY;
-
-        if (mti->mti_fsname[0] != '\0') {
-                /* empty fsname expected with "label-only" registration */
-                GOTO(out, rc = -EINVAL);
-        }
-
-        rc = server_name2fsname(mti->mti_svname, mti->mti_fsname, NULL);
-        if (rc != 0)
-                goto out;
-
-        rc = server_name2index(mti->mti_svname, &mti->mti_stripe_index, NULL);
-        if (rc < 0)
-                goto out;
-
-        mti->mti_flags = rc;
-        if (mti->mti_flags & LDD_F_VIRGIN)
-                mti->mti_flags |= LDD_F_UPDATE;
-
-        CDEBUG(D_MGS, "register to %s with name '%s' and flags %u\n",
-               mti->mti_fsname, mti->mti_svname, mti->mti_flags);
-
-out:
-        RETURN(rc);
-}
-
-
 /* Called whenever a target starts up.  Flags indicate first connect, etc. */
 static int mgs_handle_target_reg(struct ptlrpc_request *req)
 {
@@ -437,14 +408,6 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         mgs_counter_incr(req->rq_export, LPROC_MGS_TARGET_REG);
 
         mti = req_capsule_client_get(&req->rq_pill, &RMF_MGS_TARGET_INFO);
-
-        /* if no other data is supplied, parse label */
-        if (mti->mti_flags == 0) {
-                rc = mgs_parse_label_to_mti(mti);
-                if (rc < 0)
-                        GOTO(out_nolock, rc);
-        }
-
         if (!(mti->mti_flags & (LDD_F_WRITECONF | LDD_F_UPGRADE14 |
                                 LDD_F_UPDATE))) {
                 /* We're just here as a startup ping. */

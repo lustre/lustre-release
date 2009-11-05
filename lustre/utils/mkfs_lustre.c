@@ -765,7 +765,10 @@ int make_lustre_backfs(struct mkfs_opts *mop)
 
                 /* Set the label */
                 snprintf(mkfs_cmd, sizeof(mkfs_cmd), "zfs set "
-                         "com.sun.lustre:label=%s %s", mop->mo_ldd.ldd_svname,
+                         "com.sun.lustre:label=%s:%s%04x %s",
+                         mop->mo_ldd.ldd_fsname,
+                         mop->mo_ldd.ldd_flags & LDD_F_SV_TYPE_MDT ? "MDT":"OST",
+                         mop->mo_ldd.ldd_svindex,
                          mop->mo_device);
                 mkfs_cmd[sizeof(mkfs_cmd) - 1] = '\0';
 

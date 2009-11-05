@@ -904,11 +904,118 @@ int server_mti_print(char *title, struct mgs_target_info *mti)
         return(0);
 }
 
+/* Get the fsname from the obd name.
+   fsname must have at least 'strlen(svname) + 1' chars.
+   rc < 0  on error
+   if endptr isn't NULL it is set to end of fsname */
+int server_name2fsname(char *svname, char *fsname, char **endptr)
+{
+        char *dash = strrchr(svname, '-');
+        if (!dash) {
+                dash = strrchr(svname, ':');
+                if (!dash)
+                        return -EINVAL;
+        }
+
+        /* interpret <fsname>-MDTXXXXX-mdc as mdt, the better way is to pass
+         * in the fsname, then determine the server index */
+        if (!strcmp(LUSTRE_MDC_NAME, dash + 1)) {
+                dash--;
+                for (; dash > svname && *dash != '-' && *dash != ':'; dash--);
+                if (dash == svname)
+                        return -EINVAL;
+        }
+
+        if (fsname != NULL) {
+                strncpy(fsname, svname, dash - svname);
+                fsname[dash - svname] = '\0';
+        }
+
+        if (endptr != NULL)
+                *endptr = dash;
+
+        return 0;
+}
+
+/**
+ * Get service name (svname) from string
+ * rc < 0 on error
+ * if endptr isn't NULL it is set to end of fsname *
+ */
+
+int server_name2svname(char *label, char *svname, char **endptr)
+{
+        int rc;
+        char *dash;
+
+        /* We use server_name2fsname() just for parsing */
+        rc = server_name2fsname(label, NULL, &dash);
+        if (rc != 0)
+                return rc;
+        
+        if (*dash == ':')
+                strncpy(svname, dash + 1, MTI_NAME_MAXLEN);
+        else
+                strncpy(svname, label, MTI_NAME_MAXLEN);
+        
+        return 0;
+}
+
+
+/* Get the index from the obd name.
+   rc = server type, or
+   rc < 0  on error
+   if endptr isn't NULL it is set to end of name */
+int server_name2index(char *svname, __u32 *idx, char **endptr)
+{
+        unsigned long index;
+        int rc;
+        char *dash;
+
+        /* We use server_name2fsname() just for parsing */
+        rc = server_name2fsname(svname, NULL, &dash);
+        if (rc != 0)
+                return rc;
+
+        if (*dash == ':')
+                rc |= LDD_F_VIRGIN;
+
+        dash++;
+
+        if (strncmp(dash, "MDT", 3) == 0)
+                rc |= LDD_F_SV_TYPE_MDT;
+        else if (strncmp(dash, "OST", 3) == 0)
+                rc |= LDD_F_SV_TYPE_OST;
+        else
+                return(-EINVAL);
+
+        dash += 3;
+
+        if (strcmp(dash, "all") == 0)
+                return rc | LDD_F_SV_ALL;
+
+        if (strcmp(dash, "ffff") == 0) {
+                rc |= LDD_F_NEED_INDEX;
+                *idx = 65535;
+                return rc;
+        }
+
+        if (*dash == 'u') {
+                rc |= LDD_F_NEED_INDEX;
+                dash++;
+        }
+
+        index = simple_strtoul(dash, endptr, 16);
+        *idx = index;
+        return rc;
+}
+
 static int server_label2mti(struct super_block *sb, struct mgs_target_info *mti)
 {
-        struct                 dt_device_param dt_param;
-        struct lustre_sb_info *lsi = s2lsi(sb);
-        char *label;
+        struct lustre_sb_info  *lsi = s2lsi(sb);
+        struct dt_device_param  dt_param;
+        char                   *label;
+        int                     rc;
 
         LASSERT(lsi);
         LASSERT(lsi->lsi_dt_dev);
@@ -921,9 +1028,21 @@ static int server_label2mti(struct super_block *sb, struct mgs_target_info *mti)
         lsi->lsi_dt_dev->dd_ops->dt_conf_get(NULL, lsi->lsi_dt_dev, &dt_param);
         lsi->lsi_ldd->ldd_mount_type = dt_param.ddp_mount_type;
 
-        mti->mti_flags = 0;
-        strncpy(mti->mti_svname, label, sizeof(mti->mti_svname));
-        mti->mti_svname[sizeof(mti->mti_svname) - 1] = '\0';
+        rc = server_name2fsname(label, mti->mti_fsname, NULL);
+        if (rc != 0)
+                return rc;
+
+        rc = server_name2svname(label, mti->mti_svname, NULL);
+        if (rc != 0)
+                return rc;
+
+        rc = server_name2index(label, &mti->mti_stripe_index, NULL);
+        if (rc < 0)
+                return rc;
+
+        mti->mti_flags = rc;
+        if (mti->mti_flags & LDD_F_VIRGIN)
+                mti->mti_flags |= LDD_F_UPDATE;
 
         return 0;
 }
@@ -1986,81 +2105,6 @@ out_mnt:
          * In this case we can't just put @mnt and have to do real cleanup
          * with stoping targets, etc. */
         server_put_super(sb);
-        return rc;
-}
-
-/* Get the fsname from the obd name.
-   fsname must have at least 'strlen(svname) + 1' chars.
-   rc < 0  on error
-   if endptr isn't NULL it is set to end of fsname */
-int server_name2fsname(char *svname, char *fsname, char **endptr)
-{
-        char *dash = strrchr(svname, '-');
-        if (!dash) {
-                dash = strrchr(svname, ':');
-                if (!dash)
-                        return -EINVAL;
-        }
-
-        /* interpret <fsname>-MDTXXXXX-mdc as mdt, the better way is to pass
-         * in the fsname, then determine the server index */
-        if (!strcmp(LUSTRE_MDC_NAME, dash + 1)) {
-                dash--;
-                for (; dash > svname && *dash != '-' && *dash != ':'; dash--);
-                if (dash == svname)
-                        return -EINVAL;
-        }
-
-        if (fsname != NULL) {
-                strncpy(fsname, svname, dash - svname);
-                fsname[dash - svname] = '\0';
-        }
-
-        if (endptr != NULL)
-                *endptr = dash;
-
-        return 0;
-}
-
-/* Get the index from the obd name.
-   rc = server type, or
-   rc < 0  on error
-   if endptr isn't NULL it is set to end of name */
-int server_name2index(char *svname, __u32 *idx, char **endptr)
-{
-        unsigned long index;
-        int rc;
-        char *dash;
-
-        /* We use server_name2fsname() just for parsing */
-        rc = server_name2fsname(svname, NULL, &dash);
-        if (rc != 0)
-                return rc;
-
-        if (*dash == ':')
-                rc |= LDD_F_VIRGIN;
-
-        dash++;
-
-        if (strncmp(dash, "MDT", 3) == 0)
-                rc |= LDD_F_SV_TYPE_MDT;
-        else if (strncmp(dash, "OST", 3) == 0)
-                rc |= LDD_F_SV_TYPE_OST;
-        else
-                return(-EINVAL);
-
-        dash += 3;
-
-        if (strcmp(dash, "all") == 0)
-                return rc | LDD_F_SV_ALL;
-
-        if (*dash == 'u') {
-                rc |= LDD_F_NEED_INDEX;
-                dash++;
-        }
-
-        index = simple_strtoul(dash, endptr, 16);
-        *idx = index;
         return rc;
 }
 
