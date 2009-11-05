@@ -995,10 +995,10 @@ static int cl_echo_enqueue0(struct lu_env *env, struct echo_object *eco,
         descr->cld_start = cl_index(obj, start);
         descr->cld_end   = cl_index(obj, end);
         descr->cld_mode  = mode == LCK_PW ? CLM_WRITE : CLM_READ;
+        descr->cld_enq_flags = CEF_ASYNC | enqflags;
         io->ci_obj = obj;
 
-        lck = cl_lock_request(env, io, descr, CEF_ASYNC | enqflags,
-                              "ec enqueue", eco);
+        lck = cl_lock_request(env, io, descr, "ec enqueue", eco);
         if (lck) {
                 struct echo_client_obd *ec = eco->eo_dev->ed_ec;
                 struct echo_lock *el;

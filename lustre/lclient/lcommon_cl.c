@@ -738,8 +738,8 @@ int ccc_io_one_lock_index(const struct lu_env *env, struct cl_io *io,
         descr->cld_obj   = obj;
         descr->cld_start = start;
         descr->cld_end   = end;
+        descr->cld_enq_flags = enqflags;
 
-        cio->cui_link.cill_enq_flags = enqflags;
         cl_io_lock_add(env, io, &cio->cui_link);
         RETURN(0);
 }

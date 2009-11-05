@@ -412,8 +412,9 @@ static int lovsub_lock_delete_one(const struct lu_env *env,
                 break;
         case CLS_HELD:
         default:
-                CERROR("Impossible state: %i\n", parent->cll_state);
-                LBUG();
+                LASSERTF(parent->cll_error != 0, "cll state %d is wrong!\n",
+                         parent->cll_state);
+                break;
         }
 
         RETURN(result);

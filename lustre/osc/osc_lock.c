@@ -1576,24 +1576,40 @@ static int osc_lock_fits_into(const struct lu_env *env,
 {
         struct osc_lock *ols = cl2osc_lock(slice);
 
-        /* If the lock hasn't ever enqueued, it can't be matched because
-         * enqueue process brings in many information which can be used to
-         * determine things such as lockless, CEF_MUST, etc.
-         */
-        if (ols->ols_state < OLS_ENQUEUED)
+        if (need->cld_enq_flags & CEF_NEVER)
                 return 0;
 
-        /* Don't match this lock if the lock is able to become lockless lock.
-         * This is because the new lock might be covering a mmap region and
-         * so that it must have a cached at the local side. */
-        if (ols->ols_state < OLS_UPCALL_RECEIVED && ols->ols_locklessable)
-                return 0;
-
-        /* If the lock is going to be canceled, no reason to match it as well */
-        if (ols->ols_state > OLS_RELEASED)
-                return 0;
-
-        /* go for it. */
+        if (need->cld_mode == CLM_PHANTOM) {
+                /*
+                 * Note: the QUEUED lock can't be matched here, otherwise
+                 * it might cause the deadlocks.
+                 * In read_process,
+                 * P1: enqueued read lock, create sublock1
+                 * P2: enqueued write lock, create sublock2(conflicted
+                 *     with sublock1).
+                 * P1: Grant read lock.
+                 * P1: enqueued glimpse lock(with holding sublock1_read),
+                 *     matched with sublock2, waiting sublock2 to be granted.
+                 *     But sublock2 can not be granted, because P1
+                 *     will not release sublock1. Bang!
+                 */
+                if (ols->ols_state < OLS_GRANTED ||
+                        ols->ols_state > OLS_RELEASED)
+                        return 0;
+        } else if (need->cld_enq_flags & CEF_MUST) {
+                 /*
+                 * If the lock hasn't ever enqueued, it can't be matched
+                 * because enqueue process brings in many information
+                 * which can be used to determine things such as lockless,
+                 * CEF_MUST, etc.
+                 */
+                if (ols->ols_state < OLS_GRANTED ||
+                        ols->ols_state > OLS_RELEASED)
+                        return 0;
+                if (ols->ols_state < OLS_UPCALL_RECEIVED &&
+                        ols->ols_locklessable)
+                        return 0;
+        }
         return 1;
 }
 
