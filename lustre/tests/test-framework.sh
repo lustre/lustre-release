@@ -218,7 +218,7 @@ load_module() {
     EXT=".ko"
     module=$1
     shift
-    BASE=`basename $module $EXT`
+    BASE=`basename $module $EXT | tr '-' '_'`
 
     module_loaded ${BASE} && return
 
