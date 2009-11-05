@@ -522,6 +522,11 @@ enum changelog_message_type {
 
 
 /********* HSM **********/
+
+
+#define HSM_FLAGS_MASK  0
+
+
 enum hsm_message_type {
         HMT_ACTION_LIST = 100, /* message is a hsm_action_list */
 };

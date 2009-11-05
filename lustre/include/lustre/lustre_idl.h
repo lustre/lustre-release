@@ -294,6 +294,45 @@ struct lustre_mdt_attrs {
 };
 
 /**
+ * Fill \a lma with its first content.
+ * Only fid is stored.
+ */
+static inline void lustre_lma_init(struct lustre_mdt_attrs *lma,
+                                   const struct lu_fid *fid)
+{
+        lma->lma_compat      = 0;
+        lma->lma_incompat    = 0;
+        memcpy(&lma->lma_self_fid, fid, sizeof(*fid));
+        lma->lma_flags       = 0;
+        lma->lma_som_sectors = 0;
+
+        /* If a field is added in struct lustre_mdt_attrs, zero it explicitly
+         * and change the test below. */
+        LASSERT(sizeof(*lma) ==
+                (offsetof(struct lustre_mdt_attrs, lma_som_sectors) +
+                 sizeof(lma->lma_som_sectors)));
+};
+
+extern void lustre_swab_lu_fid(struct lu_fid *fid);
+
+/**
+ * Swab, if needed, lustre_mdt_attr struct to on-disk format.
+ * Otherwise, do not touch it.
+ */
+static inline void lustre_lma_swab(struct lustre_mdt_attrs *lma)
+{
+        /* Use LUSTRE_MSG_MAGIC to detect local endianess. */
+        if (LUSTRE_MSG_MAGIC != cpu_to_le32(LUSTRE_MSG_MAGIC)) {
+                __swab32s(&lma->lma_compat);
+                __swab32s(&lma->lma_incompat);
+                lustre_swab_lu_fid(&lma->lma_self_fid);
+                __swab64s(&lma->lma_flags);
+                __swab64s(&lma->lma_som_sectors);
+        }
+};
+
+
+/**
  * fid constants
  */
 enum {

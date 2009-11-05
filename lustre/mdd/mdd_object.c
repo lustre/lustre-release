@@ -685,6 +685,55 @@ static int __mdd_lmv_get(const struct lu_env *env,
         RETURN(rc);
 }
 
+static int __mdd_lma_get(const struct lu_env *env, struct mdd_object *mdd_obj,
+                         struct md_attr *ma)
+{
+        struct mdd_thread_info *info = mdd_env_info(env);
+        struct lustre_mdt_attrs *lma =
+                                 (struct lustre_mdt_attrs *)info->mti_xattr_buf;
+        int lma_size;
+        int rc;
+        ENTRY;
+
+        /* If all needed data are already valid, nothing to do */
+        if ((ma->ma_valid & (MA_HSM | MA_SOM)) ==
+            (ma->ma_need & (MA_HSM | MA_SOM)))
+                RETURN(0);
+
+        /* Read LMA from disk EA */
+        lma_size = sizeof(info->mti_xattr_buf);
+        rc = mdd_get_md(env, mdd_obj, lma, &lma_size, XATTR_NAME_LMA);
+        if (rc <= 0)
+                RETURN(rc);
+
+        /* Useless to check LMA incompatibility because this is already done in
+         * osd_ea_fid_get(), and this will fail long before this code is
+         * called.
+         * So, if we are here, LMA is compatible.
+         */
+
+        lustre_lma_swab(lma);
+
+        /* Swab and copy LMA */
+        if (ma->ma_need & MA_HSM) {
+                if (lma->lma_compat & LMAC_HSM)
+                        ma->ma_hsm_flags = lma->lma_flags & HSM_FLAGS_MASK;
+                else
+                        ma->ma_hsm_flags = 0;
+                ma->ma_valid |= MA_HSM;
+        }
+        if (ma->ma_need & MA_SOM) {
+
+                /* XXX: Here, copy and swab SoM data, and then remove this
+                 * assert. */
+                LASSERT(!(ma->ma_need & MA_SOM));
+
+                ma->ma_valid |= MA_SOM;
+        }
+
+        RETURN(0);
+}
+
 static int mdd_attr_get_internal(const struct lu_env *env,
                                  struct mdd_object *mdd_obj,
                                  struct md_attr *ma)
@@ -704,6 +753,10 @@ static int mdd_attr_get_internal(const struct lu_env *env,
                 if (S_ISDIR(mdd_object_type(mdd_obj)))
                         rc = __mdd_lmv_get(env, mdd_obj, ma);
         }
+        if (rc == 0 && ma->ma_need & (MA_HSM | MA_SOM)) {
+                if (S_ISREG(mdd_object_type(mdd_obj)))
+                        rc = __mdd_lma_get(env, mdd_obj, ma);
+        }
 #ifdef CONFIG_FS_POSIX_ACL
         if (rc == 0 && ma->ma_need & MA_ACL_DEF) {
                 if (S_ISDIR(mdd_object_type(mdd_obj)))
@@ -719,7 +772,8 @@ int mdd_attr_get_internal_locked(const struct lu_env *env,
                                  struct mdd_object *mdd_obj, struct md_attr *ma)
 {
         int rc;
-        int needlock = ma->ma_need & (MA_LOV | MA_LMV | MA_ACL_DEF);
+        int needlock = ma->ma_need &
+                       (MA_LOV | MA_LMV | MA_ACL_DEF | MA_HSM | MA_SOM);
 
         if (needlock)
                 mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
@@ -1216,6 +1270,76 @@ static int mdd_changelog_data_store(const struct lu_env     *env,
         return 0;
 }
 
+/**
+ * Should be called with write lock held.
+ *
+ * \see mdd_lma_set_locked().
+ */
+static int __mdd_lma_set(const struct lu_env *env, struct mdd_object *mdd_obj,
+                       const struct md_attr *ma, struct thandle *handle)
+{
+        struct mdd_thread_info *info = mdd_env_info(env);
+        struct lu_buf *buf;
+        struct lustre_mdt_attrs *lma =
+                                (struct lustre_mdt_attrs *) info->mti_xattr_buf;
+        int lmasize = sizeof(struct lustre_mdt_attrs);
+        int rc = 0;
+
+        ENTRY;
+
+        memset(lma, 0, lmasize);
+
+        /* Either HSM or SOM part is not valid, we need to read it before */
+        if ((!ma->ma_valid) & (MA_HSM | MA_SOM)) {
+                rc = mdd_get_md(env, mdd_obj, lma, &lmasize, XATTR_NAME_LMA);
+                if (rc)
+                        RETURN(rc);
+
+                lustre_lma_swab(lma);
+        }
+
+        /* Copy HSM data */
+        if (ma->ma_valid & MA_HSM) {
+                lma->lma_flags  |= ma->ma_hsm_flags & HSM_FLAGS_MASK;
+                lma->lma_compat |= LMAC_HSM;
+        }
+        /* XXX: Copy SOM data */
+        if (ma->ma_valid & MA_SOM) {
+                /*
+                lma->lma_compat |= LMAC_SOM;
+                */
+                LASSERT(!(ma->ma_valid & MA_SOM));
+        }
+
+        /* Copy FID */
+        memcpy(&lma->lma_self_fid, mdo2fid(mdd_obj), sizeof(lma->lma_self_fid));
+
+        lustre_lma_swab(lma);
+        buf = mdd_buf_get(env, lma, lmasize);
+        rc = __mdd_xattr_set(env, mdd_obj, buf, XATTR_NAME_LMA, 0, handle);
+
+        RETURN(rc);
+}
+
+/**
+ * Save LMA extended attributes with data from \a ma.
+ *
+ * HSM and Size-On-MDS data will be extracted from \ma if they are valid, if
+ * not, LMA EA will be first read from disk, modified and write back.
+ *
+ */
+static int mdd_lma_set_locked(const struct lu_env *env,
+                              struct mdd_object *mdd_obj,
+                              const struct md_attr *ma, struct thandle *handle)
+{
+        int rc;
+
+        mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
+        rc = __mdd_lma_set(env, mdd_obj, ma, handle);
+        mdd_write_unlock(env, mdd_obj);
+        return rc;
+}
+
 /* set attr and LOV EA at once, return updated attr */
 static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
                         const struct md_attr *ma)
@@ -1329,6 +1453,14 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
                         rc = mdd_lov_set_md(env, NULL, mdd_obj, ma->ma_lmm,
                                             ma->ma_lmm_size, handle, 1);
                 }
+
+        }
+        if (rc == 0 && ma->ma_valid & (MA_HSM | MA_SOM)) {
+                umode_t mode;
+
+                mode = mdd_object_type(mdd_obj);
+                if (S_ISREG(mode))
+                        rc = mdd_lma_set_locked(env, mdd_obj, ma, handle);
 
         }
 cleanup:

@@ -2873,7 +2873,7 @@ static int path2fid_from_lma(const char *path, lustre_fid *fid)
         if (rc < 0)
                 return -errno;
         lma = (struct lustre_mdt_attrs *)buf;
-        fid_be_to_cpu(fid, &lma->lma_self_fid);
+        fid_le_to_cpu(fid, &lma->lma_self_fid);
         return 0;
 }
 

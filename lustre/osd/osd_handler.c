@@ -1710,8 +1710,8 @@ static int osd_ea_fid_set(const struct lu_env *env, struct dt_object *dt,
         struct osd_thread_info  *info      = osd_oti_get(env);
         struct lustre_mdt_attrs *mdt_attrs = &info->oti_mdt_attrs;
 
-        fid_cpu_to_be(&mdt_attrs->lma_self_fid, fid);
-
+        lustre_lma_init(mdt_attrs, fid);
+        lustre_lma_swab(mdt_attrs);
         return __osd_xattr_set(env, dt,
                                osd_buf_get(env, mdt_attrs, sizeof *mdt_attrs),
                                XATTR_NAME_LMA, LU_XATTR_CREATE);
@@ -1794,15 +1794,16 @@ static int osd_ea_fid_get(const struct lu_env *env, struct osd_object *obj,
 
         /* Check LMA compatibility */
         if (rc > 0 &&
-            (mdt_attrs->lma_incompat & ~cpu_to_be32(LMA_INCOMPAT_SUPP))) {
+            (mdt_attrs->lma_incompat & ~cpu_to_le32(LMA_INCOMPAT_SUPP))) {
                 CWARN("Inode %lx: Unsupported incompat LMA feature(s) %#x\n",
-                      inode->i_ino, be32_to_cpu(mdt_attrs->lma_incompat) &
+                      inode->i_ino, le32_to_cpu(mdt_attrs->lma_incompat) &
                       ~LMA_INCOMPAT_SUPP);
                 return -ENOSYS;
         }
 
         if (rc > 0) {
-                fid_be_to_cpu(fid, &mdt_attrs->lma_self_fid);
+                lustre_lma_swab(mdt_attrs);
+                memcpy(fid, &mdt_attrs->lma_self_fid, sizeof(*mdt_attrs));
                 rc = 0;
         } else if (rc == -ENODATA) {
                 osd_igif_get(env, inode, fid);
