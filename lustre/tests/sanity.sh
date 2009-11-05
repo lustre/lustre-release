@@ -6600,7 +6600,7 @@ cleaup_obdecho_osc () {
 
 obdecho_create_test() {
         local OBD=$1
-        local node=ost
+        local node=$2
         local rc=0
         do_facet $node "$LCTL attach echo_client ec ec_uuid" || rc=1
         [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec setup $OBD" ||    \
@@ -6627,7 +6627,7 @@ test_180() {
         HOST=$($LCTL dl -t | grep -v mdt | grep osc | awk '{print $7;exit}')
         OBD=`echo $OBD | sed 's/-osc-.*$//'`
         [ "x$OBD" != "x" ] && { setup_obdecho_osc $HOST $OBD || rc=1; } || rc=1
-        [ $rc -eq 0 ] && { obdecho_create_test ${OBD}_osc || rc=2; }
+        [ $rc -eq 0 ] && { obdecho_create_test ${OBD}_osc client || rc=2; }
         [ "x$OBD" != "x" ] && cleaup_obdecho_osc $OBD
         [ $rmmod_local -eq 1 ] && rmmod obdecho
         [ $rc -eq 0 ] || return $rc
@@ -6636,7 +6636,7 @@ test_180() {
                      "{ insmod ${LUSTRE}/obdecho/obdecho.ko || "        \
                      "modprobe obdecho; }" && rmmod_remote=1
         OBD=$(do_facet ost $LCTL dl | awk '/obdfilter/ {print $4;exit}')
-        [ "x$OBD" != "x" ] && { obdecho_create_test $OBD || rc=3; }
+        [ "x$OBD" != "x" ] && { obdecho_create_test $OBD ost || rc=3; }
         [ $rmmod_remote -eq 1 ] && do_facet ost "rmmod obdecho"
         [ $rc -eq 0 ] || return $rc
 
