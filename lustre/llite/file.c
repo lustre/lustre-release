@@ -331,6 +331,10 @@ int ll_file_release(struct inode *inode, struct file *file)
         lli->lli_async_rc = 0;
 
         rc = ll_md_close(sbi->ll_md_exp, inode, file);
+
+        if (OBD_FAIL_TIMEOUT_MS(OBD_FAIL_PTLRPC_DUMP_LOG, obd_fail_val))
+                libcfs_debug_dumplog();
+
         RETURN(rc);
 }
 

@@ -61,6 +61,7 @@
 #include <linux/timer.h>
 #include <linux/signal.h>
 #include <linux/sched.h>
+#include <linux/kthread.h>
 
 #include <linux/miscdevice.h>
 #include <libcfs/linux/portals_compat25.h>
@@ -140,6 +141,8 @@ typedef struct proc_dir_entry           cfs_proc_dir_entry_t;
 typedef wait_queue_t			cfs_waitlink_t;
 typedef wait_queue_head_t		cfs_waitq_t;
 typedef long                            cfs_task_state_t;
+
+#define cfs_kthread_run(fn, data, fmt, arg...) kthread_run(fn, data, fmt, ##arg)
 
 /* Kernel thread */
 typedef int (*cfs_thread_t)(void *);

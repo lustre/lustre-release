@@ -6579,6 +6579,21 @@ test_170() {
 }
 run_test 170 "test lctl df to handle corrupted log ====================="
 
+test_171() { # bug20592
+#define OBD_FAIL_PTLRPC_DUMP_LOG         0x50e
+        $LCTL set_param fail_loc=0x50e
+        $LCTL set_param fail_val=3000
+        multiop_bg_pause $DIR/$tfile Os || true
+        # cause log dump
+        sleep 3
+        if dmesg | grep "recursive fault"; then
+                error "caught a recursive fault"
+        fi
+        $LCTL set_param fail_loc=0
+        true
+}
+run_test 171 "test libcfs_debug_dumplog_thread stuck in do_exit() ======"
+
 # it would be good to share it with obdfilter-survey/libecho code
 setup_obdecho_osc () {
         local rc=0

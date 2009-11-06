@@ -139,6 +139,7 @@ static inline int cfs_psdev_deregister(cfs_psdev_t *foo)
 #define cfs_sigfillset(l) do {}         while (0)
 #define cfs_recalc_sigpending(l)        do {} while (0)
 #define cfs_kernel_thread(l,m,n)        LBUG()
+#define cfs_kthread_run(fn,d,fmt,...)   LBUG()
 
 #ifdef HAVE_LIBPTHREAD
 typedef int (*cfs_thread_t)(void *);

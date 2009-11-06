@@ -347,7 +347,6 @@ void libcfs_debug_dumplog_internal(void *arg)
 
 int libcfs_debug_dumplog_thread(void *arg)
 {
-        cfs_daemonize("");
         libcfs_debug_dumplog_internal(arg);
         cfs_waitq_signal(&debug_ctlwq);
         return 0;
@@ -355,8 +354,8 @@ int libcfs_debug_dumplog_thread(void *arg)
 
 void libcfs_debug_dumplog(void)
 {
-        int            rc;
         cfs_waitlink_t wait;
+        cfs_task_t    *dumper;
         ENTRY;
 
         /* we're being careful to ensure that the kernel thread is
@@ -366,12 +365,12 @@ void libcfs_debug_dumplog(void)
         set_current_state(TASK_INTERRUPTIBLE);
         cfs_waitq_add(&debug_ctlwq, &wait);
 
-        rc = cfs_kernel_thread(libcfs_debug_dumplog_thread,
-                               (void *)(long_ptr_t)cfs_curproc_pid(),
-                               CLONE_VM | CLONE_FS | CLONE_FILES);
-        if (rc < 0)
+        dumper = cfs_kthread_run(libcfs_debug_dumplog_thread,
+                                 (void*)(long)cfs_curproc_pid(),
+                                 "libcfs_debug_dumper");
+        if (IS_ERR(dumper))
                 printk(KERN_ERR "LustreError: cannot start log dump thread: "
-                       "%d\n", rc);
+                       "%ld\n", PTR_ERR(dumper));
         else
                 cfs_waitq_wait(&wait, CFS_TASK_INTERRUPTIBLE);
 
