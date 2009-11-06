@@ -1684,20 +1684,8 @@ static int handle_recovery_req(struct ptlrpc_thread *thread,
                                       AT_OFF ? obd_timeout :
                                       lustre_msg_get_timeout(req->rq_reqmsg), 1);
         }
-        /**
-         * bz18031: increase next_recovery_transno before target_request_copy_put()
-         * will drop exp_rpc reference
-         */
-        if (req->rq_export->exp_req_replay_needed) {
-                spin_lock_bh(&req->rq_export->exp_obd->obd_processing_task_lock);
-                req->rq_export->exp_obd->obd_next_recovery_transno++;
-                spin_unlock_bh(&req->rq_export->exp_obd->obd_processing_task_lock);
-        }
 reqcopy_put:
-        if (req->rq_export->exp_req_replay_needed)
-                target_exp_dequeue_req_replay(req);
-        target_request_copy_put(req);
-        RETURN(0);
+        RETURN(rc);
 }
 
 static int target_recovery_thread(void *arg)
@@ -1754,6 +1742,15 @@ static int target_recovery_thread(void *arg)
                           libcfs_nid2str(req->rq_peer.nid));
                 handle_recovery_req(thread, req,
                                     trd->trd_recovery_handler);
+                /**
+                 * bz18031: increase next_recovery_transno before
+                 * target_request_copy_put() will drop exp_rpc reference
+                 */
+                spin_lock_bh(&obd->obd_processing_task_lock);
+                obd->obd_next_recovery_transno++;
+                spin_unlock_bh(&obd->obd_processing_task_lock);
+                target_exp_dequeue_req_replay(req);
+                target_request_copy_put(req);
                 obd->obd_replayed_requests++;
         }
 
@@ -1768,6 +1765,7 @@ static int target_recovery_thread(void *arg)
                           libcfs_nid2str(req->rq_peer.nid));
                 handle_recovery_req(thread, req,
                                     trd->trd_recovery_handler);
+                target_request_copy_put(req);
                 obd->obd_replayed_locks++;
         }
 
@@ -1790,6 +1788,7 @@ static int target_recovery_thread(void *arg)
                           libcfs_nid2str(req->rq_peer.nid));
                 handle_recovery_req(thread, req,
                                     trd->trd_recovery_handler);
+                target_request_copy_put(req);
         }
 
         delta = (jiffies - delta) / HZ;
