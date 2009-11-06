@@ -1337,7 +1337,7 @@ AC_DEFUN([LN_FUNC_DUMP_TRACE],
 [kernel/ksyms.c arch/${LINUX_ARCH%_64}/kernel/traps_64.c],[
 	tmp_flags="$EXTRA_KCFLAGS"
 	EXTRA_KCFLAGS="-Werror"
-	AC_MSG_CHECKING([whether we can really use dump_stack])
+	AC_MSG_CHECKING([whether we can really use dump_trace])
 	LB_LINUX_TRY_COMPILE([
 		struct task_struct;
 		struct pt_regs;
