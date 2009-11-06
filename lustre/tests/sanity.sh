@@ -6769,14 +6769,14 @@ test_200f() {
 run_test 200f "Create files in a pool ==================================="
 
 test_200g() {
-        remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-        TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
-        res=$($LFS df --pool $FSNAME.$POOL | awk '{print $1}' | grep "$FSNAME-OST ")
-        [ "$res" = "$TGT" ] || echo "Pools OSTS $TGT is not $res that lfs df reports"
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+	TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
+	res=$($LFS df --pool $FSNAME.$POOL | awk '{print $1}' | grep "$FSNAME-OST")
+	[ "$res" = "$TGT" ] || error "Pools OSTS '$TGT' is not '$res' that lfs df reports"
 }
 run_test 200g "lfs df a pool ============================================"
 
-test_201a() {  # was 200g
+test_201a() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 	TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
 	do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
@@ -6784,7 +6784,7 @@ test_201a() {  # was 200g
 }
 run_test 201a "Remove a target from a pool ============================="
 
-test_201b() {  # was 200h
+test_201b() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 	for TGT in $($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | sort -u)
 	do
@@ -6792,14 +6792,26 @@ test_201b() {  # was 200h
  	done
 	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL" ""\
 	    || error "Pool $FSNAME.$POOL cannot be drained"
-	# striping on an empty pool should fall back to "pool of everything"
-	$SETSTRIPE -p $POOL ${POOL_FILE}/$tfile || error "failed to create file with empty pool"
+	# striping on an empty/nonexistant pool should fall back to "pool of everything"
+	touch ${POOL_DIR}/$tfile || error "failed to use fallback striping for empty pool"
+	# setstripe on an empty pool should fail
+	$SETSTRIPE -p $POOL ${POOL_FILE}/$tfile 2>/dev/null && \
+		error "expected failure when creating file with empty pool"
+	return 0
 }
 run_test 201b "Remove all targets from a pool =========================="
 
-test_201c() {  # was 200i
+test_201c() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 	do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
+	
+	sleep 2                        
+    # striping on an empty/nonexistant pool should fall back to "pool of everything"
+	touch ${POOL_DIR}/$tfile || error "failed to use fallback striping for missing pool"
+	# setstripe on an empty pool should fail
+	$SETSTRIPE -p $POOL ${POOL_FILE}/$tfile 2>/dev/null && \
+		error "expected failure when creating file with missing pool"
+
 	# get param should return err once pool is gone
 	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null ||
 		echo foo" "foo" && unset CLEANUP_200 && trap 0 && return 0

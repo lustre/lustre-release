@@ -3141,7 +3141,6 @@ oos_full() {
         return $OSCFULL
 }
 
-
 destroy_pool_int() {
     local ost
     local OSTS=$(do_facet $SINGLEMDS lctl pool_list $1 | \

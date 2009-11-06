@@ -261,7 +261,98 @@ int llapi_stripe_limit_check(unsigned long long stripe_size, int stripe_offset,
         return 0;
 }
 
-static int poolpath(char *fsname, char *pathname, char *pool_pathname);
+static int find_target_obdpath(char *fsname, char *path)
+{
+        glob_t glob_info;
+        char pattern[PATH_MAX + 1];
+        int rc;
+
+        snprintf(pattern, PATH_MAX,
+                 "/proc/fs/lustre/lov/%s-*/target_obd",
+                 fsname);
+        rc = glob(pattern, GLOB_BRACE, NULL, &glob_info);
+        if (rc == GLOB_NOMATCH)
+                return -ENODEV;
+        else if (rc)
+                return -EINVAL;
+
+        strcpy(path, glob_info.gl_pathv[0]);
+        globfree(&glob_info);
+        return 0;
+}
+
+static int find_poolpath(char *fsname, char *poolname, char *poolpath)
+{
+        glob_t glob_info;
+        char pattern[PATH_MAX + 1];
+        int rc;
+
+        snprintf(pattern, PATH_MAX,
+                 "/proc/fs/lustre/lov/%s-*/pools/%s",
+                 fsname, poolname);
+        rc = glob(pattern, GLOB_BRACE, NULL, &glob_info);
+        /* If no pools, make sure the lov is available */
+        if ((rc == GLOB_NOMATCH) &&
+            (find_target_obdpath(fsname, poolpath) == -ENODEV))
+                return -ENODEV;
+        if (rc)
+                return -EINVAL;
+
+        strcpy(poolpath, glob_info.gl_pathv[0]);
+        globfree(&glob_info);
+        return 0;
+}
+
+/*
+ * if pool is NULL, search ostname in target_obd
+ * if pool is not NULL:
+ *  if pool not found returns errno < 0
+ *  if ostname is NULL, returns 1 if pool is not empty and 0 if pool empty
+ *  if ostname is not NULL, returns 1 if OST is in pool and 0 if not
+ */
+int llapi_search_ost(char *fsname, char *poolname, char *ostname)
+{
+        FILE *fd;
+        char buffer[PATH_MAX + 1];
+        int len = 0, rc;
+
+        if (ostname != NULL)
+                len = strlen(ostname);
+
+        if (poolname == NULL)
+                rc = find_target_obdpath(fsname, buffer);
+        else
+                rc = find_poolpath(fsname, poolname, buffer);
+        if (rc)
+                return rc;
+
+        if ((fd = fopen(buffer, "r")) == NULL)
+                return -EINVAL;
+
+        while (fgets(buffer, sizeof(buffer), fd) != NULL) {
+                if (poolname == NULL) {
+                        char *ptr;
+                        /* Search for an ostname in the list of OSTs
+                         Line format is IDX: fsname-OSTxxxx_UUID STATUS */
+                        ptr = strchr(buffer, ' ');
+                        if ((ptr != NULL) &&
+                            (strncmp(ptr + 1, ostname, len) == 0)) {
+                                fclose(fd);
+                                return 1;
+                        }
+                } else {
+                        /* Search for an ostname in a pool,
+                         (or an existing non-empty pool if no ostname) */
+                        if ((ostname == NULL) ||
+                            (strncmp(buffer, ostname, len) == 0)) {
+                                fclose(fd);
+                                return 1;
+                        }
+                }
+        }
+        fclose(fd);
+        return 0;
+}
 
 int llapi_file_open_pool(const char *name, int flags, int mode,
                          unsigned long long stripe_size, int stripe_offset,
@@ -270,7 +361,40 @@ int llapi_file_open_pool(const char *name, int flags, int mode,
         struct lov_user_md_v3 lum = { 0 };
         int fd, rc = 0;
         int isdir = 0;
-        char fsname[MAX_OBD_NAME + 1], *ptr;
+
+        /* Make sure we have a good pool */
+        if (pool_name != NULL) {
+                char fsname[MAX_OBD_NAME + 1], *ptr;
+
+                if (llapi_search_fsname(name, fsname)) {
+                    llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                              "'%s' is not on a Lustre filesystem", name);
+                    return -EINVAL;
+                }
+
+                /* in case user gives the full pool name <fsname>.<poolname>,
+                 * strip the fsname */
+                ptr = strchr(pool_name, '.');
+                if (ptr != NULL) {
+                        *ptr = '\0';
+                        if (strcmp(pool_name, fsname) != 0) {
+                                *ptr = '.';
+                                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                                   "Pool '%s' is not on filesystem '%s'",
+                                   pool_name, fsname);
+                                return -EINVAL;
+                        }
+                        pool_name = ptr + 1;
+                }
+
+                /* Make sure the pool exists and is non-empty */
+                if ((rc = llapi_search_ost(fsname, pool_name, NULL)) < 1) {
+                        llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                                  "pool '%s.%s' %s", fsname, pool_name,
+                                  rc == 0 ? "has no OSTs" : "does not exist");
+                        return -EINVAL;
+                }
+        }
 
         fd = open(name, flags | O_LOV_DELAY_CREATE, mode);
         if (fd < 0 && errno == EISDIR) {
@@ -296,19 +420,7 @@ int llapi_file_open_pool(const char *name, int flags, int mode,
         lum.lmm_stripe_size = stripe_size;
         lum.lmm_stripe_count = stripe_count;
         lum.lmm_stripe_offset = stripe_offset;
-
-        /* in case user give the full pool name <fsname>.<poolname>, skip
-         * the fsname */
         if (pool_name != NULL) {
-                ptr = strchr(pool_name, '.');
-                if (ptr != NULL) {
-                        strncpy(fsname, pool_name, ptr - pool_name);
-                        *ptr = '\0';
-                        /* if fsname matches a filesystem skip it
-                         * if not keep the poolname as is */
-                        if (poolpath(fsname, NULL, NULL) == 0)
-                                pool_name = ptr + 1;
-                }
                 strncpy(lum.lmm_pool_name, pool_name, LOV_MAXPOOLNAME);
         } else {
                 /* If no pool is specified at all, use V1 request */
@@ -388,7 +500,7 @@ static int get_root_path(int want, char *fsname, int *outfd, char *path,
 {
         struct mntent mnt;
         char buf[PATH_MAX], mntdir[PATH_MAX];
-        char *name = NULL, *ptr;
+        char *ptr;
         FILE *fp;
         int idx = 0, len = 0, mntlen, fd;
         int rc = -ENODEV;
@@ -419,7 +531,7 @@ static int get_root_path(int want, char *fsname, int *outfd, char *path,
                 if ((want & WANT_INDEX) && (idx++ != index))
                         continue;
 
-                /* Check the fsname for a match */
+                /* Check the fsname for a match, if given */
                 if (!(want & WANT_FSNAME) && fsname != NULL &&
                     (strlen(fsname) > 0) && (strcmp(ptr, fsname) != 0))
                         continue;
@@ -427,15 +539,17 @@ static int get_root_path(int want, char *fsname, int *outfd, char *path,
                 /* If the path isn't set return the first one we find */
                 if (path == NULL || strlen(path) == 0) {
                         strcpy(mntdir, mnt.mnt_dir);
-                        name = ptr;
+                        if ((want & WANT_FSNAME) && fsname != NULL)
+                                strcpy(fsname, ptr);
                         rc = 0;
                         break;
                 /* Otherwise find the longest matching path */
                 } else if ((strlen(path) >= mntlen) && (mntlen >= len) &&
                            (strncmp(mnt.mnt_dir, path, mntlen) == 0)) {
                         strcpy(mntdir, mnt.mnt_dir);
-                        mntlen = len;
-                        name = ptr;
+                        len = mntlen;
+                        if ((want & WANT_FSNAME) && fsname != NULL)
+                                strcpy(fsname, ptr);
                         rc = 0;
                 }
         }
@@ -443,8 +557,6 @@ static int get_root_path(int want, char *fsname, int *outfd, char *path,
 
         /* Found it */
         if (rc == 0) {
-                if ((want & WANT_FSNAME) && fsname != NULL)
-                        strcpy(fsname, name);
                 if ((want & WANT_PATH) && path != NULL)
                         strcpy(path, mntdir);
                 if (want & WANT_FD) {
