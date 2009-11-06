@@ -37,7 +37,7 @@
 #ifndef __LNET_SYSCTL_H__
 #define __LNET_SYSCTL_H__
 
-#if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
+#if defined(CONFIG_SYSCTL)
 
 #ifndef HAVE_SYSCTL_UNNUMBERED
 
@@ -50,6 +50,7 @@
 #define CTL_QSWNAL      207
 #define CTL_SOCKLND     208
 #define CTL_VIBLND      209
+#define CTL_GNILND      210
 
 #else
 
@@ -62,6 +63,7 @@
 #define CTL_QSWNAL	CTL_UNNUMBERED
 #define CTL_SOCKLND     CTL_UNNUMBERED
 #define CTL_VIBLND      CTL_UNNUMBERED
+#define CTL_GNILND      CTL_UNNUMBERED
 
 #endif /* sysctl id */
 
