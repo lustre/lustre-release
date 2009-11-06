@@ -240,7 +240,8 @@ int t2(int argc, char* argv[])
         }
 
         t_fcntl(fd, F_SETFL, O_APPEND);
-        if (!(rc = t_fcntl(fd, F_GETFL)) & O_APPEND) {
+        rc = t_fcntl(fd, F_GETFL);
+        if ((rc & O_APPEND) == 0) {
                 fprintf(stderr, "error get flag: ret %x\n", rc);
                 return EXIT_FAILURE;
         }
