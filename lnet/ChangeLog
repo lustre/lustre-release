@@ -12,6 +12,10 @@ tbd  Sun Microsystems, Inc.
 	  mxlnd     - MX 1.2.1 or later,
 	  ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
+Severity   : enhancement
+Bugzilla   : 19735
+Description: multiple-instance support for kptllnd
+
 Severity   : normal
 Bugzilla   : 20897
 Description: ksocknal_close_conn_locked connection race

@@ -135,6 +135,7 @@ typedef struct
 /***********************************************************************/
 
 typedef struct kptl_data kptl_data_t;
+typedef struct kptl_net kptl_net_t;
 typedef struct kptl_rx_buffer kptl_rx_buffer_t;
 typedef struct kptl_peer kptl_peer_t;
 
@@ -243,7 +244,7 @@ enum kptllnd_peer_state
 struct kptl_peer
 {
         struct list_head        peer_list;
-        atomic_t                peer_refcount;          /* The current refrences */
+        atomic_t                peer_refcount;          /* The current references */
         enum kptllnd_peer_state peer_state;
         spinlock_t              peer_lock;              /* serialize */
         struct list_head        peer_noops;             /* PTLLND_MSG_TYPE_NOOP txs */
@@ -271,11 +272,13 @@ struct kptl_data
         int                     kptl_init;             /* initialisation state */
         volatile int            kptl_shutdown;         /* shut down? */
         atomic_t                kptl_nthreads;         /* # live threads */
-        lnet_ni_t              *kptl_ni;               /* _the_ LND instance */
         ptl_handle_ni_t         kptl_nih;              /* network inteface handle */
         ptl_process_id_t        kptl_portals_id;       /* Portals ID of interface */
         __u64                   kptl_incarnation;      /* which one am I */
         ptl_handle_eq_t         kptl_eqh;              /* Event Queue (EQ) */
+
+        rwlock_t                kptl_net_rw_lock;      /* serialise... */
+        struct list_head        kptl_nets;             /* kptl_net instances */
 
         spinlock_t              kptl_sched_lock;       /* serialise... */
         wait_queue_head_t       kptl_sched_waitq;      /* schedulers sleep here */
@@ -306,6 +309,14 @@ struct kptl_data
         spinlock_t              kptl_ptlid2str_lock;   /* serialise str ops */
 };
 
+struct kptl_net
+{
+        struct list_head  net_list;      /* chain on kptl_data:: kptl_nets */
+        lnet_ni_t        *net_ni;
+        atomic_t          net_refcount;  /* # current references */
+        int               net_shutdown;  /* lnd_shutdown called */
+};
+
 enum 
 {
         PTLLND_INIT_NOTHING = 0,
@@ -317,14 +328,12 @@ extern kptl_tunables_t  kptllnd_tunables;
 extern kptl_data_t      kptllnd_data;
 
 static inline lnet_nid_t 
-kptllnd_ptl2lnetnid(ptl_nid_t ptl_nid)
+kptllnd_ptl2lnetnid(lnet_nid_t ni_nid, ptl_nid_t ptl_nid)
 {
 #ifdef _USING_LUSTRE_PORTALS_
-        return LNET_MKNID(LNET_NIDNET(kptllnd_data.kptl_ni->ni_nid), 
-                          LNET_NIDADDR(ptl_nid));
+        return LNET_MKNID(LNET_NIDNET(ni_nid), LNET_NIDADDR(ptl_nid));
 #else
-	return LNET_MKNID(LNET_NIDNET(kptllnd_data.kptl_ni->ni_nid), 
-                          ptl_nid);
+        return LNET_MKNID(LNET_NIDNET(ni_nid), ptl_nid);
 #endif
 }
 
@@ -466,8 +475,10 @@ int  kptllnd_peer_connect(kptl_tx_t *tx, lnet_nid_t nid);
 void kptllnd_peer_check_sends(kptl_peer_t *peer);
 void kptllnd_peer_check_bucket(int idx, int stamp);
 void kptllnd_tx_launch(kptl_peer_t *peer, kptl_tx_t *tx, int nfrag);
-int  kptllnd_find_target(kptl_peer_t **peerp, lnet_process_id_t target);
-kptl_peer_t *kptllnd_peer_handle_hello(ptl_process_id_t initiator,
+int  kptllnd_find_target(kptl_net_t *net, lnet_process_id_t target,
+                         kptl_peer_t **peerp);
+kptl_peer_t *kptllnd_peer_handle_hello(kptl_net_t *net,
+                                       ptl_process_id_t initiator,
                                        kptl_msg_t *msg);
 kptl_peer_t *kptllnd_id2peer_locked(lnet_process_id_t id);
 void kptllnd_peer_alive(kptl_peer_t *peer);
@@ -486,6 +497,20 @@ kptllnd_peer_decref (kptl_peer_t *peer)
 }
 
 static inline void
+kptllnd_net_addref (kptl_net_t *net)
+{
+        LASSERT (atomic_read(&net->net_refcount) > 0);
+        atomic_inc(&net->net_refcount);
+}
+
+static inline void
+kptllnd_net_decref (kptl_net_t *net)
+{
+        LASSERT (atomic_read(&net->net_refcount) > 0);
+        atomic_dec(&net->net_refcount);
+}
+
+static inline void
 kptllnd_set_tx_peer(kptl_tx_t *tx, kptl_peer_t *peer) 
 {
         LASSERT (tx->tx_peer == NULL);
@@ -497,7 +522,9 @@ kptllnd_set_tx_peer(kptl_tx_t *tx, kptl_peer_t *peer)
 static inline struct list_head *
 kptllnd_nid2peerlist(lnet_nid_t nid)
 {
-        unsigned int hash = ((unsigned int)nid) %
+        /* Only one copy of peer state for all logical peers, so the net part
+         * of NIDs is ignored; e.g. A@ptl0 and A@ptl2 share peer state */
+        unsigned int hash = ((unsigned int)LNET_NIDADDR(nid)) %
                             kptllnd_data.kptl_peer_hash_size;
 
         return &kptllnd_data.kptl_peers[hash];
@@ -543,7 +570,7 @@ int  kptllnd_setup_tx_descs(void);
 void kptllnd_cleanup_tx_descs(void);
 void kptllnd_tx_fini(kptl_tx_t *tx);
 void kptllnd_cancel_txlist(struct list_head *peerq, struct list_head *txs);
-void kptllnd_restart_txs(lnet_process_id_t target, struct list_head *restarts);
+void kptllnd_restart_txs(kptl_net_t *net, lnet_process_id_t id, struct list_head *restarts);
 kptl_tx_t *kptllnd_get_idle_tx(enum kptl_tx_type purpose);
 void kptllnd_tx_callback(ptl_event_t *ev);
 const char *kptllnd_tx_typestr(int type);
@@ -566,7 +593,8 @@ kptllnd_tx_decref(kptl_tx_t *tx)
 /*
  * MESSAGE SUPPORT FUNCTIONS
  */
-void kptllnd_init_msg(kptl_msg_t *msg, int type, int body_nob);
+void kptllnd_init_msg(kptl_msg_t *msg, int type,
+                      lnet_process_id_t target, int body_nob);
 void kptllnd_msg_pack(kptl_msg_t *msg, kptl_peer_t *peer);
 int  kptllnd_msg_unpack(kptl_msg_t *msg, int nob);
 

@@ -299,7 +299,7 @@ kptllnd_rx_buffer_post(kptl_rx_buffer_t *rxb)
          * Setup MD
          */
         md.start = rxb->rxb_buffer;
-        md.length = PAGE_SIZE * *kptllnd_tunables.kptl_rxb_npages;
+        md.length = kptllnd_rx_buffer_size();
         md.threshold = PTL_MD_THRESH_INF;
         md.options = PTL_MD_OP_PUT |
                      PTL_MD_LUSTRE_COMPLETION_SEMANTICS |
@@ -505,7 +505,7 @@ kptllnd_rx_buffer_callback (ptl_event_t *ev)
 }
 
 void
-kptllnd_nak (kptl_rx_t *rx)
+kptllnd_nak (ptl_process_id_t dest)
 {
         /* Fire-and-forget a stub message that will let the peer know my
          * protocol magic/version and make her drop/refresh any peer state she
@@ -523,21 +523,38 @@ kptllnd_nak (kptl_rx_t *rx)
         rc = PtlMDBind(kptllnd_data.kptl_nih, md, PTL_UNLINK, &mdh);
         if (rc != PTL_OK) {
                 CWARN("Can't NAK %s: bind failed %s(%d)\n",
-                      kptllnd_ptlid2str(rx->rx_initiator),
-                      kptllnd_errtype2str(rc), rc);
+                      kptllnd_ptlid2str(dest), kptllnd_errtype2str(rc), rc);
                 return;
         }
 
-        rc = PtlPut(mdh, PTL_NOACK_REQ, rx->rx_initiator,
+        rc = PtlPut(mdh, PTL_NOACK_REQ, dest,
                     *kptllnd_tunables.kptl_portal, 0,
                     LNET_MSG_MATCHBITS, 0, 0);
-
         if (rc != PTL_OK) {
                 CWARN("Can't NAK %s: put failed %s(%d)\n",
-                      kptllnd_ptlid2str(rx->rx_initiator),
-                      kptllnd_errtype2str(rc), rc);
+                      kptllnd_ptlid2str(dest), kptllnd_errtype2str(rc), rc);
                 kptllnd_schedule_ptltrace_dump();
         }
+}
+
+kptl_net_t *
+kptllnd_find_net (lnet_nid_t nid)
+{
+        kptl_net_t *net;
+
+        read_lock(&kptllnd_data.kptl_net_rw_lock);
+        list_for_each_entry (net, &kptllnd_data.kptl_nets, net_list) {
+                LASSERT (!net->net_shutdown);
+
+                if (net->net_ni->ni_nid == nid) {
+                        kptllnd_net_addref(net);
+                        read_unlock(&kptllnd_data.kptl_net_rw_lock);
+                        return net;
+                }
+        }
+        read_unlock(&kptllnd_data.kptl_net_rw_lock);
+
+        return NULL;
 }
 
 void
@@ -546,11 +563,13 @@ kptllnd_rx_parse(kptl_rx_t *rx)
         kptl_msg_t             *msg = rx->rx_msg;
         int                     rc = 0;
         int                     post_credit = PTLLND_POSTRX_PEER_CREDIT;
+        kptl_net_t             *net = NULL;
         kptl_peer_t            *peer;
         struct list_head        txs;
         unsigned long           flags;
         lnet_process_id_t       srcid;
 
+        LASSERT (!in_interrupt());
         LASSERT (rx->rx_peer == NULL);
 
         INIT_LIST_HEAD(&txs);
@@ -570,7 +589,8 @@ kptllnd_rx_parse(kptl_rx_t *rx)
                        (__u32)(msg->ptlm_magic == PTLLND_MSG_MAGIC ?
                                msg->ptlm_version : __swab16(msg->ptlm_version)),
                         PTLLND_MSG_VERSION, kptllnd_ptlid2str(rx->rx_initiator));
-                kptllnd_nak(rx);
+                /* NB backward compatibility */
+                kptllnd_nak(rx->rx_initiator);
                 goto rx_done;
         }
         
@@ -590,8 +610,8 @@ kptllnd_rx_parse(kptl_rx_t *rx)
                jiffies - rx->rx_treceived,
                cfs_duration_sec(jiffies - rx->rx_treceived));
 
-        if (srcid.nid != kptllnd_ptl2lnetnid(rx->rx_initiator.nid)) {
-                CERROR("Bad source id %s from %s\n",
+        if (kptllnd_lnet2ptlnid(srcid.nid) != rx->rx_initiator.nid) {
+                CERROR("Bad source nid %s from %s\n",
                        libcfs_id2str(srcid),
                        kptllnd_ptlid2str(rx->rx_initiator));
                 goto rx_done;
@@ -619,21 +639,28 @@ kptllnd_rx_parse(kptl_rx_t *rx)
                 goto failed;
         }
 
-        if (msg->ptlm_dstnid != kptllnd_data.kptl_ni->ni_nid ||
-            msg->ptlm_dstpid != the_lnet.ln_pid) {
-                CERROR("Bad dstid %s (expected %s) from %s\n",
+        net = kptllnd_find_net(msg->ptlm_dstnid);
+        if (net == NULL || msg->ptlm_dstpid != the_lnet.ln_pid) {
+                CERROR("Bad dstid %s from %s\n",
                        libcfs_id2str((lnet_process_id_t) {
                                .nid = msg->ptlm_dstnid,
                                .pid = msg->ptlm_dstpid}),
-                       libcfs_id2str((lnet_process_id_t) {
-                               .nid = kptllnd_data.kptl_ni->ni_nid,
-                               .pid = the_lnet.ln_pid}),
                        kptllnd_ptlid2str(rx->rx_initiator));
                 goto rx_done;
         }
 
+        if (LNET_NIDNET(srcid.nid) != LNET_NIDNET(net->net_ni->ni_nid)) {
+                lnet_nid_t nid = LNET_MKNID(LNET_NIDNET(net->net_ni->ni_nid),
+                                            LNET_NIDADDR(srcid.nid));
+                CERROR("Bad source nid %s from %s, %s expected.\n",
+                       libcfs_id2str(srcid),
+                       kptllnd_ptlid2str(rx->rx_initiator),
+                       libcfs_nid2str(nid));
+                goto rx_done;
+        }
+
         if (msg->ptlm_type == PTLLND_MSG_TYPE_HELLO) {
-                peer = kptllnd_peer_handle_hello(rx->rx_initiator, msg);
+                peer = kptllnd_peer_handle_hello(net, rx->rx_initiator, msg);
                 if (peer == NULL)
                         goto rx_done;
         } else {
@@ -643,7 +670,7 @@ kptllnd_rx_parse(kptl_rx_t *rx)
                               kptllnd_msgtype2str(msg->ptlm_type),
                               libcfs_id2str(srcid));
                         /* NAK to make the peer reconnect */
-                        kptllnd_nak(rx);
+                        kptllnd_nak(rx->rx_initiator);
                         goto rx_done;
                 }
 
@@ -671,7 +698,7 @@ kptllnd_rx_parse(kptl_rx_t *rx)
                         CWARN("NAK %s: Unexpected %s message\n",
                               libcfs_id2str(srcid),
                               kptllnd_msgtype2str(msg->ptlm_type));
-                        kptllnd_nak(rx);
+                        kptllnd_nak(rx->rx_initiator);
                         rc = -EPROTO;
                         goto failed;
                 }
@@ -687,8 +714,12 @@ kptllnd_rx_parse(kptl_rx_t *rx)
                 }
         }
 
-        LASSERT (msg->ptlm_srcnid == peer->peer_id.nid &&
-                 msg->ptlm_srcpid == peer->peer_id.pid);
+        LASSERTF (LNET_NIDADDR(msg->ptlm_srcnid) ==
+                         LNET_NIDADDR(peer->peer_id.nid), "m %s p %s\n",
+                  libcfs_nid2str(msg->ptlm_srcnid),
+                  libcfs_nid2str(peer->peer_id.nid));
+        LASSERTF (msg->ptlm_srcpid == peer->peer_id.pid, "m %u p %u\n",
+                  msg->ptlm_srcpid, peer->peer_id.pid);
 
         spin_lock_irqsave(&peer->peer_lock, flags);
 
@@ -743,12 +774,14 @@ kptllnd_rx_parse(kptl_rx_t *rx)
 
         case PTLLND_MSG_TYPE_IMMEDIATE:
                 CDEBUG(D_NET, "PTLLND_MSG_TYPE_IMMEDIATE\n");
-                rc = lnet_parse(kptllnd_data.kptl_ni,
+                rc = lnet_parse(net->net_ni,
                                 &msg->ptlm_u.immediate.kptlim_hdr,
                                 msg->ptlm_srcnid,
                                 rx, 0);
-                if (rc >= 0)                    /* kptllnd_recv owns 'rx' now */
+                if (rc >= 0) {                  /* kptllnd_recv owns 'rx' now */
+                        kptllnd_net_decref(net);
                         return;
+                }
                 goto failed;
                 
         case PTLLND_MSG_TYPE_PUT:
@@ -771,12 +804,14 @@ kptllnd_rx_parse(kptl_rx_t *rx)
 
                 spin_unlock_irqrestore(&rx->rx_peer->peer_lock, flags);
 
-                rc = lnet_parse(kptllnd_data.kptl_ni,
+                rc = lnet_parse(net->net_ni,
                                 &msg->ptlm_u.rdma.kptlrm_hdr,
                                 msg->ptlm_srcnid,
                                 rx, 1);
-                if (rc >= 0)                    /* kptllnd_recv owns 'rx' now */
+                if (rc >= 0) {                  /* kptllnd_recv owns 'rx' now */
+                        kptllnd_net_decref(net);
                         return;
+                }
                 goto failed;
         }
 
@@ -785,8 +820,12 @@ kptllnd_rx_parse(kptl_rx_t *rx)
         kptllnd_peer_close(peer, rc);
         if (rx->rx_peer == NULL)                /* drop ref on peer */
                 kptllnd_peer_decref(peer);      /* unless rx_done will */
-        if (!list_empty(&txs))
-                kptllnd_restart_txs(srcid, &txs);
+        if (!list_empty(&txs)) {
+                LASSERT (net != NULL);
+                kptllnd_restart_txs(net, srcid, &txs);
+        }
  rx_done:
+        if (net != NULL)
+                kptllnd_net_decref(net);
         kptllnd_rx_done(rx, post_credit);
 }

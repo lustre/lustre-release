@@ -75,7 +75,7 @@
 
 /*
  * The Cray Portals has no maximum number of IOVs.  The
- * maximum is limited only my memory and size of the
+ * maximum is limited only by memory and size of the
  * int parameters (2^31-1).
  * Lustre only really require that the underyling
  * implemenation to support at least LNET_MAX_IOV,
