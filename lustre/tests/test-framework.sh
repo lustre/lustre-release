@@ -1533,7 +1533,9 @@ nfs_client_mode () {
     return 1
 }
 
-check_config_client () {
+check_config () {
+    nfs_client_mode && return
+
     local mntpt=$1
 
     local mounted=$(mount | grep " $mntpt ")
@@ -1573,16 +1575,6 @@ check_config_client () {
 #                   Please use correct config or set mds_HOST correctly!"
 #    fi
 
-}
-
-check_config_clients () {
-    local clients=${CLIENTS:-$HOSTNAME}
-    local mntpt=$1
-
-    nfs_client_mode && return
-
-    do_rpc_nodes $clients check_config_client $mntpt
-
     sanity_mount_check ||
         error "environments are insane!"
 }
@@ -1616,30 +1608,17 @@ check_and_setup_lustre() {
 
         # MOUNT2 is mounted,  MOUNT_2 is not set
         if ! [ "$MOUNT_2" ]; then
-            cleanup_mount $MOUNT2
+            zconf_umount `hostname` $MOUNT2
             export I_UMOUNTED2=yes
 
         # MOUNT2 is mounted, MOUNT_2 is set
         else
-            # FIXME: what to do if check_config failed?
-            # i.e. if:
-            # 1) remote client has mounted other Lustre fs ?
-            # 2) it has insane env ?
-            # let's try umount MOUNT2 on all clients and mount it again:
-            if ! check_config_clients $MOUNT2; then
-                    cleanup_mount $MOUNT2
-                    restore_mount $MOUNT2
-                    export I_MOUNTED2=yes
-            fi 
+            check_config $MOUNT2
         fi 
     fi
 
     if $do_check; then
-        # FIXME: what to do if check_config failed?
-        # i.e. if:
-        # 1) remote client has mounted other Lustre fs?
-        # 2) lustre is mounted on remote_clients atall ?
-        check_config_clients $MOUNT
+        check_config $MOUNT
         init_facets_vars
         init_param_vars
 
@@ -1651,20 +1630,6 @@ check_and_setup_lustre() {
     if [ "$ONLY" == "setup" ]; then
         exit 0
     fi
-}
-
-restore_mount () {
-   local clients=${CLIENTS:-$HOSTNAME}
-   local mntpt=$1
-
-   zconf_mount_clients $clients $mntpt
-}
-
-cleanup_mount () {
-    local clients=${CLIENTS:-$HOSTNAME}
-    local mntpt=$1
-
-    zconf_umount_clients $clients $mntpt    
 }
 
 cleanup_and_setup_lustre() {
@@ -1684,13 +1649,9 @@ check_and_cleanup_lustre() {
         [ "$ENABLE_QUOTA" ] && restore_quota_type || true
     fi
     if [ "$I_UMOUNTED2" = "yes" ]; then
-        restore_mount $MOUNT2 || error "restore $MOUNT2 failed"
+        mount_client $MOUNT2 || error "restore $MOUNT2 failed"
     fi
 
-    if [ "$I_MOUNTED2" = "yes" ]; then
-        cleanup_mount $MOUNT2
-    fi
-        zconf_umount_clients $clients $MOUNT2
     if [ "$I_MOUNTED" = "yes" ]; then
         cleanupall -f || error "cleanup failed"
     fi
