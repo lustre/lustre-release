@@ -323,11 +323,12 @@ static int cl_lockset_lock_one(const struct lu_env *env,
 
         ENTRY;
 
-        lock = cl_lock_request(env, io, &link->cill_descr, "io", io);
+        lock = cl_lock_request(env, io, &link->cill_descr, link->cill_enq_flags,
+                               "io", io);
         if (!IS_ERR(lock)) {
                 link->cill_lock = lock;
                 list_move(&link->cill_linkage, &set->cls_curr);
-                if (!(link->cill_descr.cld_enq_flags & CEF_ASYNC)) {
+                if (!(link->cill_enq_flags & CEF_ASYNC)) {
                         result = cl_wait(env, lock);
                         if (result == 0)
                                 list_move(&link->cill_linkage, &set->cls_done);
@@ -572,7 +573,7 @@ static void cl_free_io_lock_link(const struct lu_env *env,
  * Allocates new lock link, and uses it to add a lock to a lockset.
  */
 int cl_io_lock_alloc_add(const struct lu_env *env, struct cl_io *io,
-                         struct cl_lock_descr *descr)
+                         struct cl_lock_descr *descr, int enqflags)
 {
         struct cl_io_lock_link *link;
         int result;
@@ -581,6 +582,7 @@ int cl_io_lock_alloc_add(const struct lu_env *env, struct cl_io *io,
         OBD_ALLOC_PTR(link);
         if (link != NULL) {
                 link->cill_descr     = *descr;
+                link->cill_enq_flags = enqflags;
                 link->cill_fini      = cl_free_io_lock_link;
                 result = cl_io_lock_add(env, io, link);
                 if (result) /* lock match */

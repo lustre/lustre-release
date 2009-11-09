@@ -154,9 +154,8 @@ int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
         descr->cld_mode = CLM_GROUP;
 
         enqflags = CEF_MUST | (nonblock ? CEF_NONBLOCK : 0);
-        descr->cld_enq_flags = enqflags;
-
-        lock = cl_lock_request(env, io, descr, GROUPLOCK_SCOPE, cfs_current());
+        lock = cl_lock_request(env, io, descr, enqflags,
+                               GROUPLOCK_SCOPE, cfs_current());
         if (IS_ERR(lock)) {
                 cl_io_fini(env, io);
                 cl_env_put(env, &refcheck);

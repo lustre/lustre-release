@@ -1787,7 +1787,6 @@ struct cl_lock *cl_lock_at_page(const struct lu_env *env, struct cl_object *obj,
         need->cld_mode = CLM_READ; /* CLM_READ matches both READ & WRITE, but
                                     * not PHANTOM */
         need->cld_start = need->cld_end = page->cp_index;
-        need->cld_enq_flags = 0;
 
         spin_lock(&head->coh_lock_guard);
         /* It is fine to match any group lock since there could be only one
@@ -2072,6 +2071,7 @@ EXPORT_SYMBOL(cl_lock_hold);
  */
 struct cl_lock *cl_lock_request(const struct lu_env *env, struct cl_io *io,
                                 const struct cl_lock_descr *need,
+                                __u32 enqflags,
                                 const char *scope, const void *source)
 {
         struct cl_lock       *lock;
@@ -2079,7 +2079,6 @@ struct cl_lock *cl_lock_request(const struct lu_env *env, struct cl_io *io,
         int                   rc;
         int                   iter;
         int warn;
-        __u32                 enqflags = need->cld_enq_flags;
 
         ENTRY;
         fid = lu_object_fid(&io->ci_obj->co_lu);

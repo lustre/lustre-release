@@ -118,7 +118,6 @@ int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
                         *descr = whole_file;
                         descr->cld_obj   = clob;
                         descr->cld_mode  = CLM_PHANTOM;
-                        descr->cld_enq_flags = CEF_ASYNC | CEF_MUST;
                         cio->cui_glimpse = 1;
                         /*
                          * CEF_ASYNC is used because glimpse sub-locks cannot
@@ -128,8 +127,9 @@ int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
                          * CEF_MUST protects glimpse lock from conversion into
                          * a lockless mode.
                          */
-                        lock = cl_lock_request(env, io, descr, "glimpse",
-                                               cfs_current());
+                        lock = cl_lock_request(env, io, descr,
+                                               CEF_ASYNC|CEF_MUST,
+                                               "glimpse", cfs_current());
                         cio->cui_glimpse = 0;
                         if (!IS_ERR(lock)) {
                                 result = cl_wait(env, lock);

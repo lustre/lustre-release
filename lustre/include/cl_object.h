@@ -1301,11 +1301,6 @@ struct cl_lock_descr {
         __u64             cld_gid;
         /** Lock mode. */
         enum cl_lock_mode cld_mode;
-        /**
-         * flags to enqueue lock. A combination of bit-flags from
-         * enum cl_enq_flags.
-         */
-        __u32             cld_enq_flags;
 };
 
 #define DDESCR "%s(%d):[%lu, %lu]"
@@ -2161,6 +2156,11 @@ struct cl_io_lock_link {
         struct list_head     cill_linkage;
         struct cl_lock_descr cill_descr;
         struct cl_lock      *cill_lock;
+        /**
+         * flags to enqueue lock for this IO. A combination of bit-flags from
+         * enum cl_enq_flags.
+         */
+        __u32                cill_enq_flags;
         /** optional destructor */
         void               (*cill_fini)(const struct lu_env *env,
                                         struct cl_io_lock_link *link);
@@ -2763,6 +2763,7 @@ struct cl_lock *cl_lock_peek(const struct lu_env *env, const struct cl_io *io,
                              const char *scope, const void *source);
 struct cl_lock *cl_lock_request(const struct lu_env *env, struct cl_io *io,
                                 const struct cl_lock_descr *need,
+                                __u32 enqflags,
                                 const char *scope, const void *source);
 struct cl_lock *cl_lock_at_page(const struct lu_env *env, struct cl_object *obj,
                                 struct cl_page *page, struct cl_lock *except,
@@ -2900,7 +2901,7 @@ void  cl_io_end          (const struct lu_env *env, struct cl_io *io);
 int   cl_io_lock_add     (const struct lu_env *env, struct cl_io *io,
                           struct cl_io_lock_link *link);
 int   cl_io_lock_alloc_add(const struct lu_env *env, struct cl_io *io,
-                           struct cl_lock_descr *descr);
+                           struct cl_lock_descr *descr, int enqflags);
 int   cl_io_read_page    (const struct lu_env *env, struct cl_io *io,
                           struct cl_page *page);
 int   cl_io_prepare_write(const struct lu_env *env, struct cl_io *io,
