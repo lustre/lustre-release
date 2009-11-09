@@ -1,4 +1,6 @@
 #!/bin/bash
+# -*- mode: Bash; tab-width: 4; indent-tabs-mode: t; -*-
+# vim:autoindent:shiftwidth=4:tabstop=4:
 #
 # Run select tests by setting ONLY, or as arguments to the script.
 # Skip specific tests by setting EXCEPT.
@@ -6352,43 +6354,56 @@ test_200f() {
 run_test 200f "Create files in a pool ==================================="
 
 test_200g() {
-        test_pools || return 0
+	test_pools || return 0
 
-        TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
-        res=$(lfs df --pool $FSNAME.$POOL | awk '{print $1}' | grep "$FSNAME-OST")
-        [ "$res" = "$TGT" ] || echo "Pools OSTS $TGT is not $res that lfs df reports"
+	TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
+	res=$($LFS df --pool $FSNAME.$POOL | awk '{print $1}' | grep "$FSNAME-OST")
+	[ "$res" = "$TGT" ] || error "Pools OSTS '$TGT' is not '$res' that lfs df reports"
 }
 run_test 200g "lfs df a pool ============================================"
 
-test_201a() { # was 200g
-        test_pools || return 0
-        TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
-        do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
-        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | grep $TGT" "" || error "$TGT not removed from $FSNAME.$POOL"
+test_201a() {
+	test_pools || return 0
+
+	TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
+	do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
+	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | grep $TGT" "" || error "$TGT not removed from $FSNAME.$POOL"
 }
 run_test 201a "Remove a target from a pool ============================="
 
-test_201b() {	# was 200h
-        test_pools || return 0
-        for TGT in $($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | sort -u)
-        do
-                do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
-        done
-        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL" ""\
-            || error "Pool $FSNAME.$POOL cannot be drained"
-        # striping on an empty pool should fall back to "pool of everything"
-        $SETSTRIPE -p $POOL ${POOL_FILE}/$tfile || \
-	    error "failed to create file with empty pool"
+test_201b() {
+	test_pools || return 0
+
+	for TGT in $($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | sort -u)
+	do
+		do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
+ 	done
+	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL" ""\
+	    || error "Pool $FSNAME.$POOL cannot be drained"
+	# striping on an empty/nonexistant pool should fall back to "pool of everything"
+	touch ${POOL_DIR}/$tfile || error "failed to use fallback striping for empty pool"
+	# setstripe on an empty pool should fail
+	$SETSTRIPE -p $POOL ${POOL_FILE}/$tfile 2>/dev/null && \
+		error "expected failure when creating file with empty pool"
+	return 0
 }
 run_test 201b "Remove all targets from a pool =========================="
 
-test_201c() {	# was 200i
-        test_pools || return 0
-        do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
-        # get param should return err once pool is gone
-        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || 
-                echo foo" "foo" && unset CLEANUP_200 && trap 0 && return 0
-        error "Pool $FSNAME.$POOL is not destroyed"
+test_201c() {
+	test_pools || return 0
+
+	do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
+	
+	sleep 2                        
+    # striping on an empty/nonexistant pool should fall back to "pool of everything"
+	touch ${POOL_DIR}/$tfile || error "failed to use fallback striping for missing pool"
+	# setstripe on an empty pool should fail
+	$SETSTRIPE -p $POOL ${POOL_FILE}/$tfile 2>/dev/null && \
+		error "expected failure when creating file with missing pool"
+
+	# get param should return err once pool is gone
+	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "foo" && unset CLEANUP_200 && trap 0 && return 0
+	error "Pool $FSNAME.$POOL is not destroyed"
 }
 run_test 201c "Remove a pool ============================================"
 

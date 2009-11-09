@@ -55,6 +55,7 @@
 #include <errno.h>
 #include <dirent.h>
 #include <stdarg.h>
+#include <ctype.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
@@ -262,7 +263,98 @@ int llapi_stripe_limit_check(unsigned long long stripe_size, int stripe_offset,
         return 0;
 }
 
-static int poolpath(char *fsname, char *pathname, char *pool_pathname);
+static int find_target_obdpath(char *fsname, char *path)
+{
+        glob_t glob_info;
+        char pattern[PATH_MAX + 1];
+        int rc;
+
+        snprintf(pattern, PATH_MAX,
+                 "/proc/fs/lustre/lov/%s-*/target_obd",
+                 fsname);
+        rc = glob(pattern, GLOB_BRACE, NULL, &glob_info);
+        if (rc == GLOB_NOMATCH)
+                return -ENODEV;
+        else if (rc)
+                return -EINVAL;
+
+        strcpy(path, glob_info.gl_pathv[0]);
+        globfree(&glob_info);
+        return 0;
+}
+
+static int find_poolpath(char *fsname, char *poolname, char *poolpath)
+{
+        glob_t glob_info;
+        char pattern[PATH_MAX + 1];
+        int rc;
+
+        snprintf(pattern, PATH_MAX,
+                 "/proc/fs/lustre/lov/%s-*/pools/%s",
+                 fsname, poolname);
+        rc = glob(pattern, GLOB_BRACE, NULL, &glob_info);
+        /* If no pools, make sure the lov is available */
+        if ((rc == GLOB_NOMATCH) &&
+            (find_target_obdpath(fsname, poolpath) == -ENODEV))
+                return -ENODEV;
+        if (rc)
+                return -EINVAL;
+
+        strcpy(poolpath, glob_info.gl_pathv[0]);
+        globfree(&glob_info);
+        return 0;
+}
+
+/*
+ * if pool is NULL, search ostname in target_obd
+ * if pool is not NULL:
+ *  if pool not found returns errno < 0
+ *  if ostname is NULL, returns 1 if pool is not empty and 0 if pool empty
+ *  if ostname is not NULL, returns 1 if OST is in pool and 0 if not
+ */
+int llapi_search_ost(char *fsname, char *poolname, char *ostname)
+{
+        FILE *fd;
+        char buffer[PATH_MAX + 1];
+        int len = 0, rc;
+
+        if (ostname != NULL)
+                len = strlen(ostname);
+
+        if (poolname == NULL)
+                rc = find_target_obdpath(fsname, buffer);
+        else
+                rc = find_poolpath(fsname, poolname, buffer);
+        if (rc)
+                return rc;
+
+        if ((fd = fopen(buffer, "r")) == NULL)
+                return -EINVAL;
+
+        while (fgets(buffer, sizeof(buffer), fd) != NULL) {
+                if (poolname == NULL) {
+                        char *ptr;
+                        /* Search for an ostname in the list of OSTs
+                         Line format is IDX: fsname-OSTxxxx_UUID STATUS */
+                        ptr = strchr(buffer, ' ');
+                        if ((ptr != NULL) &&
+                            (strncmp(ptr + 1, ostname, len) == 0)) {
+                                fclose(fd);
+                                return 1;
+                        }
+                } else {
+                        /* Search for an ostname in a pool,
+                         (or an existing non-empty pool if no ostname) */
+                        if ((ostname == NULL) ||
+                            (strncmp(buffer, ostname, len) == 0)) {
+                                fclose(fd);
+                                return 1;
+                        }
+                }
+        }
+        fclose(fd);
+        return 0;
+}
 
 int llapi_file_open_pool(const char *name, int flags, int mode,
                          unsigned long long stripe_size, int stripe_offset,
@@ -271,7 +363,40 @@ int llapi_file_open_pool(const char *name, int flags, int mode,
         struct lov_user_md_v3 lum = { 0 };
         int fd, rc = 0;
         int isdir = 0;
-        char fsname[MAX_OBD_NAME + 1], *ptr;
+
+        /* Make sure we have a good pool */
+        if (pool_name != NULL) {
+                char fsname[MAX_OBD_NAME + 1], *ptr;
+
+                if (llapi_search_fsname(name, fsname)) {
+                    llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                              "'%s' is not on a Lustre filesystem", name);
+                    return -EINVAL;
+                }
+
+                /* in case user gives the full pool name <fsname>.<poolname>,
+                 * strip the fsname */
+                ptr = strchr(pool_name, '.');
+                if (ptr != NULL) {
+                        *ptr = '\0';
+                        if (strcmp(pool_name, fsname) != 0) {
+                                *ptr = '.';
+                                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                                   "Pool '%s' is not on filesystem '%s'",
+                                   pool_name, fsname);
+                                return -EINVAL;
+                        }
+                        pool_name = ptr + 1;
+                }
+
+                /* Make sure the pool exists and is non-empty */
+                if ((rc = llapi_search_ost(fsname, pool_name, NULL)) < 1) {
+                        llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                                  "pool '%s.%s' %s", fsname, pool_name,
+                                  rc == 0 ? "has no OSTs" : "does not exist");
+                        return -EINVAL;
+                }
+        }
 
         fd = open(name, flags | O_LOV_DELAY_CREATE, mode);
         if (fd < 0 && errno == EISDIR) {
@@ -297,19 +422,7 @@ int llapi_file_open_pool(const char *name, int flags, int mode,
         lum.lmm_stripe_size = stripe_size;
         lum.lmm_stripe_count = stripe_count;
         lum.lmm_stripe_offset = stripe_offset;
-
-        /* in case user give the full pool name <fsname>.<poolname>, skip
-         * the fsname */
         if (pool_name != NULL) {
-                ptr = strchr(pool_name, '.');
-                if (ptr != NULL) {
-                        strncpy(fsname, pool_name, ptr - pool_name);
-                        fsname[ptr - pool_name] = '\0';
-                        /* if fsname matches a filesystem skip it
-                         * if not keep the poolname as is */
-                        if (poolpath(fsname, NULL, NULL) == 0)
-                                pool_name = ptr + 1;
-                }
                 strncpy(lum.lmm_pool_name, pool_name, LOV_MAXPOOLNAME);
         } else {
                 /* If no pool is specified at all, use V1 request */
@@ -375,24 +488,93 @@ int llapi_file_create_pool(const char *name, unsigned long long stripe_size,
         return 0;
 }
 
-
-static int print_pool_members(char *fs, char *pool_dir, char *pool_file)
+/*
+ * Find the fsname, the full path, and/or an open fd.
+ * Either the fsname or path must not be NULL
+ */
+#define WANT_PATH   0x1
+#define WANT_FSNAME 0x2
+#define WANT_FD     0x4
+#define WANT_INDEX  0x8
+#define WANT_ERROR  0x10
+static int get_root_path(int want, char *fsname, int *outfd, char *path,
+                         int index)
 {
-        char path[MAXPATHLEN + 1];
-        char buf[1024];
-        FILE *fd;
+        struct mntent mnt;
+        char buf[PATH_MAX], mntdir[PATH_MAX];
+        char *ptr;
+        FILE *fp;
+        int idx = 0, len = 0, mntlen, fd;
+        int rc = -ENODEV;
 
-        llapi_printf(LLAPI_MSG_NORMAL, "Pool: %s.%s\n", fs, pool_file);
-        sprintf(path, "%s/%s", pool_dir, pool_file);
-        if ((fd = fopen(path, "r")) == NULL) {
-                llapi_err(LLAPI_MSG_ERROR, "Cannot open %s\n", path);
-                return -EINVAL;
+        /* get the mount point */
+        fp = setmntent(MOUNTED, "r");
+        if (fp == NULL) {
+                 llapi_err(LLAPI_MSG_ERROR,
+                           "setmntent(%s) failed: %s:", MOUNTED,
+                           strerror (errno));
+                 return -EIO;
         }
-        while (fgets(buf, sizeof(buf), fd) != NULL)
-               llapi_printf(LLAPI_MSG_NORMAL, buf);
+        while (1) {
+                if (getmntent_r(fp, &mnt, buf, sizeof(buf)) == NULL)
+                        break;
 
-        fclose(fd);
-        return 0;
+                if (!llapi_is_lustre_mnt(&mnt))
+                        continue;
+
+                mntlen = strlen(mnt.mnt_dir);
+                ptr = strrchr(mnt.mnt_fsname, '/');
+                if (!ptr && !len) {
+                        rc = -EINVAL;
+                        break;
+                }
+                ptr++;
+
+                if ((want & WANT_INDEX) && (idx++ != index))
+                        continue;
+
+                /* Check the fsname for a match, if given */
+                if (!(want & WANT_FSNAME) && fsname != NULL &&
+                    (strlen(fsname) > 0) && (strcmp(ptr, fsname) != 0))
+                        continue;
+
+                /* If the path isn't set return the first one we find */
+                if (path == NULL || strlen(path) == 0) {
+                        strcpy(mntdir, mnt.mnt_dir);
+                        if ((want & WANT_FSNAME) && fsname != NULL)
+                                strcpy(fsname, ptr);
+                        rc = 0;
+                        break;
+                /* Otherwise find the longest matching path */
+                } else if ((strlen(path) >= mntlen) && (mntlen >= len) &&
+                           (strncmp(mnt.mnt_dir, path, mntlen) == 0)) {
+                        strcpy(mntdir, mnt.mnt_dir);
+                        len = mntlen;
+                        if ((want & WANT_FSNAME) && fsname != NULL)
+                                strcpy(fsname, ptr);
+                        rc = 0;
+                }
+        }
+        endmntent(fp);
+
+        /* Found it */
+        if (rc == 0) {
+                if ((want & WANT_PATH) && path != NULL)
+                        strcpy(path, mntdir);
+                if (want & WANT_FD) {
+                        fd = open(mntdir, O_RDONLY | O_DIRECTORY | O_NONBLOCK);
+                        if (fd < 0) {
+                                perror("open");
+                                rc = -errno;
+                        } else {
+                                *outfd = fd;
+                        }
+                }
+        } else if (want & WANT_ERROR)
+                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
+                          "can't find fs root for '%s': %d",
+                          (want & WANT_PATH) ? fsname : path, rc);
+        return rc;
 }
 
 /*
@@ -404,60 +586,48 @@ static int print_pool_members(char *fs, char *pool_dir, char *pool_file)
  * The user inputs are pathname and index. If the pathname is supplied then
  * the value of the index will be ignored. The pathname will return data if
  * the pathname is located on a lustre mount. Index is used to pick which
- * mount point you want in the case of multiple mounted lustre file systems. 
+ * mount point you want in the case of multiple mounted lustre file systems.
  * See function lfs_osts in lfs.c for a example of the index use.
  */
-int llapi_search_mounts(const char *pathname, int index, char *mntdir, 
+int llapi_search_mounts(const char *pathname, int index, char *mntdir,
                         char *fsname)
 {
-        int len = 0, idx = 0, rc = -ENOENT;
-        char *ptr;
-        FILE *fp;
-        struct mntent *mnt = NULL;
+        int want = WANT_PATH, idx = -1;
 
-        /* get the mount point */
-        fp = setmntent(MOUNTED, "r");
-        if (fp == NULL) {
-                 llapi_err(LLAPI_MSG_ERROR,
-                           "setmntent(%s) failed: %s:", MOUNTED,
-                           strerror (errno));
-                 return -EIO;
+        if (!pathname) {
+                want |= WANT_INDEX;
+                idx = index;
+        } else
+                strcpy(mntdir, pathname);
+
+        if (fsname)
+                want |= WANT_FSNAME;
+        return get_root_path(want, fsname, NULL, mntdir, idx);
+}
+
+int llapi_search_fsname(const char *pathname, char *fsname)
+{
+        return get_root_path(WANT_FSNAME | WANT_ERROR, fsname, NULL,
+                             (char *)pathname, -1);
+}
+
+/* return the first file matching this pattern */
+static int first_match(char *pattern, char *buffer)
+{
+        glob_t glob_info;
+
+        if (glob(pattern, GLOB_BRACE, NULL, &glob_info))
+                return -ENOENT;
+
+        if (glob_info.gl_pathc < 1) {
+                globfree(&glob_info);
+                return -ENOENT;
         }
-        mnt = getmntent(fp);
-        while ((feof(fp) == 0) && ferror(fp) == 0) {
-                if (llapi_is_lustre_mnt(mnt)) {
-                        int mntlen = strlen(mnt->mnt_dir);
 
-                        ptr = strchr(mnt->mnt_fsname, '/');
-                        if (ptr == NULL && !len) {
-                                rc = -EINVAL;
-                                continue;
-                        }
+        strcpy(buffer, glob_info.gl_pathv[0]);
 
-                        /* search by pathname */
-                        if (pathname) {
-                                if ((mntlen >= len) && (strncmp(mnt->mnt_dir,
-                                     pathname, mntlen) == 0)) {
-                                        strcpy(mntdir, mnt->mnt_dir);
-                                        if (fsname)
-                                                strcpy(fsname, ++ptr);
-                                        len = mntlen;
-                                        rc = 0;
-                                }
-                        } else if (idx == index) {
-                                strcpy(mntdir, mnt->mnt_dir);
-                                if (fsname)
-                                        strcpy(fsname, ++ptr);
-                                rc = 0;
-                                break;
-                        }
-                        idx++;
-                }
-                mnt = getmntent(fp);
-        }
-        endmntent(fp);
-        return rc;
-
+        globfree(&glob_info);
+        return 0;
 }
 
 /*
@@ -467,44 +637,131 @@ int llapi_search_mounts(const char *pathname, int index, char *mntdir,
 static int poolpath(char *fsname, char *pathname, char *pool_pathname)
 {
         int rc = 0;
-        glob_t glob_info;
-        char pattern[MAXPATHLEN + 1];
-        char buffer[MAXPATHLEN];
+        char pattern[PATH_MAX + 1];
+        char buffer[PATH_MAX];
 
         if (fsname == NULL) {
-                rc = llapi_search_mounts(pathname, 0, pattern, buffer);
+                rc = llapi_search_fsname(pathname, buffer);
                 if (rc != 0)
                         return rc;
                 fsname = buffer;
                 strcpy(pathname, fsname);
         }
 
-        snprintf(pattern, MAXPATHLEN,
-                 "/proc/fs/lustre/lov/%s-*/pools",
-                 fsname);
-        rc = glob(pattern, GLOB_BRACE, NULL, &glob_info);
+        snprintf(pattern, PATH_MAX, "/proc/fs/lustre/lov/%s-*/pools", fsname);
+        rc = first_match(pattern, buffer);
         if (rc)
-                return -ENOENT;
-
-        if (glob_info.gl_pathc == 0) {
-                globfree(&glob_info);
-                return -ENOENT;
-        }
+                return rc;
 
         /* in fsname test mode, pool_pathname is NULL */
         if (pool_pathname != NULL)
-                strcpy(pool_pathname, glob_info.gl_pathv[0]);
+                strcpy(pool_pathname, buffer);
 
         return 0;
 }
 
-int llapi_poollist(char *name)
+/**
+ * Get the list of pool members.
+ * \param poolname    string of format \<fsname\>.\<poolname\>
+ * \param members     caller-allocated array of char*
+ * \param list_size   size of the members array
+ * \param buffer      caller-allocated buffer for storing OST names
+ * \param buffer_size size of the buffer
+ *
+ * \return number of members retrieved for this pool
+ * \retval -error failure
+ */
+int llapi_get_poolmembers(const char *poolname, char **members,
+                          int list_size, char *buffer, int buffer_size)
 {
-        char *poolname;
-        char *fsname;
-        char rname[MAXPATHLEN + 1], pathname[MAXPATHLEN + 1];
-        char *ptr;
+        char fsname[PATH_MAX + 1];
+        char *pool, *tmp;
+        char pathname[PATH_MAX + 1];
+        char path[PATH_MAX + 1];
+        char buf[1024];
+        FILE *fd;
         int rc = 0;
+        int nb_entries = 0;
+        int used = 0;
+
+        /* name is FSNAME.POOLNAME */
+        if (strlen(poolname) > PATH_MAX)
+                return -EOVERFLOW;
+        strcpy(fsname, poolname);
+        pool = strchr(fsname, '.');
+        if (pool == NULL)
+                return -EINVAL;
+
+        *pool = '\0';
+        pool++;
+
+        rc = poolpath(fsname, NULL, pathname);
+        if (rc != 0) {
+                errno = -rc;
+                llapi_err(LLAPI_MSG_ERROR, "Lustre filesystem '%s' not found",
+                          fsname);
+                return rc;
+        }
+
+        llapi_printf(LLAPI_MSG_NORMAL, "Pool: %s.%s\n", fsname, pool);
+        sprintf(path, "%s/%s", pathname, pool);
+        if ((fd = fopen(path, "r")) == NULL) {
+                llapi_err(LLAPI_MSG_ERROR, "Cannot open %s", path);
+                return -EINVAL;
+        }
+
+        rc = 0;
+        while (fgets(buf, sizeof(buf), fd) != NULL) {
+                if (nb_entries >= list_size) {
+                        rc = -EOVERFLOW;
+                        break;
+                }
+                /* remove '\n' */
+                if ((tmp = strchr(buf, '\n')) != NULL)
+                        *tmp='\0';
+                if (used + strlen(buf) + 1 > buffer_size) {
+                        rc = -EOVERFLOW;
+                        break;
+                }
+
+                strcpy(buffer + used, buf);
+                members[nb_entries] = buffer + used;
+                used += strlen(buf) + 1;
+                nb_entries++;
+                rc = nb_entries;
+        }
+
+        fclose(fd);
+        return rc;
+}
+
+/**
+ * Get the list of pools in a filesystem.
+ * \param name        filesystem name or path
+ * \param poollist    caller-allocated array of char*
+ * \param list_size   size of the poollist array
+ * \param buffer      caller-allocated buffer for storing pool names
+ * \param buffer_size size of the buffer
+ *
+ * \return number of pools retrieved for this filesystem
+ * \retval -error failure
+ */
+int llapi_get_poollist(const char *name, char **poollist, int list_size,
+                       char *buffer, int buffer_size)
+{
+        char fsname[PATH_MAX + 1], rname[PATH_MAX + 1], pathname[PATH_MAX + 1];
+        char *ptr;
+        DIR *dir;
+        struct dirent pool;
+        struct dirent *cookie = NULL;
+        int rc = 0;
+        unsigned int nb_entries = 0;
+        unsigned int used = 0;
+        unsigned int i;
+
+        /* initilize output array */
+        for (i = 0; i < list_size; i++)
+                poollist[i] = NULL;
 
         /* is name a pathname ? */
         ptr = strchr(name, '/');
@@ -514,72 +771,100 @@ int llapi_poollist(char *name)
                         return -EINVAL;
                 if (!realpath(name, rname)) {
                         rc = -errno;
-                        llapi_err(LLAPI_MSG_ERROR,
-                                  "llapi_poollist: invalid path '%s'",
-                                  name);
+                        llapi_err(LLAPI_MSG_ERROR, "invalid path '%s'", name);
                         return rc;
                 }
 
                 rc = poolpath(NULL, rname, pathname);
                 if (rc != 0) {
                         errno = -rc;
-                        llapi_err(LLAPI_MSG_ERROR,
-                                  "llapi_poollist: '%s' is not"
-                                  " a Lustre filesystem",
-                                  name);
+                        llapi_err(LLAPI_MSG_ERROR, "'%s' is not"
+                                  " a Lustre filesystem", name);
                         return rc;
                 }
-                fsname = rname;
-                poolname = NULL;
+                strcpy(fsname, rname);
         } else {
-                /* name is FSNAME[.POOLNAME] */
-                fsname = name;
-                poolname = strchr(name, '.');
-                if (poolname != NULL) {
-                        *poolname = '\0';
-                        poolname++;
-                }
+                /* name is FSNAME */
+                strcpy(fsname, name);
                 rc = poolpath(fsname, NULL, pathname);
-                if (rc != 0) {
-                        errno = -rc;
-                        llapi_err(LLAPI_MSG_ERROR,
-                                  "llapi_poollist: Lustre filesystem '%s'"
-                                  " not found", name);
-                        return rc;
-                }
         }
         if (rc != 0) {
                 errno = -rc;
-                llapi_err(LLAPI_MSG_ERROR,
-                          "llapi_poollist: Lustre filesystem '%s' not found",
+                llapi_err(LLAPI_MSG_ERROR, "Lustre filesystem '%s' not found",
                           name);
                 return rc;
         }
 
-        if (poolname != NULL) {
-                rc = print_pool_members(fsname, pathname, poolname);
-                poolname--;
-                *poolname = '.';
-        } else {
-                DIR *dir;
-                struct dirent *pool;
-
-                llapi_printf(LLAPI_MSG_NORMAL, "Pools from %s:\n", fsname);
-                if ((dir = opendir(pathname)) == NULL) {
-                        return -EINVAL;
-                }
-                while ((pool = readdir(dir)) != NULL) {
-                        if (!((pool->d_name[0] == '.') &&
-                              (pool->d_name[1] == '\0')) &&
-                            !((pool->d_name[0] == '.') &&
-                              (pool->d_name[1] == '.') &&
-                              (pool->d_name[2] == '\0')))
-                        llapi_printf(LLAPI_MSG_NORMAL, " %s.%s\n",
-                                     fsname, pool->d_name);
-                }
-                closedir(dir);
+        llapi_printf(LLAPI_MSG_NORMAL, "Pools from %s:\n", fsname);
+        if ((dir = opendir(pathname)) == NULL) {
+                llapi_err(LLAPI_MSG_ERROR, "Could not open pool list for '%s'",
+                          name);
+                return -errno;
         }
-        return rc;
+
+        while(1) {
+                rc = readdir_r(dir, &pool, &cookie);
+
+                if (rc != 0) {
+                        llapi_err(LLAPI_MSG_ERROR,
+                                  "Error reading pool list for '%s'", name);
+                        return -errno;
+                } else if ((rc == 0) && (cookie == NULL))
+                        /* end of directory */
+                        break;
+
+                /* ignore . and .. */
+                if (!strcmp(pool.d_name, ".") || !strcmp(pool.d_name, ".."))
+                        continue;
+
+                /* check output bounds */
+                if (nb_entries >= list_size)
+                        return -EOVERFLOW;
+
+                /* +2 for '.' and final '\0' */
+                if (used + strlen(pool.d_name) + strlen(fsname) + 2
+                    > buffer_size)
+                        return -EOVERFLOW;
+
+                sprintf(buffer + used, "%s.%s", fsname, pool.d_name);
+                poollist[nb_entries] = buffer + used;
+                used += strlen(pool.d_name) + strlen(fsname) + 2;
+                nb_entries++;
+        }
+
+        closedir(dir);
+        return nb_entries;
+}
+
+/* wrapper for lfs.c and obd.c */
+int llapi_poollist(const char *name)
+{
+        /* list of pool names (assume that pool count is smaller
+           than OST count) */
+        char *list[FIND_MAX_OSTS];
+        char *buffer;
+        /* fsname-OST0000_UUID < 32 char, 1 per OST */
+        int bufsize = FIND_MAX_OSTS * 32;
+        int i, nb;
+
+        buffer = malloc(bufsize);
+        if (buffer == NULL)
+                return -ENOMEM;
+
+        if ((name[0] == '/') || (strchr(name, '.') == NULL))
+                /* name is a path or fsname */
+                nb = llapi_get_poollist(name, list, FIND_MAX_OSTS, buffer,
+                                        bufsize);
+        else
+                /* name is a pool name (<fsname>.<poolname>) */
+                nb = llapi_get_poolmembers(name, list, FIND_MAX_OSTS, buffer,
+                                           bufsize);
+
+        for (i = 0; i < nb; i++)
+                llapi_printf(LLAPI_MSG_NORMAL, "%s\n", list[i]);
+
+        free(buffer);
+        return (nb < 0 ? nb : 0);
 }
 
 typedef int (semantic_func_t)(char *path, DIR *parent, DIR *d,
@@ -686,6 +971,24 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
         return rc;
 }
 
+/* Check if user specified value matches a real uuid.  Ignore _UUID,
+ * -osc-4ba41334, other trailing gunk in comparison.
+ * @param real_uuid ends in "_UUID"
+ * @param search_uuid may or may not end in "_UUID"
+ */
+int llapi_uuid_match(char *real_uuid, char *search_uuid)
+{
+        int cmplen = strlen(real_uuid) - 5;
+
+        if ((strlen(search_uuid) > cmplen) && isxdigit(search_uuid[cmplen])) {
+                /* OST00000003 doesn't match OST0000 */
+                llapi_err(LLAPI_MSG_ERROR, "Bad UUID format '%s'", search_uuid);
+                return 0;
+        }
+
+        return (strncmp(search_uuid, real_uuid, cmplen) == 0);
+}
+
 /* Here, param->obduuid points to a single obduuid, the index of which is
  * returned in param->obdindex */
 static int setup_obd_uuid(DIR *dir, char *dname, struct find_param *param)
@@ -729,8 +1032,7 @@ static int setup_obd_uuid(DIR *dir, char *dname, struct find_param *param)
                         break;
 
                 if (param->obduuid) {
-                        if (strncmp((char *)param->obduuid->uuid, uuid,
-                                    sizeof(uuid)) == 0) {
+                        if (llapi_uuid_match(uuid, param->obduuid->uuid)) {
                                 param->obdindex = index;
                                 break;
                         }
@@ -745,10 +1047,10 @@ static int setup_obd_uuid(DIR *dir, char *dname, struct find_param *param)
 
         if (!param->quiet && param->obduuid &&
             (param->obdindex == OBD_NOT_FOUND)) {
-                llapi_err_noerrno(LLAPI_MSG_ERROR, 
+                llapi_err_noerrno(LLAPI_MSG_ERROR,
                                   "error: %s: unknown obduuid: %s",
                                   __FUNCTION__, param->obduuid->uuid);
-                //rc = EINVAL;
+                rc = -EINVAL;
         }
 
         return (rc);
@@ -792,16 +1094,22 @@ retry_get_uuids:
                 return -ENOMEM;
 
         for (obdnum = 0; obdnum < param->num_obds; obdnum++) {
-                for (i = 0; i <= obdcount; i++) {
-                        if (strcmp((char *)&param->obduuid[obdnum].uuid,
-                                   (char *)&uuids[i]) == 0) {
+                for (i = 0; i < obdcount; i++) {
+                        if (llapi_uuid_match(uuids[i].uuid,
+                                             param->obduuid[obdnum].uuid)) {
                                 param->obdindexes[obdnum] = i;
                                 obd_valid++;
                                 break;
                         }
                 }
-                if (i == obdcount)
+                if (i >= obdcount) {
                         param->obdindexes[obdnum] = OBD_NOT_FOUND;
+                        llapi_err_noerrno(LLAPI_MSG_ERROR,
+                                          "error: %s: unknown obduuid: %s",
+                                          __FUNCTION__,
+                                          param->obduuid[obdnum].uuid);
+                        ret = -EINVAL;
+                }
         }
 
         if (obd_valid == 0)
@@ -811,7 +1119,7 @@ retry_get_uuids:
 
         param->got_uuids = 1;
 
-        return 0;
+        return ret;
 }
 
 static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
@@ -1117,8 +1425,8 @@ int llapi_mds_getfileinfo(char *path, DIR *parent,
 
         fname = (fname == NULL ? path : fname + 1);
         /* retrieve needed file info */
-        strncpy((char *)lmd, fname, lov_mds_md_size(MAX_LOV_UUID_COUNT,
-                LOV_MAGIC));
+        strncpy((char *)lmd, fname,
+                lov_mds_md_size(MAX_LOV_UUID_COUNT, LOV_MAGIC));
         ret = ioctl(dirfd(parent), IOC_MDC_GETFILEINFO, (void *)lmd);
 
         if (ret) {
@@ -1874,7 +2182,9 @@ static void do_target_check(char *obd_type_name, char *obd_name,
         int rc;
 
         rc = llapi_ping(obd_type_name, obd_name);
-        if (rc) {
+        if (rc == ENOTCONN) {
+                llapi_printf(LLAPI_MSG_NORMAL, "%s inactive.\n", obd_name);
+        } else if (rc) {
                 llapi_err(LLAPI_MSG_ERROR, "error: check '%s'", obd_name);
         } else {
                 llapi_printf(LLAPI_MSG_NORMAL, "%s active.\n", obd_name);

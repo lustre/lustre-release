@@ -2537,106 +2537,13 @@ void obd_finalize(int argc, char **argv)
         do_disconnect(argv[0], 1);
 }
 
-static int find_target_obdpath(char *fsname, char *path)
-{
-        glob_t glob_info;
-        char pattern[MAXPATHLEN + 1];
-        int rc;
-
-        snprintf(pattern, MAXPATHLEN,
-                 "/proc/fs/lustre/lov/%s-*/target_obd",
-                 fsname);
-        rc = glob(pattern, GLOB_BRACE, NULL, &glob_info);
-        if (rc == GLOB_NOMATCH)
-                return -ENODEV;
-        else if (rc)
-                return -EINVAL;
-
-        strcpy(path, glob_info.gl_pathv[0]);
-        globfree(&glob_info);
-        return 0;
-}
-
-static int find_poolpath(char *fsname, char *poolname, char *poolpath)
-{
-        glob_t glob_info;
-        char pattern[MAXPATHLEN + 1];
-        int rc;
-
-        snprintf(pattern, MAXPATHLEN,
-                 "/proc/fs/lustre/lov/%s-*/pools/%s",
-                 fsname, poolname);
-        rc = glob(pattern, GLOB_BRACE, NULL, &glob_info);
-        /* If no pools, make sure the lov is available */
-        if ((rc == GLOB_NOMATCH) &&
-            (find_target_obdpath(fsname, poolpath) == -ENODEV))
-                return -ENODEV;
-        if (rc)
-                return -EINVAL;
-
-        strcpy(poolpath, glob_info.gl_pathv[0]);
-        globfree(&glob_info);
-        return 0;
-}
-
-/*
- * if pool is NULL, search ostname in target_obd
- * if pool is no NULL
- *  if pool not found returns errno < 0
- *  if ostname is NULL, returns 1 if pool is not empty and 0 if pool empty
- *  if ostname is not NULL, returns 1 if OST is in pool and 0 if not
- */
-int llapi_search_ost(char *fsname, char *poolname, char *ostname)
-{
-        FILE *fd;
-        char buffer[MAXPATHLEN + 1];
-        int len = 0, rc;
-
-        if (ostname != NULL)
-                len = strlen(ostname);
-
-        if (poolname == NULL)
-                rc = find_target_obdpath(fsname, buffer);
-        else
-                rc = find_poolpath(fsname, poolname, buffer);
-        if (rc)
-                return rc;
-
-        if ((fd = fopen(buffer, "r")) == NULL)
-                return -EINVAL;
-
-        while (fgets(buffer, sizeof(buffer), fd) != NULL) {
-                if (poolname == NULL) {
-                        char *ptr;
-                        /* Search for an ostname in the list of OSTs
-                           Line format is IDX: fsname-OSTxxxx_UUID STATUS */
-                        ptr = strchr(buffer, ' ');
-                        if ((ptr != NULL) &&
-                            (strncmp(ptr + 1, ostname, len) == 0)) {
-                                fclose(fd);
-                                return 1;
-                        }
-                } else {
-                        /* Search for an ostname in a pool,
-                           (or an existing non-empty pool if no ostname) */
-                        if ((ostname == NULL) ||
-                            (strncmp(buffer, ostname, len) == 0)) {
-                                fclose(fd);
-                                return 1;
-                        }
-                }
-        }
-        fclose(fd);
-        return 0;
-}
-
 static int check_pool_cmd(enum lcfg_command_type cmd,
                           char *fsname, char *poolname,
                           char *ostname)
 {
         int rc;
 
-        rc = llapi_search_ost(fsname, poolname, NULL);
+        rc = llapi_search_ost(fsname, poolname, ostname);
         if (rc < 0 && (cmd != LCFG_POOL_NEW)) {
                 fprintf(stderr, "Pool %s.%s not found\n",
                         fsname, poolname);
@@ -3017,7 +2924,7 @@ err:
 int jt_pool_cmd(int argc, char **argv)
 {
         enum lcfg_command_type cmd;
-        char fsname[MAXPATHLEN + 1];
+        char fsname[PATH_MAX + 1];
         char poolname[LOV_MAXPOOLNAME + 1];
         char *ostnames_buf = NULL;
         int i, rc;

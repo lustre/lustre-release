@@ -81,7 +81,7 @@ extern int llapi_file_open_pool(const char *name, int flags, int mode,
                                 unsigned long long stripe_size,
                                 int stripe_offset, int stripe_count,
                                 int stripe_pattern, char *pool_name);
-extern int llapi_poollist(char *name);
+extern int llapi_poollist(const char *name);
 extern int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);
 #define HAVE_LLAPI_FILE_LOOKUP
 extern int llapi_file_lookup(int dirfd, const char *name);
@@ -164,8 +164,10 @@ extern int llapi_is_lustre_mnttype(const char *type);
 extern int llapi_search_ost(char *fsname, char *poolname, char *ostname);
 extern int llapi_search_mounts(const char *pathname, int index, 
                                char *mntdir, char *fsname);
+extern int llapi_search_fsname(const char *pathname, char *fsname);
 extern int parse_size(char *optarg, unsigned long long *size,
                       unsigned long long *size_units, int bytes_spec);
+
 extern void llapi_ping_target(char *obd_type, char *obd_name,
                               char *obd_uuid, void *args);
 extern int llapi_path2fid(const char *path, lustre_fid *fid);
