@@ -808,7 +808,9 @@ test_37() {
     sync
     return 0
 }
+start_full_debug_logging
 run_test 37 "abort recovery before client does replay (test mds_cleanup_orphans for directories)"
+stop_full_debug_logging
 
 test_38() {
     createmany -o $DIR/$tfile-%d 800
