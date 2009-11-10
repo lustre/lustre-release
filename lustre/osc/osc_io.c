@@ -384,7 +384,10 @@ static int osc_punch_upcall(void *a, int rc)
         return 0;
 }
 
-#ifdef __KERNEL__
+/* Disable osc_trunc_check() because it is naturally race between read and
+ * truncate. See bug 20645 for details.
+ */
+#if 0 && defined(__KERNEL__)
 /**
  * Checks that there are no pages being written in the extent being truncated.
  */
@@ -454,9 +457,6 @@ static int osc_io_trunc_start(const struct lu_env *env,
         loff_t                   size   = io->u.ci_truncate.tr_size;
         int                      result = 0;
 
-
-        memset(oa, 0, sizeof(*oa));
-
         osc_trunc_check(env, io, oio, size);
 
         if (oio->oi_lockless == 0) {
@@ -470,6 +470,7 @@ static int osc_io_trunc_start(const struct lu_env *env,
                 cl_object_attr_unlock(obj);
         }
 
+        memset(oa, 0, sizeof(*oa));
         if (result == 0) {
                 oa->o_id = loi->loi_id;
                 oa->o_gr = loi->loi_gr;
