@@ -711,6 +711,7 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 	check_timeout || return 1
 	client_df
 	zconf_mount `hostname` $MOUNT2 || error "Failed to mount $MOUNT2"
+	sleep 1 # wait connections being established
 
 	local MDS_NEXP=$(do_facet mds lctl get_param -n mds.${mds_svc}.num_exports | cut -d' ' -f2)
 	local OST_NEXP=$(do_facet ost1 lctl get_param -n obdfilter.${ost1_svc}.num_exports | cut -d' ' -f2)
