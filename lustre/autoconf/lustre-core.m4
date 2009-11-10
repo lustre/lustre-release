@@ -1635,6 +1635,7 @@ LB_LINUX_TRY_COMPILE([
 #ifdef HAVE_LINUX_MMTYPES_H
         #include <linux/mm_types.h>
 #endif
+        #include <linux/pagemap.h>
 ],[
         struct address_space_operations aops;
         struct page *page;
