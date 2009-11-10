@@ -179,8 +179,6 @@ static int ost_statfs(struct ptlrpc_request *req)
 
         req->rq_status = obd_statfs(req->rq_export->exp_obd, osfs,
                                     cfs_time_current_64() - HZ, 0);
-        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_ENOSPC))
-                osfs->os_bfree = osfs->os_bavail = 64;
         if (req->rq_status != 0)
                 CERROR("ost: statfs failed: rc %d\n", req->rq_status);
 
@@ -1824,8 +1822,6 @@ static int ost_handle(struct ptlrpc_request *req)
                 CDEBUG(D_INODE, "create\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_CREATE_NET, 0);
                 OBD_FAIL_TIMEOUT_MS(OBD_FAIL_OST_PAUSE_CREATE, obd_fail_val);
-                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_ENOSPC))
-                        GOTO(out, rc = -ENOSPC);
                 if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_EROFS))
                         GOTO(out, rc = -EROFS);
                 rc = ost_create(req->rq_export, req, oti);
@@ -1858,7 +1854,7 @@ static int ost_handle(struct ptlrpc_request *req)
                         GOTO(out, rc = -EPROTO);
                 }
                 OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
-                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_ENOSPC))
+                if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOSPC))
                         GOTO(out, rc = -ENOSPC);
                 if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_EROFS))
                         GOTO(out, rc = -EROFS);

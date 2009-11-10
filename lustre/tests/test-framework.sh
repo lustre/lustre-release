@@ -1943,7 +1943,6 @@ debugrestore() {
 error_noexit() {
     local TYPE=${TYPE:-"FAIL"}
     local ERRLOG
-    lctl set_param fail_loc=0 2>/dev/null || true
 
     local dump=true
     # do not dump logs if $1=false
@@ -1967,6 +1966,7 @@ error_noexit() {
 
 error() {
     error_noexit "$@"
+    reset_fail_loc
     $FAIL_ON_ERROR && exit 1 || true
 }
 
