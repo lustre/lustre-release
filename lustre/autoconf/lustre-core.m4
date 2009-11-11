@@ -1722,7 +1722,6 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_CONFIG_DELAYED_RECOVERY
           LC_QUOTA_MODULE
 
-          LC_TASK_PPTR
           # RHEL4 patches
           LC_EXPORT_TRUNCATE_COMPLETE_PAGE
           LC_EXPORT_TRUNCATE_RANGE
@@ -1828,7 +1827,6 @@ AC_DEFUN([LC_PROG_LINUX],
 
           # 2.6.26
           LC_FS_STRUCT_USE_PATH
-          LC_RCU_LIST_SAFE
 
           # 2.6.27
           LC_INODE_PERMISION_2ARGS
