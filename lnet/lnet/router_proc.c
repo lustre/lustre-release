@@ -168,9 +168,9 @@ int LL_PROC_PROTO(proc_lnet_routes)
                                 if (skip == 0) {
                                         route = re;
                                         break;
-                                } else
-                                        skip--;
+                                }
 
+                                skip--;
                                 r = r->next;
                         }
 
@@ -264,10 +264,10 @@ int LL_PROC_PROTO(proc_lnet_routers)
 
                         if (skip == 0) {
                                 peer = lp;
-                                        break;
-                                } else
-                                        skip--;
+                                break;
+                        }
 
+                        skip--;
                         r = r->next;
                 }
 
@@ -411,13 +411,14 @@ int LL_PROC_PROTO(proc_lnet_peers)
                                             &the_lnet.ln_peer_hash[idx]) {
                                                 num = 1;
                                                 idx++;
-                                        } else
+                                        } else {
                                                 num++;
+                                        }
 
                                         break;
-                                } else
-                                        skip--;
+                                }
 
+                                skip--;
                                 p = lp->lp_hashlist.next;
                         }
 
@@ -572,9 +573,9 @@ int LL_PROC_PROTO(proc_lnet_nis)
                         if (skip == 0) {
                                 ni = a_ni;
                                 break;
-                        } else
-                                skip--;
+                        }
 
+                        skip--;
                         n = n->next;
                 }
 

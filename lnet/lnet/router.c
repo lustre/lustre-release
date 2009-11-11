@@ -235,6 +235,34 @@ lnet_find_net_locked (__u32 net)
         return NULL;
 }
 
+/* NB expects LNET_LOCK held */
+void
+lnet_add_route_to_rnet (lnet_remotenet_t *rnet, lnet_route_t *route)
+{
+        unsigned int      len = 0;
+        unsigned int      offset = 0;
+        struct list_head *e;
+        extern __u64 lnet_create_interface_cookie(void);
+
+        list_for_each (e, &rnet->lrn_routes) {
+                len++;
+        }
+
+        /* FIXME use Lustre random function when it's moved to libcfs.
+         * See bug 18751 */
+        /* len+1 positions to add a new entry, also prevents division by 0 */
+        offset = lnet_create_interface_cookie() % (len + 1);
+        list_for_each (e, &rnet->lrn_routes) {
+                if (offset == 0)
+                        break;
+                offset--;
+        }
+        list_add(&route->lr_list, e);
+
+        the_lnet.ln_remote_nets_version++;
+        lnet_rtr_addref_locked(route->lr_gateway);
+}
+
 int
 lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
 {
@@ -321,11 +349,7 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
                 ni = route->lr_gateway->lp_ni;
                 lnet_ni_addref_locked(ni);
 
-                list_add_tail(&route->lr_list, &rnet2->lrn_routes);
-                the_lnet.ln_remote_nets_version++;
-
-                lnet_rtr_addref_locked(route->lr_gateway);
-
+                lnet_add_route_to_rnet(rnet2, route);
                 LNET_UNLOCK();
 
                 /* XXX Assume alive */
