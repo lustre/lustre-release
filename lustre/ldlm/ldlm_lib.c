@@ -2024,7 +2024,7 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
 {
 #ifdef __KERNEL__
         struct obd_device *obd = req->rq_export->exp_obd;
-        struct obd_device *master_obd;
+        struct obd_device *master_obd = NULL, *lov_obd = NULL;
         struct lustre_quota_ctxt *qctxt;
         struct qunit_data *qdata = NULL;
         int rc = 0;
@@ -2055,13 +2055,13 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         }
 
         /* we use the observer */
-        if (!obd->obd_observer || !obd->obd_observer->obd_observer) {
+        if (obd_pin_observer(obd, &lov_obd) ||
+            obd_pin_observer(lov_obd, &master_obd)) {
                 CERROR("Can't find the observer, it is recovering\n");
                 req->rq_status = -EAGAIN;
                 GOTO(send_reply, rc = -EAGAIN);
         }
 
-        master_obd = obd->obd_observer->obd_observer;
         qctxt = &master_obd->u.obt.obt_qctxt;
 
         if (!qctxt->lqc_setup) {
@@ -2096,6 +2096,10 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
  send_reply:
         rc = ptlrpc_reply(req);
 out:
+        if (master_obd)
+                obd_unpin_observer(lov_obd);
+        if (lov_obd)
+                obd_unpin_observer(obd);
         OBD_FREE(qdata, sizeof(struct qunit_data));
         RETURN(rc);
 #else
