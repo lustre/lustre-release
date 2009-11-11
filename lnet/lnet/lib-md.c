@@ -213,6 +213,24 @@ lnet_md_deconstruct(lnet_libmd_t *lmd, lnet_md_t *umd)
 }
 
 int
+lnet_md_validate(lnet_md_t *umd)
+{
+        if (umd->start == NULL) {
+                CERROR("MD start pointer can not be NULL\n");
+                return -EINVAL;
+        }
+
+        if ((umd->options & (LNET_MD_KIOV | LNET_MD_IOVEC)) != 0 &&
+            umd->length > LNET_MAX_IOV) {
+                CERROR("Invalid option: too many fragments %d, %d max\n",
+                       umd->length, LNET_MAX_IOV);
+                return -EINVAL;
+        }
+
+        return 0;
+}
+
+int
 LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
              lnet_unlink_t unlink, lnet_handle_md_t *handle)
 {
@@ -223,12 +241,13 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
 
-        if ((umd.options & (LNET_MD_KIOV | LNET_MD_IOVEC)) != 0 &&
-            umd.length > LNET_MAX_IOV) /* too many fragments */
+        if (lnet_md_validate(&umd) != 0)
                 return -EINVAL;
 
-        if ((umd.options & (LNET_MD_OP_GET | LNET_MD_OP_PUT)) == 0)
+        if ((umd.options & (LNET_MD_OP_GET | LNET_MD_OP_PUT)) == 0) {
+                CERROR("Invalid option: no MD_OP set\n");
                 return -EINVAL;
+        }
 
         md = lnet_md_alloc(&umd);
         if (md == NULL)
@@ -274,12 +293,13 @@ LNetMDBind(lnet_md_t umd, lnet_unlink_t unlink, lnet_handle_md_t *handle)
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
 
-        if ((umd.options & (LNET_MD_KIOV | LNET_MD_IOVEC)) != 0 &&
-            umd.length > LNET_MAX_IOV) /* too many fragments */
+        if (lnet_md_validate(&umd) != 0)
                 return -EINVAL;
 
-        if ((umd.options & (LNET_MD_OP_GET | LNET_MD_OP_PUT)) != 0)
+        if ((umd.options & (LNET_MD_OP_GET | LNET_MD_OP_PUT)) != 0) {
+                CERROR("Invalid option: GET|PUT illegal on active MDs\n");
                 return -EINVAL;
+        }
 
         md = lnet_md_alloc(&umd);
         if (md == NULL)

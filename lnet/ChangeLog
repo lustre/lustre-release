@@ -12,6 +12,15 @@ tbd  Sun Microsystems, Inc.
 	  mxlnd     - MX 1.2.1 or later,
 	  ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
+Severity   : normal
+Bugzilla   : 20171
+Description: router checker stops working when system wall clock goes backward
+Details    : use monotonic timing source instead of system wall clock time.
+
+Severity   : enhancement
+Bugzilla   : 18460
+Description: avoid asymmetrical router failures
+
 Severity   : enhancement
 Bugzilla   : 19735
 Description: multiple-instance support for kptllnd

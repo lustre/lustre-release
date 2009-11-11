@@ -1724,8 +1724,8 @@ kiblnd_peer_alive (kib_peer_t *peer)
 void
 kiblnd_peer_notify (kib_peer_t *peer)
 {
-        time_t        last_alive = 0;
         int           error = 0;
+        cfs_time_t    last_alive = 0;
         unsigned long flags;
 
         read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
@@ -1737,9 +1737,7 @@ kiblnd_peer_notify (kib_peer_t *peer)
                 error = peer->ibp_error;
                 peer->ibp_error = 0;
 
-                last_alive = cfs_time_current_sec() -
-                             cfs_duration_sec(cfs_time_current() -
-                                              peer->ibp_last_alive);
+                last_alive = peer->ibp_last_alive;
         }
 
         read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);

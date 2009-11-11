@@ -484,8 +484,7 @@ mxlnd_conn_disconnect(struct kmx_conn *conn, int mx_dis, int send_bye)
         }
 
         if (kmxlnd_data.kmx_shutdown != 1) {
-                time_t          last_alive      = 0;
-                unsigned long   last_msg        = 0;
+                unsigned long last_msg = 0;
 
                 /* notify LNET that we are giving up on this peer */
                 if (time_after(conn->mxk_last_rx, conn->mxk_last_tx))
@@ -493,9 +492,7 @@ mxlnd_conn_disconnect(struct kmx_conn *conn, int mx_dis, int send_bye)
                 else
                         last_msg = conn->mxk_last_tx;
 
-                last_alive = cfs_time_current_sec() -
-                             cfs_duration_sec(cfs_time_current() - last_msg);
-                lnet_notify(kmxlnd_data.kmx_ni, conn->mxk_peer->mxp_nid, 0, last_alive);
+                lnet_notify(kmxlnd_data.kmx_ni, conn->mxk_peer->mxp_nid, 0, last_msg);
 
                 if (mx_dis && valid)
                         mx_disconnect(kmxlnd_data.kmx_endpt, epa);

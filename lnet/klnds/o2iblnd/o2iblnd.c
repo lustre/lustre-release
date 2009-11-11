@@ -1075,7 +1075,7 @@ kiblnd_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 }
 
 void
-kiblnd_query (lnet_ni_t *ni, lnet_nid_t nid, time_t *when)
+kiblnd_query (lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
 {
         cfs_time_t     last_alive = 0;
         rwlock_t      *glock = &kiblnd_data.kib_global_lock;
@@ -1095,8 +1095,7 @@ kiblnd_query (lnet_ni_t *ni, lnet_nid_t nid, time_t *when)
         read_unlock_irqrestore(glock, flags);
 
         if (last_alive != 0)
-                *when = cfs_time_current_sec() -
-                        cfs_duration_sec(cfs_time_current() - last_alive);
+                *when = last_alive;
 
         /* peer is not persistent in hash, trigger peer creation
          * and connection establishment with a NULL tx */

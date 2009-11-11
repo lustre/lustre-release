@@ -482,7 +482,7 @@ kptllnd_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 }
 
 void
-kptllnd_query (lnet_ni_t *ni, lnet_nid_t nid, time_t *when)
+kptllnd_query (lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
 {
         kptl_net_t        *net = ni->ni_data;
         kptl_peer_t       *peer = NULL;
@@ -495,9 +495,7 @@ kptllnd_query (lnet_ni_t *ni, lnet_nid_t nid, time_t *when)
 
         spin_lock_irqsave(&peer->peer_lock, flags);
         if (peer->peer_last_alive != 0)
-                *when = cfs_time_current_sec() -
-                        cfs_duration_sec(cfs_time_current() -
-                                         peer->peer_last_alive);
+                *when = peer->peer_last_alive;
         spin_unlock_irqrestore(&peer->peer_lock, flags);
         kptllnd_peer_decref(peer);
         return;
