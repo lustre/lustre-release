@@ -6770,9 +6770,9 @@ run_test 200f "Create files in a pool ==================================="
 
 test_200g() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
-	res=$($LFS df --pool $FSNAME.$POOL | awk '{print $1}' | grep "$FSNAME-OST")
-	[ "$res" = "$TGT" ] || error "Pools OSTS '$TGT' is not '$res' that lfs df reports"
+	TGT=$($LCTL get_param -n lov.$FSNAME-clilov-*.pools.$POOL | tr '\n' ' ')
+	res=$($LFS df --pool $FSNAME.$POOL | awk '{print $1}' | grep "$FSNAME-OST" | tr '\n' ' ')
+	[ "$res" = "$TGT" ] || error "Pools OSTs '$TGT' is not '$res' that lfs df reports"
 }
 run_test 200g "lfs df a pool ============================================"
 
