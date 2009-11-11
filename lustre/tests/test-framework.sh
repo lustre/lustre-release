@@ -2286,7 +2286,6 @@ stop_full_debug_logging() {
 error_noexit() {
     local TYPE=${TYPE:-"FAIL"}
     local ERRLOG
-    lctl set_param fail_loc=0 2>/dev/null || true
 
     local dump=true
     # do not dump logs if $1=false
@@ -2310,7 +2309,10 @@ error_noexit() {
 
 error() {
     error_noexit "$@"
-    $FAIL_ON_ERROR && exit 1 || true
+    if $FAIL_ON_ERROR; then
+        reset_fail_loc
+        exit 1
+    fi
 }
 
 error_exit() {

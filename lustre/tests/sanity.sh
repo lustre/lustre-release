@@ -991,19 +991,22 @@ sleep_maxage() {
 # OSCs keep a NOSPC flag that will be reset after ~5s (qos_maxage)
 # if the OST isn't full anymore.
 reset_enospc() {
-	local FAIL_LOC=${1:-0}
-	local OSTIDX=${2:-""}
+	local OSTIDX=${1:-""}
 
 	local list=$(comma_list $(osts_nodes))
 	[ "$OSTIDX" ] && list=$(facet_host ost$((OSTIDX + 1)))
 
-	do_nodes $list lctl set_param fail_loc=$FAIL_LOC
+	do_nodes $list lctl set_param fail_loc=0
 	sleep_maxage
 }
 
 exhaust_precreations() {
 	local OSTIDX=$1
-	local MDSIDX=$(get_mds_dir "$DIR/d27")
+	local FAILLOC=$2
+	local FAILIDX=${3:-$OSTIDX}
+
+	mkdir -p $DIR/$tdir
+	local MDSIDX=$(get_mds_dir "$DIR/$tdir")
 	echo OSTIDX=$OSTIDX MDSIDX=$MDSIDX
 
 	local OST=$(lfs osts | grep ${OSTIDX}": " | \
@@ -1018,21 +1021,22 @@ exhaust_precreations() {
 	do_facet mds${MDSIDX} lctl get_param osc.*OST*-osc-${MDT_INDEX}.prealloc*
 
 	mkdir -p $DIR/d27/${OST}
-	$SETSTRIPE $DIR/d27/${OST} -i $OSTIDX -c 1
+	$SETSTRIPE $DIR/$tdir/${OST} -i $OSTIDX -c 1
 #define OBD_FAIL_OST_ENOSPC              0x215
+	do_facet ost$((OSTIDX + 1)) lctl set_param fail_val=$FAILIDX
 	do_facet ost$((OSTIDX + 1)) lctl set_param fail_loc=0x215
 	echo "Creating to objid $last_id on ost $OST..."
-	createmany -o $DIR/d27/${OST}/f $next_id $((last_id - next_id + 2))
+	createmany -o $DIR/$tdir/${OST}/f $next_id $((last_id - next_id + 2))
 	do_facet mds${MDSIDX} lctl get_param osc.*OST*-osc-${MDT_INDEX}.prealloc*
-	reset_enospc $2 $OSTIDX
+	do_facet ost$((OSTIDX + 1)) lctl set_param fail_loc=$FAILLOC
+	sleep_maxage
 }
 
 exhaust_all_precreations() {
 	local i
 	for (( i=0; i < OSTCOUNT; i++ )) ; do
-		exhaust_precreations $i 0x215
+		exhaust_precreations $i $1 -1
 	done
-	reset_enospc $1
 }
 
 test_27n() {
@@ -1041,11 +1045,11 @@ test_27n() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
-	rm -f $DIR/d27/f27n
+	rm -f $DIR/$tdir/$tfile
 	exhaust_precreations 0 0x80000215
-	$SETSTRIPE -c -1 $DIR/d27
-	touch $DIR/d27/f27n || error
-	$GETSTRIPE $DIR/d27/f27n
+	$SETSTRIPE -c -1 $DIR/$tdir
+	touch $DIR/$tdir/$tfile || error
+	$GETSTRIPE $DIR/$tdir/$tfile
 	reset_enospc
 }
 run_test 27n "create file with some full OSTs =================="
@@ -1056,13 +1060,13 @@ test_27o() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
-	rm -f $DIR/d27/f27o
+	rm -f $DIR/$tdir/$tfile
 	exhaust_all_precreations 0x215
 
-	touch $DIR/d27/f27o && error "able to create $DIR/d27/f27o"
+	touch $DIR/$tdir/$tfile && error "able to create $DIR/$tdir/$tfile"
 
 	reset_enospc
-	rm -rf $DIR/d27/*
+	rm -rf $DIR/$tdir/*
 }
 run_test 27o "create file with all full OSTs (should error) ===="
 
@@ -1072,17 +1076,17 @@ test_27p() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
-	rm -f $DIR/d27/f27p
-	mkdir -p $DIR/d27
+	rm -f $DIR/$tdir/$tfile
+	mkdir -p $DIR/$tdir
 
-	$MCREATE $DIR/d27/f27p || error "mcreate failed"
-	$TRUNCATE $DIR/d27/f27p 80000000 || error "truncate failed"
-	$CHECKSTAT -s 80000000 $DIR/d27/f27p || error "checkstat failed"
+	$MCREATE $DIR/$tdir/$tfile || error "mcreate failed"
+	$TRUNCATE $DIR/$tdir/$tfile 80000000 || error "truncate failed"
+	$CHECKSTAT -s 80000000 $DIR/$tdir/$tfile || error "checkstat failed"
 
 	exhaust_precreations 0 0x80000215
-	echo foo >> $DIR/d27/f27p || error "append failed"
-	$CHECKSTAT -s 80000004 $DIR/d27/f27p || error "checkstat failed"
-	$LFS getstripe $DIR/d27/f27p
+	echo foo >> $DIR/$tdir/$tfile || error "append failed"
+	$CHECKSTAT -s 80000004 $DIR/$tdir/$tfile || error "checkstat failed"
+	$LFS getstripe $DIR/$tdir/$tfile
 
 	reset_enospc
 }
@@ -1094,16 +1098,16 @@ test_27q() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
-	rm -f $DIR/d27/f27q
+	rm -f $DIR/$tdir/$tfile
 
-	$MCREATE $DIR/d27/f27q || error "mcreate $DIR/d27/f27q failed"
-	$TRUNCATE $DIR/d27/f27q 80000000 ||error "truncate $DIR/d27/f27q failed"
-	$CHECKSTAT -s 80000000 $DIR/d27/f27q || error "checkstat failed"
+	$MCREATE $DIR/$tdir/$tfile || error "mcreate $DIR/$tdir/$tfile failed"
+	$TRUNCATE $DIR/$tdir/$tfile 80000000 ||error "truncate $DIR/$tdir/$tfile failed"
+	$CHECKSTAT -s 80000000 $DIR/$tdir/$tfile || error "checkstat failed"
 
 	exhaust_all_precreations 0x215
 
-	echo foo >> $DIR/d27/f27q && error "append succeeded"
-	$CHECKSTAT -s 80000000 $DIR/d27/f27q || error "checkstat 2 failed"
+	echo foo >> $DIR/$tdir/$tfile && error "append succeeded"
+	$CHECKSTAT -s 80000000 $DIR/$tdir/$tfile || error "checkstat 2 failed"
 
 	reset_enospc
 }
@@ -1115,10 +1119,10 @@ test_27r() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
-	rm -f $DIR/d27/f27r
+	rm -f $DIR/$tdir/$tfile
 	exhaust_precreations 0 0x80000215
 
-	$SETSTRIPE $DIR/d27/f27r -i 0 -c 2 # && error
+	$SETSTRIPE $DIR/$tdir/$tfile -i 0 -c 2 # && error
 
 	reset_enospc
 }
@@ -1151,14 +1155,14 @@ test_27u() { # bug 4900
 
 #define OBD_FAIL_MDS_OSC_PRECREATE      0x139
         do_facet $SINGLEMDS lctl set_param fail_loc=0x139
-        mkdir -p $DIR/d27u
-        createmany -o $DIR/d27u/t- 1000
+        mkdir -p $DIR/$tdir
+        createmany -o $DIR/$tdir/t- 1000
         do_facet $SINGLEMDS lctl set_param fail_loc=0
 
         TLOG=$DIR/$tfile.getstripe
-        $GETSTRIPE $DIR/d27u > $TLOG
+        $GETSTRIPE $DIR/$tdir > $TLOG
         OBJS=`awk -vobj=0 '($1 == 0) { obj += 1 } END { print obj;}' $TLOG`
-        unlinkmany $DIR/d27u/t- 1000
+        unlinkmany $DIR/$tdir/t- 1000
         [ $OBJS -gt 0 ] && \
                 error "$OBJS objects created on OST-0.  See $TLOG" || pass
 }
@@ -1169,7 +1173,8 @@ test_27v() { # bug 4900
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
-        exhaust_all_precreations
+        exhaust_all_precreations 0x215
+        reset_enospc
 
         mkdir -p $DIR/$tdir
         $SETSTRIPE $DIR/$tdir -c 1         # 1 stripe / file
@@ -1193,17 +1198,17 @@ test_27v() { # bug 4900
 run_test 27v "skip object creation on slow OST ================="
 
 test_27w() { # bug 10997
-        mkdir -p $DIR/d27w || error "mkdir failed"
-        $LSTRIPE $DIR/d27w/f0 -s 65536 || error "lstripe failed"
-        size=`$GETSTRIPE $DIR/d27w/f0 -qs | head -n 1`
+        mkdir -p $DIR/$tdir || error "mkdir failed"
+        $LSTRIPE $DIR/$tdir/f0 -s 65536 || error "lstripe failed"
+        size=`$GETSTRIPE $DIR/$tdir/f0 -qs | head -n 1`
         [ $size -ne 65536 ] && error "stripe size $size != 65536" || true
 
         [ "$OSTCOUNT" -lt "2" ] && skip_env "skipping multiple stripe count/offset test" && return
         for i in `seq 1 $OSTCOUNT`; do
                 offset=$(($i-1))
-                $LSTRIPE $DIR/d27w/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
-                count=`$GETSTRIPE -qc $DIR/d27w/f$i | head -n 1`
-                index=`$GETSTRIPE -qo $DIR/d27w/f$i | head -n 1`
+                $LSTRIPE $DIR/$tdir/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
+                count=`$GETSTRIPE -qc $DIR/$tdir/f$i | head -n 1`
+                index=`$GETSTRIPE -qo $DIR/$tdir/f$i | head -n 1`
                 [ $count -ne $i ] && error "stripe count $count != $i" || true
                 [ $index -ne $offset ] && error "stripe offset $index != $offset" || true
         done
@@ -1212,20 +1217,20 @@ run_test 27w "check lfs setstripe -c -s -i options ============="
 
 test_27x() {
 	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs" && return
-	OFFSET=$(($OSTCOUNTi - 1))
+	OFFSET=$(($OSTCOUNT - 1))
 	OSTIDX=0
 	local OST=$(lfs osts | awk '/'${OSTIDX}': / { print $2 }' | sed -e 's/_UUID$//')
 
 	mkdir -p $DIR/$tdir
 	$SETSTRIPE $DIR/$tdir -c 1	# 1 stripe per file
-	do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 1
+	do_facet ost$((OSTIDX + 1)) lctl set_param -n obdfilter.$OST.degraded 1
 	sleep_maxage
 	createmany -o $DIR/$tdir/$tfile $OSTCOUNT
 	for i in `seq 0 $OFFSET`; do
 		[ `$GETSTRIPE $DIR/$tdir/$tfile$i | grep -A 10 obdidx | awk '{print $1}' | grep -w "$OSTIDX"` ] &&
 		error "OST0 was degraded but new created file still use it"
 	done
-	do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 0
+	do_facet ost$((OSTIDX + 1)) lctl set_param -n obdfilter.$OST.degraded 0
 }
 run_test 27x "create files while OST0 is degraded"
 

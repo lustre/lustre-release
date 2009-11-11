@@ -202,8 +202,6 @@ static int ost_statfs(struct ptlrpc_request *req)
 
         req->rq_status = obd_statfs(req->rq_export->exp_obd, osfs,
                                     cfs_time_current_64() - HZ, 0);
-        if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOSPC))
-                osfs->os_bfree = osfs->os_bavail = 64;
         if (req->rq_status != 0)
                 CERROR("ost: statfs failed: rc %d\n", req->rq_status);
 
@@ -2057,8 +2055,6 @@ int ost_handle(struct ptlrpc_request *req)
                 req_capsule_set(&req->rq_pill, &RQF_OST_CREATE);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_CREATE_NET))
                         RETURN(0);
-                if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOSPC))
-                        GOTO(out, rc = -ENOSPC);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_EROFS))
                         GOTO(out, rc = -EROFS);
                 rc = ost_create(req->rq_export, req, oti);
