@@ -81,15 +81,15 @@ static int avoid_asym_router_failure = 0;
 CFS_MODULE_PARM(avoid_asym_router_failure, "i", int, 0444,
                 "Avoid asymmetrical failures: reserved, use at your own risk");
 
-int dead_router_check_interval = 0;
+static int dead_router_check_interval = 0;
 CFS_MODULE_PARM(dead_router_check_interval, "i", int, 0444,
                 "Seconds between dead router health checks (<= 0 to disable)");
 
-int live_router_check_interval = 0;
+static int live_router_check_interval = 0;
 CFS_MODULE_PARM(live_router_check_interval, "i", int, 0444,
                 "Seconds between live router health checks (<= 0 to disable)");
 
-int router_ping_timeout = 50;
+static int router_ping_timeout = 50;
 CFS_MODULE_PARM(router_ping_timeout, "i", int, 0444,
                 "Seconds to wait for the reply to a router health query");
 
@@ -251,7 +251,7 @@ lnet_add_route_to_rnet (lnet_remotenet_t *rnet, lnet_route_t *route)
         /* FIXME use Lustre random function when it's moved to libcfs.
          * See bug 18751 */
         /* len+1 positions to add a new entry, also prevents division by 0 */
-        offset = lnet_create_interface_cookie() % (len + 1);
+        offset = ((unsigned int) lnet_create_interface_cookie()) % (len + 1);
         list_for_each (e, &rnet->lrn_routes) {
                 if (offset == 0)
                         break;
