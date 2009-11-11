@@ -1470,27 +1470,6 @@ struct mdt_remote_perm {
 
 extern void lustre_swab_mdt_remote_perm(struct mdt_remote_perm *p);
 
-struct mds_rec_setattr {
-        __u32           sa_opcode;
-        __u32           sa_fsuid;
-        __u32           sa_fsgid;
-        __u32           sa_cap;
-        __u32           sa_suppgid;
-        __u32           sa_mode;
-        struct ll_fid   sa_fid;
-        __u64           sa_valid; /* MDS_ATTR_* attributes */
-        __u64           sa_size;
-        __u64           sa_mtime;
-        __u64           sa_atime;
-        __u64           sa_ctime;
-        __u32           sa_uid;
-        __u32           sa_gid;
-        __u32           sa_attr_flags;
-        __u32           sa_padding; /* also fix lustre_swab_mds_rec_setattr */
-};
-
-extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
-
 struct mdt_rec_setattr {
         __u32           sa_opcode;
         __u32           sa_cap;
@@ -1522,7 +1501,7 @@ struct mdt_rec_setattr {
 extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 
 /*
- * Attribute flags used in mds_rec_setattr::sa_valid.
+ * Attribute flags used in mdt_rec_setattr::sa_valid.
  * The kernel's #defines for ATTR_* should not be used over the network
  * since the client and MDS may run different kernels (see bug 13828)
  * Therefore, we should only use MDS_ATTR_* attributes for sa_valid.
@@ -1608,27 +1587,6 @@ enum {
         MDS_CLOSE_CLEANUP = 1 << 6
 };
 
-struct mds_rec_create {
-        __u32           cr_opcode;
-        __u32           cr_fsuid;
-        __u32           cr_fsgid;
-        __u32           cr_cap;
-        __u32           cr_flags; /* for use with open */
-        __u32           cr_mode;
-        struct ll_fid   cr_fid;
-        struct ll_fid   cr_replayfid;
-        __u64           cr_time;
-        __u64           cr_rdev;
-        __u32           cr_suppgid;
-        __u32           cr_padding_1; /* also fix lustre_swab_mds_rec_create */
-        __u32           cr_padding_2; /* also fix lustre_swab_mds_rec_create */
-        __u32           cr_padding_3; /* also fix lustre_swab_mds_rec_create */
-        __u32           cr_padding_4; /* also fix lustre_swab_mds_rec_create */
-        __u32           cr_padding_5; /* also fix lustre_swab_mds_rec_create */
-};
-
-extern void lustre_swab_mds_rec_create (struct mds_rec_create *cr);
-
 struct mdt_rec_create {
         __u32           cr_opcode;
         __u32           cr_cap;
@@ -1654,26 +1612,6 @@ struct mdt_rec_create {
         __u32           cr_padding_3;
         __u32           cr_padding_4;
 };
-
-extern void lustre_swab_mdt_rec_create (struct mdt_rec_create *cr);
-
-struct mds_rec_link {
-        __u32           lk_opcode;
-        __u32           lk_fsuid;
-        __u32           lk_fsgid;
-        __u32           lk_cap;
-        __u32           lk_suppgid1;
-        __u32           lk_suppgid2;
-        struct ll_fid   lk_fid1;
-        struct ll_fid   lk_fid2;
-        __u64           lk_time;
-        __u32           lk_padding_1;  /* also fix lustre_swab_mds_rec_link */
-        __u32           lk_padding_2;  /* also fix lustre_swab_mds_rec_link */
-        __u32           lk_padding_3;  /* also fix lustre_swab_mds_rec_link */
-        __u32           lk_padding_4;  /* also fix lustre_swab_mds_rec_link */
-};
-
-extern void lustre_swab_mds_rec_link (struct mds_rec_link *lk);
 
 struct mdt_rec_link {
         __u32           lk_opcode;
@@ -1701,24 +1639,6 @@ struct mdt_rec_link {
         __u32           lk_padding_9;
 };
 
-struct mds_rec_unlink {
-        __u32           ul_opcode;
-        __u32           ul_fsuid;
-        __u32           ul_fsgid;
-        __u32           ul_cap;
-        __u32           ul_suppgid;
-        __u32           ul_mode;
-        struct ll_fid   ul_fid1;
-        struct ll_fid   ul_fid2;
-        __u64           ul_time;
-        __u32           ul_padding_1; /* also fix lustre_swab_mds_rec_unlink */
-        __u32           ul_padding_2; /* also fix lustre_swab_mds_rec_unlink */
-        __u32           ul_padding_3; /* also fix lustre_swab_mds_rec_unlink */
-        __u32           ul_padding_4; /* also fix lustre_swab_mds_rec_unlink */
-};
-
-extern void lustre_swab_mds_rec_unlink (struct mds_rec_unlink *ul);
-
 struct mdt_rec_unlink {
         __u32           ul_opcode;
         __u32           ul_cap;
@@ -1744,24 +1664,6 @@ struct mdt_rec_unlink {
         __u32           ul_padding_8;
         __u32           ul_padding_9;
 };
-
-struct mds_rec_rename {
-        __u32           rn_opcode;
-        __u32           rn_fsuid;
-        __u32           rn_fsgid;
-        __u32           rn_cap;
-        __u32           rn_suppgid1;
-        __u32           rn_suppgid2;
-        struct ll_fid   rn_fid1;
-        struct ll_fid   rn_fid2;
-        __u64           rn_time;
-        __u32           rn_padding_1; /* also fix lustre_swab_mds_rec_rename */
-        __u32           rn_padding_2; /* also fix lustre_swab_mds_rec_rename */
-        __u32           rn_padding_3; /* also fix lustre_swab_mds_rec_rename */
-        __u32           rn_padding_4; /* also fix lustre_swab_mds_rec_rename */
-};
-
-extern void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn);
 
 struct mdt_rec_rename {
         __u32           rn_opcode;

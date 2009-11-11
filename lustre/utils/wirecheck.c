@@ -332,7 +332,6 @@ check_lov_mds_md_v1(void)
         CHECK_MEMBER(lov_ost_data_v1, l_ost_idx);
 
         CHECK_CDEFINE(LOV_MAGIC_V1);
-        CHECK_CDEFINE(LOV_MAGIC_JOIN);
 
         CHECK_VALUE(LOV_PATTERN_RAID0);
         CHECK_VALUE(LOV_PATTERN_RAID1);
@@ -546,107 +545,155 @@ check_mds_body(void)
 }
 
 static void
-check_mds_rec_setattr(void)
+check_mdt_rec_setattr(void)
 {
         BLANK_LINE();
-        CHECK_STRUCT(mds_rec_setattr);
-        CHECK_MEMBER(mds_rec_setattr, sa_opcode);
-        CHECK_MEMBER(mds_rec_setattr, sa_fsuid);
-        CHECK_MEMBER(mds_rec_setattr, sa_fsgid);
-        CHECK_MEMBER(mds_rec_setattr, sa_cap);
-        CHECK_MEMBER(mds_rec_setattr, sa_suppgid);
-        CHECK_MEMBER(mds_rec_setattr, sa_mode);
-        CHECK_MEMBER(mds_rec_setattr, sa_fid);
-        CHECK_MEMBER(mds_rec_setattr, sa_valid);
-        CHECK_MEMBER(mds_rec_setattr, sa_size);
-        CHECK_MEMBER(mds_rec_setattr, sa_mtime);
-        CHECK_MEMBER(mds_rec_setattr, sa_atime);
-        CHECK_MEMBER(mds_rec_setattr, sa_ctime);
-        CHECK_MEMBER(mds_rec_setattr, sa_uid);
-        CHECK_MEMBER(mds_rec_setattr, sa_gid);
-        CHECK_MEMBER(mds_rec_setattr, sa_attr_flags);
-        CHECK_CDEFINE(MDS_ATTR_MODE);
-        CHECK_CDEFINE(MDS_ATTR_UID);
-        CHECK_CDEFINE(MDS_ATTR_GID);
-        CHECK_CDEFINE(MDS_ATTR_SIZE);
-        CHECK_CDEFINE(MDS_ATTR_ATIME);
-        CHECK_CDEFINE(MDS_ATTR_MTIME);
-        CHECK_CDEFINE(MDS_ATTR_CTIME);
-        CHECK_CDEFINE(MDS_ATTR_ATIME_SET);
-        CHECK_CDEFINE(MDS_ATTR_MTIME_SET);
-        CHECK_CDEFINE(MDS_ATTR_FORCE);
-        CHECK_CDEFINE(MDS_ATTR_ATTR_FLAG);
-        CHECK_CDEFINE(MDS_ATTR_KILL_SUID);
-        CHECK_CDEFINE(MDS_ATTR_KILL_SGID);
-        CHECK_CDEFINE(MDS_ATTR_CTIME_SET);
-        CHECK_CDEFINE(MDS_ATTR_FROM_OPEN);
-        CHECK_CDEFINE(MDS_ATTR_BLOCKS);
+        CHECK_STRUCT(mdt_rec_setattr);
+        CHECK_MEMBER(mdt_rec_setattr, sa_opcode);
+        CHECK_MEMBER(mdt_rec_setattr, sa_cap);
+        CHECK_MEMBER(mdt_rec_setattr, sa_fsuid);
+        CHECK_MEMBER(mdt_rec_setattr, sa_fsuid_h);
+        CHECK_MEMBER(mdt_rec_setattr, sa_fsgid);
+        CHECK_MEMBER(mdt_rec_setattr, sa_fsgid_h);
+        CHECK_MEMBER(mdt_rec_setattr, sa_suppgid);
+        CHECK_MEMBER(mdt_rec_setattr, sa_suppgid_h);
+        CHECK_MEMBER(mdt_rec_setattr, sa_padding_1);
+        CHECK_MEMBER(mdt_rec_setattr, sa_padding_1_h);
+        CHECK_MEMBER(mdt_rec_setattr, sa_fid);
+        CHECK_MEMBER(mdt_rec_setattr, sa_valid);
+        CHECK_MEMBER(mdt_rec_setattr, sa_uid);
+        CHECK_MEMBER(mdt_rec_setattr, sa_gid);
+        CHECK_MEMBER(mdt_rec_setattr, sa_size);
+        CHECK_MEMBER(mdt_rec_setattr, sa_blocks);
+        CHECK_MEMBER(mdt_rec_setattr, sa_mtime);
+        CHECK_MEMBER(mdt_rec_setattr, sa_atime);
+        CHECK_MEMBER(mdt_rec_setattr, sa_ctime);
+        CHECK_MEMBER(mdt_rec_setattr, sa_attr_flags);
+        CHECK_MEMBER(mdt_rec_setattr, sa_mode);
+        CHECK_MEMBER(mdt_rec_setattr, sa_padding_2);
+        CHECK_MEMBER(mdt_rec_setattr, sa_padding_3);
+        CHECK_MEMBER(mdt_rec_setattr, sa_padding_4);
+        CHECK_MEMBER(mdt_rec_setattr, sa_padding_5);
 }
 
 static void
-check_mds_rec_create(void)
+check_mdt_rec_create(void)
 {
         BLANK_LINE();
-        CHECK_STRUCT(mds_rec_create);
-        CHECK_MEMBER(mds_rec_create, cr_opcode);
-        CHECK_MEMBER(mds_rec_create, cr_fsuid);
-        CHECK_MEMBER(mds_rec_create, cr_fsgid);
-        CHECK_MEMBER(mds_rec_create, cr_cap);
-        CHECK_MEMBER(mds_rec_create, cr_flags);
-        CHECK_MEMBER(mds_rec_create, cr_mode);
-        CHECK_MEMBER(mds_rec_create, cr_fid);
-        CHECK_MEMBER(mds_rec_create, cr_replayfid);
-        CHECK_MEMBER(mds_rec_create, cr_time);
-        CHECK_MEMBER(mds_rec_create, cr_rdev);
-        CHECK_MEMBER(mds_rec_create, cr_suppgid);
+        CHECK_STRUCT(mdt_rec_create);
+        CHECK_MEMBER(mdt_rec_create, cr_opcode);
+        CHECK_MEMBER(mdt_rec_create, cr_cap);
+        CHECK_MEMBER(mdt_rec_create, cr_fsuid);
+        CHECK_MEMBER(mdt_rec_create, cr_fsuid_h);
+        CHECK_MEMBER(mdt_rec_create, cr_fsgid);
+        CHECK_MEMBER(mdt_rec_create, cr_fsgid_h);
+        CHECK_MEMBER(mdt_rec_create, cr_suppgid1);
+        CHECK_MEMBER(mdt_rec_create, cr_suppgid1_h);
+        CHECK_MEMBER(mdt_rec_create, cr_suppgid2);
+        CHECK_MEMBER(mdt_rec_create, cr_suppgid2_h);
+        CHECK_MEMBER(mdt_rec_create, cr_fid1);
+        CHECK_MEMBER(mdt_rec_create, cr_fid2);
+        CHECK_MEMBER(mdt_rec_create, cr_old_handle);
+        CHECK_MEMBER(mdt_rec_create, cr_time);
+        CHECK_MEMBER(mdt_rec_create, cr_rdev);
+        CHECK_MEMBER(mdt_rec_create, cr_ioepoch);
+        CHECK_MEMBER(mdt_rec_create, cr_padding_1);
+        CHECK_MEMBER(mdt_rec_create, cr_mode);
+        CHECK_MEMBER(mdt_rec_create, cr_bias);
+        CHECK_MEMBER(mdt_rec_create, cr_flags);
+        CHECK_MEMBER(mdt_rec_create, cr_padding_2);
+        CHECK_MEMBER(mdt_rec_create, cr_padding_3);
+        CHECK_MEMBER(mdt_rec_create, cr_padding_4);
 }
 
 static void
-check_mds_rec_link(void)
+check_mdt_rec_link(void)
 {
         BLANK_LINE();
-        CHECK_STRUCT(mds_rec_link);
-        CHECK_MEMBER(mds_rec_link, lk_opcode);
-        CHECK_MEMBER(mds_rec_link, lk_fsuid);
-        CHECK_MEMBER(mds_rec_link, lk_fsgid);
-        CHECK_MEMBER(mds_rec_link, lk_cap);
-        CHECK_MEMBER(mds_rec_link, lk_suppgid1);
-        CHECK_MEMBER(mds_rec_link, lk_suppgid2);
-        CHECK_MEMBER(mds_rec_link, lk_fid1);
-        CHECK_MEMBER(mds_rec_link, lk_fid2);
-        CHECK_MEMBER(mds_rec_link, lk_time);
+        CHECK_STRUCT(mdt_rec_link);
+        CHECK_MEMBER(mdt_rec_link, lk_opcode);
+        CHECK_MEMBER(mdt_rec_link, lk_cap);
+        CHECK_MEMBER(mdt_rec_link, lk_fsuid);
+        CHECK_MEMBER(mdt_rec_link, lk_fsuid_h);
+        CHECK_MEMBER(mdt_rec_link, lk_fsgid);
+        CHECK_MEMBER(mdt_rec_link, lk_fsgid_h);
+        CHECK_MEMBER(mdt_rec_link, lk_suppgid1);
+        CHECK_MEMBER(mdt_rec_link, lk_suppgid1_h);
+        CHECK_MEMBER(mdt_rec_link, lk_suppgid2);
+        CHECK_MEMBER(mdt_rec_link, lk_suppgid2_h);
+        CHECK_MEMBER(mdt_rec_link, lk_fid1);
+        CHECK_MEMBER(mdt_rec_link, lk_fid2);
+        CHECK_MEMBER(mdt_rec_link, lk_time);
+        CHECK_MEMBER(mdt_rec_link, lk_padding_1);
+        CHECK_MEMBER(mdt_rec_link, lk_padding_2);
+        CHECK_MEMBER(mdt_rec_link, lk_padding_3);
+        CHECK_MEMBER(mdt_rec_link, lk_padding_4);
+        CHECK_MEMBER(mdt_rec_link, lk_bias);
+        CHECK_MEMBER(mdt_rec_link, lk_padding_5);
+        CHECK_MEMBER(mdt_rec_link, lk_padding_6);
+        CHECK_MEMBER(mdt_rec_link, lk_padding_7);
+        CHECK_MEMBER(mdt_rec_link, lk_padding_8);
+        CHECK_MEMBER(mdt_rec_link, lk_padding_9);
 }
 
 static void
-check_mds_rec_unlink(void)
+check_mdt_rec_unlink(void)
 {
         BLANK_LINE();
-        CHECK_STRUCT(mds_rec_unlink);
-        CHECK_MEMBER(mds_rec_unlink, ul_opcode);
-        CHECK_MEMBER(mds_rec_unlink, ul_fsuid);
-        CHECK_MEMBER(mds_rec_unlink, ul_fsgid);
-        CHECK_MEMBER(mds_rec_unlink, ul_cap);
-        CHECK_MEMBER(mds_rec_unlink, ul_suppgid);
-        CHECK_MEMBER(mds_rec_unlink, ul_mode);
-        CHECK_MEMBER(mds_rec_unlink, ul_fid1);
-        CHECK_MEMBER(mds_rec_unlink, ul_fid2);
-        CHECK_MEMBER(mds_rec_unlink, ul_time);
+        CHECK_STRUCT(mdt_rec_unlink);
+        CHECK_MEMBER(mdt_rec_unlink, ul_opcode);
+        CHECK_MEMBER(mdt_rec_unlink, ul_cap);
+        CHECK_MEMBER(mdt_rec_unlink, ul_fsuid);
+        CHECK_MEMBER(mdt_rec_unlink, ul_fsuid_h);
+        CHECK_MEMBER(mdt_rec_unlink, ul_fsgid);
+        CHECK_MEMBER(mdt_rec_unlink, ul_fsgid_h);
+        CHECK_MEMBER(mdt_rec_unlink, ul_suppgid1);
+        CHECK_MEMBER(mdt_rec_unlink, ul_suppgid1_h);
+        CHECK_MEMBER(mdt_rec_unlink, ul_suppgid2);
+        CHECK_MEMBER(mdt_rec_unlink, ul_suppgid2_h);
+        CHECK_MEMBER(mdt_rec_unlink, ul_fid1);
+        CHECK_MEMBER(mdt_rec_unlink, ul_fid2);
+        CHECK_MEMBER(mdt_rec_unlink, ul_time);
+        CHECK_MEMBER(mdt_rec_unlink, ul_padding_2);
+        CHECK_MEMBER(mdt_rec_unlink, ul_padding_3);
+        CHECK_MEMBER(mdt_rec_unlink, ul_padding_4);
+        CHECK_MEMBER(mdt_rec_unlink, ul_padding_5);
+        CHECK_MEMBER(mdt_rec_unlink, ul_bias);
+        CHECK_MEMBER(mdt_rec_unlink, ul_mode);
+        CHECK_MEMBER(mdt_rec_unlink, ul_padding_6);
+        CHECK_MEMBER(mdt_rec_unlink, ul_padding_7);
+        CHECK_MEMBER(mdt_rec_unlink, ul_padding_8);
+        CHECK_MEMBER(mdt_rec_unlink, ul_padding_9);
 }
 
 static void
-check_mds_rec_rename(void)
+check_mdt_rec_rename(void)
 {
         BLANK_LINE();
-        CHECK_STRUCT(mds_rec_rename);
-        CHECK_MEMBER(mds_rec_rename, rn_opcode);
-        CHECK_MEMBER(mds_rec_rename, rn_fsuid);
-        CHECK_MEMBER(mds_rec_rename, rn_fsgid);
-        CHECK_MEMBER(mds_rec_rename, rn_cap);
-        CHECK_MEMBER(mds_rec_rename, rn_suppgid1);
-        CHECK_MEMBER(mds_rec_rename, rn_suppgid2);
-        CHECK_MEMBER(mds_rec_rename, rn_fid1);
-        CHECK_MEMBER(mds_rec_rename, rn_fid2);
-        CHECK_MEMBER(mds_rec_rename, rn_time);
+        CHECK_STRUCT(mdt_rec_rename);
+        CHECK_MEMBER(mdt_rec_rename, rn_opcode);
+        CHECK_MEMBER(mdt_rec_rename, rn_cap);
+        CHECK_MEMBER(mdt_rec_rename, rn_fsuid);
+        CHECK_MEMBER(mdt_rec_rename, rn_fsuid_h);
+        CHECK_MEMBER(mdt_rec_rename, rn_fsgid);
+        CHECK_MEMBER(mdt_rec_rename, rn_fsgid_h);
+        CHECK_MEMBER(mdt_rec_rename, rn_suppgid1);
+        CHECK_MEMBER(mdt_rec_rename, rn_suppgid1_h);
+        CHECK_MEMBER(mdt_rec_rename, rn_suppgid2);
+        CHECK_MEMBER(mdt_rec_rename, rn_suppgid2_h);
+        CHECK_MEMBER(mdt_rec_rename, rn_fid1);
+        CHECK_MEMBER(mdt_rec_rename, rn_fid2);
+        CHECK_MEMBER(mdt_rec_rename, rn_time);
+        CHECK_MEMBER(mdt_rec_rename, rn_padding_1);
+        CHECK_MEMBER(mdt_rec_rename, rn_padding_2);
+        CHECK_MEMBER(mdt_rec_rename, rn_padding_3);
+        CHECK_MEMBER(mdt_rec_rename, rn_padding_4); 
+        CHECK_MEMBER(mdt_rec_rename, rn_bias);
+        CHECK_MEMBER(mdt_rec_rename, rn_mode);
+        CHECK_MEMBER(mdt_rec_rename, rn_padding_5);
+        CHECK_MEMBER(mdt_rec_rename, rn_padding_6);
+        CHECK_MEMBER(mdt_rec_rename, rn_padding_7);
+        CHECK_MEMBER(mdt_rec_rename, rn_padding_8);
 }
 
 static void
@@ -1035,16 +1082,6 @@ check_llogd_conn_body(void)
 }
 
 static void
-check_llog_array_rec(void)
-{
-        BLANK_LINE();
-        CHECK_STRUCT(llog_array_rec);
-        CHECK_MEMBER(llog_array_rec, lmr_hdr);
-        CHECK_MEMBER(llog_array_rec, lmr_med);
-        CHECK_MEMBER(llog_array_rec, lmr_tail);
-}
-
-static void
 check_qunit_data(void)
 {
         BLANK_LINE();
@@ -1405,11 +1442,11 @@ main(int argc, char **argv)
         check_ll_fid();
         check_mds_status_req();
         check_mds_body();
-        check_mds_rec_setattr();
-        check_mds_rec_create();
-        check_mds_rec_link();
-        check_mds_rec_unlink();
-        check_mds_rec_rename();
+        check_mdt_rec_setattr();
+        check_mdt_rec_create();
+        check_mdt_rec_link();
+        check_mdt_rec_unlink();
+        check_mdt_rec_rename();
         check_lov_desc();
         check_ldlm_res_id();
         check_ldlm_extent();
@@ -1441,7 +1478,6 @@ main(int argc, char **argv)
         check_llog_cookie();
         check_llogd_body();
         check_llogd_conn_body();
-        check_llog_array_rec();
         check_qunit_data();
         check_quota_adjust_qunit();
         check_mgs_target_info();

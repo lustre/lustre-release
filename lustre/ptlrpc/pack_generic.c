@@ -1729,26 +1729,6 @@ void lustre_swab_mdt_remote_perm (struct mdt_remote_perm *p)
         __swab32s (&p->rp_access_perm);
 };
 
-void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa)
-{
-        __swab32s (&sa->sa_opcode);
-        __swab32s (&sa->sa_fsuid);
-        __swab32s (&sa->sa_fsgid);
-        __swab32s (&sa->sa_cap);
-        __swab32s (&sa->sa_suppgid);
-        __swab32s (&sa->sa_mode);
-        lustre_swab_ll_fid (&sa->sa_fid);
-        __swab64s (&sa->sa_valid);
-        __swab64s (&sa->sa_size);
-        __swab64s (&sa->sa_mtime);
-        __swab64s (&sa->sa_atime);
-        __swab64s (&sa->sa_ctime);
-        __swab32s (&sa->sa_uid);
-        __swab32s (&sa->sa_gid);
-        __swab32s (&sa->sa_attr_flags);
-        CLASSERT(offsetof(typeof(*sa), sa_padding) != 0);
-}
-
 void lustre_swab_fid2path(struct getinfo_fid2path *gf)
 {
         lustre_swab_lu_fid(&gf->gf_fid);
@@ -1757,60 +1737,6 @@ void lustre_swab_fid2path(struct getinfo_fid2path *gf)
         __swab32s(&gf->gf_pathlen);
 }
 EXPORT_SYMBOL(lustre_swab_fid2path);
-
-void lustre_swab_mds_rec_create (struct mds_rec_create *cr)
-{
-        __swab32s (&cr->cr_opcode);
-        __swab32s (&cr->cr_fsuid);
-        __swab32s (&cr->cr_fsgid);
-        __swab32s (&cr->cr_cap);
-        __swab32s (&cr->cr_flags); /* for use with open */
-        __swab32s (&cr->cr_mode);
-        lustre_swab_ll_fid (&cr->cr_fid);
-        lustre_swab_ll_fid (&cr->cr_replayfid);
-        __swab64s (&cr->cr_time);
-        __swab64s (&cr->cr_rdev);
-        __swab32s (&cr->cr_suppgid);
-        CLASSERT(offsetof(typeof(*cr), cr_padding_1) != 0);
-        CLASSERT(offsetof(typeof(*cr), cr_padding_2) != 0);
-        CLASSERT(offsetof(typeof(*cr), cr_padding_3) != 0);
-        CLASSERT(offsetof(typeof(*cr), cr_padding_4) != 0);
-        CLASSERT(offsetof(typeof(*cr), cr_padding_5) != 0);
-}
-
-void lustre_swab_mds_rec_link (struct mds_rec_link *lk)
-{
-        __swab32s (&lk->lk_opcode);
-        __swab32s (&lk->lk_fsuid);
-        __swab32s (&lk->lk_fsgid);
-        __swab32s (&lk->lk_cap);
-        __swab32s (&lk->lk_suppgid1);
-        __swab32s (&lk->lk_suppgid2);
-        lustre_swab_ll_fid (&lk->lk_fid1);
-        lustre_swab_ll_fid (&lk->lk_fid2);
-        __swab64s (&lk->lk_time);
-        CLASSERT(offsetof(typeof(*lk), lk_padding_1) != 0);
-        CLASSERT(offsetof(typeof(*lk), lk_padding_2) != 0);
-        CLASSERT(offsetof(typeof(*lk), lk_padding_3) != 0);
-        CLASSERT(offsetof(typeof(*lk), lk_padding_4) != 0);
-}
-
-void lustre_swab_mds_rec_unlink (struct mds_rec_unlink *ul)
-{
-        __swab32s (&ul->ul_opcode);
-        __swab32s (&ul->ul_fsuid);
-        __swab32s (&ul->ul_fsgid);
-        __swab32s (&ul->ul_cap);
-        __swab32s (&ul->ul_suppgid);
-        __swab32s (&ul->ul_mode);
-        lustre_swab_ll_fid (&ul->ul_fid1);
-        lustre_swab_ll_fid (&ul->ul_fid2);
-        __swab64s (&ul->ul_time);
-        CLASSERT(offsetof(typeof(*ul), ul_padding_1) != 0);
-        CLASSERT(offsetof(typeof(*ul), ul_padding_2) != 0);
-        CLASSERT(offsetof(typeof(*ul), ul_padding_3) != 0);
-        CLASSERT(offsetof(typeof(*ul), ul_padding_4) != 0);
-}
 
 void lustre_swab_fiemap_extent(struct ll_fiemap_extent *fm_extent)
 {
@@ -1834,23 +1760,6 @@ void lustre_swab_fiemap(struct ll_user_fiemap *fiemap)
 
         for (i = 0; i < fiemap->fm_mapped_extents; i++)
                 lustre_swab_fiemap_extent(&fiemap->fm_extents[i]);
-}
-
-void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn)
-{
-        __swab32s (&rn->rn_opcode);
-        __swab32s (&rn->rn_fsuid);
-        __swab32s (&rn->rn_fsgid);
-        __swab32s (&rn->rn_cap);
-        __swab32s (&rn->rn_suppgid1);
-        __swab32s (&rn->rn_suppgid2);
-        lustre_swab_ll_fid (&rn->rn_fid1);
-        lustre_swab_ll_fid (&rn->rn_fid2);
-        __swab64s (&rn->rn_time);
-        CLASSERT(offsetof(typeof(*rn), rn_padding_1) != 0);
-        CLASSERT(offsetof(typeof(*rn), rn_padding_2) != 0);
-        CLASSERT(offsetof(typeof(*rn), rn_padding_3) != 0);
-        CLASSERT(offsetof(typeof(*rn), rn_padding_4) != 0);
 }
 
 void lustre_swab_mdt_rec_reint (struct mdt_rec_reint *rr)
