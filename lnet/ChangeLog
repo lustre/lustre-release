@@ -12,6 +12,10 @@ tbd  Sun Microsystems, Inc.
 	  mxlnd     - MX 1.2.1 or later,
 	  ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
+Severity   : enhancement
+Bugzilla   : 15332
+Description: LNet fine grain routing support.
+
 Severity   : normal
 Bugzilla   : 20171
 Description: router checker stops working when system wall clock goes backward

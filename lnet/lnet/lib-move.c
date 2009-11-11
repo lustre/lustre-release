@@ -790,8 +790,17 @@ lnet_ni_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
 }
 
 int
-lnet_compare_routers(lnet_peer_t *p1, lnet_peer_t *p2)
+lnet_compare_routes(lnet_route_t *r1, lnet_route_t *r2)
 {
+        lnet_peer_t *p1 = r1->lr_gateway;
+        lnet_peer_t *p2 = r2->lr_gateway;
+
+        if (r1->lr_hops < r2->lr_hops)
+                return 1;
+
+        if (r1->lr_hops > r2->lr_hops)
+                return -1;
+
         if (p1->lp_txqnob < p2->lp_txqnob)
                 return 1;
 
@@ -1339,7 +1348,7 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
                         lnet_ni_decref_locked(local_ni);
                         lnet_ni_decref_locked(src_ni);
                         LNET_UNLOCK();
-                        CERROR("no route to %s via from %s\n",
+                        CERROR("No route to %s via from %s\n",
                                libcfs_nid2str(dst_nid), libcfs_nid2str(src_nid));
                         return -EINVAL;
                 }
@@ -1403,7 +1412,8 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
                         if (lp2->lp_alive &&
                             lnet_router_down_ni(lp2, rnet->lrn_net) <= 0 &&
                             (src_ni == NULL || lp2->lp_ni == src_ni) &&
-                            (lp == NULL || lnet_compare_routers(lp2, lp) > 0)) {
+                            (lp == NULL ||
+                             lnet_compare_routes(route, best_route) > 0)) {
                                 best_route = route;
                                 lp = lp2;
                         }
@@ -1413,8 +1423,10 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
                         if (src_ni != NULL)
                                 lnet_ni_decref_locked(src_ni);
                         LNET_UNLOCK();
-                        CERROR("No route to %s (all routers down)\n",
-                               libcfs_id2str(msg->msg_target));
+
+                        CERROR("No route to %s via %s (all routers down)\n",
+                               libcfs_id2str(msg->msg_target),
+                               libcfs_nid2str(src_nid));
                         return -EHOSTUNREACH;
                 }
 
@@ -2615,7 +2627,6 @@ LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
 {
         struct list_head *e;
         lnet_ni_t        *ni;
-        lnet_route_t     *route;
         lnet_remotenet_t *rnet;
         __u32             dstnet = LNET_NIDNET(dstnid);
         int               hops;
@@ -2671,12 +2682,21 @@ LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
                 rnet = list_entry(e, lnet_remotenet_t, lrn_list);
 
                 if (rnet->lrn_net == dstnet) {
+                        lnet_route_t *route;
+                        lnet_route_t *shortest = NULL;
+
                         LASSERT (!list_empty(&rnet->lrn_routes));
-                        route = list_entry(rnet->lrn_routes.next,
-                                           lnet_route_t, lr_list);
-                        hops = rnet->lrn_hops;
+
+                        list_for_each_entry(route, &rnet->lrn_routes, lr_list) {
+                                if (shortest == NULL ||
+                                    route->lr_hops < shortest->lr_hops)
+                                        shortest = route;
+                        }
+
+                        LASSERT (shortest != NULL);
+                        hops = shortest->lr_hops;
                         if (srcnidp != NULL)
-                                *srcnidp = route->lr_gateway->lp_ni->ni_nid;
+                                *srcnidp = shortest->lr_gateway->lp_ni->ni_nid;
                         if (orderp != NULL)
                                 *orderp = order;
                         LNET_UNLOCK();
