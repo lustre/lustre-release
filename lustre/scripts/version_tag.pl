@@ -154,11 +154,10 @@ sub get_linuxdir()
             $dir = $1;
         } elsif ($line =~ /LINUX_OBJ :?= (.*)/) {
             $objdir = $1;
-        } elsif ($line =~ /MODULES_TRUE :?= (.*)/) {
+        } elsif ($line =~ /MODULES_TRUE = #/ ||
+		 $line =~ /MODULE_TARGET = $/) {
             # nothing to do if modules are not being built
             return ""
-                if ($1 eq "#");
-            last;
         }
     }
     $config->close();
@@ -167,7 +166,7 @@ sub get_linuxdir()
         !$ver->open("$objdir/include/linux/version.h") &&
         !$ver->open("$dir/include/linux/utsrelease.h") &&
         !$ver->open("$dir/include/linux/version.h")) {
-            die "Run make dep on $dir\n";
+            die "Run make dep on '$dir'\n";
         }
 
     while(defined($line = <$ver>)) {
