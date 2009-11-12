@@ -1025,10 +1025,8 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         if (IS_ERR(handle))
                 GOTO(out_dput2, rc = PTR_ERR(handle));
 
-        lock_kernel();
         rc = ll_vfs_rename(parent_inode, dchild, mds->mds_vfsmnt,
                            parent_inode, new_child, mds->mds_vfsmnt);
-        unlock_kernel();
         if (rc)
                 CERROR("error renaming new object "LPU64":%u: rc %d\n",
                        oa->o_id, oa->o_generation, rc);

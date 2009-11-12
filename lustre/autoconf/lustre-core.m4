@@ -1684,23 +1684,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.17 super_block use s_vfs_rename_mutex instead of s_vfs_rename_sem
-AC_DEFUN([LC_VFS_RENAME_MUTEX],
-[AC_MSG_CHECKING([super_block has s_vfs_rename_mutex])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-        struct super_block sb;
-        mutex_lock(&sb.s_vfs_rename_mutex);
-],[
-        AC_DEFINE(HAVE_VFS_RENAME_MUTEX, 1,
-                [super_block has s_vfs_rename_mutex])
-        AC_MSG_RESULT([yes])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
 #
 # LC_PROG_LINUX
 #
