@@ -27,5 +27,4 @@ ext4-dynlocks-2.6-rhel5.patch
 ext4-hash-indexed-dir-dotdot-update.patch
 ext4-ext_generation-sles11.patch
 ext4-kill-dx_root.patch
-ext4_data_in_dirent.patch
 ext4-extents-mount-option-rhel5.patch
