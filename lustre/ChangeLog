@@ -12,6 +12,12 @@ TBD Sun Microsystems, Inc.
 	* ext4 support for RHEL5 is experimental and thus should not be
 	  used in production.
 
+Severity   : major
+Bugzilla   : 20892
+Description: bad entry in directory xxx: inode out of bounds
+Details    : fix locking issue in the rename path which could race with any
+	     other operations updating the same directory.
+
 -------------------------------------------------------------------------------
 
 2009-10-16 Sun Microsystems, Inc.
