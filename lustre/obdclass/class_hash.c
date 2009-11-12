@@ -55,6 +55,34 @@
 
 #include <class_hash.h>
 
+static void
+lh_read_lock(lustre_hash_t *lh)
+{
+        if ((lh->lh_flags & LH_REHASH) != 0)
+                read_lock(&lh->lh_rwlock);
+}
+
+static void
+lh_read_unlock(lustre_hash_t *lh)
+{
+        if ((lh->lh_flags & LH_REHASH) != 0)
+                read_unlock(&lh->lh_rwlock);
+}
+
+static void
+lh_write_lock(lustre_hash_t *lh)
+{
+        if ((lh->lh_flags & LH_REHASH) != 0)
+                write_lock(&lh->lh_rwlock);
+}
+
+static void
+lh_write_unlock(lustre_hash_t *lh)
+{
+        if ((lh->lh_flags & LH_REHASH) != 0)
+                write_unlock(&lh->lh_rwlock);
+}
+
 /**
  * Initialize new lustre hash, where:
  * \param name Descriptive hash name
@@ -79,7 +107,7 @@ lustre_hash_init(char *name, unsigned int cur_bits, unsigned int max_bits,
         LASSERT(max_bits >= cur_bits);
         LASSERT(max_bits < 31);
 
-        OBD_ALLOC_PTR(lh);
+        LIBCFS_ALLOC(lh, sizeof(*lh));
         if (!lh)
                 RETURN(NULL);
 
@@ -98,20 +126,28 @@ lustre_hash_init(char *name, unsigned int cur_bits, unsigned int max_bits,
         lh->lh_max_theta = 1 << (LH_THETA_BITS + 1);
         lh->lh_ops = ops;
         lh->lh_flags = flags;
+        if (cur_bits != max_bits && (lh->lh_flags & LH_REHASH) == 0)
+                CWARN("Rehash is disabled, ignore max_bits %d\n", max_bits);
 
         /* theta * 1000 */
         __lustre_hash_set_theta(lh, 500, 2000);
 
-        OBD_VMALLOC(lh->lh_buckets, sizeof(*lh->lh_buckets) << lh->lh_cur_bits);
-        if (!lh->lh_buckets) {
-                OBD_FREE_PTR(lh);
+        LIBCFS_ALLOC(lh->lh_buckets, sizeof(*lh->lh_buckets) << lh->lh_cur_bits);
+        if (lh->lh_buckets == NULL) {
+                LIBCFS_FREE(lh, sizeof(*lh));
                 RETURN(NULL);
         }
 
         for (i = 0; i <= lh->lh_cur_mask; i++) {
-                INIT_HLIST_HEAD(&lh->lh_buckets[i].lhb_head);
-                rwlock_init(&lh->lh_buckets[i].lhb_rwlock);
-                atomic_set(&lh->lh_buckets[i].lhb_count, 0);
+                LIBCFS_ALLOC(lh->lh_buckets[i], sizeof(lustre_hash_bucket_t));
+                if (lh->lh_buckets[i] == NULL) {
+                        lustre_hash_exit(lh);
+                        return NULL;
+                }
+
+                INIT_HLIST_HEAD(&lh->lh_buckets[i]->lhb_head);
+                rwlock_init(&lh->lh_buckets[i]->lhb_rwlock);
+                atomic_set(&lh->lh_buckets[i]->lhb_count, 0);
         }
 
         return lh;
@@ -132,9 +168,12 @@ lustre_hash_exit(lustre_hash_t *lh)
 
         LASSERT(lh != NULL);
 
-        write_lock(&lh->lh_rwlock);
+        lh_write_lock(lh);
 
         lh_for_each_bucket(lh, lhb, i) {
+                if (lhb == NULL)
+                        continue;
+
                 write_lock(&lhb->lhb_rwlock);
                 hlist_for_each_safe(hnode, pos, &(lhb->lhb_head)) {
                         __lustre_hash_bucket_validate(lh, lhb, hnode);
@@ -145,13 +184,14 @@ lustre_hash_exit(lustre_hash_t *lh)
                 LASSERT(hlist_empty(&(lhb->lhb_head)));
                 LASSERT(atomic_read(&lhb->lhb_count) == 0);
                 write_unlock(&lhb->lhb_rwlock);
+                LIBCFS_FREE(lhb, sizeof(*lhb));
         }
 
         LASSERT(atomic_read(&lh->lh_count) == 0);
-        write_unlock(&lh->lh_rwlock);
+        lh_write_unlock(lh);
 
-        OBD_VFREE(lh->lh_buckets, sizeof(*lh->lh_buckets) << lh->lh_cur_bits);
-        OBD_FREE_PTR(lh);
+        LIBCFS_FREE(lh->lh_buckets, sizeof(*lh->lh_buckets) << lh->lh_cur_bits);
+        LIBCFS_FREE(lh, sizeof(*lh));
         EXIT;
 }
 EXPORT_SYMBOL(lustre_hash_exit);
@@ -188,9 +228,9 @@ lustre_hash_add(lustre_hash_t *lh, void *key, struct hlist_node *hnode)
 
         __lustre_hash_key_validate(lh, key, hnode);
 
-        read_lock(&lh->lh_rwlock);
+        lh_read_lock(lh);
         i = lh_hash(lh, key, lh->lh_cur_mask);
-        lhb = &lh->lh_buckets[i];
+        lhb = lh->lh_buckets[i];
         LASSERT(i <= lh->lh_cur_mask);
         LASSERT(hlist_unhashed(hnode));
 
@@ -199,7 +239,7 @@ lustre_hash_add(lustre_hash_t *lh, void *key, struct hlist_node *hnode)
         write_unlock(&lhb->lhb_rwlock);
 
         bits = lustre_hash_rehash_bits(lh);
-        read_unlock(&lh->lh_rwlock);
+        lh_read_unlock(lh);
         if (bits)
                 lustre_hash_rehash(lh, bits);
 
@@ -219,9 +259,9 @@ lustre_hash_findadd_unique_hnode(lustre_hash_t *lh, void *key,
 
         __lustre_hash_key_validate(lh, key, hnode);
 
-        read_lock(&lh->lh_rwlock);
+        lh_read_lock(lh);
         i = lh_hash(lh, key, lh->lh_cur_mask);
-        lhb = &lh->lh_buckets[i];
+        lhb = lh->lh_buckets[i];
         LASSERT(i <= lh->lh_cur_mask);
         LASSERT(hlist_unhashed(hnode));
 
@@ -235,7 +275,7 @@ lustre_hash_findadd_unique_hnode(lustre_hash_t *lh, void *key,
                 bits = lustre_hash_rehash_bits(lh);
         }
         write_unlock(&lhb->lhb_rwlock);
-        read_unlock(&lh->lh_rwlock);
+        lh_read_unlock(lh);
         if (bits)
                 lustre_hash_rehash(lh, bits);
 
@@ -300,16 +340,16 @@ lustre_hash_del(lustre_hash_t *lh, void *key, struct hlist_node *hnode)
 
         __lustre_hash_key_validate(lh, key, hnode);
 
-        read_lock(&lh->lh_rwlock);
+        lh_read_lock(lh);
         i = lh_hash(lh, key, lh->lh_cur_mask);
-        lhb = &lh->lh_buckets[i];
+        lhb = lh->lh_buckets[i];
         LASSERT(i <= lh->lh_cur_mask);
         LASSERT(!hlist_unhashed(hnode));
 
         write_lock(&lhb->lhb_rwlock);
         obj = __lustre_hash_bucket_del(lh, lhb, hnode);
         write_unlock(&lhb->lhb_rwlock);
-        read_unlock(&lh->lh_rwlock);
+        lh_read_unlock(lh);
 
         RETURN(obj);
 }
@@ -330,9 +370,9 @@ lustre_hash_del_key(lustre_hash_t *lh, void *key)
         void                 *obj = NULL;
         ENTRY;
 
-        read_lock(&lh->lh_rwlock);
+        lh_read_lock(lh);
         i = lh_hash(lh, key, lh->lh_cur_mask);
-        lhb = &lh->lh_buckets[i];
+        lhb = lh->lh_buckets[i];
         LASSERT(i <= lh->lh_cur_mask);
 
         write_lock(&lhb->lhb_rwlock);
@@ -341,7 +381,7 @@ lustre_hash_del_key(lustre_hash_t *lh, void *key)
                 obj = __lustre_hash_bucket_del(lh, lhb, hnode);
 
         write_unlock(&lhb->lhb_rwlock);
-        read_unlock(&lh->lh_rwlock);
+        lh_read_unlock(lh);
 
         RETURN(obj);
 }
@@ -364,9 +404,9 @@ lustre_hash_lookup(lustre_hash_t *lh, void *key)
         void                 *obj = NULL;
         ENTRY;
 
-        read_lock(&lh->lh_rwlock);
+        lh_read_lock(lh);
         i = lh_hash(lh, key, lh->lh_cur_mask);
-        lhb = &lh->lh_buckets[i];
+        lhb = lh->lh_buckets[i];
         LASSERT(i <= lh->lh_cur_mask);
 
         read_lock(&lhb->lhb_rwlock);
@@ -375,7 +415,7 @@ lustre_hash_lookup(lustre_hash_t *lh, void *key)
                 obj = lh_get(lh, hnode);
 
         read_unlock(&lhb->lhb_rwlock);
-        read_unlock(&lh->lh_rwlock);
+        lh_read_unlock(lh);
 
         RETURN(obj);
 }
@@ -397,7 +437,7 @@ lustre_hash_for_each(lustre_hash_t *lh, lh_for_each_cb func, void *data)
         int                   i;
         ENTRY;
 
-        read_lock(&lh->lh_rwlock);
+        lh_read_lock(lh);
         lh_for_each_bucket(lh, lhb, i) {
                 read_lock(&lhb->lhb_rwlock);
                 hlist_for_each(hnode, &(lhb->lhb_head)) {
@@ -408,7 +448,7 @@ lustre_hash_for_each(lustre_hash_t *lh, lh_for_each_cb func, void *data)
                 }
                 read_unlock(&lhb->lhb_rwlock);
         }
-        read_unlock(&lh->lh_rwlock);
+        lh_read_unlock(lh);
 
         EXIT;
 }
@@ -434,7 +474,7 @@ lustre_hash_for_each_safe(lustre_hash_t *lh, lh_for_each_cb func, void *data)
         int                   i;
         ENTRY;
 
-        read_lock(&lh->lh_rwlock);
+        lh_read_lock(lh);
         lh_for_each_bucket(lh, lhb, i) {
                 read_lock(&lhb->lhb_rwlock);
                 hlist_for_each_safe(hnode, pos, &(lhb->lhb_head)) {
@@ -447,7 +487,7 @@ lustre_hash_for_each_safe(lustre_hash_t *lh, lh_for_each_cb func, void *data)
                 }
                 read_unlock(&lhb->lhb_rwlock);
         }
-        read_unlock(&lh->lh_rwlock);
+        lh_read_unlock(lh);
         EXIT;
 }
 EXPORT_SYMBOL(lustre_hash_for_each_safe);
@@ -473,7 +513,7 @@ lustre_hash_for_each_empty(lustre_hash_t *lh, lh_for_each_cb func, void *data)
         ENTRY;
 
 restart:
-        read_lock(&lh->lh_rwlock);
+        lh_read_lock(lh);
         lh_for_each_bucket(lh, lhb, i) {
                 write_lock(&lhb->lhb_rwlock);
                 while (!hlist_empty(&lhb->lhb_head)) {
@@ -481,14 +521,14 @@ restart:
                         __lustre_hash_bucket_validate(lh, lhb, hnode);
                         obj = lh_get(lh, hnode);
                         write_unlock(&lhb->lhb_rwlock);
-                        read_unlock(&lh->lh_rwlock);
+                        lh_read_unlock(lh);
                         func(obj, data);
                         (void)lh_put(lh, hnode);
                         goto restart;
                 }
                 write_unlock(&lhb->lhb_rwlock);
         }
-        read_unlock(&lh->lh_rwlock);
+        lh_read_unlock(lh);
         EXIT;
 }
 EXPORT_SYMBOL(lustre_hash_for_each_empty);
@@ -510,9 +550,9 @@ lustre_hash_for_each_key(lustre_hash_t *lh, void *key,
         unsigned              i;
         ENTRY;
 
-        read_lock(&lh->lh_rwlock);
+        lh_read_lock(lh);
         i = lh_hash(lh, key, lh->lh_cur_mask);
-        lhb = &lh->lh_buckets[i];
+        lhb = lh->lh_buckets[i];
         LASSERT(i <= lh->lh_cur_mask);
 
         read_lock(&lhb->lhb_rwlock);
@@ -527,7 +567,7 @@ lustre_hash_for_each_key(lustre_hash_t *lh, void *key,
         }
 
         read_unlock(&lhb->lhb_rwlock);
-        read_unlock(&lh->lh_rwlock);
+        lh_read_unlock(lh);
 
         EXIT;
 }
@@ -549,8 +589,8 @@ lustre_hash_rehash(lustre_hash_t *lh, int bits)
 {
         struct hlist_node     *hnode;
         struct hlist_node     *pos;
-        lustre_hash_bucket_t  *lh_buckets;
-        lustre_hash_bucket_t  *rehash_buckets;
+        lustre_hash_bucket_t **lh_buckets;
+        lustre_hash_bucket_t **rehash_buckets;
         lustre_hash_bucket_t  *lh_lhb;
         lustre_hash_bucket_t  *rehash_lhb;
         int                    i;
@@ -558,23 +598,29 @@ lustre_hash_rehash(lustre_hash_t *lh, int bits)
         int                    lh_mask;
         int                    lh_bits;
         int                    mask = (1 << bits) - 1;
+        int                    rc = 0;
         void                  *key;
         ENTRY;
 
         LASSERT(!in_interrupt());
         LASSERT(mask > 0);
+        LASSERT((lh->lh_flags & LH_REHASH) != 0);
 
-        OBD_VMALLOC(rehash_buckets, sizeof(*rehash_buckets) << bits);
+        LIBCFS_ALLOC(rehash_buckets, sizeof(*rehash_buckets) << bits);
         if (!rehash_buckets)
                 RETURN(-ENOMEM);
 
         for (i = 0; i <= mask; i++) {
-                INIT_HLIST_HEAD(&rehash_buckets[i].lhb_head);
-                rwlock_init(&rehash_buckets[i].lhb_rwlock);
-                atomic_set(&rehash_buckets[i].lhb_count, 0);
+                LIBCFS_ALLOC(rehash_buckets[i], sizeof(*rehash_buckets[i]));
+                if (rehash_buckets[i] == NULL)
+                        GOTO(free, rc = -ENOMEM);
+
+                INIT_HLIST_HEAD(&rehash_buckets[i]->lhb_head);
+                rwlock_init(&rehash_buckets[i]->lhb_rwlock);
+                atomic_set(&rehash_buckets[i]->lhb_count, 0);
         }
 
-        write_lock(&lh->lh_rwlock);
+        lh_write_lock(lh);
 
         /*
          * Early return for multiple concurrent racing callers,
@@ -582,9 +628,8 @@ lustre_hash_rehash(lustre_hash_t *lh, int bits)
          */
         theta = __lustre_hash_theta(lh);
         if ((theta >= lh->lh_min_theta) && (theta <= lh->lh_max_theta)) {
-                OBD_VFREE(rehash_buckets, sizeof(*rehash_buckets) << bits);
-                write_unlock(&lh->lh_rwlock);
-                RETURN(-EALREADY);
+                lh_write_unlock(lh);
+                GOTO(free, rc = -EALREADY);
         }
 
         lh_bits = lh->lh_cur_bits;
@@ -597,7 +642,7 @@ lustre_hash_rehash(lustre_hash_t *lh, int bits)
         atomic_inc(&lh->lh_rehash_count);
 
         for (i = 0; i <= lh_mask; i++) {
-                lh_lhb = &lh_buckets[i];
+                lh_lhb = lh_buckets[i];
 
                 write_lock(&lh_lhb->lhb_rwlock);
                 hlist_for_each_safe(hnode, pos, &(lh_lhb->lhb_head)) {
@@ -620,7 +665,7 @@ lustre_hash_rehash(lustre_hash_t *lh, int bits)
                         /*
                          * Add to rehash bucket, ops->lh_key must be defined.
                          */
-                        rehash_lhb = &rehash_buckets[lh_hash(lh, key, mask)];
+                        rehash_lhb = rehash_buckets[lh_hash(lh, key, mask)];
                         hlist_add_head(hnode, &(rehash_lhb->lhb_head));
                         atomic_inc(&rehash_lhb->lhb_count);
                 }
@@ -630,10 +675,15 @@ lustre_hash_rehash(lustre_hash_t *lh, int bits)
                 write_unlock(&lh_lhb->lhb_rwlock);
         }
 
-        OBD_VFREE(lh_buckets, sizeof(*lh_buckets) << lh_bits);
-        write_unlock(&lh->lh_rwlock);
-
-        RETURN(0);
+        lh_write_unlock(lh);
+        rehash_buckets = lh_buckets;
+        i = (1 << lh_bits) - 1;
+        bits = lh_bits;
+ free:
+        while (i-- > 0)
+                LIBCFS_FREE(rehash_buckets[i], sizeof(*rehash_buckets[i]));
+        LIBCFS_FREE(rehash_buckets, sizeof(*rehash_buckets) << bits);
+        RETURN(rc);
 }
 EXPORT_SYMBOL(lustre_hash_rehash);
 
@@ -658,14 +708,14 @@ void lustre_hash_rehash_key(lustre_hash_t *lh, void *old_key, void *new_key,
         __lustre_hash_key_validate(lh, new_key, hnode);
         LASSERT(!hlist_unhashed(hnode));
 
-        read_lock(&lh->lh_rwlock);
+        lh_read_lock(lh);
 
         i = lh_hash(lh, old_key, lh->lh_cur_mask);
-        old_lhb = &lh->lh_buckets[i];
+        old_lhb = lh->lh_buckets[i];
         LASSERT(i <= lh->lh_cur_mask);
 
         j = lh_hash(lh, new_key, lh->lh_cur_mask);
-        new_lhb = &lh->lh_buckets[j];
+        new_lhb = lh->lh_buckets[j];
         LASSERT(j <= lh->lh_cur_mask);
 
         if (i < j) { /* write_lock ordering */
@@ -692,7 +742,7 @@ void lustre_hash_rehash_key(lustre_hash_t *lh, void *old_key, void *new_key,
 
         write_unlock(&new_lhb->lhb_rwlock);
         write_unlock(&old_lhb->lhb_rwlock);
-        read_unlock(&lh->lh_rwlock);
+        lh_read_unlock(lh);
 
         EXIT;
 }
@@ -718,7 +768,7 @@ int lustre_hash_debug_str(lustre_hash_t *lh, char *str, int size)
         if (str == NULL || size == 0)
                 return 0;
 
-        read_lock(&lh->lh_rwlock);
+        lh_read_lock(lh);
         theta = __lustre_hash_theta(lh);
 
         c += snprintf(str + c, size - c, "%-*s ",
@@ -761,7 +811,7 @@ int lustre_hash_debug_str(lustre_hash_t *lh, char *str, int size)
                 c += snprintf(str + c, size - c, "%d%c",  dist[i],
                               (i == 7) ? '\n' : '/');
 
-        read_unlock(&lh->lh_rwlock);
+        lh_read_unlock(lh);
 
         return c;
 }
