@@ -579,7 +579,7 @@ test_6() {
     [[ $? -eq 0 ]] || \
         error "pool_list $FSNAME failed."
 
-    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL $TGT_ALL
+    add_pool $POOL $TGT_ALL "$TGT_UUID"
 
     mkdir -p $POOL_DIR
     $SETSTRIPE -c -1 -p $POOL $POOL_DIR
@@ -626,11 +626,11 @@ test_11() {
     create_pool_nofail $POOL
     create_pool_nofail $POOL2
 
-    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL \
-        $FSNAME-OST[$TGT_FIRST-$TGT_MAX/2]
     local start=$((TGT_FIRST+1))
     do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL2 \
         $FSNAME-OST[$start-$TGT_MAX/2]
+
+    add_pool $POOL $TGT_HALF "$TGT_UUID2"
 
     create_dir $POOL_ROOT/dir1  $POOL
     create_dir $POOL_ROOT/dir2  $POOL2
@@ -668,11 +668,11 @@ test_12() {
     create_pool_nofail $POOL
     create_pool_nofail $POOL2
 
-    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL \
-        $FSNAME-OST[$TGT_FIRST-$TGT_MAX/2]
     local start=$((TGT_FIRST+1))
     do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL2 \
         $FSNAME-OST[$start-$TGT_MAX/2]
+
+    add_pool $POOL $TGT_HALF "$TGT_UUID2"
 
     echo creating some files in $POOL and $POOL2
 
@@ -690,7 +690,8 @@ test_12() {
     echo Changing the pool membership
     do_facet $SINGLEMDS lctl pool_remove $FSNAME.$POOL $FSNAME-OST[$TGT_FIRST]
     do_facet $SINGLEMDS lctl pool_list $FSNAME.$POOL
-    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL2 $FSNAME-OST[$TGT_FIRST]
+	FIRST_UUID=$(echo $TGT_UUID | awk '{print $1}')
+    add_pool $POOL2 $FSNAME-OST[$TGT_FIRST] "$FIRST_UUID "
     do_facet $SINGLEMDS lctl pool_list $FSNAME.$POOL2
 
     echo Checking the files again    
@@ -701,7 +702,7 @@ test_12() {
 
     echo Creating some more files
     create_dir $POOL_ROOT/dir3 $POOL
-    create_dir $POOL_ROOT/dir4 POOL2
+    create_dir $POOL_ROOT/dir4 $POOL2
     create_file $POOL_ROOT/file3 $POOL
     create_file $POOL_ROOT/file4 $POOL2
 
@@ -724,7 +725,7 @@ test_13() {
     local count=3
 
     create_pool_nofail $POOL
-    do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL $TGT_ALL
+    add_pool $POOL $TGT_ALL "$TGT_UUID"
 
     create_dir $POOL_ROOT/dir1 $POOL -1
     createmany -o $POOL_ROOT/dir1/$tfile $numfiles || \
