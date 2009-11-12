@@ -65,7 +65,7 @@ Index: b/fs/ext3/namei.c
  	struct buffer_head *bh;
  	struct dx_frame *frame = frame_in;
  	u32 hash;
-@@ -372,45 +374,45 @@ dx_probe(struct dentry *dentry, struct i
+@@ -372,46 +374,45 @@ dx_probe(struct dentry *dentry, struct i
  		dir = dentry->d_parent->d_inode;
  	if (!(bh = ext3_bread (NULL,dir, 0, 0, err)))
  		goto fail;
@@ -117,14 +117,14 @@ Index: b/fs/ext3/namei.c
  
 -	entries = (struct dx_entry *) (((char *)&root->info) +
 -				       root->info.info_length);
--	assert(dx_get_limit(entries) == dx_root_limit(dir,
--						      root->info.info_length));
 +	entries = (struct dx_entry *) (((char *)info) + info->info_length);
-+	assert(dx_get_limit(entries) == dx_root_limit(dir, info->info_length));
-+
- 	dxtrace (printk("Look up %x", hash));
- 	while (1)
- 	{
+ 
+-	if (dx_get_limit(entries) != dx_root_limit(dir,
+-						   root->info.info_length)) {
++	if (dx_get_limit(entries) != dx_root_limit(dir, info->info_length)) {
+		ext3_warning(dir->i_sb, __FUNCTION__,
+			     "dx entry: limit != root limit");
+		brelse(bh);
 @@ -467,10 +469,12 @@ fail:
  
  static void dx_release (struct dx_frame *frames)

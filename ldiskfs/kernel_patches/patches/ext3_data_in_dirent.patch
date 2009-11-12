@@ -75,18 +75,17 @@ Index: b/fs/ext3/namei.c
  	 		names++;
  		}
  		de = (struct ext3_dir_entry_2 *) ((char *) de + le16_to_cpu(de->rec_len));
-@@ -411,7 +422,10 @@ dx_probe(struct dentry *dentry, struct i
- 	}
+@@ -411,7 +422,9 @@ dx_probe(struct dentry *dentry, struct i
  
  	entries = (struct dx_entry *) (((char *)info) + info->info_length);
--	assert(dx_get_limit(entries) == dx_root_limit(dir, info->info_length));
-+	assert(dx_get_limit(entries) == dx_root_limit(dir->i_sb->s_blocksize,
-+						(struct ext3_dir_entry_2*)bh->b_data,
-+						info->info_length));
-+
  
- 	dxtrace (printk("Look up %x", hash));
- 	while (1)
+-	if (dx_get_limit(entries) != dx_root_limit(dir, info->info_length)) {
++	if (dx_get_limit(entries) != dx_root_limit(dir->i_sb->s_blocksize,
++						(struct ext3_dir_entry_2*)bh->b_data,
++						info->info_length)) {
+		ext3_warning(dir->i_sb, __FUNCTION__,
+			     "dx entry: limit != root limit");
+		brelse(bh);
 @@ -583,7 +597,7 @@ static int htree_dirblock_to_tree(struct
  	de = (struct ext3_dir_entry_2 *) bh->b_data;
  	top = (struct ext3_dir_entry_2 *) ((char *) de +

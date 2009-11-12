@@ -167,7 +167,7 @@ Index: b/fs/ext4/ext4.h
  					    struct ext4_dir_entry_2
  					    ** res_dir);
  extern int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
--			       struct inode *inode);
+-				  struct inode *inode);
 +			  struct inode *inode, const void *, const void *);
  extern int ext4_orphan_add(handle_t *, struct inode *);
  extern int ext4_orphan_del(handle_t *, struct inode *);
@@ -208,12 +208,12 @@ Index: b/fs/ext4/namei.c
 +++ b/fs/ext4/namei.c
 @@ -177,7 +177,8 @@ static unsigned dx_get_count (struct dx_
  static unsigned dx_get_limit (struct dx_entry *entries);
- static void dx_set_count (struct dx_entry *entries, unsigned value);
- static void dx_set_limit (struct dx_entry *entries, unsigned value);
--static unsigned dx_root_limit (struct inode *dir, unsigned infosize);
+ static void dx_set_count(struct dx_entry *entries, unsigned value);
+ static void dx_set_limit(struct dx_entry *entries, unsigned value);
+-static unsigned dx_root_limit(struct inode *dir, unsigned infosize);
 +static inline unsigned dx_root_limit(__u32 blocksize,
 +		struct ext4_dir_entry_2 *dot_de, unsigned infosize);
- static unsigned dx_node_limit (struct inode *dir);
+ static unsigned dx_node_limit(struct inode *dir);
  static struct dx_frame *dx_probe(struct dentry *dentry,
  				 struct inode *dir,
 @@ -218,11 +219,12 @@ ext4_next_entry(struct ext4_dir_entry_2 
@@ -237,7 +237,7 @@ Index: b/fs/ext4/namei.c
  	((struct dx_countlimit *) entries)->limit = cpu_to_le16(value);
  }
  
--static inline unsigned dx_root_limit (struct inode *dir, unsigned infosize)
+-static inline unsigned dx_root_limit(struct inode *dir, unsigned infosize)
 +static inline unsigned dx_root_limit(__u32 blocksize,
 +		struct ext4_dir_entry_2 *dot_de, unsigned infosize)
  {
@@ -254,7 +254,7 @@ Index: b/fs/ext4/namei.c
  	return entry_space / sizeof(struct dx_entry);
  }
  
- static inline unsigned dx_node_limit (struct inode *dir)
+ static inline unsigned dx_node_limit(struct inode *dir)
  {
 -	unsigned entry_space = dir->i_sb->s_blocksize - EXT4_DIR_REC_LEN(0);
 +	unsigned entry_space = dir->i_sb->s_blocksize - __EXT4_DIR_REC_LEN(0);
@@ -356,7 +356,7 @@ Index: b/fs/ext4/namei.c
 @@ -1399,6 +1415,12 @@ static int add_dirent_to_buf(handle_t *h
  		de->inode = 0;
  	de->name_len = namelen;
- 	memcpy (de->name, name, namelen);
+ 	memcpy(de->name, name, namelen);
 +	if (data) {
 +		de->name[namelen] = 0;
 +		memcpy(&de->name[namelen + 1], data, *(char *) data);
@@ -436,23 +436,23 @@ Index: b/fs/ext4/namei.c
  /* Initialize @inode as a subdirectory of @dir, and add the
   * "." and ".." entries into the first directory block. */
  int ext4_add_dot_dotdot(handle_t *handle, struct inode * dir,
--			 struct inode *inode)
+-			struct inode *inode)
 +			 struct inode *inode,
 +			 const void *data1, const void *data2)
-  {
+ {
  	struct buffer_head * dir_block;
- 	struct ext4_dir_entry_2 * de;
+	struct ext4_dir_entry_2 * de;
 -	int err = 0;
 +	int err = 0, dot_reclen;
  
- 	inode->i_op = &ext4_dir_inode_operations;
- 	inode->i_fop = &ext4_dir_operations;
+	if (IS_ERR(handle))
+		return PTR_ERR(handle);
 @@ -1993,16 +2029,34 @@ int ext4_add_dot_dotdot(handle_t *handle
  	de = (struct ext4_dir_entry_2 *) dir_block->b_data;
  	de->inode = cpu_to_le32(inode->i_ino);
  	de->name_len = 1;
 -	de->rec_len = ext4_rec_len_to_disk(EXT4_DIR_REC_LEN(de->name_len));
- 	strcpy (de->name, ".");
+ 	strcpy(de->name, ".");
  	ext4_set_de_type(dir->i_sb, de, S_IFDIR);
 +	/* get packed fid data*/
 +	data1 = ext4_dentry_get_data(dir->i_sb,
@@ -468,10 +468,10 @@ Index: b/fs/ext4/namei.c
  	de = ext4_next_entry(de);
  	de->inode = cpu_to_le32(dir->i_ino);
  	de->rec_len = ext4_rec_len_to_disk(inode->i_sb->s_blocksize -
--					      EXT4_DIR_REC_LEN(1));
+-						EXT4_DIR_REC_LEN(1));
 +						dot_reclen);
  	de->name_len = 2;
- 	strcpy (de->name, "..");
+ 	strcpy(de->name, "..");
  	ext4_set_de_type(dir->i_sb, de, S_IFDIR);
 +	data2 = ext4_dentry_get_data(dir->i_sb,
 +			(struct ext4_dentry_param *) data2);
@@ -499,6 +499,6 @@ Index: b/fs/ext4/namei.c
  	sb = inode->i_sb;
 -	if (inode->i_size < EXT4_DIR_REC_LEN(1) + EXT4_DIR_REC_LEN(2) ||
 +	if (inode->i_size < __EXT4_DIR_REC_LEN(1) + __EXT4_DIR_REC_LEN(2) ||
- 	    !(bh = ext4_bread (NULL, inode, 0, 0, &err))) {
+ 	    !(bh = ext4_bread(NULL, inode, 0, 0, &err))) {
  		if (err)
  			ext4_error(inode->i_sb, __func__,
