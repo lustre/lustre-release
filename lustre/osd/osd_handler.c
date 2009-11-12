@@ -2480,7 +2480,7 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
                                       (char *)key, strlen((char *)key));
 
         down_write(&obj->oo_ext_idx_sem);
-        bh = ldiskfs_find_entry(dentry, &de);
+        bh = ll_ldiskfs_find_entry(dir, dentry, &de);
         if (bh) {
                 struct osd_thread_info *oti = osd_oti_get(env);
                 struct timespec *ctime = &oti->oti_time;
@@ -2753,7 +2753,7 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
                                       (char *)key, strlen((char *)key));
 
         down_read(&obj->oo_ext_idx_sem);
-        bh = ldiskfs_find_entry(dentry, &de);
+        bh = ll_ldiskfs_find_entry(dir, dentry, &de);
         if (bh) {
                 ino = le32_to_cpu(de->inode);
                 brelse(bh);
