@@ -1341,6 +1341,7 @@ AC_DEFUN([LC_LINUX_FIEMAP_H],
 [LB_CHECK_FILE([$LINUX/include/linux/fiemap.h],[
         AC_MSG_CHECKING([if fiemap.h can be compiled])
         LB_LINUX_TRY_COMPILE([
+                #include <linux/types.h>
                 #include <linux/fiemap.h>
         ],[],[
                 AC_MSG_RESULT([yes])
@@ -1770,6 +1771,7 @@ AC_DEFUN([LC_PROG_LINUX],
           #2.6.18 + RHEL5 (fc6)
           LC_PG_FS_MISC
           LC_PAGE_CHECKED
+          LC_LINUX_FIEMAP_H
 
           # 2.6.19
           LC_INODE_BLKSIZE

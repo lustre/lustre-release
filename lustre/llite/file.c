@@ -2764,7 +2764,7 @@ int ll_release_openhandle(struct dentry *dentry, struct lookup_intent *it)
         RETURN(rc);
 }
 
-int ll_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
+int ll_do_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
               int num_bytes)
 {
         struct obd_export *exp = ll_i2obdexp(inode);
@@ -2899,7 +2899,7 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                                 GOTO(error, rc);
                 }
 
-                rc = ll_fiemap(inode, fiemap_s, num_bytes);
+                rc = ll_do_fiemap(inode, fiemap_s, num_bytes);
                 if (rc)
                         GOTO(error, rc);
 
@@ -3412,6 +3412,26 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat)
         return ll_getattr_it(mnt, de, &it, stat);
 }
 
+#ifdef HAVE_LINUX_FIEMAP_H
+int ll_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
+                __u64 start, __u64 len)
+{
+        int rc;
+        struct ll_user_fiemap *fiemap = (struct ll_user_fiemap*)(
+                fieinfo->fi_extents_start - sizeof(ll_user_fiemap));
+
+        rc = ll_do_fiemap(inode, fiemap, sizeof(*fiemap) +
+                          fiemap->fm_extent_count *
+                          sizeof(struct ll_fiemap_extent));
+
+        fieinfo->fi_flags = fiemap->fm_flags;
+        fieinfo->fi_extents_mapped = fiemap->fm_mapped_extents;
+
+        return rc;
+}
+#endif
+
+
 static
 int lustre_check_acl(struct inode *inode, int mask)
 {
@@ -3622,6 +3642,9 @@ struct inode_operations ll_file_inode_operations = {
         .getxattr       = ll_getxattr,
         .listxattr      = ll_listxattr,
         .removexattr    = ll_removexattr,
+#ifdef  HAVE_LINUX_FIEMAP_H
+        .fiemap         = ll_fiemap,
+#endif
 };
 
 /* dynamic ioctl number support routins */
