@@ -398,11 +398,25 @@ download_srpm() {
 download_ofed() {
     local force="${1:-false}"
 
+    local location="http://downloads.lustre.org/public/OFED/"
+
+    local Mmv daily
+    if [[ $OFED_VERSION = daily-* ]]; then
+        OFED_VERSION=${OFED_VERSION/daily-/}
+        Mmv=${OFED_VERSION%%-*}
+        daily=${OFED_VERSION##$Mmv-}
+        location="http://www.openfabrics.org/downloads/OFED/ofed-${Mmv}-daily/"
+        # find the filename for the version for the date specified
+        OFED_VERSION=$(curl -s "$location" | sed -nre "/${daily}-/s/.*href=\"OFED-([0-9]+\.[0-9]+-${daily}-[0-9]{4,4}).tgz.*$/\1/p")
+        if [ -z "$OFED_VERSION" ]; then
+            fatal 1 "Could not determine the filename of the OFED snapshot for ${daily}"
+        fi
+    fi
+
     if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ] &&
        ( $force || [ ! -r "$KERNELTREE/OFED-${OFED_VERSION}.tgz" ] ||
            [ ! -s "$KERNELTREE/OFED-${OFED_VERSION}.tgz" ] ); then
         if $DOWNLOAD; then
-            local location="http://downloads.lustre.org/public/OFED/"
             echo "Downloading $location/OFED-${OFED_VERSION}.tgz..."
             if ! wget -nv "$location/OFED-${OFED_VERSION}.tgz" \
                 -O "$KERNELTREE/OFED-${OFED_VERSION}.tgz" ||
@@ -431,7 +445,15 @@ load_target() {
 
     echo "Loading target config file $TARGET.target..."
 
+    # if the caller specified an OFED_VERSION it should override whatever
+    # the target file specifies
+    local env_OFED_VERSION="$OFED_VERSION"
+
     . "$TARGET_FILE"
+
+    if [ -n "env_OFED_VERSION" ]; then
+        OFED_VERSION="$env_OFED_VERSION"
+    fi
 
     # doesn't make any sense to build OFED for xen domX's
     if $XEN; then
@@ -928,29 +950,41 @@ find_linux_devel_paths() {
 }
 
 build_kernel_ib() {
+    local linux="$1"
+
     # build kernel-ib{,-devel}
-    # some I/B drivers are architecture dependent and kernel-ib's configure
-    # does not figure it out for us ~sigh~
-    local configure_options=""
-    case "$TARGET_ARCH" in
-	x86_64 | ia64)
-	    configure_options="--with-ipath_inf-mod"
-	    ;;
-	ppc64)
-	    configure_options="--with-ipath_inf-mod --with-ehca-mod"
-	    ;;
-    esac
     local K_SRC="K_SRC"
     # ofed 1.3 had a bug in the rpm spec
     if [ "$OFED_VERSION" = "1.3" ]; then
         K_SRC="KSRC"
     fi
+
+    local OFED_CORE="--with-core-mod --with-ipoib-mod --with-sdp-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-rds-mod --with-qlgc_vnic-mod --with-madeye-mod"
+    local OFED_HARDWARE="--with-mthca-mod --with-mlx4-mod --with-mlx4_en-mod --with-cxgb3-mod --with-nes-mod"
+    # some I/B drivers are architecture dependent and kernel-ib's configure
+    # does not figure it out for us ~sigh~
+    case "$TARGET_ARCH" in
+	ppc64)
+            OFED_HARDWARE="$OFED_HARDWARE --with-ehca-mod"
+	    ;;
+    esac
+    # we're no longer shipping the OFED iSCSI
+    #OFED_ISCSI="--with-srp-mod --with-srp-target-mod"
+    ## ISER module has no backport support as of OFED 1.5 (i.e. only builds on
+    ##kernels >= 2.6.30)
+    #if [[ $OFED_VERSION = 1.[0-4]* ]]; then
+    #	OFED_ISCSI="$OFED_ISCSI --with-iser-mod"
+    #fi
+
+    local linuxrelease=$(find_linux_release "$linux")
     $RPMBUILD --rebuild --define 'build_kernel_ib 1' --define 'build_kernel_ib_devel 1' \
 	      --define "_topdir ${TOPDIR}" --target ${TARGET_ARCH} \
-	      --define "KVERSION ${LINUXRELEASE}" \
-	      --define "$K_SRC ${LINUXOBJ:-${LINUX}}" \
-	      --define "LIB_MOD_DIR /lib/modules/${LINUXRELEASE}/updates" \
-	      --define "configure_options --without-quilt --with-core-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-srp-target-mod --with-core-mod --with-mthca-mod --with-mlx4-mod --with-mlx4_en-mod --with-cxgb3-mod --with-nes-mod --with-ipoib-mod --with-sdp-mod --with-srp-mod --with-rds-mod --with-iser-mod --with-qlgc_vnic-mod --with-madeye-mod $configure_options" ${TOPDIR}/OFED/SRPMS/ofa_kernel-*.src.rpm
+              --define "KVERSION ${linuxrelease}" \
+              --define "$K_SRC ${linux}" \
+              --define "LIB_MOD_DIR /lib/modules/${linuxrelease}/updates" \
+              ${OFA_KERNEL_RELEASE:+--define "_release $OFA_KERNEL_RELEASE"} \
+              --define "configure_options --without-quilt $OFED_CORE $OFED_HARDWARE $OFED_ISCSI" \
+              ${TOPDIR}/OFED/SRPMS/ofa_kernel-*.src.rpm
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
         fatal 1 "Error building kernel-ib"
@@ -1240,7 +1274,7 @@ build_with_srpm() {
             }
             create_rpmbuild_dirs
             # build it
-            build_kernel_ib
+            build_kernel_ib "${LINUXOBJ:-${LINUX}}"
             if ! store_for_reuse "$TOPDIR/{SPECS,SOURCES,BUILD,SRPMS,RPMS}" \
                                  "ofed" "$REUSEBUILD" "$REUSE_SIGNATURE" \
                                  "$CAN_LINK_FOR_REUSE"; then
@@ -1382,7 +1416,7 @@ backtrace() {
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
-options=$(getopt -o d:D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ldiskfs,ccache,reuse:,norpm,disable-datestamp,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,publish,release,src,stage:,tag:,target:,target-archs:,with-linux:,xen -- "$@")
+options=$(getopt -o d:D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ldiskfs,ccache,reuse:,norpm,disable-datestamp,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,ofed-version:,publish,release,src,stage:,tag:,target:,target-archs:,with-linux:,xen -- "$@")
 
 if [ $? != 0 ]; then
     usage 1
@@ -1481,6 +1515,10 @@ while [ "$1" ]; do
         --nosrc)
             DO_SRC=false
             shift 1
+            ;;
+        --ofed-version)
+            OFED_VERSION="$2"
+            shift 2
             ;;
         --publish)
             shift
