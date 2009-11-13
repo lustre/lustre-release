@@ -451,7 +451,7 @@ load_target() {
 
     . "$TARGET_FILE"
 
-    if [ -n "env_OFED_VERSION" ]; then
+    if [ -n "$env_OFED_VERSION" ]; then
         OFED_VERSION="$env_OFED_VERSION"
     fi
 
