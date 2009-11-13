@@ -105,7 +105,12 @@ int
 _SCANDIR(const char *dirname, 
 	 _DIRENT_T ***namelist, 
 	 int (*filter) (const _DIRENT_T *), 
-	 int (*compar) (const void *, const void *))
+#ifdef HAVE_POSIX2008_SCANDIR
+	 int(*compar)(const _DIRENT_T **, const  _DIRENT_T **)
+#else
+	 int(*compar)(const void *, const void *)
+#endif
+	)
 {
 	DIR *dir = NULL;
 	_DIRENT_T *de 	  = NULL,
