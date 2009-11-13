@@ -2697,7 +2697,7 @@ static int osd_add_dot_dotdot(struct osd_thread_info *info,
                 if (dir->oo_compat_dotdot_created)
                         return __osd_ea_add_rec(info, dir, obj, name, th);
 
-                result = ldiskfs_add_dot_dotdot(oth->ot_handle, parent_dir, inode, NULL, NULL);
+                result = ldiskfs_add_dot_dotdot(oth->ot_handle, parent_dir, inode);
                 if (result == 0)
                        dir->oo_compat_dotdot_created = 1;
         }
