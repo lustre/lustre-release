@@ -141,6 +141,14 @@ struct fsfilt_cb_data {
 #define ext3_find_next_bit           ext2_find_next_bit
 #endif
 
+#ifndef ext2_find_next_bit
+#ifdef __LITTLE_ENDIAN
+#define ext2_find_next_bit(addr, size, off) find_next_bit((addr), (size), (off))
+#else
+error "Need implementation of find_next_bit on big-endian systems"
+#endif	/* __LITTLE_ENDIAN */
+#endif	/* !ext2_find_next_le_bit */
+
 static char *fsfilt_ext3_get_label(struct super_block *sb)
 {
         return EXT3_SB(sb)->s_es->s_volume_name;
