@@ -143,7 +143,7 @@ struct fsfilt_cb_data {
 
 #ifndef ext2_find_next_bit
 #ifdef __LITTLE_ENDIAN
-#define ext2_find_next_bit(addr, size, off) find_next_bit((addr), (size), (off))
+#define ext2_find_next_bit(addr, size, off) find_next_bit((unsigned long *)(addr), (size), (off))
 #else
 error "Need implementation of find_next_bit on big-endian systems"
 #endif	/* __LITTLE_ENDIAN */
