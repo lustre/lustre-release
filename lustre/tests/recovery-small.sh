@@ -686,7 +686,7 @@ test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 	remote_mds || { skip "local MDS" && return 0; }
 
-	if [ $(facet_host mgs) -eq $(facet_host ost1) ]; then
+	if [ $(facet_host mgs) = $(facet_host ost1) ]; then
 		skip "mgs and ost1 are at the same node"
 		return 0
 	fi
@@ -713,7 +713,7 @@ run_test 26a "evict dead exports"
 test_26b() {      # bug 10140 - evict dead exports by pinger
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
-	if [ $(facet_host mgs) -eq $(facet_host ost1) ]; then
+	if [ $(facet_host mgs) = $(facet_host ost1) ]; then
 		skip "mgs and ost1 are at the same node"
 		return 0
 	fi
