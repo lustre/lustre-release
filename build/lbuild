@@ -1441,7 +1441,7 @@ build_ofed() {
             }
             create_rpmbuild_dirs
             # build it
-            build_kernel_ib "${LINUXOBJ:-${LINUX}}"
+            build_kernel_ib "${linux}"
             if ! store_for_reuse "$TOPDIR/{SPECS,SOURCES,BUILD,SRPMS,RPMS}" \
                                  "ofed" "$REUSEBUILD" "$REUSE_SIGNATURE" \
                                  "$CAN_LINK_FOR_REUSE"; then
