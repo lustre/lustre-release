@@ -64,11 +64,6 @@ BIGSMP_ARCHS=
 PSERIES64_ARCHS=
 UP_ARCHS=
 
-# these should likely come from the target files too
-RDAC_VERSION="09.03.0C02.0013"
-MPTLINUX_VERSION="4.16.00.00-2"
-
-
 # not in the target file any more
 CONFIG=
 
@@ -438,56 +433,6 @@ download_ofed() {
 
 }
 
-download_rdac() {
-    local force="${1:-false}"
-
-    if [ -n "$RDAC_VERSION" -a "$RDAC_VERSION" != "inkernel" ] &&
-       ( $force || [ ! -r "$KERNELTREE/rdac-LINUX-${RDAC_VERSION}-source.tar.gz" ] ||
-           [ ! -s "$KERNELTREE/rdac-LINUX-${RDAC_VERSION}-source.tar.gz" ] ); then
-        if $DOWNLOAD; then
-            local location="http://downloads.lustre.org/public/RDAC/"
-            echo "Downloading $location/rdac-LINUX-${RDAC_VERSION}-source.tar.gz..."
-            if ! wget -nv "$location/rdac-LINUX-${RDAC_VERSION}-source.tar.gz" \
-                -O "$KERNELTREE/rdac-LINUX-${RDAC_VERSION}-source.tar.gz" ||
-               [ ! -s "$KERNELTREE/rdac-LINUX-${RDAC_VERSION}-source.tar.gz" ]; then
-                rm -f $KERNELTREE/rdac-LINUX-${RDAC_VERSION}-source.tar.gz
-                fatal 1 "Could not download rdac-LINUX-${RDAC_VERSION}-source.tar.gz" \
-                        "from downloads.lustre.org."
-            fi
-        else
-            fatal 1 "rdac-LINUX-${RDAC_VERSION}-source.tar.gz not found in kernel" \
-                    "directory $KERNELTREE."
-        fi
-    fi
-
-    return 0
-}
-
-download_mptlinux() {
-    local force="${1:-false}"
-
-    if [ -n "$MPTLINUX_VERSION" -a "$MPTLINUX_VERSION" != "inkernel" ] &&
-       ( $force || [ ! -r "$KERNELTREE/MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip" ] ||
-           [ ! -s "$KERNELTREE/MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip" ] ); then
-        if $DOWNLOAD; then
-            local location="http://downloads.lustre.org/public/MPTLINUX/"
-            echo "Downloading $location/MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip..."
-            if ! wget -nv "$location/MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip" \
-                -O "$KERNELTREE/MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip" ||
-               [ ! -s "$KERNELTREE/MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip" ]; then
-                rm -f $KERNELTREE/MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip
-                fatal 1 "Could not download MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip" \
-                        "from downloads.lustre.org."
-            fi
-        else
-            fatal 1 "MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip not found in kernel" \
-                    "directory $KERNELTREE."
-        fi
-    fi
-
-    return 0
-}
-
 load_target() {
 
     EXTRA_VERSION_save="$EXTRA_VERSION"
@@ -631,24 +576,6 @@ unpack_ofed() {
 
 }
 
-unpack_rdac() {
-
-    if ! untar "$KERNELTREE/rdac-LINUX-${RDAC_VERSION}-source.tar.gz"; then
-        return 1
-    fi
-    [ -d rdac-LINUX ] || ln -sf rdac-LINUX-[0-9][0-9].* rdac-LINUX
-
-}
-
-unpack_mptlinux() {
-
-    if ! unzip -p $KERNELTREE/MPTLINUX_RHEL5_SLES10_PH15-4.16.00.00-2.zip | tar xzvf - srpms-2/mptlinux-4.16.00.00-2.src.rpm; then
-        return 1
-    fi
-    mv srpms-2/mptlinux-4.16.00.00-2.src.rpm .
-
-}
-
 unpack_lustre() {
 
     if [ -z "$LUSTRE" ]; then
@@ -717,25 +644,23 @@ do_patch_linux() {
 }
 
 build_lustre() {
-    local linux="$1"
-    local linuxobj="$2"
 
     cp "$LUSTRE" SOURCES
 
     pushd lustre >/dev/null
 
     echo "Building Lustre RPMs for: $BUILD_ARCHS..."
-    local targets arch
+    targets=
     for arch in $BUILD_ARCHS; do
         targets="--target $arch $targets"
     done
 
-    local confoptions="--with-linux=${linux}"
+    local confoptions="--with-linux=${LINUX}"
     if $PATCHLESS; then
-        confoptions="--with-linux=${linux} --disable-server"
+        confoptions="--with-linux=${LINUX} --disable-server"
     fi
-    if [ "$linuxobj" != "" ]; then
-        confoptions="$confoptions --with-linux-obj=${linuxobj}"
+    if [ ! "$LINUXOBJ" = "" ]; then
+        confoptions="$confoptions --with-linux-obj=${LINUXOBJ}"
     fi
 
     ./configure $confoptions ${CONFIGURE_FLAGS}
@@ -1119,7 +1044,7 @@ reuse() {
     if [ -n "$REUSEBUILD" ] && [ -d "$REUSEBUILD/$signature/$module" ]; then
         if [ ! -f "$REUSEBUILD/$signature/$module/.lastused" ]; then
             # the .lastused flag is populated at the end of the caching to
-            # signal that the caching was completed.  if that flag is not
+            # signal that the caching was completeld.  if that flag is not
             # there, then the cache is invalid (and should be removed in fact) 
             mv "$REUSEBUILD/$signature/$module"{,-bad-$(date +%s)} || 
                 fatal 1 "failed to clean up a bad cache in location" \
@@ -1289,187 +1214,6 @@ build_kernel_with_srpm() {
 
 }
 
-build_mptlinux() {
-    local LINUX="$1"
-
-    local targets arch
-    for arch in $BUILD_ARCHS; do
-        targets="--target $arch $targets"
-    done
-
-    local rpmbuildopt='-bb'
-    if $NORPM; then
-        rpmbuildopt='-bc'
-        echo NORPM mode. Only compiling.
-        fi
-
-    # if only we could just rebuild the src.rpm.  but the included spec
-    # is a real pig's breakfast.  just check out the patch we need to
-    # apply to it to make it useful.
-    #$RPMBUILD --rebuild \
-    #          --define "_topdir ${TOPDIR}" --target ${TARGET_ARCH} \
-    #          ${TOPDIR}/mptlinux-*.src.rpm
-    rpm -ivh --define "_topdir ${TOPDIR}" ${TOPDIR}/mptlinux-*.src.rpm
-
-    # now the big honkin' patch to the spec file
-    pushd ${TOPDIR}/SPECS
-    # to regen this patch use:
-    # !!cd ~/rpm/SPECS/ && diff -u mptlinux.spec{.dist,}
-    patch -p0 < ${TOPDIR}/lustre/build/mptlinux.spec.patch || fatal 1 "failed to patch mptlinux.spec"
-    popd
-
-    local targets arch
-        for arch in $BUILD_ARCHS; do
-        targets="--target $arch $targets"
-    done
-
-    local rpmbuildopt='-bb'
-    if $NORPM; then
-        rpmbuildopt='-bc'
-        echo NORPM mode. Only compiling.
-            fi
-
-    if ! $RPMBUILD $targets $rpmbuildopt \
-                  --define "_tmppath /var/tmp" \
-                  --define "_topdir ${TOPDIR}" \
-                  --define "kernel_obj $LINUX" \
-                  ${TOPDIR}/SPECS/mptlinux.spec; then
-        return 1
-    fi
-    if $DO_SRC; then
-        if ! $RPMBUILD -bs \
-                      --define "_tmppath /var/tmp" \
-                      --define "_topdir ${TOPDIR}" \
-                      --define "kernel_obj $LINUX" \
-                      ${TOPDIR}/SPECS/mptlinux.spec; then
-            return 1
-        fi
-            fi
-
-    return 0
-
-}
-
-# build RDAC
-build_rdac() {
-    local LINUX="$1"
-
-    # note that we use an _, not a . before the spec on purpose.  we are not
-    # allowed to have more than one file with a .spec trailer in a tarball
-    # that is supposed to be usable with rpmbuild
-    cp lustre/build/rdac_spec ${TOPDIR}/SPECS/rdac.spec || fatal 1 "Could not find rdac.spec in lustre/build" 
-
-    local targets arch
-    for arch in $BUILD_ARCHS; do
-        targets="--target $arch $targets"
-        done
-
-    local rpmbuildopt='-bb'
-    if $NORPM; then
-        rpmbuildopt='-bc'
-        echo NORPM mode. Only compiling.
-        fi
-
-    local distro
-    case $DISTRO in
-     rhel5)     distro="REDHAT"
-                ;;
-    sles1*)     distro="SUSE"
-                ;;
-         *)     echo "$DISTRO not supported by RDAC, skipping"
-                return 0
-                ;;
-    esac
-    if ! $RPMBUILD $targets $rpmbuildopt --define "dist $distro" \
-                  --define "_tmppath /var/tmp" \
-                  --define "_topdir ${TOPDIR}" \
-                  --define "kernel_obj $LINUX" \
-                  ${TOPDIR}/SPECS/rdac.spec; then
-        return 1
-        fi
-    if $DO_SRC; then
-        if ! $RPMBUILD -bs --define "dist $distro" \
-                      --define "_tmppath /var/tmp" \
-                      --define "_topdir ${TOPDIR}" \
-                      --define "kernel_obj $LINUX" \
-                      ${TOPDIR}/SPECS/rdac.spec; then
-            return 1
-    fi
-    fi
-
-    return 0
-}
-
-# build OFED
-# globals used:
-#    TOPDIR
-#    REUSEBUILD, REUSERPM
-#    CONFIGURE_FLAGS
-
-build_ofed() {
-    local linux="$1"
-    local ofed_version="$2"
-
-    # before lustre, build kernel-ib
-    if [ -n "$ofed_version" -a "$ofed_version" != "inkernel" ]; then
-        if [ -n "$REUSEBUILD" ]; then
-        # see if we can link to the reuse pool
-            # XXX - hrm.  i'm not convinced this doesn't belong in the reuse
-            #       "library"
-        local CAN_LINK_FOR_REUSE=false
-        touch $REUSEBUILD/$$
-        if cp -al $REUSEBUILD/$$ $TOPDIR/; then
-            CAN_LINK_FOR_REUSE=true
-        fi
-        rm $REUSEBUILD/$$
-        fi
-
-        local REUSE_SIGNATURE=$({ echo "$ofed_version";
-                                  echo "$(find_linux_release ${linux})";
-                                  cat "${linux}/include/linux/autoconf.h"; } |
-                                md5sum | cut -d" " -f1)
-        if ! $REUSERPM || ! reuse ofed "$TOPDIR" "$CAN_LINK_FOR_REUSE" \
-                        "$REUSE_SIGNATURE"; then
-            # stash away the existing built articles for a moment
-            mkdir bak
-            mv {BUILD,{S,}RPMS,S{OURCE,PEC}S} bak
-            function mv_back {
-                pushd bak
-                find . | cpio -pudlm ..
-                popd
-                rm -rf bak
-            }
-            create_rpmbuild_dirs
-            # build it
-            build_kernel_ib "${linux}"
-            if ! store_for_reuse "$TOPDIR/{SPECS,SOURCES,BUILD,SRPMS,RPMS}" \
-                                 "ofed" "$REUSEBUILD" "$REUSE_SIGNATURE" \
-                                 "$CAN_LINK_FOR_REUSE"; then
-                error "Failed to store OFED RPMS for reuse"
-                mv_back
-                return 1
-            fi
-            # put the stuff we stashed away back
-            mv_back
-        fi
-
-        pushd "$TOPDIR" >/dev/null
-        rm -rf kernel-ib-devel
-        mkdir kernel-ib-devel
-        cd kernel-ib-devel
-        # the actual ofed RPMs don't have the -rc$n or -$date string appened that
-        # might be present on the file
-        local linuxrelease=$(find_linux_release "$linux")
-        ofed_version=$(echo $ofed_version |
-                         sed -re 's/-(20[0-9]{6,6}-[0-9]{4,4}|rc[0-9]*)$//')
-        local rpm=$(ls $TOPDIR/RPMS/*/kernel-ib-devel-${ofed_version}-${linuxrelease//-/_}.*.rpm)
-        rpm2cpio -itv < $rpm | cpio -id
-        CONFIGURE_FLAGS="--with-o2ib=$(pwd)/usr/src/ofa_kernel ${CONFIGURE_FLAGS}"
-        popd >/dev/null
-    fi
-
-}
-
 build_with_srpm() {
 
     if ! $PATCHLESS; then
@@ -1505,17 +1249,62 @@ build_with_srpm() {
         fi
     fi
 
-    build_ofed "${LINUXOBJ:-$LINUX}" "$OFED_VERSION" || fatal 1 "error building OFED"
+    # before lustre, build kernel-ib
+    if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
+        # see if we can link to the reuse pool
+        # XXX - hrm.  i'm not convinced this doesn't belong in the reuse "library"
+        local CAN_LINK_FOR_REUSE=false
+        touch $REUSEBUILD/$$
+        if cp -al $REUSEBUILD/$$ $TOPDIR/; then
+            CAN_LINK_FOR_REUSE=true
+        fi
+        rm $REUSEBUILD/$$
 
-    build_rdac "${LINUXOBJ:-$LINUX}" || fatal 1 "error building RDAC"
+        local REUSE_SIGNATURE=$({ echo "$OFED_VERSION"; echo "$(find_linux_release ${LINUXOBJ:-$LINUX})"; cat "${LINUXOBJ:-${LINUX}}/include/linux/autoconf.h"; } | md5sum | cut -d" " -f1)
+        if ! reuse ofed "$TOPDIR" "$CAN_LINK_FOR_REUSE" \
+                        "$REUSE_SIGNATURE"; then
+            # stash away the existing built articles for a moment
+            mkdir bak
+            mv {BUILD,{S,}RPMS,S{OURCE,PEC}S} bak
+            function mv_back {
+                pushd bak
+                find . | cpio -pudlm ..
+                popd
+                rm -rf bak
+            }
+            create_rpmbuild_dirs
+            # build it
+            build_kernel_ib "${LINUXOBJ:-${LINUX}}"
+            if ! store_for_reuse "$TOPDIR/{SPECS,SOURCES,BUILD,SRPMS,RPMS}" \
+                                 "ofed" "$REUSEBUILD" "$REUSE_SIGNATURE" \
+                                 "$CAN_LINK_FOR_REUSE"; then
+                error "Failed to store OFED RPMS for reuse"
+                mv_back
+                return 1
+            fi
+            # put the stuff we stashed away back
+            mv_back
+        fi
 
-    build_mptlinux "${LINUX}" || fatal 1 "error building mptlinux"
+        pushd "$TOPDIR" >/dev/null
+        rm -rf kernel-ib-devel
+        mkdir kernel-ib-devel
+        cd kernel-ib-devel
+        # the actual ofed RPMs don't have the -rc$n or -$date string appened that
+        # might be present on the file
+        local ofed_version=$(echo $OFED_VERSION |
+                         sed -re 's/-(20[0-9]{6,6}-[0-9]{4,4}|rc[0-9]*)$//')
+        local rpm=$(ls $TOPDIR/RPMS/*/kernel-ib-devel-${ofed_version}-${LINUXRELEASE//-/_}.*.rpm)
+        rpm2cpio -itv < $rpm | cpio -id
+        CONFIGURE_FLAGS="--with-o2ib=$(pwd)/usr/src/ofa_kernel ${CONFIGURE_FLAGS}"
+        popd >/dev/null
+    fi
 
     # now build Lustre
-    if build_lustre "$LINUX" "$LINUXOBJ"; then
+    if build_lustre; then
         # the build worked.  resolve any symlinked files (i.e. from reuse)
         # in RPMS/$arch to real files so that that that huge mess of
-        # complication known as LTS can copy them yet somewhere else.
+        # complication knows as LTS can copy them yet somewhere else.
         # is it any wonder this whole process is so damn so?  anyone ever
         # heard of hardlinks?  it this cool new thing that allows you save
         # tons of time and space by creating... well you can go read about
@@ -1790,33 +1579,15 @@ if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ]; then
     unpack_ofed || fatal 1 "Error unpacking OFED tarball"
 fi
 
-if [ -n "$MPTLINUX_VERSION" -a "$MPTLINUX_VERSION" != "inkernel" ]; then
-    download_mptlinux
-    unpack_mptlinux || fatal 1 "Error unpacking MPTLINUX distribution"
-fi
-
-unpack_mptlinux || fatal 1 "Error unpacking mptlinux"
-
 # make sure the RPM build environment is set up
 create_rpmbuild_dirs
-
-if [ -n "$RDAC_VERSION" -a "$RDAC_VERSION" != "inkernel" ]; then
-    download_rdac
-    # we don't actually need to unpack this.  just put it in the SOURCES dir
-    #unpack_rdac || fatal 1 "Error unpacking RDAC tarball"
-    cp "$KERNELTREE/rdac-LINUX-${RDAC_VERSION}-source.tar.gz" ${TOPDIR}/SOURCES/ ||
-        fatal 1 "Error copying RDAC source tarball to RPM SOURCES dir"
-fi
 
 trap '[ -n "$CCACHE" ] && ccache -s' EXIT
 
 # if an unpacked kernel source tree was given on the command line
 # just build lustre with it (nothing distro kernel specific here)
 if [ -n "$LINUX" ]; then
-    build_mptlinux "${LINUX}" || fatal 1 "error building mptlinux"
-    build_ofed "${LINUX}" "$OFED_VERSION" || fatal 1 "error building OFED"
-    build_rdac "${LINUX}" || fatal 1 "error building RDAC"
-    build_lustre "$LINUX" "$LINUXOBJ"
+    build_lustre
 else
     if [ -f "${0%/*}/lbuild-$DISTRO" ]; then
         seen_list=$(new_list)
