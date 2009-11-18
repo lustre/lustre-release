@@ -1,0 +1,130 @@
+%{!?kernel_obj: %define kernel_obj /lib/modules/$(uname -r)/build}
+# legal values are REDHAT and SUSE.  default to REDHAT
+%{!?dist: %define dist REDHAT}
+
+%define version 09.03.0C02.0013
+
+Name: rdac
+License: GPL
+Group: System/Kernel
+Summary: Multipathing tools
+Version: %{version}
+Release: 1
+Source: http://codeman.central.sun.com/LSI/USR-SDLC/RDAC-Linux/rdac-LINUX-%{version}-source.tar.gz
+#?? BuildRequires: kernel-source kernel-syms
+BuildRoot: %{_tmppath}/rdac-%{version}-root
+
+%description
+This package provides the mppUtil (multipathing command line utilities).
+
+%package modules
+Summary: Multipathing driver for disk subsystems.
+Group: System/Kernel
+
+%description modules
+This package provides the multipathing kernel modules.
+
+%prep
+if true; then
+#exit 0
+%setup -n linuxrdac-%{version}
+else
+cd linuxrdac-%{version}
+fi
+find_linux_release() {
+    local SRCDIR="$1"
+
+    local LINUXRELEASEHEADER=$SRCDIR/include/linux/version.h
+    if [ -s $SRCDIR/include/linux/utsrelease.h ]; then
+        LINUXRELEASEHEADER=$SRCDIR/include/linux/utsrelease.h
+    fi
+
+    sed -ne 's/#define UTS_RELEASE "\(.*\)"$/\1/p' $LINUXRELEASEHEADER
+
+}
+
+# need to fix up silly Makefile madness
+chmod u+w Makefile
+ed Makefile << EOF
+/^GCC_CHK_FLAG :=/c
+GCC_CHK_FLAG := 1
+.
+/^DIST :=/c
+DIST := %{dist}
+.
+/^%{dist}_KERNEL_CHECK :=/c
+%{dist}_KERNEL_CHECK := 1
+.
+/^OS_VER :=/c
+OS_VER := $(find_linux_release %{kernel_obj})
+.
+g/install -o root -g root -m [0-9]\{4,4\}/s//install/
+wq
+EOF
+
+# and other silliness
+#ed genfileattributes << "EOF"
+#EOF
+sed -i -e 's/\/bin\/\(basename\)/\1/g' -e 's/\/bin\/\(awk\)/\1/g' genfileattributes
+
+#sed -i -e 's/install -o root -g root/install/g Makefile
+
+%build
+#exit 0
+export KERNEL_OBJ=%{kernel_obj}
+make all
+
+%install
+rm -rf $RPM_BUILD_ROOT
+export KERNEL_OBJ=%{kernel_obj}
+DIST=%{dist}
+make DEST_DIR=$RPM_BUILD_ROOT copyfiles copyrpmfiles
+install -m 0755 -D mpp_rcscript.$DIST $RPM_BUILD_ROOT/etc/init.d/mpp
+gzip $RPM_BUILD_ROOT/usr/share/man/man9/RDAC.9
+gzip $RPM_BUILD_ROOT/usr/share/man/man1/mppBusRescan.1
+ln -s mppBusRescan $RPM_BUILD_ROOT/usr/sbin/hot_add
+ln -s mppBusRescan.1.gz $RPM_BUILD_ROOT/usr/share/man/man1/hot_add.1.gz
+gzip $RPM_BUILD_ROOT/usr/share/man/man1/mppUpdate.1
+gzip $RPM_BUILD_ROOT/usr/share/man/man1/mppUtil.1
+install -m 0444 -D mpp.conf $RPM_BUILD_ROOT/etc/mpp.conf
+touch devicemapping
+install -m 0755 -d $RPM_BUILD_ROOT/var/mpp
+install -m 0644 -D devicemapping $RPM_BUILD_ROOT/var/mpp/devicemapping
+rm devicemapping
+rm -rf $RPM_BUILD_ROOT/opt/mpp/.mppLnx_rpm_helpers
+
+%post modules
+depmod -a
+
+%files
+%defattr (-,root,root)
+/usr/sbin/hot_add
+/usr/share/man/man1/hot_add.1.gz
+%attr (755,root,root) /etc/init.d/mpp
+%attr (444,root,root) %config(noreplace) /etc/mpp.conf
+%attr (755,root,root) %dir /var/mpp
+%attr (644,root,root) %config(noreplace) /var/mpp/devicemapping
+%attr (755,root,root) %dir /opt/mpp
+%defattr (0500,root,root)
+/opt/mpp/genuniqueid
+/opt/mpp/mppSupport
+/opt/mpp/lsvdev
+/opt/mpp/mppiscsi_umountall
+/usr/sbin/mppBusRescan
+/opt/mpp/mppMkInitrdHelper
+/usr/sbin/mppUpdate
+/usr/sbin/mppUtil
+%defattr (0644,root,root)
+/usr/share/man/man1/mppBusRescan.1.gz
+/usr/share/man/man1/mppUpdate.1.gz
+/usr/share/man/man1/mppUtil.1.gz
+/usr/share/man/man9/RDAC.9.gz
+
+%files modules
+%defattr (0644,root,root)
+/lib/modules
+
+
+%changelog
+* Fri Oct 23 2009 - brian@sun.com 09.03.0C02.0013-1
+  - initial packaging
