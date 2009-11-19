@@ -1853,6 +1853,8 @@ init_param_vars () {
             $LFS quotaoff -ug $MOUNT > /dev/null 2>&1
         fi
     fi
+
+    return 0
 }
 
 nfs_client_mode () {

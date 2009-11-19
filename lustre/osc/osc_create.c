@@ -144,10 +144,14 @@ static int osc_interpret_create(const struct lu_env *env,
                 spin_unlock(&oscc->oscc_lock);
                 break;
         }
+        case -EINTR:
         case -EWOULDBLOCK: {
                 /* aka EAGAIN we should not delay create if import failed -
                  * this avoid client stick in create and avoid race with
                  * delorphan */
+                /* EINTR say - old create request is killed due mds<>ost
+                 * eviction - OSCC_FLAG_RECOVERING can already set due
+                 * IMP_DISCONN event */
                 oscc->oscc_flags |= OSCC_FLAG_RECOVERING;
                 /* oscc->oscc_grow_count = OST_MIN_PRECREATE; */
                 spin_unlock(&oscc->oscc_lock);
