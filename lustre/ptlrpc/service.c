@@ -1947,7 +1947,7 @@ static int ptlrpc_main(void *arg)
 
         /* XXX maintain a list of all managed devices: insert here */
 
-        while ((thread->t_flags & SVC_STOPPING) == 0) {
+        while (!(thread->t_flags & SVC_STOPPING) && !svc->srv_is_stopping) {
                 /* Don't exit while there are replies to be handled */
                 struct l_wait_info lwi = LWI_TIMEOUT(svc->srv_rqbd_timeout,
                                                      ptlrpc_retry_rqbds, svc);
@@ -1957,7 +1957,8 @@ static int ptlrpc_main(void *arg)
                 cond_resched();
 
                 l_wait_event_exclusive (svc->srv_waitq,
-                              ((thread->t_flags & SVC_STOPPING) != 0) ||
+                              thread->t_flags & SVC_STOPPING ||
+                              svc->srv_is_stopping ||
                               (!list_empty(&svc->srv_idle_rqbds) &&
                                svc->srv_rqbd_timeout == 0) ||
                               !list_empty(&svc->srv_req_in_queue) ||
@@ -1967,15 +1968,17 @@ static int ptlrpc_main(void *arg)
                               svc->srv_at_check,
                               &lwi);
 
+                if (thread->t_flags & SVC_STOPPING || svc->srv_is_stopping)
+                        break;
+
                 lc_watchdog_touch(thread->t_watchdog, GET_TIMEOUT(svc));
 
                 ptlrpc_check_rqbd_pool(svc);
 
-                if ((svc->srv_threads_started < svc->srv_threads_max) &&
-                    (svc->srv_n_active_reqs >= (svc->srv_threads_started - 1))){
+                if (svc->srv_threads_started < svc->srv_threads_max &&
+                    svc->srv_n_active_reqs >= (svc->srv_threads_started - 1)) 
                         /* Ignore return code - we tried... */
                         ptlrpc_start_thread(dev, svc);
-                }
 
                 if (!list_empty(&svc->srv_req_in_queue)) {
                         /* Process all incoming reqs before handling any */
@@ -2176,24 +2179,19 @@ static void ptlrpc_stop_thread(struct ptlrpc_service *svc,
                                struct ptlrpc_thread *thread)
 {
         struct l_wait_info lwi = { 0 };
-        int stopped = 0;
         ENTRY;
 
+        CDEBUG(D_RPCTRACE, "Stopping thread [ %p : %u ]\n",
+               thread, thread->t_pid);
+
         spin_lock(&svc->srv_lock);
-        if (unlikely(thread->t_flags & SVC_STOPPED))
-                stopped = 1;
-        else
-                /* let the thread know that we would like it to stop asap */
-                thread->t_flags |= SVC_STOPPING;
+        /* let the thread know that we would like it to stop asap */
+        thread->t_flags |= SVC_STOPPING;
         spin_unlock(&svc->srv_lock);
 
-        if (likely(!stopped)) {
-                CDEBUG(D_RPCTRACE, "Stopping thread [ %p : %u ]\n",
-                       thread, thread->t_pid);
-                cfs_waitq_broadcast(&svc->srv_waitq);
-                l_wait_event(thread->t_ctl_waitq,
-                             (thread->t_flags & SVC_STOPPED), &lwi);
-        }
+        cfs_waitq_broadcast(&svc->srv_waitq);
+        l_wait_event(thread->t_ctl_waitq,
+                     (thread->t_flags & SVC_STOPPED), &lwi);
 
         spin_lock(&svc->srv_lock);
         list_del(&thread->t_link);
@@ -2239,6 +2237,7 @@ int ptlrpc_start_threads(struct obd_device *dev, struct ptlrpc_service *svc)
                         CERROR("cannot start %s thread #%d: rc %d\n",
                                svc->srv_thread_name, i, rc);
                         ptlrpc_stop_all_threads(svc);
+                        break;
                 }
         }
         RETURN(rc);
@@ -2256,6 +2255,10 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc)
         CDEBUG(D_RPCTRACE, "%s started %d min %d max %d running %d\n",
                svc->srv_name, svc->srv_threads_started, svc->srv_threads_min,
                svc->srv_threads_max, svc->srv_threads_running);
+
+        if (unlikely(svc->srv_is_stopping))
+                RETURN(-ESRCH);
+
         if (unlikely(svc->srv_threads_started >= svc->srv_threads_max) ||
             (OBD_FAIL_CHECK(OBD_FAIL_TGT_TOOMANY_THREADS) &&
              svc->srv_threads_started == svc->srv_threads_min - 1))
