@@ -216,7 +216,8 @@ static int lov_sublock_lock(const struct lu_env *env,
                 LASSERT(cl_lock_is_mutexed(child));
                 sublock->lss_active = parent;
 
-                if (unlikely(child->cll_state == CLS_FREEING)) {
+                if (unlikely((child->cll_state == CLS_FREEING) ||
+                             (child->cll_flags & CLF_CANCELLED))) {
                         struct lov_lock_link *link;
                         /*
                          * we could race with lock deletion which temporarily
@@ -345,6 +346,7 @@ static int lov_lock_sub_init(const struct lu_env *env,
                         descr->cld_end   = cl_index(descr->cld_obj, end);
                         descr->cld_mode  = parent->cll_descr.cld_mode;
                         descr->cld_gid   = parent->cll_descr.cld_gid;
+                        descr->cld_enq_flags   = parent->cll_descr.cld_enq_flags;
                         /* XXX has no effect */
                         lck->lls_sub[nr].sub_got = *descr;
                         lck->lls_sub[nr].sub_stripe = i;
@@ -366,6 +368,7 @@ static int lov_lock_sub_init(const struct lu_env *env,
                                 result = PTR_ERR(sublock);
                                 break;
                         }
+                        cl_lock_get_trust(sublock);
                         cl_lock_mutex_get(env, sublock);
                         cl_lock_mutex_get(env, parent);
                         /*
@@ -383,6 +386,7 @@ static int lov_lock_sub_init(const struct lu_env *env,
                                                "lov-parent", parent);
                         }
                         cl_lock_mutex_put(env, sublock);
+                        cl_lock_put(env, sublock);
                 }
         }
         /*
@@ -536,10 +540,11 @@ static int lov_sublock_fill(const struct lu_env *env, struct cl_lock *parent,
         cl_lock_mutex_get(env, parent);
 
         if (!IS_ERR(sublock)) {
+                cl_lock_get_trust(sublock);
                 if (parent->cll_state == CLS_QUEUING &&
-                    lck->lls_sub[idx].sub_lock == NULL)
+                    lck->lls_sub[idx].sub_lock == NULL) {
                         lov_sublock_adopt(env, lck, sublock, idx, link);
-                else {
+                } else {
                         OBD_SLAB_FREE_PTR(link, lov_lock_link_kmem);
                         /* other thread allocated sub-lock, or enqueue is no
                          * longer going on */
@@ -548,6 +553,7 @@ static int lov_sublock_fill(const struct lu_env *env, struct cl_lock *parent,
                         cl_lock_mutex_get(env, parent);
                 }
                 cl_lock_mutex_put(env, sublock);
+                cl_lock_put(env, sublock);
                 result = CLO_REPEAT;
         } else
                 result = PTR_ERR(sublock);
@@ -659,15 +665,11 @@ static int lov_lock_unuse(const struct lu_env *env,
                         if (lls->sub_flags & LSF_HELD) {
                                 LASSERT(sublock->cll_state == CLS_HELD);
                                 rc = cl_unuse_try(subenv->lse_env, sublock);
-                                if (rc != CLO_WAIT)
-                                        rc = lov_sublock_release(env, lck,
-                                                                 i, 0, rc);
+                                rc = lov_sublock_release(env, lck, i, 0, rc);
                         }
                         lov_sublock_unlock(env, sub, closure, subenv);
                 }
                 result = lov_subresult(result, rc);
-                if (result < 0)
-                        break;
         }
 
         if (result == 0 && lck->lls_cancel_race) {
@@ -676,6 +678,75 @@ static int lov_lock_unuse(const struct lu_env *env,
         }
         cl_lock_closure_fini(closure);
         RETURN(result);
+}
+
+
+static void lov_lock_cancel(const struct lu_env *env,
+                           const struct cl_lock_slice *slice)
+{
+        struct lov_lock        *lck     = cl2lov_lock(slice);
+        struct cl_lock_closure *closure = lov_closure_get(env, slice->cls_lock);
+        int i;
+        int result;
+
+        ENTRY;
+
+        for (result = 0, i = 0; i < lck->lls_nr; ++i) {
+                int rc;
+                struct lovsub_lock     *sub;
+                struct cl_lock         *sublock;
+                struct lov_lock_sub    *lls;
+                struct lov_sublock_env *subenv;
+
+                /* top-lock state cannot change concurrently, because single
+                 * thread (one that released the last hold) carries unlocking
+                 * to the completion. */
+                lls = &lck->lls_sub[i];
+                sub = lls->sub_lock;
+                if (sub == NULL)
+                        continue;
+
+                sublock = sub->lss_cl.cls_lock;
+                rc = lov_sublock_lock(env, lck, lls, closure, &subenv);
+                if (rc == 0) {
+                        if (!(lls->sub_flags & LSF_HELD)) {
+                                lov_sublock_unlock(env, sub, closure, subenv);
+                                continue;
+                        }
+
+                        switch(sublock->cll_state) {
+                        case CLS_HELD:
+                                rc = cl_unuse_try(subenv->lse_env,
+                                                  sublock);
+                                lov_sublock_release(env, lck, i, 0, 0);
+                                break;
+                        case CLS_ENQUEUED:
+                                /* TODO: it's not a good idea to cancel this
+                                 * lock because it's innocent. But it's
+                                 * acceptable. The better way would be to
+                                 * define a new lock method to unhold the
+                                 * dlm lock. */
+                                cl_lock_cancel(env, sublock);
+                        default:
+                                lov_sublock_release(env, lck, i, 1, 0);
+                                break;
+                        }
+                        lov_sublock_unlock(env, sub, closure, subenv);
+                }
+
+                if (rc == CLO_REPEAT) {
+                        --i;
+                        continue;
+                }
+
+                result = lov_subresult(result, rc);
+        }
+
+        if (result)
+                CL_LOCK_DEBUG(D_ERROR, env, slice->cls_lock,
+                              "lov_lock_cancel fails with %d.\n", result);
+
+        cl_lock_closure_fini(closure);
 }
 
 static int lov_lock_wait(const struct lu_env *env,
@@ -1049,6 +1120,7 @@ static const struct cl_lock_operations lov_lock_ops = {
         .clo_wait      = lov_lock_wait,
         .clo_use       = lov_lock_use,
         .clo_unuse     = lov_lock_unuse,
+        .clo_cancel    = lov_lock_cancel,
         .clo_fits_into = lov_lock_fits_into,
         .clo_delete    = lov_lock_delete,
         .clo_print     = lov_lock_print

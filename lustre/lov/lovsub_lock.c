@@ -331,9 +331,11 @@ static int lovsub_lock_delete_one(const struct lu_env *env,
         int             result;
         ENTRY;
 
-        parent  = lov->lls_cl.cls_lock;
-        result = 0;
+        parent = lov->lls_cl.cls_lock;
+        if (parent->cll_error)
+                RETURN(0);
 
+        result = 0;
         switch (parent->cll_state) {
         case CLS_NEW:
         case CLS_QUEUING:

@@ -178,7 +178,8 @@ static int vvp_mmap_locks(const struct lu_env *env,
                                                     policy.l_extent.start);
                         descr->cld_end = cl_index(descr->cld_obj,
                                                   policy.l_extent.end);
-                        result = cl_io_lock_alloc_add(env, io, descr, flags);
+                        descr->cld_enq_flags = flags;
+                        result = cl_io_lock_alloc_add(env, io, descr);
                         if (result < 0)
                                 RETURN(result);
 
