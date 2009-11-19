@@ -111,7 +111,7 @@ test_0b() {
     zconf_umount $CLIENT2 $MOUNT
     facet_failover $SINGLEMDS
 
-    do_node $CLIENT1 df $MOUNT && error "$CLIENT1 not evicted"
+    client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     if ! do_node $CLIENT1 $CHECKSTAT -a $DIR/$tdir/$tfile; then
         error "open succeeded unexpectedly"
     fi
@@ -132,8 +132,8 @@ test_0c() {
     rmultiop_start $CLIENT1 $DIR/$tdir/$tfile o_c
     zconf_umount $CLIENT2 $MOUNT
     facet_failover $SINGLEMDS
+    client_up $CLIENT1 || error "$CLIENT1 evicted"
 
-    do_node $CLIENT1 df $MOUNT || error "$CLIENT1 evicted"
     rmultiop_stop $CLIENT1 || error "close failed"
     zconf_mount $CLIENT2 $MOUNT
 }
@@ -164,7 +164,7 @@ test_0e() {
     zconf_umount $CLIENT2 $MOUNT
     facet_failover $SINGLEMDS
 
-    do_node $CLIENT1 df $MOUNT && error "$CLIENT1 not evicted"
+    client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     if ! do_node $CLIENT1 $CHECKSTAT -a $DIR/$tdir/$tfile; then
         error "create succeeded unexpectedly"
     fi
@@ -199,7 +199,7 @@ test_0g() {
     zconf_umount $CLIENT2 $MOUNT
     facet_failover $SINGLEMDS
 
-    do_node $CLIENT1 df $MOUNT && error "$CLIENT1 not evicted"
+    client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     if do_node $CLIENT1 $CHECKSTAT -a $DIR/$tdir/$tfile; then
         error "unlink succeeded unexpectedly"
     fi
@@ -250,7 +250,7 @@ test_0j() {
     zconf_umount $CLIENT2 $MOUNT
     facet_failover $SINGLEMDS
 
-    do_node $CLIENT1 df $MOUNT && error "$CLIENT1 not evicted"
+    client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     if ! do_node $CLIENT1 $CHECKSTAT -u \\\#$UID $file; then
         error "setattr of UID succeeded unexpectedly"
     fi
@@ -271,7 +271,7 @@ test_0k() {
     zconf_umount $CLIENT2 $MOUNT
     facet_failover $SINGLEMDS
 
-    do_node $CLIENT1 df $MOUNT && error "$CLIENT1 not evicted"
+    client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     if ! do_node $CLIENT1 $CHECKSTAT -g \\\#$UID $file; then
         error "setattr of GID succeeded unexpectedly"
     fi
@@ -307,7 +307,7 @@ test_0m() {
     zconf_umount $CLIENT2 $MOUNT
     facet_failover $SINGLEMDS
 
-    do_node $CLIENT1 df $MOUNT && error "$CLIENT1 not evicted"
+    client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     if ! do_node $CLIENT1 $CHECKSTAT -p 0644 $file; then
         error "setattr of permission succeeded unexpectedly"
     fi
@@ -357,7 +357,7 @@ test_0o() {
     zconf_umount $CLIENT2 $MOUNT
     facet_failover $SINGLEMDS
 
-    do_node $CLIENT1 df $MOUNT && error "$CLIENT1 not evicted"
+    client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     checkattr $CLIENT1 i $file
     rc=$?
     do_node $CLIENT1 chattr -i $file
@@ -428,7 +428,7 @@ test_0r() {
     zconf_umount $CLIENT2 $MOUNT
     facet_failover $SINGLEMDS
 
-    do_node $CLIENT1 df $MOUNT || error "$CLIENT1 evicted"
+    client_up $CLIENT1 || error "$CLIENT1 evicted"
     if (($mtime_pre >= $mtime_post)); then
         error "time not changed: pre $mtime_pre, post $mtime_post"
     fi
@@ -478,7 +478,7 @@ test_0t() {
     zconf_umount $CLIENT2 $MOUNT
     facet_failover $SINGLEMDS
 
-    do_node $CLIENT1 df $MOUNT && error "$CLIENT1 not evicted"
+    client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     if ! do_node $CLIENT1 $CHECKSTAT -a $DIR/$tdir/$tfile; then
         error "link should fail"
     fi
@@ -499,7 +499,7 @@ test_0u() {
     zconf_umount $CLIENT2 $MOUNT
     facet_failover $SINGLEMDS
 
-    do_node $CLIENT1 df $MOUNT && error "$CLIENT1 not evicted"
+    client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     if ! do_node $CLIENT1 $CHECKSTAT -a $DIR/$tdir/$tfile; then
         error "link should fail"
     fi
@@ -556,7 +556,7 @@ test_0x() {
     zconf_umount $CLIENT2 $MOUNT
     facet_failover $SINGLEMDS
 
-    do_node $CLIENT1 df $MOUNT && error "$CLIENT1 not evicted"
+    client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     if do_node $CLIENT1 $CHECKSTAT -a $DIR/$tfile; then
         error "rename should fail"
     fi
@@ -577,7 +577,7 @@ test_0y() {
     zconf_umount $CLIENT2 $MOUNT
     facet_failover $SINGLEMDS
 
-    do_node $CLIENT1 df $MOUNT && error "$CLIENT1 not evicted"
+    client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
     if do_node $CLIENT1 $CHECKSTAT -a $DIR/$tfile; then
         error "rename should fail"
     fi
@@ -601,7 +601,7 @@ test_1a() {
 
     facet_failover $SINGLEMDS
     # recovery shouldn't fail due to missing client 2
-    do_node $CLIENT1 df $DIR || return 1
+    client_up $CLIENT1 || return 1
 
     # All 50 files should have been replayed
     do_node $CLIENT1 unlinkmany $DIR/$tfile- 25 || return 2
@@ -630,7 +630,7 @@ test_2a() {
 
     facet_failover $SINGLEMDS
     # recovery shouldn't fail due to missing client 2
-    do_node $CLIENT1 df $DIR || return 1
+    client_up $CLIENT1 || return 1
 
     # All 50 files should have been replayed
     do_node $CLIENT1 unlinkmany $DIR/$tfile- 25 || return 2
@@ -687,8 +687,8 @@ test_2b() {
     zconf_umount $CLIENT2 $MOUNT2
     facet_failover $SINGLEMDS
 
-    do_node $CLIENT1 df $MOUNT && error "$CLIENT1:$MOUNT not evicted"
-    do_node $CLIENT2 df $MOUNT1 || error "$CLIENT2:$MOUNT1 evicted"
+    client_evicted $CLIENT1 || error "$CLIENT1:$MOUNT not evicted"
+    client_up $CLIENT2 || error "$CLIENT2:$MOUNT1 evicted"
 
     #
     # Check the MDT epoch.  $post must be the first transaction
@@ -738,7 +738,7 @@ test_3a() {
 
     facet_failover $SINGLEMDS
     # recovery shouldn't fail due to missing client 2
-    do_node $CLIENT1 df $DIR || return 1
+    client_up $CLIENT1 || return 1
     do_node $CLIENT1 $CHECKSTAT $DIR/$tfile && return 2
 
     zconf_mount $CLIENT2 $DIR || error "mount $CLIENT2 $DIR fail"
@@ -770,7 +770,7 @@ test_3b() {
 
     facet_failover $SINGLEMDS
     # recovery should fail due to missing client 2
-    do_node $CLIENT1 df $DIR && return 1
+    client_evicted $CLIENT1 || return 1
 
     do_node $CLIENT1 $CHECKSTAT -p 0755 $DIR/$tfile && return 2
     zconf_mount $CLIENT2 $DIR || error "mount $CLIENT2 $DIR fail"
@@ -817,14 +817,14 @@ test_4a() {
     vbr_deactivate_client $CLIENT2
 
     facet_failover $SINGLEMDS
-    do_node $CLIENT1 df $DIR || return 1
+    client_up $CLIENT1 || return 1
 
     # All 50 files should have been replayed
     do_node $CLIENT1 unlinkmany $DIR/$tfile- 25 || return 2
     do_node $CLIENT1 unlinkmany $DIR/$tfile-3- 25 || return 3
 
     vbr_activate_client $CLIENT2
-    do_node $CLIENT2 df $DIR || return 4
+    client_up $CLIENT2 || return 4
     # All 25 files from client2 should have been replayed
     do_node $CLIENT2 unlinkmany $DIR/$tdir/$tfile-2- 25 || return 5
 
@@ -848,13 +848,13 @@ test_4b(){
     vbr_deactivate_client $CLIENT2
 
     facet_failover $SINGLEMDS
-    do_node $CLIENT1 df $DIR || return 1
+    client_up $CLIENT1 || return 1
 
     # create another set of files
     do_node $CLIENT1 createmany -o $DIR/$tfile-3- 25
 
     vbr_activate_client $CLIENT2
-    do_node $CLIENT2 df $DIR || return 2
+    client_up $CLIENT2 || return 2
 
     # All files from should have been replayed
     do_node $CLIENT1 unlinkmany $DIR/$tfile- 25 || return 3
@@ -880,13 +880,13 @@ test_4c() {
     vbr_deactivate_client $CLIENT2
 
     facet_failover $SINGLEMDS
-    do_node $CLIENT1 df $DIR || return 1
+    client_up $CLIENT1 || return 1
 
     # create another set of files
     do_node $CLIENT1 createmany -m $DIR/$tfile-3- 25
 
     vbr_activate_client $CLIENT2
-    do_node $CLIENT2 df $DIR || return 2
+    client_up $CLIENT2 || return 2
 
     # All files from should have been replayed
     do_node $CLIENT1 unlinkmany $DIR/$tfile- 25 || return 3
@@ -913,10 +913,10 @@ test_5a() {
     vbr_deactivate_client $CLIENT2
 
     facet_failover $SINGLEMDS
-    do_node $CLIENT1 df $DIR && return 1
+    client_evicted $CLIENT1 || return 1
 
     vbr_activate_client $CLIENT2
-    do_node $CLIENT2 df $DIR || return 2
+    client_up $CLIENT2 || return 2
 
     # First 25 files should have been replayed
     do_node $CLIENT1 unlinkmany $DIR/$tfile- 25 || return 3
@@ -944,14 +944,14 @@ test_5b() {
     vbr_deactivate_client $CLIENT2
 
     facet_failover $SINGLEMDS
-    do_node $CLIENT1 df $DIR || return 1
+    client_up $CLIENT1 || return 1
     do_node $CLIENT1 $CHECKSTAT $DIR/$tfile-2-0 && error "$tfile-2-0 exists"
 
     # create another set of files
     do_node $CLIENT1 createmany -o $DIR/$tfile-3- 25
 
     vbr_activate_client $CLIENT2
-    do_node $CLIENT2 df $DIR && return 4
+    client_evicted $CLIENT2 || return 4
     # file from client2 should fail
     do_node $CLIENT2 $CHECKSTAT $DIR/$tfile-2-0 && error "$tfile-2-0 exists"
 
@@ -984,13 +984,13 @@ test_6a() {
     do_node $CLIENT2 "sysctl -w lustre.fail_val=5"
 #define OBD_FAIL_PTLRPC_REPLAY        0x50e
     do_node $CLIENT2 "sysctl -w lustre.fail_loc=0x2000050e"
-    do_node $CLIENT2 df $DIR
+    client_up $CLIENT2
     # vbr_activate_client $CLIENT2
     # need way to know that client stops replays
     sleep 5
 
     facet_failover $SINGLEMDS
-    do_node $CLIENT1 df $DIR || return 1
+    client_up $CLIENT1 || return 1
 
     # All files should have been replayed
     do_node $CLIENT1 unlinkmany $DIR/$tfile- 25 || return 2
@@ -1020,10 +1020,10 @@ test_7a() {
 
     facet_failover $SINGLEMDS
     vbr_activate_client $CLIENT2
-    do_node $CLIENT2 df $DIR || return 4
+    client_up $CLIENT2 || return 4
 
     facet_failover $SINGLEMDS
-    do_node $CLIENT1 df $DIR || return 1
+    client_up $CLIENT1 || return 1
 
     # All files should have been replayed
     do_node $CLIENT1 unlinkmany $DIR/$tfile- 25 || return 2
@@ -1051,10 +1051,10 @@ test_8a() {
 
     vbr_deactivate_client $CLIENT2
     facet_failover $SINGLEMDS
-    do_node $CLIENT1 df $DIR || return 3
+    client_up $CLIENT1 || return 3
     #client1 is back and will try to open orphan
     vbr_activate_client $CLIENT2
-    do_node $CLIENT2 df $DIR || return 4
+    client_up $CLIENT2 || return 4
 
     do_node $CLIENT2 $CHECKSTAT $DIR/$tfile && error "$tfile exists"
     zconf_umount_clients $CLIENTS $DIR
@@ -1077,10 +1077,10 @@ test_8b() {
 
     vbr_deactivate_client $CLIENT2
     facet_failover $SINGLEMDS
-    do_node $CLIENT1 df $DIR || return 2
+    client_up $CLIENT1 || return 2
     #client1 is back and will try to open orphan
     vbr_activate_client $CLIENT2
-    do_node $CLIENT2 df $DIR || return 3
+    client_up $CLIENT2 || return 3
 
     rmultiop_stop $CLIENT2 || return 1
     do_node $CLIENT2 $CHECKSTAT $DIR/$tfile && error "$tfile exists"
@@ -1105,10 +1105,10 @@ test_8c() {
 
     vbr_deactivate_client $CLIENT2
     facet_failover $SINGLEMDS
-    do_node $CLIENT1 df $DIR || return 3
+    client_up $CLIENT1 || return 3
     #client1 is back and will try to open orphan
     vbr_activate_client $CLIENT2
-    do_node $CLIENT2 df $DIR || return 4
+    client_up $CLIENT2 || return 4
 
     do_node $CLIENT2 $CHECKSTAT $DIR/$tfile && error "$tfile exists"
     zconf_umount_clients $CLIENTS $DIR
@@ -1134,11 +1134,11 @@ test_8d() {
 
     vbr_deactivate_client $CLIENT2
     facet_failover $SINGLEMDS
-    do_node $CLIENT1 df $DIR || return 6
+    client_up $CLIENT1 || return 6
 
     #client1 is back and will try to open orphan
     vbr_activate_client $CLIENT2
-    do_node $CLIENT2 df $DIR || return 8
+    client_up $CLIENT2 || return 8
 
     do_node $CLIENT2 $CHECKSTAT $DIR/$tfile && error "$tfile exists"
     zconf_umount_clients $CLIENTS $DIR
@@ -1160,7 +1160,7 @@ test_8e() {
 
     zconf_umount $CLIENT1 $DIR
     facet_failover $SINGLEMDS
-    do_node $CLIENT2 df $DIR || return 6
+    client_up $CLIENT2 || return 6
 
     do_node $CLIENT2 rm $DIR/$tfile || error "$tfile doesn't exists"
     zconf_umount_clients $CLIENTS $DIR
@@ -1182,7 +1182,7 @@ test_8f() {
 
     zconf_umount $CLIENT1 $DIR
     facet_failover $SINGLEMDS
-    do_node $CLIENT2 df $DIR || return 6
+    client_up $CLIENT2 || return 6
 
     do_node $CLIENT2 rm $DIR/$tfile || error "$tfile doesn't exists"
     zconf_umount $CLIENT2 $DIR
@@ -1204,7 +1204,7 @@ test_8g() {
 
     zconf_umount $CLIENT1 $DIR
     facet_failover $SINGLEMDS
-    do_node $CLIENT2 df $DIR || return 6
+    client_up $CLIENT2 || return 6
 
     do_node $CLIENT2 rmdir $DIR/$tfile || error "$tfile doesn't exists"
     zconf_umount $CLIENT2 $DIR
@@ -1241,7 +1241,7 @@ test_10 () {
     sleep $TIMEOUT
 
     vbr_activate_client $CLIENT2
-    do_node $CLIENT2 df $DIR || return 4
+    client_up $CLIENT2 || return 4
 
     for CLIENT in ${CLIENTS//,/ }; do
         PID=`cat pid.$CLIENT`

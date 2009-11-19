@@ -681,7 +681,7 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
 	check_timeout || return 1
-	client_df
+	clients_up
 	zconf_mount `hostname` $MOUNT2 || error "Failed to mount $MOUNT2"
 	sleep 1 # wait connections being established
 
@@ -741,7 +741,7 @@ test_28() {      # bug 6086 - error adding new clients
 	#define OBD_FAIL_MDS_CLIENT_ADD 0x12f
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x8000012f"
 	# fail once (evicted), reconnect fail (fail_loc), ok
-	df || (sleep 10; df) || (sleep 10; df) || error "reconnect failed"
+	client_up || (sleep 10; client_up) || (sleep 10; client_up) || error "reconnect failed"
 	rm -f $DIR/$tfile
 	fail $SINGLEMDS		# verify MDS last_rcvd can be loaded
 }

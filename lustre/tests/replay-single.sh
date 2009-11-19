@@ -474,10 +474,9 @@ test_20b() { # bug 10480
     lfs getstripe $DIR/$tfile || return 1
     rm -f $DIR/$tfile || return 2       # make it an orphan
     mds_evict_client
-    df -P $DIR || df -P $DIR || true    # reconnect
+    client_up || client_up || true    # reconnect
 
     fail $SINGLEMDS                            # start orphan recovery
-    df -P $DIR || df -P $DIR || true    # reconnect
     wait_recovery_complete $SINGLEMDS || error "MDS recovery not done"
     wait_mds_ost_sync || return 3
     AFTERUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
@@ -495,8 +494,7 @@ test_20c() { # bug 10480
     ls -la $DIR/$tfile
 
     mds_evict_client
-
-    df -P $DIR || df -P $DIR || true    # reconnect
+    client_up || client_up || true    # reconnect
 
     kill -USR1 $pid
     wait $pid || return 1
@@ -710,7 +708,7 @@ test_32() {
     multiop_bg_pause $DIR/$tfile O_c || return 3
     pid2=$!
     mds_evict_client
-    df $MOUNT || sleep 1 && df $MOUNT || return 1
+    client_up || client_up || return 1
     kill -USR1 $pid1
     kill -USR1 $pid2
     wait $pid1 || return 4
@@ -1031,7 +1029,7 @@ test_47() { # bug 2824
     # OBD_FAIL_OST_CREATE_NET 0x204
     fail ost1
     do_facet ost1 "lctl set_param fail_loc=0x80000204"
-    df $MOUNT || return 2
+    client_up || return 2
 
     # let the MDS discover the OST failure, attempt to recover, fail
     # and recover again.
@@ -1055,7 +1053,7 @@ test_48() {
     # OBD_FAIL_OST_EROFS 0x216
     facet_failover $SINGLEMDS
     do_facet ost1 "lctl set_param fail_loc=0x80000216"
-    df $MOUNT || return 2
+    client_up || return 2
 
     createmany -o $DIR/$tfile 20 20 || return 2
     unlinkmany $DIR/$tfile 40 || return 3
@@ -1525,8 +1523,7 @@ test_62() { # Bug 15756 - don't mis-drop resent replay
     createmany -o $DIR/$tdir/$tfile- 25
 #define OBD_FAIL_TGT_REPLAY_DROP         0x707
     do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000707"
-    facet_failover $SINGLEMDS
-    df $MOUNT || return 1
+    fail $SINGLEMDS
     do_facet $SINGLEMDS "lctl set_param fail_loc=0"
     unlinkmany $DIR/$tdir/$tfile- 25 || return 2
     return 0
@@ -1916,7 +1913,7 @@ test_74() {
     mount_facet ost1
     touch $DIR/$tfile || return 1
     rm $DIR/$tfile || return 2
-    client_df || error "df failed: $?"
+    clients_up || error "client evicted: $?"
     return 0
 }
 run_test 74 "Ensure applications don't fail waiting for OST recovery"
@@ -2015,7 +2012,7 @@ test_84a() {
     PID=$!
     mds_evict_client
     wait $PID
-    df -P $DIR || df -P $DIR || true    # reconnect
+    client_up || client_up || true    # reconnect
 }
 run_test 84a "stale open during export disconnect"
 

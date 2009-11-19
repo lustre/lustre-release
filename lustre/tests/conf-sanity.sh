@@ -1747,7 +1747,7 @@ test_47() { #17674
 
         facet_failover ost1
         facet_failover $SINGLEMDS
-        df -h $MOUNT || return 3
+        client_up || return 3
 
         count=0
         for ns in $($LCTL get_param ldlm.namespaces.$FSNAME-*-*-*.lru_size); do

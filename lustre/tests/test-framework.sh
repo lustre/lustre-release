@@ -1171,13 +1171,29 @@ wait_remote_prog () {
     return $rc
 }
 
-client_df() {
+clients_up() {
     # not every config has many clients
+    sleep 1
     if [ ! -z "$CLIENTS" ]; then
-        $PDSH $CLIENTS "df $MOUNT" > /dev/null
+        $PDSH $CLIENTS "stat -f $MOUNT" > /dev/null
     else
-	df $MOUNT > /dev/null
+        stat -f $MOUNT > /dev/null
     fi
+}
+
+client_up() {
+    local client=$1
+    # usually checked on particular client or locally
+    sleep 1
+    if [ ! -z "$client" ]; then
+        $PDSH $client "stat -f $MOUNT" > /dev/null
+    else
+        stat -f $MOUNT > /dev/null
+    fi
+}
+
+client_evicted() {
+    ! client_up $1
 }
 
 client_reconnect() {
@@ -1255,7 +1271,7 @@ ost_evict_client() {
 
 fail() {
     facet_failover $* || error "failover: $?"
-    client_df || error "post-failover df: $?"
+    clients_up || error "post-failover df: $?"
 }
 
 fail_nodf() {
@@ -1268,9 +1284,8 @@ fail_abort() {
     stop $facet
     change_active $facet
     mount_facet $facet -o abort_recovery
-    client_df || echo "first df failed: $?"
-    sleep 1
-    client_df || error "post-failover df: $?"
+    clients_up || echo "first df failed: $?"
+    clients_up || error "post-failover df: $?"
 }
 
 do_lmc() {
