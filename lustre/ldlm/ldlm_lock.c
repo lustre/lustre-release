@@ -1467,6 +1467,9 @@ int ldlm_run_ast_work(struct list_head *rpc_list, ldlm_desc_ast_t ast_type)
         int ast_count;
         ENTRY;
 
+        if (list_empty(rpc_list))
+                RETURN(0);
+
         arg.set = ptlrpc_prep_set();
         if (NULL == arg.set)
                 RETURN(-ERESTART);
