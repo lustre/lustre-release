@@ -629,9 +629,6 @@ int ccc_lock_fits_into(const struct lu_env *env,
         /*
          * Also, don't match incomplete write locks for read, otherwise read
          * would enqueue missing sub-locks in the write mode.
-         *
-         * XXX this is a candidate for generic locking policy, to be moved
-         * into cl_lock_lookup().
          */
         else if (need->cld_mode != descr->cld_mode)
                 result = lock->cll_state >= CLS_ENQUEUED;
@@ -693,8 +690,9 @@ void ccc_lock_state(const struct lu_env *env,
                         cl_inode_mtime(inode) = attr->cat_mtime;
                         cl_inode_atime(inode) = attr->cat_atime;
                         cl_inode_ctime(inode) = attr->cat_ctime;
-                } else
-                        CL_LOCK_DEBUG(D_ERROR, env, lock, "attr_get: %i\n", rc);
+                } else {
+                        CL_LOCK_DEBUG(D_INFO, env, lock, "attr_get: %i\n", rc);
+                }
                 cl_object_attr_unlock(obj);
                 cl_isize_unlock(inode, 0);
         }

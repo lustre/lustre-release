@@ -1414,7 +1414,7 @@ enum cl_lock_state {
          * state, it must wait for the lock.
          * See state diagram for details.
          */
-         CLS_INTRANSIT,
+        CLS_INTRANSIT,
         /**
          * Lock granted, not used.
          */
@@ -1667,7 +1667,7 @@ struct cl_lock_operations {
          * -ESTALE to indicate that lock cannot be returned to the cache, and
          * has to be re-initialized.
          *
-         * \see ccc_lock_unlock(), lov_lock_unlock(), osc_lock_unlock()
+         * \see ccc_lock_unuse(), lov_lock_unuse(), osc_lock_unuse()
          */
         int  (*clo_unuse)(const struct lu_env *env,
                           const struct cl_lock_slice *slice);

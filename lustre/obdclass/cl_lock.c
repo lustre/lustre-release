@@ -127,6 +127,23 @@ static struct cl_thread_counters *cl_lock_counters(const struct lu_env *env,
         return &info->clt_counters[nesting];
 }
 
+static void cl_lock_trace0(int level, const struct lu_env *env,
+                           const char *prefix, const struct cl_lock *lock,
+                           const char *func, const int line)
+{
+        struct cl_object_header *h = cl_object_header(lock->cll_descr.cld_obj);
+        CDEBUG(level, "%s: %p@(%i %p %i %d %d %d %d %lx)"
+                      "(%p/%d/%i) at %s():%d\n",
+               prefix, lock,
+               atomic_read(&lock->cll_ref), lock->cll_guarder, lock->cll_depth,
+               lock->cll_state, lock->cll_error, lock->cll_holds,
+               lock->cll_users, lock->cll_flags,
+               env, h->coh_nesting, cl_lock_nr_mutexed(env),
+               func, line);
+}
+#define cl_lock_trace(level, env, prefix, lock)                         \
+        cl_lock_trace0(level, env, prefix, lock, __FUNCTION__, __LINE__)
+
 #define RETIP ((unsigned long)__builtin_return_address(0))
 
 #ifdef CONFIG_LOCKDEP
@@ -244,6 +261,7 @@ static void cl_lock_free(const struct lu_env *env, struct cl_lock *lock)
         LINVRNT(!cl_lock_is_mutexed(lock));
 
         ENTRY;
+        cl_lock_trace(D_DLMTRACE, env, "free lock", lock);
         might_sleep();
         while (!list_empty(&lock->cll_layers)) {
                 struct cl_lock_slice *slice;
@@ -634,14 +652,6 @@ const struct cl_lock_slice *cl_lock_at(const struct cl_lock *lock,
 }
 EXPORT_SYMBOL(cl_lock_at);
 
-static void cl_lock_trace(struct cl_thread_counters *counters,
-                          const char *prefix, const struct cl_lock *lock)
-{
-        CDEBUG(D_DLMTRACE|D_TRACE, "%s: %i@%p %p %i %i\n", prefix,
-               atomic_read(&lock->cll_ref), lock, lock->cll_guarder,
-               lock->cll_depth, counters->ctc_nr_locks_locked);
-}
-
 static void cl_lock_mutex_tail(const struct lu_env *env, struct cl_lock *lock)
 {
         struct cl_thread_counters *counters;
@@ -650,7 +660,7 @@ static void cl_lock_mutex_tail(const struct lu_env *env, struct cl_lock *lock)
         lock->cll_depth++;
         counters->ctc_nr_locks_locked++;
         lu_ref_add(&counters->ctc_locks_locked, "cll_guard", lock);
-        cl_lock_trace(counters, "got mutex", lock);
+        cl_lock_trace(D_TRACE, env, "got mutex", lock);
 }
 
 /**
@@ -742,7 +752,7 @@ void cl_lock_mutex_put(const struct lu_env *env, struct cl_lock *lock)
         counters = cl_lock_counters(env, lock);
         LINVRNT(counters->ctc_nr_locks_locked > 0);
 
-        cl_lock_trace(counters, "put mutex", lock);
+        cl_lock_trace(D_TRACE, env, "put mutex", lock);
         lu_ref_del(&counters->ctc_locks_locked, "cll_guard", lock);
         counters->ctc_nr_locks_locked--;
         if (--lock->cll_depth == 0) {
@@ -888,6 +898,7 @@ static void cl_lock_hold_release(const struct lu_env *env, struct cl_lock *lock,
         LASSERT(lock->cll_holds > 0);
 
         ENTRY;
+        cl_lock_trace(D_DLMTRACE, env, "hold release lock", lock);
         lu_ref_del(&lock->cll_holders, scope, source);
         cl_lock_hold_mod(env, lock, -1);
         if (lock->cll_holds == 0) {
@@ -942,6 +953,7 @@ int cl_lock_state_wait(const struct lu_env *env, struct cl_lock *lock)
         LASSERT(lock->cll_depth == 1);
         LASSERT(lock->cll_state != CLS_FREEING); /* too late to wait */
 
+        cl_lock_trace(D_DLMTRACE, env, "state wait lock", lock);
         result = lock->cll_error;
         if (result == 0) {
                 cfs_waitlink_init(&waiter);
@@ -987,6 +999,7 @@ static void cl_lock_state_signal(const struct lu_env *env, struct cl_lock *lock,
 void cl_lock_signal(const struct lu_env *env, struct cl_lock *lock)
 {
         ENTRY;
+        cl_lock_trace(D_DLMTRACE, env, "state signal lock", lock);
         cl_lock_state_signal(env, lock, lock->cll_state);
         EXIT;
 }
@@ -1072,8 +1085,9 @@ int cl_use_try(const struct lu_env *env, struct cl_lock *lock, int atomic)
         enum cl_lock_state state;
 
         ENTRY;
-        result = -ENOSYS;
+        cl_lock_trace(D_DLMTRACE, env, "use lock", lock);
 
+        result = -ENOSYS;
         state = cl_lock_intransit(env, lock);
         list_for_each_entry(slice, &lock->cll_layers, cls_linkage) {
                 if (slice->cls_ops->clo_use != NULL) {
@@ -1168,6 +1182,7 @@ int cl_enqueue_try(const struct lu_env *env, struct cl_lock *lock,
         int result;
 
         ENTRY;
+        cl_lock_trace(D_DLMTRACE, env, "enqueue lock", lock);
         do {
                 result = 0;
 
@@ -1291,6 +1306,8 @@ int cl_unuse_try(const struct lu_env *env, struct cl_lock *lock)
         enum cl_lock_state          state = CLS_NEW;
 
         ENTRY;
+        cl_lock_trace(D_DLMTRACE, env, "unuse lock", lock);
+
         if (lock->cll_state != CLS_INTRANSIT) {
                 if (lock->cll_users > 1) {
                         cl_lock_user_del(env, lock);
@@ -1398,6 +1415,7 @@ int cl_wait_try(const struct lu_env *env, struct cl_lock *lock)
         int                         result;
 
         ENTRY;
+        cl_lock_trace(D_DLMTRACE, env, "wait lock try", lock);
         do {
                 LINVRNT(cl_lock_is_mutexed(lock));
                 LINVRNT(cl_lock_invariant(env, lock));
@@ -1455,6 +1473,7 @@ int cl_wait(const struct lu_env *env, struct cl_lock *lock)
         LINVRNT(cl_lock_invariant(env, lock));
         LASSERT(lock->cll_state == CLS_ENQUEUED || lock->cll_state == CLS_HELD);
         LASSERT(lock->cll_holds > 0);
+        cl_lock_trace(D_DLMTRACE, env, "wait lock", lock);
 
         do {
                 result = cl_wait_try(env, lock);
@@ -1523,6 +1542,7 @@ int cl_lock_modify(const struct lu_env *env, struct cl_lock *lock,
         int result;
 
         ENTRY;
+        cl_lock_trace(D_DLMTRACE, env, "modify lock", lock);
         /* don't allow object to change */
         LASSERT(obj == desc->cld_obj);
         LINVRNT(cl_lock_is_mutexed(lock));
@@ -1615,8 +1635,9 @@ EXPORT_SYMBOL(cl_lock_closure_build);
 int cl_lock_enclosure(const struct lu_env *env, struct cl_lock *lock,
                       struct cl_lock_closure *closure)
 {
-        int result;
+        int result = 0;
         ENTRY;
+        cl_lock_trace(D_DLMTRACE, env, "enclosure lock", lock);
         if (!cl_lock_mutex_try(env, lock)) {
                 /*
                  * If lock->cll_inclosure is not empty, lock is already in
@@ -1658,6 +1679,7 @@ void cl_lock_disclosure(const struct lu_env *env,
         struct cl_lock *scan;
         struct cl_lock *temp;
 
+        cl_lock_trace(D_DLMTRACE, env, "disclosure lock", closure->clc_origin);
         list_for_each_entry_safe(scan, temp, &closure->clc_list, cll_inclosure){
                 list_del_init(&scan->cll_inclosure);
                 cl_lock_mutex_put(env, scan);
@@ -1706,6 +1728,7 @@ void cl_lock_delete(const struct lu_env *env, struct cl_lock *lock)
                      cl_lock_nr_mutexed(env) == 1));
 
         ENTRY;
+        cl_lock_trace(D_DLMTRACE, env, "delete lock", lock);
         if (lock->cll_holds == 0)
                 cl_lock_delete0(env, lock);
         else
@@ -1730,6 +1753,7 @@ void cl_lock_error(const struct lu_env *env, struct cl_lock *lock, int error)
         LINVRNT(cl_lock_invariant(env, lock));
 
         ENTRY;
+        cl_lock_trace(D_DLMTRACE, env, "set lock error", lock);
         if (lock->cll_error == 0 && error != 0) {
                 lock->cll_error = error;
                 cl_lock_signal(env, lock);
@@ -1757,6 +1781,7 @@ void cl_lock_cancel(const struct lu_env *env, struct cl_lock *lock)
         LINVRNT(cl_lock_invariant(env, lock));
 
         ENTRY;
+        cl_lock_trace(D_DLMTRACE, env, "cancel lock", lock);
         if (lock->cll_holds == 0)
                 cl_lock_cancel0(env, lock);
         else
@@ -2102,6 +2127,7 @@ struct cl_lock *cl_lock_request(const struct lu_env *env, struct cl_io *io,
                                                       "got (see bug 17665)\n");
                                 cl_unuse_locked(env, lock);
                         }
+                        cl_lock_trace(D_DLMTRACE, env, "enqueue failed", lock);
                         cl_lock_hold_release(env, lock, scope, source);
                         cl_lock_mutex_put(env, lock);
                         lu_ref_del(&lock->cll_reference, scope, source);
@@ -2158,6 +2184,7 @@ void cl_lock_release(const struct lu_env *env, struct cl_lock *lock,
 {
         LINVRNT(cl_lock_invariant(env, lock));
         ENTRY;
+        cl_lock_trace(D_DLMTRACE, env, "release lock", lock);
         cl_lock_mutex_get(env, lock);
         cl_lock_hold_release(env, lock, scope, source);
         cl_lock_mutex_put(env, lock);
@@ -2212,15 +2239,15 @@ EXPORT_SYMBOL(cl_lock_compatible);
 const char *cl_lock_mode_name(const enum cl_lock_mode mode)
 {
         static const char *names[] = {
-                [CLM_PHANTOM] = "PHANTOM",
-                [CLM_READ]    = "READ",
-                [CLM_WRITE]   = "WRITE",
-                [CLM_GROUP]   = "GROUP"
+                [CLM_PHANTOM] = "P",
+                [CLM_READ]    = "R",
+                [CLM_WRITE]   = "W",
+                [CLM_GROUP]   = "G"
         };
         if (0 <= mode && mode < ARRAY_SIZE(names))
                 return names[mode];
         else
-                return "UNKNW";
+                return "U";
 }
 EXPORT_SYMBOL(cl_lock_mode_name);
 

@@ -637,7 +637,20 @@ static void osc_req_attr_set(const struct lu_env *env,
                 opg = osc_cl_page_osc(apage);
                 apage = opg->ops_cl.cpl_page; /* now apage is a sub-page */
                 lock = cl_lock_at_page(env, apage->cp_obj, apage, NULL, 1, 1);
-                LASSERT(lock != NULL);
+                if (lock == NULL) {
+                        struct cl_object_header *head;
+                        struct cl_lock          *scan;
+
+                        head = cl_object_header(apage->cp_obj);
+                        list_for_each_entry(scan, &head->coh_locks, cll_linkage)
+                                CL_LOCK_DEBUG(D_ERROR, env, scan,
+                                              "no cover page!\n");
+                        CL_PAGE_DEBUG(D_ERROR, env, apage,
+                                      "dump uncover page!\n");
+                        libcfs_debug_dumpstack(NULL);
+                        LBUG();
+                }
+
                 olck = osc_lock_at(lock);
                 LASSERT(olck != NULL);
                 /* check for lockless io. */

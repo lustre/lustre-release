@@ -327,7 +327,7 @@ static int lovsub_lock_closure(const struct lu_env *env,
 static int lovsub_lock_delete_one(const struct lu_env *env,
                                   struct cl_lock *child, struct lov_lock *lov)
 {
-        struct cl_lock       *parent;
+        struct cl_lock *parent;
         int             result;
         ENTRY;
 
@@ -411,6 +411,7 @@ static int lovsub_lock_delete_one(const struct lu_env *env,
                 }
                 break;
         case CLS_HELD:
+                CL_LOCK_DEBUG(D_ERROR, env, parent, "Delete CLS_HELD lock\n");
         default:
                 CERROR("Impossible state: %i\n", parent->cll_state);
                 LBUG();

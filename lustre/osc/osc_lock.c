@@ -135,6 +135,8 @@ static void osc_lock_detach(const struct lu_env *env, struct osc_lock *olck)
 {
         struct ldlm_lock *dlmlock;
 
+        /* reset the osc lock's state because it might be queued again. */
+        olck->ols_state = OLS_NEW;
         spin_lock(&osc_ast_guard);
         dlmlock = olck->ols_lock;
         if (dlmlock == NULL) {
@@ -167,15 +169,28 @@ static void osc_lock_detach(const struct lu_env *env, struct osc_lock *olck)
                 unlock_res_and_lock(dlmlock);
 
         /* release a reference taken in osc_lock_upcall0(). */
+        LASSERT(olck->ols_has_ref);
         lu_ref_del(&dlmlock->l_reference, "osc_lock", olck);
         LDLM_LOCK_RELEASE(dlmlock);
+        olck->ols_has_ref = 0;
+}
+
+static int osc_lock_unhold(struct osc_lock *ols)
+{
+        int result = 0;
+
+        if (ols->ols_hold) {
+                ols->ols_hold = 0;
+                result = osc_cancel_base(&ols->ols_handle,
+                                         ols->ols_einfo.ei_mode);
+        }
+        return result;
 }
 
 static int osc_lock_unuse(const struct lu_env *env,
                           const struct cl_lock_slice *slice)
 {
         struct osc_lock *ols = cl2osc_lock(slice);
-        int result;
 
         LASSERT(ols->ols_state == OLS_GRANTED ||
                 ols->ols_state == OLS_UPCALL_RECEIVED);
@@ -193,10 +208,7 @@ static int osc_lock_unuse(const struct lu_env *env,
          * e.g., for liblustre) sees that lock is released.
          */
         ols->ols_state = OLS_RELEASED;
-        ols->ols_hold = 0;
-        result = osc_cancel_base(&ols->ols_handle, ols->ols_einfo.ei_mode);
-        ols->ols_has_ref = 0;
-        return result;
+        return osc_lock_unhold(ols);
 }
 
 static void osc_lock_fini(const struct lu_env *env,
@@ -211,8 +223,7 @@ static void osc_lock_fini(const struct lu_env *env,
          * to the lock), before reply from a server was received. In this case
          * lock is destroyed immediately after upcall.
          */
-        if (ols->ols_hold)
-                osc_lock_unuse(env, slice);
+        osc_lock_unhold(ols);
         LASSERT(ols->ols_lock == NULL);
 
         OBD_SLAB_FREE_PTR(ols, osc_lock_kmem);
@@ -462,11 +473,12 @@ static void osc_lock_upcall0(const struct lu_env *env, struct osc_lock *olck)
          * this.
          */
         ldlm_lock_addref(&olck->ols_handle, olck->ols_einfo.ei_mode);
-        olck->ols_hold = olck->ols_has_ref = 1;
+        olck->ols_hold = 1;
 
         /* lock reference taken by ldlm_handle2lock_long() is owned by
          * osc_lock and released in osc_lock_detach() */
         lu_ref_add(&dlmlock->l_reference, "osc_lock", olck);
+        olck->ols_has_ref = 1;
 }
 
 /**
@@ -569,12 +581,11 @@ static void osc_lock_blocking(const struct lu_env *env,
         CLASSERT(OLS_BLOCKED < OLS_CANCELLED);
         LASSERT(!osc_lock_is_lockless(olck));
 
-        if (olck->ols_hold)
-                /*
-                 * Lock might be still addref-ed here, if e.g., blocking ast
-                 * is sent for a failed lock.
-                 */
-                osc_lock_unuse(env, &olck->ols_cl);
+        /*
+         * Lock might be still addref-ed here, if e.g., blocking ast
+         * is sent for a failed lock.
+         */
+        osc_lock_unhold(olck);
 
         if (blocking && olck->ols_state < OLS_BLOCKED)
                 /*
@@ -771,7 +782,7 @@ static int osc_ldlm_completion_ast(struct ldlm_lock *dlmlock,
                         LASSERT(dlmlock->l_lvb_data != NULL);
                         lock_res_and_lock(dlmlock);
                         olck->ols_lvb = *(struct ost_lvb *)dlmlock->l_lvb_data;
-                        if (olck->ols_lock == NULL)
+                        if (olck->ols_lock == NULL) {
                                 /*
                                  * upcall (osc_lock_upcall()) hasn't yet been
                                  * called. Do nothing now, upcall will bind
@@ -781,12 +792,17 @@ static int osc_ldlm_completion_ast(struct ldlm_lock *dlmlock,
                                  * and ldlm_lock are always bound when
                                  * osc_lock is in OLS_GRANTED state.
                                  */
-                                ;
-                        else if (dlmlock->l_granted_mode != LCK_MINMODE)
+                        } else if (dlmlock->l_granted_mode ==
+                                   dlmlock->l_req_mode) {
                                 osc_lock_granted(env, olck, dlmlock, dlmrc);
+                        }
                         unlock_res_and_lock(dlmlock);
-                        if (dlmrc != 0)
+
+                        if (dlmrc != 0) {
+                                CL_LOCK_DEBUG(D_ERROR, env, lock,
+                                              "dlmlock returned %d\n", dlmrc);
                                 cl_lock_error(env, lock, dlmrc);
+                        }
                         cl_lock_mutex_put(env, lock);
                         osc_ast_data_put(env, olck);
                         result = 0;
@@ -1343,13 +1359,14 @@ static int osc_lock_use(const struct lu_env *env,
         int rc;
 
         LASSERT(!olck->ols_hold);
+
         /*
          * Atomically check for LDLM_FL_CBPENDING and addref a lock if this
          * flag is not set. This protects us from a concurrent blocking ast.
          */
         rc = ldlm_lock_addref_try(&olck->ols_handle, olck->ols_einfo.ei_mode);
         if (rc == 0) {
-                olck->ols_hold = olck->ols_has_ref = 1;
+                olck->ols_hold = 1;
                 olck->ols_state = OLS_GRANTED;
         } else {
                 struct cl_lock *lock;
@@ -1422,8 +1439,7 @@ static void osc_lock_cancel(const struct lu_env *env,
 
                 discard = dlmlock->l_flags & LDLM_FL_DISCARD_DATA;
                 result = osc_lock_flush(olck, discard);
-                if (olck->ols_hold)
-                        osc_lock_unuse(env, slice);
+                osc_lock_unhold(olck);
 
                 lock_res_and_lock(dlmlock);
                 /* Now that we're the only user of dlm read/write reference,
@@ -1521,8 +1537,7 @@ static void osc_lock_delete(const struct lu_env *env,
         LINVRNT(osc_lock_invariant(olck));
         LINVRNT(!osc_lock_has_pages(olck));
 
-        if (olck->ols_hold)
-                osc_lock_unuse(env, slice);
+        osc_lock_unhold(olck);
         osc_lock_detach(env, olck);
 }
 
@@ -1562,7 +1577,7 @@ static int osc_lock_print(const struct lu_env *env, void *cookie,
         /*
          * XXX print ldlm lock and einfo properly.
          */
-        (*p)(env, cookie, "%p %08x "LPU64" %d %p ",
+        (*p)(env, cookie, "%p %08x "LPX64" %d %p ",
              lock->ols_lock, lock->ols_flags, lock->ols_handle.cookie,
              lock->ols_state, lock->ols_owner);
         osc_lvb_print(env, cookie, p, &lock->ols_lvb);
