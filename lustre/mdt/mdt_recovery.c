@@ -179,9 +179,9 @@ static int mdt_last_rcvd_header_write(const struct lu_env *env,
         RETURN(rc);
 }
 
-static int mdt_last_rcvd_read(const struct lu_env *env,
-                              struct mdt_device *mdt,
-                              struct lsd_client_data *lcd, loff_t *off)
+static int mdt_last_rcvd_read(const struct lu_env *env, struct mdt_device *mdt,
+                              struct lsd_client_data *lcd, loff_t *off, 
+                              int index)
 {
         struct mdt_thread_info *mti;
         struct lsd_client_data *tmp;
@@ -191,8 +191,10 @@ static int mdt_last_rcvd_read(const struct lu_env *env,
         tmp = &mti->mti_lcd;
         rc = dt_record_read(env, mdt->mdt_last_rcvd,
                             mdt_buf(env, tmp, sizeof(*tmp)), off);
-        if (rc == 0)
+        if (rc == 0) {
+                check_lcd(mdt2obd_dev(mdt)->obd_name, index, tmp);
                 lcd_le_to_cpu(tmp, lcd);
+        }
 
         CDEBUG(D_INFO, "read lcd @%d rc = %d, uuid = %s, last_transno = "LPU64
                ", last_xid = "LPU64", last_result = %u, last_data = %u, "
@@ -264,7 +266,7 @@ static int mdt_clients_data_init(const struct lu_env *env,
                 off = lsd->lsd_client_start +
                         cl_idx * lsd->lsd_client_size;
 
-                rc = mdt_last_rcvd_read(env, mdt, lcd, &off);
+                rc = mdt_last_rcvd_read(env, mdt, lcd, &off, cl_idx);
                 if (rc) {
                         CERROR("error reading MDS %s idx %d, off %llu: rc %d\n",
                                LAST_RCVD, cl_idx, off, rc);
