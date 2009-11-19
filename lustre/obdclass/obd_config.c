@@ -268,6 +268,7 @@ int class_attach(struct lustre_cfg *lcfg)
         obd->obd_osfs_age = cfs_time_shift_64(-1000);
 
         /* XXX belongs in setup not attach  */
+        init_rwsem(&obd->obd_observer_link_sem);
         /* recovery data */
         cfs_init_timer(&obd->obd_recovery_timer);
         spin_lock_init(&obd->obd_processing_task_lock);

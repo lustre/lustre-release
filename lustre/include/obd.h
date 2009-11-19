@@ -1073,6 +1073,7 @@ struct obd_device {
         struct lvfs_run_ctxt    obd_lvfs_ctxt;
         struct obd_llog_group   obd_olg; /* default llog group */
         struct obd_device       *obd_observer;
+        struct rw_semaphore     obd_observer_link_sem;
         struct obd_notify_upcall obd_upcall;
         struct obd_export       *obd_self_export;
         /* list of exports in LRU order, for ping evictor, with obd_dev_lock */
