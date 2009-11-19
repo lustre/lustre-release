@@ -135,8 +135,6 @@ static void osc_lock_detach(const struct lu_env *env, struct osc_lock *olck)
 {
         struct ldlm_lock *dlmlock;
 
-        /* reset the osc lock's state because it might be queued again. */
-        olck->ols_state = OLS_NEW;
         spin_lock(&osc_ast_guard);
         dlmlock = olck->ols_lock;
         if (dlmlock == NULL) {
