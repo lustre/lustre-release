@@ -77,7 +77,7 @@ static struct lov_sublock_env *lov_sublock_env_get(const struct lu_env *env,
          * they are not initialized at all. As a temp fix, in this case,
          * we still borrow the parent's env to call sublock operations.
          */
-        if (!cl_object_same(io->ci_obj, parent->cll_descr.cld_obj)) {
+        if (!io || !cl_object_same(io->ci_obj, parent->cll_descr.cld_obj)) {
                 subenv->lse_env = env;
                 subenv->lse_io  = io;
                 subenv->lse_sub = NULL;
