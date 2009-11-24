@@ -19,8 +19,8 @@ GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0
 
 # Skip these tests
-# bug number:  17466 18857,15962
-ALWAYS_EXCEPT="61d   33a 33b  $REPLAY_SINGLE_EXCEPT"
+# bug number:  17466 18857,15962 21240
+ALWAYS_EXCEPT="61d   33a 33b     44 $REPLAY_SINGLE_EXCEPT"
 
 if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
     CONFIG_EXCEPTIONS="0b 42 47 61a 61c"
