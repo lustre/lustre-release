@@ -1961,7 +1961,7 @@ ksocknal_connect (ksock_route_t *route)
                         /* We want to introduce a delay before next
                          * attempt to connect if we lost conn race,
                          * but the race is resolved quickly usually,
-                         * so min_reconnectms should be good heruistic */
+                         * so min_reconnectms should be good heuristic */
                         route->ksnr_retry_interval =
                                 cfs_time_seconds(*ksocknal_tunables.ksnd_min_reconnectms)/1000;
                         route->ksnr_timeout = cfs_time_add(cfs_time_current(),
