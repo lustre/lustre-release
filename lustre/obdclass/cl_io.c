@@ -1633,23 +1633,16 @@ int cl_sync_io_wait(const struct lu_env *env, struct cl_io *io,
                           atomic_read(&anchor->csi_sync_nr) == 0,
                           &lwi);
         if (rc < 0) {
-                int rc2;
-
                 CERROR("SYNC IO failed with error: %d, try to cancel "
-                       "the remaining page\n", rc);
+                       "%d remaining pages\n",
+                       rc, atomic_read(&anchor->csi_sync_nr));
 
-                rc2 = cl_io_cancel(env, io, queue);
-                if (rc2 < 0) {
-                        lwi = (struct l_wait_info) { 0 };
-                        /* Too bad, some pages are still in IO. */
-                        CERROR("Failed to cancel transfer error: %d, mostly "
-                               "because of they are still being transferred, "
-                               "waiting for %i pages\n",
-                               rc2, atomic_read(&anchor->csi_sync_nr));
-                        (void)l_wait_event(anchor->csi_waitq,
-                                     atomic_read(&anchor->csi_sync_nr) == 0,
-                                     &lwi);
-                }
+                (void)cl_io_cancel(env, io, queue);
+
+                lwi = (struct l_wait_info) { 0 };
+                (void)l_wait_event(anchor->csi_waitq,
+                                   atomic_read(&anchor->csi_sync_nr) == 0,
+                                   &lwi);
         } else {
                 rc = anchor->csi_sync_rc;
         }
@@ -1673,6 +1666,7 @@ void cl_sync_io_note(struct cl_sync_io *anchor, int ioret)
          * ->{prepare,commit}_write(). Completion is used to signal the end of
          * IO.
          */
+        LASSERT(atomic_read(&anchor->csi_sync_nr) > 0);
         if (atomic_dec_and_test(&anchor->csi_sync_nr))
                 cfs_waitq_broadcast(&anchor->csi_waitq);
         EXIT;
