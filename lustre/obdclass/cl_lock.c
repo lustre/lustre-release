@@ -519,8 +519,6 @@ static struct cl_lock *cl_lock_lookup(const struct lu_env *env,
                        matched);
                 if (matched) {
                         cl_lock_get_trust(lock);
-                        /* move the lock to the LRU head */
-                        list_move(&lock->cll_linkage, &head->coh_locks);
                         atomic_inc(&cl_object_site(obj)->cs_locks.cs_hit);
                         RETURN(lock);
                 }
@@ -565,7 +563,7 @@ static struct cl_lock *cl_lock_find(const struct lu_env *env,
                         spin_lock(&head->coh_lock_guard);
                         ghost = cl_lock_lookup(env, obj, io, need);
                         if (ghost == NULL) {
-                                list_add(&lock->cll_linkage, &head->coh_locks);
+                                list_add_tail(&lock->cll_linkage, &head->coh_locks);
                                 spin_unlock(&head->coh_lock_guard);
                                 atomic_inc(&site->cs_locks.cs_busy);
                         } else {
