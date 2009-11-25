@@ -492,6 +492,52 @@ static void lov_lock_fini(const struct lu_env *env,
 }
 
 /**
+ *
+ * \retval 0 if state-transition can proceed
+ * \retval -ve otherwise.
+ */
+static int lov_lock_enqueue_wait(const struct lu_env *env,
+                                 struct lov_lock *lck,
+                                 struct cl_lock *sublock)
+{
+        struct cl_lock *lock     = lck->lls_cl.cls_lock;
+        struct cl_lock *conflict = sublock->cll_conflict;
+        int result = CLO_REPEAT;
+        ENTRY;
+
+        LASSERT(cl_lock_is_mutexed(lock));
+        LASSERT(cl_lock_is_mutexed(sublock));
+        LASSERT(sublock->cll_state == CLS_QUEUING);
+        LASSERT(conflict != NULL);
+
+        sublock->cll_conflict = NULL;
+        cl_lock_mutex_put(env, lock);
+        cl_lock_mutex_put(env, sublock);
+
+        LASSERT(cl_lock_nr_mutexed(env) == 0);
+
+        cl_lock_mutex_get(env, conflict);
+        cl_lock_cancel(env, conflict);
+        cl_lock_delete(env, conflict);
+        while (conflict->cll_state != CLS_FREEING) {
+                int rc = 0;
+
+                rc = cl_lock_state_wait(env, conflict);
+                if (rc == 0)
+                        continue;
+
+                result = lov_subresult(result, rc);
+                break;
+        }
+        cl_lock_mutex_put(env, conflict);
+        lu_ref_del(&conflict->cll_reference, "cancel-wait", sublock);
+        cl_lock_put(env, conflict);
+
+        cl_lock_mutex_get(env, lock);
+        RETURN(result);
+}
+
+/**
  * Tries to advance a state machine of a given sub-lock toward enqueuing of
  * the top-lock.
  *
@@ -617,13 +663,30 @@ static int lov_lock_enqueue(const struct lu_env *env,
                                                   subenv->lse_io, enqflags,
                                                   i == lck->lls_nr - 1);
                         minstate = min(minstate, sublock->cll_state);
-                        /*
-                         * Don't hold a sub-lock in CLS_CACHED state, see
-                         * description for lov_lock::lls_sub.
-                         */
-                        if (sublock->cll_state > CLS_HELD)
-                                rc = lov_sublock_release(env, lck, i, 1, rc);
-                        lov_sublock_unlock(env, sub, closure, subenv);
+                        if (rc == CLO_WAIT) {
+                                switch (sublock->cll_state) {
+                                case CLS_QUEUING:
+                                        /* take recursive mutex, the lock is
+                                         * released in lov_lock_enqueue_wait.
+                                         */
+                                        cl_lock_mutex_get(env, sublock);
+                                        lov_sublock_unlock(env, sub, closure,
+                                                           subenv);
+                                        rc = lov_lock_enqueue_wait(env, lck,
+                                                                   sublock);
+                                        break;
+                                case CLS_CACHED:
+                                        rc = lov_sublock_release(env, lck, i,
+                                                                 1, rc);
+                                default:
+                                        lov_sublock_unlock(env, sub, closure,
+                                                           subenv);
+                                        break;
+                                }
+                        } else {
+                                LASSERT(sublock->cll_conflict == NULL);
+                                lov_sublock_unlock(env, sub, closure, subenv);
+                        }
                 }
                 result = lov_subresult(result, rc);
                 if (result != 0)

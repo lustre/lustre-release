@@ -2200,25 +2200,6 @@ int cl_lock_user_del(const struct lu_env *env, struct cl_lock *lock)
 }
 EXPORT_SYMBOL(cl_lock_user_del);
 
-/**
- * Check if two lock's mode are compatible.
- *
- * This returns true iff en-queuing \a lock2 won't cause cancellation of \a
- * lock1 even when these locks overlap.
- */
-int cl_lock_compatible(const struct cl_lock *lock1, const struct cl_lock *lock2)
-{
-        enum cl_lock_mode mode1;
-        enum cl_lock_mode mode2;
-
-        ENTRY;
-        mode1 = lock1->cll_descr.cld_mode;
-        mode2 = lock2->cll_descr.cld_mode;
-        RETURN(mode2 == CLM_PHANTOM ||
-               (mode1 == CLM_READ && mode2 == CLM_READ));
-}
-EXPORT_SYMBOL(cl_lock_compatible);
-
 const char *cl_lock_mode_name(const enum cl_lock_mode mode)
 {
         static const char *names[] = {

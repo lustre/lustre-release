@@ -97,7 +97,6 @@ struct osc_thread_info {
         struct cl_lock_descr    oti_descr;
         struct cl_attr          oti_attr;
         struct lustre_handle    oti_handle;
-        struct cl_lock_closure  oti_closure;
         struct cl_page_list     oti_plist;
 };
 

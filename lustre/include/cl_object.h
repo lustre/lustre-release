@@ -1570,6 +1570,10 @@ struct cl_lock {
          */
         struct list_head      cll_inclosure;
         /**
+         * Confict lock at queuing time.
+         */
+        struct cl_lock       *cll_conflict;
+        /**
          * A list of references to this lock, for debugging.
          */
         struct lu_ref         cll_reference;
@@ -2783,8 +2787,6 @@ void  cl_lock_release   (const struct lu_env *env, struct cl_lock *lock,
                          const char *scope, const void *source);
 void  cl_lock_user_add  (const struct lu_env *env, struct cl_lock *lock);
 int   cl_lock_user_del  (const struct lu_env *env, struct cl_lock *lock);
-int   cl_lock_compatible(const struct cl_lock *lock1,
-                         const struct cl_lock *lock2);
 
 enum cl_lock_state cl_lock_intransit(const struct lu_env *env,
                                      struct cl_lock *lock);
