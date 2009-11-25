@@ -658,6 +658,11 @@ test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 	remote_mds || { skip "local MDS" && return 0; }
 
+        if [ $(facet_host mgs) = $(facet_host ost1) ]; then
+                skip "msg and ost1 are at the same node"
+                return 0
+        fi
+
 	check_timeout || return 1
 
 	local OST_NEXP=$(do_facet ost1 lctl get_param -n obdfilter.${ost1_svc}.num_exports | cut -d' ' -f2)
@@ -680,9 +685,15 @@ run_test 26a "evict dead exports"
 test_26b() {      # bug 10140 - evict dead exports by pinger
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
+        if [ $(facet_host mgs) = $(facet_host ost1) ]; then
+                skip "msg and ost1 are at the same node"
+                return 0
+        fi
+
 	check_timeout || return 1
 	clients_up
-	zconf_mount `hostname` $MOUNT2 || error "Failed to mount $MOUNT2"
+	zconf_mount `hostname` $MOUNT2 ||
+                { error "Failed to mount $MOUNT2"; return 2; }
 	sleep 1 # wait connections being established
 
 	local MDS_NEXP=$(do_facet $SINGLEMDS lctl get_param -n mdt.${mds1_svc}.num_exports | cut -d' ' -f2)

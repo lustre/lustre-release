@@ -774,8 +774,8 @@ static void ptlrpc_update_export_timer(struct obd_export *exp, long extra_delay)
                         exp->exp_obd->obd_eviction_timer =
                                 cfs_time_current_sec() + 3 * PING_INTERVAL;
                         CDEBUG(D_HA, "%s: Think about evicting %s from "CFS_TIME_T"\n",
-                               exp->exp_obd->obd_name, obd_export_nid2str(exp),
-                               oldest_time);
+                               exp->exp_obd->obd_name, 
+                               obd_export_nid2str(oldest_exp), oldest_time);
                 }
         } else {
                 if (cfs_time_current_sec() >
