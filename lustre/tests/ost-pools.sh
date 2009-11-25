@@ -1159,13 +1159,15 @@ test_23() {
         return 0
     }
 
-    local numfiles=12
     local i=0
     local TGT
-    local LIMIT=1024
+    local BLK_SZ=1024
+    local BUNIT_SZ=1024  	# min block quota unit(kB)
+    local LOVNAME=`lctl get_param -n llite.*.lov.common_name | tail -n 1`
+    local OSTCOUNT=`lctl get_param -n lov.$LOVNAME.numobd`
+    local LIMIT
     local dir=$POOL_ROOT/dir
-    local file1="$dir/$tfile-quota1"
-    local file2="$dir/$tfile-quota2"
+    local file="$dir/$tfile-quota"
 
     create_pool_nofail $POOL
 
@@ -1176,19 +1178,26 @@ test_23() {
 
     $LFS quotaoff -ug $MOUNT
     $LFS quotacheck -ug $MOUNT
-    $LFS setquota -u $TSTUSR -b $LIMIT -B $LIMIT $dir #-i 5 -I 5 $dir
+    LIMIT=$((BUNIT_SZ * (OSTCOUNT + 1)))
+    $LFS setquota -u $TSTUSR -b $LIMIT -B $LIMIT $dir
+    sleep 3
+    $LFS quota -v -u $TSTUSR $dir
 
-    $LFS setstripe $file1 -c 1 -p $POOL
-    chown $TSTUSR.$TSTUSR $file1
-    ls -l $file1
+    $LFS setstripe $file -c 1 -p $POOL
+    chown $TSTUSR.$TSTUSR $file
+    ls -l $file
     type runas
 
-    stat=$(LC_ALL=C $RUNAS dd if=/dev/zero of=$file1 bs=1024 count=$((LIMIT*2)) 2>&1)
+    LOCALE=C $RUNAS dd if=/dev/zero of=$file bs=$BLK_SZ count=$((BUNIT_SZ*2)) || true
+    $LFS quota -v -u $TSTUSR $dir
+    cancel_lru_locks osc
+    stat=$(LOCALE=C $RUNAS dd if=/dev/zero of=$file bs=$BLK_SZ count=$BUNIT_SZ seek=$((BUNIT_SZ*2)) 2>&1)
     RC=$?
     echo $stat
     [[ $RC -eq 0 ]] && error "dd did not fail with EDQUOT."
-    echo $stat | grep "Disk quota exceeded"
+    echo $stat | grep "Disk quota exceeded" > /dev/null
     [[ $? -eq 1 ]] && error "dd did not fail with EDQUOT."
+    $LFS quota -v -u $TSTUSR $dir
 
     echo "second run"
     $LFS quotaoff -ug $MOUNT
@@ -1199,7 +1208,7 @@ test_23() {
     while [ $RC -eq 0 ];
     do
       i=$((i+1))
-      stat=$(LOCALE=C $RUNAS2 dd if=/dev/zero of=${file2}$i bs=1024 \
+      stat=$(LOCALE=C $RUNAS2 dd if=/dev/zero of=${file}$i bs=1M \
           count=$((LIMIT*LIMIT)) 2>&1)
       RC=$?
       if [ $RC -eq 1 ]; then
