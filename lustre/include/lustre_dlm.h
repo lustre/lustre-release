@@ -530,10 +530,6 @@ struct ldlm_lock {
 
         struct lustre_handle  l_remote_handle;
         ldlm_policy_data_t    l_policy_data;
-        /* traffic index indicating how busy the resource will be, if it is
-         * high, the lock's granted region will not be so big lest it conflicts
-         * other locks, causing frequent lock cancellation and re-enqueue */
-        int                   l_traffic;
 
         /* protected by lr_lock */
         __u64                 l_flags;
