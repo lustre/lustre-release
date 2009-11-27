@@ -63,7 +63,7 @@ test_0c() {
     umount $DIR
     facet_failover mds
     zconf_mount `hostname` $DIR || error "mount fails"
-    df $DIR || error "post-failover df failed"
+    clients_up || error "post-failover df failed"
 }
 run_test 0c "expired recovery with no clients"
 
@@ -408,10 +408,9 @@ test_20b() { # bug 10480
     lfs getstripe $DIR/$tfile || return 1
     rm -f $DIR/$tfile || return 2       # make it an orphan
     mds_evict_client
-    df -P $DIR || df -P $DIR || true    # reconnect
+    client_up || client_up || true    # reconnect
 
     fail mds                            # start orphan recovery
-    df -P $DIR || df -P $DIR || true    # reconnect
     wait_recovery_complete mds || error "MDS recovery not done"
 
     # For interop with 2.0 only:
@@ -436,8 +435,7 @@ test_20c() { # bug 10480
     ls -la $DIR/$tfile
 
     mds_evict_client
-
-    df -P $DIR || df -P $DIR || true    # reconnect
+    client_up || client_up || true    # reconnect
 
     kill -USR1 $pid
     wait $pid || return 1
@@ -651,7 +649,7 @@ test_32() {
     multiop_bg_pause $DIR/$tfile O_c || return 3
     pid2=$!
     mds_evict_client
-    df $MOUNT || sleep 1 && df $MOUNT || return 1
+    client_up || client_up || return 1
     kill -USR1 $pid1
     kill -USR1 $pid2
     wait $pid1 || return 4
@@ -958,7 +956,7 @@ test_47() { # bug 2824
     # OBD_FAIL_OST_CREATE_NET 0x204
     fail ost1
     do_facet ost1 "lctl set_param fail_loc=0x80000204"
-    df $MOUNT || return 2
+    client_up || return 2
 
     # let the MDS discover the OST failure, attempt to recover, fail
     # and recover again.
@@ -982,7 +980,7 @@ test_48() {
     facet_failover mds
     #define OBD_FAIL_OST_EROFS 0x216
     do_facet ost1 "lctl set_param fail_loc=0x80000216"
-    df $MOUNT || return 2
+    client_up || return 2
 
     createmany -o $DIR/$tfile 20 20 || return 2
     unlinkmany $DIR/$tfile 40 || return 3
@@ -1489,8 +1487,7 @@ test_62() { # Bug 15756 - don't mis-drop resent replay
     createmany -o $DIR/$tdir/$tfile- 25
 #define OBD_FAIL_TGT_REPLAY_DROP         0x707
     do_facet mds "lctl set_param fail_loc=0x80000707"
-    facet_failover mds
-    df $MOUNT || return 1
+    fail mds
     do_facet mds "lctl set_param fail_loc=0"
     unlinkmany $DIR/$tdir/$tfile- 25 || return 2
     return 0
@@ -1831,7 +1828,7 @@ test_71a() {
     umount $DIR
     facet_failover mds
     zconf_mount `hostname` $DIR || error "mount fails"
-    df $DIR || error "post-failover df failed"
+    client_up || error "post-failover df failed"
     do_facet mds "lctl get_param -n mds.${mds_svc}.stale_exports|grep $UUID" || \
         error "no delayed exports"
     OLD_AGE=$(do_facet mds "lctl get_param -n mds.${mds_svc}.stale_export_age")
@@ -2080,6 +2077,7 @@ test_84() {
     PID=$!
     mds_evict_client
     wait $PID || true
+    client_up || client_up || true    # reconnect
 }
 run_test 84 "stale open during export disconnect"
 

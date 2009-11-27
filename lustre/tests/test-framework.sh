@@ -983,13 +983,29 @@ wait_remote_prog () {
     return $rc
 }
 
-client_df() {
+clients_up() {
     # not every config has many clients
+    sleep 1
     if [ -n "$CLIENTS" ]; then
-        $PDSH $CLIENTS "df $MOUNT" > /dev/null
+        $PDSH $CLIENTS "stat -f $MOUNT" > /dev/null
     else
-	df $MOUNT > /dev/null
+        stat -f $MOUNT > /dev/null
     fi
+}
+
+client_up() {
+    local client=$1
+    # usually checked on particular client or locally
+    sleep 1
+    if [ ! -z "$client" ]; then
+        $PDSH $client "stat -f $MOUNT" > /dev/null
+    else
+        stat -f $MOUNT > /dev/null
+    fi
+}
+
+client_evicted() {
+    ! client_up $1
 }
 
 client_reconnect() {
@@ -1012,7 +1028,7 @@ facet_failover() {
     shutdown_facet $facet
     [ -n "$sleep_time" ] && sleep $sleep_time
     reboot_facet $facet
-    client_df &
+    clients_up &
     DFPID=$!
     RECOVERY_START_TIME=`date +%s`
     echo "df pid is $DFPID"
