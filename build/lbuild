@@ -1036,7 +1036,7 @@ build_kernel_ib() {
     case "$TARGET_ARCH" in
         ppc64)
             OFED_HARDWARE="$OFED_HARDWARE --with-ehca-mod"
-        ;;
+            ;;
     esac
     # we're no longer shipping the OFED iSCSI
     #OFED_ISCSI="--with-srp-mod --with-srp-target-mod"
