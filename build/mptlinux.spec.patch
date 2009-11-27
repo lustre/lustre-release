@@ -19,7 +19,7 @@
  Source0: %{name}-%{version}.tar.gz
  Source1: fusion.mptctl
  URL: http://www.lsilogic.com
-@@ -22,228 +24,284 @@
+@@ -22,228 +24,285 @@
  Fibre Channel FC909, FC919, FC929, FC919X, FC929X, and FC949X adapters
  SAS SAS1064, SAS1068, and SAS1078 adapters.
  
@@ -200,7 +200,7 @@
 +		#echo "alias scsi_hostadapter2 mptsas" >> /etc/modprobe.edit
 +		#mv -f /etc/modprobe.edit /etc/modprobe.conf
 +	#fi
-	:
++	:
  elif [ -f /etc/SuSE-release ]; then
  	# SLES 9
  	if [ -f /etc/sysconfig/kernel ] ; then
