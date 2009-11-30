@@ -794,7 +794,7 @@ static int dqacq_interpret(struct ptlrpc_request *req, void *data, int rc)
         if (rc1 < 0) {
                 DEBUG_REQ(D_ERROR, req,
                           "error unpacking qunit_data(rc: %d)\n", rc1);
-                GOTO(exit, rc = rc1);
+                *qdata = qunit->lq_data;
         }
 
         QDATA_DEBUG(qdata, "qdata: interpret rc(%d).\n", rc);
@@ -828,7 +828,6 @@ static int dqacq_interpret(struct ptlrpc_request *req, void *data, int rc)
         rc = dqacq_completion(obd, qctxt, qdata, rc,
                               lustre_msg_get_opc(req->rq_reqmsg));
 
-exit:
         OBD_FREE(qdata, sizeof(struct qunit_data));
 
         RETURN(rc);
