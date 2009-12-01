@@ -674,9 +674,6 @@ void lnet_get_tunables(void);
 int lnet_peers_start_down(void);
 int lnet_peer_buffer_credits(lnet_ni_t *ni);
 
-extern int router_ping_timeout;
-extern int dead_router_check_interval;
-extern int live_router_check_interval;
 int lnet_router_checker_start(void);
 void lnet_router_checker_stop(void);
 void lnet_swap_pinginfo(lnet_ping_info_t *info);

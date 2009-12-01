@@ -19,6 +19,10 @@ Details    :
 
 Severity   : enhancement
 Bugzilla   : 15332
+Description: LNet router shuffler.
+
+Severity   : enhancement
+Bugzilla   : 15332
 Description: LNet fine grain routing support.
 
 Severity   : normal

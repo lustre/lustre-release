@@ -168,9 +168,9 @@ int LL_PROC_PROTO(proc_lnet_routes)
                                 if (skip == 0) {
                                         route = re;
                                         break;
-                                } else
-                                        skip--;
+                                }
 
+                                skip--;
                                 r = r->next;
                         }
 
@@ -264,10 +264,10 @@ int LL_PROC_PROTO(proc_lnet_routers)
 
                         if (skip == 0) {
                                 peer = lp;
-                                        break;
-                                } else
-                                        skip--;
+                                break;
+                        }
 
+                        skip--;
                         r = r->next;
                 }
 
@@ -280,8 +280,10 @@ int LL_PROC_PROTO(proc_lnet_routers)
                         int alive_cnt = peer->lp_alive_count;
                         int alive     = peer->lp_alive;
                         int pingsent  = !peer->lp_ping_notsent;
-                        int last_ping = cfs_duration_sec(now - peer->lp_ping_timestamp);
-                        int down_ni   = lnet_router_down_ni(peer, LNET_NIDNET(LNET_NID_ANY));
+                        int last_ping = cfs_duration_sec(cfs_time_sub(now,
+                                                     peer->lp_ping_timestamp));
+                        int down_ni   = lnet_router_down_ni(peer,
+                                                    LNET_NIDNET(LNET_NID_ANY));
 
                         if (deadline == 0)
                                 s += snprintf(s, tmpstr + tmpsiz - s,
@@ -296,7 +298,7 @@ int LL_PROC_PROTO(proc_lnet_routers)
                                               nrefs, nrtrrefs, alive_cnt,
                                               alive ? "up" : "down", last_ping,
                                               pingsent,
-                                              cfs_duration_sec(deadline - now),
+                                              cfs_duration_sec(cfs_time_sub(deadline, now)),
                                               down_ni, libcfs_nid2str(nid));
                         LASSERT (tmpstr + tmpsiz - s > 0);
                 }
@@ -411,13 +413,14 @@ int LL_PROC_PROTO(proc_lnet_peers)
                                             &the_lnet.ln_peer_hash[idx]) {
                                                 num = 1;
                                                 idx++;
-                                        } else
+                                        } else {
                                                 num++;
+                                        }
 
                                         break;
-                                } else
-                                        skip--;
+                                }
 
+                                skip--;
                                 p = lp->lp_hashlist.next;
                         }
 
@@ -572,14 +575,15 @@ int LL_PROC_PROTO(proc_lnet_nis)
                         if (skip == 0) {
                                 ni = a_ni;
                                 break;
-                        } else
-                                skip--;
+                        }
 
+                        skip--;
                         n = n->next;
                 }
 
                 if (ni != NULL) {
                         cfs_time_t now = cfs_time_current();
+                        int        last_alive = -1;
                         int        maxtxcr = ni->ni_maxtxcredits;
                         int        txcr = ni->ni_txcredits;
                         int        mintxcr = ni->ni_mintxcredits;
@@ -587,11 +591,11 @@ int LL_PROC_PROTO(proc_lnet_nis)
                         int        npeerrtrcr = ni->ni_peerrtrcredits;
                         lnet_nid_t nid = ni->ni_nid;
                         int        nref = ni->ni_refcount;
-                        int        last_alive;
                         char      *stat;
 
-                        last_alive = (the_lnet.ln_routing) ?
-                                 cfs_duration_sec(now - ni->ni_last_alive) : -1;
+                        if (the_lnet.ln_routing)
+                                last_alive = cfs_duration_sec(cfs_time_sub(now,
+                                                            ni->ni_last_alive));
                         if (ni->ni_lnd->lnd_type == LOLND)  /* @lo forever alive */
                                 last_alive = 0;
 
