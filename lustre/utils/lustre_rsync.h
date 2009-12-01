@@ -33,21 +33,21 @@
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
- * lustre/include/lustre/lreplicate.h
+ * lustre/include/lustre/lustre_rsync.h
  *
  */
 
-#ifndef _LREPLICATE_H_
-#define _LREPLICATE_H_
+#ifndef _LUSTRE_RSYNC_H_
+#define _LUSTRE_RSYNC_H_
 
 #define LR_NAME_MAXLEN 64
 #define LR_FID_STR_LEN 128
 
-/* Structure used by lreplicate. On-disk structures stored in a log
+/* Structure used by lustre_rsync. On-disk structures stored in a log
  * file. This is used to determine the next start record and other
  * parameters. */
 
-struct lreplicate_status {
+struct lustre_rsync_status {
         __u32   ls_version;           /* Version of the log entry */
         __u32   ls_size;              /* Size of the log entry */
         __u64   ls_last_recno;        /* Last replicated record no. */
@@ -65,4 +65,4 @@ struct lr_parent_child_log {
         char pcl_name[PATH_MAX];
 };
 
-#endif /* _LREPLICATE_H_ */
+#endif /* _LUSTRE_RSYNC_H_ */

@@ -10,7 +10,7 @@ SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 
 ONLY=${ONLY:-"$*"}
-ALWAYS_EXCEPT="$LREPLICATE_EXCEPT 5a 5b"
+ALWAYS_EXCEPT="$LRSYNC_EXCEPT 5a 5b"
 # bug number for skipped test: -  20878
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
@@ -20,7 +20,7 @@ ALWAYS_EXCEPT="$LREPLICATE_EXCEPT 5a 5b"
 KILL=/bin/kill
 
 TMP=${TMP:-/tmp}
-LREPL_LOG=$TMP/lreplicate.log
+LREPL_LOG=$TMP/lustre_rsync.log
 ORIG_PWD=${PWD}
 
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
@@ -41,9 +41,9 @@ assert_DIR
 
 build_test_filter
 
-export LREPLICATE=${LREPLICATE:-"$LUSTRE/utils/lreplicate"}
-[ ! -f "$LREPLICATE" ] && export LREPLICATE=$(which lreplicate)
-export LREPLICATE="$LREPLICATE -v" # -a
+export LRSYNC=${LRSYNC:-"$LUSTRE/utils/lustre_rsync"}
+[ ! -f "$LRSYNC" ] && export LRSYNC=$(which lustre_rsync)
+export LRSYNC="$LRSYNC -v" # -a
 
 # control the time of tests
 DBENCH_TIME=${DBENCH_TIME:-60}  # No of seconds to run dbench
@@ -62,9 +62,9 @@ init_changelog() {
 }
 
 init_src() {
-    rm -rf $TGT/$tdir $TGT/d*.lreplicate-test 2> /dev/null
-    rm -rf $TGT2/$tdir $TGT2/d*.lreplicate-test 2> /dev/null
-    rm -rf ${DIR}/$tdir $DIR/d*.lreplicate-test ${DIR}/tgt 2> /dev/null
+    rm -rf $TGT/$tdir $TGT/d*.lustre_rsync-test 2> /dev/null
+    rm -rf $TGT2/$tdir $TGT2/d*.lustre_rsync-test 2> /dev/null
+    rm -rf ${DIR}/$tdir $DIR/d*.lustre_rsync-test ${DIR}/tgt 2> /dev/null
     rm -f $LREPL_LOG
     mkdir -p $TGT
     mkdir -p $TGT2
@@ -144,7 +144,7 @@ test_1() {
 
     # Replicate
     echo "Replication #1"
-    $LREPLICATE -s $DIR -t $TGT -t $TGT2 -m $MDT0 -u $CL_USER -l $LREPL_LOG
+    $LRSYNC -s $DIR -t $TGT -t $TGT2 -m $MDT0 -u $CL_USER -l $LREPL_LOG
 
     # Set attributes
     chmod 000 $DIR/$tdir/d2/file3
@@ -157,7 +157,7 @@ test_1() {
     fi
 
     echo "Replication #2"
-    $LREPLICATE -l $LREPL_LOG
+    $LRSYNC -l $LREPL_LOG
 
     if [ "$xattr" == "yes" ]; then
 	local xval1=$(getfattr -n user.foo --absolute-names --only-values \
@@ -200,7 +200,7 @@ test_2a() {
     sh rundbench -C -D $DIR/$tdir 2 -t $DBENCH_TIME || error "dbench failed!"
 
     # Replicate the changes to $TGT
-    $LREPLICATE -s $DIR -t $TGT -t $TGT2 -m $MDT0 -u $CL_USER -l $LREPL_LOG
+    $LRSYNC -s $DIR -t $TGT -t $TGT2 -m $MDT0 -u $CL_USER -l $LREPL_LOG
 
     # Use diff to compare the source and the destination
     check_diff $DIR/$tdir $TGT/$tdir
@@ -230,7 +230,7 @@ test_2b() {
     $KILL -SIGSTOP $child_pid
 
     echo Starting replication
-    $LREPLICATE -s $DIR -t $TGT -t $TGT2 -m $MDT0 -u $CL_USER -l $LREPL_LOG
+    $LRSYNC -s $DIR -t $TGT -t $TGT2 -m $MDT0 -u $CL_USER -l $LREPL_LOG
     check_diff $DIR/$tdir $TGT/$tdir
 
     echo Resuming dbench
@@ -241,7 +241,7 @@ test_2b() {
     $KILL -SIGSTOP $child_pid
 
     echo Starting replication
-    $LREPLICATE -l $LREPL_LOG
+    $LRSYNC -l $LREPL_LOG
     check_diff $DIR/$tdir $TGT/$tdir
 
     echo "Wait for dbench to finish"
@@ -250,7 +250,7 @@ test_2b() {
 
     # Replicate the changes to $TGT
     echo Starting replication
-    $LREPLICATE -l $LREPL_LOG
+    $LRSYNC -l $LREPL_LOG
 
     check_diff $DIR/$tdir $TGT/$tdir
     check_diff $DIR/$tdir $TGT2/$tdir
@@ -275,8 +275,8 @@ test_2c() {
     local quit=0
     while [ $quit -le 1 ];
     do
-        echo "Running lreplicate"
-        $LREPLICATE -s $DIR -t $TGT -t $TGT2 -m ${mds1_svc} -u $CL_USER -l $LREPL_LOG
+        echo "Running lustre_rsync"
+        $LRSYNC -s $DIR -t $TGT -t $TGT2 -m ${mds1_svc} -u $CL_USER -l $LREPL_LOG
         sleep 5
         pgrep dbench
         if [ $? -ne 0 ]; then
@@ -306,7 +306,7 @@ test_3a() {
     createmany -o $DIR/$tdir/$tfile $numfiles || error "createmany failed!"
 
     # Replicate the changes to $TGT
-    $LREPLICATE -s $DIR -t $TGT -t $TGT2 -m $MDT0 -u $CL_USER -l $LREPL_LOG
+    $LRSYNC -s $DIR -t $TGT -t $TGT2 -m $MDT0 -u $CL_USER -l $LREPL_LOG
     check_diff $DIR/$tdir $TGT/$tdir   
     check_diff $DIR/$tdir $TGT2/$tdir
 
@@ -330,7 +330,7 @@ test_3b() {
     writemany -q -a $DIR/$tdir/$tfile $time $threads || error "writemany failed!"
 
     # Replicate the changes to $TGT
-    $LREPLICATE -s $DIR -t $TGT -t $TGT2 -m $MDT0 -u $CL_USER -l $LREPL_LOG
+    $LRSYNC -s $DIR -t $TGT -t $TGT2 -m $MDT0 -u $CL_USER -l $LREPL_LOG
 
     check_diff $DIR/$tdir $TGT/$tdir   
     check_diff $DIR/$tdir $TGT2/$tdir
@@ -354,7 +354,7 @@ test_3c() {
     unlinkmany $DIR/$tdir/$tfile $numfiles || error "unlinkmany failed!"
 
     # Replicate the changes to $TGT
-    $LREPLICATE -s $DIR -t $TGT -t $TGT2 -m $MDT0  -u $CL_USER -l $LREPL_LOG
+    $LRSYNC -s $DIR -t $TGT -t $TGT2 -m $MDT0  -u $CL_USER -l $LREPL_LOG
     check_diff $DIR/$tdir $TGT/$tdir   
     check_diff $DIR/$tdir $TGT2/$tdir
 
@@ -385,7 +385,7 @@ test_4() {
     $KILL -SIGSTOP $child_pid
 
     # Replicate the changes to $TGT
-    $LREPLICATE -s $DIR -t $TGT -t $TGT2 -m $MDT0  -u $CL_USER -l $LREPL_LOG
+    $LRSYNC -s $DIR -t $TGT -t $TGT2 -m $MDT0  -u $CL_USER -l $LREPL_LOG
     check_diff $DIR/$tdir $TGT/$tdir
     check_diff $DIR/$tdir $TGT2/$tdir
 
@@ -406,7 +406,7 @@ test_4() {
       sleep 1;
     done
 
-    $LREPLICATE -l $LREPL_LOG
+    $LRSYNC -l $LREPL_LOG
     check_diff $DIR/$tdir $TGT/$tdir
     check_diff $DIR/$tdir $TGT2/$tdir
 
@@ -416,7 +416,7 @@ test_4() {
 }
 run_test 4 "Replicate files created by iozone"
 
-# Test 5a - Stop / start lreplicate
+# Test 5a - Stop / start lustre_rsync
 test_5a() {
     [ "$SLOW" = "no" ] && skip "Skipping slow test" && return
 
@@ -429,12 +429,12 @@ test_5a() {
 
     # Replicate the changes to $TGT
     
-    $LREPLICATE -s $DIR -t $TGT -t $TGT2 -m $MDT0 -u $CL_USER -l $LREPL_LOG &
+    $LRSYNC -s $DIR -t $TGT -t $TGT2 -m $MDT0 -u $CL_USER -l $LREPL_LOG &
     local child_pid=$!
     sleep 30
     $KILL -SIGHUP $child_pid
     wait
-    $LREPLICATE -l $LREPL_LOG
+    $LRSYNC -l $LREPL_LOG
 
     check_diff $DIR/$tdir $TGT/$tdir   
     check_diff $DIR/$tdir $TGT2/$tdir
@@ -443,9 +443,9 @@ test_5a() {
     cleanup_src_tgt
     return 0
 }
-run_test 5a "Stop / start lreplicate"
+run_test 5a "Stop / start lustre_rsync"
 
-# Test 5b - Kill / restart lreplicate
+# Test 5b - Kill / restart lustre_rsync
 test_5b() {
     [ "$SLOW" = "no" ] && skip "Skipping slow test" && return
 
@@ -458,12 +458,12 @@ test_5b() {
 
     # Replicate the changes to $TGT
     
-    $LREPLICATE -s $DIR -t $TGT -t $TGT2 -m $MDT0 -u $CL_USER -l $LREPL_LOG &
+    $LRSYNC -s $DIR -t $TGT -t $TGT2 -m $MDT0 -u $CL_USER -l $LREPL_LOG &
     local child_pid=$!
     sleep 30
     $KILL -SIGKILL $child_pid
     wait
-    $LREPLICATE -l $LREPL_LOG
+    $LRSYNC -l $LREPL_LOG
 
     check_diff $DIR/$tdir $TGT/$tdir   
     check_diff $DIR/$tdir $TGT2/$tdir
@@ -472,9 +472,9 @@ test_5b() {
     cleanup_src_tgt
     return 0
 }
-run_test 5b "Kill / restart lreplicate"
+run_test 5b "Kill / restart lustre_rsync"
 
-# Test 6 - lreplicate large no of hard links
+# Test 6 - lustre_rsync large no of hard links
 test_6() {
     init_src
     init_changelog
@@ -490,7 +490,7 @@ test_6() {
     done
 
     # Replicate the changes to $TGT
-    $LREPLICATE -s $DIR -t $TGT -t $TGT2 -m $MDT0 -u $CL_USER -l $LREPL_LOG
+    $LRSYNC -s $DIR -t $TGT -t $TGT2 -m $MDT0 -u $CL_USER -l $LREPL_LOG
     check_diff $DIR/$tdir $TGT/$tdir
     check_diff $DIR/$tdir $TGT2/$tdir
 
@@ -504,9 +504,9 @@ test_6() {
     cleanup_src_tgt
     return 0
 }
-run_test 6 "lreplicate large no of hard links"
+run_test 6 "lustre_rsync large no of hard links"
 
-# Test 7 - lreplicate stripesize
+# Test 7 - lustre_rsync stripesize
 test_7() {
     init_src
     init_changelog
@@ -518,11 +518,11 @@ test_7() {
 
     # To simulate replication to another lustre filesystem, replicate
     # the changes to $DIR/tgt. We can't turn off the changelogs
-    # while we are registered, so lreplicate better not try to 
+    # while we are registered, so lustre_rsync better not try to 
     # replicate the replication steps.  It seems ok :)
     mkdir $DIR/tgt
 
-    $LREPLICATE -s $DIR -t $DIR/tgt -m $MDT0 -u $CL_USER -l $LREPL_LOG
+    $LRSYNC -s $DIR -t $DIR/tgt -m $MDT0 -u $CL_USER -l $LREPL_LOG
     check_diff ${DIR}/$tdir $DIR/tgt/$tdir
 
     local i=0
@@ -538,7 +538,7 @@ test_7() {
     cleanup_src_tgt
     return 0
 }
-run_test 7 "lreplicate stripesize"
+run_test 7 "lustre_rsync stripesize"
 
 # Test 8 - Replicate multiple file/directory moves
 test_8() {
@@ -561,7 +561,7 @@ test_8() {
 	    mv $DIR/$tdir/d$i $DIR/$tdir/d0$i
     done
 
-    $LREPLICATE -s $DIR -t $TGT -m $MDT0 -u $CL_USER -l $LREPL_LOG
+    $LRSYNC -s $DIR -t $TGT -m $MDT0 -u $CL_USER -l $LREPL_LOG
 
     check_diff ${DIR}/$tdir $TGT/$tdir
 

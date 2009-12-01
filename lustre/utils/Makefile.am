@@ -21,7 +21,7 @@ EXTRA_PROGRAMS = wirecheck
 rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl wiretest \
 	l_getidentity llverfs llverdev \
-	llog_reader lr_reader lshowmount lreplicate \
+	llog_reader lr_reader lshowmount lustre_rsync \
 	ll_recover_lost_found_objs ltrack_stats
 if LIBPTHREAD
 sbin_PROGRAMS += loadgen
@@ -45,9 +45,9 @@ loadgen_SOURCES = loadgen.c lustre_cfg.c obd.c
 loadgen_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS)
 loadgen_DEPENDENCIES := $(LIBPTLCTL)
 
-lreplicate_SOURCES = lreplicate.c obd.c lustre_cfg.c lreplicate.h
-lreplicate_LDADD :=  $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
-lreplicate_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
+lustre_rsync_SOURCES = lustre_rsync.c obd.c lustre_cfg.c lustre_rsync.h
+lustre_rsync_LDADD :=  $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
+lustre_rsync_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 
 ll_recover_lost_found_objs_SOURCES = ll_recover_lost_found_objs.c
 ll_recover_lost_found_objs_LDADD := $(LIBPTLCTL)
