@@ -79,7 +79,7 @@ lustre_hash_init(char *name, unsigned int cur_bits, unsigned int max_bits,
         LASSERT(max_bits >= cur_bits);
         LASSERT(max_bits < 31);
 
-        OBD_ALLOC_PTR(lh);
+        LIBCFS_ALLOC_PTR(lh);
         if (!lh)
                 RETURN(NULL);
 
@@ -102,9 +102,9 @@ lustre_hash_init(char *name, unsigned int cur_bits, unsigned int max_bits,
         /* theta * 1000 */
         __lustre_hash_set_theta(lh, 500, 2000);
 
-        OBD_VMALLOC(lh->lh_buckets, sizeof(*lh->lh_buckets) << lh->lh_cur_bits);
+        LIBCFS_ALLOC(lh->lh_buckets, sizeof(*lh->lh_buckets) << lh->lh_cur_bits);
         if (!lh->lh_buckets) {
-                OBD_FREE_PTR(lh);
+                LIBCFS_FREE_PTR(lh);
                 RETURN(NULL);
         }
 
@@ -150,8 +150,8 @@ lustre_hash_exit(lustre_hash_t *lh)
         LASSERT(atomic_read(&lh->lh_count) == 0);
         write_unlock(&lh->lh_rwlock);
 
-        OBD_VFREE(lh->lh_buckets, sizeof(*lh->lh_buckets) << lh->lh_cur_bits);
-        OBD_FREE_PTR(lh);
+        LIBCFS_FREE(lh->lh_buckets, sizeof(*lh->lh_buckets) << lh->lh_cur_bits);
+        LIBCFS_FREE_PTR(lh);
         EXIT;
 }
 EXPORT_SYMBOL(lustre_hash_exit);
@@ -564,7 +564,7 @@ lustre_hash_rehash(lustre_hash_t *lh, int bits)
         LASSERT(!in_interrupt());
         LASSERT(mask > 0);
 
-        OBD_VMALLOC(rehash_buckets, sizeof(*rehash_buckets) << bits);
+        LIBCFS_ALLOC(rehash_buckets, sizeof(*rehash_buckets) << bits);
         if (!rehash_buckets)
                 RETURN(-ENOMEM);
 
@@ -582,8 +582,8 @@ lustre_hash_rehash(lustre_hash_t *lh, int bits)
          */
         theta = __lustre_hash_theta(lh);
         if ((theta >= lh->lh_min_theta) && (theta <= lh->lh_max_theta)) {
-                OBD_VFREE(rehash_buckets, sizeof(*rehash_buckets) << bits);
                 write_unlock(&lh->lh_rwlock);
+                LIBCFS_FREE(rehash_buckets, sizeof(*rehash_buckets) << bits);
                 RETURN(-EALREADY);
         }
 
@@ -630,8 +630,8 @@ lustre_hash_rehash(lustre_hash_t *lh, int bits)
                 write_unlock(&lh_lhb->lhb_rwlock);
         }
 
-        OBD_VFREE(lh_buckets, sizeof(*lh_buckets) << lh_bits);
         write_unlock(&lh->lh_rwlock);
+        LIBCFS_FREE(lh_buckets, sizeof(*lh_buckets) << lh_bits);
 
         RETURN(0);
 }
