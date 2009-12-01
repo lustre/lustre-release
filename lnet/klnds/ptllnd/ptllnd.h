@@ -362,7 +362,7 @@ kptllnd_schedule_ptltrace_dump (void)
 int  kptllnd_startup(lnet_ni_t *ni);
 void kptllnd_shutdown(lnet_ni_t *ni);
 int  kptllnd_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg);
-void kptllnd_query (struct lnet_ni *ni, lnet_nid_t nid, time_t *when);
+void kptllnd_query (struct lnet_ni *ni, lnet_nid_t nid, cfs_time_t *when);
 int  kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg);
 int  kptllnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
                   int delayed, unsigned int niov, 

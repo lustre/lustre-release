@@ -289,17 +289,14 @@ kptllnd_peer_notify (kptl_peer_t *peer)
         int           i = 0;
         int           nnets = 0;
         int           error = 0;
-        time_t        last_alive = 0;
+        cfs_time_t    last_alive = 0;
         
         spin_lock_irqsave(&peer->peer_lock, flags);
 
         if (peer->peer_error != 0) {
                 error = peer->peer_error;
                 peer->peer_error = 0;
-                
-                last_alive = cfs_time_current_sec() - 
-                             cfs_duration_sec(cfs_time_current() - 
-                                              peer->peer_last_alive);
+                last_alive = peer->peer_last_alive;
         }
         
         spin_unlock_irqrestore(&peer->peer_lock, flags);

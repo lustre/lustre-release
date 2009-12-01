@@ -1495,8 +1495,8 @@ ksocknal_close_conn_locked (ksock_conn_t *conn, int error)
 void
 ksocknal_peer_failed (ksock_peer_t *peer)
 {
-        time_t    last_alive = 0;
-        int       notify = 0;
+        int        notify = 0;
+        cfs_time_t last_alive = 0;
 
         /* There has been a connection failure or comms error; but I'll only
          * tell LNET I think the peer is dead if it's to another kernel and
@@ -1509,9 +1509,7 @@ ksocknal_peer_failed (ksock_peer_t *peer)
             peer->ksnp_accepting == 0 &&
             ksocknal_find_connecting_route_locked(peer) == NULL) {
                 notify = 1;
-                last_alive = (time_t) (cfs_time_current_sec() -
-                        cfs_duration_sec(cfs_time_current() -
-                                         peer->ksnp_last_alive));
+                last_alive = peer->ksnp_last_alive;
         }
 
         cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
@@ -1792,7 +1790,7 @@ ksocknal_notify (lnet_ni_t *ni, lnet_nid_t gw_nid, int alive)
 }
 
 void
-ksocknal_query (lnet_ni_t *ni, lnet_nid_t nid, time_t *when)
+ksocknal_query (lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
 {
         int                connect = 1;
         cfs_time_t         last_alive = 0;
@@ -1829,8 +1827,7 @@ ksocknal_query (lnet_ni_t *ni, lnet_nid_t nid, time_t *when)
         read_unlock(glock);
 
         if (last_alive != 0)
-                *when = cfs_time_current_sec() -
-                        cfs_duration_sec(cfs_time_current() - last_alive);
+                *when = last_alive;
 
         if (!connect)
                 return;

@@ -1120,9 +1120,11 @@ LNetInit(void)
         memset(&the_lnet, 0, sizeof(the_lnet));
 
         lnet_init_locks();
-        CFS_INIT_LIST_HEAD(&the_lnet.ln_lnds);
         the_lnet.ln_refcount = 0;
         the_lnet.ln_init = 1;
+        LNetInvalidateHandle(&the_lnet.ln_rc_eqh);
+        CFS_INIT_LIST_HEAD(&the_lnet.ln_lnds);
+        CFS_INIT_LIST_HEAD(&the_lnet.ln_zombie_rcd);
 
 #ifdef __KERNEL__
         /* All LNDs apart from the LOLND are in separate modules.  They
@@ -1207,11 +1209,13 @@ LNetNIInit(lnet_pid_t requested_pid)
         the_lnet.ln_refcount = 1;
         /* Now I may use my own API functions... */
 
-        rc = lnet_router_checker_start();
+        /* NB router checker needs the_lnet.ln_ping_info in
+         * lnet_router_checker -> lnet_update_ni_status */
+        rc = lnet_ping_target_init();
         if (rc != 0)
                 goto failed3;
 
-        rc = lnet_ping_target_init();
+        rc = lnet_router_checker_start();
         if (rc != 0)
                 goto failed4;
 
@@ -1219,7 +1223,7 @@ LNetNIInit(lnet_pid_t requested_pid)
         goto out;
 
  failed4:
-        lnet_router_checker_stop();
+        lnet_ping_target_fini();
  failed3:
         the_lnet.ln_refcount = 0;
         lnet_acceptor_stop();
@@ -1249,8 +1253,8 @@ LNetNIFini()
                 LASSERT (!the_lnet.ln_niinit_self);
 
                 lnet_proc_fini();
-                lnet_ping_target_fini();
                 lnet_router_checker_stop();
+                lnet_ping_target_fini();
 
                 /* Teardown fns that use my own API functions BEFORE here */
                 the_lnet.ln_refcount = 0;
@@ -1299,7 +1303,9 @@ LNetCtl(unsigned int cmd, void *arg)
                                       &data->ioc_nid, &data->ioc_flags);
         case IOC_LIBCFS_NOTIFY_ROUTER:
                 return lnet_notify(NULL, data->ioc_nid, data->ioc_flags,
-                                   (time_t)data->ioc_u64[0]);
+                                   cfs_time_current() -
+                                   cfs_time_seconds(cfs_time_current_sec() -
+                                                    (time_t)data->ioc_u64[0]));
 
         case IOC_LIBCFS_PORTALS_COMPATIBILITY:
                 /* This can be removed once lustre stops calling it */
@@ -1404,18 +1410,16 @@ LNetSnprintHandle(char *str, int len, lnet_handle_any_t h)
         snprintf(str, len, LPX64, h.cookie);
 }
 
-
-int
-lnet_ping_target_init(void)
+static int
+lnet_create_ping_info(void)
 {
-        lnet_handle_me_t  meh;
-        lnet_process_id_t id;
-        lnet_md_t         md = {0};
-        int               rc;
-        int               rc2;
-        int               n;
-        unsigned int      infosz;
         int               i;
+        int               n;
+        int               rc;
+        unsigned int      infosz;
+        lnet_ni_t        *ni;
+        lnet_process_id_t id;
+        lnet_ping_info_t *pinfo;
 
         for (n = 0; ; n++) {
                 rc = LNetGetId(n, &id);
@@ -1425,23 +1429,75 @@ lnet_ping_target_init(void)
                 LASSERT (rc == 0);
         }
 
-        infosz = offsetof(lnet_ping_info_t, pi_nid[n]);
-        LIBCFS_ALLOC(the_lnet.ln_ping_info, infosz);
-        if (the_lnet.ln_ping_info == NULL) {
+        infosz = offsetof(lnet_ping_info_t, pi_ni[n]);
+        LIBCFS_ALLOC(pinfo, infosz);
+        if (pinfo == NULL) {
                 CERROR("Can't allocate ping info[%d]\n", n);
                 return -ENOMEM;
         }
 
-        the_lnet.ln_ping_info->pi_magic   = LNET_PROTO_PING_MAGIC;
-        the_lnet.ln_ping_info->pi_version = LNET_PROTO_PING_VERSION;
-        the_lnet.ln_ping_info->pi_pid     = the_lnet.ln_pid;
-        the_lnet.ln_ping_info->pi_nnids   = n;
+        pinfo->pi_nnis    = n;
+        pinfo->pi_pid     = the_lnet.ln_pid;
+        pinfo->pi_magic   = LNET_PROTO_PING_MAGIC;
+        pinfo->pi_version = LNET_PROTO_PING_VERSION;
 
         for (i = 0; i < n; i++) {
+                lnet_ni_status_t *ns = &pinfo->pi_ni[i];
+
                 rc = LNetGetId(i, &id);
                 LASSERT (rc == 0);
-                the_lnet.ln_ping_info->pi_nid[i] = id.nid;
+
+                ns->ns_nid    = id.nid;
+                ns->ns_status = LNET_NI_STATUS_UP;
+
+                LNET_LOCK();
+
+                ni = lnet_nid2ni_locked(id.nid);
+                LASSERT (ni != NULL);
+                LASSERT (ni->ni_status == NULL);
+                ni->ni_status = ns;
+                lnet_ni_decref_locked(ni);
+
+                LNET_UNLOCK();
         }
+
+        the_lnet.ln_ping_info = pinfo;
+        return 0;
+}
+
+static void
+lnet_destroy_ping_info(void)
+{
+        lnet_ni_t *ni;
+
+        LNET_LOCK();
+
+        list_for_each_entry (ni, &the_lnet.ln_nis, ni_list) {
+                ni->ni_status = NULL;
+        }
+
+        LNET_UNLOCK();
+
+        LIBCFS_FREE(the_lnet.ln_ping_info,
+                    offsetof(lnet_ping_info_t,
+                             pi_ni[the_lnet.ln_ping_info->pi_nnis]));
+        the_lnet.ln_ping_info = NULL;
+        return;
+}
+
+int
+lnet_ping_target_init(void)
+{
+        lnet_md_t         md = {0};
+        lnet_handle_me_t  meh;
+        lnet_process_id_t id;
+        int               rc;
+        int               rc2;
+        int               infosz;
+
+        rc = lnet_create_ping_info();
+        if (rc != 0)
+                return rc;
 
         /* We can have a tiny EQ since we only need to see the unlink event on
          * teardown, which by definition is the last one! */
@@ -1465,6 +1521,8 @@ lnet_ping_target_init(void)
         }
 
         /* initialize md content */
+        infosz = offsetof(lnet_ping_info_t,
+                          pi_ni[the_lnet.ln_ping_info->pi_nnis]);
         md.start     = the_lnet.ln_ping_info;
         md.length    = infosz;
         md.threshold = LNET_MD_THRESH_INF;
@@ -1491,8 +1549,7 @@ lnet_ping_target_init(void)
         rc2 = LNetEQFree(the_lnet.ln_ping_target_eq);
         LASSERT (rc2 == 0);
  failed_0:
-        LIBCFS_FREE(the_lnet.ln_ping_info, infosz);
-
+        lnet_destroy_ping_info();
         return rc;
 }
 
@@ -1529,11 +1586,7 @@ lnet_ping_target_fini(void)
 
         rc = LNetEQFree(the_lnet.ln_ping_target_eq);
         LASSERT (rc == 0);
-
-        LIBCFS_FREE(the_lnet.ln_ping_info,
-                    offsetof(lnet_ping_info_t,
-                             pi_nid[the_lnet.ln_ping_info->pi_nnids]));
-
+        lnet_destroy_ping_info();
         cfs_restore_sigs(blocked);
 }
 
@@ -1548,7 +1601,7 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
         int                  unlinked = 0;
         int                  replied = 0;
         const int            a_long_time = 60000; /* mS */
-        int                  infosz = offsetof(lnet_ping_info_t, pi_nid[n_ids]);
+        int                  infosz = offsetof(lnet_ping_info_t, pi_ni[n_ids]);
         lnet_ping_info_t    *info;
         lnet_process_id_t    tmpid;
         int                  i;
@@ -1642,7 +1695,6 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
                                 CWARN("ping %s: late network completion\n",
                                       libcfs_id2str(id));
                         }
-
                 } else if (event.type == LNET_EVENT_REPLY) {
                         replied = 1;
                         rc = event.mlength;
@@ -1671,14 +1723,7 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
         }
 
         if (info->pi_magic == __swab32(LNET_PROTO_PING_MAGIC)) {
-                /* NB I might be swabbing garbage until I check below, but it
-                 * doesn't matter */
-                __swab32s(&info->pi_version);
-                __swab32s(&info->pi_pid);
-                __swab32s(&info->pi_nnids);
-                for (i = 0; i < (int)info->pi_nnids && i < (int)n_ids; i++)
-                        __swab64s(&info->pi_nid[i]);
-
+                lnet_swap_pinginfo(info);
         } else if (info->pi_magic != LNET_PROTO_PING_MAGIC) {
                 CERROR("%s: Unexpected magic %08x\n", 
                        libcfs_id2str(id), info->pi_magic);
@@ -1691,18 +1736,18 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
                 goto out_1;
         }
 
-        if (nob < (int)offsetof(lnet_ping_info_t, pi_nid[0])) {
+        if (nob < offsetof(lnet_ping_info_t, pi_ni[0])) {
                 CERROR("%s: Short reply %d(%d min)\n", libcfs_id2str(id),
-                       nob, (int)offsetof(lnet_ping_info_t, pi_nid[0]));
+                       nob, (int)offsetof(lnet_ping_info_t, pi_ni[0]));
                 goto out_1;
         }
 
-        if ((int) info->pi_nnids < n_ids)
-                n_ids = info->pi_nnids;
+        if (info->pi_nnis < n_ids)
+                n_ids = info->pi_nnis;
 
-        if (nob < (int)offsetof(lnet_ping_info_t, pi_nid[n_ids])) {
+        if (nob < offsetof(lnet_ping_info_t, pi_ni[n_ids])) {
                 CERROR("%s: Short reply %d(%d expected)\n", libcfs_id2str(id),
-                       nob, (int)offsetof(lnet_ping_info_t, pi_nid[n_ids]));
+                       nob, (int)offsetof(lnet_ping_info_t, pi_ni[n_ids]));
                 goto out_1;
         }
 
@@ -1710,7 +1755,7 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
 
         for (i = 0; i < n_ids; i++) {
                 tmpid.pid = info->pi_pid;
-                tmpid.nid = info->pi_nid[i];
+                tmpid.nid = info->pi_ni[i].ns_nid;
 #ifdef __KERNEL__
                 if (copy_to_user(&ids[i], &tmpid, sizeof(tmpid)))
                         goto out_1;
@@ -1718,7 +1763,7 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
                 ids[i] = tmpid;
 #endif
         }
-        rc = info->pi_nnids;
+        rc = info->pi_nnis;
 
  out_1:
         rc2 = LNetEQFree(eqh);
