@@ -172,18 +172,6 @@ check_dir_not_in_pool() {
     fi
 }
 
-create_pool() {
-    do_facet $SINGLEMDS lctl pool_new $FSNAME.$1
-    local RC=$?
-    # get param should return err until pool is created
-    [[ $RC -ne 0 ]] && return $RC
-
-    wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$1 \
-        2>/dev/null || echo foo" "" || RC=1
-    [[ $RC -ne 0 ]] && error "pool_new failed"
-    return $RC
-}
-
 drain_pool() {
     pool=$1
     wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$pool" ""\
@@ -207,7 +195,7 @@ add_pool() {
 }
 
 create_pool_nofail() {
-    create_pool $1
+    create_pool $FSNAME.$1
     if [[ $? != 0 ]]
     then
         error "Pool creation of $1 failed"
@@ -215,7 +203,7 @@ create_pool_nofail() {
 }
 
 create_pool_fail() {
-    create_pool $1
+    create_pool $FSNAME.$1
     if [[ $? == 0 ]]
     then
         error "Pool creation of $1 succeeded; should have failed"
@@ -241,8 +229,9 @@ remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
 ost_pools_init
 
-# Tests for new commands added
+trap "cleanup_pools $FSNAME" EXIT
 
+# Tests for new commands added
 test_1() {
     echo "Creating a pool with a 1 character pool name"
     create_pool_nofail p
@@ -620,7 +609,7 @@ run_test 6 "getstripe/setstripe"
 test_11() {
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 
-    [[ $OSTCOUNT -le 1 ]] && skip "Need atleast 2 OSTs" && return
+    [[ $OSTCOUNT -le 1 ]] && skip_env "Need atleast 2 OSTs" && return
 
     create_pool_nofail $POOL
     create_pool_nofail $POOL2
@@ -662,7 +651,7 @@ run_test 11 "OSTs in overlapping/multiple pools"
 test_12() {
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 
-    [[ $OSTCOUNT -le 2 ]] && skip "Need atleast 3 OSTs" && return
+    [[ $OSTCOUNT -le 2 ]] && skip_env "Need atleast 3 OSTs" && return
 
     create_pool_nofail $POOL
     create_pool_nofail $POOL2
@@ -717,7 +706,7 @@ test_12() {
 run_test 12 "OST Pool Membership"
 
 test_13() {
-    [[ $OSTCOUNT -le 2 ]] && skip "Need atleast 3 OSTs" && return
+    [[ $OSTCOUNT -le 2 ]] && skip_env "Need atleast 3 OSTs" && return
 
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
     local numfiles=10
@@ -780,7 +769,7 @@ test_13() {
 run_test 13 "Striping characteristics in a pool"
 
 test_14() {
-    [[ $OSTCOUNT -le 2 ]] && skip "Need atleast 3 OSTs" && return
+    [[ $OSTCOUNT -le 2 ]] && skip_env "Need atleast 3 OSTs" && return
 
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
     local numfiles=100
@@ -1083,7 +1072,7 @@ run_test 20 "Different pools in a directory hierarchy."
 
 test_21() {
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-    [[ $OSTCOUNT -le 1 ]] && skip "Need atleast 2 OSTs" && return
+    [[ $OSTCOUNT -le 1 ]] && skip_env "Need atleast 2 OSTs" && return
 
     local numfiles=12
     local i=0
@@ -1125,7 +1114,7 @@ add_loop() {
 
 test_22() {
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-    [[ $OSTCOUNT -le 1 ]] && skip "Need at least 2 OSTs" && return
+    [[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return
 
     local numfiles=100
 
@@ -1151,11 +1140,11 @@ run_test 22 "Simultaneous manipulation of a pool"
 
 test_23() {
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-    [[ $OSTCOUNT -le 1 ]] && skip "Need atleast 2 OSTs" && return
+    [[ $OSTCOUNT -le 1 ]] && skip_env "Need atleast 2 OSTs" && return
 
     mkdir -p $POOL_ROOT
     check_runas_id $TSTID $TSTID $RUNAS  || {
-        skip "User $RUNAS_ID does not exist - skipping"
+        skip_env "User $RUNAS_ID does not exist - skipping"
         return 0
     }
 
@@ -1233,7 +1222,7 @@ run_test 23 "OST pools and quota"
 
 test_24() {
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-    [[ $OSTCOUNT -le 1 ]] && skip "Need atleast 2 OSTs" && return
+    [[ $OSTCOUNT -le 1 ]] && skip_env "Need atleast 2 OSTs" && return
 
     local numfiles=10
     local i=0
@@ -1340,7 +1329,7 @@ run_test 25 "Create new pool and restart MDS ======================="
 
 log "cleanup: ======================================================"
 cd $ORIG_PWD
-cleanup_tests
+cleanup_pools $FSNAME
 check_and_cleanup_lustre
 echo '=========================== finished ==============================='
 [ -f "$POOLSLOG" ] && cat $POOLSLOG && grep -q FAIL $POOLSLOG && exit 1 || true
