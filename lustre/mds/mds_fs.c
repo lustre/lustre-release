@@ -123,12 +123,10 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         if (IS_ERR(handle))
                 GOTO(out_dput, rc = PTR_ERR(handle));
 
-        VFS_RENAME_LOCK(mds->mds_objects_dir->d_inode);
         rc = ll_vfs_rename(mds->mds_objects_dir->d_inode, filp->f_dentry,
                            filp->f_vfsmnt, mds->mds_objects_dir->d_inode,
                            new_child, filp->f_vfsmnt);
 
-        VFS_RENAME_UNLOCK(mds->mds_objects_dir->d_inode);
         if (rc)
                 CERROR("error renaming new object "LPU64":%u: rc %d\n",
                        oa->o_id, oa->o_generation, rc);
