@@ -454,13 +454,13 @@ typedef struct lnet_peer {
 typedef struct {
         struct list_head  lr_list;              /* chain on net */
         lnet_peer_t      *lr_gateway;           /* router node */
+        unsigned int      lr_hops;              /* how far I am */
 } lnet_route_t;
 
 typedef struct {
         struct list_head        lrn_list;       /* chain on ln_remote_nets */
         struct list_head        lrn_routes;     /* routes to me */
         __u32                   lrn_net;        /* my net number */
-        unsigned int            lrn_hops;       /* how far I am */
 } lnet_remotenet_t;
 
 typedef struct {

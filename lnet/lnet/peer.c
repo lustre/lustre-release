@@ -227,8 +227,8 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid)
         lp->lp_rtrcredits    =
         lp->lp_minrtrcredits = lnet_peer_buffer_credits(lp->lp_ni);
 
-        LASSERT (!the_lnet.ln_shutdown);
         /* can't add peers after shutdown starts */
+        LASSERT (!the_lnet.ln_shutdown);
 
         list_add_tail(&lp->lp_hashlist, lnet_nid2peerhash(nid));
         the_lnet.ln_npeers++;

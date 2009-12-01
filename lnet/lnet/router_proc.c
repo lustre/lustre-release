@@ -179,7 +179,7 @@ int LL_PROC_PROTO(proc_lnet_routes)
 
                 if (route != NULL) {
                         __u32        net   = rnet->lrn_net;
-                        unsigned int hops  = rnet->lrn_hops;
+                        unsigned int hops  = route->lr_hops;
                         lnet_nid_t   nid   = route->lr_gateway->lp_nid;
                         int          alive = route->lr_gateway->lp_alive;
 

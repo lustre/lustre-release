@@ -238,12 +238,10 @@ lnet_find_net_locked (__u32 net)
 int
 lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
 {
-        struct list_head     zombies;
         struct list_head    *e;
         lnet_remotenet_t    *rnet;
         lnet_remotenet_t    *rnet2;
         lnet_route_t        *route;
-        lnet_route_t        *route2;
         lnet_ni_t           *ni;
         int                  add_route;
         int                  rc;
@@ -277,7 +275,7 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
 
         CFS_INIT_LIST_HEAD(&rnet->lrn_routes);
         rnet->lrn_net = net;
-        rnet->lrn_hops = hops;
+        route->lr_hops = hops;
 
         LNET_LOCK();
 
@@ -297,7 +295,6 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
         }
 
         LASSERT (!the_lnet.ln_shutdown);
-        CFS_INIT_LIST_HEAD(&zombies);
 
         rnet2 = lnet_find_net_locked(net);
         if (rnet2 == NULL) {
@@ -306,37 +303,24 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
                 rnet2 = rnet;
         }
 
-        if (hops > rnet2->lrn_hops) {
-                /* New route is longer; ignore it */
-                add_route = 0;
-        } else if (hops < rnet2->lrn_hops) {
-                /* new route supercedes all currently known routes to this
-                 * net */
-                list_add(&zombies, &rnet2->lrn_routes);
-                list_del_init(&rnet2->lrn_routes);
-                add_route = 1;
-        } else {
-                add_route = 1;
-                /* New route has the same hopcount as existing routes; search
-                 * for a duplicate route (it's a NOOP if it is) */
-                list_for_each (e, &rnet2->lrn_routes) {
-                        route2 = list_entry(e, lnet_route_t, lr_list);
+        /* Search for a duplicate route (it's a NOOP if it is) */
+        add_route = 1;
+        list_for_each (e, &rnet2->lrn_routes) {
+                lnet_route_t *route2 = list_entry(e, lnet_route_t, lr_list);
 
-                        if (route2->lr_gateway == route->lr_gateway) {
-                                add_route = 0;
-                                break;
-                        }
-
-                        /* our loopups must be true */
-                        LASSERT (route2->lr_gateway->lp_nid != gateway);
+                if (route2->lr_gateway == route->lr_gateway) {
+                        add_route = 0;
+                        break;
                 }
+
+                /* our lookups must be true */
+                LASSERT (route2->lr_gateway->lp_nid != gateway);
         }
 
         if (add_route) {
                 ni = route->lr_gateway->lp_ni;
                 lnet_ni_addref_locked(ni);
 
-                LASSERT (rc == 0);
                 list_add_tail(&route->lr_list, &rnet2->lrn_routes);
                 the_lnet.ln_remote_nets_version++;
 
@@ -358,18 +342,7 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
         if (rnet != rnet2)
                 LIBCFS_FREE(rnet, sizeof(*rnet));
 
-        while (!list_empty(&zombies)) {
-                route = list_entry(zombies.next, lnet_route_t, lr_list);
-                list_del(&route->lr_list);
-
-                LNET_LOCK();
-                lnet_rtr_decref_locked(route->lr_gateway);
-                lnet_peer_decref_locked(route->lr_gateway);
-                LNET_UNLOCK();
-                LIBCFS_FREE(route, sizeof(*route));
-        }
-
-        return rc;
+        return 0;
 }
 
 int
@@ -492,7 +465,7 @@ lnet_get_route (int idx, __u32 *net, __u32 *hops,
 
                         if (idx-- == 0) {
                                 *net     = rnet->lrn_net;
-                                *hops    = rnet->lrn_hops;
+                                *hops    = route->lr_hops;
                                 *gateway = route->lr_gateway->lp_nid;
                                 *alive   = route->lr_gateway->lp_alive;
                                 LNET_UNLOCK();
