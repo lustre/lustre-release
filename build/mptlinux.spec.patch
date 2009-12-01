@@ -1,5 +1,5 @@
 --- mptlinux.spec.dist	2008-11-07 02:16:26.000000000 -0500
-+++ mptlinux.spec	2009-10-28 12:10:05.000000000 -0400
++++ mptlinux.spec	2009-12-01 14:17:11.000000000 -0500
 @@ -1,13 +1,15 @@
 +%{!?kernel_obj: %define kernel_obj ""}
 +
@@ -19,7 +19,7 @@
  Source0: %{name}-%{version}.tar.gz
  Source1: fusion.mptctl
  URL: http://www.lsilogic.com
-@@ -22,228 +24,285 @@
+@@ -22,228 +24,272 @@
  Fibre Channel FC909, FC919, FC929, FC919X, FC929X, and FC949X adapters
  SAS SAS1064, SAS1068, and SAS1078 adapters.
  
@@ -135,6 +135,19 @@
 -			$RPM_BUILD_ROOT/$MPTLINUX_IPATH/${driver_name}.new
 -	done;
 -done;
+-
+-# pre #########################################################################
+-%pre
+-echo pre %{version}
+-system_arch=`uname -m`
+-if [ -f /etc/SuSE-release ] && [ ${system_arch} == i686 ]; then
+-	system_arch=i586;
+-fi;
+-if [ %{_target_cpu} != ${system_arch} ]; then
+-	echo "ERROR: Failed installing this rpm!!!!"
+-	echo "This rpm is intended for %{_target_cpu} platform. It seems your system is ${system_arch}.";
+-	exit 1;
+-fi;
 +	# the Makefile hardcodes the destination path to
 +	# $(PREFIX)/lib/modules/$(KERNEL)/kernel/drivers/message/fusion
 +	# so lets move these to where they really go
@@ -143,25 +156,6 @@
 +	mv -f $RPM_BUILD_ROOT/lib/modules/${kernel}/kernel/drivers/message/fusion/* \
 +	      $RPM_BUILD_ROOT/$MPTLINUX_IPATH/
 +done
-+fi
- 
- # pre #########################################################################
--%pre
-+%pre modules
- echo pre %{version}
- system_arch=`uname -m`
- if [ -f /etc/SuSE-release ] && [ ${system_arch} == i686 ]; then
--	system_arch=i586;
--fi;
-+	system_arch=i586
-+fi
- if [ %{_target_cpu} != ${system_arch} ]; then
- 	echo "ERROR: Failed installing this rpm!!!!"
--	echo "This rpm is intended for %{_target_cpu} platform. It seems your system is ${system_arch}.";
--	exit 1;
--fi;
-+	echo "This rpm is intended for %{_target_cpu} platform. It seems your system is ${system_arch}."
-+	exit 1
 +fi
  
  # post #########################################################################
