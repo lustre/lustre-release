@@ -305,13 +305,11 @@ int ll_getxattr_common(struct inode *inode, const char *name,
                     rce->rce_ops != RMT_RGETFACL))
                         RETURN(-EOPNOTSUPP);
         }
-#endif
 
         /* posix acl is under protection of LOOKUP lock. when calling to this,
          * we just have path resolution to the target inode, so we have great
          * chance that cached ACL is uptodate.
          */
-#ifdef CONFIG_FS_POSIX_ACL
         if (xattr_type == XATTR_ACL_ACCESS_T &&
             !(sbi->ll_flags & LL_SBI_RMT_CLIENT)) {
                 struct ll_inode_info *lli = ll_i2info(inode);
@@ -382,13 +380,15 @@ do_getxattr:
                         GOTO(out, rc);
                 }
         }
-
-        if (xattr_type == XATTR_ACL_ACCESS_T && !body->eadatasize)
-                GOTO(out, rc = -ENODATA);
 #endif
-        LASSERT(buffer);
-        memcpy(buffer, xdata, body->eadatasize);
-        rc = body->eadatasize;
+
+        if (body->eadatasize == 0) {
+                rc = -ENODATA;
+        } else {
+                LASSERT(buffer);
+                memcpy(buffer, xdata, body->eadatasize);
+                rc = body->eadatasize;
+        }
         EXIT;
 out:
         ptlrpc_req_finished(req);
