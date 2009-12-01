@@ -158,7 +158,7 @@ do {                                            \
 # define libcfs_kmem_dec(ptr, size) do {} while (0)
 #endif /* LIBCFS_DEBUG */
 
-#define LIBCFS_VMALLOC_SIZE        16384
+#define LIBCFS_VMALLOC_SIZE        (2 << CFS_PAGE_SHIFT) /* 2 pages */
 
 #define LIBCFS_ALLOC_GFP(ptr, size, mask)                                 \
 do {                                                                      \
@@ -176,8 +176,8 @@ do {                                                                      \
                 break;                                                    \
         }                                                                 \
         libcfs_kmem_inc((ptr), (size));                                   \
-        if (!((mask) & CFS_ALLOC_ZERO))                                   \
-                memset((ptr), 0, (size));                                 \
+        /* always zero out memory */                                      \
+        memset((ptr), 0, (size));                                         \
         CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p (tot %d).\n",    \
                (int)(size), (ptr), atomic_read (&libcfs_kmemory));        \
 } while (0)
@@ -275,6 +275,9 @@ int libcfs_debug_cleanup(void);
 
 /* !__KERNEL__ */
 #endif
+
+#define LIBCFS_ALLOC_PTR(ptr) LIBCFS_ALLOC(ptr, sizeof *(ptr))
+#define LIBCFS_FREE_PTR(ptr)  LIBCFS_FREE(ptr, sizeof *(ptr))
 
 /*
  * compile-time assertions. @cond has to be constant expression.
