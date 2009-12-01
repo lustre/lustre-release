@@ -1803,7 +1803,7 @@ static int osd_ea_fid_get(const struct lu_env *env, struct osd_object *obj,
 
         if (rc > 0) {
                 lustre_lma_swab(mdt_attrs);
-                memcpy(fid, &mdt_attrs->lma_self_fid, sizeof(*mdt_attrs));
+                memcpy(fid, &mdt_attrs->lma_self_fid, sizeof(*fid));
                 rc = 0;
         } else if (rc == -ENODATA) {
                 osd_igif_get(env, inode, fid);
