@@ -33,13 +33,6 @@ $2
 esac
 ])
 
-AC_DEFUN([LC_KERNEL_WITH_EXT4],
-[if test -f $LINUX/fs/ext4/ext4.h ; then
-$1
-else
-$2
-fi
-])
 
 AC_MSG_CHECKING([whether to build kernel modules])
 AC_ARG_ENABLE([modules],
@@ -89,22 +82,6 @@ fi
 AM_CONDITIONAL(USE_QUILT, test x$QUILT != xno)
 
 LB_DEFINE_LDISKFS_OPTIONS
-
-AC_MSG_CHECKING([whether to build ldiskfs based on ext4])
-if test x$RHEL_KERNEL = xyes; then
-	AC_ARG_ENABLE([ext4],
-		AC_HELP_STRING([--enable-ext4],
-			     [enable building of ldiskfs based on ext4]),
-			     [], [enable_ext4='no'])
-else
-	case $LINUXRELEASE in
-	# ext4 was in 2.6.22-2.6.26 but not stable enough to use
-	2.6.2[0-6]*) enable_ext4='no' ;;
-	*) LC_KERNEL_WITH_EXT4([enable_ext4='yes'],
-			       [enable_ext4='no']) ;;
-	esac
-fi
-AC_MSG_RESULT([$enable_ext4])
 
 if test x$enable_ext4 = xyes ; then
 	AC_DEFINE(HAVE_EXT4_LDISKFS, 1, [ldiskfs based on ext4])

@@ -246,6 +246,46 @@ fi
 AC_CONFIG_SUBDIRS(ldiskfs)
 ])
 
+AC_DEFUN([LC_KERNEL_WITH_EXT4],
+[if test -f $LINUX/fs/ext4/ext4.h ; then
+$1
+else
+$2
+fi
+])
+
+#
+# LB_HAVE_EXT4_ENABLED
+#
+AC_DEFUN([LB_HAVE_EXT4_ENABLED],
+[
+if test x$RHEL_KERNEL = xyes; then
+	AC_ARG_ENABLE([ext4],
+		 AC_HELP_STRING([--enable-ext4],
+				[enable building of ldiskfs based on ext4]),
+		[],
+		[
+			if test x$ldiskfs_is_ext4 = xyes; then
+				enable_ext4=yes
+			else
+				enable_ext4=no
+			fi
+		])
+else
+	case $LINUXRELEASE in
+	# ext4 was in 2.6.22-2.6.26 but not stable enough to use
+	2.6.2[0-6]*) enable_ext4='no' ;;
+	*)  LC_KERNEL_WITH_EXT4([enable_ext4='yes'],
+				[enable_ext4='no']) ;;
+	esac
+fi
+if test x$enable_ext4 = xyes; then
+	 ac_configure_args="$ac_configure_args --enable-ext4"
+fi
+AC_MSG_CHECKING([whether to build ldiskfs based on ext4])
+AC_MSG_RESULT([$enable_ext4])
+])
+
 # Define no libcfs by default.
 AC_DEFUN([LB_LIBCFS_DIR],
 [
@@ -873,8 +913,8 @@ LN_CONFIG_CDEBUG
 LC_QUOTA
 
 LB_CONFIG_MODULES
-
 LN_CONFIG_USERSPACE
+LB_HAVE_EXT4_ENABLED
 
 LB_PATH_DMU
 LB_PATH_LIBSYSIO
