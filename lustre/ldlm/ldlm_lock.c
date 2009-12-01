@@ -270,8 +270,8 @@ int ldlm_lock_destroy_internal(struct ldlm_lock *lock)
 
         if (lock->l_export && lock->l_export->exp_lock_hash &&
             !hlist_unhashed(&lock->l_exp_hash))
-                lustre_hash_del(lock->l_export->exp_lock_hash,
-                                &lock->l_remote_handle, &lock->l_exp_hash);
+                cfs_hash_del(lock->l_export->exp_lock_hash,
+                             &lock->l_remote_handle, &lock->l_exp_hash);
 
         ldlm_lock_remove_from_lru(lock);
         class_handle_unhash(&lock->l_handle);
@@ -1685,8 +1685,8 @@ void ldlm_cancel_locks_for_export_cb(void *obj, void *data)
 
 void ldlm_cancel_locks_for_export(struct obd_export *exp)
 {
-        lustre_hash_for_each_empty(exp->exp_lock_hash,
-                                   ldlm_cancel_locks_for_export_cb, exp);
+        cfs_hash_for_each_empty(exp->exp_lock_hash,
+                                ldlm_cancel_locks_for_export_cb, exp);
 }
 
 /**

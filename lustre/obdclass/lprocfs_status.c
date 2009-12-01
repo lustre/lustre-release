@@ -1648,8 +1648,8 @@ int lprocfs_exp_rd_uuid(char *page, char **start, off_t off, int count,
         *eof = 1;
         page[0] = '\0';
         lprocfs_exp_rd_cb_data_init(&cb_data, page, count, eof, &len);
-        lustre_hash_for_each_key(obd->obd_nid_hash, &stats->nid,
-                                 lprocfs_exp_print_uuid, &cb_data);
+        cfs_hash_for_each_key(obd->obd_nid_hash, &stats->nid,
+                              lprocfs_exp_print_uuid, &cb_data);
         return (*cb_data.len);
 }
 
@@ -1657,16 +1657,16 @@ void lprocfs_exp_print_hash(void *obj, void *cb_data)
 {
         struct exp_uuid_cb_data *data = cb_data;
         struct obd_export       *exp = obj;
-        lustre_hash_t           *lh;
+        cfs_hash_t              *hs;
 
-        lh = exp->exp_lock_hash;
-        if (lh) {
+        hs = exp->exp_lock_hash;
+        if (hs) {
                 if (!*data->len)
-                        *data->len += lustre_hash_debug_header(data->page,
-                                                               data->count);
+                        *data->len += cfs_hash_debug_header(data->page,
+                                                            data->count);
 
-                *data->len += lustre_hash_debug_str(lh, data->page + *data->len,
-                                                    data->count);
+                *data->len += cfs_hash_debug_str(hs, data->page + *data->len,
+                                                 data->count);
         }
 }
 
@@ -1682,8 +1682,8 @@ int lprocfs_exp_rd_hash(char *page, char **start, off_t off, int count,
         page[0] = '\0';
         lprocfs_exp_rd_cb_data_init(&cb_data, page, count, eof, &len);
 
-        lustre_hash_for_each_key(obd->obd_nid_hash, &stats->nid,
-                                 lprocfs_exp_print_hash, &cb_data);
+        cfs_hash_for_each_key(obd->obd_nid_hash, &stats->nid,
+                              lprocfs_exp_print_hash, &cb_data);
         return (*cb_data.len);
 }
 
@@ -1733,8 +1733,8 @@ int lprocfs_nid_stats_clear_write(struct file *file, const char *buffer,
         struct nid_stat *client_stat;
         CFS_LIST_HEAD(free_list);
 
-        lustre_hash_for_each(obd->obd_nid_stats_hash,
-                             lprocfs_nid_stats_clear_write_cb, &free_list);
+        cfs_hash_for_each(obd->obd_nid_stats_hash,
+                          lprocfs_nid_stats_clear_write_cb, &free_list);
 
         while (!list_empty(&free_list)) {
                 client_stat = list_entry(free_list.next, struct nid_stat,
@@ -1779,8 +1779,8 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
         new_stat->nid_obd           = exp->exp_obd;
         atomic_set(&new_stat->nid_exp_ref_count, 0);
 
-        old_stat = lustre_hash_findadd_unique(obd->obd_nid_stats_hash,
-                                              nid, &new_stat->nid_hash);
+        old_stat = cfs_hash_findadd_unique(obd->obd_nid_stats_hash,
+                                           nid, &new_stat->nid_hash);
         CDEBUG(D_INFO, "Found stats %p for nid %s - ref %d\n",
                old_stat, libcfs_nid2str(*nid),
                atomic_read(&new_stat->nid_exp_ref_count));
@@ -1794,7 +1794,7 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
                                 nidstat_putref(exp->exp_nid_stats);
                         exp->exp_nid_stats = old_stat;
                 } else {
-                        /* lustre_hash_findadd_unique() has added
+                        /* cfs_hash_findadd_unique() has added
                          * old_stat's refcount */
                         nidstat_putref(old_stat);
                 }
@@ -1844,7 +1844,7 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
 destroy_new_ns:
         if (new_stat->nid_proc != NULL)
                 lprocfs_remove(&new_stat->nid_proc);
-        lustre_hash_del(obd->obd_nid_stats_hash, nid, &new_stat->nid_hash);
+        cfs_hash_del(obd->obd_nid_stats_hash, nid, &new_stat->nid_hash);
 
 destroy_new:
         OBD_FREE_PTR(new_stat);
@@ -2109,10 +2109,10 @@ int lprocfs_obd_rd_hash(char *page, char **start, off_t off,
         if (obd == NULL)
                 return 0;
 
-        c += lustre_hash_debug_header(page, count);
-        c += lustre_hash_debug_str(obd->obd_uuid_hash, page + c, count - c);
-        c += lustre_hash_debug_str(obd->obd_nid_hash, page + c, count - c);
-        c += lustre_hash_debug_str(obd->obd_nid_stats_hash, page+c, count-c);
+        c += cfs_hash_debug_header(page, count);
+        c += cfs_hash_debug_str(obd->obd_uuid_hash, page + c, count - c);
+        c += cfs_hash_debug_str(obd->obd_nid_hash, page + c, count - c);
+        c += cfs_hash_debug_str(obd->obd_nid_stats_hash, page+c, count-c);
 
         return c;
 }

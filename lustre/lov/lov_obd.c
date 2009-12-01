@@ -803,10 +803,9 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-ENOMEM);
         cfs_waitq_init(&lov->lov_qos.lq_statfs_waitq);
 
-        lov->lov_pools_hash_body = lustre_hash_init("POOLS",
-                                                    HASH_POOLS_CUR_BITS,
-                                                    HASH_POOLS_MAX_BITS,
-                                                    &pool_hash_operations, 0);
+        lov->lov_pools_hash_body = cfs_hash_create("POOLS", HASH_POOLS_CUR_BITS,
+                                                   HASH_POOLS_CUR_BITS,
+                                                   &pool_hash_operations, 0);
         CFS_INIT_LIST_HEAD(&lov->lov_pool_list);
         lov->lov_pool_count = 0;
         rc = lov_ost_pool_init(&lov->lov_packed, 0);
@@ -876,7 +875,7 @@ static int lov_cleanup(struct obd_device *obd)
                 CDEBUG(D_INFO, "delete pool %p\n", pool);
                 lov_pool_del(obd, pool->pool_name);
         }
-        lustre_hash_exit(lov->lov_pools_hash_body);
+        cfs_hash_destroy(lov->lov_pools_hash_body);
         lov_ost_pool_free(&(lov->lov_qos.lq_rr.lqr_pool));
         lov_ost_pool_free(&lov->lov_packed);
 

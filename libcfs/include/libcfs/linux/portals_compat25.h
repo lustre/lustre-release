@@ -140,6 +140,10 @@ typedef unsigned long cpumask_t;
 #define __user
 #endif
 
+#ifndef __fls
+#define __fls fls
+#endif
+
 #define ll_proc_dointvec(table, write, filp, buffer, lenp, ppos)        \
         proc_dointvec(table, write, filp, buffer, lenp, ppos);
 

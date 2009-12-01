@@ -287,6 +287,9 @@ int libcfs_debug_cleanup(void);
 /* !__KERNEL__ */
 #endif
 
+#define CFS_ALLOC_PTR(ptr)      LIBCFS_ALLOC(ptr, sizeof (*(ptr)));
+#define CFS_FREE_PTR(ptr)       LIBCFS_FREE(ptr, sizeof (*(ptr)));
+
 /** Compile-time assertion. 
 
  * Check an invariant described by a constant expression at compile time by

@@ -532,9 +532,9 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 
         /* Key change rehash lock in per-export hash with new key */
         if (exp->exp_lock_hash)
-                lustre_hash_rehash_key(exp->exp_lock_hash, &old_hash_key,
-                                       &lock->l_remote_handle,
-                                       &lock->l_exp_hash);
+                cfs_hash_rehash_key(exp->exp_lock_hash, &old_hash_key,
+                                    &lock->l_remote_handle,
+                                    &lock->l_exp_hash);
 
         *flags = reply->lock_flags;
         lock->l_flags |= reply->lock_flags & LDLM_INHERIT_FLAGS;
@@ -1993,9 +1993,9 @@ static int replay_lock_interpret(const struct lu_env *env,
         /* Key change rehash lock in per-export hash with new key */
         exp = req->rq_export;
         if (exp && exp->exp_lock_hash)
-                lustre_hash_rehash_key(exp->exp_lock_hash, &old_hash_key,
-                                       &lock->l_remote_handle,
-                                       &lock->l_exp_hash);
+                cfs_hash_rehash_key(exp->exp_lock_hash, &old_hash_key,
+                                    &lock->l_remote_handle,
+                                    &lock->l_exp_hash);
 
         LDLM_DEBUG(lock, "replayed lock:");
         ptlrpc_import_recovery_state_machine(req->rq_import);

@@ -40,7 +40,6 @@
 #include <lprocfs_status.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_dlm.h>
-#include <class_hash.h>
 
 struct mds_client_data;
 struct mdt_client_data;
@@ -169,7 +168,7 @@ struct obd_export {
         struct lprocfs_stats     *exp_md_stats;
         struct ptlrpc_connection *exp_connection;
         __u32                     exp_conn_cnt;
-        lustre_hash_t            *exp_lock_hash; /* existing lock hash */
+        cfs_hash_t               *exp_lock_hash; /* existing lock hash */
         spinlock_t                exp_lock_hash_lock;
         struct list_head          exp_outstanding_replies;
         struct list_head          exp_uncommitted_replies;

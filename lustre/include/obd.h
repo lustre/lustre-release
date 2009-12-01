@@ -67,7 +67,6 @@
 #include <lustre_quota.h>
 #include <lustre_fld.h>
 #include <lustre_capa.h>
-#include <class_hash.h>
 
 #include <libcfs/bitmap.h>
 
@@ -726,7 +725,7 @@ struct lov_obd {
         __u32                   lov_tgt_size;   /* size of tgts array */
         int                     lov_connects;
         int                     lov_pool_count;
-        lustre_hash_t          *lov_pools_hash_body; /* used for key access */
+        cfs_hash_t             *lov_pools_hash_body; /* used for key access */
         struct list_head        lov_pool_list; /* used for sequential access */
         cfs_proc_dir_entry_t   *lov_pool_proc_entry;
         enum lustre_sec_part    lov_sp_me;
@@ -1047,11 +1046,11 @@ struct obd_device {
                                            * (for /proc/status only!!) */
                       obd_process_conf:1;  /* device is processing mgs config */
         /* uuid-export hash body */
-        struct lustre_hash     *obd_uuid_hash;
+        cfs_hash_t             *obd_uuid_hash;
         /* nid-export hash body */
-        struct lustre_hash     *obd_nid_hash;
+        cfs_hash_t             *obd_nid_hash;
         /* nid stats body */
-        struct lustre_hash     *obd_nid_stats_hash;
+        cfs_hash_t             *obd_nid_stats_hash;
         struct list_head        obd_nid_stats;
         atomic_t                obd_refcount;
         cfs_waitq_t             obd_refcount_waitq;

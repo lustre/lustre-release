@@ -44,10 +44,9 @@
 #endif
 
 #include "ptlrpc_internal.h"
-#include <class_hash.h>
 
-static lustre_hash_t *conn_hash = NULL;
-static lustre_hash_ops_t conn_hash_ops;
+static cfs_hash_t *conn_hash = NULL;
+static cfs_hash_ops_t conn_hash_ops;
 
 struct ptlrpc_connection *
 ptlrpc_connection_get(lnet_process_id_t peer, lnet_nid_t self,
@@ -56,7 +55,7 @@ ptlrpc_connection_get(lnet_process_id_t peer, lnet_nid_t self,
         struct ptlrpc_connection *conn, *conn2;
         ENTRY;
 
-        conn = lustre_hash_lookup(conn_hash, &peer);
+        conn = cfs_hash_lookup(conn_hash, &peer);
         if (conn)
                 GOTO(out, conn);
 
@@ -77,7 +76,7 @@ ptlrpc_connection_get(lnet_process_id_t peer, lnet_nid_t self,
          * connection.  The object which exists in the has will be
          * returned and may be compared against out object.
          */
-        conn2 = lustre_hash_findadd_unique(conn_hash, &peer, &conn->c_hash);
+        conn2 = cfs_hash_findadd_unique(conn_hash, &peer, &conn->c_hash);
         if (conn != conn2) {
                 OBD_FREE_PTR(conn);
                 conn = conn2;
@@ -143,10 +142,10 @@ int ptlrpc_connection_init(void)
 {
         ENTRY;
 
-        conn_hash = lustre_hash_init("CONN_HASH",
-                                     HASH_CONN_CUR_BITS,
-                                     HASH_CONN_MAX_BITS,
-                                     &conn_hash_ops, LH_REHASH);
+        conn_hash = cfs_hash_create("CONN_HASH",
+                                    HASH_CONN_CUR_BITS,
+                                    HASH_CONN_MAX_BITS,
+                                    &conn_hash_ops, CFS_HASH_REHASH);
         if (!conn_hash)
                 RETURN(-ENOMEM);
 
@@ -155,7 +154,7 @@ int ptlrpc_connection_init(void)
 
 void ptlrpc_connection_fini(void) {
         ENTRY;
-        lustre_hash_exit(conn_hash);
+        cfs_hash_destroy(conn_hash);
         EXIT;
 }
 
@@ -163,9 +162,9 @@ void ptlrpc_connection_fini(void) {
  * Hash operations for net_peer<->connection
  */
 static unsigned
-conn_hashfn(lustre_hash_t *lh,  void *key, unsigned mask)
+conn_hashfn(cfs_hash_t *hs,  void *key, unsigned mask)
 {
-        return lh_djb2_hash(key, sizeof(lnet_process_id_t), mask);
+        return cfs_hash_djb2_hash(key, sizeof(lnet_process_id_t), mask);
 }
 
 static int
@@ -229,11 +228,11 @@ conn_exit(struct hlist_node *hnode)
         OBD_FREE_PTR(conn);
 }
 
-static lustre_hash_ops_t conn_hash_ops = {
-        .lh_hash    = conn_hashfn,
-        .lh_compare = conn_compare,
-        .lh_key     = conn_key,
-        .lh_get     = conn_get,
-        .lh_put     = conn_put,
-        .lh_exit    = conn_exit,
+static cfs_hash_ops_t conn_hash_ops = {
+        .hs_hash    = conn_hashfn,
+        .hs_compare = conn_compare,
+        .hs_key     = conn_key,
+        .hs_get     = conn_get,
+        .hs_put     = conn_put,
+        .hs_exit    = conn_exit,
 };

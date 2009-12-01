@@ -178,6 +178,14 @@ struct cfs_stack_trace {
         })
 #endif
 
+#ifndef min
+# define min(x,y) ((x)<(y) ? (x) : (y))
+#endif
+
+#ifndef max
+# define max(x,y) ((x)>(y) ? (x) : (y))
+#endif
+
 /* utility libcfs init/fini entries */
 #ifdef __WINNT__
 extern int libcfs_arch_init(void);

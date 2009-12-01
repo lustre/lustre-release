@@ -297,6 +297,7 @@ int cfs_univ2oflags(int flags);
 #include <libcfs/libcfs_time.h>
 #include <libcfs/libcfs_string.h>
 #include <libcfs/libcfs_kernelcomm.h>
+#include <libcfs/libcfs_hash.h>
 
 /* container_of depends on "likely" which is defined in libcfs_private.h */
 static inline void *__container_of(void *ptr, unsigned long shift)

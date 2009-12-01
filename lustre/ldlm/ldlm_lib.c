@@ -772,7 +772,7 @@ int target_handle_connect(struct ptlrpc_request *req)
         if (obd_uuid_equals(&cluuid, &target->obd_uuid))
                 goto dont_check_exports;
 
-        export = lustre_hash_lookup(target->obd_uuid_hash, &cluuid);
+        export = cfs_hash_lookup(target->obd_uuid_hash, &cluuid);
         if (!export)
                 goto no_export;
 
@@ -976,9 +976,9 @@ dont_check_exports:
                 /* Check to see if connection came from another NID */
                 if ((export->exp_connection->c_peer.nid != req->rq_peer.nid) &&
                     !hlist_unhashed(&export->exp_nid_hash))
-                        lustre_hash_del(export->exp_obd->obd_nid_hash,
-                                        &export->exp_connection->c_peer.nid,
-                                        &export->exp_nid_hash);
+                        cfs_hash_del(export->exp_obd->obd_nid_hash,
+                                     &export->exp_connection->c_peer.nid,
+                                     &export->exp_nid_hash);
 
                 ptlrpc_connection_put(export->exp_connection);
         }
@@ -987,9 +987,9 @@ dont_check_exports:
                                                        req->rq_self,
                                                        &remote_uuid);
         if (hlist_unhashed(&export->exp_nid_hash)) {
-                lustre_hash_add_unique(export->exp_obd->obd_nid_hash,
-                                       &export->exp_connection->c_peer.nid,
-                                       &export->exp_nid_hash);
+                cfs_hash_add_unique(export->exp_obd->obd_nid_hash,
+                                    &export->exp_connection->c_peer.nid,
+                                    &export->exp_nid_hash);
         }
 
         spin_lock_bh(&target->obd_processing_task_lock);

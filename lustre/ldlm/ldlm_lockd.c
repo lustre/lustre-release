@@ -1079,8 +1079,8 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
 
         if (unlikely(flags & LDLM_FL_REPLAY)) {
                 /* Find an existing lock in the per-export lock hash */
-                lock = lustre_hash_lookup(req->rq_export->exp_lock_hash,
-                                          (void *)&dlm_req->lock_handle[0]);
+                lock = cfs_hash_lookup(req->rq_export->exp_lock_hash,
+                                       (void *)&dlm_req->lock_handle[0]);
                 if (lock != NULL) {
                         DEBUG_REQ(D_DLMTRACE, req, "found existing lock cookie "
                                   LPX64, lock->l_handle.h_cookie);
@@ -1111,9 +1111,9 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
 
         lock->l_export = class_export_lock_get(req->rq_export, lock);
         if (lock->l_export->exp_lock_hash)
-                lustre_hash_add(lock->l_export->exp_lock_hash,
-                                &lock->l_remote_handle,
-                                &lock->l_exp_hash);
+                cfs_hash_add(lock->l_export->exp_lock_hash,
+                             &lock->l_remote_handle,
+                             &lock->l_exp_hash);
 
 existing_lock:
 
@@ -2009,8 +2009,8 @@ void ldlm_revoke_lock_cb(void *obj, void *data)
         lock->l_flags |= LDLM_FL_AST_SENT;
         if (lock->l_export && lock->l_export->exp_lock_hash &&
             !hlist_unhashed(&lock->l_exp_hash))
-                lustre_hash_del(lock->l_export->exp_lock_hash,
-                                &lock->l_remote_handle, &lock->l_exp_hash);
+                cfs_hash_del(lock->l_export->exp_lock_hash,
+                             &lock->l_remote_handle, &lock->l_exp_hash);
         list_add_tail(&lock->l_rk_ast, rpc_list);
         LDLM_LOCK_GET(lock);
 
@@ -2023,8 +2023,8 @@ void ldlm_revoke_export_locks(struct obd_export *exp)
         ENTRY;
 
         CFS_INIT_LIST_HEAD(&rpc_list);
-        lustre_hash_for_each_empty(exp->exp_lock_hash,
-                                   ldlm_revoke_lock_cb, &rpc_list);
+        cfs_hash_for_each_empty(exp->exp_lock_hash,
+                                ldlm_revoke_lock_cb, &rpc_list);
         ldlm_run_ast_work(&rpc_list, LDLM_WORK_REVOKE_AST);
 
         EXIT;
@@ -2197,9 +2197,9 @@ void ldlm_put_ref(void)
  * Export handle<->lock hash operations.
  */
 static unsigned
-ldlm_export_lock_hash(lustre_hash_t *lh, void *key, unsigned mask)
+ldlm_export_lock_hash(cfs_hash_t *hs, void *key, unsigned mask)
 {
-        return lh_u64_hash(((struct lustre_handle *)key)->cookie, mask);
+        return cfs_hash_u64_hash(((struct lustre_handle *)key)->cookie, mask);
 }
 
 static void *
@@ -2243,12 +2243,12 @@ ldlm_export_lock_put(struct hlist_node *hnode)
         RETURN(lock);
 }
 
-static lustre_hash_ops_t ldlm_export_lock_ops = {
-        .lh_hash    = ldlm_export_lock_hash,
-        .lh_key     = ldlm_export_lock_key,
-        .lh_compare = ldlm_export_lock_compare,
-        .lh_get     = ldlm_export_lock_get,
-        .lh_put     = ldlm_export_lock_put
+static cfs_hash_ops_t ldlm_export_lock_ops = {
+        .hs_hash    = ldlm_export_lock_hash,
+        .hs_key     = ldlm_export_lock_key,
+        .hs_compare = ldlm_export_lock_compare,
+        .hs_get     = ldlm_export_lock_get,
+        .hs_put     = ldlm_export_lock_put
 };
 
 int ldlm_init_export(struct obd_export *exp)
@@ -2256,8 +2256,9 @@ int ldlm_init_export(struct obd_export *exp)
         ENTRY;
 
         exp->exp_lock_hash =
-                lustre_hash_init(obd_uuid2str(&exp->exp_client_uuid),
-                                 7, 16, &ldlm_export_lock_ops, LH_REHASH);
+                cfs_hash_create(obd_uuid2str(&exp->exp_client_uuid),
+                                HASH_EXP_LOCK_CUR_BITS, HASH_EXP_LOCK_MAX_BITS,
+                                &ldlm_export_lock_ops, CFS_HASH_REHASH);
 
         if (!exp->exp_lock_hash)
                 RETURN(-ENOMEM);
@@ -2269,7 +2270,7 @@ EXPORT_SYMBOL(ldlm_init_export);
 void ldlm_destroy_export(struct obd_export *exp)
 {
         ENTRY;
-        lustre_hash_exit(exp->exp_lock_hash);
+        cfs_hash_destroy(exp->exp_lock_hash);
         exp->exp_lock_hash = NULL;
         EXIT;
 }

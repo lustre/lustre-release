@@ -51,7 +51,6 @@
 #include <lustre/lustre_idl.h>
 #include <lvfs.h>
 #include <obd_support.h>
-#include <class_hash.h>
 
 struct obd_device;
 struct client_obd;
@@ -296,7 +295,7 @@ struct lustre_quota_ctxt {
         /** See comment of lqc_itune_sz */
         unsigned long lqc_btune_sz;
         /** all lustre_qunit_size structures */
-        struct lustre_hash *lqc_lqs_hash;
+        cfs_hash_t   *lqc_lqs_hash;
 
         /** @{ */
         /**

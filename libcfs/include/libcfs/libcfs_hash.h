@@ -41,6 +41,20 @@
 
 #ifndef __LIBCFS_HASH_H__
 #define __LIBCFS_HASH_H__
+/*
+ * Knuth recommends primes in approximately golden ratio to the maximum
+ * integer representable by a machine word for multiplicative hashing.
+ * Chuck Lever verified the effectiveness of this technique:
+ * http://www.citi.umich.edu/techreports/reports/citi-tr-00-1.pdf
+ *
+ * These primes are chosen to be bit-sparse, that is operations on
+ * them can use shifts and additions instead of multiplications for
+ * machines where multiplications are slow.
+ */
+/* 2^31 + 2^29 - 2^25 + 2^22 - 2^19 - 2^16 + 1 */
+#define CFS_GOLDEN_RATIO_PRIME_32 0x9e370001UL
+/*  2^63 + 2^61 - 2^57 + 2^54 - 2^51 - 2^18 + 1 */
+#define CFS_GOLDEN_RATIO_PRIME_64 0x9e37fffffffc0001ULL
 
 /*
  * Ideally we would use HAVE_HASH_LONG for this, but on linux we configure
@@ -55,24 +69,14 @@
 /* Fast hashing routine for a long.
    (C) 2002 William Lee Irwin III, IBM */
 
-/*
- * Knuth recommends primes in approximately golden ratio to the maximum
- * integer representable by a machine word for multiplicative hashing.
- * Chuck Lever verified the effectiveness of this technique:
- * http://www.citi.umich.edu/techreports/reports/citi-tr-00-1.pdf
- *
- * These primes are chosen to be bit-sparse, that is operations on
- * them can use shifts and additions instead of multiplications for
- * machines where multiplications are slow.
- */
 #if BITS_PER_LONG == 32
 /* 2^31 + 2^29 - 2^25 + 2^22 - 2^19 - 2^16 + 1 */
-#define GOLDEN_RATIO_PRIME 0x9e370001UL
+#define CFS_GOLDEN_RATIO_PRIME          CFS_GOLDEN_RATIO_PRIME_32
 #elif BITS_PER_LONG == 64
 /*  2^63 + 2^61 - 2^57 + 2^54 - 2^51 - 2^18 + 1 */
-#define GOLDEN_RATIO_PRIME 0x9e37fffffffc0001UL
+#define CFS_GOLDEN_RATIO_PRIME          CFS_GOLDEN_RATIO_PRIME_64
 #else
-#error Define GOLDEN_RATIO_PRIME for your wordsize.
+#error Define CFS_GOLDEN_RATIO_PRIME for your wordsize.
 #endif
 
 static inline unsigned long hash_long(unsigned long val, unsigned int bits)
@@ -96,7 +100,7 @@ static inline unsigned long hash_long(unsigned long val, unsigned int bits)
 	hash += n;
 #else
 	/* On some cpus multiply is faster, on others gcc will do shifts */
-	hash *= GOLDEN_RATIO_PRIME;
+	hash *= CFS_GOLDEN_RATIO_PRIME;
 #endif
 
 	/* High bits are more random, so use them. */
@@ -111,6 +115,298 @@ static inline unsigned long hash_ptr(void *ptr, unsigned int bits)
 
 /* !(__linux__ && __KERNEL__) */
 #endif
+
+struct cfs_hash_ops;
+
+typedef struct cfs_hash_bucket {
+        struct hlist_head           hsb_head;       /* entries list */
+        atomic_t                    hsb_count;      /* current entries */
+        rwlock_t                    hsb_rwlock;     /* cfs_hash_bucket */
+} cfs_hash_bucket_t;
+
+#define CFS_MAX_HASH_NAME 16
+
+typedef struct cfs_hash {
+        int                         hs_cur_bits;    /* current hash bits */
+        int                         hs_cur_mask;    /* current hash mask */
+        int                         hs_min_bits;    /* min hash bits */
+        int                         hs_max_bits;    /* max hash bits */
+        int                         hs_min_theta;   /* resize min threshold */
+        int                         hs_max_theta;   /* resize max threshold */
+        int                         hs_flags;       /* hash flags */
+        atomic_t                    hs_count;       /* current entries */
+        atomic_t                    hs_rehash_count;/* resize count */
+        struct cfs_hash_bucket    **hs_buckets;     /* hash buckets */
+        struct cfs_hash_ops        *hs_ops;         /* hash operations */
+        rwlock_t                    hs_rwlock;      /* cfs_hash */
+        char                        hs_name[CFS_MAX_HASH_NAME];
+} cfs_hash_t;
+
+typedef struct cfs_hash_ops {
+        unsigned (*hs_hash)(cfs_hash_t *hs, void *key, unsigned mask);
+        void *   (*hs_key)(struct hlist_node *hnode);
+        int      (*hs_compare)(void *key, struct hlist_node *hnode);
+        void *   (*hs_get)(struct hlist_node *hnode);
+        void *   (*hs_put)(struct hlist_node *hnode);
+        void     (*hs_exit)(struct hlist_node *hnode);
+} cfs_hash_ops_t;
+
+#define CFS_HASH_DEBUG          0x0001  /* Enable expensive debug checks */
+#define CFS_HASH_REHASH         0x0002  /* Enable dynamic hash resizing */
+
+#define CFS_HO(hs)             (hs)->hs_ops
+#define CFS_HOP(hs, op)        (hs)->hs_ops->hs_ ## op
+
+static inline unsigned
+cfs_hash_id(cfs_hash_t *hs, void *key, unsigned mask)
+{
+        LASSERT(hs);
+        LASSERT(CFS_HO(hs));
+        LASSERT(CFS_HOP(hs, hash));
+
+        return CFS_HOP(hs, hash)(hs, key, mask);
+}
+
+static inline void *
+cfs_hash_key(cfs_hash_t *hs, struct hlist_node *hnode)
+{
+        LASSERT(hs);
+        LASSERT(hnode);
+        LASSERT(CFS_HO(hs));
+
+        if (CFS_HOP(hs, key))
+                return CFS_HOP(hs, key)(hnode);
+
+        return NULL;
+}
+
+/* Returns 1 on a match,
+ * XXX: This would be better if it returned, -1, 0, or 1 for
+ *      <, =, > respectivly.  It could then be used to implement
+ *      a CFS_HASH_SORT feature flags which could keep each hash
+ *      bucket in order.  This would increase insertion times
+ *      but could reduce lookup times for deep chains.  Ideally,
+ *      the rehash should keep chain depth short but if that
+ *      ends up not being the case this would be a nice feature.
+ */
+static inline int
+cfs_hash_compare(cfs_hash_t *hs, void *key, struct hlist_node *hnode)
+{
+        LASSERT(hs);
+        LASSERT(hnode);
+        LASSERT(CFS_HO(hs));
+
+        if (CFS_HOP(hs, compare))
+                return CFS_HOP(hs, compare)(key, hnode);
+
+        return -EOPNOTSUPP;
+}
+
+static inline void *
+cfs_hash_get(cfs_hash_t *hs, struct hlist_node *hnode)
+{
+        LASSERT(hs);
+        LASSERT(hnode);
+        LASSERT(CFS_HO(hs));
+
+        if (CFS_HOP(hs, get))
+                return CFS_HOP(hs, get)(hnode);
+
+        return NULL;
+}
+
+static inline void *
+cfs_hash_put(cfs_hash_t *hs, struct hlist_node *hnode)
+{
+        LASSERT(hs);
+        LASSERT(hnode);
+        LASSERT(CFS_HO(hs));
+
+        if (CFS_HOP(hs, put))
+                return CFS_HOP(hs, put)(hnode);
+
+        return NULL;
+}
+
+static inline void
+cfs_hash_exit(cfs_hash_t *hs, struct hlist_node *hnode)
+{
+        LASSERT(hs);
+        LASSERT(hnode);
+        LASSERT(CFS_HO(hs));
+
+        if (CFS_HOP(hs, exit))
+                return CFS_HOP(hs, exit)(hnode);
+}
+
+/* Validate hnode references the correct key */
+static inline void
+__cfs_hash_key_validate(cfs_hash_t *hs, void *key,
+                        struct hlist_node *hnode)
+{
+        if (unlikely(hs->hs_flags & CFS_HASH_DEBUG))
+                LASSERT(cfs_hash_compare(hs, key, hnode) > 0);
+}
+
+/* Validate hnode is in the correct bucket */
+static inline void
+__cfs_hash_bucket_validate(cfs_hash_t *hs, cfs_hash_bucket_t *hsb,
+                           struct hlist_node *hnode)
+{
+        unsigned i;
+
+        if (unlikely(hs->hs_flags & CFS_HASH_DEBUG)) {
+                i = cfs_hash_id(hs, cfs_hash_key(hs, hnode), hs->hs_cur_mask);
+                LASSERT(hs->hs_buckets[i] == hsb);
+        }
+}
+
+static inline struct hlist_node *
+__cfs_hash_bucket_lookup(cfs_hash_t *hs,
+                         cfs_hash_bucket_t *hsb, void *key)
+{
+        struct hlist_node *hnode;
+
+        hlist_for_each(hnode, &hsb->hsb_head)
+                if (cfs_hash_compare(hs, key, hnode) > 0)
+                        return hnode;
+
+        return NULL;
+}
+
+static inline void *
+__cfs_hash_bucket_add(cfs_hash_t *hs,
+                      cfs_hash_bucket_t *hsb,
+                      struct hlist_node *hnode)
+{
+        hlist_add_head(hnode, &(hsb->hsb_head));
+        atomic_inc(&hsb->hsb_count);
+        atomic_inc(&hs->hs_count);
+
+        return cfs_hash_get(hs, hnode);
+}
+
+static inline void *
+__cfs_hash_bucket_del(cfs_hash_t *hs,
+                      cfs_hash_bucket_t *hsb,
+                      struct hlist_node *hnode)
+{
+        hlist_del_init(hnode);
+        LASSERT(atomic_read(&hsb->hsb_count) > 0);
+        atomic_dec(&hsb->hsb_count);
+        LASSERT(atomic_read(&hs->hs_count) > 0);
+        atomic_dec(&hs->hs_count);
+
+        return cfs_hash_put(hs, hnode);
+}
+
+/* Hash init/cleanup functions */
+cfs_hash_t *cfs_hash_create(char *name, unsigned int cur_bits,
+                            unsigned int max_bits,
+                            cfs_hash_ops_t *ops, int flags);
+void cfs_hash_destroy(cfs_hash_t *hs);
+
+/* Hash addition functions */
+void cfs_hash_add(cfs_hash_t *hs, void *key,
+                  struct hlist_node *hnode);
+int cfs_hash_add_unique(cfs_hash_t *hs, void *key,
+                        struct hlist_node *hnode);
+void *cfs_hash_findadd_unique(cfs_hash_t *hs, void *key,
+                              struct hlist_node *hnode);
+
+/* Hash deletion functions */
+void *cfs_hash_del(cfs_hash_t *hs, void *key, struct hlist_node *hnode);
+void *cfs_hash_del_key(cfs_hash_t *hs, void *key);
+
+/* Hash lookup/for_each functions */
+void *cfs_hash_lookup(cfs_hash_t *hs, void *key);
+typedef void (*cfs_hash_for_each_cb_t)(void *obj, void *data);
+void cfs_hash_for_each(cfs_hash_t *hs, cfs_hash_for_each_cb_t, void *data);
+void cfs_hash_for_each_safe(cfs_hash_t *hs, cfs_hash_for_each_cb_t, void *data);
+void cfs_hash_for_each_empty(cfs_hash_t *hs, cfs_hash_for_each_cb_t, void *data);
+void cfs_hash_for_each_key(cfs_hash_t *hs, void *key,
+                           cfs_hash_for_each_cb_t, void *data);
+
+/*
+ * Rehash - Theta is calculated to be the average chained
+ * hash depth assuming a perfectly uniform hash funcion.
+ */
+int cfs_hash_rehash(cfs_hash_t *hs, int bits);
+void cfs_hash_rehash_key(cfs_hash_t *hs, void *old_key,
+                         void *new_key, struct hlist_node *hnode);
+
+
+#define CFS_HASH_THETA_BITS  10
+
+/* Return integer component of theta */
+static inline int __cfs_hash_theta_int(int theta)
+{
+        return (theta >> CFS_HASH_THETA_BITS);
+}
+
+/* Return a fractional value between 0 and 999 */
+static inline int __cfs_hash_theta_frac(int theta)
+{
+        return ((theta * 1000) >> CFS_HASH_THETA_BITS) -
+               (__cfs_hash_theta_int(theta) * 1000);
+}
+
+static inline int __cfs_hash_theta(cfs_hash_t *hs)
+{
+        return (atomic_read(&hs->hs_count) <<
+                CFS_HASH_THETA_BITS) >> hs->hs_cur_bits;
+}
+
+static inline void __cfs_hash_set_theta(cfs_hash_t *hs, int min, int max)
+{
+        LASSERT(min < max);
+        hs->hs_min_theta = min;
+        hs->hs_max_theta = max;
+}
+
+/* Generic debug formatting routines mainly for proc handler */
+int cfs_hash_debug_header(char *str, int size);
+int cfs_hash_debug_str(cfs_hash_t *hs, char *str, int size);
+
+/*
+ * Generic djb2 hash algorithm for character arrays.
+ */
+static inline unsigned
+cfs_hash_djb2_hash(void *key, size_t size, unsigned mask)
+{
+        unsigned i, hash = 5381;
+
+        LASSERT(key != NULL);
+
+        for (i = 0; i < size; i++)
+                hash = hash * 33 + ((char *)key)[i];
+
+        return (hash & mask);
+}
+
+/*
+ * Generic u32 hash algorithm.
+ */
+static inline unsigned
+cfs_hash_u32_hash(__u32 key, unsigned mask)
+{
+        return ((key * CFS_GOLDEN_RATIO_PRIME_32) & mask);
+}
+
+/*
+ * Generic u64 hash algorithm.
+ */
+static inline unsigned
+cfs_hash_u64_hash(__u64 key, unsigned mask)
+{
+        return ((unsigned)(key * CFS_GOLDEN_RATIO_PRIME_64) & mask);
+}
+
+#define cfs_hash_for_each_bucket(hs, hsb, pos)   \
+        for (pos = 0;                            \
+             pos <= hs->hs_cur_mask &&           \
+             ({ hsb = hs->hs_buckets[i]; 1; });  \
+             pos++)
 
 /* !__LIBCFS__HASH_H__ */
 #endif

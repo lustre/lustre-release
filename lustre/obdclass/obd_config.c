@@ -51,11 +51,10 @@
 #include <lprocfs_status.h>
 #include <libcfs/list.h>
 #include <lustre_param.h>
-#include <class_hash.h>
 
-static lustre_hash_ops_t uuid_hash_ops;
-static lustre_hash_ops_t nid_hash_ops;
-static lustre_hash_ops_t nid_stat_hash_ops;
+static cfs_hash_ops_t uuid_hash_ops;
+static cfs_hash_ops_t nid_hash_ops;
+static cfs_hash_ops_t nid_stat_hash_ops;
 
 /*********** string parsing utils *********/
 
@@ -356,26 +355,26 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         spin_unlock(&obd->obd_dev_lock);
 
         /* create an uuid-export lustre hash */
-        obd->obd_uuid_hash = lustre_hash_init("UUID_HASH",
-                                              HASH_UUID_CUR_BITS,
-                                              HASH_UUID_MAX_BITS,
-                                              &uuid_hash_ops, 0);
+        obd->obd_uuid_hash = cfs_hash_create("UUID_HASH",
+                                             HASH_UUID_CUR_BITS,
+                                             HASH_UUID_CUR_BITS,
+                                             &uuid_hash_ops, 0);
         if (!obd->obd_uuid_hash)
                 GOTO(err_hash, err = -ENOMEM);
 
         /* create a nid-export lustre hash */
-        obd->obd_nid_hash = lustre_hash_init("NID_HASH",
-                                             HASH_NID_CUR_BITS,
-                                             HASH_NID_MAX_BITS,
-                                             &nid_hash_ops, 0);
+        obd->obd_nid_hash = cfs_hash_create("NID_HASH",
+                                            HASH_NID_CUR_BITS,
+                                            HASH_NID_CUR_BITS,
+                                            &nid_hash_ops, 0);
         if (!obd->obd_nid_hash)
                 GOTO(err_hash, err = -ENOMEM);
 
         /* create a nid-stats lustre hash */
-        obd->obd_nid_stats_hash = lustre_hash_init("NID_STATS",
-                                                   HASH_NID_STATS_CUR_BITS,
-                                                   HASH_NID_STATS_MAX_BITS,
-                                                   &nid_stat_hash_ops, 0);
+        obd->obd_nid_stats_hash = cfs_hash_create("NID_STATS",
+                                                  HASH_NID_STATS_CUR_BITS,
+                                                  HASH_NID_STATS_CUR_BITS,
+                                                  &nid_stat_hash_ops, 0);
         if (!obd->obd_nid_stats_hash)
                 GOTO(err_hash, err = -ENOMEM);
 
@@ -409,15 +408,15 @@ err_exp:
         }
 err_hash:
         if (obd->obd_uuid_hash) {
-                lustre_hash_exit(obd->obd_uuid_hash);
+                cfs_hash_destroy(obd->obd_uuid_hash);
                 obd->obd_uuid_hash = NULL;
         }
         if (obd->obd_nid_hash) {
-                lustre_hash_exit(obd->obd_nid_hash);
+                cfs_hash_destroy(obd->obd_nid_hash);
                 obd->obd_nid_hash = NULL;
         }
         if (obd->obd_nid_stats_hash) {
-                lustre_hash_exit(obd->obd_nid_stats_hash);
+                cfs_hash_destroy(obd->obd_nid_stats_hash);
                 obd->obd_nid_stats_hash = NULL;
         }
         obd->obd_starting = 0;
@@ -520,19 +519,19 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         /* destroy an uuid-export hash body */
         if (obd->obd_uuid_hash) {
-                lustre_hash_exit(obd->obd_uuid_hash);
+                cfs_hash_destroy(obd->obd_uuid_hash);
                 obd->obd_uuid_hash = NULL;
         }
 
         /* destroy a nid-export hash body */
         if (obd->obd_nid_hash) {
-                lustre_hash_exit(obd->obd_nid_hash);
+                cfs_hash_destroy(obd->obd_nid_hash);
                 obd->obd_nid_hash = NULL;
         }
 
         /* destroy a nid-stats hash body */
         if (obd->obd_nid_stats_hash) {
-                lustre_hash_exit(obd->obd_nid_stats_hash);
+                cfs_hash_destroy(obd->obd_nid_stats_hash);
                 obd->obd_nid_stats_hash = NULL;
         }
 
@@ -1424,10 +1423,10 @@ out:
  */
 
 static unsigned
-uuid_hash(lustre_hash_t *lh,  void *key, unsigned mask)
+uuid_hash(cfs_hash_t *hs,  void *key, unsigned mask)
 {
-        return lh_djb2_hash(((struct obd_uuid *)key)->uuid,
-                            sizeof(((struct obd_uuid *)key)->uuid), mask);
+        return cfs_hash_djb2_hash(((struct obd_uuid *)key)->uuid,
+                                  sizeof(((struct obd_uuid *)key)->uuid), mask);
 }
 
 static void *
@@ -1478,12 +1477,12 @@ uuid_export_put(struct hlist_node *hnode)
         RETURN(exp);
 }
 
-static lustre_hash_ops_t uuid_hash_ops = {
-        .lh_hash    = uuid_hash,
-        .lh_key     = uuid_key,
-        .lh_compare = uuid_compare,
-        .lh_get     = uuid_export_get,
-        .lh_put     = uuid_export_put,
+static cfs_hash_ops_t uuid_hash_ops = {
+        .hs_hash    = uuid_hash,
+        .hs_key     = uuid_key,
+        .hs_compare = uuid_compare,
+        .hs_get     = uuid_export_get,
+        .hs_put     = uuid_export_put,
 };
 
 
@@ -1492,9 +1491,9 @@ static lustre_hash_ops_t uuid_hash_ops = {
  */
 
 static unsigned
-nid_hash(lustre_hash_t *lh,  void *key, unsigned mask)
+nid_hash(cfs_hash_t *hs,  void *key, unsigned mask)
 {
-        return lh_djb2_hash(key, sizeof(lnet_nid_t), mask);
+        return cfs_hash_djb2_hash(key, sizeof(lnet_nid_t), mask);
 }
 
 static void *
@@ -1545,12 +1544,12 @@ nid_export_put(struct hlist_node *hnode)
         RETURN(exp);
 }
 
-static lustre_hash_ops_t nid_hash_ops = {
-        .lh_hash    = nid_hash,
-        .lh_key     = nid_key,
-        .lh_compare = nid_compare,
-        .lh_get     = nid_export_get,
-        .lh_put     = nid_export_put,
+static cfs_hash_ops_t nid_hash_ops = {
+        .hs_hash    = nid_hash,
+        .hs_key     = nid_key,
+        .hs_compare = nid_compare,
+        .hs_get     = nid_export_get,
+        .hs_put     = nid_export_put,
 };
 
 
@@ -1596,10 +1595,10 @@ nidstats_put(struct hlist_node *hnode)
         RETURN(ns);
 }
 
-static lustre_hash_ops_t nid_stat_hash_ops = {
-        .lh_hash    = nid_hash,
-        .lh_key     = nidstats_key,
-        .lh_compare = nidstats_compare,
-        .lh_get     = nidstats_get,
-        .lh_put     = nidstats_put,
+static cfs_hash_ops_t nid_stat_hash_ops = {
+        .hs_hash    = nid_hash,
+        .hs_key     = nidstats_key,
+        .hs_compare = nidstats_compare,
+        .hs_get     = nidstats_get,
+        .hs_put     = nidstats_put,
 };

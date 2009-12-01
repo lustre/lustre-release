@@ -3188,9 +3188,9 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
 
         unlock_res_and_lock(new_lock);
 
-        lustre_hash_add(new_lock->l_export->exp_lock_hash,
-                        &new_lock->l_remote_handle,
-                        &new_lock->l_exp_hash);
+        cfs_hash_add(new_lock->l_export->exp_lock_hash,
+                     &new_lock->l_remote_handle,
+                     &new_lock->l_exp_hash);
 
         LDLM_LOCK_RELEASE(new_lock);
         lh->mlh_reg_lh.cookie = 0;
@@ -3215,7 +3215,7 @@ static void mdt_intent_fixup_resent(struct mdt_thread_info *info,
         dlmreq = req_capsule_client_get(info->mti_pill, &RMF_DLM_REQ);
         remote_hdl = dlmreq->lock_handle[0];
 
-        lock = lustre_hash_lookup(exp->exp_lock_hash, &remote_hdl);
+        lock = cfs_hash_lookup(exp->exp_lock_hash, &remote_hdl);
         if (lock) {
                 if (lock != new_lock) {
                         lh->mlh_reg_lh.cookie = lock->l_handle.h_cookie;
@@ -3227,11 +3227,11 @@ static void mdt_intent_fixup_resent(struct mdt_thread_info *info,
                                   lh->mlh_reg_lh.cookie);
                         if (old_lock)
                                 *old_lock = LDLM_LOCK_GET(lock);
-                        lh_put(exp->exp_lock_hash, &lock->l_exp_hash);
+                        cfs_hash_put(exp->exp_lock_hash, &lock->l_exp_hash);
                         return;
                 }
 
-                lh_put(exp->exp_lock_hash, &lock->l_exp_hash);
+                cfs_hash_put(exp->exp_lock_hash, &lock->l_exp_hash);
         }
 
         /*

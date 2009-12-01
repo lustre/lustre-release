@@ -745,7 +745,7 @@ static int lprocfs_mdt_wr_mdc(struct file *file, const char *buffer,
         sscanf(buffer, "%40s", tmpbuf);
 
         obd_str2uuid(&uuid, tmpbuf);
-        exp = lustre_hash_lookup(obd->obd_uuid_hash, &uuid);
+        exp = cfs_hash_lookup(obd->obd_uuid_hash, &uuid);
         if (exp == NULL) {
                 CERROR("%s: no export %s found\n",
                        obd->obd_name, obd_uuid2str(&uuid));

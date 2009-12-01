@@ -69,6 +69,8 @@
 
 #include <libcfs/linux/linux-time.h>
 
+#define CFS_EXPORT_SYMBOL(s)            EXPORT_SYMBOL(s)
+
 /*
  * Pseudo device register
  */
