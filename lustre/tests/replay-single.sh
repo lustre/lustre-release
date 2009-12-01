@@ -1729,10 +1729,21 @@ test_67b() #bug 3055
 
     at_start || return 0
     CONN1=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
+
+    # exhaust precreations on ost1
+    local OST=$(lfs osts | grep 0": " | awk '{print $2}' | sed -e 's/_UUID$//')
+    local mdtosc=$(get_mdtosc_proc_path $OST)
+    local last_id=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_last_id)
+    local next_id=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_next_id)
+
+    mkdir -p $DIR/$tdir/${OST}
+    lfs setstripe $DIR/$tdir/${OST} -o 0 -c 1 || error "setstripe"
+    echo "Creating to objid $last_id on ost $OST..."
 #define OBD_FAIL_OST_PAUSE_CREATE        0x223
     do_facet ost1 "sysctl -w lustre.fail_val=20000"
     do_facet ost1 "sysctl -w lustre.fail_loc=0x80000223"
-    cp /etc/profile $DIR/$tfile || error "cp failed"
+    createmany -o $DIR/$tdir/${OST}/f $next_id $((last_id - next_id + 2))
+
     client_reconnect
     do_facet ost1 "lctl get_param -n ost.OSS.ost_create.timeouts"
     log "phase 2"
