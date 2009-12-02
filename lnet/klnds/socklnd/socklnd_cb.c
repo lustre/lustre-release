@@ -2312,7 +2312,6 @@ void
 ksocknal_check_peer_timeouts (int idx)
 {
         struct list_head *peers = &ksocknal_data.ksnd_peers[idx];
-        struct list_head *ptmp;
         ksock_peer_t     *peer;
         ksock_conn_t     *conn;
 
@@ -2322,8 +2321,7 @@ ksocknal_check_peer_timeouts (int idx)
          * take a look... */
         cfs_read_lock (&ksocknal_data.ksnd_global_lock);
 
-        list_for_each (ptmp, peers) {
-                peer = list_entry (ptmp, ksock_peer_t, ksnp_list);
+        list_for_each_entry(peer, peers, ksnp_list) {
                 if (ksocknal_send_keepalive_locked(peer) != 0) {
                         read_unlock (&ksocknal_data.ksnd_global_lock);
                         goto again;
@@ -2354,7 +2352,7 @@ ksocknal_check_peer_timeouts (int idx)
 
                                 ksocknal_peer_addref(peer);
                                 cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
-                                
+
                                 ksocknal_flush_stale_txs(peer);
 
                                 ksocknal_peer_decref(peer);
@@ -2367,7 +2365,7 @@ ksocknal_check_peer_timeouts (int idx)
         list_for_each_entry(peer, peers, ksnp_list) {
                 ksock_tx_t *tx;
                 int         n = 0;
-                
+
                 list_for_each_entry(tx, &peer->ksnp_zc_req_list, tx_zc_list) {
                         if (!cfs_time_aftereq(cfs_time_current(),
                                               tx->tx_deadline))
@@ -2385,7 +2383,7 @@ ksocknal_check_peer_timeouts (int idx)
                                                tx->tx_deadline));
                 }
         }
-        
+
         cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
 }
 
