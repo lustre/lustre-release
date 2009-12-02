@@ -1098,15 +1098,45 @@ build_kernel_ib() {
     #   OFED_ISCSI="$OFED_ISCSI --with-iser-mod"
     #fi
 
+    # assume we are just rebuilding the SRPM
+    local BUILD_TYPE=${BUILD_TYPE:-"--rebuild"}
+    local SOURCE="${TOPDIR}/OFED/SRPMS/ofa_kernel-*.src.rpm"
+
+    # but switch to building from the SPEC if we need to apply patches
+    if ls ${TOPDIR}/lustre/build/patches/ofed/* >/dev/null; then
+        BUILD_TYPE="-bb"
+        rpm --define "_topdir ${TOPDIR}" -ivh $SOURCE
+        SOURCE="${TOPDIR}/SPECS/ofa_kernel.spec"
+        local file ed_fragment1 ed_fragment2 n=1
+        for file in ${TOPDIR}/lustre/build/patches/ofed/*; do
+            ed_fragment1="$ed_fragment1
+Patch$n: ${file%%*/}"
+            ed_fragment2="$ed_fragment2
+%patch$n -p0"
+            cp $file ${TOPDIR}/SOURCES
+            let n=$n+1
+        done
+
+        ed $SOURCE <<EOF
+/^Source: /a
+$ed_fragment1
+.
+/^%setup /a
+$ed_fragment2
+.
+wq
+EOF
+    fi
+
     local linuxrelease=$(find_linux_release "$linux")
-    $RPMBUILD --rebuild --define 'build_kernel_ib 1' --define 'build_kernel_ib_devel 1' \
+    $RPMBUILD $BUILD_TYPE --define 'build_kernel_ib 1' --define 'build_kernel_ib_devel 1' \
               --define "_topdir ${TOPDIR}" --target ${TARGET_ARCH} \
               --define "KVERSION ${linuxrelease}" \
               --define "$K_SRC ${linux}" \
               --define "LIB_MOD_DIR /lib/modules/${linuxrelease}/updates" \
               ${OFA_KERNEL_RELEASE:+--define "_release $OFA_KERNEL_RELEASE"} \
               --define "configure_options --without-quilt $OFED_CORE $OFED_HARDWARE $OFED_ISCSI" \
-              ${TOPDIR}/OFED/SRPMS/ofa_kernel-*.src.rpm
+              ${SOURCE}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
         fatal 1 "Error building kernel-ib"
