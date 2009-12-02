@@ -5,6 +5,12 @@
 #set -x
 shopt -s extdebug
 
+# include the exit_traps library
+. ${0%/lbuild}/exit_traps.sh
+
+# our children should die when we do
+push_exit_trap "kill -INT -$$ || true" kill_children
+
 TOPDIR=$PWD
 
 # CVSROOT is inherited from the environment
@@ -395,6 +401,85 @@ download_srpm() {
 
 }
 
+download_file() {
+    local from="$1"
+    local to="$2"
+    local force="$3"
+
+    local file=${from##*/}
+
+    if [ -d $to ]; then
+        to="$to/$file"
+    fi
+
+    local semaphore="$to-downloading"
+
+    is_downloading() {
+        if [ ! -f $semaphore ]; then
+            return 1
+        fi
+
+        # make sure the download has not been aborted
+        local now=$(date +%s)
+        local file_mtime=$(stat -c %Y "$to")
+        local staleness=$((now - file_mtime))
+        # let's assume an active download will write at least once a minute
+        if [ $staleness -gt 60 ]; then
+            return 1
+        fi
+
+        return 0
+    }
+
+    is_downloaded() {
+        # if the semaphore file exists, the file is either still downloading
+        # or a download was aborted and we cannot trust the target file
+        if [ -f $semaphore ]; then
+            return 1
+        fi
+
+        if ! $(is_downloading) && [ -r "$to" ] && [ -s "$to" ]; then
+            return 0
+        fi
+
+        return 1
+    }
+
+    if $force || ! $(is_downloaded); then
+        if $(is_downloading); then
+            echo "Somebody else is downloading $from..."
+            while $(is_downloading); do
+                echo "Waiting for $to to finish downloading"
+                sleep 60
+            done
+            if $(is_downloaded); then
+                return 0
+            else
+                echo "The download we were waiting for seems to have been aborted"
+            fi
+
+        fi
+
+        if $DOWNLOAD; then
+            echo "Downloading $from..."
+            # flag others so they don't try to download also
+            push_exit_trap "rm -f $to $semaphore" "download"
+            touch $semaphore
+            if ! wget -nv "$from" -O "$to" || [ ! -s "$to" ]; then
+                # the trap will remove the files via the fatal below
+                fatal 1 "Could not download ${to##*/} from ${from%%/*}/."
+            fi
+            rm -f $semaphore
+            delete_exit_trap "download"
+        else
+            fatal 1 "${to##*/} not found in directory ${to%/*}."
+        fi
+    fi
+
+    return 0
+
+}
+
 download_ofed() {
     local force="${1:-false}"
 
@@ -407,80 +492,47 @@ download_ofed() {
         daily=${OFED_VERSION##$Mmv-}
         location="http://www.openfabrics.org/downloads/OFED/ofed-${Mmv}-daily/"
         # find the filename for the version for the date specified
-        OFED_VERSION=$(curl -s "$location" | sed -nre "/${daily}-/s/.*href=\"OFED-([0-9]+\.[0-9]+-${daily}-[0-9]{4,4}).tgz.*$/\1/p")
+        OFED_VERSION=$(curl -s "$location" | sed -nre "/${daily}-/s/.*href=\"OFED-([0-9]+\.[0-9]+-${daily}-[0-9]{4,4}).tgz.*$/\1/p" | tail -1)
         if [ -z "$OFED_VERSION" ]; then
             fatal 1 "Could not determine the filename of the OFED snapshot for ${daily}"
         fi
     fi
 
-    if [ -n "$OFED_VERSION" -a "$OFED_VERSION" != "inkernel" ] &&
-       ( $force || [ ! -r "$KERNELTREE/OFED-${OFED_VERSION}.tgz" ] ||
-           [ ! -s "$KERNELTREE/OFED-${OFED_VERSION}.tgz" ] ); then
-        if $DOWNLOAD; then
-            echo "Downloading $location/OFED-${OFED_VERSION}.tgz..."
-            if ! wget -nv "$location/OFED-${OFED_VERSION}.tgz" \
-                -O "$KERNELTREE/OFED-${OFED_VERSION}.tgz" ||
-               [ ! -s "$KERNELTREE/OFED-${OFED_VERSION}.tgz" ]; then
-                rm -f $KERNELTREE/OFED-${OFED_VERSION}.tgz
-                fatal 1 "Could not download OFED-${OFED_VERSION}.tgz" \
-                        "from downloads.lustre.org."
-            fi
-        else
-            fatal 1 "OFED-${OFED_VERSION}.tgz not found in kernel" \
-                    "directory $KERNELTREE."
-        fi
+    if [ -z "$OFED_VERSION" -o "$OFED_VERSION" = "inkernel" ]; then
+        return 0
     fi
+
+    local file="OFED-${OFED_VERSION}.tgz"
+    download_file "$location/$file" "$KERNELTREE" "$force"
 
 }
 
 download_rdac() {
     local force="${1:-false}"
 
-    if [ -n "$RDAC_VERSION" -a "$RDAC_VERSION" != "inkernel" ] &&
-       ( $force || [ ! -r "$KERNELTREE/rdac-LINUX-${RDAC_VERSION}-source.tar.gz" ] ||
-           [ ! -s "$KERNELTREE/rdac-LINUX-${RDAC_VERSION}-source.tar.gz" ] ); then
-        if $DOWNLOAD; then
             local location="http://downloads.lustre.org/public/RDAC/"
-            echo "Downloading $location/rdac-LINUX-${RDAC_VERSION}-source.tar.gz..."
-            if ! wget -nv "$location/rdac-LINUX-${RDAC_VERSION}-source.tar.gz" \
-                -O "$KERNELTREE/rdac-LINUX-${RDAC_VERSION}-source.tar.gz" ||
-               [ ! -s "$KERNELTREE/rdac-LINUX-${RDAC_VERSION}-source.tar.gz" ]; then
-                rm -f $KERNELTREE/rdac-LINUX-${RDAC_VERSION}-source.tar.gz
-                fatal 1 "Could not download rdac-LINUX-${RDAC_VERSION}-source.tar.gz" \
-                        "from downloads.lustre.org."
-            fi
-        else
-            fatal 1 "rdac-LINUX-${RDAC_VERSION}-source.tar.gz not found in kernel" \
-                    "directory $KERNELTREE."
-        fi
+
+    if [ -z "$RDAC_VERSION" -o "$RDAC_VERSION" = "inkernel" ]; then
+    return 0
     fi
 
-    return 0
+    local file="rdac-LINUX-${RDAC_VERSION}-source.tar.gz"
+    download_file "$location/$file" "$KERNELTREE" "$force"
+
 }
 
 download_mptlinux() {
     local force="${1:-false}"
 
-    if [ -n "$MPTLINUX_VERSION" -a "$MPTLINUX_VERSION" != "inkernel" ] &&
-       ( $force || [ ! -r "$KERNELTREE/MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip" ] ||
-           [ ! -s "$KERNELTREE/MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip" ] ); then
-        if $DOWNLOAD; then
             local location="http://downloads.lustre.org/public/MPTLINUX/"
-            echo "Downloading $location/MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip..."
-            if ! wget -nv "$location/MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip" \
-                -O "$KERNELTREE/MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip" ||
-               [ ! -s "$KERNELTREE/MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip" ]; then
-                rm -f $KERNELTREE/MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip
-                fatal 1 "Could not download MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip" \
-                        "from downloads.lustre.org."
-            fi
-        else
-            fatal 1 "MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip not found in kernel" \
-                    "directory $KERNELTREE."
-        fi
+
+    if [ -z "$MPTLINUX_VERSION" -o "$MPTLINUX_VERSION" = "inkernel" ]; then
+    return 0
     fi
 
-    return 0
+    file="MPTLINUX_RHEL5_SLES10_PH15-${MPTLINUX_VERSION}.zip"
+    download_file "$location/$file" "$KERNELTREE" "$force"
+
 }
 
 load_target() {
@@ -1815,7 +1867,7 @@ if [ -n "$RDAC_VERSION" -a "$RDAC_VERSION" != "inkernel" ]; then
         fatal 1 "Error copying RDAC source tarball to RPM SOURCES dir"
 fi
 
-trap '[ -n "$CCACHE" ] && ccache -s' EXIT
+push_exit_trap '[ -n "$CCACHE" ] && ccache -s' "ccache"
 
 # if an unpacked kernel source tree was given on the command line
 # just build lustre with it (nothing distro kernel specific here)
