@@ -6283,31 +6283,25 @@ check_file_in_pool()
 
 export mdtlov=
 
-cleanup_200 () {
-        trap 0
-        test_pools || return 0
-        destroy_pool $POOL
-}
+trap "cleanup_pools $FSNAME" EXIT
 
 test_200a() {
         test_pools || return 0
 
-        do_facet mgs $LCTL pool_new $FSNAME.$POOL
-
-        trap cleanup_200 EXIT
-        CLEANUP_200=yes
-
-        # get param should return err until pool is created
-        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "" || error "Pool creation of $POOL failed"
+        create_pool $FSNAME.$POOL || return $?
+        [ $($LFS pool_list $FSNAME | grep -c $POOL) -eq 1 ] ||
+                error "$POOL not in lfs pool_list"
 }
 run_test 200a "Create new pool =========================================="
 
 test_200b() {
         test_pools || return 0
-        TGT=$(for i in `seq $TGTPOOL_FIRST $TGTPOOL_STEP $TGTPOOL_MAX`; do printf "$FSNAME-OST%04x_UUID " $i; done)
+        TGT=$(for i in $TGTPOOL_LIST; do printf "$FSNAME-OST%04x_UUID " $i; done)
         do_facet mgs $LCTL pool_add $FSNAME.$POOL \
                 $FSNAME-OST[$TGTPOOL_FIRST-$TGTPOOL_MAX/$TGTPOOL_STEP]
-        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | sort -u | tr '\n' ' ' " "$TGT" || error "Add to pool failed"
+
+        wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | sort -u | tr '\n' ' ' " "$TGT" ||
+		        error "Add to pool failed"
 }
 run_test 200b "Add targets to a pool ===================================="
 
@@ -6371,7 +6365,8 @@ test_201a() {
 
 	TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
 	do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | grep $TGT" "" || error "$TGT not removed from $FSNAME.$POOL"
+	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | grep $TGT" "" ||
+		error "$TGT not removed from $FSNAME.$POOL"
 }
 run_test 201a "Remove a target from a pool ============================="
 
@@ -6382,8 +6377,8 @@ test_201b() {
 	do
 		do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
  	done
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL" ""\
-	    || error "Pool $FSNAME.$POOL cannot be drained"
+	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL" "" ||
+		error "Pool $FSNAME.$POOL cannot be drained"
 	# striping on an empty/nonexistant pool should fall back to "pool of everything"
 	touch ${POOL_DIR}/$tfile || error "failed to use fallback striping for empty pool"
 	# setstripe on an empty pool should fail
@@ -6406,12 +6401,16 @@ test_201c() {
 		error "expected failure when creating file with missing pool"
 
 	# get param should return err once pool is gone
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "foo" && unset CLEANUP_200 && trap 0 && return 0
+	if wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null ||
+		echo foo" "foo"; then
+		remove_pool_from_list $FSNAME.$POOL
+		return 0
+	fi
 	error "Pool $FSNAME.$POOL is not destroyed"
 }
 run_test 201c "Remove a pool ============================================"
 
-[ "$CLEANUP_200" ] && cleanup_200
+cleanup_pools $FSNAME
 
 test_202() {
         $LFS setstripe -c 2 -s 1048576 $DIR/$tfile

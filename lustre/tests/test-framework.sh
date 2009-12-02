@@ -164,6 +164,44 @@ case `uname -r` in
     *) EXT=".ko"; USE_QUOTA=yes;;
 esac
 
+pool_list () {
+   do_facet mgs lctl pool_list $1
+}
+
+create_pool() {
+    local fsname=${1%%.*}
+    local poolname=${1##$fsname.}
+
+    do_facet mgs lctl pool_new $1
+    local RC=$?
+    # get param should return err unless pool is created
+    [[ $RC -ne 0 ]] && return $RC
+
+    wait_update $HOSTNAME "lctl get_param -n lov.$fsname-*.pools.$poolname \
+        2>/dev/null || echo foo" "" || RC=1
+    if [[ $RC -eq 0 ]]; then
+        add_pool_to_list $1
+    else
+        error "pool_new failed $1"
+    fi
+    return $RC
+}
+
+add_pool_to_list () {
+    local fsname=${1%%.*}
+    local poolname=${1##$fsname.}
+
+    local listvar=${fsname}_CREATED_POOLS
+    eval export ${listvar}=$(expand_list ${!listvar} $poolname)
+}
+
+remove_pool_from_list () {
+    local fsname=${1%%.*}
+    local poolname=${1##$fsname.}
+
+    local listvar=${fsname}_CREATED_POOLS
+    eval export ${listvar}=$(exclude_items_from_list ${!listvar} $poolname)
+}
 
 module_loaded () {
    /sbin/lsmod | grep -q $1
@@ -2819,19 +2857,51 @@ destroy_pool_int() {
     do_facet mgs lctl pool_destroy $1
 }
 
+# <fsname>.<poolname> or <poolname>
 destroy_pool() {
+    local fsname=${1%%.*}
+    local poolname=${1##$fsname.}
+
+    [[ x$fsname = x$poolname ]] && fsname=$FSNAME
+
     local RC
 
-    do_facet mds lctl pool_list $FSNAME.$1
+    pool_list $fsname.$poolname || return $?
+
+    destroy_pool_int $fsname.$poolname
     RC=$?
     [[ $RC -ne 0 ]] && return $RC
 
-    destroy_pool_int $FSNAME.$1
-    RC=$?
-    [[ $RC -ne 0 ]] && return $RC
+    wait_update $HOSTNAME "lctl get_param -n lov.$fsname-*.pools.$poolname \
+      2>/dev/null || echo foo" "foo" || RC=1
 
-    wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$1 \
-      2>/dev/null || echo foo" "foo" && return 0
+    if [[ $RC -eq 0 ]]; then
+        remove_pool_from_list $fsname.$poolname
+    else
+        error "destroy pool failed $1"
+    fi
+    return $RC
+}
+
+destroy_pools () {
+    local fsname=${1:-$FSNAME}
+    local poolname
+    local listvar=${fsname}_CREATED_POOLS
+
+    pool_list $fsname
+
+    [ x${!listvar} = x ] && return 0
+
+    echo destroy the created pools: ${!listvar}
+    for poolname in ${!listvar//,/ }; do
+        destroy_pool $fsname.$poolname
+    done
+}
+
+cleanup_pools () {
+    local fsname=${1:-$FSNAME}
+    trap 0
+    destroy_pools $fsname
 }
 
 gather_logs () {
