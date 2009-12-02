@@ -62,7 +62,7 @@ if [ "$LFSCK_SETUP" != "no" ]; then
 	# -- can't remove the mountpoint...
 	[ -z "$DIR" ] && rm -rf $DIR/*
 	mkdir -p $DIR
-	OSTCOUNT=`$GETSTRIPE $MOUNT | grep -c "^[0-9]*: " || true`
+	OSTCOUNT=`$LFS osts | grep -c "^[0-9]*: " || true`
 
 	# Create some files on the filesystem
 	for d in `seq -f d%g $NUMDIRS`; do

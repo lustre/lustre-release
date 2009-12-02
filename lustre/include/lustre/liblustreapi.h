@@ -90,9 +90,10 @@ extern int llapi_file_lookup(int dirfd, const char *name);
 #define VERBOSE_SIZE    0x2
 #define VERBOSE_OFFSET  0x4 
 #define VERBOSE_POOL    0x8
-#define VERBOSE_DETAIL  0x10 
+#define VERBOSE_OBJID   0x10
+#define VERBOSE_DETAIL  0x20 
 #define VERBOSE_ALL     (VERBOSE_COUNT | VERBOSE_SIZE | VERBOSE_OFFSET | \
-                         VERBOSE_POOL)
+                         VERBOSE_POOL | VERBOSE_OBJID)
 
 struct find_param {
         unsigned int maxdepth;
@@ -148,6 +149,7 @@ struct find_param {
         char poolname[LOV_MAXPOOLNAME + 1];
 };
 
+extern int llapi_ostlist(char *path, struct find_param *param);
 extern int llapi_getstripe(char *path, struct find_param *param);
 extern int llapi_find(char *path, struct find_param *param);
 

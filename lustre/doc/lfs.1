@@ -20,6 +20,8 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .B lfs osts
 .br
 .B lfs getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v] 
+        \fB[--count | -c ] [--size | -s ] [--index | -i ]
+        \fB[--offset | -o ] [--pool | -p ] [--directory | -d ]
         \fB[--recursive|-r] <dirname|filename>\fR
 .br
 .B lfs setstripe [--size|-s stripe-size] [--count|-c stripe-cnt]
@@ -85,8 +87,12 @@ To search the directory tree rooted at the given dir/file name for the files tha
 .B osts 
 List all the OSTs for the filesystem
 .TP
-.B getstripe
-To list the striping info for a given filename or files in a directory, optionally recursively, for all files in a directory tree: \fB--quiet\fR (don't print object IDs), \fB--verbose\fR (print striping parameters), \fB--recursive\fR (recurse into subdirectories).
+.B getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v] 
+        \fB[--count | -c ] [--size | -s ] [--index | -i ]
+        \fB[--offset | -o ] [--pool | -p ] [--directory | -d ]
+        \fB[--recursive|-r] <dirname|filename>\fR
+.br
+To list the striping information for a given filename or directory. By default the stripe count, size, and offset will be returned. If you only want specific striping information then the options of \fB--count\fR,\fB--size\fR,\fB--index\fR or \fB--offset\fR plus various combinations of these options can be used to retrieve only what you want. What pools a file belong to can also be obtained with \fB--pool\fR. In the case where you only want details about the files object id information then the \fB--quiet\fR option is used. Additional information available about striping can be displayed with \fB--verbose\fR. The default behavior of lfs getstripe used to retrieve data about a directory is to list all the contents of that directory. If you wish to inquire only about that directory then \fB--directory\fR,can be used to list directory entries instead of its contents in the same manner as ls -d. This can be expanded with \fB--recursive\fR which will recurse into all subdirectories. You can filter the search to return only files that has a object on a specific OST with \fB--obd\fR.
 .TP
 .B setstripe [--size stripe-size] [--count stripe-cnt] 
 	\fB[--offset start-ost] [--pool <pool>]\fR
@@ -185,7 +191,7 @@ Lists space usage per OST and MDT in human readable format.
 .B $ lfs df -i 
 Lists inode usage per OST and MDT
 .TP
-.B lfs df --pool <filesystem>[.<pool>] | <pathname>
+.B $ lfs df --pool <filesystem>[.<pool>] | <pathname>
 List space or inode usage for a specific OST pool
 .TP
 .B $ lfs quotachown -i /mnt/lustre

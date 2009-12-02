@@ -1152,7 +1152,7 @@ run_test 27v "skip object creation on slow OST ================="
 test_27w() { # bug 10997
         mkdir -p $DIR/$tdir || error "mkdir failed"
         $SETSTRIPE $DIR/$tdir/f0 -s 65536 || error "lstripe failed"
-        size=`$GETSTRIPE $DIR/$tdir/f0 -qs`
+        size=`$GETSTRIPE $DIR/$tdir/f0 -s`
         [ $size -ne 65536 ] && error "stripe size $size != 65536" || true
 
         [ "$OSTCOUNT" -lt "2" ] && skip_env "skipping multiple stripe count/offset test" && return
@@ -1160,8 +1160,8 @@ test_27w() { # bug 10997
                 offset=$(($i-1))
                 log setstripe $DIR/$tdir/f$i -c $i -i $offset
                 $SETSTRIPE $DIR/$tdir/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
-                count=`$GETSTRIPE -qc $DIR/$tdir/f$i`
-                index=`$GETSTRIPE -qo $DIR/$tdir/f$i`
+                count=`$GETSTRIPE -c $DIR/$tdir/f$i`
+                index=`$GETSTRIPE -o $DIR/$tdir/f$i`
                 [ $count -ne $i ] && error "stripe count $count != $i" || true
                 [ $index -ne $offset ] && error "stripe offset $index != $offset" || true
         done
@@ -2532,12 +2532,14 @@ test_56a() {	# was test_56
 
         [  "$OSTCOUNT" -lt 2 ] && \
                 skip_env "skipping other lfs getstripe --obd test" && return
-        FILENUM=`$GETSTRIPE --recursive $DIR/d56 | sed -n '/^[	 ]*1[	 ]/p' | wc -l`
-        OBDUUID=`$GETSTRIPE --recursive $DIR/d56 | sed -n '/^[	 ]*1:/p' | awk '{print $2}'`
-        FOUND=`$GETSTRIPE -r --obd $OBDUUID $DIR/d56 | wc -l`
+        OSTIDX=1
+        OBDUUID=$(lfs osts | grep ${OSTIDX}": " | awk '{print $2}')
+        FILENUM=`$GETSTRIPE -ir $DIR/d56 | grep -x $OSTIDX | wc -l`
+        FOUND=`$GETSTRIPE -r --obd $OBDUUID $DIR/d56 | grep obdidx | wc -l`
         [ $FOUND -eq $FILENUM ] || \
                 error "lfs getstripe --obd wrong: found $FOUND, expected $FILENUM"
-        [ `$GETSTRIPE -r -v --obd $OBDUUID $DIR/d56 | sed '/^[	 ]*1[	 ]/d' |\
+        [ `$GETSTRIPE -r -v --obd $OBDUUID $DIR/d56 | \
+                sed '/^[	 ]*'${OSTIDX}'[	 ]/d' |\
                 sed -n '/^[	 ]*[0-9][0-9]*[	 ]/p' | wc -l` -eq 0 ] || \
                 error "lfs getstripe --obd wrong: should not show file on other obd"
         echo "lfs getstripe --obd passed."
@@ -2617,7 +2619,7 @@ run_test 56h "check lfs find ! -name ============================="
 test_56i() {
        tdir=${tdir}i
        mkdir -p $DIR/$tdir
-       UUID=`$GETSTRIPE $DIR/$tdir | awk '/0: / { print $2 }'`
+       UUID=`$LFS osts $DIR/$tdir | awk '/0: / { print $2 }'`
        OUT="`$LFIND -ost $UUID $DIR/$tdir`"
        [ "$OUT" ] && error "$LFIND returned directory '$OUT'" || true
 }
