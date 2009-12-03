@@ -813,14 +813,6 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
         int rc;
         ENTRY;
 
-        /*
-         * Disable global rename BFL lock temporarily because
-         * when a mds do rename recoverying, which might enqueue
-         * BFL lock to the controller mds. and this req might be
-         * replay req for controller mds. but we did not have
-         * such handling in controller mds. XXX
-         */
-        RETURN(0);
         ms = mdt_md_site(info->mti_mdt);
         fid_build_reg_res_name(&LUSTRE_BFL_FID, res_id);
 
@@ -858,9 +850,6 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
 static void mdt_rename_unlock(struct lustre_handle *lh)
 {
         ENTRY;
-        /* Disable global rename BFL lock temporarily. see above XXX*/
-        EXIT;
-        return;
         LASSERT(lustre_handle_is_used(lh));
         ldlm_lock_decref(lh, LCK_EX);
         EXIT;
