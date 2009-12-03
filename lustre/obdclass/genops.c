@@ -985,6 +985,20 @@ no_disconn:
         RETURN(0);
 }
 
+/* Return non-zero for a fully connected export */
+int class_connected_export(struct obd_export *exp)
+{
+        if (exp) {
+                int connected;
+                spin_lock(&exp->exp_lock);
+                connected = (exp->exp_conn_cnt > 0);
+                spin_unlock(&exp->exp_lock);
+                return connected;
+        }
+        return 0;
+}
+EXPORT_SYMBOL(class_connected_export);
+
 static void class_disconnect_export_list(struct list_head *list,
                                          enum obd_option flags)
 {

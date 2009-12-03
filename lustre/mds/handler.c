@@ -1501,12 +1501,11 @@ int mds_handle(struct ptlrpc_request *req)
                 RETURN(rc);
         }
 
-        /* XXX identical to OST */
         if (lustre_msg_get_opc(req->rq_reqmsg) != MDS_CONNECT) {
                 struct mds_export_data *med;
                 int recovering;
 
-                if (req->rq_export == NULL) {
+                if (!class_connected_export(req->rq_export)) {
                         CERROR("operation %d on unconnected MDS from %s\n",
                                lustre_msg_get_opc(req->rq_reqmsg),
                                libcfs_id2str(req->rq_peer));
