@@ -321,6 +321,10 @@ test_ior() {
 run_test ior "ior"
  
 test_cascading_rw() {
+    if [ "$NFSCLIENT" ]; then
+        skip "skipped for NFSCLIENT mode"
+    fi
+
     [ x$CASC_RW = x ] &&
         { skip_env "cascading_rw not found" && return; }
 
