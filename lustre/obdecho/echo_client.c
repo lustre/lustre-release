@@ -1348,8 +1348,14 @@ echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
                 rc = obd_connect(&conn, tgt, &echo_uuid, ocd, &ec->ec_exp);
         } else {
                 rc = obd_connect(&conn, tgt, &echo_uuid, ocd, NULL);
-                if (rc == 0)
+                if (rc == 0) {
                         ec->ec_exp = class_conn2export(&conn);
+
+                        /* Turn off pinger because it connects to tgt obd directly */
+                        spin_lock(&tgt->obd_dev_lock);
+                        list_del_init(&ec->ec_exp->exp_obd_chain_timed);
+                        spin_unlock(&tgt->obd_dev_lock);
+                }
         }
 
         OBD_FREE(ocd, sizeof(*ocd));
