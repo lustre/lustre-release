@@ -957,6 +957,7 @@ dont_check_exports:
 
                 GOTO(out, rc = -EALREADY);
         }
+        LASSERT(lustre_msg_get_conn_cnt(req->rq_reqmsg) > 0);
         export->exp_conn_cnt = lustre_msg_get_conn_cnt(req->rq_reqmsg);
         export->exp_abort_active_req = 0;
 

@@ -1990,11 +1990,10 @@ int ost_handle(struct ptlrpc_request *req)
 
         req_capsule_init(&req->rq_pill, req, RCL_SERVER);
 
-        /* XXX identical to MDS */
         if (lustre_msg_get_opc(req->rq_reqmsg) != OST_CONNECT) {
                 int recovering;
 
-                if (req->rq_export == NULL) {
+                if (!class_connected_export(req->rq_export)) {
                         CDEBUG(D_HA,"operation %d on unconnected OST from %s\n",
                                lustre_msg_get_opc(req->rq_reqmsg),
                                libcfs_id2str(req->rq_peer));

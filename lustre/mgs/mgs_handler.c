@@ -636,7 +636,7 @@ int mgs_handle(struct ptlrpc_request *req)
                 GOTO(out, rc = 0);
 
         if (opc != MGS_CONNECT) {
-                if (req->rq_export == NULL) {
+                if (!class_connected_export(req->rq_export)) {
                         CERROR("lustre_mgs: operation %d on unconnected MGS\n",
                                opc);
                         req->rq_status = -ENOTCONN;

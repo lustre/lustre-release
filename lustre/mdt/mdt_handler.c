@@ -2768,7 +2768,7 @@ static int mdt_recovery(struct mdt_thread_info *info)
                 }
         }
 
-        if (unlikely(req->rq_export == NULL)) {
+        if (unlikely(!class_connected_export(req->rq_export))) {
                 CERROR("operation %d on unconnected MDS from %s\n",
                        lustre_msg_get_opc(req->rq_reqmsg),
                        libcfs_id2str(req->rq_peer));
