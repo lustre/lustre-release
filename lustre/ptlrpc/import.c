@@ -786,8 +786,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
         if (rc) {
                 /* if this reconnect to busy export - not need select new target
                  * for connecting*/
-                if (ptlrpc_busy_reconnect(rc))
-                        imp->imp_force_reconnect = 1;
+                imp->imp_force_reconnect = ptlrpc_busy_reconnect(rc);
                 spin_unlock(&imp->imp_lock);
                 GOTO(out, rc);
         }
