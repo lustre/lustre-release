@@ -140,60 +140,73 @@ struct cl_page *lov_page_init_raid0(const struct lu_env *env,
                                     struct cl_object *obj, struct cl_page *page,
                                     cfs_page_t *vmpage)
 {
-        struct lov_page   *lpg;
         struct lov_object *loo = cl2lov(obj);
+        struct lov_io     *lio = lov_env_io(env);
         int result;
 
+        loff_t   offset;
+        int      stripe;
+        obd_off  suboff;
+        struct cl_page          *subpage;
+        struct cl_object        *subobj;
+        struct lov_layout_raid0 *r0 = lov_r0(loo);
+        struct lov_io_sub       *sub;
+
         ENTRY;
-        OBD_SLAB_ALLOC_PTR_GFP(lpg, lov_page_kmem, CFS_ALLOC_IO);
-        if (lpg != NULL) {
-                loff_t   offset;
-                int      stripe;
-                obd_off  suboff;
-                struct cl_page          *subpage;
-                struct cl_object        *subobj;
-                struct lov_layout_raid0 *r0 = lov_r0(loo);
 
-                offset = cl_offset(obj, page->cp_index);
-                stripe = lov_stripe_number(r0->lo_lsm, offset);
-                result = lov_stripe_offset(r0->lo_lsm, offset, stripe,
-                                           &suboff);
-                LASSERT(stripe < r0->lo_nr);
-                LASSERT(result == 0);
+        offset = cl_offset(obj, page->cp_index);
+        stripe = lov_stripe_number(r0->lo_lsm, offset);
+        LASSERT(stripe < r0->lo_nr);
+        result = lov_stripe_offset(r0->lo_lsm, offset, stripe,
+                                   &suboff);
+        LASSERT(result == 0);
 
-                subobj  = lovsub2cl(r0->lo_sub[stripe]);
-                subpage = cl_page_find(env, subobj,
-                                       cl_index(subobj, suboff), vmpage,
-                                       page->cp_type);
-                if (!IS_ERR(subpage)) {
-                        if (subpage->cp_parent != NULL) {
-                                /*
-                                 * This is only possible when TRANSIENT page
-                                 * is being created, and CACHEABLE sub-page
-                                 * (attached to already existing top-page) has
-                                 * been found. Tell cl_page_find() to use
-                                 * existing page.
-                                 */
-                                LASSERT(subpage->cp_type == CPT_CACHEABLE);
-                                LASSERT(page->cp_type == CPT_TRANSIENT);
-                                lpg->lps_invalid = 1;
-                                cl_page_put(env, subpage);
-                                /*
-                                 * XXX This assumes that lov is in the topmost
-                                 * cl_page.
-                                 */
-                                result = PTR_ERR(cl_page_top(subpage));
-                        } else {
-                                lu_ref_add(&subpage->cp_reference, "lov", page);
-                                subpage->cp_parent = page;
-                                page->cp_child = subpage;
-                        }
-                        cl_page_slice_add(page, &lpg->lps_cl,
-                                          obj, &lov_page_ops);
-                } else
-                        result = PTR_ERR(subpage);
+        subobj = lovsub2cl(r0->lo_sub[stripe]);
+        sub    = lov_sub_get(env, lio, stripe);
+        if (IS_ERR(sub))
+                GOTO(out, result = PTR_ERR(sub));
+
+        subpage = cl_page_find(sub->sub_env, subobj,
+                               cl_index(subobj, suboff), vmpage,
+                               page->cp_type);
+        lov_sub_put(sub);
+        if (!IS_ERR(subpage)) {
+                struct lov_page *lpg;
+
+                OBD_SLAB_ALLOC_PTR_GFP(lpg, lov_page_kmem, CFS_ALLOC_IO);
+                if (lpg == NULL) {
+                        cl_page_put(env, subpage);
+                        GOTO(out, result = -ENOMEM);
+                }
+
+                if (subpage->cp_parent != NULL) {
+                        /*
+                         * This is only possible when TRANSIENT page
+                         * is being created, and CACHEABLE sub-page
+                         * (attached to already existing top-page) has
+                         * been found. Tell cl_page_find() to use
+                         * existing page.
+                         */
+                        LASSERT(subpage->cp_type == CPT_CACHEABLE);
+                        LASSERT(page->cp_type == CPT_TRANSIENT);
+                        lpg->lps_invalid = 1;
+                        cl_page_put(env, subpage);
+                        /*
+                         * XXX This assumes that lov is in the topmost
+                         * cl_page.
+                         */
+                        result = PTR_ERR(cl_page_top(subpage));
+                } else {
+                        lu_ref_add(&subpage->cp_reference, "lov", page);
+                        subpage->cp_parent = page;
+                        page->cp_child = subpage;
+                }
+                cl_page_slice_add(page, &lpg->lps_cl,
+                                  obj, &lov_page_ops);
         } else
-                result = -ENOMEM;
+                result = PTR_ERR(subpage);
+
+out:
         RETURN(ERR_PTR(result));
 }
 

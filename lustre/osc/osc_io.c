@@ -653,6 +653,7 @@ static void osc_req_attr_set(const struct lu_env *env,
 
                 olck = osc_lock_at(lock);
                 LASSERT(olck != NULL);
+                LASSERT(ergo(opg->ops_srvlock, olck->ols_lock == NULL));
                 /* check for lockless io. */
                 if (olck->ols_lock != NULL) {
                         oa->o_handle = olck->ols_lock->l_remote_handle;

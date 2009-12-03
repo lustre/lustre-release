@@ -281,7 +281,11 @@ struct osc_page {
          * True for a `temporary page' created by read-ahead code, probably
          * outside of any DLM lock.
          */
-                              ops_temp:1;
+                              ops_temp:1,
+        /**
+         * Set if the page must be transferred with OBD_BRW_SRVLOCK.
+         */
+                              ops_srvlock:1;
         /**
          * Linkage into a per-osc_object list of pages in flight. For
          * debugging.
