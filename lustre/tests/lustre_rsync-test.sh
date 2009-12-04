@@ -528,7 +528,7 @@ test_7() {
     local i=0
     while [ $i -lt $NUMFILES ];
     do
-      local count=$(( $(lfs getstripe -q $DIR/tgt/$tdir/${tfile}$i | wc -l) - 1))
+      local count=$(lfs getstripe $DIR/tgt/$tdir/${tfile}$i | awk '/stripe_count/ {print $2}')
       if [ $count -ne 2 ]; then
 	  error "Stripe size not replicated" 
       fi
