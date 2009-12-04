@@ -1897,7 +1897,9 @@ if [ -n "$RDAC_VERSION" -a "$RDAC_VERSION" != "inkernel" ]; then
         fatal 1 "Error copying RDAC source tarball to RPM SOURCES dir"
 fi
 
-push_exit_trap '[ -n "$CCACHE" ] && ccache -s' "ccache"
+push_exit_trap '[ -n "$CCACHE" ] && ccache -s' "ccache_summary"
+# should remove the ccache trap if lbuild is interrupted
+trap 'delete_exit_trap "ccache_summary"; exit 1' INT TERM HUP
 
 # if an unpacked kernel source tree was given on the command line
 # just build lustre with it (nothing distro kernel specific here)
