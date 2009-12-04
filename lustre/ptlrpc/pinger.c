@@ -554,23 +554,25 @@ void ptlrpc_pinger_wake_up()
 static int               pet_refcount = 0;
 static int               pet_state;
 static wait_queue_head_t pet_waitq;
-static struct obd_export *pet_exp = NULL;
+CFS_LIST_HEAD(pet_list);
 static spinlock_t        pet_lock = SPIN_LOCK_UNLOCKED;
 
 int ping_evictor_wake(struct obd_export *exp)
 {
+        struct obd_device *obd;
+
         spin_lock(&pet_lock);
-        if (pet_exp || (pet_state != PET_READY)) {
+        if (pet_state != PET_READY) {
                 /* eventually the new obd will call here again. */
                 spin_unlock(&pet_lock);
                 return 1;
         }
 
-        /* We have to make sure the obd isn't destroyed between now and when
-         * the ping evictor runs.  We'll take a reference here, and drop it
-         * when we finish in the evictor.  We don't really care about this
-         * export in particular; we just need one to keep the obd alive. */
-        pet_exp = class_export_get(exp);
+        obd = class_exp2obd(exp);
+        if (list_empty(&obd->obd_evict_list)) {
+                class_incref(obd);
+                list_add(&obd->obd_evict_list, &pet_list);
+        }
         spin_unlock(&pet_lock);
 
         wake_up(&pet_waitq);
@@ -588,19 +590,21 @@ static int ping_evictor_main(void *arg)
         cfs_daemonize_ctxt("ll_evictor");
 
         CDEBUG(D_HA, "Starting Ping Evictor\n");
-        pet_exp = NULL;
         pet_state = PET_READY;
         while (1) {
-                l_wait_event(pet_waitq, pet_exp ||
+                l_wait_event(pet_waitq, (!list_empty(&pet_list)) ||
                              (pet_state == PET_TERMINATE), &lwi);
-                if (pet_state == PET_TERMINATE)
+
+                /* loop until all obd's will be removed */
+                if ((pet_state == PET_TERMINATE) && list_empty(&pet_list))
                         break;
 
                 /* we only get here if pet_exp != NULL, and the end of this
                  * loop is the only place which sets it NULL again, so lock
                  * is not strictly necessary. */
                 spin_lock(&pet_lock);
-                obd = pet_exp->exp_obd;
+                obd = list_entry(pet_list.next, struct obd_device,
+                                 obd_evict_list);
                 spin_unlock(&pet_lock);
 
                 /* bug 18948: ensure recovery is aborted in a timely fashion */
@@ -644,12 +648,13 @@ static int ping_evictor_main(void *arg)
                 }
                 spin_unlock(&obd->obd_dev_lock);
 skip:
-                class_export_put(pet_exp);
-
                 spin_lock(&pet_lock);
-                pet_exp = NULL;
+                list_del_init(&obd->obd_evict_list);
                 spin_unlock(&pet_lock);
+
+                class_decref(obd);
         }
+
         CDEBUG(D_HA, "Exiting Ping Evictor\n");
 
         RETURN(0);

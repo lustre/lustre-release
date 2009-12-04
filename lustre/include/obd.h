@@ -1063,6 +1063,7 @@ struct obd_device {
         unsigned int           obd_cntr_base;
         atomic_t               obd_evict_inprogress;
         cfs_waitq_t            obd_evict_inprogress_waitq;
+        struct list_head       obd_evict_list; /* protected with pet_lock */
 
         /* Ldlm pool part. Save last calculated SLV and Limit. */
         rwlock_t               obd_pool_lock;
