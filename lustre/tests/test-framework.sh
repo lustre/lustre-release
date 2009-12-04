@@ -17,6 +17,16 @@ export CATASTROPHE=${CATASTROPHE:-/proc/sys/lnet/catastrophe}
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/functions.sh
 
+LUSTRE_TESTS_CFG_DIR=${LUSTRE_TESTS_CFG_DIR:-${LUSTRE}/tests/cfg}
+
+EXCEPT_LIST_FILE=${EXCEPT_LIST_FILE:-${LUSTRE_TESTS_CFG_DIR}/tests-to-skip.sh}
+
+if [ -f "$EXCEPT_LIST_FILE" ]; then
+    echo "Reading test skip list from $EXCEPT_LIST_FILE"
+    cat $EXCEPT_LIST_FILE
+    . $EXCEPT_LIST_FILE
+fi
+
 assert_DIR () {
     local failed=""
     [[ $DIR/ = $MOUNT/* ]] || \
