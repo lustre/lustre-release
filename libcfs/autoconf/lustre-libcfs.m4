@@ -489,6 +489,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LIBCFS_SCATTERLIST_SETPAGE],
 [AC_MSG_CHECKING([for exist sg_set_page])
 LB_LINUX_TRY_COMPILE([
+        #include <asm/types.h>
         #include <linux/scatterlist.h>
 ],[
 	sg_set_page(NULL,NULL,0,0);
