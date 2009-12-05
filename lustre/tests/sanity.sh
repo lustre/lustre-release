@@ -6859,100 +6859,134 @@ test_214() { # for bug 20133
 }
 run_test 214 "hash-indexed directory test - bug 20133"
 
-test_215() { # for bug 18102
-	# /proc/sys/lnet/stats should look as 11 space-separated numbers
-	cat /proc/sys/lnet/stats >$TMP/lnet_stats.out
-	sysctl lnet.stats |sed 's/^lnet.stats\ =\ //g' >$TMP/lnet_stats.sys
-	STATS_LINES_OUT=$(cat $TMP/lnet_stats.out|wc -l)
-	[ "$STATS_LINES_OUT" = 1 ] || error "/proc/sys/lnet/stats has more than 1 line: $STATS"
-	STATS_LINES_SYS=$(cat $TMP/lnet_stats.sys|wc -l)
-	[ "$STATS_LINES_SYS" = 1 ] || error "lnet.stats has more than 1 line: $STATS"
-	STATS_REG='^[0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+$'
-	grep "$STATS_REG" $TMP/lnet_stats.out || (cat $TMP/lnet_stats.out && 
-						  error "/proc/sys/lnet/stats misformatted")
-	grep "$STATS_REG" $TMP/lnet_stats.sys || (cat $TMP/lnet_stats.sys && 
-						  error "lnet.stats misformatted")
-	rm -f $TMP/lnet_stats.out $TMP/lnet_stats.sys
+# having "abc" as 1st arg, creates $TMP/lnet_abc.out and $TMP/lnet_abc.sys
+create_lnet_proc_files() {
+	cat /proc/sys/lnet/$1 >$TMP/lnet_$1.out || error "cannot read /proc/sys/lnet/$1"
+	sysctl lnet.$1 >$TMP/lnet_$1.sys_tmp || error "cannot read lnet.$1"
 
-	# /proc/sys/lnet/routes should look exactly as expected
-	cat /proc/sys/lnet/routes >$TMP/lnet_routes.out
-	sysctl lnet.routes |sed 's/^lnet.routes\ =\ //g' >$TMP/lnet_routes.sys
-	echo "Routing disabled" >$TMP/lnet_routes.expected
-	echo "net      hops   state router" >>$TMP/lnet_routes.expected
-	diff $TMP/lnet_routes.expected $TMP/lnet_routes.out ||
-		error "/proc/sys/lnet/routes does not look as expected"
-	diff $TMP/lnet_routes.expected $TMP/lnet_routes.sys ||
-		error "lnet.routes does not look as expected"
-	rm -f $TMP/lnet_routes.expected $TMP/lnet_routes.out $TMP/lnet_routes.sys
+	sed "s/^lnet.$1\ =\ //g" "$TMP/lnet_$1.sys_tmp" >$TMP/lnet_$1.sys
+	rm -f "$TMP/lnet_$1.sys_tmp"
+}
 
-	# /proc/sys/lnet/routers should look exactly as expected
-	cat /proc/sys/lnet/routers >$TMP/lnet_routers.out
-	sysctl lnet.routers |sed 's/^lnet.routers\ =\ //g' >$TMP/lnet_routers.sys
-	echo "ref  rtr_ref alive_cnt  state    last_ping router" >$TMP/lnet_routers.expected
-	diff $TMP/lnet_routers.expected $TMP/lnet_routers.out ||
-		error "/proc/sys/lnet/routers does not look as expected"
-	diff $TMP/lnet_routers.expected $TMP/lnet_routers.sys ||
-		error "lnet.routers does not look as expected"
-	rm -f $TMP/lnet_routers.expected $TMP/lnet_routers.out $TMP/lnet_routers.sys
+# counterpart of create_lnet_proc_files
+remove_lnet_proc_files() {
+	rm -f $TMP/lnet_$1.out $TMP/lnet_$1.sys
+}
 
-	# fisrt line of /proc/sys/lnet/peers should look exactly as expected
-	cat /proc/sys/lnet/peers >$TMP/lnet_peers.out
-	sysctl lnet.peers |sed 's/^lnet.peers\ =\ //g' >$TMP/lnet_peers.sys
-	head -1 $TMP/lnet_peers.out > $TMP/lnet_peers1.out
-	echo "nid                      refs state   max   rtr   min    tx   min queue" >$TMP/lnet_peers1.expected
-	diff $TMP/lnet_peers1.expected $TMP/lnet_peers1.out ||
-		error "first line of /proc/sys/lnet/peers does not look as expected"
-	rm -f $TMP/lnet_peers1.expected $TMP/lnet_peers1.out
-	# other lines should look as a nid followed by 1 number, a word, 6 numbers, e.g.:
-	# 0@lo                        1    NA     0     0     0     0     0 0
-	TOTAL_LINES=$(cat $TMP/lnet_peers.out |wc -l)
-	OTHER_LINES=$(($TOTAL_LINES - 1))
-	MATCHED_LINES=$(cat $TMP/lnet_peers.out |tail -$TOTAL_LINES |
-			grep -c "^[0-9.]\+@[a-z0-9]\+ *[0-9]\+ *[a-zA-Z]\+ *[0-9]\+ *[0-9]\+ *-\?[0-9]\+ *[0-9]\+ *-\?[0-9]\+ *[0-9]\+$")
-	[ "$MATCHED_LINES" = "$OTHER_LINES" ] || (cat $TMP/lnet_peers.out && 
-						  error "/proc/sys/lnet/peers misformatted")
-	diff $TMP/lnet_peers.out $TMP/lnet_peers.sys ||
-		error "lnet.peers does not look as expected"
-	rm -f $TMP/lnet_peers.out $TMP/lnet_peers.sys
+# uses 1st arg as trailing part of filename, 2nd arg as description for reports,
+# 3rd arg as regexp for body
+check_lnet_proc_stats() {
+	local l=$(cat "$TMP/lnet_$1" |wc -l)
+	[ $l = 1 ] || (cat "$TMP/lnet_$1" && error "$2 is not of 1 line: $l")
 
-	# /proc/sys/lnet/buffers should look exactly as expected
-	cat /proc/sys/lnet/buffers >$TMP/lnet_buffers.out
-	sysctl lnet.buffers |sed 's/^lnet.buffers\ =\ //g' >$TMP/lnet_buffers.sys
-	echo "pages count credits     min" >$TMP/lnet_buffers.expected
-	echo "    0     0       0       0" >>$TMP/lnet_buffers.expected
-	echo "    1     0       0       0" >>$TMP/lnet_buffers.expected
-	echo "  256     0       0       0" >>$TMP/lnet_buffers.expected
-	diff $TMP/lnet_buffers.expected $TMP/lnet_buffers.out ||
-		error "/proc/sys/lnet/buffers does not look as expected"
-	diff $TMP/lnet_buffers.expected $TMP/lnet_buffers.sys ||
-		error "lnet.buffers does not look as expected"
-	rm -f $TMP/lnet_buffers.expected $TMP/lnet_buffers.out $TMP/lnet_buffers.sys
+	grep -E "$3" "$TMP/lnet_$1" || (cat "$TMP/lnet_$1" && error "$2 misformatted")
+}
 
-	# fisrt line of /proc/sys/lnet/nis should look exactly as expected
-	cat /proc/sys/lnet/nis >$TMP/lnet_nis.out
-	sysctl lnet.nis |sed 's/^lnet.nis\ =\ //g' >$TMP/lnet_nis.sys
-	head -1 $TMP/lnet_nis.out > $TMP/lnet_nis1.out
-	echo "nid                      refs peer  rtr   max    tx   min" >$TMP/lnet_nis1.expected
-	diff $TMP/lnet_nis1.expected $TMP/lnet_nis1.out ||
-		error "first line of /proc/sys/lnet/nis does not look as expected"
-	rm -f $TMP/lnet_nis1.expected $TMP/lnet_nis1.out
-	# other lines should look as a nid followed by 6 numbers, e.g.:
-	# 0@lo                        3    0    0     0     0     0
-	TOTAL_LINES=$(cat $TMP/lnet_nis.out |wc -l)
-	OTHER_LINES=$(($TOTAL_LINES - 1))
-	MATCHED_LINES=$(cat $TMP/lnet_nis.out |tail -$TOTAL_LINES |
-		grep -c "^[0-9.]\+@[a-z0-9]\+ *[0-9]\+ *[0-9]\+ *[0-9]\+ *[0-9]\+ *[0-9]\+ *[0-9]\+$")
-	[ "$MATCHED_LINES" = "$OTHER_LINES" ] || (cat $TMP/lnet_nis.out && 
-						  error "/proc/sys/lnet/nis misformatted")
-	diff $TMP/lnet_nis.out $TMP/lnet_nis.sys ||
-		error "lnet.nis does not look as expected"
-	rm -f $TMP/lnet_nis.out $TMP/lnet_nis.sys
+# uses 1st arg as trailing part of filename, 2nd arg as description for reports,
+# 3rd arg as regexp for body, 4th arg as regexp for 1st line, 5th arg is
+# optional and can be regexp for 2nd line (lnet.routes case)
+check_lnet_proc_entry() {
+	local blp=2            # blp stands for 'position of 1st line of body'
+	[ "$5" = "" ] || blp=3 # lnet.routes case
+
+	local l=$(cat "$TMP/lnet_$1" |wc -l)
+	# subtracting one from $blp because the body can be empty
+	[ "$l" -ge "$(($blp - 1))" ] || (cat "$TMP/lnet_$1" && error "$2 is too short: $l")
+
+	sed -n '1 p' "$TMP/lnet_$1" |grep -E "$4" >/dev/null ||
+		(cat "$TMP/lnet_$1" && error "1st line of $2 misformatted")
+
+	[ "$5" = "" ] || sed -n '2 p' "$TMP/lnet_$1" |grep -E "$5" >/dev/null ||
+		(cat "$TMP/lnet_$1" && error "2nd line of $2 misformatted")
+
+	# bail out if any unexpected line happened
+	sed -n "$blp~1 p" "$TMP/lnet_$1" |grep -Ev "$3"
+	[ "$?" != 0 ] || error "$2 misformatted"
+}
+
+test_215() { # for bugs 18102, 21079, 21517
+	local N='(0|[1-9][0-9]*)'   # non-negative numeric
+	local P='[1-9][0-9]*'       # positive numeric
+	local I='(0|-?[1-9][0-9]*)' # any numeric (0 | >0 | <0)
+	local NET='[a-z][a-z0-9]*'  # LNET net like o2ib2
+	local ADDR='[0-9.]+'        # LNET addr like 10.0.0.1
+	local NID="$ADDR@$NET"      # LNET nid like 10.0.0.1@o2ib2
+
+	local L1 # regexp for 1st line
+	local L2 # regexp for 2nd line (optional)
+	local BR # regexp for the rest (body)
+
+	# /proc/sys/lnet/stats should look as 11 space-separated non-negative numerics
+	BR="^$N $N $N $N $N $N $N $N $N $N $N$"
+	create_lnet_proc_files "stats"
+	check_lnet_proc_stats "stats.out" "/proc/sys/lnet/stats" "$BR"
+	check_lnet_proc_stats "stats.sys" "lnet.stats" "$BR"
+	remove_lnet_proc_files "stats"
+
+	# /proc/sys/lnet/routes should look like this:
+	# Routing disabled/enabled
+	# net hops state router
+	# where net is a string like tcp0, hops >= 0, state is up/down,
+	# router is a string like 192.168.1.1@tcp2
+	L1="^Routing (disabled|enabled)$"
+	L2="^net +hops +state +router$"
+	BR="^$NET +$N +(up|down) +$NID$"
+	create_lnet_proc_files "routes"
+	check_lnet_proc_entry "routes.out" "/proc/sys/lnet/routes" "$BR" "$L1" "$L2"
+	check_lnet_proc_entry "routes.sys" "lnet.routes" "$BR" "$L1" "$L2"
+	remove_lnet_proc_files "routes"
+
+	# /proc/sys/lnet/routers should look like this:
+	# ref rtr_ref alive_cnt state last_ping ping_sent deadline down_ni router
+	# where ref > 0, rtr_ref > 0, alive_cnt >= 0, state is up/down,
+	# last_ping >= 0, ping_sent is boolean (0/1), deadline and down_ni are
+	# numeric (0 or >0 or <0), router is a string like 192.168.1.1@tcp2
+	L1="^ref +rtr_ref +alive_cnt +state +last_ping +ping_sent +deadline +down_ni +router$"
+	BR="^$P +$P +$N +(up|down) +$N +(0|1) +$I +$I +$NID$"
+	create_lnet_proc_files "routers"
+	check_lnet_proc_entry "routers.out" "/proc/sys/lnet/routers" "$BR" "$L1"
+	check_lnet_proc_entry "routers.sys" "lnet.routers" "$BR" "$L1"
+	remove_lnet_proc_files "routers"
+
+	# /proc/sys/lnet/peers should look like this:
+	# nid refs state max rtr min tx min queue
+	# where nid is a string like 192.168.1.1@tcp2, refs > 0,
+	# state is up/down/NA, max >= 0. rtr, min, tx, min are 
+	# numeric (0 or >0 or <0), queue >= 0.
+	L1="^nid +refs +state +max +rtr +min +tx +min +queue$"
+	BR="^$NID +$P +(up|down|NA) +$N +$I +$I +$I +$I +$N$"
+	create_lnet_proc_files "peers"
+	check_lnet_proc_entry "peers.out" "/proc/sys/lnet/peers" "$BR" "$L1"
+	check_lnet_proc_entry "peers.sys" "lnet.peers" "$BR" "$L1"
+	remove_lnet_proc_files "peers"
+
+	# /proc/sys/lnet/buffers  should look like this:
+	# pages count credits min
+	# where pages >=0, count >=0, credits and min are numeric (0 or >0 or <0)
+	L1="^pages +count +credits +min$"
+	BR="^ +$N +$N +$I +$I$"
+	create_lnet_proc_files "buffers"
+	check_lnet_proc_entry "buffers.out" "/proc/sys/lnet/buffers" "$BR" "$L1"
+	check_lnet_proc_entry "buffers.sys" "lnet.buffers" "$BR" "$L1"
+	remove_lnet_proc_files "buffers"
+
+	# /proc/sys/lnet/nis should look like this:
+	# nid status alive refs peer rtr max tx min
+	# where nid is a string like 192.168.1.1@tcp2, status is up/down,
+	# alive is numeric (0 or >0 or <0), refs > 0, peer >= 0,
+	# rtr >= 0, max >=0, tx and min are numeric (0 or >0 or <0).
+	L1="^nid +status +alive +refs +peer +rtr +max +tx +min$"
+	BR="^$NID +(up|down) +$I +$P +$N +$N +$N +$I +$I$"
+	create_lnet_proc_files "nis"
+	check_lnet_proc_entry "nis.out" "/proc/sys/lnet/nis" "$BR" "$L1"
+	check_lnet_proc_entry "nis.sys" "lnet.nis" "$BR" "$L1"
+	remove_lnet_proc_files "nis"
 
 	# can we successfully write to /proc/sys/lnet/stats?
 	echo "0" >/proc/sys/lnet/stats || error "cannot write to /proc/sys/lnet/stats"
 	sysctl -w lnet.stats=0 || error "cannot write to lnet.stats"
 }
-run_test 215 "/proc/sys/lnet exists and has proper content - bug 18102"
+run_test 215 "/proc/sys/lnet exists and has proper content - bugs 18102, 21079, 21517"
 
 test_216() { # bug 20317
         local node
