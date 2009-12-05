@@ -1052,8 +1052,6 @@ static int cl_unuse_try_internal(const struct lu_env *env, struct cl_lock *lock)
                 LINVRNT(cl_lock_is_mutexed(lock));
                 LINVRNT(cl_lock_invariant(env, lock));
                 LASSERT(lock->cll_state == CLS_INTRANSIT);
-                LASSERT(lock->cll_users > 0);
-                LASSERT(lock->cll_holds > 0);
 
                 result = -ENOSYS;
                 list_for_each_entry_reverse(slice, &lock->cll_layers,

@@ -831,15 +831,6 @@ struct vvp_io {
          */
         int                  cui_ra_window_set;
         /**
-         * If IO was created directly in low level method like
-         * ->prepare_write(), this field stores the number of method calls
-         * that constitute this IO. This field is decremented by ll_cl_fini(),
-         * and cl_io is destroyed, when it reaches 0. When oneshot IO
-         * completes, this fields is set to -1.
-         */
-
-        int                  cui_oneshot;
-        /**
          * Partially truncated page, that vvp_io_trunc_start() keeps locked
          * across truncate.
          */
@@ -872,6 +863,15 @@ struct vvp_io_args {
         } u;
 };
 
+struct ll_cl_context {
+        void           *lcc_cookie;
+        struct cl_io   *lcc_io;
+        struct cl_page *lcc_page;
+        struct lu_env  *lcc_env;
+        int             lcc_refcheck;
+        int             lcc_created;
+};
+
 struct vvp_thread_info {
         struct ost_lvb       vti_lvb;
         struct cl_2queue     vti_queue;
@@ -879,6 +879,7 @@ struct vvp_thread_info {
         struct vvp_io_args   vti_args;
         struct ra_io_arg     vti_ria;
         struct kiocb         vti_kiocb;
+        struct ll_cl_context vti_io_ctx;
 };
 
 static inline struct vvp_thread_info *vvp_env_info(const struct lu_env *env)
@@ -902,7 +903,7 @@ static inline struct vvp_io_args *vvp_env_args(const struct lu_env *env,
 }
 
 struct vvp_session {
-        struct vvp_io vs_ios;
+        struct vvp_io         vs_ios;
 };
 
 static inline struct vvp_session *vvp_env_session(const struct lu_env *env)
