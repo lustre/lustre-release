@@ -17,6 +17,10 @@ Bugzilla   :
 Description: 
 Details    : 
 
+Severity   : minor
+Bugzilla   : 21459
+Description: should update lp_alive for non-router peers
+
 Severity   : enhancement
 Bugzilla   : 15332
 Description: LNet router shuffler.

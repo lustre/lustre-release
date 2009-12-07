@@ -915,8 +915,7 @@ lnet_ni_peer_alive(lnet_peer_t *lp)
         cfs_time_t  last_alive = 0;
         lnet_ni_t  *ni = lp->lp_ni;
 
-        LASSERT (ni != NULL);
-        LASSERT (ni->ni_peertimeout > 0);
+        LASSERT (lnet_peer_aliveness_enabled(lp));
         LASSERT (ni->ni_lnd->lnd_query != NULL);
 
         LNET_UNLOCK();
@@ -934,12 +933,10 @@ lnet_ni_peer_alive(lnet_peer_t *lp)
 static inline int
 lnet_peer_is_alive (lnet_peer_t *lp, cfs_time_t now)
 {
-        lnet_ni_t  *ni = lp->lp_ni;
-        cfs_time_t  deadline;
-        int         alive;
+        int        alive;
+        cfs_time_t deadline;
 
-        LASSERT (ni != NULL);
-        LASSERT (ni->ni_peertimeout > 0);
+        LASSERT (lnet_peer_aliveness_enabled(lp));
 
         /* Trust lnet_notify() if it has more recent aliveness news, but
          * ignore the initial assumed death (see lnet_peers_start_down()).
@@ -949,12 +946,15 @@ lnet_peer_is_alive (lnet_peer_t *lp, cfs_time_t now)
                 return 0;
 
         deadline = cfs_time_add(lp->lp_last_alive,
-                                cfs_time_seconds(ni->ni_peertimeout));
+                                cfs_time_seconds(lp->lp_ni->ni_peertimeout));
         alive = cfs_time_after(deadline, now);
 
-        /* Update obsolete lp_alive */
-        if (alive && !lp->lp_alive && lp->lp_timestamp != 0 &&
-            cfs_time_before(lp->lp_timestamp, lp->lp_last_alive))
+        /* Update obsolete lp_alive except for routers assumed to be dead
+         * initially, because router checker would update aliveness in this
+         * case, and moreover lp_last_alive at peer creation is assumed.
+         */
+        if (alive && !lp->lp_alive &&
+            !(lnet_isrouter(lp) && lp->lp_alive_count == 0))
                 lnet_notify_locked(lp, 0, 1, lp->lp_last_alive);
 
         return alive;
@@ -966,12 +966,9 @@ lnet_peer_is_alive (lnet_peer_t *lp, cfs_time_t now)
 int
 lnet_peer_alive_locked (lnet_peer_t *lp)
 {
-        lnet_ni_t  *ni = lp->lp_ni;
-        cfs_time_t  now = cfs_time_current();
+        cfs_time_t now = cfs_time_current();
 
-        LASSERT (ni != NULL);
-
-        if (ni->ni_peertimeout <= 0)  /* disabled */
+        if (!lnet_peer_aliveness_enabled(lp))
                 return -ENODEV;
 
         if (lnet_peer_is_alive(lp, now))
@@ -992,7 +989,8 @@ lnet_peer_alive_locked (lnet_peer_t *lp)
                                       "%d < %d (%d/%d)\n",
                                       libcfs_nid2str(lp->lp_nid),
                                       (int)now, (int)next_query,
-                                      lnet_queryinterval, ni->ni_peertimeout);
+                                      lnet_queryinterval,
+                                      lp->lp_ni->ni_peertimeout);
                         return 0;
                 }
         }

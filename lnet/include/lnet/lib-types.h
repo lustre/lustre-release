@@ -451,6 +451,8 @@ typedef struct lnet_peer {
         lnet_rc_data_t   *lp_rcd;               /* router checker state */
 } lnet_peer_t;
 
+#define lnet_peer_aliveness_enabled(lp) ((lp)->lp_ni->ni_peertimeout > 0)
+
 typedef struct {
         struct list_head  lr_list;              /* chain on net */
         lnet_peer_t      *lr_gateway;           /* router node */
