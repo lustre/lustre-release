@@ -253,7 +253,7 @@ lnet_debug_peer(lnet_nid_t nid)
                 return;
         }
 
-        if (lnet_isrouter(lp) || lp->lp_ni->ni_peertimeout > 0)
+        if (lnet_isrouter(lp) || lnet_peer_aliveness_enabled(lp))
                 aliveness = lp->lp_alive ? "up" : "down";
 
         CDEBUG(D_WARNING, "%-24s %4d %5s %5d %5d %5d %5d %5d %ld\n",
