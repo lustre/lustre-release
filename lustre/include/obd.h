@@ -1129,6 +1129,7 @@ struct obd_device {
         struct lprocfs_stats  *obd_svc_stats;
         atomic_t               obd_evict_inprogress;
         cfs_waitq_t            obd_evict_inprogress_waitq;
+        struct list_head       obd_evict_list; /* protected with pet_lock */
 
         /**
          * Ldlm pool part. Save last calculated SLV and Limit.

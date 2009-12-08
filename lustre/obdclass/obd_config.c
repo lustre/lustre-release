@@ -276,6 +276,7 @@ int class_attach(struct lustre_cfg *lcfg)
         CFS_INIT_LIST_HEAD(&obd->obd_req_replay_queue);
         CFS_INIT_LIST_HEAD(&obd->obd_lock_replay_queue);
         CFS_INIT_LIST_HEAD(&obd->obd_final_req_queue);
+        CFS_INIT_LIST_HEAD(&obd->obd_evict_list);
 
         llog_group_init(&obd->obd_olg, FILTER_GROUP_LLOG);
 
