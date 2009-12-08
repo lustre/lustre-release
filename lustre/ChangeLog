@@ -2,13 +2,17 @@ tbd Sun Microsystems, Inc.
 	* version 1.8.2
 	* Support for kernels:
 	  2.6.16.60-0.42.4 (SLES 10),
-	  2.6.27.29-0.1 (SLES11),
+	  2.6.27.39-0.3.1 (SLES11),
 	  2.6.18-164.6.1.el5 (RHEL 5)
 	  2.6.18-164.6.1.0.1.el5 (OEL 5)
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
 	  2.6.16 - 2.6.30 vanilla (kernel.org)
 	* Recommended e2fsprogs version: 1.41.6.sun1
+
+Severity   : enhancement
+Bugzilla   : 21511
+Description: Update kernel to SLES11 2.6.27.39-0.3.1.
 
 Severity   : normal
 Bugzilla   : 21513
