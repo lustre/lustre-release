@@ -3640,7 +3640,9 @@ rm -f $F77_TMP
 unset F77_TMP
 
 test_78() { # bug 10901
- 	NSEQ=5
+	remote_ost || { skip_env "local OST" && return; }
+
+	NSEQ=5
 	F78SIZE=$(($(awk '/MemFree:/ { print $2 }' /proc/meminfo) / 1024))
 	echo "MemFree: $F78SIZE, Max file size: $MAXFREE"
 	MEMTOTAL=$(($(awk '/MemTotal:/ { print $2 }' /proc/meminfo) / 1024))
