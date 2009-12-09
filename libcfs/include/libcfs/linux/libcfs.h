@@ -84,6 +84,7 @@ do {                                                                    \
                 libcfs_debug_msg(NULL, DEBUG_SUBSYSTEM, D_WARNING,      \
                                  file, func, line,                      \
                                  "maximum lustre stack %lu\n", _stack); \
+                dump_stack();                                           \
               /*panic("LBUG");*/                                        \
         }                                                               \
 } while (0)
