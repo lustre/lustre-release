@@ -54,76 +54,57 @@ lnd_t the_kmxlnd = {
 
 kmx_data_t               kmxlnd_data;
 
-/**
- * mxlnd_ctx_free - free ctx struct
- * @ctx - a kmx_peer pointer
- *
- * The calling function should remove the ctx from the ctx list first
- * then free it.
- */
 void
-mxlnd_ctx_free(struct kmx_ctx *ctx)
+mxlnd_free_pages(kmx_pages_t *p)
 {
-        if (ctx == NULL) return;
+        int     npages = p->mxg_npages;
+        int     i;
 
-        if (ctx->mxc_page != NULL) {
-                __free_page(ctx->mxc_page);
-                write_lock(&kmxlnd_data.kmx_global_lock);
-                kmxlnd_data.kmx_mem_used -= MXLND_EAGER_SIZE;
-                write_unlock(&kmxlnd_data.kmx_global_lock);
+        CDEBUG(D_MALLOC, "freeing %d pages\n", npages);
+
+        for (i = 0; i < npages; i++) {
+                if (p->mxg_pages[i] != NULL) {
+                        __free_page(p->mxg_pages[i]);
+                        spin_lock(&kmxlnd_data.kmx_mem_lock);
+                        kmxlnd_data.kmx_mem_used -= PAGE_SIZE;
+                        spin_unlock(&kmxlnd_data.kmx_mem_lock);
+                }
         }
 
-        if (ctx->mxc_seg_list != NULL) {
-                LASSERT(ctx->mxc_nseg > 0);
-                MXLND_FREE(ctx->mxc_seg_list, ctx->mxc_nseg * sizeof(mx_ksegment_t));
-        }
-
-        MXLND_FREE (ctx, sizeof (*ctx));
-        return;
+        MXLND_FREE(p, offsetof(kmx_pages_t, mxg_pages[npages]));
 }
 
-/**
- * mxlnd_ctx_alloc - allocate and initialize a new ctx struct
- * @ctxp - address of a kmx_ctx pointer
- *
- * Returns 0 on success and -EINVAL, -ENOMEM on failure
- */
 int
-mxlnd_ctx_alloc(struct kmx_ctx **ctxp, enum kmx_req_type type)
+mxlnd_alloc_pages(kmx_pages_t **pp, int npages)
 {
-        int             ret     = 0;
-        struct kmx_ctx  *ctx    = NULL;
+        kmx_pages_t    *p       = NULL;
+        int             i       = 0;
 
-        if (ctxp == NULL) return -EINVAL;
+        CDEBUG(D_MALLOC, "allocing %d pages\n", npages);
 
-        MXLND_ALLOC(ctx, sizeof (*ctx));
-        if (ctx == NULL) {
-                CDEBUG(D_NETERROR, "Cannot allocate ctx\n");
+        MXLND_ALLOC(p, offsetof(kmx_pages_t, mxg_pages[npages]));
+        if (p == NULL) {
+                CERROR("Can't allocate descriptor for %d pages\n", npages);
                 return -ENOMEM;
         }
-        memset(ctx, 0, sizeof(*ctx));
-        spin_lock_init(&ctx->mxc_lock);
 
-        ctx->mxc_type = type;
-        ctx->mxc_page = alloc_page (GFP_KERNEL);
-        if (ctx->mxc_page == NULL) {
-                CDEBUG(D_NETERROR, "Can't allocate page\n");
-                ret = -ENOMEM;
-                goto failed;
+        memset(p, 0, offsetof(kmx_pages_t, mxg_pages[npages]));
+        p->mxg_npages = npages;
+
+        for (i = 0; i < npages; i++) {
+                p->mxg_pages[i] = alloc_page(GFP_KERNEL);
+                if (p->mxg_pages[i] == NULL) {
+                        CERROR("Can't allocate page %d of %d\n", i, npages);
+                        mxlnd_free_pages(p);
+                        return -ENOMEM;
+                }
+                spin_lock(&kmxlnd_data.kmx_mem_lock);
+                kmxlnd_data.kmx_mem_used += PAGE_SIZE;
+                spin_unlock(&kmxlnd_data.kmx_mem_lock);
         }
-        write_lock(&kmxlnd_data.kmx_global_lock);
-        kmxlnd_data.kmx_mem_used += MXLND_EAGER_SIZE;
-        write_unlock(&kmxlnd_data.kmx_global_lock);
-        ctx->mxc_msg = (struct kmx_msg *)((char *)page_address(ctx->mxc_page));
-        ctx->mxc_seg.segment_ptr = MX_PA_TO_U64(lnet_page2phys(ctx->mxc_page));
-        ctx->mxc_state = MXLND_CTX_IDLE;
 
-        *ctxp = ctx;
+        *pp = p;
         return 0;
-
-failed:
-        mxlnd_ctx_free(ctx);
-        return ret;
 }
 
 /**
@@ -131,7 +112,7 @@ failed:
  * @ctx - a kmx_ctx pointer
  */
 void
-mxlnd_ctx_init(struct kmx_ctx *ctx)
+mxlnd_ctx_init(kmx_ctx_t *ctx)
 {
         if (ctx == NULL) return;
 
@@ -139,25 +120,21 @@ mxlnd_ctx_init(struct kmx_ctx *ctx)
         ctx->mxc_incarnation = 0;
         ctx->mxc_deadline = 0;
         ctx->mxc_state = MXLND_CTX_IDLE;
-        /* ignore mxc_global_list */
-        if (ctx->mxc_list.next != NULL && !list_empty(&ctx->mxc_list)) {
-                if (ctx->mxc_peer != NULL) spin_lock(&ctx->mxc_lock);
+        if (!list_empty(&ctx->mxc_list))
                 list_del_init(&ctx->mxc_list);
-                if (ctx->mxc_peer != NULL) spin_unlock(&ctx->mxc_lock);
-        }
         /* ignore mxc_rx_list */
-        /* ignore mxc_lock */
-        ctx->mxc_nid = 0;
-        ctx->mxc_peer = NULL;
-        ctx->mxc_conn = NULL;
+        if (ctx->mxc_type == MXLND_REQ_TX) {
+                ctx->mxc_nid = 0;
+                ctx->mxc_peer = NULL;
+                ctx->mxc_conn = NULL;
+        }
         /* ignore mxc_msg */
-        /* ignore mxc_page */
         ctx->mxc_lntmsg[0] = NULL;
         ctx->mxc_lntmsg[1] = NULL;
         ctx->mxc_msg_type = 0;
         ctx->mxc_cookie = 0LL;
         ctx->mxc_match = 0LL;
-        /* ctx->mxc_seg.segment_ptr points to mxc_page */
+        /* ctx->mxc_seg.segment_ptr points to backing page */
         ctx->mxc_seg.segment_length = 0;
         if (ctx->mxc_seg_list != NULL) {
                 LASSERT(ctx->mxc_nseg > 0);
@@ -166,15 +143,15 @@ mxlnd_ctx_init(struct kmx_ctx *ctx)
         ctx->mxc_seg_list = NULL;
         ctx->mxc_nseg = 0;
         ctx->mxc_nob = 0;
-        ctx->mxc_mxreq = NULL;
+        memset(&ctx->mxc_mxreq, 0, sizeof(mx_request_t));
         memset(&ctx->mxc_status, 0, sizeof(mx_status_t));
+        ctx->mxc_errno = 0;
         /* ctx->mxc_get */
         /* ctx->mxc_put */
 
         ctx->mxc_msg->mxm_type = 0;
         ctx->mxc_msg->mxm_credits = 0;
         ctx->mxc_msg->mxm_nob = 0;
-        ctx->mxc_msg->mxm_seq = 0;
 
         return;
 }
@@ -187,13 +164,24 @@ mxlnd_ctx_init(struct kmx_ctx *ctx)
 void
 mxlnd_free_txs(void)
 {
-        struct kmx_ctx          *tx     = NULL;
-        struct kmx_ctx          *next   = NULL;
+        int             i       = 0;
+        kmx_ctx_t       *tx     = NULL;
 
-        list_for_each_entry_safe(tx, next, &kmxlnd_data.kmx_txs, mxc_global_list) {
-                list_del_init(&tx->mxc_global_list);
-                mxlnd_ctx_free(tx);
+        if (kmxlnd_data.kmx_tx_pages) {
+                for (i = 0; i < MXLND_TX_MSGS(); i++) {
+                        tx = &kmxlnd_data.kmx_txs[i];
+                        if (tx->mxc_seg_list != NULL) {
+                                LASSERT(tx->mxc_nseg > 0);
+                                MXLND_FREE(tx->mxc_seg_list,
+                                           tx->mxc_nseg *
+                                           sizeof(*tx->mxc_seg_list));
+                        }
+                }
+                MXLND_FREE(kmxlnd_data.kmx_txs,
+                            MXLND_TX_MSGS() * sizeof(kmx_ctx_t));
+                mxlnd_free_pages(kmxlnd_data.kmx_tx_pages);
         }
+
         return;
 }
 
@@ -208,68 +196,64 @@ mxlnd_init_txs(void)
 {
         int             ret     = 0;
         int             i       = 0;
-        struct kmx_ctx  *tx      = NULL;
+        int             ipage   = 0;
+        int             offset  = 0;
+        void           *addr    = NULL;
+        kmx_ctx_t      *tx      = NULL;
+        kmx_pages_t    *pages   = NULL;
+        struct page    *page    = NULL;
 
-        for (i = 0; i < *kmxlnd_tunables.kmx_ntx; i++) {
-                ret = mxlnd_ctx_alloc(&tx, MXLND_REQ_TX);
-                if (ret != 0) {
-                        mxlnd_free_txs();
-                        return ret;
-                }
+        /* pre-mapped messages are not bigger than 1 page */
+        CLASSERT(MXLND_MSG_SIZE <= PAGE_SIZE);
+
+        /* No fancy arithmetic when we do the buffer calculations */
+        CLASSERT (PAGE_SIZE % MXLND_MSG_SIZE == 0);
+
+        ret = mxlnd_alloc_pages(&pages, MXLND_TX_MSG_PAGES());
+        if (ret != 0) {
+                CERROR("Can't allocate tx pages\n");
+                return -ENOMEM;
+        }
+        kmxlnd_data.kmx_tx_pages = pages;
+
+        MXLND_ALLOC(kmxlnd_data.kmx_txs, MXLND_TX_MSGS() * sizeof(kmx_ctx_t));
+        if (&kmxlnd_data.kmx_txs == NULL) {
+                CERROR("Can't allocate %d tx descriptors\n", MXLND_TX_MSGS());
+                mxlnd_free_pages(pages);
+                return -ENOMEM;
+        }
+
+        memset(kmxlnd_data.kmx_txs, 0, MXLND_TX_MSGS() * sizeof(kmx_ctx_t));
+
+        for (i = 0; i < MXLND_TX_MSGS(); i++) {
+
+                tx = &kmxlnd_data.kmx_txs[i];
+                tx->mxc_type = MXLND_REQ_TX;
+
+                INIT_LIST_HEAD(&tx->mxc_list);
+
+                /* map mxc_msg to page */
+                page = pages->mxg_pages[ipage];
+                addr = page_address(page);
+                LASSERT(addr != NULL);
+                tx->mxc_msg = (kmx_msg_t *)(addr + offset);
+                tx->mxc_seg.segment_ptr = MX_PA_TO_U64(virt_to_phys(tx->mxc_msg));
+
                 mxlnd_ctx_init(tx);
+
+                offset += MXLND_MSG_SIZE;
+                LASSERT (offset <= PAGE_SIZE);
+
+                if (offset == PAGE_SIZE) {
+                        offset = 0;
+                        ipage++;
+                        LASSERT (ipage <= MXLND_TX_MSG_PAGES());
+                }
+
                 /* in startup(), no locks required */
-                list_add_tail(&tx->mxc_global_list, &kmxlnd_data.kmx_txs);
                 list_add_tail(&tx->mxc_list, &kmxlnd_data.kmx_tx_idle);
         }
-        return 0;
-}
 
-/**
- * mxlnd_free_rxs - free initial kmx_rx descriptors and associated pages
- *
- * Called from mxlnd_shutdown()
- */
-void
-mxlnd_free_rxs(void)
-{
-        struct kmx_ctx          *rx     = NULL;
-        struct kmx_ctx          *next   = NULL;
-
-        list_for_each_entry_safe(rx, next, &kmxlnd_data.kmx_rxs, mxc_global_list) {
-                list_del_init(&rx->mxc_global_list);
-                mxlnd_ctx_free(rx);
-        }
-        return;
-}
-
-/**
- * mxlnd_init_rxs - allocate initial rx descriptors 
- *
- * Called from startup(). We create MXLND_MAX_PEERS plus MXLND_NTX
- * rx descriptors. We create one for each potential peer to handle 
- * the initial connect request. We create on for each tx in case the 
- * send requires a non-eager receive.
- *
- * Returns 0 on success, else -ENOMEM
- */
-int
-mxlnd_init_rxs(void)
-{
-        int             ret     = 0;
-        int             i       = 0;
-        struct kmx_ctx  *rx      = NULL;
-
-        for (i = 0; i < (*kmxlnd_tunables.kmx_ntx + *kmxlnd_tunables.kmx_max_peers); i++) {
-                ret = mxlnd_ctx_alloc(&rx, MXLND_REQ_RX);
-                if (ret != 0) {
-                        mxlnd_free_rxs();
-                        return ret;
-                }
-                mxlnd_ctx_init(rx);
-                /* in startup(), no locks required */
-                list_add_tail(&rx->mxc_global_list, &kmxlnd_data.kmx_rxs);
-                list_add_tail(&rx->mxc_list, &kmxlnd_data.kmx_rx_idle);
-        }
         return 0;
 }
 
@@ -281,17 +265,20 @@ mxlnd_init_rxs(void)
 void
 mxlnd_free_peers(void)
 {
-        int                      i      = 0;
-        struct kmx_peer         *peer   = NULL;
-        struct kmx_peer         *next   = NULL;
+        int             i      = 0;
+        int             count  = 0;
+        kmx_peer_t     *peer   = NULL;
+        kmx_peer_t     *next   = NULL;
 
         for (i = 0; i < MXLND_HASH_SIZE; i++) {
-                list_for_each_entry_safe(peer, next, &kmxlnd_data.kmx_peers[i], mxp_peers) {
-                        list_del_init(&peer->mxp_peers);
+                list_for_each_entry_safe(peer, next, &kmxlnd_data.kmx_peers[i], mxp_list) {
+                        list_del_init(&peer->mxp_list);
                         if (peer->mxp_conn) mxlnd_conn_decref(peer->mxp_conn);
                         mxlnd_peer_decref(peer);
+                        count++;
                 }
         }
+        CDEBUG(D_NET, "%s: freed %d peers\n", __func__, count);
 }
 
 /**
@@ -304,17 +291,14 @@ int
 mxlnd_init_mx(lnet_ni_t *ni)
 {
         int                     ret     = 0;
-        int                     hash    = 0;
         mx_return_t             mxret;
-        mx_endpoint_addr_t      epa;
         u32                     board   = *kmxlnd_tunables.kmx_board;
         u32                     ep_id   = *kmxlnd_tunables.kmx_ep_id;
         u64                     nic_id  = 0LL;
         char                    *ifname = NULL;
         __u32                   ip;
         __u32                   netmask;
-        int                     up      = 0;
-        struct kmx_peer         *peer   = NULL;
+        int                     if_up   = 0;
 
         mxret = mx_init();
         if (mxret != MX_SUCCESS) {
@@ -336,14 +320,14 @@ mxlnd_init_mx(lnet_ni_t *ni)
                 ifname = *kmxlnd_tunables.kmx_default_ipif;
         }
 
-        ret = libcfs_ipif_query(ifname, &up, &ip, &netmask);
+        ret = libcfs_ipif_query(ifname, &if_up, &ip, &netmask);
         if (ret != 0) {
                 CERROR("Can't query IPoMX interface %s: %d\n",
                        ifname, ret);
                 goto failed_with_init;
         }
 
-        if (!up) {
+        if (!if_up) {
                 CERROR("Can't query IPoMX interface %s: it's down\n",
                        ifname);
                 goto failed_with_init;
@@ -356,58 +340,35 @@ mxlnd_init_mx(lnet_ni_t *ni)
                 goto failed_with_init;
         }
 
-        mx_get_endpoint_addr(kmxlnd_data.kmx_endpt, &epa);
-        mx_decompose_endpoint_addr(epa, &nic_id, &ep_id);
+        mx_get_endpoint_addr(kmxlnd_data.kmx_endpt, &kmxlnd_data.kmx_epa);
+        mx_decompose_endpoint_addr(kmxlnd_data.kmx_epa, &nic_id, &ep_id);
+        mxret = mx_connect(kmxlnd_data.kmx_endpt, nic_id, ep_id, MXLND_MSG_MAGIC,
+                           MXLND_CONNECT_TIMEOUT/HZ*1000, &kmxlnd_data.kmx_epa);
+        if (mxret != MX_SUCCESS) {
+                CDEBUG(D_NETERROR, "unable to connect to myself (%s)\n", mx_strerror(mxret));
+                goto failed_with_endpoint;
+        }
 
         ni->ni_nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), ip);
         CDEBUG(D_NET, "My NID is 0x%llx\n", ni->ni_nid);
-
-        ret = mxlnd_peer_alloc(&peer, ni->ni_nid, board, ep_id, nic_id);
-        if (ret != 0) {
-                goto failed_with_endpoint;
-        }
-        peer->mxp_conn->mxk_epa = epa;
-
-        peer->mxp_incarnation = kmxlnd_data.kmx_incarnation;
-        peer->mxp_incompatible = 0;
-        spin_lock(&peer->mxp_conn->mxk_lock);
-        peer->mxp_conn->mxk_credits = *kmxlnd_tunables.kmx_credits;
-        peer->mxp_conn->mxk_outstanding = 0;
-        peer->mxp_conn->mxk_incarnation = kmxlnd_data.kmx_incarnation;
-        peer->mxp_conn->mxk_timeout = 0;
-        peer->mxp_conn->mxk_status = MXLND_CONN_READY;
-        spin_unlock(&peer->mxp_conn->mxk_lock);
-        mx_set_endpoint_addr_context(peer->mxp_conn->mxk_epa, (void *) peer);
-
-        hash = mxlnd_nid_to_hash(ni->ni_nid);
-        list_add_tail(&peer->mxp_peers, &kmxlnd_data.kmx_peers[hash]);
-        atomic_inc(&kmxlnd_data.kmx_npeers);
-
-        mxlnd_conn_decref(peer->mxp_conn); /* drop 2nd ref taken in peer_alloc */
-
-        kmxlnd_data.kmx_localhost = peer;
 
         /* this will catch all unexpected receives. */
         mxret = mx_register_unexp_handler(kmxlnd_data.kmx_endpt,
                                           (mx_unexp_handler_t) mxlnd_unexpected_recv,
                                           NULL);
         if (mxret != MX_SUCCESS) {
-                CERROR("mx_register_unexp_callback() failed with %s\n", 
+                CERROR("mx_register_unexp_callback() failed with %s\n",
                          mx_strerror(mxret));
-                goto failed_with_peer;
+                goto failed_with_endpoint;
         }
         mxret = mx_set_request_timeout(kmxlnd_data.kmx_endpt, NULL, MXLND_COMM_TIMEOUT/HZ*1000);
         if (mxret != MX_SUCCESS) {
-                CERROR("mx_set_request_timeout() failed with %s\n", 
+                CERROR("mx_set_request_timeout() failed with %s\n",
                         mx_strerror(mxret));
-                goto failed_with_peer;
+                goto failed_with_endpoint;
         }
         return 0;
 
-failed_with_peer:
-        mxlnd_conn_decref(peer->mxp_conn);
-        mxlnd_conn_decref(peer->mxp_conn);
-        mxlnd_peer_decref(peer);
 failed_with_endpoint:
         mx_close_endpoint(kmxlnd_data.kmx_endpt);
 failed_with_init:
@@ -463,32 +424,34 @@ mxlnd_thread_stop(long id)
 void
 mxlnd_shutdown (lnet_ni_t *ni)
 {
-        int     i               = 0;
-        int     nthreads        = 2 + *kmxlnd_tunables.kmx_n_waitd;
+        int                     i               = 0;
+        int                     nthreads        = MXLND_NDAEMONS
+                                                  + *kmxlnd_tunables.kmx_n_waitd;
 
         LASSERT (ni == kmxlnd_data.kmx_ni);
         LASSERT (ni->ni_data == &kmxlnd_data);
         CDEBUG(D_NET, "in shutdown()\n");
 
         CDEBUG(D_MALLOC, "before MXLND cleanup: libcfs_kmemory %d "
-                         "kmx_mem_used %ld\n", atomic_read (&libcfs_kmemory), 
+                         "kmx_mem_used %ld\n", atomic_read (&libcfs_kmemory),
                          kmxlnd_data.kmx_mem_used);
+
+
+        CDEBUG(D_NET, "setting shutdown = 1\n");
+        atomic_set(&kmxlnd_data.kmx_shutdown, 1);
 
         switch (kmxlnd_data.kmx_init) {
 
         case MXLND_INIT_ALL:
 
-                CDEBUG(D_NET, "setting shutdown = 1\n");
-                /* set shutdown and wakeup request_waitds */
-                kmxlnd_data.kmx_shutdown = 1;
-                mb();
+                /* calls write_[un]lock(kmx_global_lock) */
+                mxlnd_del_peer(LNET_NID_ANY);
+
+                /* wakeup request_waitds */
                 mx_wakeup(kmxlnd_data.kmx_endpt);
                 up(&kmxlnd_data.kmx_tx_queue_sem);
+                up(&kmxlnd_data.kmx_conn_sem);
                 mxlnd_sleep(2 * HZ);
-
-                read_lock(&kmxlnd_data.kmx_global_lock);
-                mxlnd_close_matching_conns(LNET_NID_ANY);
-                read_unlock(&kmxlnd_data.kmx_global_lock);
 
                 /* fall through */
 
@@ -502,8 +465,8 @@ mxlnd_shutdown (lnet_ni_t *ni)
                 LASSERT(atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
 
                 CDEBUG(D_NET, "freeing completions\n");
-                MXLND_FREE(kmxlnd_data.kmx_completions, 
-                            MXLND_NCOMPLETIONS * sizeof(struct completion));
+                MXLND_FREE(kmxlnd_data.kmx_completions,
+                            nthreads * sizeof(struct completion));
 
                 /* fall through */
 
@@ -511,22 +474,9 @@ mxlnd_shutdown (lnet_ni_t *ni)
 
                 CDEBUG(D_NET, "stopping mx\n");
 
-                /* wakeup waiters if they missed the above.
-                 * close endpoint to stop all traffic.
-                 * this will cancel and cleanup all requests, etc. */
-
-                mx_wakeup(kmxlnd_data.kmx_endpt);
+                /* no peers left, close the endpoint */
                 mx_close_endpoint(kmxlnd_data.kmx_endpt);
                 mx_finalize();
-
-                /* fall through */
-
-        case MXLND_INIT_RXS:
-
-                CDEBUG(D_NET, "freeing rxs\n");
-
-                /* free all rxs and associated pages */
-                mxlnd_free_rxs();
 
                 /* fall through */
 
@@ -543,8 +493,11 @@ mxlnd_shutdown (lnet_ni_t *ni)
 
                 CDEBUG(D_NET, "freeing peers\n");
 
-                /* free peer list */
+                /* peers should be gone, but check again */
                 mxlnd_free_peers();
+
+                /* conn zombies should be gone, but check again */
+                mxlnd_free_conn_zombies();
 
                 /* fall through */
 
@@ -554,7 +507,7 @@ mxlnd_shutdown (lnet_ni_t *ni)
         CDEBUG(D_NET, "shutdown complete\n");
 
         CDEBUG(D_MALLOC, "after MXLND cleanup: libcfs_kmemory %d "
-                         "kmx_mem_used %ld\n", atomic_read (&libcfs_kmemory), 
+                         "kmx_mem_used %ld\n", atomic_read (&libcfs_kmemory),
                          kmxlnd_data.kmx_mem_used);
 
         kmxlnd_data.kmx_init = MXLND_INIT_NOTHING;
@@ -574,7 +527,8 @@ mxlnd_startup (lnet_ni_t *ni)
 {
         int             i               = 0;
         int             ret             = 0;
-        int             nthreads        = 2; /* for timeoutd and tx_queued */
+        int             nthreads        = MXLND_NDAEMONS /* tx_queued, timeoutd, connd */
+                                          + *kmxlnd_tunables.kmx_n_waitd;
         struct timeval  tv;
 
         LASSERT (ni->ni_lnd == &the_kmxlnd);
@@ -584,12 +538,11 @@ mxlnd_startup (lnet_ni_t *ni)
                 return -EPERM;
         }
         CDEBUG(D_MALLOC, "before MXLND startup: libcfs_kmemory %d "
-                         "kmx_mem_used %ld\n", atomic_read (&libcfs_kmemory), 
+                         "kmx_mem_used %ld\n", atomic_read (&libcfs_kmemory),
                          kmxlnd_data.kmx_mem_used);
 
-        /* reserve 1/2 of tx for connect request messages */
-        ni->ni_maxtxcredits = *kmxlnd_tunables.kmx_ntx / 2;
-        ni->ni_peertxcredits = *kmxlnd_tunables.kmx_credits;
+        ni->ni_maxtxcredits = MXLND_TX_MSGS();
+        ni->ni_peertxcredits = *kmxlnd_tunables.kmx_peercredits;
         if (ni->ni_maxtxcredits < ni->ni_peertxcredits)
                 ni->ni_maxtxcredits = ni->ni_peertxcredits;
 
@@ -601,32 +554,27 @@ mxlnd_startup (lnet_ni_t *ni)
 
         do_gettimeofday(&tv);
         kmxlnd_data.kmx_incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
-        CDEBUG(D_NET, "my incarnation is %lld\n", kmxlnd_data.kmx_incarnation);
+        CDEBUG(D_NET, "my incarnation is %llu\n", kmxlnd_data.kmx_incarnation);
 
         rwlock_init (&kmxlnd_data.kmx_global_lock);
         spin_lock_init (&kmxlnd_data.kmx_mem_lock);
 
-        INIT_LIST_HEAD (&kmxlnd_data.kmx_conn_req);
+        INIT_LIST_HEAD (&kmxlnd_data.kmx_conn_reqs);
+        INIT_LIST_HEAD (&kmxlnd_data.kmx_conn_zombies);
+        INIT_LIST_HEAD (&kmxlnd_data.kmx_orphan_msgs);
         spin_lock_init (&kmxlnd_data.kmx_conn_lock);
         sema_init(&kmxlnd_data.kmx_conn_sem, 0);
 
         for (i = 0; i < MXLND_HASH_SIZE; i++) {
                 INIT_LIST_HEAD (&kmxlnd_data.kmx_peers[i]);
         }
-        //rwlock_init (&kmxlnd_data.kmx_peers_lock);
 
-        INIT_LIST_HEAD (&kmxlnd_data.kmx_txs);
         INIT_LIST_HEAD (&kmxlnd_data.kmx_tx_idle);
         spin_lock_init (&kmxlnd_data.kmx_tx_idle_lock);
         kmxlnd_data.kmx_tx_next_cookie = 1;
         INIT_LIST_HEAD (&kmxlnd_data.kmx_tx_queue);
         spin_lock_init (&kmxlnd_data.kmx_tx_queue_lock);
         sema_init(&kmxlnd_data.kmx_tx_queue_sem, 0);
-
-        INIT_LIST_HEAD (&kmxlnd_data.kmx_rxs);
-        spin_lock_init (&kmxlnd_data.kmx_rxs_lock);
-        INIT_LIST_HEAD (&kmxlnd_data.kmx_rx_idle);
-        spin_lock_init (&kmxlnd_data.kmx_rx_idle_lock);
 
         kmxlnd_data.kmx_init = MXLND_INIT_DATA;
         /*****************************************************/
@@ -637,14 +585,6 @@ mxlnd_startup (lnet_ni_t *ni)
                 goto failed;
         }
         kmxlnd_data.kmx_init = MXLND_INIT_TXS;
-        /*****************************************************/
-
-        ret = mxlnd_init_rxs();
-        if (ret != 0) {
-                CERROR("Can't alloc rx descs: %d\n", ret);
-                goto failed;
-        }
-        kmxlnd_data.kmx_init = MXLND_INIT_RXS;
         /*****************************************************/
 
         ret = mxlnd_init_mx(ni);
@@ -658,64 +598,75 @@ mxlnd_startup (lnet_ni_t *ni)
 
         /* start threads */
 
-        nthreads += *kmxlnd_tunables.kmx_n_waitd;
-        MXLND_ALLOC (kmxlnd_data.kmx_completions,
+        MXLND_ALLOC(kmxlnd_data.kmx_completions,
                      nthreads * sizeof(struct completion));
         if (kmxlnd_data.kmx_completions == NULL) {
                 CERROR("failed to alloc kmxlnd_data.kmx_completions\n");
                 goto failed;
         }
-        memset(kmxlnd_data.kmx_completions, 0, 
+        memset(kmxlnd_data.kmx_completions, 0,
                nthreads * sizeof(struct completion));
 
-        {
-                CDEBUG(D_NET, "using %d %s in mx_wait_any()\n",
-                        *kmxlnd_tunables.kmx_n_waitd, 
-                        *kmxlnd_tunables.kmx_n_waitd == 1 ? "thread" : "threads");
+        CDEBUG(D_NET, "using %d %s in mx_wait_any()\n",
+                *kmxlnd_tunables.kmx_n_waitd,
+                *kmxlnd_tunables.kmx_n_waitd == 1 ? "thread" : "threads");
 
-                for (i = 0; i < *kmxlnd_tunables.kmx_n_waitd; i++) {
-                        ret = mxlnd_thread_start(mxlnd_request_waitd, (void*)((long)i));
-                        if (ret < 0) {
-                                CERROR("Starting mxlnd_request_waitd[%d] failed with %d\n", i, ret);
-                                kmxlnd_data.kmx_shutdown = 1;
-                                mx_wakeup(kmxlnd_data.kmx_endpt);
-                                for (--i; i >= 0; i--) {
-                                        wait_for_completion(&kmxlnd_data.kmx_completions[i]);
-                                }
-                                LASSERT(atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
-                                MXLND_FREE(kmxlnd_data.kmx_completions, 
-                                        MXLND_NCOMPLETIONS * sizeof(struct completion));
-
-                                goto failed;
-                        }
-                }
-                ret = mxlnd_thread_start(mxlnd_tx_queued, (void*)((long)i++));
+        for (i = 0; i < *kmxlnd_tunables.kmx_n_waitd; i++) {
+                ret = mxlnd_thread_start(mxlnd_request_waitd, (void*)((long)i));
                 if (ret < 0) {
-                        CERROR("Starting mxlnd_tx_queued failed with %d\n", ret);
-                        kmxlnd_data.kmx_shutdown = 1;
+                        CERROR("Starting mxlnd_request_waitd[%d] failed with %d\n", i, ret);
+                        atomic_set(&kmxlnd_data.kmx_shutdown, 1);
                         mx_wakeup(kmxlnd_data.kmx_endpt);
                         for (--i; i >= 0; i--) {
                                 wait_for_completion(&kmxlnd_data.kmx_completions[i]);
                         }
                         LASSERT(atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
-                        MXLND_FREE(kmxlnd_data.kmx_completions, 
-                                MXLND_NCOMPLETIONS * sizeof(struct completion));
+                        MXLND_FREE(kmxlnd_data.kmx_completions,
+                                nthreads * sizeof(struct completion));
+
                         goto failed;
                 }
-                ret = mxlnd_thread_start(mxlnd_timeoutd, (void*)((long)i++));
-                if (ret < 0) {
-                        CERROR("Starting mxlnd_timeoutd failed with %d\n", ret);
-                        kmxlnd_data.kmx_shutdown = 1;
-                        mx_wakeup(kmxlnd_data.kmx_endpt);
-                        up(&kmxlnd_data.kmx_tx_queue_sem);
-                        for (--i; i >= 0; i--) {
-                                wait_for_completion(&kmxlnd_data.kmx_completions[i]);
-                        }
-                        LASSERT(atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
-                        MXLND_FREE(kmxlnd_data.kmx_completions, 
-                                MXLND_NCOMPLETIONS * sizeof(struct completion));
-                        goto failed;
+        }
+        ret = mxlnd_thread_start(mxlnd_tx_queued, (void*)((long)i++));
+        if (ret < 0) {
+                CERROR("Starting mxlnd_tx_queued failed with %d\n", ret);
+                atomic_set(&kmxlnd_data.kmx_shutdown, 1);
+                mx_wakeup(kmxlnd_data.kmx_endpt);
+                for (--i; i >= 0; i--) {
+                        wait_for_completion(&kmxlnd_data.kmx_completions[i]);
                 }
+                LASSERT(atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
+                MXLND_FREE(kmxlnd_data.kmx_completions,
+                        nthreads * sizeof(struct completion));
+                goto failed;
+        }
+        ret = mxlnd_thread_start(mxlnd_timeoutd, (void*)((long)i++));
+        if (ret < 0) {
+                CERROR("Starting mxlnd_timeoutd failed with %d\n", ret);
+                atomic_set(&kmxlnd_data.kmx_shutdown, 1);
+                mx_wakeup(kmxlnd_data.kmx_endpt);
+                up(&kmxlnd_data.kmx_tx_queue_sem);
+                for (--i; i >= 0; i--) {
+                        wait_for_completion(&kmxlnd_data.kmx_completions[i]);
+                }
+                LASSERT(atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
+                MXLND_FREE(kmxlnd_data.kmx_completions,
+                        nthreads * sizeof(struct completion));
+                goto failed;
+        }
+        ret = mxlnd_thread_start(mxlnd_connd, (void*)((long)i++));
+        if (ret < 0) {
+                CERROR("Starting mxlnd_connd failed with %d\n", ret);
+                atomic_set(&kmxlnd_data.kmx_shutdown, 1);
+                mx_wakeup(kmxlnd_data.kmx_endpt);
+                up(&kmxlnd_data.kmx_tx_queue_sem);
+                for (--i; i >= 0; i--) {
+                        wait_for_completion(&kmxlnd_data.kmx_completions[i]);
+                }
+                LASSERT(atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
+                MXLND_FREE(kmxlnd_data.kmx_completions,
+                        nthreads * sizeof(struct completion));
+                goto failed;
         }
 
         kmxlnd_data.kmx_init = MXLND_INIT_THREADS;

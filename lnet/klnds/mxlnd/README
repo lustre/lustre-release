@@ -63,14 +63,18 @@ On some (older?) systems, you may need to modify /etc/modprobe.conf.
 
 The available options are:
 
-    n_waitd     # of completion daemons
-    max_peers   maximum number of peers that may connect
-    cksum       set non-zero to enable small message (< 4KB) checksums
-    ntx         # of total tx message descriptors
-    credits     # concurrent sends to a single peer
-    board       index value of the Myrinet board (NIC)
-    ep_id       MX endpoint ID
-    polling     Use 0 to block (wait). A value > 0 will poll that many times before blocking
+    n_waitd	# of completion daemons
+    cksum	set non-zero to enable small message (< 4KB) checksums
+    ntx		# of total tx message descriptors
+    peercredits	# concurrent sends to one peer
+    board	index value of the Myrinet board
+    ep_id	MX endpoint ID
+    ipif_name	IPoMX interface name
+    polling	Use 0 to block (wait). A value > 0 will poll that many times before blocking
+
+    credits	Unused - was # concurrent sends to all peers
+    max_peers	Unused - was maximum number of peers that may connect
+    hosts	Unused - was IP-to-hostname resolution file
 
 You may want to vary the options to obtain the optimal performance for your
 platform.
@@ -78,21 +82,13 @@ platform.
     n_waitd sets the number of threads that process completed MX requests
 (sends and receives). In our testing, the default of 1 performed best.
 
-    max_peers tells MXLND the upper limit of machines that it will need to 
-communicate with. This affects how many receives it will pre-post and each
-receive will use one page of memory. Ideally, on clients, this value will
-be equal to the total number of Lustre servers (MDS and OSS). On servers,
-it needs to equal the total number of machines in the storage system.
-
     cksum turns on small message checksums. It can be used to aid in trouble-
 shooting. MX also provides an optional checksumming feature which can check 
 all messages (large and small). See the MX README for details.
 
-    ntx is the number of total sends in flight from this machine. In actuality,
-MXLND reserves half of them for connect messages so make this value twice as large
-as you want for the total number of sends in flight.
+    ntx is the number of total sends in flight from this machine.
 
-    credits is the number of in-flight messages for a specific peer. This is part
+    peercredits is the number of in-flight messages for a specific peer. This is part
 of the flow-control system in Lustre. Increasing this value may improve performance
 but it requires more memory since each message requires at least one page.
 
@@ -104,6 +100,9 @@ least one MX endpoint to access the MX library and NIC. The ID is a simple index
 starting at 0. When used on a server, the server will attempt to use this end-
 point. When used on a client, it specifies the endpoint to connect to on the 
 management server.
+
+    ipif_name is the name of the Ethernet interface over MX. Generally, it is
+myriN, where N matches the MX board index.
 
     polling determines whether this host will poll or block for MX request com-
 pletions. A value of 0 blocks and any positive value will poll that many times
