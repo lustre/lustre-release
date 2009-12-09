@@ -88,40 +88,6 @@ static void lovsub_parent_unlock(const struct lu_env *env, struct lov_lock *lov)
         EXIT;
 }
 
-static int lovsub_lock_state_one(const struct lu_env *env,
-                                 const struct lovsub_lock *lovsub,
-                                 struct lov_lock *lov)
-{
-        struct cl_lock *parent;
-        struct cl_lock *child;
-        int             restart = 0;
-
-        ENTRY;
-        parent = lov->lls_cl.cls_lock;
-        child  = lovsub->lss_cl.cls_lock;
-
-        if (lovsub->lss_active != parent) {
-                lovsub_parent_lock(env, lov);
-                if (child->cll_error != 0 && parent->cll_error == 0) {
-                        /*
-                         * This is a deadlock case:
-                         * cl_lock_error(for the parent lock)
-                         *   -> cl_lock_delete
-                         *     -> lov_lock_delete
-                         *       -> cl_lock_enclosure
-                         *         -> cl_lock_mutex_try(for the child lock)
-                         */
-                        cl_lock_mutex_put(env, child);
-                        cl_lock_error(env, parent, child->cll_error);
-                        restart = 1;
-                } else {
-                        cl_lock_signal(env, parent);
-                }
-                lovsub_parent_unlock(env, lov);
-        }
-        RETURN(restart);
-}
-
 /**
  * Implements cl_lock_operations::clo_state() method for lovsub layer, which
  * method is called whenever sub-lock state changes. Propagates state change
@@ -133,22 +99,20 @@ static void lovsub_lock_state(const struct lu_env *env,
 {
         struct lovsub_lock   *sub = cl2lovsub_lock(slice);
         struct lov_lock_link *scan;
-        int                   restart = 0;
 
         LASSERT(cl_lock_is_mutexed(slice->cls_lock));
         ENTRY;
 
-        do {
-                restart = 0;
-                list_for_each_entry(scan, &sub->lss_parents, lll_list) {
-                        restart = lovsub_lock_state_one(env, sub,
-                                                        scan->lll_super);
-                        if (restart) {
-                                cl_lock_mutex_get(env, slice->cls_lock);
-                                break;
-                        }
+        list_for_each_entry(scan, &sub->lss_parents, lll_list) {
+                struct lov_lock *lov    = scan->lll_super;
+                struct cl_lock  *parent = lov->lls_cl.cls_lock;
+
+                if (sub->lss_active != parent) {
+                        lovsub_parent_lock(env, lov);
+                        cl_lock_signal(env, parent);
+                        lovsub_parent_unlock(env, lov);
                 }
-        } while(restart);
+        }
         EXIT;
 }
 
@@ -203,9 +167,6 @@ static void lovsub_lock_descr_map(const struct cl_lock_descr *in,
         start = in->cld_start;
         end   = in->cld_end;
 
-        /*
-         * XXX join file support.
-         */
         if (lsm->lsm_stripe_count > 1) {
                 size = cl_index(lov2cl(obj), lsm->lsm_stripe_size);
                 skip = (lsm->lsm_stripe_count - 1) * size;
@@ -330,13 +291,15 @@ static int lovsub_lock_closure(const struct lu_env *env,
 static int lovsub_lock_delete_one(const struct lu_env *env,
                                   struct cl_lock *child, struct lov_lock *lov)
 {
-        struct cl_lock       *parent;
+        struct cl_lock *parent;
         int             result;
         ENTRY;
 
-        parent  = lov->lls_cl.cls_lock;
-        result = 0;
+        parent = lov->lls_cl.cls_lock;
+        if (parent->cll_error)
+                RETURN(0);
 
+        result = 0;
         switch (parent->cll_state) {
         case CLS_NEW:
         case CLS_QUEUING:
@@ -414,9 +377,11 @@ static int lovsub_lock_delete_one(const struct lu_env *env,
                 }
                 break;
         case CLS_HELD:
+                CL_LOCK_DEBUG(D_ERROR, env, parent, "Delete CLS_HELD lock\n");
         default:
                 CERROR("Impossible state: %i\n", parent->cll_state);
                 LBUG();
+                break;
         }
 
         RETURN(result);

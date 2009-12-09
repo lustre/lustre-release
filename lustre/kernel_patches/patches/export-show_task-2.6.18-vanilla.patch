@@ -16,12 +16,8 @@ Index: linux-2.6/kernel/sched.c
  {
  	struct task_struct *relative;
  	unsigned long free = 0;
-@@ -4698,9 +4698,10 @@ static void show_task(struct task_struct
- 	else
- 		printk(" (NOTLB)\n");
+@@ -4698,6 +4698,7 @@ static void show_task(struct task_struct
  
--	if (state != TASK_RUNNING)
-+	if (state != TASK_RUNNING || p == current)
  		show_stack(p, NULL);
  }
 +EXPORT_SYMBOL(show_task);

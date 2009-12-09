@@ -218,7 +218,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
                          *
                          * Of course, this will all disappear when we switch to
                          * taking liblustre locks on the OST. */
-                        ldlm_res_lvbo_update(res, NULL, 0, 1);
+                        ldlm_res_lvbo_update(res, NULL, 1);
                 }
                 RETURN(ELDLM_LOCK_ABORTED);
         }
@@ -245,7 +245,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
          * sending ast is not handled. This can result in lost client writes.
          */
         if (rc != 0)
-                ldlm_res_lvbo_update(res, NULL, 0, 1);
+                ldlm_res_lvbo_update(res, NULL, 1);
 
         lock_res(res);
         *reply_lvb = *res_lvb;

@@ -164,7 +164,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 ldlm_resource_putref(res);
                 lock->l_resource = NULL;
                 if (lock->l_export) {
-                        class_export_lock_put(lock->l_export);
+                        class_export_lock_put(lock->l_export, lock);
                         lock->l_export = NULL;
                 }
 
@@ -270,8 +270,8 @@ int ldlm_lock_destroy_internal(struct ldlm_lock *lock)
 
         if (lock->l_export && lock->l_export->exp_lock_hash &&
             !hlist_unhashed(&lock->l_exp_hash))
-                lustre_hash_del(lock->l_export->exp_lock_hash,
-                                &lock->l_remote_handle, &lock->l_exp_hash);
+                cfs_hash_del(lock->l_export->exp_lock_hash,
+                             &lock->l_remote_handle, &lock->l_exp_hash);
 
         ldlm_lock_remove_from_lru(lock);
         class_handle_unhash(&lock->l_handle);
@@ -370,6 +370,12 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
         lu_ref_init(&lock->l_reference);
         lu_ref_add(&lock->l_reference, "hash", lock);
         lock->l_callback_timeout = 0;
+
+#if LUSTRE_TRACKS_LOCK_EXP_REFS
+        CFS_INIT_LIST_HEAD(&lock->l_exp_refs_link);
+        lock->l_exp_refs_nr = 0;
+        lock->l_exp_refs_target = NULL;
+#endif
 
         RETURN(lock);
 }
@@ -1461,6 +1467,9 @@ int ldlm_run_ast_work(struct list_head *rpc_list, ldlm_desc_ast_t ast_type)
         int ast_count;
         ENTRY;
 
+        if (list_empty(rpc_list))
+                RETURN(0);
+
         arg.set = ptlrpc_prep_set();
         if (NULL == arg.set)
                 RETURN(-ERESTART);
@@ -1667,7 +1676,7 @@ void ldlm_cancel_locks_for_export_cb(void *obj, void *data)
         LDLM_LOCK_GET(lock);
 
         LDLM_DEBUG(lock, "export %p", exp);
-        ldlm_res_lvbo_update(res, NULL, 0, 1);
+        ldlm_res_lvbo_update(res, NULL, 1);
         ldlm_lock_cancel(lock);
         ldlm_reprocess_all(res);
         ldlm_resource_putref(res);
@@ -1676,8 +1685,8 @@ void ldlm_cancel_locks_for_export_cb(void *obj, void *data)
 
 void ldlm_cancel_locks_for_export(struct obd_export *exp)
 {
-        lustre_hash_for_each_empty(exp->exp_lock_hash,
-                                   ldlm_cancel_locks_for_export_cb, exp);
+        cfs_hash_for_each_empty(exp->exp_lock_hash,
+                                ldlm_cancel_locks_for_export_cb, exp);
 }
 
 /**

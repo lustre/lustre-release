@@ -33,14 +33,14 @@
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
- * lustre/utils/lreplicate.c
+ * lustre/utils/lustre_rsync.c
  *
  * Author: Kalpak Shah <Kalpak.Shah@Sun.COM>
  * Author: Manoj Joseph <Manoj.Joseph@Sun.COM>
  */
 
 /*
- * - lreplicate is a tool for replicating a lustre filesystem.
+ * - lustre_rsync is a tool for replicating a lustre filesystem.
  *
  * - The source-fs is a live lustre filesystem. It is not a
  * snapshot. It is mounted and undergoing changes
@@ -51,7 +51,7 @@
  * - There is a changelog of all metadata operations that happened on
  * the filesystem since the 'sync point'.
  *
- * - lreplicate replicates all the operations saved in the changelog
+ * - lustre_rsync replicates all the operations saved in the changelog
  * on to the target filesystem to make it identical to the source.
  *
  * To facilitate replication, the lustre filesystem provides
@@ -67,7 +67,7 @@
  * With just this information, it is not alwasy possible to determine
  * the file paths for each operation. For instance, if pfid does not
  * exist on the source-fs (due to a subsequent deletion), its path
- * cannot be queried. In such cases, lreplicate keeps the files in a
+ * cannot be queried. In such cases, lustre_rsync keeps the files in a
  * special directory ("/.lustrerepl"). Once all the operations in a
  * changelog are replayed, all the files in this special directory
  * will get moved to the location as in the source-fs.
@@ -121,7 +121,7 @@
 #include <libcfs/libcfsutil.h>
 #include <lustre/liblustreapi.h>
 #include <lustre/lustre_idl.h>
-#include "lreplicate.h"
+#include "lustre_rsync.h"
 
 #define REPLICATE_STATUS_VER 1
 #define CLEAR_INTERVAL 100
@@ -174,7 +174,7 @@ struct lr_parent_child_list {
         struct lr_parent_child_list *pc_next;
 };
 
-struct lreplicate_status *status;
+struct lustre_rsync_status *status;
 char *statuslog;  /* Name of the status log file */
 int logbackedup;
 int noxattr;    /* Flag to turn off replicating xattrs */
@@ -217,11 +217,11 @@ struct option long_opts[] = {
 /* Command line usage */
 void lr_usage()
 {
-        fprintf(stderr, "\tlreplicate -s <lustre_root_path> -t <target_path> "
+        fprintf(stderr, "\tlustre_rsync -s <lustre_root_path> -t <target_path> "
                 "-m <mdt> -r <user id> -l <status log>\n"
-                "lreplicate can also pick up parameters from a "
+                "lustre_rsync can also pick up parameters from a "
                 "status log created earlier.\n"
-                "\tlreplicate -l <log_file>\n"
+                "\tlustre_rsync -l <log_file>\n"
                 "options:\n"
                 "\t--xattr <yes|no> replicate EAs\n"
                 "\t--abort-on-err   abort at first err\n"
@@ -1069,7 +1069,7 @@ int lr_parse_line(void *priv, struct lr_info *info)
 /* Initialize the replication parameters */
 int lr_init_status()
 {
-        size_t size = sizeof(struct lreplicate_status) + PATH_MAX;
+        size_t size = sizeof(struct lustre_rsync_status) + PATH_MAX;
 
         if (status != NULL)
                 return 0;
@@ -1145,10 +1145,10 @@ int lr_read_log()
 {
         struct lr_parent_child_list *tmp;
         struct lr_parent_child_log rec;
-        struct lreplicate_status *s;
+        struct lustre_rsync_status *s;
         int fd = -1;
         size_t size;
-        size_t read_size = sizeof(struct lreplicate_status) + PATH_MAX;
+        size_t read_size = sizeof(struct lustre_rsync_status) + PATH_MAX;
         int rc = 0;
 
         if (statuslog == NULL)
@@ -1464,7 +1464,7 @@ int lr_replicate()
         lr_clear_cl(info, 1);
 
         if (verbose) {
-                printf("lreplicate took %ld seconds\n", time(NULL) - start);
+                printf("lustre_rsync took %ld seconds\n", time(NULL) - start);
                 printf("Changelog records consumed: %lld\n", rec_count);
         }
 
@@ -1476,7 +1476,7 @@ termination_handler (int signum)
 {
         /* Set a flag for the replicator to gracefully shutdown */
         quit = 1;
-        printf("lreplicate halting.\n");
+        printf("lustre_rsync halting.\n");
 }
 
 int main(int argc, char *argv[])
@@ -1510,7 +1510,7 @@ int main(int argc, char *argv[])
                                    ignored. */
                                 status->ls_num_targets = numtargets;
                         }
-                        newsize = sizeof (struct lreplicate_status) +
+                        newsize = sizeof (struct lustre_rsync_status) +
                                 (status->ls_num_targets * PATH_MAX);
                         if (status->ls_size != newsize) {
                                 status->ls_size = newsize;

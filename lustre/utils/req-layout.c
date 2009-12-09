@@ -64,7 +64,6 @@
 #define lustre_swab_mdt_rec_reint NULL
 #define lustre_swab_lustre_capa NULL
 #define lustre_swab_lustre_capa_key NULL
-#define lustre_swab_mdt_rec_join NULL
 #define lustre_swab_llogd_conn_body NULL
 #define lustre_swab_llog_hdr NULL
 #define lustre_swab_llogd_body NULL
@@ -76,6 +75,13 @@
 #define lustre_swab_ost_body NULL
 #define lustre_swab_ost_last_id NULL
 #define lustre_swab_fiemap NULL
+#define lustre_swab_qdata NULL
+#define lustre_swab_ost_lvb NULL
+#define dump_rniobuf NULL
+#define dump_ioo NULL
+#define dump_obdo NULL
+#define dump_ost_body NULL
+#define dump_rcs NULL
 
 /*
  * Yes, include .c file.

@@ -2,8 +2,8 @@ tbd  Sun Microsystems, Inc.
        * version 2.0.0
        * Support for kernels:
         2.6.16.60-0.39.3 (SLES 10),
-        2.6.18-128.7.1.el5 (RHEL 5),
-        2.6.18-128.7.1.el5 (OEL 5),
+        2.6.18-164.6.1.el5 (RHEL 5),
+        2.6.18-164.6.1.0.1.el5 (OEL 5),
         2.6.27.19-5 (SLES11)
         2.6.27 vanilla (kernel.org).
        * Client support for unpatched kernels:
@@ -13,7 +13,32 @@ tbd  Sun Microsystems, Inc.
        * Note that reiserfs quotas are disabled on SLES 10 in this kernel.
        * RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
 	 removed cwd "./" (refer to Bugzilla 14399).
-       * File join has been disabled in this release, refer to Bugzilla 16929.
+
+Severity   : normal
+Bugzilla   : 21513
+Description: Clear imp_force_reconnect correctly in ptlrpc_connect_interpret()
+
+Severity   : enhancement
+Bugzilla   : 20773
+Description: Update kernel to RHEL5.4 2.6.18-164.6.1.el5 and
+	     OEL5 2.6.18-164.6.1.0.1.el5(Both in-kernel OFED enabled).
+
+Severity   : normal
+Bugzilla   : 21049
+Description: Sanity test_27p fails.
+Details    : OBD_FAIL_OST_ENOSPC has been moved to filter_statfs().
+             Sanity tests 27 were cleaned up and improved.
+
+Severity   : normal$
+Bugzilla   : 18631
+Description: Unify req format on client/servers
+Details    : Use new req_capsule API [almost] everywhere instead of old PTLRPC
+             buffers and swabbers approach..
+
+Severity   : normal
+Frequency  : cleanup
+Bugzilla   : 19200
+Description: drop join file stuff.
 
 Severity   : enhancement
 Bugzilla   : 14250
@@ -2296,6 +2321,13 @@ Severity   : normal
 Bugzilla   : 20463
 Descriptoin: getstripe doesn't report stripe count = -1 sanely
 Details    : Detect and print out the 'stripe count = -1' case properly.
+
+Severity   : normal
+Bugzilla   : 19128
+Description: Out or order replies might be lost on replay
+Details    : In ptlrpc_retain_replayable_request if we cannot find retained
+             request with tid smaller then one currently being added, add it
+	     to the start, not end of the list.
 
 --------------------------------------------------------------------------------
 

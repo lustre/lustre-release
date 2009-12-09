@@ -134,8 +134,13 @@ struct rcu_head { };
 
 typedef __u64 kdev_t;
 
+#ifndef min
 #define min(x,y) ((x)<(y) ? (x) : (y))
+#endif
+
+#ifndef max
 #define max(x,y) ((x)>(y) ? (x) : (y))
+#endif
 
 #ifndef min_t
 #define min_t(type,x,y) \

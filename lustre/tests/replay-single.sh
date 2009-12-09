@@ -20,7 +20,7 @@ remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0
 
 # Skip these tests
 # bug number:  17466 18857,15962
-ALWAYS_EXCEPT="61d   33a 33b  $REPLAY_SINGLE_EXCEPT"
+ALWAYS_EXCEPT="61d   33a 33b     $REPLAY_SINGLE_EXCEPT"
 
 if [ "$FAILURE_MODE" = "HARD" ] && mixed_ost_devs; then
     CONFIG_EXCEPTIONS="0b 42 47 61a 61c"
@@ -474,10 +474,9 @@ test_20b() { # bug 10480
     lfs getstripe $DIR/$tfile || return 1
     rm -f $DIR/$tfile || return 2       # make it an orphan
     mds_evict_client
-    df -P $DIR || df -P $DIR || true    # reconnect
+    client_up || client_up || true    # reconnect
 
     fail $SINGLEMDS                            # start orphan recovery
-    df -P $DIR || df -P $DIR || true    # reconnect
     wait_recovery_complete $SINGLEMDS || error "MDS recovery not done"
     wait_mds_ost_sync || return 3
     AFTERUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
@@ -495,8 +494,7 @@ test_20c() { # bug 10480
     ls -la $DIR/$tfile
 
     mds_evict_client
-
-    df -P $DIR || df -P $DIR || true    # reconnect
+    client_up || client_up || true    # reconnect
 
     kill -USR1 $pid
     wait $pid || return 1
@@ -710,7 +708,7 @@ test_32() {
     multiop_bg_pause $DIR/$tfile O_c || return 3
     pid2=$!
     mds_evict_client
-    df $MOUNT || sleep 1 && df $MOUNT || return 1
+    client_up || client_up || return 1
     kill -USR1 $pid1
     kill -USR1 $pid2
     wait $pid1 || return 4
@@ -808,7 +806,9 @@ test_37() {
     sync
     return 0
 }
+start_full_debug_logging
 run_test 37 "abort recovery before client does replay (test mds_cleanup_orphans for directories)"
+stop_full_debug_logging
 
 test_38() {
     createmany -o $DIR/$tfile-%d 800
@@ -936,7 +936,7 @@ test_43() { # bug 2530
 }
 run_test 43 "mds osc import failure during recovery; don't LBUG"
 
-test_44a() {	# was test_44
+test_44a() { # was test_44
     local at_max_saved=0
 
     mdcdev=`lctl get_param -n devices | awk '/MDT0000-mdc-/ {print $1}'`
@@ -950,12 +950,13 @@ test_44a() {	# was test_44
     fi
 
     for i in `seq 1 10`; do
-	echo "$i of 10 ($(date +%s))"
-	do_facet $SINGLEMDS "lctl get_param -n mdt.*.mdt.timeouts | grep service"
-	#define OBD_FAIL_TGT_CONN_RACE     0x701
-	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000701"
-	$LCTL --device $mdcdev recover || return 4
-	df $MOUNT
+        echo "$i of 10 ($(date +%s))"
+        do_facet $SINGLEMDS "lctl get_param -n mdt.*.mdt.timeouts | grep service"
+        #define OBD_FAIL_TGT_CONN_RACE     0x701
+        do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000701"
+        # lctl below may fail, it is valid case
+        $LCTL --device $mdcdev recover
+        df $MOUNT
     done
     do_facet $SINGLEMDS "lctl set_param fail_loc=0"
     [ $at_max_saved -ne 0 ] && at_max_set $at_max_saved mds
@@ -970,11 +971,12 @@ test_44b() {
 
     for i in `seq 1 10`; do
         echo "$i of 10 ($(date +%s))"
-	do_facet $SINGLEMDS "lctl get_param -n mdt.*.mdt.timeouts | grep service"
-	#define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
-	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000704"
-	$LCTL --device $mdcdev recover || return 4
-	df $MOUNT
+        do_facet $SINGLEMDS "lctl get_param -n mdt.*.mdt.timeouts | grep service"
+        #define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
+        do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000704"
+        # lctl below may fail, it is valid case
+        $LCTL --device $mdcdev recover
+        df $MOUNT
     done
     do_facet $SINGLEMDS "lctl set_param fail_loc=0"
     return 0
@@ -1029,7 +1031,7 @@ test_47() { # bug 2824
     # OBD_FAIL_OST_CREATE_NET 0x204
     fail ost1
     do_facet ost1 "lctl set_param fail_loc=0x80000204"
-    df $MOUNT || return 2
+    client_up || return 2
 
     # let the MDS discover the OST failure, attempt to recover, fail
     # and recover again.
@@ -1053,7 +1055,7 @@ test_48() {
     # OBD_FAIL_OST_EROFS 0x216
     facet_failover $SINGLEMDS
     do_facet ost1 "lctl set_param fail_loc=0x80000216"
-    df $MOUNT || return 2
+    client_up || return 2
 
     createmany -o $DIR/$tfile 20 20 || return 2
     unlinkmany $DIR/$tfile 40 || return 3
@@ -1523,8 +1525,7 @@ test_62() { # Bug 15756 - don't mis-drop resent replay
     createmany -o $DIR/$tdir/$tfile- 25
 #define OBD_FAIL_TGT_REPLAY_DROP         0x707
     do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000707"
-    facet_failover $SINGLEMDS
-    df $MOUNT || return 1
+    fail $SINGLEMDS
     do_facet $SINGLEMDS "lctl set_param fail_loc=0"
     unlinkmany $DIR/$tdir/$tfile- 25 || return 2
     return 0
@@ -1730,10 +1731,21 @@ test_67b() #bug 3055
 
     at_start || return 0
     CONN1=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
+
+    # exhaust precreations on ost1
+    local OST=$(lfs osts | grep 0": " | awk '{print $2}' | sed -e 's/_UUID$//')
+    local mdtosc=$(get_mdtosc_proc_path $OST)
+    local last_id=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_last_id)
+    local next_id=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_next_id)
+
+    mkdir -p $DIR/$tdir/${OST}
+    lfs setstripe $DIR/$tdir/${OST} -o 0 -c 1 || error "setstripe"
+    echo "Creating to objid $last_id on ost $OST..."
 #define OBD_FAIL_OST_PAUSE_CREATE        0x223
     do_facet ost1 "sysctl -w lustre.fail_val=20000"
     do_facet ost1 "sysctl -w lustre.fail_loc=0x80000223"
-    cp /etc/profile $DIR/$tfile || error "cp failed"
+    createmany -o $DIR/$tdir/${OST}/f $next_id $((last_id - next_id + 2))
+
     client_reconnect
     do_facet ost1 "lctl get_param -n ost.OSS.ost_create.timeouts"
     log "phase 2"
@@ -1914,7 +1926,7 @@ test_74() {
     mount_facet ost1
     touch $DIR/$tfile || return 1
     rm $DIR/$tfile || return 2
-    client_df || error "df failed: $?"
+    clients_up || error "client evicted: $?"
     return 0
 }
 run_test 74 "Ensure applications don't fail waiting for OST recovery"
@@ -2074,7 +2086,7 @@ test_84a() {
     PID=$!
     mds_evict_client
     wait $PID
-    df -P $DIR || df -P $DIR || true    # reconnect
+    client_up || client_up || true    # reconnect
 }
 run_test 84a "stale open during export disconnect"
 

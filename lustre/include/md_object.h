@@ -101,6 +101,10 @@ struct md_capainfo {
         struct lustre_capa     *mc_capa[MD_CAPAINFO_MAX];
 };
 
+struct md_quota {
+        struct obd_export       *mq_exp;
+};
+
 /**
  * Implemented in mdd/mdd_handler.c.
  *
@@ -109,6 +113,7 @@ struct md_capainfo {
  */
 struct md_ucred *md_ucred(const struct lu_env *env);
 struct md_capainfo *md_capainfo(const struct lu_env *env);
+struct md_quota *md_quota(const struct lu_env *env);
 
 /** metadata attributes */
 enum ma_valid {
@@ -118,7 +123,10 @@ enum ma_valid {
         MA_FLAGS     = (1 << 3),
         MA_LMV       = (1 << 4),
         MA_ACL_DEF   = (1 << 5),
-        MA_LOV_DEF   = (1 << 6)
+        MA_LOV_DEF   = (1 << 6),
+/* (Layout lock will used #7 here) */
+        MA_HSM       = (1 << 8),
+        MA_SOM       = (1 << 9)
 };
 
 typedef enum {
@@ -139,6 +147,11 @@ typedef enum {
         MDT_PDO_LOCK = (1 << 1)
 } mdl_type_t;
 
+struct md_hsm {
+        __u32  mh_flags;
+};
+#define ma_hsm_flags ma_hsm.mh_flags
+
 struct md_attr {
         __u64                   ma_valid;
         __u64                   ma_need;
@@ -153,6 +166,8 @@ struct md_attr {
         struct llog_cookie     *ma_cookie;
         int                     ma_cookie_size;
         struct lustre_capa     *ma_capa;
+        struct md_hsm           ma_hsm;
+/* XXX:  struct md_som_data   *ma_som; */
 };
 
 /** Additional parameters for create */
@@ -352,7 +367,6 @@ struct md_device_operations {
 
                 int (*mqo_check)(const struct lu_env *env,
                                  struct md_device *m,
-                                 struct obd_export *exp,
                                  __u32 type);
 
                 int (*mqo_on)(const struct lu_env *env,

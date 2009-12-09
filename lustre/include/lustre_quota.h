@@ -51,7 +51,6 @@
 #include <lustre/lustre_idl.h>
 #include <lvfs.h>
 #include <obd_support.h>
-#include <class_hash.h>
 
 struct obd_device;
 struct client_obd;
@@ -296,7 +295,7 @@ struct lustre_quota_ctxt {
         /** See comment of lqc_itune_sz */
         unsigned long lqc_btune_sz;
         /** all lustre_qunit_size structures */
-        struct lustre_hash *lqc_lqs_hash;
+        cfs_hash_t   *lqc_lqs_hash;
 
         /** @{ */
         /**
@@ -526,10 +525,10 @@ typedef struct {
          * can finish a block_write or inode_create rpc. It updates the pending
          * record of block and inode, acquires quota if necessary
          */
-        int (*quota_chkquota) (struct obd_device *, const unsigned int [],
-                               int [], int, quota_acquire,
-                               struct obd_trans_info *, int, struct inode *,
-                               int);
+        int (*quota_chkquota) (struct obd_device *, struct obd_export *,
+                               const unsigned int [], int [],
+                               int, quota_acquire, struct obd_trans_info *,
+                               int, struct inode *, int);
 
         /**
          * For quota client, the actions after the pending write is committed
@@ -765,6 +764,7 @@ static inline int lquota_getflag(quota_interface_t *interface,
 #ifdef __KERNEL__
 static inline int lquota_chkquota(quota_interface_t *interface,
                                   struct obd_device *obd,
+                                  struct obd_export *exp,
                                   const unsigned int id[], int pending[],
                                   int count, struct obd_trans_info *oti,
                                   int isblk, void *data, int frags)
@@ -774,7 +774,7 @@ static inline int lquota_chkquota(quota_interface_t *interface,
 
         QUOTA_CHECK_OP(interface, chkquota);
         QUOTA_CHECK_OP(interface, acquire);
-        rc = QUOTA_OP(interface, chkquota)(obd, id, pending, count,
+        rc = QUOTA_OP(interface, chkquota)(obd, exp, id, pending, count,
                                            QUOTA_OP(interface, acquire), oti,
                                            isblk, (struct inode *)data, frags);
         RETURN(rc);

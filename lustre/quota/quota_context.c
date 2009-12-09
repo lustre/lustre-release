@@ -57,13 +57,12 @@
 #include <obd_class.h>
 #include <lustre_quota.h>
 #include <lustre_fsfilt.h>
-#include <class_hash.h>
 #include <lprocfs_status.h>
 #include "quota_internal.h"
 
 #ifdef HAVE_QUOTA_SUPPORT
 
-static lustre_hash_ops_t lqs_hash_ops;
+static cfs_hash_ops_t lqs_hash_ops;
 
 unsigned long default_bunit_sz = 128 * 1024 * 1024; /* 128M bytes */
 unsigned long default_btune_ratio = 50;             /* 50 percentage */
@@ -1238,10 +1237,10 @@ qctxt_init(struct obd_device *obd, dqacq_handler_t handler)
         qctxt->lqc_sync_blk = 0;
         spin_unlock(&qctxt->lqc_lock);
 
-        qctxt->lqc_lqs_hash = lustre_hash_init("LQS_HASH",
-                                               HASH_LQS_CUR_BITS,
-                                               HASH_LQS_MAX_BITS,
-                                               &lqs_hash_ops, 0);
+        qctxt->lqc_lqs_hash = cfs_hash_create("LQS_HASH",
+                                              HASH_LQS_CUR_BITS,
+                                              HASH_LQS_MAX_BITS,
+                                              &lqs_hash_ops, CFS_HASH_REHASH);
         if (!qctxt->lqc_lqs_hash) {
                 CERROR("initialize hash lqs for %s error!\n", obd->obd_name);
                 RETURN(-ENOMEM);
@@ -1316,10 +1315,10 @@ void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force)
                                      cfs_time_seconds(1));
         }
 
-        lustre_hash_for_each_safe(qctxt->lqc_lqs_hash, hash_put_lqs, NULL);
+        cfs_hash_for_each_safe(qctxt->lqc_lqs_hash, hash_put_lqs, NULL);
         l_wait_event(qctxt->lqc_lqs_waitq, check_lqs(qctxt), &lwi);
         down_write(&obt->obt_rwsem);
-        lustre_hash_exit(qctxt->lqc_lqs_hash);
+        cfs_hash_destroy(qctxt->lqc_lqs_hash);
         qctxt->lqc_lqs_hash = NULL;
         up_write(&obt->obt_rwsem);
 
@@ -1545,7 +1544,7 @@ void build_lqs(struct obd_device *obd)
  * string hashing using djb2 hash algorithm
  */
 static unsigned
-lqs_hash(lustre_hash_t *lh, void *key, unsigned mask)
+lqs_hash(cfs_hash_t *hs, void *key, unsigned mask)
 {
         struct quota_adjust_qunit *lqs_key;
         unsigned hash;
@@ -1618,11 +1617,11 @@ lqs_exit(struct hlist_node *hnode)
         EXIT;
 }
 
-static lustre_hash_ops_t lqs_hash_ops = {
-        .lh_hash    = lqs_hash,
-        .lh_compare = lqs_compare,
-        .lh_get     = lqs_get,
-        .lh_put     = lqs_put,
-        .lh_exit    = lqs_exit
+static cfs_hash_ops_t lqs_hash_ops = {
+        .hs_hash    = lqs_hash,
+        .hs_compare = lqs_compare,
+        .hs_get     = lqs_get,
+        .hs_put     = lqs_put,
+        .hs_exit    = lqs_exit
 };
 #endif /* HAVE_QUOTA_SUPPORT */

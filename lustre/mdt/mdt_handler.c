@@ -1490,6 +1490,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
 {
         struct req_capsule      *pill = info->mti_pill;
         struct mdt_device       *mdt = info->mti_mdt;
+        struct md_quota         *mq = md_quota(info->mti_env);
         struct mdt_body         *repbody;
         int                      rc = 0;
         ENTRY;
@@ -1548,6 +1549,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
                 rc = lustre_msg_get_status(mdt_info_req(info)->rq_repmsg);
                 GOTO(out_ucred, rc);
         }
+        mq->mq_exp = info->mti_exp;
         rc = mdt_reint_rec(info, lhc);
         EXIT;
 out_ucred:
@@ -1697,6 +1699,7 @@ static int mdt_quotacheck_handle(struct mdt_thread_info *info)
         struct obd_quotactl *oqctl;
         struct req_capsule *pill = info->mti_pill;
         struct obd_export *exp = info->mti_exp;
+        struct md_quota *mq = md_quota(info->mti_env);
         struct md_device *next = info->mti_mdt->mdt_child;
         int rc;
         ENTRY;
@@ -1713,7 +1716,8 @@ static int mdt_quotacheck_handle(struct mdt_thread_info *info)
         if (rc)
                 RETURN(rc);
 
-        rc = next->md_ops->mdo_quota.mqo_check(info->mti_env, next, exp,
+        mq->mq_exp = exp;
+        rc = next->md_ops->mdo_quota.mqo_check(info->mti_env, next,
                                                oqctl->qc_type);
         RETURN(rc);
 }
@@ -1723,6 +1727,7 @@ static int mdt_quotactl_handle(struct mdt_thread_info *info)
         struct obd_quotactl *oqctl, *repoqc;
         struct req_capsule *pill = info->mti_pill;
         struct obd_export *exp = info->mti_exp;
+        struct md_quota *mq = md_quota(info->mti_env);
         struct md_device *next = info->mti_mdt->mdt_child;
         const struct md_quota_operations *mqo = &next->md_ops->mdo_quota;
         int id, rc;
@@ -1766,6 +1771,7 @@ static int mdt_quotactl_handle(struct mdt_thread_info *info)
         repoqc = req_capsule_server_get(pill, &RMF_OBD_QUOTACTL);
         LASSERT(repoqc != NULL);
 
+        mq->mq_exp = exp;
         switch (oqctl->qc_cmd) {
         case Q_QUOTAON:
                 rc = mqo->mqo_on(info->mti_env, next, oqctl->qc_type);
@@ -2762,7 +2768,7 @@ static int mdt_recovery(struct mdt_thread_info *info)
                 }
         }
 
-        if (unlikely(req->rq_export == NULL)) {
+        if (unlikely(!class_connected_export(req->rq_export))) {
                 CERROR("operation %d on unconnected MDS from %s\n",
                        lustre_msg_get_opc(req->rq_reqmsg),
                        libcfs_id2str(req->rq_peer));
@@ -3174,7 +3180,7 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
                 new_lock->l_writers--;
         }
 
-        new_lock->l_export = class_export_lock_get(req->rq_export);
+        new_lock->l_export = class_export_lock_get(req->rq_export, new_lock);
         new_lock->l_blocking_ast = lock->l_blocking_ast;
         new_lock->l_completion_ast = lock->l_completion_ast;
         new_lock->l_remote_handle = lock->l_remote_handle;
@@ -3182,9 +3188,9 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
 
         unlock_res_and_lock(new_lock);
 
-        lustre_hash_add(new_lock->l_export->exp_lock_hash,
-                        &new_lock->l_remote_handle,
-                        &new_lock->l_exp_hash);
+        cfs_hash_add(new_lock->l_export->exp_lock_hash,
+                     &new_lock->l_remote_handle,
+                     &new_lock->l_exp_hash);
 
         LDLM_LOCK_RELEASE(new_lock);
         lh->mlh_reg_lh.cookie = 0;
@@ -3209,7 +3215,7 @@ static void mdt_intent_fixup_resent(struct mdt_thread_info *info,
         dlmreq = req_capsule_client_get(info->mti_pill, &RMF_DLM_REQ);
         remote_hdl = dlmreq->lock_handle[0];
 
-        lock = lustre_hash_lookup(exp->exp_lock_hash, &remote_hdl);
+        lock = cfs_hash_lookup(exp->exp_lock_hash, &remote_hdl);
         if (lock) {
                 if (lock != new_lock) {
                         lh->mlh_reg_lh.cookie = lock->l_handle.h_cookie;
@@ -3221,11 +3227,11 @@ static void mdt_intent_fixup_resent(struct mdt_thread_info *info,
                                   lh->mlh_reg_lh.cookie);
                         if (old_lock)
                                 *old_lock = LDLM_LOCK_GET(lock);
-                        lh_put(exp->exp_lock_hash, &lock->l_exp_hash);
+                        cfs_hash_put(exp->exp_lock_hash, &lock->l_exp_hash);
                         return;
                 }
 
-                lh_put(exp->exp_lock_hash, &lock->l_exp_hash);
+                cfs_hash_put(exp->exp_lock_hash, &lock->l_exp_hash);
         }
 
         /*
@@ -4086,7 +4092,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                                      procfs_entry, target_print_req,"mdt_xmds");
 
         if (m->mdt_xmds_service == NULL) {
-                CERROR("failed to start readpage service\n");
+                CERROR("failed to start xmds service\n");
                 GOTO(err_mdt_svc, rc = -ENOMEM);
         }
 

@@ -92,13 +92,6 @@ void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
                              le32_to_cpu(lmm->lmm_stripe_count));
 }
 
-void lov_dump_lmm_join(int level, struct lov_mds_md_join *lmmj)
-{
-        lov_dump_lmm_common(level, &lmmj->lmmj_md);
-        CDEBUG(level, "extent_count %u\n",
-               le32_to_cpu(lmmj->lmmj_extent_count));
-}
-
 void lov_dump_lmm_v3(int level, struct lov_mds_md_v3 *lmm)
 {
         lov_dump_lmm_common(level, lmm);
@@ -115,8 +108,6 @@ void lov_dump_lmm(int level, void *lmm)
         switch (magic) {
         case LOV_MAGIC_V1:
                 return lov_dump_lmm_v1(level, (struct lov_mds_md_v1 *)(lmm));
-        case LOV_MAGIC_JOIN:
-                return lov_dump_lmm_join(level, (struct lov_mds_md_join *)(lmm));
         case LOV_MAGIC_V3:
                 return lov_dump_lmm_v3(level, (struct lov_mds_md_v3 *)(lmm));
         default:

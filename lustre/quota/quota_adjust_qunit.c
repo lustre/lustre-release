@@ -60,7 +60,6 @@
 #include <obd_ost.h>
 #include <lustre_fsfilt.h>
 #include <linux/lustre_quota.h>
-#include <class_hash.h>
 #include "quota_internal.h"
 
 #ifdef HAVE_QUOTA_SUPPORT
@@ -125,8 +124,8 @@ quota_create_lqs(unsigned long long lqs_key, struct lustre_quota_ctxt *qctxt)
         if (!qctxt->lqc_valid)
                 rc = -EBUSY;
         else
-                rc = lustre_hash_add_unique(qctxt->lqc_lqs_hash,
-                                            &lqs->lqs_key, &lqs->lqs_hash);
+                rc = cfs_hash_add_unique(qctxt->lqc_lqs_hash,
+                                         &lqs->lqs_key, &lqs->lqs_hash);
         spin_unlock(&qctxt->lqc_lock);
 
         if (!rc)
@@ -150,7 +149,7 @@ struct lustre_qunit_size *quota_search_lqs(unsigned long long lqs_key,
         int rc = 0;
 
  search_lqs:
-        lqs = lustre_hash_lookup(qctxt->lqc_lqs_hash, &lqs_key);
+        lqs = cfs_hash_lookup(qctxt->lqc_lqs_hash, &lqs_key);
         if (IS_ERR(lqs))
                 GOTO(out, rc = PTR_ERR(lqs));
 

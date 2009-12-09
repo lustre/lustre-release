@@ -181,7 +181,6 @@ int get_flags(char *data, int *rflags)
 }
 
 #define POP_ARG() (pop_arg(argc, argv))
-#define min(a,b) ((a)>(b)?(b):(a))
 
 int main(int argc, char **argv)
 {

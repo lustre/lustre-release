@@ -629,9 +629,6 @@ int ccc_lock_fits_into(const struct lu_env *env,
         /*
          * Also, don't match incomplete write locks for read, otherwise read
          * would enqueue missing sub-locks in the write mode.
-         *
-         * XXX this is a candidate for generic locking policy, to be moved
-         * into cl_lock_lookup().
          */
         else if (need->cld_mode != descr->cld_mode)
                 result = lock->cll_state >= CLS_ENQUEUED;
@@ -693,8 +690,9 @@ void ccc_lock_state(const struct lu_env *env,
                         cl_inode_mtime(inode) = attr->cat_mtime;
                         cl_inode_atime(inode) = attr->cat_atime;
                         cl_inode_ctime(inode) = attr->cat_ctime;
-                } else
-                        CL_LOCK_DEBUG(D_ERROR, env, lock, "attr_get: %i\n", rc);
+                } else {
+                        CL_LOCK_DEBUG(D_INFO, env, lock, "attr_get: %i\n", rc);
+                }
                 cl_object_attr_unlock(obj);
                 cl_isize_unlock(inode, 0);
         }
@@ -728,12 +726,18 @@ int ccc_io_one_lock_index(const struct lu_env *env, struct cl_io *io,
         CDEBUG(D_VFSTRACE, "lock: %i [%lu, %lu]\n", mode, start, end);
 
         memset(&cio->cui_link, 0, sizeof cio->cui_link);
-        descr->cld_mode  = mode;
+
+        if (cio->cui_fd && (cio->cui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
+                descr->cld_mode = CLM_GROUP;
+                descr->cld_gid  = cio->cui_fd->fd_grouplock.cg_gid;
+        } else {
+                descr->cld_mode  = mode;
+        }
         descr->cld_obj   = obj;
         descr->cld_start = start;
         descr->cld_end   = end;
+        descr->cld_enq_flags = enqflags;
 
-        cio->cui_link.cill_enq_flags = enqflags;
         cl_io_lock_add(env, io, &cio->cui_link);
         RETURN(0);
 }

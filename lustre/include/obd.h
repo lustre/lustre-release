@@ -67,7 +67,6 @@
 #include <lustre_quota.h>
 #include <lustre_fld.h>
 #include <lustre_capa.h>
-#include <class_hash.h>
 
 #include <libcfs/bitmap.h>
 
@@ -128,21 +127,6 @@ static inline void loi_init(struct lov_oinfo *loi)
         CFS_INIT_LIST_HEAD(&loi->loi_read_item);
 }
 
-/*extent array item for describing the joined file extent info*/
-struct lov_extent {
-        __u64 le_start;            /* extent start */
-        __u64 le_len;              /* extent length */
-        int   le_loi_idx;          /* extent #1 loi's index in lsm loi array */
-        int   le_stripe_count;     /* extent stripe count*/
-};
-
-/*Lov array info for describing joined file array EA info*/
-struct lov_array_info {
-        struct llog_logid    lai_array_id;    /* MDS med llog object id */
-        unsigned             lai_ext_count; /* number of extent count */
-        struct lov_extent    *lai_ext_array; /* extent desc array */
-};
-
 struct lov_stripe_md {
         spinlock_t       lsm_lock;
         pid_t            lsm_lock_owner; /* debugging */
@@ -161,7 +145,6 @@ struct lov_stripe_md {
                 char  lw_pool_name[LOV_MAXPOOLNAME]; /* pool name */
         } lsm_wire;
 
-        struct lov_array_info *lsm_array; /*Only for joined file array info*/
         struct lov_oinfo *lsm_oinfo[0];
 };
 
@@ -749,7 +732,7 @@ struct lov_obd {
         __u32                   lov_tgt_size;   /* size of tgts array */
         int                     lov_connects;
         int                     lov_pool_count;
-        lustre_hash_t          *lov_pools_hash_body; /* used for key access */
+        cfs_hash_t             *lov_pools_hash_body; /* used for key access */
         struct list_head        lov_pool_list; /* used for sequential access */
         cfs_proc_dir_entry_t   *lov_pool_proc_entry;
         enum lustre_sec_part    lov_sp_me;
@@ -1074,11 +1057,11 @@ struct obd_device {
                                            * (for /proc/status only!!) */
                       obd_process_conf:1;  /* device is processing mgs config */
         /* uuid-export hash body */
-        struct lustre_hash     *obd_uuid_hash;
+        cfs_hash_t             *obd_uuid_hash;
         /* nid-export hash body */
-        struct lustre_hash     *obd_nid_hash;
+        cfs_hash_t             *obd_nid_hash;
         /* nid stats body */
-        struct lustre_hash     *obd_nid_stats_hash;
+        cfs_hash_t             *obd_nid_stats_hash;
         struct list_head        obd_nid_stats;
         atomic_t                obd_refcount;
         cfs_waitq_t             obd_refcount_waitq;
@@ -1100,6 +1083,7 @@ struct obd_device {
         struct lvfs_run_ctxt    obd_lvfs_ctxt;
         struct obd_llog_group   obd_olg; /* default llog group */
         struct obd_device       *obd_observer;
+        struct rw_semaphore     obd_observer_link_sem;
         struct obd_notify_upcall obd_upcall;
         struct obd_export       *obd_self_export;
         /* list of exports in LRU order, for ping evictor, with obd_dev_lock */
@@ -1346,8 +1330,6 @@ struct obd_ops {
                         struct lov_stripe_md *mem_src);
         int (*o_unpackmd)(struct obd_export *exp,struct lov_stripe_md **mem_tgt,
                           struct lov_mds_md *disk_src, int disk_len);
-        int (*o_checkmd)(struct obd_export *exp, struct obd_export *md_exp,
-                         struct lov_stripe_md *mem_tgt);
         int (*o_preallocate)(struct lustre_handle *, obd_count *req,
                              obd_id *ids);
         /* FIXME: add fid capability support for create & destroy! */
@@ -1610,10 +1592,6 @@ struct lsm_operations {
                                     obd_off *);
         void (*lsm_stripe_by_offset)(struct lov_stripe_md *, int *, obd_off *,
                                      obd_off *);
-        obd_off (*lsm_stripe_offset_by_index)(struct lov_stripe_md *, int);
-        obd_off (*lsm_stripe_offset_by_offset)(struct lov_stripe_md *, obd_off);
-        int (*lsm_stripe_index_by_offset)(struct lov_stripe_md *, obd_off);
-        int (*lsm_revalidate) (struct lov_stripe_md *, struct obd_device *obd);
         int (*lsm_lmm_verify) (struct lov_mds_md *lmm, int lmm_bytes,
                                int *stripe_count);
         int (*lsm_unpackmd) (struct lov_obd *lov, struct lov_stripe_md *lsm,
@@ -1621,15 +1599,12 @@ struct lsm_operations {
 };
 
 extern const struct lsm_operations lsm_v1_ops;
-extern const struct lsm_operations lsm_join_ops;
 extern const struct lsm_operations lsm_v3_ops;
 static inline const struct lsm_operations *lsm_op_find(int magic)
 {
         switch(magic) {
         case LOV_MAGIC_V1:
                return &lsm_v1_ops;
-        case LOV_MAGIC_JOIN:
-               return &lsm_join_ops;
         case LOV_MAGIC_V3:
                return &lsm_v3_ops;
         default:

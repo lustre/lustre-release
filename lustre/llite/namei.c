@@ -1106,10 +1106,6 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         }
         LASSERT(rc >= sizeof(*lsm));
 
-        rc = obd_checkmd(ll_i2dtexp(dir), ll_i2mdexp(dir), lsm);
-        if (rc)
-                GOTO(out_free_memmd, rc);
-
         OBDO_ALLOC(oa);
         if (oa == NULL)
                 GOTO(out_free_memmd, rc = -ENOMEM);

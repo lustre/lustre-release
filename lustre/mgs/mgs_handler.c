@@ -336,7 +336,7 @@ static int mgs_get_cfg_lock(struct obd_device *obd, char *fsname,
                                             LDLM_PLAIN, NULL, LCK_EX,
                                             &flags, ldlm_blocking_ast,
                                             ldlm_completion_ast, NULL,
-                                            fsname, 0, NULL, NULL, lockh);
+                                            fsname, 0, NULL, lockh);
         if (rc)
                 CERROR("can't take cfg lock for %s (%d)\n", fsname, rc);
 
@@ -640,7 +640,7 @@ int mgs_handle(struct ptlrpc_request *req)
                 GOTO(out, rc = 0);
 
         if (opc != MGS_CONNECT) {
-                if (req->rq_export == NULL) {
+                if (!class_connected_export(req->rq_export)) {
                         CERROR("lustre_mgs: operation %d on unconnected MGS\n",
                                opc);
                         req->rq_status = -ENOTCONN;

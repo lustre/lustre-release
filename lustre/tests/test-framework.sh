@@ -23,6 +23,16 @@ export QUOTA_AUTO=0
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/functions.sh
 
+LUSTRE_TESTS_CFG_DIR=${LUSTRE_TESTS_CFG_DIR:-${LUSTRE}/tests/cfg}
+
+EXCEPT_LIST_FILE=${EXCEPT_LIST_FILE:-${LUSTRE_TESTS_CFG_DIR}/tests-to-skip.sh}
+
+if [ -f "$EXCEPT_LIST_FILE" ]; then
+    echo "Reading test skip list from $EXCEPT_LIST_FILE"
+    cat $EXCEPT_LIST_FILE
+    . $EXCEPT_LIST_FILE
+fi
+
 assert_DIR () {
     local failed=""
     [[ $DIR/ = $MOUNT/* ]] || \
@@ -1227,13 +1237,29 @@ wait_remote_prog () {
     return $rc
 }
 
-client_df() {
+clients_up() {
     # not every config has many clients
+    sleep 1
     if [ ! -z "$CLIENTS" ]; then
-        $PDSH $CLIENTS "df $MOUNT" > /dev/null
+        $PDSH $CLIENTS "stat -f $MOUNT" > /dev/null
     else
-	df $MOUNT > /dev/null
+        stat -f $MOUNT > /dev/null
     fi
+}
+
+client_up() {
+    local client=$1
+    # usually checked on particular client or locally
+    sleep 1
+    if [ ! -z "$client" ]; then
+        $PDSH $client "stat -f $MOUNT" > /dev/null
+    else
+        stat -f $MOUNT > /dev/null
+    fi
+}
+
+client_evicted() {
+    ! client_up $1
 }
 
 client_reconnect() {
@@ -1311,7 +1337,7 @@ ost_evict_client() {
 
 fail() {
     facet_failover $* || error "failover: $?"
-    client_df || error "post-failover df: $?"
+    clients_up || error "post-failover df: $?"
 }
 
 fail_nodf() {
@@ -1325,9 +1351,8 @@ fail_abort() {
     refresh_disk ${facet}
     change_active $facet
     mount_facet $facet -o abort_recovery
-    client_df || echo "first df failed: $?"
-    sleep 1
-    client_df || error "post-failover df: $?"
+    clients_up || echo "first df failed: $?"
+    clients_up || error "post-failover df: $?"
 }
 
 do_lmc() {
@@ -1919,6 +1944,8 @@ init_param_vars () {
             $LFS quotaoff -ug $MOUNT > /dev/null 2>&1
         fi
     fi
+
+    return 0
 }
 
 nfs_client_mode () {
@@ -2130,9 +2157,9 @@ testslist_filter () {
     local start_at=$START_AT
     local stop_at=$STOP_AT
 
-    local var=${TESTSUITE}_START_AT
+    local var=${TESTSUITE//-/_}_START_AT
     [ x"${!var}" != x ] && start_at=${!var}
-    var=${TESTSUITE}_STOP_AT
+    var=${TESTSUITE//-/_}_STOP_AT
     [ x"${!var}" != x ] && stop_at=${!var}
 
     sed -n 's/^test_\([^ (]*\).*/\1/p' $script | \
@@ -2367,7 +2394,6 @@ stop_full_debug_logging() {
 error_noexit() {
     local TYPE=${TYPE:-"FAIL"}
     local ERRLOG
-    lctl set_param fail_loc=0 2>/dev/null || true
 
     local dump=true
     # do not dump logs if $1=false
@@ -2391,7 +2417,10 @@ error_noexit() {
 
 error() {
     error_noexit "$@"
-    $FAIL_ON_ERROR && exit 1 || true
+    if $FAIL_ON_ERROR; then
+        reset_fail_loc
+        exit 1
+    fi
 }
 
 error_exit() {
@@ -3198,7 +3227,6 @@ wait_clients_import_state () {
         *) error "unknown facet!" ;;
     esac
 
-
     if ! do_rpc_nodes $list wait_import_state $expected $proc_path; then
         error "import is not in ${expected} state"
         return 1
@@ -3222,6 +3250,44 @@ oos_full() {
         return $OSCFULL
 }
 
+pool_list () {
+   do_facet mgs lctl pool_list $1
+}
+
+create_pool() {
+    local fsname=${1%%.*}
+    local poolname=${1##$fsname.}
+
+    do_facet mgs lctl pool_new $1
+    local RC=$?
+    # get param should return err unless pool is created
+    [[ $RC -ne 0 ]] && return $RC
+
+    wait_update $HOSTNAME "lctl get_param -n lov.$fsname-*.pools.$poolname \
+        2>/dev/null || echo foo" "" || RC=1
+    if [[ $RC -eq 0 ]]; then
+        add_pool_to_list $1
+    else
+        error "pool_new failed $1"
+    fi
+    return $RC
+}
+
+add_pool_to_list () {
+    local fsname=${1%%.*}
+    local poolname=${1##$fsname.}
+
+    local listvar=${fsname}_CREATED_POOLS
+    eval export ${listvar}=$(expand_list ${!listvar} $poolname)
+}
+
+remove_pool_from_list () {
+    local fsname=${1%%.*}
+    local poolname=${1##$fsname.}
+
+    local listvar=${fsname}_CREATED_POOLS
+    eval export ${listvar}=$(exclude_items_from_list ${!listvar} $poolname)
+}
 
 destroy_pool_int() {
     local ost
@@ -3233,19 +3299,51 @@ destroy_pool_int() {
     do_facet mgs lctl pool_destroy $1
 }
 
+# <fsname>.<poolname> or <poolname>
 destroy_pool() {
+    local fsname=${1%%.*}
+    local poolname=${1##$fsname.}
+
+    [[ x$fsname = x$poolname ]] && fsname=$FSNAME
+
     local RC
 
-    do_facet $SINGLEMDS lctl pool_list $FSNAME.$1
+    pool_list $fsname.$poolname || return $?
+
+    destroy_pool_int $fsname.$poolname
     RC=$?
     [[ $RC -ne 0 ]] && return $RC
 
-    destroy_pool_int $FSNAME.$1
-    RC=$?
-    [[ $RC -ne 0 ]] && return $RC
+    wait_update $HOSTNAME "lctl get_param -n lov.$fsname-*.pools.$poolname \
+      2>/dev/null || echo foo" "foo" || RC=1
 
-    wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$1 \
-      2>/dev/null || echo foo" "foo" && return 0
+    if [[ $RC -eq 0 ]]; then
+        remove_pool_from_list $fsname.$poolname
+    else
+        error "destroy pool failed $1"
+    fi
+    return $RC
+}
+
+destroy_pools () {
+    local fsname=${1:-$FSNAME}
+    local poolname
+    local listvar=${fsname}_CREATED_POOLS
+
+    pool_list $fsname
+
+    [ x${!listvar} = x ] && return 0
+
+    echo destroy the created pools: ${!listvar}
+    for poolname in ${!listvar//,/ }; do
+        destroy_pool $fsname.$poolname 
+    done
+}
+
+cleanup_pools () {
+    local fsname=${1:-$FSNAME}
+    trap 0
+    destroy_pools $fsname
 }
 
 gather_logs () {

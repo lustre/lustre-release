@@ -396,8 +396,9 @@ int quota_is_set(struct obd_device *obd, const unsigned int id[], int flag)
         return q_set;
 }
 
-static int quota_chk_acq_common(struct obd_device *obd, const unsigned int id[],
-                                int pending[], int count, quota_acquire acquire,
+static int quota_chk_acq_common(struct obd_device *obd, struct obd_export *exp,
+                                const unsigned int id[], int pending[],
+                                int count, quota_acquire acquire,
                                 struct obd_trans_info *oti, int isblk,
                                 struct inode *inode, int frags)
 {
@@ -411,6 +412,12 @@ static int quota_chk_acq_common(struct obd_device *obd, const unsigned int id[],
 
         if (!quota_is_set(obd, id, isblk ? QB_SET : QI_SET))
                 RETURN(0);
+
+        if (isblk && (exp->exp_failed || exp->exp_abort_active_req))
+                /* If the client has been evicted or if it
+                 * timed out and tried to reconnect already,
+                 * abort the request immediately */
+                RETURN(-ENOTCONN);
 
         CDEBUG(D_QUOTA, "check quota for %s\n", obd->obd_name);
         pending[USRQUOTA] = pending[GRPQUOTA] = 0;
@@ -468,6 +475,11 @@ static int quota_chk_acq_common(struct obd_device *obd, const unsigned int id[],
                         break;
                 }
 
+                if (isblk && (exp->exp_failed || exp->exp_abort_active_req))
+                        /* The client has been evicted or tried to
+                         * to reconnect already, abort the request */
+                        RETURN(-ENOTCONN);
+
                 /* -EBUSY and others, wait a second and try again */
                 if (rc < 0) {
                         cfs_waitq_t        waitq;
@@ -511,6 +523,8 @@ static int quota_chk_acq_common(struct obd_device *obd, const unsigned int id[],
                                     LQUOTA_WAIT_FOR_CHK_INO,
                             timediff);
 
+        if (rc > 0)
+                rc = 0;
         RETURN(rc);
 }
 

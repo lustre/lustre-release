@@ -294,6 +294,45 @@ struct lustre_mdt_attrs {
 };
 
 /**
+ * Fill \a lma with its first content.
+ * Only fid is stored.
+ */
+static inline void lustre_lma_init(struct lustre_mdt_attrs *lma,
+                                   const struct lu_fid *fid)
+{
+        lma->lma_compat      = 0;
+        lma->lma_incompat    = 0;
+        memcpy(&lma->lma_self_fid, fid, sizeof(*fid));
+        lma->lma_flags       = 0;
+        lma->lma_som_sectors = 0;
+
+        /* If a field is added in struct lustre_mdt_attrs, zero it explicitly
+         * and change the test below. */
+        LASSERT(sizeof(*lma) ==
+                (offsetof(struct lustre_mdt_attrs, lma_som_sectors) +
+                 sizeof(lma->lma_som_sectors)));
+};
+
+extern void lustre_swab_lu_fid(struct lu_fid *fid);
+
+/**
+ * Swab, if needed, lustre_mdt_attr struct to on-disk format.
+ * Otherwise, do not touch it.
+ */
+static inline void lustre_lma_swab(struct lustre_mdt_attrs *lma)
+{
+        /* Use LUSTRE_MSG_MAGIC to detect local endianess. */
+        if (LUSTRE_MSG_MAGIC != cpu_to_le32(LUSTRE_MSG_MAGIC)) {
+                __swab32s(&lma->lma_compat);
+                __swab32s(&lma->lma_incompat);
+                lustre_swab_lu_fid(&lma->lma_self_fid);
+                __swab64s(&lma->lma_flags);
+                __swab64s(&lma->lma_som_sectors);
+        }
+};
+
+
+/**
  * fid constants
  */
 enum {
@@ -729,7 +768,11 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_TRUNCLOCK           0x400ULL /*locks on server for punch */
 #define OBD_CONNECT_TRANSNO             0x800ULL /*replay sends init transno */
 #define OBD_CONNECT_IBITS              0x1000ULL /*support for inodebits locks*/
-#define OBD_CONNECT_JOIN               0x2000ULL /*files can be concatenated */
+#define OBD_CONNECT_JOIN               0x2000ULL /*files can be concatenated.
+                                                  *We do not support JOIN FILE
+                                                  *anymore, reserve this flags
+                                                  *just for preventing such bit
+                                                  *to be reused.*/
 #define OBD_CONNECT_ATTRFID            0x4000ULL /*Server can GetAttr By Fid*/
 #define OBD_CONNECT_NODEVOH            0x8000ULL /*No open hndl on specl nodes*/
 #define OBD_CONNECT_RMT_CLIENT        0x10000ULL /*Remote client */
@@ -897,7 +940,7 @@ enum obdo_flags {
 
 #define LOV_MAGIC_V1      0x0BD10BD0
 #define LOV_MAGIC         LOV_MAGIC_V1
-#define LOV_MAGIC_JOIN    0x0BD20BD0
+#define LOV_MAGIC_JOIN_V1 0x0BD20BD0
 #define LOV_MAGIC_V3      0x0BD30BD0
 
 #define LOV_PATTERN_RAID0 0x001   /* stripes are used round-robin */
@@ -1427,27 +1470,6 @@ struct mdt_remote_perm {
 
 extern void lustre_swab_mdt_remote_perm(struct mdt_remote_perm *p);
 
-struct mds_rec_setattr {
-        __u32           sa_opcode;
-        __u32           sa_fsuid;
-        __u32           sa_fsgid;
-        __u32           sa_cap;
-        __u32           sa_suppgid;
-        __u32           sa_mode;
-        struct ll_fid   sa_fid;
-        __u64           sa_valid; /* MDS_ATTR_* attributes */
-        __u64           sa_size;
-        __u64           sa_mtime;
-        __u64           sa_atime;
-        __u64           sa_ctime;
-        __u32           sa_uid;
-        __u32           sa_gid;
-        __u32           sa_attr_flags;
-        __u32           sa_padding; /* also fix lustre_swab_mds_rec_setattr */
-};
-
-extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
-
 struct mdt_rec_setattr {
         __u32           sa_opcode;
         __u32           sa_cap;
@@ -1479,7 +1501,7 @@ struct mdt_rec_setattr {
 extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 
 /*
- * Attribute flags used in mds_rec_setattr::sa_valid.
+ * Attribute flags used in mdt_rec_setattr::sa_valid.
  * The kernel's #defines for ATTR_* should not be used over the network
  * since the client and MDS may run different kernels (see bug 13828)
  * Therefore, we should only use MDS_ATTR_* attributes for sa_valid.
@@ -1524,7 +1546,11 @@ extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 
 #define MDS_OPEN_DELAY_CREATE  0100000000 /* delay initial object create */
 #define MDS_OPEN_OWNEROVERRIDE 0200000000 /* NFSD rw-reopen ro file for owner */
-#define MDS_OPEN_JOIN_FILE     0400000000 /* open for join file*/
+#define MDS_OPEN_JOIN_FILE     0400000000 /* open for join file.
+                                           * We do not support JOIN FILE
+                                           * anymore, reserve this flags
+                                           * just for preventing such bit
+                                           * to be reused. */
 #define MDS_CREATE_RMT_ACL    01000000000 /* indicate create on remote server
                                            * with default ACL */
 #define MDS_CREATE_SLAVE_OBJ  02000000000 /* indicate create slave object
@@ -1561,27 +1587,6 @@ enum {
         MDS_CLOSE_CLEANUP = 1 << 6
 };
 
-struct mds_rec_create {
-        __u32           cr_opcode;
-        __u32           cr_fsuid;
-        __u32           cr_fsgid;
-        __u32           cr_cap;
-        __u32           cr_flags; /* for use with open */
-        __u32           cr_mode;
-        struct ll_fid   cr_fid;
-        struct ll_fid   cr_replayfid;
-        __u64           cr_time;
-        __u64           cr_rdev;
-        __u32           cr_suppgid;
-        __u32           cr_padding_1; /* also fix lustre_swab_mds_rec_create */
-        __u32           cr_padding_2; /* also fix lustre_swab_mds_rec_create */
-        __u32           cr_padding_3; /* also fix lustre_swab_mds_rec_create */
-        __u32           cr_padding_4; /* also fix lustre_swab_mds_rec_create */
-        __u32           cr_padding_5; /* also fix lustre_swab_mds_rec_create */
-};
-
-extern void lustre_swab_mds_rec_create (struct mds_rec_create *cr);
-
 struct mdt_rec_create {
         __u32           cr_opcode;
         __u32           cr_cap;
@@ -1607,40 +1612,6 @@ struct mdt_rec_create {
         __u32           cr_padding_3;
         __u32           cr_padding_4;
 };
-
-extern void lustre_swab_mdt_rec_create (struct mdt_rec_create *cr);
-
-struct mds_rec_join {
-        struct ll_fid  jr_fid;
-        __u64          jr_headsize;
-};
-
-extern void lustre_swab_mds_rec_join (struct mds_rec_join *jr);
-
-struct mdt_rec_join {
-        struct lu_fid  jr_fid;
-        __u64          jr_headsize;
-};
-
-extern void lustre_swab_mdt_rec_join (struct mdt_rec_join *jr);
-
-struct mds_rec_link {
-        __u32           lk_opcode;
-        __u32           lk_fsuid;
-        __u32           lk_fsgid;
-        __u32           lk_cap;
-        __u32           lk_suppgid1;
-        __u32           lk_suppgid2;
-        struct ll_fid   lk_fid1;
-        struct ll_fid   lk_fid2;
-        __u64           lk_time;
-        __u32           lk_padding_1;  /* also fix lustre_swab_mds_rec_link */
-        __u32           lk_padding_2;  /* also fix lustre_swab_mds_rec_link */
-        __u32           lk_padding_3;  /* also fix lustre_swab_mds_rec_link */
-        __u32           lk_padding_4;  /* also fix lustre_swab_mds_rec_link */
-};
-
-extern void lustre_swab_mds_rec_link (struct mds_rec_link *lk);
 
 struct mdt_rec_link {
         __u32           lk_opcode;
@@ -1668,24 +1639,6 @@ struct mdt_rec_link {
         __u32           lk_padding_9;
 };
 
-struct mds_rec_unlink {
-        __u32           ul_opcode;
-        __u32           ul_fsuid;
-        __u32           ul_fsgid;
-        __u32           ul_cap;
-        __u32           ul_suppgid;
-        __u32           ul_mode;
-        struct ll_fid   ul_fid1;
-        struct ll_fid   ul_fid2;
-        __u64           ul_time;
-        __u32           ul_padding_1; /* also fix lustre_swab_mds_rec_unlink */
-        __u32           ul_padding_2; /* also fix lustre_swab_mds_rec_unlink */
-        __u32           ul_padding_3; /* also fix lustre_swab_mds_rec_unlink */
-        __u32           ul_padding_4; /* also fix lustre_swab_mds_rec_unlink */
-};
-
-extern void lustre_swab_mds_rec_unlink (struct mds_rec_unlink *ul);
-
 struct mdt_rec_unlink {
         __u32           ul_opcode;
         __u32           ul_cap;
@@ -1711,24 +1664,6 @@ struct mdt_rec_unlink {
         __u32           ul_padding_8;
         __u32           ul_padding_9;
 };
-
-struct mds_rec_rename {
-        __u32           rn_opcode;
-        __u32           rn_fsuid;
-        __u32           rn_fsgid;
-        __u32           rn_cap;
-        __u32           rn_suppgid1;
-        __u32           rn_suppgid2;
-        struct ll_fid   rn_fid1;
-        struct ll_fid   rn_fid2;
-        __u64           rn_time;
-        __u32           rn_padding_1; /* also fix lustre_swab_mds_rec_rename */
-        __u32           rn_padding_2; /* also fix lustre_swab_mds_rec_rename */
-        __u32           rn_padding_3; /* also fix lustre_swab_mds_rec_rename */
-        __u32           rn_padding_4; /* also fix lustre_swab_mds_rec_rename */
-};
-
-extern void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn);
 
 struct mdt_rec_rename {
         __u32           rn_opcode;
@@ -2145,14 +2080,6 @@ struct llog_catid {
         __u32                   lci_padding3;
 } __attribute__((packed));
 
-/** join file lov mds md*/
-struct lov_mds_md_join {
-        struct lov_mds_md lmmj_md;
-        /*join private info*/
-        struct llog_logid lmmj_array_id; /*array object id*/
-        __u32  lmmj_extent_count;        /*array extent count*/
-};
-
 /* Log data record types - there is no specific reason that these need to
  * be related to the RPC opcodes, but no reason not to (may be handy later?)
  */
@@ -2169,7 +2096,7 @@ typedef enum {
         OBD_CFG_REC        = LLOG_OP_MAGIC | 0x20000,
         PTL_CFG_REC        = LLOG_OP_MAGIC | 0x30000, /* obsolete */
         LLOG_GEN_REC       = LLOG_OP_MAGIC | 0x40000,
-        LLOG_JOIN_REC      = LLOG_OP_MAGIC | 0x50000,
+        LLOG_JOIN_REC      = LLOG_OP_MAGIC | 0x50000, /* obsolete */
         CHANGELOG_REC      = LLOG_OP_MAGIC | 0x60000,
         CHANGELOG_USER_REC = LLOG_OP_MAGIC | 0x70000,
         LLOG_HDR_MAGIC     = LLOG_OP_MAGIC | 0x45539,
@@ -2211,23 +2138,6 @@ struct llog_logid_rec {
         __u32                   padding5;
         struct llog_rec_tail    lid_tail;
 } __attribute__((packed));
-
-/** MDS extent description
- * It is for joined file extent info, each extent info for joined file
- * just like (start, end, lmm).
- */
-struct mds_extent_desc {
-        __u64                   med_start; /* extent start */
-        __u64                   med_len;   /* extent length */
-        struct lov_mds_md       med_lmm;   /* extent's lmm  */
-};
-
-/** Joined file array extent log record*/
-struct llog_array_rec {
-        struct llog_rec_hdr     lmr_hdr;
-        struct mds_extent_desc  lmr_med;
-        struct llog_rec_tail    lmr_tail;
-};
 
 struct llog_create_rec {
         struct llog_rec_hdr     lcr_hdr;
@@ -2404,29 +2314,6 @@ struct llogd_conn_body {
         __u32                   lgdc_ctxt_idx;
 } __attribute__((packed));
 
-struct lov_user_ost_data_join {   /* per-stripe data structure */
-        __u64 l_extent_start;     /* extent start*/
-        __u64 l_extent_end;       /* extent end*/
-        __u64 l_object_id;        /* OST object ID */
-        __u64 l_object_gr;        /* OST object group (creating MDS number) */
-        __u32 l_ost_gen;          /* generation of this OST index */
-        __u32 l_ost_idx;          /* OST index in LOV */
-} __attribute__((packed));
-
-struct lov_user_md_join {         /* LOV EA user data (host-endian) */
-        __u32 lmm_magic;          /* magic number = LOV_MAGIC_JOIN */
-        __u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
-        __u64 lmm_object_id;      /* LOV object ID */
-        __u64 lmm_object_gr;      /* LOV object group */
-        __u32 lmm_stripe_size;    /* size of stripe in bytes */
-        __u32 lmm_stripe_count;   /* num stripes in use for this object */
-        __u32 lmm_extent_count;   /* extent count of lmm*/
-        __u64 lmm_tree_id;        /* mds tree object id */
-        __u64 lmm_tree_gen;       /* mds tree object gen */
-        struct llog_logid lmm_array_id; /* mds extent desc llog object id */
-        struct lov_user_ost_data_join lmm_objects[0]; /* per-stripe data */
-} __attribute__((packed));
-
 /* Note: 64-bit types are 64-bit aligned in structure */
 struct obdo {
         obd_valid               o_valid;        /* hot fields in this obdo */
@@ -2507,7 +2394,6 @@ extern void lustre_swab_lov_user_md_v1(struct lov_user_md_v1 *lum);
 extern void lustre_swab_lov_user_md_v3(struct lov_user_md_v3 *lum);
 extern void lustre_swab_lov_user_md_objects(struct lov_user_ost_data *lod,
                                             int stripe_count);
-extern void lustre_swab_lov_user_md_join(struct lov_user_md_join *lumj);
 extern void lustre_swab_lov_mds_md(struct lov_mds_md *lmm);
 
 /* llog_swab.c */
@@ -2519,6 +2405,13 @@ extern void lustre_swab_llog_rec(struct llog_rec_hdr  *rec,
 
 struct lustre_cfg;
 extern void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg);
+
+/* Functions for dumping PTLRPC fields */
+void dump_rniobuf(struct niobuf_remote *rnb);
+void dump_ioo(struct obd_ioobj *nb);
+void dump_obdo(struct obdo *oa);
+void dump_ost_body(struct ost_body *ob);
+void dump_rcs(__u32 *rc);
 
 /* this will be used when OBD_CONNECT_CHANGE_QS is set */
 struct qunit_data {
@@ -2558,7 +2451,7 @@ struct qunit_data {
 #define QDATA_CLR_CHANGE_QS(qdata)  ((qdata)->qd_flags &= ~LQUOTA_FLAGS_CHG_QS)
 
 extern void lustre_swab_qdata(struct qunit_data *d);
-extern struct qunit_data *quota_get_qdata(void*req, int is_req, int is_exp);
+extern struct qunit_data *quota_get_qdata(void *req, int is_req, int is_exp);
 extern int quota_copy_qdata(void *request, struct qunit_data *qdata,
                             int is_req, int is_exp);
 
@@ -2568,8 +2461,6 @@ typedef enum {
         QUOTA_LAST_OPC
 } quota_cmd_t;
 #define QUOTA_FIRST_OPC QUOTA_DQACQ
-
-#define JOIN_FILE_ALIGN 4096
 
 #define QUOTA_REQUEST   1
 #define QUOTA_REPLY     0

@@ -177,7 +177,6 @@ static inline lvfs_sbdev_type fsfilt_journal_sbdev(struct obd_device *obd,
 #define FSFILT_OP_SETATTR               8
 #define FSFILT_OP_LINK                  9
 #define FSFILT_OP_CANCEL_UNLINK         10
-#define FSFILT_OP_JOIN                  11
 #define FSFILT_OP_NOOP                  15
 #define FSFILT_OP_UNLINK_PARTIAL_CHILD  21
 #define FSFILT_OP_UNLINK_PARTIAL_PARENT 22

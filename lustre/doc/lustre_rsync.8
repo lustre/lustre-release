@@ -1,9 +1,9 @@
-.TH lreplicate 8 "2009 Apr 08" Lustre "Lustre Filesystem replication utility"
+.TH lustre_rsync 8 "2009 Apr 08" Lustre "Lustre Filesystem replication utility"
 .SH NAME
-lreplicate \- Utility to replicate a Lustre Filesystem
+lustre_rsync \- Utility to replicate a Lustre Filesystem
 .SH SYNOPSIS
 .br
-.B lreplicate --source|-s <src> --target|-t <tgt> 
+.B lustre_rsync --source|-s <src> --target|-t <tgt> 
 .br
 .B\t\t\t --mdt|-m <mdt>  [--user|-u <user id>] 
 .br
@@ -13,16 +13,16 @@ lreplicate \- Utility to replicate a Lustre Filesystem
 .br
 
 .br
-.B lreplicate  --statuslog|-l <log>
+.B lustre_rsync  --statuslog|-l <log>
 .br
 
 .br
-.B lreplicate  --statuslog|-l <log> --source|-s <source>
+.B lustre_rsync  --statuslog|-l <log> --source|-s <source>
 .br
 .br
 .B\t\t\t --target|-t <tgt> --mdt|-m <mdt>
 .SH DESCRIPTION
-.B lreplicate
+.B lustre_rsync
 is designed to replicate a Lustre filesystem (source filesystem) to
 another target filesystem (any filesystem type) efficiently by 
 using Lustre MDT changelogs.  A changelog user must be registered
@@ -62,7 +62,7 @@ Mandatory if a valid statuslog created during an previous replication operation
 .B --statuslog=<log>
 .br
 A status log file to which the status of replication is saved. 
-When lreplicate is started, the state from a previous replication
+When lustre_rsync is started, the state from a previous replication
 will be read from here.
 
 If a statuslog from a previous replication operation is specified, the
@@ -104,7 +104,7 @@ cl1
 
 .TP
 Replicate the lustre filesystem /mnt/lustre to /mnt/target.
-$ lreplicate --source=/mnt/lustre --target=/mnt/target \\ 
+$ lustre_rsync --source=/mnt/lustre --target=/mnt/target \\ 
 .br
              --mdt=lustre-MDT0000 --user=cl1 \\
 .br
@@ -126,7 +126,7 @@ Starting changelog record: 0
 .br
 Errors: 0
 .br
-lreplicate took 1 seconds
+lustre_rsync took 1 seconds
 .br
 Changelog records consumed: 22
 .br
@@ -137,7 +137,7 @@ After the filesystem undergoes some changes, replicate the \
 changes. Only the statuslog needs to be specified as it has all the \
 parameters passed earlier.
 .br
-$ lreplicate --statuslog replicate.log --verbose
+$ lustre_rsync --statuslog replicate.log --verbose
 .br
 Replicating Lustre filesystem: lustre
 .br
@@ -155,14 +155,14 @@ Starting changelog record: 22
 .br
 Errors: 0
 .br
-lreplicate took 2 seconds
+lustre_rsync took 2 seconds
 .br
 Changelog records consumed: 42
 .br
 
 .TP
 To replicate the lustre filesystem /mnt/lustre to /mnt/target1 and /mnt/target2.
-$ lreplicate --source=/mnt/lustre \\ 
+$ lustre_rsync --source=/mnt/lustre \\ 
 .br
              --target=/mnt/target1 --target=/mnt/target2 \\ 
 .br
@@ -173,7 +173,7 @@ $ lreplicate --source=/mnt/lustre \\
 
 
 .SH AUTHOR
-The lreplicate command is part of the Lustre filesystem. Contact
+The lustre_rsync command is part of the Lustre filesystem. Contact
 http://www.lustre.org/
 
 .SH SEE ALSO

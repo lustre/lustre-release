@@ -88,9 +88,7 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
         struct cl_object *obj = io->ci_obj;
 
         CLOBINVRNT(env, obj, ccc_object_invariant(obj));
-        if (io->ci_type == CIT_WRITE)
-                up(&ll_i2info(ccc_object_inode(obj))->lli_write_sem);
-        else {
+        if (io->ci_type == CIT_READ) {
                 struct vvp_io     *vio  = cl2vvp_io(env, ios);
                 struct ccc_io     *cio  = cl2ccc_io(env, ios);
 
@@ -180,7 +178,8 @@ static int vvp_mmap_locks(const struct lu_env *env,
                                                     policy.l_extent.start);
                         descr->cld_end = cl_index(descr->cld_obj,
                                                   policy.l_extent.end);
-                        result = cl_io_lock_alloc_add(env, io, descr, flags);
+                        descr->cld_enq_flags = flags;
+                        result = cl_io_lock_alloc_add(env, io, descr);
                         if (result < 0)
                                 RETURN(result);
 
@@ -202,7 +201,6 @@ static int vvp_io_rw_lock(const struct lu_env *env, struct cl_io *io,
         int ast_flags = 0;
 
         LASSERT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE);
-        LASSERT(vvp_env_io(env)->cui_oneshot == 0);
         ENTRY;
 
         ccc_io_update_iov(env, cio, io);
@@ -253,20 +251,15 @@ static int vvp_io_write_lock(const struct lu_env *env,
         struct cl_io *io = ios->cis_io;
         loff_t start;
         loff_t end;
-        int    result;
 
-        if (cl2vvp_io(env, ios)->cui_oneshot == 0) {
-                if (io->u.ci_wr.wr_append) {
-                        start = 0;
-                        end   = OBD_OBJECT_EOF;
-                } else {
-                        start = io->u.ci_wr.wr.crw_pos;
-                        end   = start + io->u.ci_wr.wr.crw_count - 1;
-                }
-                result = vvp_io_rw_lock(env, io, CLM_WRITE, start, end);
-        } else
-                result = 0;
-        return result;
+        if (io->u.ci_wr.wr_append) {
+                start = 0;
+                end   = OBD_OBJECT_EOF;
+        } else {
+                start = io->u.ci_wr.wr.crw_pos;
+                end   = start + io->u.ci_wr.wr.crw_count - 1;
+        }
+        return vvp_io_rw_lock(env, io, CLM_WRITE, start, end);
 }
 
 static int vvp_io_trunc_iter_init(const struct lu_env *env,
@@ -323,7 +316,6 @@ static int vvp_io_trunc_start(const struct lu_env *env,
         int                   result;
 
         LASSERT(cio->u.trunc.cui_locks_released);
-        LASSERT(vio->cui_oneshot == 0);
 
         LOCK_INODE_MUTEX(inode);
         DOWN_WRITE_I_ALLOC_SEM(inode);
@@ -440,7 +432,6 @@ static int vvp_io_read_start(const struct lu_env *env,
         int     exceed = 0;
 
         CLOBINVRNT(env, obj, ccc_object_invariant(obj));
-        LASSERT(vio->cui_oneshot == 0);
 
         CDEBUG(D_VFSTRACE, "read: -> [%lli, %lli)\n", pos, pos + cnt);
 
@@ -532,7 +523,7 @@ static int vvp_io_write_start(const struct lu_env *env,
 
         CDEBUG(D_VFSTRACE, "write: [%lli, %lli)\n", pos, pos + (long long)cnt);
 
-        if (cl2vvp_io(env, ios)->cui_oneshot > 0)
+        if (cio->cui_iov == NULL) /* from a temp io in ll_cl_init(). */
                 result = 0;
         else
                 result = lustre_generic_file_write(file, cio, &pos);
@@ -627,8 +618,6 @@ static int vvp_io_fault_start(const struct lu_env *env,
         loff_t               size;
         pgoff_t              last; /* last page in a file data region */
 
-        LASSERT(vio->cui_oneshot == 0);
-
         if (fio->ft_executable &&
             LTIME_S(inode->i_mtime) != vio->u.fault.ft_mtime)
                 CWARN("binary "DFID
@@ -700,7 +689,6 @@ static int vvp_io_read_page(const struct lu_env *env,
         int rc;
 
         CLOBINVRNT(env, obj, ccc_object_invariant(obj));
-        LASSERT(cl2vvp_io(env, ios)->cui_oneshot == 0);
         LASSERT(slice->cpl_obj == obj);
 
         ENTRY;
@@ -986,7 +974,6 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
 
         CL_IO_SLICE_CLEAN(cio, cui_cl);
         cl_io_slice_add(io, &cio->cui_cl, obj, &vvp_io_ops);
-        vio->cui_oneshot = 0;
         vio->cui_ra_window_set = 0;
         result = 0;
         if (io->ci_type == CIT_READ || io->ci_type == CIT_WRITE) {
@@ -996,8 +983,6 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
                 count = io->u.ci_rw.crw_count;
                 op    = io->ci_type == CIT_READ ?
                         LPROC_LL_READ_BYTES : LPROC_LL_WRITE_BYTES;
-                if (io->ci_type == CIT_WRITE)
-                        down(&ll_i2info(inode)->lli_write_sem);
                 /* "If nbyte is 0, read() will return 0 and have no other
                  *  results."  -- Single Unix Spec */
                 if (count == 0)

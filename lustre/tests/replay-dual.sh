@@ -215,7 +215,7 @@ test_12() {
     do_facet $SINGLEMDS lctl set_param fail_loc=0x80000302
     facet_failover $SINGLEMDS
     do_facet $SINGLEMDS lctl set_param fail_loc=0
-    df $MOUNT || return 1
+    clients_up || return 1
 
     ls $DIR/$tfile
     kill -USR1 $MULTIPID || return 3
@@ -240,7 +240,7 @@ test_13() {
     do_facet $SINGLEMDS lctl set_param fail_loc=0x80000115
     facet_failover $SINGLEMDS
     do_facet $SINGLEMDS lctl set_param fail_loc=0
-    df $MOUNT || return 1
+    clients_up || return 1
 
     ls $DIR/$tfile
     $CHECKSTAT -t file $DIR/$tfile || return 2
@@ -259,7 +259,7 @@ test_14a() {
 
     facet_failover $SINGLEMDS
     # expect failover to fail due to missing client 2
-    df $MOUNT && return 1
+    client_evicted || return 1
     sleep 1
 
     # first 25 files should have been replayed 
@@ -305,8 +305,7 @@ test_15a() { # was test_15
     createmany -o $MOUNT2/$tfile-2- 1
     umount $MOUNT2
 
-    facet_failover $SINGLEMDS
-    df $MOUNT || return 1
+    fail $SINGLEMDS
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
     [ -e $MOUNT1/$tfile-2-0 ] && error "$tfile-2-0 exists"
@@ -321,11 +320,9 @@ test_15c() {
     for ((i = 0; i < 2000; i++)); do
         echo "data" > "$MOUNT2/${tfile}-$i" || error "create ${tfile}-$i failed"
     done
-
     umount $MOUNT2
-    facet_failover $SINGLEMDS
 
-    df $MOUNT || return 1
+    fail $SINGLEMDS
 
     zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     return 0
@@ -340,8 +337,7 @@ test_16() {
 
     facet_failover $SINGLEMDS
     sleep $TIMEOUT
-    facet_failover $SINGLEMDS
-    df $MOUNT || return 1
+    fail $SINGLEMDS
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
 
@@ -363,8 +359,7 @@ test_17() {
 
     facet_failover ost1
     sleep $TIMEOUT
-    facet_failover ost1
-    df $MOUNT || return 1
+    fail ost1
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
 
@@ -417,8 +412,7 @@ test_20() { #16389
     touch $MOUNT1/a
     touch $MOUNT2/b
     umount $MOUNT2
-    facet_failover $SINGLEMDS
-    df $MOUNT1 || return 1
+    fail $SINGLEMDS
     rm $MOUNT1/a
     zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     TIER1=$((`date +%s` - BEFORE))
@@ -427,8 +421,7 @@ test_20() { #16389
     touch $MOUNT1/a
     touch $MOUNT2/b
     umount $MOUNT2
-    facet_failover $SINGLEMDS
-    df $MOUNT1 || return 1
+    fail $SINGLEMDS
     rm $MOUNT1/a
     zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
     TIER2=$((`date +%s` - BEFORE))

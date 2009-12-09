@@ -1,12 +1,13 @@
 lnxmaj="2.6.18"
-lnxrel="128.7.1.el5"
+lnxrel="164.6.1.el5"
 
 KERNEL_SRPM=kernel-$lnxmaj-$lnxrel.src.rpm
 SERIES=2.6-rhel5.series
 EXTRA_VERSION=${lnxrel}_lustre.@VERSION@
 LUSTRE_VERSION=@VERSION@
 
-OFED_VERSION=1.4.2
+RDAC_VERSION="09.03.0C02.0013"
+MPTLINUX_VERSION="4.16.00.00-2"
 
 BASE_ARCHS="i686 x86_64 ia64 ppc64"
 BIGMEM_ARCHS=""

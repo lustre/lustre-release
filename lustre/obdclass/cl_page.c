@@ -1320,6 +1320,8 @@ EXPORT_SYMBOL(cl_page_prep);
 void cl_page_completion(const struct lu_env *env,
                         struct cl_page *pg, enum cl_req_type crt, int ioret)
 {
+        struct cl_sync_io *anchor = pg->cp_sync_io;
+
         PASSERT(env, pg, crt < CRT_NR);
         /* cl_page::cp_req already cleared by the caller (osc_completion()) */
         PASSERT(env, pg, pg->cp_req == NULL);
@@ -1337,9 +1339,10 @@ void cl_page_completion(const struct lu_env *env,
         CL_PAGE_INVOID_REVERSE(env, pg, CL_PAGE_OP(io[crt].cpo_completion),
                                (const struct lu_env *,
                                 const struct cl_page_slice *, int), ioret);
-        if (pg->cp_sync_io) {
-                cl_sync_io_note(pg->cp_sync_io, ioret);
+        if (anchor) {
+                LASSERT(pg->cp_sync_io == anchor);
                 pg->cp_sync_io = NULL;
+                cl_sync_io_note(anchor, ioret);
         }
 
         /* Don't assert the page writeback bit here because the lustre file

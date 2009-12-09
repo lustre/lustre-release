@@ -803,10 +803,9 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-ENOMEM);
         cfs_waitq_init(&lov->lov_qos.lq_statfs_waitq);
 
-        lov->lov_pools_hash_body = lustre_hash_init("POOLS",
-                                                    HASH_POOLS_CUR_BITS,
-                                                    HASH_POOLS_MAX_BITS,
-                                                    &pool_hash_operations, 0);
+        lov->lov_pools_hash_body = cfs_hash_create("POOLS", HASH_POOLS_CUR_BITS,
+                                                   HASH_POOLS_CUR_BITS,
+                                                   &pool_hash_operations, 0);
         CFS_INIT_LIST_HEAD(&lov->lov_pool_list);
         lov->lov_pool_count = 0;
         rc = lov_ost_pool_init(&lov->lov_packed, 0);
@@ -876,7 +875,7 @@ static int lov_cleanup(struct obd_device *obd)
                 CDEBUG(D_INFO, "delete pool %p\n", pool);
                 lov_pool_del(obd, pool->pool_name);
         }
-        lustre_hash_exit(lov->lov_pools_hash_body);
+        cfs_hash_destroy(lov->lov_pools_hash_body);
         lov_ost_pool_free(&(lov->lov_qos.lq_rr.lqr_pool));
         lov_ost_pool_free(&lov->lov_packed);
 
@@ -1161,9 +1160,8 @@ out:
 do {                                                                            \
         LASSERT((lsmp) != NULL);                                                \
         LASSERTF(((lsmp)->lsm_magic == LOV_MAGIC_V1 ||                          \
-                 (lsmp)->lsm_magic == LOV_MAGIC_V3 ||                           \
-                 (lsmp)->lsm_magic == LOV_MAGIC_JOIN), "%p->lsm_magic=%x\n",    \
-                 (lsmp), (lsmp)->lsm_magic);                                    \
+                 (lsmp)->lsm_magic == LOV_MAGIC_V3),                            \
+                 "%p->lsm_magic=%x\n", (lsmp), (lsmp)->lsm_magic);              \
 } while (0)
 
 static int lov_destroy(struct obd_export *exp, struct obdo *oa,
@@ -2659,21 +2657,6 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
         RETURN(rc);
 }
 
-static int lov_checkmd(struct obd_export *exp, struct obd_export *md_exp,
-                       struct lov_stripe_md *lsm)
-{
-        int rc;
-        ENTRY;
-
-        if (!lsm)
-                RETURN(0);
-        LASSERT(md_exp);
-        LASSERT(lsm_op_find(lsm->lsm_magic) != NULL);
-        rc = lsm_op_find(lsm->lsm_magic)->lsm_revalidate(lsm, md_exp->exp_obd);
-
-        RETURN(rc);
-}
-
 int lov_test_and_clear_async_rc(struct lov_stripe_md *lsm)
 {
         int i, rc = 0;
@@ -2744,7 +2727,6 @@ struct obd_ops lov_obd_ops = {
         .o_statfs_async        = lov_statfs_async,
         .o_packmd              = lov_packmd,
         .o_unpackmd            = lov_unpackmd,
-        .o_checkmd             = lov_checkmd,
         .o_create              = lov_create,
         .o_destroy             = lov_destroy,
         .o_getattr             = lov_getattr,

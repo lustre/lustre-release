@@ -121,6 +121,7 @@ struct ll_inode_info {
         struct semaphore        lli_size_sem;           /* protect open and change size */
         void                   *lli_size_sem_owner;
         struct semaphore        lli_write_sem;
+        struct semaphore        lli_trunc_sem;
         char                   *lli_symlink_name;
         __u64                   lli_maxbytes;
         __u64                   lli_ioepoch;
@@ -295,7 +296,6 @@ enum stats_track_type {
 #define LL_SBI_FLOCK             0x04
 #define LL_SBI_USER_XATTR        0x08 /* support user xattr */
 #define LL_SBI_ACL               0x10 /* support ACL */
-#define LL_SBI_JOIN              0x20 /* support JOIN */
 #define LL_SBI_RMT_CLIENT        0x40 /* remote client */
 #define LL_SBI_MDS_CAPA          0x80 /* support mds capa */
 #define LL_SBI_OSS_CAPA         0x100 /* support oss capa */
@@ -658,7 +658,7 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
 int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmm,
                      int *lmm_size, struct ptlrpc_request **request);
 int ll_fsync(struct file *file, struct dentry *dentry, int data);
-int ll_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
+int ll_do_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
               int num_bytes);
 int ll_merge_lvb(struct inode *inode);
 int ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg);
@@ -831,15 +831,6 @@ struct vvp_io {
          */
         int                  cui_ra_window_set;
         /**
-         * If IO was created directly in low level method like
-         * ->prepare_write(), this field stores the number of method calls
-         * that constitute this IO. This field is decremented by ll_cl_fini(),
-         * and cl_io is destroyed, when it reaches 0. When oneshot IO
-         * completes, this fields is set to -1.
-         */
-
-        int                  cui_oneshot;
-        /**
          * Partially truncated page, that vvp_io_trunc_start() keeps locked
          * across truncate.
          */
@@ -872,6 +863,15 @@ struct vvp_io_args {
         } u;
 };
 
+struct ll_cl_context {
+        void           *lcc_cookie;
+        struct cl_io   *lcc_io;
+        struct cl_page *lcc_page;
+        struct lu_env  *lcc_env;
+        int             lcc_refcheck;
+        int             lcc_created;
+};
+
 struct vvp_thread_info {
         struct ost_lvb       vti_lvb;
         struct cl_2queue     vti_queue;
@@ -879,6 +879,7 @@ struct vvp_thread_info {
         struct vvp_io_args   vti_args;
         struct ra_io_arg     vti_ria;
         struct kiocb         vti_kiocb;
+        struct ll_cl_context vti_io_ctx;
 };
 
 static inline struct vvp_thread_info *vvp_env_info(const struct lu_env *env)
@@ -902,7 +903,7 @@ static inline struct vvp_io_args *vvp_env_args(const struct lu_env *env,
 }
 
 struct vvp_session {
-        struct vvp_io vs_ios;
+        struct vvp_io         vs_ios;
 };
 
 static inline struct vvp_session *vvp_env_session(const struct lu_env *env)

@@ -377,7 +377,7 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
                            ldlm_blocking_callback blocking,
                            ldlm_completion_callback completion,
                            ldlm_glimpse_callback glimpse,
-                           void *data, __u32 lvb_len, void *lvb_swabber,
+                           void *data, __u32 lvb_len,
                            const __u64 *client_cookie,
                            struct lustre_handle *lockh)
 {
@@ -406,7 +406,6 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
         lock->l_flags |= LDLM_FL_LOCAL;
         if (*flags & LDLM_FL_ATOMIC_CB)
                 lock->l_flags |= LDLM_FL_ATOMIC_CB;
-        lock->l_lvb_swabber = lvb_swabber;
         unlock_res_and_lock(lock);
         if (policy != NULL)
                 lock->l_policy_data = *policy;
@@ -476,7 +475,7 @@ static void failed_lock_cleanup(struct ldlm_namespace *ns,
 int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                           ldlm_type_t type, __u8 with_policy, ldlm_mode_t mode,
                           int *flags, void *lvb, __u32 lvb_len,
-                          void *lvb_swabber, struct lustre_handle *lockh,int rc)
+                          struct lustre_handle *lockh,int rc)
 {
         struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
         int is_replay = *flags & LDLM_FL_REPLAY;
@@ -509,9 +508,8 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                                 req_capsule_set_size(&req->rq_pill,
                                                      &RMF_DLM_LVB, RCL_SERVER,
                                                      lvb_len);
-                            tmplvb = req_capsule_server_swab_get(&req->rq_pill,
-                                                                 &RMF_DLM_LVB,
-                                                                 lvb_swabber);
+                            tmplvb = req_capsule_server_get(&req->rq_pill,
+                                                                 &RMF_DLM_LVB);
                                 if (tmplvb == NULL)
                                         GOTO(cleanup, rc = -EPROTO);
                                 if (lvb != NULL)
@@ -534,9 +532,9 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 
         /* Key change rehash lock in per-export hash with new key */
         if (exp->exp_lock_hash)
-                lustre_hash_rehash_key(exp->exp_lock_hash, &old_hash_key,
-                                       &lock->l_remote_handle,
-                                       &lock->l_exp_hash);
+                cfs_hash_rehash_key(exp->exp_lock_hash, &old_hash_key,
+                                    &lock->l_remote_handle,
+                                    &lock->l_exp_hash);
 
         *flags = reply->lock_flags;
         lock->l_flags |= reply->lock_flags & LDLM_INHERIT_FLAGS;
@@ -606,9 +604,8 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 
                 req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER,
                                      lvb_len);
-                tmplvb = req_capsule_server_swab_get(&req->rq_pill,
-                                                     &RMF_DLM_LVB,
-                                                     lvb_swabber);
+                tmplvb = req_capsule_server_get(&req->rq_pill,
+                                                     &RMF_DLM_LVB);
                 if (tmplvb == NULL)
                         GOTO(cleanup, rc = -EPROTO);
                 memcpy(lock->l_lvb_data, tmplvb, lvb_len);
@@ -758,8 +755,8 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                      struct ldlm_enqueue_info *einfo,
                      const struct ldlm_res_id *res_id,
                      ldlm_policy_data_t *policy, int *flags,
-                     void *lvb, __u32 lvb_len, void *lvb_swabber,
-                     struct lustre_handle *lockh, int async)
+                     void *lvb, __u32 lvb_len, struct lustre_handle *lockh,
+                     int async)
 {
         struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
         struct ldlm_lock      *lock;
@@ -794,7 +791,6 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                 /* for the local lock, add the reference */
                 ldlm_lock_addref_internal(lock, einfo->ei_mode);
                 ldlm_lock2handle(lock, lockh);
-                lock->l_lvb_swabber = lvb_swabber;
                 if (policy != NULL) {
                         /* INODEBITS_INTEROP: If the server does not support
                          * inodebits, we will request a plain lock in the
@@ -880,7 +876,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 
         err = ldlm_cli_enqueue_fini(exp, req, einfo->ei_type, policy ? 1 : 0,
                                     einfo->ei_mode, flags, lvb, lvb_len,
-                                    lvb_swabber, lockh, rc);
+                                    lockh, rc);
 
         /* If ldlm_cli_enqueue_fini did not find the lock, we need to free
          * one reference that we took */
@@ -1997,9 +1993,9 @@ static int replay_lock_interpret(const struct lu_env *env,
         /* Key change rehash lock in per-export hash with new key */
         exp = req->rq_export;
         if (exp && exp->exp_lock_hash)
-                lustre_hash_rehash_key(exp->exp_lock_hash, &old_hash_key,
-                                       &lock->l_remote_handle,
-                                       &lock->l_exp_hash);
+                cfs_hash_rehash_key(exp->exp_lock_hash, &old_hash_key,
+                                    &lock->l_remote_handle,
+                                    &lock->l_exp_hash);
 
         LDLM_DEBUG(lock, "replayed lock:");
         ptlrpc_import_recovery_state_machine(req->rq_import);

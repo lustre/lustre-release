@@ -148,16 +148,7 @@ static int lov_io_sub_init(const struct lu_env *env, struct lov_io *lio,
         sub->sub_io_initialized = 0;
         sub->sub_borrowed = 0;
 
-        /*
-         * First sub-io. Use ->lis_single_subio and current environment, to
-         * avoid dynamic allocation.
-         */
-        if (lio->lis_active_subios == 0) {
-                sub->sub_io = &lio->lis_single_subio;
-                lio->lis_single_subio_index = stripe;
-                sub->sub_env = cl_env_get(&sub->sub_refcheck);
-                LASSERT(sub->sub_env == env);
-        } else if (lio->lis_mem_frozen) {
+        if (lio->lis_mem_frozen) {
                 LASSERT(mutex_is_locked(&ld->ld_mutex));
                 sub->sub_io  = &ld->ld_emrg[stripe]->emrg_subio;
                 sub->sub_env = ld->ld_emrg[stripe]->emrg_env;
@@ -169,12 +160,23 @@ static int lov_io_sub_init(const struct lu_env *env, struct lov_io *lio,
                 cookie = cl_env_reenter();
                 sub->sub_env = cl_env_get(&sub->sub_refcheck);
                 cl_env_reexit(cookie);
-
-                OBD_ALLOC_PTR(sub->sub_io);
                 if (IS_ERR(sub->sub_env))
                         result = PTR_ERR(sub->sub_env);
-                else if (sub->sub_io == NULL)
-                        result = -ENOMEM;
+
+                if (result == 0) {
+                        /*
+                         * First sub-io. Use ->lis_single_subio to
+                         * avoid dynamic allocation.
+                         */
+                        if (lio->lis_active_subios == 0) {
+                                sub->sub_io = &lio->lis_single_subio;
+                                lio->lis_single_subio_index = stripe;
+                        } else {
+                                OBD_ALLOC_PTR(sub->sub_io);
+                                if (sub->sub_io == NULL)
+                                        result = -ENOMEM;
+                        }
+                }
         }
 
         if (result == 0) {

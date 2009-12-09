@@ -303,9 +303,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
                 sbi->ll_flags &= ~LL_SBI_ACL;
         }
 
-        if (data->ocd_connect_flags & OBD_CONNECT_JOIN)
-                sbi->ll_flags |= LL_SBI_JOIN;
-
         if (data->ocd_connect_flags & OBD_CONNECT_RMT_CLIENT) {
                 if (!(sbi->ll_flags & LL_SBI_RMT_CLIENT)) {
                         sbi->ll_flags |= LL_SBI_RMT_CLIENT;
@@ -865,6 +862,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_inode_magic = LLI_INODE_MAGIC;
         sema_init(&lli->lli_size_sem, 1);
         sema_init(&lli->lli_write_sem, 1);
+        sema_init(&lli->lli_trunc_sem, 1);
         lli->lli_flags = 0;
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
         spin_lock_init(&lli->lli_lock);
@@ -1327,6 +1325,14 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         if (op_data == NULL)
                 RETURN(-ENOMEM);
 
+        UNLOCK_INODE_MUTEX(inode);
+        if (ia_valid & ATTR_SIZE)
+                UP_WRITE_I_ALLOC_SEM(inode);
+        down(&lli->lli_trunc_sem);
+        LOCK_INODE_MUTEX(inode);
+        if (ia_valid & ATTR_SIZE)
+                DOWN_WRITE_I_ALLOC_SEM(inode);
+
         memcpy(&op_data->op_attr, attr, sizeof(*attr));
 
         /* Open epoch for truncate. */
@@ -1358,6 +1364,7 @@ out:
                         rc1 = ll_setattr_done_writing(inode, op_data, mod);
                 ll_finish_md_op_data(op_data);
         }
+        up(&lli->lli_trunc_sem);
         return rc ? rc : rc1;
 }
 
@@ -1507,23 +1514,6 @@ void ll_inode_size_unlock(struct inode *inode, int unlock_lsm)
         up(&lli->lli_size_sem);
 }
 
-static void ll_replace_lsm(struct inode *inode, struct lov_stripe_md *lsm)
-{
-        struct ll_inode_info *lli = ll_i2info(inode);
-
-        dump_lsm(D_INODE, lsm);
-        dump_lsm(D_INODE, lli->lli_smd);
-        LASSERTF(lsm->lsm_magic == LOV_MAGIC_JOIN,
-                 "lsm must be joined lsm %p\n", lsm);
-        obd_free_memmd(ll_i2dtexp(inode), &lli->lli_smd);
-        CDEBUG(D_INODE, "replace lsm %p to lli_smd %p for inode %lu%u(%p)\n",
-               lsm, lli->lli_smd, inode->i_ino, inode->i_generation, inode);
-        lli->lli_smd = lsm;
-        lli->lli_maxbytes = lsm->lsm_maxbytes;
-        if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
-                lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
-}
-
 void ll_update_inode(struct inode *inode, struct lustre_md *md)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -1535,8 +1525,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         if (lsm != NULL) {
                 if (lli->lli_smd == NULL) {
                         if (lsm->lsm_magic != LOV_MAGIC_V1 &&
-                            lsm->lsm_magic != LOV_MAGIC_V3 &&
-                            lsm->lsm_magic != LOV_MAGIC_JOIN) {
+                            lsm->lsm_magic != LOV_MAGIC_V3) {
                                 dump_lsm(D_ERROR, lsm);
                                 LBUG();
                         }
@@ -1552,21 +1541,17 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                         if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
                                 lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
                 } else {
-                        if (lli->lli_smd->lsm_magic == lsm->lsm_magic &&
-                             lli->lli_smd->lsm_stripe_count ==
-                                        lsm->lsm_stripe_count) {
-                                if (lov_stripe_md_cmp(lli->lli_smd, lsm)) {
-                                        CERROR("lsm mismatch for inode %ld\n",
-                                                inode->i_ino);
-                                        CERROR("lli_smd:\n");
-                                        dump_lsm(D_ERROR, lli->lli_smd);
-                                        CERROR("lsm:\n");
-                                        dump_lsm(D_ERROR, lsm);
-                                        LBUG();
-                                }
-                        } else {
-                                cl_inode_init(inode, md);
-                                ll_replace_lsm(inode, lsm);
+                        LASSERT(lli->lli_smd->lsm_magic == lsm->lsm_magic &&
+                                lli->lli_smd->lsm_stripe_count ==
+                                lsm->lsm_stripe_count);
+                        if (lov_stripe_md_cmp(lli->lli_smd, lsm)) {
+                                CERROR("lsm mismatch for inode %ld\n",
+                                       inode->i_ino);
+                                CERROR("lli_smd:\n");
+                                dump_lsm(D_ERROR, lli->lli_smd);
+                                CERROR("lsm:\n");
+                                dump_lsm(D_ERROR, lsm);
+                                LBUG();
                         }
                 }
                 if (lli->lli_smd != lsm)
@@ -2023,8 +2008,6 @@ int ll_prep_inode(struct inode **inode,
                 }
         }
 
-        rc = obd_checkmd(sbi->ll_dt_exp, sbi->ll_md_exp,
-                         ll_i2info(*inode)->lli_smd);
 out:
         md_free_lustre_md(sbi->ll_md_exp, &md);
         RETURN(rc);

@@ -384,7 +384,10 @@ static int osc_punch_upcall(void *a, int rc)
         return 0;
 }
 
-#ifdef __KERNEL__
+/* Disable osc_trunc_check() because it is naturally race between read and
+ * truncate. See bug 20645 for details.
+ */
+#if 0 && defined(__KERNEL__)
 /**
  * Checks that there are no pages being written in the extent being truncated.
  */
@@ -454,9 +457,6 @@ static int osc_io_trunc_start(const struct lu_env *env,
         loff_t                   size   = io->u.ci_truncate.tr_size;
         int                      result = 0;
 
-
-        memset(oa, 0, sizeof(*oa));
-
         osc_trunc_check(env, io, oio, size);
 
         if (oio->oi_lockless == 0) {
@@ -470,6 +470,7 @@ static int osc_io_trunc_start(const struct lu_env *env,
                 cl_object_attr_unlock(obj);
         }
 
+        memset(oa, 0, sizeof(*oa));
         if (result == 0) {
                 oa->o_id = loi->loi_id;
                 oa->o_gr = loi->loi_gr;
@@ -636,9 +637,23 @@ static void osc_req_attr_set(const struct lu_env *env,
                 opg = osc_cl_page_osc(apage);
                 apage = opg->ops_cl.cpl_page; /* now apage is a sub-page */
                 lock = cl_lock_at_page(env, apage->cp_obj, apage, NULL, 1, 1);
-                LASSERT(lock != NULL);
+                if (lock == NULL) {
+                        struct cl_object_header *head;
+                        struct cl_lock          *scan;
+
+                        head = cl_object_header(apage->cp_obj);
+                        list_for_each_entry(scan, &head->coh_locks, cll_linkage)
+                                CL_LOCK_DEBUG(D_ERROR, env, scan,
+                                              "no cover page!\n");
+                        CL_PAGE_DEBUG(D_ERROR, env, apage,
+                                      "dump uncover page!\n");
+                        libcfs_debug_dumpstack(NULL);
+                        LBUG();
+                }
+
                 olck = osc_lock_at(lock);
                 LASSERT(olck != NULL);
+                LASSERT(ergo(opg->ops_srvlock, olck->ols_lock == NULL));
                 /* check for lockless io. */
                 if (olck->ols_lock != NULL) {
                         oa->o_handle = olck->ols_lock->l_remote_handle;

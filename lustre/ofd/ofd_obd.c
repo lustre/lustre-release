@@ -695,7 +695,7 @@ int filter_setattr(struct obd_export *exp,
 
         res = ldlm_resource_get(ns, NULL, &info->fti_resid, LDLM_EXTENT, 0);
         if (res != NULL) {
-                ldlm_res_lvbo_update(res, NULL, 0, 0);
+                ldlm_res_lvbo_update(res, NULL, 0);
                 ldlm_resource_putref(res);
         }
 
@@ -770,7 +770,7 @@ static int filter_punch(struct obd_export *exp, struct obd_info *oinfo,
 
         res = ldlm_resource_get(ns, NULL, &info->fti_resid, LDLM_EXTENT, 0);
         if (res != NULL) {
-                ldlm_res_lvbo_update(res, NULL, 0, 0);
+                ldlm_res_lvbo_update(res, NULL, 0);
                 ldlm_resource_putref(res);
         }
 
@@ -805,7 +805,7 @@ static int filter_destroy_by_fid(const struct lu_env *env,
         rc = ldlm_cli_enqueue_local(ofd->ofd_namespace, &info->fti_resid,
                                     LDLM_EXTENT, &policy, LCK_PW, &flags,
                                     ldlm_blocking_ast, ldlm_completion_ast,
-                                    NULL, NULL, 0, NULL, NULL, &lockh);
+                                    NULL, NULL, 0, NULL, &lockh);
 
         /* We only care about the side-effects, just drop the lock. */
         if (rc == ELDLM_OK)

@@ -1410,7 +1410,7 @@ static int llu_file_flock(struct inode *ino,
 
                 if (lmv->tgts[0].ltd_exp != NULL)
                         rc = ldlm_cli_enqueue(lmv->tgts[0].ltd_exp, NULL, &einfo, &res_id,
-                                              &flock, &flags, NULL, 0, NULL, &lockh, 0);
+                                              &flock, &flags, NULL, 0, &lockh, 0);
                 else
                         rc = -ENODEV;
         }
@@ -1599,56 +1599,51 @@ static int llu_get_grouplock(struct inode *inode, unsigned long arg)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct ll_file_data *fd = lli->lli_file_data;
-        ldlm_policy_data_t policy = { .l_extent = { .start = 0,
-                                                    .end = OBD_OBJECT_EOF}};
-        struct lustre_handle lockh = { 0 };
-        struct lov_stripe_md *lsm = lli->lli_smd;
-        ldlm_error_t err;
-        int flags = 0;
+        int rc;
+        struct ccc_grouplock grouplock;
         ENTRY;
 
+        if (fd->fd_flags & LL_FILE_IGNORE_LOCK) {
+                RETURN(-ENOTSUPP);
+        }
         if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
                 RETURN(-EINVAL);
         }
+        LASSERT(fd->fd_grouplock.cg_lock == NULL);
 
-        policy.l_extent.gid = arg;
-        if (lli->lli_open_flags & O_NONBLOCK)
-                flags = LDLM_FL_BLOCK_NOWAIT;
+        rc = cl_get_grouplock(cl_i2info(inode)->lli_clob,
+                              arg, (lli->lli_open_flags & O_NONBLOCK),
+                              &grouplock);
 
-        err = llu_extent_lock(fd, inode, lsm, LCK_GROUP, &policy, &lockh,
-                              flags);
-        if (err)
-                RETURN(err);
+        if (rc)
+                RETURN(rc);
 
-        fd->fd_flags |= LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK;
-        fd->fd_gid = arg;
-        memcpy(&fd->fd_cwlockh, &lockh, sizeof(lockh));
+        fd->fd_flags |= LL_FILE_GROUP_LOCKED;
+        fd->fd_grouplock = grouplock;
 
         RETURN(0);
 }
 
-static int llu_put_grouplock(struct inode *inode, unsigned long arg)
+int llu_put_grouplock(struct inode *inode, unsigned long arg)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct ll_file_data *fd = lli->lli_file_data;
-        struct lov_stripe_md *lsm = lli->lli_smd;
-        ldlm_error_t err;
+        struct ccc_grouplock grouplock;
         ENTRY;
 
         if (!(fd->fd_flags & LL_FILE_GROUP_LOCKED))
                 RETURN(-EINVAL);
 
-        if (fd->fd_gid != arg)
+        LASSERT(fd->fd_grouplock.cg_lock != NULL);
+
+        if (fd->fd_grouplock.cg_gid != arg)
                 RETURN(-EINVAL);
 
-        fd->fd_flags &= ~(LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK);
+        grouplock = fd->fd_grouplock;
+        memset(&fd->fd_grouplock, 0, sizeof(fd->fd_grouplock));
+        fd->fd_flags &= ~LL_FILE_GROUP_LOCKED;
 
-        err = llu_extent_unlock(fd, inode, lsm, LCK_GROUP, &fd->fd_cwlockh);
-        if (err)
-                RETURN(err);
-
-        fd->fd_gid = 0;
-        memset(&fd->fd_cwlockh, 0, sizeof(fd->fd_cwlockh));
+        cl_put_grouplock(&grouplock);
 
         RETURN(0);
 }

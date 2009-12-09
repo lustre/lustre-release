@@ -7,8 +7,8 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-#              bug 20670 
-ALWAYS_EXCEPT="parallel_grouplock  $PARALLEL_SCALE_EXCEPT"
+#              bug 20670           21255 
+ALWAYS_EXCEPT="parallel_grouplock  statahead $PARALLEL_SCALE_EXCEPT"
 
 #
 # compilbench
@@ -321,6 +321,10 @@ test_ior() {
 run_test ior "ior"
  
 test_cascading_rw() {
+    if [ "$NFSCLIENT" ]; then
+        skip "skipped for NFSCLIENT mode"
+    fi
+
     [ x$CASC_RW = x ] &&
         { skip_env "cascading_rw not found" && return; }
 

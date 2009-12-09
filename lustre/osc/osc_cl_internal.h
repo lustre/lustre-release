@@ -97,7 +97,6 @@ struct osc_thread_info {
         struct cl_lock_descr    oti_descr;
         struct cl_attr          oti_attr;
         struct lustre_handle    oti_handle;
-        struct cl_lock_closure  oti_closure;
         struct cl_page_list     oti_plist;
 };
 
@@ -282,7 +281,11 @@ struct osc_page {
          * True for a `temporary page' created by read-ahead code, probably
          * outside of any DLM lock.
          */
-                              ops_temp:1;
+                              ops_temp:1,
+        /**
+         * Set if the page must be transferred with OBD_BRW_SRVLOCK.
+         */
+                              ops_srvlock:1;
         /**
          * Linkage into a per-osc_object list of pages in flight. For
          * debugging.

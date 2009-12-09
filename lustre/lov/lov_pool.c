@@ -81,7 +81,7 @@ void lov_pool_putref(struct pool_desc *pool)
  * Chapter 6.4.
  * Addison Wesley, 1973
  */
-static __u32 pool_hashfn(lustre_hash_t *hash_body, void *key, unsigned mask)
+static __u32 pool_hashfn(cfs_hash_t *hash_body, void *key, unsigned mask)
 {
         int i;
         __u32 result;
@@ -135,12 +135,12 @@ static void *pool_hashrefcount_put(struct hlist_node *hnode)
         return (pool);
 }
 
-lustre_hash_ops_t pool_hash_operations = {
-        .lh_hash        = pool_hashfn,
-        .lh_key         = pool_key,
-        .lh_compare     = pool_hashkey_compare,
-        .lh_get         = pool_hashrefcount_get,
-        .lh_put         = pool_hashrefcount_put,
+cfs_hash_ops_t pool_hash_operations = {
+        .hs_hash        = pool_hashfn,
+        .hs_key         = pool_key,
+        .hs_compare     = pool_hashkey_compare,
+        .hs_get         = pool_hashrefcount_get,
+        .hs_put         = pool_hashrefcount_put,
 };
 
 #ifdef LPROCFS
@@ -475,8 +475,8 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
         spin_unlock(&obd->obd_dev_lock);
 
         /* add to find only when it fully ready  */
-        rc = lustre_hash_add_unique(lov->lov_pools_hash_body, poolname,
-                                    &new_pool->pool_hash);
+        rc = cfs_hash_add_unique(lov->lov_pools_hash_body, poolname,
+                                 &new_pool->pool_hash);
         if (rc)
                 GOTO(out_err, rc = -EEXIST);
 
@@ -509,7 +509,7 @@ int lov_pool_del(struct obd_device *obd, char *poolname)
         lov = &(obd->u.lov);
 
         /* lookup and kill hash reference */
-        pool = lustre_hash_del_key(lov->lov_pools_hash_body, poolname);
+        pool = cfs_hash_del_key(lov->lov_pools_hash_body, poolname);
         if (pool == NULL)
                 RETURN(-ENOENT);
 
@@ -542,7 +542,7 @@ int lov_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 
         lov = &(obd->u.lov);
 
-        pool = lustre_hash_lookup(lov->lov_pools_hash_body, poolname);
+        pool = cfs_hash_lookup(lov->lov_pools_hash_body, poolname);
         if (pool == NULL)
                 RETURN(-ENOENT);
 
@@ -589,7 +589,7 @@ int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
 
         lov = &(obd->u.lov);
 
-        pool = lustre_hash_lookup(lov->lov_pools_hash_body, poolname);
+        pool = cfs_hash_lookup(lov->lov_pools_hash_body, poolname);
         if (pool == NULL)
                 RETURN(-ENOENT);
 
@@ -656,7 +656,7 @@ struct pool_desc *lov_find_pool(struct lov_obd *lov, char *poolname)
 
         pool = NULL;
         if (poolname[0] != '\0') {
-                pool = lustre_hash_lookup(lov->lov_pools_hash_body, poolname);
+                pool = cfs_hash_lookup(lov->lov_pools_hash_body, poolname);
                 if (pool == NULL)
                         CWARN("Request for an unknown pool ("LOV_POOLNAMEF")\n",
                               poolname);

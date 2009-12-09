@@ -773,26 +773,6 @@ static inline void *__lustre_swab_buf(struct lustre_msg *msg, int index,
         return ptr;
 }
 
-void *lustre_swab_reqbuf(struct ptlrpc_request *req, int index, int min_size,
-                         void *swabber)
-{
-        if (!ptlrpc_buf_need_swab(req, 1, index))
-                return lustre_msg_buf(req->rq_reqmsg, index, min_size);
-
-        lustre_set_req_swabbed(req, index);
-        return __lustre_swab_buf(req->rq_reqmsg, index, min_size, swabber);
-}
-
-void *lustre_swab_repbuf(struct ptlrpc_request *req, int index,
-                         int min_size, void *swabber)
-{
-        if (!ptlrpc_buf_need_swab(req, 0, index))
-                return lustre_msg_buf(req->rq_repmsg, index, min_size);
-
-        lustre_set_rep_swabbed(req, index);
-        return __lustre_swab_buf(req->rq_repmsg, index, min_size, swabber);
-}
-
 static inline struct ptlrpc_body *lustre_msg_ptlrpc_body(struct lustre_msg *msg)
 {
         return lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF,
@@ -1749,26 +1729,6 @@ void lustre_swab_mdt_remote_perm (struct mdt_remote_perm *p)
         __swab32s (&p->rp_access_perm);
 };
 
-void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa)
-{
-        __swab32s (&sa->sa_opcode);
-        __swab32s (&sa->sa_fsuid);
-        __swab32s (&sa->sa_fsgid);
-        __swab32s (&sa->sa_cap);
-        __swab32s (&sa->sa_suppgid);
-        __swab32s (&sa->sa_mode);
-        lustre_swab_ll_fid (&sa->sa_fid);
-        __swab64s (&sa->sa_valid);
-        __swab64s (&sa->sa_size);
-        __swab64s (&sa->sa_mtime);
-        __swab64s (&sa->sa_atime);
-        __swab64s (&sa->sa_ctime);
-        __swab32s (&sa->sa_uid);
-        __swab32s (&sa->sa_gid);
-        __swab32s (&sa->sa_attr_flags);
-        CLASSERT(offsetof(typeof(*sa), sa_padding) != 0);
-}
-
 void lustre_swab_fid2path(struct getinfo_fid2path *gf)
 {
         lustre_swab_lu_fid(&gf->gf_fid);
@@ -1777,72 +1737,6 @@ void lustre_swab_fid2path(struct getinfo_fid2path *gf)
         __swab32s(&gf->gf_pathlen);
 }
 EXPORT_SYMBOL(lustre_swab_fid2path);
-
-void lustre_swab_mds_rec_join (struct mds_rec_join *jr)
-{
-        __swab64s(&jr->jr_headsize);
-        lustre_swab_ll_fid(&jr->jr_fid);
-}
-
-void lustre_swab_mdt_rec_join (struct mdt_rec_join *jr)
-{
-        __swab64s(&jr->jr_headsize);
-        lustre_swab_lu_fid(&jr->jr_fid);
-}
-
-void lustre_swab_mds_rec_create (struct mds_rec_create *cr)
-{
-        __swab32s (&cr->cr_opcode);
-        __swab32s (&cr->cr_fsuid);
-        __swab32s (&cr->cr_fsgid);
-        __swab32s (&cr->cr_cap);
-        __swab32s (&cr->cr_flags); /* for use with open */
-        __swab32s (&cr->cr_mode);
-        lustre_swab_ll_fid (&cr->cr_fid);
-        lustre_swab_ll_fid (&cr->cr_replayfid);
-        __swab64s (&cr->cr_time);
-        __swab64s (&cr->cr_rdev);
-        __swab32s (&cr->cr_suppgid);
-        CLASSERT(offsetof(typeof(*cr), cr_padding_1) != 0);
-        CLASSERT(offsetof(typeof(*cr), cr_padding_2) != 0);
-        CLASSERT(offsetof(typeof(*cr), cr_padding_3) != 0);
-        CLASSERT(offsetof(typeof(*cr), cr_padding_4) != 0);
-        CLASSERT(offsetof(typeof(*cr), cr_padding_5) != 0);
-}
-
-void lustre_swab_mds_rec_link (struct mds_rec_link *lk)
-{
-        __swab32s (&lk->lk_opcode);
-        __swab32s (&lk->lk_fsuid);
-        __swab32s (&lk->lk_fsgid);
-        __swab32s (&lk->lk_cap);
-        __swab32s (&lk->lk_suppgid1);
-        __swab32s (&lk->lk_suppgid2);
-        lustre_swab_ll_fid (&lk->lk_fid1);
-        lustre_swab_ll_fid (&lk->lk_fid2);
-        __swab64s (&lk->lk_time);
-        CLASSERT(offsetof(typeof(*lk), lk_padding_1) != 0);
-        CLASSERT(offsetof(typeof(*lk), lk_padding_2) != 0);
-        CLASSERT(offsetof(typeof(*lk), lk_padding_3) != 0);
-        CLASSERT(offsetof(typeof(*lk), lk_padding_4) != 0);
-}
-
-void lustre_swab_mds_rec_unlink (struct mds_rec_unlink *ul)
-{
-        __swab32s (&ul->ul_opcode);
-        __swab32s (&ul->ul_fsuid);
-        __swab32s (&ul->ul_fsgid);
-        __swab32s (&ul->ul_cap);
-        __swab32s (&ul->ul_suppgid);
-        __swab32s (&ul->ul_mode);
-        lustre_swab_ll_fid (&ul->ul_fid1);
-        lustre_swab_ll_fid (&ul->ul_fid2);
-        __swab64s (&ul->ul_time);
-        CLASSERT(offsetof(typeof(*ul), ul_padding_1) != 0);
-        CLASSERT(offsetof(typeof(*ul), ul_padding_2) != 0);
-        CLASSERT(offsetof(typeof(*ul), ul_padding_3) != 0);
-        CLASSERT(offsetof(typeof(*ul), ul_padding_4) != 0);
-}
 
 void lustre_swab_fiemap_extent(struct ll_fiemap_extent *fm_extent)
 {
@@ -1866,23 +1760,6 @@ void lustre_swab_fiemap(struct ll_user_fiemap *fiemap)
 
         for (i = 0; i < fiemap->fm_mapped_extents; i++)
                 lustre_swab_fiemap_extent(&fiemap->fm_extents[i]);
-}
-
-void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn)
-{
-        __swab32s (&rn->rn_opcode);
-        __swab32s (&rn->rn_fsuid);
-        __swab32s (&rn->rn_fsgid);
-        __swab32s (&rn->rn_cap);
-        __swab32s (&rn->rn_suppgid1);
-        __swab32s (&rn->rn_suppgid2);
-        lustre_swab_ll_fid (&rn->rn_fid1);
-        lustre_swab_ll_fid (&rn->rn_fid2);
-        __swab64s (&rn->rn_time);
-        CLASSERT(offsetof(typeof(*rn), rn_padding_1) != 0);
-        CLASSERT(offsetof(typeof(*rn), rn_padding_2) != 0);
-        CLASSERT(offsetof(typeof(*rn), rn_padding_3) != 0);
-        CLASSERT(offsetof(typeof(*rn), rn_padding_4) != 0);
 }
 
 void lustre_swab_mdt_rec_reint (struct mdt_rec_reint *rr)
@@ -1975,18 +1852,6 @@ static void lustre_swab_lov_user_md_common(struct lov_user_md_v1 *lum)
         EXIT;
 }
 
-static void print_lumj (struct lov_user_md_join *lumj)
-{
-        CDEBUG(D_OTHER, "lov_user_md %p:\n", lumj);
-        CDEBUG(D_OTHER, "\tlmm_magic: %#x\n", lumj->lmm_magic);
-        CDEBUG(D_OTHER, "\tlmm_pattern: %#x\n", lumj->lmm_pattern);
-        CDEBUG(D_OTHER, "\tlmm_object_id: "LPU64"\n", lumj->lmm_object_id);
-        CDEBUG(D_OTHER, "\tlmm_object_gr: "LPU64"\n", lumj->lmm_object_gr);
-        CDEBUG(D_OTHER, "\tlmm_stripe_size: %#x\n", lumj->lmm_stripe_size);
-        CDEBUG(D_OTHER, "\tlmm_stripe_count: %#x\n", lumj->lmm_stripe_count);
-        CDEBUG(D_OTHER, "\tlmm_extent_count: %#x\n", lumj->lmm_extent_count);
-}
-
 void lustre_swab_lov_user_md_v1(struct lov_user_md_v1 *lum)
 {
         ENTRY;
@@ -2014,21 +1879,6 @@ void lustre_swab_lov_mds_md(struct lov_mds_md *lmm)
         __swab64s(&lmm->lmm_object_gr);
         __swab32s(&lmm->lmm_stripe_size);
         __swab32s(&lmm->lmm_stripe_count);
-        EXIT;
-}
-
-void lustre_swab_lov_user_md_join(struct lov_user_md_join *lumj)
-{
-        ENTRY;
-        CDEBUG(D_IOCTL, "swabbing lov_user_md_join\n");
-        __swab32s(&lumj->lmm_magic);
-        __swab32s(&lumj->lmm_pattern);
-        __swab64s(&lumj->lmm_object_id);
-        __swab64s(&lumj->lmm_object_gr);
-        __swab32s(&lumj->lmm_stripe_size);
-        __swab32s(&lumj->lmm_stripe_count);
-        __swab32s(&lumj->lmm_extent_count);
-        print_lumj(lumj);
         EXIT;
 }
 
@@ -2123,14 +1973,94 @@ void lustre_swab_qdata(struct qunit_data *d)
         __swab64s (&d->padding);
 }
 
+/* Dump functions */
+void dump_ioo(struct obd_ioobj *ioo)
+{
+        CDEBUG(D_RPCTRACE,
+               "obd_ioobj: ioo_id="LPD64", ioo_gr="LPD64", ioo_type=%d, "
+               "ioo_bufct=%d\n", ioo->ioo_id, ioo->ioo_gr, ioo->ioo_type,
+               ioo->ioo_bufcnt);
+}
+
+void dump_rniobuf(struct niobuf_remote *nb)
+{
+        CDEBUG(D_RPCTRACE, "niobuf_remote: offset="LPU64", len=%d, flags=%x\n",
+               nb->offset, nb->len, nb->flags);
+}
+
+void dump_obdo(struct obdo *oa)
+{
+        __u32 valid = oa->o_valid;
+
+        CDEBUG(D_RPCTRACE, "obdo: o_valid = %08x\n", valid);
+        if (valid & OBD_MD_FLID)
+                CDEBUG(D_RPCTRACE, "obdo: o_id = "LPD64"\n", oa->o_id);
+        if (valid & OBD_MD_FLGROUP)
+                CDEBUG(D_RPCTRACE, "obdo: o_gr = "LPD64"\n", oa->o_gr);
+        if (valid & OBD_MD_FLFID)
+                CDEBUG(D_RPCTRACE, "obdo: o_fid = "LPD64"\n", oa->o_fid);
+        if (valid & OBD_MD_FLSIZE)
+                CDEBUG(D_RPCTRACE, "obdo: o_size = "LPD64"\n", oa->o_size);
+        if (valid & OBD_MD_FLMTIME)
+                CDEBUG(D_RPCTRACE, "obdo: o_mtime = "LPD64"\n", oa->o_mtime);
+        if (valid & OBD_MD_FLATIME)
+                CDEBUG(D_RPCTRACE, "obdo: o_atime = "LPD64"\n", oa->o_atime);
+        if (valid & OBD_MD_FLCTIME)
+                CDEBUG(D_RPCTRACE, "obdo: o_ctime = "LPD64"\n", oa->o_ctime);
+        if (valid & OBD_MD_FLBLOCKS)   /* allocation of space */
+                CDEBUG(D_RPCTRACE, "obdo: o_blocks = "LPD64"\n", oa->o_blocks);
+        if (valid & OBD_MD_FLGRANT)
+                CDEBUG(D_RPCTRACE, "obdo: o_grant = "LPD64"\n", oa->o_grant);
+        if (valid & OBD_MD_FLBLKSZ)
+                CDEBUG(D_RPCTRACE, "obdo: o_blksize = %d\n", oa->o_blksize);
+        if (valid & (OBD_MD_FLTYPE | OBD_MD_FLMODE))
+                CDEBUG(D_RPCTRACE, "obdo: o_mode = %o\n",
+                       oa->o_mode & ((valid & OBD_MD_FLTYPE ?  S_IFMT : 0) |
+                                     (valid & OBD_MD_FLMODE ? ~S_IFMT : 0)));
+        if (valid & OBD_MD_FLUID)
+                CDEBUG(D_RPCTRACE, "obdo: o_uid = %u\n", oa->o_uid);
+        if (valid & OBD_MD_FLGID)
+                CDEBUG(D_RPCTRACE, "obdo: o_gid = %u\n", oa->o_gid);
+        if (valid & OBD_MD_FLFLAGS)
+                CDEBUG(D_RPCTRACE, "obdo: o_flags = %x\n", oa->o_flags);
+        if (valid & OBD_MD_FLNLINK)
+                CDEBUG(D_RPCTRACE, "obdo: o_nlink = %u\n", oa->o_nlink);
+        else if (valid & OBD_MD_FLCKSUM)
+                CDEBUG(D_RPCTRACE, "obdo: o_checksum (o_nlink) = %u\n", oa->o_nlink);
+        if (valid & OBD_MD_FLGENER)
+                CDEBUG(D_RPCTRACE, "obdo: o_generation = %u\n",
+                       oa->o_generation);
+        if (valid & OBD_MD_FLEASIZE)
+                CDEBUG(D_RPCTRACE, "obdo: o_easize = %u\n", oa->o_easize);
+        else if (valid & OBD_MD_FLEPOCH)
+                CDEBUG(D_RPCTRACE, "obdo: o_epoc (o_easize) = %u\n", oa->o_easize);
+        if (valid & OBD_MD_FLID)
+                CDEBUG(D_RPCTRACE, "obdo: o_stripe_idx = %u\n", oa->o_stripe_idx);
+        if (valid & OBD_MD_FLHANDLE)
+                CDEBUG(D_RPCTRACE, "obdo: o_handle = "LPD64"\n", oa->o_handle.cookie);
+        if (valid & OBD_MD_FLCOOKIE)
+                CDEBUG(D_RPCTRACE, "obdo: o_lcookie = "
+                       "(llog_cookie dumping not yet implemented)\n");
+}
+
+void dump_ost_body(struct ost_body *ob)
+{
+        dump_obdo(&ob->oa);
+}
+
+void dump_rcs(__u32 *rc)
+{
+        CDEBUG(D_RPCTRACE, "rmf_rcs: %d\n", *rc);
+}
+
 #ifdef __KERNEL__
 
 /**
  * got qdata from request(req/rep)
  */
-struct qunit_data *quota_get_qdata(void *request, int is_req, int is_exp)
+struct qunit_data *quota_get_qdata(void *r, int is_req, int is_exp)
 {
-        struct ptlrpc_request *req = (struct ptlrpc_request *)request;
+        struct ptlrpc_request *req = (struct ptlrpc_request *)r;
         struct qunit_data *qdata;
         __u64  flags = is_exp ? req->rq_export->exp_connect_flags :
                        req->rq_import->imp_connect_data.ocd_connect_flags;
@@ -2142,13 +2072,9 @@ struct qunit_data *quota_get_qdata(void *request, int is_req, int is_exp)
         LASSERT(flags & OBD_CONNECT_CHANGE_QS);
 
         if (is_req == QUOTA_REQUEST)
-                qdata = lustre_swab_reqbuf(req, REQ_REC_OFF,
-                                           sizeof(struct qunit_data),
-                                           lustre_swab_qdata);
+                qdata = req_capsule_client_get(&req->rq_pill, &RMF_QUNIT_DATA);
         else
-                qdata = lustre_swab_repbuf(req, REPLY_REC_OFF,
-                                           sizeof(struct qunit_data),
-                                           lustre_swab_qdata);
+                qdata = req_capsule_server_get(&req->rq_pill, &RMF_QUNIT_DATA);
         if (qdata == NULL)
                 return ERR_PTR(-EPROTO);
 
@@ -2160,10 +2086,10 @@ EXPORT_SYMBOL(quota_get_qdata);
 /**
  * copy qdata to request(req/rep)
  */
-int quota_copy_qdata(void *request, struct qunit_data *qdata,
-                     int is_req, int is_exp)
+int quota_copy_qdata(void *r, struct qunit_data *qdata, int is_req,
+                     int is_exp)
 {
-        struct ptlrpc_request *req = (struct ptlrpc_request *)request;
+        struct ptlrpc_request *req = (struct ptlrpc_request *)r;
         void *target;
         __u64  flags = is_exp ? req->rq_export->exp_connect_flags :
                 req->rq_import->imp_connect_data.ocd_connect_flags;
@@ -2176,14 +2102,13 @@ int quota_copy_qdata(void *request, struct qunit_data *qdata,
         LASSERT(flags & OBD_CONNECT_CHANGE_QS);
 
         if (is_req == QUOTA_REQUEST)
-                target = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF,
-                                        sizeof(struct qunit_data));
+                target = req_capsule_client_get(&req->rq_pill, &RMF_QUNIT_DATA);
         else
-                target = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                                        sizeof(struct qunit_data));
+                target = req_capsule_server_get(&req->rq_pill, &RMF_QUNIT_DATA);
         if (target == NULL)
                 return -EPROTO;
 
+        LASSERT(target != qdata);
         memcpy(target, qdata, sizeof(*qdata));
         return 0;
 }

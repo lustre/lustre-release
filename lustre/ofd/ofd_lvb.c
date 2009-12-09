@@ -125,8 +125,9 @@ out:
  *
  *   If 'increase_only' is true, don't allow values to move backwards.
  */
-static int filter_lvbo_update(struct ldlm_resource *res, struct ptlrpc_request *r,
-                              int buf_idx, int increase_only)
+static int filter_lvbo_update(struct ldlm_resource *res,
+                              struct ptlrpc_request *r,
+                              int increase_only)
 {
         struct filter_device *ofd;
         struct filter_object *fo;
@@ -159,8 +160,8 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct ptlrpc_request *
         if (r != NULL) {
                 struct ost_lvb *new;
 
-                new = lustre_swab_repbuf(r, buf_idx, sizeof(*new),
-                                         lustre_swab_ost_lvb);
+                /* XXX update always from reply buffer */
+                new = req_capsule_server_get(&r->rq_pill, &RMF_DLM_LVB);
                 if (new == NULL) {
                         CERROR("lustre_swab_buf failed\n");
                         goto disk_update;

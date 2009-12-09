@@ -60,7 +60,7 @@
 #include <obd_support.h>
 #include <lustre_fid.h>
 #include <libcfs/list.h>
-#include <class_hash.h> /* for lustre_hash stuff */
+#include <libcfs/libcfs_hash.h> /* for cfs_hash stuff */
 /* lu_time_global_{init,fini}() */
 #include <lu_time.h>
 
@@ -533,7 +533,7 @@ struct cl_env {
          */
         struct hlist_node ce_node;
         /**
-         * Owner for the current cl_env, the key for lustre_hash.
+         * Owner for the current cl_env, the key for cfs_hash.
          * Now current thread pointer is stored.
          */
         void             *ce_owner;
@@ -562,20 +562,20 @@ struct cl_env {
         } while (0)
 
 /*****************************************************************************
- * Routins to use lustre_hash functionality to bind the current thread
+ * Routins to use cfs_hash functionality to bind the current thread
  * to cl_env
  */
 
 /** lustre hash to manage the cl_env for current thread */
-static lustre_hash_t *cl_env_hash;
+static cfs_hash_t *cl_env_hash;
 static void cl_env_init0(struct cl_env *cle, void *debug);
 
-static unsigned cl_env_hops_hash(lustre_hash_t *lh, void *key, unsigned mask)
+static unsigned cl_env_hops_hash(cfs_hash_t *lh, void *key, unsigned mask)
 {
 #if BITS_PER_LONG == 64
-        return lh_u64_hash((__u64)key, mask);
+        return cfs_hash_u64_hash((__u64)key, mask);
 #else
-        return lh_u32_hash((__u32)key, mask);
+        return cfs_hash_u32_hash((__u32)key, mask);
 #endif
 }
 
@@ -594,18 +594,18 @@ static int cl_env_hops_compare(void *key, struct hlist_node *hn)
         return (key == cle->ce_owner);
 }
 
-static lustre_hash_ops_t cl_env_hops = {
-        .lh_hash    = cl_env_hops_hash,
-        .lh_compare = cl_env_hops_compare,
-        .lh_key     = cl_env_hops_obj,
-        .lh_get     = cl_env_hops_obj,
-        .lh_put     = cl_env_hops_obj,
+static cfs_hash_ops_t cl_env_hops = {
+        .hs_hash    = cl_env_hops_hash,
+        .hs_compare = cl_env_hops_compare,
+        .hs_key     = cl_env_hops_obj,
+        .hs_get     = cl_env_hops_obj,
+        .hs_put     = cl_env_hops_obj,
 };
 
 static inline struct cl_env *cl_env_fetch(void)
 {
         struct cl_env *cle;
-        cle = lustre_hash_lookup(cl_env_hash, cfs_current());
+        cle = cfs_hash_lookup(cl_env_hash, cfs_current());
         LASSERT(ergo(cle, cle->ce_magic == &cl_env_init0));
         return cle;
 }
@@ -616,7 +616,7 @@ static inline void cl_env_attach(struct cl_env *cle)
                 int rc;
                 LASSERT(cle->ce_owner == NULL);
                 cle->ce_owner = cfs_current();
-                rc = lustre_hash_add_unique(cl_env_hash, cle->ce_owner,
+                rc = cfs_hash_add_unique(cl_env_hash, cle->ce_owner,
                                             &cle->ce_node);
                 LASSERT(rc == 0);
         }
@@ -629,7 +629,7 @@ static inline struct cl_env *cl_env_detach(struct cl_env *cle)
         if (cle && cle->ce_owner) {
                 void *cookie;
                 LASSERT(cle->ce_owner == cfs_current());
-                cookie = lustre_hash_del(cl_env_hash, cle->ce_owner,
+                cookie = cfs_hash_del(cl_env_hash, cle->ce_owner,
                                          &cle->ce_node);
                 cle->ce_owner = NULL;
                 LASSERT(cookie == cle);
@@ -1137,7 +1137,8 @@ int cl_global_init(void)
 {
         int result;
 
-        cl_env_hash = lustre_hash_init("cl_env", 8, 10, &cl_env_hops, 0);
+        cl_env_hash = cfs_hash_create("cl_env", 8, 10, &cl_env_hops,
+                                      CFS_HASH_REHASH);
         if (cl_env_hash == NULL)
                 return -ENOMEM;
 
@@ -1152,7 +1153,7 @@ int cl_global_init(void)
                 }
         }
         if (result)
-                lustre_hash_exit(cl_env_hash);
+                cfs_hash_destroy(cl_env_hash);
         return result;
 }
 
@@ -1165,5 +1166,5 @@ void cl_global_fini(void)
         cl_page_fini();
         lu_context_key_degister(&cl_key);
         lu_kmem_fini(cl_object_caches);
-        lustre_hash_exit(cl_env_hash);
+        cfs_hash_destroy(cl_env_hash);
 }

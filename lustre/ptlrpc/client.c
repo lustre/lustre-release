@@ -1061,7 +1061,8 @@ static int after_reply(struct ptlrpc_request *req)
                 RETURN(-EPROTO);
         }
 
-        OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_PAUSE_REP, obd_fail_val);
+        if (lustre_msg_get_opc(req->rq_reqmsg) != OBD_PING)
+                OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_PAUSE_REP, obd_fail_val);
         ptlrpc_at_adj_service(req, lustre_msg_get_timeout(req->rq_repmsg));
         ptlrpc_at_adj_net_latency(req,
                                   lustre_msg_get_service_time(req->rq_repmsg));
@@ -2135,7 +2136,7 @@ void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
                 return;
         }
 
-        list_add_tail(&req->rq_replay_list, &imp->imp_replay_list);
+        list_add(&req->rq_replay_list, &imp->imp_replay_list);
 }
 
 int ptlrpc_queue_wait(struct ptlrpc_request *req)

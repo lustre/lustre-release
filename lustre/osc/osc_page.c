@@ -212,7 +212,6 @@ static int osc_page_cache_add(const struct lu_env *env,
 {
         struct osc_page   *opg = cl2osc_page(slice);
         struct osc_object *obj = cl2osc(opg->ops_cl.cpl_obj);
-        struct osc_io     *oio = osc_env_io(env);
         int result;
         int brw_flags;
         int noquota = 0;
@@ -221,7 +220,7 @@ static int osc_page_cache_add(const struct lu_env *env,
         ENTRY;
 
         /* Set the OBD_BRW_SRVLOCK before the page is queued. */
-        brw_flags = osc_io_srvlock(oio) ? OBD_BRW_SRVLOCK : 0;
+        brw_flags = opg->ops_srvlock ? OBD_BRW_SRVLOCK : 0;
         if (!client_is_remote(osc_export(obj)) &&
             cfs_capable(CFS_CAP_SYS_RESOURCE)) {
                 brw_flags |= OBD_BRW_NOQUOTA;
@@ -303,7 +302,7 @@ static int osc_page_print(const struct lu_env *env,
         return (*printer)(env, cookie, LUSTRE_OSC_NAME"-page@%p: "
                           "1< %#x %d %u %s %s %s > "
                           "2< %llu %u %#x %#x | %p %p %p %p %p > "
-                          "3< %s %p %d %lu > "
+                          "3< %s %p %d %lu %d > "
                           "4< %d %d %d %lu %s | %s %s %s %s > "
                           "5< %s %s %s %s | %d %s %s | %d %s %s>\n",
                           opg,
@@ -322,7 +321,7 @@ static int osc_page_print(const struct lu_env *env,
                           /* 3 */
                           osc_list(&opg->ops_inflight),
                           opg->ops_submitter, opg->ops_transfer_pinned,
-                          osc_submit_duration(opg),
+                          osc_submit_duration(opg), opg->ops_srvlock,
                           /* 4 */
                           cli->cl_r_in_flight, cli->cl_w_in_flight,
                           cli->cl_max_rpcs_in_flight,
@@ -571,9 +570,12 @@ struct cl_page *osc_page_init(const struct lu_env *env,
                                              cl_offset(obj, page->cp_index),
                                              &osc_async_page_ops,
                                              opg, (void **)&oap, 1, NULL);
-                if (result == 0)
+                if (result == 0) {
+                        struct osc_io *oio = osc_env_io(env);
+                        opg->ops_srvlock = osc_io_srvlock(oio);
                         cl_page_slice_add(page, &opg->ops_cl, obj,
                                           &osc_page_ops);
+                }
                 /*
                  * Cannot assert osc_page_protected() here as read-ahead
                  * creates temporary pages outside of a lock.

@@ -51,7 +51,6 @@
 #include <lustre_net.h>
 #include <lustre_import.h>
 #include <lustre_handles.h>
-#include <lustre_export.h> /* for obd_export, for LDLM_DEBUG */
 #include <interval_tree.h> /* for interval_node{}, ldlm_extent */
 #include <lu_ref.h>
 
@@ -369,7 +368,7 @@ struct ldlm_valblock_ops {
         int (*lvbo_init)(struct ldlm_resource *res);
         int (*lvbo_update)(struct ldlm_resource *res,
                            struct ptlrpc_request *r,
-                           int buf_idx, int increase);
+                           int increase);
 };
 
 typedef enum {
@@ -545,6 +544,8 @@ struct ldlm_interval_tree {
         struct interval_node *lit_root; /* actually ldlm_interval */
 };
 
+#define LUSTRE_TRACKS_LOCK_EXP_REFS (1)
+
 struct ldlm_lock {
         /**
          * Must be first in the structure.
@@ -666,7 +667,6 @@ struct ldlm_lock {
          */
         __u32                 l_lvb_len;
         void                 *l_lvb_data;
-        void                 *l_lvb_swabber;
 
         void                 *l_ast_data;
         spinlock_t            l_extents_list_lock;
@@ -715,6 +715,16 @@ struct ldlm_lock {
         struct list_head      l_sl_mode;
         struct list_head      l_sl_policy;
         struct lu_ref         l_reference;
+#if LUSTRE_TRACKS_LOCK_EXP_REFS
+        /* Debugging stuff for bug 20498, for tracking export
+           references. */
+        /** number of export references taken */
+        int                   l_exp_refs_nr;
+        /** link all locks referencing one export */
+        struct list_head      l_exp_refs_link;
+        /** referenced export object */
+        struct obd_export    *l_exp_refs_target;
+#endif
 };
 
 struct ldlm_resource {
@@ -904,12 +914,11 @@ ldlm_handle2lock_long(const struct lustre_handle *h, int flags)
 }
 
 static inline int ldlm_res_lvbo_update(struct ldlm_resource *res,
-                                       struct ptlrpc_request *r, int buf_idx,
-                                       int increase)
+                                       struct ptlrpc_request *r, int increase)
 {
         if (res->lr_namespace->ns_lvbo &&
             res->lr_namespace->ns_lvbo->lvbo_update) {
-                return res->lr_namespace->ns_lvbo->lvbo_update(res, r, buf_idx,
+                return res->lr_namespace->ns_lvbo->lvbo_update(res, r,
                                                                increase);
         }
         return 0;
@@ -918,6 +927,9 @@ static inline int ldlm_res_lvbo_update(struct ldlm_resource *res,
 int ldlm_error2errno(ldlm_error_t error);
 ldlm_error_t ldlm_errno2error(int err_no); /* don't call it `errno': this
                                             * confuses user-space. */
+#if LUSTRE_TRACKS_LOCK_EXP_REFS
+void ldlm_dump_export_locks(struct obd_export *exp);
+#endif
 
 /**
  * Release a temporary lock reference obtained by ldlm_handle2lock() or
@@ -1050,8 +1062,8 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                      struct ldlm_enqueue_info *einfo,
                      const struct ldlm_res_id *res_id,
                      ldlm_policy_data_t *policy, int *flags,
-                     void *lvb, __u32 lvb_len, void *lvb_swabber,
-                     struct lustre_handle *lockh, int async);
+                     void *lvb, __u32 lvb_len, struct lustre_handle *lockh,
+                     int async);
 int ldlm_prep_enqueue_req(struct obd_export *exp,
                           struct ptlrpc_request *req,
                           struct list_head *cancels,
@@ -1066,8 +1078,7 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns, struct ptlrpc_request *req,
 int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                           ldlm_type_t type, __u8 with_policy, ldlm_mode_t mode,
                           int *flags, void *lvb, __u32 lvb_len,
-                          void *lvb_swabber, struct lustre_handle *lockh,
-                          int rc);
+                          struct lustre_handle *lockh, int rc);
 int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
                            const struct ldlm_res_id *res_id,
                            ldlm_type_t type, ldlm_policy_data_t *policy,
@@ -1075,7 +1086,7 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
                            ldlm_blocking_callback blocking,
                            ldlm_completion_callback completion,
                            ldlm_glimpse_callback glimpse,
-                           void *data, __u32 lvb_len, void *lvb_swabber,
+                           void *data, __u32 lvb_len,
                            const __u64 *client_cookie,
                            struct lustre_handle *lockh);
 int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *new,

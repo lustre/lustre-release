@@ -201,15 +201,6 @@ struct ccc_page {
         struct list_head     cpg_pending_linkage;
         /** VM page */
         cfs_page_t          *cpg_page;
-        /**
-         * checksum for paranoid I/O debugging enabled by
-         * ENABLE_LLITE_CHECKSUM configuration option.
-         *
-         * XXX This cannot be implemented reliably because checksum cannot be
-         * updated from ->set_page_dirty() that is called without page VM
-         * lock.
-         */
-        __u32                cpg_checksum;
 };
 
 static inline struct ccc_page *cl2ccc_page(const struct cl_page_slice *slice)

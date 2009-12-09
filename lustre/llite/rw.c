@@ -130,132 +130,149 @@ void ll_truncate(struct inode *inode)
 } /* ll_truncate */
 
 /**
- * Initializes common cl-data at the typical address_space operation entry
- * point.
- */
-static int ll_cl_init(struct file *file, struct page *vmpage,
-                      struct lu_env **env,
-                      struct cl_io **io, struct cl_page **page, int *refcheck)
-{
-        struct lu_env    *_env;
-        struct cl_io     *_io;
-        struct cl_page   *_page;
-        struct cl_object *clob;
-
-        int result;
-
-        *env  = NULL;
-        *io   = NULL;
-        *page = NULL;
-
-        clob = ll_i2info(vmpage->mapping->host)->lli_clob;
-        LASSERT(clob != NULL);
-
-        _env = cl_env_get(refcheck);
-        if (!IS_ERR(env)) {
-                struct ccc_io *cio = ccc_env_io(_env);
-
-                *env = _env;
-                *io  = _io = cio->cui_cl.cis_io;
-                if (_io != NULL) {
-                        LASSERT(_io->ci_state == CIS_IO_GOING);
-                        LASSERT(cio->cui_fd == LUSTRE_FPRIVATE(file));
-                        _page = cl_page_find(_env, clob, vmpage->index, vmpage,
-                                             CPT_CACHEABLE);
-                        if (!IS_ERR(_page)) {
-                                *page = _page;
-                                lu_ref_add(&_page->cp_reference, "cl_io", _io);
-                                result = 0;
-                        } else
-                                result = PTR_ERR(_page);
-                } else
-                        /*
-                         * This is for a case where operation can be called
-                         * either with or without cl_io created by the upper
-                         * layer (e.g., ->prepare_write() called directly from
-                         * loop-back driver).
-                         */
-                        result = -EALREADY;
-        } else
-                result = PTR_ERR(_env);
-        CDEBUG(D_VFSTRACE, "%lu@"DFID" -> %i %p %p %p\n",
-               vmpage->index, PFID(lu_object_fid(&clob->co_lu)), result,
-               *env, *io, *page);
-        return result;
-}
-
-/**
  * Finalizes cl-data before exiting typical address_space operation. Dual to
  * ll_cl_init().
  */
-static void ll_cl_fini(struct lu_env *env,
-                       struct cl_io *io, struct cl_page *page, int *refcheck)
+static void ll_cl_fini(struct ll_cl_context *lcc)
 {
+        struct lu_env  *env  = lcc->lcc_env;
+        struct cl_io   *io   = lcc->lcc_io;
+        struct cl_page *page = lcc->lcc_page;
+
+        LASSERT(lcc->lcc_cookie == current);
+        LASSERT(env != NULL);
+
         if (page != NULL) {
                 lu_ref_del(&page->cp_reference, "cl_io", io);
                 cl_page_put(env, page);
         }
-        if (env != NULL) {
-                struct vvp_io *vio;
 
-                vio = vvp_env_io(env);
-                LASSERT(vio->cui_oneshot >= 0);
-                if (vio->cui_oneshot > 0) {
-                        if (--vio->cui_oneshot == 0) {
-                                cl_io_end(env, io);
-                                cl_io_unlock(env, io);
-                                cl_io_iter_fini(env, io);
-                                cl_io_fini(env, io);
-                                /* to trigger assertion above, if ll_cl_fini()
-                                 * is called against freed io. */
-                                vio->cui_oneshot = -1;
-                        }
-                        /* additional reference on env was acquired by io,
-                         * disable refcheck */
-                        refcheck = NULL;
-                }
-                cl_env_put(env, refcheck);
-        } else
-                LASSERT(io == NULL);
+        if (io && lcc->lcc_created) {
+                cl_io_end(env, io);
+                cl_io_unlock(env, io);
+                cl_io_iter_fini(env, io);
+                cl_io_fini(env, io);
+        }
+        cl_env_put(env, &lcc->lcc_refcheck);
 }
 
 /**
- * Initializes one-shot cl_io for the case when loop driver calls
- * ->{prepare,commit}_write() methods directly.
+ * Initializes common cl-data at the typical address_space operation entry
+ * point.
  */
-static int ll_prepare_loop(struct lu_env *env, struct cl_io *io,
-                           struct file *file, struct page *vmpage,
-                           unsigned from, unsigned to)
+static struct ll_cl_context *ll_cl_init(struct file *file,
+                                        struct page *vmpage, int create)
 {
-        struct vvp_io *vio;
-        struct ccc_io *cio;
-        int result;
-        loff_t pos;
+        struct ll_cl_context *lcc;
+        struct lu_env    *env;
+        struct cl_io     *io;
+        struct cl_object *clob;
+        struct ccc_io    *cio;
 
-        vio = vvp_env_io(env);
+        int refcheck;
+        int result = 0;
+
+        clob = ll_i2info(vmpage->mapping->host)->lli_clob;
+        LASSERT(clob != NULL);
+
+        env = cl_env_get(&refcheck);
+        if (IS_ERR(env))
+                return ERR_PTR(PTR_ERR(env));
+
+        lcc = &vvp_env_info(env)->vti_io_ctx;
+        memset(lcc, 0, sizeof(*lcc));
+        lcc->lcc_env = env;
+        lcc->lcc_refcheck = refcheck;
+        lcc->lcc_cookie = current;
+
         cio = ccc_env_io(env);
-        ll_io_init(io, file, 1);
-        pos = (vmpage->index << CFS_PAGE_SHIFT) + from;
-        /*
-         * Create IO and quickly drive it through CIS_{INIT,IT_STARTED,LOCKED}
-         * states. DLM locks are not taken for vio->cui_oneshot IO---we cannot
-         * take DLM locks here, because page is already locked. With new
-         * ->write_{being,end}() address_space operations lustre might be
-         * luckier.
-         */
-        result = cl_io_rw_init(env, io, CIT_WRITE, pos, from - to);
-        if (result == 0) {
-                cio->cui_fd = LUSTRE_FPRIVATE(file);
-                vio->cui_oneshot = 1;
-                result = cl_io_iter_init(env, io);
+        io = cio->cui_cl.cis_io;
+        if (io == NULL && create) {
+                struct vvp_io *vio;
+                loff_t pos;
+
+                /*
+                 * Loop-back driver calls ->prepare_write() and ->sendfile()
+                 * methods directly, bypassing file system ->write() operation,
+                 * so cl_io has to be created here.
+                 */
+
+                io = &ccc_env_info(env)->cti_io;
+                vio = vvp_env_io(env);
+                ll_io_init(io, file, 1);
+
+                /* No lock at all for this kind of IO - we can't do it because
+                 * we have held page lock, it would cause deadlock.
+                 * XXX: This causes poor performance to loop device - One page
+                 *      per RPC.
+                 *      In order to get better performance, users should use
+                 *      lloop driver instead.
+                 */
+                io->ci_lockreq = CILR_NEVER;
+
+                pos = (vmpage->index << CFS_PAGE_SHIFT);
+
+                /* Create a temp IO to serve write. */
+                result = cl_io_rw_init(env, io, CIT_WRITE, pos, CFS_PAGE_SIZE);
                 if (result == 0) {
-                        result = cl_io_lock(env, io);
-                        if (result == 0)
-                                result = cl_io_start(env, io);
-                }
-        } else
-                result = io->ci_result;
-        return result;
+                        cio->cui_fd = LUSTRE_FPRIVATE(file);
+                        cio->cui_iov = NULL;
+                        cio->cui_nrsegs = 0;
+                        result = cl_io_iter_init(env, io);
+                        if (result == 0) {
+                                result = cl_io_lock(env, io);
+                                if (result == 0)
+                                        result = cl_io_start(env, io);
+                        }
+                } else
+                        result = io->ci_result;
+                lcc->lcc_created = 1;
+        }
+
+        lcc->lcc_io = io;
+        if (io == NULL)
+                result = -EIO;
+        if (result == 0) {
+                struct cl_page   *page;
+
+                LASSERT(io != NULL);
+                LASSERT(io->ci_state == CIS_IO_GOING);
+                LASSERT(cio->cui_fd == LUSTRE_FPRIVATE(file));
+                page = cl_page_find(env, clob, vmpage->index, vmpage,
+                                    CPT_CACHEABLE);
+                if (!IS_ERR(page)) {
+                        lcc->lcc_page = page;
+                        lu_ref_add(&page->cp_reference, "cl_io", io);
+                        result = 0;
+                } else
+                        result = PTR_ERR(page);
+        }
+        if (result) {
+                ll_cl_fini(lcc);
+                lcc = ERR_PTR(result);
+        }
+
+        CDEBUG(D_VFSTRACE, "%lu@"DFID" -> %i %p %p\n",
+               vmpage->index, PFID(lu_object_fid(&clob->co_lu)), result,
+               env, io);
+        return lcc;
+}
+
+static struct ll_cl_context *ll_cl_get(void)
+{
+        struct ll_cl_context *lcc;
+        struct lu_env *env;
+        int refcheck;
+
+        env = cl_env_get(&refcheck);
+        LASSERT(!IS_ERR(env));
+        lcc = &vvp_env_info(env)->vti_io_ctx;
+        LASSERT(env == lcc->lcc_env);
+        LASSERT(current == lcc->lcc_cookie);
+        cl_env_put(env, &refcheck);
+
+        /* env has got in ll_cl_init, so it is still usable. */
+        return lcc;
 }
 
 /**
@@ -265,29 +282,16 @@ static int ll_prepare_loop(struct lu_env *env, struct cl_io *io,
 int ll_prepare_write(struct file *file, struct page *vmpage, unsigned from,
                      unsigned to)
 {
-        struct lu_env    *env;
-        struct cl_io     *io;
-        struct cl_page   *page;
+        struct ll_cl_context *lcc;
         int result;
-        int refcheck;
         ENTRY;
 
-        result = ll_cl_init(file, vmpage, &env, &io, &page, &refcheck);
-        /*
-         * Loop-back driver calls ->prepare_write() and ->sendfile() methods
-         * directly, bypassing file system ->write() operation, so cl_io has
-         * to be created here.
-         */
-        if (result == -EALREADY) {
-                io = &ccc_env_info(env)->cti_io;
-                result = ll_prepare_loop(env, io, file, vmpage, from, to);
-                if (result == 0) {
-                        result = ll_cl_init(file, vmpage,
-                                            &env, &io, &page, &refcheck);
-                        cl_env_put(env, NULL);
-                }
-        }
-        if (result == 0) {
+        lcc = ll_cl_init(file, vmpage, 1);
+        if (!IS_ERR(lcc)) {
+                struct lu_env  *env = lcc->lcc_env;
+                struct cl_io   *io  = lcc->lcc_io;
+                struct cl_page *page = lcc->lcc_page;
+
                 cl_page_assume(env, io, page);
                 if (cl_io_is_append(io)) {
                         struct cl_object   *obj   = io->ci_obj;
@@ -302,8 +306,6 @@ int ll_prepare_write(struct file *file, struct page *vmpage, unsigned from,
                 }
                 result = cl_io_prepare_write(env, io, page, from, to);
                 if (result == 0) {
-                        struct vvp_io *vio;
-
                         /*
                          * Add a reference, so that page is not evicted from
                          * the cache until ->commit_write() is called.
@@ -311,40 +313,43 @@ int ll_prepare_write(struct file *file, struct page *vmpage, unsigned from,
                         cl_page_get(page);
                         lu_ref_add(&page->cp_reference, "prepare_write",
                                    cfs_current());
-                        vio = vvp_env_io(env);
-                        if (vio->cui_oneshot > 0)
-                                vio->cui_oneshot++;
-                } else
+                } else {
                         cl_page_unassume(env, io, page);
+                        ll_cl_fini(lcc);
+                }
+                /* returning 0 in prepare assumes commit must be called
+                 * afterwards */
+        } else {
+                result = PTR_ERR(lcc);
         }
-        ll_cl_fini(env, io, page, &refcheck);
         RETURN(result);
 }
 
 int ll_commit_write(struct file *file, struct page *vmpage, unsigned from,
                     unsigned to)
 {
+        struct ll_cl_context *lcc;
         struct lu_env    *env;
         struct cl_io     *io;
         struct cl_page   *page;
         int result;
-        int refcheck;
         ENTRY;
 
-        result = ll_cl_init(file, vmpage, &env, &io, &page, &refcheck);
-        LASSERT(result != -EALREADY);
-        if (result == 0) {
-                LASSERT(cl_page_is_owned(page, io));
-                result = cl_io_commit_write(env, io, page, from, to);
-                if (cl_page_is_owned(page, io))
-                        cl_page_unassume(env, io, page);
-                /*
-                 * Release reference acquired by cl_io_prepare_write().
-                 */
-                lu_ref_del(&page->cp_reference, "prepare_write", cfs_current());
-                cl_page_put(env, page);
-        }
-        ll_cl_fini(env, io, page, &refcheck);
+        lcc  = ll_cl_get();
+        env  = lcc->lcc_env;
+        page = lcc->lcc_page;
+        io   = lcc->lcc_io;
+
+        LASSERT(cl_page_is_owned(page, io));
+        result = cl_io_commit_write(env, io, page, from, to);
+        if (cl_page_is_owned(page, io))
+                cl_page_unassume(env, io, page);
+        /*
+         * Release reference acquired by cl_io_prepare_write().
+         */
+        lu_ref_del(&page->cp_reference, "prepare_write", cfs_current());
+        cl_page_put(env, page);
+        ll_cl_fini(lcc);
         RETURN(result);
 }
 
@@ -1208,15 +1213,16 @@ int ll_writepage(struct page *vmpage, struct writeback_control *unused)
 
 int ll_readpage(struct file *file, struct page *vmpage)
 {
-        struct lu_env    *env;
-        struct cl_io     *io;
-        struct cl_page   *page;
+        struct ll_cl_context *lcc;
         int result;
-        int refcheck;
         ENTRY;
 
-        result = ll_cl_init(file, vmpage, &env, &io, &page, &refcheck);
-        if (result == 0) {
+        lcc = ll_cl_init(file, vmpage, 0);
+        if (!IS_ERR(lcc)) {
+                struct lu_env  *env  = lcc->lcc_env;
+                struct cl_io   *io   = lcc->lcc_io;
+                struct cl_page *page = lcc->lcc_page;
+
                 LASSERT(page->cp_type == CPT_CACHEABLE);
                 if (likely(!PageUptodate(vmpage))) {
                         cl_page_assume(env, io, page);
@@ -1227,9 +1233,10 @@ int ll_readpage(struct file *file, struct page *vmpage)
                         unlock_page(vmpage);
                         result = 0;
                 }
+                ll_cl_fini(lcc);
+        } else {
+                result = PTR_ERR(lcc);
         }
-        LASSERT(!cl_page_is_owned(page, io));
-        ll_cl_fini(env, io, page, &refcheck);
         RETURN(result);
 }
 

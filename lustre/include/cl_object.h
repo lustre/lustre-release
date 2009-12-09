@@ -1301,6 +1301,11 @@ struct cl_lock_descr {
         __u64             cld_gid;
         /** Lock mode. */
         enum cl_lock_mode cld_mode;
+        /**
+         * flags to enqueue lock. A combination of bit-flags from
+         * enum cl_enq_flags.
+         */
+        __u32             cld_enq_flags;
 };
 
 #define DDESCR "%s(%d):[%lu, %lu]"
@@ -1414,7 +1419,7 @@ enum cl_lock_state {
          * state, it must wait for the lock.
          * See state diagram for details.
          */
-         CLS_INTRANSIT,
+        CLS_INTRANSIT,
         /**
          * Lock granted, not used.
          */
@@ -1565,6 +1570,10 @@ struct cl_lock {
          */
         struct list_head      cll_inclosure;
         /**
+         * Confict lock at queuing time.
+         */
+        struct cl_lock       *cll_conflict;
+        /**
          * A list of references to this lock, for debugging.
          */
         struct lu_ref         cll_reference;
@@ -1666,8 +1675,9 @@ struct cl_lock_operations {
          * usual return values of lock state-machine methods, this can return
          * -ESTALE to indicate that lock cannot be returned to the cache, and
          * has to be re-initialized.
+         * unuse is a one-shot operation, so it must NOT return CLO_WAIT.
          *
-         * \see ccc_lock_unlock(), lov_lock_unlock(), osc_lock_unlock()
+         * \see ccc_lock_unuse(), lov_lock_unuse(), osc_lock_unuse()
          */
         int  (*clo_unuse)(const struct lu_env *env,
                           const struct cl_lock_slice *slice);
@@ -2156,11 +2166,6 @@ struct cl_io_lock_link {
         struct list_head     cill_linkage;
         struct cl_lock_descr cill_descr;
         struct cl_lock      *cill_lock;
-        /**
-         * flags to enqueue lock for this IO. A combination of bit-flags from
-         * enum cl_enq_flags.
-         */
-        __u32                cill_enq_flags;
         /** optional destructor */
         void               (*cill_fini)(const struct lu_env *env,
                                         struct cl_io_lock_link *link);
@@ -2763,7 +2768,6 @@ struct cl_lock *cl_lock_peek(const struct lu_env *env, const struct cl_io *io,
                              const char *scope, const void *source);
 struct cl_lock *cl_lock_request(const struct lu_env *env, struct cl_io *io,
                                 const struct cl_lock_descr *need,
-                                __u32 enqflags,
                                 const char *scope, const void *source);
 struct cl_lock *cl_lock_at_page(const struct lu_env *env, struct cl_object *obj,
                                 struct cl_page *page, struct cl_lock *except,
@@ -2783,8 +2787,6 @@ void  cl_lock_release   (const struct lu_env *env, struct cl_lock *lock,
                          const char *scope, const void *source);
 void  cl_lock_user_add  (const struct lu_env *env, struct cl_lock *lock);
 int   cl_lock_user_del  (const struct lu_env *env, struct cl_lock *lock);
-int   cl_lock_compatible(const struct cl_lock *lock1,
-                         const struct cl_lock *lock2);
 
 enum cl_lock_state cl_lock_intransit(const struct lu_env *env,
                                      struct cl_lock *lock);
@@ -2901,7 +2903,7 @@ void  cl_io_end          (const struct lu_env *env, struct cl_io *io);
 int   cl_io_lock_add     (const struct lu_env *env, struct cl_io *io,
                           struct cl_io_lock_link *link);
 int   cl_io_lock_alloc_add(const struct lu_env *env, struct cl_io *io,
-                           struct cl_lock_descr *descr, int enqflags);
+                           struct cl_lock_descr *descr);
 int   cl_io_read_page    (const struct lu_env *env, struct cl_io *io,
                           struct cl_page *page);
 int   cl_io_prepare_write(const struct lu_env *env, struct cl_io *io,

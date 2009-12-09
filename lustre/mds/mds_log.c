@@ -292,9 +292,6 @@ static int mds_llog_add_unlink(struct obd_device *obd,
         struct llog_ctxt *ctxt;
         int rc;
 
-        rc = obd_checkmd(obd->u.mds.mds_osc_exp, obd->obd_self_export, lsm);
-        if (rc)
-                RETURN(rc);
         /* first prepare unlink log record */
         OBD_ALLOC_PTR(lur);
         if (!lur)
@@ -345,9 +342,6 @@ int mds_log_op_orphan(struct obd_device *obd, struct lov_stripe_md *lsm,
         if (IS_ERR(mds->mds_osc_obd))
                 RETURN(PTR_ERR(mds->mds_osc_obd));
 
-        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, lsm);
-        if (rc)
-                RETURN(rc);
         rc = mds_llog_add_unlink(obd, lsm, count - 1, &logcookie, 1, th);
         RETURN(rc);
 }

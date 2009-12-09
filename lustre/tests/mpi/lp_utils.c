@@ -88,8 +88,9 @@ inline void end(char *str) {
         MPI_Barrier(MPI_COMM_WORLD);
         if (verbose > 0 && rank == 0) {
                 gettimeofday(&t2, NULL);
-                elapsed = (t2.tv_sec + ((float)t2.tv_usec/1000000))
-                          - (t1.tv_sec + ((float)t1.tv_usec/1000000));
+
+                elapsed = t2.tv_sec - t1.tv_sec +
+                          (float)(t2.tv_usec-t1.tv_usec)/1000000;
                 if (elapsed >= 60) {
                         printf("%s:\tFinished %-15s(%.2f min)\n",
                                timestamp(), str, elapsed / 60);

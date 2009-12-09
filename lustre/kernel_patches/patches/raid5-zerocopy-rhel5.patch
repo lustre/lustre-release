@@ -428,9 +428,9 @@ Index: linux-2.6.18-128.1.6/mm/filemap.c
  #include <linux/syscalls.h>
  #include <linux/cpuset.h>
 +#include <linux/rmap.h>
- #include "filemap.h"
+ #include <linux/hardirq.h> /* for BUG_ON(!in_atomic()) only */
+ #include <trace/mm.h>
  #include "internal.h"
- 
 @@ -567,11 +568,55 @@
  		if (!test_clear_page_writeback(page))
  			BUG();

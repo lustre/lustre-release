@@ -771,7 +771,7 @@ static int ll_statahead_thread(void *arg)
 
                 if (IS_ERR(page)) {
                         rc = PTR_ERR(page);
-                        CERROR("error reading dir "DFID" at "LPU64"/%u: rc %d\n",
+                        CDEBUG(D_READA, "error reading dir "DFID" at "LPU64"/%u: rc %d\n",
                                PFID(ll_inode2fid(dir)), pos,
                                sai->sai_index, rc);
                         break;

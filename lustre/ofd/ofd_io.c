@@ -379,7 +379,7 @@ int filter_commitrw(int cmd, struct obd_export *exp,
                         rs = ldlm_resource_get(ns, NULL, &info->fti_resid,
                                                LDLM_EXTENT, 0);
                         if (rs != NULL) {
-                                ns->ns_lvbo->lvbo_update(rs, NULL, 0, 1);
+                                ns->ns_lvbo->lvbo_update(rs, NULL, 1);
                                 ldlm_resource_putref(rs);
                         }
                 }

@@ -21,7 +21,7 @@ for num in $(seq $MDSCOUNT); do
     eval mds${num}failover_HOST=\$\{mds${num}failover_HOST:-$mdsfailover_HOST\}
 done
 MDSDEVBASE=${MDSDEVBASE:-$TMP/${FSNAME}-mdt}
-MDSSIZE=${MDSSIZE:-100000}
+MDSSIZE=${MDSSIZE:-200000}
 MDSOPT=${MDSOPT:-"--mountfsoptions=acl"}
 
 MGSDEV=${MGSDEV:-$MDSDEV1}

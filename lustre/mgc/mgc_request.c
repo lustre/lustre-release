@@ -796,29 +796,27 @@ static int mgc_set_mgs_param(struct obd_export *exp,
 {
         struct ptlrpc_request *req;
         struct mgs_send_param *req_msp, *rep_msp;
-        int size[] = { sizeof(struct ptlrpc_body), sizeof(*req_msp) };
-        __u32 rep_size[] = { sizeof(struct ptlrpc_body), sizeof(*msp) };
         int rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MGS_VERSION,
-                              MGS_SET_INFO, 2, size, NULL);
+        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
+                                        &RQF_MGS_SET_INFO, LUSTRE_MGS_VERSION,
+                                        MGS_SET_INFO);
         if (!req)
                 RETURN(-ENOMEM);
 
-        req_msp = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*req_msp));
+        req_msp = req_capsule_client_get(&req->rq_pill, &RMF_MGS_SEND_PARAM);
         if (!req_msp) {
                 ptlrpc_req_finished(req);
                 RETURN(-ENOMEM);
         }
 
         memcpy(req_msp, msp, sizeof(*req_msp));
-        ptlrpc_req_set_repsize(req, 2, rep_size);
+        ptlrpc_request_set_replen(req);
 
         rc = ptlrpc_queue_wait(req);
         if (!rc) {
-                rep_msp = lustre_swab_repbuf(req, REPLY_REC_OFF,
-                                             sizeof(*rep_msp), NULL);
+                rep_msp = req_capsule_server_get(&req->rq_pill, &RMF_MGS_SEND_PARAM);
                 memcpy(msp, rep_msp, sizeof(*rep_msp));
         }
 
@@ -851,8 +849,8 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         /* We need a callback for every lockholder, so don't try to
            ldlm_lock_match (see rev 1.1.2.11.2.47) */
 
-        rc = ldlm_cli_enqueue(exp, NULL, &einfo, &cld->cld_resid,
-                              NULL, flags, NULL, 0, NULL, lockh, 0);
+        rc = ldlm_cli_enqueue(exp, NULL, &einfo, &cld->cld_resid, NULL, flags,
+                              NULL, 0, lockh, 0);
         /* A failed enqueue should still call the mgc_blocking_ast,
            where it will be requeued if needed ("grant failed"). */
 

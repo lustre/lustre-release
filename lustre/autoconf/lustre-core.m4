@@ -8,6 +8,7 @@
 AC_DEFUN([LC_CONFIG_SRCDIR],
 [AC_CONFIG_SRCDIR([lustre/obdclass/obdo.c])
 libcfs_is_module=yes
+ldiskfs_is_ext4=no
 ])
 
 #
@@ -1780,6 +1781,7 @@ AC_DEFUN([LC_LINUX_FIEMAP_H],
 [LB_CHECK_FILE([$LINUX/include/linux/fiemap.h],[
         AC_MSG_CHECKING([if fiemap.h can be compiled])
         LB_LINUX_TRY_COMPILE([
+                #include <linux/types.h>
                 #include <linux/fiemap.h>
         ],[],[
                 AC_MSG_RESULT([yes])
@@ -1789,23 +1791,6 @@ AC_DEFUN([LC_LINUX_FIEMAP_H],
         ])
 ],
 [])
-])
-
-# 2.6.17 super_block use s_vfs_rename_mutex instead of s_vfs_rename_sem
-AC_DEFUN([LC_VFS_RENAME_MUTEX],
-[AC_MSG_CHECKING([super_block has s_vfs_rename_mutex])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-        struct super_block sb;
-        mutex_lock(&sb.s_vfs_rename_mutex);
-],[
-        AC_DEFINE(HAVE_VFS_RENAME_MUTEX, 1,
-                [super_block has s_vfs_rename_mutex])
-        AC_MSG_RESULT([yes])
-],[
-        AC_MSG_RESULT([no])
-])
 ])
 
 #
@@ -1883,7 +1868,6 @@ AC_DEFUN([LC_PROG_LINUX],
          # 2.6.17
          LC_INODE_IPRIVATE
          LC_DQUOTOFF_MUTEX
-         LC_VFS_RENAME_MUTEX
 
          # 2.6.18
          LC_NR_PAGECACHE
@@ -1900,6 +1884,7 @@ AC_DEFUN([LC_PROG_LINUX],
          #2.6.18 + RHEL5 (fc6)
          LC_PG_FS_MISC
          LC_PAGE_CHECKED
+         LC_LINUX_FIEMAP_H
 
          # 2.6.19
          LC_INODE_BLKSIZE

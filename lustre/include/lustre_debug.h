@@ -38,6 +38,7 @@
 #define _LUSTRE_DEBUG_H
 
 #include <lustre_net.h>
+#include <obd.h>
 
 #if defined(__linux__)
 #include <linux/lustre_debug.h>
@@ -67,11 +68,8 @@ do { if (offset > ASSERT_MAX_SIZE_MB << 20) {                           \
 }} while(0)
 
 /* lib/debug.c */
-int dump_lniobuf(struct niobuf_local *lnb);
-int dump_rniobuf(struct niobuf_remote *rnb);
-int dump_ioo(struct obd_ioobj *nb);
+void dump_lniobuf(struct niobuf_local *lnb);
 int dump_req(struct ptlrpc_request *req);
-int dump_obdo(struct obdo *oa);
 void dump_lsm(int level, struct lov_stripe_md *lsm);
 int block_debug_setup(void *addr, int len, __u64 off, __u64 id);
 int block_debug_check(char *who, void *addr, int len, __u64 off, __u64 id);

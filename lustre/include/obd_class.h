@@ -115,7 +115,7 @@ struct obd_device *class_incref(struct obd_device *obd,
                                 const char *scope, const void *source);
 void class_decref(struct obd_device *obd,
                   const char *scope, const void *source);
-void dump_exports(struct obd_device *obd);
+void dump_exports(struct obd_device *obd, int locks);
 
 /*obdecho*/
 #ifdef LPROCFS
@@ -172,6 +172,19 @@ struct lustre_profile *class_get_profile(const char * prof);
 void class_del_profile(const char *prof);
 void class_del_profiles(void);
 
+#if LUSTRE_TRACKS_LOCK_EXP_REFS
+
+void __class_export_add_lock_ref(struct obd_export *, struct ldlm_lock *);
+void __class_export_del_lock_ref(struct obd_export *, struct ldlm_lock *);
+extern void (*class_export_dump_hook)(struct obd_export *);
+
+#else
+
+#define __class_export_add_lock_ref(exp, lock)             do {} while(0)
+#define __class_export_del_lock_ref(exp, lock)             do {} while(0)
+
+#endif
+
 #define class_export_rpc_get(exp)                                       \
 ({                                                                      \
         atomic_inc(&(exp)->exp_rpc_count);                              \
@@ -189,18 +202,20 @@ void class_del_profiles(void);
         class_export_put(exp);                                          \
 })
 
-#define class_export_lock_get(exp)                                      \
+#define class_export_lock_get(exp, lock)                                \
 ({                                                                      \
         atomic_inc(&(exp)->exp_locks_count);                            \
+        __class_export_add_lock_ref(exp, lock);                         \
         CDEBUG(D_INFO, "lock GETting export %p : new locks_count %d\n", \
                (exp), atomic_read(&(exp)->exp_locks_count));            \
         class_export_get(exp);                                          \
 })
 
-#define class_export_lock_put(exp)                                      \
+#define class_export_lock_put(exp, lock)                                \
 ({                                                                      \
         LASSERT(atomic_read(&exp->exp_locks_count) > 0);                \
         atomic_dec(&(exp)->exp_locks_count);                            \
+        __class_export_del_lock_ref(exp, lock);                         \
         CDEBUG(D_INFO, "lock PUTting export %p : new locks_count %d\n", \
                (exp), atomic_read(&(exp)->exp_locks_count));            \
         class_export_put(exp);                                          \
@@ -243,6 +258,7 @@ int class_connect(struct lustre_handle *conn, struct obd_device *obd,
                   struct obd_uuid *cluuid);
 int class_disconnect(struct obd_export *exp);
 void class_fail_export(struct obd_export *exp);
+int class_connected_export(struct obd_export *exp);
 void class_disconnect_exports(struct obd_device *obddev);
 int class_manual_cleanup(struct obd_device *obd);
 void class_disconnect_stale_exports(struct obd_device *,
@@ -682,20 +698,6 @@ static inline int obd_free_memmd(struct obd_export *exp,
         rc = obd_unpackmd(exp, mem_tgt, NULL, 0);
         *mem_tgt = NULL;
         return rc;
-}
-
-static inline int obd_checkmd(struct obd_export *exp,
-                              struct obd_export *md_exp,
-                              struct lov_stripe_md *mem_tgt)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, checkmd);
-        EXP_COUNTER_INCREMENT(exp, checkmd);
-
-        rc = OBP(exp->exp_obd, checkmd)(exp, md_exp, mem_tgt);
-        RETURN(rc);
 }
 
 static inline int obd_precreate(struct obd_export *exp)
@@ -1643,9 +1645,34 @@ static inline int obd_register_observer(struct obd_device *obd,
 {
         ENTRY;
         OBD_CHECK_DEV(obd);
-        if (obd->obd_observer && observer)
+        down_write(&obd->obd_observer_link_sem);
+        if (obd->obd_observer && observer) {
+                up_write(&obd->obd_observer_link_sem);
                 RETURN(-EALREADY);
+        }
         obd->obd_observer = observer;
+        up_write(&obd->obd_observer_link_sem);
+        RETURN(0);
+}
+
+static inline int obd_pin_observer(struct obd_device *obd,
+                                   struct obd_device **observer)
+{
+        ENTRY;
+        down_read(&obd->obd_observer_link_sem);
+        if (!obd->obd_observer) {
+                *observer = NULL;
+                up_read(&obd->obd_observer_link_sem);
+                RETURN(-ENOENT);
+        }
+        *observer = obd->obd_observer;
+        RETURN(0);
+}
+
+static inline int obd_unpin_observer(struct obd_device *obd)
+{
+        ENTRY;
+        up_read(&obd->obd_observer_link_sem);
         RETURN(0);
 }
 

@@ -813,14 +813,6 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
         int rc;
         ENTRY;
 
-        /*
-         * Disable global rename BFL lock temporarily because
-         * when a mds do rename recoverying, which might enqueue
-         * BFL lock to the controller mds. and this req might be
-         * replay req for controller mds. but we did not have
-         * such handling in controller mds. XXX
-         */
-        RETURN(0);
         ms = mdt_md_site(info->mti_mdt);
         fid_build_reg_res_name(&LUSTRE_BFL_FID, res_id);
 
@@ -837,7 +829,6 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
                 rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS, policy,
                                             LCK_EX, &flags, ldlm_blocking_ast,
                                             ldlm_completion_ast, NULL, NULL, 0,
-                                            NULL,
                                             &info->mti_exp->exp_handle.h_cookie,
                                             lh);
         } else {
@@ -849,9 +840,8 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
                  * This is the case mdt0 is remote node, issue DLM lock like
                  * other clients.
                  */
-                rc = ldlm_cli_enqueue(ms->ms_control_exp,
-                                      NULL, &einfo, res_id,
-                                      policy, &flags, NULL, 0, NULL, lh, 0);
+                rc = ldlm_cli_enqueue(ms->ms_control_exp, NULL, &einfo, res_id,
+                                      policy, &flags, NULL, 0, lh, 0);
         }
 
         RETURN(rc);
@@ -860,9 +850,6 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
 static void mdt_rename_unlock(struct lustre_handle *lh)
 {
         ENTRY;
-        /* Disable global rename BFL lock temporarily. see above XXX*/
-        EXIT;
-        return;
         LASSERT(lustre_handle_is_used(lh));
         ldlm_lock_decref(lh, LCK_EX);
         EXIT;

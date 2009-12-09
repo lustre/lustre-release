@@ -46,7 +46,6 @@
 #include <obd_ost.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
-#include <class_hash.h>
 
 extern struct list_head obd_types;
 spinlock_t obd_types_lock;
@@ -62,7 +61,8 @@ spinlock_t        obd_zombie_impexp_lock;
 static void obd_zombie_impexp_notify(void);
 static void obd_zombie_export_add(struct obd_export *exp);
 static void obd_zombie_import_add(struct obd_import *imp);
-static void print_export_data(struct obd_export *exp, const char *status);
+static void print_export_data(struct obd_export *exp,
+                              const char *status, int locks);
 
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 
@@ -785,6 +785,10 @@ struct obd_export *class_new_export(struct obd_device *obd,
         atomic_set(&export->exp_rpc_count, 0);
         atomic_set(&export->exp_cb_count, 0);
         atomic_set(&export->exp_locks_count, 0);
+#if LUSTRE_TRACKS_LOCK_EXP_REFS
+        CFS_INIT_LIST_HEAD(&export->exp_locks_list);
+        spin_lock_init(&export->exp_locks_list_guard);
+#endif
         atomic_set(&export->exp_replay_count, 0);
         export->exp_obd = obd;
         CFS_INIT_LIST_HEAD(&export->exp_outstanding_replies);
@@ -810,8 +814,8 @@ struct obd_export *class_new_export(struct obd_device *obd,
                 GOTO(exit_err, rc = -ENODEV);
 
         if (!obd_uuid_equals(cluuid, &obd->obd_uuid)) {
-                rc = lustre_hash_add_unique(obd->obd_uuid_hash, cluuid,
-                                            &export->exp_uuid_hash);
+                rc = cfs_hash_add_unique(obd->obd_uuid_hash, cluuid,
+                                         &export->exp_uuid_hash);
                 if (rc != 0) {
                         LCONSOLE_WARN("%s: denying duplicate export for %s, %d\n",
                                       obd->obd_name, cluuid->uuid, rc);
@@ -844,9 +848,9 @@ void class_unlink_export(struct obd_export *exp)
         spin_lock(&exp->exp_obd->obd_dev_lock);
         /* delete an uuid-export hashitem from hashtables */
         if (!hlist_unhashed(&exp->exp_uuid_hash))
-                lustre_hash_del(exp->exp_obd->obd_uuid_hash,
-                                &exp->exp_client_uuid,
-                                &exp->exp_uuid_hash);
+                cfs_hash_del(exp->exp_obd->obd_uuid_hash,
+                             &exp->exp_client_uuid,
+                             &exp->exp_uuid_hash);
 
         list_move(&exp->exp_obd_chain, &exp->exp_obd->obd_unlinked_exports);
         list_del_init(&exp->exp_obd_chain_timed);
@@ -985,6 +989,49 @@ void class_destroy_import(struct obd_import *import)
 }
 EXPORT_SYMBOL(class_destroy_import);
 
+#if LUSTRE_TRACKS_LOCK_EXP_REFS
+
+void __class_export_add_lock_ref(struct obd_export *exp, struct ldlm_lock *lock)
+{
+        spin_lock(&exp->exp_locks_list_guard);
+
+        LASSERT(lock->l_exp_refs_nr >= 0);
+
+        if (lock->l_exp_refs_target != NULL &&
+            lock->l_exp_refs_target != exp) {
+                LCONSOLE_WARN("setting export %p for lock %p which already has export %p\n",
+                              exp, lock, lock->l_exp_refs_target);
+        }
+        if ((lock->l_exp_refs_nr ++) == 0) {
+                list_add(&lock->l_exp_refs_link, &exp->exp_locks_list);
+                lock->l_exp_refs_target = exp;
+        }
+        CDEBUG(D_INFO, "lock = %p, export = %p, refs = %u\n",
+               lock, exp, lock->l_exp_refs_nr);
+        spin_unlock(&exp->exp_locks_list_guard);
+}
+EXPORT_SYMBOL(__class_export_add_lock_ref);
+
+void __class_export_del_lock_ref(struct obd_export *exp, struct ldlm_lock *lock)
+{
+        spin_lock(&exp->exp_locks_list_guard);
+        LASSERT(lock->l_exp_refs_nr > 0);
+        if (lock->l_exp_refs_target != exp) {
+                LCONSOLE_WARN("lock %p, "
+                              "mismatching export pointers: %p, %p\n",
+                              lock, lock->l_exp_refs_target, exp);
+        }
+        if (-- lock->l_exp_refs_nr == 0) {
+                list_del_init(&lock->l_exp_refs_link);
+                lock->l_exp_refs_target = NULL;
+        }
+        CDEBUG(D_INFO, "lock = %p, export = %p, refs = %u\n",
+               lock, exp, lock->l_exp_refs_nr);
+        spin_unlock(&exp->exp_locks_list_guard);
+}
+EXPORT_SYMBOL(__class_export_del_lock_ref);
+#endif
+
 /* A connection defines an export context in which preallocation can
    be managed. This releases the export pointer reference, and returns
    the export handle, so the export refcount is 1 when this function
@@ -1079,9 +1126,9 @@ int class_disconnect(struct obd_export *export)
                export->exp_handle.h_cookie);
 
         if (!hlist_unhashed(&export->exp_nid_hash))
-                lustre_hash_del(export->exp_obd->obd_nid_hash,
-                                &export->exp_connection->c_peer.nid,
-                                &export->exp_nid_hash);
+                cfs_hash_del(export->exp_obd->obd_nid_hash,
+                             &export->exp_connection->c_peer.nid,
+                             &export->exp_nid_hash);
 
         class_export_recovery_cleanup(export);
         class_unlink_export(export);
@@ -1089,6 +1136,20 @@ no_disconn:
         class_export_put(export);
         RETURN(0);
 }
+
+/* Return non-zero for a fully connected export */
+int class_connected_export(struct obd_export *exp)
+{
+        if (exp) {
+                int connected;
+                spin_lock(&exp->exp_lock);
+                connected = (exp->exp_conn_cnt > 0);
+                spin_unlock(&exp->exp_lock);
+                return connected;
+        }
+        return 0;
+}
+EXPORT_SYMBOL(class_connected_export);
 
 static void class_disconnect_export_list(struct list_head *list,
                                          enum obd_option flags)
@@ -1188,7 +1249,7 @@ void class_disconnect_stale_exports(struct obd_device *obd,
                        obd->obd_name, exp->exp_client_uuid.uuid,
                        exp->exp_connection == NULL ? "<unknown>" :
                        libcfs_nid2str(exp->exp_connection->c_peer.nid));
-                print_export_data(exp, "EVICTING");
+                print_export_data(exp, "EVICTING", 0);
         }
         spin_unlock(&obd->obd_dev_lock);
 
@@ -1254,7 +1315,7 @@ int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
         lnet_nid_t nid_key = libcfs_str2nid((char *)nid);
 
         do {
-                doomed_exp = lustre_hash_lookup(obd->obd_nid_hash, &nid_key);
+                doomed_exp = cfs_hash_lookup(obd->obd_nid_hash, &nid_key);
                 if (doomed_exp == NULL)
                         break;
 
@@ -1291,7 +1352,7 @@ int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid)
                 return exports_evicted;
         }
 
-        doomed_exp = lustre_hash_lookup(obd->obd_uuid_hash, &doomed_uuid);
+        doomed_exp = cfs_hash_lookup(obd->obd_uuid_hash, &doomed_uuid);
 
         if (doomed_exp == NULL) {
                 CERROR("%s: can't disconnect %s: no exports found\n",
@@ -1308,7 +1369,13 @@ int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid)
 }
 EXPORT_SYMBOL(obd_export_evict_by_uuid);
 
-static void print_export_data(struct obd_export *exp, const char *status)
+#if LUSTRE_TRACKS_LOCK_EXP_REFS
+void (*class_export_dump_hook)(struct obd_export*) = NULL;
+EXPORT_SYMBOL(class_export_dump_hook);
+#endif
+
+static void print_export_data(struct obd_export *exp, const char *status,
+                              int locks)
 {
         struct ptlrpc_reply_state *rs;
         struct ptlrpc_reply_state *first_reply = NULL;
@@ -1331,23 +1398,27 @@ static void print_export_data(struct obd_export *exp, const char *status)
                exp->exp_disconnected, exp->exp_delayed, exp->exp_failed,
                nreplies, first_reply, nreplies > 3 ? "..." : "",
                exp->exp_last_committed);
+#if LUSTRE_TRACKS_LOCK_EXP_REFS
+        if (locks && class_export_dump_hook != NULL)
+                class_export_dump_hook(exp);
+#endif
 }
 
-void dump_exports(struct obd_device *obd)
+void dump_exports(struct obd_device *obd, int locks)
 {
         struct obd_export *exp;
 
         spin_lock(&obd->obd_dev_lock);
         list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain)
-                print_export_data(exp, "ACTIVE");
+                print_export_data(exp, "ACTIVE", locks);
         list_for_each_entry(exp, &obd->obd_unlinked_exports, exp_obd_chain)
-                print_export_data(exp, "UNLINKED");
+                print_export_data(exp, "UNLINKED", locks);
         list_for_each_entry(exp, &obd->obd_delayed_exports, exp_obd_chain)
-                print_export_data(exp, "DELAYED");
+                print_export_data(exp, "DELAYED", locks);
         spin_unlock(&obd->obd_dev_lock);
         spin_lock(&obd_zombie_impexp_lock);
         list_for_each_entry(exp, &obd_zombie_exports, exp_obd_chain)
-                print_export_data(exp, "ZOMBIE");
+                print_export_data(exp, "ZOMBIE", locks);
         spin_unlock(&obd_zombie_impexp_lock);
 }
 EXPORT_SYMBOL(dump_exports);
@@ -1366,7 +1437,7 @@ void obd_exports_barrier(struct obd_device *obd)
                                       "The obd refcount = %d. Is it stuck?\n",
                                       obd->obd_name, waited,
                                       atomic_read(&obd->obd_refcount));
-                        dump_exports(obd);
+                        dump_exports(obd, 0);
                 }
                 waited *= 2;
                 spin_lock(&obd->obd_dev_lock);

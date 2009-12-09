@@ -1013,7 +1013,8 @@ int main(int argc, char *argv[])
 
         if (size < MIN_GLHOST) {
                 fprintf(stderr, "Error: "
-                        "should be at least four tasks to run the test!\n");
+                        "%d tasks run, but should be at least %d tasks to run "
+                        "the test!\n", size, MIN_GLHOST);
                 MPI_Abort(MPI_COMM_WORLD, 2);
         }
 

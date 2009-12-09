@@ -864,6 +864,8 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                         continue;
                 }
 
+                check_lcd(obd->obd_name, cl_idx, lcd);
+
                 last_rcvd = le64_to_cpu(lcd->lcd_last_transno);
 
                 /* These exports are cleaned up by filter_disconnect(), so they
@@ -1551,7 +1553,7 @@ static int filter_prepare_destroy(struct obd_device *obd, obd_id objid,
         rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, LDLM_EXTENT,
                                     &policy, LCK_PW, &flags, ldlm_blocking_ast,
                                     ldlm_completion_ast, NULL, NULL, 0, NULL,
-                                    NULL, lockh);
+                                    lockh);
         if (rc != ELDLM_OK)
                 lockh->cookie = 0;
         RETURN(rc);
@@ -1809,7 +1811,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
                          *
                          * Of course, this will all disappear when we switch to
                          * taking liblustre locks on the OST. */
-                        ldlm_res_lvbo_update(res, NULL, 0, 1);
+                        ldlm_res_lvbo_update(res, NULL, 1);
                 }
                 RETURN(ELDLM_LOCK_ABORTED);
         }
@@ -1836,7 +1838,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
          * sending ast is not handled. This can result in lost client writes.
          */
         if (rc != 0)
-                ldlm_res_lvbo_update(res, NULL, 0, 1);
+                ldlm_res_lvbo_update(res, NULL, 1);
 
         lock_res(res);
         *reply_lvb = *res_lvb;
@@ -3445,7 +3447,7 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
 
         if (res != NULL) {
                 LDLM_RESOURCE_ADDREF(res);
-                rc = ldlm_res_lvbo_update(res, NULL, 0, 0);
+                rc = ldlm_res_lvbo_update(res, NULL, 0);
                 LDLM_RESOURCE_DELREF(res);
                 ldlm_resource_putref(res);
         }
@@ -3696,6 +3698,17 @@ static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         osfs->os_bavail -= min(osfs->os_bavail, GRANT_FOR_LLOG(obd) +
                                ((filter->fo_tot_dirty + filter->fo_tot_pending +
                                  osfs->os_bsize - 1) >> blockbits));
+
+        if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOSPC)) {
+                struct lr_server_data *lsd = filter->fo_fsd;
+                int index = le32_to_cpu(lsd->lsd_ost_index);
+
+                if (obd_fail_val == -1 ||
+                    index == obd_fail_val)
+                        osfs->os_bfree = osfs->os_bavail = 2;
+                else if (obd_fail_loc & OBD_FAIL_ONCE)
+                        obd_fail_loc &= ~OBD_FAILED; /* reset flag */
+        }
 
         /* set EROFS to state field if FS is mounted as RDONLY. The goal is to
          * stop creating files on MDS if OST is not good shape to create

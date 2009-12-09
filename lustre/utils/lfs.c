@@ -133,7 +133,7 @@ command_t cmdlist[] = {
          "directory or recursively for all files in a directory tree.\n"
          "usage: getstripe [--obd|-O <uuid>] [--quiet | -q] [--verbose | -v]\n"
          "                 [--count | -c ] [--size | -s ] [--index | -i ]\n"
-         "                 [--offset | -o ] [--pool | -p ]\n"
+         "                 [--offset | -o ] [--pool | -p ] [--directory | -d]\n"
          "                 [--recursive | -r] <dir|file> ..."},
         {"pool_list", lfs_poollist, 0,
          "List pools or pool OSTs\n"
@@ -160,8 +160,8 @@ command_t cmdlist[] = {
          "\tkeywords are one of followings: config, deletions.\n"
          "\tnode name must be provided when use keyword config."},
         {"join", lfs_join, 0,
-         "join two lustre files into one - join A, B, will be like cat B >> A & del B\n"
-         "usage: join <filename_A> <filename_B>\n"},
+         "join two lustre files into one.\n"
+         "obsolete, HEAD does not support it anymore.\n"},
         {"osts", lfs_osts, 0, "osts"},
         {"df", lfs_df, 0,
          "report filesystem disk space usage or inodes usage"
@@ -824,14 +824,15 @@ static int lfs_getstripe(int argc, char **argv)
                 {"offset", 0, 0, 'o'},
                 {"pool", 0, 0, 'p'},
                 {"verbose", 0, 0, 'v'},
+                {"directory", 0, 0, 'd'},
                 {0, 0, 0, 0}
         };
-        char short_opts[] = "hO:qrvcsiop";
         int c, rc;
         struct find_param param = { 0 };
 
+        param.maxdepth = 1;
         optind = 0;
-        while ((c = getopt_long(argc, argv, short_opts,
+        while ((c = getopt_long(argc, argv, "cdhioO:pqrsv",
                                 long_opts, NULL)) != -1) {
                 switch (c) {
                 case 'O':
@@ -846,22 +847,33 @@ static int lfs_getstripe(int argc, char **argv)
                 case 'q':
                         param.quiet++;
                         break;
+                case 'd':
+                        param.maxdepth = 0;
+                        break;
                 case 'r':
                         param.recursive = 1;
                         break;
                 case 'v':
                         param.verbose = VERBOSE_ALL | VERBOSE_DETAIL;
-                        param.quiet = 0;
                         break;
                 case 'c':
-                        param.verbose |= VERBOSE_COUNT;
+                        if (!(param.verbose & VERBOSE_DETAIL)) {
+                                param.verbose |= VERBOSE_COUNT;
+                                param.maxdepth = 0;
+                        }
                         break;
                 case 's':
-                        param.verbose |= VERBOSE_SIZE;
+                        if (!(param.verbose & VERBOSE_DETAIL)) {
+                                param.verbose |= VERBOSE_SIZE;
+                                param.maxdepth = 0;
+                        }
                         break;
                 case 'i':
                 case 'o':
-                        param.verbose |= VERBOSE_OFFSET;
+                        if (!(param.verbose & VERBOSE_DETAIL)) {
+                                param.verbose |= VERBOSE_OFFSET;
+                                param.maxdepth = 0;
+                        }
                         break;
                 case 'p':
                         param.verbose |= VERBOSE_POOL;
@@ -878,7 +890,13 @@ static int lfs_getstripe(int argc, char **argv)
         if (optind >= argc)
                 return CMD_HELP;
 
-        param.maxdepth = param.recursive ? -1 : 1;
+        if (param.recursive)
+                param.maxdepth = -1;
+
+        if (!param.verbose)
+                param.verbose = VERBOSE_ALL;
+        if (param.quiet)
+                param.verbose = VERBOSE_OBJID;
 
         do {
                 rc = llapi_getstripe(argv[optind], &param);
@@ -901,7 +919,7 @@ static int lfs_osts(int argc, char **argv)
 
         while (llapi_search_mounts(NULL, index++, mntdir, NULL) == 0) {
                 memset(&param, 0, sizeof(param));
-                rc = llapi_getstripe(mntdir, &param);
+                rc = llapi_ostlist(mntdir, &param);
                 if (rc) {
                         fprintf(stderr, "error: %s: failed on %s\n",
                                 argv[0], mntdir);
@@ -1244,37 +1262,11 @@ static int lfs_catinfo(int argc, char **argv)
         return rc;
 }
 
-int lfs_join(int argc, char **argv)
+static int lfs_join(int argc, char **argv)
 {
-        char *name_head, *name_tail;
-        int fd, rc;
-        loff_t size;
-
-        if (argc != 3)
-                return CMD_HELP;
-        name_head = argv[1];
-        fd = open(name_head, O_WRONLY);
-        if (fd < 0) {
-                fprintf(stderr, "Can not open name_head %s rc=%d\n",
-                        name_head, fd);
-                return fd;
-        }
-        size = lseek(fd, 0, SEEK_END);
-        if (size % JOIN_FILE_ALIGN) {
-                fprintf(stderr,"head file %s size %llu must be mutiple of %d\n",
-                        name_head, (long long)size, JOIN_FILE_ALIGN);
-                rc = -EINVAL;
-                goto out;
-        }
-        name_tail = argv[2];
-        rc = ioctl(fd, LL_IOC_JOIN, name_tail);
-out:
-        close(fd);
-        if (rc) {
-                fprintf(stderr, "Lustre joining files: %s, %s, failed\n",
-                        argv[1], argv[2]);
-        }
-        return rc;
+        fprintf(stderr, "join two lustre files into one.\n"
+                        "obsolete, HEAD does not support it anymore.\n");
+        return 0;
 }
 
 #ifdef HAVE_SYS_QUOTA_H

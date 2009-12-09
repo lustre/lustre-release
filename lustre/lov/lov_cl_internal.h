@@ -169,8 +169,6 @@ enum lov_layout_type {
         LLT_EMPTY,
         /** striped file */
         LLT_RAID0,
-        /** join file */
-        LLT_JOIN,
         LLT_NR
 };
 
@@ -239,8 +237,6 @@ struct lov_object {
                 } raid0;
                 struct lov_layout_state_empty {
                 } empty;
-                struct lov_layout_state_join {
-                } join;
         } u;
         /**
          * Thread that acquired lov_object::lo_type_guard in an exclusive

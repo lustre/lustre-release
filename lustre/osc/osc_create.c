@@ -82,8 +82,7 @@ static int osc_interpret_create(const struct lu_env *env,
         ENTRY;
 
         if (req->rq_repmsg) {
-                body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
-                                          lustre_swab_ost_body);
+                body = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
                 if (body == NULL && rc == 0)
                         rc = -EPROTO;
         }
@@ -145,10 +144,14 @@ static int osc_interpret_create(const struct lu_env *env,
                 spin_unlock(&oscc->oscc_lock);
                 break;
         }
+        case -EINTR:
         case -EWOULDBLOCK: {
                 /* aka EAGAIN we should not delay create if import failed -
                  * this avoid client stick in create and avoid race with
                  * delorphan */
+                /* EINTR say - old create request is killed due mds<>ost
+                 * eviction - OSCC_FLAG_RECOVERING can already set due
+                 * IMP_DISCONN event */
                 oscc->oscc_flags |= OSCC_FLAG_RECOVERING;
                 /* oscc->oscc_grow_count = OST_MIN_PRECREATE; */
                 spin_unlock(&oscc->oscc_lock);
@@ -189,7 +192,6 @@ static int oscc_internal_create(struct osc_creator *oscc)
 {
         struct ptlrpc_request *request;
         struct ost_body *body;
-        __u32 size[] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
         LASSERT_SPIN_LOCKED(&oscc->oscc_lock);
@@ -221,9 +223,9 @@ static int oscc_internal_create(struct osc_creator *oscc)
         oscc->oscc_flags |= OSCC_FLAG_CREATING;
         spin_unlock(&oscc->oscc_lock);
 
-        request = ptlrpc_prep_req(oscc->oscc_obd->u.cli.cl_import,
-                                  LUSTRE_OST_VERSION, OST_CREATE, 2,
-                                  size, NULL);
+        request = ptlrpc_request_alloc_pack(oscc->oscc_obd->u.cli.cl_import,
+                                            &RQF_OST_CREATE,
+                                            LUSTRE_OST_VERSION, OST_CREATE);
         if (request == NULL) {
                 spin_lock(&oscc->oscc_lock);
                 oscc->oscc_flags &= ~OSCC_FLAG_CREATING;
@@ -233,7 +235,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
 
         request->rq_request_portal = OST_CREATE_PORTAL;
         ptlrpc_at_set_req_timeout(request);
-        body = lustre_msg_buf(request->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
+        body = req_capsule_client_get(&request->rq_pill, &RMF_OST_BODY);
 
         spin_lock(&oscc->oscc_lock);
         body->oa.o_id = oscc->oscc_last_id + oscc->oscc_grow_count;
@@ -248,7 +250,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
         /* we should not resend create request - anyway we will have delorphan
          * and kill these objects */
         request->rq_no_delay = request->rq_no_resend = 1;
-        ptlrpc_req_set_repsize(request, 2, size);
+        ptlrpc_request_set_replen(request);
 
         request->rq_async_args.pointer_arg[0] = oscc;
         request->rq_interpret_reply = osc_interpret_create;

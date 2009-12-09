@@ -772,7 +772,7 @@ int target_handle_connect(struct ptlrpc_request *req)
         if (obd_uuid_equals(&cluuid, &target->obd_uuid))
                 goto dont_check_exports;
 
-        export = lustre_hash_lookup(target->obd_uuid_hash, &cluuid);
+        export = cfs_hash_lookup(target->obd_uuid_hash, &cluuid);
         if (!export)
                 goto no_export;
 
@@ -957,6 +957,7 @@ dont_check_exports:
 
                 GOTO(out, rc = -EALREADY);
         }
+        LASSERT(lustre_msg_get_conn_cnt(req->rq_reqmsg) > 0);
         export->exp_conn_cnt = lustre_msg_get_conn_cnt(req->rq_reqmsg);
         export->exp_abort_active_req = 0;
 
@@ -976,9 +977,9 @@ dont_check_exports:
                 /* Check to see if connection came from another NID */
                 if ((export->exp_connection->c_peer.nid != req->rq_peer.nid) &&
                     !hlist_unhashed(&export->exp_nid_hash))
-                        lustre_hash_del(export->exp_obd->obd_nid_hash,
-                                        &export->exp_connection->c_peer.nid,
-                                        &export->exp_nid_hash);
+                        cfs_hash_del(export->exp_obd->obd_nid_hash,
+                                     &export->exp_connection->c_peer.nid,
+                                     &export->exp_nid_hash);
 
                 ptlrpc_connection_put(export->exp_connection);
         }
@@ -987,9 +988,9 @@ dont_check_exports:
                                                        req->rq_self,
                                                        &remote_uuid);
         if (hlist_unhashed(&export->exp_nid_hash)) {
-                lustre_hash_add_unique(export->exp_obd->obd_nid_hash,
-                                       &export->exp_connection->c_peer.nid,
-                                       &export->exp_nid_hash);
+                cfs_hash_add_unique(export->exp_obd->obd_nid_hash,
+                                    &export->exp_connection->c_peer.nid,
+                                    &export->exp_nid_hash);
         }
 
         spin_lock_bh(&target->obd_processing_task_lock);
@@ -1684,20 +1685,8 @@ static int handle_recovery_req(struct ptlrpc_thread *thread,
                                       AT_OFF ? obd_timeout :
                                       lustre_msg_get_timeout(req->rq_reqmsg), 1);
         }
-        /**
-         * bz18031: increase next_recovery_transno before target_request_copy_put()
-         * will drop exp_rpc reference
-         */
-        if (req->rq_export->exp_req_replay_needed) {
-                spin_lock_bh(&req->rq_export->exp_obd->obd_processing_task_lock);
-                req->rq_export->exp_obd->obd_next_recovery_transno++;
-                spin_unlock_bh(&req->rq_export->exp_obd->obd_processing_task_lock);
-        }
 reqcopy_put:
-        if (req->rq_export->exp_req_replay_needed)
-                target_exp_dequeue_req_replay(req);
-        target_request_copy_put(req);
-        RETURN(0);
+        RETURN(rc);
 }
 
 static int target_recovery_thread(void *arg)
@@ -1754,6 +1743,15 @@ static int target_recovery_thread(void *arg)
                           libcfs_nid2str(req->rq_peer.nid));
                 handle_recovery_req(thread, req,
                                     trd->trd_recovery_handler);
+                /**
+                 * bz18031: increase next_recovery_transno before
+                 * target_request_copy_put() will drop exp_rpc reference
+                 */
+                spin_lock_bh(&obd->obd_processing_task_lock);
+                obd->obd_next_recovery_transno++;
+                spin_unlock_bh(&obd->obd_processing_task_lock);
+                target_exp_dequeue_req_replay(req);
+                target_request_copy_put(req);
                 obd->obd_replayed_requests++;
         }
 
@@ -1768,6 +1766,7 @@ static int target_recovery_thread(void *arg)
                           libcfs_nid2str(req->rq_peer.nid));
                 handle_recovery_req(thread, req,
                                     trd->trd_recovery_handler);
+                target_request_copy_put(req);
                 obd->obd_replayed_locks++;
         }
 
@@ -1790,6 +1789,7 @@ static int target_recovery_thread(void *arg)
                           libcfs_nid2str(req->rq_peer.nid));
                 handle_recovery_req(thread, req,
                                     trd->trd_recovery_handler);
+                target_request_copy_put(req);
         }
 
         delta = (jiffies - delta) / HZ;
@@ -2253,7 +2253,7 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
 {
 #ifdef __KERNEL__
         struct obd_device *obd = req->rq_export->exp_obd;
-        struct obd_device *master_obd;
+        struct obd_device *master_obd = NULL, *lov_obd = NULL;
         struct obd_device_target *obt;
         struct lustre_quota_ctxt *qctxt;
         struct qunit_data *qdata = NULL;
@@ -2280,13 +2280,13 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         }
 
         /* we use the observer */
-        if (!obd->obd_observer || !obd->obd_observer->obd_observer) {
+        if (obd_pin_observer(obd, &lov_obd) ||
+            obd_pin_observer(lov_obd, &master_obd)) {
                 CERROR("Can't find the observer, it is recovering\n");
                 req->rq_status = -EAGAIN;
                 GOTO(out, rc);
         }
 
-        master_obd = obd->obd_observer->obd_observer;
         obt = &master_obd->u.obt;
         qctxt = &obt->obt_qctxt;
 
@@ -2332,6 +2332,11 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         EXIT;
 
 out:
+        if (master_obd)
+                obd_unpin_observer(lov_obd);
+        if (lov_obd)
+                obd_unpin_observer(obd);
+
         rc = ptlrpc_reply(req);
         return rc;
 #else
@@ -2476,3 +2481,18 @@ ldlm_error_t ldlm_errno2error(int err_no)
 }
 EXPORT_SYMBOL(ldlm_errno2error);
 
+#if LUSTRE_TRACKS_LOCK_EXP_REFS
+void ldlm_dump_export_locks(struct obd_export *exp)
+{
+        spin_lock(&exp->exp_locks_list_guard);
+        if (!list_empty(&exp->exp_locks_list)) {
+            struct ldlm_lock *lock;
+
+            CERROR("dumping locks for export %p,"
+                   "ignore if the unmount doesn't hang\n", exp);
+            list_for_each_entry(lock, &exp->exp_locks_list, l_exp_refs_link)
+                ldlm_lock_dump(D_ERROR, lock, 0);
+        }
+        spin_unlock(&exp->exp_locks_list_guard);
+}
+#endif

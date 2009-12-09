@@ -9,8 +9,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 13297 2108 9789 3637 9789 3561 12622 12653 12653 5188 10764 16260
-ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   65a   65e   68b   75    119d   $SANITY_EXCEPT"
+# bug number for skipped test: 13297 2108 9789 3637 9789 3561 12622 12653 12653 5188 16260 19742 
+ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   65a   65e   68b  119d  130 $SANITY_EXCEPT"
 # bug number for skipped test: 2108 9789 3637 9789 3561 5188/5749 1443
 #ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27m 42a 42b 42c 42d 45 68 76"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
@@ -32,7 +32,8 @@ ALWAYS_EXCEPT="$ALWAYS_EXCEPT 76"
 # 156 -- ^^
 # 160 -- changelogs don't work yet
 # 162 -- DMU's osd_object_create() doesn't set XATTR_NAME_LMA
-ALWAYS_EXCEPT="$ALWAYS_EXCEPT 52a 52b 57a 57b 129 132 156 160"
+# 180 -- ofd doesn't work with obdecho 
+ALWAYS_EXCEPT="$ALWAYS_EXCEPT 52a 52b 57a 57b 129 132 156 160 180"
 
 case `uname -r` in
 2.4*) FSTYPE=${FSTYPE:-ext3} ;;
@@ -1002,19 +1003,22 @@ sleep_maxage() {
 # OSCs keep a NOSPC flag that will be reset after ~5s (qos_maxage)
 # if the OST isn't full anymore.
 reset_enospc() {
-	local FAIL_LOC=${1:-0}
-	local OSTIDX=${2:-""}
+	local OSTIDX=${1:-""}
 
 	local list=$(comma_list $(osts_nodes))
 	[ "$OSTIDX" ] && list=$(facet_host ost$((OSTIDX + 1)))
 
-	do_nodes $list lctl set_param fail_loc=$FAIL_LOC
+	do_nodes $list lctl set_param fail_loc=0
 	sleep_maxage
 }
 
 exhaust_precreations() {
 	local OSTIDX=$1
-	local MDSIDX=$(get_mds_dir "$DIR/d27")
+	local FAILLOC=$2
+	local FAILIDX=${3:-$OSTIDX}
+
+	mkdir -p $DIR/$tdir
+	local MDSIDX=$(get_mds_dir "$DIR/$tdir")
 	echo OSTIDX=$OSTIDX MDSIDX=$MDSIDX
 
 	local OST=$(lfs osts | grep ${OSTIDX}": " | \
@@ -1029,21 +1033,22 @@ exhaust_precreations() {
 	do_facet mds${MDSIDX} lctl get_param osc.*OST*-osc-${MDT_INDEX}.prealloc*
 
 	mkdir -p $DIR/d27/${OST}
-	$SETSTRIPE $DIR/d27/${OST} -i $OSTIDX -c 1
+	$SETSTRIPE $DIR/$tdir/${OST} -i $OSTIDX -c 1
 #define OBD_FAIL_OST_ENOSPC              0x215
+	do_facet ost$((OSTIDX + 1)) lctl set_param fail_val=$FAILIDX
 	do_facet ost$((OSTIDX + 1)) lctl set_param fail_loc=0x215
 	echo "Creating to objid $last_id on ost $OST..."
-	createmany -o $DIR/d27/${OST}/f $next_id $((last_id - next_id + 2))
+	createmany -o $DIR/$tdir/${OST}/f $next_id $((last_id - next_id + 2))
 	do_facet mds${MDSIDX} lctl get_param osc.*OST*-osc-${MDT_INDEX}.prealloc*
-	reset_enospc $2 $OSTIDX
+	do_facet ost$((OSTIDX + 1)) lctl set_param fail_loc=$FAILLOC
+	sleep_maxage
 }
 
 exhaust_all_precreations() {
 	local i
 	for (( i=0; i < OSTCOUNT; i++ )) ; do
-		exhaust_precreations $i 0x215
+		exhaust_precreations $i $1 -1
 	done
-	reset_enospc $1
 }
 
 test_27n() {
@@ -1052,12 +1057,11 @@ test_27n() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
-	rm -f $DIR/d27/f27n
-	$SETSTRIPE $DIR/d27 -c 1 -i -1
+	rm -f $DIR/$tdir/$tfile
 	exhaust_precreations 0 0x80000215
-	$SETSTRIPE -c -1 $DIR/d27
-	touch $DIR/d27/f27n || error
-	$GETSTRIPE $DIR/d27/f27n
+	$SETSTRIPE -c -1 $DIR/$tdir
+	touch $DIR/$tdir/$tfile || error
+	$GETSTRIPE $DIR/$tdir/$tfile
 	reset_enospc
 }
 run_test 27n "create file with some full OSTs =================="
@@ -1068,13 +1072,13 @@ test_27o() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
-	rm -f $DIR/d27/f27o
+	rm -f $DIR/$tdir/$tfile
 	exhaust_all_precreations 0x215
 
-	touch $DIR/d27/f27o && error "able to create $DIR/d27/f27o"
+	touch $DIR/$tdir/$tfile && error "able to create $DIR/$tdir/$tfile"
 
 	reset_enospc
-	rm -rf $DIR/d27/*
+	rm -rf $DIR/$tdir/*
 }
 run_test 27o "create file with all full OSTs (should error) ===="
 
@@ -1084,17 +1088,17 @@ test_27p() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
-	rm -f $DIR/d27/f27p
-	mkdir -p $DIR/d27
+	rm -f $DIR/$tdir/$tfile
+	mkdir -p $DIR/$tdir
 
-	$MCREATE $DIR/d27/f27p || error "mcreate failed"
-	$TRUNCATE $DIR/d27/f27p 80000000 || error "truncate failed"
-	$CHECKSTAT -s 80000000 $DIR/d27/f27p || error "checkstat failed"
+	$MCREATE $DIR/$tdir/$tfile || error "mcreate failed"
+	$TRUNCATE $DIR/$tdir/$tfile 80000000 || error "truncate failed"
+	$CHECKSTAT -s 80000000 $DIR/$tdir/$tfile || error "checkstat failed"
 
 	exhaust_precreations 0 0x80000215
-	echo foo >> $DIR/d27/f27p || error "append failed"
-	$CHECKSTAT -s 80000004 $DIR/d27/f27p || error "checkstat failed"
-	$LFS getstripe $DIR/d27/f27p
+	echo foo >> $DIR/$tdir/$tfile || error "append failed"
+	$CHECKSTAT -s 80000004 $DIR/$tdir/$tfile || error "checkstat failed"
+	$LFS getstripe $DIR/$tdir/$tfile
 
 	reset_enospc
 }
@@ -1106,16 +1110,16 @@ test_27q() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
-	rm -f $DIR/d27/f27q
+	rm -f $DIR/$tdir/$tfile
 
-	$MCREATE $DIR/d27/f27q || error "mcreate $DIR/d27/f27q failed"
-	$TRUNCATE $DIR/d27/f27q 80000000 ||error "truncate $DIR/d27/f27q failed"
-	$CHECKSTAT -s 80000000 $DIR/d27/f27q || error "checkstat failed"
+	$MCREATE $DIR/$tdir/$tfile || error "mcreate $DIR/$tdir/$tfile failed"
+	$TRUNCATE $DIR/$tdir/$tfile 80000000 ||error "truncate $DIR/$tdir/$tfile failed"
+	$CHECKSTAT -s 80000000 $DIR/$tdir/$tfile || error "checkstat failed"
 
 	exhaust_all_precreations 0x215
 
-	echo foo >> $DIR/d27/f27q && error "append succeeded"
-	$CHECKSTAT -s 80000000 $DIR/d27/f27q || error "checkstat 2 failed"
+	echo foo >> $DIR/$tdir/$tfile && error "append succeeded"
+	$CHECKSTAT -s 80000000 $DIR/$tdir/$tfile || error "checkstat 2 failed"
 
 	reset_enospc
 }
@@ -1127,10 +1131,10 @@ test_27r() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	reset_enospc
-	rm -f $DIR/d27/f27r
+	rm -f $DIR/$tdir/$tfile
 	exhaust_precreations 0 0x80000215
 
-	$SETSTRIPE $DIR/d27/f27r -i 0 -c 2 # && error
+	$SETSTRIPE $DIR/$tdir/$tfile -i 0 -c 2 # && error
 
 	reset_enospc
 }
@@ -1163,14 +1167,14 @@ test_27u() { # bug 4900
 
 #define OBD_FAIL_MDS_OSC_PRECREATE      0x139
         do_facet $SINGLEMDS lctl set_param fail_loc=0x139
-        mkdir -p $DIR/d27u
-        createmany -o $DIR/d27u/t- 1000
+        mkdir -p $DIR/$tdir
+        createmany -o $DIR/$tdir/t- 1000
         do_facet $SINGLEMDS lctl set_param fail_loc=0
 
         TLOG=$DIR/$tfile.getstripe
-        $GETSTRIPE $DIR/d27u > $TLOG
+        $GETSTRIPE $DIR/$tdir > $TLOG
         OBJS=`awk -vobj=0 '($1 == 0) { obj += 1 } END { print obj;}' $TLOG`
-        unlinkmany $DIR/d27u/t- 1000
+        unlinkmany $DIR/$tdir/t- 1000
         [ $OBJS -gt 0 ] && \
                 error "$OBJS objects created on OST-0.  See $TLOG" || pass
 }
@@ -1181,7 +1185,8 @@ test_27v() { # bug 4900
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
-        exhaust_all_precreations
+        exhaust_all_precreations 0x215
+        reset_enospc
 
         mkdir -p $DIR/$tdir
         $SETSTRIPE $DIR/$tdir -c 1         # 1 stripe / file
@@ -1205,17 +1210,17 @@ test_27v() { # bug 4900
 run_test 27v "skip object creation on slow OST ================="
 
 test_27w() { # bug 10997
-        mkdir -p $DIR/d27w || error "mkdir failed"
-        $LSTRIPE $DIR/d27w/f0 -s 65536 || error "lstripe failed"
-        size=`$GETSTRIPE $DIR/d27w/f0 -qs | head -n 1`
+        mkdir -p $DIR/$tdir || error "mkdir failed"
+        $LSTRIPE $DIR/$tdir/f0 -s 65536 || error "lstripe failed"
+        size=`$GETSTRIPE $DIR/$tdir/f0 -s`
         [ $size -ne 65536 ] && error "stripe size $size != 65536" || true
 
         [ "$OSTCOUNT" -lt "2" ] && skip_env "skipping multiple stripe count/offset test" && return
         for i in `seq 1 $OSTCOUNT`; do
                 offset=$(($i-1))
-                $LSTRIPE $DIR/d27w/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
-                count=`$GETSTRIPE -qc $DIR/d27w/f$i | head -n 1`
-                index=`$GETSTRIPE -qo $DIR/d27w/f$i | head -n 1`
+                $LSTRIPE $DIR/$tdir/f$i -c $i -i $offset || error "lstripe -c $i -i $offset failed"
+                count=`$GETSTRIPE -c $DIR/$tdir/f$i`
+                index=`$GETSTRIPE -o $DIR/$tdir/f$i`
                 [ $count -ne $i ] && error "stripe count $count != $i" || true
                 [ $index -ne $offset ] && error "stripe offset $index != $offset" || true
         done
@@ -1224,20 +1229,20 @@ run_test 27w "check lfs setstripe -c -s -i options ============="
 
 test_27x() {
 	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs" && return
-	OFFSET=$(($OSTCOUNTi - 1))
+	OFFSET=$(($OSTCOUNT - 1))
 	OSTIDX=0
 	local OST=$(lfs osts | awk '/'${OSTIDX}': / { print $2 }' | sed -e 's/_UUID$//')
 
 	mkdir -p $DIR/$tdir
 	$SETSTRIPE $DIR/$tdir -c 1	# 1 stripe per file
-	do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 1
+	do_facet ost$((OSTIDX + 1)) lctl set_param -n obdfilter.$OST.degraded 1
 	sleep_maxage
 	createmany -o $DIR/$tdir/$tfile $OSTCOUNT
 	for i in `seq 0 $OFFSET`; do
 		[ `$GETSTRIPE $DIR/$tdir/$tfile$i | grep -A 10 obdidx | awk '{print $1}' | grep -w "$OSTIDX"` ] &&
 		error "OST0 was degraded but new created file still use it"
 	done
-	do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 0
+	do_facet ost$((OSTIDX + 1)) lctl set_param -n obdfilter.$OST.degraded 0
 }
 run_test 27x "create files while OST0 is degraded"
 
@@ -2658,12 +2663,14 @@ test_56a() {	# was test_56
 
         [  "$OSTCOUNT" -lt 2 ] && \
                 skip_env "skipping other lfs getstripe --obd test" && return
-        FILENUM=`$GETSTRIPE --recursive $DIR/d56 | sed -n '/^[	 ]*1[	 ]/p' | wc -l`
-        OBDUUID=`$GETSTRIPE --recursive $DIR/d56 | sed -n '/^[	 ]*1:/p' | awk '{print $2}'`
-        FOUND=`$GETSTRIPE -r --obd $OBDUUID $DIR/d56 | wc -l`
+        OSTIDX=1
+        OBDUUID=$(lfs osts | grep ${OSTIDX}": " | awk '{print $2}')
+        FILENUM=`$GETSTRIPE -ir $DIR/d56 | grep -x $OSTIDX | wc -l`
+        FOUND=`$GETSTRIPE -r --obd $OBDUUID $DIR/d56 | grep obdidx | wc -l`
         [ $FOUND -eq $FILENUM ] || \
                 error "lfs getstripe --obd wrong: found $FOUND, expected $FILENUM"
-        [ `$GETSTRIPE -r -v --obd $OBDUUID $DIR/d56 | sed '/^[	 ]*1[	 ]/d' |\
+        [ `$GETSTRIPE -r -v --obd $OBDUUID $DIR/d56 | \
+                sed '/^[	 ]*'${OSTIDX}'[	 ]/d' |\
                 sed -n '/^[	 ]*[0-9][0-9]*[	 ]/p' | wc -l` -eq 0 ] || \
                 error "lfs getstripe --obd wrong: should not show file on other obd"
         echo "lfs getstripe --obd passed."
@@ -2743,7 +2750,7 @@ run_test 56h "check lfs find ! -name ============================="
 test_56i() {
        tdir=${tdir}i
        mkdir -p $DIR/$tdir
-       UUID=`$GETSTRIPE $DIR/$tdir | awk '/0: / { print $2 }'`
+       UUID=`$LFS osts | awk '/0: / { print $2 }'`
        OUT="`$LFIND -ost $UUID $DIR/$tdir`"
        [ "$OUT" ] && error "$LFIND returned directory '$OUT'" || true
 }
@@ -3436,113 +3443,6 @@ test_74b() { # bug 13310
 	rm -f $DIR/f74b
 }
 run_test 74b "ldlm_enqueue freed-export error path, touch (shouldn't LBUG)"
-
-JOIN=${JOIN:-"lfs join"}
-F75=$DIR/f75
-F128k=${F75}_128k
-FHEAD=${F75}_head
-FTAIL=${F75}_tail
-export T75_PREP=no
-test75_prep() {
-        [ $T75_PREP = "yes" ] && return
-        echo "using F75=$F75, F128k=$F128k, FHEAD=$FHEAD, FTAIL=$FTAIL"
-
-        dd if=/dev/urandom of=${F75}_128k bs=128k count=1 || error "dd failed"
-        log "finished dd"
-        chmod 777 ${F128k}
-        T75_PREP=yes
-}
-
-test_75a() {
-        test75_prep
-
-        cp -p ${F128k} ${FHEAD}
-        log "finished cp to $FHEAD"
-        cp -p ${F128k} ${FTAIL}
-        log "finished cp to $FTAIL"
-        cat ${F128k} ${F128k} > ${F75}_sim_sim
-
-        $JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
-        log "finished join $FHEAD to ${F75}_sim_sim"
-        cmp ${FHEAD} ${F75}_sim_sim || error "${FHEAD} ${F75}_sim_sim differ"
-        log "finished cmp $FHEAD to ${F75}_sim_sim"
-        $CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} still exist after join"
-}
-run_test 75a "TEST join file ===================================="
-
-test_75b() {
-        test75_prep
-
-        cp -p ${F128k} ${FTAIL}
-        cat ${F75}_sim_sim >> ${F75}_join_sim
-        cat ${F128k} >> ${F75}_join_sim
-        $JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
-        cmp ${FHEAD} ${F75}_join_sim || \
-                error "${FHEAD} ${F75}_join_sim are different"
-        $CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join"
-}
-run_test 75b "TEST join file 2 =================================="
-
-test_75c() {
-        test75_prep
-
-        cp -p ${F128k} ${FTAIL}
-        cat ${F128k} >> ${F75}_sim_join
-        cat ${F75}_join_sim >> ${F75}_sim_join
-        $JOIN ${FTAIL} ${FHEAD} || error "join error"
-        cmp ${FTAIL} ${F75}_sim_join || \
-                error "${FTAIL} ${F75}_sim_join are different"
-        $CHECKSTAT -a ${FHEAD} || error "tail ${FHEAD} exist after join"
-}
-run_test 75c "TEST join file 3 =================================="
-
-test_75d() {
-        test75_prep
-
-        cp -p ${F128k} ${FHEAD}
-        cp -p ${F128k} ${FHEAD}_tmp
-        cat ${F75}_sim_sim >> ${F75}_join_join
-        cat ${F75}_sim_join >> ${F75}_join_join
-        $JOIN ${FHEAD} ${FHEAD}_tmp || error "join ${FHEAD} ${FHEAD}_tmp error"
-        $JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
-        cmp ${FHEAD} ${F75}_join_join ||error "${FHEAD} ${F75}_join_join differ"        $CHECKSTAT -a ${FHEAD}_tmp || error "${FHEAD}_tmp exist after join"
-        $CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join (2)"
-}
-run_test 75d "TEST join file 4 =================================="
-
-test_75e() {
-        test75_prep
-
-        rm -rf ${FHEAD} || "delete join file error"
-}
-run_test 75e "TEST join file 5 (remove joined file) ============="
-
-test_75f() {
-        test75_prep
-
-        cp -p ${F128k} ${F75}_join_10_compare
-        cp -p ${F128k} ${F75}_join_10
-        for ((i = 0; i < 10; i++)); do
-                cat ${F128k} >> ${F75}_join_10_compare
-                cp -p ${F128k} ${FTAIL}
-                $JOIN ${F75}_join_10 ${FTAIL} || \
-                        error "join ${F75}_join_10 ${FTAIL} error"
-                $CHECKSTAT -a ${FTAIL} || error "tail file exist after join"
-        done
-        cmp ${F75}_join_10 ${F75}_join_10_compare || \
-                error "files ${F75}_join_10 ${F75}_join_10_compare differ"
-}
-run_test 75f "TEST join file 6 (join 10 files) =================="
-
-test_75g() {
-        [ ! -f ${F75}_join_10 ] && echo "${F75}_join_10 missing" && return
-        $LFS getstripe ${F75}_join_10
-
-        $OPENUNLINK ${F75}_join_10 ${F75}_join_10 || error "files unlink open"
-
-        ls -l $F75*
-}
-run_test 75g "TEST join file 7 (open unlink) ===================="
 
 num_inodes() {
 	awk '/lustre_inode_cache/ {print $2; exit}' /proc/slabinfo
@@ -6099,6 +5999,7 @@ test_150() {
         cancel_lru_locks osc
         cmp $TF $DIR/$tfile || error "$TMP/$tfile $DIR/$tfile differ"
         remount_client $MOUNT
+        df -P $MOUNT
         cmp $TF $DIR/$tfile || error "$TF $DIR/$tfile differ (remount)"
 
         $TRUNCATE $TF 6000
@@ -6697,6 +6598,86 @@ test_170() {
 }
 run_test 170 "test lctl df to handle corrupted log ====================="
 
+test_171() { # bug20592
+#define OBD_FAIL_PTLRPC_DUMP_LOG         0x50e
+        $LCTL set_param fail_loc=0x50e
+        $LCTL set_param fail_val=3000
+        multiop_bg_pause $DIR/$tfile Os || true
+        # cause log dump
+        sleep 3
+        if dmesg | grep "recursive fault"; then
+                error "caught a recursive fault"
+        fi
+        $LCTL set_param fail_loc=0
+        true
+}
+run_test 171 "test libcfs_debug_dumplog_thread stuck in do_exit() ======"
+
+# it would be good to share it with obdfilter-survey/libecho code
+setup_obdecho_osc () {
+        local rc=0
+        local ost_nid=$1
+        local obdfilter_name=$2
+        [ $rc -eq 0 ] && { $LCTL attach osc ${obdfilter_name}_osc     \
+                           ${obdfilter_name}_osc_UUID || rc=2; }
+        [ $rc -eq 0 ] && { $LCTL --device ${obdfilter_name}_osc setup \
+                           ${obdfilter_name}_UUID  $ost_nid || rc=3; }
+        return $rc
+}
+
+cleaup_obdecho_osc () {
+        local obdfilter_name=$1
+        $LCTL --device ${obdfilter_name}_osc cleanup >/dev/null
+        $LCTL --device ${obdfilter_name}_osc detach  >/dev/null
+        return 0
+}
+
+obdecho_create_test() {
+        local OBD=$1
+        local node=$2
+        local rc=0
+        do_facet $node "$LCTL attach echo_client ec ec_uuid" || rc=1
+        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec setup $OBD" ||    \
+                           rc=2; }
+        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec create 1" ||      \
+                           rc=3; }
+        [ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec test_brw 0 w 1" ||\
+                           rc=4; }
+        [ $rc -eq 0 -o $rc -gt 2 ] && { do_facet $node "$LCTL --device ec "    \
+                                        "cleanup" || rc=5; }
+        [ $rc -eq 0 -o $rc -gt 1 ] && { do_facet $node "$LCTL --device ec "    \
+                                        "detach" || rc=6; }
+        return $rc
+}
+
+test_180() {
+        local rc=0
+        local rmmod_local=0
+        local rmmod_remote=0
+
+        lsmod | grep -q obdecho || \
+                { load_module obdecho/obdecho && rmmod_local=1; }
+        OBD=$($LCTL dl | grep -v mdt | grep osc | awk '{print $4;exit}')
+        HOST=$($LCTL dl -t | grep -v mdt | grep osc | awk '{print $7;exit}')
+        OBD=`echo $OBD | sed 's/-osc-.*$//'`
+        [ "x$OBD" != "x" ] && { setup_obdecho_osc $HOST $OBD || rc=1; } || rc=1
+        [ $rc -eq 0 ] && { obdecho_create_test ${OBD}_osc client || rc=2; }
+        [ "x$OBD" != "x" ] && cleaup_obdecho_osc $OBD
+        [ $rmmod_local -eq 1 ] && rmmod obdecho
+        [ $rc -eq 0 ] || return $rc
+
+        do_facet ost "lsmod | grep -q obdecho || "                      \
+                     "{ insmod ${LUSTRE}/obdecho/obdecho.ko || "        \
+                     "modprobe obdecho; }" && rmmod_remote=1
+        OBD=$(do_facet ost $LCTL dl | awk '/obdfilter/ {print $4;exit}')
+        [ "x$OBD" != "x" ] && { obdecho_create_test $OBD ost || rc=3; }
+        [ $rmmod_remote -eq 1 ] && do_facet ost "rmmod obdecho"
+        [ $rc -eq 0 ] || return $rc
+
+        true
+}
+run_test 180 "test obdecho ============================================"
+
 # OST pools tests
 POOL=${POOL:-cea1}
 TGT_COUNT=$OSTCOUNT
@@ -6726,33 +6707,27 @@ check_file_in_pool()
 	return 0
 }
 
-cleanup_200 () {
-	trap 0
-	destroy_pool $POOL
-}
+trap "cleanup_pools $FSNAME" EXIT
 
 test_200a() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	do_facet mgs $LCTL pool_new $FSNAME.$POOL
-
-	trap cleanup_200 EXIT
-	CLEANUP_200=yes
-
-	# get param should return err until pool is created
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null || echo foo" "" || error "Pool creation of $POOL failed"
-	[ $($LFS pool_list $FSNAME | grep -c $POOL) -eq 1 ] || error "$POOL not in lfs pool_list"
+    create_pool $FSNAME.$POOL || return $?
+	[ $($LFS pool_list $FSNAME | grep -c $POOL) -eq 1 ] ||
+		error "$POOL not in lfs pool_list"
 }
 run_test 200a "Create new pool =========================================="
 
 test_200b() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	TGT=$(for i in `seq $TGTPOOL_FIRST $TGTPOOL_STEP $TGTPOOL_MAX`; do printf "$FSNAME-OST%04x_UUID " $i; done)
+	TGT=$(for i in $TGTPOOL_LIST; do printf "$FSNAME-OST%04x_UUID " $i; done)
 	do_facet mgs $LCTL pool_add $FSNAME.$POOL \
 		$FSNAME-OST[$TGTPOOL_FIRST-$TGTPOOL_MAX/$TGTPOOL_STEP]
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | sort -u | tr '\n' ' ' " "$TGT" || error "Add to pool failed"
+	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | sort -u | tr '\n' ' ' " "$TGT" ||
+		error "Add to pool failed"
 	local lfscount=$($LFS pool_list $FSNAME.$POOL | grep -c "\-OST")
 	local addcount=$((($TGTPOOL_MAX - $TGTPOOL_FIRST) / $TGTPOOL_STEP + 1))
-	[ $lfscount -eq $addcount ] || error "lfs pool_list bad ost count $lfscount != $addcount"
+	[ $lfscount -eq $addcount ] ||
+		error "lfs pool_list bad ost count $lfscount != $addcount"
 }
 run_test 200b "Add targets to a pool ===================================="
 
@@ -6807,45 +6782,61 @@ test_200f() {
 run_test 200f "Create files in a pool ==================================="
 
 test_200g() {
-        remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-        TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
-        res=$($LFS df --pool $FSNAME.$POOL | awk '{print $1}' | grep "$FSNAME-OST ")
-        [ "$res" = "$TGT" ] || echo "Pools OSTS $TGT is not $res that lfs df reports"
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+	TGT=$($LCTL get_param -n lov.$FSNAME-clilov-*.pools.$POOL | tr '\n' ' ')
+	res=$($LFS df --pool $FSNAME.$POOL | awk '{print $1}' | grep "$FSNAME-OST" | tr '\n' ' ')
+	[ "$res" = "$TGT" ] || error "Pools OSTs '$TGT' is not '$res' that lfs df reports"
 }
 run_test 200g "lfs df a pool ============================================"
 
-test_201a() {  # was 200g
+test_201a() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 	TGT=$($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | head -1)
 	do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | grep $TGT" "" || error "$TGT not removed from $FSNAME.$POOL"
+	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL | grep $TGT" "" ||
+		error "$TGT not removed from $FSNAME.$POOL"
 }
 run_test 201a "Remove a target from a pool ============================="
 
-test_201b() {  # was 200h
+test_201b() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 	for TGT in $($LCTL get_param -n lov.$FSNAME-*.pools.$POOL | sort -u)
 	do
 		do_facet mgs $LCTL pool_remove $FSNAME.$POOL $TGT
  	done
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL" ""\
-	    || error "Pool $FSNAME.$POOL cannot be drained"
-	# striping on an empty pool should fall back to "pool of everything"
-	$SETSTRIPE -p $POOL ${POOL_FILE}/$tfile || error "failed to create file with empty pool"
+	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL" "" ||
+		error "Pool $FSNAME.$POOL cannot be drained"
+	# striping on an empty/nonexistant pool should fall back to "pool of everything"
+	touch ${POOL_DIR}/$tfile || error "failed to use fallback striping for empty pool"
+	# setstripe on an empty pool should fail
+	$SETSTRIPE -p $POOL ${POOL_FILE}/$tfile 2>/dev/null && \
+		error "expected failure when creating file with empty pool"
+	return 0
 }
 run_test 201b "Remove all targets from a pool =========================="
 
-test_201c() {  # was 200i
+test_201c() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 	do_facet mgs $LCTL pool_destroy $FSNAME.$POOL
+	
+	sleep 2                        
+    # striping on an empty/nonexistant pool should fall back to "pool of everything"
+	touch ${POOL_DIR}/$tfile || error "failed to use fallback striping for missing pool"
+	# setstripe on an empty pool should fail
+	$SETSTRIPE -p $POOL ${POOL_FILE}/$tfile 2>/dev/null && \
+		error "expected failure when creating file with missing pool"
+
 	# get param should return err once pool is gone
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null ||
-		echo foo" "foo" && unset CLEANUP_200 && trap 0 && return 0
+	if wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null ||
+			echo foo" "foo"; then
+		remove_pool_from_list $FSNAME.$POOL
+		return 0
+	fi
 	error "Pool $FSNAME.$POOL is not destroyed"
 }
 run_test 201c "Remove a pool ============================================"
 
-[ "$CLEANUP_200" ] && cleanup_200
+cleanup_pools $FSNAME
 
 test_212() {
 	size=`date +%s`
@@ -6880,100 +6871,134 @@ test_214() { # for bug 20133
 }
 run_test 214 "hash-indexed directory test - bug 20133"
 
-test_215() { # for bug 18102
-	# /proc/sys/lnet/stats should look as 11 space-separated numbers
-	cat /proc/sys/lnet/stats >$TMP/lnet_stats.out
-	sysctl lnet.stats |sed 's/^lnet.stats\ =\ //g' >$TMP/lnet_stats.sys
-	STATS_LINES_OUT=$(cat $TMP/lnet_stats.out|wc -l)
-	[ "$STATS_LINES_OUT" = 1 ] || error "/proc/sys/lnet/stats has more than 1 line: $STATS"
-	STATS_LINES_SYS=$(cat $TMP/lnet_stats.sys|wc -l)
-	[ "$STATS_LINES_SYS" = 1 ] || error "lnet.stats has more than 1 line: $STATS"
-	STATS_REG='^[0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+ [0-9]\+$'
-	grep "$STATS_REG" $TMP/lnet_stats.out || (cat $TMP/lnet_stats.out && 
-						  error "/proc/sys/lnet/stats misformatted")
-	grep "$STATS_REG" $TMP/lnet_stats.sys || (cat $TMP/lnet_stats.sys && 
-						  error "lnet.stats misformatted")
-	rm -f $TMP/lnet_stats.out $TMP/lnet_stats.sys
+# having "abc" as 1st arg, creates $TMP/lnet_abc.out and $TMP/lnet_abc.sys
+create_lnet_proc_files() {
+	cat /proc/sys/lnet/$1 >$TMP/lnet_$1.out || error "cannot read /proc/sys/lnet/$1"
+	sysctl lnet.$1 >$TMP/lnet_$1.sys_tmp || error "cannot read lnet.$1"
 
-	# /proc/sys/lnet/routes should look exactly as expected
-	cat /proc/sys/lnet/routes >$TMP/lnet_routes.out
-	sysctl lnet.routes |sed 's/^lnet.routes\ =\ //g' >$TMP/lnet_routes.sys
-	echo "Routing disabled" >$TMP/lnet_routes.expected
-	echo "net      hops   state router" >>$TMP/lnet_routes.expected
-	diff $TMP/lnet_routes.expected $TMP/lnet_routes.out ||
-		error "/proc/sys/lnet/routes does not look as expected"
-	diff $TMP/lnet_routes.expected $TMP/lnet_routes.sys ||
-		error "lnet.routes does not look as expected"
-	rm -f $TMP/lnet_routes.expected $TMP/lnet_routes.out $TMP/lnet_routes.sys
+	sed "s/^lnet.$1\ =\ //g" "$TMP/lnet_$1.sys_tmp" >$TMP/lnet_$1.sys
+	rm -f "$TMP/lnet_$1.sys_tmp"
+}
 
-	# /proc/sys/lnet/routers should look exactly as expected
-	cat /proc/sys/lnet/routers >$TMP/lnet_routers.out
-	sysctl lnet.routers |sed 's/^lnet.routers\ =\ //g' >$TMP/lnet_routers.sys
-	echo "ref  rtr_ref alive_cnt  state    last_ping router" >$TMP/lnet_routers.expected
-	diff $TMP/lnet_routers.expected $TMP/lnet_routers.out ||
-		error "/proc/sys/lnet/routers does not look as expected"
-	diff $TMP/lnet_routers.expected $TMP/lnet_routers.sys ||
-		error "lnet.routers does not look as expected"
-	rm -f $TMP/lnet_routers.expected $TMP/lnet_routers.out $TMP/lnet_routers.sys
+# counterpart of create_lnet_proc_files
+remove_lnet_proc_files() {
+	rm -f $TMP/lnet_$1.out $TMP/lnet_$1.sys
+}
 
-	# fisrt line of /proc/sys/lnet/peers should look exactly as expected
-	cat /proc/sys/lnet/peers >$TMP/lnet_peers.out
-	sysctl lnet.peers |sed 's/^lnet.peers\ =\ //g' >$TMP/lnet_peers.sys
-	head -1 $TMP/lnet_peers.out > $TMP/lnet_peers1.out
-	echo "nid                      refs state   max   rtr   min    tx   min queue" >$TMP/lnet_peers1.expected
-	diff $TMP/lnet_peers1.expected $TMP/lnet_peers1.out ||
-		error "first line of /proc/sys/lnet/peers does not look as expected"
-	rm -f $TMP/lnet_peers1.expected $TMP/lnet_peers1.out
-	# other lines should look as a nid followed by 1 number, a word, 6 numbers, e.g.:
-	# 0@lo                        1    NA     0     0     0     0     0 0
-	TOTAL_LINES=$(cat $TMP/lnet_peers.out |wc -l)
-	OTHER_LINES=$(($TOTAL_LINES - 1))
-	MATCHED_LINES=$(cat $TMP/lnet_peers.out |tail -$TOTAL_LINES |
-			grep -c "^[0-9.]\+@[a-z0-9]\+ *[0-9]\+ *[a-zA-Z]\+ *[0-9]\+ *[0-9]\+ *-\?[0-9]\+ *[0-9]\+ *-\?[0-9]\+ *[0-9]\+$")
-	[ "$MATCHED_LINES" = "$OTHER_LINES" ] || (cat $TMP/lnet_peers.out && 
-						  error "/proc/sys/lnet/peers misformatted")
-	diff $TMP/lnet_peers.out $TMP/lnet_peers.sys ||
-		error "lnet.peers does not look as expected"
-	rm -f $TMP/lnet_peers.out $TMP/lnet_peers.sys
+# uses 1st arg as trailing part of filename, 2nd arg as description for reports,
+# 3rd arg as regexp for body
+check_lnet_proc_stats() {
+	local l=$(cat "$TMP/lnet_$1" |wc -l)
+	[ $l = 1 ] || (cat "$TMP/lnet_$1" && error "$2 is not of 1 line: $l")
 
-	# /proc/sys/lnet/buffers should look exactly as expected
-	cat /proc/sys/lnet/buffers >$TMP/lnet_buffers.out
-	sysctl lnet.buffers |sed 's/^lnet.buffers\ =\ //g' >$TMP/lnet_buffers.sys
-	echo "pages count credits     min" >$TMP/lnet_buffers.expected
-	echo "    0     0       0       0" >>$TMP/lnet_buffers.expected
-	echo "    1     0       0       0" >>$TMP/lnet_buffers.expected
-	echo "  256     0       0       0" >>$TMP/lnet_buffers.expected
-	diff $TMP/lnet_buffers.expected $TMP/lnet_buffers.out ||
-		error "/proc/sys/lnet/buffers does not look as expected"
-	diff $TMP/lnet_buffers.expected $TMP/lnet_buffers.sys ||
-		error "lnet.buffers does not look as expected"
-	rm -f $TMP/lnet_buffers.expected $TMP/lnet_buffers.out $TMP/lnet_buffers.sys
+	grep -E "$3" "$TMP/lnet_$1" || (cat "$TMP/lnet_$1" && error "$2 misformatted")
+}
 
-	# fisrt line of /proc/sys/lnet/nis should look exactly as expected
-	cat /proc/sys/lnet/nis >$TMP/lnet_nis.out
-	sysctl lnet.nis |sed 's/^lnet.nis\ =\ //g' >$TMP/lnet_nis.sys
-	head -1 $TMP/lnet_nis.out > $TMP/lnet_nis1.out
-	echo "nid                      refs peer  rtr   max    tx   min" >$TMP/lnet_nis1.expected
-	diff $TMP/lnet_nis1.expected $TMP/lnet_nis1.out ||
-		error "first line of /proc/sys/lnet/nis does not look as expected"
-	rm -f $TMP/lnet_nis1.expected $TMP/lnet_nis1.out
-	# other lines should look as a nid followed by 6 numbers, e.g.:
-	# 0@lo                        3    0    0     0     0     0
-	TOTAL_LINES=$(cat $TMP/lnet_nis.out |wc -l)
-	OTHER_LINES=$(($TOTAL_LINES - 1))
-	MATCHED_LINES=$(cat $TMP/lnet_nis.out |tail -$TOTAL_LINES |
-		grep -c "^[0-9.]\+@[a-z0-9]\+ *[0-9]\+ *[0-9]\+ *[0-9]\+ *[0-9]\+ *[0-9]\+ *[0-9]\+$")
-	[ "$MATCHED_LINES" = "$OTHER_LINES" ] || (cat $TMP/lnet_nis.out && 
-						  error "/proc/sys/lnet/nis misformatted")
-	diff $TMP/lnet_nis.out $TMP/lnet_nis.sys ||
-		error "lnet.nis does not look as expected"
-	rm -f $TMP/lnet_nis.out $TMP/lnet_nis.sys
+# uses 1st arg as trailing part of filename, 2nd arg as description for reports,
+# 3rd arg as regexp for body, 4th arg as regexp for 1st line, 5th arg is
+# optional and can be regexp for 2nd line (lnet.routes case)
+check_lnet_proc_entry() {
+	local blp=2            # blp stands for 'position of 1st line of body'
+	[ "$5" = "" ] || blp=3 # lnet.routes case
+
+	local l=$(cat "$TMP/lnet_$1" |wc -l)
+	# subtracting one from $blp because the body can be empty
+	[ "$l" -ge "$(($blp - 1))" ] || (cat "$TMP/lnet_$1" && error "$2 is too short: $l")
+
+	sed -n '1 p' "$TMP/lnet_$1" |grep -E "$4" >/dev/null ||
+		(cat "$TMP/lnet_$1" && error "1st line of $2 misformatted")
+
+	[ "$5" = "" ] || sed -n '2 p' "$TMP/lnet_$1" |grep -E "$5" >/dev/null ||
+		(cat "$TMP/lnet_$1" && error "2nd line of $2 misformatted")
+
+	# bail out if any unexpected line happened
+	sed -n "$blp~1 p" "$TMP/lnet_$1" |grep -Ev "$3"
+	[ "$?" != 0 ] || error "$2 misformatted"
+}
+
+test_215() { # for bugs 18102, 21079, 21517
+	local N='(0|[1-9][0-9]*)'   # non-negative numeric
+	local P='[1-9][0-9]*'       # positive numeric
+	local I='(0|-?[1-9][0-9]*)' # any numeric (0 | >0 | <0)
+	local NET='[a-z][a-z0-9]*'  # LNET net like o2ib2
+	local ADDR='[0-9.]+'        # LNET addr like 10.0.0.1
+	local NID="$ADDR@$NET"      # LNET nid like 10.0.0.1@o2ib2
+
+	local L1 # regexp for 1st line
+	local L2 # regexp for 2nd line (optional)
+	local BR # regexp for the rest (body)
+
+	# /proc/sys/lnet/stats should look as 11 space-separated non-negative numerics
+	BR="^$N $N $N $N $N $N $N $N $N $N $N$"
+	create_lnet_proc_files "stats"
+	check_lnet_proc_stats "stats.out" "/proc/sys/lnet/stats" "$BR"
+	check_lnet_proc_stats "stats.sys" "lnet.stats" "$BR"
+	remove_lnet_proc_files "stats"
+
+	# /proc/sys/lnet/routes should look like this:
+	# Routing disabled/enabled
+	# net hops state router
+	# where net is a string like tcp0, hops >= 0, state is up/down,
+	# router is a string like 192.168.1.1@tcp2
+	L1="^Routing (disabled|enabled)$"
+	L2="^net +hops +state +router$"
+	BR="^$NET +$N +(up|down) +$NID$"
+	create_lnet_proc_files "routes"
+	check_lnet_proc_entry "routes.out" "/proc/sys/lnet/routes" "$BR" "$L1" "$L2"
+	check_lnet_proc_entry "routes.sys" "lnet.routes" "$BR" "$L1" "$L2"
+	remove_lnet_proc_files "routes"
+
+	# /proc/sys/lnet/routers should look like this:
+	# ref rtr_ref alive_cnt state last_ping ping_sent deadline down_ni router
+	# where ref > 0, rtr_ref > 0, alive_cnt >= 0, state is up/down,
+	# last_ping >= 0, ping_sent is boolean (0/1), deadline and down_ni are
+	# numeric (0 or >0 or <0), router is a string like 192.168.1.1@tcp2
+	L1="^ref +rtr_ref +alive_cnt +state +last_ping +ping_sent +deadline +down_ni +router$"
+	BR="^$P +$P +$N +(up|down) +$N +(0|1) +$I +$I +$NID$"
+	create_lnet_proc_files "routers"
+	check_lnet_proc_entry "routers.out" "/proc/sys/lnet/routers" "$BR" "$L1"
+	check_lnet_proc_entry "routers.sys" "lnet.routers" "$BR" "$L1"
+	remove_lnet_proc_files "routers"
+
+	# /proc/sys/lnet/peers should look like this:
+	# nid refs state max rtr min tx min queue
+	# where nid is a string like 192.168.1.1@tcp2, refs > 0,
+	# state is up/down/NA, max >= 0. rtr, min, tx, min are 
+	# numeric (0 or >0 or <0), queue >= 0.
+	L1="^nid +refs +state +max +rtr +min +tx +min +queue$"
+	BR="^$NID +$P +(up|down|NA) +$N +$I +$I +$I +$I +$N$"
+	create_lnet_proc_files "peers"
+	check_lnet_proc_entry "peers.out" "/proc/sys/lnet/peers" "$BR" "$L1"
+	check_lnet_proc_entry "peers.sys" "lnet.peers" "$BR" "$L1"
+	remove_lnet_proc_files "peers"
+
+	# /proc/sys/lnet/buffers  should look like this:
+	# pages count credits min
+	# where pages >=0, count >=0, credits and min are numeric (0 or >0 or <0)
+	L1="^pages +count +credits +min$"
+	BR="^ +$N +$N +$I +$I$"
+	create_lnet_proc_files "buffers"
+	check_lnet_proc_entry "buffers.out" "/proc/sys/lnet/buffers" "$BR" "$L1"
+	check_lnet_proc_entry "buffers.sys" "lnet.buffers" "$BR" "$L1"
+	remove_lnet_proc_files "buffers"
+
+	# /proc/sys/lnet/nis should look like this:
+	# nid status alive refs peer rtr max tx min
+	# where nid is a string like 192.168.1.1@tcp2, status is up/down,
+	# alive is numeric (0 or >0 or <0), refs > 0, peer >= 0,
+	# rtr >= 0, max >=0, tx and min are numeric (0 or >0 or <0).
+	L1="^nid +status +alive +refs +peer +rtr +max +tx +min$"
+	BR="^$NID +(up|down) +$I +$P +$N +$N +$N +$I +$I$"
+	create_lnet_proc_files "nis"
+	check_lnet_proc_entry "nis.out" "/proc/sys/lnet/nis" "$BR" "$L1"
+	check_lnet_proc_entry "nis.sys" "lnet.nis" "$BR" "$L1"
+	remove_lnet_proc_files "nis"
 
 	# can we successfully write to /proc/sys/lnet/stats?
 	echo "0" >/proc/sys/lnet/stats || error "cannot write to /proc/sys/lnet/stats"
 	sysctl -w lnet.stats=0 || error "cannot write to lnet.stats"
 }
-run_test 215 "/proc/sys/lnet exists and has proper content - bug 18102"
+run_test 215 "/proc/sys/lnet exists and has proper content - bugs 18102, 21079, 21517"
 
 test_216() { # bug 20317
         local node
