@@ -2111,7 +2111,7 @@ err_put:
 static int mds_lov_clean(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct obd_device *osc = mds->mds_osc_obd;
+        struct obd_device *lov = mds->mds_lov_obd;
         ENTRY;
 
         if (mds->mds_profile) {
@@ -2121,21 +2121,21 @@ static int mds_lov_clean(struct obd_device *obd)
         }
 
         /* There better be a lov */
-        if (!osc)
+        if (!lov)
                 RETURN(0);
-        if (IS_ERR(osc))
-                RETURN(PTR_ERR(osc));
+        if (IS_ERR(lov))
+                RETURN(PTR_ERR(lov));
 
-        obd_register_observer(osc, NULL);
+        obd_register_observer(lov, NULL);
 
         /* Give lov our same shutdown flags */
-        osc->obd_force = obd->obd_force;
-        osc->obd_fail = obd->obd_fail;
+        lov->obd_force = obd->obd_force;
+        lov->obd_fail = obd->obd_fail;
 
         /* Cleanup the lov */
-        obd_disconnect(mds->mds_osc_exp);
-        class_manual_cleanup(osc);
-        mds->mds_osc_exp = NULL;
+        obd_disconnect(mds->mds_lov_exp);
+        class_manual_cleanup(lov);
+        mds->mds_lov_exp = NULL;
 
         RETURN(0);
 }
@@ -2209,7 +2209,7 @@ int mds_postrecov(struct obd_device *obd)
         /* Notify the LOV, which will in turn call mds_notify for each tgt */
         /* This means that we have to hack obd_notify to think we're obd_set_up
            during mds_lov_connect. */
-        obd_notify(obd->u.mds.mds_osc_obd, NULL,
+        obd_notify(obd->u.mds.mds_lov_obd, NULL,
                    obd->obd_async_recov ? OBD_NOTIFY_SYNC_NONBLOCK :
                    OBD_NOTIFY_SYNC, NULL);
 
@@ -2225,13 +2225,13 @@ out:
 static int mds_lov_early_clean(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct obd_device *osc = mds->mds_osc_obd;
+        struct obd_device *lov = mds->mds_lov_obd;
 
-        if (!osc || (!obd->obd_force && !obd->obd_fail))
+        if (!lov || (!obd->obd_force && !obd->obd_fail))
                 return(0);
 
         CDEBUG(D_HA, "abort inflight\n");
-        return (obd_precleanup(osc, OBD_CLEANUP_EARLY));
+        return (obd_precleanup(lov, OBD_CLEANUP_EARLY));
 }
 
 static int mds_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
@@ -2269,10 +2269,10 @@ static int mds_cleanup(struct obd_device *obd)
                 RETURN(0);
         save_dev = lvfs_sbdev(obd->u.obt.obt_sb);
 
-        if (mds->mds_osc_exp)
+        if (mds->mds_lov_exp)
                 /* lov export was disconnected by mds_lov_clean;
                    we just need to drop our ref */
-                class_export_put(mds->mds_osc_exp);
+                class_export_put(mds->mds_lov_exp);
 
         remove_proc_entry("clear", obd->obd_proc_exports_entry);
         lprocfs_free_per_client_stats(obd);

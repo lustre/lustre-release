@@ -2974,6 +2974,19 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                         GOTO(out, rc = -ESRCH);
                 rc = obd_get_info(tgt->ltd_exp, keylen, key, vallen, val, NULL);
                 GOTO(out, rc);
+        } else if (KEY_IS(KEY_CONNECT_FLAG)) {
+                struct lov_tgt_desc *tgt;
+                __u64 ost_idx = *((__u64*)val);
+
+                LASSERT(*vallen == sizeof(__u64));
+                LASSERT(ost_idx < lov->desc.ld_tgt_count);
+                tgt = lov->lov_tgts[ost_idx];
+
+                if (!tgt || !tgt->ltd_exp)
+                        GOTO(out, rc = -ESRCH);
+
+                *((__u64*)val) = tgt->ltd_exp->exp_connect_flags;
+                GOTO(out, rc = 0);
         }
 
         rc = -EINVAL;

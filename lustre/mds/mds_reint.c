@@ -126,14 +126,14 @@ static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
         CDEBUG(D_RPCTRACE, "cancelling %d cookies\n",
                (int)(mlcd->mlcd_cookielen / sizeof(*mlcd->mlcd_cookies)));
 
-        rc = obd_unpackmd(obd->u.mds.mds_osc_exp, &lsm, mlcd->mlcd_lmm,
+        rc = obd_unpackmd(obd->u.mds.mds_lov_exp, &lsm, mlcd->mlcd_lmm,
                           mlcd->mlcd_eadatalen);
         if (rc < 0) {
                 CERROR("bad LSM cancelling %d log cookies: rc %d\n",
                        (int)(mlcd->mlcd_cookielen/sizeof(*mlcd->mlcd_cookies)),
                        rc);
         } else {
-                rc = obd_checkmd(obd->u.mds.mds_osc_exp, obd->obd_self_export,
+                rc = obd_checkmd(obd->u.mds.mds_lov_exp, obd->obd_self_export,
                                  lsm);
                 if (rc)
                         CERROR("Can not revalidate lsm %p \n", lsm);
@@ -609,13 +609,13 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
 
         LASSERT(lmm);
 
-        rc = obd_unpackmd(mds->mds_osc_exp, &oinfo.oi_md, lmm, lmm_size);
+        rc = obd_unpackmd(mds->mds_lov_exp, &oinfo.oi_md, lmm, lmm_size);
         if (rc < 0) {
                 CERROR("Error unpack md %p for inode %lu\n", lmm, inode->i_ino);
                 GOTO(out, rc);
         }
 
-        rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, oinfo.oi_md);
+        rc = obd_checkmd(mds->mds_lov_exp, obd->obd_self_export, oinfo.oi_md);
         if (rc) {
                 CERROR("Error revalidate lsm %p \n", oinfo.oi_md);
                 GOTO(out, rc);
@@ -637,13 +637,13 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
         oinfo.oi_oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
 
         /* do async setattr from mds to ost not waiting for responses. */
-        rc = obd_setattr_async(mds->mds_osc_exp, &oinfo, &oti, NULL);
+        rc = obd_setattr_async(mds->mds_lov_exp, &oinfo, &oti, NULL);
         if (rc)
                 CDEBUG(D_INODE, "mds to ost setattr objid 0x"LPX64
                        " on ost error %d\n", oinfo.oi_md->lsm_object_id, rc);
 out:
         if (oinfo.oi_md)
-                obd_free_memmd(mds->mds_osc_exp, &oinfo.oi_md);
+                obd_free_memmd(mds->mds_lov_exp, &oinfo.oi_md);
         OBDO_FREE(oinfo.oi_oa);
         RETURN(rc);
 }
@@ -814,12 +814,12 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                                 GOTO(cleanup, rc);
                 } else {
                         rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
-                                           mds->mds_osc_exp, 0,
+                                           mds->mds_lov_exp, 0,
                                            &lsm, rec->ur_eadata);
                         if (rc)
                                 GOTO(cleanup, rc);
 
-                        obd_free_memmd(mds->mds_osc_exp, &lsm);
+                        obd_free_memmd(mds->mds_lov_exp, &lsm);
 
                         rc = fsfilt_set_md(obd, inode, handle, rec->ur_eadata,
                                            rec->ur_eadatalen, "lov");
@@ -839,7 +839,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         if (ia_valid & (ATTR_ATIME | ATTR_ATIME_SET))
                 body->valid |= OBD_MD_FLATIME;
 
-        if (rc == 0 && rec->ur_cookielen && !IS_ERR(mds->mds_osc_obd)) {
+        if (rc == 0 && rec->ur_cookielen && !IS_ERR(mds->mds_lov_obd)) {
                 OBD_ALLOC(mlcd, sizeof(*mlcd) + rec->ur_cookielen +
                           rec->ur_eadatalen);
                 if (mlcd) {

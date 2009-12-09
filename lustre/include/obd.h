@@ -584,10 +584,10 @@ struct mds_obd {
         cfs_dentry_t                    *mds_objects_dir;
         struct llog_handle              *mds_cfg_llh;
 //        struct llog_handle              *mds_catalog;
-        struct obd_device               *mds_osc_obd; /* XXX lov_obd */
+        struct obd_device               *mds_lov_obd;
         struct obd_uuid                  mds_lov_uuid;
         char                            *mds_profile;
-        struct obd_export               *mds_osc_exp; /* XXX lov_exp */
+        struct obd_export               *mds_lov_exp;
         struct lov_desc                  mds_lov_desc;
 
         /* mark pages dirty for write. */
@@ -1110,6 +1110,7 @@ enum obd_cleanup_stage {
 #define KEY_BLOCKSIZE_BITS      "blocksize_bits"
 #define KEY_MAX_EASIZE          "max_ea_size"
 #define KEY_FIEMAP              "fiemap"
+#define KEY_CONNECT_FLAG        "connect_flags"
 /* XXX unused */
 #define KEY_ASYNC               "async"
 #define KEY_CAPA_KEY            "capa_key"
