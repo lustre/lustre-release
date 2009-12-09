@@ -51,18 +51,13 @@
 
 #ifdef __KERNEL__
 
+#ifdef HAVE_SERVER_SUPPORT
+
 #ifdef HAVE_EXT4_LDISKFS
 #include <ldiskfs/ldiskfs_jbd2.h>
-#else
-#include <linux/jbd.h>
-#endif
-
-#ifdef HAVE_SERVER_SUPPORT
-/* LDISKFS_SB() */
-
-#ifdef HAVE_EXT4_LDISKFS
 #include <ldiskfs/ldiskfs.h>
 #else
+#include <linux/jbd.h>
 #include <linux/ldiskfs_fs.h>
 #endif
 
