@@ -725,10 +725,8 @@ out:
 
         /* this is for dqacq_in_flight() */
         qunit_put(qunit);
-        /* this is for alloc_qunit() */
-        qunit_put(qunit);
         if (rc < 0 && rc != -EDQUOT)
-                 RETURN(err);
+                GOTO(out1, err);
 
         /* don't reschedule in such cases:
          *   - acq/rel failure and qunit isn't changed,
@@ -738,21 +736,21 @@ out:
          */
          OBD_ALLOC_PTR(oqaq);
          if (!oqaq)
-                 RETURN(-ENOMEM);
+                 GOTO(out1, err = -ENOMEM);
          qdata_to_oqaq(qdata, oqaq);
          /* adjust the qunit size in slaves */
          rc1 = quota_adjust_slave_lqs(oqaq, qctxt);
          OBD_FREE_PTR(oqaq);
          if (rc1 < 0) {
                  CERROR("adjust slave's qunit size failed!(rc:%d)\n", rc1);
-                 RETURN(rc1);
+                 GOTO(out1, err = rc1);
          }
          if (err || (rc < 0 && rc != -EBUSY && rc1 == 0) || is_master(qctxt))
-                 RETURN(err);
+                 GOTO(out1, err);
 
          if (opc == QUOTA_DQREL && qdata->qd_count >= 5242880 &&
              OBD_FAIL_CHECK(OBD_FAIL_QUOTA_DELAY_REL))
-                 RETURN(err);
+                 GOTO(out1, err);
 
         /* reschedule another dqacq/dqrel if needed */
         qdata->qd_count = 0;
@@ -764,6 +762,9 @@ out:
                 rc1 = schedule_dqacq(obd, qctxt, qdata, opc, 0, NULL);
                 QDATA_DEBUG(qdata, "reschedudle opc(%d) rc(%d)\n", opc, rc1);
         }
+ out1:
+        /* this is for alloc_qunit() */
+        qunit_put(qunit);
         RETURN(err);
 }
 
@@ -798,7 +799,7 @@ static int dqacq_interpret(const struct lu_env *env,
                 DEBUG_REQ(D_ERROR, req,
                           "error unpacking qunit_data(rc: %ld)\n",
                           PTR_ERR(qdata));
-                RETURN(PTR_ERR(qdata));
+                qdata = &qunit->lq_data;
         }
 
         QDATA_DEBUG(qdata, "qdata: interpret rc(%d).\n", rc);
