@@ -139,6 +139,8 @@
 #define SEQ_DATA_PORTAL                31
 #define SEQ_CONTROLLER_PORTAL          32
 
+/* Portal 63 is reserved for the Cray Inc DVS - nic@cray.com, roe@cray.com, n8851@cray.com */
+
 #define SVC_KILLED               1
 #define SVC_EVENT                2
 #define SVC_SIGNAL               4
