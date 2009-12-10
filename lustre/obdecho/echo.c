@@ -369,7 +369,7 @@ static int echo_finalize_lb(struct obdo *oa, struct obd_ioobj *obj,
 
                 addr = cfs_kmap(page);
 
-                CDEBUG(D_PAGE, "$$$$ use page %p, addr %p@"LPU64"\n",
+                CDEBUG(D_PAGE, "$$$$ use page %p, addr %p@%u\n",
                        res->page, addr, res->page_offset);
 
                 if (verify) {
