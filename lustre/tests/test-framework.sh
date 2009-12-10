@@ -2085,8 +2085,10 @@ error_noexit() {
 
 error() {
     error_noexit "$@"
-    reset_fail_loc
-    $FAIL_ON_ERROR && exit 1 || true
+    if $FAIL_ON_ERROR;  then
+        reset_fail_loc
+        exit 1
+    fi
 }
 
 error_exit() {
