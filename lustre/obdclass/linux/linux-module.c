@@ -204,7 +204,8 @@ static int obd_class_ioctl(struct inode *inode, struct file *filp,
         int err = 0;
         ENTRY;
 
-        if (current->fsuid != 0)
+        /* Allow non-root access for OBD_IOC_PING_TARGET - used by lfs check */
+        if (!cfs_capable(CFS_CAP_SYS_ADMIN) && (cmd != OBD_IOC_PING_TARGET))
                 RETURN(err = -EACCES);
         if ((cmd & 0xffffff00) == ((int)'T') << 8) /* ignore all tty ioctls */
                 RETURN(err = -ENOTTY);
