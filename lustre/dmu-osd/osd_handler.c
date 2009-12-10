@@ -1407,7 +1407,7 @@ struct osd_zap_it {
         zap_cursor_t            *ozi_zc;
         struct osd_object       *ozi_obj;
         struct lustre_capa      *ozi_capa;
-        int                      ozi_reset;     /* 1 -- no need to advance */
+        unsigned                 ozi_reset:1;     /* 1 -- no need to advance */
         char                     ozi_name[NAME_MAX + 1];
         char                     ozi_rec[IT_REC_SIZE];
 };
