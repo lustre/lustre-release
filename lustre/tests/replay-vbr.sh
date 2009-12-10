@@ -2,8 +2,8 @@
 
 set -e
 
-# bug number: 19023 19023
-ALWAYS_EXCEPT="0x 0y 3c 4b 4c 10 $REPLAY_VBR_EXCEPT"
+# bug number:
+ALWAYS_EXCEPT="3c 4b 4c 10 $REPLAY_VBR_EXCEPT"
 
 SAVE_PWD=$PWD
 PTLDEBUG=${PTLDEBUG:--1}
