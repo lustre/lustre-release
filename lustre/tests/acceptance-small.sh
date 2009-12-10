@@ -62,7 +62,7 @@ setup_if_needed() {
 
     local MOUNTED=$(mounted_lustre_filesystems)
     if $(echo $MOUNTED | grep -w -q $MOUNT); then
-        check_config $MOUNT
+        check_config_clients $MOUNT
         init_facets_vars
         init_param_vars
         return
@@ -288,15 +288,7 @@ for NAME in $CONFIGS; do
 
 	if [ "$SANITYN" != "no" ]; then
 	        title sanityN
-		$DEBUG_OFF
-
-		mkdir -p $MOUNT2
-		mount_client $MOUNT2
-		#echo "can't mount2 for '$NAME', skipping sanityN.sh"
-		START=: CLEAN=: bash sanityN.sh
-		[ "$(mount | grep $MOUNT2)" ] && umount $MOUNT2
-
-		$DEBUG_ON
+		bash sanityN.sh
 		$CLEANUP
 		$SETUP
 		SANITYN="done"

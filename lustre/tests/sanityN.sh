@@ -715,9 +715,6 @@ test_33a() {
     [ $CLIENTCOUNT -ge 2 ] || \
         { skip "Need two or more clients, have $CLIENTCOUNT" && return 0; }
 
-    zconf_mount_clients $CLIENT1,$CLIENT2 $DIR1
-    zconf_mount_clients $CLIENT1,$CLIENT2 $DIR2
-
     local nfiles=${TEST33_NFILES:-10000}
     local param_file=$TMP/$tfile-params
 

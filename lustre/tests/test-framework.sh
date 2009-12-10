@@ -1882,9 +1882,7 @@ nfs_client_mode () {
     return 1
 }
 
-check_config () {
-    nfs_client_mode && return
-
+check_config_client () {
     local mntpt=$1
 
     local mounted=$(mount | grep " $mntpt ")
@@ -1924,6 +1922,16 @@ check_config () {
                    Please use correct config or set mds_HOST correctly!"
     fi
 
+}
+
+check_config_clients () {
+    local clients=${CLIENTS:-$HOSTNAME}
+    local mntpt=$1
+
+    nfs_client_mode && return
+
+    do_rpc_nodes $clients check_config_client $mntpt
+
     sanity_mount_check ||
         error "environments are insane!"
 }
@@ -1937,37 +1945,65 @@ check_timeout () {
     fi
 }
 
+is_mounted () {
+    local mntpt=$1
+    local mounted=$(mounted_lustre_filesystems)
+
+    echo $mounted' ' | grep -w -q $mntpt' '
+}
+
 check_and_setup_lustre() {
     nfs_client_mode && return
 
     local MOUNTED=$(mounted_lustre_filesystems)
 
     local do_check=true
-    # MOUNT is not mounted
-    if [ -z "$MOUNTED" ] || ! $(echo $MOUNTED | grep -w -q $MOUNT); then
+    # 1.
+    # both MOUNT and MOUNT2 are not mounted
+    if ! is_mounted $MOUNT && ! is_mounted $MOUNT2; then
         [ "$REFORMAT" ] && formatall
+        # setupall mounts both MOUNT and MOUNT2 (if MOUNT_2 is set)
         setupall
-        MOUNTED=$(mounted_lustre_filesystems | head -1)
-        [ -z "$MOUNTED" ] && error "NAME=$NAME not mounted"
+        is_mounted $MOUNT || error "NAME=$NAME not mounted"
         export I_MOUNTED=yes
         do_check=false
+    # 2.
+    # MOUNT2 is mounted
+    elif is_mounted $MOUNT2; then
+            # 3.
+            # MOUNT2 is mounted, while MOUNT_2 is not set
+            if ! [ "$MOUNT_2" ]; then
+                cleanup_mount $MOUNT2
+                export I_UMOUNTED2=yes
 
-    # MOUNT and MOUNT2 are mounted
-    elif $(echo $MOUNTED | grep -w -q $MOUNT2); then
+            # 4.
+            # MOUNT2 is mounted, MOUNT_2 is set
+            else
+                # FIXME: what to do if check_config failed?
+                # i.e. if:
+                # 1) remote client has mounted other Lustre fs ?
+                # 2) it has insane env ?
+                # let's try umount MOUNT2 on all clients and mount it again:
+                if ! check_config_clients $MOUNT2; then
+                    cleanup_mount $MOUNT2
+                    restore_mount $MOUNT2
+                    export I_MOUNTED2=yes
+                fi
+            fi 
 
-        # MOUNT2 is mounted,  MOUNT_2 is not set
-        if ! [ "$MOUNT_2" ]; then
-            zconf_umount `hostname` $MOUNT2
-            export I_UMOUNTED2=yes
-
-        # MOUNT2 is mounted, MOUNT_2 is set
-        else
-            check_config $MOUNT2
-        fi 
+    # 5.
+    # MOUNT is mounted MOUNT2 is not mounted
+    elif [ "$MOUNT_2" ]; then
+        restore_mount $MOUNT2
+        export I_MOUNTED2=yes
     fi
 
     if $do_check; then
-        check_config $MOUNT
+        # FIXME: what to do if check_config failed?
+        # i.e. if:
+        # 1) remote client has mounted other Lustre fs?
+        # 2) lustre is mounted on remote_clients atall ?
+        check_config_clients $MOUNT
         init_facets_vars
         init_param_vars
 
@@ -1979,6 +2015,20 @@ check_and_setup_lustre() {
     if [ "$ONLY" == "setup" ]; then
         exit 0
     fi
+}
+
+restore_mount () {
+   local clients=${CLIENTS:-$HOSTNAME}
+   local mntpt=$1
+
+   zconf_mount_clients $clients $mntpt
+}
+
+cleanup_mount () {
+    local clients=${CLIENTS:-$HOSTNAME}
+    local mntpt=$1
+
+    zconf_umount_clients $clients $mntpt    
 }
 
 cleanup_and_setup_lustre() {
@@ -1993,18 +2043,23 @@ cleanup_and_setup_lustre() {
 }
 
 check_and_cleanup_lustre() {
-    if [ "`mount | grep $MOUNT`" ]; then
+    if is_mounted $MOUNT; then
         [ -n "$DIR" ] && rm -rf $DIR/[Rdfs][0-9]*
         [ "$ENABLE_QUOTA" ] && restore_quota_type || true
     fi
+
     if [ "$I_UMOUNTED2" = "yes" ]; then
-        mount_client $MOUNT2 || error "restore $MOUNT2 failed"
+        restore_mount $MOUNT2 || error "restore $MOUNT2 failed"
+    fi
+
+    if [ "$I_MOUNTED2" = "yes" ]; then
+        cleanup_mount $MOUNT2
     fi
 
     if [ "$I_MOUNTED" = "yes" ]; then
         cleanupall -f || error "cleanup failed"
+        unset I_MOUNTED
     fi
-    unset I_MOUNTED
 }
 
 #######
