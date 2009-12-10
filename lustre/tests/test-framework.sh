@@ -1917,10 +1917,10 @@ check_config_client () {
     local mgshost=$(mount | grep " $mntpt " | awk -F@ '{print $1}')
     mgshost=$(echo $mgshost | awk -F: '{print $1}')
 
-    if [ "$mgshost" != "$myMGS_host" ]; then
-            log "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST, NETTYPE=$NETTYPE
-                   Please use correct config or set mds_HOST correctly!"
-    fi
+#    if [ "$mgshost" != "$myMGS_host" ]; then
+#            log "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST, NETTYPE=$NETTYPE
+#                   Please use correct config or set mds_HOST correctly!"
+#    fi
 
 }
 
