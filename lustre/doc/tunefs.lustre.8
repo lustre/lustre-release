@@ -43,7 +43,14 @@ The Lustre filesystem this service will be part of.  Default is 'lustre'
 Force a particular OST or MDT index 
 .TP
 .BI \--mountfsoptions= opts
-Set permanent mount options, equivalent to setting in /etc/fstab
+Set  the mount options that will be used when mounting the backing fs.
+WARNING: unlike earlier versions of \fBtunefs.lustre\fR,  this version
+completely replaces the existing mount options with those specified on
+the command line, issuing a warning  on  stderr  if any  of the default
+mount options are omitted.  The defaults for ldiskfs  are
+OST: \fIerrors=remount-ro,mballoc,extents\fR;
+MGS/MDT: \fIerrors=remount-ro,iopen_nopriv,user_xattr\fR.
+\fBDO NOT\fR alter the default mount options unless you know what you are doing.
 .TP
 .BI \--mgs
 Add a configuration management service to this target
