@@ -412,11 +412,7 @@ test_20b() { # bug 10480
 
     fail mds                            # start orphan recovery
     wait_recovery_complete mds || error "MDS recovery not done"
-
-    # For interop with 2.0 only:
-    # FIXME just because recovery is done doesn't mean we've finished
-    # orphan cleanup.  Fake it with a sleep for now...
-    sleep 10
+    wait_mds_ost_sync || return 3
 
     AFTERUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
     log "before $BEFOREUSED, after $AFTERUSED"
@@ -862,7 +858,7 @@ test_43() { # bug 2530
 }
 run_test 43 "mds osc import failure during recovery; don't LBUG"
 
-test_44a() {	# was test_44
+test_44a() { # was test_44
     local at_max_saved=0
 
     mdcdev=`lctl get_param -n devices | awk '/-mdc-/ {print $1}'`
@@ -876,12 +872,13 @@ test_44a() {	# was test_44
     fi
 
     for i in `seq 1 10`; do
-	echo "$i of 10 ($(date +%s))"
-	do_facet mds "lctl get_param -n mdt.MDS.mds.timeouts | grep service"
-	#define OBD_FAIL_TGT_CONN_RACE     0x701
-	do_facet mds "lctl set_param fail_loc=0x80000701"
-	$LCTL --device $mdcdev recover || return 4
-	df $MOUNT
+        echo "$i of 10 ($(date +%s))"
+        do_facet mds "lctl get_param -n mdt.MDS.mds.timeouts | grep service"
+        #define OBD_FAIL_TGT_CONN_RACE     0x701
+        do_facet mds "lctl set_param fail_loc=0x80000701"
+        # lctl below may fail, it is valid case
+        $LCTL --device $mdcdev recover
+        df $MOUNT
     done
 
     do_facet mds "lctl set_param fail_loc=0"
@@ -896,12 +893,13 @@ test_44b() {
     [ $(echo $mdcdev | wc -w) -eq 1 ] || { echo $mdcdev=$mdcdev && return 3; }
 
     for i in `seq 1 10`; do
-	echo "$i of 10 ($(date +%s))"
-	do_facet mds "lctl get_param -n mdt.MDS.mds.timeouts | grep service"
-	#define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
-	do_facet mds "lctl set_param fail_loc=0x80000704"
-	$LCTL --device $mdcdev recover || return 4
-	df $MOUNT
+        echo "$i of 10 ($(date +%s))"
+        do_facet mds "lctl get_param -n mdt.MDS.mds.timeouts | grep service"
+        #define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
+        do_facet mds "lctl set_param fail_loc=0x80000704"
+        # lctl below may fail, it is valid case
+        $LCTL --device $mdcdev recover
+        df $MOUNT
     done
     do_facet mds "lctl set_param fail_loc=0"
     return 0
