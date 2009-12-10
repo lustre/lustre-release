@@ -242,6 +242,13 @@ Description: bad entry in directory xxx: inode out of bounds
 Details    : fix locking issue in the rename path which could race with any
 	     other operations updating the same directory.
 
+Severity   : normal
+Bugzilla   : 19557
+Description: BUG: soft lockup - CPU#1 stuck for 10s! [ll_mdt_07:4523]
+Details    : add cond_resched() calls to avoid hogging the cpu for too long
+	     in the hash code.
+
+
 -------------------------------------------------------------------------------
 2009-10-16 Sun Microsystems, Inc.
 	* version 1.8.1.1

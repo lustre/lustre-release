@@ -524,6 +524,7 @@ restart:
                         lh_read_unlock(lh);
                         func(obj, data);
                         (void)lh_put(lh, hnode);
+                        cfs_cond_resched();
                         goto restart;
                 }
                 write_unlock(&lhb->lhb_rwlock);
