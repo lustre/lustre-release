@@ -127,6 +127,7 @@ init_test_env() {
     if ! echo $PATH | grep -q $LUSTRE/tests/mpi; then
         export PATH=$PATH:$LUSTRE/tests/mpi
     fi
+    export RSYNC_RSH=${RSYNC_RSH:-rsh}
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     [ ! -f "$LCTL" ] && export LCTL=$(which lctl)
     export LFS=${LFS:-"$LUSTRE/utils/lfs"}
@@ -3346,7 +3347,7 @@ dmesg > \\\$log; "
         logs=$logs' '$tmp/'*'$ts'*'
     fi
     for node in ${list//,/ }; do
-        rsync -az $node:"$logs" $TMP 
+        rsync -az $node:"$logs" $TMP
     done
 
     local archive=$TMP/${TESTSUITE}-$ts.tar.bz2

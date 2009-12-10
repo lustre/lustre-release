@@ -17,8 +17,11 @@ CLEANUP=${CLEANUP:-""}
 init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
-TESTSUITELOG=${TESTSUITELOG:-$TMP/recovery-double-scale}
+TESTSUITELOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh)}
 DEBUGLOG=$TESTSUITELOG.debug
+
+cleanup_logs
+
 exec 2>$DEBUGLOG
 echo "--- env ---" >&2
 env >&2
@@ -227,6 +230,16 @@ Status: $result: rc=$rc"
         sleep 5
         kill -9 $CLIENT_LOAD_PIDS || true
     fi
+
+    if [ $rc -ne 0 ]; then
+        # we are interested in only on failed clients and servers
+        local failedclients=$(cat $END_RUN_FILE | grep -v $0)
+        # FIXME: need ostfailover-s nodes also for FLAVOR=OST
+        local product=$(gather_logs $(comma_list $(osts_nodes) \
+                                 $(mdts_nodes) $mdsfailover_HOST $failedclients))
+        echo logs files $product
+    fi
+
     [ $rc -eq 0 ] && zconf_mount $(hostname) $MOUNT
     exit $rc
 }
