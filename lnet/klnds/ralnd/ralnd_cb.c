@@ -1941,7 +1941,7 @@ kranal_scheduler (void *arg)
                 if (busy_loops++ >= RANAL_RESCHED) {
                         spin_unlock_irqrestore(&dev->rad_lock, flags);
 
-                        cfs_cond_resched();
+                        our_cond_resched();
                         busy_loops = 0;
 
                         spin_lock_irqsave(&dev->rad_lock, flags);
