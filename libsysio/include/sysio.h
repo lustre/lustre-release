@@ -279,17 +279,11 @@ extern int SYSIO_INTERFACE_NAME(umount)(const char *target);
 extern DIR *SYSIO_INTERFACE_NAME(opendir)(const char *name);
 extern int SYSIO_INTERFACE_NAME(closedir)(DIR *dir);
 extern struct dirent *SYSIO_INTERFACE_NAME(readdir)(DIR *dir);
-
 extern int SYSIO_INTERFACE_NAME(scandir)(const char *dir,
 					 struct dirent ***namelist,
 					 int(*filter)(const struct dirent *),
-#ifdef HAVE_POSIX2008_SCANDIR
-					 int(*compar)(const struct dirent **,
-					              const struct dirent **)
-#else
-					 int(*compar)(const void *, const void *)
-#endif
-					);
+					 int(*compar)(const void *,
+						      const void *));
 #if defined(_BSD_SOURCE) || defined(_SVID_SOURCE)
 extern ssize_t SYSIO_INTERFACE_NAME(getdirentries)(int fd,
 						   char *buf,

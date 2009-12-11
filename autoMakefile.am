@@ -10,7 +10,7 @@ endif
 
 include build/autoMakefile.am.toplevel
 
-EXTRA_DIST += config.h.in debian/*
+EXTRA_DIST += config.h.in
 
 if LDISKFS_ENABLED
 if !LDISKFS_IN_KERNEL

@@ -255,7 +255,9 @@ int dqacq_adjust_qunit_sz(struct obd_device *obd, qid_t id, int type,
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_quota_ctxt *qctxt = &mds->mds_obt.obt_qctxt;
-        __u32 ost_num = mds->mds_lov_objid_count, mdt_num = 1;
+        struct obd_device *lov_mds_obd = class_exp2obd(mds->mds_osc_exp);
+        struct lov_obd *lov = &lov_mds_obd->u.lov;
+        __u32 ost_num = lov->desc.ld_tgt_count, mdt_num = 1;
         struct quota_adjust_qunit *oqaq = NULL;
         unsigned int uid = 0, gid = 0;
         struct lustre_quota_info *info = &mds->mds_quota_info;
@@ -322,7 +324,7 @@ int dqacq_adjust_qunit_sz(struct obd_device *obd, qid_t id, int type,
 
         /* only when block qunit is reduced, boardcast to osts */
         if ((adjust_res & LQS_BLK_DECREASE) && QAQ_IS_ADJBLK(oqaq))
-                rc = obd_quota_adjust_qunit(mds->mds_lov_exp, oqaq, qctxt);
+                rc = obd_quota_adjust_qunit(mds->mds_osc_exp, oqaq, qctxt);
 
 out:
         lustre_dqput(dquot);
@@ -689,7 +691,7 @@ int mds_quota_finvalidate(struct obd_device *obd, struct obd_quotactl *oqctl)
         oqctl->qc_cmd = Q_FINVALIDATE;
         rc = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
         if (!rc)
-                rc = obd_quotactl(mds->mds_lov_exp, oqctl);
+                rc = obd_quotactl(mds->mds_osc_exp, oqctl);
 
         up(&mds->mds_qonoff_sem);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
@@ -939,7 +941,7 @@ int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
         else
                 GOTO(out, rc);
 
-        rc = obd_quotactl(mds->mds_lov_exp, oqctl);
+        rc = obd_quotactl(mds->mds_osc_exp, oqctl);
 
 out:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
@@ -972,7 +974,7 @@ int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl)
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         mds_admin_quota_off(obd, oqctl);
 
-        rc = obd_quotactl(mds->mds_lov_exp, oqctl);
+        rc = obd_quotactl(mds->mds_osc_exp, oqctl);
         rc2 = fsfilt_quotactl(obd, obd->u.obt.obt_sb, oqctl);
         if (!rc2)
                 obt->obt_qctxt.lqc_flags &= ~UGQUOTA2LQC(oqctl->qc_type);
@@ -1278,7 +1280,7 @@ static int mds_init_slave_blimits(struct obd_device *obd,
                 gid = oqctl->qc_id;
 
         /* initialize all slave's limit */
-        rc = obd_quotactl(mds->mds_lov_exp, ioqc);
+        rc = obd_quotactl(mds->mds_osc_exp, ioqc);
 
         rc = qctxt_adjust_qunit(obd, &obd->u.obt.obt_qctxt, uid, gid, 1, 0,
                                 NULL);
@@ -1310,7 +1312,7 @@ static void adjust_lqs(struct obd_device *obd, struct quota_adjust_qunit *qaq)
 
         /* adjust remote lqs */
         if (QAQ_IS_ADJBLK(qaq)) {
-                rc = obd_quota_adjust_qunit(obd->u.mds.mds_lov_exp, qaq, qctxt);
+                rc = obd_quota_adjust_qunit(obd->u.mds.mds_osc_exp, qaq, qctxt);
                 if (rc < 0)
                         CERROR("adjust slaves' qunit size failed!(rc=%d)\n", rc);
 
@@ -1321,7 +1323,7 @@ int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_quota_ctxt *qctxt = &mds->mds_obt.obt_qctxt;
-        struct obd_device *lov_obd = class_exp2obd(mds->mds_lov_exp);
+        struct obd_device *lov_obd = class_exp2obd(mds->mds_osc_exp);
         struct lov_obd *lov = &lov_obd->u.lov;
         struct quota_adjust_qunit *oqaq = NULL;
         struct lustre_quota_info *qinfo = &mds->mds_quota_info;
@@ -1504,7 +1506,7 @@ static int mds_get_space(struct obd_device *obd, struct obd_quotactl *oqctl)
         soqc->qc_id = oqctl->qc_id;
         soqc->qc_type = oqctl->qc_type;
 
-        rc = obd_quotactl(obd->u.mds.mds_lov_exp, soqc);
+        rc = obd_quotactl(obd->u.mds.mds_osc_exp, soqc);
 
         oqctl->qc_dqblk.dqb_curspace = soqc->qc_dqblk.dqb_curspace;
 
@@ -1626,7 +1628,7 @@ dquot_recovery(struct obd_device *obd, unsigned int id, unsigned short type)
         qctl->qc_type = type;
         qctl->qc_id = id;
         qctl->qc_stat = QUOTA_RECOVERING;
-        rc = obd_quotactl(obd->u.mds.mds_lov_exp, qctl);
+        rc = obd_quotactl(obd->u.mds.mds_osc_exp, qctl);
         if (rc)
                 GOTO(out, rc);
         total_limits = qctl->qc_dqblk.dqb_bhardlimit;

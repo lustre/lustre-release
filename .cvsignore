@@ -35,7 +35,6 @@ Module.symvers
 Module.symvers.old
 Modules.symvers
 modules.order
-modules-deb
 stamp-h1
 INSTALL
 .pc

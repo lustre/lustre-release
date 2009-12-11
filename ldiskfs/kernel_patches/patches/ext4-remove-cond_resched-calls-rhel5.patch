@@ -5,7 +5,7 @@ Index: linux-2.6.18.i386/fs/ext4/ialloc.c
 @@ -1057,7 +1057,6 @@ unsigned long ext4_count_free_inodes (st
  		if (!gdp)
  			continue;
-		desc_count += ext4_free_inodes_count(sb, gdp);
+ 		desc_count += le16_to_cpu(gdp->bg_free_inodes_count);
 -		cond_resched();
  	}
  	return desc_count;

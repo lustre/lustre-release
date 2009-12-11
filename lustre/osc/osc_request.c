@@ -1023,7 +1023,7 @@ static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
  * via the LOV, and it _knows_ it's reading inside the file, it's just that
  * this stripe never got written at or beyond this stripe offset yet. */
 static void handle_short_read(int nob_read, obd_count page_count,
-                              struct brw_page **pga, int pshift)
+                              struct brw_page **pga)
 {
         char *ptr;
         int i = 0;
@@ -1035,7 +1035,7 @@ static void handle_short_read(int nob_read, obd_count page_count,
                 if (pga[i]->count > nob_read) {
                         /* EOF inside this page */
                         ptr = cfs_kmap(pga[i]->pg) +
-                              (OSC_FILE2MEM_OFF(pga[i]->off,pshift)&~CFS_PAGE_MASK);
+                                (pga[i]->off & ~CFS_PAGE_MASK);
                         memset(ptr + nob_read, 0, pga[i]->count - nob_read);
                         cfs_kunmap(pga[i]->pg);
                         page_count--;
@@ -1050,8 +1050,7 @@ static void handle_short_read(int nob_read, obd_count page_count,
 
         /* zero remaining pages */
         while (page_count-- > 0) {
-                ptr = cfs_kmap(pga[i]->pg) +
-                      (OSC_FILE2MEM_OFF(pga[i]->off, pshift) & ~CFS_PAGE_MASK);
+                ptr = cfs_kmap(pga[i]->pg) + (pga[i]->off & ~CFS_PAGE_MASK);
                 memset(ptr, 0, pga[i]->count);
                 cfs_kunmap(pga[i]->pg);
                 i++;
@@ -1442,7 +1441,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
         }
 
         if (rc < aa->aa_requested_nob)
-                handle_short_read(rc, aa->aa_page_count, aa->aa_ppga, aa->aa_pshift);
+                handle_short_read(rc, aa->aa_page_count, aa->aa_ppga);
 
         if (body->oa.o_valid & OBD_MD_FLCKSUM) {
                 static int cksum_counter;

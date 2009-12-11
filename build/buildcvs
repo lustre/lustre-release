@@ -62,6 +62,7 @@ case "$lustretag" in
 
     b_cmd_cray)
         lnettag="HEAD"
+        ldiskfstag="$ldiskfstag_head"
         libcfstag="HEAD"
         ;;
 

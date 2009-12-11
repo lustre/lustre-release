@@ -1159,10 +1159,7 @@ int ping_evictor_wake(struct obd_export *exp);
 #else
 #define ping_evictor_start()    do {} while (0)
 #define ping_evictor_stop()     do {} while (0)
-static inline int ping_evictor_wake(struct obd_export *exp)
-{
-        return 1;
-}
+#define ping_evictor_wake(exp)  1
 #endif
 
 /* ptlrpc/ptlrpcd.c */

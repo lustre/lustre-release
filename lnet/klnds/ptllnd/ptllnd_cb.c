@@ -320,27 +320,22 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         lnet_kiov_t      *payload_kiov = lntmsg->msg_kiov;
         unsigned int      payload_offset = lntmsg->msg_offset;
         unsigned int      payload_nob = lntmsg->msg_len;
-        kptl_net_t       *net = ni->ni_data;
         kptl_peer_t      *peer;
         kptl_tx_t        *tx;
         int               nob;
         int               nfrag;
         int               rc;
 
-        LASSERT (net->net_ni == ni);
-        LASSERT (!net->net_shutdown);
         LASSERT (payload_nob == 0 || payload_niov > 0);
         LASSERT (payload_niov <= LNET_MAX_IOV);
         LASSERT (payload_niov <= PTL_MD_MAX_IOV); /* !!! */
         LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
         LASSERT (!in_interrupt());
 
-        rc = kptllnd_find_target(net, target, &peer);
+        rc = kptllnd_find_target(&peer, target);
         if (rc != 0)
                 return rc;
         
-        /* NB peer->peer_id does NOT always equal target, be careful with
-         * which one to use */
         switch (type) {
         default:
                 LBUG();
@@ -370,7 +365,7 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 tx->tx_lnet_msg = lntmsg;
                 tx->tx_msg->ptlm_u.rdma.kptlrm_hdr = *hdr;
                 kptllnd_init_msg (tx->tx_msg, PTLLND_MSG_TYPE_PUT,
-                                 target, sizeof(kptl_rdma_msg_t));
+                                  sizeof(kptl_rdma_msg_t));
 
                 CDEBUG(D_NETTRACE, "%s: passive PUT p %d %p\n",
                        libcfs_id2str(target),
@@ -399,7 +394,8 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                         goto out;
                 }
 
-                tx->tx_lnet_replymsg = lnet_create_reply_msg(ni, lntmsg);
+                tx->tx_lnet_replymsg =
+                        lnet_create_reply_msg(kptllnd_data.kptl_ni, lntmsg);
                 if (tx->tx_lnet_replymsg == NULL) {
                         CERROR("Failed to allocate LNET reply for %s\n",
                                libcfs_id2str(target));
@@ -420,7 +416,7 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 tx->tx_lnet_msg = lntmsg;
                 tx->tx_msg->ptlm_u.rdma.kptlrm_hdr = *hdr;
                 kptllnd_init_msg (tx->tx_msg, PTLLND_MSG_TYPE_GET,
-                                 target, sizeof(kptl_rdma_msg_t));
+                                  sizeof(kptl_rdma_msg_t));
 
                 CDEBUG(D_NETTRACE, "%s: passive GET p %d %p\n",
                        libcfs_id2str(target),
@@ -472,7 +468,7 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         }
         
         nob = offsetof(kptl_immediate_msg_t, kptlim_payload[payload_nob]);
-        kptllnd_init_msg(tx->tx_msg, PTLLND_MSG_TYPE_IMMEDIATE, target, nob);
+        kptllnd_init_msg(tx->tx_msg, PTLLND_MSG_TYPE_IMMEDIATE, nob);
 
         CDEBUG(D_NETTRACE, "%s: immediate %s p %d %p\n",
                libcfs_id2str(target),

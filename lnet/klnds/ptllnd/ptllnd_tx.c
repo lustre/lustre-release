@@ -79,7 +79,6 @@ kptllnd_alloc_tx(void)
         tx->tx_rdma_eventarg.eva_type = PTLLND_EVENTARG_TYPE_RDMA;
         tx->tx_msg_eventarg.eva_type = PTLLND_EVENTARG_TYPE_MSG;
         tx->tx_msg = NULL;
-        tx->tx_peer = NULL;
         tx->tx_frags = NULL;
                 
         LIBCFS_ALLOC(tx->tx_msg, sizeof(*tx->tx_msg));
@@ -109,11 +108,14 @@ kptllnd_setup_tx_descs()
         
         for (i = 0; i < n; i++) {
                 kptl_tx_t *tx = kptllnd_alloc_tx();
+                
                 if (tx == NULL)
                         return -ENOMEM;
                 
                 spin_lock(&kptllnd_data.kptl_tx_lock);
+                
                 list_add_tail(&tx->tx_list, &kptllnd_data.kptl_idle_txs);
+                
                 spin_unlock(&kptllnd_data.kptl_tx_lock);
         }
         
@@ -363,10 +365,11 @@ kptllnd_tx_fini (kptl_tx_t *tx)
 
         /* Must finalize AFTER freeing 'tx' */
         if (msg != NULL)
-                lnet_finalize(NULL, msg, (replymsg == NULL) ? status : 0);
+                lnet_finalize(kptllnd_data.kptl_ni, msg,
+                              (replymsg == NULL) ? status : 0);
 
         if (replymsg != NULL)
-                lnet_finalize(NULL, replymsg, status);
+                lnet_finalize(kptllnd_data.kptl_ni, replymsg, status);
 
         if (peer != NULL)
                 kptllnd_peer_decref(peer);
@@ -453,7 +456,8 @@ kptllnd_tx_callback(ptl_event_t *ev)
 
                 if (!ismsg && ok && ev->type == PTL_EVENT_PUT_END) {
                         if (ev->hdr_data == PTLLND_RDMA_OK) {
-                                lnet_set_reply_msg_len(NULL,
+                                lnet_set_reply_msg_len(
+                                        kptllnd_data.kptl_ni,
                                         tx->tx_lnet_replymsg,
                                         ev->mlength);
                         } else {

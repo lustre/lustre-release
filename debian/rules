@@ -77,11 +77,6 @@ SRCDIR=.
 
 autogen: autogen-stamp
 autogen-stamp: patch-stamp
-	# see if any patches requires us to run autogen
-	if ! grep "^--- .*\/autoconf" debian/patches/* || \
-	   [ ! -f autogen.sh ]; then \
-		exit 0; \
-	fi
 	cp /usr/share/misc/config.sub config.sub
 	cp /usr/share/misc/config.sub libsysio/config.sub
 	cp /usr/share/misc/config.sub ldiskfs/config.sub

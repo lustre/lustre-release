@@ -74,9 +74,9 @@ Index: linux-2.6.18-128.1.6/include/linux/jbd2.h
 +	 * Called when the transaction is committed. [t_jcb_lock]
 +	 */
 +	struct list_head	t_jcb;
-	/*
-	 * For use by the filesystem to store fs-specific data
-	 * structures associated with the transaction
+ };
+ 
+ struct transaction_run_stats_s {
 @@ -1018,6 +1058,9 @@
  extern int	 jbd2_journal_flush (journal_t *);
  extern void	 jbd2_journal_lock_updates (journal_t *);
@@ -139,9 +139,9 @@ Index: linux-2.6.18-128.1.6/fs/jbd2/journal.c
 --- linux-2.6.18-128.1.6.orig/fs/jbd2/journal.c	2009-04-15 08:35:28.000000000 +0530
 +++ linux-2.6.18-128.1.6/fs/jbd2/journal.c	2009-05-28 17:13:35.000000000 +0530
 @@ -80,6 +80,9 @@
- EXPORT_SYMBOL(jbd2_journal_init_jbd_inode);
- EXPORT_SYMBOL(jbd2_journal_release_jbd_inode);
- EXPORT_SYMBOL(jbd2_journal_begin_ordered_truncate);
+ EXPORT_SYMBOL(jbd2_journal_invalidatepage);
+ EXPORT_SYMBOL(jbd2_journal_try_to_free_buffers);
+ EXPORT_SYMBOL(jbd2_journal_force_commit);
 +EXPORT_SYMBOL(jbd2_journal_callback_set);
 +EXPORT_SYMBOL(jbd2_journal_bmap);
 +EXPORT_SYMBOL(jbd2_log_start_commit);
@@ -153,9 +153,9 @@ Index: linux-2.6.18-128.1.6/fs/jbd2/transaction.c
 --- linux-2.6.18-128.1.6.orig/fs/jbd2/transaction.c	2009-04-15 08:35:28.000000000 +0530
 +++ linux-2.6.18-128.1.6/fs/jbd2/transaction.c	2009-05-28 15:11:28.000000000 +0530
 @@ -51,6 +51,9 @@
+ 	transaction->t_tid = journal->j_transaction_sequence++;
+ 	transaction->t_expires = jiffies + journal->j_commit_interval;
  	spin_lock_init(&transaction->t_handle_lock);
-	INIT_LIST_HEAD(&transaction->t_inode_list);
-	INIT_LIST_HEAD(&transaction->t_private_list);
 +	INIT_LIST_HEAD(&transaction->t_jcb);
 +	spin_lock_init(&transaction->t_jcb_lock);
 +

@@ -204,7 +204,7 @@ diff -rupN linux-2.6.18-128.1.6_1/include/linux/ext3_fs.h linux-2.6.18-128.1.6_2
  extern struct proc_dir_entry *proc_root_ext3;
  extern int __init init_ext3_proc(void);
  extern void exit_ext3_proc(void);
-@@ -1107,6 +1111,20 @@ extern struct inode_operations ext3_file
+@@ -1107,6 +1111,19 @@ extern struct inode_operations ext3_file
  extern const struct file_operations ext3_file_operations;
  
  /* namei.c */
@@ -219,7 +219,6 @@ diff -rupN linux-2.6.18-128.1.6_1/include/linux/ext3_fs.h linux-2.6.18-128.1.6_2
 +extern struct buffer_head * ext3_find_entry(struct dentry *dentry,
 +					    struct ext3_dir_entry_2
 +					    ** res_dir);
-+#define ll_ext3_find_entry(inode, dentry, res_dir) ext3_find_entry(dentry, res_dir)
 +extern int ext3_add_dot_dotdot(handle_t *handle, struct inode *dir,
 +			       struct inode *inode);
  extern struct inode_operations ext3_dir_inode_operations;

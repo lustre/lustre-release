@@ -61,7 +61,7 @@ Index: b/fs/ext4/namei.c
  	struct buffer_head *bh;
  	struct dx_frame *frame = frame_in;
  	u32 hash;
-@@ -388,18 +389,19 @@ dx_probe(struct dentry *dentry, struct i
+@@ -388,46 +389,46 @@ dx_probe(struct dentry *dentry, struct i
  		dir = dentry->d_parent->d_inode;
  	if (!(bh = ext4_bread (NULL,dir, 0, 0, err)))
  		goto fail;
@@ -84,10 +84,8 @@ Index: b/fs/ext4/namei.c
  	}
 -	hinfo->hash_version = root->info.hash_version;
 +	hinfo->hash_version = info->hash_version;
-	if (hinfo->hash_version <= DX_HASH_TEA)
-		hinfo->hash_version += EXT4_SB(dir->i_sb)->s_hash_unsigned;
  	hinfo->seed = EXT4_SB(dir->i_sb)->s_hash_seed;
-@@ -398,29 +399,28 @@ dx_probe(struct dentry *dentry, struct i
+ 	if (dentry)
  		ext4fs_dirhash(dentry->d_name.name, dentry->d_name.len, hinfo);
  	hash = hinfo->hash;
  
@@ -165,9 +163,9 @@ Index: b/fs/ext4/namei.c
  
  	bh2 = ext4_append (handle, dir, &block, &retval);
  	if (!(bh2)) {
-@@ -1460,18 +1461,20 @@ static int make_indexed_dir(handle_t *ha
-	}
-	root = (struct dx_root *) bh->b_data;
+@@ -1460,11 +1461,13 @@ static int make_indexed_dir(handle_t *ha
+ 	EXT4_I(dir)->i_flags |= EXT4_INDEX_FL;
+ 	data1 = bh2->b_data;
  
 +	dot_de = (struct ext4_dir_entry_2 *) bh->b_data;
 +	dotdot_de = ext4_next_entry(dot_de);
@@ -176,22 +174,14 @@ Index: b/fs/ext4/namei.c
 -	fde = &root->dotdot;
 -	de = (struct ext4_dir_entry_2 *)((char *)fde +
 -		ext4_rec_len_from_disk(fde->rec_len));
+-	len = ((char *) root) + blocksize - (char *) de;
 +	de = (struct ext4_dir_entry_2 *)((char *)dotdot_de +
 +		ext4_rec_len_from_disk(dotdot_de->rec_len));
--	if ((char *) de >= (((char *) root) + blocksize)) {
-+	if ((char *) de >= (((char *) dot_de) + blocksize)) {
-		ext4_error(dir->i_sb, __func__,
-			   "invalid rec_len for '..' in inode %lu",
-			   dir->i_ino);
-		brelse(bh);
-		return -EIO;
-	}
--	len = ((char *) root) + blocksize - (char *) de;
 +	len = ((char *) dot_de) + blocksize - (char *) de;
- 
-	/* Allocate new block for the 0th block's dirents */
-	bh2 = ext4_append(handle, dir, &block, &retval);
-@@ -1472,18 +1475,23 @@ static int make_indexed_dir(handle_t *ha
+ 	memcpy (data1, de, len);
+ 	de = (struct ext4_dir_entry_2 *) data1;
+ 	top = data1 + len;
+@@ -1472,18 +1475,24 @@ static int make_indexed_dir(handle_t *ha
  		de = de2;
  	de->rec_len = ext4_rec_len_to_disk(data1 + blocksize - (char *) de);
  	/* Initialize the root; the dot dirents already exist */
@@ -201,9 +191,9 @@ Index: b/fs/ext4/namei.c
 -	root->info.info_length = sizeof(root->info);
 -	root->info.hash_version = EXT4_SB(dir->i_sb)->s_def_hash_version;
 -	entries = root->entries;
--	dx_set_block(entries, 1);
--	dx_set_count(entries, 1);
--	dx_set_limit(entries, dx_root_limit(dir, sizeof(root->info)));
+-	dx_set_block (entries, 1);
+-	dx_set_count (entries, 1);
+-	dx_set_limit (entries, dx_root_limit(dir, sizeof(root->info)));
 +	dotdot_de->rec_len = ext4_rec_len_to_disk(blocksize -
 +			le16_to_cpu(dot_de->rec_len));
 +
@@ -222,17 +212,18 @@ Index: b/fs/ext4/namei.c
  	/* Initialize as for dx_probe */
 -	hinfo.hash_version = root->info.hash_version;
 +	hinfo.hash_version = dx_info->hash_version;
-	if (hinfo.hash_version <= DX_HASH_TEA)
-		hinfo.hash_version += EXT4_SB(dir->i_sb)->s_hash_unsigned;
++
  	hinfo.seed = EXT4_SB(dir->i_sb)->s_hash_seed;
+ 	ext4fs_dirhash(name, namelen, &hinfo);
+ 	frame = frames;
 @@ -1724,6 +1733,7 @@ static int ext4_dx_add_entry(handle_t *h
  				goto journal_error;
  			brelse (bh2);
  		} else {
 +			struct dx_root_info * info;
-			dxtrace(printk(KERN_DEBUG
-				       "Creating second level index...\n"));
+ 			dxtrace(printk("Creating second level index...\n"));
  			memcpy((char *) entries2, (char *) entries,
+ 			       icount * sizeof(struct dx_entry));
 @@ -1732,7 +1742,9 @@ static int ext4_dx_add_entry(handle_t *h
  			/* Set up root */
  			dx_set_count(entries, 1);

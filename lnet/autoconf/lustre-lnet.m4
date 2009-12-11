@@ -1337,7 +1337,7 @@ AC_DEFUN([LN_FUNC_DUMP_TRACE],
 [kernel/ksyms.c arch/${LINUX_ARCH%_64}/kernel/traps_64.c],[
 	tmp_flags="$EXTRA_KCFLAGS"
 	EXTRA_KCFLAGS="-Werror"
-	AC_MSG_CHECKING([whether we can really use dump_trace])
+	AC_MSG_CHECKING([whether we can really use dump_stack])
 	LB_LINUX_TRY_COMPILE([
 		struct task_struct;
 		struct pt_regs;
@@ -1394,7 +1394,6 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LN_SCATTERLIST_SETPAGE],
 [AC_MSG_CHECKING([for exist sg_set_page])
 LB_LINUX_TRY_COMPILE([
-        #include <asm/types.h>
         #include <linux/scatterlist.h>
 ],[
 	sg_set_page(NULL,NULL,0,0);

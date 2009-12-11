@@ -206,8 +206,6 @@ void class_handle_free_cb(struct rcu_head *rcu)
 int class_handle_init(void)
 {
         struct handle_bucket *bucket;
-        struct timeval tv;
-        int seed[2];
 
         LASSERT(handle_hash == NULL);
 
@@ -221,11 +219,6 @@ int class_handle_init(void)
                 CFS_INIT_LIST_HEAD(&bucket->head);
                 spin_lock_init(&bucket->lock);
         }
-
-        /** bug 21430: add randomness to the initial base */
-        ll_get_random_bytes(seed, sizeof(seed));
-        do_gettimeofday(&tv);
-        ll_srand(tv.tv_sec ^ seed[0], tv.tv_usec ^ seed[1]);
 
         ll_get_random_bytes(&handle_base, sizeof(handle_base));
         LASSERT(handle_base != 0ULL);

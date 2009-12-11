@@ -90,7 +90,7 @@ run_test 1b "VBR: connect $CLIENTCOUNT clients with delayed exports"
 # fail fn does not do df on all clients
 fail_mds () {
     facet_failover mds
-    clients_up
+    client_df
 }
 
 test_1c() {

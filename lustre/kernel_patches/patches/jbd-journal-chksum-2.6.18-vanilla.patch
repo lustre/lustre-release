@@ -223,7 +223,7 @@ Index: linux-2.6.18-128.1.14/fs/jbd/commit.c
 -		} else {
 -			jbd_unlock_bh_state(bh);
 -		}
--		release_data_buffer(bh);
+-		put_bh(bh);
 -		cond_resched_lock(&journal->j_list_lock);
 -	}
 +	if (!JFS_HAS_INCOMPAT_FEATURE(journal,

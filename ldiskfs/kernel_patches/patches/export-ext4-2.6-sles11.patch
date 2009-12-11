@@ -75,15 +75,3 @@ Index: linux-stage/fs/ext4/ialloc.c
  
  /*
   * NOTE! When we get the inode, we're the only people
-Index: linux-stage/fs/ext4/balloc.c
-===================================================================
---- linux-stage.orig/fs/ext4/balloc.c
-+++ linux-stage/fs/ext4/balloc.c
-@@ -238,6 +238,7 @@ struct ext4_group_desc * ext4_get_group_
- 		*bh = sbi->s_group_desc[group_desc];
- 	return desc;
- }
-+EXPORT_SYMBOL(ext4_get_group_desc);
- 
- static int ext4_valid_block_bitmap(struct super_block *sb,
- 					struct ext4_group_desc *desc,

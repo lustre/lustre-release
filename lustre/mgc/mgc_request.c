@@ -210,7 +210,6 @@ static int config_log_add(char *logname, struct config_llog_instance *cfg,
         cld->cld_cfg.cfg_flags = 0;
         cld->cld_cfg.cfg_sb = sb;
         atomic_set(&cld->cld_refcount, 1);
-        init_mutex(&cld->cld_sem);
 
         /* Keep the mgc around until we are done */
         cld->cld_mgcexp = class_export_get(lsi->lsi_mgc->obd_self_export);
@@ -233,6 +232,8 @@ static int config_log_add(char *logname, struct config_llog_instance *cfg,
         RETURN(rc);
 }
 
+DECLARE_MUTEX(llog_process_lock);
+
 /* Stop watching for updates on this log. */
 static int config_log_end(char *logname, struct config_llog_instance *cfg)
 {
@@ -246,9 +247,9 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
         /* drop the ref from the find */
         config_log_put(cld);
 
-        down(&cld->cld_sem);
+        down(&llog_process_lock);
         cld->cld_stopping = 1;
-        up(&cld->cld_sem);
+        up(&llog_process_lock);
 
         /* drop the start ref */
         config_log_put(cld);
@@ -1110,10 +1111,14 @@ static int mgc_process_log(struct obd_device *mgc,
                 RETURN(-EINVAL);
         }
 
-        /* Serialize update from the same log */
-        down(&cld->cld_sem);
+        /* I don't want mutliple processes running process_log at once --
+           sounds like badness.  It actually might be fine, as long as
+           we're not trying to update from the same log
+           simultaneously (in which case we should use a per-log sem.) */
+        down(&llog_process_lock);
+
         if (cld->cld_stopping) {
-                up(&cld->cld_sem);
+                up(&llog_process_lock);
                 RETURN(0);
         }
 
@@ -1126,8 +1131,8 @@ static int mgc_process_log(struct obd_device *mgc,
 
         ctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
         if (!ctxt) {
-                up(&cld->cld_sem);
                 CERROR("missing llog context\n");
+                up(&llog_process_lock);
                 RETURN(-EINVAL);
         }
 
@@ -1187,10 +1192,11 @@ out_pop:
                 if (rcl)
                         CERROR("Can't drop cfg lock: %d\n", rcl);
         }
-        up(&cld->cld_sem);
 
         CDEBUG(D_MGC, "%s: configuration from log '%s' %sed (%d).\n",
                mgc->obd_name, cld->cld_logname, rc ? "fail" : "succeed", rc);
+
+        up(&llog_process_lock);
 
         RETURN(rc);
 }

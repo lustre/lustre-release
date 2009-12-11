@@ -266,11 +266,6 @@ Failed to meet interval $reqfail times ( REQFAIL=$REQFAIL ); have sleep=$sleep"
     fi  
 
     log "$SERVERFACET has failed over ${!var} times, and counting..."
-
-    if [ $((ELAPSED + sleep)) -gt $DURATION ]; then
-         break
-    fi
-
     if [ $sleep -gt 0 ]; then 
         echo "sleeping $sleep seconds ... "
         sleep $sleep

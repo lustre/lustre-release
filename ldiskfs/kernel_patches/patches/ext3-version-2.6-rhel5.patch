@@ -12,8 +12,3 @@ Index: linux-2.6.18-128.1.6/fs/ext3/super.c
  	return 0;
  out:
  	destroy_inodecache();
---- /dev/null   2009-09-21 17:11:24.467285554 +0800
-+++ linux-2.6.27.21-0.1/fs/ext3/fiemap.h
-@@ -0,0 +1,2 @@
-+
-+#include_next <fiemap.h>

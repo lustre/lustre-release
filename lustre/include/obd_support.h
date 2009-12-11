@@ -382,8 +382,10 @@ do {                                                                         \
         if (unlikely(obd_fail_loc && (_ret_ = obd_fail_check(id)))) {        \
                 CERROR("obd_fail_timeout id %x sleeping for %d secs\n",      \
                        (id), (secs));                                        \
+                set_current_state(TASK_UNINTERRUPTIBLE);                     \
                 cfs_schedule_timeout(CFS_TASK_UNINT,                         \
                                     cfs_time_seconds(secs));                 \
+                set_current_state(TASK_RUNNING);                             \
                 CERROR("obd_fail_timeout id %x awake\n", (id));              \
         }                                                                    \
         _ret_;                                                               \
@@ -394,8 +396,10 @@ do {                                                                         \
         if (unlikely(obd_fail_loc && (_ret_ = obd_fail_check(id)))) {        \
                 CERROR("obd_fail_timeout id %x sleeping for %d ms\n",        \
                        (id), (ms));                                          \
+                set_current_state(TASK_UNINTERRUPTIBLE);                     \
                 cfs_schedule_timeout(CFS_TASK_UNINT,                         \
                                      cfs_time_seconds(ms)/1000);             \
+                set_current_state(TASK_RUNNING);                             \
                 CERROR("obd_fail_timeout id %x awake\n", (id));              \
         }                                                                    \
         _ret_;                                                               \
