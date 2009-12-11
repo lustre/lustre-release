@@ -128,8 +128,6 @@ usocklnd_tear_peer_conn(usock_conn_t *conn)
         lnet_process_id_t id;
         int               decref_flag  = 0;
         int               killall_flag = 0;
-        void             *rx_lnetmsg   = NULL; 
-        CFS_LIST_HEAD    (zombie_txs);
         
         if (peer == NULL) /* nothing to tear */
                 return;
@@ -144,12 +142,11 @@ usocklnd_tear_peer_conn(usock_conn_t *conn)
                 if (conn->uc_rx_state == UC_RX_LNET_PAYLOAD) {
                         /* change state not to finalize twice */
                         conn->uc_rx_state = UC_RX_KSM_HEADER;
-                        /* stash lnetmsg while holding locks */
-                        rx_lnetmsg = conn->uc_rx_lnetmsg;
+                        lnet_finalize(peer->up_ni, conn->uc_rx_lnetmsg, -EIO);                        
                 }
                 
-                /* we cannot finilize txs right now (bug #18844) */
-                list_splice_init(&conn->uc_tx_list, &zombie_txs);
+                usocklnd_destroy_txlist(peer->up_ni,
+                                        &conn->uc_tx_list);
 
                 peer->up_conns[idx] = NULL;
                 conn->uc_peer = NULL;
@@ -157,9 +154,6 @@ usocklnd_tear_peer_conn(usock_conn_t *conn)
 
                 if(conn->uc_errored && !peer->up_errored)
                         peer->up_errored = killall_flag = 1;
-
-                /* prevent queueing new txs to this conn */
-                conn->uc_errored = 1;
         }
         
         pthread_mutex_unlock(&conn->uc_lock);
@@ -171,11 +165,6 @@ usocklnd_tear_peer_conn(usock_conn_t *conn)
         
         if (!decref_flag)
                 return;
-
-        if (rx_lnetmsg != NULL)
-                lnet_finalize(ni, rx_lnetmsg, -EIO);
-        
-        usocklnd_destroy_txlist(ni, &zombie_txs);
 
         usocklnd_conn_decref(conn);
         usocklnd_peer_decref(peer);
@@ -403,6 +392,15 @@ usocklnd_set_sock_options(int fd)
         return libcfs_fcntl_nonblock(fd);
 }
 
+void
+usocklnd_init_msg(ksock_msg_t *msg, int type)
+{
+        msg->ksm_type           = type;
+        msg->ksm_csum           = 0;
+        msg->ksm_zc_req_cookie  = 0;
+        msg->ksm_zc_ack_cookie  = 0;
+}
+
 usock_tx_t *
 usocklnd_create_noop_tx(__u64 cookie)
 {
@@ -415,8 +413,8 @@ usocklnd_create_noop_tx(__u64 cookie)
         tx->tx_size = sizeof(usock_tx_t);
         tx->tx_lnetmsg = NULL;
 
-        socklnd_init_msg(&tx->tx_msg, KSOCK_MSG_NOOP);
-        tx->tx_msg.ksm_zc_cookies[1] = cookie;
+        usocklnd_init_msg(&tx->tx_msg, KSOCK_MSG_NOOP);
+        tx->tx_msg.ksm_zc_ack_cookie = cookie;
         
         tx->tx_iova[0].iov_base = (void *)&tx->tx_msg;
         tx->tx_iova[0].iov_len = tx->tx_resid = tx->tx_nob =
@@ -449,7 +447,7 @@ usocklnd_create_tx(lnet_msg_t *lntmsg)
                 offsetof(ksock_msg_t,  ksm_u.lnetmsg.ksnm_payload) +
                 payload_nob;
         
-        socklnd_init_msg(&tx->tx_msg, KSOCK_MSG_LNET);
+        usocklnd_init_msg(&tx->tx_msg, KSOCK_MSG_LNET);
         tx->tx_msg.ksm_u.lnetmsg.ksnm_hdr = lntmsg->msg_hdr;
         tx->tx_iova[0].iov_base = (void *)&tx->tx_msg;
         tx->tx_iova[0].iov_len = offsetof(ksock_msg_t,
@@ -863,13 +861,6 @@ usocklnd_find_or_create_conn(usock_peer_t *peer, int type,
 
         LASSERT(tx == NULL || zc_ack == NULL);
         if (tx != NULL) {
-                /* usocklnd_tear_peer_conn() could signal us stop queueing */
-                if (conn->uc_errored) {
-                        rc = -EIO;
-                        pthread_mutex_unlock(&conn->uc_lock);
-                        goto find_or_create_conn_failed;
-                }
-
                 usocklnd_enqueue_tx(conn, tx, send_immediately);
         } else {
                 rc = usocklnd_enqueue_zcack(conn, zc_ack);        

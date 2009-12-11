@@ -39,7 +39,8 @@ loadgen_SOURCES = loadgen.c lustre_cfg.c obd.c
 loadgen_LDADD := $(LIBREADLINE) $(LIBPTLCTL) $(PTHREAD_LIBS)
 loadgen_DEPENDENCIES := $(LIBPTLCTL)
 
-lshowmount_SOURCES    = lshowmount.c nidlist.c nidlist.h
+lshowmount_SOURCES    = lshowmount.h lshowmount.c hash.c hash.h \
+			thread.c thread.h hostlist.c hostlist.h
 
 if EXT2FS_DEVEL
 EXT2FSLIB = -lext2fs

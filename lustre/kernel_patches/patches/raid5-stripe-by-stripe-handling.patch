@@ -2,11 +2,11 @@ Helps to avoid unnesessary reads if request covers full stripe.
 
 Note that reads needed to update parity hurt performance badly
 
-Index: linux-2.6.9/drivers/md/raid5.c
+Index: linux-2.6.9-78.0.22/drivers/md/raid5.c
 ===================================================================
---- linux-2.6.9.orig/drivers/md/raid5.c	2006-05-22 00:09:56.000000000 +0400
-+++ linux-2.6.9/drivers/md/raid5.c	2006-05-22 00:10:01.000000000 +0400
-@@ -1412,6 +1412,11 @@ static int make_request (request_queue_t
+--- linux-2.6.9-78.0.22.orig/drivers/md/raid5.c	2009-05-11 23:23:12.000000000 -0600
++++ linux-2.6.9-78.0.22/drivers/md/raid5.c	2009-05-11 23:23:13.000000000 -0600
+@@ -1412,6 +1412,11 @@
  	sector_t new_sector;
  	sector_t logical_sector, last_sector;
  	struct stripe_head *sh;
@@ -16,9 +16,9 @@ Index: linux-2.6.9/drivers/md/raid5.c
 +	int sectors_per_stripe;
 +	int i, j;
  
- 	atomic_inc(&conf->in_reqs_in_queue);
- 
-@@ -1431,30 +1436,66 @@ static int make_request (request_queue_t
+ 	if (unlikely(bio_barrier(bi))) {
+ 		bio_endio(bi, bi->bi_size, -EOPNOTSUPP);
+@@ -1436,30 +1441,66 @@
  	bi->bi_phys_segments = 1;	/* over-loaded to count active stripes */
  	if ( bio_data_dir(bi) == WRITE )
  		md_write_start(mddev);

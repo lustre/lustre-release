@@ -90,6 +90,7 @@ typedef struct { volatile int counter; } atomic_t;
 #define SWI_STATE_REQUEST_SENT             4
 #define SWI_STATE_REPLY_RECEIVED           5
 #define SWI_STATE_BULK_STARTED             6
+#define SWI_STATE_BULK_ERRORED             7
 #define SWI_STATE_DONE                     10
 
 /* forward refs */
@@ -209,13 +210,13 @@ srpc_service2reply (int service)
 }
 
 typedef enum {
-        SRPC_BULK_REQ_RCVD   = 1, /* passive bulk request(PUT sink/GET source) received */
-        SRPC_BULK_PUT_SENT   = 2, /* active bulk PUT sent (source) */
-        SRPC_BULK_GET_RPLD   = 3, /* active bulk GET replied (sink) */
-        SRPC_REPLY_RCVD      = 4, /* incoming reply received */
-        SRPC_REPLY_SENT      = 5, /* outgoing reply sent */
-        SRPC_REQUEST_RCVD    = 6, /* incoming request received */
-        SRPC_REQUEST_SENT    = 7, /* outgoing request sent */
+        SRPC_BULK_REQ_RCVD   = 0, /* passive bulk request(PUT sink/GET source) received */
+        SRPC_BULK_PUT_SENT   = 1, /* active bulk PUT sent (source) */
+        SRPC_BULK_GET_RPLD   = 2, /* active bulk GET replied (sink) */
+        SRPC_REPLY_RCVD      = 3, /* incoming reply received */
+        SRPC_REPLY_SENT      = 4, /* outgoing reply sent */
+        SRPC_REQUEST_RCVD    = 5, /* incoming request received */
+        SRPC_REQUEST_SENT    = 6, /* outgoing request sent */
 } srpc_event_type_t;
 
 /* RPC event */
@@ -240,6 +241,15 @@ typedef struct {
 #endif
 } srpc_bulk_t; /* bulk descriptor */
 
+typedef struct srpc_peer {
+        struct list_head stp_list;     /* chain on peer hash */
+        struct list_head stp_rpcq;     /* q of non-control RPCs */
+        struct list_head stp_ctl_rpcq; /* q of control RPCs */
+        spinlock_t       stp_lock;     /* serialize */
+        lnet_nid_t       stp_nid;
+        int              stp_credits;  /* available credits */
+} srpc_peer_t;
+
 /* message buffer descriptor */
 typedef struct {
         struct list_head     buf_list; /* chain on srpc_service::*_msgq */
@@ -262,7 +272,6 @@ typedef struct srpc_server_rpc {
         srpc_buffer_t       *srpc_reqstbuf;
         srpc_bulk_t         *srpc_bulk;
 
-        unsigned int         srpc_aborted; /* being given up */
         int                  srpc_status;
         void               (*srpc_done)(struct srpc_server_rpc *);
 } srpc_server_rpc_t;
@@ -270,6 +279,7 @@ typedef struct srpc_server_rpc {
 /* client-side state of a RPC */
 typedef struct srpc_client_rpc {
         struct list_head     crpc_list;   /* chain on user's lists */
+        struct list_head     crpc_privl;  /* chain on srpc_peer_t::*rpcq */
         spinlock_t           crpc_lock;   /* serialize */
         int                  crpc_service;
         atomic_t             crpc_refcount;
@@ -277,6 +287,7 @@ typedef struct srpc_client_rpc {
         stt_timer_t          crpc_timer;
         swi_workitem_t       crpc_wi;
         lnet_process_id_t    crpc_dest;
+        srpc_peer_t         *crpc_peer;
 
         void               (*crpc_done)(struct srpc_client_rpc *);
         void               (*crpc_fini)(struct srpc_client_rpc *);
@@ -349,7 +360,7 @@ typedef struct srpc_service {
         int                (*sv_bulk_ready) (srpc_server_rpc_t *, int);
 } srpc_service_t;
 
-#define SFW_POST_BUFFERS         256
+#define SFW_POST_BUFFERS         8
 #define SFW_SERVICE_CONCURRENCY  (SFW_POST_BUFFERS/2)
 
 typedef struct {
@@ -360,7 +371,6 @@ typedef struct {
         stt_timer_t       sn_timer;
         struct list_head  sn_batches; /* list of batches */
         char              sn_name[LST_NAME_SIZE];
-        atomic_t          sn_refcount;
         atomic_t          sn_brw_errors;
         atomic_t          sn_ping_errors;
 } sfw_session_t;
@@ -448,7 +458,6 @@ void sfw_unpack_message(srpc_msg_t *msg);
 void sfw_free_pages(srpc_server_rpc_t *rpc);
 void sfw_add_bulk_page(srpc_bulk_t *bk, cfs_page_t *pg, int i);
 int sfw_alloc_pages(srpc_server_rpc_t *rpc, int npages, int sink);
-int sfw_make_session (srpc_mksn_reqst_t *request, srpc_mksn_reply_t *reply);
 
 srpc_client_rpc_t *
 srpc_create_client_rpc(lnet_process_id_t peer, int service,
@@ -464,7 +473,6 @@ int srpc_send_reply(srpc_server_rpc_t *rpc);
 int srpc_add_service(srpc_service_t *sv);
 int srpc_remove_service(srpc_service_t *sv);
 void srpc_shutdown_service(srpc_service_t *sv);
-void srpc_abort_service(srpc_service_t *sv);
 int srpc_finish_service(srpc_service_t *sv);
 int srpc_service_add_buffers(srpc_service_t *sv, int nbuffer);
 void srpc_service_remove_buffers(srpc_service_t *sv, int nbuffer);
@@ -486,6 +494,7 @@ srpc_destroy_client_rpc (srpc_client_rpc_t *rpc)
 {
         LASSERT (rpc != NULL);
         LASSERT (!srpc_event_pending(rpc));
+        LASSERT (list_empty(&rpc->crpc_privl));
         LASSERT (atomic_read(&rpc->crpc_refcount) == 0);
 #ifndef __KERNEL__
         LASSERT (rpc->crpc_bulk.bk_pages == NULL);
@@ -512,6 +521,7 @@ srpc_init_client_rpc (srpc_client_rpc_t *rpc, lnet_process_id_t peer,
                                 crpc_bulk.bk_iovs[nbulkiov]));
 
         CFS_INIT_LIST_HEAD(&rpc->crpc_list);
+        CFS_INIT_LIST_HEAD(&rpc->crpc_privl);
         swi_init_workitem(&rpc->crpc_wi, rpc, srpc_send_rpc);
         spin_lock_init(&rpc->crpc_lock);
         atomic_set(&rpc->crpc_refcount, 1); /* 1 ref for caller */
@@ -552,6 +562,7 @@ swi_state2str (int state)
                 STATE2STR(SWI_STATE_REQUEST_SENT);
                 STATE2STR(SWI_STATE_REPLY_RECEIVED);
                 STATE2STR(SWI_STATE_BULK_STARTED);
+                STATE2STR(SWI_STATE_BULK_ERRORED);
                 STATE2STR(SWI_STATE_DONE);
         }
 #undef STATE2STR

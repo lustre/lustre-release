@@ -10,9 +10,8 @@ configure
 .depend
 COPYING
 INSTALL
-install-sh
 lustre-iokit.spec
-lustre-iokit*.tar.gz
+install-sh
 missing
 mkinstalldirs
-modules.order
+lustre-iokit*.tar.gz

@@ -59,7 +59,6 @@
                               OBD_INCOMPAT_COMMON_LR)
 
 #define FILTER_GRANT_CHUNK (2ULL * PTLRPC_MAX_BRW_SIZE)
-#define FILTER_GRANT_SHRINK_LIMIT (16ULL * FILTER_GRANT_CHUNK)
 #define GRANT_FOR_LLOG(obd) 16
 
 extern struct file_operations filter_per_export_stats_fops;
@@ -165,7 +164,6 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
                   obd_size want, obd_size fs_space_left);
 void filter_grant_commit(struct obd_export *exp, int niocount,
                          struct niobuf_local *res);
-void filter_grant_incoming(struct obd_export *exp, struct obdo *oa);
 struct filter_iobuf *filter_alloc_iobuf(struct filter_obd *, int rw,
                                         int num_pages);
 void filter_free_iobuf(struct filter_iobuf *iobuf);

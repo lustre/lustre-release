@@ -161,13 +161,11 @@ void ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
 
         desc->bd_nob += len;
 
-        cfs_page_pin(page);
         ptlrpc_add_bulk_page(desc, page, pageoffset, len);
 }
 
 void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
 {
-        int i;
         ENTRY;
 
         LASSERT(desc != NULL);
@@ -178,9 +176,6 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
                 class_export_put(desc->bd_export);
         else
                 class_import_put(desc->bd_import);
-
-        for (i = 0; i < desc->bd_iov_count ; i++)
-                cfs_page_unpin(desc->bd_iov[i].kiov_page);
 
         OBD_FREE(desc, offsetof(struct ptlrpc_bulk_desc,
                                 bd_iov[desc->bd_max_iov]));
@@ -226,8 +221,7 @@ static void ptlrpc_at_adj_service(struct ptlrpc_request *req,
         struct imp_at *at;
 
         /* do estimate only if is not in recovery */
-        if ((req->rq_send_state != LUSTRE_IMP_FULL) &&
-             (req->rq_send_state != LUSTRE_IMP_CONNECTING))
+        if (!(req->rq_send_state & (LUSTRE_IMP_FULL | LUSTRE_IMP_CONNECTING)))
                 return;
 
         LASSERT(req->rq_import);
@@ -955,9 +949,6 @@ static int after_reply(struct ptlrpc_request *req)
                         imp->imp_peer_committed_transno =
                                 lustre_msg_get_last_committed(req->rq_repmsg);
                 ptlrpc_free_committed(imp);
-
-                if (req->rq_transno > imp->imp_peer_committed_transno)
-                        ptlrpc_pinger_sending_on_import(imp);
                 spin_unlock(&imp->imp_lock);
         }
 
@@ -1294,7 +1285,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                 spin_unlock(&imp->imp_lock);
 
                 set->set_remaining--;
-                cfs_waitq_broadcast(&imp->imp_recovery_waitq);
+                cfs_waitq_signal(&imp->imp_recovery_waitq);
         }
 
         /* If we hit an error, we want to recover promptly. */
@@ -2099,7 +2090,7 @@ restart:
 
         LASSERT(!req->rq_receiving_reply);
         ptlrpc_rqphase_move(req, RQ_PHASE_INTERPRET);
-        cfs_waitq_broadcast(&imp->imp_recovery_waitq);
+        cfs_waitq_signal(&imp->imp_recovery_waitq);
         RETURN(rc);
 }
 
@@ -2170,6 +2161,8 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         ENTRY;
 
         LASSERT(req->rq_import->imp_state == LUSTRE_IMP_REPLAY);
+        /* Not handling automatic bulk replay yet (or ever?) */
+        LASSERT(req->rq_bulk == NULL);
 
         CLASSERT(sizeof (*aa) <= sizeof (req->rq_async_args));
         aa = ptlrpc_req_async_args(req);

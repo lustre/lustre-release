@@ -83,6 +83,77 @@ $2
 ])
 
 #
+# LC_STRUCT_KIOBUF
+#
+# rh 2.4.18 has iobuf->dovary, but other kernels do not
+#
+AC_DEFUN([LC_STRUCT_KIOBUF],
+[AC_MSG_CHECKING([if struct kiobuf has a dovary field])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/iobuf.h>
+],[
+	struct kiobuf iobuf;
+	iobuf.dovary = 1;
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_KIOBUF_DOVARY, 1, [struct kiobuf has a dovary field])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
+# LC_FUNC_COND_RESCHED
+#
+# cond_resched() was introduced in 2.4.20
+#
+AC_DEFUN([LC_FUNC_COND_RESCHED],
+[AC_MSG_CHECKING([if kernel offers cond_resched])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/sched.h>
+],[
+	cond_resched();
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_COND_RESCHED, 1, [cond_resched found])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
+# LC_FUNC_ZAP_PAGE_RANGE
+#
+# if zap_page_range() takes a vma arg
+#
+AC_DEFUN([LC_FUNC_ZAP_PAGE_RANGE],
+[AC_MSG_CHECKING([if zap_page_range with vma parameter])
+ZAP_PAGE_RANGE_VMA="`grep -c 'zap_page_range.*struct vm_area_struct' $LINUX/include/linux/mm.h`"
+if test "$ZAP_PAGE_RANGE_VMA" != 0 ; then
+	AC_DEFINE(ZAP_PAGE_RANGE_VMA, 1, [zap_page_range with vma parameter])
+	AC_MSG_RESULT([yes])
+else
+	AC_MSG_RESULT([no])
+fi
+])
+
+#
+# LC_FUNC_PDE
+#
+# if proc_fs.h defines PDE()
+#
+AC_DEFUN([LC_FUNC_PDE],
+[AC_MSG_CHECKING([if kernel defines PDE])
+HAVE_PDE="`grep -c 'proc_dir_entry..PDE' $LINUX/include/linux/proc_fs.h`"
+if test "$HAVE_PDE" != 0 ; then
+	AC_DEFINE(HAVE_PDE, 1, [the kernel defines PDE])
+	AC_MSG_RESULT([yes])
+else
+	AC_MSG_RESULT([no])
+fi
+])
+
+#
 # LC_FUNC_FILEMAP_FDATASYNC
 #
 # if filemap_fdatasync() exists
@@ -99,6 +170,22 @@ LB_LINUX_TRY_COMPILE([
 ],[
 	AC_MSG_RESULT([no])
 ])
+])
+
+#
+# LC_FUNC_DIRECT_IO
+#
+# if direct_IO takes a struct file argument
+#
+AC_DEFUN([LC_FUNC_DIRECT_IO],
+[AC_MSG_CHECKING([if kernel passes struct file to direct_IO])
+HAVE_DIO_FILE="`grep -c 'direct_IO.*struct file' $LINUX/include/linux/fs.h`"
+if test "$HAVE_DIO_FILE" != 0 ; then
+	AC_DEFINE(HAVE_DIO_FILE, 1, [the kernel passes struct file to direct_IO])
+	AC_MSG_RESULT(yes)
+else
+	AC_MSG_RESULT(no)
+fi
 ])
 
 #
@@ -223,7 +310,7 @@ BACKINGFS="ldiskfs"
 if test x$with_ldiskfs = xno ; then
 	BACKINGFS="ext3"
 
-	if test x$enable_server = xyes ; then
+	if test x$linux25$enable_server = xyesyes ; then
 		AC_MSG_ERROR([ldiskfs is required for 2.6-based servers.])
 	fi
 
@@ -545,6 +632,14 @@ AC_DEFUN([LC_LUSTRE_VERSION_H],
 ])
 ])
 
+AC_DEFUN([LC_FUNC_SET_FS_PWD],
+[LB_CHECK_SYMBOL_EXPORT([set_fs_pwd],
+[fs/namespace.c],[
+        AC_DEFINE(HAVE_SET_FS_PWD, 1, [set_fs_pwd is exported])
+],[
+])
+])
+
 #
 # check for FS_RENAME_DOES_D_MOVE flag
 #
@@ -713,17 +808,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# LC_EXPORT_SYNCHRONIZE_RCU
-# after 2.6.12 synchronize_rcu is preferred over synchronize_kernel
-AC_DEFUN([LC_EXPORT_SYNCHRONIZE_RCU],
-[LB_CHECK_SYMBOL_EXPORT([synchronize_rcu],
-[kernel/rcupdate.c],[
-        AC_DEFINE(HAVE_SYNCHRONIZE_RCU, 1,
-                [in 2.6.12 synchronize_rcu preferred over synchronize_kernel])
-],[
-])
-])
-
 # LC_INODE_I_MUTEX
 # after 2.6.15 inode have i_mutex intead of i_sem
 AC_DEFUN([LC_INODE_I_MUTEX],
@@ -826,38 +910,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-#
-# LC_RELEASEPAGE_ARG_GFP_T
-# more 2.6 api changes.  Second argument type for newer kernels is
-# gfp_t and for older 2.6 kernels is int.
-#
-AC_DEFUN([LC_RELEASEPAGE_ARG_GFP_T],
-[AC_MSG_CHECKING([releasepage has gfp_t as argument])
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-
-        static int my_releasepage(struct page *pg, gfp_t gfp_mask)
-        {
-                return 0;
-        }
-
-        struct address_space_operations my_aops = {
-                .releasepage    = my_releasepage,
-        };
-],[
-        my_aops.releasepage(NULL, 0);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_RELEASEPAGE_ARG_GFP_T, 1,
-                [Define if releasepage argument should be gfp_t])
-],[
-        AC_MSG_RESULT(no)
-])
-EXTRA_KCFLAGS="$tmp_flags"
-])
-
 # LC_UMOUNTBEGIN_HAS_VFSMOUNT
 # more 2.6 API changes. 2.6.18 umount_begin has different parameters
 AC_DEFUN([LC_UMOUNTBEGIN_HAS_VFSMOUNT],
@@ -886,23 +938,6 @@ LB_LINUX_TRY_COMPILE([
 	AC_MSG_RESULT(no)
 ])
 EXTRA_KCFLAGS="$tmp_flags"
-])
-
-# inode have i_private field since 2.6.17
-AC_DEFUN([LC_INODE_IPRIVATE],
-[AC_MSG_CHECKING([if inode has a i_private field])
-LB_LINUX_TRY_COMPILE([
-#include <linux/fs.h>
-],[
-	struct inode i;
-	i.i_private = NULL; 
-],[
-	AC_MSG_RESULT(yes)
-	AC_DEFINE(HAVE_INODE_IPRIVATE, 1,
-		[struct inode has i_private field])
-],[
-	AC_MSG_RESULT(no)
-])
 ])
 
 # 2.6.19 API changes
@@ -1071,20 +1106,15 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_PAGE_CHECKED],
 [AC_MSG_CHECKING([kernel has PageChecked and SetPageChecked])
 LB_LINUX_TRY_COMPILE([
-        #include <linux/autoconf.h>
-#ifdef HAVE_LINUX_MMTYPES_H
-        #include <linux/mm_types.h>
-#endif
-	#include <linux/page-flags.h>
+        #include <linux/mm.h>
+        #include <linux/page-flags.h>
 ],[
- 	struct page *p;
-
-        /* before 2.6.26 this define*/
-        #ifndef PageChecked	
- 	/* 2.6.26 use function instead of define for it */
- 	SetPageChecked(p);
- 	PageChecked(p);
- 	#endif
+        #ifndef PageChecked
+        #error PageChecked not defined in kernel
+        #endif
+        #ifndef SetPageChecked
+        #error SetPageChecked not defined in kernel
+        #endif
 ],[
         AC_MSG_RESULT(yes)
         AC_DEFINE(HAVE_PAGE_CHECKED, 1,
@@ -1202,9 +1232,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.18
-
-
 # 2.6.23 have return type 'void' for unregister_blkdev
 AC_DEFUN([LC_UNREGISTER_BLKDEV_RETURN_INT],
 [AC_MSG_CHECKING([if unregister_blkdev return int])
@@ -1216,25 +1243,6 @@ LB_LINUX_TRY_COMPILE([
         AC_MSG_RESULT([yes])
         AC_DEFINE(HAVE_UNREGISTER_BLKDEV_RETURN_INT, 1, 
                 [unregister_blkdev return int])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-# 2.6.23 change .sendfile to .splice_read
-# RHEL4 (-92 kernel) have both sendfile and .splice_read API
-AC_DEFUN([LC_KERNEL_SENDFILE],
-[AC_MSG_CHECKING([if kernel has .sendfile])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-        struct file_operations file;
-
-        file.sendfile = NULL;
-], [
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_KERNEL_SENDFILE, 1,
-                [kernel has .sendfile])
 ],[
         AC_MSG_RESULT([no])
 ])
@@ -1260,233 +1268,11 @@ LB_LINUX_TRY_COMPILE([
 
 # 2.6.23 extract nfs export related data into exportfs.h
 AC_DEFUN([LC_HAVE_EXPORTFS_H],
-[LB_CHECK_FILE([$LINUX/include/linux/exportfs.h], [
-        AC_DEFINE(HAVE_LINUX_EXPORTFS_H, 1,
-                [kernel has include/exportfs.h])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-# 2.6.23 have new page fault handling API
-AC_DEFUN([LC_VM_OP_FAULT],
-[AC_MSG_CHECKING([if kernel has .fault in vm_operation_struct])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/mm.h>
-],[
-        struct vm_operations_struct op;
-
-        op.fault = NULL;
-], [
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_VM_OP_FAULT, 1,
-                [if kernel has .fault in vm_operation_struct])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-#2.6.23 has new shrinker API
-AC_DEFUN([LC_REGISTER_SHRINKER],
-[AC_MSG_CHECKING([if kernel has register_shrinker])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/mm.h>
-],[
-        register_shrinker(NULL);
-], [
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_REGISTER_SHRINKER, 1,
-                [if kernel has register_shrinker])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-# 2.6.24 has bio_endio with 2 args
-AC_DEFUN([LC_BIO_ENDIO_2ARG],
-[AC_MSG_CHECKING([if kernel has bio_endio with 2 args])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/bio.h>
-],[
-        bio_endio(NULL, 0);
-], [
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_BIO_ENDIO_2ARG, 1,
-                [if kernel has bio_endio with 2 args])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-# 2.6.24 has new members in exports struct.
-AC_DEFUN([LC_FH_TO_DENTRY],
-[AC_MSG_CHECKING([if kernel has .fh_to_dentry member in export_operations struct])
-LB_LINUX_TRY_COMPILE([
-#ifdef HAVE_LINUX_EXPORTFS_H
-        #include <linux/exportfs.h>
-#else
-        #include <linux/fs.h>
-#endif
-],[
-        struct export_operations exp;
-
-        exp.fh_to_dentry   = NULL;
-], [
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_FH_TO_DENTRY, 1,
-                [kernel has .fh_to_dentry member in export_operations struct])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-# 2.6.24 need linux/mm_types.h included
-AC_DEFUN([LC_HAVE_MMTYPES_H],
-[LB_CHECK_FILE([$LINUX/include/linux/mm_types.h], [
-        AC_DEFINE(HAVE_LINUX_MMTYPES_H, 1,
-                [kernel has include/mm_types.h])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-# 2.6.24 remove long aged procfs entry -> deleted member
-AC_DEFUN([LC_PROCFS_DELETED],
-[AC_MSG_CHECKING([if kernel has deleted member in procfs entry struct])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/proc_fs.h>
-],[
-        struct proc_dir_entry pde;
-
-        pde.deleted   = NULL;
-], [
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_PROCFS_DELETED, 1,
-                [kernel has deleted member in procfs entry struct])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-# 2.6.25 change define to inline
-AC_DEFUN([LC_MAPPING_CAP_WRITEBACK_DIRTY],
-[AC_MSG_CHECKING([if kernel have mapping_cap_writeback_dirty])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/backing-dev.h>
-],[
-        #ifndef mapping_cap_writeback_dirty
-        mapping_cap_writeback_dirty(NULL);
-        #endif
-],[
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_MAPPING_CAP_WRITEBACK_DIRTY, 1,
-                [kernel have mapping_cap_writeback_dirty])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-
-
-# 2.6.26 isn't export set_fs_pwd and change paramter in fs struct
-AC_DEFUN([LC_FS_STRUCT_USE_PATH],
-[AC_MSG_CHECKING([fs_struct use path structure])
-LB_LINUX_TRY_COMPILE([
-        #include <asm/atomic.h>
-        #include <linux/spinlock.h>
-        #include <linux/fs_struct.h>
-],[
-        struct path path;
-        struct fs_struct fs;
-
-        fs.pwd = path;
-], [
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_FS_STRUCT_USE_PATH, 1,
-                [fs_struct use path structure])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-#2.6.27
-AC_DEFUN([LC_INODE_PERMISION_2ARGS],
-[AC_MSG_CHECKING([inode_operations->permission have two args])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-        struct inode *inode;
-
-        inode->i_op->permission(NULL,0);
-],[
-        AC_DEFINE(HAVE_INODE_PERMISION_2ARGS, 1, 
-                  [inode_operations->permission have two args])
-        AC_MSG_RESULT([yes])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-# 2.6.27 have file_remove_suid instead of remove_suid
-AC_DEFUN([LC_FILE_REMOVE_SUID],
-[AC_MSG_CHECKING([kernel have file_remove_suid])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-        file_remove_suid(NULL);
-],[
-        AC_DEFINE(HAVE_FILE_REMOVE_SUID, 1,
-                  [kernel have file_remove_suid])
-        AC_MSG_RESULT([yes])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-# 2.6.27 have new page locking API
-AC_DEFUN([LC_TRYLOCKPAGE],
-[AC_MSG_CHECKING([kernel use trylock_page for page lock])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/pagemap.h>
-],[
-        trylock_page(NULL);
-],[
-        AC_DEFINE(HAVE_TRYLOCK_PAGE, 1,
-                  [kernel use trylock_page for page lock])
-        AC_MSG_RESULT([yes])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-# 2.6.27 and some older have mapping->tree_lock as spin_lock
-AC_DEFUN([LC_RW_TREE_LOCK],
-[AC_MSG_CHECKING([mapping->tree_lock is rw_lock])
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_LINUX_TRY_COMPILE([
-	#include <linux/fs.h>
-],[
-	struct address_space *map = NULL;
-	
-	write_lock_irq(&map->tree_lock);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_RW_TREE_LOCK, 1,
-                [mapping->tree_lock is rw_lock])
-],[
-        AC_MSG_RESULT(no)
-])
-EXTRA_KCFLAGS="$tmp_flags"
-])
-
-# 2.6.5 sles9 hasn't define sysctl_vfs_cache_pressure
-AC_DEFUN([LC_HAVE_SYSCTL_VFS_CACHE_PRESSURE],
-[LB_CHECK_SYMBOL_EXPORT([sysctl_vfs_cache_pressure],
-[fs/dcache.c],[
-        AC_DEFINE(HAVE_SYSCTL_VFS_CACHE_PRESSURE, 1, [kernel exports sysctl_vfs_cache_pressure])
-],[
-])
+[
+tmpfl="$CFLAGS"
+CFLAGS="$CFLAGS -I$LINUX_OBJ/include"
+AC_CHECK_HEADERS([linux/exportfs.h])
+CFLAGS="$tmpfl"
 ])
 
 #
@@ -1516,6 +1302,11 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_EXPORT___D_MOVE
           LC_EXPORT_NODE_TO_CPUMASK
 
+          LC_STRUCT_KIOBUF
+          LC_FUNC_COND_RESCHED
+          LC_FUNC_ZAP_PAGE_RANGE
+          LC_FUNC_PDE
+          LC_FUNC_DIRECT_IO
           LC_HEADER_MM_INLINE
           LC_STRUCT_INODE
           LC_FUNC_REGISTER_CACHE
@@ -1532,6 +1323,7 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_STRUCT_INTENT_FILE
           LC_POSIX_ACL_XATTR_H
           LC_EXPORT___IGET
+          LC_FUNC_SET_FS_PWD
           LC_FUNC_MS_FLOCK_LOCK
           LC_FUNC_HAVE_CAN_SLEEP_ARG
           LC_FUNC_F_OP_FLOCK
@@ -1542,12 +1334,6 @@ AC_DEFUN([LC_PROG_LINUX],
 
           # does the kernel have VFS intent patches?
           LC_VFS_INTENT_PATCHES
-
-          # 2.6.5 sles9
-          LC_HAVE_SYSCTL_VFS_CACHE_PRESSURE
-
-          # 2.6.12
-          LC_EXPORT_SYNCHRONIZE_RCU
 
           # 2.6.15
           LC_INODE_I_MUTEX
@@ -1563,9 +1349,7 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_STATFS_DENTRY_PARAM
           LC_VFS_KERN_MOUNT
           LC_INVALIDATEPAGE_RETURN_INT
-          LC_RELEASEPAGE_ARG_GFP_T
           LC_UMOUNTBEGIN_HAS_VFSMOUNT
-          LC_INODE_IPRIVATE
 
           #2.6.18 + RHEL5 (fc6)
           LC_PG_FS_MISC
@@ -1588,30 +1372,8 @@ AC_DEFUN([LC_PROG_LINUX],
           LC_FS_RENAME_DOES_D_MOVE
           # 2.6.23
           LC_UNREGISTER_BLKDEV_RETURN_INT
-          LC_KERNEL_SENDFILE
           LC_KERNEL_SPLICE_READ
           LC_HAVE_EXPORTFS_H
-          LC_VM_OP_FAULT
-          LC_REGISTER_SHRINKER
-
-          #2.6.25
-          LC_MAPPING_CAP_WRITEBACK_DIRTY
- 
- 	  # 2.6.24
- 	  LC_HAVE_MMTYPES_H
-          LC_BIO_ENDIO_2ARG
-          LC_FH_TO_DENTRY
-          LC_PROCFS_DELETED
- 
-          # 2.6.26
-          LC_FS_STRUCT_USE_PATH
-          LC_RCU_LIST_SAFE
-
-          # 2.6.27
-          LC_INODE_PERMISION_2ARGS
-          LC_FILE_REMOVE_SUID
-          LC_TRYLOCKPAGE
-	  LC_RW_TREE_LOCK
 ])
 
 #
@@ -1844,7 +1606,6 @@ LB_LINUX_TRY_COMPILE([
         ],[
                 AC_MSG_RESULT([no]) 
         ])
-
 ],[
         AC_MSG_RESULT([no])
 ])

@@ -65,10 +65,6 @@ that will be part of the Lustre cluster.
 
 It can also optionally: 
  * upgrade Lustre targets from 1.4 to 1.6
-   It does not support "rolling upgrade". Before upgrading, the entire Lustre
-   filesystem (all servers and clients) need be shut down. After upgrading, old
-   configuration logs for the filesystem would be erased and new configuration
-   logs would be regenerated as Lustre servers restart.
  * verify the network connectivity and hostnames in the cluster
  * configure Linux MD/LVM devices
  * modify /etc/modprobe.conf to add Lustre networking info
@@ -338,8 +334,6 @@ construct_mkfs_cmdline() {
         ;;
     "mdt")
         MKFS_CMD="$MKFS_CMD --mdt"
-        $UPGRADE_TARGET && [ -n "${MGS_NIDS[i]}" ] && \
-        MKFS_CMD="$MKFS_CMD --nomgs"
         ;;
     "mgs")
         MKFS_CMD="$MKFS_CMD --mgs"

@@ -39,3 +39,4 @@ modulefs_DATA = ost$(KMODEXT)
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
+DIST_SOURCES = $(ost-objs:%.o=%.c) ost_internal.h

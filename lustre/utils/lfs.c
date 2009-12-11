@@ -1125,8 +1125,7 @@ static int lfs_check(int argc, char **argv)
                 return -1;
         }
 
-        rc = llapi_target_iterate(num_types, obd_types,
-                                  mnt->mnt_dir, llapi_ping_target);
+        rc = llapi_target_check(num_types, obd_types, mnt->mnt_dir);
 
         if (rc)
                 fprintf(stderr, "error: %s: %s status failed\n",

@@ -33,14 +33,6 @@ static int peer_credits = 8;
 CFS_MODULE_PARM(peer_credits, "i", int, 0444,
                 "# concurrent sends to 1 peer");
 
-static int peer_buffer_credits = 0;
-CFS_MODULE_PARM(peer_buffer_credits, "i", int, 0444,
-                "# per-peer router buffer credits");
-
-static int peer_timeout = 180;
-CFS_MODULE_PARM(peer_timeout, "i", int, 0444,
-                "Seconds without aliveness news to declare peer dead (<=0 to disable)");
-
 static int nconnds = 4;
 CFS_MODULE_PARM(nconnds, "i", int, 0444,
                 "# connection daemons");
@@ -91,14 +83,6 @@ static int nagle = 0;
 CFS_MODULE_PARM(nagle, "i", int, 0644,
                 "enable NAGLE?");
 
-static int round_robin = 1;
-CFS_MODULE_PARM(round_robin, "i", int, 0644,
-                "Round robin for multiple interfaces");
-
-static int keepalive = 30;
-CFS_MODULE_PARM(keepalive, "i", int, 0644,
-                "# seconds before send keepalive");
-
 static int keepalive_idle = 30;
 CFS_MODULE_PARM(keepalive_idle, "i", int, 0644,
                 "# idle seconds before probe");
@@ -129,9 +113,9 @@ CFS_MODULE_PARM(enable_irq_affinity, "i", int, 0644,
                 "enable IRQ affinity");
 #endif
 
-static unsigned int zc_min_payload = (16 << 10);
-CFS_MODULE_PARM(zc_min_payload, "i", int, 0644,
-                "minimum payload size to zero copy");
+static unsigned int zc_min_frag = (2<<10);
+CFS_MODULE_PARM(zc_min_frag, "i", int, 0644,
+                "minimum fragment to zero copy");
 
 static unsigned int zc_recv = 0;
 CFS_MODULE_PARM(zc_recv, "i", int, 0644,
@@ -152,7 +136,7 @@ CFS_MODULE_PARM(backoff_max, "i", int, 0644,
 #endif
 
 #if SOCKNAL_VERSION_DEBUG
-static int protocol = 3;
+static int protocol = 2;
 CFS_MODULE_PARM(protocol, "i", int, 0644,
                 "protocol version");
 #endif
@@ -160,9 +144,7 @@ CFS_MODULE_PARM(protocol, "i", int, 0644,
 ksock_tunables_t ksocknal_tunables = {
         .ksnd_timeout         = &sock_timeout,
         .ksnd_credits         = &credits,
-        .ksnd_peertxcredits   = &peer_credits,
-        .ksnd_peerrtrcredits  = &peer_buffer_credits,
-        .ksnd_peertimeout     = &peer_timeout,
+        .ksnd_peercredits     = &peer_credits,
         .ksnd_nconnds         = &nconnds,
         .ksnd_min_reconnectms = &min_reconnectms,
         .ksnd_max_reconnectms = &max_reconnectms,
@@ -172,14 +154,12 @@ ksock_tunables_t ksocknal_tunables = {
         .ksnd_tx_buffer_size  = &tx_buffer_size,
         .ksnd_rx_buffer_size  = &rx_buffer_size,
         .ksnd_nagle           = &nagle,
-        .ksnd_round_robin     = &round_robin,
-        .ksnd_keepalive       = &keepalive,
         .ksnd_keepalive_idle  = &keepalive_idle,
         .ksnd_keepalive_count = &keepalive_count,
         .ksnd_keepalive_intvl = &keepalive_intvl,
         .ksnd_enable_csum     = &enable_csum,
         .ksnd_inject_csum_error = &inject_csum_error,
-        .ksnd_zc_min_payload  = &zc_min_payload,
+        .ksnd_zc_min_frag     = &zc_min_frag,
         .ksnd_zc_recv         = &zc_recv,
         .ksnd_zc_recv_min_nfrags = &zc_recv_min_nfrags,
 #ifdef CPU_AFFINITY

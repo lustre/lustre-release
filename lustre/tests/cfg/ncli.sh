@@ -15,10 +15,3 @@ MPIBIN=${MPIBIN:-/testsuite/tests/`arch`/bin}
 export PATH=:$PATH:$MPIBIN
 MPIRUN=$(which mpirun) || true
 MPI_USER=${MPI_USER:-mpiuser}
-
-# for recovery scale tests
-# default boulder cluster iozone location
-export PATH=/opt/iozone/bin:$PATH
-SHARED_DIRECTORY=${SHARED_DIRECTORY:-""}	# bug 17839 comment 65
-LOADS="dd tar dbench iozone"
-CLIENT_LOADS=($LOADS)

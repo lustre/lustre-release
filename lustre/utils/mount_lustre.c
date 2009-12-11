@@ -161,11 +161,6 @@ static char *convert_hostnames(char *s1)
         lnet_nid_t nid;
 
         converted = malloc(left);
-        if (converted == NULL) {
-                fprintf(stderr, "out of memory: needed %d bytes\n",
-                        MAXNIDSTR);
-                return NULL;
-        }
         c = converted;
         while ((left > 0) && (*s1 != '/')) {
                 s2 = strpbrk(s1, ",:");
@@ -331,7 +326,7 @@ int set_tunables(char *source, int src_len)
         glob_t glob_info;
         struct stat stat_buf;
         char *chk_major, *chk_minor;
-        char *savept, *dev;
+        char *savept, *dev, *s2 = 0;
         char *ret_path;
         char buf[PATH_MAX] = {'\0'}, path[PATH_MAX] = {'\0'};
         char real_path[PATH_MAX] = {'\0'};
@@ -354,7 +349,7 @@ int set_tunables(char *source, int src_len)
         if (strncmp(real_path, "/dev/loop", 9) == 0)
                 return 0;
 
-        if ((real_path[0] != '/') && (strpbrk(real_path, ",:") != NULL))
+        if ((real_path[0] != '/') && ((s2 = strpbrk(real_path, ",:")) != NULL))
                 return 0;
 
         dev = real_path + src_len - 1;
@@ -518,20 +513,16 @@ int main(int argc, char *const argv[])
         }
 
         usource = argv[optind];
-        if (!usource) {
-                usage(stderr);
-        }
-
         source = convert_hostnames(usource);
-        if (!source) {
-                usage(stderr);
-        }
-
         target = argv[optind + 1];
         ptr = target + strlen(target) - 1;
         while ((ptr > target) && (*ptr == '/')) {
                 *ptr = 0;
                 ptr--;
+        }
+
+        if (!usource || !source) {
+                usage(stderr);
         }
 
         if (verbose) {
@@ -543,10 +534,6 @@ int main(int argc, char *const argv[])
         }
 
         options = malloc(strlen(orig_options) + 1);
-        if (options == NULL) {
-                fprintf(stderr, "can't allocate memory for options\n");
-                return -1;
-        }
         strcpy(options, orig_options);
         rc = parse_options(options, &flags);
         if (rc) {
@@ -585,10 +572,6 @@ int main(int argc, char *const argv[])
            functions.  So we'll stick it on the end of the options. */
         optlen = strlen(options) + strlen(",device=") + strlen(source) + 1;
         optcopy = malloc(optlen);
-        if (optcopy == NULL) {
-                fprintf(stderr, "can't allocate memory to optcopy\n");
-                return -1;
-        }
         strcpy(optcopy, options);
         if (*optcopy)
                 strcat(optcopy, ",");

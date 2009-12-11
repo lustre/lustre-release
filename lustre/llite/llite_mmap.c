@@ -81,7 +81,8 @@ struct ll_lock_tree_node {
 int lt_get_mmap_locks(struct ll_lock_tree *tree,
                       unsigned long addr, size_t count);
 
-static struct vm_operations_struct ll_file_vm_ops;
+struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
+                       int *type);
 
 struct ll_lock_tree_node * ll_node_from_inode(struct inode *inode, __u64 start,
                                               __u64 end, ldlm_mode_t mode)
@@ -284,19 +285,9 @@ static ldlm_mode_t mode_from_vma(struct vm_area_struct *vma)
         return LCK_PR;
 }
 
-static void policy_from_vma_pgoff(ldlm_policy_data_t *policy,
-                                  struct vm_area_struct *vma,
-                                  __u64 pgoff, size_t count)
-{
-        policy->l_extent.start = pgoff << CFS_PAGE_SHIFT;
-        policy->l_extent.end = (policy->l_extent.start + count - 1) |
-                               ~CFS_PAGE_MASK;
-}
-
 static void policy_from_vma(ldlm_policy_data_t *policy,
                             struct vm_area_struct *vma, unsigned long addr,
                             size_t count)
-
 {
         policy->l_extent.start = ((addr - vma->vm_start) & CFS_PAGE_MASK) +
                                  ((__u64)vma->vm_pgoff << CFS_PAGE_SHIFT);
@@ -317,7 +308,7 @@ static struct vm_area_struct * our_vma(unsigned long addr, size_t count)
         spin_lock(&mm->page_table_lock);
         for(vma = find_vma(mm, addr);
             vma != NULL && vma->vm_start < (addr + count); vma = vma->vm_next) {
-                if (vma->vm_ops && vma->vm_ops == &ll_file_vm_ops &&
+                if (vma->vm_ops && vma->vm_ops->nopage == ll_nopage &&
                     vma->vm_flags & VM_SHARED) {
                         ret = vma;
                         break;
@@ -369,30 +360,44 @@ int lt_get_mmap_locks(struct ll_lock_tree *tree,
         }
         RETURN(0);
 }
-
-static int ll_get_extent_lock(struct vm_area_struct *vma, unsigned long pgoff,
-                              int *save_flags, struct lustre_handle *lockh)
+/**
+ * Page fault handler.
+ *
+ * \param vma - is virtiual area struct related to page fault
+ * \param address - address when hit fault
+ * \param type - of fault
+ *
+ * \return allocated and filled page for address
+ * \retval NOPAGE_SIGBUS if page not exist on this address
+ * \retval NOPAGE_OOM not have memory for allocate new page
+ */
+struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
+                       int *type)
 {
         struct file *filp = vma->vm_file;
         struct ll_file_data *fd = LUSTRE_FPRIVATE(filp);
         struct inode *inode = filp->f_dentry->d_inode;
+        struct lustre_handle lockh = { 0 };
         ldlm_policy_data_t policy;
         ldlm_mode_t mode;
+        struct page *page = NULL;
         struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm;
         struct ost_lvb lvb;
         __u64 kms, old_mtime;
-        unsigned long size;
+        unsigned long pgoff, size, rand_read, seq_read;
+        int rc = 0;
         ENTRY;
 
         if (lli->lli_smd == NULL) {
                 CERROR("No lsm on fault?\n");
-                RETURN(0);
+                RETURN(NOPAGE_SIGBUS);
         }
 
         ll_clear_file_contended(inode);
 
         /* start and end the lock on the first and last bytes in the page */
-        policy_from_vma_pgoff(&policy, vma, pgoff, CFS_PAGE_SIZE);
+        policy_from_vma(&policy, vma, address, CFS_PAGE_SIZE);
 
         CDEBUG(D_MMAP, "nopage vma %p inode %lu, locking ["LPU64", "LPU64"]\n",
                vma, inode->i_ino, policy.l_extent.start, policy.l_extent.end);
@@ -400,28 +405,26 @@ static int ll_get_extent_lock(struct vm_area_struct *vma, unsigned long pgoff,
         mode = mode_from_vma(vma);
         old_mtime = LTIME_S(inode->i_mtime);
 
-        if(ll_extent_lock(fd, inode, lli->lli_smd, mode, &policy,
-                          lockh, LDLM_FL_CBPENDING | LDLM_FL_NO_LRU) != 0)
-                RETURN(0);
+        lsm = lli->lli_smd;
+        rc = ll_extent_lock(fd, inode, lsm, mode, &policy,
+                            &lockh, LDLM_FL_CBPENDING | LDLM_FL_NO_LRU);
+        if (rc != 0)
+                RETURN(NOPAGE_SIGBUS);
 
         if (vma->vm_flags & VM_EXEC && LTIME_S(inode->i_mtime) != old_mtime)
                 CWARN("binary changed. inode %lu\n", inode->i_ino);
 
-        lov_stripe_lock(lli->lli_smd);
+        lov_stripe_lock(lsm);
         inode_init_lvb(inode, &lvb);
-        if(obd_merge_lvb(ll_i2obdexp(inode), lli->lli_smd, &lvb, 1)) {
-                lov_stripe_unlock(lli->lli_smd);
-                RETURN(0);
-        }
+        obd_merge_lvb(ll_i2obdexp(inode), lsm, &lvb, 1);
         kms = lvb.lvb_size;
 
+        pgoff = ((address - vma->vm_start) >> CFS_PAGE_SHIFT) + vma->vm_pgoff;
         size = (kms + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
-        CDEBUG(D_INFO, "Kms %lu - %lu\n", size, pgoff);
 
         if (pgoff >= size) {
-                lov_stripe_unlock(lli->lli_smd);
+                lov_stripe_unlock(lsm);
                 ll_glimpse_size(inode, LDLM_FL_BLOCK_GRANTED);
-                lov_stripe_lock(lli->lli_smd);
         } else {
                 /* XXX change inode size without ll_inode_size_lock() held!
                  *     there is a race condition with truncate path. (see
@@ -443,68 +446,28 @@ static int ll_get_extent_lock(struct vm_area_struct *vma, unsigned long pgoff,
                         CDEBUG(D_INODE, "ino=%lu, updating i_size %llu\n",
                                inode->i_ino, i_size_read(inode));
                 }
+                lov_stripe_unlock(lsm);
         }
 
         /* If mapping is writeable, adjust kms to cover this page,
          * but do not extend kms beyond actual file size.
          * policy.l_extent.end is set to the end of the page by policy_from_vma
          * bug 10919 */
+        lov_stripe_lock(lsm);
         if (mode == LCK_PW)
-                obd_adjust_kms(ll_i2obdexp(inode), lli->lli_smd,
+                obd_adjust_kms(ll_i2obdexp(inode), lsm,
                                min_t(loff_t, policy.l_extent.end + 1,
                                i_size_read(inode)), 0);
-        lov_stripe_unlock(lli->lli_smd);
+        lov_stripe_unlock(lsm);
 
         /* disable VM_SEQ_READ and use VM_RAND_READ to make sure that
          * the kernel will not read other pages not covered by ldlm in
          * filemap_nopage. we do our readahead in ll_readpage.
          */
-        *save_flags = vma->vm_flags & (VM_RAND_READ | VM_SEQ_READ);
+        rand_read = vma->vm_flags & VM_RAND_READ;
+        seq_read = vma->vm_flags & VM_SEQ_READ;
         vma->vm_flags &= ~ VM_SEQ_READ;
         vma->vm_flags |= VM_RAND_READ;
-
-        return 1;
-}
-
-static void ll_put_extent_lock(struct vm_area_struct *vma, int save_flags,
-                             struct lustre_handle *lockh)
-{
-        struct file *filp = vma->vm_file;
-        struct ll_file_data *fd = LUSTRE_FPRIVATE(filp);
-        struct inode *inode = filp->f_dentry->d_inode;
-        ldlm_mode_t mode;
-
-        mode = mode_from_vma(vma);
-        vma->vm_flags &= ~(VM_RAND_READ | VM_SEQ_READ);
-        vma->vm_flags |= save_flags;
-
-        ll_extent_unlock(fd, inode, ll_i2info(inode)->lli_smd, mode, lockh);
-}
-
-#ifndef HAVE_VM_OP_FAULT
-/**
- * Page fault handler.
- *
- * \param vma - is virtiual area struct related to page fault
- * \param address - address when hit fault
- * \param type - of fault
- *
- * \return allocated and filled page for address
- * \retval NOPAGE_SIGBUS if page not exist on this address
- * \retval NOPAGE_OOM not have memory for allocate new page
- */
-struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
-                       int *type)
-{
-        struct lustre_handle lockh = { 0 };
-        int save_fags = 0;
-        unsigned long pgoff;
-        struct page *page;
-        ENTRY;
-
-        pgoff = ((address - vma->vm_start) >> CFS_PAGE_SHIFT) + vma->vm_pgoff;
-        if(!ll_get_extent_lock(vma, pgoff, &save_fags, &lockh))
-                RETURN(NOPAGE_SIGBUS);
 
         page = filemap_nopage(vma, address, type);
         if (page != NOPAGE_SIGBUS && page != NOPAGE_OOM)
@@ -514,47 +477,12 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
                 CDEBUG(D_PAGE, "got addr %lu type %lx - SIGBUS\n",  address,
                                (long)type);
 
-        ll_put_extent_lock(vma, save_fags, &lockh);
+        vma->vm_flags &= ~VM_RAND_READ;
+        vma->vm_flags |= (rand_read | seq_read);
 
+        ll_extent_unlock(fd, inode, ll_i2info(inode)->lli_smd, mode, &lockh);
         RETURN(page);
 }
-
-#else
-/* New fault() API*/
-/**
- * Page fault handler.
- *
- * \param vma - is virtiual area struct related to page fault
- * \param address - address when hit fault
- * \param type - of fault
- *
- * \return allocated and filled page for address
- * \retval NOPAGE_SIGBUS if page not exist on this address
- * \retval NOPAGE_OOM not have memory for allocate new page
- */
-int ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
-{
-        struct lustre_handle lockh = { 0 };
-        int save_fags = 0;
-        int rc;
-        ENTRY;
-
-        if(!ll_get_extent_lock(vma, vmf->pgoff, &save_fags, &lockh))
-               RETURN(VM_FAULT_SIGBUS);
-
-        rc = filemap_fault(vma, vmf);
-        if (vmf->page)
-                LL_CDEBUG_PAGE(D_PAGE, vmf->page, "got addr %p type NOPAGE\n",
-                               vmf->virtual_address);
-        else
-                CDEBUG(D_PAGE, "got addr %p - SIGBUS\n",
-                       vmf->virtual_address);
-
-        ll_put_extent_lock(vma, save_fags, &lockh);
-
-        RETURN(rc);
-}
-#endif
 
 /* To avoid cancel the locks covering mmapped region for lock cache pressure,
  * we track the mapped vma count by lli_mmap_cnt.
@@ -620,7 +548,6 @@ static void ll_vm_close(struct vm_area_struct *vma)
         }
 }
 
-#ifndef HAVE_VM_OP_FAULT
 #ifndef HAVE_FILEMAP_POPULATE
 static int (*filemap_populate)(struct vm_area_struct * area, unsigned long address, unsigned long len, pgprot_t prot, unsigned long pgoff, int nonblock);
 #endif
@@ -635,7 +562,6 @@ static int ll_populate(struct vm_area_struct *area, unsigned long address,
         rc = filemap_populate(area, address, len, prot, pgoff, 1);
         RETURN(rc);
 }
-#endif
 
 /* return the user space pointer that maps to a file offset via a vma */
 static inline unsigned long file_to_user(struct vm_area_struct *vma, __u64 byte)
@@ -662,14 +588,10 @@ int ll_teardown_mmaps(struct address_space *mapping, __u64 first, __u64 last)
 }
 
 static struct vm_operations_struct ll_file_vm_ops = {
+        .nopage         = ll_nopage,
         .open           = ll_vm_open,
         .close          = ll_vm_close,
-#ifdef HAVE_VM_OP_FAULT
-        .fault          = ll_fault,
-#else
-        .nopage         = ll_nopage,
         .populate       = ll_populate,
-#endif
 };
 
 int ll_file_mmap(struct file * file, struct vm_area_struct * vma)
@@ -680,7 +602,7 @@ int ll_file_mmap(struct file * file, struct vm_area_struct * vma)
         ll_stats_ops_tally(ll_i2sbi(file->f_dentry->d_inode), LPROC_LL_MAP, 1);
         rc = generic_file_mmap(file, vma);
         if (rc == 0) {
-#if !defined(HAVE_FILEMAP_POPULATE) && !defined(HAVE_VM_OP_FAULT)
+#ifndef HAVE_FILEMAP_POPULATE
                 if (!filemap_populate)
                         filemap_populate = vma->vm_ops->populate;
 #endif

@@ -98,11 +98,7 @@ static void ll_invalidatepage(struct page *page, unsigned long offset)
 }
 #endif
 
-#ifdef HAVE_RELEASEPAGE_ARG_GFP_T
 static int ll_releasepage(struct page *page, gfp_t gfp_mask)
-#else
-static int ll_releasepage(struct page *page, int gfp_mask)
-#endif
 {
         if (PagePrivate(page))
                 ll_removepage(page);
@@ -213,7 +209,7 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct ptlrpc_request_set *set;
         struct obd_info oinfo;
-        struct obdo oa = { 0 };
+        struct obdo oa;
         unsigned long seg;
         size_t size = MAX_DIO_SIZE;
         ENTRY;

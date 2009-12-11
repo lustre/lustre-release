@@ -143,7 +143,6 @@ setup() {
 	start_ost
 	start_mds
 	mount_client $MOUNT
-	df $MOUNT
 }
 
 setup_noconfig() {
@@ -424,9 +423,9 @@ test_16() {
         cleanup || return $?
 
         log "read the mode of OBJECTS/LOGS/PENDING and check if they has been changed properly"
-        EXPECTEDOBJECTSMODE=`do_facet mds "$DEBUGFS -R 'stat OBJECTS' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
-        EXPECTEDLOGSMODE=`do_facet mds "$DEBUGFS -R 'stat LOGS' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
-        EXPECTEDPENDINGMODE=`do_facet mds "$DEBUGFS -R 'stat PENDING' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
+        EXPECTEDOBJECTSMODE=`do_facet mds "debugfs -R 'stat OBJECTS' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
+        EXPECTEDLOGSMODE=`do_facet mds "debugfs -R 'stat LOGS' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
+        EXPECTEDPENDINGMODE=`do_facet mds "debugfs -R 'stat PENDING' $MDSDEV 2> /dev/null" | grep 'Mode: ' | sed -e "s/.*Mode: *//" -e "s/ *Flags:.*//"`
 
         if [ "$EXPECTEDOBJECTSMODE" = "0777" ]; then
                 log "Success:Lustre change the mode of OBJECTS correctly"
@@ -457,7 +456,7 @@ test_17() {
         fi
 
         echo "Remove mds config log"
-        do_facet mds "$DEBUGFS -w -R 'unlink CONFIGS/$FSNAME-MDT0000' $MDSDEV || return \$?" || return $?
+        do_facet mds "debugfs -w -R 'unlink CONFIGS/$FSNAME-MDT0000' $MDSDEV || return \$?" || return $?
 
         start_ost
 	start_mds && return 42
@@ -507,7 +506,7 @@ test_18() {
         check_mount || return 41
 
         echo "check journal size..."
-        local FOUNDSIZE=`do_facet mds "$DEBUGFS -c -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}'`
+        local FOUNDSIZE=`do_facet mds "debugfs -c -R 'stat <8>' $MDSDEV" | awk '/Size: / { print $NF; exit;}'`
         if [ $FOUNDSIZE -gt $((32 * 1024 * 1024)) ]; then
                 log "Success: mkfs creates large journals. Size: $((FOUNDSIZE >> 20))M"
         else
@@ -1344,8 +1343,8 @@ test_38() { # bug 14222
 	stop_mds
 	log "rename lov_objid file on MDS"
 	rm -f $TMP/lov_objid.orig
-	do_facet mds "$DEBUGFS -c -R \\\"dump lov_objid $TMP/lov_objid.orig\\\" $MDSDEV"
-	do_facet mds "$DEBUGFS -w -R \\\"rm lov_objid\\\" $MDSDEV"
+	do_facet mds "debugfs -c -R \\\"dump lov_objid $TMP/lov_objid.orig\\\" $MDSDEV"
+	do_facet mds "debugfs -w -R \\\"rm lov_objid\\\" $MDSDEV"
 
 	do_facet mds "od -Ax -td8 $TMP/lov_objid.orig"
 	# check create in mds_lov_connect
@@ -1355,7 +1354,7 @@ test_38() { # bug 14222
 		[ $V ] && log "verifying $DIR/$tdir/$f"
 		diff -q $f $DIR/$tdir/$f || ERROR=y
 	done
-	do_facet mds "$DEBUGFS -c -R \\\"dump lov_objid $TMP/lov_objid.new\\\"  $MDSDEV"
+	do_facet mds "debugfs -c -R \\\"dump lov_objid $TMP/lov_objid.new\\\"  $MDSDEV"
 	do_facet mds "od -Ax -td8 $TMP/lov_objid.new"
 	[ "$ERROR" = "y" ] && error "old and new files are different after connect" || true
 	
@@ -1365,8 +1364,8 @@ test_38() { # bug 14222
 	stop_mds
 	
 	do_facet mds dd if=/dev/zero of=$TMP/lov_objid.clear bs=4096 count=1
-	do_facet mds "$DEBUGFS -w -R \\\"rm lov_objid\\\" $MDSDEV"
-	do_facet mds "$DEBUGFS -w -R \\\"write $TMP/lov_objid.clear lov_objid\\\" $MDSDEV "
+	do_facet mds "debugfs -w -R \\\"rm lov_objid\\\" $MDSDEV"
+	do_facet mds "debugfs -w -R \\\"write $TMP/lov_objid.clear lov_objid\\\" $MDSDEV "
 
 	start_mds
 	mount_client $MOUNT
@@ -1374,7 +1373,7 @@ test_38() { # bug 14222
 		[ $V ] && log "verifying $DIR/$tdir/$f"
 		diff -q $f $DIR/$tdir/$f || ERROR=y
 	done
-        do_facet mds "$DEBUGFS -c -R \\\"dump lov_objid $TMP/lov_objid.new1\\\" $MDSDEV"
+        do_facet mds "debugfs -c -R \\\"dump lov_objid $TMP/lov_objid.new1\\\" $MDSDEV"
 	do_facet mds "od -Ax -td8 $TMP/lov_objid.new1"
 	umount_client $MOUNT
 	stop_mds
@@ -1583,259 +1582,6 @@ test_48() { # bug 17636
 }
 run_test 48 "too many acls on file"
 
-# check PARAM_SYS_LDLM_TIMEOUT option of MKFS.LUSTRE
-test_49() { # bug 17710
-	local OLD_MDS_MKFS_OPTS=$MDS_MKFS_OPTS
-	local OLD_OST_MKFS_OPTS=$OST_MKFS_OPTS
-	local LOCAL_TIMEOUT=20
-
-	OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID --param sys.timeout=$LOCAL_TIMEOUT --param sys.ldlm_timeout=$LOCAL_TIMEOUT $MKFSOPT $OSTOPT"
-
-	reformat
-	start_mds
-	start_ost
-	mount_client $MOUNT
-	check_mount || return 1
-
-	echo "check ldlm_timout..."
-	LDLM_MDS="`do_facet mds lctl get_param -n ldlm_timeout`"
-	LDLM_OST1="`do_facet ost1 lctl get_param -n ldlm_timeout`"
-	LDLM_CLIENT="`do_facet client lctl get_param -n ldlm_timeout`"
-
-	if [ $LDLM_MDS -ne $LDLM_OST1 ] || [ $LDLM_MDS -ne $LDLM_CLIENT ]; then
-		error "Different LDLM_TIMEOUT:$LDLM_MDS $LDLM_OST1 $LDLM_CLIENT"
-	fi
-
-	if [ $LDLM_MDS -ne $((LOCAL_TIMEOUT / 3)) ]; then
-		error "LDLM_TIMEOUT($LDLM_MDS) is not correct"
-	fi
-
-	umount_client $MOUNT
-	stop_ost || return 2
-	stop_mds || return 3
-
-	OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID --param sys.timeout=$LOCAL_TIMEOUT --param sys.ldlm_timeout=$((LOCAL_TIMEOUT - 1)) $MKFSOPT $OSTOPT"
-	
-	reformat
-	start_mds || return 4
-	start_ost || return 5
-	mount_client $MOUNT || return 6
-	check_mount || return 7
-
-	LDLM_MDS="`do_facet mds lctl get_param -n ldlm_timeout`"
-	LDLM_OST1="`do_facet ost1 lctl get_param -n ldlm_timeout`"
-	LDLM_CLIENT="`do_facet client lctl get_param -n ldlm_timeout`"
-
-	if [ $LDLM_MDS -ne $LDLM_OST1 ] || [ $LDLM_MDS -ne $LDLM_CLIENT ]; then
-		error "Different LDLM_TIMEOUT:$LDLM_MDS $LDLM_OST1 $LDLM_CLIENT"
-	fi
-	
-	if [ $LDLM_MDS -ne $((LOCAL_TIMEOUT - 1)) ]; then
-		error "LDLM_TIMEOUT($LDLM_MDS) is not correct"
-	fi
-		
-	cleanup || return $?
-
-	MDS_MKFS_OPTS=$OLD_MDS_MKFS_OPTS
-	OST_MKFS_OPTS=$OLD_OST_MKFS_OPTS
-}
-run_test 49 "check PARAM_SYS_LDLM_TIMEOUT option of MKFS.LUSTRE"
-
-lazystatfs() {
-        # Test both statfs and lfs df and fail if either one fails
-	multiop_bg_pause $1 f_
-	RC1=$?
-	PID=$!
-	killall -USR1 multiop
-	[ $RC1 -ne 0 ] && log "lazystatfs multiop failed"
-	wait $PID || { RC1=$?; log "multiop return error "; }
-
-	$LFS df &
-	PID=$!
-	sleep 5
-	kill -s 0 $PID
-	RC2=$?
-	if [ $RC2 -eq 0 ]; then
-	    kill -s 9 $PID
-	    log "lazystatfs df failed"
-	fi
-
-	RC=0
-	[[ $RC1 -ne 0 || $RC2 -eq 0 ]] && RC=1
-	return $RC
-}
-
-test_50a() {
-	setup
-	lctl set_param llite.$FSNAME-*.lazystatfs=1
-	touch $DIR/$tfile
-
-	lazystatfs $MOUNT || error "lazystatfs failed but no down servers"
-
-	cleanup || return $?
-}
-run_test 50a "lazystatfs all servers available =========================="
-
-test_50b() {
-	setup
-	lctl set_param llite.$FSNAME-*.lazystatfs=1
-	touch $DIR/$tfile
-
-	# Wait for client to detect down OST
-	stop_ost || error "Unable to stop OST1"
-	CONN_PROC="osc.$FSNAME-OST0000-osc.ost_server_uuid"
-	CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	while [ ${CONN_STATE} = "FULL" ]; do
-		sleep 1
-		CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	done
-	lazystatfs $MOUNT || error "lazystatfs should don't have returned EIO"
-
-	umount_client $MOUNT || error "Unable to unmount client"
-	stop_mds || error "Unable to stop MDS"
-}
-run_test 50b "lazystatfs all servers down =========================="
-
-test_50c() {
-	start_mds || error "Unable to start MDS"
-	start_ost || error "Unable to start OST1"
-	start_ost2 || error "Unable to start OST2"
-	mount_client $MOUNT || error "Unable to mount client"
-	lctl set_param llite.$FSNAME-*.lazystatfs=1
-	touch $DIR/$tfile
-
-	# Wait for client to detect down OST
-	stop_ost || error "Unable to stop OST1"
-	CONN_PROC="osc.$FSNAME-OST0000-osc.ost_server_uuid"
-	CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	while [ ${CONN_STATE} = "FULL" ]; do
-		sleep 1
-		CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	done
-	lazystatfs $MOUNT || error "lazystatfs failed with one down server"
-
- 	umount_client $MOUNT || error "Unable to unmount client"
-	stop_ost2 || error "Unable to stop OST2"
-	stop_mds || error "Unable to stop MDS"
-}
-run_test 50c "lazystatfs one server down =========================="
-
-test_50d() {
-	start_mds || error "Unable to start MDS"
-	start_ost || error "Unable to start OST1"
-	start_ost2 || error "Unable to start OST2"
-	mount_client $MOUNT || error "Unable to mount client"
-	lctl set_param llite.$FSNAME-*.lazystatfs=1
-	touch $DIR/$tfile
-
-	# Issue the statfs during the window where the client still
-	# belives the OST to be available but it is in fact down.
-	# No failure just a statfs which hangs for a timeout interval.
-	stop_ost || error "Unable to stop OST1"
-	lazystatfs $MOUNT || error "lazystatfs failed with one down server"
-
- 	umount_client $MOUNT || error "Unable to unmount client"
-	stop_ost2 || error "Unable to stop OST2"
-	stop_mds || error "Unable to stop MDS"
-}
-run_test 50d "lazystatfs client/server conn race =========================="
-
-test_50e() {
-	local RC1
-	local pid
-	CONN_PROC="osc.$FSNAME-OST0000-osc.ost_server_uuid"
-	
-	start_mds || return 1
-	#first client should see only one ost
-	start_ost || return 2
-	CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	while [ ${CONN_STATE} != "FULL" ]; do
-		sleep 1
-		CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	done
-
-	lctl set_param llite.$FSNAME-*.lazystatfs=0
-
-	# Wait for client to detect down OST
-	stop_ost || error "Unable to stop OST1"
-
-	CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	while [ ${CONN_STATE} = "FULL" ]; do
-		sleep 1
-		CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	done
-	
-	mount_client $MOUNT || error "Unable to mount client"
-	
-	multiop_bg_pause $MOUNT _f
-	RC1=$?
-	pid=$!
-
-	if [ $RC1 -ne 0 ]; then
-		log "lazystatfs multiop failed $RC1"
-	else
-	    kill -USR1 $pid
-	    sleep $(( $TIMEOUT+1 ))
-	    kill -0 $pid
-	    [ $? -ne 0 ] && error "process isn't sleep"
-	    start_ost || error "Unable to start OST1"    	    
-	    wait $pid || error "statfs failed"
-	fi
-
-	umount_client $MOUNT || error "Unable to unmount client"
-	stop_ost || error "Unable to stop OST1"	
-	stop_mds || error "Unable to stop MDS"
-}
-run_test 50e "normal statfs all servers down =========================="
-
-test_50f() {
-	local RC1
-	local pid
-	CONN_PROC="osc.$FSNAME-OST0001-osc.ost_server_uuid"
-	
-	start_mds || error "Unable to start mds"
-	#first client should see only one ost
-	start_ost || error "Unable to start OST1"
-	start_ost2 || error "Unable to start OST2"
-	CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	while [ ${CONN_STATE} != "FULL" ]; do
-		sleep 1
-		CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	done
-
-	lctl set_param llite.$FSNAME-*.lazystatfs=0
-
-	# Wait for client to detect down OST
-	stop_ost2 || error "Unable to stop OST2"
-
-	CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	while [ ${CONN_STATE} = "FULL" ]; do
-		sleep 1
-		CONN_STATE=`lctl get_param -n $CONN_PROC | cut -f2`
-	done
-	
-	mount_client $MOUNT || error "Unable to mount client"
-	
-	multiop_bg_pause $MOUNT _f
-	RC1=$?
-	pid=$!
-
-	if [ $RC1 -ne 0 ]; then
-		log "lazystatfs multiop failed $RC1"
-	else
-	    kill -USR1 $pid
-	    sleep $(( $TIMEOUT+1 ))
-	    kill -0 $pid
-	    [ $? -ne 0 ] && error "process isn't sleep"
-	    start_ost2 || error "Unable to start OST1"    	    
-	    wait $pid || error "statfs failed"
-	fi
-
-	umount_client $MOUNT || error "Unable to unmount client"
-	stop_ost || error "Unable to stop OST1"	
-	stop_mds || error "Unable to stop MDS"
-}
-run_test 50f "normal statfs one server in down =========================="
 
 equals_msg `basename $0`: test complete
 [ -f "$TESTSUITELOG" ] && cat $TESTSUITELOG && grep -q FAIL $TESTSUITELOG && exit 1 || true

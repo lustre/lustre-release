@@ -69,20 +69,9 @@ fi
 
 shift $((OPTIND - 1))
 
-trap '
-echo kill dbench main pid=$DBENCHPID
-kill $DBENCHPID
-rm -rf dbench $LIBS71 client.txt
-exit 0
-' TERM
-
 cd $DIR
 echo "running 'dbench $@' $PREFIX $PWD at `date`"
-
-$RUN dbench -c client.txt $@ &
-DBENCHPID=$!
-echo "dbench PID=$DBENCHPID"
-wait $DBENCHPID
+$RUN dbench -c client.txt $@
 RC=$?
 [ $RC -ne 0 ] && killall -9 dbench
 

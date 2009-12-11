@@ -153,13 +153,13 @@ usocklnd_read_msg(usock_conn_t *conn, int *cont_flag)
                 if (conn->uc_flip) {
                         __swab32s(&conn->uc_rx_msg.ksm_type);
                         __swab32s(&conn->uc_rx_msg.ksm_csum);
-                        __swab64s(&conn->uc_rx_msg.ksm_zc_cookies[0]);
-                        __swab64s(&conn->uc_rx_msg.ksm_zc_cookies[1]);
+                        __swab64s(&conn->uc_rx_msg.ksm_zc_req_cookie);
+                        __swab64s(&conn->uc_rx_msg.ksm_zc_ack_cookie);
                 } 
 
                 /* we never send packets for wich zc-acking is required */
                 if (conn->uc_rx_msg.ksm_type != KSOCK_MSG_LNET ||
-                    conn->uc_rx_msg.ksm_zc_cookies[1] != 0) {
+                    conn->uc_rx_msg.ksm_zc_ack_cookie != 0) {
                         conn->uc_errored = 1;
                         return -EPROTO;
                 }
@@ -230,7 +230,7 @@ usocklnd_read_msg(usock_conn_t *conn, int *cont_flag)
 
                 lnet_finalize(conn->uc_peer->up_ni, conn->uc_rx_lnetmsg, 0);
 
-                cookie = conn->uc_rx_msg.ksm_zc_cookies[0];
+                cookie = conn->uc_rx_msg.ksm_zc_req_cookie;
                 if (cookie != 0)
                         rc = usocklnd_handle_zc_req(conn->uc_peer, cookie);
                 
@@ -742,7 +742,7 @@ usocklnd_try_piggyback(struct list_head *tx_list_p,
                 list_del(&tx->tx_list);
 
                 /* already piggybacked or partially send */
-                if (tx->tx_msg.ksm_zc_cookies[1] != 0 ||
+                if (tx->tx_msg.ksm_zc_ack_cookie ||
                     tx->tx_resid != tx->tx_nob)
                         return tx;
         }
@@ -758,7 +758,7 @@ usocklnd_try_piggyback(struct list_head *tx_list_p,
                 
         if (tx != NULL)
                 /* piggyback the zc-ack cookie */
-                tx->tx_msg.ksm_zc_cookies[1] = zc_ack->zc_cookie;
+                tx->tx_msg.ksm_zc_ack_cookie = zc_ack->zc_cookie;
         else
                 /* cannot piggyback, need noop */
                 tx = usocklnd_create_noop_tx(zc_ack->zc_cookie);                     
@@ -999,8 +999,7 @@ usocklnd_read_data(usock_conn_t *conn)
                 
                 nob = libcfs_sock_readv(conn->uc_fd, conn->uc_rx_iov, conn->uc_rx_niov);                
                 if (nob <= 0) {/* read nothing or error */
-                        if (nob < 0)
-                                conn->uc_errored = 1;
+                        conn->uc_errored = 1;
                         return nob;
                 }
                 

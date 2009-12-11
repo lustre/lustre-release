@@ -7,16 +7,12 @@ lvfs-objs := lvfs_common.o lvfs_linux.o fsfilt.o upcall_cache.o prng.o lvfs_lib.
 
 @QUOTA_TRUE@quotafmt-objs := quotafmt_test.o
 
+ifeq ($(PATCHLEVEL),6)
 fsfilt_@BACKINGFS@-objs := fsfilt-@BACKINGFS@.o
 
 $(obj)/fsfilt-%.c: $(obj)/fsfilt_%.c
 	ln -s $< $@
-
-EXTRA_DIST = $(lvfs-objs:.o=.c)  $(quotafmt-objs:.o=.c) \
-	fsfilt_ext3.c fsfilt_reiserfs.c \
-        lvfs_internal.h lvfs_userfs.c \
-	lustre_quota_fmt.c lustre_quota_fmt.h lustre_quota_fmt_convert.c \
-	quotafmt_test.c
+endif
 
 # for <ext3/xattr.h> on 2.6
 EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LDISKFS_DIR@ -I@LDISKFS_DIR@/ldiskfs

@@ -206,48 +206,6 @@ void lbug_with_loc(const char *file, const char *func, const int line)
 
 #ifdef __KERNEL__
 
-#if defined(HAVE_DUMP_TRACE) && !(defined(HAVE_SHOW_TASK))
-#include <linux/nmi.h>
-#include <asm/stacktrace.h>
-
-static void
-print_trace_warning_symbol(void *data, char *msg, unsigned long symbol)
-{
-        printk("%s", (char *)data);
-	print_symbol(msg, symbol);
-	printk("\n");
-}
-
-static void print_trace_warning(void *data, char *msg)
-{
-	printk("%s%s\n", (char *)data, msg);
-}
-
-static int print_trace_stack(void *data, char *name)
-{
-	printk(" <%s> ", name);
-	return 0;
-}
-
-#ifdef HAVE_TRACE_ADDRESS_RELIABLE
-# define RELIABLE reliable
-# define DUMP_TRACE_CONST const
-static void print_trace_address(void *data, unsigned long addr, int reliable)
-#else
-/* before 2.6.24 there was no reliable arg */
-# define RELIABLE 1
-# define DUMP_TRACE_CONST
-static void print_trace_address(void *data, unsigned long addr)
-#endif
-{
-        char fmt[32];
-	touch_nmi_watchdog();
-        sprintf(fmt, " [<%016lx>] %s%%s\n", addr, RELIABLE ? "": "? ");
-	__print_symbol(fmt, addr);
-}
-
-#endif
-
 void libcfs_debug_dumpstack(struct task_struct *tsk)
 {
 #if defined(__arch_um__)
@@ -263,34 +221,6 @@ void libcfs_debug_dumpstack(struct task_struct *tsk)
                 tsk = current;
         CWARN("showing stack for process %d\n", tsk->pid);
         show_task(tsk);
-#elif defined(HAVE_DUMP_TRACE)
-static DUMP_TRACE_CONST struct stacktrace_ops print_trace_ops = {
-	.warning = print_trace_warning,
-	.warning_symbol = print_trace_warning_symbol,
-	.stack = print_trace_stack,
-	.address = print_trace_address,
-};
-        if (tsk == NULL)
-                tsk = current;
-        /* dump_stack() */
-        /* show_trace() */
-	printk("Pid: %d, comm: %.20s\n", tsk->pid, tsk->comm);
-        /* show_trace_log_lvl() */
-	printk("\nCall Trace:\n");
-	dump_trace(tsk, NULL, NULL,
-#ifdef HAVE_TRACE_ADDRESS_RELIABLE
-                   0,
-#endif /* HAVE_TRACE_ADDRESS_RELIABLE */
-                   &print_trace_ops, NULL);
-	printk("\n");
-#elif defined(HAVE_SCHED_SHOW_TASK)
-        /* exported by lustre patch on 2.6.27 kernel */
-        extern void show_task(struct task_struct *);
-
-        if (tsk == NULL)
-                tsk = current;
-        CWARN("showing stack for process %d\n", tsk->pid);
-        sched_show_task(tsk);
 #else
         if ((tsk == NULL) || (tsk == current))
                 dump_stack();

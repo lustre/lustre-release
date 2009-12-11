@@ -88,9 +88,9 @@ Index: linux-2.6.9-67.0.15/fs/ext3/resize.c
 -}
 -
 -/*
-  * Set up the block and inode bitmaps, and the inode table for the new group.
-  * This doesn't need to be part of the main transaction, since we are only
-  * changing blocks outside the actual filesystem.  We still do journaling to
+  * If we have fewer than thresh credits, extend by EXT3_MAX_TRANS_DATA.
+  * If that fails, restart the transaction & regain write access for the
+  * buffer head which is used for block_bitmap modifications.
 @@ -807,6 +789,7 @@ int ext3_group_add(struct super_block *s
  	gdp->bg_inode_table = cpu_to_le32(input->inode_table);
  	gdp->bg_free_blocks_count = cpu_to_le16(input->free_blocks_count);
@@ -680,7 +680,7 @@ Index: linux-2.6.9-67.0.15/fs/ext3/balloc.c
 @@ -429,6 +519,7 @@ do_more:
  	gdp->bg_free_blocks_count =
  		cpu_to_le16(le16_to_cpu(gdp->bg_free_blocks_count) +
- 			*pdquot_freed_blocks);
+			group_freed);
 +	gdp->bg_checksum = ext3_group_desc_csum(sbi, block_group, gdp);
  	spin_unlock(sb_bgl_lock(sbi, block_group));
  	percpu_counter_mod(&sbi->s_freeblocks_counter, count);

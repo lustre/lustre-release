@@ -305,10 +305,8 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
                 int min_threads, int max_threads, char *threadname,
                 svc_hpreq_handler_t hp_handler)
 {
-        int                     rc;
-        struct ptlrpc_at_array *array;
-        struct ptlrpc_service  *service;
-        unsigned int            size, index;
+        int                    rc;
+        struct ptlrpc_service *service;
         ENTRY;
 
         LASSERT (nbufs > 0);
@@ -359,25 +357,7 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
 
         spin_lock_init(&service->srv_at_lock);
         CFS_INIT_LIST_HEAD(&service->srv_req_in_queue);
-
-        array = &service->srv_at_array;
-        size = at_est2timeout(at_max);
-        array->paa_size = size;
-        array->paa_count = 0;
-        array->paa_deadline = -1;
-
-        /* allocate memory for srv_at_array (ptlrpc_at_array) */ 
-        OBD_ALLOC(array->paa_reqs_array, sizeof(struct list_head) * size);
-        if (array->paa_reqs_array == NULL)
-                GOTO(failed, NULL);
-
-        for (index = 0; index < size; index++)
-                CFS_INIT_LIST_HEAD(&array->paa_reqs_array[index]);
-        
-        OBD_ALLOC(array->paa_reqs_count, sizeof(__u32) * size);
-        if (array->paa_reqs_count == NULL)
-                GOTO(failed, NULL);
-
+        CFS_INIT_LIST_HEAD(&service->srv_at_list);
         cfs_timer_init(&service->srv_at_timer, ptlrpc_at_timer, service);
         /* At SOW, service time should be quick; 10s seems generous. If client
            timeout is less than this, we'll be sending an early reply. */
@@ -534,14 +514,6 @@ static void ptlrpc_server_finish_request(struct ptlrpc_request *req)
         spin_lock(&svc->srv_at_lock);
         req->rq_sent_final = 1;
         list_del_init(&req->rq_timed_list);
-        if (req->rq_at_linked) {
-                struct ptlrpc_at_array *array = &svc->srv_at_array;
-                __u32 index = req->rq_at_index;
-        
-                req->rq_at_linked = 0;        
-                array->paa_reqs_count[index]--;
-                array->paa_count--;
-        }
         spin_unlock(&svc->srv_at_lock);
 
         ptlrpc_server_drop_request(req);
@@ -653,18 +625,20 @@ static int ptlrpc_check_req(struct ptlrpc_request *req)
 
 static void ptlrpc_at_set_timer(struct ptlrpc_service *svc)
 {
-        struct ptlrpc_at_array *array = &svc->srv_at_array;
+        struct ptlrpc_request *rq;
         __s32 next;
 
         spin_lock(&svc->srv_at_lock);
-        if (array->paa_count == 0) {
+        if (list_empty(&svc->srv_at_list)) {
                 cfs_timer_disarm(&svc->srv_at_timer);
                 spin_unlock(&svc->srv_at_lock);
                 return;
         }
 
         /* Set timer for closest deadline */
-        next = (__s32)(array->paa_deadline - cfs_time_current_sec() -
+        rq = list_entry(svc->srv_at_list.next, struct ptlrpc_request,
+                        rq_timed_list);
+        next = (__s32)(rq->rq_deadline - cfs_time_current_sec() -
                        at_early_margin);
         if (next <= 0)
                 ptlrpc_at_timer((unsigned long)svc);
@@ -678,9 +652,7 @@ static void ptlrpc_at_set_timer(struct ptlrpc_service *svc)
 static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
 {
         struct ptlrpc_service *svc = req->rq_rqbd->rqbd_service;
-        struct ptlrpc_request *rq = NULL;
-        struct ptlrpc_at_array *array = &svc->srv_at_array;
-        __u32 index;
+        struct ptlrpc_request *rq;
         int found = 0;
 
         if (AT_OFF)
@@ -697,33 +669,22 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
         }
 
         LASSERT(list_empty(&req->rq_timed_list));
-
-        index = req->rq_deadline % array->paa_size;
-        if (array->paa_reqs_count[index] > 0) {
-                /* latest rpcs will have the latest deadlines in the list,
-                 * so search backward. */
-                list_for_each_entry_reverse(rq, &array->paa_reqs_array[index], 
-                                            rq_timed_list) {
-                        if (req->rq_deadline >= rq->rq_deadline) {
-                                list_add(&req->rq_timed_list, 
-                                         &rq->rq_timed_list);
-                                break;
-                        }
+        /* Add to sorted list.  Presumably latest rpcs will have the latest
+           deadlines, so search backward. */
+        list_for_each_entry_reverse(rq, &svc->srv_at_list, rq_timed_list) {
+                if (req->rq_deadline >= rq->rq_deadline) {
+                        list_add(&req->rq_timed_list, &rq->rq_timed_list);
+                        found++;
+                        break;
                 }
         }
-        
-        /* Add the request at the head of the list */
-        if (list_empty(&req->rq_timed_list))
-                list_add(&req->rq_timed_list, &array->paa_reqs_array[index]);
+        if (!found)
+                /* Add to front if shortest deadline or list empty */
+                list_add(&req->rq_timed_list, &svc->srv_at_list);
 
-        req->rq_at_linked = 1;
-        req->rq_at_index = index;
-        array->paa_reqs_count[index]++;
-        array->paa_count++;
-        if (array->paa_count == 1 || array->paa_deadline > req->rq_deadline) {
-                array->paa_deadline = req->rq_deadline;
-                found = 1;
-        }
+        /* Check if we're the head of the list */
+        found = (svc->srv_at_list.next == &req->rq_timed_list);
+
         spin_unlock(&svc->srv_at_lock);
 
         if (found)
@@ -860,9 +821,6 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
 {
         struct ptlrpc_request *rq, *n;
         struct list_head work_list;
-        struct ptlrpc_at_array *array = &svc->srv_at_array;
-        __u32  index, count;
-        time_t deadline;
         time_t now = cfs_time_current_sec();
         cfs_duration_t delay;
         int first, counter = 0;
@@ -876,13 +834,15 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
         delay = cfs_time_sub(cfs_time_current(), svc->srv_at_checktime);
         svc->srv_at_check = 0;
 
-        if (array->paa_count == 0) {
+        if (list_empty(&svc->srv_at_list)) {
                 spin_unlock(&svc->srv_at_lock);
                 RETURN(0);
         }
 
         /* The timer went off, but maybe the nearest rpc already completed. */
-        first = array->paa_deadline - now;
+        rq = list_entry(svc->srv_at_list.next, struct ptlrpc_request,
+                        rq_timed_list);
+        first = (int)(rq->rq_deadline - now);
         if (first > at_early_margin) {
                 /* We've still got plenty of time.  Reset the timer. */
                 spin_unlock(&svc->srv_at_lock);
@@ -893,33 +853,15 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service *svc)
         /* We're close to a timeout, and we don't know how much longer the
            server will take. Send early replies to everyone expiring soon. */
         CFS_INIT_LIST_HEAD(&work_list);
-        deadline = -1;
-        index = array->paa_deadline % array->paa_size;
-        count = array->paa_count;
-        while (count > 0) {
-                count -= array->paa_reqs_count[index];
-                list_for_each_entry_safe(rq, n, &array->paa_reqs_array[index], 
-                                         rq_timed_list) {
-                        if (rq->rq_deadline <= now + at_early_margin) {
-                                list_move(&rq->rq_timed_list, &work_list);
-                                counter++;
-                                array->paa_reqs_count[index]--;
-                                array->paa_count--;
-                                rq->rq_at_linked = 0;
-                                continue;
-                        }
-                        
-                        /* update the earliest deadline */
-                        if (deadline == -1 || rq->rq_deadline < deadline)
-                                deadline = rq->rq_deadline;
-
+        list_for_each_entry_safe(rq, n, &svc->srv_at_list, rq_timed_list) {
+                if (rq->rq_deadline <= now + at_early_margin) {
+                        list_move(&rq->rq_timed_list, &work_list);
+                        counter++;
+                } else {
                         break;
                 }
-                
-                if (++index >= array->paa_size)
-                        index = 0;
         }
-        array->paa_deadline = deadline;
+
         spin_unlock(&svc->srv_at_lock);
 
         /* we have a new earliest deadline, restart the timer */
@@ -1178,7 +1120,7 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
                 goto err_req;
         }
 
-        CDEBUG(D_NET, "got req "LPU64"\n", req->rq_xid);
+        CDEBUG(D_NET, "got req "LPD64"\n", req->rq_xid);
 
         req->rq_export = class_conn2export(
                 lustre_msg_get_handle(req->rq_reqmsg));
@@ -1314,7 +1256,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                                     at_get(&svc->srv_at_estimate));
         }
 
-        CDEBUG(D_NET, "got req "LPU64"\n", request->rq_xid);
+        CDEBUG(D_NET, "got req "LPD64"\n", request->rq_xid);
 
         request->rq_svc_thread = thread;
         if (request->rq_export) {
@@ -1559,7 +1501,7 @@ void ptlrpc_daemonize(char *name)
         cfs_daemonize(name);
         exit_fs(cfs_current());
         current->fs = fs;
-        ll_set_fs_pwd(current->fs, cfs_fs_mnt(init_task.fs), cfs_fs_pwd(init_task.fs));
+        ll_set_fs_pwd(current->fs, init_task.fs->pwdmnt, init_task.fs->pwd);
 }
 
 static void
@@ -1657,7 +1599,10 @@ static int ptlrpc_main(void *arg)
          */
         cfs_waitq_signal(&thread->t_ctl_waitq);
 
-        thread->t_watchdog = lc_watchdog_add(GET_TIMEOUT(svc), NULL, NULL);
+        thread->t_watchdog = lc_watchdog_add(max_t(int, obd_timeout, AT_OFF ? 0 :
+                                                   at_get(&svc->srv_at_estimate))
+                                             *  svc->srv_watchdog_factor,
+                                             NULL, NULL);
 
         spin_lock(&svc->srv_lock);
         svc->srv_threads_running++;
@@ -1693,7 +1638,10 @@ static int ptlrpc_main(void *arg)
                               svc->srv_at_check,
                               &lwi);
 
-                lc_watchdog_touch(thread->t_watchdog, GET_TIMEOUT(svc));
+                lc_watchdog_touch_ms(thread->t_watchdog, max_t(int, obd_timeout,
+                                     AT_OFF ? 0 :
+                                     at_get(&svc->srv_at_estimate)) *
+                                     svc->srv_watchdog_factor);
 
                 ptlrpc_check_rqbd_pool(svc);
 
@@ -1849,7 +1797,6 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc)
         id = svc->srv_threads_started++;
         spin_unlock(&svc->srv_lock);
 
-        thread->t_svc = svc;
         thread->t_id = id;
         sprintf(name, "%s_%02d", svc->srv_thread_name, id);
         d.dev = dev;
@@ -1888,7 +1835,6 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
         struct l_wait_info    lwi;
         struct list_head     *tmp;
         struct ptlrpc_reply_state *rs, *t;
-        struct ptlrpc_at_array *array = &service->srv_at_array;
 
         cfs_timer_disarm(&service->srv_at_timer);
 
@@ -2017,18 +1963,6 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
         /* In case somebody rearmed this in the meantime */
         cfs_timer_disarm(&service->srv_at_timer);
 
-        if (array->paa_reqs_array != NULL) {
-                OBD_FREE(array->paa_reqs_array, 
-                         sizeof(struct list_head) * array->paa_size);
-                array->paa_reqs_array = NULL;
-        }
-        
-        if (array->paa_reqs_count != NULL) {
-                OBD_FREE(array->paa_reqs_count, 
-                         sizeof(__u32) * array->paa_size);
-                array->paa_reqs_count= NULL;
-        }
-        
         OBD_FREE(service, sizeof(*service));
         return 0;
 }

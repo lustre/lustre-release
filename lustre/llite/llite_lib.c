@@ -53,7 +53,6 @@
 #include <lustre_disk.h>
 #include <lustre_param.h>
 #include <lustre_cache.h>
-#include <obd_support.h>
 #include "llite_internal.h"
 
 cfs_mem_cache_t *ll_file_data_slab;
@@ -83,7 +82,7 @@ static struct ll_sb_info *ll_init_sbi(void)
                 RETURN(NULL);
 
         spin_lock_init(&sbi->ll_lock);
-        spin_lock_init(&sbi->ll_lco.lco_lock);
+        init_mutex(&sbi->ll_lco.lco_lock);
         spin_lock_init(&sbi->ll_pp_extent_lock);
         spin_lock_init(&sbi->ll_process_lock);
         sbi->ll_rw_stats_on = 0;
@@ -100,9 +99,8 @@ static struct ll_sb_info *ll_init_sbi(void)
         } else {
                 sbi->ll_async_page_max = (pages / 4) * 3;
         }
-        sbi->ll_ra_info.ra_max_pages_per_file = min(pages / 32,
+        sbi->ll_ra_info.ra_max_pages = min(pages / 32,
                                            SBI_DEFAULT_READAHEAD_MAX);
-        sbi->ll_ra_info.ra_max_pages = sbi->ll_ra_info.ra_max_pages_per_file;
         sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
                                            SBI_DEFAULT_READAHEAD_WHOLE_MAX;
         sbi->ll_contention_time = SBI_DEFAULT_CONTENTION_SECONDS;
@@ -295,9 +293,9 @@ static int client_common_fill_super(struct super_block *sb,
         }
 
         data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_GRANT |
-                OBD_CONNECT_REQPORTAL | OBD_CONNECT_BRW_SIZE |
+                OBD_CONNECT_REQPORTAL | OBD_CONNECT_BRW_SIZE | 
                 OBD_CONNECT_SRVLOCK | OBD_CONNECT_CANCELSET | OBD_CONNECT_AT |
-                OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_GRANT_SHRINK;
+                OBD_CONNECT_TRUNCLOCK;
 
         if (!OBD_FAIL_CHECK(OBD_FAIL_OSC_CONNECT_CKSUM)) {
                 /* OBD_CONNECT_CKSUM should always be set, even if checksums are
@@ -341,11 +339,11 @@ static int client_common_fill_super(struct super_block *sb,
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
                 GOTO(out_cb, err);
         }
-        spin_lock(&sbi->ll_lco.lco_lock);
+        mutex_down(&sbi->ll_lco.lco_lock);
         sbi->ll_lco.lco_flags = data->ocd_connect_flags;
         sbi->ll_lco.lco_mdc_exp = sbi->ll_mdc_exp;
         sbi->ll_lco.lco_osc_exp = sbi->ll_osc_exp;
-        spin_unlock(&sbi->ll_lco.lco_lock);
+        mutex_up(&sbi->ll_lco.lco_lock);
 
         err = mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
         if (err) {
@@ -660,7 +658,7 @@ void ll_kill_super(struct super_block *sb)
 
         sbi = ll_s2sbi(sb);
         /* we need restore s_dev from changed for clustred NFS before put_super
-         * because new kernels have cached s_dev and change sb->s_dev in
+         * because new kernels have cached s_dev and change sb->s_dev in 
          * put_super not affected real removing devices */
         if (sbi)
                 sb->s_dev = sbi->ll_sdev_orig;
@@ -780,16 +778,6 @@ static int ll_options(char *options, int *flags)
                         *flags &= ~tmp;
                         goto next;
                 }
-                tmp = ll_set_opt("lazystatfs", s1, LL_SBI_LAZYSTATFS);
-                if (tmp) {
-                        *flags |= tmp;
-                        goto next;
-                }
-                tmp = ll_set_opt("nolazystatfs", s1, LL_SBI_LAZYSTATFS);
-                if (tmp) {
-                        *flags &= ~tmp;
-                        goto next;
-                }
                 LCONSOLE_ERROR_MSG(0x152, "Unknown option '%s', won't mount.\n",
                                    s1);
                 RETURN(-EINVAL);
@@ -821,7 +809,6 @@ void ll_lli_init(struct ll_inode_info *lli)
 #ifdef HAVE_CLOSE_THREAD
         INIT_LIST_HEAD(&lli->lli_pending_write_llaps);
 #endif
-        init_rwsem(&lli->lli_truncate_rwsem);
 }
 
 /* COMPAT_146 */
@@ -1136,7 +1123,7 @@ void ll_put_super(struct super_block *sb)
 
         if (sbi->ll_mdc_exp) {
                 obd = class_exp2obd(sbi->ll_mdc_exp);
-                if (obd)
+                if (obd) 
                         force = obd->obd_force;
         }
 
@@ -1314,46 +1301,36 @@ static int ll_setattr_do_truncate(struct inode *inode, loff_t new_size)
         ldlm_policy_data_t policy = { .l_extent = {new_size,
                                                    OBD_OBJECT_EOF } };
         struct lustre_handle lockh = { 0 };
-        int local_lock = 1; /* 0 - no local lock;
+        int local_lock = 0; /* 0 - no local lock;
                              * 1 - lock taken by lock_extent;
                              * 2 - by obd_match*/
         int ast_flags;
+        int err;
         ENTRY;
 
         UNLOCK_INODE_MUTEX(inode);
         UP_WRITE_I_ALLOC_SEM(inode);
 
-        down_write(&lli->lli_truncate_rwsem);
-        if (sbi->ll_lockless_truncate_enable &&
+        if (sbi->ll_lockless_truncate_enable && 
             (sbi->ll_lco.lco_flags & OBD_CONNECT_TRUNCLOCK)) {
-                int n_matches = 0;
-
                 ast_flags = LDLM_FL_BLOCK_GRANTED;
                 rc = obd_match(sbi->ll_osc_exp, lsm, LDLM_EXTENT,
-                               &policy, LCK_PW, &ast_flags, inode, &lockh,
-                               &n_matches);
+                               &policy, LCK_PW, &ast_flags, inode, &lockh);
                 if (rc > 0) {
                         local_lock = 2;
                         rc = 0;
-                } else {
-                        /* clear the lock handle as it not cleared
-                         * by obd_match if no matched lock found */
-                        lockh.cookie = 0;
-                        if (rc == 0 && n_matches == 0) {
-                                local_lock = 0;
-                                rc = ll_file_punch(inode, new_size, 1);
-                        }
+                } else if (rc == 0) {
+                        rc = ll_file_punch(inode, new_size, 1);
                 }
-        }
-        if (local_lock == 1) {
+        } else {
                 /* XXX when we fix the AST intents to pass the discard-range
                  * XXX extent, make ast_flags always LDLM_AST_DISCARD_DATA
                  * XXX here. */
                 ast_flags = (new_size == 0) ? LDLM_AST_DISCARD_DATA : 0;
                 rc = ll_extent_lock(NULL, inode, lsm, LCK_PW, &policy,
                                     &lockh, ast_flags);
-                if (unlikely(rc != 0))
-                        local_lock = 0;
+                if (likely(rc == 0))
+                        local_lock = 1;
         }
 
         LOCK_INODE_MUTEX(inode);
@@ -1369,16 +1346,15 @@ static int ll_setattr_do_truncate(struct inode *inode, loff_t new_size)
                 rc = vmtruncate(inode, new_size);
                 clear_bit(LLI_F_SRVLOCK, &lli->lli_flags);
                 if (rc != 0) {
-                        LASSERT(SEM_COUNT(&lli->lli_size_sem) <= 0);
+                        LASSERT(atomic_read(&lli->lli_size_sem.count) <= 0);
                         ll_inode_size_unlock(inode, 0);
                 }
         }
         if (local_lock) {
-                int err;
-
-                err = (local_lock == 2) ?
-                        obd_cancel(sbi->ll_osc_exp, lsm, LCK_PW, &lockh):
-                        ll_extent_unlock(NULL, inode, lsm, LCK_PW, &lockh);
+                if (local_lock == 2)
+                        err = obd_cancel(sbi->ll_osc_exp, lsm, LCK_PW, &lockh);
+                else
+                        err = ll_extent_unlock(NULL, inode, lsm, LCK_PW, &lockh);
                 if (unlikely(err != 0)){
                         CERROR("extent unlock failed: err=%d,"
                                " unlock method =%d\n", err, local_lock);
@@ -1386,7 +1362,6 @@ static int ll_setattr_do_truncate(struct inode *inode, loff_t new_size)
                                 rc = err;
                 }
         }
-        up_write(&lli->lli_truncate_rwsem);
         RETURN(rc);
 }
 
@@ -1559,7 +1534,7 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
         if ((attr->ia_valid & (ATTR_CTIME|ATTR_SIZE|ATTR_MODE)) ==
             (ATTR_CTIME|ATTR_SIZE|ATTR_MODE))
                 attr->ia_valid |= MDS_OPEN_OWNEROVERRIDE;
-        if ((attr->ia_valid & (ATTR_MODE|ATTR_FORCE|ATTR_SIZE)) ==
+        if ((attr->ia_valid & (ATTR_MODE|ATTR_FORCE|ATTR_SIZE)) == 
             (ATTR_SIZE|ATTR_MODE)) {
                 mode = de->d_inode->i_mode;
                 if (((mode & S_ISUID) && (!(attr->ia_mode & S_ISUID))) ||
@@ -1589,9 +1564,6 @@ int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
 
         CDEBUG(D_SUPER, "MDC blocks "LPU64"/"LPU64" objects "LPU64"/"LPU64"\n",
                osfs->os_bavail, osfs->os_blocks, osfs->os_ffree,osfs->os_files);
-
-        if (sbi->ll_flags & LL_SBI_LAZYSTATFS)
-                flags |= OBD_STATFS_NODELAY;
 
         rc = obd_statfs_rqset(class_exp2obd(sbi->ll_osc_exp),
                               &obd_osfs, max_age, flags);
@@ -2255,9 +2227,6 @@ int ll_show_options(struct seq_file *seq, struct vfsmount *vfs)
 
         if (sbi->ll_flags & LL_SBI_ACL)
                 seq_puts(seq, ",acl");
-
-        if (sbi->ll_flags & LL_SBI_LAZYSTATFS)
-                seq_puts(seq, ",lazystatfs");
 
         RETURN(0);
 }

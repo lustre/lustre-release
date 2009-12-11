@@ -93,9 +93,8 @@
                LQS_IS_GRP(lqs) ? 'g' : 'u',                                   \
                lqs->lqs_bunit_sz, lqs->lqs_btune_sz, lqs->lqs_iunit_sz,       \
                lqs->lqs_itune_sz, lqs->lqs_bwrite_pending,                    \
-               lqs->lqs_iwrite_pending, (__s64)lqs->lqs_ino_rec,              \
-               (__s64)lqs->lqs_blk_rec, atomic_read(&lqs->lqs_refcount),      \
-               ## arg);
+               lqs->lqs_iwrite_pending, lqs->lqs_ino_rec,                     \
+               lqs->lqs_blk_rec, atomic_read(&lqs->lqs_refcount), ## arg);
 
 
 /* quota_context.c */
@@ -114,7 +113,6 @@ int compute_remquota(struct obd_device *obd,
                      struct lustre_quota_ctxt *qctxt, struct qunit_data *qdata,
                      int isblk);
 int check_qm(struct lustre_quota_ctxt *qctxt);
-void dqacq_interrupt(struct lustre_quota_ctxt *qctxt);
 /* quota_master.c */
 int lustre_dquot_init(void);
 void lustre_dquot_exit(void);
@@ -153,12 +151,17 @@ int target_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl);
 
 int quota_adjust_slave_lqs(struct quota_adjust_qunit *oqaq, struct
                           lustre_quota_ctxt *qctxt);
+void qdata_to_oqaq(struct qunit_data *qdata,
+                   struct quota_adjust_qunit *oqaq);
 #ifdef __KERNEL__
-int quota_is_set(struct obd_device *obd, unsigned int uid,
-                 unsigned int gid, int flag);
-struct lustre_qunit_size *quota_search_lqs(unsigned long long lqs_key,
-                                           struct lustre_quota_ctxt *qctxt,
-                                           int create);
+int quota_search_lqs(struct qunit_data *qdata,
+                     struct quota_adjust_qunit *oqaq,
+                     struct lustre_quota_ctxt *qctxt,
+                     struct lustre_qunit_size **lqs_return);
+int quota_create_lqs(struct qunit_data *qdata,
+                     struct quota_adjust_qunit *oqaq,
+                     struct lustre_quota_ctxt *qctxt,
+                     struct lustre_qunit_size **lqs_return);
 void quota_compute_lqs(struct qunit_data *qdata, struct lustre_qunit_size *lqs,
                        int is_chk, int is_acq);
 
@@ -172,7 +175,6 @@ int filter_quota_adjust_qunit(struct obd_export *exp,
                               struct lustre_quota_ctxt *qctxt);
 int lquota_proc_setup(struct obd_device *obd, int is_master);
 int lquota_proc_cleanup(struct lustre_quota_ctxt *qctxt);
-void build_lqs(struct obd_device *obd);
 
 extern cfs_proc_dir_entry_t *lquota_type_proc_dir;
 #endif
@@ -182,8 +184,6 @@ extern cfs_proc_dir_entry_t *lquota_type_proc_dir;
 #define LQS_INO_DECREASE 4
 #define LQS_INO_INCREASE 8
 
-/* the return status of quota operation */
-#define QUOTA_REQ_RETURNED 1
 
 #endif
 int client_quota_adjust_qunit(struct obd_export *exp,

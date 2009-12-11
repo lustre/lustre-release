@@ -334,8 +334,6 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_FID        0x40000000ULL /* FID is supported */
 #define OBD_CONNECT_VBR        0x80000000ULL /* version based recovery */
 #define OBD_CONNECT_LOV_V3    0x100000000ULL /* client supports lov v3 ea */
-#define OBD_CONNECT_GRANT_SHRINK  0x200000000ULL /* support grant shrink */
-#define OBD_CONNECT_SKIP_ORPHAN   0x400000000ULL /* don't reuse orphan objids */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
@@ -357,9 +355,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64 | \
                                 OBD_CONNECT_CANCELSET | OBD_CONNECT_AT | \
                                 LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_CKSUM | \
-                                OBD_CONNECT_CHANGE_QS | OBD_CONNECT_MDS | \
-                                OBD_CONNECT_GRANT_SHRINK | \
-                                OBD_CONNECT_SKIP_ORPHAN)
+                                OBD_CONNECT_CHANGE_QS | OBD_CONNECT_MDS)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT)
 
@@ -450,32 +446,30 @@ typedef __u32 obd_gid;
 typedef __u32 obd_flag;
 typedef __u32 obd_count;
 
-enum obdo_flags {
-        OBD_FL_INLINEDATA   = 0x00000001,
-        OBD_FL_OBDMDEXISTS  = 0x00000002,
-        OBD_FL_DELORPHAN    = 0x00000004, /* if set in o_flags delete orphans */
-        OBD_FL_NORPC        = 0x00000008, /* set in o_flags do in OSC not OST */
-        OBD_FL_IDONLY       = 0x00000010, /* set in o_flags only adjust obj id*/
-        OBD_FL_RECREATE_OBJS= 0x00000020, /* recreate missing obj */
-        OBD_FL_DEBUG_CHECK  = 0x00000040, /* echo client/server debug check */
-        OBD_FL_NO_USRQUOTA  = 0x00000100, /* the object's owner is over quota */
-        OBD_FL_NO_GRPQUOTA  = 0x00000200, /* the object's group is over quota */
-        OBD_FL_CREATE_CROW  = 0x00000400, /* object should be create on write */
-        OBD_FL_TRUNCLOCK    = 0x00000800, /* delegate DLM locking during punch*/
-        OBD_FL_CKSUM_CRC32  = 0x00001000, /* CRC32 checksum type */
-        OBD_FL_CKSUM_ADLER  = 0x00002000, /* ADLER checksum type */
-        OBD_FL_CKSUM_RSVD1  = 0x00004000, /* for future cksum types */
-        OBD_FL_CKSUM_RSVD2  = 0x00008000, /* for future cksum types */
-        OBD_FL_CKSUM_RSVD3  = 0x00010000, /* for future cksum types */
-        OBD_FL_SHRINK_GRANT = 0x00020000, /* object shrink the grant */
+#define OBD_FL_INLINEDATA    (0x00000001)
+#define OBD_FL_OBDMDEXISTS   (0x00000002)
+#define OBD_FL_DELORPHAN     (0x00000004) /* if set in o_flags delete orphans */
+#define OBD_FL_NORPC         (0x00000008) /* set in o_flags do in OSC not OST */
+#define OBD_FL_IDONLY        (0x00000010) /* set in o_flags only adjust obj id*/
+#define OBD_FL_RECREATE_OBJS (0x00000020) /* recreate missing obj */
+#define OBD_FL_DEBUG_CHECK   (0x00000040) /* echo client/server debug check */
+#define OBD_FL_NO_USRQUOTA   (0x00000100) /* the object's owner is over quota */
+#define OBD_FL_NO_GRPQUOTA   (0x00000200) /* the object's group is over quota */
+#define OBD_FL_CREATE_CROW   (0x00000400) /* object should be create on write */
 
-        OBD_FL_CKSUM_ALL    = OBD_FL_CKSUM_CRC32 | OBD_FL_CKSUM_ADLER,
+/*
+ * set this to delegate DLM locking during obd_punch() to the OSTs. Only OSTs
+ * that declared OBD_CONNECT_TRUNCLOCK in their connect flags support this
+ * functionality.
+ */
+#define OBD_FL_TRUNCLOCK     (0x00000800)
 
-        /* mask for local-only flag, which won't be sent over network */
-        OBD_FL_LOCAL_MASK   = 0xF0000000,
-        /* temporary OBDO used by osc_brw_async (see bug 18364) */
-        OBD_FL_TEMPORARY    = 0x10000000,
-};
+/*
+ * Checksum types
+ */
+#define OBD_FL_CKSUM_CRC32    (0x00001000)
+#define OBD_FL_CKSUM_ADLER    (0x00002000)
+#define OBD_FL_CKSUM_ALL      (OBD_FL_CKSUM_CRC32 | OBD_FL_CKSUM_ADLER)
 
 #define LOV_MAGIC_V1      0x0BD10BD0
 #define LOV_MAGIC         LOV_MAGIC_V1
@@ -600,14 +594,9 @@ struct obd_statfs {
 extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_STATFS_NODELAY      0x0001  /* requests should be send without delay
                                          * and resends for avoid deadlocks */
+
 #define OBD_STATFS_FROM_CACHE   0x0002  /* the statfs callback should not update
                                          * obd_osfs_age */
-#define OBD_STATFS_PTLRPCD      0x0004  /* requests will be sent via ptlrpcd
-                                         * instead of a specific set. This
-                                         * means that we cannot rely on the set
-                                         * interpret routine to be called.
-                                         * lov_statfs_fini() must thus be called
-                                         * by the request interpret routine */
 
 /* ost_body.data values for OST_BRW */
 
@@ -621,7 +610,6 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_BRW_DROP            0x80 /* drop the page after IO */
 #define OBD_BRW_NOQUOTA        0x100
 #define OBD_BRW_SRVLOCK        0x200 /* Client holds no lock over this page */
-#define OBD_BRW_ASYNC          0x400 /* Server may delay commit to disk */
 
 #define OBD_OBJECT_EOF 0xffffffffffffffffULL
 
@@ -648,7 +636,7 @@ extern void lustre_swab_niobuf_remote (struct niobuf_remote *nbr);
 
 /* lock value block communicated between the filter and llite */
 
-/* OST_LVB_ERR_INIT is needed because the return code in rc is
+/* OST_LVB_ERR_INIT is needed because the return code in rc is 
  * negative, i.e. because ((MASK + rc) & MASK) != MASK. */
 #define OST_LVB_ERR_INIT 0xffbadbad80000000ULL
 #define OST_LVB_ERR_MASK 0xffbadbad00000000ULL
@@ -1558,23 +1546,6 @@ struct obdo {
 #define o_dropped o_misc
 #define o_cksum   o_nlink
 
-static inline void lustre_set_wire_obdo(struct obdo *wobdo, struct obdo *lobdo)
-{
-        memcpy(wobdo, lobdo, sizeof(*lobdo));
-        wobdo->o_flags &= ~OBD_FL_LOCAL_MASK;
-}
-
-static inline void lustre_get_wire_obdo(struct obdo *lobdo, struct obdo *wobdo)
-{
-        obd_flag local_flags = lobdo->o_flags & OBD_FL_LOCAL_MASK;
-
-        LASSERT(!(wobdo->o_flags & OBD_FL_LOCAL_MASK));
-        
-        memcpy(lobdo, wobdo, sizeof(*lobdo));
-        lobdo->o_flags &= ~OBD_FL_LOCAL_MASK;
-        lobdo->o_flags |= local_flags;
-}
-
 extern void lustre_swab_obdo (struct obdo *o);
 
 /* request structure for OST's */
@@ -1596,8 +1567,6 @@ extern void lustre_swab_fiemap(struct ll_user_fiemap *fiemap);
 extern void lustre_swab_lov_user_md(struct lov_user_md *lum);
 extern void lustre_swab_lov_user_md_objects(struct lov_user_md *lum);
 extern void lustre_swab_lov_user_md_join(struct lov_user_md_join *lumj);
-extern void lustre_swab_lov_mds_md(struct lov_mds_md *lmm);
-extern void lustre_swab_lov_mds_md_objects(struct lov_mds_md *lum);
 
 /* llog_swab.c */
 extern void lustre_swab_llogd_body (struct llogd_body *d);

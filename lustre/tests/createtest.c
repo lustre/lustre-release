@@ -93,26 +93,18 @@ int main(int argc, char *argv[])
 					argv[0], name, st.st_mode, mode);
 				exit(12);
 			}
-			if (i == S_IFCHR || i == S_IFBLK) {
-				if (st.st_rdev != 0x1234) {
-					fprintf(stderr, "%s: ERROR rdev %s: "
-					        "%lu != 0x1234",
-					        argv[0], name, st.st_rdev);
-					exit(13);
-				}
-			}
 			rc = unlink(name);
 			if (rc < 0) {
 				fprintf(stderr, "%s: ERROR unlink %s: %s",
 					argv[0], name, strerror(errno));
-				exit(14);
+				exit(13);
 			}
 			break;
 		default:
 			if (rc == 0) {
 				fprintf(stderr, "%s: ERROR: %s created\n",
 					argv[0], name);
-				exit(15);
+				exit(14);
 			}
 		}
 	}

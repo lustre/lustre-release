@@ -47,33 +47,29 @@
 #define LCFG_HDR_SIZE(count) \
     size_round(offsetof (struct lustre_cfg, lcfg_buflens[(count)]))
 
-/* If the LCFG_REQUIRED bit is set in a configuration command,
- * then the client is required to understand this parameter
- * in order to mount the filesystem. If it does not understand
- * a REQUIRED command the client mount will fail. */
+/* If not LCFG_REQUIRED, we can ignore this cmd and go on. */
 #define LCFG_REQUIRED         0x0001000
 
 enum lcfg_command_type {
-        LCFG_ATTACH             = 0x00cf001,
-        LCFG_DETACH             = 0x00cf002,
-        LCFG_SETUP              = 0x00cf003,
-        LCFG_CLEANUP            = 0x00cf004,
-        LCFG_ADD_UUID           = 0x00cf005,
-        LCFG_DEL_UUID           = 0x00cf006,
-        LCFG_MOUNTOPT           = 0x00cf007,
-        LCFG_DEL_MOUNTOPT       = 0x00cf008,
-        LCFG_SET_TIMEOUT        = 0x00cf009,
-        LCFG_SET_UPCALL         = 0x00cf00a,
-        LCFG_ADD_CONN           = 0x00cf00b,
-        LCFG_DEL_CONN           = 0x00cf00c,
-        LCFG_LOV_ADD_OBD        = 0x00cf00d,
-        LCFG_LOV_DEL_OBD        = 0x00cf00e,
-        LCFG_PARAM              = 0x00cf00f,
-        LCFG_MARKER             = 0x00cf010,
-        LCFG_LOG_START          = 0x00ce011,
-        LCFG_LOG_END            = 0x00ce012,
-        LCFG_LOV_ADD_INA        = 0x00ce013,
-        LCFG_SET_LDLM_TIMEOUT   = 0x00ce030,
+        LCFG_ATTACH         = 0x00cf001,
+        LCFG_DETACH         = 0x00cf002,
+        LCFG_SETUP          = 0x00cf003,
+        LCFG_CLEANUP        = 0x00cf004,
+        LCFG_ADD_UUID       = 0x00cf005,
+        LCFG_DEL_UUID       = 0x00cf006,
+        LCFG_MOUNTOPT       = 0x00cf007,
+        LCFG_DEL_MOUNTOPT   = 0x00cf008,
+        LCFG_SET_TIMEOUT    = 0x00cf009,
+        LCFG_SET_UPCALL     = 0x00cf00a,
+        LCFG_ADD_CONN       = 0x00cf00b,
+        LCFG_DEL_CONN       = 0x00cf00c,
+        LCFG_LOV_ADD_OBD    = 0x00cf00d,
+        LCFG_LOV_DEL_OBD    = 0x00cf00e,
+        LCFG_PARAM          = 0x00cf00f,
+        LCFG_MARKER         = 0x00cf010,
+        LCFG_LOG_START      = 0x00ce011,
+        LCFG_LOG_END        = 0x00ce012,
+        LCFG_LOV_ADD_INA    = 0x00ce013,
 };
 
 struct lustre_cfg_bufs {

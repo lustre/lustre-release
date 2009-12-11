@@ -1,10 +1,10 @@
-tbd Sun Microsystems, Inc.
-	* version 1.6.8
-	* Support for kernels:
-	 2.6.5-7.315 (SLES 9),
-	 2.6.9-67.0.22.EL (RHEL 4),
+TBD Sun Microsystems, Inc.
+        * version 1.6.7.3
+        * Support for kernels:
+	 2.6.5-7.314 (SLES 9),
+	 2.6.9-78.0.22.EL (RHEL 4),
 	 2.6.16.60-0.37 (SLES 10),
-	 2.6.18-128.1.6.el5 (RHEL 5),
+	 2.6.18-92.1.26.el5 (RHEL 5),
 	 2.6.22.14 vanilla (kernel.org)
 	* Client support for unpatched kernels:
 	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
@@ -12,17 +12,9 @@ tbd Sun Microsystems, Inc.
 	* Client support for unpatched kernels:
 	  we do not recommend using patchless RHEL4 clients with kernels
 	  prior to 2.6.9-55EL (RHEL4U5).
-	* Recommended e2fsprogs version: 1.41.5.sun2
-	* Note that reiserfs quotas are disabled on SLES 10 in this kernel.
+	* Recommended e2fsprogs version: 1.40.11-sun1
 	* RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
 	  removed cwd "./" (refer to Bugzilla 14399).
-	* A new quota file format has been introduced in 1.6.5.
-	  The format conversion from prior releases is handled transparently,
-	  but releases older than 1.4.12/1.6.5 don't understand this new
-	  format. The automatic format conversion can be avoided by running
-	  the following command on the MDS:
-	  	'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
-	  For more information, please refer to bugzilla 13904.
 	* A new quota file format was introduced in 1.6.6 (for 2.6.16+ kernels).
 	  The format conversion from prior releases is handled transparently,
 	  but releases older than 1.6.6/1.8.0 don't understand this new
@@ -40,203 +32,59 @@ tbd Sun Microsystems, Inc.
 	* File join has been disabled in this release, refer to Bugzilla
 	  16929.
 	* A new Lustre ADIO driver is available for MPICH2-1.0.7.
-	* NFS export disabled when stack size < 8192. Since the NFSv4 export
-	  of Lustre filesystem with 4K stack may cause a stack overflow. For
-	  more information, please refer to bugzilla 17630.
+	* NFS export disabled when stack size < 8192. Since the NFSv4 export of
+	  Lustre filesystem with 4K stack may cause a stack overflow. For more
+	  information, please refer to bugzilla 17630.
+
+--------------------------------------------------------------------------
+
+2009-06-05 Sun Microsystems, Inc.
+        * version 1.6.7.2
+        * Support for kernels:
+	 2.6.5-7.314 (SLES 9),
+	 2.6.9-78.0.22.EL (RHEL 4),
+	 2.6.16.60-0.37 (SLES 10),
+	 2.6.18-92.1.26.el5 (RHEL 5),
+	 2.6.22.14 vanilla (kernel.org)
+	* Client support for unpatched kernels:
+	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
+	  2.6.16 - 2.6.22 vanilla (kernel.org)
+	* Client support for unpatched kernels:
+	  we do not recommend using patchless RHEL4 clients with kernels
+	  prior to 2.6.9-55EL (RHEL4U5).
+	* Recommended e2fsprogs version: 1.40.11-sun1
+	* RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
+	  removed cwd "./" (refer to Bugzilla 14399).
+	* A new quota file format was introduced in 1.6.6 (for 2.6.16+ kernels).
+	  The format conversion from prior releases is handled transparently,
+	  but releases older than 1.6.6/1.8.0 don't understand this new
+	  format. The automatic format conversion can be avoided by running
+	  the following commands on the MDS and OSS servers (for
+	  pre 1.4.12-1.6.5 quota files):
+	  	'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV',
+		'tunefs.lustre --param="ost.quota_type=ug1" $MDTDEV'
+		or (for 1.4.12/1.6.5 quota files)
+		'tunefs.lustre --param="mdt.quota_type=ug2" $MDTDEV',
+		'tunefs.lustre --param="ost.quota_type=ug2" $MDTDEV'
+	  For more information, please refer to bugzilla 13904.
+	* Output of lfs quota has been made less detailed by default,
+	  old (verbose) output can be obtained by using -v option.
+	* File join has been disabled in this release, refer to Bugzilla
+	  16929.
+	* A new Lustre ADIO driver is available for MPICH2-1.0.7.
+	* NFS export disabled when stack size < 8192. Since the NFSv4 export of
+	  Lustre filesystem with 4K stack may cause a stack overflow. For more
+	  information, please refer to bugzilla 17630.
+
+Severity   : normal 
+Bugzilla   : 19907
+Description: ASSERTION(open_req->rq_import == imp) failed in mdc_commit_close().
+Details    : Set mod_close_req to NULL in case the request is aborted or 
+	     invalidated.
 
 Severity   : enhancement
-Bugzilla   : 18775
-Description: improve lctl set/get_param
-Details    : handle the bad options, support more than one arguments,
-	     add '-F' option to append the indicator to the parameters.
-
-Severity   : enhancement
-Bugzilla   : 19024
-Description: Update kernel to RHEL5.3 2.6.18-128.1.6.el5.
-
-Severity   : enhancement
-Bugzilla   : 19212
-Description: Update kernel to SLES10 SP2 2.6.16.60-0.37.
-
-Severity   : normal
-Bugzilla   : 19223
-Descriptoin: correctly skip time estimate if in recovery
-Details    : rq_send_state insn't bitmask so using bitwise ops is forbided.
-
-Severity   : normal
-Bugzilla   : 18192
-Descriptoin: fix goal inodes
-Details    : Allocate inodes for llog in last inode group for avoid broke
-             recovery.
-
-Severity   : normal
-Bugzilla   : 18399
-Descriptoin: OSS DeadLock
-Details    : Use trylock to prevent deadlock when shrink icache.
-
-Severity   : enhancement
-Bugzilla   : 17974
-Description: add lazystatfs mount option to allow statfs(2) to skip down OSTs
-Details    : allow skip disconnected ost for send statfs request and hide error
-             in this case.
-
-Severity   : normal
-Frequency  : rare, on llog test 6
-Bugzilla   : 16839
-Descriptoin: don't allow connect to already connected import
-Details    : allowing connect to already connected import is hide connecting problem.
-
-Severity   : minor
-Bugzilla   : 18480
-Description: correct count of recoverable clients
-Details    : if recovery failed for client for some reasons (goal inode or
-             something else) server can wait failed clients for finish recovery.
-
-Severity   : normal
-Frequency  : rare, on failed llog setup
-Bugzilla   : 18896
-Descriptoin: don't leak obd reference on failed llog setup
-Details    : for failed llog setup - mgc forget call class_destroy_import for
-             client import, move destroy import to more generic place.
-
-Severity   : normal
-Frequency  : rare
-Bugzilla   : 18902
-Descriptoin: allow kill process which wait statahead result
-Details    : for some reasons 'ls' can stick in waiting result from statahead,
-             in this case need way for kill this process.
-
-Severity   : normal
-Bugzilla   : 18645
-Description: Reduce small size read RPC
-Details    : Set read-ahead limite for every file and only do read-ahead when
-	     available read-ahead pages are bigger than 1M to avoid small size
-	     read RPC.
-
-Severity   : normal
-Bugzilla   : 18204
-Description: free_entry erroneously used groups_free instead of put_group_info
-
-Severity   : enhancement
-Bugzilla   : 17817
-Description: Make read-ahead stripe size aligned.
-
-Severity   : enhancement
-Bugzilla   : 17536
-Description: MDS create should not wait for statfs RPC while holding DLM lock.
-
-Severity   : enhancement
-Bugzilla   : 18289
-Description: Update to RHEL5U3 kernel-2.6.18-128.1.1.el5.
-
-Severity   : normal
-Frequency  : normal
-Bugzilla   : 12069
-Descriptoin: OST grant too much space to client even there are not enough space.
-Details    : Client will shrink its grant cache to OST if there are no write
-	     activity over 6 mins (GRANT_SHRINK_INTERVAL), and OST will retrieve
-	     this grant cache if there are already not enough avaible space
-	     (left_space < total_clients * 32M).
-
-Severity   : enhancement
-Bugzilla   : 14250
-Description: Update client support to vanila kernels up to 2.6.27.
-
-Severity   : normal
-Frequency  : rare
-Bugzilla   : 18154
-Descriptoin: don't lose wakeup for imp_recovery_waitq
-Details    : recover_import_no_retry or invalidate_import and import_close can
-	     both sleep on imp_recovery_waitq, but we was send only one wakeup
-	     to sleep queue.
-
-Severity   : normal
-Frequency  : start MDS on uncleanly shutdowned MDS device
-Bugzilla   : 16839
-Descriptoin: ll_sync thread stay in waiting mds<>ost recovery finished
-Details    : stay in waiting mds<>ost recovery finished produce random bugs
-	     due race between two ll_sync thread for one lov target. Send
-	     ACTIVATE event only if connect really finished and import has
-	     FULL state.
-
-Severity   : enhancement
-Bugzilla   : 18061
-Description: Update to SLES10 kernel-2.6.16.60-0.33.
-
-Severity   : enhancement
-Bugzilla   : 18062
-Description: Update to sles9 kernel-2.6.5-7.315.
-
-Severity   : enhancement
-Bugzilla   : 18060
-Description: Update to RHEL5 kernel-2.6.18-92.1.22.el5.
-
-Severity   : normal
-Frequency  : start MDS on uncleanly shutdowned MDS device
-Bugzilla   : 18049
-Descriptoin: aborting recovery hang on MDS
-Details    : don't throttle destroy RPCs for the MDT.
-
-Severity   : enhancement
-Bugzilla   : 16919
-Descriptoin: Don't sync journal after every i/o
-Details    : Implement write RPC replay to allow server replies for write RPCs
-	     before data is on disk.
-
-Severity   : low
-Bugzilla   : 18016
-Description: Slow reads beyond 8Tb offsets.
-Details    : Page index integer overflow in ll_read_ahead_page
-
-Severity   : normal
-Bugzilla   : 18304
-Description: Soft lockup on OSS after MDS failover
-Details    : MSG_CONNECT_INITIAL is not set on the initial MDS->OST connect.
-	     As a conseqence, the patch from bug 18224 is not operational
-	     and the MDS export cannot be reused on the OSTs until it gets
-	     evicted.
-
-Severity   : major
-Frequency  : rare, only if using MMP with Linux RAID
-Bugzilla   : 17895
-Description: MMP doesn't work with Linux RAID
-Details    : While using HA for Lustre servers with Linux RAID, it is possible
-	     that MMP will not detect multiple mounts. To make this work we
-	     need to unplug the device queue in RAID when the MMP block is being
-	     written. Also while reading the MMP block, we should read it from
-	     disk and not the cached one.
-
-Severity   : minor
-Frequency  : rare, during recovery
-Bugzilla   : 17895
-Description: Assertion failure in ldlm_lock_put
-Details    : Do not put cancelled locks into replay list, hold references on
-	     locks in replay list
-
-Severity   : normal
-Bugzilla   : 18577
-Description: 1.6.5 mdsrate performance is slower than 1.4.11/12 (MDS is not cpu bound!)
-Details    : create_count always drops to the min value (=32) because grow_count
-	     is being changed before the precreate RPC completes.
-
-Severity   : critical
-Bugzilla   : 18695
-Descriptoin: Lustre detected file system corruption with inode out of bounds
-Details    : don't update i_size on MDS_CLOSE for directories. This causes
-	     directory corruptions on the MDT.
-
-Severity   : normal
-Frequency  : Only in RHEL5 when mounting multiple ext3 filesystems
-             simultaneously
-Bugzilla   : 19184
-Description: "kmem_cache_create: duplicate cache jbd_4k" error message
-Details    : add proper locking for creation of jbd_4k slab cache
-
-Severity   : normal
-Bugzilla   : 19058
-Description: MMP check in ext3_remount() fails without displaying any error
-Details    : When multiple mount protection fails during remount, proper error
-             should be returned
+Bugzilla   : 19601
+Description: Update kernel to RHEL5.2 2.6.18-92.1.26.
 
 Severity   : critical, only with RHEL4/SLES9 MDS
 Bugzilla   : 19453
@@ -245,6 +93,28 @@ Details    : setting extended attributes can corrupt other attributes stored in
 	     the inode body. Both user & lustre internal (LOV EA) attributes
 	     are concerned. In the latter case, the lustre filesystem can be
 	     damaged.
+
+Severity   : enhancement
+Bugzilla   : 16504
+Description: Update kernel to RHEL4.7 2.6.9-78.0.22.
+
+Severity   : enhancement
+Bugzilla   : 18289
+Description: allow the use of the kernel provided OFED stack
+Details    : This patch allows for lbuild to use the OFED stack provided
+	     by the kernel vendor.
+	     For the RHEL4 and RHEL5 kernels, we enable the kernel supplied
+	     OFED stack.
+
+Severity   : enhancement
+Bugzilla   : 18775
+Description: improve lctl set/get_param
+Details    : handle the bad options, support more than one arguments,
+	     add '-F' option to append the indicator to the parameters.
+
+Severity   : enhancement
+Bugzilla   : 19212
+Description: Update kernel to SLES10 SP2 2.6.16.60-0.37.
 
 Severity   : major
 Frequency  : rare
@@ -262,7 +132,107 @@ Details    : This patch fixes:
                 -                RETURN(0);
 
 --------------------------------------------------------------------------
-2009-01-15 Sun Microsystems, Inc.
+
+2009-04-06 Sun Microsystems, Inc.
+	* version 1.6.7.1
+	* Support for kernels:
+	 2.6.5-7.314 (SLES 9),
+	 2.6.9-67.0.22.EL (RHEL 4),
+	 2.6.16.60-0.31 (SLES 10),
+	 2.6.18-92.1.17.el5 (RHEL 5),
+	 2.6.22.14 vanilla (kernel.org)
+	* Client support for unpatched kernels:
+	  (see http://wiki.lustre.org/index.php?title=Patchless_Client)
+	  2.6.16 - 2.6.22 vanilla (kernel.org)
+	* Client support for unpatched kernels:
+	  we do not recommend using patchless RHEL4 clients with kernels
+	  prior to 2.6.9-55EL (RHEL4U5).
+	* Recommended e2fsprogs version: 1.40.11-sun1
+	* RHEL 4 and RHEL 5/SLES 10 clients behaves differently on 'cd' to a
+	  removed cwd "./" (refer to Bugzilla 14399).
+	* A new quota file format was introduced in 1.6.6 (for 2.6.16+ kernels).
+	  The format conversion from prior releases is handled transparently,
+	  but releases older than 1.6.6/1.8.0 don't understand this new
+	  format. The automatic format conversion can be avoided by running
+	  the following commands on the MDS and OSS servers (for
+	  pre 1.4.12-1.6.5 quota files):
+		'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV',
+		'tunefs.lustre --param="ost.quota_type=ug1" $MDTDEV'
+		or (for 1.4.12/1.6.5 quota files)
+		'tunefs.lustre --param="mdt.quota_type=ug2" $MDTDEV',
+		'tunefs.lustre --param="ost.quota_type=ug2" $MDTDEV'
+	  For more information, please refer to bugzilla 13904.
+	* Output of lfs quota has been made less detailed by default,
+	  old (verbose) output can be obtained by using -v option.
+	* File join has been disabled in this release, refer to Bugzilla
+	  16929.
+	* A new Lustre ADIO driver is available for MPICH2-1.0.7.
+	* NFS export disabled when stack size < 8192. Since the NFSv4 export of
+	  Lustre filesystem with 4K stack may cause a stack overflow. For more
+	  information, please refer to bugzilla 17630.
+
+Severity   : minor
+Frequency  : common
+Bugzilla   : 18480
+Description: correct count of recoverable clients
+Details    : if recovery failed for client for some reasons (goal inode or
+	     something else) server can wait failed clients for finish recovery.
+
+Severity   : critical
+Frequency  : when directories had atime set in past (e.g. untar)
+Bugzilla   : 18695
+Descriptoin: Lustre detected file system corruption with inode out of bounds
+Details    : don't update i_size on MDS_CLOSE for directories. This causes
+	     directory corruptions on the MDT.
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 18810
+Description: fix racy locking of mballoc block bitmaps causing BUG
+Details    : The locking of the mballoc buddy bitmap and the in-memory
+	     block bitmap was using two different spin locks in some
+	     cases.  This made it possible to incorrectly access the
+	     mballoc bitmap while another process was modifying it,
+	     causing a sanity assertion to fail.  While no on-disk corruption
+	     was reported, there was some risk of this happening.
+
+Severity   : normal
+Frequency  : on failed service startup
+Bugzilla   : 18895
+Description: replay-single test_61d: LustreError:
+	     17392:0:(lprocfs_status.c:859:lprocfs_obd_cleanup())
+	     ASSERTION(obd->obd_proc_exports_entry->subdir == NULL) failed
+Details    : cleanup lprocfs entries on error.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 18903
+Description: llmount.sh: BUG: spinlock wrong owner on CPU#0, mount.lustre/8180
+Details    : fix typo in import_set_conn() causing spinlock corruption.
+
+Severity   : normal
+Frequency  : rare, only when using group lock on client
+Bugzilla   : 18859
+Description: Group Lock in Lustre: write call is blocking
+Details    : fix wrong return code of ll_is_file_contended() causing processes
+	     to be blocked indefinitely.
+
+Severity   : normal
+Frequency  : rare
+Bugzilla   : 17757
+Description: ASSERTION(new_lock != NULL) failed:op 0x1 lockh 0x0
+Details    : DISP_OPEN_LOCK is not cleared properly in reconstruct_open() since
+	     intent_disposition() is used instead of intent_set_disposition().
+
+Severity   : major
+Frequency  : occasional when using software RAID5
+Bugzilla   : 15428
+Description: raid5 panics
+Details    : fix panic in raid5_end_read_request().
+
+--------------------------------------------------------------------------
+
+2009-02-07 Sun Microsystems, Inc.
 	* version 1.6.7
 	* Support for kernels:
 	 2.6.5-7.314 (SLES 9),
@@ -318,7 +288,7 @@ Severity   : normal
 Frequency  : rare
 Bugzilla   : 17972
 Descriptoin: stuck in cache_remove_extent() or panic with accessing to already
-	     freed lock.
+             freed look.
 Details    : release lock refernce only after add page to pages list.
 
 Severity   : normal
@@ -328,12 +298,17 @@ Descriptoin: mds can't pack reply with long acl.
 Details    : mds don't control size of acl but they limited by reint/getattr
 	     reply buffer.
 
+Severity   : normal
+Frequency  : start MDS on uncleanly shutdowned MDS device
+Bugzilla   : 18049
+Descriptoin: aborting recovery hang on MDS
+Details    : don't throttle destroy RPCs for the MDT.
+
 Severity   : major
 Frequency  : on remount
 Bugzilla   : 18018
 Description: external journal device not working after the remount
-Details    : clear dev_rdonly flag for external journal devices in
-	     blkdev_put()
+Details    : clear dev_rdonly flag for external journal devices in blkdev_put()
 
 Severity   : minor
 Frequency  : rare
@@ -555,13 +530,32 @@ Details    : enable OBD_CONNECT_MDT flag when connecting from the MDS so that
 	     from a different NID, so we do not need to wait for the export to
 	     be evicted.
 
+Severity   : normal
+Frequency  : start MDS on uncleanly shutdowned MDS device
+Bugzilla   : 16839
+Description: ll_sync thread stay in waiting mds<>ost recovery finished
+Details    : fix race due to two ll_sync threads processing the same lov target
+	     causing random failures in various tests. The solution is to send
+	     ACTIVATE event only if connect already finished and import is in
+	     FULL state.
+
+Severity   : major
+Frequency  : rare, only if using MMP with Linux RAID
+Bugzilla   : 17895
+Description: MMP doesn't work with Linux RAID
+Details    : While using HA for Lustre servers with Linux RAID, it is possible
+	     that MMP will not detect multiple mounts. To make this work we
+	     need to unplug the device queue in RAID when the MMP block is being
+	     written. Also while reading the MMP block, we should read it from
+	     disk and not the cached one.
+
 --------------------------------------------------------------------------
 
 2008-08-31 Sun Microsystems, Inc.
 	* version 1.6.6
 	* Support for kernels:
 	 2.6.5-7.312 (SLES 9),
-	 2.6.9-67.0.22.EL (RHEL 4),
+	 2.6.9-78.EL (RHEL 4),
 	 2.6.16.60-0.23 (SLES 10),
 	 2.6.18-92.1.6.el5 (RHEL 5),
 	 2.6.22.14 vanilla (kernel.org)
@@ -582,7 +576,7 @@ Details    : enable OBD_CONNECT_MDT flag when connecting from the MDS so that
 	  the following command on the MDS:
 		'tunefs.lustre --param="mdt.quota_type=ug1" $MDTDEV'.
 	  For more information, please refer to bugzilla 13904.
-	* A new quota file format was introduced in 1.6.6.
+	* A new quota file format was introduced in 1.6.6 (for 2.6.16+ kernels).
 	  The format conversion from prior releases is handled transparently,
 	  but releases older than 1.6.6/1.8.0 don't understand this new
 	  format. The automatic format conversion can be avoided by running
@@ -596,6 +590,10 @@ Details    : enable OBD_CONNECT_MDT flag when connecting from the MDS so that
 	  For more information, please refer to bugzilla 13904.
 	* Output of lfs quota has been made less detailed by default,
 	  old (verbose) output can be obtained by using -v option.
+
+Severity   : enhancement
+Bugzilla   : 16504
+Description: Update to RHEL4.7 kernel-2.6.9-78.
 
 Severity   : minor
 Bugzilla   : 15899
@@ -632,9 +630,9 @@ Details    : restore missing copy oi_flags to lov requests.
 Severity   : enhancement
 Bugzilla   : 16581
 Description: Add man pages for llobdstat(8), llstat(8), plot-llstat(8),
-	     l_getgroups(8), lst(8), routerstat(8)
+	   : l_getgroups(8), lst(8), routerstat(8)
 Details    : included man pages for llobdstat(8), llstat(8),
-	     plot-llstat(8), l_getgroups(8), lst(8), routerstat(8)
+	   : plot-llstat(8), l_getgroups(8), lst(8), routerstat(8)
 
 Severity   : enhancement
 Bugzilla   : 16208
@@ -651,9 +649,9 @@ Description: Update to RHEL4 kernel-2.6.9-67.0.22.EL.
 Severity   : enhancement
 Bugzilla   : 16091
 Description: configure's --enable-quota should check the
-	     kernel .config for CONFIG_QUOTA
+	   : kernel .config for CONFIG_QUOTA
 Details    : configure is terminated if --enable-quota is passed but
-	     no quota support is in kernel
+	   : no quota support is in kernel
 
 Severity   : normal
 Bugzilla   : 16317
@@ -930,7 +928,7 @@ Description: add -gid, -group, -uid, -user options to lfs find
 
 Severity   : enhancement
 Bugzilla   : 15284
-Description: ll_recover_lost_found_objs - rename lost+found objects to object ID
+Description: ll_recover_lost_found_objs - rename objects in lost+found to object ID
 Details    : OST crashes and subsequent e2fsck can lead to objects being moved
 	     to lost+found directory. Using the "ll_recover_lost_found_objs"
 	     tool, these objects can be retrieved and data can be salvaged
@@ -973,7 +971,7 @@ Details    : If insertion of an extent fails, then discard the inode
 Severity   : normal
 Bugzilla   : 16199
 Description: don't always update ctime in ext3_xattr_set_handle()
-Details    : Current xattr code updates inode ctime in ext3_xattr_set_handle()
+Details    : Current xattr code updates the inode ctime in ext3_xattr_set_handle.
 	     In some cases the ctime should not be updated, for example for
 	     2.0->1.8 compatibility it is necessary to delete an xattr and it
 	     should not update the ctime.
@@ -1050,7 +1048,8 @@ Details    : FIEMAP ioctl will allow an application to efficiently fetch the
 Severity   : minor
 Bugzilla   : 16717
 Description: LBUG when llog conf file is full
-Details    : When llog bitmap is full, ENOSPC should be returned for plain log.
+Details    : When llog bitmap is full, ENOSPC should be returned for plain
+	     log.
 
 Severity   : normal
 Frequency  : only with adaptive timeout enabled
@@ -1081,12 +1080,6 @@ Details    : In case of memory pressure, list_del() can be called twice on
 
 -------------------------------------------------------------------------------
 
-Severity   : normal
-Frequency  : rare, connect and disconnect target at same time
-Bugzilla   : 17310
-Descriptoin: ASSERTION(atomic_read(&imp->imp_inflight) == 0
-Details    : don't call obd_disconnect under lov_lock. this long time
-	      operation and can block ptlrpcd which answer to connect request.
 
 2008-05-26  Sun Microsystems, Inc.
        * version 1.6.5

@@ -40,3 +40,4 @@ endif
 endif
 
 MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
+DIST_SOURCES = $(kiiblnd-objs:%.o=%.c) iiblnd.h

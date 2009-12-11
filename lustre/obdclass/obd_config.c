@@ -801,15 +801,6 @@ int class_process_config(struct lustre_cfg *lcfg)
                 obd_timeout = max(lcfg->lcfg_num, 1U);
                 GOTO(out, err = 0);
         }
-        case LCFG_SET_LDLM_TIMEOUT: {
-                CDEBUG(D_IOCTL, "changing lustre ldlm_timeout from %d to %d\n",
-                       ldlm_timeout, lcfg->lcfg_num);
-                ldlm_timeout = max(lcfg->lcfg_num, 1U);
-                if (ldlm_timeout >= obd_timeout)
-                        ldlm_timeout = max(obd_timeout / 3, 1U);
-                
-                GOTO(out, err = 0);
-        }
         case LCFG_SET_UPCALL: {
                 LCONSOLE_ERROR_MSG(0x15a, "recovery upcall is deprecated\n");
                 /* COMPAT_146 Don't fail on old configs */

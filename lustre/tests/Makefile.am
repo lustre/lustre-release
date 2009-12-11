@@ -5,19 +5,18 @@ AM_CFLAGS = $(LLCFLAGS)
 # LDADD := -lreadline -ltermcap # -lefence
 
 noinst_DATA = disk1_4.zip
-noinst_SCRIPTS = leak_finder.pl llmount.sh llmountcleanup.sh
+noinst_SCRIPTS = leak_finder.pl llecho.sh llmount.sh llmountcleanup.sh
 noinst_SCRIPTS += test-framework.sh runvmstat runiozone runtests
 noinst_SCRIPTS += sanity.sh rundbench acceptance-small.sh compile.sh
 noinst_SCRIPTS += conf-sanity.sh insanity.sh lfscktest.sh oos.sh oos2.sh
 noinst_SCRIPTS += llog-test.sh recovery-small.sh replay-dual.sh sanity-quota.sh
 noinst_SCRIPTS += replay-ost-single.sh replay-single.sh run-llog.sh sanityN.sh
-noinst_SCRIPTS += runracer performance-sanity.sh
-noinst_SCRIPTS += mdsrate-create-small.sh mdsrate-create-large.sh
-noinst_SCRIPTS += mdsrate-lookup-1dir.sh mdsrate-lookup-10dirs.sh
+noinst_SCRIPTS += runracer
+noinst_SCRIPTS += performance-sanity.sh mdsrate-create-small.sh
+noinst_SCRIPTS += mdsrate-create-large.sh mdsrate-lookup-1dir.sh
 noinst_SCRIPTS += mdsrate-stat-small.sh mdsrate-stat-large.sh
 noinst_SCRIPTS += lockorder.sh socketclient socketserver runmultiop_bg_pause
-noinst_SCRIPTS += recovery-mds-scale.sh run_dd.sh run_tar.sh run_iozone.sh
-noinst_SCRIPTS += run_dbench.sh recovery-double-scale.sh parallel-scale.sh
+noinst_SCRIPTS += parallel-scale.sh
 nobase_noinst_SCRIPTS = cfg/local.sh
 nobase_noinst_SCRIPTS += acl/make-tree acl/run cfg/ncli.sh
 nobase_noinst_SCRIPTS += racer/dir_create.sh racer/file_create.sh racer/file_list.sh
@@ -30,12 +29,12 @@ EXTRA_DIST = $(noinst_SCRIPTS) $(noinst_DATA) \
              $(nobase_noinst_SCRIPTS) $(nobase_noinst_DATA)
 
 if TESTS
-noinst_PROGRAMS = openunlink truncate directio writeme mlink utime it_test
-noinst_PROGRAMS += tchmod fsx test_brw 
+noinst_PROGRAMS = openunlink truncate directio openme writeme mlink utime it_test
+noinst_PROGRAMS += tchmod toexcl fsx test_brw openclose createdestroy
 noinst_PROGRAMS += createmany chownmany statmany multifstat createtest
-noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany checkstat
-noinst_PROGRAMS += statone runas openfile rmdirmany
-noinst_PROGRAMS += small_write multiop ll_sparseness_verify
+noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany fchdir_test checkstat
+noinst_PROGRAMS += statone runas openfile getdents o_directory rmdirmany
+noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify cmknod
 noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify mkdirmany
 noinst_PROGRAMS += openfilleddirunlink rename_many memhog iopentest1 iopentest2
 noinst_PROGRAMS += mmap_sanity flock_test writemany reads flocks_test
@@ -43,7 +42,7 @@ noinst_PROGRAMS += ll_getstripe_info
 if MPITESTS
 noinst_PROGRAMS += parallel_grouplock write_append_truncate createmany_mpi mdsrate
 endif
-# noinst_PROGRAMS += copy_attr mkdirdeep 
+# noinst_PROGRAMS += ldaptest copy_attr mkdirdeep 
 bin_PROGRAMS = mcreate munlink
 testdir = $(libdir)/lustre/tests
 test_SCRIPTS = $(noinst_SCRIPTS) $(noinst_PROGRAMS)
@@ -57,7 +56,7 @@ mmap_sanity_SOURCES= mmap_sanity.c
 
 LIBLUSTREAPI := $(top_builddir)/lustre/utils/liblustreapi.a
 ll_getstripe_info_LDADD=$(LIBLUSTREAPI)
-multiop_LDADD=$(LIBLUSTREAPI) -lrt
+multiop_LDADD=$(LIBLUSTREAPI)
 
 ll_dirstripe_verify_SOURCES= ll_dirstripe_verify.c
 ll_dirstripe_verify_LDADD= -L$(top_builddir)/lustre/utils -llustreapi

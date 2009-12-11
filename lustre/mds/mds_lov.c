@@ -392,21 +392,17 @@ static int mds_lov_get_objid(struct obd_device * obd,
                              obd_id idx)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct obd_export *osc_exp = mds->mds_osc_exp;
         unsigned int page;
         unsigned int off;
         obd_id *data;
         int rc = 0;
         ENTRY;
 
-        LASSERT(osc_exp != NULL);
-
         page = idx / OBJID_PER_PAGE();
         off = idx % OBJID_PER_PAGE();
 
         data = mds->mds_lov_page_array[page];
-        if (data[off] < 2 || 
-            !(osc_exp->exp_connect_flags & OBD_CONNECT_SKIP_ORPHAN)) {
+        if (data[off] < 2) {
                 /* We never read this lastid; ask the osc */
                 struct obd_id_info lastid;
                 __u32 size = sizeof(lastid);
@@ -433,7 +429,7 @@ out:
 int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
 {
         int rc;
-        struct obdo oa = { 0 };
+        struct obdo oa;
         struct obd_trans_info oti = {0};
         struct lov_stripe_md  *empty_ea = NULL;
         ENTRY;
@@ -619,8 +615,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                 RETURN(-ENOMEM);
         data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_INDEX |
                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_QUOTA64 | OBD_CONNECT_AT |
-                OBD_CONNECT_CHANGE_QS | OBD_CONNECT_MDS |
-                OBD_CONNECT_SKIP_ORPHAN;
+                OBD_CONNECT_CHANGE_QS | OBD_CONNECT_MDS;
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
 #endif
@@ -1092,8 +1087,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         rc = mds_lov_start_synchronize(obd, watched, data,
                                        !(ev == OBD_NOTIFY_SYNC));
 
-        if (likely(obd->obd_stopping == 0))
-                lquota_recovery(mds_quota_interface_ref, obd);
+        lquota_recovery(mds_quota_interface_ref, obd);
 
         RETURN(rc);
 }

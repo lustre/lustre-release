@@ -15,7 +15,6 @@ Summary: The Linux kernel (the core of the Linux operating system)
 %define release @KERNEL_RELEASE@
 # /usr/src/%{kslnk} -> /usr/src/linux-%{KVERREL}
 %define kslnk linux-2.4
-%define kprovides %(bash -c "echo %{kversion}%{kextraverdelim}%{kextraver} | sed -e 's/-[^0-9]*smp$//'")
 
 # groups of related archs
 %define all_x86 i386 i686 i586 athlon
@@ -26,7 +25,6 @@ Summary: The Linux kernel (the core of the Linux operating system)
 %define rhbuild @RHBUILD@
 %define susebuild @SUSEBUILD@
 %define linux26 @LINUX26@
-%define lmakeopts @LMAKEOPTS@
 
 # disable build root strip policy
 %define __spec_install_post /usr/lib/rpm/brp-compress || :
@@ -44,7 +42,7 @@ Summary: The Linux kernel (the core of the Linux operating system)
 %define dashtargetboard %{?targetboard:-%{targetboard}}
 %define withtargetboard 0
 %{?targetboard: %{expand: %%define withtargetboard 1}}
-
+	
 # Override generic defaults with per-arch defaults (which can
 # themselves be overridden with --with/--without).  These must
 # ONLY be "0", never "1"
@@ -159,7 +157,7 @@ Group: System Environment/Kernel
 ExclusiveArch: %{all_x86} x86_64 ia64 ppc ppc64
 ExclusiveOS: Linux
 Obsoletes: kernel-modules, kernel-sparc
-Provides: kernel = %{kprovides}
+Provides: kernel = %{version}
 BuildConflicts: rhbuildsys(DiscFree) < 500Mb
 %ifarch %{all_x86} ia64 x86_64
 Provides: kernel-drm = 4.1.0, kernel-drm = 4.2.0, kernel-drm = 4.3.0, kernel-drm = 4.2.99.3
@@ -231,7 +229,7 @@ options that can be passed to Linux kernel modules at load time.
 %package smp
 Summary: The Linux kernel compiled for SMP machines.
 Group: System Environment/Kernel
-Provides: module-info, kernel = %{kprovides}
+Provides: module-info, kernel = %{version}
 %ifarch %{all_x86} ia64 x86_64
 Provides: kernel-drm = 4.1.0, kernel-drm = 4.2.0, kernel-drm = 4.3.0, kernel-drm = 4.2.99.3
 %endif
@@ -250,7 +248,7 @@ Install the kernel-smp package if your machine uses two or more CPUs.
 %package bigsmp
 Summary: The Linux kernel compiled for SMP machines.
 Group: System/Kernel
-Provides: module-info, kernel = %{kprovides}, k_smp4G
+Provides: module-info, kernel = %{version}, k_smp4G
 Obsoletes: k_smp4G
 %ifarch %{all_x86} ia64 x86_64
 Provides: kernel-drm = 4.1.0, kernel-drm = 4.2.0, kernel-drm = 4.3.0, kernel-drm = 4.2.99.3
@@ -270,7 +268,7 @@ Install the kernel-bigsmp package if your machine uses two or more CPUs.
 %package pseries64
 Summary: Standard Kernel for 64-bit Power based SMP and LPAR Machines
 Group: System/Kernel
-Provides: module-info, kernel = %{kprovides}, k_smp4G
+Provides: module-info, kernel = %{version}, k_smp4G
 %ifarch %{all_x86} ia64 x86_64
 Provides: kernel-drm = 4.1.0, kernel-drm = 4.2.0, kernel-drm = 4.3.0, kernel-drm = 4.2.99.3
 %endif
@@ -289,7 +287,7 @@ machines.
 %package bigmem
 Summary: The Linux Kernel for machines with more than 4 Gigabyte of memory.
 Group: System Environment/Kernel
-Provides: module-info, kernel = %{kprovides}
+Provides: module-info, kernel = %{version}
 %ifarch %{all_x86} ia64 x86_64
 Provides: kernel-drm = 4.1.0, kernel-drm = 4.2.0, kernel-drm = 4.3.0, kernel-drm = 4.2.99.3
 %endif
@@ -306,7 +304,7 @@ enabled for Pentium III machines with 4 Gigabyte of memory or more.
 %package BOOT
 Summary: The version of the Linux kernel used on installation boot disks.
 Group: System Environment/Kernel
-Provides: kernel = %{kprovides}
+Provides: kernel = %{version}
 %if %{rhbuild}
 Prereq: %{BOOT_kernel_prereq}
 Conflicts: %{kernel_conflicts}
@@ -321,7 +319,7 @@ turned off because of the size constraints.
 %package BOOTsmp
 Summary: The Linux kernel used on installation boot disks for SMP machines.
 Group: System Environment/Kernel
-Provides: kernel = %{kprovides}
+Provides: kernel = %{version}
 %if %{rhbuild}
 Prereq: %{BOOT_kernel_prereq}
 Conflicts: %{kernel_conflicts}
@@ -337,7 +335,7 @@ machines that have trouble coming up to life with the uniprocessor kernel.
 %package jensen
 Summary: The Linux Kernel compiled for the Alpha Jensen platform.
 Group: System Environment/Kernel
-Provides: kernel = %{kprovides}
+Provides: kernel = %{version}
 %if %{rhbuild}
 Prereq: %{kernel_prereq}
 Conflicts: %{kernel_conflicts}
@@ -386,7 +384,7 @@ sh -x ./build/lmake \
 	--unpack-kernel \
 	--target @LUSTRE_TARGET@ \
 	--target-arch %{_target_cpu} \
-	--kerneldir $RPM_SOURCE_DIR %{lmakeopts}
+	--kerneldir $RPM_SOURCE_DIR
 popd >/dev/null
 
 # handle both SuSE and Red Hat's new-kernel-pkg bits
@@ -523,7 +521,7 @@ DependKernel()
 	--target-arch %{_target_cpu} \
 	${target_config} \
 	--extraversion %{kextraver} \
-	-j $RPM_BUILD_NCPUS %{lmakeopts}
+	-j $RPM_BUILD_NCPUS
 }
 
 BuildKernel()
@@ -539,7 +537,7 @@ BuildKernel()
 	--extraversion %{kextraver} \
 	--kerneldir $RPM_SOURCE_DIR \
 	-j $RPM_BUILD_NCPUS \
-	--destdir $RPM_BUILD_ROOT %{lmakeopts} \
+	--destdir $RPM_BUILD_ROOT \
 	-- --enable-tests \
 	@CONFIGURE_FLAGS@
 }
@@ -556,7 +554,7 @@ BuildLustre()
 	--extraversion %{kextraver} \
 	--kerneldir $RPM_SOURCE_DIR \
 	-j $RPM_BUILD_NCPUS \
-	--destdir $RPM_BUILD_ROOT %{lmakeopts} \
+	--destdir $RPM_BUILD_ROOT \
 	-- --enable-utils \
 	--disable-doc --disable-tests \
 	--disable-modules --disable-liblustre \
@@ -572,7 +570,7 @@ SaveHeaders()
 	--target @LUSTRE_TARGET@ \
 	--target-arch %{_target_cpu} \
 	--extraversion %{kextraver} \
-	--destdir $RPM_BUILD_ROOT %{lmakeopts}
+	--destdir $RPM_BUILD_ROOT
 }
 
 pushd lustre >/dev/null
@@ -647,7 +645,7 @@ BuildObj ()
 	    if grep -q "$oc" Makefile ; then
 	        OLDCONFIG="$oc"
 		break
-	    fi
+   	    fi
         done
 	MAKE="make -s O=$o -C ${c}"
 	if [ "$CC" ] ; then
@@ -734,7 +732,7 @@ if [ "%{buildbase}" -ne 0 ] ; then
 	    if grep -q "$oc" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile ; then
 		OLDCONFIG="$oc"
 		break
-	    fi
+   	    fi
         done
 	if [ "$CC" ] ; then
 	    MAKE_CC="CC=$CC"

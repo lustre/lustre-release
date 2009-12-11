@@ -23,7 +23,7 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval lctl set_param debug=\"$DEBUG_LVL\""
 [ "$DEBUG_ON" ] || DEBUG_ON="eval lctl set_param debug=0x33f0484"
 
-export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA PERFORMANCE_SANITY RECOVERY_MDS_SCALE RECOVERY_DOUBLE_SCALE PARALLEL_SCALE"
+export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL INSANITY SANITY_QUOTA PERFORMANCE_SANITY PARALLEL_SCALE"
 
 if [ "$ACC_SM_ONLY" ]; then
     for O in $TESTSUITE_LIST; do
@@ -303,8 +303,8 @@ for NAME in $CONFIGS; do
 		if [ -x /usr/sbin/lfsck ]; then
 			bash lfscktest.sh
 		else
-			log "$($E2FSCK -V)"
-			log "SKIP: $E2FSCK does not support lfsck"
+			log "$(e2fsck -V)"
+			log "SKIP: e2fsck does not support lfsck"
 		fi
 		LFSCK="done"
 	fi
@@ -324,12 +324,8 @@ for NAME in $CONFIGS; do
 		#export LIBLUSTRE_DEBUG_MASK=`lctl get_param -n debug`
 		if [ -x $LIBLUSTRETESTS/sanity ]; then
 			mkdir -p $MOUNT2
-			if [ "$LIBLUSTRE_EXCEPT" ]; then
-				LIBLUSTRE_OPT="$LIBLUSTRE_OPT \
-					$(echo ' '$LIBLUSTRE_EXCEPT  | sed -re 's/\s+/ -e /g')"
-			fi
-			echo $LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET $LIBLUSTRE_OPT
-			$LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET $LIBLUSTRE_OPT
+			echo $LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET
+			$LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET
 		fi
 		$CLEANUP
 		#$SETUP
@@ -344,8 +340,8 @@ for NAME in $CONFIGS; do
 		[ "$SLOW" = "no" ] && DURATION=300
 		RACERCLIENTS=$HOSTNAME
 		[ ! -z ${CLIENTS} ] && RACERCLIENTS=$CLIENTS
-		log "racer on clients: $RACERCLIENTS DURATION=$DURATION RACERDIRS=$RACERDIRS"
-		CLIENTS=${RACERCLIENTS} DURATION=$DURATION bash runracer $RACERDIRS
+		log "racer on clients: $RACERCLIENTS DURATION=$DURATION"
+		CLIENTS=${RACERCLIENTS} DURATION=$DURATION bash runracer
 		$CLEANUP
 		$SETUP
 		RACER="done"
@@ -412,22 +408,6 @@ if [ "$PERFORMANCE_SANITY" != "no" ]; then
         title performance-sanity
         bash performance-sanity.sh
         PERFORMANCE_SANITY="done"
-fi
-
-[ "$RECOVERY_MDS_SCALE" != "no" ] && skip_remmds recovery-mds-scale && RECOVERY_MDS_SCALE=no && MSKIPPED=1
-[ "$RECOVERY_MDS_SCALE" != "no" ] && skip_remost recovery-mds-scale && RECOVERY_MDS_SCALE=no && OSKIPPED=1
-if [ "$RECOVERY_MDS_SCALE" != "no" ]; then
-        title recovery-mds-scale
-        bash recovery-mds-scale.sh
-        RECOVERY_MDS_SCALE="done"
-fi
-
-[ "$RECOVERY_DOUBLE_SCALE" != "no" ] && skip_remmds recovery-double-scale && RECOVERY_DOUBLE_SCALE=no && MSKIPPED=1
-[ "$RECOVERY_DOUBLE_SCALE" != "no" ] && skip_remost recovery-double-scale && RECOVERY_DOUBLE_SCALE=no && OSKIPPED=1
-if [ "$RECOVERY_DOUBLE_SCALE" != "no" ]; then
-        title recovery-double-scale
-        bash recovery-double-scale.sh
-        RECOVERY_DOUBLE_SCALE="done"
 fi
 
 which mpirun > /dev/null 2>&1 || PARALLEL_SCALE="no"

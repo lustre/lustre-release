@@ -184,13 +184,6 @@ typedef enum {
 /* Flags sent in AST lock_flags to be mapped into the receiving lock. */
 #define LDLM_AST_FLAGS         (LDLM_FL_DISCARD_DATA)
 
-/* 
- * --------------------------------------------------------------------------
- * NOTE! Starting from this point, that is, LDLM_FL_* flags with values above
- * 0x80000000 will not be sent over the wire.
- * --------------------------------------------------------------------------
- */
-
 /* Lock marked with this flag is going to fail to obtain cp_ast with emulating 
  * -EINTR while waiting. */
 #define LDLM_FL_FAIL_LOC       0x100000000ULL
@@ -376,6 +369,12 @@ typedef enum {
 #define NS_DEFAULT_CONTENTION_SECONDS 2
 #define NS_DEFAULT_CONTENDED_LOCKS 32
 
+/* Default value for ->ns_shrink_thumb. If lock is not extent one its cost 
+ * is one page. Here we have 256 pages which is 1M on i386. Thus by default
+ * all extent locks which have more than 1M long extent will be kept in lru,
+ * others (including ibits locks) will be canceled on memory pressure event. */
+#define LDLM_LOCK_SHRINK_THUMB 256
+
 struct ldlm_namespace {
         char                  *ns_name;
         ldlm_side_t            ns_client; /* is this a client-side lock tree? */
@@ -398,6 +397,8 @@ struct ldlm_namespace {
         unsigned int           ns_max_age;
         unsigned int           ns_timeouts;
 
+        /* Lower limit to number of pages in lock to keep it in cache */
+        unsigned int           ns_shrink_thumb;
         cfs_time_t             ns_next_dump;   /* next debug dump, jiffies */
 
         atomic_t               ns_locks;

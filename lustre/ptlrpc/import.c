@@ -311,6 +311,16 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                         }
 
                         if (atomic_read(&imp->imp_unregistering) == 0) {
+                                /* XXX: This is temporary workaround for long
+                                 * connect interpret due to locking in lov in
+                                 * in import activation path, which causes
+                                 * connect rpc stay on sending list longer
+                                 * time. Let's wait longer insread of asserting
+                                 * here.
+                                 *
+                                 * Activation should not be blocking. Kill
+                                 * this #if 0 when activation code is fixed. */
+#if 0
                                 /* We know that only "unregistering" rpcs may
                                  * still survive in sending or delaying lists
                                  * (They are waiting for long reply unlink in
@@ -323,6 +333,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                                  * dropped to zero. No new inflights possible at
                                  * this point. */
                                 rc = 0;
+#endif
                         } else {
                                 CERROR("%s: RPCs in \"%s\" phase found (%d). "
                                        "Network is sluggish? Waiting them "
@@ -342,7 +353,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
 
         atomic_dec(&imp->imp_inval_count);
-        cfs_waitq_broadcast(&imp->imp_recovery_waitq);
+        cfs_waitq_signal(&imp->imp_recovery_waitq);
 }
 
 /* unset imp_invalid */
@@ -662,8 +673,6 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                 spin_lock(&imp->imp_lock);
                 imp->imp_replayable = 1;
                 spin_unlock(&imp->imp_lock);
-                lustre_msg_add_op_flags(request->rq_reqmsg,
-                                        MSG_CONNECT_INITIAL);
         }
 
         DEBUG_REQ(D_RPCTRACE, request, "%sconnect request %d",
@@ -1018,8 +1027,8 @@ finish:
                  * disable lru_resize, etc. */
                 if (old_connect_flags != exp->exp_connect_flags ||
                     aa->pcaa_initial_connect) {
-                        CDEBUG(D_HA, "Reseting ns_connect_flags to server flags: "
-                               LPU64"\n", ocd->ocd_connect_flags);
+                        CDEBUG(D_HA, "Resetting ns_connect_flags to server "
+                               "flags: "LPU64"\n", ocd->ocd_connect_flags);
                         imp->imp_obd->obd_namespace->ns_connect_flags =
                                 ocd->ocd_connect_flags;
                         imp->imp_obd->obd_namespace->ns_orig_connect_flags =
@@ -1099,7 +1108,7 @@ finish:
         imp->imp_last_recon = 0;
         spin_unlock(&imp->imp_lock);
 
-        cfs_waitq_broadcast(&imp->imp_recovery_waitq);
+        cfs_waitq_signal(&imp->imp_recovery_waitq);
         RETURN(rc);
 }
 
@@ -1267,7 +1276,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
         }
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {
-                cfs_waitq_broadcast(&imp->imp_recovery_waitq);
+                cfs_waitq_signal(&imp->imp_recovery_waitq);
                 ptlrpc_wake_delayed(imp);
         }
 
@@ -1373,18 +1382,6 @@ void ptlrpc_import_setasync(struct obd_import *imp, int count)
         LNetSetAsync(imp->imp_connection->c_peer, count);
 }
 
-void ptlrpc_cleanup_imp(struct obd_import *imp)
-{
-        ENTRY;
-
-        spin_lock(&imp->imp_lock);
-        IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_CLOSED);
-        imp->imp_generation++;
-        spin_unlock(&imp->imp_lock);
-        ptlrpc_abort_inflight(imp);
-
-        EXIT;
-}
 
 /* Adaptive Timeout utils */
 extern unsigned int at_min, at_max, at_history;
@@ -1400,10 +1397,11 @@ int at_add(struct adaptive_timeout *at, unsigned int val)
         time_t binlimit = max_t(time_t, at_history / AT_BINS, 1);
 
         LASSERT(at);
-        CDEBUG(D_OTHER, "add %u to %p time=%lu v=%u (%u %u %u %u)\n",
+#if 0
+        CDEBUG(D_INFO, "add %u to %p time=%lu v=%u (%u %u %u %u)\n",
                val, at, now - at->at_binstart, at->at_current,
                at->at_hist[0], at->at_hist[1], at->at_hist[2], at->at_hist[3]);
-
+#endif
         if (val == 0)
                 /* 0's don't count, because we never want our timeout to
                    drop to 0, and because 0 could mean an error */
@@ -1455,12 +1453,14 @@ int at_add(struct adaptive_timeout *at, unsigned int val)
                 at->at_current =  min(at->at_current, at_max);
         at->at_current =  max(at->at_current, at_min);
 
+#if 0
         if (at->at_current != old)
-                CDEBUG(D_OTHER, "AT %p change: old=%u new=%u delta=%d "
+                CDEBUG(D_ADAPTTO, "AT %p change: old=%u new=%u delta=%d "
                        "(val=%u) hist %u %u %u %u\n", at,
                        old, at->at_current, at->at_current - old, val,
                        at->at_hist[0], at->at_hist[1], at->at_hist[2],
                        at->at_hist[3]);
+#endif
 
         /* if we changed, report the old value */
         old = (at->at_current != old) ? old : 0;

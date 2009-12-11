@@ -237,48 +237,6 @@ static int ll_wr_max_readahead_mb(struct file *file, const char *buffer,
         return count;
 }
 
-static int ll_rd_max_readahead_per_file_mb(char *page, char **start, off_t off,
-                                          int count, int *eof, void *data)
-{
-        struct super_block *sb = data;
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-        long pages_number;
-        int mult;
-
-        spin_lock(&sbi->ll_lock);
-        pages_number = sbi->ll_ra_info.ra_max_pages_per_file;
-        spin_unlock(&sbi->ll_lock);
-
-        mult = 1 << (20 - CFS_PAGE_SHIFT);
-        return lprocfs_read_frac_helper(page, count, pages_number, mult);
-}
-
-static int ll_wr_max_readahead_per_file_mb(struct file *file, const char *buffer,
-                                          unsigned long count, void *data)
-{
-        struct super_block *sb = data;
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-        int mult, rc, pages_number;
-
-        mult = 1 << (20 - CFS_PAGE_SHIFT);
-        rc = lprocfs_write_frac_helper(buffer, count, &pages_number, mult);
-        if (rc)
-                return rc;
-
-        if (pages_number < 0 ||
-                pages_number > sbi->ll_ra_info.ra_max_pages) {
-                CERROR("can't set file readahead more than"
-                       "max_read_ahead_mb %lu MB\n", sbi->ll_ra_info.ra_max_pages);
-                return -ERANGE;
-        }
-
-        spin_lock(&sbi->ll_lock);
-        sbi->ll_ra_info.ra_max_pages_per_file = pages_number;
-        spin_unlock(&sbi->ll_lock);
-
-        return count;
-}
-
 static int ll_rd_max_read_ahead_whole_mb(char *page, char **start, off_t off,
                                        int count, int *eof, void *data)
 {
@@ -309,11 +267,10 @@ static int ll_wr_max_read_ahead_whole_mb(struct file *file, const char *buffer,
 
         /* Cap this at the current max readahead window size, the readahead
          * algorithm does this anyway so it's pointless to set it larger. */
-        if (pages_number < 0 ||
-            pages_number > sbi->ll_ra_info.ra_max_pages_per_file) {
+        if (pages_number < 0 || pages_number > sbi->ll_ra_info.ra_max_pages) {
                 CERROR("can't set max_read_ahead_whole_mb more than "
-                       "max_read_ahead_per_file_mb: %lu\n",
-                        sbi->ll_ra_info.ra_max_pages_per_file >> (20 - CFS_PAGE_SHIFT));
+                       "max_read_ahead_mb: %lu\n",
+                       sbi->ll_ra_info.ra_max_pages >> (20 - CFS_PAGE_SHIFT));
                 return -ERANGE;
         }
 
@@ -591,35 +548,6 @@ static int ll_rd_statahead_stats(char *page, char **start, off_t off,
                         sbi->ll_sa_miss);
 }
 
-static int ll_rd_lazystatfs(char *page, char **start, off_t off,
-                            int count, int *eof, void *data)
-{
-        struct super_block *sb = data;
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-
-        return snprintf(page, count, "%u\n",
-                        (sbi->ll_flags & LL_SBI_LAZYSTATFS) ? 1 : 0);
-}
-
-static int ll_wr_lazystatfs(struct file *file, const char *buffer,
-                            unsigned long count, void *data)
-{
-        struct super_block *sb = data;
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-        int val, rc;
-
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-
-        if (val)
-                sbi->ll_flags |= LL_SBI_LAZYSTATFS;
-        else
-                sbi->ll_flags &= ~LL_SBI_LAZYSTATFS;
-
-        return count;
-}
-
 static struct lprocfs_vars lprocfs_llite_obd_vars[] = {
         { "uuid",         ll_rd_sb_uuid,          0, 0 },
         //{ "mntpt_path",   ll_rd_path,             0, 0 },
@@ -633,8 +561,6 @@ static struct lprocfs_vars lprocfs_llite_obd_vars[] = {
         //{ "filegroups",   lprocfs_rd_filegroups,  0, 0 },
         { "max_read_ahead_mb", ll_rd_max_readahead_mb,
                                ll_wr_max_readahead_mb, 0 },
-        { "max_read_ahead_per_file_mb", ll_rd_max_readahead_per_file_mb,
-                                        ll_wr_max_readahead_per_file_mb, 0 },
         { "max_read_ahead_whole_mb", ll_rd_max_read_ahead_whole_mb,
                                      ll_wr_max_read_ahead_whole_mb, 0 },
         { "max_cached_mb",  ll_rd_max_cached_mb, ll_wr_max_cached_mb, 0 },
@@ -649,7 +575,6 @@ static struct lprocfs_vars lprocfs_llite_obd_vars[] = {
                                ll_wr_lockless_truncate, 0},
         { "statahead_max",      ll_rd_statahead_max, ll_wr_statahead_max, 0 },
         { "statahead_stats",    ll_rd_statahead_stats, 0, 0 },
-        { "lazystatfs",         ll_rd_lazystatfs, ll_wr_lazystatfs, 0 },
         { 0 }
 };
 

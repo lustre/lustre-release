@@ -562,9 +562,8 @@ void *lustre_msg_buf_v2(struct lustre_msg_v2 *m, int n, int min_size)
 
         buflen = m->lm_buflens[n];
         if (buflen < min_size) {
-                CERROR("msg %p buffer[%d] size %d too small "
-                       "(required %d, opc=%d)\n",
-                       m, n, buflen, min_size, lustre_msg_get_opc(m));
+                CERROR("msg %p buffer[%d] size %d too small (required %d)\n",
+                       m, n, buflen, min_size);
                 return NULL;
         }
 
@@ -655,7 +654,7 @@ void lustre_shrink_reply_v2(struct ptlrpc_request *req, int segment,
                 newpos = lustre_msg_buf_v2(msg, segment + 1, 0);
                 LASSERT(newpos <= tail);
                 if (newpos != tail)
-                        memmove(newpos, tail, tail_len);
+                        memcpy(newpos, tail, tail_len);
         }
 
         if (newlen == 0 && msg->lm_bufcount > segment + 1) {
@@ -2270,34 +2269,6 @@ void lustre_swab_lov_user_md(struct lov_user_md *lum)
         EXIT;
 }
 
-void lustre_swab_lov_mds_md(struct lov_mds_md *lmm)
-{
-        ENTRY;
-        CDEBUG(D_IOCTL, "swabbing lov_mds_md\n");
-        __swab32s(&lmm->lmm_magic);
-        __swab32s(&lmm->lmm_pattern);
-        __swab64s(&lmm->lmm_object_id);
-        __swab64s(&lmm->lmm_object_gr);
-        __swab32s(&lmm->lmm_stripe_size);
-        __swab32s(&lmm->lmm_stripe_count);
-        EXIT;
-}
-
-void lustre_swab_lov_mds_md_objects(struct lov_mds_md *lmm)
-{
-        struct lov_user_ost_data *lod;
-        int i;
-        ENTRY;
-        for (i = 0; i < lmm->lmm_stripe_count; i++) {
-                lod = &lmm->lmm_objects[i];
-                __swab64s(&lod->l_object_id);
-                __swab64s(&lod->l_object_gr);
-                __swab32s(&lod->l_ost_gen);
-                __swab32s(&lod->l_ost_idx);
-        }
-        EXIT;
-}
-
 void lustre_swab_lov_user_md_join(struct lov_user_md_join *lumj)
 {
         ENTRY;
@@ -2761,7 +2732,7 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
         va_start(args, fmt);
         libcfs_debug_vmsg2(data->msg_cdls, data->msg_subsys, mask,
                 data->msg_file, data->msg_fn, data->msg_line, fmt, args,
-                " req@%p x"LPU64"/t"LPD64" o%d->%s@%s:%d/%d lens %d/%d e %d "
+                " req@%p x"LPD64"/t"LPD64" o%d->%s@%s:%d/%d lens %d/%d e %d "
                 "to %d dl %ld ref %d fl "REQ_FLAGS_FMT"/%x/%x rc %d/%d\n",
                 req, req->rq_xid, req->rq_transno, opc,
                 req->rq_import ? obd2cli_tgt(req->rq_import->imp_obd) :

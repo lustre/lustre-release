@@ -301,8 +301,6 @@ struct ptlrpc_request {
         struct ptlrpc_hpreq_ops *rq_ops;        /* server-side hp handlers */
 
         __u64            rq_history_seq;        /* history sequence # */
-        /* the index of service's srv_at_array into which request is linked */
-        time_t rq_at_index;
         int rq_status;
         spinlock_t rq_lock;
         /* client-side flags are serialized by rq_lock */
@@ -323,8 +321,7 @@ struct ptlrpc_request {
                 /* server-side flags */
                 rq_packed_final:1,  /* packed final reply */
                 rq_sent_final:1,    /* stop sending early replies */
-                rq_hp:1,            /* high priority RPC */
-                rq_at_linked:1;     /* link into service's srv_at_array */
+                rq_hp:1;            /* high priority RPC */
         enum rq_phase rq_phase;     /* one of RQ_PHASE_* */
         enum rq_phase rq_next_phase; /* one of RQ_PHASE_* to be used next */
         atomic_t rq_refcount;   /* client-side refcount for SENT race,
@@ -560,8 +557,6 @@ struct ptlrpc_thread {
         unsigned int t_id; /* service thread index, from ptlrpc_start_threads */
         struct lc_watchdog *t_watchdog; /* put watchdog in the structure per
                                          * thread b=14840 */
-        struct ptlrpc_service *t_svc;   /* the svc this thread belonged to
-                                         * b=18582 */
         cfs_waitq_t t_ctl_waitq;
 };
 
@@ -608,7 +603,7 @@ struct ptlrpc_service {
         /* AT stuff */
         struct adaptive_timeout srv_at_estimate;/* estimated rpc service time */
         spinlock_t        srv_at_lock;
-        struct ptlrpc_at_array  srv_at_array;   /* reqs waiting for replies */
+        struct list_head  srv_at_list;          /* reqs waiting for replies */
         cfs_timer_t       srv_at_timer;         /* early reply timer */
 
         int               srv_n_queued_reqs;    /* # reqs in either of the queues below */
@@ -697,7 +692,7 @@ struct ptlrpcd_ctl {
         char                        pc_name[16];
 #ifndef __KERNEL__
         /**
-         * Async rpcs flag to make sure that ptlrpcd_check() is called only
+         * Async rpcs flag to make sure that ptlrpcd_check() is called only 
          * once.
          */
         int                         pc_recurred;
@@ -815,7 +810,6 @@ int ptlrpc_replay_req(struct ptlrpc_request *req);
 int ptlrpc_unregister_reply(struct ptlrpc_request *req, int async);
 void ptlrpc_restart_req(struct ptlrpc_request *req);
 void ptlrpc_abort_inflight(struct obd_import *imp);
-void ptlrpc_cleanup_imp(struct obd_import *imp);
 void ptlrpc_abort_set(struct ptlrpc_request_set *set);
 
 struct ptlrpc_request_set *ptlrpc_prep_set(void);
@@ -974,19 +968,19 @@ ptlrpc_rqphase_move(struct ptlrpc_request *req, enum rq_phase new_phase)
 {
         if (req->rq_phase == new_phase)
                 return;
-
+        
         if (new_phase == RQ_PHASE_UNREGISTERING) {
                 req->rq_next_phase = req->rq_phase;
                 if (req->rq_import)
                         atomic_inc(&req->rq_import->imp_unregistering);
         }
-
+        
         if (req->rq_phase == RQ_PHASE_UNREGISTERING) {
                 if (req->rq_import)
                         atomic_dec(&req->rq_import->imp_unregistering);
         }
 
-        DEBUG_REQ(D_RPCTRACE, req, "move req \"%s\" -> \"%s\"",
+        DEBUG_REQ(D_RPCTRACE, req, "move req \"%s\" -> \"%s\"", 
                   ptlrpc_rqphase2str(req), ptlrpc_phase2str(new_phase));
 
         req->rq_phase = new_phase;
@@ -1112,20 +1106,8 @@ int client_import_del_conn(struct obd_import *imp, struct obd_uuid *uuid);
 int import_set_conn_priority(struct obd_import *imp, struct obd_uuid *uuid);
 
 /* ptlrpc/pinger.c */
-enum timeout_event {
-        TIMEOUT_GRANT = 1
-};
-struct timeout_item;
-typedef int (*timeout_cb_t)(struct timeout_item *, void *);
 int ptlrpc_pinger_add_import(struct obd_import *imp);
 int ptlrpc_pinger_del_import(struct obd_import *imp);
-int ptlrpc_add_timeout_client(int time, enum timeout_event event,
-                              timeout_cb_t cb, void *data,
-                              struct list_head *obd_list);
-int ptlrpc_del_timeout_client(struct list_head *obd_list, 
-                              enum timeout_event event);
-struct ptlrpc_request * ptlrpc_prep_ping(struct obd_import *imp);
-int ptlrpc_obd_ping(struct obd_device *obd);
 #ifdef __KERNEL__
 void ping_evictor_start(void);
 void ping_evictor_stop(void);
@@ -1139,7 +1121,6 @@ int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc);
 void ptlrpcd_stop(struct ptlrpcd_ctl *pc, int force);
 void ptlrpcd_wake(struct ptlrpc_request *req);
 void ptlrpcd_add_req(struct ptlrpc_request *req);
-void ptlrpcd_add_rqset(struct ptlrpc_request_set *set);
 int ptlrpcd_addref(void);
 void ptlrpcd_decref(void);
 

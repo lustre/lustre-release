@@ -1455,7 +1455,7 @@ static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
         }
 
 repeat:
-        if (sbi->ll_max_rw_chunk != 0 && !(file->f_flags & O_DIRECT)) {
+        if (sbi->ll_max_rw_chunk != 0) {
                 /* first, let's know the end of the current stripe */
                 end = *ppos;
                 obd_extent_calc(sbi->ll_osc_exp, lsm, OBD_CALC_STRIPE_END,
@@ -1493,13 +1493,9 @@ repeat:
                 nrsegs_copy = nr_segs;
         }
 
-        down_read(&lli->lli_truncate_rwsem); /* Bug 18233 */
-
         lock_style = ll_file_get_lock(file, (obd_off)(*ppos), end,
                                       iov_copy, nrsegs_copy, &cookie, &tree,
                                       OBD_BRW_READ);
-        if (lock_style < 0 || lock_style == LL_LOCK_STYLE_NOLOCK)
-                up_read(&lli->lli_truncate_rwsem);
         if (lock_style < 0)
                 GOTO(out, retval = lock_style);
 
@@ -1532,11 +1528,9 @@ repeat:
                 ll_inode_size_unlock(inode, 1);
                 retval = ll_glimpse_size(inode, LDLM_FL_BLOCK_GRANTED);
                 if (retval) {
-                        if (lock_style != LL_LOCK_STYLE_NOLOCK) {
+                        if (lock_style != LL_LOCK_STYLE_NOLOCK)
                                 ll_file_put_lock(inode, end, lock_style,
                                                  cookie, &tree, OBD_BRW_READ);
-                                up_read(&lli->lli_truncate_rwsem);
-                        }
                         goto out;
                 } else {
                         /* If objective page index exceed the end-of-file page
@@ -1548,12 +1542,10 @@ repeat:
 
                         if ((size == 0 && cur_index != 0) ||
                             (((size - 1) >> CFS_PAGE_SHIFT) < cur_index)) {
-                                if (lock_style != LL_LOCK_STYLE_NOLOCK) {
+                                if (lock_style != LL_LOCK_STYLE_NOLOCK)
                                         ll_file_put_lock(inode, end, lock_style,
                                                          cookie, &tree,
                                                          OBD_BRW_READ);
-                                        up_read(&lli->lli_truncate_rwsem);
-                                }
                                 goto out;
                         }
                 }
@@ -1579,7 +1571,9 @@ repeat:
                 /* initialize read-ahead window once per syscall */
                 if (ra == 0) {
                         ra = 1;
-                        ll_ra_read_init(file, &bead, *ppos, count);
+                        bead.lrr_start = *ppos >> CFS_PAGE_SHIFT;
+                        bead.lrr_count = (count + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
+                        ll_ra_read_in(file, &bead);
                 }
 
                 /* BUG: 5972 */
@@ -1592,7 +1586,6 @@ repeat:
 #endif
                 ll_file_put_lock(inode, end, lock_style, cookie,
                                  &tree, OBD_BRW_READ);
-                up_read(&lli->lli_truncate_rwsem);
         } else {
                 retval = ll_file_lockless_io(file, iov_copy, nrsegs_copy, ppos,
                                              READ, chunk);
@@ -1683,9 +1676,7 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 
         LASSERT(ll_i2info(inode)->lli_smd != NULL);
 
-        /* signal(7) specifies that write(2) and writev(2) should be restarted */
-        if (down_interruptible(&ll_i2info(inode)->lli_write_sem))
-                RETURN(-ERESTARTSYS);
+        down(&ll_i2info(inode)->lli_write_sem);
 
 repeat:
         chunk = 0; /* just to fix gcc's warning */
@@ -1696,7 +1687,7 @@ repeat:
                 lock_end = OBD_OBJECT_EOF;
                 iov_copy = (struct iovec *)iov;
                 nrsegs_copy = nr_segs;
-        } else if (sbi->ll_max_rw_chunk != 0 && !(file->f_flags & O_DIRECT)) {
+        } else if (sbi->ll_max_rw_chunk != 0) {
                 /* first, let's know the end of the current stripe */
                 end = *ppos;
                 obd_extent_calc(sbi->ll_osc_exp, lsm, OBD_CALC_STRIPE_END,
@@ -1821,12 +1812,11 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
 #endif
 }
 
-#ifdef HAVE_KERNEL_SENDFILE
 /*
  * Send file content (through pagecache) somewhere with helper
  */
-static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,
-                                size_t count, read_actor_t actor, void *target)
+static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,size_t count,
+                                read_actor_t actor, void *target)
 {
         struct inode *inode = in_file->f_dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -1835,10 +1825,10 @@ static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,
         struct ll_lock_tree_node *node;
         struct ost_lvb lvb;
         struct ll_ra_read bead;
-        ssize_t rc;
+        int rc;
+        ssize_t retval;
         __u64 kms;
         ENTRY;
-
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
                inode->i_ino, inode->i_generation, inode, count, *ppos);
 
@@ -1852,10 +1842,8 @@ static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,
         in_file->f_ra.ra_pages = 0;
 
         /* File with no objects, nothing to lock */
-        if (!lsm) {
-                rc = generic_file_sendfile(in_file, ppos, count, actor, target);
-                RETURN(rc);
-        }
+        if (!lsm)
+                RETURN(generic_file_sendfile(in_file, ppos, count, actor, target));
 
         node = ll_node_from_inode(inode, *ppos, *ppos + count - 1, LCK_PR);
         if (IS_ERR(node))
@@ -1895,8 +1883,8 @@ static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,
                 /* A glimpse is necessary to determine whether we return a
                  * short read (B) or some zeroes at the end of the buffer (C) */
                 ll_inode_size_unlock(inode, 1);
-                rc = ll_glimpse_size(inode, LDLM_FL_BLOCK_GRANTED);
-                if (rc)
+                retval = ll_glimpse_size(inode, LDLM_FL_BLOCK_GRANTED);
+                if (retval)
                         goto out;
         } else {
                 /* region is within kms and, hence, within real file size (A) */
@@ -1907,116 +1895,18 @@ static ssize_t ll_file_sendfile(struct file *in_file, loff_t *ppos,
         CDEBUG(D_INFO, "Send ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
                inode->i_ino, count, *ppos, i_size_read(inode));
 
-        ll_ra_read_init(in_file, &bead, *ppos, count);
+        bead.lrr_start = *ppos >> CFS_PAGE_SHIFT;
+        bead.lrr_count = (count + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
+        ll_ra_read_in(in_file, &bead);
         /* BUG: 5972 */
         file_accessed(in_file);
-        rc = generic_file_sendfile(in_file, ppos, count, actor, target);
+        retval = generic_file_sendfile(in_file, ppos, count, actor, target);
         ll_ra_read_ex(in_file, &bead);
 
  out:
         ll_tree_unlock(&tree);
-        RETURN(rc);
+        RETURN(retval);
 }
-#endif
-
-/* change based on 
- * http://git.kernel.org/?p=linux/kernel/git/torvalds/linux-2.6.git;a=commit;h=f0930fffa99e7fe0a0c4b6c7d9a244dc88288c27
- */
-#ifdef HAVE_KERNEL_SPLICE_READ
-static ssize_t ll_file_splice_read(struct file *in_file, loff_t *ppos,
-                                   struct pipe_inode_info *pipe, size_t count,
-                                   unsigned int flags)
-{
-        struct inode *inode = in_file->f_dentry->d_inode;
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct lov_stripe_md *lsm = lli->lli_smd;
-        struct ll_lock_tree tree;
-        struct ll_lock_tree_node *node;
-        struct ost_lvb lvb;
-        struct ll_ra_read bead;
-        ssize_t rc;
-        __u64 kms;
-        ENTRY;
-
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
-               inode->i_ino, inode->i_generation, inode, count, *ppos);
-
-        /* "If nbyte is 0, read() will return 0 and have no other results."
-         *                      -- Single Unix Spec */
-        if (count == 0)
-                RETURN(0);
-
-        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_READ_BYTES, count);
-        /* turn off the kernel's read-ahead */
-        in_file->f_ra.ra_pages = 0;
-
-        /* File with no objects, nothing to lock */
-        if (!lsm) {
-                rc = generic_file_splice_read(in_file, ppos, pipe, count, flags);
-                RETURN(rc);
-        }
-
-        node = ll_node_from_inode(inode, *ppos, *ppos + count - 1, LCK_PR);
-        if (IS_ERR(node))
-                RETURN(PTR_ERR(node));
-
-        tree.lt_fd = LUSTRE_FPRIVATE(in_file);
-        rc = ll_tree_lock(&tree, node, NULL, count,
-                          in_file->f_flags & O_NONBLOCK?LDLM_FL_BLOCK_NOWAIT:0);
-        if (rc != 0)
-                RETURN(rc);
-
-        ll_clear_file_contended(inode);
-        ll_inode_size_lock(inode, 1);
-        /*
-         * Consistency guarantees: following possibilities exist for the
-         * relation between region being read and real file size at this
-         * moment:
-         *
-         *  (A): the region is completely inside of the file;
-         *
-         *  (B-x): x bytes of region are inside of the file, the rest is
-         *  outside;
-         *
-         *  (C): the region is completely outside of the file.
-         *
-         * This classification is stable under DLM lock acquired by
-         * ll_tree_lock() above, because to change class, other client has to
-         * take DLM lock conflicting with our lock. Also, any updates to
-         * ->i_size by other threads on this client are serialized by
-         * ll_inode_size_lock(). This guarantees that short reads are handled
-         * correctly in the face of concurrent writes and truncates.
-         */
-        inode_init_lvb(inode, &lvb);
-        obd_merge_lvb(ll_i2sbi(inode)->ll_osc_exp, lsm, &lvb, 1);
-        kms = lvb.lvb_size;
-        if (*ppos + count - 1 > kms) {
-                /* A glimpse is necessary to determine whether we return a
-                 * short read (B) or some zeroes at the end of the buffer (C) */
-                ll_inode_size_unlock(inode, 1);
-                rc = ll_glimpse_size(inode, LDLM_FL_BLOCK_GRANTED);
-                if (rc)
-                        goto out;
-        } else {
-                /* region is within kms and, hence, within real file size (A) */
-                i_size_write(inode, kms);
-                ll_inode_size_unlock(inode, 1);
-        }
-
-        CDEBUG(D_INFO, "Send ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
-               inode->i_ino, count, *ppos, i_size_read(inode));
-
-        ll_ra_read_init(in_file, &bead, *ppos, count);
-        /* BUG: 5972 */
-        file_accessed(in_file);
-        rc = generic_file_splice_read(in_file, ppos, pipe, count, flags);
-        ll_ra_read_ex(in_file, &bead);
-
- out:
-        ll_tree_unlock(&tree);
-        RETURN(rc);
-}
-#endif
 
 static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
                                unsigned long arg)
@@ -2447,7 +2337,7 @@ static int ll_file_join(struct inode *head, struct file *filp,
         struct file *tail_filp, *first_filp, *second_filp;
         struct ll_lock_tree first_tree, second_tree;
         struct ll_lock_tree_node *first_node, *second_node;
-        struct ll_inode_info *hlli = ll_i2info(head);
+        struct ll_inode_info *hlli = ll_i2info(head), *tlli;
         int rc = 0, cleanup_phase = 0;
         ENTRY;
 
@@ -2462,6 +2352,7 @@ static int ll_file_join(struct inode *head, struct file *filp,
         }
         tail = igrab(tail_filp->f_dentry->d_inode);
 
+        tlli = ll_i2info(tail);
         tail_dentry = tail_filp->f_dentry;
         LASSERT(tail_dentry);
         cleanup_phase = 1;
@@ -3204,11 +3095,7 @@ int lustre_check_acl(struct inode *inode, int mask)
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10))
-#ifndef HAVE_INODE_PERMISION_2ARGS
 int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
-#else
-int ll_inode_permission(struct inode *inode, int mask)
-#endif
 {
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), mask %o\n",
                inode->i_ino, inode->i_generation, inode, mask);
@@ -3217,7 +3104,7 @@ int ll_inode_permission(struct inode *inode, int mask)
         return generic_permission(inode, mask, lustre_check_acl);
 }
 #else
-#ifndef HAVE_INODE_PERMISION_2ARGS
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
 int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
 #else
 int ll_inode_permission(struct inode *inode, int mask)
@@ -3287,12 +3174,7 @@ struct file_operations ll_file_operations = {
         .release        = ll_file_release,
         .mmap           = ll_file_mmap,
         .llseek         = ll_file_seek,
-#ifdef HAVE_KERNEL_SPLICE_READ
-        .splice_read    = ll_file_splice_read,
-#endif
-#ifdef HAVE_KERNEL_SENDFILE
         .sendfile       = ll_file_sendfile,
-#endif
         .fsync          = ll_fsync,
 };
 
@@ -3314,12 +3196,7 @@ struct file_operations ll_file_operations_flock = {
         .release        = ll_file_release,
         .mmap           = ll_file_mmap,
         .llseek         = ll_file_seek,
-#ifdef HAVE_KERNEL_SPLICE_READ
-        .splice_read    = ll_file_splice_read,
-#endif
-#ifdef HAVE_KERNEL_SENDFILE
         .sendfile       = ll_file_sendfile,
-#endif
         .fsync          = ll_fsync,
 #ifdef HAVE_F_OP_FLOCK
         .flock          = ll_file_flock,
@@ -3346,12 +3223,7 @@ struct file_operations ll_file_operations_noflock = {
         .release        = ll_file_release,
         .mmap           = ll_file_mmap,
         .llseek         = ll_file_seek,
-#ifdef HAVE_KERNEL_SPLICE_READ
-        .splice_read    = ll_file_splice_read,
-#endif
-#ifdef HAVE_KERNEL_SENDFILE
         .sendfile       = ll_file_sendfile,
-#endif
         .fsync          = ll_fsync,
 #ifdef HAVE_F_OP_FLOCK
         .flock          = ll_file_noflock,

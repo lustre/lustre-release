@@ -101,12 +101,11 @@ ldlm_flock_destroy(struct ldlm_lock *lock, ldlm_mode_t mode, int flags)
         LASSERT(list_empty(&lock->l_flock_waitq));
 
         list_del_init(&lock->l_res_link);
-        if (flags == LDLM_FL_WAIT_NOREPROC &&
-            !(lock->l_flags & LDLM_FL_FAILED)) {
+        if (flags == LDLM_FL_WAIT_NOREPROC) {
                 /* client side - set a flag to prevent sending a CANCEL */
                 lock->l_flags |= LDLM_FL_LOCAL_ONLY | LDLM_FL_CBPENDING;
 
-                /* when reaching here, it is under lock_res_and_lock(). Thus,
+                /* when reaching here, it is under lock_res_and_lock(). Thus, 
                    need call the nolock version of ldlm_lock_decref_internal*/
                 ldlm_lock_decref_internal_nolock(lock, mode);
         }
@@ -371,8 +370,7 @@ reprocess:
                                         NULL, 0);
                         lock_res_and_lock(req);
                         if (!new2) {
-                                ldlm_flock_destroy(req, lock->l_granted_mode,
-                                                   *flags);
+                                ldlm_flock_destroy(req, lock->l_granted_mode, *flags);
                                 *err = -ENOLCK;
                                 RETURN(LDLM_ITER_STOP);
                         }
@@ -393,15 +391,14 @@ reprocess:
                 new2->l_conn_export = lock->l_conn_export;
                 if (lock->l_export != NULL) {
                         new2->l_export = class_export_get(lock->l_export);
-                        if (new2->l_export->exp_lock_hash &&
+                        if (new2->l_export->exp_lock_hash && 
                             hlist_unhashed(&new2->l_exp_hash))
                                 lustre_hash_add(new2->l_export->exp_lock_hash,
                                                 &new2->l_remote_handle,
                                                 &new2->l_exp_hash);
                 }
                 if (*flags == LDLM_FL_WAIT_NOREPROC)
-                        ldlm_lock_addref_internal_nolock(new2,
-                                                         lock->l_granted_mode);
+                        ldlm_lock_addref_internal_nolock(new2, lock->l_granted_mode);
 
                 /* insert new2 at lock */
                 ldlm_resource_add_lock(res, ownlocks, new2);
@@ -426,7 +423,7 @@ reprocess:
         if (*flags != LDLM_FL_WAIT_NOREPROC) {
                 if (first_enq) {
                         /* If this is an unlock, reprocess the waitq and
-                         * send completions ASTs for locks that can now be
+                         * send completions ASTs for locks that can now be 
                          * granted. The only problem with doing this
                          * reprocessing here is that the completion ASTs for
                          * newly granted locks will be sent before the unlock
@@ -436,7 +433,7 @@ reprocess:
                          * ldlm_reprocess_queue. */
                         if ((mode == LCK_NL) && overlaps) {
                                 struct list_head rpc_list
-                                                 = CFS_LIST_HEAD_INIT(rpc_list);
+                                                    = CFS_LIST_HEAD_INIT(rpc_list);
                                 int rc;
 restart:
                                 ldlm_reprocess_queue(res, &res->lr_waiting,
@@ -497,26 +494,17 @@ ldlm_flock_interrupted_wait(void *data)
         EXIT;
 }
 
-/**
- * Flock completion calback function.
- *
- * \param lock [in,out]: A lock to be handled
- * \param flags    [in]: flags
- * \param *data    [in]: ldlm_run_cp_ast_work() will use ldlm_cb_set_arg
- *
- * \retval 0    : success
- * \retval <0   : failure
- */
 int
 ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 {
-        cfs_flock_t                    *getlk = lock->l_ast_data;
-        struct obd_device              *obd;
-        struct obd_import              *imp = NULL;
-        struct ldlm_flock_wait_data     fwd;
-        struct l_wait_info              lwi;
-        ldlm_error_t                    err;
-        int                             rc = 0;
+        struct ldlm_namespace *ns;
+        cfs_flock_t *getlk = lock->l_ast_data;
+        struct ldlm_flock_wait_data fwd;
+        struct obd_device *obd;
+        struct obd_import *imp = NULL;
+        ldlm_error_t err;
+        int rc = 0;
+        struct l_wait_info lwi;
         ENTRY;
 
         CDEBUG(D_DLMTRACE, "flags: 0x%x data: %p getlk: %p\n",
@@ -527,12 +515,11 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
          * holding the lock even if app still believes it has it, since
          * server already dropped it anyway. Only for granted locks too. */
         lock_res_and_lock(lock);
-        if ((lock->l_flags & (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) ==
+        if ((lock->l_flags & (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) == 
             (LDLM_FL_FAILED|LDLM_FL_LOCAL_ONLY)) {
                 unlock_res_and_lock(lock);
                 if (lock->l_req_mode == lock->l_granted_mode &&
-                    lock->l_granted_mode != LCK_NL &&
-                    NULL == data)
+                    lock->l_granted_mode != LCK_NL)
                         ldlm_lock_decref_internal(lock, lock->l_req_mode);
                 RETURN(0);
         }
@@ -541,25 +528,20 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         LASSERT(flags != LDLM_FL_WAIT_NOREPROC);
 
         if (!(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
-                       LDLM_FL_BLOCK_CONV))) {
-                if (NULL == data)
-                        /* mds granted the lock in the reply */
-                        goto granted;
-                /* CP AST RPC: lock get granted, wake it up */
-                cfs_waitq_signal(&lock->l_waitq);
-                RETURN(0);
-        }
+                       LDLM_FL_BLOCK_CONV)))
+                goto  granted;
 
         LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock, "
                    "sleeping");
+
         fwd.fwd_lock = lock;
         obd = class_exp2obd(lock->l_conn_export);
 
-        /* if this is a local lock, there is no import */
-        if (NULL != obd)
+        /* if this is a local lock, then there is no import */
+        if (obd != NULL)
                 imp = obd->u.cli.cl_import;
 
-        if (NULL != imp) {
+        if (imp != NULL) {
                 spin_lock(&imp->imp_lock);
                 fwd.fwd_generation = imp->imp_generation;
                 spin_unlock(&imp->imp_lock);
@@ -568,31 +550,27 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         lwi = LWI_TIMEOUT_INTR(0, NULL, ldlm_flock_interrupted_wait, &fwd);
 
         /* Go to sleep until the lock is granted. */
-        rc = l_wait_event(lock->l_waitq, is_granted_or_cancelled(lock), &lwi);
+        rc = l_wait_event(lock->l_waitq,
+                          ((lock->l_req_mode == lock->l_granted_mode) ||
+                           lock->l_destroyed), &lwi);
 
-        if (rc) {
-                LDLM_DEBUG(lock, "client-side enqueue waking up: failed (%d)",
-                           rc);
-                RETURN(rc);
-        }
-
+        LDLM_DEBUG(lock, "client-side enqueue waking up: rc = %d", rc);
+        RETURN(rc);
+ 
 granted:
         OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT, 10);
-
-        lock_res_and_lock(lock);
-        if (lock->l_destroyed || lock->l_flags & LDLM_FL_FAILED) {
-                LDLM_DEBUG(lock, "client-side enqueue waking up: destroyed");
-                unlock_res_and_lock(lock);
-                RETURN(-EIO);
-        }
-        if (rc) {
-                LDLM_DEBUG(lock, "client-side enqueue waking up: failed (%d)",
-                           rc);
-                unlock_res_and_lock(lock);
-                RETURN(rc);
-        }
-
         LDLM_DEBUG(lock, "client-side enqueue granted");
+        ns = lock->l_resource->lr_namespace;
+        lock_res_and_lock(lock);
+
+        /* before flock's complete ast gets here, the flock
+         * can possibly be freed by another thread
+         */
+        if (lock->l_destroyed) {
+                LDLM_DEBUG(lock, "already destroyed by another thread");
+                unlock_res_and_lock(lock);
+                RETURN(0);
+        }
 
         /* take lock off the deadlock detection waitq. */
         spin_lock(&ldlm_flock_waitq_lock);
@@ -605,9 +583,8 @@ granted:
         if (flags & LDLM_FL_TEST_LOCK) {
                 /* fcntl(F_GETLK) request */
                 /* The old mode was saved in getlk->fl_type so that if the mode
-                 * in the lock changes we can decref the appropriate refcount.*/
-                ldlm_flock_destroy(lock, cfs_flock_type(getlk),
-                                   LDLM_FL_WAIT_NOREPROC);
+                 * in the lock changes we can decref the approprate refcount. */
+                ldlm_flock_destroy(lock, cfs_flock_type(getlk), LDLM_FL_WAIT_NOREPROC);
                 switch (lock->l_granted_mode) {
                 case LCK_PR:
                         cfs_flock_set_type(getlk, F_RDLCK);
@@ -618,18 +595,17 @@ granted:
                 default:
                         cfs_flock_set_type(getlk, F_UNLCK);
                 }
-                cfs_flock_set_pid(getlk,
-                                  (pid_t)lock->l_policy_data.l_flock.pid);
-                cfs_flock_set_start(getlk,
-                                    (loff_t)lock->l_policy_data.l_flock.start);
-                cfs_flock_set_end(getlk,
-                                  (loff_t)lock->l_policy_data.l_flock.end);
+                cfs_flock_set_pid(getlk, (pid_t)lock->l_policy_data.l_flock.pid);
+                cfs_flock_set_start(getlk, (loff_t)lock->l_policy_data.l_flock.start);
+                cfs_flock_set_end(getlk, (loff_t)lock->l_policy_data.l_flock.end);
         } else {
                 int noreproc = LDLM_FL_WAIT_NOREPROC;
 
                 /* We need to reprocess the lock to do merges or splits
                  * with existing locks owned by this process. */
                 ldlm_process_flock_lock(lock, &noreproc, 1, &err, NULL);
+                if (flags == 0)
+                        cfs_waitq_signal(&lock->l_waitq);
         }
         unlock_res_and_lock(lock);
         RETURN(0);

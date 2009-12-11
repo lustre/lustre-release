@@ -87,7 +87,7 @@ do {                                            \
 	(dest)->st_blocks  = (src)->st_blocks;  \
 	(dest)->st_flags   = (src)->st_flags;   \
 	(dest)->st_gen     = (src)->st_gen;     \
-} while (0)
+} while (0);
 
 #else 
 #define _sysio_native_stat intnl_stat

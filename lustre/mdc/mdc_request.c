@@ -509,9 +509,6 @@ static void mdc_commit_open(struct ptlrpc_request *req)
         if (mod == NULL)
                 return;
 
-        if (mod->mod_close_req != NULL)
-                mod->mod_close_req->rq_cb_data = NULL;
-
         if (mod->mod_och != NULL)
                 mod->mod_och->och_mod = NULL;
 
@@ -538,7 +535,7 @@ static void mdc_replay_open(struct ptlrpc_request *req)
                 EXIT;
                 return;
         }
-        DEBUG_REQ(D_HA, req, "mdc open data found");
+        DEBUG_REQ(D_ERROR, req, "mdc open data found");
 
         och = mod->mod_och;
         if (och != NULL) {
@@ -629,6 +626,36 @@ void mdc_clear_open_replay_data(struct obd_client_handle *och)
         och->och_mod = NULL;
 }
 
+static void mdc_commit_close(struct ptlrpc_request *req)
+{
+        struct mdc_open_data *mod = req->rq_cb_data;
+        struct ptlrpc_request *open_req;
+        struct obd_import *imp = req->rq_import;
+
+        DEBUG_REQ(D_RPCTRACE, req, "close req committed");
+        if (mod == NULL)
+                return;
+
+        mod->mod_close_req = NULL;
+        req->rq_cb_data = NULL;
+        req->rq_commit_cb = NULL;
+
+        open_req = mod->mod_open_req;
+        LASSERT(open_req != NULL);
+        LASSERT(open_req != LP_POISON);
+        LASSERT(open_req->rq_type != LI_POISON);
+
+        DEBUG_REQ(D_RPCTRACE, open_req, "open req balanced");
+        LASSERT(open_req->rq_transno != 0);
+        LASSERT(open_req->rq_import == imp);
+
+        /* We no longer want to preserve this for transno-unconditional
+         * replay. */
+        spin_lock(&open_req->rq_lock);
+        open_req->rq_replay = 0;
+        spin_unlock(&open_req->rq_lock);
+}
+
 int mdc_close(struct obd_export *exp, struct obdo *oa,
               struct obd_client_handle *och, struct ptlrpc_request **request)
 {
@@ -641,6 +668,7 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
                                obd->u.cli.cl_max_mds_cookiesize };
         int rc;
         struct ptlrpc_request *req;
+        struct mdc_open_data *mod;
         ENTRY;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
@@ -657,25 +685,17 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         /* Ensure that this close's handle is fixed up during replay. */
         LASSERT(och != NULL);
         LASSERT(och->och_magic == OBD_CLIENT_HANDLE_MAGIC);
-        if (likely(och->och_mod != NULL)) {
-                struct ptlrpc_request *open_req = och->och_mod->mod_open_req;;
-
-                if (open_req->rq_type == LI_POISON) {
-                        CERROR("LBUG POISONED open %p!\n", open_req);
+        mod = och->och_mod;
+        if (likely(mod != NULL)) {
+                if (mod->mod_open_req->rq_type == LI_POISON) {
+                        CERROR("LBUG POISONED open %p!\n", mod->mod_open_req);
                         LBUG();
                         ptlrpc_req_finished(req);
                         req = NULL;
                         GOTO(out, rc = -EIO);
                 }
-                och->och_mod->mod_close_req = req;
-                DEBUG_REQ(D_RPCTRACE, req, "close req");
-                DEBUG_REQ(D_RPCTRACE, open_req, "clear open replay");
-
-                /* We no longer want to preserve this open for replay even
-                 * though the open was committed. b=3632, b=3633 */
-                spin_lock(&open_req->rq_lock);
-                open_req->rq_replay = 0;
-                spin_unlock(&open_req->rq_lock);
+                mod->mod_close_req = req;
+                DEBUG_REQ(D_RPCTRACE, mod->mod_open_req, "matched open");
         } else {
                 CDEBUG(D_RPCTRACE, "couldn't find open req; expecting error\n");
         }
@@ -683,6 +703,9 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         mdc_close_pack(req, REQ_REC_OFF, oa, oa->o_valid, och);
 
         ptlrpc_req_set_repsize(req, 4, repsize);
+        req->rq_commit_cb = mdc_commit_close;
+        LASSERT(req->rq_cb_data == NULL);
+        req->rq_cb_data = mod;
 
         mdc_get_rpc_lock(obd->u.cli.cl_close_lock, NULL);
         rc = ptlrpc_queue_wait(req);
@@ -700,7 +723,7 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
                                   "= %d", rc);
                         if (rc > 0)
                                 rc = -rc;
-                } else if (och->och_mod == NULL) {
+                } else if (mod == NULL) {
                         CERROR("Unexpected: can't find mdc_open_data, but the "
                                "close succeeded.  Please tell <http://bugzilla.lustre.org/>.\n");
                 }
@@ -715,8 +738,8 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         EXIT;
         *request = req;
  out:
-        if (rc != 0 && req && req->rq_commit_cb)
-                req->rq_commit_cb(req);
+        if (rc != 0 && och->och_mod)
+                och->och_mod->mod_close_req = NULL;
 
         return rc;
 }
@@ -847,9 +870,6 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_POLL_QUOTACHECK:
                 rc = lquota_poll_check(quota_interface, exp,
                                        (struct if_quotacheck *)karg);
-                GOTO(out, rc);
-        case OBD_IOC_PING_TARGET:
-                rc = ptlrpc_obd_ping(obd);
                 GOTO(out, rc);
         default:
                 CERROR("mdc_ioctl(): unrecognised ioctl %#x\n", cmd);

@@ -111,7 +111,7 @@ LB_LINUX_TRY_COMPILE([
 		RHEL_KENEL="yes"
 		AC_MSG_RESULT([yes])
 	],[
-	        AC_MSG_RESULT([no])
+		AC_MSG_RESULT([no])
 ])
 
 AC_MSG_CHECKING([that SuSe kernel])
@@ -125,7 +125,7 @@ LB_LINUX_TRY_COMPILE([
 		SUSE_KERNEL="yes"
 		AC_MSG_RESULT([yes])
 	],[
-	        AC_MSG_RESULT([no])
+		AC_MSG_RESULT([no])
 ])
 
 ])
@@ -141,13 +141,7 @@ AC_DEFUN([LB_LINUX_PATH],
 AC_ARG_WITH([linux],
 	AC_HELP_STRING([--with-linux=path],
 		       [set path to Linux source (default=/usr/src/linux)]),
-	[
-		if ! [[[ $with_linux = /* ]]]; then
-			AC_MSG_ERROR([You must provide an absolute pathname to the --with-linux= option.])
-		else
-			LINUX=$with_linux
-		fi
-	],
+	[LINUX=$with_linux],
 	[LINUX=/usr/src/linux])
 AC_MSG_RESULT([$LINUX])
 AC_SUBST(LINUX)
@@ -305,7 +299,7 @@ if test -e $LINUX/include/asm-um ; then
 		UML_CFLAGS='-O0'
 		AC_MSG_RESULT(yes)
     	else
-		AC_MSG_RESULT([no])
+		AC_MSG_RESULT([no (asm doesn't point at asm-um)])
 	fi
 else
 	AC_MSG_RESULT([no (asm-um missing)])
@@ -468,12 +462,21 @@ AC_DEFUN([LB_PROG_LINUX],
 LB_LINUX_ARCH
 LB_LINUX_SYMVERFILE
 
+#if test $LINUX_ARCH == "powerpc64"; then
+#	AC_MSG_WARN([set compiler with -m64])
+#	CFLAGS="$CFLAGS -m64"
+#	CC="$CC -m64"
+#fi
 
 LB_LINUX_CONFIG([MODULES],[],[
 	AC_MSG_ERROR([module support is required to build Lustre kernel modules.])
 ])
 
 LB_LINUX_CONFIG([MODVERSIONS])
+
+LB_LINUX_CONFIG([PREEMPT],[
+	AC_MSG_ERROR([Lustre does not support kernels with preempt enabled.])
+])
 
 LB_LINUX_CONFIG([KALLSYMS],[],[
 if test "x$ARCH_UM" = "x" ; then
@@ -503,16 +506,16 @@ AC_DEFUN([LB_LINUX_CONDITIONALS],
 
 #
 # LB_CHECK_SYMBOL_EXPORT
-# check symbol exported or not 
+# check symbol exported or not
 # $1 - symbol
 # $2 - file(s) for find.
 # $3 - do 'yes'
 # $4 - do 'no'
 #
 # 2.6 based kernels - put modversion info into $LINUX/Module.modvers
-# or check 
+# or check
 AC_DEFUN([LB_CHECK_SYMBOL_EXPORT],
-[AC_MSG_CHECKING([if Linux was built with symbol $1 exported])
+[AC_MSG_CHECKING([if Linux was built with symbol $1 is exported])
 grep -q -E '[[[:space:]]]$1[[[:space:]]]' $LINUX/$SYMVERFILE 2>/dev/null
 rc=$?
 if test $rc -ne 0; then

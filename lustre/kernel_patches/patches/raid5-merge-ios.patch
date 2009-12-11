@@ -1,10 +1,10 @@
 Merge IO requests to try and get larger requests on underlying drives.
 
-Index: linux-2.6.9/drivers/md/raid5.c
+Index: linux-2.6.9-78.0.22/drivers/md/raid5.c
 ===================================================================
---- linux-2.6.9.orig/drivers/md/raid5.c	2006-05-22 00:10:04.000000000 +0400
-+++ linux-2.6.9/drivers/md/raid5.c	2006-05-22 00:10:06.000000000 +0400
-@@ -934,6 +934,26 @@ static void add_stripe_bio (struct strip
+--- linux-2.6.9-78.0.22.orig/drivers/md/raid5.c	2009-05-11 23:23:22.000000000 -0600
++++ linux-2.6.9-78.0.22/drivers/md/raid5.c	2009-05-11 23:23:25.000000000 -0600
+@@ -852,6 +852,26 @@
  	}
  }
  
@@ -31,7 +31,7 @@ Index: linux-2.6.9/drivers/md/raid5.c
  
  /*
   * handle_stripe - do things to a stripe.
-@@ -953,7 +973,7 @@ static void add_stripe_bio (struct strip
+@@ -871,7 +891,7 @@
   *
   */
   
@@ -40,7 +40,7 @@ Index: linux-2.6.9/drivers/md/raid5.c
  {
  	raid5_conf_t *conf = sh->raid_conf;
  	int disks = conf->raid_disks;
-@@ -1376,7 +1396,11 @@ static void handle_stripe(struct stripe_
+@@ -1291,7 +1311,11 @@
  			bi->bi_size = STRIPE_SIZE;
  			bi->bi_next = NULL;
  			atomic_inc(&conf->out_reqs_in_queue);
@@ -53,23 +53,23 @@ Index: linux-2.6.9/drivers/md/raid5.c
  		} else {
  			PRINTK("skip op %ld on disc %d for sector %llu\n",
  				bi->bi_rw, i, (unsigned long long)sh->sector);
-@@ -1501,6 +1525,7 @@ static int make_request (request_queue_t
+@@ -1416,6 +1440,7 @@
  	int sectors_per_chunk = conf->chunk_size >> 9;
  	int stripes_per_chunk, sectors_per_block;
  	int sectors_per_stripe;
 +	struct bio *bios[MD_SB_DISKS];
  	int i, j;
  
- 	atomic_inc(&conf->in_reqs_in_queue);
-@@ -1530,6 +1555,7 @@ static int make_request (request_queue_t
+ 	if (unlikely(bio_barrier(bi))) {
+@@ -1450,6 +1475,7 @@
  	sector_div(block, sectors_per_block);
  	sectors = bi->bi_size >> 9;
  
 +	memset(&bios, 0, sizeof(bios));
  repeat:
- 	stripe = block * sectors_per_block / data_disks;
+ 	stripe = block * (sectors_per_block / data_disks);
  	b_sector = stripe * data_disks;
-@@ -1549,9 +1575,17 @@ repeat:
+@@ -1469,9 +1495,17 @@
  			new_sector = raid5_compute_sector(r_sector, raid_disks,
  							data_disks, &dd_idx, 
  							&pd_idx, conf);
@@ -90,7 +90,7 @@ Index: linux-2.6.9/drivers/md/raid5.c
  			if (sh) {
  				add_stripe_bio(sh, bi, dd_idx, (bi->bi_rw&RW_MASK));
  			} else {
-@@ -1571,7 +1605,7 @@ repeat:
+@@ -1491,7 +1525,7 @@
  		}
  		if (sh) {
  			raid5_plug_device(conf);
@@ -99,7 +99,7 @@ Index: linux-2.6.9/drivers/md/raid5.c
  			release_stripe(sh);
  			sh = NULL;
  		}
-@@ -1581,6 +1615,9 @@ repeat:
+@@ -1501,6 +1535,9 @@
  	if (sectors > 0)
  		goto repeat;
  
@@ -109,7 +109,7 @@ Index: linux-2.6.9/drivers/md/raid5.c
  	spin_lock_irq(&conf->device_lock);
  	if (--bi->bi_phys_segments == 0) {
  		int bytes = bi->bi_size;
-@@ -1636,7 +1673,7 @@ static int sync_request (mddev_t *mddev,
+@@ -1556,7 +1593,7 @@
  	clear_bit(STRIPE_INSYNC, &sh->state);
  	spin_unlock(&sh->lock);
  
@@ -118,7 +118,7 @@ Index: linux-2.6.9/drivers/md/raid5.c
  	release_stripe(sh);
  
  	return STRIPE_SECTORS;
-@@ -1685,7 +1722,7 @@ static void raid5d (mddev_t *mddev)
+@@ -1605,7 +1642,7 @@
  		
  		handled++;
  		atomic_inc(&conf->handled_in_raid5d);

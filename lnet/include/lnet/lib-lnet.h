@@ -567,8 +567,7 @@ lnet_net2ni (__u32 net)
         return ni;
 }
 
-int lnet_notify(lnet_ni_t *ni, lnet_nid_t peer, int alive, cfs_time_t when);
-void lnet_notify_locked(lnet_peer_t *lp, int notifylnd, int alive, cfs_time_t when);
+int lnet_notify(lnet_ni_t *ni, lnet_nid_t peer, int alive, time_t when);
 int lnet_add_route(__u32 net, unsigned int hops, lnet_nid_t gateway_nid);
 int lnet_check_routes(void);
 int lnet_del_route(__u32 net, lnet_nid_t gw_nid);
@@ -689,8 +688,6 @@ int lnet_count_acceptor_nis(lnet_ni_t **first_ni);
 int lnet_accept(lnet_ni_t *blind_ni, cfs_socket_t *sock, __u32 magic);
 int lnet_acceptor_timeout(void);
 int lnet_acceptor_port(void);
-#else
-void lnet_router_checker(void);
 #endif
 
 #ifdef HAVE_LIBPTHREAD
@@ -701,14 +698,9 @@ int lnet_acceptor_port(void);
 int lnet_acceptor_start(void);
 void lnet_acceptor_stop(void);
 
-void lnet_get_tunables(void);
 int lnet_peers_start_down(void);
-int lnet_peer_buffer_credits(lnet_ni_t *ni);
-
 int lnet_router_checker_start(void);
 void lnet_router_checker_stop(void);
-void lnet_swap_pinginfo(lnet_ping_info_t *info);
-int lnet_router_down_ni(lnet_peer_t *rtr, __u32 net);
 
 int lnet_ping_target_init(void);
 void lnet_ping_target_fini(void);

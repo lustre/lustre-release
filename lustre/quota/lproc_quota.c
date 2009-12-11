@@ -411,14 +411,8 @@ int lprocfs_quota_wr_type(struct file *file, const char *buffer,
                 }
         }
 
-        if (type != 0) {
-                int rc = auto_quota_on(obd, type - 1, obt->obt_sb, is_mds);
-
-                if (rc == 0)
-                        build_lqs(obd);
-                else if (rc != -EALREADY)
-                        return rc;
-        }
+        if (type != 0)
+                auto_quota_on(obd, type - 1, obt->obt_sb, is_mds);
 
         return count;
 }

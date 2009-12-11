@@ -113,7 +113,7 @@ int lov_update_common_set(struct lov_request_set *set,
         lov_update_set(set, req, rc);
 
         /* grace error on inactive ost */
-        if (rc && !(lov->lov_tgts[req->rq_idx] &&
+        if (rc && !(lov->lov_tgts[req->rq_idx] && 
                     lov->lov_tgts[req->rq_idx]->ltd_active))
                 rc = 0;
 
@@ -734,8 +734,6 @@ int lov_prep_create_set(struct obd_export *exp, struct obd_info *oinfo,
         set->set_oti = oti;
 
         rc = qos_prep_create(exp, set);
-        /* qos_shrink_lsm() may have allocated a new lsm */
-        *lsmp = oinfo->oi_md;
         if (rc)
                 lov_fini_create_set(set, lsmp);
         else
@@ -876,7 +874,7 @@ int lov_prep_brw_set(struct obd_export *exp, struct obd_info *oinfo,
                         continue;
 
                 loi = oinfo->oi_md->lsm_oinfo[i];
-                if (!lov->lov_tgts[loi->loi_ost_idx] ||
+                if (!lov->lov_tgts[loi->loi_ost_idx] || 
                     !lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
                         GOTO(out, rc = -EIO);
@@ -1017,7 +1015,6 @@ int lov_prep_getattr_set(struct obd_export *exp, struct obd_info *oinfo,
                        sizeof(*req->rq_oi.oi_oa));
                 req->rq_oi.oi_oa->o_id = loi->loi_id;
                 req->rq_oi.oi_cb_up = cb_getattr_update;
-                req->rq_rqset = set;
 
                 lov_set_add_req(req, set);
         }
@@ -1075,7 +1072,7 @@ int lov_prep_destroy_set(struct obd_export *exp, struct obd_info *oinfo,
                 struct lov_request *req;
 
                 loi = lsm->lsm_oinfo[i];
-                if (!lov->lov_tgts[loi->loi_ost_idx] ||
+                if (!lov->lov_tgts[loi->loi_ost_idx] || 
                     !lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
                         continue;
@@ -1134,7 +1131,7 @@ int lov_update_setattr_set(struct lov_request_set *set,
         lov_update_set(set, req, rc);
 
         /* grace error on inactive ost */
-        if (rc && !(lov->lov_tgts[req->rq_idx] &&
+        if (rc && !(lov->lov_tgts[req->rq_idx] && 
                     lov->lov_tgts[req->rq_idx]->ltd_active))
                 rc = 0;
 
@@ -1433,7 +1430,6 @@ int lov_prep_sync_set(struct obd_export *exp, struct obd_info *oinfo,
                 req->rq_oi.oi_policy.l_extent.start = rs;
                 req->rq_oi.oi_policy.l_extent.end = re;
                 req->rq_oi.oi_policy.l_extent.gid = -1;
-                req->rq_rqset = set;
 
                 lov_set_add_req(req, set);
         }
@@ -1565,7 +1561,7 @@ void lov_update_statfs(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
 }
 
 /* The callback for osc_statfs_async that finilizes a request info when a
- * response is received. */
+ * response is recieved. */
 static int cb_statfs_update(struct obd_info *oinfo, int rc)
 {
         struct lov_request *lovreq;
@@ -1583,15 +1579,15 @@ static int cb_statfs_update(struct obd_info *oinfo, int rc)
         lov_sfs = oinfo->oi_osfs;
 
         success = lovreq->rq_rqset->set_success;
+
         /* XXX: the same is done in lov_update_common_set, however
            lovset->set_exp is not initialized. */
         lov_update_set(lovreq->rq_rqset, lovreq, rc);
         if (rc) {
-                /* XXX ignore error for disconnected ost ? */
                 if (rc && !(lov->lov_tgts[lovreq->rq_idx] &&
                             lov->lov_tgts[lovreq->rq_idx]->ltd_active))
                         rc = 0;
-                GOTO(out, rc);
+                RETURN(rc);
         }
 
         spin_lock(&obd->obd_osfs_lock);
@@ -1602,14 +1598,6 @@ static int cb_statfs_update(struct obd_info *oinfo, int rc)
 
         lov_update_statfs(osfs, lov_sfs, success);
         qos_update(lov);
-out:
-        if (lovreq->rq_rqset->set_oi->oi_flags & OBD_STATFS_PTLRPCD &&
-            lovreq->rq_rqset->set_count == lovreq->rq_rqset->set_completes) {
-               lov_statfs_interpret(NULL, lovreq->rq_rqset,
-                                    lovreq->rq_rqset->set_success !=
-                                                  lovreq->rq_rqset->set_count);
-               qos_statfs_done(lov);
-        }
 
         RETURN(0);
 }
@@ -1634,8 +1622,7 @@ int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 struct lov_request *req;
 
-                if (!lov->lov_tgts[i] || (!lov->lov_tgts[i]->ltd_active
-                                          && (oinfo->oi_flags & OBD_STATFS_NODELAY))) {
+                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", i);
                         continue;
                 }

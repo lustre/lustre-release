@@ -37,8 +37,8 @@
 #ifndef __EXPORT_H
 #define __EXPORT_H
 
-#include <lustre_dlm.h>
 #include <lustre/lustre_idl.h>
+#include <lustre_dlm.h>
 #include <lprocfs_status.h>
 #include <class_hash.h>
 
@@ -80,6 +80,7 @@ struct filter_export_data {
         struct list_head           fed_mod_list; /* files being modified */
         int                        fed_mod_count;/* items in fed_writing list */
         long                       fed_pending;  /* bytes just being written */
+        struct brw_stats           fed_brw_stats;
 };
 
 typedef struct nid_stat_uuid {

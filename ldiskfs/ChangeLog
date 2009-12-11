@@ -1,53 +1,10 @@
-tbd  Sun Microsystems, Inc.
-        * version 3.1.1
-	
-
--------------------------------------------------------------------------------
-	
-2009-11-05  Sun Microsystems, Inc.
-	* version 3.1.0
-
-Severity   : normal
-Frequency  : in recovery
-Bugzilla   : 21031
-Description: ext3-corrupted-orphans-2.6.patch added.
-Details    : Backport of ext3 patch to handle corrupted orphans.
-
--------------------------------------------------------------------------------
-	
-2009-07-31  Sun Microsystems, Inc.
-	* version 3.0.9
-
-Severity   : minor
-Frequency  : in recovery
-Bugzilla   : 18192
-Description: don't mix llog inodes with normal.
-Details    : allocate inodes for log in last inode group
+TBD Sun Microsystems, Inc.
+        * version 3.0.7.3
 
 -------------------------------------------------------------------------------
 
-2009-04-20  Sun Microsystems, Inc.
-	* version 3.0.8
-
-Severity   : minor
-Bugzilla   : 16114
-Description: minor fixes and cleanups
-Details    : use EXT_UNSET_BLOCK to avoid confusion with EXT_MAX_BLOCK.
-	     Initialize 'ix' variable in extents patch to stop compiler warning.
-
-Severity   : feature
-Bugzilla   : 17942
-Description: update FIEMAP ioctl to match upstream kernel version
-Details    : the FIEMAP block-mapping ioctl had a prototype version in
-	     ldiskfs 3.0.7 but this release updates it to match the
-	     interface in the upstream kernel, with a new ioctl number.
-
-Severity   : normal
-Frequency  : only if MMP is active and detects filesystem is in use
-Bugzilla   : 18173
-Description: if MMP startup fails, an oops is triggered
-Details    : if ldiskfs mounting doesn't succeed the error handling doesn't
-	     clean up the MMP data correctly, causing an oops.
+2009-06-05 Sun Microsystems, Inc.
+        * version 3.0.7.2
 
 -------------------------------------------------------------------------------
 
@@ -88,14 +45,6 @@ Details    : The ldiskfs code is not tested on big-endian machines, and
 	     filesystems that might have been created in this way it is
 	     possible to mount with the "bigendian_extents" option to
 	     force the mount.
-
-Severity   : major
-Frequency  : only with software RAID-5
-Bugzilla   : 17895
-Description: MMP block reads may fail to detect another user of the filesystem
-Details    : with software RAID it is possible that the RAID driver will
-	     cache the MMP block and not refetch it from disk.  Force the
-	     read to invalidate the RAID page cache and go directly to disk.
 
 -------------------------------------------------------------------------------
 
@@ -142,7 +91,7 @@ Details    : FIEMAP ioctl will allow an application to efficiently fetch the
 
 Severity   : normal
 Bugzilla   : 17490
-Description: mkfs.lustre: Unable to mount /dev/cciss/c0d1:Cannot allocate memory
+Description: mkfs.lustre: Unable to mount /dev/cciss/c0d1: Cannot allocate memory
 Details    : correctly handle device paths using a subdirectory in /dev when
 	     creating the per-device procfs directory under /proc/fs/ldiskfs.
 

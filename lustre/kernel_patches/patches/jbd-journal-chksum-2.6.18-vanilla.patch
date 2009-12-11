@@ -38,7 +38,7 @@ Index: linux-2.6.18.8/fs/jbd/commit.c
  	int barrier_done = 0;
  
  	if (is_journal_aborted(journal))
-@@ -119,21 +124,35 @@ static int journal_write_commit_record(j
+@@ -119,21 +124,34 @@ static int journal_write_commit_record(j
  
  	bh = jh2bh(descriptor);
  
@@ -63,7 +63,6 @@ Index: linux-2.6.18.8/fs/jbd/commit.c
 -	JBUFFER_TRACE(descriptor, "write commit block");
 +	JBUFFER_TRACE(descriptor, "submit commit block");
 +	lock_buffer(bh);
-+	get_bh(bh);
 +
  	set_buffer_dirty(bh);
 -	if (journal->j_flags & JFS_BARRIER) {
@@ -188,7 +187,7 @@ Index: linux-2.6.18.8/fs/jbd/commit.c
  
  	/*
  	 * First job: lock down the current transaction and wait for
-@@ -439,39 +532,14 @@ void journal_commit_transaction(journal_
+@@ -439,38 +532,14 @@ void journal_commit_transaction(journal_
  	journal_submit_data_buffers(journal, commit_transaction);
  
  	/*
@@ -206,11 +205,10 @@ Index: linux-2.6.18.8/fs/jbd/commit.c
 -		if (buffer_locked(bh)) {
 -			spin_unlock(&journal->j_list_lock);
 -			wait_on_buffer(bh);
+-			if (unlikely(!buffer_uptodate(bh)))
+-				err = -EIO;
 -			spin_lock(&journal->j_list_lock);
 -		}
--		if (unlikely(!buffer_uptodate(bh)))
--			err = -EIO;
--
 -		if (!inverted_lock(journal, bh)) {
 -			put_bh(bh);
 -			spin_lock(&journal->j_list_lock);

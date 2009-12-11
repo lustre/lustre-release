@@ -436,7 +436,7 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
                  * must be just as careful as the service's request
                  * parser. Currently I only print stuff here I know is OK
                  * to look at coz it was set up in request_in_callback()!!! */
-                seq_printf(s, LPD64":%s:%s:x"LPU64":%d:%s:%ld:%lds(%+lds) ",
+                seq_printf(s, LPD64":%s:%s:x"LPD64":%d:%s:%ld:%lds(%+lds) ",
                            req->rq_history_seq, libcfs_nid2str(req->rq_self),
                            libcfs_id2str(req->rq_peer), req->rq_xid,
                            req->rq_reqlen, ptlrpc_rqphase2str(req),
@@ -688,12 +688,16 @@ int lprocfs_wr_ping(struct file *file, const char *buffer,
         ENTRY;
 
         LPROCFS_CLIMP_CHECK(obd);
-        req = ptlrpc_prep_ping(obd->u.cli.cl_import);
+        req = ptlrpc_prep_req(obd->u.cli.cl_import, LUSTRE_OBD_VERSION,
+                              OBD_PING, 1, NULL, NULL);
         LPROCFS_CLIMP_EXIT(obd);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
+        ptlrpc_req_set_repsize(req, 1, NULL);
         req->rq_send_state = LUSTRE_IMP_FULL;
+        req->rq_no_resend = 1;
+        req->rq_no_delay = 1;
 
         rc = ptlrpc_queue_wait(req);
 

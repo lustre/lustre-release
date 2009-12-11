@@ -57,8 +57,7 @@ static int checksum = 0;
 CFS_MODULE_PARM(checksum, "i", int, 0644,
                 "set non-zero to enable message (not RDMA) checksums");
 
-/* NB 250 is the Cray Portals wire timeout */
-static int timeout = 250;
+static int timeout = 50;
 CFS_MODULE_PARM(timeout, "i", int, 0644,
                 "timeout (seconds)");
 
@@ -86,10 +85,6 @@ static int peercredits = PTLLND_PEERCREDITS;    /* <lnet/ptllnd_wire.h> */
 CFS_MODULE_PARM(peercredits, "i", int, 0444,
                 "concurrent sends to 1 peer");
 
-static int peer_buffer_credits = 0;
-CFS_MODULE_PARM(peer_buffer_credits, "i", int, 0444,
-                "# per-peer router buffer credits");
-
 static int max_msg_size = PTLLND_MAX_KLND_MSG_SIZE;  /* <lnet/ptllnd_wire.h> */
 CFS_MODULE_PARM(max_msg_size, "i", int, 0444,
                 "max size of immediate message");
@@ -110,10 +105,6 @@ CFS_MODULE_PARM(ack_puts, "i", int, 0644,
 static int ptltrace_on_timeout = 0;
 CFS_MODULE_PARM(ptltrace_on_timeout, "i", int, 0644,
                 "dump ptltrace on timeout");
-
-static int ptltrace_on_fail = 1;
-CFS_MODULE_PARM(ptltrace_on_fail, "i", int, 0644,
-                "dump ptltrace on Portals failure");
 
 static char *ptltrace_basename = "/tmp/lnet-ptltrace";
 CFS_MODULE_PARM(ptltrace_basename, "s", charp, 0644,
@@ -137,15 +128,13 @@ kptl_tunables_t kptllnd_tunables = {
         .kptl_rxb_npages             = &rxb_npages,
         .kptl_rxb_nspare             = &rxb_nspare,
         .kptl_credits                = &credits,
-        .kptl_peertxcredits          = &peercredits,
-        .kptl_peerrtrcredits         = &peer_buffer_credits,
+        .kptl_peercredits            = &peercredits,
         .kptl_max_msg_size           = &max_msg_size,
         .kptl_peer_hash_table_size   = &peer_hash_table_size,
         .kptl_reschedule_loops       = &reschedule_loops,
         .kptl_ack_puts               = &ack_puts,
 #ifdef CRAY_XT3
         .kptl_ptltrace_on_timeout    = &ptltrace_on_timeout,
-        .kptl_ptltrace_on_fail       = &ptltrace_on_fail,
         .kptl_ptltrace_basename      = &ptltrace_basename,
 #endif
 #ifdef PJK_DEBUGGING
@@ -179,14 +168,12 @@ enum {
         KPTLLND_PID,
         KPTLLND_RXB_PAGES,
         KPTLLND_CREDITS,
-        KPTLLND_PEERTXCREDITS,
-        KPTLLND_PEERRTRCREDITS,
+        KPTLLND_PEERCREDITS,
         KPTLLND_MAX_MSG_SIZE,
         KPTLLND_PEER_HASH_SIZE,
         KPTLLND_RESHEDULE_LOOPS,
         KPTLLND_ACK_PUTS,
         KPTLLND_TRACETIMEOUT,
-        KPTLLND_TRACEFAIL,
         KPTLLND_TRACEBASENAME,
         KPTLLND_SIMULATION_BITMAP
 };
@@ -201,14 +188,12 @@ enum {
 #define KPTLLND_PID             CTL_UNNUMBERED
 #define KPTLLND_RXB_PAGES       CTL_UNNUMBERED
 #define KPTLLND_CREDITS         CTL_UNNUMBERED
-#define KPTLLND_PEERTXCREDITS   CTL_UNNUMBERED
-#define KPTLLND_PEERRTRCREDITS  CTL_UNNUMBERED
+#define KPTLLND_PEERCREDITS     CTL_UNNUMBERED
 #define KPTLLND_MAX_MSG_SIZE    CTL_UNNUMBERED
 #define KPTLLND_PEER_HASH_SIZE  CTL_UNNUMBERED
 #define KPTLLND_RESHEDULE_LOOPS CTL_UNNUMBERED
 #define KPTLLND_ACK_PUTS        CTL_UNNUMBERED
 #define KPTLLND_TRACETIMEOUT    CTL_UNNUMBERED
-#define KPTLLND_TRACEFAIL       CTL_UNNUMBERED
 #define KPTLLND_TRACEBASENAME   CTL_UNNUMBERED
 #define KPTLLND_SIMULATION_BITMAP CTL_UNNUMBERED
 #endif
@@ -287,17 +272,9 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = KPTLLND_PEERTXCREDITS,
+                .ctl_name = KPTLLND_PEERCREDITS,
                 .procname = "peercredits",
                 .data     = &peercredits,
-                .maxlen   = sizeof(int),
-                .mode     = 0444,
-                .proc_handler = &proc_dointvec
-        },
-        {
-                .ctl_name = KPTLLND_PEERRTRCREDITS,
-                .procname = "peer_buffer_credits",
-                .data     = &peer_buffer_credits,
                 .maxlen   = sizeof(int),
                 .mode     = 0444,
                 .proc_handler = &proc_dointvec
@@ -339,14 +316,6 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
                 .ctl_name = KPTLLND_TRACETIMEOUT,
                 .procname = "ptltrace_on_timeout",
                 .data     = &ptltrace_on_timeout,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec
-        },
-        {
-                .ctl_name = KPTLLND_TRACEFAIL,
-                .procname = "ptltrace_on_fail",
-                .data     = &ptltrace_on_fail,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec

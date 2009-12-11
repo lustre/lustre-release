@@ -42,6 +42,7 @@ MCREATE=${MCREATE:-mcreate}
 OPENFILE=${OPENFILE:-openfile}
 OPENUNLINK=${OPENUNLINK:-openunlink}
 READS=${READS:-"reads"}
+TOEXCL=${TOEXCL:-toexcl}
 TRUNCATE=${TRUNCATE:-truncate}
 MUNLINK=${MUNLINK:-munlink}
 SOCKETSERVER=${SOCKETSERVER:-socketserver}
@@ -451,15 +452,6 @@ test_17g() {
 }
 run_test 17g "symlinks: really long symlink name ==============================="
 
-test_17h() { #bug 17378
-        mkdir -p $DIR/$tdir
-        $SETSTRIPE $DIR/$tdir -c -1
-#define OBD_FAIL_MDS_LOV_PREP_CREATE 0x141
-	do_facet mds lctl set_param fail_loc=0x80000141
-        touch $DIR/$tdir/$tfile || true
-}
-run_test 17h "create objects: lov_free_memmd() doesn't lbug"
-
 test_18() {
 	touch $DIR/f
 	ls $DIR || error
@@ -528,28 +520,12 @@ test_22() {
 }
 run_test 22 "unpack tar archive as non-root user ==============="
 
-# was test_23
-test_23a() {
-	mkdir -p $DIR/$tdir
-	local file=$DIR/$tdir/$tfile
-
-	openfile -f O_CREAT:O_EXCL $file || error "$file create failed"
-	openfile -f O_CREAT:O_EXCL $file &&
-		error "$file recreate succeeded" || true
+test_23() {
+	mkdir $DIR/d23
+	$TOEXCL $DIR/d23/f23
+	$TOEXCL -e $DIR/d23/f23 || error
 }
-run_test 23a "O_CREAT|O_EXCL in subdir =========================="
-
-test_23b() { # bug 18988
-	mkdir -p $DIR/$tdir
-	local file=$DIR/$tdir/$tfile
-
-        rm -f $file
-        echo foo > $file || error "write filed"
-        echo bar >> $file || error "append filed"
-        $CHECKSTAT -s 8 $file || error "wrong size"
-        rm $file
-}
-run_test 23b "O_APPEND check =========================="
+run_test 23 "O_CREAT|O_EXCL in subdir =========================="
 
 test_24a() {
 	echo '== rename sanity =============================================='
@@ -633,7 +609,7 @@ test_24i() {
 	mrename $DIR/R9/f $DIR/R9/a
 	$CHECKSTAT -t file $DIR/R9/f || error
 	$CHECKSTAT -t dir  $DIR/R9/a || error
-	$CHECKSTAT -a $DIR/R9/a/f || error
+	$CHECKSTAT -a file $DIR/R9/a/f || error
 }
 run_test 24i "rename file to dir error: touch f ; mkdir a ; rename f a"
 
@@ -854,7 +830,7 @@ test_27e() {
 	$SETSTRIPE $DIR/d27/f12 -c 2 && error "lstripe succeeded twice"
 	$CHECKSTAT -t file $DIR/d27/f12 || error "checkstat failed"
 }
-run_test 27e "setstripe existing file (should return error) ======"
+run_test 27e "lstripe existing file (should return error) ======"
 
 test_27f() {
 	mkdir -p $DIR/d27
@@ -862,7 +838,7 @@ test_27f() {
 	dd if=/dev/zero of=$DIR/d27/f12 bs=4k count=4 || error "dd failed"
 	$GETSTRIPE $DIR/d27/fbad || error "lfs getstripe failed"
 }
-run_test 27f "setstripe with bad stripe size (should return error)"
+run_test 27f "lstripe with bad stripe size (should return error)"
 
 test_27g() {
 	mkdir -p $DIR/d27
@@ -881,7 +857,7 @@ test_27j() {
 	mkdir -p $DIR/d27
 	$SETSTRIPE $DIR/d27/f27j -i $OSTCOUNT && error "lstripe failed"||true
 }
-run_test 27j "setstripe with bad stripe offset (should return error)"
+run_test 27j "lstripe with bad stripe offset (should return error)"
 
 test_27k() { # bug 2844
 	mkdir -p $DIR/d27
@@ -1065,7 +1041,7 @@ test_27s() { # bug 10725
 	mkdir -p $DIR/$tdir
 	local stripe_size=$((4096 * 1024 * 1024))	# 2^32
 	local stripe_count=0
-	[ $OSTCOUNT -eq 1 ] || stripe_count=2
+	[ $OSTCOUNT -eq 1 ] || stripe_count=2 
 	$SETSTRIPE $DIR/$tdir -s $stripe_size -c $stripe_count && \
 		error "stripe width >= 2^32 succeeded" || true
 }
@@ -1149,9 +1125,7 @@ test_27w() { # bug 10997
 }
 run_test 27w "check lfs setstripe -c -s -i options ============="
 
-# createtest also checks that device nodes are created and
-# then visible correctly (#2091)
-test_28() { # bug 2091
+test_28() {
 	mkdir $DIR/d28
 	$CREATETEST $DIR/d28/ct || error
 }
@@ -1651,15 +1625,9 @@ test_37() {
 run_test 37 "ls a mounted file system to check old content ====="
 
 test_38() {
-	local file=$DIR/$tfile
-	touch $file
-	openfile -f O_DIRECTORY $file
-	local RC=$?
-	local ENOTDIR=20
-	[ $RC -eq 0 ] && error "opened file $file with O_DIRECTORY" || true
-	[ $RC -eq $ENOTDIR ] || error "error $RC should be ENOTDIR ($ENOTDIR)"
+	o_directory $DIR/$tfile
 }
-run_test 38 "open a regular file with O_DIRECTORY should return -ENOTDIR ==="
+run_test 38 "open a regular file with O_DIRECTORY =============="
 
 test_39() {
 	touch $DIR/$tfile
@@ -2047,7 +2015,11 @@ test_46() {
 }
 run_test 46 "dirtying a previously written page ================"
 
-# test_47 is removed "Device nodes check" is moved to test_28
+# Check that device nodes are created and then visible correctly (#2091)
+test_47() {
+	cmknod $DIR/test_47_node || error
+}
+run_test 47 "Device nodes check ================================"
 
 test_48a() { # bug 2399
 	check_kernel_version 34 || return 0
@@ -2658,7 +2630,7 @@ test_57a() {
 	DEV=$(do_facet mds lctl get_param -n $MNTDEV)
 	[ -z "$DEV" ] && error "can't access $MNTDEV"
 	for DEV in $(do_facet mds lctl get_param -n $MNTDEV); do
-		do_facet mds $DUMPE2FS -h $DEV > $TMP/t57a.dump || error "can't access $DEV"
+		do_facet mds dumpe2fs -h $DEV > $TMP/t57a.dump || error "can't access $DEV"
 		DEVISIZE=`awk '/Inode size:/ { print $3 }' $TMP/t57a.dump`
 		[ "$DEVISIZE" -gt 128 ] || error "inode size $DEVISIZE"
 		rm $TMP/t57a.dump
@@ -3796,95 +3768,46 @@ test_101b() {
 		cancel_lru_locks osc
 		ra_check_101 $BSIZE
 	done
+	cleanup_test101
 	true
 }
 run_test 101b "check stride-io mode read-ahead ================="
-
-test_101c() {
-        local STRIPE_SIZE=1048576
-        local FILE_LENGTH=$((STRIPE_SIZE*100))
-        local nreads=10000
-
-        setup_101b
-
-        cancel_lru_locks osc
-        $LCTL set_param osc.*.rpc_stats 0
-        $READS -f $DIR/$tfile -s$FILE_LENGTH -b65536 -n$nreads -t 180
-        for OSC in `$LCTL  get_param -N osc.*`
-        do
-                if [ "$OSC" == "osc.num_refs" ]; then
-                        continue
-                fi
-                lines=`$LCTL get_param -n ${OSC}.rpc_stats | wc | awk '{print $1}'`
-                if [ $lines -le 20 ]; then
-                        continue
-                fi
-
-		rpc4k=$($LCTL get_param -n $OSC | awk '$1 == "1:" { print $2; exit; }')
-                rpc8k=$($LCTL get_param -n $OSC | awk '$1 == "2:" { print $2; exit; }')
-                rpc16k=$($LCTL get_param -n $OSC | awk '$1 == "4:" { print $2; exit; }')
-                rpc32k=$($LCTL get_param -n $OSC | awk '$1 == "8:" { print $2; exit; }')
-
-                [ $rpc4k != 0 ]  && error "Small 4k read IO ${rpc4k}!"
-                [ $rpc8k != 0 ]  && error "Small 8k read IO ${rpc8k}!"
-                [ $rpc16k != 0 ] && error "Small 16k read IO ${rpc16k}!"
-                [ $rpc32k != 0 ] && error "Small 32k read IO ${rpc32k}!"
-
-                echo "Small rpc check passed!"
-       	        rpc64k=$($LCTL get_param -n $OSC | awk '$1 == "16:" { print $2; exit; }')
-                rpc128k=$($LCTL get_param -n $OSC | awk '$1 == "32:" { print $2; exit; }')
-                rpc256k=$($LCTL get_param -n $OSC | awk '$1 == "64:" { print $2; exit; }')
-                rpc512k=$($LCTL get_param -n $OSC | awk '$1 == "128:" { print $2; exit; }')
-                rpc1024k=$($LCTL get_param -n $OSC | awk '$1 == "256:" { print $2; exit; }')
-
-                [ $rpc64k == 0 ]   && error "No 64k readahead IO ${rpc64k}"
-                [ $rpc128k == 0 ]  && error "No 128k readahead IO ${rpc128k}"
-                [ $rpc256k == 0 ]  && error "No 256k readahead IO ${rpc256k}"
-                [ $rpc512k == 0 ]  && error "No 512k readahead IO ${rpc256k}"
-                [ $rpc1024k == 0 ] && error "No 1024k readahead IO ${rpc1024k}"
-                echo "Big rpc check passed!"
-        done
-        cleanup_test101
-        true
-}
-run_test 101c "check stripe_size aligned read-ahead ================="
 
 export SETUP_TEST102=no
 setup_test102() {
 	[ "$SETUP_TEST102" = "yes" ] && return
 	mkdir -p $DIR/$tdir
-	chown $RUNAS_ID $DIR/$tdir
 	STRIPE_SIZE=65536
-	STRIPE_OFFSET=1
-	STRIPE_COUNT=$OSTCOUNT
-	[ $OSTCOUNT -gt 4 ] && STRIPE_COUNT=4
+	STRIPE_COUNT=4
+	STRIPE_OFFSET=2
 
 	trap cleanup_test102 EXIT
 	cd $DIR
-	$1 $SETSTRIPE $tdir -s $STRIPE_SIZE -i $STRIPE_OFFSET -c $STRIPE_COUNT
+	$SETSTRIPE $tdir -s $STRIPE_SIZE -i $STRIPE_OFFSET -c $STRIPE_COUNT
 	cd $DIR/$tdir
 	for num in 1 2 3 4
 	do
-		for count in `seq 1 $STRIPE_COUNT`
+		for count in 1 2 3 4
 		do
-			for offset in `seq 0 $[$STRIPE_COUNT - 1]`
+			for offset in 0 1 2 3
 			do
 				local stripe_size=`expr $STRIPE_SIZE \* $num`
 				local file=file"$num-$offset-$count"
-				$1 $SETSTRIPE $file -s $stripe_size -i $offset -c $count
+				$SETSTRIPE $file -s $stripe_size -i $offset -c $count
 			done
 		done
 	done
 
 	cd $DIR
-	$1 $TAR cf $TMP/f102.tar $tdir --xattrs
+	star -c  f=$TMP/f102.tar $tdir
 	SETUP_TEST102=yes
 }
 
 cleanup_test102() {
+	[ "$SETUP_TEST102" = "yes" ] || return
 	trap 0
-	[ "$SETUP_TEST102" = "yes" ] || return 0
 	rm -f $TMP/f102.tar
+	rm -rf $DIR/$tdir
 	SETUP_TEST102=no
 }
 
@@ -3942,7 +3865,7 @@ test_102b() {
 	echo "get/set/list trusted.lov xattr ..."
 	[ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 	local testfile=$DIR/$tfile
-	$SETSTRIPE -s 65536 -i 1 -c 2 $testfile || error "setstripe failed"
+	$SETSTRIPE $testfile -s 65536 -i 1 -c 2
 	getfattr -d -m "^trusted" $testfile 2> /dev/null | \
 	grep "trusted.lov" || error "can't get trusted.lov from $testfile"
 
@@ -3968,7 +3891,7 @@ test_102c() {
 	mkdir -p $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
 	local testfile=$DIR/$tdir/$tfile
-	$RUNAS $SETSTRIPE -s 65536 -i 1 -c 2 $testfile||error "setstripe failed"
+	$RUNAS $SETSTRIPE $testfile -s 65536 -i 1 -c 2
 	$RUNAS getfattr -d -m "^lustre" $testfile 2> /dev/null | \
 	grep "lustre.lov" || error "can't get lustre.lov from $testfile"
 
@@ -3992,18 +3915,18 @@ compare_stripe_info1() {
 
 	for num in 1 2 3 4
 	do
- 		for count in `seq 1 $STRIPE_COUNT`
+		for count in 1 2 3 4
 		do
-			for offset in `seq 0 $[$STRIPE_COUNT - 1]`
+			for offset in 0 1 2 3
 			do
 				local size=`expr $STRIPE_SIZE \* $num`
 				local file=file"$num-$offset-$count"
-				get_stripe_info client $PWD/$file "$1"
+				get_stripe_info client $PWD/$file
 				if [ $stripe_size -ne $size ]; then
-					error "$file: different stripe size $stripe_size, expected $size" && return
+					error "$file: different stripe size" && return
 				fi
 				if [ $stripe_count -ne $count ]; then
-					error "$file: different stripe count $stripe_count, expected $count" && return
+					error "$file: different stripe count" && return
 				fi
 				if [ $stripe_index -ne 0 ]; then
 				       stripe_index_all_zero=0
@@ -4015,36 +3938,88 @@ compare_stripe_info1() {
 	return 0
 }
 
-find_lustre_tar() {
-	[ -n "$(which tar 2>/dev/null)" ] && strings $(which tar) | grep -q lustre && echo tar
+compare_stripe_info2() {
+	for num in 1 2 3 4
+	do
+		for count in 1 2 3 4
+		do
+			for offset in 0 1 2 3
+			do
+				local size=`expr $STRIPE_SIZE \* $num`
+				local file=file"$num-$offset-$count"
+				get_stripe_info client $PWD/$file
+				if [ $stripe_size -ne $size ]; then
+					error "$file: different stripe size" && return	
+				fi
+				if [ $stripe_count -ne $count ]; then
+					error "$file: different stripe count" && return
+				fi
+				if [ $stripe_index -ne $offset ]; then
+					error "$file: different stripe offset" && return
+				fi
+			done
+		done
+	done
 }
 
 test_102d() {
-	# b10930: tar test for trusted.lov xattr
-	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip "lustre-aware tar is not installed" && return
-	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
+	# b10930: star test for trusted.lov xattr
+	star --xhelp 2>&1 | grep -q nolustre
+	if [ $? -ne 0 ]
+	then
+		skip "being skipped because a lustre-aware star is not installed." && return
+	fi
+	[ "$OSTCOUNT" -lt "4" ] && skip "skipping 4-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102d
-	$TAR xf $TMP/f102.tar -C $DIR/d102d --xattrs
+	star -x  f=$TMP/f102.tar -C $DIR/d102d
 	cd $DIR/d102d/$tdir
 	compare_stripe_info1
+
 }
-run_test 102d "tar restore stripe info from tarfile,not keep osts ==========="
+run_test 102d "star restore stripe info from tarfile,not keep osts ==========="
+
+test_102e() {
+	# b10930: star test for trusted.lov xattr
+	star --xhelp 2>&1 | grep -q nolustre
+	[ $? -ne 0 ] && skip "lustre-aware star is not installed" && return
+	[ "$OSTCOUNT" -lt "4" ] && skip "skipping 4-stripe test" && return
+	setup_test102
+	mkdir -p $DIR/d102e
+	star -x  -preserve-osts f=$TMP/f102.tar -C $DIR/d102e
+	cd $DIR/d102e/$tdir
+	compare_stripe_info2
+}
+run_test 102e "star restore stripe info from tarfile, keep osts ==========="
 
 test_102f() {
-	# b10930: tar test for trusted.lov xattr
-	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip "lustre-aware tar is not installed" && return
-	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
+	# b10930: star test for trusted.lov xattr
+	star --xhelp 2>&1 | grep -q nolustre
+	[ $? -ne 0 ] && skip "lustre-aware star is not installed" && return
+	[ "$OSTCOUNT" -lt "4" ] && skip "skipping 4-stripe test" && return
 	setup_test102
 	mkdir -p $DIR/d102f
 	cd $DIR
-	$TAR cf - --xattrs $tdir | $TAR xf - --xattrs -C $DIR/d102f
+	star -copy  $tdir $DIR/d102f
 	cd $DIR/d102f/$tdir
 	compare_stripe_info1
 }
-run_test 102f "tar copy files, not keep osts ==========="
+run_test 102f "star copy files, not keep osts ==========="
+
+test_102g() {
+	# b10930: star test for trusted.lov xattr
+	star --xhelp 2>&1 | grep -q nolustre
+	[ $? -ne 0 ] && skip "lustre-aware star is not installed" && return
+	[ "$OSTCOUNT" -lt "4" ] && skip "skipping 4-stripe test" && return
+	setup_test102
+	mkdir -p $DIR/d102g
+	cd $DIR
+	star -copy -preserve-osts $tdir $DIR/d102g
+	cd $DIR/d102g/$tdir
+	compare_stripe_info2
+	cleanup_test102
+}
+run_test 102g "star copy files, keep osts ==========="
 
 test_102h() { # bug 15777
 	[ -z $(lctl get_param -n mdc.*.connect_flags | grep xattr) ] &&
@@ -4098,21 +4073,6 @@ test_102i() { # bug 17038
         rm -f $DIR/$tfile $DIR/${tfile}link
 }
 run_test 102i "lgetxattr test on symbolic link ============"
-
-test_102j() {
-	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip "lustre-aware tar is not installed" && return
-	[ "$OSTCOUNT" -lt "2" ] && skip "skipping N-stripe test" && return
-	setup_test102 "$RUNAS"
-	mkdir -p $DIR/d102j
-	chown $RUNAS_ID $DIR/d102j
-	$RUNAS $TAR xf $TMP/f102.tar -C $DIR/d102j --xattrs
-	cd $DIR/d102j/$tdir
-	compare_stripe_info1 "$RUNAS"
-}
-run_test 102j "non-root tar restore stripe info from tarfile, not keep osts ==="
-
-cleanup_test102
 
 run_acl_subtest()
 {
@@ -4317,7 +4277,7 @@ test_116() {
 	declare -i FILL
 	FILL=$(($MINV / 4))
 	echo "Filling 25% remaining space in OST${MINI} with ${FILL}Kb"
-	$SETSTRIPE -i $MINI -c 1 $DIR/$tdir/OST${MINI}||error "setstripe failed"
+	$SETSTRIPE $DIR/$tdir/OST${MINI} -i $MINI -c 1
 	i=1
 	while [ $FILL -gt 0 ]; do
 	    dd if=/dev/zero of=$DIR/$tdir/OST${MINI}/$tfile-$i bs=2M count=1 2>/dev/null
@@ -4379,8 +4339,6 @@ test_116() {
 	echo "$MAXC files created on larger OST $MAXI1"
 	[ $MINC -gt 0 ] && echo "Wrote $(($MAXC * 100 / $MINC - 100))% more files to larger OST $MAXI1"
 	[ $MAXC -gt $MINC ] || error_ignore "stripe QOS didn't balance free space"
-
-	rm -rf $DIR/$tdir/OST${MINI}
 }
 run_test 116 "stripe QOS: free space balance ==================="
 
@@ -4410,7 +4368,7 @@ reset_async() {
 	FILE=$DIR/reset_async
 
 	# Ensure all OSCs are cleared
-	$LSTRIPE -c -1 $FILE
+	$LSTRIPE $FILE 0 -1 -1
         dd if=/dev/zero of=$FILE bs=64k count=$OSTCOUNT
 	sync
         rm $FILE
@@ -4763,7 +4721,7 @@ test_119b() # bug 11737
 {
         [ "$OSTCOUNT" -lt "2" ] && skip "skipping 2-stripe test" && return
 
-        $SETSTRIPE -c 2 $DIR/$tfile || error "setstripe failed"
+        $SETSTRIPE $DIR/$tfile -c 2
         dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1 || error "dd failed"
         sync
         multiop $DIR/$tfile oO_RDONLY:O_DIRECT:r$((2048 * 1024)) || \
@@ -5161,7 +5119,7 @@ test_124a() {
         log "LVF=$LVF"
         local OLD_LVF=`lctl get_param -n $NSDIR.pool.lock_volume_factor`
         lctl set_param -n $NSDIR.pool.lock_volume_factor $LVF
-
+        
         # Let's make sure that we really have some margin. Client checks
         # cached locks every 10 sec.
         SLEEP=$((SLEEP+20))
@@ -5279,7 +5237,7 @@ test_126() { # bug 12829/13455
 run_test 126 "check that the fsgid provided by the client is taken into account"
 
 test_127() { # bug 15521
-        $SETSTRIPE -i 0 -c 1 $DIR/$tfile || error "setstripe failed"
+        $LSTRIPE -i 0 -c 1 $DIR/$tfile
         $LCTL set_param osc.*.stats=0
         FSIZE=$((2048 * 1024))
         dd if=/dev/zero of=$DIR/$tfile bs=$FSIZE count=1
@@ -5655,23 +5613,6 @@ test_153() {
 }
 run_test 153 "test if fdatasync does not crash ======================="
 
-test_154() {
-	# do directio so as not to populate the page cache
-	log "creating a 10 Mb file"
-	multiop $DIR/$tfile oO_CREAT:O_DIRECT:O_RDWR:w$((10*1048576))c || error "multiop failed while creating a file"
-	log "starting reads"
-	dd if=$DIR/$tfile of=/dev/null bs=4096 &
-	log "truncating the file"
-	multiop $DIR/$tfile oO_TRUNC:c || error "multiop failed while truncating the file"
-	log "killing dd"
-	kill %+ || true # reads might have finished
-	log "wait until dd is finished"
-	wait
-	log "removing the temporary file"
-	rm -rf $DIR/$tfile || error "tmp file removal failed"
-}
-run_test 154 "parallel read and truncate should not deadlock ======================="
-
 test_170() {
         $LCTL clear	# bug 18514
         $LCTL debug_daemon start $TMP/${tfile}_log_good
@@ -5693,31 +5634,31 @@ test_170() {
         $LCTL df $TMP/${tfile}_log_good > $TMP/${tfile}_log_good.out 2>&1
         local good_line2=$(tail -n 1 $TMP/${tfile}_log_good.out | awk '{print $5}')
 
-	[ "$bad_line" ] && [ "$good_line1" ] && [ "$good_line2" ] ||
+	[ "$bad_line" ] && [ "$good_line1" ] && [ "$good_line2" ] || 
 		error "bad_line good_line1 good_line2 are empty"
-
+ 
         cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt
-        cat $TMP/${tfile}_log_bad >> $TMP/${tfile}_logs_corrupt
-        cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt
+        cat $TMP/${tfile}_log_bad >> $TMP/${tfile}_logs_corrupt 
+        cat $TMP/${tfile}_log_good >> $TMP/${tfile}_logs_corrupt           
 
         $LCTL df $TMP/${tfile}_logs_corrupt > $TMP/${tfile}_log_bad.out 2>&1
         local bad_line_new=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $9}')
         local good_line_new=$(tail -n 1 $TMP/${tfile}_log_bad.out | awk '{print $5}')
 
-	[ "$bad_line_new" ] && [ "$good_line_new" ] ||
+	[ "$bad_line_new" ] && [ "$good_line_new" ] || 
 		error "bad_line_new good_line_new are empty"
-
+ 
         local expected_good=$((good_line1 + good_line2*2))
 
         rm -f $TMP/${tfile}*
         if [ $bad_line -ne $bad_line_new ]; then
                 error "expected $bad_line bad lines, but got $bad_line_new"
-                return 1
+                return 1 
         fi
 
         if [ $expected_good -ne $good_line_new ]; then
                 error "expected $expected_good good lines, but got $good_line_new"
-                return 2
+                return 2 
         fi
         true
 }

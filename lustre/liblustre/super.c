@@ -760,8 +760,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
 
                 /* check that there are no matching locks */
                 LASSERT(obd_match(sbi->ll_osc_exp, lsm, LDLM_EXTENT, &policy,
-                                  LCK_PW, &flags, inode, &match_lockh, NULL)
-                                  <= 0);
+                                  LCK_PW, &flags, inode, &match_lockh) <= 0);
 
                 /* XXX when we fix the AST intents to pass the discard-range
                  * XXX extent, make ast_flags always LDLM_AST_DISCARD_DATA
@@ -798,7 +797,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 }
         } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
                 struct obd_info oinfo = { { { 0 } } };
-                struct obdo oa = { 0 };
+                struct obdo oa;
 
                 CDEBUG(D_INODE, "set mtime on OST inode %llu to %lu\n",
                        (long long)st->st_ino, LTIME_S(attr->ia_mtime));

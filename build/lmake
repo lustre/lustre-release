@@ -47,7 +47,6 @@ KERNEL_FILE=
 SERIES_FILE=
 CONFIG_FILE=
 RPMBUILD=
-XEN=false
 
 canon()
 {
@@ -161,9 +160,6 @@ Options:
   --unpack-kernel
     Untars and patches the kernel source.
 
-  --xen
-    Builds a Xen domX kernel.
-
   The order that commands (--build-lustre, --unpack-kernel) are
   specified on the command line is ignored; ${0##*/} will always
   execute them in the correct order (unpack, then build, then install
@@ -232,11 +228,6 @@ load_target()
 
     . "$TARGET_FILE"
 
-    # doesn't make any sense to build OFED for xen domX's
-    if $XEN; then
-        OFED_VERSION=""
-    fi
-
     [ "$KERNEL" ] || fatal 1 "Target $TARGET did not specify a kernel."
 # Suse 2.6 has our patches in already
 #    [ "$SERIES" ] || fatal 1 "Target $TARGET did not specify a patch series."
@@ -257,13 +248,8 @@ load_target()
 	done
     fi
 
-    local XENPOSTFIX=""
-    if $XEN; then
-        XENPOSTFIX="-xen"
-    fi
-
     TARGET_ARCH=${TARGET_ARCH:-$BASE_ARCHS}
-    CONFIG_TARGET="${TARGET}${XENPOSTFIX}-${TARGET_ARCH}${TARGET_CONFIG:+-$TARGET_CONFIG}"
+    CONFIG_TARGET="$TARGET-${TARGET_ARCH}${TARGET_CONFIG:+-$TARGET_CONFIG}"
     CONFIG_FILE="$TOPDIR/lustre/kernel_patches/kernel_configs/kernel-$VERSION-$CONFIG_TARGET.config"
     [ -r "$CONFIG_FILE" ] ||
 	fatal 1 "Target $TARGET's config file $CONFIG_FILE missing from $TOPDIR/lustre/kernel_patches/configs."
@@ -498,21 +484,17 @@ build_kernel()
     (( $BUILD_KERNEL )) || return 0
     set_make
     echo "Building kernel in $PWD..."
-    if $XEN; then
-        $MAKE_J "$MAKE_CC" vmlinuz || fatal 1 "Error making vmlinux."
-    else
-        case "$TARGET_ARCH" in
-	    i386 | i586 | i686 | athlon | x86_64)
-	        $MAKE_J "$MAKE_CC" bzImage || fatal 1 "Error making bzImage."
-	        ;;
-            ia64 | ppc | ppc64)
-	        $MAKE_J "$MAKE_CC" vmlinux || fatal 1 "Error making vmlinux."
-	        ;;
-	    *)
-	        $MAKE_J "$MAKE_CC" boot || fatal 1 "Error making boot."
-	        ;;
-        esac
-    fi
+    case "$TARGET_ARCH" in
+	i386 | i586 | i686 | athlon | x86_64)
+	    $MAKE_J "$MAKE_CC" bzImage || fatal 1 "Error making bzImage."
+	    ;;
+    ia64 | ppc | ppc64)
+	    $MAKE_J "$MAKE_CC" vmlinux || fatal 1 "Error making vmlinux."
+	    ;;
+	*)
+	    $MAKE_J "$MAKE_CC" boot || fatal 1 "Error making boot."
+	    ;;
+    esac
     $MAKE_J "$MAKE_CC" modules || fatal 1 "Error building modules."
 
     popd >/dev/null
@@ -585,7 +567,6 @@ build_lustre()
 	< lustre.spec.in \
 	> lustre.spec
     $RPMBUILD --target ${TARGET_ARCH} -bb lustre.spec \
-        ${PATCHLESS:+--define "lustre_name lustre-client"} \
         --define "_tmppath $TMPDIR" \
 	--define "_topdir $(lbuild_topdir)" || \
 	fatal 1 "Error building Lustre rpms."
@@ -611,42 +592,37 @@ install_kernel()
 	-s modules_install || \
 	fatal 1 "Error installing modules."
 
-    if $XEN; then
-	cp vmlinuz "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
-	cp vmlinux "$DESTDIR/lib/modules/${FULL_VERSION}/vmlinux-${FULL_VERSION}"
-	ln -sf "../lib/modules/${FULL_VERSION}/vmlinux-${FULL_VERSION}" "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
-    else
-        case "$TARGET_ARCH" in
-	    i386 | i586 | i686 | athlon)
-	        cp arch/i386/boot/bzImage "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
-	        cp vmlinux "$DESTDIR/lib/modules/${FULL_VERSION}/"
-	        ln -sf "../lib/modules/${FULL_VERSION}/vmlinux" "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
-	        ;;
-	    x86_64)
-	        cp arch/x86_64/boot/bzImage "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
-	        cp vmlinux "$DESTDIR/lib/modules/${FULL_VERSION}/"
-	        ln -sf "../lib/modules/${FULL_VERSION}/vmlinux" "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
-	        ;;
-            ppc | ppc64)
-	        cp vmlinux "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
-	        ln -sf "$DESTDIR/boot/vmlinux-${FULL_VERSION}" "../lib/modules/${FULL_VERSION}/vmlinux" 
-	        ;;
-	    ia64)
-	        gzip -cfv vmlinux > vmlinuz
-	        mkdir -p "$DESTDIR/boot/efi/redhat"
-	        install -m 755 vmlinux "$DESTDIR/lib/modules/${FULL_VERSION}/"
-	        install -m 755 vmlinuz "$DESTDIR/boot/efi/redhat/vmlinuz-${FULL_VERSION}"
-	        ln -sf "../../../lib/modules/${FULL_VERSION}/vmlinux" "$DESTDIR/boot/efi/redhat/vmlinux-${FULL_VERSION}"
-	        ln -sf "efi/redhat/vmlinux-${FULL_VERSION}" "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
-	        ln -sf "efi/redhat/vmlinuz-${FULL_VERSION}" "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
-	        ;;
-	    *)
-	        cp vmlinuz "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
-	        cp vmlinux "$DESTDIR/lib/modules/${FULL_VERSION}/vmlinux-${FULL_VERSION}"
-	        ln -sf "../lib/modules/${FULL_VERSION}/vmlinux-${FULL_VERSION}" "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
-	    	;;
-    	esac
-    fi
+    case "$TARGET_ARCH" in
+	i386 | i586 | i686 | athlon)
+	    cp arch/i386/boot/bzImage "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
+	    cp vmlinux "$DESTDIR/lib/modules/${FULL_VERSION}/"
+	    ln -sf "../lib/modules/${FULL_VERSION}/vmlinux" "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
+	    ;;
+	x86_64)
+	    cp arch/x86_64/boot/bzImage "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
+	    cp vmlinux "$DESTDIR/lib/modules/${FULL_VERSION}/"
+	    ln -sf "../lib/modules/${FULL_VERSION}/vmlinux" "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
+	    ;;
+        ppc | ppc64)
+	    cp vmlinux "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
+	    ln -sf "$DESTDIR/boot/vmlinux-${FULL_VERSION}" "../lib/modules/${FULL_VERSION}/vmlinux" 
+	    ;;
+	ia64)
+	    gzip -cfv vmlinux > vmlinuz
+	    mkdir -p "$DESTDIR/boot/efi/redhat"
+	    install -m 755 vmlinux "$DESTDIR/lib/modules/${FULL_VERSION}/"
+	    install -m 755 vmlinuz "$DESTDIR/boot/efi/redhat/vmlinuz-${FULL_VERSION}"
+	    ln -sf "../../../lib/modules/${FULL_VERSION}/vmlinux" "$DESTDIR/boot/efi/redhat/vmlinux-${FULL_VERSION}"
+	    ln -sf "efi/redhat/vmlinux-${FULL_VERSION}" "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
+	    ln -sf "efi/redhat/vmlinuz-${FULL_VERSION}" "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
+	    ;;
+	*)
+	    cp vmlinuz "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
+	    cp vmlinux "$DESTDIR/lib/modules/${FULL_VERSION}/vmlinux-${FULL_VERSION}"
+	    ln -sf "../lib/modules/${FULL_VERSION}/vmlinux-${FULL_VERSION}" "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
+
+	    ;;
+    esac
     if [ -e init/kerntypes.o ] ; then
 	cp init/kerntypes.o "$DESTDIR/boot/Kerntypes-${FULL_VERSION}"
     fi
@@ -788,7 +764,7 @@ save_all_headers()
 
 longopts="build,build-lustre,build-kernel,depend-kernel,destdir:,extraversion:"
 longopts="$longopts,help,install,install-lustre,install-kernel,kerneldir:"
-longopts="$longopts,save-headers,target:,target-arch:,target-config:,unpack-kernel,xen"
+longopts="$longopts,save-headers,target:,target-arch:,target-config:,unpack-kernel"
 
 options=$(getopt -o hj: -l "$longopts" -- "$@")
 
@@ -871,10 +847,6 @@ while [ "$1" ] ; do
 	    UNPACK_KERNEL=1
 	    shift
 	    ;;
-        --xen)
-            XEN=true
-            shift
-            ;;
 	--)
 	    shift
 	    CONFIGURE_FLAGS=$@

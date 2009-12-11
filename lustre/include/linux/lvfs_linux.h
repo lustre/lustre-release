@@ -74,11 +74,6 @@ struct lvfs_dentry_params
         __u32            ldp_magic;
 };
 #define LVFS_DENTRY_PARAMS_INIT         { .ldp_magic = LVFS_DENTRY_PARAM_MAGIC }
-/* Only use the least 3 bits of ldp_flags for goal policy */
-typedef enum {
-        DP_GOAL_POLICY       = 0,
-        DP_LASTGROUP_REVERSE = 1,
-} dp_policy_t;
 
 #define lvfs_sbdev(SB)       ((SB)->s_bdev)
 #define lvfs_sbdev_type      struct block_device *

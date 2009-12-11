@@ -41,3 +41,4 @@ endif
 endif
 
 MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
+DIST_SOURCES = $(ko2iblnd-objs:%.o=%.c) o2iblnd.h

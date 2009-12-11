@@ -41,3 +41,4 @@ endif
 endif
 
 MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
+DIST_SOURCES = $(kviblnd-objs:%.o=%.c) viblnd.h viblnd_wire.h

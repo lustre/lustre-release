@@ -174,7 +174,6 @@ EXPORT_SYMBOL(ptlrpc_prep_bulk_exp);
 EXPORT_SYMBOL(ptlrpc_free_bulk);
 EXPORT_SYMBOL(ptlrpc_prep_bulk_page);
 EXPORT_SYMBOL(ptlrpc_abort_inflight);
-EXPORT_SYMBOL(ptlrpc_cleanup_imp);
 EXPORT_SYMBOL(ptlrpc_retain_replayable_request);
 EXPORT_SYMBOL(ptlrpc_next_xid);
 
@@ -237,8 +236,6 @@ EXPORT_SYMBOL(lustre_swab_lov_desc);
 EXPORT_SYMBOL(lustre_swab_lov_user_md);
 EXPORT_SYMBOL(lustre_swab_lov_user_md_objects);
 EXPORT_SYMBOL(lustre_swab_lov_user_md_join);
-EXPORT_SYMBOL(lustre_swab_lov_mds_md);
-EXPORT_SYMBOL(lustre_swab_lov_mds_md_objects);
 EXPORT_SYMBOL(lustre_swab_ldlm_res_id);
 EXPORT_SYMBOL(lustre_swab_ldlm_policy_data);
 EXPORT_SYMBOL(lustre_swab_ldlm_intent);
@@ -307,8 +304,6 @@ EXPORT_SYMBOL(ptlrpc_import_setasync);
 /* pinger.c */
 EXPORT_SYMBOL(ptlrpc_pinger_add_import);
 EXPORT_SYMBOL(ptlrpc_pinger_del_import);
-EXPORT_SYMBOL(ptlrpc_add_timeout_client);
-EXPORT_SYMBOL(ptlrpc_del_timeout_client);
 EXPORT_SYMBOL(ptlrpc_pinger_sending_on_import);
 
 /* ptlrpcd.c */

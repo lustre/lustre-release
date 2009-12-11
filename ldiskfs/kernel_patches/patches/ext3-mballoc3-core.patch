@@ -4714,8 +4714,6 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +	if (err)
 +		goto error_return;
 +
-+	ext3_lock_group(sb, block_group);
-+	spin_lock(sb_bgl_lock(sbi, block_group));
 +#ifdef AGGRESSIVE_CHECK
 +	{
 +		int i;
@@ -4723,6 +4721,8 @@ Index: linux-2.6.22.19/fs/ext3/mballoc.c
 +			BUG_ON(!mb_test_bit(bit + i, bitmap_bh->b_data));
 +	}
 +#endif
++	ext3_lock_group(sb, block_group);
++	spin_lock(sb_bgl_lock(sbi, block_group));
 +	mb_clear_bits(NULL, bitmap_bh->b_data, bit, count);
 +	gdp->bg_free_blocks_count =
 +		cpu_to_le16(le16_to_cpu(gdp->bg_free_blocks_count) + count);

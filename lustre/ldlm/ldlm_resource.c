@@ -269,6 +269,13 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
                 lock_vars[0].write_fptr = lprocfs_wr_lru_size;
                 lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
 
+                snprintf(lock_name, MAX_STRING_SIZE, "%s/shrink_thumb",
+                         ns->ns_name);
+                lock_vars[0].data = ns;
+                lock_vars[0].read_fptr = lprocfs_rd_uint;
+                lock_vars[0].write_fptr = lprocfs_wr_uint;
+                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
+
                 snprintf(lock_name, MAX_STRING_SIZE, "%s/lru_max_age",
                          ns->ns_name);
                 lock_vars[0].data = &ns->ns_max_age;
@@ -337,6 +344,7 @@ ldlm_namespace_new(struct obd_device *obd, char *name,
         if (!ns->ns_name)
                 GOTO(out_hash, NULL);
 
+        ns->ns_shrink_thumb = LDLM_LOCK_SHRINK_THUMB;
         ns->ns_appetite = apt;
 
         LASSERT(obd != NULL);
@@ -655,6 +663,7 @@ void ldlm_namespace_free(struct ldlm_namespace *ns,
 
 void ldlm_namespace_get_locked(struct ldlm_namespace *ns)
 {
+        LASSERT(ns->ns_refcount >= 0);
         ns->ns_refcount++;
 }
 

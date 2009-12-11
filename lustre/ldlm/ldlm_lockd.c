@@ -373,7 +373,7 @@ static int __ldlm_add_waiting_lock(struct ldlm_lock *lock, int seconds)
 
         if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT) ||
             OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_TIMEOUT))
-                seconds = 1;
+                seconds = 2;
 
         timeout = cfs_time_shift(seconds);
         if (likely(cfs_time_after(timeout, lock->l_callback_timeout)))
@@ -395,7 +395,6 @@ static int __ldlm_add_waiting_lock(struct ldlm_lock *lock, int seconds)
 static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
 {
         int ret;
-        int timeout = ldlm_get_enq_timeout(lock);
 
         LASSERT(!(lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK));
 
@@ -411,16 +410,15 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
                 return 0;
         }
 
-        ret = __ldlm_add_waiting_lock(lock, timeout);
+        ret = __ldlm_add_waiting_lock(lock, ldlm_get_enq_timeout(lock));
         if (ret)
                 /* grab ref on the lock if it has been added to the
                  * waiting list */
                 LDLM_LOCK_GET(lock);
         spin_unlock_bh(&waiting_locks_spinlock);
 
-        LDLM_DEBUG(lock, "%sadding to wait list(timeout: %d, AT: %s)",
-                   ret == 0 ? "not re-" : "", timeout,
-                   AT_OFF ? "off" : "on");
+        LDLM_DEBUG(lock, "%sadding to wait list",
+                   ret == 0 ? "not re-" : "");
         return ret;
 }
 
@@ -860,8 +858,6 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         lock_res_and_lock(lock);
         if (lock->l_flags & LDLM_FL_AST_SENT) {
                 body->lock_flags |= LDLM_FL_AST_SENT;
-                /* copy ast flags like LDLM_FL_DISCARD_DATA */
-                body->lock_flags |= (lock->l_flags & LDLM_AST_FLAGS);
 
                 /* We might get here prior to ldlm_handle_enqueue setting
                  * LDLM_FL_CANCEL_ON_BLOCK flag. Then we will put this lock
@@ -902,7 +898,7 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         int rc = 0;
         ENTRY;
 
-        LASSERT(lock != NULL && lock->l_export != NULL);
+        LASSERT(lock != NULL);
 
         req = ptlrpc_prep_req(lock->l_export->exp_imp_reverse,
                               LUSTRE_DLM_VERSION, LDLM_GL_CALLBACK, 2, size,
@@ -1137,7 +1133,7 @@ existing_lock:
         if (dlm_req->lock_desc.l_resource.lr_type == LDLM_EXTENT)
                 lock->l_req_extent = lock->l_policy_data.l_extent;
 
-        err = ldlm_lock_enqueue(obddev->obd_namespace, &lock, cookie,
+        err = ldlm_lock_enqueue(obddev->obd_namespace, &lock, cookie, 
                                 (int *)&flags);
         if (err)
                 GOTO(out, err);
@@ -1653,6 +1649,22 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
          * message buffers. */
 
         if (req->rq_export == NULL) {
+                struct ldlm_request *dlm_req;
+
+                CDEBUG(D_RPCTRACE, "operation %d from %s with bad "
+                       "export cookie "LPX64"; this is "
+                       "normal if this node rebooted with a lock held\n",
+                       lustre_msg_get_opc(req->rq_reqmsg),
+                       libcfs_id2str(req->rq_peer),
+                       lustre_msg_get_handle(req->rq_reqmsg)->cookie);
+
+                dlm_req = lustre_swab_reqbuf(req, DLM_LOCKREQ_OFF,
+                                             sizeof(*dlm_req),
+                                             lustre_swab_ldlm_request);
+                if (dlm_req != NULL)
+                        CDEBUG(D_RPCTRACE, "--> lock cookie: "LPX64"\n",
+                               dlm_req->lock_handle[0].cookie);
+
                 ldlm_callback_reply(req, -ENOTCONN);
                 RETURN(0);
         }
@@ -1741,7 +1753,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
-        if ((lock->l_flags & LDLM_FL_FAIL_LOC) &&
+        if ((lock->l_flags & LDLM_FL_FAIL_LOC) && 
             lustre_msg_get_opc(req->rq_reqmsg) == LDLM_BL_CALLBACK)
                 OBD_RACE(OBD_FAIL_LDLM_CP_BL_RACE);
 
@@ -1985,8 +1997,8 @@ static int ldlm_bl_thread_main(void *arg)
 
 #endif
 
-/*
- * Export handle<->lock hash operations.
+/* 
+ * Export handle<->lock hash operations. 
  */
 static unsigned
 ldlm_export_lock_hash(lustre_hash_t *lh, void *key, unsigned mask)
@@ -2141,7 +2153,7 @@ static int ldlm_setup(void)
         ldlm_state->ldlm_cb_service =
                 ptlrpc_init_svc(LDLM_NBUFS, LDLM_BUFSIZE, LDLM_MAXREQSIZE,
                                 LDLM_MAXREPSIZE, LDLM_CB_REQUEST_PORTAL,
-                                LDLM_CB_REPLY_PORTAL, 2,
+                                LDLM_CB_REPLY_PORTAL, 1800,
                                 ldlm_callback_handler, "ldlm_cbd",
                                 ldlm_svc_proc_dir, NULL,
                                 ldlm_min_threads, ldlm_max_threads,
@@ -2155,7 +2167,7 @@ static int ldlm_setup(void)
         ldlm_state->ldlm_cancel_service =
                 ptlrpc_init_svc(LDLM_NBUFS, LDLM_BUFSIZE, LDLM_MAXREQSIZE,
                                 LDLM_MAXREPSIZE, LDLM_CANCEL_REQUEST_PORTAL,
-                                LDLM_CANCEL_REPLY_PORTAL, 6,
+                                LDLM_CANCEL_REPLY_PORTAL, 6000,
                                 ldlm_cancel_handler, "ldlm_canceld",
                                 ldlm_svc_proc_dir, NULL,
                                 ldlm_min_threads, ldlm_max_threads,
@@ -2302,8 +2314,8 @@ int __init ldlm_init(void)
                 return -ENOMEM;
 
         ldlm_lock_slab = cfs_mem_cache_create("ldlm_locks",
-                                      sizeof(struct ldlm_lock), 0,
-                                      SLAB_HWCACHE_ALIGN | SLAB_DESTROY_BY_RCU);
+                                           sizeof(struct ldlm_lock), 0,
+                                           SLAB_HWCACHE_ALIGN);
         if (ldlm_lock_slab == NULL) {
                 cfs_mem_cache_destroy(ldlm_resource_slab);
                 return -ENOMEM;
@@ -2328,12 +2340,6 @@ void __exit ldlm_exit(void)
                 CERROR("ldlm_refcount is %d in ldlm_exit!\n", ldlm_refcount);
         rc = cfs_mem_cache_destroy(ldlm_resource_slab);
         LASSERTF(rc == 0, "couldn't free ldlm resource slab\n");
-#ifdef __KERNEL__
-        /* ldlm_lock_put() use RCU to call ldlm_lock_free, so need call
-         * synchronize_rcu() to wait a grace period elapsed, so that
-         * ldlm_lock_free() get a chance to be called. */
-        synchronize_rcu();
-#endif
         rc = cfs_mem_cache_destroy(ldlm_lock_slab);
         LASSERTF(rc == 0, "couldn't free ldlm lock slab\n");
         rc = cfs_mem_cache_destroy(ldlm_interval_slab);

@@ -1,7 +1,7 @@
-Index: linux-2.6.16.60-0.37/fs/ext3/super.c
+Index: linux-2.6.16.60-0.31/fs/ext3/super.c
 ===================================================================
---- linux-2.6.16.60-0.37.orig/fs/ext3/super.c
-+++ linux-2.6.16.60-0.37/fs/ext3/super.c
+--- linux-2.6.16.60-0.31.orig/fs/ext3/super.c
++++ linux-2.6.16.60-0.31/fs/ext3/super.c
 @@ -36,6 +36,8 @@
  #include <linux/namei.h>
  #include <linux/quotaops.h>
@@ -357,20 +357,20 @@ Index: linux-2.6.16.60-0.37/fs/ext3/super.c
 +	if (EXT3_HAS_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_MMP) &&
 +	    !(sb->s_flags & MS_RDONLY))
 +		if (ext3_multi_mount_protect(sb, le64_to_cpu(es->s_mmp_block)))
-+			goto failed_mount2;
++			goto failed_mount3;
 +
  	/*
  	 * The first inode we look at is the journal inode.  Don't try
  	 * root first: it may be modified in the journal!
-@@ -1993,6 +2325,8 @@ cantfind_ext3:
+@@ -1991,6 +2323,8 @@ cantfind_ext3:
+ 	goto failed_mount;
+ 
  failed_mount3:
- 	journal_destroy(sbi->s_journal);
- failed_mount2:
 +	if (sbi->s_mmp_tsk)
 +		kthread_stop(sbi->s_mmp_tsk);
+ 	journal_destroy(sbi->s_journal);
+ failed_mount2:
  	for (i = 0; i < db_count; i++)
- 		brelse(sbi->s_group_desc[i]);
- 	kfree(sbi->s_group_desc);
 @@ -2463,7 +2797,7 @@ static int ext3_remount (struct super_bl
  	unsigned long n_blocks_count = 0;
  	unsigned long old_sb_flags;
@@ -380,24 +380,22 @@ Index: linux-2.6.16.60-0.37/fs/ext3/super.c
  #ifdef CONFIG_QUOTA
  	int i;
  #endif
-@@ -2547,6 +2881,13 @@ static int ext3_remount (struct super_bl
+@@ -2547,6 +2881,11 @@ static int ext3_remount (struct super_bl
  			}
  			if (!ext3_setup_super (sb, es, 0))
  				sb->s_flags &= ~MS_RDONLY;
 +			if (EXT3_HAS_INCOMPAT_FEATURE(sb,
 +						    EXT3_FEATURE_INCOMPAT_MMP))
 +				if (ext3_multi_mount_protect(sb,
-+						le64_to_cpu(es->s_mmp_block))) {
-+					err = -EROFS;
++						le64_to_cpu(es->s_mmp_block)))
 +					goto restore_opts;
-+				}
  		}
  	}
  #ifdef CONFIG_QUOTA
-Index: linux-2.6.16.60-0.37/include/linux/ext3_fs.h
+Index: linux-2.6.16.60-0.31/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.16.60-0.37.orig/include/linux/ext3_fs.h
-+++ linux-2.6.16.60-0.37/include/linux/ext3_fs.h
+--- linux-2.6.16.60-0.31.orig/include/linux/ext3_fs.h
++++ linux-2.6.16.60-0.31/include/linux/ext3_fs.h
 @@ -597,13 +597,17 @@ struct ext3_super_block {
  	__le32	s_first_meta_bg;	/* First metablock block group */
  	__le32	s_mkfs_time;		/* When the filesystem was created */
@@ -475,10 +473,10 @@ Index: linux-2.6.16.60-0.37/include/linux/ext3_fs.h
   * Function prototypes
   */
  
-Index: linux-2.6.16.60-0.37/include/linux/ext3_fs_sb.h
+Index: linux-2.6.16.60-0.31/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.6.16.60-0.37.orig/include/linux/ext3_fs_sb.h
-+++ linux-2.6.16.60-0.37/include/linux/ext3_fs_sb.h
+--- linux-2.6.16.60-0.31.orig/include/linux/ext3_fs_sb.h
++++ linux-2.6.16.60-0.31/include/linux/ext3_fs_sb.h
 @@ -147,6 +147,7 @@ struct ext3_sb_info {
  	/* locality groups */
  	struct ext3_locality_group *s_locality_groups;

@@ -18,7 +18,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +++ linux-2.6.18.8/fs/ext3/extents.c	2007-07-17 11:08:59.000000000 +0200
 @@ -0,0 +1,2276 @@
 +/*
-+ * Copyright 2008, Sun Microsystems, Inc.
++ * Copyright 2008 Sun Microsystems, Inc.
 + * Written by Alex Tomas <alex@clusterfs.com>
 + *
 + * Architecture independence:
@@ -1037,7 +1037,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +{
 +	struct buffer_head *bh = NULL;
 +	struct ext3_extent_header *eh;
-+	struct ext3_extent_idx *ix = NULL;
++	struct ext3_extent_idx *ix;
 +	struct ext3_extent *ex;
 +	unsigned long block;
 +	int depth;
@@ -1162,7 +1162,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +}
 +
 +/*
-+ * returns first allocated block from next leaf or EXT_UNSET_BLOCK
++ * returns first allocated block from next leaf or EXT_MAX_BLOCK
 + */
 +static unsigned ext3_ext_next_leaf_block(struct inode *inode,
 +					 struct ext3_ext_path *path)
@@ -1174,7 +1174,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +
 +	/* zero-tree has no leaf blocks at all */
 +	if (depth == 0)
-+		return EXT_UNSET_BLOCK;
++		return EXT_MAX_BLOCK;
 +
 +	/* go to index block */
 +	depth--;
@@ -1186,7 +1186,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +		depth--;
 +	}
 +
-+	return EXT_UNSET_BLOCK;
++	return EXT_MAX_BLOCK;
 +}
 +
 +/*
@@ -1309,7 +1309,7 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +	fex = EXT_LAST_EXTENT(eh);
 +	next = ext3_ext_next_leaf_block(inode, path);
 +	if (le32_to_cpu(newext->ee_block) > le32_to_cpu(fex->ee_block)
-+	    && next != EXT_UNSET_BLOCK) {
++	    && next != EXT_MAX_BLOCK) {
 +		ext_debug(inode, "next leaf block - %d\n", next);
 +		BUG_ON(npath != NULL);
 +		npath = ext3_ext_find_extent(inode, next, NULL);
@@ -1773,8 +1773,8 @@ Index: linux-2.6.18.8/fs/ext3/extents.c
 +		path[depth].p_ext = ex;
 +
 +		a = ex_ee_block > start ? ex_ee_block : start;
-+		b = (unsigned long long)ex_ee_block + ex_ee_len - 1 < 
-+		     EXT_MAX_BLOCK ? ex_ee_block + ex_ee_len - 1 : EXT_MAX_BLOCK;
++		b = ex_ee_block + ex_ee_len - 1 < EXT_MAX_BLOCK ?
++			ex_ee_block + ex_ee_len - 1 : EXT_MAX_BLOCK;
 +
 +		ext_debug(inode, "  border %u:%u\n", a, b);
 +
@@ -2337,20 +2337,20 @@ Index: linux-2.6.18.8/fs/ext3/inode.c
  	depth = ext3_block_to_path(inode,iblock,offsets,&blocks_to_boundary);
  
 @@ -984,12 +983,10 @@ static int ext3_get_block(struct inode *
-		started = 1;
-	}
  
--	ret = ext3_get_blocks_handle(handle, inode, iblock,
-+	ret = ext3_get_blocks_wrap(handle, inode, iblock,
+ get_block:
+ 	if (ret == 0) {
+-		ret = ext3_get_blocks_handle(handle, inode, iblock,
++		ret = ext3_get_blocks_wrap(handle, inode, iblock,
  					max_blocks, bh_result, create, 0);
--	if (ret > 0) {
--		bh_result->b_size = (ret << inode->i_blkbits);
-+	if (ret > 0)
- 		ret = 0;
--	}
-	if (started)
-		ext3_journal_stop(handle);
- out:
+-		if (ret > 0) {
+-			bh_result->b_size = (ret << inode->i_blkbits);
++		if (ret > 0)
+ 			ret = 0;
+-		}
+ 	}
+ 	return ret;
+ }
 @@ -1008,7 +1005,7 @@ struct buffer_head *ext3_getblk(handle_t
  	dummy.b_state = 0;
  	dummy.b_blocknr = -1000;
@@ -2488,7 +2488,7 @@ Index: linux-2.6.18.8/include/linux/ext3_extents.h
 ===================================================================
 --- /dev/null	1970-01-01 00:00:00.000000000 +0000
 +++ linux-2.6.18.8/include/linux/ext3_extents.h	2007-07-17 09:18:14.000000000 +0200
-@@ -0,0 +1,232 @@
+@@ -0,0 +1,231 @@
 +/*
 + * Copyright 2008 Sun Microsystems, Inc.
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -2543,7 +2543,7 @@ Index: linux-2.6.18.8/include/linux/ext3_extents.h
 +do {                                                    \
 +	if (test_opt(inode->i_sb, EXTDEBUG))             \
 +		printk(fmt, ##a);                        \
-+} while (0)
++} while (0);
 +#else
 +#define ext_debug(inode,fmt,a...)
 +#endif
@@ -2642,7 +2642,6 @@ Index: linux-2.6.18.8/include/linux/ext3_extents.h
 +
 +
 +#define EXT_MAX_BLOCK	0xffffffff
-+#define EXT_UNSET_BLOCK 1
 +
 +#define EXT_FLAGS_CLR_UNKNOWN	0x7  /* Flags cleared on modification */
 +#define EXT_HDR_GEN_BITS	24
@@ -2761,9 +2760,9 @@ Index: linux-2.6.18.8/include/linux/ext3_fs.h
  					 EXT3_FEATURE_RO_COMPAT_LARGE_FILE| \
  					 EXT3_FEATURE_RO_COMPAT_BTREE_DIR)
 @@ -816,6 +821,9 @@ extern int ext3_get_inode_loc(struct ino
+ extern void ext3_truncate (struct inode *);
+ extern void ext3_set_inode_flags(struct inode *);
  extern void ext3_set_aops(struct inode *inode);
- extern int ext3_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
-		       u64 start, u64 len);
 +extern int ext3_writepage_trans_blocks(struct inode *);
 +extern int ext3_block_truncate_page(handle_t *handle, struct page *page,
 +		struct address_space *mapping, loff_t from);

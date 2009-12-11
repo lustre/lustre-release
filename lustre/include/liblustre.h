@@ -210,30 +210,17 @@ typedef int (write_proc_t)(struct file *file, const char *buffer,
 
 static __inline__ int ext2_set_bit(int nr, void *addr)
 {
-#ifdef __BIG_ENDIAN
-        return set_bit((nr ^ ((BITS_PER_LONG-1) & ~0x7)), addr);
-#else
         return set_bit(nr, addr);
-#endif
 }
 
 static __inline__ int ext2_clear_bit(int nr, void *addr)
 {
-#ifdef __BIG_ENDIAN
-        return clear_bit((nr ^ ((BITS_PER_LONG-1) & ~0x7)), addr);
-#else
         return clear_bit(nr, addr);
-#endif
 }
 
 static __inline__ int ext2_test_bit(int nr, void *addr)
 {
-#ifdef __BIG_ENDIAN
-        __const__ unsigned char *tmp = (__const__ unsigned char *) addr;
-        return (tmp[nr >> 3] >> (nr & 7)) & 1;
-#else
         return test_bit(nr, addr);
-#endif
 }
 
 /* modules */
@@ -379,7 +366,6 @@ typedef struct {
          int size;
 } kmem_cache_t;
 #define SLAB_HWCACHE_ALIGN 0
-#define SLAB_DESTROY_BY_RCU 0
 static inline kmem_cache_t *
 kmem_cache_create(const char *name, size_t objsize, size_t cdum,
                   unsigned long d,
@@ -903,10 +889,10 @@ void posix_acl_release(struct posix_acl *acl)
 }
 
 #ifdef LIBLUSTRE_POSIX_ACL
- #ifndef posix_acl_xattr_entry
+ #ifndef posix_acl_xattr_entry 
   #define posix_acl_xattr_entry xattr_acl_entry
  #endif
- #ifndef posix_acl_xattr_header
+ #ifndef posix_acl_xattr_header 
   #define posix_acl_xattr_header xattr_acl_header
  #endif
  #ifndef posix_acl_xattr_size

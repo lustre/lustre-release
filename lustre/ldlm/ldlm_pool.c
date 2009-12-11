@@ -382,12 +382,13 @@ static int ldlm_srv_pool_shrink(struct ldlm_pool *pl,
                                 int nr, unsigned int gfp_mask)
 {
         __u32 limit;
+        ENTRY;
 
         /* 
          * VM is asking how many entries may be potentially freed. 
          */
         if (nr == 0)
-                return atomic_read(&pl->pl_granted);
+                RETURN(atomic_read(&pl->pl_granted));
 
         /* 
          * Client already canceled locks but server is already in shrinker
@@ -427,7 +428,7 @@ static int ldlm_srv_pool_shrink(struct ldlm_pool *pl,
          * We did not really free any memory here so far, it only will be
          * freed later may be, so that we return 0 to not confuse VM. 
          */
-        return 0;
+        RETURN(0);
 }
 
 /**
@@ -508,7 +509,7 @@ static int ldlm_cli_pool_recalc(struct ldlm_pool *pl)
          * It may be called when SLV has changed much, this is why we do not
          * take into account pl->pl_recalc_time here. 
          */
-        RETURN(ldlm_cancel_lru(ldlm_pl2ns(pl), 0, LDLM_SYNC, 
+        RETURN(ldlm_cancel_lru(ldlm_pl2ns(pl), 0, LDLM_ASYNC, 
                                LDLM_CANCEL_LRUR));
 }
 
@@ -520,15 +521,12 @@ static int ldlm_cli_pool_recalc(struct ldlm_pool *pl)
 static int ldlm_cli_pool_shrink(struct ldlm_pool *pl,
                                 int nr, unsigned int gfp_mask)
 {
-        struct ldlm_namespace *ns;
-        int canceled = 0, unused;
+        ENTRY;
         
-        ns = ldlm_pl2ns(pl);
-
         /* 
          * Do not cancel locks in case lru resize is disabled for this ns. 
          */
-        if (!ns_connect_lru_resize(ns))
+        if (!ns_connect_lru_resize(ldlm_pl2ns(pl)))
                 RETURN(0);
 
         /* 
@@ -536,22 +534,19 @@ static int ldlm_cli_pool_shrink(struct ldlm_pool *pl,
          */
         ldlm_cli_pool_pop_slv(pl);
 
-        spin_lock(&ns->ns_unused_lock);
-        unused = ns->ns_nr_unused;
-        spin_unlock(&ns->ns_unused_lock);
-        
-        if (nr) {
-                canceled = ldlm_cancel_lru(ns, nr, LDLM_SYNC, 
-                                           LDLM_CANCEL_SHRINK);
-        }
-#ifdef __KERNEL__
-        /*
-         * Retrun the number of potentially reclaimable locks.
+        /* 
+         * Find out how many locks may be released according to shrink 
+         * policy. 
          */
-        return ((unused - canceled) / 100) * sysctl_vfs_cache_pressure;
-#else
-        return unused - canceled;
-#endif
+        if (nr == 0)
+                RETURN(ldlm_cancel_lru_estimate(ldlm_pl2ns(pl), 0, 0, 
+                                                LDLM_CANCEL_SHRINK));
+
+        /* 
+         * Cancel @nr locks accoding to shrink policy. 
+         */
+        RETURN(ldlm_cancel_lru(ldlm_pl2ns(pl), nr, LDLM_SYNC, 
+                               LDLM_CANCEL_SHRINK));
 }
 
 struct ldlm_pool_ops ldlm_srv_pool_ops = {
@@ -1084,7 +1079,7 @@ static int ldlm_pools_shrink(ldlm_side_t client, int nr,
                 total += ldlm_pool_shrink(&ns->ns_pool, 0, gfp_mask);
                 ldlm_namespace_put(ns, 1);
         }
- 
+
         if (nr == 0 || total == 0)
                 return total;
 

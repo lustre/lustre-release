@@ -432,6 +432,7 @@ static int mds_destroy_export(struct obd_export *export)
         if (obd_uuid_equals(&export->exp_client_uuid, &obd->obd_uuid))
                 RETURN(0);
 
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         /* Close any open files (which may also cause orphan unlinking). */
 
         lmm_sz = mds->mds_max_mdsize;
@@ -450,8 +451,6 @@ static int mds_destroy_export(struct obd_export *export)
                 OBD_FREE(lmm, lmm_sz);
                 GOTO(out, rc = -ENOMEM);
         }
-
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         CFS_INIT_LIST_HEAD(&closing_list);
         spin_lock(&med->med_open_lock);
@@ -1209,7 +1208,7 @@ static int mds_statfs(struct ptlrpc_request *req)
         /* This will trigger a watchdog timeout */
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_STATFS_LCW_SLEEP,
                          (MDS_SERVICE_WATCHDOG_FACTOR *
-                          at_get(&svc->srv_at_estimate)) + 1);
+                          at_get(&svc->srv_at_estimate) / 1000) + 1);
         OBD_COUNTER_INCREMENT(obd, statfs);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK))
@@ -1648,8 +1647,9 @@ int mds_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_CONNECT_NET, 0);
                 rc = target_handle_connect(req, mds_handle);
                 if (!rc) {
-                        /* Now that we have an export, set obd. */
+                        /* Now that we have an export, set mds. */
                         obd = req->rq_export->exp_obd;
+                        mds = mds_req2mds(req);
                 }
                 break;
 
@@ -1740,8 +1740,9 @@ int mds_handle(struct ptlrpc_request *req)
                         __swab32s(&opc);
 
                 DEBUG_REQ(D_INODE, req, "reint %d (%s)", opc,
-                          (opc < REINT_MAX) ? reint_names[opc] :
-                          "unknown opcode");
+                          (opc < sizeof(reint_names) / sizeof(reint_names[0]) ||
+                           reint_names[opc] == NULL) ? reint_names[opc] :
+                                                       "unknown opcode");
 
                 switch (opc) {
                 case REINT_CREATE:
@@ -1779,13 +1780,6 @@ int mds_handle(struct ptlrpc_request *req)
                         bufcount = 3;
                 else
                         bufcount = 2;
-
-                /* if we do recovery we isn't send reply mds state is restored */
-                if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
-                        size[DLM_REPLY_REC_OFF] = 0;
-                        if (opc == REINT_UNLINK || opc == REINT_RENAME)
-                                size[DLM_REPLY_REC_OFF + 1] = 0;
-                }
 
                 rc = lustre_pack_reply(req, bufcount, size, NULL);
                 if (rc)
@@ -2309,8 +2303,7 @@ int mds_postrecov(struct obd_device *obd)
                    OBD_NOTIFY_SYNC, NULL);
 
         /* quota recovery */
-        if (likely(obd->obd_stopping == 0))
-                lquota_recovery(mds_quota_interface_ref, obd);
+        lquota_recovery(mds_quota_interface_ref, obd);
 
 out:
         RETURN(rc);

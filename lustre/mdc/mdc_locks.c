@@ -248,7 +248,7 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
         if (rc & (rc - 1))
                 size[DLM_INTENT_REC_OFF + 2] =
                          min(size[DLM_INTENT_REC_OFF + 2] + round_up(rc) - rc,
-                             (__u32)obddev->u.cli.cl_max_mds_easize);
+                                     obddev->u.cli.cl_max_mds_easize);
 
                 /* If inode is known, cancel conflicting OPEN locks. */
         if (data->fid2.id) {
@@ -436,7 +436,6 @@ static int mdc_finish_enqueue(struct obd_export *exp,
         it->d.lustre.it_disposition = (int)lockrep->lock_policy_res1;
         it->d.lustre.it_status = (int)lockrep->lock_policy_res2;
         it->d.lustre.it_lock_mode = einfo->ei_mode;
-        it->d.lustre.it_lock_handle = lockh->cookie;
         it->d.lustre.it_data = req;
 
         if (it->d.lustre.it_status < 0 && req->rq_replay)
@@ -770,6 +769,7 @@ int mdc_intent_lock(struct obd_export *exp, struct mdc_op_data *op_data,
                                  lmm, lmmsize, extra_lock_flags);
                 if (rc < 0)
                         RETURN(rc);
+                memcpy(&it->d.lustre.it_lock_handle, &lockh, sizeof(lockh));
         } else if (!op_data->fid2.id) {
                 /* DISP_ENQ_COMPLETE set means there is extra reference on
                  * request referenced from this intent, saved for subsequent
@@ -817,6 +817,8 @@ static int mdc_intent_getattr_async_interpret(struct ptlrpc_request *req,
         rc = mdc_finish_enqueue(exp, req, einfo, it, lockh, rc);
         if (rc)
                 GOTO(out, rc);
+
+        memcpy(&it->d.lustre.it_lock_handle, lockh, sizeof(*lockh));
 
         rc = mdc_finish_intent_lock(exp, req, &minfo->mi_data, it, lockh);
         GOTO(out, rc);

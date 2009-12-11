@@ -87,13 +87,12 @@ test_2b() {
 run_test 2b "touch"
 
 test_3a() {
-    local file=$DIR/$tfile
     replay_barrier mds
-    mcreate $file
-    openfile -f O_DIRECTORY $file
+    mcreate $DIR/$tfile
+    o_directory $DIR/$tfile
     fail mds
-    $CHECKSTAT -t file $file || return 2
-    rm $file
+    $CHECKSTAT -t file $DIR/$tfile || return 2
+    rm $DIR/$tfile
 }
 run_test 3a "replay failed open(O_DIRECTORY)"
 
@@ -403,7 +402,7 @@ test_20b() { # bug 10480
 
     fail mds                            # start orphan recovery
     df -P $DIR || df -P $DIR || true    # reconnect
-    wait_recovery_complete mds || error "MDS recovery not done"
+    wait_mds_recovery_done || error "MDS recovery not done"
 
     AFTERUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
     log "before $BEFOREUSED, after $AFTERUSED"
@@ -972,47 +971,6 @@ test_48() {
 }
 run_test 48 "MDS->OSC failure during precreate cleanup (2824)"
 
-test_49a() {
-    multiop $DIR/$tfile O_c &
-    pid=$!
-    sleep 1
-    rm -rf $DIR/$tfile
-
-#define OBD_FAIL_MDS_ALL_REPLY_NET       0x122
-    do_facet mds "lctl set_param fail_loc=0x80000122"
-    kill -USR1 $pid
-    do_facet mds "lctl set_param fail_loc=0"
-
-    replay_barrier_nodf mds
-    fail mds
-
-    wait $pid || return 1
-    $CHECKSTAT -t file $DIR/$tfile && return 2
-    return 0
-}
-run_test 49a "mds fail after close reply is dropped: open|create "
-
-test_49c() {
-    touch $DIR/$tfile
-    multiop $DIR/$tfile o_c &
-    pid=$!
-    sleep 1
-    rm -rf $DIR/$tfile
-
-#define OBD_FAIL_MDS_ALL_REPLY_NET       0x122
-    do_facet mds "lctl set_param fail_loc=0x80000122"
-    kill -USR1 $pid
-    do_facet mds "lctl set_param fail_loc=0"
-
-    replay_barrier_nodf mds
-    fail mds
-
-    wait $pid || return 1
-    $CHECKSTAT -t file $DIR/$tfile && return 2
-    return 0
-}
-run_test 49c "mds fail after close reply is dropped: open"
-
 test_50() {
     local oscdev=`do_facet mds lctl get_param -n devices | grep ${ost1_svc}-osc | awk '{print $1}' | head -1`
     [ "$oscdev" ] || return 1
@@ -1472,31 +1430,10 @@ run_test 62 "don't mis-drop resent replay"
 
 #Adaptive Timeouts (bug 3055)
 AT_MAX_SET=0
-
-at_cleanup () {
-    local var
-    local facet
-    local at_new
-
-    echo "Cleaning up AT ..."
-    if [ -n "$ATOLDBASE" ]; then
-        local at_history=$(do_facet mds "find /sys/ -name at_history")
-        do_facet mds "echo $ATOLDBASE >> $at_history" || true
-        do_facet ost1 "echo $ATOLDBASE >> $at_history" || true
-    fi
-
-    if [ $AT_MAX_SET -ne 0 ]; then
-        for facet in mds client ost; do
-            var=AT_MAX_SAVE_${facet}
-            echo restore AT on $facet to saved value ${!var}
-            at_max_set ${!var} $facet
-            at_new=$(at_max_get $facet)
-            echo Restored AT value on $facet $at_new
-            [ $at_new -eq ${!var} ] || \
-            error "$facet : AT value was not restored SAVED ${!var} NEW $at_new"
-        done
-    fi
-}
+# Suppose that all osts have the same at_max
+for facet in mds client ost; do
+    eval AT_MAX_SAVE_${facet}=$(at_max_get $facet)
+done
 
 at_start()
 {
@@ -1506,15 +1443,8 @@ at_start()
         return 1
     fi
 
-    # Save at_max original values
-    local facet
-    if [ $AT_MAX_SET -eq 0 ]; then
-        # Suppose that all osts have the same at_max
-        for facet in mds client ost; do
-            eval AT_MAX_SAVE_${facet}=$(at_max_get $facet)
-        done
-    fi
     local at_max
+
     for facet in mds client ost; do
         at_max=$(at_max_get $facet)
         if [ $at_max -ne $at_max_new ]; then
@@ -1731,7 +1661,24 @@ test_68 () #bug 13813
 }
 run_test 68 "AT: verify slowing locks"
 
-at_cleanup
+if [ -n "$ATOLDBASE" ]; then
+    at_history=$(do_facet mds "find /sys/ -name at_history")
+    do_facet mds "echo $ATOLDBASE >> $at_history" || true
+    do_facet ost1 "echo $ATOLDBASE >> $at_history" || true
+fi
+
+if [ $AT_MAX_SET -ne 0 ]; then
+    for facet in mds client ost; do
+        var=AT_MAX_SAVE_${facet}
+        echo restore AT on $facet to saved value ${!var}
+        at_max_set ${!var} $facet
+        AT_NEW=$(at_max_get $facet)
+        echo Restored AT value on $facet $AT_NEW 
+        [ $AT_NEW -ne ${!var} ] && \
+            error "$facet : AT value was not restored SAVED ${!var} NEW $AT_NEW"
+    done
+fi
+
 # end of AT tests includes above lines
 
 # start multi-client tests
@@ -1764,80 +1711,36 @@ test_70a () {
 run_test 70a "check multi client t-f"
 
 test_70b () {
-	local clients=${CLIENTS:-$HOSTNAME}
+	[ -z "$CLIENTS" ] && \
+		{ skip "Need two or more clients." && return; }
+	[ $CLIENTCOUNT -lt 2 ] && \
+		{ skip "Need two or more clients, have $CLIENTCOUNT" && return; }
 
-	zconf_mount_clients $clients $DIR
+	zconf_mount_clients $CLIENTS $DIR
 	
-	local duration=300
+	local duration=120
 	[ "$SLOW" = "no" ] && duration=60
 	local cmd="rundbench 1 -t $duration"
 	local PID=""
-	do_nodes $clients "set -x; MISSING_DBENCH_OK=$MISSING_DBENCH_OK \
+	do_nodes $CLIENTS "set -x; MISSING_DBENCH_OK=$MISSING_DBENCH_OK \
 		PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests/:$DBENCH_LIB \
 		DBENCH_LIB=$DBENCH_LIB TESTSUITE=$TESTSUITE TESTNAME=$TESTNAME \
 		LCTL=$LCTL $cmd" &
 	PID=$!
 	log "Started rundbench load PID=$PID ..."
 
-	ELAPSED=0
-	NUM_FAILOVERS=0
-	START_TS=$(date +%s)
-	CURRENT_TS=$START_TS
-	while [ $ELAPSED -lt $duration ]; do
-		sleep 1
-		replay_barrier mds
-		sleep 1 # give clients a time to do operations
-		# Increment the number of failovers
-		NUM_FAILOVERS=$((NUM_FAILOVERS+1))
-		log "$TESTNAME fail mds1 $NUM_FAILOVERS times"
-		facet_failover mds
-		CURRENT_TS=$(date +%s)
-		ELAPSED=$((CURRENT_TS - START_TS))
-	done
+	sleep $((duration / 4))
+	replay_barrier mds 
+	sleep 3 # give clients a time to do operations
 
-	wait $PID || error "rundbench load on $CLIENTS failed!"
+	log "$TESTNAME fail mds 1"
+	fail mds
 
 	wait $PID || error "rundbench load on $CLIENTS failed!"
 
 }
 run_test 70b "mds recovery; $CLIENTCOUNT clients"
 # end multi-client tests
-
-test_80() {
-    do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 0"
-    
-    replay_barrier ost1
-    lfs setstripe -i 0 -c 1 $DIR/$tfile
-    dd if=/dev/urandom of=$DIR/$tfile bs=1024k count=8 || error "Cannot write"
-    cksum=`md5sum $DIR/$tfile | awk '{print $1}'`
-    cancel_lru_locks osc
-    fail ost1
-    dd if=$DIR/$tfile of=/dev/null bs=1024k count=8 || error "Cannot read"
-    cksum2=`md5sum $DIR/$tfile | awk '{print $1}'`
-    if [ $cksum != $cksum2 ] ; then
-	error "New checksum $cksum2 does not match original $cksum"
-    fi
-}
-run_test 80 "write replay"
-
-test_80b() {
-    do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 0"
-    
-    replay_barrier ost1
-    lfs setstripe -i 0 -c 1 $DIR/$tfile
-    dd if=/dev/urandom of=$DIR/$tfile bs=1024k count=8 || error "Cannot write"
-    sleep 1 # Give it a chance to flush dirty data
-    echo TESTTEST | dd of=$DIR/$tfile bs=1 count=8 seek=64
-    cksum=`md5sum $DIR/$tfile | awk '{print $1}'`
-    cancel_lru_locks osc
-    fail ost1
-    dd if=$DIR/$tfile of=/dev/null bs=1024k count=8 || error "Cannot read"
-    cksum2=`md5sum $DIR/$tfile | awk '{print $1}'`
-    if [ $cksum != $cksum2 ] ; then
-	error "New checksum $cksum2 does not match original $cksum"
-    fi
-}
-run_test 80b "write replay with changed data (checksum resend)"
 
 test_81a() {
     mkdir -p $DIR/$tdir
@@ -1859,19 +1762,6 @@ test_81b() {
 }
 run_test 81b "fail log_add during unlink recovery"
 
-
-test_72() { #bug 16711
-    replay_barrier mds
-    multiop_bg_pause $DIR/$tfile O_c || return 4
-    pid=$!
-#define OBD_FAIL_TGT_REPLAY_DELAY 0x709
-    do_facet mds "lctl set_param fail_loc=0x80000709"
-    fail mds
-    kill -USR1 $pid || return 1
-    wait $pid || return 2
-    $CHECKSTAT -t file $DIR/$tfile || return 3
-}
-run_test 72 "target_finish_recovery vs process_recovery_queue race"
 
 equals_msg `basename $0`: test complete, cleaning up
 check_and_cleanup_lustre

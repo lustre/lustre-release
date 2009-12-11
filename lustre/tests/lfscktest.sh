@@ -132,7 +132,7 @@ if [ "$LFSCK_SETUP" != "no" ]; then
 	for i in $OST_REMOVE; do
 		echo "rm O/0/d$((i % 32))/$i" >> $DEBUGTMP
 	done
-	$DEBUGFS -w -f $DEBUGTMP `echo $OSTDEVS | cut -d' ' -f 1`
+	debugfs -w -f $DEBUGTMP `echo $OSTDEVS | cut -d' ' -f 1`
 	RET=$?
 	rm $DEBUGTMP
 	[ $RET -ne 0 ] && exit 50
@@ -174,19 +174,19 @@ fi # LFSCK_SETUP
 # a return status of 1 indicates e2fsck successfuly fixed problems found
 set +e
 
-echo "$E2FSCK -d -v -fn --mdsdb $MDSDB $MDSDEV"
+echo "e2fsck -d -v -fn --mdsdb $MDSDB $MDSDEV"
 df > /dev/null	# update statfs data on disk
-$E2FSCK -d -v -fn --mdsdb $MDSDB $MDSDEV
+e2fsck -d -v -fn --mdsdb $MDSDB $MDSDEV
 RET=$?
-[ $RET -gt $MAX_ERR ] && echo "$E2FSCK returned $RET" && exit 90 || true
+[ $RET -gt $MAX_ERR ] && echo "e2fsck returned $RET" && exit 90 || true
 
 export OSTDB_LIST=""
 i=0
 for OSTDEV in $OSTDEVS; do
 	df > /dev/null	# update statfs data on disk
-	$E2FSCK -d -v -fn --mdsdb $MDSDB --ostdb $OSTDB-$i $OSTDEV
+	e2fsck -d -v -fn --mdsdb $MDSDB --ostdb $OSTDB-$i $OSTDEV
 	RET=$?
-	[ $RET -gt $MAX_ERR ] && echo "$E2FSCK returned $RET" && exit 100
+	[ $RET -gt $MAX_ERR ] && echo "e2fsck returned $RET" && exit 100
 	OSTDB_LIST="$OSTDB_LIST $OSTDB-$i"
 	i=$((i + 1))
 done
@@ -208,19 +208,19 @@ echo "LFSCK TEST 1 - finished with rc=$RET"
 sync; sleep 2; sync
 
 echo "LFSCK TEST 2"
-echo "$E2FSCK -d -v -fn --mdsdb $MDSDB $MDSDEV"
+echo "e2fsck -d -v -fn --mdsdb $MDSDB $MDSDEV"
 df > /dev/null	# update statfs data on disk
-$E2FSCK -d -v -fn --mdsdb $MDSDB $MDSDEV
+e2fsck -d -v -fn --mdsdb $MDSDB $MDSDEV
 RET=$?
-[ $RET -gt $MAX_ERR ] && echo "$E2FSCK returned $RET" && exit 123 || true
+[ $RET -gt $MAX_ERR ] && echo "e2fsck returned $RET" && exit 123 || true
 
 i=0
 export OSTDB_LIST=""
 for OSTDEV in $OSTDEVS; do
 	df > /dev/null	# update statfs data on disk
-	$E2FSCK -d -v -fn --mdsdb $MDSDB --ostdb $OSTDB-$i $OSTDEV
+	e2fsck -d -v -fn --mdsdb $MDSDB --ostdb $OSTDB-$i $OSTDEV
 	RET=$?
-	[ $RET -gt $MAX_ERR ] && echo "$E2FSCK returned $RET" && exit 124
+	[ $RET -gt $MAX_ERR ] && echo "e2fsck returned $RET" && exit 124
 	OSTDB_LIST="$OSTDB_LIST $OSTDB-$i"
 	i=$((i + 1))
 done

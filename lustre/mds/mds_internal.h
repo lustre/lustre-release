@@ -43,7 +43,7 @@
 #define MDT_ROCOMPAT_SUPP       (OBD_ROCOMPAT_LOVOBJID)
 #define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR)
 
-#define MDS_SERVICE_WATCHDOG_FACTOR 2
+#define MDS_SERVICE_WATCHDOG_FACTOR 2000
 
 #define MAX_ATIME_DIFF 60
 
@@ -51,9 +51,7 @@ struct mds_filter_data {
         __u64 io_epoch;
 };
 
-#define MDS_FILTERDATA(inode) \
-                ((struct mds_filter_data *)INODE_PRIVATE_DATA(inode))
-
+#define MDS_FILTERDATA(inode) ((struct mds_filter_data *)(inode)->i_filterdata)
 
 static inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
 {

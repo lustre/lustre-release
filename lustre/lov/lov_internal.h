@@ -37,7 +37,6 @@
 #ifndef LOV_INTERNAL_H
 #define LOV_INTERNAL_H
 
-#include <obd_class.h>
 #include <lustre/lustre_user.h>
 
 struct lov_lock_handles {
@@ -175,12 +174,10 @@ int lov_stripe_number(struct lov_stripe_md *lsm, obd_off lov_off);
 #define LOV_USES_ASSIGNED_STRIPE        0
 #define LOV_USES_DEFAULT_STRIPE         1
 int qos_add_tgt(struct obd_device *obd, __u32 index);
-int qos_del_tgt(struct obd_device *obd, struct lov_tgt_desc *tgt);
+int qos_del_tgt(struct obd_device *obd, __u32 index);
 void qos_shrink_lsm(struct lov_request_set *set);
 int qos_prep_create(struct obd_export *exp, struct lov_request_set *set);
 void qos_update(struct lov_obd *lov);
-void qos_statfs_done(struct lov_obd *lov);
-void qos_statfs_update(struct obd_device *obd, __u64 max_age, int wait);
 int qos_remedy_create(struct lov_request_set *set, struct lov_request *req);
 
 /* lov_request.c */
@@ -251,7 +248,6 @@ void lov_update_statfs(struct obd_statfs *osfs, struct obd_statfs *lov_sfs,
 int lov_fini_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                     int success);
 int lov_fini_statfs_set(struct lov_request_set *set);
-int lov_statfs_interpret(struct ptlrpc_request_set *rqset, void *data, int rc);
 
 /* lov_obd.c */
 void lov_fix_desc(struct lov_desc *desc);
@@ -260,6 +256,8 @@ void lov_fix_desc_stripe_count(__u32 *val);
 void lov_fix_desc_pattern(__u32 *val);
 void lov_fix_desc_qos_maxage(__u32 *val);
 int lov_get_stripecnt(struct lov_obd *lov, __u32 stripe_count);
+void lov_getref(struct obd_device *obd);
+void lov_putref(struct obd_device *obd);
 
 /* lov_log.c */
 int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,

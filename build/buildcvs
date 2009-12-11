@@ -57,12 +57,6 @@ case "$lustretag" in
         portalstag="b_hd_newconfig"
         ;;
 
-    b_cmd_cray)
-        lnettag="HEAD"
-        ldiskfstag="$ldiskfstag_head"
-        libcfstag="HEAD"
-        ;;
-
     b_cmd*)
         portalstag="$lustretag"
         ;;
@@ -79,12 +73,12 @@ case "$lustretag" in
 
     b_mpilnd)
         # lnet mpilnd development branch
-        lnettag="b_mpilnd"
-        lustretag="HEAD"
-        ;;
+	lnettag="b_mpilnd"
+	lustretag="HEAD"
+	;;
 
     b_new_cmd)
-        portalstag="b_new_portals"
+	portalstag="b_new_portals"
         # lnettag="b_lnet_tmp"
         ;;
 
@@ -153,15 +147,15 @@ case "$lustretag" in
 
     b_self_test)
         # lnet self test development branch
-        lnettag="b_self_test"
-        lustretag="HEAD"
-        ;;
+	lnettag="b_self_test"
+	lustretag="HEAD"
+	;;
 
     b_usocklnd)
         # lnet usocklnd development branch
-        lnettag="b_usocklnd"
-        lustretag="b1_6_usocklnd"
-        ;;
+	lnettag="b_usocklnd"
+	lustretag="b1_6_usocklnd"
+	;;
 
     b_uo2iblnd)
         # lnet u-o2iblnd development branch
@@ -172,17 +166,17 @@ case "$lustretag" in
     b_hd_lnet_smp)
         # LNet grained locking and SMP improvement branch
         lnettag="b_hd_lnet_smp"
-        ldiskfstag="lnet_smp_ldiskfs"
-        lustretag="lnet_smp_lustre"
-        libcfstag="lnet_smp_libcfs"
+        ldiskfstag="$ldiskfstag_head"
+        lustretag="HEAD"
+        libcfstag="HEAD"
         ;;
 
-    b_hd_lnet_perf)
-        # Tag for lnet performance tests
-        lnettag="lnet_smp_lnet"
-        ldiskfstag="lnet_smp_ldiskfs"
-        lustretag="lnet_smp_lustre"
-        libcfstag="lnet_smp_libcfs"
+    b_hd_lnet_smp_concur)
+        # LNet grained locking and SMP concurrency branch
+        lnettag="b_hd_lnet_smp_concur"
+        ldiskfstag="$ldiskfstag_head"
+        lustretag="HEAD"
+        libcfstag="HEAD"
         ;;
 
     b_hd_o2ib_new_proto)
@@ -195,10 +189,10 @@ case "$lustretag" in
 
     b_ula)
         # lnet "User Level Access" development branch
-        lnettag="b_ula"
-        lustretag="HEAD"
+	lnettag="b_ula"
+	lustretag="HEAD"
         ldiskfstag="$ldiskfstag_head"
-        ;;
+	;;
 
     # CMD3
     b_post_cmd3|b_new_cmd_sles10|b1_6_head_sync|b_mixed_layout_req|b_mount_perm|b1_8_gns|b1_8_interop_server)
@@ -209,7 +203,7 @@ case "$lustretag" in
     #umds cleanup
     b_hd_umds_cln2)
         ldiskfstag="b1_8_iam_dynlock"
-        ;;
+	;;
 
     # uOSS
     b_hd_dmu)
@@ -234,19 +228,12 @@ case "$lustretag" in
    
     # params_tree 
     b_hd_params_tree)
-        lnettag="b_hd_params_tree"
+        lnettag="HEAD"
         ldiskfstag="$ldiskfstag_head"
         libcfstag="b_hd_params_tree"
         lustretag="b_hd_params_tree"
         ;;
-  
-    # Network request scheduler
-    b_hd_nrs)
-        lnettag="HEAD"
-        ldiskfstag="$ldiskfstag_head"
-        libcfstag="HEAD"
-        ;;
- 
+   
     # uMDS
     b_dmu_umds)
         lnettag="b_uoss_umds"
@@ -257,7 +244,7 @@ case "$lustretag" in
     # uOSS o2iblnd
     b_uoss_o2iblnd)
         lnettag="b_uoss_o2iblnd"
-        lustretag="b_hd_dmu"
+	lustretag="b_hd_dmu"
         ldiskfstag="$ldiskfstag_head"
         dmutag="zfs-lustre"
         ;;
@@ -316,7 +303,7 @@ case "$lustretag" in
 
     # Branches that have been updated to include
     # the libcfs split should be added here
-    HEAD|b_head_capa|b_hd_cfld|b_hd_changelog|b_hd_sptlrpc|HD_SPTLRPC_BASE|b_som|b_hd_kdmu|b_hd_recov|b_hd_transapi)
+    HEAD|b_head_quota|b_hd_cfld|b_hd_changelog|b_hd_sptlrpc|HD_SPTLRPC_BASE|b_som|b_hd_kdmu|b_hd_recov)
         lnettag="HEAD"
         ldiskfstag="$ldiskfstag_head"
         libcfstag="HEAD"
@@ -350,9 +337,8 @@ case "$lustretag" in
         ;;
 
     b_HEAD_*|b_head_*|b_hd_*)
-        lnettag="HEAD"
+        lnettag="b1_x"
         ldiskfstag="$ldiskfstag_head"
-        libcfstag="HEAD"
         ;;
 esac
 

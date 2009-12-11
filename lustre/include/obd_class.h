@@ -730,26 +730,6 @@ static inline int obd_ping(struct obd_export *exp)
         RETURN(rc);
 }
 
-static inline void obd_getref(struct obd_device *obd)
-{
-        ENTRY;
-        if (OBT(obd) && OBP(obd, getref)) {
-                OBD_COUNTER_INCREMENT(obd, getref);
-                OBP(obd, getref)(obd);
-        }
-        EXIT;
-}
-
-static inline void obd_putref(struct obd_device *obd)
-{
-        ENTRY;
-        if (OBT(obd) && OBP(obd, putref)) {
-                OBD_COUNTER_INCREMENT(obd, putref);
-                OBP(obd, putref)(obd);
-        }
-        EXIT;
-}
-
 static inline int obd_init_export(struct obd_export *exp)
 {
         int rc = 0;
@@ -1254,8 +1234,7 @@ static inline int obd_enqueue(struct obd_export *exp,
 
 static inline int obd_match(struct obd_export *exp, struct lov_stripe_md *ea,
                             __u32 type, ldlm_policy_data_t *policy, __u32 mode,
-                            int *flags, void *data, struct lustre_handle *lockh,
-                            int *n_matches)
+                            int *flags, void *data, struct lustre_handle *lockh)
 {
         int rc;
         ENTRY;
@@ -1264,7 +1243,7 @@ static inline int obd_match(struct obd_export *exp, struct lov_stripe_md *ea,
         EXP_COUNTER_INCREMENT(exp, match);
 
         rc = OBP(exp->exp_obd, match)(exp, ea, type, policy, mode, flags, data,
-                                      lockh, n_matches);
+                                      lockh);
         RETURN(rc);
 }
 

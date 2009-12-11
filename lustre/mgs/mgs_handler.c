@@ -181,12 +181,6 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         if (IS_ERR(obd->obd_fsops))
                 GOTO(err_put, rc = PTR_ERR(obd->obd_fsops));
 
-        if (lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb))) {
-                CERROR("%s: Underlying device is marked as read-only. "
-                       "Setup failed\n", obd->obd_name);
-                GOTO(err_ops, rc = -EROFS);
-        }
-
         /* namespace for mgs llog */
         obd->obd_namespace = ldlm_namespace_new(obd, "MGS", LDLM_NAMESPACE_SERVER,
                                                 LDLM_NAMESPACE_MODEST);
@@ -196,6 +190,12 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         /* ldlm setup */
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
                            "mgs_ldlm_client", &obd->obd_ldlm_client);
+
+        if (lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb))) {
+                CERROR("%s: Underlying device is marked as read-only. "
+                       "Setup failed\n", obd->obd_name);
+                GOTO(err_ops, rc = -EROFS);
+        }
 
         rc = mgs_fs_setup(obd, mnt);
         if (rc) {
@@ -220,7 +220,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         mgs->mgs_service =
                 ptlrpc_init_svc(MGS_NBUFS, MGS_BUFSIZE, MGS_MAXREQSIZE,
                                 MGS_MAXREPSIZE, MGS_REQUEST_PORTAL,
-                                MGC_REPLY_PORTAL, 2,
+                                MGC_REPLY_PORTAL, 2000,
                                 mgs_handle, LUSTRE_MGS_NAME,
                                 obd->obd_proc_entry, NULL,
                                 MGS_THREADS_AUTO_MIN, MGS_THREADS_AUTO_MAX,
@@ -386,7 +386,6 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
 
         mti = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*mti),
                                  lustre_swab_mgs_target_info);
-        LASSERT(mti);
 
         if (!(mti->mti_flags & (LDD_F_WRITECONF | LDD_F_UPGRADE14 |
                                 LDD_F_UPDATE))) {

@@ -641,10 +641,6 @@ static int ost_prolong_locks_iter(struct ldlm_lock *lock, void *data)
                 return LDLM_ITER_CONTINUE;
         }
 
-        CDEBUG(D_DLMTRACE,"refresh lock: "LPU64"/"LPU64" ("LPU64"->"LPU64")\n",
-               lock->l_resource->lr_name.name[0],
-               lock->l_resource->lr_name.name[1],
-               opd->opd_policy.l_extent.start, opd->opd_policy.l_extent.end);
         /* OK. this is a possible lock the user holds doing I/O
          * let's refresh eviction timer for it */
         ldlm_refresh_waiting_lock(lock, opd->opd_timeout);
@@ -675,7 +671,7 @@ static int ost_rw_prolong_locks(struct ptlrpc_request *req, struct obd_ioobj *ob
                           max(at_est2timeout(at_get(&req->rq_rqbd->
                               rqbd_service->srv_at_estimate)), ldlm_timeout);
 
-        CDEBUG(D_INFO,"refresh locks: "LPU64"/"LPU64" ("LPU64"->"LPU64")\n",
+        CDEBUG(D_DLMTRACE,"refresh locks: "LPU64"/"LPU64" ("LPU64"->"LPU64")\n",
                res_id.name[0], res_id.name[1], opd.opd_policy.l_extent.start,
                opd.opd_policy.l_extent.end);
 
@@ -1285,8 +1281,6 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
 static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
 {
-        struct ost_body *body = NULL, *repbody;
-        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         char *key, *val = NULL;
         int keylen, vallen, rc = 0;
         ENTRY;
@@ -1298,33 +1292,13 @@ static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
         }
         keylen = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF);
 
-        if (KEY_IS(KEY_GRANT_SHRINK)) {
-                rc = lustre_pack_reply(req, 2, size, NULL);
-                if (rc)
-                        RETURN(rc);
-        } else {
-                rc = lustre_pack_reply(req, 1, NULL, NULL);
-                if (rc)
-                        RETURN(rc);
-        }
+        rc = lustre_pack_reply(req, 1, NULL, NULL);
+        if (rc)
+                RETURN(rc);
 
         vallen = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF + 1);
-        if (vallen) {
-                if (KEY_IS(KEY_GRANT_SHRINK)) {
-                        body = lustre_swab_reqbuf(req, REQ_REC_OFF + 1,
-                                                  sizeof(*body),
-                                                  lustre_swab_ost_body);
-                        if (!body)
-                                RETURN(-EFAULT);
-
-                        repbody = lustre_msg_buf(req->rq_repmsg,
-                                                 REPLY_REC_OFF,
-                                                 sizeof(*repbody));
-                        memcpy(repbody, body, sizeof(*body));
-                        val = (char*)repbody;
-                } else
-                        val = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1,0);
-        }
+        if (vallen)
+                val = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1, 0);
 
         if (KEY_IS(KEY_EVICT_BY_NID)) {
                 if (val && vallen)
@@ -1438,37 +1412,6 @@ static int ost_handle_quota_adjust_qunit(struct ptlrpc_request *req)
         RETURN(rc);
 }
 #endif
-
-/* Ensure that data and metadata are synced to the disk when lock is cancelled
- * (if requested) */
-int ost_blocking_ast(struct ldlm_lock *lock,
-                             struct ldlm_lock_desc *desc,
-                             void *data, int flag)
-{
-        struct obd_device *obd = lock->l_export->exp_obd;
-        if (flag == LDLM_CB_CANCELING &&
-            (lock->l_granted_mode & (LCK_PW|LCK_GROUP)) &&
-            (obd->u.ost.ost_sync_on_lock_cancel == ALWAYS_SYNC_ON_CANCEL ||
-             (obd->u.ost.ost_sync_on_lock_cancel == BLOCKING_SYNC_ON_CANCEL &&
-              lock->l_flags & LDLM_FL_CBPENDING))) {
-                struct obdo *oa;
-                int rc;
-
-                OBDO_ALLOC(oa);
-                oa->o_id = lock->l_resource->lr_name.name[0];
-                oa->o_valid = OBD_MD_FLID;
-
-                rc = obd_sync(lock->l_export, oa, NULL,
-                              lock->l_policy_data.l_extent.start,
-                              lock->l_policy_data.l_extent.end);
-                if (rc)
-                        CERROR("Error %d syncing data on lock cancel\n", rc);
-
-                OBDO_FREE(oa);
-        }
-
-        return ldlm_server_blocking_ast(lock, desc, data, flag);
-}
 
 static int ost_filter_recovery_request(struct ptlrpc_request *req,
                                        struct obd_device *obd, int *process)
@@ -2011,7 +1954,7 @@ static int ost_handle(struct ptlrpc_request *req)
                 CDEBUG(D_INODE, "enqueue\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_ENQUEUE, 0);
                 rc = ldlm_handle_enqueue(req, ldlm_server_completion_ast,
-                                         ost_blocking_ast,
+                                         ldlm_server_blocking_ast,
                                          ldlm_server_glimpse_ast);
                 fail = OBD_FAIL_OST_LDLM_REPLY_NET;
                 break;
@@ -2145,9 +2088,6 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
         sema_init(&ost->ost_health_sem, 1);
-
-        /* Always sync on lock cancel */
-        ost->ost_sync_on_lock_cancel = ALWAYS_SYNC_ON_CANCEL;
 
         if (oss_num_threads) {
                 /* If oss_num_threads is set, it is the min and the max. */

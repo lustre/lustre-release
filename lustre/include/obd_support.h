@@ -78,8 +78,6 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_RECOVERY_FACTOR (3) /* times obd_timeout */
 /* Change recovery-small 26b time if you change this */
 #define PING_INTERVAL max(obd_timeout / 4, 1U)
-/* a bit more than maximal journal commit time in seconds */
-#define PING_INTERVAL_SHORT 7
 /* Client may skip 1 ping; we must wait at least 2.5. But for multiple
  * failover targets the client only pings one server at a time, and pings
  * can be lost on a loaded network. Since eviction has serious consequences,
@@ -106,12 +104,6 @@ extern unsigned int obd_alloc_fail_rate;
 #define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/2)
 #endif
 #define LONG_UNLINK 300          /* Unlink should happen before now */
-
-/**
- * Time interval of shrink, if the client is "idle" more than this interval,
- * then the ll_grant thread will return the requested grant space to filter
- */
-#define GRANT_SHRINK_INTERVAL             360/*6 minutes*/
 
 
 #define OBD_FAIL_MDS                     0x100
@@ -177,7 +169,6 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_MDS_BLOCK_QUOTA_REQ     0x13c
 #define OBD_FAIL_MDS_DROP_QUOTA_REQ      0x13d
 #define OBD_FAIL_MDS_FAIL_LOV_LOG_ADD    0x140
-#define OBD_FAIL_MDS_LOV_PREP_CREATE     0x141
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -294,7 +285,6 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_TGT_DELAY_PRECREATE     0x705
 #define OBD_FAIL_TGT_TOOMANY_THREADS     0x706
 #define OBD_FAIL_TGT_REPLAY_DROP         0x707
-#define OBD_FAIL_TGT_REPLAY_DELAY        0x709
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 #define OBD_FAIL_MDC_ENQUEUE_PAUSE       0x801
@@ -320,7 +310,6 @@ extern unsigned int obd_alloc_fail_rate;
 #endif
 
 #define OBD_FAIL_QUOTA_RET_QDATA         0xA02
-#define OBD_FAIL_QUOTA_DELAY_REL         0xA03
 
 #define OBD_FAIL_LPROC_REMOVE            0xB00
 
@@ -581,7 +570,7 @@ do {                                                                          \
 
 #ifdef HAVE_RCU
 # ifdef HAVE_CALL_RCU_PARAM
-#  define my_call_rcu(rcu, cb)            call_rcu(rcu, (void (*) (void *))(cb), rcu)
+#  define my_call_rcu(rcu, cb)            call_rcu(rcu, cb, rcu)
 # else
 #  define my_call_rcu(rcu, cb)            call_rcu(rcu, cb)
 # endif

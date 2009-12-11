@@ -18,11 +18,13 @@ PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
 SIZE=${SIZE:-40960}
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
+CREATETEST=${CREATETEST:-createtest}
 GETSTRIPE=${GETSTRIPE:-lfs getstripe}
 SETSTRIPE=${SETSTRIPE:-lstripe}
 MCREATE=${MCREATE:-mcreate}
 OPENFILE=${OPENFILE:-openfile}
 OPENUNLINK=${OPENUNLINK:-openunlink}
+TOEXCL=${TOEXCL:-toexcl}
 TRUNCATE=${TRUNCATE:-truncate}
 export TMP=${TMP:-/tmp}
 MOUNT_2=${MOUNT_2:-"yes"}
@@ -614,12 +616,10 @@ enable_lockless_truncate() {
 test_32a() { # bug 11270
         local p="$TMP/sanityN-$TESTNAME.parameters"
         save_lustre_params $HOSTNAME llite.*.lockless_truncate > $p
-        rm -f $DIR1/$tfile
         cancel_lru_locks osc
-        enable_lockless_truncate 1
-        lfs setstripe -c -1 -s 1m $DIR1/$tfile
-        dd if=/dev/zero of=$DIR1/$tfile count=10 bs=1M > /dev/null 2>&1
         clear_llite_stats
+        enable_lockless_truncate 1
+        dd if=/dev/zero of=$DIR1/$tfile count=10 bs=1M > /dev/null 2>&1
 
         log "checking cached lockless truncate"
         $TRUNCATE $DIR1/$tfile 8000000
@@ -712,6 +712,8 @@ test_33() { #16129
                 echo writing on client1
                 dd if=/dev/zero of=$DIR1/$tfile count=100 conv=notrunc > /dev/null 2>&1
                 sync &
+                # wait for the flush
+                sleep 1
                 echo reading on client2
                 dd of=/dev/null if=$DIR2/$tfile > /dev/null 2>&1
                 # wait for a lock timeout

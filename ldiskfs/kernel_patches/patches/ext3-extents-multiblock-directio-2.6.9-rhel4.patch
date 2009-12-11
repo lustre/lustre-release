@@ -127,17 +127,19 @@
  				  bh_result, create, 1);
  	return ret;
  }
-@@ -862,9 +866,8 @@ ext3_direct_io_get_blocks(struct inode *
- 
- get_block:
- 	if (ret == 0)
--		ret = ext3_get_block_wrap(handle, inode, iblock,
-+		ret = ext3_get_block_wrap(handle, inode, iblock, max_blocks,
- 					bh_result, create, 0);
--	bh_result->b_size = (1 << inode->i_blkbits);
- 	return ret;
- }
- 
+@@ -862,11 +866,8 @@ ext3_direct_io_get_blocks(struct inode *
+		started = 1;
+	}
+
+-	ret = ext3_get_block_wrap(handle, inode, iblock,
++	ret = ext3_get_block_wrap(handle, inode, iblock, max_blocks,
+				    bh_result, create, 0);
+-
+-	if (!ret)
+-		bh_result->b_size = (1 << inode->i_blkbits);
+
+	if (started)
+		ext3_journal_stop(handle);
 @@ -882,7 +885,7 @@ struct buffer_head *ext3_getblk(handle_t
  	dummy.b_state = 0;
  	dummy.b_blocknr = -1000;

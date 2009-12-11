@@ -46,3 +46,4 @@ modulefs_DATA = mgc$(KMODEXT)
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
+DIST_SOURCES := $(mgc-objs:%.o=%.c) libmgc.c mgc_internal.h

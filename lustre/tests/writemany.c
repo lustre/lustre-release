@@ -178,7 +178,6 @@ int run_one_child(char *file, int thread, int seconds)
                 maxrand *= 10;
 
         gettimeofday(&start, NULL);
-        cur = start;
 
         while(!rc) {
                 if (usr1_received)
@@ -234,8 +233,7 @@ int run_one_child(char *file, int thread, int seconds)
                 printf("%s: %7ld files, %4ld MB in %.2fs (%7.2f files/s, "
                        "%5.2f MB/s): rc = %d\n",
                        cmdname, nfiles, nbytes >> 20, diff,
-                       diff == 0 ? (double)0 : (double)nfiles / diff,
-                       diff == 0 ? (double)0 : (double)nbytes/1024/1024 / diff,
+                       (double)nfiles / diff, (double)nbytes/1024/1024 / diff,
                        rc);
 
         return rc;

@@ -113,7 +113,7 @@ usocklnd_poll_thread(void *arg)
                           pt_data->upt_nfds,
                           usock_tuns.ut_poll_timeout * 1000);
 
-                if (rc < 0 && errno != EINTR) {
+                if (rc < 0) {
                         CERROR("Cannot poll(2): errno=%d\n", errno);
                         break;
                 }

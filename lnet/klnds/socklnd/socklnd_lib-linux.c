@@ -43,9 +43,7 @@
 enum {
         SOCKLND_TIMEOUT = 1,
         SOCKLND_CREDITS,
-        SOCKLND_PEER_TXCREDITS,
-        SOCKLND_PEER_RTRCREDITS,
-        SOCKLND_PEER_TIMEOUT,
+        SOCKLND_PEER_CREDITS,
         SOCKLND_NCONNDS,
         SOCKLND_RECONNECTS_MIN,
         SOCKLND_RECONNECTS_MAX,
@@ -57,8 +55,6 @@ enum {
         SOCKLND_TX_BUFFER_SIZE,
         SOCKLND_NAGLE,
         SOCKLND_IRQ_AFFINITY,
-        SOCKLND_ROUND_ROBIN,
-        SOCKLND_KEEPALIVE,
         SOCKLND_KEEPALIVE_IDLE,
         SOCKLND_KEEPALIVE_COUNT,
         SOCKLND_KEEPALIVE_INTVL,
@@ -72,9 +68,7 @@ enum {
 
 #define SOCKLND_TIMEOUT         CTL_UNNUMBERED
 #define SOCKLND_CREDITS         CTL_UNNUMBERED
-#define SOCKLND_PEER_TXCREDITS  CTL_UNNUMBERED
-#define SOCKLND_PEER_RTRCREDITS  CTL_UNNUMBERED
-#define SOCKLND_PEER_TIMEOUT    CTL_UNNUMBERED
+#define SOCKLND_PEER_CREDITS    CTL_UNNUMBERED
 #define SOCKLND_NCONNDS         CTL_UNNUMBERED
 #define SOCKLND_RECONNECTS_MIN  CTL_UNNUMBERED
 #define SOCKLND_RECONNECTS_MAX  CTL_UNNUMBERED
@@ -86,8 +80,6 @@ enum {
 #define SOCKLND_TX_BUFFER_SIZE  CTL_UNNUMBERED
 #define SOCKLND_NAGLE           CTL_UNNUMBERED
 #define SOCKLND_IRQ_AFFINITY    CTL_UNNUMBERED
-#define SOCKLND_ROUND_ROBIN     CTL_UNNUMBERED
-#define SOCKLND_KEEPALIVE       CTL_UNNUMBERED
 #define SOCKLND_KEEPALIVE_IDLE  CTL_UNNUMBERED
 #define SOCKLND_KEEPALIVE_COUNT CTL_UNNUMBERED
 #define SOCKLND_KEEPALIVE_INTVL CTL_UNNUMBERED
@@ -118,27 +110,9 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
                 .strategy = &sysctl_intvec,
         },
          {
-                .ctl_name = SOCKLND_PEER_TXCREDITS,
+                .ctl_name = SOCKLND_PEER_CREDITS,
                 .procname = "peer_credits",
-                .data     = &ksocknal_tunables.ksnd_peertxcredits,
-                .maxlen   = sizeof (int),
-                .mode     = 0444,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-         {
-                .ctl_name = SOCKLND_PEER_RTRCREDITS,
-                .procname = "peer_buffer_credits",
-                .data     = &ksocknal_tunables.ksnd_peerrtrcredits,
-                .maxlen   = sizeof (int),
-                .mode     = 0444,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-        {
-                .ctl_name = SOCKLND_PEER_TIMEOUT,
-                .procname = "peer_timeout",
-                .data     = &ksocknal_tunables.ksnd_peertimeout,
+                .data     = &ksocknal_tunables.ksnd_peercredits,
                 .maxlen   = sizeof (int),
                 .mode     = 0444,
                 .proc_handler = &proc_dointvec,
@@ -183,7 +157,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         {
                 .ctl_name = SOCKLND_ZERO_COPY,
                 .procname = "zero_copy",
-                .data     = &ksocknal_tunables.ksnd_zc_min_payload,
+                .data     = &ksocknal_tunables.ksnd_zc_min_frag,
                 .maxlen   = sizeof (int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec,
@@ -265,24 +239,6 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
         },
 #endif
         {
-                .ctl_name = SOCKLND_ROUND_ROBIN,
-                .procname = "round_robin",
-                .data     = &ksocknal_tunables.ksnd_round_robin,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-        {
-                .ctl_name = SOCKLND_KEEPALIVE,
-                .procname = "keepalive",
-                .data     = &ksocknal_tunables.ksnd_keepalive,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
-        },
-        {
                 .ctl_name = SOCKLND_KEEPALIVE_IDLE,
                 .procname = "keepalive_idle",
                 .data     = &ksocknal_tunables.ksnd_keepalive_idle,
@@ -359,20 +315,6 @@ cfs_sysctl_table_t ksocknal_top_ctl_table[] = {
 int
 ksocknal_lib_tunables_init ()
 {
-        if (!*ksocknal_tunables.ksnd_typed_conns) {
-                int rc = -EINVAL;
-#if SOCKNAL_VERSION_DEBUG
-                if (*ksocknal_tunables.ksnd_protocol < 3)
-                        rc = 0;
-#endif
-                if (rc != 0) {
-                        CERROR("Protocol V3.x MUST have typed connections\n");
-                        return rc;
-                }
-        }
-
-        if (*ksocknal_tunables.ksnd_zc_min_payload < (2 << 10))
-                *ksocknal_tunables.ksnd_zc_min_payload = (2 << 10);
         if (*ksocknal_tunables.ksnd_zc_recv_min_nfrags < 2)
                 *ksocknal_tunables.ksnd_zc_recv_min_nfrags = 2;
         if (*ksocknal_tunables.ksnd_zc_recv_min_nfrags > LNET_MAX_IOV)
@@ -505,12 +447,9 @@ ksocknal_lib_sock_irq (struct socket *sock)
 }
 
 int
-ksocknal_lib_zc_capable(ksock_conn_t *conn)
+ksocknal_lib_zc_capable(struct socket *sock)
 {
-        int  caps = conn->ksnc_sock->sk->sk_route_caps;
-
-        if (conn->ksnc_proto == &ksocknal_protocol_v1x)
-                return 0;
+        int  caps = sock->sk->sk_route_caps;
 
         /* ZC if the socket supports scatter/gather and doesn't need software
          * checksums */
@@ -575,16 +514,15 @@ int
 ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
 {
         struct socket *sock = conn->ksnc_sock;
-        lnet_kiov_t   *kiov = tx->tx_kiov;
+        lnet_kiov_t    *kiov = tx->tx_kiov;
         int            rc;
         int            nob;
 
-        /* Not NOOP message */
-        LASSERT (tx->tx_lnetmsg != NULL);
-
         /* NB we can't trust socket ops to either consume our iovs
          * or leave them alone. */
-        if (tx->tx_msg.ksm_zc_cookies[0] != 0) {
+
+        if (kiov->kiov_len >= *ksocknal_tunables.ksnd_zc_min_frag &&
+            tx->tx_msg.ksm_zc_req_cookie != 0) {
                 /* Zero copy is enabled */
                 struct sock   *sk = sock->sk;
                 struct page   *page = kiov->kiov_page;

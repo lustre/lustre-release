@@ -151,7 +151,7 @@ static ssize_t lprocfs_fops_read(struct file *f, char __user *buf, size_t size,
 
         LPROCFS_ENTRY();
         OBD_FAIL_TIMEOUT(OBD_FAIL_LPROC_REMOVE, 10);
-        if (!LPROCFS_CHECK_DELETED(dp) && dp->read_proc)
+        if (!dp->deleted && dp->read_proc)
                 rc = dp->read_proc(page, &start, *ppos, PAGE_SIZE,
                         &eof, dp->data);
         LPROCFS_EXIT();
@@ -191,7 +191,7 @@ static ssize_t lprocfs_fops_write(struct file *f, const char __user *buf,
         int rc = -EIO;
 
         LPROCFS_ENTRY();
-        if (!LPROCFS_CHECK_DELETED(dp) && dp->write_proc)
+        if (!dp->deleted && dp->write_proc)
                 rc = dp->write_proc(f, buf, size, dp->data);
         LPROCFS_EXIT();
         return rc;
@@ -745,7 +745,7 @@ int lprocfs_rd_timeouts(char *page, char **start, off_t off, int count,
 static const char *obd_connect_names[] = {
         "read_only",
         "lov_index",
-        "mds_connection",
+        "unused",
         "write_grant",
         "server_lock",
         "version",
@@ -776,8 +776,6 @@ static const char *obd_connect_names[] = {
         "fid_is_enabled",
         "version_recovery",
         "pools",
-        "",
-        "skip_orpahn",
         NULL
 };
 
@@ -1256,8 +1254,6 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats,stats,unregister_page_removal_cb);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, register_lock_cancel_cb);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats,unregister_lock_cancel_cb);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, getref);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, putref);
 }
 
 void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats)

@@ -1,17 +1,11 @@
 # lustre.spec
-%{!?version: %define version @VERSION@}
-%{!?kversion: %define kversion @LINUXRELEASE@}
-%{!?release: %define release @RELEASE@}
-%{!?lustre_name: %define lustre_name lustre}
-
-%define is_client %(bash -c "if [[ %{lustre_name} = *-client ]]; then echo -n '1'; else echo -n '0'; fi")
-# for those uses that don't want the -smp/-bigsmp on the end of %kversion
-%define krequires %(bash -c "echo %{kversion} | sed -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/-ppc64$//' -e 's/-default$//'")
+%define version @VERSION@
+%define kversion @LINUXRELEASE@
 
 Summary: Lustre File System
-Name: %{lustre_name}
+Name: lustre
 Version: %{version}
-Release: %{release}
+Release: @RELEASE@
 License: GPL
 Group: Utilities/System
 Source: lustre-%{version}.tar.gz
@@ -19,7 +13,6 @@ URL: http://www.sun.com/software/products/lustre/index.xml
 BuildRoot: %{_tmppath}/lustre-%{version}-root
 Obsoletes: lustre-lite, lustre-lite-utils, lustre-ldap nfs-utils-lustre
 Provides: lustre-lite = %{version}, lustre-lite-utils = %{version}
-Requires: %{name}-modules = %{version}
 # GSS requires this: BuildRequires: pkgconfig, libgssapi-devel >= 0.10
 
 %description
@@ -27,7 +20,7 @@ Userspace tools and files for the Lustre file system.
 
 %package modules
 Summary: Kernel Lustre modules for Linux %{kversion}
-Requires: modutils >= 2.4.10, kernel = %{krequires}
+Requires: modutils >= 2.4.10
 Group: Development/Kernel
 
 %description modules
@@ -58,8 +51,8 @@ Lustre sources for further development
 Summary: Lustre dependencies meta-package for SLES
 Group: Utilities/System
 Provides: lustre-deps = %{version}
-Requires: %{name} = %{version}, sles-release
-Conflicts: %{name}-deps-rhel
+Requires: lustre = %{version}, sles-release
+Conflicts: lustre-deps-rhel
 
 %description deps-sles
 This package has RPM dependencies appropriate for SLES systems.
@@ -68,8 +61,8 @@ This package has RPM dependencies appropriate for SLES systems.
 Summary: Lustre dependencies meta-package for RHEL
 Group: Utilities/System
 Provides: lustre-deps = %{version}
-Requires: %{name} = %{version}, redhat-release
-Conflicts: %{name}-deps-sles
+Requires: lustre = %{version}, redhat-release
+Conflicts: lustre-deps-sles
 
 %description deps-rhel
 This package has RPM dependencies appropriate for RHEL, RHL, and FC
@@ -78,8 +71,8 @@ systems.
 %package tests
 Summary: Lustre testing framework
 Group: Development/Kernel
-Provides: %{name}-tests = %{version}
-Requires: %{name} = %{version}, %{name}-modules = %{version}
+Provides: lustre-tests = %{version}
+Requires: lustre = %{version}, lustre-modules = %{version}
 
 %description tests
 This package contains a set of test binaries and scripts that are intended
@@ -87,8 +80,6 @@ to be used by the Lustre testing framework.
 
 %prep
 %setup -qn lustre-%{version}
-ln lustre/ChangeLog ChangeLog-lustre
-ln lnet/ChangeLog ChangeLog-lnet
 
 %build
 # if RPM_BUILD_NCPUS unset, set it
@@ -140,7 +131,7 @@ cat >lustre.files <<EOF
 %attr(-, root, root) /usr/sbin/*
 %attr(-, root, root) /usr/bin/*
 
-%attr(-, root, root) /usr/share/lustre
+%attr(-, root, root) /usr/share/lustre/*
 
 %attr(-, root, root) %{_libdir}/libptlctl.a
 %attr(-, root, root) %{_libdir}/liblustreapi.a
@@ -195,8 +186,6 @@ popd >/dev/null
 
 %files modules -f lustre-modules.files
 %attr(-, root, root) %doc COPYING
-%attr(-, root, root) %doc ChangeLog-lustre
-%attr(-, root, root) %doc ChangeLog-lnet
 
 %files source
 %attr(-, root, root) /usr/src/lustre-%{version}
@@ -242,21 +231,6 @@ do
 		fi
 	fi
 done
-
-# If the kernel was built to reject unsupported modules (e.g. not a Lustre
-# kernel), and this hasn't been overridden in /etc/modprobe.d yet, then
-# print a warning so that users are aware of this issue.
-if sysctl kernel.unsupported >/dev/null 2>&1 &&
-   [ "$(sysctl -n kernel.unsupported 2>/dev/null)" = "0" ] &&
-    ! modprobe -c | grep -q "^allow_unsupported_modules[ \t]1" ; then
-     echo "
-     warning: the Lustre modules are not supported by Novell. To use Lustre
-              on this system, you should put
-
-     allow_unsupported_modules 1
-
-     into /etc/modprobe.d/unsupported_modules"
-fi
 
 %postun modules
 if [ -f /boot/System.map-%{kversion} ]; then

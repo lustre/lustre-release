@@ -60,6 +60,19 @@ set_fail_client() {
     echo "fail $FAIL_CLIENT, next is $FAIL_NEXT"
 }
 
+shutdown_client() {
+    client=$1
+    if [ "$FAILURE_MODE" = HARD ]; then
+       $POWER_DOWN $client
+       while ping -w 3 -c 1 $client > /dev/null 2>&1; do 
+	   echo "waiting for node $client to fail"
+	   sleep 1
+       done  
+    elif [ "$FAILURE_MODE" = SOFT ]; then
+       zconf_umount $client $MOUNT -f
+    fi
+}
+
 fail_clients() {
     num=$1
 

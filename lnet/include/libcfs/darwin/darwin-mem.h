@@ -229,7 +229,6 @@ void cfs_mem_cache_free ( cfs_mem_cache_t *, void *);
  */
 /* XXX Liang: num_physpages... fix me */
 #define num_physpages			(64 * 1024)
-#define CFS_NUM_CACHEPAGES		num_physpages
 
 #define CFS_DECL_MMSPACE		
 #define CFS_MMSPACE_OPEN		do {} while(0)

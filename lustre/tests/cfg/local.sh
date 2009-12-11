@@ -36,10 +36,6 @@ SUBSYSTEM=${SUBSYSTEM:- 0xffb7e3ff}
 
 L_GETGROUPS=${L_GETGROUPS:-`do_facet mds which l_getgroups || echo`}
 
-ENABLE_QUOTA=${ENABLE_QUOTA:-""}
-QUOTA_TYPE=${QUOTA_TYPE:-"ug3"}
-QUOTA_USERS=${QUOTA_USERS:-"quota_usr quota_2usr sanityusr sanityusr1"}
-
 MKFSOPT=""
 [ "x$MDSJOURNALSIZE" != "x" ] &&
     MKFSOPT=$MKFSOPT" -J size=$MDSJOURNALSIZE"

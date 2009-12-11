@@ -52,7 +52,7 @@ static inline void ll_remove_from_page_cache(struct page *page)
 
         BUG_ON(!PageLocked(page));
 
-#ifdef HAVE_RW_TREE_LOCK
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15))
         write_lock_irq(&mapping->tree_lock);
 #else
 	spin_lock_irq(&mapping->tree_lock);
@@ -65,7 +65,7 @@ static inline void ll_remove_from_page_cache(struct page *page)
 #else
 	__dec_zone_page_state(page, NR_FILE_PAGES);
 #endif
-#ifdef HAVE_RW_TREE_LOCK
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15))
         write_unlock_irq(&mapping->tree_lock);
 #else
 	spin_unlock_irq(&mapping->tree_lock);

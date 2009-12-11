@@ -183,15 +183,15 @@ static void tcd_shrink(struct trace_cpu_data *tcd)
         struct trace_page *tage;
         struct trace_page *tmp;
 
-        /*
-         * XXX nikita: do NOT call portals_debug_msg() (CDEBUG/ENTRY/EXIT)
-         * from here: this will lead to infinite recursion.
-         */
+	/*
+	 * XXX nikita: do NOT call portals_debug_msg() (CDEBUG/ENTRY/EXIT)
+	 * from here: this will lead to infinite recursion.
+	 */
 
-        if (printk_ratelimit())
+	if (printk_ratelimit())
                 printk(KERN_WARNING "debug daemon buffer overflowed; "
-                       "discarding  10%% of pages (%d of %ld)\n",
-                       pgcount + 1, tcd->tcd_cur_pages);
+		       "discarding  10%% of pages (%d of %ld)\n",
+		       pgcount + 1, tcd->tcd_cur_pages);
 
         CFS_INIT_LIST_HEAD(&pc.pc_pages);
         spin_lock_init(&pc.pc_lock);
@@ -212,10 +212,10 @@ static struct trace_page *trace_get_tage(struct trace_cpu_data *tcd,
 {
         struct trace_page *tage;
 
-        /*
-         * XXX nikita: do NOT call portals_debug_msg() (CDEBUG/ENTRY/EXIT)
-         * from here: this will lead to infinite recursion.
-         */
+	/*
+	 * XXX nikita: do NOT call portals_debug_msg() (CDEBUG/ENTRY/EXIT)
+	 * from here: this will lead to infinite recursion.
+	 */
 
         if (len > CFS_PAGE_SIZE) {
                 printk(KERN_ERR
@@ -239,7 +239,7 @@ static struct trace_page *trace_get_tage(struct trace_cpu_data *tcd,
 int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls, int subsys, int mask,
                        const char *file, const char *fn, const int line,
                        const char *format1, va_list args,
-                       const char *format2, ...)
+                       const char *format2, ...)		
 {
         struct trace_cpu_data   *tcd = NULL;
         struct ptldebug_header   header;
@@ -312,26 +312,26 @@ int libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls, int subsys, int mask,
                         needed = vsnprintf(string_buf, max_nob, format1, ap);
                         va_end(ap);
                 }
+		
 
                 if (format2) {
-                        remain = max_nob - needed;
+		        remain = max_nob - needed;
                         if (remain < 0)
                                 remain = 0;
-
+		
                         va_start(ap, format2);
-                        needed += vsnprintf(string_buf + needed, remain,
-                                            format2, ap);
+                        needed += vsnprintf(string_buf+needed, remain, format2, ap);
                         va_end(ap);
                 }
 
                 if (needed < max_nob) /* well. printing ok.. */
                         break;
         }
-
+	
         if (*(string_buf+needed-1) != '\n')
                 printk(KERN_INFO "format at %s:%d:%s doesn't end in newline\n",
                        file, line, fn);
-
+	
         header.ph_len = known_size + needed;
         debug_buf = (char *)cfs_page_address(tage->page) + tage->used;
 
@@ -776,7 +776,6 @@ int trace_copyout_string(char *usr_buffer, int usr_buffer_nob,
 
         return nob;
 }
-EXPORT_SYMBOL(trace_copyout_string);
 
 int trace_allocate_string_buffer(char **str, int nob)
 {
@@ -825,22 +824,22 @@ int trace_daemon_command(char *str)
 {
         int       rc = 0;
 
-        tracefile_write_lock();
+	tracefile_write_lock();
 
-        if (strcmp(str, "stop") == 0) {
+	if (strcmp(str, "stop") == 0) {
                 tracefile_write_unlock();
-                trace_stop_thread();
+		trace_stop_thread();
                 tracefile_write_lock();
                 memset(tracefile, 0, sizeof(tracefile));
 
-        } else if (strncmp(str, "size=", 5) == 0) {
-                tracefile_size = simple_strtoul(str + 5, NULL, 0);
-                if (tracefile_size < 10 || tracefile_size > 20480)
-                        tracefile_size = TRACEFILE_SIZE;
-                else
-                        tracefile_size <<= 20;
+	} else if (strncmp(str, "size=", 5) == 0) {
+		tracefile_size = simple_strtoul(str + 5, NULL, 0);
+		if (tracefile_size < 10 || tracefile_size > 20480)
+			tracefile_size = TRACEFILE_SIZE;
+		else
+			tracefile_size <<= 20;
 
-        } else if (strlen(str) >= sizeof(tracefile)) {
+	} else if (strlen(str) >= sizeof(tracefile)) {
                 rc = -ENAMETOOLONG;
 #ifndef __WINNT__
         } else if (str[0] != '/') {
@@ -856,14 +855,14 @@ int trace_daemon_command(char *str)
                 trace_start_thread();
         }
 
-        tracefile_write_unlock();
-        return rc;
+	tracefile_write_unlock();
+	return rc;
 }
 
 int trace_daemon_command_usrstr(void *usr_str, int usr_str_nob)
 {
-        char *str;
-        int   rc;
+	char *str;
+	int   rc;
 
         rc = trace_allocate_string_buffer(&str, usr_str_nob + 1);
         if (rc != 0)
@@ -875,55 +874,54 @@ int trace_daemon_command_usrstr(void *usr_str, int usr_str_nob)
                 rc = trace_daemon_command(str);
 
         trace_free_string_buffer(str, usr_str_nob + 1);
-
-        return rc;
+	return rc;
 }
 
 int trace_set_debug_mb(int mb)
 {
-        int i;
+	int i;
         int j;
         int pages;
         int limit = trace_max_debug_mb();
         struct trace_cpu_data *tcd;
 
-        if (mb < num_possible_cpus())
-                return -EINVAL;
+	if (mb < num_possible_cpus())
+		return -EINVAL;
 
-        if (mb > limit) {
-                printk(KERN_ERR "Lustre: Refusing to set debug buffer size to "
-                       "%dMB - limit is %d\n", mb, limit);
-                return -EINVAL;
-        }
+	if (mb > limit) {
+		printk(KERN_ERR "Lustre: Refusing to set debug buffer size to "
+		       "%dMB - limit is %d\n", mb, limit);
+		return -EINVAL;
+	}
 
-        mb /= num_possible_cpus();
+	mb /= num_possible_cpus();
         pages = mb << (20 - CFS_PAGE_SHIFT);
 
         tracefile_write_lock();
 
         tcd_for_each(tcd, i, j)
-                tcd->tcd_max_pages = (pages * tcd->tcd_pages_factor) / 100;
+		tcd->tcd_max_pages = (pages * tcd->tcd_pages_factor) / 100;
 
         tracefile_write_unlock();
 
-        return 0;
+	return 0;
 }
 
 int trace_set_debug_mb_usrstr(void *usr_str, int usr_str_nob)
 {
-        char     str[32];
+	char     str[32];
         int      rc;
 
         rc = trace_copyin_string(str, sizeof(str), usr_str, usr_str_nob);
         if (rc < 0)
                 return rc;
 
-        return trace_set_debug_mb(simple_strtoul(str, NULL, 0));
+	return trace_set_debug_mb(simple_strtoul(str, NULL, 0));
 }
 
 int trace_get_debug_mb(void)
 {
-        int i;
+	int i;
         int j;
         struct trace_cpu_data *tcd;
         int total_pages = 0;
@@ -946,7 +944,6 @@ static int tracefiled(void *arg)
         struct trace_page *tmp;
         struct ptldebug_header *hdr;
         cfs_file_t *filp;
-        int last_loop = 0;
         int rc;
 
         CFS_DECL_MMSPACE;
@@ -961,10 +958,20 @@ static int tracefiled(void *arg)
         while (1) {
                 cfs_waitlink_t __wait;
 
+                cfs_waitlink_init(&__wait);
+                cfs_waitq_add(&tctl->tctl_waitq, &__wait);
+                set_current_state(TASK_INTERRUPTIBLE);
+                cfs_waitq_timedwait(&__wait, CFS_TASK_INTERRUPTIBLE,
+                                    cfs_time_seconds(1));
+                cfs_waitq_del(&tctl->tctl_waitq, &__wait);
+
+                if (atomic_read(&tctl->tctl_shutdown))
+                        break;
+
                 pc.pc_want_daemon_pages = 0;
                 collect_pages(&pc);
                 if (list_empty(&pc.pc_pages))
-                        goto end_loop;
+                        continue;
 
                 filp = NULL;
                 tracefile_read_lock();
@@ -980,7 +987,7 @@ static int tracefiled(void *arg)
                 if (filp == NULL) {
                         put_pages_on_daemon_list(&pc);
                         __LASSERT(list_empty(&pc.pc_pages));
-                        goto end_loop;
+                        continue;
                 }
 
                 CFS_MMSPACE_OPEN;
@@ -1035,21 +1042,6 @@ static int tracefiled(void *arg)
                         printk(KERN_ALERT "There are %d pages unwritten\n", i);
                 }
                 __LASSERT(list_empty(&pc.pc_pages));
-end_loop:
-                if (atomic_read(&tctl->tctl_shutdown)) {
-                        if (last_loop == 0) {
-                                last_loop = 1;
-                                continue;
-                        } else {
-                                break;
-                        }
-                }
-                cfs_waitlink_init(&__wait);
-                cfs_waitq_add(&tctl->tctl_waitq, &__wait);
-                set_current_state(TASK_INTERRUPTIBLE);
-                cfs_waitq_timedwait(&__wait, CFS_TASK_INTERRUPTIBLE,
-                                    cfs_time_seconds(1));
-                cfs_waitq_del(&tctl->tctl_waitq, &__wait);
         }
         complete(&tctl->tctl_stop);
         return 0;

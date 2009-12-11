@@ -57,7 +57,6 @@
 #include <linux/timer.h>
 #include <linux/signal.h>
 #include <linux/sched.h>
-#include <linux/kthread.h>
 
 #include <linux/miscdevice.h>
 #include <libcfs/linux/portals_compat25.h>
@@ -151,23 +150,8 @@ typedef long                            cfs_task_state_t;
 #define cfs_waitq_broadcast(w)          wake_up_all(w)
 #define cfs_waitq_wait(l, s)            schedule()
 #define cfs_waitq_timedwait(l, s, t)    schedule_timeout(t)
-#define cfs_schedule_timeout(s, t)             \
-({                                             \
-        set_current_state(s);                  \
-        schedule_timeout(t);                   \
-})
+#define cfs_schedule_timeout(s, t)      schedule_timeout(t)
 #define cfs_schedule()                  schedule()
-#define cfs_kthread_run(fn, data, fmt, arg...) kthread_run(fn, data, fmt, ##arg)
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-static inline void cfs_cond_resched(void)
-{
-        if (current->need_resched)
-               schedule();
-}
-#else
-#define cfs_cond_resched()              cond_resched()
-#endif
 
 /* Kernel thread */
 typedef int (*cfs_thread_t)(void *);
@@ -184,7 +168,6 @@ static inline int cfs_kernel_thread(int (*fn)(void *),
         return rc;
 }
 
-#define CFS_MAX_SCHEDULE_TIMEOUT MAX_SCHEDULE_TIMEOUT
 
 /*
  * Task struct
@@ -252,7 +235,6 @@ static inline cfs_time_t cfs_timer_deadline(cfs_timer_t *t)
         return t->expires;
 }
 
-#define CFS_MAX_SCHEDULE_TIMEOUT MAX_SCHEDULE_TIMEOUT
 
 /* deschedule for a bit... */
 static inline void cfs_pause(cfs_duration_t ticks)

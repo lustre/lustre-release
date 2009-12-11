@@ -41,3 +41,4 @@ endif
 endif
 
 MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
+DIST_SOURCES = $(kralnd-objs:%.o=%.c) ralnd.h
