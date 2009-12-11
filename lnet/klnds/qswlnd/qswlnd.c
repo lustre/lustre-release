@@ -268,6 +268,12 @@ kqswnal_startup (lnet_ni_t *ni)
 
 	LASSERT (ni->ni_lnd == &the_kqswlnd);
 
+#if KQSW_CKSUM
+	if (the_lnet.ln_ptlcompat != 0) {
+		CERROR("Checksumming version not portals compatible\n");
+		return -ENODEV;
+	}
+#endif
 	/* Only 1 instance supported */
 	if (kqswnal_data.kqn_init != KQN_INIT_NOTHING) {
                 CERROR ("Only 1 instance supported\n");

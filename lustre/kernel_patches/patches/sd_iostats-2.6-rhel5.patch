@@ -1,10 +1,10 @@
-Index: linux-2.6.16.60-0.37/drivers/scsi/Kconfig
+Index: linux-2.6.18-128.1.14/drivers/scsi/Kconfig
 ===================================================================
---- linux-2.6.16.60-0.37.orig/drivers/scsi/Kconfig	2009-03-24 05:46:32.000000000 -0700
-+++ linux-2.6.16.60-0.37/drivers/scsi/Kconfig	2009-06-02 23:33:14.000000000 -0600
-@@ -78,6 +78,14 @@
-	  To compile this driver as a module, choose M here and read
-	  <file:Documentation/scsi/scsi.txt>. The module will be called st.
+--- linux-2.6.18-128.1.14.orig/drivers/scsi/Kconfig	2009-06-19 12:33:12.000000000 -0600
++++ linux-2.6.18-128.1.14/drivers/scsi/Kconfig	2009-06-19 12:34:05.000000000 -0600
+@@ -71,6 +71,14 @@
+ 	  In this case, do not compile the driver for your SCSI host adapter
+ 	  (below) as a module either.
  
 +config SD_IOSTATS
 +   bool "Enable SCSI disk I/O stats"
@@ -14,13 +14,13 @@ Index: linux-2.6.16.60-0.37/drivers/scsi/Kconfig
 +     This enables SCSI disk I/O stats collection.  You must also enable
 +     /proc file system support if you want this feature.
 +
- config CHR_DEV_OSST
-	tristate "SCSI OnStream SC-x0 tape support"
-	depends on SCSI
-Index: linux-2.6.16.60-0.37/drivers/scsi/scsi_proc.c
+ config CHR_DEV_ST
+ 	tristate "SCSI tape support"
+ 	depends on SCSI
+Index: linux-2.6.18-128.1.14/drivers/scsi/scsi_proc.c
 ===================================================================
---- linux-2.6.16.60-0.37.orig/drivers/scsi/scsi_proc.c	2009-03-24 05:46:25.000000000 -0700
-+++ linux-2.6.16.60-0.37/drivers/scsi/scsi_proc.c	2009-06-02 23:33:14.000000000 -0600
+--- linux-2.6.18-128.1.14.orig/drivers/scsi/scsi_proc.c	2009-06-19 12:33:12.000000000 -0600
++++ linux-2.6.18-128.1.14/drivers/scsi/scsi_proc.c	2009-06-19 12:34:05.000000000 -0600
 @@ -40,7 +40,8 @@
  /* 4K page size, but our output routines, use some slack for overruns */
  #define PROC_BLOCK_SIZE (3*1024)
@@ -31,11 +31,11 @@ Index: linux-2.6.16.60-0.37/drivers/scsi/scsi_proc.c
  
  /* Protect sht->present and sht->proc_dir */
  static DEFINE_MUTEX(global_host_template_mutex);
-Index: linux-2.6.16.60-0.37/drivers/scsi/sd.c
+Index: linux-2.6.18-128.1.14/drivers/scsi/sd.c
 ===================================================================
---- linux-2.6.16.60-0.37.orig/drivers/scsi/sd.c	2009-03-24 05:46:25.000000000 -0700
-+++ linux-2.6.16.60-0.37/drivers/scsi/sd.c	2009-06-02 23:33:14.000000000 -0600
-@@ -63,6 +63,63 @@
+--- linux-2.6.18-128.1.14.orig/drivers/scsi/sd.c	2009-06-19 12:33:12.000000000 -0600
++++ linux-2.6.18-128.1.14/drivers/scsi/sd.c	2009-06-19 12:34:05.000000000 -0600
+@@ -62,6 +62,63 @@
  
  #include "scsi_logging.h"
  
@@ -99,7 +99,7 @@ Index: linux-2.6.16.60-0.37/drivers/scsi/sd.c
  /*
   * More than enough for everybody ;)  The huge number of majors
   * is a leftover from 16bit dev_t days, we don't really need that
-@@ -127,6 +184,9 @@
+@@ -126,6 +183,9 @@
  	unsigned	WCE : 1;	/* state of disk WCE bit */
  	unsigned	RCD : 1;	/* state of disk RCD bit, unused */
  	unsigned	DPOFUA : 1;	/* state of disk DPOFUA bit */
@@ -109,7 +109,7 @@ Index: linux-2.6.16.60-0.37/drivers/scsi/sd.c
  };
  #define to_scsi_disk(obj) container_of(obj,struct scsi_disk,cdev)
  
-@@ -520,6 +580,8 @@
+@@ -557,6 +617,8 @@
  	 */
  	SCpnt->done = sd_rw_intr;
  
@@ -118,7 +118,7 @@ Index: linux-2.6.16.60-0.37/drivers/scsi/sd.c
  	/*
  	 * This indicates that the command is ready from our end to be
  	 * queued.
-@@ -1014,6 +1076,7 @@
+@@ -1038,6 +1100,7 @@
  		break;
  	}
   out:
@@ -126,7 +126,7 @@ Index: linux-2.6.16.60-0.37/drivers/scsi/sd.c
  	scsi_io_completion(SCpnt, good_bytes);
  }
  
-@@ -1713,6 +1776,36 @@
+@@ -1733,6 +1796,36 @@
  	if (sdp->removable)
  		gd->flags |= GENHD_FL_REMOVABLE;
  
@@ -163,7 +163,7 @@ Index: linux-2.6.16.60-0.37/drivers/scsi/sd.c
  	dev_set_drvdata(dev, sdkp);
  	add_disk(gd);
  
-@@ -1756,6 +1849,366 @@
+@@ -1776,6 +1869,366 @@
  	return 0;
  }
  
@@ -530,7 +530,7 @@ Index: linux-2.6.16.60-0.37/drivers/scsi/sd.c
  /**
   *	scsi_disk_release - Called to free the scsi_disk structure
   *	@cdev: pointer to embedded class device
-@@ -1774,10 +2227,16 @@
+@@ -1794,10 +2247,16 @@
  	idr_remove(&sd_index_idr, sdkp->index);
  	spin_unlock(&sd_index_lock);
  
@@ -548,7 +548,7 @@ Index: linux-2.6.16.60-0.37/drivers/scsi/sd.c
  	kfree(sdkp);
  }
  
-@@ -1844,6 +2303,7 @@
+@@ -1905,6 +2364,7 @@
  static int __init init_sd(void)
  {
  	int majors = 0, i;
@@ -556,7 +556,7 @@ Index: linux-2.6.16.60-0.37/drivers/scsi/sd.c
  
  	SCSI_LOG_HLQUEUE(3, printk("init_sd: sd driver entry point\n"));
  
-@@ -1854,9 +2314,13 @@
+@@ -1915,9 +2375,13 @@
  	if (!majors)
  		return -ENODEV;
  
@@ -571,7 +571,7 @@ Index: linux-2.6.16.60-0.37/drivers/scsi/sd.c
  }
  
  /**
-@@ -1875,6 +2339,7 @@
+@@ -1936,6 +2400,7 @@
  		unregister_blkdev(sd_major(i), "sd");
  
  	class_unregister(&sd_disk_class);

@@ -23,7 +23,7 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval lctl set_param debug=\"$DEBUG_LVL\""
 [ "$DEBUG_ON" ] || DEBUG_ON="eval lctl set_param debug=0x33f0484"
 
-export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL REPLAY_VBR INSANITY SANITY_QUOTA SANITY_SEC SANITY_GSS PERFORMANCE_SANITY LARGE_SCALE RECOVERY_MDS_SCALE RECOVERY_DOUBLE_SCALE RECOVERY_RANDOM_SCALE PARALLEL_SCALE LUSTRE_RSYNC_TEST METADATA_UPDATES OST_POOLS SANITY_BENCHMARK"
+export TESTSUITE_LIST="RUNTESTS SANITY DBENCH BONNIE IOZONE FSX SANITYN LFSCK LIBLUSTRE RACER REPLAY_SINGLE CONF_SANITY RECOVERY_SMALL REPLAY_OST_SINGLE REPLAY_DUAL REPLAY_VBR INSANITY SANITY_QUOTA PERFORMANCE_SANITY LARGE_SCALE RECOVERY_MDS_SCALE RECOVERY_DOUBLE_SCALE RECOVERY_RANDOM_SCALE PARALLEL_SCALE METADATA_UPDATES OST_POOLS SANITY_BENCHMARK"
 
 if [ "$ACC_SM_ONLY" ]; then
     for O in $TESTSUITE_LIST; do
@@ -35,7 +35,6 @@ if [ "$ACC_SM_ONLY" ]; then
 	export ${O}="yes"
     done
 fi
-LFSCK="no" # bug 13698
 
 LIBLUSTRETESTS=${LIBLUSTRETESTS:-../liblustre/tests}
 
@@ -45,13 +44,6 @@ RANTEST=""
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-
-if $GSS; then
-    # liblustre doesn't support GSS
-    export LIBLUSTRE=no
-else
-    export SANITY_GSS="no"
-fi
 
 SETUP=${SETUP:-setupall}
 FORMAT=${FORMAT:-formatall}
@@ -110,7 +102,7 @@ for NAME in $CONFIGS; do
 	export NAME MOUNT START CLEAN
 	. $LUSTRE/tests/cfg/$NAME.sh
 
-	assert_env mds_HOST MDS_MKFS_OPTS 
+	assert_env mds_HOST MDS_MKFS_OPTS MDSDEV
 	assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
 	assert_env FSNAME MOUNT MOUNT2
 
@@ -352,8 +344,8 @@ done
 
 if [ "$SANITY_BENCHMARK" != "no" ]; then
         title sanity-benchmark
-	bash sanity-benchmark.sh
-	SANITY_BENCHMARK="done"
+        bash sanity-benchmark.sh
+        SANITY_BENCHMARK="done"
 fi
 
 [ "$REPLAY_SINGLE" != "no" ] && skip_remmds replay-single && REPLAY_SINGLE=no && MSKIPPED=1
@@ -415,38 +407,6 @@ if [ "$SANITY_QUOTA" != "no" ]; then
         SANITY_QUOTA="done"
 fi
 
-[ "$SANITY_SEC" != "no" ] && skip_remmds sanity-sec && SANITY_SEC=no && MSKIPPED=1
-[ "$SANITY_SEC" != "no" ] && skip_remost sanity-sec && SANITY_SEC=no && OSKIPPED=1
-if [ "$SANITY_SEC" != "no" ]; then
-        title sanity-sec
-        bash sanity-sec.sh
-        SANITY_SEC="done"
-fi
-
-[ "$SANITY_GSS" != "no" ] && skip_remmds sanity-gss && SANITY_GSS=no && MSKIPPED=1
-if [ "$SANITY_GSS" != "no" ]; then
-        title sanity-gss
-        bash sanity-gss.sh
-        SANITY_GSS="done"
-fi
-
-
-[ "$LUSTRE_RSYNC_TEST" != "no" ] && skip_remmds lustre_rsync-test && LUSTRE_RSYNC_TEST=no && MSKIPPED=1
-[ "$LUSTRE_RSYNC_TEST" != "no" ] && skip_remost lustre_rsync-test && LUSTRE_RSYNC_TEST=no && OSKIPPED=1
-if [ "$LUSTRE_RSYNC_TEST" != "no" ]; then
-        title lustre_rsync-test
-        bash lustre_rsync-test.sh
-        LUSTRE_RSYNC_TEST="done"
-fi
-
-[ "$OST_POOLS" != "no" ] && skip_remmds ost-pools && OST_POOLS=no && MSKIPPED=1
-[ "$OST_POOLS" != "no" ] && skip_remost ost-pools && OST_POOLS=no && OSKIPPED=1
-if [ "$OST_POOLS" != "no" ]; then
-        title ost-pools
-        bash ost-pools.sh
-        OST_POOLS="done"
-fi
-
 
 [ "$SLOW" = no ] && PERFORMANCE_SANITY="no"
 [ -x "$MDSRATE" ] || PERFORMANCE_SANITY="no"
@@ -498,6 +458,14 @@ if [ "$METADATA_UPDATES" != "no" ]; then
         title metadata-updates
         bash metadata-updates.sh
         METADATA_UPDATES="done"
+fi
+
+[ "$OST_POOLS" != "no" ] && skip_remmds ost-pools && OST_POOLS=no && MSKIPPED=1
+[ "$OST_POOLS" != "no" ] && skip_remost ost-pools && OST_POOLS=no && OSKIPPED=1
+if [ "$OST_POOLS" != "no" ]; then
+        title ost-pools
+        bash ost-pools.sh
+        OST_POOLS="done"
 fi
 
 RC=$?

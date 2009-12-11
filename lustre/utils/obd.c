@@ -48,10 +48,10 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <sys/param.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <signal.h>
-#include <ctype.h>
 #include <glob.h>
 
 #include "obdctl.h"
@@ -65,12 +65,18 @@
 #include <sys/time.h>
 #include <errno.h>
 #include <string.h>
+#include <ctype.h>
+#include <lustre/liblustreapi.h>
+
+#ifdef HAVE_ASM_PAGE_H
+#include <asm/page.h>           /* needed for PAGE_SIZE - rread */
+#endif
 
 #include <obd_class.h>
 #include <lnet/lnetctl.h>
-#include <libcfs/libcfsutil.h>
+#include "parser.h"
+#include "platform.h"
 #include <stdio.h>
-#include <lustre/liblustreapi.h>
 
 #define MAX_STRING_SIZE 128
 #define DEVICES_LIST "/proc/fs/lustre/devices"
@@ -107,6 +113,7 @@ const int nthreads = 1;
 
 static int cur_device = -1;
 
+
 #define MAX_STRIPES     170
 struct lov_oinfo lov_oinfos[MAX_STRIPES];
 
@@ -115,7 +122,7 @@ struct lsm_buffer {
         struct lov_oinfo *ptrs[MAX_STRIPES];
 } lsm_buffer;
 
-static int l2_ioctl(int dev_id, int opc, void *buf)
+static int l2_ioctl(int dev_id, unsigned int opc, void *buf)
 {
         return l_ioctl(dev_id, opc, buf);
 }
@@ -195,6 +202,9 @@ out:
         if (rc) {
                 if (errno == ENOSYS)
                         fprintf(stderr, "Make sure cfg_device is set first.\n");
+                if (errno == EINVAL)
+                        fprintf(stderr, "cfg_device should be of the form "
+                                "'lustre-MDT0000'\n");
         }
         return rc;
 }
@@ -1812,7 +1822,7 @@ repeat:
                         rc = -EINVAL;
                         goto out;
                 }
-                if (desc.ld_default_stripe_count == (__u32)-1)
+                if (desc.ld_default_stripe_count == (__u16)-1)
                         printf("default_stripe_count: %d\n", -1);
                 else
                         printf("default_stripe_count: %u\n",
@@ -2040,6 +2050,7 @@ int jt_cfg_dump_log(int argc, char **argv)
         struct obd_ioctl_data data;
         char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
         int rc;
+
 
         if (argc != 2)
                 return CMD_HELP;
@@ -2326,15 +2337,14 @@ static int jt_blockdev_find_module(const char *module)
 {
         FILE *fp;
         int found = 0;
-        char buf[1024];
+        char modname[256];
 
         fp = fopen("/proc/modules", "r");
         if (fp == NULL)
                 return -1;
 
-        while (fgets(buf, 1024, fp) != NULL) {
-                *strchr(buf, ' ') = 0;
-                if (strcmp(module, buf) == 0) {
+        while (fscanf(fp, "%s %*s %*s %*s %*s %*s", modname) == 1) {
+                if (strcmp(module, modname) == 0) {
                         found = 1;
                         break;
                 }
@@ -3048,10 +3058,11 @@ out:
 
 int jt_get_obj_version(int argc, char **argv)
 {
-        struct lu_fid fid;
+        struct ll_fid fid;
         struct obd_ioctl_data data;
         __u64 version;
         char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf, *fidstr;
+        struct lu_fid f;
         int rc;
 
         if (argc != 2)
@@ -3060,12 +3071,14 @@ int jt_get_obj_version(int argc, char **argv)
         fidstr = argv[1];
         while (*fidstr == '[')
                 fidstr++;
-        sscanf(fidstr, SFID, RFID(&fid));
-        if (!fid_is_sane(&fid)) {
-                fprintf(stderr, "bad FID format [%s], should be "DFID"\n",
-                        fidstr, (__u64)1, 2, 0);
-                return -EINVAL;
-        }
+        sscanf(fidstr, SFID, RFID(&f));
+        /*
+         * fid_is_sane is not suitable here.  We rely on
+         * mds_fid2locked_dentry to report on insane FIDs.
+         */
+        fid.id = f.f_seq;
+        fid.generation = f.f_oid;
+        fid.f_type = f.f_ver;
 
         memset(&data, 0, sizeof data);
         data.ioc_dev = cur_device;
@@ -3082,7 +3095,7 @@ int jt_get_obj_version(int argc, char **argv)
                 return rc;
         }
 
-        rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_GET_OBJ_VERSION, buf);
+        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_GET_OBJ_VERSION, buf);
         if (rc == -1) {
                 fprintf(stderr, "error: %s: ioctl: %s\n",
                         jt_cmdname(argv[0]), strerror(errno));
@@ -3090,7 +3103,7 @@ int jt_get_obj_version(int argc, char **argv)
         }
 
         obd_ioctl_unpack(&data, buf, sizeof rawbuf);
-        printf("0x%llx\n", version);
+        printf(LPX64"\n", version);
         return 0;
 }
 
@@ -3121,111 +3134,5 @@ void  llapi_ping_target(char *obd_type, char *obd_name,
         } else {
                 printf("%s active.\n", obd_name);
         }
+
 }
-
-int jt_changelog_register(int argc, char **argv)
-{
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        struct obd_ioctl_data data;
-        char devname[30];
-        int rc;
-
-        if (argc > 2)
-                return CMD_HELP;
-        else if (argc == 2 && strcmp(argv[1], "-n") != 0)
-                return CMD_HELP;
-        if (cur_device < 0)
-                return CMD_HELP;
-
-        memset(&data, 0x00, sizeof(data));
-        data.ioc_dev = cur_device;
-        memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(argv[0]));
-               return rc;
-        }
-
-        rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_CHANGELOG_REG, buf);
-        if (rc < 0) {
-                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-                        strerror(rc = errno));
-                return rc;
-        }
-        obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
-
-        if (data.ioc_u32_1 == 0) {
-                fprintf(stderr, "received invalid userid!\n");
-                return EPROTO;
-        }
-
-        if (lcfg_get_devname() != NULL)
-                strcpy(devname, lcfg_get_devname());
-        else
-                sprintf(devname, "dev %d", cur_device);
-
-        if (argc == 2)
-                /* -n means bare name */
-                printf(CHANGELOG_USER_PREFIX"%u\n", data.ioc_u32_1);
-        else
-                printf("%s: Registered changelog userid '"CHANGELOG_USER_PREFIX
-                       "%u'\n", devname, data.ioc_u32_1);
-        return 0;
-}
-
-int jt_changelog_deregister(int argc, char **argv)
-{
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        struct obd_ioctl_data data;
-        char devname[30];
-        int id, rc;
-
-        if (argc != 2 || cur_device < 0)
-                return CMD_HELP;
-
-        id = strtol(argv[1] + strlen(CHANGELOG_USER_PREFIX), NULL, 10);
-        if ((id == 0) || (strncmp(argv[1], CHANGELOG_USER_PREFIX,
-                                  strlen(CHANGELOG_USER_PREFIX)) != 0)) {
-                fprintf(stderr, "expecting id of the form '"
-                        CHANGELOG_USER_PREFIX"<num>'; got '%s'\n", argv[1]);
-                return CMD_HELP;
-        }
-
-        memset(&data, 0x00, sizeof(data));
-        data.ioc_dev = cur_device;
-        data.ioc_u32_1 = id;
-        memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(argv[0]));
-                return rc;
-        }
-
-        rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_CHANGELOG_DEREG, buf);
-        if (rc < 0) {
-                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-                        strerror(rc = errno));
-                return rc;
-        }
-        obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
-
-        if (data.ioc_u32_1 != id) {
-                fprintf(stderr, "No changelog user '%s'.  Blocking user"
-                        " is '"CHANGELOG_USER_PREFIX"%d'.\n", argv[1],
-                        data.ioc_u32_1);
-                return ENOENT;
-        }
-
-        if (lcfg_get_devname() != NULL)
-                strcpy(devname, lcfg_get_devname());
-        else
-                sprintf(devname, "dev %d", cur_device);
-
-        printf("%s: Deregistered changelog user '"CHANGELOG_USER_PREFIX"%d'\n",
-               devname, data.ioc_u32_1);
-        return 0;
-}
-
-

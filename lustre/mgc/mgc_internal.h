@@ -37,7 +37,7 @@
 #ifndef _MGC_INTERNAL_H
 #define _MGC_INTERNAL_H
 
-#include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_lib.h>
 #include <lustre_dlm.h>
@@ -52,7 +52,5 @@ static void lprocfs_mgc_init_vars(struct lprocfs_static_vars *lvars)
         memset(lvars, 0, sizeof(*lvars));
 }
 #endif  /* LPROCFS */
-
-int mgc_process_log(struct obd_device *mgc, struct config_llog_data *cld);
 
 #endif  /* _MGC_INTERNAL_H */

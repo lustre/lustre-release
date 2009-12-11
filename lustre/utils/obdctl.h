@@ -113,7 +113,6 @@ int jt_lcfg_param(int argc, char **argv);
 int jt_lcfg_mgsparam(int argc, char **argv);
 int jt_lcfg_getparam(int argc, char **argv);
 int jt_lcfg_setparam(int argc, char **argv);
-int jt_lcfg_listparam(int argc, char **argv);
 
 int obd_add_uuid(char *uuid, lnet_nid_t nid);
 
@@ -122,7 +121,5 @@ int jt_blockdev_detach(int argc, char **argv);
 int jt_blockdev_info(int argc, char **argv);
 
 int jt_pool_cmd(int argc, char **argv);
-int jt_changelog_register(int argc, char **argv);
-int jt_changelog_deregister(int argc, char **argv);
 
 #endif

@@ -1,0 +1,24 @@
+lnxmaj="2.4.21"
+lnxrel="47.0.1.EL"
+
+KERNEL=linux-${lnxmaj}-${lnxrel}.tar.bz2
+SERIES=rhel-2.4.21
+VERSION=${lnxmaj}
+LUSTRE_VERSION=@VERSION@
+EXTRA_VERSION=${lnxrel}_lustre.@VERSION@
+RHBUILD=1
+
+BASE_ARCHS="i686 x86_64 ia64"
+BIGMEM_ARCHS=""
+BOOT_ARCHS=""
+JENSEN_ARCHS=""
+SMP_ARCHS="i686 x86_64 ia64"
+UP_ARCHS=""
+
+# the modules in this kernel do not build with gcc 4, 3.4, or 2.96
+for cc in gcc32 gcc33 ; do
+    if which $cc >/dev/null 2>/dev/null ; then
+        export CC=$cc
+        break
+    fi
+done

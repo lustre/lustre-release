@@ -16,14 +16,14 @@ wirecheck
 wiretest
 llog_reader
 lr_reader
+lshowmount
+ltrack_stats
 obdio
 obdbarrier
+ll_recover_lost_found_objs
 lload
 llverfs
 llverdev
-l_getidentity
-l_facl
-req_layout
 l_getgroups
 .*.cmd
 .*.d
@@ -31,6 +31,3 @@ mkfs_lustre
 mount_lustre
 tunefs_lustre
 loadgen
-lreplicate
-lshowmount
-ll_recover_lost_found_objs

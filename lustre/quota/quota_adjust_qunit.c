@@ -43,12 +43,11 @@
 # include <linux/module.h>
 # include <linux/init.h>
 # include <linux/fs.h>
-# include <linux/jbd.h>
 # include <linux/quota.h>
-# include <linux/smp_lock.h>
-# include <linux/buffer_head.h>
-# include <linux/workqueue.h>
-# include <linux/mount.h>
+#  include <linux/smp_lock.h>
+#  include <linux/buffer_head.h>
+#  include <linux/workqueue.h>
+#  include <linux/mount.h>
 #else /* __KERNEL__ */
 # include <liblustre.h>
 #endif
@@ -60,13 +59,13 @@
 #include <obd_ost.h>
 #include <lustre_fsfilt.h>
 #include <linux/lustre_quota.h>
+#include <class_hash.h>
 #include "quota_internal.h"
 
 #ifdef HAVE_QUOTA_SUPPORT
 
 #ifdef __KERNEL__
-/**
- * This function is charge of recording lqs_ino_rec and
+/* this function is charge of recording lqs_ino_rec and
  * lqs_blk_rec. when a lquota slave checks a quota
  * request(check_cur_qunit) and finishes a quota
  * request(dqacq_completion), it will be called.
@@ -124,8 +123,8 @@ quota_create_lqs(unsigned long long lqs_key, struct lustre_quota_ctxt *qctxt)
         if (!qctxt->lqc_valid)
                 rc = -EBUSY;
         else
-                rc = cfs_hash_add_unique(qctxt->lqc_lqs_hash,
-                                         &lqs->lqs_key, &lqs->lqs_hash);
+                rc = lustre_hash_add_unique(qctxt->lqc_lqs_hash,
+                                    &lqs->lqs_key, &lqs->lqs_hash);
         spin_unlock(&qctxt->lqc_lock);
 
         if (!rc)
@@ -149,7 +148,7 @@ struct lustre_qunit_size *quota_search_lqs(unsigned long long lqs_key,
         int rc = 0;
 
  search_lqs:
-        lqs = cfs_hash_lookup(qctxt->lqc_lqs_hash, &lqs_key);
+        lqs = lustre_hash_lookup(qctxt->lqc_lqs_hash, &lqs_key);
         if (IS_ERR(lqs))
                 GOTO(out, rc = PTR_ERR(lqs));
 
@@ -176,7 +175,7 @@ struct lustre_qunit_size *quota_search_lqs(unsigned long long lqs_key,
         if (rc == 0) {
                 return lqs;
         } else {
-                CDEBUG(D_ERROR, "get lqs error(rc: %d)\n", rc);
+                CERROR("get lqs error(rc: %d)\n", rc);
                 return ERR_PTR(rc);
         }
 }
@@ -195,9 +194,18 @@ int quota_adjust_slave_lqs(struct quota_adjust_qunit *oqaq,
         lqs = quota_search_lqs(LQS_KEY(QAQ_IS_GRP(oqaq), oqaq->qaq_id),
                                qctxt, QAQ_IS_CREATE_LQS(oqaq) ? 1 : 0);
         if (lqs == NULL || IS_ERR(lqs)){
-                CDEBUG(D_ERROR, "fail to find a lqs(%s id: %u)!\n",
-                       QAQ_IS_GRP(oqaq) ? "group" : "user", oqaq->qaq_id);
+                CERROR("fail to find a lqs for %sid %u!\n",
+                       QAQ_IS_GRP(oqaq) ? "g" : "u", oqaq->qaq_id);
                 RETURN(PTR_ERR(lqs));
+        }
+
+        if (OBD_FAIL_CHECK(OBD_FAIL_QUOTA_WITHOUT_CHANGE_QS)) {
+                lqs->lqs_bunit_sz = qctxt->lqc_bunit_sz;
+                lqs->lqs_btune_sz = qctxt->lqc_btune_sz;
+                lqs->lqs_iunit_sz = qctxt->lqc_iunit_sz;
+                lqs->lqs_itune_sz = qctxt->lqc_itune_sz;
+                lqs_putref(lqs);
+                RETURN(0);
         }
 
         CDEBUG(D_QUOTA, "before: bunit: %lu, iunit: %lu.\n",
@@ -262,7 +270,7 @@ int filter_quota_adjust_qunit(struct obd_export *exp,
                               struct lustre_quota_ctxt *qctxt)
 {
         struct obd_device *obd = exp->exp_obd;
-        unsigned int id[MAXQUOTAS] = { 0, 0 };
+        unsigned int uid = 0, gid = 0;
         int rc = 0;
         ENTRY;
 
@@ -274,12 +282,12 @@ int filter_quota_adjust_qunit(struct obd_export *exp,
                 RETURN(rc);
         }
         if (QAQ_IS_GRP(oqaq))
-                id[GRPQUOTA] = oqaq->qaq_id;
+                gid = oqaq->qaq_id;
         else
-                id[USRQUOTA] = oqaq->qaq_id;
+                uid = oqaq->qaq_id;
 
         if (rc > 0) {
-                rc = qctxt_adjust_qunit(obd, qctxt, id, 1, 0, NULL);
+                rc = qctxt_adjust_qunit(obd, qctxt, uid, gid, 1, 0, NULL);
                 if (rc == -EDQUOT || rc == -EBUSY ||
                     rc == QUOTA_REQ_RETURNED || rc == -EAGAIN) {
                         CDEBUG(D_QUOTA, "rc: %d.\n", rc);
@@ -299,11 +307,13 @@ int client_quota_adjust_qunit(struct obd_export *exp,
 {
         struct ptlrpc_request *req;
         struct quota_adjust_qunit *oqa;
+        __u32 size[2] = { sizeof(struct ptlrpc_body), sizeof(*oqaq) };
         int rc = 0;
         ENTRY;
 
         /* client don't support this kind of operation, abort it */
-        if (!(exp->exp_connect_flags & OBD_CONNECT_CHANGE_QS)) {
+        if (!(exp->exp_connect_flags & OBD_CONNECT_CHANGE_QS)||
+            OBD_FAIL_CHECK(OBD_FAIL_QUOTA_WITHOUT_CHANGE_QS)) {
                 CDEBUG(D_QUOTA, "osc: %s don't support change qunit size\n",
                        exp->exp_obd->obd_name);
                 RETURN(rc);
@@ -311,23 +321,24 @@ int client_quota_adjust_qunit(struct obd_export *exp,
         if (strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_OSC_NAME))
                 RETURN(-EINVAL);
 
-        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
-                                        &RQF_OST_QUOTA_ADJUST_QUNIT,
-                                        LUSTRE_OST_VERSION,
-                                        OST_QUOTA_ADJUST_QUNIT);
-        if (req == NULL)
-                RETURN(-ENOMEM);
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
+                              OST_QUOTA_ADJUST_QUNIT, 2, size, NULL);
+        if (!req)
+                GOTO(out, rc = -ENOMEM);
 
-        oqa = req_capsule_client_get(&req->rq_pill, &RMF_QUOTA_ADJUST_QUNIT);
+        oqa = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*oqaq));
         *oqa = *oqaq;
 
-        ptlrpc_request_set_replen(req);
+        ptlrpc_req_set_repsize(req, 2, size);
 
         rc = ptlrpc_queue_wait(req);
-        if (rc)
+        if (rc) {
                 CERROR("%s: %s failed: rc = %d\n", exp->exp_obd->obd_name,
                        __FUNCTION__, rc);
+                GOTO(out, rc);
+        }
         ptlrpc_req_finished(req);
+out:
         RETURN (rc);
 }
 

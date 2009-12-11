@@ -51,7 +51,6 @@ MANFILES = lustre.7 lfs.1 mount.lustre.8 mkfs.lustre.8 tunefs.lustre.8 lctl.8 \
 	plot-llstat.8 l_getgroups.8 lst.8 routerstat.8 lshowmount.8 \
 	ll_recover_lost_found_objs.8 llog_reader.8 llapi_file_open.3 \
 	llapi_file_create.3 llapi_file_get_stripe.3 liblustreapi.7
-
 if UTILS
 man_MANS = $(MANFILES)
 endif

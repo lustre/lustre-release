@@ -24,8 +24,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
-#include <libcfs/libcfsutil.h>
+#include "parser.h"
 
 
 command_t list[] = {
@@ -48,31 +49,18 @@ command_t list[] = {
 
 int main(int argc, char **argv)
 {
-        int rc = 0;
-
-        rc = libcfs_arch_init();
-        if (rc < 0)
-                return rc;
-
-        rc =  dbg_initialize(argc, argv);
-        if (rc < 0)
-                goto errorout;
+        if (dbg_initialize(argc, argv) < 0)
+                exit(2);
 
         register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH, 
                          LNET_DEV_MAJOR, LNET_DEV_MINOR);
 
         Parser_init("debugctl > ", list);
-        if (argc > 1) {
-                rc = Parser_execarg(argc - 1, &argv[1], list);
-                unregister_ioc_dev(LNET_DEV_ID);
-                goto errorout;
-        }
+        if (argc > 1)
+                return Parser_execarg(argc - 1, &argv[1], list);
 
         Parser_commands();
 
         unregister_ioc_dev(LNET_DEV_ID);
-
-errorout:
-        libcfs_arch_cleanup();
-        return rc;
+        return 0;
 }

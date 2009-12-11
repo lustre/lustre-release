@@ -1,7 +1,7 @@
-Index: linux-2.6.18-128.1.6/fs/dquot.c
+Index: linux-2.6.18-128.1.14/fs/dquot.c
 ===================================================================
---- linux-2.6.18-128.1.6.orig/fs/dquot.c	2009-04-14 21:04:50.000000000 -0600
-+++ linux-2.6.18-128.1.6/fs/dquot.c	2009-06-02 23:26:36.000000000 -0600
+--- linux-2.6.18-128.1.14.orig/fs/dquot.c	2009-06-19 12:33:10.000000000 -0600
++++ linux-2.6.18-128.1.14/fs/dquot.c	2009-06-19 12:35:20.000000000 -0600
 @@ -1592,10 +1592,19 @@
  }
  
@@ -68,10 +68,10 @@ Index: linux-2.6.18-128.1.6/fs/dquot.c
  }
  
  /* Generic routine for getting common part of quota file information */
-Index: linux-2.6.18-128.1.6/fs/quota_v1.c
+Index: linux-2.6.18-128.1.14/fs/quota_v1.c
 ===================================================================
---- linux-2.6.18-128.1.6.orig/fs/quota_v1.c	2006-09-19 21:42:06.000000000 -0600
-+++ linux-2.6.18-128.1.6/fs/quota_v1.c	2009-06-02 23:26:36.000000000 -0600
+--- linux-2.6.18-128.1.14.orig/fs/quota_v1.c	2009-06-19 12:33:10.000000000 -0600
++++ linux-2.6.18-128.1.14/fs/quota_v1.c	2009-06-19 12:35:20.000000000 -0600
 @@ -139,6 +139,9 @@
  		goto out;
  	}
@@ -82,10 +82,10 @@ Index: linux-2.6.18-128.1.6/fs/quota_v1.c
  	dqopt->info[type].dqi_igrace = dqblk.dqb_itime ? dqblk.dqb_itime : MAX_IQ_TIME;
  	dqopt->info[type].dqi_bgrace = dqblk.dqb_btime ? dqblk.dqb_btime : MAX_DQ_TIME;
  out:
-Index: linux-2.6.18-128.1.6/fs/quota_v2.c
+Index: linux-2.6.18-128.1.14/fs/quota_v2.c
 ===================================================================
---- linux-2.6.18-128.1.6.orig/fs/quota_v2.c	2006-09-19 21:42:06.000000000 -0600
-+++ linux-2.6.18-128.1.6/fs/quota_v2.c	2009-06-02 23:26:36.000000000 -0600
+--- linux-2.6.18-128.1.14.orig/fs/quota_v2.c	2009-06-19 12:33:10.000000000 -0600
++++ linux-2.6.18-128.1.14/fs/quota_v2.c	2009-06-19 12:35:20.000000000 -0600
 @@ -23,26 +23,64 @@
  typedef char *dqbuf_t;
  
@@ -501,10 +501,10 @@ Index: linux-2.6.18-128.1.6/fs/quota_v2.c
  		if (!dquot->dq_dqb.dqb_bhardlimit &&
  			!dquot->dq_dqb.dqb_bsoftlimit &&
  			!dquot->dq_dqb.dqb_ihardlimit &&
-Index: linux-2.6.18-128.1.6/include/linux/dqblk_v2.h
+Index: linux-2.6.18-128.1.14/include/linux/dqblk_v2.h
 ===================================================================
---- linux-2.6.18-128.1.6.orig/include/linux/dqblk_v2.h	2006-09-19 21:42:06.000000000 -0600
-+++ linux-2.6.18-128.1.6/include/linux/dqblk_v2.h	2009-06-02 23:26:36.000000000 -0600
+--- linux-2.6.18-128.1.14.orig/include/linux/dqblk_v2.h	2009-06-19 12:33:10.000000000 -0600
++++ linux-2.6.18-128.1.14/include/linux/dqblk_v2.h	2009-06-19 12:35:20.000000000 -0600
 @@ -21,6 +21,7 @@
  	unsigned int dqi_blocks;
  	unsigned int dqi_free_blk;
@@ -513,10 +513,10 @@ Index: linux-2.6.18-128.1.6/include/linux/dqblk_v2.h
  };
  
  #endif /* _LINUX_DQBLK_V2_H */
-Index: linux-2.6.18-128.1.6/include/linux/quota.h
+Index: linux-2.6.18-128.1.14/include/linux/quota.h
 ===================================================================
---- linux-2.6.18-128.1.6.orig/include/linux/quota.h	2006-09-19 21:42:06.000000000 -0600
-+++ linux-2.6.18-128.1.6/include/linux/quota.h	2009-06-02 23:26:36.000000000 -0600
+--- linux-2.6.18-128.1.14.orig/include/linux/quota.h	2009-06-19 12:33:10.000000000 -0600
++++ linux-2.6.18-128.1.14/include/linux/quota.h	2009-06-19 12:35:20.000000000 -0600
 @@ -149,12 +149,12 @@
   * Data for one user/group kept in memory
   */
@@ -544,10 +544,10 @@ Index: linux-2.6.18-128.1.6/include/linux/quota.h
  	union {
  		struct v1_mem_dqinfo v1_i;
  		struct v2_mem_dqinfo v2_i;
-Index: linux-2.6.18-128.1.6/include/linux/quotaio_v2.h
+Index: linux-2.6.18-128.1.14/include/linux/quotaio_v2.h
 ===================================================================
---- linux-2.6.18-128.1.6.orig/include/linux/quotaio_v2.h	2006-09-19 21:42:06.000000000 -0600
-+++ linux-2.6.18-128.1.6/include/linux/quotaio_v2.h	2009-06-02 23:26:36.000000000 -0600
+--- linux-2.6.18-128.1.14.orig/include/linux/quotaio_v2.h	2009-06-19 12:33:10.000000000 -0600
++++ linux-2.6.18-128.1.14/include/linux/quotaio_v2.h	2009-06-19 12:35:20.000000000 -0600
 @@ -16,28 +16,51 @@
  	0xd9c01927	/* GRPQUOTA */\
  }

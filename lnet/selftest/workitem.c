@@ -147,7 +147,7 @@ swi_schedule_serial_workitem (swi_workitem_t *wi)
 int
 swi_scheduler_main (void *arg)
 {
-        int  id = (int)(long_ptr_t) arg;
+        int  id = (long) arg;
         char name[16];
 
         snprintf(name, sizeof(name), "swi_sd%03d", id);
@@ -189,11 +189,11 @@ swi_scheduler_main (void *arg)
                 spin_unlock(&swi_data.wi_lock);
 
                 if (nloops < SWI_RESCHED)
-                        cfs_wait_event_interruptible_exclusive(
+                        wait_event_interruptible_exclusive(
                                    swi_data.wi_waitq,
-                                   !swi_sched_cansleep(&swi_data.wi_runq), rc);
+                                   !swi_sched_cansleep(&swi_data.wi_runq));
                 else
-                        our_cond_resched();
+                        cfs_cond_resched();
 
                 spin_lock(&swi_data.wi_lock);
         }
@@ -243,11 +243,11 @@ swi_serial_scheduler_main (void *arg)
                 spin_unlock(&swi_data.wi_lock);
 
                 if (nloops < SWI_RESCHED)
-                        cfs_wait_event_interruptible_exclusive(
+                        wait_event_interruptible_exclusive(
                              swi_data.wi_serial_waitq,
-                             !swi_sched_cansleep(&swi_data.wi_serial_runq), rc);
+                             !swi_sched_cansleep(&swi_data.wi_serial_runq));
                 else
-                        our_cond_resched();
+                        cfs_cond_resched();
 
                 spin_lock(&swi_data.wi_lock);
         }
@@ -335,8 +335,7 @@ swi_startup (void)
         }
 
         for (i = 0; i < num_online_cpus(); i++) {
-                rc = swi_start_thread(swi_scheduler_main,
-                                      (void *) (long_ptr_t) i);
+                rc = swi_start_thread(swi_scheduler_main, (void *) (long) i);
                 if (rc != 0) {
                         CERROR ("Can't spawn workitem scheduler: %d\n", rc);
                         swi_shutdown();

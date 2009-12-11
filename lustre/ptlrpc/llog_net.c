@@ -67,14 +67,22 @@ int llog_origin_connect(struct llog_ctxt *ctxt,
                         struct llog_logid *logid, struct llog_gen *gen,
                         struct obd_uuid *uuid)
 {
-        struct llog_gen_rec    *lgr;
-        struct ptlrpc_request  *req;
+        struct llog_gen_rec *lgr;
+        struct obd_import *imp;
+        struct ptlrpc_request *request;
         struct llogd_conn_body *req_body;
-        struct inode* inode = ctxt->loc_handle->lgh_file->f_dentry->d_inode;
+        int size[2] = { sizeof(struct ptlrpc_body),
+                        sizeof(struct llogd_conn_body) };
+        struct inode *inode;
         void *handle;
         int rc, rc1;
-
         ENTRY;
+
+        LASSERT(ctxt != NULL);
+        LASSERT(ctxt->loc_handle != NULL);
+        LASSERT(ctxt->loc_handle->lgh_file != NULL);
+        LASSERT(ctxt->loc_handle->lgh_file->f_dentry != NULL);
+        inode = ctxt->loc_handle->lgh_file->f_dentry->d_inode;
 
         if (list_empty(&ctxt->loc_handle->u.chd.chd_head)) {
                 CDEBUG(D_HA, "there is no record related to ctxt %p\n", ctxt);
@@ -82,27 +90,28 @@ int llog_origin_connect(struct llog_ctxt *ctxt,
         }
 
         /* FIXME what value for gen->conn_cnt */
-        llog_gen_init(ctxt);
+        LLOG_GEN_INC(ctxt->loc_gen);
 
         /* first add llog_gen_rec */
-        OBD_ALLOC_PTR(lgr);
+        OBD_ALLOC(lgr, sizeof(*lgr));
         if (!lgr)
                 RETURN(-ENOMEM);
         lgr->lgr_hdr.lrh_len = lgr->lgr_tail.lrt_len = sizeof(*lgr);
         lgr->lgr_hdr.lrh_type = LLOG_GEN_REC;
 
-        handle = fsfilt_start_log(ctxt->loc_exp->exp_obd, inode, 
+        handle = fsfilt_start_log(ctxt->loc_exp->exp_obd, inode,
                                   FSFILT_OP_CANCEL_UNLINK, NULL, 1);
+
         if (IS_ERR(handle)) {
-               CERROR("fsfilt_start failed: %ld\n", PTR_ERR(handle));
-               OBD_FREE(lgr, sizeof(*lgr));
-               rc = PTR_ERR(handle);
-               RETURN(rc);
+                CERROR("fsfilt_start failed: %ld\n", PTR_ERR(handle));
+                OBD_FREE(lgr, sizeof(*lgr));
+                rc = PTR_ERR(handle);
+                RETURN(rc);
         }
-        
         lgr->lgr_gen = ctxt->loc_gen;
         rc = llog_add(ctxt, &lgr->lgr_hdr, NULL, NULL, 1);
-        OBD_FREE_PTR(lgr);
+        OBD_FREE(lgr, sizeof(*lgr));
+
         rc1 = fsfilt_commit(ctxt->loc_exp->exp_obd, inode, handle, 0);
         if (rc != 1 || rc1 != 0) {
                 rc = (rc != 1) ? rc : rc1;
@@ -110,25 +119,23 @@ int llog_origin_connect(struct llog_ctxt *ctxt,
         }
 
         LASSERT(ctxt->loc_imp);
-        req = ptlrpc_request_alloc_pack(ctxt->loc_imp, &RQF_LLOG_ORIGIN_CONNECT,
-                                        LUSTRE_LOG_VERSION,
-                                        LLOG_ORIGIN_CONNECT);
-        if (req == NULL)
+        imp = ctxt->loc_imp;
+
+        request = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION,
+                                  LLOG_ORIGIN_CONNECT, 2, size, NULL);
+        if (!request)
                 RETURN(-ENOMEM);
 
-        CDEBUG(D_OTHER, "%s mount_count %llu, connection count %llu\n",
-               ctxt->loc_exp->exp_obd->obd_type->typ_name,
-               ctxt->loc_gen.mnt_cnt, ctxt->loc_gen.conn_cnt);
+        req_body = lustre_msg_buf(request->rq_reqmsg, REQ_REC_OFF,
+                                  sizeof(*req_body));
 
-        req_body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_CONN_BODY);
         req_body->lgdc_gen = ctxt->loc_gen;
         req_body->lgdc_logid = ctxt->loc_handle->lgh_id;
         req_body->lgdc_ctxt_idx = ctxt->loc_idx + 1;
-        ptlrpc_request_set_replen(req);
+        ptlrpc_req_set_repsize(request, 1, NULL);
 
-        req->rq_no_resend = req->rq_no_delay = 1;
-        rc = ptlrpc_queue_wait(req);
-        ptlrpc_req_finished(req);
+        rc = ptlrpc_queue_wait(request);
+        ptlrpc_req_finished(request);
 
         RETURN(rc);
 }
@@ -142,7 +149,8 @@ int llog_handle_connect(struct ptlrpc_request *req)
         int rc;
         ENTRY;
 
-        req_body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_CONN_BODY);
+        req_body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF,
+                                  sizeof(*req_body));
 
         ctxt = llog_get_context(obd, req_body->lgdc_ctxt_idx);
         rc = llog_connect(ctxt, &req_body->lgdc_logid,
@@ -159,7 +167,6 @@ EXPORT_SYMBOL(llog_handle_connect);
 int llog_receptor_accept(struct llog_ctxt *ctxt, struct obd_import *imp)
 {
         ENTRY;
-
         LASSERT(ctxt);
         mutex_down(&ctxt->loc_sem);
         if (ctxt->loc_imp != imp) {
@@ -189,11 +196,8 @@ int llog_initiator_connect(struct llog_ctxt *ctxt)
 {
         struct obd_import *new_imp;
         ENTRY;
-
         LASSERT(ctxt);
         new_imp = ctxt->loc_obd->u.cli.cl_import;
-        LASSERTF(ctxt->loc_imp == NULL || ctxt->loc_imp == new_imp,
-                 "%p - %p\n", ctxt->loc_imp, new_imp);
         mutex_down(&ctxt->loc_sem);
         if (ctxt->loc_imp != new_imp) {
                 if (ctxt->loc_imp)

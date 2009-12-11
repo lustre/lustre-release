@@ -112,7 +112,7 @@
 #include <lustre_lite.h>
 #include "llite_internal.h"
 
-#define LLOOP_MAX_SEGMENTS        PTLRPC_MAX_BRW_PAGES
+#define LLOOP_MAX_SEGMENTS    PTLRPC_MAX_BRW_PAGES
 
 /* Possible states of device */
 enum {
@@ -122,39 +122,35 @@ enum {
 };
 
 struct lloop_device {
-        int                  lo_number;
-        int                  lo_refcnt;
-        loff_t               lo_offset;
-        loff_t               lo_sizelimit;
-        int                  lo_flags;
+        int                lo_number;
+        int                lo_refcnt;
+        loff_t             lo_offset;
+        loff_t             lo_sizelimit;
+        int                lo_flags;
         int                (*ioctl)(struct lloop_device *, int cmd,
                                     unsigned long arg);
 
-        struct file         *lo_backing_file;
+        struct file *      lo_backing_file;
         struct block_device *lo_device;
-        unsigned             lo_blocksize;
+        unsigned           lo_blocksize;
 
-        int                  old_gfp_mask;
+        int                old_gfp_mask;
 
-        spinlock_t           lo_lock;
-        struct bio          *lo_bio;
-        struct bio          *lo_biotail;
-        int                  lo_state;
-        struct semaphore     lo_sem;
-        struct semaphore     lo_ctl_mutex;
-        atomic_t             lo_pending;
-        wait_queue_head_t    lo_bh_wait;
+        spinlock_t         lo_lock;
+        struct bio         *lo_bio;
+        struct bio         *lo_biotail;
+        int                lo_state;
+        struct semaphore   lo_sem;
+        struct semaphore   lo_ctl_mutex;
+        atomic_t           lo_pending;
+        wait_queue_head_t  lo_bh_wait;
 
-        struct request_queue *lo_queue;
-
-        const struct lu_env *lo_env;
-        struct cl_io         lo_io;
-        struct ll_dio_pages  lo_pvec;
+        struct request_queue  *lo_queue;
 
         /* data to handle bio for lustre. */
         struct lo_request_data {
-                struct page *lrd_pages[LLOOP_MAX_SEGMENTS];
-                loff_t       lrd_offsets[LLOOP_MAX_SEGMENTS];
+                struct brw_page    lrd_pages[LLOOP_MAX_SEGMENTS];
+                struct obdo        lrd_oa;
         } lo_requests[1];
 };
 
@@ -165,8 +161,8 @@ enum {
         LO_FLAGS_READ_ONLY       = 1,
 };
 
-static int lloop_major;
 #define MAX_LOOP_DEFAULT  16
+static int lloop_major;
 static int max_loop = MAX_LOOP_DEFAULT;
 static struct lloop_device *loop_dev;
 static struct gendisk **disks;
@@ -193,34 +189,20 @@ static loff_t get_loop_size(struct lloop_device *lo, struct file *file)
 
 static int do_bio_lustrebacked(struct lloop_device *lo, struct bio *head)
 {
-        const struct lu_env  *env   = lo->lo_env;
-        struct cl_io         *io    = &lo->lo_io;
-        struct inode         *inode = lo->lo_backing_file->f_dentry->d_inode;
-        struct cl_object     *obj = ll_i2info(inode)->lli_clob;
-        pgoff_t               offset;
-        int                   ret;
-        int                   i;
-        int                   rw;
-        obd_count             page_count = 0;
-        struct bio_vec       *bvec;
-        struct bio           *bio;
-        ssize_t               bytes;
-
-        struct ll_dio_pages  *pvec = &lo->lo_pvec;
-        struct page         **pages = pvec->ldp_pages;
-        loff_t               *offsets = pvec->ldp_offsets;
-
-        truncate_inode_pages(inode->i_mapping, 0);
-
-        /* initialize the IO */
-        memset(io, 0, sizeof(*io));
-        io->ci_obj = obj;
-        ret = cl_io_init(env, io, CIT_MISC, obj);
-        if (ret)
-                return io->ci_result;
-        io->ci_lockreq = CILR_NEVER;
+        struct inode *inode = lo->lo_backing_file->f_dentry->d_inode;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
+        struct obd_info oinfo = {{{0}}};
+        struct brw_page *pg = lo->lo_requests[0].lrd_pages;
+        struct obdo *oa = &lo->lo_requests[0].lrd_oa;
+        pgoff_t offset;
+        int ret, i, rw;
+        obd_count page_count = 0;
+        struct bio_vec *bvec;
+        struct bio *bio;
 
         LASSERT(head != NULL);
+
         rw = head->bi_rw;
         for (bio = head; bio != NULL; bio = bio->bi_next) {
                 LASSERT(rw == bio->bi_rw);
@@ -230,8 +212,14 @@ static int do_bio_lustrebacked(struct lloop_device *lo, struct bio *head)
                         BUG_ON(bvec->bv_offset != 0);
                         BUG_ON(bvec->bv_len != CFS_PAGE_SIZE);
 
-                        pages[page_count] = bvec->bv_page;
-                        offsets[page_count] = offset;
+                        pg->pg = bvec->bv_page;
+                        pg->off = offset;
+                        pg->count = bvec->bv_len;
+                        pg->flag = OBD_BRW_SRVLOCK;
+
+                        CDEBUG(D_INFO, "index %lu offset "LPU64", count %u\n",
+                               pg->pg->index, pg->off, pg->count);
+                        pg++;
                         page_count++;
                         offset += bvec->bv_len;
                 }
@@ -242,36 +230,23 @@ static int do_bio_lustrebacked(struct lloop_device *lo, struct bio *head)
                         (rw == WRITE) ? LPROC_LL_BRW_WRITE : LPROC_LL_BRW_READ,
                         page_count << PAGE_CACHE_SHIFT);
 
-        pvec->ldp_size = page_count << PAGE_CACHE_SHIFT;
-        pvec->ldp_nr = page_count;
+        oa->o_mode = inode->i_mode;
+        oa->o_id = lsm->lsm_object_id;
+        oa->o_gr = lsm->lsm_object_gr;
+        oa->o_valid = OBD_MD_FLID   | OBD_MD_FLGROUP |
+                      OBD_MD_FLMODE | OBD_MD_FLTYPE;
+        obdo_from_inode(oa, inode, OBD_MD_FLFID | OBD_MD_FLGENER);
 
-        /* FIXME: in ll_direct_rw_pages, it has to allocate many cl_page{}s to
-         * write those pages into OST. Even worse case is that more pages
-         * would be asked to write out to swap space, and then finally get here
-         * again.
-         * Unfortunately this is NOT easy to fix.
-         * Thoughts on solution:
-         * 0. Define a reserved pool for cl_pages, which could be a list of
-         *    pre-allocated cl_pages from cl_page_kmem;
-         * 1. Define a new operation in cl_object_operations{}, says clo_depth,
-         *    which measures how many layers for this lustre object. Generally
-         *    speaking, the depth would be 2, one for llite, and one for lovsub.
-         *    However, for SNS, there will be more since we need additional page
-         *    to store parity;
-         * 2. Reserve the # of (page_count * depth) cl_pages from the reserved
-         *    pool. Afterwards, the clio would allocate the pages from reserved 
-         *    pool, this guarantees we neeedn't allocate the cl_pages from
-         *    generic cl_page slab cache.
-         *    Of course, if there is NOT enough pages in the pool, we might
-         *    be asked to write less pages once, this purely depends on
-         *    implementation. Anyway, we should be careful to avoid deadlocking.
-         */
-        LOCK_INODE_MUTEX(inode);
-        bytes = ll_direct_rw_pages(env, io, rw, inode, pvec);
-        UNLOCK_INODE_MUTEX(inode);
-        cl_io_fini(env, io);
-        return (bytes == pvec->ldp_size) ? 0 : (int)bytes;
+        oinfo.oi_oa = oa;
+        oinfo.oi_md = lsm;
+        ret = obd_brw((rw == WRITE) ? OBD_BRW_WRITE : OBD_BRW_READ,
+                      ll_i2obdexp(inode), &oinfo, (obd_count)page_count,
+                      lo->lo_requests[0].lrd_pages, NULL);
+        if (ret == 0)
+                obdo_to_inode(inode, oa, OBD_MD_FLBLOCKS);
+        return ret;
 }
+
 
 /*
  * Add bio to back of pending list
@@ -416,24 +391,11 @@ static int loop_thread(void *data)
         unsigned long times = 0;
         unsigned long total_count = 0;
 
-        struct lu_env *env;
-        int refcheck;
-        int ret = 0;
-
         daemonize("lloop%d", lo->lo_number);
 
         set_user_nice(current, -20);
 
         lo->lo_state = LLOOP_BOUND;
-
-        env = cl_env_get(&refcheck);
-        if (IS_ERR(env))
-                GOTO(out, ret = PTR_ERR(env));
-
-        lo->lo_env = env;
-        memset(&lo->lo_pvec, 0, sizeof(lo->lo_pvec));
-        lo->lo_pvec.ldp_pages   = lo->lo_requests[0].lrd_pages;
-        lo->lo_pvec.ldp_offsets = lo->lo_requests[0].lrd_offsets;
 
         /*
          * up sem, we are running
@@ -459,7 +421,7 @@ static int loop_thread(void *data)
                 }
 
                 total_count += count;
-                if (total_count < count) {     /* overflow */
+                if (total_count < count) {      /* overflow */
                         total_count = count;
                         times = 1;
                 } else {
@@ -475,11 +437,9 @@ static int loop_thread(void *data)
                 loop_handle_bio(lo, bio);
                 atomic_sub(count, &lo->lo_pending);
         }
-        cl_env_put(env, &refcheck);
 
-out:
         up(&lo->lo_sem);
-        return ret;
+        return 0;
 }
 
 static int loop_set_fd(struct lloop_device *lo, struct file *unused,
@@ -599,9 +559,15 @@ static int loop_clr_fd(struct lloop_device *lo, struct block_device *bdev,
         return 0;
 }
 
+#ifdef HAVE_BLKDEV_PUT_2ARGS
+static int lo_open(struct block_device *bdev, fmode_t mode)
+{
+        struct lloop_device *lo = bdev->bd_disk->private_data;
+#else
 static int lo_open(struct inode *inode, struct file *file)
 {
         struct lloop_device *lo = inode->i_bdev->bd_disk->private_data;
+#endif
 
         down(&lo->lo_ctl_mutex);
         lo->lo_refcnt++;
@@ -610,9 +576,15 @@ static int lo_open(struct inode *inode, struct file *file)
         return 0;
 }
 
+#ifdef HAVE_BLKDEV_PUT_2ARGS
+static int lo_release(struct gendisk *disk, fmode_t mode)
+{
+        struct lloop_device *lo = disk->private_data;
+#else
 static int lo_release(struct inode *inode, struct file *file)
 {
         struct lloop_device *lo = inode->i_bdev->bd_disk->private_data;
+#endif
 
         down(&lo->lo_ctl_mutex);
         --lo->lo_refcnt;
@@ -622,11 +594,18 @@ static int lo_release(struct inode *inode, struct file *file)
 }
 
 /* lloop device node's ioctl function. */
+#ifdef HAVE_BLKDEV_PUT_2ARGS
+static int lo_ioctl(struct block_device *bdev, fmode_t mode,
+                    unsigned int cmd, unsigned long arg)
+{
+        struct lloop_device *lo = bdev->bd_disk->private_data;
+#else
 static int lo_ioctl(struct inode *inode, struct file *unused,
                     unsigned int cmd, unsigned long arg)
 {
         struct lloop_device *lo = inode->i_bdev->bd_disk->private_data;
         struct block_device *bdev = inode->i_bdev;
+#endif
         int err = 0;
 
         down(&lloop_mutex);
@@ -634,7 +613,7 @@ static int lo_ioctl(struct inode *inode, struct file *unused,
         case LL_IOC_LLOOP_DETACH: {
                 err = loop_clr_fd(lo, bdev, 2);
                 if (err == 0)
-                        blkdev_put(bdev); /* grabbed in LLOOP_ATTACH */
+                        ll_blkdev_put(bdev, 0); /* grabbed in LLOOP_ATTACH */
                 break;
         }
 
@@ -670,7 +649,7 @@ static struct block_device_operations lo_fops = {
  * ll_iocontrol_call.
  *
  * This is a llite regular file ioctl function. It takes the responsibility
- * of attaching or detaching a file by a lloop's device numner.
+ * of attaching a file, and detaching a file by a lloop's device numner.
  */
 static enum llioc_iter lloop_ioctl(struct inode *unused, struct file *file,
                                    unsigned int cmd, unsigned long arg,
@@ -686,8 +665,6 @@ static enum llioc_iter lloop_ioctl(struct inode *unused, struct file *file,
 
         if (disks == NULL)
                 GOTO(out1, err = -ENODEV);
-
-        CWARN("Enter llop_ioctl\n");
 
         down(&lloop_mutex);
         switch (cmd) {
@@ -724,7 +701,7 @@ static enum llioc_iter lloop_ioctl(struct inode *unused, struct file *file,
                 err = loop_set_fd(lo, NULL, bdev, file);
                 if (err) {
                         fput(file);
-                        blkdev_put(bdev);
+                        ll_blkdev_put(bdev, 0);
                 }
 
                 break;
@@ -748,7 +725,7 @@ static enum llioc_iter lloop_ioctl(struct inode *unused, struct file *file,
                 bdev = lo->lo_device;
                 err = loop_clr_fd(lo, bdev, 1);
                 if (err == 0)
-                        blkdev_put(bdev); /* grabbed in LLOOP_ATTACH */
+                        ll_blkdev_put(bdev, 0); /* grabbed in LLOOP_ATTACH */
 
                 break;
         }

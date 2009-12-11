@@ -21,8 +21,9 @@
 #ifndef _PTLCTL_H_
 #define _PTLCTL_H_
 
-#include <libcfs/libcfs.h>
 #include <lnet/types.h>
+#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 
 #define LNET_DEV_ID 0
 #define LNET_DEV_PATH "/dev/lnet"
@@ -77,5 +78,17 @@ int jt_dbg_clear_debug_buf(int argc, char **argv);
 int jt_dbg_mark_debug_buf(int argc, char **argv);
 int jt_dbg_modules(int argc, char **argv);
 int jt_dbg_panic(int argc, char **argv);
+
+/* l_ioctl.c */
+typedef int (ioc_handler_t)(int dev_id, unsigned int opc, void *buf);
+void set_ioc_handler(ioc_handler_t *handler);
+int register_ioc_dev(int dev_id, const char * dev_name, int major, int minor);
+void unregister_ioc_dev(int dev_id);
+int set_ioctl_dump(char * file);
+int l_ioctl(int dev_id, unsigned int opc, void *buf);
+int parse_dump(char * dump_file, ioc_handler_t ioc_func);
+int jt_ioc_dump(int argc, char **argv);
+extern char *dump_filename;
+int dump(int dev_id, unsigned int opc, void *buf);
 
 #endif

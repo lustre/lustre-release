@@ -32,7 +32,6 @@
 #include "mpi.h"
 
 /* lustre */
-#include <liblustre.h>
 #include <lustre/liblustreapi.h>        /* for O_LOV_DELAY_CREATE */
 
 #define CHECK_COUNT 10000
@@ -244,7 +243,7 @@ int llapi_file_lookup(int dirfd, const char *name)
 static void
 process_args(int argc, char *argv[])
 {
-        char   *cp, *endptr;
+        char   c, *cp, *endptr;
         int    i, index, offset, tmpend, rc;
         char   tmp[16];
         FILE * seed_file;
@@ -263,8 +262,8 @@ process_args(int argc, char *argv[])
                         *++cp = ':';
         }
 
-        while ((rc = getopt_long(argc,argv, shortOpts, longOpts,&index)) != -1) {
-                switch (rc) {
+        while ((c = getopt_long(argc,argv, shortOpts, longOpts,&index)) != -1) {
+                switch (c) {
                 case OPEN:
                         openflags &= ~(O_CREAT|O_EXCL);
                 case CREATE:
@@ -279,7 +278,7 @@ process_args(int argc, char *argv[])
                                            "specified: --%s\n",
                                         longOpts[index].name);
                         }
-                        mode = rc;
+                        mode = c;
                         cmd = (char *)longOpts[index].name;
                         break;
                 case NOEXCL:
@@ -404,7 +403,7 @@ process_args(int argc, char *argv[])
                                          "--lookup, --open, or --stat.\n",
                                       (char *)longOpts[index].name);
                         }
-                        order = rc;
+                        order = c;
                         break;
                 case IGNORE:
                         ++ignore;

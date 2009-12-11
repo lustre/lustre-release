@@ -269,8 +269,12 @@ test_pios_ssf() {
     local rc=0
     space_check || { skip_env "not enough space" && return 0; }
     pios_setup --stripe || return
+    # bug 19657
+    local old_PWD=$PWD
+    cd $TMP
     run_pios || return
     run_pios  --verify || rc=$? 
+    cd $old_PWD
     pios_cleanup $rc
     return $rc
 }
@@ -285,8 +289,12 @@ test_pios_fpp() {
     local rc=0
     space_check || { skip_env "not enough space" && return 0; }
     pios_setup || return
+    # bug 19657
+    local old_PWD=$PWD
+    cd $TMP
     run_pios -L fpp || return
     run_pios -L fpp --verify || rc=$?
+    cd $old_PWD
     pios_cleanup $rc
     return $rc
 }

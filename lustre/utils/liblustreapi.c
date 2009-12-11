@@ -55,25 +55,28 @@
 #include <errno.h>
 #include <dirent.h>
 #include <stdarg.h>
+#include <ctype.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
-#include <sys/xattr.h>
+#include <sys/param.h>
 #include <fnmatch.h>
 #include <glob.h>
+#ifdef HAVE_ASM_TYPES_H
+#include <asm/types.h>
+#endif
 #ifdef HAVE_LINUX_UNISTD_H
 #include <linux/unistd.h>
 #else
 #include <unistd.h>
 #endif
-#include <poll.h>
 
 #include <liblustre.h>
 #include <lnet/lnetctl.h>
 #include <obd.h>
 #include <lustre_lib.h>
-#include <obd_lov.h>
 #include <lustre/liblustreapi.h>
+#include <obd_lov.h>
 
 static unsigned llapi_dir_filetype_table[] = {
         [DT_UNKNOWN]= 0,
@@ -162,9 +165,7 @@ void llapi_printf(int level, char *fmt, ...)
         va_end(args);
 }
 
-/**
- * size_units is unchanged if no specifier used
- */
+/* size_units is unchanged if no specifier used */
 int parse_size(char *optarg, unsigned long long *size,
                unsigned long long *size_units, int bytes_spec)
 {
@@ -235,28 +236,29 @@ int llapi_stripe_limit_check(unsigned long long stripe_size, int stripe_offset,
                                   LOV_MIN_STRIPE_SIZE);
         }
         if (stripe_size < 0 || (stripe_size & (LOV_MIN_STRIPE_SIZE - 1))) {
+                errno = -EINVAL;
                 llapi_err(LLAPI_MSG_ERROR, "error: bad stripe_size %lu, "
                           "must be an even multiple of %d bytes",
                           stripe_size, page_size);
-                return -EINVAL;
+                return errno;
         }
         if (stripe_offset < -1 || stripe_offset > MAX_OBD_DEVICES) {
                 errno = -EINVAL;
                 llapi_err(LLAPI_MSG_ERROR, "error: bad stripe offset %d",
                           stripe_offset);
-                return -EINVAL;
+                return errno;
         }
         if (stripe_count < -1 || stripe_count > LOV_MAX_STRIPE_COUNT) {
                 errno = -EINVAL;
                 llapi_err(LLAPI_MSG_ERROR, "error: bad stripe count %d",
                           stripe_count);
-                return -EINVAL;
+                return errno;
         }
-        if (stripe_size >= (1ULL << 32)){
+        if (stripe_size >= (1ULL << 32)) {
                 errno = -EINVAL;
                 llapi_err(LLAPI_MSG_ERROR, "warning: stripe size larger than 4G"
                           " is not currently supported and would wrap");
-                return -EINVAL;
+                return errno;
         }
         return 0;
 }
@@ -865,9 +867,8 @@ int llapi_poollist(const char *name)
         return (nb < 0 ? nb : 0);
 }
 
-
 typedef int (semantic_func_t)(char *path, DIR *parent, DIR *d,
-                              void *data, cfs_dirent_t *de);
+                              void *data, struct dirent64 *de);
 
 #define MAX_LOV_UUID_COUNT      max(LOV_MAX_STRIPE_COUNT, 1000)
 #define OBD_NOT_FOUND           (-1)
@@ -898,7 +899,7 @@ static void find_param_fini(struct find_param *param)
 }
 
 static int cb_common_fini(char *path, DIR *parent, DIR *d, void *data,
-                          cfs_dirent_t *de)
+                          struct dirent64 *de)
 {
         struct find_param *param = (struct find_param *)data;
         param->depth--;
@@ -934,8 +935,8 @@ int llapi_mds_getfileinfo(char *path, DIR *parent,
 
         fname = (fname == NULL ? path : fname + 1);
         /* retrieve needed file info */
-        strncpy((char *)lmd, fname,
-                lov_mds_md_size(MAX_LOV_UUID_COUNT, LOV_MAGIC));
+        strncpy((char *)lmd, fname, lov_mds_md_size(MAX_LOV_UUID_COUNT,
+                LOV_MAGIC));
         ret = ioctl(dirfd(parent), IOC_MDC_GETFILEINFO, (void *)lmd);
 
         if (ret) {
@@ -946,18 +947,18 @@ int llapi_mds_getfileinfo(char *path, DIR *parent,
                         if (ret) {
                                 llapi_err(LLAPI_MSG_ERROR,
                                           "error: %s: lstat failed for %s",
-                                          __FUNCTION__, path);
+                                          __func__, path);
                                 return ret;
                         }
                 } else if (errno == ENOENT) {
                         llapi_err(LLAPI_MSG_WARN,
                                   "warning: %s: %s does not exist",
-                                  __FUNCTION__, path);
+                                  __func__, path);
                         return -ENOENT;
                 } else {
                         llapi_err(LLAPI_MSG_ERROR,
                                  "error: %s: IOC_MDC_GETFILEINFO failed for %s",
-                                 __FUNCTION__, path);
+                                 __func__, path);
                         return ret;
                 }
         }
@@ -968,9 +969,9 @@ int llapi_mds_getfileinfo(char *path, DIR *parent,
 static int llapi_semantic_traverse(char *path, int size, DIR *parent,
                                    semantic_func_t sem_init,
                                    semantic_func_t sem_fini, void *data,
-                                   cfs_dirent_t *de)
+                                   struct dirent64 *de)
 {
-        cfs_dirent_t *dent;
+        struct dirent64 *dent;
         int len, ret;
         DIR *d, *p = NULL;
 
@@ -980,7 +981,7 @@ static int llapi_semantic_traverse(char *path, int size, DIR *parent,
         d = opendir(path);
         if (!d && errno != ENOTDIR) {
                 llapi_err(LLAPI_MSG_ERROR, "%s: Failed to open '%s'",
-                          __FUNCTION__, path);
+                          __func__, path);
                 return -EINVAL;
         } else if (!d && !parent) {
                 /* ENOTDIR. Open the parent dir. */
@@ -1001,18 +1002,16 @@ static int llapi_semantic_traverse(char *path, int size, DIR *parent,
                 if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, ".."))
                         continue;
 
-                /* Don't traverse .lustre directory */
-                if (!(strcmp(dent->d_name, dot_lustre_name)))
-                        continue;
-
                 path[len] = 0;
                 if ((len + dent->d_reclen + 2) > size) {
                         llapi_err(LLAPI_MSG_ERROR,
                                   "error: %s: string buffer is too small",
-                                  __FUNCTION__);
+                                  __func__);
                         break;
                 }
-                strcat(path, "/");
+
+                if (path[len-1] != '/')
+                        strcat(path, "/");
                 strcat(path, dent->d_name);
 
                 if (dent->d_type == DT_UNKNOWN) {
@@ -1034,7 +1033,7 @@ static int llapi_semantic_traverse(char *path, int size, DIR *parent,
                 case DT_UNKNOWN:
                         llapi_err(LLAPI_MSG_ERROR,
                                   "error: %s: '%s' is UNKNOWN type %d",
-                                  __FUNCTION__, dent->d_name, dent->d_type);
+                                  __func__, dent->d_name, dent->d_type);
                         break;
                 case DT_DIR:
                         ret = llapi_semantic_traverse(path, size, d, sem_init,
@@ -1166,24 +1165,6 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
                 return -EOVERFLOW;
 
         *ost_count = index;
-        return rc;
-}
-
-int llapi_get_obd_count(char *mnt, int *count, int is_mdt)
-{
-        DIR *root;
-        int rc;
-
-        root = opendir(mnt);
-        if (!root) {
-                llapi_err(LLAPI_MSG_ERROR, "open %s failed", mnt);
-                return -1;
-        }
-
-        *count = is_mdt;
-        rc = ioctl(dirfd(root), LL_IOC_GETOBDCOUNT, count);
-
-        closedir(root);
         return rc;
 }
 
@@ -1341,7 +1322,7 @@ retry_get_uuids:
 }
 
 static int cb_ostlist(char *path, DIR *parent, DIR *d, void *data,
-                      struct dirent64 *de)
+                       struct dirent64 *de)
 {
         struct find_param *param = (struct find_param *)data;
 
@@ -1385,8 +1366,8 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
                 if (verbose & ~VERBOSE_COUNT)
                         llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_count:   ",
                                      prefix);
-                llapi_printf(LLAPI_MSG_NORMAL, "%hd%c",
-                             (__s16)lum->lmm_stripe_count, nl);
+                llapi_printf(LLAPI_MSG_NORMAL, "%u%c",
+                             (int)lum->lmm_stripe_count, nl);
         }
 
         if (verbose & VERBOSE_SIZE) {
@@ -1419,25 +1400,57 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
                 llapi_printf(LLAPI_MSG_NORMAL, "\n");
 }
 
-void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
-                            struct lov_user_ost_data_v1 *objects,
-                            char *path, int is_dir,
-                            int obdindex, int depth, int header)
+static void lov_dump_user_lmm_join(struct lov_user_md_v1 *lum, int is_dir,
+                                   int obdstripe, int obdindex, int header)
 {
-        int i, obdstripe = (obdindex != OBD_NOT_FOUND) ? 0 : 1;
+        struct lov_user_md_join *lumj = (struct lov_user_md_join *)lum;
+        int i;
 
-        if (!obdstripe) {
-                for (i = 0; !is_dir && i < lum->lmm_stripe_count; i++) {
-                        if (obdindex == objects[i].l_ost_idx) {
-                                obdstripe = 1;
-                                break;
+        if (header && (obdstripe == 1))
+                llapi_printf(LLAPI_MSG_NORMAL, "lmm_extent_count:   %x\n",
+                             lumj->lmm_extent_count);
+
+        if (!is_dir && (header & VERBOSE_OBJID)) {
+                unsigned long long start = -1, end = 0;
+
+                if (obdstripe == 1)
+                        llapi_printf(LLAPI_MSG_NORMAL,
+                                     "joined\tobdidx\t\t objid\t\tobjid\t\t "
+                                     "group\t\tstart\t\tend\n");
+                for (i = 0; i < lumj->lmm_stripe_count; i++) {
+                        int idx = lumj->lmm_objects[i].l_ost_idx;
+                        long long oid = lumj->lmm_objects[i].l_object_id;
+                        long long gr = lumj->lmm_objects[i].l_object_gr;
+                        if (obdindex == OBD_NOT_FOUND || obdindex == idx)
+                                llapi_printf(LLAPI_MSG_NORMAL,
+                                             "\t%6u\t%14llu\t%#13llx\t%14llu%s",
+                                             idx, oid, oid, gr,
+                                             obdindex == idx ? " *" : "");
+                        if (start != lumj->lmm_objects[i].l_extent_start ||
+                            end != lumj->lmm_objects[i].l_extent_end) {
+                                start = lumj->lmm_objects[i].l_extent_start;
+                                llapi_printf(LLAPI_MSG_NORMAL,"\t%14llu",start);
+                                end = lumj->lmm_objects[i].l_extent_end;
+                                if (end == (unsigned long long)-1)
+                                        llapi_printf(LLAPI_MSG_NORMAL,
+                                                     "\t\tEOF\n");
+                                else
+                                        llapi_printf(LLAPI_MSG_NORMAL,
+                                                     "\t\t%llu\n", end);
+                        } else {
+                                llapi_printf(LLAPI_MSG_NORMAL, "\t\t\t\t\n");
                         }
                 }
+                llapi_printf(LLAPI_MSG_NORMAL, "\n");
         }
+}
 
-        if (obdstripe == 1)
-                lov_dump_user_lmm_header(lum, path, is_dir, header, depth,
-                                         pool_name);
+static void lov_dump_user_lmm_v1v3(struct lov_user_md *lum,
+                                   struct lov_user_ost_data_v1 *objects,
+                                   int is_dir, int obdstripe,
+                                   int obdindex,int header)
+{
+        int i;
 
         if (!is_dir && (header & VERBOSE_OBJID)) {
                 if (obdstripe == 1)
@@ -1461,12 +1474,39 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 void llapi_lov_dump_user_lmm(struct find_param *param,
                              char *path, int is_dir)
 {
+        int i, obdstripe = (param->obdindex != OBD_NOT_FOUND) ? 0 : 1;
+        struct lov_user_md *lum = &param->lmd->lmd_lmm;
+
+        if (!obdstripe) {
+                for (i = 0; !is_dir && i < lum->lmm_stripe_count; i++) {
+                        if (param->obdindex == lum->lmm_objects[i].l_ost_idx) {
+                                obdstripe = 1;
+                                break;
+                        }
+                }
+        }
+
         switch(*(__u32 *)&param->lmd->lmd_lmm) { /* lum->lmm_magic */
         case LOV_USER_MAGIC_V1:
-                lov_dump_user_lmm_v1v3(&param->lmd->lmd_lmm, NULL,
+                if (param->verbose && (obdstripe == 1))
+                        lov_dump_user_lmm_header(lum, path, is_dir,
+                                                 param->verbose,
+                                                 param->maxdepth,
+                                                 NULL);
+                lov_dump_user_lmm_v1v3(&param->lmd->lmd_lmm,
                                        param->lmd->lmd_lmm.lmm_objects,
-                                       path, is_dir,
-                                       param->obdindex, param->maxdepth,
+                                       is_dir, obdstripe,
+                                       param->obdindex,
+                                       param->verbose);
+                break;
+        case LOV_USER_MAGIC_JOIN:
+                if (param->verbose && (obdstripe == 1))
+                        lov_dump_user_lmm_header(lum, path, is_dir,
+                                                 param->verbose,
+                                                 param->maxdepth,
+                                                 NULL);
+                lov_dump_user_lmm_join(&param->lmd->lmd_lmm, is_dir,
+                                       obdstripe, param->obdindex,
                                        param->verbose);
                 break;
         case LOV_USER_MAGIC_V3: {
@@ -1477,17 +1517,22 @@ void llapi_lov_dump_user_lmm(struct find_param *param,
                 strncpy(pool_name, lmmv3->lmm_pool_name, LOV_MAXPOOLNAME);
                 pool_name[LOV_MAXPOOLNAME] = '\0';
                 objects = lmmv3->lmm_objects;
-                lov_dump_user_lmm_v1v3(&param->lmd->lmd_lmm, pool_name,
-                                       objects, path, is_dir,
-                                       param->obdindex, param->maxdepth,
+                if (param->verbose && (obdstripe == 1))
+                        lov_dump_user_lmm_header(lum, path, is_dir,
+                                                 param->verbose,
+                                                 param->maxdepth,
+                                                 pool_name);
+                lov_dump_user_lmm_v1v3(&param->lmd->lmd_lmm, objects, is_dir,
+                                       obdstripe, param->obdindex,
                                        param->verbose);
                 break;
         }
         default:
                 llapi_printf(LLAPI_MSG_NORMAL, "unknown lmm_magic:  %#x "
                              "(expecting one of %#x %#x %#x)\n",
-                             *(__u32 *)&param->lmd->lmd_lmm,
-                             LOV_USER_MAGIC_V1, LOV_USER_MAGIC_V3);
+                             param->lmd->lmd_lmm.lmm_magic,
+                             LOV_USER_MAGIC_V1, LOV_USER_MAGIC_JOIN,
+                             LOV_USER_MAGIC_V3);
                 return;
         }
 }
@@ -1653,9 +1698,10 @@ static int find_time_check(lstat_t *st, struct find_param *param, int mds)
 }
 
 static int cb_find_init(char *path, DIR *parent, DIR *dir,
-                        void *data, cfs_dirent_t *de)
+                        void *data, struct dirent64 *de)
 {
         struct find_param *param = (struct find_param *)data;
+        struct lov_user_md_v3 *lmmv3 = (void *)&param->lmd->lmd_lmm;
         int decision = 1; /* 1 is accepted; -1 is rejected. */
         lstat_t *st = &param->lmd->lmd_st;
         int lustre_fs = 1;
@@ -1678,7 +1724,7 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
 
         /* See if we can check the file type from the dirent. */
         if (param->type && de != NULL && de->d_type != DT_UNKNOWN &&
-            de->d_type < DT_MAX) {
+            de->d_type <= DT_MAX) {
                 checked_type = 1;
                 if (llapi_dir_filetype_table[de->d_type] == param->type) {
                         if (param->exclude_type)
@@ -1692,7 +1738,7 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
 
         /* If a time or OST should be checked, the decision is not taken yet. */
         if (param->atime || param->ctime || param->mtime || param->obduuid ||
-            param->size)
+            param->size_check)
                 decision = 0;
 
         ret = 0;
@@ -1722,20 +1768,68 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
                         if (ret) {
                                 llapi_err(LLAPI_MSG_ERROR,
                                           "error: %s: lstat failed for %s",
-                                          __FUNCTION__, path);
+                                          __func__, path);
                                 return ret;
                         }
                 } else if (errno == ENOENT) {
                         llapi_err(LLAPI_MSG_WARN,
                                   "warning: %s: %s does not exist",
-                                  __FUNCTION__, path);
+                                  __func__, path);
                         goto decided;
                 } else {
                         llapi_err(LLAPI_MSG_ERROR,"error: %s: %s failed for %s",
-                                  __FUNCTION__, dir ? "LL_IOC_MDC_GETINFO" :
+                                  __func__, dir ? "LL_IOC_MDC_GETINFO" :
                                   "IOC_MDC_GETFILEINFO", path);
                         return ret;
                 }
+        }
+
+        if (param->check_uid) {
+                if (st->st_uid == param->uid) {
+                        if (param->exclude_uid)
+                                goto decided;
+                } else {
+                        if (!param->exclude_uid)
+                                goto decided;
+                }
+        }
+
+        if (param->check_gid) {
+                if (st->st_gid == param->gid) {
+                        if (param->exclude_gid)
+                                goto decided;
+                } else {
+                        if (!param->exclude_gid)
+                                goto decided;
+                }
+        }
+
+        if (param->check_pool) {
+                /* empty requested pool is taken as no pool search => V1 */
+                if ((param->lmd->lmd_lmm.lmm_magic == LOV_USER_MAGIC_V1 &&
+                     param->poolname[0] == '\0') ||
+                    (param->lmd->lmd_lmm.lmm_magic == LOV_USER_MAGIC_V3 &&
+                     (strncmp(lmmv3->lmm_pool_name, param->poolname,
+                              LOV_MAXPOOLNAME) == 0 ||
+                      strcmp(param->poolname, "*") == 0))) {
+                        if (param->exclude_pool)
+                                goto decided;
+                } else {
+                        if (!param->exclude_pool)
+                                goto decided;
+                }
+        }
+
+        /* Check the time on mds. */
+        if (!decision) {
+                int for_mds;
+
+                for_mds = lustre_fs ? (S_ISREG(st->st_mode) &&
+                                       param->lmd->lmd_lmm.lmm_stripe_count)
+                                    : 0;
+                decision = find_time_check(st, param, for_mds);
+                if (decision == -1)
+                        goto decided;
         }
 
         if (param->type && !checked_type) {
@@ -1788,15 +1882,10 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
                         int i, j;
                         struct lov_user_ost_data_v1 *lmm_objects;
 
-                        if (param->lmd->lmd_lmm.lmm_magic ==
-                            LOV_USER_MAGIC_V3) {
-                                struct lov_user_md_v3 *lmmv3 =
-                                        (void *)&param->lmd->lmd_lmm;
-
+                        if (param->lmd->lmd_lmm.lmm_magic == LOV_USER_MAGIC_V3)
                                 lmm_objects = lmmv3->lmm_objects;
-                        } else {
+                        else
                                 lmm_objects = param->lmd->lmd_lmm.lmm_objects;
-                        }
 
                         for (i = 0;
                              i < param->lmd->lmd_lmm.lmm_stripe_count; i++) {
@@ -1812,85 +1901,13 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
                 }
         }
 
-        if (param->check_uid) {
-                if (st->st_uid == param->uid) {
-                        if (param->exclude_uid)
-                                goto decided;
-                } else {
-                        if (!param->exclude_uid)
-                                goto decided;
-                }
-        }
-
-        if (param->check_gid) {
-                if (st->st_gid == param->gid) {
-                        if (param->exclude_gid)
-                                goto decided;
-                } else {
-                        if (!param->exclude_gid)
-                                goto decided;
-                }
-        }
-
-        if (param->check_pool) {
-                struct lov_user_md_v3 *lmmv3 = (void *)&param->lmd->lmd_lmm;
-
-                /* empty requested pool is taken as no pool search => V1 */
-                if (((param->lmd->lmd_lmm.lmm_magic == LOV_USER_MAGIC_V1) &&
-                     (param->poolname[0] == '\0')) ||
-                    ((param->lmd->lmd_lmm.lmm_magic == LOV_USER_MAGIC_V3) &&
-                     (strncmp(lmmv3->lmm_pool_name,
-                              param->poolname, LOV_MAXPOOLNAME) == 0)) ||
-                    ((param->lmd->lmd_lmm.lmm_magic == LOV_USER_MAGIC_V3) &&
-                     (strcmp(param->poolname, "*") == 0))) {
-                        if (param->exclude_pool)
-                                goto decided;
-                } else {
-                        if (!param->exclude_pool)
-                                goto decided;
-                }
-        }
-
-        /* Check the time on mds. */
-        if (!decision) {
-                int for_mds;
-
-                for_mds = lustre_fs ? (S_ISREG(st->st_mode) &&
-                                       param->lmd->lmd_lmm.lmm_stripe_count)
-                                    : 0;
-                decision = find_time_check(st, param, for_mds);
-        }
-
 obd_matches:
-        /* If file still fits the request, ask ost for updated info.
-           The regular stat is almost of the same speed as some new
+
+        /* If file still fits the request, ask osd for updated info.
+           The regulat stat is almost of the same speed as some new
            'glimpse-size-ioctl'. */
         if (!decision && S_ISREG(st->st_mode) &&
-            (param->lmd->lmd_lmm.lmm_stripe_count || param->size)) {
-                if (param->obdindex != OBD_NOT_FOUND) {
-                        /* Check whether the obd is active or not, if it is
-                         * not active, just print the object affected by this
-                         * failed ost
-                         * */
-                        struct obd_statfs stat_buf;
-                        struct obd_uuid uuid_buf;
-
-                        memset(&stat_buf, 0, sizeof(struct obd_statfs));
-                        memset(&uuid_buf, 0, sizeof(struct obd_uuid));
-                        ret = llapi_obd_statfs(path, LL_STATFS_LOV,
-                                               param->obdindex, &stat_buf,
-                                               &uuid_buf);
-                        if (ret) {
-                                if (ret == -ENODATA || ret == -ENODEV
-                                    || ret == -EIO)
-                                        errno = EIO;
-                                llapi_printf(LLAPI_MSG_NORMAL,
-                                             "obd_uuid: %s failed %s ",
-                                             param->obduuid->uuid,
-                                             strerror(errno));
-                                goto print_path;
-                        }
-                }
+            (param->lmd->lmd_lmm.lmm_stripe_count || param->size_check)) {
                 if (dir) {
                         ret = ioctl(dirfd(dir), IOC_LOV_GETINFO,
                                     (void *)param->lmd);
@@ -1903,12 +1920,12 @@ obd_matches:
                         if (errno == ENOENT) {
                                 llapi_err(LLAPI_MSG_ERROR,
                                           "warning: %s: %s does not exist",
-                                          __FUNCTION__, path);
+                                          __func__, path);
                                 goto decided;
                         } else {
                                 llapi_err(LLAPI_MSG_ERROR,
                                           "%s: IOC_LOV_GETINFO on %s failed",
-                                          __FUNCTION__, path);
+                                          __func__, path);
                                 return ret;
                         }
                 }
@@ -1919,12 +1936,11 @@ obd_matches:
                         goto decided;
         }
 
-        if (param->size)
+        if (param->size_check)
                 decision = find_value_cmp(st->st_size, param->size,
                                           param->size_sign, param->size_units,
                                           0);
 
-print_path:
         if (decision != -1) {
                 llapi_printf(LLAPI_MSG_NORMAL, "%s", path);
                 if (param->zeroend)
@@ -1944,11 +1960,11 @@ decided:
 
 int llapi_find(char *path, struct find_param *param)
 {
-        return param_callback(path, cb_find_init, cb_common_fini, param);        
+        return param_callback(path, cb_find_init, cb_common_fini, param);
 }
 
 static int cb_getstripe(char *path, DIR *parent, DIR *d, void *data,
-                        cfs_dirent_t *de)
+                        struct dirent64 *de)
 {
         struct find_param *param = (struct find_param *)data;
         int ret = 0;
@@ -1983,16 +1999,16 @@ static int cb_getstripe(char *path, DIR *parent, DIR *d, void *data,
                 } else if (errno == ENOTTY) {
                         llapi_err(LLAPI_MSG_ERROR,
                                   "%s: '%s' not on a Lustre fs?",
-                                  __FUNCTION__, path);
+                                  __func__, path);
                 } else if (errno == ENOENT) {
                         llapi_err(LLAPI_MSG_WARN,
                                   "warning: %s: %s does not exist",
-                                  __FUNCTION__, path);
+                                  __func__, path);
                         goto out;
                 } else {
                         llapi_err(LLAPI_MSG_ERROR,
                                   "error: %s: %s failed for %s",
-                                   __FUNCTION__, d ? "LL_IOC_LOV_GETSTRIPE" :
+                                   __func__, d ? "LL_IOC_LOV_GETSTRIPE" :
                                   "IOC_MDC_GETFILESTRIPE", path);
                 }
 
@@ -2046,7 +2062,7 @@ int llapi_obd_statfs(char *path, __u32 type, __u32 index,
         if (fd < 0) {
                 rc = errno ? -errno : -EBADF;
                 llapi_err(LLAPI_MSG_ERROR, "error: %s: opening '%s'",
-                          __FUNCTION__, path);
+                          __func__, path);
                 return rc;
         }
         rc = ioctl(fd, IOC_OBD_STATFS, (void *)rawbuf);
@@ -2100,6 +2116,8 @@ int llapi_target_iterate(int type_num, char **obd_type,void *args,llapi_cb_t cb)
                 char *obd_type_name = NULL;
                 char *obd_name = NULL;
                 char *obd_uuid = NULL;
+                char rawbuf[OBD_MAX_IOCTL_BUFFER];
+                char *bufl = rawbuf;
                 char *bufp = buf;
                 struct obd_ioctl_data datal = { 0, };
                 struct obd_statfs osfs_buffer;
@@ -2115,6 +2133,7 @@ int llapi_target_iterate(int type_num, char **obd_type,void *args,llapi_cb_t cb)
 
                 memset(&osfs_buffer, 0, sizeof (osfs_buffer));
 
+                memset(bufl, 0, sizeof(rawbuf));
                 datal.ioc_pbuf1 = (char *)&osfs_buffer;
                 datal.ioc_plen1 = sizeof(osfs_buffer);
 
@@ -2266,7 +2285,7 @@ int llapi_quotactl(char *mnt, struct if_quotactl *qctl)
 }
 
 static int cb_quotachown(char *path, DIR *parent, DIR *d, void *data,
-                         cfs_dirent_t *de)
+                         struct dirent64 *de)
 {
         struct find_param *param = (struct find_param *)data;
         lstat_t *st;
@@ -2297,7 +2316,7 @@ static int cb_quotachown(char *path, DIR *parent, DIR *d, void *data,
                 } else if (errno == ENOENT) {
                         llapi_err(LLAPI_MSG_ERROR,
                                   "warning: %s: %s does not exist",
-                                  __FUNCTION__, path);
+                                  __func__, path);
                         rc = 0;
                 } else if (errno != EISDIR) {
                         rc = errno;
@@ -2315,7 +2334,7 @@ static int cb_quotachown(char *path, DIR *parent, DIR *d, void *data,
          * invoke syscall directly. */
         rc = syscall(SYS_chown, path, -1, -1);
         if (rc)
-                llapi_err(LLAPI_MSG_ERROR,"error: chown %s (%u,%u)", path);
+                llapi_err(LLAPI_MSG_ERROR, "error: chown %s", path);
 
         rc = chmod(path, st->st_mode);
         if (rc)
@@ -2328,7 +2347,7 @@ static int cb_quotachown(char *path, DIR *parent, DIR *d, void *data,
 int llapi_quotachown(char *path, int flag)
 {
         struct find_param param;
-
+        
         memset(&param, 0, sizeof(param));
         param.recursive = 1;
         param.verbose = 0;
@@ -2337,777 +2356,16 @@ int llapi_quotachown(char *path, int flag)
         return param_callback(path, cb_quotachown, NULL, &param);
 }
 
-#include <pwd.h>
-#include <grp.h>
-#include <mntent.h>
-#include <sys/wait.h>
-#include <errno.h>
-#include <ctype.h>
-
-static int rmtacl_notify(int ops)
-{
-        FILE *fp;
-        struct mntent *mnt;
-        int found = 0, fd, rc;
-
-        fp = setmntent(MOUNTED, "r");
-        if (fp == NULL) {
-                perror("setmntent");
-                return -1;
-        }
-
-        while (1) {
-                mnt = getmntent(fp);
-                if (!mnt)
-                        break;
-
-                if (!llapi_is_lustre_mnt(mnt))
-                        continue;
-
-                fd = open(mnt->mnt_dir, O_RDONLY | O_DIRECTORY);
-                if (fd < 0) {
-                        perror("open");
-                        return -1;
-                }
-
-                rc = ioctl(fd, LL_IOC_RMTACL, ops);
-                if (rc < 0) {
-                        perror("ioctl");
-                return -1;
-                }
-
-                found++;
-        }
-        endmntent(fp);
-        return found;
-}
-
-static char *next_token(char *p, int div)
-{
-        if (p == NULL)
-                return NULL;
-
-        if (div)
-                while (*p && *p != ':' && !isspace(*p))
-                        p++;
-        else
-                while (*p == ':' || isspace(*p))
-                        p++;
-
-        return *p ? p : NULL;
-}
-
-static int rmtacl_name2id(char *name, int is_user)
-{
-        if (is_user) {
-                struct passwd *pw;
-
-                if ((pw = getpwnam(name)) == NULL)
-                        return INVALID_ID;
-                else
-                        return (int)(pw->pw_uid);
-        } else {
-                struct group *gr;
-
-                if ((gr = getgrnam(name)) == NULL)
-                        return INVALID_ID;
-                else
-                        return (int)(gr->gr_gid);
-        }
-}
-
-static int isodigit(int c)
-{
-        return (c >= '0' && c <= '7') ? 1 : 0;
-}
-
-/*
- * Whether the name is just digits string (uid/gid) already or not.
- * Return value:
- * 1: str is id
- * 0: str is not id
- */
-static int str_is_id(char *str)
-{
-        if (str == NULL)
-                return 0;
-
-        if (*str == '0') {
-                str++;
-                if (*str == 'x' || *str == 'X') { /* for Hex. */
-                        if (!isxdigit(*(++str)))
-                                return 0;
-
-                        while (isxdigit(*(++str)));
-                } else if (isodigit(*str)) { /* for Oct. */
-                        while (isodigit(*(++str)));
-                }
-        } else if (isdigit(*str)) { /* for Dec. */
-                while (isdigit(*(++str)));
-        }
-
-        return (*str == 0) ? 1 : 0;
-}
-
-typedef struct {
-        char *name;
-        int   length;
-        int   is_user;
-        int   next_token;
-} rmtacl_name_t;
-
-#define RMTACL_OPTNAME(name) name, sizeof(name) - 1
-
-static rmtacl_name_t rmtacl_namelist[] = {
-        { RMTACL_OPTNAME("user:"),            1,      0 },
-        { RMTACL_OPTNAME("group:"),           0,      0 },
-        { RMTACL_OPTNAME("default:user:"),    1,      0 },
-        { RMTACL_OPTNAME("default:group:"),   0,      0 },
-        /* for --tabular option */
-        { RMTACL_OPTNAME("user"),             1,      1 },
-        { RMTACL_OPTNAME("group"),            0,      1 },
-        { 0 }
-};
-
-static int rgetfacl_output(char *str)
-{
-        char *start = NULL, *end = NULL;
-        int is_user = 0, n, id;
-        char c;
-        rmtacl_name_t *rn;
-
-        if (str == NULL)
-                return -1;
-
-        for (rn = rmtacl_namelist; rn->name; rn++) {
-                if(strncmp(str, rn->name, rn->length) == 0) {
-                        if (!rn->next_token)
-                                start = str + rn->length;
-                        else
-                                start = next_token(str + rn->length, 0);
-                        is_user = rn->is_user;
-                        break;
-                }
-        }
-
-        end = next_token(start, 1);
-        if (end == NULL || start == end) {
-                n = printf("%s", str);
-                return n;
-        }
-
-        c = *end;
-        *end = 0;
-        id = rmtacl_name2id(start, is_user);
-        if (id == INVALID_ID) {
-                if (str_is_id(start)) {
-                        *end = c;
-                        n = printf("%s", str);
-                } else
-                        return -1;
-        } else if ((id == NOBODY_UID && is_user) ||
-                   (id == NOBODY_GID && !is_user)) {
-                *end = c;
-                n = printf("%s", str);
-        } else {
-                *end = c;
-                *start = 0;
-                n = printf("%s%d%s", str, id, end);
-        }
-        return n;
-}
-
-static int child_status(int status)
-{
-        return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-}
-
-static int do_rmtacl(int argc, char *argv[], int ops, int (output_func)(char *))
-{
-        pid_t pid = 0;
-        int fd[2], status;
-        FILE *fp;
-        char buf[PIPE_BUF];
-
-        if (output_func) {
-                if (pipe(fd) < 0) {
-                        perror("pipe");
-                        return -1;
-                }
-
-                if ((pid = fork()) < 0) {
-                        perror("fork");
-                        close(fd[0]);
-                        close(fd[1]);
-                        return -1;
-                } else if (!pid) {
-                        /* child process redirects its output. */
-                        close(fd[0]);
-                        close(1);
-                        if (dup2(fd[1], 1) < 0) {
-                                perror("dup2");
-                                close(fd[1]);
-                                return -1;
-                        }
-                } else {
-                        close(fd[1]);
-                }
-        }
-
-        if (!pid) {
-                status = rmtacl_notify(ops);
-                if (status < 0)
-                        return -1;
-
-                exit(execvp(argv[0], argv));
-        }
-
-        /* the following is parent process */
-        if ((fp = fdopen(fd[0], "r")) == NULL) {
-                perror("fdopen");
-                kill(pid, SIGKILL);
-                close(fd[0]);
-                return -1;
-        }
-
-        while (fgets(buf, PIPE_BUF, fp) != NULL) {
-                if (output_func(buf) < 0)
-                        fprintf(stderr, "WARNING: unexpected error!\n[%s]\n",
-                                buf);
-        }
-        fclose(fp);
-        close(fd[0]);
-
-        if (waitpid(pid, &status, 0) < 0) {
-                perror("waitpid");
-                return -1;
-        }
-
-        return child_status(status);
-}
-
-int llapi_lsetfacl(int argc, char *argv[])
-{
-        return do_rmtacl(argc, argv, RMT_LSETFACL, NULL);
-}
-
-int llapi_lgetfacl(int argc, char *argv[])
-{
-        return do_rmtacl(argc, argv, RMT_LGETFACL, NULL);
-}
-
-int llapi_rsetfacl(int argc, char *argv[])
-{
-        return do_rmtacl(argc, argv, RMT_RSETFACL, NULL);
-}
-
-int llapi_rgetfacl(int argc, char *argv[])
-{
-        return do_rmtacl(argc, argv, RMT_RGETFACL, rgetfacl_output);
-}
-
-int llapi_cp(int argc, char *argv[])
-{
-        int rc;
-
-        rc = rmtacl_notify(RMT_RSETFACL);
-        if (rc < 0)
-                return -1;
-
-        exit(execvp(argv[0], argv));
-}
-
-int llapi_ls(int argc, char *argv[])
-{
-        int rc;
-
-        rc = rmtacl_notify(RMT_LGETFACL);
-        if (rc < 0)
-                return -1;
-
-        exit(execvp(argv[0], argv));
-}
-
-/* Print mdtname 'name' into 'buf' using 'format'.  Add -MDT0000 if needed.
- * format must have %s%s, buf must be > 16
- */
-static int get_mdtname(char *name, char *format, char *buf)
-{
-        char suffix[]="-MDT0000";
-        int len = strlen(name);
-
-        if ((len > 5) && (strncmp(name + len - 5, "_UUID", 5) == 0)) {
-                name[len - 5] = '\0';
-                len -= 5;
-        }
-
-        if (len > 8) {
-                if ((len <= 16) && strncmp(name + len - 8, "-MDT", 4) == 0) {
-                        suffix[0] = '\0';
-                } else {
-                        /* Not enough room to add suffix */
-                        llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
-                                  "MDT name too long |%s|", name);
-                        return -EINVAL;
-                }
-        }
-
-        return sprintf(buf, format, name, suffix);
-}
-
-/****** Changelog API ********/
-#define CHANGELOG_PRIV_MAGIC 0xCA8E1080
-struct changelog_private {
-        int magic;
-        int flags;
-        lustre_netlink lnl;
-};
-
-/** Start reading from a changelog
- * @param priv Opaque private control structure
- * @param flags Start flags (e.g. CHANGELOG_FLAG_BLOCK)
- * @param device Report changes recorded on this MDT
- * @param startrec Report changes beginning with this record number
- * (just call llapi_changelog_fini when done; don't need an endrec)
- */
-int llapi_changelog_start(void **priv, int flags, const char *device,
-                          long long startrec)
-{
-        struct changelog_private *cp;
-        struct changelog_show cs = {};
-        char mdtname[20];
-        char pattern[PATH_MAX];
-        char trigger[PATH_MAX];
-        int fd, rc, pid;
-
-        /* Find mdtname from path, fsname, mdtname, or mdtname_UUID */
-        if (device[0] == '/') {
-                if ((rc = llapi_search_fsname(device, mdtname)))
-                        return rc;
-                if ((rc = get_mdtname(mdtname, "%s%s", mdtname)) < 0)
-                        return rc;
-        } else {
-                if ((rc = get_mdtname((char *)device, "%s%s", mdtname)) < 0)
-                        return rc;
-        }
-
-        /* Find corresponding mdc trigger */
-        snprintf(pattern, PATH_MAX,
-                 "/proc/fs/lustre/mdc/%s-*/changelog_trigger", mdtname);
-        rc = first_match(pattern, trigger);
-        if (rc)
-                return rc;
-
-        /* Make sure we can write the trigger */
-        fd = open(trigger, O_WRONLY);
-        if (fd < 0)
-                return -errno;
-
-        /* Set up the receiver control struct */
-        cp = malloc(sizeof(*cp));
-        if (cp == NULL) {
-                close(fd);
-                return -ENOMEM;
-        }
-
-        cp->magic = CHANGELOG_PRIV_MAGIC;
-        cp->flags = flags;
-        /* Start the receiver */
-        rc = libcfs_ulnl_start(&cp->lnl, 0 /* unicast */);
-        if (rc < 0)
-                goto out_free;
-
-        /* We need to trigger Lustre to start sending messages now.
-           We could send a lnl message to a kernel listener,
-           or write into proc.  Proc has the advantage of running in this
-           context, avoiding the need for a kernel thread. */
-        cs.cs_pid = getpid();
-        cs.cs_startrec = startrec;
-        cs.cs_flags = flags & CHANGELOG_FLAG_BLOCK ? LNL_FL_BLOCK : 0;
-        if ((pid = fork()) < 0) {
-                goto out_free;
-        } else if (!pid) {
-                /* Write triggers Lustre to start sending, but it
-                   won't return until it is complete, meaning everything
-                   got shipped through lnl (or error).  So we trigger it
-                   from a child process here, allowing the llapi call to
-                   return and wait for the lnl messages. */
-                rc = write(fd, &cs, sizeof(cs));
-                exit(rc);
-        }
-
-        close(fd);
-        *priv = cp;
-        return 0;
-
-out_free:
-        free(cp);
-        close(fd);
-        return rc;
-}
-
-/** Finish reading from a changelog */
-int llapi_changelog_fini(void **priv)
-{
-        struct changelog_private *cp = (struct changelog_private *)*priv;
-
-        if (!cp || (cp->magic != CHANGELOG_PRIV_MAGIC))
-                return -EINVAL;
-
-        libcfs_ulnl_stop(&cp->lnl);
-        free(cp);
-        *priv = NULL;
-        return 0;
-}
-
-/** Read the next changelog entry
- * @param priv Opaque private control structure
- * @param rech Changelog record handle; record will be allocated here
- * @return 0 valid message received; rec is set
- *         <0 error code
- *         1 EOF
- */
-int llapi_changelog_recv(void *priv, struct changelog_rec **rech)
-{
-        struct changelog_private *cp = (struct changelog_private *)priv;
-        struct lnl_hdr *lnlh;
-        int rc = 0;
-
-        if (!cp || (cp->magic != CHANGELOG_PRIV_MAGIC))
-                return -EINVAL;
-        if (rech == NULL)
-                return -EINVAL;
-
-repeat:
-        rc = libcfs_ulnl_msg_get(&cp->lnl, CR_MAXSIZE, LNL_TRANSPORT_CHANGELOG,
-                                 &lnlh);
-        if (rc < 0)
-                return rc;
-
-        if ((lnlh->lnl_transport != LNL_TRANSPORT_CHANGELOG) ||
-            ((lnlh->lnl_msgtype != CL_RECORD) &&
-             (lnlh->lnl_msgtype != CL_EOF))) {
-                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
-                          "Unknown changelog message type %d:%d\n",
-                          lnlh->lnl_transport, lnlh->lnl_msgtype);
-                rc = -EPROTO;
-                goto out_free;
-        }
-
-        if (lnlh->lnl_msgtype == CL_EOF) {
-                if (cp->flags & CHANGELOG_FLAG_FOLLOW) {
-                        /* Ignore EOFs */
-                        goto repeat;
-                } else {
-                        rc = 1;
-                        goto out_free;
-                }
-        }
-
-        /* Our message is a changelog_rec */
-        *rech = (struct changelog_rec *)(lnlh + 1);
-
-        return 0;
-
-out_free:
-        libcfs_ulnl_msg_free(&lnlh);
-        *rech = NULL;
-        return rc;
-}
-
-/** Release the changelog record when done with it. */
-int llapi_changelog_free(struct changelog_rec **rech)
-{
-        if (*rech) {
-                struct lnl_hdr *lnlh = (struct lnl_hdr *)*rech - 1;
-                libcfs_ulnl_msg_free(&lnlh);
-        }
-        *rech = NULL;
-        return 0;
-}
-
-int llapi_changelog_clear(const char *mdtname, const char *idstr,
-                          long long endrec)
-{
-        struct ioc_changelog_clear data;
-        char fsname[17];
-        char *ptr;
-        int id, fd, index, rc;
-
-        if (endrec < 0) {
-                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
-                          "can't purge negative records\n");
-                return -EINVAL;
-        }
-
-        id = strtol(idstr + strlen(CHANGELOG_USER_PREFIX), NULL, 10);
-        if ((id == 0) || (strncmp(idstr, CHANGELOG_USER_PREFIX,
-                                  strlen(CHANGELOG_USER_PREFIX)) != 0)) {
-                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
-                          "expecting id of the form '"CHANGELOG_USER_PREFIX
-                          "<num>'; got '%s'\n", idstr);
-                return -EINVAL;
-        }
-
-        /* Take path, fsname, or MDTNAME.  Assume MDT0000 in the former cases */
-        if (mdtname[0] == '/') {
-                index = 0;
-                fd = open(mdtname, O_RDONLY | O_DIRECTORY | O_NONBLOCK);
-                rc = fd < 0 ? -errno : 0;
-        } else {
-                if (get_mdtname((char *)mdtname, "%s%s", fsname) < 0)
-                        return -EINVAL;
-                ptr = fsname + strlen(fsname) - 8;
-                *ptr = '\0';
-                index = strtol(ptr + 4, NULL, 10);
-                rc = get_root_path(WANT_FD | WANT_ERROR, fsname, &fd, NULL, -1);
-        }
-        if (rc < 0) {
-                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
-                          "Can't open %s: %d\n", mdtname, rc);
-                return rc;
-        }
-
-        data.icc_mdtindex = index;
-        data.icc_id = id;
-        data.icc_recno = endrec;
-        rc = ioctl(fd, OBD_IOC_CHANGELOG_CLEAR, &data);
-        if (rc)
-                llapi_err(LLAPI_MSG_ERROR, "ioctl err %d", rc);
-
-        close(fd);
-        return rc;
-}
-
-int llapi_fid2path(const char *device, const char *fidstr, char *buf,
-                   int buflen, long long *recno, int *linkno)
-{
-        char path[PATH_MAX];
-        struct lu_fid fid;
-        struct getinfo_fid2path *gf;
-        int fd, rc;
-
-        while (*fidstr == '[')
-                fidstr++;
-
-        sscanf(fidstr, SFID, RFID(&fid));
-        if (!fid_is_sane(&fid)) {
-                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
-                          "bad FID format [%s], should be "DFID"\n",
-                          fidstr, (__u64)1, 2, 0);
-                return -EINVAL;
-        }
-
-        /* Take path or fsname */
-        if (device[0] == '/') {
-                strcpy(path, device);
-        } else {
-                rc = get_root_path(WANT_PATH | WANT_ERROR, (char *)device,
-                                   NULL, path, -1);
-                if (rc < 0)
-                        return rc;
-        }
-        sprintf(path, "%s/%s/fid/%s", path, dot_lustre_name, fidstr);
-        fd = open(path, O_RDONLY | O_NONBLOCK);
-        if (fd < 0)
-                return -errno;
-
-        gf = malloc(sizeof(*gf) + buflen);
-        gf->gf_fid = fid;
-        gf->gf_recno = *recno;
-        gf->gf_linkno = *linkno;
-        gf->gf_pathlen = buflen;
-        rc = ioctl(fd, OBD_IOC_FID2PATH, gf);
-        if (rc) {
-                llapi_err(LLAPI_MSG_ERROR, "ioctl err %d", rc);
-        } else {
-                memcpy(buf, gf->gf_path, gf->gf_pathlen);
-                *recno = gf->gf_recno;
-                *linkno = gf->gf_linkno;
-        }
-
-        free(gf);
-        close(fd);
-        return rc;
-}
-
-static int path2fid_from_lma(const char *path, lustre_fid *fid)
-{
-        char buf[512];
-        struct lustre_mdt_attrs *lma;
-        int rc;
-
-        rc = lgetxattr(path, XATTR_NAME_LMA, buf, sizeof(buf));
-        if (rc < 0)
-                return -errno;
-        lma = (struct lustre_mdt_attrs *)buf;
-        fid_le_to_cpu(fid, &lma->lma_self_fid);
-        return 0;
-}
-
 int llapi_path2fid(const char *path, lustre_fid *fid)
 {
         int fd, rc;
 
-        memset(fid, 0, sizeof(*fid));
-        fd = open(path, O_RDONLY | O_NONBLOCK | O_NOFOLLOW);
-        if (fd < 0) {
-                if (errno == ELOOP) /* symbolic link */
-                        return path2fid_from_lma(path, fid);
+        fd = open(path, O_RDONLY);
+        if (fd < 0)
                 return -errno;
-        }
 
-        rc = ioctl(fd, LL_IOC_PATH2FID, fid) < 0 ? -errno : 0;
-        if (rc == -EINVAL) /* char special device */
-                rc = path2fid_from_lma(path, fid);
+        rc = ioctl(fd, LL_IOC_PATH2FID, fid);
 
         close(fd);
         return rc;
 }
-
-/****** HSM Copytool API ********/
-#define CT_PRIV_MAGIC 0xC0BE2001
-struct copytool_private {
-        int magic;
-        lustre_netlink lnl;
-        int archive_num_count;
-        int archive_nums[0];
-};
-
-#include <libcfs/libcfs.h>
-
-/** Register a copytool
- * @param priv Opaque private control structure
- * @param flags Open flags, currently unused (e.g. O_NONBLOCK)
- * @param archive_num_count
- * @param archive_nums Which archive numbers this copytool is responsible for
- */
-int llapi_copytool_start(void **priv, int flags, int archive_num_count,
-                         int *archive_nums)
-{
-        struct copytool_private *ct;
-        int rc;
-
-        if (archive_num_count > 0 && archive_nums == NULL) {
-                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
-                          "NULL archive numbers");
-                return -EINVAL;
-        }
-
-        ct = malloc(sizeof(*ct) +
-                    archive_num_count * sizeof(ct->archive_nums[0]));
-        if (ct == NULL)
-                return -ENOMEM;
-
-        ct->magic = CT_PRIV_MAGIC;
-        ct->archive_num_count = archive_num_count;
-        if (ct->archive_num_count > 0)
-                memcpy(ct->archive_nums, archive_nums, archive_num_count *
-                       sizeof(ct->archive_nums[0]));
-
-        rc = libcfs_ulnl_start(&ct->lnl, LNL_GRP_HSM);
-        if (rc < 0)
-                goto out_err;
-
-        *priv = ct;
-        return 0;
-
-out_err:
-        free(ct);
-        return rc;
-}
-
-/** Deregister a copytool */
-int llapi_copytool_fini(void **priv)
-{
-        struct copytool_private *ct = (struct copytool_private *)*priv;
-
-        if (!ct || (ct->magic != CT_PRIV_MAGIC))
-                return -EINVAL;
-
-        libcfs_ulnl_stop(&ct->lnl);
-        free(ct);
-        *priv = NULL;
-        return 0;
-}
-
-/** Wait for the next hsm_action_list
- * @param priv Opaque private control structure
- * @param halh Action list handle, will be allocated here
- * @param msgsize Number of bytes in the message, will be set here
- * @return 0 valid message received; halh and msgsize are set
- *         <0 error code
- */
-int llapi_copytool_recv(void *priv, struct hsm_action_list **halh, int *msgsize)
-{
-        struct copytool_private *ct = (struct copytool_private *)priv;
-        struct lnl_hdr *lnlh;
-        struct hsm_action_list *hal;
-        int rc = 0;
-
-        if (!ct || (ct->magic != CT_PRIV_MAGIC))
-                return -EINVAL;
-        if (halh == NULL || msgsize == NULL)
-                return -EINVAL;
-
-        rc = libcfs_ulnl_msg_get(&ct->lnl, HAL_MAXSIZE,
-                                 LNL_TRANSPORT_HSM, &lnlh);
-        if (rc < 0)
-                return rc;
-
-        /* Handle generic messages */
-        if (lnlh->lnl_transport == LNL_TRANSPORT_GENERIC &&
-            lnlh->lnl_msgtype == LNL_MSG_SHUTDOWN) {
-                rc = -ESHUTDOWN;
-                goto out_free;
-        }
-
-        if (lnlh->lnl_transport != LNL_TRANSPORT_HSM ||
-            lnlh->lnl_msgtype != HMT_ACTION_LIST) {
-                llapi_err(LLAPI_MSG_ERROR | LLAPI_MSG_NO_ERRNO,
-                          "Unknown HSM message type %d:%d\n",
-                          lnlh->lnl_transport, lnlh->lnl_msgtype);
-                rc = -EPROTO;
-                goto out_free;
-        }
-
-        /* Our message is an hsm_action_list */
-
-        hal = (struct hsm_action_list *)(lnlh + 1);
-
-        /* Check that we have registered for this archive # */
-        for (rc = 0; rc < ct->archive_num_count; rc++) {
-                if (hal->hal_archive_num == ct->archive_nums[rc])
-                        break;
-        }
-        if (rc >= ct->archive_num_count) {
-                CDEBUG(D_INFO, "This copytool does not service archive #%d, "
-                       "ignoring this request.\n", hal->hal_archive_num);
-                rc = 0;
-                goto out_free;
-        }
-
-        *halh = hal;
-        *msgsize = lnlh->lnl_msglen - sizeof(*lnlh);
-        return 0;
-
-out_free:
-        libcfs_ulnl_msg_free(&lnlh);
-        *halh = NULL;
-        *msgsize = 0;
-        return rc;
-}
-
-/** Release the action list when done with it. */
-int llapi_copytool_free(struct hsm_action_list **hal)
-{
-        if (*hal) {
-                struct lnl_hdr *lnlh = (struct lnl_hdr *)*hal - 1;
-                libcfs_ulnl_msg_free(&lnlh);
-        }
-        *hal = NULL;
-        return 0;
-}
-
-
-

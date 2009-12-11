@@ -53,9 +53,8 @@
 /* #define QOS_DEBUG 1 */
 #define D_QOS D_OTHER
 
-#define TGT_BAVAIL(i) (lov->lov_tgts[i]->ltd_exp->exp_obd->obd_osfs.os_bavail *\
-                       lov->lov_tgts[i]->ltd_exp->exp_obd->obd_osfs.os_bsize)
-
+#define TGT_BAVAIL(i)  (lov->lov_tgts[i]->ltd_exp->exp_obd->obd_osfs.os_bavail*\
+                        lov->lov_tgts[i]->ltd_exp->exp_obd->obd_osfs.os_bsize)
 
 int qos_add_tgt(struct obd_device *obd, __u32 index)
 {
@@ -222,11 +221,9 @@ static int qos_calc_ppo(struct obd_device *obd)
                 /* If there's only 1 OSS, we can't penalize it, so instead
                    we have to double the OST penalty */
                 num_active = 1;
-                for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                        if (lov->lov_tgts[i] == NULL)
-                                continue;
-                        lov->lov_tgts[i]->ltd_qos.ltq_penalty_per_obj <<= 1;
-                }
+                for (i = 0; i < lov->desc.ld_tgt_count; i++)
+                        if (lov->lov_tgts[i])
+                            lov->lov_tgts[i]->ltd_qos.ltq_penalty_per_obj <<= 1;
         }
 
         /* Per-OSS penalty is prio * oss_avail / oss_osts / (num_oss - 1) / 2 */
@@ -357,7 +354,8 @@ static int qos_used(struct lov_obd *lov, struct ost_pool *osts,
 }
 
 #define LOV_QOS_EMPTY ((__u32)-1)
-/* compute optimal round-robin order, based on OSTs per OSS */
+/* compute optimal round-robin order, based on OSTs per OSS
+ */
 static int qos_calc_rr(struct lov_obd *lov, struct ost_pool *src_pool,
                        struct lov_qos_rr *lqr)
 {
@@ -373,16 +371,6 @@ static int qos_calc_rr(struct lov_obd *lov, struct ost_pool *src_pool,
 
         /* Do actual allocation. */
         down_write(&lov->lov_qos.lq_rw_sem);
-
-        /*
-         * Check again. While we were sleeping on @lq_rw_sem something could
-         * change.
-         */
-        if (!lqr->lqr_dirty) {
-                LASSERT(lqr->lqr_pool.op_size);
-                up_write(&lov->lov_qos.lq_rw_sem);
-                RETURN(0);
-        }
 
         real_count = src_pool->op_count;
 
@@ -410,7 +398,7 @@ static int qos_calc_rr(struct lov_obd *lov, struct ost_pool *src_pool,
                               int next = j * lqr->lqr_pool.op_count / oss->lqo_ost_count;
                               while (lqr->lqr_pool.op_array[next] !=
                                      LOV_QOS_EMPTY)
-                                        next = (next + 1) % lqr->lqr_pool.op_count;
+                                      next = (next + 1) % lqr->lqr_pool.op_count;
                               lqr->lqr_pool.op_array[next] = src_pool->op_array[i];
                               j++;
                               placed++;
@@ -729,7 +717,6 @@ out:
                 /* put back ref got by lov_find_pool() */
                 lov_pool_putref(pool);
         }
-
         RETURN(rc);
 }
 
@@ -763,25 +750,12 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
         }
 
         obd_getref(exp->exp_obd);
-
         /* wait for fresh statfs info if needed, the rpcs are sent in
          * lov_create() */
         qos_statfs_update(exp->exp_obd,
                           cfs_time_shift_64(-2 * lov->desc.ld_qos_maxage), 1);
 
-        /* Detect -EAGAIN early, before expensive lock is taken. */
-        if (!lov->lov_qos.lq_dirty && lov->lov_qos.lq_same_space)
-                GOTO(out_nolock, rc = -EAGAIN);
-
-        /* Do actual allocation, use write lock here. */
         down_write(&lov->lov_qos.lq_rw_sem);
-
-        /*
-         * Check again, while we were sleeping on @lq_rw_sem things could
-         * change.
-         */
-        if (!lov->lov_qos.lq_dirty && lov->lov_qos.lq_same_space)
-                GOTO(out, rc = -EAGAIN);
 
         if (lov->desc.ld_active_tgt_count < 2)
                 GOTO(out, rc = -EAGAIN);
@@ -822,9 +796,6 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
         /* We have enough osts */
         if (good_osts < *stripe_cnt)
                 *stripe_cnt = good_osts;
-
-        if (!*stripe_cnt)
-                GOTO(out, rc = -EAGAIN);
 
         /* Find enough OSTs with weighted random allocation. */
         nfound = 0;
@@ -883,18 +854,20 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
                                 break;
                         }
                 }
-                /* should never satisfy below condition */
                 if (rc) {
-                        CERROR("Didn't find any OSTs?\n");
-                        break;
+                        CDEBUG(D_QOS, "Didn't find any OSTs? Reduce total weight\n");
+                        if (total_weight == 0)
+                                break;
+                        else
+                                total_weight = 0;
                 }
         }
+
         LASSERT(nfound == *stripe_cnt);
 
 out:
         up_write(&lov->lov_qos.lq_rw_sem);
 
-out_nolock:
         if (pool != NULL) {
                 up_read(&pool_tgt_rw_sem(pool));
                 /* put back ref got by lov_find_pool() */
@@ -961,7 +934,6 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
         ENTRY;
 
         LASSERT(src_oa->o_valid & OBD_MD_FLID);
-        LASSERT(src_oa->o_valid & OBD_MD_FLGROUP);
 
         if (set->set_oi->oi_md == NULL) {
                 int stripes_def = lov_get_stripecnt(lov, 0);
@@ -1004,8 +976,6 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
 
         lsm = set->set_oi->oi_md;
         lsm->lsm_object_id = src_oa->o_id;
-        lsm->lsm_object_gr = src_oa->o_gr;
-
         if (!lsm->lsm_stripe_size)
                 lsm->lsm_stripe_size = lov->desc.ld_default_stripe_size;
         if (!lsm->lsm_pattern) {

@@ -9,11 +9,13 @@ TAGS
 fsfilt-*.c
 autoMakefile.in
 autoMakefile
+modules.order
 *.ko
 *.mod.c
 .*.flags
+.*.o.d
 .tmp_versions
 .depend
 sources
-fsfilt_ldiskfs.*
-fsfilt-ldiskfs.*
+fsfilt_ldiskfs*
+fsfilt-ldiskfs*

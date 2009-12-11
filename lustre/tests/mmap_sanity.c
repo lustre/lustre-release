@@ -456,7 +456,7 @@ static int cancel_lru_locks(char *prefix)
         }
 
         if (prefix)
-                sprintf(cmd, "ls /proc/fs/lustre/ldlm/namespaces/*-%s-*/lru_size", prefix);
+                sprintf(cmd, "ls /proc/fs/lustre/ldlm/namespaces/*/lru_size | grep -i %s", prefix);
         else
                 sprintf(cmd, "ls /proc/fs/lustre/ldlm/namespaces/*/lru_size");
 
@@ -652,7 +652,7 @@ static int mmap_tst7_func(char *mnt, int rw)
                 rc = errno;
                 goto out;
         }
-        buf = mmap(NULL, page_size,
+        buf = mmap(NULL, 2 * page_size,
                    PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         if (buf == MAP_FAILED) {
                 perror("mmap");

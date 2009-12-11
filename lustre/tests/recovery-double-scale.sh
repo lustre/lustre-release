@@ -80,7 +80,7 @@ reboot_recover_node () {
                       boot_node $c
                       echo "Reintegrating $c"
                       # one client fails; need dk logs from this client only 
-                      zconf_mount $c $MOUNT || NODES="$c $(mdts_nodes) $(osts_nodes)" error_exit "zconf_mount failed"
+                      zconf_mount $c $MOUNT || NODES="$c $(facet_host mds) $(osts_nodes)" error_exit "zconf_mount failed"
                  done
                  start_client_loads $item
                  ;;
@@ -236,7 +236,7 @@ Status: $result: rc=$rc"
         local failedclients=$(cat $END_RUN_FILE | grep -v $0)
         # FIXME: need ostfailover-s nodes also for FLAVOR=OST
         local product=$(gather_logs $(comma_list $(osts_nodes) \
-                                 $(mdts_nodes) $mdsfailover_HOST $failedclients))
+                                 $mds_HOST $mdsfailover_HOST $failedclients))
         echo logs files $product
     fi
 
@@ -287,12 +287,7 @@ failover_pair MDS clients "test 2: failover MDS, then 2 clients ===="
 sleep $FAILOVER_PERIOD
 
 #CMD_TEST_NUM=17.3
-if [ $MDSCOUNT -gt 1 ]; then
-    failover_pair MDS MDS     "test 3: failover MDS, then another MDS =="
-    sleep $FAILOVER_PERIOD
-else
-    skip "$0 : $MDSCOUNT < 2 MDTs, test 3 skipped"
-fi 
+# No test 3 for 1.8.x lustre version
 
 #CMD_TEST_NUM=17.4
 if [ $OSTCOUNT -gt 1 ]; then

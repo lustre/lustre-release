@@ -51,15 +51,44 @@
  * Same with quota v2's magic
  */
 #define LUSTRE_INITQMAGICS {\
-        0xd9c01f11,     /** USRQUOTA */\
-        0xd9c01927      /** GRPQUOTA */\
+        0xd9c01f11,     /* USRQUOTA */\
+        0xd9c01927      /* GRPQUOTA */\
 }
 
 /* Invalid magics that mark quota file as inconsistent */
 #define LUSTRE_BADQMAGICS {\
-        0xbadbadba,     /** USRQUOTA */\
-        0xbadbadba      /** GRPQUOTA */\
+        0xbadbadba,     /* USRQUOTA */\
+        0xbadbadba      /* GRPQUOTA */\
 }
+
+/* for the verson 1 of lustre_disk_dqblk*/
+#define LUSTRE_INITQVERSIONS_V1 {\
+        0,              /* USRQUOTA */\
+        0               /* GRPQUOTA */\
+}
+
+/*
+ * The following structure defines the format of the disk quota file
+ * (as it appears on disk) - the file is a radix tree whose leaves point
+ * to blocks of these structures. for the version 1.
+ */
+struct lustre_disk_dqblk {
+        __u32 dqb_id;           /* id this quota applies to */
+        __u32 dqb_ihardlimit;   /* absolute limit on allocated inodes */
+        __u32 dqb_isoftlimit;   /* preferred inode limit */
+        __u32 dqb_curinodes;    /* current # allocated inodes */
+        __u32 dqb_bhardlimit;   /* absolute limit on disk space (in QUOTABLOCK_SIZE) */
+        __u32 dqb_bsoftlimit;   /* preferred limit on disk space (in QUOTABLOCK_SIZE) */
+        __u64 dqb_curspace;     /* current space occupied (in bytes) */
+        __u64 dqb_btime;        /* time limit for excessive disk use */
+        __u64 dqb_itime;        /* time limit for excessive inode use */
+};
+
+/* Number of entries in one blocks(21 entries) */
+#define LUSTRE_DQSTRINBLK \
+                ((LUSTRE_DQBLKSIZE - sizeof(struct lustre_disk_dqdbheader)) \
+                / sizeof(struct lustre_disk_dqblk)) 
+#define GETENTRIES_V1(buf) (((char *)buf)+sizeof(struct lustre_disk_dqdbheader))
 
 /* for the verson 2 of lustre_disk_dqblk*/
 #define LUSTRE_INITQVERSIONS_V2 {\
@@ -73,16 +102,16 @@
  * to blocks of these structures. for the version 2.
  */
 struct lustre_disk_dqblk_v2 {
-        __u32 dqb_id;           /**< id this quota applies to */
+        __u32 dqb_id;           /* id this quota applies to */
         __u32 padding;
-        __u64 dqb_ihardlimit;   /**< absolute limit on allocated inodes */
-        __u64 dqb_isoftlimit;   /**< preferred inode limit */
-        __u64 dqb_curinodes;    /**< current # allocated inodes */
-        __u64 dqb_bhardlimit;   /**< absolute limit on disk space (in QUOTABLOCK_SIZE) */
-        __u64 dqb_bsoftlimit;   /**< preferred limit on disk space (in QUOTABLOCK_SIZE) */
-        __u64 dqb_curspace;     /**< current space occupied (in bytes) */
-        __u64 dqb_btime;        /**< time limit for excessive disk use */
-        __u64 dqb_itime;        /**< time limit for excessive inode use */
+        __u64 dqb_ihardlimit;   /* absolute limit on allocated inodes */
+        __u64 dqb_isoftlimit;   /* preferred inode limit */
+        __u64 dqb_curinodes;    /* current # allocated inodes */
+        __u64 dqb_bhardlimit;   /* absolute limit on disk space (in QUOTABLOCK_SIZE) */
+        __u64 dqb_bsoftlimit;   /* preferred limit on disk space (in QUOTABLOCK_SIZE) */
+        __u64 dqb_curspace;     /* current space occupied (in bytes) */
+        __u64 dqb_btime;        /* time limit for excessive disk use */
+        __u64 dqb_itime;        /* time limit for excessive inode use */
 };
 
 /* Number of entries in one blocks(14 entries) */
@@ -91,8 +120,13 @@ struct lustre_disk_dqblk_v2 {
 		/ sizeof(struct lustre_disk_dqblk_v2)) 
 #define GETENTRIES_V2(buf) (((char *)buf)+sizeof(struct lustre_disk_dqdbheader))
 
-#define GETENTRIES(buf,version) ((version == LUSTRE_QUOTA_V2) ? \
-                                GETENTRIES_V2(buf) : 0)
+#define GETENTRIES(buf,version) ((version == LUSTRE_QUOTA_V1) ? \
+                                GETENTRIES_V1(buf) : GETENTRIES_V2(buf))
+
+union lustre_disk_dqblk_un {
+        struct lustre_disk_dqblk    v1;
+        struct lustre_disk_dqblk_v2 v2;
+};
 
 /*
  * Here are header structures as written on disk and their in-memory copies
@@ -163,8 +197,6 @@ int lustre_init_quota_info_generic(struct lustre_quota_info *lqi, int type,
 int lustre_read_quota_info(struct lustre_quota_info *lqi, int type);
 int lustre_read_quota_file_info(struct file* f, struct lustre_mem_dqinfo* info);
 int lustre_write_quota_info(struct lustre_quota_info *lqi, int type);
-ssize_t read_blk(struct file *filp, uint blk, dqbuf_t buf);
-ssize_t write_blk(struct file *filp, uint blk, dqbuf_t buf);
 int get_free_dqblk(struct file *filp, struct lustre_mem_dqinfo *info);
 int put_free_dqblk(struct file *filp, struct lustre_mem_dqinfo *info,
                           dqbuf_t buf, uint blk);
@@ -187,11 +219,14 @@ int lustre_init_quota_info(struct lustre_quota_info *lqi, int type);
 int lustre_get_qids(struct file *fp, struct inode *inode, int type,
                     struct list_head *list);
 
-#define LUSTRE_ADMIN_QUOTAFILES_V2 {\
-        "admin_quotafile_v2.usr",       /* user admin quotafile */\
-        "admin_quotafile_v2.grp"        /* group admin quotafile */\
-}
+ssize_t lustre_read_quota(struct file *f, struct inode *inode, int type,
+                          char *buf, int count, loff_t pos);
 
-#define LUSTRE_OPQFILES_NAMES_V2 { "lquota_v2.user", "lquota_v2.group" }
+/* comes from lustre_quota_fmt_convert.c */
+int lustre_slave_quota_convert(lustre_quota_version_t qfmt, int type);
+int lustre_quota_convert(struct lustre_quota_info *lqi, int type);
+
+#define LUSTRE_OPQFILES_NAMES { { "lquota.user", "lquota.group" }, \
+                                { "lquota_v2.user", "lquota_v2.group" } }
 #endif                          /* lustre_quota_fmt.h */
 #endif

@@ -114,7 +114,7 @@ int get_mountdata(char *dev, struct lustre_disk_data *mo_ldd)
         /* Make a temporary directory to hold Lustre data files. */
         if (!mkdtemp(tmpdir)) {
                 verrprint("%s: Can't create temporary directory %s: %s\n",
-                        progname, tmpdir, strerror(errno));
+			  progname, tmpdir, strerror(errno));
                 return errno;
         }
 
@@ -139,11 +139,11 @@ int get_mountdata(char *dev, struct lustre_disk_data *mo_ldd)
                                 progname, filepnm, strerror(errno));
                         goto out_close;
                 }
-        } else {
+	} else {
                 verrprint("%s: Unable to read %d.%d config %s.\n",
                           progname, LUSTRE_MAJOR, LUSTRE_MINOR, filepnm);
                 goto out_close;
-        }
+	}
 
 out_close:
         fclose(filep);
@@ -153,11 +153,11 @@ out_rmdir:
         ret2 = run_command(cmd, cmdsz);
         if (ret2) {
                 verrprint("Failed to remove temp dir %s (%d)\n", tmpdir, ret2);
-                /* failure return from run_command() is more important
+		/* failure return from run_command() is more important
                  * than the failure to remove a dir */
-                if (!ret)
-                        ret = ret2;
-        }
+		if (!ret)
+			ret = ret2;
+	}
 
         return ret;
 }
@@ -184,7 +184,7 @@ static int stclient(char *type, char *arch)
                 urn = OSS_URN;
 
         snprintf(product, 64, "Lustre %s %d.%d.%d", type, LUSTRE_MAJOR,
-                 LUSTRE_MINOR, LUSTRE_PATCH);
+                 LUSTRE_MINOR, LUSTRE_PATCH); 
 
         /* need to see if the entry exists first */
         snprintf(cmd, 1024,
@@ -209,9 +209,9 @@ static int stclient(char *type, char *arch)
         pclose(fp);
 
         snprintf(cmd, 1024, "/opt/sun/servicetag/bin/stclient -a -p '%s' "
-                 "-e %d.%d.%d -t '%s' -S mount -F '%s' -P '%s' -m SUN "
-                 "-A %s -z global", product, LUSTRE_MAJOR, LUSTRE_MINOR,
-                 LUSTRE_PATCH, urn, PARENT_URN, PARENT_PRODUCT, arch);
+               "-e %d.%d.%d -t '%s' -S mount -F '%s' -P '%s' -m SUN "
+               "-A %s -z global", product, LUSTRE_MAJOR, LUSTRE_MINOR,
+               LUSTRE_PATCH, urn, PARENT_URN, PARENT_PRODUCT, arch);
 
         return(run_command(cmd, sizeof(cmd)));
 }
@@ -226,50 +226,50 @@ void register_service_tags(char *usource, char *source, char *target)
 
         rc = stat(stclient_loc, &stat_buf);
 
-        if (rc) {
+        if (rc == 0) {
+                /* call the service tags stclient to show that we use Lustre on
+                   this system */
+
+                rc = uname(&utsname_buf);
+                if (rc) {
+                        if (verbose)
+                                fprintf(stderr,
+                                        "%s: trying to get uname failed: %s, "
+                                        "inventory tags will not be created\n",
+                                        progname, strerror(errno));
+                } else {
+
+                        /* client or server? */
+                        if (strchr(usource, ':')) {
+                                stclient("Client", utsname_buf.machine);
+                        } else {
+                                /* first figure what type of device it is */
+                                rc = get_mountdata(source, &mo_ldd);
+                                if (rc) {
+                                        if (verbose)
+                                                fprintf(stderr,
+                                                        "%s: trying to read mountdata from %s "
+                                                        "failed: %s, inventory tags will not "
+                                                        "be created\n",
+                                                        progname, target, strerror(errno));
+                                } else {
+
+                                        if (IS_MDT(&mo_ldd))
+                                                stclient("MDS", utsname_buf.machine);
+
+                                        if (IS_MGS(&mo_ldd))
+                                                stclient("MGS", utsname_buf.machine);
+
+                                        if (IS_OST(&mo_ldd))
+                                                stclient("OSS", utsname_buf.machine);
+                                }
+                        }
+                }
+        } else {
                 if (errno != ENOENT && verbose) {
                         fprintf(stderr,
                                 "%s: trying to stat stclient failed: %s\n",
                                 progname, strerror(errno));
                 }
-
-                return;
-        }
-
-        /* call service tags stclient to show Lustre is in use on this system */
-        rc = uname(&utsname_buf);
-        if (rc) {
-                if (verbose)
-                        fprintf(stderr,
-                                "%s: trying to get uname failed: %s, "
-                                "inventory tags will not be created\n",
-                                progname, strerror(errno));
-                return;
-        }
-
-        /* client or server? */
-        if (strchr(usource, ':')) {
-                stclient("Client", utsname_buf.machine);
-        } else {
-                /* first figure what type of device it is */
-                rc = get_mountdata(source, &mo_ldd);
-                if (rc) {
-                        if (verbose)
-                                fprintf(stderr,
-                                        "%s: trying to read mountdata from %s "
-                                        "failed: %s, inventory tags will not "
-                                        "be created\n",
-                                        progname, target, strerror(errno));
-                        return;
-                }
-
-                if (IS_MDT(&mo_ldd))
-                        stclient("MDS", utsname_buf.machine);
-
-                if (IS_MGS(&mo_ldd))
-                        stclient("MGS", utsname_buf.machine);
-
-                if (IS_OST(&mo_ldd))
-                        stclient("OSS", utsname_buf.machine);
         }
 }

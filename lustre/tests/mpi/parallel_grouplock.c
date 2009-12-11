@@ -50,7 +50,6 @@
 #include <unistd.h>
 #include <time.h>
 #include <errno.h>
-#include <libcfs/libcfs.h>
 #include <lustre/lustre_user.h>
 #include "lp_utils.h"
 
@@ -252,7 +251,7 @@ void grouplock_test1(char *filename, int fd, int blocking_op, int unlock_op)
                                 filename, errno, strerror(errno));
                         FAIL(errmsg);
                 }
-
+                
                 /* Wait for task1 to complete. */
                 iter = MAX_WAIT_TRIES;
                 do {
@@ -686,7 +685,7 @@ void grouplock_test4(char *filename, int fd)
         }
 }
 
-/*
+/* 
  * task0 attempts GR(gid=1) -- granted
  * task1 attempts PR on non-blocking fd -> should return -EWOULDBLOCK
  * task2 attempts PW on non-blocking fd -> should return -EWOULDBLOCK
@@ -797,7 +796,7 @@ void grouplock_errorstest(char *filename, int fd)
                                         "with errno %d instead of EINVAL\n",
                                         errno);
                                 FAIL(errmsg);
-                        }
+                        } 
                 } else {
                         FAIL("Taking second GROUP lock on same fd succeed\n");
                 }
@@ -809,7 +808,7 @@ void grouplock_errorstest(char *filename, int fd)
                                         "different gid failed with errno %d "
                                         "instead of EINVAL\n", errno);
                                 FAIL(errmsg);
-                        }
+                        } 
                 } else {
                         FAIL("Taking second GROUP lock on same fd, with "
                              "different gid, succeeded.\n");
@@ -822,7 +821,7 @@ void grouplock_errorstest(char *filename, int fd)
                                         "failed with errno %d instead of "
                                         "EINVAL\n", errno);
                                 FAIL(errmsg);
-                        }
+                        } 
                 } else {
                         FAIL("GROUP unlock with wrong gid succeed\n");
                 }
@@ -842,7 +841,7 @@ void grouplock_errorstest(char *filename, int fd)
                                         "fd failed with errno %d instead of "
                                         "EINVAL.\n", errno);
                                 FAIL(errmsg);
-                        }
+                        } 
                 } else {
                         FAIL("GROUP unlock on never locked fd succeed\n");
                 }
@@ -960,7 +959,8 @@ void usage(char *proc)
 
 int main(int argc, char *argv[])
 {
-        int i, iterations = 1, c;
+        char c;
+        int i, iterations = 1;
 
         setbuf(stdout, 0);
         setbuf(stderr, 0);
@@ -1013,8 +1013,7 @@ int main(int argc, char *argv[])
 
         if (size < MIN_GLHOST) {
                 fprintf(stderr, "Error: "
-                        "%d tasks run, but should be at least %d tasks to run "
-                        "the test!\n", size, MIN_GLHOST);
+                        "should be at least four tasks to run the test!\n");
                 MPI_Abort(MPI_COMM_WORLD, 2);
         }
 

@@ -57,8 +57,9 @@
 # include <ctype.h>
 #endif
 
-#include <lustre_dlm.h>
+# include <lustre_dlm.h>
 #include <obd_class.h>
+#include <obd.h>
 #include "osc_internal.h"
 
 /* XXX need AT adjust ? */
@@ -73,8 +74,7 @@ struct osc_create_async_args {
 static int oscc_internal_create(struct osc_creator *oscc);
 static int handle_async_create(struct ptlrpc_request *req, int rc);
 
-static int osc_interpret_create(const struct lu_env *env,
-                                struct ptlrpc_request *req, void *data, int rc)
+static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
 {
         struct osc_creator *oscc;
         struct ost_body *body = NULL;
@@ -82,7 +82,8 @@ static int osc_interpret_create(const struct lu_env *env,
         ENTRY;
 
         if (req->rq_repmsg) {
-                body = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
+                body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
+                                          lustre_swab_ost_body);
                 if (body == NULL && rc == 0)
                         rc = -EPROTO;
         }
@@ -144,14 +145,9 @@ static int osc_interpret_create(const struct lu_env *env,
                 spin_unlock(&oscc->oscc_lock);
                 break;
         }
-        case -EINTR:
         case -EWOULDBLOCK: {
                 /* aka EAGAIN we should not delay create if import failed -
-                 * this avoid client stick in create and avoid race with
-                 * delorphan */
-                /* EINTR say - old create request is killed due mds<>ost
-                 * eviction - OSCC_FLAG_RECOVERING can already set due
-                 * IMP_DISCONN event */
+                 * this avoid client stick in create and avoid race with delorphan */
                 oscc->oscc_flags |= OSCC_FLAG_RECOVERING;
                 /* oscc->oscc_grow_count = OST_MIN_PRECREATE; */
                 spin_unlock(&oscc->oscc_lock);
@@ -162,13 +158,13 @@ static int osc_interpret_create(const struct lu_env *env,
                 oscc->oscc_grow_count = OST_MIN_PRECREATE;
                 spin_unlock(&oscc->oscc_lock);
                 DEBUG_REQ(D_ERROR, req,
-                          "Unknown rc %d from async create: failing oscc", rc);
+                          "unknown rc %d from async create: failing oscc", rc);
                 ptlrpc_fail_import(req->rq_import,
                                    lustre_msg_get_conn_cnt(req->rq_reqmsg));
         }
         }
 
-        CDEBUG(D_HA, "preallocated through id "LPU64" (next to use "LPU64")\n",
+        CDEBUG(D_RPCTRACE, "prealloc through id "LPU64", next to use "LPU64"\n",
                oscc->oscc_last_id, oscc->oscc_next_id);
 
         spin_lock(&oscc->oscc_lock);
@@ -192,6 +188,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
 {
         struct ptlrpc_request *request;
         struct ost_body *body;
+        __u32 size[] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
         LASSERT_SPIN_LOCKED(&oscc->oscc_lock);
@@ -223,9 +220,9 @@ static int oscc_internal_create(struct osc_creator *oscc)
         oscc->oscc_flags |= OSCC_FLAG_CREATING;
         spin_unlock(&oscc->oscc_lock);
 
-        request = ptlrpc_request_alloc_pack(oscc->oscc_obd->u.cli.cl_import,
-                                            &RQF_OST_CREATE,
-                                            LUSTRE_OST_VERSION, OST_CREATE);
+        request = ptlrpc_prep_req(oscc->oscc_obd->u.cli.cl_import,
+                                  LUSTRE_OST_VERSION, OST_CREATE, 2,
+                                  size, NULL);
         if (request == NULL) {
                 spin_lock(&oscc->oscc_lock);
                 oscc->oscc_flags &= ~OSCC_FLAG_CREATING;
@@ -235,12 +232,11 @@ static int oscc_internal_create(struct osc_creator *oscc)
 
         request->rq_request_portal = OST_CREATE_PORTAL;
         ptlrpc_at_set_req_timeout(request);
-        body = req_capsule_client_get(&request->rq_pill, &RMF_OST_BODY);
+        body = lustre_msg_buf(request->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
 
         spin_lock(&oscc->oscc_lock);
         body->oa.o_id = oscc->oscc_last_id + oscc->oscc_grow_count;
-        body->oa.o_gr = oscc->oscc_oa.o_gr;
-        LASSERT_MDS_GROUP(body->oa.o_gr);
+        body->oa.o_gr = 0;
         body->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
         request->rq_async_args.space[0] = oscc->oscc_grow_count;
         spin_unlock(&oscc->oscc_lock);
@@ -250,11 +246,11 @@ static int oscc_internal_create(struct osc_creator *oscc)
         /* we should not resend create request - anyway we will have delorphan
          * and kill these objects */
         request->rq_no_delay = request->rq_no_resend = 1;
-        ptlrpc_request_set_replen(request);
+        ptlrpc_req_set_repsize(request, 2, size);
 
         request->rq_async_args.pointer_arg[0] = oscc;
         request->rq_interpret_reply = osc_interpret_create;
-        ptlrpcd_add_req(request, PSCOPE_OTHER);
+        ptlrpcd_add_req(request);
 
         RETURN(0);
 }
@@ -425,8 +421,7 @@ out_wake:
         RETURN(rc);
 }
 
-static int async_create_interpret(const struct lu_env *env,
-                                  struct ptlrpc_request *req, void *data, int rc)
+static int async_create_interpret(struct ptlrpc_request *req, void *data, int rc)
 {
         struct osc_create_async_args *args = ptlrpc_req_async_args(req);
         struct osc_creator    *oscc = args->rq_oscc;
@@ -449,7 +444,7 @@ int osc_create_async(struct obd_export *exp, struct obd_info *oinfo,
         struct obdo *oa = oinfo->oi_oa;
         ENTRY;
 
-        if ((oa->o_valid & OBD_MD_FLGROUP) && !filter_group_is_mds(oa->o_gr)) {
+        if ((oa->o_valid & OBD_MD_FLGROUP) && (oa->o_gr != 0)){
                 rc = osc_real_create(exp, oinfo->oi_oa, ea, oti);
                 rc = oinfo->oi_cb_up(oinfo, rc);
                 RETURN(rc);
@@ -485,7 +480,7 @@ int osc_create_async(struct obd_export *exp, struct obd_info *oinfo,
         if (rc == -EAGAIN) {
                 int is_add;
                 /* we not have objects - try wait */
-                is_add = ptlrpcd_add_req(fake_req, PSCOPE_OTHER);
+                is_add = ptlrpcd_add_req(fake_req);
                 if (!is_add)
                         list_add(&fake_req->rq_list,
                                  &oscc->oscc_wait_create_list);
@@ -505,26 +500,25 @@ int osc_create_async(struct obd_export *exp, struct obd_info *oinfo,
         RETURN(rc);
 }
 
+
 int osc_create(struct obd_export *exp, struct obdo *oa,
                struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
-        struct osc_creator *oscc = &exp->exp_obd->u.cli.cl_oscc;
-        struct obd_import  *imp  = exp->exp_obd->u.cli.cl_import;
         struct lov_stripe_md *lsm;
+        struct osc_creator *oscc = &exp->exp_obd->u.cli.cl_oscc;
         int del_orphan = 0, rc = 0;
-        ENTRY;
 
+        ENTRY;
         LASSERT(oa);
         LASSERT(ea);
-        LASSERT(oa->o_valid & OBD_MD_FLGROUP);
+
+        if ((oa->o_valid & OBD_MD_FLGROUP) && (oa->o_gr != 0))
+                RETURN(osc_real_create(exp, oa, ea, oti));
 
         if ((oa->o_valid & OBD_MD_FLFLAGS) &&
             oa->o_flags == OBD_FL_RECREATE_OBJS) {
                 RETURN(osc_real_create(exp, oa, ea, oti));
         }
-
-        if (!filter_group_is_mds(oa->o_gr))
-                RETURN(osc_real_create(exp, oa, ea, oti));
 
         /* this is the special case where create removes orphans */
         if (oa->o_valid & OBD_MD_FLFLAGS &&
@@ -550,8 +544,9 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 del_orphan = 1;
 
                 /* delete from next_id on up */
-                oa->o_valid |= OBD_MD_FLID;
+                oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
                 oa->o_id = oscc->oscc_next_id - 1;
+                oa->o_gr = 0;
 
                 rc = osc_real_create(exp, oa, ea, NULL);
 
@@ -559,21 +554,19 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 oscc->oscc_flags &= ~OSCC_FLAG_SYNC_IN_PROGRESS;
                 if (rc == 0 || rc == -ENOSPC) {
                         struct obd_connect_data *ocd;
+			struct obd_import *imp = oscc->oscc_obd->u.cli.cl_import;
 
                         if (rc == -ENOSPC)
                                 oscc->oscc_flags |= OSCC_FLAG_NOSPC;
                         oscc->oscc_flags &= ~OSCC_FLAG_RECOVERING;
-
                         oscc->oscc_last_id = oa->o_id;
+
                         ocd = &imp->imp_connect_data;
                         if (ocd->ocd_connect_flags & OBD_CONNECT_SKIP_ORPHAN) {
                                 CDEBUG(D_HA, "%s: Skip orphan set, reset last "
                                        "objid\n", oscc->oscc_obd->obd_name);
                                 oscc->oscc_next_id = oa->o_id + 1;
                         }
-
-                        /* sanity check for next objid. see bug 17025 */
-                        LASSERT(oscc->oscc_next_id == oa->o_id + 1);
 
                         CDEBUG(D_HA, "%s: oscc recovery finished, last_id: "
                                LPU64", rc: %d\n", oscc->oscc_obd->obd_name,
@@ -586,8 +579,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 cfs_waitq_signal(&oscc->oscc_waitq);
                 spin_unlock(&oscc->oscc_lock);
 
-                if (rc < 0)
-                        RETURN(rc);
+                RETURN(rc);
         }
 
         lsm = *ea;

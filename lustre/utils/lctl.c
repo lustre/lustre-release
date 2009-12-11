@@ -44,7 +44,7 @@
 #include <stdio.h>
 #include <lnet/lnetctl.h>
 #include "obdctl.h"
-#include <libcfs/libcfsutil.h>
+#include "parser.h"
 
 static int jt_quit(int argc, char **argv) {
         Parser_quit(argc, argv);
@@ -123,7 +123,7 @@ command_t cmdlist[] = {
          "usage: dl [-t]"},
 
         /* Device operations */
-        {"==== obd device operations ====", jt_noop, 0, "device operations"},
+        {"==== obd device operations ===", jt_noop, 0, "device operations"},
         {"activate", jt_obd_activate, 0, "activate an import\n"},
         {"deactivate", jt_obd_deactivate, 0, "deactivate an import. "
          "This command should be used on failed OSC devices in an MDT LOV.\n"},
@@ -137,7 +137,7 @@ command_t cmdlist[] = {
         {"local_param", jt_lcfg_param, 0, "set a temporary, local param\n"
          "usage: local_param <target.keyword=val> ...\n"},
         {"get_param", jt_lcfg_getparam, 0, "get the Lustre or LNET parameter\n"
-         "usage: get_param [-n|-N|-F] <param_path1 param_path2 ...>\n"
+         "usage: get_param [-n | -N | -F] <param_path1 param_path2 ...> \n"
          "Get the value of Lustre or LNET parameter from the specified path.\n"
          "The path can contain shell-style filename patterns.\n"
          "  -n  Print only the value and not parameter name.\n"
@@ -149,15 +149,9 @@ command_t cmdlist[] = {
          "usage: set_param [-n] <param_path1=value1 param_path2 value2 ...>\n"
          "Set the value of the Lustre or LNET parameter at the specified path\n"
          "  -n  Disable printing of the key name when printing values."},
-        {"list_param", jt_lcfg_listparam, 0,
-         "list the Lustre or LNET parameter name\n"
-         "usage: list_param [-F] <param_path1 param_path2 ...>\n"
-         "List the name of Lustre or LNET parameter from the specified path.\n"
-         "  -F  Add '/', '@' or '=' for dirs, symlinks and writeable files,\n"
-                "respectively."},
 
         /* Debug commands */
-        {"==== debugging control ====", jt_noop, 0, "debug"},
+        {"==== debugging control ===", jt_noop, 0, "debug"},
         {"debug_daemon", jt_dbg_debug_daemon, 0,
          "debug daemon control and dump to a file\n"
          "usage: debug_daemon {start file [#MB]|stop}"},
@@ -188,6 +182,24 @@ command_t cmdlist[] = {
          "provide gdb-friendly module information\n"
          "usage: modules <path>"},
 
+        /* Device configuration commands */
+        {"== obd device setup (these are not normally used post 1.4) ==",
+                jt_noop, 0, "device config"},
+        {"attach", jt_lcfg_attach, 0,
+         "set the type, name, and uuid of the current device\n"
+         "usage: attach type name uuid"},
+        {"detach", jt_obd_detach, 0,
+         "remove driver (and name and uuid) from current device\n"
+         "usage: detach"},
+        {"setup", jt_lcfg_setup, 0,
+         "type specific device configuration information\n"
+         "usage: setup <args...>"},
+        {"cleanup", jt_obd_cleanup, 0, "cleanup previously setup device\n"
+         "usage: cleanup [force | failover]"},
+        {"dump_cfg", jt_cfg_dump_log, 0,
+         "print log of recorded commands for this config to kernel debug log\n"
+         "usage: dump_cfg config-uuid-name"},
+
         /* virtual block operations */
         {"==== virtual block device ====", jt_noop, 0, "virtual block device"},
         {"blockdev_attach", jt_blockdev_attach, 0,
@@ -217,33 +229,6 @@ command_t cmdlist[] = {
         {"pool_list", jt_pool_cmd, 0,
          "list pools and pools members\n"
          "usage pool_list  <fsname>[.<poolname>] | <pathname>"},
-
-        /* Changelog commands */
-        {"===  Changelogs ==", jt_noop, 0, "changelog user management"},
-        {"changelog_register", jt_changelog_register, 0,
-         "register a new persistent changelog user, returns id\n"
-         "usage:\tdevice <mdtname>\n\tchangelog_register [-n]"},
-        {"changelog_deregister", jt_changelog_deregister, 0,
-         "deregister an existing changelog user\n"
-         "usage:\tdevice <mdtname>\n\tchangelog_deregister <id>"},
-
-        /* Device configuration commands */
-        {"== device setup (these are not normally used post 1.4) ==",
-                jt_noop, 0, "device config"},
-        {"attach", jt_lcfg_attach, 0,
-         "set the type, name, and uuid of the current device\n"
-         "usage: attach type name uuid"},
-        {"detach", jt_obd_detach, 0,
-         "remove driver (and name and uuid) from current device\n"
-         "usage: detach"},
-        {"setup", jt_lcfg_setup, 0,
-         "type specific device configuration information\n"
-         "usage: setup <args...>"},
-        {"cleanup", jt_obd_cleanup, 0, "cleanup previously setup device\n"
-         "usage: cleanup [force | failover]"},
-        {"dump_cfg", jt_cfg_dump_log, 0,
-         "print log of recorded commands for this config to kernel debug log\n"
-         "usage: dump_cfg config-uuid-name"},
 
         /* Test only commands */
         {"==== testing (DANGEROUS) ====", jt_noop, 0, "testing (DANGEROUS)"},

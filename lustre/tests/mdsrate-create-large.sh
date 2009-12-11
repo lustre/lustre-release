@@ -10,7 +10,7 @@ init_test_env $@
 assert_env CLIENTS MDSRATE SINGLECLIENT MPIRUN
 
 MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
-BASEDIR=$MOUNT/mdsrate
+TESTDIR=$MOUNT
 
 # Requirements
 # set NUM_FILES=0 to force TIME_PERIOD work  
@@ -18,8 +18,8 @@ NUM_FILES=${NUM_FILES:-1000000}
 TIME_PERIOD=${TIME_PERIOD:-600}                        # seconds
 
 # Local test variables
-TESTDIR_SINGLE="${BASEDIR}/single"
-TESTDIR_MULTI="${BASEDIR}/multi"
+TESTDIR_SINGLE="${TESTDIR}/single"
+TESTDIR_MULTI="${TESTDIR}/multi"
 
 LOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
 CLIENT=$SINGLECLIENT
@@ -32,17 +32,15 @@ log "===== $0 ====== "
 
 check_and_setup_lustre
 
-mkdir -p $BASEDIR
-chmod 0777 $BASEDIR
-$LFS setstripe $BASEDIR -c -1
-get_stripe $BASEDIR
-
 IFree=$(inodes_available)
 if [ $IFree -lt $NUM_FILES ]; then
     NUM_FILES=$IFree
 fi
 
 generate_machine_file $NODES_TO_USE $MACHINEFILE || error "can not generate machinefile"
+
+$LFS setstripe $TESTDIR -c -1
+get_stripe $TESTDIR
 
 # Make sure we start with a clean slate
 rm -f ${LOG}
@@ -81,8 +79,6 @@ else
 	[ -f $LOG ] && sed -e "s/^/log: /" $LOG
 	error "mdsrate unlink on a single client failed, aborting"
     fi
-
-    rmdir $TESTDIR_SINGLE
 fi
 
 IFree=$(inodes_available)
@@ -124,11 +120,8 @@ else
 	[ -f $LOG ] && sed -e "s/^/log: /" $LOG
 	error "mdsrate unlink on multiple nodes failed, aborting"
     fi
-
-    rmdir $TESTDIR_MULTI
 fi
 
-rmdir $BASEDIR || true
 rm -f $MACHINEFILE
 check_and_cleanup_lustre
 #rm -f $LOG

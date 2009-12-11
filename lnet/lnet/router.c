@@ -645,7 +645,7 @@ lnet_router_checker_event (lnet_event_t *event)
 
         if (event->unlinked) {
                 if (rcd != NULL) {
-                        LNetInvalidateHandle(&rcd->rcd_mdh);
+                        rcd->rcd_mdh = LNET_INVALID_HANDLE;
                         return;
                 }
 
@@ -743,7 +743,7 @@ lnet_destroy_rc_data (lnet_rc_data_t *rcd)
 {
         LASSERT (list_empty(&rcd->rcd_list));
         /* detached from network */
-        LASSERT (LNetHandleIsInvalid(rcd->rcd_mdh));
+        LASSERT (LNetHandleIsEqual(rcd->rcd_mdh, LNET_INVALID_HANDLE));
 
         LIBCFS_FREE(rcd->rcd_pinginfo, LNET_PINGINFO_SIZE);
         LIBCFS_FREE(rcd, sizeof(*rcd));
@@ -774,10 +774,10 @@ lnet_create_rc_data (void)
                 pi->pi_ni[i].ns_status = LNET_NI_STATUS_INVALID;
         }
         rcd->rcd_pinginfo = pi;
-        LNetInvalidateHandle(&rcd->rcd_mdh);
+        rcd->rcd_mdh = LNET_INVALID_HANDLE;
         CFS_INIT_LIST_HEAD(&rcd->rcd_list);
 
-        LASSERT (!LNetHandleIsInvalid(the_lnet.ln_rc_eqh));
+        LASSERT (!LNetHandleIsEqual(the_lnet.ln_rc_eqh, LNET_EQ_NONE));
         rc = LNetMDBind((lnet_md_t){.start     = pi,
                                     .user_ptr  = rcd,
                                     .length    = LNET_PINGINFO_SIZE,
@@ -1073,7 +1073,7 @@ lnet_prune_zombie_rcd (int wait_unlink)
 rescan:
         version = the_lnet.ln_routers_version;
         list_for_each_entry_safe (rcd, tmp, &the_lnet.ln_zombie_rcd, rcd_list) {
-                if (LNetHandleIsInvalid(rcd->rcd_mdh)) {
+                if (LNetHandleIsEqual(rcd->rcd_mdh, LNET_INVALID_HANDLE)) {
                         list_del(&rcd->rcd_list);
                         list_add(&rcd->rcd_list, &free_rcd);
                         continue;
@@ -1092,7 +1092,7 @@ rescan:
         while (wait_unlink && !list_empty(&the_lnet.ln_zombie_rcd)) {
                 rcd = list_entry(the_lnet.ln_zombie_rcd.next,
                                  lnet_rc_data_t, rcd_list);
-                if (LNetHandleIsInvalid(rcd->rcd_mdh)) {
+                if (LNetHandleIsEqual(rcd->rcd_mdh, LNET_INVALID_HANDLE)) {
                         list_del(&rcd->rcd_list);
                         list_add(&rcd->rcd_list, &free_rcd);
                         continue;

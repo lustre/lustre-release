@@ -59,11 +59,10 @@ struct ost_thread_local_cache {
          * pool of nio buffers used by write-path
          */
         struct niobuf_local   local [OST_THREAD_POOL_SIZE];
+        unsigned int          temporary:1;
 };
 
-struct ost_thread_local_cache *ost_tls(struct ptlrpc_request *r);
-
-#define OSS_MIN_CREATE_THREADS  2UL
+#define OSS_DEF_CREATE_THREADS  2UL
 #define OSS_MAX_CREATE_THREADS 16UL
 
 /* Quota stuff */
@@ -77,5 +76,12 @@ static void lprocfs_ost_init_vars(struct lprocfs_static_vars *lvars)
         memset(lvars, 0, sizeof(*lvars));
 }
 #endif
+
+enum {
+        NEVER_SYNC_ON_CANCEL = 0,
+        BLOCKING_SYNC_ON_CANCEL = 1,
+        ALWAYS_SYNC_ON_CANCEL = 2,
+        NUM_SYNC_ON_CANCEL_STATES
+};
 
 #endif /* OST_INTERNAL_H */

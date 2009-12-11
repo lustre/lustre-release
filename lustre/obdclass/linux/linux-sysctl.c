@@ -58,7 +58,7 @@ cfs_sysctl_table_header_t *obd_table_header = NULL;
 
 #ifndef HAVE_SYSCTL_UNNUMBERED
 
-#define OBD_SYSCTL 300
+#define CTL_LUSTRE      300
 
 enum {
         OBD_FAIL_LOC = 1,       /* control test failures instrumentation */
@@ -81,11 +81,8 @@ enum {
         OBD_AT_EARLY_MARGIN,
         OBD_AT_HISTORY,
 };
-
 #else
-
-#define OBD_SYSCTL              CTL_UNNUMBERED
-
+#define CTL_LUSTRE              CTL_UNNUMBERED
 #define OBD_FAIL_LOC            CTL_UNNUMBERED
 #define OBD_FAIL_VAL            CTL_UNNUMBERED
 #define OBD_TIMEOUT             CTL_UNNUMBERED
@@ -105,16 +102,14 @@ enum {
 #define OBD_AT_EXTRA            CTL_UNNUMBERED
 #define OBD_AT_EARLY_MARGIN     CTL_UNNUMBERED
 #define OBD_AT_HISTORY          CTL_UNNUMBERED
-
 #endif
-
 
 int LL_PROC_PROTO(proc_fail_loc)
 {
         int rc;
-        long old_fail_loc = obd_fail_loc;
+        int old_fail_loc = obd_fail_loc;
 
-        rc = ll_proc_dolongvec(table, write, filp, buffer, lenp, ppos);
+        rc = ll_proc_dointvec(table, write, filp, buffer, lenp, ppos);
         if (old_fail_loc != obd_fail_loc)
                 wake_up(&obd_race_waitq);
         return rc;
@@ -128,102 +123,6 @@ int LL_PROC_PROTO(proc_set_timeout)
         if (ldlm_timeout >= obd_timeout)
                 ldlm_timeout = max(obd_timeout / 3, 1U);
         return rc;
-}
-
-int LL_PROC_PROTO(proc_memory_alloc)
-{
-        char buf[22];
-        int len;
-        DECLARE_LL_PROC_PPOS_DECL;
-
-        if (!*lenp || (*ppos && !write)) {
-                *lenp = 0;
-                return 0;
-        }
-        if (write)
-                return -EINVAL;
-
-        len = snprintf(buf, sizeof(buf), LPU64"\n", obd_memory_sum());
-        if (len > *lenp)
-                len = *lenp;
-        buf[len] = '\0';
-        if (copy_to_user(buffer, buf, len))
-                return -EFAULT;
-        *lenp = len;
-        *ppos += *lenp;
-        return 0;
-}
-
-int LL_PROC_PROTO(proc_pages_alloc)
-{
-        char buf[22];
-        int len;
-        DECLARE_LL_PROC_PPOS_DECL;
-
-        if (!*lenp || (*ppos && !write)) {
-                *lenp = 0;
-                return 0;
-        }
-        if (write)
-                return -EINVAL;
-
-        len = snprintf(buf, sizeof(buf), LPU64"\n", obd_pages_sum());
-        if (len > *lenp)
-                len = *lenp;
-        buf[len] = '\0';
-        if (copy_to_user(buffer, buf, len))
-                return -EFAULT;
-        *lenp = len;
-        *ppos += *lenp;
-        return 0;
-}
-
-int LL_PROC_PROTO(proc_mem_max)
-{
-        char buf[22];
-        int len;
-        DECLARE_LL_PROC_PPOS_DECL;
-
-        if (!*lenp || (*ppos && !write)) {
-                *lenp = 0;
-                return 0;
-        }
-        if (write)
-                return -EINVAL;
-
-        len = snprintf(buf, sizeof(buf), LPU64"\n", obd_memory_max());
-        if (len > *lenp)
-                len = *lenp;
-        buf[len] = '\0';
-        if (copy_to_user(buffer, buf, len))
-                return -EFAULT;
-        *lenp = len;
-        *ppos += *lenp;
-        return 0;
-}
-
-int LL_PROC_PROTO(proc_pages_max)
-{
-        char buf[22];
-        int len;
-        DECLARE_LL_PROC_PPOS_DECL;
-
-        if (!*lenp || (*ppos && !write)) {
-                *lenp = 0;
-                return 0;
-        }
-        if (write)
-                return -EINVAL;
-
-        len = snprintf(buf, sizeof(buf), LPU64"\n", obd_pages_max());
-        if (len > *lenp)
-                len = *lenp;
-        buf[len] = '\0';
-        if (copy_to_user(buffer, buf, len))
-                return -EFAULT;
-        *lenp = len;
-        *ppos += *lenp;
-        return 0;
 }
 
 int LL_PROC_PROTO(proc_max_dirty_pages_in_mb)
@@ -250,7 +149,8 @@ int LL_PROC_PROTO(proc_max_dirty_pages_in_mb)
                         obd_max_dirty_pages = 4 << (20 - CFS_PAGE_SHIFT);
                 }
         } else {
-                char buf[21];
+                char buf[22];
+                struct ctl_table dummy;
                 int len;
 
                 len = lprocfs_read_frac_helper(buf, sizeof(buf),
@@ -259,7 +159,13 @@ int LL_PROC_PROTO(proc_max_dirty_pages_in_mb)
                 if (len > *lenp)
                         len = *lenp;
                 buf[len] = '\0';
-                if (copy_to_user(buffer, buf, len))
+
+                dummy = *table;
+                dummy.data = buf;
+                dummy.maxlen = sizeof(buf);
+
+                rc = ll_proc_dostring(&dummy,write,filp,buffer,lenp, ppos);
+                if (rc)
                         return -EFAULT;
                 *lenp = len;
         }
@@ -270,7 +176,7 @@ int LL_PROC_PROTO(proc_max_dirty_pages_in_mb)
 #ifdef RANDOM_FAIL_ALLOC
 int LL_PROC_PROTO(proc_alloc_fail_rate)
 {
-        int rc          = 0;
+        int rc = 0;
         DECLARE_LL_PROC_PPOS_DECL;
 
         if (!table->data || !table->maxlen || !*lenp || (*ppos && !write)) {
@@ -282,16 +188,22 @@ int LL_PROC_PROTO(proc_alloc_fail_rate)
                                                (unsigned int*)table->data,
                                                OBD_ALLOC_FAIL_MULT);
         } else {
-                char buf[21];
+                char buf[22];
+                struct ctl_table dummy;
                 int  len;
 
-                len = lprocfs_read_frac_helper(buf, 21,
+                len = lprocfs_read_frac_helper(buf, sizeof(buf),
                                                *(unsigned int*)table->data,
                                                OBD_ALLOC_FAIL_MULT);
                 if (len > *lenp)
                         len = *lenp;
                 buf[len] = '\0';
-                if (copy_to_user(buffer, buf, len))
+                dummy = *table;
+                dummy.data = buf;
+                dummy.maxlen = sizeof(buf);
+
+                rc = ll_proc_dostring(&dummy,write,filp,buffer,lenp, ppos);
+                if(rc)
                         return -EFAULT;
                 *lenp = len;
         }
@@ -299,6 +211,110 @@ int LL_PROC_PROTO(proc_alloc_fail_rate)
         return rc;
 }
 #endif
+
+int LL_PROC_PROTO(proc_memory_alloc)
+{
+        struct ctl_table dummy;
+        char buf[22];
+        int len;
+        DECLARE_LL_PROC_PPOS_DECL;
+
+        if (!*lenp || (*ppos && !write)) {
+                *lenp = 0;
+                return 0;
+        }
+        if (write)
+                return -EINVAL;
+
+        len = snprintf(buf, sizeof(buf), LPU64"\n", obd_memory_sum());
+        if (len > *lenp)
+                len = *lenp;
+        buf[len] = '\0';
+
+        dummy = *table;
+        dummy.data = buf;
+        dummy.maxlen = sizeof(buf);
+
+        return ll_proc_dostring(&dummy,write,filp,buffer,lenp, ppos);
+}
+
+int LL_PROC_PROTO(proc_pages_alloc)
+{
+        struct ctl_table dummy;
+        char buf[22];
+        int len;
+        DECLARE_LL_PROC_PPOS_DECL;
+
+        if (!*lenp || (*ppos && !write)) {
+                *lenp = 0;
+                return 0;
+        }
+        if (write)
+                return -EINVAL;
+
+        len = snprintf(buf, sizeof(buf), LPU64"\n", obd_pages_sum());
+        if (len > *lenp)
+                len = *lenp;
+        buf[len] = '\0';
+
+        dummy = *table;
+        dummy.data = buf;
+        dummy.maxlen = sizeof(buf);
+
+        return ll_proc_dostring(&dummy,write,filp,buffer,lenp, ppos);
+}
+
+int LL_PROC_PROTO(proc_mem_max)
+{
+        struct ctl_table dummy;
+        char buf[22];
+        int len;
+        DECLARE_LL_PROC_PPOS_DECL;
+
+        if (!*lenp || (*ppos && !write)) {
+                *lenp = 0;
+                return 0;
+        }
+        if (write)
+                return -EINVAL;
+
+        len = snprintf(buf, sizeof(buf), LPU64"\n", obd_memory_max());
+        if (len > *lenp)
+                len = *lenp;
+        buf[len] = '\0';
+
+        dummy = *table;
+        dummy.data = buf;
+        dummy.maxlen = sizeof(buf);
+
+        return ll_proc_dostring(&dummy,write,filp,buffer,lenp, ppos);
+}
+
+int LL_PROC_PROTO(proc_pages_max)
+{
+        char buf[22];
+        int len;
+        struct ctl_table dummy;
+        DECLARE_LL_PROC_PPOS_DECL;
+
+        if (!*lenp || (*ppos && !write)) {
+                *lenp = 0;
+                return 0;
+        }
+        if (write)
+                return -EINVAL;
+         dummy = *table;
+         dummy.data = buf;
+         dummy.maxlen = sizeof(buf);
+         len = snprintf(buf, sizeof(buf), LPU64,
+                        obd_pages_max());
+
+         if (len > *lenp)
+                 len = *lenp;
+         buf[len] = '\0';
+
+         return ll_proc_dostring(&dummy,write,filp,buffer,lenp, ppos);
+}
 
 int LL_PROC_PROTO(proc_at_min)
 {
@@ -326,7 +342,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .ctl_name = OBD_FAIL_LOC,
                 .procname = "fail_loc",
                 .data     = &obd_fail_loc,
-                .maxlen   = sizeof(obd_fail_loc),
+                .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_fail_loc
         },
@@ -336,7 +352,8 @@ static cfs_sysctl_table_t obd_table[] = {
                 .data     = &obd_fail_val,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
-                .proc_handler = &proc_dointvec
+                .proc_handler = &proc_dointvec,
+                .strategy = &sysctl_intvec,
         },
         {
                 .ctl_name = OBD_TIMEOUT,
@@ -352,7 +369,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .data     = &obd_debug_peer_on_timeout,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
-                .proc_handler = &proc_dointvec
+                .proc_handler = &proc_dointvec,
         },
         {
                 .ctl_name = OBD_DUMP_ON_TIMEOUT,
@@ -360,7 +377,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .data     = &obd_dump_on_timeout,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
-                .proc_handler = &proc_dointvec
+                .proc_handler = &proc_dointvec,
         },
         {
                 .ctl_name = OBD_DUMP_ON_EVICTION,
@@ -368,7 +385,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .data     = &obd_dump_on_eviction,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
-                .proc_handler = &proc_dointvec
+                .proc_handler = &proc_dointvec,
         },
         {
                 .ctl_name = OBD_MEMUSED,
@@ -376,7 +393,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .data     = NULL,
                 .maxlen   = 0,
                 .mode     = 0444,
-                .proc_handler = &proc_memory_alloc
+                .proc_handler = &proc_memory_alloc,
         },
         {
                 .ctl_name = OBD_PAGESUSED,
@@ -384,7 +401,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .data     = NULL,
                 .maxlen   = 0,
                 .mode     = 0444,
-                .proc_handler = &proc_pages_alloc
+                .proc_handler = &proc_pages_alloc,
         },
         {
                 .ctl_name = OBD_MAXMEMUSED,
@@ -392,7 +409,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .data     = NULL,
                 .maxlen   = 0,
                 .mode     = 0444,
-                .proc_handler = &proc_mem_max
+                .proc_handler = &proc_mem_max,
         },
         {
                 .ctl_name = OBD_MAXPAGESUSED,
@@ -400,7 +417,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .data     = NULL,
                 .maxlen   = 0,
                 .mode     = 0444,
-                .proc_handler = &proc_pages_max
+                .proc_handler = &proc_pages_max,
         },
         {
                 .ctl_name = OBD_LDLM_TIMEOUT,
@@ -472,15 +489,15 @@ static cfs_sysctl_table_t obd_table[] = {
 };
 
 static cfs_sysctl_table_t parent_table[] = {
-        {
-                .ctl_name = OBD_SYSCTL,
-                .procname = "lustre",
-                .data     = NULL,
-                .maxlen   = 0,
-                .mode     = 0555,
-                .child    = obd_table
-        },
-        {0}
+       {
+               .ctl_name = CTL_LUSTRE,
+               .procname = "lustre",
+               .data     = NULL,
+               .maxlen   = 0,
+               .mode     = 0555,
+               .child    = obd_table
+       },
+       {0}
 };
 
 void obd_sysctl_init (void)

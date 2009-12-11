@@ -125,7 +125,13 @@ static void record_finish_io(struct filter_iobuf *iobuf, int rw, int rc)
                 wake_up(&iobuf->dr_wait);
 }
 
+#ifdef HAVE_BIO_ENDIO_2ARG
+#define DIO_RETURN(a)
+static void dio_complete_routine(struct bio *bio, int error)
+#else
+#define DIO_RETURN(a)   a
 static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
+#endif
 {
         struct filter_iobuf *iobuf = bio->bi_private;
         struct bio_vec *bvl;
@@ -134,11 +140,19 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
         /* CAVEAT EMPTOR: possibly in IRQ context
          * DO NOT record procfs stats here!!! */
 
-        if (bio->bi_size)                       /* Not complete */
-                return 1;
+#ifndef HAVE_BIO_ENDIO_2ARG
+	/* The "bi_size" check was needed for kernels < 2.6.24 in order to
+	 * handle the case where a SCSI request error caused this callback
+	 * to be called before all of the biovecs had been processed.
+	 * Without this check the server thread will hang.  In newer kernels
+	 * the bio_end_io routine is never called for partial completions,
+	 * so this check is no longer needed. */
+	if (bio->bi_size)		       /* Not complete */
+                return DIO_RETURN(1);
+#endif
 
         if (unlikely(iobuf == NULL)) {
-                CERROR("***** bio->bi_private is NULL!  This should never "
+                LCONSOLE_ERROR("bio->bi_private is NULL!  This should never "
                        "happen.  Normally, I would crash here, but instead I "
                        "will dump the bio contents to the console.  Please "
                        "report this to <http://bugzilla.lustre.org/> , along "
@@ -148,11 +162,12 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
                        "IO - you will probably have to reboot this node.\n");
                 CERROR("bi_next: %p, bi_flags: %lx, bi_rw: %lu, bi_vcnt: %d, "
                        "bi_idx: %d, bi->size: %d, bi_end_io: %p, bi_cnt: %d, "
-                       "bi_private: %p\n", bio->bi_next, bio->bi_flags,
+                       "bi_private: %p, error: %d\n",
+                       bio->bi_next, bio->bi_flags,
                        bio->bi_rw, bio->bi_vcnt, bio->bi_idx, bio->bi_size,
                        bio->bi_end_io, atomic_read(&bio->bi_cnt),
-                       bio->bi_private);
-                return 0;
+                       bio->bi_private, error);
+                return DIO_RETURN(0);
         }
 
         /* the check is outside of the cycle for performance reason -bzzz */
@@ -183,7 +198,7 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
          * deadlocking the OST.  The bios are now released as soon as complete
          * so the pool cannot be exhausted while IOs are competing. bug 10076 */
         bio_put(bio);
-        return 0;
+        return DIO_RETURN(0);
 }
 
 static int can_be_merged(struct bio *bio, sector_t sector)
@@ -354,8 +369,8 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
                                 continue;       /* added this frag OK */
 
                         if (bio != NULL) {
-                                request_queue_t *q =
-                                        bdev_get_queue(bio->bi_bdev);
+                                struct request_queue *q =
+                                       bdev_get_queue(bio->bi_bdev);
 
                                 /* Dang! I have to fragment this I/O */
                                 CDEBUG(D_INODE, "bio++ sz %d vcnt %d(%d) "
@@ -380,8 +395,8 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
 
                         /* allocate new bio, limited by max BIO size, b=9945 */
                         bio = bio_alloc(GFP_NOIO, max(BIO_MAX_PAGES,
-                                                      (npages - page_idx) *
-                                                      blocks_per_page));
+						      (npages - page_idx) *
+						      blocks_per_page));
                         if (bio == NULL) {
                                 CERROR("Can't allocate bio %u*%u = %u pages\n",
                                        (npages - page_idx), blocks_per_page,
@@ -507,8 +522,11 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                                 rc = rc2;
                 }
 
-                rc2 = fsfilt_commit_async(obd,inode,oti->oti_handle,
-                                          wait_handle);
+                if (wait_handle)
+                        rc2 = fsfilt_commit_async(obd, inode, oti->oti_handle,
+                                                  wait_handle);
+                else
+                        rc2 = fsfilt_commit(obd, inode, oti->oti_handle, 0);
                 if (rc == 0)
                         rc = rc2;
                 if (rc != 0)
@@ -569,10 +587,11 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         int i, err, cleanup_phase = 0;
         struct obd_device *obd = exp->exp_obd;
         struct filter_obd *fo = &obd->u.filter;
-        void *wait_handle;
+        void *wait_handle = NULL;
         int total_size = 0;
-        unsigned int qcids[MAXQUOTAS] = { oa->o_uid, oa->o_gid };
-        int rec_pending[MAXQUOTAS] = { 0, 0 }, quota_pages = 0;
+        int quota_pending[2] = {0, 0}, quota_pages = 0;
+        unsigned int qcids[MAXQUOTAS] = {oa->o_uid, oa->o_gid};
+        int sync_journal_commit = obd->u.filter.fo_syncjournal;
         ENTRY;
 
         LASSERT(oti != NULL);
@@ -593,12 +612,13 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         iobuf->dr_ignore_quota = 0;
         for (i = 0, lnb = res; i < niocount; i++, lnb++) {
                 loff_t this_size;
-                __u32 flags = lnb->flags;
+
 
                 if (filter_range_is_mapped(inode, lnb->offset, lnb->len)) {
                         /* If overwriting an existing block,
                          * we don't need a grant */
-                        if (!(flags & OBD_BRW_GRANTED) && lnb->rc == -ENOSPC)
+                        if (!(lnb->flags & OBD_BRW_GRANTED) &&
+                            lnb->rc == -ENOSPC)
                                 lnb->rc = 0;
                 } else {
                         quota_pages++;
@@ -632,21 +652,22 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
                 /* if one page is a write-back page from client cache and
                  * not from direct_io, or it's written by root, then mark
-                 * the whole io request as ignore quota request, remote
-                 * client can not break through quota. */
-                if (exp_connect_rmtclient(exp))
-                        flags &= ~OBD_BRW_NOQUOTA;
-                if ((flags & OBD_BRW_NOQUOTA) ||
-                    (flags & (OBD_BRW_FROM_GRANT | OBD_BRW_SYNC)) ==
-                     OBD_BRW_FROM_GRANT)
+                 * the whole io request as ignore quota request */
+                if (lnb->flags & OBD_BRW_NOQUOTA ||
+                    (lnb->flags & (OBD_BRW_FROM_GRANT | OBD_BRW_SYNC)) ==
+                    OBD_BRW_FROM_GRANT)
                         iobuf->dr_ignore_quota = 1;
+
+                if (!(lnb->flags & OBD_BRW_ASYNC)) {
+                        sync_journal_commit = 1;
+                }
         }
 
         /* we try to get enough quota to write here, and let ldiskfs
          * decide if it is out of quota or not b=14783 */
-        rc = lquota_chkquota(filter_quota_interface_ref, obd, exp, qcids,
-                             rec_pending, quota_pages, oti, LQUOTA_FLAGS_BLK,
-                             (void *)inode, obj->ioo_bufcnt);
+        rc = lquota_chkquota(filter_quota_interface_ref, exp, qcids[0],
+                             qcids[1], quota_pages, quota_pending, oti,
+                             inode, obj->ioo_bufcnt);
         if (rc == -ENOTCONN)
                 GOTO(cleanup, rc);
 
@@ -712,7 +733,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
         /* filter_direct_io drops i_mutex */
         rc = filter_direct_io(OBD_BRW_WRITE, res->dentry, iobuf, exp, &iattr,
-                              oti, &wait_handle);
+                              oti, sync_journal_commit ? &wait_handle : NULL);
         if (rc == 0)
                 obdo_from_inode(oa, inode,
                                 FILTER_VALID_FLAGS |OBD_MD_FLUID |OBD_MD_FLGID);
@@ -723,13 +744,18 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
         fsfilt_check_slow(obd, now, "direct_io");
 
-        err = fsfilt_commit_wait(obd, inode, wait_handle);
+        if (wait_handle)
+                err = fsfilt_commit_wait(obd, inode, wait_handle);
+        else
+                err = 0;
+
         if (err) {
                 CERROR("Failure to commit OST transaction (%d)?\n", err);
-                rc = err;
+                if (rc == 0)
+                        rc = err;
         }
 
-        if (obd->obd_replayable && !rc)
+        if (obd->obd_replayable && !rc && wait_handle)
                 LASSERTF(oti->oti_transno <= obd->obd_last_committed,
                          "oti_transno "LPU64" last_committed "LPU64"\n",
                          oti->oti_transno, obd->obd_last_committed);
@@ -737,8 +763,9 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         fsfilt_check_slow(obd, now, "commitrw commit");
 
 cleanup:
-        lquota_pending_commit(filter_quota_interface_ref, obd, qcids,
-                              rec_pending, 1);
+        if (quota_pending[0] || quota_pending[1])
+                lquota_pending_commit(filter_quota_interface_ref, obd,
+                                      qcids[0], qcids[1], quota_pending);
 
         filter_grant_commit(exp, niocount, res);
 
@@ -760,16 +787,14 @@ cleanup:
         err = lquota_adjust(filter_quota_interface_ref, obd, qcids, NULL, rc,
                             FSFILT_OP_CREATE);
         CDEBUG(err ? D_ERROR : D_QUOTA, "filter adjust qunit! "
-               "(rc:%d, uid:%u, gid:%u)\n",
-               err, qcids[USRQUOTA], qcids[GRPQUOTA]);
+               "(rc:%d, uid:%u, gid:%u)\n", err, qcids[0], qcids[1]);
         if (qcids[USRQUOTA] != oa->o_uid || qcids[GRPQUOTA] != oa->o_gid) {
-                qcids[USRQUOTA] = oa->o_uid;
-                qcids[GRPQUOTA] = oa->o_gid;
+                qcids[0] = oa->o_uid;
+                qcids[1] = oa->o_gid;
                 err = lquota_adjust(filter_quota_interface_ref, obd, qcids,
                                     NULL, rc, FSFILT_OP_CREATE);
                 CDEBUG(err ? D_ERROR : D_QUOTA, "filter adjust qunit! "
-                       "(rc:%d, uid:%u, gid:%u)\n",
-                       err, qcids[USRQUOTA], qcids[GRPQUOTA]);
+                       "(rc:%d, uid:%u, gid:%u)\n", err, qcids[0], qcids[1]);
         }
 
         for (i = 0, lnb = res; i < niocount; i++, lnb++) {
@@ -789,7 +814,6 @@ cleanup:
                 page_cache_release(lnb->page);
                 lnb->page = NULL;
         }
-        f_dput(res->dentry);
 
         if (inode) {
                 if (fo->fo_writethrough_cache == 0 ||
@@ -797,6 +821,7 @@ cleanup:
                         filter_release_cache(obd, obj, nb, inode);
                 up_read(&inode->i_alloc_sem);
         }
+        f_dput(res->dentry);
 
         RETURN(rc);
 }

@@ -47,6 +47,8 @@
 
 #if !defined(HAVE_LINUX_FIEMAP_H) || !defined(__KERNEL__)
 
+#include <linux/lustre_types.h>
+
 struct ll_fiemap_extent {
         __u64 fe_logical;  /* logical offset in bytes for the start of
                             * the extent from the beginning of the file */
@@ -121,9 +123,6 @@ static inline unsigned fiemap_size_to_count(size_t array_size)
 #ifdef FIEMAP_FLAGS_COMPAT
 #undef FIEMAP_FLAGS_COMPAT
 #endif
-
-#define FIEMAP_FLAGS_COMPAT    (FIEMAP_FLAG_SYNC | FIEMAP_FLAG_XATTR | \
-                                FIEMAP_FLAG_DEVICE_ORDER)
 
 /* Lustre specific flags - use a high bit, don't conflict with upstream flag */
 #define FIEMAP_EXTENT_NO_DIRECT         0x40000000 /* Data mapping undefined */

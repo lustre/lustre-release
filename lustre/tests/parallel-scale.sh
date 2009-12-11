@@ -7,15 +7,12 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
-#              bug 20670           21255 
-ALWAYS_EXCEPT="parallel_grouplock  statahead $PARALLEL_SCALE_EXCEPT"
-
 #
 # compilbench
 #
 cbench_DIR=${cbench_DIR:-""}
-cbench_IDIRS=${cbench_IDIRS:-4}
-cbench_RUNS=${cbench_RUNS:-4}	# FIXME: wiki page requirements is 30, do we really need 30 ?
+cbench_IDIRS=${cbench_IDIRS:-10}
+cbench_RUNS=${cbench_RUNS:-10}	# FIXME: wiki page requirements is 30, do we really need 30 ?
 
 if [ "$SLOW" = "no" ]; then
     cbench_IDIRS=2
@@ -93,10 +90,6 @@ parallel_grouplock_MINTASKS=${parallel_grouplock_MINTASKS:-5}
 
 build_test_filter
 check_and_setup_lustre
-
-get_mpiuser_id $MPI_USER
-MPI_RUNAS=${MPI_RUNAS:-"runas -u $MPI_USER_UID -g $MPI_USER_GID"}
-$GSS_KRB5 && refresh_krb5_tgt $MPI_USER_UID $MPI_USER_GID $MPI_RUNAS
 
 print_opts () {
     local var

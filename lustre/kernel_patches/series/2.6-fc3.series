@@ -21,5 +21,3 @@ uml-exprt-clearuser.patch
 fsprivate-2.6.patch
 linux-2.6.9-ext3-sub-second-timestamp.patch 
 bitops_ext2_find_next_le_bit-2.6.patch 
-dynamic-locks-common.patch
-dynamic-locks-2.6-fc3.patch 

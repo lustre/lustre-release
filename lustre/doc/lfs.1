@@ -1,13 +1,9 @@
-.TH lfs 1 "2009 Jan 29" Lustre "user utilities"
+.TH lfs 1 "2008 Mar 15" Lustre "user utilities"
 .SH NAME
 lfs \- Lustre utility to create a file with specific striping pattern, find the striping pattern of existing files
 .SH SYNOPSIS
 .br
 .B lfs
-.br
-.B lfs changelog [--follow] <mdtname> [startrec [endrec]]
-.br
-.B lfs changelog_clear <mdtname> <id> <endrec>
 .br
 .B lfs check <mds|osts|servers>
 .br
@@ -36,7 +32,7 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs poollist <filesystem>[.<pool>] | <pathname>
 .br
-.B lfs quota [-v] [-o obd_uuid|-I ost_idx|-i mdt_idx] [-u <uname>| -u <uid>|-g <gname>| -g <gid>] <filesystem>
+.B lfs quota [-v] [-o obd_uuid] [<-u|-g> <uname>|<uid>|<gname><gid>] <filesystem>
 .br
 .B lfs quota -t <-u|-g> <filesystem>
 .br
@@ -74,18 +70,9 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .B lfs help
 .SH DESCRIPTION
 .B lfs
-can be used to create a new file with a specific striping pattern, determine the default striping pattern, gather the extended attributes (object numbers and location) for a specific file. It can be invoked interactively without any arguments or in a non-interactive mode with one of the arguements supported. 
+can be used to create a new file with a specific striping pattern, determine the default striping pattern, gather the extended attributes (object numbers and location) for a specific file, find files with specific attributes, list OST information, or set quota limits. It can be invoked interactively without any arguments or in a non-interactive mode with one of the arguements supported. 
 .SH OPTIONS
 The various options supported by lctl are listed and explained below:
-.TP
-.B changelog
-Show the metadata changes on an MDT.  Start and end points are optional.  The --follow option will block on new changes; this option is only valid when run direclty on the MDT node.
-.TP
-.B changelog_clear
-Indicate that changelog records previous to <endrec> are no longer of
-interest to a particular consumer <id>, potentially allowing the MDT to
-free up disk space. An <endrec> of 0 indicates the current last record.
-Changelog consumers must be registered on the MDT node using \fBlctl\fR.
 .TP
 .B check 
 Display the status of MDS or OSTs (as specified in the command) or all the servers (MDS and OSTs)
@@ -140,12 +127,6 @@ Delete the default striping on the specified directory.
 .B poollist <filesystem>[.<pool>] | <pathname>
 List the pools in \fBfilesystem\fR or \fBpathname\fR, or the OSTs in \fBfilesystem.pool\fR
 .TP
-.B quota [-v] [-o obd_uuid|-i mdt_idx|-I ost_idx] [-u|-g <uname>|<uid>|<gname>|<gid>] <filesystem>
-To display disk usage and limits, either for the full filesystem, or for objects on a specific obd. A user or group name or an ID can be specified. If both user and group are omitted quotas for current uid/gid are shown. -v provides more verbose (with per-obd statistics) output.
-.TP
-.B quota -t <-u|-g> <filesystem>
-To display block and inode grace times for user (-u) or group (-g) quotas
-.TP
 .B quotachown
 To change files' owner and group on OSTs of the specified filesystem
 .TP
@@ -164,8 +145,14 @@ Clear quota files (administrative quota files if used without -f, operational qu
 .B setquota  <-u|-g> <uname>|<uid>|<gname>|<gid> [--block-softlimit <block-softlimit>] [--block-hardlimit <block-hardlimit>] [--inode-softlimit <inode-softlimit>] [--inode-hardlimit <inode-hardlimit>] <filesystem>
 To set filesystem quotas for users or groups. Limits can be specified with -b, -k, -m, -g, -t, -p suffixes which specify units of 1, 2^10, 2^20, 2^30, 2^40 and 2^50 accordingly. Block limits unit is kilobyte (1024) by default and block limits are always kilobyte-grained (even if specified in bytes), see EXAMPLES
 .TP
-.B setquota -t [-u|-g] [--block-grace <block-grace>] [--inode-grace <inode-grace>] <filesystem>
+.B setquota -t <-u|-g> [--block-grace <block-grace>] [--inode-grace <inode-grace>] <filesystem>
 To set filesystem quota grace times for users or groups. Grace time is specified in "XXwXXdXXhXXmXXs" format or as an integer seconds value, see EXAMPLES
+.TP
+.B quota [-v] [-o obd_uuid] [ -u|-g <uname|uid|gname|gid> ] <filesystem>
+To display disk usage and limits, either for the full filesystem, or for objects on a specific obd. A user or group name or an ID can be specified. If both user and group are omitted quotas for current uid/gid are shown. -v provides more verbose (with per-obd statistics) output.
+.TP
+.B quota -t <-u|-g> <filesystem>
+To display block and inode grace times for user (-u) or group (-g) quotas
 .TP
 .B help 
 Provides brief help on the various arguments
@@ -207,12 +194,6 @@ Lists inode usage per OST and MDT
 .B $ lfs df --pool <filesystem>[.<pool>] | <pathname>
 List space or inode usage for a specific OST pool
 .TP
-.B $ lfs quota -u bob /mnt/lustre
-List quotas of user `bob'
-.TP
-.B $ lfs quota -t -u /mnt/lustre
-Show grace times for user quotas on /mnt/lustre
-.TP
 .B $ lfs quotachown -i /mnt/lustre
 Change file owner and group
 .TP
@@ -230,6 +211,12 @@ Set quotas of user `bob': 1GB block quota hardlimit and 2 GB block quota softlim
 .TP
 .B $ lfs setquota -t -u --block-grace 1000 --inode-grace 1w4d /mnt/lustre
 Set grace times for user quotas: 1000 seconds for block quotas, 1 week and 4 days for inode quotas
+.TP
+.B $ lfs quota -u bob /mnt/lustre
+List quotas of user `bob'
+.TP
+.B $ lfs quota -t -u /mnt/lustre
+Show grace times for user quotas on /mnt/lustre
 .SH BUGS
 The \fBlfs find\fR command isn't as comprehensive as \fBfind\fR(1).
 Report bugs using http://bugzilla.lustre.org.

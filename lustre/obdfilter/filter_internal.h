@@ -40,6 +40,7 @@
 #ifdef __KERNEL__
 # include <linux/spinlock.h>
 #endif
+#include <lustre_disk.h>
 #include <lustre_handles.h>
 #include <lustre_debug.h>
 #include <obd.h>
@@ -49,8 +50,8 @@
 
 #define FILTER_INIT_OBJID 0
 
-#define FILTER_SUBDIR_COUNT 32 /* set to zero for no subdirs */
-#define FILTER_GROUPS        3 /* must be at least 3; not dynamic yet */
+#define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
+#define FILTER_GROUPS 3 /* must be at least 3; not dynamic yet */
 
 #define FILTER_ROCOMPAT_SUPP (0)
 
@@ -119,10 +120,6 @@ enum {
 #define OBDFILTER_CREATED_SCRATCHPAD_ENTRIES 1024
 extern int *obdfilter_created_scratchpad;
 
-extern void target_recovery_fini(struct obd_device *obd);
-extern void target_recovery_init(struct lu_target *lut,
-                                 svc_handler_t handler);
-
 /* filter.c */
 void f_dput(struct dentry *);
 struct dentry *filter_fid2dentry(struct obd_device *, struct dentry *dir,
@@ -138,21 +135,20 @@ __u64 filter_last_id(struct filter_obd *, obd_gr group);
 int filter_update_fidea(struct obd_export *exp, struct inode *inode,
                         void *handle, struct obdo *oa);
 int filter_update_server_data(struct obd_device *, struct file *,
-                              struct lr_server_data *);
+                              struct lr_server_data *, int force_sync);
 int filter_update_last_objid(struct obd_device *, obd_gr, int force_sync);
-int filter_common_setup(struct obd_device *, struct lustre_cfg *lcfg,
+int filter_common_setup(struct obd_device *, obd_count len, void *buf,
                         void *option);
 int filter_destroy(struct obd_export *exp, struct obdo *oa,
                    struct lov_stripe_md *md, struct obd_trans_info *,
-                   struct obd_export *, void *);
+                   struct obd_export *);
 int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                             struct obdo *oa, struct obd_trans_info *oti);
 int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
                    struct obd_trans_info *oti);
+int filter_recreate(struct obd_device *obd, struct obdo *oa);
 
 struct dentry *filter_create_object(struct obd_device *obd, struct obdo *oa);
-
-struct obd_llog_group *filter_find_olg(struct obd_device *obd, int group);
 
 /* filter_lvb.c */
 extern struct ldlm_valblock_ops filter_lvbo;
@@ -161,8 +157,7 @@ extern struct ldlm_valblock_ops filter_lvbo;
 /* filter_io.c */
 int filter_preprw(int cmd, struct obd_export *, struct obdo *, int objcount,
                   struct obd_ioobj *, struct niobuf_remote *,
-                  int *, struct niobuf_local *, struct obd_trans_info *,
-                  struct lustre_capa *);
+                  int *, struct niobuf_local *, struct obd_trans_info *);
 int filter_commitrw(int cmd, struct obd_export *, struct obdo *, int objcount,
                     struct obd_ioobj *, struct niobuf_remote *,  int,
                     struct niobuf_local *, struct obd_trans_info *, int rc);
@@ -179,7 +174,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                           int rc);
 obd_size filter_grant_space_left(struct obd_export *exp);
 long filter_grant(struct obd_export *exp, obd_size current_grant,
-                  obd_size want, obd_size fs_space_left, int conservative);
+                  obd_size want, obd_size fs_space_left);
 void filter_grant_commit(struct obd_export *exp, int niocount,
                          struct niobuf_local *res);
 void filter_grant_incoming(struct obd_export *exp, struct obdo *oa);
@@ -202,7 +197,7 @@ struct ost_filterdata {
 };
 int filter_log_sz_change(struct llog_handle *cathandle,
                          struct ll_fid *mds_fid,
-                         __u32 ioepoch,
+                         __u32 io_epoch,
                          struct llog_cookie *logcookie,
                          struct inode *inode);
 //int filter_get_catalog(struct obd_device *);
@@ -230,15 +225,5 @@ static void lprocfs_filter_init_vars(struct lprocfs_static_vars *lvars)
 /* Quota stuff */
 extern quota_interface_t *filter_quota_interface_ref;
 
-int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key);
-int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, obd_gr group,
-                     struct lustre_capa *capa, __u64 opc);
-int filter_capa_fixoa(struct obd_export *exp, struct obdo *oa, obd_gr group,
-                      struct lustre_capa *capa);
-void filter_free_capa_keys(struct filter_obd *filter);
-
-void blacklist_add(uid_t uid);
-void blacklist_del(uid_t uid);
-int blacklist_display(char *buf, int bufsize);
 
 #endif /* _FILTER_INTERNAL_H */

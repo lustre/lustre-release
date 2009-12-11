@@ -17,13 +17,13 @@ raid5-stripe-by-stripe-handling-rhel5.patch
 raid5-merge-ios-rhel5.patch
 raid5-zerocopy-rhel5.patch
 md-rebuild-policy.patch
+md-soft-lockups.patch
 jbd-journal-chksum-2.6.18-vanilla.patch
 quota-large-limits-rhel5.patch
-raid5-mmp-unplug-dev.patch
-small-fixes-about-jbd.patch
+md-mmp-unplug-dev.patch
+prune-icache-use-trylock-rhel5.patch
 jbd-slab-race-2.6-rhel5.patch
 mpt-fusion-max-sge.patch
-prune-icache-use-trylock-rhel5.patch
 jbd2-jcberr-2.6-rhel5.patch
 jbd2-commit-timer-no-jiffies-rounding.diff
 md-avoid-bug_on-when-bmc-overflow.patch

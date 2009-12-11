@@ -45,12 +45,13 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <sys/vfs.h>
+#include <sys/time.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <semaphore.h>
-#include <libcfs/libcfs.h>
 #include <lustre/liblustreapi.h>
+#include <time.h>
 
 #define T1 "write data before unlink\n"
 #define T2 "write data after unlink\n"
@@ -59,10 +60,12 @@ char *buf, *buf_align;
 int bufsize = 0;
 sem_t sem;
 #define ALIGN 65535
+#define MAX_SHIFT 4096
 
-char usage[] =
+char usage[] = 
 "Usage: %s filename command-sequence\n"
 "    command-sequence items:\n"
+"        b[num] write optional length from random in-memory offset\n"
 "        c  close\n"
 "        C[num] create with optional stripes\n"
 "        d  mkdir\n"
@@ -83,7 +86,6 @@ char usage[] =
 "        T[num] ftruncate [optional position, default 0]\n"
 "        u  unlink\n"
 "        U  munmap\n"
-"        v  verbose\n"
 "        w[num] write optional length\n"
 "        W  write entire mmap-ed region\n"
 "        y  fsync\n"
@@ -181,6 +183,7 @@ int get_flags(char *data, int *rflags)
 }
 
 #define POP_ARG() (pop_arg(argc, argv))
+#define min(a,b) ((a)>(b)?(b):(a))
 
 int main(int argc, char **argv)
 {
@@ -205,6 +208,7 @@ int main(int argc, char **argv)
         /* use sigaction instead of signal to avoid SA_ONESHOT semantics */
         sigaction(SIGUSR1, &(const struct sigaction){.sa_handler = &usr1_handler},
                   NULL);
+        srandom(time(NULL));
 
         fname = argv[1];
 
@@ -356,8 +360,6 @@ int main(int argc, char **argv)
                                         fprintf(stderr, "short read: %u/%u\n",
                                                 rc, len);
                                 len -= rc;
-                                if (verbose >= 2)
-                                        printf("%.*s\n", rc, buf_align);
                         }
                         break;
                 case 'R':
@@ -409,14 +411,17 @@ int main(int argc, char **argv)
                         }
                         break;
                 case 'v':
-                        verbose++;
+                        verbose = 1;
                         break;
+                case 'b':
                 case 'w':
                         len = atoi(commands+1);
                         if (len <= 0)
                                 len = 1;
                         if (bufsize < len) {
-                                buf = realloc(buf, len + ALIGN);
+                                int shift = (*commands == 'b') ?
+                                            (random() % MAX_SHIFT) : 0;
+                                buf = realloc(buf, len + ALIGN + shift);
                                 if (buf == NULL) {
                                         save_errno = errno;
                                         perror("allocating buf for write\n");
@@ -424,7 +429,7 @@ int main(int argc, char **argv)
                                 }
                                 bufsize = len;
                                 buf_align = (char *)((long)(buf + ALIGN) &
-                                                     ~ALIGN);
+                                                     ~ALIGN) + shift;
                                 strncpy(buf_align, msg, bufsize);
                         }
                         while (len > 0) {

@@ -101,9 +101,8 @@
 # include <lustre_dlm.h>
 #else
 # include <liblustre.h>
+# include <libcfs/kp30.h>
 #endif
-
-#include <cl_object.h>
 
 #include <obd_class.h>
 #include <obd_support.h>
@@ -128,7 +127,9 @@
 
 /*
  * This controls the speed of reaching LDLM_POOL_MAX_GSP
- * with increasing thread period.
+ * with increasing thread period. This is 4s which means
+ * that for 10s thread period we will have 2 steps by 4s
+ * each.
  */
 #define LDLM_POOL_GSP_STEP (4)
 
@@ -364,7 +365,6 @@ static int ldlm_srv_pool_recalc(struct ldlm_pool *pl)
                 lprocfs_counter_add(pl->pl_stats, LDLM_POOL_TIMING_STAT,
                                     recalc_interval_sec);
         }
-
         spin_unlock(&pl->pl_lock);
         RETURN(0);
 }
@@ -507,7 +507,7 @@ static int ldlm_cli_pool_recalc(struct ldlm_pool *pl)
          * It may be called when SLV has changed much, this is why we do not
          * take into account pl->pl_recalc_time here.
          */
-        RETURN(ldlm_cancel_lru(ldlm_pl2ns(pl), 0, LDLM_SYNC, 
+        RETURN(ldlm_cancel_lru(ldlm_pl2ns(pl), 0, LDLM_SYNC,
                                LDLM_CANCEL_LRUR));
 }
 
@@ -528,7 +528,7 @@ static int ldlm_cli_pool_shrink(struct ldlm_pool *pl,
          * Do not cancel locks in case lru resize is disabled for this ns.
          */
         if (!ns_connect_lru_resize(ns))
-                RETURN(0);
+                return 0;
 
         /*
          * Make sure that pool knows last SLV and Limit from obd.
@@ -538,9 +538,9 @@ static int ldlm_cli_pool_shrink(struct ldlm_pool *pl,
         spin_lock(&ns->ns_unused_lock);
         unused = ns->ns_nr_unused;
         spin_unlock(&ns->ns_unused_lock);
-        
+
         if (nr) {
-                canceled = ldlm_cancel_lru(ns, nr, LDLM_SYNC, 
+                canceled = ldlm_cancel_lru(ns, nr, LDLM_SYNC,
                                            LDLM_CANCEL_SHRINK);
         }
 #ifdef __KERNEL__
@@ -911,12 +911,12 @@ void ldlm_pool_add(struct ldlm_pool *pl, struct ldlm_lock *lock)
                 return;
         ENTRY;
 
-        LDLM_DEBUG(lock, "add lock to pool");
         atomic_inc(&pl->pl_granted);
         atomic_inc(&pl->pl_grant_rate);
         atomic_inc(&pl->pl_grant_speed);
 
         lprocfs_counter_incr(pl->pl_stats, LDLM_POOL_GRANT_STAT);
+
         /*
          * Do not do pool recalc for client side as all locks which
          * potentially may be canceled has already been packed into
@@ -941,7 +941,6 @@ void ldlm_pool_del(struct ldlm_pool *pl, struct ldlm_lock *lock)
                 return;
         ENTRY;
 
-        LDLM_DEBUG(lock, "del lock from pool");
         LASSERT(atomic_read(&pl->pl_granted) > 0);
         atomic_dec(&pl->pl_granted);
         atomic_inc(&pl->pl_cancel_rate);
@@ -1059,15 +1058,13 @@ static int ldlm_pools_shrink(ldlm_side_t client, int nr,
 {
         int total = 0, cached = 0, nr_ns;
         struct ldlm_namespace *ns;
-        void *cookie;
 
         if (nr != 0 && !(gfp_mask & __GFP_FS))
                 return -1;
 
-        CDEBUG(D_DLMTRACE, "Request to shrink %d %s locks from all pools\n",
-               nr, client == LDLM_NAMESPACE_CLIENT ? "client" : "server");
-
-        cookie = cl_env_reenter();
+        if (nr != 0)
+                CDEBUG(D_DLMTRACE, "Request to shrink %d %s locks\n",
+                       nr, client == LDLM_NAMESPACE_CLIENT ? "client":"server");
 
         /*
          * Find out how many resources we may release.
@@ -1078,7 +1075,6 @@ static int ldlm_pools_shrink(ldlm_side_t client, int nr,
                 mutex_down(ldlm_namespace_lock(client));
                 if (list_empty(ldlm_namespace_list(client))) {
                         mutex_up(ldlm_namespace_lock(client));
-                        cl_env_reexit(cookie);
                         return 0;
                 }
                 ns = ldlm_namespace_first_locked(client);
@@ -1089,10 +1085,8 @@ static int ldlm_pools_shrink(ldlm_side_t client, int nr,
                 ldlm_namespace_put(ns, 1);
         }
 
-        if (nr == 0 || total == 0) {
-                cl_env_reexit(cookie);
+        if (nr == 0 || total == 0)
                 return total;
-        }
 
         /*
          * Shrink at least ldlm_namespace_nr(client) namespaces.
@@ -1127,7 +1121,6 @@ static int ldlm_pools_shrink(ldlm_side_t client, int nr,
                 cached += ldlm_pool_granted(&ns->ns_pool);
                 ldlm_namespace_put(ns, 1);
         }
-        cl_env_reexit(cookie);
         return cached;
 }
 

@@ -44,7 +44,7 @@
 #define __LST_CONRPC_H__
 
 #ifdef __KERNEL__
-#include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-types.h>
 #include <lnet/lnetst.h>

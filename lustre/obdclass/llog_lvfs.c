@@ -103,12 +103,11 @@ static int llog_lvfs_write_blob(struct obd_device *obd, struct l_file *file,
         struct llog_rec_tail end;
         loff_t saved_off = file->f_pos;
         int buflen = rec->lrh_len;
-
         ENTRY;
 
         file->f_pos = off;
 
-        if (buflen == 0)
+        if (buflen == 0) 
                 CWARN("0-length record\n");
 
         if (!buf) {
@@ -176,7 +175,7 @@ static int llog_lvfs_read_header(struct llog_handle *handle)
         obd = handle->lgh_ctxt->loc_exp->exp_obd;
 
         if (i_size_read(handle->lgh_file->f_dentry->d_inode) == 0) {
-                CDEBUG(D_HA, "not reading header from 0-byte log\n");
+                CDEBUG(D_RPCTRACE, "not reading header from 0-byte log\n");
                 RETURN(LLOG_EEMPTY);
         }
 
@@ -244,9 +243,9 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 RETURN(rc);
 
         if (buf)
-                /* write_blob adds header and tail to lrh_len. */
-                reclen = sizeof(*rec) + rec->lrh_len +
-                         sizeof(struct llog_rec_tail);
+                /* write_blob adds header and tail to lrh_len. */ 
+                reclen = sizeof(*rec) + rec->lrh_len + 
+                        sizeof(struct llog_rec_tail);
 
         if (idx != -1) {
                 loff_t saved_offset;
@@ -260,7 +259,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 if (idx && llh->llh_size && llh->llh_size != rec->lrh_len)
                         RETURN(-EINVAL);
 
-                if (!ext2_test_bit(idx, llh->llh_bitmap))
+                if (!ext2_test_bit(idx, llh->llh_bitmap)) 
                         CERROR("Modify unset record %u\n", idx);
                 if (idx != rec->lrh_index)
                         CERROR("Index mismatch %d %u\n", idx, rec->lrh_index);
@@ -290,13 +289,13 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                                 RETURN(-EFAULT);
                         }
 #if 1  /* FIXME remove this safety check at some point */
-                        /* Verify that the record we're modifying is the
+                        /* Verify that the record we're modifying is the 
                            right one. */
                         rc = llog_lvfs_read_blob(obd, file, &check,
                                                  sizeof(check), saved_offset);
                         if (check.lrh_index != idx || check.lrh_len != reclen) {
                                 CERROR("Bad modify idx %u/%u size %u/%u (%d)\n",
-                                       idx, check.lrh_index, reclen,
+                                       idx, check.lrh_index, reclen, 
                                        check.lrh_len, rc);
                                 RETURN(-EFAULT);
                         }
@@ -324,18 +323,16 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         /* NOTE: padding is a record, but no bit is set */
         if (left != 0 && left != reclen &&
             left < (reclen + LLOG_MIN_REC_SIZE)) {
-                 index = loghandle->lgh_last_idx + 1;
-                 rc = llog_lvfs_pad(obd, file, left, index);
-                 if (rc)
-                         RETURN(rc);
-                 loghandle->lgh_last_idx++; /*for pad rec*/
-         }
-         /* if it's the last idx in log file, then return -ENOSPC */
-         if (loghandle->lgh_last_idx >= LLOG_BITMAP_SIZE(llh) - 1)
-                 RETURN(-ENOSPC);
-        loghandle->lgh_last_idx++;
-        index = loghandle->lgh_last_idx;
-        LASSERT(index < LLOG_BITMAP_SIZE(llh));
+                index = loghandle->lgh_last_idx + 1;
+                rc = llog_lvfs_pad(obd, file, left, index);
+                if (rc)
+                        RETURN(rc);
+                loghandle->lgh_last_idx++; /*for pad rec*/
+        }
+        /* if it's the last idx in log file, then return -ENOSPC */
+        if (loghandle->lgh_last_idx >= LLOG_BITMAP_SIZE(llh) - 1)
+                RETURN(-ENOSPC);
+        index = ++loghandle->lgh_last_idx;
         rec->lrh_index = index;
         if (buf == NULL) {
                 lrt = (struct llog_rec_tail *)
@@ -361,14 +358,13 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_RPCTRACE, "added record "LPX64": idx: %u, %u \n",
+        CDEBUG(D_RPCTRACE, "added record "LPX64": idx: %u, %u bytes\n",
                loghandle->lgh_id.lgl_oid, index, rec->lrh_len);
         if (rc == 0 && reccookie) {
                 reccookie->lgc_lgl = loghandle->lgh_id;
                 reccookie->lgc_index = index;
-                if ((rec->lrh_type == MDS_UNLINK_REC) ||
-                    (rec->lrh_type == MDS_SETATTR_REC) ||
-                    (rec->lrh_type == MDS_SETATTR64_REC))
+                if ((rec->lrh_type == MDS_UNLINK_REC) || 
+                                (rec->lrh_type == MDS_SETATTR_REC))
                         reccookie->lgc_subsys = LLOG_MDS_OST_ORIG_CTXT;
                 else if (rec->lrh_type == OST_SZ_REC)
                         reccookie->lgc_subsys = LLOG_SIZE_ORIG_CTXT;
@@ -440,7 +436,7 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
                 /* put number of bytes read into rc to make code simpler */
                 rc = ppos - *cur_offset;
                 *cur_offset = ppos;
-
+                
                 if (rc < len) {
                         /* signal the end of the valid buffer to llog_process */
                         memset(buf + rc, 0, len - rc);
@@ -639,8 +635,16 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 handle->lgh_id = *logid;
 
         } else if (name) {
-                handle->lgh_file = llog_filp_open(MOUNT_CONFIGS_DIR,
-                                                  name, open_flags, 0644);
+                /* COMPAT_146 */
+                if (strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME) == 0) {
+                        handle->lgh_file = llog_filp_open(MDT_LOGS_DIR, name, 
+                                                          open_flags, 0644);
+                } else {
+                        /* end COMPAT_146 */
+                        handle->lgh_file = llog_filp_open(MOUNT_CONFIGS_DIR,
+                                                          name, open_flags, 
+                                                          0644);
+                }
                 if (IS_ERR(handle->lgh_file))
                         GOTO(out, rc = PTR_ERR(handle->lgh_file));
 
@@ -666,7 +670,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
 
                 if (IS_ERR(dchild))
                         GOTO(out, rc = PTR_ERR(dchild));
-
+                
                 handle->lgh_file = l_dentry_open(&obd->obd_lvfs_ctxt, dchild,
                                                  open_flags);
                 if (IS_ERR(handle->lgh_file))
@@ -678,7 +682,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         }
 
         handle->lgh_ctxt = ctxt;
-out:
+ out:
         if (rc)
                 llog_free_handle(handle);
 
@@ -707,7 +711,12 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         int rc;
         ENTRY;
 
-        dir = MOUNT_CONFIGS_DIR;
+        /* COMPAT_146 */
+        if (strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME) == 0)
+                dir = MDT_LOGS_DIR;
+        else
+                /* end COMPAT_146 */
+                dir = MOUNT_CONFIGS_DIR;
 
         fdentry = handle->lgh_file->f_dentry;
         if (strcmp(fdentry->d_parent->d_name.name, dir) == 0) {
@@ -720,7 +729,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
                 rc = llog_lvfs_close(handle);
 
                 if (rc == 0) {
-                        LOCK_INODE_MUTEX_PARENT(inode);
+                        LOCK_INODE_MUTEX(inode);
                         rc = ll_vfs_unlink(inode, fdentry, mnt);
                         UNLOCK_INODE_MUTEX(inode);
                 }
@@ -744,14 +753,14 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         if (rc)
                 GOTO(out, rc);
 
-        rc = obd_destroy(handle->lgh_ctxt->loc_exp, oa, NULL, NULL, NULL, NULL);
+        rc = obd_destroy(handle->lgh_ctxt->loc_exp, oa, NULL, NULL, NULL);
  out:
         OBDO_FREE(oa);
         RETURN(rc);
 }
 
 /* reads the catalog list */
-int llog_get_cat_list(struct obd_device *disk_obd,
+int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                       char *name, int idx, int count, struct llog_catid *idarray)
 {
         struct lvfs_run_ctxt saved;
@@ -761,10 +770,12 @@ int llog_get_cat_list(struct obd_device *disk_obd,
         loff_t off = idx *  sizeof(*idarray);
         ENTRY;
 
-        if (!count)
+        if (!count) 
                 RETURN(0);
 
-        push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+        LASSERT_SEM_LOCKED(&obd->obd_llog_cat_process);
+
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
         if (!file || IS_ERR(file)) {
                 rc = PTR_ERR(file);
@@ -782,8 +793,8 @@ int llog_get_cat_list(struct obd_device *disk_obd,
         CDEBUG(D_CONFIG, "cat list: disk size=%d, read=%d\n",
                (int)i_size_read(file->f_dentry->d_inode), size);
 
-        /* read for new ost index or for empty file */
         memset(idarray, 0, size);
+        /* read for new ost index or for empty file */
         if (i_size_read(file->f_dentry->d_inode) < off)
                 GOTO(out, rc = 0);
 
@@ -795,7 +806,7 @@ int llog_get_cat_list(struct obd_device *disk_obd,
 
         EXIT;
  out:
-        pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (file && !IS_ERR(file))
                 rc1 = filp_close(file, 0);
         if (rc == 0)
@@ -805,7 +816,7 @@ int llog_get_cat_list(struct obd_device *disk_obd,
 EXPORT_SYMBOL(llog_get_cat_list);
 
 /* writes the cat list */
-int llog_put_cat_list(struct obd_device *disk_obd,
+int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                       char *name, int idx, int count, struct llog_catid *idarray)
 {
         struct lvfs_run_ctxt saved;
@@ -817,7 +828,8 @@ int llog_put_cat_list(struct obd_device *disk_obd,
         if (!count)
                 GOTO(out1, rc = 0);
 
-        push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+        LASSERT_SEM_LOCKED(&obd->obd_llog_cat_process);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
         if (!file || IS_ERR(file)) {
                 rc = PTR_ERR(file);
@@ -840,7 +852,7 @@ int llog_put_cat_list(struct obd_device *disk_obd,
         }
 
 out:
-        pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (file && !IS_ERR(file))
                 rc1 = filp_close(file, 0);
 
@@ -915,14 +927,14 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         return 0;
 }
 
-int llog_get_cat_list(struct obd_device *disk_obd,
+int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                       char *name, int idx, int count, struct llog_catid *idarray)
 {
         LBUG();
         return 0;
 }
 
-int llog_put_cat_list(struct obd_device *disk_obd,
+int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                       char *name, int idx, int count, struct llog_catid *idarray)
 {
         LBUG();

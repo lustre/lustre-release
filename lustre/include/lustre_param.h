@@ -45,7 +45,6 @@
 
 /* obd_config.c */
 int class_find_param(char *buf, char *key, char **valp);
-int class_get_next_param(char **params, char *copy);
 int class_match_param(char *buf, char *key, char **valp);
 int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh);
 /* obd_mount.c */
@@ -76,19 +75,15 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 #define PARAM_FAILNODE             "failover.node="    /* llog generation */
 #define PARAM_FAILMODE             "failover.mode="    /* llog generation */
 #define PARAM_ACTIVE               "active="           /* llog generation */
+#define PARAM_MDT_UPCALL           "mdt.group_upcall=" /* mds group upcall */
 
 /* Prefixes for parameters handled by obd's proc methods (XXX_process_config) */
 #define PARAM_OST                  "ost."
 #define PARAM_OSC                  "osc."
 #define PARAM_MDT                  "mdt."
-#define PARAM_MDD                  "mdd."
 #define PARAM_MDC                  "mdc."
 #define PARAM_LLITE                "llite."
 #define PARAM_LOV                  "lov."
 #define PARAM_SYS                  "sys."              /* global */
-#define PARAM_SRPC                 "srpc."
-#define PARAM_SRPC_FLVR            "srpc.flavor."
-#define PARAM_SRPC_UDESC           "srpc.udesc.cli2mdt"
-#define PARAM_SEC                  "security."
 
 #endif /* _LUSTRE_PARAM_H */

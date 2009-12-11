@@ -40,12 +40,38 @@
 
 #define __USE_FILE_OFFSET64
 #ifndef _GNU_SOURCE
-#define  _GNU_SOURCE
+#define _GNU_SOURCE
 #endif
 
-#include <libcfs/libcfsutil.h>
-#include <lnet/lnetctl.h>
+#include <stdio.h>
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
+#endif
+#include <stdlib.h>
+#include <string.h>
+#ifdef HAVE_SYS_IOCTL_H
+#include <sys/ioctl.h>
+#endif
+#ifndef _IOWR
+#include "ioctl.h"
+#endif
+#include <fcntl.h>
+#include <errno.h>
+#include <unistd.h>
+#include <assert.h>
 
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <sys/utsname.h>
+
+#include <lnet/api-support.h>
+#include <lnet/lnetctl.h>
+#include <libcfs/portals_utils.h>
+#include "parser.h"
+
+#include <time.h>
 
 static char rawbuf[8192];
 static char *buf = rawbuf;
@@ -63,7 +89,7 @@ static const char *libcfs_debug_subsystems[] =
          "pinger", "filter", "", "echo",
          "ldlm", "lov", "lquota", "",
          "", "", "", "lmv",
-         "", "sec", "gss", "", 
+         "", "sec", "gss", "",
          "mgc", "mgs", "fid", "fld", NULL};
 static const char *libcfs_debug_masks[] =
         {"trace", "inode", "super", "ext2",
@@ -73,6 +99,17 @@ static const char *libcfs_debug_masks[] =
          "dlmtrace", "error", "emerg", "ha",
          "rpctrace", "vfstrace", "reada", "mmap",
          "config", "console", "quota", "sec", NULL};
+
+struct debug_daemon_cmd {
+        char *cmd;
+        unsigned int cmdv;
+};
+
+static const struct debug_daemon_cmd libcfs_debug_daemon_cmd[] = {
+        {"start", DEBUG_DAEMON_START},
+        {"stop", DEBUG_DAEMON_STOP},
+        {0, 0}
+};
 
 #ifdef __linux__
 
@@ -147,40 +184,6 @@ dbg_write_cmd(int fd, char *str, int len)
                         sysctl_name, str, errno);
         }
         return (rc == 0 ? 0: 1);
-}
-
-#elif defined(__WINNT__)
-
-#define DAEMON_CTL_NAME         "/proc/sys/lnet/daemon_file"
-#define SUBSYS_DEBUG_CTL_NAME   "/proc/sys/lnet/subsystem_debug"
-#define DEBUG_CTL_NAME          "/proc/sys/lnet/debug"
-#define DUMP_KERNEL_CTL_NAME    "/proc/sys/lnet/dump_kernel"
-
-static int
-dbg_open_ctlhandle(const char *str)
-{
-        int fd;
-        fd = cfs_proc_open((char *)str, (int)O_WRONLY);
-        if (fd < 0) {
-                fprintf(stderr, "open %s failed: %s\n", str,
-                        strerror(errno));
-                return -1;
-        }
-        return fd;
-}
-
-static void
-dbg_close_ctlhandle(int fd)
-{
-        cfs_proc_close(fd);
-}
-
-static int
-dbg_write_cmd(int fd, char *str, int len)
-{
-        int    rc  = cfs_proc_write(fd, str, len);
-
-        return (rc == len ? 0 : 1);
 }
 
 #else
@@ -568,7 +571,7 @@ print:
 
         printf("Debug log: %lu lines, %lu kept, %lu dropped, %lu bad.\n",
                 dropped + kept + bad, kept, dropped, bad);
-
+  
         return 0;
 }
 
@@ -600,8 +603,8 @@ int jt_dbg_debug_kernel(int argc, char **argv)
         if (argc > 1 && raw)
                 strcpy(filename, argv[1]);
         else
-                sprintf(filename, "%s"CFS_TIME_T".%u",
-			DEBUG_FILE_PATH_DEFAULT, time(NULL), getpid());
+                sprintf(filename, "/tmp/lustre-log."CFS_TIME_T".%u",
+                        time(NULL),getpid());
 
         if (stat(filename, &st) == 0 && S_ISREG(st.st_mode))
                 unlink(filename);
@@ -629,6 +632,7 @@ int jt_dbg_debug_kernel(int argc, char **argv)
         if (fdin < 0) {
                 if (errno == ENOENT) /* no dump file created */
                         return 0;
+ 
                 fprintf(stderr, "fopen(%s) failed: %s\n", filename,
                         strerror(errno));
                 return 1;
@@ -643,8 +647,8 @@ int jt_dbg_debug_kernel(int argc, char **argv)
                         return 1;
                 }
         } else {
-		fdout = fileno(stdout);
-	}
+                fdout = fileno(stdout);
+        }
 
         rc = parse_buffer(fdin, fdout);
         close(fdin);
@@ -848,7 +852,7 @@ int jt_dbg_mark_debug_buf(int argc, char **argv)
 static struct mod_paths {
         char *name, *path;
 } mod_paths[] = {
-        {"libcfs", "libcfs/libcfs"},
+        {"libcfs", "lnet/libcfs"},
         {"lnet", "lnet/lnet"},
         {"kciblnd", "lnet/klnds/ciblnd"},
         {"kgmlnd", "lnet/klnds/gmlnd"},
@@ -904,6 +908,44 @@ static struct mod_paths {
 
 static int jt_dbg_modules_2_4(int argc, char **argv)
 {
+#ifdef HAVE_LINUX_VERSION_H
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        struct mod_paths *mp;
+        char *path = "";
+        char *kernel = "linux";
+
+        if (argc >= 2)
+                path = argv[1];
+        if (argc == 3)
+                kernel = argv[2];
+        if (argc > 3) {
+                printf("%s [path] [kernel]\n", argv[0]);
+                return 0;
+        }
+
+        for (mp = mod_paths; mp->name != NULL; mp++) {
+                struct module_info info;
+                int rc;
+                size_t crap;
+                int query_module(const char *name, int which, void *buf,
+                                 size_t bufsize, size_t *ret);
+
+                rc = query_module(mp->name, QM_INFO, &info, sizeof(info),
+                                  &crap);
+                if (rc < 0) {
+                        if (errno != ENOENT)
+                                printf("query_module(%s) failed: %s\n",
+                                       mp->name, strerror(errno));
+                } else {
+                        printf("add-symbol-file %s%s%s/%s.o 0x%0lx\n", path,
+                               path[0] ? "/" : "", mp->path, mp->name,
+                               info.addr + sizeof(struct module));
+                }
+        }
+
+        return 0;
+#endif // Headers are 2.6-only
+#endif // !HAVE_LINUX_VERSION_H
         return -EINVAL;
 }
 

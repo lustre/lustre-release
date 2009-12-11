@@ -39,6 +39,7 @@
  * Author: Nathan Rutman <nathan@clusterfs.com>
  */
 
+
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
@@ -90,7 +91,6 @@ void usage(FILE *out)
                 "\t-v|--verbose: print verbose config settings\n"
                 "\t<mntopt>: one or more comma separated of:\n"
                 "\t\t(no)flock,(no)user_xattr,(no)acl\n"
-                "\t\tabort_recov: abort server recovery handling\n"
                 "\t\tnosvc: only start MGC/MGS obds\n"
                 "\t\tnomgs: only start target obds, using existing MGS\n"
                 "\t\texclude=<ostname>[:<ostname>] : colon-separated list of "
@@ -102,7 +102,7 @@ void usage(FILE *out)
         exit((out != stdout) ? EINVAL : 0);
 }
 
-static int check_mtab_entry(char *spec1, char *spec2, char *mtpt, char *type)
+static int check_mtab_entry(char *spec, char *mtpt, char *type)
 {
         FILE *fp;
         struct mntent *mnt;
@@ -112,8 +112,7 @@ static int check_mtab_entry(char *spec1, char *spec2, char *mtpt, char *type)
                 return(0);
 
         while ((mnt = getmntent(fp)) != NULL) {
-                if ((strcmp(mnt->mnt_fsname, spec1) == 0 ||
-                     strcmp(mnt->mnt_fsname, spec2) == 0) &&
+                if (strcmp(mnt->mnt_fsname, spec) == 0 &&
                         strcmp(mnt->mnt_dir, mtpt) == 0 &&
                         strcmp(mnt->mnt_type, type) == 0) {
                         endmntent(fp);
@@ -239,7 +238,6 @@ static const struct opt_map opt_map[] = {
   { "nouser",   1, 0         },      /* Forbid ordinary user to mount */
   { "noowner",  1, 0         },      /* Device owner has no special privs */
   { "_netdev",  0, 0         },      /* Device accessible only via network */
-  { "loop",     0, 0         },
   { NULL,       0, 0         }
 };
 /****************************************************************************/
@@ -264,13 +262,6 @@ static int parse_one_option(const char *check, int *flagp)
         /* Assume any unknown options are valid and pass them on.  The mount
            will fail if lmd_parse, ll_options or ldiskfs doesn't recognize it.*/
         return 0;
-}
-
-static void append_option(char *options, const char *one)
-{
-        if (*options)
-                strcat(options, ",");
-        strcat(options, one);
 }
 
 /* Replace options with subset of Lustre-specific options, and
@@ -300,8 +291,6 @@ int parse_options(char *orig_options, int *flagp)
                                         retry = MAX_RETRIES;
                                 else if (retry < 0)
                                         retry = 0;
-                        } else if (strncmp(arg, "mgssec", 6) == 0) {
-                                append_option(options, opt);
                         }
                 } else if (strncmp(opt, "force", 5) == 0) {
                         //XXX special check for 'force' option
@@ -309,7 +298,9 @@ int parse_options(char *orig_options, int *flagp)
                         printf("force: %d\n", force);
                 } else if (parse_one_option(opt, flagp) == 0) {
                         /* pass this on as an option */
-                        append_option(options, opt);
+                        if (*options)
+                                strcat(options, ",");
+                        strcat(options, opt);
                 }
         }
         strcpy(orig_options, options);
@@ -357,7 +348,7 @@ int set_blockdev_tunables(char *source)
         glob_t glob_info;
         struct stat stat_buf;
         char *chk_major, *chk_minor;
-        char *savept, *dev;
+        char *savept = NULL, *dev;
         char *ret_path;
         char buf[PATH_MAX] = {'\0'}, path[PATH_MAX] = {'\0'};
         char real_path[PATH_MAX] = {'\0'};
@@ -571,8 +562,7 @@ int main(int argc, char *const argv[])
         if (verbose) {
                 for (i = 0; i < argc; i++)
                         printf("arg[%d] = %s\n", i, argv[i]);
-                printf("source = %s (%s), target = %s\n", usource, source,
-                       target);
+                printf("source = %s (%s), target = %s\n", usource, source, target);
                 printf("options = %s\n", orig_options);
         }
 
@@ -590,7 +580,7 @@ int main(int argc, char *const argv[])
         }
 
         if (!force) {
-                rc = check_mtab_entry(usource, source, target, "lustre");
+                rc = check_mtab_entry(usource, target, "lustre");
                 if (rc && !(flags & MS_REMOUNT)) {
                         fprintf(stderr, "%s: according to %s %s is "
                                 "already mounted on %s\n",

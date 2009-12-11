@@ -47,8 +47,10 @@
 #endif
 
 /* XXX Liang: should be moved to other header instead of here */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
 #ifndef WITH_GROUP_INFO
 #define WITH_GROUP_INFO
+#endif
 #endif
 
 #endif

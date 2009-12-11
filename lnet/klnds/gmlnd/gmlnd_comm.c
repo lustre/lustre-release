@@ -62,7 +62,8 @@ gmnal_pack_msg(gmnal_ni_t *gmni, gmnal_msg_t *msg,
         msg->gmm_magic    = GMNAL_MSG_MAGIC;
         msg->gmm_version  = GMNAL_MSG_VERSION;
         msg->gmm_type     = type;
-        msg->gmm_srcnid   = gmni->gmni_ni->ni_nid;
+        msg->gmm_srcnid   = lnet_ptlcompat_srcnid(gmni->gmni_ni->ni_nid,
+                                                  dstnid);
         msg->gmm_dstnid   = dstnid;
 }
 
@@ -125,7 +126,8 @@ gmnal_unpack_msg(gmnal_ni_t *gmni, gmnal_rx_t *rx)
                 return -EPROTO;
         }
 
-        if (gmni->gmni_ni->ni_nid != msg->gmm_dstnid) {
+        if (!lnet_ptlcompat_matchnid(gmni->gmni_ni->ni_nid,
+                                     msg->gmm_dstnid)) {
                 CERROR("Bad dst nid from %u: %s\n",
                        rx->rx_recv_gmid, libcfs_nid2str(msg->gmm_dstnid));
                 return -EPROTO;
@@ -138,12 +140,10 @@ gmnal_unpack_msg(gmnal_ni_t *gmni, gmnal_rx_t *rx)
                 return -EPROTO;
 
         case GMNAL_MSG_IMMEDIATE:
-                if (rx->rx_recv_nob <
-                    offsetof(gmnal_msg_t, gmm_u.immediate.gmim_payload[0])) {
-                        CERROR("Short IMMEDIATE from %u: %d(%lu)\n",
+                if (rx->rx_recv_nob < offsetof(gmnal_msg_t, gmm_u.immediate.gmim_payload[0])) {
+                        CERROR("Short IMMEDIATE from %u: %d("LPSZ")\n",
                                rx->rx_recv_gmid, rx->rx_recv_nob,
-                               (long)offsetof(gmnal_msg_t,
-                                              gmm_u.immediate.gmim_payload[0]));
+                               offsetof(gmnal_msg_t, gmm_u.immediate.gmim_payload[0]));
                         return -EPROTO;
                 }
                 break;

@@ -202,11 +202,8 @@ only need to verify that ACL permissions make a difference.
 	> e/h
 following 2 lines seems not valid, which also failed on ext3 in FC3 enviroment,
 although it pass in FC2. commented out by CFS (agreed with HP)
-Replaced "echo" with "touch" can resolve such problem.
 #	$ echo i > e/i
 #	> e/i: Permission denied
-        $ touch e/i
-        > touch: cannot touch `e/i': Permission denied
 
 	$ su
 	$ setfacl -m u:bin:rwx e

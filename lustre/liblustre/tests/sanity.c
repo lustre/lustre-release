@@ -73,9 +73,7 @@ extern char *lustre_path;
         do {                                                            \
                 char buf[100];                                          \
                 int len;                                                \
-                gettimeofday(&start, NULL);                             \
-                sprintf(buf, "===== START %s: %s %ld", __FUNCTION__,    \
-                        (str), (long)start.tv_sec);                     \
+                sprintf(buf, "===== START %s: %s ", __FUNCTION__, (str)); \
                 len = strlen(buf);                                      \
                 if (len < 79) {                                         \
                         memset(buf+len, '=', 100-len);                  \
@@ -83,6 +81,7 @@ extern char *lustre_path;
                         buf[80] = 0;                                    \
                 }                                                       \
                 printf("%s", buf);                                      \
+                gettimeofday(&start, NULL);                             \
         } while (0)
 
 #define LEAVE()                                                         \
@@ -396,7 +395,7 @@ int t14(char *name)
         char buf[1024];
         const int nfiles = 256;
         char *prefix = "test14_filename_long_prefix_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA___";
-        cfs_dirent_t *ent;
+        struct dirent64 *ent;
         int fd, i, rc, pos, index;
         loff_t base = 0;
         ENTER(">1 block(4k) directory readdir");
@@ -420,7 +419,7 @@ int t14(char *name)
                 while (pos < rc) {
                         char *item;
 
-                        ent = (void *) buf + pos;
+                        ent = (struct dirent64 *) ((char*) buf + pos);
                         item = (char *) ent->d_name;
                         if (!strcmp(item, ".") || !strcmp(item, ".."))
                                 goto iter;
@@ -428,13 +427,12 @@ int t14(char *name)
                                 printf("found bad name %s\n", item);
                                 return(-1);
                         }
-                        printf("[%03d]: %s\t",
+                        printf("[%03d]: %s\n",
                                 index++, item + strlen(prefix));
 iter:
                         pos += ent->d_reclen;
                 }
         }
-        printf("\n");
         if (rc < 0) {
                 printf("getdents error %d\n", rc);
                 return(-1);
@@ -569,7 +567,7 @@ int t18b(char *name)
         LEAVE();
 }
 
-static int check_file_size(char *file, long long size)
+static int check_file_size(char *file, off_t size)
 {
         struct stat statbuf;
 
@@ -626,12 +624,12 @@ int t20(char *name)
 
         ret = write(fd, NULL, 20);
         if (ret != -1 || errno != EFAULT) {
-                printf("write 1: ret %lld, errno %d\n", (long long)ret, errno);
+                printf("write 1: ret %ld, errno %d\n", ret, errno);
                 return(1);
         }
         ret = write(fd, (void *)-1, 20);
         if (ret != -1 || errno != EFAULT) {
-                printf("write 2: ret %lld, errno %d\n", (long long)ret, errno);
+                printf("write 2: ret %ld, errno %d\n", ret, errno);
                 return(1);
         }
         iov[0].iov_base = NULL;
@@ -640,7 +638,7 @@ int t20(char *name)
         iov[1].iov_len = 10;
         ret = writev(fd, iov, 2);
         if (ret != -1 || errno != EFAULT) {
-                printf("writev 1: ret %lld, errno %d\n", (long long)ret, errno);
+                printf("writev 1: ret %ld, errno %d\n", ret, errno);
                 return(1);
         }
         iov[0].iov_base = NULL;
@@ -649,19 +647,19 @@ int t20(char *name)
         iov[1].iov_len = sizeof(buf);
         ret = writev(fd, iov, 2);
         if (ret != sizeof(buf)) {
-                printf("writev 2: ret %lld, error %d\n", (long long)ret, errno);
+                printf("write 3 ret %ld, error %d\n", ret, errno);
                 return(1);
         }
         lseek(fd, 0, SEEK_SET);
 
         ret = read(fd, NULL, 20);
         if (ret != -1 || errno != EFAULT) {
-                printf("read 1: ret %lld, errno %d\n", (long long)ret, errno);
+                printf("read 1: ret %ld, errno %d\n", ret, errno);
                 return(1);
         }
         ret = read(fd, (void *)-1, 20);
         if (ret != -1 || errno != EFAULT) {
-                printf("read 2: ret %lld, error %d\n", (long long)ret, errno);
+                printf("read 2: ret %ld, errno %d\n", ret, errno);
                 return(1);
         }
         iov[0].iov_base = NULL;
@@ -670,7 +668,7 @@ int t20(char *name)
         iov[1].iov_len = 10;
         ret = readv(fd, iov, 2);
         if (ret != -1 || errno != EFAULT) {
-                printf("readv 1: ret %lld, error %d\n", (long long)ret, errno);
+                printf("readv 1: ret %ld, errno %d\n", ret, errno);
                 return(1);
         }
         iov[0].iov_base = NULL;
@@ -679,7 +677,7 @@ int t20(char *name)
         iov[1].iov_len = sizeof(buf);
         ret = readv(fd, iov, 2);
         if (ret != sizeof(buf)) {
-                printf("readv 2: ret %lld, error %d\n", (long long)ret, errno);
+                printf("read 3 ret %ld, error %d\n", ret, errno);
                 return(1);
         }
 
@@ -735,7 +733,7 @@ int t22(char *name)
         ENTER("make sure O_APPEND take effect");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t22_file", lustre_path);
 
-        fd = open(file, O_TRUNC|O_RDWR|O_CREAT|O_APPEND, (mode_t)0666);
+        fd = open(file, O_RDWR|O_CREAT|O_APPEND, (mode_t)0666);
         if (fd < 0) {
                 printf("error open file: %s\n", strerror(errno));
                 return(-1);
@@ -744,14 +742,14 @@ int t22(char *name)
         lseek(fd, 100, SEEK_SET);
         ret = write(fd, str, strlen(str));
         if (ret != strlen(str)) {
-                printf("write 1: ret %lld, errno %d\n", (long long)ret, errno);
+                printf("write 1: ret %ld, errno %d\n", ret, errno);
                 return(1);
         }
 
         lseek(fd, 0, SEEK_SET);
         ret = read(fd, buf, sizeof(buf));
         if (ret != strlen(str)) {
-                printf("read 1: ret %lld\n", (long long)ret);
+                printf("read 1 got %ld\n", ret);
                 return(1);
         }
 
@@ -768,14 +766,14 @@ int t22(char *name)
         lseek(fd, 100, SEEK_SET);
         ret = write(fd, str, strlen(str));
         if (ret != strlen(str)) {
-                printf("write 2: ret %lld, errno %d\n", (long long)ret, errno);
+                printf("write 2: ret %ld, errno %d\n", ret, errno);
                 return(1);
         }
 
         lseek(fd, 100, SEEK_SET);
         ret = read(fd, buf, sizeof(buf));
         if (ret != strlen(str)) {
-                printf("read 2: ret %lld\n", (long long)ret);
+                printf("read 2 got %ld\n", ret);
                 return(1);
         }
 
@@ -793,8 +791,8 @@ int t23(char *name)
 {
         char path[MAX_PATH_LENGTH];
         int fd;
-        off_t ret;
-        off_t off;
+        long long ret;
+        loff_t off;
 
         ENTER("handle seek > 2GB");
         snprintf(path, MAX_PATH_LENGTH, "%s/f%s", lustre_path, name);
@@ -843,7 +841,7 @@ int t23(char *name)
         ret = lseek(fd, -buf_size + 2, SEEK_CUR);
         if (ret != off) {
                 printf("relative seek error for %d %llu != %llu\n",
-                       -buf_size + 2, ret, off);
+                       -buf_size + 2, ret, (unsigned long long) off);
                 if (ret == -1)
                         perror("relative seek");
                 return -1;
@@ -869,7 +867,7 @@ int t23(char *name)
         off = 2048ULL * 1024 * 1024, SEEK_SET;
         ret = lseek(fd, off, SEEK_SET);
         if (ret != off) {
-                printf("seek 2GB error for %llu != %llu\n", ret, off);
+                printf("seek 2GB error for %llu != %llu\n", ret, (unsigned long long) off);
                 if (ret == -1)
                         perror("seek 2GB");
                 return -1;
@@ -1002,13 +1000,13 @@ int t50b(char *name)
         loff_t off_array[] = {1, 17, 255, 258, 4095, 4097, 8191,
                               1024*1024*1024*1024ULL};
         int i;
-        long long offset;
+        loff_t offset;
 
         ENTER("4k un-aligned i/o sanity");
         for (i = 0; i < sizeof(off_array)/sizeof(loff_t); i++) {
                 offset = off_array[i];
                 printf("16 per xfer(total %d), offset %10lld...\t",
-                        _npages, offset);
+                        _npages, (unsigned long long) offset);
                 if (pages_io(16, offset) != 0)
                         return 1;
         }
@@ -1028,7 +1026,7 @@ int t51(char *name)
 {
         char file[MAX_PATH_LENGTH] = "";
         int fd;
-        long long size;
+        off_t size;
         int result;
 
         ENTER("truncate() should truncate file to proper length");
@@ -1109,8 +1107,8 @@ int t52(char *name)
                         close(fd);
                         t_unlink(file);
                         return -1;
-                }
-                atime = statbuf.st_atime;
+                }       
+                atime = statbuf.st_atime; 
         }
         close(fd);
         t_unlink(file);
@@ -1124,26 +1122,26 @@ int t53(char *name)
         struct utimbuf times;   /* struct. buffer for utime() */
         struct stat stat_buf;   /* struct buffer to hold file info. */
         time_t mtime, atime;
-
+ 
         ENTER("mtime/atime should be updated by utime() call");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t53_file", lustre_path);
 
         t_echo_create(file, "check mtime/atime update by utime() call");
-
+ 
         /* Initialize the modification and access time in the times arg */
         times.actime = NEW_TIME+10;
         times.modtime = NEW_TIME;
-
+ 
         /* file modification/access time */
         utime(file, &times);
-
+ 
         if (stat(file, &stat_buf) < 0) {
                 printf("stat(2) of %s failed, error:%d %s\n",
-                        file, errno, strerror(errno));
+                        file, errno, strerror(errno)); 
         }
         mtime = stat_buf.st_mtime;
         atime = stat_buf.st_atime;
-
+ 
         if ((mtime == NEW_TIME) && (atime == NEW_TIME + 10)) {
                 t_unlink(file);
                 LEAVE();
@@ -1151,7 +1149,7 @@ int t53(char *name)
 
         printf("mod time %ld, expected %ld\n", mtime, (long)NEW_TIME);
         printf("acc time %ld, expected %ld\n", atime, (long)NEW_TIME + 10);
-
+ 
         t_unlink(file);
         return (-1);
 }
@@ -1177,7 +1175,7 @@ int t54(char *name)
         lock.l_whence = 0;
         lock.l_len    = 1;
         if ((err = t_fcntl(fd, F_SETLKW, &lock)) != 0) {
-                fprintf(stderr, "fcntl returned: %d (%s)\n",
+                fprintf(stderr, "fcntl returned: %d (%s)\n", 
                         err, strerror(err));
                 close(fd);
                 t_unlink(file);
@@ -1210,7 +1208,7 @@ int t55(char *name)
         ENTER("setstripe/getstripe");
         snprintf(path, MAX_PATH_LENGTH, "%s/test_t55", lustre_path);
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t55/file_t55", lustre_path);
-
+      
         buflen = sizeof(struct lov_user_md);
         buflen += STRIPE_COUNT * sizeof(struct lov_user_ost_data);
         lum = (struct lov_user_md *)malloc(buflen);
@@ -1239,7 +1237,7 @@ int t55(char *name)
                 free(lum);
                 return -1;
         }
-
+        
         lum->lmm_magic = LOV_USER_MAGIC;
         lum->lmm_stripe_count = STRIPE_COUNT;
         rc = ioctl(fd, LL_IOC_LOV_GETSTRIPE, lum);
@@ -1262,7 +1260,7 @@ int t55(char *name)
                 printf("lmm_stripe_count:   %u\n", (int)lum->lmm_stripe_count);
                 printf("lmm_stripe_size:    %u\n",      lum->lmm_stripe_size);
                 printf("lmm_stripe_pattern: %x\n",      lum->lmm_pattern);
-
+        
                 for (index = 0; index < lum->lmm_stripe_count; index++) {
                         lo = lum->lmm_objects + index;
                         printf("object %d:\n", index);
@@ -1299,7 +1297,7 @@ int t55(char *name)
         }
         fd = open(file, O_RDWR, 0644);
         if (fd < 0) {
-                printf("failed to open(%s): rc = %d (%s)\n",
+                printf("failed to open(%s): rc = %d (%s)\n", 
                        file, fd, strerror(errno));
                 t_unlink(file);
                 t_rmdir(path);
@@ -1328,7 +1326,7 @@ int t55(char *name)
                 printf("lmm_stripe_count:   %u\n", (int)lum->lmm_stripe_count);
                 printf("lmm_stripe_size:    %u\n",      lum->lmm_stripe_size);
                 printf("lmm_stripe_pattern: %x\n",      lum->lmm_pattern);
-
+        
                 for (index = 0; index < lum->lmm_stripe_count; index++) {
                         lo = lum->lmm_objects + index;
                         printf("object %d:\n", index);
@@ -1368,7 +1366,7 @@ int t56(char *name)
         size_t nbytes;
         off_t basep = 0;
         long rc = 0;
-        cfs_dirent_t dir;
+        struct dirent dir;
 
         ENTER("getdirentries should fail if nbytes is too small");
 
@@ -1381,14 +1379,13 @@ int t56(char *name)
         rc = getdirentries(fd, (char *)&dir, nbytes, &basep);
 
         if (rc != -1) {
-                printf("Test failed: getdirentries returned %lld\n",
-                       (long long)rc);
+                printf("Test failed: getdirentries returned %ld\n", rc);
                 t_close(fd);
                 return -1;
         }
         if (errno != EINVAL) {
-                printf("Test failed: getdirentries returned %lld but errno is "
-                       "set to %d (should be EINVAL)\n", (long long)rc, errno);
+                printf("Test failed: getdirentries returned %ld but errno is set"
+                                " to %d (should be EINVAL)\n", rc, errno);
                 t_close(fd);
                 return -1;
         }
@@ -1396,6 +1393,7 @@ int t56(char *name)
 
         LEAVE();
 }
+
 
 extern void __liblustre_setup_(void);
 extern void __liblustre_cleanup_(void);

@@ -110,7 +110,6 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
          */
         list_for_each_safe(tmp, pos, &imp->imp_replay_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_replay_list);
-
                 /* If need to resend the last sent transno (because a
                    reconnect has occurred), then stop on the matching
                    req and send it again. If, however, the last sent
@@ -122,6 +121,7 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
                                                      MSG_RESENT);
                         break;
                 }
+
                 req = NULL;
         }
 

@@ -141,7 +141,7 @@ static cfs_sysctl_table_t ksocknal_ctl_table[] = {
                 .data     = &ksocknal_tunables.ksnd_peertimeout,
                 .maxlen   = sizeof (int),
                 .mode     = 0444,
-                .proc_handler = &proc_dointvec
+                .proc_handler = &proc_dointvec,
                 .strategy = &sysctl_intvec,
         },
         {
@@ -371,6 +371,8 @@ ksocknal_lib_tunables_init ()
                 }
         }
 
+        if (*ksocknal_tunables.ksnd_zc_min_payload < (2 << 10))
+                *ksocknal_tunables.ksnd_zc_min_payload = (2 << 10);
         if (*ksocknal_tunables.ksnd_zc_recv_min_nfrags < 2)
                 *ksocknal_tunables.ksnd_zc_recv_min_nfrags = 2;
         if (*ksocknal_tunables.ksnd_zc_recv_min_nfrags > LNET_MAX_IOV)
@@ -1273,6 +1275,21 @@ ksocknal_lib_memory_pressure(ksock_conn_t *conn)
         cfs_spin_unlock_bh (&sched->kss_lock);
 
         return rc;
+}
+
+__u64
+ksocknal_lib_new_incarnation(void)
+{
+        struct timeval tv;
+
+        /* The incarnation number is the time this module loaded and it
+         * identifies this particular instance of the socknal.  Hopefully
+         * we won't be able to reboot more frequently than 1MHz for the
+         * forseeable future :) */
+
+        do_gettimeofday(&tv);
+
+        return (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
 }
 
 int

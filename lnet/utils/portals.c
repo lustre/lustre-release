@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
  *
  *   This file is part of Portals, http://www.sf.net/projects/lustre/
  *
@@ -20,10 +20,37 @@
  *
  */
 
-#include <libcfs/libcfsutil.h>
+#include <stdio.h>
+#include <sys/types.h>
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
+#endif
+#include <sys/socket.h>
+#ifdef HAVE_NETINET_TCP_H
+#include <netinet/tcp.h>
+#endif
+#include <stdlib.h>
+#include <string.h>
+#include <fcntl.h>
+#ifdef HAVE_SYS_IOCTL_H
+#include <sys/ioctl.h>
+#endif
+#ifndef _IOWR
+#include "ioctl.h"
+#endif
+#include <errno.h>
+#include <unistd.h>
+#include <time.h>
+#include <stdarg.h>
+#ifdef HAVE_ENDIAN_H
+#include <endian.h>
+#endif
+
+#include <libcfs/portals_utils.h>
 #include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
 #include <lnet/socklnd.h>
+#include "parser.h"
 
 unsigned int libcfs_debug;
 unsigned int libcfs_printk = D_CANTMASK;
@@ -1410,18 +1437,17 @@ get_cycles_per_usec ()
         return (1000.0);
 }
 
-#define LWT_MAX_CPUS (32)
-
 int
 jt_ptl_lwt(int argc, char **argv)
 {
+        const int       lwt_max_cpus = 32;
         int             ncpus;
         int             totalspace;
         int             nevents_per_cpu;
         lwt_event_t    *events;
-        lwt_event_t    *cpu_event[LWT_MAX_CPUS + 1];
-        lwt_event_t    *next_event[LWT_MAX_CPUS];
-        lwt_event_t    *first_event[LWT_MAX_CPUS];
+        lwt_event_t    *cpu_event[lwt_max_cpus + 1];
+        lwt_event_t    *next_event[lwt_max_cpus];
+        lwt_event_t    *first_event[lwt_max_cpus];
         int             cpu;
         lwt_event_t    *e;
         int             rc;
@@ -1463,9 +1489,9 @@ jt_ptl_lwt(int argc, char **argv)
         if (lwt_snapshot(NULL, &ncpus, &totalspace, NULL, 0) != 0)
                 return (-1);
 
-        if (ncpus > LWT_MAX_CPUS) {
+        if (ncpus > lwt_max_cpus) {
                 fprintf(stderr, "Too many cpus: %d (%d)\n",
-                        ncpus, LWT_MAX_CPUS);
+                        ncpus, lwt_max_cpus);
                 return (-1);
         }
 

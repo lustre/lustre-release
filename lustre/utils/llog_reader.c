@@ -215,7 +215,7 @@ void print_llog_header(struct llog_log_hdr *llog_buf)
         time_t t;
 
         printf("Header size : %u\n",
-               le32_to_cpu(llog_buf->llh_hdr.lrh_len));
+                le32_to_cpu(llog_buf->llh_hdr.lrh_len));
 
         t = le64_to_cpu(llog_buf->llh_timestamp);
         printf("Time : %s", ctime(&t));
@@ -238,7 +238,7 @@ static void print_1_cfg(struct lustre_cfg *lcfg)
 
         if (lcfg->lcfg_nid)
                 printf("nid=%s("LPX64")  ", libcfs_nid2str(lcfg->lcfg_nid),
-                       lcfg->lcfg_nid);
+                       (__u64)lcfg->lcfg_nid);
         if (lcfg->lcfg_nal)
                 printf("nal=%d ", lcfg->lcfg_nal);
         for (i = 0; i <  lcfg->lcfg_bufcount; i++)
@@ -267,7 +267,6 @@ static void print_setup_cfg(struct lustre_cfg *lcfg)
                 printf("setup     ");
                 print_1_cfg(lcfg);
         }
-        
         return;
 }
 
@@ -328,16 +327,6 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
                 print_1_cfg(lcfg);
                 break;
         }
-        case(LCFG_ADD_MDC):{
-                printf("modify_mdc_tgts add ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_DEL_MDC):{
-                printf("modify_mdc_tgts del ");
-                print_1_cfg(lcfg);
-                break;
-        }
         case(LCFG_MOUNTOPT):{
                 printf("mount_option ");
                 print_1_cfg(lcfg);
@@ -363,11 +352,6 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
         }
         case(LCFG_PARAM):{
                 printf("param ");
-                print_1_cfg(lcfg);
-                break;
-        }
-        case(LCFG_SPTLRPC_CONF):{
-                printf("sptlrpc_conf ");
                 print_1_cfg(lcfg);
                 break;
         }
@@ -478,5 +462,6 @@ void print_records(struct llog_rec_hdr **recs, int rec_number)
                         printf("padding\n");
                 } else
                         printf("unknown type %x\n", lopt);
+
         }
 }

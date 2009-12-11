@@ -37,33 +37,23 @@
 #ifndef __EXPORT_H
 #define __EXPORT_H
 
-#include <lprocfs_status.h>
-#include <lustre/lustre_idl.h>
 #include <lustre_dlm.h>
-
-struct mds_client_data;
-struct mdt_client_data;
-struct mds_idmap_table;
-struct mdt_idmap_table;
+#include <lustre/lustre_idl.h>
+#include <lprocfs_status.h>
+#include <class_hash.h>
 
 struct lu_export_data {
-        /** Protects led_lcd below */
-        struct semaphore        led_lcd_lock;
-        /** Per-client data for each export */
-        struct lsd_client_data *led_lcd;
-        /** Offset of record in last_rcvd file */
-        loff_t                  led_lr_off;
-        /** Client index in last_rcvd file */
-        int                     led_lr_idx;
+        struct semaphore        led_lcd_lock; /**< protect led_lcd */
+        struct lsd_client_data *led_lcd;      /**< client data */
+        loff_t                  led_lr_off;   /**< offset in last_rcvd */
+        int                     led_lr_idx;   /**< client index */
 };
 
-struct mdt_export_data {
+struct mds_export_data {
         struct lu_export_data   med_led;
         struct list_head        med_open_head;
         spinlock_t              med_open_lock; /* lock med_open_head, mfd_list*/
         __u64                   med_ibits_known;
-        struct semaphore           med_idmap_sem;
-        struct lustre_idmap_table *med_idmap;
 };
 
 #define med_lcd_lock    med_led.led_lcd_lock
@@ -78,9 +68,6 @@ struct osc_creator {
         obd_id                  oscc_last_id;//last available pre-created object
         obd_id                  oscc_next_id;// what object id to give out next
         int                     oscc_grow_count;
-        /**
-         * Limit oscc_grow_count value, can be changed via proc fs
-         */
         int                     oscc_max_grow_count;
         struct obdo             oscc_oa;
         int                     oscc_flags;
@@ -94,13 +81,12 @@ struct ec_export_data { /* echo client */
 /* In-memory access to client data from OST struct */
 struct filter_export_data {
         struct lu_export_data      fed_led;
-        spinlock_t                 fed_lock;     /**< protects fed_mod_list */
+        spinlock_t                 fed_lock;      /**< protects fed_mod_list */
         long                       fed_dirty;    /* in bytes */
         long                       fed_grant;    /* in bytes */
         struct list_head           fed_mod_list; /* files being modified */
         int                        fed_mod_count;/* items in fed_writing list */
         long                       fed_pending;  /* bytes just being written */
-        __u32                      fed_group;
 };
 
 #define fed_lcd_lock    fed_led.led_lcd_lock
@@ -115,11 +101,11 @@ typedef struct nid_stat {
         struct obd_device       *nid_obd;
         struct proc_dir_entry   *nid_proc;
         struct lprocfs_stats    *nid_stats;
-        struct lprocfs_stats    *nid_ldlm_stats;
         struct brw_stats        *nid_brw_stats;
+        struct lprocfs_stats    *nid_ldlm_stats;
         atomic_t                 nid_exp_ref_count; /* for obd_nid_stats_hash
                                                            exp_nid_stats */
-}nid_stat_t;
+} nid_stat_t;
 
 #define nidstat_getref(nidstat)                                                \
 do {                                                                           \
@@ -142,21 +128,9 @@ enum obd_option {
 struct obd_export {
         struct portals_handle     exp_handle;
         atomic_t                  exp_refcount;
-        /**
-         * Set of counters below is to track where export references are
-         * kept. The exp_rpc_count is used for reconnect handling also,
-         * the cb_count and locks_count are for debug purposes only for now.
-         * The sum of them should be less than exp_refcount by 3
-         */
-        atomic_t                  exp_rpc_count; /** RPC references */
-        atomic_t                  exp_cb_count; /** Commit callback references */
-        atomic_t                  exp_locks_count; /** Lock references */
-#if LUSTRE_TRACKS_LOCK_EXP_REFS
-        struct list_head          exp_locks_list;
-        spinlock_t                exp_locks_list_guard;
-#endif
-        atomic_t                  exp_replay_count;
+        atomic_t                  exp_rpc_count;
         struct obd_uuid           exp_client_uuid;
+        lnet_nid_t                exp_client_nid;
         struct list_head          exp_obd_chain;
         struct hlist_node         exp_uuid_hash; /* uuid-export hash*/
         struct hlist_node         exp_nid_hash; /* nid-export hash */
@@ -165,16 +139,15 @@ struct obd_export {
         struct obd_device        *exp_obd;
         struct obd_import        *exp_imp_reverse; /* to make RPCs backwards */
         struct nid_stat          *exp_nid_stats;
-        struct lprocfs_stats     *exp_md_stats;
+        struct lprocfs_stats     *exp_ops_stats;
         struct ptlrpc_connection *exp_connection;
         __u32                     exp_conn_cnt;
-        cfs_hash_t               *exp_lock_hash; /* existing lock hash */
+        lustre_hash_t            *exp_lock_hash; /* existing lock hash */
         spinlock_t                exp_lock_hash_lock;
         struct list_head          exp_outstanding_replies;
         struct list_head          exp_uncommitted_replies;
         spinlock_t                exp_uncommitted_replies_lock;
-        __u64                     exp_last_committed;
-        cfs_time_t                exp_last_request_time;
+        time_t                    exp_last_request_time;
         struct list_head          exp_req_replay_queue;
         spinlock_t                exp_lock; /* protects flags int below */
         /* ^ protects exp_outstanding_replies too */
@@ -184,43 +157,36 @@ struct obd_export {
                                   exp_in_recovery:1,
                                   exp_disconnected:1,
                                   exp_connecting:1,
-                                  /** VBR: export missed recovery */
+                                  /* VBR: export missed recovery */
                                   exp_delayed:1,
-                                  /** VBR: failed version checking */
+                                  /* VBR: failed version checking */
                                   exp_vbr_failed:1,
-                                  exp_req_replay_needed:1,
-                                  exp_lock_replay_needed:1,
-                                  exp_need_sync:1,
-                                  exp_flvr_changed:1,
-                                  exp_flvr_adapt:1,
+                                  exp_replay_needed:1,
+                                  exp_need_sync:1, /* needs sync from connect */
                                   exp_libclient:1, /* liblustre client? */
                                   /* client timed out and tried to reconnect,
                                    * but couldn't because of active rpcs */
                                   exp_abort_active_req:1;
         struct list_head          exp_queued_rpc;  /* RPC to be handled */
-        /* also protected by exp_lock */
-        enum lustre_sec_part      exp_sp_peer;
-        struct sptlrpc_flavor     exp_flvr;             /* current */
-        struct sptlrpc_flavor     exp_flvr_old[2];      /* about-to-expire */
-        cfs_time_t                exp_flvr_expire[2];   /* seconds */
-
+        /* VBR: per-export last committed */
+        __u64                     exp_last_committed;
         union {
                 struct lu_export_data     eu_target_data;
-                struct mdt_export_data    eu_mdt_data;
+                struct mds_export_data    eu_mds_data;
                 struct filter_export_data eu_filter_data;
                 struct ec_export_data     eu_ec_data;
         } u;
 };
 
 #define exp_target_data u.eu_target_data
-#define exp_mdt_data    u.eu_mdt_data
+#define exp_mds_data    u.eu_mds_data
 #define exp_filter_data u.eu_filter_data
 #define exp_ec_data     u.eu_ec_data
 
-static inline int exp_expired(struct obd_export *exp, cfs_duration_t age)
+static inline int exp_expired(struct obd_export *exp, __u32 age)
 {
         LASSERT(exp->exp_delayed);
-        return cfs_time_before(cfs_time_add(exp->exp_last_request_time, age),
+        return cfs_time_before(exp->exp_last_request_time + age,
                                cfs_time_current_sec());
 }
 
@@ -236,31 +202,11 @@ static inline int exp_connect_lru_resize(struct obd_export *exp)
         return !!(exp->exp_connect_flags & OBD_CONNECT_LRU_RESIZE);
 }
 
-static inline int exp_connect_rmtclient(struct obd_export *exp)
-{
-        LASSERT(exp != NULL);
-        return !!(exp->exp_connect_flags & OBD_CONNECT_RMT_CLIENT);
-}
-
-static inline int client_is_remote(struct obd_export *exp)
-{
-        struct obd_import *imp = class_exp2cliimp(exp);
-
-        return !!(imp->imp_connect_data.ocd_connect_flags &
-                  OBD_CONNECT_RMT_CLIENT);
-}
-
 static inline int exp_connect_vbr(struct obd_export *exp)
 {
         LASSERT(exp != NULL);
         LASSERT(exp->exp_connection);
         return !!(exp->exp_connect_flags & OBD_CONNECT_VBR);
-}
-
-static inline int exp_connect_som(struct obd_export *exp)
-{
-        LASSERT(exp != NULL);
-        return !!(exp->exp_connect_flags & OBD_CONNECT_SOM);
 }
 
 static inline int imp_connect_lru_resize(struct obd_import *imp)

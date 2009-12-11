@@ -59,7 +59,7 @@ static void lov_dump_lmm_common(int level, void *lmmp)
         struct lov_mds_md *lmm = lmmp;
 
         CDEBUG(level, "objid "LPX64", magic 0x%08x, pattern %#x\n",
-               le64_to_cpu(lmm->lmm_object_id),
+               (__u64)le64_to_cpu(lmm->lmm_object_id),
                le32_to_cpu(lmm->lmm_magic),
                le32_to_cpu(lmm->lmm_pattern));
         CDEBUG(level,"stripe_size %u, stripe_count %u\n",
@@ -80,8 +80,8 @@ static void lov_dump_lmm_objects(int level, struct lov_ost_data *lod,
         for (i = 0; i < stripe_count; ++i, ++lod) {
                 CDEBUG(level, "stripe %u idx %u subobj "LPX64"/"LPX64"\n", i,
                        le32_to_cpu(lod->l_ost_idx),
-                       le64_to_cpu(lod->l_object_gr),
-                       le64_to_cpu(lod->l_object_id));
+                       (__u64)le64_to_cpu(lod->l_object_gr),
+                       (__u64)le64_to_cpu(lod->l_object_id));
         }
 }
 
@@ -90,6 +90,13 @@ void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
         lov_dump_lmm_common(level, lmm);
         lov_dump_lmm_objects(level, lmm->lmm_objects,
                              le32_to_cpu(lmm->lmm_stripe_count));
+}
+
+void lov_dump_lmm_join(int level, struct lov_mds_md_join *lmmj)
+{
+        lov_dump_lmm_common(level, &lmmj->lmmj_md);
+        CDEBUG(level, "extent_count %u\n",
+               le32_to_cpu(lmmj->lmmj_extent_count));
 }
 
 void lov_dump_lmm_v3(int level, struct lov_mds_md_v3 *lmm)
@@ -108,6 +115,8 @@ void lov_dump_lmm(int level, void *lmm)
         switch (magic) {
         case LOV_MAGIC_V1:
                 return lov_dump_lmm_v1(level, (struct lov_mds_md_v1 *)(lmm));
+        case LOV_MAGIC_JOIN:
+                return lov_dump_lmm_join(level, (struct lov_mds_md_join *)(lmm));
         case LOV_MAGIC_V3:
                 return lov_dump_lmm_v3(level, (struct lov_mds_md_v3 *)(lmm));
         default:
@@ -137,6 +146,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
         struct lov_obd *lov = &obd->u.lov;
         struct lov_mds_md_v1 *lmmv1;
         struct lov_mds_md_v3 *lmmv3;
+        struct lov_oinfo *loi;
         int stripe_count;
         struct lov_ost_data_v1 *lmm_objects;
         int lmm_size, lmm_magic;
@@ -146,8 +156,6 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
         if (lsm) {
                 lmm_magic = lsm->lsm_magic;
 
-                /* If we are just sizing the EA, limit the stripe count
-                 * to the actual number of OSTs in this filesystem. */
                 if (!lmmp) {
                         stripe_count = lov_get_stripecnt(lov,
                                                          lsm->lsm_stripe_count);
@@ -173,9 +181,8 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
         if ((lmm_magic != LOV_MAGIC_V1) &&
             (lmm_magic != LOV_MAGIC_V3)) {
                 CERROR("bad mem LOV MAGIC: 0x%08X != 0x%08X nor 0x%08X\n",
-                        lmm_magic, LOV_MAGIC_V1, LOV_MAGIC_V3);
+                       lmm_magic, LOV_MAGIC_V1, LOV_MAGIC_V3);
                 RETURN(-EINVAL);
-
         }
 
         /* XXX LOV STACKING call into osc for sizes */
@@ -186,7 +193,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
 
         if (*lmmp && !lsm) {
                 stripe_count = le32_to_cpu((*lmmp)->lmm_stripe_count);
-                lmm_size = lov_mds_md_size(stripe_count, lmm_magic);
+                lmm_size = lov_mds_md_size(stripe_count, le32_to_cpu((*lmmp)->lmm_magic));
                 OBD_FREE(*lmmp, lmm_size);
                 *lmmp = NULL;
                 RETURN(0);
@@ -214,22 +221,20 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
         /* lmmv1 and lmmv3 point to the same struct and have the
          * same first fields
          */
+        lmmv1->lmm_pattern = cpu_to_le32(lsm->lsm_pattern);
         lmmv1->lmm_object_id = cpu_to_le64(lsm->lsm_object_id);
         lmmv1->lmm_object_gr = cpu_to_le64(lsm->lsm_object_gr);
         lmmv1->lmm_stripe_size = cpu_to_le32(lsm->lsm_stripe_size);
         lmmv1->lmm_stripe_count = cpu_to_le32(stripe_count);
-        lmmv1->lmm_pattern = cpu_to_le32(lsm->lsm_pattern);
         if (lsm->lsm_magic == LOV_MAGIC_V3) {
-                strncpy(lmmv3->lmm_pool_name, lsm->lsm_pool_name,
-                        LOV_MAXPOOLNAME);
+                strncpy(lmmv3->lmm_pool_name, lsm->lsm_pool_name, LOV_MAXPOOLNAME);
                 lmm_objects = lmmv3->lmm_objects;
         } else {
                 lmm_objects = lmmv1->lmm_objects;
         }
 
         for (i = 0; i < stripe_count; i++) {
-                struct lov_oinfo *loi = lsm->lsm_oinfo[i];
-
+                loi = lsm->lsm_oinfo[i];
                 /* XXX LOV STACKING call down to osc_packmd() to do packing */
                 LASSERTF(loi->loi_id, "lmm_oid "LPU64" stripe %u/%u idx %u\n",
                          lmmv1->lmm_object_id, i, stripe_count, loi->loi_ost_idx);
@@ -299,7 +304,7 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count,
 
         *lsmp = lsm_alloc_plain(stripe_count, &lsm_size);
         if (!*lsmp) {
-                CERROR("can't allocate lsmp stripe_count %d\n", stripe_count);
+                CERROR("can't allocate lsmp, stripe_count %d\n", stripe_count);
                 RETURN(-ENOMEM);
         }
 
@@ -357,6 +362,7 @@ int lov_unpackmd(struct obd_export *exp,  struct lov_stripe_md **lsmp,
                 LBUG();
                 RETURN(lov_stripe_md_size(stripe_count));
         }
+
         /* If we are passed an allocated struct but nothing to unpack, free */
         if (*lsmp && !lmm) {
                 lov_free_memmd(lsmp);
@@ -382,41 +388,48 @@ int lov_unpackmd(struct obd_export *exp,  struct lov_stripe_md **lsmp,
         RETURN(lsm_size);
 }
 
-static int __lov_setstripe(struct obd_export *exp, int max_lmm_size,
-                           struct lov_stripe_md **lsmp,
-                           struct lov_user_md *lump)
+/* Configure object striping information on a new file.
+ *
+ * @lmmu is a pointer to a user struct with one or more of the fields set to
+ * indicate the application preference: lmm_stripe_count, lmm_stripe_size,
+ * lmm_stripe_offset, and lmm_stripe_pattern.  lmm_magic must be LOV_MAGIC.
+ * @lsmp is a pointer to an in-core stripe MD that needs to be filled in.
+ */
+int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
+                  struct lov_user_md *lump)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;
         struct lov_user_md_v3 lumv3;
         struct lov_user_md_v1 *lumv1 = (struct lov_user_md_v1 *)&lumv3;
-        int lmm_magic;
         int stripe_count;
         int rc;
         ENTRY;
 
-        if (copy_from_user(&lumv3, lump, sizeof(struct lov_user_md_v1)))
+        rc = copy_from_user(&lumv3, lump, sizeof(struct lov_user_md_v1));
+        if (rc)
                 RETURN(-EFAULT);
 
-        lmm_magic = lumv1->lmm_magic;
-
-        if (lmm_magic == __swab32(LOV_USER_MAGIC_V1)) {
-                lustre_swab_lov_user_md_v1(lumv1);
-                lmm_magic = LOV_USER_MAGIC_V1;
-        } else if (lmm_magic == LOV_USER_MAGIC_V3) {
-                if (copy_from_user(&lumv3, lump, sizeof(lumv3)))
-                        RETURN(-EFAULT);
-        } else if (lmm_magic == __swab32(LOV_USER_MAGIC_V3)) {
-                if (copy_from_user(&lumv3, lump, sizeof(lumv3)))
-                        RETURN(-EFAULT);
-                lustre_swab_lov_user_md_v3(&lumv3);
-                lmm_magic = LOV_USER_MAGIC_V3;
-        } else if (lmm_magic != LOV_USER_MAGIC_V1) {
-                CDEBUG(D_IOCTL,
-                       "bad userland LOV MAGIC: %#08x != %#08x nor %#08x\n",
-                       lmm_magic, LOV_USER_MAGIC_V1, LOV_USER_MAGIC_V3);
-                       RETURN(-EINVAL);
+        switch (lumv1->lmm_magic) {
+        case LOV_USER_MAGIC_V3_SWABBED:
+                rc = copy_from_user(&lumv3, lump, sizeof(lumv3));
+                if (rc)
+                        break;
+                /* fall through to swab */
+        case LOV_USER_MAGIC_V1_SWABBED:
+                rc = lustre_swab_lov_user_md(lumv1);
+                break;
+        case LOV_USER_MAGIC_V3:
+                rc = copy_from_user(&lumv3, lump, sizeof(lumv3));
+                /* fall through */
+        case LOV_USER_MAGIC_V1:
+                break;
+        default:
+                CERROR("bad lsm magic %08x\n", lumv1->lmm_magic);
+                RETURN(-EINVAL);
         }
+        if (rc)
+                RETURN(rc);
 
         /* in the rest of the tests, as *lumv1 and lumv3 have the same
          * fields, we use lumv1 to avoid code duplication */
@@ -447,28 +460,18 @@ static int __lov_setstripe(struct obd_export *exp, int max_lmm_size,
                        lumv1->lmm_stripe_offset, lov->desc.ld_tgt_count);
                 RETURN(-EINVAL);
         }
+
         stripe_count = lov_get_stripecnt(lov, lumv1->lmm_stripe_count);
 
-        if (max_lmm_size) {
-                int max_stripes = (max_lmm_size -
-                                   lov_mds_md_size(0, lmm_magic)) /
-                                   sizeof(struct lov_ost_data_v1);
-                if (unlikely(max_stripes < stripe_count)) {
-                        CDEBUG(D_IOCTL, "stripe count reset from %d to %d\n",
-                               stripe_count, max_stripes);
-                        stripe_count = max_stripes;
-                }
-        }
-
-        if (lmm_magic == LOV_USER_MAGIC_V3) {
+        if (lumv1->lmm_magic == LOV_USER_MAGIC_V3) {
                 struct pool_desc *pool;
 
                 pool = lov_find_pool(lov, lumv3.lmm_pool_name);
                 if (pool != NULL) {
-                        if (lumv3.lmm_stripe_offset !=
-                            (typeof(lumv3.lmm_stripe_offset))(-1)) {
+                        if (lumv1->lmm_stripe_offset !=
+                            (typeof(lumv1->lmm_stripe_offset))(-1)) {
                                 rc = lov_check_index_in_pool(
-                                        lumv3.lmm_stripe_offset, pool);
+                                        lumv1->lmm_stripe_offset, pool);
                                 if (rc < 0) {
                                         lov_pool_putref(pool);
                                         RETURN(-EINVAL);
@@ -482,39 +485,20 @@ static int __lov_setstripe(struct obd_export *exp, int max_lmm_size,
                 }
         }
 
-        rc = lov_alloc_memmd(lsmp, stripe_count, lumv1->lmm_pattern, lmm_magic);
+        rc = lov_alloc_memmd(lsmp, stripe_count, lumv1->lmm_pattern,
+                             lumv1->lmm_magic);
 
-        if (rc >= 0) {
-                (*lsmp)->lsm_oinfo[0]->loi_ost_idx = lumv1->lmm_stripe_offset;
-                (*lsmp)->lsm_stripe_size = lumv1->lmm_stripe_size;
-                if (lmm_magic == LOV_USER_MAGIC_V3)
-                        strncpy((*lsmp)->lsm_pool_name, lumv3.lmm_pool_name,
-                                LOV_MAXPOOLNAME);
-                rc = 0;
-        }
+        if (rc < 0)
+                RETURN(rc);
 
-        RETURN(rc);
-}
+        (*lsmp)->lsm_oinfo[0]->loi_ost_idx = lumv1->lmm_stripe_offset;
+        (*lsmp)->lsm_stripe_size = lumv1->lmm_stripe_size;
 
-/* Configure object striping information on a new file.
- *
- * @lmmu is a pointer to a user struct with one or more of the fields set to
- * indicate the application preference: lmm_stripe_count, lmm_stripe_size,
- * lmm_stripe_offset, and lmm_stripe_pattern.  lmm_magic must be LOV_MAGIC.
- * @lsmp is a pointer to an in-core stripe MD that needs to be filled in.
- */
-int lov_setstripe(struct obd_export *exp, int max_lmm_size,
-                  struct lov_stripe_md **lsmp, struct lov_user_md *lump)
-{
-        int rc;
-        mm_segment_t seg;
+        if (lumv1->lmm_magic == LOV_USER_MAGIC_V3)
+                strncpy((*lsmp)->lsm_pool_name, lumv3.lmm_pool_name,
+                        LOV_MAXPOOLNAME);
 
-        seg = get_fs();
-        set_fs(KERNEL_DS);
-
-        rc = __lov_setstripe(exp, max_lmm_size, lsmp, lump);
-        set_fs(seg);
-        RETURN(rc);
+        RETURN(0);
 }
 
 int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
@@ -550,7 +534,7 @@ int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 }
         }
 
-        rc = lov_setstripe(exp, 0, lsmp, lump);
+        rc = lov_setstripe(exp, lsmp, lump);
         if (rc)
                 RETURN(rc);
 
@@ -573,67 +557,57 @@ int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
 int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
                   struct lov_user_md *lump)
 {
-        /*
-         * XXX huge struct allocated on stack.
-         */
         /* we use lov_user_md_v3 because it is larger than lov_user_md_v1 */
         struct lov_user_md_v3 lum;
         struct lov_mds_md *lmmk = NULL;
         int rc, lmm_size;
         int lum_size;
-        mm_segment_t seg;
         ENTRY;
 
         if (!lsm)
                 RETURN(-ENODATA);
-
-        /*
-         * "Switch to kernel segment" to allow copying from kernel space by
-         * copy_{to,from}_user().
-         */
-        seg = get_fs();
-        set_fs(KERNEL_DS);
-
         /* we only need the header part from user space to get lmm_magic and
          * lmm_stripe_count, (the header part is common to v1 and v3) */
         lum_size = sizeof(struct lov_user_md_v1);
-        if (copy_from_user(&lum, lump, lum_size))
-                GOTO(out_set, rc = -EFAULT);
-        else if ((lum.lmm_magic != LOV_USER_MAGIC) &&
-                 (lum.lmm_magic != LOV_USER_MAGIC_V3))
-                GOTO(out_set, rc = -EINVAL);
+        rc = copy_from_user(&lum, lump, lum_size);
+        if (rc)
+                RETURN(-EFAULT);
+        /* if v3 we just have to update the lum_size */
+        if (lum.lmm_magic == LOV_USER_MAGIC_V3)
+                lum_size = sizeof(struct lov_user_md_v3);
+
+        if ((lum.lmm_magic != LOV_USER_MAGIC_V1) &&
+            (lum.lmm_magic != LOV_USER_MAGIC_V3))
+                RETURN(-EINVAL);
 
         if (lum.lmm_stripe_count &&
             (lum.lmm_stripe_count < lsm->lsm_stripe_count)) {
                 /* Return right size of stripe to user */
                 lum.lmm_stripe_count = lsm->lsm_stripe_count;
                 rc = copy_to_user(lump, &lum, lum_size);
-                GOTO(out_set, rc = -EOVERFLOW);
+                RETURN(-EOVERFLOW);
         }
         rc = lov_packmd(exp, &lmmk, lsm);
         if (rc < 0)
-                GOTO(out_set, rc);
+                RETURN(rc);
         lmm_size = rc;
         rc = 0;
 
         /* FIXME: Bug 1185 - copy fields properly when structs change */
         /* struct lov_user_md_v3 and struct lov_mds_md_v3 must be the same */
-        CLASSERT(sizeof(lum) == sizeof(struct lov_mds_md_v3));
-        CLASSERT(sizeof lum.lmm_objects[0] == sizeof lmmk->lmm_objects[0]);
+        LASSERT(sizeof(lum) == sizeof(struct lov_mds_md_v3));
+        LASSERT(sizeof(lum.lmm_objects[0]) == sizeof(lmmk->lmm_objects[0]));
 
         if ((cpu_to_le32(LOV_MAGIC) != LOV_MAGIC) &&
             ((lmmk->lmm_magic == cpu_to_le32(LOV_MAGIC_V1)) ||
             (lmmk->lmm_magic == cpu_to_le32(LOV_MAGIC_V3)))) {
+                lustre_swab_lov_user_md_objects((struct lov_user_md*)lmmk);
                 lustre_swab_lov_mds_md(lmmk);
-                lustre_swab_lov_user_md_objects(
-                                (struct lov_user_ost_data*)lmmk->lmm_objects,
-                                lmmk->lmm_stripe_count);
         }
         if (lum.lmm_magic == LOV_USER_MAGIC) {
                 /* User request for v1, we need skip lmm_pool_name */
                 if (lmmk->lmm_magic == LOV_MAGIC_V3) {
-                        memmove((char*)(&lmmk->lmm_stripe_count) +
-                                sizeof(lmmk->lmm_stripe_count),
+                        memmove(((struct lov_mds_md_v1*)lmmk)->lmm_objects,
                                 ((struct lov_mds_md_v3*)lmmk)->lmm_objects,
                                 lmmk->lmm_stripe_count *
                                 sizeof(struct lov_ost_data_v1));
@@ -643,12 +617,11 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
                 /* if v3 we just have to update the lum_size */
                 lum_size = sizeof(struct lov_user_md_v3);
         }
-
         /* User wasn't expecting this many OST entries */
         if (lum.lmm_stripe_count == 0)
                 lmm_size = lum_size;
         else if (lum.lmm_stripe_count < lmmk->lmm_stripe_count)
-                GOTO(out_set, rc = -EOVERFLOW);
+                RETURN(-EOVERFLOW);
         /*
          * Have a difference between lov_mds_md & lov_user_md.
          * So we have to re-order the data before copy to user.
@@ -659,8 +632,13 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (copy_to_user(lump, lmmk, lmm_size))
                 rc = -EFAULT;
 
+        /* Restore the LE endian to ensure obd_free_diskmd works well */
+        if (cpu_to_le32(LOV_MAGIC) != LOV_MAGIC) {
+                lmmk->lmm_stripe_count = lum.lmm_stripe_count;
+                lustre_swab_lov_mds_md(lmmk);
+        }
+
         obd_free_diskmd(exp, &lmmk);
-out_set:
-        set_fs(seg);
+
         RETURN(rc);
 }

@@ -5,4 +5,3 @@ endif
 endif
 
 MOSTLYCLEANFILES = @MOSTLYCLEANFILES@
-DIST_SOURCES = $(kptllnd-objs:%.o=%.c) ptllnd.h

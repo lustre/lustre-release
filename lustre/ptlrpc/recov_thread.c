@@ -185,8 +185,7 @@ llcd_copy(struct llog_canceld_ctxt *llcd, struct llog_cookie *cookies)
  * in cleanup time when all inflight rpcs aborted.
  */
 static int
-llcd_interpret(const struct lu_env *env,
-               struct ptlrpc_request *req, void *noused, int rc)
+llcd_interpret(struct ptlrpc_request *req, void *noused, int rc)
 {
         struct llog_canceld_ctxt *llcd = req->rq_async_args.pointer_arg[0];
         CDEBUG(D_RPCTRACE, "Sent llcd %p (%d) - killing it\n", llcd, rc);
@@ -201,6 +200,8 @@ llcd_interpret(const struct lu_env *env,
  */
 static int llcd_send(struct llog_canceld_ctxt *llcd)
 {
+        int size[2] = { sizeof(struct ptlrpc_body),
+                        llcd->llcd_cookiebytes };
         char *bufs[2] = { NULL, (char *)llcd->llcd_cookies };
         struct obd_import *import = NULL;
         struct llog_commit_master *lcm;
@@ -246,29 +247,29 @@ static int llcd_send(struct llog_canceld_ctxt *llcd)
          * No need to get import here as it is already done in
          * llog_receptor_accept().
          */
-        req = ptlrpc_request_alloc(import, &RQF_LOG_CANCEL);
+        req = ptlrpc_prep_req(import, LUSTRE_LOG_VERSION,
+                              OBD_LOG_CANCEL, 2, size, bufs);
         if (req == NULL) {
                 CERROR("Can't allocate request for sending llcd %p\n",
                        llcd);
                 GOTO(exit, rc = -ENOMEM);
         }
-        req_capsule_set_size(&req->rq_pill, &RMF_LOGCOOKIES,
-                             RCL_CLIENT, llcd->llcd_cookiebytes);
 
-        rc = ptlrpc_request_bufs_pack(req, LUSTRE_LOG_VERSION,
-                                      OBD_LOG_CANCEL, bufs, NULL);
-        if (rc) {
-                ptlrpc_request_free(req);
-                GOTO(exit, rc);
+        /*
+         * Check if we're in exit stage again. Do not send llcd in
+         * this case.
+         */
+        if (test_bit(LLOG_LCM_FL_EXIT, &lcm->lcm_flags)) {
+                ptlrpc_req_finished(req);
+                GOTO(exit, rc = -ENODEV);
         }
-
-        ptlrpc_at_set_req_timeout(req);
-        ptlrpc_request_set_replen(req);
 
         /* bug 5515 */
         req->rq_request_portal = LDLM_CANCEL_REQUEST_PORTAL;
         req->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
-        req->rq_interpret_reply = (ptlrpc_interpterer_t)llcd_interpret;
+        ptlrpc_req_set_repsize(req, 1, NULL);
+        ptlrpc_at_set_req_timeout(req);
+        req->rq_interpret_reply = llcd_interpret;
         req->rq_async_args.pointer_arg[0] = llcd;
 
         /* llog cancels will be replayed after reconnect so this will do twice
@@ -277,10 +278,10 @@ static int llcd_send(struct llog_canceld_ctxt *llcd)
 
         rc = ptlrpc_set_add_new_req(&lcm->lcm_pc, req);
         if (rc) {
-                ptlrpc_request_free(req);
+                ptlrpc_req_finished(req);
                 GOTO(exit, rc);
         }
-        RETURN(0);
+        RETURN(rc);
 exit:
         CDEBUG(D_RPCTRACE, "Refused llcd %p\n", llcd);
         llcd_free(llcd);
@@ -336,7 +337,7 @@ static struct llog_canceld_ctxt *llcd_detach(struct llog_ctxt *ctxt)
 static struct llog_canceld_ctxt *llcd_get(struct llog_ctxt *ctxt)
 {
         struct llog_canceld_ctxt *llcd;
-        LASSERT(ctxt);
+
         llcd = llcd_alloc(ctxt->loc_lcm);
         if (!llcd) {
                 CERROR("Can't alloc an llcd for ctxt %p\n", ctxt);
@@ -433,7 +434,7 @@ void llog_recov_thread_stop(struct llog_commit_master *lcm, int force)
                 struct list_head         *tmp;
 
                 CERROR("Busy llcds found (%d) on lcm %p\n",
-                       atomic_read(&lcm->lcm_count), lcm);
+                       atomic_read(&lcm->lcm_count) == 0, lcm);
 
                 spin_lock(&lcm->lcm_lock);
                 list_for_each(tmp, &lcm->lcm_llcds) {
@@ -479,7 +480,6 @@ struct llog_commit_master *llog_recov_thread_init(char *name)
                  "lcm_%s", name);
 
         atomic_set(&lcm->lcm_count, 0);
-        atomic_set(&lcm->lcm_refcount, 1);
         spin_lock_init(&lcm->lcm_lock);
         CFS_INIT_LIST_HEAD(&lcm->lcm_llcds);
         rc = llog_recov_thread_start(lcm);
@@ -501,7 +501,7 @@ void llog_recov_thread_fini(struct llog_commit_master *lcm, int force)
 {
         ENTRY;
         llog_recov_thread_stop(lcm, force);
-        lcm_put(lcm);
+        OBD_FREE_PTR(lcm);
         EXIT;
 }
 EXPORT_SYMBOL(llog_recov_thread_fini);
@@ -591,10 +591,6 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
         LASSERT(ctxt != NULL);
 
         mutex_down(&ctxt->loc_sem);
-        if (!ctxt->loc_lcm) {
-                CDEBUG(D_RPCTRACE, "No lcm for ctxt %p\n", ctxt);
-                GOTO(out, rc = -ENODEV);
-        }
         lcm = ctxt->loc_lcm;
         CDEBUG(D_INFO, "cancel on lsm %p\n", lcm);
 

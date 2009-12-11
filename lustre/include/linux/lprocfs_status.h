@@ -56,7 +56,7 @@
 #include <linux/version.h>
 #include <linux/smp.h>
 #include <linux/rwsem.h>
-#include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 #include <linux/statfs.h>
 
 #else 

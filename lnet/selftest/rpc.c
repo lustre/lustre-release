@@ -198,7 +198,7 @@ srpc_init_server_rpc (srpc_server_rpc_t *rpc,
         rpc->srpc_reqstbuf = buffer;
         rpc->srpc_peer     = buffer->buf_peer;
         rpc->srpc_self     = buffer->buf_self;
-        LNetInvalidateHandle(&rpc->srpc_replymdh);
+        rpc->srpc_replymdh = LNET_INVALID_HANDLE;
 }
 
 int
@@ -393,10 +393,8 @@ srpc_post_passive_rqtbuf(int service, void *buf, int len,
 {
         int               rc;
         int               portal;
-        lnet_process_id_t any = {0};
-
-        any.nid = LNET_NID_ANY;
-        any.pid = LNET_PID_ANY;
+        lnet_process_id_t any = {.nid = LNET_NID_ANY,
+                                 .pid = LNET_PID_ANY};
 
         if (service > SRPC_FRAMEWORK_SERVICE_MAX_ID)
                 portal = SRPC_REQUEST_PORTAL;
@@ -416,7 +414,7 @@ srpc_service_post_buffer (srpc_service_t *sv, srpc_buffer_t *buf)
 
         LASSERT (!sv->sv_shuttingdown);
 
-        LNetInvalidateHandle(&buf->buf_mdh);
+        buf->buf_mdh = LNET_INVALID_HANDLE;
         list_add(&buf->buf_list, &sv->sv_posted_msgq);
         sv->sv_nposted_msg++;
         spin_unlock(&sv->sv_lock);
@@ -630,8 +628,7 @@ srpc_shutdown_service (srpc_service_t *sv)
         sv->sv_shuttingdown = 1; /* i.e. no new active RPC */
 
         /* schedule in-flight RPCs to notice the shutdown */
-        cfs_list_for_each_entry_typed (rpc, &sv->sv_active_rpcq,
-                                       srpc_server_rpc_t, srpc_list) {
+        list_for_each_entry (rpc, &sv->sv_active_rpcq, srpc_list) {
                 srpc_schedule_server_rpc(rpc);
         }
 
@@ -639,8 +636,7 @@ srpc_shutdown_service (srpc_service_t *sv)
 
         /* OK to traverse sv_posted_msgq without lock, since no one
          * touches sv_posted_msgq now */
-        cfs_list_for_each_entry_typed (buf, &sv->sv_posted_msgq,
-                                       srpc_buffer_t, buf_list)
+        list_for_each_entry (buf, &sv->sv_posted_msgq, buf_list)
                 LNetMDUnlink(buf->buf_mdh);
 
         return;
@@ -1473,7 +1469,7 @@ srpc_startup (void)
 
         srpc_data.rpc_state = SRPC_STATE_NI_INIT;
 
-        LNetInvalidateHandle(&srpc_data.rpc_lnet_eq);
+        srpc_data.rpc_lnet_eq = LNET_EQ_NONE;
 #ifdef __KERNEL__
         rc = LNetEQAlloc(16, srpc_lnet_ev_handler, &srpc_data.rpc_lnet_eq);
 #else

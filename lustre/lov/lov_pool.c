@@ -73,7 +73,6 @@ void lov_pool_putref(struct pool_desc *pool)
         }
 }
 
-
 /*
  * hash function using a Rotating Hash algorithm
  * Knuth, D. The Art of Computer Programming,
@@ -81,7 +80,7 @@ void lov_pool_putref(struct pool_desc *pool)
  * Chapter 6.4.
  * Addison Wesley, 1973
  */
-static __u32 pool_hashfn(cfs_hash_t *hash_body, void *key, unsigned mask)
+static __u32 pool_hashfn(lustre_hash_t *hash_body, void *key, unsigned mask)
 {
         int i;
         __u32 result;
@@ -135,12 +134,12 @@ static void *pool_hashrefcount_put(struct hlist_node *hnode)
         return (pool);
 }
 
-cfs_hash_ops_t pool_hash_operations = {
-        .hs_hash        = pool_hashfn,
-        .hs_key         = pool_key,
-        .hs_compare     = pool_hashkey_compare,
-        .hs_get         = pool_hashrefcount_get,
-        .hs_put         = pool_hashrefcount_put,
+lustre_hash_ops_t pool_hash_operations = {
+        .lh_hash        = pool_hashfn,
+        .lh_key         = pool_key,
+        .lh_compare     = pool_hashkey_compare,
+        .lh_get         = pool_hashrefcount_get,
+        .lh_put         = pool_hashrefcount_put,
 };
 
 #ifdef LPROCFS
@@ -166,7 +165,7 @@ static void *pool_proc_next(struct seq_file *s, void *v, loff_t *pos)
         struct pool_iterator *iter = (struct pool_iterator *)s->private;
         int prev_idx;
 
-        LASSERTF(iter->magic == POOL_IT_MAGIC, "%08X", iter->magic);
+        LASSERT(iter->magic == POOL_IT_MAGIC);
 
         /* test if end of file */
         if (*pos >= pool_tgt_count(iter->pool))
@@ -247,7 +246,7 @@ static int pool_proc_show(struct seq_file *s, void *v)
         struct pool_iterator *iter = (struct pool_iterator *)v;
         struct lov_tgt_desc *tgt;
 
-        LASSERTF(iter->magic == POOL_IT_MAGIC, "%08X", iter->magic);
+        LASSERT(iter->magic == POOL_IT_MAGIC);
         LASSERT(iter->pool != NULL);
         LASSERT(iter->idx <= pool_tgt_count(iter->pool));
 
@@ -384,7 +383,6 @@ int lov_ost_pool_remove(struct ost_pool *op, __u32 idx)
         ENTRY;
 
         down_write(&op->op_rw_sem);
-
         for (i = 0; i < op->op_count; i++) {
                 if (op->op_array[i] == idx) {
                         memmove(&op->op_array[i], &op->op_array[i + 1],
@@ -395,7 +393,6 @@ int lov_ost_pool_remove(struct ost_pool *op, __u32 idx)
                         return 0;
                 }
         }
-
         up_write(&op->op_rw_sem);
         RETURN(-EINVAL);
 }
@@ -405,17 +402,15 @@ int lov_ost_pool_free(struct ost_pool *op)
         ENTRY;
 
         if (op->op_size == 0)
-                RETURN(0);
+                return 0;
 
         down_write(&op->op_rw_sem);
-
         OBD_FREE(op->op_array, op->op_size * sizeof(op->op_array[0]));
         op->op_array = NULL;
         op->op_count = 0;
         op->op_size = 0;
-
         up_write(&op->op_rw_sem);
-        RETURN(0);
+        return 0;
 }
 
 
@@ -454,7 +449,7 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
         INIT_HLIST_NODE(&new_pool->pool_hash);
 
 #ifdef LPROCFS
-        /* we need this assert seq_file is not implementated for liblustre */
+        /* we need this ifdef because seq_file is not implementated for liblustre */
         /* get ref for /proc file */
         lov_pool_getref(new_pool);
         new_pool->pool_proc_entry = lprocfs_add_simple(lov->lov_pool_proc_entry,
@@ -475,8 +470,8 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
         spin_unlock(&obd->obd_dev_lock);
 
         /* add to find only when it fully ready  */
-        rc = cfs_hash_add_unique(lov->lov_pools_hash_body, poolname,
-                                 &new_pool->pool_hash);
+        rc = lustre_hash_add_unique(lov->lov_pools_hash_body, poolname,
+                                    &new_pool->pool_hash);
         if (rc)
                 GOTO(out_err, rc = -EEXIST);
 
@@ -509,7 +504,7 @@ int lov_pool_del(struct obd_device *obd, char *poolname)
         lov = &(obd->u.lov);
 
         /* lookup and kill hash reference */
-        pool = cfs_hash_del_key(lov->lov_pools_hash_body, poolname);
+        pool = lustre_hash_del_key(lov->lov_pools_hash_body, poolname);
         if (pool == NULL)
                 RETURN(-ENOENT);
 
@@ -542,12 +537,11 @@ int lov_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 
         lov = &(obd->u.lov);
 
-        pool = cfs_hash_lookup(lov->lov_pools_hash_body, poolname);
+        pool = lustre_hash_lookup(lov->lov_pools_hash_body, poolname);
         if (pool == NULL)
                 RETURN(-ENOENT);
 
         obd_str2uuid(&ost_uuid, ostname);
-
 
         /* search ost in lov array */
         obd_getref(obd);
@@ -570,7 +564,7 @@ int lov_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 
         CDEBUG(D_CONFIG, "Added %s to "LOV_POOLNAMEF" as member %d\n",
                ostname, poolname,  pool_tgt_count(pool));
-
+        rc = 0;
         EXIT;
 out:
         obd_putref(obd);
@@ -584,19 +578,20 @@ int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
         struct lov_obd *lov;
         struct pool_desc *pool;
         unsigned int lov_idx;
-        int rc = 0;
+        int rc;
         ENTRY;
 
         lov = &(obd->u.lov);
 
-        pool = cfs_hash_lookup(lov->lov_pools_hash_body, poolname);
+        /* hash have own locking */
+        pool = lustre_hash_lookup(lov->lov_pools_hash_body, poolname);
         if (pool == NULL)
                 RETURN(-ENOENT);
 
         obd_str2uuid(&ost_uuid, ostname);
 
-        obd_getref(obd);
         /* search ost in lov array, to get index */
+        obd_getref(obd);
         for (lov_idx = 0; lov_idx < lov->desc.ld_tgt_count; lov_idx++) {
                 if (!lov->lov_tgts[lov_idx])
                         continue;
@@ -605,10 +600,9 @@ int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
                                     &(lov->lov_tgts[lov_idx]->ltd_uuid)))
                         break;
         }
-
         /* test if ost found in lov */
         if (lov_idx == lov->desc.ld_tgt_count)
-                GOTO(out, rc = -EINVAL);
+               GOTO(out, rc = -EINVAL);
 
         lov_ost_pool_remove(&pool->pool_obds, lov_idx);
 
@@ -616,7 +610,7 @@ int lov_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
 
         CDEBUG(D_CONFIG, "%s removed from "LOV_POOLNAMEF"\n", ostname,
                poolname);
-
+        rc = 0;
         EXIT;
 out:
         obd_putref(obd);
@@ -636,7 +630,6 @@ int lov_check_index_in_pool(__u32 idx, struct pool_desc *pool)
         lov_pool_getref(pool);
 
         down_read(&pool_tgt_rw_sem(pool));
-
         for (i = 0; i < pool_tgt_count(pool); i++) {
                 if (pool_tgt_array(pool)[i] == idx)
                         GOTO(out, rc = 0);
@@ -656,7 +649,7 @@ struct pool_desc *lov_find_pool(struct lov_obd *lov, char *poolname)
 
         pool = NULL;
         if (poolname[0] != '\0') {
-                pool = cfs_hash_lookup(lov->lov_pools_hash_body, poolname);
+                pool = lustre_hash_lookup(lov->lov_pools_hash_body, poolname);
                 if (pool == NULL)
                         CWARN("Request for an unknown pool ("LOV_POOLNAMEF")\n",
                               poolname);

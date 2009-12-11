@@ -376,7 +376,7 @@ static int dir_write(char *chunk_buf, size_t chunksize,
 #ifdef HAVE_EXT2FS_EXT2FS_H
 	if (!full && fsetflags(testdir, EXT2_TOPDIR_FL))
 		fprintf(stderr,
-			"\n%s: can't set TOPDIR_FL on %s: %s (ignoring)",
+			"\n%s: can't set TOPDIR_FL on %s: %s (ignoring)\n",
 			progname, testdir, strerror(errno));
 #endif
 	for (; dir_num < num_dirs; num_files++, file_num++) {

@@ -18,7 +18,6 @@
  * You should have received a copy of the GNU General Public License
  * version 2 along with this program; If not, see
  * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
- * copy of GPLv2].
  *
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
@@ -50,7 +49,26 @@
 #include <sys/types.h>
 #endif
 
+/* TODO: remove these when libcfs provides proper primitives for userspace
+ *
+ * Dummy implementations of spinlock_t and atomic_t work since userspace
+ * selftest is completely single-threaded, even using multi-threaded usocklnd.
+ */
+typedef struct { } spinlock_t;
+static inline void spin_lock(spinlock_t *l) {return;}
+static inline void spin_unlock(spinlock_t *l) {return;}
+static inline void spin_lock_init(spinlock_t *l) {return;}
+
+typedef struct { volatile int counter; } atomic_t;
+#define atomic_read(a) ((a)->counter)
+#define atomic_set(a,b) do {(a)->counter = b; } while (0)
+#define atomic_dec_and_test(a) ((--((a)->counter)) == 0)
+#define atomic_inc(a)  (((a)->counter)++)
+#define atomic_dec(a)  do { (a)->counter--; } while (0)
+
 #endif
+
+#include <libcfs/kp30.h>
 #include <libcfs/libcfs.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-lnet.h>
@@ -505,9 +523,9 @@ srpc_init_client_rpc (srpc_client_rpc_t *rpc, lnet_process_id_t peer,
         rpc->crpc_bulk.bk_niov = nbulkiov;
         rpc->crpc_done         = rpc_done;
         rpc->crpc_fini         = rpc_fini;
-        LNetInvalidateHandle(&rpc->crpc_reqstmdh);
-        LNetInvalidateHandle(&rpc->crpc_replymdh);
-        LNetInvalidateHandle(&rpc->crpc_bulk.bk_mdh);
+        rpc->crpc_reqstmdh     =
+        rpc->crpc_replymdh     =
+        rpc->crpc_bulk.bk_mdh  = LNET_INVALID_HANDLE;
 
         /* no event is expected at this point */
         rpc->crpc_bulkev.ev_fired  =
@@ -560,12 +578,14 @@ int selftest_wait_events(void);
 
 #endif
 
-#define lst_wait_until(cond, lock, fmt, ...)                            \
+#define lst_wait_until(cond, lock, fmt, a...)                           \
 do {                                                                    \
         int __I = 2;                                                    \
         while (!(cond)) {                                               \
-                CDEBUG(IS_PO2(++__I) ? D_WARNING : D_NET,               \
-                       fmt, ## __VA_ARGS__);                            \
+                __I++;                                                  \
+                CDEBUG(((__I & (-__I)) == __I) ? D_WARNING :            \
+                                                 D_NET,     /* 2**n? */ \
+                       fmt, ## a);                                      \
                 spin_unlock(&(lock));                                   \
                                                                         \
                 selftest_wait_events();                                 \

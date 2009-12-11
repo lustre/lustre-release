@@ -22,8 +22,10 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
-#include <libcfs/libcfsutil.h>
+
+#include "parser.h"
 
 
 command_t list[] = {
@@ -61,25 +63,14 @@ command_t list[] = {
 
 int main(int argc, char **argv)
 {
-        int rc = 0;
-
-        rc = libcfs_arch_init();
-        if (rc < 0)
-                return rc;
-
-        rc = ptl_initialize(argc, argv);
-        if (rc < 0)
-                goto errorout;
+        if (ptl_initialize(argc, argv) < 0)
+                exit(1);
 
         Parser_init("ptlctl > ", list);
-        if (argc > 1) {
-                rc = Parser_execarg(argc - 1, &argv[1], list);
-                goto errorout;
-        }
+        if (argc > 1)
+                return Parser_execarg(argc - 1, &argv[1], list);
 
         Parser_commands();
 
-errorout:
-        libcfs_arch_cleanup();
-        return rc;
+        return 0;
 }

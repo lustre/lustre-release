@@ -41,7 +41,7 @@
 #ifndef __LNET_ST_H__
 #define __LNET_ST_H__
 
-#include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 #include <lnet/lnet.h>
 #include <lnet/lib-types.h>
 
@@ -72,7 +72,8 @@ typedef struct {
         __u64                   ses_stamp;              /* time stamp */
 } lst_sid_t;                                            /*** session id */
 
-extern lst_sid_t LST_INVALID_SID;
+#define LST_INVALID_SID         ((const lst_sid_t){.ses_nid   = LNET_NID_ANY,\
+                                                   .ses_stamp = -1})
 
 typedef struct {
         __u64                   bat_id;                 /* unique id in session */
@@ -457,7 +458,7 @@ typedef struct {
 } lst_test_ping_param_t;
 
 /* more tests */
-#include <libcfs/libcfs_pack.h>
+
 typedef struct {
         __u32 errors;
         __u32 rpcs_sent;
@@ -466,7 +467,7 @@ typedef struct {
         __u32 rpcs_expired;
         __u64 bulk_get;
         __u64 bulk_put;
-} WIRE_ATTR srpc_counters_t;
+} srpc_counters_t;
 
 typedef struct {
         __u32 active_tests;
@@ -474,7 +475,6 @@ typedef struct {
         __u32 zombie_sessions;
         __u32 brw_errors;
         __u32 ping_errors;
-} WIRE_ATTR sfw_counters_t;
-#include <libcfs/libcfs_unpack.h>
+} sfw_counters_t;
 
 #endif

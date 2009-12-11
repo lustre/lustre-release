@@ -42,6 +42,7 @@ LCTL=${LCTL:-lctl}
 SETSTRIPE=${SETSTRIPE:-"$LFS setstripe"}
 GETSTRIPE=${GETSTRIPE:-"$LFS getstripe"}
 
+SINGLEMDS=mds
 
 TSTUSR=${TSTUSR:-"quota_usr"}
 TSTID=${TSTID:-60000}
@@ -1301,28 +1302,27 @@ test_24() {
 run_test 24 "Independence of pool from other setstripe parameters"
 
 test_25() {
-    local dev=$(mdsdevname ${SINGLEMDS//mds/})
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 
     mkdir -p $POOL_ROOT
 
     for i in $(seq 10); do
-        create_pool_nofail pool$i
-	do_facet $SINGLEMDS lctl pool_add $FSNAME.pool$i OST0000
-        stop $SINGLEMDS || return 1
-        start $SINGLEMDS ${dev} $MDS_MOUNT_OPTS  || \
-            { error "Failed to start $SINGLEMDS after stopping" && break; }
-	clients_up
+		create_pool_nofail pool$i
+		do_facet $SINGLEMDS lctl pool_add $FSNAME.pool$i OST0000
+		stop $SINGLEMDS || return 1
+		start $SINGLEMDS $MDSDEV $MDS_MOUNT_OPTS  || \
+			{ error "Failed to start $SINGLEMDS after stopping" && break; }
+		clients_up
 
         # Veriy that the pool got created and is usable
-        echo "Creating a file in pool$i"
-        create_file $POOL_ROOT/file$i pool$i || break
-        check_file_in_pool $POOL_ROOT/file$i pool$i || break
-    done
+		echo "Creating a file in pool$i"
+		create_file $POOL_ROOT/file$i pool$i || break
+		check_file_in_pool $POOL_ROOT/file$i pool$i || break
+	done
 
     rm -rf $POOL_ROOT
     for i in $(seq 10); do
-        destroy_pool pool$i
+		destroy_pool pool$i
     done
 }
 run_test 25 "Create new pool and restart MDS ======================="

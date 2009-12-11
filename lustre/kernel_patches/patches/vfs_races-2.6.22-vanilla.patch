@@ -16,6 +16,32 @@ Index: linux-2.6.22.5/fs/dcache.c
  	/*
  	 * Check whether to do a partial shrink_dcache
  	 * to get rid of unused child entries.
+@@ -1441,13 +1448,22 @@
+  * Adds a dentry to the hash according to its name.
+  */
+  
+-void d_rehash(struct dentry * entry)
++void d_rehash_cond(struct dentry * entry, int lock)
+ {
+-	spin_lock(&dcache_lock);
++	if (lock)
++		spin_lock(&dcache_lock);
+ 	spin_lock(&entry->d_lock);
+ 	_d_rehash(entry);
+ 	spin_unlock(&entry->d_lock);
+-	spin_unlock(&dcache_lock);
++	if (lock)
++		spin_unlock(&dcache_lock);
++}
++
++EXPORT_SYMBOL(d_rehash_cond);
++
++void d_rehash(struct dentry * entry)
++{
++	d_rehash_cond(entry, 1);
+ }
+ 
+ #define do_switch(x,y) do { \
 Index: linux-2.6.22.5/include/linux/dcache.h
 ===================================================================
 --- linux-2.6.22.5.orig/include/linux/dcache.h	2007-08-22 17:23:54.000000000 -0600

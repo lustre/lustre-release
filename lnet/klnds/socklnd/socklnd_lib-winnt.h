@@ -43,6 +43,7 @@
 #define __WINNT_TDILND_LIB_H__
 
 #include <libcfs/libcfs.h>
+#include <libcfs/kp30.h>
 
 #ifndef CONFIG_SMP
 
@@ -73,13 +74,5 @@ ksocknal_irqsched2cpu(int i)
 }
 
 #endif
-
-static inline __u32 ksocknal_csum(__u32 crc, unsigned char const *p, size_t len)
-{
-        while (len-- > 0)
-                crc = ((crc + 0x100) & ~0xff) | ((crc + *p++) & 0xff) ;
-        return crc;
-}
-
 
 #endif

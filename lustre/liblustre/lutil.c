@@ -47,7 +47,7 @@
 #ifdef _AIX
 #include "syscall_AIX.h"
 #else
-#include <sys/syscall.h>
+#include <syscall.h>
 #endif
 #include <sys/utsname.h>
 #ifdef HAVE_NETINET_IN_H
@@ -77,12 +77,10 @@ void *inter_module_get(char *arg)
                 return ldlm_namespace_cleanup;
         else if (!strcmp(arg, "ldlm_replay_locks"))
                 return ldlm_replay_locks;
-        else if (!strcmp(arg, "mdc_quota_interface"))
-                return &mdc_quota_interface;
-        else if (!strcmp(arg, "lmv_quota_interface"))
-                return &lmv_quota_interface;
         else if (!strcmp(arg, "osc_quota_interface"))
                 return &osc_quota_interface;
+        else if (!strcmp(arg, "mdc_quota_interface"))
+                return &mdc_quota_interface;
         else if (!strcmp(arg, "lov_quota_interface"))
                 return &lov_quota_interface;
         else
@@ -207,7 +205,6 @@ int liblustre_init_current(char *comm)
 
         strncpy(current->comm, comm, sizeof(current->comm));
         current->pid = getpid();
-        current->gid = getgid();
         current->fsuid = geteuid();
         current->fsgid = getegid();
         memset(&current->pending, 0, sizeof(current->pending));
@@ -244,12 +241,24 @@ int cfs_cap_raised(cfs_cap_t cap)
         return current->cap_effective & (1 << cap);
 }
 
+void cfs_kernel_cap_pack(cfs_kernel_cap_t kcap, cfs_cap_t *cap)
+{
+        *cap = kcap;
+}
+
+void cfs_kernel_cap_unpack(cfs_kernel_cap_t *kcap, cfs_cap_t cap)
+{
+        *kcap = cap;
+}
+
 cfs_cap_t cfs_curproc_cap_pack(void) {
-        return cfs_current()->cap_effective;
+        cfs_cap_t cap;
+        cfs_kernel_cap_pack(cfs_current()->cap_effective, &cap);
+        return cap;
 }
 
 void cfs_curproc_cap_unpack(cfs_cap_t cap) {
-        cfs_current()->cap_effective = cap;
+        cfs_kernel_cap_unpack(&cfs_current()->cap_effective, cap);
 }
 
 int cfs_capable(cfs_cap_t cap)

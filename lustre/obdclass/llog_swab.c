@@ -101,19 +101,11 @@ EXPORT_SYMBOL(lustre_swab_ll_fid);
 
 void lustre_swab_lu_fid(struct lu_fid *fid)
 {
-        __swab64s (&fid->f_seq);
-        __swab32s (&fid->f_oid);
-        __swab32s (&fid->f_ver);
+        __swab64s(&fid->f_seq);
+        __swab32s(&fid->f_oid);
+        __swab32s(&fid->f_ver);
 }
 EXPORT_SYMBOL(lustre_swab_lu_fid);
-
-void lustre_swab_lu_seq_range(struct lu_seq_range *range)
-{
-        __swab64s (&range->lsr_start);
-        __swab64s (&range->lsr_end);
-        __swab32s (&range->lsr_mdt);
-}
-EXPORT_SYMBOL(lustre_swab_lu_seq_range);
 
 void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
 {
@@ -127,7 +119,8 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
                         (struct llog_size_change_rec *)rec;
 
                 lustre_swab_ll_fid(&lsc->lsc_fid);
-                __swab32s(&lsc->lsc_ioepoch);
+                __swab32s(&lsc->lsc_io_epoch);
+
                 break;
         }
 
@@ -150,29 +143,7 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
                 __swab32s(&lsr->lsr_ogr);
                 __swab32s(&lsr->lsr_uid);
                 __swab32s(&lsr->lsr_gid);
-                break;
-        }
 
-        case CHANGELOG_REC: {
-                struct llog_changelog_rec *cr = (struct llog_changelog_rec*)rec;
-
-                __swab16s(&cr->cr.cr_namelen);
-                __swab16s(&cr->cr.cr_flags);
-                __swab32s(&cr->cr.cr_type);
-                __swab64s(&cr->cr.cr_index);
-                __swab64s(&cr->cr.cr_prev);
-                __swab64s(&cr->cr.cr_time);
-                lustre_swab_lu_fid(&cr->cr.cr_tfid);
-                lustre_swab_lu_fid(&cr->cr.cr_pfid);
-                break;
-        }
-
-        case CHANGELOG_USER_REC: {
-                struct llog_changelog_user_rec *cur =
-                        (struct llog_changelog_user_rec*)rec;
-
-                __swab32s(&cur->cur_id);
-                __swab64s(&cur->cur_endrec);
                 break;
         }
 
@@ -188,6 +159,7 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
         }
 
         case OBD_CFG_REC:
+        case PTL_CFG_REC:                       /* obsolete */
                 /* these are swabbed as they are consumed */
                 break;
 
@@ -204,6 +176,7 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
                         __swab32s(&llh->llh_tail.lrt_index);
                         __swab32s(&llh->llh_tail.lrt_len);
                 }
+
                 break;
         }
 
@@ -215,7 +188,10 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
                 __swab32s(&lid->lid_id.lgl_ogen);
                 break;
         }
+        case LLOG_JOIN_REC:
         case LLOG_PAD_MAGIC:
+        /* ignore old pad records of type 0 */
+        case 0:
                 break;
 
         default:

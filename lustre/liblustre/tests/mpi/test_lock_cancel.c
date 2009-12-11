@@ -106,7 +106,7 @@ int main(int argc, char *argv[])
                 {"dumpfile", 1, 0, 0},
                 {0, 0, 0, 0}
         };
-	int fd;
+	int fd = 0;
         long time1, time2;
         struct stat statbuf;
 
@@ -195,7 +195,7 @@ int main(int argc, char *argv[])
 
         time1 = time(NULL);
         if (unlink(test_file_name)) {
-                printf("Node %d: error unlink file: %s\n", rank, test_file_name);
+                printf("Node %d: error unlink file: %d\n", rank, fd);
                 fflush(stdout);
                 goto cleanup;
         }

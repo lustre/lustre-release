@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
 		int mode = i | 0644;
 		int rc;
 
-		sprintf(name, "%s-mknod%07o", argv[1], mode);
+		sprintf(name, "%s-mknod%06o", argv[1], mode);
 		rc = mknod(name, mode, 0x1234);
 		switch (i) {
 		case 0:
@@ -96,9 +96,9 @@ int main(int argc, char *argv[])
 			if (i == S_IFCHR || i == S_IFBLK) {
 				if (st.st_rdev != 0x1234) {
 					fprintf(stderr, "%s: ERROR rdev %s: "
-					        "%llu != 0x1234",
-					        argv[0], name,
-					        (unsigned long long)st.st_rdev);
+						"%llu != 0x1234",
+						argv[0], name,
+						(unsigned long long)st.st_rdev);
 					exit(13);
 				}
 			}
@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
 		int rc;
 
 		mode = i | 0644;
-		sprintf(name, "%s-creat%07o", argv[1], mode);
+		sprintf(name, "%s-creat%06o", argv[1], mode);
 		fd = open(name, O_CREAT|O_RDONLY, mode);
 		if (fd < 0) {
 			fprintf(stderr, "%s: ERROR creat %s: %s\n",

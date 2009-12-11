@@ -6,11 +6,14 @@ Makefile
 .deps
 tags
 TAGS
-.*.cmd
 autoMakefile.in
 autoMakefile
+modules.order
+.*.cmd
 *.ko
 *.mod.c
 .*.flags
+.*.o.d
+.*.o.tmp
 .tmp_versions
 .depend

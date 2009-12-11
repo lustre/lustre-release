@@ -55,14 +55,7 @@
 
 #define l_flock_waitq   l_lru
 
-/**
- * Wait queue for Posix lock deadlock detection, added with
- * ldlm_lock::l_flock_waitq.
- */
-static CFS_LIST_HEAD(ldlm_flock_waitq);
-/**
- * Lock protecting access to ldlm_flock_waitq.
- */
+static struct list_head ldlm_flock_waitq = CFS_LIST_HEAD_INIT(ldlm_flock_waitq);
 spinlock_t ldlm_flock_waitq_lock = SPIN_LOCK_UNLOCKED;
 
 int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
@@ -71,10 +64,10 @@ int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 /**
  * list_for_remaining_safe - iterate over the remaining entries in a list
  *              and safeguard against removal of a list entry.
- * \param pos   the &struct list_head to use as a loop counter. pos MUST
+ * @pos:        the &struct list_head to use as a loop counter. pos MUST
  *              have been initialized prior to using it in this macro.
- * \param n     another &struct list_head to use as temporary storage
- * \param head  the head for your list.
+ * @n:          another &struct list_head to use as temporary storage
+ * @head:       the head for your list.
  */
 #define list_for_remaining_safe(pos, n, head) \
         for (n = pos->next; pos != (head); pos = n, n = pos->next)
@@ -169,7 +162,6 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
         int added = (mode == LCK_NL);
         int overlaps = 0;
         int splitted = 0;
-        const struct ldlm_callback_suite null_cbs = { NULL };
         ENTRY;
 
         CDEBUG(D_DLMTRACE, "flags %#x pid %u mode %u start "LPU64" end "LPU64
@@ -374,8 +366,8 @@ reprocess:
                  * and restart processing this lock. */
                 if (!new2) {
                         unlock_res_and_lock(req);
-                         new2 = ldlm_lock_create(ns, &res->lr_name, LDLM_FLOCK,
-                                        lock->l_granted_mode, &null_cbs,
+                        new2 = ldlm_lock_create(ns, res->lr_name, LDLM_FLOCK,
+                                        lock->l_granted_mode, NULL, NULL, NULL,
                                         NULL, 0);
                         lock_res_and_lock(req);
                         if (!new2) {
@@ -400,12 +392,12 @@ reprocess:
                         new->l_policy_data.l_flock.end + 1;
                 new2->l_conn_export = lock->l_conn_export;
                 if (lock->l_export != NULL) {
-                        new2->l_export = class_export_lock_get(lock->l_export, new2);
+                        new2->l_export = class_export_get(lock->l_export);
                         if (new2->l_export->exp_lock_hash &&
                             hlist_unhashed(&new2->l_exp_hash))
-                                cfs_hash_add(new2->l_export->exp_lock_hash,
-                                             &new2->l_remote_handle,
-                                             &new2->l_exp_hash);
+                                lustre_hash_add(new2->l_export->exp_lock_hash,
+                                                &new2->l_remote_handle,
+                                                &new2->l_exp_hash);
                 }
                 if (*flags == LDLM_FL_WAIT_NOREPROC)
                         ldlm_lock_addref_internal_nolock(new2,
@@ -413,7 +405,7 @@ reprocess:
 
                 /* insert new2 at lock */
                 ldlm_resource_add_lock(res, ownlocks, new2);
-                LDLM_LOCK_RELEASE(new2);
+                LDLM_LOCK_PUT(new2);
                 break;
         }
 
@@ -443,15 +435,15 @@ reprocess:
                          * but only once because first_enq will be false from
                          * ldlm_reprocess_queue. */
                         if ((mode == LCK_NL) && overlaps) {
-                                CFS_LIST_HEAD(rpc_list);
+                                struct list_head rpc_list
+                                                 = CFS_LIST_HEAD_INIT(rpc_list);
                                 int rc;
 restart:
                                 ldlm_reprocess_queue(res, &res->lr_waiting,
                                                      &rpc_list);
 
                                 unlock_res_and_lock(req);
-                                rc = ldlm_run_ast_work(&rpc_list,
-                                                       LDLM_WORK_CP_AST);
+                                rc = ldlm_run_cp_ast_work(&rpc_list);
                                 lock_res_and_lock(req);
                                 if (rc == -ERESTART)
                                         GOTO(restart, -ERESTART);
@@ -510,7 +502,7 @@ ldlm_flock_interrupted_wait(void *data)
  *
  * \param lock [in,out]: A lock to be handled
  * \param flags    [in]: flags
- * \param *data    [in]: ldlm_work_cp_ast_lock() will use ldlm_cb_set_arg
+ * \param *data    [in]: ldlm_run_cp_ast_work() will use ldlm_cb_set_arg
  *
  * \retval 0    : success
  * \retval <0   : failure
@@ -590,7 +582,7 @@ granted:
         lock_res_and_lock(lock);
         if (lock->l_destroyed || lock->l_flags & LDLM_FL_FAILED) {
                 LDLM_DEBUG(lock, "client-side enqueue waking up: destroyed");
-                unlock_res(lock->l_resource);
+                unlock_res_and_lock(lock);
                 RETURN(-EIO);
         }
         if (rc) {

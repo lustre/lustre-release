@@ -153,7 +153,7 @@ Status: $result: rc=$rc"
         local failedclients=$(cat $END_RUN_FILE | grep -v $0)
         # FIXME: need ostfailover-s nodes also for FLAVOR=OST
         local product=$(gather_logs $(comma_list $(osts_nodes) \
-                               $(mdts_nodes) $mdsfailover_HOST $failedclients))
+                                 $mds_HOST $mdsfailover_HOST $failedclients))
         echo logs files $product
     fi
 

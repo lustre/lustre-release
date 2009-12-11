@@ -1,25 +1,20 @@
 tbd  Sun Microsystems, Inc.
-	* version 2.0.0
+	* version 1.8.2
 	* Support for networks:
-	 socklnd   - any kernel supported by Lustre,
-	 qswlnd    - Qsnet kernel modules 5.20 and later,
-	 openiblnd - IbGold 1.8.2,
-	 o2iblnd   - OFED 1.1, 1.2.0, 1.2.5, 1.3, and 1.4.1
-	 viblnd    - Voltaire ibhost 3.4.5 and later,
-	 ciblnd    - Topspin 3.2.0,
-	 iiblnd    - Infiniserv 3.3 + PathBits patch,
-	 gmlnd     - GM 2.1.22 and later,
-	 mxlnd     - MX 1.2.10 or later,
-	 ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
-
-Severity   : 
-Bugzilla   : 
-Description: 
-Details    : 
+	  socklnd   - any kernel supported by Lustre,
+	  qswlnd    - Qsnet kernel modules 5.20 and later,
+	  openiblnd - IbGold 1.8.2,
+	  o2iblnd   - OFED 1.1, 1.2.0, 1.2.5, 1.3, and 1.4.1
+	  viblnd    - Voltaire ibhost 3.4.5 and later,
+	  ciblnd    - Topspin 3.2.0,
+	  iiblnd    - Infiniserv 3.3 + PathBits patch,
+	  gmlnd     - GM 2.1.22 and later,
+	  mxlnd     - MX 1.2.10 or later,
+	  ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
 Severity   : minor
 Bugzilla   : 21459
-Description: should update lp_alive for non-router peers
+Description: should update lp_alive for non-router peers.
 
 Severity   : enhancement
 Bugzilla   : 15332
@@ -48,11 +43,6 @@ Description: ksocknal_close_conn_locked connection race
 Details    : A race was possible when ksocknal_create_conn calls
              ksocknal_close_conn_locked for already closed conn.
 
-Severity   : normal
-Bugzilla   : 18102
-Description: router_proc.c is rewritten to use sysctl-interface for parameters
-             residing in /proc/sys/lnet
-
 Severity   : enhancement
 Bugzilla   : 13065
 Description: port router pinger to userspace
@@ -74,6 +64,27 @@ Severity   : enhancement
 Bugzilla   : 18654
 Description: MXLND: eliminate hosts file, use arp for peer nic_id resolution
 Details    : an update from the upstream developer Scott Atchley.
+
+
+------------------------------------------------------------------------------- 
+2009-07-31  Sun Microsystems, Inc.
+	* version 1.8.1
+	* Support for networks:
+	 socklnd   - any kernel supported by Lustre,
+	 qswlnd    - Qsnet kernel modules 5.20 and later,
+	 openiblnd - IbGold 1.8.2,
+	 o2iblnd   - OFED 1.1, 1.2.0, 1.2.5, 1.3, and 1.4.1
+	 viblnd    - Voltaire ibhost 3.4.5 and later,
+	 ciblnd    - Topspin 3.2.0,
+	 iiblnd    - Infiniserv 3.3 + PathBits patch,
+	 gmlnd     - GM 2.1.22 and later,
+	 mxlnd     - MX 1.2.1 or later,
+	 ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+
+Severity   : normal
+Bugzilla   : 18102
+Description: router_proc.c is rewritten to use sysctl-interface for parameters
+             residing in /proc/sys/lnet
 
 Severity   : enhancement
 Bugzilla   : 15332
@@ -122,48 +133,38 @@ Severity   : normal
 Bugzilla   : 16034
 Description: Change ptllnd timeout and watchdog timers
 Details    : Add ptltrace_on_nal_failed and bump ptllnd timeout to match
-	     Portals wire timeout.
+             Portals wire timeout.
 
 Severity   : normal
 Bugzilla   : 16186
 Description: One down Lustre FS hangs ALL mounted Lustre filesystems
 Details    : Shared routing enhancements - peer health detection.
 
-Severity   : enhancement
-Bugzilla   : 14132
-Description: acceptor.c cleanup
-Details    : Code duplication in acceptor.c for the cases of kernel and
-	     user-space removed. User-space libcfs tcpip primitives
-	     uniformed to have prototypes similar to kernel ones. Minor
-	     cosmetic changes in usocklnd to use cfs_socket_t as
-	     representation of socket.
-
 Severity   : minor
 Bugzilla   : 11245
 Description: IB path MTU mistakenly set to 1st path MTU when ib_mtu is off
 Details    : See comment 46 in bug 11245 for details - it's indeed a bug
-	     introduced by the original 11245 fix.
+             introduced by the original 11245 fix.
 
 Severity   : minor
 Bugzilla   : 15984
 Description: uptllnd credit overflow fix
 Details    : kptl_msg_t::ptlm_credits could be overflown by uptllnd since
-	     it is only a __u8.
+             it is only a __u8.
 
 Severity   : major
 Bugzilla   : 14634
-Description: socklnd protocol version 3
+Description: socklnd protocol version 3 
 Details    : With current protocol V2, connections on router can be
-	     blocked and can't receive any incoming messages when there is no
-	     more router buffer, so ZC-ACK can't be handled (LNet message
-	     can't be finalized) and will cause deadlock on router.
-	     Protocol V3 has a dedicated connection for emergency messages
-	     like ZC-ACK to router, messages on this dedicated connection
-	     don't need any credit so will never be blocked. Also, V3 can send
-	     keepalive ping in specified period for router healthy checking.
+             blocked and can't receive any incoming messages when there is no
+             more router buffer, so ZC-ACK can't be handled (LNet message
+             can't be finalized) and will cause deadlock on router.
+             Protocol V3 has a dedicated connection for emergency messages
+             like ZC-ACK to router, messages on this dedicated connection
+             don't need any credit so will never be blocked. Also, V3 can send
+             keepalive ping in specified period for router healthy checking.
 
--------------------------------------------------------------------------------
-
+------------------------------------------------------------------------------- 
 12-31-2008  Sun Microsystems, Inc.
 	* version 1.8.0
 	* Support for networks:
@@ -178,22 +179,27 @@ Details    : With current protocol V2, connections on router can be
 	 mxlnd     - MX 1.2.1 or later,
 	 ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
+Severity   : 
+Bugzilla   : 
+Description: 
+Details    : 
+
 Severity   : major
 Bugzilla   : 15983
 Description: workaround for OOM from o2iblnd
 Details    : OFED needs allocate big chunk of memory for QP while creating
-	     connection for o2iblnd, OOM can happen if no such a contiguous
-	     memory chunk.
-	     QP size is decided by concurrent_sends and max_fragments of
-	     o2iblnd, now we permit user to specify smaller value for
-	     concurrent_sends of o2iblnd(i.e: concurrent_sends=7), which
-	     will decrease memory block size required by creating QP.
+             connection for o2iblnd, OOM can happen if no such a contiguous
+             memory chunk.
+             QP size is decided by concurrent_sends and max_fragments of
+             o2iblnd, now we permit user to specify smaller value for
+             concurrent_sends of o2iblnd(i.e: concurrent_sends=7), which
+             will decrease memory block size required by creating QP.
 
 Severity   : major
 Bugzilla   : 15093
 Description: Support Zerocopy receive of Chelsio device
 Details    : Chelsio driver can support zerocopy for iov[1] if it's
-	     contiguous and large enough.
+             contiguous and large enough.
 
 Severity   : normal
 Bugzilla   : 13490
@@ -203,21 +209,21 @@ Severity   : normal
 Bugzilla   : 16308
 Description: finalize network operation in reasonable time
 Details    : conf-sanity test_32a couldn't stop ost and mds because it
-	     tried to access non-existent peer and tcp connect took
-	     quite long before timing out.
+             tried to access non-existent peer and tcp connect took
+             quite long before timing out.
 
 Severity   : major
 Bugzilla   : 16338
 Description: Continuous recovery on 33 of 413 nodes after lustre oss failure
 Details    : Lost reference on conn prevents peer from being destroyed, which
-	     could prevent new peer creation if peer count has reached upper
+             could prevent new peer creation if peer count has reached upper
 	     limit.
 
 Severity   : normal
 Bugzilla   : 16102
 Description: LNET Selftest results in Soft lockup on OSS CPU
 Details    : only hits when 8 or more o2ib clients involved and a session is
-	     torn down with 'lst end_session' without preceeding 'lst stop'.
+             torn down with 'lst end_session' without preceeding 'lst stop'.
 
 Severity   : minor
 Bugzilla   : 16321
@@ -233,7 +239,7 @@ Details    : only hits under out-of-memory situations
 -------------------------------------------------------------------------------
 
 2009-02-07 Sun Microsystems, Inc.
-	* version 1.6.7
+        * version 1.6.7
 	* Support for networks:
 	 socklnd   - any kernel supported by Lustre,
 	 qswlnd    - Qsnet kernel modules 5.20 and later,
@@ -245,11 +251,12 @@ Details    : only hits under out-of-memory situations
 	 gmlnd     - GM 2.1.22 and later,
 	 mxlnd     - MX 1.2.1 or later,
 	 ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+
 Severity   : major
 Bugzilla   : 15983
 Description: workaround for OOM from o2iblnd
 Details    : OFED needs allocate big chunk of memory for QP while creating
-	     connection for o2iblnd, OOM can happen if no such a contiguous
+             connection for o2iblnd, OOM can happen if no such a contiguous
 	     memory chunk.
 	     QP size is decided by concurrent_sends and max_fragments of
 	     o2iblnd, now we permit user to specify smaller value for
@@ -260,7 +267,8 @@ Severity   : major
 Bugzilla   : 15093
 Description: Support Zerocopy receive of Chelsio device
 Details    : Chelsio driver can support zerocopy for iov[1] if it's
-	     contiguous and large enough.
+             contiguous and large enough.
+
 Severity   : normal
 Bugzilla   : 13490
 Description: fix credit flow deadlock in uptllnd
@@ -269,21 +277,21 @@ Severity   : normal
 Bugzilla   : 16308
 Description: finalize network operation in reasonable time
 Details    : conf-sanity test_32a couldn't stop ost and mds because it
-	     tried to access non-existent peer and tcp connect took
+             tried to access non-existent peer and tcp connect took
 	     quite long before timing out.
 
 Severity   : major
 Bugzilla   : 16338
 Description: Continuous recovery on 33 of 413 nodes after lustre oss failure
 Details    : Lost reference on conn prevents peer from being destroyed, which
-	     could prevent new peer creation if peer count has reached upper
+             could prevent new peer creation if peer count has reached upper
 	     limit.
 
 Severity   : normal
 Bugzilla   : 16102
 Description: LNET Selftest results in Soft lockup on OSS CPU
 Details    : only hits when 8 or more o2ib clients involved and a session is
-	     torn down with 'lst end_session' without preceeding 'lst stop'.
+             torn down with 'lst end_session' without preceeding 'lst stop'.
 
 Severity   : minor
 Bugzilla   : 16321
@@ -293,7 +301,7 @@ Details    : concurrent_sends in IB LNDs should not be changeable at run time
 -------------------------------------------------------------------------------
 
 11-03-2008  Sun Microsystems, Inc.
-	* version 1.6.6
+        * version 1.6.6
 	* Support for networks:
 	 socklnd   - any kernel supported by Lustre,
 	 qswlnd    - Qsnet kernel modules 5.20 and later,
@@ -312,6 +320,7 @@ Description: ptl_send_rpc hits LASSERT when ptl_send_buf fails
 Details    : only hits under out-of-memory situations
 
 -------------------------------------------------------------------------------
+
 
 04-26-2008  Sun Microsystems, Inc.
        * version 1.6.5
@@ -358,7 +367,6 @@ Bugzilla   : 14838
 Description: ksocklnd fails to establish connection if accept_port is high
 Details    : PID remapping must not be done for active (outgoing) connections
 
-
 --------------------------------------------------------------------------------
 
 2008-01-11  Sun Microsystems, Inc.
@@ -374,7 +382,6 @@ Details    : PID remapping must not be done for active (outgoing) connections
 	gmlnd     - GM 2.1.22 and later,
 	mxlnd     - MX 1.2.1 or later,
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
-
 Severity   : normal
 Bugzilla   : 14387
 Description: liblustre network error
@@ -414,7 +421,7 @@ Severity   : normal
 Bugzilla   : 12302
 Description: new userspace socklnd
 Details    : Old userspace tcpnal that resided in lnet/ulnds/socklnd replaced
-	     with new one - usocklnd.
+             with new one - usocklnd.
 
 Severity   : enhancement
 Bugzilla   : 11686
@@ -448,26 +455,26 @@ Severity   : major
 Bugzilla   : 13236
 Description: TOE Kernel panic by ksocklnd
 Details    : offloaded sockets provide their own implementation of sendpage,
-	     can't call tcp_sendpage() directly
+             can't call tcp_sendpage() directly
 
 Severity   : normal
 Bugzilla   : 10778
 Description: kibnal_shutdown() doesn't finish; lconf --cleanup hangs
 Details    : races between lnd_shutdown and peer creation prevent 
-	     lnd_shutdown from finishing.
+             lnd_shutdown from finishing.
 
 Severity   : normal
 Bugzilla   : 13279
 Description: open files rlimit 1024 reached while liblustre testing
 Details    : ulnds/socklnd must close open socket after unsuccessful
-	     'say hello' attempt.
+             'say hello' attempt.
 
 Severity   : major 
 Bugzilla   : 13482
 Description: build error
 Details    : fix typos in gmlnd, ptllnd and viblnd
 
---------------------------------------------------------------------------------
+------------------------------------------------------------------------------
 
 2007-07-30  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.6.1
@@ -482,8 +489,6 @@ Details    : fix typos in gmlnd, ptllnd and viblnd
 	gmlnd     - GM 2.1.22 and later,
 	mxlnd     - MX 1.2.1 or later,
 	ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
-
---------------------------------------------------------------------------------
 
 2007-06-21  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.11
@@ -506,20 +511,20 @@ Description: Initialize cpumask before use
 Severity   : major
 Bugzilla   : 12014
 Description: ASSERTION failures when upgrading to the patchless zero-copy
-	     socklnd 
+             socklnd 
 Details    : This bug affects "rolling upgrades", causing an inconsistent
-	     protocol version negotiation and subsequent assertion failure
+             protocol version negotiation and subsequent assertion failure
 	     during rolling upgrades after the first wave of upgrades.
 
 Severity   : minor
 Bugzilla   : 11223
 Details    : Change "dropped message" CERRORs to D_NETERROR so they are
-	     logged instead of creating "console chatter" when a lustre
+             logged instead of creating "console chatter" when a lustre
 	     timeout races with normal RPC completion.
 
 Severity   : minor
 Details    : lnet_clear_peer_table can wait forever if user forgets to
-	     clear a lazy portal.
+             clear a lazy portal.
 
 Severity   : minor
 Details    : libcfs_id2str should check pid against LNET_PID_ANY.
@@ -546,16 +551,16 @@ Severity   : major
 Bugzilla   : 12316
 Description: Add OFED1.2 support to o2iblnd
 Details    : o2iblnd depends on OFED's modules, if out-tree OFED's modules
-	     are installed (other than kernel's in-tree infiniband), there
-	     could be some problem while insmod o2iblnd (mismatch CRC of 
-	     ib_* symbols).
-	     If extra Module.symvers is supported in kernel (i.e, 2.6.17),
-	     this link provides solution:
-	     https://bugs.openfabrics.org/show_bug.cgi?id=355
-	     if extra Module.symvers is not supported in kernel, we will
-	     have to run the script in bug 12316 to update
-	     $LINUX/module.symvers before building o2iblnd.
-	     More details about this are in bug 12316.
+             are installed (other than kernel's in-tree infiniband), there
+             could be some problem while insmod o2iblnd (mismatch CRC of 
+             ib_* symbols).
+             If extra Module.symvers is supported in kernel (i.e, 2.6.17),
+             this link provides solution:
+             https://bugs.openfabrics.org/show_bug.cgi?id=355
+             if extra Module.symvers is not supported in kernel, we will
+             have to run the script in bug 12316 to update
+             $LINUX/module.symvers before building o2iblnd.
+             More details about this are in bug 12316.
 
 ------------------------------------------------------------------------------
 
@@ -590,7 +595,7 @@ Description: ptllnd logs a piece of incorrect debug info in kptllnd_peer_handle_
 Severity   : minor
 Frequency  : rare
 Description: the_lnet.ln_finalizing was not set when the current thread is
-	     about to complete messages. It only affects multi-threaded 
+             about to complete messages. It only affects multi-threaded 
 	     user space LNet.
 	
 Severity   : normal
@@ -602,13 +607,13 @@ Severity   : major
 Frequency  : rare
 Bugzilla   : 12458
 Description: Assertion failure in kernel ptllnd caused by posting passive
-	     bulk buffers before connection establishment complete.
+             bulk buffers before connection establishment complete.
 	
 Severity   : major
 Frequency  : rare
 Bugzilla   : 12445
 Description: A race in kernel ptllnd between deleting a peer and posting
-	     new communications for it could hang communications -
+             new communications for it could hang communications -
 	     manifesting as "Unexpectedly long timeout" messages.
 	
 Severity   : major
@@ -631,7 +636,7 @@ Frequency  : after Ptllnd timeouts and portals congestion
 Bugzilla   : 11659
 Description: Credit overflows
 Details    : This was a bug in ptllnd connection establishment.  The fix
-	     implements better peer stamps to disambiguate connection
+             implements better peer stamps to disambiguate connection
 	     establishment and ensure both peers enter the credit flow
 	     state machine consistently.
 
@@ -640,7 +645,7 @@ Frequency  : rare
 Bugzilla   : 11394
 Description: kptllnd didn't propagate some network errors up to LNET 
 Details    : This bug was spotted while investigating 11394.  The fix
-	     ensures network errors on sends and bulk transfers are
+             ensures network errors on sends and bulk transfers are
 	     propagated to LNET/lustre correctly.
 
 Severity   : enhancement
@@ -909,11 +914,11 @@ Description: add /proc/sys/portals/catastrophe entry which will report if
 	  - renamed cfs_sleep_chan -> cfs_waitq
 	            cfs_sleep_link -> cfs_waitlink
 
-	  - fixed race in linux version of arch-independent socknal
-	    (the ENOMEM/EAGAIN decision).
+          - fixed race in linux version of arch-independent socknal
+  	    (the ENOMEM/EAGAIN decision).
 
 	  - Didn't fix problems in Darwin version of arch-independent socknal
-	    (resetting socket callbacks, eager ack hack, ENOMEM/EAGAIN decision)
+ 	    (resetting socket callbacks, eager ack hack, ENOMEM/EAGAIN decision)
 
 	  - removed libcfs types from non-socknal header files (only some types
 	    in the header files had been changed; the .c files hadn't been

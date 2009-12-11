@@ -67,7 +67,7 @@ static int quotfmt_initialize(struct lustre_quota_info *lqi,
 {
         struct lustre_disk_dqheader dqhead;
         static const uint quota_magics[] = LUSTRE_INITQMAGICS;
-        static const uint quota_versions[] = LUSTRE_INITQVERSIONS_V2;
+        static const uint quota_versions[] = LUSTRE_INITQVERSIONS_V1;
         struct file *fp;
         struct inode *parent_inode = tgt->obd_lvfs_ctxt.pwd->d_inode;
         size_t size;
@@ -83,10 +83,10 @@ static int quotfmt_initialize(struct lustre_quota_info *lqi,
                 int namelen = strlen(name);
 
                 /* remove the stale test quotafile */
-                LOCK_INODE_MUTEX_PARENT(parent_inode);
+                LOCK_INODE_MUTEX(parent_inode);
                 de = lookup_one_len(name, tgt->obd_lvfs_ctxt.pwd, namelen);
                 if (!IS_ERR(de) && de->d_inode)
-                        ll_vfs_unlink(parent_inode, de,
+                        ll_vfs_unlink(parent_inode, de, 
                                       tgt->obd_lvfs_ctxt.pwdmnt);
                 if (!IS_ERR(de))
                         dput(de);
@@ -138,7 +138,7 @@ static int quotfmt_finalize(struct lustre_quota_info *lqi,
                 filp_close(lqi->qi_files[i], 0);
 
                 /* unlink quota file */
-                LOCK_INODE_MUTEX_PARENT(parent_inode);
+                LOCK_INODE_MUTEX(parent_inode);
 
                 de = lookup_one_len(name, tgt->obd_lvfs_ctxt.pwd, namelen);
                 if (IS_ERR(de) || de->d_inode == NULL) {
@@ -182,12 +182,13 @@ static void print_quota_info(struct lustre_quota_info *lqi)
 
         for (i = 0; i < MAXQUOTAS; i++) {
                 dqinfo = &lqi->qi_info[i];
-                CDEBUG(D_INFO, "%s quota info:\n", i == USRQUOTA ? "user " : "group");
-                CDEBUG(D_INFO, "dqi_bgrace(%u) dqi_igrace(%u) dqi_flags(%lu) dqi_blocks(%u) "
-                       "dqi_free_blk(%u) dqi_free_entry(%u)\n",
-                       dqinfo->dqi_bgrace, dqinfo->dqi_igrace, dqinfo->dqi_flags,
-                       dqinfo->dqi_blocks, dqinfo->dqi_free_blk,
-                       dqinfo->dqi_free_entry);
+                printk("%s quota info:\n", i == USRQUOTA ? "user " : "group");
+                printk
+                    ("dqi_bgrace(%u) dqi_igrace(%u) dqi_flags(%lu) dqi_blocks(%u) "
+                     "dqi_free_blk(%u) dqi_free_entry(%u)\n",
+                     dqinfo->dqi_bgrace, dqinfo->dqi_igrace, dqinfo->dqi_flags,
+                     dqinfo->dqi_blocks, dqinfo->dqi_free_blk,
+                     dqinfo->dqi_free_entry);
         }
 #endif
 }
@@ -382,7 +383,7 @@ static int quotfmt_test_4(struct lustre_quota_info *lqi)
 
 static int quotfmt_test_5(struct lustre_quota_info *lqi)
 {
-#ifndef KERNEL_SUPPORTS_QUOTA_READ
+#ifndef KERNEL_SUPPORTS_QUOTA_READ 
         int i, rc = 0;
 
         for (i = USRQUOTA; i < MAXQUOTAS && !rc; i++) {
@@ -399,10 +400,10 @@ static int quotfmt_test_5(struct lustre_quota_info *lqi)
                 list_for_each_entry_safe(dqid, tmp, &list, di_link) {
                         list_del_init(&dqid->di_link);
                         if (rc == 0)
-                                CDEBUG(D_INFO, "%d ", dqid->di_id);
+                                printk("%d ", dqid->di_id);
                         kfree(dqid);
                 }
-                CDEBUG(D_INFO, "\n");
+                printk("\n");
         }
         return rc;
 #else
@@ -478,9 +479,10 @@ static int quotfmt_test_cleanup(struct obd_device *obd)
         RETURN(0);
 }
 
-static int quotfmt_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
+static int quotfmt_test_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lprocfs_static_vars lvars;
+        struct lustre_cfg *lcfg = buf;
         struct obd_device *tgt;
         int rc;
         ENTRY;
@@ -528,8 +530,8 @@ static int __init quotfmt_test_init(void)
         struct lprocfs_static_vars lvars;
 
         lprocfs_quotfmt_test_init_vars(&lvars);
-        return class_register_type(&quotfmt_obd_ops, NULL, lvars.module_vars,
-                                   "quotfmt_test", NULL);
+        return class_register_type(&quotfmt_obd_ops, lvars.module_vars,
+                                   "quotfmt_test");
 }
 
 static void __exit quotfmt_test_exit(void)

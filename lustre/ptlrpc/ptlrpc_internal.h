@@ -46,6 +46,7 @@ struct obd_import;
 struct ldlm_res_id;
 struct ptlrpc_request_set;
 extern int test_req_buffer_pressure;
+extern cfs_mem_cache_t *ptlrpc_cbdata_slab;
 
 /* client.c */
 void ptlrpc_init_xid(void);
@@ -62,6 +63,8 @@ void ptlrpc_handle_failed_import(struct obd_import *imp);
 int ptlrpc_replay_next(struct obd_import *imp, int *inflight);
 void ptlrpc_initiate_recovery(struct obd_import *imp);
 
+int lustre_msg_need_swab(struct lustre_msg *msg);
+int lustre_unpack_msg_ptlrpc_body(struct lustre_msg *msg, int offset, int swab);
 int lustre_unpack_req_ptlrpc_body(struct ptlrpc_request *req, int offset);
 int lustre_unpack_rep_ptlrpc_body(struct ptlrpc_request *req, int offset);
 
@@ -80,7 +83,6 @@ void ptlrpc_lprocfs_do_request_stat (struct ptlrpc_request *req,
 #endif /* LPROCFS */
 
 /* recovd_thread.c */
-
 int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink);
 
 /* pers.c */
@@ -88,56 +90,13 @@ void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc);
 void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page,
                           int pageoffset, int len);
 
-/* pack_generic.c */
-struct ptlrpc_reply_state *lustre_get_emerg_rs(struct ptlrpc_service *svc);
-void lustre_put_emerg_rs(struct ptlrpc_reply_state *rs);
-
 /* pinger.c */
 int ptlrpc_start_pinger(void);
 int ptlrpc_stop_pinger(void);
 void ptlrpc_pinger_sending_on_import(struct obd_import *imp);
+void ptlrpc_pinger_commit_expected(struct obd_import *imp);
 void ptlrpc_pinger_wake_up(void);
 void ptlrpc_ping_import_soon(struct obd_import *imp);
-#ifdef __KERNEL__
-int ping_evictor_wake(struct obd_export *exp);
-#else
-#define ping_evictor_wake(exp)     1
-#endif
-
-/* sec_null.c */
-int  sptlrpc_null_init(void);
-void sptlrpc_null_fini(void);
-
-/* sec_plain.c */
-int  sptlrpc_plain_init(void);
-void sptlrpc_plain_fini(void);
-
-/* sec_bulk.c */
-int  sptlrpc_enc_pool_init(void);
-void sptlrpc_enc_pool_fini(void);
-int sptlrpc_proc_read_enc_pool(char *page, char **start, off_t off, int count,
-                               int *eof, void *data);
-
-/* sec_lproc.c */
-int  sptlrpc_lproc_init(void);
-void sptlrpc_lproc_fini(void);
-
-/* sec_gc.c */
-int sptlrpc_gc_init(void);
-void sptlrpc_gc_fini(void);
-
-/* sec_config.c */
-void sptlrpc_conf_choose_flavor(enum lustre_sec_part from,
-                                enum lustre_sec_part to,
-                                struct obd_uuid *target,
-                                lnet_nid_t nid,
-                                struct sptlrpc_flavor *sf);
-int  sptlrpc_conf_init(void);
-void sptlrpc_conf_fini(void);
-
-/* sec.c */
-int  __init sptlrpc_init(void);
-void __exit sptlrpc_fini(void);
 
 /* recov_thread.c */
 int llog_recov_init(void);
